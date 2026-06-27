@@ -241,23 +241,23 @@ export default function Home() {
       // Filter for Spanish voices
       const esVoices = voices.filter(v => v.lang.toLowerCase().startsWith('es'));
       
-      // Prioritize female names/identifiers in Spanish voices
-      const femaleKeywords = ['sabina', 'helena', 'laura', 'maria', 'elena', 'female', 'mujer', 'monica', 'daria', 'karina', 'hilda', 'paulina', 'mona'];
+      // Prioritize male names/identifiers in Spanish voices (matching Mateo)
+      const maleKeywords = ['david', 'jorge', 'carlos', 'male', 'hombre', 'julio', 'miguel', 'hector', 'default', 'pablo'];
       let selectedVoice = esVoices.find(v => {
         const nameLower = v.name.toLowerCase();
-        return femaleKeywords.some(keyword => nameLower.includes(keyword));
+        return maleKeywords.some(keyword => nameLower.includes(keyword));
       });
       
-      // Fallback 1: Any Spanish voice containing "spain" or "es"
+      // Fallback 1: Any Spanish voice
       if (!selectedVoice) {
         selectedVoice = esVoices.find(v => v.lang.startsWith('es-AR') || v.lang.startsWith('es-ES') || v.lang.startsWith('es'));
       }
       
-      // Fallback 2: Any voice containing female keywords
+      // Fallback 2: Any male voice globally
       if (!selectedVoice) {
         selectedVoice = voices.find(v => {
           const nameLower = v.name.toLowerCase();
-          return femaleKeywords.some(keyword => nameLower.includes(keyword));
+          return maleKeywords.some(keyword => nameLower.includes(keyword));
         });
       }
       
@@ -266,7 +266,7 @@ export default function Home() {
       }
       
       utterance.rate = 0.95;
-      utterance.pitch = 1.15; // Slightly higher pitch to make it sound female even on neutral fallback voices
+      utterance.pitch = 0.95; // Lower pitch for masculine/natural tone
       
       utterance.onend = () => { if (callback) callback(); };
       utterance.onerror = () => { if (callback) callback(); };
@@ -283,7 +283,7 @@ export default function Home() {
     setAvatarStatus('Hablando...');
     
     playBeep('start', () => {
-      const pitch = "Hola, soy Sofía, la asistente virtual de ObraSaaS. Nuestra plataforma permite conectar las notas de voz de WhatsApp de tus albañiles con tu cronograma Gantt de manera automática usando inteligencia artificial. Completa el formulario de la derecha para registrarte en el CRM SuperAdmin y probar la demo.";
+      const pitch = "Hola, soy Mateo, el asistente virtual de ObraSaaS. Nuestra plataforma permite conectar las notas de voz de WhatsApp de tus albañiles con tu cronograma Gantt de manera automática usando inteligencia artificial. Completa el formulario de la derecha para registrarte en el CRM SuperAdmin y probar la demo.";
       speakText(pitch, () => {
         playBeep('end', () => {
           setAvatarActive(false);
@@ -317,7 +317,7 @@ export default function Home() {
         body: JSON.stringify(state)
       });
       
-      alert(`¡Excelente! Lead registrado en la base de datos centralizada de ObraSaaS.\nSofía ha enviado los datos de ${leadName} al CRM de la Consola Administrativa.`);
+      alert(`¡Excelente! Lead registrado en la base de datos centralizada de ObraSaaS.\nMateo ha enviado los datos de ${leadName} al CRM de la Consola Administrativa.`);
       
       // Clear form
       setLeadName('');
@@ -395,7 +395,7 @@ export default function Home() {
               <i className="fa-solid fa-play"></i> Probar Demo del Dashboard
             </Link>
             <button className="btn btn-secondary" onClick={speakAvatarSalesPitch} style={{ padding: '14px 28px', fontSize: '1rem', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: '#fff', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '8px', borderRadius: '6px' }}>
-              <i className="fa-solid fa-headphones"></i> Hablar con Sofía AI
+              <i className="fa-solid fa-headphones"></i> Hablar con Mateo AI
             </button>
           </div>
 
@@ -720,7 +720,7 @@ export default function Home() {
         <section className="avatar-card glass-card" data-aos="fade-up">
           {/* Left: Avatar simulator */}
           <div className="avatar-visual-column">
-            <h3 style={{ marginBottom: '16px' }}><i className="fa-solid fa-microphone-lines" style={{ color: '#ff9f1c' }}></i> AI Avatar 2.0: Sofía</h3>
+            <h3 style={{ marginBottom: '16px' }}><i className="fa-solid fa-microphone-lines" style={{ color: '#ff9f1c' }}></i> AI Avatar 2.0: Mateo</h3>
             
             <div className={`avatar-circle ${avatarActive ? 'active' : ''}`} onClick={speakAvatarSalesPitch}>
               <div className="avatar-pulse-ring"></div>
@@ -743,7 +743,7 @@ export default function Home() {
             )}
             
             <p className="avatar-subtext">
-              Haz clic en el avatar o el botón de arriba para escuchar a Sofía AI describir el producto.
+              Haz clic en el avatar o el botón de arriba para escuchar a Mateo AI describir el producto.
             </p>
           </div>
 
@@ -923,6 +923,14 @@ export default function Home() {
               <p style={{ color: '#64748b', fontSize: '0.9rem', lineHeight: '1.7' }}>
                 Nuestra visión es erradicar las planillas de papel, planillas manuales propensas a errores y pérdidas de stock en obras residenciales e industriales, permitiendo a los directores de obra tomar decisiones basadas en datos auditables en tiempo real.
               </p>
+              <div style={{ display: 'flex', gap: '16px', marginTop: '24px', flexWrap: 'wrap' }}>
+                <a href="mailto:hola@inmov.ar" style={{ color: '#e2e8f0', textDecoration: 'none', background: 'rgba(255,255,255,0.03)', padding: '10px 18px', borderRadius: '10px', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '8px', border: '1px solid rgba(255,255,255,0.06)', transition: 'all 0.3s' }}>
+                  <i className="fa-solid fa-envelope" style={{ color: '#ff9f1c' }}></i> hola@inmov.ar
+                </a>
+                <a href="https://wa.me/5491132145678" target="_blank" rel="noopener noreferrer" style={{ color: '#e2e8f0', textDecoration: 'none', background: 'rgba(16,185,129,0.06)', padding: '10px 18px', borderRadius: '10px', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '8px', border: '1px solid rgba(16,185,129,0.15)', transition: 'all 0.3s' }}>
+                  <i className="fa-brands fa-whatsapp" style={{ color: '#10b981' }}></i> WhatsApp Ventas
+                </a>
+              </div>
             </div>
             <div style={{ background: 'linear-gradient(135deg, rgba(255, 159, 28, 0.05) 0%, rgba(59, 130, 246, 0.05) 100%)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '20px', padding: '30px', display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left' }}>
               <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
@@ -991,11 +999,21 @@ export default function Home() {
         </section>
 
         {/* Footer */}
-        <footer className="landing-footer">
-          <span>© 2026 ObraSaaS por Innovar Latam. Todos los derechos reservados.</span>
-          <div style={{ display: 'flex', gap: '16px' }}>
-            <Link href="/presupuesto" style={{ color: '#64748b', textDecoration: 'none' }}>Propuesta Económica</Link>
-            <Link href="/dashboard" style={{ color: '#64748b', textDecoration: 'none' }}>Dashboard Obra</Link>
+        <footer className="landing-footer" style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '40px 0 20px 0', marginTop: '100px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px', width: '100%' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', textAlign: 'left' }}>
+            <span style={{ fontSize: '0.85rem', color: '#fff', fontWeight: 600 }}>ObraSaaS por Innovar Latam</span>
+            <span style={{ fontSize: '0.75rem', color: '#64748b' }}>© 2026 Todos los derechos reservados.</span>
+            <span style={{ fontSize: '0.7rem', color: '#475569' }}>Buenos Aires, Argentina | inmov.ar</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '30px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: '16px', fontSize: '0.8rem' }}>
+              <Link href="/presupuesto" style={{ color: '#64748b', textDecoration: 'none', transition: 'color 0.3s' }}>Propuesta Económica</Link>
+              <Link href="/dashboard" style={{ color: '#64748b', textDecoration: 'none', transition: 'color 0.3s' }}>Dashboard Obra</Link>
+            </div>
+            {/* AFIP QR Code */}
+            <a href="https://servicios1.afip.gob.ar/clavefiscal/qr/registrar.aspx" target="_F960HV" rel="noopener noreferrer" style={{ display: 'inline-block', transition: 'opacity 0.3s' }}>
+              <img src="https://www.afip.gob.ar/images/f960/DATAWEB.jpg" border="0" width="38" height="52" alt="Data Fiscal AFIP" style={{ borderRadius: '4px', boxShadow: '0 4px 12px rgba(0,0,0,0.5)' }} />
+            </a>
           </div>
         </footer>
       </div>
