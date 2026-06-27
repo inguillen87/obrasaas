@@ -237,11 +237,36 @@ export default function Home() {
       utterance.lang = 'es-AR';
       
       const voices = window.speechSynthesis.getVoices();
-      const esVoice = voices.find(v => v.lang.startsWith('es-AR') || v.lang.startsWith('es-ES') || v.lang.startsWith('es'));
-      if (esVoice) utterance.voice = esVoice;
+      
+      // Filter for Spanish voices
+      const esVoices = voices.filter(v => v.lang.toLowerCase().startsWith('es'));
+      
+      // Prioritize female names/identifiers in Spanish voices
+      const femaleKeywords = ['sabina', 'helena', 'laura', 'maria', 'elena', 'female', 'mujer', 'monica', 'daria', 'karina', 'hilda', 'paulina', 'mona'];
+      let selectedVoice = esVoices.find(v => {
+        const nameLower = v.name.toLowerCase();
+        return femaleKeywords.some(keyword => nameLower.includes(keyword));
+      });
+      
+      // Fallback 1: Any Spanish voice containing "spain" or "es"
+      if (!selectedVoice) {
+        selectedVoice = esVoices.find(v => v.lang.startsWith('es-AR') || v.lang.startsWith('es-ES') || v.lang.startsWith('es'));
+      }
+      
+      // Fallback 2: Any voice containing female keywords
+      if (!selectedVoice) {
+        selectedVoice = voices.find(v => {
+          const nameLower = v.name.toLowerCase();
+          return femaleKeywords.some(keyword => nameLower.includes(keyword));
+        });
+      }
+      
+      if (selectedVoice) {
+        utterance.voice = selectedVoice;
+      }
       
       utterance.rate = 0.95;
-      utterance.pitch = 1.05; 
+      utterance.pitch = 1.15; // Slightly higher pitch to make it sound female even on neutral fallback voices
       
       utterance.onend = () => { if (callback) callback(); };
       utterance.onerror = () => { if (callback) callback(); };
