@@ -16,6 +16,10 @@ export default function Home() {
   const [leadCompany, setLeadCompany] = useState('');
   const [leadTopic, setLeadTopic] = useState('');
 
+  const [currentDemoStep, setCurrentDemoStep] = useState(0); // 0: init, 1: step1, 2: step2, 3: step3
+  const [userInteracted, setUserInteracted] = useState(false);
+  const autoPlayTimerRef = useRef(null);
+
   const [demoTaskProgress, setDemoTaskProgress] = useState(80);
   const [demoCementStock, setDemoCementStock] = useState(35);
   const [demoCementStatus, setDemoCementStatus] = useState('Crítico');
@@ -25,6 +29,14 @@ export default function Home() {
     { sender: 'Carlos Pérez', text: '🎙️ Carlos: Terminando empalmes de agua caliente.', time: '08:15 AM' },
     { sender: 'IA ObraSaaS', text: '🤖 Entendido. Se actualizó la tarea Cañerías al 80% en el Gantt.', time: '08:16 AM' }
   ]);
+
+  const stopAutoPlay = () => {
+    if (autoPlayTimerRef.current) {
+      clearInterval(autoPlayTimerRef.current);
+      autoPlayTimerRef.current = null;
+    }
+    setUserInteracted(true);
+  };
 
   const runDemoStep1 = () => {
     setDemoTaskProgress(100);
@@ -69,6 +81,107 @@ export default function Home() {
       { sender: 'IA ObraSaaS', text: '🤖 Entendido. Se actualizó la tarea Cañerías al 80% en el Gantt.', time: '08:16 AM' }
     ]);
   };
+
+  const handleManualStep1 = () => {
+    stopAutoPlay();
+    setCurrentDemoStep(1);
+    setDemoTaskProgress(100);
+    const time = new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+    setDemoMessages([
+      { sender: 'Carlos Pérez', text: '🎙️ Carlos: Terminando empalmes de agua caliente.', time: '08:15 AM' },
+      { sender: 'IA ObraSaaS', text: '🤖 Entendido. Se actualizó la tarea Cañerías al 80% en el Gantt.', time: '08:16 AM' },
+      { sender: 'Carlos Pérez', text: '🎙️ Carlos: Instalación de cañerías 100% terminada y probada.', time },
+      { sender: 'IA ObraSaaS', text: '🤖 Excelente. Hito de Cañerías completado al 100% en el Gantt.', time }
+    ]);
+  };
+
+  const handleManualStep2 = () => {
+    stopAutoPlay();
+    setCurrentDemoStep(2);
+    setDemoTaskProgress(100);
+    setDemoCementStock(135);
+    setDemoCementStatus('Orden Enviada');
+    setDemoCementColor('#f59e0b');
+    const time = new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+    setDemoMessages([
+      { sender: 'Carlos Pérez', text: '🎙️ Carlos: Terminando empalmes de agua caliente.', time: '08:15 AM' },
+      { sender: 'IA ObraSaaS', text: '🤖 Entendido. Se actualizó la tarea Cañerías al 80% en el Gantt.', time: '08:16 AM' },
+      { sender: 'IA ObraSaaS', text: '⚠️ Stock de Cemento Loma Negra bajo mínimo (35 bolsas). Enviando compra automática.', time },
+      { sender: 'Corralón Loma Negra', text: '📞 Loma Negra: Recibida orden #OC-2026-901 por 100 bolsas. En viaje.', time }
+    ]);
+  };
+
+  const handleManualStep3 = () => {
+    stopAutoPlay();
+    setCurrentDemoStep(3);
+    setDemoWorkerStatus('Presente (GPS) - Palermo Site (08:35 AM)');
+    const time = new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+    setDemoMessages([
+      { sender: 'Carlos Pérez', text: '🎙️ Carlos: Terminando empalmes de agua caliente.', time: '08:15 AM' },
+      { sender: 'IA ObraSaaS', text: '🤖 Entendido. Se actualizó la tarea Cañerías al 80% en el Gantt.', time: '08:16 AM' },
+      { sender: 'Juan Gómez', text: '📍 Compartiendo ubicación GPS desde la entrada.', time },
+      { sender: 'IA ObraSaaS', text: '🤖 Ingreso validado. Juan Gómez dentro del predio de la obra.', time }
+    ]);
+  };
+
+  const handleManualReset = () => {
+    stopAutoPlay();
+    setCurrentDemoStep(0);
+    resetDemo();
+  };
+
+  useEffect(() => {
+    if (userInteracted) return;
+
+    let step = 0;
+    autoPlayTimerRef.current = setInterval(() => {
+      step = (step + 1) % 4;
+      setCurrentDemoStep(step);
+      if (step === 0) {
+        setDemoTaskProgress(80);
+        setDemoCementStock(35);
+        setDemoCementStatus('Crítico');
+        setDemoCementColor('#ef4444');
+        setDemoWorkerStatus('Asistencia verificado por GPS (08:02 AM)');
+        setDemoMessages([
+          { sender: 'Carlos Pérez', text: '🎙️ Carlos: Terminando empalmes de agua caliente.', time: '08:15 AM' },
+          { sender: 'IA ObraSaaS', text: '🤖 Entendido. Se actualizó la tarea Cañerías al 80% en el Gantt.', time: '08:16 AM' }
+        ]);
+      } else if (step === 1) {
+        setDemoTaskProgress(100);
+        const time = new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+        setDemoMessages(prev => [
+          ...prev,
+          { sender: 'Carlos Pérez', text: '🎙️ Carlos: Instalación de cañerías 100% terminada y probada.', time },
+          { sender: 'IA ObraSaaS', text: '🤖 Excelente. Hito de Cañerías completado al 100% en el Gantt.', time }
+        ]);
+      } else if (step === 2) {
+        setDemoCementStock(135);
+        setDemoCementStatus('Orden Enviada');
+        setDemoCementColor('#f59e0b');
+        const time = new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+        setDemoMessages(prev => [
+          ...prev,
+          { sender: 'IA ObraSaaS', text: '⚠️ Stock de Cemento Loma Negra bajo mínimo (35 bolsas). Enviando compra automática.', time },
+          { sender: 'Corralón Loma Negra', text: '📞 Loma Negra: Recibida orden #OC-2026-901 por 100 bolsas. En viaje.', time }
+        ]);
+      } else if (step === 3) {
+        setDemoWorkerStatus('Presente (GPS) - Palermo Site (08:35 AM)');
+        const time = new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+        setDemoMessages(prev => [
+          ...prev,
+          { sender: 'Juan Gómez', text: '📍 Compartiendo ubicación GPS desde la entrada.', time },
+          { sender: 'IA ObraSaaS', text: '🤖 Ingreso validado. Juan Gómez dentro del predio de la obra.', time }
+        ]);
+      }
+    }, 4500);
+
+    return () => {
+      if (autoPlayTimerRef.current) {
+        clearInterval(autoPlayTimerRef.current);
+      }
+    };
+  }, [userInteracted]);
 
   const audioCtxRef = useRef(null);
 
@@ -273,9 +386,15 @@ export default function Home() {
                 <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#f59e0b' }}></div>
                 <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#10b981' }}></div>
               </div>
-              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                <i className="fa-solid fa-circle-play" style={{ marginRight: '6px' }}></i> Simulador de WhatsApp &amp; Gantt Interactivo
-              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ fontSize: '0.65rem', padding: '3px 8px', borderRadius: '20px', background: userInteracted ? 'rgba(255,255,255,0.05)' : 'rgba(16, 185, 129, 0.12)', color: userInteracted ? '#94a3b8' : '#10b981', fontWeight: 700, border: userInteracted ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(16, 185, 129, 0.2)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  <span className={`status-dot ${userInteracted ? '' : 'pulse-active'}`} style={{ width: '6px', height: '6px', borderRadius: '50%', background: userInteracted ? '#94a3b8' : '#10b981' }}></span>
+                  {userInteracted ? 'Modo Manual' : 'Reproducción Automática'}
+                </span>
+                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                  <i className="fa-solid fa-circle-play" style={{ marginRight: '6px' }}></i> Simulador de WhatsApp &amp; Gantt
+                </span>
+              </div>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '24px', textAlign: 'left', minHeight: '340px' }} className="home-preview-grid">
@@ -367,7 +486,7 @@ export default function Home() {
                     const border = isBot ? '1px solid rgba(59, 130, 246, 0.2)' : isSupplier ? '1px solid rgba(245, 158, 11, 0.2)' : '1px solid rgba(255,255,255,0.06)';
                     const color = isBot ? '#60a5fa' : isSupplier ? '#f59e0b' : '#ff9f1c';
                     return (
-                      <div key={idx} style={{ background: bg, border, padding: '10px 12px', borderRadius: '10px', alignSelf: isBot ? 'flex-start' : 'flex-end', maxWidth: '90%', animation: 'slideFadeIn 0.3s' }}>
+                      <div key={idx} style={{ background: bg, border, padding: '10px 12px', borderRadius: '10px', alignSelf: isBot ? 'flex-start' : 'flex-end', maxWidth: '90%', transition: 'all 0.3s' }}>
                         <div style={{ fontWeight: 700, color: color, marginBottom: '2px' }}>{msg.sender}</div>
                         <div style={{ color: '#cbd5e1' }}>{msg.text}</div>
                         <div style={{ fontSize: '0.55rem', color: '#475569', textAlign: 'right', marginTop: '4px' }}>{msg.time}</div>
@@ -379,20 +498,96 @@ export default function Home() {
 
             </div>
 
-            {/* Bottom Actions grid */}
+            {/* Bottom Actions grid with highlight active states */}
             <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '20px', marginTop: '20px', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
-              <button onClick={runDemoStep1} style={{ padding: '10px', background: 'rgba(255, 159, 28, 0.08)', border: '1px solid rgba(255, 159, 28, 0.2)', borderRadius: '8px', color: '#ff9f1c', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', transition: 'var(--transition-smooth)' }}>
-                <i className="fa-solid fa-microphone"></i> 1. Enviar Audio de Avance
+              
+              <button 
+                onClick={handleManualStep1} 
+                style={{ 
+                  padding: '10px', 
+                  background: currentDemoStep === 1 ? 'rgba(255, 159, 28, 0.18)' : 'rgba(255, 159, 28, 0.06)', 
+                  border: currentDemoStep === 1 ? '1px solid #ff9f1c' : '1px solid rgba(255, 159, 28, 0.2)', 
+                  boxShadow: currentDemoStep === 1 ? '0 0 12px rgba(255, 159, 28, 0.4)' : 'none',
+                  borderRadius: '8px', 
+                  color: currentDemoStep === 1 ? '#fff' : '#ff9f1c', 
+                  fontSize: '0.75rem', 
+                  fontWeight: 700, 
+                  cursor: 'pointer', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  gap: '6px', 
+                  transition: 'all 0.4s' 
+                }}
+              >
+                <i className="fa-solid fa-microphone"></i> 1. Reporte de Avance
               </button>
-              <button onClick={runDemoStep2} style={{ padding: '10px', background: 'rgba(255, 159, 28, 0.08)', border: '1px solid rgba(255, 159, 28, 0.2)', borderRadius: '8px', color: '#ff9f1c', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', transition: 'var(--transition-smooth)' }}>
-                <i className="fa-solid fa-cart-flatbed-suitcases"></i> 2. Alerta de Stock Bajo
+
+              <button 
+                onClick={handleManualStep2} 
+                style={{ 
+                  padding: '10px', 
+                  background: currentDemoStep === 2 ? 'rgba(255, 159, 28, 0.18)' : 'rgba(255, 159, 28, 0.06)', 
+                  border: currentDemoStep === 2 ? '1px solid #ff9f1c' : '1px solid rgba(255, 159, 28, 0.2)', 
+                  boxShadow: currentDemoStep === 2 ? '0 0 12px rgba(255, 159, 28, 0.4)' : 'none',
+                  borderRadius: '8px', 
+                  color: currentDemoStep === 2 ? '#fff' : '#ff9f1c', 
+                  fontSize: '0.75rem', 
+                  fontWeight: 700, 
+                  cursor: 'pointer', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  gap: '6px', 
+                  transition: 'all 0.4s' 
+                }}
+              >
+                <i className="fa-solid fa-cart-flatbed-suitcases"></i> 2. Compra de Cemento
               </button>
-              <button onClick={runDemoStep3} style={{ padding: '10px', background: 'rgba(255, 159, 28, 0.08)', border: '1px solid rgba(255, 159, 28, 0.2)', borderRadius: '8px', color: '#ff9f1c', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', transition: 'var(--transition-smooth)' }}>
-                <i className="fa-solid fa-location-crosshairs"></i> 3. Compartir GPS
+
+              <button 
+                onClick={handleManualStep3} 
+                style={{ 
+                  padding: '10px', 
+                  background: currentDemoStep === 3 ? 'rgba(255, 159, 28, 0.18)' : 'rgba(255, 159, 28, 0.06)', 
+                  border: currentDemoStep === 3 ? '1px solid #ff9f1c' : '1px solid rgba(255, 159, 28, 0.2)', 
+                  boxShadow: currentDemoStep === 3 ? '0 0 12px rgba(255, 159, 28, 0.4)' : 'none',
+                  borderRadius: '8px', 
+                  color: currentDemoStep === 3 ? '#fff' : '#ff9f1c', 
+                  fontSize: '0.75rem', 
+                  fontWeight: 700, 
+                  cursor: 'pointer', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  gap: '6px', 
+                  transition: 'all 0.4s' 
+                }}
+              >
+                <i className="fa-solid fa-location-crosshairs"></i> 3. Registro GPS
               </button>
-              <button onClick={resetDemo} style={{ padding: '10px', background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '8px', color: '#ef4444', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', transition: 'var(--transition-smooth)' }}>
+
+              <button 
+                onClick={handleManualReset} 
+                style={{ 
+                  padding: '10px', 
+                  background: currentDemoStep === 0 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(239, 68, 68, 0.06)', 
+                  border: currentDemoStep === 0 ? '1px solid #ef4444' : '1px solid rgba(239, 68, 68, 0.2)', 
+                  borderRadius: '8px', 
+                  color: '#ef4444', 
+                  fontSize: '0.75rem', 
+                  fontWeight: 700, 
+                  cursor: 'pointer', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  gap: '6px', 
+                  transition: 'all 0.4s' 
+                }}
+              >
                 <i className="fa-solid fa-rotate-left"></i> Reiniciar
               </button>
+
             </div>
 
             {/* Glowing mesh background */}
