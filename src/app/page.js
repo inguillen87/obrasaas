@@ -358,7 +358,6 @@ export default function Home() {
           <nav className="desktop-menu">
             <a href="#que-hacemos">¿Qué Hacemos?</a>
             <a href="#quienes-somos">¿Quiénes Somos?</a>
-            <a href="#tecnologias">Tecnologías</a>
             <a href="#faqs">Preguntas Frecuentes</a>
           </nav>
 
@@ -387,7 +386,6 @@ export default function Home() {
 
         {/* Hero Section */}
         <section className="hero-section">
-          <div className="hero-badge"><i className="fa-solid fa-wand-magic-sparkles"></i> AI Avatar Realtime 2.0</div>
           <h1 className="hero-title">La plataforma de Control de Obra que <span>tu cuadrilla sí usará</span></h1>
           <p className="hero-subtitle">
             Convierte simples notas de voz de WhatsApp en planificación Gantt reactiva y reportes premium. Captura leads comerciales automáticos y lleva el control administrativo total en un solo panel de control.
@@ -492,32 +490,130 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Right Column: WhatsApp Live Chat Simulation */}
-              <div style={{ background: 'rgba(10, 15, 30, 0.6)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '14px', display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-                {/* Chat header */}
-                <div style={{ background: 'rgba(255, 255, 255, 0.02)', borderBottom: '1px solid rgba(255,255,255,0.05)', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'linear-gradient(135deg, #10b981, #059669)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '0.9rem', fontWeight: 800 }}>🤖</div>
-                  <div>
-                    <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#fff' }}>Copiloto ObraSaaS</div>
-                    <div style={{ fontSize: '0.6rem', color: '#10b981' }}><i className="fa-solid fa-circle" style={{ fontSize: '0.4rem', marginRight: '4px' }}></i> En línea</div>
+              {/* Right Column: Smartphone Container Mockup */}
+              <div style={{
+                background: '#1e293b', 
+                border: '6px solid #475569', 
+                borderRadius: '36px', 
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7), inset 0 0 10px rgba(0,0,0,0.8)',
+                padding: '10px 4px 10px 4px', // margins representing phone screen bezels
+                height: '420px',
+                display: 'flex',
+                flexDirection: 'column',
+                position: 'relative',
+                overflow: 'hidden'
+              }}>
+                {/* Speaker Notch */}
+                <div style={{ 
+                  position: 'absolute', 
+                  top: '4px', 
+                  left: '50%', 
+                  transform: 'translateX(-50%)', 
+                  width: '60px', 
+                  height: '4px', 
+                  background: '#0f172a', 
+                  borderRadius: '2px', 
+                  zIndex: 20 
+                }}></div>
+                {/* Camera punch hole */}
+                <div style={{ 
+                  position: 'absolute', 
+                  top: '12px', 
+                  left: '50%', 
+                  transform: 'translateX(-50%)', 
+                  width: '8px', 
+                  height: '8px', 
+                  background: '#000', 
+                  borderRadius: '50%', 
+                  zIndex: 20 
+                }}></div>
+
+                {/* WhatsApp Chat App Interface */}
+                <div style={{ 
+                  background: '#0b141a', // WhatsApp dark background
+                  backgroundImage: 'radial-gradient(rgba(255,255,255,0.03) 1px, transparent 0)', // Simulates texturized wallpaper
+                  backgroundSize: '16px 16px',
+                  borderRadius: '26px', 
+                  display: 'flex', 
+                  flexDirection: 'column', 
+                  height: '100%', 
+                  overflow: 'hidden',
+                  position: 'relative'
+                }}>
+                  {/* WhatsApp status bar */}
+                  <div style={{ background: '#111b21', padding: '6px 16px 2px 16px', display: 'flex', justifyContent: 'space-between', fontSize: '0.55rem', color: '#8696a0', fontWeight: 600 }}>
+                    <span>08:15 AM</span>
+                    <div style={{ display: 'flex', gap: '4px' }}>
+                      <i className="fa-solid fa-signal"></i>
+                      <i className="fa-solid fa-wifi"></i>
+                      <i className="fa-solid fa-battery-three-quarters"></i>
+                    </div>
                   </div>
-                </div>
-                {/* Chat body messages list */}
-                <div style={{ flexGrow: 1, padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px', overflowY: 'auto', maxHeight: '210px', fontSize: '0.7rem' }}>
-                  {demoMessages.map((msg, idx) => {
-                    const isBot = msg.sender === 'IA ObraSaaS';
-                    const isSupplier = msg.sender.includes('Loma Negra');
-                    const bg = isBot ? 'rgba(59, 130, 246, 0.12)' : isSupplier ? 'rgba(245, 158, 11, 0.12)' : 'rgba(255,255,255,0.04)';
-                    const border = isBot ? '1px solid rgba(59, 130, 246, 0.2)' : isSupplier ? '1px solid rgba(245, 158, 11, 0.2)' : '1px solid rgba(255,255,255,0.06)';
-                    const color = isBot ? '#60a5fa' : isSupplier ? '#f59e0b' : '#ff9f1c';
-                    return (
-                      <div key={idx} style={{ background: bg, border, padding: '10px 12px', borderRadius: '10px', alignSelf: isBot ? 'flex-start' : 'flex-end', maxWidth: '90%', transition: 'all 0.3s' }}>
-                        <div style={{ fontWeight: 700, color: color, marginBottom: '2px' }}>{msg.sender}</div>
-                        <div style={{ color: '#cbd5e1' }}>{msg.text}</div>
-                        <div style={{ fontSize: '0.55rem', color: '#475569', textAlign: 'right', marginTop: '4px' }}>{msg.time}</div>
+
+                  {/* WhatsApp chat header */}
+                  <div style={{ background: '#202c33', borderBottom: '1px solid rgba(255,255,255,0.05)', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ width: '30px', height: '30px', borderRadius: '50%', background: 'linear-gradient(135deg, #075e54, #128c7e)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '0.8rem', fontWeight: 800 }}>
+                      <i className="fa-brands fa-whatsapp" style={{ color: '#fff', fontSize: '1.1rem' }}></i>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#fff' }}>WhatsApp Copiloto</div>
+                      <div style={{ fontSize: '0.55rem', color: '#00a884' }}><i className="fa-solid fa-circle" style={{ fontSize: '0.35rem', marginRight: '4px', color: '#00a884' }}></i> En línea</div>
+                    </div>
+                  </div>
+
+                  {/* Chat body messages list */}
+                  <div style={{ flexGrow: 1, padding: '12px', display: 'flex', flexDirection: 'column', gap: '10px', overflowY: 'auto', maxHeight: '270px', fontSize: '0.65rem' }}>
+                    {demoMessages.map((msg, idx) => {
+                      const isBot = msg.sender === 'IA ObraSaaS';
+                      const isSupplier = msg.sender.includes('Loma Negra');
+                      // Outgoing bubbles (Workers/Supplier) vs Incoming (Bot)
+                      const isOutgoing = !isBot;
+                      const bg = isOutgoing 
+                        ? (isSupplier ? '#025141' : '#005c4b') // WhatsApp dark outgoing green
+                        : '#202c33'; // WhatsApp dark incoming gray
+                      const align = isOutgoing ? 'flex-end' : 'flex-start';
+                      const color = isOutgoing 
+                        ? (isSupplier ? '#ffc107' : '#ffd166') 
+                        : '#60a5fa';
+                      return (
+                        <div key={idx} style={{ 
+                          background: bg, 
+                          padding: '8px 10px', 
+                          borderRadius: '8px', 
+                          alignSelf: align, 
+                          maxWidth: '85%', 
+                          boxShadow: '0 1px 2px rgba(0,0,0,0.3)',
+                          position: 'relative',
+                          transition: 'all 0.3s'
+                        }}>
+                          <div style={{ fontWeight: 700, color: color, marginBottom: '2px', fontSize: '0.6rem' }}>{msg.sender}</div>
+                          <div style={{ color: '#e9edef', wordBreak: 'break-word', lineHeight: '1.4' }}>{msg.text}</div>
+                          <div style={{ fontSize: '0.55rem', color: '#8696a0', textAlign: 'right', marginTop: '3px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '2px' }}>
+                            <span>{msg.time}</span>
+                            {isOutgoing && <i className="fa-solid fa-check-double" style={{ color: '#53bdeb', fontSize: '0.55rem' }}></i>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* WhatsApp Text Input Bar Mockup */}
+                  <div style={{ background: '#1f2c34', padding: '6px 10px 10px 10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <div style={{ background: '#2a3942', borderRadius: '20px', padding: '6px 12px', flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#8696a0', fontSize: '0.65rem' }}>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <i className="fa-regular fa-face-smile" style={{ fontSize: '0.9rem' }}></i>
+                        <span>Mensaje...</span>
                       </div>
-                    );
-                  })}
+                      <div style={{ display: 'flex', gap: '10px' }}>
+                        <i className="fa-solid fa-paperclip" style={{ fontSize: '0.8rem' }}></i>
+                        <i className="fa-solid fa-camera" style={{ fontSize: '0.8rem' }}></i>
+                      </div>
+                    </div>
+                    <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#00a884', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '0.75rem' }}>
+                      <i className="fa-solid fa-microphone"></i>
+                    </div>
+                  </div>
+
                 </div>
               </div>
 
@@ -843,35 +939,7 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Tecnologías Section */}
-        <section id="tecnologias" style={{ marginTop: '100px' }} data-aos="fade-up">
-          <h2 style={{ textAlign: 'center', fontSize: '2.2rem', marginBottom: '12px', color: '#fff' }}>Tecnologías que Usamos</h2>
-          <p style={{ textAlign: 'center', color: '#64748b', maxWidth: '600px', margin: '0 auto 40px auto', fontSize: '0.95rem', lineHeight: '1.6' }}>
-            Nuestra arquitectura modular está impulsada por herramientas líderes de la industria global.
-          </p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }} className="grid-3">
-            <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '12px', padding: '18px', textAlign: 'center' }}>
-              <i className="fa-brands fa-react" style={{ fontSize: '2rem', color: '#60a5fa', marginBottom: '12px' }}></i>
-              <h5 style={{ color: '#fff', marginBottom: '6px' }}>Next.js 16</h5>
-              <span style={{ fontSize: '0.7rem', color: '#64748b' }}>React 19, Server Actions, App Router para carga veloz.</span>
-            </div>
-            <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '12px', padding: '18px', textAlign: 'center' }}>
-              <i className="fa-solid fa-brain" style={{ fontSize: '2rem', color: '#ff9f1c', marginBottom: '12px' }}></i>
-              <h5 style={{ color: '#fff', marginBottom: '6px' }}>OpenAI GPT-4o</h5>
-              <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Structured Outputs estrictos para parseo exacto de comandos.</span>
-            </div>
-            <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '12px', padding: '18px', textAlign: 'center' }}>
-              <i className="fa-brands fa-whatsapp" style={{ fontSize: '2rem', color: '#10b981', marginBottom: '12px' }}></i>
-              <h5 style={{ color: '#fff', marginBottom: '6px' }}>Twilio API</h5>
-              <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Canal de mensajería empresarial encriptado y seguro.</span>
-            </div>
-            <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '12px', padding: '18px', textAlign: 'center' }}>
-              <i className="fa-solid fa-map-location-dot" style={{ fontSize: '2rem', color: '#3b82f6', marginBottom: '12px' }}></i>
-              <h5 style={{ color: '#fff', marginBottom: '6px' }}>Leaflet Satelital</h5>
-              <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Mapas satelitales y geofencing para auditar presentismo.</span>
-            </div>
-          </div>
-        </section>
+        {/* Tecnologías Section Deleted */}
 
         {/* FAQs (Preguntas Frecuentes) Accordion Section */}
         <section id="faqs" style={{ marginTop: '100px', marginBottom: '60px' }} data-aos="fade-up">
