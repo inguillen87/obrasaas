@@ -652,6 +652,11 @@ export default function Dashboard() {
 
       // 1. Progress Chart (Line)
       if (progressChartRef.current) {
+        const ctx = progressChartRef.current.getContext('2d');
+        const gradientReal = ctx.createLinearGradient(0, 0, 0, 250);
+        gradientReal.addColorStop(0, 'rgba(255, 159, 28, 0.35)');
+        gradientReal.addColorStop(1, 'rgba(255, 159, 28, 0.00)');
+
         progressChart = new Chart(progressChartRef.current, {
           type: 'line',
           data: {
@@ -670,7 +675,7 @@ export default function Dashboard() {
                       label: 'Real de Obra',
                       data: [10, 20, 32, state.avancePercentage, null, null, null, null, null, null],
                       borderColor: '#ff9f1c',
-                      backgroundColor: 'rgba(255, 159, 28, 0.08)',
+                      backgroundColor: gradientReal,
                       fill: true,
                       borderWidth: 3,
                       tension: 0.3
@@ -739,6 +744,11 @@ export default function Dashboard() {
 
       // 3. MRR Chart (Bar)
       if (mrrChartRef.current) {
+        const ctx = mrrChartRef.current.getContext('2d');
+        const gradientBar = ctx.createLinearGradient(0, 0, 0, 200);
+        gradientBar.addColorStop(0, 'rgba(255, 159, 28, 0.85)');
+        gradientBar.addColorStop(1, 'rgba(255, 159, 28, 0.15)');
+
         mrrChart = new Chart(mrrChartRef.current, {
           type: 'bar',
           data: {
@@ -746,7 +756,7 @@ export default function Dashboard() {
               datasets: [{
                   label: 'MRR en ARS',
                   data: [3200000, 3500000, 3900000, 4200000, 4500000, state.subscription?.plan === 'Enterprise' ? 5030000 : 4850000],
-                  backgroundColor: 'rgba(255, 159, 28, 0.6)',
+                  backgroundColor: gradientBar,
                   borderColor: '#ff9f1c',
                   borderWidth: 1.5,
                   borderRadius: 6

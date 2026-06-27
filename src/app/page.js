@@ -510,6 +510,10 @@ export default function Home() {
           window.gsap.from(".hero-subtitle", { y: 20, opacity: 0, duration: 1, delay: 0.4, ease: "power3.out" });
           window.gsap.from(".hero-ctas > *", { y: 20, opacity: 0, duration: 1, delay: 0.6, stagger: 0.15, ease: "power3.out" });
           window.gsap.from(".dashboard-preview", { y: 50, opacity: 0, duration: 1.2, delay: 0.8, ease: "power2.out" });
+          
+          // Animate sections further down for a highly polished sequence
+          window.gsap.from(".avatar-card", { y: 40, opacity: 0, duration: 1, delay: 1, ease: "power2.out" });
+          window.gsap.from(".feature-box", { y: 30, opacity: 0, duration: 0.8, delay: 1.2, stagger: 0.2, ease: "power2.out" });
         }
       }} />
     </>
