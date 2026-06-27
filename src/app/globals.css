@@ -1814,6 +1814,46 @@ select.form-input option {
    LANDING PAGE STYLING & GENERAL RESPONSIVE ENHANCEMENTS
    ======================================================== */
 
+.desktop-menu {
+    display: flex;
+    gap: 28px;
+    align-items: center;
+}
+
+.desktop-menu a {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: var(--transition-smooth);
+    position: relative;
+}
+
+.desktop-menu a:hover {
+    color: var(--primary);
+}
+
+.desktop-menu a::after {
+    content: '';
+    position: absolute;
+    bottom: -4px;
+    left: 0;
+    width: 0;
+    height: 2px;
+    background: var(--primary);
+    transition: var(--transition-smooth);
+}
+
+.desktop-menu a:hover::after {
+    width: 100%;
+}
+
+@media (max-width: 820px) {
+    .desktop-menu {
+        display: none !important;
+    }
+}
+
 .hero-section {
     padding: 100px 0 60px 0;
     text-align: center;
