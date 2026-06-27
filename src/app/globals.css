@@ -1810,9 +1810,12 @@ select.form-input option {
     }
 }
 
-/* ========================================================
-   LANDING PAGE STYLING & GENERAL RESPONSIVE ENHANCEMENTS
-   ======================================================== */
+.landing-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 40px;
+    width: 100%;
+}
 
 .desktop-menu {
     display: flex;

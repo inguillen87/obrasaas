@@ -420,16 +420,17 @@ export default function Home() {
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '24px', textAlign: 'left', minHeight: '340px' }} className="home-preview-grid">
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '30px', textAlign: 'left', minHeight: '610px', alignItems: 'stretch' }} className="home-preview-grid">
               
               {/* Left Column: Reactive Dashboard Panel */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', justifyContent: 'space-between' }}>
                 {/* Gantt Chart Preview */}
-                <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '14px', padding: '18px' }}>
-                  <h5 style={{ marginBottom: '16px', fontWeight: 700, color: '#fff', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '18px', padding: '22px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <h5 style={{ marginBottom: '4px', fontWeight: 700, color: '#fff', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                     <i className="fa-solid fa-chart-gantt" style={{ color: '#ff9f1c', marginRight: '8px' }}></i> Estado del Cronograma (Gantt)
                   </h5>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                     {/* Task 1 */}
                     <div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#94a3b8', marginBottom: '6px' }}>
@@ -452,9 +453,19 @@ export default function Home() {
                     </div>
                     {/* Task 3 */}
                     <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#475569', marginBottom: '6px' }}>
-                        <span>Revestimientos y Cerámicos</span>
-                        <span style={{ fontWeight: 700 }}>En Espera</span>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#64748b', marginBottom: '6px' }}>
+                        <span>Revestimientos y Cerámicos (Fase 3)</span>
+                        <span style={{ fontWeight: 700, color: '#64748b' }}>En Espera</span>
+                      </div>
+                      <div style={{ height: '10px', background: 'rgba(255,255,255,0.03)', borderRadius: '5px', overflow: 'hidden' }}>
+                        <div style={{ width: '0%', height: '100%', background: '#ff9f1c', borderRadius: '5px' }}></div>
+                      </div>
+                    </div>
+                    {/* Task 4 */}
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#64748b', marginBottom: '6px' }}>
+                        <span>Carpinterías y Aberturas (Fase 4)</span>
+                        <span style={{ fontWeight: 700, color: '#64748b' }}>En Espera</span>
                       </div>
                       <div style={{ height: '10px', background: 'rgba(255,255,255,0.03)', borderRadius: '5px', overflow: 'hidden' }}>
                         <div style={{ width: '0%', height: '100%', background: '#ff9f1c', borderRadius: '5px' }}></div>
@@ -463,77 +474,103 @@ export default function Home() {
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-                  {/* Stockpile Card */}
-                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '14px', padding: '16px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#fff' }}>Cemento</span>
-                      <span style={{ fontSize: '0.6rem', padding: '3px 8px', borderRadius: '6px', background: demoCementStatus === 'Crítico' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(245, 158, 11, 0.15)', color: demoCementColor, fontWeight: 700, transition: 'color 0.5s' }}>
-                        {demoCementStatus}
-                      </span>
+                {/* Stockpiles and GPS Info Grid */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                    {/* Cemento stockpile card */}
+                    <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '16px', padding: '18px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                        <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#94a3b8' }}><i className="fa-solid fa-cubes" style={{ marginRight: '6px', color: '#ff9f1c' }}></i> Cemento</span>
+                        <span style={{ fontSize: '0.6rem', padding: '3px 8px', borderRadius: '6px', background: demoCementStatus === 'Crítico' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(245, 158, 11, 0.15)', color: demoCementColor, fontWeight: 700, transition: 'color 0.5s' }}>
+                          {demoCementStatus}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#fff', marginBottom: '4px', transition: 'color 0.5s' }}>{demoCementStock} Bolsas</div>
+                      <div style={{ fontSize: '0.65rem', color: '#64748b' }}>
+                        {demoCementStatus === 'Crítico' ? 'Abastecimiento automático en curso' : 'Suministro óptimo'}
+                      </div>
                     </div>
-                    <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#fff', marginBottom: '4px', transition: 'color 0.5s' }}>{demoCementStock} Bolsas</div>
-                    <div style={{ fontSize: '0.65rem', color: '#64748b' }}>
-                      {demoCementStatus === 'Crítico' ? 'Faltan 5 bolsas para stock' : 'Suministro reabastecido'}
+
+                    {/* Acero stockpile card */}
+                    <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '16px', padding: '18px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                        <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#94a3b8' }}><i className="fa-solid fa-bars" style={{ marginRight: '6px', color: '#3b82f6', transform: 'rotate(90deg)' }}></i> Hierro/Acero</span>
+                        <span style={{ fontSize: '0.6rem', padding: '3px 8px', borderRadius: '6px', background: 'rgba(16, 185, 129, 0.15)', color: '#10b981', fontWeight: 700 }}>
+                          Óptimo
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#fff', marginBottom: '4px' }}>42 Varillas</div>
+                      <div style={{ fontSize: '0.65rem', color: '#64748b' }}>
+                        Consumo estable de acero
+                      </div>
                     </div>
                   </div>
 
-                  {/* GPS Card */}
-                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '14px', padding: '16px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
-                      <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 8px #10b981' }}></div>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#fff' }}>Control Satelital</span>
+                  {/* Satellite Control card */}
+                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '16px', padding: '18px', display: 'flex', alignItems: 'center', gap: '14px' }}>
+                    <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'rgba(16, 185, 129, 0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10b981', fontSize: '1.2rem', boxShadow: '0 0 10px rgba(16, 185, 129, 0.1)' }}>
+                      <i className="fa-solid fa-map-location-dot"></i>
                     </div>
-                    <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#e2e8f0', lineHeight: '1.4' }}>{demoWorkerStatus}</div>
-                    <div style={{ fontSize: '0.6rem', color: '#64748b', marginTop: '4px' }}>Geocerca: Palermo Site</div>
+                    <div style={{ flexGrow: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 8px #10b981' }}></div>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#fff' }}>Geocerca de Obra Activa</span>
+                      </div>
+                      <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#cbd5e1' }}>{demoWorkerStatus}</div>
+                    </div>
                   </div>
                 </div>
               </div>
 
               {/* Right Column: Smartphone Container Mockup */}
               <div style={{
-                background: '#1e293b', 
-                border: '6px solid #475569', 
-                borderRadius: '36px', 
-                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7), inset 0 0 10px rgba(0,0,0,0.8)',
-                padding: '10px 4px 10px 4px', // margins representing phone screen bezels
-                height: '420px',
+                background: '#090d16', 
+                border: '12px solid #0f172a', 
+                borderRadius: '44px', 
+                boxShadow: '0 0 0 2px #334155, 0 25px 60px -12px rgba(0, 0, 0, 0.8), inset 0 0 12px rgba(0,0,0,0.9)',
+                padding: '12px 6px 12px 6px',
+                width: '300px',
+                height: '610px',
                 display: 'flex',
                 flexDirection: 'column',
                 position: 'relative',
-                overflow: 'hidden'
+                overflow: 'hidden',
+                margin: '0 auto'
               }}>
-                {/* Speaker Notch */}
-                <div style={{ 
-                  position: 'absolute', 
-                  top: '4px', 
-                  left: '50%', 
-                  transform: 'translateX(-50%)', 
-                  width: '60px', 
-                  height: '4px', 
-                  background: '#0f172a', 
-                  borderRadius: '2px', 
-                  zIndex: 20 
-                }}></div>
-                {/* Camera punch hole */}
-                <div style={{ 
-                  position: 'absolute', 
-                  top: '12px', 
-                  left: '50%', 
-                  transform: 'translateX(-50%)', 
-                  width: '8px', 
-                  height: '8px', 
-                  background: '#000', 
-                  borderRadius: '50%', 
-                  zIndex: 20 
-                }}></div>
+                {/* Dynamic Island */}
+                <div style={{
+                  position: 'absolute',
+                  top: '12px',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  width: '90px',
+                  height: '24px',
+                  background: '#000',
+                  borderRadius: '12px',
+                  zIndex: 30,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: 'inset 0 0 4px rgba(255,255,255,0.2)'
+                }}>
+                  {/* Micro camera lens glow */}
+                  <div style={{
+                    width: '6px',
+                    height: '6px',
+                    borderRadius: '50%',
+                    background: '#040b14',
+                    border: '1px solid #111827',
+                    position: 'absolute',
+                    right: '12px'
+                  }}></div>
+                </div>
 
                 {/* WhatsApp Chat App Interface */}
                 <div style={{ 
                   background: '#0b141a', // WhatsApp dark background
                   backgroundImage: 'radial-gradient(rgba(255,255,255,0.03) 1px, transparent 0)', // Simulates texturized wallpaper
                   backgroundSize: '16px 16px',
-                  borderRadius: '26px', 
+                  borderRadius: '34px', 
                   display: 'flex', 
                   flexDirection: 'column', 
                   height: '100%', 
@@ -541,7 +578,7 @@ export default function Home() {
                   position: 'relative'
                 }}>
                   {/* WhatsApp status bar */}
-                  <div style={{ background: '#111b21', padding: '6px 16px 2px 16px', display: 'flex', justifyContent: 'space-between', fontSize: '0.55rem', color: '#8696a0', fontWeight: 600 }}>
+                  <div style={{ background: '#111b21', padding: '16px 20px 4px 20px', display: 'flex', justifyContent: 'space-between', fontSize: '0.55rem', color: '#8696a0', fontWeight: 600 }}>
                     <span>08:15 AM</span>
                     <div style={{ display: 'flex', gap: '4px' }}>
                       <i className="fa-solid fa-signal"></i>
@@ -562,7 +599,7 @@ export default function Home() {
                   </div>
 
                   {/* Chat body messages list */}
-                  <div style={{ flexGrow: 1, padding: '12px', display: 'flex', flexDirection: 'column', gap: '10px', overflowY: 'auto', maxHeight: '270px', fontSize: '0.65rem' }}>
+                  <div style={{ flexGrow: 1, padding: '12px', display: 'flex', flexDirection: 'column', gap: '10px', overflowY: 'auto', maxHeight: '460px', fontSize: '0.65rem' }}>
                     {demoMessages.map((msg, idx) => {
                       const isBot = msg.sender === 'IA ObraSaaS';
                       const isSupplier = msg.sender.includes('Loma Negra');
@@ -616,7 +653,6 @@ export default function Home() {
 
                 </div>
               </div>
-
             </div>
 
             {/* Bottom Actions grid with highlight active states */}
@@ -914,35 +950,68 @@ export default function Home() {
 
         {/* ¿Quiénes Somos? Section */}
         <section id="quienes-somos" style={{ marginTop: '100px' }} data-aos="fade-up">
-          <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: '40px', alignItems: 'center' }} className="home-preview-grid">
-            <div style={{ textAlign: 'left' }}>
-              <h2 style={{ fontSize: '2.2rem', marginBottom: '16px', color: '#fff' }}>¿Quiénes Somos?</h2>
-              <p style={{ color: '#94a3b8', fontSize: '0.95rem', lineHeight: '1.7', marginBottom: '16px' }}>
-                Somos <strong>Innovar Latam</strong>, una startup enfocada en digitalizar la construcción civil en América Latina. Combinamos metodologías ágiles de desarrollo con las tecnologías de inteligencia artificial más potentes del mercado.
-              </p>
-              <p style={{ color: '#64748b', fontSize: '0.9rem', lineHeight: '1.7' }}>
-                Nuestra visión es erradicar las planillas de papel, planillas manuales propensas a errores y pérdidas de stock en obras residenciales e industriales, permitiendo a los directores de obra tomar decisiones basadas en datos auditables en tiempo real.
-              </p>
-              <div style={{ display: 'flex', gap: '16px', marginTop: '24px', flexWrap: 'wrap' }}>
-                <a href="mailto:hola@inmov.ar" style={{ color: '#e2e8f0', textDecoration: 'none', background: 'rgba(255,255,255,0.03)', padding: '10px 18px', borderRadius: '10px', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '8px', border: '1px solid rgba(255,255,255,0.06)', transition: 'all 0.3s' }}>
-                  <i className="fa-solid fa-envelope" style={{ color: '#ff9f1c' }}></i> hola@inmov.ar
-                </a>
-                <a href="https://wa.me/5491132145678" target="_blank" rel="noopener noreferrer" style={{ color: '#e2e8f0', textDecoration: 'none', background: 'rgba(16,185,129,0.06)', padding: '10px 18px', borderRadius: '10px', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '8px', border: '1px solid rgba(16,185,129,0.15)', transition: 'all 0.3s' }}>
-                  <i className="fa-brands fa-whatsapp" style={{ color: '#10b981' }}></i> WhatsApp Ventas
-                </a>
+          <div style={{ textAlign: 'center', marginBottom: '44px' }}>
+            <span style={{ color: '#ff9f1c', fontSize: '0.8rem', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase' }}>El Equipo Detrás del Software</span>
+            <h2 style={{ fontSize: '2.2rem', color: '#fff', marginTop: '8px' }}>¿Quiénes Somos?</h2>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '30px', alignItems: 'stretch' }} className="home-preview-grid">
+            {/* Left Card: Company Profile */}
+            <div style={{ background: 'rgba(13, 20, 38, 0.45)', border: '1px solid rgba(255, 255, 255, 0.07)', borderRadius: '24px', padding: '32px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', textAlign: 'left', backdropFilter: 'blur(12px)' }}>
+              <div>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.65rem', fontWeight: 700, padding: '4px 10px', borderRadius: '12px', background: 'rgba(255,159,28,0.12)', color: '#ff9f1c', border: '1px solid rgba(255,159,28,0.2)', textTransform: 'uppercase', marginBottom: '16px' }}>
+                  <i className="fa-solid fa-circle-check"></i> Digitalizando LATAM
+                </span>
+                <p style={{ color: '#cbd5e1', fontSize: '0.95rem', lineHeight: '1.7', marginBottom: '16px' }}>
+                  Somos <strong>Innovar Latam</strong>, una software factory especializada en la digitalización integral de la construcción civil en América Latina. Combinamos metodologías de desarrollo ágiles con modelos avanzados de inteligencia artificial.
+                </p>
+                <p style={{ color: '#64748b', fontSize: '0.88rem', lineHeight: '1.7', marginBottom: '24px' }}>
+                  Nuestra meta es erradicar el uso ineficiente de planillas físicas en obra, automatizando el flujo de reportes diarios, el presentismo de cuadrillas y el control preventivo de stock.
+                </p>
               </div>
-            </div>
-            <div style={{ background: 'linear-gradient(135deg, rgba(255, 159, 28, 0.05) 0%, rgba(59, 130, 246, 0.05) 100%)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '20px', padding: '30px', display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left' }}>
-              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#ff9f1c', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>IL</div>
+
+              {/* Metrics Grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '20px' }}>
                 <div>
-                  <strong style={{ color: '#fff', display: 'block' }}>Innovar Latam Studio</strong>
-                  <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Creadores de ObraSaaS</span>
+                  <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#ff9f1c' }}>12+</div>
+                  <div style={{ fontSize: '0.65rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: '2px' }}>Apps Activas</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#fff' }}>5+</div>
+                  <div style={{ fontSize: '0.65rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: '2px' }}>Años de Trayectoria</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#fff' }}>200+</div>
+                  <div style={{ fontSize: '0.65rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: '2px' }}>Obras Auditadas</div>
                 </div>
               </div>
-              <blockquote style={{ borderLeft: '3px solid #ff9f1c', paddingLeft: '16px', color: '#94a3b8', fontSize: '0.85rem', fontStyle: 'italic', margin: 0 }}>
-                "La construcción civil no necesita sistemas más complejos en pantallas gigantes; necesita interfaces sencillas e invisibles en el bolsillo del capataz y operarios."
-              </blockquote>
+            </div>
+
+            {/* Right Card: Studio Profile & Contact */}
+            <div style={{ background: 'linear-gradient(135deg, rgba(255, 159, 28, 0.04) 0%, rgba(59, 130, 246, 0.04) 100%)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '24px', padding: '32px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', textAlign: 'left', boxShadow: '0 20px 40px rgba(0,0,0,0.3)', backdropFilter: 'blur(12px)' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
+                  <div style={{ width: '48px', height: '48px', borderRadius: '14px', background: 'linear-gradient(135deg, #ff9f1c, #d97706)', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: '1.1rem', boxShadow: '0 4px 15px rgba(255, 159, 28, 0.25)' }}>IL</div>
+                  <div>
+                    <strong style={{ color: '#fff', display: 'block', fontSize: '1rem' }}>Innovar Latam Studio</strong>
+                    <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Creadores y Desarrolladores de ObraSaaS</span>
+                  </div>
+                </div>
+                
+                <blockquote style={{ borderLeft: '3px solid #ff9f1c', paddingLeft: '16px', color: '#94a3b8', fontSize: '0.85rem', fontStyle: 'italic', margin: 0, lineHeight: '1.6' }}>
+                  "La construcción civil no necesita sistemas más complejos en pantallas gigantes; necesita interfaces sencillas e invisibles en el bolsillo del capataz y operarios."
+                </blockquote>
+              </div>
+
+              {/* Styled Contact Buttons */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '24px' }}>
+                <a href="mailto:hola@inmov.ar" style={{ color: '#e2e8f0', textDecoration: 'none', background: 'rgba(255,255,255,0.03)', padding: '12px 20px', borderRadius: '12px', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px', border: '1px solid rgba(255,255,255,0.06)', transition: 'all 0.3s', fontWeight: 600 }} className="contact-btn-email">
+                  <i className="fa-solid fa-envelope" style={{ color: '#ff9f1c' }}></i> hola@inmov.ar
+                </a>
+                <a href="https://wa.me/5491132145678" target="_blank" rel="noopener noreferrer" style={{ color: '#fff', textDecoration: 'none', background: 'rgba(16,185,129,0.08)', padding: '12px 20px', borderRadius: '12px', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px', border: '1px solid rgba(16,185,129,0.2)', transition: 'all 0.3s', fontWeight: 600 }} className="contact-btn-wa">
+                  <i className="fa-brands fa-whatsapp" style={{ color: '#10b981', fontSize: '1rem' }}></i> Contactar por WhatsApp
+                </a>
+              </div>
             </div>
           </div>
         </section>
