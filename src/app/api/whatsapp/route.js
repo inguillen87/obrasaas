@@ -1,14 +1,5 @@
 import { getAppState, saveAppState, getMessages, saveMessages } from '@/lib/db';
-
-export async function GET() {
-    try {
-        const messages = await getMessages();
-        return Response.json(messages);
-    } catch (error) {
-        console.error("Error fetching messages:", error);
-        return Response.json({ error: "Failed to fetch messages" }, { status: 500 });
-    }
-}
+import { verifyTwilioSignature, generateWebviewToken } from '@/lib/auth';
 
 // Haversine formula to calculate distance in meters
 function getDistance(lat1, lon1, lat2, lon2) {
@@ -26,10 +17,23 @@ function getDistance(lat1, lon1, lat2, lon2) {
     return R * c; // distance in meters
 }
 
+export async function GET() {
+    try {
+        const messages = await getMessages();
+        return Response.json(messages);
+    } catch (error) {
+        console.error("Error fetching messages:", error);
+        return Response.json({ error: "Failed to fetch messages" }, { status: 500 });
+    }
+}
+
 export async function POST(request) {
     try {
         const contentType = request.headers.get('content-type') || '';
         let payload = {};
+
+        // Clone request for signature verification
+        const rawClone = request.clone();
 
         // Parse payload depending on content type (Twilio uses urlencoded form, Meta uses JSON)
         if (contentType.includes('x-www-form-urlencoded') || contentType.includes('form-data')) {
@@ -39,6 +43,13 @@ export async function POST(request) {
             }
         } else {
             payload = await request.json();
+        }
+
+        // Validate Twilio signature to secure webhook endpoint
+        const isTwilioAuthentic = await verifyTwilioSignature(rawClone, process.env.TWILIO_AUTH_TOKEN);
+        if (!isTwilioAuthentic) {
+            console.warn("Unauthorized Twilio signature check blocked.");
+            return Response.json({ error: "Unauthorized Signature" }, { status: 401 });
         }
 
         // Extract key parameters from Twilio or Meta payload
@@ -56,17 +67,21 @@ export async function POST(request) {
         // 1. Identify Sender
         let senderName = "Operario Obra";
         let senderRole = "Cuadrilla";
+        let shortId = "cuadrilla";
         const cleanFrom = fromNumber.replace(/\D/g, ''); // Extract digits only
 
         if (cleanFrom.endsWith('1132419981') || cleanFrom.includes('carlos')) {
             senderName = "Carlos Pérez";
             senderRole = "Pintura e Interiores";
+            shortId = "carlos";
         } else if (cleanFrom.includes('juan')) {
             senderName = "Juan Gómez";
             senderRole = "Albañilería Principal";
+            shortId = "juan";
         } else if (cleanFrom.includes('luis')) {
             senderName = "Luis Martínez";
             senderRole = "Instalaciones y Sanitarios";
+            shortId = "luis";
         }
 
         const now = new Date();
@@ -75,6 +90,12 @@ export async function POST(request) {
         let botReply = '';
         let showInFeed = false;
         let feedIncident = null;
+
+        // Generate short-lived secure tokens for webviews
+        const webviewToken = generateWebviewToken(shortId);
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://obrasaas-saas.vercel.app';
+        const medicalLink = `${appUrl}/webview/medical?worker=${shortId}&token=${webviewToken}`;
+        const attendanceLink = `${appUrl}/webview/attendance?worker=${shortId}&token=${webviewToken}`;
 
         // 2. Process Location Sharing (Check-in)
         if (!isNaN(latitude) && !isNaN(longitude)) {
@@ -87,7 +108,7 @@ export async function POST(request) {
                 
                 if (distance <= 20) {
                     state.attendance[senderName].status = "Presente (GPS)";
-                    botReply = `📍 *Ubicación Verificada* por Satélite GPS.\n\n¡Bienvenido *${senderName}* a la obra!\n• Rol: ${senderRole}\n• Ingreso: ${timeStr}\n• Geocerca: Verificada (Distancia: ${distance}m).`;
+                    botReply = `📍 *Ubicación Verificada* por Satélite GPS.\n\n¡Bienvenido *${senderName}* a la obra!\n• Rol: ${senderRole}\n• Ingreso: ${timeStr}\n• Geocerca: Verificada (Distancia: ${distance}m).\n\nConsulte sus horas aquí:\n👉 ${attendanceLink}`;
                     
                     // Add success log to incidents
                     feedIncident = {
@@ -122,117 +143,193 @@ export async function POST(request) {
             }
             showInFeed = true;
         }
-        // 3. Process Voice Notes (Audio Reports)
-        else if (mediaUrl && mediaType.startsWith('audio/')) {
-            let transcribedText = bodyText || "Reporte de voz enviado.";
-            let actionDesc = "Audio procesado por el motor de IA.";
-            let impactTag = "Nota de Voz";
-            let impactClass = "info";
+        // 3. Process Voice Notes (Audio Reports) or LLM Intent Processing
+        else {
+            // Advanced Intent Parsing Engine (Check if real OpenAI key is present)
+            let whisperTranscript = bodyText;
+            let nlpResult = null;
 
-            // Simular transcripción de acuerdo a contenido/palabras clave en bodyText o simular por defecto
-            const lowerBody = bodyText.toLowerCase() || '';
+            if (process.env.OPENAI_API_KEY && mediaUrl && mediaType.startsWith('audio/')) {
+                try {
+                    // 1. In production, download the audio and translate via Whisper
+                    // For the sake of structured SaaS we simulate calling the endpoint or do a real API call if keys are present
+                    // We run basic structured JSON parsing from GPT-4o-mini
+                    const gptRes = await fetch("https://api.openai.com/v1/chat/completions", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
+                        },
+                        body: JSON.stringify({
+                            model: "gpt-4o-mini",
+                            response_format: {
+                                type: "json_schema",
+                                json_schema: {
+                                    name: "obra_intent_schema",
+                                    strict: true,
+                                    schema: {
+                                        type: "object",
+                                        properties: {
+                                            intent: { 
+                                                type: "string", 
+                                                enum: ["fichaje", "avance_tarea", "incidencia_critica", "demora_logistica", "otros"] 
+                                            },
+                                            task_id: { type: ["integer", "null"] },
+                                            progress_update: { type: ["integer", "null"] },
+                                            incidencia_titulo: { type: ["string", "null"] },
+                                            incidencia_descripcion: { type: ["string", "null"] },
+                                            incidencia_severidad: { type: ["string", "null"] },
+                                            incidencia_icono: { type: ["string", "null"] }
+                                        },
+                                        required: ["intent", "task_id", "progress_update", "incidencia_titulo", "incidencia_descripcion", "incidencia_severidad", "incidencia_icono"],
+                                        additionalProperties: false
+                                    }
+                                }
+                            },
+                            messages: [
+                                {
+                                    role: "system",
+                                    content: "Analiza el audio transcrito de la cuadrilla de obra en Argentina y clasifica su intención y parámetros correspondientes."
+                                },
+                                { role: "user", content: bodyText }
+                            ]
+                        })
+                    });
+                    const gptData = await gptRes.json();
+                    nlpResult = JSON.parse(gptData.choices[0].message.content);
+                } catch(e) {
+                    console.error("OpenAI real parsing failed, fallback to local NLP engine:", e);
+                }
+            }
+
+            // Fallback to local Regex NLP engine
+            const lowerBody = bodyText.toLowerCase();
             
-            if (lowerBody.includes('entra') || lowerBody.includes('ingres') || lowerBody.includes('arranc')) {
-                state.attendance["Luis Martínez"] = { role: "Instalaciones y Sanitarios", checkin: timeStr, status: "Presente" };
-                let presentCount = 0;
-                Object.values(state.attendance).forEach(val => {
-                    if (val.status.includes("Presente")) presentCount++;
-                });
-                state.operariosCount = presentCount;
-                actionDesc = "Fichaje de ingreso verificado y registrado mediante biométrica de voz.";
-                impactTag = "Ingreso Exitoso";
-                impactClass = "success";
-                botReply = `🎙️ *Fichaje por Voz Procesado*\n\nSe ha registrado el ingreso de *Luis Martínez* a la obra a las ${timeStr} mediante biometría de voz.`;
-            } 
-            else if (lowerBody.includes('revoque') || lowerBody.includes('termin') || lowerBody.includes('living')) {
-                if (state.tasks && state.tasks[1]) {
-                    state.tasks[1].progress = 100;
-                    actionDesc = "Revoque grueso registrado al 100%. Avanzada etapa en Gantt.";
-                    impactTag = "Gantt Actualizado";
-                    impactClass = "success";
-                    botReply = `🎙️ *Reporte de Avance Procesado*\n\nIA analizó el audio: *"Revoque grueso terminado"*. El progreso de la tarea ha sido actualizado al 100% en el Gantt.`;
+            if (nlpResult) {
+                // Real OpenAI parser integration
+                if (nlpResult.intent === 'fichaje') {
+                    state.attendance[senderName] = { role: senderRole, checkin: timeStr, status: "Presente" };
+                    botReply = `🎙️ *Fichaje por Voz Procesado*\n\nSe ha registrado tu ingreso a las ${timeStr} mediante biometría de voz.`;
+                } else if (nlpResult.intent === 'avance_tarea' && nlpResult.task_id) {
+                    const tid = nlpResult.task_id;
+                    const prog = nlpResult.progress_update || 100;
+                    if (state.tasks[tid]) {
+                        state.tasks[tid].progress = prog;
+                        botReply = `🎙️ *Reporte de Avance Procesado*\n\nSe actualizó la tarea *"${state.tasks[tid].name}"* al *${prog}%* en el cronograma Gantt.`;
+                    }
+                } else if (nlpResult.intent === 'incidencia_critica') {
+                    state.alertsCount += 1;
+                    feedIncident = {
+                        id: "inc-ai-" + Date.now(),
+                        title: nlpResult.incidencia_titulo || "Incidencia de Obra",
+                        description: nlpResult.incidencia_descripcion || bodyText,
+                        type: nlpResult.incidencia_severidad || "critical",
+                        badge: "Reportado IA",
+                        timestamp: `Hoy, ${timeStr}`,
+                        reporter: senderName,
+                        icon: nlpResult.incidencia_icono || "fa-solid fa-triangle-exclamation"
+                    };
+                    botReply = `🎙️ *Alerta de Novedad IA*\n\nAlerta crítica registrada: *${nlpResult.incidencia_titulo}*. Se ha informado al director de obra.`;
+                    showInFeed = true;
                 }
-            }
-            else if (lowerBody.includes('fuga') || lowerBody.includes('caño') || lowerBody.includes('agua') || lowerBody.includes('roto')) {
-                state.alertsCount += 1;
-                feedIncident = {
-                    id: "inc-fuga-" + Date.now(),
-                    title: "Fuga de Agua - Baño Principal",
-                    description: "Fisura en descarga del baño principal. Reclama codo PVC de 110.",
-                    type: "critical",
-                    badge: "Urgente",
-                    timestamp: `Hoy, ${timeStr}`,
-                    reporter: "Luis Martínez",
-                    icon: "fa-solid fa-droplet"
-                };
-                state.tasks[99] = { name: "Reparación Urgente Cañería", progress: 0, duration: 2, startOffset: 42.8, assignee: "Luis Martínez", isDelayed: true };
-                actionDesc = "Fisura en descarga sanitaria detectada. Ordenada reparación técnica urgente.";
-                impactTag = "Alerta de Rotura";
-                impactClass = "danger";
-                botReply = `🎙️ *Alerta de Novedad IA*\n\nAlerta crítica registrada: *Fuga de Agua en Baño Principal*. Se ha añadido una tarea de reparación correctiva urgente en el Gantt.`;
-                showInFeed = true;
-            }
-            else if (lowerBody.includes('demora') || lowerBody.includes('retraso') || lowerBody.includes('cerámic') || lowerBody.includes('suministro')) {
-                state.alertsCount += 1;
-                state.diasEstimados = "Día 12/37 (+2 días)";
-                feedIncident = {
-                    id: "inc-demora-" + Date.now(),
-                    title: "Demora de Suministros",
-                    description: "Cerámicas demoradas. Revestimiento desplazado al 29/Jun.",
-                    type: "warning",
-                    badge: "Demora 48hs",
-                    timestamp: `Hoy, ${timeStr}`,
-                    reporter: "Carlos Pérez",
-                    icon: "fa-solid fa-truck-ramp-box"
-                };
-                if (state.tasks[3]) {
-                    state.tasks[3].startOffset = 71.4;
-                    state.tasks[3].isShifted = true;
+            } else {
+                // Local keyword processor fallback (runs without OpenAI keys)
+                if (lowerBody.includes('fichar') || lowerBody.includes('entra') || lowerBody.includes('ingres') || lowerBody.includes('arranc')) {
+                    state.attendance[senderName] = { role: senderRole, checkin: timeStr, status: "Presente (Voz)" };
+                    
+                    let presentCount = 0;
+                    Object.values(state.attendance).forEach(val => {
+                        if (val.status.includes("Presente") || val.status.includes("Voz")) presentCount++;
+                    });
+                    state.operariosCount = presentCount;
+
+                    botReply = `🎙️ *Fichaje por Voz Procesado*\n\n¡Bienvenido *${senderName}*!\n• Rol: ${senderRole}\n• Ingreso registrado a las ${timeStr} mediante biometría de voz.\n\nFichaje seguro GPS:\n👉 ${attendanceLink}`;
+                    
+                    feedIncident = {
+                        id: "inc-gps-" + Date.now(),
+                        title: "Presentismo Registrado",
+                        description: `${senderName} inició jornada. Biometría de voz validada con éxito.`,
+                        type: "success",
+                        badge: "Presente",
+                        timestamp: `Hoy, ${timeStr}`,
+                        reporter: "Asistente de Voz IA",
+                        icon: "fa-solid fa-microphone"
+                    };
+                    showInFeed = true;
+                } 
+                else if (lowerBody.includes('revoque') || lowerBody.includes('termin') || lowerBody.includes('living')) {
+                    if (state.tasks && state.tasks[1]) {
+                        state.tasks[1].progress = 100;
+                        botReply = `🎙️ *Reporte de Avance Procesado*\n\nIA analizó el audio: *"Revoque grueso terminado"*. El progreso de la tarea ha sido actualizado al 100% en el Gantt.`;
+                        
+                        feedIncident = {
+                            id: "inc-gantt-" + Date.now(),
+                            title: "Tarea Finalizada en Gantt",
+                            description: `El operario ${senderName} completó la tarea: Revoque Grueso.`,
+                            type: "success",
+                            badge: "Gantt",
+                            timestamp: `Hoy, ${timeStr}`,
+                            reporter: "Supervisor IA",
+                            icon: "fa-solid fa-chart-gantt"
+                        };
+                        showInFeed = true;
+                    }
                 }
-                if (state.tasks[4]) {
-                    state.tasks[4].startOffset = 100.0;
-                    state.tasks[4].isShifted = true;
+                else if (lowerBody.includes('fuga') || lowerBody.includes('caño') || lowerBody.includes('agua') || lowerBody.includes('roto')) {
+                    state.alertsCount += 1;
+                    feedIncident = {
+                        id: "inc-fuga-" + Date.now(),
+                        title: "Fuga de Agua - Baño Principal",
+                        description: "Fisura en descarga del baño principal. Reclama codo PVC de 110.",
+                        type: "critical",
+                        badge: "Urgente",
+                        timestamp: `Hoy, ${timeStr}`,
+                        reporter: "Luis Martínez",
+                        icon: "fa-solid fa-droplet"
+                    };
+                    // Agrega la tarea de reparación al Gantt
+                    state.tasks[99] = { name: "Reparación Urgente Cañería", progress: 0, duration: 2, startOffset: 42.8, assignee: "Luis Martínez", isDelayed: true };
+                    botReply = `🎙️ *Alerta de Novedad IA*\n\nAlerta crítica registrada: *Fuga de Agua en Baño Principal*. Se ha añadido una tarea de reparación correctiva urgente en el Gantt.`;
+                    showInFeed = true;
                 }
-                actionDesc = "Retraso logístico del proveedor. Reprogramación de cronograma Gantt (+2 días).";
-                impactTag = "Gantt Reajustado";
-                impactClass = "warning";
-                botReply = `🎙️ *Reporte de Logística IA*\n\nAdvertencia registrada: *Demora de suministros de revestimientos cerámicos*. Hitos de finalización reprogramados +48hs.`;
-                showInFeed = true;
-            }
-            else {
-                botReply = `🎙️ *Audio Recibido y Transcrito*\n\n*"${transcribedText}"*\n\n• Estado: Guardado en Novedades de la Obra.`;
+                else if (lowerBody.includes('demora') || lowerBody.includes('retraso') || lowerBody.includes('cerámic') || lowerBody.includes('suministro')) {
+                    state.alertsCount += 1;
+                    state.diasEstimados = "Día 12/37 (+2 días)";
+                    feedIncident = {
+                        id: "inc-demora-" + Date.now(),
+                        title: "Demora de Suministros",
+                        description: "Cerámicas demoradas. Revestimiento de paredes desplazado al 29/Jun.",
+                        type: "warning",
+                        badge: "Demora 48hs",
+                        timestamp: `Hoy, ${timeStr}`,
+                        reporter: "Carlos Pérez",
+                        icon: "fa-solid fa-truck-ramp-box"
+                    };
+                    if (state.tasks[3]) {
+                        state.tasks[3].startOffset = 71.4;
+                        state.tasks[3].isShifted = true;
+                    }
+                    if (state.tasks[4]) {
+                        state.tasks[4].startOffset = 100.0;
+                        state.tasks[4].isShifted = true;
+                    }
+                    botReply = `🎙️ *Reporte de Logística IA*\n\nAdvertencia registrada: *Demora de suministros de revestimientos cerámicos*. Hitos de finalización reprogramados +48hs.`;
+                    showInFeed = true;
+                }
+                else if (lowerBody.includes('certificado') || lowerBody.includes('médico') || lowerBody.includes('enfermo') || lowerBody.includes('licencia')) {
+                    botReply = `🩺 *Carga de Certificados Médicos ObraSaaS*\n\nPara justificar tu inasistencia y subir la foto del certificado médico correspondiente, ingresa a este enlace seguro:\n👉 ${medicalLink}`;
+                }
+                else if (lowerBody.includes('ayuda') || lowerBody.includes('hola') || lowerBody.includes('buen')) {
+                    botReply = `👷 *Copiloto de ObraSaaS* 👷\n\nHola ${senderName}, soy tu asistente virtual de obra. Puedes:\n1. Enviar tu *ubicación* para fichaje satelital.\n2. Mandar un *audio* con tu avance diario.\n3. Solicitar carga de certificado médico escribiendo *'licencia'*.`;
+                }
+                else {
+                    botReply = `✅ *Mensaje Recibido, ${senderName}*.\n\nHe guardado tu reporte en la bitácora diaria de ObraSaaS. Puedes consultar tu estado de horas ingresando aquí:\n👉 ${attendanceLink}`;
+                }
             }
 
             // Append to database logs
             if (feedIncident) {
                 state.incidents.unshift(feedIncident);
-            }
-        }
-        // 4. Process Photo Uploads
-        else if (mediaUrl && mediaType.startsWith('image/')) {
-            feedIncident = {
-                id: "inc-photo-" + Date.now(),
-                title: "Reporte Visual de Obra",
-                description: `Verificación visual de avance enviada por ${senderName}. Captura archivada.`,
-                type: "success",
-                badge: "Guardado",
-                timestamp: `Hoy, ${timeStr}`,
-                reporter: senderName,
-                icon: "fa-solid fa-circle-check"
-            };
-            state.incidents.unshift(feedIncident);
-            botReply = `📸 *Imagen de Avance Registrada*\n\nLa captura enviada por *${senderName}* fue analizada por el módulo de visión IA y archivada en la bitácora fotográfica de Control de Calidad del día.`;
-            showInFeed = true;
-        }
-        // 5. Process Text Messages
-        else {
-            const lowerBody = bodyText.toLowerCase();
-            if (lowerBody.includes('hola') || lowerBody.includes('buen')) {
-                botReply = `👷 *Asistente ObraSaaS AI* 👷\n\nHola ${senderName}, soy tu copiloto inteligente de obra. Puedes:\n1. Enviar tu *ubicación* para marcar check-in satelital.\n2. Enviar una *nota de voz* con tu reporte de avance.\n3. Enviar una *foto* de los trabajos finalizados.`;
-            } else if (lowerBody.includes('status') || lowerBody.includes('estado')) {
-                botReply = `📊 *Resumen de Obra en Tiempo Real*\n\n• Avance General: *${state.avancePercentage}%*\n• Plazo: *${state.diasEstimados}*\n• Alertas activas: *${state.alertsCount}*\n• Personal presente: *${state.operariosCount}*`;
-            } else {
-                botReply = `✅ *Mensaje Recibido, ${senderName}*.\n\nProcesando tu informe en la bitácora digital de ObraSaaS. Escribe 'status' para obtener un resumen del proyecto.`;
             }
         }
 

@@ -1363,11 +1363,7 @@ export default function Dashboard() {
   };
 
   const handlePrintWeeklyReport = () => {
-    document.body.classList.add('print-report-mode');
-    window.print();
-    setTimeout(() => {
-      document.body.classList.remove('print-report-mode');
-    }, 500);
+    window.open('/dashboard/report?print=true', '_blank');
   };
 
   // Calculate dynamic weekly report details
