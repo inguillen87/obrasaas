@@ -208,7 +208,7 @@ export default function Home() {
               <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#f59e0b' }}></div>
               <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#10b981' }}></div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '20px', textAlign: 'left' }}>
+            <div className="home-preview-grid">
               {/* Gantt Chart Preview */}
               <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '12px', padding: '16px' }}>
                 <h5 style={{ marginBottom: '12px', fontWeight: 600, color: '#fff', fontSize: '0.9rem' }}>
