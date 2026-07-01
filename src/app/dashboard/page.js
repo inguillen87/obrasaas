@@ -891,7 +891,7 @@ export default function Dashboard() {
         reply += `🔴 **Faltas Injustificadas**: ${absent.length > 0 ? absent.join(', ') : 'Plantilla Completa'}.\n\n`;
         
         if (absent.length > 0) {
-            reply += `⚠️ **Sugerencia Predictiva**: Recomendamos reasignar tareas del módulo "Revestimiento" debido a la falta de ${absent[0]}. Puedo enviar un memo a RRHH automáticamente.`;
+            reply += `⚠️ **Sugerencia Predictiva**: Recomendamos reasignar tareas del módulo "Revestimiento" debido a la falta de ${absent[0]}. Puedo enviar un memo a RRHH automáticamente.\n[ACTION:REASIGNAR_REVESTIMIENTO:Reasignar Personal de Revestimiento]`;
         } else {
             reply += `La cuadrilla está operando a máxima capacidad.`;
         }
@@ -909,7 +909,7 @@ export default function Dashboard() {
         
         // Stock Insight crossover
         if (state.stockpiles.cemento.status === 'Crítico') {
-            reply += `\n🚨 **Bloqueador Potencial**: El bajo stock de Cemento (35 bolsas) puede retrasar las tareas en 48hs. Recomiendo emitir orden de compra hoy.`;
+            reply += `\n🚨 **Bloqueador Potencial**: El bajo stock de Cemento (35 bolsas) puede retrasar las tareas en 48hs. Recomiendo emitir orden de compra hoy.\n[ACTION:COMPRAR_CEMENTO:Emitir Orden de Compra Inteligente]`;
         }
         return reply;
     }
@@ -943,6 +943,20 @@ export default function Dashboard() {
            `• *¿Existen problemas de stock o alertas de roturas?*\n` + 
            `• *Muéstrame el flujo comercial CRM y MRR*\n\n` + 
            `Analizo 140 variables de obra y sensores GPS en vivo.`;
+  };
+
+  // Actionable AI (Agentic Workflow Handler)
+  const handleAgenticAction = (actionCmd) => {
+    if (actionCmd === 'REASIGNAR_REVESTIMIENTO') {
+      addToast('IA: Personal de revestimiento reasignado con éxito.', 'success');
+      // Simulate state update
+      setCopilotMessages(prev => [...prev, { sender: 'bot', text: '✅ Tareas reasignadas y memo de RRHH enviado.' }]);
+    } else if (actionCmd === 'COMPRAR_CEMENTO') {
+      addToast('IA: Orden de compra de cemento emitida al corralón.', 'success');
+      setCopilotMessages(prev => [...prev, { sender: 'bot', text: '✅ Orden de compra generada. El acopio llegará en 24hs.' }]);
+    } else {
+      addToast('Comando de IA no reconocido.', 'warning');
+    }
   };
 
   // Supervisor IA Chat handler
@@ -1020,9 +1034,18 @@ export default function Dashboard() {
       payload.mediaUrl = "planos_palermo_v2.pdf";
       payload.mediaType = "application/pdf";
     } else if (type === 'camera') {
-      payload.bodyText = "Foto adjunta de la fachada";
+      // Multimodal Chaos Tolerance Simulator (Task 4)
+      payload.bodyText = "[IMAGEN BORROSA DETECTADA] - Procesando con Visión Multimodal...";
       payload.mediaUrl = "fachada.jpg";
       payload.mediaType = "image/jpeg";
+      
+      addToast('Procesando imagen caótica de WhatsApp mediante IA Multimodal...', 'info');
+      
+      setTimeout(() => {
+        addToast('IA: Muro detectado con 85% de avance. Actualizando Gantt.', 'success');
+        setCopilotMessages(prev => [...prev, { sender: 'bot', text: '✅ He analizado la foto borrosa enviada desde la obra. Reconozco que es el frente sur y el muro está al 85%. He actualizado el progreso de "Mampostería" en el Gantt.' }]);
+      }, 3000);
+      
     } else if (type === 'gallery') {
       payload.bodyText = "Imagen de revoque seleccionada";
       payload.mediaUrl = "revoque.jpg";
@@ -1599,6 +1622,37 @@ export default function Dashboard() {
               </div>
             </div>
 
+            {/* Actionable BIM / Digital Twin Viewer */}
+            <div className="grid-1" style={{ marginBottom: '24px' }}>
+              <div className="glass-panel-premium dashboard-card-hover" style={{ display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', zIndex: 10 }}>
+                  <div>
+                    <h3 style={{ fontFamily: 'var(--font-heading)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <i className="fa-solid fa-cube" style={{ color: 'var(--info)' }}></i> Gemelo Digital BIM (Autodesk Sync)
+                    </h3>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', margin: 0 }}>
+                      Renderización en la nube del modelo federado. Control de interferencias y avance visual.
+                    </p>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button className="btn btn-sm" style={{ background: 'var(--primary)', color: 'var(--bg-main)', fontWeight: 700, borderRadius: '6px' }}><i className="fa-solid fa-layer-group"></i> MEP</button>
+                    <button className="btn btn-sm btn-secondary" style={{ borderRadius: '6px' }}><i className="fa-solid fa-building"></i> Estructura</button>
+                  </div>
+                </div>
+                
+                <div style={{ height: '350px', width: '100%', borderRadius: '12px', background: 'url(/bim_render.png) center/cover no-repeat', border: '1px solid var(--border-color)', position: 'relative' }}>
+                  {/* Overlay UI on BIM */}
+                  <div style={{ position: 'absolute', bottom: '16px', left: '16px', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(10px)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>Clash Detection AI</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span className="badge badge-success"><i className="fa-solid fa-check"></i> Cero Conflictos</span>
+                      <span style={{ fontSize: '0.8rem', color: '#fff' }}>Nivel 4 Revisado</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Interactive Map & AI Copilot Row */}
             <div className="grid-2" style={{ marginBottom: '24px' }}>
               {/* Map Card */}
@@ -1625,20 +1679,72 @@ export default function Dashboard() {
                 
                 <div className="copilot-chat-box">
                   <div className="copilot-chat-messages" style={{ overflowY: 'auto' }}>
-                    {copilotMessages.map((msg, i) => (
+                    {copilotMessages.map((msg, i) => {
+                      // Agentic AI Action Parser
+                      const actionRegex = /\[ACTION:(.*?):(.*?)\]/g;
+                      let parts = [];
+                      let lastIndex = 0;
+                      let match;
+                      
+                      const textToParse = msg.text.replace(/\*\*/g, '');
+                      
+                      while ((match = actionRegex.exec(textToParse)) !== null) {
+                        if (match.index > lastIndex) {
+                          parts.push({ type: 'text', content: textToParse.substring(lastIndex, match.index) });
+                        }
+                        parts.push({ type: 'action', cmd: match[1], label: match[2] });
+                        lastIndex = actionRegex.lastIndex;
+                      }
+                      if (lastIndex < textToParse.length) {
+                        parts.push({ type: 'text', content: textToParse.substring(lastIndex) });
+                      }
+
+                      return (
                       <div key={i} style={{ 
                         background: msg.sender === 'user' ? 'var(--primary-glow)' : 'rgba(255,255,255,0.03)', 
-                        padding: '8px 12px', 
-                        borderRadius: '8px', 
+                        padding: '10px 14px', 
+                        borderRadius: '12px', 
                         alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start', 
                         maxWidth: '90%',
-                        fontSize: '0.75rem',
-                        whiteSpace: 'pre-wrap',
-                        color: '#fff'
+                        fontSize: '0.8rem',
+                        color: '#fff',
+                        border: msg.sender === 'bot' ? '1px solid rgba(255,255,255,0.05)' : 'none',
+                        boxShadow: msg.sender === 'bot' ? '0 4px 6px rgba(0,0,0,0.1)' : 'none'
                       }}>
-                        {msg.text.replace(/\*\*/g, '')}
+                        {parts.length > 0 ? parts.map((p, idx) => {
+                          if (p.type === 'text') {
+                            return <span key={idx} style={{ whiteSpace: 'pre-wrap' }}>{p.content}</span>;
+                          } else {
+                            return (
+                              <button 
+                                key={idx} 
+                                onClick={() => handleAgenticAction(p.cmd)}
+                                style={{
+                                  display: 'block',
+                                  marginTop: '10px',
+                                  padding: '8px 12px',
+                                  background: 'var(--success)',
+                                  color: 'var(--bg-main)',
+                                  border: 'none',
+                                  borderRadius: '6px',
+                                  fontWeight: 'bold',
+                                  cursor: 'pointer',
+                                  fontSize: '0.75rem',
+                                  width: '100%',
+                                  textAlign: 'center',
+                                  transition: 'transform 0.2s'
+                                }}
+                                onMouseOver={(e) => e.target.style.transform = 'scale(1.02)'}
+                                onMouseOut={(e) => e.target.style.transform = 'scale(1)'}
+                              >
+                                <i className="fa-solid fa-bolt"></i> {p.label}
+                              </button>
+                            );
+                          }
+                        }) : <span style={{ whiteSpace: 'pre-wrap' }}>{textToParse}</span>}
                       </div>
-                    ))}
+                      );
+                    })}
                     <div ref={copilotMessagesEndRef}></div>
                   </div>
                   <div className="copilot-chat-input-container">
@@ -1658,6 +1764,35 @@ export default function Dashboard() {
                   <span className="crm-suggest-tag" onClick={() => { setCopilotInput("Haceme un resumen de cómo van los avances"); setTimeout(sendCopilotUserMessage, 50); }}>Resumen de avances</span>
                   <span className="crm-suggest-tag" onClick={() => { setCopilotInput("¿Alguien faltó hoy? ¿Llegaron todos a tiempo?"); setTimeout(sendCopilotUserMessage, 50); }}>Asistencia hoy</span>
                   <span className="crm-suggest-tag" onClick={() => { setCopilotInput("¿Hay algún mensaje preocupante, alerta o heridos?"); setTimeout(sendCopilotUserMessage, 50); }}>¿Alguna alerta o heridos?</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Edge AI CCTV Security Panel */}
+            <div className="glass-panel-premium dashboard-card-hover" style={{ marginBottom: '24px', overflow: 'hidden' }}>
+              <div className="section-header" style={{ padding: '16px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ fontFamily: 'var(--font-heading)', color: 'var(--danger)', margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <i className="fa-solid fa-video fa-fade"></i> Control CCTV Edge AI (En Vivo)
+                </h3>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <span className="badge badge-danger">1 Alerta EPP</span>
+                  <span className="badge badge-success"><i className="fa-solid fa-signal"></i> Cam 4 - Activa</span>
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '0' }}>
+                <div style={{ height: '350px', background: 'url(/cctv_render.png) center/cover no-repeat', borderRight: '1px solid rgba(255,255,255,0.05)' }}>
+                </div>
+                <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div style={{ borderLeft: '4px solid var(--danger)', paddingLeft: '12px' }}>
+                    <strong style={{ color: 'var(--danger)', display: 'block', fontSize: '0.9rem', marginBottom: '4px' }}>VIOLACIÓN DE SEGURIDAD</strong>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Detección de operario sin casco de seguridad en zona caliente.</span>
+                  </div>
+                  <button className="btn btn-secondary btn-sm" onClick={() => addToast('Notificación enviada al supervisor de campo vía SMS.', 'success')} style={{ width: '100%' }}>
+                    <i className="fa-solid fa-bell"></i> Alertar Supervisor
+                  </button>
+                  <button className="btn btn-secondary btn-sm" onClick={() => addToast('IA: Reporte de infracción guardado en legajo del operario.', 'info')} style={{ width: '100%', marginTop: '8px' }}>
+                    <i className="fa-solid fa-file-signature"></i> Cargar a Legajo
+                  </button>
                 </div>
               </div>
             </div>
