@@ -208,6 +208,17 @@ export default function Dashboard() {
   // Audio Playback Waveforms Animation State
   const [playingAudioIndex, setPlayingAudioIndex] = useState(null);
 
+  // Live Toast Notifications State
+  const [toasts, setToasts] = useState([]);
+
+  const addToast = (message, type = 'info') => {
+    const id = Date.now();
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 5000);
+  };
+
   // DOM Canvas and Map Container Refs
   const progressChartRef = useRef(null);
   const tasksChartRef = useRef(null);
@@ -518,6 +529,20 @@ export default function Dashboard() {
               const messagesData = await messagesRes.json();
               setChatMessages(messagesData);
             }
+            
+            // Push smart notification
+            if (data.impactClass === 'danger') {
+              addToast('Alerta crítica prioritaria de campo: ' + data.actionDesc, 'warning');
+            } else {
+              addToast('Evento procesado por IA: ' + data.impactTag, 'success');
+            }
+            
+            // Auto Copilot Insights update
+            setCopilotMessages(prev => [...prev, { 
+                sender: 'bot', 
+                text: `**[Alerta de Audio en Vivo]**\nHe interceptado un mensaje de voz de ${data.from}. He procedido a actualizar el Gantt y notificar a los supervisores por precaución.` 
+            }]);
+
           } catch (e) {
             console.error("Audio sim webhook error:", e);
           }
@@ -851,79 +876,73 @@ export default function Dashboard() {
   const getBotResponse = (msgText) => {
     const lower = msgText.toLowerCase();
     
+    // Cross-referencing logic: NLP engine upgrades
     if (lower.includes('falto') || lower.includes('asistencia') || lower.includes('llegaron') || lower.includes('presente') || lower.includes('tarde') || lower.includes('quien') || lower.includes('fichaje')) {
         let present = [];
         let absent = [];
         Object.keys(state.attendance).forEach(name => {
-            const item = state.attendance[name];
-            if (item.status.includes('Presente')) {
-                present.push(`${name} (${item.checkin})`);
-            } else {
-                absent.push(name);
-            }
+            if (state.attendance[name].status.includes('Presente')) present.push(`${name} (${state.attendance[name].checkin})`);
+            else absent.push(name);
         });
         
-        let reply = `**[Monitoreo de Asistencia - ObraSaaS AI]**\n\n`;
-        reply += `Actualmente hay **${state.operariosCount} operarios** presentes en el predio de obra.\n\n`;
-        reply += `🟢 **Presentes (GPS)**: ${present.length > 0 ? present.join(', ') : 'Ninguno por ahora'}.\n`;
-        reply += `🔴 **Ausentes**: ${absent.length > 0 ? absent.join(', ') : 'Ninguno (plantilla completa)'}.\n\n`;
-        reply += `Todos los ingresos confirmados coinciden con su ID de celular único y se localizan físicamente dentro de la geocerca.`;
-        return reply;
-    }
-    
-    if (lower.includes('resumen') || lower.includes('avance') || lower.includes('como va') || lower.includes('avances') || lower.includes('progreso') || lower.includes('gantt') || lower.includes('cronograma')) {
-        let reply = `**[Reporte de Avance - ObraSaaS AI]**\n\n`;
-        reply += `El progreso promedio ponderado de la obra Palermo Chico es del **${state.avancePercentage}%**.\n\n`;
+        let reply = `**[Monitoreo de Asistencia Biométrico - AI]**\n\n`;
+        reply += `Actualmente detecto **${state.operariosCount} operarios** en la zona caliente de obra.\n\n`;
+        reply += `🟢 **Ingresos Check-in**: ${present.length > 0 ? present.join(', ') : 'Ninguno'}.\n`;
+        reply += `🔴 **Faltas Injustificadas**: ${absent.length > 0 ? absent.join(', ') : 'Plantilla Completa'}.\n\n`;
         
-        Object.keys(state.tasks).forEach(id => {
-            const task = state.tasks[id];
-            reply += `• **${task.name}**: ${task.progress}% completado (${task.duration} días asignados a ${task.assignee}).\n`;
-        });
-        
-        reply += `\n📅 **Plazo estimado**: ${state.diasEstimados}.`;
-        return reply;
-    }
-    
-    if (lower.includes('herido') || lower.includes('accidente') || lower.includes('heridos') || lower.includes('seguridad') || lower.includes('alerta') || lower.includes('alertas') || lower.includes('problema') || lower.includes('preocupante') || lower.includes('fuga') || lower.includes('agua') || lower.includes('caño') || lower.includes('cañería')) {
-        let reply = `**[Auditoría de Seguridad - ObraSaaS AI]**\n\n`;
-        reply += `👷 **Integridad Física**: 🔴 **Cero Accidentes**. Todo el personal trabaja con equipamiento de protección reglamentario. No se reportan heridos.\n\n`;
-        
-        if (state.alertsCount > 0 && state.incidents.length > 0) {
-            reply += `⚠️ **Incidencias Activas**: Se registran las siguientes alertas críticas:\n`;
-            state.incidents.forEach(inc => {
-                const text = typeof inc === 'object' && inc !== null ? `${inc.title}: ${inc.description}` : inc;
-                reply += `• *${text}*\n`;
-            });
-            reply += `\nSe han enviado notificaciones correctivas automáticas y reprogramado los plazos correspondientes.`;
+        if (absent.length > 0) {
+            reply += `⚠️ **Sugerencia Predictiva**: Recomendamos reasignar tareas del módulo "Revestimiento" debido a la falta de ${absent[0]}. Puedo enviar un memo a RRHH automáticamente.`;
         } else {
-            reply += `🟢 **Estado Técnico**: Sin anomalías reportadas. Obra transcurriendo bajo curso regular.`;
+            reply += `La cuadrilla está operando a máxima capacidad.`;
         }
         return reply;
     }
     
-    if (lower.includes('suscripcion') || lower.includes('suscripciones') || lower.includes('mrr') || lower.includes('mes') || lower.includes('cobros') || lower.includes('facturacion') || lower.includes('plataforma') || lower.includes('estudios') || lower.includes('dinero') || lower.includes('ingresos')) {
-        let reply = `**[Auditoría de Suscripciones - ObraSaaS AI]**\n\n`;
-        reply += `• **MRR Recurrente**: $4.850.000 ARS (+12% intermensual).\n`;
-        reply += `• **Suscripciones Activas**: 28 Estudios de Arquitectura en Argentina.\n`;
-        reply += `• **Distribución de Planes**: 16 Enterprise ($350.000/mes) y 12 Pro ($180.000/mes).\n`;
-        reply += `• **Tasa de Abandono (Churn)**: 0% en el último trimestre.\n`;
-        reply += `• **Cobros pendientes**: Estudio MRA+A ($180.000).`;
-        return reply;
-    }
-    
-    if (lower.includes('leads') || lower.includes('consulta') || lower.includes('consultas') || lower.includes('clientes') || lower.includes('ventas') || lower.includes('comercial')) {
-        let reply = `**[Embudo de Ventas CRM - ObraSaaS AI]**\n\n`;
-        state.crmLeads.slice(0, 3).forEach(lead => {
-          reply += `• **${lead.company} (${lead.name})**: ${lead.topic} (${lead.status})\n`;
+    if (lower.includes('resumen') || lower.includes('avance') || lower.includes('como va') || lower.includes('avances') || lower.includes('progreso') || lower.includes('gantt') || lower.includes('cronograma')) {
+        let reply = `**[Auditoría de Avance y Gantt - AI]**\n\n`;
+        reply += `El progreso real de la obra es del **${state.avancePercentage}%** (frente al 32% proyectado en curva S).\n\n`;
+        
+        Object.keys(state.tasks).forEach(id => {
+            const t = state.tasks[id];
+            reply += `• **${t.name}**: ${t.progress}% (${t.assignee}).\n`;
         });
+        
+        // Stock Insight crossover
+        if (state.stockpiles.cemento.status === 'Crítico') {
+            reply += `\n🚨 **Bloqueador Potencial**: El bajo stock de Cemento (35 bolsas) puede retrasar las tareas en 48hs. Recomiendo emitir orden de compra hoy.`;
+        }
         return reply;
     }
     
-    return `Hola, Marcelo. Soy tu Copiloto de ObraSaaS. Entiendo tu consulta. Puedes preguntarme acerca de:\n\n` + 
-           `• *¿Cómo van los avances de obra?* (Resumen del Gantt)\n` + 
-           `• *¿Alguien faltó hoy? ¿Llegaron todos a tiempo?* (Asistencia)\n` + 
-           `• *¿Hay algún herido, accidente o alerta técnica?* (Seguridad)\n\n` + 
-           `Estoy monitoreando el predio y procesando audios en tiempo real.`;
+    if (lower.includes('herido') || lower.includes('accidente') || lower.includes('heridos') || lower.includes('seguridad') || lower.includes('alerta') || lower.includes('alertas') || lower.includes('problema') || lower.includes('preocupante') || lower.includes('fuga') || lower.includes('agua') || lower.includes('caño') || lower.includes('cañería')) {
+        let reply = `**[Control de Riesgos de Obra - AI]**\n\n`;
+        reply += `👷 **Integridad Física**: 🔴 0 Accidentes Reportados.\n\n`;
+        
+        if (state.incidents.length > 0) {
+            reply += `⚠️ **Incidencias Estructurales Activas**:\n`;
+            state.incidents.forEach(inc => {
+                reply += `• *${inc.title}: ${inc.description}*\n`;
+            });
+            reply += `\nHe procedido a notificar a los subcontratistas y al arquitecto residente para la mitigación inmediata del riesgo.`;
+        }
+        return reply;
+    }
+    
+    if (lower.includes('suscripcion') || lower.includes('suscripciones') || lower.includes('mrr') || lower.includes('mes') || lower.includes('cobros') || lower.includes('facturacion') || lower.includes('plataforma') || lower.includes('estudios') || lower.includes('dinero') || lower.includes('ingresos') || lower.includes('crm')) {
+        let reply = `**[Métricas de Crecimiento CRM - AI]**\n\n`;
+        reply += `• **MRR Recurrente**: $4.850.000 ARS (+12% MoM).\n`;
+        reply += `• **Leads Calientes**: 3 Nuevos prospectos de Estudios.\n`;
+        reply += `• **Churn Involuntario**: $0. Tickets técnicos estables.\n\n`;
+        reply += `💡 **Insight de Crecimiento**: Aumentar la inversión en Ads de "Geofencing" puede subir tu MRR un 8% este trimestre.`;
+        return reply;
+    }
+    
+    return `Hola, Marcelo. Soy tu Copiloto Inteligente de ObraSaaS. Puedes preguntarme acerca de:\n\n` + 
+           `• *¿Quiénes llegaron y quiénes faltaron hoy?*\n` + 
+           `• *Dame un resumen de avances frente al Gantt*\n` + 
+           `• *¿Existen problemas de stock o alertas de roturas?*\n` + 
+           `• *Muéstrame el flujo comercial CRM y MRR*\n\n` + 
+           `Analizo 140 variables de obra y sensores GPS en vivo.`;
   };
 
   // Supervisor IA Chat handler
@@ -1425,6 +1444,21 @@ export default function Dashboard() {
 
   return (
     <>
+      {/* Live Toasts Notifications Container */}
+      <div className="toast-container">
+        {toasts.map(t => (
+          <div key={t.id} className={`toast-notification toast-${t.type}`}>
+            <div className="toast-icon-wrapper">
+              <i className={t.type === 'success' ? 'fa-solid fa-check' : t.type === 'warning' ? 'fa-solid fa-exclamation-triangle' : 'fa-solid fa-info'}></i>
+            </div>
+            <div>
+              <strong style={{ display: 'block', fontSize: '0.85rem', marginBottom: '2px' }}>{t.type === 'success' ? 'Éxito' : t.type === 'warning' ? 'Alerta Crítica' : 'Notificación'}</strong>
+              <span style={{ fontSize: '0.8rem', opacity: 0.9 }}>{t.message}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
       <div className="app-container">
         {/* Sidebar Navigation */}
         <aside className={`sidebar ${mobileSidebarOpen ? 'active' : ''}`}>
@@ -1500,7 +1534,7 @@ export default function Dashboard() {
         <main className="main-content">
           
           {/* SECTION 1: DASHBOARD */}
-          <section id="sec-dashboard" className={`content-section ${activeTab === 'sec-dashboard' ? 'active' : ''}`}>
+          <section id="sec-dashboard" className={`content-section animate-fade-in-up ${activeTab === 'sec-dashboard' ? 'active' : ''}`}>
             <div className="section-header">
               <div className="header-title">
                 <h1>Panel de Control de Obra</h1>
@@ -1516,21 +1550,21 @@ export default function Dashboard() {
 
             {/* Stats Grid */}
             <div className="grid-4">
-              <div className="glass-card stat-card">
+              <div className="glass-panel-premium dashboard-card-hover stat-card">
                 <div className="stat-icon primary"><i className="fa-solid fa-person-digging"></i></div>
                 <div className="stat-content">
                   <span className="stat-value">{state.operariosCount}</span>
                   <span className="stat-label">Operarios en Obra</span>
                 </div>
               </div>
-              <div className="glass-card stat-card">
+              <div className="glass-panel-premium dashboard-card-hover stat-card">
                 <div className="stat-icon success"><i className="fa-solid fa-percent"></i></div>
                 <div className="stat-content">
                   <span className="stat-value">{state.avancePercentage}%</span>
                   <span className="stat-label">Progreso General</span>
                 </div>
               </div>
-              <div className="glass-card stat-card">
+              <div className="glass-panel-premium dashboard-card-hover stat-card">
                 <div className={`stat-icon danger ${state.alertsCount > 0 ? 'fa-fade' : ''}`} style={{ background: state.alertsCount > 0 ? 'rgba(239,68,68,0.25)' : 'rgba(255,255,255,0.02)' }}>
                   <i className="fa-solid fa-triangle-exclamation"></i>
                 </div>
@@ -1539,7 +1573,7 @@ export default function Dashboard() {
                   <span className="stat-label">Alertas/Bloqueos</span>
                 </div>
               </div>
-              <div className="glass-card stat-card">
+              <div className="glass-panel-premium dashboard-card-hover stat-card">
                 <div className="stat-icon info"><i className="fa-solid fa-calendar-day"></i></div>
                 <div className="stat-content">
                   <span className="stat-value">{state.diasEstimados}</span>
@@ -1550,14 +1584,14 @@ export default function Dashboard() {
 
             {/* Dashboard Charts */}
             <div className="grid-2" style={{ marginBottom: '24px' }}>
-              <div className="glass-card">
+              <div className="glass-panel-premium dashboard-card-hover">
                 <h3 style={{ fontFamily: 'var(--font-heading)', marginBottom: '16px' }}>Curva de Avance Real vs. Planificado</h3>
                 <div className="chart-container" style={{ height: '220px', position: 'relative' }}>
                   <canvas ref={progressChartRef}></canvas>
                 </div>
               </div>
 
-              <div className="glass-card">
+              <div className="glass-panel-premium dashboard-card-hover">
                 <h3 style={{ fontFamily: 'var(--font-heading)', marginBottom: '16px' }}>Distribución de Tareas por Estado</h3>
                 <div className="chart-container" style={{ height: '220px', position: 'relative' }}>
                   <canvas ref={tasksChartRef}></canvas>
@@ -1568,7 +1602,7 @@ export default function Dashboard() {
             {/* Interactive Map & AI Copilot Row */}
             <div className="grid-2" style={{ marginBottom: '24px' }}>
               {/* Map Card */}
-              <div className="glass-card" style={{ display: 'flex', flexDirection: 'column' }}>
+              <div className="glass-panel-premium dashboard-card-hover" style={{ display: 'flex', flexDirection: 'column' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                   <h3 style={{ fontFamily: 'var(--font-heading)', marginBottom: 0 }}>Mapa de Asistencia Satelital</h3>
                   <div style={{ display: 'flex', gap: '4px', background: 'rgba(255,255,255,0.03)', padding: '4px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
@@ -1583,7 +1617,7 @@ export default function Dashboard() {
               </div>
 
               {/* Architect AI Supervisor Card */}
-              <div className="glass-card" style={{ display: 'flex', flexDirection: 'column' }}>
+              <div className="glass-panel-premium dashboard-card-hover" style={{ display: 'flex', flexDirection: 'column' }}>
                 <h3 style={{ fontFamily: 'var(--font-heading)', marginBottom: '4px', color: 'var(--primary)' }}><i className="fa-solid fa-wand-magic-sparkles"></i> Supervisor IA de Obra</h3>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginBottom: '10px' }}>
                   Pregúntale al supervisor un resumen global de avances, asistencia o alertas sin navegar menú por menú.
@@ -1631,7 +1665,7 @@ export default function Dashboard() {
             {/* Dashboard Details Table */}
             <div className="grid-2">
               {/* Left: Asistencia y Operarios */}
-              <div className="glass-card">
+              <div className="glass-panel-premium dashboard-card-hover">
                 <div className="section-header" style={{ marginBottom: '16px' }}>
                   <h3 style={{ fontFamily: 'var(--font-heading)' }}>Historial de Fichajes de Hoy</h3>
                 </div>
@@ -1676,7 +1710,7 @@ export default function Dashboard() {
               </div>
 
               {/* Right: Incidencias y Bitácora */}
-              <div className="glass-card">
+              <div className="glass-panel-premium dashboard-card-hover">
                 <div className="section-header" style={{ marginBottom: '16px' }}>
                   <h3 style={{ fontFamily: 'var(--font-heading)' }}>Incidencias &amp; Alertas en Curso</h3>
                 </div>
@@ -1709,7 +1743,7 @@ export default function Dashboard() {
                       }
 
                       return (
-                        <div key={i} className="glass-card" style={{ borderLeft: `4px solid ${borderCol}`, background: bgCol, marginBottom: 0, padding: '12px' }}>
+                        <div key={i} className="glass-panel-premium dashboard-card-hover" style={{ borderLeft: `4px solid ${borderCol}`, background: bgCol, marginBottom: 0, padding: '12px' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                             <strong style={{ color: borderCol, fontSize: '0.8rem' }}><i className={inc.icon}></i> {inc.title}</strong>
                             <span className={`badge ${badgeClass}`}>{inc.badge}</span>
@@ -1729,7 +1763,7 @@ export default function Dashboard() {
             </div>
 
             {/* Control de Acopios and Recepción de Suministros Row */}
-            <div className="glass-card" style={{ marginTop: '24px' }}>
+            <div className="glass-panel-premium dashboard-card-hover" style={{ marginTop: '24px' }}>
               <div className="section-header" style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
                 <div>
                   <h3 style={{ fontFamily: 'var(--font-heading)', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
@@ -1760,7 +1794,7 @@ export default function Dashboard() {
                   const pct = Math.min((item.current / item.max) * 100, 100);
 
                   return (
-                    <div key={key} className="glass-card stat-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: '8px', marginBottom: 0, padding: '16px' }}>
+                    <div key={key} className="glass-panel-premium dashboard-card-hover stat-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: '8px', marginBottom: 0, padding: '16px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <strong style={{ fontSize: '0.9rem', fontFamily: 'var(--font-heading)', color: 'var(--text-primary)' }}>{item.name}</strong>
                         <span className={`badge ${badgeClass}`}>{item.status}</span>
@@ -1782,7 +1816,7 @@ export default function Dashboard() {
             </div>
 
             {/* Future Pro Features Roadmap */}
-            <div className="glass-card" style={{ marginTop: '24px' }}>
+            <div className="glass-panel-premium dashboard-card-hover" style={{ marginTop: '24px' }}>
               <h3 style={{ fontFamily: 'var(--font-heading)', marginBottom: '16px', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <i className="fa-solid fa-rocket"></i> Roadmap de Funcionalidades Pro (Plan de Evolución)
               </h3>
@@ -1813,7 +1847,7 @@ export default function Dashboard() {
           </section>
 
           {/* SECTION 2: WHATSAPP SIMULATOR */}
-          <section id="sec-whatsapp" className={`content-section ${activeTab === 'sec-whatsapp' ? 'active' : ''}`}>
+          <section id="sec-whatsapp" className={`content-section animate-fade-in-up ${activeTab === 'sec-whatsapp' ? 'active' : ''}`}>
             <div className="section-header">
               <div className="header-title">
                 <h1>Simulador de Chat de Obra (WhatsApp IA)</h1>
@@ -1950,14 +1984,14 @@ export default function Dashboard() {
               </div>
 
               {/* Waveform Controls */}
-              <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div className="glass-panel-premium dashboard-card-hover" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                 <h3 style={{ fontFamily: 'var(--font-heading)', color: 'var(--primary)' }}>Panel de Simulación de Audios</h3>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
                   Haz clic en reproducir para oír la telemetría sintetizada por **Web Audio API** mientras la IA procesa y transcribe el reporte.
                 </p>
 
                 {/* Audio 1 */}
-                <div className="glass-card" style={{ background: 'rgba(255, 255, 255, 0.01)', padding: '14px', marginBottom: 0 }}>
+                <div className="glass-panel-premium dashboard-card-hover" style={{ background: 'rgba(255, 255, 255, 0.01)', padding: '14px', marginBottom: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
                     <strong style={{ fontSize: '0.85rem' }}><i className="fa-solid fa-clipboard-user" style={{ color: 'var(--success)' }}></i> Audio 1: Fichaje Diario (Ingreso)</strong>
                     <span className="badge badge-success">Luis Martínez</span>
@@ -1975,7 +2009,7 @@ export default function Dashboard() {
                 </div>
 
                 {/* Audio 2 */}
-                <div className="glass-card" style={{ background: 'rgba(255, 255, 255, 0.01)', padding: '14px', marginBottom: 0 }}>
+                <div className="glass-panel-premium dashboard-card-hover" style={{ background: 'rgba(255, 255, 255, 0.01)', padding: '14px', marginBottom: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
                     <strong style={{ fontSize: '0.85rem' }}><i className="fa-solid fa-chart-line" style={{ color: 'var(--info)' }}></i> Audio 2: Reporte de Avance Diario</strong>
                     <span className="badge badge-info">Juan Gómez</span>
@@ -1993,7 +2027,7 @@ export default function Dashboard() {
                 </div>
 
                 {/* Audio 3 */}
-                <div className="glass-card" style={{ background: 'rgba(255, 255, 255, 0.01)', padding: '14px', marginBottom: 0 }}>
+                <div className="glass-panel-premium dashboard-card-hover" style={{ background: 'rgba(255, 255, 255, 0.01)', padding: '14px', marginBottom: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
                     <strong style={{ fontSize: '0.85rem' }}><i className="fa-solid fa-triangle-exclamation" style={{ color: 'var(--danger)' }}></i> Audio 3: Incidencia Técnica Crítica</strong>
                     <span className="badge badge-danger">Luis Martínez</span>
@@ -2011,7 +2045,7 @@ export default function Dashboard() {
                 </div>
 
                 {/* Audio 4 */}
-                <div className="glass-card" style={{ background: 'rgba(255, 255, 255, 0.01)', padding: '14px', marginBottom: 0 }}>
+                <div className="glass-panel-premium dashboard-card-hover" style={{ background: 'rgba(255, 255, 255, 0.01)', padding: '14px', marginBottom: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
                     <strong style={{ fontSize: '0.85rem' }}><i className="fa-solid fa-clock" style={{ color: 'var(--warning)' }}></i> Audio 4: Alerta de Retraso Crítico</strong>
                     <span className="badge badge-warning">Carlos Pérez</span>
@@ -2029,7 +2063,7 @@ export default function Dashboard() {
                 </div>
 
                 {/* Sim Check-in */}
-                <div className="glass-card" style={{ background: 'rgba(255, 255, 255, 0.01)', padding: '14px', marginBottom: 0 }}>
+                <div className="glass-panel-premium dashboard-card-hover" style={{ background: 'rgba(255, 255, 255, 0.01)', padding: '14px', marginBottom: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
                     <strong style={{ fontSize: '0.85rem' }}><i className="fa-solid fa-map-location-dot" style={{ color: '#60a5fa' }}></i> Simular Fichaje Completo por GPS</strong>
                     <span className="badge badge-info">Carlos Pérez</span>
@@ -2046,7 +2080,7 @@ export default function Dashboard() {
           </section>
 
           {/* SECTION 3: GANTT CHART */}
-          <section id="sec-gantt" className={`content-section ${activeTab === 'sec-gantt' ? 'active' : ''}`}>
+          <section id="sec-gantt" className={`content-section animate-fade-in-up ${activeTab === 'sec-gantt' ? 'active' : ''}`}>
             <div className="section-header">
               <div className="header-title">
                 <h1>Cronograma Dinámico de Obra (Gantt Interactivo)</h1>
@@ -2058,7 +2092,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div className="glass-card">
+            <div className="glass-panel-premium dashboard-card-hover">
               <div className="gantt-chart-container" style={{ position: 'relative', overflowX: 'auto' }}>
                 {/* Grid lines background */}
                 <div className="gantt-row-grid-bg">
@@ -2137,7 +2171,7 @@ export default function Dashboard() {
                 {Object.keys(state.tasks).map(id => {
                   const task = state.tasks[id];
                   return (
-                    <div key={id} className="glass-card" style={{ padding: '14px', marginBottom: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div key={id} className="glass-panel-premium dashboard-card-hover" style={{ padding: '14px', marginBottom: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <strong style={{ fontSize: '0.8rem', color: 'var(--primary)' }}>{task.name}</strong>
                         <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', cursor: 'pointer' }} onClick={() => handleEditTask(id)}><i className="fa-solid fa-cog"></i> Configurar</span>
@@ -2158,7 +2192,7 @@ export default function Dashboard() {
           </section>
 
           {/* SECTION 4: SUPER ADMIN MULTITENANT CONSOLE */}
-          <section id="sec-admin" className={`content-section ${activeTab === 'sec-admin' ? 'active' : ''}`}>
+          <section id="sec-admin" className={`content-section animate-fade-in-up ${activeTab === 'sec-admin' ? 'active' : ''}`}>
             <div className="section-header">
               <div className="header-title">
                 <h1>Consola Multitenant de Super Admin</h1>
@@ -2173,28 +2207,28 @@ export default function Dashboard() {
 
             {/* Admin CRM Stats Grid */}
             <div className="grid-4" style={{ marginBottom: '24px' }}>
-              <div className="glass-card stat-card" style={{ marginBottom: 0 }}>
+              <div className="glass-panel-premium dashboard-card-hover stat-card" style={{ marginBottom: 0 }}>
                 <div className="stat-icon primary"><i className="fa-solid fa-hotel"></i></div>
                 <div className="stat-content">
                   <span className="stat-value">28</span>
                   <span className="stat-label">Suscripciones</span>
                 </div>
               </div>
-              <div className="glass-card stat-card" style={{ marginBottom: 0 }}>
+              <div className="glass-panel-premium dashboard-card-hover stat-card" style={{ marginBottom: 0 }}>
                 <div className="stat-icon success"><i className="fa-solid fa-money-bill-trend-up"></i></div>
                 <div className="stat-content">
                   <span className="stat-value" id="val-mrr">{state.subscription?.plan === 'Enterprise' ? "$5.030.000 ARS" : "$4.850.000 ARS"}</span>
                   <span className="stat-label">MRR Recurrente</span>
                 </div>
               </div>
-              <div className="glass-card stat-card" style={{ marginBottom: 0 }}>
+              <div className="glass-panel-premium dashboard-card-hover stat-card" style={{ marginBottom: 0 }}>
                 <div className="stat-icon info"><i className="fa-solid fa-user-tag"></i></div>
                 <div className="stat-content">
                   <span className="stat-value">{state.crmLeads.length}</span>
                   <span className="stat-label">Leads Activos</span>
                 </div>
               </div>
-              <div className="glass-card stat-card" style={{ marginBottom: 0 }}>
+              <div className="glass-panel-premium dashboard-card-hover stat-card" style={{ marginBottom: 0 }}>
                 <div className="stat-icon danger" style={{ background: state.crmTickets.length > 3 ? 'rgba(239,68,68,0.25)' : 'rgba(255,255,255,0.02)' }}><i className="fa-solid fa-ticket"></i></div>
                 <div className="stat-content">
                   <span className="stat-value">{state.crmTickets.length}</span>
@@ -2205,7 +2239,7 @@ export default function Dashboard() {
 
             {/* MRR & KPIs Row */}
             <div className="grid-2" style={{ marginBottom: '24px' }}>
-              <div className="glass-card" style={{ marginBottom: 0 }}>
+              <div className="glass-panel-premium dashboard-card-hover" style={{ marginBottom: 0 }}>
                 <h3 style={{ fontFamily: 'var(--font-heading)', marginBottom: '8px', color: 'var(--primary)' }}><i className="fa-solid fa-chart-line"></i> Evolución de Ingresos Recurrentes (MRR)</h3>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginBottom: '16px' }}>
                   Facturación mensual acumulada de licencias de estudios y constructoras en Argentina.
@@ -2215,7 +2249,7 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              <div className="glass-card" style={{ marginBottom: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+              <div className="glass-panel-premium dashboard-card-hover" style={{ marginBottom: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                 <div>
                   <h3 style={{ fontFamily: 'var(--font-heading)', marginBottom: '8px', color: 'var(--success)' }}><i className="fa-solid fa-chart-pie"></i> KPIs de Negocio &amp; Retención</h3>
                   <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginBottom: '16px' }}>
@@ -2250,7 +2284,7 @@ export default function Dashboard() {
             {/* CRM Chat and Subscriptions */}
             <div className="grid-2" style={{ marginBottom: '24px' }}>
               {/* AI CRM Chatbot */}
-              <div className="glass-card">
+              <div className="glass-panel-premium dashboard-card-hover">
                 <h3 style={{ fontFamily: 'var(--font-heading)', marginBottom: '8px', color: 'var(--primary)' }}><i className="fa-solid fa-chart-pie"></i> Consultor Financiero &amp; Leads (AI CRM)</h3>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginBottom: '12px' }}>
                   Hazle consultas directas a la IA del negocio para auditar métricas financieras y conversiones.
@@ -2295,7 +2329,7 @@ export default function Dashboard() {
               </div>
 
               {/* Active Subscriptions list */}
-              <div className="glass-card">
+              <div className="glass-panel-premium dashboard-card-hover">
                 <h3 style={{ fontFamily: 'var(--font-heading)', marginBottom: '16px' }}>Suscripciones de Estudios</h3>
                 <table className="billing-table">
                   <thead>
@@ -2348,7 +2382,7 @@ export default function Dashboard() {
 
             {/* CRM Second Row: Leads and Tickets Lists */}
             <div className="grid-2">
-              <div className="glass-card">
+              <div className="glass-panel-premium dashboard-card-hover">
                 <h3 style={{ fontFamily: 'var(--font-heading)', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <i className="fa-solid fa-users-rectangle" style={{ color: 'var(--info)' }}></i> Leads de la Web (Consultas Recientes)
                 </h3>
@@ -2372,7 +2406,7 @@ export default function Dashboard() {
                 </table>
               </div>
 
-              <div className="glass-card">
+              <div className="glass-panel-premium dashboard-card-hover">
                 <h3 style={{ fontFamily: 'var(--font-heading)', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <i className="fa-solid fa-circle-exclamation" style={{ color: 'var(--warning)' }}></i> Tickets de Soporte Activos
                 </h3>
@@ -2398,7 +2432,7 @@ export default function Dashboard() {
             </div>
 
             {/* Suppliers Directory */}
-            <div className="glass-card" style={{ marginTop: '24px' }}>
+            <div className="glass-panel-premium dashboard-card-hover" style={{ marginTop: '24px' }}>
               <h3 style={{ fontFamily: 'var(--font-heading)', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <i className="fa-solid fa-truck-field" style={{ color: 'var(--primary)' }}></i> Proveedores y Corralones Homologados
               </h3>
@@ -2445,7 +2479,7 @@ export default function Dashboard() {
 
             {/* Simulation Log */}
             {showBillingLogs && (
-              <div className="glass-card" style={{ borderLeft: '4px solid var(--success)', animation: 'fadeIn 0.3s ease', marginTop: '24px' }}>
+              <div className="glass-panel-premium dashboard-card-hover" style={{ borderLeft: '4px solid var(--success)', animation: 'fadeIn 0.3s ease', marginTop: '24px' }}>
                 <h4 style={{ fontFamily: 'var(--font-heading)', color: 'var(--success)', marginBottom: '10px' }}><i className="fa-solid fa-cash-register"></i> Logs de Procesamiento de Pago (Simulado)</h4>
                 <pre style={{ fontFamily: 'monospace', fontSize: '0.8rem', background: 'rgba(0,0,0,0.2)', padding: '12px', borderRadius: '8px', color: '#a3e635', overflowX: 'auto', whiteSpace: 'pre-wrap' }}>
                   {billingLogs}
@@ -2455,7 +2489,7 @@ export default function Dashboard() {
           </section>
 
           {/* SECTION 5: BUDGET & PROPOSAL VIEW */}
-          <section id="sec-presupuesto" className={`content-section ${activeTab === 'sec-presupuesto' ? 'active' : ''}`}>
+          <section id="sec-presupuesto" className={`content-section animate-fade-in-up ${activeTab === 'sec-presupuesto' ? 'active' : ''}`}>
             <div className="section-header">
               <div className="header-title">
                 <h1>Presupuesto Formal de Desarrollo</h1>
@@ -2629,7 +2663,7 @@ export default function Dashboard() {
           </section>
 
           {/* SECTION 6: GESTION DE PERSONAL & RRHH */}
-          <section id="sec-personal" className={`content-section ${activeTab === 'sec-personal' ? 'active' : ''}`}>
+          <section id="sec-personal" className={`content-section animate-fade-in-up ${activeTab === 'sec-personal' ? 'active' : ''}`}>
             <div className="section-header">
               <div className="header-title">
                 <h1>Gestión de Personal &amp; Recursos Humanos</h1>
@@ -2642,7 +2676,7 @@ export default function Dashboard() {
 
             <div className="grid-3">
               {/* Empleado del Mes */}
-              <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+              <div className="glass-panel-premium dashboard-card-hover" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                 <div>
                   <h3 style={{ fontFamily: 'var(--font-heading)', marginBottom: '8px', color: 'var(--primary)' }}><i className="fa-solid fa-award"></i> Empleado del Mes</h3>
                   <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginBottom: '20px' }}>
@@ -2674,7 +2708,7 @@ export default function Dashboard() {
               </div>
 
               {/* Incentives / Bonuses */}
-              <div className="glass-card" style={{ display: 'flex', flexDirection: 'column' }}>
+              <div className="glass-panel-premium dashboard-card-hover" style={{ display: 'flex', flexDirection: 'column' }}>
                 <h3 style={{ fontFamily: 'var(--font-heading)', marginBottom: '8px', color: 'var(--success)' }}><i className="fa-solid fa-gift"></i> Premios &amp; Bonos Asignados</h3>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginBottom: '16px' }}>
                   Incentivos cargados para motivar el cumplimiento de plazos del cronograma.
@@ -2715,7 +2749,7 @@ export default function Dashboard() {
               </div>
 
               {/* Medical Licences */}
-              <div className="glass-card">
+              <div className="glass-panel-premium dashboard-card-hover">
                 <h3 style={{ fontFamily: 'var(--font-heading)', marginBottom: '8px', color: 'var(--info)' }}><i className="fa-solid fa-notes-medical"></i> Licencias &amp; Certificados Médicos</h3>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginBottom: '16px' }}>
                   Registra certificados médicos recibidos por WhatsApp para justificar ausencias en presentismo.
@@ -2761,7 +2795,7 @@ export default function Dashboard() {
             </div>
 
             {/* Attendance History */}
-            <div className="glass-card" style={{ marginTop: '24px' }}>
+            <div className="glass-panel-premium dashboard-card-hover" style={{ marginTop: '24px' }}>
               <h3 style={{ fontFamily: 'var(--font-heading)', marginBottom: '12px', color: '#fff' }}><i className="fa-solid fa-calendar-check"></i> Historial de Presentismo &amp; Licencias de la Obra</h3>
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
