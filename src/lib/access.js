@@ -1,4 +1,5 @@
 import { auth, clerkClient } from '@clerk/nextjs/server';
+import { cookies } from 'next/headers';
 import { getPrisma } from '@/lib/prisma';
 import { getSubscriptionEntitlements } from '@/lib/plans';
 import { roleForClerkMembership, roleHasPermission } from '@/lib/tenant-roles';
@@ -7,6 +8,11 @@ import {
   clerkOrganizationIsInternal,
   mergeClerkOrganizationMetadata,
 } from '@/lib/organization-policy';
+import {
+  ACTIVE_PROJECT_COOKIE,
+  isSelectableProjectStatus,
+  tenantProjectWhere,
+} from '@/lib/projects';
 
 export const SUPERADMIN_EMAIL = (
   process.env.OBRASAAS_SUPERADMIN_EMAIL || 'guillen.marce@gmail.com'
@@ -127,6 +133,15 @@ async function ensureDefaultProject(prisma, organization) {
   });
   if (activeProject) return activeProject;
 
+  const existingProject = await prisma.project.findFirst({
+    where: {
+      organizationId: organization.id,
+      status: { not: 'ARCHIVED' },
+    },
+    orderBy: { createdAt: 'asc' },
+  });
+  if (existingProject) return existingProject;
+
   const projectSlug = organization.clerkOrganizationId === 'system:obrasaas'
     ? process.env.OBRASAAS_PROJECT_SLUG || 'palermo'
     : 'obra-principal';
@@ -144,6 +159,19 @@ async function ensureDefaultProject(prisma, organization) {
       geofenceMeters: Number(process.env.PROJECT_GEOFENCE_METERS || 100),
     },
   });
+}
+
+async function resolveActiveProject(prisma, organization) {
+  const selectedProjectId = (await cookies()).get(ACTIVE_PROJECT_COOKIE)?.value || null;
+  if (selectedProjectId) {
+    const selectedProject = await prisma.project.findFirst({
+      where: tenantProjectWhere(organization.id, selectedProjectId),
+    });
+    if (selectedProject && isSelectableProjectStatus(selectedProject.status)) {
+      return selectedProject;
+    }
+  }
+  return ensureDefaultProject(prisma, organization);
 }
 
 export async function getPlatformAccess({ requireOrganization = true } = {}) {
@@ -248,7 +276,7 @@ export async function getPlatformAccess({ requireOrganization = true } = {}) {
     });
   }
 
-  if (organization) project = await ensureDefaultProject(prisma, organization);
+  if (organization) project = await resolveActiveProject(prisma, organization);
 
   const subscription = organization
     ? getSubscriptionEntitlements(organization)

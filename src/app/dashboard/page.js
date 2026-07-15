@@ -62,6 +62,7 @@ export default async function DashboardPage() {
           id: access.project.id,
           name: access.project.name,
           address: access.project.address,
+          status: access.project.status,
         },
       }}
     />

@@ -109,6 +109,14 @@ const initialChatMessages = [
   }
 ];
 
+const PROJECT_STATUS = {
+  ACTIVE: { label: 'Obra activa', badge: 'badge-success' },
+  PLANNING: { label: 'En planificación', badge: 'badge-info' },
+  PAUSED: { label: 'Obra pausada', badge: 'badge-warning' },
+  COMPLETED: { label: 'Obra finalizada', badge: 'badge-info' },
+  ARCHIVED: { label: 'Obra archivada', badge: 'badge-warning' },
+};
+
 const audioData = {
   1: {
       from: "luis",
@@ -1432,25 +1440,22 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
             <li className={`nav-item ${activeTab === 'sec-gantt' ? 'active' : ''}`}>
               <button onClick={() => setActiveTab('sec-gantt')}><i className="fa-solid fa-timeline"></i> Cronograma Gantt</button>
             </li>
+            <li className="nav-item">
+              <Link href="/dashboard/projects" className="nav-button-link"><i className="fa-solid fa-building-circle-check"></i> Obras y portfolio</Link>
+            </li>
             {platformAccess.isSuperadmin && (
               <li className="nav-item">
-                <Link href="/superadmin" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
-                  <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-building-user"></i> Consola SuperAdmin</button>
-                </Link>
+                <Link href="/superadmin" className="nav-button-link"><i className="fa-solid fa-building-user"></i> Consola SuperAdmin</Link>
               </li>
             )}
             {(platformAccess.isSuperadmin || platformAccess.tenantRole !== 'AUDITOR') && (
               <li className="nav-item">
-                <Link href="/dashboard/team" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
-                  <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-user-shield"></i> Equipo y roles</button>
-                </Link>
+                <Link href="/dashboard/team" className="nav-button-link"><i className="fa-solid fa-user-shield"></i> Equipo y roles</Link>
               </li>
             )}
             {(platformAccess.isSuperadmin || ['ADMIN', 'DIRECTOR'].includes(platformAccess.tenantRole)) && (
               <li className="nav-item">
-                <Link href="/dashboard/integrations" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
-                  <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-plug-circle-bolt"></i> Integraciones</button>
-                </Link>
+                <Link href="/dashboard/integrations" className="nav-button-link"><i className="fa-solid fa-plug-circle-bolt"></i> Integraciones</Link>
               </li>
             )}
             {platformAccess.isSuperadmin && (
@@ -1462,9 +1467,7 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
               <button onClick={() => setActiveTab('sec-personal')}><i className="fa-solid fa-users-gear"></i> Personal &amp; RRHH</button>
             </li>
             <li className="nav-item">
-              <Link href="/" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
-                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-rocket"></i> Landing Comercial</button>
-              </Link>
+              <Link href="/" className="nav-button-link"><i className="fa-solid fa-rocket"></i> Landing Comercial</Link>
             </li>
           </nav>
           
@@ -1517,7 +1520,9 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
                 <Link href="/dashboard/report" className="btn btn-secondary btn-sm" style={{ padding: '8px 14px', fontSize: '0.8rem', fontWeight: 700, background: 'rgba(255,255,255,0.05)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', textDecoration: 'none' }}>
                   <i className="fa-solid fa-file-pdf"></i> Reporte Semanal
                 </Link>
-                <span className="badge badge-success"><i className="fa-solid fa-circle-check"></i> Obra Activa</span>
+                <span className={`badge ${PROJECT_STATUS[platformAccess.project.status]?.badge || 'badge-info'}`}>
+                  <i className="fa-solid fa-circle-check"></i> {PROJECT_STATUS[platformAccess.project.status]?.label || platformAccess.project.status}
+                </span>
               </div>
             </div>
 

@@ -10,7 +10,7 @@
   position: relative;
   isolation: isolate;
   min-height: 100vh;
-  overflow: hidden;
+  overflow-x: clip;
   color: var(--ink);
   background: radial-gradient(circle at 8% 6%, rgba(255, 155, 56, 0.13), transparent 23rem), radial-gradient(circle at 92% 20%, rgba(80, 127, 106, 0.12), transparent 31rem), #0a0b0c;
 }
@@ -27,12 +27,29 @@
   mask-image: linear-gradient(to bottom, #000 20%, transparent 92%);
 }
 
+.skipLink {
+  position: fixed;
+  z-index: 100;
+  top: 12px;
+  left: 12px;
+  padding: 10px 14px;
+  color: #17120c;
+  border-radius: 8px;
+  background: var(--orange);
+  font-size: .78rem;
+  font-weight: 800;
+  text-decoration: none;
+  transform: translateY(-150%);
+  transition: transform 160ms ease;
+}
+.skipLink:focus { transform: translateY(0); }
+
 .header, .hero, .audienceStrip, .outcomes, .platform, .positioning, .sectors, .innovation, .pricing, .faq, .finalCta, .footer {
   width: min(1180px, calc(100% - 48px));
   margin-inline: auto;
 }
 
-.header { min-height: 82px; display: flex; align-items: center; justify-content: space-between; gap: 28px; border-bottom: 1px solid var(--line); }
+.header { position: sticky; z-index: 50; top: 0; min-height: 82px; display: flex; align-items: center; justify-content: space-between; gap: 28px; border-bottom: 1px solid var(--line); background: rgba(10, 11, 12, .78); backdrop-filter: blur(22px) saturate(1.25); }
 .brand, .logo, .headerActions, .heroActions, .heroProof, .shellTopbar, .panelHeadline, .ganttHeader, .eventCard, .flowStep, .cardTopline, .architectureHeader, .architectureStack > div, .architectureOutput, .finalActions, .footerLinks { display: flex; align-items: center; }
 .brand { gap: 12px; color: var(--ink); text-decoration: none; }
 .logo { gap: 10px; font-size: 1rem; font-weight: 760; letter-spacing: -0.035em; }
@@ -46,6 +63,18 @@
 .nav a, .quietLink, .footer a { color: var(--muted); text-decoration: none; font-size: 0.82rem; font-weight: 520; transition: color 180ms ease; }
 .nav a:hover, .quietLink:hover, .footer a:hover { color: var(--ink); }
 .headerActions { gap: 18px; }
+.mobileNav { position: relative; display: none; }
+.mobileNavTrigger { width: 42px; height: 42px; display: grid; place-content: center; gap: 4px; padding: 0; color: var(--ink); border: 1px solid var(--line-strong); border-radius: 9px; background: rgba(255,255,255,.035); cursor: pointer; }
+.mobileNavTrigger span { width: 16px; height: 1.5px; display: block; border-radius: 99px; background: currentColor; transition: transform 180ms ease, opacity 180ms ease; }
+.mobileNavTrigger[aria-expanded='true'] span:first-child { transform: translateY(5.5px) rotate(45deg); }
+.mobileNavTrigger[aria-expanded='true'] span:nth-child(2) { opacity: 0; }
+.mobileNavTrigger[aria-expanded='true'] span:last-child { transform: translateY(-5.5px) rotate(-45deg); }
+.mobileNavPanel { position: absolute; top: calc(100% + 13px); right: 0; width: min(310px, calc(100vw - 30px)); display: grid; overflow: hidden; padding: 8px; border: 1px solid var(--line-strong); border-radius: 14px; background: rgba(13,15,16,.98); box-shadow: 0 28px 70px rgba(0,0,0,.55); animation: menu-enter 180ms cubic-bezier(.16,1,.3,1) both; }
+.mobileNavPanel a { display: flex; align-items: center; gap: 14px; padding: 13px 12px; color: #d9dcda; border-radius: 9px; text-decoration: none; font-size: .82rem; }
+.mobileNavPanel a:hover { background: rgba(255,255,255,.05); }
+.mobileNavPanel a > span { color: #666d69; font-size: .58rem; }
+.mobileNavPanel .mobileNavProduct { justify-content: space-between; margin-top: 5px; color: #17120c; background: var(--orange); font-weight: 800; }
+.mobileNavPanel .mobileNavProduct > span { color: inherit; font-size: .9rem; }
 
 .compactCta, .primaryCta, .secondaryCta { display: inline-flex; align-items: center; justify-content: center; gap: 9px; border-radius: 9px; font-weight: 720; text-decoration: none; transition: transform 180ms ease, border-color 180ms ease, background 180ms ease, box-shadow 180ms ease; }
 .compactCta { padding: 10px 14px; color: #17120c; background: var(--orange); font-size: 0.78rem; }
@@ -122,7 +151,7 @@
 .chatBody { position: relative; height: 332px; padding: 16px 9px; background: radial-gradient(circle at 30% 20%, rgba(44, 66, 59, 0.46), transparent 35%), #101917; animation: event-enter 420ms ease both; }
 .chatBody::before { content: ''; position: absolute; inset: 0; opacity: 0.1; background-image: radial-gradient(rgba(255,255,255,.7) .7px, transparent .7px); background-size: 13px 13px; }
 .chatSystem { position: relative; width: fit-content; margin: 0 auto 12px; padding: 3px 7px; color: #a8b5b1; border-radius: 5px; background: #1f302b; font-size: 0.42rem; }
-.chatBubble, .botBubble { position: relative; z-index: 1; margin-left: auto; padding: 8px; border-radius: 8px 1px 8px 8px; background: #155f49; box-shadow: 0 3px 10px rgba(0, 0, 0, 0.14); }
+.chatBubble, .botBubble, .flowMessage { position: relative; z-index: 1; margin-left: auto; padding: 8px; border-radius: 8px 1px 8px 8px; background: #155f49; box-shadow: 0 3px 10px rgba(0, 0, 0, 0.14); }
 .chatBubble { width: 88%; }
 .chatBubble > small { color: #b8f1d6; font-size: 0.46rem; font-weight: 700; }
 .chatBubble p, .botBubble p { margin: 4px 0; color: #f0f5f3; font-size: 0.5rem; line-height: 1.42; }
@@ -135,6 +164,16 @@
 .botBubble > span { width: 18px; height: 18px; display: grid; place-items: center; color: var(--orange); border-radius: 5px; background: rgba(255, 155, 56, 0.12); font-size: 0.55rem; }
 .botBubble strong { color: var(--orange); font-size: 0.46rem; }
 .botBubble time { grid-column: 2; }
+.flowMessage { width: 94%; padding: 10px; background: #edf2f0; color: #14201c; }
+.flowMessageTopline { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; color: #27765b; font-size: .43rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+.flowMessageTopline small { padding: 2px 5px; border-radius: 99px; color: #246f55; background: #d4e8df; font-size: .38rem; }
+.flowMessage > strong { display: block; font-size: .58rem; }
+.flowMessage > p { margin: 3px 0 8px; color: #66706c; font-size: .44rem; line-height: 1.35; }
+.flowField { display: grid; gap: 2px; padding: 6px 0; border-top: 1px solid #d9dfdc; }
+.flowField span { color: #7b8581; font-size: .37rem; }
+.flowField b { overflow: hidden; font-size: .44rem; font-weight: 680; text-overflow: ellipsis; white-space: nowrap; }
+.flowSubmit { width: 100%; min-height: 27px; display: grid; place-items: center; margin-top: 6px; color: #fff; border-radius: 5px; background: #1a8f67; font-size: .43rem; font-weight: 800; }
+.flowMessage time { display: block; margin-top: 5px; color: #7c8581; text-align: right; font-size: .36rem; }
 .chatComposer { height: 38px; display: grid; grid-template-columns: 18px 1fr 18px; align-items: center; gap: 6px; padding: 0 8px; background: #141d1a; color: #80908b; font-size: 0.55rem; }
 .chatComposer p { margin: 0; padding: 5px 8px; border-radius: 99px; background: #222c29; }
 .demoControls { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--line); }
@@ -144,6 +183,8 @@
 .demoControls button:hover { color: var(--ink); background: rgba(255, 255, 255, 0.04); }
 .demoControls .demoControlActive { color: var(--orange); background: rgba(255, 155, 56, 0.06); }
 .demoControls .demoControlActive::before { content: ''; position: absolute; inset: 0 0 auto; height: 2px; background: var(--orange); }
+.demoControls .demoControlActive::after { content: ''; position: absolute; inset: auto 0 0; height: 2px; background: rgba(255,155,56,.6); transform-origin: left; animation: scenario-progress 4.8s linear both; }
+.productShell[data-paused='true'] .demoControls .demoControlActive::after { animation: none; transform: scaleX(0); }
 
 .audienceStrip { min-height: 78px; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 14px; color: #858c92; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); font-size: 0.73rem; }
 .audienceStrip > span { color: #555d63; text-transform: uppercase; letter-spacing: 0.12em; font-size: 0.58rem; }
@@ -151,6 +192,7 @@
 .audienceStrip i { width: 3px; height: 3px; border-radius: 50%; background: #4c5358; }
 
 .outcomes, .platform, .sectors, .innovation, .pricing, .faq { padding-block: 132px; }
+.outcomes, .platform, .sectors, .pricing, .faq, .finalCta { scroll-margin-top: 96px; }
 .sectionIntro { max-width: 790px; }
 .sectionIntro h2, .sectionIntroRow h2, .positioning h2, .innovationIntro h2, .faqIntro h2, .finalCta h2 { margin: 14px 0 0; color: var(--ink); font-size: clamp(2.25rem, 4vw, 4.15rem); font-weight: 580; line-height: 1.04; letter-spacing: -0.055em; text-wrap: balance; }
 .sectionIntro > p, .sectionIntroRow > p, .positioningCopy > p, .innovationIntro > p, .faqIntro > p, .finalCta > div > p { margin: 24px 0 0; color: var(--muted); font-size: 0.95rem; line-height: 1.72; }
@@ -253,6 +295,31 @@
 
 @keyframes product-arrive { from { opacity: 0; transform: translate3d(42px, 18px, 0) scale(.97); } to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); } }
 @keyframes event-enter { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes menu-enter { from { opacity: 0; transform: translateY(-8px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes scenario-progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes section-reveal { from { opacity: .22; transform: translateY(42px); } to { opacity: 1; transform: translateY(0); } }
+
+@supports (animation-timeline: view()) {
+  .outcomes .sectionIntro,
+  .flowRail,
+  .platform .sectionIntroRow,
+  .capabilityGrid,
+  .positioningCopy,
+  .architectureCard,
+  .sectors .sectionIntro,
+  .audienceCards,
+  .innovationIntro,
+  .visualGrid,
+  .pricing .sectionIntroRow,
+  .pricingGrid,
+  .faqIntro,
+  .faqList,
+  .finalCta {
+    animation: section-reveal linear both;
+    animation-timeline: view();
+    animation-range: entry 4% cover 26%;
+  }
+}
 
 @media (max-width: 1180px) {
   .hero { grid-template-columns: 0.86fr 1.14fr; gap: 34px; }
@@ -262,6 +329,7 @@
 
 @media (max-width: 980px) {
   .nav { display: none; }
+  .mobileNav { display: block; }
   .hero { min-height: auto; grid-template-columns: 1fr; padding-block: 70px 85px; }
   .heroCopy { max-width: 760px; }
   .heroProduct { width: min(850px, 100%); margin: 18px auto 0; }
@@ -292,8 +360,11 @@
   .heroActions { align-items: stretch; flex-direction: column; }
   .primaryCta, .secondaryCta { width: 100%; }
   .heroProof { display: grid; }
-  .productBody { grid-template-columns: 1fr; min-height: auto; padding-bottom: 0; }
-  .phoneWrap { display: none; }
+  .productBody { grid-template-columns: 1fr; min-height: auto; padding-bottom: 18px; }
+  .phoneWrap { width: min(270px, 100%); display: block; grid-row: 1; justify-self: center; padding: 0; }
+  .phone { border-bottom: 1px solid #43494d; border-radius: 26px; }
+  .chatBody { height: 302px; }
+  .controlPanel { grid-row: 2; }
   .demoControls button { min-height: 48px; flex-direction: column; gap: 2px; }
   .audienceStrip { justify-content: flex-start; padding-block: 22px; }
   .audienceStrip > span { width: 100%; }
@@ -318,6 +389,10 @@
   .metricRow { grid-template-columns: 1fr 1fr; }
   .metricRow > div:last-child { display: none; }
   .ganttLine { grid-template-columns: 76px 1fr 26px; }
+  .productBody { padding-inline: 11px; }
+  .shellTopbar { padding-inline: 11px; }
+  .shellTopbar .windowDots { display: none; }
+  .demoControls button { font-size: .51rem; }
   .flowRail { grid-template-columns: 1fr; }
   .architectureCard { padding: 17px; }
   .architectureOutput { flex-wrap: wrap; }
@@ -325,6 +400,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .heroProduct, .eventCard, .chatBody { animation: none; }
-  .compactCta, .primaryCta, .secondaryCta, .visualCard img { transition: none; }
+  .heroProduct, .eventCard, .chatBody, .mobileNavPanel, .demoControls .demoControlActive::after { animation: none; }
+  .compactCta, .primaryCta, .secondaryCta, .visualCard img, .skipLink, .mobileNavTrigger span { transition: none; }
+  .outcomes .sectionIntro, .flowRail, .platform .sectionIntroRow, .capabilityGrid, .positioningCopy, .architectureCard, .sectors .sectionIntro, .audienceCards, .innovationIntro, .visualGrid, .pricing .sectionIntroRow, .pricingGrid, .faqIntro, .faqList, .finalCta { animation: none; }
 }

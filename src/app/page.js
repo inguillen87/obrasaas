@@ -1,5 +1,6 @@
 import Image from 'next/image';
 import Link from 'next/link';
+import MobileNavigation from './landing/mobile-navigation';
 import ProductExperience from './landing/product-experience';
 import styles from './landing/landing.module.css';
 import { PLAN_CATALOG, PRICING_BASIS_NOTE, VARIABLE_COST_NOTE } from '@/lib/plans';
@@ -42,22 +43,23 @@ function Logo() {
 export default function Home() {
   return (
     <main className={styles.page}>
+      <a href="#contenido" className={styles.skipLink}>Saltar al contenido</a>
       <div className={styles.ambientGrid} aria-hidden="true" />
       <header className={styles.header}>
         <Link href="/" className={styles.brand} aria-label="ObraSaaS, inicio"><Logo /><span className={styles.brandTag}>Field OS</span></Link>
         <nav className={styles.nav} aria-label="Navegación principal">
           <a href="#producto">Producto</a><a href="#plataforma">Plataforma</a><a href="#sectores">Sectores</a><a href="#precios">Precios</a><a href="#preguntas">Preguntas</a>
         </nav>
-        <div className={styles.headerActions}><Link href="/dashboard" prefetch={false} className={styles.quietLink}>Ver plataforma</Link><a href="#contacto" className={styles.compactCta}>Solicitar demo <ArrowIcon /></a></div>
+        <div className={styles.headerActions}><Link href="/dashboard" prefetch={false} className={styles.quietLink}>Ver plataforma</Link><a href="#contacto" className={styles.compactCta}>Solicitar demo <ArrowIcon /></a><MobileNavigation /></div>
       </header>
 
-      <section className={styles.hero}>
+      <section className={styles.hero} id="contenido">
         <div className={styles.heroCopy}>
           <div className={styles.eyebrow}><span className={styles.liveDot} />Operación de obra conectada, desde el primer mensaje</div>
           <h1>La obra avanza por WhatsApp.<span> La gestión se actualiza sola.</span></h1>
           <p>Convierte audios, fotos, ubicación y formularios de la cuadrilla en tareas, evidencia, alertas y decisiones. Un sistema operativo de campo diseñado para la realidad de LATAM.</p>
           <div className={styles.heroActions}><Link href="/dashboard" prefetch={false} className={styles.primaryCta}>Explorar la plataforma <ArrowIcon /></Link><a href="#producto" className={styles.secondaryCta}>Ver cómo funciona</a></div>
-          <div className={styles.heroProof} aria-label="Capacidades principales"><span><CheckIcon /> WhatsApp Cloud API + Flows</span><span><CheckIcon /> Cronograma y evidencia conectados</span><span><CheckIcon /> Diseñado para español y LATAM</span></div>
+          <div className={styles.heroProof} aria-label="Capacidades principales"><span><CheckIcon /> WhatsApp Cloud API + Flows 7.3</span><span><CheckIcon /> Cronograma y evidencia conectados</span><span><CheckIcon /> Diseñado para español y LATAM</span></div>
         </div>
         <div className={styles.heroProduct}><ProductExperience /></div>
       </section>

@@ -56,16 +56,19 @@ body.light-theme .sidebar {
     background: rgba(255, 255, 255, 0.95);
 }
 
-body.light-theme .nav-item button {
+body.light-theme .nav-item button,
+body.light-theme .nav-item .nav-button-link {
     color: var(--text-secondary);
 }
 
-body.light-theme .nav-item button:hover {
+body.light-theme .nav-item button:hover,
+body.light-theme .nav-item .nav-button-link:hover {
     color: var(--text-primary);
     background: rgba(15, 23, 42, 0.03);
 }
 
-body.light-theme .nav-item.active button {
+body.light-theme .nav-item.active button,
+body.light-theme .nav-item.active .nav-button-link {
     color: #fff;
     background: var(--primary);
 }
@@ -199,7 +202,8 @@ body {
     flex-grow: 1;
 }
 
-.nav-item button {
+.nav-item button,
+.nav-item .nav-button-link {
     width: 100%;
     display: flex;
     align-items: center;
@@ -214,27 +218,32 @@ body {
     border-radius: 12px;
     cursor: pointer;
     text-align: left;
+    text-decoration: none;
     transition: var(--transition-smooth);
 }
 
-.nav-item button:hover {
+.nav-item button:hover,
+.nav-item .nav-button-link:hover {
     color: var(--text-primary);
     background: rgba(255, 255, 255, 0.04);
     transform: translateX(4px);
 }
 
-.nav-item.active button {
+.nav-item.active button,
+.nav-item.active .nav-button-link {
     color: var(--bg-main);
     background: var(--primary);
     font-weight: 600;
     box-shadow: 0 8px 24px rgba(255, 159, 28, 0.3);
 }
 
-.nav-item.active button i {
+.nav-item.active button i,
+.nav-item.active .nav-button-link i {
     color: var(--bg-main);
 }
 
-.nav-item button i {
+.nav-item button i,
+.nav-item .nav-button-link i {
     font-size: 1.15rem;
     transition: var(--transition-smooth);
 }

@@ -4,26 +4,34 @@ import { useEffect, useState } from 'react';
 import styles from './landing.module.css';
 
 const steps = [
-  { id: 'report', short: 'Reporte', label: 'Nota de voz recibida', message: 'Terminamos las cañerías del segundo piso. Quedaron probadas y listas para cerrar.', assistant: 'Avance identificado · Instalaciones sanitarias · Evidencia vinculada', progress: 84, event: 'Tarea actualizada' },
-  { id: 'risk', short: 'Riesgo', label: 'Bloqueo detectado', message: 'El proveedor confirmó que los revestimientos llegan recién el jueves.', assistant: 'Demora logística · Impacto estimado: 2 días · Requiere aprobación', progress: 84, event: 'Replanificación propuesta' },
-  { id: 'stock', short: 'Acopio', label: 'Stock bajo mínimo', message: 'Quedan 35 bolsas de cemento. Mañana arranca el revoque del frente norte.', assistant: 'Riesgo de quiebre · Proveedor homologado · Orden preparada', progress: 91, event: 'Aprobación solicitada' },
-  { id: 'attendance', short: 'Personal', label: 'Ingreso validado', message: 'Juan compartió su ubicación desde el acceso principal de la obra.', assistant: 'Dentro de geocerca · 08:02 · Registro asociado al operario', progress: 91, event: 'Presentismo confirmado' },
+  { id: 'report', short: 'Reporte', kind: 'voice', label: 'Nota de voz recibida', message: 'Terminamos las cañerías del segundo piso. Quedaron probadas y listas para cerrar.', assistant: 'Avance identificado · Instalaciones sanitarias · Evidencia vinculada', progress: 84, event: 'Tarea actualizada' },
+  { id: 'risk', short: 'Riesgo', kind: 'voice', label: 'Bloqueo detectado', message: 'El proveedor confirmó que los revestimientos llegan recién el jueves.', assistant: 'Demora logística · Impacto estimado: 2 días · Requiere aprobación', progress: 84, event: 'Replanificación propuesta' },
+  { id: 'stock', short: 'Acopio', kind: 'voice', label: 'Stock bajo mínimo', message: 'Quedan 35 bolsas de cemento. Mañana arranca el revoque del frente norte.', assistant: 'Riesgo de quiebre · Proveedor homologado · Orden preparada', progress: 91, event: 'Aprobación solicitada' },
+  { id: 'attendance', short: 'Flow', kind: 'flow', label: 'Control de ingreso', message: 'Juan Gómez · Albañilería', assistant: 'Dentro de geocerca · 08:02 · Registro asociado al operario', progress: 91, event: 'Presentismo confirmado' },
 ];
 
 export default function ProductExperience() {
   const [active, setActive] = useState(0);
+  const [paused, setPaused] = useState(false);
 
   useEffect(() => {
     const media = window.matchMedia('(prefers-reduced-motion: reduce)');
-    if (media.matches) return undefined;
+    if (media.matches || paused) return undefined;
     const timer = window.setInterval(() => setActive((current) => (current + 1) % steps.length), 4800);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [active, paused]);
 
   const step = steps[active];
 
   return (
-    <div className={styles.productShell}>
+    <div
+      className={styles.productShell}
+      data-paused={paused || undefined}
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onFocusCapture={() => setPaused(true)}
+      onBlurCapture={() => setPaused(false)}
+    >
       <div className={styles.shellTopbar}>
         <div className={styles.windowDots} aria-hidden="true"><i /><i /><i /></div>
         <span><b className={styles.liveDot} /> Centro de control · Obra Palermo</span>
@@ -39,7 +47,7 @@ export default function ProductExperience() {
               ['Estructura', 100, 'done'], ['Instalaciones', step.progress, 'active'], ['Revestimientos', active === 1 ? 28 : 42, active === 1 ? 'risk' : 'active'], ['Terminaciones', 12, 'waiting'],
             ].map(([label, value, status]) => <div className={styles.ganttLine} key={label}><span>{label}</span><div><i className={styles[status]} style={{ width: `${value}%` }} /></div><small>{value}%</small></div>)}
           </div>
-          <div className={styles.eventCard} key={step.id}><span className={styles.eventIcon}>OS</span><div><small>ObraSaaS Engine</small><strong>{step.event}</strong><p>{step.assistant}</p></div><time>ahora</time></div>
+          <div className={styles.eventCard} key={step.id} aria-live="polite"><span className={styles.eventIcon}>OS</span><div><small>ObraSaaS Engine</small><strong>{step.event}</strong><p>{step.assistant}</p></div><time>ahora</time></div>
         </div>
         <div className={styles.phoneWrap}>
           <div className={styles.phone}>
@@ -47,7 +55,20 @@ export default function ProductExperience() {
             <div className={styles.chatHeader}><span className={styles.chatAvatar}>OS</span><div><strong>Obra Palermo</strong><small>ObraSaaS · en línea</small></div></div>
             <div className={styles.chatBody} key={step.id}>
               <div className={styles.chatSystem}>Hoy</div>
-              <div className={styles.chatBubble}><small>{step.label}</small><p>{step.message}</p><div className={styles.voiceLine}><button type="button" aria-label="Reproducir nota de voz">▶</button><i /><span>0:18</span></div><time>08:41 ✓✓</time></div>
+              {step.kind === 'flow' ? (
+                <div className={styles.flowMessage}>
+                  <div className={styles.flowMessageTopline}><span>WhatsApp Flow</span><small>Seguro</small></div>
+                  <strong>{step.label}</strong>
+                  <p>Confirmá los datos del turno sin salir del chat.</p>
+                  <div className={styles.flowField}><span>Operario</span><b>Juan Gómez</b></div>
+                  <div className={styles.flowField}><span>Frente</span><b>Albañilería · PB</b></div>
+                  <div className={styles.flowField}><span>Ubicación</span><b>Acceso principal · dentro de geocerca</b></div>
+                  <span className={styles.flowSubmit}>Confirmar ingreso</span>
+                  <time>08:41 ✓✓</time>
+                </div>
+              ) : (
+                <div className={styles.chatBubble}><small>{step.label}</small><p>{step.message}</p><div className={styles.voiceLine}><button type="button" aria-label="Reproducir nota de voz">▶</button><i /><span>0:18</span></div><time>08:41 ✓✓</time></div>
+              )}
               <div className={styles.botBubble}><span>✦</span><div><strong>Procesado por ObraSaaS</strong><p>{step.assistant}</p></div><time>08:41</time></div>
             </div>
             <div className={styles.chatComposer}><span>＋</span><p>Mensaje</p><b>⌁</b></div>
