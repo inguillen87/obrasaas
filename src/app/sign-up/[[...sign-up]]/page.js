@@ -1,5 +1,5 @@
-import Link from 'next/link';
 import { SignUp } from '@clerk/nextjs';
+import AuthShell from '@/app/auth-shell';
 
 export const metadata = {
   title: 'Crear organización',
@@ -8,12 +8,20 @@ export const metadata = {
 
 export default function SignUpPage() {
   return (
-    <main style={{ minHeight: '100svh', display: 'grid', placeItems: 'center', padding: '32px 18px', background: 'radial-gradient(circle at 50% 0%, rgba(233,135,69,.16), transparent 34rem), #0b1312' }}>
-      <div style={{ display: 'grid', justifyItems: 'center', gap: '22px' }}>
-        <Link href="/" style={{ color: '#f7f5ef', fontWeight: 850, textDecoration: 'none', letterSpacing: '-.03em' }}>ObraSaaS</Link>
-        <SignUp />
-      </div>
-    </main>
+    <AuthShell
+      eyebrow="14 días para operar"
+      title="Tu obra, ordenada desde el primer día."
+      description="Creá la cuenta de tu organización. ObraSaaS prepara un workspace aislado y una obra inicial para que el equipo pueda empezar sin configurar infraestructura."
+      points={[
+        { title: 'Sin tarjeta', detail: 'Probá el flujo completo durante 14 días.' },
+        { title: 'Tenant aislado', detail: 'Personas, evidencias y proyectos separados desde el alta.' },
+        { title: 'Listo para equipo', detail: 'Administración, dirección, jefatura y auditoría con permisos claros.' },
+      ]}
+    >
+      <SignUp
+        fallbackRedirectUrl="/dashboard"
+        signInUrl="/sign-in"
+      />
+    </AuthShell>
   );
 }
-

@@ -1,5 +1,5 @@
-import Link from 'next/link';
 import { SignIn } from '@clerk/nextjs';
+import AuthShell from '@/app/auth-shell';
 
 export const metadata = {
   title: 'Ingresar',
@@ -8,11 +8,20 @@ export const metadata = {
 
 export default function SignInPage() {
   return (
-    <main style={{ minHeight: '100svh', display: 'grid', placeItems: 'center', padding: '32px 18px', background: 'radial-gradient(circle at 50% 0%, rgba(233,135,69,.16), transparent 34rem), #0b1312' }}>
-      <div style={{ display: 'grid', justifyItems: 'center', gap: '22px' }}>
-        <Link href="/" style={{ color: '#f7f5ef', fontWeight: 850, textDecoration: 'none', letterSpacing: '-.03em' }}>ObraSaaS</Link>
-        <SignIn />
-      </div>
-    </main>
+    <AuthShell
+      eyebrow="Centro operativo"
+      title="Volvé a decidir con evidencia."
+      description="Ingresá al espacio de tu organización para seguir avances, cuadrillas, suministros, reportes e integraciones desde un único lugar."
+      points={[
+        { title: 'Acceso seguro', detail: 'Sesiones y organizaciones administradas con Clerk.' },
+        { title: 'Roles reales', detail: 'Cada persona ve y modifica sólo lo que corresponde.' },
+        { title: 'Continuidad operativa', detail: 'Campo, oficina y dirección sobre la misma trazabilidad.' },
+      ]}
+    >
+      <SignIn
+        fallbackRedirectUrl="/dashboard"
+        signUpUrl="/sign-up"
+      />
+    </AuthShell>
   );
 }

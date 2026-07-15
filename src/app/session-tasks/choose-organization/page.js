@@ -1,5 +1,5 @@
-import Link from 'next/link';
 import { TaskChooseOrganization } from '@clerk/nextjs';
+import AuthShell from '@/app/auth-shell';
 
 export const metadata = {
   title: 'Seleccionar organización',
@@ -8,11 +8,17 @@ export const metadata = {
 
 export default function ChooseOrganizationTaskPage() {
   return (
-    <main style={{ minHeight: '100svh', display: 'grid', placeItems: 'center', padding: '32px 18px', background: 'radial-gradient(circle at 50% 0%, rgba(233,135,69,.16), transparent 34rem), #0b1312' }}>
-      <div style={{ width: 'min(100%, 520px)', display: 'grid', justifyItems: 'center', gap: '22px' }}>
-        <Link href="/" style={{ color: '#f7f5ef', fontWeight: 850, textDecoration: 'none', letterSpacing: '-.03em' }}>ObraSaaS</Link>
-        <TaskChooseOrganization redirectUrlComplete="/dashboard" />
-      </div>
-    </main>
+    <AuthShell
+      eyebrow="Contexto de trabajo"
+      title="Elegí dónde vas a operar."
+      description="La organización activa define el perímetro de datos, proyectos, miembros e integraciones disponible durante esta sesión."
+      points={[
+        { title: 'Sin cruces de datos', detail: 'Cada organización mantiene su propio perímetro operativo.' },
+        { title: 'Cambio controlado', detail: 'El contexto activo acompaña cada consulta y mutación.' },
+        { title: 'Auditoría consistente', detail: 'Las acciones quedan vinculadas al tenant correcto.' },
+      ]}
+    >
+      <TaskChooseOrganization redirectUrlComplete="/dashboard" />
+    </AuthShell>
   );
 }
