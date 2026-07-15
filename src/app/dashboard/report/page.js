@@ -9,7 +9,7 @@ import styles from './report.module.css';
 export const dynamic = 'force-dynamic';
 
 export const metadata = {
-  title: 'Reporte semanal | ObraSaaS',
+  title: { absolute: 'Reporte semanal | ObraSaaS' },
   robots: { index: false, follow: false },
 };
 
