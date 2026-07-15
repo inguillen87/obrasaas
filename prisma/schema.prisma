@@ -101,6 +101,17 @@ enum WhatsAppConnectionStatus {
   DISABLED
 }
 
+enum CrmStage {
+  NEW
+  CONTACTED
+  QUALIFIED
+  DEMO
+  PROPOSAL
+  TRIAL
+  WON
+  LOST
+}
+
 model Organization {
   id                   String             @id @default(cuid())
   clerkOrganizationId  String?            @unique
@@ -117,8 +128,31 @@ model Organization {
   projects             Project[]
   memberships          TenantMembership[]
   auditLogs            AuditLog[]
+  crmAccount           CrmAccount?
   createdAt            DateTime           @default(now())
   updatedAt            DateTime           @updatedAt
+}
+
+model CrmAccount {
+  id                    String        @id @default(cuid())
+  organizationId        String?       @unique
+  organization          Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  name                  String
+  contactName           String?
+  email                 String?
+  phone                 String?
+  segment               String?
+  source                String?
+  stage                 CrmStage      @default(NEW)
+  estimatedSeats        Int?
+  estimatedMonthlyValue Decimal?      @db.Decimal(12, 2)
+  nextFollowUpAt        DateTime?
+  notes                 String?       @db.Text
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  @@index([stage, nextFollowUpAt])
+  @@index([email])
 }
 
 model PlatformUser {

@@ -14,7 +14,13 @@ function parseTrialEnd(value) {
     throw new TenantSubscriptionUpdateError('La fecha de prueba debe usar el formato AAAA-MM-DD.');
   }
   const date = new Date(`${value}T23:59:59.999Z`);
-  if (Number.isNaN(date.getTime())) {
+  const [year, month, day] = value.split('-').map(Number);
+  if (
+    Number.isNaN(date.getTime())
+    || date.getUTCFullYear() !== year
+    || date.getUTCMonth() + 1 !== month
+    || date.getUTCDate() !== day
+  ) {
     throw new TenantSubscriptionUpdateError('La fecha de prueba es inválida.');
   }
   return date;

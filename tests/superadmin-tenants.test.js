@@ -38,6 +38,10 @@ test('trial extensions require a future ISO date', () => {
     () => normalizeTenantSubscriptionUpdate({ trialEndsAt: '15/07/2026' }, currentTrial, now),
     TenantSubscriptionUpdateError,
   );
+  assert.throws(
+    () => normalizeTenantSubscriptionUpdate({ trialEndsAt: '2026-02-31' }, currentTrial, now),
+    /inválida/,
+  );
 });
 
 test('invalid plan and status combinations fail closed', () => {

@@ -5,6 +5,7 @@ import styles from './superadmin.module.css';
 import { requireSuperadmin } from '@/lib/access';
 import { PLAN_CATALOG } from '@/lib/plans';
 import { getPrisma } from '@/lib/prisma';
+import { serializeCrmAccount } from '@/lib/superadmin-crm';
 import { isExternalTenant } from '@/lib/superadmin-tenants';
 
 export const dynamic = 'force-dynamic';
@@ -85,7 +86,9 @@ function serializeTenant(organization) {
 
 export default async function SuperadminPage() {
   const access = await requireSuperadmin();
-  const organizations = await getPrisma().organization.findMany({
+  const prisma = getPrisma();
+  const [organizations, crmAccounts] = await Promise.all([
+    prisma.organization.findMany({
     include: {
       _count: { select: { memberships: true, projects: true } },
       memberships: {
@@ -126,8 +129,17 @@ export default async function SuperadminPage() {
     },
     orderBy: { createdAt: 'desc' },
     take: 250,
-  });
+    }),
+    prisma.crmAccount.findMany({
+      orderBy: [
+        { nextFollowUpAt: 'asc' },
+        { updatedAt: 'desc' },
+      ],
+      take: 500,
+    }),
+  ]);
   const tenants = organizations.filter(isExternalTenant).map(serializeTenant);
+  const opportunities = crmAccounts.map(serializeCrmAccount);
   const activeTenants = tenants.filter((item) => ['TRIALING', 'ACTIVE'].includes(item.subscriptionStatus));
   const payingTenants = tenants.filter((item) => item.subscriptionStatus === 'ACTIVE');
   const estimatedMrr = payingTenants.reduce(
@@ -182,7 +194,7 @@ export default async function SuperadminPage() {
         </article>
       </section>
 
-      <SuperadminConsole initialTenants={tenants} />
+      <SuperadminConsole initialTenants={tenants} initialAccounts={opportunities} />
 
       <section className={styles.guardrail}>
         <div className={styles.guardrailIcon}>01</div>
