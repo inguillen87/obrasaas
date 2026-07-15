@@ -103,7 +103,7 @@ export async function ingestInboundWhatsAppMedia(event, {
       size: downloaded.size,
       url: uploadResult.secureUrl,
       storage: {
-        provider: uploadResult.provider || "cloudinary",
+        provider: uploadResult.provider || "protected-storage",
         status: "stored",
         assetId: uploadResult.assetId,
         publicId: uploadResult.publicId,

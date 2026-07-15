@@ -2350,8 +2350,8 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
                   </tr>
                   <tr>
                     <td>
-                      <strong>Webhooks WhatsApp API, Cloudinary Media Setup &amp; Logs</strong><br/>
-                      <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Configuración de webhooks en la API oficial de WhatsApp, almacenamiento de imágenes y grabaciones en Cloudinary.</span>
+                      <strong>Webhooks WhatsApp API, Evidencia Privada &amp; Logs</strong><br/>
+                      <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Configuración de webhooks en la API oficial de WhatsApp y almacenamiento privado de imágenes, audios y documentos en Vercel Blob, con Cloudinary como proveedor opcional.</span>
                     </td>
                     <td>40</td>
                     <td>$24.625 ARS</td>
@@ -2368,8 +2368,8 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
                   </tr>
                   <tr>
                     <td>
-                      <strong>Despliegue de Producción (Vercel/Cloudflare) &amp; Soporte SLA (30 días)</strong><br/>
-                      <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Setup de CDN Cloudflare, pipelines automatizados de despliegue en Vercel, pruebas reales y soporte post-lanzamiento.</span>
+                      <strong>Despliegue Gestionado en Vercel &amp; Soporte (30 días)</strong><br/>
+                      <span style={{ fontSize: '0.75rem', color: '#64748b' }}>CDN y runtime Edge de Vercel, pipelines automatizados, observabilidad, pruebas reales y soporte post-lanzamiento. Cloudflare queda disponible si el dominio o la política del cliente lo requieren.</span>
                     </td>
                     <td>35</td>
                     <td>$23.428,57 ARS</td>
@@ -2402,7 +2402,7 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
                   <div className="milestone-badge">Hito 3</div>
                   <div className="milestone-desc">
                     <h4>Semana 4: Dashboard Gantt Reactivo, PDF &amp; Despliegue en Producción (30% del Pago)</h4>
-                    <p>Implementación final del cronograma Gantt dinámico en el Dashboard administrativo, compilación de reportes semanales en PDF, despliegue seguro a producción en Vercel con Cloudflare y capacitación final del equipo.</p>
+                    <p>Implementación final del cronograma Gantt dinámico en el Dashboard administrativo, compilación de reportes semanales en PDF, despliegue seguro sobre Vercel Edge y capacitación final del equipo.</p>
                   </div>
                 </div>
               </div>
@@ -2420,7 +2420,7 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
 
               <div className="doc-section-title">Condiciones de Servicio (SLA) &amp; Garantías</div>
               <p style={{ fontSize: '0.85rem', color: '#334155', marginBottom: '24px' }}>
-                - <strong>Disponibilidad del Sistema (SLA)</strong>: Compromiso de disponibilidad de la base de datos Postgres del 99.9% mensual.<br/>
+                - <strong>Disponibilidad del Sistema</strong>: Monitoreo sobre Vercel y Neon. Un SLA contractual se define según los planes de infraestructura y soporte elegidos por el cliente; la beta gratuita no promete un 99.9% que sus proveedores no garanticen.<br/>
                 - <strong>Soporte Post-Entrega</strong>: Incluye 30 días de soporte técnico gratuito para corregir posibles bugs y dar capacitación a los operarios en obra.<br/>
                 - <strong>Propiedad Intelectual</strong>: El código fuente desarrollado del MVP será de propiedad exclusiva del cliente una vez saldada la totalidad de la propuesta.
               </p>
