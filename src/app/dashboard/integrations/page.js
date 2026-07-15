@@ -30,6 +30,11 @@ export default async function IntegrationsPage() {
   const connection = await getPrisma().whatsAppConnection.findUnique({
     where: { projectId: access.project.id },
   });
+  const metaPlatformReady = Boolean(
+    process.env.META_APP_SECRET
+    && process.env.META_VERIFY_TOKEN
+    && process.env.WHATSAPP_CREDENTIALS_ENCRYPTION_KEY,
+  );
 
   return (
     <main className={styles.shell}>
@@ -52,6 +57,7 @@ export default async function IntegrationsPage() {
       <IntegrationsClient
         appId={process.env.NEXT_PUBLIC_META_APP_ID || ''}
         configId={process.env.NEXT_PUBLIC_META_EMBEDDED_SIGNUP_CONFIG_ID || ''}
+        platformReady={metaPlatformReady}
         initialConnection={serializeConnection(connection)}
       />
     </main>

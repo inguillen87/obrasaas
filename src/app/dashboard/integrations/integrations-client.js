@@ -24,7 +24,7 @@ function parseEmbeddedSignupEvent(raw) {
   }
 }
 
-export default function IntegrationsClient({ appId, configId, initialConnection }) {
+export default function IntegrationsClient({ appId, configId, platformReady, initialConnection }) {
   const [connection, setConnection] = useState(initialConnection);
   const [sdkReady, setSdkReady] = useState(false);
   const [registrationPin, setRegistrationPin] = useState('');
@@ -179,7 +179,7 @@ export default function IntegrationsClient({ appId, configId, initialConnection 
   }
 
   const connected = connection?.enabled && connection.connectionStatus === 'CONNECTED';
-  const configured = Boolean(appId && configId);
+  const configured = Boolean(appId && configId && platformReady);
 
   return (
     <div className={styles.grid}>
@@ -258,6 +258,12 @@ export default function IntegrationsClient({ appId, configId, initialConnection 
             {status.text}
           </div>
         )}
+        {!platformReady && (
+          <div className={`${styles.notice} ${styles.info}`} role="status">
+            Canal en activación controlada. El alta se habilitará cuando la validación firmada
+            de Meta esté completa; no necesitás compartir credenciales con ObraSaaS.
+          </div>
+        )}
         {connection?.lastError && !connected && (
           <div className={`${styles.notice} ${styles.error}`} role="alert">
             Último intento: {connection.lastError}
@@ -270,7 +276,7 @@ export default function IntegrationsClient({ appId, configId, initialConnection 
               Desactivar en esta obra
             </button>
           )}
-          <span>{configured ? 'Embedded Signup v4 listo' : 'Falta publicar la configuración de Meta'}</span>
+          <span>{configured ? 'Embedded Signup v4 listo' : 'Activación técnica pendiente'}</span>
         </div>
       </section>
 
