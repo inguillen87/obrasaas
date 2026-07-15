@@ -1,5 +1,6 @@
 import { Geist, Manrope } from 'next/font/google';
 import { ClerkProvider } from '@clerk/nextjs';
+import Observability from './observability';
 import './globals.css';
 
 const geist = Geist({
@@ -63,6 +64,7 @@ export default function RootLayout({ children }) {
         >
           {children}
         </ClerkProvider>
+        <Observability />
       </body>
     </html>
   );

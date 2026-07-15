@@ -11,6 +11,7 @@ Plataforma multi-tenant para convertir reportes de campo enviados por WhatsApp e
 - Evidencia privada en Vercel Blob, validación de firma, hash y alcance por número.
 - Transcripción de audio preparada para OpenAI y persistencia de mensajes idempotente.
 - Dashboard operativo, Gantt, asistencia, acopios, incidencias y reporte semanal imprimible/PDF.
+- Web Analytics anonimizado incluido en el plan de Vercel.
 - Consola global de tenants reservada a `guillen.marce@gmail.com`.
 
 Las superficies BIM y visión perimetral están identificadas como **Demo Lab** hasta conectar proveedores reales. La aplicación no presenta esas demos como integraciones productivas.
