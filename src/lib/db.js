@@ -1,190 +1,533 @@
-import fs from 'fs';
-import path from 'path';
+import fs from "node:fs";
+import path from "node:path";
 
-// Path for local file fallback
-const LOCAL_DB_PATH = path.join(process.cwd(), 'data', 'db.json');
+const LOCAL_DB_PATH = path.join(process.cwd(), "data", "db.json");
+const LOCAL_CONVERSATION_ID = "dashboard-demo";
 
 const initialIncidents = [
-    {
-        id: "inc-1",
-        title: "Quiebre de Stock Crítico",
-        description: "Cemento Loma Negra por debajo del mínimo de seguridad (35 de 40 bolsas). Riesgo de detención de revoque grueso.",
-        type: "warning",
-        badge: "Stock Bajo",
-        timestamp: "Hoy, 08:30 AM",
-        reporter: "Control de Corralón",
-        icon: "fa-solid fa-triangle-exclamation"
-    },
-    {
-        id: "inc-2",
-        title: "Alerta de Geocerca (Desvío GPS)",
-        description: "El operario Carlos Pérez registró check-in satelital a 150m del radio de obra verificado (excede límite de 20m).",
-        type: "critical",
-        badge: "Desvío GPS",
-        timestamp: "Hoy, 07:50 AM",
-        reporter: "Geolocalización Satelital",
-        icon: "fa-solid fa-location-crosshairs"
-    },
-    {
-        id: "inc-3",
-        title: "Asistencia Registrada por Voz",
-        description: "Juan Gómez (Albañilería Principal) inició jornada. Biometría de voz validada con éxito.",
-        type: "success",
-        badge: "Presentismo",
-        timestamp: "Hoy, 08:02 AM",
-        reporter: "Asistente de Voz IA",
-        icon: "fa-solid fa-microphone"
-    },
-    {
-        id: "inc-4",
-        title: "Planificación Gantt Sincronizada",
-        description: "Línea base reajustada. Hito de finalización proyectado para el 15/Jul.",
-        type: "info",
-        badge: "Gantt",
-        timestamp: "Ayer, 06:15 PM",
-        reporter: "Supervisor IA",
-        icon: "fa-solid fa-chart-gantt"
-    }
+  {
+    id: "inc-1",
+    title: "Quiebre de stock crítico",
+    description:
+      "Cemento por debajo del mínimo de seguridad. Requiere validación antes de emitir una orden de compra.",
+    type: "warning",
+    badge: "Stock bajo",
+    timestamp: "Hoy, 08:30",
+    reporter: "Control de acopio",
+    icon: "fa-solid fa-triangle-exclamation",
+  },
+  {
+    id: "inc-2",
+    title: "Alerta de geocerca",
+    description:
+      "Un fichaje fue registrado fuera del radio configurado para la obra y quedó pendiente de revisión.",
+    type: "critical",
+    badge: "Desvío GPS",
+    timestamp: "Hoy, 07:50",
+    reporter: "Geolocalización",
+    icon: "fa-solid fa-location-crosshairs",
+  },
+  {
+    id: "inc-3",
+    title: "Asistencia registrada",
+    description: "Juan Gómez inició su jornada desde el acceso móvil de la obra.",
+    type: "success",
+    badge: "Presentismo",
+    timestamp: "Hoy, 08:02",
+    reporter: "Asistente de obra",
+    icon: "fa-solid fa-user-check",
+  },
+  {
+    id: "inc-4",
+    title: "Planificación sincronizada",
+    description: "La línea base fue reajustada y el cambio quedó registrado en la bitácora.",
+    type: "info",
+    badge: "Gantt",
+    timestamp: "Ayer, 18:15",
+    reporter: "Planificación",
+    icon: "fa-solid fa-chart-gantt",
+  },
 ];
 
 export const defaultAppState = {
-    operariosCount: 1,
-    avancePercentage: 42,
-    alertsCount: 2,
-    diasEstimados: "Día 12/35",
-    tasks: {
-        1: { name: "Revoque Grueso", progress: 80, duration: 5, startOffset: 0, assignee: "Juan Gómez" },
-        2: { name: "Cañería y Descargas", progress: 20, duration: 4, startOffset: 28.5, assignee: "Luis Martínez" },
-        3: { name: "Revestimiento Cerámico", progress: 0, duration: 4, startOffset: 57.1, assignee: "Carlos Pérez" },
-        4: { name: "Pintura y Terminación", progress: 0, duration: 2, startOffset: 85.7, assignee: "Carlos Pérez" }
-    },
-    incidents: initialIncidents,
-    attendance: {
-        "Juan Gómez": { role: "Albañilería Principal", checkin: "08:02 AM", status: "Presente" },
-        "Carlos Pérez": { role: "Pintura e Interiores", checkin: "--:--", status: "Ausente" },
-        "Luis Martínez": { role: "Instalaciones y Sanitarios", checkin: "--:--", status: "Ausente" }
-    },
-    stockpiles: {
-        cemento: { name: "Cemento Loma Negra", current: 35, min: 40, max: 150, unit: "Bolsas", supplier: "Loma Negra S.A.", status: "Crítico" },
-        hierro: { name: "Hierro A500 Acindar", current: 85, min: 30, max: 100, unit: "Barras", supplier: "Acindar Distribuidores", status: "Stock OK" },
-        ladrillo: { name: "Ladrillo Portante Alberdi", current: 1500, min: 800, max: 2500, unit: "Uds", supplier: "Ladrillos Alberdi", status: "Stock OK" },
-        arena: { name: "Arena Fina Cantera", current: 4, min: 8, max: 20, unit: "m³", supplier: "Cantera Palermo", status: "En Camino" }
-    },
-    crmLeads: [
-        { name: "Ing. R. Silva", company: "Silva Constructora", topic: "Cotización para 8 obras simultáneas", status: "Nuevo Lead" },
-        { name: "Arq. Sofía B.", company: "Estudio SB", topic: "Consulta por plan Pro de 3 usuarios", status: "En Contacto" },
-        { name: "Arq. Carlos M.", company: "PfZ Planeamiento", topic: "Demo de Geofencing en Mendoza", status: "Nuevo Lead" }
-    ],
-    crmTickets: [
-        { client: "Estudio BMA", issue: "Error de sincronización en mapa de Palermo", severity: "Media" },
-        { client: "MSGSSV", issue: "Falla al exportar reporte semanal en PDF", severity: "Alta" },
-        { client: "Constructora Innovar", issue: "Agregar invitación para 2 operarios extra", severity: "Baja" }
-    ],
-    hrAttendance: {
-        "Juan Gómez": { role: "Albañilería Principal", presents: 21, excused: 1, unexcused: 0, status: "Presente" },
-        "Carlos Pérez": { role: "Pintura e Interiores", presents: 15, excused: 2, unexcused: 5, status: "Ausente" },
-        "Luis Martínez": { role: "Instalaciones y Sanitarios", presents: 18, excused: 3, unexcused: 1, status: "Ausente" }
-    },
-    hrBonuses: [
-        { name: "Juan Gómez", type: "Bono Puntualidad", amount: "$25.000 ARS", date: "Hace 2 días" },
-        { name: "Luis Martínez", type: "Bono Desempeño", amount: "$45.000 ARS", date: "Hace 1 semana" }
-    ],
-    subscription: {
-        status: "active",
-        plan: "Pro",
-        expiresAt: "2027-12-31"
-    }
+  operariosCount: 1,
+  avancePercentage: 42,
+  alertsCount: 2,
+  diasEstimados: "Día 12/35",
+  tasks: {
+    1: { name: "Revoque grueso", progress: 80, duration: 5, startOffset: 0, assignee: "Juan Gómez" },
+    2: { name: "Cañería y descargas", progress: 20, duration: 4, startOffset: 28.5, assignee: "Luis Martínez" },
+    3: { name: "Revestimiento cerámico", progress: 0, duration: 4, startOffset: 57.1, assignee: "Carlos Pérez" },
+    4: { name: "Pintura y terminación", progress: 0, duration: 2, startOffset: 85.7, assignee: "Carlos Pérez" },
+  },
+  incidents: initialIncidents,
+  attendance: {
+    "Juan Gómez": { role: "Albañilería principal", checkin: "08:02", status: "Presente" },
+    "Carlos Pérez": { role: "Pintura e interiores", checkin: "--:--", status: "Ausente" },
+    "Luis Martínez": { role: "Instalaciones sanitarias", checkin: "--:--", status: "Ausente" },
+  },
+  stockpiles: {
+    cemento: { name: "Cemento", current: 35, min: 40, max: 150, unit: "Bolsas", supplier: "Proveedor asignado", status: "Crítico" },
+    hierro: { name: "Hierro A500", current: 85, min: 30, max: 100, unit: "Barras", supplier: "Proveedor asignado", status: "Stock OK" },
+    ladrillo: { name: "Ladrillo portante", current: 1500, min: 800, max: 2500, unit: "Uds", supplier: "Proveedor asignado", status: "Stock OK" },
+    arena: { name: "Arena fina", current: 4, min: 8, max: 20, unit: "m³", supplier: "Proveedor asignado", status: "En camino" },
+  },
+  hrAttendance: {
+    "Juan Gómez": { role: "Albañilería principal", presents: 21, excused: 1, unexcused: 0, status: "Presente" },
+    "Carlos Pérez": { role: "Pintura e interiores", presents: 15, excused: 2, unexcused: 5, status: "Ausente" },
+    "Luis Martínez": { role: "Instalaciones sanitarias", presents: 18, excused: 3, unexcused: 1, status: "Ausente" },
+  },
+  hrBonuses: [],
 };
 
 export const defaultMessages = [
-    {
-        sender: "bot",
-        text: "Hola Arq. Marcelo. Soy tu Copiloto Inteligente de ObraSaaS. Estoy procesando los reportes de la cuadrilla y telemetría de obra en tiempo real. Escribe una consulta o reproduce un audio.",
-        time: "08:00 AM"
-    }
+  {
+    sender: "bot",
+    text: "Hola. Soy el asistente de ObraSaaS. Puedo registrar avances, novedades, asistencia y evidencias de obra.",
+    time: "08:00",
+  },
 ];
 
-// Helper to check and initialize the local database file
+function clone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+const MESSAGE_KINDS = new Set([
+  "TEXT",
+  "IMAGE",
+  "AUDIO",
+  "VIDEO",
+  "DOCUMENT",
+  "LOCATION",
+  "INTERACTIVE",
+  "SYSTEM",
+]);
+
+function normalizeMessageKind(kind, sender) {
+  const normalized = String(kind || "").toUpperCase();
+  if (normalized === "STICKER") return "IMAGE";
+  if (MESSAGE_KINDS.has(normalized)) return normalized;
+  return sender === "bot" && normalized === "SYSTEM" ? "SYSTEM" : "TEXT";
+}
+
+function storedMessageMetadata(message) {
+  const metadata = message.metadata && typeof message.metadata === "object" && !Array.isArray(message.metadata)
+    ? { ...message.metadata }
+    : {};
+  metadata.time = message.time || metadata.time || null;
+  if (message.media) metadata.media = message.media;
+  if (message.transcription) metadata.transcription = message.transcription;
+  return clone(metadata);
+}
+
+function storedMessageDate(value, fallback) {
+  const date = value ? new Date(value) : fallback;
+  return Number.isNaN(date.getTime()) ? fallback : date;
+}
+
+function durableMessageData(message, conversationId, fallbackDate) {
+  return {
+    conversationId,
+    externalId: message.externalId || null,
+    direction: message.sender === "bot" ? "OUTBOUND" : "INBOUND",
+    kind: normalizeMessageKind(message.kind, message.sender),
+    body: message.text || "",
+    mediaUrl: message.mediaUrl || message.media?.url || null,
+    status: message.status || null,
+    metadata: storedMessageMetadata(message),
+    sentAt: storedMessageDate(message.sentAt, fallbackDate),
+  };
+}
+
+function hasDurableDatabase() {
+  return Boolean(process.env.DATABASE_URL);
+}
+
+function assertLocalStorageAllowed() {
+  if (process.env.VERCEL || process.env.NODE_ENV === "production") {
+    throw new Error("DATABASE_URL is required in production; local JSON storage is development-only.");
+  }
+}
+
 function initLocalDb() {
-    const dir = path.dirname(LOCAL_DB_PATH);
-    if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-    }
-    if (!fs.existsSync(LOCAL_DB_PATH)) {
-        fs.writeFileSync(LOCAL_DB_PATH, JSON.stringify({
-            appState: defaultAppState,
-            messages: defaultMessages
-        }, null, 2));
-    }
+  assertLocalStorageAllowed();
+  const dir = path.dirname(LOCAL_DB_PATH);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  if (!fs.existsSync(LOCAL_DB_PATH)) {
+    fs.writeFileSync(
+      LOCAL_DB_PATH,
+      JSON.stringify(
+        {
+          appState: clone(defaultAppState),
+          messages: clone(defaultMessages),
+          webhookEvents: [],
+        },
+        null,
+        2,
+      ),
+    );
+  }
 }
 
-// Read database contents
-async function readDb() {
-    if (process.env.DATABASE_URL) {
-        try {
-            // Placeholder for Postgres/Supabase/Vercel Postgres integration
-            // e.g., const { rows } = await pg.query('SELECT data FROM state WHERE id = 1');
-            // return rows[0].data;
-        } catch (e) {
-            console.error("External database read error. Falling back to local file:", e);
-        }
-    }
-    initLocalDb();
-    const data = fs.readFileSync(LOCAL_DB_PATH, 'utf-8');
-    try {
-        return JSON.parse(data);
-    } catch(e) {
-        return {
-            appState: defaultAppState,
-            messages: defaultMessages
-        };
-    }
-}
-
-// Write database contents
-async function writeDb(data) {
-    if (process.env.DATABASE_URL) {
-        try {
-            // Placeholder for Postgres/Supabase write
-            // await pg.query('UPDATE state SET data = $1 WHERE id = 1', [JSON.stringify(data)]);
-            // return;
-        } catch (e) {
-            console.error("External database write error. Falling back to local file:", e);
-        }
-    }
-    initLocalDb();
-    fs.writeFileSync(LOCAL_DB_PATH, JSON.stringify(data, null, 2));
-}
-
-export async function getAppState() {
-    const db = await readDb();
-    return db.appState || defaultAppState;
-}
-
-export async function saveAppState(state) {
-    const db = await readDb();
-    db.appState = state;
-    await writeDb(db);
-    return state;
-}
-
-export async function getMessages() {
-    const db = await readDb();
-    return db.messages || defaultMessages;
-}
-
-export async function saveMessages(messages) {
-    const db = await readDb();
-    db.messages = messages;
-    await writeDb(db);
-    return messages;
-}
-
-export async function resetState() {
-    const freshDb = {
-        appState: JSON.parse(JSON.stringify(defaultAppState)),
-        messages: JSON.parse(JSON.stringify(defaultMessages))
+function readLocalDb() {
+  initLocalDb();
+  try {
+    return JSON.parse(fs.readFileSync(LOCAL_DB_PATH, "utf8"));
+  } catch {
+    return {
+      appState: clone(defaultAppState),
+      messages: clone(defaultMessages),
+      webhookEvents: [],
     };
-    await writeDb(freshDb);
-    return freshDb;
+  }
+}
+
+function writeLocalDb(data) {
+  initLocalDb();
+  const temporaryPath = `${LOCAL_DB_PATH}.${process.pid}.tmp`;
+  fs.writeFileSync(temporaryPath, JSON.stringify(data, null, 2));
+  fs.renameSync(temporaryPath, LOCAL_DB_PATH);
+}
+
+async function durableContext(scope) {
+  const { getPrisma } = await import("@/lib/prisma");
+  const prisma = getPrisma();
+
+  if (scope?.organization?.id && scope?.project?.id) {
+    const project = await prisma.project.findFirst({
+      where: {
+        id: scope.project.id,
+        organizationId: scope.organization.id,
+      },
+      include: { organization: true },
+    });
+    if (!project) throw new Error("The selected project does not belong to the active organization.");
+    return { prisma, organization: project.organization, project };
+  }
+
+  if (scope?.projectId) {
+    const project = await prisma.project.findUnique({
+      where: { id: String(scope.projectId) },
+      include: { organization: true },
+    });
+    if (!project) throw new Error("Unknown project scope.");
+    return { prisma, organization: project.organization, project };
+  }
+
+  if (scope?.phoneNumberId) {
+    const connection = await prisma.whatsAppConnection.findUnique({
+      where: { phoneNumberId: String(scope.phoneNumberId) },
+      include: { project: { include: { organization: true } } },
+    });
+    if (!connection?.enabled) throw new Error("Unknown or disabled WhatsApp connection.");
+    return {
+      prisma,
+      organization: connection.project.organization,
+      project: connection.project,
+      whatsappConnection: connection,
+    };
+  }
+
+  throw new Error("A trusted tenant or integration scope is required for durable data access.");
+}
+
+async function durableConversation(context) {
+  return context.prisma.conversation.upsert({
+    where: {
+      projectId_channel_externalId: {
+        projectId: context.project.id,
+        channel: "whatsapp",
+        externalId: LOCAL_CONVERSATION_ID,
+      },
+    },
+    update: {},
+    create: {
+      projectId: context.project.id,
+      channel: "whatsapp",
+      externalId: LOCAL_CONVERSATION_ID,
+      displayName: "Bitácora principal",
+    },
+  });
+}
+
+export async function getAppState(scope) {
+  if (!hasDurableDatabase()) return readLocalDb().appState || clone(defaultAppState);
+
+  const { prisma, project } = await durableContext(scope);
+  const snapshot = await prisma.projectSnapshot.findUnique({ where: { projectId: project.id } });
+  return snapshot?.state || clone(defaultAppState);
+}
+
+export async function saveAppState(state, scope) {
+  if (!hasDurableDatabase()) {
+    const db = readLocalDb();
+    db.appState = state;
+    writeLocalDb(db);
+    return state;
+  }
+
+  const { prisma, project } = await durableContext(scope);
+  await prisma.projectSnapshot.upsert({
+    where: { projectId: project.id },
+    update: { state, version: { increment: 1 } },
+    create: { projectId: project.id, state },
+  });
+  return state;
+}
+
+export async function getMessages(scope) {
+  if (!hasDurableDatabase()) return readLocalDb().messages || clone(defaultMessages);
+
+  const context = await durableContext(scope);
+  const conversation = await durableConversation(context);
+  let messages = await context.prisma.message.findMany({
+    where: { conversationId: conversation.id },
+    orderBy: [{ sentAt: "desc" }, { createdAt: "desc" }],
+    take: 200,
+  });
+
+  if (messages.length === 0) {
+    await context.prisma.message.create({
+      data: {
+        conversationId: conversation.id,
+        direction: "OUTBOUND",
+        kind: "SYSTEM",
+        body: defaultMessages[0].text,
+        metadata: { time: defaultMessages[0].time },
+      },
+    });
+    messages = await context.prisma.message.findMany({
+      where: { conversationId: conversation.id },
+      orderBy: [{ sentAt: "desc" }, { createdAt: "desc" }],
+      take: 200,
+    });
+  }
+
+  messages.reverse();
+
+  return messages.map((message) => {
+    const metadata = message.metadata && typeof message.metadata === "object" && !Array.isArray(message.metadata)
+      ? message.metadata
+      : {};
+    return {
+      id: message.id,
+      externalId: message.externalId,
+      sender: message.direction === "OUTBOUND" ? "bot" : "user",
+      kind: message.kind.toLowerCase(),
+      text: message.body || "",
+      mediaUrl: message.mediaUrl,
+      media: metadata.media || null,
+      transcription: metadata.transcription || null,
+      status: message.status,
+      metadata,
+      sentAt: message.sentAt.toISOString(),
+      time: metadata.time || message.sentAt.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" }),
+    };
+  });
+}
+
+export async function saveMessages(messages, scope) {
+  if (!hasDurableDatabase()) {
+    const db = readLocalDb();
+    db.messages = messages;
+    writeLocalDb(db);
+    return messages;
+  }
+
+  const context = await durableContext(scope);
+  const conversation = await durableConversation(context);
+  await context.prisma.$transaction(async (transaction) => {
+    await transaction.message.deleteMany({ where: { conversationId: conversation.id } });
+    if (messages.length > 0) {
+      await transaction.message.createMany({
+        data: messages.map((message, index) => durableMessageData(
+          message,
+          conversation.id,
+          new Date(Date.now() + index),
+        )),
+      });
+    }
+  });
+  return messages;
+}
+
+export async function appendMessages(messages, scope) {
+  if (!Array.isArray(messages) || messages.length === 0) return [];
+  if (!hasDurableDatabase()) {
+    const db = readLocalDb();
+    const current = Array.isArray(db.messages) ? db.messages : [];
+    for (const message of messages) {
+      const existingIndex = message.externalId
+        ? current.findIndex((item) => item.externalId === message.externalId)
+        : -1;
+      if (existingIndex >= 0) current[existingIndex] = message;
+      else current.push(message);
+    }
+    db.messages = current.slice(-200);
+    writeLocalDb(db);
+    return messages;
+  }
+
+  const context = await durableContext(scope);
+  const conversation = await durableConversation(context);
+  await context.prisma.$transaction(async (transaction) => {
+    for (const [index, message] of messages.entries()) {
+      const data = durableMessageData(
+        message,
+        conversation.id,
+        new Date(Date.now() + index),
+      );
+      if (!data.externalId) {
+        await transaction.message.create({ data });
+        continue;
+      }
+
+      const existing = await transaction.message.findUnique({
+        where: { externalId: data.externalId },
+        select: { id: true, conversationId: true },
+      });
+      if (existing && existing.conversationId !== conversation.id) {
+        throw new Error("Message external ID collision across tenant conversations.");
+      }
+      if (existing) {
+        const update = { ...data };
+        delete update.conversationId;
+        delete update.externalId;
+        await transaction.message.update({ where: { id: existing.id }, data: update });
+      } else {
+        await transaction.message.create({ data });
+      }
+    }
+  });
+  return messages;
+}
+
+export async function claimWebhookEvent({ provider, externalId, eventType, payload, scope }) {
+  if (!hasDurableDatabase()) {
+    const db = readLocalDb();
+    db.webhookEvents ||= [];
+    if (db.webhookEvents.some((event) => event.provider === provider && event.externalId === externalId)) {
+      return { claimed: false };
+    }
+    db.webhookEvents.push({
+      provider,
+      externalId,
+      eventType,
+      payload,
+      status: "PENDING",
+      attempts: 0,
+      createdAt: new Date().toISOString(),
+    });
+    writeLocalDb(db);
+    return { claimed: true };
+  }
+
+  const { prisma, project } = await durableContext(scope);
+  try {
+    const event = await prisma.webhookEvent.create({
+      data: { projectId: project.id, provider, externalId, eventType, payload },
+    });
+    return { claimed: true, eventId: event.id };
+  } catch (error) {
+    if (error?.code === "P2002") return { claimed: false };
+    throw error;
+  }
+}
+
+export async function updateWebhookEvent({ provider, externalId, status, error = null }) {
+  if (!hasDurableDatabase()) {
+    const db = readLocalDb();
+    const event = db.webhookEvents?.find(
+      (item) => item.provider === provider && item.externalId === externalId,
+    );
+    if (event) {
+      event.status = status;
+      event.attempts = (event.attempts || 0) + 1;
+      event.lastError = error;
+      if (status === "PROCESSED") event.processedAt = new Date().toISOString();
+      writeLocalDb(db);
+    }
+    return;
+  }
+
+  const { getPrisma } = await import("@/lib/prisma");
+  const prisma = getPrisma();
+  await prisma.webhookEvent.update({
+    where: { provider_externalId: { provider, externalId } },
+    data: {
+      status,
+      attempts: { increment: 1 },
+      lastError: error,
+      processedAt: status === "PROCESSED" ? new Date() : null,
+    },
+  });
+}
+
+export async function resetState(scope) {
+  const fresh = {
+    appState: clone(defaultAppState),
+    messages: clone(defaultMessages),
+  };
+  await saveAppState(fresh.appState, scope);
+  await saveMessages(fresh.messages, scope);
+  return fresh;
+}
+
+export async function resolveWhatsAppScope(phoneNumberId) {
+  const scopes = await resolveWhatsAppScopes({ phoneNumberId });
+  return scopes[0] || null;
+}
+
+export async function resolveWhatsAppScopes({
+  phoneNumberId,
+  whatsappBusinessId,
+  displayPhoneNumber,
+} = {}) {
+  if (!phoneNumberId && !whatsappBusinessId && !displayPhoneNumber) return [];
+  if (!hasDurableDatabase()) {
+    return phoneNumberId ? [{ phoneNumberId: String(phoneNumberId) }] : [];
+  }
+
+  const { getPrisma } = await import("@/lib/prisma");
+  const prisma = getPrisma();
+  const identifiers = [
+    ...(phoneNumberId ? [{ phoneNumberId: String(phoneNumberId) }] : []),
+    ...(whatsappBusinessId ? [{ whatsappBusinessId: String(whatsappBusinessId) }] : []),
+    ...(displayPhoneNumber ? [{ displayPhoneNumber: String(displayPhoneNumber) }] : []),
+  ];
+  const connections = await prisma.whatsAppConnection.findMany({
+    where: {
+      enabled: true,
+      OR: identifiers,
+    },
+    select: {
+      phoneNumberId: true,
+      whatsappBusinessId: true,
+      displayPhoneNumber: true,
+    },
+  });
+  return connections.map((connection) => ({
+    phoneNumberId: connection.phoneNumberId,
+    whatsappBusinessId: connection.whatsappBusinessId,
+    displayPhoneNumber: connection.displayPhoneNumber,
+  }));
+}
+
+export async function getProjectSettings(scope) {
+  if (!hasDurableDatabase()) {
+    return {
+      id: "local-project",
+      latitude: Number(process.env.PROJECT_LATITUDE || -34.5886),
+      longitude: Number(process.env.PROJECT_LONGITUDE || -58.4302),
+      geofenceMeters: Number(process.env.PROJECT_GEOFENCE_METERS || 100),
+    };
+  }
+
+  const { project } = await durableContext(scope);
+  return {
+    id: project.id,
+    latitude: Number(project.latitude ?? process.env.PROJECT_LATITUDE ?? -34.5886),
+    longitude: Number(project.longitude ?? process.env.PROJECT_LONGITUDE ?? -58.4302),
+    geofenceMeters: project.geofenceMeters,
+  };
 }

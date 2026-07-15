@@ -1,9 +1,12 @@
 import { getAppState } from '@/lib/db';
+import { getPlatformAccess, requireTenantPermission } from '@/lib/access';
 
 export const dynamic = 'force-dynamic';
 
 export default async function ReportPage() {
-    const state = await getAppState();
+    const access = await getPlatformAccess();
+    requireTenantPermission(access, 'org:reports:read');
+    const state = await getAppState(access);
 
     // Parse timeline dates safely
     const cleanDias = String(state.diasEstimados || "12/35").replace(/Día\s*|Da\s*|D.a\s*/gi, "");
@@ -36,11 +39,10 @@ export default async function ReportPage() {
         <html lang="es">
             <head>
                 <title>Reporte_Semanal_Palermo_Chico.pdf</title>
-                <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@600;700;800&display=swap" />
                 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
                 <style>{`
                     body {
-                        font-family: 'Inter', sans-serif;
+                        font-family: var(--font-geist), Arial, sans-serif;
                         color: #1e293b;
                         background: #fff;
                         padding: 30px;
@@ -55,7 +57,7 @@ export default async function ReportPage() {
                         margin-bottom: 24px;
                     }
                     .logo-section h2 {
-                        font-family: 'Outfit', sans-serif;
+                        font-family: var(--font-manrope), Arial, sans-serif;
                         font-weight: 800;
                         font-size: 1.4rem;
                         color: #ff9f1c;
@@ -73,7 +75,7 @@ export default async function ReportPage() {
                         color: #64748b;
                     }
                     .meta-section h3 {
-                        font-family: 'Outfit', sans-serif;
+                        font-family: var(--font-manrope), Arial, sans-serif;
                         font-size: 1.2rem;
                         color: #0f172a;
                         margin: 0 0 6px 0;

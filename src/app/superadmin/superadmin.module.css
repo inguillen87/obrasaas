@@ -1,0 +1,77 @@
+.shell {
+  min-height: 100vh;
+  padding: 48px clamp(20px, 5vw, 76px) 80px;
+  color: #f5f2ea;
+  background:
+    radial-gradient(circle at 78% -10%, rgba(233, 135, 69, 0.18), transparent 34%),
+    linear-gradient(145deg, #0a1110 0%, #101a18 48%, #0b1211 100%);
+  font-family: var(--font-geist), sans-serif;
+}
+
+.header,
+.panelHeader,
+.headerActions,
+.guardrail {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.header { margin: 0 auto 40px; max-width: 1500px; }
+.header h1 { margin: 4px 0 8px; font: 700 clamp(2.25rem, 5vw, 4.5rem)/0.98 var(--font-manrope), sans-serif; letter-spacing: -0.055em; }
+.header p { margin: 0; color: #9fada8; }
+.eyebrow { color: #e98745 !important; font: 700 0.72rem/1 var(--font-geist), sans-serif; letter-spacing: 0.15em; text-transform: uppercase; }
+.headerActions { align-items: flex-end; flex-direction: column; }
+.identity { color: #aab6b2; font-size: 0.8rem; }
+.secondaryButton { padding: 11px 16px; border: 1px solid #34423e; border-radius: 999px; color: #f5f2ea; text-decoration: none; transition: 180ms ease; }
+.secondaryButton:hover { border-color: #e98745; transform: translateY(-2px); }
+
+.metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; max-width: 1500px; margin: 0 auto 20px; }
+.metrics article,
+.panel,
+.guardrail { border: 1px solid rgba(221, 232, 227, 0.1); background: rgba(18, 29, 27, 0.74); box-shadow: 0 24px 70px rgba(0, 0, 0, 0.18); backdrop-filter: blur(16px); }
+.metrics article { min-height: 148px; padding: 24px; border-radius: 18px; }
+.metrics span { display: block; margin-bottom: 20px; color: #9fada8; font-size: 0.78rem; }
+.metrics strong { display: block; font: 700 clamp(1.8rem, 3vw, 2.8rem)/1 var(--font-manrope), sans-serif; letter-spacing: -0.05em; }
+.metrics small { display: block; margin-top: 12px; color: #6f807a; }
+
+.panel { max-width: 1500px; margin: 0 auto; padding: 28px; border-radius: 22px; }
+.panelHeader { margin-bottom: 24px; }
+.panelHeader h2 { margin: 5px 0 0; font: 650 1.45rem var(--font-manrope), sans-serif; }
+.liveBadge { color: #b8c7c1; font-size: 0.75rem; }
+.liveBadge i { display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: #55c58b; box-shadow: 0 0 0 6px rgba(85, 197, 139, 0.1); }
+.tableWrap { overflow-x: auto; }
+.tableWrap table { width: 100%; min-width: 880px; border-collapse: collapse; }
+.tableWrap th { padding: 12px 14px; color: #7f918b; font-size: 0.68rem; letter-spacing: 0.09em; text-align: left; text-transform: uppercase; }
+.tableWrap td { padding: 16px 14px; border-top: 1px solid rgba(221, 232, 227, 0.08); color: #d9e1de; font-size: 0.83rem; }
+.tableWrap td strong,
+.tableWrap td small { display: block; }
+.tableWrap td small { margin-top: 4px; color: #758680; }
+.status { display: inline-flex; padding: 5px 8px; border-radius: 999px; background: rgba(255,255,255,0.05); font-size: 0.65rem; font-weight: 800; }
+.active { color: #7de3ae; background: rgba(85, 197, 139, 0.12); }
+.trialing { color: #f2b17f; background: rgba(233, 135, 69, 0.12); }
+.past_due,
+.suspended { color: #ff9d91; background: rgba(255, 96, 80, 0.12); }
+.emptyState { padding: 54px 20px; text-align: center; color: #83938e; }
+.emptyState strong { color: #f5f2ea; }
+
+.guardrail { max-width: 1500px; margin: 20px auto 0; justify-content: flex-start; padding: 24px; border-radius: 18px; }
+.guardrailIcon { display: grid; place-items: center; width: 48px; height: 48px; flex: 0 0 auto; border-radius: 14px; color: #0a1110; background: #e98745; font-weight: 900; }
+.guardrail h2 { margin: 0 0 5px; font-size: 1rem; }
+.guardrail p { margin: 0; color: #9fada8; font-size: 0.84rem; line-height: 1.6; }
+
+@media (max-width: 980px) {
+  .metrics { grid-template-columns: repeat(2, 1fr); }
+  .header { align-items: flex-start; flex-direction: column; }
+  .headerActions { align-items: flex-start; }
+}
+
+@media (max-width: 620px) {
+  .shell { padding-top: 28px; }
+  .metrics { grid-template-columns: 1fr; }
+  .panel { padding: 20px; }
+  .panelHeader { align-items: flex-start; flex-direction: column; }
+  .guardrail { align-items: flex-start; }
+}
+

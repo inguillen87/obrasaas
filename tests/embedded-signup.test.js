@@ -1,0 +1,69 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+
+import {
+  completeEmbeddedSignup,
+  createAppSecretProof,
+  isValidMetaResourceId,
+  isValidRegistrationPin,
+} from '../src/lib/whatsapp/embedded-signup.js';
+
+test('Embedded Signup validates Meta resource IDs and six-digit PINs', () => {
+  assert.equal(isValidMetaResourceId('1556998679107747'), true);
+  assert.equal(isValidMetaResourceId('other-app'), false);
+  assert.equal(isValidRegistrationPin('731902'), true);
+  assert.equal(isValidRegistrationPin('12345'), false);
+});
+
+test('appsecret proof is deterministic and token-bound', () => {
+  const proof = createAppSecretProof('tenant-token', 'app-secret');
+  assert.equal(proof.length, 64);
+  assert.notEqual(proof, createAppSecretProof('other-token', 'app-secret'));
+});
+
+test('Embedded Signup exchanges code, validates ownership, subscribes, and registers', async () => {
+  const previousAppId = process.env.NEXT_PUBLIC_META_APP_ID;
+  const previousSecret = process.env.META_APP_SECRET;
+  process.env.NEXT_PUBLIC_META_APP_ID = '1665088767899217';
+  process.env.META_APP_SECRET = 'unit-test-secret';
+  const calls = [];
+  const fetchImpl = async (url, options = {}) => {
+    const parsed = new URL(url);
+    calls.push({ path: parsed.pathname, search: parsed.search, method: options.method || 'GET', body: options.body });
+    if (parsed.pathname.endsWith('/oauth/access_token')) {
+      return Response.json({ access_token: 'tenant-token', token_type: 'bearer' });
+    }
+    if (parsed.pathname.endsWith('/debug_token')) {
+      return Response.json({ data: { is_valid: true, app_id: '1665088767899217', scopes: ['whatsapp_business_management'] } });
+    }
+    if (parsed.pathname.endsWith('/123456789/phone_numbers')) {
+      return Response.json({ data: [{ id: '987654321', display_phone_number: '+54 9 11 5555 5555', verified_name: 'Constructora Sur' }] });
+    }
+    return Response.json({ success: true });
+  };
+
+  try {
+    const result = await completeEmbeddedSignup({
+      code: 'short-lived-code',
+      whatsappBusinessId: '123456789',
+      phoneNumberId: '987654321',
+      registrationPin: '731902',
+      fetchImpl,
+    });
+    assert.equal(result.accessToken, 'tenant-token');
+    assert.equal(result.verifiedBusinessName, 'Constructora Sur');
+    assert.match(calls[2].search, /limit=100/);
+    assert.deepEqual(calls.map(({ path, method }) => [path, method]), [
+      ['/v25.0/oauth/access_token', 'GET'],
+      ['/v25.0/debug_token', 'GET'],
+      ['/v25.0/123456789/phone_numbers', 'GET'],
+      ['/v25.0/123456789/subscribed_apps', 'POST'],
+      ['/v25.0/987654321/register', 'POST'],
+    ]);
+  } finally {
+    if (previousAppId === undefined) delete process.env.NEXT_PUBLIC_META_APP_ID;
+    else process.env.NEXT_PUBLIC_META_APP_ID = previousAppId;
+    if (previousSecret === undefined) delete process.env.META_APP_SECRET;
+    else process.env.META_APP_SECRET = previousSecret;
+  }
+});

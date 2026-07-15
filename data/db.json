@@ -1,0 +1,174 @@
+{
+  "appState": {
+    "operariosCount": 1,
+    "avancePercentage": 42,
+    "alertsCount": 2,
+    "diasEstimados": "Día 12/35",
+    "tasks": {
+      "1": {
+        "name": "Revoque grueso",
+        "progress": 80,
+        "duration": 5,
+        "startOffset": 0,
+        "assignee": "Juan Gómez"
+      },
+      "2": {
+        "name": "Cañería y descargas",
+        "progress": 20,
+        "duration": 4,
+        "startOffset": 28.5,
+        "assignee": "Luis Martínez"
+      },
+      "3": {
+        "name": "Revestimiento cerámico",
+        "progress": 0,
+        "duration": 4,
+        "startOffset": 57.1,
+        "assignee": "Carlos Pérez"
+      },
+      "4": {
+        "name": "Pintura y terminación",
+        "progress": 0,
+        "duration": 2,
+        "startOffset": 85.7,
+        "assignee": "Carlos Pérez"
+      }
+    },
+    "incidents": [
+      {
+        "id": "inc-1",
+        "title": "Quiebre de stock crítico",
+        "description": "Cemento por debajo del mínimo de seguridad. Requiere validación antes de emitir una orden de compra.",
+        "type": "warning",
+        "badge": "Stock bajo",
+        "timestamp": "Hoy, 08:30",
+        "reporter": "Control de acopio",
+        "icon": "fa-solid fa-triangle-exclamation"
+      },
+      {
+        "id": "inc-2",
+        "title": "Alerta de geocerca",
+        "description": "Un fichaje fue registrado fuera del radio configurado para la obra y quedó pendiente de revisión.",
+        "type": "critical",
+        "badge": "Desvío GPS",
+        "timestamp": "Hoy, 07:50",
+        "reporter": "Geolocalización",
+        "icon": "fa-solid fa-location-crosshairs"
+      },
+      {
+        "id": "inc-3",
+        "title": "Asistencia registrada",
+        "description": "Juan Gómez inició su jornada desde el acceso móvil de la obra.",
+        "type": "success",
+        "badge": "Presentismo",
+        "timestamp": "Hoy, 08:02",
+        "reporter": "Asistente de obra",
+        "icon": "fa-solid fa-user-check"
+      },
+      {
+        "id": "inc-4",
+        "title": "Planificación sincronizada",
+        "description": "La línea base fue reajustada y el cambio quedó registrado en la bitácora.",
+        "type": "info",
+        "badge": "Gantt",
+        "timestamp": "Ayer, 18:15",
+        "reporter": "Planificación",
+        "icon": "fa-solid fa-chart-gantt"
+      }
+    ],
+    "attendance": {
+      "Juan Gómez": {
+        "role": "Albañilería principal",
+        "checkin": "08:02",
+        "status": "Presente"
+      },
+      "Carlos Pérez": {
+        "role": "Pintura e interiores",
+        "checkin": "--:--",
+        "status": "Ausente"
+      },
+      "Luis Martínez": {
+        "role": "Instalaciones sanitarias",
+        "checkin": "--:--",
+        "status": "Ausente"
+      }
+    },
+    "stockpiles": {
+      "cemento": {
+        "name": "Cemento",
+        "current": 35,
+        "min": 40,
+        "max": 150,
+        "unit": "Bolsas",
+        "supplier": "Proveedor asignado",
+        "status": "Crítico"
+      },
+      "hierro": {
+        "name": "Hierro A500",
+        "current": 85,
+        "min": 30,
+        "max": 100,
+        "unit": "Barras",
+        "supplier": "Proveedor asignado",
+        "status": "Stock OK"
+      },
+      "ladrillo": {
+        "name": "Ladrillo portante",
+        "current": 1500,
+        "min": 800,
+        "max": 2500,
+        "unit": "Uds",
+        "supplier": "Proveedor asignado",
+        "status": "Stock OK"
+      },
+      "arena": {
+        "name": "Arena fina",
+        "current": 4,
+        "min": 8,
+        "max": 20,
+        "unit": "m³",
+        "supplier": "Proveedor asignado",
+        "status": "En camino"
+      }
+    },
+    "crmLeads": [],
+    "crmTickets": [],
+    "hrAttendance": {
+      "Juan Gómez": {
+        "role": "Albañilería principal",
+        "presents": 21,
+        "excused": 1,
+        "unexcused": 0,
+        "status": "Presente"
+      },
+      "Carlos Pérez": {
+        "role": "Pintura e interiores",
+        "presents": 15,
+        "excused": 2,
+        "unexcused": 5,
+        "status": "Ausente"
+      },
+      "Luis Martínez": {
+        "role": "Instalaciones sanitarias",
+        "presents": 18,
+        "excused": 3,
+        "unexcused": 1,
+        "status": "Ausente"
+      }
+    },
+    "hrBonuses": [],
+    "subscription": {
+      "status": "trial",
+      "plan": "Demo",
+      "expiresAt": null
+    }
+  },
+  "messages": [
+    {
+      "sender": "bot",
+      "text": "Hola. Soy el asistente de ObraSaaS. Puedo registrar avances, novedades, asistencia y evidencias de obra.",
+      "time": "08:00"
+    }
+  ],
+  "webhookEvents": []
+}

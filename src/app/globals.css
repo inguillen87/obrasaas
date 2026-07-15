@@ -1,5 +1,4 @@
-/* styles.css - ObraSaaS MVP & Presupuesto Formal (Premium Edition) */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap');
+/* ObraSaaS application styles */
 
 :root {
     --bg-main: #060913;
@@ -29,8 +28,8 @@
     --text-secondary: #94a3b8;
     --text-muted: #475569;
     
-    --font-sans: 'Inter', sans-serif;
-    --font-heading: 'Outfit', sans-serif;
+    --font-sans: var(--font-geist), 'Segoe UI', sans-serif;
+    --font-heading: var(--font-manrope), var(--font-geist), 'Segoe UI', sans-serif;
     
     --sidebar-width: 260px;
     --transition-smooth: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);

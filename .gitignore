@@ -32,6 +32,10 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
+
+# generated database client (created by postinstall/build)
+/src/generated/prisma/
 
 # vercel
 .vercel
@@ -41,3 +45,4 @@ yarn-error.log*
 next-env.d.ts
 
 .vercel
+.env*

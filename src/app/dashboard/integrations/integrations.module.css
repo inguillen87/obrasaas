@@ -1,0 +1,191 @@
+.shell {
+  min-height: 100vh;
+  padding: 54px clamp(20px, 6vw, 92px) 80px;
+  color: #f5f4ed;
+  background:
+    radial-gradient(circle at 78% 12%, rgba(44, 170, 119, 0.14), transparent 32%),
+    radial-gradient(circle at 12% 0%, rgba(233, 135, 69, 0.12), transparent 28%),
+    #0c1514;
+}
+
+.header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 36px;
+  max-width: 1240px;
+  margin: 0 auto 42px;
+}
+
+.back {
+  display: inline-flex;
+  margin-bottom: 34px;
+  color: #b5c0bb;
+  text-decoration: none;
+}
+
+.eyebrow {
+  margin: 0 0 10px;
+  color: #e98745;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.header h1,
+.channelCard h2,
+.securityCard h2 {
+  margin: 0;
+  font-family: var(--font-manrope), sans-serif;
+  letter-spacing: -0.04em;
+}
+
+.header h1 { font-size: clamp(2.7rem, 6vw, 5.4rem); }
+.header > div:first-child > p:last-child {
+  max-width: 760px;
+  margin: 18px 0 0;
+  color: #aab7b1;
+  font-size: 1.05rem;
+  line-height: 1.7;
+}
+
+.projectBadge {
+  min-width: 220px;
+  padding: 18px 20px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.035);
+}
+.projectBadge span { display: block; margin-bottom: 5px; color: #83918b; font-size: 0.75rem; text-transform: uppercase; }
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(300px, 0.85fr);
+  gap: 22px;
+  max-width: 1240px;
+  margin: 0 auto;
+}
+
+.channelCard,
+.securityCard {
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 28px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.018));
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.24);
+}
+
+.channelCard { padding: clamp(24px, 4vw, 42px); }
+.securityCard { padding: 34px; }
+.cardTop { display: flex; align-items: center; gap: 16px; }
+.cardTop h2, .securityCard h2 { font-size: clamp(1.7rem, 3vw, 2.45rem); }
+.whatsappMark {
+  display: grid;
+  width: 58px;
+  height: 58px;
+  place-items: center;
+  border-radius: 17px;
+  color: #07110e;
+  background: #48d88d;
+  font-size: 2rem;
+  box-shadow: 0 12px 34px rgba(72, 216, 141, 0.22);
+}
+
+.state {
+  margin-left: auto;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+.connected { color: #8ef0bd; background: rgba(72, 216, 141, 0.12); }
+.pendingState { color: #f0c39f; background: rgba(233, 135, 69, 0.12); }
+.summary { margin: 28px 0; color: #afbbb6; line-height: 1.7; }
+
+.connectionPanel {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 28px 0;
+}
+.connectionPanel > div,
+.boundary {
+  padding: 17px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  background: rgba(0, 0, 0, 0.14);
+}
+.connectionPanel span,
+.boundary span { display: block; margin-bottom: 5px; color: #7f8d87; font-size: 0.72rem; text-transform: uppercase; }
+.connectionPanel strong { overflow-wrap: anywhere; }
+
+.connectFlow {
+  display: grid;
+  grid-template-columns: minmax(230px, 1fr) auto;
+  align-items: end;
+  gap: 16px;
+  margin: 28px 0;
+}
+.connectFlow label span { display: block; margin-bottom: 8px; font-size: 0.82rem; font-weight: 700; }
+.connectFlow input {
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 13px;
+  outline: none;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.24);
+  font: inherit;
+  letter-spacing: 0.22em;
+}
+.connectFlow input:focus { border-color: #48d88d; box-shadow: 0 0 0 3px rgba(72, 216, 141, 0.1); }
+.connectFlow small { display: block; margin-top: 7px; color: #77857f; line-height: 1.45; }
+
+.primaryButton,
+.secondaryButton {
+  border: 0;
+  border-radius: 13px;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+}
+.primaryButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 0 22px;
+  color: #07110e;
+  background: #48d88d;
+}
+.primaryButton:disabled { cursor: not-allowed; filter: grayscale(0.6); opacity: 0.5; }
+.secondaryButton { padding: 10px 14px; color: #d9dfdc; background: rgba(255, 255, 255, 0.07); }
+
+.notice { margin: 14px 0; padding: 13px 15px; border-radius: 13px; font-size: 0.88rem; }
+.success { color: #a7f1c9; background: rgba(72, 216, 141, 0.1); }
+.error { color: #ffc2b8; background: rgba(255, 91, 70, 0.11); }
+.progress { color: #f3c49f; background: rgba(233, 135, 69, 0.1); }
+.info { color: #b6d8ef; background: rgba(91, 167, 218, 0.1); }
+
+.actions { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 24px; color: #6f7c77; font-size: 0.78rem; }
+.securityCard ul { display: grid; gap: 15px; margin: 30px 0; padding: 0; list-style: none; }
+.securityCard li { display: flex; gap: 11px; color: #b5c0bb; line-height: 1.5; }
+.securityCard li i { width: 20px; margin-top: 3px; color: #e98745; }
+.boundary { display: grid; gap: 5px; }
+.boundary span:not(:first-child) { margin-top: 16px; }
+.boundary strong { color: #dfe4e1; line-height: 1.45; }
+
+@media (max-width: 860px) {
+  .header { align-items: flex-start; flex-direction: column; }
+  .projectBadge { width: 100%; }
+  .grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 560px) {
+  .shell { padding-inline: 16px; }
+  .cardTop { align-items: flex-start; flex-wrap: wrap; }
+  .state { margin-left: 0; }
+  .connectionPanel, .connectFlow { grid-template-columns: 1fr; }
+  .actions { align-items: flex-start; flex-direction: column; }
+}

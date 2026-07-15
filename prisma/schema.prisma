@@ -1,0 +1,364 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ProjectStatus {
+  PLANNING
+  ACTIVE
+  PAUSED
+  COMPLETED
+  ARCHIVED
+}
+
+enum TaskStatus {
+  BACKLOG
+  READY
+  IN_PROGRESS
+  BLOCKED
+  DONE
+}
+
+enum IncidentSeverity {
+  INFO
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AttendanceStatus {
+  PRESENT
+  OUTSIDE_GEOFENCE
+  EXCUSED
+  ABSENT
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum MessageKind {
+  TEXT
+  IMAGE
+  AUDIO
+  VIDEO
+  DOCUMENT
+  LOCATION
+  INTERACTIVE
+  SYSTEM
+}
+
+enum WebhookStatus {
+  PENDING
+  PROCESSING
+  PROCESSED
+  FAILED
+}
+
+enum SystemRole {
+  SUPERADMIN
+  TENANT_USER
+}
+
+enum SubscriptionPlan {
+  TRIAL
+  PRO
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  SUSPENDED
+}
+
+enum MembershipStatus {
+  ACTIVE
+  INVITED
+  DISABLED
+}
+
+enum TenantRole {
+  ADMIN
+  DIRECTOR
+  SITE_MANAGER
+  FINANCE
+  AUDITOR
+}
+
+enum WhatsAppConnectionStatus {
+  PENDING
+  CONNECTED
+  ERROR
+  DISABLED
+}
+
+model Organization {
+  id                   String             @id @default(cuid())
+  clerkOrganizationId  String?            @unique
+  name                 String
+  slug                 String             @unique
+  country              String             @default("AR")
+  timezone             String             @default("America/Argentina/Buenos_Aires")
+  subscriptionPlan     SubscriptionPlan   @default(TRIAL)
+  subscriptionStatus   SubscriptionStatus @default(TRIALING)
+  trialEndsAt          DateTime?
+  stripeCustomerId     String?            @unique
+  stripeSubscriptionId String?            @unique
+  metadata             Json?
+  projects             Project[]
+  memberships          TenantMembership[]
+  auditLogs            AuditLog[]
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+}
+
+model PlatformUser {
+  id           String             @id @default(cuid())
+  clerkUserId  String             @unique
+  primaryEmail String             @unique
+  fullName     String?
+  avatarUrl    String?
+  systemRole   SystemRole         @default(TENANT_USER)
+  memberships  TenantMembership[]
+  auditLogs    AuditLog[]
+  lastSeenAt   DateTime           @default(now())
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  @@index([systemRole, createdAt])
+}
+
+model TenantMembership {
+  id             String           @id @default(cuid())
+  organizationId String
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           PlatformUser     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clerkRole      String           @default("org:member")
+  tenantRole     TenantRole       @default(AUDITOR)
+  status         MembershipStatus @default(ACTIVE)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@unique([organizationId, userId])
+  @@index([userId, status])
+  @@index([organizationId, tenantRole, status])
+}
+
+model AuditLog {
+  id             String        @id @default(cuid())
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  actorId        String?
+  actor          PlatformUser? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  action         String
+  entityType     String
+  entityId       String?
+  metadata       Json?
+  ipAddress      String?
+  createdAt      DateTime      @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([actorId, createdAt])
+  @@index([action, createdAt])
+}
+
+model Project {
+  id             String              @id @default(cuid())
+  organizationId String
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  slug           String
+  status         ProjectStatus       @default(ACTIVE)
+  address        String?
+  latitude       Decimal?            @db.Decimal(10, 7)
+  longitude      Decimal?            @db.Decimal(10, 7)
+  geofenceMeters Int                 @default(100)
+  startsAt       DateTime?
+  endsAt         DateTime?
+  metadata       Json?
+  snapshot       ProjectSnapshot?
+  workers        Worker[]
+  tasks          Task[]
+  incidents      Incident[]
+  attendances    AttendanceEntry[]
+  conversations  Conversation[]
+  webhookEvents  WebhookEvent[]
+  whatsapp       WhatsAppConnection?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@unique([organizationId, slug])
+  @@index([organizationId, status])
+}
+
+model WhatsAppConnection {
+  id                    String                   @id @default(cuid())
+  projectId             String                   @unique
+  project               Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  phoneNumberId         String                   @unique
+  whatsappBusinessId    String?
+  displayPhoneNumber    String?
+  verifiedBusinessName  String?
+  enabled               Boolean                  @default(true)
+  connectionStatus      WhatsAppConnectionStatus @default(PENDING)
+  encryptedAccessToken  String?                  @db.Text
+  encryptedPin          String?                  @db.Text
+  tokenLastFour         String?
+  embeddedSignupVersion String                   @default("v4")
+  connectedAt           DateTime?
+  lastVerifiedAt        DateTime?
+  lastError             String?                  @db.Text
+  metadata              Json?
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
+
+  @@index([whatsappBusinessId])
+}
+
+model ProjectSnapshot {
+  id        String   @id @default(cuid())
+  projectId String   @unique
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  state     Json
+  version   Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Worker {
+  id          String            @id @default(cuid())
+  projectId   String
+  project     Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  externalId  String?
+  phone       String
+  name        String
+  role        String?
+  active      Boolean           @default(true)
+  metadata    Json?
+  attendances AttendanceEntry[]
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@unique([projectId, phone])
+  @@index([externalId])
+}
+
+model Task {
+  id          String     @id @default(cuid())
+  projectId   String
+  project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  externalId  String?
+  title       String
+  description String?
+  status      TaskStatus @default(BACKLOG)
+  progress    Int        @default(0)
+  startsAt    DateTime?
+  endsAt      DateTime?
+  assignee    String?
+  metadata    Json?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@unique([projectId, externalId])
+  @@index([projectId, status])
+}
+
+model Incident {
+  id          String           @id @default(cuid())
+  projectId   String
+  project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  externalId  String?
+  title       String
+  description String?
+  severity    IncidentSeverity @default(INFO)
+  status      String           @default("open")
+  reporter    String?
+  metadata    Json?
+  occurredAt  DateTime         @default(now())
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@unique([projectId, externalId])
+  @@index([projectId, severity, status])
+}
+
+model AttendanceEntry {
+  id             String           @id @default(cuid())
+  projectId      String
+  project        Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workerId       String
+  worker         Worker           @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  status         AttendanceStatus
+  latitude       Decimal?         @db.Decimal(10, 7)
+  longitude      Decimal?         @db.Decimal(10, 7)
+  distanceMeters Int?
+  source         String           @default("whatsapp")
+  checkedInAt    DateTime         @default(now())
+  metadata       Json?
+  createdAt      DateTime         @default(now())
+
+  @@index([projectId, checkedInAt])
+  @@index([workerId, checkedInAt])
+}
+
+model Conversation {
+  id          String    @id @default(cuid())
+  projectId   String
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  channel     String    @default("whatsapp")
+  externalId  String
+  displayName String?
+  metadata    Json?
+  messages    Message[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([projectId, channel, externalId])
+}
+
+model Message {
+  id             String           @id @default(cuid())
+  conversationId String
+  conversation   Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  externalId     String?          @unique
+  direction      MessageDirection
+  kind           MessageKind      @default(TEXT)
+  body           String?
+  mediaUrl       String?
+  status         String?
+  metadata       Json?
+  sentAt         DateTime         @default(now())
+  createdAt      DateTime         @default(now())
+
+  @@index([conversationId, sentAt])
+}
+
+model WebhookEvent {
+  id          String        @id @default(cuid())
+  projectId   String?
+  project     Project?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  provider    String
+  externalId  String
+  eventType   String
+  status      WebhookStatus @default(PENDING)
+  attempts    Int           @default(0)
+  payload     Json
+  lastError   String?
+  processedAt DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@unique([provider, externalId])
+  @@index([status, createdAt])
+  @@index([projectId, createdAt])
+}
