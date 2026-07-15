@@ -9,7 +9,8 @@ ObraSaaS usa una app propia de Meta y separada del resto de las plataformas:
 - callback de la beta: `https://obrasaas-preview.vercel.app/api/webhooks/whatsapp`;
 - versión de Graph API y de las suscripciones: `v25.0`;
 - cada tenant conecta su propio WABA, número y token;
-- las credenciales del tenant se cifran con AES-256-GCM y nunca se comparten entre organizaciones.
+- las credenciales del tenant se cifran con AES-256-GCM y nunca se comparten entre organizaciones;
+- los Flows se definen como blueprints Flow JSON `7.3` y se crean dentro del WABA de cada tenant.
 
 La URL de callback está verificada en Meta. El token de verificación vive cifrado en Vercel y no se documenta ni se imprime.
 
@@ -44,7 +45,9 @@ Listo:
 - callback guardado en Meta;
 - seis campos de webhook suscritos en `v25.0`;
 - dominio, privacidad, términos, eliminación de datos y categoría de la app completados;
-- Embedded Signup v4 implementado y tenant-scoped.
+- Embedded Signup v4 implementado y tenant-scoped;
+- blueprints `Incidencia de obra` y `Fichaje y seguridad` validados localmente;
+- provisionamiento de borradores Meta tenant-scoped, sin publicación automática.
 
 Pendiente antes del primer tenant real:
 
@@ -52,6 +55,10 @@ Pendiente antes del primer tenant real:
 2. guardarlo como `META_APP_SECRET` sensible en Vercel Preview y Production;
 3. redeployar la beta y ejecutar un webhook de prueba firmado;
 4. completar el primer Embedded Signup con un WABA y número reales;
-5. publicar la app de Meta cuando el ícono y la identidad definitivos estén aprobados.
+5. crear los dos borradores desde Integraciones y completar una prueba Flow end-to-end;
+6. publicar los Flows aprobados desde Meta;
+7. publicar la app de Meta cuando el ícono y la identidad definitivos estén aprobados.
 
 La interfaz de integraciones mantiene deshabilitado el alta mientras falte cualquiera de los secretos necesarios. Esto evita que un administrador complete Meta y falle recién al volver a ObraSaaS.
+
+Meta vuelve inmutables los assets de un Flow después de publicarlo. Por eso ObraSaaS puede crear o actualizar borradores, pero no expone una publicación automática: un cambio posterior debe salir como un nuevo Flow clonado y volver a validarse.

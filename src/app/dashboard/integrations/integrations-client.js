@@ -24,15 +24,47 @@ function parseEmbeddedSignupEvent(raw) {
   }
 }
 
-export default function IntegrationsClient({ appId, configId, platformReady, initialConnection }) {
+function flowStatusLabel(status) {
+  if (status === 'PUBLISHED') return 'Publicado';
+  if (status === 'DRAFT') return 'Borrador validado';
+  if (status === 'NOT_CREATED') return 'Sin crear';
+  return status === 'UNKNOWN' ? 'Revisar' : status;
+}
+
+function flowStatusClass(status) {
+  if (status === 'PUBLISHED') return 'flowPublished';
+  if (status === 'DRAFT') return 'flowDraft';
+  if (status === 'NOT_CREATED') return 'flowMissing';
+  return 'flowBlocked';
+}
+
+async function readFlowCatalog() {
+  const response = await fetch('/api/integrations/whatsapp/flows', { cache: 'no-store' });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error || 'No se pudieron consultar los Flows.');
+  return payload.catalog;
+}
+
+export default function IntegrationsClient({
+  appId,
+  configId,
+  platformReady,
+  initialConnection,
+  initialFlowCatalog,
+}) {
   const [connection, setConnection] = useState(initialConnection);
   const [sdkReady, setSdkReady] = useState(false);
   const [registrationPin, setRegistrationPin] = useState('');
   const [status, setStatus] = useState(null);
   const [pending, setPending] = useState(false);
+  const [flowCatalog, setFlowCatalog] = useState(initialFlowCatalog);
+  const [flowPendingKey, setFlowPendingKey] = useState(null);
+  const [flowNotice, setFlowNotice] = useState(null);
   const signupRef = useRef({ code: null, whatsappBusinessId: null, phoneNumberId: null });
   const pinRef = useRef('');
   const submittedRef = useRef(false);
+  const connected = connection?.enabled && connection.connectionStatus === 'CONNECTED';
+  const configured = Boolean(appId && configId && platformReady);
 
   async function submitConnection() {
     const signup = signupRef.current;
@@ -121,6 +153,19 @@ export default function IntegrationsClient({ appId, configId, platformReady, ini
     return () => window.removeEventListener('message', onMessage);
   }, [appId]);
 
+  useEffect(() => {
+    if (!connected) return undefined;
+    let active = true;
+    readFlowCatalog()
+      .then((catalog) => {
+        if (active) setFlowCatalog(catalog);
+      })
+      .catch((error) => {
+        if (active) setFlowNotice({ type: 'error', text: error.message });
+      });
+    return () => { active = false; };
+  }, [connected]);
+
   function startSignup() {
     if (!/^\d{6}$/.test(registrationPin)) {
       setStatus({ type: 'error', text: 'Definí un PIN de 6 números antes de conectar.' });
@@ -170,6 +215,8 @@ export default function IntegrationsClient({ appId, configId, platformReady, ini
         connectionStatus: 'DISABLED',
         tokenLastFour: null,
       } : null);
+      setFlowCatalog(initialFlowCatalog);
+      setFlowNotice(null);
       setStatus({ type: 'success', text: 'La conexión local fue desactivada y las credenciales eliminadas.' });
     } catch (error) {
       setStatus({ type: 'error', text: error.message });
@@ -178,11 +225,49 @@ export default function IntegrationsClient({ appId, configId, platformReady, ini
     }
   }
 
-  const connected = connection?.enabled && connection.connectionStatus === 'CONNECTED';
-  const configured = Boolean(appId && configId && platformReady);
+  async function refreshFlows() {
+    setFlowPendingKey('refresh');
+    setFlowNotice({ type: 'progress', text: 'Consultando el estado real en Meta…' });
+    try {
+      setFlowCatalog(await readFlowCatalog());
+      setFlowNotice({ type: 'success', text: 'Estado de Flows sincronizado con la cuenta de WhatsApp.' });
+    } catch (error) {
+      setFlowNotice({ type: 'error', text: error.message });
+    } finally {
+      setFlowPendingKey(null);
+    }
+  }
+
+  async function provisionFlowDraft(blueprintKey) {
+    setFlowPendingKey(blueprintKey);
+    setFlowNotice({ type: 'progress', text: 'Validando y sincronizando el borrador con Meta…' });
+    try {
+      const response = await fetch('/api/integrations/whatsapp/flows', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ blueprintKey }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'No se pudo preparar el Flow.');
+      setFlowCatalog((current) => current.map((item) => (
+        item.key === blueprintKey ? payload.catalogItem : item
+      )));
+      setFlowNotice({
+        type: 'success',
+        text: payload.result.flow.status === 'PUBLISHED'
+          ? 'El Flow ya estaba publicado. No se modificó ningún activo irreversible.'
+          : 'Borrador validado y guardado en la cuenta de WhatsApp. Publicarlo seguirá requiriendo una decisión explícita.',
+      });
+    } catch (error) {
+      setFlowNotice({ type: 'error', text: error.message });
+    } finally {
+      setFlowPendingKey(null);
+    }
+  }
 
   return (
-    <div className={styles.grid}>
+    <>
+      <div className={styles.grid}>
       <section className={styles.channelCard}>
         <div className={styles.cardTop}>
           <div className={styles.whatsappMark} aria-hidden="true">
@@ -296,6 +381,102 @@ export default function IntegrationsClient({ appId, configId, platformReady, ini
           <strong>Credenciales · números · datos entre empresas</strong>
         </div>
       </aside>
-    </div>
+      </div>
+
+      <section className={styles.flowsSection} aria-labelledby="whatsapp-flows-title">
+        <header className={styles.flowsHeader}>
+          <div>
+            <p className={styles.eyebrow}>Experiencias nativas · sin salir de WhatsApp</p>
+            <h2 id="whatsapp-flows-title">WhatsApp Flows operativos</h2>
+            <p>
+              Blueprints propios para obra, aislados por WABA y compilados con Flow JSON 7.3.
+              ObraSaaS crea borradores reversibles; nunca publica un Flow sin una decisión explícita.
+            </p>
+          </div>
+          <div className={styles.flowHeaderActions}>
+            <span className={styles.versionBadge}>Flow JSON 7.3</span>
+            <button
+              type="button"
+              className={styles.secondaryButton}
+              onClick={refreshFlows}
+              disabled={!connected || Boolean(flowPendingKey)}
+            >
+              <i className="fa-solid fa-arrows-rotate" aria-hidden="true" />
+              Sincronizar
+            </button>
+          </div>
+        </header>
+
+        <div className={styles.flowGrid}>
+          {flowCatalog.map((flow) => {
+            const remoteStatus = flow.remote.status;
+            const isPublished = remoteStatus === 'PUBLISHED';
+            const isPending = flowPendingKey === flow.key;
+            return (
+              <article className={styles.flowCard} key={flow.key}>
+                <div className={styles.flowCardTop}>
+                  <div className={styles.flowIcon} aria-hidden="true">
+                    <i className={flow.flowType === 'incident'
+                      ? 'fa-solid fa-triangle-exclamation'
+                      : 'fa-solid fa-helmet-safety'} />
+                  </div>
+                  <span className={`${styles.flowState} ${styles[flowStatusClass(remoteStatus)]}`}>
+                    {flowStatusLabel(remoteStatus)}
+                  </span>
+                </div>
+                <p className={styles.flowScreen}>{flow.screenId}</p>
+                <h3>{flow.title}</h3>
+                <p>{flow.description}</p>
+                <ul className={styles.flowCapabilities} aria-label="Datos incluidos">
+                  {flow.capabilities.map((capability) => <li key={capability}>{capability}</li>)}
+                </ul>
+                {flow.remote.validationErrors.length > 0 && (
+                  <div className={`${styles.notice} ${styles.error}`} role="alert">
+                    {flow.remote.validationErrors[0].message}
+                  </div>
+                )}
+                <div className={styles.flowCardFooter}>
+                  <div>
+                    <span>Activo Meta</span>
+                    <strong>{flow.remote.id || 'Se crea al conectar un WABA'}</strong>
+                  </div>
+                  <button
+                    type="button"
+                    className={styles.flowButton}
+                    onClick={() => provisionFlowDraft(flow.key)}
+                    disabled={!connected || !platformReady || Boolean(flowPendingKey) || isPublished}
+                  >
+                    {isPending
+                      ? 'Validando…'
+                      : isPublished
+                        ? 'Publicado en Meta'
+                        : remoteStatus === 'DRAFT'
+                          ? 'Actualizar borrador'
+                          : 'Crear borrador'}
+                  </button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+
+        {flowNotice && (
+          <div className={`${styles.notice} ${styles[flowNotice.type]}`} role="status">
+            {flowNotice.text}
+          </div>
+        )}
+
+        <div className={styles.flowGovernance}>
+          <i className="fa-solid fa-shield-halved" aria-hidden="true" />
+          <div>
+            <strong>Gobernanza antes de automatización</strong>
+            <span>
+              Publicar en Meta vuelve el JSON inmutable. Por eso esta beta valida y provisiona borradores,
+              pero reserva la publicación para cuando exista número real, prueba end-to-end y aprobación del tenant.
+            </span>
+          </div>
+        </div>
+      </section>
+    </>
   );
 }

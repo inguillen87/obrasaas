@@ -4,6 +4,7 @@ import IntegrationsClient from './integrations-client';
 import styles from './integrations.module.css';
 import { getPlatformAccess, requireTenantPermission } from '@/lib/access';
 import { getPrisma } from '@/lib/prisma';
+import { getWhatsAppFlowCatalog } from '@/lib/whatsapp/flows';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,6 +60,7 @@ export default async function IntegrationsPage() {
         configId={process.env.NEXT_PUBLIC_META_EMBEDDED_SIGNUP_CONFIG_ID || ''}
         platformReady={metaPlatformReady}
         initialConnection={serializeConnection(connection)}
+        initialFlowCatalog={getWhatsAppFlowCatalog()}
       />
     </main>
   );

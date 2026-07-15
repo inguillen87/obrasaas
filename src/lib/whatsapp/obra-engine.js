@@ -98,14 +98,16 @@ function updatePresentCount(state) {
 
 function processFlowReply({ state, worker, event, now }) {
   const response = event.interactive?.response || {};
-  const flowName = normalize(event.interactive?.name || response.flow_name || "");
+  const flowName = normalize(response.flow_type || response.flow_name || event.interactive?.name || "");
   const summary = Object.entries(response)
-    .filter(([key]) => !["flow_token", "screen"].includes(key))
+    .filter(([key]) => !["flow_token", "screen", "flow_type", "flow_name"].includes(key))
     .slice(0, 6)
     .map(([key, value]) => `${key}: ${String(value)}`)
     .join(" · ");
 
   const isMedical = flowName.includes("medical") || flowName.includes("licencia");
+  const isIncident = flowName.includes("incident");
+  const isAttendance = flowName.includes("attendance") || flowName.includes("fichaje");
   if (isMedical) {
     const days = Math.min(30, Math.max(1, Number(response.days) || 1));
     state.attendance[worker.name] = {
@@ -114,18 +116,37 @@ function processFlowReply({ state, worker, event, now }) {
       status: `Licencia justificada (${days} días)`,
     };
   }
+  if (isAttendance) {
+    const ppeComplete = response.ppe_status === "complete";
+    state.attendance[worker.name] = {
+      role: worker.role,
+      checkin: new Intl.DateTimeFormat("es-AR", {
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZone: "America/Argentina/Buenos_Aires",
+      }).format(now),
+      status: ppeComplete ? "Presente · EPP verificado" : "Ingreso observado · EPP incompleto",
+    };
+    updatePresentCount(state);
+    if (!ppeComplete) state.alertsCount += 1;
+  }
+  if (isIncident && ["high", "critical"].includes(response.severity)) state.alertsCount += 1;
 
   state.incidents.unshift(
     buildIncident({
       title: isMedical
         ? "Certificado médico recibido"
-        : flowName.includes("incid")
+        : isIncident
           ? "Incidencia recibida por WhatsApp Flow"
+          : isAttendance
+            ? "Ingreso y seguridad confirmados"
           : "Formulario de obra completado",
       description: isMedical
         ? `Licencia justificada de ${worker.name}. Documento almacenado en repositorio protegido.`
         : summary || "El formulario fue recibido y quedó registrado en la bitácora.",
-      type: flowName.includes("incid") ? "warning" : "info",
+      type: isIncident
+        ? ["high", "critical"].includes(response.severity) ? "critical" : "warning"
+        : isAttendance && response.ppe_status !== "complete" ? "warning" : "info",
       badge: "WhatsApp Flow",
       reporter: worker.name,
       icon: "fa-brands fa-whatsapp",
@@ -135,6 +156,10 @@ function processFlowReply({ state, worker, event, now }) {
 
   return isMedical
     ? "Certificado recibido y asociado a tu legajo. La licencia quedó informada al equipo autorizado."
+    : isAttendance
+      ? response.ppe_status === "complete"
+        ? "Ingreso registrado. El control de EPP quedó confirmado y ya está visible para el equipo de obra."
+        : "Ingreso registrado con observación de EPP. No inicies la tarea hasta regularizar los elementos de protección."
     : "Formulario recibido. Lo registré en la bitácora de la obra y ya está visible para el equipo de gestión.";
 }
 

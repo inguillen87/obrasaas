@@ -35,7 +35,9 @@
 
 .header h1,
 .channelCard h2,
-.securityCard h2 {
+.securityCard h2,
+.flowsSection h2,
+.flowCard h3 {
   margin: 0;
   font-family: var(--font-manrope), sans-serif;
   letter-spacing: -0.04em;
@@ -160,7 +162,8 @@
   background: #48d88d;
 }
 .primaryButton:disabled { cursor: not-allowed; filter: grayscale(0.6); opacity: 0.5; }
-.secondaryButton { padding: 10px 14px; color: #d9dfdc; background: rgba(255, 255, 255, 0.07); }
+.secondaryButton { display: inline-flex; align-items: center; gap: 8px; padding: 10px 14px; color: #d9dfdc; background: rgba(255, 255, 255, 0.07); }
+.secondaryButton:disabled { cursor: not-allowed; opacity: 0.45; }
 
 .notice { margin: 14px 0; padding: 13px 15px; border-radius: 13px; font-size: 0.88rem; }
 .success { color: #a7f1c9; background: rgba(72, 216, 141, 0.1); }
@@ -176,10 +179,73 @@
 .boundary span:not(:first-child) { margin-top: 16px; }
 .boundary strong { color: #dfe4e1; line-height: 1.45; }
 
+.flowsSection {
+  max-width: 1240px;
+  margin: 24px auto 0;
+  padding: clamp(24px, 4vw, 42px);
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 28px;
+  background:
+    linear-gradient(135deg, rgba(72, 216, 141, 0.055), transparent 44%),
+    rgba(255, 255, 255, 0.025);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.2);
+}
+.flowsHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 28px; }
+.flowsHeader h2 { margin: 0; font-size: clamp(2rem, 4vw, 3.4rem); }
+.flowsHeader > div:first-child > p:last-child { max-width: 760px; margin: 14px 0 0; color: #9fada7; line-height: 1.65; }
+.flowHeaderActions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.versionBadge {
+  padding: 9px 12px;
+  border: 1px solid rgba(72, 216, 141, 0.2);
+  border-radius: 999px;
+  color: #99e9bf;
+  background: rgba(72, 216, 141, 0.08);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+.flowGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 30px; }
+.flowCard {
+  display: flex;
+  min-width: 0;
+  min-height: 390px;
+  padding: 24px;
+  flex-direction: column;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 22px;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.045), rgba(0, 0, 0, 0.12));
+  transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+}
+.flowCard:hover { transform: translateY(-3px); border-color: rgba(72, 216, 141, 0.2); background: linear-gradient(150deg, rgba(255, 255, 255, 0.06), rgba(0, 0, 0, 0.1)); }
+.flowCardTop { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.flowIcon { display: grid; width: 46px; height: 46px; place-items: center; border-radius: 14px; color: #f0a36e; background: rgba(233, 135, 69, 0.11); }
+.flowState { padding: 7px 10px; border-radius: 999px; font-size: 0.71rem; font-weight: 800; }
+.flowPublished { color: #93edbb; background: rgba(72, 216, 141, 0.11); }
+.flowDraft { color: #a8d5f3; background: rgba(91, 167, 218, 0.11); }
+.flowMissing { color: #c0c9c5; background: rgba(255, 255, 255, 0.07); }
+.flowBlocked { color: #ffc0b7; background: rgba(255, 91, 70, 0.1); }
+.flowScreen { margin: 22px 0 7px; color: #6f8078; font: 700 0.68rem/1.3 monospace; letter-spacing: 0.08em; }
+.flowCard h3 { margin: 0; font-size: 1.55rem; }
+.flowCard > p:not(.flowScreen) { margin: 12px 0 0; color: #9daaa5; line-height: 1.58; }
+.flowCapabilities { display: flex; gap: 7px; margin: 20px 0 24px; padding: 0; flex-wrap: wrap; list-style: none; }
+.flowCapabilities li { padding: 7px 9px; border-radius: 9px; color: #b9c4bf; background: rgba(255, 255, 255, 0.055); font-size: 0.73rem; }
+.flowCardFooter { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-top: auto; padding-top: 18px; border-top: 1px solid rgba(255, 255, 255, 0.07); }
+.flowCardFooter > div { min-width: 0; }
+.flowCardFooter span { display: block; margin-bottom: 4px; color: #718079; font-size: 0.68rem; text-transform: uppercase; }
+.flowCardFooter strong { display: block; overflow: hidden; max-width: 220px; color: #d8dfdc; font-size: 0.76rem; text-overflow: ellipsis; white-space: nowrap; }
+.flowButton { min-height: 42px; padding: 0 14px; border: 0; border-radius: 11px; color: #09120f; background: #48d88d; cursor: pointer; font: inherit; font-size: 0.78rem; font-weight: 850; white-space: nowrap; }
+.flowButton:disabled { cursor: not-allowed; filter: grayscale(0.5); opacity: 0.48; }
+.flowGovernance { display: flex; align-items: flex-start; gap: 15px; margin-top: 22px; padding: 18px 20px; border: 1px solid rgba(233, 135, 69, 0.14); border-radius: 17px; color: #d8dfdc; background: rgba(233, 135, 69, 0.055); }
+.flowGovernance > i { margin-top: 3px; color: #e98745; }
+.flowGovernance strong, .flowGovernance span { display: block; }
+.flowGovernance span { margin-top: 5px; color: #96a49e; line-height: 1.55; }
+
 @media (max-width: 860px) {
   .header { align-items: flex-start; flex-direction: column; }
   .projectBadge { width: 100%; }
   .grid { grid-template-columns: 1fr; }
+  .flowsHeader { flex-direction: column; }
+  .flowHeaderActions { justify-content: flex-start; }
+  .flowGrid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 560px) {
@@ -188,4 +254,13 @@
   .state { margin-left: 0; }
   .connectionPanel, .connectFlow { grid-template-columns: 1fr; }
   .actions { align-items: flex-start; flex-direction: column; }
+  .flowsSection { padding-inline: 18px; }
+  .flowCard { min-height: 0; padding: 20px; }
+  .flowCardFooter { align-items: stretch; flex-direction: column; }
+  .flowButton { width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flowCard { transition: none; }
+  .flowCard:hover { transform: none; }
 }
