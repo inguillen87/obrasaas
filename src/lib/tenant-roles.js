@@ -61,6 +61,14 @@ const ROLE_PERMISSIONS = {
   ],
 };
 
+const CLERK_ROLE_TO_TENANT_ROLE = {
+  'org:admin': 'ADMIN',
+  'org:director': 'DIRECTOR',
+  'org:site_manager': 'SITE_MANAGER',
+  'org:finance': 'FINANCE',
+  'org:auditor': 'AUDITOR',
+};
+
 export function isTenantRole(role) {
   return Boolean(role && TENANT_ROLES[role]);
 }
@@ -71,7 +79,8 @@ export function roleHasPermission(role, permission) {
 }
 
 export function roleForClerkMembership(clerkRole, currentRole = null) {
-  if (clerkRole === 'org:admin') return 'ADMIN';
+  const mappedRole = CLERK_ROLE_TO_TENANT_ROLE[clerkRole];
+  if (mappedRole) return mappedRole;
   if (currentRole === 'ADMIN' || !isTenantRole(currentRole)) return 'AUDITOR';
   return currentRole;
 }

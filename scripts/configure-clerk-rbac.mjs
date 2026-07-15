@@ -20,16 +20,16 @@ const permissions = [
 const roles = [
   ['Admin', 'org:admin', 'Full tenant administration.', permissions.map(([, key]) => key)],
   ['Director de obra', 'org:director', 'Directs projects, resources, costs and operational decisions.', [
-    'org:projects:read', 'org:projects:manage', 'org:field:manage', 'org:reports:read', 'org:costs:read', 'org:portfolio:read',
+    'org:projects:read', 'org:projects:manage', 'org:field:manage', 'org:reports:read', 'org:costs:read', 'org:costs:manage', 'org:integrations:manage', 'org:portfolio:read',
   ]],
   ['Jefe de obra', 'org:site_manager', 'Runs daily field execution and reporting.', [
-    'org:projects:read', 'org:projects:manage', 'org:field:manage', 'org:reports:read',
+    'org:projects:read', 'org:projects:manage', 'org:field:manage', 'org:reports:read', 'org:costs:read',
   ]],
   ['Administración', 'org:finance', 'Manages costs, purchasing and financial reporting.', [
     'org:projects:read', 'org:reports:read', 'org:costs:read', 'org:costs:manage',
   ]],
   ['Auditor', 'org:auditor', 'Read-only access to projects, reports, costs and portfolio.', [
-    'org:projects:read', 'org:reports:read', 'org:costs:read', 'org:portfolio:read',
+    'org:projects:read', 'org:reports:read', 'org:costs:read',
   ]],
 ];
 
@@ -87,4 +87,3 @@ for (const [name, key, description, permissionKeys] of roles) {
 }
 
 console.log(apply ? 'Clerk RBAC is synchronized.' : 'Dry run complete. Re-run with --apply to mutate Clerk.');
-

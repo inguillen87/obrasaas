@@ -50,6 +50,7 @@ export default function RootLayout({ children }) {
       </head>
       <body>
         <ClerkProvider
+          taskUrls={{ 'choose-organization': '/session-tasks/choose-organization' }}
           appearance={{
             variables: {
               colorPrimary: '#e98745',

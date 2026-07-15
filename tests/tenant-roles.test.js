@@ -14,6 +14,18 @@ test('demoting a Clerk admin removes the implicit ObraSaaS admin role', () => {
   assert.equal(roleForClerkMembership('org:member', 'ADMIN'), 'AUDITOR');
 });
 
+test('custom Clerk roles map to the same ObraSaaS tenant roles', () => {
+  assert.equal(roleForClerkMembership('org:director'), 'DIRECTOR');
+  assert.equal(roleForClerkMembership('org:site_manager'), 'SITE_MANAGER');
+  assert.equal(roleForClerkMembership('org:finance'), 'FINANCE');
+  assert.equal(roleForClerkMembership('org:auditor'), 'AUDITOR');
+});
+
+test('generic Clerk members preserve an explicitly assigned operational role', () => {
+  assert.equal(roleForClerkMembership('org:member', 'SITE_MANAGER'), 'SITE_MANAGER');
+  assert.equal(roleForClerkMembership('org:member', 'FINANCE'), 'FINANCE');
+});
+
 test('tenant roles enforce least privilege', () => {
   assert.equal(roleHasPermission('ADMIN', 'tenant:members:manage'), true);
   assert.equal(roleHasPermission('DIRECTOR', 'org:costs:manage'), true);

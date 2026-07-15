@@ -1,0 +1,91 @@
+import Link from 'next/link';
+import styles from './platform-readiness.module.css';
+
+const SYNC_LABELS = {
+  live: 'Sincronizado',
+  syncing: 'Actualizando',
+  error: 'Conexión interrumpida',
+};
+
+export default function PlatformReadiness({ platformAccess, setup, syncState, lastSyncedAt }) {
+  const teamReady = setup.membershipCount > 1;
+  const trialEndLabel = platformAccess.organization.trialEndsAt
+    ? new Intl.DateTimeFormat('es-AR', {
+      day: '2-digit',
+      month: 'short',
+      timeZone: 'America/Argentina/Buenos_Aires',
+    }).format(new Date(platformAccess.organization.trialEndsAt))
+    : null;
+  const planLabel = platformAccess.organization.plan === 'TRIAL'
+    ? `Prueba${trialEndLabel ? ` · hasta ${trialEndLabel}` : ''}`
+    : platformAccess.organization.plan;
+
+  return (
+    <section className={styles.shell} aria-label="Estado de configuración de ObraSaaS">
+      <div className={styles.summary}>
+        <div>
+          <p className={styles.eyebrow}>Centro operativo</p>
+          <strong>{platformAccess.organization.name}</strong>
+          <span>{planLabel} · {platformAccess.tenantRole === 'SUPERADMIN' ? 'Superadmin' : platformAccess.tenantRole}</span>
+        </div>
+        <div className={`${styles.sync} ${styles[syncState]}`}>
+          <i aria-hidden="true" />
+          <span>{SYNC_LABELS[syncState] || SYNC_LABELS.live}</span>
+          <time dateTime={lastSyncedAt}>
+            {new Intl.DateTimeFormat('es-AR', {
+              hour: '2-digit',
+              minute: '2-digit',
+              timeZone: 'America/Argentina/Buenos_Aires',
+            }).format(new Date(lastSyncedAt))}
+          </time>
+        </div>
+      </div>
+
+      <div className={styles.steps}>
+        <article className={styles.ready}>
+          <span>01</span>
+          <div><strong>Empresa activa</strong><small>Tenant aislado y autenticado</small></div>
+          <i className="fa-solid fa-check" aria-hidden="true" />
+        </article>
+        {setup.canViewTeam ? (
+          <Link href="/dashboard/team" className={teamReady ? styles.ready : styles.recommended}>
+            <span>02</span>
+            <div><strong>Equipo</strong><small>{setup.membershipCount} miembro{setup.membershipCount === 1 ? '' : 's'} activo{setup.membershipCount === 1 ? '' : 's'}</small></div>
+            <i className={teamReady ? 'fa-solid fa-check' : 'fa-solid fa-arrow-right'} aria-hidden="true" />
+          </Link>
+        ) : (
+          <article className={teamReady ? styles.ready : styles.recommended}>
+            <span>02</span>
+            <div><strong>Equipo</strong><small>Gestionado por un responsable</small></div>
+            <i className={teamReady ? 'fa-solid fa-check' : 'fa-solid fa-lock'} aria-hidden="true" />
+          </article>
+        )}
+        {setup.canManageIntegrations ? (
+          <Link href="/dashboard/integrations" className={setup.whatsappConnected ? styles.ready : styles.action}>
+            <span>03</span>
+            <div><strong>WhatsApp</strong><small>{setup.whatsappConnected ? 'Canal conectado' : 'Conexión pendiente'}</small></div>
+            <i className={setup.whatsappConnected ? 'fa-solid fa-check' : 'fa-solid fa-arrow-right'} aria-hidden="true" />
+          </Link>
+        ) : (
+          <article className={setup.whatsappConnected ? styles.ready : styles.recommended}>
+            <span>03</span>
+            <div><strong>WhatsApp</strong><small>{setup.whatsappConnected ? 'Canal conectado' : 'Pendiente del administrador'}</small></div>
+            <i className={setup.whatsappConnected ? 'fa-solid fa-check' : 'fa-solid fa-lock'} aria-hidden="true" />
+          </article>
+        )}
+        <article className={setup.isDemoData ? styles.demo : styles.ready}>
+          <span>04</span>
+          <div><strong>Datos de obra</strong><small>{setup.isDemoData ? 'Modo demostración' : 'Operación persistida'}</small></div>
+          <i className={setup.isDemoData ? 'fa-solid fa-flask' : 'fa-solid fa-check'} aria-hidden="true" />
+        </article>
+      </div>
+
+      {setup.isDemoData && (
+        <p className={styles.notice}>
+          <i className="fa-solid fa-circle-info" aria-hidden="true" />
+          Estás viendo datos demostrativos. Conectá WhatsApp o registrá el primer avance para iniciar la operación real de esta obra.
+        </p>
+      )}
+    </section>
+  );
+}

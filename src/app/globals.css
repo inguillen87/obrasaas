@@ -2414,3 +2414,40 @@ select.form-input option {
   align-items: center;
   gap: 6px;
 }
+
+.internal-workspace {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 16px;
+  padding: 12px 13px;
+  border: 1px solid rgba(255, 159, 28, 0.28);
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(255, 159, 28, 0.12), rgba(255, 255, 255, 0.025));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+.internal-workspace__eyebrow {
+  color: var(--accent-color);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.internal-workspace__name {
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
+.internal-workspace__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 0.67rem;
+}
+
+.internal-workspace__status i {
+  color: #10b981;
+}

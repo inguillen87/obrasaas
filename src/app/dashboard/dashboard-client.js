@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { OrganizationSwitcher, UserButton, useUser } from '@clerk/nextjs';
+import PlatformReadiness from './platform-readiness';
 
 function parseAgenticMessage(message) {
   const text = message.replace(/\*\*/g, '');
@@ -143,11 +144,13 @@ const audioData = {
   }
 };
 
-export default function Dashboard({ platformAccess }) {
+export default function Dashboard({ platformAccess, initialState, initialMessages, setup }) {
   const { user } = useUser();
   // Application State
-  const [state, setState] = useState(initialAppState);
-  const [chatMessages, setChatMessages] = useState(initialChatMessages);
+  const [state, setState] = useState(initialState || initialAppState);
+  const [chatMessages, setChatMessages] = useState(initialMessages || initialChatMessages);
+  const [syncState, setSyncState] = useState('live');
+  const [lastSyncedAt, setLastSyncedAt] = useState(setup.initialLoadedAt);
   const [activeTab, setActiveTab] = useState('sec-dashboard');
   const [isLightTheme, setIsLightTheme] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -233,7 +236,7 @@ export default function Dashboard({ platformAccess }) {
     [],
   );
 
-  // Fetch initial state & setup polling
+  // Refresh tenant-scoped operational data while the app is visible.
   useEffect(() => {
     const initializationFrame = requestAnimationFrame(() => {
       const savedTheme = localStorage.getItem('obrasaas_theme');
@@ -245,48 +248,45 @@ export default function Dashboard({ platformAccess }) {
       if (tabParam) setActiveTab(tabParam);
     });
 
-    // Fetch initial DB state
-    const fetchState = async () => {
+    let active = true;
+    let refreshing = false;
+    const refreshOperationalData = async () => {
+      if (refreshing || document.visibilityState === 'hidden') return;
+      refreshing = true;
+      setSyncState('syncing');
       try {
-        const stateRes = await fetch('/api/state');
-        if (stateRes.ok) {
-          const stateData = await stateRes.json();
-          setState(stateData);
-        }
-
-        const messagesRes = await fetch('/api/whatsapp');
-        if (messagesRes.ok) {
-          const messagesData = await messagesRes.json();
-          setChatMessages(messagesData);
-        }
+        const [stateRes, messagesRes] = await Promise.all([
+          fetch('/api/state', { cache: 'no-store' }),
+          fetch('/api/whatsapp', { cache: 'no-store' }),
+        ]);
+        if (!stateRes.ok || !messagesRes.ok) throw new Error('Operational refresh failed.');
+        const [stateData, messagesData] = await Promise.all([
+          stateRes.json(),
+          messagesRes.json(),
+        ]);
+        if (!active) return;
+        setState(stateData);
+        setChatMessages(messagesData);
+        setLastSyncedAt(new Date().toISOString());
+        setSyncState('live');
       } catch (err) {
-        console.error("Error loading initial data:", err);
+        if (active) setSyncState('error');
+        console.warn('Operational refresh failed:', err);
+      } finally {
+        refreshing = false;
       }
     };
-    fetchState();
-
-    // Start Polling loop every 3 seconds to get DB updates from webhook
-    const interval = setInterval(async () => {
-      try {
-        const stateRes = await fetch('/api/state');
-        if (stateRes.ok) {
-          const stateData = await stateRes.json();
-          setState(stateData);
-        }
-
-        const messagesRes = await fetch('/api/whatsapp');
-        if (messagesRes.ok) {
-          const messagesData = await messagesRes.json();
-          setChatMessages(messagesData);
-        }
-      } catch (err) {
-        console.warn("Polling error:", err);
-      }
-    }, 3000);
+    const interval = setInterval(refreshOperationalData, 10_000);
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') void refreshOperationalData();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
+      active = false;
       cancelAnimationFrame(initializationFrame);
       clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, []);
 
@@ -1383,25 +1383,36 @@ export default function Dashboard({ platformAccess }) {
             <div className="brand-logo">OS</div>
             <div className="brand-name">ObraSaaS</div>
           </div>
-          <div style={{ marginBottom: '16px' }}>
-            <OrganizationSwitcher
-              hidePersonal
-              afterCreateOrganizationUrl="/dashboard"
-              afterSelectOrganizationUrl="/dashboard"
-              appearance={{
-                elements: {
-                  rootBox: { width: '100%' },
-                  organizationSwitcherTrigger: {
-                    width: '100%',
-                    justifyContent: 'space-between',
-                    border: '1px solid var(--border-color)',
-                    background: 'rgba(255,255,255,0.03)',
-                    color: 'var(--text-primary)',
+          {platformAccess.isSuperadmin ? (
+            <div className="internal-workspace" aria-label="Workspace interno de plataforma">
+              <span className="internal-workspace__eyebrow">Control plane</span>
+              <span className="internal-workspace__name">ObraSaaS Operaciones</span>
+              <span className="internal-workspace__status">
+                <i className="fa-solid fa-shield-halved" aria-hidden="true"></i>
+                Workspace interno
+              </span>
+            </div>
+          ) : (
+            <div style={{ marginBottom: '16px' }}>
+              <OrganizationSwitcher
+                hidePersonal
+                afterCreateOrganizationUrl="/dashboard"
+                afterSelectOrganizationUrl="/dashboard"
+                appearance={{
+                  elements: {
+                    rootBox: { width: '100%' },
+                    organizationSwitcherTrigger: {
+                      width: '100%',
+                      justifyContent: 'space-between',
+                      border: '1px solid var(--border-color)',
+                      background: 'rgba(255,255,255,0.03)',
+                      color: 'var(--text-primary)',
+                    },
                   },
-                },
-              }}
-            />
-          </div>
+                }}
+              />
+            </div>
+          )}
           
           {/* Light/Dark Theme Toggle */}
           <div className="theme-toggle-container" style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', padding: '8px 12px', borderRadius: '12px' }}>
@@ -1416,7 +1427,7 @@ export default function Dashboard({ platformAccess }) {
               <button onClick={() => setActiveTab('sec-dashboard')}><i className="fa-solid fa-chart-line"></i> Dashboard</button>
             </li>
             <li className={`nav-item ${activeTab === 'sec-whatsapp' ? 'active' : ''}`}>
-              <button onClick={() => setActiveTab('sec-whatsapp')}><i className="fa-brands fa-whatsapp"></i> Simulador WhatsApp</button>
+              <button onClick={() => setActiveTab('sec-whatsapp')}><i className="fa-brands fa-whatsapp"></i> WhatsApp · Demo Lab</button>
             </li>
             <li className={`nav-item ${activeTab === 'sec-gantt' ? 'active' : ''}`}>
               <button onClick={() => setActiveTab('sec-gantt')}><i className="fa-solid fa-timeline"></i> Cronograma Gantt</button>
@@ -1486,13 +1497,19 @@ export default function Dashboard({ platformAccess }) {
 
         {/* Main Content Area */}
         <main className="main-content">
+          <PlatformReadiness
+            platformAccess={platformAccess}
+            setup={setup}
+            syncState={syncState}
+            lastSyncedAt={lastSyncedAt}
+          />
           
           {/* SECTION 1: DASHBOARD */}
           <section id="sec-dashboard" className={`content-section animate-fade-in-up ${activeTab === 'sec-dashboard' ? 'active' : ''}`}>
             <div className="section-header">
               <div className="header-title">
-                <h1>Panel de Control de Obra</h1>
-                <p>Visualización en tiempo real y métricas analíticas de la obra activa: &ldquo;Edificio Palermo Chico&rdquo;</p>
+                <h1>{platformAccess.project.name}</h1>
+                <p>{platformAccess.project.address || 'Operación centralizada de la obra activa'} · avance, alertas y evidencia en un solo lugar.</p>
               </div>
               <div className="header-actions" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                 <button className="btn btn-secondary btn-sm" onClick={() => setShowWeeklyReportModal(true)} style={{ padding: '8px 14px', fontSize: '0.8rem', fontWeight: 700, background: 'rgba(255,255,255,0.05)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}>
@@ -1559,10 +1576,10 @@ export default function Dashboard({ platformAccess }) {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', zIndex: 10 }}>
                   <div>
                     <h3 style={{ fontFamily: 'var(--font-heading)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <i className="fa-solid fa-cube" style={{ color: 'var(--info)' }}></i> Gemelo Digital BIM (Autodesk Sync)
+                      <i className="fa-solid fa-cube" style={{ color: 'var(--info)' }}></i> Visor BIM · Demo Lab
                     </h3>
                     <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', margin: 0 }}>
-                      Renderización en la nube del modelo federado. Control de interferencias y avance visual.
+                      Modelo de muestra para validar capas, interferencias y seguimiento visual antes de conectar el CDE del cliente.
                     </p>
                   </div>
                   <div style={{ display: 'flex', gap: '8px' }}>
@@ -1576,8 +1593,8 @@ export default function Dashboard({ platformAccess }) {
                   <div style={{ position: 'absolute', bottom: '16px', left: '16px', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(10px)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>Clash Detection AI</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span className="badge badge-success"><i className="fa-solid fa-check"></i> Cero Conflictos</span>
-                      <span style={{ fontSize: '0.8rem', color: '#fff' }}>Nivel 4 Revisado</span>
+                      <span className="badge badge-info"><i className="fa-solid fa-flask"></i> Escenario demostrativo</span>
+                      <span style={{ fontSize: '0.8rem', color: '#fff' }}>Sin Autodesk conectado</span>
                     </div>
                   </div>
                 </div>
@@ -1686,11 +1703,11 @@ export default function Dashboard({ platformAccess }) {
             <div className="glass-panel-premium dashboard-card-hover" style={{ marginBottom: '24px', overflow: 'hidden' }}>
               <div className="section-header" style={{ padding: '16px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h3 style={{ fontFamily: 'var(--font-heading)', color: 'var(--danger)', margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <i className="fa-solid fa-video fa-fade"></i> Control CCTV Edge AI (En Vivo)
+                  <i className="fa-solid fa-video"></i> Visión perimetral · Demo Lab
                 </h3>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  <span className="badge badge-danger">1 Alerta EPP</span>
-                  <span className="badge badge-success"><i className="fa-solid fa-signal"></i> Cam 4 - Activa</span>
+                  <span className="badge badge-warning">Escenario EPP</span>
+                  <span className="badge badge-info"><i className="fa-solid fa-flask"></i> Cámara no conectada</span>
                 </div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '0' }}>
@@ -1698,14 +1715,14 @@ export default function Dashboard({ platformAccess }) {
                 </div>
                 <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
                   <div style={{ borderLeft: '4px solid var(--danger)', paddingLeft: '12px' }}>
-                    <strong style={{ color: 'var(--danger)', display: 'block', fontSize: '0.9rem', marginBottom: '4px' }}>VIOLACIÓN DE SEGURIDAD</strong>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Detección de operario sin casco de seguridad en zona caliente.</span>
+                    <strong style={{ color: 'var(--warning)', display: 'block', fontSize: '0.9rem', marginBottom: '4px' }}>CASO DE PRUEBA: EPP</strong>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Simulación de detección de una persona sin casco en una zona restringida.</span>
                   </div>
-                  <button className="btn btn-secondary btn-sm" onClick={() => addToast('Notificación enviada al supervisor de campo vía SMS.', 'success')} style={{ width: '100%' }}>
-                    <i className="fa-solid fa-bell"></i> Alertar Supervisor
+                  <button className="btn btn-secondary btn-sm" onClick={() => addToast('Simulación: el supervisor recibiría una alerta por el canal configurado.', 'info')} style={{ width: '100%' }}>
+                    <i className="fa-solid fa-bell"></i> Simular alerta
                   </button>
-                  <button className="btn btn-secondary btn-sm" onClick={() => addToast('IA: Reporte de infracción guardado en legajo del operario.', 'info')} style={{ width: '100%', marginTop: '8px' }}>
-                    <i className="fa-solid fa-file-signature"></i> Cargar a Legajo
+                  <button className="btn btn-secondary btn-sm" onClick={() => addToast('Simulación: se generaría evidencia para revisión humana antes de guardarla.', 'info')} style={{ width: '100%', marginTop: '8px' }}>
+                    <i className="fa-solid fa-file-signature"></i> Simular evidencia
                   </button>
                 </div>
               </div>
@@ -1864,13 +1881,13 @@ export default function Dashboard({ platformAccess }) {
               </div>
             </div>
 
-            {/* Future Pro Features Roadmap */}
+            {/* Operational capabilities */}
             <div className="glass-panel-premium dashboard-card-hover" style={{ marginTop: '24px' }}>
               <h3 style={{ fontFamily: 'var(--font-heading)', marginBottom: '16px', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <i className="fa-solid fa-rocket"></i> Roadmap de Funcionalidades Pro (Plan de Evolución)
+                <i className="fa-solid fa-shield-halved"></i> Capacidades operativas disponibles
               </h3>
               <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '20px' }}>
-                Para escalar de un MVP a un SaaS corporativo de alta gama, estas son las características técnicas y comerciales que integrará la plataforma:
+                Componentes incorporados al núcleo operativo. Su disponibilidad final depende de los canales y permisos configurados por cada tenant.
               </p>
               <div className="grid-3" style={{ marginBottom: '10px' }}>
                 <div style={{ background: 'rgba(255,255,255,0.02)', padding: '16px', borderRadius: '8px', borderTop: '3px solid #60a5fa' }}>
@@ -1899,8 +1916,8 @@ export default function Dashboard({ platformAccess }) {
           <section id="sec-whatsapp" className={`content-section animate-fade-in-up ${activeTab === 'sec-whatsapp' ? 'active' : ''}`}>
             <div className="section-header">
               <div className="header-title">
-                <h1>Simulador de Chat de Obra (WhatsApp IA)</h1>
-                <p>Interactúa con la IA en tiempo real. Reproduce notas de voz con sonido sintetizado o chatea directamente con el bot.</p>
+                <h1>WhatsApp · Demo Lab</h1>
+                <p>Probá el flujo operativo sin afectar un número real. Cuando Meta esté conectado, los mensajes reales ingresarán por la integración del tenant.</p>
               </div>
             </div>
 

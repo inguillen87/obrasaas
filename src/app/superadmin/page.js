@@ -18,13 +18,16 @@ function formatDate(value) {
 export default async function SuperadminPage() {
   const access = await requireSuperadmin();
   const prisma = getPrisma();
-  const organizations = await prisma.organization.findMany({
+  const allOrganizations = await prisma.organization.findMany({
     where: { clerkOrganizationId: { not: 'system:obrasaas' } },
     include: {
       _count: { select: { memberships: true, projects: true } },
     },
     orderBy: { createdAt: 'desc' },
   });
+  const organizations = allOrganizations.filter(
+    (organization) => organization.metadata?.internal !== true,
+  );
 
   const activeTenants = organizations.filter((item) =>
     ['TRIALING', 'ACTIVE'].includes(item.subscriptionStatus),
@@ -132,4 +135,3 @@ export default async function SuperadminPage() {
     </main>
   );
 }
-

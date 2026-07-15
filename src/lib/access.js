@@ -2,6 +2,10 @@ import { auth, clerkClient } from '@clerk/nextjs/server';
 import { getPrisma } from '@/lib/prisma';
 import { getSubscriptionEntitlements } from '@/lib/plans';
 import { roleForClerkMembership, roleHasPermission } from '@/lib/tenant-roles';
+import {
+  clerkOrganizationIsInternal,
+  mergeClerkOrganizationMetadata,
+} from '@/lib/organization-policy';
 
 export const SUPERADMIN_EMAIL = (
   process.env.OBRASAAS_SUPERADMIN_EMAIL || 'guillen.marce@gmail.com'
@@ -71,24 +75,45 @@ async function ensureTenantOrganization({ prisma, clerk, orgId, orgSlug }) {
   const existing = await prisma.organization.findUnique({
     where: { clerkOrganizationId: orgId },
   });
-  const metadata = {
-    clerkSlug: clerkOrganization.slug || orgSlug || null,
-    clerkImageUrl: clerkOrganization.imageUrl || null,
-  };
+  const internalClerkOrgId = process.env.OBRASAAS_INTERNAL_CLERK_ORG_ID || null;
+  const internal = clerkOrganizationIsInternal(
+    clerkOrganization,
+    existing?.metadata,
+    internalClerkOrgId,
+  );
+  const metadata = mergeClerkOrganizationMetadata(
+    existing?.metadata,
+    clerkOrganization,
+    orgSlug,
+    internalClerkOrgId,
+  );
+  const organizationName = internal ? 'ObraSaaS Operaciones' : clerkOrganization.name;
 
   if (existing) {
     return prisma.organization.update({
       where: { id: existing.id },
-      data: { name: clerkOrganization.name, metadata },
+      data: {
+        name: organizationName,
+        metadata,
+        ...(internal ? {
+          subscriptionPlan: 'ENTERPRISE',
+          subscriptionStatus: 'ACTIVE',
+          trialEndsAt: null,
+        } : {}),
+      },
     });
   }
 
   return prisma.organization.create({
     data: {
       clerkOrganizationId: orgId,
-      name: clerkOrganization.name,
+      name: organizationName,
       slug: tenantDatabaseSlug(orgId),
-      trialEndsAt: new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1_000),
+      subscriptionPlan: internal ? 'ENTERPRISE' : 'TRIAL',
+      subscriptionStatus: internal ? 'ACTIVE' : 'TRIALING',
+      trialEndsAt: internal
+        ? null
+        : new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1_000),
       metadata,
     },
   });

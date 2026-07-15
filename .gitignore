@@ -34,6 +34,9 @@ yarn-error.log*
 .env*
 !.env.example
 
+# local fallback data must never be versioned
+/data/*.json
+
 # generated database client (created by postinstall/build)
 /src/generated/prisma/
 
@@ -43,6 +46,3 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-
-.vercel
-.env*
