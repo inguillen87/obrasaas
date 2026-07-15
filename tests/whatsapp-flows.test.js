@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   getWhatsAppFlowBlueprint,
   getWhatsAppFlowCatalog,
+  getPublishedWhatsAppFlowReference,
   listWhatsAppFlows,
   provisionWhatsAppFlowDraft,
   validateWhatsAppFlowDefinition,
@@ -40,6 +41,25 @@ test('local Flow validation rejects duplicate screens and incomplete terminal ac
   const errors = validateWhatsAppFlowDefinition(definition);
   assert.equal(errors.some((error) => error.includes('duplicada')), true);
   assert.equal(errors.some((error) => error.includes('complete')), true);
+});
+
+test('runtime references require an exact published Flow cached for the tenant', () => {
+  const metadata = {
+    whatsappFlows: {
+      'incident-report': {
+        id: '987654321012345',
+        name: 'ObraSaaS | Incidencia de obra',
+        status: 'PUBLISHED',
+      },
+    },
+  };
+  const reference = getPublishedWhatsAppFlowReference(metadata, 'incident-report');
+  assert.equal(reference.id, '987654321012345');
+  assert.equal(reference.screenId, 'INCIDENT_REPORT');
+  assert.equal(reference.message.cta, 'Reportar');
+  assert.equal(getPublishedWhatsAppFlowReference(metadata, 'shift-check-in'), null);
+  metadata.whatsappFlows['incident-report'].status = 'DRAFT';
+  assert.equal(getPublishedWhatsAppFlowReference(metadata, 'incident-report'), null);
 });
 
 test('Flow catalog reads Meta with token-bound appsecret proof', async () => withMetaSecret(async () => {

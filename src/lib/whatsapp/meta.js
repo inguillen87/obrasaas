@@ -475,29 +475,131 @@ export async function downloadWhatsAppMedia({
 }
 
 export async function sendWhatsAppText({ to, text, replyToMessageId, phoneNumberId: requestedPhoneNumberId }) {
-  const { version, accessToken, phoneNumberId } = await requireMetaPhoneConfig(requestedPhoneNumberId);
-  const response = await fetch(
-    `https://graph.facebook.com/${version}/${phoneNumberId}/messages`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        messaging_product: "whatsapp",
-        recipient_type: "individual",
-        to,
-        type: "text",
-        text: { preview_url: false, body: text },
-        ...(replyToMessageId ? { context: { message_id: replyToMessageId } } : {}),
-      }),
+  const { version, accessToken, phoneNumberId, appSecret } = await requireMetaPhoneConfig(requestedPhoneNumberId);
+  const url = new URL(`https://graph.facebook.com/${version}/${phoneNumberId}/messages`);
+  if (appSecret) {
+    url.searchParams.set(
+      "appsecret_proof",
+      crypto.createHmac("sha256", appSecret).update(accessToken).digest("hex"),
+    );
+  }
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
     },
-  );
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to,
+      type: "text",
+      text: { preview_url: false, body: text },
+      ...(replyToMessageId ? { context: { message_id: replyToMessageId } } : {}),
+    }),
+    signal: AbortSignal.timeout(20_000),
+  });
 
   const result = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(`Meta send failed (${response.status}): ${JSON.stringify(result)}`);
+    const message = String(result?.error?.message || "Meta rejected the text message.").slice(0, 500);
+    throw new Error(`Meta send failed (${response.status}): ${message}`);
+  }
+  return result;
+}
+
+function boundedFlowText(value, name, maxLength) {
+  const normalized = String(value || '').trim();
+  if (!normalized || normalized.length > maxLength) {
+    throw new Error(`WhatsApp Flow ${name} must contain between 1 and ${maxLength} characters.`);
+  }
+  return normalized;
+}
+
+export function buildWhatsAppFlowMessage({
+  to,
+  flowId,
+  flowToken,
+  screenId,
+  header,
+  body,
+  footer,
+  cta,
+}) {
+  const recipient = String(to || '').replace(/^\+/, '');
+  if (!/^\d{8,20}$/.test(recipient)) throw new Error('Invalid WhatsApp Flow recipient.');
+  const safeFlowId = requireMetaResourceId(flowId, 'Flow ID');
+  const safeScreenId = String(screenId || '');
+  if (!/^[A-Z][A-Z0-9_]{0,29}$/.test(safeScreenId)) {
+    throw new Error('Invalid WhatsApp Flow screen ID.');
+  }
+  const safeToken = String(flowToken || '');
+  if (!/^[A-Za-z0-9._~-]{12,256}$/.test(safeToken)) {
+    throw new Error('Invalid WhatsApp Flow session token.');
+  }
+
+  return {
+    messaging_product: 'whatsapp',
+    recipient_type: 'individual',
+    to: recipient,
+    type: 'interactive',
+    interactive: {
+      type: 'flow',
+      header: { type: 'text', text: boundedFlowText(header, 'header', 60) },
+      body: { text: boundedFlowText(body, 'body', 1_024) },
+      footer: { text: boundedFlowText(footer, 'footer', 60) },
+      action: {
+        name: 'flow',
+        parameters: {
+          flow_message_version: '3',
+          flow_action: 'navigate',
+          flow_token: safeToken,
+          flow_id: safeFlowId,
+          flow_cta: boundedFlowText(cta, 'CTA', 20),
+          flow_action_payload: {
+            screen: safeScreenId,
+            data: {},
+          },
+        },
+      },
+    },
+  };
+}
+
+export async function sendWhatsAppFlow({
+  phoneNumberId: requestedPhoneNumberId,
+  fetchImpl = fetch,
+  credentials,
+  ...messageInput
+}) {
+  const safePhoneNumberId = requireMetaResourceId(requestedPhoneNumberId, 'phone number ID');
+  const resolved = credentials || await requireMetaPhoneConfig(safePhoneNumberId);
+  if (String(resolved.phoneNumberId) !== safePhoneNumberId) {
+    throw new Error('WhatsApp Flow credential scope mismatch.');
+  }
+  const url = new URL(
+    `https://graph.facebook.com/${resolved.version || 'v25.0'}/${safePhoneNumberId}/messages`,
+  );
+  const appSecret = resolved.appSecret || process.env.META_APP_SECRET;
+  if (appSecret) {
+    url.searchParams.set(
+      'appsecret_proof',
+      crypto.createHmac('sha256', appSecret).update(resolved.accessToken).digest('hex'),
+    );
+  }
+  const response = await fetchImpl(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${resolved.accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(buildWhatsAppFlowMessage(messageInput)),
+    signal: AbortSignal.timeout(20_000),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const message = String(result?.error?.message || 'Meta rejected the Flow message.').slice(0, 500);
+    throw new Error(`Meta Flow send failed (${response.status}): ${message}`);
   }
   return result;
 }

@@ -1,14 +1,17 @@
+import crypto from "node:crypto";
 import { after } from "next/server";
 import { claimWebhookEvent, resolveWhatsAppScopes, updateWebhookEvent } from "@/lib/db";
 import { getPrisma } from "@/lib/prisma";
 import {
   normalizeMetaWebhook,
+  sendWhatsAppFlow,
   sendWhatsAppText,
   verifyMetaSignature,
   verifyMetaSubscription,
 } from "@/lib/whatsapp/meta";
 import { ingestInboundWhatsAppMedia } from "@/lib/whatsapp/media";
 import { processIncomingObraMessage } from "@/lib/whatsapp/obra-engine";
+import { getPublishedWhatsAppFlowReference } from "@/lib/whatsapp/flows";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -35,12 +38,21 @@ async function processClaimedEvent(event, scope) {
         ? await ingestInboundWhatsAppMedia(event)
         : event;
       const result = await processIncomingObraMessage(enrichedEvent, scope);
-      await sendWhatsAppText({
-        to: event.from,
-        text: result.reply,
-        replyToMessageId: event.externalId,
-        phoneNumberId: event.phoneNumberId,
-      });
+      const flowSent = result.flowPrompt
+        ? await trySendPublishedFlow({
+            blueprintKey: result.flowPrompt,
+            event,
+            scope,
+          })
+        : false;
+      if (!flowSent) {
+        await sendWhatsAppText({
+          to: event.from,
+          text: result.reply,
+          replyToMessageId: event.externalId,
+          phoneNumberId: event.phoneNumberId,
+        });
+      }
     } else if (event.eventType === "account") {
       await synchronizeConnectionStatus(event, scope);
     }
@@ -57,6 +69,30 @@ async function processClaimedEvent(event, scope) {
       status: "FAILED",
       error: error instanceof Error ? error.message.slice(0, 2_000) : "Unknown processing error",
     });
+  }
+}
+
+async function trySendPublishedFlow({ blueprintKey, event, scope }) {
+  const connection = await getPrisma().whatsAppConnection.findUnique({
+    where: { phoneNumberId: scope.phoneNumberId },
+    select: { metadata: true },
+  });
+  const flow = getPublishedWhatsAppFlowReference(connection?.metadata, blueprintKey);
+  if (!flow) return false;
+
+  try {
+    await sendWhatsAppFlow({
+      to: event.from,
+      phoneNumberId: event.phoneNumberId,
+      flowId: flow.id,
+      flowToken: crypto.randomBytes(18).toString("base64url"),
+      screenId: flow.screenId,
+      ...flow.message,
+    });
+    return true;
+  } catch (error) {
+    console.warn(`Published WhatsApp Flow ${blueprintKey} was unavailable; using text fallback:`, error);
+    return false;
   }
 }
 

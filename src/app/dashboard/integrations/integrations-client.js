@@ -411,6 +411,7 @@ export default function IntegrationsClient({
           {flowCatalog.map((flow) => {
             const remoteStatus = flow.remote.status;
             const isPublished = remoteStatus === 'PUBLISHED';
+            const runtimeActive = Boolean(flow.runtimeActive);
             const isPending = flowPendingKey === flow.key;
             return (
               <article className={styles.flowCard} key={flow.key}>
@@ -444,12 +445,14 @@ export default function IntegrationsClient({
                     type="button"
                     className={styles.flowButton}
                     onClick={() => provisionFlowDraft(flow.key)}
-                    disabled={!connected || !platformReady || Boolean(flowPendingKey) || isPublished}
+                    disabled={!connected || !platformReady || Boolean(flowPendingKey) || runtimeActive}
                   >
                     {isPending
                       ? 'Validando…'
-                      : isPublished
-                        ? 'Publicado en Meta'
+                      : isPublished && runtimeActive
+                        ? 'Listo para enviar'
+                        : isPublished
+                          ? 'Activar en ObraSaaS'
                         : remoteStatus === 'DRAFT'
                           ? 'Actualizar borrador'
                           : 'Crear borrador'}

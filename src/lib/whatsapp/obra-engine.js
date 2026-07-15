@@ -193,6 +193,7 @@ export async function processIncomingObraMessage(event, scope) {
       }
     : null;
   let reply;
+  let flowPrompt = null;
 
   if (event.interactive?.type === "flow") {
     reply = processFlowReply({ state, worker, event, now });
@@ -267,6 +268,7 @@ export async function processIncomingObraMessage(event, scope) {
   } else if (lowerBody.includes("licencia") || lowerBody.includes("certificado")) {
     reply = `Cargá el certificado desde este enlace seguro, válido por dos horas:\n${links.medical}`;
   } else if (["fichar", "ingreso", "ingresar", "entrada", "arranco"].some((term) => lowerBody.includes(term))) {
+    flowPrompt = "shift-check-in";
     state.attendance[worker.name] = { role: worker.role, checkin: time, status: "Presente" };
     updatePresentCount(state);
     state.incidents.unshift(
@@ -281,6 +283,9 @@ export async function processIncomingObraMessage(event, scope) {
       }),
     );
     reply = `Registré tu ingreso a las ${time}. Completá la validación GPS desde este enlace seguro:\n${links.attendance}`;
+  } else if (["incidencia", "reportar incidencia", "nueva incidencia"].includes(lowerBody)) {
+    flowPrompt = "incident-report";
+    reply = "Contame qué ocurrió, en qué sector y qué nivel de riesgo observás. Lo voy a registrar en la bitácora de la obra.";
   } else if (/\b([0-9]{1,3})\s*%/.test(lowerBody)) {
     const progress = Math.min(100, Number(lowerBody.match(/\b([0-9]{1,3})\s*%/)?.[1] || 0));
     const [, task] = selectTask(state, lowerBody);
@@ -291,6 +296,7 @@ export async function processIncomingObraMessage(event, scope) {
       reply = `Detecté un avance del ${progress}%, pero necesito el nombre o número de la tarea para aplicarlo sin ambigüedad.`;
     }
   } else if (["fuga", "roto", "accidente", "riesgo", "urgente", "peligro"].some((term) => lowerBody.includes(term))) {
+    flowPrompt = "incident-report";
     state.alertsCount += 1;
     state.incidents.unshift(
       buildIncident({
@@ -351,5 +357,5 @@ export async function processIncomingObraMessage(event, scope) {
   await saveAppState(state, scope);
   await appendMessages(newMessages, scope);
 
-  return { reply, state, worker };
+  return { reply, state, worker, flowPrompt };
 }

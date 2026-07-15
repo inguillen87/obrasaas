@@ -2,12 +2,62 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import {
+  buildWhatsAppFlowMessage,
   downloadWhatsAppMedia,
   isAllowedMetaMediaUrl,
   normalizeMetaWebhook,
+  sendWhatsAppFlow,
   verifyMetaSignature,
   verifyMetaSubscription,
 } from "../src/lib/whatsapp/meta.js";
+
+test("published WhatsApp Flow messages use the official interactive v3 envelope", () => {
+  const message = buildWhatsAppFlowMessage({
+    to: "+5491112345678",
+    flowId: "987654321012345",
+    flowToken: "flow-session-token-123",
+    screenId: "INCIDENT_REPORT",
+    header: "Incidencia de obra",
+    body: "Completá el reporte para registrar el riesgo.",
+    footer: "Detené la tarea si existe riesgo.",
+    cta: "Reportar",
+  });
+  assert.equal(message.type, "interactive");
+  assert.equal(message.interactive.type, "flow");
+  assert.equal(message.interactive.action.parameters.flow_message_version, "3");
+  assert.equal(message.interactive.action.parameters.flow_id, "987654321012345");
+  assert.equal(message.interactive.action.parameters.flow_action_payload.screen, "INCIDENT_REPORT");
+  assert.equal("mode" in message.interactive.action.parameters, false);
+});
+
+test("Flow delivery stays phone-scoped and falls through appsecret proof", async () => {
+  let call;
+  const result = await sendWhatsAppFlow({
+    to: "5491112345678",
+    phoneNumberId: "123456789012345",
+    flowId: "987654321012345",
+    flowToken: "flow-session-token-123",
+    screenId: "INCIDENT_REPORT",
+    header: "Incidencia de obra",
+    body: "Completá el reporte para registrar el riesgo.",
+    footer: "Detené la tarea si existe riesgo.",
+    cta: "Reportar",
+    credentials: {
+      version: "v25.0",
+      phoneNumberId: "123456789012345",
+      accessToken: "tenant-flow-token",
+      appSecret: "meta-app-secret",
+    },
+    fetchImpl: async (url, options) => {
+      call = { url: new URL(url), options };
+      return Response.json({ messages: [{ id: "wamid.flow-outbound" }] });
+    },
+  });
+  assert.equal(result.messages[0].id, "wamid.flow-outbound");
+  assert.equal(call.options.headers.Authorization, "Bearer tenant-flow-token");
+  assert.match(call.url.searchParams.get("appsecret_proof"), /^[a-f0-9]{64}$/);
+  assert.equal(JSON.parse(call.options.body).interactive.action.parameters.flow_id, "987654321012345");
+});
 
 test("Meta media URLs reject non-Meta hosts and ambiguous suffixes", () => {
   assert.equal(isAllowedMetaMediaUrl("https://lookaside.fbsbx.com/whatsapp_business/attachments/"), true);

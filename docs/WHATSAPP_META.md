@@ -47,7 +47,9 @@ Listo:
 - dominio, privacidad, términos, eliminación de datos y categoría de la app completados;
 - Embedded Signup v4 implementado y tenant-scoped;
 - blueprints `Incidencia de obra` y `Fichaje y seguridad` validados localmente;
-- provisionamiento de borradores Meta tenant-scoped, sin publicación automática.
+- provisionamiento de borradores Meta tenant-scoped, sin publicación automática;
+- envío interactivo v3 de Flows publicados, limitado al mismo número y token cifrado del tenant;
+- fallback automático a texto cuando un Flow publicado no está disponible.
 
 Pendiente antes del primer tenant real:
 
@@ -56,7 +58,7 @@ Pendiente antes del primer tenant real:
 3. redeployar la beta y ejecutar un webhook de prueba firmado;
 4. completar el primer Embedded Signup con un WABA y número reales;
 5. crear los dos borradores desde Integraciones y completar una prueba Flow end-to-end;
-6. publicar los Flows aprobados desde Meta;
+6. publicar los Flows aprobados desde Meta y activarlos en el runtime de ObraSaaS;
 7. publicar la app de Meta cuando el ícono y la identidad definitivos estén aprobados.
 
 La interfaz de integraciones mantiene deshabilitado el alta mientras falte cualquiera de los secretos necesarios. Esto evita que un administrador complete Meta y falle recién al volver a ObraSaaS.

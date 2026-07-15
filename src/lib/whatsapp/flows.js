@@ -16,6 +16,12 @@ const BLUEPRINTS = [
     flowType: 'incident',
     categories: ['OTHER'],
     capabilities: ['Severidad', 'Sector', 'Detalle trazable'],
+    message: {
+      header: 'Incidencia de obra',
+      body: 'Completá el reporte para que el riesgo, el sector y el detalle queden trazables en la bitácora.',
+      footer: 'Si hay riesgo para personas, detené la tarea.',
+      cta: 'Reportar',
+    },
     definition: {
       version: WHATSAPP_FLOW_JSON_VERSION,
       screens: [
@@ -94,6 +100,12 @@ const BLUEPRINTS = [
     flowType: 'attendance',
     categories: ['OTHER'],
     capabilities: ['Presentismo', 'Control EPP', 'Observaciones'],
+    message: {
+      header: 'Inicio de turno',
+      body: 'Confirmá tu frente de trabajo y el estado de los elementos de protección antes de comenzar.',
+      footer: 'La ubicación se valida por separado.',
+      cta: 'Confirmar ingreso',
+    },
     definition: {
       version: WHATSAPP_FLOW_JSON_VERSION,
       screens: [
@@ -236,6 +248,28 @@ for (const blueprint of BLUEPRINTS) {
 export function getWhatsAppFlowBlueprint(key) {
   const blueprint = BLUEPRINTS.find((item) => item.key === key);
   return blueprint ? clone(blueprint) : null;
+}
+
+export function getPublishedWhatsAppFlowReference(metadata, blueprintKey) {
+  const blueprint = getWhatsAppFlowBlueprint(blueprintKey);
+  if (!blueprint || !metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null;
+  const storedFlows = metadata.whatsappFlows;
+  if (!storedFlows || typeof storedFlows !== 'object' || Array.isArray(storedFlows)) return null;
+  const stored = storedFlows[blueprintKey];
+  if (
+    !stored
+    || stored.status !== 'PUBLISHED'
+    || !isValidMetaResourceId(stored.id)
+    || stored.name !== blueprint.name
+  ) return null;
+  return {
+    blueprintKey,
+    id: String(stored.id),
+    name: blueprint.name,
+    screenId: blueprint.screenId,
+    flowType: blueprint.flowType,
+    message: clone(blueprint.message),
+  };
 }
 
 function normalizeValidationErrors(value) {

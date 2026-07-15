@@ -49,6 +49,23 @@ function flowErrorResponse(error, fallback) {
   return Response.json({ error: 'No se pudieron administrar los WhatsApp Flows.' }, { status: 500 });
 }
 
+function catalogWithRuntimeState(catalog, metadata) {
+  const storedFlows = metadata
+    && typeof metadata === 'object'
+    && !Array.isArray(metadata)
+    && metadata.whatsappFlows
+    && typeof metadata.whatsappFlows === 'object'
+    && !Array.isArray(metadata.whatsappFlows)
+    ? metadata.whatsappFlows
+    : {};
+  return catalog.map((item) => ({
+    ...item,
+    runtimeActive: item.remote.status === 'PUBLISHED'
+      && storedFlows[item.key]?.status === 'PUBLISHED'
+      && String(storedFlows[item.key]?.id || '') === item.remote.id,
+  }));
+}
+
 export async function GET() {
   try {
     const access = await getPlatformAccess();
@@ -58,7 +75,9 @@ export async function GET() {
       whatsappBusinessId: connection.whatsappBusinessId,
       accessToken: decryptCredential(connection.encryptedAccessToken),
     });
-    return Response.json({ catalog: getWhatsAppFlowCatalog(remoteFlows) });
+    return Response.json({
+      catalog: catalogWithRuntimeState(getWhatsAppFlowCatalog(remoteFlows), connection.metadata),
+    });
   } catch (error) {
     return flowErrorResponse(error, 'WhatsApp Flow catalog read failed:');
   }
@@ -133,8 +152,11 @@ export async function POST(request) {
 
     return Response.json({
       result,
-      catalogItem: getWhatsAppFlowCatalog([result.flow])
-        .find((item) => item.key === result.blueprintKey),
+      catalogItem: {
+        ...getWhatsAppFlowCatalog([result.flow])
+          .find((item) => item.key === result.blueprintKey),
+        runtimeActive: result.flow.status === 'PUBLISHED',
+      },
     });
   } catch (error) {
     return flowErrorResponse(error, 'WhatsApp Flow draft provision failed:');
