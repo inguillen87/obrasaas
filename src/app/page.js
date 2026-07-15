@@ -2,7 +2,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import ProductExperience from './landing/product-experience';
 import styles from './landing/landing.module.css';
-import { PLAN_CATALOG, VARIABLE_COST_NOTE } from '@/lib/plans';
+import { PLAN_CATALOG, PRICING_BASIS_NOTE, VARIABLE_COST_NOTE } from '@/lib/plans';
 
 const capabilities = [
   ['01', 'Campo conversacional', 'WhatsApp como interfaz de obra', 'La cuadrilla reporta por voz, foto, ubicación o formulario. ObraSaaS estructura el mensaje sin obligar al equipo a aprender otra aplicación.', 'Cloud API · Flows · multimedia'],
@@ -125,6 +125,7 @@ export default function Home() {
             </article>
           ))}
         </div>
+        <p className={styles.pricingBasisNote}>{PRICING_BASIS_NOTE}</p>
         <p className={styles.variableCostNote}>{VARIABLE_COST_NOTE}</p>
       </section>
 

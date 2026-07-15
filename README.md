@@ -1,83 +1,70 @@
-# 🏗️ ObraSaaS - Plataforma SaaS de Control de Obras Inteligente
+# ObraSaaS
 
-ObraSaaS es una plataforma SaaS modular de nivel de producción diseñada para arquitectos, inspectores y constructoras en América Latina. Convierte reportes informales por mensajes de voz y fotos de WhatsApp en planificación Gantt reactiva y reportes ejecutivos semanales automáticos.
+Plataforma multi-tenant para convertir reportes de campo enviados por WhatsApp en tareas, asistencia, evidencia, alertas, cronograma y reportes ejecutivos trazables.
 
----
+## Estado actual
 
-## 🚀 Características Clave
+- Next.js 16 App Router, React 19 y Vercel.
+- Clerk Organizations para autenticación B2B, cinco roles operativos y superadmin único.
+- Neon Postgres + Prisma con aislamiento por organización y obra.
+- Meta WhatsApp Cloud API con Embedded Signup v4 por tenant.
+- Evidencia privada en Vercel Blob, validación de firma, hash y alcance por número.
+- Transcripción de audio preparada para OpenAI y persistencia de mensajes idempotente.
+- Dashboard operativo, Gantt, asistencia, acopios, incidencias y reporte semanal imprimible/PDF.
+- Consola global de tenants reservada a `guillen.marce@gmail.com`.
 
-1.  **Copiloto de Voz de WhatsApp (IA)**:
-    *   Los operarios envían audios a un número de WhatsApp.
-    *   La plataforma transcribe (Whisper API) e interpreta intenciones (IA) para registrar asistencia satelital, actualizar tareas del Gantt y añadir incidencias del corralón.
-2.  **Geocercas Satelitales (Geofencing)**:
-    *   Validación de presentismo mediante el envío de ubicación en tiempo real en WhatsApp.
-    *   Verificación automática de coordenadas contra el predio de la obra (límite de 20 metros).
-3.  **Cronograma Gantt Interactivo**:
-    *   Seguimiento dinámico de dependencias y tareas de obra (Revoque, Cañerías, Revestimiento, Pintura) con barras y líneas de progreso reactivas.
-4.  **Consola SuperAdmin (CRM)**:
-    *   Gestión integrada de leads, tickets de soporte técnico de clientes corporativos y gráficas financieras de suscripciones.
-5.  **Membership Gate (Planes SaaS)**:
-    *   Control de accesos según la licencia contratada:
-        *   **Free**: Hasta 1 operario activo en demo.
-        *   **Pro ($180.000 ARS/mes)**: Operarios ilimitados, edición Gantt y exportación de reportes PDF.
-        *   **Enterprise ($350.000 ARS/mes)**: Control multi-obra, auditoría blockchain y analíticas avanzadas.
-6.  **WhatsApp Webviews**:
-    *   Páginas optimizadas para celular integrables en botones de plantillas de WhatsApp:
-        *   `/webview/medical` para subir certificados médicos directamente.
-        *   `/webview/attendance` para marcar presentismo detallado.
+Las superficies BIM y visión perimetral están identificadas como **Demo Lab** hasta conectar proveedores reales. La aplicación no presenta esas demos como integraciones productivas.
 
----
+## Planes
 
-## 🛠️ Estructura del Proyecto (Next.js App Router)
+| Plan | Precio | Alcance principal |
+| --- | ---: | --- |
+| Prueba completa | USD 0 por 14 días | 1 obra, 3 usuarios de gestión, 20 colaboradores de campo |
+| Pro | USD 199/mes o USD 159/mes anual | 10 obras, 10 usuarios de gestión, 100 colaboradores de campo |
+| Enterprise | Desde USD 699/mes | Obras ilimitadas, 50 usuarios de gestión, 500 colaboradores y gobierno avanzado |
 
-*   `src/app/page.js`: Landing page comercial con la Asistente Virtual Sofía AI.
-*   `src/app/dashboard/page.js`: Panel administrativo principal (Gantt, Mapa Satelital, Acopios, CRM, RRHH y Facturación).
-*   `src/app/presupuesto/page.js`: Hoja membretada oficial con la propuesta de desarrollo de $4.995.000 ARS.
-*   `src/app/api/state/route.js`: API para leer, actualizar y resetear el estado de la obra.
-*   `src/app/api/whatsapp/route.js`: Webhook de mensajería (compatible con Twilio y Meta) que procesa la lógica conversacional.
-*   `src/app/api/billing/route.js`: Pasarela para simulación de upgrades y degradación de planes.
-*   `src/app/webview/`: Vistas de integración en el chat de WhatsApp.
-*   `src/lib/db.js`: Adaptador centralizado con fallback automático a archivo local (`data/db.json`) si no hay base de datos SQL conectada.
+El precio es por organización, no por cada persona de campo dentro de los límites publicados. Meta, IA y almacenamiento extraordinario se informan como costos variables separados. La referencia competitiva y la lógica de posicionamiento están documentadas en [docs/PRICING.md](docs/PRICING.md).
 
----
+## Desarrollo local
 
-## 💻 Configuración y Ejecución Local
+Requisitos: Node.js 24 y npm.
 
-### Prerrequisitos
-*   Node.js (v18 o superior)
-*   npm (v9 o superior)
-
-### Instalación y Servidor de Desarrollo
-1.  Instala las dependencias necesarias:
-    ```bash
-    npm install
-    ```
-2.  Inicia el servidor local en modo desarrollo:
-    ```bash
-    npm run dev
-    ```
-3.  Abre tu navegador en [http://localhost:3000](http://localhost:3000).
-
----
-
-## 🌐 Guía de Despliegue en GitHub y Vercel
-
-### Paso 1: Inicializar y empujar a GitHub
-```bash
-git remote add origin https://github.com/TU-USUARIO/obrasaas-saas.git
-git branch -M main
-git push -u origin main
+```powershell
+npm ci
+npm test
+npm run lint
+npm run dev
 ```
 
-### Paso 2: Desplegar en Vercel
-1.  Importa el repositorio en tu cuenta de Vercel.
-2.  Configura las siguientes variables de entorno en el panel (opcional para simulación, requerido para producción):
-    *   `OPENAI_API_KEY`: Para transcripción por Whisper.
-    *   `DATABASE_URL`: URL de Postgres (Supabase/Neon) para persistencia duradera de producción.
-3.  Haz clic en **Deploy**. ¡El proyecto estará en vivo en segundos!
+Copiar `.env.example` a `.env.local` y completar únicamente credenciales dedicadas de ObraSaaS. No reutilizar recursos de otras plataformas.
 
----
+## Gates de entrega
 
-## 📄 Licencia y Garantía (SLA)
+```powershell
+npm test
+npm run lint
+npm run build
+npm audit --omit=dev
+```
 
-Soporte técnico premium post-despliegue por 30 días incluido. Propiedad intelectual exclusiva del cliente una vez saldada la propuesta de servicios de Innovar Latam.
+La preview autenticada estable se publica en `https://obrasaas-preview.vercel.app`. Producción permanece sin promoción hasta disponer de dominio propio compatible con la instancia productiva de Clerk.
+
+## Superficies principales
+
+- `/`: landing comercial y planes.
+- `/dashboard`: centro operativo tenant-aware.
+- `/dashboard/report`: reporte semanal A4/PDF con datos del tenant.
+- `/dashboard/team`: equipo y matriz de roles.
+- `/dashboard/integrations`: conexión de activos Meta propios del tenant.
+- `/superadmin`: CRM global de organizaciones, solo superadmin.
+- `/webview/attendance` y `/webview/medical`: vistas móviles firmadas para WhatsApp.
+
+## Seguridad operativa
+
+- Una app Meta exclusiva para ObraSaaS; cada tenant aporta su WABA, número y token mediante Embedded Signup.
+- Tokens de integración cifrados con AES-256-GCM.
+- Webhooks Meta y Clerk verificados e idempotentes.
+- Evidencia privada accesible únicamente desde el tenant y proyecto autorizados.
+- Acciones sensibles sujetas a permisos, estado de suscripción y auditoría.
+
+Nunca guardar claves reales en el repositorio ni pegarlas en documentación o incidencias.

@@ -50,6 +50,9 @@ export const PLAN_CATALOG = {
 export const VARIABLE_COST_NOTE =
   'Los cargos variables de Meta, IA y almacenamiento extraordinario se informan por separado y se trasladan sin margen oculto.';
 
+export const PRICING_BASIS_NOTE =
+  'Precio por organización, no por cada colaborador de campo. Los límites visibles evitan sorpresas y el plan Enterprise parte de una base publicada.';
+
 export function getSubscriptionEntitlements(organization, now = new Date()) {
   const status = organization?.subscriptionStatus || 'TRIALING';
   const plan = organization?.subscriptionPlan || 'TRIAL';

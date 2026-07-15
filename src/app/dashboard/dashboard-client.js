@@ -1453,9 +1453,11 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
                 </Link>
               </li>
             )}
-            <li className={`nav-item ${activeTab === 'sec-presupuesto' ? 'active' : ''}`}>
-              <button onClick={() => setActiveTab('sec-presupuesto')}><i className="fa-solid fa-file-invoice-dollar"></i> Presupuesto Formal</button>
-            </li>
+            {platformAccess.isSuperadmin && (
+              <li className={`nav-item ${activeTab === 'sec-presupuesto' ? 'active' : ''}`}>
+                <button onClick={() => setActiveTab('sec-presupuesto')}><i className="fa-solid fa-file-invoice-dollar"></i> Presupuesto de desarrollo</button>
+              </li>
+            )}
             <li className={`nav-item ${activeTab === 'sec-personal' ? 'active' : ''}`}>
               <button onClick={() => setActiveTab('sec-personal')}><i className="fa-solid fa-users-gear"></i> Personal &amp; RRHH</button>
             </li>
@@ -1512,9 +1514,9 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
                 <p>{platformAccess.project.address || 'Operación centralizada de la obra activa'} · avance, alertas y evidencia en un solo lugar.</p>
               </div>
               <div className="header-actions" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                <button className="btn btn-secondary btn-sm" onClick={() => setShowWeeklyReportModal(true)} style={{ padding: '8px 14px', fontSize: '0.8rem', fontWeight: 700, background: 'rgba(255,255,255,0.05)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}>
+                <Link href="/dashboard/report" className="btn btn-secondary btn-sm" style={{ padding: '8px 14px', fontSize: '0.8rem', fontWeight: 700, background: 'rgba(255,255,255,0.05)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', textDecoration: 'none' }}>
                   <i className="fa-solid fa-file-pdf"></i> Reporte Semanal
-                </button>
+                </Link>
                 <span className="badge badge-success"><i className="fa-solid fa-circle-check"></i> Obra Activa</span>
               </div>
             </div>
@@ -2267,7 +2269,8 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
             </div>
           </section>
 
-          {/* SECTION 5: BUDGET & PROPOSAL VIEW */}
+          {/* SECTION 5: INTERNAL DEVELOPMENT PROPOSAL */}
+          {platformAccess.isSuperadmin && (
           <section id="sec-presupuesto" className={`content-section animate-fade-in-up ${activeTab === 'sec-presupuesto' ? 'active' : ''}`}>
             <div className="section-header">
               <div className="header-title">
@@ -2440,6 +2443,7 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
               </div>
             </div>
           </section>
+          )}
 
           {/* SECTION 6: GESTION DE PERSONAL & RRHH */}
           <section id="sec-personal" className={`content-section animate-fade-in-up ${activeTab === 'sec-personal' ? 'active' : ''}`}>
