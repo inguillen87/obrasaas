@@ -2,6 +2,7 @@ import { auth, clerkClient } from '@clerk/nextjs/server';
 import { getPrisma } from '@/lib/prisma';
 import { getSubscriptionEntitlements } from '@/lib/plans';
 import { roleForClerkMembership, roleHasPermission } from '@/lib/tenant-roles';
+import { acceptedInvitationRole } from '@/lib/invitations';
 import {
   clerkOrganizationIsInternal,
   mergeClerkOrganizationMetadata,
@@ -202,6 +203,20 @@ export async function getPlatformAccess({ requireOrganization = true } = {}) {
         },
       },
     });
+    let invitedTenantRole = null;
+    if (!currentMembership && session.orgRole !== 'org:admin') {
+      try {
+        const acceptedInvitations = await clerk.organizations.getOrganizationInvitationList({
+          organizationId: session.orgId,
+          status: ['accepted'],
+          limit: 100,
+        });
+        invitedTenantRole = acceptedInvitationRole(acceptedInvitations.data, email);
+      } catch (error) {
+        console.error('Accepted Clerk invitation lookup failed; using least privilege:', error);
+      }
+    }
+    const resolvedClerkRole = session.orgRole || 'org:member';
     membership = await prisma.tenantMembership.upsert({
       where: {
         organizationId_userId: {
@@ -210,9 +225,9 @@ export async function getPlatformAccess({ requireOrganization = true } = {}) {
         },
       },
       update: {
-        clerkRole: session.orgRole || 'org:member',
+        clerkRole: resolvedClerkRole,
         tenantRole: roleForClerkMembership(
-          session.orgRole || 'org:member',
+          resolvedClerkRole,
           currentMembership?.tenantRole,
         ),
         status: 'ACTIVE',
@@ -220,8 +235,8 @@ export async function getPlatformAccess({ requireOrganization = true } = {}) {
       create: {
         organizationId: organization.id,
         userId: user.id,
-        clerkRole: session.orgRole || 'org:member',
-        tenantRole: roleForClerkMembership(session.orgRole || 'org:member'),
+        clerkRole: resolvedClerkRole,
+        tenantRole: roleForClerkMembership(resolvedClerkRole, invitedTenantRole),
       },
     });
   } else if (isSuperadmin) {

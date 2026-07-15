@@ -3,10 +3,61 @@
 import { useState } from 'react';
 import styles from './team.module.css';
 
-export default function TeamClient({ initialMemberships, roles, canManage }) {
+const invitationDateFormatter = new Intl.DateTimeFormat('es-AR', {
+  timeZone: 'America/Argentina/Buenos_Aires',
+});
+
+export default function TeamClient({ initialMemberships, initialInvitations, roles, canManage }) {
   const [memberships, setMemberships] = useState(initialMemberships);
+  const [invitations, setInvitations] = useState(initialInvitations);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState('SITE_MANAGER');
   const [pending, setPending] = useState(null);
   const [message, setMessage] = useState(null);
+
+  const roleLabels = Object.fromEntries(roles.map((role) => [role.key, role.label]));
+
+  async function inviteMember(event) {
+    event.preventDefault();
+    setPending('invite');
+    setMessage(null);
+    try {
+      const response = await fetch('/api/tenant/invitations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: inviteEmail, tenantRole: inviteRole }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'No se pudo enviar la invitación.');
+      setInvitations((current) => [payload.invitation, ...current]);
+      setInviteEmail('');
+      setMessage({ type: 'success', text: 'Invitación enviada. El acceso vence en 7 días.' });
+    } catch (error) {
+      setMessage({ type: 'error', text: error.message });
+    } finally {
+      setPending(null);
+    }
+  }
+
+  async function revokeInvitation(invitationId) {
+    setPending(invitationId);
+    setMessage(null);
+    try {
+      const response = await fetch('/api/tenant/invitations', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invitationId }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'No se pudo revocar la invitación.');
+      setInvitations((current) => current.filter((item) => item.id !== invitationId));
+      setMessage({ type: 'success', text: 'Invitación revocada y registrada en auditoría.' });
+    } catch (error) {
+      setMessage({ type: 'error', text: error.message });
+    } finally {
+      setPending(null);
+    }
+  }
 
   async function updateRole(membershipId, tenantRole) {
     setPending(membershipId);
@@ -32,10 +83,43 @@ export default function TeamClient({ initialMemberships, roles, canManage }) {
 
   return (
     <section className={styles.membersPanel}>
+      {canManage && (
+        <div className={styles.invitePanel}>
+          <div>
+            <p className={styles.eyebrow}>Activar equipo</p>
+            <h2>Invitar una persona</h2>
+            <p>Hasta 20 cuentas de acceso. Las cuadrillas que operan por WhatsApp no ocupan una cuenta.</p>
+          </div>
+          <form className={styles.inviteForm} onSubmit={inviteMember}>
+            <label>
+              <span>Email laboral</span>
+              <input
+                autoComplete="email"
+                inputMode="email"
+                placeholder="persona@empresa.com"
+                required
+                type="email"
+                value={inviteEmail}
+                onChange={(event) => setInviteEmail(event.target.value)}
+              />
+            </label>
+            <label>
+              <span>Rol inicial</span>
+              <select value={inviteRole} onChange={(event) => setInviteRole(event.target.value)}>
+                {roles.map((role) => <option key={role.key} value={role.key}>{role.label}</option>)}
+              </select>
+            </label>
+            <button disabled={pending === 'invite'} type="submit">
+              {pending === 'invite' ? 'Enviando…' : 'Enviar invitación'}
+            </button>
+          </form>
+        </div>
+      )}
+
       <div className={styles.panelHeading}>
         <div>
           <p className={styles.eyebrow}>Acceso activo</p>
-          <h2>{memberships.length} integrantes</h2>
+          <h2>{memberships.length} {memberships.length === 1 ? 'integrante' : 'integrantes'}</h2>
         </div>
         <p>{canManage ? 'Los cambios quedan auditados.' : 'Vista de solo lectura.'}</p>
       </div>
@@ -43,6 +127,30 @@ export default function TeamClient({ initialMemberships, roles, canManage }) {
       {message && (
         <div className={message.type === 'success' ? styles.success : styles.error} role="status">
           {message.text}
+        </div>
+      )}
+
+      {canManage && invitations.length > 0 && (
+        <div className={styles.pendingInvitations}>
+          <div className={styles.subheading}>
+            <strong>Invitaciones pendientes</strong>
+            <span>{invitations.length}</span>
+          </div>
+          {invitations.map((invitation) => (
+            <article key={invitation.id}>
+              <div>
+                <strong>{invitation.email}</strong>
+                <span>{roleLabels[invitation.tenantRole] || invitation.tenantRole} · vence {invitationDateFormatter.format(new Date(invitation.expiresAt))}</span>
+              </div>
+              <button
+                disabled={pending === invitation.id}
+                type="button"
+                onClick={() => revokeInvitation(invitation.id)}
+              >
+                {pending === invitation.id ? 'Revocando…' : 'Revocar'}
+              </button>
+            </article>
+          ))}
         </div>
       )}
 

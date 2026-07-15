@@ -42,6 +42,42 @@
 .roleGrid p { color: #8f8f88; font-size: .74rem; line-height: 1.55; }
 
 .membersPanel { max-width: 1180px; margin: 0 auto; padding: 24px; }
+.invitePanel {
+  display: grid;
+  grid-template-columns: minmax(240px, .75fr) minmax(420px, 1.25fr);
+  gap: 30px;
+  align-items: end;
+  margin: -4px -4px 26px;
+  padding: 22px;
+  border: 1px solid rgba(255, 159, 67, .2);
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(255, 159, 67, .09), rgba(255,255,255,.02));
+}
+.invitePanel h2 { margin: 5px 0 7px; font-size: 1.35rem; }
+.invitePanel p { margin: 0; color: #999991; font-size: .78rem; line-height: 1.55; }
+.inviteForm { display: grid; grid-template-columns: 1fr minmax(155px, .55fr) auto; gap: 10px; align-items: end; }
+.inviteForm label { display: grid; gap: 6px; }
+.inviteForm label span { color: #a3a39c; font-size: .68rem; }
+.inviteForm input, .inviteForm select {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 10px;
+  padding: 9px 11px;
+  color: #f7f7f4;
+  background: #111315;
+}
+.inviteForm button, .pendingInvitations button {
+  min-height: 42px;
+  border: 0;
+  border-radius: 10px;
+  padding: 9px 15px;
+  color: #17100b;
+  background: #ff9f43;
+  font-weight: 850;
+  cursor: pointer;
+}
+.inviteForm button:disabled, .pendingInvitations button:disabled { opacity: .55; cursor: wait; }
 .panelHeading { display: flex; justify-content: space-between; gap: 20px; align-items: flex-end; margin-bottom: 18px; }
 .panelHeading h2 { margin: 4px 0 0; font-size: 1.55rem; }
 .panelHeading > p { color: #8f8f88; font-size: .8rem; }
@@ -67,9 +103,20 @@
 .success, .error { margin-bottom: 14px; padding: 11px 14px; border-radius: 10px; font-size: .8rem; }
 .success { color: #93ebba; background: rgba(41, 176, 102, .12); }
 .error { color: #ffb1a7; background: rgba(255, 79, 59, .12); }
+.pendingInvitations { display: grid; gap: 8px; margin-bottom: 22px; }
+.subheading { display: flex; align-items: center; justify-content: space-between; color: #c7c7c0; font-size: .78rem; }
+.subheading span { display: grid; min-width: 24px; height: 24px; place-items: center; border-radius: 999px; color: #ffb36a; background: rgba(255,159,67,.1); }
+.pendingInvitations article { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 14px; border: 1px dashed rgba(255,255,255,.11); border-radius: 12px; }
+.pendingInvitations article > div { display: grid; gap: 4px; min-width: 0; }
+.pendingInvitations article strong { overflow: hidden; text-overflow: ellipsis; }
+.pendingInvitations article span { color: #85857f; font-size: .72rem; }
+.pendingInvitations button { min-height: 34px; color: #ffb1a7; background: rgba(255,79,59,.11); }
 
 @media (max-width: 900px) {
   .roleGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .invitePanel { grid-template-columns: 1fr; }
+  .inviteForm { grid-template-columns: 1fr 1fr; }
+  .inviteForm button { grid-column: 1 / -1; }
   .member { grid-template-columns: 42px 1fr; }
   .status, .member label, .member small { grid-column: 2; }
 }
@@ -81,4 +128,9 @@
   .roleGrid { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; }
   .roleGrid article { min-width: 230px; scroll-snap-align: start; }
   .panelHeading { align-items: flex-start; flex-direction: column; }
+  .membersPanel { padding: 16px; }
+  .invitePanel { margin: 0 0 24px; padding: 16px; }
+  .inviteForm { grid-template-columns: 1fr; }
+  .inviteForm button { grid-column: auto; }
+  .pendingInvitations article { align-items: flex-start; flex-direction: column; }
 }

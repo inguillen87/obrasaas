@@ -29,6 +29,16 @@ ObraSaaS mantiene los roles operativos en su propia base de datos:
 
 Clerk conserva la autoridad de pertenencia y el rol base `org:admin` / `org:member`. Los roles operativos de ObraSaaS no deben depender de un add-on pago de Clerk para funcionar.
 
+## Invitaciones
+
+- Sólo un Administrador del tenant o el superadmin puede invitar y revocar accesos.
+- La invitación dura 7 días y siempre queda acotada a la organización activa.
+- Clerk recibe únicamente `org:admin` o `org:member`.
+- El rol operativo deseado viaja en metadata y se persiste en Neon durante el primer acceso.
+- Un `org:member` nunca puede elevarse a Administrador por metadata; ante una inconsistencia entra como Auditor.
+- La creación y la revocación quedan registradas en `AuditLog`.
+- El redirect del preview apunta explícitamente a `https://obrasaas-preview.vercel.app/dashboard`.
+
 ## Regla de costos
 
 Las funciones marcadas como add-on son gratuitas para probar en la instancia de desarrollo. No deben habilitarse ni contratarse en producción sin aprobación explícita y un cliente que cubra ese costo.
