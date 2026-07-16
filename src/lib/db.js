@@ -258,19 +258,54 @@ export async function getAppState(scope) {
   return snapshot?.state || clone(defaultAppState);
 }
 
-export async function saveAppState(state, scope) {
+function auditActivityData(activity, context, scope) {
+  return {
+    organizationId: context.organization.id,
+    actorId: scope?.databaseUserId || null,
+    action: String(activity.action || 'project.state.updated').slice(0, 160),
+    entityType: 'ProjectActivity',
+    entityId: context.project.id,
+    metadata: {
+      projectId: context.project.id,
+      category: String(activity.category || 'SYSTEM').slice(0, 40),
+      severity: String(activity.severity || 'INFO').slice(0, 20),
+      source: String(activity.source || 'system').slice(0, 40),
+      title: String(activity.title || 'Actividad de obra').slice(0, 500),
+      description: String(activity.description || '').slice(0, 2_000),
+      details: activity.metadata && typeof activity.metadata === 'object'
+        ? clone(activity.metadata)
+        : null,
+    },
+  };
+}
+
+export async function saveAppState(state, scope, { activities = [] } = {}) {
   if (!hasDurableDatabase()) {
     const db = readLocalDb();
     db.appState = state;
+    db.activities ||= [];
+    db.activities.push(...activities.map((activity, index) => ({
+      id: `local-activity-${Date.now()}-${index}`,
+      ...clone(activity),
+      createdAt: new Date().toISOString(),
+    })));
+    db.activities = db.activities.slice(-500);
     writeLocalDb(db);
     return state;
   }
 
-  const { prisma, project } = await durableContext(scope);
-  await prisma.projectSnapshot.upsert({
-    where: { projectId: project.id },
-    update: { state, version: { increment: 1 } },
-    create: { projectId: project.id, state },
+  const context = await durableContext(scope);
+  await context.prisma.$transaction(async (transaction) => {
+    await transaction.projectSnapshot.upsert({
+      where: { projectId: context.project.id },
+      update: { state, version: { increment: 1 } },
+      create: { projectId: context.project.id, state },
+    });
+    if (activities.length > 0) {
+      await transaction.auditLog.createMany({
+        data: activities.map((activity) => auditActivityData(activity, context, scope)),
+      });
+    }
   });
   return state;
 }

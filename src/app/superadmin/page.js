@@ -162,6 +162,7 @@ export default async function SuperadminPage() {
         </div>
         <div className={styles.headerActions}>
           <span className={styles.identity}>{access.email} · Superadmin exclusivo</span>
+          <Link href="/presupuesto" className={styles.secondaryButton}>Alcance contractual</Link>
           <Link href="/dashboard" className={styles.secondaryButton}>Volver a la operación</Link>
         </div>
       </header>
