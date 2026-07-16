@@ -1,9 +1,11 @@
 import { ClerkProvider } from '@clerk/nextjs';
+import { esUY } from '@clerk/localizations';
 
 export default function PlatformProvider({ children, includeIcons = false }) {
   return (
     <ClerkProvider
       taskUrls={{ 'choose-organization': '/session-tasks/choose-organization' }}
+      localization={esUY}
       appearance={{
         variables: {
           colorPrimary: '#e98745',
