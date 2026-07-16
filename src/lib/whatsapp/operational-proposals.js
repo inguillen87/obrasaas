@@ -89,6 +89,29 @@ function decisionTaskReference(value) {
     : null;
 }
 
+function decisionTaskSelection(value) {
+  const selection = cleanText(value, MAX_TASK_REFERENCE_LENGTH);
+  if (!selection) {
+    return { taskReference: null, taskExpectedProgress: null };
+  }
+  const match = /^(.*?)(?:\s+DESDE\s+(\d{1,3})(?:\s*%|\s+POR\s+CIENTO)?)?$/i.exec(selection);
+  if (!match) return null;
+  const taskReference = decisionTaskReference(match[1]);
+  if (!taskReference) return null;
+  const taskExpectedProgress = match[2] == null ? null : Number(match[2]);
+  if (
+    taskExpectedProgress !== null
+    && (
+      !Number.isSafeInteger(taskExpectedProgress)
+      || taskExpectedProgress < 0
+      || taskExpectedProgress > 100
+    )
+  ) {
+    return null;
+  }
+  return { taskReference, taskExpectedProgress };
+}
+
 function normalizeTaskAction(action = {}) {
   const percentage = Number(action.percentage);
   if (!Number.isFinite(percentage) || percentage < 0 || percentage > 100) {
@@ -223,14 +246,14 @@ export function parseOperationalProposalDecision(input) {
   const normalized = normalize(source);
   const match = /^(CONFIRMAR|APROBAR|RECHAZAR)\s+(VP-[A-F0-9]{12})(?:\s+(.+))?$/.exec(normalized);
   if (!match) return null;
-  const taskReference = decisionTaskReference(match[3]);
-  if (match[3] && (!taskReference || match[1] === 'RECHAZAR')) return null;
+  const taskSelection = decisionTaskSelection(match[3]);
+  if (!taskSelection || (match[3] && match[1] === 'RECHAZAR')) return null;
   return {
     decision: match[1] === 'RECHAZAR'
       ? OPERATIONAL_PROPOSAL_DECISIONS.REJECT
       : OPERATIONAL_PROPOSAL_DECISIONS.APPROVE,
     confirmationCode: match[2],
-    taskReference,
+    ...taskSelection,
     channel: 'whatsapp-text',
   };
 }

@@ -2,11 +2,16 @@ import {
   AccessError,
   accessErrorResponse,
   getPlatformAccess,
+  hasTenantPermission,
   requireTenantPermission,
 } from '@/lib/access';
 import { getAppStateSnapshot, getMessages } from '@/lib/db';
 import { FIRST_VALUE_REPORT_ACTION } from '@/lib/first-value-onboarding';
-import { sanitizeProjectStateMedicalData } from '@/lib/medical-privacy';
+import {
+  MEDICAL_EVIDENCE_PERMISSION,
+  SOURCE_EVIDENCE_PERMISSION,
+  sanitizeProjectStateMedicalData,
+} from '@/lib/medical-privacy';
 import { getPrisma } from '@/lib/prisma';
 import { buildWeeklyReportModel } from '@/lib/reporting';
 
@@ -14,10 +19,21 @@ export async function POST() {
   try {
     const access = await getPlatformAccess();
     requireTenantPermission(access, 'org:reports:read');
+    const includeMedicalEvidence = hasTenantPermission(
+      access,
+      MEDICAL_EVIDENCE_PERMISSION,
+    );
+    const includeSourceEvidence = hasTenantPermission(
+      access,
+      SOURCE_EVIDENCE_PERMISSION,
+    );
 
     const [snapshot, messages] = await Promise.all([
       getAppStateSnapshot(access),
-      getMessages(access),
+      getMessages(access, {
+        includeMedicalEvidence,
+        includeSourceEvidence,
+      }),
     ]);
     const generatedAt = new Date();
     const report = buildWeeklyReportModel({

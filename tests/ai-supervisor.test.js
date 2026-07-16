@@ -5,6 +5,7 @@ import {
   assertSupervisorRateLimits,
   buildSupervisorContext,
   requestSupervisorAnswer,
+  scrubSupervisorSecrets,
   SupervisorInputError,
   SupervisorProviderError,
   validateSupervisorRequest,
@@ -85,6 +86,81 @@ test('supervisor context contains only the supplied active scope and bounded ope
   assert.equal(context.tasks[0].name, 'Fundaciones');
   assert.equal(context.recentOperationalMessages[0].text, 'Llegó el camión');
   assert.equal(JSON.stringify(context).includes('guillen.marce@gmail.com'), false);
+});
+
+test('supervisor removes active webview bearers before context or provider transmission', async () => {
+  const bearer = 'signed-worker-token-that-must-never-reach-openai';
+  const labeledKey = 'plain-or-json-key-that-must-never-reach-openai';
+  const webviewUrl = `https://obrasaas.vercel.app/webview/medical?worker=worker-a&token=${bearer}`;
+  const context = buildSupervisorContext({
+    access: {
+      organization: { name: 'Constructora Norte' },
+      project: { name: 'Hospital Sur' },
+    },
+    state: {},
+    messages: [{
+      sender: 'bot',
+      kind: 'text',
+      text: `Completá el formulario seguro: ${webviewUrl}`,
+      time: '09:10',
+    }],
+  });
+  const contextJson = JSON.stringify(context);
+  assert.equal(contextJson.includes(bearer), false);
+  assert.equal(contextJson.includes('/webview/medical'), false);
+  assert.match(context.recentOperationalMessages[0].text, /enlace seguro omitido/i);
+  assert.equal(
+    scrubSupervisorSecrets(`Authorization: Bearer ${bearer}`).includes(bearer),
+    false,
+  );
+  assert.equal(scrubSupervisorSecrets(`key=${labeledKey}`).includes(labeledKey), false);
+  assert.equal(
+    scrubSupervisorSecrets(JSON.stringify({ key: labeledKey })).includes(labeledKey),
+    false,
+  );
+  assert.equal(
+    scrubSupervisorSecrets(`monkey=${labeledKey}`).includes(labeledKey),
+    true,
+  );
+
+  let providerBody;
+  await requestSupervisorAnswer({
+    question: `¿Uso este code=${bearer} o key=${labeledKey}?`,
+    history: [{
+      role: 'assistant',
+      content: JSON.stringify({
+        authorization: `Bearer ${bearer}`,
+        key: labeledKey,
+      }),
+    }],
+    context: {
+      ...context,
+      nestedLegacyUrl: webviewUrl,
+      nestedCredentials: {
+        token: bearer,
+        key: labeledKey,
+      },
+    },
+    apiKey: 'test-key',
+    fetchImpl: async (_url, options) => {
+      providerBody = options.body;
+      return Response.json({
+        model: 'gpt-5-mini',
+        output_text: JSON.stringify({
+          answer: 'El enlace seguro fue omitido del análisis.',
+          confidence: 'high',
+          evidence: [],
+          limitations: [],
+          actions: [],
+        }),
+      });
+    },
+  });
+
+  assert.equal(providerBody.includes(bearer), false);
+  assert.equal(providerBody.includes(labeledKey), false);
+  assert.equal(providerBody.includes('/webview/medical'), false);
+  assert.match(providerBody, /secreto omitido|enlace seguro omitido/i);
 });
 
 test('supervisor marks a tenant without a snapshot as empty instead of demonstrative', () => {

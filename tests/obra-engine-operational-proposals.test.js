@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { tsImport } from 'tsx/esm/api';
 
+import { sanitizeMessagesForMedicalPrivacy } from '../src/lib/medical-privacy.js';
+
 const {
   OPERATIONAL_PROPOSAL_STATUSES,
 } = await import('../src/lib/whatsapp/operational-proposals.js');
@@ -415,7 +417,7 @@ test('ambiguous task names stay unbound until an exact task ID is confirmed', as
   assert.match(incomplete.reply, /sigue pendiente/i);
   assert.equal(proposals[0].status, OPERATIONAL_PROPOSAL_STATUSES.PENDING);
 
-  const exact = await processIncomingObraMessage({
+  const preconditionPrompt = await processIncomingObraMessage({
     externalId: 'wamid.confirm-ambiguous-task-4',
     provider: 'meta',
     from: '+5491112345678',
@@ -430,11 +432,152 @@ test('ambiguous task names stay unbound until an exact task ID is confirmed', as
     persist: false,
     processingTime: new Date('2026-07-16T12:06:00.000Z'),
   });
+  assert.equal(preconditionPrompt.stateChanged, false);
+  assert.match(preconditionPrompt.reply, /actualmente en 30%/i);
+  assert.match(preconditionPrompt.reply, new RegExp(`CONFIRMAR ${code} TAREA 4 DESDE 30%`));
+  assert.equal(proposals[0].status, OPERATIONAL_PROPOSAL_STATUSES.PENDING);
 
+  const exact = await processIncomingObraMessage({
+    externalId: 'wamid.confirm-ambiguous-task-4-safe',
+    provider: 'meta',
+    from: '+5491112345678',
+    kind: 'text',
+    text: `CONFIRMAR ${code} TAREA 4 DESDE 30%`,
+    timestamp: new Date('2026-07-16T12:07:00.000Z'),
+  }, scope, {
+    state: currentState,
+    projectSettings,
+    worker: worker(),
+    prisma,
+    persist: false,
+    processingTime: new Date('2026-07-16T12:07:00.000Z'),
+  });
   assert.equal(exact.stateChanged, true);
   assert.equal(currentState.tasks[3].progress, 20);
   assert.equal(currentState.tasks[4].progress, 75);
   assert.equal(currentState.avancePercentage, 48);
+});
+
+test('an unbound proposal can target a durable UUID-style task key', async () => {
+  const { prisma, proposals } = memoryPrisma();
+  const currentState = state();
+  const selectedTaskKey = 'task-9f77e9e4-9115-4a5d-a495-72e937ed11ad';
+  currentState.tasks = {
+    [selectedTaskKey]: {
+      name: 'Estructura planta baja',
+      progress: 20,
+      duration: 8,
+    },
+    'task-a9b23144-daf1-4dbc-b696-b67ef8bd44ec': {
+      name: 'Estructura planta alta',
+      progress: 30,
+      duration: 8,
+    },
+  };
+  currentState.avancePercentage = 25;
+
+  const audio = await processIncomingObraMessage({
+    externalId: 'wamid.audio-ambiguous-uuid-task',
+    provider: 'meta',
+    from: '+5491112345678',
+    kind: 'audio',
+    text: 'La estructura está al 75 por ciento.',
+    transcription: {
+      status: 'completed',
+      provider: 'openai',
+      text: 'La estructura está al 75 por ciento.',
+    },
+    timestamp: audioTime,
+  }, scope, {
+    state: currentState,
+    projectSettings,
+    worker: worker(),
+    prisma,
+    persist: false,
+    processingTime: audioTime,
+  });
+  const code = audio.operationalProposal.confirmationCode;
+  assert.equal(proposals[0].action.taskKey, null);
+
+  const wrongTask = await processIncomingObraMessage({
+    externalId: 'wamid.confirm-wrong-uuid-task',
+    provider: 'meta',
+    from: '+5491112345678',
+    kind: 'text',
+    text: `CONFIRMAR ${code} TAREA task-uuid-equivocado DESDE 20%`,
+    timestamp: new Date('2026-07-16T12:05:00.000Z'),
+  }, scope, {
+    state: currentState,
+    projectSettings,
+    worker: worker(),
+    prisma,
+    persist: false,
+    processingTime: new Date('2026-07-16T12:05:00.000Z'),
+  });
+  assert.equal(wrongTask.stateChanged, false);
+  assert.match(wrongTask.reply, /indicá la tarea exacta/i);
+  assert.equal(proposals[0].status, OPERATIONAL_PROPOSAL_STATUSES.PENDING);
+
+  const preconditionPrompt = await processIncomingObraMessage({
+    externalId: 'wamid.confirm-uuid-task',
+    provider: 'meta',
+    from: '+5491112345678',
+    kind: 'text',
+    text: `CONFIRMAR ${code} TAREA ${selectedTaskKey}`,
+    timestamp: new Date('2026-07-16T12:06:00.000Z'),
+  }, scope, {
+    state: currentState,
+    projectSettings,
+    worker: worker(),
+    prisma,
+    persist: false,
+    processingTime: new Date('2026-07-16T12:06:00.000Z'),
+  });
+  assert.equal(preconditionPrompt.stateChanged, false);
+  assert.match(preconditionPrompt.reply, /actualmente en 20%/i);
+  assert.equal(proposals[0].status, OPERATIONAL_PROPOSAL_STATUSES.PENDING);
+
+  currentState.tasks[selectedTaskKey].progress = 90;
+  currentState.avancePercentage = 60;
+  const staleConfirmation = await processIncomingObraMessage({
+    externalId: 'wamid.confirm-uuid-task-stale',
+    provider: 'meta',
+    from: '+5491112345678',
+    kind: 'text',
+    text: `CONFIRMAR ${code} TAREA ${selectedTaskKey} DESDE 20%`,
+    timestamp: new Date('2026-07-16T12:07:00.000Z'),
+  }, scope, {
+    state: currentState,
+    projectSettings,
+    worker: worker(),
+    prisma,
+    persist: false,
+    processingTime: new Date('2026-07-16T12:07:00.000Z'),
+  });
+  assert.equal(staleConfirmation.stateChanged, false);
+  assert.match(staleConfirmation.reply, /ahora está en 90%/i);
+  assert.equal(currentState.tasks[selectedTaskKey].progress, 90);
+  assert.equal(proposals[0].status, OPERATIONAL_PROPOSAL_STATUSES.PENDING);
+
+  const confirmation = await processIncomingObraMessage({
+    externalId: 'wamid.confirm-uuid-task-safe',
+    provider: 'meta',
+    from: '+5491112345678',
+    kind: 'text',
+    text: `CONFIRMAR ${code} TAREA ${selectedTaskKey} DESDE 90%`,
+    timestamp: new Date('2026-07-16T12:08:00.000Z'),
+  }, scope, {
+    state: currentState,
+    projectSettings,
+    worker: worker(),
+    prisma,
+    persist: false,
+    processingTime: new Date('2026-07-16T12:08:00.000Z'),
+  });
+  assert.equal(confirmation.stateChanged, true);
+  assert.equal(currentState.tasks[selectedTaskKey].progress, 75);
+  assert.equal(currentState.avancePercentage, 53);
+  assert.equal(proposals[0].status, OPERATIONAL_PROPOSAL_STATUSES.APPLIED);
 });
 
 test('rejection closes the proposal without applying its stored operation', async () => {
@@ -523,7 +666,222 @@ test('confirmed safety incidents retain the original reporter when a supervisor 
   assert.equal(approved.stateChanged, true);
   assert.equal(currentState.incidents[0].reporter, 'Lucía Operaria');
   assert.equal(currentState.incidents[0].type, 'critical');
+  assert.equal(
+    currentState.incidents[0].description.includes('persona herida'),
+    false,
+  );
+  assert.equal(currentState.incidents[0].sensitivity, 'restricted');
+  assert.deepEqual(currentState.incidents[0].metadata, {
+    kind: 'operational-proposal',
+    proposalId: proposals[0].id,
+    detailRestricted: true,
+  });
   assert.equal(currentState.alertsCount, 1);
+});
+
+test('clinical details stay out of project state and general message views even when classified as a delay', async () => {
+  const { prisma, proposals } = memoryPrisma();
+  const currentState = state();
+  const clinicalReport = 'Hay una demora porque Juan tiene cáncer y está bajo tratamiento médico.';
+  const audio = await processIncomingObraMessage({
+    externalId: 'wamid.audio-clinical-delay',
+    provider: 'meta',
+    from: worker().phone,
+    kind: 'audio',
+    text: clinicalReport,
+    transcription: {
+      status: 'completed',
+      provider: 'openai',
+      text: clinicalReport,
+    },
+    timestamp: audioTime,
+  }, scope, {
+    state: currentState,
+    projectSettings,
+    worker: worker(),
+    prisma,
+    persist: false,
+    processingTime: audioTime,
+  });
+
+  assert.equal(proposals[0].type, 'DELAY_REPORT');
+  assert.equal(audio.newMessages[0].metadata.sensitivity, 'medical');
+  assert.equal(audio.newMessages[1].metadata.sensitivity, 'medical');
+  assert.doesNotMatch(JSON.stringify(currentState), /Juan|cáncer|tratamiento médico/i);
+  assert.doesNotMatch(
+    JSON.stringify(sanitizeMessagesForMedicalPrivacy(audio.newMessages)),
+    /Juan|cáncer|tratamiento médico/i,
+  );
+
+  proposals[0].proposedByWorker = { name: worker().name };
+  await processIncomingObraMessage({
+    externalId: 'wamid.confirm-clinical-delay',
+    provider: 'meta',
+    from: worker().phone,
+    kind: 'text',
+    text: `CONFIRMAR ${audio.operationalProposal.confirmationCode}`,
+    timestamp: new Date('2026-07-16T12:05:00.000Z'),
+  }, scope, {
+    state: currentState,
+    projectSettings,
+    worker: worker(),
+    prisma,
+    persist: false,
+    processingTime: new Date('2026-07-16T12:05:00.000Z'),
+  });
+
+  assert.doesNotMatch(JSON.stringify(currentState), /Juan|cáncer|tratamiento médico/i);
+  assert.equal(currentState.incidents[0].sensitivity, 'medical');
+  assert.equal(currentState.incidents[0].metadata.detailRestricted, true);
+});
+
+test('clinical text reports are restricted on the direct WhatsApp text path too', async () => {
+  const currentState = state();
+  const result = await processIncomingObraMessage({
+    externalId: 'wamid.text-clinical-delay',
+    provider: 'meta',
+    from: worker().phone,
+    kind: 'text',
+    text: 'Demora porque Juan tiene cáncer y está bajo tratamiento médico.',
+    timestamp: audioTime,
+  }, scope, {
+    state: currentState,
+    projectSettings,
+    worker: worker(),
+    prisma: memoryPrisma().prisma,
+    persist: false,
+    processingTime: audioTime,
+  });
+
+  assert.doesNotMatch(JSON.stringify(currentState), /Juan|cáncer|tratamiento médico/i);
+  assert.equal(currentState.incidents[0].sensitivity, 'medical');
+  assert.equal(result.newMessages[0].metadata.sensitivity, 'medical');
+  assert.equal(result.newMessages[1].metadata.sensitivity, 'medical');
+});
+
+test('clinical task references are not echoed into unrestricted operational replies', async () => {
+  const { prisma, proposals } = memoryPrisma();
+  const currentState = state();
+  const result = await processIncomingObraMessage({
+    externalId: 'wamid.audio-clinical-task',
+    provider: 'meta',
+    from: worker().phone,
+    kind: 'audio',
+    text: 'La tarea "tratamiento médico de Juan" está al 75 por ciento.',
+    transcription: {
+      status: 'completed',
+      provider: 'openai',
+      text: 'La tarea "tratamiento médico de Juan" está al 75 por ciento.',
+    },
+    timestamp: audioTime,
+  }, scope, {
+    state: currentState,
+    projectSettings,
+    worker: worker(),
+    prisma,
+    persist: false,
+    processingTime: audioTime,
+  });
+
+  assert.equal(proposals[0].type, 'TASK_PROGRESS');
+  assert.doesNotMatch(result.reply, /tratamiento médico|Juan/i);
+  assert.doesNotMatch(JSON.stringify(currentState), /tratamiento médico|Juan/i);
+  assert.equal(result.newMessages[0].metadata.sensitivity, 'medical');
+  assert.equal(result.newMessages[1].metadata.sensitivity, 'medical');
+});
+
+test('audio privacy scans the transcription even when a benign event text is also present', async () => {
+  const { prisma, proposals } = memoryPrisma();
+  const currentState = state();
+  const result = await processIncomingObraMessage({
+    externalId: 'wamid.audio-hidden-clinical-transcript',
+    provider: 'meta',
+    from: worker().phone,
+    kind: 'audio',
+    text: 'Audio recibido.',
+    transcription: {
+      status: 'completed',
+      provider: 'openai',
+      text: 'Hay una demora porque Juan tiene VIH y requiere diálisis.',
+    },
+    timestamp: audioTime,
+  }, scope, {
+    state: currentState,
+    projectSettings,
+    worker: worker(),
+    prisma,
+    persist: false,
+    processingTime: audioTime,
+  });
+
+  assert.equal(proposals[0].type, 'DELAY_REPORT');
+  assert.equal(result.newMessages[0].metadata.sensitivity, 'medical');
+  assert.equal(result.newMessages[1].metadata.sensitivity, 'medical');
+  assert.doesNotMatch(JSON.stringify(currentState), /Juan|VIH|diálisis/i);
+  assert.doesNotMatch(
+    JSON.stringify(sanitizeMessagesForMedicalPrivacy(result.newMessages)),
+    /Juan|VIH|diálisis/i,
+  );
+});
+
+test('free-form WhatsApp reports stay restricted even when the vocabulary is unknown', async () => {
+  const currentState = state();
+  const privateReport = 'Demora por una condición privada XQ-17 de Juan.';
+  const result = await processIncomingObraMessage({
+    externalId: 'wamid.text-private-unknown',
+    provider: 'meta',
+    from: worker().phone,
+    kind: 'text',
+    text: privateReport,
+    timestamp: audioTime,
+  }, scope, {
+    state: currentState,
+    projectSettings,
+    worker: worker(),
+    prisma: memoryPrisma().prisma,
+    persist: false,
+    processingTime: audioTime,
+  });
+
+  assert.doesNotMatch(JSON.stringify(currentState), /Juan|XQ-17/i);
+  assert.equal(result.newMessages[0].metadata.sourceContentRestricted, true);
+  assert.doesNotMatch(
+    JSON.stringify(sanitizeMessagesForMedicalPrivacy(result.newMessages)),
+    /Juan|XQ-17/i,
+  );
+});
+
+test('long audio transcripts cannot hide medical content after the former scan cutoff', async () => {
+  const { prisma } = memoryPrisma();
+  const currentState = state();
+  const longClinicalReport = `${'Reporte operativo sin novedad. '.repeat(350)} Demora porque Juan tiene VIH.`;
+  const result = await processIncomingObraMessage({
+    externalId: 'wamid.audio-long-clinical-tail',
+    provider: 'meta',
+    from: worker().phone,
+    kind: 'audio',
+    text: 'Audio recibido.',
+    transcription: {
+      status: 'completed',
+      provider: 'openai',
+      text: longClinicalReport,
+    },
+    timestamp: audioTime,
+  }, scope, {
+    state: currentState,
+    projectSettings,
+    worker: worker(),
+    prisma,
+    persist: false,
+    processingTime: audioTime,
+  });
+
+  assert.equal(result.newMessages[0].metadata.sensitivity, 'medical');
+  assert.doesNotMatch(JSON.stringify(currentState), /Juan|VIH/i);
+  assert.doesNotMatch(
+    JSON.stringify(sanitizeMessagesForMedicalPrivacy(result.newMessages)),
+    /Juan|VIH/i,
+  );
 });
 
 test('dashboard simulations audit the real platform actor separately from the represented worker', async () => {

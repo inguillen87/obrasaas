@@ -9,7 +9,11 @@ import {
 } from '@/lib/ai/supervisor';
 import { tenantAiSettingsFromMetadata } from '@/lib/ai/tenant-settings';
 import { getAppState, getMessages } from '@/lib/db';
-import { sanitizeProjectStateMedicalData } from '@/lib/medical-privacy';
+import {
+  MEDICAL_EVIDENCE_PERMISSION,
+  SOURCE_EVIDENCE_PERMISSION,
+  sanitizeProjectStateMedicalData,
+} from '@/lib/medical-privacy';
 import { getPrisma } from '@/lib/prisma';
 import {
   readJsonRequest,
@@ -128,9 +132,20 @@ export async function POST(request) {
     const input = validateSupervisorRequest(parsed);
     question = input.question;
     const canRequestActions = hasTenantPermission(access, 'org:projects:manage');
+    const includeMedicalEvidence = hasTenantPermission(
+      access,
+      MEDICAL_EVIDENCE_PERMISSION,
+    );
+    const includeSourceEvidence = hasTenantPermission(
+      access,
+      SOURCE_EVIDENCE_PERMISSION,
+    );
     const [state, messages, snapshot] = await Promise.all([
       getAppState(access),
-      getMessages(access),
+      getMessages(access, {
+        includeMedicalEvidence,
+        includeSourceEvidence,
+      }),
       getPrisma().projectSnapshot.findUnique({
         where: { projectId: access.project.id },
         select: { updatedAt: true },

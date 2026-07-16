@@ -91,7 +91,9 @@ export async function POST(request) {
         const body = validateProjectStateInput(writeRequest.state, validationContext);
         flagStockRisks(body);
         const validatedBody = validateProjectStateInput(
-            sanitizeProjectStateMedicalData(body),
+            sanitizeProjectStateMedicalData(body, {
+                inferLegacyMedicalText: false,
+            }),
             validationContext,
         );
         const updated = await saveAppStateSnapshot(validatedBody, access, {

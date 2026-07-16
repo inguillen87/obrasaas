@@ -6,6 +6,7 @@ import { fieldWorkerWhatsAppRole } from '@/lib/field-workers';
 import { publicTenantAiSettings } from '@/lib/ai/tenant-settings';
 import {
   MEDICAL_EVIDENCE_PERMISSION,
+  SOURCE_EVIDENCE_PERMISSION,
   sanitizeProjectStateMedicalData,
 } from '@/lib/medical-privacy';
 import { redirect } from 'next/navigation';
@@ -22,10 +23,25 @@ export default async function DashboardPage() {
   const prisma = getPrisma();
   const canManageField = hasTenantPermission(access, 'org:field:manage');
   const canReadMedicalEvidence = hasTenantPermission(access, MEDICAL_EVIDENCE_PERMISSION);
+  const canReadSourceEvidence = hasTenantPermission(access, SOURCE_EVIDENCE_PERMISSION);
+  const canReadOperationalProposals = hasTenantPermission(
+    access,
+    'org:operational-proposals:read',
+  );
   const aiSettings = publicTenantAiSettings(access.organization.metadata);
-  const [initialSnapshot, initialMessages, whatsapp, membershipCount, fieldWorkers] = await Promise.all([
+  const [
+    initialSnapshot,
+    initialMessages,
+    whatsapp,
+    membershipCount,
+    fieldWorkers,
+    pendingOperationalProposalCount,
+  ] = await Promise.all([
     getAppStateSnapshot(access),
-    getMessages(access, { includeMedicalEvidence: canReadMedicalEvidence }),
+    getMessages(access, {
+      includeMedicalEvidence: canReadMedicalEvidence,
+      includeSourceEvidence: canReadSourceEvidence,
+    }),
     prisma.whatsAppConnection.findUnique({
       where: { projectId: access.project.id },
       select: { enabled: true, connectionStatus: true, lastVerifiedAt: true },
@@ -40,6 +56,15 @@ export default async function DashboardPage() {
           select: { id: true, name: true, role: true, metadata: true },
         })
       : Promise.resolve([]),
+    canReadOperationalProposals
+      ? prisma.operationalProposal.count({
+          where: {
+            projectId: access.project.id,
+            status: 'PENDING',
+            expiresAt: { gt: new Date() },
+          },
+        })
+      : Promise.resolve(0),
   ]);
   return (
     <DashboardClient
@@ -59,6 +84,8 @@ export default async function DashboardPage() {
         canManageProjects: hasTenantPermission(access, 'org:projects:manage'),
         canViewTeam: hasTenantPermission(access, 'tenant:members:read'),
         canManageIntegrations: hasTenantPermission(access, 'org:integrations:manage'),
+        canReadOperationalProposals,
+        pendingOperationalProposalCount,
         aiSupervisorEnabled: aiSettings.supervisorEnabled,
         aiAudioTranscriptionEnabled: aiSettings.audioTranscriptionEnabled,
         canManageField,

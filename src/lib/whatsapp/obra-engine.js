@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { generateWebviewToken } from "@/lib/auth";
 import {
   completePendingGeoAttendance,
@@ -12,23 +11,30 @@ import {
 } from "@/lib/field-workers";
 import { getDistanceMeters, validateProjectGeofence } from "@/lib/geo";
 import { medicalFlowRecord } from "@/lib/medical-upload";
+import {
+  isSensitiveMedicalText,
+  medicalOperationalDescription,
+  restrictedOperationalDescription,
+  sensitiveMedicalOperationalDescription,
+} from "@/lib/medical-privacy";
+import {
+  DEFAULT_OPERATIONAL_TIME_ZONE,
+  appendOperationalIncident,
+  ensureOperationalStateCollections,
+  recalculateOverallProgress,
+  selectOperationalTask,
+  trustedOperationalTimeZone,
+} from "@/lib/operational-state-effects";
+import { resolveOperationalProposalDecision } from "@/lib/operational-proposal-resolution";
 import { getPrisma } from "@/lib/prisma";
 import {
   classifyObraIntent,
   countPresentAttendanceEntries,
-  prependUniqueEventIncident,
   setWorkerAttendance,
 } from "@/lib/whatsapp/obra-policy";
 import {
-  OPERATIONAL_PROPOSAL_DECISIONS,
-  OPERATIONAL_PROPOSAL_STATUSES,
   OPERATIONAL_PROPOSAL_TYPES,
-  canResolveOperationalProposal,
   createOperationalProposal,
-  finalizeOperationalProposal,
-  findOperationalProposal,
-  invalidateOperationalProposal,
-  markOperationalProposalExpired,
   parseOperationalProposalDecision,
 } from "@/lib/whatsapp/operational-proposals";
 import {
@@ -52,7 +58,7 @@ export class ObraOperationalAtomicityError extends Error {
   }
 }
 
-const DEFAULT_TIME_ZONE = "America/Argentina/Buenos_Aires";
+const DEFAULT_TIME_ZONE = DEFAULT_OPERATIONAL_TIME_ZONE;
 
 function normalize(value) {
   return String(value || "")
@@ -61,16 +67,7 @@ function normalize(value) {
     .toLowerCase();
 }
 
-function trustedTimeZone(value) {
-  const candidate = String(value || "").trim();
-  if (!candidate) return DEFAULT_TIME_ZONE;
-  try {
-    new Intl.DateTimeFormat("en", { timeZone: candidate }).format(0);
-    return candidate;
-  } catch {
-    return DEFAULT_TIME_ZONE;
-  }
-}
+const trustedTimeZone = trustedOperationalTimeZone;
 
 function requireOperationalAtomicContext(options) {
   if (
@@ -105,70 +102,9 @@ function trustedWorker(worker, projectId) {
   };
 }
 
-function buildIncident({
-  title,
-  description,
-  type,
-  badge,
-  reporter,
-  icon,
-  now,
-  evidence,
-  timeZone = DEFAULT_TIME_ZONE,
-}) {
-  return {
-    id: `inc-${randomUUID()}`,
-    title,
-    description,
-    type,
-    badge,
-    timestamp: new Intl.DateTimeFormat("es-AR", {
-      dateStyle: "short",
-      timeStyle: "short",
-      timeZone: trustedTimeZone(timeZone),
-    }).format(now),
-    reporter,
-    icon,
-    ...(evidence ? { evidence } : {}),
-  };
-}
-
-function addIncident(state, event, incident) {
-  return prependUniqueEventIncident(
-    state.incidents,
-    event?.externalId,
-    buildIncident(incident),
-  );
-}
-
-function ensureStateCollections(state) {
-  state.attendance ||= {};
-  state.incidents ||= [];
-  state.tasks ||= {};
-  state.alertsCount ||= 0;
-}
-
-function selectTask(state, text) {
-  const normalizedText = normalize(text);
-  const explicitId = normalizedText.match(/(?:tarea|task)\s*#?([0-9]+)/)?.[1];
-  if (explicitId && state.tasks[explicitId]) return [explicitId, state.tasks[explicitId]];
-
-  const entries = Object.entries(state.tasks);
-  const exactNameMatches = entries.filter(([, task]) => {
-    const taskName = normalize(task?.name).trim();
-    return taskName.length >= 3 && normalizedText.includes(taskName);
-  });
-  if (exactNameMatches.length === 1) return exactNameMatches[0];
-  if (exactNameMatches.length > 1) return [null, null];
-
-  const wordMatches = entries.filter(([, task]) => {
-    const significantWords = normalize(task?.name)
-      .split(/\s+/)
-      .filter((word) => word.length >= 5);
-    return significantWords.some((word) => normalizedText.includes(word));
-  });
-  return wordMatches.length === 1 ? wordMatches[0] : [null, null];
-}
+const addIncident = appendOperationalIncident;
+const ensureStateCollections = ensureOperationalStateCollections;
+const selectTask = selectOperationalTask;
 
 function secureLinks(workerId, projectId) {
   const deploymentUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
@@ -193,17 +129,7 @@ function updatePresentCount(state) {
   state.operariosCount = countPresentAttendanceEntries(state.attendance);
 }
 
-function updateOverallProgress(state) {
-  const tasks = Object.values(state.tasks || {});
-  const nextProgress = tasks.length === 0
-    ? 0
-    : Math.round(tasks.reduce((total, task) => (
-        total + Math.max(0, Math.min(100, Number(task?.progress) || 0))
-      ), 0) / tasks.length);
-  const changed = Number(state.avancePercentage) !== nextProgress;
-  state.avancePercentage = nextProgress;
-  return changed;
-}
+const updateOverallProgress = recalculateOverallProgress;
 
 function publicOperationalProposal(record) {
   if (!record) return null;
@@ -317,285 +243,6 @@ function audioProposalReply(proposal, {
   return "Guardé y transcribí el audio como evidencia. No detecté una acción inequívoca y no modifiqué la obra. Si querés aplicar un cambio, confirmalo con un comando por texto.";
 }
 
-function terminalProposalReply(proposal) {
-  if (proposal.status === OPERATIONAL_PROPOSAL_STATUSES.APPLIED) {
-    return `La propuesta ${proposal.confirmationCode} ya fue aplicada. No repetí ningún cambio.`;
-  }
-  if (proposal.status === OPERATIONAL_PROPOSAL_STATUSES.REJECTED) {
-    return `La propuesta ${proposal.confirmationCode} ya fue rechazada. No modifiqué la obra.`;
-  }
-  if (proposal.status === OPERATIONAL_PROPOSAL_STATUSES.EXPIRED) {
-    return `La propuesta ${proposal.confirmationCode} venció. Enviá un nuevo audio o comando para generar una decisión actualizada.`;
-  }
-  if (proposal.status === OPERATIONAL_PROPOSAL_STATUSES.INVALIDATED) {
-    return `La propuesta ${proposal.confirmationCode} quedó invalidada porque el contexto de la obra cambió. Generá una nueva propuesta.`;
-  }
-  return `La propuesta ${proposal.confirmationCode} ya no está pendiente. No repetí ningún cambio.`;
-}
-
-async function processOperationalProposalDecision({
-  state,
-  worker,
-  event,
-  now,
-  projectSettings,
-  prisma,
-  decision,
-  auditActorId = null,
-  auditSource = null,
-}) {
-  const proposal = await findOperationalProposal(prisma, {
-    projectId: projectSettings.id,
-    confirmationCode: decision.confirmationCode,
-  });
-  if (!proposal) {
-    return {
-      reply: `No encontré una propuesta pendiente con el código ${decision.confirmationCode} en esta obra.`,
-      stateChanged: false,
-      authorized: false,
-      proposal: null,
-    };
-  }
-  if (proposal.status !== OPERATIONAL_PROPOSAL_STATUSES.PENDING) {
-    return {
-      reply: terminalProposalReply(proposal),
-      stateChanged: false,
-      authorized: true,
-      proposal,
-    };
-  }
-
-  const organizationId = projectSettings.organizationId;
-  const resolverProvider = String(event.provider || decision.channel || "whatsapp")
-    .trim()
-    .toLowerCase()
-    .slice(0, 32);
-  const resolverExternalId = String(event.externalId || "").trim().slice(0, 512);
-  if (!organizationId || !resolverProvider || !resolverExternalId) {
-    return {
-      reply: "No pude vincular esta confirmación a un evento confiable. No modifiqué la obra.",
-      stateChanged: false,
-      authorized: false,
-      proposal,
-    };
-  }
-
-  const transitionContext = {
-    proposal,
-    projectId: projectSettings.id,
-    organizationId,
-    resolverWorkerId: worker.id,
-    resolverProvider,
-    resolverExternalId,
-    auditActorId,
-    auditSource,
-    now,
-  };
-  if (new Date(proposal.expiresAt).getTime() <= now.getTime()) {
-    await markOperationalProposalExpired(prisma, {
-      ...transitionContext,
-      result: { reason: "confirmation_after_expiry" },
-    });
-    return {
-      reply: `La propuesta ${proposal.confirmationCode} venció. Enviá un nuevo audio para trabajar con información actualizada.`,
-      stateChanged: false,
-      authorized: true,
-      proposal: { ...proposal, status: OPERATIONAL_PROPOSAL_STATUSES.EXPIRED },
-    };
-  }
-
-  if (!canResolveOperationalProposal(worker, proposal, decision.decision)) {
-    return {
-      reply: proposal.type === OPERATIONAL_PROPOSAL_TYPES.CRITICAL_INCIDENT
-        ? "Tu identidad no puede resolver esta propuesta crítica. Debe hacerlo quien la reportó, Seguridad, el capataz o el jefe de obra."
-        : "Tu identidad puede reportar, pero sólo un capataz o jefe de obra puede aprobar o rechazar este cambio operativo.",
-      stateChanged: false,
-      authorized: false,
-      proposal,
-    };
-  }
-
-  if (decision.decision === OPERATIONAL_PROPOSAL_DECISIONS.REJECT) {
-    const rejected = await finalizeOperationalProposal(prisma, {
-      ...transitionContext,
-      decision: decision.decision,
-      result: { reason: "rejected_by_authorized_worker" },
-    });
-    return {
-      reply: rejected
-        ? `Rechacé la propuesta ${proposal.confirmationCode}. La evidencia permanece en la bitácora y no modifiqué la obra.`
-        : `La propuesta ${proposal.confirmationCode} cambió de estado antes de poder rechazarla. No repetí ninguna acción.`,
-      stateChanged: false,
-      authorized: true,
-      proposal: rejected
-        ? { ...proposal, status: OPERATIONAL_PROPOSAL_STATUSES.REJECTED }
-        : proposal,
-    };
-  }
-
-  if (proposal.type === OPERATIONAL_PROPOSAL_TYPES.TASK_PROGRESS) {
-    const action = proposal.action && typeof proposal.action === "object"
-      ? proposal.action
-      : {};
-    const precondition = proposal.precondition && typeof proposal.precondition === "object"
-      ? proposal.precondition
-      : null;
-    const percentage = Number(action.percentage);
-    let taskKey = action.taskKey ? String(action.taskKey) : null;
-    let task = taskKey ? state.tasks[taskKey] : null;
-
-    if (taskKey) {
-      const stale = !task
-        || (
-          precondition
-          && (
-            Number(task.progress) !== Number(precondition.taskProgress)
-            || (
-              precondition.taskName
-              && String(task.name || "") !== String(precondition.taskName)
-            )
-          )
-        );
-      if (stale) {
-        const invalidated = await invalidateOperationalProposal(prisma, {
-          ...transitionContext,
-          result: {
-            reason: task ? "task_changed_after_proposal" : "task_missing_after_proposal",
-            taskKey,
-          },
-        });
-        return {
-          reply: invalidated
-            ? `La tarea vinculada a ${proposal.confirmationCode} cambió después del audio. Invalidé la propuesta para no pisar un avance más nuevo.`
-            : `La propuesta ${proposal.confirmationCode} cambió de estado. No modifiqué el Gantt.`,
-          stateChanged: false,
-          authorized: true,
-          proposal: invalidated
-            ? { ...proposal, status: OPERATIONAL_PROPOSAL_STATUSES.INVALIDATED }
-            : proposal,
-        };
-      }
-    } else {
-      [taskKey, task] = selectTask(
-        state,
-        `${decision.taskReference || ""} ${action.taskReference || ""}`,
-      );
-    }
-
-    if (!taskKey || !task) {
-      return {
-        reply: `La propuesta ${proposal.confirmationCode} sigue pendiente: indicá la tarea exacta con “CONFIRMAR ${proposal.confirmationCode} TAREA <número o nombre>”.`,
-        stateChanged: false,
-        authorized: true,
-        proposal,
-      };
-    }
-    if (!Number.isFinite(percentage) || percentage < 0 || percentage > 100) {
-      const invalidated = await invalidateOperationalProposal(prisma, {
-        ...transitionContext,
-        result: { reason: "invalid_stored_percentage", taskKey },
-      });
-      return {
-        reply: invalidated
-          ? `La propuesta ${proposal.confirmationCode} contenía un porcentaje inválido y fue anulada sin modificar la obra.`
-          : `La propuesta ${proposal.confirmationCode} cambió de estado. No modifiqué el Gantt.`,
-        stateChanged: false,
-        authorized: true,
-        proposal,
-      };
-    }
-
-    const previousProgress = Number(task.progress) || 0;
-    const result = {
-      taskKey,
-      taskName: String(task.name || ""),
-      previousProgress,
-      nextProgress: percentage,
-    };
-    const applied = await finalizeOperationalProposal(prisma, {
-      ...transitionContext,
-      decision: decision.decision,
-      result,
-    });
-    if (!applied) {
-      return {
-        reply: `La propuesta ${proposal.confirmationCode} cambió de estado antes de aplicarse. No repetí ningún cambio.`,
-        stateChanged: false,
-        authorized: true,
-        proposal,
-      };
-    }
-    task.progress = percentage;
-    const aggregateChanged = updateOverallProgress(state);
-    return {
-      reply: `Apliqué la propuesta ${proposal.confirmationCode}: “${task.name}” pasó de ${previousProgress}% a ${percentage}%.`,
-      stateChanged: previousProgress !== percentage || aggregateChanged,
-      authorized: true,
-      proposal: { ...proposal, status: OPERATIONAL_PROPOSAL_STATUSES.APPLIED, result },
-    };
-  }
-
-  if (
-    proposal.type === OPERATIONAL_PROPOSAL_TYPES.DELAY_REPORT
-    || proposal.type === OPERATIONAL_PROPOSAL_TYPES.CRITICAL_INCIDENT
-  ) {
-    const critical = proposal.type === OPERATIONAL_PROPOSAL_TYPES.CRITICAL_INCIDENT;
-    const result = {
-      effect: "incident_created",
-      severity: critical ? "critical" : "warning",
-    };
-    const applied = await finalizeOperationalProposal(prisma, {
-      ...transitionContext,
-      decision: decision.decision,
-      result,
-    });
-    if (!applied) {
-      return {
-        reply: `La propuesta ${proposal.confirmationCode} cambió de estado antes de aplicarse. No repetí ningún cambio.`,
-        stateChanged: false,
-        authorized: true,
-        proposal,
-      };
-    }
-    const incidentAdded = addIncident(
-      state,
-      { externalId: `operational-proposal:${proposal.id}` },
-      {
-        title: critical ? "Incidencia crítica confirmada" : "Demora confirmada",
-        description: proposal.summary,
-        type: critical ? "critical" : "warning",
-        badge: critical ? "Urgente" : "Planificación",
-        reporter: proposal.proposedByWorker?.name || worker.name,
-        icon: critical ? "fa-solid fa-triangle-exclamation" : "fa-solid fa-clock",
-        now,
-        timeZone: projectSettings.timezone,
-      },
-    );
-    if (incidentAdded) state.alertsCount += 1;
-    return {
-      reply: critical
-        ? `Apliqué la propuesta ${proposal.confirmationCode}: la incidencia crítica quedó visible en alertas. Si hay riesgo para personas, detené la tarea y seguí el protocolo de seguridad.`
-        : `Apliqué la propuesta ${proposal.confirmationCode}: la demora quedó registrada para revisión de planificación, sin reprogramar automáticamente el cronograma.`,
-      stateChanged: incidentAdded,
-      authorized: true,
-      proposal: { ...proposal, status: OPERATIONAL_PROPOSAL_STATUSES.APPLIED, result },
-    };
-  }
-
-  const invalidated = await invalidateOperationalProposal(prisma, {
-    ...transitionContext,
-    result: { reason: "unsupported_proposal_type" },
-  });
-  return {
-    reply: invalidated
-      ? `La propuesta ${proposal.confirmationCode} no tiene una acción compatible y fue anulada sin modificar la obra.`
-      : `La propuesta ${proposal.confirmationCode} cambió de estado. No modifiqué la obra.`,
-    stateChanged: false,
-    authorized: true,
-    proposal,
-  };
-}
-
 async function processFlowReply({
   state,
   worker,
@@ -609,11 +256,6 @@ async function processFlowReply({
 }) {
   const response = event.interactive?.response || {};
   const flowName = normalize(response.flow_type || response.flow_name || event.interactive?.name || "");
-  const summary = Object.entries(response)
-    .filter(([key]) => !["flow_token", "screen", "flow_type", "flow_name"].includes(key))
-    .slice(0, 6)
-    .map(([key, value]) => `${key}: ${String(value)}`)
-    .join(" · ");
 
   const isMedical = flowName.includes("medical") || flowName.includes("licencia");
   const isIncident = flowName.includes("incident");
@@ -663,8 +305,10 @@ async function processFlowReply({
             ? "Ingreso pendiente de geocerca"
           : "Formulario de obra completado",
       description: isMedical
-        ? medicalRecord.description
-        : summary || "El formulario fue recibido y quedó registrado en la bitácora.",
+        ? medicalOperationalDescription()
+        : isAttendance
+          ? "El formulario de ingreso fue recibido y quedó pendiente de ubicación."
+          : restrictedOperationalDescription(),
       type: isIncident
         ? ["high", "critical"].includes(response.severity) ? "critical" : "warning"
         : isAttendance && response.ppe_status !== "complete" ? "warning" : "info",
@@ -673,6 +317,18 @@ async function processFlowReply({
       icon: "fa-brands fa-whatsapp",
       now,
       evidence: isMedical && medicalRecord.hasEvidence ? evidence : null,
+      sensitivity: isMedical
+        ? "medical"
+        : isAttendance
+          ? null
+          : "restricted",
+      metadata: isAttendance
+        ? null
+        : {
+            kind: isIncident ? "whatsapp-flow-incident" : "whatsapp-flow-report",
+            sourceContentRestricted: true,
+            detailRestricted: true,
+          },
       timeZone,
     },
   );
@@ -718,7 +374,13 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
     || scope?.organizationId
     || null;
   const links = secureLinks(worker.id, projectSettings.id);
-  const body = String(event.text || event.transcription?.text || "").trim();
+  const eventText = String(event.text || "").trim();
+  const transcriptionText = String(event.transcription?.text || "").trim();
+  const body = String(
+    event.kind === "audio" && transcriptionText
+      ? transcriptionText
+      : eventText || transcriptionText,
+  ).trim();
   const lowerBody = normalize(body);
   const evidence = event.media
     ? {
@@ -742,6 +404,26 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
   let operationalProposal = null;
   let authorized = true;
   const intent = classifyObraIntent(event);
+  const sensitiveMedicalContent = (
+    intent === FIELD_WORKER_INTENTS.MEDICAL
+    || isSensitiveMedicalText(`${eventText}\n${transcriptionText}`)
+  );
+  const sourceContentRestricted = Boolean(
+    body
+    || event.media
+    || event.transcription
+    || event.interactive,
+  );
+  const restrictedSourceIncident = {
+    sensitivity: sensitiveMedicalContent ? "medical" : "restricted",
+    metadata: {
+      kind: sensitiveMedicalContent
+        ? "sensitive-medical-report"
+        : "source-content-restricted",
+      sourceContentRestricted: true,
+      detailRestricted: true,
+    },
+  };
   const operationalDecision = intent === FIELD_WORKER_INTENTS.COMMAND_CONFIRMATION
     ? parseOperationalProposalDecision(event)
     : null;
@@ -757,9 +439,9 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
       : "Tu rol no permite ejecutar esa acción desde WhatsApp. El mensaje quedó registrado sin modificar la obra.";
   } else if (operationalDecision) {
     requireOperationalAtomicContext(options);
-    const outcome = await processOperationalProposalDecision({
+    const outcome = await resolveOperationalProposalDecision({
       state,
-      worker,
+      resolver: worker,
       event,
       now: processingNow,
       projectSettings: { ...projectSettings, organizationId },
@@ -845,13 +527,16 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
       event,
       {
         title: "Evidencia de obra recibida",
-        description: body || `Archivo ${event.kind} recibido desde WhatsApp y asociado a la bitácora.`,
+        description: sensitiveMedicalContent
+          ? sensitiveMedicalOperationalDescription()
+          : restrictedOperationalDescription(),
         type: "info",
         badge: "Evidencia",
         reporter: worker.name,
         icon: "fa-solid fa-camera",
         now,
-        evidence,
+        evidence: null,
+        ...restrictedSourceIncident,
         timeZone,
       },
     );
@@ -880,19 +565,15 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
       });
       operationalProposal = created.record;
     }
-    const evidenceProposal = audioProposal
-      ? {
-          ...audioProposal,
-          operationalProposal: publicOperationalProposal(operationalProposal),
-        }
-      : null;
     stateChanged = addIncident(
       state,
       event,
       {
         title: transcriptionCompleted ? "Reporte de voz transcripto" : "Audio de obra recibido",
         description: transcriptionCompleted
-          ? body
+          ? sensitiveMedicalContent
+            ? sensitiveMedicalOperationalDescription()
+            : restrictedOperationalDescription()
           : transcriptionDisabled
             ? "El audio quedó almacenado como evidencia. La transcripción con IA está desactivada por la organización."
             : "El audio quedó almacenado como evidencia y su transcripción está pendiente.",
@@ -902,17 +583,21 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
         icon: "fa-solid fa-microphone-lines",
         now,
         timeZone,
-        evidence: evidenceProposal
-          ? { ...(evidence || {}), proposal: evidenceProposal }
-          : evidence,
+        evidence: null,
+        ...restrictedSourceIncident,
       },
     );
-    reply = audioProposalReply(audioProposal, {
-      transcriptionStatus: event.transcription?.status || null,
-      operationalProposal,
-      worker,
-      timeZone,
-    });
+    reply = audioProposalReply(
+      sensitiveMedicalContent && audioProposal
+        ? { ...audioProposal, taskReference: null }
+        : audioProposal,
+      {
+        transcriptionStatus: event.transcription?.status || null,
+        operationalProposal,
+        worker,
+        timeZone,
+      },
+    );
   } else if (lowerBody.includes("licencia") || lowerBody.includes("certificado")) {
     reply = `Cargá el certificado desde este enlace seguro, válido por dos horas:\n${links.medical}`;
   } else if (["fichar", "ingreso", "ingresar", "entrada", "arranco"].some((term) => lowerBody.includes(term))) {
@@ -963,12 +648,15 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
       event,
       {
         title: "Incidencia crítica reportada",
-        description: body || "Reporte urgente recibido desde WhatsApp.",
+        description: sensitiveMedicalContent
+          ? sensitiveMedicalOperationalDescription()
+          : restrictedOperationalDescription(),
         type: "critical",
         badge: "Urgente",
         reporter: worker.name,
         icon: "fa-solid fa-triangle-exclamation",
         now,
+        ...restrictedSourceIncident,
         timeZone,
       },
     );
@@ -980,12 +668,15 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
       event,
       {
         title: "Demora reportada",
-        description: body,
+        description: sensitiveMedicalContent
+          ? sensitiveMedicalOperationalDescription()
+          : restrictedOperationalDescription(),
         type: "warning",
         badge: "Planificación",
         reporter: worker.name,
         icon: "fa-solid fa-clock",
         now,
+        ...restrictedSourceIncident,
         timeZone,
       },
     );
@@ -1018,7 +709,12 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
       workerRole: worker.whatsappRole,
       intent,
       authorized,
-      ...(intent === FIELD_WORKER_INTENTS.MEDICAL ? { sensitivity: "medical" } : {}),
+      ...(sourceContentRestricted ? { sourceContentRestricted: true } : {}),
+      ...(sensitiveMedicalContent
+        ? { sensitivity: "medical" }
+        : sourceContentRestricted
+          ? { sensitivity: "restricted" }
+          : {}),
       ...(audioProposal
         ? {
             audioProposal: {
@@ -1043,6 +739,14 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
     text: reply,
     time,
     sentAt: new Date().toISOString(),
+    ...((sensitiveMedicalContent || event.kind === "audio")
+      ? {
+          metadata: {
+            sensitivity: sensitiveMedicalContent ? "medical" : "restricted",
+            sourceContentRestricted: true,
+          },
+        }
+      : {}),
   }];
   if (options.persist !== false) {
     if (stateChanged) await saveAppState(state, scope);

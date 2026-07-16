@@ -335,6 +335,7 @@ model OperationalProposal {
   @@unique([projectId, resolverProvider, resolverExternalId])
   @@unique([projectId, confirmationCode])
   @@index([projectId, status, expiresAt])
+  @@index([projectId, status, createdAt])
   @@index([proposedByWorkerId, status, createdAt])
 }
 

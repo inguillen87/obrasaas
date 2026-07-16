@@ -12,7 +12,7 @@ export const TENANT_ROLES = {
   SITE_MANAGER: {
     key: 'SITE_MANAGER',
     label: 'Jefe de obra',
-    description: 'Gestiona ejecución, cuadrillas, tareas, evidencias e incidencias de campo.',
+    description: 'Gestiona ejecución, cuadrillas, tareas y el registro estructurado de incidencias de campo.',
   },
   FINANCE: {
     key: 'FINANCE',
@@ -31,7 +31,10 @@ const ROLE_PERMISSIONS = {
   DIRECTOR: [
     'org:projects:read',
     'org:projects:manage',
+    'org:operational-proposals:read',
+    'org:operational-proposals:manage',
     'org:field:manage',
+    'org:field:evidence:read',
     'org:medical:evidence:read',
     'org:reports:read',
     'org:costs:read',
@@ -43,6 +46,8 @@ const ROLE_PERMISSIONS = {
   SITE_MANAGER: [
     'org:projects:read',
     'org:projects:manage',
+    'org:operational-proposals:read',
+    'org:operational-proposals:manage',
     'org:field:manage',
     'org:reports:read',
     'org:costs:read',
@@ -50,6 +55,7 @@ const ROLE_PERMISSIONS = {
   ],
   FINANCE: [
     'org:projects:read',
+    'org:operational-proposals:read',
     'org:reports:read',
     'org:costs:read',
     'org:costs:manage',
@@ -57,6 +63,7 @@ const ROLE_PERMISSIONS = {
   ],
   AUDITOR: [
     'org:projects:read',
+    'org:operational-proposals:read',
     'org:reports:read',
     'org:costs:read',
   ],

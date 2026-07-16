@@ -6,7 +6,9 @@ import {
 } from "@/lib/access";
 import {
   MEDICAL_EVIDENCE_PERMISSION,
+  SOURCE_EVIDENCE_PERMISSION,
   isMedicalEvidenceRecord,
+  isRestrictedEvidenceRecord,
 } from "@/lib/medical-privacy";
 import { getPrisma } from "@/lib/prisma";
 import {
@@ -38,8 +40,10 @@ export async function GET(request, { params }) {
       },
       select: {
         id: true,
+        direction: true,
         externalId: true,
         kind: true,
+        body: true,
         mediaUrl: true,
         metadata: true,
       },
@@ -53,8 +57,14 @@ export async function GET(request, { params }) {
       ? message.metadata
       : {};
     const media = metadata.media && typeof metadata.media === "object" ? metadata.media : {};
-    const medicalEvidence = isMedicalEvidenceRecord({ ...message, metadata, media });
-    if (medicalEvidence) requireTenantPermission(access, MEDICAL_EVIDENCE_PERMISSION);
+    const evidenceRecord = { ...message, metadata, media };
+    const medicalEvidence = isMedicalEvidenceRecord(evidenceRecord);
+    const restrictedEvidence = isRestrictedEvidenceRecord(evidenceRecord);
+    if (medicalEvidence) {
+      requireTenantPermission(access, MEDICAL_EVIDENCE_PERMISSION);
+    } else if (restrictedEvidence) {
+      requireTenantPermission(access, SOURCE_EVIDENCE_PERMISSION);
+    }
 
     const stored = media.storage && typeof media.storage === "object"
       ? media.storage
@@ -82,7 +92,7 @@ export async function GET(request, { params }) {
       status: 200,
       headers: {
         "Cache-Control": "private, no-store",
-        "Content-Disposition": `${medicalEvidence || asDownload ? "attachment" : "inline"}; filename="${fileName}"`,
+        "Content-Disposition": `${restrictedEvidence || asDownload ? "attachment" : "inline"}; filename="${fileName}"`,
         ...contentLength,
         "Content-Type": result.contentType || media.mimeType || "application/octet-stream",
         "Content-Security-Policy": "sandbox",

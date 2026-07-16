@@ -17,7 +17,11 @@ import {
   resolveActiveFieldWorkerById,
 } from "@/lib/field-workers";
 import { getPrisma } from "@/lib/prisma";
-import { MEDICAL_EVIDENCE_PERMISSION } from "@/lib/medical-privacy";
+import {
+  MEDICAL_EVIDENCE_PERMISSION,
+  SOURCE_EVIDENCE_PERMISSION,
+  sanitizeObraEngineResultForMedicalPrivacy,
+} from "@/lib/medical-privacy";
 import {
   RequestBodyError,
   readJsonRequest,
@@ -59,6 +63,7 @@ export async function GET() {
     requireTenantPermission(access, "org:projects:read");
     return Response.json(await getMessages(access, {
       includeMedicalEvidence: hasTenantPermission(access, MEDICAL_EVIDENCE_PERMISSION),
+      includeSourceEvidence: hasTenantPermission(access, SOURCE_EVIDENCE_PERMISSION),
     }));
   } catch (error) {
     if (error instanceof AccessError) return accessErrorResponse(error);
@@ -168,10 +173,20 @@ export async function POST(request) {
         actorId: scope.databaseUserId,
       },
     });
+    const result = sanitizeObraEngineResultForMedicalPrivacy(applied.result, {
+      includeMedicalEvidence: hasTenantPermission(
+        scope,
+        MEDICAL_EVIDENCE_PERMISSION,
+      ),
+      includeSourceEvidence: hasTenantPermission(
+        scope,
+        SOURCE_EVIDENCE_PERMISSION,
+      ),
+    });
     return Response.json({
       success: true,
       alreadyApplied: applied.alreadyApplied,
-      ...applied.result,
+      ...result,
     });
   } catch (error) {
     if (error instanceof AccessError) return accessErrorResponse(error);

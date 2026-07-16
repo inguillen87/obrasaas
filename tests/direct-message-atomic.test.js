@@ -16,7 +16,13 @@ registerHooks({
 const originalDatabaseUrl = process.env.DATABASE_URL;
 process.env.DATABASE_URL = 'postgresql://unit-test.invalid/obrasaas';
 
-const { applyDirectObraMessageAtomically } = await import('../src/lib/db.js');
+const [
+  { applyDirectObraMessageAtomically },
+  { sanitizeObraEngineResultForMedicalPrivacy },
+] = await Promise.all([
+  import('../src/lib/db.js'),
+  import('../src/lib/medical-privacy.js'),
+]);
 
 after(() => {
   if (originalDatabaseUrl === undefined) delete process.env.DATABASE_URL;
@@ -254,4 +260,123 @@ test('an idempotent direct retry returns its stored outcome without reapplying e
     calls.map(([name]) => name),
     ['transaction', 'lock', 'project', 'worker', 'operation-read'],
   );
+});
+
+test('restricted simulator replies stay redacted across an idempotent retry', async () => {
+  const firstTransaction = transactionDouble();
+  globalThis.__obraSaasPrisma = firstTransaction.prisma;
+
+  await applyDirectObraMessageAtomically({
+    event: {
+      externalId: 'direct-private-a',
+      provider: 'internal',
+      kind: 'audio',
+      text: 'Condición privada XQ-17 de Juan.',
+      timestamp: new Date('2026-07-16T12:00:00.000Z'),
+    },
+    scope: { projectId: project.id, organizationId: project.organizationId },
+    workerId: worker.id,
+    operation: {
+      id: 'dashboard-field-simulation:private-a',
+      action: 'dashboard.field_simulation.applied',
+      actorId: 'platform-user-a',
+    },
+    apply: async ({ worker: scopedWorker }) => ({
+      reply: 'Guardé y transcribí el audio: condición privada XQ-17 de Juan.',
+      flowPrompt: null,
+      intent: 'DELAY_REPORT',
+      stateChanged: false,
+      state: structuredClone(project.snapshot.state),
+      worker: scopedWorker,
+      operationalProposal: null,
+      newMessages: [{
+        externalId: 'obrasaas-reply:direct-private-a',
+        sender: 'bot',
+        kind: 'text',
+        text: 'Guardé y transcribí el audio: condición privada XQ-17 de Juan.',
+        metadata: {
+          sensitivity: 'restricted',
+          sourceContentRestricted: true,
+        },
+      }],
+    }),
+  });
+
+  const operationCreate = firstTransaction.calls.find(
+    ([name]) => name === 'operation-create',
+  )[1];
+  assert.equal(
+    operationCreate.data.metadata.outcome.replySensitivity,
+    'restricted',
+  );
+
+  const retryTransaction = transactionDouble({
+    priorOperation: operationCreate.data,
+  });
+  globalThis.__obraSaasPrisma = retryTransaction.prisma;
+  const retried = await applyDirectObraMessageAtomically({
+    event: { externalId: 'direct-private-a', provider: 'internal', kind: 'audio' },
+    scope: { projectId: project.id, organizationId: project.organizationId },
+    workerId: worker.id,
+    operation: {
+      id: 'dashboard-field-simulation:private-a',
+      action: 'dashboard.field_simulation.applied',
+      actorId: 'platform-user-a',
+    },
+    apply: async () => {
+      throw new Error('The idempotent retry must not reapply effects.');
+    },
+  });
+
+  assert.equal(retried.alreadyApplied, true);
+  assert.equal(retried.result.__replySensitivity, 'restricted');
+  assert.equal(
+    Object.prototype.propertyIsEnumerable.call(
+      retried.result,
+      '__replySensitivity',
+    ),
+    false,
+  );
+  const sanitized = sanitizeObraEngineResultForMedicalPrivacy(retried.result);
+  assert.doesNotMatch(JSON.stringify(sanitized), /Juan|XQ-17/i);
+  assert.match(sanitized.reply, /contenido original permanece restringido/i);
+});
+
+test('legacy simulator outcomes fail closed when reply sensitivity is absent', async () => {
+  const priorOperation = {
+    organizationId: project.organizationId,
+    actorId: 'platform-user-a',
+    action: 'dashboard.field_simulation.applied',
+    entityType: 'Worker',
+    entityId: worker.id,
+    metadata: {
+      projectId: project.id,
+      outcome: {
+        reply: 'Condición privada antigua XQ-18 de Juan.',
+        flowPrompt: null,
+        intent: 'DELAY_REPORT',
+        operationalProposal: null,
+      },
+    },
+  };
+  const { prisma } = transactionDouble({ priorOperation });
+  globalThis.__obraSaasPrisma = prisma;
+
+  const retried = await applyDirectObraMessageAtomically({
+    event: { externalId: 'direct-private-legacy', provider: 'internal', kind: 'audio' },
+    scope: { projectId: project.id, organizationId: project.organizationId },
+    workerId: worker.id,
+    operation: {
+      id: 'dashboard-field-simulation:private-legacy',
+      action: 'dashboard.field_simulation.applied',
+      actorId: 'platform-user-a',
+    },
+    apply: async () => {
+      throw new Error('The idempotent retry must not reapply effects.');
+    },
+  });
+
+  const sanitized = sanitizeObraEngineResultForMedicalPrivacy(retried.result);
+  assert.doesNotMatch(JSON.stringify(sanitized), /Juan|XQ-18/i);
+  assert.match(sanitized.reply, /contenido original permanece restringido/i);
 });

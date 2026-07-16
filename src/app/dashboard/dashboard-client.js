@@ -1495,6 +1495,24 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
             <li className="nav-item">
               <Link href="/dashboard/activity" className="nav-button-link"><i className="fa-solid fa-shield-halved"></i> Bitácora y auditoría</Link>
             </li>
+            {setup.canReadOperationalProposals && (
+              <li className="nav-item">
+                <Link href="/dashboard/approvals" className="nav-button-link">
+                  <i className="fa-solid fa-list-check"></i>
+                  <span>Aprobaciones</span>
+                  {setup.pendingOperationalProposalCount > 0 && (
+                    <span
+                      className="nav-count-badge"
+                      aria-label={`${setup.pendingOperationalProposalCount} aprobaciones pendientes`}
+                    >
+                      {setup.pendingOperationalProposalCount > 99
+                        ? '99+'
+                        : setup.pendingOperationalProposalCount}
+                    </span>
+                  )}
+                </Link>
+              </li>
+            )}
             <li className="nav-item">
               <Link href="/dashboard/projects" className="nav-button-link"><i className="fa-solid fa-building-circle-check"></i> Obras y portfolio</Link>
             </li>

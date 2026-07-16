@@ -1,9 +1,17 @@
 import Link from 'next/link';
 import { getAppState, getMessages } from '@/lib/db';
-import { getPlatformAccess, requireTenantPermission } from '@/lib/access';
+import {
+  getPlatformAccess,
+  hasTenantPermission,
+  requireTenantPermission,
+} from '@/lib/access';
 import { getPrisma } from '@/lib/prisma';
 import { buildWeeklyReportModel } from '@/lib/reporting';
-import { sanitizeProjectStateMedicalData } from '@/lib/medical-privacy';
+import {
+  MEDICAL_EVIDENCE_PERMISSION,
+  SOURCE_EVIDENCE_PERMISSION,
+  sanitizeProjectStateMedicalData,
+} from '@/lib/medical-privacy';
 import ReportActions from './report-actions';
 import styles from './report.module.css';
 
@@ -39,11 +47,22 @@ function taskPlanLabel(task) {
 export default async function ReportPage({ searchParams }) {
   const access = await getPlatformAccess();
   requireTenantPermission(access, 'org:reports:read');
+  const includeMedicalEvidence = hasTenantPermission(
+    access,
+    MEDICAL_EVIDENCE_PERMISSION,
+  );
+  const includeSourceEvidence = hasTenantPermission(
+    access,
+    SOURCE_EVIDENCE_PERMISSION,
+  );
 
   const prisma = getPrisma();
   const [state, messages, snapshot] = await Promise.all([
     getAppState(access),
-    getMessages(access),
+    getMessages(access, {
+      includeMedicalEvidence,
+      includeSourceEvidence,
+    }),
     prisma.projectSnapshot.findUnique({
       where: { projectId: access.project.id },
       select: { updatedAt: true, version: true },

@@ -43,11 +43,395 @@ function state(overrides = {}) {
   };
 }
 
+function incident(overrides = {}) {
+  return {
+    id: 'inc-1',
+    title: 'Incidencia de obra',
+    description: 'Detalle operativo validado.',
+    type: 'info',
+    badge: 'Bitácora',
+    timestamp: 'Hoy, 10:30',
+    reporter: 'Equipo de obra',
+    icon: 'fa-solid fa-circle-info',
+    ...overrides,
+  };
+}
+
 test('project state validation accepts a bounded operational snapshot and clones it', () => {
   const input = state();
   const validated = validateProjectStateInput(input);
   assert.deepEqual(validated, input);
   assert.notEqual(validated, input);
+});
+
+test('project state validation preserves every current persisted snapshot shape', () => {
+  const protectedAssetUrl = 'https://blob.example/private/certificado.pdf';
+  const input = state({
+    diasEstimados: '',
+    tasks: {
+      1: {
+        ...state().tasks[1],
+        isDelayed: false,
+        isShifted: true,
+      },
+    },
+    incidents: [
+      incident({
+        id: 'inc-medical',
+        title: 'Certificado médico recibido',
+        description: 'Licencia médica registrada con acceso restringido.',
+        type: 'warning',
+        badge: 'Evidencia protegida',
+        sensitivity: 'medical',
+        metadata: {
+          kind: 'sensitive-medical-report',
+          sourceContentRestricted: true,
+          detailRestricted: true,
+        },
+        evidence: {
+          kind: 'document',
+          url: protectedAssetUrl,
+          filename: 'certificado.pdf',
+          mimeType: 'application/pdf',
+          size: 1_024,
+          sha256: `${'A'.repeat(43)}=`,
+          provider: 'vercel-blob',
+          storageStatus: 'stored',
+          assetId: protectedAssetUrl,
+          publicId: 'obrasaas/medical-certificates/certificado.pdf',
+          pathname: 'obrasaas/medical-certificates/certificado.pdf',
+        },
+      }),
+      incident({
+        id: 'stock-risk-cemento',
+        title: 'Stock normalizado: Cemento',
+        description: '50 bolsas disponibles; el mínimo operativo es 20.',
+        type: 'success',
+        badge: 'Stock normalizado',
+        status: 'resolved',
+        metadata: {
+          kind: 'stock-risk',
+          stockpileKey: 'cemento',
+          stockRiskStatus: 'resolved',
+          resolvedAt: '2026-07-16T12:00:00.000Z',
+          updatedAt: '2026-07-16T11:00:00.000Z',
+        },
+      }),
+      {
+        id: 'legacy-incident',
+        title: 'Registro heredado',
+      },
+      incident({
+        id: 'private-incident-0123456789abcdef',
+        title: 'Licencia médica registrada',
+        description: 'Licencia médica registrada con acceso restringido.',
+        type: 'warning',
+        badge: 'Licencia',
+        timestamp: 'Registro protegido',
+        reporter: 'Canal protegido',
+        icon: 'fa-solid fa-notes-medical',
+        status: 'closed',
+        sensitivity: 'medical',
+        metadata: {
+          kind: 'medical-leave',
+          proposalId: 'proposal-safe-1',
+          rawContentRestricted: true,
+          detailRestricted: true,
+          redacted: true,
+        },
+      }),
+    ],
+    attendance: {
+      'worker-a': {
+        workerId: 'worker-a',
+        name: 'Ana Pérez',
+        role: 'Operaria',
+        checkin: '--:--',
+        status: 'Licencia informada con certificado (3 días)',
+        latitude: -34.6037,
+        longitude: -58.3816,
+        accuracy: 12,
+        distanceMeters: 45,
+      },
+      'Juan Gómez': {
+        role: 'Albañilería principal',
+        checkin: '08:02',
+        status: 'Presente',
+      },
+    },
+    hrAttendance: {
+      'Ana Pérez': {
+        workerId: 'worker-a',
+        name: 'Ana Pérez',
+        role: 'Operaria',
+        presents: 20,
+        excused: 1,
+        unexcused: 0,
+        status: 'Ausente Justificado',
+      },
+    },
+    hrBonuses: [{
+      name: 'Ana Pérez',
+      type: 'Reconocimiento de presentismo',
+      amount: null,
+      date: '16/7/2026, 10:30:00',
+    }, {
+      assignee: 'Equipo de obra',
+      type: 'Bono de Puntualidad',
+      description: 'Reconocimiento de desempeño.',
+    }],
+    stockpiles: {
+      cemento: {
+        name: 'Cemento',
+        current: 50,
+        min: 20,
+        max: 200,
+        unit: 'bolsas',
+        supplier: 'Proveedor asignado',
+        status: 'Stock OK',
+      },
+    },
+    budget: {
+      total: 100_000,
+      executed: 35_000,
+      currency: 'USD',
+    },
+    budgetTotal: 100_000,
+    budgetExecuted: 35_000,
+    budgetCurrency: 'USD',
+  });
+
+  assert.deepEqual(validateProjectStateInput(input), input);
+});
+
+test('project state validation rejects unknown fields before they can enter the snapshot', () => {
+  const cases = [
+    {
+      label: 'top-level',
+      input: state({ integrationSecrets: { token: 'hidden' } }),
+      field: 'state.integrationSecrets',
+    },
+    {
+      label: 'task',
+      input: state({
+        tasks: {
+          1: {
+            ...state().tasks[1],
+            medicalDetails: 'Diagnóstico privado',
+          },
+        },
+      }),
+      field: 'tasks.1.medicalDetails',
+    },
+    {
+      label: 'incident',
+      input: state({ incidents: [incident({ diagnosis: 'Dato privado' })] }),
+      field: 'incidents[0].diagnosis',
+    },
+    {
+      label: 'incident metadata',
+      input: state({
+        incidents: [incident({
+          metadata: {
+            kind: 'source-content-restricted',
+            detailRestricted: true,
+            diagnosis: 'Dato privado',
+          },
+        })],
+      }),
+      field: 'incidents[0].metadata.diagnosis',
+    },
+    {
+      label: 'incident evidence',
+      input: state({
+        incidents: [incident({
+          evidence: {
+            kind: 'document',
+            url: 'https://blob.example/evidence.pdf',
+            provider: 'vercel-blob',
+            storageStatus: 'stored',
+            certificate: 'Dato privado',
+          },
+        })],
+      }),
+      field: 'incidents[0].evidence.certificate',
+    },
+    {
+      label: 'hr attendance',
+      input: state({
+        hrAttendance: {
+          'Ana Pérez': {
+            role: 'Operaria',
+            presents: 20,
+            excused: 1,
+            unexcused: 0,
+            status: 'Ausente Justificado',
+            medicalDetails: 'Dato privado',
+          },
+        },
+      }),
+      field: 'hrAttendance.Ana Pérez.medicalDetails',
+    },
+    {
+      label: 'hr bonus',
+      input: state({
+        hrBonuses: [{
+          name: 'Ana Pérez',
+          type: 'Bono de Puntualidad',
+          amount: null,
+          date: '16/7/2026, 10:30:00',
+          nested: { clinical: 'Dato privado' },
+        }],
+      }),
+      field: 'hrBonuses[0].nested',
+    },
+    {
+      label: 'stockpile',
+      input: state({
+        stockpiles: {
+          cemento: {
+            ...state().stockpiles.cemento,
+            certificate: 'Dato privado',
+          },
+        },
+      }),
+      field: 'stockpiles.cemento.certificate',
+    },
+    {
+      label: 'budget',
+      input: state({
+        budget: {
+          total: 100_000,
+          executed: 35_000,
+          currency: 'USD',
+          notes: 'Dato privado',
+        },
+      }),
+      field: 'budget.notes',
+    },
+  ];
+
+  for (const { label, input, field } of cases) {
+    assert.throws(
+      () => validateProjectStateInput(input),
+      (error) => (
+        error instanceof ProjectStateInputError
+        && error.message.includes(field)
+      ),
+      label,
+    );
+  }
+});
+
+test('attendance rejects hidden medical fields instead of returning a persistable clone', () => {
+  for (const field of ['medicalDetails', 'nested', 'certificate']) {
+    const input = state({
+      attendance: {
+        'worker-a': {
+          workerId: 'worker-a',
+          name: 'Ana Pérez',
+          role: 'Operaria',
+          checkin: '08:02',
+          status: 'Presente',
+          [field]: field === 'nested'
+            ? { diagnosis: 'Dato clínico privado' }
+            : 'Dato clínico privado',
+        },
+      },
+    });
+
+    let persistable = false;
+    assert.throws(
+      () => {
+        validateProjectStateInput(input);
+        persistable = true;
+      },
+      (error) => (
+        error instanceof ProjectStateInputError
+        && error.message.includes(`attendance.worker-a.${field}`)
+      ),
+    );
+    assert.equal(persistable, false);
+  }
+});
+
+test('project state validation rejects arbitrary nested values and invalid closed enums', () => {
+  const cases = [
+    state({
+      attendance: {
+        'worker-a': {
+          role: { public: 'Operaria', private: 'Dato clínico' },
+          status: 'Presente',
+        },
+      },
+    }),
+    state({
+      attendance: {
+        'worker-a': {
+          role: 'Operaria',
+          status: 'En tratamiento',
+        },
+      },
+    }),
+    state({
+      tasks: {
+        a: {
+          name: 'Tarea A',
+          progress: 10,
+          duration: 2,
+          dependencies: [{ id: 'b' }],
+        },
+        b: {
+          name: 'Tarea B',
+          progress: 0,
+          duration: 2,
+        },
+      },
+    }),
+    state({
+      incidents: [incident({
+        type: 'medical',
+      })],
+    }),
+    state({
+      incidents: [incident({
+        sensitivity: 'private',
+      })],
+    }),
+    state({
+      incidents: [incident({
+        metadata: {
+          kind: 'source-content-restricted',
+          detailRestricted: 'true',
+        },
+      })],
+    }),
+    state({
+      hrAttendance: {
+        'Ana Pérez': {
+          role: 'Operaria',
+          presents: 20,
+          excused: 1,
+          unexcused: 0,
+          status: 'Licencia médica',
+        },
+      },
+    }),
+    state({
+      budget: {
+        total: { amount: 100_000 },
+        executed: 35_000,
+        currency: 'USD',
+      },
+    }),
+  ];
+
+  for (const input of cases) {
+    assert.throws(
+      () => validateProjectStateInput(input),
+      ProjectStateInputError,
+    );
+  }
 });
 
 test('project state write parsing accepts matching body and If-Match versions', () => {

@@ -4,9 +4,9 @@ import ActivityClient from './activity-client';
 import styles from './activity.module.css';
 import { getPlatformAccess, requireTenantPermission } from '@/lib/access';
 import {
-  isMedicalEvidenceRecord,
-  isMedicalIncident,
-  medicalOperationalDescription,
+  isRestrictedEvidenceRecord,
+  isRestrictedOperationalIncident,
+  restrictedOperationalDescription,
 } from '@/lib/medical-privacy';
 import { getPrisma } from '@/lib/prisma';
 
@@ -53,6 +53,12 @@ function auditLabel(action) {
     'integration.whatsapp.disabled': 'WhatsApp desconectado',
     'integration.whatsapp.flow_created': 'Flow creado',
     'integration.whatsapp.flow_updated': 'Flow actualizado',
+    'voice.proposal.created': 'Propuesta operativa creada',
+    'voice.proposal.applied': 'Propuesta operativa aprobada y aplicada',
+    'voice.proposal.rejected': 'Propuesta operativa rechazada',
+    'voice.proposal.expired': 'Propuesta operativa vencida',
+    'voice.proposal.invalidated': 'Propuesta operativa invalidada',
+    'operational.proposal.dashboard_decision': 'Decisión desde la bandeja de aprobaciones',
     'platform.tenant.subscription_updated': 'Suscripción actualizada',
   };
   return labels[action] || action.split('.').join(' · ');
@@ -65,10 +71,16 @@ function actorLabel(actor) {
 function auditEntry(log) {
   const metadata = jsonObject(log.metadata);
   const projectActivity = log.entityType === 'ProjectActivity';
-  const medical = isMedicalIncident({
+  const restricted = isRestrictedOperationalIncident({
     title: metadata.title,
+    description: metadata.description,
     category: metadata.category,
     action: log.action,
+    metadata: {
+      kind: metadata.kind,
+      sourceContentRestricted: metadata.sourceContentRestricted,
+      detailRestricted: metadata.detailRestricted,
+    },
   });
   return {
     id: `audit-${log.id}`,
@@ -77,10 +89,14 @@ function auditEntry(log) {
     category: projectActivity ? String(metadata.category || 'SYSTEM') : 'AUDIT',
     severity: projectActivity ? String(metadata.severity || 'INFO') : 'INFO',
     source: projectActivity ? String(metadata.source || 'dashboard') : 'auditoría',
-    title: projectActivity ? truncate(metadata.title, 180) : auditLabel(log.action),
+    title: projectActivity
+      ? restricted
+        ? 'Reporte operativo restringido'
+        : truncate(metadata.title, 180)
+      : auditLabel(log.action),
     description: projectActivity
-      ? medical
-        ? medicalOperationalDescription()
+      ? restricted
+        ? restrictedOperationalDescription()
         : truncate(metadata.description)
       : `${actorLabel(log.actor)} · ${log.entityType}`,
     actor: actorLabel(log.actor),
@@ -93,7 +109,7 @@ function messageEntry(message) {
   const inbound = message.direction === 'INBOUND';
   const sender = metadata.displayName || message.conversation.displayName || 'Canal de obra';
   const kind = message.kind === 'TEXT' ? 'mensaje' : message.kind.toLowerCase();
-  const medical = isMedicalEvidenceRecord(message);
+  const restricted = isRestrictedEvidenceRecord(message);
   return {
     id: `message-${message.id}`,
     occurredAt: message.sentAt.toISOString(),
@@ -101,11 +117,19 @@ function messageEntry(message) {
     category: 'MESSAGE',
     severity: 'INFO',
     source: message.conversation.channel || 'whatsapp',
-    title: inbound ? `Reporte recibido · ${sender}` : 'Respuesta de ObraSaaS',
-    description: medical
-      ? medicalOperationalDescription()
+    title: restricted
+      ? 'Reporte de campo restringido'
+      : inbound
+        ? `Reporte recibido · ${sender}`
+        : 'Respuesta de ObraSaaS',
+    description: restricted
+      ? restrictedOperationalDescription()
       : truncate(message.body || `${kind} sin texto`, 560),
-    actor: inbound ? sender : 'Asistente de obra',
+    actor: restricted
+      ? 'Canal protegido'
+      : inbound
+        ? sender
+        : 'Asistente de obra',
     reference: `${inbound ? 'entrada' : 'salida'} · ${kind}`,
   };
 }

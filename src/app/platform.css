@@ -248,6 +248,27 @@ body {
     transition: var(--transition-smooth);
 }
 
+.nav-item .nav-button-link > span:not(.nav-count-badge) {
+    min-width: 0;
+}
+
+.nav-count-badge {
+    margin-left: auto;
+    min-width: 24px;
+    height: 24px;
+    padding: 0 7px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(255, 159, 28, 0.38);
+    border-radius: 999px;
+    background: rgba(255, 159, 28, 0.14);
+    color: var(--primary);
+    font-size: 0.72rem;
+    font-weight: 800;
+    line-height: 1;
+}
+
 .sidebar-footer {
     padding-top: 20px;
     border-top: 1px solid var(--border-color);

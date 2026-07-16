@@ -21,7 +21,12 @@ import {
   lockProjectTransaction,
   requireOperationalProjectWrite,
 } from "@/lib/project-write-policy";
-import { sanitizeMessagesForMedicalPrivacy } from "@/lib/medical-privacy";
+import {
+  isMedicalEvidenceRecord,
+  isRestrictedEvidenceRecord,
+  isSensitiveMedicalText,
+  sanitizeMessagesForMedicalPrivacy,
+} from "@/lib/medical-privacy";
 import { resolveWhatsAppConnectionScopes } from "@/lib/whatsapp/webhook-scope";
 import { persistDurableMetaWebhookBatch } from "@/lib/whatsapp/webhook-ingress";
 
@@ -493,11 +498,14 @@ export async function saveAppState(state, scope, options = {}) {
   return snapshot.state;
 }
 
-export async function getMessages(scope, { includeMedicalEvidence = false } = {}) {
+export async function getMessages(scope, {
+  includeMedicalEvidence = false,
+  includeSourceEvidence = includeMedicalEvidence,
+} = {}) {
   if (!hasDurableDatabase()) {
     return sanitizeMessagesForMedicalPrivacy(
       readLocalDb().messages || clone(defaultMessages),
-      { includeMedicalEvidence },
+      { includeMedicalEvidence, includeSourceEvidence },
     );
   }
 
@@ -547,7 +555,10 @@ export async function getMessages(scope, { includeMedicalEvidence = false } = {}
       time: metadata.time || message.sentAt.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" }),
     };
   });
-  return sanitizeMessagesForMedicalPrivacy(serialized, { includeMedicalEvidence });
+  return sanitizeMessagesForMedicalPrivacy(serialized, {
+    includeMedicalEvidence,
+    includeSourceEvidence,
+  });
 }
 
 async function replaceDurableMessages(context, messages) {
@@ -717,6 +728,34 @@ function directOperationalProposalOutcome(value) {
   return { id, confirmationCode, type, status, expiresAt };
 }
 
+const DIRECT_REPLY_SENSITIVITIES = new Set(["medical", "restricted"]);
+
+function directReplySensitivity(result) {
+  const messages = Array.isArray(result?.newMessages) ? result.newMessages : [];
+  const outboundReplies = messages.filter((message) => message?.sender === "bot");
+  if (
+    isSensitiveMedicalText(result?.reply)
+    || outboundReplies.some((message) => isMedicalEvidenceRecord(message))
+  ) {
+    return "medical";
+  }
+  if (outboundReplies.some((message) => isRestrictedEvidenceRecord(message))) {
+    return "restricted";
+  }
+  return null;
+}
+
+function attachDirectReplySensitivity(result, sensitivity) {
+  if (!sensitivity) return result;
+  Object.defineProperty(result, "__replySensitivity", {
+    configurable: false,
+    enumerable: false,
+    writable: false,
+    value: sensitivity,
+  });
+  return result;
+}
+
 function readDirectOperationOutcome(record, { operation, project, worker }) {
   if (!record) return null;
   const metadata = record.metadata && typeof record.metadata === "object" && !Array.isArray(record.metadata)
@@ -726,6 +765,11 @@ function readDirectOperationOutcome(record, { operation, project, worker }) {
     ? metadata.outcome
     : null;
   const operationalProposal = directOperationalProposalOutcome(outcome?.operationalProposal);
+  const storedReplySensitivity = outcome?.replySensitivity;
+  const replySensitivity = storedReplySensitivity === undefined
+    && operation.action === "dashboard.field_simulation.applied"
+    ? "restricted"
+    : storedReplySensitivity || null;
   if (
     record.organizationId !== project.organizationId
     || (record.actorId || null) !== operation.actorId
@@ -734,6 +778,7 @@ function readDirectOperationOutcome(record, { operation, project, worker }) {
     || record.entityId !== worker.id
     || metadata.projectId !== project.id
     || typeof outcome?.reply !== "string"
+    || (replySensitivity && !DIRECT_REPLY_SENSITIVITIES.has(replySensitivity))
     || (outcome?.operationalProposal != null && !operationalProposal)
   ) {
     throw new DirectObraMessageError(
@@ -742,7 +787,7 @@ function readDirectOperationOutcome(record, { operation, project, worker }) {
       409,
     );
   }
-  return {
+  return attachDirectReplySensitivity({
     reply: outcome.reply,
     flowPrompt: typeof outcome.flowPrompt === "string" ? outcome.flowPrompt : null,
     intent: typeof outcome.intent === "string" ? outcome.intent : null,
@@ -750,12 +795,13 @@ function readDirectOperationOutcome(record, { operation, project, worker }) {
     stateChanged: false,
     newMessages: [],
     worker,
-  };
+  }, replySensitivity);
 }
 
 function storedDirectOperationOutcome(result) {
   return {
     reply: String(result.reply || "").slice(0, 4_000),
+    replySensitivity: directReplySensitivity(result),
     flowPrompt: typeof result.flowPrompt === "string" ? result.flowPrompt.slice(0, 160) : null,
     intent: typeof result.intent === "string" ? result.intent.slice(0, 160) : null,
     operationalProposal: directOperationalProposalOutcome(result.operationalProposal),

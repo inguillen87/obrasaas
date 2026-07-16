@@ -10,6 +10,151 @@ const MAX_STATE_DEPTH = 10;
 const MAX_COLLECTION_SIZE = 2_000;
 const MAX_PROJECT_STATE_VERSION = 2_147_483_647;
 const BLOCKED_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+const PROJECT_STATE_FIELDS = new Set([
+  'operariosCount',
+  'avancePercentage',
+  'alertsCount',
+  'diasEstimados',
+  'tasks',
+  'incidents',
+  'attendance',
+  'stockpiles',
+  'hrAttendance',
+  'hrBonuses',
+  'budget',
+  'budgetTotal',
+  'budgetExecuted',
+  'budgetCurrency',
+]);
+const TASK_FIELDS = new Set([
+  'name',
+  'assignee',
+  'progress',
+  'duration',
+  'startOffset',
+  'startDay',
+  'dependencies',
+  'isDelayed',
+  'isShifted',
+]);
+const INCIDENT_FIELDS = new Set([
+  'id',
+  'title',
+  'description',
+  'type',
+  'badge',
+  'timestamp',
+  'reporter',
+  'icon',
+  'status',
+  'sensitivity',
+  'metadata',
+  'evidence',
+]);
+const INCIDENT_METADATA_FIELDS = new Set([
+  'kind',
+  'stockpileKey',
+  'stockRiskStatus',
+  'resolvedAt',
+  'updatedAt',
+  'proposalId',
+  'sourceContentRestricted',
+  'rawContentRestricted',
+  'detailRestricted',
+  'redacted',
+]);
+const INCIDENT_EVIDENCE_FIELDS = new Set([
+  'kind',
+  'url',
+  'filename',
+  'mimeType',
+  'size',
+  'sha256',
+  'provider',
+  'storageStatus',
+  'assetId',
+  'publicId',
+  'pathname',
+]);
+const ATTENDANCE_FIELDS = new Set([
+  'workerId',
+  'name',
+  'role',
+  'checkin',
+  'status',
+  'latitude',
+  'longitude',
+  'accuracy',
+  'distanceMeters',
+]);
+const HR_ATTENDANCE_FIELDS = new Set([
+  'workerId',
+  'name',
+  'role',
+  'presents',
+  'excused',
+  'unexcused',
+  'status',
+]);
+const HR_BONUS_FIELDS = new Set([
+  'name',
+  'assignee',
+  'worker',
+  'type',
+  'amount',
+  'date',
+  'description',
+]);
+const STOCKPILE_FIELDS = new Set([
+  'name',
+  'current',
+  'min',
+  'max',
+  'unit',
+  'supplier',
+  'status',
+]);
+const BUDGET_FIELDS = new Set(['total', 'executed', 'currency']);
+const INCIDENT_TYPES = new Set(['info', 'warning', 'critical', 'success']);
+const INCIDENT_SENSITIVITIES = new Set(['medical', 'restricted']);
+const INCIDENT_STATUSES = new Set(['active', 'open', 'pending', 'resolved', 'closed']);
+const INCIDENT_METADATA_KINDS = new Set([
+  'medical-leave',
+  'stock-risk',
+  'operational-proposal',
+  'whatsapp-flow-incident',
+  'whatsapp-flow-report',
+  'sensitive-medical-report',
+  'source-content-restricted',
+]);
+const STOCK_RISK_STATUSES = new Set(['active', 'resolved']);
+const EVIDENCE_KINDS = new Set(['image', 'video', 'document', 'audio', 'sticker']);
+const EVIDENCE_STORAGE_STATUSES = new Set(['stored']);
+const ATTENDANCE_STATUSES = new Set([
+  'Presente',
+  'Ausente',
+  'GPS pendiente',
+  'GPS pendiente · EPP verificado',
+  'GPS pendiente · EPP incompleto',
+  'Presente (ubicación informada)',
+  'Presente · EPP verificado',
+  'Desvío (ubicación informada)',
+  'Desvío (GPS)',
+  'Ausente Justificado',
+  'Registro operativo restringido',
+]);
+const HR_ATTENDANCE_STATUSES = new Set([
+  'Presente',
+  'Ausente',
+  'Ausente Justificado',
+  'Registro de personal restringido',
+]);
+const HR_BONUS_TYPES = new Set([
+  'Bono de Puntualidad',
+  'Reconocimiento de avance',
+  'Reconocimiento de presentismo',
+  'Detalle de reconocimiento restringido',
+]);
 
 export class ProjectStateInputError extends Error {
   constructor(message, { code = 'INVALID_PROJECT_STATE', status = 400 } = {}) {
@@ -151,15 +296,34 @@ function assertJsonShape(value, path, depth, counter) {
 }
 
 function assertNumber(value, path, { min = 0, max = Number.MAX_SAFE_INTEGER } = {}) {
-  if (!Number.isFinite(Number(value)) || Number(value) < min || Number(value) > max) {
+  if (
+    typeof value !== 'number'
+    || !Number.isFinite(value)
+    || value < min
+    || value > max
+  ) {
     throw new ProjectStateInputError(`${path} debe ser un número entre ${min} y ${max}.`);
   }
 }
 
 function assertInteger(value, path, options = {}) {
   assertNumber(value, path, options);
-  if (!Number.isInteger(Number(value))) {
+  if (!Number.isInteger(value)) {
     throw new ProjectStateInputError(`${path} debe ser un número entero.`);
+  }
+}
+
+function assertStockpileNumber(value, path) {
+  if (
+    typeof value !== 'number'
+    || !Number.isFinite(value)
+    || value < 0
+    || value > 1_000_000_000_000
+  ) {
+    throw new ProjectStateInputError(
+      `${path} no tiene un formato numérico válido.`,
+      { code: 'STOCKPILE_QUANTITY_INVALID' },
+    );
   }
 }
 
@@ -170,26 +334,372 @@ function assertShortString(value, path, { required = false, max = 180 } = {}) {
   }
 }
 
+function assertAllowedFields(value, path, allowedFields) {
+  for (const key of Object.keys(value)) {
+    if (!allowedFields.has(key)) {
+      throw new ProjectStateInputError(`${path}.${key} no está permitido.`);
+    }
+  }
+}
+
+function assertRecordKey(value, path, { max = 180 } = {}) {
+  if (
+    typeof value !== 'string'
+    || !value.trim()
+    || value.length > max
+    || BLOCKED_KEYS.has(value)
+  ) {
+    throw new ProjectStateInputError(`${path} no tiene un identificador válido.`);
+  }
+}
+
+function assertEnum(value, path, allowedValues, { required = false } = {}) {
+  if (value == null && !required) return;
+  if (typeof value !== 'string' || !allowedValues.has(value)) {
+    throw new ProjectStateInputError(`${path} no tiene un valor permitido.`);
+  }
+}
+
+function assertBoolean(value, path) {
+  if (typeof value !== 'boolean') {
+    throw new ProjectStateInputError(`${path} debe ser booleano.`);
+  }
+}
+
+function assertNullableShortString(value, path, { max = 180 } = {}) {
+  if (value == null) return;
+  assertShortString(value, path, { required: true, max });
+}
+
+function assertIsoTimestamp(value, path) {
+  assertShortString(value, path, { required: true, max: 40 });
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString() !== value) {
+    throw new ProjectStateInputError(`${path} debe ser una fecha ISO válida.`);
+  }
+}
+
+function assertCurrency(value, path) {
+  if (typeof value !== 'string' || !/^[A-Za-z]{3}$/.test(value)) {
+    throw new ProjectStateInputError(`${path} debe usar un código ISO de tres letras.`);
+  }
+}
+
+function assertAttendanceStatus(value, path) {
+  assertShortString(value, path, { required: true, max: 160 });
+  const medicalLeave = /^Licencia informada (?:con certificado|· certificado pendiente) \((?:[1-9]|[12]\d|30) días\)$/;
+  if (!ATTENDANCE_STATUSES.has(value) && !medicalLeave.test(value)) {
+    throw new ProjectStateInputError(`${path} no tiene un estado de asistencia permitido.`);
+  }
+}
+
+function assertCheckin(value, path) {
+  assertShortString(value, path, { required: true, max: 10 });
+  if (!/^(?:--:--|(?:[01]\d|2[0-4]):[0-5]\d)$/.test(value)) {
+    throw new ProjectStateInputError(`${path} no tiene un horario válido.`);
+  }
+}
+
+function assertEvidenceUrl(value, path) {
+  assertShortString(value, path, { required: true, max: 2_048 });
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new ProjectStateInputError(`${path} debe ser una URL válida.`);
+  }
+  if (!['http:', 'https:'].includes(parsed.protocol)) {
+    throw new ProjectStateInputError(`${path} debe usar HTTP o HTTPS.`);
+  }
+}
+
+function assertIncidentMetadata(metadata, path) {
+  if (!isPlainObject(metadata)) {
+    throw new ProjectStateInputError(`${path} debe ser un objeto.`);
+  }
+  assertAllowedFields(metadata, path, INCIDENT_METADATA_FIELDS);
+  if (Object.hasOwn(metadata, 'kind')) {
+    assertEnum(metadata.kind, `${path}.kind`, INCIDENT_METADATA_KINDS, { required: true });
+  }
+  if (Object.hasOwn(metadata, 'stockpileKey')) {
+    assertRecordKey(metadata.stockpileKey, `${path}.stockpileKey`, { max: 160 });
+  }
+  if (Object.hasOwn(metadata, 'stockRiskStatus')) {
+    assertEnum(
+      metadata.stockRiskStatus,
+      `${path}.stockRiskStatus`,
+      STOCK_RISK_STATUSES,
+      { required: true },
+    );
+  }
+  if (Object.hasOwn(metadata, 'resolvedAt')) {
+    assertIsoTimestamp(metadata.resolvedAt, `${path}.resolvedAt`);
+  }
+  if (Object.hasOwn(metadata, 'updatedAt')) {
+    assertIsoTimestamp(metadata.updatedAt, `${path}.updatedAt`);
+  }
+  if (Object.hasOwn(metadata, 'proposalId')) {
+    assertRecordKey(metadata.proposalId, `${path}.proposalId`, { max: 256 });
+  }
+  for (
+    const field of [
+      'sourceContentRestricted',
+      'rawContentRestricted',
+      'detailRestricted',
+      'redacted',
+    ]
+  ) {
+    if (Object.hasOwn(metadata, field)) assertBoolean(metadata[field], `${path}.${field}`);
+  }
+}
+
+function assertIncidentEvidence(evidence, path) {
+  if (!isPlainObject(evidence)) {
+    throw new ProjectStateInputError(`${path} debe ser un objeto.`);
+  }
+  assertAllowedFields(evidence, path, INCIDENT_EVIDENCE_FIELDS);
+  assertEnum(evidence.kind, `${path}.kind`, EVIDENCE_KINDS, { required: true });
+  assertEvidenceUrl(evidence.url, `${path}.url`);
+  assertShortString(evidence.provider, `${path}.provider`, { required: true, max: 80 });
+  assertEnum(
+    evidence.storageStatus,
+    `${path}.storageStatus`,
+    EVIDENCE_STORAGE_STATUSES,
+    { required: true },
+  );
+  assertNullableShortString(evidence.filename, `${path}.filename`, { max: 255 });
+  if (evidence.mimeType != null) {
+    assertShortString(evidence.mimeType, `${path}.mimeType`, { required: true, max: 160 });
+    if (!/^[A-Za-z0-9!#$&^_.+-]+\/[A-Za-z0-9!#$&^_.+-]+$/.test(evidence.mimeType)) {
+      throw new ProjectStateInputError(`${path}.mimeType no tiene un formato válido.`);
+    }
+  }
+  if (evidence.size != null) {
+    assertInteger(evidence.size, `${path}.size`, { min: 0, max: Number.MAX_SAFE_INTEGER });
+  }
+  if (evidence.sha256 != null) {
+    assertShortString(evidence.sha256, `${path}.sha256`, { required: true, max: 64 });
+    if (
+      !/^[a-f0-9]{64}$/i.test(evidence.sha256)
+      && !/^[A-Za-z0-9+/]{43}=$/.test(evidence.sha256)
+    ) {
+      throw new ProjectStateInputError(`${path}.sha256 no tiene un formato válido.`);
+    }
+  }
+  for (const field of ['assetId', 'publicId', 'pathname']) {
+    assertNullableShortString(evidence[field], `${path}.${field}`, { max: 2_048 });
+  }
+}
+
+function assertIncident(incident, path) {
+  if (!isPlainObject(incident)) {
+    throw new ProjectStateInputError(`${path} debe ser un objeto.`);
+  }
+  assertAllowedFields(incident, path, INCIDENT_FIELDS);
+  if (Object.hasOwn(incident, 'id')) {
+    assertShortString(incident.id, `${path}.id`, { required: true, max: 180 });
+  }
+  if (Object.hasOwn(incident, 'title')) {
+    assertShortString(incident.title, `${path}.title`, { required: true, max: 240 });
+  }
+  if (Object.hasOwn(incident, 'description')) {
+    assertShortString(
+      incident.description,
+      `${path}.description`,
+      { required: true, max: 2_000 },
+    );
+  }
+  if (Object.hasOwn(incident, 'type')) {
+    assertEnum(incident.type, `${path}.type`, INCIDENT_TYPES, { required: true });
+  }
+  if (Object.hasOwn(incident, 'badge')) {
+    assertShortString(incident.badge, `${path}.badge`, { required: true, max: 100 });
+  }
+  if (Object.hasOwn(incident, 'timestamp')) {
+    assertShortString(
+      incident.timestamp,
+      `${path}.timestamp`,
+      { required: true, max: 100 },
+    );
+  }
+  if (Object.hasOwn(incident, 'reporter')) {
+    assertShortString(incident.reporter, `${path}.reporter`, { required: true, max: 180 });
+  }
+  if (Object.hasOwn(incident, 'icon')) {
+    assertShortString(incident.icon, `${path}.icon`, { required: true, max: 180 });
+  }
+  if (Object.hasOwn(incident, 'status')) {
+    assertEnum(incident.status, `${path}.status`, INCIDENT_STATUSES, { required: true });
+  }
+  if (Object.hasOwn(incident, 'sensitivity')) {
+    assertEnum(
+      incident.sensitivity,
+      `${path}.sensitivity`,
+      INCIDENT_SENSITIVITIES,
+      { required: true },
+    );
+  }
+  if (Object.hasOwn(incident, 'metadata')) {
+    assertIncidentMetadata(incident.metadata, `${path}.metadata`);
+  }
+  if (Object.hasOwn(incident, 'evidence')) {
+    assertIncidentEvidence(incident.evidence, `${path}.evidence`);
+  }
+}
+
+function assertAttendanceCatalog(attendance) {
+  if (!isPlainObject(attendance) || Object.keys(attendance).length > 1_000) {
+    throw new ProjectStateInputError('attendance debe ser un catálogo de hasta 1000 registros.');
+  }
+  for (const [workerKey, entry] of Object.entries(attendance)) {
+    const path = `attendance.${workerKey}`;
+    assertRecordKey(workerKey, 'attendance', { max: 180 });
+    if (!isPlainObject(entry)) {
+      throw new ProjectStateInputError(`${path} debe ser un objeto.`);
+    }
+    assertAllowedFields(entry, path, ATTENDANCE_FIELDS);
+    if (Object.hasOwn(entry, 'workerId')) {
+      assertShortString(entry.workerId, `${path}.workerId`, { required: true, max: 180 });
+    }
+    if (Object.hasOwn(entry, 'name')) {
+      assertShortString(entry.name, `${path}.name`, { required: true, max: 180 });
+    }
+    if (Object.hasOwn(entry, 'role')) {
+      assertShortString(entry.role, `${path}.role`, { required: true, max: 180 });
+    }
+    if (Object.hasOwn(entry, 'checkin')) assertCheckin(entry.checkin, `${path}.checkin`);
+    if (Object.hasOwn(entry, 'status')) assertAttendanceStatus(entry.status, `${path}.status`);
+    if (Object.hasOwn(entry, 'latitude')) {
+      assertNumber(entry.latitude, `${path}.latitude`, { min: -90, max: 90 });
+    }
+    if (Object.hasOwn(entry, 'longitude')) {
+      assertNumber(entry.longitude, `${path}.longitude`, { min: -180, max: 180 });
+    }
+    if (Object.hasOwn(entry, 'accuracy')) {
+      assertNumber(entry.accuracy, `${path}.accuracy`, { min: 0, max: 1_000_000 });
+    }
+    if (Object.hasOwn(entry, 'distanceMeters')) {
+      assertNumber(
+        entry.distanceMeters,
+        `${path}.distanceMeters`,
+        { min: 0, max: 100_000_000 },
+      );
+    }
+  }
+}
+
+function assertHrAttendanceCatalog(attendance) {
+  if (!isPlainObject(attendance) || Object.keys(attendance).length > 1_000) {
+    throw new ProjectStateInputError('hrAttendance debe ser un catálogo de hasta 1000 registros.');
+  }
+  for (const [workerKey, entry] of Object.entries(attendance)) {
+    const path = `hrAttendance.${workerKey}`;
+    assertRecordKey(workerKey, 'hrAttendance', { max: 180 });
+    if (!isPlainObject(entry)) {
+      throw new ProjectStateInputError(`${path} debe ser un objeto.`);
+    }
+    assertAllowedFields(entry, path, HR_ATTENDANCE_FIELDS);
+    for (const field of ['workerId', 'name', 'role']) {
+      if (Object.hasOwn(entry, field)) {
+        assertShortString(entry[field], `${path}.${field}`, { required: true, max: 180 });
+      }
+    }
+    for (const field of ['presents', 'excused', 'unexcused']) {
+      if (Object.hasOwn(entry, field)) {
+        assertInteger(entry[field], `${path}.${field}`, { min: 0, max: 1_000_000 });
+      }
+    }
+    if (Object.hasOwn(entry, 'status')) {
+      assertEnum(entry.status, `${path}.status`, HR_ATTENDANCE_STATUSES, { required: true });
+    }
+  }
+}
+
+function assertHrBonuses(bonuses) {
+  if (!Array.isArray(bonuses) || bonuses.length > 1_000) {
+    throw new ProjectStateInputError('hrBonuses debe ser una lista de hasta 1000 registros.');
+  }
+  bonuses.forEach((bonus, index) => {
+    const path = `hrBonuses[${index}]`;
+    if (!isPlainObject(bonus)) {
+      throw new ProjectStateInputError(`${path} debe ser un objeto.`);
+    }
+    assertAllowedFields(bonus, path, HR_BONUS_FIELDS);
+    for (const field of ['name', 'assignee', 'worker']) {
+      if (Object.hasOwn(bonus, field)) {
+        assertShortString(bonus[field], `${path}.${field}`, { required: true, max: 180 });
+      }
+    }
+    if (Object.hasOwn(bonus, 'type')) {
+      assertEnum(bonus.type, `${path}.type`, HR_BONUS_TYPES, { required: true });
+    }
+    if (Object.hasOwn(bonus, 'amount') && bonus.amount != null) {
+      assertNumber(bonus.amount, `${path}.amount`, { min: 0, max: Number.MAX_SAFE_INTEGER });
+    }
+    if (Object.hasOwn(bonus, 'date')) {
+      assertShortString(bonus.date, `${path}.date`, { required: true, max: 100 });
+    }
+    if (Object.hasOwn(bonus, 'description')) {
+      assertShortString(
+        bonus.description,
+        `${path}.description`,
+        { required: true, max: 500 },
+      );
+    }
+  });
+}
+
+function assertBudget(budget) {
+  if (!isPlainObject(budget)) {
+    throw new ProjectStateInputError('budget debe ser un objeto.');
+  }
+  assertAllowedFields(budget, 'budget', BUDGET_FIELDS);
+  if (Object.hasOwn(budget, 'total')) {
+    assertNumber(budget.total, 'budget.total', { min: 0, max: Number.MAX_SAFE_INTEGER });
+  }
+  if (Object.hasOwn(budget, 'executed')) {
+    assertNumber(budget.executed, 'budget.executed', { min: 0, max: Number.MAX_SAFE_INTEGER });
+  }
+  if (
+    Object.hasOwn(budget, 'total')
+    && Object.hasOwn(budget, 'executed')
+    && budget.executed > budget.total
+  ) {
+    throw new ProjectStateInputError('budget.executed no puede superar budget.total.');
+  }
+  if (Object.hasOwn(budget, 'currency')) assertCurrency(budget.currency, 'budget.currency');
+}
+
 function assertKnownCollections(state, previousState = null) {
-  if (state.tasks != null) {
+  assertAllowedFields(state, 'state', PROJECT_STATE_FIELDS);
+
+  if (Object.hasOwn(state, 'tasks')) {
     if (!isPlainObject(state.tasks) || Object.keys(state.tasks).length > 500) {
       throw new ProjectStateInputError('tasks debe ser un catálogo de hasta 500 tareas.');
     }
     for (const [taskId, task] of Object.entries(state.tasks)) {
+      assertRecordKey(taskId, 'tasks', { max: 160 });
       if (!isPlainObject(task)) {
         throw new ProjectStateInputError(`tasks.${taskId} debe ser un objeto.`);
       }
+      assertAllowedFields(task, `tasks.${taskId}`, TASK_FIELDS);
       assertShortString(task.name, `tasks.${taskId}.name`, { required: true, max: 160 });
-      assertShortString(task.assignee, `tasks.${taskId}.assignee`, { max: 160 });
+      if (Object.hasOwn(task, 'assignee')) {
+        assertShortString(
+          task.assignee,
+          `tasks.${taskId}.assignee`,
+          { required: true, max: 160 },
+        );
+      }
       assertNumber(task.progress, `tasks.${taskId}.progress`, { min: 0, max: 100 });
       assertNumber(task.duration, `tasks.${taskId}.duration`, { min: 1, max: 3_650 });
-      if (task.startOffset != null) {
+      if (Object.hasOwn(task, 'startOffset')) {
         assertNumber(task.startOffset, `tasks.${taskId}.startOffset`, { min: 0, max: 100 });
       }
-      if (task.startDay != null) {
+      if (Object.hasOwn(task, 'startDay')) {
         assertInteger(task.startDay, `tasks.${taskId}.startDay`, { min: 1, max: MAX_GANTT_DAYS });
       }
-      if (task.dependencies != null) {
+      if (Object.hasOwn(task, 'dependencies')) {
         if (!Array.isArray(task.dependencies) || task.dependencies.length > MAX_TASK_DEPENDENCIES) {
           throw new ProjectStateInputError(`tasks.${taskId}.dependencies debe contener hasta ${MAX_TASK_DEPENDENCIES} predecesoras.`);
         }
@@ -208,6 +718,9 @@ function assertKnownCollections(state, previousState = null) {
           dependencyIds.add(dependencyId);
         }
       }
+      for (const field of ['isDelayed', 'isShifted']) {
+        if (Object.hasOwn(task, field)) assertBoolean(task[field], `tasks.${taskId}.${field}`);
+      }
     }
     const cycle = dependencyCycle(state.tasks);
     if (cycle) {
@@ -215,11 +728,53 @@ function assertKnownCollections(state, previousState = null) {
     }
   }
 
-  if (state.incidents != null && (!Array.isArray(state.incidents) || state.incidents.length > 1_000)) {
-    throw new ProjectStateInputError('incidents debe ser una lista de hasta 1000 registros.');
+  if (Object.hasOwn(state, 'incidents')) {
+    if (!Array.isArray(state.incidents) || state.incidents.length > 1_000) {
+      throw new ProjectStateInputError('incidents debe ser una lista de hasta 1000 registros.');
+    }
+    state.incidents.forEach((incident, index) => assertIncident(incident, `incidents[${index}]`));
   }
 
-  if (state.stockpiles != null) {
+  if (Object.hasOwn(state, 'attendance')) {
+    assertAttendanceCatalog(state.attendance);
+  }
+
+  if (Object.hasOwn(state, 'hrAttendance')) {
+    assertHrAttendanceCatalog(state.hrAttendance);
+  }
+
+  if (Object.hasOwn(state, 'hrBonuses')) {
+    assertHrBonuses(state.hrBonuses);
+  }
+
+  if (Object.hasOwn(state, 'stockpiles')) {
+    if (!isPlainObject(state.stockpiles)) {
+      throw new ProjectStateInputError('stockpiles debe ser un catálogo de materiales.');
+    }
+    for (const [materialId, item] of Object.entries(state.stockpiles)) {
+      const path = `stockpiles.${materialId}`;
+      if (!isPlainObject(item)) {
+        throw new ProjectStateInputError(`${path} debe ser un objeto.`);
+      }
+      assertAllowedFields(item, path, STOCKPILE_FIELDS);
+      assertShortString(item.name, `${path}.name`, { required: true, max: 160 });
+      if (Object.hasOwn(item, 'unit')) {
+        assertShortString(item.unit, `${path}.unit`, { max: 40 });
+      }
+      assertStockpileNumber(item.current, `${path}.current`);
+      assertStockpileNumber(item.min, `${path}.min`);
+      assertStockpileNumber(item.max, `${path}.max`);
+      if (Object.hasOwn(item, 'supplier')) {
+        assertShortString(
+          item.supplier,
+          `${path}.supplier`,
+          { required: true, max: 180 },
+        );
+      }
+      if (Object.hasOwn(item, 'status')) {
+        assertShortString(item.status, `${path}.status`, { required: true, max: 80 });
+      }
+    }
     try {
       validateStockpileCatalog(state.stockpiles, {
         maxItems: 500,
@@ -235,14 +790,40 @@ function assertKnownCollections(state, previousState = null) {
     }
   }
 
-  for (const field of ['operariosCount', 'alertsCount']) {
-    if (state[field] != null) assertNumber(state[field], field, { min: 0, max: 1_000_000 });
+  if (Object.hasOwn(state, 'budget')) assertBudget(state.budget);
+  if (Object.hasOwn(state, 'budgetTotal')) {
+    assertNumber(state.budgetTotal, 'budgetTotal', { min: 0, max: Number.MAX_SAFE_INTEGER });
   }
-  if (state.avancePercentage != null) {
+  if (Object.hasOwn(state, 'budgetExecuted')) {
+    assertNumber(
+      state.budgetExecuted,
+      'budgetExecuted',
+      { min: 0, max: Number.MAX_SAFE_INTEGER },
+    );
+  }
+  if (
+    Object.hasOwn(state, 'budgetTotal')
+    && Object.hasOwn(state, 'budgetExecuted')
+    && state.budgetExecuted > state.budgetTotal
+  ) {
+    throw new ProjectStateInputError('budgetExecuted no puede superar budgetTotal.');
+  }
+  if (Object.hasOwn(state, 'budgetCurrency')) {
+    assertCurrency(state.budgetCurrency, 'budgetCurrency');
+  }
+
+  for (const field of ['operariosCount', 'alertsCount']) {
+    if (Object.hasOwn(state, field)) {
+      assertNumber(state[field], field, { min: 0, max: 1_000_000 });
+    }
+  }
+  if (Object.hasOwn(state, 'avancePercentage')) {
     assertNumber(state.avancePercentage, 'avancePercentage', { min: 0, max: 100 });
   }
-  if (state.diasEstimados != null) {
-    assertShortString(state.diasEstimados, 'diasEstimados', { max: 100 });
+  if (Object.hasOwn(state, 'diasEstimados')) {
+    if (typeof state.diasEstimados !== 'string' || state.diasEstimados.length > 100) {
+      throw new ProjectStateInputError('diasEstimados no tiene un formato válido.');
+    }
   }
 }
 

@@ -110,6 +110,7 @@ test('proposal codes are deterministic, provider-scoped and hard to confuse with
     decision: OPERATIONAL_PROPOSAL_DECISIONS.APPROVE,
     confirmationCode: first,
     taskReference: null,
+    taskExpectedProgress: null,
     channel: 'whatsapp-text',
   });
   assert.equal(parseOperationalProposalDecision('sí, confirmo'), null);
@@ -122,6 +123,14 @@ test('text decisions require an exact code and unsigned Flow decisions stay disa
     decision: OPERATIONAL_PROPOSAL_DECISIONS.APPROVE,
     confirmationCode: code,
     taskReference: 'TAREA 4',
+    taskExpectedProgress: null,
+    channel: 'whatsapp-text',
+  });
+  assert.deepEqual(parseOperationalProposalDecision(`APROBAR ${code} TAREA 4 DESDE 35%`), {
+    decision: OPERATIONAL_PROPOSAL_DECISIONS.APPROVE,
+    confirmationCode: code,
+    taskReference: 'TAREA 4',
+    taskExpectedProgress: 35,
     channel: 'whatsapp-text',
   });
   assert.equal(parseOperationalProposalDecision({
