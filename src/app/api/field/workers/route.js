@@ -15,6 +15,10 @@ import {
 import { fieldUserCapacity } from '@/lib/plans';
 import { getPrisma } from '@/lib/prisma';
 import {
+  projectWritePolicyErrorResponse,
+  runOperationalProjectMutation,
+} from '@/lib/project-write-policy';
+import {
   RequestBodyError,
   readJsonRequest,
   requestBodyErrorResponse,
@@ -42,6 +46,15 @@ class FieldWorkerCapacityError extends Error {
   }
 }
 
+class FieldWorkerMutationError extends Error {
+  constructor(message, code, status) {
+    super(message);
+    this.name = 'FieldWorkerMutationError';
+    this.code = code;
+    this.status = status;
+  }
+}
+
 function scopeFromAccess(access) {
   return {
     organizationId: access.organization.id,
@@ -58,6 +71,13 @@ function phoneConflictResponse() {
     error: 'Ese teléfono ya está asignado a otra persona de la obra.',
     code: 'PHONE_ALREADY_ASSIGNED',
   }, { status: 409 });
+}
+
+function fieldWorkerMutationErrorResponse(error) {
+  return Response.json({
+    error: error.message,
+    code: error.code,
+  }, { status: error.status });
 }
 
 function capacityErrorResponse(error) {
@@ -84,18 +104,6 @@ async function requireFieldWorkerCapacity(prisma, access) {
   return capacity;
 }
 
-async function runFieldWorkerMutation(prisma, operation) {
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
-    try {
-      return await prisma.$transaction(operation, { isolationLevel: 'Serializable' });
-    } catch (error) {
-      if (error instanceof FieldWorkerCapacityError) throw error;
-      if (error?.code !== 'P2034' || attempt === 3) throw error;
-    }
-  }
-  throw new Error('Field worker mutation retry loop exhausted.');
-}
-
 function phoneAuditValue(phone) {
   const digits = String(phone || '').replace(/\D/g, '');
   return digits ? `***${digits.slice(-4)}` : null;
@@ -106,6 +114,11 @@ function handleKnownError(error) {
   if (error instanceof RequestBodyError) return requestBodyErrorResponse(error);
   if (error instanceof FieldWorkerInputError) return inputErrorResponse(error);
   if (error instanceof FieldWorkerCapacityError) return capacityErrorResponse(error);
+  if (error instanceof FieldWorkerMutationError) {
+    return fieldWorkerMutationErrorResponse(error);
+  }
+  const policyError = projectWritePolicyErrorResponse(error);
+  if (policyError) return policyError;
   if (error?.code === 'P2002') return phoneConflictResponse();
   return null;
 }
@@ -140,11 +153,14 @@ export async function POST(request) {
     }));
     const prisma = getPrisma();
     const scope = scopeFromAccess(access);
-    if (await findFieldWorkerPhoneConflict(prisma, scope, input.phone)) {
-      return phoneConflictResponse();
-    }
-
-    const worker = await runFieldWorkerMutation(prisma, async (tx) => {
+    const worker = await runOperationalProjectMutation(prisma, scope, async (tx) => {
+      if (await findFieldWorkerPhoneConflict(tx, scope, input.phone)) {
+        throw new FieldWorkerMutationError(
+          'Ese teléfono ya está asignado a otra persona de la obra.',
+          'PHONE_ALREADY_ASSIGNED',
+          409,
+        );
+      }
       await requireFieldWorkerCapacity(tx, access);
       const created = await tx.worker.create({
         data: {
@@ -192,37 +208,40 @@ export async function PATCH(request) {
     }));
     const prisma = getPrisma();
     const scope = scopeFromAccess(access);
-    const current = await prisma.worker.findFirst({
-      where: {
-        id: workerId,
-        projectId: scope.projectId,
-        project: { organizationId: scope.organizationId },
-      },
-      select: WORKER_SELECT,
-    });
-    if (!current) {
-      return Response.json({
-        error: 'La persona no pertenece a la obra activa.',
-        code: 'WORKER_NOT_FOUND',
-      }, { status: 404 });
-    }
-    const phoneToValidate = data.phone || (data.active === true ? current.phone : null);
-    if (
-      phoneToValidate
-      && await findFieldWorkerPhoneConflict(prisma, scope, phoneToValidate, current.id)
-    ) {
-      return phoneConflictResponse();
-    }
-
-    const updateData = {};
-    for (const field of ['name', 'phone', 'role', 'active']) {
-      if (Object.hasOwn(data, field)) updateData[field] = data[field];
-    }
-    if (Object.hasOwn(data, 'whatsappRole')) {
-      updateData.metadata = metadataWithWhatsAppRole(current.metadata, data.whatsappRole);
-    }
-
-    const worker = await runFieldWorkerMutation(prisma, async (tx) => {
+    const worker = await runOperationalProjectMutation(prisma, scope, async (tx) => {
+      const current = await tx.worker.findFirst({
+        where: {
+          id: workerId,
+          projectId: scope.projectId,
+          project: { organizationId: scope.organizationId },
+        },
+        select: WORKER_SELECT,
+      });
+      if (!current) {
+        throw new FieldWorkerMutationError(
+          'La persona no pertenece a la obra seleccionada.',
+          'WORKER_NOT_FOUND',
+          404,
+        );
+      }
+      const phoneToValidate = data.phone || (data.active === true ? current.phone : null);
+      if (
+        phoneToValidate
+        && await findFieldWorkerPhoneConflict(tx, scope, phoneToValidate, current.id)
+      ) {
+        throw new FieldWorkerMutationError(
+          'Ese teléfono ya está asignado a otra persona de la obra.',
+          'PHONE_ALREADY_ASSIGNED',
+          409,
+        );
+      }
+      const updateData = {};
+      for (const field of ['name', 'phone', 'role', 'active']) {
+        if (Object.hasOwn(data, field)) updateData[field] = data[field];
+      }
+      if (Object.hasOwn(data, 'whatsappRole')) {
+        updateData.metadata = metadataWithWhatsAppRole(current.metadata, data.whatsappRole);
+      }
       if (data.active === true && current.active === false) {
         await requireFieldWorkerCapacity(tx, access);
       }

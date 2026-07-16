@@ -11,6 +11,7 @@ import {
     parseProjectStateWriteRequest,
     validateProjectStateInput,
 } from '@/lib/project-state';
+import { projectWritePolicyErrorResponse } from '@/lib/project-write-policy';
 import { sanitizeProjectStateMedicalData } from '@/lib/medical-privacy';
 import {
     readJsonRequest,
@@ -36,6 +37,8 @@ function projectStateResponse(snapshot, { status = 200 } = {}) {
 }
 
 function projectStateErrorResponse(error) {
+    const policyError = projectWritePolicyErrorResponse(error);
+    if (policyError) return policyError;
     if (error instanceof ProjectStateVersionConflictError) {
         return Response.json(
             {

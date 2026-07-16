@@ -4,7 +4,11 @@ function normalizedIdentifier(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function connectionScope(connection) {
+function eventRequiresActiveProject(eventType) {
+  return normalizedIdentifier(eventType).toLowerCase() === "message";
+}
+
+function connectionScope(connection, eventType) {
   const projectId = normalizedIdentifier(connection?.project?.id);
   const organizationId = normalizedIdentifier(connection?.project?.organizationId);
   const phoneNumberId = normalizedIdentifier(connection?.phoneNumberId);
@@ -13,7 +17,10 @@ function connectionScope(connection) {
     || !organizationId
     || !phoneNumberId
     || !connection.enabled
-    || connection?.project?.status !== "ACTIVE"
+    || (
+      eventRequiresActiveProject(eventType)
+      && connection?.project?.status !== "ACTIVE"
+    )
   ) {
     return null;
   }
@@ -59,7 +66,7 @@ export async function resolveWhatsAppConnectionScopes(prisma, {
       where: { phoneNumberId: exactPhoneNumberId },
       select,
     });
-    const scope = connectionScope(connection);
+    const scope = connectionScope(connection, eventType);
     return scope ? [scope] : [];
   }
 
@@ -75,7 +82,6 @@ export async function resolveWhatsAppConnectionScopes(prisma, {
       where: {
         enabled: true,
         whatsappBusinessId: exactWhatsappBusinessId,
-        project: { status: "ACTIVE" },
       },
       select,
     });
@@ -84,7 +90,6 @@ export async function resolveWhatsAppConnectionScopes(prisma, {
       where: {
         enabled: true,
         displayPhoneNumber: exactDisplayPhoneNumber,
-        project: { status: "ACTIVE" },
       },
       select,
     });
@@ -95,14 +100,16 @@ export async function resolveWhatsAppConnectionScopes(prisma, {
     return [];
   }
 
-  return scopesWithinSingleOrganization(connections.map(connectionScope));
+  return scopesWithinSingleOrganization(
+    connections.map((connection) => connectionScope(connection, eventType)),
+  );
 }
 
-function addToLookup(lookup, key, scope) {
-  if (!key || !scope) return;
+function addToLookup(lookup, key, value) {
+  if (!key || !value) return;
   const existing = lookup.get(key);
-  if (existing) existing.push(scope);
-  else lookup.set(key, [scope]);
+  if (existing) existing.push(value);
+  else lookup.set(key, [value]);
 }
 
 /**
@@ -153,7 +160,6 @@ export async function resolveWhatsAppConnectionScopesBulk(prisma, events = []) {
   const connections = await prisma.whatsAppConnection.findMany({
     where: {
       enabled: true,
-      project: { status: "ACTIVE" },
       OR: matchers,
     },
     select: {
@@ -171,18 +177,17 @@ export async function resolveWhatsAppConnectionScopesBulk(prisma, events = []) {
   const byWhatsappBusinessId = new Map();
   const byDisplayPhoneNumber = new Map();
   for (const connection of connections) {
-    const scope = connectionScope(connection);
-    if (!scope) continue;
-    addToLookup(byPhoneNumberId, normalizedIdentifier(connection.phoneNumberId), scope);
+    if (!connectionScope(connection, "status")) continue;
+    addToLookup(byPhoneNumberId, normalizedIdentifier(connection.phoneNumberId), connection);
     addToLookup(
       byWhatsappBusinessId,
       normalizedIdentifier(connection.whatsappBusinessId),
-      scope,
+      connection,
     );
     addToLookup(
       byDisplayPhoneNumber,
       normalizedIdentifier(connection.displayPhoneNumber),
-      scope,
+      connection,
     );
   }
 
@@ -190,7 +195,9 @@ export async function resolveWhatsAppConnectionScopesBulk(prisma, events = []) {
     const phoneIdentifierWasSupplied = event?.phoneNumberId !== null
       && event?.phoneNumberId !== undefined;
     if (phoneIdentifierWasSupplied) {
-      const matches = byPhoneNumberId.get(normalizedIdentifier(event.phoneNumberId)) || [];
+      const matches = (byPhoneNumberId.get(normalizedIdentifier(event.phoneNumberId)) || [])
+        .map((connection) => connectionScope(connection, event.eventType))
+        .filter(Boolean);
       return matches.length === 1 ? matches : [];
     }
     if (normalizedIdentifier(event?.eventType).toLowerCase() !== "account") return [];
@@ -198,14 +205,18 @@ export async function resolveWhatsAppConnectionScopesBulk(prisma, events = []) {
     const whatsappBusinessId = normalizedIdentifier(event?.whatsappBusinessId);
     if (whatsappBusinessId) {
       return scopesWithinSingleOrganization(
-        byWhatsappBusinessId.get(whatsappBusinessId) || [],
+        (byWhatsappBusinessId.get(whatsappBusinessId) || [])
+          .map((connection) => connectionScope(connection, event.eventType))
+          .filter(Boolean),
       );
     }
 
     const displayPhoneNumber = normalizedIdentifier(
       event?.displayPhoneNumber || event?.businessDisplayPhone,
     );
-    const matches = byDisplayPhoneNumber.get(displayPhoneNumber) || [];
+    const matches = (byDisplayPhoneNumber.get(displayPhoneNumber) || [])
+      .map((connection) => connectionScope(connection, event.eventType))
+      .filter(Boolean);
     return matches.length === 1 ? matches : [];
   });
 }
@@ -241,18 +252,22 @@ export async function validateStoredWebhookScope(prisma, leasedEvent, event, sco
     );
   }
 
+  // Project status is an ingress decision for message events. Once an event is
+  // durably accepted, a later pause must not erase it as a tenant-scope breach.
+  // The immutable project/organization/phone binding and enabled connection
+  // remain mandatory throughout processing.
   const connection = await prisma.whatsAppConnection.findFirst({
     where: {
       projectId,
       phoneNumberId,
       enabled: true,
-      project: { organizationId, status: "ACTIVE" },
+      project: { organizationId },
     },
     select: { id: true },
   });
   if (!connection) {
     throw webhookScopeError(
-      "Stored webhook scope no longer belongs to an active tenant connection.",
+      "Stored webhook scope no longer belongs to an enabled tenant connection.",
       "WEBHOOK_MESSAGE_SCOPE_MISMATCH",
     );
   }

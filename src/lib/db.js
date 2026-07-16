@@ -17,6 +17,10 @@ import {
   resolveActiveFieldWorkerByPhone,
 } from "@/lib/field-workers";
 import { assertProjectStateVersion } from "@/lib/project-state";
+import {
+  lockProjectTransaction,
+  requireOperationalProjectWrite,
+} from "@/lib/project-write-policy";
 import { sanitizeMessagesForMedicalPrivacy } from "@/lib/medical-privacy";
 import { resolveWhatsAppConnectionScopes } from "@/lib/whatsapp/webhook-scope";
 import { persistDurableMetaWebhookBatch } from "@/lib/whatsapp/webhook-ingress";
@@ -230,13 +234,6 @@ function writeLocalDb(data) {
   fs.renameSync(temporaryPath, LOCAL_DB_PATH);
 }
 
-async function lockProjectTransaction(transaction, projectId) {
-  await transaction.$executeRawUnsafe(
-    "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
-    projectId,
-  );
-}
-
 async function durableContext(scope) {
   const { getPrisma } = await import("@/lib/prisma");
   const prisma = getPrisma();
@@ -411,7 +408,10 @@ export async function persistProjectStateTransaction(transaction, {
   activities = [],
   deriveActivities = null,
 }) {
-  await lockProjectTransaction(transaction, context.project.id);
+  await requireOperationalProjectWrite(transaction, {
+    organizationId: context.organization?.id || context.project.organizationId,
+    projectId: context.project.id,
+  });
 
   const current = await transaction.projectSnapshot.findUnique({
     where: { projectId: context.project.id },
@@ -550,6 +550,20 @@ export async function getMessages(scope, { includeMedicalEvidence = false } = {}
   return sanitizeMessagesForMedicalPrivacy(serialized, { includeMedicalEvidence });
 }
 
+async function replaceDurableMessages(context, messages) {
+  const conversation = await durableConversation(context);
+  await context.prisma.message.deleteMany({ where: { conversationId: conversation.id } });
+  if (messages.length > 0) {
+    await context.prisma.message.createMany({
+      data: messages.map((message, index) => durableMessageData(
+        message,
+        conversation.id,
+        new Date(Date.now() + index),
+      )),
+    });
+  }
+}
+
 export async function saveMessages(messages, scope) {
   if (!hasDurableDatabase()) {
     const db = readLocalDb();
@@ -559,18 +573,12 @@ export async function saveMessages(messages, scope) {
   }
 
   const context = await durableContext(scope);
-  const conversation = await durableConversation(context);
   await context.prisma.$transaction(async (transaction) => {
-    await transaction.message.deleteMany({ where: { conversationId: conversation.id } });
-    if (messages.length > 0) {
-      await transaction.message.createMany({
-        data: messages.map((message, index) => durableMessageData(
-          message,
-          conversation.id,
-          new Date(Date.now() + index),
-        )),
-      });
-    }
+    await requireOperationalProjectWrite(transaction, {
+      organizationId: context.organization.id,
+      projectId: context.project.id,
+    });
+    await replaceDurableMessages({ ...context, prisma: transaction }, messages);
   });
   return messages;
 }
@@ -979,11 +987,13 @@ export async function applyWebhookMessageAtomically({
       return { alreadyApplied: true, outcome: priorOutcome };
     }
 
+    // Message ingress already required an ACTIVE project. A later pause does
+    // not invalidate a durably accepted event, but tenant ownership and the
+    // exact enabled WhatsApp connection are revalidated under the project lock.
     const project = await transaction.project.findFirst({
       where: {
         id: normalized.projectId,
         organizationId: normalized.organizationId,
-        status: "ACTIVE",
       },
       select: {
         id: true,
@@ -1008,7 +1018,7 @@ export async function applyWebhookMessageAtomically({
       || project.whatsapp.phoneNumberId !== normalized.phoneNumberId
     ) {
       throw webhookProcessingError(
-        "Stored webhook scope does not belong to the active project WhatsApp connection.",
+        "Stored webhook scope does not belong to the enabled project WhatsApp connection.",
         "WEBHOOK_MESSAGE_SCOPE_MISMATCH",
       );
     }
@@ -1684,8 +1694,24 @@ export async function resetState(scope, { expectedVersion = null } = {}) {
       : createEmptyAppState(),
     messages: clone(defaultMessages),
   };
-  const snapshot = await saveAppStateSnapshot(fresh.appState, scope, { expectedVersion });
-  await saveMessages(fresh.messages, scope);
+  if (useDevelopmentDemo) {
+    const snapshot = await saveAppStateSnapshot(fresh.appState, scope, { expectedVersion });
+    await saveMessages(fresh.messages, scope);
+    return { ...fresh, snapshot, version: snapshot.version };
+  }
+
+  const context = await durableContext(scope);
+  const snapshot = await context.prisma.$transaction(async (transaction) => {
+    const transactionContext = { ...context, prisma: transaction };
+    const stored = await persistProjectStateTransaction(transaction, {
+      context: transactionContext,
+      scope,
+      state: fresh.appState,
+      expectedVersion,
+    });
+    await replaceDurableMessages(transactionContext, fresh.messages);
+    return stored;
+  });
   return { ...fresh, snapshot, version: snapshot.version };
 }
 

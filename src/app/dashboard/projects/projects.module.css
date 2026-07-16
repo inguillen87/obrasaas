@@ -12,7 +12,7 @@
     #090a0b;
 }
 
-.header, .summaryGrid, .workspace, .error { width: min(1240px, 100%); margin-inline: auto; }
+.header, .summaryGrid, .workspace, .error, .notice { width: min(1240px, 100%); margin-inline: auto; }
 .header { display: flex; align-items: flex-end; justify-content: space-between; gap: 32px; margin-bottom: 34px; }
 .back { color: #b8b8b1; text-decoration: none; font-size: .84rem; }
 .back:hover { color: #fff; }
@@ -20,14 +20,14 @@
 .header h1 { max-width: 840px; margin: 12px 0 9px; font-size: clamp(2.35rem, 5vw, 4.8rem); line-height: .98; letter-spacing: -.065em; }
 .header > div:first-child > p:last-child { max-width: 760px; margin: 0; color: var(--muted); line-height: 1.6; }
 .planBadge { min-width: 150px; display: grid; gap: 6px; padding: 15px 17px; border: 1px solid rgba(255, 159, 67, .22); border-radius: 14px; background: rgba(255, 159, 67, .07); text-align: right; }
-.planBadge span { color: #8c8f8d; font-size: .68rem; }
+.planBadge span { color: #a1a6a3; font-size: .72rem; }
 .planBadge strong { color: var(--orange); font-size: 1rem; }
 
 .summaryGrid { display: grid; grid-template-columns: repeat(3, minmax(0, .65fr)) minmax(260px, 1.35fr); gap: 10px; margin-bottom: 26px; }
 .summaryGrid article { min-height: 128px; display: flex; flex-direction: column; justify-content: center; padding: 20px; border: 1px solid var(--line); border-radius: 16px; background: rgba(255,255,255,.03); }
-.summaryGrid article > span, .capacityCard span { color: #898d8b; font-size: .7rem; }
+.summaryGrid article > span, .capacityCard span { color: #a0a5a2; font-size: .74rem; }
 .summaryGrid article > strong { margin: 7px 0 1px; font-size: 2rem; letter-spacing: -.05em; }
-.summaryGrid article > small { color: #6f7471; font-size: .68rem; }
+.summaryGrid article > small { color: #979d99; font-size: .72rem; }
 .capacityCard { gap: 10px; background: linear-gradient(135deg, rgba(255,159,67,.09), rgba(255,255,255,.025)) !important; }
 .capacityCard > div { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
 .capacityCard strong { color: #f6f6f1; font-size: .88rem; }
@@ -40,15 +40,15 @@
 .sectionHeading { display: flex; justify-content: space-between; gap: 30px; align-items: end; margin-bottom: 22px; }
 .sectionHeading .eyebrow { margin: 0; }
 .sectionHeading h2, .createPanel h2 { margin: 7px 0 0; font-size: 1.55rem; letter-spacing: -.035em; }
-.sectionHeading > p { max-width: 430px; margin: 0; color: #858986; font-size: .76rem; line-height: 1.55; }
+.sectionHeading > p { max-width: 430px; margin: 0; color: #a0a5a2; font-size: .8rem; line-height: 1.55; }
 .projectGrid { display: grid; gap: 12px; }
 .projectCard { padding: 20px; border: 1px solid rgba(255,255,255,.08); border-radius: 17px; background: #111315; transition: border-color 180ms ease, transform 180ms ease, background 180ms ease; }
 .projectCard:hover { transform: translateY(-2px); border-color: rgba(255,255,255,.17); background: #141618; }
 .currentProject { border-color: rgba(255,159,67,.38); box-shadow: inset 3px 0 #ff9f43; }
-.cardTopline, .projectTitle, .cardFooter, .integrationState { display: flex; align-items: center; }
+.cardTopline, .projectTitle, .cardFooter, .integrationState, .cardActions, .panelTopline, .geoActions, .formActions { display: flex; align-items: center; }
 .cardTopline { justify-content: space-between; gap: 16px; }
-.cardTopline > strong { color: #ffb36b; font-size: .65rem; text-transform: uppercase; letter-spacing: .09em; }
-.status { display: inline-flex; align-items: center; gap: 7px; color: #adb2af; font-size: .68rem; }
+.cardTopline > strong { color: #ffb36b; font-size: .7rem; text-transform: uppercase; letter-spacing: .09em; }
+.status { display: inline-flex; align-items: center; gap: 7px; color: #c1c5c2; font-size: .73rem; }
 .status i { width: 7px; height: 7px; border-radius: 50%; background: #727775; }
 .statusACTIVE i { background: #60d394; box-shadow: 0 0 0 4px rgba(96,211,148,.09); }
 .statusPAUSED i { background: #f3be60; }
@@ -57,43 +57,105 @@
 .projectTitle { gap: 13px; margin-top: 19px; }
 .projectTitle > span { width: 42px; height: 42px; display: grid; place-items: center; flex: 0 0 auto; border: 1px solid rgba(255,159,67,.27); border-radius: 12px; color: #ffad5d; background: rgba(255,159,67,.08); font-size: .72rem; font-weight: 900; }
 .projectTitle h2 { margin: 0; font-size: 1.15rem; letter-spacing: -.02em; }
-.projectTitle p { margin: 4px 0 0; color: #7e8380; font-size: .72rem; }
+.projectTitle p { margin: 4px 0 0; color: #9ba19d; font-size: .78rem; }
 .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 18px 0 0; }
 .metrics div { padding: 11px 12px; border: 1px solid rgba(255,255,255,.06); border-radius: 11px; background: rgba(255,255,255,.02); }
-.metrics dt { color: #727774; font-size: .63rem; }
+.metrics dt { color: #959b97; font-size: .7rem; }
 .metrics dd { margin: 4px 0 0; font-weight: 820; }
-.integrationState { gap: 10px; margin-top: 12px; padding: 12px; border-radius: 11px; background: rgba(255,255,255,.025); }
+.signalGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.integrationState { min-width: 0; gap: 10px; padding: 12px; border-radius: 11px; background: rgba(255,255,255,.025); }
 .integrationState > span { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
 .connected { background: #60d394; box-shadow: 0 0 0 5px rgba(96,211,148,.08); }
 .pending { background: #747976; }
 .integrationState div { display: grid; gap: 3px; }
-.integrationState strong { font-size: .7rem; }
-.integrationState small { color: #747976; font-size: .62rem; }
+.integrationState strong { font-size: .75rem; }
+.integrationState small { color: #949b96; font-size: .7rem; line-height: 1.4; }
 .cardFooter { justify-content: space-between; gap: 14px; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,.065); }
-.cardFooter > span { color: #6f7471; font-size: .63rem; }
-.cardFooter button, .createForm button { display: inline-flex; align-items: center; justify-content: center; gap: 9px; border: 0; border-radius: 10px; color: #17110b; background: var(--orange); font: inherit; font-size: .72rem; font-weight: 850; cursor: pointer; }
-.cardFooter button { min-height: 38px; padding: 0 13px; }
+.cardFooter > span { color: #939a96; font-size: .7rem; }
+.cardFooter button, .createForm button { display: inline-flex; align-items: center; justify-content: center; gap: 9px; border: 0; border-radius: 10px; color: #17110b; background: var(--orange); font: inherit; font-size: .76rem; font-weight: 850; cursor: pointer; }
+.cardFooter button { min-height: 44px; padding: 0 14px; }
 .cardFooter button:disabled { color: #777c79; background: rgba(255,255,255,.055); cursor: default; }
+.cardActions { justify-content: flex-end; flex-wrap: wrap; gap: 7px; }
+.cardActions .secondaryAction { color: #c7cbc8; border: 1px solid rgba(255,255,255,.11); background: rgba(255,255,255,.04); }
+.cardActions .secondaryAction:hover { color: #fff; border-color: rgba(255,159,67,.3); background: rgba(255,159,67,.08); }
 
 .createPanel { position: sticky; top: 18px; padding: 24px; background: linear-gradient(155deg, rgba(255,159,67,.075), rgba(255,255,255,.025) 45%); }
 .createPanel .eyebrow { margin: 0; }
-.createPanel > p:not(.eyebrow) { margin: 10px 0 0; color: #858986; font-size: .76rem; line-height: 1.6; }
+.createPanel > p:not(.eyebrow) { margin: 10px 0 0; color: #a0a6a2; font-size: .8rem; line-height: 1.6; }
+.panelTopline { align-items: flex-start; justify-content: space-between; gap: 18px; }
+.panelControls { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+.dirtyBadge { padding: 5px 8px; color: #ffd09f; border: 1px solid rgba(255,159,67,.24); border-radius: 99px; background: rgba(255,159,67,.08); font-size: .68rem; font-weight: 780; white-space: nowrap; }
+.closeEditor { width: 44px; height: 44px; flex: 0 0 auto; padding: 0; color: #c6cbc8; border: 1px solid rgba(255,255,255,.14); border-radius: 10px; background: rgba(255,255,255,.045); font: inherit; font-size: 1.2rem; cursor: pointer; }
+.closeEditor:hover:not(:disabled) { color: #fff; border-color: rgba(255,159,67,.42); }
+.createPanel h2:focus { outline: 2px solid rgba(255,179,107,.78); outline-offset: 5px; border-radius: 4px; }
 .createForm { display: grid; gap: 14px; margin-top: 23px; }
 .createForm label { display: grid; gap: 7px; }
-.createForm label > span { color: #a6aaa7; font-size: .67rem; }
-.createForm input { width: 100%; min-height: 43px; padding: 10px 11px; color: #f7f7f2; border: 1px solid rgba(255,255,255,.12); border-radius: 10px; outline: 0; background: #111315; font: inherit; font-size: .76rem; }
-.createForm input:focus { border-color: rgba(255,159,67,.6); box-shadow: 0 0 0 3px rgba(255,159,67,.08); }
+.createForm label > span { color: #bec3c0; font-size: .74rem; }
+.createForm input:not([type='checkbox']), .createForm select { width: 100%; min-height: 44px; padding: 10px 11px; color: #f7f7f2; border: 1px solid rgba(255,255,255,.16); border-radius: 10px; outline: 0; background: #111315; font: inherit; font-size: .82rem; }
+.createForm input:focus, .createForm select:focus { border-color: rgba(255,159,67,.72); box-shadow: 0 0 0 3px rgba(255,159,67,.14); }
+.createForm input:disabled, .createForm select:disabled, .geofenceFields:disabled { opacity: .68; cursor: not-allowed; }
+.createForm select { appearance: none; background-image: linear-gradient(45deg, transparent 50%, #858986 50%), linear-gradient(135deg, #858986 50%, transparent 50%); background-position: calc(100% - 15px) 18px, calc(100% - 10px) 18px; background-repeat: no-repeat; background-size: 5px 5px; }
+.fieldHint { color: #929995; font-size: .7rem; line-height: 1.5; }
 .formRow { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
 .unitInput { position: relative; }
 .unitInput input { padding-right: 66px; }
-.unitInput b { position: absolute; right: 11px; top: 50%; transform: translateY(-50%); color: #747976; font-size: .63rem; }
+.unitInput b { position: absolute; right: 11px; top: 50%; transform: translateY(-50%); color: #949b96; font-size: .7rem; }
 .createForm button { min-height: 47px; margin-top: 3px; }
-.createForm button:disabled { opacity: .6; cursor: wait; }
-.createForm > small { color: #717673; font-size: .62rem; line-height: 1.5; text-align: center; }
+.createForm button:disabled { opacity: 1; color: #858a87; background: rgba(255,255,255,.075); cursor: not-allowed; }
+.createForm > small { color: #929995; font-size: .7rem; line-height: 1.5; text-align: center; }
+.geofenceFields { display: grid; gap: 13px; margin: 4px 0 0; padding: 15px; border: 1px solid rgba(96,211,148,.14); border-radius: 13px; background: rgba(96,211,148,.035); }
+.geofenceFields legend { padding: 0 7px; color: #aeeac7; font-size: .73rem; font-weight: 780; }
+.geofenceFields > p { margin: -2px 0 0; color: #929995; font-size: .7rem; line-height: 1.5; }
+.geoActions { flex-wrap: wrap; gap: 8px; }
+.createForm .inlineButton, .createForm .textButton, .createForm .cancelButton { min-height: 44px; margin: 0; padding: 0 12px; color: #d5d9d6; border: 1px solid rgba(255,255,255,.14); border-radius: 9px; background: rgba(255,255,255,.045); font-weight: 720; }
+.createForm .inlineButton:hover:not(:disabled), .createForm .cancelButton:hover:not(:disabled) { color: #fff; border-color: rgba(255,159,67,.38); background: rgba(255,159,67,.09); }
+.createForm .textButton { padding-inline: 8px; border-color: transparent; background: transparent; color: #abb1ad; }
+.createForm .textButton:hover:not(:disabled) { color: #fff; }
+.gpsAccuracy { margin: 0 !important; padding: 10px 11px; border: 1px solid; border-radius: 10px; font-size: .72rem !important; line-height: 1.5 !important; }
+.gpsAccuracy strong { color: inherit; }
+.gpsAccuracyReady { color: #b8eacf !important; border-color: rgba(96,211,148,.2); background: rgba(96,211,148,.06); }
+.gpsAccuracyWarning { color: #ffd5a8 !important; border-color: rgba(255,159,67,.28); background: rgba(255,159,67,.08); }
+.geoReadiness { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 9px; padding: 11px; border-radius: 10px; }
+.geoReadiness > i { width: 8px; height: 8px; border-radius: 50%; }
+.geoReadiness > div { min-width: 0; display: grid; gap: 3px; }
+.geoReadiness strong { font-size: .73rem; }
+.geoReadiness span { color: #969c98; font-size: .68rem; line-height: 1.45; }
+.geoReadiness a { min-height: 44px; display: inline-flex; align-items: center; color: #ffbd7f; font-size: .72rem; font-weight: 740; text-decoration: none; }
+.geoReady { border: 1px solid rgba(96,211,148,.18); background: rgba(96,211,148,.055); }
+.geoReady > i { background: #60d394; box-shadow: 0 0 0 4px rgba(96,211,148,.08); }
+.geoAttention { border: 1px solid rgba(255,159,67,.24); background: rgba(255,159,67,.07); }
+.geoAttention > i { background: #ffb36b; box-shadow: 0 0 0 4px rgba(255,159,67,.09); }
+.geoPending { border: 1px solid rgba(255,255,255,.07); background: rgba(255,255,255,.025); }
+.geoPending > i { background: #747976; }
+.archiveConfirmation { grid-template-columns: auto 1fr !important; align-items: start; gap: 10px !important; padding: 13px; border: 1px solid rgba(255,93,74,.24); border-radius: 11px; background: rgba(255,79,59,.07); }
+.archiveConfirmation input { width: 20px; height: 20px; margin-top: 1px; accent-color: #ff6d5b; }
+.archiveConfirmation > span { display: grid; gap: 4px; color: #a98e89 !important; line-height: 1.45; }
+.archiveConfirmation strong { color: #ffc0b8; font-size: .74rem; }
+.formActions { justify-content: flex-end; gap: 8px; }
+.formActions button { flex: 1; }
+.panelFeedback { display: grid; gap: 8px; padding: 13px; border: 1px solid; border-radius: 11px; font-size: .74rem; line-height: 1.5; }
+.panelFeedback > div { display: grid; gap: 4px; }
+.panelFeedback strong { font-size: .78rem; }
+.panelFeedback span { display: block; }
+.panelFeedback button { min-height: 42px; margin: 2px 0 0; padding: 0 12px; color: #fff0e1; border: 1px solid rgba(255,159,67,.32); background: rgba(255,159,67,.1); }
+.panelFeedback button:hover:not(:disabled) { border-color: rgba(255,159,67,.58); background: rgba(255,159,67,.16); }
+.panelFeedback:focus { outline: 2px solid rgba(255,179,107,.78); outline-offset: 3px; }
+.panelError { color: #ffc0b8; border-color: rgba(255,93,74,.28); background: rgba(255,79,59,.09); }
+.panelNotice { color: #b8eacf; border-color: rgba(96,211,148,.24); background: rgba(96,211,148,.075); }
 .limitNotice { display: grid; gap: 7px; margin-top: 22px; padding: 15px; border: 1px solid rgba(255,159,67,.2); border-radius: 12px; background: rgba(255,159,67,.06); }
 .limitNotice strong { color: #ffb36b; font-size: .78rem; }
-.limitNotice span { color: #8d918e; font-size: .7rem; line-height: 1.5; }
-.error { margin-bottom: 16px; padding: 12px 15px; border: 1px solid rgba(255,93,74,.25); border-radius: 12px; color: #ffb2a8; background: rgba(255,79,59,.1); font-size: .78rem; }
+.limitNotice span { color: #a9afab; font-size: .74rem; line-height: 1.5; }
+.error { margin-bottom: 16px; padding: 12px 15px; border: 1px solid rgba(255,93,74,.25); border-radius: 12px; color: #ffc0b8; background: rgba(255,79,59,.1); font-size: .8rem; }
+.notice { margin-bottom: 16px; padding: 12px 15px; border: 1px solid rgba(96,211,148,.22); border-radius: 12px; color: #b8eacf; background: rgba(96,211,148,.08); font-size: .8rem; }
+
+.back:focus-visible,
+.cardFooter button:focus-visible,
+.closeEditor:focus-visible,
+.createForm button:focus-visible,
+.geoReadiness a:focus-visible {
+  outline: 2px solid #ffb36b;
+  outline-offset: 3px;
+}
 
 @media (max-width: 980px) {
   .summaryGrid { grid-template-columns: repeat(3, 1fr); }
@@ -111,9 +173,15 @@
   .summaryGrid article:nth-child(3), .capacityCard { grid-column: 1 / -1; }
   .sectionHeading { align-items: flex-start; flex-direction: column; gap: 12px; }
   .metrics { gap: 5px; }
+  .signalGrid { grid-template-columns: 1fr; }
   .cardFooter { align-items: flex-start; flex-direction: column; }
-  .cardFooter button { width: 100%; }
+  .cardActions { width: 100%; }
+  .cardFooter button { flex: 1; }
+  .panelTopline { flex-direction: column; gap: 12px; }
+  .panelControls { width: 100%; justify-content: flex-end; }
   .formRow { grid-template-columns: 1fr; }
+  .geoReadiness { grid-template-columns: auto 1fr; }
+  .geoReadiness a { grid-column: 2; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -2,7 +2,31 @@ import { PLAN_CATALOG } from './plans.js';
 
 export const ACTIVE_PROJECT_COOKIE = 'obrasaas_active_project';
 
-const PROJECT_STATUSES = new Set(['PLANNING', 'ACTIVE', 'PAUSED', 'COMPLETED', 'ARCHIVED']);
+export const PROJECT_STATUSES = Object.freeze([
+  'PLANNING',
+  'ACTIVE',
+  'PAUSED',
+  'COMPLETED',
+  'ARCHIVED',
+]);
+export const PROJECT_CAPACITY_STATUSES = Object.freeze([
+  'PLANNING',
+  'ACTIVE',
+  'PAUSED',
+]);
+
+const PROJECT_STATUS_SET = new Set(PROJECT_STATUSES);
+const PROJECT_CAPACITY_STATUS_SET = new Set(PROJECT_CAPACITY_STATUSES);
+const PROJECT_PATCH_FIELDS = new Set([
+  'name',
+  'address',
+  'startsAt',
+  'endsAt',
+  'geofenceMeters',
+  'latitude',
+  'longitude',
+  'status',
+]);
 
 export class ProjectInputError extends Error {
   constructor(message, code = 'INVALID_PROJECT') {
@@ -59,14 +83,131 @@ export function normalizeProjectInput(input = {}) {
     throw new ProjectInputError('La geocerca debe estar entre 25 y 5000 metros.');
   }
 
+  const latitude = optionalCoordinate(input.latitude, 'La latitud', -90, 90);
+  const longitude = optionalCoordinate(input.longitude, 'La longitud', -180, 180);
+  if ((latitude == null) !== (longitude == null)) {
+    throw new ProjectInputError(
+      'La geocerca necesita latitud y longitud juntas.',
+      'PROJECT_COORDINATES_INCOMPLETE',
+    );
+  }
+
   return {
     name,
     address,
     startsAt,
     endsAt,
     geofenceMeters,
-    latitude: optionalCoordinate(input.latitude, 'La latitud', -90, 90),
-    longitude: optionalCoordinate(input.longitude, 'La longitud', -180, 180),
+    latitude,
+    longitude,
+  };
+}
+
+export function normalizeProjectPatchInput(input = {}) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    throw new ProjectInputError('La actualización de la obra no es válida.');
+  }
+  const unknownEnvelopeFields = Object.keys(input).filter(
+    (field) => !['projectId', 'expectedUpdatedAt', 'data'].includes(field),
+  );
+  if (unknownEnvelopeFields.length > 0) {
+    throw new ProjectInputError(`Campo no permitido: ${unknownEnvelopeFields[0]}.`);
+  }
+
+  const projectId = typeof input.projectId === 'string' ? input.projectId.trim() : '';
+  if (!projectId) {
+    throw new ProjectInputError('Seleccioná una obra válida.');
+  }
+  const expectedDate = new Date(input.expectedUpdatedAt);
+  if (
+    typeof input.expectedUpdatedAt !== 'string'
+    || !input.expectedUpdatedAt.trim()
+    || Number.isNaN(expectedDate.getTime())
+  ) {
+    throw new ProjectInputError(
+      'La versión de la obra es obligatoria para evitar sobrescribir cambios.',
+      'PROJECT_VERSION_REQUIRED',
+    );
+  }
+
+  if (!input.data || typeof input.data !== 'object' || Array.isArray(input.data)) {
+    throw new ProjectInputError('Los cambios de la obra son obligatorios.');
+  }
+  const unknownFields = Object.keys(input.data).filter(
+    (field) => !PROJECT_PATCH_FIELDS.has(field),
+  );
+  if (unknownFields.length > 0) {
+    throw new ProjectInputError(`Campo de obra no permitido: ${unknownFields[0]}.`);
+  }
+
+  const data = {};
+  if (Object.hasOwn(input.data, 'name')) {
+    data.name = cleanText(input.data.name, { field: 'El nombre', min: 3, max: 80 });
+  }
+  if (Object.hasOwn(input.data, 'address')) {
+    data.address = input.data.address
+      ? cleanText(input.data.address, { field: 'La dirección', max: 180 })
+      : null;
+  }
+
+  const hasStartsAt = Object.hasOwn(input.data, 'startsAt');
+  const hasEndsAt = Object.hasOwn(input.data, 'endsAt');
+  if (hasStartsAt !== hasEndsAt) {
+    throw new ProjectInputError(
+      'Para actualizar el cronograma enviá inicio y final prevista juntos.',
+      'PROJECT_DATES_INCOMPLETE',
+    );
+  }
+  if (hasStartsAt) {
+    data.startsAt = optionalDate(input.data.startsAt, 'La fecha de inicio');
+    data.endsAt = optionalDate(input.data.endsAt, 'La fecha de finalización');
+    if (data.startsAt && data.endsAt && data.endsAt < data.startsAt) {
+      throw new ProjectInputError('La fecha de finalización debe ser posterior al inicio.');
+    }
+  }
+
+  if (Object.hasOwn(input.data, 'geofenceMeters')) {
+    const geofenceMeters = Number(input.data.geofenceMeters);
+    if (!Number.isInteger(geofenceMeters) || geofenceMeters < 25 || geofenceMeters > 5_000) {
+      throw new ProjectInputError('La geocerca debe estar entre 25 y 5000 metros.');
+    }
+    data.geofenceMeters = geofenceMeters;
+  }
+
+  const hasLatitude = Object.hasOwn(input.data, 'latitude');
+  const hasLongitude = Object.hasOwn(input.data, 'longitude');
+  if (hasLatitude !== hasLongitude) {
+    throw new ProjectInputError(
+      'Para actualizar la geocerca enviá latitud y longitud juntas.',
+      'PROJECT_COORDINATES_INCOMPLETE',
+    );
+  }
+  if (hasLatitude) {
+    data.latitude = optionalCoordinate(input.data.latitude, 'La latitud', -90, 90);
+    data.longitude = optionalCoordinate(input.data.longitude, 'La longitud', -180, 180);
+    if ((data.latitude == null) !== (data.longitude == null)) {
+      throw new ProjectInputError(
+        'Para activar la geocerca necesitás latitud y longitud.',
+        'PROJECT_COORDINATES_INCOMPLETE',
+      );
+    }
+  }
+
+  if (Object.hasOwn(input.data, 'status')) {
+    const status = String(input.data.status || '').trim().toUpperCase();
+    if (!PROJECT_STATUS_SET.has(status)) {
+      throw new ProjectInputError('El estado operativo de la obra no es válido.');
+    }
+    data.status = status;
+  }
+  if (Object.keys(data).length === 0) {
+    throw new ProjectInputError('Agregá al menos un cambio para guardar.');
+  }
+
+  return {
+    projectId,
+    expectedUpdatedAt: expectedDate.toISOString(),
+    data,
   };
 }
 
@@ -97,6 +238,10 @@ export async function uniqueProjectSlug(prisma, organizationId, name) {
 export function activeProjectLimit(plan) {
   if (!PLAN_CATALOG[plan]) return 0;
   return PLAN_CATALOG[plan].limits.activeProjects;
+}
+
+export function projectConsumesActiveCapacity(status) {
+  return PROJECT_CAPACITY_STATUS_SET.has(status);
 }
 
 export function activeProjectCapacity({ plan, activeCount }) {
@@ -133,7 +278,7 @@ export function activeProjectCookieOptions() {
 }
 
 export function isSelectableProjectStatus(status) {
-  return PROJECT_STATUSES.has(status) && status !== 'ARCHIVED';
+  return PROJECT_STATUS_SET.has(status) && status !== 'ARCHIVED';
 }
 
 export function tenantProjectWhere(organizationId, projectId) {

@@ -89,6 +89,34 @@ test('supplied unknown, blank or disabled phone_number_id never falls back for a
     eventType: 'message',
     phoneNumberId: 'phone-1',
   }), []);
+
+  const pausedStatusPrisma = resolvingPrisma({
+    unique: connection({ projectStatus: 'PAUSED' }),
+  });
+  assert.deepEqual(await resolveWhatsAppConnectionScopes(pausedStatusPrisma, {
+    eventType: 'status',
+    phoneNumberId: 'phone-1',
+  }), [{
+    projectId: 'project-1',
+    organizationId: 'organization-1',
+    phoneNumberId: 'phone-1',
+    whatsappBusinessId: 'waba-1',
+    displayPhoneNumber: '+54 9 11 5555 0001',
+  }]);
+
+  const pausedAccountPrisma = resolvingPrisma({
+    unique: connection({ projectStatus: 'PAUSED' }),
+  });
+  assert.deepEqual(await resolveWhatsAppConnectionScopes(pausedAccountPrisma, {
+    eventType: 'account',
+    phoneNumberId: 'phone-1',
+  }), [{
+    projectId: 'project-1',
+    organizationId: 'organization-1',
+    phoneNumberId: 'phone-1',
+    whatsappBusinessId: 'waba-1',
+    displayPhoneNumber: '+54 9 11 5555 0001',
+  }]);
 });
 
 test('WABA/display fallback is restricted to account events without phone_number_id', async () => {
@@ -112,8 +140,15 @@ test('WABA/display fallback is restricted to account events without phone_number
   assert.deepEqual(accountPrisma.calls[0][1].where, {
     enabled: true,
     whatsappBusinessId: 'waba-1',
-    project: { status: 'ACTIVE' },
   });
+
+  const pausedAccountPrisma = resolvingPrisma({
+    many: [connection({ projectStatus: 'PAUSED' })],
+  });
+  assert.equal((await resolveWhatsAppConnectionScopes(pausedAccountPrisma, {
+    eventType: 'account',
+    whatsappBusinessId: 'waba-1',
+  })).length, 1);
 
   const crossTenantWabaPrisma = resolvingPrisma({ many: [connection(), connection({
     phoneNumberId: 'phone-2',
@@ -168,7 +203,7 @@ test('stored webhook validation binds queue, provider, project, organization and
     projectId: 'project-1',
     phoneNumberId: 'phone-1',
     enabled: true,
-    project: { organizationId: 'organization-1', status: 'ACTIVE' },
+    project: { organizationId: 'organization-1' },
   });
 
   await assert.rejects(
@@ -182,7 +217,7 @@ test('stored webhook validation binds queue, provider, project, organization and
   assert.equal(queries.length, 1);
 });
 
-test('stored webhook validation rejects a scope no longer owned by an active tenant connection', async () => {
+test('stored webhook validation rejects a scope no longer owned by an enabled tenant connection', async () => {
   const prisma = {
     whatsAppConnection: {
       async findFirst() {
@@ -212,4 +247,43 @@ test('stored webhook validation rejects a scope no longer owned by an active ten
     validateStoredWebhookScope(prisma, leasedEvent, event, scope),
     (error) => error.code === 'WEBHOOK_MESSAGE_SCOPE_MISMATCH',
   );
+});
+
+test('a message accepted while active remains valid for draining after the project is paused', async () => {
+  const queries = [];
+  const prisma = {
+    whatsAppConnection: {
+      async findFirst(query) {
+        queries.push(query);
+        return { id: 'connection-1' };
+      },
+    },
+  };
+  const event = {
+    provider: 'meta',
+    eventType: 'message',
+    externalId: 'wamid-accepted-before-pause',
+    phoneNumberId: 'phone-1',
+  };
+  const scope = {
+    projectId: 'project-1',
+    organizationId: 'organization-1',
+    phoneNumberId: 'phone-1',
+  };
+  const leasedEvent = {
+    provider: 'meta',
+    projectId: 'project-1',
+    eventType: 'message',
+    externalId: scopedWebhookExternalId('project-1', event.externalId),
+  };
+
+  assert.deepEqual(await validateStoredWebhookScope(
+    prisma,
+    leasedEvent,
+    event,
+    scope,
+  ), scope);
+  assert.deepEqual(queries[0].where.project, {
+    organizationId: 'organization-1',
+  });
 });

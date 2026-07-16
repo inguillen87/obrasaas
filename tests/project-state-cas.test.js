@@ -18,15 +18,25 @@ const { ProjectStateVersionConflictError } = await import('../src/lib/project-st
 function durableContext() {
   return {
     organization: { id: 'org-1' },
-    project: { id: 'project-1' },
+    project: { id: 'project-1', organizationId: 'org-1' },
   };
 }
 
-function transactionDouble(currentSnapshot) {
+function transactionDouble(currentSnapshot, projectStatus = 'ACTIVE') {
   const calls = [];
   const transaction = {
     async $executeRawUnsafe(query, projectId) {
       calls.push(['lock', query, projectId]);
+    },
+    project: {
+      async findFirst(args) {
+        calls.push(['project', args]);
+        return {
+          id: 'project-1',
+          organizationId: 'org-1',
+          status: projectStatus,
+        };
+      },
     },
     projectSnapshot: {
       async findUnique() {
@@ -82,13 +92,13 @@ test('state CAS locks, reads, derives activities and increments in one transacti
     },
   });
 
-  assert.deepEqual(calls.map(([name]) => name), ['lock', 'read', 'write', 'audit']);
+  assert.deepEqual(calls.map(([name]) => name), ['lock', 'project', 'read', 'write', 'audit']);
   assert.match(calls[0][1], /pg_advisory_xact_lock/);
   assert.equal(calls[0][2], 'project-1');
   assert.deepEqual(derivationInput, { current: before, next: after });
-  assert.equal(calls[2][1].update.version, 8);
-  assert.equal(calls[2][1].create.version, 8);
-  assert.equal(calls[3][1].data[0].actorId, 'user-1');
+  assert.equal(calls[3][1].update.version, 8);
+  assert.equal(calls[3][1].create.version, 8);
+  assert.equal(calls[4][1].data[0].actorId, 'user-1');
   assert.equal(stored.version, 8);
   assert.deepEqual(stored.state, after);
 });
@@ -118,6 +128,30 @@ test('state CAS rejects a stale writer before writing or auditing', async () => 
     ),
   );
 
-  assert.deepEqual(calls.map(([name]) => name), ['lock', 'read']);
+  assert.deepEqual(calls.map(([name]) => name), ['lock', 'project', 'read']);
 });
 
+for (const status of ['COMPLETED', 'ARCHIVED']) {
+  test(`state writes reject a ${status.toLowerCase()} project under the project lock`, async () => {
+    const { calls, transaction } = transactionDouble({
+      state: { tasks: {} },
+      version: 5,
+      updatedAt: new Date(),
+    }, status);
+
+    await assert.rejects(
+      persistProjectStateTransaction(transaction, {
+        context: durableContext(),
+        scope: {},
+        state: { tasks: { unsafe: {} } },
+        expectedVersion: 5,
+      }),
+      (error) => (
+        error.code === 'PROJECT_READ_ONLY'
+        && error.status === 409
+        && error.projectStatus === status
+      ),
+    );
+    assert.deepEqual(calls.map(([name]) => name), ['lock', 'project']);
+  });
+}

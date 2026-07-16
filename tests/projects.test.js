@@ -7,6 +7,8 @@ import {
   isUnconfiguredTenantBootstrapProject,
   isSelectableProjectStatus,
   normalizeProjectInput,
+  normalizeProjectPatchInput,
+  projectConsumesActiveCapacity,
   projectSlugBase,
   tenantProjectWhere,
 } from '../src/lib/projects.js';
@@ -47,6 +49,65 @@ test('project input rejects unsafe operational ranges', () => {
     }),
     /posterior/,
   );
+  assert.throws(
+    () => normalizeProjectInput({
+      name: 'Obra válida',
+      latitude: -34.6,
+    }),
+    (error) => error.code === 'PROJECT_COORDINATES_INCOMPLETE',
+  );
+});
+
+test('project patch input is strict, versioned and normalizes the complete editor payload', () => {
+  const patch = normalizeProjectPatchInput({
+    projectId: ' project-1 ',
+    expectedUpdatedAt: '2026-07-16T10:30:00.000Z',
+    data: {
+      name: ' Hospital Regional Norte ',
+      address: '',
+      startsAt: '2026-08-01',
+      endsAt: '2027-03-31',
+      geofenceMeters: '225',
+      latitude: '-31.4201',
+      longitude: '-64.1888',
+      status: 'paused',
+    },
+  });
+
+  assert.equal(patch.projectId, 'project-1');
+  assert.equal(patch.expectedUpdatedAt, '2026-07-16T10:30:00.000Z');
+  assert.equal(patch.data.name, 'Hospital Regional Norte');
+  assert.equal(patch.data.address, null);
+  assert.equal(patch.data.geofenceMeters, 225);
+  assert.equal(patch.data.latitude, -31.4201);
+  assert.equal(patch.data.longitude, -64.1888);
+  assert.equal(patch.data.status, 'PAUSED');
+});
+
+test('project patch input rejects stale-unsafe and incomplete payloads', () => {
+  assert.throws(
+    () => normalizeProjectPatchInput({
+      projectId: 'project-1',
+      data: { status: 'ACTIVE' },
+    }),
+    (error) => error.code === 'PROJECT_VERSION_REQUIRED',
+  );
+  assert.throws(
+    () => normalizeProjectPatchInput({
+      projectId: 'project-1',
+      expectedUpdatedAt: '2026-07-16T10:30:00.000Z',
+      data: { latitude: -34.6 },
+    }),
+    (error) => error.code === 'PROJECT_COORDINATES_INCOMPLETE',
+  );
+  assert.throws(
+    () => normalizeProjectPatchInput({
+      projectId: 'project-1',
+      expectedUpdatedAt: '2026-07-16T10:30:00.000Z',
+      data: { unexpected: true },
+    }),
+    /no permitido/,
+  );
 });
 
 test('plan capacity prevents silent project overages', () => {
@@ -59,6 +120,11 @@ test('plan capacity prevents silent project overages', () => {
   assert.equal(activeProjectCapacity({ plan: 'PRO', activeCount: 9 }).canCreate, true);
   assert.equal(activeProjectCapacity({ plan: 'ENTERPRISE', activeCount: 500 }).limit, null);
   assert.equal(activeProjectCapacity({ plan: 'UNKNOWN', activeCount: 0 }).canCreate, false);
+  assert.equal(projectConsumesActiveCapacity('PLANNING'), true);
+  assert.equal(projectConsumesActiveCapacity('ACTIVE'), true);
+  assert.equal(projectConsumesActiveCapacity('PAUSED'), true);
+  assert.equal(projectConsumesActiveCapacity('COMPLETED'), false);
+  assert.equal(projectConsumesActiveCapacity('ARCHIVED'), false);
 });
 
 test('the first real project configures the empty tenant bootstrap instead of consuming a second seat', () => {

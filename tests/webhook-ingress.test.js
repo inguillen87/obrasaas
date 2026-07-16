@@ -192,6 +192,24 @@ test('bulk scope resolution uses one query and preserves phone, WABA and display
   ]);
 });
 
+test('paused projects reject new messages but keep delivery and account events routable', async () => {
+  const pausedConnection = connection({ projectStatus: 'PAUSED' });
+  const prisma = fakeDurablePrisma([pausedConnection]);
+  const scopes = await resolveWhatsAppConnectionScopesBulk(prisma, [
+    { eventType: 'message', phoneNumberId: pausedConnection.phoneNumberId },
+    { eventType: 'status', phoneNumberId: pausedConnection.phoneNumberId },
+    { eventType: 'account', phoneNumberId: pausedConnection.phoneNumberId },
+  ]);
+
+  assert.deepEqual(scopes.map((matches) => matches.map((scope) => scope.projectId)), [
+    [],
+    ['project-1'],
+    ['project-1'],
+  ]);
+  assert.equal(prisma.scopeQueries.length, 1);
+  assert.equal(Object.hasOwn(prisma.scopeQueries[0].where, 'project'), false);
+});
+
 test('WABA account events fan out only inside one tenant organization', async () => {
   const sameTenantA = connection({
     phoneNumberId: 'phone-a',
