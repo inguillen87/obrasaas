@@ -43,6 +43,7 @@ export default async function DashboardPage() {
         whatsappLastVerifiedAt: whatsapp?.lastVerifiedAt?.toISOString() || null,
         isDemoData: !snapshot,
         lastDataAt: snapshot?.updatedAt?.toISOString() || null,
+        canManageProjects: hasTenantPermission(access, 'org:projects:manage'),
         canViewTeam: hasTenantPermission(access, 'tenant:members:read'),
         canManageIntegrations: hasTenantPermission(access, 'org:integrations:manage'),
       }}

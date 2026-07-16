@@ -5,6 +5,7 @@ const isProtectedRoute = createRouteMatcher([
   '/superadmin(.*)',
   '/presupuesto(.*)',
   '/session-tasks(.*)',
+  '/api/ai(.*)',
   '/api/billing(.*)',
   '/api/evidence(.*)',
   '/api/integrations(.*)',

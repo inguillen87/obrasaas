@@ -5,27 +5,6 @@ import Link from 'next/link';
 import { OrganizationSwitcher, UserButton, useUser } from '@clerk/nextjs';
 import PlatformReadiness from './platform-readiness';
 
-function parseAgenticMessage(message) {
-  const text = message.replace(/\*\*/g, '');
-  const parts = [];
-  let cursor = 0;
-
-  for (const match of text.matchAll(/\[ACTION:(.*?):(.*?)\]/g)) {
-    if (match.index > cursor) {
-      parts.push({ type: 'text', content: text.slice(cursor, match.index) });
-    }
-
-    parts.push({ type: 'action', cmd: match[1], label: match[2] });
-    cursor = match.index + match[0].length;
-  }
-
-  if (cursor < text.length) {
-    parts.push({ type: 'text', content: text.slice(cursor) });
-  }
-
-  return { parts, text };
-}
-
 const initialAppState = {
   operariosCount: 1,
   avancePercentage: 42,
@@ -221,9 +200,14 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
   const [copilotMessages, setCopilotMessages] = useState([
     {
       sender: "bot",
-      text: "Hola Arq. Marcelo. ¿Deseas un resumen de la obra, el estado de asistencia, alertas o heridos?"
+      text: "Puedo analizar el avance, la asistencia, los materiales y las alertas registradas en esta obra. Las acciones siempre quedan sujetas a aprobación humana.",
+      confidence: null,
+      evidence: [],
+      limitations: [],
+      actions: [],
     }
   ]);
+  const [copilotStatus, setCopilotStatus] = useState('idle');
 
   // Audio Playback Waveforms Animation State
   const [playingAudioIndex, setPlayingAudioIndex] = useState(null);
@@ -847,125 +831,110 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
     return () => window.removeEventListener('resize', drawGanttDependencyLines);
   }, [activeTab, drawGanttDependencyLines]);
 
-  // NLP bot response (Supervisor & CRM AI engine)
-  const getBotResponse = (msgText) => {
-    const lower = msgText.toLowerCase();
-    
-    // Cross-referencing logic: NLP engine upgrades
-    if (lower.includes('falto') || lower.includes('asistencia') || lower.includes('llegaron') || lower.includes('presente') || lower.includes('tarde') || lower.includes('quien') || lower.includes('fichaje')) {
-        let present = [];
-        let absent = [];
-        Object.keys(state.attendance).forEach(name => {
-            if (state.attendance[name].status.includes('Presente')) present.push(`${name} (${state.attendance[name].checkin})`);
-            else absent.push(name);
-        });
-        
-        let reply = `**[Monitoreo de Asistencia Biométrico - AI]**\n\n`;
-        reply += `Actualmente detecto **${state.operariosCount} operarios** en la zona caliente de obra.\n\n`;
-        reply += `🟢 **Ingresos Check-in**: ${present.length > 0 ? present.join(', ') : 'Ninguno'}.\n`;
-        reply += `🔴 **Faltas Injustificadas**: ${absent.length > 0 ? absent.join(', ') : 'Plantilla Completa'}.\n\n`;
-        
-        if (absent.length > 0) {
-            reply += `⚠️ **Sugerencia Predictiva**: Conviene revisar la asignación del módulo "Revestimiento" por la ausencia de ${absent[0]}. Puedo crear una solicitud para que el responsable la apruebe.\n[ACTION:CREAR_SOLICITUD_REASIGNACION:Crear solicitud de reasignación]`;
-        } else {
-            reply += `La cuadrilla está operando a máxima capacidad.`;
-        }
-        return reply;
+  const handleAgenticAction = async (suggestion) => {
+    if (!setup.canManageProjects) {
+      addToast('Tu rol puede consultar la obra, pero no crear solicitudes operativas.', 'warning');
+      return;
     }
-    
-    if (lower.includes('resumen') || lower.includes('avance') || lower.includes('como va') || lower.includes('avances') || lower.includes('progreso') || lower.includes('gantt') || lower.includes('cronograma')) {
-        let reply = `**[Auditoría de Avance y Gantt - AI]**\n\n`;
-        reply += `El progreso real de la obra es del **${state.avancePercentage}%** (frente al 32% proyectado en curva S).\n\n`;
-        
-        Object.keys(state.tasks).forEach(id => {
-            const t = state.tasks[id];
-            reply += `• **${t.name}**: ${t.progress}% (${t.assignee}).\n`;
-        });
-        
-        // Stock Insight crossover
-        if (state.stockpiles.cemento.status === 'Crítico') {
-            reply += `\n🚨 **Bloqueador Potencial**: El bajo stock de Cemento (35 bolsas) puede retrasar las tareas en 48hs. Recomiendo iniciar una solicitud de compra para aprobación.\n[ACTION:CREAR_SOLICITUD_COMPRA_CEMENTO:Crear solicitud de compra]`;
-        }
-        return reply;
-    }
-    
-    if (lower.includes('herido') || lower.includes('accidente') || lower.includes('heridos') || lower.includes('seguridad') || lower.includes('alerta') || lower.includes('alertas') || lower.includes('problema') || lower.includes('preocupante') || lower.includes('fuga') || lower.includes('agua') || lower.includes('caño') || lower.includes('cañería')) {
-        let reply = `**[Control de Riesgos de Obra - AI]**\n\n`;
-        reply += `👷 **Integridad Física**: 🔴 0 Accidentes Reportados.\n\n`;
-        
-        if (state.incidents.length > 0) {
-            reply += `⚠️ **Incidencias Estructurales Activas**:\n`;
-            state.incidents.forEach(inc => {
-                reply += `• *${inc.title}: ${inc.description}*\n`;
-            });
-            reply += `\nHe procedido a notificar a los subcontratistas y al arquitecto residente para la mitigación inmediata del riesgo.`;
-        }
-        return reply;
-    }
-    
-    return `Hola, Marcelo. Soy tu Copiloto Inteligente de ObraSaaS. Puedes preguntarme acerca de:\n\n` + 
-           `• *¿Quiénes llegaron y quiénes faltaron hoy?*\n` + 
-           `• *Dame un resumen de avances frente al Gantt*\n` + 
-           `• *¿Existen problemas de stock o alertas de roturas?*\n\n` + 
-           `Analizo 140 variables de obra y sensores GPS en vivo.`;
-  };
-
-  // Actionable AI (Agentic Workflow Handler)
-  const handleAgenticAction = async (actionCmd) => {
     const actions = {
-      CREAR_SOLICITUD_REASIGNACION: {
+      REQUEST_CREW_REASSIGNMENT: {
         title: 'Reasignación de cuadrilla pendiente',
-        description: 'El Copiloto detectó una ausencia y creó una solicitud para que el responsable revise la asignación de Revestimiento.',
+        description: 'El Supervisor IA sugirió revisar una reasignación de cuadrilla. La solicitud requiere aprobación del responsable.',
       },
-      CREAR_SOLICITUD_COMPRA_CEMENTO: {
-        title: 'Compra de cemento pendiente de aprobación',
-        description: 'El stock está debajo del mínimo. La solicitud requiere cantidad, proveedor y aprobación antes de emitir cualquier orden.',
+      REQUEST_MATERIAL_PURCHASE: {
+        title: 'Compra de material pendiente de aprobación',
+        description: 'El Supervisor IA detectó un posible riesgo de stock. La solicitud requiere cantidad, proveedor y aprobación antes de emitir una orden.',
       },
     };
-    const action = actions[actionCmd];
+    const action = actions[suggestion?.type];
     if (!action) {
       addToast('Comando de IA no reconocido.', 'warning');
       return;
     }
 
     const newIncident = {
-      id: `approval-${actionCmd.toLowerCase()}-${state.incidents.length + 1}`,
+      id: createClientEntityId('approval-ai'),
       title: action.title,
-      description: action.description,
+      description: suggestion.rationale || action.description,
       type: 'warning',
       badge: 'Requiere aprobación',
       timestamp: 'Recién creada',
-      reporter: 'Copiloto IA',
+      reporter: 'Supervisor IA',
       icon: 'fa-solid fa-clipboard-check',
     };
     const nextState = { ...state, incidents: [newIncident, ...state.incidents] };
-    setState(nextState);
-    await saveStateToApi(nextState);
+    const saved = await saveStateToApi(nextState);
+    if (!saved) return;
     addToast('Solicitud creada. No se ejecutó ninguna acción externa.', 'success');
     setCopilotMessages(prev => [...prev, {
       sender: 'bot',
       text: '✅ Solicitud registrada para aprobación humana. No se emitieron órdenes ni mensajes externos.',
+      confidence: 'high',
+      evidence: [],
+      limitations: [],
+      actions: [],
     }]);
   };
 
-  // Supervisor IA Chat handler
-  const sendCopilotUserMessage = () => {
-    const text = copilotInput.trim();
-    if (!text) return;
+  const sendCopilotUserMessage = async (promptOverride = null) => {
+    const text = (typeof promptOverride === 'string' ? promptOverride : copilotInput).trim();
+    if (!text || copilotStatus === 'loading') return;
 
-    const userMsg = { sender: 'user', text };
+    const history = copilotMessages
+      .filter((message) => message.text && !message.error)
+      .slice(-8)
+      .map((message) => ({
+        role: message.sender === 'user' ? 'user' : 'assistant',
+        content: message.text.slice(0, 1_200),
+      }));
+    const userMsg = {
+      sender: 'user',
+      text,
+      confidence: null,
+      evidence: [],
+      limitations: [],
+      actions: [],
+    };
     setCopilotMessages(prev => [...prev, userMsg]);
     setCopilotInput('');
+    setCopilotStatus('loading');
 
-    setTimeout(() => {
-      const responseText = getBotResponse(text);
-      const botMsg = { sender: 'bot', text: responseText };
+    try {
+      const response = await fetch('/api/ai/supervisor', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: text, history }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'El Supervisor IA no está disponible.');
+
+      const botMsg = {
+        sender: 'bot',
+        text: data.answer,
+        confidence: data.confidence,
+        evidence: data.evidence || [],
+        limitations: data.limitations || [],
+        actions: data.actions || [],
+        model: data.model,
+        generatedAt: data.generatedAt,
+      };
       setCopilotMessages(prev => [...prev, botMsg]);
-
-      // Speak audio synthesis of bot response (clean text)
-      const cleanText = responseText.replace(/\*\*|\[.*?\]|•|🟢|🔴|⚠️/g, '').split('.')[0];
+      const cleanText = data.answer.replace(/\*\*|\[.*?\]|•|🟢|🔴|⚠️/g, '').split('.')[0];
       speakTextSpanish(cleanText);
-    }, 1000);
+    } catch (error) {
+      setCopilotMessages(prev => [...prev, {
+        sender: 'bot',
+        text: error.message || 'No pude procesar la consulta. Probá nuevamente.',
+        confidence: null,
+        evidence: [],
+        limitations: [],
+        actions: [],
+        error: true,
+      }]);
+      addToast(error.message || 'El Supervisor IA no está disponible.', 'error');
+    } finally {
+      setCopilotStatus('idle');
+    }
   };
 
   const handleSendMessage = async () => {
@@ -1637,82 +1606,106 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
               </div>
 
               {/* Architect AI Supervisor Card */}
-              <div className="glass-panel-premium dashboard-card-hover" style={{ display: 'flex', flexDirection: 'column' }}>
-                <h3 style={{ fontFamily: 'var(--font-heading)', marginBottom: '4px', color: 'var(--primary)' }}><i className="fa-solid fa-wand-magic-sparkles"></i> Supervisor IA de Obra</h3>
+              <div className="glass-panel-premium dashboard-card-hover copilot-panel">
+                <div className="copilot-heading">
+                  <div>
+                    <span className="copilot-eyebrow">Inteligencia operativa</span>
+                    <h3><i className="fa-solid fa-wand-magic-sparkles"></i> Supervisor IA de Obra</h3>
+                  </div>
+                  <span className={`copilot-scope-badge ${setup.isDemoData ? 'is-demo' : 'is-live'}`}>
+                    <span className="copilot-status-dot"></span>
+                    {setup.isDemoData ? 'Datos demostrativos' : 'Obra activa'}
+                  </span>
+                </div>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginBottom: '10px' }}>
-                  Pregúntale al supervisor un resumen global de avances, asistencia o alertas sin navegar menú por menú.
+                  Consultá avances, asistencia, stock y riesgos con evidencia de la obra seleccionada. No ejecuta acciones sin aprobación.
                 </p>
                 
                 <div className="copilot-chat-box">
                   <div className="copilot-chat-messages" style={{ overflowY: 'auto' }}>
-                    {copilotMessages.map((msg, i) => {
-                      const { parts, text } = parseAgenticMessage(msg.text);
-
-                      return (
-                      <div key={i} style={{ 
-                        background: msg.sender === 'user' ? 'var(--primary-glow)' : 'rgba(255,255,255,0.03)', 
-                        padding: '10px 14px', 
-                        borderRadius: '12px', 
-                        alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start', 
-                        maxWidth: '90%',
-                        fontSize: '0.8rem',
-                        color: '#fff',
-                        border: msg.sender === 'bot' ? '1px solid rgba(255,255,255,0.05)' : 'none',
-                        boxShadow: msg.sender === 'bot' ? '0 4px 6px rgba(0,0,0,0.1)' : 'none'
-                      }}>
-                        {parts.length > 0 ? parts.map((p, idx) => {
-                          if (p.type === 'text') {
-                            return <span key={idx} style={{ whiteSpace: 'pre-wrap' }}>{p.content}</span>;
-                          } else {
-                            return (
-                              <button 
-                                key={idx} 
-                                onClick={() => handleAgenticAction(p.cmd)}
-                                style={{
-                                  display: 'block',
-                                  marginTop: '10px',
-                                  padding: '8px 12px',
-                                  background: 'var(--success)',
-                                  color: 'var(--bg-main)',
-                                  border: 'none',
-                                  borderRadius: '6px',
-                                  fontWeight: 'bold',
-                                  cursor: 'pointer',
-                                  fontSize: '0.75rem',
-                                  width: '100%',
-                                  textAlign: 'center',
-                                  transition: 'transform 0.2s'
-                                }}
-                                onMouseOver={(e) => e.target.style.transform = 'scale(1.02)'}
-                                onMouseOut={(e) => e.target.style.transform = 'scale(1)'}
-                              >
-                                <i className="fa-solid fa-bolt"></i> {p.label}
-                              </button>
-                            );
-                          }
-                        }) : <span style={{ whiteSpace: 'pre-wrap' }}>{text}</span>}
+                    {copilotMessages.map((msg, i) => (
+                      <div
+                        key={`${msg.sender}-${msg.generatedAt || i}`}
+                        className={`copilot-message ${msg.sender === 'user' ? 'is-user' : 'is-assistant'} ${msg.error ? 'is-error' : ''}`}
+                      >
+                        <span className="copilot-message-text">{msg.text}</span>
+                        {msg.confidence && (
+                          <div className="copilot-answer-meta">
+                            <span>Confianza {msg.confidence === 'high' ? 'alta' : msg.confidence === 'medium' ? 'media' : 'baja'}</span>
+                            {msg.model && <span>{msg.model}</span>}
+                          </div>
+                        )}
+                        {msg.evidence?.length > 0 && (
+                          <details className="copilot-evidence">
+                            <summary><i className="fa-solid fa-list-check"></i> Evidencia usada ({msg.evidence.length})</summary>
+                            <ul>
+                              {msg.evidence.map((item, evidenceIndex) => (
+                                <li key={`${item}-${evidenceIndex}`}>{item}</li>
+                              ))}
+                            </ul>
+                          </details>
+                        )}
+                        {msg.limitations?.length > 0 && (
+                          <div className="copilot-limitations">
+                            <i className="fa-solid fa-circle-info"></i>
+                            <span>{msg.limitations.join(' ')}</span>
+                          </div>
+                        )}
+                        {msg.actions?.map((action) => (
+                          <button
+                            type="button"
+                            key={action.type}
+                            className="copilot-action-btn"
+                            onClick={() => handleAgenticAction(action)}
+                            disabled={!setup.canManageProjects}
+                            title={!setup.canManageProjects ? 'Tu rol no puede crear solicitudes operativas' : action.rationale}
+                          >
+                            <i className="fa-solid fa-clipboard-check"></i>
+                            {action.label}
+                            <span>Requiere aprobación</span>
+                          </button>
+                        ))}
                       </div>
-                      );
-                    })}
+                    ))}
+                    {copilotStatus === 'loading' && (
+                      <div className="copilot-message is-assistant is-loading" role="status">
+                        <span className="copilot-thinking"><i></i><i></i><i></i></span>
+                        Analizando la obra activa…
+                      </div>
+                    )}
                     <div ref={copilotMessagesEndRef}></div>
                   </div>
-                  <div className="copilot-chat-input-container">
+                  <form
+                    className="copilot-chat-input-container"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void sendCopilotUserMessage();
+                    }}
+                  >
                     <input 
                       type="text" 
                       className="copilot-chat-input" 
                       placeholder="Pregunta al Supervisor de la obra..." 
                       value={copilotInput}
                       onChange={(e) => setCopilotInput(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && sendCopilotUserMessage()}
+                      maxLength={2000}
+                      disabled={copilotStatus === 'loading'}
+                      aria-label="Consulta para el Supervisor IA"
                     />
-                    <button className="copilot-chat-btn" onClick={sendCopilotUserMessage}>Consultar</button>
-                  </div>
+                    <button
+                      type="submit"
+                      className="copilot-chat-btn"
+                      disabled={copilotStatus === 'loading' || !copilotInput.trim()}
+                    >
+                      {copilotStatus === 'loading' ? 'Analizando…' : 'Consultar'}
+                    </button>
+                  </form>
                 </div>
 
-                <div className="crm-suggestions" style={{ marginTop: 0 }}>
-                  <span className="crm-suggest-tag" onClick={() => { setCopilotInput("Haceme un resumen de cómo van los avances"); setTimeout(sendCopilotUserMessage, 50); }}>Resumen de avances</span>
-                  <span className="crm-suggest-tag" onClick={() => { setCopilotInput("¿Alguien faltó hoy? ¿Llegaron todos a tiempo?"); setTimeout(sendCopilotUserMessage, 50); }}>Asistencia hoy</span>
-                  <span className="crm-suggest-tag" onClick={() => { setCopilotInput("¿Hay algún mensaje preocupante, alerta o heridos?"); setTimeout(sendCopilotUserMessage, 50); }}>¿Alguna alerta o heridos?</span>
+                <div className="crm-suggestions copilot-suggestions">
+                  <button type="button" className="crm-suggest-tag" onClick={() => void sendCopilotUserMessage('Haceme un resumen ejecutivo del avance y los bloqueos registrados.')} disabled={copilotStatus === 'loading'}>Resumen ejecutivo</button>
+                  <button type="button" className="crm-suggest-tag" onClick={() => void sendCopilotUserMessage('¿Quiénes figuran presentes y qué datos de asistencia faltan hoy?')} disabled={copilotStatus === 'loading'}>Asistencia hoy</button>
+                  <button type="button" className="crm-suggest-tag" onClick={() => void sendCopilotUserMessage('¿Qué alertas, incidentes o riesgos de stock requieren atención?')} disabled={copilotStatus === 'loading'}>Riesgos abiertos</button>
                 </div>
               </div>
             </div>
@@ -2850,11 +2843,66 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
             margin-bottom: 16px;
             z-index: 10;
         }
+        .copilot-panel {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+        .copilot-heading {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 6px;
+        }
+        .copilot-heading h3 {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 2px 0 0;
+            color: var(--primary);
+            font-family: var(--font-heading);
+        }
+        .copilot-eyebrow {
+            color: var(--text-secondary);
+            font-size: 0.62rem;
+            font-weight: 800;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+        .copilot-scope-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            flex: 0 0 auto;
+            padding: 5px 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 999px;
+            color: var(--text-secondary);
+            background: rgba(255, 255, 255, 0.035);
+            font-size: 0.64rem;
+            font-weight: 700;
+        }
+        .copilot-scope-badge.is-live {
+            color: var(--success);
+            border-color: color-mix(in srgb, var(--success) 35%, transparent);
+        }
+        .copilot-scope-badge.is-demo {
+            color: var(--warning);
+            border-color: color-mix(in srgb, var(--warning) 35%, transparent);
+        }
+        .copilot-status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: currentColor;
+            box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 12%, transparent);
+        }
         .copilot-chat-box {
             display: flex;
             flex-direction: column;
-            height: 220px;
-            background: rgba(0, 0, 0, 0.25);
+            height: 320px;
+            background: linear-gradient(180deg, rgba(8, 13, 19, 0.68), rgba(4, 8, 12, 0.42));
             border-radius: 12px;
             border: 1px solid var(--border-color);
             overflow: hidden;
@@ -2869,6 +2917,129 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
             gap: 8px;
             font-size: 0.8rem;
         }
+        .copilot-message {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-width: 92%;
+            padding: 10px 12px;
+            border-radius: 12px;
+            color: var(--text-primary);
+            line-height: 1.5;
+        }
+        .copilot-message.is-assistant {
+            align-self: flex-start;
+            background: rgba(255, 255, 255, 0.045);
+            border: 1px solid rgba(255, 255, 255, 0.07);
+            box-shadow: 0 8px 22px rgba(0, 0, 0, 0.12);
+        }
+        .copilot-message.is-user {
+            align-self: flex-end;
+            color: #fff;
+            background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 78%, #111), color-mix(in srgb, var(--primary) 55%, #111));
+            border-bottom-right-radius: 4px;
+        }
+        .copilot-message.is-error {
+            border-color: color-mix(in srgb, var(--danger) 38%, transparent);
+            background: color-mix(in srgb, var(--danger) 10%, transparent);
+        }
+        .copilot-message-text {
+            white-space: pre-wrap;
+        }
+        .copilot-answer-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            padding-top: 7px;
+            border-top: 1px solid var(--border-color);
+        }
+        .copilot-answer-meta span {
+            padding: 3px 6px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-secondary);
+            font-size: 0.62rem;
+            font-weight: 700;
+        }
+        .copilot-evidence {
+            color: var(--text-secondary);
+            font-size: 0.72rem;
+        }
+        .copilot-evidence summary {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--primary);
+            cursor: pointer;
+            font-weight: 700;
+        }
+        .copilot-evidence ul {
+            margin: 8px 0 0;
+            padding-left: 18px;
+        }
+        .copilot-evidence li + li {
+            margin-top: 5px;
+        }
+        .copilot-limitations {
+            display: flex;
+            gap: 7px;
+            padding: 8px;
+            border-radius: 8px;
+            background: color-mix(in srgb, var(--warning) 8%, transparent);
+            color: var(--text-secondary);
+            font-size: 0.7rem;
+        }
+        .copilot-limitations i {
+            color: var(--warning);
+            margin-top: 2px;
+        }
+        .copilot-action-btn {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 2px 8px;
+            align-items: center;
+            width: 100%;
+            padding: 9px 10px;
+            border: 1px solid color-mix(in srgb, var(--success) 32%, transparent);
+            border-radius: 8px;
+            color: var(--text-primary);
+            background: color-mix(in srgb, var(--success) 10%, transparent);
+            cursor: pointer;
+            font: inherit;
+            font-weight: 750;
+            text-align: left;
+        }
+        .copilot-action-btn i {
+            grid-row: 1 / span 2;
+            color: var(--success);
+        }
+        .copilot-action-btn span {
+            color: var(--text-secondary);
+            font-size: 0.62rem;
+            font-weight: 600;
+        }
+        .copilot-action-btn:disabled {
+            cursor: not-allowed;
+            opacity: 0.52;
+        }
+        .copilot-message.is-loading {
+            flex-direction: row;
+            align-items: center;
+            color: var(--text-secondary);
+        }
+        .copilot-thinking {
+            display: inline-flex;
+            gap: 3px;
+        }
+        .copilot-thinking i {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: var(--primary);
+            animation: copilot-bounce 1.1s infinite ease-in-out;
+        }
+        .copilot-thinking i:nth-child(2) { animation-delay: 0.14s; }
+        .copilot-thinking i:nth-child(3) { animation-delay: 0.28s; }
         .copilot-chat-input-container {
             display: flex;
             border-top: 1px solid var(--border-color);
@@ -2882,6 +3053,9 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
             font-size: 0.8rem;
             outline: none;
         }
+        .copilot-chat-input:disabled {
+            opacity: 0.65;
+        }
         .copilot-chat-btn {
             background: var(--primary);
             color: var(--bg-main);
@@ -2890,6 +3064,38 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
             cursor: pointer;
             font-weight: 600;
             font-size: 0.8rem;
+        }
+        .copilot-chat-btn:disabled {
+            cursor: not-allowed;
+            filter: saturate(0.45);
+            opacity: 0.58;
+        }
+        .copilot-suggestions {
+            margin-top: 0;
+        }
+        .copilot-suggestions .crm-suggest-tag {
+            font: inherit;
+        }
+        .copilot-suggestions .crm-suggest-tag:disabled {
+            cursor: not-allowed;
+            opacity: 0.48;
+        }
+        @keyframes copilot-bounce {
+            0%, 60%, 100% { transform: translateY(0); opacity: 0.45; }
+            30% { transform: translateY(-3px); opacity: 1; }
+        }
+
+        @media (max-width: 640px) {
+            .copilot-heading {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+            .copilot-chat-box {
+                height: 360px;
+            }
+            .copilot-chat-btn {
+                padding-inline: 10px;
+            }
         }
 
         /* Responsive Layout Overrides for Print Mode */
