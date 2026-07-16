@@ -64,6 +64,24 @@ test('the write guard locks first and re-reads the tenant-bound project status',
   });
 });
 
+test('operational mutations use read committed so the status read is fresh after the project lock', async () => {
+  const { calls, transaction } = transactionDouble('ACTIVE');
+  let receivedOptions = null;
+  const prisma = {
+    async $transaction(callback, options) {
+      receivedOptions = options;
+      return callback(transaction);
+    },
+  };
+
+  await runOperationalProjectMutation(prisma, scope, (tx) => tx.worker.create({
+    data: { projectId: scope.projectId, name: 'Capataz' },
+  }));
+
+  assert.deepEqual(receivedOptions, { isolationLevel: 'ReadCommitted' });
+  assert.deepEqual(calls.map(([name]) => name), ['lock', 'project', 'worker-create']);
+});
+
 for (const status of ['COMPLETED', 'ARCHIVED']) {
   test(`${status.toLowerCase()} projects reject field administration before mutation`, async () => {
     const { calls, transaction } = transactionDouble(status);

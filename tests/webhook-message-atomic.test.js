@@ -121,6 +121,69 @@ test('an accepted message can finish draining after its project is paused', asyn
   assert.deepEqual(projectQuery.where, {
     id: scope.projectId,
     organizationId: scope.organizationId,
+    status: { in: ['ACTIVE', 'PAUSED'] },
   });
   assert.equal(calls.some(([name]) => name === 'event-apply'), true);
 });
+
+for (const terminalStatus of ['COMPLETED', 'ARCHIVED']) {
+  test(`an accepted message cannot mutate a project after it becomes ${terminalStatus.toLowerCase()}`, async () => {
+    const scope = {
+      projectId: `project-${terminalStatus.toLowerCase()}`,
+      organizationId: 'organization-a',
+      phoneNumberId: 'phone-a',
+    };
+    const calls = [];
+    const transaction = {
+      async $executeRawUnsafe(query, projectId) {
+        calls.push(['lock', query, projectId]);
+      },
+      webhookEvent: {
+        async findFirst(args) {
+          calls.push(['event-read', args]);
+          return { id: 'event-terminal', appliedAt: null, outcome: null };
+        },
+      },
+      project: {
+        async findFirst(args) {
+          calls.push(['project', args]);
+          return args.where.status.in.includes(terminalStatus)
+            ? {
+                id: scope.projectId,
+                organizationId: scope.organizationId,
+                status: terminalStatus,
+              }
+            : null;
+        },
+      },
+    };
+    globalThis.__obraSaasPrisma = {
+      async $transaction(callback) {
+        return callback(transaction);
+      },
+    };
+
+    await assert.rejects(
+      applyWebhookMessageAtomically({
+        eventId: 'event-terminal',
+        leaseToken: 'lease-terminal',
+        event: {
+          provider: 'meta',
+          eventType: 'message',
+          externalId: `wamid.${terminalStatus.toLowerCase()}`,
+          phoneNumberId: scope.phoneNumberId,
+          from: '+5491112345678',
+        },
+        scope,
+        apply: async () => {
+          throw new Error('The engine must not run for a terminal project.');
+        },
+      }),
+      (error) => error.code === 'WEBHOOK_MESSAGE_SCOPE_MISMATCH',
+    );
+
+    const projectQuery = calls.find(([name]) => name === 'project')[1];
+    assert.deepEqual(projectQuery.where.status, { in: ['ACTIVE', 'PAUSED'] });
+    assert.equal(calls.some(([name]) => name === 'event-apply'), false);
+  });
+}

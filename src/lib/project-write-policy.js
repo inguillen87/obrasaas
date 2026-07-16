@@ -92,7 +92,9 @@ export async function runOperationalProjectMutation(
   prisma,
   scope,
   operation,
-  { attempts = 3, transactionOptions = { isolationLevel: 'Serializable' } } = {},
+  // PostgreSQL takes a fresh snapshot for each READ COMMITTED statement. That
+  // makes the status read happen after a contended advisory lock is acquired.
+  { attempts = 3, transactionOptions = { isolationLevel: 'ReadCommitted' } } = {},
 ) {
   if (typeof operation !== 'function') {
     throw new TypeError('An operational project mutation callback is required.');

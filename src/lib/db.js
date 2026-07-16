@@ -988,12 +988,14 @@ export async function applyWebhookMessageAtomically({
     }
 
     // Message ingress already required an ACTIVE project. A later pause does
-    // not invalidate a durably accepted event, but tenant ownership and the
-    // exact enabled WhatsApp connection are revalidated under the project lock.
+    // not invalidate a durably accepted event, but completed and archived
+    // projects stay immutable. Tenant ownership and the exact enabled WhatsApp
+    // connection are revalidated under the project lock.
     const project = await transaction.project.findFirst({
       where: {
         id: normalized.projectId,
         organizationId: normalized.organizationId,
+        status: { in: ["ACTIVE", "PAUSED"] },
       },
       select: {
         id: true,
