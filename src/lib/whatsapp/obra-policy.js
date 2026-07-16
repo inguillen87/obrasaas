@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 
 import { FIELD_WORKER_INTENTS } from '../field-workers.js';
+import { parseOperationalProposalDecision } from './operational-proposals.js';
 
 function normalizePolicyText(value) {
   return String(value || '')
@@ -19,6 +20,13 @@ function flowKind(event) {
 export function classifyObraIntent(event) {
   const body = String(event.text || event.transcription?.text || '').trim();
   const lowerBody = normalizePolicyText(body);
+  if (event.location) return FIELD_WORKER_INTENTS.ATTENDANCE_LOCATION;
+  if (['image', 'video', 'document', 'sticker', 'audio'].includes(event.kind)) {
+    return FIELD_WORKER_INTENTS.EVIDENCE;
+  }
+  if (parseOperationalProposalDecision(event)) {
+    return FIELD_WORKER_INTENTS.COMMAND_CONFIRMATION;
+  }
   if (event.interactive?.type === 'flow') {
     const kind = flowKind(event);
     if (kind.includes('medical') || kind.includes('licencia')) return FIELD_WORKER_INTENTS.MEDICAL;
@@ -26,10 +34,6 @@ export function classifyObraIntent(event) {
       return FIELD_WORKER_INTENTS.ATTENDANCE_START;
     }
     if (kind.includes('incident')) return FIELD_WORKER_INTENTS.INCIDENT;
-    return FIELD_WORKER_INTENTS.EVIDENCE;
-  }
-  if (event.location) return FIELD_WORKER_INTENTS.ATTENDANCE_LOCATION;
-  if (['image', 'video', 'document', 'sticker', 'audio'].includes(event.kind)) {
     return FIELD_WORKER_INTENTS.EVIDENCE;
   }
   if (lowerBody.includes('licencia') || lowerBody.includes('certificado')) {

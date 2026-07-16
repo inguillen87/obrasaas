@@ -30,6 +30,7 @@ const project = {
   latitude: -34.6,
   longitude: -58.4,
   geofenceMeters: 120,
+  organization: { timezone: 'America/Montevideo' },
   snapshot: {
     state: { incidents: [], attendance: {}, tasks: {}, alertsCount: 0 },
     version: 4,
@@ -124,7 +125,11 @@ test('direct application couples claim, engine, snapshot, messages and idempoten
     },
     scope: { projectId: project.id, organizationId: project.organizationId },
     workerId: worker.id,
-    operation: { id: 'direct-operation-a', action: 'webview.attendance.location_applied' },
+    operation: {
+      id: 'direct-operation-a',
+      action: 'webview.attendance.location_applied',
+      actorId: 'platform-user-a',
+    },
     async beforeApply({ prisma: scopedPrisma, project: scopedProject, worker: scopedWorker }) {
       callbackTransaction = scopedPrisma;
       calls.push(['claim', scopedProject.id, scopedWorker.id]);
@@ -133,6 +138,7 @@ test('direct application couples claim, engine, snapshot, messages and idempoten
       calls.push(['apply', projectSettings.id, event.from, event.displayName]);
       assert.equal(scopedPrisma, transaction);
       assert.equal(scopedWorker.id, worker.id);
+      assert.equal(projectSettings.timezone, 'America/Montevideo');
       state.incidents.push({ id: 'incident-direct-a' });
       return {
         reply: 'Aplicado',
@@ -141,6 +147,13 @@ test('direct application couples claim, engine, snapshot, messages and idempoten
         stateChanged: true,
         state,
         worker: scopedWorker,
+        operationalProposal: {
+          id: 'proposal-a',
+          confirmationCode: 'VP-ABCDEF123456',
+          type: 'TASK_PROGRESS',
+          status: 'PENDING',
+          expiresAt: '2026-07-16T12:30:00.000Z',
+        },
         newMessages: [
           { externalId: 'direct-event-a', sender: 'user', kind: 'text', text: 'incidencia' },
           { externalId: 'obrasaas-reply:direct-event-a', sender: 'bot', kind: 'text', text: 'Aplicado' },
@@ -175,19 +188,40 @@ test('direct application couples claim, engine, snapshot, messages and idempoten
   assert.equal(snapshotArgs.update.version, 5);
   assert.equal(snapshotArgs.update.state.incidents[0].id, 'incident-direct-a');
   const operationArgs = calls.find(([name]) => name === 'operation-create')[1];
+  assert.equal(operationArgs.data.actorId, 'platform-user-a');
+  assert.equal(
+    operationArgs.data.metadata.initiatedByPlatformUserId,
+    'platform-user-a',
+  );
   assert.equal(operationArgs.data.metadata.outcome.reply, 'Aplicado');
+  assert.equal(
+    operationArgs.data.metadata.outcome.operationalProposal.confirmationCode,
+    'VP-ABCDEF123456',
+  );
   assert.equal(JSON.stringify(operationArgs).includes('+000000000'), false);
 });
 
 test('an idempotent direct retry returns its stored outcome without reapplying effects', async () => {
   const priorOperation = {
     organizationId: project.organizationId,
+    actorId: 'platform-user-a',
     action: 'webview.attendance.location_applied',
     entityType: 'Worker',
     entityId: worker.id,
     metadata: {
       projectId: project.id,
-      outcome: { reply: 'Ya registrado', flowPrompt: null, intent: 'ATTENDANCE_LOCATION' },
+      outcome: {
+        reply: 'Ya registrado',
+        flowPrompt: null,
+        intent: 'ATTENDANCE_LOCATION',
+        operationalProposal: {
+          id: 'proposal-a',
+          confirmationCode: 'VP-ABCDEF123456',
+          type: 'TASK_PROGRESS',
+          status: 'PENDING',
+          expiresAt: '2026-07-16T12:30:00.000Z',
+        },
+      },
     },
   };
   const { calls, prisma } = transactionDouble({ priorOperation });
@@ -198,7 +232,11 @@ test('an idempotent direct retry returns its stored outcome without reapplying e
     event: { externalId: 'direct-event-a', kind: 'location' },
     scope: { projectId: project.id, organizationId: project.organizationId },
     workerId: worker.id,
-    operation: { id: 'direct-operation-a', action: 'webview.attendance.location_applied' },
+    operation: {
+      id: 'direct-operation-a',
+      action: 'webview.attendance.location_applied',
+      actorId: 'platform-user-a',
+    },
     apply: async () => {
       appliedAgain = true;
       return null;
@@ -207,6 +245,10 @@ test('an idempotent direct retry returns its stored outcome without reapplying e
 
   assert.equal(result.alreadyApplied, true);
   assert.equal(result.result.reply, 'Ya registrado');
+  assert.equal(
+    result.result.operationalProposal.confirmationCode,
+    'VP-ABCDEF123456',
+  );
   assert.equal(appliedAgain, false);
   assert.deepEqual(
     calls.map(([name]) => name),

@@ -673,11 +673,13 @@ function directObraMessageInput({ event, scope, workerId, apply, beforeApply, op
   if (operation == null) return { ...normalized, operation: null };
   const operationId = String(operation.id || "").trim();
   const operationAction = String(operation.action || "").trim();
+  const operationActorId = String(operation.actorId || "").trim() || null;
   if (
     !operationId
     || operationId.length > 190
     || !operationAction
     || operationAction.length > 160
+    || (operationActorId && operationActorId.length > 256)
   ) {
     throw new DirectObraMessageError(
       "The direct-message idempotency operation is invalid.",
@@ -687,8 +689,32 @@ function directObraMessageInput({ event, scope, workerId, apply, beforeApply, op
   }
   return {
     ...normalized,
-    operation: { id: operationId, action: operationAction },
+    operation: {
+      id: operationId,
+      action: operationAction,
+      actorId: operationActorId,
+    },
   };
+}
+
+function directOperationalProposalOutcome(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const id = String(value.id || "").trim();
+  const confirmationCode = String(value.confirmationCode || "").trim();
+  const type = String(value.type || "").trim();
+  const status = String(value.status || "").trim();
+  const expiresAt = String(value.expiresAt || "").trim();
+  if (
+    !id
+    || id.length > 256
+    || !/^VP-[A-F0-9]{12}$/.test(confirmationCode)
+    || !["TASK_PROGRESS", "DELAY_REPORT", "CRITICAL_INCIDENT"].includes(type)
+    || !["PENDING", "APPLIED", "REJECTED", "EXPIRED", "INVALIDATED"].includes(status)
+    || Number.isNaN(new Date(expiresAt).getTime())
+  ) {
+    return null;
+  }
+  return { id, confirmationCode, type, status, expiresAt };
 }
 
 function readDirectOperationOutcome(record, { operation, project, worker }) {
@@ -699,13 +725,16 @@ function readDirectOperationOutcome(record, { operation, project, worker }) {
   const outcome = metadata.outcome && typeof metadata.outcome === "object" && !Array.isArray(metadata.outcome)
     ? metadata.outcome
     : null;
+  const operationalProposal = directOperationalProposalOutcome(outcome?.operationalProposal);
   if (
     record.organizationId !== project.organizationId
+    || (record.actorId || null) !== operation.actorId
     || record.action !== operation.action
     || record.entityType !== "Worker"
     || record.entityId !== worker.id
     || metadata.projectId !== project.id
     || typeof outcome?.reply !== "string"
+    || (outcome?.operationalProposal != null && !operationalProposal)
   ) {
     throw new DirectObraMessageError(
       "A prior direct-message operation has an invalid or conflicting outcome.",
@@ -717,6 +746,7 @@ function readDirectOperationOutcome(record, { operation, project, worker }) {
     reply: outcome.reply,
     flowPrompt: typeof outcome.flowPrompt === "string" ? outcome.flowPrompt : null,
     intent: typeof outcome.intent === "string" ? outcome.intent : null,
+    operationalProposal,
     stateChanged: false,
     newMessages: [],
     worker,
@@ -728,6 +758,7 @@ function storedDirectOperationOutcome(result) {
     reply: String(result.reply || "").slice(0, 4_000),
     flowPrompt: typeof result.flowPrompt === "string" ? result.flowPrompt.slice(0, 160) : null,
     intent: typeof result.intent === "string" ? result.intent.slice(0, 160) : null,
+    operationalProposal: directOperationalProposalOutcome(result.operationalProposal),
   };
 }
 
@@ -772,6 +803,7 @@ export async function applyDirectObraMessageAtomically({
         latitude: true,
         longitude: true,
         geofenceMeters: true,
+        organization: { select: { timezone: true } },
         snapshot: { select: { state: true, version: true } },
       },
     });
@@ -802,6 +834,7 @@ export async function applyDirectObraMessageAtomically({
         where: { id: normalized.operation.id },
         select: {
           organizationId: true,
+          actorId: true,
           action: true,
           entityType: true,
           entityId: true,
@@ -824,9 +857,11 @@ export async function applyDirectObraMessageAtomically({
       : createEmptyAppState();
     const projectSettings = {
       id: project.id,
+      organizationId: project.organizationId,
       latitude: project.latitude == null ? null : Number(project.latitude),
       longitude: project.longitude == null ? null : Number(project.longitude),
       geofenceMeters: project.geofenceMeters,
+      timezone: project.organization?.timezone || "America/Argentina/Buenos_Aires",
     };
     const trustedEvent = {
       ...event,
@@ -865,11 +900,17 @@ export async function applyDirectObraMessageAtomically({
         data: {
           id: normalized.operation.id,
           organizationId: project.organizationId,
+          ...(normalized.operation.actorId ? { actorId: normalized.operation.actorId } : {}),
           action: normalized.operation.action,
           entityType: "Worker",
           entityId: worker.id,
           metadata: {
             projectId: project.id,
+            ...(normalized.operation.actorId
+              ? { initiatedByPlatformUserId: normalized.operation.actorId }
+              : {}),
+            provider: String(event.provider || "direct").slice(0, 32),
+            simulated: event.provider === "internal",
             outcome: storedDirectOperationOutcome(result),
           },
         },
@@ -1003,6 +1044,7 @@ export async function applyWebhookMessageAtomically({
         latitude: true,
         longitude: true,
         geofenceMeters: true,
+        organization: { select: { timezone: true } },
         snapshot: { select: { state: true } },
         whatsapp: {
           select: { phoneNumberId: true, enabled: true },
@@ -1042,9 +1084,11 @@ export async function applyWebhookMessageAtomically({
       : createEmptyAppState();
     const projectSettings = {
       id: project.id,
+      organizationId: project.organizationId,
       latitude: project.latitude == null ? null : Number(project.latitude),
       longitude: project.longitude == null ? null : Number(project.longitude),
       geofenceMeters: project.geofenceMeters,
+      timezone: project.organization?.timezone || "America/Argentina/Buenos_Aires",
     };
     const result = await apply({
       prisma: transaction,
@@ -1755,6 +1799,7 @@ export async function getProjectSettings(scope) {
       latitude: Number(process.env.PROJECT_LATITUDE || -34.5886),
       longitude: Number(process.env.PROJECT_LONGITUDE || -58.4302),
       geofenceMeters: Number(process.env.PROJECT_GEOFENCE_METERS || 100),
+      timezone: process.env.PROJECT_TIMEZONE || "America/Argentina/Buenos_Aires",
     };
   }
 
@@ -1764,5 +1809,7 @@ export async function getProjectSettings(scope) {
     latitude: project.latitude == null ? null : Number(project.latitude),
     longitude: project.longitude == null ? null : Number(project.longitude),
     geofenceMeters: project.geofenceMeters,
+    organizationId: project.organizationId,
+    timezone: project.organization?.timezone || "America/Argentina/Buenos_Aires",
   };
 }

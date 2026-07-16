@@ -4,6 +4,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { OrganizationSwitcher, UserButton, useUser } from '@clerk/nextjs';
+import { WHATSAPP_DEMO_AUDIO_TRANSCRIPTS } from '@/lib/whatsapp/demo-audio';
 import GanttPlanner from './gantt-planner';
 import PlatformReadiness from './platform-readiness';
 import StockpilePanel from './stockpile-panel';
@@ -168,21 +169,6 @@ function createClientEntityId(prefix) {
   return `${prefix}-${Array.from(bytes, (value) => value.toString(16).padStart(8, '0')).join('')}`;
 }
 
-const audioData = {
-  1: {
-      text: "Buen día. Ya llegué a la obra y quiero registrar el inicio de mi jornada.",
-  },
-  2: {
-      text: "Terminamos la tarea asignada en el frente de trabajo y dejo este audio como evidencia de avance.",
-  },
-  3: {
-      text: "Detectamos una pérdida en una instalación. Hay que revisar el tramo antes de continuar.",
-  },
-  4: {
-      text: "El proveedor informó una demora de entrega. Dejo el aviso para que el responsable evalúe el cronograma.",
-  }
-};
-
 function attendanceRecords(attendance) {
   if (!attendance || typeof attendance !== 'object' || Array.isArray(attendance)) return [];
   return Object.entries(attendance).map(([key, value]) => {
@@ -309,6 +295,7 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
   const copilotMessagesEndRef = useRef(null);
   const gpsDialogRef = useRef(null);
   const gpsReturnFocusRef = useRef(null);
+  const fieldSimulationOperationRef = useRef(null);
 
   const waveformRef1 = useRef(null);
   const waveformRef2 = useRef(null);
@@ -547,19 +534,68 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
         ? 'Primero autorizá una persona de la cuadrilla en Equipo y permisos.'
         : 'Elegí qué persona autorizada representa este evento de prueba.');
     }
+    const requestBody = { ...payload, workerId: selectedFieldWorker.id };
+    const requestSignature = JSON.stringify(requestBody);
+    if (fieldSimulationOperationRef.current?.signature !== requestSignature) {
+      fieldSimulationOperationRef.current = {
+        signature: requestSignature,
+        idempotencyKey: createClientEntityId('field-simulator'),
+      };
+    }
+    const idempotencyKey = fieldSimulationOperationRef.current.idempotencyKey;
     setFieldSimulationPending(true);
     try {
-      const response = await fetch('/api/whatsapp', {
+      const send = () => fetch('/api/whatsapp', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...payload, workerId: selectedFieldWorker.id }),
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': idempotencyKey,
+        },
+        body: JSON.stringify(requestBody),
       });
+      let response;
+      try {
+        response = await send();
+        if (response.status >= 500) response = await send();
+      } catch {
+        response = await send();
+      }
       const result = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(result.error || 'No se pudo procesar el evento de campo.');
+      if (!response.ok) {
+        if (response.status < 500) fieldSimulationOperationRef.current = null;
+        throw new Error(result.error || 'No se pudo procesar el evento de campo.');
+      }
+      fieldSimulationOperationRef.current = null;
       return result;
     } finally {
       setFieldSimulationPending(false);
     }
+  };
+
+  const refreshFieldSimulationViews = async () => {
+    const [stateRefresh, messageRefresh] = await Promise.allSettled([
+      reloadLatestProjectState(),
+      (async () => {
+        const response = await fetch('/api/whatsapp', { cache: 'no-store' });
+        if (!response.ok) throw new Error('No se pudo recargar la conversación.');
+        const messages = await response.json();
+        setChatMessages(Array.isArray(messages) ? messages : []);
+      })(),
+    ]);
+    const failures = [stateRefresh, messageRefresh].filter(
+      (result) => result.status === 'rejected',
+    );
+    if (failures.length === 0) return true;
+    if (stateRefresh.status === 'rejected') setSyncState('error');
+    console.warn(
+      'Field simulation committed, but its follow-up refresh was incomplete:',
+      failures.map((failure) => failure.reason),
+    );
+    addToast(
+      'El evento ya fue aplicado. No pudimos refrescar toda la vista; recargá el panel sin reenviar la acción.',
+      'warning',
+    );
+    return false;
   };
 
   // Helper Beep Node generator (Web Audio API)
@@ -718,26 +754,23 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
           setPlayingAudioIndex(null);
 
           // Register the provided demo transcript without implying live transcription.
-          const data = audioData[index];
+          const data = WHATSAPP_DEMO_AUDIO_TRANSCRIPTS[index];
           try {
-            await postFieldSimulation({ text: data.text, kind: 'audio' });
+            const simulation = await postFieldSimulation({ text: data.text, kind: 'audio' });
 
-            // Reload the authoritative snapshot and its concurrency version.
-            await reloadLatestProjectState();
-
-            const messagesRes = await fetch('/api/whatsapp');
-            if (messagesRes.ok) {
-              const messagesData = await messagesRes.json();
-              setChatMessages(Array.isArray(messagesData) ? messagesData : []);
-            }
-            
-            addToast('Transcripción de prueba guardada como evidencia.', 'success');
+            addToast(
+              simulation.operationalProposal
+                ? `Propuesta ${simulation.operationalProposal.confirmationCode} creada y pendiente de confirmación.`
+                : 'Transcripción de prueba guardada como evidencia.',
+              'success',
+            );
 
             setCopilotMessages(prev => [...prev, { 
                 sender: 'bot',
-                text: `**[Audio de prueba]**\nRegistré la transcripción demostrativa de ${selectedFieldWorker.name} como evidencia. Por seguridad no ejecuté cambios de avance, asistencia ni notificaciones desde el audio.`,
+                text: `**[Audio de prueba]**\n${simulation.reply}`,
             }]);
 
+            await refreshFieldSimulationViews();
           } catch (e) {
             console.error("Audio sim webhook error:", e);
             addToast(e.message || 'No se pudo procesar el audio de prueba.', 'error');
@@ -1079,13 +1112,7 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
     try {
       await postFieldSimulation({ text });
       setChatInput('');
-
-      // Fetch updates
-      const messagesRes = await fetch('/api/whatsapp');
-      if (messagesRes.ok) {
-        const messagesData = await messagesRes.json();
-        setChatMessages(Array.isArray(messagesData) ? messagesData : []);
-      }
+      await refreshFieldSimulationViews();
     } catch (e) {
       console.error(e);
       addToast(e.message || 'No se pudo enviar el mensaje.', 'error');
@@ -1112,6 +1139,7 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
     try {
       await postFieldSimulation(payload);
       addToast('Escenario registrado sin adjuntar un archivo real.', 'info');
+      await refreshFieldSimulationViews();
     } catch(e) {
       console.error(e);
       addToast(e.message || 'No se pudo adjuntar la evidencia de prueba.', 'error');
@@ -1126,6 +1154,7 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
       });
       closeGpsOptions();
       addToast(successMessage, 'success');
+      await refreshFieldSimulationViews();
     } catch (e) {
       console.error(e);
       addToast(e.message || 'No se pudo validar la ubicación.', 'error');
@@ -1945,7 +1974,7 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
 
             <div className="field-simulator-toolbar">
               <label className="field-simulator-actor" htmlFor="field-simulator-worker">
-                <span>Actor autorizado del evento</span>
+                <span>Identidad representada en la simulación</span>
                 <select
                   id="field-simulator-worker"
                   value={selectedFieldWorkerId}
@@ -1959,7 +1988,7 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
                     </option>
                   ))}
                 </select>
-                <small>Cada mensaje, audio o ubicación quedará atribuido a esta identidad.</small>
+                <small>La simulación puede modificar esta obra. La auditoría registra al usuario del panel y a la persona representada.</small>
               </label>
               <div className={`field-simulator-access ${fieldSimulatorReady ? 'is-ready' : 'is-blocked'}`} role="status">
                 {!setup.canManageField ? (
@@ -1977,7 +2006,7 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
                 ) : !selectedFieldWorker ? (
                   <div><strong>Elegí el actor de la prueba</strong><span>Los controles se habilitan después de seleccionar una identidad.</span></div>
                 ) : (
-                  <div><strong>{selectedFieldWorker.name}</strong><span>Actor visible y auditado para esta simulación.</span></div>
+                  <div><strong>{selectedFieldWorker.name}</strong><span>Persona representada; el usuario real del panel también queda auditado.</span></div>
                 )}
               </div>
             </div>
@@ -2158,7 +2187,7 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
                     <span className="audio-duration">0:08</span>
                   </div>
                   <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontStyle: 'italic', marginTop: '6px' }}>
-                    Actor: {selectedFieldWorker?.name || 'pendiente'} · &ldquo;{audioData[1].text}&rdquo;
+                    Actor: {selectedFieldWorker?.name || 'pendiente'} · &ldquo;{WHATSAPP_DEMO_AUDIO_TRANSCRIPTS[1].text}&rdquo;
                   </p>
                 </div>
 
@@ -2176,7 +2205,7 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
                     <span className="audio-duration">0:12</span>
                   </div>
                   <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontStyle: 'italic', marginTop: '6px' }}>
-                    Actor: {selectedFieldWorker?.name || 'pendiente'} · &ldquo;{audioData[2].text}&rdquo;
+                    Actor: {selectedFieldWorker?.name || 'pendiente'} · &ldquo;{WHATSAPP_DEMO_AUDIO_TRANSCRIPTS[2].text}&rdquo;
                   </p>
                 </div>
 
@@ -2194,7 +2223,7 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
                     <span className="audio-duration">0:16</span>
                   </div>
                   <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontStyle: 'italic', marginTop: '6px' }}>
-                    Actor: {selectedFieldWorker?.name || 'pendiente'} · &ldquo;{audioData[3].text}&rdquo;
+                    Actor: {selectedFieldWorker?.name || 'pendiente'} · &ldquo;{WHATSAPP_DEMO_AUDIO_TRANSCRIPTS[3].text}&rdquo;
                   </p>
                 </div>
 
@@ -2212,7 +2241,7 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
                     <span className="audio-duration">0:14</span>
                   </div>
                   <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontStyle: 'italic', marginTop: '6px' }}>
-                    Actor: {selectedFieldWorker?.name || 'pendiente'} · &ldquo;{audioData[4].text}&rdquo;
+                    Actor: {selectedFieldWorker?.name || 'pendiente'} · &ldquo;{WHATSAPP_DEMO_AUDIO_TRANSCRIPTS[4].text}&rdquo;
                   </p>
                 </div>
 

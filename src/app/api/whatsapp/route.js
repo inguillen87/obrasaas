@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import {
   DirectObraMessageError,
   applyDirectObraMessageAtomically,
@@ -37,6 +39,19 @@ const SIMULATOR_FIELDS = new Set([
   "longitude",
 ]);
 const SIMULATOR_KINDS = new Set(["text", "audio", "image", "video", "document"]);
+const SIMULATOR_IDEMPOTENCY_KEY = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/;
+
+function simulatorIdentity(scope, idempotencyKey) {
+  const digest = createHash("sha256")
+    .update(
+      `obrasaas-dashboard-simulator-v1\0${scope.organization.id}\0${scope.project.id}\0${idempotencyKey}`,
+    )
+    .digest("hex");
+  return {
+    externalId: `internal:simulator:${digest}`,
+    operationId: `dashboard-field-simulation:${digest}`,
+  };
+}
 
 export async function GET() {
   try {
@@ -72,6 +87,14 @@ export async function POST(request) {
     if (Object.keys(body).some((field) => !SIMULATOR_FIELDS.has(field))) {
       return Response.json({ error: "El evento contiene campos no permitidos." }, { status: 400 });
     }
+    const idempotencyKey = String(request.headers.get("idempotency-key") || "").trim();
+    if (!SIMULATOR_IDEMPOTENCY_KEY.test(idempotencyKey)) {
+      return Response.json({
+        error: "El simulador requiere una clave de idempotencia válida por cada acción.",
+        code: "SIMULATOR_IDEMPOTENCY_KEY_REQUIRED",
+      }, { status: 400 });
+    }
+    const identity = simulatorIdentity(scope, idempotencyKey);
     const resolution = await resolveActiveFieldWorkerById(
       getPrisma(),
       { organizationId: scope.organization.id, projectId: scope.project.id },
@@ -100,6 +123,7 @@ export async function POST(request) {
     }
     const text = String(body.text ?? body.bodyText ?? "").slice(0, 4_000);
     const event = {
+      externalId: identity.externalId,
       provider: "internal",
       from: resolution.worker.phone,
       displayName: resolution.worker.name,
@@ -134,10 +158,21 @@ export async function POST(request) {
           projectSettings,
           worker,
           persist: false,
+          auditActorId: scope.databaseUserId,
+          auditSource: "dashboard-simulator",
         })
       ),
+      operation: {
+        id: identity.operationId,
+        action: "dashboard.field_simulation.applied",
+        actorId: scope.databaseUserId,
+      },
     });
-    return Response.json({ success: true, ...applied.result });
+    return Response.json({
+      success: true,
+      alreadyApplied: applied.alreadyApplied,
+      ...applied.result,
+    });
   } catch (error) {
     if (error instanceof AccessError) return accessErrorResponse(error);
     if (error instanceof RequestBodyError) return requestBodyErrorResponse(error);

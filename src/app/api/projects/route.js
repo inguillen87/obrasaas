@@ -24,6 +24,7 @@ import {
   ProjectInputError,
   activeProjectCapacity,
   activeProjectCookieOptions,
+  attachProjectOperationalCounts,
   isUnconfiguredTenantBootstrapProject,
   isSelectableProjectStatus,
   listOrganizationProjects,
@@ -128,6 +129,20 @@ async function selectProject(projectId) {
   cookieStore.set(ACTIVE_PROJECT_COOKIE, projectId, activeProjectCookieOptions());
 }
 
+async function serializeMutatedProject(prisma, organizationId, project) {
+  try {
+    const [projectWithCounts] = await attachProjectOperationalCounts(
+      prisma,
+      organizationId,
+      [project],
+    );
+    return serializeProject(projectWithCounts);
+  } catch (error) {
+    console.error('Operational project count refresh failed after a committed mutation:', error);
+    return serializeProject(project);
+  }
+}
+
 function projectErrorResponse(error) {
   if (error instanceof AccessError) return accessErrorResponse(error);
   if (error instanceof RequestBodyError) return requestBodyErrorResponse(error);
@@ -189,7 +204,12 @@ export async function POST(request) {
     const prisma = getPrisma();
     const project = await createTenantProject(prisma, access, input);
     await selectProject(project.id);
-    return Response.json({ project: serializeProject(project) }, { status: 201 });
+    const serializedProject = await serializeMutatedProject(
+      prisma,
+      access.organization.id,
+      project,
+    );
+    return Response.json({ project: serializedProject }, { status: 201 });
   } catch (error) {
     try {
       return projectErrorResponse(error);
@@ -207,14 +227,20 @@ export async function PATCH(request) {
     const input = normalizeProjectPatchInput(
       await readJsonRequest(request, { maxBytes: MAX_PROJECT_JSON_BYTES }),
     );
-    const result = await updateTenantProject(getPrisma(), access, input);
+    const prisma = getPrisma();
+    const result = await updateTenantProject(prisma, access, input);
     if (result.activeProjectId !== access.project.id) {
       await selectProject(result.activeProjectId);
     }
+    const serializedProject = await serializeMutatedProject(
+      prisma,
+      access.organization.id,
+      result.project,
+    );
     return Response.json({
       activeProjectId: result.activeProjectId,
       capacity: result.capacity,
-      project: serializeProject(result.project),
+      project: serializedProject,
     });
   } catch (error) {
     try {

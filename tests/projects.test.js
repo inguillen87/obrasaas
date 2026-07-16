@@ -4,12 +4,15 @@ import test from 'node:test';
 import {
   ProjectInputError,
   activeProjectCapacity,
+  attachProjectOperationalCounts,
   isUnconfiguredTenantBootstrapProject,
   isSelectableProjectStatus,
   normalizeProjectInput,
   normalizeProjectPatchInput,
+  listOrganizationProjects,
   projectConsumesActiveCapacity,
   projectSlugBase,
+  serializeProject,
   tenantProjectWhere,
 } from '../src/lib/projects.js';
 
@@ -159,4 +162,94 @@ test('project selection always carries the active tenant boundary', () => {
     organizationId: 'org-database-id',
   });
   assert.throws(() => tenantProjectWhere('', 'project-id'), ProjectInputError);
+});
+
+test('portfolio counts use the canonical operational snapshot instead of dormant relational rows', () => {
+  const serialized = serializeProject({
+    id: 'project-a',
+    name: 'Hospital Regional',
+    slug: 'hospital-regional',
+    status: 'ACTIVE',
+    address: null,
+    latitude: null,
+    longitude: null,
+    geofenceMeters: 100,
+    startsAt: null,
+    endsAt: null,
+    createdAt: new Date('2026-07-16T10:00:00.000Z'),
+    updatedAt: new Date('2026-07-16T11:00:00.000Z'),
+    snapshot: { updatedAt: new Date('2026-07-16T12:00:00.000Z') },
+    operationalCounts: { tasks: 2, incidents: 1 },
+    whatsapp: null,
+    _count: { workers: 4, tasks: 0, incidents: 0 },
+  });
+
+  assert.deepEqual(serialized.counts, {
+    workers: 4,
+    tasks: 2,
+    incidents: 1,
+  });
+  assert.equal(serialized.lastActivityAt, '2026-07-16T12:00:00.000Z');
+  assert.equal(Object.hasOwn(serialized, 'snapshot'), false);
+});
+
+test('portfolio count projection never hydrates the complete snapshot JSON', async () => {
+  const calls = [];
+  const project = {
+    id: 'project-a',
+    name: 'Hospital Regional',
+    slug: 'hospital-regional',
+    status: 'ACTIVE',
+    address: null,
+    latitude: null,
+    longitude: null,
+    geofenceMeters: 100,
+    startsAt: null,
+    endsAt: null,
+    createdAt: new Date('2026-07-16T10:00:00.000Z'),
+    updatedAt: new Date('2026-07-16T11:00:00.000Z'),
+    snapshot: { updatedAt: new Date('2026-07-16T12:00:00.000Z') },
+    whatsapp: null,
+    _count: { workers: 4 },
+  };
+  const prisma = {
+    project: {
+      async findMany(args) {
+        calls.push(['findMany', args]);
+        return [project];
+      },
+    },
+    async $queryRawUnsafe(query, organizationId, projectId) {
+      calls.push(['counts', query, organizationId, projectId]);
+      return [{ projectId: 'project-a', tasks: 2, incidents: 1 }];
+    },
+  };
+
+  const projects = await listOrganizationProjects(prisma, 'organization-a');
+
+  assert.equal(calls[0][1].select.snapshot.select.state, undefined);
+  assert.deepEqual(calls[0][1].select.snapshot.select, { updatedAt: true });
+  assert.match(calls[1][1], /jsonb_object_keys/);
+  assert.equal(calls[1][2], 'organization-a');
+  assert.equal(calls[1][3], 'project-a');
+  assert.deepEqual(projects[0].counts, { workers: 4, tasks: 2, incidents: 1 });
+});
+
+test('single-project count projection stays tenant and project scoped', async () => {
+  const calls = [];
+  const prisma = {
+    async $queryRawUnsafe(query, organizationId, projectId) {
+      calls.push([query, organizationId, projectId]);
+      return [{ projectId, tasks: 7, incidents: 3 }];
+    },
+  };
+  const [project] = await attachProjectOperationalCounts(
+    prisma,
+    'organization-a',
+    [{ id: 'project-a' }],
+  );
+
+  assert.equal(calls[0][1], 'organization-a');
+  assert.equal(calls[0][2], 'project-a');
+  assert.deepEqual(project.operationalCounts, { tasks: 7, incidents: 3 });
 });

@@ -21,6 +21,25 @@ test('voice transcriptions are always evidence and never executable commands', (
   }), FIELD_WORKER_INTENTS.TASK_PROGRESS);
 });
 
+test('only exact proposal decisions become command confirmations', () => {
+  assert.equal(classifyObraIntent({
+    kind: 'text',
+    text: 'CONFIRMAR VP-ABCDEF123456',
+  }), FIELD_WORKER_INTENTS.COMMAND_CONFIRMATION);
+  assert.equal(classifyObraIntent({
+    kind: 'text',
+    text: 'RECHAZAR VP-ABCDEF123456',
+  }), FIELD_WORKER_INTENTS.COMMAND_CONFIRMATION);
+  assert.equal(classifyObraIntent({
+    kind: 'text',
+    text: 'sí, dale',
+  }), FIELD_WORKER_INTENTS.EVIDENCE);
+  assert.equal(classifyObraIntent({
+    kind: 'audio',
+    transcription: { text: 'CONFIRMAR VP-ABCDEF123456' },
+  }), FIELD_WORKER_INTENTS.EVIDENCE);
+});
+
 test('attendance, incident and medical inputs classify before mutation', () => {
   assert.equal(
     classifyObraIntent({ kind: 'location', location: { latitude: -34, longitude: -58 } }),

@@ -289,6 +289,7 @@ export function tenantProjectWhere(organizationId, projectId) {
 }
 
 export function serializeProject(project) {
+  const operationalCounts = project.operationalCounts;
   return {
     id: project.id,
     name: project.name,
@@ -312,16 +313,78 @@ export function serializeProject(project) {
       : null,
     counts: {
       workers: project._count?.workers || 0,
-      tasks: project._count?.tasks || 0,
-      incidents: project._count?.incidents || 0,
+      tasks: operationalCounts?.tasks ?? project._count?.tasks ?? 0,
+      incidents: operationalCounts?.incidents ?? project._count?.incidents ?? 0,
     },
   };
+}
+
+const PROJECT_OPERATIONAL_COUNTS_SQL = `
+  SELECT
+    project."id" AS "projectId",
+    CASE
+      WHEN jsonb_typeof(snapshot."state"->'tasks') = 'object'
+        THEN (
+          SELECT count(*)
+          FROM jsonb_object_keys(snapshot."state"->'tasks')
+        )
+      ELSE 0
+    END::integer AS "tasks",
+    CASE
+      WHEN jsonb_typeof(snapshot."state"->'incidents') = 'array'
+        THEN jsonb_array_length(snapshot."state"->'incidents')
+      ELSE 0
+    END::integer AS "incidents"
+  FROM "Project" AS project
+  LEFT JOIN "ProjectSnapshot" AS snapshot
+    ON snapshot."projectId" = project."id"
+  WHERE project."organizationId" = $1
+    AND ($2::text IS NULL OR project."id" = $2)
+`;
+
+export async function attachProjectOperationalCounts(
+  prisma,
+  organizationId,
+  projects,
+) {
+  if (!organizationId || !Array.isArray(projects) || projects.length === 0) return projects;
+  const onlyProjectId = projects.length === 1 ? projects[0].id : null;
+  const rows = await prisma.$queryRawUnsafe(
+    PROJECT_OPERATIONAL_COUNTS_SQL,
+    organizationId,
+    onlyProjectId,
+  );
+  const countsByProject = new Map(
+    rows.map((row) => [
+      row.projectId,
+      {
+        tasks: Number(row.tasks) || 0,
+        incidents: Number(row.incidents) || 0,
+      },
+    ]),
+  );
+  return projects.map((project) => ({
+    ...project,
+    operationalCounts: countsByProject.get(project.id) || { tasks: 0, incidents: 0 },
+  }));
 }
 
 export async function listOrganizationProjects(prisma, organizationId) {
   const projects = await prisma.project.findMany({
     where: { organizationId },
-    include: {
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      status: true,
+      address: true,
+      latitude: true,
+      longitude: true,
+      geofenceMeters: true,
+      startsAt: true,
+      endsAt: true,
+      createdAt: true,
+      updatedAt: true,
       snapshot: { select: { updatedAt: true } },
       whatsapp: {
         select: {
@@ -330,9 +393,14 @@ export async function listOrganizationProjects(prisma, organizationId) {
           verifiedBusinessName: true,
         },
       },
-      _count: { select: { workers: true, tasks: true, incidents: true } },
+      _count: { select: { workers: true } },
     },
     orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }],
   });
-  return projects.map(serializeProject);
+  const countedProjects = await attachProjectOperationalCounts(
+    prisma,
+    organizationId,
+    projects,
+  );
+  return countedProjects.map(serializeProject);
 }

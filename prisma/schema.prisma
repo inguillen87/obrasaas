@@ -113,6 +113,20 @@ enum CrmStage {
   LOST
 }
 
+enum OperationalProposalType {
+  TASK_PROGRESS
+  DELAY_REPORT
+  CRITICAL_INCIDENT
+}
+
+enum OperationalProposalStatus {
+  PENDING
+  APPLIED
+  REJECTED
+  EXPIRED
+  INVALIDATED
+}
+
 model Organization {
   id                   String             @id @default(cuid())
   clerkOrganizationId  String?            @unique
@@ -208,16 +222,16 @@ model AuditLog {
 }
 
 model Project {
-  id             String              @id @default(cuid())
+  id             String                @id @default(cuid())
   organizationId String
-  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   name           String
   slug           String
-  status         ProjectStatus       @default(ACTIVE)
+  status         ProjectStatus         @default(ACTIVE)
   address        String?
-  latitude       Decimal?            @db.Decimal(10, 7)
-  longitude      Decimal?            @db.Decimal(10, 7)
-  geofenceMeters Int                 @default(100)
+  latitude       Decimal?              @db.Decimal(10, 7)
+  longitude      Decimal?              @db.Decimal(10, 7)
+  geofenceMeters Int                   @default(100)
   startsAt       DateTime?
   endsAt         DateTime?
   metadata       Json?
@@ -228,9 +242,10 @@ model Project {
   attendances    AttendanceEntry[]
   conversations  Conversation[]
   webhookEvents  WebhookEvent[]
+  proposals      OperationalProposal[]
   whatsapp       WhatsAppConnection?
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
 
   @@unique([organizationId, slug])
   @@index([organizationId, status])
@@ -271,21 +286,56 @@ model ProjectSnapshot {
 }
 
 model Worker {
-  id          String            @id @default(cuid())
-  projectId   String
-  project     Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  externalId  String?
-  phone       String
-  name        String
-  role        String?
-  active      Boolean           @default(true)
-  metadata    Json?
-  attendances AttendanceEntry[]
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  id                       String                @id @default(cuid())
+  projectId                String
+  project                  Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  externalId               String?
+  phone                    String
+  name                     String
+  role                     String?
+  active                   Boolean               @default(true)
+  metadata                 Json?
+  attendances              AttendanceEntry[]
+  proposedOperationalItems OperationalProposal[] @relation("OperationalProposalProposer")
+  resolvedOperationalItems OperationalProposal[] @relation("OperationalProposalResolver")
+  createdAt                DateTime              @default(now())
+  updatedAt                DateTime              @updatedAt
 
   @@unique([projectId, phone])
   @@index([externalId])
+}
+
+model OperationalProposal {
+  id                 String                    @id @default(cuid())
+  projectId          String
+  project            Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  proposedByWorkerId String?
+  proposedByWorker   Worker?                   @relation("OperationalProposalProposer", fields: [proposedByWorkerId], references: [id], onDelete: SetNull)
+  resolvedByWorkerId String?
+  resolvedByWorker   Worker?                   @relation("OperationalProposalResolver", fields: [resolvedByWorkerId], references: [id], onDelete: SetNull)
+  sourceProvider     String                    @db.VarChar(32)
+  sourceExternalId   String                    @db.VarChar(512)
+  resolverProvider   String?                   @db.VarChar(32)
+  resolverExternalId String?                   @db.VarChar(512)
+  confirmationCode   String                    @db.VarChar(16)
+  type               OperationalProposalType
+  status             OperationalProposalStatus @default(PENDING)
+  summary            String                    @db.VarChar(280)
+  action             Json
+  precondition       Json?
+  result             Json?
+  classifierVersion  String                    @db.VarChar(64)
+  transcriptSha256   String                    @db.Char(64)
+  expiresAt          DateTime
+  resolvedAt         DateTime?
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+
+  @@unique([projectId, sourceProvider, sourceExternalId])
+  @@unique([projectId, resolverProvider, resolverExternalId])
+  @@unique([projectId, confirmationCode])
+  @@index([projectId, status, expiresAt])
+  @@index([proposedByWorkerId, status, createdAt])
 }
 
 model Task {
