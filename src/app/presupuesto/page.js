@@ -4,7 +4,7 @@ import { requireSuperadmin } from '@/lib/access';
 export const dynamic = 'force-dynamic';
 
 export const metadata = {
-  title: 'Alcance contractual | ObraSaaS',
+  title: 'Alcance contractual',
   robots: { index: false, follow: false },
 };
 

@@ -4,7 +4,7 @@ import MedicalClient from "./medical-client";
 import styles from "../webview.module.css";
 
 export const metadata = {
-  title: "Certificado médico | ObraSaaS",
+  title: "Certificado médico",
   robots: { index: false, follow: false },
 };
 

@@ -13,7 +13,7 @@ import { getPrisma } from '@/lib/prisma';
 export const dynamic = 'force-dynamic';
 
 export const metadata = {
-  title: 'Bitácora y auditoría | ObraSaaS',
+  title: 'Bitácora y auditoría',
   description: 'Trazabilidad operativa de una obra en ObraSaaS.',
   robots: { index: false, follow: false },
 };

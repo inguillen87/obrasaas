@@ -19,7 +19,7 @@ import { isUnconfiguredTenantBootstrapProject } from '@/lib/projects';
 export const dynamic = 'force-dynamic';
 
 export const metadata = {
-  title: 'Primer valor | ObraSaaS',
+  title: 'Primer valor',
   robots: { index: false, follow: false },
 };
 

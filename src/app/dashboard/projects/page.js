@@ -19,7 +19,7 @@ import {
 export const dynamic = 'force-dynamic';
 
 export const metadata = {
-  title: 'Obras y portfolio | ObraSaaS',
+  title: 'Obras y portfolio',
   robots: { index: false, follow: false },
 };
 

@@ -4,7 +4,7 @@ import AttendanceClient from "./attendance-client";
 import styles from "../webview.module.css";
 
 export const metadata = {
-  title: "Fichaje de obra | ObraSaaS",
+  title: "Fichaje de obra",
   robots: { index: false, follow: false },
 };
 
