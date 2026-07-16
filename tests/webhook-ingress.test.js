@@ -55,13 +55,14 @@ function connection({
   displayPhoneNumber = '15550783881',
   projectId = 'project-1',
   organizationId = 'organization-1',
+  projectStatus = 'ACTIVE',
 } = {}) {
   return {
     enabled: true,
     phoneNumberId,
     whatsappBusinessId,
     displayPhoneNumber,
-    project: { id: projectId, organizationId },
+    project: { id: projectId, organizationId, status: projectStatus },
   };
 }
 

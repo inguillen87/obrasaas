@@ -8,7 +8,15 @@ function connectionScope(connection) {
   const projectId = normalizedIdentifier(connection?.project?.id);
   const organizationId = normalizedIdentifier(connection?.project?.organizationId);
   const phoneNumberId = normalizedIdentifier(connection?.phoneNumberId);
-  if (!projectId || !organizationId || !phoneNumberId || !connection.enabled) return null;
+  if (
+    !projectId
+    || !organizationId
+    || !phoneNumberId
+    || !connection.enabled
+    || connection?.project?.status !== "ACTIVE"
+  ) {
+    return null;
+  }
   return {
     projectId,
     organizationId,
@@ -39,7 +47,7 @@ export async function resolveWhatsAppConnectionScopes(prisma, {
     whatsappBusinessId: true,
     displayPhoneNumber: true,
     project: {
-      select: { id: true, organizationId: true },
+      select: { id: true, organizationId: true, status: true },
     },
   };
 
@@ -64,12 +72,20 @@ export async function resolveWhatsAppConnectionScopes(prisma, {
   let connections = [];
   if (exactWhatsappBusinessId) {
     connections = await prisma.whatsAppConnection.findMany({
-      where: { enabled: true, whatsappBusinessId: exactWhatsappBusinessId },
+      where: {
+        enabled: true,
+        whatsappBusinessId: exactWhatsappBusinessId,
+        project: { status: "ACTIVE" },
+      },
       select,
     });
   } else if (exactDisplayPhoneNumber) {
     connections = await prisma.whatsAppConnection.findMany({
-      where: { enabled: true, displayPhoneNumber: exactDisplayPhoneNumber },
+      where: {
+        enabled: true,
+        displayPhoneNumber: exactDisplayPhoneNumber,
+        project: { status: "ACTIVE" },
+      },
       select,
     });
     // A display number is a weaker, non-unique database field. Refuse an
@@ -137,6 +153,7 @@ export async function resolveWhatsAppConnectionScopesBulk(prisma, events = []) {
   const connections = await prisma.whatsAppConnection.findMany({
     where: {
       enabled: true,
+      project: { status: "ACTIVE" },
       OR: matchers,
     },
     select: {
@@ -145,7 +162,7 @@ export async function resolveWhatsAppConnectionScopesBulk(prisma, events = []) {
       whatsappBusinessId: true,
       displayPhoneNumber: true,
       project: {
-        select: { id: true, organizationId: true },
+        select: { id: true, organizationId: true, status: true },
       },
     },
   });
@@ -229,7 +246,7 @@ export async function validateStoredWebhookScope(prisma, leasedEvent, event, sco
       projectId,
       phoneNumberId,
       enabled: true,
-      project: { organizationId },
+      project: { organizationId, status: "ACTIVE" },
     },
     select: { id: true },
   });

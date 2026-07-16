@@ -14,13 +14,14 @@ function connection({
   displayPhoneNumber = '+54 9 11 5555 0001',
   projectId = 'project-1',
   organizationId = 'organization-1',
+  projectStatus = 'ACTIVE',
 } = {}) {
   return {
     enabled,
     phoneNumberId,
     whatsappBusinessId,
     displayPhoneNumber,
-    project: { id: projectId, organizationId },
+    project: { id: projectId, organizationId, status: projectStatus },
   };
 }
 
@@ -82,6 +83,12 @@ test('supplied unknown, blank or disabled phone_number_id never falls back for a
     whatsappBusinessId: 'waba-1',
   }), []);
   assert.equal(disabledPrisma.calls.some(([method]) => method === 'findMany'), false);
+
+  const pausedPrisma = resolvingPrisma({ unique: connection({ projectStatus: 'PAUSED' }) });
+  assert.deepEqual(await resolveWhatsAppConnectionScopes(pausedPrisma, {
+    eventType: 'message',
+    phoneNumberId: 'phone-1',
+  }), []);
 });
 
 test('WABA/display fallback is restricted to account events without phone_number_id', async () => {
@@ -105,6 +112,7 @@ test('WABA/display fallback is restricted to account events without phone_number
   assert.deepEqual(accountPrisma.calls[0][1].where, {
     enabled: true,
     whatsappBusinessId: 'waba-1',
+    project: { status: 'ACTIVE' },
   });
 
   const crossTenantWabaPrisma = resolvingPrisma({ many: [connection(), connection({
@@ -160,7 +168,7 @@ test('stored webhook validation binds queue, provider, project, organization and
     projectId: 'project-1',
     phoneNumberId: 'phone-1',
     enabled: true,
-    project: { organizationId: 'organization-1' },
+    project: { organizationId: 'organization-1', status: 'ACTIVE' },
   });
 
   await assert.rejects(

@@ -983,6 +983,7 @@ export async function applyWebhookMessageAtomically({
       where: {
         id: normalized.projectId,
         organizationId: normalized.organizationId,
+        status: "ACTIVE",
       },
       select: {
         id: true,

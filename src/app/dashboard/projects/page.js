@@ -10,6 +10,7 @@ import {
 import { PLAN_CATALOG } from '@/lib/plans';
 import { getPrisma } from '@/lib/prisma';
 import {
+  PROJECT_CAPACITY_STATUSES,
   activeProjectCapacity,
   isUnconfiguredTenantBootstrapProject,
   listOrganizationProjects,
@@ -29,7 +30,10 @@ export default async function ProjectsPage() {
   const [projects, activeCount] = await Promise.all([
     listOrganizationProjects(prisma, access.organization.id),
     prisma.project.count({
-      where: { organizationId: access.organization.id, status: 'ACTIVE' },
+      where: {
+        organizationId: access.organization.id,
+        status: { in: PROJECT_CAPACITY_STATUSES },
+      },
     }),
   ]);
   const plan = PLAN_CATALOG[access.organization.subscriptionPlan];

@@ -36,6 +36,9 @@ function auditGroup(action) {
 function auditLabel(action) {
   const labels = {
     'project.created': 'Obra creada',
+    'project.updated': 'Obra actualizada',
+    'project.archived': 'Obra archivada',
+    'project.restored': 'Obra restaurada',
     'project.task.created': 'Tarea creada',
     'project.task.updated': 'Tarea actualizada',
     'project.task.deleted': 'Tarea eliminada',
