@@ -13,6 +13,7 @@ import {
   resolveActiveFieldWorkerByPhone,
 } from "@/lib/field-workers";
 import { tenantAiSettingsFromMetadata } from "@/lib/ai/tenant-settings";
+import { assertOrganizationSubscriptionAllowsWrites } from "@/lib/plans";
 import { getPrisma } from "@/lib/prisma";
 import {
   deserializeWebhookPayload,
@@ -33,6 +34,20 @@ function invalidWebhookPayload(message) {
   const error = new Error(message);
   error.code = "WEBHOOK_PAYLOAD_INVALID";
   return error;
+}
+
+export async function assertWebhookMessageSubscription(
+  scope,
+  { prisma = getPrisma(), now = new Date() } = {},
+) {
+  const organizationId = typeof scope?.organizationId === "string"
+    ? scope.organizationId.trim()
+    : "";
+  return assertOrganizationSubscriptionAllowsWrites(prisma, organizationId, {
+    now,
+    code: "WEBHOOK_SUBSCRIPTION_BLOCKED",
+    message: "La suscripción del tenant no permite procesar mensajes de WhatsApp.",
+  });
 }
 
 export function providerMessageIdFromMetaResult(result) {
@@ -128,7 +143,56 @@ async function synchronizeConnectionStatus(event, scope) {
   });
 }
 
+export async function deliverWhatsAppMessageOutcome({
+  outcome,
+  event,
+  scope,
+}, {
+  assertSubscription = assertWebhookMessageSubscription,
+  sendFlow = trySendPublishedFlow,
+  sendText = sendWhatsAppText,
+  linkMessage = linkOutboundWhatsAppMessage,
+} = {}) {
+  let flowDelivery = { sent: false, providerMessageId: null };
+  if (outcome.flowPrompt) {
+    await assertSubscription(scope);
+    flowDelivery = await sendFlow({
+      blueprintKey: outcome.flowPrompt,
+      event,
+      scope,
+    });
+  }
+
+  let providerMessageId = flowDelivery.providerMessageId;
+  if (!flowDelivery.sent) {
+    await assertSubscription(scope);
+    const delivery = await sendText({
+      to: event.from,
+      text: outcome.reply,
+      replyToMessageId: event.externalId,
+      phoneNumberId: event.phoneNumberId,
+    });
+    providerMessageId = providerMessageIdFromMetaResult(delivery);
+  }
+  if (providerMessageId) {
+    const linked = await linkMessage({
+      inboundExternalId: event.externalId,
+      providerMessageId,
+      scope,
+      status: "accepted",
+    });
+    if (!linked) {
+      console.warn(`Meta accepted outbound message ${providerMessageId}, but its local correlation row was missing.`);
+    }
+  }
+  return {
+    flowSent: flowDelivery.sent,
+    providerMessageId,
+  };
+}
+
 async function processMessageEvent(leasedEvent, event, scope) {
+  await assertWebhookMessageSubscription(scope);
   const storedOutcome = readAppliedMessageWebhookOutcome(leasedEvent);
   if (!storedOutcome && event.media) {
     const resolution = await resolveActiveFieldWorkerByPhone(
@@ -155,9 +219,13 @@ async function processMessageEvent(leasedEvent, event, scope) {
   }
 
   const enrichedEvent = !storedOutcome && event.media
-    ? await ingestAndPersistInboundWhatsAppMedia(
+      ? await ingestAndPersistInboundWhatsAppMedia(
         { leasedEvent, event, scope },
-        { persist: persistEnrichedWebhookEvent, transcriptionEnabled },
+        {
+          persist: persistEnrichedWebhookEvent,
+          transcriptionEnabled,
+          beforeTranscribe: () => assertWebhookMessageSubscription(scope),
+        },
       )
     : event;
   const application = await applyWebhookMessageAtomically({
@@ -176,30 +244,7 @@ async function processMessageEvent(leasedEvent, event, scope) {
   // Internal writes are exactly-once under the project lock and lease CAS. Meta
   // delivery is necessarily at-least-once: a crash after Meta accepts but before
   // local correlation/completion can cause the stored outcome to be sent again.
-  const flowDelivery = outcome.flowPrompt
-    ? await trySendPublishedFlow({ blueprintKey: outcome.flowPrompt, event, scope })
-    : { sent: false, providerMessageId: null };
-  let providerMessageId = flowDelivery.providerMessageId;
-  if (!flowDelivery.sent) {
-    const delivery = await sendWhatsAppText({
-      to: event.from,
-      text: outcome.reply,
-      replyToMessageId: event.externalId,
-      phoneNumberId: event.phoneNumberId,
-    });
-    providerMessageId = providerMessageIdFromMetaResult(delivery);
-  }
-  if (providerMessageId) {
-    const linked = await linkOutboundWhatsAppMessage({
-      inboundExternalId: event.externalId,
-      providerMessageId,
-      scope,
-      status: "accepted",
-    });
-    if (!linked) {
-      console.warn(`Meta accepted outbound message ${providerMessageId}, but its local correlation row was missing.`);
-    }
-  }
+  await deliverWhatsAppMessageOutcome({ outcome, event, scope });
 }
 
 async function processLeasedEvent(leasedEvent) {

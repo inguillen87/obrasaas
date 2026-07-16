@@ -1,5 +1,6 @@
 import Link from 'next/link';
 
+import { ObraSaasLogo } from '@/app/brand/brand-logo';
 import SuperadminConsole from './superadmin-console';
 import styles from './superadmin.module.css';
 import { requireSuperadmin } from '@/lib/access';
@@ -156,7 +157,10 @@ export default async function SuperadminPage() {
     <main className={styles.shell}>
       <header className={styles.header}>
         <div>
-          <p className={styles.eyebrow}>ObraSaaS Control Plane</p>
+          <div className={styles.controlPlaneBrand}>
+            <ObraSaasLogo markSize={34} preload />
+            <span>Control plane</span>
+          </div>
           <h1>Administración global</h1>
           <p>Pipeline, adopción, suscripciones y salud operativa de todos los tenants.</p>
         </div>

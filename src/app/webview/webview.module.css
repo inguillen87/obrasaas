@@ -31,15 +31,11 @@
   letter-spacing: -0.02em;
 }
 
-.brand span {
-  display: grid;
+.brandMark {
+  display: block;
   width: 31px;
   height: 31px;
-  place-items: center;
   border-radius: 10px;
-  color: #13110e;
-  background: linear-gradient(135deg, #ffbd66, #ed8241);
-  font-size: 0.7rem;
 }
 
 .secureBadge {

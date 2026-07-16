@@ -1,6 +1,11 @@
 :root {
   --font-sans: var(--font-geist), 'Segoe UI', sans-serif;
   --font-heading: var(--font-manrope), var(--font-geist), 'Segoe UI', sans-serif;
+  --brand-ink: #08110f;
+  --brand-ivory: #f4f1e8;
+  --brand-field: #f28a42;
+  --brand-field-hover: #f6a066;
+  --brand-signal: #57b295;
   color-scheme: dark;
 }
 
@@ -19,8 +24,8 @@ html {
 body {
   min-height: 100vh;
   margin: 0;
-  color: #f8fafc;
-  background: #080a0c;
+  color: var(--brand-ivory);
+  background: var(--brand-ink);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -40,7 +45,7 @@ a {
 
 ::selection {
   color: #18120b;
-  background: #ffad5c;
+  background: var(--brand-field-hover);
 }
 
 @media (prefers-reduced-motion: reduce) {

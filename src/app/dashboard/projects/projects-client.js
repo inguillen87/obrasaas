@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from 'react';
 
+import { ObraSaasMark } from '@/app/brand/brand-logo';
 import styles from './projects.module.css';
 
 const STATUS_LABELS = {
@@ -158,7 +159,7 @@ function ProjectCard({
         {active && <strong>Contexto actual</strong>}
       </div>
       <div className={styles.projectTitle}>
-        <span aria-hidden="true">OS</span>
+        <span aria-hidden="true"><ObraSaasMark size={42} /></span>
         <div>
           <h2>{project.name}</h2>
           <p>{project.address || 'Dirección pendiente de configurar'}</p>

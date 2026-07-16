@@ -24,13 +24,20 @@ function connectionScope(connection, eventType) {
   ) {
     return null;
   }
-  return {
+  const scope = {
     projectId,
     organizationId,
     phoneNumberId,
     whatsappBusinessId: connection.whatsappBusinessId || null,
     displayPhoneNumber: connection.displayPhoneNumber || null,
   };
+  Object.defineProperty(scope, 'subscriptionOrganization', {
+    configurable: false,
+    enumerable: false,
+    writable: false,
+    value: connection?.project?.organization || null,
+  });
+  return scope;
 }
 
 function scopesWithinSingleOrganization(scopes) {
@@ -54,7 +61,18 @@ export async function resolveWhatsAppConnectionScopes(prisma, {
     whatsappBusinessId: true,
     displayPhoneNumber: true,
     project: {
-      select: { id: true, organizationId: true, status: true },
+      select: {
+        id: true,
+        organizationId: true,
+        status: true,
+        organization: {
+          select: {
+            subscriptionPlan: true,
+            subscriptionStatus: true,
+            trialEndsAt: true,
+          },
+        },
+      },
     },
   };
 
@@ -168,7 +186,18 @@ export async function resolveWhatsAppConnectionScopesBulk(prisma, events = []) {
       whatsappBusinessId: true,
       displayPhoneNumber: true,
       project: {
-        select: { id: true, organizationId: true, status: true },
+        select: {
+          id: true,
+          organizationId: true,
+          status: true,
+          organization: {
+            select: {
+              subscriptionPlan: true,
+              subscriptionStatus: true,
+              trialEndsAt: true,
+            },
+          },
+        },
       },
     },
   });

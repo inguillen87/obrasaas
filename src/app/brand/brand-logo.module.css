@@ -1,0 +1,38 @@
+.lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.68em;
+  min-width: 0;
+  color: inherit;
+}
+
+.mark {
+  display: block;
+  flex: 0 0 auto;
+}
+
+.wordmark {
+  display: inline-flex;
+  align-items: baseline;
+  color: inherit;
+  font-family: var(--font-manrope), var(--font-geist), sans-serif;
+  font-size: inherit;
+  line-height: 1;
+  letter-spacing: -0.055em;
+  white-space: nowrap;
+}
+
+.wordmark strong,
+.wordmark span {
+  color: inherit;
+  font: inherit;
+}
+
+.wordmark strong {
+  font-weight: 850;
+}
+
+.wordmark span {
+  font-weight: 650;
+  opacity: 0.74;
+}

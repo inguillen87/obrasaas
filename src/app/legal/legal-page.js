@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { ObraSaasLogo } from '@/app/brand/brand-logo';
 import styles from './legal.module.css';
 
 export default function LegalPage({
@@ -11,7 +12,9 @@ export default function LegalPage({
   return (
     <main className={styles.page}>
       <nav className={styles.nav} aria-label="Navegación legal">
-        <Link href="/" className={styles.brand}>ObraSaaS</Link>
+        <Link href="/" className={styles.brand} aria-label="ObraSaaS, inicio">
+          <ObraSaasLogo markSize={30} />
+        </Link>
         <div className={styles.navLinks}>
           <Link href="/privacy">Privacidad</Link>
           <Link href="/terms">Términos</Link>

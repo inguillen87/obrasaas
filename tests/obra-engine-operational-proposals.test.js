@@ -3,6 +3,10 @@ import test from 'node:test';
 import { tsImport } from 'tsx/esm/api';
 
 import { sanitizeMessagesForMedicalPrivacy } from '../src/lib/medical-privacy.js';
+import {
+  FIRST_VALUE_APPROVAL_SIMULATION_MESSAGE,
+  FIRST_VALUE_APPROVAL_SIMULATOR_SCENARIO,
+} from '../src/lib/field-simulator-scenarios.js';
 
 const {
   OPERATIONAL_PROPOSAL_STATUSES,
@@ -196,6 +200,44 @@ test('audio creates a pending proposal and an exact confirmation applies it once
   assert.match(repeated.reply, /ya fue aplicada/i);
   assert.equal(repeated.stateChanged, false);
   assert.equal(audits.filter((audit) => audit.action === 'voice.proposal.applied').length, 1);
+});
+
+test('the explicit first-value simulator scenario creates a pending delay proposal without applying project changes', async () => {
+  const { prisma, proposals, audits } = memoryPrisma();
+  const currentState = state();
+  const before = structuredClone(currentState);
+  const result = await processIncomingObraMessage({
+    externalId: 'internal:simulator:first-value-delay-a',
+    provider: 'internal',
+    from: worker().phone,
+    kind: 'audio',
+    text: FIRST_VALUE_APPROVAL_SIMULATION_MESSAGE,
+    transcription: {
+      status: 'completed',
+      provider: 'dashboard-simulator',
+      text: FIRST_VALUE_APPROVAL_SIMULATION_MESSAGE,
+    },
+    timestamp: audioTime,
+  }, scope, {
+    state: currentState,
+    projectSettings,
+    worker: worker(),
+    prisma,
+    persist: false,
+    processingTime: audioTime,
+    auditActorId: 'platform-user-a',
+    auditSource: 'dashboard-simulator',
+    simulationScenario: FIRST_VALUE_APPROVAL_SIMULATOR_SCENARIO,
+  });
+
+  assert.equal(result.operationalProposal.type, 'DELAY_REPORT');
+  assert.equal(result.operationalProposal.status, OPERATIONAL_PROPOSAL_STATUSES.PENDING);
+  assert.equal(result.stateChanged, false);
+  assert.deepEqual(currentState, before);
+  assert.equal(proposals.length, 1);
+  assert.equal(proposals[0].status, OPERATIONAL_PROPOSAL_STATUSES.PENDING);
+  assert.equal(audits[0].action, 'voice.proposal.created');
+  assert.match(result.reply, /no apliqué cambios/i);
 });
 
 test('a worker can propose progress but only an authorized supervisor can apply it', async () => {

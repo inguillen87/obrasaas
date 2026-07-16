@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 
+import { ObraSaasMark } from '@/app/brand/brand-logo';
 import styles from './platform-tour.module.css';
 
 const modules = [
@@ -259,7 +260,7 @@ export default function PlatformTour() {
         <div className={styles.stage}>
           <div className={styles.stageTopbar}>
             <div className={styles.windowDots} aria-hidden="true"><i /><i /><i /></div>
-            <p><span>OS</span><strong>Obra Palermo</strong><small>Centro operativo</small></p>
+            <p><span><ObraSaasMark size={25} /></span><strong>Obra Palermo</strong><small>Centro operativo</small></p>
             <div className={styles.stageStatus}><i /> Entorno demostrativo</div>
           </div>
           <div

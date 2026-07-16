@@ -22,7 +22,7 @@ export default async function OpenGraphImage() {
           position: 'relative',
           overflow: 'hidden',
           color: '#f7f7f2',
-          background: '#0a0b0c',
+          background: '#08110f',
           fontFamily: 'Arial, sans-serif',
         }}
       >
@@ -45,7 +45,7 @@ export default async function OpenGraphImage() {
             left: -120,
             display: 'flex',
             borderRadius: 999,
-            background: 'radial-gradient(circle, rgba(255,155,56,.28) 0%, rgba(255,155,56,.08) 48%, transparent 72%)',
+            background: 'radial-gradient(circle, rgba(242,138,66,.28) 0%, rgba(242,138,66,.08) 48%, transparent 72%)',
           }}
         />
         <div
@@ -70,13 +70,13 @@ export default async function OpenGraphImage() {
               />
               ObraSaaS
             </div>
-            <div style={{ marginTop: 68, color: '#ff9b38', fontSize: 18, fontWeight: 700, letterSpacing: 3 }}>
+            <div style={{ marginTop: 68, color: '#f28a42', fontSize: 18, fontWeight: 700, letterSpacing: 3 }}>
               SISTEMA OPERATIVO DE OBRA
             </div>
             <div style={{ marginTop: 20, fontSize: 58, fontWeight: 700, lineHeight: 1.02, letterSpacing: -3 }}>
               La obra reporta por WhatsApp.
             </div>
-            <div style={{ marginTop: 12, color: '#ff9b38', fontSize: 58, fontWeight: 700, lineHeight: 1.02, letterSpacing: -3 }}>
+            <div style={{ marginTop: 12, color: '#f28a42', fontSize: 58, fontWeight: 700, lineHeight: 1.02, letterSpacing: -3 }}>
               La gestión actúa con contexto.
             </div>
             <div style={{ marginTop: 30, color: '#a8adb3', fontSize: 22, lineHeight: 1.45 }}>
@@ -106,7 +106,7 @@ export default async function OpenGraphImage() {
                 <div style={{ marginTop: 12, color: 'rgba(255,255,255,.58)', fontSize: 12, textAlign: 'right' }}>08:41 · recibido</div>
               </div>
               <div style={{ width: 242, display: 'flex', flexDirection: 'column', marginTop: 18, padding: 14, borderRadius: '3px 14px 14px 14px', background: '#242d2a' }}>
-                <div style={{ color: '#ff9b38', fontSize: 13, fontWeight: 700 }}>Procesado por ObraSaaS</div>
+                <div style={{ color: '#f28a42', fontSize: 13, fontWeight: 700 }}>Procesado por ObraSaaS</div>
                 <div style={{ marginTop: 8, color: '#d4d8d6', fontSize: 16, lineHeight: 1.4 }}>Evidencia vinculada. Cambio pendiente de aprobación.</div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 'auto', color: '#8fdcaf', fontSize: 13 }}>

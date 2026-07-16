@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+
+import { ObraSaasMark } from '@/app/brand/brand-logo';
 import styles from './landing.module.css';
 
 const steps = [
@@ -59,12 +61,12 @@ export default function ProductExperience() {
               ['Estructura', 100, 'done'], ['Instalaciones', step.progress, 'active'], ['Revestimientos', active === 1 ? 28 : 42, active === 1 ? 'risk' : 'active'], ['Terminaciones', 12, 'waiting'],
             ].map(([label, value, status]) => <div className={styles.ganttLine} key={label}><span>{label}</span><div><i className={styles[status]} style={{ width: `${value}%` }} /></div><small>{value}%</small></div>)}
           </div>
-          <div className={styles.eventCard} key={step.id}><span className={styles.eventIcon}>OS</span><div><small>ObraSaaS Engine</small><strong>{step.event}</strong><p>{step.assistant}</p></div><time>ahora</time></div>
+          <div className={styles.eventCard} key={step.id}><span className={styles.eventIcon}><ObraSaasMark size={30} /></span><div><small>ObraSaaS Engine</small><strong>{step.event}</strong><p>{step.assistant}</p></div><time>ahora</time></div>
         </div>
         <div className={styles.phoneWrap}>
           <div className={styles.phone}>
             <div className={styles.phoneBar}><span>9:41</span><i /><span>●●●</span></div>
-            <div className={styles.chatHeader}><span className={styles.chatAvatar}>OS</span><div><strong>Obra demostrativa</strong><small>ObraSaaS · escenario simulado</small></div></div>
+            <div className={styles.chatHeader}><span className={styles.chatAvatar}><ObraSaasMark size={27} /></span><div><strong>Obra demostrativa</strong><small>ObraSaaS · escenario simulado</small></div></div>
             <div className={styles.chatBody} key={step.id}>
               <div className={styles.chatSystem}>Hoy</div>
               {step.kind === 'flow' ? (

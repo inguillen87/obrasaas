@@ -3,8 +3,10 @@ import Link from 'next/link';
 import ReportMilestoneAction from './report-milestone-action';
 import styles from './getting-started.module.css';
 import {
+  FIRST_VALUE_APPROVAL_STATUSES,
   FIRST_VALUE_REPORT_ACTION,
   countMeaningfulReportGenerations,
+  deriveFirstValueApprovalStep,
   deriveFirstValueReadiness,
 } from '@/lib/first-value-onboarding';
 import {
@@ -73,7 +75,7 @@ function MilestoneCard({ milestone, number, isCurrent, reportGenerated }) {
           {milestone.actions.map((action) => (
             <MilestoneAction action={action} key={`${action.href}-${action.label}`} />
           ))}
-          {milestone.key === 'report' && (
+          {milestone.key === 'report' && milestone.actionAvailable !== false && (
             <ReportMilestoneAction compact generated={reportGenerated} />
           )}
           {milestone.blocked && (
@@ -89,6 +91,16 @@ export default async function GettingStartedPage() {
   const access = await getPlatformAccess();
   requireTenantPermission(access, 'org:projects:read');
   const prisma = getPrisma();
+  const now = new Date();
+  const canManageField = hasTenantPermission(access, 'org:field:manage');
+  const canManageOperationalProposals = hasTenantPermission(
+    access,
+    'org:operational-proposals:manage',
+  );
+  const canReadOperationalProposals = hasTenantPermission(
+    access,
+    'org:operational-proposals:read',
+  );
   const reportAuditWhere = {
     organizationId: access.organization.id,
     action: FIRST_VALUE_REPORT_ACTION,
@@ -101,6 +113,8 @@ export default async function GettingStartedPage() {
     activeFieldWorkerCount,
     inboundMessageCount,
     whatsapp,
+    lastOperationalDecision,
+    pendingOperationalProposalCount,
     lastReport,
     meaningfulReportEvents,
   ] = await Promise.all([
@@ -127,6 +141,25 @@ export default async function GettingStartedPage() {
         lastVerifiedAt: true,
       },
     }),
+    canReadOperationalProposals
+      ? prisma.operationalProposal.findFirst({
+          where: {
+            projectId: access.project.id,
+            status: { in: [...FIRST_VALUE_APPROVAL_STATUSES] },
+          },
+          orderBy: [{ resolvedAt: 'desc' }, { updatedAt: 'desc' }],
+          select: { status: true, resolvedAt: true, updatedAt: true },
+        })
+      : Promise.resolve(null),
+    canReadOperationalProposals
+      ? prisma.operationalProposal.count({
+          where: {
+            projectId: access.project.id,
+            status: 'PENDING',
+            expiresAt: { gt: now },
+          },
+        })
+      : Promise.resolve(0),
     prisma.auditLog.findFirst({
       where: reportAuditWhere,
       orderBy: { createdAt: 'desc' },
@@ -143,7 +176,17 @@ export default async function GettingStartedPage() {
     }),
   ]);
 
-  const lastMeaningfulReport = meaningfulReportEvents[0] || null;
+  const latestMeaningfulReport = meaningfulReportEvents[0] || null;
+  const lastOperationalDecisionAt = lastOperationalDecision
+    ? lastOperationalDecision.resolvedAt || lastOperationalDecision.updatedAt
+    : null;
+  const postDecisionReportGenerationCount = countMeaningfulReportGenerations(
+    meaningfulReportEvents,
+    { notBefore: lastOperationalDecisionAt },
+  );
+  const lastMeaningfulReport = postDecisionReportGenerationCount > 0
+    ? latestMeaningfulReport
+    : null;
 
   const projectConfigured = !isUnconfiguredTenantBootstrapProject(access.project);
   const whatsappConnected = Boolean(
@@ -153,17 +196,27 @@ export default async function GettingStartedPage() {
     activeFieldWorkerCount,
     activeMembershipCount,
     inboundMessageCount,
+    operationalDecisionCount: lastOperationalDecision ? 1 : 0,
     projectConfigured,
-    reportGenerationCount: countMeaningfulReportGenerations(meaningfulReportEvents),
+    reportGenerationCount: postDecisionReportGenerationCount,
     state: snapshot.state,
     whatsappConnected,
   });
 
   const canManageProjects = hasTenantPermission(access, 'org:projects:manage');
-  const canManagePeople = hasTenantPermission(access, 'org:field:manage')
+  const canManagePeople = canManageField
     || hasTenantPermission(access, 'tenant:members:manage');
   const canManageIntegrations = hasTenantPermission(access, 'org:integrations:manage');
   const canViewTeam = hasTenantPermission(access, 'tenant:members:read');
+  const approvalStep = deriveFirstValueApprovalStep({
+    canManageField,
+    canManageProposals: canManageOperationalProposals,
+    pendingProposalCount: pendingOperationalProposalCount,
+    terminalProposalCount: lastOperationalDecision ? 1 : 0,
+  });
+  const canOpenApprovalStep = approvalStep.complete || approvalStep.hasPending
+    ? canReadOperationalProposals
+    : canManageField;
   const connectionIdentity = whatsapp?.verifiedBusinessName
     || whatsapp?.displayPhoneNumber
     || 'activo verificado por Meta';
@@ -235,19 +288,44 @@ export default async function GettingStartedPage() {
       ],
     },
     {
+      key: 'approval',
+      eyebrow: 'Control humano',
+      title: 'Decidí la primera propuesta',
+      description: 'Convertí un reporte accionable en una decisión trazable: revisalo en contexto y aprobalo o rechazalo antes de emitir el control semanal.',
+      complete: readiness.completion.approval,
+      blocked: approvalStep.blocked,
+      signal: lastOperationalDecision
+        ? `${lastOperationalDecision.status === 'APPLIED' ? 'Aplicada' : 'Rechazada'} el ${DATE_FORMATTER.format(lastOperationalDecision.resolvedAt || lastOperationalDecision.updatedAt)}`
+        : approvalStep.hasPending
+          ? `${approvalStep.pending} propuesta${approvalStep.pending === 1 ? '' : 's'} pendiente${approvalStep.pending === 1 ? '' : 's'} de decisión`
+          : 'Todavía no existe una propuesta pendiente ni una decisión terminal',
+      actions: canOpenApprovalStep
+        ? [{
+            href: approvalStep.href,
+            label: approvalStep.label,
+            primary: !approvalStep.complete,
+          }]
+        : [],
+    },
+    {
       key: 'report',
       eyebrow: 'Primer entregable',
       title: 'Generá el primer reporte',
-      description: 'ObraSaaS compone el reporte con los datos actuales, registra la generación en la bitácora y abre la vista lista para guardar como PDF.',
+      description: 'Con el circuito reportar → aprobar ya resuelto, ObraSaaS compone el control semanal, registra la generación y abre la vista lista para guardar como PDF.',
       complete: readiness.completion.report,
       blocked: false,
-      signal: lastMeaningfulReport
-        ? `Reporte con datos generado el ${DATE_FORMATTER.format(lastMeaningfulReport.createdAt)}`
-        : lastReport?.metadata?.emptyState === true
-          ? `Último intento vacío el ${DATE_FORMATTER.format(lastReport.createdAt)} · el hito sigue pendiente`
-          : readiness.completion.task
-            ? 'Datos listos; todavía no hay una generación registrada'
-            : 'El reporte puede abrirse, pero permanecerá vacío hasta registrar actividad',
+      actionAvailable: readiness.completion.approval || readiness.completion.report,
+      signal: !readiness.completion.approval && !readiness.completion.report
+        ? 'Primero resolvé una propuesta operativa para cerrar el circuito de control'
+        : lastMeaningfulReport
+          ? `Reporte con datos generado el ${DATE_FORMATTER.format(lastMeaningfulReport.createdAt)}`
+          : latestMeaningfulReport && lastOperationalDecisionAt
+            ? `El reporte del ${DATE_FORMATTER.format(latestMeaningfulReport.createdAt)} es anterior a la última decisión · generá un control actualizado`
+            : lastReport?.metadata?.emptyState === true
+              ? `Último intento vacío el ${DATE_FORMATTER.format(lastReport.createdAt)} · el hito sigue pendiente`
+              : readiness.completion.task
+                ? 'Datos listos; todavía no hay una generación registrada'
+                : 'El reporte puede abrirse, pero permanecerá vacío hasta registrar actividad',
       actions: lastMeaningfulReport ? [{ href: '/dashboard/report', label: 'Revisar reporte' }] : [],
     },
   ];
@@ -263,8 +341,8 @@ export default async function GettingStartedPage() {
             <p className={styles.eyebrow}>Primer valor · puesta en marcha</p>
             <h1>De tenant vacío a una operación demostrable.</h1>
             <p className={styles.lead}>
-              Cinco hitos verificables para que {access.organization.name} pueda planificar,
-              operar y emitir su primer reporte sin contratar ningún servicio adicional.
+              Seis hitos verificables para que {access.organization.name} pueda planificar,
+              reportar, decidir y emitir su primer control sin contratar ningún servicio adicional.
             </p>
           </div>
           <div className={styles.contextCard}>
@@ -329,6 +407,8 @@ export default async function GettingStartedPage() {
             <div><span>Personas</span><strong>{readiness.counts.activeMemberships + readiness.counts.activeFieldWorkers}</strong></div>
             <div><span>Tareas</span><strong>{readiness.counts.tasks}</strong></div>
             <div><span>Canal</span><strong>{whatsappConnected ? 'Meta' : readiness.counts.inboundMessages ? 'Prueba local' : 'Pendiente'}</strong></div>
+            <div><span>Decisión</span><strong>{readiness.completion.approval ? 'Resuelta' : approvalStep.hasPending ? 'Pendiente' : 'Sin propuesta'}</strong></div>
+            <div><span>Control</span><strong>{readiness.completion.report ? 'Emitido' : 'Pendiente'}</strong></div>
           </section>
 
           <section className={styles.truthCard}>

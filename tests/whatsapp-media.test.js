@@ -165,6 +165,52 @@ test("audio is stored but never sent to OpenAI before tenant activation", async 
   assert.equal(isEnrichedInboundWhatsAppMediaEvent(event), true);
 });
 
+test("audio revalidates the subscription immediately before OpenAI transcription", async () => {
+  const calls = [];
+  const subscriptionError = Object.assign(new Error("subscription blocked"), {
+    code: "WEBHOOK_SUBSCRIPTION_BLOCKED",
+  });
+
+  await assert.rejects(
+    ingestInboundWhatsAppMedia(baseEvent, {
+      transcriptionEnabled: true,
+      storageConfigured: () => true,
+      aiConfigured: () => true,
+      download: async () => {
+        calls.push("download");
+        return {
+          id: "123456789012345",
+          buffer: Buffer.from("voice"),
+          kind: "audio",
+          mimeType: "audio/ogg",
+          size: 5,
+          sha256: "verified-sha",
+        };
+      },
+      upload: async () => {
+        calls.push("upload");
+        return {
+          assetId: "asset-before-transcription-fence",
+          provider: "vercel-blob",
+          bytes: 5,
+          secureUrl: "https://blob.example/private/audio-fenced.ogg",
+        };
+      },
+      beforeTranscribe: async () => {
+        calls.push("subscription-fence");
+        throw subscriptionError;
+      },
+      transcribe: async () => {
+        calls.push("transcribe");
+        return { provider: "openai", text: "must not exist" };
+      },
+    }),
+    (error) => error === subscriptionError,
+  );
+
+  assert.deepEqual(calls, ["download", "upload", "subscription-fence"]);
+});
+
 test("freshly enriched webhook media is persisted under the active lease before application", async () => {
   const calls = [];
   const enriched = {

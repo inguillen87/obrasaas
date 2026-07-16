@@ -5,7 +5,7 @@
   background:
     radial-gradient(circle at 12% 10%, rgba(233, 135, 69, 0.18), transparent 30rem),
     radial-gradient(circle at 88% 90%, rgba(87, 178, 149, 0.12), transparent 28rem),
-    #08110f;
+    var(--brand-ink);
   overflow: hidden;
 }
 
@@ -60,19 +60,6 @@
   font-weight: 850;
   letter-spacing: -0.025em;
   text-decoration: none;
-}
-
-.brandMark {
-  display: grid;
-  width: 34px;
-  height: 34px;
-  place-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 10px;
-  color: #08110f;
-  background: #e98745;
-  font-size: 0.72rem;
-  letter-spacing: -0.05em;
 }
 
 .copy {
@@ -131,7 +118,7 @@
 .points strong {
   display: block;
   margin-bottom: 2px;
-  color: #f7f5ef;
+  color: var(--brand-ivory);
   font-size: 0.93rem;
 }
 

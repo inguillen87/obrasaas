@@ -505,6 +505,7 @@
 .cardActions > div { display: flex; gap: 8px; }
 .cardActions button,
 .empty button,
+.emptyPrimaryAction,
 .loadError button,
 .modalFooter button {
   min-height: 42px;
@@ -517,6 +518,7 @@
   font: inherit;
   font-size: .7rem;
   font-weight: 830;
+  text-decoration: none;
   cursor: pointer;
 }
 
@@ -578,6 +580,16 @@
   color: #e1e4e0;
   background: rgba(255, 255, 255, .04);
 }
+
+.emptyPrimaryAction {
+  margin-top: 6px;
+  border: 0;
+  color: #17110b;
+  background: var(--approval-orange);
+  box-shadow: 0 8px 24px rgba(255, 159, 67, .13);
+}
+
+.emptyPrimaryAction:hover { background: #ffae61; }
 
 .loadError {
   min-height: 450px;
@@ -787,6 +799,7 @@
 .viewTabs button:focus-visible,
 .cardActions button:focus-visible,
 .empty button:focus-visible,
+.emptyPrimaryAction:focus-visible,
 .loadError button:focus-visible,
 .globalNotice button:focus-visible,
 .modalClose:focus-visible,

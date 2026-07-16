@@ -2,12 +2,14 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  assertSubscriptionAllowsWrites,
   createOfficeInvitationWithinPlan,
   fieldUserCapacity,
   getSubscriptionEntitlements,
   OfficeSeatCheckError,
   OfficeSeatLimitError,
   officeUserCapacity,
+  SubscriptionWriteBlockedError,
 } from '../src/lib/plans.js';
 
 const NOW = new Date('2026-07-14T12:00:00.000Z');
@@ -51,6 +53,18 @@ test('an expired trial becomes read-only', () => {
   assert.equal(access.canWrite, false);
 });
 
+test('a trial is read-only at the exact trialEndsAt boundary', () => {
+  const access = getSubscriptionEntitlements({
+    subscriptionPlan: 'TRIAL',
+    subscriptionStatus: 'TRIALING',
+    trialEndsAt: NOW,
+  }, NOW);
+
+  assert.equal(access.status, 'TRIAL_EXPIRED');
+  assert.equal(access.trialDaysRemaining, 0);
+  assert.equal(access.canWrite, false);
+});
+
 test('active plans work and suspended tenants are blocked', () => {
   assert.deepEqual(
     getSubscriptionEntitlements({
@@ -73,6 +87,60 @@ test('active plans work and suspended tenants are blocked', () => {
   }, NOW);
   assert.equal(suspended.canRead, false);
   assert.equal(suspended.canWrite, false);
+});
+
+test('operational writes allow ACTIVE and current trials but reject every read-only status', () => {
+  const active = {
+    subscriptionPlan: 'PRO',
+    subscriptionStatus: 'ACTIVE',
+  };
+  const currentTrial = {
+    subscriptionPlan: 'TRIAL',
+    subscriptionStatus: 'TRIALING',
+    trialEndsAt: new Date('2026-07-20T12:00:00.000Z'),
+  };
+  assert.equal(assertSubscriptionAllowsWrites(active, { now: NOW }).canWrite, true);
+  assert.equal(assertSubscriptionAllowsWrites(currentTrial, { now: NOW }).canWrite, true);
+
+  const blocked = [
+    {
+      label: 'expired trial',
+      organization: {
+        subscriptionPlan: 'TRIAL',
+        subscriptionStatus: 'TRIALING',
+        trialEndsAt: new Date('2026-07-13T12:00:00.000Z'),
+      },
+      expectedStatus: 'TRIAL_EXPIRED',
+    },
+    {
+      label: 'past due',
+      organization: { subscriptionPlan: 'PRO', subscriptionStatus: 'PAST_DUE' },
+      expectedStatus: 'PAST_DUE',
+    },
+    {
+      label: 'canceled',
+      organization: { subscriptionPlan: 'PRO', subscriptionStatus: 'CANCELED' },
+      expectedStatus: 'CANCELED',
+    },
+    {
+      label: 'suspended',
+      organization: { subscriptionPlan: 'ENTERPRISE', subscriptionStatus: 'SUSPENDED' },
+      expectedStatus: 'SUSPENDED',
+    },
+  ];
+
+  for (const scenario of blocked) {
+    assert.throws(
+      () => assertSubscriptionAllowsWrites(scenario.organization, { now: NOW }),
+      (error) => {
+        assert.equal(error instanceof SubscriptionWriteBlockedError, true, scenario.label);
+        assert.equal(error.code, 'SUBSCRIPTION_READ_ONLY', scenario.label);
+        assert.equal(error.status, 402, scenario.label);
+        assert.equal(error.entitlements.status, scenario.expectedStatus, scenario.label);
+        return true;
+      },
+    );
+  }
 });
 
 test('field worker capacity enforces the published organization-wide limits', () => {

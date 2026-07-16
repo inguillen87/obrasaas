@@ -1,9 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 
 import { useModalFocus } from '../use-modal-focus';
 import styles from './approvals.module.css';
+import { FIRST_VALUE_APPROVAL_SIMULATOR_HREF } from '@/lib/first-value-onboarding';
 
 const DEFAULT_TIME_ZONE = 'America/Argentina/Buenos_Aires';
 const TERMINAL_STATUSES = new Set(['APPLIED', 'REJECTED', 'EXPIRED', 'INVALIDATED']);
@@ -458,7 +460,7 @@ function DecisionDialog({
   );
 }
 
-export default function ApprovalsClient() {
+export default function ApprovalsClient({ canCreateFieldSimulation = false }) {
   const [proposals, setProposals] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [serverMetrics, setServerMetrics] = useState({});
@@ -989,6 +991,18 @@ export default function ApprovalsClient() {
             </p>
             {(query || typeFilter !== 'ALL') && (
               <button type="button" onClick={clearFilters}>Limpiar filtros</button>
+            )}
+            {activeFilter === 'PENDING'
+              && !query
+              && typeFilter === 'ALL'
+              && canCreateFieldSimulation && (
+              <Link
+                className={styles.emptyPrimaryAction}
+                href={FIRST_VALUE_APPROVAL_SIMULATOR_HREF}
+              >
+                <i className="fa-brands fa-whatsapp" aria-hidden="true" />
+                Generar propuesta de prueba
+              </Link>
             )}
           </div>
         ) : (

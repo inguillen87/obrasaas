@@ -16,6 +16,7 @@ import {
   FIELD_WORKER_RESOLUTION,
   resolveActiveFieldWorkerById,
 } from "@/lib/field-workers";
+import { parseFieldSimulatorScenarioRequest } from "@/lib/field-simulator-scenarios";
 import { getPrisma } from "@/lib/prisma";
 import {
   MEDICAL_EVIDENCE_PERMISSION,
@@ -41,6 +42,7 @@ const SIMULATOR_FIELDS = new Set([
   "fileName",
   "latitude",
   "longitude",
+  "scenario",
 ]);
 const SIMULATOR_KINDS = new Set(["text", "audio", "image", "video", "document"]);
 const SIMULATOR_IDEMPOTENCY_KEY = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/;
@@ -92,6 +94,13 @@ export async function POST(request) {
     if (Object.keys(body).some((field) => !SIMULATOR_FIELDS.has(field))) {
       return Response.json({ error: "El evento contiene campos no permitidos." }, { status: 400 });
     }
+    const scenarioRequest = parseFieldSimulatorScenarioRequest(body);
+    if (scenarioRequest.error) {
+      return Response.json({
+        error: scenarioRequest.error,
+        code: "SIMULATOR_SCENARIO_INVALID",
+      }, { status: 400 });
+    }
     const idempotencyKey = String(request.headers.get("idempotency-key") || "").trim();
     if (!SIMULATOR_IDEMPOTENCY_KEY.test(idempotencyKey)) {
       return Response.json({
@@ -112,7 +121,7 @@ export async function POST(request) {
       }, { status: 409 });
     }
 
-    const mediaType = String(body.mediaType || "");
+    const mediaType = scenarioRequest.scenario ? "" : String(body.mediaType || "");
     const inferredKind = mediaType.startsWith("audio/")
       ? "audio"
       : mediaType.startsWith("image/")
@@ -122,11 +131,16 @@ export async function POST(request) {
           : body.mediaUrl
             ? "document"
             : "text";
-    const kind = String(body.kind || inferredKind);
+    const kind = String(scenarioRequest.scenario?.kind || body.kind || inferredKind);
     if (!SIMULATOR_KINDS.has(kind)) {
       return Response.json({ error: "El tipo de evento de prueba no es válido." }, { status: 400 });
     }
-    const text = String(body.text ?? body.bodyText ?? "").slice(0, 4_000);
+    const text = String(
+      scenarioRequest.scenario?.text
+      ?? body.text
+      ?? body.bodyText
+      ?? "",
+    ).slice(0, 4_000);
     const event = {
       externalId: identity.externalId,
       provider: "internal",
@@ -165,6 +179,7 @@ export async function POST(request) {
           persist: false,
           auditActorId: scope.databaseUserId,
           auditSource: "dashboard-simulator",
+          simulationScenario: scenarioRequest.scenario?.id || null,
         })
       ),
       operation: {

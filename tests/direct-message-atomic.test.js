@@ -36,7 +36,12 @@ const project = {
   latitude: -34.6,
   longitude: -58.4,
   geofenceMeters: 120,
-  organization: { timezone: 'America/Montevideo' },
+  organization: {
+    timezone: 'America/Montevideo',
+    subscriptionPlan: 'PRO',
+    subscriptionStatus: 'ACTIVE',
+    trialEndsAt: null,
+  },
   snapshot: {
     state: { incidents: [], attendance: {}, tasks: {}, alertsCount: 0 },
     version: 4,
@@ -205,6 +210,42 @@ test('direct application couples claim, engine, snapshot, messages and idempoten
     'VP-ABCDEF123456',
   );
   assert.equal(JSON.stringify(operationArgs).includes('+000000000'), false);
+});
+
+test('direct field effects fail closed inside the project lock when the subscription is read-only', async () => {
+  const { calls, prisma, transaction } = transactionDouble();
+  transaction.project.findFirst = async (args) => {
+    calls.push(['project', args]);
+    return {
+      ...structuredClone(project),
+      organization: {
+        ...structuredClone(project.organization),
+        subscriptionStatus: 'PAST_DUE',
+      },
+    };
+  };
+  globalThis.__obraSaasPrisma = prisma;
+  let applied = false;
+
+  await assert.rejects(
+    applyDirectObraMessageAtomically({
+      event: {
+        externalId: 'direct-blocked-a',
+        provider: 'webview',
+        kind: 'location',
+      },
+      scope: { projectId: project.id, organizationId: project.organizationId },
+      workerId: worker.id,
+      apply: async () => {
+        applied = true;
+        return null;
+      },
+    }),
+    (error) => error.code === 'SUBSCRIPTION_READ_ONLY' && error.status === 402,
+  );
+
+  assert.equal(applied, false);
+  assert.deepEqual(calls.map(([name]) => name), ['transaction', 'lock', 'project']);
 });
 
 test('an idempotent direct retry returns its stored outcome without reapplying effects', async () => {

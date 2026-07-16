@@ -1,5 +1,5 @@
-import Image from 'next/image';
 import Link from 'next/link';
+import { ObraSaasLogo } from './brand/brand-logo';
 import MobileNavigation from './landing/mobile-navigation';
 import PlatformTour from './landing/platform-tour';
 import ProductExperience from './landing/product-experience';
@@ -83,8 +83,8 @@ function CheckIcon() {
   return <svg aria-hidden="true" viewBox="0 0 20 20" width="18" height="18"><path d="m4 10 3.5 3.5L16 5.5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" /></svg>;
 }
 
-function Logo() {
-  return <span className={styles.logo}><span className={styles.logoMark} aria-hidden="true"><Image src="/brand/obrasaas-app-icon.svg" width={28} height={28} alt="" /></span><span>ObraSaaS</span></span>;
+function Logo({ preload = false } = {}) {
+  return <ObraSaasLogo className={styles.logo} markSize={30} preload={preload} />;
 }
 
 export default function Home() {
@@ -97,7 +97,7 @@ export default function Home() {
       <a href="#contenido" className={styles.skipLink}>Saltar al contenido</a>
       <div className={styles.ambientGrid} aria-hidden="true" />
       <header className={styles.header}>
-        <Link href="/" className={styles.brand} aria-label="ObraSaaS, inicio"><Logo /><span className={styles.brandTag}>Field OS</span></Link>
+        <Link href="/" className={styles.brand} aria-label="ObraSaaS, inicio"><Logo preload /></Link>
         <nav className={styles.nav} aria-label="Navegación principal">
           <a href="#producto">Producto</a><a href="#plataforma">Plataforma</a><a href="#confianza">Confianza</a><a href="#sectores">Sectores</a><a href="#precios">Precios</a><a href="#preguntas">Preguntas</a>
         </nav>

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { ObraSaasMark } from '@/app/brand/brand-logo';
 import { getAppState, getMessages } from '@/lib/db';
 import {
   getPlatformAccess,
@@ -92,7 +93,7 @@ export default async function ReportPage({ searchParams }) {
       <article className={styles.report} aria-labelledby="report-title">
         <header className={styles.header}>
           <div className={styles.brandBlock}>
-            <div className={styles.mark} aria-hidden="true">OS</div>
+            <ObraSaasMark className={styles.mark} size={44} />
             <div>
               <strong>ObraSaaS</strong>
               <span>Control operativo y evidencia de obra</span>

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { ObraSaasLogo } from "@/app/brand/brand-logo";
 import styles from "../webview.module.css";
 
 function getCurrentPosition() {
@@ -58,7 +59,7 @@ export default function AttendanceClient({ worker, token, name }) {
       <div className={styles.shell}>
         <header className={styles.header}>
           <Link className={styles.brand} href="/" aria-label="ObraSaaS, inicio">
-            <span>OS</span> ObraSaaS
+            <ObraSaasLogo markClassName={styles.brandMark} markSize={32} />
           </Link>
           <span className={styles.secureBadge}>Enlace cifrado · 2 h</span>
         </header>

@@ -1,16 +1,17 @@
 /* ObraSaaS application styles */
 
 :root {
-    --bg-main: #060913;
+    --bg-main: var(--brand-ink);
     --bg-surface: rgba(13, 20, 38, 0.6);
     --bg-surface-hover: rgba(22, 32, 59, 0.8);
     --bg-card: rgba(255, 255, 255, 0.02);
     --border-color: rgba(255, 255, 255, 0.08);
-    --border-color-focus: rgba(255, 159, 28, 0.4);
+    --border-color-focus: rgba(242, 138, 66, 0.4);
 
-    --primary: #ff9f1c;
-    --primary-hover: #ffb03a;
-    --primary-glow: rgba(255, 159, 28, 0.25);
+    --primary: var(--brand-field);
+    --primary-hover: var(--brand-field-hover);
+    --primary-glow: rgba(242, 138, 66, 0.25);
+    --on-primary: var(--brand-ink);
 
     --success: #10b981;
     --success-bg: rgba(16, 185, 129, 0.1);
@@ -24,7 +25,7 @@
     --info: #3b82f6;
     --info-bg: rgba(59, 130, 246, 0.1);
 
-    --text-primary: #f8fafc;
+    --text-primary: var(--brand-ivory);
     --text-secondary: #94a3b8;
     --text-muted: #475569;
 
@@ -43,7 +44,7 @@ body.light-theme {
     --bg-surface-hover: rgba(255, 255, 255, 0.95);
     --bg-card: rgba(0, 0, 0, 0.02);
     --border-color: rgba(15, 23, 42, 0.08);
-    --border-color-focus: rgba(255, 159, 28, 0.6);
+    --border-color-focus: rgba(242, 138, 66, 0.6);
 
     --text-primary: #0f172a;
     --text-secondary: #475569;
@@ -69,14 +70,14 @@ body.light-theme .nav-item .nav-button-link:hover {
 
 body.light-theme .nav-item.active button,
 body.light-theme .nav-item.active .nav-button-link {
-    color: #fff;
+    color: var(--on-primary);
     background: var(--primary);
 }
 
 body.light-theme .brand-name {
-    background: linear-gradient(to right, #0f172a, #475569);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+    color: #0f172a;
+    background: none;
+    -webkit-text-fill-color: currentColor;
 }
 
 body.light-theme .whatsapp-simulator {
@@ -172,26 +173,18 @@ body {
 .brand-logo {
     width: 40px;
     height: 40px;
-    background: linear-gradient(135deg, var(--primary), #e76f51);
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #fff;
-    font-weight: 800;
-    font-size: 1.1rem;
-    font-family: var(--font-heading);
-    box-shadow: 0 4px 20px rgba(255, 159, 28, 0.4);
+    border-radius: 10px;
+    box-shadow: 0 8px 28px rgba(242, 138, 66, 0.16);
 }
 
 .brand-name {
     font-family: var(--font-heading);
-    font-weight: 800;
     font-size: 1.35rem;
-    letter-spacing: -0.5px;
-    background: linear-gradient(to right, #fff, #cbd5e1);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+    color: var(--text-primary);
+}
+
+.dashboard-brand-lockup {
+    color: var(--text-primary);
 }
 
 .nav-menu {
@@ -231,7 +224,7 @@ body {
 
 .nav-item.active button,
 .nav-item.active .nav-button-link {
-    color: var(--bg-main);
+    color: var(--on-primary);
     background: var(--primary);
     font-weight: 600;
     box-shadow: 0 8px 24px rgba(255, 159, 28, 0.3);
@@ -239,7 +232,7 @@ body {
 
 .nav-item.active button i,
 .nav-item.active .nav-button-link i {
-    color: var(--bg-main);
+    color: var(--on-primary);
 }
 
 .nav-item button i,
@@ -404,7 +397,7 @@ body {
 
 .btn-primary {
     background: var(--primary);
-    color: var(--bg-main);
+    color: var(--on-primary);
     box-shadow: 0 4px 15px var(--primary-glow);
 }
 
@@ -547,15 +540,16 @@ body {
 .whatsapp-avatar {
     width: 38px;
     height: 38px;
+    overflow: hidden;
     border-radius: 50%;
-    background: linear-gradient(135deg, #10b981, #059669);
     display: flex;
     align-items: center;
     justify-content: center;
-    color: white;
-    font-weight: 700;
-    font-size: 0.85rem;
-    font-family: var(--font-heading);
+}
+
+.whatsapp-avatar-mark {
+    width: 38px;
+    height: 38px;
 }
 
 .whatsapp-contact-details {
@@ -661,7 +655,7 @@ body {
     height: 32px;
     border-radius: 50%;
     background: var(--primary);
-    color: var(--bg-main);
+    color: var(--on-primary);
     border: none;
     display: flex;
     align-items: center;
@@ -688,7 +682,7 @@ body {
     border-radius: 50%;
     background: var(--primary);
     border: none;
-    color: var(--bg-main);
+    color: var(--on-primary);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -813,7 +807,7 @@ body {
     display: flex;
     align-items: center;
     padding: 0 12px;
-    color: var(--bg-main);
+    color: var(--on-primary);
     font-size: 0.75rem;
     font-weight: 700;
     box-shadow: 0 4px 12px rgba(255, 159, 28, 0.2);
@@ -835,7 +829,7 @@ body {
 .gantt-bar.shifted {
     border: 2px dashed rgba(255, 255, 255, 0.4);
     background: linear-gradient(90deg, #f59e0b, #fbbf24);
-    color: var(--bg-main);
+    color: var(--on-primary);
 }
 
 .gantt-bar-progress {
@@ -1396,7 +1390,7 @@ select.form-input option {
 
 .clerk-btn {
     background: var(--primary);
-    color: var(--bg-main);
+    color: var(--on-primary);
     width: 100%;
     padding: 12px;
     border: none;
@@ -1480,20 +1474,11 @@ select.form-input option {
     .mobile-logo-box {
         width: 28px;
         height: 28px;
-        background: linear-gradient(135deg, var(--primary), #e76f51);
-        border-radius: 8px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-        font-weight: 800;
-        font-size: 0.85rem;
-        font-family: var(--font-heading);
+        border-radius: 7px;
     }
 
     .mobile-brand-name {
         font-family: var(--font-heading);
-        font-weight: 800;
         font-size: 1.1rem;
         color: #fff;
     }
@@ -1813,7 +1798,7 @@ select.form-input option {
 
 .avatar-status-badge {
     background: var(--success);
-    color: var(--bg-main);
+    color: var(--on-primary);
     padding: 4px 10px;
     border-radius: 12px;
     font-size: 0.7rem;

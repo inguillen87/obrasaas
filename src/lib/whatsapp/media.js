@@ -106,6 +106,7 @@ export async function ingestAndPersistInboundWhatsAppMedia({
   ingest = ingestInboundWhatsAppMedia,
   persist,
   transcriptionEnabled = false,
+  beforeTranscribe = null,
 } = {}) {
   if (!event?.media) return event;
   if (typeof persist !== "function") {
@@ -113,7 +114,10 @@ export async function ingestAndPersistInboundWhatsAppMedia({
   }
 
   const wasEnriched = isEnrichedInboundWhatsAppMediaEvent(event);
-  const enrichedEvent = await ingest(event, { transcriptionEnabled });
+  const enrichedEvent = await ingest(event, {
+    transcriptionEnabled,
+    beforeTranscribe,
+  });
   const isEnriched = isEnrichedInboundWhatsAppMediaEvent(enrichedEvent);
   if (!wasEnriched && isEnriched) {
     await persist({
@@ -133,6 +137,7 @@ export async function ingestInboundWhatsAppMedia(event, {
   storageConfigured = isProtectedStorageConfigured,
   aiConfigured = isOpenAIConfigured,
   transcriptionEnabled = false,
+  beforeTranscribe = null,
 } = {}) {
   if (!event?.media?.id) return event;
   if (isEnrichedInboundWhatsAppMediaEvent(event)) return event;
@@ -171,6 +176,7 @@ export async function ingestInboundWhatsAppMedia(event, {
     } else if (!canTranscribeMimeType(downloaded.mimeType)) {
       transcription = { status: "pending_conversion", provider: "openai", text: null };
     } else {
+      if (typeof beforeTranscribe === "function") await beforeTranscribe();
       try {
         const result = await transcribe({
           buffer: downloaded.buffer,

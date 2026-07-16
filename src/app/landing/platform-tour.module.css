@@ -197,11 +197,14 @@
   height: 25px;
   display: grid;
   place-items: center;
-  color: #17120c;
+  overflow: hidden;
   border-radius: 7px;
-  background: var(--orange);
-  font-size: .5rem;
-  font-weight: 850;
+  background: transparent;
+}
+
+.stageTopbar > p > span img {
+  width: 25px;
+  height: 25px;
 }
 
 .stageTopbar > p strong {

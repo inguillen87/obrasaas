@@ -13,6 +13,7 @@ import {
   OPERATIONAL_PROPOSAL_MANAGE_PERMISSION,
   OPERATIONAL_PROPOSAL_READ_PERMISSION,
   OperationalProposalInboxError,
+  countPendingOperationalProposals,
   listOperationalProposalInbox,
   operationalProposalInboxErrorResponse,
   parseOperationalProposalFilters,
@@ -34,12 +35,39 @@ export async function GET(request) {
   try {
     const access = await getPlatformAccess();
     requireTenantPermission(access, OPERATIONAL_PROPOSAL_READ_PERMISSION);
-    const filters = parseOperationalProposalFilters(
-      new URL(request.url).searchParams,
-    );
+    const searchParams = new URL(request.url).searchParams;
     const prisma = getPrisma();
     const scope = scopeFromAccess(access);
     const now = new Date();
+    const summaryValues = searchParams.getAll('summary');
+    if (summaryValues.length > 0) {
+      if (
+        summaryValues.length !== 1
+        || summaryValues[0] !== 'pending-count'
+        || [...searchParams.keys()].some((key) => key !== 'summary')
+      ) {
+        return Response.json({
+          error: 'El resumen solicitado no es válido.',
+          code: 'OPERATIONAL_PROPOSAL_SUMMARY_INVALID',
+        }, {
+          status: 400,
+          headers: { 'Cache-Control': 'private, no-store' },
+        });
+      }
+      const pendingCount = await countPendingOperationalProposals(
+        prisma,
+        scope,
+        { now },
+      );
+      return Response.json({
+        project: { id: access.project.id },
+        pendingCount,
+        synchronizedAt: now.toISOString(),
+      }, {
+        headers: { 'Cache-Control': 'private, no-store' },
+      });
+    }
+    const filters = parseOperationalProposalFilters(searchParams);
     await sweepExpiredOperationalProposals(prisma, scope, { now });
     const inbox = await listOperationalProposalInbox(prisma, scope, {
       filters,

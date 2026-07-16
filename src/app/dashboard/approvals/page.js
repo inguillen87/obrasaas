@@ -2,7 +2,11 @@ import Link from 'next/link';
 
 import ApprovalsClient from './approvals-client';
 import styles from './approvals.module.css';
-import { getPlatformAccess, requireTenantPermission } from '@/lib/access';
+import {
+  getPlatformAccess,
+  hasTenantPermission,
+  requireTenantPermission,
+} from '@/lib/access';
 import { OPERATIONAL_PROPOSAL_READ_PERMISSION } from '@/lib/operational-proposal-inbox';
 
 export const dynamic = 'force-dynamic';
@@ -40,7 +44,9 @@ export default async function ApprovalsPage() {
         </aside>
       </header>
 
-      <ApprovalsClient />
+      <ApprovalsClient
+        canCreateFieldSimulation={hasTenantPermission(access, 'org:field:manage')}
+      />
     </main>
   );
 }

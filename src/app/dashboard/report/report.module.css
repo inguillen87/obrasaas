@@ -6,7 +6,7 @@
 .report { max-width: 1120px; margin: 0 auto; padding: 42px; border: 1px solid #dbe1e8; border-radius: 18px; background: #fff; box-shadow: 0 28px 90px rgba(0, 0, 0, .32); }
 .header { display: flex; align-items: flex-start; justify-content: space-between; gap: 32px; padding-bottom: 24px; border-bottom: 2px solid #172033; }
 .brandBlock { display: flex; align-items: center; gap: 13px; }
-.mark { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 11px; color: #111827; background: #ff9b38; font-size: .92rem; font-weight: 900; }
+.mark { width: 44px; height: 44px; display: block; border-radius: 11px; }
 .brandBlock strong, .brandBlock span { display: block; }
 .brandBlock strong { color: #101828; font-size: 1.08rem; }
 .brandBlock span { margin-top: 3px; color: #667085; font-size: .7rem; }

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">Símbolo ObraSaaS inverso</title>
+  <desc id="desc">Campo y gestión forman una O y cierran un mismo circuito operativo.</desc>
+  <g fill="none" stroke-linecap="butt" stroke-linejoin="round" stroke-width="10">
+    <path d="M13 36V21Q13 12 22 12H42Q51 12 51 21V28" stroke="#F4F1E8"/>
+    <path d="M51 28V43Q51 52 42 52H22Q13 52 13 43V36" stroke="#F28A42"/>
+  </g>
+</svg>

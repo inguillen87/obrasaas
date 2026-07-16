@@ -85,6 +85,10 @@ export default async function DashboardPage() {
         canViewTeam: hasTenantPermission(access, 'tenant:members:read'),
         canManageIntegrations: hasTenantPermission(access, 'org:integrations:manage'),
         canReadOperationalProposals,
+        canManageOperationalProposals: hasTenantPermission(
+          access,
+          'org:operational-proposals:manage',
+        ),
         pendingOperationalProposalCount,
         aiSupervisorEnabled: aiSettings.supervisorEnabled,
         aiAudioTranscriptionEnabled: aiSettings.audioTranscriptionEnabled,

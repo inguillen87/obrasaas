@@ -6,6 +6,11 @@ export const SUPERVISOR_LIMITS = Object.freeze({
   maxHistoryChars: 1_200,
 });
 
+export const SUPERVISOR_ACCESS_REQUIREMENT = Object.freeze({
+  permission: 'org:projects:read',
+  subscriptionMode: 'write',
+});
+
 export const SUPERVISOR_ACTION_TYPES = Object.freeze([
   'REQUEST_CREW_REASSIGNMENT',
   'REQUEST_MATERIAL_PURCHASE',

@@ -1,18 +1,18 @@
 .page {
-  --ink: #f7f7f2;
+  --ink: var(--brand-ivory);
   --muted: #9fa5ad;
   --subtle: #707780;
   --line: rgba(255, 255, 255, 0.1);
   --line-strong: rgba(255, 255, 255, 0.17);
-  --orange: #ff9b38;
-  --orange-bright: #ffad5c;
+  --orange: var(--brand-field);
+  --orange-bright: var(--brand-field-hover);
   --green: #60d394;
   position: relative;
   isolation: isolate;
   min-height: 100vh;
   overflow-x: clip;
   color: var(--ink);
-  background: radial-gradient(circle at 8% 6%, rgba(255, 155, 56, 0.13), transparent 23rem), radial-gradient(circle at 92% 20%, rgba(80, 127, 106, 0.12), transparent 31rem), #0a0b0c;
+  background: radial-gradient(circle at 8% 6%, rgba(242, 138, 66, 0.13), transparent 23rem), radial-gradient(circle at 92% 20%, rgba(80, 127, 106, 0.12), transparent 31rem), var(--brand-ink);
 }
 
 .page::after {
@@ -99,9 +99,7 @@
 .brand, .logo, .headerActions, .heroActions, .heroProof, .shellTopbar, .panelHeadline, .ganttHeader, .eventCard, .flowStep, .architectureHeader, .architectureStack > div, .architectureOutput, .finalActions, .footerLinks { display: flex; align-items: center; }
 .brand { gap: 12px; color: var(--ink); text-decoration: none; }
 .logo { gap: 10px; font-size: 1rem; font-weight: 760; letter-spacing: -0.035em; }
-.logoMark { width: 28px; height: 28px; display: block; overflow: hidden; border-radius: 7px; box-shadow: 0 7px 20px rgba(255,155,56,.12); }
-.logoMark img { width: 100%; height: 100%; display: block; }
-.brandTag { padding: 4px 7px; border: 1px solid var(--line); border-radius: 5px; color: var(--muted); font-size: 0.62rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+.logo img { filter: drop-shadow(0 7px 16px rgba(255,155,56,.1)); }
 .nav { display: flex; gap: 26px; }
 .nav a, .quietLink, .footer a { color: var(--muted); text-decoration: none; font-size: 0.82rem; font-weight: 520; transition: color 180ms ease; }
 .nav a:hover, .quietLink:hover, .footer a:hover { color: var(--ink); }
@@ -179,7 +177,8 @@
 .waiting { background: #596068; }
 .eventCard { position: relative; gap: 10px; margin-top: 9px; padding: 11px; overflow: hidden; border: 1px solid rgba(255, 155, 56, 0.2); border-radius: 10px; background: linear-gradient(90deg, rgba(255, 155, 56, 0.09), rgba(255, 155, 56, 0.02)); animation: event-enter 520ms cubic-bezier(0.16, 1, 0.3, 1) both; }
 .eventIcon, .nodeIcon { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; color: var(--orange); border: 1px solid rgba(255, 155, 56, 0.28); background: rgba(255, 155, 56, 0.08); font-weight: 760; }
-.eventIcon { width: 30px; height: 30px; border-radius: 8px; font-size: 0.55rem; }
+.eventIcon { width: 30px; height: 30px; overflow: hidden; border: 0; border-radius: 7px; background: transparent; }
+.eventIcon img { width: 30px; height: 30px; }
 .eventCard > div { min-width: 0; }
 .eventCard small { display: block; color: var(--orange); font-size: 0.5rem; }
 .eventCard strong { display: block; margin: 2px 0; font-size: 0.63rem; }
@@ -191,7 +190,8 @@
 .phoneBar { height: 24px; display: flex; align-items: center; justify-content: space-between; padding: 0 9px; color: #d7dadb; border-radius: 18px 18px 0 0; background: #121719; font-size: 0.47rem; }
 .phoneBar i { width: 48px; height: 13px; border-radius: 99px; background: #070909; }
 .chatHeader { height: 43px; display: flex; align-items: center; gap: 8px; padding: 0 9px; background: #1d2927; }
-.chatAvatar { width: 27px; height: 27px; display: grid; place-items: center; color: #0d1915; border-radius: 50%; background: #74d3a2; font-size: 0.5rem; font-weight: 800; }
+.chatAvatar { width: 27px; height: 27px; display: grid; place-items: center; overflow: hidden; border-radius: 50%; }
+.chatAvatar img { width: 27px; height: 27px; }
 .chatHeader div { display: flex; flex-direction: column; }
 .chatHeader strong { font-size: 0.56rem; }
 .chatHeader small { color: #a5b0ad; font-size: 0.43rem; }
@@ -530,7 +530,7 @@
 
   .header, .hero, .audienceStrip, .outcomes, .trust, .positioning, .sectors, .innovation, .pricing, .faq, .finalCta, .footer { width: min(100% - 30px, 1180px); }
   .header { min-height: 70px; }
-  .brandTag, .quietLink { display: none; }
+  .quietLink { display: none; }
   .compactCta { padding: 9px 11px; }
   .hero { padding-block: 55px 65px; }
   .hero h1 { font-size: clamp(2.75rem, 13vw, 4.3rem); }

@@ -9,6 +9,7 @@ import {
   canFieldWorkerHandleIntent,
   fieldWorkerWhatsAppRole,
 } from "@/lib/field-workers";
+import { FIRST_VALUE_APPROVAL_SIMULATOR_SCENARIO } from "@/lib/field-simulator-scenarios";
 import { getDistanceMeters, validateProjectGeofence } from "@/lib/geo";
 import { medicalFlowRecord } from "@/lib/medical-upload";
 import {
@@ -431,6 +432,11 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
     options.auditSource
       || (event.provider === "internal" ? "dashboard-simulator" : event.provider || "whatsapp"),
   ).slice(0, 64);
+  const trustedProposalSimulation = (
+    event.provider === "internal"
+    && auditSource === "dashboard-simulator"
+    && options.simulationScenario === FIRST_VALUE_APPROVAL_SIMULATOR_SCENARIO
+  );
 
   if (!canFieldWorkerHandleIntent(worker.whatsappRole, intent)) {
     authorized = false;
@@ -565,39 +571,46 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
       });
       operationalProposal = created.record;
     }
-    stateChanged = addIncident(
-      state,
-      event,
-      {
-        title: transcriptionCompleted ? "Reporte de voz transcripto" : "Audio de obra recibido",
-        description: transcriptionCompleted
-          ? sensitiveMedicalContent
-            ? sensitiveMedicalOperationalDescription()
-            : restrictedOperationalDescription()
-          : transcriptionDisabled
-            ? "El audio quedó almacenado como evidencia. La transcripción con IA está desactivada por la organización."
-            : "El audio quedó almacenado como evidencia y su transcripción está pendiente.",
-        type: "info",
-        badge: transcriptionCompleted ? "Voz + propuesta" : "Evidencia de voz",
-        reporter: worker.name,
-        icon: "fa-solid fa-microphone-lines",
-        now,
-        timeZone,
-        evidence: null,
-        ...restrictedSourceIncident,
-      },
-    );
-    reply = audioProposalReply(
-      sensitiveMedicalContent && audioProposal
-        ? { ...audioProposal, taskReference: null }
-        : audioProposal,
-      {
-        transcriptionStatus: event.transcription?.status || null,
-        operationalProposal,
-        worker,
-        timeZone,
-      },
-    );
+    if (trustedProposalSimulation) {
+      stateChanged = false;
+      reply = operationalProposal
+        ? `Generé la propuesta de prueba ${operationalProposal.confirmationCode}. Quedó pendiente de decisión y no apliqué cambios al cronograma ni al estado de la obra.`
+        : "El escenario de prueba no produjo una propuesta accionable y no modificó la obra.";
+    } else {
+      stateChanged = addIncident(
+        state,
+        event,
+        {
+          title: transcriptionCompleted ? "Reporte de voz transcripto" : "Audio de obra recibido",
+          description: transcriptionCompleted
+            ? sensitiveMedicalContent
+              ? sensitiveMedicalOperationalDescription()
+              : restrictedOperationalDescription()
+            : transcriptionDisabled
+              ? "El audio quedó almacenado como evidencia. La transcripción con IA está desactivada por la organización."
+              : "El audio quedó almacenado como evidencia y su transcripción está pendiente.",
+          type: "info",
+          badge: transcriptionCompleted ? "Voz + propuesta" : "Evidencia de voz",
+          reporter: worker.name,
+          icon: "fa-solid fa-microphone-lines",
+          now,
+          timeZone,
+          evidence: null,
+          ...restrictedSourceIncident,
+        },
+      );
+      reply = audioProposalReply(
+        sensitiveMedicalContent && audioProposal
+          ? { ...audioProposal, taskReference: null }
+          : audioProposal,
+        {
+          transcriptionStatus: event.transcription?.status || null,
+          operationalProposal,
+          worker,
+          timeZone,
+        },
+      );
+    }
   } else if (lowerBody.includes("licencia") || lowerBody.includes("certificado")) {
     reply = `Cargá el certificado desde este enlace seguro, válido por dos horas:\n${links.medical}`;
   } else if (["fichar", "ingreso", "ingresar", "entrada", "arranco"].some((term) => lowerBody.includes(term))) {

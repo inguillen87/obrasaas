@@ -2,6 +2,7 @@ import {
   scopedWebhookExternalId,
   serializeWebhookPayload,
 } from '../webhook-queue.js';
+import { subscriptionAllowsWrites } from '../plans.js';
 import { resolveWhatsAppConnectionScopesBulk } from './webhook-scope.js';
 
 // Meta documents a maximum of 1,000 updates in one webhook POST. An update is
@@ -39,13 +40,22 @@ export function assertMetaWebhookBatchLimit(
   return updateCount;
 }
 
-function webhookRow(event, scope) {
+const WEBHOOK_SUBSCRIPTION_BLOCKED = 'WEBHOOK_SUBSCRIPTION_BLOCKED';
+
+function webhookRow(event, scope, { subscriptionBlocked = false } = {}) {
   return {
     projectId: scope.projectId,
     provider: event.provider,
     externalId: scopedWebhookExternalId(scope.projectId, event.externalId),
     eventType: event.eventType,
-    payload: serializeWebhookPayload({ ...event, phoneNumberId: scope.phoneNumberId }, scope),
+    payload: subscriptionBlocked
+      ? { version: 1, redacted: true }
+      : serializeWebhookPayload({ ...event, phoneNumberId: scope.phoneNumberId }, scope),
+    ...(subscriptionBlocked ? {
+      status: 'FAILED',
+      lastError: `[${WEBHOOK_SUBSCRIPTION_BLOCKED}] La suscripción no permite procesar mensajes de WhatsApp.`,
+      nextAttemptAt: null,
+    } : {}),
   };
 }
 
@@ -54,7 +64,11 @@ function webhookRow(event, scope) {
  * idempotent insert. Only durable persistence belongs on the webhook ACK path;
  * all business processing happens after the response or via recovery cron.
  */
-export async function persistDurableMetaWebhookBatch(prisma, events = []) {
+export async function persistDurableMetaWebhookBatch(
+  prisma,
+  events = [],
+  { now = new Date() } = {},
+) {
   if (!Array.isArray(events) || events.length === 0) {
     return {
       accepted: 0,
@@ -79,9 +93,11 @@ export async function persistDurableMetaWebhookBatch(prisma, events = []) {
     }
 
     for (const scope of scopes) {
-      const row = webhookRow(event, scope);
+      const subscriptionBlocked = event.eventType === 'message'
+        && !subscriptionAllowsWrites(scope.subscriptionOrganization, now);
+      const row = webhookRow(event, scope, { subscriptionBlocked });
       scopedEventCount += 1;
-      projectIds.add(scope.projectId);
+      if (!subscriptionBlocked) projectIds.add(scope.projectId);
       uniqueRows.set(`${row.provider}\u0000${row.externalId}`, row);
     }
   }

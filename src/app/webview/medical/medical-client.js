@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { ObraSaasLogo } from "@/app/brand/brand-logo";
 import {
   MAX_MEDICAL_CERTIFICATE_BYTES,
   MAX_MEDICAL_CERTIFICATE_MEGABYTES,
@@ -45,7 +46,9 @@ export default function MedicalClient({ worker, token, name }) {
     <main className={styles.page}>
       <div className={styles.shell}>
         <header className={styles.header}>
-          <Link className={styles.brand} href="/" aria-label="ObraSaaS, inicio"><span>OS</span> ObraSaaS</Link>
+          <Link className={styles.brand} href="/" aria-label="ObraSaaS, inicio">
+            <ObraSaasLogo markClassName={styles.brandMark} markSize={32} />
+          </Link>
           <span className={styles.secureBadge}>Documento protegido</span>
         </header>
 

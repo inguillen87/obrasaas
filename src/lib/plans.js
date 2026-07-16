@@ -53,6 +53,20 @@ export const VARIABLE_COST_NOTE =
 export const PRICING_BASIS_NOTE =
   'Precio por organización, no por cada colaborador de campo. Los límites visibles evitan sorpresas y el plan Enterprise parte de una base publicada.';
 
+export class SubscriptionWriteBlockedError extends Error {
+  constructor(entitlements, {
+    code = 'SUBSCRIPTION_READ_ONLY',
+    status = 402,
+    message = 'La organización está en modo lectura. El plan debe activarse para realizar cambios.',
+  } = {}) {
+    super(message);
+    this.name = 'SubscriptionWriteBlockedError';
+    this.code = code;
+    this.status = status;
+    this.entitlements = entitlements;
+  }
+}
+
 export function fieldUserCapacity({ plan, activeCount }) {
   const limit = PLAN_CATALOG[plan]?.limits.fieldUsers ?? 0;
   const used = Math.max(0, Number.isFinite(Number(activeCount)) ? Number(activeCount) : 0);
@@ -271,7 +285,7 @@ export function getSubscriptionEntitlements(organization, now = new Date()) {
     ? new Date(organization.trialEndsAt)
     : null;
   const trialExpired = status === 'TRIALING'
-    && (!trialEndsAt || trialEndsAt.getTime() < now.getTime());
+    && (!trialEndsAt || trialEndsAt.getTime() <= now.getTime());
   const suspended = status === 'SUSPENDED';
   const canWrite = !suspended && (
     status === 'ACTIVE'
@@ -292,4 +306,47 @@ export function getSubscriptionEntitlements(organization, now = new Date()) {
     canRead,
     canWrite,
   };
+}
+
+export function subscriptionAllowsWrites(organization, now = new Date()) {
+  return getSubscriptionEntitlements(organization, now).canWrite;
+}
+
+export function assertSubscriptionAllowsWrites(organization, {
+  now = new Date(),
+  code,
+  status,
+  message,
+} = {}) {
+  const entitlements = getSubscriptionEntitlements(organization, now);
+  if (!entitlements.canWrite) {
+    throw new SubscriptionWriteBlockedError(entitlements, {
+      ...(code ? { code } : {}),
+      ...(status ? { status } : {}),
+      ...(message ? { message } : {}),
+    });
+  }
+  return entitlements;
+}
+
+export async function assertOrganizationSubscriptionAllowsWrites(
+  prisma,
+  organizationId,
+  options = {},
+) {
+  const normalizedOrganizationId = typeof organizationId === 'string'
+    ? organizationId.trim()
+    : '';
+  const organization = normalizedOrganizationId
+    && typeof prisma?.organization?.findUnique === 'function'
+    ? await prisma.organization.findUnique({
+        where: { id: normalizedOrganizationId },
+        select: {
+          subscriptionPlan: true,
+          subscriptionStatus: true,
+          trialEndsAt: true,
+        },
+      })
+    : null;
+  return assertSubscriptionAllowsWrites(organization, options);
 }

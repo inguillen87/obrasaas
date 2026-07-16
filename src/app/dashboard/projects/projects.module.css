@@ -55,7 +55,8 @@
 .statusPLANNING i { background: #65aef5; }
 .statusCOMPLETED i { background: #a58ce6; }
 .projectTitle { gap: 13px; margin-top: 19px; }
-.projectTitle > span { width: 42px; height: 42px; display: grid; place-items: center; flex: 0 0 auto; border: 1px solid rgba(255,159,67,.27); border-radius: 12px; color: #ffad5d; background: rgba(255,159,67,.08); font-size: .72rem; font-weight: 900; }
+.projectTitle > span { width: 42px; height: 42px; display: grid; place-items: center; overflow: hidden; flex: 0 0 auto; border-radius: 10px; }
+.projectTitle > span img { width: 42px; height: 42px; }
 .projectTitle h2 { margin: 0; font-size: 1.15rem; letter-spacing: -.02em; }
 .projectTitle p { margin: 4px 0 0; color: #9ba19d; font-size: .78rem; }
 .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 18px 0 0; }

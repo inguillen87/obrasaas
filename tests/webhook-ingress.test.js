@@ -56,13 +56,24 @@ function connection({
   projectId = 'project-1',
   organizationId = 'organization-1',
   projectStatus = 'ACTIVE',
+  subscriptionStatus = 'ACTIVE',
+  trialEndsAt = null,
 } = {}) {
   return {
     enabled: true,
     phoneNumberId,
     whatsappBusinessId,
     displayPhoneNumber,
-    project: { id: projectId, organizationId, status: projectStatus },
+    project: {
+      id: projectId,
+      organizationId,
+      status: projectStatus,
+      organization: {
+        subscriptionPlan: subscriptionStatus === 'TRIALING' ? 'TRIAL' : 'PRO',
+        subscriptionStatus,
+        trialEndsAt,
+      },
+    },
   };
 }
 
@@ -208,6 +219,92 @@ test('paused projects reject new messages but keep delivery and account events r
   ]);
   assert.equal(prisma.scopeQueries.length, 1);
   assert.equal(Object.hasOwn(prisma.scopeQueries[0].where, 'project'), false);
+});
+
+test('blocked subscriptions terminally redact message ingress while status and account sync remain operational', async () => {
+  const now = new Date('2026-07-16T12:00:00.000Z');
+  const blockedScenarios = [
+    { label: 'expired trial', subscriptionStatus: 'TRIALING', trialEndsAt: new Date('2026-07-15T12:00:00.000Z') },
+    { label: 'past due', subscriptionStatus: 'PAST_DUE' },
+    { label: 'canceled', subscriptionStatus: 'CANCELED' },
+    { label: 'suspended', subscriptionStatus: 'SUSPENDED' },
+  ];
+
+  for (const scenario of blockedScenarios) {
+    const blockedConnection = connection(scenario);
+    const prisma = fakeDurablePrisma([blockedConnection]);
+    const events = [
+      {
+        provider: 'meta',
+        externalId: `wamid-${scenario.label}`,
+        eventType: 'message',
+        phoneNumberId: blockedConnection.phoneNumberId,
+        timestamp: now,
+        text: 'contenido que debe quedar redactado',
+      },
+      {
+        provider: 'meta',
+        externalId: `status-${scenario.label}`,
+        eventType: 'status',
+        phoneNumberId: blockedConnection.phoneNumberId,
+        timestamp: now,
+      },
+      {
+        provider: 'meta',
+        externalId: `account-${scenario.label}`,
+        eventType: 'account',
+        phoneNumberId: blockedConnection.phoneNumberId,
+        timestamp: now,
+      },
+    ];
+
+    const result = await persistDurableMetaWebhookBatch(prisma, events, { now });
+    assert.equal(result.accepted, 3, scenario.label);
+    assert.deepEqual(result.projectIds, ['project-1'], scenario.label);
+
+    const rows = prisma.insertCalls[0].data;
+    const messageRow = rows.find((row) => row.eventType === 'message');
+    assert.equal(messageRow.status, 'FAILED', scenario.label);
+    assert.match(messageRow.lastError, /WEBHOOK_SUBSCRIPTION_BLOCKED/, scenario.label);
+    assert.deepEqual(messageRow.payload, { version: 1, redacted: true }, scenario.label);
+    assert.equal(JSON.stringify(messageRow).includes('contenido que debe quedar redactado'), false);
+
+    for (const eventType of ['status', 'account']) {
+      const row = rows.find((candidate) => candidate.eventType === eventType);
+      assert.equal(Object.hasOwn(row, 'status'), false, `${scenario.label}: ${eventType}`);
+      assert.equal(row.payload.redacted, undefined, `${scenario.label}: ${eventType}`);
+    }
+  }
+});
+
+test('ACTIVE and current TRIALING subscriptions enqueue WhatsApp messages normally', async () => {
+  const now = new Date('2026-07-16T12:00:00.000Z');
+  const allowedConnections = [
+    connection({ projectId: 'project-active', organizationId: 'organization-active' }),
+    connection({
+      phoneNumberId: 'phone-trial',
+      projectId: 'project-trial',
+      organizationId: 'organization-trial',
+      subscriptionStatus: 'TRIALING',
+      trialEndsAt: new Date('2026-07-17T12:00:00.000Z'),
+    }),
+  ];
+
+  for (const allowedConnection of allowedConnections) {
+    const prisma = fakeDurablePrisma([allowedConnection]);
+    const result = await persistDurableMetaWebhookBatch(prisma, [{
+      provider: 'meta',
+      externalId: `wamid-${allowedConnection.project.id}`,
+      eventType: 'message',
+      phoneNumberId: allowedConnection.phoneNumberId,
+      timestamp: now,
+      text: 'parte permitido',
+    }], { now });
+    const row = prisma.insertCalls[0].data[0];
+    assert.equal(Object.hasOwn(row, 'status'), false);
+    assert.equal(row.payload.event.text, 'parte permitido');
+    assert.deepEqual(result.projectIds, [allowedConnection.project.id]);
+  }
 });
 
 test('WABA account events fan out only inside one tenant organization', async () => {

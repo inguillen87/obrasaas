@@ -67,6 +67,12 @@ test('an accepted message can finish draining after its project is paused', asyn
           latitude: -34.6037,
           longitude: -58.3816,
           geofenceMeters: 100,
+          organization: {
+            timezone: 'America/Argentina/Buenos_Aires',
+            subscriptionPlan: 'PRO',
+            subscriptionStatus: 'ACTIVE',
+            trialEndsAt: null,
+          },
           snapshot: { state: { incidents: [], attendance: {}, tasks: {} } },
           whatsapp: { phoneNumberId: scope.phoneNumberId, enabled: true },
         };
@@ -124,6 +130,84 @@ test('an accepted message can finish draining after its project is paused', asyn
     status: { in: ['ACTIVE', 'PAUSED'] },
   });
   assert.equal(calls.some(([name]) => name === 'event-apply'), true);
+});
+
+test('a subscription blocked after ingress fails terminally before engine effects', async () => {
+  const scope = {
+    projectId: 'project-subscription-blocked',
+    organizationId: 'organization-subscription-blocked',
+    phoneNumberId: 'phone-subscription-blocked',
+  };
+  const calls = [];
+  const transaction = {
+    async $executeRawUnsafe(query, projectId) {
+      calls.push(['lock', query, projectId]);
+    },
+    webhookEvent: {
+      async findFirst(args) {
+        calls.push(['event-read', args]);
+        return { id: 'event-subscription-blocked', appliedAt: null, outcome: null };
+      },
+    },
+    project: {
+      async findFirst(args) {
+        calls.push(['project', args]);
+        return {
+          id: scope.projectId,
+          organizationId: scope.organizationId,
+          latitude: -34.6037,
+          longitude: -58.3816,
+          geofenceMeters: 100,
+          organization: {
+            timezone: 'America/Argentina/Buenos_Aires',
+            subscriptionPlan: 'PRO',
+            subscriptionStatus: 'CANCELED',
+            trialEndsAt: null,
+          },
+          snapshot: { state: { incidents: [], attendance: {}, tasks: {} } },
+          whatsapp: { phoneNumberId: scope.phoneNumberId, enabled: true },
+        };
+      },
+    },
+    worker: {
+      async findMany() {
+        assert.fail('blocked subscriptions must fail before resolving a worker');
+      },
+    },
+  };
+  globalThis.__obraSaasPrisma = {
+    async $transaction(callback, options) {
+      calls.push(['transaction', options]);
+      return callback(transaction);
+    },
+  };
+  let applied = false;
+
+  await assert.rejects(
+    applyWebhookMessageAtomically({
+      eventId: 'event-subscription-blocked',
+      leaseToken: 'lease-subscription-blocked',
+      event: {
+        provider: 'meta',
+        eventType: 'message',
+        externalId: 'wamid.subscription-blocked',
+        phoneNumberId: scope.phoneNumberId,
+        from: '+5491112345678',
+      },
+      scope,
+      apply: async () => {
+        applied = true;
+        return null;
+      },
+    }),
+    (error) => error.code === 'WEBHOOK_SUBSCRIPTION_BLOCKED',
+  );
+
+  assert.equal(applied, false);
+  assert.deepEqual(
+    calls.map(([name]) => name),
+    ['transaction', 'lock', 'event-read', 'project'],
+  );
 });
 
 for (const terminalStatus of ['COMPLETED', 'ARCHIVED']) {

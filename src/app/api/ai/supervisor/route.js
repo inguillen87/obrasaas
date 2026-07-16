@@ -3,6 +3,7 @@ import {
   assertSupervisorRateLimits,
   buildSupervisorContext,
   requestSupervisorAnswer,
+  SUPERVISOR_ACCESS_REQUIREMENT,
   SupervisorInputError,
   SupervisorProviderError,
   validateSupervisorRequest,
@@ -14,6 +15,10 @@ import {
   SOURCE_EVIDENCE_PERMISSION,
   sanitizeProjectStateMedicalData,
 } from '@/lib/medical-privacy';
+import {
+  assertOrganizationSubscriptionAllowsWrites,
+  SubscriptionWriteBlockedError,
+} from '@/lib/plans';
 import { getPrisma } from '@/lib/prisma';
 import {
   readJsonRequest,
@@ -112,94 +117,115 @@ function providerErrorResponse(error) {
   );
 }
 
-export async function POST(request) {
-  let access;
-  let question = '';
-  try {
-    access = await getPlatformAccess();
-    requireTenantPermission(access, 'org:projects:read');
-    if (!tenantAiSettingsFromMetadata(access.organization.metadata).supervisorEnabled) {
+export function createSupervisorPostHandler({
+  resolveAccess = getPlatformAccess,
+  requestAnswer = requestSupervisorAnswer,
+} = {}) {
+  return async function postSupervisor(request) {
+    let access;
+    let question = '';
+    try {
+      access = await resolveAccess();
+      requireTenantPermission(
+        access,
+        SUPERVISOR_ACCESS_REQUIREMENT.permission,
+        { subscriptionMode: SUPERVISOR_ACCESS_REQUIREMENT.subscriptionMode },
+      );
+      if (!tenantAiSettingsFromMetadata(access.organization.metadata).supervisorEnabled) {
+        return Response.json({
+          error: 'El Supervisor IA está desactivado para esta organización. Un administrador puede revisar el tratamiento de datos y activarlo en Integraciones.',
+          code: 'AI_PROCESSING_NOT_ENABLED',
+          settingsUrl: '/dashboard/integrations',
+          privacyUrl: '/privacy#openai-processing',
+        }, { status: 409 });
+      }
+      await enforceSupervisorRateLimit(access);
+
+      const parsed = await readJsonRequest(request, { maxBytes: MAX_REQUEST_BYTES });
+      const input = validateSupervisorRequest(parsed);
+      question = input.question;
+      const canRequestActions = hasTenantPermission(access, 'org:projects:manage');
+      const includeMedicalEvidence = hasTenantPermission(
+        access,
+        MEDICAL_EVIDENCE_PERMISSION,
+      );
+      const includeSourceEvidence = hasTenantPermission(
+        access,
+        SOURCE_EVIDENCE_PERMISSION,
+      );
+      const [state, messages, snapshot] = await Promise.all([
+        getAppState(access),
+        getMessages(access, {
+          includeMedicalEvidence,
+          includeSourceEvidence,
+        }),
+        getPrisma().projectSnapshot.findUnique({
+          where: { projectId: access.project.id },
+          select: { updatedAt: true },
+        }),
+      ]);
+      const context = buildSupervisorContext({
+        access,
+        state: sanitizeProjectStateMedicalData(state),
+        messages,
+        canRequestActions,
+        hasOperationalData: Boolean(snapshot),
+        snapshotUpdatedAt: snapshot?.updatedAt || null,
+      });
+      await assertOrganizationSubscriptionAllowsWrites(
+        getPrisma(),
+        access.organization.id,
+      );
+      const result = await requestAnswer({
+        question,
+        history: input.history,
+        context,
+      });
+      await recordSupervisorAudit(access, { question, status: 'success', result });
+
       return Response.json({
-        error: 'El Supervisor IA está desactivado para esta organización. Un administrador puede revisar el tratamiento de datos y activarlo en Integraciones.',
-        code: 'AI_PROCESSING_NOT_ENABLED',
-        settingsUrl: '/dashboard/integrations',
-        privacyUrl: '/privacy#openai-processing',
-      }, { status: 409 });
-    }
-    await enforceSupervisorRateLimit(access);
-
-    const parsed = await readJsonRequest(request, { maxBytes: MAX_REQUEST_BYTES });
-    const input = validateSupervisorRequest(parsed);
-    question = input.question;
-    const canRequestActions = hasTenantPermission(access, 'org:projects:manage');
-    const includeMedicalEvidence = hasTenantPermission(
-      access,
-      MEDICAL_EVIDENCE_PERMISSION,
-    );
-    const includeSourceEvidence = hasTenantPermission(
-      access,
-      SOURCE_EVIDENCE_PERMISSION,
-    );
-    const [state, messages, snapshot] = await Promise.all([
-      getAppState(access),
-      getMessages(access, {
-        includeMedicalEvidence,
-        includeSourceEvidence,
-      }),
-      getPrisma().projectSnapshot.findUnique({
-        where: { projectId: access.project.id },
-        select: { updatedAt: true },
-      }),
-    ]);
-    const context = buildSupervisorContext({
-      access,
-      state: sanitizeProjectStateMedicalData(state),
-      messages,
-      canRequestActions,
-      hasOperationalData: Boolean(snapshot),
-      snapshotUpdatedAt: snapshot?.updatedAt || null,
-    });
-    const result = await requestSupervisorAnswer({
-      question,
-      history: input.history,
-      context,
-    });
-    await recordSupervisorAudit(access, { question, status: 'success', result });
-
-    return Response.json({
-      ...result,
-      scope: {
-        dataStatus: context.dataStatus,
-        asOf: context.snapshotUpdatedAt || context.capturedAt,
-      },
-      generatedAt: new Date().toISOString(),
-    });
-  } catch (error) {
-    if (error instanceof AccessError) return accessErrorResponse(error);
-    if (error instanceof RequestBodyError) return requestBodyErrorResponse(error);
-    if (error instanceof SupervisorInputError) {
-      return Response.json(
-        { error: error.message, code: error.code },
-        {
-          status: error.status,
-          headers: error.status === 429 ? { 'Retry-After': '60' } : undefined,
+        ...result,
+        scope: {
+          dataStatus: context.dataStatus,
+          asOf: context.snapshotUpdatedAt || context.capturedAt,
         },
+        generatedAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      if (error instanceof AccessError) return accessErrorResponse(error);
+      if (error instanceof SubscriptionWriteBlockedError) {
+        return Response.json(
+          { error: error.message, code: error.code },
+          { status: error.status, headers: { 'Cache-Control': 'no-store' } },
+        );
+      }
+      if (error instanceof RequestBodyError) return requestBodyErrorResponse(error);
+      if (error instanceof SupervisorInputError) {
+        return Response.json(
+          { error: error.message, code: error.code },
+          {
+            status: error.status,
+            headers: error.status === 429 ? { 'Retry-After': '60' } : undefined,
+          },
+        );
+      }
+      if (error instanceof SupervisorProviderError) {
+        if (access?.organization && access?.project && question) {
+          await recordSupervisorAudit(access, {
+            question,
+            status: 'error',
+            error,
+          });
+        }
+        return providerErrorResponse(error);
+      }
+      console.error('Supervisor IA request failed:', error);
+      return Response.json(
+        { error: 'No se pudo procesar la consulta.', code: 'SUPERVISOR_INTERNAL_ERROR' },
+        { status: 500 },
       );
     }
-    if (error instanceof SupervisorProviderError) {
-      if (access?.organization && access?.project && question) {
-        await recordSupervisorAudit(access, {
-          question,
-          status: 'error',
-          error,
-        });
-      }
-      return providerErrorResponse(error);
-    }
-    console.error('Supervisor IA request failed:', error);
-    return Response.json(
-      { error: 'No se pudo procesar la consulta.', code: 'SUPERVISOR_INTERNAL_ERROR' },
-      { status: 500 },
-    );
-  }
+  };
 }
+
+export const POST = createSupervisorPostHandler();

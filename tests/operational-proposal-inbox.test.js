@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   OperationalProposalInboxError,
+  countPendingOperationalProposals,
   dashboardDecisionIdentity,
   listOperationalProposalInbox,
   parseOperationalProposalDecisionInput,
@@ -457,6 +458,39 @@ test('list results stay tenant-project scoped and expose current task progress s
   assert.deepEqual(findCall[1].where.project, {
     organizationId: scope.organizationId,
   });
+});
+
+test('lightweight pending counts retain tenant, project and expiry boundaries', async () => {
+  const store = prismaStore({
+    proposals: [
+      proposal(),
+      proposal({
+        id: 'proposal-expired',
+        confirmationCode: 'VP-EXPIRED12345',
+        expiresAt: new Date('2026-07-16T14:59:00.000Z'),
+      }),
+      proposal({
+        id: 'proposal-applied',
+        confirmationCode: 'VP-APPLIED12345',
+        status: 'APPLIED',
+      }),
+    ],
+  });
+
+  const pendingCount = await countPendingOperationalProposals(
+    store.prisma,
+    scope,
+    { now },
+  );
+
+  assert.equal(pendingCount, 1);
+  const countCall = store.calls.find(([name]) => name === 'proposal-count');
+  assert.equal(countCall[1].projectId, scope.projectId);
+  assert.deepEqual(countCall[1].project, {
+    organizationId: scope.organizationId,
+  });
+  assert.equal(countCall[1].status, 'PENDING');
+  assert.deepEqual(countCall[1].expiresAt, { gt: now });
 });
 
 test('inbox task options omit clinical task identities unless sensitive access is authorized', async () => {

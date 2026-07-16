@@ -409,6 +409,20 @@ function statusCountWhere(scope, status, now) {
   return { ...scoped, status };
 }
 
+export async function countPendingOperationalProposals(
+  prisma,
+  scope,
+  { now = new Date() } = {},
+) {
+  return prisma.operationalProposal.count({
+    where: statusCountWhere(
+      scope,
+      OPERATIONAL_PROPOSAL_STATUSES.PENDING,
+      now,
+    ),
+  });
+}
+
 export async function sweepExpiredOperationalProposals(prisma, scope, {
   now = new Date(),
   limit = DEFAULT_EXPIRY_SWEEP_LIMIT,

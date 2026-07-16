@@ -1,37 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
   <title id="title">ObraSaaS</title>
-  <desc id="desc">Marca geométrica de ObraSaaS inspirada en una estructura y una verificación de avance.</desc>
-  <defs>
-    <radialGradient id="background" cx="0" cy="0" r="1" gradientTransform="translate(754 182) rotate(131) scale(875)">
-      <stop offset="0" stop-color="#1f3833"/>
-      <stop offset="0.55" stop-color="#10201d"/>
-      <stop offset="1" stop-color="#091210"/>
-    </radialGradient>
-    <linearGradient id="structure" x1="278" y1="226" x2="746" y2="824" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#f5a66f"/>
-      <stop offset="0.52" stop-color="#e98745"/>
-      <stop offset="1" stop-color="#c85f27"/>
-    </linearGradient>
-    <filter id="shadow" x="150" y="110" width="724" height="804" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
-      <feDropShadow dx="0" dy="34" stdDeviation="32" flood-color="#000000" flood-opacity="0.34"/>
-    </filter>
-  </defs>
-
-  <rect width="1024" height="1024" rx="210" fill="url(#background)"/>
-
-  <g opacity="0.085" stroke="#d8e4de" stroke-width="2">
-    <path d="M128 256H896M128 512H896M128 768H896"/>
-    <path d="M256 128V896M512 128V896M768 128V896"/>
+  <desc id="desc">Campo y gestión forman una O y cierran un mismo circuito operativo.</desc>
+  <rect width="1024" height="1024" rx="224" fill="#08110F"/>
+  <g transform="translate(128 128) scale(12)" fill="none" stroke-linecap="butt" stroke-linejoin="round" stroke-width="10">
+    <path d="M13 36V21Q13 12 22 12H42Q51 12 51 21V28" stroke="#F4F1E8"/>
+    <path d="M51 28V43Q51 52 42 52H22Q13 52 13 43V36" stroke="#F28A42"/>
   </g>
-
-  <g filter="url(#shadow)">
-    <path
-      fill="url(#structure)"
-      fill-rule="evenodd"
-      d="M512 142 812 315v394L512 882 212 709V315L512 142Zm0 154L350 389v246l162 93 162-93V389L512 296Z"
-    />
-    <path d="m386 530 94 94 176-218" fill="none" stroke="#f7f2e8" stroke-width="72" stroke-linecap="round" stroke-linejoin="round"/>
-  </g>
-
-  <circle cx="512" cy="210" r="16" fill="#f7f2e8" opacity="0.9"/>
 </svg>

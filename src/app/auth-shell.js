@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { ObraSaasLogo } from '@/app/brand/brand-logo';
 import styles from './auth-shell.module.css';
 
 export default function AuthShell({
@@ -13,8 +14,7 @@ export default function AuthShell({
       <div className={styles.grid}>
         <section className={styles.context} aria-labelledby="auth-heading">
           <Link className={styles.brand} href="/" aria-label="ObraSaaS, volver al inicio">
-            <span className={styles.brandMark} aria-hidden="true">OS</span>
-            <span>ObraSaaS</span>
+            <ObraSaasLogo markSize={36} preload />
           </Link>
 
           <div className={styles.copy}>

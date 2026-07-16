@@ -4,7 +4,13 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { OrganizationSwitcher, UserButton, useUser } from '@clerk/nextjs';
+import { ObraSaasLogo, ObraSaasMark } from '@/app/brand/brand-logo';
 import { WHATSAPP_DEMO_AUDIO_TRANSCRIPTS } from '@/lib/whatsapp/demo-audio';
+import {
+  FIRST_VALUE_APPROVAL_SIMULATOR_SCENARIO,
+  nextPendingOperationalProposalCount,
+  pendingOperationalProposalCountFromPayload,
+} from '@/lib/first-value-onboarding';
 import GanttPlanner from './gantt-planner';
 import PlatformReadiness from './platform-readiness';
 import StockpilePanel from './stockpile-panel';
@@ -238,6 +244,11 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
   const [syncState, setSyncState] = useState('live');
   const [lastSyncedAt, setLastSyncedAt] = useState(setup.initialLoadedAt);
   const [activeTab, setActiveTab] = useState('sec-dashboard');
+  const [approvalOnboardingMode, setApprovalOnboardingMode] = useState(false);
+  const [pendingOperationalProposalCount, setPendingOperationalProposalCount] = useState(
+    () => Math.max(0, Number(setup.pendingOperationalProposalCount) || 0),
+  );
+  const [latestOperationalProposal, setLatestOperationalProposal] = useState(null);
   const [isLightTheme, setIsLightTheme] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [mapMode, setMapMode] = useState('sat');
@@ -296,6 +307,8 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
   const gpsDialogRef = useRef(null);
   const gpsReturnFocusRef = useRef(null);
   const fieldSimulationOperationRef = useRef(null);
+  const knownOperationalProposalIdsRef = useRef(new Set());
+  const pendingProposalLocalGenerationRef = useRef(0);
 
   const waveformRef1 = useRef(null);
   const waveformRef2 = useRef(null);
@@ -316,6 +329,13 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
 
       const tabParam = new URLSearchParams(window.location.search).get('tab');
       if (DASHBOARD_TABS.has(tabParam)) setActiveTab(tabParam);
+      const onboardingParam = new URLSearchParams(window.location.search).get('onboarding');
+      if (onboardingParam === 'approval') {
+        setActiveTab('sec-whatsapp');
+        setApprovalOnboardingMode(
+          Math.max(0, Number(setup.pendingOperationalProposalCount) || 0) === 0,
+        );
+      }
     });
 
     let active = true;
@@ -369,7 +389,65 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
       clearInterval(interval);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, []);
+  }, [setup.pendingOperationalProposalCount]);
+
+  useEffect(() => {
+    if (!setup.canReadOperationalProposals) return undefined;
+    let active = true;
+    let refreshing = false;
+
+    const refreshPendingCount = async () => {
+      if (refreshing || document.visibilityState === 'hidden') return;
+      refreshing = true;
+      const localGeneration = pendingProposalLocalGenerationRef.current;
+      try {
+        const response = await fetch(
+          '/api/operational-proposals?summary=pending-count',
+          {
+            cache: 'no-store',
+            headers: { Accept: 'application/json' },
+          },
+        );
+        if (!response.ok) throw new Error('Pending proposal count refresh failed.');
+        const payload = await response.json();
+        const nextCount = pendingOperationalProposalCountFromPayload(
+          payload,
+          platformAccess.project.id,
+        );
+        if (nextCount === null) {
+          throw new Error('Pending proposal count response was invalid.');
+        }
+        if (
+          active
+          && localGeneration === pendingProposalLocalGenerationRef.current
+        ) {
+          setPendingOperationalProposalCount(nextCount);
+          setLatestOperationalProposal(null);
+        }
+      } catch (error) {
+        console.warn('Pending proposal count refresh failed:', error);
+      } finally {
+        refreshing = false;
+      }
+    };
+
+    const frame = window.requestAnimationFrame(() => void refreshPendingCount());
+    const interval = window.setInterval(() => void refreshPendingCount(), 30_000);
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') void refreshPendingCount();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      active = false;
+      window.cancelAnimationFrame(frame);
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [
+    platformAccess.project.id,
+    setup.canReadOperationalProposals,
+  ]);
 
   // Sync scroll to bottoms on updates
   useEffect(() => {
@@ -525,6 +603,37 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
     if (hrMedAssignee && !activeIds.has(hrMedAssignee)) setHrMedAssignee('');
   }, [fieldWorkers, hrBonusAssignee, hrMedAssignee]);
 
+  useEffect(() => {
+    if (
+      approvalOnboardingMode
+      && setup.canManageField
+      && fieldWorkers.length === 1
+      && !selectedFieldWorkerId
+    ) {
+      setSelectedFieldWorkerId(fieldWorkers[0].id);
+    }
+  }, [
+    approvalOnboardingMode,
+    fieldWorkers,
+    selectedFieldWorkerId,
+    setup.canManageField,
+  ]);
+
+  const registerPendingOperationalProposal = (proposal) => {
+    if (!proposal || String(proposal.status || '').toUpperCase() !== 'PENDING') return;
+    const proposalId = String(proposal.id || proposal.confirmationCode || '').trim();
+    const alreadyKnown = proposalId
+      ? knownOperationalProposalIdsRef.current.has(proposalId)
+      : false;
+    if (proposalId) knownOperationalProposalIdsRef.current.add(proposalId);
+    if (!alreadyKnown) pendingProposalLocalGenerationRef.current += 1;
+    setPendingOperationalProposalCount((current) => (
+      nextPendingOperationalProposalCount(current, proposal, { alreadyKnown })
+    ));
+    setLatestOperationalProposal(proposal);
+    setApprovalOnboardingMode(false);
+  };
+
   const postFieldSimulation = async (payload) => {
     if (!setup.canManageField) {
       throw new Error('Tu rol no puede ejecutar comandos de campo.');
@@ -566,6 +675,7 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
         throw new Error(result.error || 'No se pudo procesar el evento de campo.');
       }
       fieldSimulationOperationRef.current = null;
+      registerPendingOperationalProposal(result.operationalProposal);
       return result;
     } finally {
       setFieldSimulationPending(false);
@@ -1110,12 +1220,38 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
     if (!text || fieldSimulatorBusy) return;
 
     try {
-      await postFieldSimulation({ text });
+      const simulation = await postFieldSimulation({ text });
       setChatInput('');
       await refreshFieldSimulationViews();
+      if (simulation.operationalProposal) {
+        addToast(
+          `Propuesta ${simulation.operationalProposal.confirmationCode} creada. Revisala antes de aplicar cambios.`,
+          'success',
+        );
+      }
     } catch (e) {
       console.error(e);
       addToast(e.message || 'No se pudo enviar el mensaje.', 'error');
+    }
+  };
+
+  const handleCreateOnboardingProposal = async () => {
+    if (!fieldSimulatorReady || fieldSimulatorBusy) return;
+    try {
+      const simulation = await postFieldSimulation({
+        scenario: FIRST_VALUE_APPROVAL_SIMULATOR_SCENARIO,
+      });
+      await refreshFieldSimulationViews();
+      if (!simulation.operationalProposal) {
+        throw new Error('El escenario se registró, pero no generó una propuesta accionable.');
+      }
+      addToast(
+        `Propuesta ${simulation.operationalProposal.confirmationCode} lista para revisión.`,
+        'success',
+      );
+    } catch (error) {
+      console.error('First-value proposal simulation failed:', error);
+      addToast(error.message || 'No se pudo generar la propuesta de prueba.', 'error');
     }
   };
 
@@ -1440,8 +1576,13 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
         {/* Sidebar Navigation */}
         <aside className={`sidebar ${mobileSidebarOpen ? 'active' : ''}`}>
           <div className="brand">
-            <div className="brand-logo">OS</div>
-            <div className="brand-name">ObraSaaS</div>
+            <ObraSaasLogo
+              className="dashboard-brand-lockup"
+              markClassName="brand-logo"
+              markSize={40}
+              variant="app"
+              wordmarkClassName="brand-name"
+            />
           </div>
           {platformAccess.isSuperadmin ? (
             <div className="internal-workspace" aria-label="Workspace interno de plataforma">
@@ -1477,7 +1618,7 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
           {/* Light/Dark Theme Toggle */}
           <div className="theme-toggle-container" style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', padding: '8px 12px', borderRadius: '12px' }}>
             <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}><i className="fa-solid fa-circle-half-stroke"></i> Tema</span>
-            <button onClick={handleToggleTheme} className="btn btn-sm" style={{ padding: '4px 10px', fontSize: '0.75rem', background: 'var(--primary)', color: 'var(--bg-main)', border: 'none', cursor: 'pointer', fontWeight: 700, borderRadius: '8px' }}>
+            <button onClick={handleToggleTheme} className="btn btn-sm" style={{ padding: '4px 10px', fontSize: '0.75rem', background: 'var(--primary)', color: 'var(--on-primary)', border: 'none', cursor: 'pointer', fontWeight: 700, borderRadius: '8px' }}>
               {isLightTheme ? <><i className="fa-solid fa-sun"></i> Claro</> : <><i className="fa-solid fa-moon"></i> Oscuro</>}
             </button>
           </div>
@@ -1500,14 +1641,14 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
                 <Link href="/dashboard/approvals" className="nav-button-link">
                   <i className="fa-solid fa-list-check"></i>
                   <span>Aprobaciones</span>
-                  {setup.pendingOperationalProposalCount > 0 && (
+                  {pendingOperationalProposalCount > 0 && (
                     <span
                       className="nav-count-badge"
-                      aria-label={`${setup.pendingOperationalProposalCount} aprobaciones pendientes`}
+                      aria-label={`${pendingOperationalProposalCount} aprobaciones pendientes`}
                     >
-                      {setup.pendingOperationalProposalCount > 99
+                      {pendingOperationalProposalCount > 99
                         ? '99+'
-                        : setup.pendingOperationalProposalCount}
+                        : pendingOperationalProposalCount}
                     </span>
                   )}
                 </Link>
@@ -1541,7 +1682,7 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
           
           <div className="sidebar-footer">
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%' }}>
-              <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--primary)', color: 'var(--bg-main)', fontWeight: 800, display: 'flex', alignItems: 'center', fontSize: '0.85rem', flexShrink: 0, justifyContent: 'center' }}>M</div>
+              <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--primary)', color: 'var(--on-primary)', fontWeight: 800, display: 'flex', alignItems: 'center', fontSize: '0.85rem', flexShrink: 0, justifyContent: 'center' }}>M</div>
               <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexGrow: 1 }}>
                 <span style={{ fontSize: '0.75rem', fontWeight: 700, display: 'block', color: '#fff' }}>{user?.fullName || user?.primaryEmailAddress?.emailAddress || 'Usuario'}</span>
                 <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>
@@ -1561,10 +1702,13 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
           <button className="mobile-toggle-btn" onClick={() => setMobileSidebarOpen(true)}>
             <i className="fa-solid fa-bars"></i>
           </button>
-          <div className="mobile-logo">
-            <div className="mobile-logo-box">OS</div>
-            <span className="mobile-brand-name">ObraSaaS</span>
-          </div>
+          <ObraSaasLogo
+            className="mobile-logo"
+            markClassName="mobile-logo-box"
+            markSize={28}
+            variant="app"
+            wordmarkClassName="mobile-brand-name"
+          />
           <div style={{ width: '32px' }}></div>
         </header>
 
@@ -1576,6 +1720,27 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
             syncState={syncState}
             lastSyncedAt={lastSyncedAt}
           />
+
+          {setup.canReadOperationalProposals && pendingOperationalProposalCount > 0 && (
+            <aside className="operational-approval-cta" aria-live="polite">
+              <div className="operational-approval-cta__icon" aria-hidden="true">
+                <i className="fa-solid fa-list-check"></i>
+              </div>
+              <div className="operational-approval-cta__copy">
+                <span>Control humano pendiente</span>
+                <strong>
+                  {latestOperationalProposal?.confirmationCode
+                    ? `La propuesta ${latestOperationalProposal.confirmationCode} está lista para decidir.`
+                    : `${pendingOperationalProposalCount} propuesta${pendingOperationalProposalCount === 1 ? '' : 's'} espera${pendingOperationalProposalCount === 1 ? '' : 'n'} revisión.`}
+                </strong>
+                <small>Ningún cambio se aplica hasta confirmar una decisión válida.</small>
+              </div>
+              <Link href="/dashboard/approvals">
+                {setup.canManageOperationalProposals ? 'Revisar y decidir' : 'Revisar propuestas'}
+                <span aria-hidden="true">→</span>
+              </Link>
+            </aside>
+          )}
           
           {/* SECTION 1: DASHBOARD */}
           <section id="sec-dashboard" className={`content-section animate-fade-in-up ${activeTab === 'sec-dashboard' ? 'active' : ''}`}>
@@ -1668,7 +1833,7 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
                     </p>
                   </div>
                   <div style={{ display: 'flex', gap: '8px' }}>
-                    <button className="btn btn-sm" style={{ background: 'var(--primary)', color: 'var(--bg-main)', fontWeight: 700, borderRadius: '6px' }}><i className="fa-solid fa-layer-group"></i> MEP</button>
+                    <button className="btn btn-sm" style={{ background: 'var(--primary)', color: 'var(--on-primary)', fontWeight: 700, borderRadius: '6px' }}><i className="fa-solid fa-layer-group"></i> MEP</button>
                     <button className="btn btn-sm btn-secondary" style={{ borderRadius: '6px' }}><i className="fa-solid fa-building"></i> Estructura</button>
                   </div>
                 </div>
@@ -1693,8 +1858,8 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                   <h3 style={{ fontFamily: 'var(--font-heading)', marginBottom: 0 }}>Mapa de ubicaciones registradas</h3>
                   <div style={{ display: 'flex', gap: '4px', background: 'rgba(255,255,255,0.03)', padding: '4px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                    <button className="btn btn-sm" onClick={() => setMapMode('sat')} style={{ fontSize: '0.7rem', padding: '4px 10px', background: mapMode === 'sat' ? 'var(--primary)' : 'transparent', color: mapMode === 'sat' ? 'var(--bg-main)' : 'var(--text-secondary)', fontWeight: mapMode === 'sat' ? '700' : '600', borderRadius: '6px', border: 'none', cursor: 'pointer' }}>Puntos</button>
-                    <button className="btn btn-sm" onClick={() => setMapMode('heat')} style={{ fontSize: '0.7rem', padding: '4px 10px', background: mapMode === 'heat' ? 'var(--primary)' : 'transparent', color: mapMode === 'heat' ? 'var(--bg-main)' : 'var(--text-secondary)', fontWeight: mapMode === 'heat' ? '700' : '600', borderRadius: '6px', border: 'none', cursor: 'pointer' }}>Precisión</button>
+                    <button className="btn btn-sm" onClick={() => setMapMode('sat')} style={{ fontSize: '0.7rem', padding: '4px 10px', background: mapMode === 'sat' ? 'var(--primary)' : 'transparent', color: mapMode === 'sat' ? 'var(--on-primary)' : 'var(--text-secondary)', fontWeight: mapMode === 'sat' ? '700' : '600', borderRadius: '6px', border: 'none', cursor: 'pointer' }}>Puntos</button>
+                    <button className="btn btn-sm" onClick={() => setMapMode('heat')} style={{ fontSize: '0.7rem', padding: '4px 10px', background: mapMode === 'heat' ? 'var(--primary)' : 'transparent', color: mapMode === 'heat' ? 'var(--on-primary)' : 'var(--text-secondary)', fontWeight: mapMode === 'heat' ? '700' : '600', borderRadius: '6px', border: 'none', cursor: 'pointer' }}>Precisión</button>
                   </div>
                 </div>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginBottom: '12px' }}>
@@ -1990,6 +2155,28 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
               </div>
             </div>
 
+            {approvalOnboardingMode && (
+              <aside className="approval-onboarding-card" aria-labelledby="approval-onboarding-title">
+                <div className="approval-onboarding-card__step">05</div>
+                <div className="approval-onboarding-card__copy">
+                  <span>Primer valor · reportar → aprobar → controlar</span>
+                  <strong id="approval-onboarding-title">Generá una propuesta operativa segura.</strong>
+                  <p>
+                    Este escenario registra una demora de proveedor como propuesta pendiente.
+                    No modifica el cronograma: primero vas a revisarla y decidirla en la bandeja.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={!fieldSimulatorReady || fieldSimulatorBusy}
+                  onClick={() => void handleCreateOnboardingProposal()}
+                >
+                  <i className="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
+                  {fieldSimulationPending ? 'Generando…' : 'Generar propuesta de prueba'}
+                </button>
+              </aside>
+            )}
+
             <div className="field-simulator-toolbar">
               <label className="field-simulator-actor" htmlFor="field-simulator-worker">
                 <span>Identidad representada en la simulación</span>
@@ -2036,7 +2223,7 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
                 <div className="whatsapp-simulator">
                   <div className="whatsapp-header">
                     <div className="whatsapp-contact">
-                      <div className="whatsapp-avatar">OS</div>
+                      <div className="whatsapp-avatar"><ObraSaasMark className="whatsapp-avatar-mark" size={38} /></div>
                         <div className="whatsapp-contact-details">
                           <span className="whatsapp-contact-name">Asistente ObraSaaS</span>
                           <span className="whatsapp-contact-status">{fieldSimulatorReady ? `Actor: ${selectedFieldWorker.name}` : 'Actor pendiente'}</span>
@@ -2056,7 +2243,7 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
                         ) : msg.kind === 'audio' || msg.text.includes('Audio de obra') || msg.text.includes('Audio ') ? (
                           <div>
                             <div className="audio-player-container" onClick={() => replayAudio(msg)} style={{ minWidth: '180px', marginBottom: '6px', cursor: 'pointer' }} title="Reproducir audio">
-                              <div className="play-btn" style={{ width: '26px', height: '26px', fontSize: '0.75rem', background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', color: 'var(--bg-main)' }}><i className="fa-solid fa-play"></i></div>
+                              <div className="play-btn" style={{ width: '26px', height: '26px', fontSize: '0.75rem', background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', color: 'var(--on-primary)' }}><i className="fa-solid fa-play"></i></div>
                               <div style={{ flexGrow: 1, height: '4px', background: 'rgba(255,255,255,0.15)', borderRadius: '2px', position: 'relative', overflow: 'hidden' }}>
                                 <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '100%', background: 'var(--primary)', borderRadius: '2px' }}></div>
                               </div>
@@ -2506,6 +2693,121 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
             border-color: var(--primary);
             color: var(--text-primary);
         }
+        .operational-approval-cta {
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr) auto;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 22px;
+            padding: 14px 16px;
+            border: 1px solid color-mix(in srgb, var(--primary) 38%, transparent);
+            border-radius: 15px;
+            background:
+                radial-gradient(circle at 96% 0, color-mix(in srgb, var(--primary) 14%, transparent), transparent 38%),
+                var(--bg-surface);
+            box-shadow: 0 18px 45px rgba(0, 0, 0, .16);
+        }
+        .operational-approval-cta__icon {
+            display: grid;
+            width: 42px;
+            height: 42px;
+            place-items: center;
+            border: 1px solid color-mix(in srgb, var(--primary) 28%, transparent);
+            border-radius: 12px;
+            color: var(--primary);
+            background: color-mix(in srgb, var(--primary) 10%, transparent);
+        }
+        .operational-approval-cta__copy {
+            min-width: 0;
+            display: grid;
+            gap: 3px;
+        }
+        .operational-approval-cta__copy > span,
+        .approval-onboarding-card__copy > span {
+            color: var(--primary);
+            font-size: .62rem;
+            font-weight: 850;
+            letter-spacing: .1em;
+            text-transform: uppercase;
+        }
+        .operational-approval-cta__copy strong {
+            overflow: hidden;
+            font-size: .82rem;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .operational-approval-cta__copy small {
+            color: var(--text-secondary);
+            font-size: .66rem;
+        }
+        .operational-approval-cta > a,
+        .approval-onboarding-card > button {
+            min-height: 40px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 0 13px;
+            border: 0;
+            border-radius: 9px;
+            color: #121822;
+            background: var(--primary);
+            font: inherit;
+            font-size: .69rem;
+            font-weight: 850;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .operational-approval-cta > a:focus-visible,
+        .approval-onboarding-card > button:focus-visible {
+            outline: 2px solid var(--text-primary);
+            outline-offset: 3px;
+        }
+        .approval-onboarding-card {
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr) auto;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 18px;
+            padding: 16px;
+            border: 1px solid color-mix(in srgb, var(--info) 30%, transparent);
+            border-radius: 15px;
+            background:
+                linear-gradient(135deg, color-mix(in srgb, var(--info) 9%, transparent), transparent 52%),
+                rgba(255, 255, 255, .025);
+        }
+        .approval-onboarding-card__step {
+            display: grid;
+            width: 42px;
+            height: 42px;
+            place-items: center;
+            border: 1px solid color-mix(in srgb, var(--info) 32%, transparent);
+            border-radius: 50%;
+            color: var(--info);
+            background: color-mix(in srgb, var(--info) 9%, transparent);
+            font-size: .72rem;
+            font-weight: 850;
+        }
+        .approval-onboarding-card__copy {
+            min-width: 0;
+            display: grid;
+            gap: 4px;
+        }
+        .approval-onboarding-card__copy strong {
+            font-family: var(--font-heading);
+            font-size: .94rem;
+        }
+        .approval-onboarding-card__copy p {
+            margin: 0;
+            color: var(--text-secondary);
+            font-size: .69rem;
+            line-height: 1.5;
+        }
+        .approval-onboarding-card > button:disabled {
+            cursor: not-allowed;
+            filter: saturate(.45);
+            opacity: .5;
+        }
         .field-simulator-toolbar {
             display: grid;
             grid-template-columns: minmax(260px, .8fr) minmax(320px, 1.2fr);
@@ -2572,7 +2874,7 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
         .field-simulator-access > a {
             flex: 0 0 auto;
             padding: 8px 10px;
-            color: var(--bg-main);
+            color: var(--on-primary);
             border-radius: 8px;
             background: var(--primary);
             font-size: .68rem;
@@ -2854,7 +3156,7 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
         }
         .copilot-chat-btn {
             background: var(--primary);
-            color: var(--bg-main);
+            color: var(--on-primary);
             border: none;
             padding: 0 12px;
             cursor: pointer;
@@ -2882,6 +3184,19 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
         }
 
         @media (max-width: 640px) {
+            .operational-approval-cta,
+            .approval-onboarding-card {
+                grid-template-columns: auto minmax(0, 1fr);
+                align-items: start;
+            }
+            .operational-approval-cta > a,
+            .approval-onboarding-card > button {
+                grid-column: 1 / -1;
+                width: 100%;
+            }
+            .operational-approval-cta__copy strong {
+                white-space: normal;
+            }
             .field-simulator-toolbar {
                 grid-template-columns: 1fr;
             }

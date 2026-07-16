@@ -54,6 +54,7 @@ test("unknown or ambiguous WhatsApp identities are terminal before media process
   assert.equal(isTerminalWebhookFailure({ code: "FIELD_WORKER_AMBIGUOUS" }), true);
   assert.equal(isTerminalWebhookFailure({ code: "FIELD_WORKER_INVALID_PHONE" }), true);
   assert.equal(isTerminalWebhookFailure({ code: "WEBHOOK_PAYLOAD_INVALID" }), true);
+  assert.equal(isTerminalWebhookFailure({ code: "WEBHOOK_SUBSCRIPTION_BLOCKED" }), true);
   assert.equal(isTerminalWebhookFailure({ code: "META_TEMPORARY_FAILURE" }), false);
 });
 

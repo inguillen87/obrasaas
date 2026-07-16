@@ -1,7 +1,7 @@
 .shell {
   min-height: 100vh;
   padding: 48px clamp(20px, 5vw, 76px) 80px;
-  color: #f5f2ea;
+  color: var(--brand-ivory);
   background:
     radial-gradient(circle at 78% -10%, rgba(233, 135, 69, 0.18), transparent 34%),
     linear-gradient(145deg, #0a1110 0%, #101a18 48%, #0b1211 100%);
@@ -21,11 +21,13 @@
 .header { margin: 0 auto 40px; max-width: 1500px; }
 .header h1 { margin: 4px 0 8px; font: 700 clamp(2.25rem, 5vw, 4.5rem)/0.98 var(--font-manrope), sans-serif; letter-spacing: -0.055em; }
 .header p { margin: 0; color: #9fada8; }
-.eyebrow { color: #e98745 !important; font: 700 0.72rem/1 var(--font-geist), sans-serif; letter-spacing: 0.15em; text-transform: uppercase; }
+.eyebrow { color: var(--brand-field) !important; font: 700 0.72rem/1 var(--font-geist), sans-serif; letter-spacing: 0.15em; text-transform: uppercase; }
+.controlPlaneBrand { display: inline-flex; align-items: center; gap: 13px; margin-bottom: 12px; color: #f5f2ea; font-size: 1.05rem; }
+.controlPlaneBrand > span { padding-left: 13px; border-left: 1px solid rgba(245, 242, 234, .18); color: var(--brand-field); font: 750 .64rem/1 var(--font-geist), sans-serif; letter-spacing: .14em; text-transform: uppercase; }
 .headerActions { align-items: flex-end; flex-direction: column; }
 .identity { color: #aab6b2; font-size: 0.8rem; }
 .secondaryButton { padding: 11px 16px; border: 1px solid #34423e; border-radius: 999px; color: #f5f2ea; text-decoration: none; transition: 180ms ease; }
-.secondaryButton:hover { border-color: #e98745; transform: translateY(-2px); }
+.secondaryButton:hover { border-color: var(--brand-field); transform: translateY(-2px); }
 
 .metrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; max-width: 1500px; margin: 0 auto 20px; }
 .metrics article,
@@ -43,7 +45,7 @@
 .panelDescription { max-width: 720px; margin: 7px 0 0; color: #7f918b; font-size: 0.82rem; line-height: 1.55; }
 .liveBadge { color: #b8c7c1; font-size: 0.75rem; }
 .liveBadge i { display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: #55c58b; box-shadow: 0 0 0 6px rgba(85, 197, 139, 0.1); }
-.primaryButton { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 43px; padding: 0 17px; border: 1px solid #e98745; border-radius: 11px; color: #0b1211; background: #e98745; font: 800 0.76rem var(--font-geist), sans-serif; cursor: pointer; transition: 160ms ease; }
+.primaryButton { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 43px; padding: 0 17px; border: 1px solid var(--brand-field); border-radius: 11px; color: #0b1211; background: var(--brand-field); font: 800 0.76rem var(--font-geist), sans-serif; cursor: pointer; transition: 160ms ease; }
 .primaryButton:hover { background: #f3a069; box-shadow: 0 12px 28px rgba(233, 135, 69, 0.18); transform: translateY(-1px); }
 .pipelineMetrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 18px; }
 .pipelineMetrics article { min-height: 112px; padding: 17px; border: 1px solid rgba(221, 232, 227, 0.08); border-radius: 14px; background: rgba(6, 12, 11, 0.35); }

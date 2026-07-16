@@ -13,6 +13,11 @@ import {
   normalizedMedicalCertificateFile,
   shouldDeleteUncommittedMedicalUpload,
 } from "@/lib/medical-upload";
+import {
+  assertOrganizationSubscriptionAllowsWrites,
+  assertSubscriptionAllowsWrites,
+  SubscriptionWriteBlockedError,
+} from "@/lib/plans";
 import { getPrisma } from "@/lib/prisma";
 import {
   RequestBodyError,
@@ -69,11 +74,25 @@ export async function POST(request) {
     const prisma = getPrisma();
     const fieldWorker = await prisma.worker.findFirst({
       where: { id: worker, projectId: tokenPayload.ctx, active: true },
-      include: { project: { select: { organizationId: true } } },
+      include: {
+        project: {
+          select: {
+            organizationId: true,
+            organization: {
+              select: {
+                subscriptionPlan: true,
+                subscriptionStatus: true,
+                trialEndsAt: true,
+              },
+            },
+          },
+        },
+      },
     });
     if (!fieldWorker) {
       return Response.json({ error: "La persona ya no está autorizada en esta obra." }, { status: 403 });
     }
+    assertSubscriptionAllowsWrites(fieldWorker.project.organization);
     if (!Number.isInteger(days) || days < 1 || days > 30) {
       return Response.json({ error: "La licencia debe tener entre 1 y 30 días." }, { status: 400 });
     }
@@ -123,6 +142,10 @@ export async function POST(request) {
       workerId: fieldWorker.id,
       tokenFingerprint,
     });
+    await assertOrganizationSubscriptionAllowsWrites(
+      prisma,
+      fieldWorker.project.organizationId,
+    );
     const upload = await uploadProtectedFile(protectedFile, {
       folder: "obrasaas/medical-certificates",
       context: `worker=${fieldWorker.id}|days=${days}`,
@@ -195,6 +218,12 @@ export async function POST(request) {
     return Response.json({ success: true, message: applied.result.reply });
   } catch (error) {
     if (error instanceof RequestBodyError) return requestBodyErrorResponse(error);
+    if (error instanceof SubscriptionWriteBlockedError) {
+      return Response.json(
+        { error: error.message, code: error.code },
+        { status: error.status, headers: { "Cache-Control": "no-store" } },
+      );
+    }
     if (error instanceof WebviewSecurityError) {
       return Response.json({ error: error.message, code: error.code }, { status: error.status });
     }

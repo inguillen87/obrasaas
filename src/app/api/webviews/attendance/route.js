@@ -8,6 +8,10 @@ import {
   MAX_REPORTED_LOCATION_ACCURACY_METERS,
   validateReportedLocation,
 } from "@/lib/geo";
+import {
+  assertSubscriptionAllowsWrites,
+  SubscriptionWriteBlockedError,
+} from "@/lib/plans";
 import { getPrisma } from "@/lib/prisma";
 import {
   RequestBodyError,
@@ -30,11 +34,25 @@ export async function POST(request) {
     }
     const fieldWorker = await getPrisma().worker.findFirst({
       where: { id: worker, projectId: tokenPayload.ctx, active: true },
-      include: { project: { select: { organizationId: true } } },
+      include: {
+        project: {
+          select: {
+            organizationId: true,
+            organization: {
+              select: {
+                subscriptionPlan: true,
+                subscriptionStatus: true,
+                trialEndsAt: true,
+              },
+            },
+          },
+        },
+      },
     });
     if (!fieldWorker) {
       return Response.json({ error: "La persona ya no está autorizada en esta obra." }, { status: 403 });
     }
+    assertSubscriptionAllowsWrites(fieldWorker.project.organization);
 
     const location = validateReportedLocation({
       latitude: body.latitude,
@@ -92,6 +110,12 @@ export async function POST(request) {
     return Response.json({ success: true, message: applied.result.reply });
   } catch (error) {
     if (error instanceof RequestBodyError) return requestBodyErrorResponse(error);
+    if (error instanceof SubscriptionWriteBlockedError) {
+      return Response.json(
+        { error: error.message, code: error.code },
+        { status: error.status, headers: { "Cache-Control": "no-store" } },
+      );
+    }
     if (error instanceof DirectObraMessageError) {
       const authorizationFailure = ["DIRECT_PROJECT_UNAVAILABLE", "FIELD_WORKER_REQUIRED"]
         .includes(error.code);

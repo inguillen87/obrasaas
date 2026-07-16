@@ -27,6 +27,7 @@ import {
   isSensitiveMedicalText,
   sanitizeMessagesForMedicalPrivacy,
 } from "@/lib/medical-privacy";
+import { subscriptionAllowsWrites } from "@/lib/plans";
 import { resolveWhatsAppConnectionScopes } from "@/lib/whatsapp/webhook-scope";
 import { persistDurableMetaWebhookBatch } from "@/lib/whatsapp/webhook-ingress";
 
@@ -849,7 +850,14 @@ export async function applyDirectObraMessageAtomically({
         latitude: true,
         longitude: true,
         geofenceMeters: true,
-        organization: { select: { timezone: true } },
+        organization: {
+          select: {
+            timezone: true,
+            subscriptionPlan: true,
+            subscriptionStatus: true,
+            trialEndsAt: true,
+          },
+        },
         snapshot: { select: { state: true, version: true } },
       },
     });
@@ -858,6 +866,13 @@ export async function applyDirectObraMessageAtomically({
         "The project is unavailable for direct field messages.",
         "DIRECT_PROJECT_UNAVAILABLE",
         403,
+      );
+    }
+    if (!subscriptionAllowsWrites(project.organization)) {
+      throw new DirectObraMessageError(
+        "The organization subscription does not allow direct field writes.",
+        "SUBSCRIPTION_READ_ONLY",
+        402,
       );
     }
 
@@ -1090,7 +1105,14 @@ export async function applyWebhookMessageAtomically({
         latitude: true,
         longitude: true,
         geofenceMeters: true,
-        organization: { select: { timezone: true } },
+        organization: {
+          select: {
+            timezone: true,
+            subscriptionPlan: true,
+            subscriptionStatus: true,
+            trialEndsAt: true,
+          },
+        },
         snapshot: { select: { state: true } },
         whatsapp: {
           select: { phoneNumberId: true, enabled: true },
@@ -1110,6 +1132,12 @@ export async function applyWebhookMessageAtomically({
       throw webhookProcessingError(
         "Stored webhook scope does not belong to the enabled project WhatsApp connection.",
         "WEBHOOK_MESSAGE_SCOPE_MISMATCH",
+      );
+    }
+    if (!subscriptionAllowsWrites(project.organization)) {
+      throw webhookProcessingError(
+        "The organization subscription no longer allows WhatsApp message processing.",
+        "WEBHOOK_SUBSCRIPTION_BLOCKED",
       );
     }
 
