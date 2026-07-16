@@ -98,7 +98,10 @@ export default function ActivityClient({ entries, metrics, organizationName, pro
           <div>
             <p className={styles.eyebrow}>Registro consolidado</p>
             <h2>Historia operativa verificable</h2>
-            <p>{organizationName} · {entries.length} eventos recientes dentro de esta obra.</p>
+            <p>
+              {organizationName} · {entries.length} evento{entries.length === 1 ? '' : 's'}
+              {' '}reciente{entries.length === 1 ? '' : 's'} dentro de esta obra.
+            </p>
           </div>
           <div className={styles.actions}>
             <button type="button" className={styles.secondaryAction} onClick={() => window.print()}>
