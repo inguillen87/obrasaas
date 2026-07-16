@@ -4,11 +4,14 @@ import test from 'node:test';
 import {
   getWhatsAppFlowBlueprint,
   getWhatsAppFlowCatalog,
+  getWhatsAppFlowSessionTtlMs,
   getPublishedWhatsAppFlowReference,
   listWhatsAppFlows,
   provisionWhatsAppFlowDraft,
   validateWhatsAppFlowDefinition,
+  validateWhatsAppFlowReply,
   WHATSAPP_FLOW_JSON_VERSION,
+  WHATSAPP_FLOW_SESSION_TTL_MS,
 } from '../src/lib/whatsapp/flows.js';
 
 function withMetaSecret(callback) {
@@ -32,6 +35,22 @@ test('ObraSaaS blueprints use the current Flow JSON contract', () => {
     assert.equal(blueprint.definition.version, '7.3');
     assert.equal(item.remote.status, 'NOT_CREATED');
   }
+});
+
+test('Flow session lifetime follows the operational risk of each blueprint', () => {
+  assert.equal(
+    getWhatsAppFlowSessionTtlMs('shift-check-in'),
+    30 * 60 * 1_000,
+  );
+  assert.equal(
+    getWhatsAppFlowSessionTtlMs('incident-report'),
+    4 * 60 * 60 * 1_000,
+  );
+  assert.equal(
+    getWhatsAppFlowBlueprint('incident-report').sessionTtlMs,
+    WHATSAPP_FLOW_SESSION_TTL_MS['incident-report'],
+  );
+  assert.equal(getWhatsAppFlowSessionTtlMs('unknown-flow'), null);
 });
 
 test('local Flow validation rejects duplicate screens and incomplete terminal actions', () => {
@@ -60,6 +79,71 @@ test('runtime references require an exact published Flow cached for the tenant',
   assert.equal(getPublishedWhatsAppFlowReference(metadata, 'shift-check-in'), null);
   metadata.whatsappFlows['incident-report'].status = 'DRAFT';
   assert.equal(getPublishedWhatsAppFlowReference(metadata, 'incident-report'), null);
+});
+
+test('Flow replies are validated against the server-owned issued blueprint', () => {
+  assert.deepEqual(validateWhatsAppFlowReply('incident-report', {
+    flow_type: 'incident',
+    severity: 'high',
+    area: '  Planta   baja ',
+    description: '  Fisura visible en el apoyo. ',
+  }), {
+    flow_type: 'incident',
+    severity: 'high',
+    area: 'Planta baja',
+    description: 'Fisura visible en el apoyo.',
+  });
+
+  assert.deepEqual(validateWhatsAppFlowReply('shift-check-in', {
+    flow_type: 'attendance',
+    work_area: 'Frente norte',
+    ppe_status: 'complete',
+    observations: '',
+  }), {
+    flow_type: 'attendance',
+    work_area: 'Frente norte',
+    ppe_status: 'complete',
+    observations: '',
+  });
+});
+
+test('Flow replies reject client routing overrides and malformed fields', () => {
+  const validIncident = {
+    flow_type: 'incident',
+    severity: 'medium',
+    area: 'PB',
+    description: 'DescripciÃ³n acotada',
+  };
+  assert.throws(
+    () => validateWhatsAppFlowReply('incident-report', {
+      ...validIncident,
+      flow_type: 'attendance',
+    }),
+    (error) => error.code === 'WHATSAPP_FLOW_REPLY_INVALID',
+  );
+  assert.throws(
+    () => validateWhatsAppFlowReply('incident-report', {
+      ...validIncident,
+      delete_project: true,
+    }),
+    (error) => error.code === 'WHATSAPP_FLOW_REPLY_INVALID',
+  );
+  assert.throws(
+    () => validateWhatsAppFlowReply('shift-check-in', {
+      flow_type: 'attendance',
+      work_area: 'PB',
+      ppe_status: 'approved-by-client',
+      observations: '',
+    }),
+    (error) => error.code === 'WHATSAPP_FLOW_REPLY_INVALID',
+  );
+  assert.throws(
+    () => validateWhatsAppFlowReply('incident-report', {
+      ...validIncident,
+      description: 'x'.repeat(2_001),
+    }),
+    (error) => error.code === 'WHATSAPP_FLOW_REPLY_INVALID',
+  );
 });
 
 test('Flow catalog reads Meta with token-bound appsecret proof', async () => withMetaSecret(async () => {

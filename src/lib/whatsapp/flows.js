@@ -5,10 +5,15 @@ import {
 } from './embedded-signup.js';
 
 export const WHATSAPP_FLOW_JSON_VERSION = '7.3';
+export const WHATSAPP_FLOW_SESSION_TTL_MS = Object.freeze({
+  'incident-report': 4 * 60 * 60 * 1_000,
+  'shift-check-in': 30 * 60 * 1_000,
+});
 
 const BLUEPRINTS = [
   {
     key: 'incident-report',
+    sessionTtlMs: WHATSAPP_FLOW_SESSION_TTL_MS['incident-report'],
     name: 'ObraSaaS | Incidencia de obra',
     title: 'Incidencia de obra',
     description: 'Clasifica el riesgo, identifica el sector y deja el detalle listo para la bitácora.',
@@ -93,6 +98,7 @@ const BLUEPRINTS = [
   },
   {
     key: 'shift-check-in',
+    sessionTtlMs: WHATSAPP_FLOW_SESSION_TTL_MS['shift-check-in'],
     name: 'ObraSaaS | Fichaje y seguridad',
     title: 'Fichaje y seguridad',
     description: 'Confirma el frente de trabajo y el estado de los elementos de protección al iniciar el turno.',
@@ -248,6 +254,111 @@ for (const blueprint of BLUEPRINTS) {
 export function getWhatsAppFlowBlueprint(key) {
   const blueprint = BLUEPRINTS.find((item) => item.key === key);
   return blueprint ? clone(blueprint) : null;
+}
+
+export function getWhatsAppFlowSessionTtlMs(key) {
+  const blueprint = BLUEPRINTS.find((item) => item.key === key);
+  return blueprint?.sessionTtlMs || null;
+}
+
+export class WhatsAppFlowReplyError extends Error {
+  constructor(message, code = 'WHATSAPP_FLOW_REPLY_INVALID') {
+    super(message);
+    this.name = 'WhatsAppFlowReplyError';
+    this.code = code;
+  }
+}
+
+function replyText(value, {
+  field,
+  minLength = 0,
+  maxLength,
+}) {
+  if (typeof value !== 'string') {
+    throw new WhatsAppFlowReplyError(`WhatsApp Flow field ${field} must be text.`);
+  }
+  const normalized = value
+    .replace(/[\u0000-\u001f\u007f]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (normalized.length < minLength || normalized.length > maxLength) {
+    throw new WhatsAppFlowReplyError(`WhatsApp Flow field ${field} has an invalid length.`);
+  }
+  return normalized;
+}
+
+function assertReplyShape(response, allowedFields) {
+  if (!response || typeof response !== 'object' || Array.isArray(response)) {
+    throw new WhatsAppFlowReplyError('WhatsApp Flow reply must be an object.');
+  }
+  const unexpected = Object.keys(response).filter((field) => !allowedFields.has(field));
+  if (unexpected.length > 0) {
+    throw new WhatsAppFlowReplyError('WhatsApp Flow reply contains unsupported fields.');
+  }
+}
+
+export function validateWhatsAppFlowReply(blueprintKey, response) {
+  const blueprint = getWhatsAppFlowBlueprint(blueprintKey);
+  if (!blueprint) {
+    throw new WhatsAppFlowReplyError('WhatsApp Flow reply references an unknown blueprint.');
+  }
+
+  if (blueprintKey === 'incident-report') {
+    assertReplyShape(
+      response,
+      new Set(['flow_type', 'severity', 'area', 'description']),
+    );
+    if (response.flow_type !== blueprint.flowType) {
+      throw new WhatsAppFlowReplyError('WhatsApp Flow reply type does not match its issued session.');
+    }
+    const severity = String(response.severity || '');
+    if (!new Set(['low', 'medium', 'high', 'critical']).has(severity)) {
+      throw new WhatsAppFlowReplyError('WhatsApp Flow incident severity is invalid.');
+    }
+    return {
+      flow_type: blueprint.flowType,
+      severity,
+      area: replyText(response.area, {
+        field: 'area',
+        minLength: 1,
+        maxLength: 120,
+      }),
+      description: replyText(response.description, {
+        field: 'description',
+        minLength: 1,
+        maxLength: 2_000,
+      }),
+    };
+  }
+
+  if (blueprintKey === 'shift-check-in') {
+    assertReplyShape(
+      response,
+      new Set(['flow_type', 'work_area', 'ppe_status', 'observations']),
+    );
+    if (response.flow_type !== blueprint.flowType) {
+      throw new WhatsAppFlowReplyError('WhatsApp Flow reply type does not match its issued session.');
+    }
+    const ppeStatus = String(response.ppe_status || '');
+    if (!new Set(['complete', 'incomplete']).has(ppeStatus)) {
+      throw new WhatsAppFlowReplyError('WhatsApp Flow PPE status is invalid.');
+    }
+    return {
+      flow_type: blueprint.flowType,
+      work_area: replyText(response.work_area, {
+        field: 'work_area',
+        minLength: 1,
+        maxLength: 120,
+      }),
+      ppe_status: ppeStatus,
+      observations: replyText(response.observations ?? '', {
+        field: 'observations',
+        maxLength: 500,
+      }),
+    };
+  }
+
+  throw new WhatsAppFlowReplyError('WhatsApp Flow reply is not supported by this runtime.');
 }
 
 export function getPublishedWhatsAppFlowReference(metadata, blueprintKey) {

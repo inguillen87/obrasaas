@@ -28,6 +28,14 @@ import {
   sanitizeMessagesForMedicalPrivacy,
 } from "@/lib/medical-privacy";
 import { subscriptionAllowsWrites } from "@/lib/plans";
+import {
+  getPublishedWhatsAppFlowReference,
+  getWhatsAppFlowSessionTtlMs,
+} from "@/lib/whatsapp/flows";
+import {
+  consumeWhatsAppFlowSession,
+  issueWhatsAppFlowSession,
+} from "@/lib/whatsapp/flow-sessions";
 import { resolveWhatsAppConnectionScopes } from "@/lib/whatsapp/webhook-scope";
 import { persistDurableMetaWebhookBatch } from "@/lib/whatsapp/webhook-ingress";
 
@@ -987,6 +995,30 @@ function webhookProcessingError(message, code) {
   return error;
 }
 
+export function assertExpiredWhatsAppFlowRecoveryResult(
+  expiredFlowSession,
+  result,
+) {
+  if (!expiredFlowSession) return;
+  const flowPrompt = result?.flowPrompt === null
+    || result?.flowPrompt === undefined
+    || result?.flowPrompt === ""
+    ? null
+    : result.flowPrompt;
+  if (
+    result?.stateChanged !== false
+    || (
+      flowPrompt !== null
+      && flowPrompt !== expiredFlowSession.blueprintKey
+    )
+  ) {
+    throw webhookProcessingError(
+      "An expired WhatsApp Flow recovery cannot mutate state or change blueprints.",
+      "WEBHOOK_OUTCOME_INVALID",
+    );
+  }
+}
+
 function atomicWebhookInput({ eventId, leaseToken, event, scope, apply }) {
   const normalized = {
     eventId: typeof eventId === "string" ? eventId.trim() : "",
@@ -1115,7 +1147,7 @@ export async function applyWebhookMessageAtomically({
         },
         snapshot: { select: { state: true } },
         whatsapp: {
-          select: { phoneNumberId: true, enabled: true },
+          select: { phoneNumberId: true, enabled: true, metadata: true },
         },
       },
     });
@@ -1153,6 +1185,37 @@ export async function applyWebhookMessageAtomically({
       throw fieldWorkerResolutionError(resolution.status);
     }
 
+    const isFlowReply = event.interactive?.type === "flow";
+    if (isFlowReply && event.provider !== "meta") {
+      throw webhookProcessingError(
+        "Durable WhatsApp Flow replies must come from the Meta provider.",
+        "WEBHOOK_PAYLOAD_INVALID",
+      );
+    }
+    const isMetaFlowReply = isFlowReply && event.provider === "meta";
+    const flowConsumption = isMetaFlowReply
+      ? (
+          await consumeWhatsAppFlowSession(transaction, {
+            tokenEvidence: event.interactive?.flowToken,
+            consumedExternalId: event.externalId,
+            organizationId: normalized.organizationId,
+            projectId: normalized.projectId,
+            workerId: resolution.worker.id,
+            phoneNumberId: normalized.phoneNumberId,
+            recipientPhone: resolution.normalizedPhone,
+          }, { recoverExpired: true })
+        )
+      : null;
+    const flowSession = flowConsumption?.expired ? null : flowConsumption?.session || null;
+    const expiredFlowSession = flowConsumption?.expired ? flowConsumption.session : null;
+    const expiredFlowCanReissue = Boolean(
+      expiredFlowSession
+      && getPublishedWhatsAppFlowReference(
+        project.whatsapp.metadata,
+        expiredFlowSession.blueprintKey,
+      ),
+    );
+
     const state = project.snapshot?.state
       ? clone(project.snapshot.state)
       : createEmptyAppState();
@@ -1169,6 +1232,9 @@ export async function applyWebhookMessageAtomically({
       state,
       projectSettings,
       worker: resolution.worker,
+      flowSession,
+      expiredFlowSession,
+      expiredFlowCanReissue,
     });
     if (!result || !Array.isArray(result.newMessages)) {
       throw webhookProcessingError(
@@ -1176,7 +1242,36 @@ export async function applyWebhookMessageAtomically({
         "WEBHOOK_OUTCOME_INVALID",
       );
     }
-    const outcome = createMessageWebhookOutcome(result);
+    assertExpiredWhatsAppFlowRecoveryResult(expiredFlowSession, result);
+    let issuedFlowSession = null;
+    if (result.flowPrompt) {
+      const publishedFlow = getPublishedWhatsAppFlowReference(
+        project.whatsapp.metadata,
+        result.flowPrompt,
+      );
+      if (publishedFlow) {
+        issuedFlowSession = (
+          await issueWhatsAppFlowSession(transaction, {
+            organizationId: normalized.organizationId,
+            projectId: normalized.projectId,
+            workerId: resolution.worker.id,
+            phoneNumberId: normalized.phoneNumberId,
+            recipientPhone: resolution.normalizedPhone,
+            blueprintKey: publishedFlow.blueprintKey,
+            flowId: publishedFlow.id,
+            screenId: publishedFlow.screenId,
+            flowType: publishedFlow.flowType,
+            sourceExternalId: event.externalId,
+          }, {
+            ttlMs: getWhatsAppFlowSessionTtlMs(publishedFlow.blueprintKey),
+          })
+        ).session;
+      }
+    }
+    const outcome = createMessageWebhookOutcome({
+      ...result,
+      flowSessionId: issuedFlowSession?.id || null,
+    });
 
     if (result.stateChanged) {
       await transaction.projectSnapshot.upsert({

@@ -1,4 +1,3 @@
-import crypto from "node:crypto";
 import {
   acquireWebhookEvent,
   applyWebhookMessageAtomically,
@@ -22,6 +21,13 @@ import {
   readAppliedMessageWebhookOutcome,
 } from "@/lib/webhook-queue";
 import { getPublishedWhatsAppFlowReference } from "@/lib/whatsapp/flows";
+import {
+  getWhatsAppFlowSessionForDelivery,
+  getWhatsAppFlowSessionSentFence,
+  markWhatsAppFlowSessionDeliveryAttempted,
+  markWhatsAppFlowSessionDeliveryRejected,
+  markWhatsAppFlowSessionSent,
+} from "@/lib/whatsapp/flow-sessions";
 import { ingestAndPersistInboundWhatsAppMedia } from "@/lib/whatsapp/media";
 import { sendWhatsAppFlow, sendWhatsAppText } from "@/lib/whatsapp/meta";
 import { processIncomingObraMessage } from "@/lib/whatsapp/obra-engine";
@@ -58,28 +64,157 @@ export function providerMessageIdFromMetaResult(result) {
   return normalized;
 }
 
-async function trySendPublishedFlow({ blueprintKey, event, scope }) {
-  const connection = await getPrisma().whatsAppConnection.findUnique({
+function unresolvedFlowDelivery() {
+  const error = new Error(
+    "WhatsApp Flow delivery has an unresolved prior provider attempt.",
+  );
+  error.code = "WHATSAPP_FLOW_DELIVERY_UNRESOLVED";
+  return error;
+}
+
+export async function trySendPublishedFlow({
+  blueprintKey,
+  flowSessionId,
+  event,
+  scope,
+}, {
+  prisma = getPrisma(),
+  loadSession = getWhatsAppFlowSessionForDelivery,
+  loadSentFence = getWhatsAppFlowSessionSentFence,
+  markAttempted = markWhatsAppFlowSessionDeliveryAttempted,
+  markRejected = markWhatsAppFlowSessionDeliveryRejected,
+  markSent = markWhatsAppFlowSessionSent,
+  sendProviderFlow = sendWhatsAppFlow,
+  warn = console.warn,
+} = {}) {
+  if (!flowSessionId) return { sent: false, providerMessageId: null };
+
+  const sentFence = await loadSentFence(prisma, {
+    sessionId: flowSessionId,
+    organizationId: scope.organizationId,
+    projectId: scope.projectId,
+    phoneNumberId: scope.phoneNumberId,
+    recipientPhone: event.from,
+    blueprintKey,
+    sourceExternalId: event.externalId,
+  });
+  if (sentFence.session.sentAt || sentFence.session.consumedAt) {
+    return {
+      sent: true,
+      providerMessageId: sentFence.session.providerMessageId || null,
+    };
+  }
+  if (sentFence.session.deliveryRejectedAt) {
+    return { sent: false, providerMessageId: null };
+  }
+  const hadAmbiguousAttempt = Boolean(sentFence.session.deliveryAttemptedAt);
+
+  const connection = await prisma.whatsAppConnection.findUnique({
     where: { phoneNumberId: scope.phoneNumberId },
     select: { metadata: true },
   });
   const flow = getPublishedWhatsAppFlowReference(connection?.metadata, blueprintKey);
-  if (!flow) return { sent: false, providerMessageId: null };
+  if (!flow) {
+    if (hadAmbiguousAttempt) throw unresolvedFlowDelivery();
+    return { sent: false, providerMessageId: null };
+  }
+  const persistedFlowMatches = (
+    sentFence.session.flowId === flow.id
+    && sentFence.session.screenId === flow.screenId
+    && sentFence.session.flowType === flow.flowType
+  );
+  if (!persistedFlowMatches) {
+    if (hadAmbiguousAttempt) throw unresolvedFlowDelivery();
+    return { sent: false, providerMessageId: null };
+  }
 
+  let delivery;
   try {
-    const result = await sendWhatsAppFlow({
-      to: event.from,
-      phoneNumberId: event.phoneNumberId,
+    delivery = await loadSession(prisma, {
+      sessionId: flowSessionId,
+      organizationId: scope.organizationId,
+      projectId: scope.projectId,
+      phoneNumberId: scope.phoneNumberId,
+      recipientPhone: event.from,
+      blueprintKey: flow.blueprintKey,
       flowId: flow.id,
-      flowToken: crypto.randomBytes(18).toString("base64url"),
+      screenId: flow.screenId,
+      flowType: flow.flowType,
+      sourceExternalId: event.externalId,
+    });
+  } catch (error) {
+    if (hadAmbiguousAttempt) throw unresolvedFlowDelivery();
+    if (
+      error?.code === "WHATSAPP_FLOW_SESSION_EXPIRED"
+      || error?.code === "WHATSAPP_FLOW_SESSION_INVALID"
+    ) {
+      return { sent: false, providerMessageId: null };
+    }
+    throw error;
+  }
+  if (delivery.session.sentAt || delivery.session.consumedAt) {
+    return {
+      sent: true,
+      providerMessageId: delivery.session.providerMessageId || null,
+    };
+  }
+  if (delivery.session.deliveryRejectedAt) {
+    return { sent: false, providerMessageId: null };
+  }
+
+  const attempt = await markAttempted(prisma, {
+    sessionId: delivery.session.id,
+  });
+  if (attempt.session.sentAt || attempt.session.consumedAt) {
+    return {
+      sent: true,
+      providerMessageId: attempt.session.providerMessageId || null,
+    };
+  }
+  if (attempt.session.deliveryRejectedAt) {
+    return { sent: false, providerMessageId: null };
+  }
+  let result;
+  try {
+    result = await sendProviderFlow({
+      to: event.from,
+      phoneNumberId: scope.phoneNumberId,
+      flowId: flow.id,
+      flowToken: delivery.token,
       screenId: flow.screenId,
       ...flow.message,
     });
-    return { sent: true, providerMessageId: providerMessageIdFromMetaResult(result) };
   } catch (error) {
-    console.warn(`Published WhatsApp Flow ${blueprintKey} was unavailable; using text fallback:`, error);
+    if (error?.code !== "META_FLOW_REJECTED") throw error;
+    if (attempt.alreadyAttempted) throw unresolvedFlowDelivery();
+    const rejection = await markRejected(prisma, {
+      sessionId: delivery.session.id,
+    });
+    if (rejection.session.sentAt || rejection.session.consumedAt) {
+      return {
+        sent: true,
+        providerMessageId: rejection.session.providerMessageId || null,
+      };
+    }
+    if (!rejection.session.deliveryRejectedAt) throw unresolvedFlowDelivery();
+    warn(
+      `Meta rejected published WhatsApp Flow ${blueprintKey}; using text fallback (${error.status || "4xx"}).`,
+    );
     return { sent: false, providerMessageId: null };
   }
+
+  const providerMessageId = providerMessageIdFromMetaResult(result);
+  try {
+    await markSent(prisma, {
+      sessionId: delivery.session.id,
+      providerMessageId,
+    });
+  } catch (error) {
+    // Meta already accepted the Flow. Falling back to text here would duplicate
+    // the outbound response, so correlation remains best-effort after 2xx.
+    console.error(`Meta accepted WhatsApp Flow ${blueprintKey}, but its sent fence could not be persisted:`, error);
+  }
+  return { sent: true, providerMessageId };
 }
 
 function connectionMetadata(metadata, event) {
@@ -154,10 +289,11 @@ export async function deliverWhatsAppMessageOutcome({
   linkMessage = linkOutboundWhatsAppMessage,
 } = {}) {
   let flowDelivery = { sent: false, providerMessageId: null };
-  if (outcome.flowPrompt) {
+  if (outcome.flowPrompt && outcome.flowSessionId) {
     await assertSubscription(scope);
     flowDelivery = await sendFlow({
       blueprintKey: outcome.flowPrompt,
+      flowSessionId: outcome.flowSessionId,
       event,
       scope,
     });
@@ -233,10 +369,27 @@ async function processMessageEvent(leasedEvent, event, scope) {
     leaseToken: leasedEvent.leaseToken,
     event: enrichedEvent,
     scope,
-    apply: ({ prisma, state, projectSettings, worker }) => processIncomingObraMessage(
+    apply: ({
+      prisma,
+      state,
+      projectSettings,
+      worker,
+      flowSession,
+      expiredFlowSession,
+      expiredFlowCanReissue,
+    }) => processIncomingObraMessage(
       enrichedEvent,
       scope,
-      { prisma, state, projectSettings, worker, persist: false },
+      {
+        prisma,
+        state,
+        projectSettings,
+        worker,
+        flowSession,
+        expiredFlowSession,
+        expiredFlowCanReissue,
+        persist: false,
+      },
     ),
   });
   const outcome = application.outcome;

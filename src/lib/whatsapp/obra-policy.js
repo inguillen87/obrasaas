@@ -17,7 +17,7 @@ function flowKind(event) {
   );
 }
 
-export function classifyObraIntent(event) {
+export function classifyObraIntent(event, { trustedFlowType = null } = {}) {
   const body = String(event.text || event.transcription?.text || '').trim();
   const lowerBody = normalizePolicyText(body);
   if (event.location) return FIELD_WORKER_INTENTS.ATTENDANCE_LOCATION;
@@ -28,7 +28,9 @@ export function classifyObraIntent(event) {
     return FIELD_WORKER_INTENTS.COMMAND_CONFIRMATION;
   }
   if (event.interactive?.type === 'flow') {
-    const kind = flowKind(event);
+    const kind = event.provider === 'meta'
+      ? normalizePolicyText(trustedFlowType)
+      : flowKind(event);
     if (kind.includes('medical') || kind.includes('licencia')) return FIELD_WORKER_INTENTS.MEDICAL;
     if (kind.includes('attendance') || kind.includes('fichaje')) {
       return FIELD_WORKER_INTENTS.ATTENDANCE_START;

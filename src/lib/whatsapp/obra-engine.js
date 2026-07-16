@@ -33,6 +33,7 @@ import {
   countPresentAttendanceEntries,
   setWorkerAttendance,
 } from "@/lib/whatsapp/obra-policy";
+import { validateWhatsAppFlowReply } from "@/lib/whatsapp/flows";
 import {
   OPERATIONAL_PROPOSAL_TYPES,
   createOperationalProposal,
@@ -248,6 +249,7 @@ async function processFlowReply({
   state,
   worker,
   event,
+  flowSession,
   now,
   projectId,
   links,
@@ -255,8 +257,21 @@ async function processFlowReply({
   evidence,
   timeZone,
 }) {
-  const response = event.interactive?.response || {};
-  const flowName = normalize(response.flow_type || response.flow_name || event.interactive?.name || "");
+  const isMetaFlow = event.provider === "meta";
+  const response = isMetaFlow
+    ? validateWhatsAppFlowReply(
+        flowSession.blueprintKey,
+        event.interactive?.response || {},
+      )
+    : event.interactive?.response || {};
+  if (isMetaFlow && normalize(flowSession.flowType) !== normalize(response.flow_type)) {
+    const error = new Error("WhatsApp Flow session type does not match its server-owned blueprint.");
+    error.code = "WHATSAPP_FLOW_SESSION_INVALID";
+    throw error;
+  }
+  const flowName = isMetaFlow
+    ? normalize(response.flow_type)
+    : normalize(response.flow_type || response.flow_name || event.interactive?.name || "");
 
   const isMedical = flowName.includes("medical") || flowName.includes("licencia");
   const isIncident = flowName.includes("incident");
@@ -404,7 +419,30 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
   let audioProposal = null;
   let operationalProposal = null;
   let authorized = true;
-  const intent = classifyObraIntent(event);
+  const isMetaFlowReply = (
+    event.provider === "meta"
+    && event.interactive?.type === "flow"
+  );
+  const trustedFlowSession = isMetaFlowReply ? options.flowSession : null;
+  const expiredFlowSession = isMetaFlowReply ? options.expiredFlowSession : null;
+  const trustedFlowContext = trustedFlowSession || expiredFlowSession;
+  if (
+    isMetaFlowReply
+    && (
+      !trustedFlowContext
+      || Boolean(trustedFlowSession) === Boolean(expiredFlowSession)
+      || trustedFlowContext.projectId !== projectSettings.id
+      || trustedFlowContext.workerId !== worker.id
+      || trustedFlowContext.phoneNumberId !== event.phoneNumberId
+    )
+  ) {
+    const error = new Error("WhatsApp Flow reply is not bound to a trusted active session.");
+    error.code = "WHATSAPP_FLOW_SESSION_INVALID";
+    throw error;
+  }
+  const intent = classifyObraIntent(event, {
+    trustedFlowType: trustedFlowContext?.flowType || null,
+  });
   const sensitiveMedicalContent = (
     intent === FIELD_WORKER_INTENTS.MEDICAL
     || isSensitiveMedicalText(`${eventText}\n${transcriptionText}`)
@@ -443,6 +481,16 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
     reply = intent === FIELD_WORKER_INTENTS.TASK_PROGRESS
       ? "Tu número está autorizado para reportar, pero no para cambiar avances. Pedile al capataz o jefe de obra que confirme la actualización."
       : "Tu rol no permite ejecutar esa acción desde WhatsApp. El mensaje quedó registrado sin modificar la obra.";
+  } else if (expiredFlowSession) {
+    flowPrompt = options.expiredFlowCanReissue
+      ? expiredFlowSession.blueprintKey
+      : null;
+    const recoveryCopy = flowPrompt
+      ? "Te preparo uno nuevo; si no aparece, solicitá otro desde el chat."
+      : "El formulario no está disponible ahora; pedile al administrador que revise la conexión con Meta.";
+    reply = expiredFlowSession.blueprintKey === "shift-check-in"
+      ? `El control de ingreso anterior venció y no registré sus datos, porque el fichaje debe representar el momento actual. ${recoveryCopy}`
+      : `El formulario anterior venció y no registré sus datos. ${recoveryCopy}`;
   } else if (operationalDecision) {
     requireOperationalAtomicContext(options);
     const outcome = await resolveOperationalProposalDecision({
@@ -465,6 +513,7 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
       state,
       worker,
       event,
+      flowSession: trustedFlowSession,
       now,
       projectId: projectSettings.id,
       links,
@@ -722,6 +771,13 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
       workerRole: worker.whatsappRole,
       intent,
       authorized,
+      ...(trustedFlowContext
+        ? {
+            whatsappFlowSessionId: trustedFlowContext.id,
+            whatsappFlowBlueprintKey: trustedFlowContext.blueprintKey,
+            ...(expiredFlowSession ? { whatsappFlowSessionExpired: true } : {}),
+          }
+        : {}),
       ...(sourceContentRestricted ? { sourceContentRestricted: true } : {}),
       ...(sensitiveMedicalContent
         ? { sensitivity: "medical" }

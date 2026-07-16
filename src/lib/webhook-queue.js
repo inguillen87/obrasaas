@@ -11,11 +11,18 @@ const TERMINAL_WEBHOOK_CODES = new Set([
   "WEBHOOK_MESSAGE_SCOPE_MISMATCH",
   "WEBHOOK_OUTCOME_INVALID",
   "WEBHOOK_SUBSCRIPTION_BLOCKED",
+  "WHATSAPP_FLOW_REPLY_INVALID",
+  "WHATSAPP_FLOW_SESSION_CONFLICT",
+  "WHATSAPP_FLOW_SESSION_EXPIRED",
+  "WHATSAPP_FLOW_SESSION_INPUT_INVALID",
+  "WHATSAPP_FLOW_SESSION_INVALID",
+  "WHATSAPP_FLOW_SESSION_USED",
 ]);
 
 const MESSAGE_OUTCOME_VERSION = 1;
 const MAX_WHATSAPP_TEXT_LENGTH = 4_096;
 const FLOW_PROMPT_PATTERN = /^[a-z0-9][a-z0-9-]{0,99}$/;
+const FLOW_SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 function invalidWebhookOutcome() {
   const error = new Error("Stored webhook outcome is not a supported delivery envelope.");
@@ -23,7 +30,11 @@ function invalidWebhookOutcome() {
   return error;
 }
 
-export function createMessageWebhookOutcome({ reply, flowPrompt = null } = {}) {
+export function createMessageWebhookOutcome({
+  reply,
+  flowPrompt = null,
+  flowSessionId = null,
+} = {}) {
   if (typeof reply !== "string" || !reply.trim()) throw invalidWebhookOutcome();
   const normalizedFlowPrompt = flowPrompt === null || flowPrompt === undefined || flowPrompt === ""
     ? null
@@ -31,11 +42,26 @@ export function createMessageWebhookOutcome({ reply, flowPrompt = null } = {}) {
   if (normalizedFlowPrompt && !FLOW_PROMPT_PATTERN.test(normalizedFlowPrompt)) {
     throw invalidWebhookOutcome();
   }
+  const normalizedFlowSessionId = flowSessionId === null
+    || flowSessionId === undefined
+    || flowSessionId === ""
+    ? null
+    : String(flowSessionId).trim().toLowerCase();
+  if (
+    normalizedFlowSessionId
+    && (
+      !normalizedFlowPrompt
+      || !FLOW_SESSION_ID_PATTERN.test(normalizedFlowSessionId)
+    )
+  ) {
+    throw invalidWebhookOutcome();
+  }
   return {
     version: MESSAGE_OUTCOME_VERSION,
     type: "message",
     reply: reply.slice(0, MAX_WHATSAPP_TEXT_LENGTH),
     flowPrompt: normalizedFlowPrompt,
+    ...(normalizedFlowSessionId ? { flowSessionId: normalizedFlowSessionId } : {}),
   };
 }
 
@@ -57,6 +83,15 @@ export function readAppliedMessageWebhookOutcome(webhookEvent) {
         || !FLOW_PROMPT_PATTERN.test(outcome.flowPrompt)
       )
     )
+    || (
+      outcome.flowSessionId !== null
+      && outcome.flowSessionId !== undefined
+      && (
+        typeof outcome.flowSessionId !== "string"
+        || !outcome.flowPrompt
+        || !FLOW_SESSION_ID_PATTERN.test(outcome.flowSessionId)
+      )
+    )
   ) {
     throw invalidWebhookOutcome();
   }
@@ -65,6 +100,7 @@ export function readAppliedMessageWebhookOutcome(webhookEvent) {
     type: "message",
     reply: outcome.reply,
     flowPrompt: outcome.flowPrompt || null,
+    ...(outcome.flowSessionId ? { flowSessionId: outcome.flowSessionId } : {}),
   };
 }
 

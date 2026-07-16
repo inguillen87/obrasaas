@@ -38,6 +38,31 @@ test("an applied message retry reuses only its minimal delivery outcome", () => 
   assert.equal(readAppliedMessageWebhookOutcome({ appliedAt: null, outcome }), null);
 });
 
+test("a Flow delivery outcome retains only its non-secret durable session reference", () => {
+  const outcome = createMessageWebhookOutcome({
+    reply: "CompletÃ¡ el control de ingreso.",
+    flowPrompt: "shift-check-in",
+    flowSessionId: "123e4567-e89b-42d3-a456-426614174000",
+    flowToken: "must-not-be-persisted",
+  });
+  assert.deepEqual(outcome, {
+    version: 1,
+    type: "message",
+    reply: "CompletÃ¡ el control de ingreso.",
+    flowPrompt: "shift-check-in",
+    flowSessionId: "123e4567-e89b-42d3-a456-426614174000",
+  });
+  assert.equal(JSON.stringify(outcome).includes("must-not-be-persisted"), false);
+  assert.throws(
+    () => createMessageWebhookOutcome({
+      reply: "InvÃ¡lido",
+      flowPrompt: null,
+      flowSessionId: "123e4567-e89b-42d3-a456-426614174000",
+    }),
+    (error) => error.code === "WEBHOOK_OUTCOME_INVALID",
+  );
+});
+
 test("corrupt applied outcomes fail terminally instead of repeating internal effects", () => {
   assert.throws(
     () => readAppliedMessageWebhookOutcome({
@@ -55,6 +80,14 @@ test("unknown or ambiguous WhatsApp identities are terminal before media process
   assert.equal(isTerminalWebhookFailure({ code: "FIELD_WORKER_INVALID_PHONE" }), true);
   assert.equal(isTerminalWebhookFailure({ code: "WEBHOOK_PAYLOAD_INVALID" }), true);
   assert.equal(isTerminalWebhookFailure({ code: "WEBHOOK_SUBSCRIPTION_BLOCKED" }), true);
+  assert.equal(isTerminalWebhookFailure({ code: "WHATSAPP_FLOW_REPLY_INVALID" }), true);
+  assert.equal(isTerminalWebhookFailure({ code: "WHATSAPP_FLOW_SESSION_CONFLICT" }), true);
+  assert.equal(isTerminalWebhookFailure({ code: "WHATSAPP_FLOW_SESSION_EXPIRED" }), true);
+  assert.equal(isTerminalWebhookFailure({ code: "WHATSAPP_FLOW_SESSION_INPUT_INVALID" }), true);
+  assert.equal(isTerminalWebhookFailure({ code: "WHATSAPP_FLOW_SESSION_INVALID" }), true);
+  assert.equal(isTerminalWebhookFailure({ code: "WHATSAPP_FLOW_SESSION_USED" }), true);
+  assert.equal(isTerminalWebhookFailure({ code: "WHATSAPP_FLOW_TOKEN_SECRET_INVALID" }), false);
+  assert.equal(isTerminalWebhookFailure({ code: "WHATSAPP_FLOW_DELIVERY_UNRESOLVED" }), false);
   assert.equal(isTerminalWebhookFailure({ code: "META_TEMPORARY_FAILURE" }), false);
 });
 

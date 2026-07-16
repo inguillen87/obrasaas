@@ -50,6 +50,37 @@ test('attendance, incident and medical inputs classify before mutation', () => {
   assert.equal(classifyObraIntent({ kind: 'text', text: 'certificado médico' }), FIELD_WORKER_INTENTS.MEDICAL);
 });
 
+test('Meta Flow intent comes from the trusted session, never client flow_type', () => {
+  const event = {
+    provider: 'meta',
+    kind: 'interactive',
+    interactive: {
+      type: 'flow',
+      response: { flow_type: 'incident' },
+    },
+  };
+  assert.equal(
+    classifyObraIntent(event),
+    FIELD_WORKER_INTENTS.EVIDENCE,
+  );
+  assert.equal(
+    classifyObraIntent(event, { trustedFlowType: 'attendance' }),
+    FIELD_WORKER_INTENTS.ATTENDANCE_START,
+  );
+  assert.equal(
+    classifyObraIntent({
+      ...event,
+      provider: 'webview',
+      interactive: {
+        type: 'flow',
+        name: 'medical_leave',
+        response: {},
+      },
+    }),
+    FIELD_WORKER_INTENTS.MEDICAL,
+  );
+});
+
 test('pending GPS and geofence deviations never count as present', () => {
   assert.equal(attendanceStatusCountsAsPresent('GPS pendiente'), false);
   assert.equal(attendanceStatusCountsAsPresent('GPS pendiente · EPP verificado'), false);

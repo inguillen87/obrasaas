@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { decryptCredential } from "../credentials.js";
+import { whatsAppFlowTokenEvidence } from "./flow-sessions.js";
 
 const MEDIA_POLICIES = Object.freeze({
   audio: {
@@ -39,6 +40,20 @@ const META_MEDIA_HOST_SUFFIXES = [
   "fbcdn.net",
   "fbsbx.com",
 ];
+
+export class MetaFlowDeliveryError extends Error {
+  constructor(message, {
+    code = "META_FLOW_DELIVERY_UNKNOWN",
+    status = null,
+    providerCode = null,
+  } = {}) {
+    super(message);
+    this.name = "MetaFlowDeliveryError";
+    this.code = code;
+    this.status = status;
+    this.providerCode = providerCode;
+  }
+}
 
 function timingSafeEqual(left, right) {
   const leftBuffer = Buffer.from(left);
@@ -126,6 +141,24 @@ function safeJson(value) {
   }
 }
 
+function normalizeFlowResponse(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return { response: value, flowToken: null };
+  }
+
+  const { flow_token: rawFlowToken, ...response } = value;
+  let flowToken = null;
+  if (typeof rawFlowToken === "string") {
+    try {
+      flowToken = whatsAppFlowTokenEvidence(rawFlowToken);
+    } catch {
+      // Keep webhook ingestion durable and fail closed in the transactional
+      // consumer. The raw token must never enter persisted payloads or logs.
+    }
+  }
+  return { response, flowToken };
+}
+
 function normalizeInteractive(interactive) {
   if (!interactive) return { text: "", interactive: null };
 
@@ -144,18 +177,40 @@ function normalizeInteractive(interactive) {
   }
 
   if (interactive.type === "nfm_reply") {
-    const response = safeJson(interactive.nfm_reply?.response_json);
+    const parsed = safeJson(interactive.nfm_reply?.response_json);
+    const { response, flowToken } = normalizeFlowResponse(parsed);
     return {
       text: interactive.nfm_reply?.body || "Formulario de WhatsApp completado",
       interactive: {
         type: "flow",
         name: interactive.nfm_reply?.name || null,
         response,
+        flowToken,
       },
     };
   }
 
   return { text: "Interacción de WhatsApp", interactive };
+}
+
+function sanitizedRawMessage(message, normalizedInteractive) {
+  if (message?.interactive?.type !== "nfm_reply") return message;
+
+  const {
+    response_json: _rawResponse,
+    flow_token: _unexpectedRawToken,
+    ...safeNfmReply
+  } = message.interactive.nfm_reply || {};
+  return {
+    ...message,
+    interactive: {
+      ...message.interactive,
+      nfm_reply: {
+        ...safeNfmReply,
+        response_json: JSON.stringify(normalizedInteractive?.response ?? null),
+      },
+    },
+  };
 }
 
 function normalizeMessage(message, value, contactNames) {
@@ -198,7 +253,7 @@ function normalizeMessage(message, value, contactNames) {
     media,
     interactive: interactive.interactive,
     context: message.context || null,
-    raw: message,
+    raw: sanitizedRawMessage(message, interactive.interactive),
   };
 }
 
@@ -593,19 +648,42 @@ export async function sendWhatsAppFlow({
       crypto.createHmac('sha256', appSecret).update(resolved.accessToken).digest('hex'),
     );
   }
-  const response = await fetchImpl(url, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${resolved.accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(buildWhatsAppFlowMessage(messageInput)),
-    signal: AbortSignal.timeout(20_000),
-  });
+  let response;
+  try {
+    response = await fetchImpl(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${resolved.accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(buildWhatsAppFlowMessage(messageInput)),
+      signal: AbortSignal.timeout(20_000),
+    });
+  } catch {
+    throw new MetaFlowDeliveryError(
+      'Meta Flow delivery ended without a definitive provider response.',
+    );
+  }
   const result = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const message = String(result?.error?.message || 'Meta rejected the Flow message.').slice(0, 500);
-    throw new Error(`Meta Flow send failed (${response.status}): ${message}`);
+    const parsedProviderCode = Number(result?.error?.code);
+    const providerCode = Number.isSafeInteger(parsedProviderCode)
+      && parsedProviderCode > 0
+      ? parsedProviderCode
+      : null;
+    const canFallback = response.status >= 400
+      && response.status < 500
+      && ![408, 425, 429].includes(response.status);
+    throw new MetaFlowDeliveryError(
+      `Meta Flow send failed (${response.status}${providerCode === null ? '' : `, code ${providerCode}`}).`,
+      {
+        code: canFallback
+          ? 'META_FLOW_REJECTED'
+          : 'META_FLOW_DELIVERY_RETRYABLE',
+        status: response.status,
+        providerCode,
+      },
+    );
   }
   return result;
 }

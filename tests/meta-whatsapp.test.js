@@ -59,6 +59,67 @@ test("Flow delivery stays phone-scoped and falls through appsecret proof", async
   assert.equal(JSON.parse(call.options.body).interactive.action.parameters.flow_id, "987654321012345");
 });
 
+test("Flow delivery classifies explicit rejection separately from ambiguous transport failure", async () => {
+  const input = {
+    to: "5491112345678",
+    phoneNumberId: "123456789012345",
+    flowId: "987654321012345",
+    flowToken: "flow-session-token-123",
+    screenId: "INCIDENT_REPORT",
+    header: "Incidencia de obra",
+    body: "Completá el reporte para registrar el riesgo.",
+    footer: "Detené la tarea si existe riesgo.",
+    cta: "Reportar",
+    credentials: {
+      version: "v25.0",
+      phoneNumberId: "123456789012345",
+      accessToken: "tenant-flow-token",
+      appSecret: "meta-app-secret",
+    },
+  };
+
+  await assert.rejects(
+    sendWhatsAppFlow({
+      ...input,
+      fetchImpl: async () => {
+        throw new Error("socket reset");
+      },
+    }),
+    (error) => error.code === "META_FLOW_DELIVERY_UNKNOWN"
+      && error.status === null,
+  );
+  await assert.rejects(
+    sendWhatsAppFlow({
+      ...input,
+      fetchImpl: async () => Response.json(
+        {
+          error: {
+            message: `Flow is not available: ${input.flowToken}`,
+            code: 131009,
+          },
+        },
+        { status: 400 },
+      ),
+    }),
+    (error) => error.code === "META_FLOW_REJECTED"
+      && error.status === 400
+      && error.providerCode === 131009
+      && !error.message.includes(input.flowToken),
+  );
+  await assert.rejects(
+    sendWhatsAppFlow({
+      ...input,
+      fetchImpl: async () => Response.json(
+        { error: { message: `Temporary provider failure: ${input.flowToken}` } },
+        { status: 503 },
+      ),
+    }),
+    (error) => error.code === "META_FLOW_DELIVERY_RETRYABLE"
+      && error.status === 503
+      && !error.message.includes(input.flowToken),
+  );
+});
+
 test("Meta media URLs reject non-Meta hosts and ambiguous suffixes", () => {
   assert.equal(isAllowedMetaMediaUrl("https://lookaside.fbsbx.com/whatsapp_business/attachments/"), true);
   assert.equal(isAllowedMetaMediaUrl("https://scontent-eze1-1.xx.fbcdn.net/file"), true);
@@ -195,6 +256,7 @@ test("Meta subscription challenge requires the configured verify token", () => {
 });
 
 test("Meta webhook messages and WhatsApp Flow replies normalize into stable events", () => {
+  const flowToken = `ofs1.1f967f35-9f99-4db0-bd42-2d88f734cc72.${"A".repeat(43)}`;
   const payload = {
     object: "whatsapp_business_account",
     entry: [
@@ -224,7 +286,12 @@ test("Meta webhook messages and WhatsApp Flow replies normalize into stable even
                     nfm_reply: {
                       name: "flow",
                       body: "Incidencia enviada",
-                      response_json: JSON.stringify({ flow_token: "opaque", severity: "high", area: "PB" }),
+                      response_json: JSON.stringify({
+                        flow_token: flowToken,
+                        flow_type: "incident-report",
+                        severity: "high",
+                        area: "PB",
+                      }),
                     },
                   },
                 },
@@ -250,6 +317,16 @@ test("Meta webhook messages and WhatsApp Flow replies normalize into stable even
   assert.equal(events[0].displayName, "Juan Gómez");
   assert.equal(events[1].interactive.type, "flow");
   assert.equal(events[1].interactive.response.severity, "high");
+  assert.equal("flow_token" in events[1].interactive.response, false);
+  assert.deepEqual(events[1].interactive.flowToken, {
+    sessionId: "1f967f35-9f99-4db0-bd42-2d88f734cc72",
+    tokenSha256: crypto.createHash("sha256").update(flowToken).digest("hex"),
+  });
+  assert.equal(JSON.stringify(events[1]).includes(flowToken), false);
+  assert.equal(
+    JSON.parse(events[1].raw.interactive.nfm_reply.response_json).flow_token,
+    undefined,
+  );
   assert.equal(events[2].externalId, "status:wamid.outbound-1:delivered:1784030420");
 });
 
