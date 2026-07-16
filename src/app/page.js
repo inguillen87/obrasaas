@@ -2,6 +2,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import MobileNavigation from './landing/mobile-navigation';
 import ProductExperience from './landing/product-experience';
+import DemoForm from './landing/demo-form';
 import styles from './landing/landing.module.css';
 import { PLAN_CATALOG, PRICING_BASIS_NOTE, VARIABLE_COST_NOTE } from '@/lib/plans';
 
@@ -50,7 +51,7 @@ export default function Home() {
         <nav className={styles.nav} aria-label="Navegación principal">
           <a href="#producto">Producto</a><a href="#plataforma">Plataforma</a><a href="#sectores">Sectores</a><a href="#precios">Precios</a><a href="#preguntas">Preguntas</a>
         </nav>
-        <div className={styles.headerActions}><Link href="/dashboard" prefetch={false} className={styles.quietLink}>Ver plataforma</Link><a href="#contacto" className={styles.compactCta}>Solicitar demo <ArrowIcon /></a><MobileNavigation /></div>
+        <div className={styles.headerActions}><Link href="/sign-in" className={styles.quietLink}>Iniciar sesión</Link><a href="#contacto" className={styles.compactCta}>Solicitar demo <ArrowIcon /></a><MobileNavigation /></div>
       </header>
 
       <section className={styles.hero} id="contenido">
@@ -58,7 +59,7 @@ export default function Home() {
           <div className={styles.eyebrow}><span className={styles.liveDot} />Operación de obra conectada, desde el primer mensaje</div>
           <h1>La obra avanza por WhatsApp.<span> La gestión se actualiza sola.</span></h1>
           <p>Convierte audios, fotos, ubicación y formularios de la cuadrilla en tareas, evidencia, alertas y decisiones. Un sistema operativo de campo diseñado para la realidad de LATAM.</p>
-          <div className={styles.heroActions}><Link href="/dashboard" prefetch={false} className={styles.primaryCta}>Explorar la plataforma <ArrowIcon /></Link><a href="#producto" className={styles.secondaryCta}>Ver cómo funciona</a></div>
+          <div className={styles.heroActions}><Link href="/sign-up" className={styles.primaryCta}>Probar 14 días <ArrowIcon /></Link><a href="#producto" className={styles.secondaryCta}>Ver la demo operativa</a></div>
           <div className={styles.heroProof} aria-label="Capacidades principales"><span><CheckIcon /> WhatsApp Cloud API + Flows 7.3</span><span><CheckIcon /> Cronograma y evidencia conectados</span><span><CheckIcon /> Diseñado para español y LATAM</span></div>
         </div>
         <div className={styles.heroProduct}><ProductExperience /></div>
@@ -123,7 +124,7 @@ export default function Home() {
               <ul>{plan.features.map((feature) => <li key={feature}><CheckIcon /> {feature}</li>)}</ul>
               {plan.key === 'TRIAL'
                 ? <Link href="/sign-up" className={styles.primaryCta}>Probar 14 días <ArrowIcon /></Link>
-                : <a href={`mailto:guillen.marce@gmail.com?subject=ObraSaaS%20${plan.name}`} className={plan.key === 'PRO' ? styles.primaryCta : styles.secondaryCta}>{plan.key === 'PRO' ? 'Empezar con Pro' : 'Hablar con Enterprise'} <ArrowIcon /></a>}
+                : <a href="#contacto" className={plan.key === 'PRO' ? styles.primaryCta : styles.secondaryCta}>{plan.key === 'PRO' ? 'Hablar con ventas' : 'Diseñar Enterprise'} <ArrowIcon /></a>}
             </article>
           ))}
         </div>
@@ -136,9 +137,9 @@ export default function Home() {
         <div className={styles.faqList}>{faqs.map(([question, answer], index) => <details key={question} open={index === 0}><summary>{question}<span aria-hidden="true">+</span></summary><p>{answer}</p></details>)}</div>
       </section>
 
-      <section className={styles.finalCta} id="contacto"><div><span className={styles.sectionKicker}>Implementación guiada</span><h2>Elegimos una obra, conectamos un flujo y medimos el resultado.</h2><p>Un piloto serio empieza con un problema operativo y una métrica, no con una lista infinita de funciones.</p></div><div className={styles.finalActions}><a className={styles.primaryCta} href="mailto:guillen.marce@gmail.com?subject=Demo%20ObraSaaS">Coordinar una demo <ArrowIcon /></a><Link className={styles.secondaryCta} href="/presupuesto">Ver alcance de referencia</Link></div></section>
+      <section className={styles.finalCta} id="contacto"><div className={styles.finalCtaCopy}><span className={styles.sectionKicker}>Implementación guiada</span><h2>Elegimos una obra, conectamos un flujo y medimos el resultado.</h2><p>Un piloto serio empieza con un problema operativo y una métrica, no con una lista infinita de funciones.</p><ul><li><CheckIcon /> Diagnóstico de 30 minutos</li><li><CheckIcon /> Una obra y un flujo prioritario</li><li><CheckIcon /> Alcance, responsables y métrica de éxito</li></ul></div><DemoForm /></section>
 
-      <footer className={styles.footer}><div><Logo /><p>Tecnología de obra diseñada en Argentina para operar globalmente.</p></div><div className={styles.footerLinks}><Link href="/dashboard" prefetch={false}>Plataforma</Link><Link href="/presupuesto">Propuesta</Link><Link href="/privacy">Privacidad</Link><Link href="/terms">Términos</Link><a href="mailto:guillen.marce@gmail.com">Contacto</a></div><p>© 2026 ObraSaaS · Operado desde Argentina</p></footer>
+      <footer className={styles.footer}><div><Logo /><p>Tecnología de obra diseñada en Argentina para operar globalmente.</p></div><div className={styles.footerLinks}><a href="#producto">Demo</a><a href="#plataforma">Plataforma</a><Link href="/sign-in">Ingresar</Link><Link href="/privacy">Privacidad</Link><Link href="/terms">Términos</Link><a href="#contacto">Contacto</a></div><p>© 2026 ObraSaaS · Operado desde Argentina</p></footer>
     </main>
   );
 }

@@ -285,9 +285,37 @@
 .faqList details[open] summary span { transform: rotate(45deg); }
 .faqList details p { margin: -5px 44px 26px 0; color: var(--muted); font-size: .8rem; line-height: 1.65; }
 
-.finalCta { display: grid; grid-template-columns: 1.2fr .8fr; align-items: end; gap: 70px; padding: 60px; border: 1px solid rgba(255,155,56,.24); border-radius: 18px; background: radial-gradient(circle at 95% 0, rgba(255,155,56,.16), transparent 26rem), rgba(255,255,255,.025); box-shadow: 0 35px 90px rgba(0,0,0,.28); }
+.finalCta { display: grid; grid-template-columns: .82fr 1.18fr; align-items: stretch; gap: 56px; padding: 60px; border: 1px solid rgba(255,155,56,.24); border-radius: 18px; background: radial-gradient(circle at 95% 0, rgba(255,155,56,.16), transparent 26rem), rgba(255,255,255,.025); box-shadow: 0 35px 90px rgba(0,0,0,.28); }
 .finalCta h2 { font-size: clamp(2rem, 3.3vw, 3.5rem); }
+.finalCtaCopy { align-self: center; }
+.finalCtaCopy ul { display: grid; gap: 12px; margin: 30px 0 0; padding: 0; color: #c7cbcd; list-style: none; font-size: .76rem; }
+.finalCtaCopy li { display: flex; align-items: center; gap: 9px; }
+.finalCtaCopy li svg { flex: 0 0 auto; color: var(--green); }
 .finalActions { justify-content: flex-end; flex-wrap: wrap; gap: 10px; }
+.leadForm { position: relative; display: grid; gap: 18px; padding: 24px; border: 1px solid var(--line-strong); border-radius: 14px; background: rgba(7,9,10,.66); box-shadow: inset 0 1px 0 rgba(255,255,255,.04); }
+.leadFormHeader { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+.leadFormHeader > span { color: var(--ink); font-size: .88rem; font-weight: 720; }
+.leadFormHeader small { color: var(--green); font-size: .62rem; font-weight: 650; }
+.leadFormGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.leadForm label { display: grid; gap: 7px; color: #c7cbcd; font-size: .68rem; font-weight: 650; }
+.leadForm label > span { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.leadForm label > span small { color: var(--subtle); font-size: .56rem; font-weight: 540; }
+.leadForm input, .leadForm select, .leadForm textarea { width: 100%; color: var(--ink); border: 1px solid var(--line-strong); border-radius: 8px; outline: none; background: rgba(255,255,255,.035); font: inherit; font-size: .74rem; transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease; }
+.leadForm input, .leadForm select { min-height: 43px; padding: 0 11px; }
+.leadForm textarea { resize: vertical; min-height: 98px; padding: 11px; line-height: 1.5; }
+.leadForm input::placeholder, .leadForm textarea::placeholder { color: #5d646a; }
+.leadForm input:focus, .leadForm select:focus, .leadForm textarea:focus { border-color: rgba(255,155,56,.72); background: rgba(255,155,56,.045); box-shadow: 0 0 0 3px rgba(255,155,56,.09); }
+.leadChallenge { grid-column: 1 / -1; }
+.leadHoneypot { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.leadFormFooter { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding-top: 2px; }
+.leadFormFooter p { max-width: 330px; margin: 0; color: var(--subtle); font-size: .58rem; line-height: 1.5; }
+.leadFormFooter a { color: #b6bbbe; }
+.leadFormFooter button { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 10px; flex: 0 0 auto; padding: 0 16px; color: #18120b; border: 0; border-radius: 8px; background: var(--orange); font: inherit; font-size: .74rem; font-weight: 780; cursor: pointer; transition: transform 180ms ease, background 180ms ease, opacity 180ms ease; }
+.leadFormFooter button:hover { transform: translateY(-2px); background: var(--orange-bright); }
+.leadFormFooter button:disabled { cursor: wait; opacity: .58; transform: none; }
+.leadFeedback { margin: 0; padding: 9px 11px; border-radius: 8px; font-size: .68rem; line-height: 1.45; }
+.leadSuccess { color: #a7e8c4; border: 1px solid rgba(96,211,148,.2); background: rgba(96,211,148,.07); }
+.leadError { color: #ffb3aa; border: 1px solid rgba(255,111,97,.22); background: rgba(255,111,97,.07); }
 .footer { min-height: 180px; display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 55px; margin-top: 110px; border-top: 1px solid var(--line); color: var(--subtle); }
 .footer > div:first-child { display: flex; flex-direction: column; gap: 10px; }
 .footer p { margin: 0; font-size: .68rem; }
@@ -377,6 +405,10 @@
   .visualCard { min-height: 420px; }
   .faq { gap: 42px; }
   .finalCta { padding: 32px 24px; }
+  .leadFormGrid { grid-template-columns: 1fr; }
+  .leadFormFooter { align-items: stretch; flex-direction: column; }
+  .leadFormFooter p { max-width: none; }
+  .leadFormFooter button { width: 100%; }
   .footer { grid-template-columns: 1fr; gap: 25px; padding-block: 45px 25px; }
   .footer > p { grid-column: auto; padding: 0; }
   .footerLinks { flex-wrap: wrap; }
@@ -397,6 +429,8 @@
   .architectureCard { padding: 17px; }
   .architectureOutput { flex-wrap: wrap; }
   .architectureOutput span { min-width: 27%; }
+  .leadForm { padding: 19px; }
+  .leadFormHeader { align-items: flex-start; flex-direction: column; }
 }
 
 @media (prefers-reduced-motion: reduce) {
