@@ -3,6 +3,15 @@ import LegalPage, { LegalCallout, LegalSection } from '@/app/legal/legal-page';
 export const metadata = {
   title: 'Términos del servicio',
   description: 'Condiciones aplicables al uso de la plataforma ObraSaaS.',
+  alternates: { canonical: '/terms' },
+  openGraph: {
+    title: 'Términos del servicio | ObraSaaS',
+    description: 'Condiciones aplicables al uso de la plataforma ObraSaaS.',
+    type: 'website',
+    locale: 'es_AR',
+    siteName: 'ObraSaaS',
+    url: '/terms',
+  },
 };
 
 export default function TermsPage() {

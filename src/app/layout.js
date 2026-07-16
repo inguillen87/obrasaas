@@ -1,5 +1,4 @@
 import { Geist, Manrope } from 'next/font/google';
-import { ClerkProvider } from '@clerk/nextjs';
 import Observability from './observability';
 import './globals.css';
 
@@ -14,6 +13,12 @@ const manrope = Manrope({
 });
 
 export const metadata = {
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_APP_URL
+      || (process.env.VERCEL_PROJECT_PRODUCTION_URL
+        ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+        : 'https://obrasaas-preview.vercel.app'),
+  ),
   title: {
     default: 'ObraSaaS | El sistema operativo de la obra',
     template: '%s | ObraSaaS',
@@ -28,42 +33,14 @@ export const metadata = {
     'Gantt de obra',
     'tecnología para construcción LATAM',
   ],
-  openGraph: {
-    title: 'ObraSaaS | La obra avanza por WhatsApp',
-    description:
-      'Una plataforma operativa para conectar cuadrillas, cronograma, evidencia, suministros y dirección.',
-    type: 'website',
-    locale: 'es_AR',
-    siteName: 'ObraSaaS',
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'ObraSaaS | El sistema operativo de la obra',
-    description: 'De la realidad de campo a una decisión trazable.',
-  },
+  category: 'construction technology',
 };
 
 export default function RootLayout({ children }) {
   return (
     <html lang="es" className={`${geist.variable} ${manrope.variable}`}>
-      <head>
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
-      </head>
       <body>
-        <ClerkProvider
-          taskUrls={{ 'choose-organization': '/session-tasks/choose-organization' }}
-          appearance={{
-            variables: {
-              colorPrimary: '#e98745',
-              colorBackground: '#111b19',
-              colorForeground: '#f7f5ef',
-              borderRadius: '0.85rem',
-              fontFamily: 'var(--font-geist)',
-            },
-          }}
-        >
-          {children}
-        </ClerkProvider>
+        {children}
         <Observability />
       </body>
     </html>

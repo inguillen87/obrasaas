@@ -38,11 +38,11 @@ export const PLAN_CATALOG = {
     description: 'Para grandes organizaciones, portfolios y sector público.',
     limits: { officeUsers: 50, fieldUsers: 500, activeProjects: null },
     features: [
-      'Obras activas ilimitadas y 50 usuarios de gestión',
+      'Portfolio multiobra y 50 usuarios de gestión',
       'Hasta 500 colaboradores de campo',
-      'Portfolio multiempresa, roles avanzados y auditoría',
-      'SSO, API, webhooks e integraciones bajo implementación',
-      'Onboarding dedicado, SLA y soporte prioritario',
+      'Roles organizacionales y auditoría centralizada',
+      'Configuración dedicada de Meta, IA y almacenamiento',
+      'Onboarding técnico y soporte prioritario',
     ],
   },
 };

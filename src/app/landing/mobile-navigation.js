@@ -7,8 +7,8 @@ import styles from './landing.module.css';
 
 const links = [
   ['Producto', '#producto'],
-  ['Confianza', '#confianza'],
   ['Plataforma', '#plataforma'],
+  ['Confianza', '#confianza'],
   ['Sectores', '#sectores'],
   ['Precios', '#precios'],
   ['Preguntas', '#preguntas'],
@@ -33,7 +33,10 @@ export default function MobileNavigation() {
         return;
       }
       if (event.key !== 'Tab') return;
-      const focusable = Array.from(panelRef.current?.querySelectorAll('a[href]') || []);
+      const focusable = [
+        triggerRef.current,
+        ...Array.from(panelRef.current?.querySelectorAll('a[href]') || []),
+      ].filter(Boolean);
       if (focusable.length === 0) return;
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
@@ -67,16 +70,19 @@ export default function MobileNavigation() {
         <span /><span /><span />
       </button>
       {open && (
-        <nav ref={panelRef} id="mobile-navigation-panel" className={styles.mobileNavPanel} aria-label="Navegación móvil">
-          {links.map(([label, href], index) => (
-            <a href={href} onClick={() => setOpen(false)} key={href}>
-              <span>0{index + 1}</span>{label}
-            </a>
-          ))}
-          <Link href="/sign-up" className={styles.mobileNavProduct} onClick={() => setOpen(false)}>
-            Probar 14 días <span aria-hidden="true">→</span>
-          </Link>
-        </nav>
+        <>
+          <button type="button" tabIndex={-1} className={styles.mobileNavBackdrop} aria-label="Cerrar navegación" onClick={() => setOpen(false)} />
+          <nav ref={panelRef} id="mobile-navigation-panel" className={styles.mobileNavPanel} aria-label="Navegación móvil">
+            {links.map(([label, href], index) => (
+              <a href={href} onClick={() => setOpen(false)} key={href}>
+                <span>0{index + 1}</span>{label}
+              </a>
+            ))}
+            <Link href="/sign-up" className={styles.mobileNavProduct} onClick={() => setOpen(false)}>
+              Probar 14 días <span aria-hidden="true">→</span>
+            </Link>
+          </nav>
+        </>
       )}
     </div>
   );

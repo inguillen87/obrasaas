@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useMemo, useState } from 'react';
 
 import styles from './integrations.module.css';
@@ -148,7 +147,7 @@ export default function AiProcessingControls({ initialSettings, canManage }) {
 
         <div className={styles.aiFooter}>
           <div>
-            <Link href="/privacy#openai-processing">Ver datos enviados, proveedor y retención</Link>
+            <a href="/privacy#openai-processing">Ver datos enviados, proveedor y retención</a>
             {settings.authorizationAttestedAt && (
               <span>
                 Última atestación: {formatDate(settings.authorizationAttestedAt)}

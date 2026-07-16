@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @next/next/no-html-link-for-pages -- Public/legal links intentionally hard-reload to unload route-scoped global platform CSS. */
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Link from 'next/link';
@@ -1487,7 +1488,7 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
               <button onClick={() => setActiveTab('sec-personal')}><i className="fa-solid fa-users-gear"></i> Personal &amp; RRHH</button>
             </li>
             <li className="nav-item">
-              <Link href="/" className="nav-button-link"><i className="fa-solid fa-arrow-up-right-from-square"></i> Sitio público</Link>
+              <a href="/" className="nav-button-link"><i className="fa-solid fa-arrow-up-right-from-square"></i> Sitio público</a>
             </li>
           </nav>
           
@@ -1672,7 +1673,7 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
                 </p>
                 <p style={{ color: setup.aiSupervisorEnabled ? 'var(--text-secondary)' : 'var(--warning)', fontSize: '0.74rem', marginBottom: '12px', lineHeight: 1.5 }}>
                   {setup.aiSupervisorEnabled
-                    ? <>Al consultar, OpenAI procesa la pregunta y un contexto acotado de la obra activa. <Link href="/privacy#openai-processing">Ver privacidad</Link>.</>
+                    ? <>Al consultar, OpenAI procesa la pregunta y un contexto acotado de la obra activa. <a href="/privacy#openai-processing">Ver privacidad</a>.</>
                     : <>Procesamiento con OpenAI desactivado para este tenant. <Link href="/dashboard/integrations">Revisar activación y privacidad</Link>.</>}
                 </p>
                 

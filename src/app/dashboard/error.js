@@ -1,7 +1,7 @@
 'use client';
+/* eslint-disable @next/next/no-html-link-for-pages -- Returning to marketing must hard-reload to unload route-scoped global platform CSS. */
 
 import { useEffect } from 'react';
-import Link from 'next/link';
 import styles from './route-state.module.css';
 
 export default function DashboardError({ error, unstable_retry }) {
@@ -18,7 +18,7 @@ export default function DashboardError({ error, unstable_retry }) {
         <span>La sesión sigue protegida. Podés reintentar la lectura o volver al inicio sin perder datos.</span>
         <div>
           <button type="button" onClick={() => unstable_retry()}>Reintentar</button>
-          <Link href="/">Volver al inicio</Link>
+          <a href="/">Volver al inicio</a>
         </div>
       </div>
     </main>

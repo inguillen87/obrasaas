@@ -3,6 +3,15 @@ import LegalPage, { LegalCallout, LegalSection } from '@/app/legal/legal-page';
 export const metadata = {
   title: 'Eliminación de datos',
   description: 'Instrucciones para solicitar la eliminación de datos personales y de WhatsApp en ObraSaaS.',
+  alternates: { canonical: '/data-deletion' },
+  openGraph: {
+    title: 'Eliminación de datos | ObraSaaS',
+    description: 'Instrucciones para solicitar la eliminación de datos personales y de WhatsApp en ObraSaaS.',
+    type: 'website',
+    locale: 'es_AR',
+    siteName: 'ObraSaaS',
+    url: '/data-deletion',
+  },
 };
 
 export default function DataDeletionPage() {

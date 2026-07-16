@@ -3,6 +3,15 @@ import LegalPage, { LegalCallout, LegalSection } from '@/app/legal/legal-page';
 export const metadata = {
   title: 'Política de privacidad',
   description: 'Cómo ObraSaaS trata y protege datos de cuentas, obras, WhatsApp Business e inteligencia artificial.',
+  alternates: { canonical: '/privacy' },
+  openGraph: {
+    title: 'Política de privacidad | ObraSaaS',
+    description: 'Cómo ObraSaaS trata y protege datos de cuentas, obras, WhatsApp Business e inteligencia artificial.',
+    type: 'website',
+    locale: 'es_AR',
+    siteName: 'ObraSaaS',
+    url: '/privacy',
+  },
 };
 
 export default function PrivacyPage() {

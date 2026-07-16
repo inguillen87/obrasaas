@@ -12,14 +12,24 @@ const steps = [
 
 export default function ProductExperience() {
   const [active, setActive] = useState(0);
-  const [paused, setPaused] = useState(false);
+  const [interactionPaused, setInteractionPaused] = useState(false);
+  const [userPaused, setUserPaused] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(false);
+  const paused = interactionPaused || userPaused;
 
   useEffect(() => {
     const media = window.matchMedia('(prefers-reduced-motion: reduce)');
-    if (media.matches || paused) return undefined;
+    const updatePreference = () => setReducedMotion(media.matches);
+    updatePreference();
+    media.addEventListener('change', updatePreference);
+    return () => media.removeEventListener('change', updatePreference);
+  }, []);
+
+  useEffect(() => {
+    if (reducedMotion || paused) return undefined;
     const timer = window.setInterval(() => setActive((current) => (current + 1) % steps.length), 4800);
     return () => window.clearInterval(timer);
-  }, [active, paused]);
+  }, [active, paused, reducedMotion]);
 
   const step = steps[active];
 
@@ -27,10 +37,12 @@ export default function ProductExperience() {
     <div
       className={styles.productShell}
       data-paused={paused || undefined}
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
-      onFocusCapture={() => setPaused(true)}
-      onBlurCapture={() => setPaused(false)}
+      onMouseEnter={() => setInteractionPaused(true)}
+      onMouseLeave={() => setInteractionPaused(false)}
+      onFocusCapture={() => setInteractionPaused(true)}
+      onBlurCapture={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setInteractionPaused(false);
+      }}
     >
       <div className={styles.shellTopbar}>
         <div className={styles.windowDots} aria-hidden="true"><i /><i /><i /></div>
@@ -47,7 +59,7 @@ export default function ProductExperience() {
               ['Estructura', 100, 'done'], ['Instalaciones', step.progress, 'active'], ['Revestimientos', active === 1 ? 28 : 42, active === 1 ? 'risk' : 'active'], ['Terminaciones', 12, 'waiting'],
             ].map(([label, value, status]) => <div className={styles.ganttLine} key={label}><span>{label}</span><div><i className={styles[status]} style={{ width: `${value}%` }} /></div><small>{value}%</small></div>)}
           </div>
-          <div className={styles.eventCard} key={step.id} aria-live="polite"><span className={styles.eventIcon}>OS</span><div><small>ObraSaaS Engine</small><strong>{step.event}</strong><p>{step.assistant}</p></div><time>ahora</time></div>
+          <div className={styles.eventCard} key={step.id}><span className={styles.eventIcon}>OS</span><div><small>ObraSaaS Engine</small><strong>{step.event}</strong><p>{step.assistant}</p></div><time>ahora</time></div>
         </div>
         <div className={styles.phoneWrap}>
           <div className={styles.phone}>
@@ -67,7 +79,7 @@ export default function ProductExperience() {
                   <time>08:41 ✓✓</time>
                 </div>
               ) : (
-                <div className={styles.chatBubble}><small>{step.label}</small><p>{step.message}</p><div className={styles.voiceLine}><button type="button" aria-label="Reproducir nota de voz">▶</button><i /><span>0:18</span></div><time>08:41 ✓✓</time></div>
+                <div className={styles.chatBubble}><small>{step.label}</small><p>{step.message}</p><div className={styles.voiceLine}><span className={styles.voicePlay} aria-hidden="true">▶</span><i /><span>0:18</span></div><time>08:41 ✓✓</time></div>
               )}
               <div className={styles.botBubble}><span>✦</span><div><strong>Procesado por ObraSaaS</strong><p>{step.assistant}</p></div><time>08:41</time></div>
             </div>
@@ -75,7 +87,18 @@ export default function ProductExperience() {
           </div>
         </div>
       </div>
-      <div className={styles.demoDisclosure}><span>Escenario demostrativo</span><small>Simula el flujo completo; no ejecuta cambios reales.</small></div>
+      <div className={styles.demoDisclosure}>
+        <span>Escenario demostrativo</span>
+        <small>Simula el flujo completo; no ejecuta cambios reales.</small>
+        <button
+          type="button"
+          className={styles.demoPause}
+          aria-pressed={userPaused}
+          onClick={() => setUserPaused((current) => !current)}
+        >
+          {userPaused ? 'Reanudar' : 'Pausar'}
+        </button>
+      </div>
       <div className={styles.demoControls} aria-label="Escenarios demostrativos">
         {steps.map((item, index) => <button type="button" className={index === active ? styles.demoControlActive : undefined} onClick={() => setActive(index)} key={item.id} aria-pressed={index === active}><span>0{index + 1}</span>{item.short}</button>)}
       </div>
