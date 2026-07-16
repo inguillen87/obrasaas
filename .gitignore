@@ -33,6 +33,9 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 !.env.example
+**/.dev.vars
+**/.dev.vars.*
+**/.wrangler/
 
 # local fallback data must never be versioned
 /data/*.json

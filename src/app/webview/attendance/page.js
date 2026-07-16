@@ -1,16 +1,11 @@
-import { verifyWebviewToken } from "@/lib/auth";
+import { readWebviewToken } from "@/lib/auth";
+import { getPrisma } from "@/lib/prisma";
 import AttendanceClient from "./attendance-client";
 import styles from "../webview.module.css";
 
 export const metadata = {
   title: "Fichaje de obra | ObraSaaS",
   robots: { index: false, follow: false },
-};
-
-const knownNames = {
-  juan: "Juan Gómez",
-  carlos: "Carlos Pérez",
-  luis: "Luis Martínez",
 };
 
 function AccessDenied() {
@@ -30,8 +25,13 @@ export default async function AttendanceWebview({ searchParams }) {
   const query = await searchParams;
   const worker = Array.isArray(query.worker) ? query.worker[0] : query.worker || "";
   const token = Array.isArray(query.token) ? query.token[0] : query.token || "";
-  if (!verifyWebviewToken(worker, token, { purpose: "attendance" })) return <AccessDenied />;
+  const tokenPayload = readWebviewToken(worker, token, { purpose: "attendance" });
+  if (!tokenPayload?.ctx) return <AccessDenied />;
+  const fieldWorker = await getPrisma().worker.findFirst({
+    where: { id: worker, projectId: tokenPayload.ctx, active: true },
+    select: { name: true },
+  });
+  if (!fieldWorker) return <AccessDenied />;
 
-  const name = knownNames[worker] || `Operario ${worker.replace(/\D/g, "").slice(-4) || "de obra"}`;
-  return <AttendanceClient worker={worker} token={token} name={name} />;
+  return <AttendanceClient worker={worker} token={token} name={fieldWorker.name} />;
 }

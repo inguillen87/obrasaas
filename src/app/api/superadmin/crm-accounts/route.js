@@ -5,10 +5,17 @@ import {
 } from '@/lib/access';
 import { getPrisma } from '@/lib/prisma';
 import {
+  RequestBodyError,
+  readJsonRequest,
+  requestBodyErrorResponse,
+} from '@/lib/request-body';
+import {
   CrmAccountInputError,
   normalizeCrmAccountInput,
   serializeCrmAccount,
 } from '@/lib/superadmin-crm';
+
+const MAX_CRM_ACCOUNT_JSON_BYTES = 32 * 1024;
 
 function inputErrorResponse(error) {
   return Response.json({ error: error.message }, { status: 400 });
@@ -17,7 +24,9 @@ function inputErrorResponse(error) {
 export async function POST(request) {
   try {
     const access = await requireSuperadmin();
-    const body = await request.json().catch(() => ({}));
+    const body = await readJsonRequest(request, {
+      maxBytes: MAX_CRM_ACCOUNT_JSON_BYTES,
+    });
     const normalized = normalizeCrmAccountInput(body);
     const prisma = getPrisma();
     const account = await prisma.$transaction(async (tx) => {
@@ -41,6 +50,7 @@ export async function POST(request) {
     return Response.json({ account: serializeCrmAccount(account) }, { status: 201 });
   } catch (error) {
     if (error instanceof AccessError) return accessErrorResponse(error);
+    if (error instanceof RequestBodyError) return requestBodyErrorResponse(error);
     if (error instanceof CrmAccountInputError) return inputErrorResponse(error);
     console.error('Superadmin CRM account creation failed:', error);
     return Response.json({ error: 'No se pudo crear la oportunidad.' }, { status: 500 });
@@ -50,7 +60,9 @@ export async function POST(request) {
 export async function PATCH(request) {
   try {
     const access = await requireSuperadmin();
-    const body = await request.json().catch(() => ({}));
+    const body = await readJsonRequest(request, {
+      maxBytes: MAX_CRM_ACCOUNT_JSON_BYTES,
+    });
     if (typeof body.id !== 'string' || !body.id.trim()) {
       return Response.json({ error: 'La oportunidad es obligatoria.' }, { status: 400 });
     }
@@ -81,6 +93,7 @@ export async function PATCH(request) {
     return Response.json({ account: serializeCrmAccount(account) });
   } catch (error) {
     if (error instanceof AccessError) return accessErrorResponse(error);
+    if (error instanceof RequestBodyError) return requestBodyErrorResponse(error);
     if (error instanceof CrmAccountInputError) return inputErrorResponse(error);
     console.error('Superadmin CRM account update failed:', error);
     return Response.json({ error: 'No se pudo actualizar la oportunidad.' }, { status: 500 });

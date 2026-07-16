@@ -1,5 +1,10 @@
 import { getPrisma } from '@/lib/prisma';
 import { normalizePublicLeadInput, PublicLeadInputError } from '@/lib/public-leads';
+import {
+  readJsonRequest,
+  RequestBodyError,
+  requestBodyErrorResponse,
+} from '@/lib/request-body';
 
 const MAX_REQUEST_BYTES = 16_000;
 const IP_HOURLY_LIMIT = 5;
@@ -49,22 +54,7 @@ function successResponse(status = 201) {
 export async function POST(request) {
   try {
     assertSameOrigin(request);
-    if (!request.headers.get('content-type')?.toLowerCase().includes('application/json')) {
-      throw new PublicLeadInputError('El cuerpo debe enviarse como JSON.');
-    }
-    const rawBody = await request.text();
-    if (Buffer.byteLength(rawBody, 'utf8') > MAX_REQUEST_BYTES) {
-      throw new PublicLeadInputError('La solicitud supera el tamaño permitido.', {
-        code: 'LEAD_REQUEST_TOO_LARGE',
-        status: 413,
-      });
-    }
-    let parsed;
-    try {
-      parsed = JSON.parse(rawBody);
-    } catch {
-      throw new PublicLeadInputError('El cuerpo debe ser JSON válido.');
-    }
+    const parsed = await readJsonRequest(request, { maxBytes: MAX_REQUEST_BYTES });
     const normalized = normalizePublicLeadInput(parsed);
     if (normalized.spam) return successResponse(202);
 
@@ -143,6 +133,7 @@ export async function POST(request) {
     });
     return successResponse();
   } catch (error) {
+    if (error instanceof RequestBodyError) return requestBodyErrorResponse(error);
     if (error instanceof PublicLeadInputError) {
       return Response.json(
         { error: error.message, code: error.code },

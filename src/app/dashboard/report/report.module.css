@@ -19,7 +19,7 @@
 .contextGrid > div:last-child { border-right: 0; }
 .contextGrid span, .footer span, .budgetGrid span { display: block; margin-bottom: 5px; color: #7a8492; font-size: .6rem; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
 .contextGrid strong { display: block; color: #263246; font-size: .78rem; line-height: 1.35; }
-.demoNotice { margin: 0 0 22px; padding: 12px 15px; border: 1px solid #f5d3a9; border-radius: 9px; color: #7a4615; background: #fff8ed; font-size: .77rem; }
+.emptyNotice { margin: 0 0 22px; padding: 12px 15px; border: 1px solid #f5d3a9; border-radius: 9px; color: #7a4615; background: #fff8ed; font-size: .77rem; }
 .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 26px; }
 .metrics article { padding: 16px; border: 1px solid #e3e8ef; border-radius: 11px; background: #f8fafc; }
 .metrics span, .metrics small { display: block; }
@@ -88,7 +88,7 @@
   .metrics article { padding: 11px; }
   .executiveSummary { margin-bottom: 18px; padding: 14px 16px; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
   .section { margin-top: 18px; }
-  .tableWrap th, .badge, .mark, .demoNotice, .metrics article { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .tableWrap th, .badge, .mark, .emptyNotice, .metrics article { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
   .tableWrap th { padding: 6px 8px; }
   .tableWrap td { padding: 7px 8px; }
   .footer { margin-top: 22px; }

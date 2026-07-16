@@ -15,6 +15,7 @@ test('weekly reports use tenant and project data without inventing a budget', ()
       incidents: [],
     },
     generatedAt: new Date('2026-07-15T12:00:00.000Z'),
+    snapshot: { version: 1, updatedAt: new Date('2026-07-15T11:00:00.000Z') },
   });
 
   assert.equal(report.organizationName, 'Constructora Sur');
@@ -23,8 +24,21 @@ test('weekly reports use tenant and project data without inventing a budget', ()
   assert.equal(report.tasksDone, 1);
   assert.equal(report.presentWorkers, 1);
   assert.equal(report.budget, null);
-  assert.equal(report.isDemoData, true);
+  assert.equal(report.isEmptyState, false);
   assert.match(report.reportId, /^OS-1234567-20260715$/);
+});
+
+test('an empty tenant report states that there is no operational evidence', () => {
+  const report = buildWeeklyReportModel({
+    organization: { name: 'Tenant nuevo' },
+    project: { name: 'Primera obra' },
+    generatedAt: new Date('2026-07-15T12:00:00.000Z'),
+  });
+
+  assert.equal(report.isEmptyState, true);
+  assert.equal(report.tasks.length, 0);
+  assert.equal(report.evidenceCount, 0);
+  assert.match(report.executiveSummary, /no hay actividad operativa persistida/i);
 });
 
 test('weekly reports summarize risk, evidence and configured budget', () => {
@@ -49,6 +63,6 @@ test('weekly reports summarize risk, evidence and configured budget', () => {
   assert.equal(report.audioCount, 1);
   assert.equal(report.budget.remaining, 65_000);
   assert.equal(report.snapshotVersion, 3);
-  assert.equal(report.isDemoData, false);
+  assert.equal(report.isEmptyState, false);
   assert.match(report.executiveSummary, /60 puntos por debajo/);
 });

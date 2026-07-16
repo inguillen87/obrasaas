@@ -8,10 +8,16 @@ import {
 } from '@/lib/access';
 import { getPrisma } from '@/lib/prisma';
 import {
+  RequestBodyError,
+  readJsonRequest,
+  requestBodyErrorResponse,
+} from '@/lib/request-body';
+import {
   ACTIVE_PROJECT_COOKIE,
   ProjectInputError,
   activeProjectCapacity,
   activeProjectCookieOptions,
+  isUnconfiguredTenantBootstrapProject,
   isSelectableProjectStatus,
   listOrganizationProjects,
   normalizeProjectInput,
@@ -19,6 +25,8 @@ import {
   tenantProjectWhere,
   uniqueProjectSlug,
 } from '@/lib/projects';
+
+const MAX_PROJECT_JSON_BYTES = 16 * 1024;
 
 class ProjectLimitError extends Error {
   constructor(plan, capacity) {
@@ -33,6 +41,54 @@ async function createTenantProject(prisma, access, input) {
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     try {
       return await prisma.$transaction(async (transaction) => {
+        const bootstrapProject = await transaction.project.findFirst({
+          where: {
+            organizationId: access.organization.id,
+            slug: 'obra-principal',
+          },
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            status: true,
+            address: true,
+            latitude: true,
+            longitude: true,
+          },
+        });
+        if (isUnconfiguredTenantBootstrapProject(bootstrapProject)) {
+          const configured = await transaction.project.update({
+            where: { id: bootstrapProject.id },
+            data: input,
+            include: {
+              snapshot: { select: { updatedAt: true } },
+              whatsapp: {
+                select: {
+                  connectionStatus: true,
+                  displayPhoneNumber: true,
+                  verifiedBusinessName: true,
+                },
+              },
+              _count: { select: { workers: true, tasks: true, incidents: true } },
+            },
+          });
+          await transaction.auditLog.create({
+            data: {
+              organizationId: access.organization.id,
+              actorId: access.databaseUserId,
+              action: 'project.created',
+              entityType: 'Project',
+              entityId: configured.id,
+              metadata: {
+                name: configured.name,
+                slug: configured.slug,
+                configuredBootstrap: true,
+              },
+            },
+          });
+          return configured;
+        }
+
         const activeCount = await transaction.project.count({
           where: { organizationId: access.organization.id, status: 'ACTIVE' },
         });
@@ -95,9 +151,7 @@ async function selectProject(projectId) {
 
 function projectErrorResponse(error) {
   if (error instanceof AccessError) return accessErrorResponse(error);
-  if (error instanceof SyntaxError) {
-    return Response.json({ error: 'El cuerpo JSON no es válido.', code: 'INVALID_JSON' }, { status: 400 });
-  }
+  if (error instanceof RequestBodyError) return requestBodyErrorResponse(error);
   if (error instanceof ProjectInputError) {
     return Response.json({ error: error.message, code: error.code }, { status: 400 });
   }
@@ -144,8 +198,10 @@ export async function POST(request) {
   try {
     const access = await getPlatformAccess();
     requireTenantPermission(access, 'org:projects:manage');
+    const input = normalizeProjectInput(
+      await readJsonRequest(request, { maxBytes: MAX_PROJECT_JSON_BYTES }),
+    );
     const prisma = getPrisma();
-    const input = normalizeProjectInput(await request.json());
     const project = await createTenantProject(prisma, access, input);
     await selectProject(project.id);
     return Response.json({ project: serializeProject(project) }, { status: 201 });
@@ -163,7 +219,9 @@ export async function PUT(request) {
   try {
     const access = await getPlatformAccess();
     requireTenantPermission(access, 'org:projects:read');
-    const { projectId } = await request.json();
+    const { projectId } = await readJsonRequest(request, {
+      maxBytes: MAX_PROJECT_JSON_BYTES,
+    });
     if (!projectId) throw new ProjectInputError('Seleccioná una obra válida.');
     const project = await getPrisma().project.findFirst({
       where: tenantProjectWhere(access.organization.id, projectId),

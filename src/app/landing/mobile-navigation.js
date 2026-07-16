@@ -7,6 +7,7 @@ import styles from './landing.module.css';
 
 const links = [
   ['Producto', '#producto'],
+  ['Confianza', '#confianza'],
   ['Plataforma', '#plataforma'],
   ['Sectores', '#sectores'],
   ['Precios', '#precios'],

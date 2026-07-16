@@ -3,6 +3,7 @@ import { getAppState, getMessages } from '@/lib/db';
 import { getPlatformAccess, requireTenantPermission } from '@/lib/access';
 import { getPrisma } from '@/lib/prisma';
 import { buildWeeklyReportModel } from '@/lib/reporting';
+import { sanitizeProjectStateMedicalData } from '@/lib/medical-privacy';
 import ReportActions from './report-actions';
 import styles from './report.module.css';
 
@@ -43,7 +44,7 @@ export default async function ReportPage({ searchParams }) {
   ]);
   const query = await searchParams;
   const report = buildWeeklyReportModel({
-    state,
+    state: sanitizeProjectStateMedicalData(state),
     messages,
     organization: access.organization,
     project: access.project,
@@ -85,9 +86,9 @@ export default async function ReportPage({ searchParams }) {
           <div><span>Actualización</span><strong>{report.lastUpdatedAt ? formatDate(report.lastUpdatedAt, { dateStyle: 'short', timeStyle: 'short' }) : 'Sin actividad persistida'}</strong></div>
         </section>
 
-        {report.isDemoData && (
-          <div className={styles.demoNotice} role="note">
-            <strong>Vista demostrativa.</strong> Este tenant todavía no registró actividad operativa persistida; los valores sirven para evaluar el formato del reporte.
+        {report.isEmptyState && (
+          <div className={styles.emptyNotice} role="note">
+            <strong>Reporte sin actividad.</strong> Este tenant todavía no registró datos operativos persistidos; los indicadores permanecen vacíos o en cero y no representan una obra real.
           </div>
         )}
 

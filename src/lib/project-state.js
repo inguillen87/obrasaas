@@ -1,6 +1,7 @@
 const MAX_STATE_NODES = 20_000;
 const MAX_STATE_DEPTH = 10;
 const MAX_COLLECTION_SIZE = 2_000;
+const MAX_PROJECT_STATE_VERSION = 2_147_483_647;
 const BLOCKED_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
 export class ProjectStateInputError extends Error {
@@ -12,10 +13,91 @@ export class ProjectStateInputError extends Error {
   }
 }
 
+export class ProjectStateVersionConflictError extends Error {
+  constructor(expectedVersion, currentVersion) {
+    super('El estado de la obra cambió mientras estabas editando. Recargamos la versión más reciente para evitar sobrescribir trabajo de otra persona.');
+    this.name = 'ProjectStateVersionConflictError';
+    this.code = 'STATE_VERSION_CONFLICT';
+    this.status = 409;
+    this.expectedVersion = parseNumericStateVersion(expectedVersion);
+    this.currentVersion = parseNumericStateVersion(currentVersion);
+  }
+}
+
 function isPlainObject(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const prototype = Object.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;
+}
+
+function invalidStateVersion(message, { status = 400, code = 'STATE_VERSION_INVALID' } = {}) {
+  throw new ProjectStateInputError(message, { code, status });
+}
+
+function parseNumericStateVersion(value) {
+  const version = typeof value === 'number'
+    ? value
+    : typeof value === 'string' && /^\d+$/.test(value.trim())
+      ? Number(value.trim())
+      : Number.NaN;
+  if (!Number.isSafeInteger(version) || version < 0 || version > MAX_PROJECT_STATE_VERSION) {
+    invalidStateVersion('La versión del estado no es válida.');
+  }
+  return version;
+}
+
+export function formatProjectStateEtag(version) {
+  return `"project-state-${parseNumericStateVersion(version)}"`;
+}
+
+export function parseProjectStateVersion(value, { required = true } = {}) {
+  if (value == null || String(value).trim() === '') {
+    if (!required) return null;
+    invalidStateVersion(
+      'Falta la versión esperada del estado. Recargá la obra antes de guardar.',
+      { status: 428, code: 'STATE_VERSION_REQUIRED' },
+    );
+  }
+  if (typeof value === 'number') return parseNumericStateVersion(value);
+  const raw = String(value).trim();
+  const etag = raw.match(/^"project-state-(\d+)"$/);
+  if (etag) return parseNumericStateVersion(etag[1]);
+  return parseNumericStateVersion(raw);
+}
+
+export function assertProjectStateVersion(expectedVersion, currentVersion) {
+  if (expectedVersion == null) return parseNumericStateVersion(currentVersion);
+  const expected = parseNumericStateVersion(expectedVersion);
+  const current = parseNumericStateVersion(currentVersion);
+  if (expected !== current) {
+    throw new ProjectStateVersionConflictError(expected, current);
+  }
+  return current;
+}
+
+export function parseProjectStateWriteRequest(body, ifMatch = null) {
+  const envelope = isPlainObject(body)
+    && Object.keys(body).every((key) => key === 'state' || key === 'expectedVersion')
+    && Object.hasOwn(body, 'state')
+    && Object.hasOwn(body, 'expectedVersion');
+  const headerVersion = parseProjectStateVersion(ifMatch, { required: false });
+  const envelopeVersion = envelope
+    ? parseProjectStateVersion(body.expectedVersion)
+    : null;
+  if (headerVersion != null && envelopeVersion != null && headerVersion !== envelopeVersion) {
+    invalidStateVersion('If-Match y expectedVersion deben identificar la misma versión.');
+  }
+  const expectedVersion = headerVersion ?? envelopeVersion;
+  if (expectedVersion == null) {
+    invalidStateVersion(
+      'Falta la versión esperada del estado. Recargá la obra antes de guardar.',
+      { status: 428, code: 'STATE_VERSION_REQUIRED' },
+    );
+  }
+  return {
+    expectedVersion,
+    state: envelope ? body.state : body,
+  };
 }
 
 function assertJsonShape(value, path, depth, counter) {

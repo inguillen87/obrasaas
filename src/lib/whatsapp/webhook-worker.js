@@ -1,0 +1,257 @@
+import crypto from "node:crypto";
+import {
+  acquireWebhookEvent,
+  applyWebhookMessageAtomically,
+  completeWebhookEvent,
+  linkOutboundWhatsAppMessage,
+  persistEnrichedWebhookEvent,
+  rescheduleWebhookEvent,
+  updateWhatsAppMessageStatus,
+} from "@/lib/db";
+import {
+  FIELD_WORKER_RESOLUTION,
+  resolveActiveFieldWorkerByPhone,
+} from "@/lib/field-workers";
+import { tenantAiSettingsFromMetadata } from "@/lib/ai/tenant-settings";
+import { getPrisma } from "@/lib/prisma";
+import {
+  deserializeWebhookPayload,
+  drainWebhookProjectQueue,
+  isTerminalWebhookFailure,
+  readAppliedMessageWebhookOutcome,
+} from "@/lib/webhook-queue";
+import { getPublishedWhatsAppFlowReference } from "@/lib/whatsapp/flows";
+import { ingestAndPersistInboundWhatsAppMedia } from "@/lib/whatsapp/media";
+import { sendWhatsAppFlow, sendWhatsAppText } from "@/lib/whatsapp/meta";
+import { processIncomingObraMessage } from "@/lib/whatsapp/obra-engine";
+import { validateStoredWebhookScope } from "@/lib/whatsapp/webhook-scope";
+
+export const DEFAULT_WEBHOOK_DRAIN_EVENTS = 10;
+const MAX_WEBHOOK_DRAIN_EVENTS = 25;
+
+function invalidWebhookPayload(message) {
+  const error = new Error(message);
+  error.code = "WEBHOOK_PAYLOAD_INVALID";
+  return error;
+}
+
+export function providerMessageIdFromMetaResult(result) {
+  const providerMessageId = result?.messages?.[0]?.id;
+  if (typeof providerMessageId !== "string") return null;
+  const normalized = providerMessageId.trim();
+  if (!normalized || normalized.length > 500 || /[\u0000-\u001f\u007f]/.test(normalized)) return null;
+  return normalized;
+}
+
+async function trySendPublishedFlow({ blueprintKey, event, scope }) {
+  const connection = await getPrisma().whatsAppConnection.findUnique({
+    where: { phoneNumberId: scope.phoneNumberId },
+    select: { metadata: true },
+  });
+  const flow = getPublishedWhatsAppFlowReference(connection?.metadata, blueprintKey);
+  if (!flow) return { sent: false, providerMessageId: null };
+
+  try {
+    const result = await sendWhatsAppFlow({
+      to: event.from,
+      phoneNumberId: event.phoneNumberId,
+      flowId: flow.id,
+      flowToken: crypto.randomBytes(18).toString("base64url"),
+      screenId: flow.screenId,
+      ...flow.message,
+    });
+    return { sent: true, providerMessageId: providerMessageIdFromMetaResult(result) };
+  } catch (error) {
+    console.warn(`Published WhatsApp Flow ${blueprintKey} was unavailable; using text fallback:`, error);
+    return { sent: false, providerMessageId: null };
+  }
+}
+
+function connectionMetadata(metadata, event) {
+  const current = metadata && typeof metadata === "object" && !Array.isArray(metadata)
+    ? metadata
+    : {};
+  return {
+    ...current,
+    metaWebhook: {
+      field: event.field,
+      event: event.event,
+      decision: event.decision,
+      value: event.value,
+      receivedAt: event.timestamp.toISOString(),
+    },
+  };
+}
+
+async function synchronizeConnectionStatus(event, scope) {
+  const prisma = getPrisma();
+  const connection = await prisma.whatsAppConnection.findUnique({
+    where: { phoneNumberId: scope.phoneNumberId },
+    select: { id: true, metadata: true },
+  });
+  if (!connection) return;
+
+  const data = {
+    metadata: connectionMetadata(connection.metadata, event),
+    lastVerifiedAt: new Date(),
+  };
+
+  if (event.field === "account_update") {
+    if (event.event === "VERIFIED_ACCOUNT") {
+      data.connectionStatus = "CONNECTED";
+      data.lastError = null;
+    } else if (event.event === "DISABLED_UPDATE") {
+      data.connectionStatus = "ERROR";
+      data.lastError = "Meta informó que la cuenta de WhatsApp fue deshabilitada.";
+    }
+  } else if (event.field === "account_review_update") {
+    if (event.decision === "APPROVED") {
+      data.connectionStatus = "CONNECTED";
+      data.lastError = null;
+    } else if (event.decision === "REJECTED") {
+      data.connectionStatus = "ERROR";
+      data.lastError = event.value?.rejection_reason
+        ? `Meta rechazó la cuenta: ${String(event.value.rejection_reason).slice(0, 1_900)}`
+        : "Meta rechazó la revisión de la cuenta de WhatsApp.";
+    }
+  } else if (
+    event.field === "phone_number_name_update"
+    && event.decision === "APPROVED"
+    && event.value?.requested_verified_name
+  ) {
+    data.verifiedBusinessName = String(event.value.requested_verified_name).slice(0, 255);
+  }
+
+  await prisma.whatsAppConnection.update({
+    where: { id: connection.id },
+    data,
+  });
+}
+
+async function processMessageEvent(leasedEvent, event, scope) {
+  const storedOutcome = readAppliedMessageWebhookOutcome(leasedEvent);
+  if (!storedOutcome && event.media) {
+    const resolution = await resolveActiveFieldWorkerByPhone(
+      getPrisma(),
+      { organizationId: scope.organizationId, projectId: scope.projectId },
+      event.from,
+    );
+    if (resolution.status !== FIELD_WORKER_RESOLUTION.RESOLVED) {
+      const error = new Error(`WhatsApp sender could not be resolved as an active field worker: ${resolution.status}`);
+      error.code = `FIELD_WORKER_${resolution.status}`;
+      throw error;
+    }
+  }
+
+  let transcriptionEnabled = false;
+  if (!storedOutcome && event.kind === "audio" && event.media) {
+    const organization = await getPrisma().organization.findUnique({
+      where: { id: scope.organizationId },
+      select: { metadata: true },
+    });
+    transcriptionEnabled = tenantAiSettingsFromMetadata(
+      organization?.metadata,
+    ).audioTranscriptionEnabled;
+  }
+
+  const enrichedEvent = !storedOutcome && event.media
+    ? await ingestAndPersistInboundWhatsAppMedia(
+        { leasedEvent, event, scope },
+        { persist: persistEnrichedWebhookEvent, transcriptionEnabled },
+      )
+    : event;
+  const application = await applyWebhookMessageAtomically({
+    eventId: leasedEvent.id,
+    leaseToken: leasedEvent.leaseToken,
+    event: enrichedEvent,
+    scope,
+    apply: ({ prisma, state, projectSettings, worker }) => processIncomingObraMessage(
+      enrichedEvent,
+      scope,
+      { prisma, state, projectSettings, worker, persist: false },
+    ),
+  });
+  const outcome = application.outcome;
+
+  // Internal writes are exactly-once under the project lock and lease CAS. Meta
+  // delivery is necessarily at-least-once: a crash after Meta accepts but before
+  // local correlation/completion can cause the stored outcome to be sent again.
+  const flowDelivery = outcome.flowPrompt
+    ? await trySendPublishedFlow({ blueprintKey: outcome.flowPrompt, event, scope })
+    : { sent: false, providerMessageId: null };
+  let providerMessageId = flowDelivery.providerMessageId;
+  if (!flowDelivery.sent) {
+    const delivery = await sendWhatsAppText({
+      to: event.from,
+      text: outcome.reply,
+      replyToMessageId: event.externalId,
+      phoneNumberId: event.phoneNumberId,
+    });
+    providerMessageId = providerMessageIdFromMetaResult(delivery);
+  }
+  if (providerMessageId) {
+    const linked = await linkOutboundWhatsAppMessage({
+      inboundExternalId: event.externalId,
+      providerMessageId,
+      scope,
+      status: "accepted",
+    });
+    if (!linked) {
+      console.warn(`Meta accepted outbound message ${providerMessageId}, but its local correlation row was missing.`);
+    }
+  }
+}
+
+async function processLeasedEvent(leasedEvent) {
+  const stored = deserializeWebhookPayload(leasedEvent.payload);
+  const event = stored.event;
+  const scope = stored.scope;
+  await validateStoredWebhookScope(getPrisma(), leasedEvent, event, scope);
+
+  if (event.eventType === "message") {
+    await processMessageEvent(leasedEvent, event, scope);
+    return;
+  }
+  if (event.eventType === "status") {
+    await updateWhatsAppMessageStatus({
+      providerMessageId: event.messageId,
+      status: event.status,
+      scope,
+    });
+    return;
+  }
+  if (event.eventType === "account") {
+    await synchronizeConnectionStatus(event, scope);
+    return;
+  }
+  throw invalidWebhookPayload("Stored webhook event type is not supported.");
+}
+
+export async function drainProjectWebhookEvents(
+  projectId,
+  { maxEvents = DEFAULT_WEBHOOK_DRAIN_EVENTS } = {},
+) {
+  const normalizedMaxEvents = Math.min(
+    MAX_WEBHOOK_DRAIN_EVENTS,
+    Math.max(1, Math.trunc(Number(maxEvents) || DEFAULT_WEBHOOK_DRAIN_EVENTS)),
+  );
+  return drainWebhookProjectQueue({
+    projectId,
+    acquire: (selectedProjectId) => acquireWebhookEvent({ projectId: selectedProjectId }),
+    process: processLeasedEvent,
+    complete: (event) => completeWebhookEvent({
+      eventId: event.id,
+      leaseToken: event.leaseToken,
+    }),
+    reschedule: async (event, error) => {
+      console.error(`Meta webhook event ${event.externalId} failed:`, error);
+      return rescheduleWebhookEvent({
+        eventId: event.id,
+        leaseToken: event.leaseToken,
+        error,
+        terminal: isTerminalWebhookFailure(error),
+      });
+    },
+    maxEvents: normalizedMaxEvents,
+  });
+}

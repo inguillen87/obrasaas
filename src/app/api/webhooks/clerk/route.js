@@ -1,6 +1,6 @@
 import { verifyWebhook } from '@clerk/nextjs/webhooks';
 import { clerkClient } from '@clerk/nextjs/server';
-import { SUPERADMIN_EMAIL } from '@/lib/access';
+import { systemRoleForVerifiedEmail } from '@/lib/platform-identity';
 import { getPrisma } from '@/lib/prisma';
 import {
   clerkOrganizationIsInternal,
@@ -32,14 +32,14 @@ async function syncUser(prisma, clerkUser) {
       primaryEmail: email,
       fullName: [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(' ') || null,
       avatarUrl: clerkUser.imageUrl || null,
-      systemRole: email === SUPERADMIN_EMAIL ? 'SUPERADMIN' : 'TENANT_USER',
+      systemRole: systemRoleForVerifiedEmail(email),
     },
     create: {
       clerkUserId: clerkUser.id,
       primaryEmail: email,
       fullName: [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(' ') || null,
       avatarUrl: clerkUser.imageUrl || null,
-      systemRole: email === SUPERADMIN_EMAIL ? 'SUPERADMIN' : 'TENANT_USER',
+      systemRole: systemRoleForVerifiedEmail(email),
     },
   });
 }

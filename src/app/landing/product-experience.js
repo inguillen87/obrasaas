@@ -4,10 +4,10 @@ import { useEffect, useState } from 'react';
 import styles from './landing.module.css';
 
 const steps = [
-  { id: 'report', short: 'Reporte', kind: 'voice', label: 'Nota de voz recibida', message: 'Terminamos las cañerías del segundo piso. Quedaron probadas y listas para cerrar.', assistant: 'Avance identificado · Instalaciones sanitarias · Evidencia vinculada', progress: 84, event: 'Tarea actualizada' },
-  { id: 'risk', short: 'Riesgo', kind: 'voice', label: 'Bloqueo detectado', message: 'El proveedor confirmó que los revestimientos llegan recién el jueves.', assistant: 'Demora logística · Impacto estimado: 2 días · Requiere aprobación', progress: 84, event: 'Replanificación propuesta' },
-  { id: 'stock', short: 'Acopio', kind: 'voice', label: 'Stock bajo mínimo', message: 'Quedan 35 bolsas de cemento. Mañana arranca el revoque del frente norte.', assistant: 'Riesgo de quiebre · Proveedor homologado · Orden preparada', progress: 91, event: 'Aprobación solicitada' },
-  { id: 'attendance', short: 'Flow', kind: 'flow', label: 'Control de ingreso', message: 'Juan Gómez · Albañilería', assistant: 'Dentro de geocerca · 08:02 · Registro asociado al operario', progress: 91, event: 'Presentismo confirmado' },
+  { id: 'report', short: 'Reporte', kind: 'voice', label: 'Nota de voz recibida', message: 'Terminamos las cañerías del segundo piso. Quedaron probadas y listas para cerrar.', assistant: 'Reporte transcripto · Evidencia vinculada · Requiere confirmación escrita', progress: 84, event: 'Propuesta pendiente' },
+  { id: 'risk', short: 'Riesgo', kind: 'voice', label: 'Bloqueo detectado', message: 'El proveedor confirmó que los revestimientos llegan recién el jueves.', assistant: 'Posible demora logística · Sin reprogramación automática · Requiere confirmación', progress: 84, event: 'Demora propuesta' },
+  { id: 'stock', short: 'Acopio', kind: 'voice', label: 'Stock bajo mínimo', message: 'Quedan 35 bolsas de cemento. Mañana arranca el revoque del frente norte.', assistant: 'Riesgo de stock detectado · Compra no emitida · Revisión pendiente', progress: 91, event: 'Revisión solicitada' },
+  { id: 'attendance', short: 'Flow', kind: 'flow', label: 'Control de ingreso', message: 'Persona de ejemplo · Cuadrilla', assistant: 'EPP confirmado · Ubicación todavía pendiente · Sin presentismo registrado', progress: 91, event: 'Fichaje iniciado' },
 ];
 
 export default function ProductExperience() {
@@ -34,8 +34,8 @@ export default function ProductExperience() {
     >
       <div className={styles.shellTopbar}>
         <div className={styles.windowDots} aria-hidden="true"><i /><i /><i /></div>
-        <span><b className={styles.liveDot} /> Centro de control · Obra Palermo</span>
-        <small>Sincronizado ahora</small>
+        <span><b className={styles.liveDot} /> Centro de control · Obra demostrativa</span>
+        <small>Datos simulados</small>
       </div>
       <div className={styles.productBody}>
         <div className={styles.controlPanel}>
@@ -52,7 +52,7 @@ export default function ProductExperience() {
         <div className={styles.phoneWrap}>
           <div className={styles.phone}>
             <div className={styles.phoneBar}><span>9:41</span><i /><span>●●●</span></div>
-            <div className={styles.chatHeader}><span className={styles.chatAvatar}>OS</span><div><strong>Obra Palermo</strong><small>ObraSaaS · en línea</small></div></div>
+            <div className={styles.chatHeader}><span className={styles.chatAvatar}>OS</span><div><strong>Obra demostrativa</strong><small>ObraSaaS · escenario simulado</small></div></div>
             <div className={styles.chatBody} key={step.id}>
               <div className={styles.chatSystem}>Hoy</div>
               {step.kind === 'flow' ? (
@@ -60,10 +60,10 @@ export default function ProductExperience() {
                   <div className={styles.flowMessageTopline}><span>WhatsApp Flow</span><small>Seguro</small></div>
                   <strong>{step.label}</strong>
                   <p>Confirmá los datos del turno sin salir del chat.</p>
-                  <div className={styles.flowField}><span>Operario</span><b>Juan Gómez</b></div>
-                  <div className={styles.flowField}><span>Frente</span><b>Albañilería · PB</b></div>
-                  <div className={styles.flowField}><span>Ubicación</span><b>Acceso principal · dentro de geocerca</b></div>
-                  <span className={styles.flowSubmit}>Confirmar ingreso</span>
+                  <div className={styles.flowField}><span>Persona</span><b>Identidad autorizada</b></div>
+                  <div className={styles.flowField}><span>Frente</span><b>Cuadrilla · PB</b></div>
+                  <div className={styles.flowField}><span>Ubicación</span><b>Pendiente de informar</b></div>
+                  <span className={styles.flowSubmit}>Continuar al control de ubicación</span>
                   <time>08:41 ✓✓</time>
                 </div>
               ) : (
@@ -75,7 +75,8 @@ export default function ProductExperience() {
           </div>
         </div>
       </div>
-      <div className={styles.demoControls} aria-label="Escenarios del simulador">
+      <div className={styles.demoDisclosure}><span>Escenario demostrativo</span><small>Simula el flujo completo; no ejecuta cambios reales.</small></div>
+      <div className={styles.demoControls} aria-label="Escenarios demostrativos">
         {steps.map((item, index) => <button type="button" className={index === active ? styles.demoControlActive : undefined} onClick={() => setActive(index)} key={item.id} aria-pressed={index === active}><span>0{index + 1}</span>{item.short}</button>)}
       </div>
     </div>

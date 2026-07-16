@@ -7,8 +7,15 @@ import {
   SupervisorProviderError,
   validateSupervisorRequest,
 } from '@/lib/ai/supervisor';
+import { tenantAiSettingsFromMetadata } from '@/lib/ai/tenant-settings';
 import { getAppState, getMessages } from '@/lib/db';
+import { sanitizeProjectStateMedicalData } from '@/lib/medical-privacy';
 import { getPrisma } from '@/lib/prisma';
+import {
+  readJsonRequest,
+  RequestBodyError,
+  requestBodyErrorResponse,
+} from '@/lib/request-body';
 
 const MAX_REQUEST_BYTES = 24_000;
 
@@ -57,9 +64,12 @@ async function recordSupervisorAudit(access, {
           title: status === 'success'
             ? 'Consulta al Supervisor IA procesada'
             : 'Consulta al Supervisor IA no procesada',
-          description: question.slice(0, 300),
+          description: status === 'success'
+            ? 'Consulta procesada dentro del alcance de la obra activa.'
+            : 'Consulta no procesada por el proveedor de IA.',
           details: {
             status,
+            questionLength: question.length,
             provider: result?.provider || 'openai',
             model: result?.model || process.env.OPENAI_SUPERVISOR_MODEL || 'gpt-5-mini',
             requestId: result?.requestId || error?.requestId || null,
@@ -104,22 +114,17 @@ export async function POST(request) {
   try {
     access = await getPlatformAccess();
     requireTenantPermission(access, 'org:projects:read');
+    if (!tenantAiSettingsFromMetadata(access.organization.metadata).supervisorEnabled) {
+      return Response.json({
+        error: 'El Supervisor IA está desactivado para esta organización. Un administrador puede revisar el tratamiento de datos y activarlo en Integraciones.',
+        code: 'AI_PROCESSING_NOT_ENABLED',
+        settingsUrl: '/dashboard/integrations',
+        privacyUrl: '/privacy#openai-processing',
+      }, { status: 409 });
+    }
     await enforceSupervisorRateLimit(access);
 
-    const rawBody = await request.text();
-    if (Buffer.byteLength(rawBody, 'utf8') > MAX_REQUEST_BYTES) {
-      throw new SupervisorInputError('La consulta supera el tamaño permitido.', {
-        code: 'SUPERVISOR_REQUEST_TOO_LARGE',
-        status: 413,
-      });
-    }
-
-    let parsed;
-    try {
-      parsed = JSON.parse(rawBody);
-    } catch {
-      throw new SupervisorInputError('El cuerpo debe ser JSON válido.');
-    }
+    const parsed = await readJsonRequest(request, { maxBytes: MAX_REQUEST_BYTES });
     const input = validateSupervisorRequest(parsed);
     question = input.question;
     const canRequestActions = hasTenantPermission(access, 'org:projects:manage');
@@ -133,10 +138,10 @@ export async function POST(request) {
     ]);
     const context = buildSupervisorContext({
       access,
-      state,
+      state: sanitizeProjectStateMedicalData(state),
       messages,
       canRequestActions,
-      isDemoData: !snapshot,
+      hasOperationalData: Boolean(snapshot),
       snapshotUpdatedAt: snapshot?.updatedAt || null,
     });
     const result = await requestSupervisorAnswer({
@@ -149,13 +154,14 @@ export async function POST(request) {
     return Response.json({
       ...result,
       scope: {
-        isDemoData: !snapshot,
+        dataStatus: context.dataStatus,
         asOf: context.snapshotUpdatedAt || context.capturedAt,
       },
       generatedAt: new Date().toISOString(),
     });
   } catch (error) {
     if (error instanceof AccessError) return accessErrorResponse(error);
+    if (error instanceof RequestBodyError) return requestBodyErrorResponse(error);
     if (error instanceof SupervisorInputError) {
       return Response.json(
         { error: error.message, code: error.code },

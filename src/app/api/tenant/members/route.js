@@ -5,7 +5,14 @@ import {
   requireTenantPermission,
 } from '@/lib/access';
 import { getPrisma } from '@/lib/prisma';
+import {
+  RequestBodyError,
+  readJsonRequest,
+  requestBodyErrorResponse,
+} from '@/lib/request-body';
 import { isTenantRole } from '@/lib/tenant-roles';
+
+const MAX_MEMBERSHIP_JSON_BYTES = 8 * 1024;
 
 function serializeMembership(membership) {
   return {
@@ -50,7 +57,9 @@ export async function PATCH(request) {
   try {
     const access = await getPlatformAccess();
     requireTenantPermission(access, 'tenant:members:manage');
-    const body = await request.json().catch(() => ({}));
+    const body = await readJsonRequest(request, {
+      maxBytes: MAX_MEMBERSHIP_JSON_BYTES,
+    });
     if (!body.membershipId || !isTenantRole(body.tenantRole)) {
       return Response.json({ error: 'Membresía o rol inválido.' }, { status: 400 });
     }
@@ -103,6 +112,7 @@ export async function PATCH(request) {
     return Response.json({ membership: serializeMembership(updated) });
   } catch (error) {
     if (error instanceof AccessError) return accessErrorResponse(error);
+    if (error instanceof RequestBodyError) return requestBodyErrorResponse(error);
     console.error('Member role update failed:', error);
     return Response.json({ error: 'No se pudo actualizar el rol.' }, { status: 500 });
   }

@@ -6,6 +6,11 @@ import {
 } from '@/lib/access';
 import { decryptCredential } from '@/lib/credentials';
 import { getPrisma } from '@/lib/prisma';
+import {
+  RequestBodyError,
+  readJsonRequest,
+  requestBodyErrorResponse,
+} from '@/lib/request-body';
 import { MetaIntegrationError } from '@/lib/whatsapp/embedded-signup';
 import {
   getWhatsAppFlowCatalog,
@@ -15,6 +20,8 @@ import {
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
+
+const MAX_FLOW_JSON_BYTES = 8 * 1024;
 
 function auditIp(request) {
   return request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
@@ -42,6 +49,7 @@ async function requireActiveConnection(access) {
 
 function flowErrorResponse(error, fallback) {
   if (error instanceof AccessError) return accessErrorResponse(error);
+  if (error instanceof RequestBodyError) return requestBodyErrorResponse(error);
   if (error instanceof MetaIntegrationError) {
     return Response.json({ error: error.message, code: error.code }, { status: error.status });
   }
@@ -87,8 +95,8 @@ export async function POST(request) {
   try {
     const access = await getPlatformAccess();
     requireTenantPermission(access, 'org:integrations:manage');
+    const body = await readJsonRequest(request, { maxBytes: MAX_FLOW_JSON_BYTES });
     const connection = await requireActiveConnection(access);
-    const body = await request.json().catch(() => ({}));
     const result = await provisionWhatsAppFlowDraft({
       blueprintKey: String(body.blueprintKey || ''),
       whatsappBusinessId: connection.whatsappBusinessId,

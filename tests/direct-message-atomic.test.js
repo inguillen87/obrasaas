@@ -1,0 +1,215 @@
+import assert from 'node:assert/strict';
+import { registerHooks } from 'node:module';
+import { after, test } from 'node:test';
+
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier.startsWith('@/')) {
+      const extension = specifier.startsWith('@/generated/') ? '.ts' : '.js';
+      const sourcePath = new URL(`../src/${specifier.slice(2)}${extension}`, import.meta.url);
+      return nextResolve(sourcePath.href, context);
+    }
+    return nextResolve(specifier, context);
+  },
+});
+
+const originalDatabaseUrl = process.env.DATABASE_URL;
+process.env.DATABASE_URL = 'postgresql://unit-test.invalid/obrasaas';
+
+const { applyDirectObraMessageAtomically } = await import('../src/lib/db.js');
+
+after(() => {
+  if (originalDatabaseUrl === undefined) delete process.env.DATABASE_URL;
+  else process.env.DATABASE_URL = originalDatabaseUrl;
+  delete globalThis.__obraSaasPrisma;
+});
+
+const project = {
+  id: 'project-direct-a',
+  organizationId: 'organization-direct-a',
+  latitude: -34.6,
+  longitude: -58.4,
+  geofenceMeters: 120,
+  snapshot: {
+    state: { incidents: [], attendance: {}, tasks: {}, alertsCount: 0 },
+    version: 4,
+  },
+};
+
+const worker = {
+  id: 'worker-direct-a',
+  projectId: project.id,
+  phone: '+5491112345678',
+  name: 'Persona autorizada',
+  role: 'Capataz',
+  active: true,
+  metadata: { whatsappRole: 'FOREMAN' },
+  project: { organizationId: project.organizationId },
+};
+
+function transactionDouble({ priorOperation = null } = {}) {
+  const calls = [];
+  const transaction = {
+    async $executeRawUnsafe(query, projectId) {
+      calls.push(['lock', query, projectId]);
+    },
+    project: {
+      async findFirst(args) {
+        calls.push(['project', args]);
+        return structuredClone(project);
+      },
+    },
+    worker: {
+      async findFirst(args) {
+        calls.push(['worker', args]);
+        return structuredClone(worker);
+      },
+    },
+    auditLog: {
+      async findUnique(args) {
+        calls.push(['operation-read', args]);
+        return priorOperation;
+      },
+      async create(args) {
+        calls.push(['operation-create', args]);
+        return args.data;
+      },
+    },
+    projectSnapshot: {
+      async upsert(args) {
+        calls.push(['snapshot', args]);
+        return args.update;
+      },
+    },
+    conversation: {
+      async upsert(args) {
+        calls.push(['conversation', args]);
+        return { id: 'conversation-direct-a', ...args.create };
+      },
+    },
+    message: {
+      async findUnique(args) {
+        calls.push(['message-read', args]);
+        return null;
+      },
+      async create(args) {
+        calls.push(['message-create', args]);
+        return args.data;
+      },
+    },
+  };
+  const prisma = {
+    async $transaction(callback, options) {
+      calls.push(['transaction', options]);
+      return callback(transaction);
+    },
+  };
+  return { calls, prisma, transaction };
+}
+
+test('direct application couples claim, engine, snapshot, messages and idempotency outcome', async () => {
+  const { calls, prisma, transaction } = transactionDouble();
+  globalThis.__obraSaasPrisma = prisma;
+  let callbackTransaction;
+
+  const applied = await applyDirectObraMessageAtomically({
+    event: {
+      externalId: 'direct-event-a',
+      provider: 'webview',
+      from: '+000000000',
+      displayName: 'Untrusted name',
+      kind: 'text',
+      text: 'incidencia',
+      timestamp: new Date('2026-07-16T12:00:00.000Z'),
+    },
+    scope: { projectId: project.id, organizationId: project.organizationId },
+    workerId: worker.id,
+    operation: { id: 'direct-operation-a', action: 'webview.attendance.location_applied' },
+    async beforeApply({ prisma: scopedPrisma, project: scopedProject, worker: scopedWorker }) {
+      callbackTransaction = scopedPrisma;
+      calls.push(['claim', scopedProject.id, scopedWorker.id]);
+    },
+    async apply({ prisma: scopedPrisma, state, projectSettings, worker: scopedWorker, event }) {
+      calls.push(['apply', projectSettings.id, event.from, event.displayName]);
+      assert.equal(scopedPrisma, transaction);
+      assert.equal(scopedWorker.id, worker.id);
+      state.incidents.push({ id: 'incident-direct-a' });
+      return {
+        reply: 'Aplicado',
+        flowPrompt: null,
+        intent: 'INCIDENT',
+        stateChanged: true,
+        state,
+        worker: scopedWorker,
+        newMessages: [
+          { externalId: 'direct-event-a', sender: 'user', kind: 'text', text: 'incidencia' },
+          { externalId: 'obrasaas-reply:direct-event-a', sender: 'bot', kind: 'text', text: 'Aplicado' },
+        ],
+      };
+    },
+  });
+
+  assert.equal(callbackTransaction, transaction);
+  assert.equal(applied.alreadyApplied, false);
+  assert.equal(applied.result.reply, 'Aplicado');
+  assert.deepEqual(
+    calls.map(([name]) => name),
+    [
+      'transaction',
+      'lock',
+      'project',
+      'worker',
+      'operation-read',
+      'claim',
+      'apply',
+      'snapshot',
+      'conversation',
+      'message-read',
+      'message-create',
+      'message-read',
+      'message-create',
+      'operation-create',
+    ],
+  );
+  const snapshotArgs = calls.find(([name]) => name === 'snapshot')[1];
+  assert.equal(snapshotArgs.update.version, 5);
+  assert.equal(snapshotArgs.update.state.incidents[0].id, 'incident-direct-a');
+  const operationArgs = calls.find(([name]) => name === 'operation-create')[1];
+  assert.equal(operationArgs.data.metadata.outcome.reply, 'Aplicado');
+  assert.equal(JSON.stringify(operationArgs).includes('+000000000'), false);
+});
+
+test('an idempotent direct retry returns its stored outcome without reapplying effects', async () => {
+  const priorOperation = {
+    organizationId: project.organizationId,
+    action: 'webview.attendance.location_applied',
+    entityType: 'Worker',
+    entityId: worker.id,
+    metadata: {
+      projectId: project.id,
+      outcome: { reply: 'Ya registrado', flowPrompt: null, intent: 'ATTENDANCE_LOCATION' },
+    },
+  };
+  const { calls, prisma } = transactionDouble({ priorOperation });
+  globalThis.__obraSaasPrisma = prisma;
+  let appliedAgain = false;
+
+  const result = await applyDirectObraMessageAtomically({
+    event: { externalId: 'direct-event-a', kind: 'location' },
+    scope: { projectId: project.id, organizationId: project.organizationId },
+    workerId: worker.id,
+    operation: { id: 'direct-operation-a', action: 'webview.attendance.location_applied' },
+    apply: async () => {
+      appliedAgain = true;
+      return null;
+    },
+  });
+
+  assert.equal(result.alreadyApplied, true);
+  assert.equal(result.result.reply, 'Ya registrado');
+  assert.equal(appliedAgain, false);
+  assert.deepEqual(
+    calls.map(([name]) => name),
+    ['transaction', 'lock', 'project', 'worker', 'operation-read'],
+  );
+});

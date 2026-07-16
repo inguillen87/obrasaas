@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   ProjectInputError,
   activeProjectCapacity,
+  isUnconfiguredTenantBootstrapProject,
   isSelectableProjectStatus,
   normalizeProjectInput,
   projectSlugBase,
@@ -58,6 +59,25 @@ test('plan capacity prevents silent project overages', () => {
   assert.equal(activeProjectCapacity({ plan: 'PRO', activeCount: 9 }).canCreate, true);
   assert.equal(activeProjectCapacity({ plan: 'ENTERPRISE', activeCount: 500 }).limit, null);
   assert.equal(activeProjectCapacity({ plan: 'UNKNOWN', activeCount: 0 }).canCreate, false);
+});
+
+test('the first real project configures the empty tenant bootstrap instead of consuming a second seat', () => {
+  assert.equal(isUnconfiguredTenantBootstrapProject({
+    name: 'Obra principal',
+    slug: 'obra-principal',
+    status: 'ACTIVE',
+    address: null,
+    latitude: null,
+    longitude: null,
+  }), true);
+  assert.equal(isUnconfiguredTenantBootstrapProject({
+    name: 'Obra principal',
+    slug: 'obra-principal',
+    status: 'ACTIVE',
+    address: 'Calle 1',
+    latitude: -34.6,
+    longitude: -58.4,
+  }), false);
 });
 
 test('archived projects cannot become an active session context', () => {

@@ -5,15 +5,24 @@ import {
 } from '@/lib/access';
 import { getPrisma } from '@/lib/prisma';
 import {
+  RequestBodyError,
+  readJsonRequest,
+  requestBodyErrorResponse,
+} from '@/lib/request-body';
+import {
   TenantSubscriptionUpdateError,
   isExternalTenant,
   normalizeTenantSubscriptionUpdate,
 } from '@/lib/superadmin-tenants';
 
+const MAX_TENANT_UPDATE_JSON_BYTES = 8 * 1024;
+
 export async function PATCH(request) {
   try {
     const access = await requireSuperadmin();
-    const body = await request.json().catch(() => ({}));
+    const body = await readJsonRequest(request, {
+      maxBytes: MAX_TENANT_UPDATE_JSON_BYTES,
+    });
     if (typeof body.organizationId !== 'string' || !body.organizationId.trim()) {
       return Response.json({ error: 'La organización es obligatoria.' }, { status: 400 });
     }
@@ -56,6 +65,7 @@ export async function PATCH(request) {
     });
   } catch (error) {
     if (error instanceof AccessError) return accessErrorResponse(error);
+    if (error instanceof RequestBodyError) return requestBodyErrorResponse(error);
     if (error instanceof TenantSubscriptionUpdateError) {
       return Response.json({ error: error.message }, { status: 400 });
     }

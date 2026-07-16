@@ -3,6 +3,11 @@ import Link from 'next/link';
 import ActivityClient from './activity-client';
 import styles from './activity.module.css';
 import { getPlatformAccess, requireTenantPermission } from '@/lib/access';
+import {
+  isMedicalEvidenceRecord,
+  isMedicalIncident,
+  medicalOperationalDescription,
+} from '@/lib/medical-privacy';
 import { getPrisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
@@ -57,6 +62,11 @@ function actorLabel(actor) {
 function auditEntry(log) {
   const metadata = jsonObject(log.metadata);
   const projectActivity = log.entityType === 'ProjectActivity';
+  const medical = isMedicalIncident({
+    title: metadata.title,
+    category: metadata.category,
+    action: log.action,
+  });
   return {
     id: `audit-${log.id}`,
     occurredAt: log.createdAt.toISOString(),
@@ -66,7 +76,9 @@ function auditEntry(log) {
     source: projectActivity ? String(metadata.source || 'dashboard') : 'auditoría',
     title: projectActivity ? truncate(metadata.title, 180) : auditLabel(log.action),
     description: projectActivity
-      ? truncate(metadata.description)
+      ? medical
+        ? medicalOperationalDescription()
+        : truncate(metadata.description)
       : `${actorLabel(log.actor)} · ${log.entityType}`,
     actor: actorLabel(log.actor),
     reference: log.action,
@@ -78,6 +90,7 @@ function messageEntry(message) {
   const inbound = message.direction === 'INBOUND';
   const sender = metadata.displayName || message.conversation.displayName || 'Canal de obra';
   const kind = message.kind === 'TEXT' ? 'mensaje' : message.kind.toLowerCase();
+  const medical = isMedicalEvidenceRecord(message);
   return {
     id: `message-${message.id}`,
     occurredAt: message.sentAt.toISOString(),
@@ -86,7 +99,9 @@ function messageEntry(message) {
     severity: 'INFO',
     source: message.conversation.channel || 'whatsapp',
     title: inbound ? `Reporte recibido · ${sender}` : 'Respuesta de ObraSaaS',
-    description: truncate(message.body || `${kind} sin texto`, 560),
+    description: medical
+      ? medicalOperationalDescription()
+      : truncate(message.body || `${kind} sin texto`, 560),
     actor: inbound ? sender : 'Asistente de obra',
     reference: `${inbound ? 'entrada' : 'salida'} · ${kind}`,
   };

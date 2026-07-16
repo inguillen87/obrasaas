@@ -44,7 +44,7 @@
 }
 .skipLink:focus { transform: translateY(0); }
 
-.header, .hero, .audienceStrip, .outcomes, .platform, .positioning, .sectors, .innovation, .pricing, .faq, .finalCta, .footer {
+.header, .hero, .audienceStrip, .outcomes, .trust, .platform, .positioning, .sectors, .innovation, .pricing, .faq, .finalCta, .footer {
   width: min(1180px, calc(100% - 48px));
   margin-inline: auto;
 }
@@ -185,14 +185,18 @@
 .demoControls .demoControlActive::before { content: ''; position: absolute; inset: 0 0 auto; height: 2px; background: var(--orange); }
 .demoControls .demoControlActive::after { content: ''; position: absolute; inset: auto 0 0; height: 2px; background: rgba(255,155,56,.6); transform-origin: left; animation: scenario-progress 4.8s linear both; }
 .productShell[data-paused='true'] .demoControls .demoControlActive::after { animation: none; transform: scaleX(0); }
+.demoDisclosure { min-height: 38px; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 0 16px; color: var(--subtle); border-top: 1px solid var(--line); background: rgba(255,255,255,.012); }
+.demoDisclosure span { display: inline-flex; align-items: center; gap: 7px; color: #c6cacf; font-size: .56rem; font-weight: 680; letter-spacing: .035em; text-transform: uppercase; }
+.demoDisclosure span::before { content: ''; width: 5px; height: 5px; flex: 0 0 auto; border-radius: 50%; background: var(--orange); box-shadow: 0 0 0 4px rgba(255,155,56,.08); }
+.demoDisclosure small { font-size: .52rem; }
 
 .audienceStrip { min-height: 78px; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 14px; color: #858c92; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); font-size: 0.73rem; }
 .audienceStrip > span { color: #555d63; text-transform: uppercase; letter-spacing: 0.12em; font-size: 0.58rem; }
 .audienceStrip strong { color: #aeb3b7; font-weight: 540; }
 .audienceStrip i { width: 3px; height: 3px; border-radius: 50%; background: #4c5358; }
 
-.outcomes, .platform, .sectors, .innovation, .pricing, .faq { padding-block: 132px; }
-.outcomes, .platform, .sectors, .pricing, .faq, .finalCta { scroll-margin-top: 96px; }
+.outcomes, .trust, .platform, .sectors, .innovation, .pricing, .faq { padding-block: 132px; }
+.outcomes, .trust, .platform, .sectors, .pricing, .faq, .finalCta { scroll-margin-top: 96px; }
 .sectionIntro { max-width: 790px; }
 .sectionIntro h2, .sectionIntroRow h2, .positioning h2, .innovationIntro h2, .faqIntro h2, .finalCta h2 { margin: 14px 0 0; color: var(--ink); font-size: clamp(2.25rem, 4vw, 4.15rem); font-weight: 580; line-height: 1.04; letter-spacing: -0.055em; text-wrap: balance; }
 .sectionIntro > p, .sectionIntroRow > p, .positioningCopy > p, .innovationIntro > p, .faqIntro > p, .finalCta > div > p { margin: 24px 0 0; color: var(--muted); font-size: 0.95rem; line-height: 1.72; }
@@ -202,6 +206,33 @@
 .flowStep > span { color: #585f65; font-size: 0.62rem; }
 .flowStep h3 { margin: 0; font-size: 0.92rem; font-weight: 610; }
 .flowStep p { margin: 5px 0 0; color: var(--subtle); font-size: 0.72rem; }
+
+.trust { position: relative; border-top: 1px solid var(--line); }
+.trust::before { content: ''; position: absolute; z-index: -1; top: 8%; right: 4%; width: 420px; height: 420px; border-radius: 50%; background: rgba(96,211,148,.055); filter: blur(90px); pointer-events: none; }
+.trustIntro { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(280px, .65fr); align-items: end; gap: 70px; }
+.trustPrinciple { min-height: 178px; display: grid; grid-template-columns: auto 1fr; gap: 18px; padding: 24px; border: 1px solid rgba(96,211,148,.2); border-radius: 14px; background: linear-gradient(145deg, rgba(96,211,148,.08), rgba(255,255,255,.018)); box-shadow: inset 0 1px 0 rgba(255,255,255,.04); }
+.trustPrinciple > span { width: 39px; height: 39px; display: grid; place-items: center; color: var(--green); border: 1px solid rgba(96,211,148,.22); border-radius: 10px; background: rgba(96,211,148,.07); font-size: .62rem; font-weight: 750; }
+.trustPrinciple div { align-self: center; }
+.trustPrinciple small { display: block; color: var(--green); font-size: .57rem; font-weight: 730; letter-spacing: .08em; text-transform: uppercase; }
+.trustPrinciple strong { display: block; margin-top: 8px; color: var(--ink); font-size: 1.06rem; font-weight: 620; line-height: 1.25; }
+.trustPrinciple p { margin: 9px 0 0; color: var(--muted); font-size: .7rem; line-height: 1.55; }
+.trustGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 64px; }
+.trustCard { position: relative; min-height: 292px; display: flex; flex-direction: column; overflow: hidden; padding: 26px; border: 1px solid var(--line); border-radius: 13px; background: linear-gradient(150deg, rgba(255,255,255,.035), rgba(255,255,255,.012)); transition: transform 220ms cubic-bezier(.16,1,.3,1), border-color 220ms ease, background 220ms ease; }
+.trustCard::after { content: ''; position: absolute; right: -70px; bottom: -80px; width: 155px; height: 155px; border-radius: 50%; background: rgba(255,155,56,.045); filter: blur(28px); pointer-events: none; }
+.trustCard:hover { transform: translateY(-4px); border-color: rgba(255,155,56,.26); background: linear-gradient(150deg, rgba(255,155,56,.055), rgba(255,255,255,.014)); }
+.trustCardTopline { display: flex; align-items: center; justify-content: space-between; color: #5c646a; font-size: .62rem; }
+.trustCardTopline i { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 5px rgba(96,211,148,.07); }
+.trustCard h3 { max-width: 285px; margin: 50px 0 0; color: var(--ink); font-size: 1.22rem; font-weight: 590; line-height: 1.18; letter-spacing: -.03em; }
+.trustCard > p { margin: 15px 0 0; color: var(--muted); font-size: .75rem; line-height: 1.62; }
+.trustCard > small { margin-top: auto; padding-top: 24px; color: var(--orange); font-size: .51rem; font-weight: 720; line-height: 1.5; letter-spacing: .07em; }
+.trustFooter { display: grid; grid-template-columns: .95fr 1.05fr; gap: 48px; margin-top: 14px; padding: 28px; border: 1px solid var(--line-strong); border-radius: 14px; background: rgba(5,7,8,.48); }
+.trustFooter > div:first-child { padding-right: 42px; border-right: 1px solid var(--line); }
+.trustFooterLabel { color: var(--orange); font-size: .59rem; font-weight: 740; letter-spacing: .08em; text-transform: uppercase; }
+.trustFooter p { margin: 10px 0 0; color: var(--muted); font-size: .72rem; line-height: 1.6; }
+.trustFooterActions { display: grid; align-content: center; gap: 18px; }
+.trustFooterActions > p { margin: 0; color: #d3d6d7; font-weight: 560; }
+.trustFooterActions > div { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.trustFooterActions .primaryCta, .trustFooterActions .secondaryCta { min-height: 44px; padding-inline: 16px; font-size: .74rem; }
 
 .platform { border-top: 1px solid var(--line); }
 .sectionIntroRow { display: grid; grid-template-columns: 1.45fr 0.55fr; align-items: end; gap: 80px; }
@@ -330,6 +361,9 @@
 @supports (animation-timeline: view()) {
   .outcomes .sectionIntro,
   .flowRail,
+  .trustIntro,
+  .trustGrid,
+  .trustFooter,
   .platform .sectionIntroRow,
   .capabilityGrid,
   .positioningCopy,
@@ -362,6 +396,11 @@
   .heroCopy { max-width: 760px; }
   .heroProduct { width: min(850px, 100%); margin: 18px auto 0; }
   .sectionIntroRow, .positioning, .faq, .finalCta { grid-template-columns: 1fr; }
+  .trustIntro { grid-template-columns: 1fr; gap: 34px; }
+  .trustPrinciple { max-width: 600px; }
+  .trustGrid { grid-template-columns: repeat(2, 1fr); }
+  .trustFooter { grid-template-columns: 1fr; gap: 24px; }
+  .trustFooter > div:first-child { padding: 0 0 24px; border-right: 0; border-bottom: 1px solid var(--line); }
   .sectionIntroRow { gap: 22px; }
   .sectionIntroRow > p { max-width: 600px; }
   .capabilityGrid { grid-template-columns: repeat(2, 1fr); }
@@ -378,7 +417,7 @@
 }
 
 @media (max-width: 720px) {
-  .header, .hero, .audienceStrip, .outcomes, .platform, .positioning, .sectors, .innovation, .pricing, .faq, .finalCta, .footer { width: min(100% - 30px, 1180px); }
+  .header, .hero, .audienceStrip, .outcomes, .trust, .platform, .positioning, .sectors, .innovation, .pricing, .faq, .finalCta, .footer { width: min(100% - 30px, 1180px); }
   .header { min-height: 70px; }
   .brandTag, .quietLink { display: none; }
   .compactCta { padding: 9px 11px; }
@@ -394,11 +433,17 @@
   .chatBody { height: 302px; }
   .controlPanel { grid-row: 2; }
   .demoControls button { min-height: 48px; flex-direction: column; gap: 2px; }
+  .demoDisclosure { align-items: flex-start; flex-direction: column; gap: 4px; padding-block: 10px; }
   .audienceStrip { justify-content: flex-start; padding-block: 22px; }
   .audienceStrip > span { width: 100%; }
   .audienceStrip i { display: none; }
-  .outcomes, .platform, .sectors, .innovation, .pricing, .faq, .positioning { padding-block: 90px; }
+  .outcomes, .trust, .platform, .sectors, .innovation, .pricing, .faq, .positioning { padding-block: 90px; }
   .flowRail { grid-template-columns: 1fr 1fr; row-gap: 38px; }
+  .trustGrid { grid-template-columns: 1fr; margin-top: 46px; }
+  .trustCard { min-height: 255px; }
+  .trustFooter { padding: 24px; }
+  .trustFooterActions > div { align-items: stretch; flex-direction: column; }
+  .trustFooterActions .primaryCta, .trustFooterActions .secondaryCta { width: 100%; }
   .capabilityGrid { grid-template-columns: 1fr; }
   .capabilityCard { min-height: 270px; }
   .visualGrid { grid-template-columns: 1fr; }
@@ -435,6 +480,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   .heroProduct, .eventCard, .chatBody, .mobileNavPanel, .demoControls .demoControlActive::after { animation: none; }
-  .compactCta, .primaryCta, .secondaryCta, .visualCard img, .skipLink, .mobileNavTrigger span { transition: none; }
-  .outcomes .sectionIntro, .flowRail, .platform .sectionIntroRow, .capabilityGrid, .positioningCopy, .architectureCard, .sectors .sectionIntro, .audienceCards, .innovationIntro, .visualGrid, .pricing .sectionIntroRow, .pricingGrid, .faqIntro, .faqList, .finalCta { animation: none; }
+  .compactCta, .primaryCta, .secondaryCta, .visualCard img, .skipLink, .mobileNavTrigger span, .trustCard { transition: none; }
+  .outcomes .sectionIntro, .flowRail, .trustIntro, .trustGrid, .trustFooter, .platform .sectionIntroRow, .capabilityGrid, .positioningCopy, .architectureCard, .sectors .sectionIntro, .audienceCards, .innovationIntro, .visualGrid, .pricing .sectionIntroRow, .pricingGrid, .faqIntro, .faqList, .finalCta { animation: none; }
 }

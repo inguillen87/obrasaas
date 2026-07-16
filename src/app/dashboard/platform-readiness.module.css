@@ -50,7 +50,6 @@
 .steps > * > i { font-size: 0.72rem; }
 .ready > i { color: var(--success); }
 .recommended > i, .action > i { color: var(--primary); }
-.demo > i { color: var(--info); }
 .action { background: rgba(255, 159, 28, 0.055); }
 
 .notice { display: flex; align-items: flex-start; gap: 9px; margin: 0; padding: 11px 20px; border-top: 1px solid var(--border-color); color: var(--text-secondary); font-size: 0.72rem; line-height: 1.5; }

@@ -10,7 +10,19 @@ import {
   parseInvitationInput,
   serializeInvitation,
 } from '@/lib/invitations';
+import {
+  createOfficeInvitationWithinPlan,
+  OfficeSeatCheckError,
+  OfficeSeatLimitError,
+} from '@/lib/plans';
 import { getPrisma } from '@/lib/prisma';
+import {
+  RequestBodyError,
+  readJsonRequest,
+  requestBodyErrorResponse,
+} from '@/lib/request-body';
+
+const MAX_INVITATION_JSON_BYTES = 8 * 1024;
 
 function redirectUrlForInvitation(request) {
   if (process.env.OBRASAAS_INVITATION_REDIRECT_URL) {
@@ -42,42 +54,74 @@ export async function POST(request) {
     }
 
     const input = parseInvitationInput(
-      await request.json().catch(() => ({})),
+      await readJsonRequest(request, { maxBytes: MAX_INVITATION_JSON_BYTES }),
       access.email,
     );
     if (input.error) return Response.json({ error: input.error }, { status: 400 });
 
     const clerk = await clerkClient();
-    const invitation = await clerk.organizations.createOrganizationInvitation({
+    const prisma = getPrisma();
+    const { invitation, capacity } = await createOfficeInvitationWithinPlan({
+      prisma,
+      organizations: clerk.organizations,
       organizationId: access.orgId,
-      emailAddress: input.email,
-      role: input.clerkRole,
-      inviterUserId: access.userId,
-      expiresInDays: 7,
-      redirectUrl: redirectUrlForInvitation(request),
-      publicMetadata: {
-        obrasaasTenantRole: input.tenantRole,
-      },
-    });
-
-    await getPrisma().auditLog.create({
-      data: {
-        organizationId: access.organization.id,
-        actorId: access.databaseUserId,
-        action: 'tenant.invitation.created',
-        entityType: 'ClerkOrganizationInvitation',
-        entityId: invitation.id,
-        metadata: {
-          email: input.email,
-          tenantRole: input.tenantRole,
-          expiresAt: new Date(invitation.expiresAt).toISOString(),
+      plan: access.subscription?.plan || access.organization.subscriptionPlan,
+      invitationParams: {
+        emailAddress: input.email,
+        role: input.clerkRole,
+        inviterUserId: access.userId,
+        expiresInDays: 7,
+        redirectUrl: redirectUrlForInvitation(request),
+        publicMetadata: {
+          obrasaasTenantRole: input.tenantRole,
         },
       },
     });
 
+    try {
+      await prisma.auditLog.create({
+        data: {
+          organizationId: access.organization.id,
+          actorId: access.databaseUserId,
+          action: 'tenant.invitation.created',
+          entityType: 'ClerkOrganizationInvitation',
+          entityId: invitation.id,
+          metadata: {
+            email: input.email,
+            tenantRole: input.tenantRole,
+            expiresAt: new Date(invitation.expiresAt).toISOString(),
+            officeSeats: {
+              plan: capacity.plan,
+              limit: capacity.limit,
+              usedBeforeInvitation: capacity.used,
+            },
+          },
+        },
+      });
+    } catch (auditError) {
+      // Clerk already created the external invitation. Returning an error here
+      // would invite a retry and could create duplicate side effects.
+      console.error('Invitation created but audit persistence failed:', auditError);
+    }
+
     return Response.json({ invitation: serializeInvitation(invitation) }, { status: 201 });
   } catch (error) {
     if (error instanceof AccessError) return accessErrorResponse(error);
+    if (error instanceof RequestBodyError) return requestBodyErrorResponse(error);
+    if (error instanceof OfficeSeatLimitError) {
+      return Response.json({
+        error: `${error.message} Revocá una invitación pendiente, quitá un miembro o cambiá de plan.`,
+        code: error.code,
+        capacity: error.capacity,
+      }, { status: 409 });
+    }
+    if (error instanceof OfficeSeatCheckError) {
+      console.error('Office seat capacity check failed:', error.cause || error);
+      return Response.json({
+        error: 'No se pudo verificar el cupo en Clerk. No se envió ninguna invitación.',
+        code: error.code,
+      }, { status: 503 });
+    }
     return clerkFailure(error, 'No se pudo enviar la invitación.');
   }
 }
@@ -90,7 +134,9 @@ export async function DELETE(request) {
       return Response.json({ error: 'La sesión no tiene una organización Clerk activa.' }, { status: 409 });
     }
 
-    const body = await request.json().catch(() => ({}));
+    const body = await readJsonRequest(request, {
+      maxBytes: MAX_INVITATION_JSON_BYTES,
+    });
     if (
       typeof body.invitationId !== 'string'
       || !/^orginv_[A-Za-z0-9]+$/.test(body.invitationId)
@@ -105,20 +151,25 @@ export async function DELETE(request) {
       requestingUserId: access.userId,
     });
 
-    await getPrisma().auditLog.create({
-      data: {
-        organizationId: access.organization.id,
-        actorId: access.databaseUserId,
-        action: 'tenant.invitation.revoked',
-        entityType: 'ClerkOrganizationInvitation',
-        entityId: invitation.id,
-        metadata: { email: invitation.emailAddress },
-      },
-    });
+    try {
+      await getPrisma().auditLog.create({
+        data: {
+          organizationId: access.organization.id,
+          actorId: access.databaseUserId,
+          action: 'tenant.invitation.revoked',
+          entityType: 'ClerkOrganizationInvitation',
+          entityId: invitation.id,
+          metadata: { email: invitation.emailAddress },
+        },
+      });
+    } catch (auditError) {
+      console.error('Invitation revoked but audit persistence failed:', auditError);
+    }
 
     return Response.json({ invitation: serializeInvitation(invitation) });
   } catch (error) {
     if (error instanceof AccessError) return accessErrorResponse(error);
+    if (error instanceof RequestBodyError) return requestBodyErrorResponse(error);
     return clerkFailure(error, 'No se pudo revocar la invitación.');
   }
 }

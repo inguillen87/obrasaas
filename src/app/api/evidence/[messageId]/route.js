@@ -1,11 +1,18 @@
-import { get } from "@vercel/blob";
 import {
   AccessError,
   accessErrorResponse,
   getPlatformAccess,
   requireTenantPermission,
 } from "@/lib/access";
+import {
+  MEDICAL_EVIDENCE_PERMISSION,
+  isMedicalEvidenceRecord,
+} from "@/lib/medical-privacy";
 import { getPrisma } from "@/lib/prisma";
+import {
+  isPrivateVercelBlobUrl,
+  readProtectedFile,
+} from "@/lib/storage";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -17,17 +24,6 @@ function safeFileName(value, fallback) {
     .trim()
     .slice(0, 140);
   return name || fallback;
-}
-
-function isPrivateVercelBlobUrl(value) {
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:"
-      && (url.hostname === "private.blob.vercel-storage.com"
-        || url.hostname.endsWith(".private.blob.vercel-storage.com"));
-  } catch {
-    return false;
-  }
 }
 
 export async function GET(request, { params }) {
@@ -42,18 +38,14 @@ export async function GET(request, { params }) {
       },
       select: {
         id: true,
+        externalId: true,
         kind: true,
         mediaUrl: true,
         metadata: true,
       },
     });
 
-    if (!message?.mediaUrl || !isPrivateVercelBlobUrl(message.mediaUrl)) {
-      return Response.json({ error: "Evidence not found" }, { status: 404 });
-    }
-
-    const result = await get(message.mediaUrl, { access: "private" });
-    if (!result || result.statusCode !== 200 || !result.stream) {
+    if (!message?.mediaUrl) {
       return Response.json({ error: "Evidence not found" }, { status: 404 });
     }
 
@@ -61,16 +53,39 @@ export async function GET(request, { params }) {
       ? message.metadata
       : {};
     const media = metadata.media && typeof metadata.media === "object" ? metadata.media : {};
+    const medicalEvidence = isMedicalEvidenceRecord({ ...message, metadata, media });
+    if (medicalEvidence) requireTenantPermission(access, MEDICAL_EVIDENCE_PERMISSION);
+
+    const stored = media.storage && typeof media.storage === "object"
+      ? media.storage
+      : {};
+    const storage = stored.provider
+      ? stored
+      : isPrivateVercelBlobUrl(message.mediaUrl)
+        ? { provider: "vercel-blob", assetId: message.mediaUrl }
+        : null;
+    if (!storage || !["vercel-blob", "cloudinary"].includes(storage.provider)) {
+      return Response.json({ error: "Evidence not found" }, { status: 404 });
+    }
+    const result = await readProtectedFile(storage);
+    if (!result?.stream) {
+      return Response.json({ error: "Evidence not found" }, { status: 404 });
+    }
+
     const fileName = safeFileName(media.filename, `evidence-${message.id}`);
     const asDownload = new URL(request.url).searchParams.get("download") === "1";
+    const contentLength = Number.isSafeInteger(result.size)
+      ? { "Content-Length": String(result.size) }
+      : {};
 
     return new Response(result.stream, {
       status: 200,
       headers: {
-        "Cache-Control": "private, max-age=60, must-revalidate",
-        "Content-Disposition": `${asDownload ? "attachment" : "inline"}; filename="${fileName}"`,
-        "Content-Length": String(result.blob.size),
-        "Content-Type": result.blob.contentType || media.mimeType || "application/octet-stream",
+        "Cache-Control": "private, no-store",
+        "Content-Disposition": `${medicalEvidence || asDownload ? "attachment" : "inline"}; filename="${fileName}"`,
+        ...contentLength,
+        "Content-Type": result.contentType || media.mimeType || "application/octet-stream",
+        "Content-Security-Policy": "sandbox",
         "X-Content-Type-Options": "nosniff",
       },
     });

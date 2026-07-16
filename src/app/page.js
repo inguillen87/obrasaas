@@ -9,7 +9,7 @@ import { PLAN_CATALOG, PRICING_BASIS_NOTE, VARIABLE_COST_NOTE } from '@/lib/plan
 const capabilities = [
   ['01', 'Campo conversacional', 'WhatsApp como interfaz de obra', 'La cuadrilla reporta por voz, foto, ubicación o formulario. ObraSaaS estructura el mensaje sin obligar al equipo a aprender otra aplicación.', 'Cloud API · Flows · multimedia'],
   ['02', 'Planificación viva', 'Del reporte al Gantt', 'Cada avance, bloqueo o desvío propone una actualización trazable del cronograma, con responsable, evidencia y contexto de obra.', 'Tareas · dependencias · alertas'],
-  ['03', 'Control de recursos', 'Acopios, compras y proveedores', 'Monitorea mínimos de seguridad, registra consumos y prepara órdenes de compra con aprobación humana y seguimiento de entrega.', 'Stock · OC · trazabilidad'],
+  ['03', 'Control de recursos', 'Acopios, compras y proveedores', 'Monitorea mínimos de seguridad, registra consumos y prepara propuestas de compra pendientes de revisión.', 'Stock · propuesta · trazabilidad'],
   ['04', 'Personas y seguridad', 'Presentismo con evidencia', 'Geocerca, horario y registro del operario quedan unidos en una bitácora auditable, con flujos para certificados e incidencias.', 'GPS · RRHH · cumplimiento'],
   ['05', 'Dirección ejecutiva', 'Reportes que explican el riesgo', 'Convierte la actividad diaria en resúmenes semanales, evidencias y reportes listos para comitentes, dirección o inspección.', 'PDF · KPIs · bitácora'],
   ['06', 'Capa abierta', 'BIM, cámaras e integraciones', 'Una arquitectura preparada para conectar modelos, video, ERPs y sensores sin encerrar la operación en un único proveedor.', 'BIM · API · visión'],
@@ -21,10 +21,19 @@ const audiences = [
   ['Gobiernos y mandantes', 'Trazabilidad para obras que deben rendir cuentas.', 'Estandariza evidencia, responsables y fechas con permisos por rol y una historia verificable de cada decisión.', ['Auditoría', 'Contratistas y permisos', 'Tableros de cartera']],
 ];
 
+const trustControls = [
+  ['01', 'Aislamiento por organización y obra', 'Cada sesión se resuelve contra una organización, una obra activa y un rol. Las lecturas y escrituras se limitan a ese contexto antes de llegar a la base.', 'TENANT · PROYECTO · PERMISOS POR ROL'],
+  ['02', 'Trazabilidad por contexto', 'Cambios del proyecto, consultas de IA y comunicaciones conservan fecha, origen y responsable en sus registros asociados.', 'AUDITORÍA · EVIDENCIA · HISTORIAL'],
+  ['03', 'WhatsApp oficial por proyecto', 'Cada obra puede conectar su propio número mediante Embedded Signup, validar webhooks firmados y administrar Flows sin compartir credenciales con otro tenant.', 'META CLOUD API · EMBEDDED SIGNUP V4 · FLOWS 7.3'],
+  ['04', 'Persistencia durable y transaccional', 'El estado operativo se guarda en Neon Postgres. Las actualizaciones del proyecto y sus registros de auditoría se confirman dentro de la misma transacción.', 'NEON POSTGRES · PRISMA · TRANSACCIONES'],
+  ['05', 'Supervisor IA acotado al contexto', 'El Supervisor analiza únicamente la obra activa y devuelve una respuesta estructurada con evidencia, nivel de confianza y limitaciones. Cada consulta queda registrada.', 'OPENAI RESPONSES · SALIDA ESTRUCTURADA · STORE: FALSE'],
+  ['06', 'La IA propone; la acción sigue pendiente', 'La versión actual presenta sugerencias de reasignación o compra como acciones pendientes. No emite órdenes ni mensajes externos.', 'PROPUESTA PENDIENTE · SIN EJECUCIÓN EXTERNA'],
+];
+
 const faqs = [
   ['¿La cuadrilla tiene que instalar una app?', 'No para los flujos principales. La propuesta es operar desde WhatsApp mediante mensajes, ubicación y WhatsApp Flows. El panel web queda para supervisión, planificación y administración.'],
   ['¿ObraSaaS reemplaza un ERP o una plataforma BIM?', 'No pretende reemplazar todo. Funciona como capa operativa entre campo y gestión: captura la realidad de obra y puede integrarla con ERP, BIM, almacenamiento y analítica mediante APIs.'],
-  ['¿La IA modifica el cronograma o compra sin control?', 'Las acciones sensibles deben trabajar con reglas, permisos y aprobación. La IA clasifica, propone y automatiza tareas repetitivas; ObraSaaS conserva evidencia y responsables para cada cambio.'],
+  ['¿La IA modifica el cronograma o compra sin control?', 'No. La versión actual clasifica información y propone acciones, pero no emite órdenes ni mensajes externos. Los cambios operativos permitidos dependen del rol y quedan registrados.'],
   ['¿Puede funcionar en varias obras y empresas?', 'Sí. Cada empresa opera como un tenant separado, con usuarios, roles, proyectos y datos aislados por organización. Enterprise agrega portfolio multiempresa, permisos avanzados e integraciones dedicadas.'],
   ['¿Qué se necesita para conectar WhatsApp oficial?', 'Una cuenta comercial de Meta, un WABA, un número habilitado, plantillas aprobadas, webhook HTTPS y credenciales de Cloud API. Para un SaaS multicliente también corresponde implementar Embedded Signup.'],
 ];
@@ -49,7 +58,7 @@ export default function Home() {
       <header className={styles.header}>
         <Link href="/" className={styles.brand} aria-label="ObraSaaS, inicio"><Logo /><span className={styles.brandTag}>Field OS</span></Link>
         <nav className={styles.nav} aria-label="Navegación principal">
-          <a href="#producto">Producto</a><a href="#plataforma">Plataforma</a><a href="#sectores">Sectores</a><a href="#precios">Precios</a><a href="#preguntas">Preguntas</a>
+          <a href="#producto">Producto</a><a href="#confianza">Confianza</a><a href="#plataforma">Plataforma</a><a href="#sectores">Sectores</a><a href="#precios">Precios</a><a href="#preguntas">Preguntas</a>
         </nav>
         <div className={styles.headerActions}><Link href="/sign-in" className={styles.quietLink}>Iniciar sesión</Link><a href="#contacto" className={styles.compactCta}>Solicitar demo <ArrowIcon /></a><MobileNavigation /></div>
       </header>
@@ -57,10 +66,10 @@ export default function Home() {
       <section className={styles.hero} id="contenido">
         <div className={styles.heroCopy}>
           <div className={styles.eyebrow}><span className={styles.liveDot} />Operación de obra conectada, desde el primer mensaje</div>
-          <h1>La obra avanza por WhatsApp.<span> La gestión se actualiza sola.</span></h1>
-          <p>Convierte audios, fotos, ubicación y formularios de la cuadrilla en tareas, evidencia, alertas y decisiones. Un sistema operativo de campo diseñado para la realidad de LATAM.</p>
+          <h1>La obra reporta por WhatsApp.<span> La gestión gana contexto para actuar.</span></h1>
+          <p>Convierte audios, fotos, ubicación y formularios de la cuadrilla en información estructurada, evidencia, alertas y propuestas de acción. Un sistema operativo de campo diseñado para la realidad de LATAM.</p>
           <div className={styles.heroActions}><Link href="/sign-up" className={styles.primaryCta}>Probar 14 días <ArrowIcon /></Link><a href="#producto" className={styles.secondaryCta}>Ver la demo operativa</a></div>
-          <div className={styles.heroProof} aria-label="Capacidades principales"><span><CheckIcon /> WhatsApp Cloud API + Flows 7.3</span><span><CheckIcon /> Cronograma y evidencia conectados</span><span><CheckIcon /> Diseñado para español y LATAM</span></div>
+          <div className={styles.heroProof} aria-label="Condiciones principales"><span><CheckIcon /> Escenario interactivo con datos simulados</span><span><CheckIcon /> Acciones sensibles sin ejecución automática</span><span><CheckIcon /> Diseñado para español y LATAM</span></div>
         </div>
         <div className={styles.heroProduct}><ProductExperience /></div>
       </section>
@@ -71,8 +80,42 @@ export default function Home() {
         <div className={styles.sectionIntro}><span className={styles.sectionKicker}>Una sola línea operativa</span><h2>Del mensaje informal a una decisión que queda registrada.</h2><p>ObraSaaS conecta lo que ocurre en campo con lo que dirección necesita controlar. Sin copiar mensajes, perseguir planillas ni reconstruir la historia al final de la semana.</p></div>
         <div className={styles.flowRail}>
           {[
-            ['01', 'Captura', 'Voz, foto, GPS o Flow'], ['02', 'Comprensión', 'Proyecto, persona e intención'], ['03', 'Acción', 'Tarea, alerta o aprobación'], ['04', 'Evidencia', 'Bitácora, KPI y reporte'],
+            ['01', 'Captura', 'Voz, foto, GPS o Flow'], ['02', 'Comprensión', 'Proyecto, persona e intención'], ['03', 'Propuesta', 'Tarea, alerta o acción pendiente'], ['04', 'Evidencia', 'Bitácora, KPI y reporte'],
           ].map(([step, title, copy]) => <article key={step} className={styles.flowStep}><span>{step}</span><div><h3>{title}</h3><p>{copy}</p></div></article>)}
+        </div>
+      </section>
+
+      <section className={styles.trust} id="confianza">
+        <div className={styles.trustIntro}>
+          <div className={styles.sectionIntro}>
+            <span className={styles.sectionKicker}>Confianza verificable</span>
+            <h2>La automatización sirve cuando cada dato, permiso y decisión se puede revisar.</h2>
+            <p>ObraSaaS no presenta a la IA como una caja negra. La plataforma separa organizaciones y obras, limita acciones por rol y conserva una bitácora de lo que ocurrió. Las integraciones externas se activan con los activos y credenciales de cada tenant.</p>
+          </div>
+          <div className={styles.trustPrinciple}>
+            <span aria-hidden="true">06</span>
+            <div><small>Principio operativo</small><strong>La IA propone; no ejecuta por su cuenta.</strong><p>Las acciones sensibles permanecen pendientes y no generan órdenes ni mensajes externos.</p></div>
+          </div>
+        </div>
+        <div className={styles.trustGrid}>
+          {trustControls.map(([number, title, description, signal]) => (
+            <article className={styles.trustCard} key={number}>
+              <div className={styles.trustCardTopline}><span>{number}</span><i aria-hidden="true" /></div>
+              <h3>{title}</h3>
+              <p>{description}</p>
+              <small>{signal}</small>
+            </article>
+          ))}
+        </div>
+        <div className={styles.trustFooter}>
+          <div>
+            <span className={styles.trustFooterLabel}>Condiciones de activación</span>
+            <p>La activación de WhatsApp requiere los activos y aprobaciones de Meta de cada organización. El Supervisor IA requiere OpenAI configurado en el entorno correspondiente.</p>
+          </div>
+          <div className={styles.trustFooterActions}>
+            <p>Lo verificamos sobre una obra de prueba: evento → permiso → actualización → bitácora.</p>
+            <div><a href="#contacto" className={styles.primaryCta}>Solicitar recorrido técnico <ArrowIcon /></a><Link href="/sign-up" className={styles.secondaryCta}>Crear organización de prueba</Link></div>
+          </div>
         </div>
       </section>
 
@@ -84,7 +127,7 @@ export default function Home() {
       </section>
 
       <section className={styles.positioning}>
-        <div className={styles.positioningCopy}><span className={styles.sectionKicker}>Nuestra ventaja</span><h2>No es otra app que la cuadrilla tiene que recordar abrir.</h2><p>Las plataformas globales demostraron el valor de una fuente única de verdad. ObraSaaS acerca esa disciplina al canal que el campo latinoamericano ya usa todos los días.</p><ul><li><CheckIcon /><span><strong>Adopción primero.</strong> WhatsApp en campo, panel especializado en oficina.</span></li><li><CheckIcon /><span><strong>IA con control.</strong> Propone y automatiza dentro de reglas, permisos y aprobaciones.</span></li><li><CheckIcon /><span><strong>Arquitectura abierta.</strong> Preparada para ERP, BIM, almacenamiento, cámaras y sensores.</span></li></ul></div>
+        <div className={styles.positioningCopy}><span className={styles.sectionKicker}>Nuestra ventaja</span><h2>No es otra app que la cuadrilla tiene que recordar abrir.</h2><p>Las plataformas globales demostraron el valor de una fuente única de verdad. ObraSaaS acerca esa disciplina al canal que el campo latinoamericano ya usa todos los días.</p><ul><li><CheckIcon /><span><strong>Adopción primero.</strong> WhatsApp en campo, panel especializado en oficina.</span></li><li><CheckIcon /><span><strong>IA con control.</strong> Estructura información y propone acciones dentro de reglas y permisos.</span></li><li><CheckIcon /><span><strong>Arquitectura abierta.</strong> Preparada para ERP, BIM, almacenamiento, cámaras y sensores.</span></li></ul></div>
         <div className={styles.architectureCard}>
           <div className={styles.architectureHeader}><span>Arquitectura operativa</span><small>Evento → contexto → acción</small></div>
           <div className={styles.architectureStack}><div><span className={styles.nodeIcon}>WA</span><p><strong>Canales de campo</strong><small>WhatsApp · webviews · sensores</small></p></div><i aria-hidden="true" /><div><span className={styles.nodeIcon}>AI</span><p><strong>Motor ObraSaaS</strong><small>Identidad · intención · políticas</small></p></div><i aria-hidden="true" /><div><span className={styles.nodeIcon}>OS</span><p><strong>Registro operativo</strong><small>Gantt · RRHH · stock · evidencia</small></p></div></div>
@@ -112,7 +155,7 @@ export default function Home() {
             <article key={plan.key} className={`${styles.pricingCard} ${plan.key === 'PRO' ? styles.pricingFeatured : ''}`}>
               <div className={styles.pricingTopline}>
                 <span>{plan.name}</span>
-                {plan.key === 'PRO' && <small>Más elegido</small>}
+                {plan.key === 'PRO' && <small>Plan recomendado</small>}
               </div>
               <p>{plan.description}</p>
               <div className={styles.price}>
@@ -139,7 +182,7 @@ export default function Home() {
 
       <section className={styles.finalCta} id="contacto"><div className={styles.finalCtaCopy}><span className={styles.sectionKicker}>Implementación guiada</span><h2>Elegimos una obra, conectamos un flujo y medimos el resultado.</h2><p>Un piloto serio empieza con un problema operativo y una métrica, no con una lista infinita de funciones.</p><ul><li><CheckIcon /> Diagnóstico de 30 minutos</li><li><CheckIcon /> Una obra y un flujo prioritario</li><li><CheckIcon /> Alcance, responsables y métrica de éxito</li></ul></div><DemoForm /></section>
 
-      <footer className={styles.footer}><div><Logo /><p>Tecnología de obra diseñada en Argentina para operar globalmente.</p></div><div className={styles.footerLinks}><a href="#producto">Demo</a><a href="#plataforma">Plataforma</a><Link href="/sign-in">Ingresar</Link><Link href="/privacy">Privacidad</Link><Link href="/terms">Términos</Link><a href="#contacto">Contacto</a></div><p>© 2026 ObraSaaS · Operado desde Argentina</p></footer>
+      <footer className={styles.footer}><div><Logo /><p>Tecnología de obra diseñada en Argentina para operar globalmente.</p></div><div className={styles.footerLinks}><a href="#producto">Demo</a><a href="#confianza">Confianza</a><a href="#plataforma">Plataforma</a><Link href="/sign-in">Ingresar</Link><Link href="/privacy">Privacidad</Link><Link href="/terms">Términos</Link><a href="#contacto">Contacto</a></div><p>© 2026 ObraSaaS · Operado desde Argentina</p></footer>
     </main>
   );
 }

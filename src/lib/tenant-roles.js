@@ -32,6 +32,7 @@ const ROLE_PERMISSIONS = {
     'org:projects:read',
     'org:projects:manage',
     'org:field:manage',
+    'org:medical:evidence:read',
     'org:reports:read',
     'org:costs:read',
     'org:costs:manage',

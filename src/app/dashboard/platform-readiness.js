@@ -73,17 +73,17 @@ export default function PlatformReadiness({ platformAccess, setup, syncState, la
             <i className={setup.whatsappConnected ? 'fa-solid fa-check' : 'fa-solid fa-lock'} aria-hidden="true" />
           </article>
         )}
-        <article className={setup.isDemoData ? styles.demo : styles.ready}>
+        <article className={setup.isEmptyState ? styles.recommended : styles.ready}>
           <span>04</span>
-          <div><strong>Datos de obra</strong><small>{setup.isDemoData ? 'Modo demostración' : 'Operación persistida'}</small></div>
-          <i className={setup.isDemoData ? 'fa-solid fa-flask' : 'fa-solid fa-check'} aria-hidden="true" />
+          <div><strong>Datos de obra</strong><small>{setup.isEmptyState ? 'Sin actividad registrada' : 'Operación persistida'}</small></div>
+          <i className={setup.isEmptyState ? 'fa-solid fa-inbox' : 'fa-solid fa-check'} aria-hidden="true" />
         </article>
       </div>
 
-      {setup.isDemoData && (
+      {setup.isEmptyState && (
         <p className={styles.notice}>
           <i className="fa-solid fa-circle-info" aria-hidden="true" />
-          Estás viendo datos demostrativos. Conectá WhatsApp o registrá el primer avance para iniciar la operación real de esta obra.
+          Este tenant todavía no tiene actividad operativa. Conectá WhatsApp o registrá el primer avance para iniciar la trazabilidad de esta obra.
         </p>
       )}
     </section>

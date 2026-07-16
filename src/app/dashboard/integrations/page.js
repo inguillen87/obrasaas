@@ -1,8 +1,14 @@
 import Link from 'next/link';
 
 import IntegrationsClient from './integrations-client';
+import AiProcessingControls from './ai-processing-controls';
 import styles from './integrations.module.css';
-import { getPlatformAccess, requireTenantPermission } from '@/lib/access';
+import {
+  getPlatformAccess,
+  hasTenantPermission,
+  requireTenantPermission,
+} from '@/lib/access';
+import { publicTenantAiSettings } from '@/lib/ai/tenant-settings';
 import { getPrisma } from '@/lib/prisma';
 import { getWhatsAppFlowCatalog } from '@/lib/whatsapp/flows';
 
@@ -61,6 +67,10 @@ export default async function IntegrationsPage() {
         platformReady={metaPlatformReady}
         initialConnection={serializeConnection(connection)}
         initialFlowCatalog={getWhatsAppFlowCatalog()}
+      />
+      <AiProcessingControls
+        canManage={hasTenantPermission(access, 'tenant:members:manage')}
+        initialSettings={publicTenantAiSettings(access.organization.metadata)}
       />
     </main>
   );

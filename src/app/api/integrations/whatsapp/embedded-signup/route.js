@@ -10,12 +10,19 @@ import {
 } from '@/lib/credentials';
 import { getPrisma } from '@/lib/prisma';
 import {
+  RequestBodyError,
+  readJsonRequest,
+  requestBodyErrorResponse,
+} from '@/lib/request-body';
+import {
   completeEmbeddedSignup,
   MetaIntegrationError,
 } from '@/lib/whatsapp/embedded-signup';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
+
+const MAX_EMBEDDED_SIGNUP_JSON_BYTES = 16 * 1024;
 
 function safeConnection(connection) {
   if (!connection) return null;
@@ -61,7 +68,9 @@ export async function POST(request) {
   try {
     access = await getPlatformAccess();
     requireTenantPermission(access, 'org:integrations:manage');
-    const body = await request.json().catch(() => ({}));
+    const body = await readJsonRequest(request, {
+      maxBytes: MAX_EMBEDDED_SIGNUP_JSON_BYTES,
+    });
     const whatsappBusinessId = String(body.whatsappBusinessId || '');
     const phoneNumberId = String(body.phoneNumberId || '');
     const registrationPin = String(body.registrationPin || '');
@@ -144,6 +153,7 @@ export async function POST(request) {
     return Response.json({ connection: safeConnection(connection) });
   } catch (error) {
     if (error instanceof AccessError) return accessErrorResponse(error);
+    if (error instanceof RequestBodyError) return requestBodyErrorResponse(error);
     if (error instanceof MetaIntegrationError) {
       if (access?.project?.id) {
         await getPrisma().whatsAppConnection.updateMany({

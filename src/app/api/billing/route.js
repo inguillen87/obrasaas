@@ -1,7 +1,14 @@
 import { AccessError, accessErrorResponse, getPlatformAccess, requireTenantPermission } from '@/lib/access';
 import { getPrisma } from '@/lib/prisma';
 import { PLAN_CATALOG } from '@/lib/plans';
+import {
+  RequestBodyError,
+  readJsonRequest,
+  requestBodyErrorResponse,
+} from '@/lib/request-body';
 import { getStripe } from '@/lib/stripe';
+
+const MAX_BILLING_JSON_BYTES = 8 * 1024;
 
 export async function GET() {
   try {
@@ -27,7 +34,7 @@ export async function POST(request) {
       return Response.json({ error: 'Seleccioná una organización tenant para administrar su plan.' }, { status: 400 });
     }
 
-    const body = await request.json().catch(() => ({}));
+    const body = await readJsonRequest(request, { maxBytes: MAX_BILLING_JSON_BYTES });
     const stripe = getStripe();
     const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, '');
     let customerId = access.organization.stripeCustomerId;
@@ -103,6 +110,7 @@ export async function POST(request) {
     return Response.json({ url: checkout.url });
   } catch (error) {
     if (error instanceof AccessError) return accessErrorResponse(error);
+    if (error instanceof RequestBodyError) return requestBodyErrorResponse(error);
     if (error instanceof Error && error.message.includes('STRIPE_SECRET_KEY')) {
       return Response.json(
         { error: 'Stripe todavía no está conectado para esta instalación.', code: 'BILLING_NOT_CONFIGURED' },

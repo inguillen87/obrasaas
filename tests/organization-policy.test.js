@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   clerkOrganizationIsInternal,
+  databaseOrganizationIsInternal,
   mergeClerkOrganizationMetadata,
 } from '../src/lib/organization-policy.js';
 
@@ -18,6 +19,18 @@ test('only explicitly marked Clerk organizations are internal', () => {
     ),
     true,
   );
+});
+
+test('database organizations preserve the internal platform marker', () => {
+  assert.equal(databaseOrganizationIsInternal({ clerkOrganizationId: 'system:obrasaas' }), true);
+  assert.equal(databaseOrganizationIsInternal({
+    clerkOrganizationId: 'org_internal',
+    metadata: { internal: true },
+  }), true);
+  assert.equal(databaseOrganizationIsInternal({
+    clerkOrganizationId: 'org_tenant',
+    metadata: { internal: false },
+  }), false);
 });
 
 test('Clerk metadata sync preserves the internal platform marker', () => {

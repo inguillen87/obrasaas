@@ -1,8 +1,43 @@
 import fs from "node:fs";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
+import {
+  WEBHOOK_LEASE_MS,
+  createMessageWebhookOutcome,
+  isWebhookEventEligible,
+  readAppliedMessageWebhookOutcome,
+  serializeWebhookPayload,
+  shouldDeadLetterWebhookEvent,
+  webhookFailureTransition,
+} from "@/lib/webhook-queue";
+import {
+  FIELD_WORKER_RESOLUTION,
+  resolveActiveFieldWorkerById,
+  resolveActiveFieldWorkerByPhone,
+} from "@/lib/field-workers";
+import { assertProjectStateVersion } from "@/lib/project-state";
+import { sanitizeMessagesForMedicalPrivacy } from "@/lib/medical-privacy";
+import { resolveWhatsAppConnectionScopes } from "@/lib/whatsapp/webhook-scope";
 
 const LOCAL_DB_PATH = path.join(process.cwd(), "data", "db.json");
 const LOCAL_CONVERSATION_ID = "dashboard-demo";
+
+export const emptyAppState = Object.freeze({
+  operariosCount: 0,
+  avancePercentage: 0,
+  alertsCount: 0,
+  diasEstimados: "",
+  tasks: Object.freeze({}),
+  incidents: Object.freeze([]),
+  attendance: Object.freeze({}),
+  stockpiles: Object.freeze({}),
+  hrAttendance: Object.freeze({}),
+  hrBonuses: Object.freeze([]),
+});
+
+export function createEmptyAppState() {
+  return clone(emptyAppState);
+}
 
 const initialIncidents = [
   {
@@ -49,7 +84,7 @@ const initialIncidents = [
   },
 ];
 
-export const defaultAppState = {
+const localDevelopmentDemoAppState = {
   operariosCount: 1,
   avancePercentage: 42,
   alertsCount: 2,
@@ -90,6 +125,10 @@ export const defaultMessages = [
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
+}
+
+function redactedWebhookPayload() {
+  return { version: 1, redacted: true };
 }
 
 const MESSAGE_KINDS = new Set([
@@ -158,7 +197,7 @@ function initLocalDb() {
       LOCAL_DB_PATH,
       JSON.stringify(
         {
-          appState: clone(defaultAppState),
+          appState: clone(localDevelopmentDemoAppState),
           messages: clone(defaultMessages),
           webhookEvents: [],
         },
@@ -175,7 +214,7 @@ function readLocalDb() {
     return JSON.parse(fs.readFileSync(LOCAL_DB_PATH, "utf8"));
   } catch {
     return {
-      appState: clone(defaultAppState),
+      appState: clone(localDevelopmentDemoAppState),
       messages: clone(defaultMessages),
       webhookEvents: [],
     };
@@ -189,6 +228,13 @@ function writeLocalDb(data) {
   fs.renameSync(temporaryPath, LOCAL_DB_PATH);
 }
 
+async function lockProjectTransaction(transaction, projectId) {
+  await transaction.$executeRawUnsafe(
+    "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+    projectId,
+  );
+}
+
 async function durableContext(scope) {
   const { getPrisma } = await import("@/lib/prisma");
   const prisma = getPrisma();
@@ -199,19 +245,65 @@ async function durableContext(scope) {
         id: scope.project.id,
         organizationId: scope.organization.id,
       },
-      include: { organization: true },
+      include: { organization: true, whatsapp: true },
     });
     if (!project) throw new Error("The selected project does not belong to the active organization.");
-    return { prisma, organization: project.organization, project };
+    const expectedOrganizationId = typeof scope.organizationId === "string"
+      ? scope.organizationId.trim()
+      : "";
+    if (expectedOrganizationId && project.organizationId !== expectedOrganizationId) {
+      throw new Error("The selected project does not belong to the trusted organization scope.");
+    }
+    const expectedPhoneNumberId = typeof scope.phoneNumberId === "string"
+      ? scope.phoneNumberId.trim()
+      : "";
+    if (
+      expectedPhoneNumberId
+      && (
+        !project.whatsapp?.enabled
+        || project.whatsapp.phoneNumberId !== expectedPhoneNumberId
+      )
+    ) {
+      throw new Error("The selected project does not belong to the trusted WhatsApp connection scope.");
+    }
+    return {
+      prisma,
+      organization: project.organization,
+      project,
+      whatsappConnection: project.whatsapp || undefined,
+    };
   }
 
   if (scope?.projectId) {
     const project = await prisma.project.findUnique({
       where: { id: String(scope.projectId) },
-      include: { organization: true },
+      include: { organization: true, whatsapp: true },
     });
     if (!project) throw new Error("Unknown project scope.");
-    return { prisma, organization: project.organization, project };
+    const expectedOrganizationId = typeof scope.organizationId === "string"
+      ? scope.organizationId.trim()
+      : "";
+    if (expectedOrganizationId && project.organizationId !== expectedOrganizationId) {
+      throw new Error("The selected project does not belong to the trusted organization scope.");
+    }
+    const expectedPhoneNumberId = typeof scope.phoneNumberId === "string"
+      ? scope.phoneNumberId.trim()
+      : "";
+    if (
+      expectedPhoneNumberId
+      && (
+        !project.whatsapp?.enabled
+        || project.whatsapp.phoneNumberId !== expectedPhoneNumberId
+      )
+    ) {
+      throw new Error("The selected project does not belong to the trusted WhatsApp connection scope.");
+    }
+    return {
+      prisma,
+      organization: project.organization,
+      project,
+      whatsappConnection: project.whatsapp || undefined,
+    };
   }
 
   if (scope?.phoneNumberId) {
@@ -220,6 +312,12 @@ async function durableContext(scope) {
       include: { project: { include: { organization: true } } },
     });
     if (!connection?.enabled) throw new Error("Unknown or disabled WhatsApp connection.");
+    const expectedOrganizationId = typeof scope.organizationId === "string"
+      ? scope.organizationId.trim()
+      : "";
+    if (expectedOrganizationId && connection.project.organizationId !== expectedOrganizationId) {
+      throw new Error("The WhatsApp connection does not belong to the trusted organization scope.");
+    }
     return {
       prisma,
       organization: connection.project.organization,
@@ -250,12 +348,36 @@ async function durableConversation(context) {
   });
 }
 
-export async function getAppState(scope) {
-  if (!hasDurableDatabase()) return readLocalDb().appState || clone(defaultAppState);
+function localProjectStateSnapshot(db) {
+  const numericVersion = Number(db.appStateVersion);
+  const version = Number.isSafeInteger(numericVersion) && numericVersion >= 0
+    ? numericVersion
+    : 0;
+  const parsedUpdatedAt = db.appStateUpdatedAt ? new Date(db.appStateUpdatedAt) : null;
+  return {
+    state: db.appState || clone(localDevelopmentDemoAppState),
+    version,
+    updatedAt: parsedUpdatedAt && !Number.isNaN(parsedUpdatedAt.getTime()) ? parsedUpdatedAt : null,
+    exists: Object.hasOwn(db, "appState"),
+  };
+}
+
+export async function getAppStateSnapshot(scope) {
+  if (!hasDurableDatabase()) return localProjectStateSnapshot(readLocalDb());
 
   const { prisma, project } = await durableContext(scope);
-  const snapshot = await prisma.projectSnapshot.findUnique({ where: { projectId: project.id } });
-  return snapshot?.state || clone(defaultAppState);
+  const snapshot = await prisma.projectSnapshot.findUnique({
+    where: { projectId: project.id },
+    select: { state: true, version: true, updatedAt: true },
+  });
+  return snapshot
+    ? { ...snapshot, exists: true }
+    : { state: createEmptyAppState(), version: 0, updatedAt: null, exists: false };
+}
+
+export async function getAppState(scope) {
+  const snapshot = await getAppStateSnapshot(scope);
+  return snapshot.state;
 }
 
 function auditActivityData(activity, context, scope) {
@@ -279,39 +401,103 @@ function auditActivityData(activity, context, scope) {
   };
 }
 
-export async function saveAppState(state, scope, { activities = [] } = {}) {
+export async function persistProjectStateTransaction(transaction, {
+  context,
+  scope,
+  state,
+  expectedVersion = null,
+  activities = [],
+  deriveActivities = null,
+}) {
+  await lockProjectTransaction(transaction, context.project.id);
+
+  const current = await transaction.projectSnapshot.findUnique({
+    where: { projectId: context.project.id },
+    select: { state: true, version: true, updatedAt: true },
+  });
+  const currentVersion = assertProjectStateVersion(expectedVersion, current?.version ?? 0);
+  const currentState = current?.state || createEmptyAppState();
+  const derivedActivities = typeof deriveActivities === "function"
+    ? deriveActivities(currentState, state)
+    : [];
+  const auditActivities = [
+    ...(Array.isArray(activities) ? activities : []),
+    ...(Array.isArray(derivedActivities) ? derivedActivities : []),
+  ];
+  const nextVersion = currentVersion + 1;
+  const stored = await transaction.projectSnapshot.upsert({
+    where: { projectId: context.project.id },
+    update: { state, version: nextVersion },
+    create: { projectId: context.project.id, state, version: nextVersion },
+    select: { state: true, version: true, updatedAt: true },
+  });
+  if (auditActivities.length > 0) {
+    await transaction.auditLog.createMany({
+      data: auditActivities.map((activity) => auditActivityData(activity, context, scope)),
+    });
+  }
+  return { ...stored, exists: true };
+}
+
+export async function saveAppStateSnapshot(state, scope, {
+  activities = [],
+  expectedVersion = null,
+  deriveActivities = null,
+} = {}) {
   if (!hasDurableDatabase()) {
     const db = readLocalDb();
-    db.appState = state;
+    const current = localProjectStateSnapshot(db);
+    const currentVersion = assertProjectStateVersion(expectedVersion, current.version);
+    const derivedActivities = typeof deriveActivities === "function"
+      ? deriveActivities(current.state, state)
+      : [];
+    const auditActivities = [
+      ...(Array.isArray(activities) ? activities : []),
+      ...(Array.isArray(derivedActivities) ? derivedActivities : []),
+    ];
+    const updatedAt = new Date();
+    db.appState = clone(state);
+    db.appStateVersion = currentVersion + 1;
+    db.appStateUpdatedAt = updatedAt.toISOString();
     db.activities ||= [];
-    db.activities.push(...activities.map((activity, index) => ({
+    db.activities.push(...auditActivities.map((activity, index) => ({
       id: `local-activity-${Date.now()}-${index}`,
       ...clone(activity),
       createdAt: new Date().toISOString(),
     })));
     db.activities = db.activities.slice(-500);
     writeLocalDb(db);
-    return state;
+    return {
+      state: clone(state),
+      version: db.appStateVersion,
+      updatedAt,
+      exists: true,
+    };
   }
 
   const context = await durableContext(scope);
-  await context.prisma.$transaction(async (transaction) => {
-    await transaction.projectSnapshot.upsert({
-      where: { projectId: context.project.id },
-      update: { state, version: { increment: 1 } },
-      create: { projectId: context.project.id, state },
-    });
-    if (activities.length > 0) {
-      await transaction.auditLog.createMany({
-        data: activities.map((activity) => auditActivityData(activity, context, scope)),
-      });
-    }
-  });
-  return state;
+  return context.prisma.$transaction((transaction) => persistProjectStateTransaction(transaction, {
+    context,
+    scope,
+    state,
+    expectedVersion,
+    activities,
+    deriveActivities,
+  }));
 }
 
-export async function getMessages(scope) {
-  if (!hasDurableDatabase()) return readLocalDb().messages || clone(defaultMessages);
+export async function saveAppState(state, scope, options = {}) {
+  const snapshot = await saveAppStateSnapshot(state, scope, options);
+  return snapshot.state;
+}
+
+export async function getMessages(scope, { includeMedicalEvidence = false } = {}) {
+  if (!hasDurableDatabase()) {
+    return sanitizeMessagesForMedicalPrivacy(
+      readLocalDb().messages || clone(defaultMessages),
+      { includeMedicalEvidence },
+    );
+  }
 
   const context = await durableContext(scope);
   const conversation = await durableConversation(context);
@@ -340,7 +526,7 @@ export async function getMessages(scope) {
 
   messages.reverse();
 
-  return messages.map((message) => {
+  const serialized = messages.map((message) => {
     const metadata = message.metadata && typeof message.metadata === "object" && !Array.isArray(message.metadata)
       ? message.metadata
       : {};
@@ -359,6 +545,7 @@ export async function getMessages(scope) {
       time: metadata.time || message.sentAt.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" }),
     };
   });
+  return sanitizeMessagesForMedicalPrivacy(serialized, { includeMedicalEvidence });
 }
 
 export async function saveMessages(messages, scope) {
@@ -386,6 +573,38 @@ export async function saveMessages(messages, scope) {
   return messages;
 }
 
+async function appendDurableMessages(context, messages) {
+  const conversation = await durableConversation(context);
+  for (const [index, message] of messages.entries()) {
+    const data = durableMessageData(
+      message,
+      conversation.id,
+      new Date(Date.now() + index),
+    );
+    if (!data.externalId) {
+      await context.prisma.message.create({ data });
+      continue;
+    }
+
+    const existing = await context.prisma.message.findUnique({
+      where: { externalId: data.externalId },
+      select: { id: true, conversationId: true },
+    });
+    if (existing && existing.conversationId !== conversation.id) {
+      throw new Error("Message external ID collision across tenant conversations.");
+    }
+    if (existing) {
+      const update = { ...data };
+      delete update.conversationId;
+      delete update.externalId;
+      await context.prisma.message.update({ where: { id: existing.id }, data: update });
+    } else {
+      await context.prisma.message.create({ data });
+    }
+  }
+  return messages;
+}
+
 export async function appendMessages(messages, scope) {
   if (!Array.isArray(messages) || messages.length === 0) return [];
   if (!hasDurableDatabase()) {
@@ -404,57 +623,681 @@ export async function appendMessages(messages, scope) {
   }
 
   const context = await durableContext(scope);
-  const conversation = await durableConversation(context);
   await context.prisma.$transaction(async (transaction) => {
-    for (const [index, message] of messages.entries()) {
-      const data = durableMessageData(
-        message,
-        conversation.id,
-        new Date(Date.now() + index),
-      );
-      if (!data.externalId) {
-        await transaction.message.create({ data });
-        continue;
-      }
-
-      const existing = await transaction.message.findUnique({
-        where: { externalId: data.externalId },
-        select: { id: true, conversationId: true },
-      });
-      if (existing && existing.conversationId !== conversation.id) {
-        throw new Error("Message external ID collision across tenant conversations.");
-      }
-      if (existing) {
-        const update = { ...data };
-        delete update.conversationId;
-        delete update.externalId;
-        await transaction.message.update({ where: { id: existing.id }, data: update });
-      } else {
-        await transaction.message.create({ data });
-      }
-    }
+    await appendDurableMessages({ ...context, prisma: transaction }, messages);
   });
   return messages;
 }
 
-export async function claimWebhookEvent({ provider, externalId, eventType, payload, scope }) {
+export class DirectObraMessageError extends Error {
+  constructor(message, code, status = 500) {
+    super(message);
+    this.name = "DirectObraMessageError";
+    this.code = code;
+    this.status = status;
+  }
+}
+
+function directObraMessageInput({ event, scope, workerId, apply, beforeApply, operation }) {
+  const normalized = {
+    projectId: String(scope?.project?.id || scope?.projectId || "").trim(),
+    organizationId: String(scope?.organization?.id || scope?.organizationId || "").trim() || null,
+    workerId: String(workerId || "").trim(),
+  };
+  if (
+    !normalized.projectId
+    || !normalized.workerId
+    || !event
+    || typeof event !== "object"
+    || Array.isArray(event)
+    || typeof apply !== "function"
+    || (beforeApply != null && typeof beforeApply !== "function")
+  ) {
+    throw new DirectObraMessageError(
+      "A trusted project, active worker, event and application callback are required.",
+      "DIRECT_MESSAGE_INPUT_INVALID",
+      400,
+    );
+  }
+
+  if (operation == null) return { ...normalized, operation: null };
+  const operationId = String(operation.id || "").trim();
+  const operationAction = String(operation.action || "").trim();
+  if (
+    !operationId
+    || operationId.length > 190
+    || !operationAction
+    || operationAction.length > 160
+  ) {
+    throw new DirectObraMessageError(
+      "The direct-message idempotency operation is invalid.",
+      "DIRECT_OPERATION_INVALID",
+      400,
+    );
+  }
+  return {
+    ...normalized,
+    operation: { id: operationId, action: operationAction },
+  };
+}
+
+function readDirectOperationOutcome(record, { operation, project, worker }) {
+  if (!record) return null;
+  const metadata = record.metadata && typeof record.metadata === "object" && !Array.isArray(record.metadata)
+    ? record.metadata
+    : {};
+  const outcome = metadata.outcome && typeof metadata.outcome === "object" && !Array.isArray(metadata.outcome)
+    ? metadata.outcome
+    : null;
+  if (
+    record.organizationId !== project.organizationId
+    || record.action !== operation.action
+    || record.entityType !== "Worker"
+    || record.entityId !== worker.id
+    || metadata.projectId !== project.id
+    || typeof outcome?.reply !== "string"
+  ) {
+    throw new DirectObraMessageError(
+      "A prior direct-message operation has an invalid or conflicting outcome.",
+      "DIRECT_OPERATION_OUTCOME_INVALID",
+      409,
+    );
+  }
+  return {
+    reply: outcome.reply,
+    flowPrompt: typeof outcome.flowPrompt === "string" ? outcome.flowPrompt : null,
+    intent: typeof outcome.intent === "string" ? outcome.intent : null,
+    stateChanged: false,
+    newMessages: [],
+    worker,
+  };
+}
+
+function storedDirectOperationOutcome(result) {
+  return {
+    reply: String(result.reply || "").slice(0, 4_000),
+    flowPrompt: typeof result.flowPrompt === "string" ? result.flowPrompt.slice(0, 160) : null,
+    intent: typeof result.intent === "string" ? result.intent.slice(0, 160) : null,
+  };
+}
+
+export async function applyDirectObraMessageAtomically({
+  event,
+  scope,
+  workerId,
+  apply,
+  beforeApply = null,
+  operation = null,
+}) {
+  const normalized = directObraMessageInput({
+    event,
+    scope,
+    workerId,
+    apply,
+    beforeApply,
+    operation,
+  });
+  if (!hasDurableDatabase()) {
+    throw new DirectObraMessageError(
+      "Direct message processing requires durable storage.",
+      "DIRECT_DURABLE_STORAGE_REQUIRED",
+      503,
+    );
+  }
+
+  const { getPrisma } = await import("@/lib/prisma");
+  const prisma = getPrisma();
+  return prisma.$transaction(async (transaction) => {
+    await lockProjectTransaction(transaction, normalized.projectId);
+
+    const project = await transaction.project.findFirst({
+      where: {
+        id: normalized.projectId,
+        status: "ACTIVE",
+        ...(normalized.organizationId ? { organizationId: normalized.organizationId } : {}),
+      },
+      select: {
+        id: true,
+        organizationId: true,
+        latitude: true,
+        longitude: true,
+        geofenceMeters: true,
+        snapshot: { select: { state: true, version: true } },
+      },
+    });
+    if (!project) {
+      throw new DirectObraMessageError(
+        "The project is unavailable for direct field messages.",
+        "DIRECT_PROJECT_UNAVAILABLE",
+        403,
+      );
+    }
+
+    const resolution = await resolveActiveFieldWorkerById(
+      transaction,
+      { organizationId: project.organizationId, projectId: project.id },
+      normalized.workerId,
+    );
+    if (resolution.status !== FIELD_WORKER_RESOLUTION.RESOLVED) {
+      throw new DirectObraMessageError(
+        "The field worker is no longer active in this project.",
+        "FIELD_WORKER_REQUIRED",
+        403,
+      );
+    }
+    const worker = resolution.worker;
+
+    if (normalized.operation) {
+      const priorOperation = await transaction.auditLog.findUnique({
+        where: { id: normalized.operation.id },
+        select: {
+          organizationId: true,
+          action: true,
+          entityType: true,
+          entityId: true,
+          metadata: true,
+        },
+      });
+      const priorResult = readDirectOperationOutcome(priorOperation, {
+        operation: normalized.operation,
+        project,
+        worker,
+      });
+      if (priorResult) return { alreadyApplied: true, result: priorResult };
+    }
+
+    if (beforeApply) {
+      await beforeApply({ prisma: transaction, project, worker });
+    }
+    const state = project.snapshot?.state
+      ? clone(project.snapshot.state)
+      : createEmptyAppState();
+    const projectSettings = {
+      id: project.id,
+      latitude: project.latitude == null ? null : Number(project.latitude),
+      longitude: project.longitude == null ? null : Number(project.longitude),
+      geofenceMeters: project.geofenceMeters,
+    };
+    const trustedEvent = {
+      ...event,
+      from: worker.phone,
+      displayName: worker.name,
+    };
+    const result = await apply({
+      prisma: transaction,
+      state,
+      projectSettings,
+      worker,
+      event: trustedEvent,
+    });
+    if (!result || typeof result.reply !== "string" || !Array.isArray(result.newMessages)) {
+      throw new DirectObraMessageError(
+        "The ObraSaaS engine did not return persistable direct-message effects.",
+        "DIRECT_MESSAGE_OUTCOME_INVALID",
+      );
+    }
+
+    if (result.stateChanged) {
+      const nextVersion = (project.snapshot?.version ?? 0) + 1;
+      await transaction.projectSnapshot.upsert({
+        where: { projectId: project.id },
+        update: { state, version: nextVersion },
+        create: { projectId: project.id, state, version: nextVersion },
+      });
+    }
+    await appendDurableMessages(
+      { prisma: transaction, project },
+      result.newMessages,
+    );
+
+    if (normalized.operation) {
+      await transaction.auditLog.create({
+        data: {
+          id: normalized.operation.id,
+          organizationId: project.organizationId,
+          action: normalized.operation.action,
+          entityType: "Worker",
+          entityId: worker.id,
+          metadata: {
+            projectId: project.id,
+            outcome: storedDirectOperationOutcome(result),
+          },
+        },
+      });
+    }
+    return { alreadyApplied: false, result };
+  }, { maxWait: 5_000, timeout: 20_000 });
+}
+
+function webhookProcessingError(message, code) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
+
+function atomicWebhookInput({ eventId, leaseToken, event, scope, apply }) {
+  const normalized = {
+    eventId: typeof eventId === "string" ? eventId.trim() : "",
+    leaseToken: typeof leaseToken === "string" ? leaseToken.trim() : "",
+    projectId: typeof scope?.projectId === "string" ? scope.projectId.trim() : "",
+    organizationId: typeof scope?.organizationId === "string" ? scope.organizationId.trim() : "",
+    phoneNumberId: typeof scope?.phoneNumberId === "string" ? scope.phoneNumberId.trim() : "",
+  };
+  if (
+    !normalized.eventId
+    || !normalized.leaseToken
+    || !normalized.projectId
+    || !normalized.organizationId
+    || !normalized.phoneNumberId
+    || event?.eventType !== "message"
+    || typeof event?.from !== "string"
+    || typeof apply !== "function"
+  ) {
+    throw webhookProcessingError(
+      "A leased message event, trusted tenant scope and application callback are required.",
+      "WEBHOOK_PAYLOAD_INVALID",
+    );
+  }
+  if (String(event.phoneNumberId || "").trim() !== normalized.phoneNumberId) {
+    throw webhookProcessingError(
+      "Stored webhook phone scope does not match its normalized message event.",
+      "WEBHOOK_MESSAGE_SCOPE_MISMATCH",
+    );
+  }
+  return normalized;
+}
+
+function fieldWorkerResolutionError(status) {
+  return webhookProcessingError(
+    `WhatsApp sender could not be resolved as an active field worker: ${status}`,
+    `FIELD_WORKER_${status}`,
+  );
+}
+
+export async function applyWebhookMessageAtomically({
+  eventId,
+  leaseToken,
+  event,
+  scope,
+  apply,
+}) {
+  const normalized = atomicWebhookInput({ eventId, leaseToken, event, scope, apply });
+  if (!hasDurableDatabase()) {
+    throw webhookProcessingError(
+      "Durable webhook processing requires DATABASE_URL.",
+      "WEBHOOK_DURABLE_STORAGE_REQUIRED",
+    );
+  }
+
+  const { getPrisma } = await import("@/lib/prisma");
+  const prisma = getPrisma();
+  return prisma.$transaction(async (transaction) => {
+    await lockProjectTransaction(transaction, normalized.projectId);
+
+    const leasedEvent = await transaction.webhookEvent.findFirst({
+      where: {
+        id: normalized.eventId,
+        projectId: normalized.projectId,
+        eventType: "message",
+        status: "PROCESSING",
+        leaseToken: normalized.leaseToken,
+      },
+      select: {
+        id: true,
+        appliedAt: true,
+        outcome: true,
+      },
+    });
+    if (!leasedEvent) {
+      throw webhookProcessingError(
+        "The webhook lease changed before its internal effects were committed.",
+        "WEBHOOK_LEASE_LOST",
+      );
+    }
+
+    const priorOutcome = readAppliedMessageWebhookOutcome(leasedEvent);
+    if (priorOutcome) {
+      const accepted = await transaction.webhookEvent.updateMany({
+        where: {
+          id: normalized.eventId,
+          projectId: normalized.projectId,
+          eventType: "message",
+          status: "PROCESSING",
+          leaseToken: normalized.leaseToken,
+          appliedAt: { not: null },
+        },
+        data: { lastError: null },
+      });
+      if (accepted.count !== 1) {
+        throw webhookProcessingError(
+          "The webhook lease changed before its stored outcome could be reused.",
+          "WEBHOOK_LEASE_LOST",
+        );
+      }
+      return { alreadyApplied: true, outcome: priorOutcome };
+    }
+
+    const project = await transaction.project.findFirst({
+      where: {
+        id: normalized.projectId,
+        organizationId: normalized.organizationId,
+      },
+      select: {
+        id: true,
+        organizationId: true,
+        latitude: true,
+        longitude: true,
+        geofenceMeters: true,
+        snapshot: { select: { state: true } },
+        whatsapp: {
+          select: { phoneNumberId: true, enabled: true },
+        },
+      },
+    });
+    if (!project) {
+      throw webhookProcessingError(
+        "Stored webhook scope does not belong to the selected tenant project.",
+        "WEBHOOK_MESSAGE_SCOPE_MISMATCH",
+      );
+    }
+    if (
+      !project.whatsapp?.enabled
+      || project.whatsapp.phoneNumberId !== normalized.phoneNumberId
+    ) {
+      throw webhookProcessingError(
+        "Stored webhook scope does not belong to the active project WhatsApp connection.",
+        "WEBHOOK_MESSAGE_SCOPE_MISMATCH",
+      );
+    }
+
+    const resolution = await resolveActiveFieldWorkerByPhone(
+      transaction,
+      {
+        organizationId: normalized.organizationId,
+        projectId: normalized.projectId,
+      },
+      event.from,
+    );
+    if (resolution.status !== FIELD_WORKER_RESOLUTION.RESOLVED) {
+      throw fieldWorkerResolutionError(resolution.status);
+    }
+
+    const state = project.snapshot?.state
+      ? clone(project.snapshot.state)
+      : createEmptyAppState();
+    const projectSettings = {
+      id: project.id,
+      latitude: project.latitude == null ? null : Number(project.latitude),
+      longitude: project.longitude == null ? null : Number(project.longitude),
+      geofenceMeters: project.geofenceMeters,
+    };
+    const result = await apply({
+      prisma: transaction,
+      state,
+      projectSettings,
+      worker: resolution.worker,
+    });
+    if (!result || !Array.isArray(result.newMessages)) {
+      throw webhookProcessingError(
+        "The WhatsApp engine did not return persistable message effects.",
+        "WEBHOOK_OUTCOME_INVALID",
+      );
+    }
+    const outcome = createMessageWebhookOutcome(result);
+
+    if (result.stateChanged) {
+      await transaction.projectSnapshot.upsert({
+        where: { projectId: project.id },
+        update: { state, version: { increment: 1 } },
+        create: { projectId: project.id, state },
+      });
+    }
+    await appendDurableMessages(
+      { prisma: transaction, project },
+      result.newMessages,
+    );
+
+    const appliedAt = new Date();
+    const accepted = await transaction.webhookEvent.updateMany({
+      where: {
+        id: normalized.eventId,
+        projectId: normalized.projectId,
+        eventType: "message",
+        status: "PROCESSING",
+        leaseToken: normalized.leaseToken,
+        appliedAt: null,
+      },
+      data: {
+        appliedAt,
+        outcome,
+        lastError: null,
+      },
+    });
+    if (accepted.count !== 1) {
+      throw webhookProcessingError(
+        "The webhook lease changed while its internal effects were being applied.",
+        "WEBHOOK_LEASE_LOST",
+      );
+    }
+    return { alreadyApplied: false, outcome };
+  }, { maxWait: 5_000, timeout: 20_000 });
+}
+
+export async function persistEnrichedWebhookEvent({
+  eventId,
+  leaseToken,
+  event,
+  scope,
+}) {
+  const normalizedEventId = typeof eventId === "string" ? eventId.trim() : "";
+  const normalizedLeaseToken = typeof leaseToken === "string" ? leaseToken.trim() : "";
+  if (!normalizedEventId || !normalizedLeaseToken || event?.eventType !== "message") {
+    throw webhookProcessingError(
+      "A leased message event is required before enriched media can be persisted.",
+      "WEBHOOK_PAYLOAD_INVALID",
+    );
+  }
+  if (!hasDurableDatabase()) {
+    throw webhookProcessingError(
+      "Enriched webhook media requires durable storage.",
+      "WEBHOOK_DURABLE_STORAGE_REQUIRED",
+    );
+  }
+
+  const context = await durableContext(scope);
+  const updated = await context.prisma.webhookEvent.updateMany({
+    where: {
+      id: normalizedEventId,
+      projectId: context.project.id,
+      eventType: "message",
+      status: "PROCESSING",
+      leaseToken: normalizedLeaseToken,
+      appliedAt: null,
+    },
+    data: {
+      payload: serializeWebhookPayload(event, scope),
+      lastError: null,
+    },
+  });
+  if (updated.count !== 1) {
+    throw webhookProcessingError(
+      "The webhook lease changed before enriched media was persisted.",
+      "WEBHOOK_LEASE_LOST",
+    );
+  }
+  return true;
+}
+
+export async function linkOutboundWhatsAppMessage({
+  inboundExternalId,
+  providerMessageId,
+  scope,
+  status = "accepted",
+}) {
+  const inboundId = typeof inboundExternalId === "string" ? inboundExternalId.trim() : "";
+  const providerId = typeof providerMessageId === "string" ? providerMessageId.trim() : "";
+  if (!inboundId || !providerId) return false;
+  const outboundExternalId = `obrasaas-reply:${inboundId}`;
+
+  if (!hasDurableDatabase()) {
+    const db = readLocalDb();
+    const messages = Array.isArray(db.messages) ? db.messages : [];
+    const conflict = messages.find(
+      (message) => message.providerMessageId === providerId && message.externalId !== outboundExternalId,
+    );
+    if (conflict) {
+      const error = new Error("WhatsApp provider message ID belongs to another conversation.");
+      error.code = "WEBHOOK_MESSAGE_SCOPE_MISMATCH";
+      throw error;
+    }
+    const message = messages.find((item) => item.externalId === outboundExternalId);
+    if (!message) return false;
+    message.providerMessageId = providerId;
+    message.status = String(status || "accepted").slice(0, 80);
+    writeLocalDb(db);
+    return true;
+  }
+
+  const context = await durableContext(scope);
+  const conversation = await durableConversation(context);
+  const [message, conflict] = await Promise.all([
+    context.prisma.message.findUnique({
+      where: { externalId: outboundExternalId },
+      select: { id: true, conversationId: true },
+    }),
+    context.prisma.message.findUnique({
+      where: { providerMessageId: providerId },
+      select: { id: true, conversationId: true },
+    }),
+  ]);
+  if (conflict && conflict.id !== message?.id) {
+    const error = new Error("WhatsApp provider message ID belongs to another conversation.");
+    error.code = "WEBHOOK_MESSAGE_SCOPE_MISMATCH";
+    throw error;
+  }
+  if (!message) return false;
+  if (message.conversationId !== conversation.id) {
+    const error = new Error("Outbound WhatsApp message crossed its tenant conversation boundary.");
+    error.code = "WEBHOOK_MESSAGE_SCOPE_MISMATCH";
+    throw error;
+  }
+  await context.prisma.message.update({
+    where: { id: message.id },
+    data: {
+      providerMessageId: providerId,
+      status: String(status || "accepted").slice(0, 80),
+    },
+  });
+  return true;
+}
+
+const WHATSAPP_DELIVERY_STATUS_RANK = Object.freeze({
+  accepted: 1,
+  sent: 2,
+  delivered: 3,
+  read: 4,
+});
+
+export function nextWhatsAppMessageStatus(currentStatus, incomingStatus) {
+  const current = typeof currentStatus === "string" ? currentStatus.trim().toLowerCase() : "";
+  const incoming = typeof incomingStatus === "string" ? incomingStatus.trim().toLowerCase() : "";
+  if (!incoming) return current || null;
+  if (!current) return incoming;
+  if (incoming === current) return current;
+
+  const currentRank = WHATSAPP_DELIVERY_STATUS_RANK[current] || 0;
+  const incomingRank = WHATSAPP_DELIVERY_STATUS_RANK[incoming] || 0;
+  if (incoming === "failed") {
+    return currentRank >= WHATSAPP_DELIVERY_STATUS_RANK.delivered ? current : "failed";
+  }
+  if (current === "failed") {
+    return incomingRank >= WHATSAPP_DELIVERY_STATUS_RANK.delivered ? incoming : current;
+  }
+  if (currentRank && incomingRank) return incomingRank >= currentRank ? incoming : current;
+  if (currentRank) return current;
+  if (incomingRank) return incoming;
+  return current;
+}
+
+export async function updateWhatsAppMessageStatus({ providerMessageId, status, scope }) {
+  const providerId = typeof providerMessageId === "string" ? providerMessageId.trim() : "";
+  const normalizedStatus = typeof status === "string" ? status.trim().toLowerCase().slice(0, 80) : "";
+  if (!providerId || !normalizedStatus) return false;
+
+  if (!hasDurableDatabase()) {
+    const db = readLocalDb();
+    const message = (db.messages || []).find((item) => item.providerMessageId === providerId);
+    if (!message) return false;
+    const nextStatus = nextWhatsAppMessageStatus(message.status, normalizedStatus);
+    if (nextStatus !== message.status) {
+      message.status = nextStatus;
+      writeLocalDb(db);
+    }
+    return true;
+  }
+
+  const context = await durableContext(scope);
+  return context.prisma.$transaction(async (transaction) => {
+    await lockProjectTransaction(transaction, context.project.id);
+    const conversation = await durableConversation({ ...context, prisma: transaction });
+    const message = await transaction.message.findUnique({
+      where: { providerMessageId: providerId },
+      select: { id: true, conversationId: true, status: true },
+    });
+    if (!message) return false;
+    if (message.conversationId !== conversation.id) {
+      const error = new Error("WhatsApp delivery status crossed its tenant conversation boundary.");
+      error.code = "WEBHOOK_MESSAGE_SCOPE_MISMATCH";
+      throw error;
+    }
+    const nextStatus = nextWhatsAppMessageStatus(message.status, normalizedStatus);
+    if (nextStatus !== message.status) {
+      await transaction.message.update({
+        where: { id: message.id },
+        data: { status: nextStatus },
+      });
+    }
+    return true;
+  });
+}
+
+export async function storeWebhookEvent({ provider, externalId, eventType, payload, scope }) {
   if (!hasDurableDatabase()) {
     const db = readLocalDb();
     db.webhookEvents ||= [];
-    if (db.webhookEvents.some((event) => event.provider === provider && event.externalId === externalId)) {
-      return { claimed: false };
+    const existing = db.webhookEvents.find(
+      (event) => event.provider === provider && event.externalId === externalId,
+    );
+    if (existing) {
+      return {
+        stored: false,
+        eventId: existing.id,
+        projectId: existing.projectId,
+        status: existing.status,
+      };
     }
-    db.webhookEvents.push({
+    const event = {
+      id: `local-webhook-${randomUUID()}`,
+      projectId: scope?.projectId || scope?.phoneNumberId || "local-project",
       provider,
       externalId,
       eventType,
       payload,
       status: "PENDING",
       attempts: 0,
+      nextAttemptAt: new Date().toISOString(),
+      leaseToken: null,
+      leaseExpiresAt: null,
+      appliedAt: null,
+      outcome: null,
+      lastError: null,
+      processedAt: null,
       createdAt: new Date().toISOString(),
-    });
+      updatedAt: new Date().toISOString(),
+    };
+    db.webhookEvents.push(event);
     writeLocalDb(db);
-    return { claimed: true };
+    return { stored: true, eventId: event.id, projectId: event.projectId, status: event.status };
   }
 
   const { prisma, project } = await durableContext(scope);
@@ -462,50 +1305,333 @@ export async function claimWebhookEvent({ provider, externalId, eventType, paylo
     const event = await prisma.webhookEvent.create({
       data: { projectId: project.id, provider, externalId, eventType, payload },
     });
-    return { claimed: true, eventId: event.id };
+    return { stored: true, eventId: event.id, projectId: event.projectId, status: event.status };
   } catch (error) {
-    if (error?.code === "P2002") return { claimed: false };
+    if (error?.code === "P2002") {
+      const existing = await prisma.webhookEvent.findUnique({
+        where: { provider_externalId: { provider, externalId } },
+        select: { id: true, projectId: true, status: true },
+      });
+      if (existing?.projectId && existing.projectId !== project.id) {
+        throw new Error("Webhook external ID collision across tenant projects.");
+      }
+      return {
+        stored: false,
+        eventId: existing?.id || null,
+        projectId: existing?.projectId || project.id,
+        status: existing?.status || null,
+      };
+    }
     throw error;
   }
 }
 
-export async function updateWebhookEvent({ provider, externalId, status, error = null }) {
+export async function acquireWebhookEvent({ projectId, now = new Date(), leaseMs = WEBHOOK_LEASE_MS }) {
+  const leaseStartedAt = new Date(now);
+  if (!projectId || Number.isNaN(leaseStartedAt.getTime())) {
+    throw new Error("A project and valid lease time are required to acquire a webhook event.");
+  }
+  const leaseExpiresAt = new Date(leaseStartedAt.getTime() + leaseMs);
+
+  if (!hasDurableDatabase()) {
+    const db = readLocalDb();
+    const events = (db.webhookEvents || [])
+      .filter((event) => event.projectId === projectId && ["PENDING", "PROCESSING"].includes(event.status))
+      .sort((left, right) => {
+        const timeDifference = new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime();
+        return timeDifference || String(left.id).localeCompare(String(right.id));
+      });
+    const active = events.find(
+      (event) => event.status === "PROCESSING"
+        && event.leaseExpiresAt
+        && new Date(event.leaseExpiresAt).getTime() > leaseStartedAt.getTime(),
+    );
+    if (active) return null;
+
+    while (events.length > 0) {
+      const event = events.shift();
+      if (shouldDeadLetterWebhookEvent(event, leaseStartedAt)) {
+        event.status = "FAILED";
+        event.lastError ||= "Webhook lease expired after the maximum retry count.";
+        event.payload = redactedWebhookPayload();
+        if (!event.appliedAt) event.outcome = null;
+        event.nextAttemptAt = null;
+        event.leaseToken = null;
+        event.leaseExpiresAt = null;
+        event.updatedAt = leaseStartedAt.toISOString();
+        continue;
+      }
+      if (!isWebhookEventEligible(event, leaseStartedAt)) {
+        writeLocalDb(db);
+        return null;
+      }
+      event.status = "PROCESSING";
+      event.attempts = (event.attempts || 0) + 1;
+      event.leaseToken = randomUUID();
+      event.leaseExpiresAt = leaseExpiresAt.toISOString();
+      event.updatedAt = leaseStartedAt.toISOString();
+      writeLocalDb(db);
+      return event;
+    }
+    writeLocalDb(db);
+    return null;
+  }
+
+  const [{ getPrisma }, { Prisma }] = await Promise.all([
+    import("@/lib/prisma"),
+    import("@/generated/prisma/client"),
+  ]);
+  const prisma = getPrisma();
+  for (let guard = 0; guard < 5; guard += 1) {
+    const active = await prisma.webhookEvent.findFirst({
+      where: {
+        projectId,
+        status: "PROCESSING",
+        leaseExpiresAt: { gt: leaseStartedAt },
+      },
+      select: { id: true },
+    });
+    if (active) return null;
+
+    const event = await prisma.webhookEvent.findFirst({
+      where: { projectId, status: { in: ["PENDING", "PROCESSING"] } },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    });
+    if (!event) return null;
+
+    if (shouldDeadLetterWebhookEvent(event, leaseStartedAt)) {
+      const retired = await prisma.webhookEvent.updateMany({
+        where: {
+          id: event.id,
+          status: event.status,
+          attempts: event.attempts,
+          leaseToken: event.leaseToken,
+        },
+        data: {
+          status: "FAILED",
+          lastError: event.lastError || "Webhook lease expired after the maximum retry count.",
+          payload: redactedWebhookPayload(),
+          ...(!event.appliedAt ? { outcome: Prisma.DbNull } : {}),
+          nextAttemptAt: null,
+          leaseToken: null,
+          leaseExpiresAt: null,
+        },
+      });
+      if (retired.count === 0) continue;
+      continue;
+    }
+    if (!isWebhookEventEligible(event, leaseStartedAt)) return null;
+
+    const leaseToken = randomUUID();
+    const eligibility = event.status === "PENDING"
+      ? { OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: leaseStartedAt } }] }
+      : {
+          leaseToken: event.leaseToken,
+          OR: [{ leaseExpiresAt: null }, { leaseExpiresAt: { lte: leaseStartedAt } }],
+        };
+    const acquired = await prisma.webhookEvent.updateMany({
+      where: {
+        id: event.id,
+        status: event.status,
+        attempts: event.attempts,
+        ...eligibility,
+      },
+      data: {
+        status: "PROCESSING",
+        attempts: { increment: 1 },
+        leaseToken,
+        leaseExpiresAt,
+      },
+    });
+    if (acquired.count === 0) continue;
+    return prisma.webhookEvent.findUnique({ where: { id: event.id } });
+  }
+  return null;
+}
+
+export async function completeWebhookEvent({ eventId, leaseToken, now = new Date() }) {
+  const completedAt = new Date(now);
+  if (!eventId || !leaseToken || Number.isNaN(completedAt.getTime())) return false;
+
   if (!hasDurableDatabase()) {
     const db = readLocalDb();
     const event = db.webhookEvents?.find(
-      (item) => item.provider === provider && item.externalId === externalId,
+      (item) => item.id === eventId && item.status === "PROCESSING" && item.leaseToken === leaseToken,
     );
-    if (event) {
-      event.status = status;
-      event.attempts = (event.attempts || 0) + 1;
-      event.lastError = error;
-      if (status === "PROCESSED") event.processedAt = new Date().toISOString();
-      writeLocalDb(db);
+    if (!event) return false;
+    event.status = "PROCESSED";
+    event.lastError = null;
+    event.payload = redactedWebhookPayload();
+    event.outcome = null;
+    event.nextAttemptAt = null;
+    event.leaseToken = null;
+    event.leaseExpiresAt = null;
+    event.processedAt = completedAt.toISOString();
+    event.updatedAt = completedAt.toISOString();
+    writeLocalDb(db);
+    return true;
+  }
+
+  const [{ getPrisma }, { Prisma }] = await Promise.all([
+    import("@/lib/prisma"),
+    import("@/generated/prisma/client"),
+  ]);
+  const result = await getPrisma().webhookEvent.updateMany({
+    where: { id: eventId, status: "PROCESSING", leaseToken },
+    data: {
+      status: "PROCESSED",
+      lastError: null,
+      payload: redactedWebhookPayload(),
+      outcome: Prisma.DbNull,
+      nextAttemptAt: null,
+      leaseToken: null,
+      leaseExpiresAt: null,
+      processedAt: completedAt,
+    },
+  });
+  return result.count === 1;
+}
+
+export async function rescheduleWebhookEvent({
+  eventId,
+  leaseToken,
+  error,
+  now = new Date(),
+  terminal = false,
+}) {
+  const failedAt = new Date(now);
+  if (!eventId || !leaseToken || Number.isNaN(failedAt.getTime())) return null;
+  const errorCode = typeof error?.code === "string" ? error.code.slice(0, 120) : null;
+  const errorMessage = error instanceof Error
+    ? error.message
+    : String(error || "Unknown processing error");
+  const lastError = `${errorCode ? `[${errorCode}] ` : ""}${errorMessage}`.slice(0, 2_000);
+
+  if (!hasDurableDatabase()) {
+    const db = readLocalDb();
+    const event = db.webhookEvents?.find(
+      (item) => item.id === eventId && item.status === "PROCESSING" && item.leaseToken === leaseToken,
+    );
+    if (!event) return null;
+    const transition = terminal
+      ? { status: "FAILED", nextAttemptAt: null }
+      : webhookFailureTransition({
+          attempts: event.attempts,
+          externalId: event.externalId,
+          now: failedAt,
+        });
+    event.status = transition.status;
+    event.lastError = lastError;
+    if (transition.status === "FAILED") {
+      event.payload = redactedWebhookPayload();
+      if (!event.appliedAt) event.outcome = null;
     }
-    return;
+    event.nextAttemptAt = transition.nextAttemptAt?.toISOString() || null;
+    event.leaseToken = null;
+    event.leaseExpiresAt = null;
+    event.updatedAt = failedAt.toISOString();
+    writeLocalDb(db);
+    return {
+      status: transition.status,
+      nextAttemptAt: transition.nextAttemptAt?.toISOString() || null,
+    };
+  }
+
+  const [{ getPrisma }, { Prisma }] = await Promise.all([
+    import("@/lib/prisma"),
+    import("@/generated/prisma/client"),
+  ]);
+  const prisma = getPrisma();
+  const event = await prisma.webhookEvent.findFirst({
+    where: { id: eventId, status: "PROCESSING", leaseToken },
+    select: { id: true, attempts: true, externalId: true, appliedAt: true },
+  });
+  if (!event) return null;
+  const transition = terminal
+    ? { status: "FAILED", nextAttemptAt: null }
+    : webhookFailureTransition({
+        attempts: event.attempts,
+        externalId: event.externalId,
+        now: failedAt,
+      });
+  const result = await prisma.webhookEvent.updateMany({
+    where: { id: eventId, status: "PROCESSING", leaseToken },
+    data: {
+      status: transition.status,
+      lastError,
+      ...(transition.status === "FAILED"
+        ? {
+            payload: redactedWebhookPayload(),
+            ...(!event.appliedAt ? { outcome: Prisma.DbNull } : {}),
+          }
+        : {}),
+      nextAttemptAt: transition.nextAttemptAt,
+      leaseToken: null,
+      leaseExpiresAt: null,
+    },
+  });
+  if (result.count !== 1) return null;
+  return { status: transition.status, nextAttemptAt: transition.nextAttemptAt };
+}
+
+export async function listDueWebhookProjectIds({ now = new Date(), limit = 5 } = {}) {
+  const currentTime = new Date(now);
+  const normalizedLimit = Math.min(25, Math.max(1, Math.trunc(Number(limit) || 5)));
+  if (Number.isNaN(currentTime.getTime())) {
+    throw new Error("A valid time is required to list due webhook projects.");
+  }
+
+  if (!hasDurableDatabase()) {
+    const db = readLocalDb();
+    const candidates = (db.webhookEvents || [])
+      .filter((event) => (
+        event.projectId
+        && (
+          isWebhookEventEligible(event, currentTime)
+          || shouldDeadLetterWebhookEvent(event, currentTime)
+        )
+      ))
+      .sort((left, right) => (
+        new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()
+        || String(left.id).localeCompare(String(right.id))
+      ));
+    return [...new Set(candidates.map((event) => event.projectId))].slice(0, normalizedLimit);
   }
 
   const { getPrisma } = await import("@/lib/prisma");
-  const prisma = getPrisma();
-  await prisma.webhookEvent.update({
-    where: { provider_externalId: { provider, externalId } },
-    data: {
-      status,
-      attempts: { increment: 1 },
-      lastError: error,
-      processedAt: status === "PROCESSED" ? new Date() : null,
+  const projects = await getPrisma().webhookEvent.groupBy({
+    by: ["projectId"],
+    where: {
+      projectId: { not: null },
+      OR: [
+        {
+          status: "PENDING",
+          OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: currentTime } }],
+        },
+        {
+          status: "PROCESSING",
+          OR: [{ leaseExpiresAt: null }, { leaseExpiresAt: { lte: currentTime } }],
+        },
+      ],
     },
+    _min: { createdAt: true },
+    orderBy: { _min: { createdAt: "asc" } },
+    take: normalizedLimit,
   });
+  return projects.map((project) => project.projectId).filter(Boolean);
 }
 
-export async function resetState(scope) {
+export async function resetState(scope, { expectedVersion = null } = {}) {
+  const useDevelopmentDemo = !hasDurableDatabase();
   const fresh = {
-    appState: clone(defaultAppState),
+    appState: useDevelopmentDemo
+      ? clone(localDevelopmentDemoAppState)
+      : createEmptyAppState(),
     messages: clone(defaultMessages),
   };
-  await saveAppState(fresh.appState, scope);
+  const snapshot = await saveAppStateSnapshot(fresh.appState, scope, { expectedVersion });
   await saveMessages(fresh.messages, scope);
-  return fresh;
+  return { ...fresh, snapshot, version: snapshot.version };
 }
 
 export async function resolveWhatsAppScope(phoneNumberId) {
@@ -514,38 +1640,29 @@ export async function resolveWhatsAppScope(phoneNumberId) {
 }
 
 export async function resolveWhatsAppScopes({
+  eventType,
   phoneNumberId,
   whatsappBusinessId,
   displayPhoneNumber,
-} = {}) {
+} = {}, { prisma: prismaOverride = null } = {}) {
   if (!phoneNumberId && !whatsappBusinessId && !displayPhoneNumber) return [];
-  if (!hasDurableDatabase()) {
-    return phoneNumberId ? [{ phoneNumberId: String(phoneNumberId) }] : [];
+  if (!prismaOverride && !hasDurableDatabase()) {
+    return typeof phoneNumberId === "string" && phoneNumberId.trim()
+      ? [{
+          projectId: "local-project",
+          organizationId: "local-organization",
+          phoneNumberId: phoneNumberId.trim(),
+        }]
+      : [];
   }
 
-  const { getPrisma } = await import("@/lib/prisma");
-  const prisma = getPrisma();
-  const identifiers = [
-    ...(phoneNumberId ? [{ phoneNumberId: String(phoneNumberId) }] : []),
-    ...(whatsappBusinessId ? [{ whatsappBusinessId: String(whatsappBusinessId) }] : []),
-    ...(displayPhoneNumber ? [{ displayPhoneNumber: String(displayPhoneNumber) }] : []),
-  ];
-  const connections = await prisma.whatsAppConnection.findMany({
-    where: {
-      enabled: true,
-      OR: identifiers,
-    },
-    select: {
-      phoneNumberId: true,
-      whatsappBusinessId: true,
-      displayPhoneNumber: true,
-    },
+  const prisma = prismaOverride || (await import("@/lib/prisma")).getPrisma();
+  return resolveWhatsAppConnectionScopes(prisma, {
+    eventType,
+    phoneNumberId,
+    whatsappBusinessId,
+    displayPhoneNumber,
   });
-  return connections.map((connection) => ({
-    phoneNumberId: connection.phoneNumberId,
-    whatsappBusinessId: connection.whatsappBusinessId,
-    displayPhoneNumber: connection.displayPhoneNumber,
-  }));
 }
 
 export async function getProjectSettings(scope) {
@@ -561,8 +1678,8 @@ export async function getProjectSettings(scope) {
   const { project } = await durableContext(scope);
   return {
     id: project.id,
-    latitude: Number(project.latitude ?? process.env.PROJECT_LATITUDE ?? -34.5886),
-    longitude: Number(project.longitude ?? process.env.PROJECT_LONGITUDE ?? -58.4302),
+    latitude: project.latitude == null ? null : Number(project.latitude),
+    longitude: project.longitude == null ? null : Number(project.longitude),
     geofenceMeters: project.geofenceMeters,
   };
 }

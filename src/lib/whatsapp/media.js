@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { canTranscribeMimeType, isOpenAIConfigured, transcribeAudio } from "../ai/openai.js";
 import { isProtectedStorageConfigured, uploadProtectedFile } from "../storage.js";
@@ -23,6 +24,13 @@ const EXTENSIONS_BY_MIME = new Map([
   ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "xlsx"],
   ["application/vnd.openxmlformats-officedocument.presentationml.presentation", "pptx"],
 ]);
+const TRANSCRIPTION_STATUSES = new Set([
+  "completed",
+  "disabled_by_tenant",
+  "failed",
+  "pending_configuration",
+  "pending_conversion",
+]);
 
 function safeContextValue(value) {
   return String(value || "unknown").replace(/[^a-zA-Z0-9_.:-]+/g, "_").slice(0, 180);
@@ -37,14 +45,97 @@ function safeFileName(originalName, mediaId, mimeType) {
   return baseName || `${mediaId}.${extension}`;
 }
 
+function isHttpsUrl(value) {
+  try {
+    return new URL(value).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+export function isEnrichedInboundWhatsAppMediaEvent(event) {
+  const media = event?.media;
+  const storage = media?.storage;
+  const storedIdentity = storage?.assetId || storage?.publicId || storage?.pathname;
+  if (
+    !media?.id
+    || !media.filename
+    || !EXTENSIONS_BY_MIME.has(media.mimeType)
+    || typeof media.sha256 !== "string"
+    || !media.sha256.trim()
+    || !Number.isSafeInteger(media.size)
+    || media.size <= 0
+    || !isHttpsUrl(media.url)
+    || storage?.status !== "stored"
+    || !storage?.provider
+    || !storedIdentity
+  ) {
+    return false;
+  }
+
+  if (event.kind !== "audio") return true;
+  const transcription = event.transcription;
+  if (!TRANSCRIPTION_STATUSES.has(transcription?.status)) return false;
+  return transcription.status !== "completed"
+    || (typeof transcription.text === "string" && Boolean(transcription.text.trim()));
+}
+
+export function whatsAppMediaUploadIdempotencyKey(event, downloaded) {
+  const values = [
+    event?.phoneNumberId,
+    event?.externalId,
+    event?.media?.id,
+    downloaded?.sha256,
+    downloaded?.size,
+    downloaded?.mimeType,
+  ];
+  if (values.some((value) => value === null || value === undefined || String(value).trim() === "")) {
+    throw new TypeError("Verified WhatsApp media identity is required for an idempotent upload.");
+  }
+  const digest = createHash("sha256")
+    .update(`whatsapp-media\0${values.join("\0")}`)
+    .digest("hex");
+  return `whatsapp-media:v1:${digest}`;
+}
+
+export async function ingestAndPersistInboundWhatsAppMedia({
+  leasedEvent,
+  event,
+  scope,
+}, {
+  ingest = ingestInboundWhatsAppMedia,
+  persist,
+  transcriptionEnabled = false,
+} = {}) {
+  if (!event?.media) return event;
+  if (typeof persist !== "function") {
+    throw new TypeError("Durable enriched-media persistence is required for webhook ingestion.");
+  }
+
+  const wasEnriched = isEnrichedInboundWhatsAppMediaEvent(event);
+  const enrichedEvent = await ingest(event, { transcriptionEnabled });
+  const isEnriched = isEnrichedInboundWhatsAppMediaEvent(enrichedEvent);
+  if (!wasEnriched && isEnriched) {
+    await persist({
+      eventId: leasedEvent?.id,
+      leaseToken: leasedEvent?.leaseToken,
+      event: enrichedEvent,
+      scope,
+    });
+  }
+  return enrichedEvent;
+}
+
 export async function ingestInboundWhatsAppMedia(event, {
   download = downloadWhatsAppMedia,
   upload = uploadProtectedFile,
   transcribe = transcribeAudio,
   storageConfigured = isProtectedStorageConfigured,
   aiConfigured = isOpenAIConfigured,
+  transcriptionEnabled = false,
 } = {}) {
   if (!event?.media?.id) return event;
+  if (isEnrichedInboundWhatsAppMediaEvent(event)) return event;
   if (!storageConfigured()) {
     throw new Error("Protected WhatsApp media storage is not configured.");
   }
@@ -57,6 +148,7 @@ export async function ingestInboundWhatsAppMedia(event, {
     expectedSha256: event.media.sha256,
   });
   const fileName = safeFileName(event.media.filename, downloaded.id, downloaded.mimeType);
+  const idempotencyKey = whatsAppMediaUploadIdempotencyKey(event, downloaded);
   const uploadResult = await upload(
     new File([downloaded.buffer], fileName, { type: downloaded.mimeType }),
     {
@@ -66,12 +158,15 @@ export async function ingestInboundWhatsAppMedia(event, {
         `message_id=${safeContextValue(event.externalId)}`,
         `kind=${safeContextValue(event.kind)}`,
       ].join("|"),
+      idempotencyKey,
     },
   );
 
   let transcription = null;
   if (event.kind === "audio") {
-    if (!aiConfigured()) {
+    if (!transcriptionEnabled) {
+      transcription = { status: "disabled_by_tenant", provider: "openai", text: null };
+    } else if (!aiConfigured()) {
       transcription = { status: "pending_configuration", provider: "openai", text: null };
     } else if (!canTranscribeMimeType(downloaded.mimeType)) {
       transcription = { status: "pending_conversion", provider: "openai", text: null };
@@ -111,6 +206,7 @@ export async function ingestInboundWhatsAppMedia(event, {
         format: uploadResult.format,
         bytes: uploadResult.bytes,
         pathname: uploadResult.pathname || null,
+        reused: uploadResult.reused === true,
       },
     },
   };

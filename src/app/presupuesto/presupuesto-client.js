@@ -450,8 +450,8 @@ export default function PresupuestoClient() {
             </tr>
             <tr>
               <td>
-                <strong>Backend Postgres Serverless (Neon/Prisma ORM) &amp; Geofencing Satelital</strong><br />
-                <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Creación de tablas, migración Prisma, validación de coordenadas por satélite y geocercas del predio.</span>
+                <strong>Backend Postgres Serverless (Neon/Prisma ORM) &amp; Geocercas</strong><br />
+                <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Creación de tablas, migración Prisma y contraste de la ubicación informada por el dispositivo con la geocerca configurada. No sustituye una solución certificada contra suplantación de GPS.</span>
               </td>
               <td>50</td>
               <td>$23.100 ARS</td>
@@ -468,8 +468,8 @@ export default function PresupuestoClient() {
             </tr>
             <tr>
               <td>
-                <strong>Módulo de Inferencia de Voz IA &amp; Speech-to-Task (ObraSaaS Engine)</strong><br />
-                <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Procesamiento de lenguaje natural y transcripción inteligente de reportes de obra. Clasificación automatizada de tareas y bloqueos.</span>
+                <strong>Módulo de Inferencia de Voz IA &amp; Speech-to-Proposal (ObraSaaS Engine)</strong><br />
+                <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Transcripción y clasificación de reportes, posibles avances y bloqueos. La voz queda como evidencia y las acciones requieren confirmación escrita antes de modificar la obra.</span>
               </td>
               <td>55</td>
               <td>$25.000 ARS</td>
@@ -520,7 +520,7 @@ export default function PresupuestoClient() {
         {/* SaaS Evolution & Future Growth */}
         <div className="doc-section-title">Evolución y Escalabilidad Futura (SaaS Corporativo)</div>
         <p style={{ fontSize: '0.85rem', color: '#334155', marginBottom: '24px', lineHeight: '1.6' }}>
-          El presente prototipo interactivo (MVP) valida y demuestra en tiempo real la Landing Page con el <strong>Avatar Comercial de Ventas</strong>, el control integrado de <strong>Acopios y Suministros</strong> y la <strong>Generación de Reportes Ejecutivos en PDF</strong>. El ecosistema está arquitectónicamente listo para escalar a un SaaS a través de:
+          El presente producto interactivo valida y demuestra la <strong>experiencia comercial y operativa</strong>, el control integrado de <strong>Acopios y Suministros</strong> y la <strong>Generación de Reportes Ejecutivos en PDF</strong>. El ecosistema está arquitectónicamente listo para escalar a un SaaS a través de:
           <br /><br />
           • <strong>Automatización de Compras &amp; Integración IoT</strong>: Enlace directo del módulo de acopios con balanzas digitales de silos de cemento o tags RFID en corralón de obra, disparando órdenes de compra automáticas vía API de WhatsApp a proveedores homologados cuando el stock alcance niveles críticos.
           <br />

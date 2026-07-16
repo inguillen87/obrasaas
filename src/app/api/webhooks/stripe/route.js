@@ -1,7 +1,14 @@
 import { getPrisma } from '@/lib/prisma';
+import {
+  readLimitedRequestBytes,
+  RequestBodyError,
+  requestBodyErrorResponse,
+} from '@/lib/request-body';
 import { getStripe, subscriptionDatabaseStatus } from '@/lib/stripe';
 
 export const runtime = 'nodejs';
+
+const MAX_STRIPE_WEBHOOK_BYTES = 1_000_000;
 
 function subscriptionIdFromInvoice(invoice) {
   const value = invoice.subscription || invoice.parent?.subscription_details?.subscription;
@@ -70,10 +77,18 @@ export async function POST(request) {
     return Response.json({ error: 'Stripe webhook is not configured.' }, { status: 503 });
   }
 
-  const rawBody = await request.text();
+  let rawBody;
+  try {
+    rawBody = await readLimitedRequestBytes(request, {
+      maxBytes: MAX_STRIPE_WEBHOOK_BYTES,
+    });
+  } catch (error) {
+    if (error instanceof RequestBodyError) return requestBodyErrorResponse(error);
+    throw error;
+  }
   let event;
   try {
-    event = getStripe().webhooks.constructEvent(rawBody, signature, webhookSecret);
+    event = getStripe().webhooks.constructEvent(Buffer.from(rawBody), signature, webhookSecret);
   } catch (error) {
     console.error('Stripe webhook verification failed:', error);
     return Response.json({ error: 'Invalid Stripe signature.' }, { status: 400 });

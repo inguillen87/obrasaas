@@ -6,6 +6,7 @@ import { roleForClerkMembership, roleHasPermission } from '@/lib/tenant-roles';
 import { acceptedInvitationRole } from '@/lib/invitations';
 import {
   clerkOrganizationIsInternal,
+  databaseOrganizationIsInternal,
   mergeClerkOrganizationMetadata,
 } from '@/lib/organization-policy';
 import {
@@ -13,10 +14,13 @@ import {
   isSelectableProjectStatus,
   tenantProjectWhere,
 } from '@/lib/projects';
+import {
+  isSuperadminEmail,
+  SUPERADMIN_EMAIL,
+  systemRoleForVerifiedEmail,
+} from '@/lib/platform-identity';
 
-export const SUPERADMIN_EMAIL = (
-  process.env.OBRASAAS_SUPERADMIN_EMAIL || 'guillen.marce@gmail.com'
-).trim().toLowerCase();
+export { SUPERADMIN_EMAIL };
 
 const TRIAL_DAYS = 14;
 
@@ -142,20 +146,19 @@ async function ensureDefaultProject(prisma, organization) {
   });
   if (existingProject) return existingProject;
 
-  const projectSlug = organization.clerkOrganizationId === 'system:obrasaas'
+  const internal = databaseOrganizationIsInternal(organization);
+  const projectSlug = internal
     ? process.env.OBRASAAS_PROJECT_SLUG || 'palermo'
     : 'obra-principal';
 
   return prisma.project.create({
     data: {
       organizationId: organization.id,
-      name: organization.clerkOrganizationId === 'system:obrasaas'
-        ? 'Obra Palermo'
-        : 'Obra principal',
+      name: internal ? 'Obra Palermo' : 'Obra principal',
       slug: projectSlug,
-      address: 'Argentina',
-      latitude: Number(process.env.PROJECT_LATITUDE || -34.5886),
-      longitude: Number(process.env.PROJECT_LONGITUDE || -58.4302),
+      address: internal ? 'Argentina' : null,
+      latitude: internal ? Number(process.env.PROJECT_LATITUDE || -34.5886) : null,
+      longitude: internal ? Number(process.env.PROJECT_LONGITUDE || -58.4302) : null,
       geofenceMeters: Number(process.env.PROJECT_GEOFENCE_METERS || 100),
     },
   });
@@ -193,7 +196,8 @@ export async function getPlatformAccess({ requireOrganization = true } = {}) {
     });
   }
 
-  const isSuperadmin = email === SUPERADMIN_EMAIL;
+  const isSuperadmin = isSuperadminEmail(email);
+  const systemRole = systemRoleForVerifiedEmail(email);
   const prisma = getPrisma();
   const user = await prisma.platformUser.upsert({
     where: { clerkUserId: session.userId },
@@ -201,7 +205,7 @@ export async function getPlatformAccess({ requireOrganization = true } = {}) {
       primaryEmail: email,
       fullName: [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(' ') || null,
       avatarUrl: clerkUser.imageUrl || null,
-      systemRole: isSuperadmin ? 'SUPERADMIN' : 'TENANT_USER',
+      systemRole,
       lastSeenAt: new Date(),
     },
     create: {
@@ -209,7 +213,7 @@ export async function getPlatformAccess({ requireOrganization = true } = {}) {
       primaryEmail: email,
       fullName: [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(' ') || null,
       avatarUrl: clerkUser.imageUrl || null,
-      systemRole: isSuperadmin ? 'SUPERADMIN' : 'TENANT_USER',
+      systemRole,
     },
   });
 
@@ -287,7 +291,7 @@ export async function getPlatformAccess({ requireOrganization = true } = {}) {
     databaseUserId: user.id,
     email,
     isSuperadmin,
-    systemRole: isSuperadmin ? 'SUPERADMIN' : 'TENANT_USER',
+    systemRole,
     orgId: session.orgId || null,
     orgSlug: session.orgSlug || null,
     orgRole: session.orgRole || null,

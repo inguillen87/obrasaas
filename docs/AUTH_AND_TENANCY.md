@@ -12,8 +12,10 @@
 
 ## Superadmin y tenants
 
-- `OBRASAAS_SUPERADMIN_EMAIL` identifica al único superadmin de plataforma.
-- `OBRASAAS_INTERNAL_CLERK_ORG_ID` identifica el workspace interno y evita contarlo como cliente.
+- `guillen.marce@gmail.com` es la única identidad de superadmin de plataforma; no se configura por entorno ni se puede reemplazar en un deploy.
+- `OBRASAAS_INTERNAL_CLERK_ORG_ID` identifica explícitamente el workspace interno y evita contarlo como cliente.
+- El script `npm run clerk:internal-org` nunca elige la primera membresía de Clerk: exige ese ID explícito o exactamente una organización ya marcada con `public_metadata.internal=true`.
+- Si el ID no pertenece al superadmin, falta una organización interna inequívoca o hay más de una marcada, el script aborta sin modificar ninguna organización tenant.
 - Todos los demás usuarios operan dentro del tenant activo de Clerk.
 - Cada consulta y mutación sensible se vuelve a acotar por organización y proyecto en el backend.
 

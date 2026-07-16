@@ -34,7 +34,7 @@ function scopedContext(canRequestActions = true) {
     },
     messages: [{ sender: 'user', kind: 'text', text: 'Llegó el camión', time: '09:10' }],
     canRequestActions,
-    isDemoData: false,
+    hasOperationalData: true,
     snapshotUpdatedAt: new Date('2026-07-15T11:55:00.000Z'),
     now: new Date('2026-07-15T12:00:00.000Z'),
   });
@@ -85,6 +85,21 @@ test('supervisor context contains only the supplied active scope and bounded ope
   assert.equal(context.tasks[0].name, 'Fundaciones');
   assert.equal(context.recentOperationalMessages[0].text, 'Llegó el camión');
   assert.equal(JSON.stringify(context).includes('guillen.marce@gmail.com'), false);
+});
+
+test('supervisor marks a tenant without a snapshot as empty instead of demonstrative', () => {
+  const context = buildSupervisorContext({
+    access: {
+      organization: { name: 'Tenant nuevo' },
+      project: { name: 'Primera obra' },
+    },
+    state: {},
+    hasOperationalData: false,
+    now: new Date('2026-07-15T12:00:00.000Z'),
+  });
+
+  assert.equal(context.dataStatus, 'empty');
+  assert.equal(JSON.stringify(context).includes('demonstrative'), false);
 });
 
 test('supervisor calls Responses with storage disabled and returns structured evidence', async () => {

@@ -1,7 +1,13 @@
 import DashboardClient from './dashboard-client';
 import { getPlatformAccess, hasTenantPermission, requireTenantPermission } from '@/lib/access';
-import { getAppState, getMessages } from '@/lib/db';
+import { getAppStateSnapshot, getMessages } from '@/lib/db';
 import { getPrisma } from '@/lib/prisma';
+import { fieldWorkerWhatsAppRole } from '@/lib/field-workers';
+import { publicTenantAiSettings } from '@/lib/ai/tenant-settings';
+import {
+  MEDICAL_EVIDENCE_PERMISSION,
+  sanitizeProjectStateMedicalData,
+} from '@/lib/medical-privacy';
 import { redirect } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
@@ -14,9 +20,12 @@ export default async function DashboardPage() {
   requireTenantPermission(access, 'org:projects:read');
 
   const prisma = getPrisma();
-  const [initialState, initialMessages, whatsapp, membershipCount, snapshot] = await Promise.all([
-    getAppState(access),
-    getMessages(access),
+  const canManageField = hasTenantPermission(access, 'org:field:manage');
+  const canReadMedicalEvidence = hasTenantPermission(access, MEDICAL_EVIDENCE_PERMISSION);
+  const aiSettings = publicTenantAiSettings(access.organization.metadata);
+  const [initialSnapshot, initialMessages, whatsapp, membershipCount, fieldWorkers] = await Promise.all([
+    getAppStateSnapshot(access),
+    getMessages(access, { includeMedicalEvidence: canReadMedicalEvidence }),
     prisma.whatsAppConnection.findUnique({
       where: { projectId: access.project.id },
       select: { enabled: true, connectionStatus: true, lastVerifiedAt: true },
@@ -24,28 +33,41 @@ export default async function DashboardPage() {
     prisma.tenantMembership.count({
       where: { organizationId: access.organization.id, status: 'ACTIVE' },
     }),
-    prisma.projectSnapshot.findUnique({
-      where: { projectId: access.project.id },
-      select: { updatedAt: true },
-    }),
+    canManageField
+      ? prisma.worker.findMany({
+          where: { projectId: access.project.id, active: true },
+          orderBy: [{ name: 'asc' }, { createdAt: 'asc' }],
+          select: { id: true, name: true, role: true, metadata: true },
+        })
+      : Promise.resolve([]),
   ]);
   return (
     <DashboardClient
-      initialState={initialState}
+      initialState={sanitizeProjectStateMedicalData(initialSnapshot.state)}
       initialMessages={initialMessages}
       setup={{
         initialLoadedAt: new Date().toISOString(),
+        initialStateVersion: initialSnapshot.version,
         membershipCount,
         whatsappConnected: Boolean(
           whatsapp?.enabled && whatsapp.connectionStatus === 'CONNECTED',
         ),
         whatsappStatus: whatsapp?.connectionStatus || 'PENDING',
         whatsappLastVerifiedAt: whatsapp?.lastVerifiedAt?.toISOString() || null,
-        isDemoData: !snapshot,
-        lastDataAt: snapshot?.updatedAt?.toISOString() || null,
+        isEmptyState: !initialSnapshot.exists,
+        lastDataAt: initialSnapshot.updatedAt?.toISOString() || null,
         canManageProjects: hasTenantPermission(access, 'org:projects:manage'),
         canViewTeam: hasTenantPermission(access, 'tenant:members:read'),
         canManageIntegrations: hasTenantPermission(access, 'org:integrations:manage'),
+        aiSupervisorEnabled: aiSettings.supervisorEnabled,
+        aiAudioTranscriptionEnabled: aiSettings.audioTranscriptionEnabled,
+        canManageField,
+        fieldWorkers: fieldWorkers.map((worker) => ({
+          id: worker.id,
+          name: worker.name,
+          role: worker.role,
+          whatsappRole: fieldWorkerWhatsAppRole(worker),
+        })),
       }}
       platformAccess={{
         email: access.email,
@@ -64,6 +86,9 @@ export default async function DashboardPage() {
           name: access.project.name,
           address: access.project.address,
           status: access.project.status,
+          latitude: access.project.latitude == null ? null : Number(access.project.latitude),
+          longitude: access.project.longitude == null ? null : Number(access.project.longitude),
+          geofenceMeters: access.project.geofenceMeters,
         },
       }}
     />

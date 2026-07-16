@@ -6,84 +6,139 @@ import { OrganizationSwitcher, UserButton, useUser } from '@clerk/nextjs';
 import PlatformReadiness from './platform-readiness';
 
 const initialAppState = {
-  operariosCount: 1,
-  avancePercentage: 42,
-  alertsCount: 2,
-  diasEstimados: "Día 12/35",
-  tasks: {
-      1: { name: "Revoque Grueso", progress: 80, duration: 5, startOffset: 0, assignee: "Juan Gómez" },
-      2: { name: "Cañería y Descargas", progress: 20, duration: 4, startOffset: 28.5, assignee: "Luis Martínez" },
-      3: { name: "Revestimiento Cerámico", progress: 0, duration: 4, startOffset: 57.1, assignee: "Carlos Pérez" },
-      4: { name: "Pintura y Terminación", progress: 0, duration: 2, startOffset: 85.7, assignee: "Carlos Pérez" }
-  },
-  incidents: [
-      {
-          id: "inc-1",
-          title: "Quiebre de Stock Crítico",
-          description: "Cemento Loma Negra por debajo del mínimo de seguridad (35 de 40 bolsas). Riesgo de detención de revoque grueso.",
-          type: "warning",
-          badge: "Stock Bajo",
-          timestamp: "Hoy, 08:30 AM",
-          reporter: "Control de Corralón",
-          icon: "fa-solid fa-triangle-exclamation"
-      },
-      {
-          id: "inc-2",
-          title: "Alerta de Geocerca (Desvío GPS)",
-          description: "El operario Carlos Pérez registró check-in satelital a 150m del radio de obra verificado (excede límite de 20m).",
-          type: "critical",
-          badge: "Desvío GPS",
-          timestamp: "Hoy, 07:50 AM",
-          reporter: "Geolocalización Satelital",
-          icon: "fa-solid fa-location-crosshairs"
-      },
-      {
-          id: "inc-3",
-          title: "Asistencia Registrada por Voz",
-          description: "Juan Gómez (Albañilería Principal) inició jornada. Biometría de voz validada con éxito.",
-          type: "success",
-          badge: "Presentismo",
-          timestamp: "Hoy, 08:02 AM",
-          reporter: "Asistente de Voz IA",
-          icon: "fa-solid fa-microphone"
-      },
-      {
-          id: "inc-4",
-          title: "Planificación Gantt Sincronizada",
-          description: "Línea base reajustada. Hito de finalización proyectado para el 15/Jul.",
-          type: "info",
-          badge: "Gantt",
-          timestamp: "Ayer, 06:15 PM",
-          reporter: "Supervisor IA",
-          icon: "fa-solid fa-chart-gantt"
-      }
-  ],
-  attendance: {
-      "Juan Gómez": { role: "Albañilería Principal", checkin: "08:02 AM", status: "Presente" },
-      "Carlos Pérez": { role: "Pintura e Interiores", checkin: "--:--", status: "Ausente" },
-      "Luis Martínez": { role: "Instalaciones y Sanitarios", checkin: "--:--", status: "Ausente" }
-  },
-  stockpiles: {
-      cemento: { name: "Cemento Loma Negra", current: 35, min: 40, max: 150, unit: "Bolsas", supplier: "Loma Negra S.A.", status: "Crítico" },
-      hierro: { name: "Hierro A500 Acindar", current: 85, min: 30, max: 100, unit: "Barras", supplier: "Acindar Distribuidores", status: "Stock OK" },
-      ladrillo: { name: "Ladrillo Portante Alberdi", current: 1500, min: 800, max: 2500, unit: "Uds", supplier: "Ladrillos Alberdi", status: "Stock OK" },
-      arena: { name: "Arena Fina Cantera", current: 4, min: 8, max: 20, unit: "m³", supplier: "Cantera Palermo", status: "En Camino" }
-  },
-  hrAttendance: {
-      "Juan Gómez": { role: "Albañilería Principal", presents: 21, excused: 1, unexcused: 0, status: "Presente" },
-      "Carlos Pérez": { role: "Pintura e Interiores", presents: 15, excused: 2, unexcused: 5, status: "Ausente" },
-      "Luis Martínez": { role: "Instalaciones y Sanitarios", presents: 18, excused: 3, unexcused: 1, status: "Ausente" }
-  },
-  hrBonuses: [
-      { name: "Juan Gómez", type: "Bono Puntualidad", amount: "$25.000 ARS", date: "Hace 2 días" },
-      { name: "Luis Martínez", type: "Bono Desempeño", amount: "$45.000 ARS", date: "Hace 1 semana" }
-  ]
+  operariosCount: 0,
+  avancePercentage: 0,
+  alertsCount: 0,
+  diasEstimados: 'Sin plazo',
+  tasks: {},
+  incidents: [],
+  attendance: {},
+  stockpiles: {},
+  hrAttendance: {},
+  hrBonuses: [],
 };
+
+const LEGACY_DEMO_IDENTITIES = new Set([
+  'juan gómez',
+  'carlos pérez',
+  'luis martínez',
+]);
+
+const LEGACY_DEMO_MATERIALS = new Set([
+  'cemento loma negra',
+  'hierro a500 acindar',
+  'ladrillo portante alberdi',
+  'arena fina cantera',
+]);
+
+function isObjectRecord(value) {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function isLegacyDemoIdentity(value) {
+  return LEGACY_DEMO_IDENTITIES.has(String(value || '').trim().toLocaleLowerCase('es-AR'));
+}
+
+function isLegacyDemoSnapshot(candidate) {
+  if (!isObjectRecord(candidate) || String(candidate.diasEstimados || '').trim() !== 'Día 12/35') {
+    return false;
+  }
+  const identities = new Set([
+    ...Object.keys(isObjectRecord(candidate.attendance) ? candidate.attendance : {}),
+    ...Object.keys(isObjectRecord(candidate.hrAttendance) ? candidate.hrAttendance : {}),
+    ...Object.values(isObjectRecord(candidate.tasks) ? candidate.tasks : {})
+      .map((task) => (isObjectRecord(task) ? task.assignee : null)),
+  ].map((value) => String(value || '').trim().toLocaleLowerCase('es-AR')));
+  return [...LEGACY_DEMO_IDENTITIES].every((identity) => identities.has(identity));
+}
+
+function normalizeAppState(candidate) {
+  if (!isObjectRecord(candidate)) return { ...initialAppState };
+  const stripLegacyDemo = isLegacyDemoSnapshot(candidate);
+
+  const tasks = Object.fromEntries(
+    Object.entries(isObjectRecord(candidate.tasks) ? candidate.tasks : {})
+      .filter(([, task]) => (
+        isObjectRecord(task)
+        && (!stripLegacyDemo || !isLegacyDemoIdentity(task.assignee))
+      )),
+  );
+  const attendance = Object.fromEntries(
+    Object.entries(isObjectRecord(candidate.attendance) ? candidate.attendance : {})
+      .filter(([key, entry]) => (
+        isObjectRecord(entry)
+        && (!stripLegacyDemo || (!isLegacyDemoIdentity(key) && !isLegacyDemoIdentity(entry.name)))
+      )),
+  );
+  const hrAttendance = Object.fromEntries(
+    Object.entries(isObjectRecord(candidate.hrAttendance) ? candidate.hrAttendance : {})
+      .filter(([key, entry]) => (
+        isObjectRecord(entry)
+        && (!stripLegacyDemo || (!isLegacyDemoIdentity(key) && !isLegacyDemoIdentity(entry.name)))
+      )),
+  );
+  const stockpiles = Object.fromEntries(
+    Object.entries(isObjectRecord(candidate.stockpiles) ? candidate.stockpiles : {})
+      .filter(([, item]) => (
+        isObjectRecord(item)
+        && (
+          !stripLegacyDemo
+          || (
+            !LEGACY_DEMO_MATERIALS.has(String(item.name || '').trim().toLocaleLowerCase('es-AR'))
+            && !String(item.supplier || '').toLocaleLowerCase('es-AR').includes('palermo')
+          )
+        )
+      )),
+  );
+  const incidents = (Array.isArray(candidate.incidents) ? candidate.incidents : [])
+    .filter((incident) => isObjectRecord(incident))
+    .filter((incident) => (
+      !stripLegacyDemo
+      || ![
+        incident.title,
+        incident.description,
+        incident.reporter,
+      ].some((value) => {
+        const copy = String(value || '').toLocaleLowerCase('es-AR');
+        return copy.includes('juan gómez')
+          || copy.includes('carlos pérez')
+          || copy.includes('luis martínez');
+      })
+    ));
+  const hrBonuses = (Array.isArray(candidate.hrBonuses) ? candidate.hrBonuses : [])
+    .filter((bonus) => (
+      isObjectRecord(bonus)
+      && (!stripLegacyDemo || !isLegacyDemoIdentity(bonus.name))
+    ));
+  const taskValues = Object.values(tasks);
+  const attendanceValues = Object.values(attendance);
+  const presentWorkers = attendanceValues.filter((entry) => attendanceStatus(entry).startsWith('Presente')).length;
+  const alertCount = incidents.filter((incident) => ['warning', 'critical'].includes(incident.type)).length;
+  const progress = taskValues.length > 0
+    ? Math.round(taskValues.reduce((sum, task) => sum + Math.max(0, Math.min(100, Number(task.progress) || 0)), 0) / taskValues.length)
+    : 0;
+
+  return {
+    ...candidate,
+    operariosCount: presentWorkers,
+    avancePercentage: progress,
+    alertsCount: alertCount,
+    diasEstimados: stripLegacyDemo
+      ? initialAppState.diasEstimados
+      : String(candidate.diasEstimados || initialAppState.diasEstimados),
+    tasks,
+    incidents,
+    attendance,
+    stockpiles,
+    hrAttendance,
+    hrBonuses,
+  };
+}
 
 const initialChatMessages = [
   {
       sender: "bot",
-      text: "Hola Arq. Marcelo. Soy tu Copiloto Inteligente de ObraSaaS. Estoy procesando los reportes de la cuadrilla y telemetría de obra en tiempo real. Escribe una consulta o reproduce un audio.",
+      text: "Hola. Soy tu Copiloto de ObraSaaS. Puedo analizar el último estado registrado de la cuadrilla y la obra. Escribí una consulta o probá un audio demostrativo.",
       time: "08:00 AM"
   }
 ];
@@ -112,44 +167,85 @@ function createClientEntityId(prefix) {
 
 const audioData = {
   1: {
-      from: "luis",
-      text: "Buenas, jefe. Le aviso que ya entramos a la obra acá en Palermo Chico con toda la gente. Está Juan Gómez en la mezcla y Luis Martínez ya arrancó a revisar las cañerías del baño. Todo listo para arrancar la jornada.",
-      actionDesc: "Fichaje de ingreso verificado y registrado mediante biométrica de voz.",
-      impactTag: "Ingreso Exitoso",
-      impactClass: "success",
-      time: "08:02 AM"
+      text: "Buen día. Ya llegué a la obra y quiero registrar el inicio de mi jornada.",
   },
   2: {
-      from: "juan",
-      text: "Jefe, le comento que terminamos de dar la segunda mano de revoque grueso en la cocina y en todo el living del primer piso. Quedó espectacular, ya está listo para el fratachado final. Avanzamos a la siguiente fase según el plano.",
-      actionDesc: "Revoque grueso registrado al 100%. Avanzada etapa en Gantt.",
-      impactTag: "Gantt Actualizado",
-      impactClass: "success",
-      time: "02:15 PM"
+      text: "Terminamos la tarea asignada en el frente de trabajo y dejo este audio como evidencia de avance.",
   },
   3: {
-      from: "luis",
-      text: "Hola, Marcelo. Mirá, tenemos una complicación técnica acá. Luis Martínez estuvo probando la descarga principal del baño y salta agua por una fisura importante en el codo de descarga de PVC de ciento diez. Hay que picar un pedacito de losa y cambiar el tramo roto antes de tapar.",
-      actionDesc: "Fisura en descarga sanitaria detectada. Ordenada reparación técnica urgente.",
-      impactTag: "Alerta de Rotura",
-      impactClass: "danger",
-      time: "04:05 PM"
+      text: "Detectamos una pérdida en una instalación. Hay que revisar el tramo antes de continuar.",
   },
   4: {
-      from: "carlos",
-      text: "Marcelo, llamé al corralón y me dicen que el flete con las cerámicas del revestimiento del baño se retrasó y recién nos descargan pasado mañana a primera hora. Nos va a demorar por lo menos dos días la colocación. Voy reordenando a la gente para que avance con la pintura exterior.",
-      actionDesc: "Retraso logístico del proveedor. Reprogramación de cronograma Gantt (+2 días).",
-      impactTag: "Gantt Reajustado",
-      impactClass: "warning",
-      time: "05:10 PM"
+      text: "El proveedor informó una demora de entrega. Dejo el aviso para que el responsable evalúe el cronograma.",
   }
 };
+
+function attendanceRecords(attendance) {
+  if (!attendance || typeof attendance !== 'object' || Array.isArray(attendance)) return [];
+  return Object.entries(attendance).map(([key, value]) => {
+    const entry = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    const name = typeof entry.name === 'string' && entry.name.trim() ? entry.name.trim() : key;
+    return { key, name, entry };
+  });
+}
+
+function attendanceRecordByName(attendance, name) {
+  return attendanceRecords(attendance).find((record) => (
+    record.name === name || record.key === name
+  )) || null;
+}
+
+function attendanceStatus(entry) {
+  return typeof entry?.status === 'string' && entry.status.trim()
+    ? entry.status.trim()
+    : 'Sin registro';
+}
+
+function validProjectStateVersion(value) {
+  const version = typeof value === 'number'
+    ? value
+    : typeof value === 'string' && /^\d+$/.test(value.trim())
+      ? Number(value.trim())
+      : Number.NaN;
+  return Number.isSafeInteger(version) && version >= 0 && version <= 2_147_483_647
+    ? version
+    : null;
+}
+
+function projectStateEtag(version) {
+  return `"project-state-${validProjectStateVersion(version) ?? 0}"`;
+}
+
+function decodeProjectStateResponse(response, payload, fallbackVersion = 0) {
+  const explicitHeaderVersion = validProjectStateVersion(
+    response.headers.get('x-project-state-version'),
+  );
+  const etagMatch = response.headers.get('etag')?.match(/^"project-state-(\d+)"$/);
+  const etagVersion = validProjectStateVersion(etagMatch?.[1]);
+  const envelopeVersion = isObjectRecord(payload)
+    && isObjectRecord(payload.state)
+    ? validProjectStateVersion(payload.version)
+    : null;
+  const headerVersion = explicitHeaderVersion ?? etagVersion;
+  if (headerVersion != null && envelopeVersion != null && headerVersion !== envelopeVersion) {
+    throw new Error('La API devolvió versiones de estado inconsistentes.');
+  }
+  return {
+    state: envelopeVersion == null ? payload : payload.state,
+    version: headerVersion ?? envelopeVersion ?? validProjectStateVersion(fallbackVersion) ?? 0,
+  };
+}
 
 export default function Dashboard({ platformAccess, initialState, initialMessages, setup }) {
   const { user } = useUser();
   // Application State
-  const [state, setState] = useState(initialState || initialAppState);
-  const [chatMessages, setChatMessages] = useState(initialMessages || initialChatMessages);
+  const [state, setState] = useState(() => normalizeAppState(initialState));
+  const stateVersionRef = useRef(validProjectStateVersion(setup.initialStateVersion) ?? 0);
+  const stateWriteQueueRef = useRef(Promise.resolve());
+  const stateWriteGenerationRef = useRef(0);
+  const latestStateWriteSequenceRef = useRef(0);
+  const pendingStateWritesRef = useRef(0);
+  const [chatMessages, setChatMessages] = useState(Array.isArray(initialMessages) ? initialMessages : initialChatMessages);
   const [syncState, setSyncState] = useState('live');
   const [lastSyncedAt, setLastSyncedAt] = useState(setup.initialLoadedAt);
   const [activeTab, setActiveTab] = useState('sec-dashboard');
@@ -161,39 +257,39 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
   const [showAddTaskModal, setShowAddTaskModal] = useState(false);
   const [showEditTaskModal, setShowEditTaskModal] = useState(false);
   const [showReceiveMaterialModal, setShowReceiveMaterialModal] = useState(false);
-  const [showWeeklyReportModal, setShowWeeklyReportModal] = useState(false);
 
   // CRUD Forms State
   const [newTaskName, setNewTaskName] = useState('');
-  const [newTaskAssignee, setNewTaskAssignee] = useState('Juan Gómez');
+  const [newTaskAssignee, setNewTaskAssignee] = useState('');
   const [newTaskStart, setNewTaskStart] = useState(1);
   const [newTaskDuration, setNewTaskDuration] = useState(3);
   const [newTaskProgress, setNewTaskProgress] = useState(0);
 
   const [editTaskId, setEditTaskId] = useState(null);
   const [editTaskName, setEditTaskName] = useState('');
-  const [editTaskAssignee, setEditTaskAssignee] = useState('Juan Gómez');
+  const [editTaskAssignee, setEditTaskAssignee] = useState('');
   const [editTaskStart, setEditTaskStart] = useState(1);
   const [editTaskDuration, setEditTaskDuration] = useState(3);
   const [editTaskProgress, setEditTaskProgress] = useState(0);
 
-  const [receiveMaterialKey, setReceiveMaterialKey] = useState('cemento');
+  const [receiveMaterialKey, setReceiveMaterialKey] = useState('');
   const [receiveMaterialQty, setReceiveMaterialQty] = useState(50);
   const [receiveMaterialInvoice, setReceiveMaterialInvoice] = useState('');
 
   // Personal HR forms
-  const [hrBonusAssignee, setHrBonusAssignee] = useState('Juan Gómez');
+  const [hrBonusAssignee, setHrBonusAssignee] = useState('');
   const [hrBonusType, setHrBonusType] = useState('Bono de Puntualidad');
-  const [hrMedAssignee, setHrMedAssignee] = useState('Carlos Pérez');
-  const [hrMedDiagnosis, setHrMedDiagnosis] = useState('');
+  const [hrMedAssignee, setHrMedAssignee] = useState('');
   const [hrMedDays, setHrMedDays] = useState('1 día');
-  const [hrMedFileName, setHrMedFileName] = useState('Seleccionar Archivo...');
 
   // Simulated messaging / chats inputs
   const [chatInput, setChatInput] = useState('');
   const [attachmentMenuOpen, setAttachmentMenuOpen] = useState(false);
   const [gpsModalOpen, setGpsModalOpen] = useState(false);
-  const [gpsLabel, setGpsLabel] = useState('GPS: Obra Palermo Chico');
+  const [gpsLabel, setGpsLabel] = useState('Elegí cómo obtener un punto de ubicación');
+  const [gpsRequestPending, setGpsRequestPending] = useState(false);
+  const [selectedFieldWorkerId, setSelectedFieldWorkerId] = useState('');
+  const [fieldSimulationPending, setFieldSimulationPending] = useState(false);
 
   // AI Supervisors Inputs & histories
   const [copilotInput, setCopilotInput] = useState('');
@@ -232,6 +328,8 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
   const svgLinesRef = useRef(null);
   const chatMessagesEndRef = useRef(null);
   const copilotMessagesEndRef = useRef(null);
+  const gpsDialogRef = useRef(null);
+  const gpsReturnFocusRef = useRef(null);
 
   const waveformRef1 = useRef(null);
   const waveformRef2 = useRef(null);
@@ -271,8 +369,19 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
           messagesRes.json(),
         ]);
         if (!active) return;
-        setState(stateData);
-        setChatMessages(messagesData);
+        const snapshot = decodeProjectStateResponse(
+          stateRes,
+          stateData,
+          stateVersionRef.current,
+        );
+        if (
+          pendingStateWritesRef.current === 0
+          && snapshot.version >= stateVersionRef.current
+        ) {
+          stateVersionRef.current = snapshot.version;
+          setState(normalizeAppState(snapshot.state));
+        }
+        setChatMessages(Array.isArray(messagesData) ? messagesData : []);
         setLastSyncedAt(new Date().toISOString());
         setSyncState('live');
       } catch (err) {
@@ -318,28 +427,161 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
     }
   };
 
-  // Sync state back to API database
-  const saveStateToApi = async (updatedState) => {
+  const reloadLatestProjectState = async () => {
+    const response = await fetch('/api/state', { cache: 'no-store' });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || 'No se pudo recargar el estado vigente de la obra.');
+    }
+    const snapshot = decodeProjectStateResponse(
+      response,
+      payload,
+      stateVersionRef.current,
+    );
+    stateVersionRef.current = snapshot.version;
+    setState(normalizeAppState(snapshot.state));
+    setLastSyncedAt(new Date().toISOString());
+    setSyncState('live');
+    return snapshot;
+  };
+
+  // Serialize local writes so rapid controls use the version returned by the prior save.
+  const saveStateToApi = (updatedState) => {
+    const queuedState = JSON.parse(JSON.stringify(updatedState));
+    const generation = stateWriteGenerationRef.current;
+    const sequence = latestStateWriteSequenceRef.current + 1;
+    latestStateWriteSequenceRef.current = sequence;
+    pendingStateWritesRef.current += 1;
+    setSyncState('syncing');
+
+    const performWrite = async () => {
+      let saved = false;
+      try {
+        if (generation !== stateWriteGenerationRef.current) return false;
+        const expectedVersion = stateVersionRef.current;
+        const response = await fetch('/api/state', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'If-Match': projectStateEtag(expectedVersion),
+          },
+          body: JSON.stringify({ state: queuedState, expectedVersion }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (response.status === 409 && payload.code === 'STATE_VERSION_CONFLICT') {
+          if (generation === stateWriteGenerationRef.current) {
+            stateWriteGenerationRef.current += 1;
+          }
+          await reloadLatestProjectState();
+          addToast(
+            'Otra persona actualizó la obra antes que vos. Recargamos sus cambios y descartamos la edición desactualizada para no sobrescribirla.',
+            'warning',
+          );
+          return false;
+        }
+        if (!response.ok) {
+          throw new Error(payload.error || 'No se pudo guardar el cambio operativo.');
+        }
+
+        const snapshot = decodeProjectStateResponse(
+          response,
+          payload,
+          expectedVersion + 1,
+        );
+        stateVersionRef.current = snapshot.version;
+        if (sequence === latestStateWriteSequenceRef.current) {
+          setState(normalizeAppState(snapshot.state));
+        }
+        setLastSyncedAt(new Date().toISOString());
+        saved = true;
+        return true;
+      } catch (error) {
+        if (generation === stateWriteGenerationRef.current) {
+          stateWriteGenerationRef.current += 1;
+        }
+        console.error('Error saving state to DB:', error);
+        setSyncState('error');
+        addToast(error.message || 'No se pudo guardar el cambio operativo.', 'error');
+        return false;
+      } finally {
+        pendingStateWritesRef.current = Math.max(0, pendingStateWritesRef.current - 1);
+        if (saved && pendingStateWritesRef.current === 0) setSyncState('live');
+      }
+    };
+
+    const queuedWrite = stateWriteQueueRef.current.then(performWrite, performWrite);
+    stateWriteQueueRef.current = queuedWrite.catch(() => false);
+    return queuedWrite;
+  };
+
+  const fieldWorkers = useMemo(
+    () => (Array.isArray(setup.fieldWorkers) ? setup.fieldWorkers : []),
+    [setup.fieldWorkers],
+  );
+  const selectedFieldWorker = fieldWorkers.find((worker) => worker.id === selectedFieldWorkerId) || null;
+  const taskEntries = Object.entries(state.tasks);
+  const stockpileEntries = Object.entries(state.stockpiles);
+  const hrAttendanceEntries = Object.entries(state.hrAttendance);
+  const isLegacyInternalProject = platformAccess.isSuperadmin
+    && platformAccess.organization.name === 'ObraSaaS Operaciones'
+    && String(platformAccess.project.name || '').trim().toLocaleLowerCase('es-AR') === 'obra palermo';
+  const displayProjectName = isLegacyInternalProject
+    ? 'Proyecto sin configurar'
+    : platformAccess.project.name || 'Proyecto sin configurar';
+  const displayProjectAddress = isLegacyInternalProject
+    ? ''
+    : platformAccess.project.address || '';
+  const attendanceInsight = useMemo(() => {
+    const measured = hrAttendanceEntries
+      .map(([name, item]) => ({
+        name,
+        role: item?.role || 'Cuadrilla de obra',
+        presents: Number(item?.presents),
+      }))
+      .filter((item) => Number.isFinite(item.presents) && item.presents > 0)
+      .sort((left, right) => right.presents - left.presents || left.name.localeCompare(right.name, 'es'));
+    if (measured.length === 0) return null;
+    const leader = measured[0];
+    const tied = measured.filter((item) => item.presents === leader.presents);
+    return tied.length === 1 ? leader : null;
+  }, [hrAttendanceEntries]);
+  const fieldSimulatorReady = Boolean(setup.canManageField && selectedFieldWorker);
+  const fieldSimulatorBusy = fieldSimulationPending || gpsRequestPending || playingAudioIndex !== null;
+  const projectLatitude = Number(platformAccess.project.latitude);
+  const projectLongitude = Number(platformAccess.project.longitude);
+  const projectPointAvailable = platformAccess.project.latitude != null
+    && platformAccess.project.longitude != null
+    && Number.isFinite(projectLatitude)
+    && Number.isFinite(projectLongitude);
+
+  useEffect(() => {
+    const activeIds = new Set(fieldWorkers.map((worker) => worker.id));
+    if (newTaskAssignee && !activeIds.has(newTaskAssignee)) setNewTaskAssignee('');
+    if (hrBonusAssignee && !activeIds.has(hrBonusAssignee)) setHrBonusAssignee('');
+    if (hrMedAssignee && !activeIds.has(hrMedAssignee)) setHrMedAssignee('');
+  }, [fieldWorkers, hrBonusAssignee, hrMedAssignee, newTaskAssignee]);
+
+  const postFieldSimulation = async (payload) => {
+    if (!setup.canManageField) {
+      throw new Error('Tu rol no puede ejecutar comandos de campo.');
+    }
+    if (!selectedFieldWorker) {
+      throw new Error(fieldWorkers.length === 0
+        ? 'Primero autorizá una persona de la cuadrilla en Equipo y permisos.'
+        : 'Elegí qué persona autorizada representa este evento de prueba.');
+    }
+    setFieldSimulationPending(true);
     try {
-      setSyncState('syncing');
-      const res = await fetch('/api/state', {
+      const response = await fetch('/api/whatsapp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedState)
+        body: JSON.stringify({ ...payload, workerId: selectedFieldWorker.id }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(data.error || 'No se pudo guardar el cambio operativo.');
-      }
-      setState(data);
-      setLastSyncedAt(new Date().toISOString());
-      setSyncState('live');
-      return true;
-    } catch (e) {
-      console.error("Error saving state to DB:", e);
-      setSyncState('error');
-      addToast(e.message || 'No se pudo guardar el cambio operativo.', 'error');
-      return false;
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || 'No se pudo procesar el evento de campo.');
+      return result;
+    } finally {
+      setFieldSimulationPending(false);
     }
   };
 
@@ -481,6 +723,16 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
   // Play simulated audio notes
   const playAudioSim = (index) => {
     if (playingAudioIndex !== null) return;
+    if (!setup.canManageField) {
+      addToast('Tu rol no puede ejecutar comandos de campo.', 'warning');
+      return;
+    }
+    if (!selectedFieldWorker) {
+      addToast(fieldWorkers.length === 0
+        ? 'Primero autorizá una persona de la cuadrilla en Equipo y permisos.'
+        : 'Elegí el actor autorizado de la prueba.', 'warning');
+      return;
+    }
 
     setPlayingAudioIndex(index);
     playBeep('start', () => {
@@ -488,47 +740,30 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
         playBeep('end', async () => {
           setPlayingAudioIndex(null);
 
-          // Call simulated Webhook API to process the voice note transcription!
+          // Register the provided demo transcript without implying live transcription.
           const data = audioData[index];
           try {
-            await fetch('/api/whatsapp', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                from: data.from,
-                text: data.text,
-                kind: 'audio',
-              })
-            });
+            await postFieldSimulation({ text: data.text, kind: 'audio' });
 
-            // Reload state after webhook processed it
-            const stateRes = await fetch('/api/state');
-            if (stateRes.ok) {
-              const stateData = await stateRes.json();
-              setState(stateData);
-            }
+            // Reload the authoritative snapshot and its concurrency version.
+            await reloadLatestProjectState();
 
             const messagesRes = await fetch('/api/whatsapp');
             if (messagesRes.ok) {
               const messagesData = await messagesRes.json();
-              setChatMessages(messagesData);
+              setChatMessages(Array.isArray(messagesData) ? messagesData : []);
             }
             
-            // Push smart notification
-            if (data.impactClass === 'danger') {
-              addToast('Alerta crítica prioritaria de campo: ' + data.actionDesc, 'warning');
-            } else {
-              addToast('Evento procesado por IA: ' + data.impactTag, 'success');
-            }
-            
-            // Auto Copilot Insights update
+            addToast('Transcripción de prueba guardada como evidencia.', 'success');
+
             setCopilotMessages(prev => [...prev, { 
-                sender: 'bot', 
-                text: `**[Alerta de Audio en Vivo]**\nHe interceptado un mensaje de voz de ${data.from}. He procedido a actualizar el Gantt y notificar a los supervisores por precaución.` 
+                sender: 'bot',
+                text: `**[Audio de prueba]**\nRegistré la transcripción demostrativa de ${selectedFieldWorker.name} como evidencia. Por seguridad no ejecuté cambios de avance, asistencia ni notificaciones desde el audio.`,
             }]);
 
           } catch (e) {
             console.error("Audio sim webhook error:", e);
+            addToast(e.message || 'No se pudo procesar el audio de prueba.', 'error');
           }
         });
       }, 3000);
@@ -567,11 +802,13 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
 
       if (!mapContainerRef.current) return;
 
-      const palermoSite = [-34.5886, -58.4302];
+      const projectSite = projectPointAvailable
+        ? [projectLatitude, projectLongitude]
+        : [-34.6037, -58.3816];
       mapInstance = L.map(mapContainerRef.current, {
         zoomControl: false,
         attributionControl: false
-      }).setView(palermoSite, 17);
+      }).setView(projectSite, projectPointAvailable ? 17 : 11);
 
       const tileUrl = isLightTheme
         ? 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
@@ -581,39 +818,44 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
         maxZoom: 20
       }).addTo(mapInstance);
 
-      // Virtual geofence (green boundary)
-      L.circle(palermoSite, {
-        color: '#10b981',
-        fillColor: '#10b981',
-        fillOpacity: 0.12,
-        radius: 80
-      }).addTo(mapInstance);
+      if (projectPointAvailable) {
+        L.circle(projectSite, {
+          color: '#10b981',
+          fillColor: '#10b981',
+          fillOpacity: 0.12,
+          radius: Math.max(25, Number(platformAccess.project.geofenceMeters) || 100),
+        }).addTo(mapInstance);
+      }
 
-      // Coordinates for employees
-      const workerCoords = {
-        "Juan Gómez": { lat: -34.5884, lng: -58.4304, role: "Albañilería Principal" },
-        "Carlos Pérez": { lat: -34.5886, lng: -58.4302, role: "Pintura e Interiores" },
-        "Luis Martínez": { lat: -34.5888, lng: -58.4300, role: "Instalaciones y Sanitarios" }
-      };
+      const locatedAttendance = attendanceRecords(state.attendance).filter(({ entry }) => {
+        const latitude = Number(entry.latitude);
+        const longitude = Number(entry.longitude);
+        return attendanceStatus(entry).includes('Presente')
+          && entry.latitude != null
+          && entry.longitude != null
+          && Number.isFinite(latitude)
+          && Number.isFinite(longitude);
+      });
 
       if (mapMode === 'sat') {
-        // Draw individual markers with pulsating CSS radar ring
-        Object.keys(state.attendance).forEach(name => {
-          const att = state.attendance[name];
-          if (att.status.includes('Presente') && workerCoords[name]) {
-            const coord = workerCoords[name];
-            const radarIcon = L.divIcon({
-              className: 'radar-marker-container',
-              html: '<div class="radar-marker-pulse"></div><div class="radar-marker-dot"></div>',
-              iconSize: [20, 20],
-              iconAnchor: [10, 10]
-            });
+        locatedAttendance.forEach(({ name, entry }) => {
+          const radarIcon = L.divIcon({
+            className: 'radar-marker-container',
+            html: '<div class="radar-marker-pulse"></div><div class="radar-marker-dot"></div>',
+            iconSize: [20, 20],
+            iconAnchor: [10, 10]
+          });
+          const popup = document.createElement('div');
+          const person = document.createElement('strong');
+          person.textContent = name;
+          const detail = document.createElement('div');
+          detail.textContent = `${entry.role || 'Cuadrilla de obra'} · Check-in: ${entry.checkin || 'Sin hora'}`;
+          popup.append(person, detail);
 
-            const marker = L.marker([coord.lat, coord.lng], { icon: radarIcon })
-              .addTo(mapInstance)
-              .bindPopup(`<b>${name}</b><br>${coord.role}<br>Check-in: ${att.checkin}`);
-            markers.push(marker);
-          }
+          const marker = L.marker([Number(entry.latitude), Number(entry.longitude)], { icon: radarIcon })
+            .addTo(mapInstance)
+            .bindPopup(popup);
+          markers.push(marker);
         });
 
         // Zoom fit
@@ -623,25 +865,12 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
           markers[0].openPopup();
         }
       } else {
-        // Draw heat map circles
-        const heatSpots = [
-          { lat: -34.5886, lng: -58.4302, radius: 60, opacity: 0.45 },
-          { lat: -34.5884, lng: -58.4304, radius: 35, opacity: 0.30 }
-        ];
-
-        if (state.attendance["Luis Martínez"].status.includes("Presente")) {
-          heatSpots.push({ lat: -34.5888, lng: -58.4300, radius: 35, opacity: 0.30 });
-        }
-        if (state.attendance["Carlos Pérez"].status.includes("Presente")) {
-          heatSpots.push({ lat: -34.5886, lng: -58.4302, radius: 45, opacity: 0.35 });
-        }
-
-        heatSpots.forEach(spot => {
-          const circle = L.circle([spot.lat, spot.lng], {
+        locatedAttendance.forEach(({ entry }) => {
+          const circle = L.circle([Number(entry.latitude), Number(entry.longitude)], {
             color: '#ff9f1c',
             fillColor: '#ff9f1c',
-            fillOpacity: spot.opacity,
-            radius: spot.radius,
+            fillOpacity: 0.35,
+            radius: Math.max(25, Number(entry.accuracy) || 35),
             stroke: false
           }).addTo(mapInstance);
           heatCircles.push(circle);
@@ -658,7 +887,16 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
         mapInstance.remove();
       }
     };
-  }, [activeTab, isLightTheme, mapMode, state.attendance]);
+  }, [
+    activeTab,
+    isLightTheme,
+    mapMode,
+    platformAccess.project.geofenceMeters,
+    projectLatitude,
+    projectLongitude,
+    projectPointAvailable,
+    state.attendance,
+  ]);
 
   // Chart.js reactive loader
   useEffect(() => {
@@ -668,37 +906,18 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
     const buildCharts = async () => {
       const { Chart } = await import('chart.js/auto');
 
-      // 1. Progress Chart (Line)
+      // 1. Progress recorded on each persisted task.
       if (progressChartRef.current) {
-        const ctx = progressChartRef.current.getContext('2d');
-        const gradientReal = ctx.createLinearGradient(0, 0, 0, 250);
-        gradientReal.addColorStop(0, 'rgba(255, 159, 28, 0.35)');
-        gradientReal.addColorStop(1, 'rgba(255, 159, 28, 0.00)');
-
         progressChart = new Chart(progressChartRef.current, {
-          type: 'line',
+          type: 'bar',
           data: {
-              labels: ['Día 1', 'Día 4', 'Día 8', 'Día 12', 'Día 16', 'Día 20', 'Día 24', 'Día 28', 'Día 32', 'Día 35'],
-              datasets: [
-                  {
-                      label: 'Planificado (Curva S)',
-                      data: [10, 22, 35, 45, 58, 70, 82, 90, 96, 100],
-                      borderColor: isLightTheme ? 'rgba(0,0,0,0.2)' : 'rgba(255, 255, 255, 0.25)',
-                      borderDash: [5, 5],
-                      backgroundColor: 'transparent',
-                      borderWidth: 2,
-                      tension: 0.3
-                  },
-                  {
-                      label: 'Real de Obra',
-                      data: [10, 20, 32, state.avancePercentage, null, null, null, null, null, null],
-                      borderColor: '#ff9f1c',
-                      backgroundColor: gradientReal,
-                      fill: true,
-                      borderWidth: 3,
-                      tension: 0.3
-                  }
-              ]
+              labels: Object.values(state.tasks).map((task) => task.name || 'Tarea sin nombre'),
+              datasets: [{
+                label: 'Avance registrado',
+                data: Object.values(state.tasks).map((task) => Math.max(0, Math.min(100, Number(task.progress) || 0))),
+                backgroundColor: '#ff9f1c',
+                borderRadius: 6,
+              }],
           },
           options: {
               responsive: true,
@@ -719,7 +938,6 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
         let completed = 0;
         let enCurso = 0;
         let pendientes = 0;
-        let demoradas = state.alertsCount;
 
         Object.values(state.tasks).forEach(task => {
           if (task.progress === 100) completed++;
@@ -727,21 +945,16 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
           else pendientes++;
         });
 
-        if (demoradas > 0) {
-          pendientes = Math.max(0, pendientes - demoradas);
-        }
-
         tasksChart = new Chart(tasksChartRef.current, {
           type: 'doughnut',
           data: {
-              labels: ['Completadas', 'En Curso', 'Pendientes', 'Bloqueadas/Demoradas'],
+              labels: ['Completadas', 'En curso', 'Pendientes'],
               datasets: [{
-                  data: [completed, enCurso, pendientes, demoradas],
+                  data: [completed, enCurso, pendientes],
                   backgroundColor: [
                       '#10b981', 
                       '#3b82f6', 
-                      isLightTheme ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.08)', 
-                      '#ef4444'  
+                      isLightTheme ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.12)',
                   ],
                   borderWidth: 0
               }]
@@ -877,6 +1090,10 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
   };
 
   const sendCopilotUserMessage = async (promptOverride = null) => {
+    if (!setup.aiSupervisorEnabled) {
+      addToast('El Supervisor IA debe ser activado por un administrador en Integraciones.', 'warning');
+      return;
+    }
     const text = (typeof promptOverride === 'string' ? promptOverride : copilotInput).trim();
     if (!text || copilotStatus === 'loading') return;
 
@@ -939,104 +1156,162 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
 
   const handleSendMessage = async () => {
     const text = chatInput.trim();
-    if (!text) return;
+    if (!text || fieldSimulatorBusy) return;
 
-    setChatInput('');
     try {
-      await fetch('/api/whatsapp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          from: 'carlos',
-          text
-        })
-      });
+      await postFieldSimulation({ text });
+      setChatInput('');
 
       // Fetch updates
       const messagesRes = await fetch('/api/whatsapp');
       if (messagesRes.ok) {
         const messagesData = await messagesRes.json();
-        setChatMessages(messagesData);
+        setChatMessages(Array.isArray(messagesData) ? messagesData : []);
       }
     } catch (e) {
       console.error(e);
+      addToast(e.message || 'No se pudo enviar el mensaje.', 'error');
     }
   };
 
   // Select simulated attachments
   const selectAttachment = async (type) => {
     setAttachmentMenuOpen(false);
-    let payload = { from: 'carlos' };
-    
+    const payload = { kind: 'text' };
+
     if (type === 'document') {
-      payload.text = "Documento enviado: planos_palermo_v2.pdf";
-      payload.mediaUrl = "planos_palermo_v2.pdf";
-      payload.mediaType = "application/pdf";
-      payload.kind = "document";
+      payload.text = '[Escenario de documento] No se adjuntó un archivo real desde este simulador.';
     } else if (type === 'camera') {
-      // Multimodal Chaos Tolerance Simulator (Task 4)
-      payload.text = "[IMAGEN BORROSA DETECTADA] - Procesando con Visión Multimodal...";
-      payload.mediaUrl = "fachada.jpg";
-      payload.mediaType = "image/jpeg";
-      payload.kind = "image";
-      
-      addToast('Procesando imagen caótica de WhatsApp mediante IA Multimodal...', 'info');
-      
-      setTimeout(() => {
-        addToast('IA: Muro detectado con 85% de avance. Actualizando Gantt.', 'success');
-        setCopilotMessages(prev => [...prev, { sender: 'bot', text: '✅ He analizado la foto borrosa enviada desde la obra. Reconozco que es el frente sur y el muro está al 85%. He actualizado el progreso de "Mampostería" en el Gantt.' }]);
-      }, 3000);
-      
+      payload.text = '[Escenario de cámara] No se capturó ni adjuntó una imagen real.';
     } else if (type === 'gallery') {
-      payload.text = "Imagen de revoque seleccionada";
-      payload.mediaUrl = "revoque.jpg";
-      payload.mediaType = "image/jpeg";
-      payload.kind = "image";
+      payload.text = '[Escenario de galería] No se seleccionó ni adjuntó una imagen real.';
     } else if (type === 'audio') {
-      payload.text = "Audio de obra (5.4s)";
-      payload.mediaUrl = "audio.mp3";
-      payload.mediaType = "audio/mpeg";
-      payload.kind = "audio";
+      payload.text = '[Escenario de audio] Usá los audios demostrativos del panel para registrar una transcripción de prueba.';
     } else if (type === 'contact') {
-      payload.text = "👤 Contacto: Proveedor Arenas";
-      payload.mediaUrl = "arenas.vcf";
-      payload.mediaType = "text/vcard";
-      payload.kind = "document";
+      payload.text = '[Escenario de contacto] No se adjuntó una tarjeta de contacto real.';
     }
 
     try {
-      await fetch('/api/whatsapp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+      await postFieldSimulation(payload);
+      addToast('Escenario registrado sin adjuntar un archivo real.', 'info');
     } catch(e) {
       console.error(e);
+      addToast(e.message || 'No se pudo adjuntar la evidencia de prueba.', 'error');
     }
   };
 
-  const confirmGpsSend = async () => {
-    setGpsModalOpen(false);
+  const sendGpsPoint = async ({ latitude, longitude, successMessage }) => {
     try {
-      await fetch('/api/whatsapp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          from: 'carlos',
-          latitude: -34.5886,
-          longitude: -58.4302
-        })
+      await postFieldSimulation({
+        latitude,
+        longitude,
       });
+      closeGpsOptions();
+      addToast(successMessage, 'success');
     } catch (e) {
       console.error(e);
+      addToast(e.message || 'No se pudo validar la ubicación.', 'error');
     }
   };
 
-  const refreshGpsSearch = () => {
-    setGpsLabel("Buscando satélites GPS...");
-    setTimeout(() => {
-      setGpsLabel("GPS: Obra Palermo Chico (Precisión: 4m)");
-    }, 1000);
+  const openGpsOptions = () => {
+    if (!fieldSimulatorReady || fieldSimulatorBusy) return;
+    gpsReturnFocusRef.current = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    setGpsLabel('Elegí cómo obtener un punto de ubicación');
+    setGpsModalOpen(true);
+  };
+
+  const closeGpsOptions = () => {
+    setGpsModalOpen(false);
+    requestAnimationFrame(() => gpsReturnFocusRef.current?.focus());
+  };
+
+  const handleGpsDialogKeyDown = (event) => {
+    if (event.key === 'Escape') {
+      if (!fieldSimulatorBusy) {
+        event.preventDefault();
+        closeGpsOptions();
+      }
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const focusable = Array.from(
+      gpsDialogRef.current?.querySelectorAll('button:not([disabled])') || [],
+    );
+    if (focusable.length === 0) {
+      event.preventDefault();
+      return;
+    }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+
+  const simulateProjectGps = async () => {
+    if (!projectPointAvailable) {
+      addToast('La obra todavía no tiene latitud y longitud configuradas.', 'warning');
+      return;
+    }
+    setGpsLabel(`Punto configurado de ${displayProjectName}`);
+    await sendGpsPoint({
+      latitude: projectLatitude,
+      longitude: projectLongitude,
+      successMessage: `Punto configurado de ${displayProjectName} enviado como simulación.`,
+    });
+  };
+
+  const useBrowserGps = async () => {
+    if (!navigator.geolocation) {
+      addToast('Este navegador no ofrece geolocalización.', 'error');
+      return;
+    }
+    setGpsRequestPending(true);
+    setGpsLabel('Solicitando una lectura puntual al navegador…');
+    try {
+      const position = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          maximumAge: 0,
+          timeout: 12_000,
+        });
+      });
+      const latitude = Number(position.coords.latitude);
+      const longitude = Number(position.coords.longitude);
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+        throw new Error('El navegador devolvió una ubicación inválida.');
+      }
+      const accuracy = Number(position.coords.accuracy);
+      setGpsLabel(Number.isFinite(accuracy)
+        ? `Lectura puntual obtenida · precisión aproximada ${Math.round(accuracy)} m`
+        : 'Lectura puntual obtenida');
+      await sendGpsPoint({
+        latitude,
+        longitude,
+        successMessage: 'Ubicación actual del navegador enviada como lectura puntual.',
+      });
+    } catch (error) {
+      const denied = error?.code === 1;
+      const timedOut = error?.code === 3;
+      addToast(
+        denied
+          ? 'El navegador no recibió permiso para acceder a tu ubicación.'
+          : timedOut
+            ? 'La ubicación demoró demasiado. Probá nuevamente.'
+            : error.message || 'No se pudo obtener la ubicación del navegador.',
+        'error',
+      );
+      setGpsLabel('No se obtuvo una ubicación. Podés reintentar o usar el punto configurado de la obra.');
+    } finally {
+      setGpsRequestPending(false);
+    }
   };
 
   // CRUD actions for Gantt Chart
@@ -1045,6 +1320,7 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
       alert("Ingrese un nombre de tarea válido.");
       return;
     }
+    const assignedWorker = fieldWorkers.find((worker) => worker.id === newTaskAssignee) || null;
     const newId = createClientEntityId('task');
     const startOffset = (newTaskStart - 1) * 7.14;
     
@@ -1052,7 +1328,7 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
       ...state.tasks,
       [newId]: {
         name: newTaskName,
-        assignee: newTaskAssignee,
+        assignee: assignedWorker?.name || 'Sin asignar',
         progress: newTaskProgress,
         duration: newTaskDuration,
         startOffset: startOffset
@@ -1060,11 +1336,12 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
     };
 
     const nextState = { ...state, tasks: updatedTasks };
-    setState(nextState);
+    setState(normalizeAppState(nextState));
     await saveStateToApi(nextState);
 
     setShowAddTaskModal(false);
     setNewTaskName('');
+    setNewTaskAssignee('');
     setNewTaskStart(1);
     setNewTaskDuration(3);
     setNewTaskProgress(0);
@@ -1075,7 +1352,7 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
     if (!task) return;
     setEditTaskId(id);
     setEditTaskName(task.name);
-    setEditTaskAssignee(task.assignee);
+    setEditTaskAssignee(fieldWorkers.find((worker) => worker.name === task.assignee)?.id || '');
     setEditTaskStart(Math.round(task.startOffset / 7.14) + 1);
     setEditTaskDuration(task.duration);
     setEditTaskProgress(task.progress);
@@ -1085,11 +1362,12 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
   const handleSaveEditedTask = async () => {
     if (!editTaskName.trim()) return;
 
+    const assignedWorker = fieldWorkers.find((worker) => worker.id === editTaskAssignee) || null;
     const startOffset = (editTaskStart - 1) * 7.14;
     const updatedTasks = { ...state.tasks };
     updatedTasks[editTaskId] = {
       name: editTaskName,
-      assignee: editTaskAssignee,
+      assignee: assignedWorker?.name || 'Sin asignar',
       progress: editTaskProgress,
       duration: editTaskDuration,
       startOffset: startOffset
@@ -1107,7 +1385,7 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
       avancePercentage: newAv
     };
 
-    setState(nextState);
+    setState(normalizeAppState(nextState));
     await saveStateToApi(nextState);
     setShowEditTaskModal(false);
   };
@@ -1130,7 +1408,7 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
       avancePercentage: newAv
     };
 
-    setState(nextState);
+    setState(normalizeAppState(nextState));
     await saveStateToApi(nextState);
     setShowEditTaskModal(false);
   };
@@ -1153,7 +1431,7 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
       avancePercentage: newAv
     };
 
-    setState(nextState);
+    setState(normalizeAppState(nextState));
     await saveStateToApi(nextState);
   };
 
@@ -1165,15 +1443,23 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
       return;
     }
 
-    const updatedStockpiles = { ...state.stockpiles };
-    const item = updatedStockpiles[receiveMaterialKey];
-    item.current = Math.min(item.current + qty, item.max);
-    item.status = 'Stock OK';
+    const existingItem = state.stockpiles[receiveMaterialKey];
+    if (!existingItem) {
+      addToast('Elegí un material registrado antes de guardar la recepción.', 'warning');
+      return;
+    }
+    const nextCurrent = Math.min((Number(existingItem.current) || 0) + qty, Number(existingItem.max) || Number.MAX_SAFE_INTEGER);
+    const item = {
+      ...existingItem,
+      current: nextCurrent,
+      status: nextCurrent < (Number(existingItem.min) || 0) ? 'Crítico' : 'Stock OK',
+    };
+    const updatedStockpiles = { ...state.stockpiles, [receiveMaterialKey]: item };
 
     const newIncident = {
       id: createClientEntityId('inc-mat'),
       title: "Recepción de Materiales",
-      description: `Ingresaron ${qty} ${item.unit} de ${item.name} de ${item.supplier}. Remito: ${receiveMaterialInvoice || 'S/N'}. Stock normalizado.`,
+      description: `Se registraron ${qty} ${item.unit || 'unidades'} de ${item.name || 'material'}. Proveedor: ${item.supplier || 'sin informar'}. Remito: ${receiveMaterialInvoice || 'sin informar'}. Stock actualizado a ${item.current} ${item.unit || 'unidades'}.`,
       type: "success",
       badge: "Ingreso",
       timestamp: "Hace un momento",
@@ -1187,7 +1473,7 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
       incidents: [newIncident, ...state.incidents]
     };
 
-    setState(nextState);
+    setState(normalizeAppState(nextState));
     await saveStateToApi(nextState);
 
     setShowReceiveMaterialModal(false);
@@ -1197,22 +1483,27 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
 
   // Award incentive bonus
   const handleAwardBonus = async () => {
+    const worker = fieldWorkers.find((candidate) => candidate.id === hrBonusAssignee) || null;
+    if (!worker) {
+      addToast('Elegí una persona activa de la cuadrilla.', 'warning');
+      return;
+    }
     const nextBonuses = [
       {
-        name: hrBonusAssignee,
+        name: worker.name,
         type: hrBonusType,
-        amount: hrBonusType.includes("Puntualidad") ? "$15.000 ARS" : hrBonusType.includes("Velocidad") ? "$20.000 ARS" : "$25.000 ARS",
-        date: "Hace un momento"
+        amount: null,
+        date: new Date().toLocaleString('es-AR'),
       },
       ...state.hrBonuses
     ];
 
     const newIncident = {
       id: createClientEntityId('inc-bonus'),
-      title: "Bono Otorgado",
-      description: `Premio de ${hrBonusType} asignado a ${hrBonusAssignee}.`,
+      title: "Incentivo registrado",
+      description: `${hrBonusType} registrado para ${worker.name}. No se informó un importe ni se ejecutó un pago.`,
       type: "success",
-      badge: "Premio",
+      badge: "Registro",
       timestamp: "Hace un momento",
       reporter: "Recursos Humanos",
       icon: "fa-solid fa-gift"
@@ -1224,44 +1515,52 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
       incidents: [newIncident, ...state.incidents]
     };
 
-    setState(nextState);
+    setState(normalizeAppState(nextState));
     await saveStateToApi(nextState);
-    alert(`¡Premio otorgado con éxito a ${hrBonusAssignee}!`);
-  };
-
-  // Upload medical certificate uploader form
-  const handleMedicalFileSelected = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setHrMedFileName(file.name);
-    }
+    addToast(`Incentivo registrado para ${worker.name}.`, 'success');
   };
 
   const handleSubmitMedicalCert = async (e) => {
     e.preventDefault();
-    if (!hrMedDiagnosis.trim()) {
-      alert("Por favor ingrese un diagnóstico.");
+    const worker = fieldWorkers.find((candidate) => candidate.id === hrMedAssignee) || null;
+    if (!worker) {
+      addToast('Elegí una persona activa de la cuadrilla.', 'warning');
       return;
     }
-
     const updatedHrAttendance = { ...state.hrAttendance };
-    const attendee = updatedHrAttendance[hrMedAssignee];
+    const attendee = updatedHrAttendance[worker.name];
     if (attendee) {
-      attendee.excused += 1;
-      attendee.status = "Ausente Justificado";
+      updatedHrAttendance[worker.name] = {
+        ...attendee,
+        excused: (Number(attendee.excused) || 0) + 1,
+        status: 'Ausente Justificado',
+      };
+    } else {
+      updatedHrAttendance[worker.name] = {
+        role: worker.role || 'Cuadrilla de obra',
+        presents: 0,
+        excused: 1,
+        unexcused: 0,
+        status: 'Ausente Justificado',
+      };
     }
 
     const updatedAttendance = { ...state.attendance };
-    if (updatedAttendance[hrMedAssignee]) {
-      updatedAttendance[hrMedAssignee].status = "Ausente Justificado";
+    const attendanceRecord = attendanceRecordByName(updatedAttendance, worker.name);
+    if (attendanceRecord) {
+      updatedAttendance[attendanceRecord.key] = {
+        ...attendanceRecord.entry,
+        status: "Ausente Justificado",
+      };
     }
 
     const newIncident = {
       id: createClientEntityId('inc-med'),
       title: "Licencia Médica Registrada",
-      description: `${hrMedAssignee} presentó certificado por ${hrMedDiagnosis} (${hrMedDays} de licencia). Archivo adjunto: ${hrMedFileName}.`,
+      description: `Licencia registrada manualmente para ${worker.name}. Duración informada: ${hrMedDays}. Los detalles clínicos y el certificado no se incorporan a la bitácora operativa.`,
       type: "warning",
       badge: "Licencia",
+      sensitivity: "medical",
       timestamp: "Hace un momento",
       reporter: "Recursos Humanos",
       icon: "fa-solid fa-notes-medical"
@@ -1274,80 +1573,53 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
       incidents: [newIncident, ...state.incidents]
     };
 
-    setState(nextState);
+    setState(normalizeAppState(nextState));
     await saveStateToApi(nextState);
 
-    alert(`Certificado cargado para ${hrMedAssignee}. Ausencia justificada.`);
-    setHrMedDiagnosis('');
-    setHrMedFileName('Seleccionar Archivo...');
+    addToast(`Licencia registrada para ${worker.name}.`, 'success');
   };
 
   // Reset entire database state
   const handleResetState = async () => {
     if (confirm("¿Estás seguro de restablecer toda la base de datos de ObraSaaS? Se borrarán las tareas creadas, licencias e incidencias.")) {
       try {
-        const res = await fetch('/api/state', { method: 'DELETE' });
-        if (res.ok) {
-          const freshState = await res.json();
-          setState(freshState);
-          alert("Base de datos de ObraSaaS restablecida con éxito.");
+        await stateWriteQueueRef.current;
+        const expectedVersion = stateVersionRef.current;
+        setSyncState('syncing');
+        const response = await fetch('/api/state', {
+          method: 'DELETE',
+          headers: { 'If-Match': projectStateEtag(expectedVersion) },
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (response.status === 409 && payload.code === 'STATE_VERSION_CONFLICT') {
+          stateWriteGenerationRef.current += 1;
+          await reloadLatestProjectState();
+          addToast(
+            'La obra cambió antes del restablecimiento. Recargamos el estado vigente y no borramos esos cambios.',
+            'warning',
+          );
+          return;
         }
-      } catch(e) {
-        console.error(e);
+        if (!response.ok) {
+          throw new Error(payload.error || 'No se pudo restablecer el estado de la obra.');
+        }
+        const snapshot = decodeProjectStateResponse(
+          response,
+          payload,
+          expectedVersion + 1,
+        );
+        stateVersionRef.current = snapshot.version;
+        setState(normalizeAppState(snapshot.state));
+        setLastSyncedAt(new Date().toISOString());
+        setSyncState('live');
+        addToast('Estado operativo restablecido.', 'success');
+      } catch (error) {
+        console.error(error);
+        setSyncState('error');
+        addToast(error.message || 'No se pudo restablecer el estado de la obra.', 'error');
       }
     }
   };
-
-  const handlePrintWeeklyReport = () => {
-    window.open('/dashboard/report?print=true', '_blank');
-  };
-
-  // Calculate dynamic weekly report details
-  const weeklyReportDetails = useMemo(() => {
-    const cleanDias = String(state.diasEstimados || "12/35").replace(/Día\s*|Da\s*|D.a\s*/gi, "");
-    const match = cleanDias.match(/(\d+)\/(\d+)/);
-    let currentDay = 12;
-    let totalDays = 35;
-    if (match) {
-        currentDay = parseInt(match[1]) || 12;
-        totalDays = parseInt(match[2]) || 35;
-    }
-    totalDays = totalDays || 35;
-    const timelinePercentage = Math.round((currentDay / totalDays) * 100);
-
-    const totalBudget = 4995000;
-    const progressVal = parseFloat(state.avancePercentage) || 0;
-    const executedBudget = Math.round(totalBudget * (progressVal / 100));
-    const remainingBudget = totalBudget - executedBudget;
-
-    let aiSummaryText = '';
-    if (state.alertsCount === 0) {
-        aiSummaryText = `La obra "Edificio Palermo Chico" se desenvuelve bajo condiciones óptimas de eficiencia, alcanzando un progreso físico consolidado del ${progressVal}%. La cuadrilla registra un presentismo perfecto del 100% de los operarios reportados. El inventario de acopios se mantiene estable sin desvíos presupuestarios ni de entrega de materiales. Se aconseja continuar con las etapas de cañería y preparación de revoques según el cronograma previsto.`;
-    } else {
-        let problems = [];
-        const incidentsString = (state.incidents || []).map(inc => typeof inc === 'object' && inc !== null ? (inc.title + ' ' + inc.description) : inc).join(' ').toLowerCase();
-        if (incidentsString.includes('cañería') || incidentsString.includes('baño') || incidentsString.includes('fuga')) {
-            problems.push('una fisura sanitaria en la cañería del baño principal (reparación inmediata en curso)');
-        }
-        if (incidentsString.includes('cerámicas') || incidentsString.includes('suministro') || incidentsString.includes('retraso') || incidentsString.includes('demora')) {
-            problems.push('un retraso logístico de 48 horas en el suministro de revestimientos cerámicos');
-        }
-        
-        let problemStr = problems.length > 0 ? problems.join(' y ') : 'demoras menores reportadas en las bitácoras diarias';
-        aiSummaryText = `Se detecta una desviación operativa temporal en el proyecto por ${state.alertsCount} alerta(s) activa(s), generadas principalmente por ${problemStr}. Para neutralizar impactos negativos en el plazo de entrega, la IA ha reprogramado las holguras del Gantt, postergando revestimientos por 2 días y priorizando las tareas correctivas. Los niveles de seguridad física y el avance en el resto de los frentes continúan con normalidad.`;
-    }
-
-    return {
-      currentDay,
-      totalDays,
-      timelinePercentage,
-      totalBudget,
-      executedBudget,
-      remainingBudget,
-      aiSummaryText,
-      todayStr: new Date().toLocaleDateString('es-AR', { year: 'numeric', month: 'long', day: 'numeric' })
-    };
-  }, [state]);
 
   return (
     <>
@@ -1493,8 +1765,8 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
           <section id="sec-dashboard" className={`content-section animate-fade-in-up ${activeTab === 'sec-dashboard' ? 'active' : ''}`}>
             <div className="section-header">
               <div className="header-title">
-                <h1>{platformAccess.project.name}</h1>
-                <p>{platformAccess.project.address || 'Operación centralizada de la obra activa'} · avance, alertas y evidencia en un solo lugar.</p>
+                <h1>{displayProjectName}</h1>
+                <p>{displayProjectAddress || 'Proyecto sin dirección informada'} · avance, alertas y evidencia en un solo lugar.</p>
               </div>
               <div className="header-actions" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                 <Link href="/dashboard/report" className="btn btn-secondary btn-sm" style={{ padding: '8px 14px', fontSize: '0.8rem', fontWeight: 700, background: 'rgba(255,255,255,0.05)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', textDecoration: 'none' }}>
@@ -1518,8 +1790,8 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
               <div className="glass-panel-premium dashboard-card-hover stat-card">
                 <div className="stat-icon success"><i className="fa-solid fa-percent"></i></div>
                 <div className="stat-content">
-                  <span className="stat-value">{state.avancePercentage}%</span>
-                  <span className="stat-label">Progreso General</span>
+                  <span className="stat-value">{taskEntries.length > 0 ? `${state.avancePercentage}%` : '—'}</span>
+                  <span className="stat-label">Promedio de Tareas</span>
                 </div>
               </div>
               <div className="glass-panel-premium dashboard-card-hover stat-card">
@@ -1534,7 +1806,7 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
               <div className="glass-panel-premium dashboard-card-hover stat-card">
                 <div className="stat-icon info"><i className="fa-solid fa-calendar-day"></i></div>
                 <div className="stat-content">
-                  <span className="stat-value">{state.diasEstimados}</span>
+                  <span className="stat-value">{state.diasEstimados || 'Sin plazo'}</span>
                   <span className="stat-label">Plazo Estimado</span>
                 </div>
               </div>
@@ -1543,16 +1815,26 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
             {/* Dashboard Charts */}
             <div className="grid-2" style={{ marginBottom: '24px' }}>
               <div className="glass-panel-premium dashboard-card-hover">
-                <h3 style={{ fontFamily: 'var(--font-heading)', marginBottom: '16px' }}>Curva de Avance Real vs. Planificado</h3>
+                <h3 style={{ fontFamily: 'var(--font-heading)', marginBottom: '16px' }}>Avance registrado por tarea</h3>
                 <div className="chart-container" style={{ height: '220px', position: 'relative' }}>
-                  <canvas ref={progressChartRef}></canvas>
+                  {taskEntries.length === 0 ? (
+                    <div className="nocrit-msg" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '54px 20px' }}>
+                      <i className="fa-solid fa-list-check" style={{ display: 'block', fontSize: '1.8rem', marginBottom: '10px' }}></i>
+                      Todavía no hay tareas registradas.
+                    </div>
+                  ) : <canvas ref={progressChartRef}></canvas>}
                 </div>
               </div>
 
               <div className="glass-panel-premium dashboard-card-hover">
                 <h3 style={{ fontFamily: 'var(--font-heading)', marginBottom: '16px' }}>Distribución de Tareas por Estado</h3>
                 <div className="chart-container" style={{ height: '220px', position: 'relative' }}>
-                  <canvas ref={tasksChartRef}></canvas>
+                  {taskEntries.length === 0 ? (
+                    <div className="nocrit-msg" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '54px 20px' }}>
+                      <i className="fa-solid fa-chart-pie" style={{ display: 'block', fontSize: '1.8rem', marginBottom: '10px' }}></i>
+                      La distribución aparecerá cuando cargues tareas.
+                    </div>
+                  ) : <canvas ref={tasksChartRef}></canvas>}
                 </div>
               </div>
             </div>
@@ -1593,14 +1875,14 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
               {/* Map Card */}
               <div className="glass-panel-premium dashboard-card-hover" style={{ display: 'flex', flexDirection: 'column' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                  <h3 style={{ fontFamily: 'var(--font-heading)', marginBottom: 0 }}>Mapa de Asistencia Satelital</h3>
+                  <h3 style={{ fontFamily: 'var(--font-heading)', marginBottom: 0 }}>Mapa de ubicaciones registradas</h3>
                   <div style={{ display: 'flex', gap: '4px', background: 'rgba(255,255,255,0.03)', padding: '4px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                    <button className="btn btn-sm" onClick={() => setMapMode('sat')} style={{ fontSize: '0.7rem', padding: '4px 10px', background: mapMode === 'sat' ? 'var(--primary)' : 'transparent', color: mapMode === 'sat' ? 'var(--bg-main)' : 'var(--text-secondary)', fontWeight: mapMode === 'sat' ? '700' : '600', borderRadius: '6px', border: 'none', cursor: 'pointer' }}>Satelital</button>
-                    <button className="btn btn-sm" onClick={() => setMapMode('heat')} style={{ fontSize: '0.7rem', padding: '4px 10px', background: mapMode === 'heat' ? 'var(--primary)' : 'transparent', color: mapMode === 'heat' ? 'var(--bg-main)' : 'var(--text-secondary)', fontWeight: mapMode === 'heat' ? '700' : '600', borderRadius: '6px', border: 'none', cursor: 'pointer' }}>Mapa de Calor</button>
+                    <button className="btn btn-sm" onClick={() => setMapMode('sat')} style={{ fontSize: '0.7rem', padding: '4px 10px', background: mapMode === 'sat' ? 'var(--primary)' : 'transparent', color: mapMode === 'sat' ? 'var(--bg-main)' : 'var(--text-secondary)', fontWeight: mapMode === 'sat' ? '700' : '600', borderRadius: '6px', border: 'none', cursor: 'pointer' }}>Puntos</button>
+                    <button className="btn btn-sm" onClick={() => setMapMode('heat')} style={{ fontSize: '0.7rem', padding: '4px 10px', background: mapMode === 'heat' ? 'var(--primary)' : 'transparent', color: mapMode === 'heat' ? 'var(--bg-main)' : 'var(--text-secondary)', fontWeight: mapMode === 'heat' ? '700' : '600', borderRadius: '6px', border: 'none', cursor: 'pointer' }}>Precisión</button>
                   </div>
                 </div>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginBottom: '12px' }}>
-                  Geolocalización satelital en tiempo real de los operarios dentro del radio de obra (cerca virtual).
+                  Lecturas puntuales informadas por cada dispositivo. La precisión depende del navegador y no constituye seguimiento continuo ni validación de identidad.
                 </p>
                 <div id="map" ref={mapContainerRef} style={{ height: '260px', width: '100%', borderRadius: '12px', border: '1px solid var(--border-color)', zIndex: 5 }}></div>
               </div>
@@ -1612,13 +1894,18 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
                     <span className="copilot-eyebrow">Inteligencia operativa</span>
                     <h3><i className="fa-solid fa-wand-magic-sparkles"></i> Supervisor IA de Obra</h3>
                   </div>
-                  <span className={`copilot-scope-badge ${setup.isDemoData ? 'is-demo' : 'is-live'}`}>
+                  <span className={`copilot-scope-badge ${setup.isEmptyState ? 'is-empty' : 'is-live'}`}>
                     <span className="copilot-status-dot"></span>
-                    {setup.isDemoData ? 'Datos demostrativos' : 'Obra activa'}
+                    {setup.isEmptyState ? 'Sin datos operativos' : 'Obra activa'}
                   </span>
                 </div>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginBottom: '10px' }}>
                   Consultá avances, asistencia, stock y riesgos con evidencia de la obra seleccionada. No ejecuta acciones sin aprobación.
+                </p>
+                <p style={{ color: setup.aiSupervisorEnabled ? 'var(--text-secondary)' : 'var(--warning)', fontSize: '0.74rem', marginBottom: '12px', lineHeight: 1.5 }}>
+                  {setup.aiSupervisorEnabled
+                    ? <>Al consultar, OpenAI procesa la pregunta y un contexto acotado de la obra activa. <Link href="/privacy#openai-processing">Ver privacidad</Link>.</>
+                    : <>Procesamiento con OpenAI desactivado para este tenant. <Link href="/dashboard/integrations">Revisar activación y privacidad</Link>.</>}
                 </p>
                 
                 <div className="copilot-chat-box">
@@ -1685,17 +1972,17 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
                     <input 
                       type="text" 
                       className="copilot-chat-input" 
-                      placeholder="Pregunta al Supervisor de la obra..." 
+                      placeholder={setup.aiSupervisorEnabled ? 'Pregunta al Supervisor de la obra...' : 'Supervisor IA desactivado por la organización'}
                       value={copilotInput}
                       onChange={(e) => setCopilotInput(e.target.value)}
                       maxLength={2000}
-                      disabled={copilotStatus === 'loading'}
+                      disabled={copilotStatus === 'loading' || !setup.aiSupervisorEnabled}
                       aria-label="Consulta para el Supervisor IA"
                     />
                     <button
                       type="submit"
                       className="copilot-chat-btn"
-                      disabled={copilotStatus === 'loading' || !copilotInput.trim()}
+                      disabled={copilotStatus === 'loading' || !copilotInput.trim() || !setup.aiSupervisorEnabled}
                     >
                       {copilotStatus === 'loading' ? 'Analizando…' : 'Consultar'}
                     </button>
@@ -1703,9 +1990,9 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
                 </div>
 
                 <div className="crm-suggestions copilot-suggestions">
-                  <button type="button" className="crm-suggest-tag" onClick={() => void sendCopilotUserMessage('Haceme un resumen ejecutivo del avance y los bloqueos registrados.')} disabled={copilotStatus === 'loading'}>Resumen ejecutivo</button>
-                  <button type="button" className="crm-suggest-tag" onClick={() => void sendCopilotUserMessage('¿Quiénes figuran presentes y qué datos de asistencia faltan hoy?')} disabled={copilotStatus === 'loading'}>Asistencia hoy</button>
-                  <button type="button" className="crm-suggest-tag" onClick={() => void sendCopilotUserMessage('¿Qué alertas, incidentes o riesgos de stock requieren atención?')} disabled={copilotStatus === 'loading'}>Riesgos abiertos</button>
+                  <button type="button" className="crm-suggest-tag" onClick={() => void sendCopilotUserMessage('Haceme un resumen ejecutivo del avance y los bloqueos registrados.')} disabled={copilotStatus === 'loading' || !setup.aiSupervisorEnabled}>Resumen ejecutivo</button>
+                  <button type="button" className="crm-suggest-tag" onClick={() => void sendCopilotUserMessage('¿Quiénes figuran presentes y qué datos de asistencia faltan hoy?')} disabled={copilotStatus === 'loading' || !setup.aiSupervisorEnabled}>Asistencia hoy</button>
+                  <button type="button" className="crm-suggest-tag" onClick={() => void sendCopilotUserMessage('¿Qué alertas, incidentes o riesgos de stock requieren atención?')} disabled={copilotStatus === 'loading' || !setup.aiSupervisorEnabled}>Riesgos abiertos</button>
                 </div>
               </div>
             </div>
@@ -1747,7 +2034,7 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
                   <h3 style={{ fontFamily: 'var(--font-heading)' }}>Historial de Fichajes de Hoy</h3>
                 </div>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '16px' }}>
-                  Registro pormenorizado de operarios activos validados por celular.
+                  Registros asociados al número autorizado de cada persona activa.
                 </p>
                 <table className="logs-table">
                   <thead>
@@ -1759,25 +2046,26 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
                     </tr>
                   </thead>
                   <tbody>
-                    {Object.keys(state.attendance).map(name => {
-                      const item = state.attendance[name];
+                    {attendanceRecords(state.attendance).length === 0 ? (
+                      <tr>
+                        <td colSpan={4} style={{ color: 'var(--text-secondary)', textAlign: 'center' }}>
+                          Todavía no hay fichajes registrados para esta obra.
+                        </td>
+                      </tr>
+                    ) : attendanceRecords(state.attendance).map(({ key, name, entry: item }) => {
+                      const status = attendanceStatus(item);
                       let badgeClass = "badge-warning";
-                      if (item.status.includes('Presente')) badgeClass = 'badge-success';
-                      if (item.status.includes('GPS')) badgeClass = 'badge-info';
+                      if (status.includes('Presente')) badgeClass = 'badge-success';
+                      if (status.includes('GPS')) badgeClass = 'badge-info';
+                      if (status.includes('Desvío')) badgeClass = 'badge-danger';
 
                       return (
-                        <tr key={name}>
+                        <tr key={key}>
                           <td>{name}</td>
-                          <td>{item.role}</td>
-                          <td>{item.checkin}</td>
+                          <td>{item.role || 'Cuadrilla de obra'}</td>
+                          <td>{item.checkin || '—'}</td>
                           <td>
-                            {item.status.includes('GPS') ? (
-                              <span className="badge badge-success" style={{ background: 'rgba(59, 130, 246, 0.1)', color: '#60a5fa' }}>
-                                <i className="fa-solid fa-location-dot" style={{ marginRight: '4px' }}></i> Presente (GPS)
-                              </span>
-                            ) : (
-                              <span className={`badge ${badgeClass}`}>{item.status}</span>
-                            )}
+                            <span className={`badge ${badgeClass}`}>{status}</span>
                           </td>
                         </tr>
                       );
@@ -1792,13 +2080,13 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
                   <h3 style={{ fontFamily: 'var(--font-heading)' }}>Incidencias &amp; Alertas en Curso</h3>
                 </div>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '16px' }}>
-                  Filtro automático de novedades críticas detectadas en audios procesados por el motor de IA.
+                  Novedades persistidas en la bitácora de la obra. Los audios de prueba se conservan como evidencia y no ejecutan cambios por sí solos.
                 </p>
                 <div className="incidencias-feed" style={{ display: 'flex', flexDirection: 'column', gap: '12px', overflowY: 'auto', maxHeight: '280px' }}>
                   {state.incidents.length === 0 ? (
                     <div className="nocrit-msg" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '30px', fontSize: '0.9rem' }}>
                       <i className="fa-solid fa-shield-halved" style={{ fontSize: '2rem', marginBottom: '10px', display: 'block', color: 'var(--success)' }}></i>
-                      Sin incidencias reportadas hoy. Obra en curso regular.
+                      No hay incidencias registradas para esta obra.
                     </div>
                   ) : (
                     state.incidents.map((inc, i) => {
@@ -1850,14 +2138,19 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
                     Trazabilidad de materiales críticos en corralón y en obra para evitar demoras por falta de stock.
                   </p>
                 </div>
-                <button className="btn btn-primary btn-sm" onClick={() => setShowReceiveMaterialModal(true)} style={{ padding: '8px 16px', fontSize: '0.8rem', fontWeight: 700 }}>
+                <button className="btn btn-primary btn-sm" disabled={!setup.canManageProjects || stockpileEntries.length === 0} onClick={() => { setReceiveMaterialKey(stockpileEntries[0]?.[0] || ''); setShowReceiveMaterialModal(true); }} style={{ padding: '8px 16px', fontSize: '0.8rem', fontWeight: 700 }}>
                   <i className="fa-solid fa-truck-loading"></i> Registrar Recepción
                 </button>
               </div>
 
               <div className="grid-4" style={{ marginBottom: 0 }}>
-                {Object.keys(state.stockpiles).map(key => {
-                  const item = state.stockpiles[key];
+                {stockpileEntries.length === 0 && (
+                  <div className="nocrit-msg" style={{ gridColumn: '1 / -1', textAlign: 'center', color: 'var(--text-muted)', padding: '30px' }}>
+                    <i className="fa-solid fa-box-open" style={{ display: 'block', fontSize: '2rem', marginBottom: '10px' }}></i>
+                    Todavía no hay materiales registrados para esta obra.
+                  </div>
+                )}
+                {stockpileEntries.map(([key, item]) => {
                   let badgeClass = 'badge-success';
                   let barColor = 'var(--success)';
                   if (item.status === 'Crítico') {
@@ -1868,7 +2161,10 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
                     barColor = 'var(--info)';
                   }
 
-                  const pct = Math.min((item.current / item.max) * 100, 100);
+                  const current = Number(item.current) || 0;
+                  const minimum = Number(item.min) || 0;
+                  const maximum = Number(item.max) || 0;
+                  const pct = maximum > 0 ? Math.min((current / maximum) * 100, 100) : 0;
 
                   return (
                     <div key={key} className="glass-panel-premium dashboard-card-hover stat-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: '8px', marginBottom: 0, padding: '16px' }}>
@@ -1877,11 +2173,11 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
                         <span className={`badge ${badgeClass}`}>{item.status}</span>
                       </div>
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '-2px' }}>
-                        Proveedor: {item.supplier}
+                        Proveedor: {item.supplier || 'sin informar'}
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '8px' }}>
-                        <span style={{ fontSize: '1.15rem', fontFamily: 'var(--font-heading)', fontWeight: 700, color: 'var(--text-primary)' }}>{item.current.toLocaleString('es-AR')} {item.unit}</span>
-                        <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Mín: {item.min} / Máx: {item.max}</span>
+                        <span style={{ fontSize: '1.15rem', fontFamily: 'var(--font-heading)', fontWeight: 700, color: 'var(--text-primary)' }}>{current.toLocaleString('es-AR')} {item.unit || ''}</span>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Mín: {minimum} / Máx: {maximum || 'sin definir'}</span>
                       </div>
                       <div style={{ background: 'rgba(255,255,255,0.05)', height: '6px', borderRadius: '3px', overflow: 'hidden', marginTop: '4px', border: '1px solid var(--border-color)' }}>
                         <div style={{ width: `${pct}%`, height: '100%', background: barColor, borderRadius: '3px', transition: 'width 0.4s ease' }}></div>
@@ -1898,25 +2194,25 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
                 <i className="fa-solid fa-shield-halved"></i> Capacidades operativas disponibles
               </h3>
               <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '20px' }}>
-                Componentes incorporados al núcleo operativo. Su disponibilidad final depende de los canales y permisos configurados por cada tenant.
+                Funciones disponibles en esta versión. Su resultado depende de los datos, canales y permisos configurados por cada organización.
               </p>
               <div className="grid-3" style={{ marginBottom: '10px' }}>
                 <div style={{ background: 'rgba(255,255,255,0.02)', padding: '16px', borderRadius: '8px', borderTop: '3px solid #60a5fa' }}>
-                  <h5 style={{ fontFamily: 'var(--font-heading)', fontSize: '0.95rem', marginBottom: '8px' }}><i className="fa-solid fa-key" style={{ color: '#60a5fa' }}></i> Enlace Único de Celular</h5>
+                  <h5 style={{ fontFamily: 'var(--font-heading)', fontSize: '0.95rem', marginBottom: '8px' }}><i className="fa-solid fa-key" style={{ color: '#60a5fa' }}></i> Identidad por número autorizado</h5>
                   <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
-                    Vincula cada número de teléfono móvil a la identidad biométrica y DNI del operario. La app rechaza fichajes desde números no validados o suplantados.
+                    Vincula un número normalizado a una persona activa de la cuadrilla. No confirma la titularidad de la línea ni evita que otra persona use el dispositivo.
                   </p>
                 </div>
                 <div style={{ background: 'rgba(255,255,255,0.02)', padding: '16px', borderRadius: '8px', borderTop: '3px solid #34d399' }}>
-                  <h5 style={{ fontFamily: 'var(--font-heading)', fontSize: '0.95rem', marginBottom: '8px' }}><i className="fa-solid fa-map-location-dot" style={{ color: '#34d399' }}></i> Geofencing Automático</h5>
+                  <h5 style={{ fontFamily: 'var(--font-heading)', fontSize: '0.95rem', marginBottom: '8px' }}><i className="fa-solid fa-map-location-dot" style={{ color: '#34d399' }}></i> Comparación con geocerca</h5>
                   <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
-                    Dibuja un límite geográfico (cerca virtual) en el plano de la obra. Los operarios solo pueden fichar entrada si el GPS de su celular está físicamente dentro del predio.
+                    Compara una lectura puntual enviada por el dispositivo con el radio configurado. Registra el resultado y la precisión informada; no evita manipulación del GPS.
                   </p>
                 </div>
                 <div style={{ background: 'rgba(255,255,255,0.02)', padding: '16px', borderRadius: '8px', borderTop: '3px solid #ff9f1c' }}>
-                  <h5 style={{ fontFamily: 'var(--font-heading)', fontSize: '0.95rem', marginBottom: '8px' }}><i className="fa-solid fa-file-pdf" style={{ color: '#ff9f1c' }}></i> Reportes Semanales Auto</h5>
+                  <h5 style={{ fontFamily: 'var(--font-heading)', fontSize: '0.95rem', marginBottom: '8px' }}><i className="fa-solid fa-file-pdf" style={{ color: '#ff9f1c' }}></i> Reporte operativo revisable</h5>
                   <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
-                    Compilación automática en un click de todas las fotos de avance de la semana, notas de voz y estado del Gantt en un reporte PDF premium para enviar directo por WhatsApp al cliente final.
+                    La vista de reporte compone únicamente los registros disponibles y permite revisarlos antes de imprimir. No envía mensajes ni archivos automáticamente.
                   </p>
                 </div>
               </div>
@@ -1932,6 +2228,45 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
               </div>
             </div>
 
+            <div className="field-simulator-toolbar">
+              <label className="field-simulator-actor" htmlFor="field-simulator-worker">
+                <span>Actor autorizado del evento</span>
+                <select
+                  id="field-simulator-worker"
+                  value={selectedFieldWorkerId}
+                  disabled={!setup.canManageField || fieldWorkers.length === 0 || fieldSimulatorBusy}
+                  onChange={(event) => setSelectedFieldWorkerId(event.target.value)}
+                >
+                  <option value="">Seleccioná una persona</option>
+                  {fieldWorkers.map((worker) => (
+                    <option key={worker.id} value={worker.id}>
+                      {worker.name} · {worker.role || 'Cuadrilla'} · {worker.whatsappRole}
+                    </option>
+                  ))}
+                </select>
+                <small>Cada mensaje, audio o ubicación quedará atribuido a esta identidad.</small>
+              </label>
+              <div className={`field-simulator-access ${fieldSimulatorReady ? 'is-ready' : 'is-blocked'}`} role="status">
+                {!setup.canManageField ? (
+                  <>
+                    <div><strong>Simulador en modo consulta</strong><span>Tu rol no puede ejecutar comandos de campo.</span></div>
+                    {setup.canViewTeam
+                      ? <Link href="/dashboard/team">Revisar equipo y permisos</Link>
+                      : <span>Pedile acceso a un administrador.</span>}
+                  </>
+                ) : fieldWorkers.length === 0 ? (
+                  <>
+                    <div><strong>Falta autorizar la cuadrilla</strong><span>Ningún evento puede modificar la obra sin una identidad activa.</span></div>
+                    <Link href="/dashboard/team">Autorizar una persona</Link>
+                  </>
+                ) : !selectedFieldWorker ? (
+                  <div><strong>Elegí el actor de la prueba</strong><span>Los controles se habilitan después de seleccionar una identidad.</span></div>
+                ) : (
+                  <div><strong>{selectedFieldWorker.name}</strong><span>Actor visible y auditado para esta simulación.</span></div>
+                )}
+              </div>
+            </div>
+
             <div className="grid-2">
               {/* Smartphone Mockup */}
               <div className="phone-frame">
@@ -1940,15 +2275,12 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
                   <div className="whatsapp-header">
                     <div className="whatsapp-contact">
                       <div className="whatsapp-avatar">OS</div>
-                      <div className="whatsapp-contact-details">
-                        <span className="whatsapp-contact-name">Asistente ObraSaaS</span>
-                        <span className="whatsapp-contact-status">En línea</span>
+                        <div className="whatsapp-contact-details">
+                          <span className="whatsapp-contact-name">Asistente ObraSaaS</span>
+                          <span className="whatsapp-contact-status">{fieldSimulatorReady ? `Actor: ${selectedFieldWorker.name}` : 'Actor pendiente'}</span>
+                        </div>
                       </div>
-                    </div>
-                    <div>
-                      <i className="fa-solid fa-phone" style={{ color: 'var(--text-secondary)', marginRight: '12px', cursor: 'pointer' }}></i>
-                      <i className="fa-solid fa-ellipsis-vertical" style={{ color: 'var(--text-secondary)', cursor: 'pointer' }}></i>
-                    </div>
+                    <span className="field-simulator-badge">Simulador</span>
                   </div>
 
                   {/* Chat messages */}
@@ -1991,55 +2323,75 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
 
                   {/* Input Bar */}
                   <div className="whatsapp-input-bar">
-                    <i className="fa-solid fa-paperclip whatsapp-clip-btn" onClick={() => setAttachmentMenuOpen(!attachmentMenuOpen)} title="Menú de Adjuntos" style={{ cursor: 'pointer' }}></i>
+                    <button
+                      type="button"
+                      className="whatsapp-clip-btn"
+                      aria-label="Abrir menú de adjuntos de prueba"
+                      aria-expanded={attachmentMenuOpen}
+                      disabled={!fieldSimulatorReady || fieldSimulatorBusy}
+                      onClick={() => setAttachmentMenuOpen(!attachmentMenuOpen)}
+                    >
+                      <i className="fa-solid fa-paperclip" aria-hidden="true"></i>
+                    </button>
                     <input 
                       type="text" 
                       className="whatsapp-text-input" 
-                      placeholder="Pregúntale al bot de obra..." 
+                      placeholder={fieldSimulatorReady ? `Mensaje como ${selectedFieldWorker.name}…` : 'Seleccioná un actor para simular…'}
+                      disabled={!fieldSimulatorReady || fieldSimulatorBusy}
                       value={chatInput}
                       onChange={(e) => setChatInput(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
                     />
-                    <button className="whatsapp-send-btn" onClick={handleSendMessage}><i className="fa-solid fa-paper-plane"></i></button>
+                    <button
+                      type="button"
+                      className="whatsapp-send-btn"
+                      aria-label="Enviar mensaje de prueba"
+                      disabled={!fieldSimulatorReady || fieldSimulatorBusy || !chatInput.trim()}
+                      onClick={handleSendMessage}
+                    >
+                      <i className="fa-solid fa-paper-plane" aria-hidden="true"></i>
+                    </button>
                   </div>
 
                   {/* Attachment menu */}
                   {attachmentMenuOpen && (
-                    <div className="whatsapp-attachment-menu" style={{ display: 'grid' }}>
-                      <div className="attachment-item" onClick={() => selectAttachment('document')}>
+                    <div className="whatsapp-attachment-menu" style={{ display: 'grid' }} aria-label="Adjuntos de prueba">
+                      <button type="button" className="attachment-item" disabled={!fieldSimulatorReady || fieldSimulatorBusy} onClick={() => selectAttachment('document')}>
                         <div className="attachment-icon" style={{ background: '#4285f4' }}><i className="fa-solid fa-file-lines"></i></div>
                         <span>Documento</span>
-                      </div>
-                      <div className="attachment-item" onClick={() => selectAttachment('camera')}>
+                      </button>
+                      <button type="button" className="attachment-item" disabled={!fieldSimulatorReady || fieldSimulatorBusy} onClick={() => selectAttachment('camera')}>
                         <div className="attachment-icon" style={{ background: '#ea4335' }}><i className="fa-solid fa-camera"></i></div>
                         <span>Cámara</span>
-                      </div>
-                      <div className="attachment-item" onClick={() => selectAttachment('gallery')}>
+                      </button>
+                      <button type="button" className="attachment-item" disabled={!fieldSimulatorReady || fieldSimulatorBusy} onClick={() => selectAttachment('gallery')}>
                         <div className="attachment-icon" style={{ background: '#a142f4' }}><i className="fa-solid fa-image"></i></div>
                         <span>Galería</span>
-                      </div>
-                      <div className="attachment-item" onClick={() => selectAttachment('audio')}>
+                      </button>
+                      <button type="button" className="attachment-item" disabled={!fieldSimulatorReady || fieldSimulatorBusy} onClick={() => selectAttachment('audio')}>
                         <div className="attachment-icon" style={{ background: '#ff6d01' }}><i className="fa-solid fa-headphones"></i></div>
                         <span>Audio</span>
-                      </div>
-                      <div className="attachment-item" onClick={() => { setAttachmentMenuOpen(false); setGpsModalOpen(true); }}>
+                      </button>
+                      <button type="button" className="attachment-item" disabled={!fieldSimulatorReady || fieldSimulatorBusy} onClick={() => { setAttachmentMenuOpen(false); openGpsOptions(); }}>
                         <div className="attachment-icon" style={{ background: '#0f9d58' }}><i className="fa-solid fa-location-dot"></i></div>
                         <span>Ubicación</span>
-                      </div>
-                      <div className="attachment-item" onClick={() => selectAttachment('contact')}>
+                      </button>
+                      <button type="button" className="attachment-item" disabled={!fieldSimulatorReady || fieldSimulatorBusy} onClick={() => selectAttachment('contact')}>
                         <div className="attachment-icon" style={{ background: '#34a853' }}><i className="fa-solid fa-user"></i></div>
                         <span>Contacto</span>
-                      </div>
+                      </button>
                     </div>
                   )}
 
                   {/* GPS modal */}
                   {gpsModalOpen && (
-                    <div className="gps-share-screen" style={{ display: 'flex' }}>
+                    <div ref={gpsDialogRef} className="gps-share-screen" style={{ display: 'flex' }} role="dialog" aria-modal="true" aria-labelledby="gps-dialog-title" onKeyDown={handleGpsDialogKeyDown}>
                       <div className="gps-share-header">
-                        <i className="fa-solid fa-arrow-left" onClick={() => setGpsModalOpen(false)} style={{ cursor: 'pointer' }}></i>
-                        <span>Enviar ubicación</span>
-                        <i className="fa-solid fa-rotate-right" onClick={refreshGpsSearch} style={{ cursor: 'pointer' }}></i>
+                        <button type="button" aria-label="Cerrar opciones de ubicación" autoFocus disabled={fieldSimulatorBusy} onClick={closeGpsOptions}>
+                          <i className="fa-solid fa-arrow-left" aria-hidden="true"></i>
+                        </button>
+                        <span id="gps-dialog-title">Elegir punto de ubicación</span>
+                        <span aria-hidden="true" />
                       </div>
                       <div className="gps-share-map-preview">
                         <div className="gps-radar-scanner">
@@ -2050,20 +2402,20 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
                         <span className="gps-map-label">{gpsLabel}</span>
                       </div>
                       <div className="gps-share-options">
-                        <div className="gps-option-item" onClick={confirmGpsSend}>
+                        <button type="button" className="gps-option-item" disabled={!fieldSimulatorReady || fieldSimulatorBusy} onClick={useBrowserGps}>
                           <div className="gps-option-icon" style={{ background: 'rgba(16,185,129,0.1)', color: 'var(--success)' }}><i className="fa-solid fa-location-crosshairs"></i></div>
                           <div className="gps-option-details">
-                            <strong>Compartir ubicación en tiempo real</strong>
-                            <span>Actualización satelital en vivo</span>
+                            <strong>Usar mi ubicación actual</strong>
+                            <span>Solicita una lectura puntual al navegador y requiere tu permiso.</span>
                           </div>
-                        </div>
-                        <div className="gps-option-item" onClick={confirmGpsSend}>
+                        </button>
+                        <button type="button" className="gps-option-item" disabled={!fieldSimulatorReady || fieldSimulatorBusy || !projectPointAvailable} onClick={simulateProjectGps}>
                           <div className="gps-option-icon" style={{ background: 'rgba(59,130,246,0.1)', color: 'var(--info)' }}><i className="fa-solid fa-building"></i></div>
                           <div className="gps-option-details">
-                            <strong>Enviar ubicación actual (Obra)</strong>
-                            <span>Fichaje de Asistencia Georreferenciado</span>
+                            <strong>Simular punto de obra</strong>
+                            <span>{projectPointAvailable ? `Usa la latitud y longitud configuradas para ${displayProjectName}.` : 'Configurá primero la latitud y longitud de la obra.'}</span>
                           </div>
-                        </div>
+                        </button>
                       </div>
                     </div>
                   )}
@@ -2072,26 +2424,26 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
 
               {/* Waveform Controls */}
               <div className="glass-panel-premium dashboard-card-hover" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <h3 style={{ fontFamily: 'var(--font-heading)', color: 'var(--primary)' }}>Panel de Simulación de Audios</h3>
+                <h3 style={{ fontFamily: 'var(--font-heading)', color: 'var(--primary)' }}>Audios con transcripción de prueba</h3>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-                  Haz clic en reproducir para oír la telemetría sintetizada por **Web Audio API** mientras la IA procesa y transcribe el reporte.
+                  Cada escenario ya incluye una transcripción demostrativa. Al reproducirlo se registra como evidencia del actor seleccionado; no llama a OpenAI ni ejecuta comandos desde el audio.
                 </p>
 
                 {/* Audio 1 */}
                 <div className="glass-panel-premium dashboard-card-hover" style={{ background: 'rgba(255, 255, 255, 0.01)', padding: '14px', marginBottom: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
                     <strong style={{ fontSize: '0.85rem' }}><i className="fa-solid fa-clipboard-user" style={{ color: 'var(--success)' }}></i> Audio 1: Fichaje Diario (Ingreso)</strong>
-                    <span className="badge badge-success">Luis Martínez</span>
+                    <span className="badge badge-success">{selectedFieldWorker?.name || 'Actor pendiente'}</span>
                   </div>
                   <div className="audio-player-container">
-                    <button className="play-btn" onClick={() => playAudioSim(1)} disabled={playingAudioIndex !== null}>
+                    <button type="button" className="play-btn" aria-label="Reproducir audio de prueba de ingreso" onClick={() => playAudioSim(1)} disabled={!fieldSimulatorReady || fieldSimulatorBusy}>
                       <i className={playingAudioIndex === 1 ? "fa-solid fa-microphone-lines fa-fade" : "fa-solid fa-play"} id="play-icon-1"></i>
                     </button>
                     <canvas ref={waveformRef1} width="200" height="40" className="waveform-canvas"></canvas>
                     <span className="audio-duration">0:08</span>
                   </div>
                   <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontStyle: 'italic', marginTop: '6px' }}>
-                    &ldquo;Hola Marcelo, ya entramos a la obra de Palermo. Todo el equipo listo.&rdquo;
+                    Actor: {selectedFieldWorker?.name || 'pendiente'} · &ldquo;{audioData[1].text}&rdquo;
                   </p>
                 </div>
 
@@ -2099,17 +2451,17 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
                 <div className="glass-panel-premium dashboard-card-hover" style={{ background: 'rgba(255, 255, 255, 0.01)', padding: '14px', marginBottom: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
                     <strong style={{ fontSize: '0.85rem' }}><i className="fa-solid fa-chart-line" style={{ color: 'var(--info)' }}></i> Audio 2: Reporte de Avance Diario</strong>
-                    <span className="badge badge-info">Juan Gómez</span>
+                    <span className="badge badge-info">{selectedFieldWorker?.name || 'Actor pendiente'}</span>
                   </div>
                   <div className="audio-player-container">
-                    <button className="play-btn" onClick={() => playAudioSim(2)} disabled={playingAudioIndex !== null}>
+                    <button type="button" className="play-btn" aria-label="Reproducir audio de prueba de avance" onClick={() => playAudioSim(2)} disabled={!fieldSimulatorReady || fieldSimulatorBusy}>
                       <i className={playingAudioIndex === 2 ? "fa-solid fa-microphone-lines fa-fade" : "fa-solid fa-play"} id="play-icon-2"></i>
                     </button>
                     <canvas ref={waveformRef2} width="200" height="40" className="waveform-canvas"></canvas>
                     <span className="audio-duration">0:12</span>
                   </div>
                   <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontStyle: 'italic', marginTop: '6px' }}>
-                    &ldquo;Terminamos el revoque grueso en la cocina y living. Avanzamos según lo planeado.&rdquo;
+                    Actor: {selectedFieldWorker?.name || 'pendiente'} · &ldquo;{audioData[2].text}&rdquo;
                   </p>
                 </div>
 
@@ -2117,17 +2469,17 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
                 <div className="glass-panel-premium dashboard-card-hover" style={{ background: 'rgba(255, 255, 255, 0.01)', padding: '14px', marginBottom: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
                     <strong style={{ fontSize: '0.85rem' }}><i className="fa-solid fa-triangle-exclamation" style={{ color: 'var(--danger)' }}></i> Audio 3: Incidencia Técnica Crítica</strong>
-                    <span className="badge badge-danger">Luis Martínez</span>
+                    <span className="badge badge-danger">{selectedFieldWorker?.name || 'Actor pendiente'}</span>
                   </div>
                   <div className="audio-player-container">
-                    <button className="play-btn" onClick={() => playAudioSim(3)} disabled={playingAudioIndex !== null}>
+                    <button type="button" className="play-btn" aria-label="Reproducir audio de prueba de incidencia" onClick={() => playAudioSim(3)} disabled={!fieldSimulatorReady || fieldSimulatorBusy}>
                       <i className={playingAudioIndex === 3 ? "fa-solid fa-microphone-lines fa-fade" : "fa-solid fa-play"} id="play-icon-3"></i>
                     </button>
                     <canvas ref={waveformRef3} width="200" height="40" className="waveform-canvas"></canvas>
                     <span className="audio-duration">0:16</span>
                   </div>
                   <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontStyle: 'italic', marginTop: '6px' }}>
-                    &ldquo;Che, Marcelo, detectamos que la cañería de la descarga del baño principal tiene una fisura y pierde agua, hay que cambiar un codo de PVC de 110.&rdquo;
+                    Actor: {selectedFieldWorker?.name || 'pendiente'} · &ldquo;{audioData[3].text}&rdquo;
                   </p>
                 </div>
 
@@ -2135,31 +2487,31 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
                 <div className="glass-panel-premium dashboard-card-hover" style={{ background: 'rgba(255, 255, 255, 0.01)', padding: '14px', marginBottom: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
                     <strong style={{ fontSize: '0.85rem' }}><i className="fa-solid fa-clock" style={{ color: 'var(--warning)' }}></i> Audio 4: Alerta de Retraso Crítico</strong>
-                    <span className="badge badge-warning">Carlos Pérez</span>
+                    <span className="badge badge-warning">{selectedFieldWorker?.name || 'Actor pendiente'}</span>
                   </div>
                   <div className="audio-player-container">
-                    <button className="play-btn" onClick={() => playAudioSim(4)} disabled={playingAudioIndex !== null}>
+                    <button type="button" className="play-btn" aria-label="Reproducir audio de prueba de demora" onClick={() => playAudioSim(4)} disabled={!fieldSimulatorReady || fieldSimulatorBusy}>
                       <i className={playingAudioIndex === 4 ? "fa-solid fa-microphone-lines fa-fade" : "fa-solid fa-play"} id="play-icon-4"></i>
                     </button>
                     <canvas ref={waveformRef4} width="200" height="40" className="waveform-canvas"></canvas>
                     <span className="audio-duration">0:14</span>
                   </div>
                   <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontStyle: 'italic', marginTop: '6px' }}>
-                    &ldquo;No nos llegó el camión con las cerámicas para el baño, nos va a demorar 2 días la colocación del revestimiento.&rdquo;
+                    Actor: {selectedFieldWorker?.name || 'pendiente'} · &ldquo;{audioData[4].text}&rdquo;
                   </p>
                 </div>
 
                 {/* Sim Check-in */}
                 <div className="glass-panel-premium dashboard-card-hover" style={{ background: 'rgba(255, 255, 255, 0.01)', padding: '14px', marginBottom: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                    <strong style={{ fontSize: '0.85rem' }}><i className="fa-solid fa-map-location-dot" style={{ color: '#60a5fa' }}></i> Simular Fichaje Completo por GPS</strong>
-                    <span className="badge badge-info">Carlos Pérez</span>
+                    <strong style={{ fontSize: '0.85rem' }}><i className="fa-solid fa-map-location-dot" style={{ color: '#60a5fa' }}></i> Probar control puntual por GPS</strong>
+                    <span className="badge badge-info">{selectedFieldWorker?.name || 'Actor pendiente'}</span>
                   </div>
                   <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                    Simula que el operario envía su ubicación real desde su celular único enlazado para registrar ingreso.
+                    Elegí entre una lectura actual del navegador o el punto configurado de la obra. Ambas son lecturas únicas; no existe seguimiento continuo.
                   </p>
-                  <button className="btn btn-primary btn-sm" onClick={confirmGpsSend} style={{ width: '100%', fontSize: '0.8rem', padding: '10px', background: '#60a5fa', color: '#0a0e17', fontWeight: 700 }}>
-                    <i className="fa-solid fa-location-arrow"></i> Enviar Ubicación en Tiempo Real
+                  <button type="button" className="btn btn-primary btn-sm" disabled={!fieldSimulatorReady || fieldSimulatorBusy} onClick={openGpsOptions} style={{ width: '100%', fontSize: '0.8rem', padding: '10px', background: '#60a5fa', color: '#0a0e17', fontWeight: 700 }}>
+                    <i className="fa-solid fa-location-arrow"></i> Elegir punto de ubicación
                   </button>
                 </div>
               </div>
@@ -2171,16 +2523,23 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
             <div className="section-header">
               <div className="header-title">
                 <h1>Cronograma Dinámico de Obra (Gantt Interactivo)</h1>
-                <p>Editor de Tareas. Ajusta el progreso y las duraciones directamente para ver el impacto en tiempo real.</p>
+                <p>Editor de tareas. Ajustá el progreso y las duraciones para ver el impacto inmediatamente.</p>
               </div>
               <div className="header-actions">
-                <button className="btn btn-primary" onClick={() => setShowAddTaskModal(true)} style={{ marginRight: '8px' }}><i className="fa-solid fa-plus"></i> Agregar Tarea</button>
-                <button className="btn btn-secondary" onClick={handleResetState}><i className="fa-solid fa-arrow-rotate-left"></i> Restablecer Cronograma</button>
+                <button className="btn btn-primary" disabled={!setup.canManageProjects} onClick={() => setShowAddTaskModal(true)} style={{ marginRight: '8px' }}><i className="fa-solid fa-plus"></i> Agregar Tarea</button>
+                <button className="btn btn-secondary" disabled={!setup.canManageProjects || taskEntries.length === 0} onClick={handleResetState}><i className="fa-solid fa-arrow-rotate-left"></i> Restablecer Cronograma</button>
               </div>
             </div>
 
             <div className="glass-panel-premium dashboard-card-hover">
-              <div className="gantt-chart-container" style={{ position: 'relative', overflowX: 'auto' }}>
+              {taskEntries.length === 0 && (
+                <div className="nocrit-msg" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '48px 20px' }}>
+                  <i className="fa-solid fa-timeline" style={{ display: 'block', fontSize: '2rem', marginBottom: '10px' }}></i>
+                  <strong style={{ display: 'block', color: 'var(--text-primary)', marginBottom: '6px' }}>Cronograma vacío</strong>
+                  Cargá la primera tarea para empezar a construir el plan relativo de 14 días.
+                </div>
+              )}
+              <div className="gantt-chart-container" style={{ position: 'relative', overflowX: 'auto', display: taskEntries.length === 0 ? 'none' : 'block' }}>
                 {/* Grid lines background */}
                 <div className="gantt-row-grid-bg">
                   <div className="gantt-grid-line"></div>
@@ -2206,20 +2565,9 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
                 <div className="gantt-timeline-header">
                   <div className="gantt-label-col-header" style={{ zIndex: 2 }}>Tarea / Asignado</div>
                   <div className="gantt-days-header" style={{ zIndex: 2 }}>
-                    <div className="gantt-day-header-item">L 20</div>
-                    <div className="gantt-day-header-item">M 21</div>
-                    <div className="gantt-day-header-item">X 22</div>
-                    <div className="gantt-day-header-item">J 23</div>
-                    <div className="gantt-day-header-item">V 24</div>
-                    <div className="gantt-day-header-item weekend">S 25</div>
-                    <div className="gantt-day-header-item weekend">D 26</div>
-                    <div className="gantt-day-header-item today">L 27</div>
-                    <div className="gantt-day-header-item">M 28</div>
-                    <div className="gantt-day-header-item">X 29</div>
-                    <div className="gantt-day-header-item">J 30</div>
-                    <div className="gantt-day-header-item">V 01</div>
-                    <div className="gantt-day-header-item weekend">S 02</div>
-                    <div className="gantt-day-header-item weekend">D 03</div>
+                    {Array.from({ length: 14 }, (_, index) => (
+                      <div key={index} className="gantt-day-header-item">Día {index + 1}</div>
+                    ))}
                   </div>
                 </div>
 
@@ -2229,11 +2577,11 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
                     const task = state.tasks[id];
                     let barClass = "gantt-bar";
                     if (task.progress === 100) barClass += " completed";
-                    else if (task.isDelayed || id === "99") barClass += " delayed";
+                    else if (task.isDelayed) barClass += " delayed";
                     else if (task.isShifted) barClass += " shifted";
 
-                    const leftVal = task.startOffset;
-                    const widthVal = task.duration * 7.14;
+                    const leftVal = Math.max(0, Math.min(92.86, Number(task.startOffset) || 0));
+                    const widthVal = Math.max(7.14, Math.min(100 - leftVal, (Number(task.duration) || 1) * 7.14));
 
                     return (
                       <div key={id} className="gantt-row">
@@ -2254,7 +2602,7 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
               </div>
 
               {/* Editors Grid */}
-              <div className="gantt-editor-card" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '16px', marginTop: '24px' }}>
+              <div className="gantt-editor-card" style={{ display: taskEntries.length === 0 ? 'none' : 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '16px', marginTop: '24px' }}>
                 {Object.keys(state.tasks).map(id => {
                   const task = state.tasks[id];
                   return (
@@ -2283,54 +2631,53 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
             <div className="section-header">
               <div className="header-title">
                 <h1>Gestión de Personal &amp; Recursos Humanos</h1>
-                <p>Estadísticas de presentismo, control de asistencia satelital, bonos de incentivos y licencias de la cuadrilla.</p>
+                <p>Registros de asistencia, incentivos y licencias cargados para la cuadrilla activa.</p>
               </div>
               <div className="header-actions">
-                <span className="badge badge-success"><i className="fa-solid fa-users"></i> Cuadrilla Activa</span>
+                <span className={`badge ${setup.canManageField && fieldWorkers.length > 0 ? 'badge-success' : 'badge-info'}`}><i className="fa-solid fa-users"></i> {setup.canManageField ? `${fieldWorkers.length} personas activas` : 'Modo consulta'}</span>
               </div>
             </div>
 
             <div className="grid-3">
-              {/* Empleado del Mes */}
+              {/* Attendance insight based only on persisted counters. */}
               <div className="glass-panel-premium dashboard-card-hover" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                 <div>
-                  <h3 style={{ fontFamily: 'var(--font-heading)', marginBottom: '8px', color: 'var(--primary)' }}><i className="fa-solid fa-award"></i> Empleado del Mes</h3>
+                  <h3 style={{ fontFamily: 'var(--font-heading)', marginBottom: '8px', color: 'var(--primary)' }}><i className="fa-solid fa-chart-simple"></i> Mayor asistencia registrada</h3>
                   <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginBottom: '20px' }}>
-                    Reconocimiento automático de IA basado en presentismo, puntualidad y tareas completadas en Gantt.
+                    Comparación simple de los contadores disponibles. No evalúa desempeño, puntualidad ni calidad de trabajo.
                   </p>
-                  
-                  <div style={{ background: 'rgba(255, 159, 28, 0.05)', border: '1px solid var(--primary)', padding: '20px', borderRadius: '12px', textAlign: 'center', position: 'relative' }}>
-                    <div style={{ position: 'absolute', top: '-10px', right: '-10px', background: 'var(--primary)', color: 'var(--bg-main)', width: '30px', height: '30px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900', boxShadow: '0 0 10px var(--primary-glow)' }}>
-                      <i className="fa-solid fa-crown" style={{ fontSize: '0.8rem' }}></i>
-                    </div>
-                    <div style={{ width: '70px', height: '70px', borderRadius: '50%', background: '#475569', backgroundImage: 'url(\'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23ffffff"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>\')', backgroundSize: '40px', backgroundRepeat: 'no-repeat', backgroundPosition: 'center', margin: '0 auto 12px auto', border: '3px solid var(--primary)', boxShadow: '0 0 15px rgba(255, 159, 28, 0.3)' }}></div>
-                    <h4 style={{ fontFamily: 'var(--font-heading)', color: '#fff', marginBottom: '4px' }}>Juan Gómez</h4>
-                    <span style={{ fontSize: '0.7rem', color: 'var(--primary)', fontWeight: 700, textTransform: 'uppercase' }}>Albañilería Principal</span>
-                    <div style={{ display: 'flex', justifyContent: 'space-around', marginTop: '15px', borderTop: '1px solid var(--border-color)', paddingTop: '12px', fontSize: '0.75rem' }}>
-                      <div>
-                        <span style={{ color: 'var(--text-secondary)', display: 'block' }}>Asistencia</span>
-                        <strong style={{ color: 'var(--success)', fontSize: '0.9rem' }}>100%</strong>
-                      </div>
-                      <div>
-                        <span style={{ color: 'var(--text-secondary)', display: 'block' }}>Tareas</span>
-                        <strong style={{ color: '#fff', fontSize: '0.9rem' }}>2 Hechas</strong>
+                  {attendanceInsight ? (
+                    <div style={{ background: 'rgba(255, 159, 28, 0.05)', border: '1px solid var(--primary)', padding: '20px', borderRadius: '12px', textAlign: 'center' }}>
+                      <i className="fa-solid fa-user-check" style={{ color: 'var(--primary)', fontSize: '2rem', marginBottom: '12px' }}></i>
+                      <h4 style={{ fontFamily: 'var(--font-heading)', color: '#fff', marginBottom: '4px' }}>{attendanceInsight.name}</h4>
+                      <span style={{ fontSize: '0.7rem', color: 'var(--primary)', fontWeight: 700, textTransform: 'uppercase' }}>{attendanceInsight.role}</span>
+                      <div style={{ marginTop: '15px', borderTop: '1px solid var(--border-color)', paddingTop: '12px', fontSize: '0.75rem' }}>
+                        <span style={{ color: 'var(--text-secondary)', display: 'block' }}>Asistencias acumuladas</span>
+                        <strong style={{ color: 'var(--success)', fontSize: '1rem' }}>{attendanceInsight.presents}</strong>
                       </div>
                     </div>
-                  </div>
-                </div>
-                <div style={{ marginTop: '20px', fontSize: '0.7rem', color: 'var(--text-secondary)', textAlign: 'center', fontStyle: 'italic' }}>
-                  Premio mensual: Bono de $35.000 ARS y canasta de herramientas.
+                  ) : (
+                    <div className="nocrit-msg" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '28px 12px' }}>
+                      <i className="fa-solid fa-user-clock" style={{ display: 'block', fontSize: '1.8rem', marginBottom: '10px' }}></i>
+                      No hay un registro suficiente y sin empates para mostrar este dato.
+                    </div>
+                  )}
                 </div>
               </div>
 
               {/* Incentives / Bonuses */}
               <div className="glass-panel-premium dashboard-card-hover" style={{ display: 'flex', flexDirection: 'column' }}>
-                <h3 style={{ fontFamily: 'var(--font-heading)', marginBottom: '8px', color: 'var(--success)' }}><i className="fa-solid fa-gift"></i> Premios &amp; Bonos Asignados</h3>
+                <h3 style={{ fontFamily: 'var(--font-heading)', marginBottom: '8px', color: 'var(--success)' }}><i className="fa-solid fa-gift"></i> Incentivos registrados</h3>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginBottom: '16px' }}>
                   Incentivos cargados para motivar el cumplimiento de plazos del cronograma.
                 </p>
                 
                 <div style={{ flexGrow: 1, overflowY: 'auto', maxHeight: '180px', display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
+                  {state.hrBonuses.length === 0 && (
+                    <div className="nocrit-msg" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '24px 10px' }}>
+                      No hay incentivos registrados.
+                    </div>
+                  )}
                   {state.hrBonuses.map((bonus, i) => (
                     <div key={i} style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', padding: '10px 14px', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
@@ -2338,8 +2685,8 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
                         <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>{bonus.type}</span>
                       </div>
                       <div style={{ textAlign: 'right' }}>
-                        <span style={{ fontSize: '0.8rem', color: 'var(--success)', fontWeight: 800, display: 'block' }}>{bonus.amount}</span>
-                        <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>{bonus.date}</span>
+                        <span style={{ fontSize: '0.7rem', color: bonus.amount ? 'var(--success)' : 'var(--text-secondary)', fontWeight: 700, display: 'block' }}>{bonus.amount || 'Sin importe informado'}</span>
+                        <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>{bonus.date || 'Sin fecha informada'}</span>
                       </div>
                     </div>
                   ))}
@@ -2348,63 +2695,65 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
                 <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
                   <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
                     <select value={hrBonusAssignee} onChange={(e) => setHrBonusAssignee(e.target.value)} className="form-control" style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid var(--border-color)', color: '#fff', borderRadius: '8px', padding: '6px 10px', fontSize: '0.75rem', flexGrow: 1, width: '50%' }}>
-                      <option value="Juan Gómez">Juan Gómez</option>
-                      <option value="Luis Martínez">Luis Martínez</option>
-                      <option value="Carlos Pérez">Carlos Pérez</option>
+                      <option value="">Seleccioná una persona</option>
+                      {fieldWorkers.map((worker) => (
+                        <option key={worker.id} value={worker.id}>{worker.name}</option>
+                      ))}
                     </select>
                     <select value={hrBonusType} onChange={(e) => setHrBonusType(e.target.value)} className="form-control" style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid var(--border-color)', color: '#fff', borderRadius: '8px', padding: '6px 10px', fontSize: '0.75rem', flexGrow: 1, width: '50%' }}>
-                      <option value="Bono de Puntualidad">Bono Puntualidad ($15.000)</option>
-                      <option value="Premio Velocidad Gantt">Premio Velocidad ($20.000)</option>
-                      <option value="Presentismo Perfecto">Presentismo Perfecto ($25.000)</option>
+                      <option value="Bono de Puntualidad">Bono de puntualidad</option>
+                      <option value="Reconocimiento de avance">Reconocimiento de avance</option>
+                      <option value="Reconocimiento de presentismo">Reconocimiento de presentismo</option>
                     </select>
                   </div>
-                  <button className="btn btn-primary btn-sm" onClick={handleAwardBonus} style={{ width: '100%', padding: '8px', fontSize: '0.75rem', fontWeight: 700, border: 'none', borderRadius: '8px', cursor: 'pointer' }}>
-                    <i className="fa-solid fa-plus"></i> Otorgar Incentivo / Bono
+                  {fieldWorkers.length === 0 && (
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.72rem', marginBottom: '8px' }}>
+                      {setup.canManageField
+                        ? <>Primero agregá una persona activa desde <Link href="/dashboard/team">Equipo y roles</Link>.</>
+                        : 'Tu rol puede consultar estos registros, pero no asignar incentivos.'}
+                    </p>
+                  )}
+                  <button className="btn btn-primary btn-sm" disabled={!setup.canManageProjects || !hrBonusAssignee || fieldWorkers.length === 0} onClick={handleAwardBonus} style={{ width: '100%', padding: '8px', fontSize: '0.75rem', fontWeight: 700, border: 'none', borderRadius: '8px', cursor: 'pointer' }}>
+                    <i className="fa-solid fa-plus"></i> Registrar incentivo sin importe
                   </button>
                 </div>
               </div>
 
               {/* Medical Licences */}
               <div className="glass-panel-premium dashboard-card-hover">
-                <h3 style={{ fontFamily: 'var(--font-heading)', marginBottom: '8px', color: 'var(--info)' }}><i className="fa-solid fa-notes-medical"></i> Licencias &amp; Certificados Médicos</h3>
+                <h3 style={{ fontFamily: 'var(--font-heading)', marginBottom: '8px', color: 'var(--info)' }}><i className="fa-solid fa-notes-medical"></i> Registro manual de licencias</h3>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginBottom: '16px' }}>
-                  Registra certificados médicos recibidos por WhatsApp para justificar ausencias en presentismo.
+                  Registrá solo la duración informada. No ingreses diagnósticos ni detalles clínicos: la bitácora operativa no debe almacenarlos.
                 </p>
                 
                 <form onSubmit={handleSubmitMedicalCert} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Seleccionar Operario</label>
                     <select value={hrMedAssignee} onChange={(e) => setHrMedAssignee(e.target.value)} className="form-control" style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid var(--border-color)', color: '#fff', borderRadius: '8px', padding: '8px 12px', fontSize: '0.8rem', outline: 'none' }} required>
-                      <option value="Carlos Pérez">Carlos Pérez (Ausente)</option>
-                      <option value="Luis Martínez">Luis Martínez</option>
-                      <option value="Juan Gómez">Juan Gómez</option>
+                      <option value="">Seleccioná una persona</option>
+                      {fieldWorkers.map((worker) => (
+                        <option key={worker.id} value={worker.id}>{worker.name}</option>
+                      ))}
                     </select>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '10px' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Diagnóstico</label>
-                      <input type="text" placeholder="Ej. Gripe / Esguince" value={hrMedDiagnosis} onChange={(e) => setHrMedDiagnosis(e.target.value)} style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid var(--border-color)', color: '#fff', borderRadius: '8px', padding: '8px 12px', fontSize: '0.8rem', outline: 'none' }} required />
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Días</label>
-                      <select value={hrMedDays} onChange={(e) => setHrMedDays(e.target.value)} style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid var(--border-color)', color: '#fff', borderRadius: '8px', padding: '8px 12px', fontSize: '0.8rem', outline: 'none' }}>
-                        <option value="1 día">1 día</option>
-                        <option value="2 días">2 días</option>
-                        <option value="3 días">3 días</option>
-                        <option value="5 días">5 días</option>
-                      </select>
-                    </div>
-                  </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Foto del Certificado (.jpg/.pdf)</label>
-                    <div style={{ border: '1px dashed var(--border-color)', borderRadius: '8px', padding: '12px', textAlign: 'center', fontSize: '0.75rem', color: 'var(--text-secondary)', background: 'rgba(0,0,0,0.15)', cursor: 'pointer' }} onClick={() => document.getElementById('hr-file-input').click()}>
-                      <i className="fa-solid fa-cloud-arrow-up" style={{ fontSize: '1.2rem', color: 'var(--info)', marginBottom: '4px', display: 'block' }}></i>
-                      <span>{hrMedFileName}</span>
-                      <input type="file" id="hr-file-input" style={{ display: 'none' }} onChange={handleMedicalFileSelected} />
-                    </div>
+                    <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Días informados</label>
+                    <select value={hrMedDays} onChange={(e) => setHrMedDays(e.target.value)} style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid var(--border-color)', color: '#fff', borderRadius: '8px', padding: '8px 12px', fontSize: '0.8rem', outline: 'none' }}>
+                      <option value="1 día">1 día</option>
+                      <option value="2 días">2 días</option>
+                      <option value="3 días">3 días</option>
+                      <option value="5 días">5 días</option>
+                    </select>
                   </div>
-                  <button type="submit" className="btn btn-secondary" style={{ background: 'var(--info-bg)', border: '1px solid var(--info)', color: 'var(--info)', width: '100%', padding: '10px', fontSize: '0.8rem', fontWeight: 700, borderRadius: '8px', cursor: 'pointer' }}>
-                    <i className="fa-solid fa-file-circle-check"></i> Cargar Licencia &amp; Justificar Faltas
+                  {fieldWorkers.length === 0 && (
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.72rem', margin: 0 }}>
+                      {setup.canManageField
+                        ? <>Primero agregá una persona activa desde <Link href="/dashboard/team">Equipo y roles</Link>.</>
+                        : 'Tu rol puede consultar estos registros, pero no registrar licencias.'}
+                    </p>
+                  )}
+                  <button type="submit" disabled={!setup.canManageProjects || !hrMedAssignee || fieldWorkers.length === 0} className="btn btn-secondary" style={{ background: 'var(--info-bg)', border: '1px solid var(--info)', color: 'var(--info)', width: '100%', padding: '10px', fontSize: '0.8rem', fontWeight: 700, borderRadius: '8px', cursor: 'pointer' }}>
+                    <i className="fa-solid fa-calendar-plus"></i> Registrar licencia manual
                   </button>
                 </form>
               </div>
@@ -2426,24 +2775,37 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
                     </tr>
                   </thead>
                   <tbody>
-                    {Object.keys(state.hrAttendance).map(name => {
-                      const item = state.hrAttendance[name];
-                      const currentAtt = state.attendance[name] || {};
-                      
-                      let statusBadge = <span className="badge badge-warning">Ausente</span>;
-                      if (currentAtt.status === 'Presente' || currentAtt.status.includes('GPS')) {
+                    {hrAttendanceEntries.length === 0 && (
+                      <tr>
+                        <td colSpan={6} style={{ padding: '24px 10px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                          No hay historial de presentismo o licencias registrado.
+                        </td>
+                      </tr>
+                    )}
+                    {hrAttendanceEntries.map(([name, item]) => {
+                      const currentAttendance = attendanceRecordByName(state.attendance, name);
+                      const currentStatus = attendanceStatus(currentAttendance?.entry);
+
+                      let statusBadge = <span className="badge badge-info">Sin registro actual</span>;
+                      if (currentStatus.startsWith('Presente')) {
                         statusBadge = <span className="badge badge-success">Presente</span>;
-                      } else if (currentAtt.status.includes('Justificado')) {
+                      } else if (currentStatus.includes('Justificado')) {
                         statusBadge = <span className="badge badge-info">Licencia</span>;
+                      } else if (currentStatus.includes('GPS pendiente')) {
+                        statusBadge = <span className="badge badge-info">GPS pendiente</span>;
+                      } else if (currentStatus.includes('Desvío')) {
+                        statusBadge = <span className="badge badge-danger">Revisar GPS</span>;
+                      } else if (currentStatus === 'Ausente') {
+                        statusBadge = <span className="badge badge-warning">Ausente</span>;
                       }
 
                       return (
                         <tr key={name} style={{ borderBottom: '1px solid var(--border-color)' }}>
                           <td style={{ padding: '10px' }}><strong>{name}</strong></td>
-                          <td style={{ padding: '10px' }}>{item.role}</td>
-                          <td style={{ padding: '10px', textAlign: 'center' }}>{item.presents}</td>
-                          <td style={{ padding: '10px', textAlign: 'center' }}>{item.excused}</td>
-                          <td style={{ padding: '10px', textAlign: 'center' }}>{item.unexcused}</td>
+                          <td style={{ padding: '10px' }}>{item.role || 'Cuadrilla de obra'}</td>
+                          <td style={{ padding: '10px', textAlign: 'center' }}>{Number(item.presents) || 0}</td>
+                          <td style={{ padding: '10px', textAlign: 'center' }}>{Number(item.excused) || 0}</td>
+                          <td style={{ padding: '10px', textAlign: 'center' }}>{Number(item.unexcused) || 0}</td>
                           <td style={{ padding: '10px', textAlign: 'center' }}>{statusBadge}</td>
                         </tr>
                       );
@@ -2472,10 +2834,16 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
               <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Operario Asignado</label>
                 <select className="form-input" value={newTaskAssignee} onChange={(e) => setNewTaskAssignee(e.target.value)}>
-                  <option value="Juan Gómez">Juan Gómez (Albañilería)</option>
-                  <option value="Luis Martínez">Luis Martínez (Instalaciones)</option>
-                  <option value="Carlos Pérez">Carlos Pérez (Pintura)</option>
+                  <option value="">Sin asignar</option>
+                  {fieldWorkers.map((worker) => (
+                    <option key={worker.id} value={worker.id}>{worker.name} ({worker.role || 'Cuadrilla'})</option>
+                  ))}
                 </select>
+                {fieldWorkers.length === 0 && (
+                  <small style={{ color: 'var(--text-secondary)' }}>
+                    Podés crear la tarea sin responsable o agregar la cuadrilla desde <Link href="/dashboard/team">Equipo y roles</Link>.
+                  </small>
+                )}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -2515,10 +2883,16 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
               <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Operario Asignado</label>
                 <select className="form-input" value={editTaskAssignee} onChange={(e) => setEditTaskAssignee(e.target.value)}>
-                  <option value="Juan Gómez">Juan Gómez (Albañilería)</option>
-                  <option value="Luis Martínez">Luis Martínez (Instalaciones)</option>
-                  <option value="Carlos Pérez">Carlos Pérez (Pintura)</option>
+                  <option value="">Sin asignar</option>
+                  {fieldWorkers.map((worker) => (
+                    <option key={worker.id} value={worker.id}>{worker.name} ({worker.role || 'Cuadrilla'})</option>
+                  ))}
                 </select>
+                {fieldWorkers.length === 0 && (
+                  <small style={{ color: 'var(--text-secondary)' }}>
+                    Agregá responsables desde <Link href="/dashboard/team">Equipo y roles</Link>.
+                  </small>
+                )}
               </div>
               
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
@@ -2562,10 +2936,10 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
               <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Material / Insumo</label>
                 <select className="form-input" value={receiveMaterialKey} onChange={(e) => setReceiveMaterialKey(e.target.value)}>
-                  <option value="cemento">Cemento Loma Negra (Bolsas)</option>
-                  <option value="hierro">Hierro A500 Acindar (Barras)</option>
-                  <option value="ladrillo">Ladrillo Portante Alberdi (Unidades)</option>
-                  <option value="arena">Arena Fina Cantera (m³)</option>
+                  <option value="">Seleccioná un material</option>
+                  {stockpileEntries.map(([key, item]) => (
+                    <option key={key} value={key}>{item.name || 'Material sin nombre'} {item.unit ? `(${item.unit})` : ''}</option>
+                  ))}
                 </select>
               </div>
               
@@ -2581,205 +2955,7 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
               
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
                 <button className="btn btn-secondary btn-sm" onClick={() => setShowReceiveMaterialModal(false)} style={{ padding: '8px 16px', fontSize: '0.8rem' }}>Cancelar</button>
-                <button className="btn btn-primary btn-sm" onClick={handleSaveReceivedMaterial} style={{ padding: '8px 16px', fontSize: '0.8rem' }}>Registrar Entrada</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal: Weekly report preview */}
-      {showWeeklyReportModal && (
-        <div className="modal-overlay" style={{ display: 'flex' }}>
-          <div className="glass-card modal-content" style={{ maxWidth: '800px', width: '95%', maxHeight: '90vh', overflowY: 'auto', padding: '40px', background: 'var(--bg-surface)', backdropFilter: 'blur(20px)', border: '1px solid var(--border-color)', borderRadius: 'var(--border-radius)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }} className="no-print">
-              <h3 style={{ fontFamily: 'var(--font-heading)', color: 'var(--primary)', margin: 0 }}><i className="fa-solid fa-file-invoice"></i> Vista Previa del Reporte de Obra</h3>
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <button className="btn btn-primary btn-sm" onClick={handlePrintWeeklyReport} style={{ padding: '6px 12px', fontSize: '0.75rem', fontWeight: 700 }}><i className="fa-solid fa-print"></i> Imprimir / PDF</button>
-                <button className="btn btn-secondary btn-sm" onClick={() => setShowWeeklyReportModal(false)} style={{ padding: '6px 12px', fontSize: '0.75rem', fontWeight: 600 }}><i className="fa-solid fa-xmark"></i> Cerrar</button>
-              </div>
-            </div>
-            
-            {/* Printable Report body */}
-            <div id="weekly-report-print-area" style={{ color: '#0f172a', background: '#fff', padding: '30px', borderRadius: '8px' }}>
-              <div style={{ fontFamily: "'Inter', 'Outfit', sans-serif", color: '#1e293b', lineHeight: 1.5, padding: '15px', maxWidth: '740px', margin: '0 auto', background: '#fff' }}>
-                
-                {/* Header logo */}
-                <div style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)', color: '#ffffff', padding: '20px 25px', borderRadius: '10px', marginBottom: '25px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                    <div style={{ width: '42px', height: '42px', background: 'linear-gradient(135deg, #ff9f1c 0%, #ff6b35 100%)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 900, fontFamily: "'Outfit', sans-serif", fontSize: '1.3rem' }}>OS</div>
-                    <div>
-                      <h1 style={{ fontFamily: "'Outfit', sans-serif", fontSize: '1.4rem', fontWeight: 800, margin: 0 }}>ObraSaaS</h1>
-                      <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', display: 'block', marginTop: '3px' }}>Innovar Latam • Reporte de Dirección</span>
-                    </div>
-                  </div>
-                  <div style={{ textAlign: 'right', fontSize: '0.75rem', color: '#cbd5e1', lineHeight: 1.4 }}>
-                    <span style={{ background: 'rgba(255, 159, 28, 0.2)', color: '#ff9f1c', padding: '3px 8px', borderRadius: '6px', fontWeight: 700, display: 'inline-block', marginBottom: '6px', fontSize: '0.65rem' }}>Auditoría Semanal</span><br/>
-                    <strong>Fecha:</strong> {weeklyReportDetails.todayStr}
-                  </div>
-                </div>
-
-                {/* Details grid */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '15px', marginBottom: '25px', fontSize: '0.8rem', background: '#f8fafc', border: '1px solid #e2e8f0', padding: '12px 18px', borderRadius: '8px' }}>
-                  <div>
-                    <span style={{ color: '#64748b', fontWeight: 600, display: 'inline-block', width: '90px' }}>PROYECTO:</span> <strong style={{ color: '#0f172a' }}>Edificio Palermo Chico</strong><br/>
-                    <span style={{ color: '#64748b', fontWeight: 600, display: 'inline-block', width: '90px' }}>UBICACIÓN:</span> <strong style={{ color: '#0f172a' }}>Palermo, CABA</strong>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <span style={{ color: '#64748b', fontWeight: 600 }}>AUDITOR:</span> <strong style={{ color: '#0f172a' }}>Arq. Marcelo (Director)</strong><br/>
-                    <span style={{ color: '#64748b', fontWeight: 600 }}>EMPRESA:</span> <strong style={{ color: '#0f172a' }}>Innovar Latam S.A.</strong>
-                  </div>
-                </div>
-
-                {/* AI Summary */}
-                <div style={{ background: 'linear-gradient(180deg, rgba(255, 159, 28, 0.04) 0%, rgba(255, 159, 28, 0.01) 100%)', borderLeft: '5px solid #ff9f1c', padding: '18px', borderRadius: '4px 10px 10px 4px', marginBottom: '30px', borderTop: '1px solid rgba(255, 159, 28, 0.08)', borderRight: '1px solid rgba(255, 159, 28, 0.08)', borderBottom: '1px solid rgba(255, 159, 28, 0.08)' }}>
-                  <h4 style={{ fontFamily: "'Outfit', sans-serif", fontSize: '0.85rem', color: '#d97706', margin: '0 0 8px 0', textTransform: 'uppercase', letterSpacing: '0.8px', fontWeight: 700 }}>
-                    ⭐ RESUMEN DIRECTIVO IA (PREDICCIÓN GEORREFERENCIADA)
-                  </h4>
-                  <p style={{ fontSize: '0.85rem', color: '#334155', margin: 0, lineHeight: 1.6, fontStyle: 'italic', fontWeight: 500 }}>
-                    &ldquo;{weeklyReportDetails.aiSummaryText}&rdquo;
-                  </p>
-                </div>
-
-                {/* Costs analytics */}
-                <div style={{ marginBottom: '35px' }}>
-                  <h3 style={{ fontFamily: "'Outfit', sans-serif", fontSize: '0.95rem', borderBottom: '2px solid #cbd5e1', paddingBottom: '6px', color: '#0f172a', marginBottom: '15px', fontWeight: 700 }}>
-                    CONTROL FINANCIERO Y PRESUPUESTO
-                  </h3>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '20px' }}>
-                    <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '10px', borderRadius: '8px', textAlign: 'center' }}>
-                      <span style={{ fontSize: '0.6rem', color: '#64748b', fontWeight: 700, display: 'block', textTransform: 'uppercase' }}>Presupuesto</span>
-                      <strong style={{ fontSize: '0.9rem', color: '#0f172a', display: 'block' }}>${weeklyReportDetails.totalBudget.toLocaleString('es-AR')}</strong>
-                      <span style={{ fontSize: '0.55rem', color: '#10b981', fontWeight: 700, background: '#e6f4ea', padding: '1px 6px', borderRadius: '4px', display: 'inline-block', marginTop: '4px' }}>Bloqueado</span>
-                    </div>
-                    <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '10px', borderRadius: '8px', textAlign: 'center' }}>
-                      <span style={{ fontSize: '0.6rem', color: '#64748b', fontWeight: 700, display: 'block', textTransform: 'uppercase' }}>Ejecutado</span>
-                      <strong style={{ fontSize: '0.9rem', color: '#ff9f1c', display: 'block' }}>${weeklyReportDetails.executedBudget.toLocaleString('es-AR')}</strong>
-                      <span style={{ fontSize: '0.6rem', color: '#64748b', display: 'block', marginTop: '4px' }}>Físico: {state.avancePercentage}%</span>
-                    </div>
-                    <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '10px', borderRadius: '8px', textAlign: 'center' }}>
-                      <span style={{ fontSize: '0.6rem', color: '#64748b', fontWeight: 700, display: 'block', textTransform: 'uppercase' }}>Disponible</span>
-                      <strong style={{ fontSize: '0.9rem', color: '#3b82f6', display: 'block' }}>${weeklyReportDetails.remainingBudget.toLocaleString('es-AR')}</strong>
-                      <span style={{ fontSize: '0.6rem', color: '#3b82f6', display: 'block', marginTop: '4px' }}>Por liberar</span>
-                    </div>
-                    <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '10px', borderRadius: '8px', textAlign: 'center' }}>
-                      <span style={{ fontSize: '0.6rem', color: '#64748b', fontWeight: 700, display: 'block', textTransform: 'uppercase' }}>Transcurrido</span>
-                      <strong style={{ fontSize: '0.9rem', color: '#0f172a', display: 'block' }}>{weeklyReportDetails.currentDay} Días</strong>
-                      <span style={{ fontSize: '0.55rem', color: '#ef4444', fontWeight: 700, background: '#fce8e6', padding: '1px 6px', borderRadius: '4px', display: 'inline-block', marginTop: '4px' }}>Tiempo: {weeklyReportDetails.timelinePercentage}%</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Tasks table */}
-                <div style={{ marginBottom: '25px' }}>
-                  <h3 style={{ fontFamily: "'Outfit', sans-serif", fontSize: '0.95rem', borderBottom: '2px solid #cbd5e1', paddingBottom: '6px', color: '#0f172a', marginBottom: '12px', fontWeight: 700 }}>
-                    ESTADO DE TAREAS Y DESEMPEÑO
-                  </h3>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                    <thead>
-                      <tr style={{ background: '#f1f5f9', borderBottom: '2px solid #cbd5e1' }}>
-                        <th style={{ padding: '8px', fontSize: '0.75rem', fontWeight: 700, color: '#475569' }}>Tarea</th>
-                        <th style={{ padding: '8px', fontSize: '0.75rem', fontWeight: 700, color: '#475569' }}>Responsable</th>
-                        <th style={{ padding: '8px', fontSize: '0.75rem', fontWeight: 700, color: '#475569' }}>Progreso</th>
-                        <th style={{ padding: '8px', fontSize: '0.75rem', fontWeight: 700, color: '#475569' }}>Duración</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {Object.keys(state.tasks).map(id => {
-                        const task = state.tasks[id];
-                        let progressColor = '#f59e0b';
-                        if (task.progress === 100) progressColor = '#10b981';
-                        else if (task.progress === 0) progressColor = '#94a3b8';
-
-                        return (
-                          <tr key={id} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                            <td style={{ padding: '10px 8px', fontSize: '0.8rem', fontWeight: 600 }}>{task.name}</td>
-                            <td style={{ padding: '10px 8px', fontSize: '0.8rem', color: '#475569' }}>{task.assignee}</td>
-                            <td style={{ padding: '10px 8px', fontSize: '0.8rem' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <div style={{ width: '80px', background: '#cbd5e1', height: '8px', borderRadius: '4px', overflow: 'hidden' }}>
-                                  <div style={{ width: `${task.progress}%`, background: progressColor, height: '100%' }}></div>
-                                </div>
-                                <span style={{ fontWeight: 700, color: progressColor }}>{task.progress}%</span>
-                              </div>
-                            </td>
-                            <td style={{ padding: '10px 8px', fontSize: '0.8rem', fontWeight: 600 }}>{task.duration} días</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Stockpile table */}
-                <div style={{ marginBottom: '25px' }}>
-                  <h3 style={{ fontFamily: "'Outfit', sans-serif", fontSize: '0.95rem', borderBottom: '2px solid #cbd5e1', paddingBottom: '6px', color: '#0f172a', marginBottom: '12px', fontWeight: 700 }}>
-                    CONTROL DE LOGÍSTICA E INSUMOS
-                  </h3>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                    <thead>
-                      <tr style={{ background: '#f1f5f9', borderBottom: '2px solid #cbd5e1' }}>
-                        <th style={{ padding: '8px', fontSize: '0.75rem', fontWeight: 700, color: '#475569' }}>Material</th>
-                        <th style={{ padding: '8px', fontSize: '0.75rem', fontWeight: 700, color: '#475569' }}>Stock Actual</th>
-                        <th style={{ padding: '8px', fontSize: '0.75rem', fontWeight: 700, color: '#475569' }}>Proveedor</th>
-                        <th style={{ padding: '8px', fontSize: '0.75rem', fontWeight: 700, color: '#475569' }}>Estado</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {Object.keys(state.stockpiles).map(key => {
-                        const item = state.stockpiles[key];
-                        let statusColor = '#137333';
-                        let statusBg = '#e6f4ea';
-                        if (item.status === 'Crítico') { statusColor = '#c5221f'; statusBg = '#fce8e6'; }
-                        if (item.status === 'En Camino') { statusColor = '#1a73e8'; statusBg = '#e8f0fe'; }
-
-                        return (
-                          <tr key={key} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                            <td style={{ padding: '10px 8px', fontSize: '0.8rem', fontWeight: 600 }}>{item.name}</td>
-                            <td style={{ padding: '10px 8px', fontSize: '0.8rem', fontWeight: 700 }}>{item.current.toLocaleString('es-AR')} {item.unit}</td>
-                            <td style={{ padding: '10px 8px', fontSize: '0.8rem', color: '#475569' }}>{item.supplier}</td>
-                            <td style={{ padding: '10px 8px', fontSize: '0.8rem' }}>
-                              <span style={{ padding: '3px 8px', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 700, color: statusColor, background: statusBg }}>{item.status}</span>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Safety & Incident Notes */}
-                <div style={{ marginBottom: '30px' }}>
-                  <h3 style={{ fontFamily: "'Outfit', sans-serif", fontSize: '0.95rem', borderBottom: '2px solid #cbd5e1', paddingBottom: '6px', color: '#0f172a', marginBottom: '12px', fontWeight: 700 }}>
-                    SEGURIDAD DE OBRA Y BITÁCORA IA
-                  </h3>
-                  {state.incidents.length === 0 ? (
-                    <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '12px', borderRadius: '8px', color: '#166534', fontSize: '0.8rem' }}>
-                      No se registraron desvíos logísticos ni incidencias críticas en el periodo semanal. Obra operando en curso nominal.
-                    </div>
-                  ) : (
-                    <ul style={{ paddingLeft: '20px', margin: 0, fontSize: '0.8rem', color: '#334155' }}>
-                      {state.incidents.slice(0, 4).map((inc, i) => (
-                        <li key={i} style={{ marginBottom: '6px' }}>
-                          <strong style={{ color: inc.type === 'critical' ? '#ef4444' : inc.type === 'warning' ? '#f59e0b' : '#10b981' }}>{inc.title}</strong>: {inc.description} ({inc.timestamp})
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-
-                {/* Signatures */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid #cbd5e1', paddingTop: '20px', marginTop: '30px' }}>
-                  <div>
-                    <strong style={{ fontSize: '0.8rem', color: '#0f172a' }}>Arq. Marcelo (Director)</strong><br/>
-                    <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Innovar Latam S.A.</span>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ borderBottom: '1px solid #cbd5e1', width: '120px', height: '24px' }}></div>
-                    <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Firma del Inspector de Obra</span>
-                  </div>
-                </div>
-
+                <button className="btn btn-primary btn-sm" disabled={!receiveMaterialKey} onClick={handleSaveReceivedMaterial} style={{ padding: '8px 16px', fontSize: '0.8rem' }}>Registrar Entrada</button>
               </div>
             </div>
           </div>
@@ -2835,6 +3011,131 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
             border-color: var(--primary);
             color: var(--text-primary);
         }
+        .field-simulator-toolbar {
+            display: grid;
+            grid-template-columns: minmax(260px, .8fr) minmax(320px, 1.2fr);
+            gap: 14px;
+            align-items: stretch;
+            margin-bottom: 18px;
+            padding: 14px;
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.025);
+        }
+        .field-simulator-actor {
+            display: grid;
+            gap: 6px;
+        }
+        .field-simulator-actor > span {
+            color: var(--text-primary);
+            font-size: .72rem;
+            font-weight: 800;
+        }
+        .field-simulator-actor select {
+            width: 100%;
+            min-height: 42px;
+            padding: 8px 10px;
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 9px;
+            background: #111827;
+        }
+        .field-simulator-actor small {
+            color: var(--text-secondary);
+            font-size: .65rem;
+            line-height: 1.45;
+        }
+        .field-simulator-access {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            padding: 12px 14px;
+            border: 1px solid var(--border-color);
+            border-radius: 11px;
+            background: rgba(255, 255, 255, 0.025);
+        }
+        .field-simulator-access.is-ready {
+            border-color: color-mix(in srgb, var(--success) 34%, transparent);
+            background: color-mix(in srgb, var(--success) 8%, transparent);
+        }
+        .field-simulator-access.is-blocked {
+            border-color: color-mix(in srgb, var(--warning) 28%, transparent);
+        }
+        .field-simulator-access > div {
+            display: grid;
+            gap: 4px;
+        }
+        .field-simulator-access strong {
+            font-size: .76rem;
+        }
+        .field-simulator-access span {
+            color: var(--text-secondary);
+            font-size: .68rem;
+            line-height: 1.45;
+        }
+        .field-simulator-access > a {
+            flex: 0 0 auto;
+            padding: 8px 10px;
+            color: var(--bg-main);
+            border-radius: 8px;
+            background: var(--primary);
+            font-size: .68rem;
+            font-weight: 800;
+            text-decoration: none;
+        }
+        .field-simulator-badge {
+            padding: 5px 7px;
+            color: var(--warning);
+            border: 1px solid color-mix(in srgb, var(--warning) 28%, transparent);
+            border-radius: 999px;
+            font-size: .6rem;
+            font-weight: 800;
+        }
+        .whatsapp-clip-btn {
+            display: grid;
+            place-items: center;
+            width: 32px;
+            height: 32px;
+            flex: 0 0 32px;
+            padding: 0;
+            border: 0;
+            background: transparent;
+        }
+        .whatsapp-clip-btn:disabled,
+        .whatsapp-send-btn:disabled,
+        .attachment-item:disabled,
+        .gps-option-item:disabled {
+            cursor: not-allowed;
+            opacity: .48;
+        }
+        .attachment-item {
+            min-width: 0;
+            padding: 0;
+            color: inherit;
+            border: 0;
+            background: transparent;
+            font: inherit;
+        }
+        .gps-share-header button {
+            width: 34px;
+            height: 34px;
+            padding: 0;
+            color: var(--text-primary);
+            border: 0;
+            border-radius: 8px;
+            background: transparent;
+            cursor: pointer;
+        }
+        .gps-share-header > span:last-child {
+            width: 34px;
+        }
+        .gps-option-item {
+            width: 100%;
+            color: inherit;
+            font: inherit;
+            text-align: left;
+        }
         #map {
             height: 260px;
             width: 100%;
@@ -2887,7 +3188,7 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
             color: var(--success);
             border-color: color-mix(in srgb, var(--success) 35%, transparent);
         }
-        .copilot-scope-badge.is-demo {
+        .copilot-scope-badge.is-empty {
             color: var(--warning);
             border-color: color-mix(in srgb, var(--warning) 35%, transparent);
         }
@@ -3086,6 +3387,13 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
         }
 
         @media (max-width: 640px) {
+            .field-simulator-toolbar {
+                grid-template-columns: 1fr;
+            }
+            .field-simulator-access {
+                align-items: flex-start;
+                flex-direction: column;
+            }
             .copilot-heading {
                 align-items: flex-start;
                 flex-direction: column;

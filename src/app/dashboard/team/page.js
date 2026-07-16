@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { clerkClient } from '@clerk/nextjs/server';
 
 import TeamClient from './team-client';
+import FieldWorkersClient from './field-workers-client';
 import styles from './team.module.css';
 import {
   getPlatformAccess,
@@ -9,6 +10,7 @@ import {
   requireTenantPermission,
 } from '@/lib/access';
 import { getPrisma } from '@/lib/prisma';
+import { fieldWorkerWhatsAppRole } from '@/lib/field-workers';
 import { TENANT_ROLES } from '@/lib/tenant-roles';
 import { serializeInvitation } from '@/lib/invitations';
 
@@ -18,7 +20,8 @@ export default async function TeamPage() {
   const access = await getPlatformAccess();
   requireTenantPermission(access, 'tenant:members:read');
   const canManage = hasTenantPermission(access, 'tenant:members:manage');
-  const [memberships, invitationResult] = await Promise.all([
+  const canManageField = hasTenantPermission(access, 'org:field:manage');
+  const [memberships, invitationResult, workers] = await Promise.all([
     getPrisma().tenantMembership.findMany({
       where: { organizationId: access.organization.id },
       include: { user: true },
@@ -31,6 +34,10 @@ export default async function TeamPage() {
         limit: 100,
       }))
       : Promise.resolve({ data: [] }),
+    getPrisma().worker.findMany({
+      where: { projectId: access.project.id },
+      orderBy: [{ active: 'desc' }, { name: 'asc' }],
+    }),
   ]);
 
   return (
@@ -74,6 +81,21 @@ export default async function TeamPage() {
           },
         }))}
         roles={Object.values(TENANT_ROLES)}
+      />
+
+      <FieldWorkersClient
+        canManage={canManageField}
+        projectName={access.project.name}
+        initialWorkers={workers.map((worker) => ({
+          id: worker.id,
+          name: worker.name,
+          phone: worker.phone,
+          role: worker.role,
+          active: worker.active,
+          whatsappRole: fieldWorkerWhatsAppRole(worker),
+          createdAt: worker.createdAt.toISOString(),
+          updatedAt: worker.updatedAt.toISOString(),
+        }))}
       />
     </main>
   );

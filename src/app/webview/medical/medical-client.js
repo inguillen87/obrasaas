@@ -2,12 +2,19 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import {
+  MAX_MEDICAL_CERTIFICATE_BYTES,
+  MAX_MEDICAL_CERTIFICATE_MEGABYTES,
+} from "@/lib/medical-upload";
 import styles from "../webview.module.css";
 
 export default function MedicalClient({ worker, token, name }) {
   const [days, setDays] = useState(1);
   const [file, setFile] = useState(null);
-  const [status, setStatus] = useState({ type: "idle", message: "PDF, JPG, PNG o WebP · máximo 10 MB" });
+  const [status, setStatus] = useState({
+    type: "idle",
+    message: `PDF, JPG, PNG o WebP · máximo ${MAX_MEDICAL_CERTIFICATE_MEGABYTES} MB`,
+  });
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -63,8 +70,22 @@ export default function MedicalClient({ worker, token, name }) {
               accept="application/pdf,image/jpeg,image/png,image/webp"
               onChange={(event) => {
                 const selected = event.target.files?.[0] || null;
+                if (selected?.size > MAX_MEDICAL_CERTIFICATE_BYTES) {
+                  event.target.value = "";
+                  setFile(null);
+                  setStatus({
+                    type: "error",
+                    message: `El archivo supera el máximo permitido de ${MAX_MEDICAL_CERTIFICATE_MEGABYTES} MB.`,
+                  });
+                  return;
+                }
                 setFile(selected);
-                setStatus({ type: "idle", message: selected ? `${selected.name} · ${(selected.size / 1024 / 1024).toFixed(1)} MB` : "PDF, JPG, PNG o WebP · máximo 10 MB" });
+                setStatus({
+                  type: "idle",
+                  message: selected
+                    ? `${selected.name} · ${(selected.size / 1024 / 1024).toFixed(1)} MB`
+                    : `PDF, JPG, PNG o WebP · máximo ${MAX_MEDICAL_CERTIFICATE_MEGABYTES} MB`,
+                });
               }}
               disabled={loading || completed}
             />

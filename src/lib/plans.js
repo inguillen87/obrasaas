@@ -26,7 +26,7 @@ export const PLAN_CATALOG = {
       'Hasta 100 colaboradores de campo',
       'WhatsApp Cloud API, Flows y webviews seguros',
       'Gantt, reportes, geocercas y control de insumos',
-      '100 GB de evidencia y soporte estándar',
+      'Evidencia centralizada y soporte estándar',
     ],
   },
   ENTERPRISE: {
@@ -52,6 +52,217 @@ export const VARIABLE_COST_NOTE =
 
 export const PRICING_BASIS_NOTE =
   'Precio por organización, no por cada colaborador de campo. Los límites visibles evitan sorpresas y el plan Enterprise parte de una base publicada.';
+
+export function fieldUserCapacity({ plan, activeCount }) {
+  const limit = PLAN_CATALOG[plan]?.limits.fieldUsers ?? 0;
+  const used = Math.max(0, Number.isFinite(Number(activeCount)) ? Number(activeCount) : 0);
+  return {
+    limit,
+    used,
+    remaining: Math.max(0, limit - used),
+    canActivate: used < limit,
+  };
+}
+
+export function officeUserCapacity({
+  plan,
+  activeMemberships,
+  pendingInvitations,
+}) {
+  const limit = PLAN_CATALOG[plan]?.limits.officeUsers ?? 0;
+  const active = Math.max(
+    0,
+    Number.isSafeInteger(activeMemberships) ? activeMemberships : 0,
+  );
+  const pending = Math.max(
+    0,
+    Number.isSafeInteger(pendingInvitations) ? pendingInvitations : 0,
+  );
+  const used = active + pending;
+
+  return {
+    plan,
+    limit,
+    activeMemberships: active,
+    pendingInvitations: pending,
+    used,
+    remaining: Math.max(0, limit - used),
+    canInvite: used < limit,
+  };
+}
+
+export class OfficeSeatLimitError extends Error {
+  constructor(capacity) {
+    const planName = PLAN_CATALOG[capacity.plan]?.name || 'actual';
+    super(
+      `El plan ${planName} permite hasta ${capacity.limit} usuarios de gestión entre miembros activos e invitaciones pendientes.`,
+    );
+    this.name = 'OfficeSeatLimitError';
+    this.code = 'OFFICE_SEAT_LIMIT_REACHED';
+    this.capacity = capacity;
+  }
+}
+
+export class OfficeSeatCheckError extends Error {
+  constructor(cause) {
+    super('No se pudo verificar el cupo de usuarios de gestión.', { cause });
+    this.name = 'OfficeSeatCheckError';
+    this.code = 'OFFICE_SEAT_CHECK_UNAVAILABLE';
+  }
+}
+
+const OFFICE_SEAT_LOCK_MAX_WAIT_MS = 5_000;
+const OFFICE_SEAT_TRANSACTION_TIMEOUT_MS = 20_000;
+
+class OfficeInvitationCreationPassthrough extends Error {
+  constructor(cause) {
+    super('Clerk rechazó la creación de la invitación.', { cause });
+    this.name = 'OfficeInvitationCreationPassthrough';
+  }
+}
+
+function officeUserLimit(plan) {
+  const limit = PLAN_CATALOG[plan]?.limits.officeUsers;
+  // Clerk treats zero as unlimited, so an unknown or malformed plan must never
+  // be synchronized as zero. Invalid entitlement state fails closed instead.
+  if (!Number.isSafeInteger(limit) || limit <= 0) {
+    throw new OfficeSeatCheckError(
+      new Error(`El plan ${String(plan || 'desconocido')} no tiene un cupo de oficina válido.`),
+    );
+  }
+  return limit;
+}
+
+async function synchronizeClerkOfficeLimit({
+  organizations,
+  organizationId,
+  limit,
+}) {
+  if (
+    typeof organizations?.getOrganization !== 'function'
+    || typeof organizations?.updateOrganization !== 'function'
+  ) {
+    throw new Error('El cliente de Clerk no permite verificar y sincronizar el cupo de la organización.');
+  }
+
+  const organization = await organizations.getOrganization({ organizationId });
+  if (organization?.maxAllowedMemberships === limit) return;
+
+  const updated = await organizations.updateOrganization(organizationId, {
+    maxAllowedMemberships: limit,
+  });
+  if (updated?.maxAllowedMemberships !== limit) {
+    throw new Error('Clerk no confirmó el cupo de membresías solicitado.');
+  }
+}
+
+function exactClerkTotal(page, resourceName) {
+  if (!Number.isSafeInteger(page?.totalCount) || page.totalCount < 0) {
+    throw new Error(`Clerk no devolvió un total exacto de ${resourceName}.`);
+  }
+  return page.totalCount;
+}
+
+export async function createOfficeInvitationWithinPlan({
+  prisma,
+  organizations,
+  organizationId,
+  plan,
+  invitationParams,
+}) {
+  const normalizedOrganizationId = typeof organizationId === 'string'
+    ? organizationId.trim()
+    : '';
+  if (!normalizedOrganizationId) {
+    throw new OfficeSeatCheckError(new Error('La organización de Clerk es obligatoria.'));
+  }
+
+  const limit = officeUserLimit(plan);
+  if (
+    typeof prisma?.$transaction !== 'function'
+    || typeof organizations?.getOrganizationMembershipList !== 'function'
+    || typeof organizations?.getOrganizationInvitationList !== 'function'
+    || typeof organizations?.createOrganizationInvitation !== 'function'
+  ) {
+    throw new OfficeSeatCheckError(
+      new Error('No está disponible la infraestructura necesaria para reservar el cupo.'),
+    );
+  }
+
+  try {
+    return await prisma.$transaction(async (transaction) => {
+      try {
+        await transaction.$executeRawUnsafe(
+          `SET LOCAL lock_timeout = '${OFFICE_SEAT_LOCK_MAX_WAIT_MS}ms'`,
+        );
+        await transaction.$executeRawUnsafe(
+          'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+          `obrasaas:office-seats:${normalizedOrganizationId}`,
+        );
+
+        await synchronizeClerkOfficeLimit({
+          organizations,
+          organizationId: normalizedOrganizationId,
+          limit,
+        });
+
+        // Read reservations first so an invitation accepted between both reads
+        // is conservatively counted twice instead of disappearing from totals.
+        const pendingInvitations = await organizations.getOrganizationInvitationList({
+          organizationId: normalizedOrganizationId,
+          status: ['pending'],
+          limit: 1,
+          offset: 0,
+        });
+        const memberships = await organizations.getOrganizationMembershipList({
+          organizationId: normalizedOrganizationId,
+          limit: 1,
+          offset: 0,
+        });
+
+        const capacity = officeUserCapacity({
+          plan,
+          activeMemberships: exactClerkTotal(memberships, 'membresías'),
+          pendingInvitations: exactClerkTotal(pendingInvitations, 'invitaciones pendientes'),
+        });
+        if (!capacity.canInvite) {
+          throw new OfficeSeatLimitError(capacity);
+        }
+
+        try {
+          // organizationId is authoritative and intentionally overwrites any
+          // caller-controlled value.
+          const invitation = await organizations.createOrganizationInvitation({
+            ...invitationParams,
+            organizationId: normalizedOrganizationId,
+          });
+          return { invitation, capacity };
+        } catch (error) {
+          // Preserve Clerk's public 4xx response instead of misclassifying it as
+          // an unavailable seat check at the transaction boundary.
+          throw new OfficeInvitationCreationPassthrough(error);
+        }
+      } catch (error) {
+        if (
+          error instanceof OfficeSeatLimitError
+          || error instanceof OfficeInvitationCreationPassthrough
+        ) {
+          throw error;
+        }
+        throw new OfficeSeatCheckError(error);
+      }
+    }, {
+      maxWait: OFFICE_SEAT_LOCK_MAX_WAIT_MS,
+      timeout: OFFICE_SEAT_TRANSACTION_TIMEOUT_MS,
+    });
+  } catch (error) {
+    if (error instanceof OfficeInvitationCreationPassthrough) throw error.cause;
+    if (error instanceof OfficeSeatLimitError || error instanceof OfficeSeatCheckError) {
+      throw error;
+    }
+    throw new OfficeSeatCheckError(error);
+  }
+}
 
 export function getSubscriptionEntitlements(organization, now = new Date()) {
   const status = organization?.subscriptionStatus || 'TRIALING';

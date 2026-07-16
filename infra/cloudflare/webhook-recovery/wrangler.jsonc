@@ -1,0 +1,18 @@
+{
+  "$schema": "https://raw.githubusercontent.com/cloudflare/workers-sdk/main/packages/wrangler/config-schema.json",
+  "name": "obrasaas-webhook-recovery",
+  "main": "src/index.js",
+  "compatibility_date": "2026-07-16",
+  "workers_dev": true,
+  "preview_urls": false,
+  "vars": {
+    "RECOVERY_URL": "https://obrasaas-preview.vercel.app/api/cron/webhooks"
+  },
+  "triggers": {
+    "crons": ["* * * * *"]
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  }
+}

@@ -150,7 +150,10 @@ export function buildWeeklyReportModel({
   const periodStart = new Date(generated);
   periodStart.setDate(periodStart.getDate() - 6);
   const scheduleGap = schedule.percentage - progress;
-  const executiveSummary = scheduleGap > 10
+  const isEmptyState = !snapshot;
+  const executiveSummary = isEmptyState
+    ? 'Todavía no hay actividad operativa persistida para elaborar una lectura ejecutiva. Registrá avances, asistencia, tareas o evidencias antes de usar este reporte para tomar decisiones.'
+    : scheduleGap > 10
     ? `El avance físico se ubica ${scheduleGap} puntos por debajo del tiempo consumido. Conviene revisar tareas bloqueadas, abastecimiento y responsables antes de confirmar la próxima línea base.`
     : alertsCount > 0
       ? `El avance mantiene una relación razonable con el plazo, pero existen ${alertsCount} alertas que requieren seguimiento. Priorizar las incidencias críticas evita trasladar riesgo a la próxima semana.`
@@ -169,7 +172,7 @@ export function buildWeeklyReportModel({
     periodStart,
     lastUpdatedAt: snapshot?.updatedAt ? new Date(snapshot.updatedAt) : null,
     snapshotVersion: Math.max(1, number(snapshot?.version, 1)),
-    isDemoData: !snapshot,
+    isEmptyState,
     progress,
     currentDay: schedule.currentDay,
     totalDays: schedule.totalDays,

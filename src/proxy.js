@@ -1,22 +1,27 @@
-import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
+import { clerkMiddleware } from '@clerk/nextjs/server';
 
-const isProtectedRoute = createRouteMatcher([
-  '/dashboard(.*)',
-  '/superadmin(.*)',
-  '/presupuesto(.*)',
-  '/session-tasks(.*)',
-  '/api/ai(.*)',
-  '/api/billing(.*)',
-  '/api/evidence(.*)',
-  '/api/integrations(.*)',
-  '/api/state(.*)',
-  '/api/superadmin(.*)',
-  '/api/tenant(.*)',
-  '/api/whatsapp(.*)',
-]);
+const PROTECTED_ROUTE_ROOTS = [
+  '/dashboard',
+  '/superadmin',
+  '/presupuesto',
+  '/session-tasks',
+  '/api/ai',
+  '/api/billing',
+  '/api/evidence',
+  '/api/field',
+  '/api/integrations',
+  '/api/state',
+  '/api/superadmin',
+  '/api/tenant',
+  '/api/whatsapp',
+];
+
+function isProtectedPathname(pathname) {
+  return PROTECTED_ROUTE_ROOTS.some((root) => pathname === root || pathname.startsWith(`${root}/`));
+}
 
 export default clerkMiddleware(async (auth, request) => {
-  if (isProtectedRoute(request)) await auth.protect();
+  if (isProtectedPathname(request.nextUrl.pathname)) await auth.protect();
 });
 
 export const config = {

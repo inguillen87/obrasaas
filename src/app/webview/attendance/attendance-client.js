@@ -25,7 +25,7 @@ export default function AttendanceClient({ worker, token, name }) {
     setStatus({ type: "loading", message: "Obteniendo ubicación precisa…" });
     try {
       const position = await getCurrentPosition();
-      setStatus({ type: "loading", message: "Validando contra la geocerca de la obra…" });
+      setStatus({ type: "loading", message: "Contrastando la ubicación informada con la geocerca…" });
       const response = await fetch("/api/webviews/attendance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -52,6 +52,7 @@ export default function AttendanceClient({ worker, token, name }) {
   }
 
   const loading = status.type === "loading";
+  const completed = status.type === "success";
   return (
     <main className={styles.page}>
       <div className={styles.shell}>
@@ -65,8 +66,8 @@ export default function AttendanceClient({ worker, token, name }) {
         <section className={styles.heroCard}>
           <div>
             <p className={styles.eyebrow}>Presentismo de campo</p>
-            <h1>Validá tu ingreso en la obra</h1>
-            <p className={styles.lead}>Hola, {name}. Usaremos tu ubicación una sola vez para compararla con la geocerca activa.</p>
+            <h1>Informá tu ubicación para completar el ingreso</h1>
+            <p className={styles.lead}>Hola, {name}. Tomaremos una lectura puntual del dispositivo para compararla con la geocerca activa.</p>
           </div>
           <div className={styles.locationVisual} aria-hidden="true">
             <span className={styles.locationPulse} />
@@ -77,7 +78,7 @@ export default function AttendanceClient({ worker, token, name }) {
         <section className={styles.actionCard}>
           <div className={styles.steps}>
             <span><b>1</b> Autorizás la ubicación</span>
-            <span><b>2</b> Validamos la geocerca</span>
+            <span><b>2</b> Contrastamos la geocerca</span>
             <span><b>3</b> Registramos la evidencia</span>
           </div>
 
@@ -86,9 +87,9 @@ export default function AttendanceClient({ worker, token, name }) {
             {status.message}
           </div>
 
-          <button className={styles.primaryButton} onClick={handleCheckin} disabled={loading}>
+          <button className={styles.primaryButton} onClick={handleCheckin} disabled={loading || completed}>
             {loading ? <span className={styles.spinner} aria-hidden="true" /> : <span aria-hidden="true">⌖</span>}
-            {loading ? "Validando…" : status.type === "success" ? "Validar nuevamente" : "Validar ubicación y fichar"}
+            {loading ? "Contrastando…" : completed ? "Ubicación informada" : "Informar ubicación y fichar"}
           </button>
           <p className={styles.privacy}>ObraSaaS no sigue tu ubicación en segundo plano. Guardamos coordenada, precisión, hora y resultado para auditoría.</p>
         </section>

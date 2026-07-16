@@ -2,9 +2,14 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  assertProjectStateVersion,
   deriveProjectStateActivities,
   flagStockRisks,
+  formatProjectStateEtag,
+  parseProjectStateVersion,
+  parseProjectStateWriteRequest,
   ProjectStateInputError,
+  ProjectStateVersionConflictError,
   validateProjectStateInput,
 } from '../src/lib/project-state.js';
 
@@ -43,6 +48,50 @@ test('project state validation accepts a bounded operational snapshot and clones
   const validated = validateProjectStateInput(input);
   assert.deepEqual(validated, input);
   assert.notEqual(validated, input);
+});
+
+test('project state write parsing accepts matching body and If-Match versions', () => {
+  const input = state();
+  assert.deepEqual(
+    parseProjectStateWriteRequest(
+      { state: input, expectedVersion: 7 },
+      formatProjectStateEtag(7),
+    ),
+    { state: input, expectedVersion: 7 },
+  );
+  assert.equal(parseProjectStateVersion('"project-state-12"'), 12);
+});
+
+test('project state writes require a version and reject inconsistent preconditions', () => {
+  assert.throws(
+    () => parseProjectStateWriteRequest(state()),
+    (error) => (
+      error instanceof ProjectStateInputError
+      && error.status === 428
+      && error.code === 'STATE_VERSION_REQUIRED'
+    ),
+  );
+  assert.throws(
+    () => parseProjectStateWriteRequest(
+      { state: state(), expectedVersion: 3 },
+      formatProjectStateEtag(4),
+    ),
+    /misma versi/,
+  );
+});
+
+test('project state version assertion exposes a machine-readable conflict', () => {
+  assert.equal(assertProjectStateVersion(4, 4), 4);
+  assert.throws(
+    () => assertProjectStateVersion(4, 5),
+    (error) => (
+      error instanceof ProjectStateVersionConflictError
+      && error.status === 409
+      && error.code === 'STATE_VERSION_CONFLICT'
+      && error.expectedVersion === 4
+      && error.currentVersion === 5
+    ),
+  );
 });
 
 test('project state validation rejects invalid task progress and dangerous object shapes', () => {

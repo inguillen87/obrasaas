@@ -109,6 +109,18 @@ export function activeProjectCapacity({ plan, activeCount }) {
   };
 }
 
+export function isUnconfiguredTenantBootstrapProject(project) {
+  return Boolean(
+    project
+    && project.status === 'ACTIVE'
+    && project.name === 'Obra principal'
+    && project.slug === 'obra-principal'
+    && project.address == null
+    && project.latitude == null
+    && project.longitude == null,
+  );
+}
+
 export function activeProjectCookieOptions() {
   return {
     httpOnly: true,
