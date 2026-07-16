@@ -2,35 +2,12 @@ import { getAppState, saveAppState, resetState } from '@/lib/db';
 import { AccessError, accessErrorResponse, getPlatformAccess, requireTenantPermission } from '@/lib/access';
 import {
     deriveProjectStateActivities,
+    flagStockRisks,
     ProjectStateInputError,
     validateProjectStateInput,
 } from '@/lib/project-state';
 
 const MAX_STATE_BODY_BYTES = 1_000_000;
-
-function flagStockRisks(state) {
-    if (!state.stockpiles) return;
-    state.incidents ||= [];
-
-    for (const [key, material] of Object.entries(state.stockpiles)) {
-        if (!material || Number(material.current) >= Number(material.min)) continue;
-        const incidentId = `stock-risk-${key}`;
-        if (state.incidents.some((incident) => incident.id === incidentId)) continue;
-
-        material.status = 'Requiere aprobación';
-        state.alertsCount = Number(state.alertsCount || 0) + 1;
-        state.incidents.unshift({
-            id: incidentId,
-            title: `Stock bajo: ${material.name}`,
-            description: `${material.current} ${material.unit} disponibles frente a un mínimo de ${material.min}. La compra quedó pendiente de aprobación de un responsable autorizado.`,
-            type: 'warning',
-            badge: 'Revisar compra',
-            timestamp: new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date()),
-            reporter: 'Control de abastecimiento',
-            icon: 'fa-solid fa-cart-shopping',
-        });
-    }
-}
 
 export async function GET() {
     try {

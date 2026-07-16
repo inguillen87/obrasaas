@@ -131,6 +131,57 @@ export function validateProjectStateInput(value) {
   return structuredClone(value);
 }
 
+function searchableText(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+function stockRiskAlreadyTracked(state, key, material) {
+  const materialName = searchableText(material.name);
+  return state.incidents.some((incident) => {
+    if (incident?.id === `stock-risk-${key}`) return true;
+    if (incident?.metadata?.stockpileKey === key) return true;
+    const incidentText = searchableText(
+      `${incident?.title || ''} ${incident?.description || ''} ${incident?.badge || ''}`,
+    );
+    return materialName
+      && incidentText.includes(materialName)
+      && /(stock|acopio|quiebre|faltante|debajo del minimo)/.test(incidentText);
+  });
+}
+
+export function flagStockRisks(state) {
+  if (!isPlainObject(state?.stockpiles)) return state;
+  state.incidents = Array.isArray(state.incidents) ? state.incidents : [];
+
+  for (const [key, material] of Object.entries(state.stockpiles)) {
+    if (!material || numeric(material.current) >= numeric(material.min)) continue;
+    const replenishmentStatus = searchableText(material.status);
+    if (/(en camino|en transito|pedido|despachado|comprado)/.test(replenishmentStatus)) continue;
+    if (stockRiskAlreadyTracked(state, key, material)) continue;
+
+    material.status = 'Requiere aprobación';
+    state.alertsCount = numeric(state.alertsCount) + 1;
+    state.incidents.unshift({
+      id: `stock-risk-${key}`,
+      title: `Stock bajo: ${material.name}`,
+      description: `${material.current} ${material.unit} disponibles frente a un mínimo de ${material.min}. La compra quedó pendiente de aprobación de un responsable autorizado.`,
+      type: 'warning',
+      badge: 'Revisar compra',
+      timestamp: new Intl.DateTimeFormat('es-AR', {
+        dateStyle: 'short',
+        timeStyle: 'short',
+      }).format(new Date()),
+      reporter: 'Control de abastecimiento',
+      icon: 'fa-solid fa-cart-shopping',
+      metadata: { stockpileKey: key },
+    });
+  }
+  return state;
+}
+
 function normalizedText(value, fallback = 'Sin detalle') {
   const text = String(value || '').trim();
   return (text || fallback).slice(0, 500);

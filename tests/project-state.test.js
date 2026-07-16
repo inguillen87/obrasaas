@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   deriveProjectStateActivities,
+  flagStockRisks,
   ProjectStateInputError,
   validateProjectStateInput,
 } from '../src/lib/project-state.js';
@@ -114,4 +115,38 @@ test('activity derivation records removed tasks as warnings', () => {
   assert.equal(activities.length, 1);
   assert.equal(activities[0].action, 'project.task.deleted');
   assert.equal(activities[0].severity, 'WARNING');
+});
+
+test('stock risk detection avoids duplicate and in-transit alerts', () => {
+  const current = state({
+    incidents: [{
+      id: 'existing-risk',
+      title: 'Quiebre de stock crítico',
+      description: 'Cemento por debajo del mínimo de seguridad.',
+      badge: 'Stock bajo',
+    }],
+    stockpiles: {
+      cemento: {
+        name: 'Cemento', current: 10, min: 20, max: 200, unit: 'bolsas', status: 'Crítico',
+      },
+      arena: {
+        name: 'Arena fina', current: 4, min: 8, max: 20, unit: 'm³', status: 'En camino',
+      },
+    },
+  });
+
+  flagStockRisks(current);
+  assert.equal(current.incidents.length, 1);
+  assert.equal(current.alertsCount, 0);
+});
+
+test('stock risk detection adds one traceable alert when no action exists', () => {
+  const current = state({ incidents: [], alertsCount: 0 });
+  current.stockpiles.cemento.current = 10;
+  flagStockRisks(current);
+  flagStockRisks(current);
+
+  assert.equal(current.incidents.length, 1);
+  assert.equal(current.incidents[0].metadata.stockpileKey, 'cemento');
+  assert.equal(current.alertsCount, 1);
 });
