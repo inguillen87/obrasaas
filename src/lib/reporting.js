@@ -1,3 +1,5 @@
+import { buildGanttModel } from './gantt.js';
+
 function number(value, fallback = 0) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
@@ -75,17 +77,25 @@ export function buildWeeklyReportModel({
 } = {}) {
   const progress = Math.round(clamp(state.avancePercentage));
   const schedule = timeline(state.diasEstimados);
-  const tasks = entries(state.tasks).map(([id, taskValue]) => {
-    const task = record(taskValue);
-    const taskProgress = Math.round(clamp(task.progress));
+  const gantt = buildGanttModel(state.tasks, {
+    projectStartsAt: project.startsAt,
+    projectEndsAt: project.endsAt,
+  });
+  const tasks = gantt.tasks.map((task) => {
     return {
-      id,
-      name: text(task.name, 'Tarea sin nombre'),
-      assignee: text(task.assignee, 'Sin asignar'),
-      duration: Math.max(1, Math.round(number(task.duration, 1))),
-      progress: taskProgress,
-      status: taskProgress >= 100 ? 'Finalizada' : taskProgress > 0 ? 'En curso' : 'Pendiente',
-      tone: taskProgress >= 100 ? 'success' : taskProgress > 0 ? 'warning' : 'neutral',
+      id: task.id,
+      name: task.name,
+      assignee: task.assignee,
+      duration: task.duration,
+      progress: task.progress,
+      status: task.status,
+      tone: task.tone,
+      startDay: task.startDay,
+      endDay: task.endDay,
+      startDate: task.startDate,
+      endDate: task.endDate,
+      dependencyNames: task.dependencyNames,
+      dependencyConflict: task.dependencyConflict,
     };
   });
   const attendance = entries(state.attendance).map(([name, attendanceValue]) => {
@@ -140,6 +150,13 @@ export function buildWeeklyReportModel({
   const audioCount = messageList.filter((message) => (
     String(message?.kind).toLowerCase() === 'audio' || Boolean(message?.transcription)
   )).length;
+  const operationalMessageCount = messageList.filter((message) => {
+    const kind = String(message?.kind).toLowerCase();
+    if (kind === 'system') return false;
+    return message?.sender === 'user'
+      || Boolean(message?.mediaUrl || message?.media || message?.transcription)
+      || ['image', 'video', 'document', 'audio', 'location'].includes(kind);
+  }).length;
   const presentWorkers = attendance.filter((entry) => entry.tone === 'success').length;
   const criticalIncidents = incidents.filter((incident) => incident.tone === 'danger').length;
   const tasksDone = tasks.filter((task) => task.progress >= 100).length;
@@ -150,9 +167,18 @@ export function buildWeeklyReportModel({
   const periodStart = new Date(generated);
   periodStart.setDate(periodStart.getDate() - 6);
   const scheduleGap = schedule.percentage - progress;
-  const isEmptyState = !snapshot;
+  const hasOperationalData = tasks.length > 0
+    || attendance.length > 0
+    || stockpiles.length > 0
+    || incidents.length > 0
+    || operationalMessageCount > 0
+    || progress > 0
+    || number(state.alertsCount) > 0;
+  const isEmptyState = !snapshot || snapshot.exists === false || !hasOperationalData;
   const executiveSummary = isEmptyState
     ? 'Todavía no hay actividad operativa persistida para elaborar una lectura ejecutiva. Registrá avances, asistencia, tareas o evidencias antes de usar este reporte para tomar decisiones.'
+    : gantt.dependencyConflicts > 0
+      ? `El cronograma contiene ${gantt.dependencyConflicts} conflicto${gantt.dependencyConflicts === 1 ? '' : 's'} de secuencia: hay tareas planificadas antes de que finalicen sus predecesoras. Reprogramarlas evita comunicar una línea base inconsistente.`
     : scheduleGap > 10
     ? `El avance físico se ubica ${scheduleGap} puntos por debajo del tiempo consumido. Conviene revisar tareas bloqueadas, abastecimiento y responsables antes de confirmar la próxima línea base.`
     : alertsCount > 0
@@ -181,6 +207,10 @@ export function buildWeeklyReportModel({
     criticalIncidents,
     presentWorkers,
     tasksDone,
+    dependencyCount: gantt.dependencyCount,
+    scheduleConflicts: gantt.dependencyConflicts,
+    scheduleStartsAt: gantt.startsAt,
+    scheduleEndsAt: gantt.endsAt,
     evidenceCount,
     audioCount,
     tasks,

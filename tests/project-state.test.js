@@ -115,6 +115,43 @@ test('project state validation rejects oversized collections', () => {
   );
 });
 
+test('project state accepts real task dependencies and rejects broken schedule graphs', () => {
+  const valid = state({
+    tasks: {
+      foundations: {
+        name: 'Fundaciones', progress: 100, duration: 5, startDay: 1, startOffset: 0,
+      },
+      structure: {
+        name: 'Estructura', progress: 0, duration: 10, startDay: 6, startOffset: 20,
+        dependencies: ['foundations'],
+      },
+    },
+  });
+  assert.deepEqual(validateProjectStateInput(valid), valid);
+
+  assert.throws(
+    () => validateProjectStateInput(state({
+      tasks: {
+        structure: {
+          name: 'Estructura', progress: 0, duration: 10, startDay: 1,
+          dependencies: ['missing'],
+        },
+      },
+    })),
+    /tarea inexistente/,
+  );
+
+  assert.throws(
+    () => validateProjectStateInput(state({
+      tasks: {
+        a: { name: 'A', progress: 0, duration: 1, startDay: 1, dependencies: ['b'] },
+        b: { name: 'B', progress: 0, duration: 1, startDay: 2, dependencies: ['a'] },
+      },
+    })),
+    /dependencia circular/,
+  );
+});
+
 test('activity derivation captures task, incident, material and people changes', () => {
   const before = state();
   const after = state({
@@ -166,7 +203,7 @@ test('activity derivation records removed tasks as warnings', () => {
   assert.equal(activities[0].severity, 'WARNING');
 });
 
-test('stock risk detection avoids duplicate and in-transit alerts', () => {
+test('stock risk detection reconciles existing alerts and avoids in-transit duplicates', () => {
   const current = state({
     incidents: [{
       id: 'existing-risk',
@@ -186,7 +223,7 @@ test('stock risk detection avoids duplicate and in-transit alerts', () => {
 
   flagStockRisks(current);
   assert.equal(current.incidents.length, 1);
-  assert.equal(current.alertsCount, 0);
+  assert.equal(current.alertsCount, 1);
 });
 
 test('stock risk detection adds one traceable alert when no action exists', () => {
@@ -198,4 +235,80 @@ test('stock risk detection adds one traceable alert when no action exists', () =
   assert.equal(current.incidents.length, 1);
   assert.equal(current.incidents[0].metadata.stockpileKey, 'cemento');
   assert.equal(current.alertsCount, 1);
+});
+
+test('material receipts do not suppress a still-active low-stock alert', () => {
+  const current = state({
+    alertsCount: 0,
+    incidents: [{
+      id: 'inc-mat-receipt',
+      title: 'Recepción de materiales',
+      description: 'Se registraron 5 bolsas de Cemento. Stock actualizado a 10 bolsas.',
+      type: 'success',
+      badge: 'Ingreso',
+      metadata: { stockpileKey: 'cemento' },
+    }],
+  });
+  current.stockpiles.cemento.current = 10;
+
+  flagStockRisks(current);
+
+  assert.equal(current.incidents.length, 2);
+  assert.equal(current.incidents[0].id, 'stock-risk-cemento');
+  assert.equal(current.incidents[1].id, 'inc-mat-receipt');
+  assert.equal(current.alertsCount, 1);
+});
+
+test('stock risk alerts update with the current quantity and resolve when stock recovers', () => {
+  const current = state({ incidents: [], alertsCount: 0 });
+  current.stockpiles.cemento.current = 10;
+  flagStockRisks(current);
+
+  current.stockpiles.cemento.current = 15;
+  flagStockRisks(current);
+  assert.equal(current.incidents.length, 1);
+  assert.match(current.incidents[0].description, /^15 bolsas disponibles/);
+  assert.equal(current.alertsCount, 1);
+
+  current.stockpiles.cemento.current = 25;
+  flagStockRisks(current);
+  assert.equal(current.incidents.length, 1);
+  assert.equal(current.incidents[0].type, 'success');
+  assert.equal(current.incidents[0].status, 'resolved');
+  assert.equal(current.incidents[0].metadata.stockRiskStatus, 'resolved');
+  assert.equal(current.stockpiles.cemento.status, 'Stock OK');
+  assert.equal(current.alertsCount, 0);
+});
+
+test('legacy stockpile configuration pauses automatic risk alerts until corrected', () => {
+  const current = state({
+    alertsCount: 1,
+    stockpiles: {
+      cemento: {
+        name: 'Cemento',
+        current: 10,
+        min: 20,
+        max: 0,
+        unit: '',
+      },
+    },
+    incidents: [{
+      id: 'stock-risk-cemento',
+      title: 'Stock bajo: Cemento',
+      description: '10 bolsas disponibles frente a un mínimo de 20.',
+      type: 'warning',
+      metadata: {
+        kind: 'stock-risk',
+        stockpileKey: 'cemento',
+        stockRiskStatus: 'active',
+      },
+    }],
+  });
+
+  flagStockRisks(current);
+
+  assert.equal(current.stockpiles.cemento.status, 'Revisar configuración');
+  assert.equal(current.incidents[0].type, 'info');
+  assert.equal(current.incidents[0].status, 'resolved');
+  assert.equal(current.alertsCount, 0);
 });

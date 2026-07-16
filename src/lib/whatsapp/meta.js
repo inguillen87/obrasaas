@@ -105,7 +105,13 @@ export function verifyMetaSubscription(searchParams, verifyToken) {
   const token = searchParams.get("hub.verify_token");
   const challenge = searchParams.get("hub.challenge");
 
-  if (mode !== "subscribe" || !verifyToken || token !== verifyToken || !challenge) {
+  if (
+    mode !== "subscribe"
+    || !verifyToken
+    || !token
+    || !timingSafeEqual(token, verifyToken)
+    || !challenge
+  ) {
     return { valid: false, challenge: null };
   }
   return { valid: true, challenge };

@@ -31,6 +31,8 @@ No se deben habilitar campos adicionales hasta que exista un consumidor idempote
 
 - El challenge `GET` compara `hub.verify_token` en tiempo constante a nivel de aplicación.
 - Cada `POST` debe incluir `x-hub-signature-256` y se valida sobre el cuerpo sin modificar con `META_APP_SECRET`.
+- El ingreso acepta el lote oficial de hasta 1.000 `changes`, resuelve todas las conexiones en una consulta y persiste los eventos con una inserción idempotente en bloque antes de responder `200`.
+- El procesamiento operativo no bloquea el ACK: se ejecuta con `after` y el cron de recuperación retoma cualquier evento pendiente o lease vencido.
 - Los eventos se reclaman de forma idempotente antes de procesarse.
 - El `phone_number_id` o WABA debe resolver una conexión activa y autorizada; los eventos desconocidos se rechazan.
 - Fotos, audios y documentos se descargan solo desde hosts permitidos, con límites de tamaño, MIME y SHA-256.

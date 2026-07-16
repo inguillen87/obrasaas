@@ -107,6 +107,16 @@ test('WABA/display fallback is restricted to account events without phone_number
     whatsappBusinessId: 'waba-1',
   });
 
+  const crossTenantWabaPrisma = resolvingPrisma({ many: [connection(), connection({
+    phoneNumberId: 'phone-2',
+    projectId: 'project-2',
+    organizationId: 'organization-2',
+  })] });
+  assert.deepEqual(await resolveWhatsAppConnectionScopes(crossTenantWabaPrisma, {
+    eventType: 'account',
+    whatsappBusinessId: 'waba-1',
+  }), []);
+
   const ambiguousDisplayPrisma = resolvingPrisma({ many: [connection(), connection({
     phoneNumberId: 'phone-2',
     projectId: 'project-2',

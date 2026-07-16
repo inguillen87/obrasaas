@@ -18,6 +18,13 @@ function connectionScope(connection) {
   };
 }
 
+function scopesWithinSingleOrganization(scopes) {
+  const validScopes = scopes.filter(Boolean);
+  if (validScopes.length === 0) return [];
+  const organizationIds = new Set(validScopes.map((scope) => scope.organizationId));
+  return organizationIds.size === 1 ? validScopes : [];
+}
+
 export async function resolveWhatsAppConnectionScopes(prisma, {
   eventType,
   phoneNumberId,
@@ -72,7 +79,118 @@ export async function resolveWhatsAppConnectionScopes(prisma, {
     return [];
   }
 
-  return connections.map(connectionScope).filter(Boolean);
+  return scopesWithinSingleOrganization(connections.map(connectionScope));
+}
+
+function addToLookup(lookup, key, scope) {
+  if (!key || !scope) return;
+  const existing = lookup.get(key);
+  if (existing) existing.push(scope);
+  else lookup.set(key, [scope]);
+}
+
+/**
+ * Resolve an entire Meta delivery with one connection query. A supplied
+ * phone_number_id remains authoritative and never falls back to a WABA or
+ * display number, matching resolveWhatsAppConnectionScopes above.
+ */
+export async function resolveWhatsAppConnectionScopesBulk(prisma, events = []) {
+  if (!Array.isArray(events) || events.length === 0) return [];
+
+  const phoneNumberIds = new Set();
+  const whatsappBusinessIds = new Set();
+  const displayPhoneNumbers = new Set();
+
+  for (const event of events) {
+    const phoneIdentifierWasSupplied = event?.phoneNumberId !== null
+      && event?.phoneNumberId !== undefined;
+    if (phoneIdentifierWasSupplied) {
+      const phoneNumberId = normalizedIdentifier(event.phoneNumberId);
+      if (phoneNumberId) phoneNumberIds.add(phoneNumberId);
+      continue;
+    }
+    if (normalizedIdentifier(event?.eventType).toLowerCase() !== "account") continue;
+
+    const whatsappBusinessId = normalizedIdentifier(event?.whatsappBusinessId);
+    if (whatsappBusinessId) {
+      whatsappBusinessIds.add(whatsappBusinessId);
+      continue;
+    }
+    const displayPhoneNumber = normalizedIdentifier(
+      event?.displayPhoneNumber || event?.businessDisplayPhone,
+    );
+    if (displayPhoneNumber) displayPhoneNumbers.add(displayPhoneNumber);
+  }
+
+  const matchers = [];
+  if (phoneNumberIds.size > 0) {
+    matchers.push({ phoneNumberId: { in: [...phoneNumberIds] } });
+  }
+  if (whatsappBusinessIds.size > 0) {
+    matchers.push({ whatsappBusinessId: { in: [...whatsappBusinessIds] } });
+  }
+  if (displayPhoneNumbers.size > 0) {
+    matchers.push({ displayPhoneNumber: { in: [...displayPhoneNumbers] } });
+  }
+  if (matchers.length === 0) return events.map(() => []);
+
+  const connections = await prisma.whatsAppConnection.findMany({
+    where: {
+      enabled: true,
+      OR: matchers,
+    },
+    select: {
+      enabled: true,
+      phoneNumberId: true,
+      whatsappBusinessId: true,
+      displayPhoneNumber: true,
+      project: {
+        select: { id: true, organizationId: true },
+      },
+    },
+  });
+
+  const byPhoneNumberId = new Map();
+  const byWhatsappBusinessId = new Map();
+  const byDisplayPhoneNumber = new Map();
+  for (const connection of connections) {
+    const scope = connectionScope(connection);
+    if (!scope) continue;
+    addToLookup(byPhoneNumberId, normalizedIdentifier(connection.phoneNumberId), scope);
+    addToLookup(
+      byWhatsappBusinessId,
+      normalizedIdentifier(connection.whatsappBusinessId),
+      scope,
+    );
+    addToLookup(
+      byDisplayPhoneNumber,
+      normalizedIdentifier(connection.displayPhoneNumber),
+      scope,
+    );
+  }
+
+  return events.map((event) => {
+    const phoneIdentifierWasSupplied = event?.phoneNumberId !== null
+      && event?.phoneNumberId !== undefined;
+    if (phoneIdentifierWasSupplied) {
+      const matches = byPhoneNumberId.get(normalizedIdentifier(event.phoneNumberId)) || [];
+      return matches.length === 1 ? matches : [];
+    }
+    if (normalizedIdentifier(event?.eventType).toLowerCase() !== "account") return [];
+
+    const whatsappBusinessId = normalizedIdentifier(event?.whatsappBusinessId);
+    if (whatsappBusinessId) {
+      return scopesWithinSingleOrganization(
+        byWhatsappBusinessId.get(whatsappBusinessId) || [],
+      );
+    }
+
+    const displayPhoneNumber = normalizedIdentifier(
+      event?.displayPhoneNumber || event?.businessDisplayPhone,
+    );
+    const matches = byDisplayPhoneNumber.get(displayPhoneNumber) || [];
+    return matches.length === 1 ? matches : [];
+  });
 }
 
 function webhookScopeError(message, code) {

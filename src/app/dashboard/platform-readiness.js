@@ -80,12 +80,22 @@ export default function PlatformReadiness({ platformAccess, setup, syncState, la
         </article>
       </div>
 
-      {setup.isEmptyState && (
-        <p className={styles.notice}>
-          <i className="fa-solid fa-circle-info" aria-hidden="true" />
-          Este tenant todavía no tiene actividad operativa. Conectá WhatsApp o registrá el primer avance para iniciar la trazabilidad de esta obra.
-        </p>
-      )}
+      <div className={styles.guide}>
+        <div>
+          <i className="fa-solid fa-route" aria-hidden="true" />
+          <p>
+            <strong>{setup.isEmptyState ? 'Empezá por una señal verificable' : 'Revisá la puesta en marcha'}</strong>
+            <span>
+              {setup.isEmptyState
+                ? 'Configurá la obra, agregá una persona y creá la primera tarea antes de emitir el reporte.'
+                : 'La guía distingue datos reales, pruebas locales y conexiones externas confirmadas.'}
+            </span>
+          </p>
+        </div>
+        <Link href="/dashboard/getting-started">
+          Abrir guía de primer valor <span aria-hidden="true">→</span>
+        </Link>
+      </div>
     </section>
   );
 }

@@ -91,6 +91,7 @@ export default function ProjectsClient({
   activeProjectId,
   canManage,
   capacity,
+  configuringBootstrap,
   initialProjects,
   planName,
   timezone,
@@ -183,10 +184,14 @@ export default function ProjectsClient({
           </div>
         </section>
 
-        <aside className={styles.createPanel}>
-          <p className={styles.eyebrow}>Nueva operación</p>
-          <h2>Crear una obra</h2>
-          <p>Cada obra recibe su propia bitácora, equipo, geocerca, WABA y estado operativo.</p>
+        <aside className={styles.createPanel} id="configure-first-project">
+          <p className={styles.eyebrow}>{configuringBootstrap ? 'Puesta en marcha' : 'Nueva operación'}</p>
+          <h2>{configuringBootstrap ? 'Configurar la primera obra' : 'Crear una obra'}</h2>
+          <p>
+            {configuringBootstrap
+              ? 'Reemplazá el perímetro inicial por una obra real sin consumir un cupo adicional.'
+              : 'Cada obra recibe su propia bitácora, equipo, geocerca, WABA y estado operativo.'}
+          </p>
           {!canManage ? (
             <div className={styles.limitNotice}>
               <strong>Acceso de consulta</strong>
@@ -215,7 +220,12 @@ export default function ProjectsClient({
                 <span>Radio de geocerca</span>
                 <div className={styles.unitInput}><input type="number" name="geofenceMeters" value={form.geofenceMeters} onChange={updateField} min="25" max="5000" step="5" required /><b>metros</b></div>
               </label>
-              <button type="submit" disabled={busy}>{busy ? 'Creando perímetro…' : 'Crear y abrir obra'} <span aria-hidden="true">→</span></button>
+              <button type="submit" disabled={busy}>
+                {busy
+                  ? 'Guardando perímetro…'
+                  : configuringBootstrap ? 'Configurar y abrir obra' : 'Crear y abrir obra'}
+                {' '}<span aria-hidden="true">→</span>
+              </button>
               <small>No se compra ningún servicio ni dominio al crearla.</small>
             </form>
           )}

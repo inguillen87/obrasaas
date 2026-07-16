@@ -89,6 +89,8 @@ export default async function DashboardPage() {
           latitude: access.project.latitude == null ? null : Number(access.project.latitude),
           longitude: access.project.longitude == null ? null : Number(access.project.longitude),
           geofenceMeters: access.project.geofenceMeters,
+          startsAt: access.project.startsAt?.toISOString() || null,
+          endsAt: access.project.endsAt?.toISOString() || null,
         },
       }}
     />

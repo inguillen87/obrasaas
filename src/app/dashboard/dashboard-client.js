@@ -3,7 +3,9 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { OrganizationSwitcher, UserButton, useUser } from '@clerk/nextjs';
+import GanttPlanner from './gantt-planner';
 import PlatformReadiness from './platform-readiness';
+import StockpilePanel from './stockpile-panel';
 
 const initialAppState = {
   operariosCount: 0,
@@ -253,29 +255,6 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [mapMode, setMapMode] = useState('sat');
 
-  // Modals for CRUD
-  const [showAddTaskModal, setShowAddTaskModal] = useState(false);
-  const [showEditTaskModal, setShowEditTaskModal] = useState(false);
-  const [showReceiveMaterialModal, setShowReceiveMaterialModal] = useState(false);
-
-  // CRUD Forms State
-  const [newTaskName, setNewTaskName] = useState('');
-  const [newTaskAssignee, setNewTaskAssignee] = useState('');
-  const [newTaskStart, setNewTaskStart] = useState(1);
-  const [newTaskDuration, setNewTaskDuration] = useState(3);
-  const [newTaskProgress, setNewTaskProgress] = useState(0);
-
-  const [editTaskId, setEditTaskId] = useState(null);
-  const [editTaskName, setEditTaskName] = useState('');
-  const [editTaskAssignee, setEditTaskAssignee] = useState('');
-  const [editTaskStart, setEditTaskStart] = useState(1);
-  const [editTaskDuration, setEditTaskDuration] = useState(3);
-  const [editTaskProgress, setEditTaskProgress] = useState(0);
-
-  const [receiveMaterialKey, setReceiveMaterialKey] = useState('');
-  const [receiveMaterialQty, setReceiveMaterialQty] = useState(50);
-  const [receiveMaterialInvoice, setReceiveMaterialInvoice] = useState('');
-
   // Personal HR forms
   const [hrBonusAssignee, setHrBonusAssignee] = useState('');
   const [hrBonusType, setHrBonusType] = useState('Bono de Puntualidad');
@@ -325,7 +304,6 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
   const progressChartRef = useRef(null);
   const tasksChartRef = useRef(null);
   const mapContainerRef = useRef(null);
-  const svgLinesRef = useRef(null);
   const chatMessagesEndRef = useRef(null);
   const copilotMessagesEndRef = useRef(null);
   const gpsDialogRef = useRef(null);
@@ -520,7 +498,6 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
   );
   const selectedFieldWorker = fieldWorkers.find((worker) => worker.id === selectedFieldWorkerId) || null;
   const taskEntries = Object.entries(state.tasks);
-  const stockpileEntries = Object.entries(state.stockpiles);
   const hrAttendanceEntries = Object.entries(state.hrAttendance);
   const isLegacyInternalProject = platformAccess.isSuperadmin
     && platformAccess.organization.name === 'ObraSaaS Operaciones'
@@ -556,10 +533,9 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
 
   useEffect(() => {
     const activeIds = new Set(fieldWorkers.map((worker) => worker.id));
-    if (newTaskAssignee && !activeIds.has(newTaskAssignee)) setNewTaskAssignee('');
     if (hrBonusAssignee && !activeIds.has(hrBonusAssignee)) setHrBonusAssignee('');
     if (hrMedAssignee && !activeIds.has(hrMedAssignee)) setHrMedAssignee('');
-  }, [fieldWorkers, hrBonusAssignee, hrMedAssignee, newTaskAssignee]);
+  }, [fieldWorkers, hrBonusAssignee, hrMedAssignee]);
 
   const postFieldSimulation = async (payload) => {
     if (!setup.canManageField) {
@@ -985,65 +961,6 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
     };
   }, [activeTab, isLightTheme, state]);
 
-  // Gantt SVG Dependency Lines Drawer
-  const drawGanttDependencyLines = useCallback(() => {
-    const svg = svgLinesRef.current;
-    if (!svg) return;
-    svg.innerHTML = ''; // Clear old lines
-
-    const svgRect = svg.getBoundingClientRect();
-    const taskIds = Object.keys(state.tasks);
-    if (taskIds.length < 2) return;
-
-    const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
-    defs.innerHTML = `
-        <marker id="arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-            <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="rgba(255, 159, 28, 0.4)"/>
-        </marker>
-    `;
-    svg.appendChild(defs);
-
-    for (let i = 0; i < taskIds.length - 1; i++) {
-      const fromId = taskIds[i];
-      const toId = taskIds[i + 1];
-
-      const fromBar = document.getElementById(`gantt-bar-${fromId}`);
-      const toBar = document.getElementById(`gantt-bar-${toId}`);
-
-      if (fromBar && toBar) {
-        const fromRect = fromBar.getBoundingClientRect();
-        const toRect = toBar.getBoundingClientRect();
-
-        const x1 = fromRect.right - svgRect.left;
-        const y1 = (fromRect.top + fromRect.bottom) / 2 - svgRect.top;
-
-        const x2 = toRect.left - svgRect.left;
-        const y2 = (toRect.top + toRect.bottom) / 2 - svgRect.top;
-
-        if (x1 > 0 && x2 > 0) {
-          const midX = x1 + (x2 - x1) / 2;
-
-          const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-          path.setAttribute("d", `M ${x1} ${y1} L ${midX} ${y1} L ${midX} ${y2} L ${x2} ${y2}`);
-          path.setAttribute("stroke", "rgba(255, 159, 28, 0.35)");
-          path.setAttribute("stroke-width", "2");
-          path.setAttribute("fill", "none");
-          path.setAttribute("marker-end", "url(#arrow)");
-
-          svg.appendChild(path);
-        }
-      }
-    }
-  }, [state.tasks]);
-
-  useEffect(() => {
-    if (activeTab === 'sec-gantt') {
-      setTimeout(drawGanttDependencyLines, 100);
-      window.addEventListener('resize', drawGanttDependencyLines);
-    }
-    return () => window.removeEventListener('resize', drawGanttDependencyLines);
-  }, [activeTab, drawGanttDependencyLines]);
-
   const handleAgenticAction = async (suggestion) => {
     if (!setup.canManageProjects) {
       addToast('Tu rol puede consultar la obra, pero no crear solicitudes operativas.', 'warning');
@@ -1314,171 +1231,64 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
     }
   };
 
-  // CRUD actions for Gantt Chart
-  const handleAddNewTask = async () => {
-    if (!newTaskName.trim()) {
-      alert("Ingrese un nombre de tarea válido.");
-      return;
+  const handleTasksChange = async (updatedTasks) => {
+    if (!setup.canManageProjects) {
+      addToast('Tu rol puede consultar el cronograma, pero no modificarlo.', 'warning');
+      return false;
     }
-    const assignedWorker = fieldWorkers.find((worker) => worker.id === newTaskAssignee) || null;
-    const newId = createClientEntityId('task');
-    const startOffset = (newTaskStart - 1) * 7.14;
-    
-    const updatedTasks = {
-      ...state.tasks,
-      [newId]: {
-        name: newTaskName,
-        assignee: assignedWorker?.name || 'Sin asignar',
-        progress: newTaskProgress,
-        duration: newTaskDuration,
-        startOffset: startOffset
-      }
-    };
-
-    const nextState = { ...state, tasks: updatedTasks };
-    setState(normalizeAppState(nextState));
-    await saveStateToApi(nextState);
-
-    setShowAddTaskModal(false);
-    setNewTaskName('');
-    setNewTaskAssignee('');
-    setNewTaskStart(1);
-    setNewTaskDuration(3);
-    setNewTaskProgress(0);
-  };
-
-  const handleEditTask = (id) => {
-    const task = state.tasks[id];
-    if (!task) return;
-    setEditTaskId(id);
-    setEditTaskName(task.name);
-    setEditTaskAssignee(fieldWorkers.find((worker) => worker.name === task.assignee)?.id || '');
-    setEditTaskStart(Math.round(task.startOffset / 7.14) + 1);
-    setEditTaskDuration(task.duration);
-    setEditTaskProgress(task.progress);
-    setShowEditTaskModal(true);
-  };
-
-  const handleSaveEditedTask = async () => {
-    if (!editTaskName.trim()) return;
-
-    const assignedWorker = fieldWorkers.find((worker) => worker.id === editTaskAssignee) || null;
-    const startOffset = (editTaskStart - 1) * 7.14;
-    const updatedTasks = { ...state.tasks };
-    updatedTasks[editTaskId] = {
-      name: editTaskName,
-      assignee: assignedWorker?.name || 'Sin asignar',
-      progress: editTaskProgress,
-      duration: editTaskDuration,
-      startOffset: startOffset
-    };
-
-    // Recalculate global percentage
-    let sum = 0;
     const items = Object.values(updatedTasks);
-    items.forEach(t => sum += t.progress);
-    const newAv = Math.round(sum / items.length);
-
-    const nextState = {
-      ...state,
-      tasks: updatedTasks,
-      avancePercentage: newAv
-    };
-
-    setState(normalizeAppState(nextState));
-    await saveStateToApi(nextState);
-    setShowEditTaskModal(false);
+    const avancePercentage = items.length > 0
+      ? Math.round(items.reduce((sum, task) => sum + (Number(task.progress) || 0), 0) / items.length)
+      : 0;
+    const nextState = { ...state, tasks: updatedTasks, avancePercentage };
+    return saveStateToApi(nextState);
   };
 
-  const handleDeleteTask = async () => {
-    const updatedTasks = { ...state.tasks };
-    delete updatedTasks[editTaskId];
-
-    let sum = 0;
-    const items = Object.values(updatedTasks);
-    let newAv = 0;
-    if (items.length > 0) {
-      items.forEach(t => sum += t.progress);
-      newAv = Math.round(sum / items.length);
+  // Stockpile control. The child owns form state; this callback keeps the shared
+  // tenant snapshot and its optimistic-concurrency precondition in one place.
+  const handleStockpileCommit = async (updatedStockpiles, action) => {
+    if (!setup.canManageProjects) {
+      addToast('Tu rol puede consultar los acopios, pero no modificarlos.', 'warning');
+      return false;
     }
 
-    const nextState = {
-      ...state,
-      tasks: updatedTasks,
-      avancePercentage: newAv
-    };
-
-    setState(normalizeAppState(nextState));
-    await saveStateToApi(nextState);
-    setShowEditTaskModal(false);
-  };
-
-  const updateGanttTaskSlider = async (id, field, value) => {
-    const updatedTasks = { ...state.tasks };
-    updatedTasks[id] = {
-      ...updatedTasks[id],
-      [field]: parseInt(value)
-    };
-
-    let sum = 0;
-    const items = Object.values(updatedTasks);
-    items.forEach(t => sum += t.progress);
-    const newAv = Math.round(sum / items.length);
-
-    const nextState = {
-      ...state,
-      tasks: updatedTasks,
-      avancePercentage: newAv
-    };
-
-    setState(normalizeAppState(nextState));
-    await saveStateToApi(nextState);
-  };
-
-  // Stockpile control
-  const handleSaveReceivedMaterial = async () => {
-    const qty = parseInt(receiveMaterialQty);
-    if (isNaN(qty) || qty <= 0) {
-      alert("Por favor ingrese una cantidad válida.");
-      return;
-    }
-
-    const existingItem = state.stockpiles[receiveMaterialKey];
-    if (!existingItem) {
-      addToast('Elegí un material registrado antes de guardar la recepción.', 'warning');
-      return;
-    }
-    const nextCurrent = Math.min((Number(existingItem.current) || 0) + qty, Number(existingItem.max) || Number.MAX_SAFE_INTEGER);
-    const item = {
-      ...existingItem,
-      current: nextCurrent,
-      status: nextCurrent < (Number(existingItem.min) || 0) ? 'Crítico' : 'Stock OK',
-    };
-    const updatedStockpiles = { ...state.stockpiles, [receiveMaterialKey]: item };
-
-    const newIncident = {
-      id: createClientEntityId('inc-mat'),
-      title: "Recepción de Materiales",
-      description: `Se registraron ${qty} ${item.unit || 'unidades'} de ${item.name || 'material'}. Proveedor: ${item.supplier || 'sin informar'}. Remito: ${receiveMaterialInvoice || 'sin informar'}. Stock actualizado a ${item.current} ${item.unit || 'unidades'}.`,
-      type: "success",
-      badge: "Ingreso",
-      timestamp: "Hace un momento",
-      reporter: `Admin (Remito: ${receiveMaterialInvoice || 'S/N'})`,
-      icon: "fa-solid fa-circle-check"
-    };
+    const material = updatedStockpiles[action.materialId];
+    const newIncident = action.type === 'received' && material
+      ? {
+          id: createClientEntityId('inc-mat'),
+          title: 'Recepción de materiales',
+          description: `Se registraron ${Number(action.quantity).toLocaleString('es-AR')} ${material.unit} de ${material.name}.${action.reference ? ` Referencia: ${action.reference}.` : ''} Stock actualizado a ${Number(material.current).toLocaleString('es-AR')} ${material.unit}.`,
+          type: 'success',
+          badge: 'Ingreso',
+          timestamp: new Intl.DateTimeFormat('es-AR', {
+            dateStyle: 'short',
+            timeStyle: 'short',
+          }).format(new Date()),
+          reporter: 'Control de acopio',
+          icon: 'fa-solid fa-circle-check',
+          metadata: { stockpileKey: action.materialId },
+        }
+      : null;
 
     const nextState = {
       ...state,
       stockpiles: updatedStockpiles,
-      incidents: [newIncident, ...state.incidents]
+      incidents: newIncident
+        ? [newIncident, ...(Array.isArray(state.incidents) ? state.incidents : [])].slice(0, 1_000)
+        : state.incidents,
     };
-
-    setState(normalizeAppState(nextState));
-    await saveStateToApi(nextState);
-
-    setShowReceiveMaterialModal(false);
-    setReceiveMaterialQty(50);
-    setReceiveMaterialInvoice('');
+    const saved = await saveStateToApi(nextState);
+    if (saved) {
+      addToast(
+        action.type === 'received'
+          ? 'Recepción y stock guardados en la obra.'
+          : action.type === 'updated'
+            ? 'Material actualizado.'
+            : 'Material agregado al acopio.',
+        'success',
+      );
+    }
+    return saved;
   };
 
   // Award incentive bonus
@@ -1577,48 +1387,6 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
     await saveStateToApi(nextState);
 
     addToast(`Licencia registrada para ${worker.name}.`, 'success');
-  };
-
-  // Reset entire database state
-  const handleResetState = async () => {
-    if (confirm("¿Estás seguro de restablecer toda la base de datos de ObraSaaS? Se borrarán las tareas creadas, licencias e incidencias.")) {
-      try {
-        await stateWriteQueueRef.current;
-        const expectedVersion = stateVersionRef.current;
-        setSyncState('syncing');
-        const response = await fetch('/api/state', {
-          method: 'DELETE',
-          headers: { 'If-Match': projectStateEtag(expectedVersion) },
-        });
-        const payload = await response.json().catch(() => ({}));
-        if (response.status === 409 && payload.code === 'STATE_VERSION_CONFLICT') {
-          stateWriteGenerationRef.current += 1;
-          await reloadLatestProjectState();
-          addToast(
-            'La obra cambió antes del restablecimiento. Recargamos el estado vigente y no borramos esos cambios.',
-            'warning',
-          );
-          return;
-        }
-        if (!response.ok) {
-          throw new Error(payload.error || 'No se pudo restablecer el estado de la obra.');
-        }
-        const snapshot = decodeProjectStateResponse(
-          response,
-          payload,
-          expectedVersion + 1,
-        );
-        stateVersionRef.current = snapshot.version;
-        setState(normalizeAppState(snapshot.state));
-        setLastSyncedAt(new Date().toISOString());
-        setSyncState('live');
-        addToast('Estado operativo restablecido.', 'success');
-      } catch (error) {
-        console.error(error);
-        setSyncState('error');
-        addToast(error.message || 'No se pudo restablecer el estado de la obra.', 'error');
-      }
-    }
   };
 
   return (
@@ -2127,66 +1895,12 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
               </div>
             </div>
 
-            {/* Control de Acopios and Recepción de Suministros Row */}
-            <div className="glass-panel-premium dashboard-card-hover" style={{ marginTop: '24px' }}>
-              <div className="section-header" style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-                <div>
-                  <h3 style={{ fontFamily: 'var(--font-heading)', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                    <i className="fa-solid fa-boxes-stacked" style={{ color: 'var(--primary)' }}></i> Control de Acopios y Recepción de Suministros
-                  </h3>
-                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-                    Trazabilidad de materiales críticos en corralón y en obra para evitar demoras por falta de stock.
-                  </p>
-                </div>
-                <button className="btn btn-primary btn-sm" disabled={!setup.canManageProjects || stockpileEntries.length === 0} onClick={() => { setReceiveMaterialKey(stockpileEntries[0]?.[0] || ''); setShowReceiveMaterialModal(true); }} style={{ padding: '8px 16px', fontSize: '0.8rem', fontWeight: 700 }}>
-                  <i className="fa-solid fa-truck-loading"></i> Registrar Recepción
-                </button>
-              </div>
-
-              <div className="grid-4" style={{ marginBottom: 0 }}>
-                {stockpileEntries.length === 0 && (
-                  <div className="nocrit-msg" style={{ gridColumn: '1 / -1', textAlign: 'center', color: 'var(--text-muted)', padding: '30px' }}>
-                    <i className="fa-solid fa-box-open" style={{ display: 'block', fontSize: '2rem', marginBottom: '10px' }}></i>
-                    Todavía no hay materiales registrados para esta obra.
-                  </div>
-                )}
-                {stockpileEntries.map(([key, item]) => {
-                  let badgeClass = 'badge-success';
-                  let barColor = 'var(--success)';
-                  if (item.status === 'Crítico') {
-                    badgeClass = 'badge-danger';
-                    barColor = 'var(--danger)';
-                  } else if (item.status === 'En Camino') {
-                    badgeClass = 'badge-info';
-                    barColor = 'var(--info)';
-                  }
-
-                  const current = Number(item.current) || 0;
-                  const minimum = Number(item.min) || 0;
-                  const maximum = Number(item.max) || 0;
-                  const pct = maximum > 0 ? Math.min((current / maximum) * 100, 100) : 0;
-
-                  return (
-                    <div key={key} className="glass-panel-premium dashboard-card-hover stat-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: '8px', marginBottom: 0, padding: '16px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <strong style={{ fontSize: '0.9rem', fontFamily: 'var(--font-heading)', color: 'var(--text-primary)' }}>{item.name}</strong>
-                        <span className={`badge ${badgeClass}`}>{item.status}</span>
-                      </div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '-2px' }}>
-                        Proveedor: {item.supplier || 'sin informar'}
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '8px' }}>
-                        <span style={{ fontSize: '1.15rem', fontFamily: 'var(--font-heading)', fontWeight: 700, color: 'var(--text-primary)' }}>{current.toLocaleString('es-AR')} {item.unit || ''}</span>
-                        <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Mín: {minimum} / Máx: {maximum || 'sin definir'}</span>
-                      </div>
-                      <div style={{ background: 'rgba(255,255,255,0.05)', height: '6px', borderRadius: '3px', overflow: 'hidden', marginTop: '4px', border: '1px solid var(--border-color)' }}>
-                        <div style={{ width: `${pct}%`, height: '100%', background: barColor, borderRadius: '3px', transition: 'width 0.4s ease' }}></div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            <StockpilePanel
+              stockpiles={state.stockpiles}
+              canManage={setup.canManageProjects}
+              createId={() => createClientEntityId('material')}
+              onCommit={handleStockpileCommit}
+            />
 
             {/* Operational capabilities */}
             <div className="glass-panel-premium dashboard-card-hover" style={{ marginTop: '24px' }}>
@@ -2520,110 +2234,14 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
 
           {/* SECTION 3: GANTT CHART */}
           <section id="sec-gantt" className={`content-section animate-fade-in-up ${activeTab === 'sec-gantt' ? 'active' : ''}`}>
-            <div className="section-header">
-              <div className="header-title">
-                <h1>Cronograma Dinámico de Obra (Gantt Interactivo)</h1>
-                <p>Editor de tareas. Ajustá el progreso y las duraciones para ver el impacto inmediatamente.</p>
-              </div>
-              <div className="header-actions">
-                <button className="btn btn-primary" disabled={!setup.canManageProjects} onClick={() => setShowAddTaskModal(true)} style={{ marginRight: '8px' }}><i className="fa-solid fa-plus"></i> Agregar Tarea</button>
-                <button className="btn btn-secondary" disabled={!setup.canManageProjects || taskEntries.length === 0} onClick={handleResetState}><i className="fa-solid fa-arrow-rotate-left"></i> Restablecer Cronograma</button>
-              </div>
-            </div>
-
-            <div className="glass-panel-premium dashboard-card-hover">
-              {taskEntries.length === 0 && (
-                <div className="nocrit-msg" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '48px 20px' }}>
-                  <i className="fa-solid fa-timeline" style={{ display: 'block', fontSize: '2rem', marginBottom: '10px' }}></i>
-                  <strong style={{ display: 'block', color: 'var(--text-primary)', marginBottom: '6px' }}>Cronograma vacío</strong>
-                  Cargá la primera tarea para empezar a construir el plan relativo de 14 días.
-                </div>
-              )}
-              <div className="gantt-chart-container" style={{ position: 'relative', overflowX: 'auto', display: taskEntries.length === 0 ? 'none' : 'block' }}>
-                {/* Grid lines background */}
-                <div className="gantt-row-grid-bg">
-                  <div className="gantt-grid-line"></div>
-                  <div className="gantt-grid-line"></div>
-                  <div className="gantt-grid-line"></div>
-                  <div className="gantt-grid-line"></div>
-                  <div className="gantt-grid-line"></div>
-                  <div className="gantt-grid-line weekend-grid"></div>
-                  <div className="gantt-grid-line weekend-grid"></div>
-                  <div className="gantt-grid-line"></div>
-                  <div className="gantt-grid-line"></div>
-                  <div className="gantt-grid-line"></div>
-                  <div className="gantt-grid-line"></div>
-                  <div className="gantt-grid-line"></div>
-                  <div className="gantt-grid-line weekend-grid"></div>
-                  <div className="gantt-grid-line weekend-grid"></div>
-                </div>
-
-                {/* Dependency lines SVG */}
-                <svg className="gantt-dependency-svg" id="gantt-dependency-lines" ref={svgLinesRef}></svg>
-
-                {/* Timeline Header */}
-                <div className="gantt-timeline-header">
-                  <div className="gantt-label-col-header" style={{ zIndex: 2 }}>Tarea / Asignado</div>
-                  <div className="gantt-days-header" style={{ zIndex: 2 }}>
-                    {Array.from({ length: 14 }, (_, index) => (
-                      <div key={index} className="gantt-day-header-item">Día {index + 1}</div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Gantt Rows */}
-                <div className="gantt-rows" style={{ zIndex: 2, position: 'relative' }}>
-                  {Object.keys(state.tasks).map(id => {
-                    const task = state.tasks[id];
-                    let barClass = "gantt-bar";
-                    if (task.progress === 100) barClass += " completed";
-                    else if (task.isDelayed) barClass += " delayed";
-                    else if (task.isShifted) barClass += " shifted";
-
-                    const leftVal = Math.max(0, Math.min(92.86, Number(task.startOffset) || 0));
-                    const widthVal = Math.max(7.14, Math.min(100 - leftVal, (Number(task.duration) || 1) * 7.14));
-
-                    return (
-                      <div key={id} className="gantt-row">
-                        <div className="gantt-task-info" onClick={() => handleEditTask(id)} style={{ cursor: 'pointer' }}>
-                          <span className="gantt-task-name">{task.name}</span>
-                          <span className="gantt-task-assignee"><i className="fa-solid fa-user" style={{ fontSize: '0.65rem', marginRight: '4px' }}></i>{task.assignee}</span>
-                        </div>
-                        <div className="gantt-task-bar-container">
-                          <div className={barClass} id={`gantt-bar-${id}`} style={{ left: `${leftVal}%`, width: `${widthVal}%` }} onClick={() => handleEditTask(id)}>
-                            <div className="gantt-bar-progress" id={`gantt-bar-progress-${id}`} style={{ width: `${task.progress}%` }}></div>
-                            <span className="gantt-bar-text" id={`gantt-bar-text-${id}`}>{task.name} ({task.progress}%)</span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Editors Grid */}
-              <div className="gantt-editor-card" style={{ display: taskEntries.length === 0 ? 'none' : 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '16px', marginTop: '24px' }}>
-                {Object.keys(state.tasks).map(id => {
-                  const task = state.tasks[id];
-                  return (
-                    <div key={id} className="glass-panel-premium dashboard-card-hover" style={{ padding: '14px', marginBottom: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <strong style={{ fontSize: '0.8rem', color: 'var(--primary)' }}>{task.name}</strong>
-                        <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', cursor: 'pointer' }} onClick={() => handleEditTask(id)}><i className="fa-solid fa-cog"></i> Configurar</span>
-                      </div>
-                      <div className="editor-control">
-                        <label style={{ fontSize: '0.75rem', display: 'flex', justifyContent: 'space-between' }}>Progreso: <strong>{task.progress}%</strong></label>
-                        <input type="range" min="0" max="100" value={task.progress} onChange={(e) => updateGanttTaskSlider(id, 'progress', e.target.value)} />
-                      </div>
-                      <div className="editor-control">
-                        <label style={{ fontSize: '0.75rem', display: 'flex', justifyContent: 'space-between' }}>Duración: <strong>{task.duration} días</strong></label>
-                        <input type="range" min="1" max="10" value={task.duration} onChange={(e) => updateGanttTaskSlider(id, 'duration', e.target.value)} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            <GanttPlanner
+              canManage={setup.canManageProjects}
+              fieldWorkers={fieldWorkers}
+              onTasksChange={handleTasksChange}
+              onToast={addToast}
+              project={platformAccess.project}
+              tasks={state.tasks}
+            />
           </section>
 
           {/* SECTION 6: GESTION DE PERSONAL & RRHH */}
@@ -2818,179 +2436,8 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
         </main>
       </div>
 
-      {/* Modal: Add Task */}
-      {showAddTaskModal && (
-        <div className="modal-overlay" style={{ display: 'flex' }}>
-          <div className="glass-card modal-content" style={{ maxWidth: '480px', width: '90%' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ fontFamily: 'var(--font-heading)', margin: 0 }}>Agregar Nueva Tarea</h3>
-              <i className="fa-solid fa-xmark" onClick={() => setShowAddTaskModal(false)} style={{ cursor: 'pointer' }}></i>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Nombre de la Tarea</label>
-                <input type="text" className="form-input" placeholder="Ej. Fratachado de Cocina" value={newTaskName} onChange={(e) => setNewTaskName(e.target.value)} />
-              </div>
-              <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Operario Asignado</label>
-                <select className="form-input" value={newTaskAssignee} onChange={(e) => setNewTaskAssignee(e.target.value)}>
-                  <option value="">Sin asignar</option>
-                  {fieldWorkers.map((worker) => (
-                    <option key={worker.id} value={worker.id}>{worker.name} ({worker.role || 'Cuadrilla'})</option>
-                  ))}
-                </select>
-                {fieldWorkers.length === 0 && (
-                  <small style={{ color: 'var(--text-secondary)' }}>
-                    Podés crear la tarea sin responsable o agregar la cuadrilla desde <Link href="/dashboard/team">Equipo y roles</Link>.
-                  </small>
-                )}
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Día de Inicio (1-14)</label>
-                  <input type="number" min="1" max="14" className="form-input" value={newTaskStart} onChange={(e) => setNewTaskStart(parseInt(e.target.value))} />
-                </div>
-                <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Duración (días)</label>
-                  <input type="number" min="1" max="14" className="form-input" value={newTaskDuration} onChange={(e) => setNewTaskDuration(parseInt(e.target.value))} />
-                </div>
-              </div>
-              <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Progreso Inicial (%)</label>
-                <input type="range" min="0" max="100" className="form-input" style={{ background: 'transparent' }} value={newTaskProgress} onChange={(e) => setNewTaskProgress(parseInt(e.target.value))} />
-              </div>
-              <button className="btn btn-primary" onClick={handleAddNewTask} style={{ marginTop: '10px' }}>Guardar Tarea</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal: Edit Task */}
-      {showEditTaskModal && (
-        <div className="modal-overlay" style={{ display: 'flex' }}>
-          <div className="glass-card modal-content" style={{ maxWidth: '480px', width: '90%' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
-              <h3 style={{ fontFamily: 'var(--font-heading)', color: 'var(--primary)', margin: 0 }}><i className="fa-solid fa-pen-to-square"></i> Editar Tarea</h3>
-              <i className="fa-solid fa-xmark modal-close-btn" onClick={() => setShowEditTaskModal(false)} style={{ cursor: 'pointer', fontSize: '1.2rem', color: 'var(--text-secondary)' }}></i>
-            </div>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Nombre de la Tarea</label>
-                <input type="text" className="form-input" value={editTaskName} onChange={(e) => setEditTaskName(e.target.value)} />
-              </div>
-              
-              <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Operario Asignado</label>
-                <select className="form-input" value={editTaskAssignee} onChange={(e) => setEditTaskAssignee(e.target.value)}>
-                  <option value="">Sin asignar</option>
-                  {fieldWorkers.map((worker) => (
-                    <option key={worker.id} value={worker.id}>{worker.name} ({worker.role || 'Cuadrilla'})</option>
-                  ))}
-                </select>
-                {fieldWorkers.length === 0 && (
-                  <small style={{ color: 'var(--text-secondary)' }}>
-                    Agregá responsables desde <Link href="/dashboard/team">Equipo y roles</Link>.
-                  </small>
-                )}
-              </div>
-              
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Día de Inicio (1-14)</label>
-                  <input type="number" min="1" max="14" className="form-input" value={editTaskStart} onChange={(e) => setEditTaskStart(parseInt(e.target.value))} />
-                </div>
-                <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Duración (días)</label>
-                  <input type="number" min="1" max="14" className="form-input" value={editTaskDuration} onChange={(e) => setEditTaskDuration(parseInt(e.target.value))} />
-                </div>
-              </div>
-              
-              <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Progreso ({editTaskProgress}%)</label>
-                <input type="range" min="0" max="100" className="form-input" style={{ background: 'transparent' }} value={editTaskProgress} onChange={(e) => setEditTaskProgress(parseInt(e.target.value))} />
-              </div>
-              
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px' }}>
-                <button className="btn btn-danger btn-sm" onClick={handleDeleteTask} style={{ padding: '8px 16px', fontSize: '0.8rem' }}><i className="fa-solid fa-trash"></i> Eliminar</button>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <button className="btn btn-secondary btn-sm" onClick={() => setShowEditTaskModal(false)} style={{ padding: '8px 16px', fontSize: '0.8rem' }}>Cancelar</button>
-                  <button className="btn btn-primary btn-sm" onClick={handleSaveEditedTask} style={{ padding: '8px 16px', fontSize: '0.8rem' }}>Guardar</button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal: Receive Material */}
-      {showReceiveMaterialModal && (
-        <div className="modal-overlay" style={{ display: 'flex' }}>
-          <div className="glass-card modal-content" style={{ maxWidth: '480px', width: '90%' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
-              <h3 style={{ fontFamily: 'var(--font-heading)', color: 'var(--primary)', margin: 0 }}><i className="fa-solid fa-truck-ramp-box"></i> Registrar Recepción</h3>
-              <i className="fa-solid fa-xmark modal-close-btn" onClick={() => setShowReceiveMaterialModal(false)} style={{ cursor: 'pointer', fontSize: '1.2rem', color: 'var(--text-secondary)' }}></i>
-            </div>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Material / Insumo</label>
-                <select className="form-input" value={receiveMaterialKey} onChange={(e) => setReceiveMaterialKey(e.target.value)}>
-                  <option value="">Seleccioná un material</option>
-                  {stockpileEntries.map(([key, item]) => (
-                    <option key={key} value={key}>{item.name || 'Material sin nombre'} {item.unit ? `(${item.unit})` : ''}</option>
-                  ))}
-                </select>
-              </div>
-              
-              <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Cantidad Recibida</label>
-                <input type="number" min="1" className="form-input" value={receiveMaterialQty} onChange={(e) => setReceiveMaterialQty(e.target.value)} />
-              </div>
-
-              <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Remito / Número de Factura</label>
-                <input type="text" placeholder="Ej. REM-004-98122" className="form-input" value={receiveMaterialInvoice} onChange={(e) => setReceiveMaterialInvoice(e.target.value)} />
-              </div>
-              
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
-                <button className="btn btn-secondary btn-sm" onClick={() => setShowReceiveMaterialModal(false)} style={{ padding: '8px 16px', fontSize: '0.8rem' }}>Cancelar</button>
-                <button className="btn btn-primary btn-sm" disabled={!receiveMaterialKey} onClick={handleSaveReceivedMaterial} style={{ padding: '8px 16px', fontSize: '0.8rem' }}>Registrar Entrada</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Styled JSX for local overlay overrides */}
       <style dangerouslySetInnerHTML={{ __html: `
-        .gantt-row-grid-bg {
-            position: absolute;
-            top: 0;
-            left: 220px;
-            right: 0;
-            bottom: 0;
-            display: grid;
-            grid-template-columns: repeat(14, 1fr);
-            pointer-events: none;
-            z-index: 0;
-        }
-        .gantt-grid-line {
-            border-right: 1px solid rgba(255, 255, 255, 0.03);
-            height: 100%;
-        }
-        .gantt-grid-line.weekend-grid {
-            background: rgba(255, 255, 255, 0.01);
-        }
-        .gantt-dependency-svg {
-            position: absolute;
-            top: 0;
-            left: 220px;
-            width: calc(100% - 220px);
-            height: 100%;
-            pointer-events: none;
-            z-index: 1;
-        }
         .crm-suggestions {
             display: flex;
             gap: 8px;

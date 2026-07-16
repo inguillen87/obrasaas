@@ -1,6 +1,7 @@
 import { getAppStateSnapshot, resetState, saveAppStateSnapshot } from '@/lib/db';
 import { AccessError, accessErrorResponse, getPlatformAccess, requireTenantPermission } from '@/lib/access';
 import {
+    assertProjectStateVersion,
     formatProjectStateEtag,
     deriveProjectStateActivities,
     flagStockRisks,
@@ -81,10 +82,14 @@ export async function POST(request) {
             parsed,
             request.headers.get('if-match'),
         );
-        const body = validateProjectStateInput(writeRequest.state);
+        const currentSnapshot = await getAppStateSnapshot(access);
+        assertProjectStateVersion(writeRequest.expectedVersion, currentSnapshot.version);
+        const validationContext = { previousState: currentSnapshot.state };
+        const body = validateProjectStateInput(writeRequest.state, validationContext);
         flagStockRisks(body);
         const validatedBody = validateProjectStateInput(
             sanitizeProjectStateMedicalData(body),
+            validationContext,
         );
         const updated = await saveAppStateSnapshot(validatedBody, access, {
             expectedVersion: writeRequest.expectedVersion,

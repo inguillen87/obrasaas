@@ -1,3 +1,10 @@
+import { dependencyCycle, MAX_GANTT_DAYS, MAX_TASK_DEPENDENCIES } from './gantt.js';
+import {
+  StockpileInputError,
+  stockpileNeedsConfiguration,
+  validateStockpileCatalog,
+} from './stockpiles.js';
+
 const MAX_STATE_NODES = 20_000;
 const MAX_STATE_DEPTH = 10;
 const MAX_COLLECTION_SIZE = 2_000;
@@ -149,6 +156,13 @@ function assertNumber(value, path, { min = 0, max = Number.MAX_SAFE_INTEGER } = 
   }
 }
 
+function assertInteger(value, path, options = {}) {
+  assertNumber(value, path, options);
+  if (!Number.isInteger(Number(value))) {
+    throw new ProjectStateInputError(`${path} debe ser un número entero.`);
+  }
+}
+
 function assertShortString(value, path, { required = false, max = 180 } = {}) {
   if (value == null && !required) return;
   if (typeof value !== 'string' || (required && !value.trim()) || value.length > max) {
@@ -156,7 +170,7 @@ function assertShortString(value, path, { required = false, max = 180 } = {}) {
   }
 }
 
-function assertKnownCollections(state) {
+function assertKnownCollections(state, previousState = null) {
   if (state.tasks != null) {
     if (!isPlainObject(state.tasks) || Object.keys(state.tasks).length > 500) {
       throw new ProjectStateInputError('tasks debe ser un catálogo de hasta 500 tareas.');
@@ -169,7 +183,35 @@ function assertKnownCollections(state) {
       assertShortString(task.assignee, `tasks.${taskId}.assignee`, { max: 160 });
       assertNumber(task.progress, `tasks.${taskId}.progress`, { min: 0, max: 100 });
       assertNumber(task.duration, `tasks.${taskId}.duration`, { min: 1, max: 3_650 });
-      assertNumber(task.startOffset, `tasks.${taskId}.startOffset`, { min: 0, max: 100 });
+      if (task.startOffset != null) {
+        assertNumber(task.startOffset, `tasks.${taskId}.startOffset`, { min: 0, max: 100 });
+      }
+      if (task.startDay != null) {
+        assertInteger(task.startDay, `tasks.${taskId}.startDay`, { min: 1, max: MAX_GANTT_DAYS });
+      }
+      if (task.dependencies != null) {
+        if (!Array.isArray(task.dependencies) || task.dependencies.length > MAX_TASK_DEPENDENCIES) {
+          throw new ProjectStateInputError(`tasks.${taskId}.dependencies debe contener hasta ${MAX_TASK_DEPENDENCIES} predecesoras.`);
+        }
+        const dependencyIds = new Set();
+        for (const dependencyId of task.dependencies) {
+          assertShortString(dependencyId, `tasks.${taskId}.dependencies`, { required: true, max: 160 });
+          if (dependencyId === taskId) {
+            throw new ProjectStateInputError(`tasks.${taskId} no puede depender de sí misma.`);
+          }
+          if (!Object.hasOwn(state.tasks, dependencyId)) {
+            throw new ProjectStateInputError(`tasks.${taskId} depende de una tarea inexistente.`);
+          }
+          if (dependencyIds.has(dependencyId)) {
+            throw new ProjectStateInputError(`tasks.${taskId} contiene una dependencia repetida.`);
+          }
+          dependencyIds.add(dependencyId);
+        }
+      }
+    }
+    const cycle = dependencyCycle(state.tasks);
+    if (cycle) {
+      throw new ProjectStateInputError(`El cronograma contiene una dependencia circular: ${cycle.join(' → ')}.`);
     }
   }
 
@@ -178,18 +220,18 @@ function assertKnownCollections(state) {
   }
 
   if (state.stockpiles != null) {
-    if (!isPlainObject(state.stockpiles) || Object.keys(state.stockpiles).length > 500) {
-      throw new ProjectStateInputError('stockpiles debe ser un catálogo de hasta 500 materiales.');
-    }
-    for (const [materialId, material] of Object.entries(state.stockpiles)) {
-      if (!isPlainObject(material)) {
-        throw new ProjectStateInputError(`stockpiles.${materialId} debe ser un objeto.`);
+    try {
+      validateStockpileCatalog(state.stockpiles, {
+        maxItems: 500,
+        previousCatalog: isPlainObject(previousState?.stockpiles)
+          ? previousState.stockpiles
+          : null,
+      });
+    } catch (error) {
+      if (error instanceof StockpileInputError) {
+        throw new ProjectStateInputError(error.message, { code: error.code });
       }
-      assertShortString(material.name, `stockpiles.${materialId}.name`, { required: true, max: 160 });
-      assertShortString(material.unit, `stockpiles.${materialId}.unit`, { max: 40 });
-      for (const field of ['current', 'min', 'max']) {
-        assertNumber(material[field], `stockpiles.${materialId}.${field}`, { min: 0, max: 1_000_000_000_000 });
-      }
+      throw error;
     }
   }
 
@@ -204,12 +246,12 @@ function assertKnownCollections(state) {
   }
 }
 
-export function validateProjectStateInput(value) {
+export function validateProjectStateInput(value, { previousState = null } = {}) {
   if (!isPlainObject(value)) {
     throw new ProjectStateInputError('El estado de la obra debe ser un objeto JSON.');
   }
   assertJsonShape(value, 'state', 0, { count: 0 });
-  assertKnownCollections(value);
+  assertKnownCollections(value, previousState);
   return structuredClone(value);
 }
 
@@ -220,47 +262,146 @@ function searchableText(value) {
     .toLowerCase();
 }
 
-function stockRiskAlreadyTracked(state, key, material) {
-  const materialName = searchableText(material.name);
-  return state.incidents.some((incident) => {
-    if (incident?.id === `stock-risk-${key}`) return true;
-    if (incident?.metadata?.stockpileKey === key) return true;
-    const incidentText = searchableText(
-      `${incident?.title || ''} ${incident?.description || ''} ${incident?.badge || ''}`,
+function stockRiskMatches(incident, key, material) {
+  if (!isPlainObject(incident)) return false;
+  const explicitRisk = incident.id === `stock-risk-${key}`
+    || (
+      incident.metadata?.stockpileKey === key
+      && incident.metadata?.kind === 'stock-risk'
     );
-    return materialName
-      && incidentText.includes(materialName)
-      && /(stock|acopio|quiebre|faltante|debajo del minimo)/.test(incidentText);
-  });
+  if (explicitRisk) return true;
+  if (incident.type === 'success') return false;
+
+  const materialName = searchableText(material.name);
+  const incidentText = searchableText(
+    `${incident.title || ''} ${incident.description || ''} ${incident.badge || ''}`,
+  );
+  return materialName
+    && incidentText.includes(materialName)
+    && /(stock (bajo|critico)|quiebre(?: de)? stock|faltante|debajo del minimo|por debajo del minimo)/.test(incidentText);
+}
+
+function stockRiskResolved(incident) {
+  return incident?.status === 'resolved'
+    || incident?.metadata?.stockRiskStatus === 'resolved'
+    || Boolean(incident?.metadata?.resolvedAt);
+}
+
+function matchingStockRisks(state, key, material) {
+  return state.incidents.filter((incident) => stockRiskMatches(incident, key, material));
+}
+
+function activeStockRiskKeys(state) {
+  const keys = new Set();
+  for (const [key, material] of Object.entries(state.stockpiles)) {
+    if (matchingStockRisks(state, key, material).some((incident) => !stockRiskResolved(incident))) {
+      keys.add(key);
+    }
+  }
+  return keys;
+}
+
+function resolveStockRisk(incident, key, material, resolution) {
+  const resolvedAt = new Date().toISOString();
+  incident.title = resolution.title;
+  incident.description = resolution.description;
+  incident.type = resolution.type;
+  incident.badge = resolution.badge;
+  incident.status = 'resolved';
+  incident.metadata = {
+    ...(isPlainObject(incident.metadata) ? incident.metadata : {}),
+    kind: 'stock-risk',
+    stockpileKey: key,
+    stockRiskStatus: 'resolved',
+    resolvedAt,
+  };
+}
+
+function upsertStockRisk(state, key, material) {
+  const risks = matchingStockRisks(state, key, material);
+  const incident = risks.find((candidate) => !stockRiskResolved(candidate)) || risks[0];
+  const timestamp = new Intl.DateTimeFormat('es-AR', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  }).format(new Date());
+  const canonical = incident || {
+    id: `stock-risk-${key}`,
+    timestamp,
+  };
+
+  canonical.title = `Stock bajo: ${material.name}`;
+  canonical.description = `${material.current} ${material.unit} disponibles frente a un mínimo de ${material.min}. Requiere revisar el abastecimiento; no se generó ninguna compra automática.`;
+  canonical.type = 'warning';
+  canonical.badge = 'Stock crítico';
+  canonical.reporter = 'Control de acopio';
+  canonical.icon = 'fa-solid fa-triangle-exclamation';
+  delete canonical.status;
+  canonical.metadata = {
+    ...(isPlainObject(canonical.metadata) ? canonical.metadata : {}),
+    kind: 'stock-risk',
+    stockpileKey: key,
+    stockRiskStatus: 'active',
+    updatedAt: new Date().toISOString(),
+  };
+  delete canonical.metadata.resolvedAt;
+
+  if (!incident) state.incidents.unshift(canonical);
 }
 
 export function flagStockRisks(state) {
   if (!isPlainObject(state?.stockpiles)) return state;
   state.incidents = Array.isArray(state.incidents) ? state.incidents : [];
+  const activeBefore = activeStockRiskKeys(state);
+  const nonStockAlerts = Math.max(0, numeric(state.alertsCount) - activeBefore.size);
 
   for (const [key, material] of Object.entries(state.stockpiles)) {
-    if (!material || numeric(material.current) >= numeric(material.min)) continue;
-    const replenishmentStatus = searchableText(material.status);
-    if (/(en camino|en transito|pedido|despachado|comprado)/.test(replenishmentStatus)) continue;
-    if (stockRiskAlreadyTracked(state, key, material)) continue;
+    if (!material) continue;
+    const risks = matchingStockRisks(state, key, material);
+    const activeRisks = risks.filter((incident) => !stockRiskResolved(incident));
+    if (stockpileNeedsConfiguration(material)) {
+      material.status = 'Revisar configuración';
+      for (const incident of activeRisks) {
+        resolveStockRisk(incident, key, material, {
+          title: `Revisar acopio: ${material.name}`,
+          description: 'La alerta automática quedó pausada porque la unidad, la capacidad o los rangos heredados requieren corrección.',
+          type: 'info',
+          badge: 'Revisar configuración',
+        });
+      }
+      continue;
+    }
 
-    material.status = 'Requiere aprobación';
-    state.alertsCount = numeric(state.alertsCount) + 1;
-    state.incidents.unshift({
-      id: `stock-risk-${key}`,
-      title: `Stock bajo: ${material.name}`,
-      description: `${material.current} ${material.unit} disponibles frente a un mínimo de ${material.min}. La compra quedó pendiente de aprobación de un responsable autorizado.`,
-      type: 'warning',
-      badge: 'Revisar compra',
-      timestamp: new Intl.DateTimeFormat('es-AR', {
-        dateStyle: 'short',
-        timeStyle: 'short',
-      }).format(new Date()),
-      reporter: 'Control de abastecimiento',
-      icon: 'fa-solid fa-cart-shopping',
-      metadata: { stockpileKey: key },
-    });
+    if (numeric(material.current) >= numeric(material.min)) {
+      material.status = 'Stock OK';
+      for (const incident of activeRisks) {
+        resolveStockRisk(incident, key, material, {
+          title: `Stock normalizado: ${material.name}`,
+          description: `${material.current} ${material.unit} disponibles; el mínimo operativo es ${material.min}.`,
+          type: 'success',
+          badge: 'Stock normalizado',
+        });
+      }
+      continue;
+    }
+
+    const replenishmentStatus = searchableText(material.status);
+    if (/(en camino|en transito|pedido|despachado|comprado)/.test(replenishmentStatus)) {
+      for (const incident of activeRisks) {
+        resolveStockRisk(incident, key, material, {
+          title: `Abastecimiento en curso: ${material.name}`,
+          description: `${material.current} ${material.unit} disponibles frente a un mínimo de ${material.min}; el material figura ${material.status}.`,
+          type: 'info',
+          badge: 'En seguimiento',
+        });
+      }
+      continue;
+    }
+
+    material.status = 'Crítico';
+    upsertStockRisk(state, key, material);
   }
+  state.incidents = state.incidents.slice(0, 1_000);
+  state.alertsCount = nonStockAlerts + activeStockRiskKeys(state).size;
   return state;
 }
 
@@ -281,6 +422,12 @@ function taskChanges(before, after) {
   if (before.assignee !== after.assignee) changes.push(`responsable: ${normalizedText(after.assignee, 'sin asignar')}`);
   if (numeric(before.duration) !== numeric(after.duration)) changes.push(`duración: ${numeric(after.duration)} días`);
   if (numeric(before.startOffset) !== numeric(after.startOffset)) changes.push(`inicio relativo: ${numeric(after.startOffset)}%`);
+  if (numeric(before.startDay) !== numeric(after.startDay)) changes.push(`inicio planificado: día ${numeric(after.startDay)}`);
+  const beforeDependencies = Array.isArray(before.dependencies) ? before.dependencies : [];
+  const afterDependencies = Array.isArray(after.dependencies) ? after.dependencies : [];
+  if (JSON.stringify(beforeDependencies) !== JSON.stringify(afterDependencies)) {
+    changes.push(`predecesoras: ${afterDependencies.length}`);
+  }
   return changes;
 }
 

@@ -1,5 +1,5 @@
 import { after } from "next/server";
-import { resolveWhatsAppScopes, storeWebhookEvent } from "@/lib/db";
+import { storeMetaWebhookBatch } from "@/lib/db";
 import {
   RequestBodyError,
   decodeUtf8RequestBytes,
@@ -7,20 +7,19 @@ import {
   requestBodyErrorResponse,
 } from "@/lib/request-body";
 import {
-  scopedWebhookExternalId,
-  serializeWebhookPayload,
-} from "@/lib/webhook-queue";
-import {
   normalizeMetaWebhook,
   verifyMetaSignature,
   verifyMetaSubscription,
 } from "@/lib/whatsapp/meta";
+import {
+  assertMetaWebhookBatchLimit,
+  META_WEBHOOK_MAX_BODY_BYTES,
+  MetaWebhookBatchError,
+} from "@/lib/whatsapp/webhook-ingress";
 import { drainProjectWebhookEvents } from "@/lib/whatsapp/webhook-worker";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
-const MAX_WEBHOOK_BYTES = 1_000_000;
-const MAX_WEBHOOK_EVENTS = 250;
 
 export async function GET(request) {
   const verification = verifyMetaSubscription(
@@ -40,7 +39,7 @@ export async function POST(request) {
   let rawBytes;
   try {
     rawBytes = await readLimitedRequestBytes(request, {
-      maxBytes: MAX_WEBHOOK_BYTES,
+      maxBytes: META_WEBHOOK_MAX_BODY_BYTES,
       requireJson: true,
     });
   } catch (error) {
@@ -66,49 +65,27 @@ export async function POST(request) {
     return Response.json({ error: "Invalid JSON payload" }, { status: 400 });
   }
 
-  const events = normalizeMetaWebhook(payload);
-  if (events.length > MAX_WEBHOOK_EVENTS) {
-    return Response.json({ error: "Webhook batch too large" }, { status: 413 });
-  }
-  const projectIds = new Set();
-  let accepted = 0;
-  let unknownConnections = 0;
-  let duplicate = 0;
-  for (const event of events) {
-    const scopes = await resolveWhatsAppScopes({
-      eventType: event.eventType,
-      phoneNumberId: event.phoneNumberId,
-      whatsappBusinessId: event.whatsappBusinessId,
-      displayPhoneNumber: event.displayPhoneNumber || event.businessDisplayPhone,
-    });
-    if (scopes.length === 0) {
-      unknownConnections += 1;
-      console.warn(
-        `Rejected Meta event for unknown connection: ${event.phoneNumberId || event.whatsappBusinessId || "missing"}`,
-      );
-      continue;
+  let updateCount;
+  try {
+    updateCount = assertMetaWebhookBatchLimit(payload);
+  } catch (error) {
+    if (error instanceof MetaWebhookBatchError) {
+      return Response.json({ error: error.message, code: error.code }, { status: error.status });
     }
-    for (const scope of scopes) {
-      const scopedEvent = {
-        ...event,
-        phoneNumberId: scope.phoneNumberId,
-      };
-      const result = await storeWebhookEvent({
-        provider: scopedEvent.provider,
-        externalId: scopedWebhookExternalId(scope.projectId, scopedEvent.externalId),
-        eventType: scopedEvent.eventType,
-        payload: serializeWebhookPayload(scopedEvent, scope),
-        scope,
-      });
-      if (result.projectId) projectIds.add(result.projectId);
-      if (result.stored) accepted += 1;
-      else duplicate += 1;
-    }
+    throw error;
   }
 
-  if (projectIds.size > 0) {
+  const events = normalizeMetaWebhook(payload);
+  const persistence = await storeMetaWebhookBatch({ events });
+  if (persistence.unknownConnections > 0) {
+    console.warn(
+      `Rejected ${persistence.unknownConnections} Meta event(s) for unknown tenant connections.`,
+    );
+  }
+
+  if (persistence.projectIds.length > 0) {
     after(async () => {
-      for (const projectId of projectIds) {
+      for (const projectId of persistence.projectIds) {
         try {
           await drainProjectWebhookEvents(projectId);
         } catch (error) {
@@ -120,8 +97,9 @@ export async function POST(request) {
 
   return Response.json({
     received: true,
-    accepted,
-    duplicate,
-    unknownConnections,
+    updates: updateCount,
+    accepted: persistence.accepted,
+    duplicate: persistence.duplicate,
+    unknownConnections: persistence.unknownConnections,
   });
 }

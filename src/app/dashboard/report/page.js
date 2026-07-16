@@ -29,6 +29,13 @@ function EmptyRow({ columns, children }) {
   return <tr><td className={styles.emptyCell} colSpan={columns}>{children}</td></tr>;
 }
 
+function taskPlanLabel(task) {
+  if (task.startDate && task.endDate) {
+    return `${formatDate(task.startDate, { timeZone: 'UTC', day: '2-digit', month: 'short' })} — ${formatDate(task.endDate, { timeZone: 'UTC', day: '2-digit', month: 'short' })}`;
+  }
+  return `Día ${task.startDay} — ${task.endDay}`;
+}
+
 export default async function ReportPage({ searchParams }) {
   const access = await getPlatformAccess();
   requireTenantPermission(access, 'org:reports:read');
@@ -110,21 +117,24 @@ export default async function ReportPage({ searchParams }) {
         <section className={styles.section}>
           <div className={styles.sectionHeading}>
             <div><span className={styles.sectionKicker}>Planificación</span><h2>Cronograma y responsables</h2></div>
-            <StatusBadge tone={report.timelinePercentage > report.progress + 10 ? 'warning' : 'success'}>
-              {report.timelinePercentage > report.progress + 10 ? 'Revisar desvío' : 'Dentro de tolerancia'}
+            <StatusBadge tone={report.scheduleConflicts > 0 ? 'danger' : report.timelinePercentage > report.progress + 10 ? 'warning' : 'success'}>
+              {report.scheduleConflicts > 0
+                ? `${report.scheduleConflicts} conflicto${report.scheduleConflicts === 1 ? '' : 's'} de secuencia`
+                : report.timelinePercentage > report.progress + 10 ? 'Revisar desvío' : 'Dentro de tolerancia'}
             </StatusBadge>
           </div>
           <div className={styles.tableWrap}>
             <table>
-              <thead><tr><th>Tarea</th><th>Responsable</th><th>Estado</th><th>Progreso</th><th>Duración</th></tr></thead>
+              <thead><tr><th>Tarea</th><th>Responsable</th><th>Plan</th><th>Predecesoras</th><th>Estado</th><th>Progreso</th></tr></thead>
               <tbody>
-                {report.tasks.length === 0 ? <EmptyRow columns={5}>No hay tareas registradas.</EmptyRow> : report.tasks.map((task) => (
+                {report.tasks.length === 0 ? <EmptyRow columns={6}>No hay tareas registradas.</EmptyRow> : report.tasks.map((task) => (
                   <tr key={task.id}>
                     <td><strong>{task.name}</strong></td>
                     <td>{task.assignee}</td>
+                    <td>{taskPlanLabel(task)}</td>
+                    <td>{task.dependencyNames.length > 0 ? task.dependencyNames.join(', ') : 'Sin predecesoras'}</td>
                     <td><StatusBadge tone={task.tone}>{task.status}</StatusBadge></td>
                     <td><div className={styles.progress}><span style={{ width: `${task.progress}%` }} /></div><strong>{task.progress}%</strong></td>
-                    <td>{task.duration} días</td>
                   </tr>
                 ))}
               </tbody>

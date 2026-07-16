@@ -41,6 +41,49 @@ test('an empty tenant report states that there is no operational evidence', () =
   assert.match(report.executiveSummary, /no hay actividad operativa persistida/i);
 });
 
+test('a missing persisted snapshot cannot count as a meaningful report', () => {
+  const report = buildWeeklyReportModel({
+    organization: { name: 'Tenant nuevo' },
+    project: { name: 'Primera obra' },
+    snapshot: { exists: false, state: {}, version: 0 },
+  });
+
+  assert.equal(report.isEmptyState, true);
+  assert.equal(report.tasks.length, 0);
+});
+
+test('a persisted but operationally empty snapshot cannot complete first value', () => {
+  const report = buildWeeklyReportModel({
+    organization: { name: 'Tenant nuevo' },
+    project: { name: 'Primera obra' },
+    snapshot: { exists: true, state: {}, version: 1 },
+    state: {
+      avancePercentage: 0,
+      attendance: {},
+      incidents: [],
+      stockpiles: {},
+      tasks: {},
+    },
+    messages: [{
+      sender: 'bot',
+      kind: 'system',
+      text: 'Hola. Soy el asistente de ObraSaaS.',
+    }],
+  });
+
+  assert.equal(report.isEmptyState, true);
+  assert.match(report.executiveSummary, /no hay actividad operativa persistida/i);
+});
+
+test('a real inbound field message makes a persisted report operational', () => {
+  const report = buildWeeklyReportModel({
+    snapshot: { exists: true, state: {}, version: 1 },
+    messages: [{ sender: 'user', kind: 'text', text: 'Avance de estructura 35%' }],
+  });
+
+  assert.equal(report.isEmptyState, false);
+});
+
 test('weekly reports summarize risk, evidence and configured budget', () => {
   const report = buildWeeklyReportModel({
     state: {
@@ -65,4 +108,32 @@ test('weekly reports summarize risk, evidence and configured budget', () => {
   assert.equal(report.snapshotVersion, 3);
   assert.equal(report.isEmptyState, false);
   assert.match(report.executiveSummary, /60 puntos por debajo/);
+});
+
+test('weekly reports expose real schedule dependencies and sequence conflicts', () => {
+  const report = buildWeeklyReportModel({
+    organization: { name: 'Constructora Sur' },
+    project: {
+      id: 'project_schedule',
+      name: 'Torre Centro',
+      startsAt: new Date('2026-07-01T00:00:00.000Z'),
+      endsAt: new Date('2026-08-31T00:00:00.000Z'),
+    },
+    state: {
+      tasks: {
+        foundations: { name: 'Fundaciones', progress: 80, duration: 10, startDay: 1 },
+        structure: {
+          name: 'Estructura', progress: 0, duration: 15, startDay: 8,
+          dependencies: ['foundations'],
+        },
+      },
+    },
+    snapshot: { version: 2, updatedAt: new Date('2026-07-16T10:00:00.000Z') },
+  });
+
+  assert.equal(report.dependencyCount, 1);
+  assert.equal(report.scheduleConflicts, 1);
+  assert.equal(report.tasks[1].dependencyNames[0], 'Fundaciones');
+  assert.equal(report.tasks[1].startDate.toISOString(), '2026-07-08T00:00:00.000Z');
+  assert.match(report.executiveSummary, /conflicto de secuencia/i);
 });

@@ -9,7 +9,11 @@ import {
 } from '@/lib/access';
 import { PLAN_CATALOG } from '@/lib/plans';
 import { getPrisma } from '@/lib/prisma';
-import { activeProjectCapacity, listOrganizationProjects } from '@/lib/projects';
+import {
+  activeProjectCapacity,
+  isUnconfiguredTenantBootstrapProject,
+  listOrganizationProjects,
+} from '@/lib/projects';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,6 +33,9 @@ export default async function ProjectsPage() {
     }),
   ]);
   const plan = PLAN_CATALOG[access.organization.subscriptionPlan];
+  const configuringBootstrap = projects.some((project) => (
+    project.id === access.project.id && isUnconfiguredTenantBootstrapProject(project)
+  ));
 
   return (
     <main className={styles.shell}>
@@ -53,8 +60,9 @@ export default async function ProjectsPage() {
         canManage={hasTenantPermission(access, 'org:projects:manage')}
         capacity={activeProjectCapacity({
           plan: access.organization.subscriptionPlan,
-          activeCount,
+          activeCount: Math.max(0, activeCount - (configuringBootstrap ? 1 : 0)),
         })}
+        configuringBootstrap={configuringBootstrap}
         initialProjects={projects}
         planName={plan?.name || access.organization.subscriptionPlan}
         timezone={access.organization.timezone}

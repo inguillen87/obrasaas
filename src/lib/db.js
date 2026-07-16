@@ -6,6 +6,7 @@ import {
   createMessageWebhookOutcome,
   isWebhookEventEligible,
   readAppliedMessageWebhookOutcome,
+  scopedWebhookExternalId,
   serializeWebhookPayload,
   shouldDeadLetterWebhookEvent,
   webhookFailureTransition,
@@ -18,6 +19,7 @@ import {
 import { assertProjectStateVersion } from "@/lib/project-state";
 import { sanitizeMessagesForMedicalPrivacy } from "@/lib/medical-privacy";
 import { resolveWhatsAppConnectionScopes } from "@/lib/whatsapp/webhook-scope";
+import { persistDurableMetaWebhookBatch } from "@/lib/whatsapp/webhook-ingress";
 
 const LOCAL_DB_PATH = path.join(process.cwd(), "data", "db.json");
 const LOCAL_CONVERSATION_ID = "dashboard-demo";
@@ -1324,6 +1326,58 @@ export async function storeWebhookEvent({ provider, externalId, eventType, paylo
     }
     throw error;
   }
+}
+
+export async function storeMetaWebhookBatch({ events }) {
+  if (!Array.isArray(events) || events.length === 0) {
+    return {
+      accepted: 0,
+      duplicate: 0,
+      unknownConnections: 0,
+      projectIds: [],
+    };
+  }
+
+  if (!hasDurableDatabase()) {
+    const projectIds = new Set();
+    let accepted = 0;
+    let duplicate = 0;
+    let unknownConnections = 0;
+    for (const event of events) {
+      const scopes = await resolveWhatsAppScopes({
+        eventType: event.eventType,
+        phoneNumberId: event.phoneNumberId,
+        whatsappBusinessId: event.whatsappBusinessId,
+        displayPhoneNumber: event.displayPhoneNumber || event.businessDisplayPhone,
+      });
+      if (scopes.length === 0) {
+        unknownConnections += 1;
+        continue;
+      }
+      for (const scope of scopes) {
+        const scopedEvent = { ...event, phoneNumberId: scope.phoneNumberId };
+        const result = await storeWebhookEvent({
+          provider: scopedEvent.provider,
+          externalId: scopedWebhookExternalId(scope.projectId, scopedEvent.externalId),
+          eventType: scopedEvent.eventType,
+          payload: serializeWebhookPayload(scopedEvent, scope),
+          scope,
+        });
+        if (result.projectId) projectIds.add(result.projectId);
+        if (result.stored) accepted += 1;
+        else duplicate += 1;
+      }
+    }
+    return {
+      accepted,
+      duplicate,
+      unknownConnections,
+      projectIds: [...projectIds].sort(),
+    };
+  }
+
+  const prisma = (await import("@/lib/prisma")).getPrisma();
+  return persistDurableMetaWebhookBatch(prisma, events);
 }
 
 export async function acquireWebhookEvent({ projectId, now = new Date(), leaseMs = WEBHOOK_LEASE_MS }) {

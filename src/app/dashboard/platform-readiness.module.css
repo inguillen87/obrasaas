@@ -52,8 +52,37 @@
 .recommended > i, .action > i { color: var(--primary); }
 .action { background: rgba(255, 159, 28, 0.055); }
 
-.notice { display: flex; align-items: flex-start; gap: 9px; margin: 0; padding: 11px 20px; border-top: 1px solid var(--border-color); color: var(--text-secondary); font-size: 0.72rem; line-height: 1.5; }
-.notice i { color: var(--info); margin-top: 2px; }
+.guide {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border-color);
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.guide > div { display: flex; min-width: 0; align-items: flex-start; gap: 10px; }
+.guide > div > i { margin-top: 3px; color: var(--info); font-size: 0.74rem; }
+.guide p { display: grid; min-width: 0; gap: 2px; }
+.guide p strong { font-size: 0.7rem; }
+.guide p span { color: var(--text-secondary); font-size: 0.65rem; line-height: 1.45; }
+.guide > a {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 11px;
+  border: 1px solid rgba(255, 159, 28, 0.28);
+  border-radius: 9px;
+  background: rgba(255, 159, 28, 0.08);
+  color: var(--primary);
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-decoration: none;
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+.guide > a:hover { transform: translateY(-1px); border-color: rgba(255, 159, 28, 0.48); background: rgba(255, 159, 28, 0.12); }
 
 @keyframes readiness-pulse { 50% { opacity: 0.35; transform: scale(0.75); } }
 
@@ -69,4 +98,10 @@
   .steps { grid-template-columns: 1fr; }
   .steps > * { border-right: 0 !important; border-bottom: 1px solid var(--border-color); }
   .steps > :last-child { border-bottom: 0; }
+  .guide { align-items: stretch; flex-direction: column; }
+  .guide > a { justify-content: center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .guide > a { transition: none; }
 }
