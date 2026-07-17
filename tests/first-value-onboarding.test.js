@@ -87,7 +87,7 @@ test('first value completes only after a durable decision and report generation'
 
 test('an empty report attempt is recorded but does not complete first value', () => {
   const reportGenerationCount = countMeaningfulReportGenerations([
-    { metadata: { emptyState: true, reportId: 'OS-EMPTY' } },
+    { metadata: { emptyState: true, format: 'pdf', reportId: 'OS-EMPTY' } },
     { metadata: null },
   ]);
   const readiness = deriveFirstValueReadiness({
@@ -105,11 +105,11 @@ test('a meaningful report only counts at or after the latest human decision', ()
   const events = [
     {
       createdAt: new Date('2026-07-16T12:04:59.999Z'),
-      metadata: { emptyState: false },
+      metadata: { emptyState: false, format: 'pdf' },
     },
     {
       createdAt: new Date('2026-07-16T12:05:00.000Z'),
-      metadata: { emptyState: false },
+      metadata: { emptyState: false, format: 'pdf' },
     },
   ];
 
@@ -135,6 +135,16 @@ test('a meaningful report only counts at or after the latest human decision', ()
   assert.equal(readiness.completion.report, false);
   assert.equal(readiness.percentage, 83);
   assert.equal(readiness.nextKey, 'report');
+});
+
+test('only an emitted PDF completes the report milestone', () => {
+  const events = [
+    { metadata: { emptyState: false, format: 'web' } },
+    { metadata: { emptyState: false } },
+    { metadata: { emptyState: false, format: 'pdf' } },
+  ];
+
+  assert.equal(countMeaningfulReportGenerations(events), 1);
 });
 
 test('a generated report never skips the human-decision milestone', () => {

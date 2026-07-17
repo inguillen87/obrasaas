@@ -1,7 +1,19 @@
 .page { min-height: 100vh; padding: 32px; color: #172033; background: #090d17; }
 .toolbar { max-width: 1120px; margin: 0 auto 18px; display: flex; align-items: center; justify-content: space-between; gap: 24px; color: #cbd5e1; }
 .toolbar p { margin: 6px 0 0; color: #7f8a9c; font-size: .8rem; }
-.printButton { min-height: 42px; padding: 0 18px; border: 1px solid #ff9b38; border-radius: 10px; color: #111827; background: #ff9b38; font: inherit; font-size: .82rem; font-weight: 800; cursor: pointer; }
+.reportActions { display: grid; justify-items: end; gap: 7px; }
+.reportActions > div { display: flex; gap: 8px; }
+.downloadButton, .printButton { min-height: 44px; padding: 0 17px; border-radius: 10px; font: inherit; font-size: .78rem; font-weight: 800; cursor: pointer; transition: border-color 160ms ease, background 160ms ease, transform 160ms ease; }
+.downloadButton { border: 1px solid #ff9b38; color: #111827; background: #ff9b38; }
+.printButton { border: 1px solid rgba(255, 255, 255, .18); color: #e6ebf2; background: rgba(255, 255, 255, .04); }
+.downloadButton:hover, .printButton:hover { transform: translateY(-1px); }
+.downloadButton:hover { border-color: #ffad5c; background: #ffad5c; }
+.printButton:hover { border-color: rgba(255, 255, 255, .32); background: rgba(255, 255, 255, .08); }
+.downloadButton:focus-visible, .printButton:focus-visible { outline: 3px solid #57b295; outline-offset: 3px; }
+.downloadButton:disabled { opacity: .65; cursor: wait; transform: none; }
+.reportActions .actionStatus, .reportActions .actionError { max-width: 330px; margin: 0; font-size: .68rem; text-align: right; }
+.actionStatus { color: #8ddabf !important; }
+.actionError { color: #ffaaa1 !important; }
 .report { max-width: 1120px; margin: 0 auto; padding: 42px; border: 1px solid #dbe1e8; border-radius: 18px; background: #fff; box-shadow: 0 28px 90px rgba(0, 0, 0, .32); }
 .header { display: flex; align-items: flex-start; justify-content: space-between; gap: 32px; padding-bottom: 24px; border-bottom: 2px solid #172033; }
 .brandBlock { display: flex; align-items: center; gap: 13px; }
@@ -47,8 +59,10 @@
 .progress span { display: block; height: 100%; border-radius: inherit; background: #ff9b38; }
 .twoColumns { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; }
 .twoColumns > * { min-width: 0; }
-.evidenceSummary { color: #667085; font-size: .68rem; }
+.evidenceSummary { display: grid; justify-items: end; gap: 3px; color: #667085; font-size: .68rem; }
 .evidenceSummary strong { color: #172033; }
+.evidenceSummary small { color: #8a5a20; font-size: .62rem; }
+.omittedRow td { color: #667085; background: #f8fafc; font-size: .68rem; font-style: italic; text-align: center; }
 .emptyCell { padding: 22px !important; color: #7a8492 !important; text-align: center; }
 .financialNote { display: flex; align-items: center; justify-content: space-between; gap: 28px; margin-top: 28px; padding: 19px 21px; border: 1px dashed #c9d0da; border-radius: 10px; background: #fbfcfd; break-inside: avoid; }
 .financialNote p { max-width: 590px; margin: 0; color: #667085; font-size: .73rem; line-height: 1.55; }
@@ -63,8 +77,12 @@
 @media (max-width: 800px) {
   .page { padding: 12px; }
   .toolbar { align-items: flex-start; flex-direction: column; }
+  .reportActions { width: 100%; justify-items: stretch; }
+  .reportActions > div { display: grid; grid-template-columns: 1fr 1fr; }
+  .reportActions .actionStatus, .reportActions .actionError { max-width: none; text-align: left; }
   .report { padding: 24px 18px; border-radius: 12px; }
   .header, .financialNote { align-items: flex-start; flex-direction: column; }
+  .evidenceSummary { justify-items: start; }
   .documentMeta { text-align: left; }
   .contextGrid, .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .contextGrid > div { border-bottom: 1px solid #e2e7ee; }
@@ -91,4 +109,8 @@
   .tableWrap th { padding: 6px 8px; }
   .tableWrap td { padding: 7px 8px; }
   .footer { margin-top: 22px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .downloadButton, .printButton { transition: none; }
 }

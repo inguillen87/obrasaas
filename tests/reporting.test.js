@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { buildWeeklyReportModel } from '../src/lib/reporting.js';
+import {
+  buildWeeklyReportModel,
+  weeklyReportPeriodStart,
+} from '../src/lib/reporting.js';
 
 test('weekly reports use tenant and project data without inventing a budget', () => {
   const report = buildWeeklyReportModel({
@@ -25,7 +28,76 @@ test('weekly reports use tenant and project data without inventing a budget', ()
   assert.equal(report.presentWorkers, 1);
   assert.equal(report.budget, null);
   assert.equal(report.isEmptyState, false);
-  assert.match(report.reportId, /^OS-1234567-20260715$/);
+  assert.match(report.reportId, /^OS-1234567-20260715-090000000$/);
+});
+
+test('weekly report boundaries use Buenos Aires calendar days around UTC midnight', () => {
+  const generatedAt = new Date('2026-07-16T01:30:00.000Z');
+  const report = buildWeeklyReportModel({
+    generatedAt,
+    project: { id: 'project_timezone' },
+  });
+
+  assert.equal(weeklyReportPeriodStart(generatedAt).toISOString(), '2026-07-09T03:00:00.000Z');
+  assert.match(report.reportId, /^OS-IMEZONE-20260715-223000000$/);
+});
+
+test('an explicit evidence summary keeps report generation data-minimal', () => {
+  const report = buildWeeklyReportModel({
+    snapshot: { exists: true, version: 2 },
+    evidenceSummary: {
+      evidenceCount: 8,
+      audioCount: 3,
+      operationalMessageCount: 11,
+      truncated: true,
+      messageLimit: 500,
+    },
+    messages: [{
+      sender: 'user',
+      kind: 'audio',
+      mediaUrl: '/must-not-be-counted',
+      transcription: 'must not be counted',
+    }],
+  });
+
+  assert.equal(report.evidenceCount, 8);
+  assert.equal(report.audioCount, 3);
+  assert.equal(report.evidenceTruncated, true);
+  assert.equal(report.evidenceMessageLimit, 500);
+  assert.equal(report.isEmptyState, false);
+});
+
+test('weekly reports prioritize severe incidents and disclose the bounded remainder', () => {
+  const incidents = Array.from({ length: 45 }, (_, index) => ({
+    id: `incident-${index}`,
+    title: `Incidente ${index}`,
+    severity: index === 44 ? 'critical' : 'low',
+  }));
+  const report = buildWeeklyReportModel({
+    state: { incidents },
+    snapshot: { exists: true, version: 1 },
+  });
+
+  assert.equal(report.incidentTotal, 45);
+  assert.equal(report.incidents.length, 40);
+  assert.equal(report.incidents[0].id, 'incident-44');
+  assert.equal(report.criticalIncidents, 1);
+});
+
+test('resolved incidents stay visible without inflating active alert metrics', () => {
+  const report = buildWeeklyReportModel({
+    state: {
+      incidents: [
+        { id: 'active', severity: 'critical', status: 'open' },
+        { id: 'resolved', severity: 'critical', status: 'resolved', badge: 'Crítica' },
+      ],
+    },
+    snapshot: { exists: true, version: 2 },
+  });
+
+  assert.equal(report.alertsCount, 1);
+  assert.equal(report.criticalIncidents, 1);
+  assert.equal(report.incidents.find((incident) => incident.id === 'resolved').label, 'Resuelta');
 });
 
 test('an empty tenant report states that there is no operational evidence', () => {
@@ -38,6 +110,7 @@ test('an empty tenant report states that there is no operational evidence', () =
   assert.equal(report.isEmptyState, true);
   assert.equal(report.tasks.length, 0);
   assert.equal(report.evidenceCount, 0);
+  assert.equal(report.snapshotVersion, null);
   assert.match(report.executiveSummary, /no hay actividad operativa persistida/i);
 });
 

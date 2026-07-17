@@ -33,6 +33,7 @@ export function countMeaningfulReportGenerations(events, { notBefore = null } = 
   if (hasThreshold && threshold === null) return 0;
   return events.filter((event) => {
     if (event?.metadata?.emptyState !== false) return false;
+    if (event?.metadata?.format !== 'pdf') return false;
     if (threshold === null) return true;
     const eventTimestamp = safeTimestamp(
       event.createdAt ?? event.metadata?.generatedAt,

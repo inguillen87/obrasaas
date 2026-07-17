@@ -1,17 +1,9 @@
 import { ObraSaasMark } from '@/app/brand/brand-logo';
-import { getAppState, getMessages } from '@/lib/db';
 import {
   getPlatformAccess,
-  hasTenantPermission,
   requireTenantPermission,
 } from '@/lib/access';
-import { getPrisma } from '@/lib/prisma';
-import { buildWeeklyReportModel } from '@/lib/reporting';
-import {
-  MEDICAL_EVIDENCE_PERMISSION,
-  SOURCE_EVIDENCE_PERMISSION,
-  sanitizeProjectStateMedicalData,
-} from '@/lib/medical-privacy';
+import { loadWeeklyReportModel } from '@/lib/weekly-report-service';
 import ReportActions from './report-actions';
 import styles from './report.module.css';
 
@@ -47,43 +39,14 @@ function taskPlanLabel(task) {
 export default async function ReportPage({ searchParams }) {
   const access = await getPlatformAccess();
   requireTenantPermission(access, 'org:reports:read');
-  const includeMedicalEvidence = hasTenantPermission(
-    access,
-    MEDICAL_EVIDENCE_PERMISSION,
-  );
-  const includeSourceEvidence = hasTenantPermission(
-    access,
-    SOURCE_EVIDENCE_PERMISSION,
-  );
-
-  const prisma = getPrisma();
-  const [state, messages, snapshot] = await Promise.all([
-    getAppState(access),
-    getMessages(access, {
-      includeMedicalEvidence,
-      includeSourceEvidence,
-    }),
-    prisma.projectSnapshot.findUnique({
-      where: { projectId: access.project.id },
-      select: { updatedAt: true, version: true },
-    }),
-  ]);
   const query = await searchParams;
-  const report = buildWeeklyReportModel({
-    state: sanitizeProjectStateMedicalData(state),
-    messages,
-    organization: access.organization,
-    project: access.project,
-    actorEmail: access.email,
-    generatedAt: new Date(),
-    snapshot,
-  });
+  const report = await loadWeeklyReportModel(access);
 
   return (
     <div className={styles.page}>
       <div className={styles.toolbar}>
         <div>
-          <p>Documento tenant-aware · preparado para impresión A4 y exportación PDF.</p>
+          <p>Vista previa dinámica · la descarga emite el ID documental y la huella auditada.</p>
         </div>
         <ReportActions autoPrint={query?.print === 'true'} />
       </div>
@@ -98,9 +61,9 @@ export default async function ReportPage({ searchParams }) {
             </div>
           </div>
           <div className={styles.documentMeta}>
-            <p>Reporte ejecutivo semanal</p>
+            <p>Vista previa del reporte semanal</p>
             <h1 id="report-title">{report.projectName}</h1>
-            <span>{report.reportId}</span>
+            <span>{report.snapshotVersion ? `Snapshot ${report.snapshotVersion}` : 'Sin snapshot'} · no constituye el documento emitido</span>
           </div>
         </header>
 
@@ -120,7 +83,7 @@ export default async function ReportPage({ searchParams }) {
         <section className={styles.metrics} aria-label="Resumen ejecutivo">
           <article><span>Avance físico</span><strong>{report.progress}%</strong><small>{report.tasksDone} de {report.tasks.length} tareas finalizadas</small></article>
           <article><span>Plazo consumido</span><strong>{report.timelinePercentage}%</strong><small>Día {report.currentDay} de {report.totalDays}</small></article>
-          <article><span>Alertas abiertas</span><strong>{report.alertsCount}</strong><small>{report.criticalIncidents} de prioridad alta</small></article>
+          <article><span>Alertas activas</span><strong>{report.alertsCount}</strong><small>{report.criticalIncidents} de prioridad alta</small></article>
           <article><span>Presentismo</span><strong>{report.presentWorkers}/{report.attendance.length}</strong><small>personas registradas hoy</small></article>
         </section>
 
@@ -176,7 +139,7 @@ export default async function ReportPage({ searchParams }) {
           </section>
 
           <section className={styles.section}>
-            <div className={styles.sectionHeading}><div><span className={styles.sectionKicker}>Abastecimiento</span><h2>Materiales críticos</h2></div></div>
+            <div className={styles.sectionHeading}><div><span className={styles.sectionKicker}>Abastecimiento</span><h2>Materiales y acopios</h2></div></div>
             <div className={styles.tableWrap}>
               <table>
                 <thead><tr><th>Material</th><th>Disponible</th><th>Estado</th></tr></thead>
@@ -192,16 +155,22 @@ export default async function ReportPage({ searchParams }) {
 
         <section className={styles.section}>
           <div className={styles.sectionHeading}>
-            <div><span className={styles.sectionKicker}>Trazabilidad</span><h2>Incidencias y evidencia</h2></div>
-            <div className={styles.evidenceSummary}><strong>{report.evidenceCount}</strong> adjuntos · <strong>{report.audioCount}</strong> audios procesados</div>
+            <div><span className={styles.sectionKicker}>Trazabilidad</span><h2>Incidencias registradas y evidencia semanal</h2></div>
+            <div className={styles.evidenceSummary}>
+              <span><strong>{report.evidenceCount}{report.evidenceTruncated ? '+' : ''}</strong> adjuntos · <strong>{report.audioCount}{report.evidenceTruncated ? '+' : ''}</strong> audios procesados</span>
+              {report.evidenceTruncated && <small>Corte: {report.evidenceMessageLimit} mensajes más recientes de la semana.</small>}
+            </div>
           </div>
           <div className={styles.tableWrap}>
             <table>
               <thead><tr><th>Evento</th><th>Detalle</th><th>Origen</th><th>Prioridad</th></tr></thead>
               <tbody>
-                {report.incidents.length === 0 ? <EmptyRow columns={4}>No hay incidencias abiertas en el período.</EmptyRow> : report.incidents.map((incident) => (
+                {report.incidents.length === 0 ? <EmptyRow columns={4}>No hay incidencias registradas en el estado actual.</EmptyRow> : report.incidents.map((incident) => (
                   <tr key={incident.id}><td><strong>{incident.title}</strong></td><td>{incident.description}</td><td>{incident.reporter}</td><td><StatusBadge tone={incident.tone}>{incident.label}</StatusBadge></td></tr>
                 ))}
+                {report.incidentTotal > report.incidents.length && (
+                  <tr className={styles.omittedRow}><td colSpan={4}>{report.incidentTotal - report.incidents.length} incidencias adicionales no incluidas; se priorizaron las de mayor severidad.</td></tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -222,8 +191,8 @@ export default async function ReportPage({ searchParams }) {
 
         <footer className={styles.footer}>
           <div><span>Emitido por</span><strong>{report.issuedBy}</strong><small>{report.issuedByEmail}</small></div>
-          <div><span>Control documental</span><strong>Versión {report.snapshotVersion}</strong><small>Datos aislados por tenant</small></div>
-          <div><span>Generado</span><strong>{formatDate(report.generatedAt, { dateStyle: 'short', timeStyle: 'short' })}</strong><small>America/Argentina/Buenos_Aires</small></div>
+          <div><span>Control documental</span><strong>{report.snapshotVersion ? `Versión ${report.snapshotVersion}` : 'Sin snapshot'}</strong><small>Datos aislados por tenant</small></div>
+          <div><span>Vista actualizada</span><strong>{formatDate(report.generatedAt, { dateStyle: 'short', timeStyle: 'short' })}</strong><small>El PDF descargado conserva su propia emisión</small></div>
         </footer>
       </article>
     </div>

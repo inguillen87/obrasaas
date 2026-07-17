@@ -168,7 +168,10 @@ export default async function GettingStartedPage() {
     prisma.auditLog.findMany({
       where: {
         ...reportAuditWhere,
-        metadata: { path: ['emptyState'], equals: false },
+        AND: [
+          { metadata: { path: ['emptyState'], equals: false } },
+          { metadata: { path: ['format'], equals: 'pdf' } },
+        ],
       },
       orderBy: { createdAt: 'desc' },
       take: 1,
@@ -311,14 +314,14 @@ export default async function GettingStartedPage() {
       key: 'report',
       eyebrow: 'Primer entregable',
       title: 'Generá el primer reporte',
-      description: 'Con el circuito reportar → aprobar ya resuelto, ObraSaaS compone el control semanal, registra la generación y abre la vista lista para guardar como PDF.',
+      description: 'Con el circuito reportar → aprobar ya resuelto, ObraSaaS compone el control semanal y genera un PDF A4 versionado, con huella de integridad y auditoría por tenant.',
       complete: readiness.completion.report,
       blocked: false,
       actionAvailable: readiness.completion.approval || readiness.completion.report,
       signal: !readiness.completion.approval && !readiness.completion.report
         ? 'Primero resolvé una propuesta operativa para cerrar el circuito de control'
         : lastMeaningfulReport
-          ? `Reporte con datos generado el ${DATE_FORMATTER.format(lastMeaningfulReport.createdAt)}`
+          ? `PDF con datos generado el ${DATE_FORMATTER.format(lastMeaningfulReport.createdAt)}`
           : latestMeaningfulReport && lastOperationalDecisionAt
             ? `El reporte del ${DATE_FORMATTER.format(latestMeaningfulReport.createdAt)} es anterior a la última decisión · generá un control actualizado`
             : lastReport?.metadata?.emptyState === true

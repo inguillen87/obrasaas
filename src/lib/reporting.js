@@ -69,12 +69,17 @@ function buildBudget(state) {
 export function buildWeeklyReportModel({
   state = {},
   messages = [],
+  evidenceSummary = null,
   organization = {},
   project = {},
   actorEmail = null,
   generatedAt = new Date(),
   snapshot = null,
 } = {}) {
+  const parsedGenerated = new Date(generatedAt);
+  const generated = Number.isNaN(parsedGenerated.getTime())
+    ? new Date()
+    : parsedGenerated;
   const progress = Math.round(clamp(state.avancePercentage));
   const schedule = timeline(state.diasEstimados);
   const gantt = buildGanttModel(state.tasks, {
@@ -128,49 +133,73 @@ export function buildWeeklyReportModel({
         : /camino|pendiente|revisar/i.test(status) ? 'warning' : 'success',
     };
   });
-  const incidents = (Array.isArray(state.incidents) ? state.incidents : [])
-    .slice(0, 8)
+  const allIncidents = (Array.isArray(state.incidents) ? state.incidents : [])
     .map((incidentValue, index) => {
       const incident = record(incidentValue);
       const sourceType = incident.severity || incident.type;
-      const tone = incidentTone(sourceType);
+      const status = text(incident.status, 'open').toLowerCase();
+      const active = !['resolved', 'closed'].includes(status);
+      const tone = active ? incidentTone(sourceType) : 'success';
       return {
         id: text(incident.id, `incident-${index}`),
         title: text(incident.title, 'Incidencia sin título'),
         description: text(incident.description, 'Sin detalle informado'),
         reporter: text(incident.reporter, 'Operación de obra'),
+        active,
+        status,
         tone,
-        label: text(incident.badge, tone === 'danger' ? 'Alta' : tone === 'warning' ? 'Media' : 'Informativa'),
+        label: active
+          ? text(incident.badge, tone === 'danger' ? 'Alta' : tone === 'warning' ? 'Media' : 'Informativa')
+          : 'Resuelta',
       };
+    })
+    .sort((left, right) => {
+      const priority = { danger: 0, warning: 1, neutral: 2, success: 3 };
+      if (left.active !== right.active) return left.active ? -1 : 1;
+      return priority[left.tone] - priority[right.tone];
     });
+  const incidentTotal = allIncidents.length;
+  const incidents = allIncidents.slice(0, 40);
   const messageList = Array.isArray(messages) ? messages : [];
-  const evidenceCount = messageList.filter((message) => Boolean(
+  const computedEvidenceCount = messageList.filter((message) => Boolean(
     message?.mediaUrl || message?.media || ['image', 'video', 'document', 'audio'].includes(String(message?.kind).toLowerCase()),
   )).length;
-  const audioCount = messageList.filter((message) => (
+  const computedAudioCount = messageList.filter((message) => (
     String(message?.kind).toLowerCase() === 'audio' || Boolean(message?.transcription)
   )).length;
-  const operationalMessageCount = messageList.filter((message) => {
+  const computedOperationalMessageCount = messageList.filter((message) => {
     const kind = String(message?.kind).toLowerCase();
     if (kind === 'system') return false;
     return message?.sender === 'user'
       || Boolean(message?.mediaUrl || message?.media || message?.transcription)
       || ['image', 'video', 'document', 'audio', 'location'].includes(kind);
   }).length;
+  const summary = record(evidenceSummary);
+  const evidenceCount = evidenceSummary == null
+    ? computedEvidenceCount
+    : Math.max(0, number(summary.evidenceCount));
+  const audioCount = evidenceSummary == null
+    ? computedAudioCount
+    : Math.max(0, number(summary.audioCount));
+  const operationalMessageCount = evidenceSummary == null
+    ? computedOperationalMessageCount
+    : Math.max(0, number(summary.operationalMessageCount));
+  const evidenceTruncated = evidenceSummary != null && summary.truncated === true;
+  const evidenceMessageLimit = Math.max(1, number(summary.messageLimit, 500));
   const presentWorkers = attendance.filter((entry) => entry.tone === 'success').length;
-  const criticalIncidents = incidents.filter((incident) => incident.tone === 'danger').length;
+  const criticalIncidents = allIncidents.filter((incident) => (
+    incident.active && incident.tone === 'danger'
+  )).length;
   const tasksDone = tasks.filter((task) => task.progress >= 100).length;
-  const alertsCount = Math.max(number(state.alertsCount), incidents.filter((item) => (
-    item.tone === 'danger' || item.tone === 'warning'
+  const alertsCount = Math.max(number(state.alertsCount), allIncidents.filter((item) => (
+    item.active && (item.tone === 'danger' || item.tone === 'warning')
   )).length);
-  const generated = generatedAt instanceof Date ? generatedAt : new Date(generatedAt);
-  const periodStart = new Date(generated);
-  periodStart.setDate(periodStart.getDate() - 6);
+  const periodStart = weeklyReportPeriodStart(generated);
   const scheduleGap = schedule.percentage - progress;
   const hasOperationalData = tasks.length > 0
     || attendance.length > 0
     || stockpiles.length > 0
-    || incidents.length > 0
+    || incidentTotal > 0
     || operationalMessageCount > 0
     || progress > 0
     || number(state.alertsCount) > 0;
@@ -183,9 +212,9 @@ export function buildWeeklyReportModel({
     ? `El avance físico se ubica ${scheduleGap} puntos por debajo del tiempo consumido. Conviene revisar tareas bloqueadas, abastecimiento y responsables antes de confirmar la próxima línea base.`
     : alertsCount > 0
       ? `El avance mantiene una relación razonable con el plazo, pero existen ${alertsCount} alertas que requieren seguimiento. Priorizar las incidencias críticas evita trasladar riesgo a la próxima semana.`
-      : 'El avance físico acompaña el plazo informado y no se observan alertas abiertas. Mantener la captura diaria de evidencia permitirá sostener esta lectura con trazabilidad.';
+      : 'El avance físico acompaña el plazo informado y no se observan alertas activas. Mantener la captura diaria de evidencia permitirá sostener esta lectura con trazabilidad.';
   const projectIdSuffix = text(project.id, 'LOCAL').slice(-7).toUpperCase();
-  const dateId = generated.toISOString().slice(0, 10).replaceAll('-', '');
+  const dateId = weeklyReportDocumentTimestamp(generated);
 
   return {
     organizationName: text(organization.name, 'Organización sin nombre'),
@@ -197,7 +226,9 @@ export function buildWeeklyReportModel({
     generatedAt: generated,
     periodStart,
     lastUpdatedAt: snapshot?.updatedAt ? new Date(snapshot.updatedAt) : null,
-    snapshotVersion: Math.max(1, number(snapshot?.version, 1)),
+    snapshotVersion: snapshot && snapshot.exists !== false
+      ? Math.max(1, number(snapshot.version, 1))
+      : null,
     isEmptyState,
     progress,
     currentDay: schedule.currentDay,
@@ -213,11 +244,41 @@ export function buildWeeklyReportModel({
     scheduleEndsAt: gantt.endsAt,
     evidenceCount,
     audioCount,
+    evidenceTruncated,
+    evidenceMessageLimit,
     tasks,
     attendance,
     stockpiles,
     incidents,
+    incidentTotal,
     budget: buildBudget(state),
     executiveSummary,
   };
+}
+
+const BUENOS_AIRES_OFFSET_MS = 3 * 60 * 60 * 1_000;
+
+export function weeklyReportPeriodStart(value) {
+  const generated = value instanceof Date ? new Date(value) : new Date(value);
+  const safeGenerated = Number.isNaN(generated.getTime()) ? new Date() : generated;
+  const buenosAiresWallClock = new Date(safeGenerated.getTime() - BUENOS_AIRES_OFFSET_MS);
+  buenosAiresWallClock.setUTCHours(0, 0, 0, 0);
+  buenosAiresWallClock.setUTCDate(buenosAiresWallClock.getUTCDate() - 6);
+  return new Date(buenosAiresWallClock.getTime() + BUENOS_AIRES_OFFSET_MS);
+}
+
+function weeklyReportDocumentTimestamp(value) {
+  const generated = value instanceof Date ? new Date(value) : new Date(value);
+  const safeGenerated = Number.isNaN(generated.getTime()) ? new Date() : generated;
+  const wallClock = new Date(safeGenerated.getTime() - BUENOS_AIRES_OFFSET_MS);
+  const parts = [
+    wallClock.getUTCFullYear(),
+    String(wallClock.getUTCMonth() + 1).padStart(2, '0'),
+    String(wallClock.getUTCDate()).padStart(2, '0'),
+    String(wallClock.getUTCHours()).padStart(2, '0'),
+    String(wallClock.getUTCMinutes()).padStart(2, '0'),
+    String(wallClock.getUTCSeconds()).padStart(2, '0'),
+    String(wallClock.getUTCMilliseconds()).padStart(3, '0'),
+  ];
+  return `${parts.slice(0, 3).join('')}-${parts.slice(3).join('')}`;
 }

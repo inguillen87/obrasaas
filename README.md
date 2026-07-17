@@ -10,7 +10,7 @@ Plataforma multi-tenant para convertir reportes de campo enviados por WhatsApp e
 - Meta WhatsApp Cloud API con Embedded Signup v4 por tenant.
 - Evidencia privada en Vercel Blob, validación de firma, hash y alcance por número.
 - Transcripción de audio preparada para OpenAI y persistencia de mensajes idempotente.
-- Dashboard operativo, Gantt, asistencia, acopios, incidencias y reporte semanal imprimible/PDF.
+- Dashboard operativo, Gantt, asistencia, acopios, incidencias y reporte semanal PDF A4 generado en servidor, versionado y auditable.
 - Web Analytics anonimizado incluido en el plan de Vercel.
 - Consola global de tenants reservada a `guillen.marce@gmail.com`.
 
@@ -54,7 +54,7 @@ La preview autenticada estable se publica en `https://obrasaas-preview.vercel.ap
 
 - `/`: landing comercial y planes.
 - `/dashboard`: centro operativo tenant-aware.
-- `/dashboard/report`: reporte semanal A4/PDF con datos del tenant.
+- `/dashboard/report`: vista ejecutiva tenant-aware con descarga de PDF A4 real, versión de snapshot, huella SHA-256 auditada y tipografía Source Sans 3 embebida para nombres internacionales.
 - `/dashboard/team`: equipo y matriz de roles.
 - `/dashboard/integrations`: conexión de activos Meta propios del tenant.
 - `/superadmin`: CRM global de organizaciones, solo superadmin.

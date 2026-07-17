@@ -12,10 +12,27 @@ export default function ReportMilestoneAction({ compact = false, generated = fal
     setPending(true);
     setError('');
     try {
-      const response = await fetch('/api/reports/weekly', { method: 'POST' });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.error || 'No se pudo preparar el reporte.');
-      window.location.assign(payload.href || '/dashboard/report');
+      const response = await fetch('/api/reports/weekly/pdf', { method: 'POST' });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || 'No se pudo generar el PDF.');
+      }
+      if (!response.headers.get('content-type')?.includes('application/pdf')) {
+        throw new Error('El servidor no devolvió un PDF válido. Volvé a iniciar sesión e intentá nuevamente.');
+      }
+
+      const disposition = response.headers.get('content-disposition') || '';
+      const filename = disposition.match(/filename="([^"]+)"/i)?.[1]
+        || 'reporte-semanal-obrasaas.pdf';
+      const objectUrl = URL.createObjectURL(await response.blob());
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1_000);
+      window.setTimeout(() => window.location.assign('/dashboard/report'), 500);
     } catch (requestError) {
       setError(requestError.message);
       setPending(false);
@@ -28,7 +45,7 @@ export default function ReportMilestoneAction({ compact = false, generated = fal
         <i className="fa-solid fa-file-arrow-down" aria-hidden="true" />
         {pending
           ? 'Preparando reporte...'
-          : generated ? 'Generar versión actualizada' : 'Generar y abrir reporte'}
+          : generated ? 'Generar PDF actualizado' : 'Generar PDF y abrir control'}
       </button>
       {error && <span role="alert">{error}</span>}
     </div>

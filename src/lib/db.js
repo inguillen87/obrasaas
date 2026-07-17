@@ -228,11 +228,12 @@ function initLocalDb() {
   }
 }
 
-function readLocalDb() {
-  initLocalDb();
+function readLocalDb({ initialize = true } = {}) {
+  if (initialize) initLocalDb();
   try {
     return JSON.parse(fs.readFileSync(LOCAL_DB_PATH, "utf8"));
   } catch {
+    if (!initialize) return { webhookEvents: [] };
     return {
       appState: clone(localDevelopmentDemoAppState),
       messages: clone(defaultMessages),
@@ -367,16 +368,19 @@ function localProjectStateSnapshot(db) {
     ? numericVersion
     : 0;
   const parsedUpdatedAt = db.appStateUpdatedAt ? new Date(db.appStateUpdatedAt) : null;
+  const exists = Object.hasOwn(db, "appState");
   return {
-    state: db.appState || clone(localDevelopmentDemoAppState),
+    state: exists ? db.appState : createEmptyAppState(),
     version,
     updatedAt: parsedUpdatedAt && !Number.isNaN(parsedUpdatedAt.getTime()) ? parsedUpdatedAt : null,
-    exists: Object.hasOwn(db, "appState"),
+    exists,
   };
 }
 
-export async function getAppStateSnapshot(scope) {
-  if (!hasDurableDatabase()) return localProjectStateSnapshot(readLocalDb());
+export async function getAppStateSnapshot(scope, { initializeIfMissing = true } = {}) {
+  if (!hasDurableDatabase()) {
+    return localProjectStateSnapshot(readLocalDb({ initialize: initializeIfMissing }));
+  }
 
   const { prisma, project } = await durableContext(scope);
   const snapshot = await prisma.projectSnapshot.findUnique({
@@ -510,23 +514,67 @@ export async function saveAppState(state, scope, options = {}) {
 export async function getMessages(scope, {
   includeMedicalEvidence = false,
   includeSourceEvidence = includeMedicalEvidence,
+  initializeIfEmpty = true,
+  sentAtGte = null,
+  sentAtLte = null,
+  take = 200,
 } = {}) {
+  const normalizedTake = Math.min(501, Math.max(1, Number(take) || 200));
+  const lowerBound = sentAtGte instanceof Date && !Number.isNaN(sentAtGte.getTime())
+    ? sentAtGte
+    : null;
+  const upperBound = sentAtLte instanceof Date && !Number.isNaN(sentAtLte.getTime())
+    ? sentAtLte
+    : null;
+
   if (!hasDurableDatabase()) {
+    const storedMessages = readLocalDb({ initialize: initializeIfEmpty }).messages;
+    const localMessages = (Array.isArray(storedMessages)
+      ? storedMessages
+      : initializeIfEmpty ? clone(defaultMessages) : [])
+      .filter((message) => {
+        if (!message.sentAt) return true;
+        const messageDate = new Date(message.sentAt);
+        if (Number.isNaN(messageDate.getTime())) return false;
+        return (!lowerBound || messageDate >= lowerBound)
+          && (!upperBound || messageDate <= upperBound);
+      })
+      .slice(-normalizedTake);
     return sanitizeMessagesForMedicalPrivacy(
-      readLocalDb().messages || clone(defaultMessages),
+      localMessages,
       { includeMedicalEvidence, includeSourceEvidence },
     );
   }
 
   const context = await durableContext(scope);
-  const conversation = await durableConversation(context);
+  const conversation = initializeIfEmpty
+    ? await durableConversation(context)
+    : await context.prisma.conversation.findUnique({
+        where: {
+          projectId_channel_externalId: {
+            projectId: context.project.id,
+            channel: "whatsapp",
+            externalId: LOCAL_CONVERSATION_ID,
+          },
+        },
+      });
+  if (!conversation) return [];
+  const messageWhere = {
+    conversationId: conversation.id,
+    ...((lowerBound || upperBound) ? {
+      sentAt: {
+        ...(lowerBound ? { gte: lowerBound } : {}),
+        ...(upperBound ? { lte: upperBound } : {}),
+      },
+    } : {}),
+  };
   let messages = await context.prisma.message.findMany({
-    where: { conversationId: conversation.id },
+    where: messageWhere,
     orderBy: [{ sentAt: "desc" }, { createdAt: "desc" }],
-    take: 200,
+    take: normalizedTake,
   });
 
-  if (messages.length === 0) {
+  if (messages.length === 0 && initializeIfEmpty) {
     await context.prisma.message.create({
       data: {
         conversationId: conversation.id,
@@ -537,9 +585,9 @@ export async function getMessages(scope, {
       },
     });
     messages = await context.prisma.message.findMany({
-      where: { conversationId: conversation.id },
+      where: messageWhere,
       orderBy: [{ sentAt: "desc" }, { createdAt: "desc" }],
-      take: 200,
+      take: normalizedTake,
     });
   }
 
