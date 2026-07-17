@@ -194,6 +194,7 @@ model PlatformUser {
   systemRole   SystemRole         @default(TENANT_USER)
   memberships  TenantMembership[]
   auditLogs    AuditLog[]
+  conversationReadStates ConversationReadState[]
   lastSeenAt   DateTime           @default(now())
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
@@ -511,10 +512,27 @@ model Conversation {
   displayName String?
   metadata    Json?
   messages    Message[]
+  readStates  ConversationReadState[]
+  unreadTrackingStartedAt DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
   @@unique([projectId, channel, externalId])
+  @@index([projectId, channel, updatedAt, id])
+}
+
+model ConversationReadState {
+  conversationId    String
+  conversation      Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  platformUserId    String
+  platformUser      PlatformUser @relation(fields: [platformUserId], references: [id], onDelete: Cascade)
+  lastReadMessageId String
+  lastReadCreatedAt DateTime
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  @@id([conversationId, platformUserId])
+  @@index([platformUserId, updatedAt])
 }
 
 model Message {
@@ -533,6 +551,8 @@ model Message {
   createdAt         DateTime         @default(now())
 
   @@index([conversationId, sentAt])
+  @@index([conversationId, createdAt, id])
+  @@index([conversationId, direction, createdAt, id])
 }
 
 model WebhookEvent {

@@ -39,6 +39,14 @@ function projectIdFromRequest(request) {
   return projectId;
 }
 
+function paginationFromRequest(request) {
+  const params = new URL(request.url).searchParams;
+  return {
+    limit: params.get('limit'),
+    cursor: params.get('cursor'),
+  };
+}
+
 async function assertActiveProject(prisma, access, projectId) {
   if (projectId !== access.project.id) {
     throw new WhatsAppInboxError('La obra solicitada no coincide con el contexto activo.', {
@@ -82,11 +90,13 @@ export function createWhatsAppInboxHandlers({
       const access = await resolveAccess();
       authorize(access, 'org:conversations:read');
       const projectId = projectIdFromRequest(request);
+      const pagination = paginationFromRequest(request);
       const prisma = prismaFactory();
       await assertActiveProject(prisma, access, projectId);
       return json(await loadInbox({
         prisma,
         access,
+        ...pagination,
         includeMedicalEvidence: hasTenantPermission(
           access,
           MEDICAL_EVIDENCE_PERMISSION,

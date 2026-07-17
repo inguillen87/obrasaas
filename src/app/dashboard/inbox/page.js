@@ -39,6 +39,7 @@ export default async function InboxPage() {
       </header>
 
       <InboxClient
+        key={`${access.organization.id}:${access.project.id}`}
         canManageIntegrations={hasTenantPermission(access, 'org:integrations:manage')}
         organizationName={access.organization.name}
         projectId={access.project.id}

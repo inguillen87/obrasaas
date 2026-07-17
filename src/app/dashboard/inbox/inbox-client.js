@@ -29,6 +29,9 @@ const ATTACHMENT_PRESENTATIONS = Object.freeze({
 });
 const MOBILE_INBOX_QUERY = '(max-width: 760px)';
 const STICK_TO_BOTTOM_THRESHOLD = 96;
+const CONVERSATION_PAGE_SIZE = 30;
+const CONVERSATION_REFRESH_LIMIT = 80;
+const MESSAGE_PAGE_SIZE = 60;
 const UNVERIFIED_COMPOSER_CAPABILITY = Object.freeze({
   allowed: false,
   code: 'CAPABILITY_UNAVAILABLE',
@@ -93,6 +96,7 @@ function normalizeMessage(raw) {
         }
       : null,
     sentAt: source.sentAt || source.createdAt || source.timestamp || null,
+    recordedAt: source.recordedAt || source.createdAt || source.sentAt || null,
     status: deliveryStatus(source.status || source.deliveryStatus),
   };
 }
@@ -167,8 +171,44 @@ function normalizeMessageList(payload) {
     .map(normalizeMessage)
     .filter(Boolean)
     .sort((left, right) => (
-      (safeDate(left.sentAt)?.getTime() || 0) - (safeDate(right.sentAt)?.getTime() || 0)
+      (safeDate(left.recordedAt)?.getTime() || 0)
+      - (safeDate(right.recordedAt)?.getTime() || 0)
+      || left.id.localeCompare(right.id)
     ));
+}
+
+function normalizePageInfo(payload) {
+  const source = objectValue(payload?.pageInfo);
+  return {
+    hasMore: source.hasMore === true,
+    nextCursor: textValue(source.nextCursor),
+  };
+}
+
+function mergeConversationPage(current, incoming, append) {
+  const nextById = new Map(current.map((conversation) => [conversation.id, conversation]));
+  for (const conversation of incoming) {
+    nextById.set(conversation.id, {
+      ...nextById.get(conversation.id),
+      ...conversation,
+    });
+  }
+  const orderedIds = append
+    ? [...current.map((conversation) => conversation.id), ...incoming.map((conversation) => conversation.id)]
+    : [...incoming.map((conversation) => conversation.id), ...current.map((conversation) => conversation.id)];
+  return [...new Set(orderedIds)]
+    .map((id) => nextById.get(id))
+    .filter(Boolean);
+}
+
+function mergeMessagePage(current, incoming) {
+  const nextById = new Map(current.map((message) => [message.id, message]));
+  for (const message of incoming) nextById.set(message.id, message);
+  return [...nextById.values()].sort((left, right) => (
+    (safeDate(left.recordedAt)?.getTime() || 0)
+    - (safeDate(right.recordedAt)?.getTime() || 0)
+    || left.id.localeCompare(right.id)
+  ));
 }
 
 function responseMessage(payload, fallback) {
@@ -358,22 +398,35 @@ function connectionPresentation(connection) {
   };
 }
 
-function DeliveryState({ status }) {
+function deliveryPresentation(status) {
   const normalized = deliveryStatus(status);
-  const presentation = {
+  return {
     SENDING: { icon: 'fa-regular fa-clock', label: 'Enviando' },
     ACCEPTED: { icon: 'fa-solid fa-check', label: 'Aceptado por Meta' },
     SENT: { icon: 'fa-solid fa-check', label: 'Enviado' },
     DELIVERED: { icon: 'fa-solid fa-check-double', label: 'Entregado' },
     READ: { icon: 'fa-solid fa-check-double', label: 'Leído' },
     FAILED: { icon: 'fa-solid fa-circle-exclamation', label: 'Falló' },
-    UNKNOWN: { icon: 'fa-regular fa-clock', label: 'Estado pendiente' },
+    UNKNOWN: { icon: 'fa-regular fa-clock', label: 'Sin confirmar' },
   }[normalized];
+}
+
+function DeliveryState({ status, compact = false }) {
+  const normalized = deliveryStatus(status);
+  const presentation = deliveryPresentation(normalized);
 
   return (
-    <span className={styles.deliveryState} data-status={normalized.toLowerCase()}>
+    <span
+      className={styles.deliveryState}
+      data-status={normalized.toLowerCase()}
+      title={presentation.label}
+    >
       <i className={presentation.icon} aria-hidden="true" />
-      <span className={styles.srOnly}>{presentation.label}</span>
+      {compact ? (
+        <span className={styles.srOnly}>{presentation.label}</span>
+      ) : (
+        <span className={styles.deliveryLabel}>{presentation.label}</span>
+      )}
     </span>
   );
 }
@@ -457,6 +510,9 @@ export default function InboxClient({
   const [selectedId, setSelectedId] = useState('');
   const [loadedConversationId, setLoadedConversationId] = useState('');
   const [messages, setMessages] = useState([]);
+  const [unreadTotal, setUnreadTotal] = useState(0);
+  const [conversationPageInfo, setConversationPageInfo] = useState(() => normalizePageInfo(null));
+  const [messagePageInfo, setMessagePageInfo] = useState(() => normalizePageInfo(null));
   const [windowState, setWindowState] = useState(() => normalizeWindow(null));
   const [composerCapability, setComposerCapability] = useState(null);
   const [query, setQuery] = useState('');
@@ -464,21 +520,35 @@ export default function InboxClient({
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [messageLoading, setMessageLoading] = useState(false);
+  const [loadingMoreConversations, setLoadingMoreConversations] = useState(false);
+  const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
   const [sending, setSending] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [messageError, setMessageError] = useState('');
+  const [historyPageError, setHistoryPageError] = useState('');
+  const [readStateError, setReadStateError] = useState('');
   const [sendError, setSendError] = useState('');
   const [sendResolution, setSendResolution] = useState('');
   const [messageAnnouncement, setMessageAnnouncement] = useState({ id: 'initial', text: '' });
   const [online, setOnline] = useState(true);
   const [now, setNow] = useState(() => new Date());
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
+  const [historyAtBottom, setHistoryAtBottom] = useState(true);
 
-  const listAbortRef = useRef(null);
-  const messageAbortRef = useRef(null);
+  const listRequestRef = useRef(null);
+  const messageRequestRef = useRef(null);
+  const readStateAbortRef = useRef(null);
+  const failedReadTargetRef = useRef(null);
   const draftKeyRef = useRef(createIdempotencyKey());
   const knownMessageIdsRef = useRef(new Set());
+  const knownMessageStatusRef = useRef(new Map());
   const shouldStickToBottomRef = useRef(true);
+  const preserveHistoryScrollRef = useRef(null);
+  const readThroughByConversationRef = useRef(new Map());
+  const conversationCountRef = useRef(0);
+  const conversationsRef = useRef([]);
+  const conversationPageInfoRef = useRef(normalizePageInfo(null));
+  const messagePageInfoRef = useRef(normalizePageInfo(null));
   const messageHistoryRef = useRef(null);
   const mobileDetailHeadingRef = useRef(null);
   const conversationButtonRefs = useRef(new Map());
@@ -499,11 +569,6 @@ export default function InboxClient({
     ].some((value) => String(value || '').toLocaleLowerCase('es').includes(needle)));
   }, [conversations, query]);
 
-  const unreadTotal = useMemo(() => conversations.reduce(
-    (total, conversation) => total + conversation.unreadCount,
-    0,
-  ), [conversations]);
-
   const connectedState = connectionPresentation(connection);
   const replyWindow = windowPresentation(windowState, now);
   const locallyReadyToCompose = online
@@ -515,17 +580,58 @@ export default function InboxClient({
   const canCompose = locallyReadyToCompose && composerCapability?.allowed === true;
   const canSubmit = canCompose && !sendResolution;
 
-  const loadInbox = useCallback(async ({ initial = false } = {}) => {
-    listAbortRef.current?.abort();
+  useEffect(() => {
+    conversationsRef.current = conversations;
+    conversationCountRef.current = conversations.length;
+  }, [conversations]);
+
+  const loadInbox = useCallback(async ({ initial = false, append = false } = {}) => {
+    const mode = initial ? 'initial' : append ? 'append' : 'refresh';
+    const cursor = append ? conversationPageInfoRef.current.nextCursor : '';
+    if (append && !cursor) return;
+    if (listRequestRef.current) {
+      if (!initial) return;
+      listRequestRef.current.controller.abort();
+      if (listRequestRef.current.mode === 'append') setLoadingMoreConversations(false);
+      if (listRequestRef.current.mode === 'refresh') setRefreshing(false);
+    }
     const controller = new AbortController();
-    listAbortRef.current = controller;
-    if (initial) setLoading(true);
-    else setRefreshing(true);
+    listRequestRef.current = { controller, mode };
+    if (initial) {
+      const emptyPage = normalizePageInfo(null);
+      conversationsRef.current = [];
+      conversationCountRef.current = 0;
+      conversationPageInfoRef.current = emptyPage;
+      readThroughByConversationRef.current = new Map();
+      failedReadTargetRef.current = null;
+      setConversations([]);
+      setSelectedId('');
+      setUnreadTotal(0);
+      setConversationPageInfo(emptyPage);
+      setLoading(true);
+    } else if (append) {
+      setLoadingMoreConversations(true);
+    } else {
+      setRefreshing(true);
+    }
     setLoadError('');
 
     try {
+      const params = new URLSearchParams({
+        projectId,
+        limit: String(append
+          ? CONVERSATION_PAGE_SIZE
+          : Math.max(
+              CONVERSATION_PAGE_SIZE,
+              Math.min(
+                CONVERSATION_REFRESH_LIMIT,
+                conversationCountRef.current || CONVERSATION_PAGE_SIZE,
+              ),
+            )),
+      });
+      if (cursor) params.set('cursor', cursor);
       const response = await fetch(
-        `/api/whatsapp/inbox?projectId=${encodeURIComponent(projectId)}`,
+        `/api/whatsapp/inbox?${params.toString()}`,
         {
           headers: { Accept: 'application/json' },
           cache: 'no-store',
@@ -537,12 +643,29 @@ export default function InboxClient({
         'No pudimos consultar las conversaciones de esta obra.',
       );
       const nextConversations = normalizeConversationList(payload);
+      const nextPageInfo = normalizePageInfo(payload);
       setConnection(normalizeConnection(payload.connection));
-      setConversations(nextConversations);
+      setUnreadTotal(Math.max(0, numberValue(payload.unreadTotal) || 0));
+      if (
+        initial
+        || append
+        || conversationCountRef.current <= CONVERSATION_REFRESH_LIMIT
+      ) {
+        setConversationPageInfo(nextPageInfo);
+        conversationPageInfoRef.current = nextPageInfo;
+      }
+      const mergedConversations = mergeConversationPage(
+        initial ? [] : conversationsRef.current,
+        nextConversations,
+        append,
+      );
+      conversationsRef.current = mergedConversations;
+      conversationCountRef.current = mergedConversations.length;
+      setConversations(mergedConversations);
       setSelectedId((current) => (
-        nextConversations.some((conversation) => conversation.id === current)
+        mergedConversations.some((conversation) => conversation.id === current)
           ? current
-          : nextConversations[0]?.id || ''
+          : mergedConversations[0]?.id || ''
       ));
       setNow(new Date());
     } catch (error) {
@@ -553,24 +676,38 @@ export default function InboxClient({
         ));
       }
     } finally {
-      if (listAbortRef.current === controller) {
-        listAbortRef.current = null;
-        setLoading(false);
-        setRefreshing(false);
+      if (listRequestRef.current?.controller === controller) {
+        listRequestRef.current = null;
+        if (initial) setLoading(false);
+        else if (append) setLoadingMoreConversations(false);
+        else setRefreshing(false);
       }
     }
   }, [projectId]);
 
-  const loadMessages = useCallback(async (conversationId, { silent = false } = {}) => {
+  const loadMessages = useCallback(async (conversationId, { mode = 'replace' } = {}) => {
     if (!conversationId) return;
-    const history = messageHistoryRef.current;
-    const wasNearBottom = history
-      ? history.scrollHeight - history.scrollTop - history.clientHeight <= STICK_TO_BOTTOM_THRESHOLD
-      : true;
-    messageAbortRef.current?.abort();
+    const loadingOlder = mode === 'older';
+    const refreshingMessages = mode === 'refresh';
+    const cursor = loadingOlder ? messagePageInfoRef.current.nextCursor : '';
+    if (loadingOlder && !cursor) return;
+    const activeRequest = messageRequestRef.current;
+    if (activeRequest) {
+      const shouldSupersede = mode === 'replace'
+        || (loadingOlder && activeRequest.mode === 'refresh');
+      if (!shouldSupersede) return;
+      activeRequest.controller.abort();
+      if (activeRequest.mode === 'older') {
+        preserveHistoryScrollRef.current = null;
+        setLoadingOlderMessages(false);
+      }
+    }
     const controller = new AbortController();
-    messageAbortRef.current = controller;
-    if (!silent) {
+    messageRequestRef.current = { controller, conversationId, mode };
+    if (loadingOlder) {
+      setLoadingOlderMessages(true);
+      setHistoryPageError('');
+    } else if (!refreshingMessages) {
       setLoadedConversationId('');
       setMessageLoading(true);
       setMessageError('');
@@ -578,8 +715,13 @@ export default function InboxClient({
     }
 
     try {
+      const params = new URLSearchParams({
+        projectId,
+        limit: String(MESSAGE_PAGE_SIZE),
+      });
+      if (cursor) params.set('before', cursor);
       const response = await fetch(
-        `/api/whatsapp/inbox/${encodeURIComponent(conversationId)}/messages?projectId=${encodeURIComponent(projectId)}`,
+        `/api/whatsapp/inbox/${encodeURIComponent(conversationId)}/messages?${params.toString()}`,
         {
           headers: { Accept: 'application/json' },
           cache: 'no-store',
@@ -592,14 +734,46 @@ export default function InboxClient({
       );
       const detailConversation = normalizeConversation(payload.conversation);
       const nextMessages = normalizeMessageList(payload);
+      const nextPageInfo = normalizePageInfo(payload);
       const previousIds = knownMessageIdsRef.current;
-      const additions = silent
+      const previousStatuses = knownMessageStatusRef.current;
+      const additions = refreshingMessages
         ? nextMessages.filter((message) => !previousIds.has(message.id))
         : [];
-      knownMessageIdsRef.current = new Set(nextMessages.map((message) => message.id));
-      shouldStickToBottomRef.current = !silent || wasNearBottom;
-      setMessages(nextMessages);
+      const statusChanges = refreshingMessages
+        ? nextMessages.filter((message) => (
+            previousStatuses.has(message.id)
+            && previousStatuses.get(message.id) !== message.status
+          ))
+        : [];
+      knownMessageIdsRef.current = loadingOlder || refreshingMessages
+        ? new Set([...previousIds, ...nextMessages.map((message) => message.id)])
+        : new Set(nextMessages.map((message) => message.id));
+      knownMessageStatusRef.current = new Map([
+        ...(loadingOlder || refreshingMessages ? previousStatuses : new Map()),
+        ...nextMessages.map((message) => [message.id, message.status]),
+      ]);
+      const history = messageHistoryRef.current;
+      const isNearBottom = history
+        ? history.scrollHeight - history.scrollTop - history.clientHeight
+          <= STICK_TO_BOTTOM_THRESHOLD
+        : true;
+      if (loadingOlder && history) {
+        preserveHistoryScrollRef.current = {
+          height: history.scrollHeight,
+          top: history.scrollTop,
+        };
+      }
+      shouldStickToBottomRef.current = loadingOlder
+        ? false
+        : !refreshingMessages || isNearBottom;
+      setMessages((current) => (
+        loadingOlder || refreshingMessages
+          ? mergeMessagePage(current, nextMessages)
+          : nextMessages
+      ));
       setMessageError('');
+      setHistoryPageError('');
       setComposerCapability(
         normalizeComposerCapability(payload.composerCapability)
           || UNVERIFIED_COMPOSER_CAPABILITY,
@@ -613,29 +787,122 @@ export default function InboxClient({
             ? `${inboundCount} ${inboundCount === 1 ? 'mensaje nuevo' : 'mensajes nuevos'} en esta conversación.`
             : 'Se actualizó el estado de la conversación.',
         });
+      } else if (statusChanges.length > 0) {
+        const latestChange = statusChanges[statusChanges.length - 1];
+        setMessageAnnouncement({
+          id: `${latestChange.id}-${latestChange.status}`,
+          text: `Estado de entrega actualizado: ${deliveryPresentation(latestChange.status).label}.`,
+        });
+      } else if (loadingOlder && nextMessages.length > 0) {
+        setMessageAnnouncement({
+          id: `older-${nextMessages[0].id}`,
+          text: `${nextMessages.length} ${nextMessages.length === 1 ? 'mensaje anterior cargado' : 'mensajes anteriores cargados'}.`,
+        });
       }
       setWindowState(normalizeWindow(payload.window));
       setLoadedConversationId(conversationId);
-      setConversations((current) => current.map((conversation) => (
-        detailConversation?.id === conversation.id
-          ? { ...conversation, ...detailConversation }
-          : conversation
-      )));
+      if (!loadingOlder) {
+        setConversations((current) => {
+          const nextConversations = current.map((conversation) => (
+            detailConversation?.id === conversation.id
+              ? { ...conversation, ...detailConversation }
+              : conversation
+          ));
+          conversationsRef.current = nextConversations;
+          conversationCountRef.current = nextConversations.length;
+          return nextConversations;
+        });
+      }
+      if (!refreshingMessages) {
+        setMessagePageInfo(nextPageInfo);
+        messagePageInfoRef.current = nextPageInfo;
+      }
       setNow(new Date());
     } catch (error) {
-      if (!silent && error.name !== 'AbortError') {
-        setMessageError(safeErrorMessage(
+      if (error.name !== 'AbortError') {
+        const safeMessage = safeErrorMessage(
           error,
-          'No pudimos consultar los mensajes de esta conversación.',
-        ));
+          loadingOlder
+            ? 'No pudimos cargar mensajes anteriores.'
+            : 'No pudimos consultar los mensajes de esta conversación.',
+        );
+        if (loadingOlder) setHistoryPageError(safeMessage);
+        else if (!refreshingMessages) setMessageError(safeMessage);
       }
     } finally {
-      if (messageAbortRef.current === controller) {
-        messageAbortRef.current = null;
-        if (!silent) setMessageLoading(false);
+      if (messageRequestRef.current?.controller === controller) {
+        messageRequestRef.current = null;
+        if (loadingOlder) setLoadingOlderMessages(false);
+        else if (!refreshingMessages) setMessageLoading(false);
       }
     }
   }, [projectId]);
+
+  const markConversationRead = useCallback(async (conversationId, throughMessageId) => {
+    if (!conversationId || !throughMessageId) return;
+    if (readThroughByConversationRef.current.get(conversationId) === throughMessageId) return;
+    readStateAbortRef.current?.abort();
+    const controller = new AbortController();
+    readStateAbortRef.current = controller;
+
+    try {
+      const response = await fetch(
+        `/api/whatsapp/inbox/${encodeURIComponent(conversationId)}/read-state?projectId=${encodeURIComponent(projectId)}`,
+        {
+          method: 'PUT',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ projectId, throughMessageId }),
+          signal: controller.signal,
+        },
+      );
+      const payload = await readResponse(
+        response,
+        'No pudimos confirmar la lectura de esta conversación.',
+      );
+      const confirmedMessageId = textValue(payload?.readThrough?.messageId, throughMessageId);
+      readThroughByConversationRef.current.set(conversationId, confirmedMessageId);
+      const nextUnreadCount = Math.max(0, numberValue(payload.unreadCount) || 0);
+      setConversations((current) => {
+        const nextConversations = current.map((conversation) => (
+          conversation.id === conversationId
+            ? { ...conversation, unreadCount: nextUnreadCount }
+            : conversation
+        ));
+        conversationsRef.current = nextConversations;
+        conversationCountRef.current = nextConversations.length;
+        return nextConversations;
+      });
+      const nextUnreadTotal = numberValue(payload.unreadTotal);
+      if (nextUnreadTotal != null) setUnreadTotal(Math.max(0, nextUnreadTotal));
+      failedReadTargetRef.current = null;
+      setReadStateError('');
+    } catch (error) {
+      if (error.name !== 'AbortError') {
+        failedReadTargetRef.current = { conversationId, throughMessageId };
+        setReadStateError(safeErrorMessage(
+          error,
+          'No pudimos confirmar la lectura. Los mensajes seguirán marcados como pendientes.',
+        ));
+      }
+    } finally {
+      if (readStateAbortRef.current === controller) readStateAbortRef.current = null;
+    }
+  }, [projectId]);
+
+  const abortAllRequests = useCallback(() => {
+    const listRequest = listRequestRef.current;
+    const messageRequest = messageRequestRef.current;
+    const readStateRequest = readStateAbortRef.current;
+    listRequestRef.current = null;
+    messageRequestRef.current = null;
+    readStateAbortRef.current = null;
+    listRequest?.controller.abort();
+    messageRequest?.controller.abort();
+    readStateRequest?.abort();
+  }, []);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -643,10 +910,9 @@ export default function InboxClient({
     });
     return () => {
       window.cancelAnimationFrame(frame);
-      listAbortRef.current?.abort();
-      messageAbortRef.current?.abort();
+      abortAllRequests();
     };
-  }, [loadInbox]);
+  }, [abortAllRequests, loadInbox]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -655,16 +921,28 @@ export default function InboxClient({
         setWindowState(normalizeWindow(null));
         setComposerCapability(null);
         setLoadedConversationId('');
+        setMessagePageInfo(normalizePageInfo(null));
+        messagePageInfoRef.current = normalizePageInfo(null);
         knownMessageIdsRef.current = new Set();
+        knownMessageStatusRef.current = new Map();
         return;
       }
+      readStateAbortRef.current?.abort();
       setDraft('');
       setSendError('');
       setSendResolution('');
+      setReadStateError('');
+      failedReadTargetRef.current = null;
+      setHistoryPageError('');
       setComposerCapability(null);
       setMessageAnnouncement({ id: `conversation-${selectedId}`, text: '' });
       knownMessageIdsRef.current = new Set();
+      knownMessageStatusRef.current = new Map();
       shouldStickToBottomRef.current = true;
+      preserveHistoryScrollRef.current = null;
+      setHistoryAtBottom(true);
+      setMessagePageInfo(normalizePageInfo(null));
+      messagePageInfoRef.current = normalizePageInfo(null);
       draftKeyRef.current = createIdempotencyKey();
       void loadMessages(selectedId);
     });
@@ -687,7 +965,7 @@ export default function InboxClient({
     const refreshInterval = window.setInterval(() => {
       if (document.visibilityState !== 'visible') return;
       void loadInbox();
-      if (selectedId) void loadMessages(selectedId, { silent: true });
+      if (selectedId) void loadMessages(selectedId, { mode: 'refresh' });
     }, 20_000);
     return () => window.clearInterval(refreshInterval);
   }, [loadInbox, loadMessages, online, selectedId]);
@@ -696,7 +974,7 @@ export default function InboxClient({
     const refreshWhenAvailable = () => {
       if (!window.navigator.onLine || document.visibilityState !== 'visible') return;
       void loadInbox();
-      if (selectedId) void loadMessages(selectedId, { silent: true });
+      if (selectedId) void loadMessages(selectedId, { mode: 'refresh' });
     };
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') refreshWhenAvailable();
@@ -716,11 +994,51 @@ export default function InboxClient({
 
   useEffect(() => {
     if (messageLoading) return;
-    if (!shouldStickToBottomRef.current) return;
     const history = messageHistoryRef.current;
-    if (history) history.scrollTop = history.scrollHeight;
+    if (!history) return;
+    const preserved = preserveHistoryScrollRef.current;
+    if (preserved) {
+      history.scrollTop = history.scrollHeight - preserved.height + preserved.top;
+      preserveHistoryScrollRef.current = null;
+    } else if (shouldStickToBottomRef.current) {
+      history.scrollTop = history.scrollHeight;
+    }
     shouldStickToBottomRef.current = false;
+    const distance = history.scrollHeight - history.scrollTop - history.clientHeight;
+    setHistoryAtBottom(distance <= STICK_TO_BOTTOM_THRESHOLD);
   }, [messageLoading, messages]);
+
+  useEffect(() => {
+    if (
+      !online
+      || !historyAtBottom
+      || loadedConversationId !== selectedId
+      || !selectedConversation
+      || messages.length === 0
+      || document.visibilityState !== 'visible'
+    ) return undefined;
+    if (window.matchMedia(MOBILE_INBOX_QUERY).matches && !mobileDetailOpen) {
+      return undefined;
+    }
+    const latestMessage = messages[messages.length - 1];
+    if (
+      readThroughByConversationRef.current.get(selectedConversation.id)
+      === latestMessage.id
+    ) return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      void markConversationRead(selectedConversation.id, latestMessage.id);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [
+    historyAtBottom,
+    loadedConversationId,
+    markConversationRead,
+    messages,
+    mobileDetailOpen,
+    online,
+    selectedConversation,
+    selectedId,
+  ]);
 
   useEffect(() => {
     if (!mobileDetailOpen || !selectedConversationId) return undefined;
@@ -749,6 +1067,45 @@ export default function InboxClient({
   function closeMobileDetail() {
     restoreConversationFocusRef.current = selectedId;
     setMobileDetailOpen(false);
+  }
+
+  function handleConversationKeyDown(event, conversationId) {
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+    const ids = filteredConversations.map((conversation) => conversation.id);
+    const currentIndex = ids.indexOf(conversationId);
+    if (currentIndex < 0 || ids.length === 0) return;
+    event.preventDefault();
+    const nextIndex = event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? ids.length - 1
+        : event.key === 'ArrowDown'
+          ? Math.min(ids.length - 1, currentIndex + 1)
+          : Math.max(0, currentIndex - 1);
+    conversationButtonRefs.current.get(ids[nextIndex])?.focus();
+  }
+
+  function handleHistoryScroll(event) {
+    const history = event.currentTarget;
+    const distance = history.scrollHeight - history.scrollTop - history.clientHeight;
+    setHistoryAtBottom(distance <= STICK_TO_BOTTOM_THRESHOLD);
+  }
+
+  function scrollToLatestMessage() {
+    const history = messageHistoryRef.current;
+    if (!history) return;
+    history.scrollTo({
+      top: history.scrollHeight,
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        ? 'auto'
+        : 'smooth',
+    });
+  }
+
+  function retryReadState() {
+    const failedTarget = failedReadTargetRef.current;
+    if (!failedTarget || failedTarget.conversationId !== selectedConversation?.id) return;
+    void markConversationRead(failedTarget.conversationId, failedTarget.throughMessageId);
   }
 
   function updateDraft(value) {
@@ -806,11 +1163,8 @@ export default function InboxClient({
           ...knownMessageIdsRef.current,
           sentMessage.id,
         ]);
-        setMessages((current) => {
-          const existing = current.findIndex((message) => message.id === sentMessage.id);
-          if (existing < 0) return [...current, sentMessage];
-          return current.map((message, index) => (index === existing ? sentMessage : message));
-        });
+        knownMessageStatusRef.current.set(sentMessage.id, sentMessage.status);
+        setMessages((current) => mergeMessagePage(current, [sentMessage]));
         setMessageAnnouncement({
           id: sentMessage.id,
           text: sentMessage.status === 'FAILED'
@@ -823,7 +1177,7 @@ export default function InboxClient({
       setWindowState(normalizeWindow(payload.window));
       const nextComposerCapability = normalizeComposerCapability(payload.composerCapability);
       if (nextComposerCapability) setComposerCapability(nextComposerCapability);
-      else void loadMessages(selectedConversation.id, { silent: true });
+      else void loadMessages(selectedConversation.id, { mode: 'refresh' });
       setNow(new Date());
       void loadInbox();
 
@@ -908,7 +1262,7 @@ export default function InboxClient({
           className={styles.refreshButton}
           type="button"
           onClick={() => void loadInbox()}
-          disabled={refreshing || !online}
+          disabled={refreshing || loadingMoreConversations || !online}
           aria-label={refreshing ? 'Actualizando conversaciones' : 'Actualizar conversaciones'}
         >
           <i className="fa-solid fa-arrows-rotate" aria-hidden="true" />
@@ -936,10 +1290,14 @@ export default function InboxClient({
           <div className={styles.conversationHeader}>
             <div>
               <span>Conversaciones recientes</span>
-              <strong>{conversations.length}</strong>
+              <strong aria-label={`${conversations.length} conversaciones cargadas`}>
+                {conversations.length}{conversationPageInfo.hasMore ? '+' : ''}
+              </strong>
             </div>
             {unreadTotal > 0 && (
-              <span className={styles.unreadSummary}>{unreadTotal > 99 ? '99+' : unreadTotal} sin leer</span>
+              <span className={styles.unreadSummary} aria-live="polite">
+                {unreadTotal > 99 ? '99+' : unreadTotal} sin leer
+              </span>
             )}
           </div>
 
@@ -950,7 +1308,7 @@ export default function InboxClient({
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Buscar nombre, teléfono o mensaje…"
+              placeholder="Buscar entre conversaciones cargadas…"
             />
             {query && (
               <button type="button" onClick={() => setQuery('')} aria-label="Limpiar búsqueda">
@@ -988,8 +1346,9 @@ export default function InboxClient({
                 <button type="button" onClick={() => setQuery('')}>Limpiar búsqueda</button>
               </div>
             ) : (
-              <ol className={styles.conversationList}>
-                {filteredConversations.map((conversation) => {
+              <>
+                <ol className={styles.conversationList}>
+                  {filteredConversations.map((conversation) => {
                   const active = conversation.id === selectedId;
                   return (
                     <li key={conversation.id}>
@@ -1001,6 +1360,7 @@ export default function InboxClient({
                         type="button"
                         className={active ? styles.activeConversation : ''}
                         onClick={() => selectConversation(conversation.id)}
+                        onKeyDown={(event) => handleConversationKeyDown(event, conversation.id)}
                         aria-current={active ? 'true' : undefined}
                       >
                         <Avatar conversation={conversation} />
@@ -1013,7 +1373,7 @@ export default function InboxClient({
                           </span>
                           <span className={styles.conversationPreview}>
                             {conversation.lastMessage?.direction === 'OUTBOUND' && (
-                              <DeliveryState status={conversation.lastMessage.status} />
+                              <DeliveryState status={conversation.lastMessage.status} compact />
                             )}
                             <span>
                               {conversation.lastMessage?.body
@@ -1030,8 +1390,25 @@ export default function InboxClient({
                       </button>
                     </li>
                   );
-                })}
-              </ol>
+                  })}
+                </ol>
+                {conversationPageInfo.hasMore && !query && (
+                  <button
+                    className={styles.loadMoreConversations}
+                    type="button"
+                    onClick={() => void loadInbox({ append: true })}
+                    disabled={loadingMoreConversations || refreshing || !online}
+                  >
+                    <i
+                      className={loadingMoreConversations
+                        ? 'fa-solid fa-circle-notch fa-spin'
+                        : 'fa-solid fa-chevron-down'}
+                      aria-hidden="true"
+                    />
+                    {loadingMoreConversations ? 'Cargando…' : 'Cargar conversaciones anteriores'}
+                  </button>
+                )}
+              </>
             )}
           </div>
 
@@ -1089,9 +1466,18 @@ export default function InboxClient({
                 <span key={messageAnnouncement.id}>{messageAnnouncement.text}</span>
               </div>
 
+              {readStateError && (
+                <div className={styles.readStateWarning} role="status">
+                  <i className="fa-solid fa-circle-exclamation" aria-hidden="true" />
+                  <span>{readStateError}</span>
+                  <button type="button" onClick={retryReadState}>Reintentar</button>
+                </div>
+              )}
+
               <div
                 ref={messageHistoryRef}
                 className={styles.messageHistory}
+                onScroll={handleHistoryScroll}
                 role="log"
                 aria-label={`Historial reciente con ${contactLabel(selectedConversation)}`}
                 aria-live="off"
@@ -1120,8 +1506,37 @@ export default function InboxClient({
                     <p>El historial reciente aparecerá cuando llegue la primera interacción.</p>
                   </div>
                 ) : (
-                  <ol className={styles.messageList}>
-                    {messages.map((message, index) => {
+                  <>
+                    <div className={styles.historyPagination}>
+                      {messagePageInfo.hasMore && (
+                        <button
+                          type="button"
+                          onClick={() => void loadMessages(selectedConversation.id, { mode: 'older' })}
+                          disabled={loadingOlderMessages || !online}
+                        >
+                          <i
+                            className={loadingOlderMessages
+                              ? 'fa-solid fa-circle-notch fa-spin'
+                              : 'fa-solid fa-clock-rotate-left'}
+                            aria-hidden="true"
+                          />
+                          {loadingOlderMessages ? 'Cargando historial…' : 'Cargar mensajes anteriores'}
+                        </button>
+                      )}
+                      {historyPageError && (
+                        <span role="alert">
+                          {historyPageError}{' '}
+                          <button
+                            type="button"
+                            onClick={() => void loadMessages(selectedConversation.id, { mode: 'older' })}
+                          >
+                            Reintentar
+                          </button>
+                        </span>
+                      )}
+                    </div>
+                    <ol className={styles.messageList}>
+                      {messages.map((message, index) => {
                       const previous = messages[index - 1];
                       const showDay = !previous
                         || dayKey(previous.sentAt, timeZone) !== dayKey(message.sentAt, timeZone);
@@ -1151,10 +1566,26 @@ export default function InboxClient({
                           </article>
                         </li>
                       );
-                    })}
-                  </ol>
+                      })}
+                    </ol>
+                  </>
                 )}
               </div>
+
+              {selectedConversation.unreadCount > 0 && !historyAtBottom && (
+                <div className={styles.newMessagesDock}>
+                  <button
+                    className={styles.newMessagesButton}
+                    type="button"
+                    onClick={scrollToLatestMessage}
+                  >
+                    <i className="fa-solid fa-arrow-down" aria-hidden="true" />
+                    {selectedConversation.unreadCount > 99
+                      ? '99+ mensajes nuevos'
+                      : `${selectedConversation.unreadCount} ${selectedConversation.unreadCount === 1 ? 'mensaje nuevo' : 'mensajes nuevos'}`}
+                  </button>
+                </div>
+              )}
 
               <form className={styles.composer} onSubmit={sendMessage}>
                 {sendError && (

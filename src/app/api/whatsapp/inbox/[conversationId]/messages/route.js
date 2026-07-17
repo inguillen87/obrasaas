@@ -49,6 +49,14 @@ function projectIdFromRequest(request) {
   return projectId;
 }
 
+function paginationFromRequest(request) {
+  const params = new URL(request.url).searchParams;
+  return {
+    limit: params.get('limit'),
+    cursor: params.get('before') || params.get('cursor'),
+  };
+}
+
 async function assertActiveProject(prisma, access, projectId) {
   if (projectId !== access.project.id) {
     throw new WhatsAppInboxError('La obra solicitada no coincide con el contexto activo.', {
@@ -140,6 +148,7 @@ export function createWhatsAppConversationMessageHandlers({
       const access = await resolveAccess();
       authorize(access, 'org:conversations:read');
       const projectId = projectIdFromRequest(request);
+      const pagination = paginationFromRequest(request);
       const conversationId = await conversationIdFromContext(context);
       const prisma = prismaFactory();
       await assertActiveProject(prisma, access, projectId);
@@ -147,6 +156,7 @@ export function createWhatsAppConversationMessageHandlers({
         prisma,
         access,
         conversationId,
+        ...pagination,
         includeMedicalEvidence: hasTenantPermission(
           access,
           MEDICAL_EVIDENCE_PERMISSION,

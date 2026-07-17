@@ -13,13 +13,25 @@ import {
 import { sendWhatsAppText } from '@/lib/whatsapp/meta';
 
 const CUSTOMER_CARE_WINDOW_MS = 24 * 60 * 60 * 1_000;
-const MAX_INBOX_CONVERSATIONS = 80;
-const MAX_INBOX_MESSAGES = 200;
+const DEFAULT_INBOX_CONVERSATION_PAGE_SIZE = 30;
+const MAX_INBOX_CONVERSATION_PAGE_SIZE = 80;
+const DEFAULT_INBOX_MESSAGE_PAGE_SIZE = 60;
+const MAX_INBOX_MESSAGE_PAGE_SIZE = 100;
+const MAX_INBOX_CURSOR_LENGTH = 768;
 const MAX_MANUAL_TEXT_LENGTH = 4_096;
 const STALE_MANUAL_SEND_MS = 2 * 60 * 1_000;
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/;
 const META_CONVERSATION_PREFIX = 'meta:';
 const MANUAL_SEND_REQUEST_ACTION = 'whatsapp.inbox.send_requested';
+const PUBLIC_DELIVERY_STATUSES = new Set([
+  'sending',
+  'accepted',
+  'sent',
+  'delivered',
+  'read',
+  'failed',
+  'unknown',
+]);
 const MANUAL_SEND_RATE_LIMITS = Object.freeze({
   actorPerMinute: 20,
   organizationPerMinute: 120,
@@ -50,6 +62,101 @@ function validDate(value) {
 function nowDate(clock) {
   const value = typeof clock === 'function' ? clock() : clock;
   return validDate(value) || new Date();
+}
+
+function paginationError() {
+  return new WhatsAppInboxError('La paginación solicitada no es válida.', {
+    code: 'INBOX_PAGINATION_INVALID',
+    status: 400,
+  });
+}
+
+function pageSize(value, fallback, maximum) {
+  if (value == null || value === '') return fallback;
+  const source = String(value).trim();
+  if (!/^\d{1,3}$/.test(source)) throw paginationError();
+  const parsed = Number(source);
+  if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > maximum) {
+    throw paginationError();
+  }
+  return parsed;
+}
+
+function encodeInboxCursor(kind, record, boundaryId) {
+  const id = String(record?.id || '').trim();
+  const scope = String(boundaryId || '').trim();
+  const timestamp = kind === 'conversation'
+    ? validDate(record?.updatedAt)
+    : validDate(record?.createdAt);
+  if (!id || !scope || !timestamp) return null;
+  return Buffer.from(JSON.stringify({
+    v: 1,
+    k: kind,
+    s: scope,
+    id,
+    at: timestamp.toISOString(),
+  })).toString('base64url');
+}
+
+function decodeInboxCursor(value, expectedKind, expectedBoundaryId) {
+  if (value == null || value === '') return null;
+  const source = String(value).trim();
+  if (
+    !source
+    || source.length > MAX_INBOX_CURSOR_LENGTH
+    || !/^[A-Za-z0-9_-]+$/.test(source)
+  ) {
+    throw paginationError();
+  }
+  try {
+    const parsed = JSON.parse(Buffer.from(source, 'base64url').toString('utf8'));
+    const id = String(parsed?.id || '').trim();
+    const scope = String(parsed?.s || '').trim();
+    const at = validDate(parsed?.at);
+    if (
+      parsed?.v !== 1
+      || parsed?.k !== expectedKind
+      || scope !== String(expectedBoundaryId || '').trim()
+      || !id
+      || id.length > 256
+      || !at
+    ) {
+      throw paginationError();
+    }
+    return { id, at };
+  } catch (error) {
+    if (error instanceof WhatsAppInboxError) throw error;
+    throw paginationError();
+  }
+}
+
+function conversationPageWhere(cursor) {
+  if (!cursor) return {};
+  return {
+    OR: [
+      { updatedAt: { lt: cursor.at } },
+      { updatedAt: cursor.at, id: { lt: cursor.id } },
+    ],
+  };
+}
+
+function messagePageWhere(cursor) {
+  if (!cursor) return {};
+  return {
+    OR: [
+      { createdAt: { lt: cursor.at } },
+      { createdAt: cursor.at, id: { lt: cursor.id } },
+    ],
+  };
+}
+
+function compareMessageMarkers(left, right) {
+  const leftTime = validDate(left?.createdAt)?.getTime() || 0;
+  const rightTime = validDate(right?.createdAt)?.getTime() || 0;
+  if (leftTime !== rightTime) return leftTime - rightTime;
+  const leftId = String(left?.id || '');
+  const rightId = String(right?.id || '');
+  return leftId < rightId ? -1 : leftId > rightId ? 1 : 0;
 }
 
 function boundedText(value, maxLength) {
@@ -129,16 +236,20 @@ function publicMessage(message, {
     || Boolean(metadata.media)
     || Boolean(metadata.transcription);
   const sourceRestricted = containsSourceEvidence && !includeSourceEvidence;
+  const rawStatus = String(safeMessage.status || '').trim().toLowerCase();
+  const status = String(safeMessage.direction || '').toUpperCase() === 'OUTBOUND'
+    ? (PUBLIC_DELIVERY_STATUSES.has(rawStatus) ? rawStatus : 'unknown')
+    : null;
   return {
     id: safeMessage.id,
-    providerMessageId: safeMessage.providerMessageId || null,
     direction: safeMessage.direction,
     kind: kind.toLowerCase(),
     body: sourceRestricted
       ? 'Evidencia adjunta recibida. El archivo y su contenido están restringidos para este rol.'
       : safeMessage.body || '',
-    status: safeMessage.status || null,
+    status,
     sentAt: validDate(safeMessage.sentAt)?.toISOString() || null,
+    recordedAt: validDate(safeMessage.createdAt)?.toISOString() || null,
     media: sourceRestricted || metadata.sourceContentRestricted && !includeSourceEvidence
       ? null
       : metadata.media
@@ -160,8 +271,8 @@ function publicConversation(conversation, options = {}) {
     displayName: conversation.displayName || phoneFromConversation(conversation),
     phone: phoneFromConversation(conversation),
     lastMessage: lastMessage ? publicMessage(lastMessage, options) : null,
-    lastMessageAt: validDate(lastMessage?.sentAt || conversation.updatedAt)?.toISOString() || null,
-    unreadCount: 0,
+    lastMessageAt: validDate(lastMessage?.createdAt || conversation.updatedAt)?.toISOString() || null,
+    unreadCount: Math.max(0, Number(options.unreadCount) || 0),
   };
 }
 
@@ -227,18 +338,200 @@ function trustedScope(access) {
   return { organizationId, projectId };
 }
 
+function trustedActorId(access) {
+  const actorId = String(access?.databaseUserId || '').trim();
+  if (!actorId) {
+    throw new WhatsAppInboxError('No pudimos identificar al usuario de la bandeja.', {
+      code: 'INBOX_ACTOR_REQUIRED',
+      status: 403,
+    });
+  }
+  return actorId;
+}
+
+function trustedMembershipId(access) {
+  const membershipId = String(access?.tenantMembershipId || '').trim();
+  return membershipId || null;
+}
+
+async function unreadCountsForConversations(prisma, {
+  scope,
+  actorId,
+  membershipId,
+  conversationIds,
+}) {
+  if (!conversationIds.length) return new Map();
+  const rows = await prisma.$queryRawUnsafe(
+    `SELECT message."conversationId" AS "conversationId",
+            COUNT(*)::integer AS "unreadCount"
+       FROM "Message" AS message
+       INNER JOIN "Conversation" AS conversation
+         ON conversation."id" = message."conversationId"
+       INNER JOIN "Project" AS project
+         ON project."id" = conversation."projectId"
+       INNER JOIN "PlatformUser" AS actor
+         ON actor."id" = $1
+       LEFT JOIN "TenantMembership" AS membership
+         ON membership."id" = $4
+        AND membership."userId" = actor."id"
+        AND membership."organizationId" = project."organizationId"
+        AND membership."status" = 'ACTIVE'
+       LEFT JOIN "ProjectMembership" AS project_membership
+         ON project_membership."tenantMembershipId" = membership."id"
+        AND project_membership."projectId" = conversation."projectId"
+        AND project_membership."status" = 'ACTIVE'
+       LEFT JOIN "ConversationReadState" AS read_state
+         ON read_state."conversationId" = conversation."id"
+        AND read_state."platformUserId" = $1
+      WHERE conversation."projectId" = $2
+        AND project."organizationId" = $3
+        AND conversation."channel" = 'whatsapp'
+        AND conversation."externalId" LIKE 'meta:%'
+        AND conversation."id" = ANY($5::text[])
+        AND message."direction" = 'INBOUND'
+        AND (
+          (
+            read_state."conversationId" IS NOT NULL
+            AND (message."createdAt", message."id")
+              > (read_state."lastReadCreatedAt", read_state."lastReadMessageId")
+          )
+          OR (
+            read_state."conversationId" IS NULL
+            AND message."createdAt" > GREATEST(
+              COALESCE(
+                conversation."unreadTrackingStartedAt",
+                '-infinity'::timestamp
+              ),
+              GREATEST(
+                actor."createdAt",
+                COALESCE(membership."createdAt", actor."createdAt"),
+                COALESCE(
+                  project_membership."createdAt",
+                  membership."createdAt",
+                  actor."createdAt"
+                )
+              )
+            )
+          )
+        )
+      GROUP BY message."conversationId"`,
+    actorId,
+    scope.projectId,
+    scope.organizationId,
+    membershipId,
+    conversationIds,
+  );
+  return new Map(rows.map((row) => [
+    String(row.conversationId),
+    Math.max(0, Number(row.unreadCount) || 0),
+  ]));
+}
+
+async function unreadSummaryForScope(prisma, {
+  scope,
+  actorId,
+  membershipId,
+  conversationId = null,
+}) {
+  const rows = await prisma.$queryRawUnsafe(
+    `SELECT COUNT(*)::integer AS "unreadTotal",
+            COUNT(*) FILTER (
+              WHERE conversation."id" = $5
+            )::integer AS "conversationUnreadCount"
+       FROM "Message" AS message
+       INNER JOIN "Conversation" AS conversation
+         ON conversation."id" = message."conversationId"
+       INNER JOIN "Project" AS project
+         ON project."id" = conversation."projectId"
+       INNER JOIN "PlatformUser" AS actor
+         ON actor."id" = $1
+       LEFT JOIN "TenantMembership" AS membership
+         ON membership."id" = $4
+        AND membership."userId" = actor."id"
+        AND membership."organizationId" = project."organizationId"
+        AND membership."status" = 'ACTIVE'
+       LEFT JOIN "ProjectMembership" AS project_membership
+         ON project_membership."tenantMembershipId" = membership."id"
+        AND project_membership."projectId" = conversation."projectId"
+        AND project_membership."status" = 'ACTIVE'
+       LEFT JOIN "ConversationReadState" AS read_state
+         ON read_state."conversationId" = conversation."id"
+        AND read_state."platformUserId" = $1
+      WHERE conversation."projectId" = $2
+        AND project."organizationId" = $3
+        AND conversation."channel" = 'whatsapp'
+        AND conversation."externalId" LIKE 'meta:%'
+        AND message."direction" = 'INBOUND'
+        AND (
+          (
+            read_state."conversationId" IS NOT NULL
+            AND (message."createdAt", message."id")
+              > (read_state."lastReadCreatedAt", read_state."lastReadMessageId")
+          )
+          OR (
+            read_state."conversationId" IS NULL
+            AND message."createdAt" > GREATEST(
+              COALESCE(
+                conversation."unreadTrackingStartedAt",
+                '-infinity'::timestamp
+              ),
+              GREATEST(
+                actor."createdAt",
+                COALESCE(membership."createdAt", actor."createdAt"),
+                COALESCE(
+                  project_membership."createdAt",
+                  membership."createdAt",
+                  actor."createdAt"
+                )
+              )
+            )
+          )
+        )`,
+    actorId,
+    scope.projectId,
+    scope.organizationId,
+    membershipId,
+    conversationId,
+  );
+  return {
+    unreadTotal: Math.max(0, Number(rows[0]?.unreadTotal) || 0),
+    conversationUnreadCount: Math.max(
+      0,
+      Number(rows[0]?.conversationUnreadCount) || 0,
+    ),
+  };
+}
+
+async function unreadTotalForScope(prisma, options) {
+  const summary = await unreadSummaryForScope(prisma, options);
+  return summary.unreadTotal;
+}
+
 export async function listWhatsAppInbox({
   prisma,
   access,
+  limit,
+  cursor,
   includeMedicalEvidence = false,
   includeSourceEvidence = false,
   env = process.env,
   clock = () => new Date(),
 }) {
   const scope = trustedScope(access);
-  const [connection, conversations] = await Promise.all([
-    prisma.whatsAppConnection.findUnique({
-      where: { projectId: scope.projectId },
+  const actorId = trustedActorId(access);
+  const membershipId = trustedMembershipId(access);
+  const requestedLimit = pageSize(
+    limit,
+    DEFAULT_INBOX_CONVERSATION_PAGE_SIZE,
+    MAX_INBOX_CONVERSATION_PAGE_SIZE,
+  );
+  const decodedCursor = decodeInboxCursor(cursor, 'conversation', scope.projectId);
+  const [connection, conversations, unreadTotal] = await Promise.all([
+    prisma.whatsAppConnection.findFirst({
+      where: {
+        projectId: scope.projectId,
+        project: { organizationId: scope.organizationId },
+      },
       select: {
         enabled: true,
         connectionStatus: true,
@@ -252,18 +545,20 @@ export async function listWhatsAppInbox({
     prisma.conversation.findMany({
       where: {
         projectId: scope.projectId,
+        project: { organizationId: scope.organizationId },
         channel: 'whatsapp',
         externalId: { startsWith: META_CONVERSATION_PREFIX },
+        ...conversationPageWhere(decodedCursor),
       },
       orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
-      take: MAX_INBOX_CONVERSATIONS,
+      take: requestedLimit + 1,
       select: {
         id: true,
         externalId: true,
         displayName: true,
         updatedAt: true,
         messages: {
-          orderBy: [{ sentAt: 'desc' }, { createdAt: 'desc' }],
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
           take: 1,
           select: {
             id: true,
@@ -273,23 +568,49 @@ export async function listWhatsAppInbox({
             status: true,
             metadata: true,
             sentAt: true,
+            createdAt: true,
           },
         },
       },
     }),
+    unreadTotalForScope(prisma, { scope, actorId, membershipId }),
   ]);
+  const hasMore = conversations.length > requestedLimit;
+  const page = hasMore ? conversations.slice(0, requestedLimit) : conversations;
+  const unreadCounts = await unreadCountsForConversations(prisma, {
+    scope,
+    actorId,
+    membershipId,
+    conversationIds: page.map((conversation) => conversation.id),
+  });
 
   return {
     project: { id: scope.projectId, name: access.project.name || 'Obra activa' },
     connection: publicConnection(connection, env, nowDate(clock)),
-    conversations: conversations.map((conversation) => publicConversation(
+    unreadTotal,
+    conversations: page.map((conversation) => publicConversation(
       conversation,
-      { includeMedicalEvidence, includeSourceEvidence },
+      {
+        includeMedicalEvidence,
+        includeSourceEvidence,
+        unreadCount: unreadCounts.get(conversation.id) || 0,
+      },
     )),
+    pageInfo: {
+      hasMore,
+      nextCursor: hasMore
+        ? encodeInboxCursor('conversation', page[page.length - 1], scope.projectId)
+        : null,
+    },
   };
 }
 
-async function findScopedConversation(prisma, scope, conversationId, { includeMessages = false } = {}) {
+async function findScopedConversation(
+  prisma,
+  scope,
+  conversationId,
+  { includeLatestMessage = false } = {},
+) {
   const id = String(conversationId || '').trim();
   if (!id) return null;
   return prisma.conversation.findFirst({
@@ -305,21 +626,20 @@ async function findScopedConversation(prisma, scope, conversationId, { includeMe
       externalId: true,
       displayName: true,
       updatedAt: true,
-      ...(includeMessages
+      ...(includeLatestMessage
         ? {
             messages: {
-              orderBy: [{ sentAt: 'desc' }, { createdAt: 'desc' }],
-              take: MAX_INBOX_MESSAGES,
+              orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+              take: 1,
               select: {
                 id: true,
-                externalId: true,
-                providerMessageId: true,
                 direction: true,
                 kind: true,
                 body: true,
                 status: true,
                 metadata: true,
                 sentAt: true,
+                createdAt: true,
               },
             },
           }
@@ -330,8 +650,10 @@ async function findScopedConversation(prisma, scope, conversationId, { includeMe
 
 function chronologicalMessages(messages) {
   return messages.slice().sort((left, right) => (
-    (validDate(left.sentAt)?.getTime() || 0)
-    - (validDate(right.sentAt)?.getTime() || 0)
+    compareMessageMarkers(
+      { id: left.id, createdAt: left.createdAt },
+      { id: right.id, createdAt: right.createdAt },
+    )
   ));
 }
 
@@ -339,6 +661,8 @@ export async function getWhatsAppConversationMessages({
   prisma,
   access,
   conversationId,
+  limit,
+  cursor,
   includeMedicalEvidence = false,
   includeSourceEvidence = false,
   canManage = false,
@@ -346,11 +670,19 @@ export async function getWhatsAppConversationMessages({
   env = process.env,
 }) {
   const scope = trustedScope(access);
+  const actorId = trustedActorId(access);
+  const membershipId = trustedMembershipId(access);
+  const requestedLimit = pageSize(
+    limit,
+    DEFAULT_INBOX_MESSAGE_PAGE_SIZE,
+    MAX_INBOX_MESSAGE_PAGE_SIZE,
+  );
+  const decodedCursor = decodeInboxCursor(cursor, 'message', conversationId);
   const conversation = await findScopedConversation(
     prisma,
     scope,
     conversationId,
-    { includeMessages: true },
+    { includeLatestMessage: true },
   );
   if (!conversation) {
     throw new WhatsAppInboxError('La conversación ya no está disponible en esta obra.', {
@@ -359,7 +691,25 @@ export async function getWhatsAppConversationMessages({
     });
   }
   const observedAt = nowDate(clock);
-  const [inbound, project, connection] = await Promise.all([
+  const [messageRows, inbound, project, connection, unreadCounts] = await Promise.all([
+    prisma.message.findMany({
+      where: {
+        conversationId: conversation.id,
+        ...messagePageWhere(decodedCursor),
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: requestedLimit + 1,
+      select: {
+        id: true,
+        direction: true,
+        kind: true,
+        body: true,
+        status: true,
+        metadata: true,
+        sentAt: true,
+        createdAt: true,
+      },
+    }),
     prisma.message.findFirst({
       where: { conversationId: conversation.id, direction: 'INBOUND' },
       orderBy: [{ sentAt: 'desc' }, { createdAt: 'desc' }],
@@ -381,18 +731,25 @@ export async function getWhatsAppConversationMessages({
         metadata: true,
       },
     }),
+    unreadCountsForConversations(prisma, {
+      scope,
+      actorId,
+      membershipId,
+      conversationIds: [conversation.id],
+    }),
   ]);
-  const orderedMessages = chronologicalMessages(conversation.messages);
+  const hasMore = messageRows.length > requestedLimit;
+  const page = hasMore ? messageRows.slice(0, requestedLimit) : messageRows;
+  const orderedMessages = chronologicalMessages(page);
   const window = whatsAppCustomerCareWindow(inbound?.sentAt, observedAt);
   return {
     conversation: publicConversation(
+      conversation,
       {
-        ...conversation,
-        messages: orderedMessages.length
-          ? [orderedMessages[orderedMessages.length - 1]]
-          : [],
+        includeMedicalEvidence,
+        includeSourceEvidence,
+        unreadCount: unreadCounts.get(conversation.id) || 0,
       },
-      { includeMedicalEvidence, includeSourceEvidence },
     ),
     messages: orderedMessages.map((message) => publicMessage(
       message,
@@ -407,7 +764,124 @@ export async function getWhatsAppConversationMessages({
       observedAt,
       env,
     }),
+    pageInfo: {
+      hasMore,
+      nextCursor: hasMore
+        ? encodeInboxCursor('message', page[page.length - 1], conversation.id)
+        : null,
+    },
   };
+}
+
+export async function markWhatsAppConversationRead({
+  prisma,
+  access,
+  conversationId,
+  throughMessageId,
+}) {
+  const scope = trustedScope(access);
+  const actorId = trustedActorId(access);
+  const membershipId = trustedMembershipId(access);
+  const targetId = String(throughMessageId || '').trim();
+  if (!targetId || targetId.length > 256) {
+    throw new WhatsAppInboxError('El punto de lectura no es válido.', {
+      code: 'INBOX_READ_TARGET_INVALID',
+      status: 400,
+    });
+  }
+
+  const readState = await prisma.$transaction(async (transaction) => {
+    const conversation = await findScopedConversation(
+      transaction,
+      scope,
+      conversationId,
+    );
+    if (!conversation) {
+      throw new WhatsAppInboxError('La conversación ya no está disponible en esta obra.', {
+        code: 'INBOX_CONVERSATION_NOT_FOUND',
+        status: 404,
+      });
+    }
+    const target = await transaction.message.findFirst({
+      where: { id: targetId, conversationId: conversation.id },
+      select: { id: true, createdAt: true },
+    });
+    if (!target) {
+      throw new WhatsAppInboxError('El mensaje visible ya no está disponible.', {
+        code: 'INBOX_READ_TARGET_NOT_FOUND',
+        status: 404,
+      });
+    }
+
+    await transaction.$queryRawUnsafe(
+      `INSERT INTO "ConversationReadState" (
+         "conversationId",
+         "platformUserId",
+         "lastReadMessageId",
+         "lastReadCreatedAt",
+         "createdAt",
+         "updatedAt"
+       ) VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+       ON CONFLICT ("conversationId", "platformUserId") DO UPDATE
+       SET "lastReadMessageId" = EXCLUDED."lastReadMessageId",
+           "lastReadCreatedAt" = EXCLUDED."lastReadCreatedAt",
+           "updatedAt" = CURRENT_TIMESTAMP
+       WHERE (
+         "ConversationReadState"."lastReadCreatedAt",
+         "ConversationReadState"."lastReadMessageId"
+       ) < (
+         EXCLUDED."lastReadCreatedAt",
+         EXCLUDED."lastReadMessageId"
+       )
+       RETURNING "lastReadMessageId"`,
+      conversation.id,
+      actorId,
+      target.id,
+      target.createdAt,
+    );
+    const state = await transaction.conversationReadState.findUnique({
+      where: {
+        conversationId_platformUserId: {
+          conversationId: conversation.id,
+          platformUserId: actorId,
+        },
+      },
+      select: {
+        lastReadMessageId: true,
+        lastReadCreatedAt: true,
+      },
+    });
+    if (!state) {
+      throw new WhatsAppInboxError('No pudimos confirmar el punto de lectura.', {
+        code: 'INBOX_READ_STATE_UNAVAILABLE',
+        status: 503,
+      });
+    }
+    const marker = {
+      id: state.lastReadMessageId,
+      createdAt: state.lastReadCreatedAt,
+    };
+    const unreadSummary = await unreadSummaryForScope(transaction, {
+      scope,
+      actorId,
+      membershipId,
+      conversationId: conversation.id,
+    });
+    return {
+      conversationId: conversation.id,
+      unreadCount: unreadSummary.conversationUnreadCount,
+      unreadTotal: unreadSummary.unreadTotal,
+      readThrough: {
+        messageId: marker.id,
+        recordedAt: validDate(marker.createdAt)?.toISOString() || null,
+      },
+    };
+  }, {
+    isolationLevel: 'ReadCommitted',
+    maxWait: 5_000,
+    timeout: 10_000,
+  });
+  return readState;
 }
 
 function manualMessageExternalId(scope, conversationId, idempotencyKey) {

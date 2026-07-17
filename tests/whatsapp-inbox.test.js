@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { registerHooks } from 'node:module';
 import { after, test } from 'node:test';
 
@@ -47,7 +48,9 @@ const [
   { applyWebhookMessageAtomically, getOperationalMessages },
   { createWhatsAppInboxHandlers },
   { createWhatsAppConversationMessageHandlers },
+  { createWhatsAppReadStateHandlers },
   {
+    markWhatsAppConversationRead,
     sendManualWhatsAppMessage,
     WhatsAppInboxError,
     whatsAppConversationIdentity,
@@ -58,6 +61,7 @@ const [
   import('../src/lib/db.js'),
   import('../src/app/api/whatsapp/inbox/route.js'),
   import('../src/app/api/whatsapp/inbox/[conversationId]/messages/route.js'),
+  import('../src/app/api/whatsapp/inbox/[conversationId]/read-state/route.js'),
   import('../src/lib/whatsapp/inbox.js'),
 ]);
 
@@ -158,6 +162,8 @@ function routePrisma({
   conversations = [conversation()],
   selectedConversation = conversation(),
   messages = [message()],
+  unreadRows = [],
+  unreadTotal = 0,
 } = {}) {
   const calls = [];
   const prisma = {
@@ -180,6 +186,10 @@ function routePrisma({
       },
     },
     whatsAppConnection: {
+      async findFirst(args) {
+        calls.push(['connection', args]);
+        return connection();
+      },
       async findUnique(args) {
         calls.push(['connection', args]);
         return connection();
@@ -195,7 +205,7 @@ function routePrisma({
         return projectVisible
           ? {
               ...selectedConversation,
-              ...(args?.select?.messages ? { messages } : {}),
+              ...(args?.select?.messages ? { messages: messages.slice(-1) } : {}),
             }
           : null;
       },
@@ -204,7 +214,7 @@ function routePrisma({
         return projectVisible
           ? {
               ...selectedConversation,
-              ...(args?.select?.messages ? { messages } : {}),
+              ...(args?.select?.messages ? { messages: messages.slice(-1) } : {}),
             }
           : null;
       },
@@ -218,13 +228,151 @@ function routePrisma({
         calls.push(['message-first', args]);
         return messages.find((item) => item.direction === 'INBOUND') || null;
       },
+      async count(args) {
+        calls.push(['message-count', args]);
+        return 0;
+      },
+    },
+    async $queryRawUnsafe(statement, ...args) {
+      calls.push(['raw', statement, args]);
+      return statement.includes('AS "unreadTotal"')
+        ? [{ unreadTotal }]
+        : unreadRows;
     },
   };
   return { calls, prisma };
 }
 
-function inboxRequest(projectId = 'project-a') {
-  return new Request(`http://localhost/api/whatsapp/inbox?projectId=${projectId}`);
+function readStatePrisma({
+  conversationId = 'conversation-a',
+  messages = [message()],
+} = {}) {
+  const calls = [];
+  const states = new Map();
+  const stateKey = (threadId, actorId) => `${threadId}:${actorId}`;
+  const compare = (left, right) => (
+    left.createdAt.getTime() - right.createdAt.getTime()
+    || left.id.localeCompare(right.id)
+  );
+  let selectedActorId = null;
+
+  const database = {
+    project: {
+      async findFirst(args) {
+        calls.push(['project', args]);
+        return { id: 'project-a' };
+      },
+    },
+    conversation: {
+      async findFirst(args) {
+        calls.push(['conversation', args]);
+        return args.where.id === conversationId
+          ? {
+              id: conversationId,
+              externalId: 'meta:5491111111111',
+              displayName: 'Ana',
+              updatedAt: NOW,
+            }
+          : null;
+      },
+    },
+    message: {
+      async findFirst(args) {
+        calls.push(['message-first', args]);
+        const target = messages.find((item) => (
+          item.id === args.where.id
+          && item.conversationId === args.where.conversationId
+        ));
+        if (target?.metadata?.testDelayMs) {
+          await new Promise((resolve) => setTimeout(resolve, target.metadata.testDelayMs));
+        }
+        return target ? { id: target.id, createdAt: target.createdAt } : null;
+      },
+      async count(args) {
+        calls.push(['message-count', args]);
+        const state = states.get(stateKey(conversationId, selectedActorId));
+        if (!state) return messages.filter((item) => item.direction === 'INBOUND').length;
+        return messages.filter((item) => (
+          item.direction === 'INBOUND'
+          && compare(
+            { id: item.id, createdAt: item.createdAt },
+            { id: state.lastReadMessageId, createdAt: state.lastReadCreatedAt },
+          ) > 0
+        )).length;
+      },
+    },
+    conversationReadState: {
+      async findUnique(args) {
+        selectedActorId = args.where.conversationId_platformUserId.platformUserId;
+        const state = states.get(stateKey(
+          args.where.conversationId_platformUserId.conversationId,
+          selectedActorId,
+        ));
+        return state ? { ...state } : null;
+      },
+    },
+    async $queryRawUnsafe(statement, ...args) {
+      calls.push(['raw', statement, args]);
+      if (statement.includes('AS "unreadTotal"')) {
+        const actorId = args[0];
+        const state = states.get(stateKey(conversationId, actorId));
+        const unreadTotal = messages.filter((item) => (
+          item.direction === 'INBOUND'
+          && (!state || compare(
+            { id: item.id, createdAt: item.createdAt },
+            { id: state.lastReadMessageId, createdAt: state.lastReadCreatedAt },
+          ) > 0)
+        )).length;
+        return [{ unreadTotal, conversationUnreadCount: unreadTotal }];
+      }
+      if (!statement.includes('INSERT INTO "ConversationReadState"')) return [];
+      const [threadId, actorId, targetId, targetCreatedAt] = args;
+      const key = stateKey(threadId, actorId);
+      const candidate = {
+        lastReadMessageId: targetId,
+        lastReadCreatedAt: targetCreatedAt,
+      };
+      const current = states.get(key);
+      if (!current || compare(
+        { id: candidate.lastReadMessageId, createdAt: candidate.lastReadCreatedAt },
+        { id: current.lastReadMessageId, createdAt: current.lastReadCreatedAt },
+      ) > 0) {
+        states.set(key, candidate);
+      }
+      return [{ lastReadMessageId: states.get(key).lastReadMessageId }];
+    },
+    async $transaction(callback) {
+      calls.push(['transaction']);
+      return callback(database);
+    },
+  };
+  const prisma = {
+    ...database,
+    async $queryRawUnsafe(statement, ...args) {
+      calls.push(['raw-root', statement, args]);
+      if (statement.includes('AS "unreadTotal"')) {
+        const actorId = args[0];
+        const state = states.get(stateKey(conversationId, actorId));
+        const unreadTotal = messages.filter((item) => (
+          item.direction === 'INBOUND'
+          && (!state || compare(
+            { id: item.id, createdAt: item.createdAt },
+            { id: state.lastReadMessageId, createdAt: state.lastReadCreatedAt },
+          ) > 0)
+        )).length;
+        return [{ unreadTotal, conversationUnreadCount: unreadTotal }];
+      }
+      return database.$queryRawUnsafe(statement, ...args);
+    },
+  };
+  return { calls, prisma, states };
+}
+
+function inboxRequest(projectId = 'project-a', { limit, cursor } = {}) {
+  const params = new URLSearchParams({ projectId });
+  if (limit != null) params.set('limit', String(limit));
+  if (cursor != null) params.set('cursor', cursor);
+  return new Request(`http://localhost/api/whatsapp/inbox?${params}`);
 }
 
 function messagesRequest({
@@ -232,16 +380,36 @@ function messagesRequest({
   method = 'GET',
   body,
   idempotencyKey,
+  limit,
+  cursor,
 } = {}) {
   const headers = new Headers();
   if (body !== undefined) headers.set('content-type', 'application/json');
   if (idempotencyKey !== undefined) headers.set('idempotency-key', idempotencyKey);
+  const params = new URLSearchParams({ projectId });
+  if (limit != null) params.set('limit', String(limit));
+  if (cursor != null) params.set('before', cursor);
   return new Request(
-    `http://localhost/api/whatsapp/inbox/conversation-a/messages?projectId=${projectId}`,
+    `http://localhost/api/whatsapp/inbox/conversation-a/messages?${params}`,
     {
       method,
       headers,
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    },
+  );
+}
+
+function readStateRequest({
+  projectId = 'project-a',
+  conversationId = 'conversation-a',
+  body = { projectId, throughMessageId: 'message-a' },
+} = {}) {
+  return new Request(
+    `http://localhost/api/whatsapp/inbox/${conversationId}/read-state?projectId=${projectId}`,
+    {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
     },
   );
 }
@@ -284,6 +452,8 @@ test('GET inbox stays tenant/project scoped and keeps one thread per WhatsApp co
   assert.equal(payload.project.id, 'project-a');
   assert.equal(payload.connection.operational, true);
   assert.equal(payload.conversations.length, 2);
+  assert.equal(payload.unreadTotal, 0);
+  assert.deepEqual(payload.pageInfo, { hasMore: false, nextCursor: null });
   assert.deepEqual(
     new Set(payload.conversations.map((item) => item.id)),
     new Set(['conversation-a', 'conversation-b']),
@@ -292,7 +462,38 @@ test('GET inbox stays tenant/project scoped and keeps one thread per WhatsApp co
 
   const queryEvidence = serializedCalls(calls);
   assert.match(queryEvidence, /project-a/);
+  assert.match(queryEvidence, /organization-a/);
   assert.doesNotMatch(queryEvidence, /organization-foreign|project-foreign/);
+});
+
+test('GET inbox publishes durable per-user unread counts and a project-wide total', async () => {
+  const { calls, prisma } = routePrisma({
+    unreadRows: [{ conversationId: 'conversation-a', unreadCount: 3 }],
+    unreadTotal: 7,
+  });
+  const response = await createWhatsAppInboxHandlers({
+    resolveAccess: async () => access(),
+    authorize: () => undefined,
+    prismaFactory: () => prisma,
+    clock: () => NOW,
+  }).GET(inboxRequest());
+  const payload = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.conversations[0].unreadCount, 3);
+  assert.equal(payload.unreadTotal, 7);
+  const rawSql = calls
+    .filter(([name]) => name === 'raw')
+    .map(([, statement]) => statement)
+    .join('\n');
+  assert.match(rawSql, /"platformUserId" = \$1/);
+  assert.match(rawSql, /"organizationId" = \$3/);
+  assert.match(rawSql, /membership\."id" = \$4/);
+  assert.match(rawSql, /project_membership\."createdAt"/);
+  assert.match(rawSql, /membership\."createdAt"/);
+  assert.match(rawSql, /actor\."createdAt"/);
+  assert.match(rawSql, /message\."createdAt"/);
+  assert.doesNotMatch(rawSql, /message\."sentAt"/);
 });
 
 test('GET inbox fails closed before reading conversations from an inaccessible project', async () => {
@@ -346,6 +547,8 @@ test('GET messages returns only the scoped conversation and its chronological me
   assert.deepEqual(permissions, ['org:conversations:read']);
   assert.equal(payload.conversation.id, 'conversation-a');
   assert.deepEqual(payload.messages.map((item) => item.id), ['message-a', 'message-b']);
+  assert.equal(JSON.stringify(payload).includes('wamid.outbound-b'), false);
+  assert.deepEqual(payload.pageInfo, { hasMore: false, nextCursor: null });
   assert.equal(payload.window.isOpen, true);
   assert.deepEqual(payload.composerCapability, {
     allowed: true,
@@ -356,6 +559,268 @@ test('GET messages returns only the scoped conversation and its chronological me
   assert.match(queryEvidence, /conversation-a/);
   assert.match(queryEvidence, /project-a/);
   assert.doesNotMatch(queryEvidence, /conversation-foreign|project-foreign/);
+});
+
+test('conversation pagination uses a project-bound updatedAt and id keyset cursor', async () => {
+  const sharedTime = new Date('2026-07-17T17:45:00.000Z');
+  const rows = [
+    conversation({ id: 'conversation-c', updatedAt: sharedTime }),
+    conversation({ id: 'conversation-b', updatedAt: sharedTime }),
+    conversation({ id: 'conversation-a', updatedAt: new Date('2026-07-17T17:44:00.000Z') }),
+  ];
+  const { calls, prisma } = routePrisma({ conversations: rows });
+  const handlers = createWhatsAppInboxHandlers({
+    resolveAccess: async () => access(),
+    authorize: () => undefined,
+    prismaFactory: () => prisma,
+    clock: () => NOW,
+  });
+
+  const firstResponse = await handlers.GET(inboxRequest('project-a', { limit: 2 }));
+  const first = await firstResponse.json();
+  assert.equal(firstResponse.status, 200);
+  assert.deepEqual(first.conversations.map((item) => item.id), ['conversation-c', 'conversation-b']);
+  assert.equal(first.pageInfo.hasMore, true);
+  assert.ok(first.pageInfo.nextCursor);
+
+  const secondResponse = await handlers.GET(inboxRequest('project-a', {
+    limit: 2,
+    cursor: first.pageInfo.nextCursor,
+  }));
+  assert.equal(secondResponse.status, 200);
+  const pageQueries = calls.filter(([name]) => name === 'conversations');
+  assert.deepEqual(pageQueries[1][1].where.OR, [
+    { updatedAt: { lt: sharedTime } },
+    { updatedAt: sharedTime, id: { lt: 'conversation-b' } },
+  ]);
+
+  const tampered = `${first.pageInfo.nextCursor.slice(0, -1)}!`;
+  const rejected = await handlers.GET(inboxRequest('project-a', { cursor: tampered }));
+  assert.equal(rejected.status, 400);
+  assert.equal((await rejected.json()).code, 'INBOX_PAGINATION_INVALID');
+});
+
+test('message pagination is stable on local createdAt plus id and bound to the conversation', async () => {
+  const sharedTime = new Date('2026-07-17T17:40:00.000Z');
+  const rows = [
+    message({ id: 'message-c', createdAt: sharedTime, sentAt: new Date('2026-07-10T10:00:00.000Z') }),
+    message({ id: 'message-b', createdAt: sharedTime, sentAt: new Date('2026-07-17T17:39:00.000Z') }),
+    message({ id: 'message-a', createdAt: new Date('2026-07-17T17:39:00.000Z') }),
+  ];
+  const { calls, prisma } = routePrisma({ messages: rows });
+  const handlers = createWhatsAppConversationMessageHandlers({
+    resolveAccess: async () => access(),
+    authorize: () => undefined,
+    prismaFactory: () => prisma,
+    clock: () => NOW,
+  });
+
+  const firstResponse = await handlers.GET(
+    messagesRequest({ limit: 2 }),
+    routeContext('conversation-a'),
+  );
+  const first = await firstResponse.json();
+  assert.equal(firstResponse.status, 200);
+  assert.deepEqual(first.messages.map((item) => item.id), ['message-b', 'message-c']);
+  assert.equal(first.pageInfo.hasMore, true);
+
+  const secondResponse = await handlers.GET(
+    messagesRequest({ limit: 2, cursor: first.pageInfo.nextCursor }),
+    routeContext('conversation-a'),
+  );
+  assert.equal(secondResponse.status, 200);
+  const pageQueries = calls.filter(([name]) => name === 'messages');
+  assert.deepEqual(pageQueries[1][1].where.OR, [
+    { createdAt: { lt: sharedTime } },
+    { createdAt: sharedTime, id: { lt: 'message-b' } },
+  ]);
+
+  const wrongConversation = await handlers.GET(
+    messagesRequest({ limit: 2, cursor: first.pageInfo.nextCursor }),
+    routeContext('conversation-b'),
+  );
+  assert.equal(wrongConversation.status, 400);
+  assert.equal((await wrongConversation.json()).code, 'INBOX_PAGINATION_INVALID');
+});
+
+test('PUT read-state advances only the authenticated operator watermark and returns remaining unread', async () => {
+  const rows = [
+    message({ id: 'message-a', createdAt: new Date('2026-07-17T17:30:00.000Z') }),
+    message({ id: 'message-b', createdAt: new Date('2026-07-17T17:31:00.000Z') }),
+  ];
+  const { calls, prisma, states } = readStatePrisma({ messages: rows });
+  const permissions = [];
+  const handlers = createWhatsAppReadStateHandlers({
+    resolveAccess: async () => access(),
+    authorize: (_access, permission, options) => permissions.push([permission, options]),
+    prismaFactory: () => prisma,
+  });
+
+  const response = await handlers.PUT(
+    readStateRequest({ body: { projectId: 'project-a', throughMessageId: 'message-a' } }),
+    routeContext(),
+  );
+  const payload = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(permissions, [[
+    'org:conversations:read',
+    { subscriptionMode: 'read' },
+  ]]);
+  assert.equal(payload.conversationId, 'conversation-a');
+  assert.equal(payload.unreadCount, 1);
+  assert.equal(payload.unreadTotal, 1);
+  assert.equal(states.get('conversation-a:actor-a').lastReadMessageId, 'message-a');
+  const insert = calls.find(([name, statement]) => (
+    name === 'raw' && statement.includes('INSERT INTO "ConversationReadState"')
+  ));
+  assert.ok(insert);
+  assert.match(insert[1], /ON CONFLICT \("conversationId", "platformUserId"\) DO UPDATE/);
+  assert.match(insert[1], /"lastReadCreatedAt"[\s\S]*"lastReadMessageId"/);
+  assert.equal(JSON.stringify(calls).includes('organization-foreign'), false);
+});
+
+test('read-state fails closed for foreign conversations and rejects client-owned fields', async () => {
+  const { calls, prisma } = readStatePrisma();
+  const handlers = createWhatsAppReadStateHandlers({
+    resolveAccess: async () => access(),
+    authorize: () => undefined,
+    prismaFactory: () => prisma,
+  });
+
+  const extraField = await handlers.PUT(
+    readStateRequest({
+      body: {
+        projectId: 'project-a',
+        throughMessageId: 'message-a',
+        platformUserId: 'actor-foreign',
+      },
+    }),
+    routeContext(),
+  );
+  assert.equal(extraField.status, 400);
+  assert.equal((await extraField.json()).code, 'INBOX_READ_STATE_INVALID');
+
+  const missingTarget = await handlers.PUT(
+    readStateRequest({ body: { projectId: 'project-a' } }),
+    routeContext(),
+  );
+  assert.equal(missingTarget.status, 400);
+  assert.equal((await missingTarget.json()).code, 'INBOX_READ_STATE_INVALID');
+
+  const missingProject = await handlers.PUT(
+    readStateRequest({ body: { throughMessageId: 'message-a' } }),
+    routeContext(),
+  );
+  assert.equal(missingProject.status, 400);
+  assert.equal((await missingProject.json()).code, 'INBOX_READ_STATE_INVALID');
+
+  const foreign = await handlers.PUT(
+    readStateRequest({ conversationId: 'conversation-foreign' }),
+    routeContext('conversation-foreign'),
+  );
+  assert.equal(foreign.status, 404);
+  assert.equal((await foreign.json()).code, 'INBOX_CONVERSATION_NOT_FOUND');
+  assert.equal(calls.some(([name, statement]) => (
+    name === 'raw' && statement.includes('INSERT INTO "ConversationReadState"')
+  )), false);
+});
+
+test('concurrent and independent read cursors never regress across tabs or users', async () => {
+  const sharedTime = new Date('2026-07-17T17:30:00.000Z');
+  const rows = [
+    message({
+      id: 'message-a',
+      createdAt: sharedTime,
+      metadata: { testDelayMs: 8 },
+    }),
+    message({ id: 'message-b', createdAt: sharedTime }),
+  ];
+  const { prisma, states } = readStatePrisma({ messages: rows });
+
+  await Promise.all([
+    markWhatsAppConversationRead({
+      prisma,
+      access: access(),
+      conversationId: 'conversation-a',
+      throughMessageId: 'message-a',
+    }),
+    markWhatsAppConversationRead({
+      prisma,
+      access: access(),
+      conversationId: 'conversation-a',
+      throughMessageId: 'message-b',
+    }),
+  ]);
+  await markWhatsAppConversationRead({
+    prisma,
+    access: access({ databaseUserId: 'actor-b' }),
+    conversationId: 'conversation-a',
+    throughMessageId: 'message-a',
+  });
+
+  assert.equal(states.get('conversation-a:actor-a').lastReadMessageId, 'message-b');
+  assert.equal(states.get('conversation-a:actor-b').lastReadMessageId, 'message-a');
+});
+
+test('an inbound recorded after the watermark remains unread even with an older provider timestamp', async () => {
+  const rows = [
+    message({
+      id: 'message-a',
+      createdAt: new Date('2026-07-17T17:30:00.000Z'),
+      sentAt: new Date('2026-07-17T17:30:00.000Z'),
+    }),
+    message({
+      id: 'message-late',
+      createdAt: new Date('2026-07-17T17:31:00.000Z'),
+      sentAt: new Date('2026-07-10T09:00:00.000Z'),
+    }),
+  ];
+  const { prisma } = readStatePrisma({ messages: rows });
+  const result = await markWhatsAppConversationRead({
+    prisma,
+    access: access(),
+    conversationId: 'conversation-a',
+    throughMessageId: 'message-a',
+  });
+
+  assert.equal(result.unreadCount, 1);
+  assert.equal(result.unreadTotal, 1);
+});
+
+test('read-state migration is atomic while hot inbox indexes build concurrently', async () => {
+  const [migration, indexMigration] = await Promise.all([
+    readFile(
+      new URL(
+        '../prisma/migrations/20260717120000_whatsapp_inbox_read_state/migration.sql',
+        import.meta.url,
+      ),
+      'utf8',
+    ),
+    readFile(
+      new URL(
+        '../prisma/migrations/20260717121000_whatsapp_inbox_read_state_indexes/migration.sql',
+        import.meta.url,
+      ),
+      'utf8',
+    ),
+  ]);
+
+  assert.match(migration, /BEGIN;[\s\S]*COMMIT;/);
+  assert.match(migration, /ADD COLUMN "unreadTrackingStartedAt"/);
+  assert.match(migration, /UPDATE "Conversation"[\s\S]*CURRENT_TIMESTAMP/);
+  assert.match(migration, /PRIMARY KEY \("conversationId", "platformUserId"\)/);
+  assert.doesNotMatch(migration, /CREATE INDEX .*Message_conversationId_createdAt_id_idx/);
+  for (const indexName of [
+    'Conversation_projectId_channel_updatedAt_id_idx',
+    'Message_conversationId_createdAt_id_idx',
+    'Message_conversationId_direction_createdAt_id_idx',
+  ]) {
+    assert.match(indexMigration, new RegExp(`DROP INDEX IF EXISTS "${indexName}"`));
+    assert.match(indexMigration, new RegExp(`CREATE INDEX CONCURRENTLY "${indexName}"`));
+  }
+  assert.doesNotMatch(`${migration}\n${indexMigration}`, /DROP INDEX "Message_conversationId_sentAt_idx"/);
+  assert.equal((migration.match(/ON DELETE CASCADE/g) || []).length, 2);
 });
 
 test('operational conversation access never exposes clinical text without medical permission', async () => {

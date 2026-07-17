@@ -380,8 +380,8 @@
   position: absolute;
   right: 8px;
   display: grid;
-  width: 27px;
-  height: 27px;
+  width: 36px;
+  height: 36px;
   place-items: center;
   border: 0;
   border-radius: 8px;
@@ -424,6 +424,36 @@
   font: inherit;
   text-align: left;
   transition: border-color 150ms ease, background 150ms ease;
+}
+
+.loadMoreConversations {
+  display: flex;
+  width: calc(100% - 28px);
+  min-height: 44px;
+  margin: 4px 14px 14px;
+  padding: 0 12px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 11px;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.025);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.loadMoreConversations:hover:not(:disabled) {
+  border-color: rgba(72, 216, 141, 0.25);
+  color: var(--text-primary);
+  background: rgba(72, 216, 141, 0.055);
+}
+
+.loadMoreConversations:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .conversationList button:hover {
@@ -485,14 +515,14 @@
 .conversationTopline time {
   flex: 0 0 auto;
   color: var(--text-secondary);
-  font-size: 0.7rem;
+  font-size: 0.74rem;
 }
 
 .conversationPreview {
   align-items: center;
   gap: 5px;
   color: var(--text-secondary);
-  font-size: 0.7rem;
+  font-size: 0.74rem;
 }
 
 .conversationPreview > span:not(.deliveryState) {
@@ -513,14 +543,20 @@
   border-radius: 999px;
   color: #07110e;
   background: #48d88d;
-  font-size: 0.57rem;
+  font-size: 0.68rem;
 }
 
 .deliveryState {
   display: inline-flex;
   align-items: center;
+  gap: 4px;
   color: var(--text-secondary);
   font-size: 0.7rem;
+}
+
+.deliveryLabel {
+  font-size: 0.68rem;
+  font-weight: 720;
 }
 
 .deliveryState[data-status='delivered'] {
@@ -533,6 +569,11 @@
 
 .deliveryState[data-status='failed'] {
   color: #ff8275;
+}
+
+.deliveryState[data-status='unknown'],
+.deliveryState[data-status='sending'] {
+  color: #efaa78;
 }
 
 .emptyConversations,
@@ -651,6 +692,7 @@
 }
 
 .messagePanel {
+  position: relative;
   display: flex;
   min-width: 0;
   min-height: 0;
@@ -724,7 +766,36 @@
 .contactIdentity span {
   margin-top: 3px;
   color: var(--text-secondary);
-  font-size: 0.68rem;
+  font-size: 0.74rem;
+}
+
+.readStateWarning {
+  display: flex;
+  min-height: 42px;
+  padding: 8px 16px;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid rgba(242, 138, 66, 0.15);
+  color: #efb287;
+  background: rgba(242, 138, 66, 0.065);
+  font-size: 0.74rem;
+}
+
+.readStateWarning span {
+  min-width: 0;
+  flex: 1;
+}
+
+.readStateWarning button {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid rgba(242, 138, 66, 0.24);
+  border-radius: 8px;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
 }
 
 .windowBadge {
@@ -775,6 +846,82 @@
   margin: 0 auto;
   padding: 0;
   list-style: none;
+}
+
+.historyPagination {
+  display: grid;
+  max-width: 930px;
+  margin: 0 auto 10px;
+  justify-items: center;
+  gap: 7px;
+}
+
+.historyPagination > button,
+.historyPagination > span button {
+  min-height: 40px;
+  padding: 0 13px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--bg-main) 84%, transparent);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.historyPagination > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.historyPagination > button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.historyPagination > span {
+  color: #ffaaa0;
+  font-size: 0.72rem;
+  text-align: center;
+}
+
+.historyPagination > span button {
+  min-height: 30px;
+  margin-left: 4px;
+  padding-inline: 8px;
+  color: inherit;
+}
+
+.newMessagesDock {
+  position: relative;
+  z-index: 4;
+  display: flex;
+  height: 0;
+  flex: 0 0 0;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.newMessagesButton {
+  position: absolute;
+  bottom: 12px;
+  display: inline-flex;
+  min-height: 42px;
+  padding: 0 14px;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(72, 216, 141, 0.26);
+  border-radius: 999px;
+  color: #07110e;
+  background: #63dfa0;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 850;
+  pointer-events: auto;
 }
 
 .messageList > li + li {
@@ -1271,10 +1418,29 @@
 
 :global(body.light-theme) .channelStatus[data-tone='disconnected'] > span,
 :global(body.light-theme) .windowBadge[data-tone='closed'] > span,
+:global(body.light-theme) .readStateWarning,
 :global(body.light-theme) .composerGuard,
 :global(body.light-theme) .connectionPrompt,
 :global(body.light-theme) .connectionPrompt a,
 :global(body.light-theme) .connectionPrompt .connectionEscalation {
+  color: #8f3600;
+}
+
+:global(body.light-theme) .readStateWarning {
+  border-bottom-color: rgba(143, 54, 0, 0.2);
+  background: rgba(242, 138, 66, 0.09);
+}
+
+:global(body.light-theme) .deliveryState[data-status='read'] {
+  color: #075985;
+}
+
+:global(body.light-theme) .deliveryState[data-status='failed'] {
+  color: #a52318;
+}
+
+:global(body.light-theme) .deliveryState[data-status='unknown'],
+:global(body.light-theme) .deliveryState[data-status='sending'] {
   color: #8f3600;
 }
 
@@ -1384,8 +1550,8 @@
 
   .mobileBack {
     display: grid;
-    width: 36px;
-    height: 36px;
+    width: 44px;
+    height: 44px;
     flex: 0 0 auto;
     place-items: center;
     border: 1px solid var(--border-color);
@@ -1415,6 +1581,15 @@
 
   .messageHistory {
     padding: 16px 12px;
+  }
+
+  .newMessagesButton {
+    max-width: calc(100% - 28px);
+    white-space: nowrap;
+  }
+
+  .readStateWarning {
+    padding-inline: 11px;
   }
 
   .inboundMessage,
