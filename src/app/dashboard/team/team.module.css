@@ -16,7 +16,6 @@
   align-items: flex-end;
 }
 
-.back { color: #b8b8b1; text-decoration: none; font-size: .85rem; }
 .eyebrow { color: #ff9f43; text-transform: uppercase; letter-spacing: .14em; font-size: .72rem; font-weight: 800; }
 .header h1 { margin: 12px 0 8px; font-size: clamp(2.2rem, 5vw, 4.4rem); letter-spacing: -.06em; }
 .header p { margin: 0; color: #a5a59e; }

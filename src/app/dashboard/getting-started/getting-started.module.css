@@ -7,18 +7,6 @@
 
 .header { margin-bottom: 24px; }
 
-.back {
-  display: inline-flex;
-  margin-bottom: 22px;
-  color: var(--text-secondary);
-  font-size: 0.76rem;
-  font-weight: 700;
-  text-decoration: none;
-  transition: color 160ms ease;
-}
-
-.back:hover { color: var(--primary); }
-
 .headerGrid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 280px;

@@ -1,5 +1,3 @@
-import Link from 'next/link';
-
 import ProjectsClient from './projects-client';
 import styles from './projects.module.css';
 import {
@@ -42,10 +40,9 @@ export default async function ProjectsPage() {
   ));
 
   return (
-    <main className={styles.shell}>
+    <div className={styles.shell}>
       <header className={styles.header}>
         <div>
-          <Link href="/dashboard" className={styles.back}>← Volver al dashboard</Link>
           <p className={styles.eyebrow}>Portfolio operativo</p>
           <h1>Todas las obras, un contexto a la vez.</h1>
           <p>
@@ -71,6 +68,6 @@ export default async function ProjectsPage() {
         planName={plan?.name || access.organization.subscriptionPlan}
         timezone={access.organization.timezone}
       />
-    </main>
+    </div>
   );
 }

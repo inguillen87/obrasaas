@@ -2,8 +2,12 @@ import styles from './route-state.module.css';
 
 export default function DashboardLoading() {
   return (
-    <main className={styles.loadingShell} aria-busy="true" aria-label="Cargando operación">
-      <aside className={styles.loadingSidebar} aria-hidden="true" />
+    <div
+      aria-busy="true"
+      aria-label="Cargando operación"
+      className={styles.loadingShell}
+      role="status"
+    >
       <section className={styles.loadingContent}>
         <div className={styles.loadingLine} />
         <div className={styles.loadingHero} />
@@ -12,6 +16,6 @@ export default function DashboardLoading() {
         </div>
         <div className={styles.loadingPanel} />
       </section>
-    </main>
+    </div>
   );
 }

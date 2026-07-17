@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { ObraSaasMark } from '@/app/brand/brand-logo';
 import { getAppState, getMessages } from '@/lib/db';
 import {
@@ -81,10 +80,9 @@ export default async function ReportPage({ searchParams }) {
   });
 
   return (
-    <main className={styles.page}>
+    <div className={styles.page}>
       <div className={styles.toolbar}>
         <div>
-          <Link href="/dashboard" className={styles.backLink}>← Volver al centro operativo</Link>
           <p>Documento tenant-aware · preparado para impresión A4 y exportación PDF.</p>
         </div>
         <ReportActions autoPrint={query?.print === 'true'} />
@@ -228,6 +226,6 @@ export default async function ReportPage({ searchParams }) {
           <div><span>Generado</span><strong>{formatDate(report.generatedAt, { dateStyle: 'short', timeStyle: 'short' })}</strong><small>America/Argentina/Buenos_Aires</small></div>
         </footer>
       </article>
-    </main>
+    </div>
   );
 }

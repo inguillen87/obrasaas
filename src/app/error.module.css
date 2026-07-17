@@ -1,0 +1,157 @@
+.shell {
+  min-height: 100svh;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  padding: 28px;
+  background:
+    radial-gradient(circle at 18% 12%, rgba(242, 138, 66, 0.16), transparent 28rem),
+    radial-gradient(circle at 86% 88%, rgba(87, 178, 149, 0.12), transparent 30rem),
+    #08110f;
+  color: #f4f1e8;
+}
+
+.card {
+  position: relative;
+  width: min(100%, 620px);
+  overflow: hidden;
+  padding: clamp(30px, 7vw, 54px);
+  border: 1px solid rgba(244, 241, 232, 0.12);
+  border-radius: 28px;
+  background: rgba(14, 28, 25, 0.88);
+  box-shadow: 0 32px 100px rgba(0, 0, 0, 0.36);
+  backdrop-filter: blur(18px);
+}
+
+.card::before {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: linear-gradient(90deg, #f28a42, #57b295);
+  content: '';
+}
+
+.brand {
+  margin-bottom: 46px;
+  font-size: 1.22rem;
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: #f6b27f;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.status span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #f28a42;
+  box-shadow: 0 0 0 5px rgba(242, 138, 66, 0.12);
+}
+
+.card h1 {
+  max-width: 12ch;
+  margin: 17px 0 16px;
+  font-family: var(--font-heading);
+  font-size: clamp(2rem, 7vw, 3.35rem);
+  line-height: 1.02;
+  letter-spacing: -0.055em;
+}
+
+.card h1:focus-visible {
+  border-radius: 4px;
+  outline: 3px solid #57b295;
+  outline-offset: 6px;
+}
+
+.card p {
+  max-width: 52ch;
+  color: #b8c4bf;
+  font-size: 1rem;
+  line-height: 1.7;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 11px;
+  margin-top: 30px;
+}
+
+.actions button,
+.actions a {
+  min-height: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 19px;
+  border-radius: 12px;
+  font-weight: 780;
+  text-decoration: none;
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.actions button {
+  border: 1px solid #f28a42;
+  background: #f28a42;
+  color: #18120b;
+  cursor: pointer;
+}
+
+.actions a {
+  border: 1px solid rgba(244, 241, 232, 0.17);
+  background: rgba(244, 241, 232, 0.04);
+  color: #f4f1e8;
+}
+
+.actions button:hover,
+.actions a:hover {
+  transform: translateY(-1px);
+}
+
+.actions button:hover {
+  background: #f6a066;
+  border-color: #f6a066;
+}
+
+.actions a:hover {
+  border-color: rgba(244, 241, 232, 0.32);
+  background: rgba(244, 241, 232, 0.08);
+}
+
+.actions button:focus-visible,
+.actions a:focus-visible {
+  outline: 3px solid #57b295;
+  outline-offset: 3px;
+}
+
+@media (max-width: 520px) {
+  .shell {
+    padding: 16px;
+  }
+
+  .card {
+    border-radius: 22px;
+  }
+
+  .brand {
+    margin-bottom: 38px;
+  }
+
+  .actions {
+    display: grid;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .actions button,
+  .actions a {
+    transition: none;
+  }
+}

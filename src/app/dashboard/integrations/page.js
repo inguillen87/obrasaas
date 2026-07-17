@@ -1,5 +1,3 @@
-import Link from 'next/link';
-
 import IntegrationsClient from './integrations-client';
 import AiProcessingControls from './ai-processing-controls';
 import styles from './integrations.module.css';
@@ -44,10 +42,9 @@ export default async function IntegrationsPage() {
   );
 
   return (
-    <main className={styles.shell}>
+    <div className={styles.shell}>
       <header className={styles.header}>
         <div>
-          <Link href="/dashboard" className={styles.back}>← Volver al dashboard</Link>
           <p className={styles.eyebrow}>Canales operativos</p>
           <h1>Integraciones</h1>
           <p>
@@ -72,6 +69,6 @@ export default async function IntegrationsPage() {
         canManage={hasTenantPermission(access, 'tenant:members:manage')}
         initialSettings={publicTenantAiSettings(access.organization.metadata)}
       />
-    </main>
+    </div>
   );
 }

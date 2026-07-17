@@ -1,5 +1,3 @@
-import Link from 'next/link';
-
 import ApprovalsClient from './approvals-client';
 import styles from './approvals.module.css';
 import {
@@ -22,12 +20,9 @@ export default async function ApprovalsPage() {
   requireTenantPermission(access, OPERATIONAL_PROPOSAL_READ_PERMISSION);
 
   return (
-    <main className={styles.shell}>
+    <div className={styles.shell}>
       <header className={styles.header}>
         <div>
-          <Link href="/dashboard" className={styles.back}>
-            <span aria-hidden="true">←</span> Volver al centro operativo
-          </Link>
           <p className={styles.eyebrow}>Control humano · cambios trazables</p>
           <h1>Decidir con contexto, antes de tocar la obra.</h1>
           <p className={styles.lead}>
@@ -47,6 +42,6 @@ export default async function ApprovalsPage() {
       <ApprovalsClient
         canCreateFieldSimulation={hasTenantPermission(access, 'org:field:manage')}
       />
-    </main>
+    </div>
   );
 }

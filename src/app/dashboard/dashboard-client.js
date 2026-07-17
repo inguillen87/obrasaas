@@ -1,10 +1,9 @@
 "use client";
-/* eslint-disable @next/next/no-html-link-for-pages -- Public/legal links intentionally hard-reload to unload route-scoped global platform CSS. */
-
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Link from 'next/link';
-import { OrganizationSwitcher, UserButton, useUser } from '@clerk/nextjs';
-import { ObraSaasLogo, ObraSaasMark } from '@/app/brand/brand-logo';
+import { useSearchParams } from 'next/navigation';
+import { ObraSaasMark } from '@/app/brand/brand-logo';
+import { resolveDashboardTab } from '@/lib/dashboard-navigation';
 import { WHATSAPP_DEMO_AUDIO_TRANSCRIPTS } from '@/lib/whatsapp/demo-audio';
 import {
   FIRST_VALUE_APPROVAL_SIMULATOR_SCENARIO,
@@ -161,13 +160,6 @@ const PROJECT_STATUS = {
   ARCHIVED: { label: 'Obra archivada', badge: 'badge-warning' },
 };
 
-const DASHBOARD_TABS = new Set([
-  'sec-dashboard',
-  'sec-whatsapp',
-  'sec-gantt',
-  'sec-personal',
-]);
-
 function createClientEntityId(prefix) {
   if (globalThis.crypto?.randomUUID) return `${prefix}-${globalThis.crypto.randomUUID()}`;
   const bytes = new Uint32Array(4);
@@ -232,7 +224,12 @@ function decodeProjectStateResponse(response, payload, fallbackVersion = 0) {
 }
 
 export default function Dashboard({ platformAccess, initialState, initialMessages, setup }) {
-  const { user } = useUser();
+  const searchParams = useSearchParams();
+  const activeTab = resolveDashboardTab({
+    tab: searchParams.get('tab'),
+    onboarding: searchParams.get('onboarding'),
+  });
+  const approvalOnboardingRequested = searchParams.get('onboarding') === 'approval';
   // Application State
   const [state, setState] = useState(() => normalizeAppState(initialState));
   const stateVersionRef = useRef(validProjectStateVersion(setup.initialStateVersion) ?? 0);
@@ -243,14 +240,12 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
   const [chatMessages, setChatMessages] = useState(Array.isArray(initialMessages) ? initialMessages : initialChatMessages);
   const [syncState, setSyncState] = useState('live');
   const [lastSyncedAt, setLastSyncedAt] = useState(setup.initialLoadedAt);
-  const [activeTab, setActiveTab] = useState('sec-dashboard');
   const [approvalOnboardingMode, setApprovalOnboardingMode] = useState(false);
   const [pendingOperationalProposalCount, setPendingOperationalProposalCount] = useState(
     () => Math.max(0, Number(setup.pendingOperationalProposalCount) || 0),
   );
   const [latestOperationalProposal, setLatestOperationalProposal] = useState(null);
   const [isLightTheme, setIsLightTheme] = useState(false);
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [mapMode, setMapMode] = useState('sat');
 
   // Personal HR forms
@@ -327,16 +322,12 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
       setIsLightTheme(lightTheme);
       document.body.classList.toggle('light-theme', lightTheme);
 
-      const tabParam = new URLSearchParams(window.location.search).get('tab');
-      if (DASHBOARD_TABS.has(tabParam)) setActiveTab(tabParam);
-      const onboardingParam = new URLSearchParams(window.location.search).get('onboarding');
-      if (onboardingParam === 'approval') {
-        setActiveTab('sec-whatsapp');
-        setApprovalOnboardingMode(
-          Math.max(0, Number(setup.pendingOperationalProposalCount) || 0) === 0,
-        );
-      }
     });
+
+    const handleThemeChange = (event) => {
+      setIsLightTheme(event.detail?.theme === 'light');
+    };
+    window.addEventListener('obrasaas:theme-change', handleThemeChange);
 
     let active = true;
     let refreshing = false;
@@ -388,8 +379,28 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
       cancelAnimationFrame(initializationFrame);
       clearInterval(interval);
       document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('obrasaas:theme-change', handleThemeChange);
     };
   }, [setup.pendingOperationalProposalCount]);
+
+  useEffect(() => {
+    if (!approvalOnboardingRequested) {
+      setApprovalOnboardingMode(false);
+      return;
+    }
+    setApprovalOnboardingMode(
+      Math.max(0, Number(setup.pendingOperationalProposalCount) || 0) === 0,
+    );
+  }, [approvalOnboardingRequested, setup.pendingOperationalProposalCount]);
+
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('obrasaas:pending-approval-count', {
+      detail: {
+        projectId: platformAccess.project.id,
+        count: pendingOperationalProposalCount,
+      },
+    }));
+  }, [pendingOperationalProposalCount, platformAccess.project.id]);
 
   useEffect(() => {
     if (!setup.canReadOperationalProposals) return undefined;
@@ -457,19 +468,6 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
   useEffect(() => {
     copilotMessagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [copilotMessages]);
-
-  // Handle Theme switching
-  const handleToggleTheme = () => {
-    const nextTheme = !isLightTheme;
-    setIsLightTheme(nextTheme);
-    if (nextTheme) {
-      document.body.classList.add('light-theme');
-      localStorage.setItem('obrasaas_theme', 'light');
-    } else {
-      document.body.classList.remove('light-theme');
-      localStorage.setItem('obrasaas_theme', 'dark');
-    }
-  };
 
   const reloadLatestProjectState = async () => {
     const response = await fetch('/api/state', { cache: 'no-store' });
@@ -911,6 +909,8 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
 
   // Leaflet Map client-side loader
   useEffect(() => {
+    let cancelled = false;
+    let mapTimer = null;
     let mapInstance = null;
     let tileLayer = null;
     let markers = [];
@@ -920,7 +920,7 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
       const L = await import('leaflet');
       await import('leaflet/dist/leaflet.css');
 
-      if (!mapContainerRef.current) return;
+      if (cancelled || !mapContainerRef.current) return;
 
       const projectSite = projectPointAvailable
         ? [projectLatitude, projectLongitude]
@@ -999,12 +999,23 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
     };
 
     if (activeTab === 'sec-dashboard') {
-      setTimeout(initMap, 100);
+      mapTimer = window.setTimeout(() => {
+        void initMap().catch((error) => {
+          if (!cancelled) {
+            console.error('Map initialization failed:', error);
+          }
+        });
+      }, 100);
     }
 
     return () => {
+      cancelled = true;
+      if (mapTimer !== null) {
+        window.clearTimeout(mapTimer);
+      }
       if (mapInstance) {
         mapInstance.remove();
+        mapInstance = null;
       }
     };
   }, [
@@ -1572,148 +1583,6 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
         ))}
       </div>
 
-      <div className="app-container">
-        {/* Sidebar Navigation */}
-        <aside className={`sidebar ${mobileSidebarOpen ? 'active' : ''}`}>
-          <div className="brand">
-            <ObraSaasLogo
-              className="dashboard-brand-lockup"
-              markClassName="brand-logo"
-              markSize={40}
-              variant="app"
-              wordmarkClassName="brand-name"
-            />
-          </div>
-          {platformAccess.isSuperadmin ? (
-            <div className="internal-workspace" aria-label="Workspace interno de plataforma">
-              <span className="internal-workspace__eyebrow">Control plane</span>
-              <span className="internal-workspace__name">ObraSaaS Operaciones</span>
-              <span className="internal-workspace__status">
-                <i className="fa-solid fa-shield-halved" aria-hidden="true"></i>
-                Workspace interno
-              </span>
-            </div>
-          ) : (
-            <div style={{ marginBottom: '16px' }}>
-              <OrganizationSwitcher
-                hidePersonal
-                afterCreateOrganizationUrl="/dashboard"
-                afterSelectOrganizationUrl="/dashboard"
-                appearance={{
-                  elements: {
-                    rootBox: { width: '100%' },
-                    organizationSwitcherTrigger: {
-                      width: '100%',
-                      justifyContent: 'space-between',
-                      border: '1px solid var(--border-color)',
-                      background: 'rgba(255,255,255,0.03)',
-                      color: 'var(--text-primary)',
-                    },
-                  },
-                }}
-              />
-            </div>
-          )}
-          
-          {/* Light/Dark Theme Toggle */}
-          <div className="theme-toggle-container" style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', padding: '8px 12px', borderRadius: '12px' }}>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}><i className="fa-solid fa-circle-half-stroke"></i> Tema</span>
-            <button onClick={handleToggleTheme} className="btn btn-sm" style={{ padding: '4px 10px', fontSize: '0.75rem', background: 'var(--primary)', color: 'var(--on-primary)', border: 'none', cursor: 'pointer', fontWeight: 700, borderRadius: '8px' }}>
-              {isLightTheme ? <><i className="fa-solid fa-sun"></i> Claro</> : <><i className="fa-solid fa-moon"></i> Oscuro</>}
-            </button>
-          </div>
-          
-          <nav className="nav-menu">
-            <li className={`nav-item ${activeTab === 'sec-dashboard' ? 'active' : ''}`}>
-              <button onClick={() => setActiveTab('sec-dashboard')}><i className="fa-solid fa-chart-line"></i> Resumen ejecutivo</button>
-            </li>
-            <li className={`nav-item ${activeTab === 'sec-whatsapp' ? 'active' : ''}`}>
-              <button onClick={() => setActiveTab('sec-whatsapp')}><i className="fa-brands fa-whatsapp"></i> {setup.whatsappConnected ? 'Operación WhatsApp' : 'Simulador WhatsApp'}</button>
-            </li>
-            <li className={`nav-item ${activeTab === 'sec-gantt' ? 'active' : ''}`}>
-              <button onClick={() => setActiveTab('sec-gantt')}><i className="fa-solid fa-timeline"></i> Cronograma Gantt</button>
-            </li>
-            <li className="nav-item">
-              <Link href="/dashboard/activity" className="nav-button-link"><i className="fa-solid fa-shield-halved"></i> Bitácora y auditoría</Link>
-            </li>
-            {setup.canReadOperationalProposals && (
-              <li className="nav-item">
-                <Link href="/dashboard/approvals" className="nav-button-link">
-                  <i className="fa-solid fa-list-check"></i>
-                  <span>Aprobaciones</span>
-                  {pendingOperationalProposalCount > 0 && (
-                    <span
-                      className="nav-count-badge"
-                      aria-label={`${pendingOperationalProposalCount} aprobaciones pendientes`}
-                    >
-                      {pendingOperationalProposalCount > 99
-                        ? '99+'
-                        : pendingOperationalProposalCount}
-                    </span>
-                  )}
-                </Link>
-              </li>
-            )}
-            <li className="nav-item">
-              <Link href="/dashboard/projects" className="nav-button-link"><i className="fa-solid fa-building-circle-check"></i> Obras y portfolio</Link>
-            </li>
-            {platformAccess.isSuperadmin && (
-              <li className="nav-item">
-                <Link href="/superadmin" className="nav-button-link"><i className="fa-solid fa-building-user"></i> Consola SuperAdmin</Link>
-              </li>
-            )}
-            {(platformAccess.isSuperadmin || platformAccess.tenantRole !== 'AUDITOR') && (
-              <li className="nav-item">
-                <Link href="/dashboard/team" className="nav-button-link"><i className="fa-solid fa-user-shield"></i> Equipo y roles</Link>
-              </li>
-            )}
-            {(platformAccess.isSuperadmin || ['ADMIN', 'DIRECTOR'].includes(platformAccess.tenantRole)) && (
-              <li className="nav-item">
-                <Link href="/dashboard/integrations" className="nav-button-link"><i className="fa-solid fa-plug-circle-bolt"></i> Integraciones</Link>
-              </li>
-            )}
-            <li className={`nav-item ${activeTab === 'sec-personal' ? 'active' : ''}`}>
-              <button onClick={() => setActiveTab('sec-personal')}><i className="fa-solid fa-users-gear"></i> Personal &amp; RRHH</button>
-            </li>
-            <li className="nav-item">
-              <a href="/" className="nav-button-link"><i className="fa-solid fa-arrow-up-right-from-square"></i> Sitio público</a>
-            </li>
-          </nav>
-          
-          <div className="sidebar-footer">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%' }}>
-              <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--primary)', color: 'var(--on-primary)', fontWeight: 800, display: 'flex', alignItems: 'center', fontSize: '0.85rem', flexShrink: 0, justifyContent: 'center' }}>M</div>
-              <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexGrow: 1 }}>
-                <span style={{ fontSize: '0.75rem', fontWeight: 700, display: 'block', color: '#fff' }}>{user?.fullName || user?.primaryEmailAddress?.emailAddress || 'Usuario'}</span>
-                <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>
-                  {platformAccess.organization.name} · {platformAccess.isSuperadmin ? 'Superadmin' : platformAccess.orgRole || 'Miembro'}
-                </span>
-              </div>
-              <UserButton afterSignOutUrl="/" />
-            </div>
-          </div>
-        </aside>
-
-        {/* Sidebar Overlay for mobile screen */}
-        {mobileSidebarOpen && <div className="sidebar-overlay active" onClick={() => setMobileSidebarOpen(false)}></div>}
-
-        {/* Mobile Header Top Navigation */}
-        <header className="mobile-header">
-          <button className="mobile-toggle-btn" onClick={() => setMobileSidebarOpen(true)}>
-            <i className="fa-solid fa-bars"></i>
-          </button>
-          <ObraSaasLogo
-            className="mobile-logo"
-            markClassName="mobile-logo-box"
-            markSize={28}
-            variant="app"
-            wordmarkClassName="mobile-brand-name"
-          />
-          <div style={{ width: '32px' }}></div>
-        </header>
-
-        {/* Main Content Area */}
-        <main className="main-content">
           <PlatformReadiness
             platformAccess={platformAccess}
             setup={setup}
@@ -2668,9 +2537,6 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
               </div>
             </div>
           </section>
-        </main>
-      </div>
-
       {/* Styled JSX for local overlay overrides */}
       <style dangerouslySetInnerHTML={{ __html: `
         .crm-suggestions {

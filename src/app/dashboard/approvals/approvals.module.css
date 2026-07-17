@@ -36,20 +36,8 @@
 
 .header > div:first-child { max-width: 900px; }
 
-.back {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: #b9beb9;
-  font-size: .82rem;
-  text-decoration: none;
-  transition: color 160ms ease, transform 160ms ease;
-}
-
-.back:hover { color: #fff; transform: translateX(-2px); }
-
 .eyebrow {
-  margin: 21px 0 0;
+  margin: 0;
   color: var(--approval-orange);
   font-size: .67rem;
   font-weight: 850;
@@ -794,7 +782,6 @@
 .clientLoading { display: grid; gap: 0; }
 .srOnly { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 
-.back:focus-visible,
 .syncState button:focus-visible,
 .viewTabs button:focus-visible,
 .cardActions button:focus-visible,
@@ -875,9 +862,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .back,
   .proposalCard { transition: none; }
-  .back:hover,
   .proposalCard:hover { transform: none; }
   .modalBackdrop,
   .modal,

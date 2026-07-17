@@ -2,7 +2,12 @@ import styles from './approvals.module.css';
 
 export default function ApprovalsLoading() {
   return (
-    <main className={styles.shell} aria-busy="true" aria-label="Cargando aprobaciones operativas">
+    <div
+      aria-busy="true"
+      aria-label="Cargando aprobaciones operativas"
+      className={styles.shell}
+      role="status"
+    >
       <header className={styles.loadingHeader}>
         <div className={`${styles.skeleton} ${styles.loadingBack}`} />
         <div className={`${styles.skeleton} ${styles.loadingTitle}`} />
@@ -21,6 +26,6 @@ export default function ApprovalsLoading() {
           <div className={`${styles.skeleton} ${styles.loadingCard}`} key={index} />
         ))}
       </section>
-    </main>
+    </div>
   );
 }

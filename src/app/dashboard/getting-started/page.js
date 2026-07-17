@@ -333,9 +333,8 @@ export default async function GettingStartedPage() {
   const nextMilestone = milestones.find((milestone) => milestone.key === readiness.nextKey);
 
   return (
-    <main className={styles.shell}>
+    <div className={styles.shell}>
       <header className={styles.header}>
-        <Link href="/dashboard" className={styles.back}>← Volver al centro operativo</Link>
         <div className={styles.headerGrid}>
           <div>
             <p className={styles.eyebrow}>Primer valor · puesta en marcha</p>
@@ -423,6 +422,6 @@ export default async function GettingStartedPage() {
           </section>
         </aside>
       </div>
-    </main>
+    </div>
   );
 }

@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { clerkClient } from '@clerk/nextjs/server';
 
 import TeamClient from './team-client';
@@ -41,10 +40,9 @@ export default async function TeamPage() {
   ]);
 
   return (
-    <main className={styles.shell}>
+    <div className={styles.shell}>
       <header className={styles.header}>
         <div>
-          <Link href="/dashboard" className={styles.back}>← Volver al dashboard</Link>
           <p className={styles.eyebrow}>Gobierno del tenant</p>
           <h1>Equipo y permisos</h1>
           <p>
@@ -97,6 +95,6 @@ export default async function TeamPage() {
           updatedAt: worker.updatedAt.toISOString(),
         }))}
       />
-    </main>
+    </div>
   );
 }

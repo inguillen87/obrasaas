@@ -1,5 +1,6 @@
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import { cookies } from 'next/headers';
+import { cache } from 'react';
 import { getPrisma } from '@/lib/prisma';
 import { getSubscriptionEntitlements } from '@/lib/plans';
 import { roleForClerkMembership, roleHasPermission } from '@/lib/tenant-roles';
@@ -177,7 +178,7 @@ async function resolveActiveProject(prisma, organization) {
   return ensureDefaultProject(prisma, organization);
 }
 
-export async function getPlatformAccess({ requireOrganization = true } = {}) {
+const resolvePlatformAccess = cache(async () => {
   const session = await auth();
   if (!session.userId) {
     throw new AccessError('Authentication required.', {
@@ -273,11 +274,6 @@ export async function getPlatformAccess({ requireOrganization = true } = {}) {
     });
   } else if (isSuperadmin) {
     organization = await ensureInternalOrganization(prisma);
-  } else if (requireOrganization) {
-    throw new AccessError('An active organization is required.', {
-      code: 'ORGANIZATION_REQUIRED',
-      status: 403,
-    });
   }
 
   if (organization) project = await resolveActiveProject(prisma, organization);
@@ -300,6 +296,17 @@ export async function getPlatformAccess({ requireOrganization = true } = {}) {
     project,
     subscription,
   };
+});
+
+export async function getPlatformAccess({ requireOrganization = true } = {}) {
+  const access = await resolvePlatformAccess();
+  if (requireOrganization && !access.organization) {
+    throw new AccessError('An active organization is required.', {
+      code: 'ORGANIZATION_REQUIRED',
+      status: 403,
+    });
+  }
+  return access;
 }
 
 export async function requireSuperadmin() {

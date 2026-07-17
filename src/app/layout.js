@@ -38,7 +38,11 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="es" className={`${geist.variable} ${manrope.variable}`}>
+    <html
+      className={`${geist.variable} ${manrope.variable}`}
+      data-scroll-behavior="smooth"
+      lang="es"
+    >
       <body>
         {children}
         <Observability />

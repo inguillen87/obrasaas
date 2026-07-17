@@ -1,5 +1,4 @@
-.loadingShell { min-height: 100svh; display: grid; grid-template-columns: 260px 1fr; background: #060913; }
-.loadingSidebar { background: rgba(4, 6, 14, 0.92); border-right: 1px solid rgba(255,255,255,.08); }
+.loadingShell { min-height: 100svh; display: grid; grid-template-columns: 1fr; background: #060913; }
 .loadingContent { padding: 42px; display: grid; align-content: start; gap: 22px; }
 .loadingLine, .loadingHero, .loadingGrid > div, .loadingPanel { position: relative; overflow: hidden; border: 1px solid rgba(255,255,255,.07); background: rgba(255,255,255,.035); }
 .loadingLine::after, .loadingHero::after, .loadingGrid > div::after, .loadingPanel::after { content: ''; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, rgba(255,255,255,.07), transparent); animation: route-shimmer 1.5s infinite; }
@@ -19,4 +18,4 @@
 .errorCard button { border: 0; background: #ff9f1c; color: #060913; }
 .errorCard a { border: 1px solid rgba(255,255,255,.12); color: #f8fafc; }
 @keyframes route-shimmer { to { transform: translateX(100%); } }
-@media (max-width: 760px) { .loadingShell { grid-template-columns: 1fr; } .loadingSidebar { display: none; } .loadingContent { padding: 76px 18px 24px; } .loadingGrid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 760px) { .loadingContent { padding: 24px 18px; } .loadingGrid { grid-template-columns: repeat(2, 1fr); } }

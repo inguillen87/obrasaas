@@ -1,7 +1,6 @@
 .page { min-height: 100vh; padding: 32px; color: #172033; background: #090d17; }
 .toolbar { max-width: 1120px; margin: 0 auto 18px; display: flex; align-items: center; justify-content: space-between; gap: 24px; color: #cbd5e1; }
 .toolbar p { margin: 6px 0 0; color: #7f8a9c; font-size: .8rem; }
-.backLink { color: #f5f7fb; font-size: .88rem; font-weight: 750; text-decoration: none; }
 .printButton { min-height: 42px; padding: 0 18px; border: 1px solid #ff9b38; border-radius: 10px; color: #111827; background: #ff9b38; font: inherit; font-size: .82rem; font-weight: 800; cursor: pointer; }
 .report { max-width: 1120px; margin: 0 auto; padding: 42px; border: 1px solid #dbe1e8; border-radius: 18px; background: #fff; box-shadow: 0 28px 90px rgba(0, 0, 0, .32); }
 .header { display: flex; align-items: flex-start; justify-content: space-between; gap: 32px; padding-bottom: 24px; border-bottom: 2px solid #172033; }

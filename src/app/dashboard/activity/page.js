@@ -1,5 +1,3 @@
-import Link from 'next/link';
-
 import ActivityClient from './activity-client';
 import styles from './activity.module.css';
 import { getPlatformAccess, requireTenantPermission } from '@/lib/access';
@@ -233,10 +231,9 @@ export default async function ActivityPage() {
   const activity = await loadActivity(access);
 
   return (
-    <main className={styles.shell}>
+    <div className={styles.shell}>
       <header className={styles.header}>
         <div>
-          <Link href="/dashboard" className={styles.back}>← Volver al centro operativo</Link>
           <p className={styles.eyebrow}>Trazabilidad por obra</p>
           <h1>Bitácora y auditoría.</h1>
           <p>
@@ -258,6 +255,6 @@ export default async function ActivityPage() {
         projectName={access.project.name}
         timezone={access.organization.timezone}
       />
-    </main>
+    </div>
   );
 }

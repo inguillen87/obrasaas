@@ -13,9 +13,7 @@
 }
 .header, .metrics, .workspace { width: min(1240px, 100%); margin-inline: auto; }
 .header { display: flex; align-items: flex-end; justify-content: space-between; gap: 32px; margin-bottom: 32px; }
-.back { color: #b8b8b1; text-decoration: none; font-size: .84rem; }
-.back:hover { color: #fff; }
-.eyebrow { margin: 21px 0 0; color: var(--orange); text-transform: uppercase; letter-spacing: .14em; font-size: .68rem; font-weight: 850; }
+.eyebrow { margin: 0; color: var(--orange); text-transform: uppercase; letter-spacing: .14em; font-size: .68rem; font-weight: 850; }
 .header h1 { margin: 11px 0 9px; font-size: clamp(2.55rem, 6vw, 5.35rem); line-height: .92; letter-spacing: -.07em; }
 .header > div:first-child > p:last-child { max-width: 760px; margin: 0; color: var(--muted); line-height: 1.6; }
 .scopeBadge { min-width: 210px; display: grid; gap: 6px; padding: 17px 18px; border: 1px solid rgba(96,211,148,.22); border-radius: 15px; background: rgba(96,211,148,.055); text-align: right; }
@@ -111,7 +109,7 @@
 @media print {
   .shell { padding: 0; color: #111; background: #fff; }
   .header, .metrics, .workspace { width: 100%; }
-  .back, .scopeBadge, .actions, .filters { display: none; }
+  .scopeBadge, .actions, .filters { display: none; }
   .header { margin-bottom: 20px; }
   .header h1 { font-size: 38px; }
   .header > div:first-child > p:last-child, .toolbar p:last-child, .entry p { color: #444; }

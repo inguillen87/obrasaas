@@ -10,7 +10,7 @@ export default function DashboardError({ error, unstable_retry }) {
   }, [error]);
 
   return (
-    <main className={styles.errorShell}>
+    <div className={styles.errorShell}>
       <div className={styles.errorCard}>
         <span className={styles.errorIcon} aria-hidden="true"><i className="fa-solid fa-triangle-exclamation" /></span>
         <p>Centro operativo</p>
@@ -21,6 +21,6 @@ export default function DashboardError({ error, unstable_retry }) {
           <a href="/">Volver al inicio</a>
         </div>
       </div>
-    </main>
+    </div>
   );
 }
