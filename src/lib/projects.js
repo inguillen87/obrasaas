@@ -322,14 +322,12 @@ export function serializeProject(project) {
 const PROJECT_OPERATIONAL_COUNTS_SQL = `
   SELECT
     project."id" AS "projectId",
-    CASE
-      WHEN jsonb_typeof(snapshot."state"->'tasks') = 'object'
-        THEN (
-          SELECT count(*)
-          FROM jsonb_object_keys(snapshot."state"->'tasks')
-        )
-      ELSE 0
-    END::integer AS "tasks",
+    (
+      SELECT count(*)
+      FROM "Task" AS task
+      WHERE task."projectId" = project."id"
+        AND task."metadata"->>'source' = 'project-snapshot-v1'
+    )::integer AS "tasks",
     CASE
       WHEN jsonb_typeof(snapshot."state"->'incidents') = 'array'
         THEN jsonb_array_length(snapshot."state"->'incidents')

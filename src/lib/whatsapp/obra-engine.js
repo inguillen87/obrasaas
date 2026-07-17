@@ -296,7 +296,12 @@ async function processFlowReply({
       projectId,
       workerId: worker.id,
       now,
-      metadata: { ppeStatus: ppeComplete ? "complete" : "incomplete", source: "whatsapp-flow" },
+      metadata: {
+        ppeStatus: ppeComplete ? "complete" : "incomplete",
+        source: "whatsapp-flow",
+        workArea: response.work_area,
+        ...(response.task_ref ? { taskRef: response.task_ref } : {}),
+      },
     });
     setWorkerAttendance(state.attendance, worker, {
       checkin: new Intl.DateTimeFormat("es-AR", {
@@ -338,13 +343,20 @@ async function processFlowReply({
         : isAttendance
           ? null
           : "restricted",
-      metadata: isAttendance
-        ? null
-        : {
-            kind: isIncident ? "whatsapp-flow-incident" : "whatsapp-flow-report",
-            sourceContentRestricted: true,
-            detailRestricted: true,
-          },
+      metadata: {
+        kind: isIncident
+          ? "whatsapp-flow-incident"
+          : isAttendance
+            ? "whatsapp-flow-attendance"
+            : "whatsapp-flow-report",
+        ...(response.task_ref ? { taskRef: response.task_ref } : {}),
+        ...((isIncident || isAttendance) && (response.area || response.work_area)
+          ? { workArea: response.area || response.work_area }
+          : {}),
+        ...(!isAttendance
+          ? { sourceContentRestricted: true, detailRestricted: true }
+          : {}),
+      },
       timeZone,
     },
   );

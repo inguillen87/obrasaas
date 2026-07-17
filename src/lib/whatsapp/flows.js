@@ -433,7 +433,13 @@ export function validateWhatsAppFlowReply(blueprintKey, response) {
   }
 
   if (blueprintKey === 'incident-report') {
-    assertReplyShape(response, new Set(['flow_type', 'severity', 'area', 'description']));
+    assertReplyShape(response, new Set([
+      'flow_type',
+      'severity',
+      'area',
+      'description',
+      'task_ref',
+    ]));
     if (response.flow_type !== blueprint.flowType) {
       throw new WhatsAppFlowReplyError('WhatsApp Flow reply type does not match its issued session.');
     }
@@ -441,6 +447,9 @@ export function validateWhatsAppFlowReply(blueprintKey, response) {
     if (!new Set(['low', 'medium', 'high', 'critical']).has(severity)) {
       throw new WhatsAppFlowReplyError('WhatsApp Flow incident severity is invalid.');
     }
+    const taskRef = response.task_ref === undefined
+      ? null
+      : replyText(response.task_ref, { field: 'task_ref', minLength: 1, maxLength: 160 });
     return {
       flow_type: blueprint.flowType,
       severity,
@@ -450,11 +459,18 @@ export function validateWhatsAppFlowReply(blueprintKey, response) {
         minLength: 1,
         maxLength: 2_000,
       }),
+      ...(taskRef ? { task_ref: taskRef } : {}),
     };
   }
 
   if (blueprintKey === 'shift-check-in') {
-    assertReplyShape(response, new Set(['flow_type', 'work_area', 'ppe_status', 'observations']));
+    assertReplyShape(response, new Set([
+      'flow_type',
+      'work_area',
+      'ppe_status',
+      'observations',
+      'task_ref',
+    ]));
     if (response.flow_type !== blueprint.flowType) {
       throw new WhatsAppFlowReplyError('WhatsApp Flow reply type does not match its issued session.');
     }
@@ -462,11 +478,15 @@ export function validateWhatsAppFlowReply(blueprintKey, response) {
     if (!new Set(['complete', 'incomplete']).has(ppeStatus)) {
       throw new WhatsAppFlowReplyError('WhatsApp Flow PPE status is invalid.');
     }
+    const taskRef = response.task_ref === undefined
+      ? null
+      : replyText(response.task_ref, { field: 'task_ref', minLength: 1, maxLength: 160 });
     return {
       flow_type: blueprint.flowType,
       work_area: replyText(response.work_area, { field: 'work_area', minLength: 1, maxLength: 120 }),
       ppe_status: ppeStatus,
       observations: replyText(response.observations ?? '', { field: 'observations', maxLength: 500 }),
+      ...(taskRef ? { task_ref: taskRef } : {}),
     };
   }
 

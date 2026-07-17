@@ -107,12 +107,14 @@ test('ObraSaaS blueprints use Flow JSON 7.3 and the dynamic Data API 4.0 contrac
     assert.equal(blueprint.definition.data_api_version, '4.0');
     assert.deepEqual(blueprint.definition.routing_model, { [screen.id]: [] });
     assert.deepEqual(Object.keys(screen.data).sort(), ['project_name', 'work_areas', 'worker_name']);
+    assert.deepEqual(Object.keys(screen.data.work_areas.items.properties).sort(), ['id', 'title']);
     assert.equal(screen.data.work_areas.items.properties.id.type, 'string');
     assert.equal(screen.data.work_areas.items.properties.title.type, 'string');
     assert.equal(area.type, 'Dropdown');
     assert.equal(area['data-source'], '${data.work_areas}');
     assert.equal(footer['on-click-action'].name, 'data_exchange');
     assert.equal(Object.hasOwn(footer['on-click-action'].payload, 'flow_type'), false);
+    assert.equal(Object.hasOwn(footer['on-click-action'].payload, 'task_ref'), false);
     assert.equal(item.dataApiVersion, '4.0');
     assert.equal(item.remote.status, 'NOT_CREATED');
   }
@@ -391,22 +393,26 @@ test('Flow replies accept only the server-owned blueprint contract', () => {
     severity: 'high',
     area: '  Planta   baja ',
     description: '  Fisura visible en el apoyo. ',
+    task_ref: '  task-structure-02 ',
   }), {
     flow_type: 'incident',
     severity: 'high',
     area: 'Planta baja',
     description: 'Fisura visible en el apoyo.',
+    task_ref: 'task-structure-02',
   });
   assert.deepEqual(validateWhatsAppFlowReply('shift-check-in', {
     flow_type: 'attendance',
     work_area: 'Frente norte',
     ppe_status: 'complete',
     observations: '',
+    task_ref: 'task-north-front',
   }), {
     flow_type: 'attendance',
     work_area: 'Frente norte',
     ppe_status: 'complete',
     observations: '',
+    task_ref: 'task-north-front',
   });
 
   const validIncident = {
@@ -420,6 +426,7 @@ test('Flow replies accept only the server-owned blueprint contract', () => {
     { ...validIncident, delete_project: true },
     { ...validIncident, severity: 'approved-by-client' },
     { ...validIncident, description: 'x'.repeat(2_001) },
+    { ...validIncident, task_ref: 'x'.repeat(161) },
   ]) {
     assert.throws(
       () => validateWhatsAppFlowReply('incident-report', invalid),

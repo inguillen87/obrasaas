@@ -24,6 +24,8 @@ Los blueprints actuales usan:
 
 El backend implementa `INIT`, `BACK`, `data_exchange`, `ping` y el acuse de errores de salud. Los datos de organización, proyecto, trabajador, Flow y pantalla no se aceptan como autoridad desde el cliente: se vuelven a resolver desde la conexión y la sesión persistida. El Data Endpoint entrega contexto y opciones; la mutación de negocio definitiva sigue entrando por el evento terminal `nfm_reply` del webhook general.
 
+Las áreas de trabajo se obtienen de la [proyección transaccional de tareas](OPERATIONAL_TASKS.md). El ID del selector es opaco y `task_ref` se agrega únicamente después de resolver esa opción dentro del proyecto autenticado; el formulario no puede aportar ni reemplazar esa referencia.
+
 La referencia de protocolo es la [guía oficial para implementar el Flow Endpoint](https://developers.facebook.com/documentation/business-messaging/whatsapp/flows/guides/implementingyourflowendpoint/) y el historial de versiones está en el [changelog oficial de WhatsApp Flows](https://developers.facebook.com/documentation/business-messaging/whatsapp/flows/changelog/). Meta también publica ejemplos interoperables en [WhatsApp Flows Tools](https://github.com/WhatsApp/WhatsApp-Flows-Tools).
 
 ## Data Endpoint por conexión

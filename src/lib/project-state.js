@@ -62,6 +62,8 @@ const INCIDENT_METADATA_FIELDS = new Set([
   'rawContentRestricted',
   'detailRestricted',
   'redacted',
+  'taskRef',
+  'workArea',
 ]);
 const INCIDENT_EVIDENCE_FIELDS = new Set([
   'kind',

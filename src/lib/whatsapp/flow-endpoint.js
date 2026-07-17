@@ -2,6 +2,10 @@ import crypto from "node:crypto";
 
 import { subscriptionAllowsWrites } from "../plans.js";
 import {
+  PROJECT_TASK_PROJECTION_SOURCE,
+  snapshotTaskIdFromProjectionExternalId,
+} from "../project-tasks.js";
+import {
   getPublishedWhatsAppFlowReference,
   validateWhatsAppFlowReply,
   WhatsAppFlowReplyError,
@@ -231,16 +235,38 @@ function stableTaskWorkAreaId(projectId, taskId) {
 }
 
 function workAreaOptions(tasks, project) {
+  const candidates = [];
+  for (const task of tasks || []) {
+    const taskRef = snapshotTaskIdFromProjectionExternalId(task?.externalId);
+    const title = safeDisplayText(task?.title, 80);
+    if (!taskRef || !title) continue;
+    candidates.push({
+      taskRef,
+      title,
+      assignee: safeDisplayText(task?.assignee, 24),
+    });
+  }
+  const titleCounts = new Map();
+  for (const candidate of candidates) {
+    titleCounts.set(candidate.title, (titleCounts.get(candidate.title) || 0) + 1);
+  }
+
   const options = [];
   const seenTaskIds = new Set();
-  for (const task of tasks || []) {
-    const taskId = String(task?.id || "").trim();
-    const title = safeDisplayText(task?.title, 80);
-    if (!taskId || !title || seenTaskIds.has(taskId)) continue;
-    seenTaskIds.add(taskId);
+  for (const candidate of candidates) {
+    if (seenTaskIds.has(candidate.taskRef)) continue;
+    seenTaskIds.add(candidate.taskRef);
+    const optionId = stableTaskWorkAreaId(project?.id, candidate.taskRef);
+    const duplicateSuffix = titleCounts.get(candidate.title) > 1
+      ? ` · ${candidate.assignee ? `${candidate.assignee} · ` : ""}${optionId.slice(-6).toUpperCase()}`
+      : "";
+    const title = duplicateSuffix
+      ? `${candidate.title.slice(0, 80 - duplicateSuffix.length)}${duplicateSuffix}`
+      : candidate.title;
     options.push({
-      id: stableTaskWorkAreaId(project?.id, taskId),
+      id: optionId,
       title,
+      taskRef: candidate.taskRef,
     });
     if (options.length === 20) break;
   }
@@ -295,11 +321,13 @@ export async function loadWhatsAppFlowTrustedContext(prisma, session) {
     prisma.task.findMany({
       where: {
         projectId: session.projectId,
-        status: { in: ["READY", "IN_PROGRESS"] },
+        externalId: { startsWith: "snapshot:" },
+        metadata: { path: ["source"], equals: PROJECT_TASK_PROJECTION_SOURCE },
+        status: { in: ["READY", "IN_PROGRESS", "BLOCKED"] },
       },
       orderBy: [{ status: "desc" }, { updatedAt: "desc" }],
       take: 40,
-      select: { id: true, title: true },
+      select: { externalId: true, title: true, assignee: true },
     }),
   ]);
 
@@ -320,12 +348,16 @@ function trustedScreenData(context) {
   return {
     project_name: safeDisplayText(context.project.name, 80) || "Obra",
     worker_name: safeDisplayText(context.worker.name, 80) || "Colaborador",
-    work_areas: context.workAreas,
+    work_areas: context.workAreas.map(({ id, title }) => ({ id, title })),
   };
 }
 
 function validateDynamicReply(session, data, context) {
-  if (!isPlainObject(data) || Object.hasOwn(data, "flow_type")) {
+  if (
+    !isPlainObject(data)
+    || Object.hasOwn(data, "flow_type")
+    || Object.hasOwn(data, "task_ref")
+  ) {
     throw endpointError(
       "WhatsApp Flow form data is invalid.",
       "WHATSAPP_FLOW_ENDPOINT_REQUEST_INVALID",
@@ -343,6 +375,7 @@ function validateDynamicReply(session, data, context) {
     ...data,
     [areaField]: selectedArea.title,
     flow_type: session.flowType,
+    ...(selectedArea.taskRef ? { task_ref: selectedArea.taskRef } : {}),
   };
   try {
     return validateWhatsAppFlowReply(session.blueprintKey, normalizedData);

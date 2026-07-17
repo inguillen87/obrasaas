@@ -163,13 +163,17 @@ test('an accepted message can finish draining after its project is paused', asyn
           latitude: -34.6037,
           longitude: -58.3816,
           geofenceMeters: 100,
+          startsAt: new Date('2026-08-01T00:00:00.000Z'),
           organization: {
             timezone: 'America/Argentina/Buenos_Aires',
             subscriptionPlan: 'PRO',
             subscriptionStatus: 'ACTIVE',
             trialEndsAt: null,
           },
-          snapshot: { state: { incidents: [], attendance: {}, tasks: {} } },
+          snapshot: {
+            state: { incidents: [], attendance: {}, tasks: {} },
+            version: 3,
+          },
           whatsapp: { phoneNumberId: scope.phoneNumberId, enabled: true },
         };
       },
@@ -178,6 +182,26 @@ test('an accepted message can finish draining after its project is paused', asyn
       async findMany(args) {
         calls.push(['worker', args]);
         return [worker];
+      },
+    },
+    task: {
+      async findMany(args) {
+        calls.push(['task-find', args]);
+        return [];
+      },
+      async upsert(args) {
+        calls.push(['task-upsert', args]);
+        return args.create;
+      },
+      async deleteMany(args) {
+        calls.push(['task-delete', args]);
+        return { count: 0 };
+      },
+    },
+    projectSnapshot: {
+      async upsert(args) {
+        calls.push(['snapshot', args]);
+        return args.update;
       },
     },
     conversation: {
@@ -205,13 +229,20 @@ test('an accepted message can finish draining after its project is paused', asyn
       from: worker.phone,
     },
     scope,
-    apply: async ({ projectSettings, worker: trustedWorker }) => {
+    apply: async ({ projectSettings, worker: trustedWorker, state }) => {
       assert.equal(projectSettings.id, scope.projectId);
       assert.equal(trustedWorker.id, worker.id);
+      state.tasks['task-a'] = {
+        name: 'Estructura principal',
+        assignee: 'Cuadrilla A',
+        progress: 35,
+        duration: 3,
+        startDay: 2,
+      };
       return {
         reply: 'Evento aplicado',
         flowPrompt: null,
-        stateChanged: false,
+        stateChanged: true,
         newMessages: [],
       };
     },
@@ -225,6 +256,31 @@ test('an accepted message can finish draining after its project is paused', asyn
     organizationId: scope.organizationId,
     status: { in: ['ACTIVE', 'PAUSED'] },
   });
+  const taskProjectionRead = calls.find(([name]) => name === 'task-find')[1];
+  assert.deepEqual(taskProjectionRead.where, {
+    projectId: scope.projectId,
+    metadata: { path: ['source'], equals: 'project-snapshot-v1' },
+  });
+  const taskProjectionWrite = calls.find(([name]) => name === 'task-upsert')[1];
+  assert.deepEqual(taskProjectionWrite.where.projectId_externalId, {
+    projectId: scope.projectId,
+    externalId: 'snapshot:task-a',
+  });
+  assert.equal(taskProjectionWrite.create.progress, 35);
+  assert.equal(taskProjectionWrite.create.metadata.projectStateVersion, 4);
+  assert.equal(taskProjectionWrite.create.startsAt.toISOString(), '2026-08-02T00:00:00.000Z');
+  assert.equal(taskProjectionWrite.create.endsAt.toISOString(), '2026-08-04T00:00:00.000Z');
+  const snapshotWrite = calls.find(([name]) => name === 'snapshot')[1];
+  assert.equal(snapshotWrite.update.state.tasks['task-a'].progress, 35);
+  assert.deepEqual(snapshotWrite.update.version, { increment: 1 });
+  assert.ok(
+    calls.findIndex(([name]) => name === 'task-upsert')
+      < calls.findIndex(([name]) => name === 'snapshot'),
+  );
+  assert.ok(
+    calls.findIndex(([name]) => name === 'snapshot')
+      < calls.findIndex(([name]) => name === 'event-apply'),
+  );
   assert.equal(calls.some(([name]) => name === 'event-apply'), true);
 });
 

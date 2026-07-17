@@ -50,8 +50,8 @@ const CONTEXT = Object.freeze({
   project: { id: SESSION.projectId, name: "Torre Norte" },
   worker: { name: "Ana Pérez" },
   workAreas: [
-    { id: "task_area_a", title: "Estructura nivel 2" },
-    { id: "task_area_b", title: "Núcleo de servicios" },
+    { id: "task_area_a", title: "Estructura nivel 2", taskRef: "task-a" },
+    { id: "task_area_b", title: "Núcleo de servicios", taskRef: "task-b" },
   ],
 });
 
@@ -174,7 +174,7 @@ test("INIT returns only server-owned project, worker, and work-area context", as
     data: {
       project_name: "Torre Norte",
       worker_name: "Ana Pérez",
-      work_areas: CONTEXT.workAreas,
+      work_areas: CONTEXT.workAreas.map(({ id, title }) => ({ id, title })),
     },
   });
   assert.equal(result.session.id, SESSION.id);
@@ -209,17 +209,27 @@ test("data_exchange maps a trusted option and emits the legacy-compatible termin
           work_area: "Núcleo de servicios",
           ppe_status: "complete",
           observations: "Sin novedades",
+          task_ref: "task-b",
         },
       },
     },
   });
 });
 
-test("work-area identities stay bound to tasks across reordering and reject deleted tasks", async () => {
+test("projected task identities survive duplicate names and reordering, then fail closed after deletion", async () => {
   let tasks = [
-    { id: "task-a", title: "Estructura nivel 2" },
-    { id: "task-b", title: "Núcleo de servicios" },
+    {
+      externalId: "snapshot:task-a",
+      title: "Estructura nivel 2",
+      metadata: { source: "project-snapshot-v1" },
+    },
+    {
+      externalId: "snapshot:task-b",
+      title: "Estructura nivel 2",
+      metadata: { source: "project-snapshot-v1" },
+    },
   ];
+  let taskQuery = null;
   const prisma = {
     project: {
       findFirst: async () => ({
@@ -233,28 +243,41 @@ test("work-area identities stay bound to tasks across reordering and reject dele
       findFirst: async () => ({ id: SESSION.workerId, name: "Ana Pérez" }),
     },
     task: {
-      findMany: async () => tasks,
+      findMany: async (query) => {
+        taskQuery = query;
+        return tasks;
+      },
     },
   };
 
   const initial = await loadWhatsAppFlowTrustedContext(prisma, SESSION);
+  assert.deepEqual(taskQuery.where, {
+    projectId: SESSION.projectId,
+    externalId: { startsWith: "snapshot:" },
+    metadata: { path: ["source"], equals: "project-snapshot-v1" },
+    status: { in: ["READY", "IN_PROGRESS", "BLOCKED"] },
+  });
+  assert.deepEqual(taskQuery.select, { externalId: true, title: true, assignee: true });
   tasks = [...tasks].reverse();
   const reordered = await loadWhatsAppFlowTrustedContext(prisma, SESSION);
-  const initialIdsByTitle = Object.fromEntries(
-    initial.workAreas.map((area) => [area.title, area.id]),
+  const initialIdsByTaskRef = Object.fromEntries(
+    initial.workAreas.map((area) => [area.taskRef, area.id]),
   );
-  const reorderedIdsByTitle = Object.fromEntries(
-    reordered.workAreas.map((area) => [area.title, area.id]),
+  const reorderedIdsByTaskRef = Object.fromEntries(
+    reordered.workAreas.map((area) => [area.taskRef, area.id]),
   );
-  assert.deepEqual(reorderedIdsByTitle, initialIdsByTitle);
-  assert.match(initialIdsByTitle["Estructura nivel 2"], /^task_[a-f0-9]{24}$/);
-  assert.notEqual(
-    initialIdsByTitle["Estructura nivel 2"],
-    initialIdsByTitle["Núcleo de servicios"],
-  );
+  assert.deepEqual(reorderedIdsByTaskRef, initialIdsByTaskRef);
+  assert.equal(new Set(initial.workAreas.map((area) => area.title)).size, 2);
+  assert.equal(initial.workAreas.every((area) => area.title.startsWith("Estructura nivel 2 · ")), true);
+  assert.match(initialIdsByTaskRef["task-a"], /^task_[a-f0-9]{24}$/);
+  assert.notEqual(initialIdsByTaskRef["task-a"], initialIdsByTaskRef["task-b"]);
 
-  const selectedTaskId = initialIdsByTitle["Estructura nivel 2"];
-  tasks = [{ id: "task-b", title: "Núcleo de servicios" }];
+  const selectedTaskId = initialIdsByTaskRef["task-a"];
+  tasks = [{
+    externalId: "snapshot:task-b",
+    title: "Estructura nivel 2",
+    metadata: { source: "project-snapshot-v1" },
+  }];
   await assert.rejects(
     dispatchWhatsAppFlowDataRequest({
       payload: payload({
@@ -281,7 +304,7 @@ test("work-area identities stay bound to tasks across reordering and reject dele
   assert.deepEqual(fallback.workAreas, [{ id: "project_site", title: "Av. Obra 100" }]);
 });
 
-test("cross-screen, client-owned flow_type, and stale static metadata fail closed", async () => {
+test("cross-screen, client-owned flow_type or task_ref, and stale static metadata fail closed", async () => {
   const deps = dependencies();
   await assert.rejects(
     dispatchWhatsAppFlowDataRequest({
@@ -289,6 +312,24 @@ test("cross-screen, client-owned flow_type, and stale static metadata fail close
         action: "data_exchange",
         screen: "OTHER_SCREEN",
         data: { work_area: "task_area_a", ppe_status: "complete", observations: "" },
+      }),
+      endpoint: ENDPOINT,
+      prisma: deps.prisma,
+      appSecret: APP_SECRET,
+    }, deps),
+    assertEndpointError("WHATSAPP_FLOW_ENDPOINT_REQUEST_INVALID", 400),
+  );
+  await assert.rejects(
+    dispatchWhatsAppFlowDataRequest({
+      payload: payload({
+        action: "data_exchange",
+        screen: "SHIFT_CHECK_IN",
+        data: {
+          task_ref: "task-b",
+          work_area: "task_area_b",
+          ppe_status: "complete",
+          observations: "",
+        },
       }),
       endpoint: ENDPOINT,
       prisma: deps.prisma,

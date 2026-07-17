@@ -5,6 +5,7 @@ import {
   projectConsumesActiveCapacity,
   tenantProjectWhere,
 } from './projects.js';
+import { synchronizeProjectTaskProjection } from './project-tasks.js';
 import { lockProjectTransaction } from './project-write-policy.js';
 
 export const PROJECT_DETAILS_INCLUDE = {
@@ -171,6 +172,18 @@ export async function updateTenantProject(prisma, access, input) {
           data: updateData,
           include: PROJECT_DETAILS_INCLUDE,
         });
+        if (changedFields.includes('startsAt')) {
+          const snapshot = await transaction.projectSnapshot.findUnique({
+            where: { projectId: current.id },
+            select: { state: true, version: true },
+          });
+          await synchronizeProjectTaskProjection(transaction, {
+            projectId: current.id,
+            nextTasks: snapshot?.state?.tasks,
+            projectStartsAt: updated.startsAt,
+            stateVersion: snapshot?.version ?? 0,
+          });
+        }
         const action = projectLifecycleAuditAction(current.status, nextStatus);
         await transaction.auditLog.create({
           data: {

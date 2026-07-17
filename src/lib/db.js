@@ -18,6 +18,9 @@ import {
 } from "@/lib/field-workers";
 import { assertProjectStateVersion } from "@/lib/project-state";
 import {
+  synchronizeProjectTaskProjection,
+} from "@/lib/project-tasks";
+import {
   lockProjectTransaction,
   requireOperationalProjectWrite,
 } from "@/lib/project-write-policy";
@@ -445,6 +448,12 @@ export async function persistProjectStateTransaction(transaction, {
     ...(Array.isArray(derivedActivities) ? derivedActivities : []),
   ];
   const nextVersion = currentVersion + 1;
+  await synchronizeProjectTaskProjection(transaction, {
+    projectId: context.project.id,
+    nextTasks: state.tasks,
+    projectStartsAt: context.project.startsAt,
+    stateVersion: nextVersion,
+  });
   const stored = await transaction.projectSnapshot.upsert({
     where: { projectId: context.project.id },
     update: { state, version: nextVersion },
@@ -906,6 +915,7 @@ export async function applyDirectObraMessageAtomically({
         latitude: true,
         longitude: true,
         geofenceMeters: true,
+        startsAt: true,
         organization: {
           select: {
             timezone: true,
@@ -1001,6 +1011,12 @@ export async function applyDirectObraMessageAtomically({
 
     if (result.stateChanged) {
       const nextVersion = (project.snapshot?.version ?? 0) + 1;
+      await synchronizeProjectTaskProjection(transaction, {
+        projectId: project.id,
+        nextTasks: state.tasks,
+        projectStartsAt: project.startsAt,
+        stateVersion: nextVersion,
+      });
       await transaction.projectSnapshot.upsert({
         where: { projectId: project.id },
         update: { state, version: nextVersion },
@@ -1185,6 +1201,7 @@ export async function applyWebhookMessageAtomically({
         latitude: true,
         longitude: true,
         geofenceMeters: true,
+        startsAt: true,
         organization: {
           select: {
             timezone: true,
@@ -1193,7 +1210,7 @@ export async function applyWebhookMessageAtomically({
             trialEndsAt: true,
           },
         },
-        snapshot: { select: { state: true } },
+        snapshot: { select: { state: true, version: true } },
         whatsapp: {
           select: { phoneNumberId: true, enabled: true, metadata: true },
         },
@@ -1322,6 +1339,13 @@ export async function applyWebhookMessageAtomically({
     });
 
     if (result.stateChanged) {
+      const nextVersion = (project.snapshot?.version ?? 0) + 1;
+      await synchronizeProjectTaskProjection(transaction, {
+        projectId: project.id,
+        nextTasks: state.tasks,
+        projectStartsAt: project.startsAt,
+        stateVersion: nextVersion,
+      });
       await transaction.projectSnapshot.upsert({
         where: { projectId: project.id },
         update: { state, version: { increment: 1 } },

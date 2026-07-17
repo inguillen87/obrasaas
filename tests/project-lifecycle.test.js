@@ -54,6 +54,9 @@ function prismaDouble({
   fallbackProjects = [],
   counts = [1],
   updateErrors = [],
+  snapshotState = { tasks: {} },
+  snapshotVersion = 0,
+  projectedTasks = [],
 } = {}) {
   const calls = [];
   let currentIndex = 0;
@@ -94,6 +97,29 @@ function prismaDouble({
           ...args.data,
           updatedAt: new Date('2026-07-16T11:00:00.000Z'),
         };
+      },
+    },
+    projectSnapshot: {
+      async findUnique(args) {
+        calls.push(['snapshot-read', args]);
+        return {
+          state: structuredClone(snapshotState),
+          version: snapshotVersion,
+        };
+      },
+    },
+    task: {
+      async findMany(args) {
+        calls.push(['task-find', args]);
+        return structuredClone(projectedTasks);
+      },
+      async upsert(args) {
+        calls.push(['task-upsert', args]);
+        return structuredClone(args.create);
+      },
+      async deleteMany(args) {
+        calls.push(['task-delete', args]);
+        return { count: args.where.externalId.in.length };
       },
     },
     auditLog: {
@@ -147,6 +173,58 @@ test('lifecycle updates lock first and retain the tenant boundary on both read a
   assert.equal(calls[4][1].data.actorId, 'user-a');
   assert.deepEqual(calls[4][1].data.metadata.changedFields, ['name']);
   assert.equal(result.project.name, 'Hospital Regional Norte');
+});
+
+test('changing the project start date reprojects canonical task dates inside the lifecycle transaction', async () => {
+  const { calls, prisma } = prismaDouble({
+    snapshotState: {
+      tasks: {
+        'task-a': {
+          name: 'Estructura principal',
+          assignee: 'Cuadrilla A',
+          progress: 40,
+          duration: 3,
+          startDay: 2,
+        },
+      },
+    },
+    snapshotVersion: 7,
+  });
+
+  await updateTenantProject(
+    prisma,
+    access(),
+    patch({ startsAt: new Date('2026-08-05T00:00:00.000Z') }),
+  );
+
+  assert.deepEqual(calls.map(([name]) => name), [
+    'transaction',
+    'lock',
+    'findFirst',
+    'update',
+    'snapshot-read',
+    'task-find',
+    'task-upsert',
+    'audit',
+    'count',
+  ]);
+  assert.deepEqual(callsNamed(calls, 'snapshot-read')[0][1], {
+    where: { projectId: 'project-a' },
+    select: { state: true, version: true },
+  });
+  const projectionRead = callsNamed(calls, 'task-find')[0][1];
+  assert.deepEqual(projectionRead.where, {
+    projectId: 'project-a',
+    metadata: { path: ['source'], equals: 'project-snapshot-v1' },
+  });
+  const projectionWrite = callsNamed(calls, 'task-upsert')[0][1];
+  assert.deepEqual(projectionWrite.where.projectId_externalId, {
+    projectId: 'project-a',
+    externalId: 'snapshot:task-a',
+  });
+  assert.equal(projectionWrite.create.metadata.projectStateVersion, 7);
+  assert.equal(projectionWrite.create.startsAt.toISOString(), '2026-08-06T00:00:00.000Z');
+  assert.equal(projectionWrite.create.endsAt.toISOString(), '2026-08-08T00:00:00.000Z');
 });
 
 test('a stale lifecycle version conflicts after the locked tenant read and before writes', async () => {

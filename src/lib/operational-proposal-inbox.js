@@ -14,6 +14,7 @@ import {
 import {
   validateProjectStateInput,
 } from './project-state.js';
+import { synchronizeProjectTaskProjection } from './project-tasks.js';
 import {
   OPERATIONAL_PROPOSAL_DECISIONS,
   OPERATIONAL_PROPOSAL_STATUSES,
@@ -1071,6 +1072,11 @@ export async function resolveDashboardOperationalProposal(prisma, {
           previousState,
         });
         stateVersion += 1;
+        await synchronizeProjectTaskProjection(transaction, {
+          projectId: scope.projectId,
+          nextTasks: validatedState.tasks,
+          stateVersion,
+        });
         await transaction.projectSnapshot.upsert({
           where: { projectId: scope.projectId },
           update: { state: validatedState, version: stateVersion },

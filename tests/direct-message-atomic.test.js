@@ -93,6 +93,20 @@ function transactionDouble({ priorOperation = null } = {}) {
         return args.update;
       },
     },
+    task: {
+      async findMany(args) {
+        calls.push(['task-find', args]);
+        return [];
+      },
+      async upsert(args) {
+        calls.push(['task-upsert', args]);
+        return args.create;
+      },
+      async deleteMany(args) {
+        calls.push(['task-delete', args]);
+        return { count: 0 };
+      },
+    },
     conversation: {
       async upsert(args) {
         calls.push(['conversation', args]);
@@ -186,6 +200,7 @@ test('direct application couples claim, engine, snapshot, messages and idempoten
       'operation-read',
       'claim',
       'apply',
+      'task-find',
       'snapshot',
       'conversation',
       'message-read',
@@ -198,6 +213,13 @@ test('direct application couples claim, engine, snapshot, messages and idempoten
   const snapshotArgs = calls.find(([name]) => name === 'snapshot')[1];
   assert.equal(snapshotArgs.update.version, 5);
   assert.equal(snapshotArgs.update.state.incidents[0].id, 'incident-direct-a');
+  const taskProjectionRead = calls.find(([name]) => name === 'task-find')[1];
+  assert.deepEqual(taskProjectionRead.where, {
+    projectId: project.id,
+    metadata: { path: ['source'], equals: 'project-snapshot-v1' },
+  });
+  assert.equal(calls.some(([name]) => name === 'task-upsert'), false);
+  assert.equal(calls.some(([name]) => name === 'task-delete'), false);
   const operationArgs = calls.find(([name]) => name === 'operation-create')[1];
   assert.equal(operationArgs.data.actorId, 'platform-user-a');
   assert.equal(

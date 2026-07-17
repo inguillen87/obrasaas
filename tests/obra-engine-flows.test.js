@@ -43,6 +43,7 @@ function incidentEvent(response = {}) {
         severity: 'high',
         area: 'Planta baja',
         description: 'Pérdida de agua junto al tablero.',
+        task_ref: 'task-structure-02',
         ...response,
       },
     },
@@ -58,6 +59,40 @@ function incidentSession(overrides = {}) {
     phoneNumberId,
     blueprintKey: 'incident-report',
     flowType: 'incident',
+    ...overrides,
+  };
+}
+
+function attendanceEvent(response = {}) {
+  return {
+    externalId: 'wamid.meta-flow-attendance',
+    provider: 'meta',
+    phoneNumberId,
+    from: worker.phone,
+    kind: 'interactive',
+    interactive: {
+      type: 'flow',
+      response: {
+        flow_type: 'attendance',
+        work_area: 'Estructura nivel 2',
+        ppe_status: 'complete',
+        observations: 'Sin novedades',
+        task_ref: 'task-structure-02',
+        ...response,
+      },
+    },
+    timestamp: new Date('2026-07-16T12:00:00.000Z'),
+  };
+}
+
+function attendanceSession(overrides = {}) {
+  return {
+    id: '0b6574a4-2c4e-49a4-a05e-e8747f1bd035',
+    projectId,
+    workerId: worker.id,
+    phoneNumberId,
+    blueprintKey: 'shift-check-in',
+    flowType: 'attendance',
     ...overrides,
   };
 }
@@ -98,6 +133,8 @@ test('a valid Meta Flow uses the trusted session and persists only non-secret re
   assert.equal(result.stateChanged, true);
   assert.equal(state.incidents.length, 1);
   assert.equal(state.incidents[0].type, 'critical');
+  assert.equal(state.incidents[0].metadata.taskRef, 'task-structure-02');
+  assert.equal(state.incidents[0].metadata.workArea, 'Planta baja');
   assert.equal(state.alertsCount, 1);
   assert.equal(result.newMessages[0].metadata.whatsappFlowSessionId, session.id);
   assert.equal(
@@ -106,6 +143,38 @@ test('a valid Meta Flow uses the trusted session and persists only non-secret re
   );
   assert.equal(JSON.stringify(result.newMessages).includes('flow_token'), false);
   assert.equal(JSON.stringify(result.newMessages).includes('tokenSha256'), false);
+});
+
+test('attendance Flow persists its server-owned task and work-area references', async () => {
+  const state = emptyState();
+  const createdEntries = [];
+  const prisma = {
+    attendanceEntry: {
+      findFirst: async () => null,
+      updateMany: async () => ({ count: 0 }),
+      create: async ({ data }) => {
+        createdEntries.push(data);
+        return { id: 'attendance-meta-flow', ...data };
+      },
+    },
+  };
+  const result = await processIncomingObraMessage(
+    attendanceEvent(),
+    { projectId, organizationId: 'organization-meta-flow', phoneNumberId },
+    engineOptions(state, attendanceSession(), { prisma }),
+  );
+
+  assert.equal(result.intent, 'ATTENDANCE_START');
+  assert.equal(result.stateChanged, true);
+  assert.equal(createdEntries.length, 1);
+  assert.deepEqual(createdEntries[0].metadata, {
+    ppeStatus: 'complete',
+    source: 'whatsapp-flow',
+    workArea: 'Estructura nivel 2',
+    taskRef: 'task-structure-02',
+  });
+  assert.equal(state.incidents[0].metadata.taskRef, 'task-structure-02');
+  assert.equal(state.incidents[0].metadata.workArea, 'Estructura nivel 2');
 });
 
 test('an expired trusted Flow ignores its payload and requests one safe replacement', async () => {

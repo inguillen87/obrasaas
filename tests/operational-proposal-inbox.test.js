@@ -96,6 +96,7 @@ function prismaStore({
 } = {}) {
   const records = proposals.map((record) => structuredClone(record));
   const audits = [];
+  const projectedTasks = new Map();
   const calls = [];
   let snapshot = {
     state: structuredClone(state),
@@ -201,6 +202,42 @@ function prismaStore({
         return structuredClone(snapshot);
       },
     },
+    task: {
+      async findMany(args) {
+        calls.push(['task-find', args]);
+        return [...projectedTasks.values()]
+          .filter((task) => task.projectId === args.where.projectId)
+          .filter((task) => (
+            task.metadata?.source === args.where.metadata.equals
+          ))
+          .map((task) => structuredClone(task));
+      },
+      async upsert(args) {
+        calls.push(['task-upsert', args]);
+        const externalId = args.where.projectId_externalId.externalId;
+        const previous = projectedTasks.get(externalId);
+        const stored = previous
+          ? { ...previous, ...structuredClone(args.update) }
+          : structuredClone(args.create);
+        projectedTasks.set(externalId, stored);
+        return structuredClone(stored);
+      },
+      async deleteMany(args) {
+        calls.push(['task-delete', args]);
+        let count = 0;
+        for (const externalId of args.where.externalId.in) {
+          const task = projectedTasks.get(externalId);
+          if (
+            task?.projectId === args.where.projectId
+            && task.metadata?.source === args.where.metadata.equals
+          ) {
+            projectedTasks.delete(externalId);
+            count += 1;
+          }
+        }
+        return { count };
+      },
+    },
     auditLog: {
       async findUnique({ where }) {
         calls.push(['audit-find', where]);
@@ -230,6 +267,7 @@ function prismaStore({
     transaction,
     records,
     audits,
+    projectedTasks,
     calls,
     get snapshot() {
       return snapshot;
@@ -643,6 +681,21 @@ test('approval atomically applies state, increments the snapshot and audits the 
     store.calls.slice(0, 5).map(([name]) => name),
     ['transaction', 'lock', 'project', 'audit-find', 'proposal-find-first'],
   );
+  const taskProjectionRead = store.calls.find(([name]) => name === 'task-find')[1];
+  assert.deepEqual(taskProjectionRead.where, {
+    projectId: scope.projectId,
+    metadata: { path: ['source'], equals: 'project-snapshot-v1' },
+  });
+  const taskProjectionWrite = store.calls.find(([name]) => name === 'task-upsert')[1];
+  assert.deepEqual(taskProjectionWrite.where.projectId_externalId, {
+    projectId: scope.projectId,
+    externalId: 'snapshot:task-a',
+  });
+  assert.equal(taskProjectionWrite.create.progress, 75);
+  assert.equal(taskProjectionWrite.create.status, 'IN_PROGRESS');
+  assert.equal(taskProjectionWrite.create.metadata.projectStateVersion, 5);
+  assert.equal(taskProjectionWrite.create.metadata.snapshotTaskId, 'task-a');
+  assert.equal(store.projectedTasks.get('snapshot:task-a').progress, 75);
 });
 
 test('an exact idempotent retry returns the stored outcome without repeating effects', async () => {
@@ -658,6 +711,7 @@ test('an exact idempotent retry returns the stored outcome without repeating eff
   };
   await resolveDashboardOperationalProposal(store.prisma, options);
   const writesBeforeRetry = store.calls.filter(([name]) => name === 'snapshot-write').length;
+  const taskWritesBeforeRetry = store.calls.filter(([name]) => name === 'task-upsert').length;
   const transitionAuditsBeforeRetry = store.audits.filter((audit) => (
     audit.action === 'voice.proposal.applied'
   )).length;
@@ -669,6 +723,10 @@ test('an exact idempotent retry returns the stored outcome without repeating eff
   assert.equal(
     store.calls.filter(([name]) => name === 'snapshot-write').length,
     writesBeforeRetry,
+  );
+  assert.equal(
+    store.calls.filter(([name]) => name === 'task-upsert').length,
+    taskWritesBeforeRetry,
   );
   assert.equal(
     store.audits.filter((audit) => audit.action === 'voice.proposal.applied').length,

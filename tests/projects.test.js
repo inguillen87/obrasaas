@@ -164,7 +164,7 @@ test('project selection always carries the active tenant boundary', () => {
   assert.throws(() => tenantProjectWhere('', 'project-id'), ProjectInputError);
 });
 
-test('portfolio counts use the canonical operational snapshot instead of dormant relational rows', () => {
+test('portfolio counts use the canonical task projection and operational incident snapshot', () => {
   const serialized = serializeProject({
     id: 'project-a',
     name: 'Hospital Regional',
@@ -229,7 +229,11 @@ test('portfolio count projection never hydrates the complete snapshot JSON', asy
 
   assert.equal(calls[0][1].select.snapshot.select.state, undefined);
   assert.deepEqual(calls[0][1].select.snapshot.select, { updatedAt: true });
-  assert.match(calls[1][1], /jsonb_object_keys/);
+  assert.match(calls[1][1], /FROM "Task" AS task/);
+  assert.match(calls[1][1], /task\."projectId" = project\."id"/);
+  assert.match(calls[1][1], /task\."metadata"->>'source' = 'project-snapshot-v1'/);
+  assert.doesNotMatch(calls[1][1], /jsonb_object_keys/);
+  assert.match(calls[1][1], /project\."organizationId" = \$1/);
   assert.equal(calls[1][2], 'organization-a');
   assert.equal(calls[1][3], 'project-a');
   assert.deepEqual(projects[0].counts, { workers: 4, tasks: 2, incidents: 1 });

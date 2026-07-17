@@ -34,6 +34,8 @@ import {
   tenantProjectWhere,
   uniqueProjectSlug,
 } from '@/lib/projects';
+import { synchronizeProjectTaskProjection } from '@/lib/project-tasks';
+import { lockProjectTransaction } from '@/lib/project-write-policy';
 
 const MAX_PROJECT_JSON_BYTES = 16 * 1024;
 
@@ -57,10 +59,21 @@ async function createTenantProject(prisma, access, input) {
           },
         });
         if (isUnconfiguredTenantBootstrapProject(bootstrapProject)) {
+          await lockProjectTransaction(transaction, bootstrapProject.id);
           const configured = await transaction.project.update({
             where: { id: bootstrapProject.id },
             data: input,
             include: PROJECT_DETAILS_INCLUDE,
+          });
+          const snapshot = await transaction.projectSnapshot.findUnique({
+            where: { projectId: bootstrapProject.id },
+            select: { state: true, version: true },
+          });
+          await synchronizeProjectTaskProjection(transaction, {
+            projectId: bootstrapProject.id,
+            nextTasks: snapshot?.state?.tasks,
+            projectStartsAt: configured.startsAt,
+            stateVersion: snapshot?.version ?? 0,
           });
           await transaction.auditLog.create({
             data: {
