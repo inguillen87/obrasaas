@@ -20,11 +20,11 @@ export const metadata = {
         : 'https://obrasaas-preview.vercel.app'),
   ),
   title: {
-    default: 'ObraSaaS | El sistema operativo de la obra',
+    default: 'ObraSaaS | La obra habla. La operación entiende.',
     template: '%s | ObraSaaS',
   },
   description:
-    'Convierte reportes de WhatsApp, fotos, ubicación y formularios de campo en tareas, evidencia, cronograma y decisiones trazables.',
+    'Convierte voz, fotos, ubicación y formularios de campo en avance, evidencia y decisiones trazables.',
   keywords: [
     'software de construcción',
     'control de obra',

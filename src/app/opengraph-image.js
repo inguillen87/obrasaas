@@ -2,7 +2,7 @@ import { ImageResponse } from 'next/og';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
-export const alt = 'ObraSaaS · La obra reporta por WhatsApp y la gestión actúa con contexto';
+export const alt = 'ObraSaaS · La obra habla y la operación entiende qué hacer';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
@@ -69,16 +69,16 @@ export default async function OpenGraphImage() {
               />
             </div>
             <div style={{ marginTop: 68, color: '#f28a42', fontSize: 18, fontWeight: 700, letterSpacing: 3 }}>
-              SISTEMA OPERATIVO DE OBRA
+              OPERACIÓN DE OBRA CONECTADA
             </div>
             <div style={{ marginTop: 20, fontSize: 58, fontWeight: 700, lineHeight: 1.02, letterSpacing: -3 }}>
-              La obra reporta por WhatsApp.
+              La obra habla.
             </div>
             <div style={{ marginTop: 12, color: '#f28a42', fontSize: 58, fontWeight: 700, lineHeight: 1.02, letterSpacing: -3 }}>
-              La gestión actúa con contexto.
+              La operación entiende.
             </div>
             <div style={{ marginTop: 30, color: '#a8adb3', fontSize: 22, lineHeight: 1.45 }}>
-              Campo, cronograma, evidencia, acopios y dirección sobre una misma trazabilidad.
+              Voz, fotos y WhatsApp convertidos en avance, evidencia y decisiones trazables.
             </div>
           </div>
           <div

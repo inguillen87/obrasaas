@@ -25,7 +25,7 @@ export default function DemoForm() {
   const startedAtRef = useRef(null);
   const analyticsStartedRef = useRef(false);
   const organizationRef = useRef(null);
-  const challengeRef = useRef(null);
+  const segmentRef = useRef(null);
 
   useEffect(() => {
     startedAtRef.current = Date.now();
@@ -47,7 +47,7 @@ export default function DemoForm() {
     if (step === 1) {
       setStep(2);
       track('Lead Form Advanced', { source: 'landing' });
-      requestAnimationFrame(() => challengeRef.current?.focus());
+      requestAnimationFrame(() => segmentRef.current?.focus());
       return;
     }
     if (status === 'submitting') return;
@@ -86,7 +86,10 @@ export default function DemoForm() {
         <div><span>Solicitud de piloto</span><small>Respuesta personalizada · sin tarjeta</small></div>
         <p><strong>0{step}</strong> / 02</p>
       </div>
-      <div className={styles.leadStep} key={step}>
+      <fieldset className={styles.leadStep} key={step}>
+        <legend className={styles.srOnly}>
+          {step === 1 ? 'Datos de contacto' : 'Contexto del piloto'}
+        </legend>
         {step === 1 ? (
           <>
             <div className={styles.leadStepIntro}><span>Empecemos por lo esencial</span><p>Contanos quién sos. En el siguiente paso definimos el flujo que vale la pena probar.</p></div>
@@ -111,7 +114,7 @@ export default function DemoForm() {
             <div className={styles.leadFormGrid}>
               <label>
                 <span>Tipo de organización</span>
-                <select name="segment" value={fields.segment} onChange={updateField}>
+                <select ref={segmentRef} name="segment" value={fields.segment} onChange={updateField}>
                   <option value="CONSTRUCTION">Constructora</option>
                   <option value="ARCHITECTURE">Estudio de arquitectura</option>
                   <option value="REAL_ESTATE">Desarrolladora inmobiliaria</option>
@@ -130,12 +133,12 @@ export default function DemoForm() {
               </label>
               <label className={styles.leadChallenge}>
                 <span>¿Qué problema querés resolver primero?</span>
-                <textarea ref={challengeRef} name="primaryChallenge" value={fields.primaryChallenge} onChange={updateField} required minLength={10} maxLength={1200} rows={4} placeholder="Ej. Los avances llegan por WhatsApp pero después nadie actualiza el cronograma ni la bitácora." />
+                <textarea name="primaryChallenge" value={fields.primaryChallenge} onChange={updateField} required minLength={10} maxLength={1200} rows={4} placeholder="Ej. Los avances llegan por WhatsApp pero después nadie actualiza el cronograma ni la bitácora." />
               </label>
             </div>
           </>
         )}
-      </div>
+      </fieldset>
       <label className={styles.leadHoneypot} aria-hidden="true">
         <span>Sitio web</span>
         <input name="website" value={fields.website} onChange={updateField} tabIndex={-1} autoComplete="off" />
@@ -145,7 +148,7 @@ export default function DemoForm() {
         <div className={styles.leadFormActions}>
           {step === 2 && <button type="button" className={styles.leadBack} onClick={returnToIdentity}>Volver</button>}
           <button type="submit" disabled={status === 'submitting'}>
-            {status === 'submitting' ? 'Registrando…' : step === 1 ? 'Continuar' : 'Solicitar demo'}
+            {status === 'submitting' ? 'Registrando…' : step === 1 ? 'Continuar' : 'Solicitar piloto'}
             <span aria-hidden="true">→</span>
           </button>
         </div>

@@ -1,6 +1,6 @@
 export default function manifest() {
   return {
-    name: 'ObraSaaS · Sistema operativo de obra',
+    name: 'ObraSaaS · Operación de obra conectada',
     short_name: 'ObraSaaS',
     description: 'Conecta reportes de campo, cronograma, evidencia, suministros y dirección desde WhatsApp y la web.',
     start_url: '/',

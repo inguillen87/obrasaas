@@ -6,7 +6,6 @@ import Link from 'next/link';
 import styles from './landing.module.css';
 
 const links = [
-  ['Producto', '#producto'],
   ['Plataforma', '#plataforma'],
   ['Confianza', '#confianza'],
   ['Sectores', '#sectores'],

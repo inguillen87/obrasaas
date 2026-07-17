@@ -226,9 +226,9 @@ export default function PlatformTour() {
       <div className={styles.intro}>
         <div>
           <span>Producto en contexto</span>
-          <h2 id="platform-tour-title">Una señal de campo actualiza toda la conversación de la obra.</h2>
+          <h2 id="platform-tour-title">Cuatro superficies. Una misma realidad operativa.</h2>
         </div>
-        <p>Recorré el circuito que conecta adopción, criterio y trazabilidad. La experiencia es demostrativa; las reglas y límites que muestra son los que aplica la plataforma.</p>
+        <p>Explorá cómo el mismo evento se presenta en campo, contexto, aprobación y control. La experiencia es demostrativa; las reglas y límites que muestra son los que aplica la plataforma.</p>
       </div>
 
       <div className={styles.tourFrame}>

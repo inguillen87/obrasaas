@@ -1,15 +1,16 @@
 # Sistema de marca ObraSaaS
 
-Estado: identidad operativa v2, lista para producto y comunicación. El nombre y el símbolo deben revisarse legalmente antes de registrar la marca o comprar el dominio definitivo.
+Estado: identidad operativa v3, lista para producto y comunicación. El nombre y el símbolo deben revisarse legalmente antes de registrar la marca o comprar el dominio definitivo.
 
-## Idea central: trazado operativo
+## Idea central: enlace estructural
 
-El símbolo representa el recorrido que diferencia a ObraSaaS: una señal real de campo entra en el perímetro de una obra, gana contexto y sale convertida en una acción coordinada.
+El símbolo representa el vínculo que diferencia a ObraSaaS: dos partes de una operación dejan de trabajar aisladas cuando una señal de campo gana contexto y se convierte en una decisión coordinada.
 
-- Los cuatro apoyos verde carbón forman un límite de proyecto abierto: estructura, obra y permisos sin dibujar un edificio literal.
-- El trazado naranja entra desde campo, cambia de nivel dentro del sistema y continúa hacia la gestión. Ese desplazamiento representa contexto, revisión y trazabilidad.
-- La geometría plana conserva una silueta clara en 16 px, funciona en una tinta y permite una animación breve del recorrido sin convertir la marca en decoración.
-- El símbolo evita los recursos saturados del software de construcción: casa, casco, grúa, skyline, cubo, capas isométricas, tilde, escudo y pin de ubicación.
+- Los dos módulos verde carbón funcionan como piezas estructurales complementarias: campo y dirección, empresa y obra, dato y decisión. No forman un marco de escaneo ni dibujan un edificio literal.
+- El trazado naranja atraviesa ambas piezas con una única curva continua. Representa captura, contexto, revisión y registro; también aporta una firma reconocible cuando el símbolo se reduce.
+- La tensión entre ángulos técnicos y curvas humanas evita que la identidad parezca una plantilla de software o una marca de ingeniería pesada.
+- La geometría plana conserva una silueta clara en 16 px, funciona en una tinta y permite revelar el recorrido una sola vez sin convertir la marca en decoración.
+- El símbolo evita los recursos saturados del software de construcción: casa, casco, grúa, skyline, cubo, tilde, escudo, pin y cuatro esquinas de escaneo.
 
 La marca no utiliza descriptor junto al nombre. `ObraSaaS` es la firma completa; expresiones de posicionamiento como “sistema operativo de obra” pertenecen al contenido, no al lockup.
 
@@ -66,7 +67,7 @@ El recorrido puede revelarse una sola vez al cargar un lockup. No se anima de fo
 
 - Tamaño mínimo del símbolo digital: `24 px`; entre `16` y `23 px`, usar el favicon.
 - Tamaño mínimo del lockup: `120 px` de ancho.
-- Área de protección: al menos el grosor de uno de los apoyos alrededor de la marca.
+- Área de protección: al menos el grosor de uno de los módulos estructurales alrededor de la marca.
 - No rotar, inclinar, deformar ni alterar el cambio de nivel del trazado.
 - No agregar sombras, biseles, gradientes o contornos.
 - No encerrar el símbolo en otra forma salvo el app icon oficial.

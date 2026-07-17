@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
   <title id="title">Símbolo ObraSaaS</title>
-  <desc id="desc">Un evento de campo cruza la estructura del proyecto y se convierte en una acción coordinada.</desc>
-  <path d="M10 8H29V16H18V25H10V8ZM35 8H54V27H46V16H35V8ZM10 37H18V48H29V56H10V37ZM35 48H46V39H54V56H35V48Z" fill="#0A1B17"/>
-  <path d="M4 29H26.5C30.1 29 33 31.9 33 35.5V36C33 38.8 35.2 41 38 41H60" fill="none" stroke="#F28A42" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <desc id="desc">Dos módulos estructurales se enlazan mediante un trazado operativo continuo.</desc>
+  <path d="M8 35V14C8 8 12 4 18 4H48L60 16V31H50V20L44 14H18V35ZM56 29V50C56 56 52 60 46 60H16L4 48V33H14V44L20 50H46V29Z" fill="#0A1B17"/>
+  <path d="M4 45H19C24.5 45 29 40.5 29 35V29C29 23.5 33.5 19 39 19H60" fill="none" stroke="#F28A42" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
