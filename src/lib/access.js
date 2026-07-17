@@ -13,8 +13,14 @@ import {
 import {
   ACTIVE_PROJECT_COOKIE,
   isSelectableProjectStatus,
-  tenantProjectWhere,
 } from '@/lib/projects';
+import {
+  accessHasPortfolioProjectAccess,
+  grantCreatedProjectAccessToActor,
+  membershipTransitionRequiresProjectAccessReset,
+  projectAccessWhere,
+  resetTenantMembershipProjectAccess,
+} from '@/lib/project-access';
 import {
   isSuperadminEmail,
   SUPERADMIN_EMAIL,
@@ -131,28 +137,28 @@ async function ensureTenantOrganization({ prisma, clerk, orgId, orgSlug }) {
   });
 }
 
-async function ensureDefaultProject(prisma, organization) {
+async function ensureDefaultProject(prisma, access) {
+  const { organization } = access;
   const activeProject = await prisma.project.findFirst({
-    where: { organizationId: organization.id, status: 'ACTIVE' },
+    where: projectAccessWhere(access, { status: 'ACTIVE' }),
     orderBy: { createdAt: 'asc' },
   });
   if (activeProject) return activeProject;
 
   const existingProject = await prisma.project.findFirst({
-    where: {
-      organizationId: organization.id,
-      status: { not: 'ARCHIVED' },
-    },
+    where: projectAccessWhere(access, { status: { not: 'ARCHIVED' } }),
     orderBy: { createdAt: 'asc' },
   });
   if (existingProject) return existingProject;
+
+  if (!accessHasPortfolioProjectAccess(access)) return null;
 
   const internal = databaseOrganizationIsInternal(organization);
   const projectSlug = internal
     ? process.env.OBRASAAS_PROJECT_SLUG || 'palermo'
     : 'obra-principal';
 
-  return prisma.project.create({
+  const project = await prisma.project.create({
     data: {
       organizationId: organization.id,
       name: internal ? 'Obra Palermo' : 'Obra principal',
@@ -163,19 +169,41 @@ async function ensureDefaultProject(prisma, organization) {
       geofenceMeters: Number(process.env.PROJECT_GEOFENCE_METERS || 100),
     },
   });
+  await grantCreatedProjectAccessToActor(prisma, access, project.id);
+  return project;
 }
 
-async function resolveActiveProject(prisma, organization) {
-  const selectedProjectId = (await cookies()).get(ACTIVE_PROJECT_COOKIE)?.value || null;
+export async function resolveActiveProject(
+  prisma,
+  access,
+  { selectedProjectId: selectedProjectIdOverride } = {},
+) {
+  const selectedProjectId = selectedProjectIdOverride === undefined
+    ? (await cookies()).get(ACTIVE_PROJECT_COOKIE)?.value || null
+    : selectedProjectIdOverride;
   if (selectedProjectId) {
     const selectedProject = await prisma.project.findFirst({
-      where: tenantProjectWhere(organization.id, selectedProjectId),
+      where: projectAccessWhere(access, { id: selectedProjectId }),
     });
     if (selectedProject && isSelectableProjectStatus(selectedProject.status)) {
       return selectedProject;
     }
   }
-  return ensureDefaultProject(prisma, organization);
+
+  const activeProject = await prisma.project.findFirst({
+    where: projectAccessWhere(access, { status: 'ACTIVE' }),
+    orderBy: { createdAt: 'asc' },
+  });
+  if (activeProject) return activeProject;
+
+  const reviewProject = await prisma.project.findFirst({
+    where: projectAccessWhere(access, { status: { not: 'ARCHIVED' } }),
+    orderBy: { createdAt: 'asc' },
+  });
+  if (reviewProject) return reviewProject;
+
+  if (!accessHasPortfolioProjectAccess(access)) return null;
+  return ensureDefaultProject(prisma, access);
 }
 
 const resolvePlatformAccess = cache(async () => {
@@ -250,7 +278,11 @@ const resolvePlatformAccess = cache(async () => {
       }
     }
     const resolvedClerkRole = session.orgRole || 'org:member';
-    membership = await prisma.tenantMembership.upsert({
+    const resolvedTenantRole = roleForClerkMembership(
+      resolvedClerkRole,
+      currentMembership?.tenantRole || invitedTenantRole,
+    );
+    const upsertMembership = (database) => database.tenantMembership.upsert({
       where: {
         organizationId_userId: {
           organizationId: organization.id,
@@ -259,24 +291,66 @@ const resolvePlatformAccess = cache(async () => {
       },
       update: {
         clerkRole: resolvedClerkRole,
-        tenantRole: roleForClerkMembership(
-          resolvedClerkRole,
-          currentMembership?.tenantRole,
-        ),
+        tenantRole: resolvedTenantRole,
         status: 'ACTIVE',
       },
       create: {
         organizationId: organization.id,
         userId: user.id,
         clerkRole: resolvedClerkRole,
-        tenantRole: roleForClerkMembership(resolvedClerkRole, invitedTenantRole),
+        tenantRole: resolvedTenantRole,
       },
     });
+    const resetProjectAccess = currentMembership && (
+      membershipTransitionRequiresProjectAccessReset({
+        previousTenantRole: currentMembership.tenantRole,
+        nextTenantRole: resolvedTenantRole,
+        previousStatus: currentMembership.status,
+        nextStatus: 'ACTIVE',
+      })
+    );
+    if (resetProjectAccess) {
+      membership = await prisma.$transaction(async (transaction) => {
+        const resolvedMembership = await upsertMembership(transaction);
+        const reset = await resetTenantMembershipProjectAccess(
+          transaction,
+          resolvedMembership.id,
+        );
+        await transaction.auditLog.create({
+          data: {
+            organizationId: organization.id,
+            actorId: user.id,
+            action: 'tenant.membership.project_access_reset',
+            entityType: 'TenantMembership',
+            entityId: resolvedMembership.id,
+            metadata: {
+              source: 'session_membership_sync',
+              previousRole: currentMembership.tenantRole,
+              nextRole: resolvedTenantRole,
+              previousStatus: currentMembership.status,
+              nextStatus: 'ACTIVE',
+              resetProjectAccessCount: reset.count,
+            },
+          },
+        });
+        return resolvedMembership;
+      });
+    } else {
+      membership = await upsertMembership(prisma);
+    }
   } else if (isSuperadmin) {
     organization = await ensureInternalOrganization(prisma);
   }
 
-  if (organization) project = await resolveActiveProject(prisma, organization);
+  const tenantRole = isSuperadmin ? 'SUPERADMIN' : membership?.tenantRole || null;
+  if (organization) {
+    project = await resolveActiveProject(prisma, {
+      isSuperadmin,
+      tenantRole,
+      tenantMembershipId: membership?.id || null,
+      organization,
+    });
+  }
 
   const subscription = organization
     ? getSubscriptionEntitlements(organization)
@@ -291,18 +365,28 @@ const resolvePlatformAccess = cache(async () => {
     orgId: session.orgId || null,
     orgSlug: session.orgSlug || null,
     orgRole: session.orgRole || null,
-    tenantRole: isSuperadmin ? 'SUPERADMIN' : membership?.tenantRole || null,
+    tenantRole,
+    tenantMembershipId: membership?.id || null,
     organization,
     project,
     subscription,
   };
 });
 
-export async function getPlatformAccess({ requireOrganization = true } = {}) {
+export async function getPlatformAccess({
+  requireOrganization = true,
+  requireProject = requireOrganization,
+} = {}) {
   const access = await resolvePlatformAccess();
   if (requireOrganization && !access.organization) {
     throw new AccessError('An active organization is required.', {
       code: 'ORGANIZATION_REQUIRED',
+      status: 403,
+    });
+  }
+  if (requireProject && !access.project) {
+    throw new AccessError('No tenés una obra activa asignada.', {
+      code: 'PROJECT_ACCESS_REQUIRED',
       status: 403,
     });
   }

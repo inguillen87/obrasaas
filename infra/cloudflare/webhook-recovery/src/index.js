@@ -1,5 +1,5 @@
 const RECOVERY_TIMEOUT_MS = 55_000;
-const RECOVERY_ORIGIN = "https://obrasaas-preview.vercel.app";
+const RECOVERY_ORIGIN = "https://obrasaas.vercel.app";
 
 function configuredRecoveryUrl(value) {
   try {

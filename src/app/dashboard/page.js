@@ -10,14 +10,16 @@ import {
   sanitizeProjectStateMedicalData,
 } from '@/lib/medical-privacy';
 import { redirect } from 'next/navigation';
+import ProjectAccessRequired from './project-access-required';
 
 export const dynamic = 'force-dynamic';
 
 export default async function DashboardPage() {
   const access = await getPlatformAccess({ requireOrganization: false });
-  if (!access.organization || !access.project) {
+  if (!access.organization) {
     redirect('/session-tasks/choose-organization');
   }
+  if (!access.project) return <ProjectAccessRequired access={access} />;
   requireTenantPermission(access, 'org:projects:read');
 
   const prisma = getPrisma();

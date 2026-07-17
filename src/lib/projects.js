@@ -1,4 +1,5 @@
 import { PLAN_CATALOG } from './plans.js';
+import { projectAccessWhere } from './project-access.js';
 
 export const ACTIVE_PROJECT_COOKIE = 'obrasaas_active_project';
 
@@ -367,9 +368,10 @@ export async function attachProjectOperationalCounts(
   }));
 }
 
-export async function listOrganizationProjects(prisma, organizationId) {
+export async function listOrganizationProjects(prisma, access) {
+  const organizationId = access?.organization?.id;
   const projects = await prisma.project.findMany({
-    where: { organizationId },
+    where: projectAccessWhere(access),
     select: {
       id: true,
       name: true,

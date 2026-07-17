@@ -10,6 +10,11 @@ import {
 } from '@/lib/access';
 import { getPrisma } from '@/lib/prisma';
 import { fieldWorkerWhatsAppRole } from '@/lib/field-workers';
+import { PLAN_CATALOG } from '@/lib/plans';
+import {
+  projectAccessWhere,
+  tenantRoleHasPortfolioAccess,
+} from '@/lib/project-access';
 import { TENANT_ROLES } from '@/lib/tenant-roles';
 import { serializeInvitation } from '@/lib/invitations';
 
@@ -20,10 +25,20 @@ export default async function TeamPage() {
   requireTenantPermission(access, 'tenant:members:read');
   const canManage = hasTenantPermission(access, 'tenant:members:manage');
   const canManageField = hasTenantPermission(access, 'org:field:manage');
-  const [memberships, invitationResult, workers] = await Promise.all([
-    getPrisma().tenantMembership.findMany({
+  const prisma = getPrisma();
+  const [memberships, invitationResult, workers, projects] = await Promise.all([
+    prisma.tenantMembership.findMany({
       where: { organizationId: access.organization.id },
-      include: { user: true },
+      include: {
+        user: true,
+        projectMemberships: {
+          where: {
+            status: 'ACTIVE',
+            project: { status: { not: 'ARCHIVED' } },
+          },
+          select: { projectId: true },
+        },
+      },
       orderBy: [{ status: 'asc' }, { createdAt: 'asc' }],
     }),
     canManage && access.orgId
@@ -33,11 +48,39 @@ export default async function TeamPage() {
         limit: 100,
       }))
       : Promise.resolve({ data: [] }),
-    getPrisma().worker.findMany({
+    prisma.worker.findMany({
       where: { projectId: access.project.id },
       orderBy: [{ active: 'desc' }, { name: 'asc' }],
     }),
+    prisma.project.findMany({
+      where: projectAccessWhere(access, {
+        status: { not: 'ARCHIVED' },
+      }),
+      select: {
+        id: true,
+        name: true,
+        status: true,
+      },
+      orderBy: [{ status: 'asc' }, { name: 'asc' }],
+    }),
   ]);
+
+  const plan = PLAN_CATALOG[access.organization.subscriptionPlan];
+  const canViewFullProjectCatalog = access.isSuperadmin
+    || canManage
+    || tenantRoleHasPortfolioAccess(access.tenantRole);
+  const currentMembership = memberships.find((membership) => (
+    membership.userId === access.databaseUserId
+  ));
+  const visibleProjectIds = canViewFullProjectCatalog
+    ? null
+    : new Set(
+        currentMembership?.projectMemberships.map(({ projectId }) => projectId) || [],
+      );
+  const visibleProjects = visibleProjectIds
+    ? projects.filter((project) => visibleProjectIds.has(project.id))
+    : projects;
+  const catalogProjectIds = new Set(visibleProjects.map((project) => project.id));
 
   return (
     <div className={styles.shell}>
@@ -72,13 +115,22 @@ export default async function TeamPage() {
           clerkRole: membership.clerkRole,
           tenantRole: membership.tenantRole,
           status: membership.status,
+          portfolioAccess: tenantRoleHasPortfolioAccess(membership.tenantRole),
+          projectIds: membership.projectMemberships
+            .map(({ projectId }) => projectId)
+            .filter((projectId) => catalogProjectIds.has(projectId)),
           user: {
             name: membership.user.fullName,
             email: membership.user.primaryEmail,
             avatarUrl: membership.user.avatarUrl,
           },
         }))}
-        roles={Object.values(TENANT_ROLES)}
+        officeUserLimit={plan?.limits.officeUsers || 0}
+        projects={visibleProjects}
+        roles={Object.values(TENANT_ROLES).map((role) => ({
+          ...role,
+          portfolioAccess: tenantRoleHasPortfolioAccess(role.key),
+        }))}
       />
 
       <FieldWorkersClient

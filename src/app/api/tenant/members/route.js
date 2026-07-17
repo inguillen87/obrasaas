@@ -6,6 +6,10 @@ import {
 } from '@/lib/access';
 import { getPrisma } from '@/lib/prisma';
 import {
+  membershipTransitionRequiresProjectAccessReset,
+  resetTenantMembershipProjectAccess,
+} from '@/lib/project-access';
+import {
   RequestBodyError,
   readJsonRequest,
   requestBodyErrorResponse,
@@ -53,9 +57,15 @@ export async function GET() {
   }
 }
 
-export async function PATCH(request) {
+export async function patchTenantMemberRole(
+  request,
+  {
+    resolveAccess = getPlatformAccess,
+    prismaFactory = getPrisma,
+  } = {},
+) {
   try {
-    const access = await getPlatformAccess();
+    const access = await resolveAccess();
     requireTenantPermission(access, 'tenant:members:manage');
     const body = await readJsonRequest(request, {
       maxBytes: MAX_MEMBERSHIP_JSON_BYTES,
@@ -64,7 +74,7 @@ export async function PATCH(request) {
       return Response.json({ error: 'Membresía o rol inválido.' }, { status: 400 });
     }
 
-    const prisma = getPrisma();
+    const prisma = prismaFactory();
     const membership = await prisma.tenantMembership.findFirst({
       where: {
         id: body.membershipId,
@@ -86,12 +96,23 @@ export async function PATCH(request) {
       }, { status: 409 });
     }
 
-    const updated = await prisma.$transaction(async (tx) => {
+    const updateResult = await prisma.$transaction(async (tx) => {
       const result = await tx.tenantMembership.update({
         where: { id: membership.id },
         data: { tenantRole: body.tenantRole },
         include: { user: true },
       });
+      const projectAccessResetApplied = membershipTransitionRequiresProjectAccessReset({
+        previousTenantRole: membership.tenantRole,
+        nextTenantRole: result.tenantRole,
+        previousStatus: membership.status,
+        nextStatus: result.status,
+      });
+      let resetProjectAccessCount = 0;
+      if (projectAccessResetApplied) {
+        const reset = await resetTenantMembershipProjectAccess(tx, membership.id);
+        resetProjectAccessCount = reset.count;
+      }
       await tx.auditLog.create({
         data: {
           organizationId: access.organization.id,
@@ -103,17 +124,27 @@ export async function PATCH(request) {
             userEmail: membership.user.primaryEmail,
             previousRole: membership.tenantRole,
             nextRole: body.tenantRole,
+            resetProjectAccessCount,
           },
         },
       });
-      return result;
+      return { membership: result, projectAccessResetApplied };
     });
 
-    return Response.json({ membership: serializeMembership(updated) });
+    return Response.json({
+      membership: {
+        ...serializeMembership(updateResult.membership),
+        ...(updateResult.projectAccessResetApplied ? { projectIds: [] } : {}),
+      },
+    });
   } catch (error) {
     if (error instanceof AccessError) return accessErrorResponse(error);
     if (error instanceof RequestBodyError) return requestBodyErrorResponse(error);
     console.error('Member role update failed:', error);
     return Response.json({ error: 'No se pudo actualizar el rol.' }, { status: 500 });
   }
+}
+
+export async function PATCH(request) {
+  return patchTenantMemberRole(request);
 }

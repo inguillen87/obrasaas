@@ -6,7 +6,7 @@
   "workers_dev": true,
   "preview_urls": false,
   "vars": {
-    "RECOVERY_URL": "https://obrasaas-preview.vercel.app/api/cron/webhooks"
+    "RECOVERY_URL": "https://obrasaas.vercel.app/api/cron/webhooks"
   },
   "triggers": {
     "crons": ["* * * * *"]

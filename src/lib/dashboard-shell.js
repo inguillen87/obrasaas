@@ -3,9 +3,12 @@ import 'server-only';
 import { cache } from 'react';
 
 import { getPlatformAccess, hasTenantPermission } from '@/lib/access';
-import { requireDashboardShellReadAccess } from '@/lib/dashboard-shell-access';
+import {
+  resolveDashboardShellAccessState,
+} from '@/lib/dashboard-shell-access';
 import { PLAN_CATALOG } from '@/lib/plans';
 import { getPrisma } from '@/lib/prisma';
+import { projectAccessWhere } from '@/lib/project-access';
 import { TENANT_ROLES } from '@/lib/tenant-roles';
 
 const PROJECT_SWITCHER_LIMIT = 50;
@@ -20,8 +23,11 @@ function serializeProjectOption(project) {
 
 export const getDashboardShellModel = cache(async () => {
   const access = await getPlatformAccess({ requireOrganization: false });
-  if (!access.organization || !access.project) return null;
-  requireDashboardShellReadAccess(access);
+  const accessState = resolveDashboardShellAccessState(access);
+  if (accessState.kind === 'NO_ORGANIZATION') return null;
+  if (accessState.kind === 'PROJECT_ACCESS_REQUIRED') {
+    return { projectAccessRequired: accessState.projectAccessRequired };
+  }
 
   const canReadApprovals = hasTenantPermission(
     access,
@@ -30,10 +36,9 @@ export const getDashboardShellModel = cache(async () => {
   const prisma = getPrisma();
   const [projectRows, pendingApprovalCount, whatsapp] = await Promise.all([
     prisma.project.findMany({
-      where: {
-        organizationId: access.organization.id,
+      where: projectAccessWhere(access, {
         status: { not: 'ARCHIVED' },
-      },
+      }),
       orderBy: [{ updatedAt: 'desc' }, { name: 'asc' }],
       take: PROJECT_SWITCHER_LIMIT + 1,
       select: { id: true, name: true, status: true },

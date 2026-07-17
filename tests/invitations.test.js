@@ -6,6 +6,7 @@ import {
   parseInvitationInput,
   tenantRoleFromInvitation,
 } from '../src/lib/invitations.js';
+import { roleForClerkMembership } from '../src/lib/tenant-roles.js';
 
 test('invitation input normalizes email and maps only admins to Clerk admin', () => {
   assert.deepEqual(
@@ -62,4 +63,11 @@ test('accepted invitation lookup is email-bound and prefers the newest match', (
 
   assert.equal(acceptedInvitationRole(invitations, 'PERSONA@obra.com'), 'FINANCE');
   assert.equal(acceptedInvitationRole(invitations, 'otra@obra.com'), null);
+  assert.equal(
+    roleForClerkMembership(
+      'org:member',
+      acceptedInvitationRole(invitations, 'persona@obra.com'),
+    ),
+    'FINANCE',
+  );
 });

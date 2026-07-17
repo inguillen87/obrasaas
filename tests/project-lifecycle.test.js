@@ -13,9 +13,14 @@ function access({
   activeProjectId = 'project-a',
   organizationId = 'organization-a',
   plan = 'PRO',
+  tenantMembershipId = null,
+  tenantRole = 'ADMIN',
 } = {}) {
   return {
     databaseUserId: 'user-a',
+    isSuperadmin: false,
+    tenantMembershipId,
+    tenantRole,
     organization: {
       id: organizationId,
       subscriptionPlan: plan,
@@ -122,6 +127,12 @@ function prismaDouble({
         return { count: args.where.externalId.in.length };
       },
     },
+    projectMembership: {
+      async updateMany(args) {
+        calls.push(['project-access-reset', args]);
+        return { count: 2 };
+      },
+    },
     auditLog: {
       async create(args) {
         calls.push(['audit', args]);
@@ -173,6 +184,35 @@ test('lifecycle updates lock first and retain the tenant boundary on both read a
   assert.equal(calls[4][1].data.actorId, 'user-a');
   assert.deepEqual(calls[4][1].data.metadata.changedFields, ['name']);
   assert.equal(result.project.name, 'Hospital Regional Norte');
+});
+
+test('restricted lifecycle reads and writes require the actor project assignment', async () => {
+  const { calls, prisma } = prismaDouble();
+  await updateTenantProject(
+    prisma,
+    access({
+      tenantRole: 'SITE_MANAGER',
+      tenantMembershipId: 'membership-a',
+    }),
+    patch({ name: 'Hospital Regional Norte' }),
+  );
+
+  const expectedScope = {
+    id: 'project-a',
+    organizationId: 'organization-a',
+    projectMemberships: {
+      some: {
+        tenantMembershipId: 'membership-a',
+        status: 'ACTIVE',
+        tenantMembership: {
+          organizationId: 'organization-a',
+          status: 'ACTIVE',
+        },
+      },
+    },
+  };
+  assert.deepEqual(callsNamed(calls, 'findFirst')[0][1].where, expectedScope);
+  assert.deepEqual(callsNamed(calls, 'update')[0][1].where, expectedScope);
 });
 
 test('changing the project start date reprojects canonical task dates inside the lifecycle transaction', async () => {
@@ -323,6 +363,14 @@ test('archiving the selected project prefers the latest active tenant fallback',
     select: { id: true },
   });
   assert.equal(callsNamed(calls, 'audit')[0][1].data.action, 'project.archived');
+  assert.deepEqual(callsNamed(calls, 'project-access-reset')[0][1], {
+    where: { projectId: 'project-a', status: 'ACTIVE' },
+    data: { status: 'DISABLED' },
+  });
+  assert.equal(
+    callsNamed(calls, 'audit')[0][1].data.metadata.resetProjectAccessCount,
+    2,
+  );
 });
 
 test('archive fallback uses the latest non-archived tenant context when none is active', async () => {

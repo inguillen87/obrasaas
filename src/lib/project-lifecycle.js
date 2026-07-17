@@ -3,8 +3,8 @@ import {
   ProjectInputError,
   activeProjectCapacity,
   projectConsumesActiveCapacity,
-  tenantProjectWhere,
 } from './projects.js';
+import { projectAccessWhere } from './project-access.js';
 import { synchronizeProjectTaskProjection } from './project-tasks.js';
 import { lockProjectTransaction } from './project-write-policy.js';
 
@@ -85,7 +85,7 @@ export async function updateTenantProject(prisma, access, input) {
         await lockProjectTransaction(transaction, input.projectId);
 
         const current = await transaction.project.findFirst({
-          where: tenantProjectWhere(access.organization.id, input.projectId),
+          where: projectAccessWhere(access, { id: input.projectId }),
           select: {
             id: true,
             name: true,
@@ -141,20 +141,18 @@ export async function updateTenantProject(prisma, access, input) {
         let activeProjectId = access.project.id;
         if (nextStatus === 'ARCHIVED' && current.id === access.project.id) {
           const activeFallback = await transaction.project.findFirst({
-            where: {
-              organizationId: access.organization.id,
+            where: projectAccessWhere(access, {
               id: { not: current.id },
               status: 'ACTIVE',
-            },
+            }),
             orderBy: { updatedAt: 'desc' },
             select: { id: true },
           });
           const reviewFallback = activeFallback || await transaction.project.findFirst({
-            where: {
-              organizationId: access.organization.id,
+            where: projectAccessWhere(access, {
               id: { not: current.id },
               status: { not: 'ARCHIVED' },
-            },
+            }),
             orderBy: { updatedAt: 'desc' },
             select: { id: true },
           });
@@ -168,10 +166,21 @@ export async function updateTenantProject(prisma, access, input) {
         }
 
         const updated = await transaction.project.update({
-          where: tenantProjectWhere(access.organization.id, current.id),
+          where: projectAccessWhere(access, { id: current.id }),
           data: updateData,
           include: PROJECT_DETAILS_INCLUDE,
         });
+        let resetProjectAccessCount = 0;
+        if (current.status !== 'ARCHIVED' && nextStatus === 'ARCHIVED') {
+          const reset = await transaction.projectMembership.updateMany({
+            where: {
+              projectId: current.id,
+              status: 'ACTIVE',
+            },
+            data: { status: 'DISABLED' },
+          });
+          resetProjectAccessCount = reset.count;
+        }
         if (changedFields.includes('startsAt')) {
           const snapshot = await transaction.projectSnapshot.findUnique({
             where: { projectId: current.id },
@@ -196,6 +205,7 @@ export async function updateTenantProject(prisma, access, input) {
               changedFields,
               previousStatus: current.status,
               nextStatus,
+              resetProjectAccessCount,
             },
           },
         });

@@ -41,7 +41,11 @@ registerHooks({
 
 const [
   { AccessError },
-  { requireDashboardShellReadAccess },
+  {
+    dashboardProjectAccessRequiredModel,
+    requireDashboardShellReadAccess,
+    resolveDashboardShellAccessState,
+  },
 ] = await Promise.all([
   import('../src/lib/access.js'),
   import('../src/lib/dashboard-shell-access.js'),
@@ -74,4 +78,37 @@ test('dashboard shell blocks suspended tenants before a data loader can run', ()
 
 test('dashboard shell admits authorized tenant readers', () => {
   assert.equal(requireDashboardShellReadAccess(tenantAccess(true)).orgId, 'org_tenant');
+});
+
+test('dashboard deep links render the pending-access state before project pages load', () => {
+  const pending = dashboardProjectAccessRequiredModel({
+    email: 'jefe@obra.com',
+    tenantRole: 'SITE_MANAGER',
+    organization: { id: 'organization-a', name: 'Constructora Norte' },
+    project: null,
+  });
+
+  assert.deepEqual(pending, {
+    email: 'jefe@obra.com',
+    tenantRole: 'SITE_MANAGER',
+    organization: { name: 'Constructora Norte' },
+  });
+  assert.equal(dashboardProjectAccessRequiredModel({
+    organization: { name: 'Constructora Norte' },
+    project: { id: 'project-a' },
+  }), null);
+  assert.equal(dashboardProjectAccessRequiredModel({ organization: null }), null);
+});
+
+test('subscription suspension is enforced before the no-project deep-link state', () => {
+  assert.throws(
+    () => resolveDashboardShellAccessState({
+      ...tenantAccess(false),
+      email: 'jefe@obra.com',
+      organization: { id: 'organization-a', name: 'Constructora Norte' },
+      project: null,
+    }),
+    (error) => error instanceof AccessError
+      && error.code === 'SUBSCRIPTION_SUSPENDED',
+  );
 });

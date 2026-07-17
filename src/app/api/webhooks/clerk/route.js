@@ -2,11 +2,13 @@ import { verifyWebhook } from '@clerk/nextjs/webhooks';
 import { clerkClient } from '@clerk/nextjs/server';
 import { systemRoleForVerifiedEmail } from '@/lib/platform-identity';
 import { getPrisma } from '@/lib/prisma';
+import { persistClerkTenantMembership } from '@/lib/clerk-membership-sync';
 import {
   clerkOrganizationIsInternal,
   mergeClerkOrganizationMetadata,
 } from '@/lib/organization-policy';
 import { roleForClerkMembership } from '@/lib/tenant-roles';
+import { acceptedInvitationRole } from '@/lib/invitations';
 
 export const runtime = 'nodejs';
 
@@ -147,25 +149,44 @@ async function processEvent(event) {
       },
     });
     const clerkRole = event.data.role || 'org:member';
-    await prisma.tenantMembership.upsert({
-      where: {
-        organizationId_userId: {
-          organizationId: organization.id,
-          userId: user.id,
-        },
-      },
-      update: {
-        clerkRole,
-        tenantRole: roleForClerkMembership(clerkRole, currentMembership?.tenantRole),
-        status: event.type === 'organizationMembership.deleted' ? 'DISABLED' : 'ACTIVE',
-      },
-      create: {
-        organizationId: organization.id,
-        userId: user.id,
-        clerkRole,
-        tenantRole: roleForClerkMembership(clerkRole),
-        status: event.type === 'organizationMembership.deleted' ? 'DISABLED' : 'ACTIVE',
-      },
+    let invitedTenantRole = null;
+    if (
+      !currentMembership
+      && clerkRole !== 'org:admin'
+      && event.type !== 'organizationMembership.deleted'
+    ) {
+      try {
+        const acceptedInvitations = await clerk.organizations.getOrganizationInvitationList({
+          organizationId: event.data.organization.id,
+          status: ['accepted'],
+          limit: 100,
+        });
+        invitedTenantRole = acceptedInvitationRole(
+          acceptedInvitations.data,
+          user.primaryEmail,
+        );
+      } catch (error) {
+        console.error(
+          'Accepted Clerk invitation lookup failed in membership webhook; using least privilege:',
+          error,
+        );
+      }
+    }
+    const resolvedTenantRole = roleForClerkMembership(
+      clerkRole,
+      currentMembership?.tenantRole || invitedTenantRole,
+    );
+    const nextStatus = event.type === 'organizationMembership.deleted'
+      ? 'DISABLED'
+      : 'ACTIVE';
+    await persistClerkTenantMembership(prisma, {
+      organizationId: organization.id,
+      userId: user.id,
+      clerkRole,
+      tenantRole: resolvedTenantRole,
+      status: nextStatus,
+      eventType: event.type,
+      currentMembership,
     });
   }
 }

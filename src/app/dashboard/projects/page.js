@@ -26,7 +26,7 @@ export default async function ProjectsPage() {
   requireTenantPermission(access, 'org:projects:read');
   const prisma = getPrisma();
   const [projects, activeCount] = await Promise.all([
-    listOrganizationProjects(prisma, access.organization.id),
+    listOrganizationProjects(prisma, access),
     prisma.project.count({
       where: {
         organizationId: access.organization.id,

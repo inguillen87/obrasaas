@@ -31,9 +31,12 @@ import {
   normalizeProjectInput,
   normalizeProjectPatchInput,
   serializeProject,
-  tenantProjectWhere,
   uniqueProjectSlug,
 } from '@/lib/projects';
+import {
+  grantCreatedProjectAccessToActor,
+  projectAccessWhere,
+} from '@/lib/project-access';
 import { synchronizeProjectTaskProjection } from '@/lib/project-tasks';
 import { lockProjectTransaction } from '@/lib/project-write-policy';
 
@@ -44,10 +47,7 @@ async function createTenantProject(prisma, access, input) {
     try {
       return await prisma.$transaction(async (transaction) => {
         const bootstrapProject = await transaction.project.findFirst({
-          where: {
-            organizationId: access.organization.id,
-            slug: 'obra-principal',
-          },
+          where: projectAccessWhere(access, { slug: 'obra-principal' }),
           select: {
             id: true,
             name: true,
@@ -65,6 +65,11 @@ async function createTenantProject(prisma, access, input) {
             data: input,
             include: PROJECT_DETAILS_INCLUDE,
           });
+          await grantCreatedProjectAccessToActor(
+            transaction,
+            access,
+            configured.id,
+          );
           const snapshot = await transaction.projectSnapshot.findUnique({
             where: { projectId: bootstrapProject.id },
             select: { state: true, version: true },
@@ -116,6 +121,11 @@ async function createTenantProject(prisma, access, input) {
           },
           include: PROJECT_DETAILS_INCLUDE,
         });
+        await grantCreatedProjectAccessToActor(
+          transaction,
+          access,
+          created.id,
+        );
         await transaction.auditLog.create({
           data: {
             organizationId: access.organization.id,
@@ -140,6 +150,27 @@ async function createTenantProject(prisma, access, input) {
 async function selectProject(projectId) {
   const cookieStore = await cookies();
   cookieStore.set(ACTIVE_PROJECT_COOKIE, projectId, activeProjectCookieOptions());
+}
+
+async function findAccessibleProjectFallback(prisma, access, excludedProjectId) {
+  const activeFallback = await prisma.project.findFirst({
+    where: projectAccessWhere(access, {
+      id: { not: excludedProjectId },
+      status: 'ACTIVE',
+    }),
+    orderBy: { updatedAt: 'desc' },
+    select: { id: true },
+  });
+  if (activeFallback) return activeFallback;
+
+  return prisma.project.findFirst({
+    where: projectAccessWhere(access, {
+      id: { not: excludedProjectId },
+      status: { not: 'ARCHIVED' },
+    }),
+    orderBy: { updatedAt: 'desc' },
+    select: { id: true },
+  });
 }
 
 async function serializeMutatedProject(prisma, organizationId, project) {
@@ -184,7 +215,7 @@ export async function GET() {
     requireTenantPermission(access, 'org:projects:read');
     const prisma = getPrisma();
     const [projects, activeCount] = await Promise.all([
-      listOrganizationProjects(prisma, access.organization.id),
+      listOrganizationProjects(prisma, access),
       prisma.project.count({
         where: projectCapacityWhere(access.organization.id),
       }),
@@ -241,7 +272,34 @@ export async function PATCH(request) {
       await readJsonRequest(request, { maxBytes: MAX_PROJECT_JSON_BYTES }),
     );
     const prisma = getPrisma();
+    const authorizedProject = await prisma.project.findFirst({
+      where: projectAccessWhere(access, { id: input.projectId }),
+      select: { id: true },
+    });
+    if (!authorizedProject) {
+      throw new ProjectLifecycleError(
+        'La obra no existe o no está asignada a tu cuenta.',
+        { code: 'PROJECT_NOT_FOUND', status: 404 },
+      );
+    }
+
+    let accessibleFallback = null;
+    if (input.data.status === 'ARCHIVED' && input.projectId === access.project.id) {
+      accessibleFallback = await findAccessibleProjectFallback(
+        prisma,
+        access,
+        input.projectId,
+      );
+      if (!accessibleFallback) {
+        throw new ProjectLifecycleError(
+          'No podés archivar tu única obra asignada. Pedí otra asignación antes de continuar.',
+          { code: 'PROJECT_LAST_CONTEXT' },
+        );
+      }
+    }
+
     const result = await updateTenantProject(prisma, access, input);
+    if (accessibleFallback) result.activeProjectId = accessibleFallback.id;
     if (result.activeProjectId !== access.project.id) {
       await selectProject(result.activeProjectId);
     }
@@ -274,7 +332,7 @@ export async function PUT(request) {
     });
     if (!projectId) throw new ProjectInputError('Seleccioná una obra válida.');
     const project = await getPrisma().project.findFirst({
-      where: tenantProjectWhere(access.organization.id, projectId),
+      where: projectAccessWhere(access, { id: String(projectId) }),
       select: { id: true, status: true },
     });
     if (!project || !isSelectableProjectStatus(project.status)) {

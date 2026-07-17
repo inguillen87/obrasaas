@@ -49,7 +49,7 @@ npm run build
 npm audit --omit=dev
 ```
 
-La preview autenticada estable se publica en `https://obrasaas-preview.vercel.app`. Producción permanece sin promoción hasta disponer de dominio propio compatible con la instancia productiva de Clerk.
+El alias estable publicado es `https://obrasaas.vercel.app`; `https://obrasaas-preview.vercel.app` queda reservado para validaciones de Preview. Mientras no exista un dominio propio, ambos entornos usan la instancia dedicada de desarrollo de Clerk y no se contratan add-ons ni una instancia productiva.
 
 ## Superficies principales
 

@@ -225,8 +225,26 @@ test('portfolio count projection never hydrates the complete snapshot JSON', asy
     },
   };
 
-  const projects = await listOrganizationProjects(prisma, 'organization-a');
+  const projects = await listOrganizationProjects(prisma, {
+    isSuperadmin: false,
+    tenantRole: 'SITE_MANAGER',
+    tenantMembershipId: 'membership-a',
+    organization: { id: 'organization-a' },
+  });
 
+  assert.deepEqual(calls[0][1].where, {
+    organizationId: 'organization-a',
+    projectMemberships: {
+      some: {
+        tenantMembershipId: 'membership-a',
+        status: 'ACTIVE',
+        tenantMembership: {
+          organizationId: 'organization-a',
+          status: 'ACTIVE',
+        },
+      },
+    },
+  });
   assert.equal(calls[0][1].select.snapshot.select.state, undefined);
   assert.deepEqual(calls[0][1].select.snapshot.select, { updatedAt: true });
   assert.match(calls[1][1], /FROM "Task" AS task/);
