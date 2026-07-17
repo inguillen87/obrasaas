@@ -38,7 +38,9 @@ export default async function IntegrationsPage() {
   const metaPlatformReady = Boolean(
     process.env.META_APP_SECRET
     && process.env.META_VERIFY_TOKEN
-    && process.env.WHATSAPP_CREDENTIALS_ENCRYPTION_KEY,
+    && process.env.WHATSAPP_CREDENTIALS_ENCRYPTION_KEY
+    && process.env.WHATSAPP_FLOW_ENDPOINT_KEK_ID
+    && process.env.WHATSAPP_FLOW_ENDPOINT_KEK_REGISTRY_JSON,
   );
 
   return (

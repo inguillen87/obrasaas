@@ -1,8 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
   <title id="title">Símbolo ObraSaaS inverso</title>
-  <desc id="desc">Campo y gestión forman una O y cierran un mismo circuito operativo.</desc>
-  <g fill="none" stroke-linecap="butt" stroke-linejoin="round" stroke-width="10">
-    <path d="M13 36V21Q13 12 22 12H42Q51 12 51 21V28" stroke="#F4F1E8"/>
-    <path d="M51 28V43Q51 52 42 52H22Q13 52 13 43V36" stroke="#F28A42"/>
+  <desc id="desc">Una planta estructural coordinada se convierte en una obra conectada.</desc>
+  <g transform="translate(0 3)">
+  <path d="M8 24.1L32 37.95L56 24.1V34.2L32 48.05L8 34.2Z" fill="#F28A42"/>
+  <path d="M8 24.1L32 37.95V48.05L8 34.2Z" fill="#D96E32"/>
+  <path d="M32 10.25L56 24.1L32 37.95L8 24.1ZM32 19.5L40 24.1L32 28.7L24 24.1Z" fill="#F4F1E8" fill-rule="evenodd"/>
+  <path d="M24 24.1L32 28.7L40 24.1V28.95L32 33.55L24 28.95Z" fill="#12241F"/>
   </g>
 </svg>

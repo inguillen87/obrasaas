@@ -7,10 +7,10 @@ export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
 export default async function OpenGraphImage() {
-  const logo = await readFile(
-    path.join(process.cwd(), 'public', 'brand', 'obrasaas-app-icon-1024.png'),
+  const lockup = await readFile(
+    path.join(process.cwd(), 'public', 'brand', 'obrasaas-lockup-inverse.svg'),
   );
-  const logoSource = `data:image/png;base64,${logo.toString('base64')}`;
+  const lockupSource = `data:image/svg+xml;base64,${lockup.toString('base64')}`;
 
   return new ImageResponse(
     (
@@ -58,17 +58,15 @@ export default async function OpenGraphImage() {
           }}
         >
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: 24, fontWeight: 700 }}>
-              {/* ImageResponse renders this remote asset directly; next/image is not supported in Satori output. */}
+            <div style={{ display: 'flex', alignItems: 'center', height: 48 }}>
+              {/* The official vector lockup keeps the wordmark geometry identical across every social card. */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={logoSource}
-                width={58}
-                height={58}
-                alt=""
-                style={{ borderRadius: 14 }}
+                src={lockupSource}
+                width={200}
+                height={48}
+                alt="ObraSaaS"
               />
-              ObraSaaS
             </div>
             <div style={{ marginTop: 68, color: '#f28a42', fontSize: 18, fontWeight: 700, letterSpacing: 3 }}>
               SISTEMA OPERATIVO DE OBRA

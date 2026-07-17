@@ -25,6 +25,37 @@ export function createAppSecretProof(accessToken, appSecret) {
   return crypto.createHmac('sha256', appSecret).update(accessToken).digest('hex');
 }
 
+export function whatsAppConnectionIdentityChanged(previousIdentity, nextIdentity) {
+  if (!previousIdentity || typeof previousIdentity !== 'object' || Array.isArray(previousIdentity)) {
+    return false;
+  }
+  if (!nextIdentity || typeof nextIdentity !== 'object' || Array.isArray(nextIdentity)) {
+    return true;
+  }
+  return previousIdentity.phoneNumberId !== nextIdentity.phoneNumberId
+    || previousIdentity.whatsappBusinessId !== nextIdentity.whatsappBusinessId;
+}
+
+export function mergeWhatsAppConnectionMetadata(current, verifiedAccount, {
+  identityChanged = false,
+} = {}) {
+  const existing = current && typeof current === 'object' && !Array.isArray(current)
+    ? current
+    : {};
+  const verified = verifiedAccount && typeof verifiedAccount === 'object' && !Array.isArray(verifiedAccount)
+    ? verifiedAccount
+    : {};
+  const merged = { ...existing, ...verified };
+  if (identityChanged === true) {
+    delete merged.whatsappFlows;
+    delete merged.whatsappFlowDrafts;
+    delete merged.whatsappFlowEndpoint;
+    // Invalidates leases created by builds that persisted the lease in JSON.
+    delete merged.whatsappFlowProvisioningLease;
+  }
+  return merged;
+}
+
 function integrationConfig() {
   const appId = process.env.NEXT_PUBLIC_META_APP_ID;
   const appSecret = process.env.META_APP_SECRET;

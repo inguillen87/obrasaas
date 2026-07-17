@@ -1,3 +1,5 @@
+import { createHash, createPublicKey } from 'node:crypto';
+
 import {
   createAppSecretProof,
   isValidMetaResourceId,
@@ -5,10 +7,59 @@ import {
 } from './embedded-signup.js';
 
 export const WHATSAPP_FLOW_JSON_VERSION = '7.3';
+export const WHATSAPP_FLOW_DATA_API_VERSION = '4.0';
 export const WHATSAPP_FLOW_SESSION_TTL_MS = Object.freeze({
   'incident-report': 4 * 60 * 60 * 1_000,
   'shift-check-in': 30 * 60 * 1_000,
 });
+
+const FLOW_GRAPH_FIELDS = Object.freeze([
+  'id',
+  'name',
+  'categories',
+  'status',
+  'validation_errors',
+  'json_version',
+  'data_api_version',
+  'endpoint_uri',
+  'data_channel_uri',
+  'application',
+  'health_status',
+]);
+const FLOW_GRAPH_FIELDS_QUERY = FLOW_GRAPH_FIELDS.join(',');
+const FLOW_LIST_PAGE_SIZE = 100;
+const FLOW_LIST_MAX_PAGES = 1_000;
+const FLOW_PAGING_CURSOR_MAX_BYTES = 4_096;
+const SCREEN_ID_PATTERN = /^[A-Z][A-Z0-9_]{0,29}$/;
+const FLOW_SCOPE_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const PEM_PUBLIC_KEY_PATTERN = /^-----BEGIN PUBLIC KEY-----[\s\S]+-----END PUBLIC KEY-----$/;
+
+function buildOperationalContextData() {
+  return {
+    project_name: {
+      type: 'string',
+      __example__: 'Torre del Parque',
+    },
+    worker_name: {
+      type: 'string',
+      __example__: 'Alex Rojas',
+    },
+    work_areas: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          title: { type: 'string' },
+        },
+      },
+      __example__: [
+        { id: 'front-north', title: 'Frente norte' },
+        { id: 'ground-floor', title: 'Planta baja' },
+      ],
+    },
+  };
+}
 
 const BLUEPRINTS = [
   {
@@ -29,13 +80,15 @@ const BLUEPRINTS = [
     },
     definition: {
       version: WHATSAPP_FLOW_JSON_VERSION,
+      data_api_version: WHATSAPP_FLOW_DATA_API_VERSION,
+      routing_model: { INCIDENT_REPORT: [] },
       screens: [
         {
           id: 'INCIDENT_REPORT',
           title: 'Reportar incidencia',
           terminal: true,
           success: true,
-          data: {},
+          data: buildOperationalContextData(),
           layout: {
             type: 'SingleColumnLayout',
             children: [
@@ -43,13 +96,10 @@ const BLUEPRINTS = [
                 type: 'Form',
                 name: 'incident_form',
                 children: [
-                  {
-                    type: 'TextHeading',
-                    text: '¿Qué pasó en la obra?',
-                  },
+                  { type: 'TextHeading', text: '¿Qué pasó en la obra?' },
                   {
                     type: 'TextBody',
-                    text: 'Registrá la situación con datos concretos. Si existe riesgo para personas, detené la tarea y seguí el protocolo de seguridad.',
+                    text: '${data.project_name} · ${data.worker_name}',
                   },
                   {
                     type: 'RadioButtonsGroup',
@@ -64,10 +114,11 @@ const BLUEPRINTS = [
                     ],
                   },
                   {
-                    type: 'TextInput',
+                    type: 'Dropdown',
                     name: 'area',
                     label: 'Sector o frente de trabajo',
                     required: true,
+                    'data-source': '${data.work_areas}',
                   },
                   {
                     type: 'TextArea',
@@ -79,9 +130,8 @@ const BLUEPRINTS = [
                     type: 'Footer',
                     label: 'Enviar incidencia',
                     'on-click-action': {
-                      name: 'complete',
+                      name: 'data_exchange',
                       payload: {
-                        flow_type: 'incident',
                         severity: '${form.severity}',
                         area: '${form.area}',
                         description: '${form.description}',
@@ -114,13 +164,15 @@ const BLUEPRINTS = [
     },
     definition: {
       version: WHATSAPP_FLOW_JSON_VERSION,
+      data_api_version: WHATSAPP_FLOW_DATA_API_VERSION,
+      routing_model: { SHIFT_CHECK_IN: [] },
       screens: [
         {
           id: 'SHIFT_CHECK_IN',
           title: 'Inicio de turno',
           terminal: true,
           success: true,
-          data: {},
+          data: buildOperationalContextData(),
           layout: {
             type: 'SingleColumnLayout',
             children: [
@@ -128,19 +180,17 @@ const BLUEPRINTS = [
                 type: 'Form',
                 name: 'attendance_form',
                 children: [
-                  {
-                    type: 'TextHeading',
-                    text: 'Control rápido de ingreso',
-                  },
+                  { type: 'TextHeading', text: 'Control rápido de ingreso' },
                   {
                     type: 'TextBody',
-                    text: 'Completá el control antes de comenzar. La ubicación se valida por separado para no mezclar permisos ni evidencias.',
+                    text: '${data.project_name} · ${data.worker_name}',
                   },
                   {
-                    type: 'TextInput',
+                    type: 'Dropdown',
                     name: 'work_area',
                     label: 'Sector o frente asignado',
                     required: true,
+                    'data-source': '${data.work_areas}',
                   },
                   {
                     type: 'RadioButtonsGroup',
@@ -162,9 +212,8 @@ const BLUEPRINTS = [
                     type: 'Footer',
                     label: 'Confirmar ingreso',
                     'on-click-action': {
-                      name: 'complete',
+                      name: 'data_exchange',
                       payload: {
-                        flow_type: 'attendance',
                         work_area: '${form.work_area}',
                         ppe_status: '${form.ppe_status}',
                         observations: '${form.observations}',
@@ -185,28 +234,46 @@ function clone(value) {
   return structuredClone(value);
 }
 
-function findFooter(children) {
-  for (const child of children || []) {
-    if (child?.type === 'Footer') return child;
-    const nested = findFooter(child?.children);
-    if (nested) return nested;
-  }
-  return null;
+function isPlainObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-function collectInputNames(children, names = []) {
+function collectComponents(children, predicate, result = []) {
   for (const child of children || []) {
-    if (child?.name && child.type !== 'Form') names.push(child.name);
-    collectInputNames(child?.children, names);
+    if (predicate(child)) result.push(child);
+    collectComponents(child?.children, predicate, result);
   }
-  return names;
+  return result;
+}
+
+function collectInputNames(children) {
+  return collectComponents(
+    children,
+    (child) => typeof child?.name === 'string' && child.type !== 'Form',
+  ).map((child) => child.name);
+}
+
+function validTrustedDataSchema(data) {
+  if (!isPlainObject(data) || Object.keys(data).length !== 3) return false;
+  if (data.project_name?.type !== 'string' || data.worker_name?.type !== 'string') return false;
+  const areas = data.work_areas;
+  return areas?.type === 'array'
+    && areas.items?.type === 'object'
+    && areas.items.properties?.id?.type === 'string'
+    && areas.items.properties?.title?.type === 'string';
 }
 
 export function validateWhatsAppFlowDefinition(definition) {
   const errors = [];
-  if (!definition || typeof definition !== 'object') return ['La definición debe ser un objeto.'];
+  if (!isPlainObject(definition)) return ['La definición debe ser un objeto.'];
   if (definition.version !== WHATSAPP_FLOW_JSON_VERSION) {
     errors.push(`Flow JSON debe usar la versión ${WHATSAPP_FLOW_JSON_VERSION}.`);
+  }
+  if (definition.data_api_version !== WHATSAPP_FLOW_DATA_API_VERSION) {
+    errors.push(`Flow Data API debe usar la versión ${WHATSAPP_FLOW_DATA_API_VERSION}.`);
+  }
+  if (!isPlainObject(definition.routing_model)) {
+    errors.push('El Flow debe declarar un routing_model válido.');
   }
   if (!Array.isArray(definition.screens) || definition.screens.length === 0) {
     errors.push('El Flow debe incluir al menos una pantalla.');
@@ -216,30 +283,76 @@ export function validateWhatsAppFlowDefinition(definition) {
   const ids = new Set();
   let terminalCount = 0;
   for (const screen of definition.screens) {
-    if (!/^[A-Z][A-Z0-9_]{0,29}$/.test(String(screen?.id || ''))) {
-      errors.push(`El identificador de pantalla ${screen?.id || '(vacío)'} no es válido.`);
-    } else if (ids.has(screen.id)) {
-      errors.push(`La pantalla ${screen.id} está duplicada.`);
+    const screenId = String(screen?.id || '');
+    if (!SCREEN_ID_PATTERN.test(screenId)) {
+      errors.push(`El identificador de pantalla ${screenId || '(vacío)'} no es válido.`);
+    } else if (ids.has(screenId)) {
+      errors.push(`La pantalla ${screenId} está duplicada.`);
     } else {
-      ids.add(screen.id);
+      ids.add(screenId);
+    }
+
+    const routes = definition.routing_model?.[screenId];
+    if (!Array.isArray(routes) || routes.some((route) => !SCREEN_ID_PATTERN.test(String(route)))) {
+      errors.push(`La pantalla ${screenId || '(sin id)'} debe tener una ruta válida en routing_model.`);
+    }
+    if (!validTrustedDataSchema(screen?.data)) {
+      errors.push(`La pantalla ${screenId || '(sin id)'} debe declarar el contexto confiable de obra.`);
     }
     if (screen?.layout?.type !== 'SingleColumnLayout' || !Array.isArray(screen.layout.children)) {
-      errors.push(`La pantalla ${screen?.id || '(sin id)'} debe usar SingleColumnLayout.`);
+      errors.push(`La pantalla ${screenId || '(sin id)'} debe usar SingleColumnLayout.`);
       continue;
     }
-    if (screen.terminal) {
-      terminalCount += 1;
-      const footer = findFooter(screen.layout.children);
-      if (!footer || footer['on-click-action']?.name !== 'complete') {
-        errors.push(`La pantalla terminal ${screen.id} debe finalizar con una acción complete.`);
-      } else if (!footer['on-click-action']?.payload?.flow_type) {
-        errors.push(`La pantalla terminal ${screen.id} debe informar flow_type.`);
-      }
-    }
+
     const inputNames = collectInputNames(screen.layout.children);
     const duplicateNames = inputNames.filter((name, index) => inputNames.indexOf(name) !== index);
     if (duplicateNames.length > 0) {
-      errors.push(`La pantalla ${screen.id} repite campos: ${[...new Set(duplicateNames)].join(', ')}.`);
+      errors.push(`La pantalla ${screenId} repite campos: ${[...new Set(duplicateNames)].join(', ')}.`);
+    }
+    const dynamicAreaDropdowns = collectComponents(
+      screen.layout.children,
+      (child) => child?.type === 'Dropdown' && child['data-source'] === '${data.work_areas}',
+    );
+    if (dynamicAreaDropdowns.length !== 1) {
+      errors.push(`La pantalla ${screenId} debe usar un único selector dinámico de sectores.`);
+    }
+
+    if (screen?.terminal) {
+      terminalCount += 1;
+      const footers = collectComponents(screen.layout.children, (child) => child?.type === 'Footer');
+      const action = footers[0]?.['on-click-action'];
+      if (footers.length !== 1 || action?.name !== 'data_exchange') {
+        errors.push(`La pantalla terminal ${screenId} debe finalizar con una acción data_exchange.`);
+      } else if (!isPlainObject(action.payload)) {
+        errors.push(`La pantalla terminal ${screenId} debe enviar un payload válido.`);
+      } else {
+        if (Object.hasOwn(action.payload, 'flow_type')) {
+          errors.push(`La pantalla terminal ${screenId} no puede confiar flow_type al cliente.`);
+        }
+        for (const [field, reference] of Object.entries(action.payload)) {
+          if (!inputNames.includes(field) || reference !== `\${form.${field}}`) {
+            errors.push(`La pantalla terminal ${screenId} contiene un campo de payload no confiable.`);
+            break;
+          }
+        }
+        const missingFields = inputNames.filter((field) => !Object.hasOwn(action.payload, field));
+        if (missingFields.length > 0) {
+          errors.push(`La pantalla terminal ${screenId} omite campos del formulario.`);
+        }
+      }
+    }
+  }
+
+  const routingKeys = isPlainObject(definition.routing_model)
+    ? Object.keys(definition.routing_model)
+    : [];
+  if (routingKeys.some((screenId) => !ids.has(screenId))) {
+    errors.push('routing_model contiene pantallas inexistentes.');
+  }
+  for (const routes of Object.values(definition.routing_model || {})) {
+    if (Array.isArray(routes) && routes.some((screenId) => !ids.has(String(screenId)))) {
+      errors.push('routing_model referencia pantallas inexistentes.');
+      break;
     }
   }
   if (terminalCount === 0) errors.push('El Flow necesita al menos una pantalla terminal.');
@@ -256,9 +369,30 @@ export function getWhatsAppFlowBlueprint(key) {
   return blueprint ? clone(blueprint) : null;
 }
 
+export function getWhatsAppFlowScopedName(blueprintKey, flowScope) {
+  const blueprint = BLUEPRINTS.find((item) => item.key === blueprintKey);
+  const normalizedScope = String(flowScope || '').trim().toLowerCase();
+  if (!blueprint) {
+    throw new MetaIntegrationError('El blueprint de WhatsApp Flow no existe.', {
+      code: 'FLOW_BLUEPRINT_NOT_FOUND',
+      status: 400,
+    });
+  }
+  if (!FLOW_SCOPE_PATTERN.test(normalizedScope)) {
+    throw new MetaIntegrationError('La identidad dedicada del WhatsApp Flow es inválida.', {
+      code: 'FLOW_SCOPE_INVALID',
+      status: 500,
+    });
+  }
+  const suffix = createHash('sha256')
+    .update(`obrasaas:whatsapp-flow:${normalizedScope}`)
+    .digest('hex')
+    .slice(0, 12);
+  return `${blueprint.name} · ${suffix}`;
+}
+
 export function getWhatsAppFlowSessionTtlMs(key) {
-  const blueprint = BLUEPRINTS.find((item) => item.key === key);
-  return blueprint?.sessionTtlMs || null;
+  return BLUEPRINTS.find((item) => item.key === key)?.sessionTtlMs || null;
 }
 
 export class WhatsAppFlowReplyError extends Error {
@@ -269,11 +403,7 @@ export class WhatsAppFlowReplyError extends Error {
   }
 }
 
-function replyText(value, {
-  field,
-  minLength = 0,
-  maxLength,
-}) {
+function replyText(value, { field, minLength = 0, maxLength }) {
   if (typeof value !== 'string') {
     throw new WhatsAppFlowReplyError(`WhatsApp Flow field ${field} must be text.`);
   }
@@ -288,11 +418,10 @@ function replyText(value, {
 }
 
 function assertReplyShape(response, allowedFields) {
-  if (!response || typeof response !== 'object' || Array.isArray(response)) {
+  if (!isPlainObject(response)) {
     throw new WhatsAppFlowReplyError('WhatsApp Flow reply must be an object.');
   }
-  const unexpected = Object.keys(response).filter((field) => !allowedFields.has(field));
-  if (unexpected.length > 0) {
+  if (Object.keys(response).some((field) => !allowedFields.has(field))) {
     throw new WhatsAppFlowReplyError('WhatsApp Flow reply contains unsupported fields.');
   }
 }
@@ -304,10 +433,7 @@ export function validateWhatsAppFlowReply(blueprintKey, response) {
   }
 
   if (blueprintKey === 'incident-report') {
-    assertReplyShape(
-      response,
-      new Set(['flow_type', 'severity', 'area', 'description']),
-    );
+    assertReplyShape(response, new Set(['flow_type', 'severity', 'area', 'description']));
     if (response.flow_type !== blueprint.flowType) {
       throw new WhatsAppFlowReplyError('WhatsApp Flow reply type does not match its issued session.');
     }
@@ -318,11 +444,7 @@ export function validateWhatsAppFlowReply(blueprintKey, response) {
     return {
       flow_type: blueprint.flowType,
       severity,
-      area: replyText(response.area, {
-        field: 'area',
-        minLength: 1,
-        maxLength: 120,
-      }),
+      area: replyText(response.area, { field: 'area', minLength: 1, maxLength: 120 }),
       description: replyText(response.description, {
         field: 'description',
         minLength: 1,
@@ -332,10 +454,7 @@ export function validateWhatsAppFlowReply(blueprintKey, response) {
   }
 
   if (blueprintKey === 'shift-check-in') {
-    assertReplyShape(
-      response,
-      new Set(['flow_type', 'work_area', 'ppe_status', 'observations']),
-    );
+    assertReplyShape(response, new Set(['flow_type', 'work_area', 'ppe_status', 'observations']));
     if (response.flow_type !== blueprint.flowType) {
       throw new WhatsAppFlowReplyError('WhatsApp Flow reply type does not match its issued session.');
     }
@@ -345,16 +464,9 @@ export function validateWhatsAppFlowReply(blueprintKey, response) {
     }
     return {
       flow_type: blueprint.flowType,
-      work_area: replyText(response.work_area, {
-        field: 'work_area',
-        minLength: 1,
-        maxLength: 120,
-      }),
+      work_area: replyText(response.work_area, { field: 'work_area', minLength: 1, maxLength: 120 }),
       ppe_status: ppeStatus,
-      observations: replyText(response.observations ?? '', {
-        field: 'observations',
-        maxLength: 500,
-      }),
+      observations: replyText(response.observations ?? '', { field: 'observations', maxLength: 500 }),
     };
   }
 
@@ -363,23 +475,179 @@ export function validateWhatsAppFlowReply(blueprintKey, response) {
 
 export function getPublishedWhatsAppFlowReference(metadata, blueprintKey) {
   const blueprint = getWhatsAppFlowBlueprint(blueprintKey);
-  if (!blueprint || !metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null;
-  const storedFlows = metadata.whatsappFlows;
-  if (!storedFlows || typeof storedFlows !== 'object' || Array.isArray(storedFlows)) return null;
-  const stored = storedFlows[blueprintKey];
+  if (!blueprint || !isPlainObject(metadata) || !isPlainObject(metadata.whatsappFlows)) return null;
+  const stored = metadata.whatsappFlows[blueprintKey];
+  const dynamic = stored?.dataExchange === true;
+  let expectedName = blueprint.name;
+  if (dynamic) {
+    try {
+      expectedName = getWhatsAppFlowScopedName(blueprintKey, stored.flowScope);
+    } catch {
+      return null;
+    }
+  }
   if (
-    !stored
+    !isPlainObject(stored)
     || stored.status !== 'PUBLISHED'
     || !isValidMetaResourceId(stored.id)
-    || stored.name !== blueprint.name
+    || stored.name !== expectedName
   ) return null;
   return {
     blueprintKey,
     id: String(stored.id),
-    name: blueprint.name,
+    name: stored.name,
     screenId: blueprint.screenId,
     flowType: blueprint.flowType,
+    flowAction: stored.dataExchange === true ? 'data_exchange' : 'navigate',
     message: clone(blueprint.message),
+  };
+}
+
+function storedFlowMap(metadata, key) {
+  return isPlainObject(metadata) && isPlainObject(metadata[key])
+    ? metadata[key]
+    : {};
+}
+
+function ownedStoredFlowReference(stored, blueprintKey, flowScope, whatsappBusinessId) {
+  if (!isPlainObject(stored) || !isValidMetaResourceId(stored.id)) return null;
+  const normalizedScope = String(flowScope || '').trim().toLowerCase();
+  const normalizedBusinessId = String(whatsappBusinessId || '').trim();
+  if (!isValidMetaResourceId(normalizedBusinessId)) return null;
+  let expectedName;
+  try {
+    expectedName = getWhatsAppFlowScopedName(blueprintKey, normalizedScope);
+  } catch {
+    return null;
+  }
+  if (
+    String(stored.flowScope || '').trim().toLowerCase() !== normalizedScope
+    || String(stored.whatsappBusinessId || '').trim() !== normalizedBusinessId
+    || stored.name !== expectedName
+  ) return null;
+  return stored;
+}
+
+export function getWhatsAppFlowProvisioningReference(
+  metadata,
+  blueprintKey,
+  flowScope,
+  whatsappBusinessId,
+) {
+  if (!getWhatsAppFlowBlueprint(blueprintKey)) return null;
+  const pending = ownedStoredFlowReference(
+    storedFlowMap(metadata, 'whatsappFlowDrafts')[blueprintKey],
+    blueprintKey,
+    flowScope,
+    whatsappBusinessId,
+  );
+  if (pending) return { id: String(pending.id), source: 'pending' };
+
+  // Backward compatibility: early Data Endpoint builds stored their owned DRAFT
+  // in whatsappFlows. Reuse it, but never treat a legacy unscoped Flow as owned.
+  const active = ownedStoredFlowReference(
+    storedFlowMap(metadata, 'whatsappFlows')[blueprintKey],
+    blueprintKey,
+    flowScope,
+    whatsappBusinessId,
+  );
+  return active ? { id: String(active.id), source: 'active' } : null;
+}
+
+export function reconcileWhatsAppFlowLifecycleMetadata(metadata, {
+  blueprintKey,
+  flow,
+  flowScope,
+  whatsappBusinessId,
+  dataExchange,
+  endpointReady,
+  provisionedAt = new Date(),
+}) {
+  const blueprint = getWhatsAppFlowBlueprint(blueprintKey);
+  if (!blueprint) {
+    throw new MetaIntegrationError('El blueprint de WhatsApp Flow no existe.', {
+      code: 'FLOW_BLUEPRINT_NOT_FOUND',
+      status: 400,
+    });
+  }
+  if (!isPlainObject(flow) || !isValidMetaResourceId(flow.id)) {
+    throw new MetaIntegrationError('Meta devolvi\u00f3 un identificador de Flow inv\u00e1lido.', {
+      code: 'INVALID_FLOW_ID',
+      status: 502,
+    });
+  }
+  const expectedName = getWhatsAppFlowScopedName(blueprintKey, flowScope);
+  const normalizedBusinessId = assertMetaId(
+    whatsappBusinessId,
+    'La cuenta de WhatsApp conectada es inv\u00e1lida.',
+    'INVALID_WABA_ID',
+  );
+  const timestamp = provisionedAt instanceof Date ? provisionedAt : new Date(provisionedAt);
+  if (Number.isNaN(timestamp.getTime())) {
+    throw new MetaIntegrationError('La fecha de provisi\u00f3n del Flow es inv\u00e1lida.', {
+      code: 'FLOW_PROVISIONED_AT_INVALID',
+      status: 500,
+    });
+  }
+
+  const baseMetadata = isPlainObject(metadata) ? metadata : {};
+  const previousFlows = storedFlowMap(baseMetadata, 'whatsappFlows');
+  const previousDrafts = storedFlowMap(baseMetadata, 'whatsappFlowDrafts');
+  const nextFlows = { ...previousFlows };
+  const nextDrafts = { ...previousDrafts };
+  const record = {
+    id: String(flow.id),
+    name: String(flow.name || ''),
+    status: String(flow.status || 'UNKNOWN'),
+    jsonVersion: flow.jsonVersion ? String(flow.jsonVersion) : null,
+    dataApiVersion: flow.dataApiVersion ? String(flow.dataApiVersion) : null,
+    endpointUri: flow.dataChannelUri || flow.endpointUri
+      ? String(flow.dataChannelUri || flow.endpointUri)
+      : null,
+    applicationId: flow.applicationId ? String(flow.applicationId) : null,
+    dataExchange: dataExchange === true,
+    flowScope: String(flowScope || '').trim().toLowerCase(),
+    whatsappBusinessId: normalizedBusinessId,
+    provisionedAt: timestamp.toISOString(),
+  };
+  const promoted = Boolean(
+    endpointReady === true
+    && dataExchange === true
+    && record.status === 'PUBLISHED'
+    && record.name === expectedName
+  );
+
+  if (promoted) {
+    nextFlows[blueprintKey] = record;
+    delete nextDrafts[blueprintKey];
+  } else {
+    nextDrafts[blueprintKey] = record;
+    const previousActive = previousFlows[blueprintKey];
+    // Move the transitional pre-lifecycle DRAFT out of the active map. A real
+    // published outbound reference is deliberately preserved until promotion.
+    if (
+      isPlainObject(previousActive)
+      && String(previousActive.id || '') === record.id
+      && previousActive.status !== 'PUBLISHED'
+    ) delete nextFlows[blueprintKey];
+  }
+
+  return {
+    metadata: {
+      ...baseMetadata,
+      whatsappFlows: nextFlows,
+      whatsappFlowDrafts: nextDrafts,
+    },
+    record,
+    promoted,
+    activeFlow: nextFlows[blueprintKey] || null,
+    pendingFlow: nextDrafts[blueprintKey] || null,
+    activePreserved: Boolean(
+      !promoted
+      && isPlainObject(previousFlows[blueprintKey])
+      && previousFlows[blueprintKey].status === 'PUBLISHED'
+      && nextFlows[blueprintKey] === previousFlows[blueprintKey]
+    ),
   };
 }
 
@@ -393,8 +661,18 @@ function normalizeValidationErrors(value) {
     : [];
 }
 
+function normalizeRemoteApplication(value) {
+  if (!isPlainObject(value) || !isValidMetaResourceId(value.id)) return null;
+  return {
+    id: String(value.id),
+    name: value.name ? String(value.name).slice(0, 200) : null,
+    link: value.link ? String(value.link).slice(0, 2_048) : null,
+  };
+}
+
 function safeRemoteFlow(flow) {
   if (!flow) return null;
+  const application = normalizeRemoteApplication(flow.application);
   return {
     id: String(flow.id || ''),
     name: String(flow.name || ''),
@@ -407,12 +685,68 @@ function safeRemoteFlow(flow) {
     dataApiVersion: flow.dataApiVersion || flow.data_api_version
       ? String(flow.dataApiVersion || flow.data_api_version)
       : null,
+    endpointUri: flow.endpointUri || flow.endpoint_uri
+      ? String(flow.endpointUri || flow.endpoint_uri)
+      : null,
+    dataChannelUri: flow.dataChannelUri || flow.data_channel_uri
+      ? String(flow.dataChannelUri || flow.data_channel_uri)
+      : null,
+    application,
+    applicationId: application?.id || null,
+    healthStatus: flow.healthStatus ?? flow.health_status ?? null,
   };
 }
 
-export function getWhatsAppFlowCatalog(remoteFlows = []) {
+function emptyRemoteFlow(blueprint) {
+  return {
+    id: null,
+    name: blueprint.name,
+    status: 'NOT_CREATED',
+    categories: [...blueprint.categories],
+    validationErrors: [],
+    jsonVersion: null,
+    dataApiVersion: null,
+    endpointUri: null,
+    dataChannelUri: null,
+    application: null,
+    applicationId: null,
+    healthStatus: null,
+  };
+}
+
+export function getWhatsAppFlowCatalog(remoteFlows = [], {
+  storedFlows = null,
+  storedDrafts = null,
+  flowScope = null,
+} = {}) {
+  const ownedCatalog = isPlainObject(storedFlows)
+    || isPlainObject(storedDrafts)
+    || flowScope !== null;
   return BLUEPRINTS.map((blueprint) => {
-    const remote = safeRemoteFlow(remoteFlows.find((flow) => flow?.name === blueprint.name));
+    const activeFlowId = isPlainObject(storedFlows?.[blueprint.key])
+      && isValidMetaResourceId(storedFlows[blueprint.key].id)
+      ? String(storedFlows[blueprint.key].id)
+      : null;
+    const pendingFlowId = isPlainObject(storedDrafts?.[blueprint.key])
+      && isValidMetaResourceId(storedDrafts[blueprint.key].id)
+      ? String(storedDrafts[blueprint.key].id)
+      : null;
+    const storedFlowId = pendingFlowId || activeFlowId;
+    let scopedName = null;
+    if (flowScope !== null) {
+      try {
+        scopedName = getWhatsAppFlowScopedName(blueprint.key, flowScope);
+      } catch {
+        scopedName = null;
+      }
+    }
+    const remote = safeRemoteFlow(remoteFlows.find((flow) => (
+      storedFlowId
+        ? String(flow?.id || '') === storedFlowId
+        : scopedName
+          ? flow?.name === scopedName
+          : !ownedCatalog && flow?.name === blueprint.name
+    )));
     return {
       key: blueprint.key,
       name: blueprint.name,
@@ -423,15 +757,13 @@ export function getWhatsAppFlowCatalog(remoteFlows = []) {
       categories: [...blueprint.categories],
       capabilities: [...blueprint.capabilities],
       version: WHATSAPP_FLOW_JSON_VERSION,
-      remote: remote || {
-        id: null,
-        name: blueprint.name,
-        status: 'NOT_CREATED',
-        categories: [...blueprint.categories],
-        validationErrors: [],
-        jsonVersion: null,
-        dataApiVersion: null,
+      dataApiVersion: WHATSAPP_FLOW_DATA_API_VERSION,
+      lifecycle: {
+        state: pendingFlowId ? 'PENDING' : activeFlowId ? 'ACTIVE' : 'UNPROVISIONED',
+        activeFlowId,
+        pendingFlowId,
       },
+      remote: remote || emptyRemoteFlow(blueprint),
     };
   });
 }
@@ -457,13 +789,7 @@ async function parseMetaResponse(response, fallbackMessage) {
   });
 }
 
-async function flowGraphRequest({
-  path,
-  accessToken,
-  method = 'GET',
-  body,
-  fetchImpl = fetch,
-}) {
+async function flowGraphRequest({ path, accessToken, method = 'GET', body, fetchImpl = fetch }) {
   if (!accessToken || typeof accessToken !== 'string') {
     throw new MetaIntegrationError('La conexión de WhatsApp no tiene un token activo.', {
       code: 'WHATSAPP_TOKEN_MISSING',
@@ -486,42 +812,220 @@ async function flowGraphRequest({
   return parseMetaResponse(response, 'Meta no pudo administrar el WhatsApp Flow.');
 }
 
+function assertMetaId(value, message, code) {
+  if (!isValidMetaResourceId(value)) {
+    throw new MetaIntegrationError(message, { code, status: 400 });
+  }
+  return String(value);
+}
+
+function normalizeHttpsEndpointUri(value) {
+  if (typeof value !== 'string' || value.length > 2_048) {
+    throw new MetaIntegrationError('El Data Endpoint del Flow debe ser una URL HTTPS válida.', {
+      code: 'FLOW_ENDPOINT_INVALID',
+      status: 400,
+    });
+  }
+  try {
+    const url = new URL(value);
+    if (
+      url.protocol !== 'https:'
+      || !url.hostname
+      || url.username
+      || url.password
+      || url.hash
+    ) throw new Error('unsafe endpoint');
+    return url.toString();
+  } catch {
+    throw new MetaIntegrationError('El Data Endpoint del Flow debe ser una URL HTTPS válida.', {
+      code: 'FLOW_ENDPOINT_INVALID',
+      status: 400,
+    });
+  }
+}
+
+function flowListPath(businessId, after = null) {
+  const search = new URLSearchParams({
+    limit: String(FLOW_LIST_PAGE_SIZE),
+    fields: FLOW_GRAPH_FIELDS_QUERY,
+  });
+  if (after) search.set('after', after);
+  return `${businessId}/flows?${search.toString()}`;
+}
+
+function nextFlowPageCursor(payload, businessId) {
+  const next = payload?.paging?.next;
+  if (typeof next !== 'string' || !next.trim()) return null;
+
+  let cursor = payload?.paging?.cursors?.after;
+  if (typeof cursor !== 'string' || !cursor) {
+    try {
+      const nextUrl = new URL(next);
+      if (
+        nextUrl.protocol !== 'https:'
+        || nextUrl.hostname !== 'graph.facebook.com'
+        || nextUrl.username
+        || nextUrl.password
+        || !nextUrl.pathname.endsWith(`/${businessId}/flows`)
+      ) throw new Error('untrusted Meta paging URL');
+      cursor = nextUrl.searchParams.get('after');
+    } catch {
+      cursor = null;
+    }
+  }
+
+  if (
+    typeof cursor !== 'string'
+    || !cursor
+    || Buffer.byteLength(cursor, 'utf8') > FLOW_PAGING_CURSOR_MAX_BYTES
+  ) {
+    throw new MetaIntegrationError('Meta devolvi\u00f3 una paginaci\u00f3n de Flows inv\u00e1lida.', {
+      code: 'FLOW_LIST_PAGINATION_INVALID',
+      status: 502,
+    });
+  }
+  return cursor;
+}
+
 export async function listWhatsAppFlows({
   whatsappBusinessId,
   accessToken,
   fetchImpl = fetch,
 }) {
-  if (!isValidMetaResourceId(whatsappBusinessId)) {
-    throw new MetaIntegrationError('La cuenta de WhatsApp conectada es inválida.', {
-      code: 'INVALID_WABA_ID',
+  const businessId = assertMetaId(
+    whatsappBusinessId,
+    'La cuenta de WhatsApp conectada es inválida.',
+    'INVALID_WABA_ID',
+  );
+  const flows = [];
+  const seenCursors = new Set();
+  let after = null;
+
+  for (let page = 0; page < FLOW_LIST_MAX_PAGES; page += 1) {
+    const result = await flowGraphRequest({
+      path: flowListPath(businessId, after),
+      accessToken,
+      fetchImpl,
+    });
+    if (Array.isArray(result.data)) flows.push(...result.data.map(safeRemoteFlow));
+
+    const nextCursor = nextFlowPageCursor(result, businessId);
+    if (!nextCursor) return flows;
+    if (seenCursors.has(nextCursor)) {
+      throw new MetaIntegrationError('Meta repiti\u00f3 un cursor al listar WhatsApp Flows.', {
+        code: 'FLOW_LIST_PAGINATION_LOOP',
+        status: 502,
+      });
+    }
+    seenCursors.add(nextCursor);
+    after = nextCursor;
+  }
+
+  throw new MetaIntegrationError('Meta excedi\u00f3 el l\u00edmite seguro de p\u00e1ginas de WhatsApp Flows.', {
+    code: 'FLOW_LIST_PAGINATION_LIMIT',
+    status: 502,
+  });
+}
+
+export async function deleteOwnedWhatsAppFlowDraft({
+  blueprintKey,
+  whatsappBusinessId,
+  accessToken,
+  flowScope,
+  flowId,
+  fetchImpl = fetch,
+}) {
+  if (!getWhatsAppFlowBlueprint(blueprintKey)) {
+    throw new MetaIntegrationError('El blueprint de WhatsApp Flow no existe.', {
+      code: 'FLOW_BLUEPRINT_NOT_FOUND',
       status: 400,
     });
   }
-  const result = await flowGraphRequest({
-    path: `${whatsappBusinessId}/flows?limit=100`,
+  const businessId = assertMetaId(
+    whatsappBusinessId,
+    'La cuenta de WhatsApp conectada es inv\u00e1lida.',
+    'INVALID_WABA_ID',
+  );
+  const id = assertMetaId(
+    flowId,
+    'El Flow remoto tiene un identificador inv\u00e1lido.',
+    'INVALID_FLOW_ID',
+  );
+  const expectedName = getWhatsAppFlowScopedName(blueprintKey, flowScope);
+  const flows = await listWhatsAppFlows({
+    whatsappBusinessId: businessId,
     accessToken,
     fetchImpl,
   });
-  return Array.isArray(result.data) ? result.data.map(safeRemoteFlow) : [];
+  const owned = flows.find((flow) => flow.id === id) || null;
+  if (!owned || owned.name !== expectedName) {
+    return { deleted: false, reason: 'OWNERSHIP_NOT_CONFIRMED', flowId: id };
+  }
+  if (owned.status !== 'DRAFT') {
+    return { deleted: false, reason: 'FLOW_NOT_DRAFT', flowId: id };
+  }
+
+  const result = await flowGraphRequest({
+    path: id,
+    accessToken,
+    method: 'DELETE',
+    fetchImpl,
+  });
+  if (result?.success !== true) {
+    throw new MetaIntegrationError('Meta no confirm\u00f3 la eliminaci\u00f3n del borrador hu\u00e9rfano.', {
+      code: 'FLOW_DRAFT_DELETE_NOT_CONFIRMED',
+      status: 502,
+    });
+  }
+  return { deleted: true, reason: 'DELETED', flowId: id };
 }
 
 async function getWhatsAppFlow({ flowId, accessToken, fetchImpl }) {
-  if (!isValidMetaResourceId(flowId)) {
-    throw new MetaIntegrationError('Meta devolvió un identificador de Flow inválido.', {
-      code: 'INVALID_FLOW_ID',
-    });
-  }
+  const id = assertMetaId(flowId, 'Meta devolvió un identificador de Flow inválido.', 'INVALID_FLOW_ID');
   return safeRemoteFlow(await flowGraphRequest({
-    path: `${flowId}?fields=id,name,categories,status,validation_errors,json_version,data_api_version`,
+    path: `${id}?fields=${encodeURIComponent(FLOW_GRAPH_FIELDS_QUERY)}`,
     accessToken,
     fetchImpl,
   }));
+}
+
+function canonicalEndpoint(value) {
+  try {
+    return new URL(value).toString();
+  } catch {
+    return null;
+  }
+}
+
+function assertProvisionedFlowContract(flow, { endpointUri, applicationId, expectedName }) {
+  if (flow.validationErrors.length > 0) {
+    throw new MetaIntegrationError(flow.validationErrors[0].message, {
+      code: 'FLOW_JSON_REJECTED',
+      status: 422,
+    });
+  }
+  if (
+    flow.jsonVersion !== WHATSAPP_FLOW_JSON_VERSION
+    || flow.dataApiVersion !== WHATSAPP_FLOW_DATA_API_VERSION
+    || flow.name !== expectedName
+    || canonicalEndpoint(flow.dataChannelUri || flow.endpointUri) !== endpointUri
+    || flow.applicationId !== applicationId
+  ) {
+    throw new MetaIntegrationError('Meta no confirmó el contrato dinámico completo del Flow.', {
+      code: 'FLOW_DATA_ENDPOINT_NOT_CONFIRMED',
+      status: 502,
+    });
+  }
 }
 
 export async function provisionWhatsAppFlowDraft({
   blueprintKey,
   whatsappBusinessId,
   accessToken,
+  endpointUri,
+  applicationId,
+  flowScope,
+  existingFlowId = null,
   fetchImpl = fetch,
 }) {
   const blueprint = getWhatsAppFlowBlueprint(blueprintKey);
@@ -531,14 +1035,47 @@ export async function provisionWhatsAppFlowDraft({
       status: 400,
     });
   }
+  const normalizedEndpointUri = normalizeHttpsEndpointUri(endpointUri);
+  const normalizedApplicationId = assertMetaId(
+    applicationId,
+    'La aplicación de Meta configurada para el Flow es inválida.',
+    'INVALID_META_APP_ID',
+  );
+  const normalizedWhatsappBusinessId = assertMetaId(
+    whatsappBusinessId,
+    'La cuenta de WhatsApp conectada es inv\u00e1lida.',
+    'INVALID_WABA_ID',
+  );
+  const scopedName = getWhatsAppFlowScopedName(blueprintKey, flowScope);
+  const normalizedExistingFlowId = existingFlowId
+    ? assertMetaId(
+        existingFlowId,
+        'El Flow almacenado tiene un identificador inválido.',
+        'INVALID_FLOW_ID',
+      )
+    : null;
 
-  const existingFlows = await listWhatsAppFlows({ whatsappBusinessId, accessToken, fetchImpl });
-  let flow = existingFlows.find((candidate) => candidate.name === blueprint.name) || null;
+  // A stored ID is only a hint. Membership in the currently connected WABA
+  // must be proven before the Flow can be configured or uploaded.
+  const existingFlows = await listWhatsAppFlows({
+    whatsappBusinessId: normalizedWhatsappBusinessId,
+    accessToken,
+    fetchImpl,
+  });
+  let flow = normalizedExistingFlowId
+    ? existingFlows.find((candidate) => (
+        candidate.id === normalizedExistingFlowId
+        && candidate.name === scopedName
+      )) || null
+    : null;
+  if (!flow) {
+    flow = existingFlows.find((candidate) => candidate.name === scopedName) || null;
+  }
   let created = false;
 
   if (flow && flow.status !== 'DRAFT') {
     if (flow.status === 'PUBLISHED') {
-      return { blueprintKey, created: false, uploaded: false, flow };
+      return { blueprintKey, created: false, uploaded: false, configured: false, flow };
     }
     throw new MetaIntegrationError(`El Flow existe con estado ${flow.status} y no puede actualizarse como borrador.`, {
       code: 'FLOW_NOT_EDITABLE',
@@ -548,10 +1085,10 @@ export async function provisionWhatsAppFlowDraft({
 
   if (!flow) {
     const createBody = new FormData();
-    createBody.set('name', blueprint.name);
+    createBody.set('name', scopedName);
     createBody.set('categories', JSON.stringify(blueprint.categories));
     const createdFlow = await flowGraphRequest({
-      path: `${whatsappBusinessId}/flows`,
+      path: `${normalizedWhatsappBusinessId}/flows`,
       accessToken,
       method: 'POST',
       body: createBody,
@@ -562,9 +1099,20 @@ export async function provisionWhatsAppFlowDraft({
         code: 'FLOW_ID_MISSING',
       });
     }
-    flow = { id: String(createdFlow.id), name: blueprint.name, status: 'DRAFT' };
+    flow = { id: String(createdFlow.id), name: scopedName, status: 'DRAFT' };
     created = true;
   }
+
+  const configurationBody = new FormData();
+  configurationBody.set('endpoint_uri', normalizedEndpointUri);
+  configurationBody.set('application_id', normalizedApplicationId);
+  await flowGraphRequest({
+    path: flow.id,
+    accessToken,
+    method: 'POST',
+    body: configurationBody,
+    fetchImpl,
+  });
 
   const uploadBody = new FormData();
   uploadBody.set(
@@ -590,11 +1138,106 @@ export async function provisionWhatsAppFlowDraft({
   }
 
   const refreshed = await getWhatsAppFlow({ flowId: flow.id, accessToken, fetchImpl });
-  if (refreshed.validationErrors.length > 0) {
-    throw new MetaIntegrationError(refreshed.validationErrors[0].message, {
-      code: 'FLOW_JSON_REJECTED',
-      status: 422,
+  assertProvisionedFlowContract(refreshed, {
+    endpointUri: normalizedEndpointUri,
+    applicationId: normalizedApplicationId,
+    expectedName: scopedName,
+  });
+  return {
+    blueprintKey,
+    created,
+    uploaded: true,
+    configured: true,
+    flow: refreshed,
+  };
+}
+
+export function normalizeWhatsAppBusinessEncryption(payload) {
+  const entry = Array.isArray(payload?.data)
+    ? payload.data[0]
+    : isPlainObject(payload?.data)
+      ? payload.data
+      : payload;
+  const publicKey = typeof entry?.business_public_key === 'string'
+    ? entry.business_public_key.trim().replace(/\r\n/g, '\n')
+    : null;
+  const signatureStatus = typeof entry?.business_public_key_signature_status === 'string'
+    ? entry.business_public_key_signature_status.trim().toUpperCase()
+    : null;
+  return {
+    publicKey,
+    signatureStatus,
+    signatureValid: signatureStatus === 'VALID',
+  };
+}
+
+export function normalizeWhatsAppFlowPublicKey(publicKey) {
+  if (typeof publicKey !== 'string' || publicKey.length > 16_384) {
+    throw new MetaIntegrationError('La clave pública del Flow es inválida.', {
+      code: 'FLOW_PUBLIC_KEY_INVALID',
+      status: 400,
     });
   }
-  return { blueprintKey, created, uploaded: true, flow: refreshed };
+  try {
+    const key = createPublicKey(publicKey);
+    if (key.asymmetricKeyType !== 'rsa' || key.asymmetricKeyDetails?.modulusLength !== 2_048) {
+      throw new Error('RSA-2048 required');
+    }
+    const normalized = key.export({ type: 'spki', format: 'pem' }).toString().trim();
+    if (!PEM_PUBLIC_KEY_PATTERN.test(normalized)) throw new Error('PEM required');
+    return `${normalized}\n`;
+  } catch {
+    throw new MetaIntegrationError('La clave pública del Flow debe ser PEM RSA de 2048 bits.', {
+      code: 'FLOW_PUBLIC_KEY_INVALID',
+      status: 400,
+    });
+  }
 }
+
+export async function getWhatsAppBusinessEncryption({
+  phoneNumberId,
+  accessToken,
+  fetchImpl = fetch,
+}) {
+  const id = assertMetaId(
+    phoneNumberId,
+    'El número de WhatsApp conectado es inválido.',
+    'INVALID_PHONE_NUMBER_ID',
+  );
+  const payload = await flowGraphRequest({
+    path: `${id}/whatsapp_business_encryption`,
+    accessToken,
+    fetchImpl,
+  });
+  return normalizeWhatsAppBusinessEncryption(payload);
+}
+
+export async function setWhatsAppBusinessEncryption({
+  phoneNumberId,
+  accessToken,
+  publicKey,
+  fetchImpl = fetch,
+}) {
+  const id = assertMetaId(
+    phoneNumberId,
+    'El número de WhatsApp conectado es inválido.',
+    'INVALID_PHONE_NUMBER_ID',
+  );
+  const normalizedPublicKey = normalizeWhatsAppFlowPublicKey(publicKey);
+  const body = new FormData();
+  body.set('business_public_key', normalizedPublicKey);
+  const payload = await flowGraphRequest({
+    path: `${id}/whatsapp_business_encryption`,
+    accessToken,
+    method: 'POST',
+    body,
+    fetchImpl,
+  });
+  return {
+    success: payload?.success === true,
+    publicKey: normalizedPublicKey,
+  };
+}
+
+export const getWhatsAppBusinessEncryptionPublicKey = getWhatsAppBusinessEncryption;
+export const setWhatsAppBusinessEncryptionPublicKey = setWhatsAppBusinessEncryption;

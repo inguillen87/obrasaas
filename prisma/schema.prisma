@@ -102,6 +102,20 @@ enum WhatsAppConnectionStatus {
   DISABLED
 }
 
+enum WhatsAppFlowEndpointKeyStatus {
+  STAGED
+  ACTIVE
+  RETIRING
+  REVOKED
+}
+
+enum WhatsAppFlowEndpointRequestStatus {
+  PROCESSING
+  SUCCEEDED
+  REJECTED
+  FAILED
+}
+
 enum CrmStage {
   NEW
   CONTACTED
@@ -271,10 +285,81 @@ model WhatsAppConnection {
   lastVerifiedAt        DateTime?
   lastError             String?                  @db.Text
   metadata              Json?
+  flowProvisioningLeaseId         String?        @db.Uuid
+  flowProvisioningBlueprintKey    String?        @db.VarChar(64)
+  flowProvisioningLeaseAcquiredAt DateTime?
+  flowProvisioningLeaseExpiresAt  DateTime?
+  flowEndpoint          WhatsAppFlowEndpoint?
   createdAt             DateTime                 @default(now())
   updatedAt             DateTime                 @updatedAt
 
   @@index([whatsappBusinessId])
+}
+
+model WhatsAppFlowEndpoint {
+  id           String                        @id @default(uuid()) @db.Uuid
+  connectionId String                        @unique
+  connection   WhatsAppConnection            @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  enabled      Boolean                       @default(true)
+  keys         WhatsAppFlowEndpointKey[]
+  requests     WhatsAppFlowEndpointRequest[]
+  createdAt    DateTime                      @default(now())
+  updatedAt    DateTime                      @updatedAt
+}
+
+model WhatsAppFlowEndpointKey {
+  id                  String                        @id @default(uuid()) @db.Uuid
+  endpointId          String                        @db.Uuid
+  endpoint            WhatsAppFlowEndpoint          @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+  version             Int
+  status              WhatsAppFlowEndpointKeyStatus @default(STAGED)
+  encryptedPrivateKey String                        @db.Text
+  publicKeyPem        String                        @db.Text
+  publicKeySha256     String                        @unique @db.Char(64)
+  wrappingKeyId       String                        @db.VarChar(100)
+  uploadedAt          DateTime?
+  verifiedAt          DateTime?
+  activatedAt         DateTime?
+  retiringAt          DateTime?
+  retireAfter         DateTime?
+  lastUsedAt          DateTime?
+  createdAt           DateTime                      @default(now())
+  updatedAt           DateTime                      @updatedAt
+
+  @@unique([endpointId, version])
+  @@index([endpointId, status, version])
+  @@index([status, retireAfter])
+  @@index([wrappingKeyId, status])
+}
+
+model WhatsAppFlowEndpointRequest {
+  id                 String                            @id @default(uuid()) @db.Uuid
+  endpointId         String                            @db.Uuid
+  endpoint           WhatsAppFlowEndpoint              @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+  flowSessionId      String?                           @db.Uuid
+  flowSession        WhatsAppFlowSession?              @relation(fields: [flowSessionId], references: [id], onDelete: SetNull)
+  requestSha256      String                            @db.Char(64)
+  action             String                            @db.VarChar(32)
+  screen             String?                           @db.VarChar(30)
+  keyVersion         Int?
+  status             WhatsAppFlowEndpointRequestStatus @default(PROCESSING)
+  responseStatus     Int?
+  responseCiphertext String?                           @db.Text
+  failureCode        String?                           @db.VarChar(64)
+  attempts           Int                               @default(1)
+  leaseToken         String?                           @db.Uuid
+  leaseExpiresAt     DateTime?
+  completedAt        DateTime?
+  expiresAt          DateTime
+  createdAt          DateTime                          @default(now())
+  updatedAt          DateTime                          @updatedAt
+
+  @@unique([endpointId, requestSha256])
+  @@index([endpointId, createdAt])
+  @@index([endpointId, status, createdAt])
+  @@index([status, leaseExpiresAt, createdAt])
+  @@index([flowSessionId, createdAt])
+  @@index([expiresAt, status])
 }
 
 model ProjectSnapshot {
@@ -483,6 +568,7 @@ model WhatsAppFlowSession {
   providerMessageId   String?      @unique @db.VarChar(500)
   consumedAt          DateTime?
   consumedExternalId  String?      @db.VarChar(512)
+  endpointRequests    WhatsAppFlowEndpointRequest[]
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt
 

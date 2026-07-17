@@ -16,13 +16,28 @@ import {
 } from '@/lib/request-body';
 import {
   completeEmbeddedSignup,
+  mergeWhatsAppConnectionMetadata,
   MetaIntegrationError,
+  whatsAppConnectionIdentityChanged,
 } from '@/lib/whatsapp/embedded-signup';
+import {
+  acquireWhatsAppConnectionLease,
+  commitWhatsAppConnectionLease,
+  releaseWhatsAppConnectionLease,
+  WhatsAppFlowProvisioningLeaseError,
+} from '@/lib/whatsapp/flow-provisioning-lease';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 const MAX_EMBEDDED_SIGNUP_JSON_BYTES = 16 * 1024;
+const CONNECTION_LEASE_PUBLIC_MESSAGES = Object.freeze({
+  WHATSAPP_FLOW_PROVISIONING_IN_PROGRESS: 'Hay otra operaci\u00f3n de WhatsApp en curso. Volv\u00e9 a intentar en unos segundos.',
+  WHATSAPP_FLOW_PROVISIONING_CONNECTION_CHANGED: 'La conexi\u00f3n de WhatsApp cambi\u00f3 durante la operaci\u00f3n. Volv\u00e9 a intentar.',
+  WHATSAPP_FLOW_PROVISIONING_LEASE_LOST: 'La operaci\u00f3n de WhatsApp perdi\u00f3 su turno seguro. Volv\u00e9 a intentar.',
+  WHATSAPP_FLOW_PROVISIONING_CONFLICT: 'La conexi\u00f3n de WhatsApp tuvo cambios simult\u00e1neos. Volv\u00e9 a intentar.',
+  WHATSAPP_FLOW_PROVISIONING_CONNECTION_NOT_FOUND: 'La conexi\u00f3n de WhatsApp ya no est\u00e1 disponible.',
+});
 
 function safeConnection(connection) {
   if (!connection) return null;
@@ -48,6 +63,17 @@ function auditIp(request) {
     || null;
 }
 
+function connectionLeaseErrorResponse(error) {
+  const headers = error.retryAfterSeconds
+    ? { 'Retry-After': String(error.retryAfterSeconds) }
+    : undefined;
+  return Response.json({
+    error: CONNECTION_LEASE_PUBLIC_MESSAGES[error.code]
+      || 'No se pudo proteger la operaci\u00f3n de WhatsApp.',
+    code: error.code,
+  }, { status: error.status, headers });
+}
+
 export async function GET() {
   try {
     const access = await getPlatformAccess();
@@ -65,6 +91,9 @@ export async function GET() {
 
 export async function POST(request) {
   let access;
+  let connectionLease = null;
+  let connectionLeaseCommitted = false;
+  let prisma;
   try {
     access = await getPlatformAccess();
     requireTenantPermission(access, 'org:integrations:manage');
@@ -75,95 +104,165 @@ export async function POST(request) {
     const phoneNumberId = String(body.phoneNumberId || '');
     const registrationPin = String(body.registrationPin || '');
 
+    prisma = getPrisma();
+    const existingSnapshot = await prisma.whatsAppConnection.findUnique({
+      where: { projectId: access.project.id },
+      select: { id: true, updatedAt: true },
+    });
+    if (existingSnapshot) {
+      const acquired = await acquireWhatsAppConnectionLease(prisma, {
+        connectionId: existingSnapshot.id,
+        operationKey: 'connection_refresh',
+        expectedUpdatedAt: existingSnapshot.updatedAt,
+        requireActive: false,
+      });
+      connectionLease = {
+        connectionId: existingSnapshot.id,
+        leaseId: acquired.lease.id,
+      };
+    }
+
     const result = await completeEmbeddedSignup({
       code: body.code,
       whatsappBusinessId,
       phoneNumberId,
       registrationPin,
     });
+    const verifiedMetadata = {
+      tokenType: result.tokenType,
+      expiresAt: result.expiresAt,
+      scopes: result.scopes,
+      qualityRating: result.qualityRating,
+      verificationStatus: result.verificationStatus,
+    };
+    const timestamp = new Date();
+    const encryptedAccessToken = encryptCredential(result.accessToken);
+    const encryptedPin = encryptCredential(registrationPin);
+    let connection;
 
-    const prisma = getPrisma();
-    const connection = await prisma.$transaction(async (tx) => {
-      const saved = await tx.whatsAppConnection.upsert({
-        where: { projectId: access.project.id },
-        update: {
-          phoneNumberId,
-          whatsappBusinessId,
-          displayPhoneNumber: result.displayPhoneNumber,
-          verifiedBusinessName: result.verifiedBusinessName,
-          enabled: true,
-          connectionStatus: 'CONNECTED',
-          encryptedAccessToken: encryptCredential(result.accessToken),
-          encryptedPin: encryptCredential(registrationPin),
-          tokenLastFour: credentialLastFour(result.accessToken),
-          embeddedSignupVersion: 'v4',
-          connectedAt: new Date(),
-          lastVerifiedAt: new Date(),
-          lastError: null,
-          metadata: {
-            tokenType: result.tokenType,
-            expiresAt: result.expiresAt,
-            scopes: result.scopes,
-            qualityRating: result.qualityRating,
-            verificationStatus: result.verificationStatus,
-          },
+    if (connectionLease) {
+      let identityChanged = false;
+      let previousIdentity = null;
+      const committed = await commitWhatsAppConnectionLease(prisma, {
+        connectionId: connectionLease.connectionId,
+        leaseId: connectionLease.leaseId,
+        requireActive: false,
+        buildConnectionData(observed) {
+          previousIdentity = {
+            phoneNumberId: observed.phoneNumberId,
+            whatsappBusinessId: observed.whatsappBusinessId,
+          };
+          identityChanged = whatsAppConnectionIdentityChanged(previousIdentity, {
+            phoneNumberId,
+            whatsappBusinessId,
+          });
+          return {
+            phoneNumberId,
+            whatsappBusinessId,
+            displayPhoneNumber: result.displayPhoneNumber,
+            verifiedBusinessName: result.verifiedBusinessName,
+            enabled: true,
+            connectionStatus: 'CONNECTED',
+            encryptedAccessToken,
+            encryptedPin,
+            tokenLastFour: credentialLastFour(result.accessToken),
+            embeddedSignupVersion: 'v4',
+            connectedAt: timestamp,
+            lastVerifiedAt: timestamp,
+            lastError: null,
+            metadata: mergeWhatsAppConnectionMetadata(observed.metadata, verifiedMetadata, {
+              identityChanged,
+            }),
+          };
         },
-        create: {
-          projectId: access.project.id,
-          phoneNumberId,
-          whatsappBusinessId,
-          displayPhoneNumber: result.displayPhoneNumber,
-          verifiedBusinessName: result.verifiedBusinessName,
-          enabled: true,
-          connectionStatus: 'CONNECTED',
-          encryptedAccessToken: encryptCredential(result.accessToken),
-          encryptedPin: encryptCredential(registrationPin),
-          tokenLastFour: credentialLastFour(result.accessToken),
-          embeddedSignupVersion: 'v4',
-          connectedAt: new Date(),
-          lastVerifiedAt: new Date(),
-          metadata: {
-            tokenType: result.tokenType,
-            expiresAt: result.expiresAt,
-            scopes: result.scopes,
-            qualityRating: result.qualityRating,
-            verificationStatus: result.verificationStatus,
+        createAuditLog: (tx) => tx.auditLog.create({
+          data: {
+            organizationId: access.organization.id,
+            actorId: access.databaseUserId,
+            action: 'integration.whatsapp.connected',
+            entityType: 'WhatsAppConnection',
+            entityId: connectionLease.connectionId,
+            ipAddress: auditIp(request),
+            metadata: {
+              projectId: access.project.id,
+              phoneNumberId,
+              whatsappBusinessId,
+              embeddedSignupVersion: 'v4',
+              identityChanged,
+              ...(identityChanged ? {
+                previousPhoneNumberId: previousIdentity.phoneNumberId,
+                previousWhatsappBusinessId: previousIdentity.whatsappBusinessId,
+                flowMetadataCleared: true,
+              } : {}),
+            },
           },
-        },
+        }),
       });
-      await tx.auditLog.create({
-        data: {
-          organizationId: access.organization.id,
-          actorId: access.databaseUserId,
-          action: 'integration.whatsapp.connected',
-          entityType: 'WhatsAppConnection',
-          entityId: saved.id,
-          ipAddress: auditIp(request),
-          metadata: {
+      connectionLeaseCommitted = true;
+      connection = {
+        id: connectionLease.connectionId,
+        ...committed.data,
+      };
+    } else {
+      connection = await prisma.$transaction(async (tx) => {
+        const saved = await tx.whatsAppConnection.create({
+          data: {
             projectId: access.project.id,
             phoneNumberId,
             whatsappBusinessId,
+            displayPhoneNumber: result.displayPhoneNumber,
+            verifiedBusinessName: result.verifiedBusinessName,
+            enabled: true,
+            connectionStatus: 'CONNECTED',
+            encryptedAccessToken,
+            encryptedPin,
+            tokenLastFour: credentialLastFour(result.accessToken),
             embeddedSignupVersion: 'v4',
+            connectedAt: timestamp,
+            lastVerifiedAt: timestamp,
+            metadata: verifiedMetadata,
           },
-        },
+        });
+        await tx.auditLog.create({
+          data: {
+            organizationId: access.organization.id,
+            actorId: access.databaseUserId,
+            action: 'integration.whatsapp.connected',
+            entityType: 'WhatsAppConnection',
+            entityId: saved.id,
+            ipAddress: auditIp(request),
+            metadata: {
+              projectId: access.project.id,
+              phoneNumberId,
+              whatsappBusinessId,
+              embeddedSignupVersion: 'v4',
+              identityChanged: false,
+            },
+          },
+        });
+        return saved;
       });
-      return saved;
-    });
+    }
 
     return Response.json({ connection: safeConnection(connection) });
   } catch (error) {
+    if (connectionLease && !connectionLeaseCommitted && prisma) {
+      try {
+        await releaseWhatsAppConnectionLease(prisma, connectionLease);
+      } catch (releaseError) {
+        console.error('WhatsApp connection lease release failed:', {
+          code: releaseError?.code,
+          name: releaseError?.name,
+          status: releaseError?.status,
+        });
+      }
+    }
     if (error instanceof AccessError) return accessErrorResponse(error);
     if (error instanceof RequestBodyError) return requestBodyErrorResponse(error);
+    if (error instanceof WhatsAppFlowProvisioningLeaseError) {
+      return connectionLeaseErrorResponse(error);
+    }
     if (error instanceof MetaIntegrationError) {
-      if (access?.project?.id) {
-        await getPrisma().whatsAppConnection.updateMany({
-          where: { projectId: access.project.id },
-          data: {
-            connectionStatus: 'ERROR',
-            lastError: error.message.slice(0, 2_000),
-          },
-        }).catch(() => {});
-      }
       return Response.json({ error: error.message, code: error.code }, { status: error.status });
     }
     if (error?.code === 'P2002') {
@@ -178,28 +277,41 @@ export async function POST(request) {
 }
 
 export async function DELETE(request) {
+  let prisma;
+  let connectionLease = null;
+  let connectionLeaseCommitted = false;
   try {
     const access = await getPlatformAccess();
     requireTenantPermission(access, 'org:integrations:manage');
-    const prisma = getPrisma();
+    prisma = getPrisma();
     const existing = await prisma.whatsAppConnection.findUnique({
       where: { projectId: access.project.id },
     });
     if (!existing) return new Response(null, { status: 204 });
 
-    await prisma.$transaction([
-      prisma.whatsAppConnection.update({
-        where: { id: existing.id },
-        data: {
-          enabled: false,
-          connectionStatus: 'DISABLED',
-          encryptedAccessToken: null,
-          encryptedPin: null,
-          tokenLastFour: null,
-          lastError: null,
-        },
+    const acquired = await acquireWhatsAppConnectionLease(prisma, {
+      connectionId: existing.id,
+      operationKey: 'connection_disable',
+      expectedUpdatedAt: existing.updatedAt,
+      requireActive: false,
+    });
+    connectionLease = {
+      connectionId: existing.id,
+      leaseId: acquired.lease.id,
+    };
+    await commitWhatsAppConnectionLease(prisma, {
+      connectionId: existing.id,
+      leaseId: acquired.lease.id,
+      requireActive: false,
+      buildConnectionData: () => ({
+        enabled: false,
+        connectionStatus: 'DISABLED',
+        encryptedAccessToken: null,
+        encryptedPin: null,
+        tokenLastFour: null,
+        lastError: null,
       }),
-      prisma.auditLog.create({
+      createAuditLog: (tx) => tx.auditLog.create({
         data: {
           organizationId: access.organization.id,
           actorId: access.databaseUserId,
@@ -213,10 +325,25 @@ export async function DELETE(request) {
           },
         },
       }),
-    ]);
+    });
+    connectionLeaseCommitted = true;
     return new Response(null, { status: 204 });
   } catch (error) {
+    if (connectionLease && !connectionLeaseCommitted && prisma) {
+      try {
+        await releaseWhatsAppConnectionLease(prisma, connectionLease);
+      } catch (releaseError) {
+        console.error('WhatsApp disconnect lease release failed:', {
+          code: releaseError?.code,
+          name: releaseError?.name,
+          status: releaseError?.status,
+        });
+      }
+    }
     if (error instanceof AccessError) return accessErrorResponse(error);
+    if (error instanceof WhatsAppFlowProvisioningLeaseError) {
+      return connectionLeaseErrorResponse(error);
+    }
     console.error('WhatsApp disconnect failed:', error);
     return Response.json({ error: 'No se pudo desactivar la conexión.' }, { status: 500 });
   }

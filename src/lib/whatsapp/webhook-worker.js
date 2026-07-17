@@ -182,6 +182,7 @@ export async function trySendPublishedFlow({
       flowId: flow.id,
       flowToken: delivery.token,
       screenId: flow.screenId,
+      flowAction: flow.flowAction,
       ...flow.message,
     });
   } catch (error) {
@@ -233,17 +234,10 @@ function connectionMetadata(metadata, event) {
   };
 }
 
-async function synchronizeConnectionStatus(event, scope) {
-  const prisma = getPrisma();
-  const connection = await prisma.whatsAppConnection.findUnique({
-    where: { phoneNumberId: scope.phoneNumberId },
-    select: { id: true, metadata: true },
-  });
-  if (!connection) return;
-
+function connectionStatusData(metadata, event, verifiedAt) {
   const data = {
-    metadata: connectionMetadata(connection.metadata, event),
-    lastVerifiedAt: new Date(),
+    metadata: connectionMetadata(metadata, event),
+    lastVerifiedAt: verifiedAt,
   };
 
   if (event.field === "account_update") {
@@ -272,10 +266,33 @@ async function synchronizeConnectionStatus(event, scope) {
     data.verifiedBusinessName = String(event.value.requested_verified_name).slice(0, 255);
   }
 
-  await prisma.whatsAppConnection.update({
-    where: { id: connection.id },
-    data,
-  });
+  return data;
+}
+
+export async function synchronizeWhatsAppConnectionStatus(
+  event,
+  scope,
+  { prisma = getPrisma(), now = new Date(), maxAttempts = 4 } = {},
+) {
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const connection = await prisma.whatsAppConnection.findUnique({
+      where: { phoneNumberId: scope.phoneNumberId },
+      select: { id: true, metadata: true, updatedAt: true },
+    });
+    if (!connection) return { updated: false, reason: "not_found" };
+
+    const result = await prisma.whatsAppConnection.updateMany({
+      where: { id: connection.id, updatedAt: connection.updatedAt },
+      data: connectionStatusData(connection.metadata, event, now),
+    });
+    if (result.count === 1) return { updated: true };
+  }
+
+  const error = new Error(
+    "WhatsApp connection metadata changed too many times while applying a webhook.",
+  );
+  error.code = "WHATSAPP_CONNECTION_WRITE_CONFLICT";
+  throw error;
 }
 
 export async function deliverWhatsAppMessageOutcome({
@@ -419,7 +436,7 @@ async function processLeasedEvent(leasedEvent) {
     return;
   }
   if (event.eventType === "account") {
-    await synchronizeConnectionStatus(event, scope);
+    await synchronizeWhatsAppConnectionStatus(event, scope);
     return;
   }
   throw invalidWebhookPayload("Stored webhook event type is not supported.");

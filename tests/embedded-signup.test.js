@@ -6,6 +6,8 @@ import {
   createAppSecretProof,
   isValidMetaResourceId,
   isValidRegistrationPin,
+  mergeWhatsAppConnectionMetadata,
+  whatsAppConnectionIdentityChanged,
 } from '../src/lib/whatsapp/embedded-signup.js';
 
 test('Embedded Signup validates Meta resource IDs and six-digit PINs', () => {
@@ -19,6 +21,65 @@ test('appsecret proof is deterministic and token-bound', () => {
   const proof = createAppSecretProof('tenant-token', 'app-secret');
   assert.equal(proof.length, 64);
   assert.notEqual(proof, createAppSecretProof('other-token', 'app-secret'));
+});
+
+test('Embedded Signup refresh preserves Flow and endpoint provisioning metadata', () => {
+  const identity = {
+    phoneNumberId: '987654321',
+    whatsappBusinessId: '123456789',
+  };
+  const existing = {
+    whatsappFlows: { 'incident-report': { id: '12345', status: 'PUBLISHED' } },
+    whatsappFlowDrafts: { 'incident-report': { id: '67890', status: 'DRAFT' } },
+    whatsappFlowEndpoint: { id: 'endpoint-a', keyFingerprint: 'abc' },
+    tokenType: 'old',
+  };
+  const identityChanged = whatsAppConnectionIdentityChanged(identity, { ...identity });
+  assert.equal(identityChanged, false);
+  assert.deepEqual(mergeWhatsAppConnectionMetadata(existing, {
+    tokenType: 'bearer',
+    scopes: ['whatsapp_business_management'],
+  }, { identityChanged }), {
+    ...existing,
+    tokenType: 'bearer',
+    scopes: ['whatsapp_business_management'],
+  });
+});
+
+test('Embedded Signup identity changes clear every Flow binding and stale provisioning lease', () => {
+  const previousIdentity = {
+    phoneNumberId: '987654321',
+    whatsappBusinessId: '123456789',
+  };
+  const nextIdentity = {
+    phoneNumberId: '987654322',
+    whatsappBusinessId: '123456780',
+  };
+  const identityChanged = whatsAppConnectionIdentityChanged(previousIdentity, nextIdentity);
+  assert.equal(identityChanged, true);
+  assert.equal(whatsAppConnectionIdentityChanged(null, nextIdentity), false);
+
+  const merged = mergeWhatsAppConnectionMetadata({
+    whatsappFlows: { 'incident-report': { id: '12345', status: 'PUBLISHED' } },
+    whatsappFlowDrafts: { 'incident-report': { id: '67890', status: 'DRAFT' } },
+    whatsappFlowEndpoint: { id: 'endpoint-a', keyFingerprint: 'abc' },
+    whatsappFlowProvisioningLease: { id: 'stale-lease' },
+    unrelated: { preserved: true },
+  }, {
+    tokenType: 'bearer',
+    whatsappFlows: { attacker: { id: '99999' } },
+  }, { identityChanged });
+
+  for (const key of [
+    'whatsappFlows',
+    'whatsappFlowDrafts',
+    'whatsappFlowEndpoint',
+    'whatsappFlowProvisioningLease',
+  ]) {
+    assert.equal(Object.hasOwn(merged, key), false);
+  }
+  assert.equal(merged.unrelated.preserved, true);
+  assert.equal(merged.tokenType, 'bearer');
 });
 
 test('Embedded Signup exchanges code, validates ownership, subscribes, and registers', async () => {

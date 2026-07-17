@@ -264,6 +264,19 @@ function normalizeConsumptionInput(input = {}) {
   return normalized;
 }
 
+function normalizeDataEndpointAuthenticationInput(input = {}) {
+  return {
+    tokenEvidence: normalizeTokenEvidence(input),
+    organizationId: boundedText(input.organizationId, { name: "organization", max: 191 }),
+    projectId: boundedText(input.projectId, { name: "project", max: 191 }),
+    phoneNumberId: boundedText(input.phoneNumberId, {
+      name: "phone number ID",
+      max: 40,
+      pattern: /^\d{5,40}$/,
+    }),
+  };
+}
+
 function normalizeNow(value) {
   return validDate(value ?? new Date(), "clock");
 }
@@ -642,6 +655,65 @@ export async function getWhatsAppFlowSessionSentFence(prisma, input) {
       "WHATSAPP_FLOW_SESSION_INVALID",
     );
   }
+  return { session };
+}
+
+/**
+ * Authenticate a raw Flow token for the encrypted Data Endpoint without
+ * consuming the session. INIT/data_exchange are read-only; the terminal
+ * nfm_reply webhook remains the only path allowed to claim the session and
+ * apply business effects.
+ */
+export async function authenticateWhatsAppFlowDataSession(
+  prisma,
+  input,
+  { secret, now = new Date() } = {},
+) {
+  const delegate = sessionDelegate(prisma);
+  const authentication = normalizeDataEndpointAuthenticationInput(input);
+  const authenticatedAt = normalizeNow(now);
+  const signingSecret = flowTokenSecret(secret);
+  const evidence = authentication.tokenEvidence;
+  const session = await delegate.findUnique({ where: { id: evidence.sessionId } });
+
+  if (!session) {
+    throw flowSessionError(
+      "WhatsApp Flow session is invalid.",
+      "WHATSAPP_FLOW_SESSION_INVALID",
+    );
+  }
+
+  const expectedToken = signedTokenForSession(session, signingSecret);
+  const expectedEvidence = whatsAppFlowTokenEvidence(expectedToken);
+  if (
+    evidence.sessionId !== expectedEvidence.sessionId
+    || !constantTimeEqual(evidence.tokenSha256, expectedEvidence.tokenSha256)
+    || !constantTimeEqual(evidence.tokenSha256, session.tokenSha256)
+  ) {
+    throw flowSessionError(
+      "WhatsApp Flow session is invalid.",
+      "WHATSAPP_FLOW_SESSION_INVALID",
+    );
+  }
+
+  if (
+    String(session.organizationId || "") !== authentication.organizationId
+    || String(session.projectId || "") !== authentication.projectId
+    || String(session.phoneNumberId || "") !== authentication.phoneNumberId
+  ) {
+    throw flowSessionError(
+      "WhatsApp Flow session does not belong to this Data Endpoint.",
+      "WHATSAPP_FLOW_SESSION_INVALID",
+    );
+  }
+  if (!session.deliveryAttemptedAt || session.deliveryRejectedAt) {
+    throw flowSessionError(
+      "WhatsApp Flow session was not in a deliverable state.",
+      "WHATSAPP_FLOW_SESSION_INVALID",
+    );
+  }
+  assertSessionNotConsumed(session);
+  assertSessionNotExpired(session, authenticatedAt);
   return { session };
 }
 

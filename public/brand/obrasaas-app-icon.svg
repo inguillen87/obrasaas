@@ -1,9 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
   <title id="title">ObraSaaS</title>
-  <desc id="desc">Campo y gestión forman una O y cierran un mismo circuito operativo.</desc>
+  <desc id="desc">Una planta estructural coordinada se convierte en una obra conectada.</desc>
   <rect width="1024" height="1024" rx="224" fill="#08110F"/>
-  <g transform="translate(128 128) scale(12)" fill="none" stroke-linecap="butt" stroke-linejoin="round" stroke-width="10">
-    <path d="M13 36V21Q13 12 22 12H42Q51 12 51 21V28" stroke="#F4F1E8"/>
-    <path d="M51 28V43Q51 52 42 52H22Q13 52 13 43V36" stroke="#F28A42"/>
+  <g transform="translate(0 72)">
+  <path d="M184 365L512 554L840 365V503L512 692L184 503Z" fill="#F28A42"/>
+  <path d="M184 365L512 554V692L184 503Z" fill="#D96E32"/>
+  <path d="M512 176L840 365L512 554L184 365ZM512 302L621 365L512 428L403 365Z" fill="#F4F1E8" fill-rule="evenodd"/>
+  <path d="M403 365L512 428L621 365V431L512 494L403 431Z" fill="#12241F"/>
   </g>
 </svg>

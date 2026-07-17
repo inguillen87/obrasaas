@@ -582,6 +582,8 @@ export function buildWhatsAppFlowMessage({
   flowId,
   flowToken,
   screenId,
+  flowAction = 'navigate',
+  flowData,
   header,
   body,
   footer,
@@ -590,13 +592,34 @@ export function buildWhatsAppFlowMessage({
   const recipient = String(to || '').replace(/^\+/, '');
   if (!/^\d{8,20}$/.test(recipient)) throw new Error('Invalid WhatsApp Flow recipient.');
   const safeFlowId = requireMetaResourceId(flowId, 'Flow ID');
+  const safeFlowAction = String(flowAction || '');
+  if (!new Set(['navigate', 'data_exchange']).has(safeFlowAction)) {
+    throw new Error('Invalid WhatsApp Flow action.');
+  }
   const safeScreenId = String(screenId || '');
-  if (!/^[A-Z][A-Z0-9_]{0,29}$/.test(safeScreenId)) {
+  if (safeFlowAction === 'navigate' && !/^[A-Z][A-Z0-9_]{0,29}$/.test(safeScreenId)) {
     throw new Error('Invalid WhatsApp Flow screen ID.');
   }
   const safeToken = String(flowToken || '');
   if (!/^[A-Za-z0-9._~-]{12,256}$/.test(safeToken)) {
     throw new Error('Invalid WhatsApp Flow session token.');
+  }
+
+  let flowActionPayload;
+  if (safeFlowAction === 'navigate') {
+    if (flowData !== undefined) {
+      if (
+        !flowData
+        || typeof flowData !== 'object'
+        || Array.isArray(flowData)
+        || Object.keys(flowData).length === 0
+      ) {
+        throw new Error('WhatsApp Flow navigation data must be a non-empty object when provided.');
+      }
+      flowActionPayload = { screen: safeScreenId, data: flowData };
+    } else {
+      flowActionPayload = { screen: safeScreenId };
+    }
   }
 
   return {
@@ -613,14 +636,11 @@ export function buildWhatsAppFlowMessage({
         name: 'flow',
         parameters: {
           flow_message_version: '3',
-          flow_action: 'navigate',
+          flow_action: safeFlowAction,
           flow_token: safeToken,
           flow_id: safeFlowId,
           flow_cta: boundedFlowText(cta, 'CTA', 20),
-          flow_action_payload: {
-            screen: safeScreenId,
-            data: {},
-          },
+          ...(flowActionPayload ? { flow_action_payload: flowActionPayload } : {}),
         },
       },
     },

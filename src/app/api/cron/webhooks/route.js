@@ -1,5 +1,7 @@
 import { isAuthorizedCronRequest } from "@/lib/cron-auth";
 import { listDueWebhookProjectIds } from "@/lib/db";
+import { getPrisma } from "@/lib/prisma";
+import { garbageCollectWhatsAppFlowEndpointRequestBacklog } from "@/lib/whatsapp/flow-endpoint-requests";
 import { drainProjectWebhookEvents } from "@/lib/whatsapp/webhook-worker";
 
 export const runtime = "nodejs";
@@ -36,11 +38,32 @@ export async function GET(request) {
     if (result.blocked) blocked += 1;
   }
 
+  let flowRequestGc = {
+    scannedEndpoints: 0,
+    failedEndpoints: 0,
+    deletedCount: 0,
+    hasMore: false,
+  };
+  try {
+    flowRequestGc = await garbageCollectWhatsAppFlowEndpointRequestBacklog(
+      getPrisma(),
+      { maxEndpoints: 2, batchSize: 250 },
+    );
+  } catch (error) {
+    flowRequestGc.failedEndpoints = 1;
+    console.error("WhatsApp Flow request GC failed:", {
+      code: error?.code,
+      name: error?.name,
+      status: error?.status,
+    });
+  }
+
   return json({
     ok: true,
     projects: projectIds.length,
     completed,
     failed,
     blocked,
+    flowRequestGc,
   });
 }

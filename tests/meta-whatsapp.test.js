@@ -27,7 +27,47 @@ test("published WhatsApp Flow messages use the official interactive v3 envelope"
   assert.equal(message.interactive.action.parameters.flow_message_version, "3");
   assert.equal(message.interactive.action.parameters.flow_id, "987654321012345");
   assert.equal(message.interactive.action.parameters.flow_action_payload.screen, "INCIDENT_REPORT");
+  assert.equal("data" in message.interactive.action.parameters.flow_action_payload, false);
   assert.equal("mode" in message.interactive.action.parameters, false);
+});
+
+test("dynamic WhatsApp Flow messages start with data_exchange and no empty payload", () => {
+  const message = buildWhatsAppFlowMessage({
+    to: "+5491112345678",
+    flowId: "987654321012345",
+    flowToken: "flow-session-token-123",
+    screenId: "INCIDENT_REPORT",
+    flowAction: "data_exchange",
+    header: "Incidencia de obra",
+    body: "Completá el reporte para registrar el riesgo.",
+    footer: "Detené la tarea si existe riesgo.",
+    cta: "Reportar",
+  });
+  const parameters = message.interactive.action.parameters;
+  assert.equal(parameters.flow_action, "data_exchange");
+  assert.equal("flow_action_payload" in parameters, false);
+});
+
+test("navigate accepts only meaningful optional initialization data", () => {
+  const input = {
+    to: "+5491112345678",
+    flowId: "987654321012345",
+    flowToken: "flow-session-token-123",
+    screenId: "INCIDENT_REPORT",
+    header: "Incidencia de obra",
+    body: "Completá el reporte para registrar el riesgo.",
+    footer: "Detené la tarea si existe riesgo.",
+    cta: "Reportar",
+  };
+  assert.throws(() => buildWhatsAppFlowMessage({ ...input, flowData: {} }), /non-empty object/);
+  const message = buildWhatsAppFlowMessage({
+    ...input,
+    flowData: { project_name: "Torre Norte" },
+  });
+  assert.deepEqual(
+    message.interactive.action.parameters.flow_action_payload.data,
+    { project_name: "Torre Norte" },
+  );
 });
 
 test("Flow delivery stays phone-scoped and falls through appsecret proof", async () => {
