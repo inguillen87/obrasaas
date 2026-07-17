@@ -54,7 +54,8 @@ El alias estable publicado es `https://obrasaas.vercel.app`; `https://obrasaas-p
 ## Superficies principales
 
 - `/`: landing comercial y planes.
-- `/dashboard`: centro operativo tenant-aware.
+- `/dashboard`: vista Hoy tenant-aware con prioridades, avance, presencia y señales reales de la obra activa.
+- `/dashboard/labs`: perímetro experimental separado para BIM, visión e IoT; explicita evidencia, límites y requisitos antes de una activación real.
 - `/dashboard/report`: vista ejecutiva tenant-aware con descarga de PDF A4 real, versión de snapshot, huella SHA-256 auditada y tipografía Source Sans 3 embebida para nombres internacionales.
 - `/dashboard/team`: equipo y matriz de roles.
 - `/dashboard/integrations`: conexión de activos Meta propios del tenant.

@@ -11,6 +11,7 @@ import {
   pendingOperationalProposalCountFromPayload,
 } from '@/lib/first-value-onboarding';
 import GanttPlanner from './gantt-planner';
+import OperationalPulse from './operational-pulse';
 import PlatformReadiness from './platform-readiness';
 import StockpilePanel from './stockpile-panel';
 
@@ -151,14 +152,6 @@ const initialChatMessages = [
       time: "08:00 AM"
   }
 ];
-
-const PROJECT_STATUS = {
-  ACTIVE: { label: 'Obra activa', badge: 'badge-success' },
-  PLANNING: { label: 'En planificación', badge: 'badge-info' },
-  PAUSED: { label: 'Obra pausada', badge: 'badge-warning' },
-  COMPLETED: { label: 'Obra finalizada', badge: 'badge-info' },
-  ARCHIVED: { label: 'Obra archivada', badge: 'badge-warning' },
-};
 
 function createClientEntityId(prefix) {
   if (globalThis.crypto?.randomUUID) return `${prefix}-${globalThis.crypto.randomUUID()}`;
@@ -572,6 +565,9 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
   const displayProjectAddress = isLegacyInternalProject
     ? ''
     : platformAccess.project.address || '';
+  const setupNeedsAttention = setup.isEmptyState
+    || !setup.whatsappConnected
+    || setup.membershipCount <= 1;
   const attendanceInsight = useMemo(() => {
     const measured = hrAttendanceEntries
       .map(([name, item]) => ({
@@ -1583,13 +1579,6 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
         ))}
       </div>
 
-          <PlatformReadiness
-            platformAccess={platformAccess}
-            setup={setup}
-            syncState={syncState}
-            lastSyncedAt={lastSyncedAt}
-          />
-
           {setup.canReadOperationalProposals && pendingOperationalProposalCount > 0 && (
             <aside className="operational-approval-cta" aria-live="polite">
               <div className="operational-approval-cta__icon" aria-hidden="true">
@@ -1613,54 +1602,26 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
           
           {/* SECTION 1: DASHBOARD */}
           <section id="sec-dashboard" className={`content-section animate-fade-in-up ${activeTab === 'sec-dashboard' ? 'active' : ''}`}>
-            <div className="section-header">
-              <div className="header-title">
-                <h1>{displayProjectName}</h1>
-                <p>{displayProjectAddress || 'Proyecto sin dirección informada'} · avance, alertas y evidencia en un solo lugar.</p>
-              </div>
-              <div className="header-actions" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                <Link href="/dashboard/report" className="btn btn-secondary btn-sm" style={{ padding: '8px 14px', fontSize: '0.8rem', fontWeight: 700, background: 'rgba(255,255,255,0.05)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', textDecoration: 'none' }}>
-                  <i className="fa-solid fa-file-pdf"></i> Reporte Semanal
-                </Link>
-                <span className={`badge ${PROJECT_STATUS[platformAccess.project.status]?.badge || 'badge-info'}`}>
-                  <i className="fa-solid fa-circle-check"></i> {PROJECT_STATUS[platformAccess.project.status]?.label || platformAccess.project.status}
-                </span>
-              </div>
-            </div>
+            <OperationalPulse
+              project={{
+                ...platformAccess.project,
+                name: displayProjectName,
+                address: displayProjectAddress,
+              }}
+              state={state}
+              setup={setup}
+              syncState={syncState}
+              lastSyncedAt={lastSyncedAt}
+            />
 
-            {/* Stats Grid */}
-            <div className="grid-4">
-              <div className="glass-panel-premium dashboard-card-hover stat-card">
-                <div className="stat-icon primary"><i className="fa-solid fa-person-digging"></i></div>
-                <div className="stat-content">
-                  <span className="stat-value">{state.operariosCount}</span>
-                  <span className="stat-label">Operarios en Obra</span>
-                </div>
-              </div>
-              <div className="glass-panel-premium dashboard-card-hover stat-card">
-                <div className="stat-icon success"><i className="fa-solid fa-percent"></i></div>
-                <div className="stat-content">
-                  <span className="stat-value">{taskEntries.length > 0 ? `${state.avancePercentage}%` : '—'}</span>
-                  <span className="stat-label">Promedio de Tareas</span>
-                </div>
-              </div>
-              <div className="glass-panel-premium dashboard-card-hover stat-card">
-                <div className={`stat-icon danger ${state.alertsCount > 0 ? 'fa-fade' : ''}`} style={{ background: state.alertsCount > 0 ? 'rgba(239,68,68,0.25)' : 'rgba(255,255,255,0.02)' }}>
-                  <i className="fa-solid fa-triangle-exclamation"></i>
-                </div>
-                <div className="stat-content">
-                  <span className="stat-value">{state.alertsCount}</span>
-                  <span className="stat-label">Alertas/Bloqueos</span>
-                </div>
-              </div>
-              <div className="glass-panel-premium dashboard-card-hover stat-card">
-                <div className="stat-icon info"><i className="fa-solid fa-calendar-day"></i></div>
-                <div className="stat-content">
-                  <span className="stat-value">{state.diasEstimados || 'Sin plazo'}</span>
-                  <span className="stat-label">Plazo Estimado</span>
-                </div>
-              </div>
-            </div>
+            {setupNeedsAttention && (
+              <PlatformReadiness
+                platformAccess={platformAccess}
+                setup={setup}
+                syncState={syncState}
+                lastSyncedAt={lastSyncedAt}
+              />
+            )}
 
             {/* Dashboard Charts */}
             <div className="grid-2" style={{ marginBottom: '24px' }}>
@@ -1685,37 +1646,6 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
                       La distribución aparecerá cuando cargues tareas.
                     </div>
                   ) : <canvas ref={tasksChartRef}></canvas>}
-                </div>
-              </div>
-            </div>
-
-            {/* Actionable BIM / Digital Twin Viewer */}
-            <div className="grid-1" style={{ marginBottom: '24px' }}>
-              <div className="glass-panel-premium dashboard-card-hover" style={{ display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', zIndex: 10 }}>
-                  <div>
-                    <h3 style={{ fontFamily: 'var(--font-heading)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <i className="fa-solid fa-cube" style={{ color: 'var(--info)' }}></i> Visor BIM · Demo Lab
-                    </h3>
-                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', margin: 0 }}>
-                      Modelo de muestra para validar capas, interferencias y seguimiento visual antes de conectar el CDE del cliente.
-                    </p>
-                  </div>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button className="btn btn-sm" style={{ background: 'var(--primary)', color: 'var(--on-primary)', fontWeight: 700, borderRadius: '6px' }}><i className="fa-solid fa-layer-group"></i> MEP</button>
-                    <button className="btn btn-sm btn-secondary" style={{ borderRadius: '6px' }}><i className="fa-solid fa-building"></i> Estructura</button>
-                  </div>
-                </div>
-                
-                <div style={{ height: '350px', width: '100%', borderRadius: '12px', background: 'url(/bim_render.png) center/cover no-repeat', border: '1px solid var(--border-color)', position: 'relative' }}>
-                  {/* Overlay UI on BIM */}
-                  <div style={{ position: 'absolute', bottom: '16px', left: '16px', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(10px)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>Clash Detection AI</div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span className="badge badge-info"><i className="fa-solid fa-flask"></i> Escenario demostrativo</span>
-                      <span style={{ fontSize: '0.8rem', color: '#fff' }}>Sin Autodesk conectado</span>
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>
@@ -1843,35 +1773,6 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
                   <button type="button" className="crm-suggest-tag" onClick={() => void sendCopilotUserMessage('Haceme un resumen ejecutivo del avance y los bloqueos registrados.')} disabled={copilotStatus === 'loading' || !setup.aiSupervisorEnabled}>Resumen ejecutivo</button>
                   <button type="button" className="crm-suggest-tag" onClick={() => void sendCopilotUserMessage('¿Quiénes figuran presentes y qué datos de asistencia faltan hoy?')} disabled={copilotStatus === 'loading' || !setup.aiSupervisorEnabled}>Asistencia hoy</button>
                   <button type="button" className="crm-suggest-tag" onClick={() => void sendCopilotUserMessage('¿Qué alertas, incidentes o riesgos de stock requieren atención?')} disabled={copilotStatus === 'loading' || !setup.aiSupervisorEnabled}>Riesgos abiertos</button>
-                </div>
-              </div>
-            </div>
-
-            {/* Edge AI CCTV Security Panel */}
-            <div className="glass-panel-premium dashboard-card-hover" style={{ marginBottom: '24px', overflow: 'hidden' }}>
-              <div className="section-header" style={{ padding: '16px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h3 style={{ fontFamily: 'var(--font-heading)', color: 'var(--danger)', margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <i className="fa-solid fa-video"></i> Visión perimetral · Demo Lab
-                </h3>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <span className="badge badge-warning">Escenario EPP</span>
-                  <span className="badge badge-info"><i className="fa-solid fa-flask"></i> Cámara no conectada</span>
-                </div>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '0' }}>
-                <div style={{ height: '350px', background: 'url(/cctv_render.png) center/cover no-repeat', borderRight: '1px solid rgba(255,255,255,0.05)' }}>
-                </div>
-                <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  <div style={{ borderLeft: '4px solid var(--danger)', paddingLeft: '12px' }}>
-                    <strong style={{ color: 'var(--warning)', display: 'block', fontSize: '0.9rem', marginBottom: '4px' }}>CASO DE PRUEBA: EPP</strong>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Simulación de detección de una persona sin casco en una zona restringida.</span>
-                  </div>
-                  <button className="btn btn-secondary btn-sm" onClick={() => addToast('Simulación: el supervisor recibiría una alerta por el canal configurado.', 'info')} style={{ width: '100%' }}>
-                    <i className="fa-solid fa-bell"></i> Simular alerta
-                  </button>
-                  <button className="btn btn-secondary btn-sm" onClick={() => addToast('Simulación: se generaría evidencia para revisión humana antes de guardarla.', 'info')} style={{ width: '100%', marginTop: '8px' }}>
-                    <i className="fa-solid fa-file-signature"></i> Simular evidencia
-                  </button>
                 </div>
               </div>
             </div>

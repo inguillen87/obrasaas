@@ -16,7 +16,7 @@ const PROJECT_STATUS_LABELS = Object.freeze({
 });
 
 const WORKSPACE_DESTINATIONS = Object.freeze([
-  { key: 'summary', href: '/dashboard', tab: 'sec-dashboard', label: 'Resumen', icon: 'fa-solid fa-chart-line' },
+  { key: 'summary', href: '/dashboard', tab: 'sec-dashboard', label: 'Hoy', icon: 'fa-solid fa-house-chimney' },
   { key: 'whatsapp', href: '/dashboard?tab=sec-whatsapp', tab: 'sec-whatsapp', label: 'Operación de campo', icon: 'fa-brands fa-whatsapp' },
   { key: 'gantt', href: '/dashboard?tab=sec-gantt', tab: 'sec-gantt', label: 'Cronograma', icon: 'fa-solid fa-timeline' },
   { key: 'approvals', href: '/dashboard/approvals', exact: true, label: 'Aprobaciones', icon: 'fa-solid fa-list-check', permission: 'canReadApprovals' },
@@ -30,6 +30,10 @@ const CONTROL_DESTINATIONS = Object.freeze([
   { key: 'activation', href: '/dashboard/getting-started', exact: true, label: 'Puesta en marcha', icon: 'fa-solid fa-route' },
   { key: 'team', href: '/dashboard/team', exact: true, label: 'Equipo y roles', icon: 'fa-solid fa-user-shield', permission: 'canReadTeam' },
   { key: 'integrations', href: '/dashboard/integrations', exact: true, label: 'Integraciones', icon: 'fa-solid fa-plug-circle-bolt', permission: 'canManageIntegrations' },
+]);
+
+const EXPLORE_DESTINATIONS = Object.freeze([
+  { key: 'labs', href: '/dashboard/labs', exact: true, label: 'ObraSaaS Labs', icon: 'fa-solid fa-flask' },
 ]);
 
 function visibleDestinations(destinations, permissions) {
@@ -108,6 +112,10 @@ export default function DashboardShell({ children, model }) {
   );
   const controlDestinations = visibleDestinations(
     CONTROL_DESTINATIONS,
+    model.permissions,
+  );
+  const exploreDestinations = visibleDestinations(
+    EXPLORE_DESTINATIONS,
     model.permissions,
   );
   const userLabel = user?.fullName
@@ -338,6 +346,13 @@ export default function DashboardShell({ children, model }) {
             location={location}
             onNavigate={() => setMobileOpen(false)}
             pendingApprovalCount={pendingApprovalCount}
+          />
+          <NavigationGroup
+            destinations={exploreDestinations}
+            label="Explorar"
+            location={location}
+            onNavigate={() => setMobileOpen(false)}
+            pendingApprovalCount={0}
           />
           {model.identity.isSuperadmin && (
             <NavigationGroup

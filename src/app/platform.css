@@ -80,6 +80,11 @@ body.light-theme .brand-name {
     -webkit-text-fill-color: currentColor;
 }
 
+.dashboard-shell :where(a, button, input, select, textarea):focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 3px;
+}
+
 body.light-theme .dashboard-project-context select {
     color: var(--text-primary);
     background: rgba(255, 255, 255, 0.92);
@@ -2413,8 +2418,11 @@ select.form-input option {
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--glass-border-dark);
   box-shadow: var(--premium-shadow);
-  border-radius: 24px;
-  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  border-radius: 20px;
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .light-theme .glass-panel-premium {
@@ -2424,19 +2432,20 @@ select.form-input option {
 }
 
 .dashboard-card-hover:hover {
-  transform: translateY(-5px) scale(1.01);
-  box-shadow: 0 30px 60px rgba(255, 159, 28, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+  border-color: rgba(242, 138, 66, 0.2);
+  box-shadow: 0 22px 52px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
 .light-theme .dashboard-card-hover:hover {
-  box-shadow: 0 30px 60px rgba(255, 159, 28, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  box-shadow: 0 20px 42px rgba(15, 23, 42, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
 /* Animations */
 @keyframes fadeInUpPremium {
   0% {
     opacity: 0;
-    transform: translateY(30px) scale(0.98);
+    transform: translateY(12px);
   }
   100% {
     opacity: 1;
@@ -2445,7 +2454,7 @@ select.form-input option {
 }
 
 .animate-fade-in-up {
-  animation: fadeInUpPremium 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: fadeInUpPremium 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 @keyframes floatSmooth {
@@ -2592,4 +2601,17 @@ select.form-input option {
 
 .internal-workspace__status i {
   color: #10b981;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glass-panel-premium,
+  .dashboard-card-hover,
+  .animate-fade-in-up,
+  .animate-float,
+  .animate-pulse-glow,
+  .toast-notification {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
 }

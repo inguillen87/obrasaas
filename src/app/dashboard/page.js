@@ -14,6 +14,11 @@ import ProjectAccessRequired from './project-access-required';
 
 export const dynamic = 'force-dynamic';
 
+export const metadata = {
+  title: 'Hoy',
+  description: 'Prioridades, avance, equipo y riesgos de la obra activa.',
+};
+
 export default async function DashboardPage() {
   const access = await getPlatformAccess({ requireOrganization: false });
   if (!access.organization) {
