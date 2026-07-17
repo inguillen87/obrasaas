@@ -2,7 +2,17 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import fontkit from '@pdf-lib/fontkit';
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import {
+  LineCapStyle,
+  PDFDocument,
+  StandardFonts,
+  rgb,
+} from 'pdf-lib';
+
+import {
+  OBRA_SAAS_STRUCTURE_PATH,
+  OBRA_SAAS_TRACE_PATH,
+} from '../app/brand/brand-geometry.js';
 
 const A4 = Object.freeze({ width: 595.28, height: 841.89 });
 const MARGIN = 44;
@@ -238,9 +248,20 @@ export async function renderWeeklyReportPdf(report) {
     page = pdfDoc.addPage([A4.width, A4.height]);
     page.drawRectangle({ x: 0, y: 0, width: A4.width, height: A4.height, color: COLOR.paper });
     page.drawRectangle({ x: 0, y: A4.height - 5, width: A4.width, height: 5, color: COLOR.orange });
-    page.drawRectangle({ x: MARGIN, y: A4.height - 58, width: 22, height: 22, color: COLOR.ink });
-    page.drawRectangle({ x: MARGIN + 4, y: A4.height - 54, width: 14, height: 3, color: COLOR.orange });
-    page.drawRectangle({ x: MARGIN + 4, y: A4.height - 50, width: 3, height: 10, color: COLOR.green });
+    page.drawSvgPath(OBRA_SAAS_STRUCTURE_PATH, {
+      x: MARGIN,
+      y: A4.height - 31,
+      scale: 0.34,
+      color: COLOR.ink,
+    });
+    page.drawSvgPath(OBRA_SAAS_TRACE_PATH, {
+      x: MARGIN,
+      y: A4.height - 31,
+      scale: 0.34,
+      borderColor: COLOR.orange,
+      borderLineCap: LineCapStyle.Round,
+      borderWidth: 7,
+    });
     page.drawText('ObraSaaS', {
       x: MARGIN + 31,
       y: A4.height - 52,

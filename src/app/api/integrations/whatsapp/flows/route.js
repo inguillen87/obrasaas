@@ -338,6 +338,8 @@ export async function POST(request) {
               id: provisioned.endpoint.id,
               endpointUri: provisioned.endpointUri,
               applicationId,
+              whatsappBusinessId: connection.whatsappBusinessId,
+              phoneNumberId: connection.phoneNumberId,
               keyFingerprint: provisioned.endpoint.keyFingerprint,
               keyVersion: provisioned.endpoint.keyVersion,
               signatureStatus: provisioned.endpoint.signatureStatus,

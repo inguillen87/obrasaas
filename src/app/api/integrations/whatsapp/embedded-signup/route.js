@@ -20,6 +20,7 @@ import {
   MetaIntegrationError,
   whatsAppConnectionIdentityChanged,
 } from '@/lib/whatsapp/embedded-signup';
+import { buildWhatsAppChannelHealthMetadata } from '@/lib/whatsapp/channel-health';
 import {
   acquireWhatsAppConnectionLease,
   commitWhatsAppConnectionLease,
@@ -128,14 +129,16 @@ export async function POST(request) {
       phoneNumberId,
       registrationPin,
     });
-    const verifiedMetadata = {
+    const timestamp = new Date();
+    const verifiedMetadata = buildWhatsAppChannelHealthMetadata({
       tokenType: result.tokenType,
       expiresAt: result.expiresAt,
       scopes: result.scopes,
       qualityRating: result.qualityRating,
       verificationStatus: result.verificationStatus,
-    };
-    const timestamp = new Date();
+      subscribed: result.subscribed,
+      phoneStatus: result.phoneStatus,
+    }, result, { now: timestamp });
     const encryptedAccessToken = encryptCredential(result.accessToken);
     const encryptedPin = encryptCredential(registrationPin);
     let connection;

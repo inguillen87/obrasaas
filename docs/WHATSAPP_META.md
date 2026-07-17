@@ -13,6 +13,23 @@ ObraSaaS usa una app de Meta dedicada. La aplicación no comparte credenciales, 
 
 Los identificadores existentes en pruebas o documentación no demuestran por sí solos que la app, la suscripción o el callback estén activos en Meta. Esa verificación debe realizarse contra la app y el WABA reales del ambiente que se va a liberar.
 
+## Activación y salud verificables
+
+La existencia de una fila `WhatsAppConnection` no equivale a un canal operativo. Integraciones presenta una progresión auditable de cinco etapas:
+
+1. `Plataforma`: App ID, App Secret, configuración de Embedded Signup, token de webhook y cifrado de credenciales presentes;
+2. `Cuenta`: token vigente, los permisos `whatsapp_business_management` y `whatsapp_business_messaging`, teléfono registrado y estado del proveedor verificados;
+3. `Webhook`: la app ObraSaaS aparece realmente en `/{WABA}/subscribed_apps`;
+4. `Envío y recepción`: existe al menos un mensaje entrante firmado persistido y una salida correlacionada con un `providerMessageId` aceptado por Meta;
+5. `Flows`: endpoint cifrado sano y al menos un Flow publicado.
+
+Los estados públicos son `UNCONFIGURED`, `READY_TO_CONNECT`, `ACCOUNT_LINKED`, `WEBHOOK_PENDING`, `OPERATIONAL` y `DEGRADED`. `OPERATIONAL` exige evidencia real en ambos sentidos; nunca se deriva sólo de datos guardados durante Embedded Signup. Un Flow pendiente no invalida un canal de mensajes ya operativo, pero un endpoint de Flow explícitamente degradado sí se presenta como una incidencia separada.
+
+- `GET /api/integrations/whatsapp/health` devuelve únicamente la proyección sanitizada y diagnósticos tenant-scoped, sin tokens, secretos ni IDs del proveedor.
+- `POST /api/integrations/whatsapp/health` revalida token, permisos, pertenencia del teléfono y suscripción directamente contra Graph API, persiste un snapshot sanitario seguro y audita el resultado.
+- Embedded Signup rechaza tokens que no tengan ambos permisos operativos, confirma la suscripción con una lectura posterior y vuelve a consultar el teléfono después de registrarlo.
+- Los errores de token, suscripción, calidad, plantillas o endpoint producen acciones concretas y nunca se maquillan como `Conectado`.
+
 ## Contrato de WhatsApp Flows
 
 Los blueprints actuales usan:
@@ -107,6 +124,7 @@ No deben agregarse nuevas suscripciones hasta contar con consumidor, persistenci
 Implementado:
 
 - Embedded Signup tenant-scoped y preservación de metadata de Flows al actualizar una conexión;
+- readiness de seis estados con revalidación remota, evidencia bidireccional y endpoint de salud tenant-scoped;
 - blueprints `Incidencia de obra` y `Fichaje y seguridad` en Flow JSON `7.3`;
 - Data API `4.0` con endpoint opaco, HMAC previo al descifrado y separación por conexión;
 - cifrado RSA-2048/AES-GCM, keyring cifrado con KEK y ventana de rotación;

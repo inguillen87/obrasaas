@@ -1,7 +1,11 @@
 import crypto from 'node:crypto';
 
+import { WHATSAPP_REQUIRED_SCOPES } from './channel-readiness.js';
+
 const RESOURCE_ID_PATTERN = /^\d{5,32}$/;
 const REGISTRATION_PIN_PATTERN = /^\d{6}$/;
+
+export const REQUIRED_META_SCOPES = WHATSAPP_REQUIRED_SCOPES;
 
 export class MetaIntegrationError extends Error {
   constructor(message, { code = 'META_INTEGRATION_FAILED', status = 502 } = {}) {
@@ -23,6 +27,22 @@ export function isValidRegistrationPin(value) {
 export function createAppSecretProof(accessToken, appSecret) {
   if (!accessToken || !appSecret) throw new Error('Access token and app secret are required.');
   return crypto.createHmac('sha256', appSecret).update(accessToken).digest('hex');
+}
+
+export function missingRequiredMetaScopes(scopes) {
+  const granted = new Set(Array.isArray(scopes) ? scopes.map(String) : []);
+  return REQUIRED_META_SCOPES.filter((scope) => !granted.has(scope));
+}
+
+export function isMetaAppSubscribed(payload, appId) {
+  const entries = Array.isArray(payload) ? payload : payload?.data;
+  if (!Array.isArray(entries) || !appId) return false;
+  return entries.some((entry) => {
+    const candidate = entry?.whatsapp_business_api_data?.id
+      ?? entry?.app_id
+      ?? entry?.id;
+    return String(candidate || '') === String(appId);
+  });
 }
 
 export function whatsAppConnectionIdentityChanged(previousIdentity, nextIdentity) {
@@ -102,6 +122,141 @@ async function graphRequest({
   return metaResponse(response, 'Meta no pudo completar la operación solicitada.');
 }
 
+function assertRequiredMetaScopes(scopes) {
+  const missingScopes = missingRequiredMetaScopes(scopes);
+  if (missingScopes.length === 0) return;
+  throw new MetaIntegrationError(
+    `La autorización de Meta no incluye los permisos operativos requeridos: ${missingScopes.join(', ')}.`,
+    { code: 'META_SCOPES_INCOMPLETE', status: 403 },
+  );
+}
+
+async function inspectAccessToken({ accessToken, appId, appSecret, version, fetchImpl }) {
+  const debugUrl = new URL(`https://graph.facebook.com/${version}/debug_token`);
+  debugUrl.searchParams.set('input_token', accessToken);
+  const debugResponse = await fetchImpl(debugUrl, {
+    headers: { Authorization: `Bearer ${appId}|${appSecret}` },
+    cache: 'no-store',
+  });
+  const debug = await metaResponse(debugResponse, 'No se pudo validar el token de Meta.');
+  if (!debug.data?.is_valid || String(debug.data?.app_id) !== String(appId)) {
+    throw new MetaIntegrationError('El token no pertenece a la app ObraSaaS.', {
+      code: 'META_TOKEN_APP_MISMATCH',
+      status: 403,
+    });
+  }
+  const scopes = Array.isArray(debug.data?.scopes) ? debug.data.scopes.map(String) : [];
+  assertRequiredMetaScopes(scopes);
+  return {
+    expiresAt: Number(debug.data?.expires_at || 0) || null,
+    scopes,
+  };
+}
+
+async function inspectPhone({
+  whatsappBusinessId,
+  phoneNumberId,
+  accessToken,
+  appSecret,
+  version,
+  fetchImpl,
+}) {
+  const phones = await graphRequest({
+    path: `${whatsappBusinessId}/phone_numbers?fields=id,display_phone_number,verified_name,quality_rating,code_verification_status,status&limit=100`,
+    accessToken,
+    appSecret,
+    version,
+    fetchImpl,
+  });
+  const selectedPhone = (phones.data || []).find(
+    (phone) => String(phone.id) === String(phoneNumberId),
+  );
+  if (!selectedPhone) {
+    throw new MetaIntegrationError('El número no pertenece a la cuenta de WhatsApp seleccionada.', {
+      code: 'PHONE_WABA_MISMATCH',
+      status: 403,
+    });
+  }
+  return selectedPhone;
+}
+
+async function inspectSubscription({
+  whatsappBusinessId,
+  accessToken,
+  appId,
+  appSecret,
+  version,
+  fetchImpl,
+}) {
+  const subscriptions = await graphRequest({
+    path: `${whatsappBusinessId}/subscribed_apps`,
+    accessToken,
+    appSecret,
+    version,
+    fetchImpl,
+  });
+  if (!isMetaAppSubscribed(subscriptions, appId)) {
+    throw new MetaIntegrationError(
+      'Meta no confirmó la suscripción de ObraSaaS al webhook de esta cuenta.',
+      { code: 'META_APP_NOT_SUBSCRIBED', status: 409 },
+    );
+  }
+  return true;
+}
+
+function verifiedAccountResult({ token, phone }) {
+  return {
+    expiresAt: token.expiresAt,
+    scopes: token.scopes,
+    subscribed: true,
+    displayPhoneNumber: phone.display_phone_number || null,
+    verifiedBusinessName: phone.verified_name || null,
+    qualityRating: phone.quality_rating || null,
+    verificationStatus: phone.code_verification_status || null,
+    phoneStatus: phone.status || null,
+  };
+}
+
+export async function verifyConnectedWhatsAppAccount({
+  accessToken,
+  whatsappBusinessId,
+  phoneNumberId,
+  fetchImpl = fetch,
+}) {
+  if (!accessToken || typeof accessToken !== 'string') {
+    throw new MetaIntegrationError('La conexión no tiene un token utilizable.', {
+      code: 'META_TOKEN_MISSING',
+      status: 409,
+    });
+  }
+  if (!isValidMetaResourceId(whatsappBusinessId) || !isValidMetaResourceId(phoneNumberId)) {
+    throw new MetaIntegrationError('Los identificadores de WhatsApp son inválidos.', {
+      code: 'INVALID_WHATSAPP_IDS',
+      status: 400,
+    });
+  }
+
+  const { appId, appSecret, version } = integrationConfig();
+  const token = await inspectAccessToken({ accessToken, appId, appSecret, version, fetchImpl });
+  const phone = await inspectPhone({
+    whatsappBusinessId,
+    phoneNumberId,
+    accessToken,
+    appSecret,
+    version,
+    fetchImpl,
+  });
+  await inspectSubscription({
+    whatsappBusinessId,
+    accessToken,
+    appId,
+    appSecret,
+    version,
+    fetchImpl,
+  });
+  return verifiedAccountResult({ token, phone });
+}
+
 export async function completeEmbeddedSignup({
   code,
   whatsappBusinessId,
@@ -146,36 +301,15 @@ export async function completeEmbeddedSignup({
   }
   const accessToken = exchange.access_token;
 
-  const debugUrl = new URL(`https://graph.facebook.com/${version}/debug_token`);
-  debugUrl.searchParams.set('input_token', accessToken);
-  const debugResponse = await fetchImpl(debugUrl, {
-    headers: { Authorization: `Bearer ${appId}|${appSecret}` },
-    cache: 'no-store',
-  });
-  const debug = await metaResponse(debugResponse, 'No se pudo validar el token de Meta.');
-  if (!debug.data?.is_valid || String(debug.data?.app_id) !== String(appId)) {
-    throw new MetaIntegrationError('El token no pertenece a la app ObraSaaS.', {
-      code: 'META_TOKEN_APP_MISMATCH',
-      status: 403,
-    });
-  }
-
-  const phones = await graphRequest({
-    path: `${whatsappBusinessId}/phone_numbers?fields=id,display_phone_number,verified_name,quality_rating,code_verification_status&limit=100`,
+  const token = await inspectAccessToken({ accessToken, appId, appSecret, version, fetchImpl });
+  await inspectPhone({
+    whatsappBusinessId,
+    phoneNumberId,
     accessToken,
     appSecret,
     version,
     fetchImpl,
   });
-  const selectedPhone = (phones.data || []).find(
-    (phone) => String(phone.id) === String(phoneNumberId),
-  );
-  if (!selectedPhone) {
-    throw new MetaIntegrationError('El número no pertenece a la cuenta de WhatsApp seleccionada.', {
-      code: 'PHONE_WABA_MISMATCH',
-      status: 403,
-    });
-  }
 
   await graphRequest({
     path: `${whatsappBusinessId}/subscribed_apps`,
@@ -183,6 +317,14 @@ export async function completeEmbeddedSignup({
     appSecret,
     version,
     method: 'POST',
+    fetchImpl,
+  });
+  await inspectSubscription({
+    whatsappBusinessId,
+    accessToken,
+    appId,
+    appSecret,
+    version,
     fetchImpl,
   });
   await graphRequest({
@@ -194,15 +336,18 @@ export async function completeEmbeddedSignup({
     body: { messaging_product: 'whatsapp', pin: registrationPin },
     fetchImpl,
   });
+  const selectedPhone = await inspectPhone({
+    whatsappBusinessId,
+    phoneNumberId,
+    accessToken,
+    appSecret,
+    version,
+    fetchImpl,
+  });
 
   return {
     accessToken,
     tokenType: exchange.token_type || null,
-    expiresAt: Number(debug.data?.expires_at || 0) || null,
-    scopes: Array.isArray(debug.data?.scopes) ? debug.data.scopes : [],
-    displayPhoneNumber: selectedPhone.display_phone_number || null,
-    verifiedBusinessName: selectedPhone.verified_name || null,
-    qualityRating: selectedPhone.quality_rating || null,
-    verificationStatus: selectedPhone.code_verification_status || null,
+    ...verifiedAccountResult({ token, phone: selectedPhone }),
   };
 }

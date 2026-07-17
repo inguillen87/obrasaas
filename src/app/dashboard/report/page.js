@@ -54,7 +54,7 @@ export default async function ReportPage({ searchParams }) {
       <article className={styles.report} aria-labelledby="report-title">
         <header className={styles.header}>
           <div className={styles.brandBlock}>
-            <ObraSaasMark className={styles.mark} size={44} />
+            <ObraSaasMark className={styles.mark} size={44} variant="dark" />
             <div>
               <strong>ObraSaaS</strong>
               <span>Control operativo y evidencia de obra</span>

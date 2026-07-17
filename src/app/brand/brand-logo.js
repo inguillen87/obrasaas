@@ -1,30 +1,51 @@
-import Image from 'next/image';
+import {
+  OBRA_SAAS_STRUCTURE_PATH,
+  OBRA_SAAS_TRACE_PATH,
+} from './brand-geometry';
 import styles from './brand-logo.module.css';
 
-const MARK_SOURCES = Object.freeze({
-  app: '/brand/obrasaas-app-icon.svg',
-  dark: '/brand/obrasaas-symbol.svg',
-  inverse: '/brand/obrasaas-symbol-inverse.svg',
-  mono: '/brand/obrasaas-symbol-mono.svg',
-});
+const SUPPORTED_VARIANTS = new Set(['app', 'auto', 'dark', 'inverse', 'mono']);
+
+function variantClassName(variant) {
+  const normalized = SUPPORTED_VARIANTS.has(variant) ? variant : 'auto';
+  return styles[`variant${normalized.charAt(0).toUpperCase()}${normalized.slice(1)}`];
+}
 
 export function ObraSaasMark({
+  animate = false,
   className = '',
-  preload = false,
   size = 32,
-  variant = 'app',
+  variant = 'auto',
 }) {
-  const source = MARK_SOURCES[variant] || MARK_SOURCES.app;
+  const appVariant = variant === 'app';
+  const mark = (
+    <>
+      <path className={styles.structure} d={OBRA_SAAS_STRUCTURE_PATH} />
+      <path
+        className={styles.trace}
+        d={OBRA_SAAS_TRACE_PATH}
+        fill="none"
+        pathLength="1"
+        strokeWidth="7"
+      />
+    </>
+  );
+
   return (
-    <Image
-      alt=""
+    <svg
       aria-hidden="true"
-      className={`${styles.mark} ${className}`.trim()}
+      className={`${styles.mark} ${variantClassName(variant)} ${animate ? styles.animated : ''} ${className}`.trim()}
       height={size}
-      preload={preload}
-      src={source}
+      viewBox="0 0 64 64"
       width={size}
-    />
+    >
+      {appVariant ? (
+        <>
+          <rect className={styles.appTile} width="64" height="64" rx="14" />
+          <g transform="translate(5.12 5.12) scale(.84)">{mark}</g>
+        </>
+      ) : mark}
+    </svg>
   );
 }
 
@@ -32,15 +53,14 @@ export function ObraSaasLogo({
   className = '',
   markClassName = '',
   markSize = 32,
-  preload = false,
-  variant = 'app',
+  variant = 'auto',
   wordmarkClassName = '',
 }) {
   return (
     <span className={`${styles.lockup} ${className}`.trim()}>
       <ObraSaasMark
+        animate
         className={markClassName}
-        preload={preload}
         size={markSize}
         variant={variant}
       />

@@ -1,73 +1,74 @@
 # Sistema de marca ObraSaaS
 
-Estado: identidad operativa v1, lista para producto y comunicación. El nombre y el símbolo deberán revisarse legalmente antes de registrar la marca o comprar el dominio definitivo.
+Estado: identidad operativa v2, lista para producto y comunicación. El nombre y el símbolo deben revisarse legalmente antes de registrar la marca o comprar el dominio definitivo.
 
-## Idea central
+## Idea central: trazado operativo
 
-El símbolo representa una planta estructural que se convierte en una obra coordinada:
+El símbolo representa el recorrido que diferencia a ObraSaaS: una señal real de campo entra en el perímetro de una obra, gana contexto y sale convertida en una acción coordinada.
 
-- La losa superior forma una `O` en perspectiva: ObraSaaS conecta la planta, la ejecución y el control sin recurrir a un monograma literal.
-- El vacío central funciona como núcleo de coordinación y conserva una silueta reconocible incluso en tamaños pequeños.
-- La capa naranja expresa la ejecución física y el avance real de la obra.
-- Las caras laterales aportan profundidad y muestran que la información de campo pasa a formar parte de una estructura operativa común.
+- Los cuatro apoyos verde carbón forman un límite de proyecto abierto: estructura, obra y permisos sin dibujar un edificio literal.
+- El trazado naranja entra desde campo, cambia de nivel dentro del sistema y continúa hacia la gestión. Ese desplazamiento representa contexto, revisión y trazabilidad.
+- La geometría plana conserva una silueta clara en 16 px, funciona en una tinta y permite una animación breve del recorrido sin convertir la marca en decoración.
+- El símbolo evita los recursos saturados del software de construcción: casa, casco, grúa, skyline, cubo, capas isométricas, tilde, escudo y pin de ubicación.
 
-La marca evita recursos demasiado literales o genéricos para software de construcción: casco, casa, grúa, tilde de verificación, escudo y hexágono.
+La marca no utiliza descriptor junto al nombre. `ObraSaaS` es la firma completa; expresiones de posicionamiento como “sistema operativo de obra” pertenecen al contenido, no al lockup.
 
 ## Activos oficiales
 
-- `public/brand/obrasaas-app-icon.svg`: ícono con fondo para aplicaciones y perfiles.
-- `public/brand/obrasaas-app-icon-1024.png`: versión raster de alta resolución.
-- `public/brand/obrasaas-app-icon-192.png` y `obrasaas-app-icon-512.png`: íconos PWA de propósito general.
-- `public/brand/obrasaas-maskable-512.png`: ícono PWA opaco y preparado para máscaras del sistema.
-- `public/brand/obrasaas-favicon.svg`: microícono simplificado para 16–48 px.
+- `public/brand/obrasaas-app-icon.svg`: ícono opaco para launchers, perfiles y avatares institucionales.
+- `public/brand/obrasaas-app-icon-1024.png`: raster de alta resolución.
+- `public/brand/obrasaas-app-icon-192.png` y `obrasaas-app-icon-512.png`: íconos PWA.
+- `public/brand/obrasaas-maskable-512.png`: ícono PWA maskable.
+- `public/brand/obrasaas-favicon.svg`: microícono para 16–48 px.
 - `public/brand/obrasaas-symbol.svg`: símbolo para fondos claros.
 - `public/brand/obrasaas-symbol-inverse.svg`: símbolo para fondos oscuros.
 - `public/brand/obrasaas-symbol-mono.svg`: versión monocromática.
 - `public/brand/obrasaas-lockup.svg`: firma horizontal para fondos claros.
 - `public/brand/obrasaas-lockup-inverse.svg`: firma horizontal para fondos oscuros.
 - `public/brand/obrasaas-lockup-mono.svg`: firma horizontal a una tinta.
-- `src/app/brand/brand-logo.js`: lockup vivo y accesible utilizado por la interfaz.
+- `src/app/brand/brand-geometry.js`: geometría canónica usada por la interfaz.
+- `src/app/brand/brand-logo.js`: símbolo y lockup vivos, accesibles y adaptables al tema.
+
+Los PNG, Apple icon, maskable e ICO se regeneran con `npm run brand:assets`; no se editan manualmente.
 
 ## Paleta principal
 
 | Uso | Color | Hex |
 | --- | --- | --- |
 | Fondo profundo | Verde carbón | `#08110F` |
-| Estructura / texto inverso | Marfil técnico | `#F4F1E8` |
+| Estructura / tinta | Verde estructural | `#0A1B17` |
+| Texto inverso | Marfil técnico | `#F4F1E8` |
 | Campo / acción | Naranja obra | `#F28A42` |
 
-El naranja es un acento de acción, no un color de relleno indiscriminado. El verde carbón reemplaza al negro puro para conservar profundidad y una identidad propia.
+El naranja identifica recorrido y acción. No debe convertirse en un relleno dominante ni reemplazar colores semánticos de WhatsApp, éxito, advertencia o riesgo.
 
 ## Wordmark
 
 El nombre se compone con Manrope:
 
-- `Obra`: peso 800, el máximo real del archivo variable de Manrope utilizado por el producto.
-- `SaaS`: peso 650 y menor contraste.
+- `Obra`: peso 800.
+- `SaaS`: peso 650 y contraste secundario.
 - Tracking aproximado: `-0.055em`.
 
-No se debe recrear el wordmark como una imagen raster. En producto se utiliza el componente `ObraSaasLogo` para mantener nitidez, traducción accesible y consistencia tipográfica. Para piezas externas se usan los lockups oficiales: el wordmark ya está convertido a paths, no contiene elementos `<text>` ni depende de que Manrope esté instalada en el equipo de destino.
+En producto se usa `ObraSaasLogo`; nunca se combina el app icon cuadrado con el wordmark. Para piezas externas se usan los lockups convertidos a paths, sin elementos `<text>` ni dependencia de fuentes instaladas.
+
+## Contraste y movimiento
+
+- `auto`: marfil en tema oscuro y verde estructural en tema claro.
+- `dark`: verde estructural para fondos claros.
+- `inverse`: marfil para fondos oscuros.
+- `mono`: una sola tinta heredada.
+- `app`: fondo verde carbón, reservado para launchers y perfiles.
+
+El recorrido puede revelarse una sola vez al cargar un lockup. No se anima de forma continua y se desactiva con `prefers-reduced-motion`.
 
 ## Reglas de uso
 
-- Tamaño mínimo recomendado del símbolo digital: `24 px`; entre `16` y `23 px` usar el microícono de favicon.
-- Tamaño mínimo recomendado del lockup: `120 px` de ancho.
-- Área de protección: como mínimo, el grosor de un tramo del símbolo alrededor de toda la marca.
-- En fondos claros: usar `obrasaas-lockup.svg` o `obrasaas-symbol.svg` si el espacio no admite la firma completa.
-- En fondos oscuros: usar `obrasaas-lockup-inverse.svg` o `obrasaas-symbol-inverse.svg`.
-- Cuando el color no sea viable: usar `obrasaas-lockup-mono.svg` o `obrasaas-symbol-mono.svg`.
-- Para favicons de hasta `48 px`: usar el microícono preparado. Para launchers, perfiles y avatares institucionales: usar el app icon.
-- Para `maskable` y Apple touch icon: usar únicamente las variantes opacas preparadas; el sistema operativo aplica su propia máscara.
-
-## Usos prohibidos
-
-- No rotar, inclinar ni deformar.
-- No cambiar la perspectiva, el vacío central ni la relación entre los niveles estructurales.
-- No agregar sombras, biseles, contornos o gradientes dentro del símbolo.
+- Tamaño mínimo del símbolo digital: `24 px`; entre `16` y `23 px`, usar el favicon.
+- Tamaño mínimo del lockup: `120 px` de ancho.
+- Área de protección: al menos el grosor de uno de los apoyos alrededor de la marca.
+- No rotar, inclinar, deformar ni alterar el cambio de nivel del trazado.
+- No agregar sombras, biseles, gradientes o contornos.
 - No encerrar el símbolo en otra forma salvo el app icon oficial.
-- No reemplazar los colores principales por colores de cada tenant.
-- No usar el símbolo como ícono genérico de estado, aprobación o seguridad.
-
-## Marca de tenants
-
-ObraSaaS conserva su identidad en navegación, autenticación, comunicaciones del sistema y superficies de confianza. La identidad de cada organización puede aparecer como contexto secundario —nombre, avatar y color de acento— sin reemplazar la marca de plataforma ni confundir la autoría de las acciones.
+- No usar el símbolo como ícono genérico de una obra, aprobación o estado.
+- La identidad de un tenant puede convivir como contexto secundario, pero no reemplaza la autoría de plataforma.

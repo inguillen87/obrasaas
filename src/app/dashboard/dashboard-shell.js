@@ -243,7 +243,6 @@ export default function DashboardShell({ children, model }) {
               className="dashboard-brand-lockup"
               markClassName="brand-logo"
               markSize={38}
-              variant="app"
               wordmarkClassName="brand-name"
             />
           </Link>

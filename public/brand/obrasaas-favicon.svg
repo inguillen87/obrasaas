@@ -1,9 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
   <title id="title">ObraSaaS</title>
-  <desc id="desc">Microícono de la planta estructural ObraSaaS.</desc>
+  <desc id="desc">Microícono del trazado operativo ObraSaaS.</desc>
   <rect width="64" height="64" rx="13" fill="#08110F"/>
-  <path d="M8 27L32 40.5L56 27V39L32 52.5L8 39Z" fill="#F28A42"/>
-  <path d="M8 27L32 40.5V52.5L8 39Z" fill="#D96E32"/>
-  <path d="M32 10L56 23.5L32 37L8 23.5ZM32 17.5L43 23.5L32 29.5L21 23.5Z" fill="#F4F1E8" fill-rule="evenodd"/>
-  <path d="M21 23.5L32 29.5L43 23.5V29.5L32 35.5L21 29.5Z" fill="#173029"/>
+  <path d="M10 8H29V16H18V25H10V8ZM35 8H54V27H46V16H35V8ZM10 37H18V48H29V56H10V37ZM35 48H46V39H54V56H35V48Z" fill="#F4F1E8"/>
+  <path d="M4 29H26.5C30.1 29 33 31.9 33 35.5V36C33 38.8 35.2 41 38 41H60" fill="none" stroke="#F28A42" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

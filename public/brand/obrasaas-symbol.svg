@@ -1,10 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
   <title id="title">Símbolo ObraSaaS</title>
-  <desc id="desc">Una planta estructural coordinada se convierte en una obra conectada.</desc>
-  <g transform="translate(0 3)">
-  <path d="M8 24.1L32 37.95L56 24.1V34.2L32 48.05L8 34.2Z" fill="#F28A42"/>
-  <path d="M8 24.1L32 37.95V48.05L8 34.2Z" fill="#D96E32"/>
-  <path d="M32 10.25L56 24.1L32 37.95L8 24.1ZM32 19.5L40 24.1L32 28.7L24 24.1Z" fill="#0A1B17" fill-rule="evenodd"/>
-  <path d="M24 24.1L32 28.7L40 24.1V28.95L32 33.55L24 28.95Z" fill="#365148"/>
-  </g>
+  <desc id="desc">Un evento de campo cruza la estructura del proyecto y se convierte en una acción coordinada.</desc>
+  <path d="M10 8H29V16H18V25H10V8ZM35 8H54V27H46V16H35V8ZM10 37H18V48H29V56H10V37ZM35 48H46V39H54V56H35V48Z" fill="#0A1B17"/>
+  <path d="M4 29H26.5C30.1 29 33 31.9 33 35.5V36C33 38.8 35.2 41 38 41H60" fill="none" stroke="#F28A42" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

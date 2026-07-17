@@ -9,6 +9,50 @@
 .mark {
   display: block;
   flex: 0 0 auto;
+  overflow: visible;
+  color: #f4f1e8;
+  shape-rendering: geometricPrecision;
+}
+
+.structure {
+  fill: currentColor;
+}
+
+.trace {
+  stroke: #f28a42;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transform-origin: center;
+}
+
+.appTile {
+  fill: #08110f;
+}
+
+.variantAuto,
+.variantInverse,
+.variantApp {
+  color: #f4f1e8;
+}
+
+.variantDark {
+  color: #0a1b17;
+}
+
+.variantMono {
+  color: currentColor;
+}
+
+.variantMono .trace {
+  stroke: currentColor;
+}
+
+:global(body.light-theme) .variantAuto {
+  color: #0a1b17;
+}
+
+.animated .trace {
+  animation: brandTrace 720ms cubic-bezier(0.16, 1, 0.3, 1) 80ms both;
 }
 
 .wordmark {
@@ -35,4 +79,23 @@
 .wordmark span {
   font-weight: 650;
   opacity: 0.74;
+}
+
+@keyframes brandTrace {
+  from {
+    opacity: 0;
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+  }
+  to {
+    opacity: 1;
+    stroke-dasharray: 1;
+    stroke-dashoffset: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animated .trace {
+    animation: none;
+  }
 }

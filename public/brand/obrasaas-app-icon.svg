@@ -1,11 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
   <title id="title">ObraSaaS</title>
-  <desc id="desc">Una planta estructural coordinada se convierte en una obra conectada.</desc>
-  <rect width="1024" height="1024" rx="224" fill="#08110F"/>
-  <g transform="translate(0 72)">
-  <path d="M184 365L512 554L840 365V503L512 692L184 503Z" fill="#F28A42"/>
-  <path d="M184 365L512 554V692L184 503Z" fill="#D96E32"/>
-  <path d="M512 176L840 365L512 554L184 365ZM512 302L621 365L512 428L403 365Z" fill="#F4F1E8" fill-rule="evenodd"/>
-  <path d="M403 365L512 428L621 365V431L512 494L403 431Z" fill="#12241F"/>
+  <desc id="desc">Ícono del trazado operativo ObraSaaS.</desc>
+  <rect width="64" height="64" rx="14" fill="#08110F"/>
+  <g transform="translate(5.12 5.12) scale(.84)">
+    <path d="M10 8H29V16H18V25H10V8ZM35 8H54V27H46V16H35V8ZM10 37H18V48H29V56H10V37ZM35 48H46V39H54V56H35V48Z" fill="#F4F1E8"/>
+    <path d="M4 29H26.5C30.1 29 33 31.9 33 35.5V36C33 38.8 35.2 41 38 41H60" fill="none" stroke="#F28A42" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
   </g>
 </svg>

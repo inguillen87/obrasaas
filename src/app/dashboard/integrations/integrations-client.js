@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import styles from './integrations.module.css';
 
 const META_ORIGINS = new Set([
@@ -40,6 +40,13 @@ function flowStatusClass(status) {
 
 function isPlainRecord(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function readinessIcon(status) {
+  if (status === 'COMPLETE') return 'fa-check';
+  if (status === 'DEGRADED') return 'fa-triangle-exclamation';
+  if (status === 'CURRENT') return 'fa-arrow-right';
+  return 'fa-circle';
 }
 
 function normalizeFlowCatalogPayload(payload) {
@@ -112,9 +119,14 @@ export default function IntegrationsClient({
   configId,
   platformReady,
   initialConnection,
+  initialHealth,
+  initialHealthDiagnostics,
   initialFlowCatalog,
 }) {
   const [connection, setConnection] = useState(initialConnection);
+  const [channelHealth, setChannelHealth] = useState(initialHealth);
+  const [healthDiagnostics, setHealthDiagnostics] = useState(initialHealthDiagnostics);
+  const [healthPending, setHealthPending] = useState(false);
   const [sdkReady, setSdkReady] = useState(false);
   const [registrationPin, setRegistrationPin] = useState('');
   const [status, setStatus] = useState(null);
@@ -134,6 +146,11 @@ export default function IntegrationsClient({
   const submittedRef = useRef(false);
   const connected = connection?.enabled && connection.connectionStatus === 'CONNECTED';
   const configured = Boolean(appId && configId && platformReady);
+  const healthStateClass = channelHealth?.degraded
+    ? styles.degradedState
+    : channelHealth?.operational
+      ? styles.connected
+      : styles.pendingState;
   const endpointPresentation = flowEndpointPresentation(
     flowEndpoint,
     connected,
@@ -142,6 +159,22 @@ export default function IntegrationsClient({
   const endpointFingerprint = typeof flowEndpoint?.keyFingerprint === 'string'
     ? flowEndpoint.keyFingerprint
     : null;
+
+  async function synchronizeChannelHealth({ method = 'GET' } = {}) {
+    const response = await fetch('/api/integrations/whatsapp/health', {
+      method,
+      cache: 'no-store',
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (isPlainRecord(payload.health)) setChannelHealth(payload.health);
+    if (isPlainRecord(payload.diagnostics)) setHealthDiagnostics(payload.diagnostics);
+    if (!response.ok) {
+      const error = new Error(payload.error || 'No se pudo verificar la salud del canal.');
+      error.code = payload.code || null;
+      throw error;
+    }
+    return payload;
+  }
 
   async function submitConnection() {
     const signup = signupRef.current;
@@ -172,9 +205,17 @@ export default function IntegrationsClient({
       setFlowNotice(null);
       setConnection(payload.connection);
       setRegistrationPin('');
+      let healthRefreshFailed = false;
+      try {
+        await synchronizeChannelHealth();
+      } catch {
+        healthRefreshFailed = true;
+      }
       setStatus({
         type: 'success',
-        text: 'WhatsApp quedó conectado, suscripto al webhook y aislado para este tenant.',
+        text: healthRefreshFailed
+          ? 'La cuenta quedó vinculada y suscripta. La lectura de salud se actualizará al recargar; falta validar tráfico real.'
+          : 'La cuenta quedó vinculada y suscripta. Falta validar tráfico real antes de declararla operativa.',
       });
     } catch (error) {
       submittedRef.current = false;
@@ -183,6 +224,10 @@ export default function IntegrationsClient({
       setPending(false);
     }
   }
+
+  const submitConnectionFromMetaEvent = useEffectEvent(() => {
+    void submitConnection();
+  });
 
   useEffect(() => {
     if (!appId) return undefined;
@@ -218,7 +263,7 @@ export default function IntegrationsClient({
         signupRef.current.whatsappBusinessId = payload.data?.waba_id || null;
         signupRef.current.phoneNumberId = payload.data?.phone_number_id || null;
         setStatus({ type: 'progress', text: 'Activos recibidos. Finalizando conexión segura…' });
-        void submitConnection();
+        submitConnectionFromMetaEvent();
       } else if (payload.event === 'CANCEL') {
         setPending(false);
         setStatus({ type: 'info', text: 'El registro fue cancelado antes de compartir los activos.' });
@@ -304,11 +349,38 @@ export default function IntegrationsClient({
       setFlowCatalog(Array.isArray(initialFlowCatalog) ? initialFlowCatalog : []);
       setFlowEndpoint(null);
       setFlowNotice(null);
-      setStatus({ type: 'success', text: 'La conexión local fue desactivada y las credenciales eliminadas.' });
+      let healthRefreshFailed = false;
+      try {
+        await synchronizeChannelHealth();
+      } catch {
+        healthRefreshFailed = true;
+      }
+      setStatus({
+        type: 'success',
+        text: healthRefreshFailed
+          ? 'La conexión local fue desactivada y las credenciales eliminadas. La lectura de salud se actualizará al recargar.'
+          : 'La conexión local fue desactivada y las credenciales eliminadas.',
+      });
     } catch (error) {
       setStatus({ type: 'error', text: error.message });
     } finally {
       setPending(false);
+    }
+  }
+
+  async function verifyChannel() {
+    setHealthPending(true);
+    setStatus({ type: 'progress', text: 'Verificando token, permisos, teléfono y suscripción en Meta…' });
+    try {
+      await synchronizeChannelHealth({ method: 'POST' });
+      setStatus({
+        type: 'success',
+        text: 'Cuenta y webhook revalidados. El estado operativo depende de evidencia real en ambos sentidos.',
+      });
+    } catch (error) {
+      setStatus({ type: 'error', text: error.message });
+    } finally {
+      setHealthPending(false);
     }
   }
 
@@ -372,8 +444,8 @@ export default function IntegrationsClient({
             <p className={styles.eyebrow}>Meta · Cloud API</p>
             <h2>WhatsApp Business</h2>
           </div>
-          <span className={`${styles.state} ${connected ? styles.connected : styles.pendingState}`}>
-            {connected ? 'Conectado' : connection?.connectionStatus === 'ERROR' ? 'Revisar' : 'Sin conectar'}
+          <span className={`${styles.state} ${healthStateClass}`}>
+            {channelHealth?.label || 'Estado pendiente'}
           </span>
         </div>
 
@@ -381,6 +453,49 @@ export default function IntegrationsClient({
           Reportes, fotos, ubicaciones y WhatsApp Flows entran por la cuenta propia de tu empresa
           y se convierten en evidencia trazable dentro de la obra correcta.
         </p>
+
+        {channelHealth && (
+          <section className={styles.readinessPanel} aria-labelledby="whatsapp-readiness-title">
+            <div className={styles.readinessHeader}>
+              <div>
+                <span>Activación verificable</span>
+                <strong id="whatsapp-readiness-title">{channelHealth.summary}</strong>
+              </div>
+              <b>{channelHealth.progress?.percentage || 0}%</b>
+            </div>
+            <div
+              className={styles.readinessProgress}
+              role="progressbar"
+              aria-label="Progreso de activación del canal"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={channelHealth.progress?.percentage || 0}
+            >
+              <i style={{ width: `${channelHealth.progress?.percentage || 0}%` }} />
+            </div>
+            <ol className={styles.readinessStages}>
+              {(channelHealth.progress?.stages || []).map((stage) => (
+                <li key={stage.key} data-state={stage.status.toLowerCase()}>
+                  <i className={`fa-solid ${readinessIcon(stage.status)}`} aria-hidden="true" />
+                  <span>{stage.label}</span>
+                </li>
+              ))}
+            </ol>
+            <div className={styles.readinessFooter}>
+              <div>
+                <span>Siguiente acción</span>
+                <strong>{channelHealth.nextAction?.label || 'Canal completamente validado'}</strong>
+              </div>
+              <div className={styles.healthEvidence}>
+                <span>Entrada firmada: {formatDate(healthDiagnostics?.lastSignedInboundAt)}</span>
+                <span>Salida Meta: {formatDate(healthDiagnostics?.lastConfirmedOutboundAt)}</span>
+                <span>
+                  Cola: {healthDiagnostics?.pendingEvents || 0} pendientes · {healthDiagnostics?.failedEvents || 0} fallidos
+                </span>
+              </div>
+            </div>
+          </section>
+        )}
 
         {connected ? (
           <div className={styles.connectionPanel}>
@@ -451,11 +566,24 @@ export default function IntegrationsClient({
         )}
 
         <div className={styles.actions}>
-          {connected && (
-            <button type="button" className={styles.secondaryButton} onClick={disconnect} disabled={pending}>
-              Desactivar en esta obra
-            </button>
-          )}
+          <div className={styles.channelActionButtons}>
+            {connected && (
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                onClick={verifyChannel}
+                disabled={pending || healthPending}
+              >
+                <i className="fa-solid fa-shield-halved" aria-hidden="true" />
+                {healthPending ? 'Verificando…' : 'Verificar con Meta'}
+              </button>
+            )}
+            {connected && (
+              <button type="button" className={styles.secondaryButton} onClick={disconnect} disabled={pending || healthPending}>
+                Desactivar en esta obra
+              </button>
+            )}
+          </div>
           <span>{configured ? 'Embedded Signup v4 listo' : 'Activación técnica pendiente'}</span>
         </div>
       </section>

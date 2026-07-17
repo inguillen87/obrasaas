@@ -8,6 +8,7 @@ import {
 } from '@/lib/access';
 import { publicTenantAiSettings } from '@/lib/ai/tenant-settings';
 import { getPrisma } from '@/lib/prisma';
+import { loadWhatsAppChannelHealth } from '@/lib/whatsapp/channel-health';
 import { getWhatsAppFlowCatalog } from '@/lib/whatsapp/flows';
 
 export const dynamic = 'force-dynamic';
@@ -32,15 +33,14 @@ function serializeConnection(connection) {
 export default async function IntegrationsPage() {
   const access = await getPlatformAccess();
   requireTenantPermission(access, 'org:integrations:manage');
-  const connection = await getPrisma().whatsAppConnection.findUnique({
-    where: { projectId: access.project.id },
+  const prisma = getPrisma();
+  const channelHealth = await loadWhatsAppChannelHealth(prisma, {
+    projectId: access.project.id,
   });
   const metaPlatformReady = Boolean(
     process.env.META_APP_SECRET
     && process.env.META_VERIFY_TOKEN
-    && process.env.WHATSAPP_CREDENTIALS_ENCRYPTION_KEY
-    && process.env.WHATSAPP_FLOW_ENDPOINT_KEK_ID
-    && process.env.WHATSAPP_FLOW_ENDPOINT_KEK_REGISTRY_JSON,
+    && process.env.WHATSAPP_CREDENTIALS_ENCRYPTION_KEY,
   );
 
   return (
@@ -64,7 +64,9 @@ export default async function IntegrationsPage() {
         appId={process.env.NEXT_PUBLIC_META_APP_ID || ''}
         configId={process.env.NEXT_PUBLIC_META_EMBEDDED_SIGNUP_CONFIG_ID || ''}
         platformReady={metaPlatformReady}
-        initialConnection={serializeConnection(connection)}
+        initialConnection={serializeConnection(channelHealth.connection)}
+        initialHealth={channelHealth.readiness}
+        initialHealthDiagnostics={channelHealth.diagnostics}
         initialFlowCatalog={getWhatsAppFlowCatalog()}
       />
       <AiProcessingControls
