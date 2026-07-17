@@ -18,6 +18,7 @@ const PROJECT_STATUS_LABELS = Object.freeze({
 const WORKSPACE_DESTINATIONS = Object.freeze([
   { key: 'summary', href: '/dashboard', tab: 'sec-dashboard', label: 'Hoy', icon: 'fa-solid fa-house-chimney' },
   { key: 'whatsapp', href: '/dashboard?tab=sec-whatsapp', tab: 'sec-whatsapp', label: 'Operación de campo', icon: 'fa-brands fa-whatsapp' },
+  { key: 'inbox', href: '/dashboard/inbox', exact: true, label: 'Bandeja WhatsApp', icon: 'fa-solid fa-comments', permission: 'canReadInbox' },
   { key: 'gantt', href: '/dashboard?tab=sec-gantt', tab: 'sec-gantt', label: 'Cronograma', icon: 'fa-solid fa-timeline' },
   { key: 'approvals', href: '/dashboard/approvals', exact: true, label: 'Aprobaciones', icon: 'fa-solid fa-list-check', permission: 'canReadApprovals' },
   { key: 'activity', href: '/dashboard/activity', exact: true, label: 'Bitácora', icon: 'fa-solid fa-shield-halved' },

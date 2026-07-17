@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { hasTenantPermission } from './access.js';
-import { getAppStateSnapshot, getMessages } from './db.js';
+import { getAppStateSnapshot, getOperationalMessages } from './db.js';
 import { FIRST_VALUE_REPORT_ACTION } from './first-value-onboarding.js';
 import {
   MEDICAL_EVIDENCE_PERMISSION,
@@ -41,10 +41,9 @@ export async function loadWeeklyReportModel(access, { generatedAt = new Date() }
 
   const [snapshot, loadedMessages] = await Promise.all([
     getAppStateSnapshot(access, { initializeIfMissing: false }),
-    getMessages(access, {
+    getOperationalMessages(access, {
       includeMedicalEvidence,
       includeSourceEvidence,
-      initializeIfEmpty: false,
       sentAtGte: weeklyReportPeriodStart(generatedAt),
       sentAtLte: generatedAt,
       take: 501,

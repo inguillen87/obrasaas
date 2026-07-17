@@ -115,6 +115,7 @@ export async function ingestAndPersistInboundWhatsAppMedia({
 
   const wasEnriched = isEnrichedInboundWhatsAppMediaEvent(event);
   const enrichedEvent = await ingest(event, {
+    scope,
     transcriptionEnabled,
     beforeTranscribe,
   });
@@ -131,6 +132,7 @@ export async function ingestAndPersistInboundWhatsAppMedia({
 }
 
 export async function ingestInboundWhatsAppMedia(event, {
+  scope,
   download = downloadWhatsAppMedia,
   upload = uploadProtectedFile,
   transcribe = transcribeAudio,
@@ -148,6 +150,7 @@ export async function ingestInboundWhatsAppMedia(event, {
   const downloaded = await download({
     mediaId: event.media.id,
     phoneNumberId: event.phoneNumberId,
+    scope,
     expectedKind: event.kind,
     expectedMimeType: event.media.mimeType,
     expectedSha256: event.media.sha256,

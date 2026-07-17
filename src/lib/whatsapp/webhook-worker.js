@@ -35,6 +35,9 @@ import { validateStoredWebhookScope } from "@/lib/whatsapp/webhook-scope";
 
 export const DEFAULT_WEBHOOK_DRAIN_EVENTS = 10;
 const MAX_WEBHOOK_DRAIN_EVENTS = 25;
+const QUARANTINE_UNASSIGNED_MEDIA = Symbol.for(
+  "obrasaas.whatsapp.quarantine-unassigned-media",
+);
 
 function invalidWebhookPayload(message) {
   const error = new Error(message);
@@ -179,6 +182,7 @@ export async function trySendPublishedFlow({
     result = await sendProviderFlow({
       to: event.from,
       phoneNumberId: scope.phoneNumberId,
+      scope,
       flowId: flow.id,
       flowToken: delivery.token,
       screenId: flow.screenId,
@@ -305,6 +309,14 @@ export async function deliverWhatsAppMessageOutcome({
   sendText = sendWhatsAppText,
   linkMessage = linkOutboundWhatsAppMessage,
 } = {}) {
+  if (outcome?.quarantined === true) {
+    return {
+      flowSent: false,
+      providerMessageId: null,
+      deliverySuppressed: true,
+    };
+  }
+
   let flowDelivery = { sent: false, providerMessageId: null };
   if (outcome.flowPrompt && outcome.flowSessionId) {
     await assertSubscription(scope);
@@ -324,6 +336,7 @@ export async function deliverWhatsAppMessageOutcome({
       text: outcome.reply,
       replyToMessageId: event.externalId,
       phoneNumberId: event.phoneNumberId,
+      scope,
     });
     providerMessageId = providerMessageIdFromMetaResult(delivery);
   }
@@ -347,21 +360,30 @@ export async function deliverWhatsAppMessageOutcome({
 async function processMessageEvent(leasedEvent, event, scope) {
   await assertWebhookMessageSubscription(scope);
   const storedOutcome = readAppliedMessageWebhookOutcome(leasedEvent);
+  let mediaWorkerResolution = null;
   if (!storedOutcome && event.media) {
-    const resolution = await resolveActiveFieldWorkerByPhone(
+    mediaWorkerResolution = await resolveActiveFieldWorkerByPhone(
       getPrisma(),
       { organizationId: scope.organizationId, projectId: scope.projectId },
       event.from,
     );
-    if (resolution.status !== FIELD_WORKER_RESOLUTION.RESOLVED) {
-      const error = new Error(`WhatsApp sender could not be resolved as an active field worker: ${resolution.status}`);
-      error.code = `FIELD_WORKER_${resolution.status}`;
+    if (
+      mediaWorkerResolution.status !== FIELD_WORKER_RESOLUTION.RESOLVED
+      && mediaWorkerResolution.status !== FIELD_WORKER_RESOLUTION.UNKNOWN
+    ) {
+      const error = new Error(`WhatsApp sender could not be resolved as an active field worker: ${mediaWorkerResolution.status}`);
+      error.code = `FIELD_WORKER_${mediaWorkerResolution.status}`;
       throw error;
     }
   }
 
   let transcriptionEnabled = false;
-  if (!storedOutcome && event.kind === "audio" && event.media) {
+  if (
+    !storedOutcome
+    && event.kind === "audio"
+    && event.media
+    && mediaWorkerResolution?.status === FIELD_WORKER_RESOLUTION.RESOLVED
+  ) {
     const organization = await getPrisma().organization.findUnique({
       where: { id: scope.organizationId },
       select: { metadata: true },
@@ -371,7 +393,11 @@ async function processMessageEvent(leasedEvent, event, scope) {
     ).audioTranscriptionEnabled;
   }
 
-  const enrichedEvent = !storedOutcome && event.media
+  const enrichedEvent = (
+    !storedOutcome
+    && event.media
+    && mediaWorkerResolution?.status === FIELD_WORKER_RESOLUTION.RESOLVED
+  )
       ? await ingestAndPersistInboundWhatsAppMedia(
         { leasedEvent, event, scope },
         {
@@ -380,7 +406,12 @@ async function processMessageEvent(leasedEvent, event, scope) {
           beforeTranscribe: () => assertWebhookMessageSubscription(scope),
         },
       )
-    : event;
+    : mediaWorkerResolution?.status === FIELD_WORKER_RESOLUTION.UNKNOWN
+      ? {
+          ...event,
+          [QUARANTINE_UNASSIGNED_MEDIA]: true,
+        }
+      : event;
   const application = await applyWebhookMessageAtomically({
     eventId: leasedEvent.id,
     leaseToken: leasedEvent.leaseToken,
@@ -417,6 +448,26 @@ async function processMessageEvent(leasedEvent, event, scope) {
   await deliverWhatsAppMessageOutcome({ outcome, event, scope });
 }
 
+export async function applyWhatsAppStatusEvent(
+  event,
+  scope,
+  { updateStatus = updateWhatsAppMessageStatus } = {},
+) {
+  const correlated = await updateStatus({
+    providerMessageId: event.messageId,
+    status: event.status,
+    scope,
+  });
+  if (!correlated) {
+    const error = new Error(
+      'WhatsApp delivery status arrived before its outbound message correlation.',
+    );
+    error.code = 'WHATSAPP_STATUS_CORRELATION_PENDING';
+    throw error;
+  }
+  return true;
+}
+
 async function processLeasedEvent(leasedEvent) {
   const stored = deserializeWebhookPayload(leasedEvent.payload);
   const event = stored.event;
@@ -428,11 +479,7 @@ async function processLeasedEvent(leasedEvent) {
     return;
   }
   if (event.eventType === "status") {
-    await updateWhatsAppMessageStatus({
-      providerMessageId: event.messageId,
-      status: event.status,
-      scope,
-    });
+    await applyWhatsAppStatusEvent(event, scope);
     return;
   }
   if (event.eventType === "account") {

@@ -9,7 +9,7 @@ import {
   validateSupervisorRequest,
 } from '@/lib/ai/supervisor';
 import { tenantAiSettingsFromMetadata } from '@/lib/ai/tenant-settings';
-import { getAppState, getMessages } from '@/lib/db';
+import { getAppState, getOperationalMessages } from '@/lib/db';
 import {
   MEDICAL_EVIDENCE_PERMISSION,
   SOURCE_EVIDENCE_PERMISSION,
@@ -155,7 +155,7 @@ export function createSupervisorPostHandler({
       );
       const [state, messages, snapshot] = await Promise.all([
         getAppState(access),
-        getMessages(access, {
+        getOperationalMessages(access, {
           includeMedicalEvidence,
           includeSourceEvidence,
         }),

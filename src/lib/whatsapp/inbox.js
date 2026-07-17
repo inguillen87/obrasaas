@@ -1,0 +1,1101 @@
+import { createHash } from 'node:crypto';
+
+import { sanitizeMessagesForMedicalPrivacy } from '@/lib/medical-privacy';
+import { subscriptionAllowsWrites } from '@/lib/plans';
+import {
+  ProjectWritePolicyError,
+  requireOperationalProjectWrite,
+} from '@/lib/project-write-policy';
+import {
+  deriveStoredWhatsAppChannelReadiness,
+  whatsAppPlatformConfiguration,
+} from '@/lib/whatsapp/channel-health';
+import { sendWhatsAppText } from '@/lib/whatsapp/meta';
+
+const CUSTOMER_CARE_WINDOW_MS = 24 * 60 * 60 * 1_000;
+const MAX_INBOX_CONVERSATIONS = 80;
+const MAX_INBOX_MESSAGES = 200;
+const MAX_MANUAL_TEXT_LENGTH = 4_096;
+const STALE_MANUAL_SEND_MS = 2 * 60 * 1_000;
+const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/;
+const META_CONVERSATION_PREFIX = 'meta:';
+const MANUAL_SEND_REQUEST_ACTION = 'whatsapp.inbox.send_requested';
+const MANUAL_SEND_RATE_LIMITS = Object.freeze({
+  actorPerMinute: 20,
+  organizationPerMinute: 120,
+  conversationPerMinute: 10,
+});
+
+export class WhatsAppInboxError extends Error {
+  constructor(message, {
+    code = 'WHATSAPP_INBOX_ERROR',
+    status = 400,
+    retryAfterSeconds = null,
+  } = {}) {
+    super(message);
+    this.name = 'WhatsAppInboxError';
+    this.code = code;
+    this.status = status;
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+}
+
+function validDate(value) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+  if (typeof value !== 'string' && typeof value !== 'number') return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function nowDate(clock) {
+  const value = typeof clock === 'function' ? clock() : clock;
+  return validDate(value) || new Date();
+}
+
+function boundedText(value, maxLength) {
+  return String(value || '').trim().slice(0, maxLength);
+}
+
+function normalizeWhatsAppPhone(value) {
+  const source = String(value || '').trim();
+  if (!/^\+?[0-9][0-9 ()-]{6,24}$/.test(source)) return '';
+  const phone = source.replace(/\D/g, '');
+  return /^\d{8,20}$/.test(phone) ? phone : '';
+}
+
+export function whatsAppConversationIdentity(event) {
+  const phone = normalizeWhatsAppPhone(event?.from);
+  if (!phone) {
+    throw new WhatsAppInboxError('Meta no informó un remitente de WhatsApp válido.', {
+      code: 'WHATSAPP_CONTACT_INVALID',
+      status: 422,
+    });
+  }
+  const displayName = boundedText(event?.displayName, 255) || null;
+  return {
+    externalId: `${META_CONVERSATION_PREFIX}${phone}`,
+    phone,
+    displayName,
+  };
+}
+
+export function whatsAppCustomerCareWindow(lastInboundAt, now = new Date()) {
+  const inboundAt = validDate(lastInboundAt);
+  const observedAt = nowDate(now);
+  if (!inboundAt || inboundAt.getTime() > observedAt.getTime()) {
+    return {
+      isOpen: false,
+      expiresAt: null,
+      remainingSeconds: 0,
+      reason: inboundAt ? 'INVALID_CLOCK' : 'NO_INBOUND_MESSAGE',
+    };
+  }
+
+  const expiresAt = new Date(inboundAt.getTime() + CUSTOMER_CARE_WINDOW_MS);
+  const remainingMs = expiresAt.getTime() - observedAt.getTime();
+  const isOpen = remainingMs > 0;
+  return {
+    isOpen,
+    expiresAt: expiresAt.toISOString(),
+    remainingSeconds: isOpen ? Math.ceil(remainingMs / 1_000) : 0,
+    reason: isOpen ? 'OPEN' : 'EXPIRED',
+  };
+}
+
+function phoneFromConversation(conversation) {
+  const externalId = String(conversation?.externalId || '');
+  if (!externalId.startsWith(META_CONVERSATION_PREFIX)) return '';
+  return normalizeWhatsAppPhone(externalId.slice(META_CONVERSATION_PREFIX.length));
+}
+
+function jsonMetadata(value) {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+}
+
+function publicMessage(message, {
+  includeMedicalEvidence = false,
+  includeSourceEvidence = false,
+} = {}) {
+  const safeMessage = sanitizeMessagesForMedicalPrivacy([message], {
+    includeMedicalEvidence,
+    // Conversation readers may see operational text. Binary/source evidence
+    // still stays private because the public DTO below never emits its URL,
+    // storage identity, transcription, or provider metadata.
+    includeSourceEvidence: true,
+  })[0] || message;
+  const metadata = jsonMetadata(safeMessage?.metadata);
+  const kind = String(safeMessage.kind || 'TEXT').toUpperCase();
+  const containsSourceEvidence = kind !== 'TEXT'
+    || Boolean(metadata.media)
+    || Boolean(metadata.transcription);
+  const sourceRestricted = containsSourceEvidence && !includeSourceEvidence;
+  return {
+    id: safeMessage.id,
+    providerMessageId: safeMessage.providerMessageId || null,
+    direction: safeMessage.direction,
+    kind: kind.toLowerCase(),
+    body: sourceRestricted
+      ? 'Evidencia adjunta recibida. El archivo y su contenido están restringidos para este rol.'
+      : safeMessage.body || '',
+    status: safeMessage.status || null,
+    sentAt: validDate(safeMessage.sentAt)?.toISOString() || null,
+    media: sourceRestricted || metadata.sourceContentRestricted && !includeSourceEvidence
+      ? null
+      : metadata.media
+        ? {
+            kind: metadata.media.kind || null,
+            mimeType: metadata.media.mimeType || null,
+            filename: metadata.media.filename || null,
+          }
+        : null,
+  };
+}
+
+function publicConversation(conversation, options = {}) {
+  const lastMessage = Array.isArray(conversation.messages)
+    ? conversation.messages[0] || null
+    : null;
+  return {
+    id: conversation.id,
+    displayName: conversation.displayName || phoneFromConversation(conversation),
+    phone: phoneFromConversation(conversation),
+    lastMessage: lastMessage ? publicMessage(lastMessage, options) : null,
+    lastMessageAt: validDate(lastMessage?.sentAt || conversation.updatedAt)?.toISOString() || null,
+    unreadCount: 0,
+  };
+}
+
+function textChannelReadiness(connection, env = process.env, now = new Date()) {
+  const readiness = deriveStoredWhatsAppChannelReadiness({
+    connection,
+    env,
+    now,
+  });
+  const account = readiness.checks.account;
+  return {
+    readiness,
+    operational: Boolean(
+      connection?.enabled
+      && connection.connectionStatus === 'CONNECTED'
+      && connection.encryptedAccessToken
+      && readiness.checks.platform.configured
+      && account.linked
+      && account.enabled
+      && account.tokenStatus === 'VALID'
+      && account.scopesVerified
+      && account.phoneStatus === 'REGISTERED'
+      && account.qualityStatus !== 'DEGRADED'
+      && account.providerStatus !== 'DEGRADED'
+      && readiness.checks.webhook.subscriptionStatus === 'SUBSCRIBED'
+    ),
+  };
+}
+
+function publicConnection(connection, env = process.env, now = new Date()) {
+  if (!connection) {
+    return {
+      operational: false,
+      status: 'NOT_CONNECTED',
+      reason: 'ACCOUNT_NOT_CONNECTED',
+      displayPhoneNumber: null,
+      verifiedBusinessName: null,
+    };
+  }
+  const { operational, readiness } = textChannelReadiness(connection, env, now);
+  return {
+    operational,
+    status: connection.connectionStatus,
+    reason: operational ? null : readiness.nextAction?.code || 'CHANNEL_NOT_READY',
+    displayPhoneNumber: connection.displayPhoneNumber || null,
+    verifiedBusinessName: connection.verifiedBusinessName || null,
+  };
+}
+
+function platformConfigurationReady(env) {
+  return Object.values(whatsAppPlatformConfiguration(env)).every(Boolean);
+}
+
+function trustedScope(access) {
+  const organizationId = String(access?.organization?.id || '').trim();
+  const projectId = String(access?.project?.id || '').trim();
+  if (!organizationId || !projectId) {
+    throw new WhatsAppInboxError('No hay una obra activa para esta bandeja.', {
+      code: 'PROJECT_SCOPE_REQUIRED',
+      status: 403,
+    });
+  }
+  return { organizationId, projectId };
+}
+
+export async function listWhatsAppInbox({
+  prisma,
+  access,
+  includeMedicalEvidence = false,
+  includeSourceEvidence = false,
+  env = process.env,
+  clock = () => new Date(),
+}) {
+  const scope = trustedScope(access);
+  const [connection, conversations] = await Promise.all([
+    prisma.whatsAppConnection.findUnique({
+      where: { projectId: scope.projectId },
+      select: {
+        enabled: true,
+        connectionStatus: true,
+        encryptedAccessToken: true,
+        lastError: true,
+        metadata: true,
+        displayPhoneNumber: true,
+        verifiedBusinessName: true,
+      },
+    }),
+    prisma.conversation.findMany({
+      where: {
+        projectId: scope.projectId,
+        channel: 'whatsapp',
+        externalId: { startsWith: META_CONVERSATION_PREFIX },
+      },
+      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+      take: MAX_INBOX_CONVERSATIONS,
+      select: {
+        id: true,
+        externalId: true,
+        displayName: true,
+        updatedAt: true,
+        messages: {
+          orderBy: [{ sentAt: 'desc' }, { createdAt: 'desc' }],
+          take: 1,
+          select: {
+            id: true,
+            direction: true,
+            kind: true,
+            body: true,
+            status: true,
+            metadata: true,
+            sentAt: true,
+          },
+        },
+      },
+    }),
+  ]);
+
+  return {
+    project: { id: scope.projectId, name: access.project.name || 'Obra activa' },
+    connection: publicConnection(connection, env, nowDate(clock)),
+    conversations: conversations.map((conversation) => publicConversation(
+      conversation,
+      { includeMedicalEvidence, includeSourceEvidence },
+    )),
+  };
+}
+
+async function findScopedConversation(prisma, scope, conversationId, { includeMessages = false } = {}) {
+  const id = String(conversationId || '').trim();
+  if (!id) return null;
+  return prisma.conversation.findFirst({
+    where: {
+      id,
+      projectId: scope.projectId,
+      project: { organizationId: scope.organizationId },
+      channel: 'whatsapp',
+      externalId: { startsWith: META_CONVERSATION_PREFIX },
+    },
+    select: {
+      id: true,
+      externalId: true,
+      displayName: true,
+      updatedAt: true,
+      ...(includeMessages
+        ? {
+            messages: {
+              orderBy: [{ sentAt: 'desc' }, { createdAt: 'desc' }],
+              take: MAX_INBOX_MESSAGES,
+              select: {
+                id: true,
+                externalId: true,
+                providerMessageId: true,
+                direction: true,
+                kind: true,
+                body: true,
+                status: true,
+                metadata: true,
+                sentAt: true,
+              },
+            },
+          }
+        : {}),
+    },
+  });
+}
+
+function chronologicalMessages(messages) {
+  return messages.slice().sort((left, right) => (
+    (validDate(left.sentAt)?.getTime() || 0)
+    - (validDate(right.sentAt)?.getTime() || 0)
+  ));
+}
+
+export async function getWhatsAppConversationMessages({
+  prisma,
+  access,
+  conversationId,
+  includeMedicalEvidence = false,
+  includeSourceEvidence = false,
+  canManage = false,
+  clock = () => new Date(),
+  env = process.env,
+}) {
+  const scope = trustedScope(access);
+  const conversation = await findScopedConversation(
+    prisma,
+    scope,
+    conversationId,
+    { includeMessages: true },
+  );
+  if (!conversation) {
+    throw new WhatsAppInboxError('La conversación ya no está disponible en esta obra.', {
+      code: 'INBOX_CONVERSATION_NOT_FOUND',
+      status: 404,
+    });
+  }
+  const observedAt = nowDate(clock);
+  const [inbound, project, connection] = await Promise.all([
+    prisma.message.findFirst({
+      where: { conversationId: conversation.id, direction: 'INBOUND' },
+      orderBy: [{ sentAt: 'desc' }, { createdAt: 'desc' }],
+      select: { id: true, sentAt: true },
+    }),
+    prisma.project.findFirst({
+      where: { id: scope.projectId, organizationId: scope.organizationId },
+      include: { organization: true },
+    }),
+    prisma.whatsAppConnection.findUnique({
+      where: { projectId: scope.projectId },
+      select: {
+        id: true,
+        phoneNumberId: true,
+        enabled: true,
+        connectionStatus: true,
+        encryptedAccessToken: true,
+        lastError: true,
+        metadata: true,
+      },
+    }),
+  ]);
+  const orderedMessages = chronologicalMessages(conversation.messages);
+  const window = whatsAppCustomerCareWindow(inbound?.sentAt, observedAt);
+  return {
+    conversation: publicConversation(
+      {
+        ...conversation,
+        messages: orderedMessages.length
+          ? [orderedMessages[orderedMessages.length - 1]]
+          : [],
+      },
+      { includeMedicalEvidence, includeSourceEvidence },
+    ),
+    messages: orderedMessages.map((message) => publicMessage(
+      message,
+      { includeMedicalEvidence, includeSourceEvidence },
+    )),
+    window,
+    composerCapability: manualComposerCapability({
+      canManage,
+      project,
+      connection,
+      inbound,
+      observedAt,
+      env,
+    }),
+  };
+}
+
+function manualMessageExternalId(scope, conversationId, idempotencyKey) {
+  const digest = createHash('sha256')
+    .update(`obrasaas-whatsapp-manual-v1\0${scope.organizationId}\0${scope.projectId}\0${conversationId}\0${idempotencyKey}`)
+    .digest('hex');
+  return { externalId: `obrasaas-manual:${digest}`, digest };
+}
+
+function providerMessageId(result) {
+  const id = result?.messages?.[0]?.id;
+  return typeof id === 'string' && id.trim() ? id.trim() : null;
+}
+
+function ambiguousSendFailure(error) {
+  if (error?.ambiguous === true) return true;
+  if (Number(error?.status) >= 500) return true;
+  return error?.name === 'AbortError' || error?.name === 'TimeoutError' || error instanceof TypeError;
+}
+
+function idempotencyKeyValue(value) {
+  const key = String(value || '').trim();
+  if (!IDEMPOTENCY_KEY_PATTERN.test(key)) {
+    throw new WhatsAppInboxError('La operación requiere una clave de idempotencia válida.', {
+      code: 'IDEMPOTENCY_KEY_INVALID',
+      status: 400,
+    });
+  }
+  return key;
+}
+
+function manualBody(value) {
+  const text = String(value || '').trim();
+  if (!text || text.length > MAX_MANUAL_TEXT_LENGTH) {
+    throw new WhatsAppInboxError('El mensaje debe tener entre 1 y 4096 caracteres.', {
+      code: 'WHATSAPP_MESSAGE_INVALID',
+      status: 400,
+    });
+  }
+  return text;
+}
+
+function manualPublicMessage(message, options = {}) {
+  return publicMessage(message, options);
+}
+
+function manualSendFailure(error, fallback = {}) {
+  if (error instanceof WhatsAppInboxError) return error;
+  if (error instanceof ProjectWritePolicyError) {
+    return new WhatsAppInboxError(error.message, {
+      code: error.code,
+      status: error.status,
+    });
+  }
+  return new WhatsAppInboxError(
+    fallback.message || 'No se pudo preparar el envío de WhatsApp.',
+    {
+      code: fallback.code || 'WHATSAPP_SEND_PREPARATION_FAILED',
+      status: fallback.status || 500,
+    },
+  );
+}
+
+function assertManualSendState({ project, connection, inbound, observedAt, env }) {
+  if (!project) {
+    throw new WhatsAppInboxError('La obra ya no está disponible.', {
+      code: 'PROJECT_WRITE_SCOPE_INVALID',
+      status: 403,
+    });
+  }
+  if (!subscriptionAllowsWrites(project.organization, observedAt)) {
+    throw new WhatsAppInboxError('El plan actual no permite enviar mensajes.', {
+      code: 'SUBSCRIPTION_WRITE_BLOCKED',
+      status: 402,
+    });
+  }
+  if (!platformConfigurationReady(env)) {
+    throw new WhatsAppInboxError('La configuración segura de Meta todavía está incompleta.', {
+      code: 'WHATSAPP_PLATFORM_NOT_READY',
+      status: 409,
+    });
+  }
+  if (
+    !connection?.enabled
+    || connection.connectionStatus !== 'CONNECTED'
+    || !connection.encryptedAccessToken
+    || !connection.phoneNumberId
+  ) {
+    throw new WhatsAppInboxError('WhatsApp no está operativo para esta obra.', {
+      code: 'WHATSAPP_CONNECTION_NOT_OPERATIONAL',
+      status: 409,
+    });
+  }
+  const { operational } = textChannelReadiness(connection, env, observedAt);
+  if (!operational) {
+    throw new WhatsAppInboxError(
+      'La cuenta de WhatsApp todavía no superó la verificación operativa.',
+      { code: 'WHATSAPP_CHANNEL_NOT_READY', status: 409 },
+    );
+  }
+  const window = whatsAppCustomerCareWindow(inbound?.sentAt, observedAt);
+  if (!window.isOpen) {
+    throw new WhatsAppInboxError('La ventana de 24 horas cerró. Elegí una plantilla aprobada.', {
+      code: 'WHATSAPP_TEMPLATE_REQUIRED',
+      status: 409,
+    });
+  }
+  return window;
+}
+
+function manualComposerCapability({
+  canManage,
+  project,
+  connection,
+  inbound,
+  observedAt,
+  env,
+}) {
+  const window = whatsAppCustomerCareWindow(inbound?.sentAt, observedAt);
+  if (!canManage) {
+    return {
+      allowed: false,
+      code: 'WHATSAPP_MANAGE_PERMISSION_REQUIRED',
+      reason: 'Tu rol puede leer la conversación, pero no enviar mensajes.',
+    };
+  }
+  if (!project || !['PLANNING', 'ACTIVE', 'PAUSED'].includes(project.status)) {
+    return {
+      allowed: false,
+      code: 'PROJECT_READ_ONLY',
+      reason: 'La obra está en modo solo lectura.',
+    };
+  }
+  try {
+    assertManualSendState({
+      project,
+      connection,
+      inbound,
+      observedAt,
+      env,
+    });
+    return { allowed: true, code: 'READY', reason: null };
+  } catch (error) {
+    return {
+      allowed: false,
+      code: error?.code || 'WHATSAPP_SEND_BLOCKED',
+      reason: error?.message || 'El canal no está listo para enviar.',
+      ...(window.expiresAt ? { expiresAt: window.expiresAt } : {}),
+    };
+  }
+}
+
+async function loadManualSendState(transaction, {
+  scope,
+  conversationId,
+  observedAt,
+  env,
+}) {
+  await requireOperationalProjectWrite(transaction, scope);
+  // Keep the subscription snapshot stable until this transaction commits.
+  // Every normal Organization UPDATE must acquire a conflicting row lock.
+  await transaction.$queryRawUnsafe(
+    'SELECT id FROM "Organization" WHERE id = $1 FOR SHARE',
+    scope.organizationId,
+  );
+  const conversation = await findScopedConversation(transaction, scope, conversationId);
+  if (!conversation) {
+    throw new WhatsAppInboxError('La conversación ya no está disponible en esta obra.', {
+      code: 'INBOX_CONVERSATION_NOT_FOUND',
+      status: 404,
+    });
+  }
+  const [project, connection, inbound] = await Promise.all([
+    transaction.project.findFirst({
+      where: { id: scope.projectId, organizationId: scope.organizationId },
+      include: { organization: true },
+    }),
+    transaction.whatsAppConnection.findUnique({
+      where: { projectId: scope.projectId },
+      select: {
+        id: true,
+        phoneNumberId: true,
+        enabled: true,
+        connectionStatus: true,
+        encryptedAccessToken: true,
+        lastError: true,
+        metadata: true,
+      },
+    }),
+    transaction.message.findFirst({
+      where: { conversationId: conversation.id, direction: 'INBOUND' },
+      orderBy: [{ sentAt: 'desc' }, { createdAt: 'desc' }],
+      select: { id: true, externalId: true, sentAt: true },
+    }),
+  ]);
+  const window = assertManualSendState({
+    project,
+    connection,
+    inbound,
+    observedAt,
+    env,
+  });
+  return { conversation, project, connection, inbound, window };
+}
+
+async function lockManualSendRateLane(transaction, organizationId) {
+  await transaction.$executeRawUnsafe(
+    'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+    `whatsapp-manual-send:${organizationId}`,
+  );
+}
+
+async function assertManualSendRateLimit(transaction, {
+  scope,
+  actorId,
+  conversationId,
+  observedAt,
+}) {
+  const since = new Date(observedAt.getTime() - 60_000);
+  const baseWhere = {
+    organizationId: scope.organizationId,
+    action: MANUAL_SEND_REQUEST_ACTION,
+    createdAt: { gte: since },
+  };
+  const [actorMinuteCount, organizationMinuteCount, conversationMinuteCount] = await Promise.all([
+    actorId
+      ? transaction.auditLog.count({ where: { ...baseWhere, actorId } })
+      : Promise.resolve(0),
+    transaction.auditLog.count({ where: baseWhere }),
+    transaction.auditLog.count({
+      where: {
+        ...baseWhere,
+        entityType: 'Conversation',
+        entityId: conversationId,
+      },
+    }),
+  ]);
+  let code = null;
+  if (actorMinuteCount >= MANUAL_SEND_RATE_LIMITS.actorPerMinute) {
+    code = 'WHATSAPP_ACTOR_RATE_LIMIT';
+  } else if (organizationMinuteCount >= MANUAL_SEND_RATE_LIMITS.organizationPerMinute) {
+    code = 'WHATSAPP_ORGANIZATION_RATE_LIMIT';
+  } else if (conversationMinuteCount >= MANUAL_SEND_RATE_LIMITS.conversationPerMinute) {
+    code = 'WHATSAPP_CONVERSATION_RATE_LIMIT';
+  }
+  if (code) {
+    throw new WhatsAppInboxError(
+      'Se alcanzó el límite seguro de envíos. Esperá un minuto antes de continuar.',
+      { code, status: 429, retryAfterSeconds: 60 },
+    );
+  }
+}
+
+function manualMessageMetadata({ access, identity, payloadDigest, extra = {} }) {
+  return {
+    source: 'dashboard-inbox',
+    actorId: access.databaseUserId || null,
+    idempotencyDigest: identity.digest,
+    payloadDigest,
+    ...extra,
+  };
+}
+
+async function reconcileStaleManualSend(transaction, {
+  message,
+  access,
+  scope,
+  identity,
+  payloadDigest,
+  observedAt,
+}) {
+  const claimedAt = validDate(message.sentAt || message.createdAt);
+  if (
+    String(message.status || '').toLowerCase() !== 'sending'
+    || !claimedAt
+    || observedAt.getTime() - claimedAt.getTime() < STALE_MANUAL_SEND_MS
+  ) {
+    return message;
+  }
+  const updated = await transaction.message.update({
+    where: { id: message.id },
+    data: {
+      status: 'unknown',
+      metadata: manualMessageMetadata({
+        access,
+        identity,
+        payloadDigest,
+        extra: {
+          failureCode: 'STALE_DISPATCH_CLAIM',
+          failedAt: observedAt.toISOString(),
+        },
+      }),
+    },
+  });
+  await transaction.auditLog.create({
+    data: {
+      organizationId: scope.organizationId,
+      actorId: access.databaseUserId || null,
+      action: 'whatsapp.inbox.delivery_unknown',
+      entityType: 'Message',
+      entityId: message.id,
+      metadata: {
+        projectId: scope.projectId,
+        conversationId: message.conversationId,
+        providerStatus: 'unknown',
+        failureCode: 'STALE_DISPATCH_CLAIM',
+      },
+    },
+  });
+  return updated;
+}
+
+export async function sendManualWhatsAppMessage({
+  prisma,
+  access,
+  conversationId,
+  body,
+  idempotencyKey,
+  includeMedicalEvidence = false,
+  sendText = sendWhatsAppText,
+  clock = () => new Date(),
+  env = process.env,
+}) {
+  const scope = trustedScope(access);
+  const key = idempotencyKeyValue(idempotencyKey);
+  const text = manualBody(body);
+  const observedAt = nowDate(clock);
+  const conversation = await findScopedConversation(prisma, scope, conversationId);
+  if (!conversation) {
+    throw new WhatsAppInboxError('La conversación ya no está disponible en esta obra.', {
+      code: 'INBOX_CONVERSATION_NOT_FOUND',
+      status: 404,
+    });
+  }
+
+  const [project, connection, inbound] = await Promise.all([
+    prisma.project.findFirst({
+      where: { id: scope.projectId, organizationId: scope.organizationId },
+      include: { organization: true },
+    }),
+    prisma.whatsAppConnection.findUnique({
+      where: { projectId: scope.projectId },
+      select: {
+        id: true,
+        phoneNumberId: true,
+        enabled: true,
+        connectionStatus: true,
+        encryptedAccessToken: true,
+        lastError: true,
+        metadata: true,
+      },
+    }),
+    prisma.message.findFirst({
+      where: { conversationId: conversation.id, direction: 'INBOUND' },
+      orderBy: [{ sentAt: 'desc' }, { createdAt: 'desc' }],
+      select: { id: true, externalId: true, sentAt: true },
+    }),
+  ]);
+
+  if (!project || !['PLANNING', 'ACTIVE', 'PAUSED'].includes(project.status)) {
+    throw new WhatsAppInboxError('La obra está en modo solo lectura.', {
+      code: 'PROJECT_READ_ONLY',
+      status: 409,
+    });
+  }
+  const window = assertManualSendState({
+    project,
+    connection,
+    inbound,
+    observedAt,
+    env,
+  });
+
+  const identity = manualMessageExternalId(scope, conversation.id, key);
+  const payloadDigest = createHash('sha256').update(text).digest('hex');
+  let claimed;
+  try {
+    const reservation = await prisma.$transaction(async (transaction) => {
+      await lockManualSendRateLane(transaction, scope.organizationId);
+      const fresh = await loadManualSendState(transaction, {
+        scope,
+        conversationId: conversation.id,
+        observedAt,
+        env,
+      });
+      const existing = await transaction.message.findUnique({
+        where: { externalId: identity.externalId },
+      });
+      if (existing) {
+        if (
+          existing.conversationId !== fresh.conversation.id
+          || jsonMetadata(existing.metadata).payloadDigest !== payloadDigest
+        ) {
+          throw new WhatsAppInboxError(
+            'La clave de idempotencia ya fue usada con otro mensaje.',
+            { code: 'IDEMPOTENCY_PAYLOAD_MISMATCH', status: 409 },
+          );
+        }
+        const reconciled = await reconcileStaleManualSend(transaction, {
+          message: existing,
+          access,
+          scope,
+          identity,
+          payloadDigest,
+          observedAt,
+        });
+        return { message: reconciled, idempotent: true, window: fresh.window };
+      }
+      await assertManualSendRateLimit(transaction, {
+        scope,
+        actorId: access.databaseUserId || null,
+        conversationId: fresh.conversation.id,
+        observedAt,
+      });
+      const message = await transaction.message.create({
+        data: {
+          conversationId: fresh.conversation.id,
+          externalId: identity.externalId,
+          direction: 'OUTBOUND',
+          kind: 'TEXT',
+          body: text,
+          status: 'sending',
+          sentAt: observedAt,
+          metadata: manualMessageMetadata({ access, identity, payloadDigest }),
+        },
+      });
+      await transaction.auditLog.create({
+        data: {
+          organizationId: scope.organizationId,
+          actorId: access.databaseUserId || null,
+          action: MANUAL_SEND_REQUEST_ACTION,
+          entityType: 'Conversation',
+          entityId: fresh.conversation.id,
+          metadata: {
+            projectId: scope.projectId,
+            messageId: message.id,
+            payloadDigest,
+          },
+        },
+      });
+      return { message, idempotent: false, window: fresh.window };
+    }, { isolationLevel: 'ReadCommitted' });
+    if (reservation.idempotent) {
+      return {
+        message: manualPublicMessage(reservation.message, { includeMedicalEvidence }),
+        window: reservation.window,
+        idempotent: true,
+      };
+    }
+    claimed = reservation.message;
+  } catch (error) {
+    if (error?.code !== 'P2002') throw manualSendFailure(error);
+    const existing = await prisma.message.findUnique({
+      where: { externalId: identity.externalId },
+    });
+    if (!existing || existing.conversationId !== conversation.id) throw error;
+    if (jsonMetadata(existing.metadata).payloadDigest !== payloadDigest) {
+      throw new WhatsAppInboxError(
+        'La clave de idempotencia ya fue usada con otro mensaje.',
+        { code: 'IDEMPOTENCY_PAYLOAD_MISMATCH', status: 409 },
+      );
+    }
+    return {
+      message: manualPublicMessage(existing, { includeMedicalEvidence }),
+      window,
+      idempotent: true,
+    };
+  }
+
+  const recipient = phoneFromConversation(conversation);
+  if (!recipient) {
+    await prisma.message.update({
+      where: { id: claimed.id },
+      data: { status: 'failed' },
+    });
+    throw new WhatsAppInboxError('El contacto de la conversación no es válido.', {
+      code: 'WHATSAPP_CONTACT_INVALID',
+      status: 422,
+    });
+  }
+
+  async function persistProviderFailure(error, {
+    forceAmbiguous = false,
+    database = prisma,
+    throwAfter = true,
+  } = {}) {
+    const ambiguous = forceAmbiguous || ambiguousSendFailure(error);
+    const status = ambiguous ? 'unknown' : 'failed';
+    const failureData = {
+      status,
+      metadata: manualMessageMetadata({
+        access,
+        identity,
+        payloadDigest,
+        extra: {
+          failureCode: boundedText(error?.code || error?.name || 'META_SEND_ERROR', 80),
+          failedAt: nowDate(clock).toISOString(),
+        },
+      }),
+    };
+    try {
+      claimed = await database.message.update({
+        where: { id: claimed.id },
+        data: failureData,
+      });
+    } catch (persistenceError) {
+      if (!throwAfter) throw persistenceError;
+      console.error('A WhatsApp provider failure could not update its claimed message:', persistenceError);
+      try {
+        await database.message.updateMany({
+          where: { id: claimed.id, conversationId: conversation.id },
+          data: failureData,
+        });
+      } catch (fallbackError) {
+        console.error('The fallback WhatsApp failure update also failed:', fallbackError);
+      }
+    }
+    const supportingWrites = [
+      database.conversation.update({
+        where: { id: conversation.id },
+        data: { updatedAt: nowDate(clock) },
+      }),
+      database.auditLog.create({
+        data: {
+          organizationId: scope.organizationId,
+          actorId: access.databaseUserId || null,
+          action: ambiguous
+            ? 'whatsapp.inbox.delivery_unknown'
+            : 'whatsapp.inbox.message_rejected',
+          entityType: 'Message',
+          entityId: claimed.id,
+          metadata: {
+            projectId: scope.projectId,
+            conversationId: conversation.id,
+            providerStatus: status,
+            failureCode: failureData.metadata.failureCode,
+          },
+        },
+      }),
+    ];
+    if (throwAfter) {
+      const failureWrites = await Promise.allSettled(supportingWrites);
+      for (const write of failureWrites) {
+        if (write.status === 'rejected') {
+          console.error('A supporting WhatsApp failure record could not be persisted:', write.reason);
+        }
+      }
+    } else {
+      await Promise.all(supportingWrites);
+    }
+    const responseError = new WhatsAppInboxError(
+      ambiguous
+        ? 'Meta no confirmó la entrega. No se reenviará automáticamente para evitar duplicados.'
+        : 'Meta rechazó el mensaje.',
+      {
+        code: ambiguous ? 'WHATSAPP_DELIVERY_UNKNOWN' : 'WHATSAPP_SEND_REJECTED',
+        status: 502,
+      },
+    );
+    if (throwAfter) throw responseError;
+    return responseError;
+  }
+
+  let providerDispatchStarted = false;
+  let outcome;
+  try {
+    outcome = await prisma.$transaction(async (transaction) => {
+      const fresh = await loadManualSendState(transaction, {
+        scope,
+        conversationId: conversation.id,
+        observedAt: nowDate(clock),
+        env,
+      });
+      providerDispatchStarted = true;
+      let result;
+      try {
+        result = await sendText({
+          to: recipient,
+          text,
+          replyToMessageId: fresh.inbound?.externalId || undefined,
+          phoneNumberId: fresh.connection.phoneNumberId,
+          scope,
+        });
+      } catch (error) {
+        const responseError = await persistProviderFailure(error, {
+          database: transaction,
+          throwAfter: false,
+        });
+        return { responseError };
+      }
+      const wamid = providerMessageId(result);
+      if (!wamid) {
+        const missingId = new Error('Meta accepted the request without a message ID.');
+        missingId.ambiguous = true;
+        const responseError = await persistProviderFailure(missingId, {
+          forceAmbiguous: true,
+          database: transaction,
+          throwAfter: false,
+        });
+        return { responseError };
+      }
+
+      const acceptedAt = nowDate(clock);
+      claimed = await transaction.message.update({
+        where: { id: claimed.id },
+        data: {
+          providerMessageId: wamid,
+          status: 'accepted',
+          metadata: manualMessageMetadata({
+            access,
+            identity,
+            payloadDigest,
+            extra: { acceptedAt: acceptedAt.toISOString() },
+          }),
+        },
+      });
+      await Promise.all([
+        transaction.conversation.update({
+          where: { id: conversation.id },
+          data: { updatedAt: acceptedAt },
+        }),
+        transaction.auditLog.create({
+          data: {
+            organizationId: scope.organizationId,
+            actorId: access.databaseUserId || null,
+            action: 'whatsapp.inbox.message_sent',
+            entityType: 'Message',
+            entityId: claimed.id,
+            metadata: {
+              projectId: scope.projectId,
+              conversationId: conversation.id,
+              providerStatus: 'accepted',
+            },
+          },
+        }),
+      ]);
+      return { message: claimed, window: fresh.window };
+    }, {
+      isolationLevel: 'ReadCommitted',
+      maxWait: 5_000,
+      timeout: 30_000,
+    });
+  } catch (error) {
+    if (providerDispatchStarted) {
+      error.code ||= 'LOCAL_CORRELATION_FAILED';
+      return persistProviderFailure(error, { forceAmbiguous: true });
+    }
+    const failureCode = boundedText(error?.code || error?.name || 'DISPATCH_BLOCKED', 80);
+    const blockedWrites = await Promise.allSettled([
+      prisma.message.update({
+        where: { id: claimed.id },
+        data: {
+          status: 'failed',
+          metadata: manualMessageMetadata({
+            access,
+            identity,
+            payloadDigest,
+            extra: { failureCode, failedAt: nowDate(clock).toISOString() },
+          }),
+        },
+      }),
+      prisma.auditLog.create({
+        data: {
+          organizationId: scope.organizationId,
+          actorId: access.databaseUserId || null,
+          action: 'whatsapp.inbox.dispatch_blocked',
+          entityType: 'Message',
+          entityId: claimed.id,
+          metadata: {
+            projectId: scope.projectId,
+            conversationId: conversation.id,
+            failureCode,
+          },
+        },
+      }),
+    ]);
+    for (const write of blockedWrites) {
+      if (write.status === 'rejected') {
+        console.error('A blocked WhatsApp dispatch could not be persisted:', write.reason);
+      }
+    }
+    throw manualSendFailure(error);
+  }
+
+  if (outcome.responseError) throw outcome.responseError;
+  return {
+    message: manualPublicMessage(outcome.message, { includeMedicalEvidence }),
+    window: outcome.window,
+    idempotent: false,
+  };
+}

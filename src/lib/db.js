@@ -39,11 +39,15 @@ import {
   consumeWhatsAppFlowSession,
   issueWhatsAppFlowSession,
 } from "@/lib/whatsapp/flow-sessions";
+import { whatsAppConversationIdentity } from "@/lib/whatsapp/inbox";
 import { resolveWhatsAppConnectionScopes } from "@/lib/whatsapp/webhook-scope";
 import { persistDurableMetaWebhookBatch } from "@/lib/whatsapp/webhook-ingress";
 
 const LOCAL_DB_PATH = path.join(process.cwd(), "data", "db.json");
 const LOCAL_CONVERSATION_ID = "dashboard-demo";
+const QUARANTINE_UNASSIGNED_MEDIA = Symbol.for(
+  "obrasaas.whatsapp.quarantine-unassigned-media",
+);
 
 export const emptyAppState = Object.freeze({
   operariosCount: 0,
@@ -346,21 +350,24 @@ async function durableContext(scope) {
   throw new Error("A trusted tenant or integration scope is required for durable data access.");
 }
 
-async function durableConversation(context) {
+async function durableConversation(context, identity = null) {
+  const externalId = identity?.externalId || LOCAL_CONVERSATION_ID;
+  const displayName = identity?.displayName
+    || (identity ? identity.phone : "Bitácora principal");
   return context.prisma.conversation.upsert({
     where: {
       projectId_channel_externalId: {
         projectId: context.project.id,
         channel: "whatsapp",
-        externalId: LOCAL_CONVERSATION_ID,
+        externalId,
       },
     },
-    update: {},
+    update: identity?.displayName ? { displayName: identity.displayName } : {},
     create: {
       projectId: context.project.id,
       channel: "whatsapp",
-      externalId: LOCAL_CONVERSATION_ID,
-      displayName: "Bitácora principal",
+      externalId,
+      displayName,
     },
   });
 }
@@ -520,6 +527,35 @@ export async function saveAppState(state, scope, options = {}) {
   return snapshot.state;
 }
 
+function serializeDurableMessages(messages, {
+  includeMedicalEvidence = false,
+  includeSourceEvidence = includeMedicalEvidence,
+} = {}) {
+  const serialized = messages.map((message) => {
+    const metadata = message.metadata && typeof message.metadata === "object" && !Array.isArray(message.metadata)
+      ? message.metadata
+      : {};
+    return {
+      id: message.id,
+      externalId: message.externalId,
+      sender: message.direction === "OUTBOUND" ? "bot" : "user",
+      kind: message.kind.toLowerCase(),
+      text: message.body || "",
+      mediaUrl: message.mediaUrl,
+      media: metadata.media || null,
+      transcription: metadata.transcription || null,
+      status: message.status,
+      metadata,
+      sentAt: message.sentAt.toISOString(),
+      time: metadata.time || message.sentAt.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" }),
+    };
+  });
+  return sanitizeMessagesForMedicalPrivacy(serialized, {
+    includeMedicalEvidence,
+    includeSourceEvidence,
+  });
+}
+
 export async function getMessages(scope, {
   includeMedicalEvidence = false,
   includeSourceEvidence = includeMedicalEvidence,
@@ -602,26 +638,48 @@ export async function getMessages(scope, {
 
   messages.reverse();
 
-  const serialized = messages.map((message) => {
-    const metadata = message.metadata && typeof message.metadata === "object" && !Array.isArray(message.metadata)
-      ? message.metadata
-      : {};
-    return {
-      id: message.id,
-      externalId: message.externalId,
-      sender: message.direction === "OUTBOUND" ? "bot" : "user",
-      kind: message.kind.toLowerCase(),
-      text: message.body || "",
-      mediaUrl: message.mediaUrl,
-      media: metadata.media || null,
-      transcription: metadata.transcription || null,
-      status: message.status,
-      metadata,
-      sentAt: message.sentAt.toISOString(),
-      time: metadata.time || message.sentAt.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" }),
-    };
+  return serializeDurableMessages(messages, {
+    includeMedicalEvidence,
+    includeSourceEvidence,
   });
-  return sanitizeMessagesForMedicalPrivacy(serialized, {
+}
+
+export async function getOperationalMessages(scope, {
+  includeMedicalEvidence = false,
+  includeSourceEvidence = includeMedicalEvidence,
+  sentAtGte = null,
+  sentAtLte = null,
+  take = 200,
+} = {}) {
+  const normalizedTake = Math.min(501, Math.max(1, Number(take) || 200));
+  const lowerBound = sentAtGte instanceof Date && !Number.isNaN(sentAtGte.getTime())
+    ? sentAtGte
+    : null;
+  const upperBound = sentAtLte instanceof Date && !Number.isNaN(sentAtLte.getTime())
+    ? sentAtLte
+    : null;
+  if (!hasDurableDatabase()) return [];
+
+  const context = await durableContext(scope);
+  const messages = await context.prisma.message.findMany({
+    where: {
+      conversation: {
+        projectId: context.project.id,
+        channel: "whatsapp",
+        externalId: { startsWith: "meta:" },
+      },
+      ...((lowerBound || upperBound) ? {
+        sentAt: {
+          ...(lowerBound ? { gte: lowerBound } : {}),
+          ...(upperBound ? { lte: upperBound } : {}),
+        },
+      } : {}),
+    },
+    orderBy: [{ sentAt: "desc" }, { createdAt: "desc" }],
+    take: normalizedTake,
+  });
+  messages.reverse();
+  return serializeDurableMessages(messages, {
     includeMedicalEvidence,
     includeSourceEvidence,
   });
@@ -660,8 +718,8 @@ export async function saveMessages(messages, scope) {
   return messages;
 }
 
-async function appendDurableMessages(context, messages) {
-  const conversation = await durableConversation(context);
+async function appendDurableMessages(context, messages, { conversationIdentity = null } = {}) {
+  const conversation = await durableConversation(context, conversationIdentity);
   for (const [index, message] of messages.entries()) {
     const data = durableMessageData(
       message,
@@ -688,6 +746,17 @@ async function appendDurableMessages(context, messages) {
     } else {
       await context.prisma.message.create({ data });
     }
+  }
+  if (conversationIdentity && messages.length > 0) {
+    await context.prisma.conversation.update({
+      where: { id: conversation.id },
+      data: {
+        updatedAt: new Date(),
+        ...(conversationIdentity.displayName
+          ? { displayName: conversationIdentity.displayName }
+          : {}),
+      },
+    });
   }
   return messages;
 }
@@ -1122,6 +1191,77 @@ function fieldWorkerResolutionError(status) {
   );
 }
 
+function quarantinedWebhookMessage(event) {
+  const kind = String(event.kind || "text").trim().toLowerCase() || "text";
+  const transcriptionText = typeof event.transcription?.text === "string"
+    ? event.transcription.text.trim()
+    : "";
+  const body = typeof event.text === "string" && event.text.trim()
+    ? event.text.trim()
+    : transcriptionText
+      || (event.location ? "[ubicación]" : event.interactive ? "[mensaje interactivo]" : `[${kind}]`);
+  const medical = isSensitiveMedicalText(body);
+  const sourceContentRestricted = Boolean(
+    event.media
+    || event.transcription
+    || kind !== "text",
+  );
+
+  return {
+    externalId: event.externalId || null,
+    sender: "user",
+    kind,
+    text: body,
+    sentAt: event.timestamp || new Date(),
+    mediaUrl: event.media?.url || null,
+    media: event.media || null,
+    transcription: event.transcription || null,
+    metadata: {
+      provider: "meta",
+      from: event.from || null,
+      providerDisplayName: typeof event.displayName === "string"
+        ? event.displayName.trim().slice(0, 255) || null
+        : null,
+      phoneNumberId: event.phoneNumberId || null,
+      contactStatus: "UNASSIGNED",
+      workerResolution: FIELD_WORKER_RESOLUTION.UNKNOWN,
+      quarantined: true,
+      automationSuppressed: true,
+      ...(sourceContentRestricted ? { sourceContentRestricted: true } : {}),
+      ...(medical
+        ? { sensitivity: "medical" }
+        : sourceContentRestricted
+          ? { sensitivity: "restricted" }
+          : {}),
+    },
+  };
+}
+
+function quarantinedWebhookOutcome() {
+  return {
+    ...createMessageWebhookOutcome({
+      // The delivery layer must never emit this internal receipt. A non-empty
+      // reply keeps the persisted envelope compatible with existing retries.
+      reply: "Mensaje conservado para revisión sin automatización.",
+    }),
+    quarantined: true,
+    contactStatus: "UNASSIGNED",
+    workerResolution: FIELD_WORKER_RESOLUTION.UNKNOWN,
+    deliverySuppressed: true,
+  };
+}
+
+function restoredAppliedWebhookOutcome(leasedEvent, outcome) {
+  if (leasedEvent?.outcome?.quarantined !== true) return outcome;
+  return {
+    ...outcome,
+    quarantined: true,
+    contactStatus: "UNASSIGNED",
+    workerResolution: FIELD_WORKER_RESOLUTION.UNKNOWN,
+    deliverySuppressed: true,
+  };
+}
+
 export async function applyWebhookMessageAtomically({
   eventId,
   leaseToken,
@@ -1165,6 +1305,7 @@ export async function applyWebhookMessageAtomically({
 
     const priorOutcome = readAppliedMessageWebhookOutcome(leasedEvent);
     if (priorOutcome) {
+      const reusableOutcome = restoredAppliedWebhookOutcome(leasedEvent, priorOutcome);
       const accepted = await transaction.webhookEvent.updateMany({
         where: {
           id: normalized.eventId,
@@ -1182,7 +1323,11 @@ export async function applyWebhookMessageAtomically({
           "WEBHOOK_LEASE_LOST",
         );
       }
-      return { alreadyApplied: true, outcome: priorOutcome };
+      return {
+        alreadyApplied: true,
+        quarantined: reusableOutcome.quarantined === true,
+        outcome: reusableOutcome,
+      };
     }
 
     // Message ingress already required an ACTIVE project. A later pause does
@@ -1246,6 +1391,49 @@ export async function applyWebhookMessageAtomically({
       },
       event.from,
     );
+    if (
+      (
+        resolution.status === FIELD_WORKER_RESOLUTION.UNKNOWN
+        || event[QUARANTINE_UNASSIGNED_MEDIA] === true
+      )
+      && event.provider === "meta"
+    ) {
+      const identity = whatsAppConversationIdentity(event);
+      const outcome = quarantinedWebhookOutcome();
+      await appendDurableMessages(
+        { prisma: transaction, project },
+        [quarantinedWebhookMessage(event)],
+        {
+          conversationIdentity: {
+            ...identity,
+            displayName: "Contacto sin asignar",
+          },
+        },
+      );
+
+      const accepted = await transaction.webhookEvent.updateMany({
+        where: {
+          id: normalized.eventId,
+          projectId: normalized.projectId,
+          eventType: "message",
+          status: "PROCESSING",
+          leaseToken: normalized.leaseToken,
+          appliedAt: null,
+        },
+        data: {
+          appliedAt: new Date(),
+          outcome,
+          lastError: null,
+        },
+      });
+      if (accepted.count !== 1) {
+        throw webhookProcessingError(
+          "The webhook lease changed while its quarantined message was being persisted.",
+          "WEBHOOK_LEASE_LOST",
+        );
+      }
+      return { alreadyApplied: false, quarantined: true, outcome };
+    }
     if (resolution.status !== FIELD_WORKER_RESOLUTION.RESOLVED) {
       throw fieldWorkerResolutionError(resolution.status);
     }
@@ -1355,6 +1543,12 @@ export async function applyWebhookMessageAtomically({
     await appendDurableMessages(
       { prisma: transaction, project },
       result.newMessages,
+      {
+        conversationIdentity: whatsAppConversationIdentity({
+          ...event,
+          displayName: resolution.worker.name,
+        }),
+      },
     );
 
     const appliedAt = new Date();
@@ -1459,11 +1653,16 @@ export async function linkOutboundWhatsAppMessage({
   }
 
   const context = await durableContext(scope);
-  const conversation = await durableConversation(context);
   const [message, conflict] = await Promise.all([
     context.prisma.message.findUnique({
       where: { externalId: outboundExternalId },
-      select: { id: true, conversationId: true },
+      select: {
+        id: true,
+        conversationId: true,
+        conversation: {
+          select: { projectId: true, channel: true, externalId: true },
+        },
+      },
     }),
     context.prisma.message.findUnique({
       where: { providerMessageId: providerId },
@@ -1476,7 +1675,11 @@ export async function linkOutboundWhatsAppMessage({
     throw error;
   }
   if (!message) return false;
-  if (message.conversationId !== conversation.id) {
+  if (
+    message.conversation?.projectId !== context.project.id
+    || message.conversation?.channel !== "whatsapp"
+    || !String(message.conversation?.externalId || "").startsWith("meta:")
+  ) {
     const error = new Error("Outbound WhatsApp message crossed its tenant conversation boundary.");
     error.code = "WEBHOOK_MESSAGE_SCOPE_MISMATCH";
     throw error;
@@ -1539,13 +1742,23 @@ export async function updateWhatsAppMessageStatus({ providerMessageId, status, s
   const context = await durableContext(scope);
   return context.prisma.$transaction(async (transaction) => {
     await lockProjectTransaction(transaction, context.project.id);
-    const conversation = await durableConversation({ ...context, prisma: transaction });
     const message = await transaction.message.findUnique({
       where: { providerMessageId: providerId },
-      select: { id: true, conversationId: true, status: true },
+      select: {
+        id: true,
+        conversationId: true,
+        status: true,
+        conversation: {
+          select: { projectId: true, channel: true, externalId: true },
+        },
+      },
     });
     if (!message) return false;
-    if (message.conversationId !== conversation.id) {
+    if (
+      message.conversation?.projectId !== context.project.id
+      || message.conversation?.channel !== "whatsapp"
+      || !String(message.conversation?.externalId || "").startsWith("meta:")
+    ) {
       const error = new Error("WhatsApp delivery status crossed its tenant conversation boundary.");
       error.code = "WEBHOOK_MESSAGE_SCOPE_MISMATCH";
       throw error;

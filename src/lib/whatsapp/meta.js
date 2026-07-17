@@ -347,21 +347,53 @@ export function normalizeMetaWebhook(payload) {
   return events;
 }
 
-async function requireMetaPhoneConfig(requestedPhoneNumberId) {
+function requireMetaTenantScope(scope) {
+  const organizationId = typeof scope?.organizationId === "string"
+    ? scope.organizationId.trim()
+    : "";
+  const projectId = typeof scope?.projectId === "string"
+    ? scope.projectId.trim()
+    : "";
+  if (!organizationId || !projectId) {
+    throw new Error("WhatsApp tenant scope is required for phone-scoped credentials.");
+  }
+  return { organizationId, projectId };
+}
+
+async function requireMetaPhoneConfig(requestedPhoneNumberId, expectedScope) {
   const version = process.env.META_GRAPH_API_VERSION || "v25.0";
-  if (requestedPhoneNumberId && process.env.DATABASE_URL) {
+  const normalizedPhoneNumberId = requestedPhoneNumberId
+    ? String(requestedPhoneNumberId).trim()
+    : "";
+  if (normalizedPhoneNumberId) {
+    const { organizationId, projectId } = requireMetaTenantScope(expectedScope);
+    if (!process.env.DATABASE_URL) {
+      throw new Error("Durable WhatsApp credentials are required for phone-scoped delivery.");
+    }
     const { getPrisma } = await import("@/lib/prisma");
-    const connection = await getPrisma().whatsAppConnection.findUnique({
-      where: { phoneNumberId: String(requestedPhoneNumberId) },
+    const connection = await getPrisma().whatsAppConnection.findFirst({
+      where: {
+        phoneNumberId: normalizedPhoneNumberId,
+        projectId,
+        enabled: true,
+        connectionStatus: "CONNECTED",
+        encryptedAccessToken: { not: null },
+        project: { organizationId },
+      },
       select: {
         phoneNumberId: true,
+        projectId: true,
         enabled: true,
         connectionStatus: true,
         encryptedAccessToken: true,
+        project: { select: { organizationId: true } },
       },
     });
     if (
-      connection?.enabled
+      connection?.phoneNumberId === normalizedPhoneNumberId
+      && connection.projectId === projectId
+      && connection.project?.organizationId === organizationId
+      && connection.enabled
       && connection.connectionStatus === "CONNECTED"
       && connection.encryptedAccessToken
     ) {
@@ -372,15 +404,12 @@ async function requireMetaPhoneConfig(requestedPhoneNumberId) {
         appSecret: process.env.META_APP_SECRET || null,
       };
     }
+    throw new Error("No active WhatsApp credential exists for this tenant project and phone number ID.");
   }
 
   const globalPhoneNumberId = process.env.META_PHONE_NUMBER_ID;
   const globalAccessToken = process.env.META_ACCESS_TOKEN;
-  if (
-    globalAccessToken
-    && globalPhoneNumberId
-    && (!requestedPhoneNumberId || String(requestedPhoneNumberId) === String(globalPhoneNumberId))
-  ) {
+  if (globalAccessToken && globalPhoneNumberId) {
     return {
       version,
       accessToken: globalAccessToken,
@@ -444,6 +473,7 @@ async function fetchAllowedMetaMedia(url, accessToken, fetchImpl, redirectCount 
 export async function downloadWhatsAppMedia({
   mediaId,
   phoneNumberId: requestedPhoneNumberId,
+  scope,
   expectedKind,
   expectedMimeType,
   expectedSha256,
@@ -452,7 +482,7 @@ export async function downloadWhatsAppMedia({
 }) {
   const safeMediaId = requireMetaResourceId(mediaId, "media ID");
   const safePhoneNumberId = requireMetaResourceId(requestedPhoneNumberId, "phone number ID");
-  const resolvedCredentials = credentials || await requireMetaPhoneConfig(safePhoneNumberId);
+  const resolvedCredentials = credentials || await requireMetaPhoneConfig(safePhoneNumberId, scope);
   if (String(resolvedCredentials.phoneNumberId) !== safePhoneNumberId) {
     throw new Error("WhatsApp media credential scope mismatch.");
   }
@@ -535,8 +565,34 @@ export async function downloadWhatsAppMedia({
   };
 }
 
-export async function sendWhatsAppText({ to, text, replyToMessageId, phoneNumberId: requestedPhoneNumberId }) {
-  const { version, accessToken, phoneNumberId, appSecret } = await requireMetaPhoneConfig(requestedPhoneNumberId);
+export class WhatsAppMetaSendError extends Error {
+  constructor(message, {
+    status = null,
+    providerCode = null,
+    ambiguous = false,
+    cause,
+  } = {}) {
+    super(message, cause ? { cause } : undefined);
+    this.name = 'WhatsAppMetaSendError';
+    this.code = providerCode ? `META_${providerCode}` : 'META_SEND_FAILED';
+    this.status = status;
+    this.providerCode = providerCode;
+    this.ambiguous = ambiguous;
+  }
+}
+
+export async function sendWhatsAppText({
+  to,
+  text,
+  replyToMessageId,
+  phoneNumberId: requestedPhoneNumberId,
+  scope,
+  fetchImpl = fetch,
+}) {
+  const { version, accessToken, phoneNumberId, appSecret } = await requireMetaPhoneConfig(
+    requestedPhoneNumberId,
+    scope,
+  );
   const url = new URL(`https://graph.facebook.com/${version}/${phoneNumberId}/messages`);
   if (appSecret) {
     url.searchParams.set(
@@ -544,27 +600,39 @@ export async function sendWhatsAppText({ to, text, replyToMessageId, phoneNumber
       crypto.createHmac("sha256", appSecret).update(accessToken).digest("hex"),
     );
   }
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      messaging_product: "whatsapp",
-      recipient_type: "individual",
-      to,
-      type: "text",
-      text: { preview_url: false, body: text },
-      ...(replyToMessageId ? { context: { message_id: replyToMessageId } } : {}),
-    }),
-    signal: AbortSignal.timeout(20_000),
-  });
+  let response;
+  try {
+    response = await fetchImpl(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to,
+        type: "text",
+        text: { preview_url: false, body: text },
+        ...(replyToMessageId ? { context: { message_id: replyToMessageId } } : {}),
+      }),
+      signal: AbortSignal.timeout(20_000),
+    });
+  } catch (error) {
+    throw new WhatsAppMetaSendError(
+      'Meta did not confirm whether the text message was accepted.',
+      { ambiguous: true, cause: error },
+    );
+  }
 
   const result = await response.json().catch(() => ({}));
   if (!response.ok) {
     const message = String(result?.error?.message || "Meta rejected the text message.").slice(0, 500);
-    throw new Error(`Meta send failed (${response.status}): ${message}`);
+    throw new WhatsAppMetaSendError(`Meta send failed (${response.status}): ${message}`, {
+      status: response.status,
+      providerCode: result?.error?.code || null,
+      ambiguous: response.status >= 500,
+    });
   }
   return result;
 }
@@ -649,12 +717,13 @@ export function buildWhatsAppFlowMessage({
 
 export async function sendWhatsAppFlow({
   phoneNumberId: requestedPhoneNumberId,
+  scope,
   fetchImpl = fetch,
   credentials,
   ...messageInput
 }) {
   const safePhoneNumberId = requireMetaResourceId(requestedPhoneNumberId, 'phone number ID');
-  const resolved = credentials || await requireMetaPhoneConfig(safePhoneNumberId);
+  const resolved = credentials || await requireMetaPhoneConfig(safePhoneNumberId, scope);
   if (String(resolved.phoneNumberId) !== safePhoneNumberId) {
     throw new Error('WhatsApp Flow credential scope mismatch.');
   }

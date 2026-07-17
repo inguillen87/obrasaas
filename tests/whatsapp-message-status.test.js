@@ -18,6 +18,7 @@ const {
   nextWhatsAppMessageStatus,
   updateWhatsAppMessageStatus,
 } = await import('../src/lib/db.js');
+const { applyWhatsAppStatusEvent } = await import('../src/lib/whatsapp/webhook-worker.js');
 
 after(() => {
   if (originalDatabaseUrl === undefined) delete process.env.DATABASE_URL;
@@ -50,6 +51,23 @@ test('unknown late provider states cannot overwrite a known delivery state', () 
   assert.equal(nextWhatsAppMessageStatus('delivered', 'custom'), 'delivered');
   assert.equal(nextWhatsAppMessageStatus('custom', 'read'), 'read');
   assert.equal(nextWhatsAppMessageStatus('custom', 'another-custom'), 'custom');
+});
+
+test('an early delivery status stays retryable until outbound correlation exists', async () => {
+  let attempts = 0;
+  const updateStatus = async () => {
+    attempts += 1;
+    return attempts > 1;
+  };
+  const event = { messageId: 'wamid.early-status', status: 'delivered' };
+  const scope = { projectId: 'project-status-a' };
+
+  await assert.rejects(
+    applyWhatsAppStatusEvent(event, scope, { updateStatus }),
+    (error) => error?.code === 'WHATSAPP_STATUS_CORRELATION_PENDING',
+  );
+  assert.equal(await applyWhatsAppStatusEvent(event, scope, { updateStatus }), true);
+  assert.equal(attempts, 2);
 });
 
 test('durable delivery updates retain the tenant conversation boundary', async () => {

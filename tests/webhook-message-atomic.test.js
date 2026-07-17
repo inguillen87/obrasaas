@@ -284,6 +284,193 @@ test('an accepted message can finish draining after its project is paused', asyn
   assert.equal(calls.some(([name]) => name === 'event-apply'), true);
 });
 
+test('an unknown Meta contact is durably quarantined without engine or operational effects', async () => {
+  const scope = {
+    projectId: 'project-quarantine-a',
+    organizationId: 'organization-quarantine-a',
+    phoneNumberId: 'phone-quarantine-a',
+  };
+  const calls = [];
+  let storedConversation = null;
+  let storedMessage = null;
+  let storedOutcome = null;
+  const transaction = {
+    async $executeRawUnsafe(query, projectId) {
+      calls.push(['lock', query, projectId]);
+    },
+    webhookEvent: {
+      async findFirst(args) {
+        calls.push(['event-read', args]);
+        return { id: 'event-quarantine-a', appliedAt: null, outcome: null };
+      },
+      async updateMany(args) {
+        calls.push(['event-apply', args]);
+        storedOutcome = structuredClone(args.data.outcome);
+        return { count: 1 };
+      },
+    },
+    project: {
+      async findFirst(args) {
+        calls.push(['project', args]);
+        return {
+          id: scope.projectId,
+          organizationId: scope.organizationId,
+          status: 'ACTIVE',
+          latitude: null,
+          longitude: null,
+          geofenceMeters: 100,
+          startsAt: null,
+          organization: {
+            timezone: 'America/Argentina/Buenos_Aires',
+            subscriptionPlan: 'PRO',
+            subscriptionStatus: 'ACTIVE',
+            trialEndsAt: null,
+          },
+          snapshot: { state: { incidents: [], attendance: {}, tasks: {} }, version: 1 },
+          whatsapp: { phoneNumberId: scope.phoneNumberId, enabled: true, metadata: null },
+        };
+      },
+    },
+    worker: {
+      async findMany(args) {
+        calls.push(['worker', args]);
+        return [];
+      },
+    },
+    conversation: {
+      async upsert(args) {
+        calls.push(['conversation-upsert', args]);
+        storedConversation = {
+          id: 'conversation-quarantine-a',
+          ...args.create,
+        };
+        return storedConversation;
+      },
+      async update(args) {
+        calls.push(['conversation-update', args]);
+        Object.assign(storedConversation, args.data);
+        return storedConversation;
+      },
+    },
+    message: {
+      async findUnique(args) {
+        calls.push(['message-read', args]);
+        return null;
+      },
+      async create(args) {
+        calls.push(['message-create', args]);
+        storedMessage = { id: 'message-quarantine-a', ...args.data };
+        return storedMessage;
+      },
+    },
+  };
+  globalThis.__obraSaasPrisma = {
+    async $transaction(callback, options) {
+      calls.push(['transaction', options]);
+      return callback(transaction);
+    },
+  };
+  let engineCalls = 0;
+
+  const result = await applyWebhookMessageAtomically({
+    eventId: 'event-quarantine-a',
+    leaseToken: 'lease-quarantine-a',
+    event: {
+      provider: 'meta',
+      eventType: 'message',
+      externalId: 'wamid.quarantine-a',
+      phoneNumberId: scope.phoneNumberId,
+      from: '+54 9 11 5555-1212',
+      displayName: 'Nombre provisto por Meta',
+      kind: 'text',
+      text: 'Hola, necesito informar una novedad.',
+      timestamp: new Date('2026-07-17T02:30:00.000Z'),
+    },
+    scope,
+    apply: async () => {
+      engineCalls += 1;
+      throw new Error('Unknown contacts must never reach the obra engine.');
+    },
+  });
+
+  assert.equal(result.alreadyApplied, false);
+  assert.equal(result.quarantined, true);
+  assert.equal(result.outcome.quarantined, true);
+  assert.equal(result.outcome.deliverySuppressed, true);
+  assert.equal(result.outcome.workerResolution, 'UNKNOWN');
+  assert.equal(storedOutcome.quarantined, true);
+  assert.equal(engineCalls, 0);
+  assert.equal(storedConversation.projectId, scope.projectId);
+  assert.equal(storedConversation.channel, 'whatsapp');
+  assert.equal(storedConversation.externalId, 'meta:5491155551212');
+  assert.equal(storedConversation.displayName, 'Contacto sin asignar');
+  assert.equal(storedMessage.conversationId, storedConversation.id);
+  assert.equal(storedMessage.externalId, 'wamid.quarantine-a');
+  assert.equal(storedMessage.direction, 'INBOUND');
+  assert.equal(storedMessage.body, 'Hola, necesito informar una novedad.');
+  assert.equal(storedMessage.metadata.quarantined, true);
+  assert.equal(storedMessage.metadata.contactStatus, 'UNASSIGNED');
+  assert.equal(storedMessage.metadata.automationSuppressed, true);
+  assert.equal(calls.some(([name]) => name === 'snapshot'), false);
+  assert.equal(calls.some(([name]) => name.startsWith('task-')), false);
+  assert.equal(calls.some(([name]) => name.startsWith('flow-')), false);
+  assert.ok(
+    calls.findIndex(([name]) => name === 'message-create')
+      < calls.findIndex(([name]) => name === 'event-apply'),
+  );
+});
+
+test('a quarantined Meta contact remains quarantined when its applied outcome is retried', async () => {
+  const scope = {
+    projectId: 'project-quarantine-retry',
+    organizationId: 'organization-quarantine-retry',
+    phoneNumberId: 'phone-quarantine-retry',
+  };
+  const storedOutcome = {
+    version: 1,
+    type: 'message',
+    reply: 'Mensaje conservado para revisión sin automatización.',
+    flowPrompt: null,
+    quarantined: true,
+    contactStatus: 'UNASSIGNED',
+    workerResolution: 'UNKNOWN',
+    deliverySuppressed: true,
+  };
+  const transaction = {
+    $executeRawUnsafe: async () => undefined,
+    webhookEvent: {
+      findFirst: async () => ({
+        id: 'event-quarantine-retry',
+        appliedAt: new Date('2026-07-17T02:30:00.000Z'),
+        outcome: storedOutcome,
+      }),
+      updateMany: async () => ({ count: 1 }),
+    },
+  };
+  globalThis.__obraSaasPrisma = {
+    $transaction: async (callback) => callback(transaction),
+  };
+
+  const result = await applyWebhookMessageAtomically({
+    eventId: 'event-quarantine-retry',
+    leaseToken: 'lease-quarantine-retry',
+    event: {
+      provider: 'meta',
+      eventType: 'message',
+      externalId: 'wamid.quarantine-retry',
+      phoneNumberId: scope.phoneNumberId,
+      from: '+5491155551313',
+    },
+    scope,
+    apply: async () => assert.fail('an applied quarantine must not run the engine'),
+  });
+
+  assert.equal(result.alreadyApplied, true);
+  assert.equal(result.quarantined, true);
+  assert.equal(result.outcome.quarantined, true);
+  assert.equal(result.outcome.deliverySuppressed, true);
+});
+
 test('a published Flow session is issued in the same transaction and only its UUID enters the outcome', async () => {
   const scope = {
     projectId: 'project-flow-outbound',

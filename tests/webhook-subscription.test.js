@@ -872,7 +872,11 @@ test('Meta text delivery remains operational when the last-moment fence is writa
     scope: { organizationId: 'organization-1', projectId: 'project-1' },
   }, {
     assertSubscription: async () => calls.push('subscription-fence'),
-    sendText: async () => {
+    sendText: async (request) => {
+      assert.deepEqual(request.scope, {
+        organizationId: 'organization-1',
+        projectId: 'project-1',
+      });
       calls.push('send-text');
       return { messages: [{ id: 'wamid-outbound-allowed' }] };
     },
@@ -886,5 +890,33 @@ test('Meta text delivery remains operational when the last-moment fence is writa
   assert.deepEqual(result, {
     flowSent: false,
     providerMessageId: 'wamid-outbound-allowed',
+  });
+});
+
+test('quarantined inbound contacts never trigger a provider delivery', async () => {
+  const result = await deliverWhatsAppMessageOutcome({
+    outcome: {
+      reply: 'Internal quarantine receipt that must not be sent.',
+      flowPrompt: null,
+      quarantined: true,
+      deliverySuppressed: true,
+    },
+    event: {
+      externalId: 'wamid-quarantined-contact',
+      from: '5491155551212',
+      phoneNumberId: 'phone-1',
+    },
+    scope: { organizationId: 'organization-1', projectId: 'project-1' },
+  }, {
+    assertSubscription: async () => assert.fail('quarantine must not reach the delivery fence'),
+    sendFlow: async () => assert.fail('quarantine must not send a Flow'),
+    sendText: async () => assert.fail('quarantine must not send text'),
+    linkMessage: async () => assert.fail('quarantine has no outbound message to correlate'),
+  });
+
+  assert.deepEqual(result, {
+    flowSent: false,
+    providerMessageId: null,
+    deliverySuppressed: true,
   });
 });
