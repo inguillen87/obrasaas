@@ -2,8 +2,20 @@ import {
   membershipTransitionRequiresProjectAccessReset,
   resetTenantMembershipProjectAccess,
 } from './project-access.js';
+import {
+  canUseClerkIdentitySyncLock,
+  isClerkIdentityTransaction,
+  withClerkIdentitySyncLock,
+} from './clerk-identity-lock.js';
 
-export async function persistClerkTenantMembership(prisma, {
+export async function persistClerkTenantMembership(prisma, input) {
+  if (canUseClerkIdentitySyncLock(prisma)) {
+    return withClerkIdentitySyncLock(
+      prisma,
+      (transaction) => persistClerkTenantMembership(transaction, input),
+    );
+  }
+  const {
   organizationId,
   userId,
   clerkRole,
@@ -11,8 +23,30 @@ export async function persistClerkTenantMembership(prisma, {
   status,
   eventType,
   currentMembership,
-}) {
-  return prisma.$transaction(async (transaction) => {
+    expectedClerkOrganizationId = null,
+    expectedClerkUserId = null,
+  } = input;
+  const synchronize = async (transaction) => {
+    if (expectedClerkOrganizationId || expectedClerkUserId) {
+      const [organization, user] = await Promise.all([
+        transaction.organization.findUnique({
+          where: { id: organizationId },
+          select: { clerkOrganizationId: true },
+        }),
+        transaction.platformUser.findUnique({
+          where: { id: userId },
+          select: { clerkUserId: true },
+        }),
+      ]);
+      if (
+        (expectedClerkOrganizationId
+          && organization?.clerkOrganizationId !== expectedClerkOrganizationId)
+        || (expectedClerkUserId && user?.clerkUserId !== expectedClerkUserId)
+      ) {
+        throw new Error('Clerk membership identity changed before persistence.');
+      }
+    }
+
     const syncedMembership = await transaction.tenantMembership.upsert({
       where: {
         organizationId_userId: { organizationId, userId },
@@ -69,5 +103,62 @@ export async function persistClerkTenantMembership(prisma, {
       projectAccessResetApplied,
       resetCount: reset.count,
     };
+  };
+  return typeof prisma.$transaction === 'function' && !isClerkIdentityTransaction(prisma)
+    ? prisma.$transaction(synchronize)
+    : synchronize(prisma);
+}
+
+export async function disableDeletedClerkTenantMembership(prisma, {
+  clerkOrganizationId,
+  clerkUserId,
+  eventType = 'organizationMembership.deleted',
+}) {
+  if (canUseClerkIdentitySyncLock(prisma)) {
+    return withClerkIdentitySyncLock(
+      prisma,
+      (transaction) => disableDeletedClerkTenantMembership(transaction, {
+        clerkOrganizationId,
+        clerkUserId,
+        eventType,
+      }),
+    );
+  }
+  if (!clerkOrganizationId || !clerkUserId) {
+    throw new Error('Clerk organization and user IDs are required for membership deletion.');
+  }
+
+  const [organization, user] = await Promise.all([
+    prisma.organization.findUnique({
+      where: { clerkOrganizationId },
+      select: { id: true },
+    }),
+    prisma.platformUser.findUnique({
+      where: { clerkUserId },
+      select: { id: true },
+    }),
+  ]);
+  if (!organization || !user) return { found: false, changed: false };
+
+  const currentMembership = await prisma.tenantMembership.findUnique({
+    where: {
+      organizationId_userId: {
+        organizationId: organization.id,
+        userId: user.id,
+      },
+    },
   });
+  if (!currentMembership) return { found: false, changed: false };
+  if (currentMembership.status === 'DISABLED') return { found: true, changed: false };
+
+  await persistClerkTenantMembership(prisma, {
+    organizationId: organization.id,
+    userId: user.id,
+    clerkRole: currentMembership.clerkRole,
+    tenantRole: currentMembership.tenantRole,
+    status: 'DISABLED',
+    eventType,
+    currentMembership,
+  });
+  return { found: true, changed: true };
 }

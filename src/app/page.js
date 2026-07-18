@@ -107,7 +107,7 @@ export default function Home() {
           <div className={styles.eyebrow}><span className={styles.liveDot} />De WhatsApp al control de obra</div>
           <h1>La obra habla. ObraSaaS la convierte en <span>avance, evidencia y decisiones.</span></h1>
           <p>La cuadrilla reporta con voz, fotos, ubicación y formularios desde el canal que ya usa. Dirección recibe contexto ordenado, propuestas revisables y una bitácora trazable, sin obligar al campo a aprender otra app.</p>
-          <div className={styles.heroActions}><a href="#plataforma" className={styles.primaryCta}>Ver una obra en acción <ArrowIcon /></a><Link href="/sign-up" className={styles.secondaryCta}>Probar 14 días</Link></div>
+          <div className={styles.heroActions}><Link href="/sign-up" className={styles.primaryCta}>Probar gratis 14 días <ArrowIcon /></Link><a href="#plataforma" className={styles.secondaryCta}>Ver el recorrido</a></div>
           <div className={styles.heroProof} aria-label="Condiciones principales"><span><CheckIcon /> Sin app nueva para la cuadrilla</span><span><CheckIcon /> Aprobación humana antes de actuar</span><span><CheckIcon /> Empresa y obra aisladas</span></div>
           <div className={styles.heroMeta} aria-label="Capacidades destacadas"><span>WhatsApp por proyecto</span><i /><span>Bandeja</span><i /><span>Gantt</span><i /><span>Reportes</span><i /><span>Auditoría</span></div>
         </div>
@@ -204,7 +204,7 @@ export default function Home() {
       <section className={styles.finalCta} id="contacto"><div className={styles.finalCtaCopy}><span className={styles.sectionKicker}>Implementación guiada</span><h2>Elegimos una obra, conectamos un flujo y medimos el resultado.</h2><p>Un piloto serio empieza con un problema operativo y una métrica, no con una lista infinita de funciones.</p><ul><li><CheckIcon /> Diagnóstico de 30 minutos</li><li><CheckIcon /> Una obra y un flujo prioritario</li><li><CheckIcon /> Alcance, responsables y métrica de éxito</li></ul></div><DemoForm /></section>
       </main>
 
-      <footer className={styles.footer}><div><Logo /><p>Tecnología de obra diseñada en Argentina para operar globalmente.</p></div><div className={styles.footerLinks}><a href="#producto">Demo</a><a href="#confianza">Confianza</a><a href="#plataforma">Plataforma</a><Link href="/sign-in">Ingresar</Link><Link href="/privacy">Privacidad</Link><Link href="/terms">Términos</Link><Link href="/data-deletion">Eliminar datos</Link><a href="#contacto">Contacto</a></div><p>© 2026 ObraSaaS · Operado desde Argentina</p></footer>
+      <footer className={styles.footer}><div><Logo /><p>Tecnología de obra diseñada en Argentina para operar globalmente.</p></div><div className={styles.footerLinks}><a href="#plataforma">Recorrido</a><a href="#confianza">Confianza</a><a href="#sectores">Sectores</a><Link href="/sign-in">Ingresar</Link><Link href="/privacy">Privacidad</Link><Link href="/terms">Términos</Link><Link href="/data-deletion">Eliminar datos</Link><a href="#contacto">Contacto</a></div><p>© 2026 ObraSaaS · Operado desde Argentina</p></footer>
     </div>
   );
 }

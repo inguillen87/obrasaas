@@ -1,4 +1,5 @@
 import { clerkMiddleware } from '@clerk/nextjs/server';
+import { resolveClerkAuthorizedParties } from '@/lib/clerk-authorized-parties';
 
 const PROTECTED_ROUTE_ROOTS = [
   '/dashboard',
@@ -23,9 +24,14 @@ function isProtectedPathname(pathname) {
   return PROTECTED_ROUTE_ROOTS.some((root) => pathname === root || pathname.startsWith(`${root}/`));
 }
 
-export default clerkMiddleware(async (auth, request) => {
-  if (isProtectedPathname(request.nextUrl.pathname)) await auth.protect();
-});
+export default clerkMiddleware(
+  async (auth, request) => {
+    if (isProtectedPathname(request.nextUrl.pathname)) await auth.protect();
+  },
+  {
+    authorizedParties: resolveClerkAuthorizedParties(),
+  },
+);
 
 export const config = {
   matcher: [

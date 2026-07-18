@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { persistClerkTenantMembership } from '../src/lib/clerk-membership-sync.js';
+import {
+  disableDeletedClerkTenantMembership,
+  persistClerkTenantMembership,
+} from '../src/lib/clerk-membership-sync.js';
 
 function prismaDouble(nextMembership, resetCount = 2) {
   const calls = [];
@@ -110,4 +113,62 @@ test('a genuinely new Clerk member starts without implicit project grants', asyn
   assert.equal(result.projectAccessResetApplied, false);
   assert.equal(result.resetCount, 0);
   assert.deepEqual(names(calls), ['transaction', 'upsert']);
+});
+
+test('membership deletion uses only existing database identities and preserves roles', async () => {
+  const currentMembership = {
+    id: 'membership-a',
+    clerkRole: 'org:member',
+    tenantRole: 'SITE_MANAGER',
+    status: 'ACTIVE',
+  };
+  const { calls, prisma } = prismaDouble({ ...currentMembership, status: 'DISABLED' }, 1);
+  prisma.organization = {
+    async findUnique() {
+      calls.push(['find-organization']);
+      return { id: 'organization-a' };
+    },
+  };
+  prisma.platformUser = {
+    async findUnique() {
+      calls.push(['find-user']);
+      return { id: 'user-a' };
+    },
+  };
+  prisma.tenantMembership = {
+    async findUnique() {
+      calls.push(['find-membership']);
+      return currentMembership;
+    },
+  };
+
+  const result = await disableDeletedClerkTenantMembership(prisma, {
+    clerkOrganizationId: 'org_clerk_a',
+    clerkUserId: 'user_clerk_a',
+  });
+
+  assert.deepEqual(result, { found: true, changed: true });
+  const upsert = calls.find(([name]) => name === 'upsert')[1];
+  assert.equal(upsert.update.status, 'DISABLED');
+  assert.equal(upsert.update.clerkRole, currentMembership.clerkRole);
+  assert.equal(upsert.update.tenantRole, currentMembership.tenantRole);
+});
+
+test('membership deletion is a successful no-op for identities absent from Neon', async () => {
+  let transactionCalled = false;
+  const prisma = {
+    organization: { async findUnique() { return null; } },
+    platformUser: { async findUnique() { return { id: 'user-a' }; } },
+    async $transaction() {
+      transactionCalled = true;
+    },
+  };
+
+  const result = await disableDeletedClerkTenantMembership(prisma, {
+    clerkOrganizationId: 'org_missing',
+    clerkUserId: 'user_clerk_a',
+  });
+
+  assert.deepEqual(result, { found: false, changed: false });
+  assert.equal(transactionCalled, false);
 });

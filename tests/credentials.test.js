@@ -27,7 +27,11 @@ test('tampered credentials fail authentication', () => {
   process.env.WHATSAPP_CREDENTIALS_ENCRYPTION_KEY = crypto.randomBytes(32).toString('base64');
   try {
     const encrypted = encryptCredential('tenant-token');
-    assert.throws(() => decryptCredential(`${encrypted.slice(0, -1)}x`));
+    const parts = encrypted.split('.');
+    const authenticationTag = Buffer.from(parts[2], 'base64url');
+    authenticationTag[0] ^= 0x01;
+    parts[2] = authenticationTag.toString('base64url');
+    assert.throws(() => decryptCredential(parts.join('.')));
   } finally {
     if (previous === undefined) delete process.env.WHATSAPP_CREDENTIALS_ENCRYPTION_KEY;
     else process.env.WHATSAPP_CREDENTIALS_ENCRYPTION_KEY = previous;

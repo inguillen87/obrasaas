@@ -9,6 +9,7 @@
 - Clerk crea la primera organización durante el alta y la deja activa en la sesión.
 - Cada usuario nuevo puede crear como máximo **una** organización. Puede ser invitado a otras, pero no multiplicar trials propios.
 - El backend crea bajo demanda el tenant y la membresía. Sólo los roles con alcance de portfolio pueden crear la obra inicial automáticamente.
+- El webhook Clerk de producción pública verifica la firma, acepta únicamente eventos de identidad/organización/membresía y conserva un registro idempotente de procesamiento.
 
 ## Superadmin y tenants
 
@@ -18,6 +19,39 @@
 - Si el ID no pertenece al superadmin, falta una organización interna inequívoca o hay más de una marcada, el script aborta sin modificar ninguna organización tenant.
 - Todos los demás usuarios operan dentro del tenant activo de Clerk.
 - Cada consulta y mutación sensible se vuelve a acotar por organización y proyecto en el backend.
+
+## Sincronización y corte a Clerk Production
+
+- Usuario y organización se sincronizan por su ID Clerk actual. Un email verificado o una metadata privada coincidente **no** autorizan por sí solos a reemplazar ese ID en runtime.
+- Cada acceso tenant y cada webhook de membresía verifican la membresía vigente en Clerk antes de activarla. Una baja o un evento fuera de orden no puede reactivar acceso, y una re-invitación nunca hereda el rol operativo histórico de una membresía deshabilitada.
+- Cada organización Clerk guarda `obrasaasDatabaseOrganizationId` en metadata privada. Ese vínculo estable preserva el mismo tenant, sus obras y su suscripción durante un cambio futuro de instancia.
+- Eliminar un usuario en Clerk conserva `PlatformUser` y la auditoría histórica; deshabilita sus membresías tenant y accesos por obra.
+- Un cambio de IDs development → production requiere un manifiesto local `clerk-cutover*.json`, ignorado por Git y con cobertura completa de usuarios y organizaciones vinculados.
+- `npm run clerk:organization-links -- --plan <archivo>` prepara y valida los vínculos privados en la instancia production. La mutación exige `--apply --confirm-instance <ins_...>`.
+- `npm run clerk:cutover -- --plan <archivo>` valida instancia production, emails verificados, organización interna, cardinalidad, membresías/roles exactos y ausencia de colisiones. El apply exige además `--confirm-webhooks-frozen --confirm-identity-writes-frozen`, toma un advisory lock, vuelve a leer Clerk production y Neon bajo el lock, y ejecuta todos los rebinds con compare-and-swap dentro de una transacción serializable.
+- Sesión, webhooks, despliegues con claves antiguas y toda mutación de usuarios, organizaciones, invitaciones o membresías en Clerk production deben permanecer congelados durante el corte. El webhook production se habilita sólo después del commit y de actualizar `OBRASAAS_INTERNAL_CLERK_ORG_ID`.
+
+El manifiesto no contiene secretos, pero sí identificadores operativos y no se versiona. Debe incluir **todas** las identidades Clerk vinculadas en Neon:
+
+```json
+{
+  "targetInstanceId": "ins_PRODUCTION",
+  "users": [
+    {
+      "platformUserId": "id_interno_neon",
+      "expectedPreviousClerkUserId": "user_DEVELOPMENT",
+      "nextClerkUserId": "user_PRODUCTION"
+    }
+  ],
+  "organizations": [
+    {
+      "organizationId": "id_tenant_neon",
+      "expectedPreviousClerkOrganizationId": "org_DEVELOPMENT",
+      "nextClerkOrganizationId": "org_PRODUCTION"
+    }
+  ]
+}
+```
 
 ## Roles
 

@@ -12,6 +12,9 @@
 
 # testing
 /coverage
+/playwright-report/
+/test-results/
+/.auth/
 
 # next.js
 /.next/
@@ -40,6 +43,7 @@ yarn-error.log*
 
 # local fallback data must never be versioned
 /data/*.json
+/clerk-cutover*.json
 
 # generated database client (created by postinstall/build)
 /src/generated/prisma/

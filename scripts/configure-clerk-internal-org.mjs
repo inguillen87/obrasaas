@@ -7,6 +7,25 @@ import { SUPERADMIN_EMAIL } from '../src/lib/platform-identity.js';
 
 dotenv.config({ path: '.env.local', quiet: true });
 
+export const INTERNAL_ORGANIZATION_PROFILE = Object.freeze({
+  name: 'ObraSaaS Operaciones',
+});
+
+function optionValue(args, name) {
+  const index = args.indexOf(name);
+  if (index === -1) return null;
+  const value = args[index + 1];
+  if (!value || value.startsWith('--')) throw new Error(`${name} requires a value.`);
+  return value;
+}
+
+export function parseInternalOrganizationArgs(args) {
+  return {
+    apply: args.includes('--apply'),
+    confirmedInstanceId: optionValue(args, '--confirm-instance'),
+  };
+}
+
 function createClerkClient(secretKey) {
   if (!secretKey) throw new Error('CLERK_SECRET_KEY is required.');
 
@@ -105,10 +124,12 @@ async function listOrganizationMemberships(clerk, userId) {
 
 export async function configureInternalOrganization({
   apply = false,
+  confirmedInstanceId = null,
   secretKey = process.env.CLERK_SECRET_KEY,
   explicitOrganizationId = process.env.OBRASAAS_INTERNAL_CLERK_ORG_ID,
 } = {}) {
   const clerk = createClerkClient(secretKey);
+  const instance = await clerk('/instance');
   const usersResponse = await clerk(
     `/users?email_address=${encodeURIComponent(SUPERADMIN_EMAIL)}&limit=10`,
   );
@@ -139,12 +160,14 @@ export async function configureInternalOrganization({
 
   console.log(`${apply ? 'Configuring' : 'Would configure'} ${organization.id} as ObraSaaS Operaciones.`);
   if (apply) {
+    if (confirmedInstanceId !== instance.id) {
+      throw new Error('--confirm-instance must match the active Clerk instance exactly.');
+    }
     await clerk(`/organizations/${encodeURIComponent(organization.id)}`, {
       method: 'PATCH',
-      body: JSON.stringify({
-        name: 'ObraSaaS Operaciones',
-        slug: 'obrasaas-operaciones',
-      }),
+      // Clerk organization slugs are an optional instance feature. Updating only
+      // the name keeps this setup compatible with the free/default configuration.
+      body: JSON.stringify(INTERNAL_ORGANIZATION_PROFILE),
     });
     await clerk(`/organizations/${encodeURIComponent(organization.id)}/metadata`, {
       method: 'PATCH',
@@ -152,7 +175,9 @@ export async function configureInternalOrganization({
     });
     console.log('Internal Clerk organization configured.');
   } else {
-    console.log('Dry run complete. Re-run with --apply to mutate Clerk.');
+    console.log(
+      `Dry run complete against Clerk ${instance.environment_type || 'unknown'}. Re-run with --apply --confirm-instance ${instance.id} to mutate Clerk.`,
+    );
   }
 }
 
@@ -162,5 +187,5 @@ const isMainModule = Boolean(
 );
 
 if (isMainModule) {
-  await configureInternalOrganization({ apply: process.argv.includes('--apply') });
+  await configureInternalOrganization(parseInternalOrganizationArgs(process.argv.slice(2)));
 }

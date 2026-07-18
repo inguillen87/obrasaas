@@ -3,13 +3,12 @@ import { cookies } from 'next/headers';
 import { cache } from 'react';
 import { getPrisma } from '@/lib/prisma';
 import { getSubscriptionEntitlements } from '@/lib/plans';
-import { roleForClerkMembership, roleHasPermission } from '@/lib/tenant-roles';
+import { roleHasPermission } from '@/lib/tenant-roles';
 import { acceptedInvitationRole } from '@/lib/invitations';
 import {
-  clerkOrganizationIsInternal,
   databaseOrganizationIsInternal,
-  mergeClerkOrganizationMetadata,
 } from '@/lib/organization-policy';
+import { syncClerkOrganization } from '@/lib/clerk-organization-sync';
 import {
   ACTIVE_PROJECT_COOKIE,
   isSelectableProjectStatus,
@@ -24,8 +23,22 @@ import {
 import {
   isSuperadminEmail,
   SUPERADMIN_EMAIL,
-  systemRoleForVerifiedEmail,
 } from '@/lib/platform-identity';
+import {
+  ClerkVerifiedEmailRequiredError,
+  syncPlatformUserFromClerk,
+} from '@/lib/clerk-user-sync';
+import { disableDeletedClerkTenantMembership } from '@/lib/clerk-membership-sync';
+import {
+  getCurrentClerkOrganizationMembership,
+  resolveClerkTenantRole,
+} from '@/lib/clerk-membership-state';
+import {
+  ensureInternalOrganization,
+  internalOrganizationClerkContext,
+  platformOrganizationMode,
+} from '@/lib/internal-organization';
+import { withClerkIdentitySyncLock } from '@/lib/clerk-identity-lock';
 
 export { SUPERADMIN_EMAIL };
 
@@ -40,100 +53,14 @@ export class AccessError extends Error {
   }
 }
 
-function primaryVerifiedEmail(user) {
-  const primary = user.emailAddresses.find(
-    (email) => email.id === user.primaryEmailAddressId,
-  );
-  const candidate = primary || user.emailAddresses[0];
-  if (!candidate || candidate.verification?.status !== 'verified') return null;
-  return candidate.emailAddress.trim().toLowerCase();
-}
-
-function tenantDatabaseSlug(clerkOrganizationId) {
-  return `tenant-${clerkOrganizationId.replace(/^org_/, '').toLowerCase()}`;
-}
-
-async function ensureInternalOrganization(prisma) {
-  const externalId = 'system:obrasaas';
-  const existing = await prisma.organization.findUnique({
-    where: { clerkOrganizationId: externalId },
-  });
-  if (existing) return existing;
-
-  const legacy = await prisma.organization.findUnique({ where: { slug: 'demo' } });
-  if (legacy && !legacy.clerkOrganizationId) {
-    return prisma.organization.update({
-      where: { id: legacy.id },
-      data: {
-        clerkOrganizationId: externalId,
-        name: 'ObraSaaS Operaciones',
-        slug: 'obrasaas-internal',
-        subscriptionPlan: 'ENTERPRISE',
-        subscriptionStatus: 'ACTIVE',
-        trialEndsAt: null,
-      },
-    });
-  }
-
-  return prisma.organization.create({
-    data: {
-      clerkOrganizationId: externalId,
-      name: 'ObraSaaS Operaciones',
-      slug: 'obrasaas-internal',
-      subscriptionPlan: 'ENTERPRISE',
-      subscriptionStatus: 'ACTIVE',
-    },
-  });
-}
-
 async function ensureTenantOrganization({ prisma, clerk, orgId, orgSlug }) {
   const clerkOrganization = await clerk.organizations.getOrganization({
     organizationId: orgId,
   });
-  const existing = await prisma.organization.findUnique({
-    where: { clerkOrganizationId: orgId },
-  });
-  const internalClerkOrgId = process.env.OBRASAAS_INTERNAL_CLERK_ORG_ID || null;
-  const internal = clerkOrganizationIsInternal(
-    clerkOrganization,
-    existing?.metadata,
-    internalClerkOrgId,
-  );
-  const metadata = mergeClerkOrganizationMetadata(
-    existing?.metadata,
-    clerkOrganization,
+  return syncClerkOrganization(prisma, {
+    organization: clerkOrganization,
     orgSlug,
-    internalClerkOrgId,
-  );
-  const organizationName = internal ? 'ObraSaaS Operaciones' : clerkOrganization.name;
-
-  if (existing) {
-    return prisma.organization.update({
-      where: { id: existing.id },
-      data: {
-        name: organizationName,
-        metadata,
-        ...(internal ? {
-          subscriptionPlan: 'ENTERPRISE',
-          subscriptionStatus: 'ACTIVE',
-          trialEndsAt: null,
-        } : {}),
-      },
-    });
-  }
-
-  return prisma.organization.create({
-    data: {
-      clerkOrganizationId: orgId,
-      name: organizationName,
-      slug: tenantDatabaseSlug(orgId),
-      subscriptionPlan: internal ? 'ENTERPRISE' : 'TRIAL',
-      subscriptionStatus: internal ? 'ACTIVE' : 'TRIALING',
-      trialEndsAt: internal
-        ? null
-        : new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1_000),
-      metadata,
-    },
+    trialDays: TRIAL_DAYS,
   });
 }
 
@@ -217,39 +144,33 @@ const resolvePlatformAccess = cache(async () => {
 
   const clerk = await clerkClient();
   const clerkUser = await clerk.users.getUser(session.userId);
-  const email = primaryVerifiedEmail(clerkUser);
-  if (!email) {
-    throw new AccessError('A verified primary email is required.', {
-      code: 'EMAIL_NOT_VERIFIED',
-      status: 403,
-    });
-  }
-
-  const isSuperadmin = isSuperadminEmail(email);
-  const systemRole = systemRoleForVerifiedEmail(email);
   const prisma = getPrisma();
-  const user = await prisma.platformUser.upsert({
-    where: { clerkUserId: session.userId },
-    update: {
-      primaryEmail: email,
-      fullName: [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(' ') || null,
-      avatarUrl: clerkUser.imageUrl || null,
-      systemRole,
-      lastSeenAt: new Date(),
-    },
-    create: {
-      clerkUserId: session.userId,
-      primaryEmail: email,
-      fullName: [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(' ') || null,
-      avatarUrl: clerkUser.imageUrl || null,
-      systemRole,
-    },
-  });
+  let user;
+  try {
+    user = await syncPlatformUserFromClerk(prisma, clerkUser, { touchLastSeenAt: true });
+  } catch (error) {
+    if (error instanceof ClerkVerifiedEmailRequiredError) {
+      throw new AccessError('A verified primary email is required.', {
+        code: 'EMAIL_NOT_VERIFIED',
+        status: 403,
+      });
+    }
+    throw error;
+  }
+  const email = user.primaryEmail;
+  const isSuperadmin = isSuperadminEmail(email);
+  const systemRole = user.systemRole;
 
   let organization = null;
   let project = null;
   let membership = null;
-  if (session.orgId) {
+  const organizationMode = platformOrganizationMode({
+    isSuperadmin,
+    sessionOrganizationId: session.orgId,
+  });
+  if (organizationMode === 'internal') {
+    organization = await ensureInternalOrganization(prisma);
+  } else if (organizationMode === 'tenant') {
     organization = await ensureTenantOrganization({
       prisma,
       clerk,
@@ -264,8 +185,27 @@ const resolvePlatformAccess = cache(async () => {
         },
       },
     });
+    const currentClerkMembership = await getCurrentClerkOrganizationMembership(
+      clerk.organizations,
+      {
+        organizationId: session.orgId,
+        userId: session.userId,
+      },
+    );
+    if (!currentClerkMembership) {
+      await disableDeletedClerkTenantMembership(prisma, {
+        clerkOrganizationId: session.orgId,
+        clerkUserId: session.userId,
+        eventType: 'session.membership_missing',
+      });
+      throw new AccessError('The active Clerk organization membership no longer exists.', {
+        code: 'ORGANIZATION_MEMBERSHIP_REQUIRED',
+        status: 403,
+      });
+    }
+    const startsNewLifecycle = !currentMembership || currentMembership.status !== 'ACTIVE';
     let invitedTenantRole = null;
-    if (!currentMembership && session.orgRole !== 'org:admin') {
+    if (startsNewLifecycle && currentClerkMembership.role !== 'org:admin') {
       try {
         const acceptedInvitations = await clerk.organizations.getOrganizationInvitationList({
           organizationId: session.orgId,
@@ -277,46 +217,74 @@ const resolvePlatformAccess = cache(async () => {
         console.error('Accepted Clerk invitation lookup failed; using least privilege:', error);
       }
     }
-    const resolvedClerkRole = session.orgRole || 'org:member';
-    const resolvedTenantRole = roleForClerkMembership(
-      resolvedClerkRole,
-      currentMembership?.tenantRole || invitedTenantRole,
-    );
-    const upsertMembership = (database) => database.tenantMembership.upsert({
-      where: {
-        organizationId_userId: {
+    const resolvedClerkRole = currentClerkMembership.role || 'org:member';
+    membership = await withClerkIdentitySyncLock(prisma, async (database) => {
+      const [boundOrganization, boundUser, lockedCurrentMembership] = await Promise.all([
+        database.organization.findUnique({
+          where: { id: organization.id },
+          select: { clerkOrganizationId: true },
+        }),
+        database.platformUser.findUnique({
+          where: { id: user.id },
+          select: { clerkUserId: true },
+        }),
+        database.tenantMembership.findUnique({
+          where: {
+            organizationId_userId: {
+              organizationId: organization.id,
+              userId: user.id,
+            },
+          },
+        }),
+      ]);
+      if (
+        boundOrganization?.clerkOrganizationId !== session.orgId
+        || boundUser?.clerkUserId !== session.userId
+      ) {
+        throw new AccessError('Clerk identity changed while resolving the active organization.', {
+          code: 'CLERK_IDENTITY_STALE',
+          status: 409,
+        });
+      }
+      const resolvedTenantRole = resolveClerkTenantRole({
+        clerkRole: resolvedClerkRole,
+        databaseMembership: lockedCurrentMembership,
+        clerkMembership: currentClerkMembership,
+        invitedTenantRole,
+      });
+      const resolvedMembership = await database.tenantMembership.upsert({
+        where: {
+          organizationId_userId: {
+            organizationId: organization.id,
+            userId: user.id,
+          },
+        },
+        update: {
+          clerkRole: resolvedClerkRole,
+          tenantRole: resolvedTenantRole,
+          status: 'ACTIVE',
+        },
+        create: {
           organizationId: organization.id,
           userId: user.id,
+          clerkRole: resolvedClerkRole,
+          tenantRole: resolvedTenantRole,
         },
-      },
-      update: {
-        clerkRole: resolvedClerkRole,
-        tenantRole: resolvedTenantRole,
-        status: 'ACTIVE',
-      },
-      create: {
-        organizationId: organization.id,
-        userId: user.id,
-        clerkRole: resolvedClerkRole,
-        tenantRole: resolvedTenantRole,
-      },
-    });
-    const resetProjectAccess = currentMembership && (
-      membershipTransitionRequiresProjectAccessReset({
-        previousTenantRole: currentMembership.tenantRole,
-        nextTenantRole: resolvedTenantRole,
-        previousStatus: currentMembership.status,
-        nextStatus: 'ACTIVE',
-      })
-    );
-    if (resetProjectAccess) {
-      membership = await prisma.$transaction(async (transaction) => {
-        const resolvedMembership = await upsertMembership(transaction);
+      });
+      const resetProjectAccess = lockedCurrentMembership && (
+        membershipTransitionRequiresProjectAccessReset({
+          previousTenantRole: lockedCurrentMembership.tenantRole,
+          nextTenantRole: resolvedTenantRole,
+          previousStatus: lockedCurrentMembership.status,
+          nextStatus: 'ACTIVE',
+        })
+      );
+      if (resetProjectAccess) {
         const reset = await resetTenantMembershipProjectAccess(
-          transaction,
+          database,
           resolvedMembership.id,
         );
-        await transaction.auditLog.create({
+        await database.auditLog.create({
           data: {
             organizationId: organization.id,
             actorId: user.id,
@@ -325,21 +293,17 @@ const resolvePlatformAccess = cache(async () => {
             entityId: resolvedMembership.id,
             metadata: {
               source: 'session_membership_sync',
-              previousRole: currentMembership.tenantRole,
+              previousRole: lockedCurrentMembership.tenantRole,
               nextRole: resolvedTenantRole,
-              previousStatus: currentMembership.status,
+              previousStatus: lockedCurrentMembership.status,
               nextStatus: 'ACTIVE',
               resetProjectAccessCount: reset.count,
             },
           },
         });
-        return resolvedMembership;
-      });
-    } else {
-      membership = await upsertMembership(prisma);
-    }
-  } else if (isSuperadmin) {
-    organization = await ensureInternalOrganization(prisma);
+      }
+      return resolvedMembership;
+    });
   }
 
   const tenantRole = isSuperadmin ? 'SUPERADMIN' : membership?.tenantRole || null;
@@ -356,15 +320,25 @@ const resolvePlatformAccess = cache(async () => {
     ? getSubscriptionEntitlements(organization)
     : null;
 
+  const internalClerkContext = isSuperadmin
+    ? internalOrganizationClerkContext(organization)
+    : null;
+  const effectiveClerkOrganizationId = isSuperadmin
+    ? internalClerkContext.orgId
+    : session.orgId || null;
+  const effectiveClerkOrganizationSlug = isSuperadmin
+    ? internalClerkContext.orgSlug
+    : session.orgSlug || null;
+
   return {
     userId: session.userId,
     databaseUserId: user.id,
     email,
     isSuperadmin,
     systemRole,
-    orgId: session.orgId || null,
-    orgSlug: session.orgSlug || null,
-    orgRole: session.orgRole || null,
+    orgId: effectiveClerkOrganizationId,
+    orgSlug: effectiveClerkOrganizationSlug,
+    orgRole: isSuperadmin ? internalClerkContext.orgRole : session.orgRole || null,
     tenantRole,
     tenantMembershipId: membership?.id || null,
     organization,

@@ -219,7 +219,7 @@
 .demoControls button:hover { color: var(--ink); background: rgba(255, 255, 255, 0.04); }
 .demoControls .demoControlActive { color: var(--orange); background: rgba(255, 155, 56, 0.06); }
 .demoControls .demoControlActive::before { content: ''; position: absolute; inset: 0 0 auto; height: 2px; background: var(--orange); }
-.demoControls .demoControlActive::after { content: ''; position: absolute; inset: auto 0 0; height: 2px; background: rgba(255,155,56,.6); transform-origin: left; animation: scenario-progress 2.8s linear both; }
+.demoControls .demoControlActive::after { content: ''; position: absolute; inset: auto 0 0; height: 2px; background: rgba(255,155,56,.6); transform-origin: left; animation: scenario-progress var(--demo-cycle-duration, 7s) linear both; }
 .productShell[data-paused='true'] .demoControls .demoControlActive::after { animation: none; transform: scaleX(0); }
 .demoDisclosure { min-height: 38px; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 14px; padding: 0 12px 0 16px; color: var(--subtle); border-top: 1px solid var(--line); background: rgba(255,255,255,.012); }
 .demoDisclosure span { display: inline-flex; align-items: center; gap: 7px; color: #c6cacf; font-size: .75rem; font-weight: 680; letter-spacing: .035em; text-transform: uppercase; }
@@ -228,6 +228,7 @@
 .demoPause { min-height: 29px; padding: 0 9px; color: #c0c5c8; border: 1px solid var(--line); border-radius: 6px; outline: none; background: rgba(255,255,255,.025); font: inherit; font-size: .75rem; font-weight: 680; cursor: pointer; }
 .demoPause:hover { color: var(--ink); border-color: var(--line-strong); background: rgba(255,255,255,.05); }
 .demoPause:focus-visible { box-shadow: 0 0 0 2px var(--orange); }
+.demoPause:disabled { opacity: .72; cursor: default; }
 
 .audienceStrip { min-height: 78px; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 14px; color: #858c92; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); font-size: 0.73rem; }
 .audienceStrip > span { color: #555d63; text-transform: uppercase; letter-spacing: 0.12em; font-size: .72rem; }
@@ -447,7 +448,7 @@
   .mobileNav { display: block; }
   .hero { min-height: auto; grid-template-columns: 1fr; padding-block: 70px 85px; }
   .heroCopy { max-width: 760px; }
-  .heroProduct { width: min(850px, 100%); margin: 18px auto 0; }
+  .heroProduct { display: none; }
   .sectionIntroRow, .positioning, .faq, .finalCta { grid-template-columns: 1fr; }
   .trustIntro { grid-template-columns: 1fr; gap: 34px; }
   .trustPrinciple { max-width: 600px; }
@@ -547,7 +548,6 @@
   .productBody { padding-inline: 11px; }
   .shellTopbar { padding-inline: 11px; }
   .shellTopbar .windowDots { display: none; }
-  .demoControls button { font-size: .75rem; }
   .architectureCard { padding: 17px; }
   .architectureOutput { flex-wrap: wrap; }
   .architectureOutput span { min-width: 27%; }

@@ -1086,13 +1086,69 @@
 
   .signalBar > div:nth-child(2) { border-right: 0; }
   .signalBar > div:nth-child(-n + 2) { border-bottom: 1px solid var(--line); }
+
+  .moduleTabs button small,
+  .moduleTabs button strong,
+  .stageTopbar > p strong,
+  .stageTopbar > p small,
+  .stageStatus,
+  .sceneIntro span,
+  .sceneIntro > p,
+  .avatar,
+  .conversationHeader strong,
+  .conversationHeader small,
+  .channelBadge,
+  .receivedBadge,
+  .reviewBadge,
+  .reportStatus,
+  .messageBubble > span,
+  .messageBubble p,
+  .messageBubble time,
+  .attachmentRow strong,
+  .attachmentRow small,
+  .identityRail > div > span,
+  .identityRail small,
+  .identityRail strong,
+  .analysisHeader span,
+  .proposalHeader span,
+  .reportTopline span,
+  .analysisHeader strong,
+  .proposalHeader strong,
+  .reportTopline strong,
+  .transcriptCard > span,
+  .classificationCard > span,
+  .reportNarrative > span,
+  .auditCard > span,
+  .sourceLine strong,
+  .sourceLine small,
+  .classificationCard dt,
+  .classificationCard dd,
+  .missingSignal > span,
+  .missingSignal strong,
+  .missingSignal p,
+  .missingSignal button,
+  .approvalActions button,
+  .proposalHeader > small,
+  .tourGanttRow > p strong,
+  .tourGanttRow > p small,
+  .tourGanttRow > small,
+  .impactSummary span,
+  .impactSummary strong,
+  .impactSummary small,
+  .reportMetrics span,
+  .reportMetrics small,
+  .reportNarrative > p,
+  .reportNarrative > div strong,
+  .reportNarrative > div small,
+  .auditCard li strong,
+  .auditCard li small,
+  .signalBar span,
+  .signalBar strong {
+    font-size: .875rem;
+  }
 }
 
 @media (max-width: 440px) {
-  .moduleTabs button strong {
-    font-size: .75rem;
-  }
-
   .messageStack {
     min-height: 300px;
     padding: 16px;

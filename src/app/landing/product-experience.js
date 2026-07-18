@@ -5,6 +5,9 @@ import { useEffect, useState } from 'react';
 import { ObraSaasMark } from '@/app/brand/brand-logo';
 import styles from './landing.module.css';
 
+const DEMO_INTERVAL_MS = 7_000;
+const DESKTOP_DEMO_QUERY = '(min-width: 981px)';
+
 const steps = [
   {
     id: 'capture',
@@ -55,7 +58,9 @@ export default function ProductExperience() {
   const [interactionPaused, setInteractionPaused] = useState(false);
   const [userPaused, setUserPaused] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
-  const paused = interactionPaused || userPaused;
+  const [desktopDemo, setDesktopDemo] = useState(false);
+  const autoplayAvailable = desktopDemo && !reducedMotion;
+  const paused = interactionPaused || userPaused || !autoplayAvailable;
 
   useEffect(() => {
     const media = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -66,10 +71,21 @@ export default function ProductExperience() {
   }, []);
 
   useEffect(() => {
-    if (reducedMotion || paused) return undefined;
-    const timer = window.setInterval(() => setActive((current) => (current + 1) % steps.length), 2800);
+    const media = window.matchMedia(DESKTOP_DEMO_QUERY);
+    const updateViewport = () => setDesktopDemo(media.matches);
+    updateViewport();
+    media.addEventListener('change', updateViewport);
+    return () => media.removeEventListener('change', updateViewport);
+  }, []);
+
+  useEffect(() => {
+    if (paused) return undefined;
+    const timer = window.setInterval(
+      () => setActive((current) => (current + 1) % steps.length),
+      DEMO_INTERVAL_MS,
+    );
     return () => window.clearInterval(timer);
-  }, [active, paused, reducedMotion]);
+  }, [active, paused]);
 
   const step = steps[active];
 
@@ -77,6 +93,7 @@ export default function ProductExperience() {
     <div
       className={styles.productShell}
       data-paused={paused || undefined}
+      style={{ '--demo-cycle-duration': `${DEMO_INTERVAL_MS}ms` }}
       aria-label="Recorrido demostrativo del circuito operativo"
       role="region"
       onMouseEnter={() => setInteractionPaused(true)}
@@ -134,10 +151,11 @@ export default function ProductExperience() {
         <button
           type="button"
           className={styles.demoPause}
-          aria-pressed={userPaused}
+          aria-pressed={autoplayAvailable ? userPaused : undefined}
+          disabled={!autoplayAvailable}
           onClick={() => setUserPaused((current) => !current)}
         >
-          {userPaused ? 'Reanudar' : 'Pausar'}
+          {!autoplayAvailable ? 'Control manual' : userPaused ? 'Reanudar' : 'Pausar'}
         </button>
       </div>
       <div className={styles.demoControls} aria-label="Etapas del circuito operativo">

@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { selectInternalOrganization } from '../scripts/configure-clerk-internal-org.mjs';
+import {
+  INTERNAL_ORGANIZATION_PROFILE,
+  parseInternalOrganizationArgs,
+  selectInternalOrganization,
+} from '../scripts/configure-clerk-internal-org.mjs';
 
 function membership(id, internal = false) {
   return {
@@ -64,5 +68,31 @@ test('rejects an explicit ID that conflicts with another internal organization',
       explicitOrganizationId: 'org_explicit',
     }),
     /Another organization is already marked internal/,
+  );
+});
+
+test('internal organization setup does not require paid or disabled slug support', () => {
+  assert.deepEqual(INTERNAL_ORGANIZATION_PROFILE, {
+    name: 'ObraSaaS Operaciones',
+  });
+  assert.equal(Object.hasOwn(INTERNAL_ORGANIZATION_PROFILE, 'slug'), false);
+});
+
+test('internal organization mutation requires exact Clerk instance confirmation', () => {
+  assert.deepEqual(parseInternalOrganizationArgs([]), {
+    apply: false,
+    confirmedInstanceId: null,
+  });
+  assert.deepEqual(parseInternalOrganizationArgs([
+    '--apply',
+    '--confirm-instance',
+    'ins_Development123',
+  ]), {
+    apply: true,
+    confirmedInstanceId: 'ins_Development123',
+  });
+  assert.throws(
+    () => parseInternalOrganizationArgs(['--confirm-instance']),
+    /requires a value/,
   );
 });

@@ -67,6 +67,7 @@ El alias estable publicado es `https://obrasaas.vercel.app`; `https://obrasaas-p
 - Una app Meta exclusiva para ObraSaaS; cada tenant aporta su WABA, número y token mediante Embedded Signup.
 - Tokens de integración cifrados con AES-256-GCM.
 - Webhooks Meta y Clerk verificados e idempotentes.
+- Clerk restringe orígenes autorizados y conserva identidades internas durante bajas o un futuro cutover development → production; el procedimiento está documentado en [docs/AUTH_AND_TENANCY.md](docs/AUTH_AND_TENANCY.md).
 - Evidencia privada accesible únicamente desde el tenant y proyecto autorizados.
 - Acciones sensibles sujetas a permisos, estado de suscripción y auditoría.
 
