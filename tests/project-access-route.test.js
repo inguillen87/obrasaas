@@ -279,6 +279,33 @@ test('PATCH rejects memberships outside the tenant before reading or writing pro
   assert.equal(callsNamed(calls, 'audit').length, 0);
 });
 
+test('PATCH rejects internal workspace membership assignments before opening a transaction', async () => {
+  const { calls, prisma } = prismaDouble();
+  const patch = createProjectAccessPatchHandler({
+    resolveAccess: async () => ({
+      ...access(),
+      isSuperadmin: true,
+      organization: {
+        id: 'organization-internal',
+        metadata: { internal: true },
+      },
+    }),
+    prismaFactory: () => prisma,
+  });
+  const response = await patch(request({
+    membershipId: 'membership-a',
+    projectIds: [],
+    expectedProjectIds: [],
+  }));
+
+  assert.equal(response.status, 403);
+  assert.equal(
+    (await response.json()).code,
+    'INTERNAL_ORGANIZATION_MEMBERSHIP_FORBIDDEN',
+  );
+  assert.deepEqual(calls, []);
+});
+
 test('PATCH rejects portfolio roles because their effective access cannot be narrowed', async () => {
   const { calls, prisma } = prismaDouble({
     targetMembership: membership({ tenantRole: 'DIRECTOR' }),

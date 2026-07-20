@@ -108,8 +108,7 @@ export function resolveClerkMembershipEventState(event, currentClerkMembership) 
   }
 
   if (
-    !newerLifecycle
-    && eventUpdatedAt !== null
+    eventUpdatedAt !== null
     && currentUpdatedAt !== null
     && currentUpdatedAt < eventUpdatedAt
   ) {

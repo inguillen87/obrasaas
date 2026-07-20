@@ -108,6 +108,16 @@ test('an event newer than the current BAPI snapshot is retried instead of applyi
     ),
     ClerkMembershipStatePendingError,
   );
+  assert.throws(
+    () => resolveClerkMembershipEventState(
+      membershipEvent('organizationMembership.created', {
+        id: 'orgmem_next',
+        updated_at: 300,
+      }),
+      clerkMembership({ id: 'orgmem_previous', updatedAt: 200 }),
+    ),
+    ClerkMembershipStatePendingError,
+  );
 });
 
 test('a disabled member never inherits its historical tenant role on reactivation', () => {

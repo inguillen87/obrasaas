@@ -14,7 +14,8 @@ function sanitizeAnalyticsEvent(event) {
   }
 }
 
-export default function Observability() {
+export default function Observability({ enabled = false }) {
+  if (!enabled) return null;
   return (
     <Analytics beforeSend={sanitizeAnalyticsEvent} />
   );

@@ -55,6 +55,9 @@ async function loadIdentityFixtures() {
       !isInternalOrganization(organization)
     ));
     if (externalMembership) {
+      if (memberships.data.some(({ organization }) => isInternalOrganization(organization))) {
+        throw new Error('A tenant E2E identity must never belong to the internal organization.');
+      }
       return {
         superadmin: {
           email: SUPERADMIN_EMAIL,
@@ -134,8 +137,8 @@ test('the canonical superadmin always enters the internal control plane', async 
   await expect(page.getByText('Superadmin exclusivo')).toBeVisible();
 });
 
-test('a tenant stays inside its organization and cannot reach superadmin APIs', async ({ page }) => {
-  const { tenant } = await identityFixtures();
+test('a tenant stays inside its organization and cannot reach internal or superadmin surfaces', async ({ page }) => {
+  const { superadmin, tenant } = await identityFixtures();
   await signInWithOrganization(page, tenant);
   await page.goto('/dashboard');
 
@@ -143,6 +146,21 @@ test('a tenant stays inside its organization and cannot reach superadmin APIs', 
   await expect(page.locator('.dashboard-organization-switcher button')).toBeVisible();
   await expect(page.locator('.internal-workspace')).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Consola SuperAdmin' })).toHaveCount(0);
+  const internalActivation = await page.evaluate(async ({ internalOrganizationId, tenantOrganizationId }) => {
+    try {
+      await window.Clerk.setActive({ organization: internalOrganizationId });
+    } catch {
+      // Clerk rejects organizations outside the signed-in user's membership set.
+    }
+    return {
+      activeOrganizationId: window.Clerk.organization?.id || null,
+      tenantOrganizationId,
+    };
+  }, {
+    internalOrganizationId: superadmin.organizationId,
+    tenantOrganizationId: tenant.organizationId,
+  });
+  expect(internalActivation.activeOrganizationId).toBe(internalActivation.tenantOrganizationId);
   const authorizationProbe = await sameOriginResponse(page, '/api/superadmin/tenants', {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },

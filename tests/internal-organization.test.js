@@ -4,6 +4,7 @@ import test from 'node:test';
 
 import {
   ensureInternalOrganization,
+  internalOrganizationMembershipAllowed,
   internalOrganizationClerkContext,
   InternalOrganizationConflictError,
   platformOrganizationMode,
@@ -18,6 +19,11 @@ test('superadmin always resolves the internal workspace even with an active tena
     isSuperadmin: false,
     sessionOrganizationId: 'org_tenant',
   }), 'tenant');
+  assert.equal(platformOrganizationMode({
+    isSuperadmin: false,
+    sessionOrganizationId: 'org_internal',
+    internalClerkOrganizationId: 'org_internal',
+  }), 'forbidden');
   assert.deepEqual(internalOrganizationClerkContext({
     clerkOrganizationId: 'org_internal',
     metadata: { clerkSlug: 'obrasaas-operaciones' },
@@ -30,6 +36,15 @@ test('superadmin always resolves the internal workspace even with an active tena
     clerkOrganizationId: 'system:obrasaas',
     metadata: { internal: true },
   }), { orgId: null, orgSlug: null, orgRole: null });
+  assert.equal(internalOrganizationMembershipAllowed({
+    metadata: { internal: true },
+  }, 'tenant@example.com'), false);
+  assert.equal(internalOrganizationMembershipAllowed({
+    metadata: { internal: true },
+  }, 'guillen.marce@gmail.com'), true);
+  assert.equal(internalOrganizationMembershipAllowed({
+    metadata: { internal: false },
+  }, 'tenant@example.com'), true);
 });
 
 test('superadmin reuses exactly one Clerk-linked internal organization', async () => {

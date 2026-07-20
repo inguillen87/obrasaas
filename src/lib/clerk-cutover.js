@@ -191,6 +191,15 @@ export function validateClerkCutoverMemberships({
   databaseMemberships,
   targetMemberships,
 }) {
+  const databaseUsersById = new Map(
+    coverage.users.map(({ databaseUser }) => [databaseUser.id, databaseUser]),
+  );
+  const databaseOrganizationsById = new Map(
+    coverage.organizations.map(({ databaseOrganization }) => [
+      databaseOrganization.id,
+      databaseOrganization,
+    ]),
+  );
   const userTargets = new Map(coverage.users.map(({ entry, databaseUser }) => [
     databaseUser.id,
     entry.nextClerkUserId,
@@ -205,6 +214,14 @@ export function validateClerkCutoverMemberships({
 
   for (const membership of databaseMemberships) {
     if (membership.status !== 'ACTIVE') continue;
+    const databaseUser = databaseUsersById.get(membership.userId);
+    const databaseOrganization = databaseOrganizationsById.get(membership.organizationId);
+    if (
+      databaseInternal(databaseOrganization?.metadata)
+      && databaseUser?.primaryEmail !== SUPERADMIN_EMAIL
+    ) {
+      throw new Error('The internal organization may only contain the canonical ObraSaaS superadmin.');
+    }
     const clerkUserId = userTargets.get(membership.userId);
     const clerkOrganizationId = organizationTargets.get(membership.organizationId);
     if (!clerkUserId || !clerkOrganizationId) {
@@ -215,6 +232,16 @@ export function validateClerkCutoverMemberships({
     expected.set(key, membership.clerkRole);
   }
 
+  const canonicalSuperadminTargetIds = new Set(
+    coverage.users
+      .filter(({ databaseUser }) => databaseUser.primaryEmail === SUPERADMIN_EMAIL)
+      .map(({ entry }) => entry.nextClerkUserId),
+  );
+  const internalOrganizationTargetIds = new Set(
+    coverage.organizations
+      .filter(({ databaseOrganization }) => databaseInternal(databaseOrganization.metadata))
+      .map(({ entry }) => entry.nextClerkOrganizationId),
+  );
   const actual = new Map();
   for (const membership of targetMemberships) {
     const clerkOrganizationId = boundedId(
@@ -228,6 +255,12 @@ export function validateClerkCutoverMemberships({
       ID_PATTERNS.user,
     );
     const clerkRole = boundedId(membership.clerkRole, 'targetMembership.clerkRole');
+    if (
+      internalOrganizationTargetIds.has(clerkOrganizationId)
+      && !canonicalSuperadminTargetIds.has(clerkUserId)
+    ) {
+      throw new Error('The internal organization may only contain the canonical ObraSaaS superadmin.');
+    }
     const key = `${clerkOrganizationId}:${clerkUserId}`;
     if (actual.has(key)) throw new Error('Target Clerk memberships must be unique.');
     actual.set(key, clerkRole);

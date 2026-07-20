@@ -42,6 +42,7 @@ registerHooks({
 const { patchTenantMemberRole } = await import(
   '../src/app/api/tenant/members/route.js'
 );
+const { hasTenantPermission } = await import('../src/lib/access.js');
 
 function platformAccess() {
   return {
@@ -171,4 +172,40 @@ test('member role updates reject cross-tenant membership IDs before a transactio
 
   assert.equal(response.status, 404);
   assert.equal(callNames(calls).includes('transaction'), false);
+});
+
+test('member role updates reject the internal workspace before reading memberships', async () => {
+  const { calls, prisma } = prismaDouble({
+    previousRole: 'DIRECTOR',
+    nextRole: 'SITE_MANAGER',
+  });
+  const response = await patchTenantMemberRole(request('SITE_MANAGER'), {
+    resolveAccess: async () => ({
+      ...platformAccess(),
+      isSuperadmin: true,
+      organization: {
+        id: 'organization-internal',
+        metadata: { internal: true },
+      },
+    }),
+    prismaFactory: () => prisma,
+  });
+
+  assert.equal(response.status, 403);
+  assert.equal(
+    (await response.json()).code,
+    'INTERNAL_ORGANIZATION_MEMBERSHIP_FORBIDDEN',
+  );
+  assert.deepEqual(calls, []);
+});
+
+test('internal workspace never exposes tenant membership management controls', () => {
+  assert.equal(hasTenantPermission({
+    ...platformAccess(),
+    isSuperadmin: true,
+    organization: {
+      id: 'organization-internal',
+      metadata: { internal: true },
+    },
+  }, 'tenant:members:manage'), false);
 });

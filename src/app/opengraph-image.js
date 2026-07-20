@@ -1,17 +1,14 @@
 import { ImageResponse } from 'next/og';
-import { readFile } from 'node:fs/promises';
-import path from 'node:path';
+import {
+  OBRA_SAAS_STRUCTURE_PATH,
+  OBRA_SAAS_TRACE_PATH,
+} from './brand/brand-geometry';
 
 export const alt = 'ObraSaaS · La obra habla y la operación entiende qué hacer';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
-export default async function OpenGraphImage() {
-  const lockup = await readFile(
-    path.join(process.cwd(), 'public', 'brand', 'obrasaas-lockup-inverse.svg'),
-  );
-  const lockupSource = `data:image/svg+xml;base64,${lockup.toString('base64')}`;
-
+export default function OpenGraphImage() {
   return new ImageResponse(
     (
       <div
@@ -58,15 +55,22 @@ export default async function OpenGraphImage() {
           }}
         >
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-            <div style={{ display: 'flex', alignItems: 'center', height: 48 }}>
-              {/* The official vector lockup keeps the wordmark geometry identical across every social card. */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={lockupSource}
-                width={200}
-                height={48}
-                alt="ObraSaaS"
-              />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 13, height: 48 }}>
+              <svg aria-hidden="true" height="48" viewBox="0 0 64 64" width="48">
+                <path d={OBRA_SAAS_STRUCTURE_PATH} fill="#f4f1e8" />
+                <path
+                  d={OBRA_SAAS_TRACE_PATH}
+                  fill="none"
+                  stroke="#f28a42"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="7"
+                />
+              </svg>
+              <div style={{ display: 'flex', alignItems: 'baseline', color: '#f4f1e8', fontSize: 34, fontWeight: 700, letterSpacing: -1.6 }}>
+                <div>Obra</div>
+                <div style={{ color: '#c8ccc9', fontWeight: 500 }}>SaaS</div>
+              </div>
             </div>
             <div style={{ marginTop: 68, color: '#f28a42', fontSize: 18, fontWeight: 700, letterSpacing: 3 }}>
               OPERACIÓN DE OBRA CONECTADA

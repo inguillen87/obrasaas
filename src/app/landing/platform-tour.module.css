@@ -375,7 +375,7 @@
 
 .messageBubble time {
   display: block;
-  color: rgba(255,255,255,.6);
+  color: rgba(255,255,255,.82);
   text-align: right;
   font-size: .7rem;
 }

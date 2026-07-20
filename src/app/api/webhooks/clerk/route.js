@@ -20,6 +20,7 @@ import {
   resolveClerkMembershipEventState,
   resolveClerkTenantRole,
 } from '@/lib/clerk-membership-state';
+import { internalOrganizationMembershipAllowed } from '@/lib/internal-organization';
 import {
   claimClerkWebhookEvent,
   clerkWebhookRetryResponse,
@@ -112,6 +113,14 @@ async function processEvent(event) {
     const organization = await syncOrganization(prisma, clerkOrganization);
     const clerkUser = await clerk.users.getUser(clerkUserId);
     const user = await syncUser(prisma, clerkUser);
+    if (!internalOrganizationMembershipAllowed(organization, user.primaryEmail)) {
+      await disableDeletedClerkTenantMembership(prisma, {
+        clerkOrganizationId,
+        clerkUserId,
+        eventType: 'organizationMembership.internal_rejected',
+      });
+      return;
+    }
     const currentMembership = await prisma.tenantMembership.findUnique({
       where: {
         organizationId_userId: {

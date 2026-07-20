@@ -274,6 +274,37 @@ test('cutover requires exact Clerk membership and base-role parity', () => {
     }),
     /role does not match/,
   );
+  assert.throws(
+    () => validateClerkCutoverMemberships({
+      coverage,
+      databaseMemberships: [
+        ...databaseMemberships,
+        {
+          userId: 'db_user_tenant',
+          organizationId: 'db_org_internal',
+          clerkRole: 'org:member',
+          status: 'ACTIVE',
+        },
+      ],
+      targetMemberships,
+    }),
+    /only contain the canonical ObraSaaS superadmin/,
+  );
+  assert.throws(
+    () => validateClerkCutoverMemberships({
+      coverage,
+      databaseMemberships,
+      targetMemberships: [
+        ...targetMemberships,
+        {
+          clerkUserId: 'user_ProdTenant',
+          clerkOrganizationId: 'org_ProdInternal',
+          clerkRole: 'org:member',
+        },
+      ],
+    }),
+    /only contain the canonical ObraSaaS superadmin/,
+  );
 });
 
 test('cutover target refresh revalidates current users, organizations and memberships', async () => {

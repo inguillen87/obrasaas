@@ -35,6 +35,7 @@ import {
 } from '@/lib/clerk-membership-state';
 import {
   ensureInternalOrganization,
+  internalOrganizationMembershipAllowed,
   internalOrganizationClerkContext,
   platformOrganizationMode,
 } from '@/lib/internal-organization';
@@ -167,7 +168,14 @@ const resolvePlatformAccess = cache(async () => {
   const organizationMode = platformOrganizationMode({
     isSuperadmin,
     sessionOrganizationId: session.orgId,
+    internalClerkOrganizationId: process.env.OBRASAAS_INTERNAL_CLERK_ORG_ID || null,
   });
+  if (organizationMode === 'forbidden') {
+    throw new AccessError('The internal ObraSaaS workspace is reserved for the canonical superadmin.', {
+      code: 'INTERNAL_ORGANIZATION_FORBIDDEN',
+      status: 403,
+    });
+  }
   if (organizationMode === 'internal') {
     organization = await ensureInternalOrganization(prisma);
   } else if (organizationMode === 'tenant') {
@@ -177,6 +185,12 @@ const resolvePlatformAccess = cache(async () => {
       orgId: session.orgId,
       orgSlug: session.orgSlug,
     });
+    if (!internalOrganizationMembershipAllowed(organization, email)) {
+      throw new AccessError('The internal ObraSaaS workspace is reserved for the canonical superadmin.', {
+        code: 'INTERNAL_ORGANIZATION_FORBIDDEN',
+        status: 403,
+      });
+    }
     const currentMembership = await prisma.tenantMembership.findUnique({
       where: {
         organizationId_userId: {
@@ -379,11 +393,26 @@ export async function requireSuperadmin() {
 }
 
 export function hasTenantPermission(access, permission) {
+  if (
+    permission === 'tenant:members:manage'
+    && databaseOrganizationIsInternal(access?.organization)
+  ) {
+    return false;
+  }
   if (access.isSuperadmin) return true;
   return Boolean(access.orgId && roleHasPermission(access.tenantRole, permission));
 }
 
 export function requireTenantPermission(access, permission, { subscriptionMode } = {}) {
+  if (
+    permission === 'tenant:members:manage'
+    && databaseOrganizationIsInternal(access?.organization)
+  ) {
+    throw new AccessError('Internal workspace memberships cannot be managed from tenant controls.', {
+      code: 'INTERNAL_ORGANIZATION_MEMBERSHIP_FORBIDDEN',
+      status: 403,
+    });
+  }
   if (!hasTenantPermission(access, permission)) {
     throw new AccessError(`Permission ${permission} is required.`, {
       code: 'PERMISSION_REQUIRED',

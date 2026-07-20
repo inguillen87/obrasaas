@@ -13,10 +13,23 @@ const links = [
   ['Preguntas', '#preguntas'],
 ];
 
+const DESKTOP_NAV_QUERY = '(min-width: 981px)';
+
 export default function MobileNavigation() {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef(null);
   const panelRef = useRef(null);
+
+  useEffect(() => {
+    const desktopViewport = window.matchMedia(DESKTOP_NAV_QUERY);
+    const closeOnDesktop = (event) => {
+      if (event.matches) setOpen(false);
+    };
+
+    closeOnDesktop(desktopViewport);
+    desktopViewport.addEventListener('change', closeOnDesktop);
+    return () => desktopViewport.removeEventListener('change', closeOnDesktop);
+  }, []);
 
   useEffect(() => {
     if (!open) return undefined;

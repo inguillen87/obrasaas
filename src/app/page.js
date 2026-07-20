@@ -175,7 +175,7 @@ export default function Home() {
           {Object.values(PLAN_CATALOG).map((plan) => (
             <article key={plan.key} className={`${styles.pricingCard} ${plan.key === 'PRO' ? styles.pricingFeatured : ''}`}>
               <div className={styles.pricingTopline}>
-                <span>{plan.name}</span>
+                <h3>{plan.name}</h3>
                 {plan.key === 'PRO' && <small>Plan recomendado</small>}
               </div>
               <p>{plan.description}</p>

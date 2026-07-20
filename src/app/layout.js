@@ -45,7 +45,7 @@ export default function RootLayout({ children }) {
     >
       <body>
         {children}
-        <Observability />
+        <Observability enabled={process.env.VERCEL === '1'} />
       </body>
     </html>
   );

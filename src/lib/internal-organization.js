@@ -1,4 +1,5 @@
 import { databaseOrganizationIsInternal } from './organization-policy.js';
+import { isSuperadminEmail } from './platform-identity.js';
 
 export class InternalOrganizationConflictError extends Error {
   constructor(message) {
@@ -8,9 +9,24 @@ export class InternalOrganizationConflictError extends Error {
   }
 }
 
-export function platformOrganizationMode({ isSuperadmin, sessionOrganizationId }) {
+export function platformOrganizationMode({
+  isSuperadmin,
+  sessionOrganizationId,
+  internalClerkOrganizationId = null,
+}) {
   if (isSuperadmin) return 'internal';
+  if (
+    sessionOrganizationId
+    && internalClerkOrganizationId
+    && sessionOrganizationId === internalClerkOrganizationId
+  ) {
+    return 'forbidden';
+  }
   return sessionOrganizationId ? 'tenant' : 'none';
+}
+
+export function internalOrganizationMembershipAllowed(organization, primaryEmail) {
+  return !databaseOrganizationIsInternal(organization) || isSuperadminEmail(primaryEmail);
 }
 
 export function internalOrganizationClerkContext(organization) {

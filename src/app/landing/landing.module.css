@@ -86,6 +86,14 @@
   contain-intrinsic-size: auto 417px;
 }
 
+.trust,
+.sectors,
+.pricing,
+.faq,
+.finalCta {
+  scroll-margin-top: 96px;
+}
+
 .footer {
   content-visibility: auto;
   contain-intrinsic-size: auto 180px;
@@ -305,6 +313,7 @@
 .pricingCard { min-height: 610px; display: flex; flex-direction: column; padding: 30px; border: 1px solid var(--line); border-radius: 15px; background: rgba(255,255,255,.022); }
 .pricingFeatured { border-color: rgba(255,155,56,.45); background: linear-gradient(155deg, rgba(255,155,56,.1), rgba(255,255,255,.025) 45%); box-shadow: 0 30px 80px rgba(0,0,0,.25); }
 .pricingTopline { display: flex; align-items: center; justify-content: space-between; color: var(--orange); font-size: .72rem; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+.pricingTopline h3 { margin: 0; color: inherit; font: inherit; }
 .pricingTopline small { padding: 5px 8px; border-radius: 999px; color: #1a120a; background: var(--orange); font-size: .7rem; }
 .pricingCard > p { min-height: 48px; margin: 18px 0 0; color: var(--muted); font-size: .8rem; line-height: 1.6; }
 .price { display: flex; align-items: baseline; flex-wrap: wrap; gap: 7px; margin-top: 38px; }
@@ -426,8 +435,8 @@
 }
 
 @media (max-width: 1180px) {
-  .hero { grid-template-columns: 0.86fr 1.14fr; gap: 34px; }
-  .heroProduct { width: 620px; margin-right: 0; }
+  .hero { grid-template-columns: minmax(360px, .86fr) minmax(0, 1.14fr); gap: 34px; }
+  .heroProduct { width: min(620px, 100%); margin-right: 0; }
   .productBody { grid-template-columns: 1fr 210px; }
 }
 
@@ -527,6 +536,38 @@
   .footer { grid-template-columns: 1fr; gap: 25px; padding-block: 45px 25px; }
   .footer > p { grid-column: auto; padding: 0; }
   .footerLinks { flex-wrap: wrap; }
+
+  .compactCta,
+  .primaryCta,
+  .secondaryCta,
+  .trustPrinciple p,
+  .trustCard > p,
+  .trustFooter p,
+  .trustFooterActions .primaryCta,
+  .trustFooterActions .secondaryCta,
+  .audienceCards p,
+  .audienceCards li,
+  .pricingCard > p,
+  .pricingCard .annualPrice,
+  .pricingCard li,
+  .pricingBasisNote,
+  .variableCostNote,
+  .faqList details p,
+  .finalCtaCopy ul,
+  .leadStepIntro > p,
+  .leadForm label,
+  .leadFormFooter p,
+  .leadFormFooter button,
+  .footer a,
+  .footer p {
+    font-size: .875rem;
+  }
+
+  .leadForm input,
+  .leadForm select,
+  .leadForm textarea {
+    font-size: 1rem;
+  }
 }
 
 @media (max-width: 840px) and (min-width: 721px) {
@@ -539,7 +580,7 @@
   .header { gap: 8px; }
   .headerActions { gap: 8px; }
   .logo { font-size: .9rem; }
-  .compactCta { padding-inline: 9px; font-size: .7rem; }
+  .compactCta { padding-inline: 9px; font-size: .875rem; }
   .compactCta svg { display: none; }
   .eyebrow { font-size: .75rem; }
   .metricRow { grid-template-columns: 1fr 1fr; }
