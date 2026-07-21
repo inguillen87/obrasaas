@@ -18,4 +18,21 @@ test.describe('landing responsive navigation', () => {
     await expect(page.locator('#mobile-navigation-panel')).toHaveCount(0);
     await expect(page.locator('body')).not.toHaveCSS('overflow', 'hidden');
   });
+
+  test('mobile navigation lands on the requested section below the sticky header', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/');
+
+    await page.locator('button[aria-controls="mobile-navigation-panel"]').click();
+    await page.locator('#mobile-navigation-panel a[href="#precios"]').click();
+
+    await expect(page).toHaveURL(/#precios$/);
+    await expect(page.locator('body')).not.toHaveCSS('overflow', 'hidden');
+    await expect.poll(async () => page.locator('#precios').evaluate(
+      (section) => Math.round(section.getBoundingClientRect().top),
+    )).toBeGreaterThanOrEqual(80);
+    await expect.poll(async () => page.locator('#precios').evaluate(
+      (section) => Math.round(section.getBoundingClientRect().top),
+    )).toBeLessThanOrEqual(112);
+  });
 });

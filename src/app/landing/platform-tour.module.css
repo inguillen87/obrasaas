@@ -4,8 +4,6 @@
   padding-block: 132px;
   scroll-margin-top: 96px;
   border-top: 1px solid var(--line);
-  content-visibility: auto;
-  contain-intrinsic-size: auto 1047px;
 }
 
 .intro {
@@ -925,11 +923,6 @@
 }
 
 @media (max-width: 980px) {
-  .tour {
-    content-visibility: visible;
-    contain-intrinsic-size: none;
-  }
-
   .intro {
     grid-template-columns: 1fr;
     gap: 22px;
@@ -972,8 +965,6 @@
   .tour {
     width: min(100% - 30px, 1180px);
     padding-block: 90px;
-    content-visibility: auto;
-    contain-intrinsic-size: auto 1764px;
   }
 
   .tourFrame {
