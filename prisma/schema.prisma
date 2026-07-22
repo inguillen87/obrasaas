@@ -308,10 +308,41 @@ model WhatsAppConnection {
   flowProvisioningLeaseAcquiredAt DateTime?
   flowProvisioningLeaseExpiresAt  DateTime?
   flowEndpoint          WhatsAppFlowEndpoint?
+  flowTemplates         WhatsAppFlowTemplate[]
   createdAt             DateTime                 @default(now())
   updatedAt             DateTime                 @updatedAt
 
   @@index([whatsappBusinessId])
+}
+
+model WhatsAppFlowTemplate {
+  id                   String             @id @default(cuid())
+  connectionId         String
+  connection           WhatsAppConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  whatsappBusinessId   String             @db.VarChar(40)
+  blueprintKey         String             @db.VarChar(100)
+  providerTemplateId   String?            @unique(map: "WAFlowTemplate_provider_id_key") @db.VarChar(40)
+  name                 String             @db.VarChar(512)
+  language             String             @db.VarChar(35)
+  category             String             @db.VarChar(32)
+  status               String             @db.VarChar(40)
+  contentSha256        String             @db.Char(64)
+  flowId               String             @db.VarChar(40)
+  screenId             String             @db.VarChar(30)
+  bodyText             String             @db.VarChar(1024)
+  buttonText           String             @db.VarChar(25)
+  rejectionReason      String?            @db.Text
+  submittedAt          DateTime?
+  lastSyncedAt         DateTime?
+  statusChangedAt      DateTime?
+  metadata             Json?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  @@unique([connectionId, name, language], map: "WAFlowTemplate_name_language_key")
+  @@unique([connectionId, blueprintKey, language, contentSha256], map: "WAFlowTemplate_blueprint_hash_key")
+  @@index([connectionId, blueprintKey, status], map: "WAFlowTemplate_blueprint_status_idx")
+  @@index([whatsappBusinessId, providerTemplateId], map: "WAFlowTemplate_waba_provider_idx")
 }
 
 model WhatsAppFlowEndpoint {

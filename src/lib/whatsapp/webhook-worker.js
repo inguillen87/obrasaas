@@ -31,6 +31,7 @@ import {
 import { ingestAndPersistInboundWhatsAppMedia } from "@/lib/whatsapp/media";
 import { sendWhatsAppFlow, sendWhatsAppText } from "@/lib/whatsapp/meta";
 import { processIncomingObraMessage } from "@/lib/whatsapp/obra-engine";
+import { synchronizeWhatsAppTemplateStatus } from "@/lib/whatsapp/templates";
 import { validateStoredWebhookScope } from "@/lib/whatsapp/webhook-scope";
 
 export const DEFAULT_WEBHOOK_DRAIN_EVENTS = 10;
@@ -468,6 +469,17 @@ export async function applyWhatsAppStatusEvent(
   return true;
 }
 
+export async function applyWhatsAppTemplateStatusEvent(
+  event,
+  scope,
+  {
+    prisma = getPrisma(),
+    synchronize = synchronizeWhatsAppTemplateStatus,
+  } = {},
+) {
+  return synchronize(event, scope, { prisma });
+}
+
 async function processLeasedEvent(leasedEvent) {
   const stored = deserializeWebhookPayload(leasedEvent.payload);
   const event = stored.event;
@@ -483,6 +495,10 @@ async function processLeasedEvent(leasedEvent) {
     return;
   }
   if (event.eventType === "account") {
+    if (event.field === "message_template_status_update") {
+      await applyWhatsAppTemplateStatusEvent(event, scope);
+      return;
+    }
     await synchronizeWhatsAppConnectionStatus(event, scope);
     return;
   }

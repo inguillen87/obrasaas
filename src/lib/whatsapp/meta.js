@@ -715,6 +715,77 @@ export function buildWhatsAppFlowMessage({
   };
 }
 
+const WHATSAPP_TEMPLATE_NAME_PATTERN = /^[a-z0-9_]{1,512}$/;
+const WHATSAPP_TEMPLATE_LANGUAGE_PATTERN = /^[a-z]{2}_[A-Z]{2}$/;
+
+function safeFlowActionData(value) {
+  if (value === undefined) return undefined;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('WhatsApp Flow template action data must be an object.');
+  }
+  let serialized;
+  try {
+    serialized = JSON.stringify(value);
+  } catch {
+    throw new Error('WhatsApp Flow template action data must be JSON serializable.');
+  }
+  if (serialized === '{}' || Buffer.byteLength(serialized, 'utf8') > 4_096) {
+    throw new Error('WhatsApp Flow template action data must be non-empty and at most 4096 bytes.');
+  }
+  return JSON.parse(serialized);
+}
+
+export function buildWhatsAppFlowTemplateMessage({
+  to,
+  templateName,
+  language = 'es_AR',
+  flowToken,
+  flowActionData,
+}) {
+  const recipient = String(to || '').replace(/^\+/, '');
+  if (!/^\d{8,20}$/.test(recipient)) throw new Error('Invalid WhatsApp Flow recipient.');
+  const safeTemplateName = String(templateName || '');
+  if (!WHATSAPP_TEMPLATE_NAME_PATTERN.test(safeTemplateName)) {
+    throw new Error('Invalid WhatsApp Flow template name.');
+  }
+  const safeLanguage = String(language || '');
+  if (!WHATSAPP_TEMPLATE_LANGUAGE_PATTERN.test(safeLanguage)) {
+    throw new Error('Invalid WhatsApp Flow template language.');
+  }
+  const safeToken = String(flowToken || '');
+  if (!/^[A-Za-z0-9._~-]{12,256}$/.test(safeToken)) {
+    throw new Error('Invalid WhatsApp Flow session token.');
+  }
+  const actionData = safeFlowActionData(flowActionData);
+
+  return {
+    messaging_product: 'whatsapp',
+    recipient_type: 'individual',
+    to: recipient,
+    type: 'template',
+    template: {
+      name: safeTemplateName,
+      language: { code: safeLanguage },
+      components: [
+        {
+          type: 'button',
+          sub_type: 'flow',
+          index: '0',
+          parameters: [
+            {
+              type: 'action',
+              action: {
+                flow_token: safeToken,
+                ...(actionData ? { flow_action_data: actionData } : {}),
+              },
+            },
+          ],
+        },
+      ],
+    },
+  };
+}
+
 export async function sendWhatsAppFlow({
   phoneNumberId: requestedPhoneNumberId,
   scope,
@@ -769,6 +840,69 @@ export async function sendWhatsAppFlow({
         code: canFallback
           ? 'META_FLOW_REJECTED'
           : 'META_FLOW_DELIVERY_RETRYABLE',
+        status: response.status,
+        providerCode,
+      },
+    );
+  }
+  return result;
+}
+
+export async function sendWhatsAppFlowTemplate({
+  phoneNumberId: requestedPhoneNumberId,
+  scope,
+  fetchImpl = fetch,
+  credentials,
+  ...messageInput
+}) {
+  const safePhoneNumberId = requireMetaResourceId(requestedPhoneNumberId, 'phone number ID');
+  const resolved = credentials || await requireMetaPhoneConfig(safePhoneNumberId, scope);
+  if (String(resolved.phoneNumberId) !== safePhoneNumberId) {
+    throw new Error('WhatsApp Flow template credential scope mismatch.');
+  }
+  const url = new URL(
+    `https://graph.facebook.com/${resolved.version || 'v25.0'}/${safePhoneNumberId}/messages`,
+  );
+  const appSecret = resolved.appSecret || process.env.META_APP_SECRET;
+  if (appSecret) {
+    url.searchParams.set(
+      'appsecret_proof',
+      crypto.createHmac('sha256', appSecret).update(resolved.accessToken).digest('hex'),
+    );
+  }
+  let response;
+  try {
+    response = await fetchImpl(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${resolved.accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(buildWhatsAppFlowTemplateMessage(messageInput)),
+      signal: AbortSignal.timeout(20_000),
+    });
+  } catch {
+    throw new MetaFlowDeliveryError(
+      'Meta template delivery ended without a definitive provider response.',
+      { code: 'META_FLOW_TEMPLATE_DELIVERY_UNKNOWN' },
+    );
+  }
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const parsedProviderCode = Number(result?.error?.code);
+    const providerCode = Number.isSafeInteger(parsedProviderCode)
+      && parsedProviderCode > 0
+      ? parsedProviderCode
+      : null;
+    const definitive = response.status >= 400
+      && response.status < 500
+      && ![408, 425, 429].includes(response.status);
+    throw new MetaFlowDeliveryError(
+      `Meta Flow template send failed (${response.status}${providerCode === null ? '' : `, code ${providerCode}`}).`,
+      {
+        code: definitive
+          ? 'META_FLOW_TEMPLATE_REJECTED'
+          : 'META_FLOW_TEMPLATE_DELIVERY_RETRYABLE',
         status: response.status,
         providerCode,
       },
