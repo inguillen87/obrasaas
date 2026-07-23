@@ -48,17 +48,26 @@ function validatedFlowTokenSecret(value) {
   return secret;
 }
 
-function flowTokenSecret(explicitSecret) {
+export function assertWhatsAppFlowTokenSecret(explicitSecret, {
+  allowDevelopmentFallback = false,
+} = {}) {
   const secret = validatedFlowTokenSecret(
-    explicitSecret ?? process.env.WHATSAPP_FLOW_TOKEN_SECRET,
+    explicitSecret,
   );
   if (secret) return secret;
-  if (["development", "test"].includes(process.env.NODE_ENV)) {
+  if (allowDevelopmentFallback && ["development", "test"].includes(process.env.NODE_ENV)) {
     return LOCAL_DEVELOPMENT_SECRET;
   }
   throw flowSessionError(
     "WHATSAPP_FLOW_TOKEN_SECRET is required outside explicit development or test runtimes.",
     "WHATSAPP_FLOW_TOKEN_SECRET_REQUIRED",
+  );
+}
+
+function flowTokenSecret(explicitSecret) {
+  return assertWhatsAppFlowTokenSecret(
+    explicitSecret ?? process.env.WHATSAPP_FLOW_TOKEN_SECRET,
+    { allowDevelopmentFallback: true },
   );
 }
 

@@ -19,6 +19,7 @@ import {
   getWhatsAppFlowSessionTtlMs,
 } from '@/lib/whatsapp/flows';
 import {
+  assertWhatsAppFlowTokenSecret,
   getWhatsAppFlowSessionForDelivery,
   issueWhatsAppFlowSession,
   markWhatsAppFlowSessionDeliveryAttempted,
@@ -37,6 +38,8 @@ const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/;
 const BLUEPRINT_KEY_PATTERN = /^[a-z0-9][a-z0-9-]{0,99}$/;
 const PROVIDER_MESSAGE_ID_PATTERN = /^[^\u0000-\u001f\u007f]{1,500}$/;
 const SEND_REQUEST_ACTION = 'whatsapp.inbox.flow_template_send_requested';
+const UNCERTAINTY_RESOLUTION_ACTION = 'whatsapp.inbox.flow_template_uncertainty_resolved';
+const UNCERTAINTY_CONFIRMATION = 'ACEPTO_RIESGO_DE_DUPLICADO';
 const STALE_SEND_MS = 2 * 60 * 1_000;
 const RATE_LIMITS = Object.freeze({
   actorPerMinute: 10,
@@ -49,12 +52,14 @@ export class WhatsAppProactiveFlowError extends Error {
     code = 'WHATSAPP_PROACTIVE_FLOW_ERROR',
     status = 400,
     retryAfterSeconds = null,
+    details = null,
   } = {}) {
     super(message);
     this.name = 'WhatsAppProactiveFlowError';
     this.code = code;
     this.status = status;
     this.retryAfterSeconds = retryAfterSeconds;
+    this.details = details;
   }
 }
 
@@ -102,6 +107,27 @@ function configurationReady(env) {
   return Object.values(whatsAppPlatformConfiguration(env)).every(Boolean);
 }
 
+function flowSecretError({ env, flowSessionSecret }) {
+  try {
+    assertWhatsAppFlowTokenSecret(
+      flowSessionSecret ?? env?.WHATSAPP_FLOW_TOKEN_SECRET,
+    );
+    return null;
+  } catch (error) {
+    return new WhatsAppProactiveFlowError(
+      'La firma segura de los formularios todavía no está configurada.',
+      {
+        code: error?.code || 'WHATSAPP_FLOW_TOKEN_SECRET_REQUIRED',
+        status: error?.status || 503,
+      },
+    );
+  }
+}
+
+function channelReadiness(connection, env, now) {
+  return deriveStoredWhatsAppChannelReadiness({ connection, env, now });
+}
+
 function channelOperational(connection, env, now) {
   if (
     !connection?.enabled
@@ -110,7 +136,7 @@ function channelOperational(connection, env, now) {
     || !connection.phoneNumberId
     || !connection.whatsappBusinessId
   ) return false;
-  const readiness = deriveStoredWhatsAppChannelReadiness({ connection, env, now });
+  const readiness = channelReadiness(connection, env, now);
   const account = readiness.checks.account;
   return Boolean(
     readiness.checks.platform.configured
@@ -171,6 +197,24 @@ async function readState(prisma, scope, conversationId, { lockWrites = false } =
         encryptedAccessToken: true,
         lastError: true,
         metadata: true,
+        flowEndpoint: {
+          select: {
+            id: true,
+            enabled: true,
+            updatedAt: true,
+            keys: {
+              where: { status: 'ACTIVE' },
+              orderBy: { version: 'desc' },
+              take: 1,
+              select: {
+                status: true,
+                version: true,
+                publicKeySha256: true,
+                verifiedAt: true,
+              },
+            },
+          },
+        },
       },
     }),
     prisma.message.findFirst({
@@ -190,7 +234,7 @@ async function readState(prisma, scope, conversationId, { lockWrites = false } =
   return { conversation, project, connection, inbound, recipient, workerResolution };
 }
 
-function capabilityError(state, { canManage, env, now }) {
+function capabilityError(state, { canManage, env, now, flowSessionSecret }) {
   if (!canManage) {
     return new WhatsAppProactiveFlowError(
       'Tu rol puede leer la conversación, pero no enviar formularios.',
@@ -215,11 +259,24 @@ function capabilityError(state, { canManage, env, now }) {
       { code: 'WHATSAPP_PLATFORM_NOT_READY', status: 409 },
     );
   }
+  const secretError = flowSecretError({ env, flowSessionSecret });
+  if (secretError) return secretError;
   if (!channelOperational(state.connection, env, now)) {
     return new WhatsAppProactiveFlowError('WhatsApp no está operativo para esta obra.', {
       code: 'WHATSAPP_CONNECTION_NOT_OPERATIONAL',
       status: 409,
     });
+  }
+  const flows = channelReadiness(state.connection, env, now).checks.flows;
+  if (
+    flows.configured !== true
+    || flows.endpointStatus !== 'HEALTHY'
+    || Number(flows.publishedCount || 0) < 1
+  ) {
+    return new WhatsAppProactiveFlowError(
+      'El Data Endpoint cifrado de WhatsApp Flows no está listo para recibir respuestas.',
+      { code: 'WHATSAPP_FLOW_ENDPOINT_NOT_READY', status: 409 },
+    );
   }
   if (!state.inbound) {
     return new WhatsAppProactiveFlowError(
@@ -271,17 +328,78 @@ function recordMatches(record, connection, definition) {
     && record.blueprintKey === definition.blueprintKey
     && record.name === definition.name
     && record.language === definition.language
+    && record.category === definition.category
     && record.contentSha256 === definition.contentSha256
     && record.flowId === definition.flowId
     && record.screenId === definition.screenId
+    && record.bodyText === definition.bodyText
+    && record.buttonText === definition.buttonText
     && record.providerTemplateId
   );
 }
 
-async function buildCatalog(prisma, connection, { baseAllowed = false } = {}) {
+function isUnresolvedFlowMessage(message, blueprintKey = null) {
+  const metadata = jsonObject(message?.metadata);
+  const status = String(message?.status || '').trim().toLowerCase();
+  return ['sending', 'unknown'].includes(status)
+    && metadata.messageType === 'whatsapp_flow_template'
+    && (!blueprintKey || metadata.blueprintKey === blueprintKey);
+}
+
+function publicUnresolvedAttempt(message) {
+  if (!message) return null;
+  return {
+    messageId: String(message.id || ''),
+    status: String(message.status || 'unknown').trim().toLowerCase(),
+    recordedAt: validDate(message.createdAt)?.toISOString() || null,
+    attemptedAt: validDate(message.sentAt)?.toISOString() || null,
+  };
+}
+
+async function findUnresolvedFlowMessage(prisma, conversationId, blueprintKey) {
+  if (!prisma.message?.findFirst) return null;
+  const message = await prisma.message.findFirst({
+    where: {
+      conversationId,
+      direction: 'OUTBOUND',
+      status: { in: ['sending', 'unknown', 'SENDING', 'UNKNOWN'] },
+      AND: [
+        {
+          metadata: {
+            path: ['messageType'],
+            equals: 'whatsapp_flow_template',
+          },
+        },
+        {
+          metadata: {
+            path: ['blueprintKey'],
+            equals: blueprintKey,
+          },
+        },
+      ],
+    },
+    select: {
+      id: true,
+      externalId: true,
+      status: true,
+      metadata: true,
+      sentAt: true,
+      createdAt: true,
+    },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+  });
+  return isUnresolvedFlowMessage(message, blueprintKey) ? message : null;
+}
+
+async function buildCatalog(
+  prisma,
+  connection,
+  { baseAllowed = false, conversationId = null } = {},
+) {
   const blueprints = getWhatsAppFlowCatalog();
-  const records = connection?.id && prisma.whatsAppFlowTemplate?.findMany
-    ? await prisma.whatsAppFlowTemplate.findMany({
+  const [records, ...unresolved] = await Promise.all([
+    connection?.id && prisma.whatsAppFlowTemplate?.findMany
+      ? prisma.whatsAppFlowTemplate.findMany({
         where: {
           connectionId: connection.id,
           language: WHATSAPP_FLOW_TEMPLATE_LANGUAGE,
@@ -289,7 +407,13 @@ async function buildCatalog(prisma, connection, { baseAllowed = false } = {}) {
         },
         orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
       })
-    : [];
+      : [],
+    ...blueprints.map((blueprint) => (
+      conversationId
+        ? findUnresolvedFlowMessage(prisma, conversationId, blueprint.key)
+        : null
+    )),
+  ]);
   return blueprints.map((blueprint) => {
     const published = connection
       ? getPublishedWhatsAppFlowReference(connection.metadata, blueprint.key)
@@ -315,6 +439,9 @@ async function buildCatalog(prisma, connection, { baseAllowed = false } = {}) {
     const status = templateStatus(
       presented || { status: published ? 'NOT_CREATED' : 'FLOW_NOT_PUBLISHED' },
     );
+    const unresolvedAttempt = unresolved.find(
+      (message) => isUnresolvedFlowMessage(message, blueprint.key),
+    ) || null;
     return {
       key: blueprint.key,
       title: blueprint.title,
@@ -330,7 +457,12 @@ async function buildCatalog(prisma, connection, { baseAllowed = false } = {}) {
         statusLabel: status.label,
         rejectionReason: matching?.rejectionReason || null,
       },
-      canSend: Boolean(baseAllowed && matching?.status === 'APPROVED'),
+      unresolvedAttempt: publicUnresolvedAttempt(unresolvedAttempt),
+      canSend: Boolean(
+        baseAllowed
+        && matching?.status === 'APPROVED'
+        && !unresolvedAttempt,
+      ),
     };
   });
 }
@@ -347,12 +479,22 @@ export async function getProactiveWhatsAppFlowCatalog({
   const now = observedDate(clock);
   const state = await readState(prisma, scope, conversationId);
   const error = capabilityError(state, { canManage, env, now });
-  const catalog = await buildCatalog(prisma, state.connection, { baseAllowed: !error });
+  const catalog = await buildCatalog(prisma, state.connection, {
+    baseAllowed: !error,
+    conversationId: state.conversation.id,
+  });
   const anySendable = catalog.some((item) => item.canSend);
+  const hasUnresolvedAttempt = catalog.some((item) => item.unresolvedAttempt);
   const capability = error
     ? { allowed: false, code: error.code, reason: error.message }
     : anySendable
       ? { allowed: true, code: 'READY', reason: null }
+      : hasUnresolvedAttempt
+        ? {
+            allowed: false,
+            code: 'WHATSAPP_FLOW_TEMPLATE_UNRESOLVED',
+            reason: 'Hay un formulario con entrega sin confirmar. Revisalo antes de habilitar otro intento.',
+          }
       : {
           allowed: false,
           code: 'WHATSAPP_FLOW_TEMPLATE_NOT_APPROVED',
@@ -371,6 +513,203 @@ export async function getProactiveWhatsAppFlowCatalog({
       : null,
     catalog,
   };
+}
+
+function uncertaintyMessageId(value) {
+  const messageId = String(value || '').trim();
+  if (!messageId || messageId.length > 191 || /[\u0000-\u001f\u007f]/.test(messageId)) {
+    throw new WhatsAppProactiveFlowError('El intento pendiente no es válido.', {
+      code: 'WHATSAPP_FLOW_UNCERTAINTY_INPUT_INVALID',
+      status: 400,
+    });
+  }
+  return messageId;
+}
+
+function deliveryProvenError() {
+  return new WhatsAppProactiveFlowError(
+    'Hay evidencia de que Meta entregó este formulario. El bloqueo no puede levantarse manualmente.',
+    { code: 'WHATSAPP_FLOW_TEMPLATE_DELIVERY_PROVEN', status: 409 },
+  );
+}
+
+async function invalidateUncertainFlowSession(prisma, session, now) {
+  if (!session) {
+    throw new WhatsAppProactiveFlowError(
+      'No se encontró la sesión segura del intento anterior. El bloqueo se mantiene.',
+      { code: 'WHATSAPP_FLOW_UNCERTAINTY_SESSION_MISSING', status: 409 },
+    );
+  }
+  let fenced;
+  try {
+    fenced = await markWhatsAppFlowSessionDeliveryRejected(
+      prisma,
+      { sessionId: session.id },
+      { now },
+    );
+  } catch (error) {
+    if (error instanceof WhatsAppFlowSessionError) {
+      throw new WhatsAppProactiveFlowError(
+        'La sesión anterior cambió de estado y no puede invalidarse con seguridad.',
+        { code: 'WHATSAPP_FLOW_UNCERTAINTY_SESSION_CONFLICT', status: 409 },
+      );
+    }
+    throw error;
+  }
+  if (
+    !fenced.session.deliveryRejectedAt
+    || fenced.session.sentAt
+    || fenced.session.consumedAt
+  ) {
+    throw deliveryProvenError();
+  }
+  return fenced.session;
+}
+
+export async function resolveProactiveWhatsAppFlowUncertainty({
+  prisma,
+  access,
+  conversationId,
+  blueprintKey: requestedBlueprint,
+  messageId: requestedMessageId,
+  confirmation,
+  clock = () => new Date(),
+}) {
+  const scope = trustedScope(access);
+  const { key: blueprintKey, blueprint } = selectedBlueprint(requestedBlueprint);
+  const messageId = uncertaintyMessageId(requestedMessageId);
+  if (String(confirmation || '').trim() !== UNCERTAINTY_CONFIRMATION) {
+    throw new WhatsAppProactiveFlowError(
+      'Confirmá explícitamente el riesgo de duplicado antes de habilitar otro intento.',
+      { code: 'WHATSAPP_FLOW_UNCERTAINTY_CONFIRMATION_REQUIRED', status: 400 },
+    );
+  }
+  const now = observedDate(clock);
+
+  return prisma.$transaction(async (transaction) => {
+    await lockSendLane(transaction, scope.organizationId);
+    const state = await readState(
+      transaction,
+      scope,
+      conversationId,
+      { lockWrites: true },
+    );
+    const message = await transaction.message.findFirst({
+      where: {
+        id: messageId,
+        conversationId: state.conversation.id,
+        direction: 'OUTBOUND',
+      },
+      select: {
+        id: true,
+        conversationId: true,
+        providerMessageId: true,
+        status: true,
+        metadata: true,
+        sentAt: true,
+        createdAt: true,
+      },
+    });
+    const metadata = jsonObject(message?.metadata);
+    if (
+      !message
+      || metadata.messageType !== 'whatsapp_flow_template'
+      || metadata.blueprintKey !== blueprintKey
+    ) {
+      throw new WhatsAppProactiveFlowError('El intento pendiente ya no está disponible.', {
+        code: 'WHATSAPP_FLOW_UNCERTAINTY_NOT_FOUND',
+        status: 404,
+      });
+    }
+    const session = metadata.flowSessionId
+      ? await transaction.whatsAppFlowSession.findUnique({
+          where: { id: metadata.flowSessionId },
+        })
+      : null;
+    if (
+      message.providerMessageId
+      || session?.providerMessageId
+      || session?.sentAt
+      || session?.consumedAt
+    ) {
+      throw deliveryProvenError();
+    }
+    if (
+      String(message.status || '').toLowerCase() === 'failed'
+      && jsonObject(metadata.uncertaintyResolution).decision === 'ALLOW_NEW_ATTEMPT'
+    ) {
+      await invalidateUncertainFlowSession(transaction, session, now);
+      return {
+        conversationId: state.conversation.id,
+        flow: { key: blueprintKey, title: blueprint.title },
+        resolvedAttempt: publicMessage(message),
+        idempotent: true,
+      };
+    }
+    if (!isUnresolvedFlowMessage(message, blueprintKey)) {
+      throw new WhatsAppProactiveFlowError(
+        'Este intento ya tiene un estado final y no necesita resolución manual.',
+        { code: 'WHATSAPP_FLOW_UNCERTAINTY_ALREADY_RESOLVED', status: 409 },
+      );
+    }
+    const claimedAt = validDate(message.sentAt || message.createdAt);
+    if (
+      String(message.status || '').toLowerCase() === 'sending'
+      && claimedAt
+      && now.getTime() - claimedAt.getTime() < STALE_SEND_MS
+    ) {
+      throw new WhatsAppProactiveFlowError(
+        'El intento todavía se está procesando. Esperá antes de resolverlo manualmente.',
+        {
+          code: 'WHATSAPP_FLOW_TEMPLATE_STILL_DISPATCHING',
+          status: 409,
+          retryAfterSeconds: Math.max(
+            1,
+            Math.ceil((STALE_SEND_MS - (now.getTime() - claimedAt.getTime())) / 1_000),
+          ),
+        },
+      );
+    }
+
+    await invalidateUncertainFlowSession(transaction, session, now);
+
+    const resolution = {
+      decision: 'ALLOW_NEW_ATTEMPT',
+      riskAccepted: true,
+      resolvedAt: now.toISOString(),
+      resolvedBy: access.databaseUserId || null,
+    };
+    const updated = await transaction.message.update({
+      where: { id: message.id },
+      data: {
+        status: 'failed',
+        metadata: { ...metadata, uncertaintyResolution: resolution },
+      },
+    });
+    await transaction.auditLog.create({
+      data: {
+        organizationId: scope.organizationId,
+        actorId: access.databaseUserId || null,
+        action: UNCERTAINTY_RESOLUTION_ACTION,
+        entityType: 'Message',
+        entityId: message.id,
+        metadata: {
+          projectId: scope.projectId,
+          conversationId: state.conversation.id,
+          blueprintKey,
+          previousStatus: String(message.status || '').toLowerCase(),
+          decision: resolution.decision,
+          riskAccepted: true,
+        },
+      },
+    });
+    return {
+      conversationId: state.conversation.id,
+      flow: { key: blueprintKey, title: blueprint.title },
+      resolvedAttempt: publicMessage(updated),
+      idempotent: false,
+    };
+  }, { isolationLevel: 'ReadCommitted', maxWait: 5_000, timeout: 15_000 });
 }
 
 function normalizedIdempotencyKey(value) {
@@ -587,6 +926,8 @@ async function persistDispatchFailure({
   sessionId,
   error,
   definitive,
+  providerAccepted = false,
+  providerMessageId = null,
   clock,
 }) {
   const failedAt = observedDate(clock);
@@ -596,7 +937,13 @@ async function persistDispatchFailure({
     .slice(0, 80);
   try {
     await prisma.$transaction(async (transaction) => {
-      if (definitive) {
+      if (providerAccepted && providerMessageId) {
+        await markWhatsAppFlowSessionSent(
+          transaction,
+          { sessionId, providerMessageId },
+          { now: failedAt },
+        );
+      } else if (definitive) {
         await markWhatsAppFlowSessionDeliveryRejected(
           transaction,
           { sessionId },
@@ -607,6 +954,7 @@ async function persistDispatchFailure({
         transaction.message.update({
           where: { id: claim.id },
           data: {
+            ...(providerAccepted && providerMessageId ? { providerMessageId } : {}),
             status,
             metadata: messageMetadata({
               access,
@@ -615,7 +963,16 @@ async function persistDispatchFailure({
               blueprintKey,
               template,
               sessionId,
-              extra: { failureCode, failedAt: failedAt.toISOString() },
+              extra: {
+                failureCode,
+                failedAt: failedAt.toISOString(),
+                ...(providerAccepted
+                  ? {
+                      providerAcceptedAt: failedAt.toISOString(),
+                      correlationPending: true,
+                    }
+                  : {}),
+              },
             }),
           },
         }),
@@ -627,7 +984,9 @@ async function persistDispatchFailure({
           data: {
             organizationId: scope.organizationId,
             actorId: access.databaseUserId || null,
-            action: definitive
+            action: providerAccepted
+              ? 'whatsapp.inbox.flow_template_correlation_pending'
+              : definitive
               ? 'whatsapp.inbox.flow_template_rejected'
               : 'whatsapp.inbox.flow_template_delivery_unknown',
             entityType: 'Message',
@@ -637,6 +996,7 @@ async function persistDispatchFailure({
               conversationId: claim.conversationId,
               blueprintKey,
               providerStatus: status,
+              providerAccepted,
               failureCode,
             },
           },
@@ -646,20 +1006,41 @@ async function persistDispatchFailure({
   } catch (persistenceError) {
     console.error('WhatsApp Flow template failure could not be persisted atomically:', persistenceError);
     try {
+      if (providerAccepted && providerMessageId) {
+        try {
+          await markWhatsAppFlowSessionSent(
+            prisma,
+            { sessionId, providerMessageId },
+            { now: failedAt },
+          );
+        } catch (sessionFallbackError) {
+          console.error(
+            'WhatsApp Flow template provider acceptance fence also failed:',
+            sessionFallbackError,
+          );
+        }
+      }
       await prisma.message.updateMany({
         where: { id: claim.id, conversationId: claim.conversationId },
-        data: { status: 'unknown' },
+        data: {
+          status: 'unknown',
+          ...(providerAccepted && providerMessageId ? { providerMessageId } : {}),
+        },
       });
     } catch (fallbackError) {
       console.error('WhatsApp Flow template fallback status also failed:', fallbackError);
     }
   }
   throw new WhatsAppProactiveFlowError(
-    definitive
+    providerAccepted
+      ? 'Meta aceptó el formulario, pero su correlación local sigue pendiente. No se habilitará otro intento.'
+      : definitive
       ? 'Meta rechazó el formulario. Podés revisar la plantilla y crear un nuevo intento.'
       : 'Meta no confirmó la entrega. No se reenviará automáticamente para evitar duplicados.',
     {
-      code: definitive
+      code: providerAccepted
+        ? 'WHATSAPP_FLOW_TEMPLATE_CORRELATION_PENDING'
+        : definitive
         ? 'WHATSAPP_FLOW_TEMPLATE_REJECTED'
         : 'WHATSAPP_FLOW_TEMPLATE_DELIVERY_UNKNOWN',
       status: 502,
@@ -683,14 +1064,17 @@ export async function sendProactiveWhatsAppFlowTemplate({
   const { key: blueprintKey, blueprint } = selectedBlueprint(requestedBlueprint);
   const now = observedDate(clock);
   const identity = sendIdentity(scope, conversationId, blueprintKey, key);
+  const resolvedFlowSessionSecret = flowSessionSecret ?? env?.WHATSAPP_FLOW_TOKEN_SECRET;
   let reservation;
+  let expectedPayloadDigest = null;
+  let expectedTemplateName = null;
 
   try {
     reservation = await prisma.$transaction(async (transaction) => {
       await lockSendLane(transaction, scope.organizationId);
       const state = assertState(
         await readState(transaction, scope, conversationId, { lockWrites: true }),
-        { canManage: true, env, now },
+        { canManage: true, env, now, flowSessionSecret: resolvedFlowSessionSecret },
       );
       const { definition, record: template } = await approvedTemplate(
         transaction,
@@ -698,6 +1082,8 @@ export async function sendProactiveWhatsAppFlowTemplate({
         blueprintKey,
       );
       const digest = payloadDigest({ state, definition });
+      expectedPayloadDigest = digest;
+      expectedTemplateName = template.name;
       const existing = await transaction.message.findUnique({
         where: { externalId: identity.externalId },
       });
@@ -806,6 +1192,22 @@ export async function sendProactiveWhatsAppFlowTemplate({
         };
       }
 
+      const unresolved = await findUnresolvedFlowMessage(
+        transaction,
+        state.conversation.id,
+        blueprintKey,
+      );
+      if (unresolved) {
+        throw new WhatsAppProactiveFlowError(
+          'Ya existe un intento de este formulario cuya entrega no fue confirmada.',
+          {
+            code: 'WHATSAPP_FLOW_TEMPLATE_UNRESOLVED',
+            status: 409,
+            details: { unresolvedAttempt: publicUnresolvedAttempt(unresolved) },
+          },
+        );
+      }
+
       await assertRateLimit(transaction, {
         scope,
         actorId: access.databaseUserId || null,
@@ -824,7 +1226,7 @@ export async function sendProactiveWhatsAppFlowTemplate({
         flowType: blueprint.flowType,
         sourceExternalId: identity.externalId,
       }, {
-        secret: flowSessionSecret,
+        secret: resolvedFlowSessionSecret,
         now,
         ttlMs: getWhatsAppFlowSessionTtlMs(blueprintKey),
       });
@@ -884,8 +1286,21 @@ export async function sendProactiveWhatsAppFlowTemplate({
     const existing = await prisma.message.findUnique({
       where: { externalId: identity.externalId },
     });
-    if (!existing) throw normalizedSendError(error);
+    const metadata = jsonObject(existing?.metadata);
+    if (
+      !existing
+      || existing.conversationId !== String(conversationId || '').trim()
+      || metadata.payloadDigest !== expectedPayloadDigest
+      || metadata.blueprintKey !== blueprintKey
+      || metadata.templateName !== expectedTemplateName
+    ) {
+      throw new WhatsAppProactiveFlowError(
+        'La clave de idempotencia ya fue usada con otro formulario.',
+        { code: 'IDEMPOTENCY_PAYLOAD_MISMATCH', status: 409 },
+      );
+    }
     return {
+      conversationId: existing.conversationId,
       message: publicMessage(existing),
       flow: { key: blueprintKey, title: blueprint.title },
       idempotent: true,
@@ -894,6 +1309,7 @@ export async function sendProactiveWhatsAppFlowTemplate({
 
   if (!reservation.dispatch) {
     return {
+      conversationId: reservation.message.conversationId,
       message: publicMessage(reservation.message),
       flow: { key: blueprintKey, title: blueprint.title },
       idempotent: true,
@@ -905,7 +1321,12 @@ export async function sendProactiveWhatsAppFlowTemplate({
     delivery = await prisma.$transaction(async (transaction) => {
       const freshState = assertState(
         await readState(transaction, scope, conversationId, { lockWrites: true }),
-        { canManage: true, env, now: observedDate(clock) },
+        {
+          canManage: true,
+          env,
+          now: observedDate(clock),
+          flowSessionSecret: resolvedFlowSessionSecret,
+        },
       );
       const freshTemplate = await approvedTemplate(transaction, freshState, blueprintKey);
       if (
@@ -933,7 +1354,7 @@ export async function sendProactiveWhatsAppFlowTemplate({
           flowType: blueprint.flowType,
           sourceExternalId: identity.externalId,
         },
-        { secret: flowSessionSecret, now: observedDate(clock) },
+        { secret: resolvedFlowSessionSecret, now: observedDate(clock) },
       );
       const attempt = await markWhatsAppFlowSessionDeliveryAttempted(
         transaction,
@@ -1104,11 +1525,14 @@ export async function sendProactiveWhatsAppFlowTemplate({
       sessionId: reservation.session.id,
       error: Object.assign(error, { code: error?.code || 'LOCAL_CORRELATION_FAILED' }),
       definitive: false,
+      providerAccepted: true,
+      providerMessageId: wamid,
       clock,
     });
   }
 
   return {
+    conversationId: reservation.message.conversationId,
     message: publicMessage(accepted),
     flow: { key: blueprintKey, title: blueprint.title },
     idempotent: reservation.idempotent,

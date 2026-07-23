@@ -13,6 +13,7 @@ import {
 } from '@/lib/request-body';
 import {
   getProactiveWhatsAppFlowCatalog,
+  resolveProactiveWhatsAppFlowUncertainty,
   sendProactiveWhatsAppFlowTemplate,
   WhatsAppProactiveFlowError,
 } from '@/lib/whatsapp/proactive-flows';
@@ -21,6 +22,7 @@ export const runtime = 'nodejs';
 
 const MAX_BODY_BYTES = 10_000;
 const POST_FIELDS = new Set(['projectId', 'blueprintKey', 'idempotencyKey']);
+const PATCH_FIELDS = new Set(['projectId', 'blueprintKey', 'messageId', 'confirmation']);
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/;
 
 function json(payload, init = {}) {
@@ -90,6 +92,21 @@ function assertPostInput(input) {
   }
 }
 
+function assertPatchInput(input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    throw new WhatsAppProactiveFlowError('El cuerpo debe ser un objeto JSON.', {
+      code: 'WHATSAPP_FLOW_UNCERTAINTY_INPUT_INVALID',
+      status: 400,
+    });
+  }
+  if (Object.keys(input).some((field) => !PATCH_FIELDS.has(field))) {
+    throw new WhatsAppProactiveFlowError('La resolución contiene campos no permitidos.', {
+      code: 'WHATSAPP_FLOW_UNCERTAINTY_INPUT_INVALID',
+      status: 400,
+    });
+  }
+}
+
 function idempotencyKey(request, input) {
   const key = String(
     request.headers.get('idempotency-key') || input?.idempotencyKey || '',
@@ -108,7 +125,11 @@ function errorResponse(error) {
   if (error instanceof RequestBodyError) return requestBodyErrorResponse(error);
   if (error instanceof WhatsAppProactiveFlowError) {
     return json(
-      { error: error.message, code: error.code },
+      {
+        error: error.message,
+        code: error.code,
+        ...(error.details ? { details: error.details } : {}),
+      },
       {
         status: error.status,
         headers: error.retryAfterSeconds
@@ -125,6 +146,7 @@ export function createWhatsAppProactiveFlowHandlers({
   authorize = requireTenantPermission,
   prismaFactory = getPrisma,
   loadCatalog = getProactiveWhatsAppFlowCatalog,
+  resolveUncertainty = resolveProactiveWhatsAppFlowUncertainty,
   sendFlow = sendProactiveWhatsAppFlowTemplate,
   parseBody = (request) => readJsonRequest(request, { maxBytes: MAX_BODY_BYTES }),
   clock = () => new Date(),
@@ -190,7 +212,41 @@ export function createWhatsAppProactiveFlowHandlers({
     }
   }
 
-  return { GET, POST };
+  async function PATCH(request, context) {
+    try {
+      const access = await resolveAccess();
+      authorize(access, 'org:conversations:manage');
+      const queryProjectId = projectIdFromRequest(request);
+      const conversationId = await conversationIdFromContext(context);
+      const input = await parseBody(request);
+      assertPatchInput(input);
+      const bodyProjectId = String(input.projectId || '').trim();
+      if (bodyProjectId !== queryProjectId) {
+        throw new WhatsAppProactiveFlowError(
+          'La obra de la resolución no coincide con la URL.',
+          { code: 'PROJECT_SCOPE_MISMATCH', status: 403 },
+        );
+      }
+      const prisma = prismaFactory();
+      await assertActiveProject(prisma, access, queryProjectId);
+      return json(await resolveUncertainty({
+        prisma,
+        access,
+        conversationId,
+        blueprintKey: input.blueprintKey,
+        messageId: input.messageId,
+        confirmation: input.confirmation,
+        clock,
+      }));
+    } catch (error) {
+      const response = errorResponse(error);
+      if (response) return response;
+      console.error('WhatsApp proactive Flow uncertainty resolution failed:', error);
+      return json({ error: 'No se pudo resolver el estado del formulario.' }, { status: 500 });
+    }
+  }
+
+  return { GET, POST, PATCH };
 }
 
-export const { GET, POST } = createWhatsAppProactiveFlowHandlers();
+export const { GET, POST, PATCH } = createWhatsAppProactiveFlowHandlers();

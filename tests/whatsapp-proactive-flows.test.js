@@ -44,13 +44,18 @@ registerHooks({
 const [
   {
     getProactiveWhatsAppFlowCatalog,
+    resolveProactiveWhatsAppFlowUncertainty,
     sendProactiveWhatsAppFlowTemplate,
   },
   { buildOwnedWhatsAppFlowTemplate },
+  { getWhatsAppFlowScopedName },
+  { consumeWhatsAppFlowSession },
   { createWhatsAppProactiveFlowHandlers },
 ] = await Promise.all([
   import('../src/lib/whatsapp/proactive-flows.js'),
   import('../src/lib/whatsapp/templates.js'),
+  import('../src/lib/whatsapp/flows.js'),
+  import('../src/lib/whatsapp/flow-sessions.js'),
   import('../src/app/api/whatsapp/inbox/[conversationId]/proactive-flows/route.js'),
 ]);
 
@@ -62,6 +67,7 @@ const CONFIGURED_META_ENV = Object.freeze({
   NEXT_PUBLIC_META_EMBEDDED_SIGNUP_CONFIG_ID: 'config-a',
   META_VERIFY_TOKEN: 'verify-a',
   WHATSAPP_CREDENTIALS_ENCRYPTION_KEY: 'encryption-a',
+  WHATSAPP_FLOW_TOKEN_SECRET: FLOW_SECRET,
 });
 
 function access(overrides = {}) {
@@ -147,6 +153,9 @@ function createDatabase({
   worker = true,
   templateStatus = 'APPROVED',
   inboundAt = new Date('2026-07-22T18:00:00.000Z'),
+  flowEndpoint = true,
+  endpointEnabled = true,
+  endpointFingerprintMatches = true,
 } = {}) {
   const calls = [];
   const messages = [];
@@ -194,12 +203,37 @@ function createDatabase({
       whatsappFlows: {
         'incident-report': {
           id: '111111111111111',
-          name: 'ObraSaaS | Incidencia de obra',
+          name: getWhatsAppFlowScopedName(
+            'incident-report',
+            '11111111-1111-4111-8111-111111111111',
+          ),
           status: 'PUBLISHED',
-          dataExchange: false,
+          dataExchange: true,
+          flowScope: '11111111-1111-4111-8111-111111111111',
         },
       },
+      whatsappFlowEndpoint: {
+        id: 'endpoint-a',
+        keyFingerprint: endpointFingerprintMatches ? 'endpoint-key-a' : 'stale-key',
+        keyVersion: 1,
+        signatureStatus: 'VALID',
+        whatsappBusinessId: '987654321098765',
+        phoneNumberId: '123456789012345',
+      },
     },
+    flowEndpoint: flowEndpoint
+      ? {
+          id: 'endpoint-a',
+          enabled: endpointEnabled,
+          updatedAt: NOW,
+          keys: [{
+            status: 'ACTIVE',
+            version: 1,
+            publicKeySha256: 'endpoint-key-a',
+            verifiedAt: NOW,
+          }],
+        }
+      : null,
   };
   const definition = buildOwnedWhatsAppFlowTemplate({
     connection,
@@ -299,7 +333,43 @@ function createDatabase({
     message: {
       async findFirst(args) {
         calls.push(['message-first', args]);
-        return args.where.direction === 'INBOUND' ? inboundMessage : null;
+        if (args.where.direction === 'INBOUND') return inboundMessage;
+        if (args.where.status?.in) {
+          const filters = Array.isArray(args.where.AND) ? args.where.AND : [];
+          const jsonExpected = Object.fromEntries(filters.map((filter) => {
+            const path = filter?.metadata?.path?.[0];
+            return path ? [path, filter.metadata.equals] : [null, null];
+          }).filter(([path]) => path));
+          return messages
+            .filter((message) => (
+              message.conversationId === args.where.conversationId
+              && message.direction === args.where.direction
+              && args.where.status.in.includes(message.status)
+              && Object.entries(jsonExpected).every(
+                ([field, expected]) => message.metadata?.[field] === expected,
+              )
+            ))
+            .sort((left, right) => (
+              new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
+            ))[0] || null;
+        }
+        if (args.where.id) {
+          return messages.find((message) => (
+            message.id === args.where.id
+            && message.conversationId === args.where.conversationId
+            && message.direction === args.where.direction
+          )) || null;
+        }
+        return null;
+      },
+      async findMany({ where, take }) {
+        return messages
+          .filter((message) => matchesWhere(message, where))
+          .sort((left, right) => (
+            new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
+          ))
+          .slice(0, take || messages.length)
+          .map((message) => ({ ...message }));
       },
       async findUnique({ where }) {
         if (where.externalId) {
@@ -359,6 +429,9 @@ function createDatabase({
     sessions,
     audits,
     template,
+    connection,
+    project,
+    worker: workerRow,
   };
 }
 
@@ -403,7 +476,15 @@ test('proactive Flow send is durable and an idempotent retry reaches Meta once',
   assert.equal(first.idempotent, false);
   assert.equal(retry.idempotent, true);
   assert.equal(providerCalls.length, 1);
+  assert.equal(providerCalls[0].to, '+5491111111111');
+  assert.equal(providerCalls[0].phoneNumberId, '123456789012345');
+  assert.deepEqual(providerCalls[0].scope, {
+    organizationId: 'organization-a',
+    projectId: 'project-a',
+  });
   assert.equal(providerCalls[0].templateName, store.template.name);
+  assert.equal(providerCalls[0].language, 'es_AR');
+  assert.match(providerCalls[0].flowToken, /^ofs1\./);
   assert.equal(store.messages[0].status, 'accepted');
   assert.equal(store.messages[0].providerMessageId, 'wamid.flow-template-a');
   assert.equal(store.sessions[0].deliveryAttemptedAt instanceof Date, true);
@@ -414,6 +495,32 @@ test('proactive Flow send is durable and an idempotent retry reaches Meta once',
       'whatsapp.inbox.flow_template_send_requested',
       'whatsapp.inbox.flow_template_sent',
     ],
+  );
+
+  const consumptionInput = {
+    token: providerCalls[0].flowToken,
+    consumedExternalId: 'wamid.flow-reply-a',
+    organizationId: 'organization-a',
+    projectId: 'project-a',
+    workerId: 'worker-a',
+    phoneNumberId: '123456789012345',
+    recipientPhone: '5491111111111',
+    blueprintKey: 'incident-report',
+    flowId: store.template.flowId,
+    screenId: store.template.screenId,
+    flowType: 'incident',
+  };
+  const consumed = await consumeWhatsAppFlowSession(store.prisma, consumptionInput, {
+    secret: FLOW_SECRET,
+    now: new Date(NOW.getTime() + 1_000),
+  });
+  assert.equal(consumed.session.id, store.sessions[0].id);
+  await assert.rejects(
+    consumeWhatsAppFlowSession(store.prisma, consumptionInput, {
+      secret: FLOW_SECRET,
+      now: new Date(NOW.getTime() + 2_000),
+    }),
+    (error) => error?.code === 'WHATSAPP_FLOW_SESSION_USED',
   );
 });
 
@@ -504,6 +611,508 @@ test('ambiguous provider failure becomes unknown and is never auto-retried', asy
   assert.equal(retry.message.status, 'unknown');
   assert.equal(store.sessions[0].deliveryAttemptedAt instanceof Date, true);
   assert.equal(store.sessions[0].sentAt, null);
+});
+
+test('an unresolved attempt blocks every new key until an explicit audited resolution', async () => {
+  const store = createDatabase();
+  let providerCalls = 0;
+  let staleFlowToken = '';
+  await assert.rejects(
+    sendProactiveWhatsAppFlowTemplate({
+      prisma: store.prisma,
+      access: access(),
+      conversationId: 'conversation-a',
+      blueprintKey: 'incident-report',
+      idempotencyKey: 'flow-unknown-durable-a',
+      sendTemplate: async ({ flowToken }) => {
+        providerCalls += 1;
+        staleFlowToken = flowToken;
+        throw Object.assign(new Error('timeout'), {
+          code: 'META_FLOW_TEMPLATE_DELIVERY_RETRYABLE',
+        });
+      },
+      clock: () => NOW,
+      env: CONFIGURED_META_ENV,
+    }),
+    (error) => error?.code === 'WHATSAPP_FLOW_TEMPLATE_DELIVERY_UNKNOWN',
+  );
+
+  const catalog = await getProactiveWhatsAppFlowCatalog({
+    prisma: store.prisma,
+    access: access(),
+    conversationId: 'conversation-a',
+    canManage: true,
+    clock: () => NOW,
+    env: CONFIGURED_META_ENV,
+  });
+  const incident = catalog.catalog.find((item) => item.key === 'incident-report');
+  assert.equal(incident.canSend, false);
+  assert.equal(incident.unresolvedAttempt.messageId, store.messages[0].id);
+
+  await assert.rejects(
+    sendProactiveWhatsAppFlowTemplate({
+      prisma: store.prisma,
+      access: access(),
+      conversationId: 'conversation-a',
+      blueprintKey: 'incident-report',
+      idempotencyKey: 'flow-unknown-durable-b',
+      sendTemplate: async () => {
+        providerCalls += 1;
+        return { messages: [{ id: 'must-not-dispatch' }] };
+      },
+      clock: () => NOW,
+      env: CONFIGURED_META_ENV,
+    }),
+    (error) => error?.code === 'WHATSAPP_FLOW_TEMPLATE_UNRESOLVED',
+  );
+  assert.equal(providerCalls, 1);
+
+  const resolution = await resolveProactiveWhatsAppFlowUncertainty({
+    prisma: store.prisma,
+    access: access(),
+    conversationId: 'conversation-a',
+    blueprintKey: 'incident-report',
+    messageId: store.messages[0].id,
+    confirmation: 'ACEPTO_RIESGO_DE_DUPLICADO',
+    clock: () => new Date(NOW.getTime() + 3 * 60 * 1_000),
+  });
+  assert.equal(resolution.resolvedAttempt.status, 'failed');
+  assert.equal(store.messages[0].metadata.uncertaintyResolution.riskAccepted, true);
+  assert.equal(store.sessions[0].deliveryRejectedAt instanceof Date, true);
+  await assert.rejects(
+    consumeWhatsAppFlowSession(store.prisma, {
+      token: staleFlowToken,
+      consumedExternalId: 'wamid.stale-after-resolution',
+      organizationId: 'organization-a',
+      projectId: 'project-a',
+      workerId: 'worker-a',
+      phoneNumberId: '123456789012345',
+      recipientPhone: '5491111111111',
+      blueprintKey: 'incident-report',
+      flowId: store.template.flowId,
+      screenId: store.template.screenId,
+      flowType: 'incident',
+    }, {
+      secret: FLOW_SECRET,
+      now: new Date(NOW.getTime() + 3 * 60 * 1_000),
+    }),
+    (error) => error?.code === 'WHATSAPP_FLOW_SESSION_INVALID',
+  );
+  assert.equal(
+    store.audits.some((entry) => (
+      entry.action === 'whatsapp.inbox.flow_template_uncertainty_resolved'
+      && entry.metadata.riskAccepted === true
+    )),
+    true,
+  );
+
+  const accepted = await sendProactiveWhatsAppFlowTemplate({
+    prisma: store.prisma,
+    access: access(),
+    conversationId: 'conversation-a',
+    blueprintKey: 'incident-report',
+    idempotencyKey: 'flow-unknown-durable-b',
+    sendTemplate: async () => {
+      providerCalls += 1;
+      return { messages: [{ id: 'wamid.after-resolution' }] };
+    },
+    clock: () => new Date(NOW.getTime() + 3 * 60 * 1_000),
+    env: CONFIGURED_META_ENV,
+  });
+  assert.equal(accepted.message.status, 'accepted');
+  assert.equal(providerCalls, 2);
+});
+
+test('non-Flow unknown traffic cannot hide an older unresolved Flow attempt', async () => {
+  const store = createDatabase();
+  store.messages.push({
+    id: 'outbound-flow-older',
+    conversationId: 'conversation-a',
+    externalId: 'flow-older',
+    direction: 'OUTBOUND',
+    kind: 'INTERACTIVE',
+    body: 'Incidencia de obra',
+    status: 'unknown',
+    sentAt: new Date(NOW.getTime() - 10 * 60 * 1_000),
+    createdAt: new Date(NOW.getTime() - 10 * 60 * 1_000),
+    metadata: {
+      messageType: 'whatsapp_flow_template',
+      blueprintKey: 'incident-report',
+    },
+  });
+  for (let index = 0; index < 120; index += 1) {
+    store.messages.push({
+      id: `outbound-noise-${index}`,
+      conversationId: 'conversation-a',
+      externalId: `noise-${index}`,
+      direction: 'OUTBOUND',
+      kind: 'TEXT',
+      body: 'Mensaje manual',
+      status: 'unknown',
+      sentAt: new Date(NOW.getTime() - index * 1_000),
+      createdAt: new Date(NOW.getTime() - index * 1_000),
+      metadata: { source: 'dashboard-inbox' },
+    });
+  }
+
+  const catalog = await getProactiveWhatsAppFlowCatalog({
+    prisma: store.prisma,
+    access: access(),
+    conversationId: 'conversation-a',
+    canManage: true,
+    clock: () => NOW,
+    env: CONFIGURED_META_ENV,
+  });
+  const incident = catalog.catalog.find((item) => item.key === 'incident-report');
+  assert.equal(incident.canSend, false);
+  assert.equal(incident.unresolvedAttempt.messageId, 'outbound-flow-older');
+
+  let providerCalls = 0;
+  await assert.rejects(
+    sendProactiveWhatsAppFlowTemplate({
+      prisma: store.prisma,
+      access: access(),
+      conversationId: 'conversation-a',
+      blueprintKey: 'incident-report',
+      idempotencyKey: 'flow-hidden-by-noise-a',
+      sendTemplate: async () => {
+        providerCalls += 1;
+        return { messages: [{ id: 'must-not-dispatch' }] };
+      },
+      clock: () => NOW,
+      env: CONFIGURED_META_ENV,
+    }),
+    (error) => error?.code === 'WHATSAPP_FLOW_TEMPLATE_UNRESOLVED',
+  );
+  assert.equal(providerCalls, 0);
+});
+
+test('catalog and send fail closed when the Flow endpoint or signing secret is not ready', async () => {
+  for (const store of [
+    createDatabase({ flowEndpoint: false }),
+    createDatabase({ endpointEnabled: false }),
+    createDatabase({ endpointFingerprintMatches: false }),
+  ]) {
+    const catalog = await getProactiveWhatsAppFlowCatalog({
+      prisma: store.prisma,
+      access: access(),
+      conversationId: 'conversation-a',
+      canManage: true,
+      clock: () => NOW,
+      env: CONFIGURED_META_ENV,
+    });
+    assert.equal(catalog.capability.code, 'WHATSAPP_FLOW_ENDPOINT_NOT_READY');
+    assert.equal(catalog.catalog.every((item) => item.canSend === false), true);
+    await assert.rejects(
+      sendProactiveWhatsAppFlowTemplate({
+        prisma: store.prisma,
+        access: access(),
+        conversationId: 'conversation-a',
+        blueprintKey: 'incident-report',
+        idempotencyKey: 'flow-endpoint-blocked-a',
+        sendTemplate: async () => ({ messages: [{ id: 'must-not-dispatch' }] }),
+        clock: () => NOW,
+        env: CONFIGURED_META_ENV,
+      }),
+      (error) => error?.code === 'WHATSAPP_FLOW_ENDPOINT_NOT_READY',
+    );
+    assert.equal(store.messages.length, 0);
+    assert.equal(store.sessions.length, 0);
+  }
+
+  const store = createDatabase();
+  const envWithoutFlowSecret = { ...CONFIGURED_META_ENV };
+  delete envWithoutFlowSecret.WHATSAPP_FLOW_TOKEN_SECRET;
+  const catalog = await getProactiveWhatsAppFlowCatalog({
+    prisma: store.prisma,
+    access: access(),
+    conversationId: 'conversation-a',
+    canManage: true,
+    clock: () => NOW,
+    env: envWithoutFlowSecret,
+  });
+  assert.equal(catalog.capability.code, 'WHATSAPP_FLOW_TOKEN_SECRET_REQUIRED');
+  assert.equal(catalog.catalog.every((item) => item.canSend === false), true);
+});
+
+test('an env-injected Flow secret signs the provider token without global state', async () => {
+  const store = createDatabase();
+  const originalSecret = process.env.WHATSAPP_FLOW_TOKEN_SECRET;
+  delete process.env.WHATSAPP_FLOW_TOKEN_SECRET;
+  let capturedToken = '';
+  try {
+    const result = await sendProactiveWhatsAppFlowTemplate({
+      prisma: store.prisma,
+      access: access(),
+      conversationId: 'conversation-a',
+      blueprintKey: 'incident-report',
+      idempotencyKey: 'flow-env-secret-a',
+      sendTemplate: async (payload) => {
+        capturedToken = payload.flowToken;
+        return { messages: [{ id: 'wamid.env-secret-a' }] };
+      },
+      clock: () => NOW,
+      env: CONFIGURED_META_ENV,
+    });
+    assert.equal(result.message.status, 'accepted');
+    assert.match(capturedToken, /^ofs1\./);
+    assert.equal(process.env.WHATSAPP_FLOW_TOKEN_SECRET, undefined);
+  } finally {
+    if (originalSecret === undefined) delete process.env.WHATSAPP_FLOW_TOKEN_SECRET;
+    else process.env.WHATSAPP_FLOW_TOKEN_SECRET = originalSecret;
+  }
+});
+
+test('local template drift in category, body, or button fails exact ownership checks', async () => {
+  for (const field of ['category', 'bodyText', 'buttonText']) {
+    const store = createDatabase();
+    store.template[field] = `${store.template[field]}-drift`;
+    const catalog = await getProactiveWhatsAppFlowCatalog({
+      prisma: store.prisma,
+      access: access(),
+      conversationId: 'conversation-a',
+      canManage: true,
+      clock: () => NOW,
+      env: CONFIGURED_META_ENV,
+    });
+    assert.equal(
+      catalog.catalog.find((item) => item.key === 'incident-report').canSend,
+      false,
+      field,
+    );
+    await assert.rejects(
+      sendProactiveWhatsAppFlowTemplate({
+        prisma: store.prisma,
+        access: access(),
+        conversationId: 'conversation-a',
+        blueprintKey: 'incident-report',
+        idempotencyKey: `flow-template-drift-${field}`,
+        sendTemplate: async () => ({ messages: [{ id: 'must-not-dispatch' }] }),
+        clock: () => NOW,
+        env: CONFIGURED_META_ENV,
+      }),
+      (error) => error?.code === 'WHATSAPP_FLOW_TEMPLATE_NOT_APPROVED',
+    );
+    assert.equal(store.messages.length, 0);
+  }
+});
+
+test('a unique-race fallback validates payload identity before returning a message', async () => {
+  const store = createDatabase();
+  let providerCalls = 0;
+  store.prisma.message.create = async ({ data }) => {
+    store.messages.push({
+      id: 'outbound-raced',
+      createdAt: NOW,
+      ...data,
+      metadata: { ...data.metadata, payloadDigest: 'attacker-payload' },
+    });
+    throw Object.assign(new Error('unique'), { code: 'P2002' });
+  };
+  await assert.rejects(
+    sendProactiveWhatsAppFlowTemplate({
+      prisma: store.prisma,
+      access: access(),
+      conversationId: 'conversation-a',
+      blueprintKey: 'incident-report',
+      idempotencyKey: 'flow-race-mismatch-a',
+      sendTemplate: async () => {
+        providerCalls += 1;
+        return { messages: [{ id: 'must-not-dispatch' }] };
+      },
+      clock: () => NOW,
+      env: CONFIGURED_META_ENV,
+    }),
+    (error) => error?.code === 'IDEMPOTENCY_PAYLOAD_MISMATCH' && error?.status === 409,
+  );
+  assert.equal(providerCalls, 0);
+});
+
+test('a known Meta WAMID survives local correlation failure and cannot be manually unlocked', async () => {
+  const store = createDatabase();
+  const originalTransaction = store.prisma.$transaction;
+  let transactionCalls = 0;
+  store.prisma.$transaction = async (...args) => {
+    transactionCalls += 1;
+    if (transactionCalls === 3) {
+      throw Object.assign(new Error('local correlation outage'), {
+        code: 'LOCAL_CORRELATION_OUTAGE',
+      });
+    }
+    return originalTransaction(...args);
+  };
+  let providerCalls = 0;
+  await assert.rejects(
+    sendProactiveWhatsAppFlowTemplate({
+      prisma: store.prisma,
+      access: access(),
+      conversationId: 'conversation-a',
+      blueprintKey: 'incident-report',
+      idempotencyKey: 'flow-correlation-pending-a',
+      sendTemplate: async () => {
+        providerCalls += 1;
+        return { messages: [{ id: 'wamid.correlation-pending-a' }] };
+      },
+      clock: () => NOW,
+      env: CONFIGURED_META_ENV,
+    }),
+    (error) => error?.code === 'WHATSAPP_FLOW_TEMPLATE_CORRELATION_PENDING',
+  );
+  assert.equal(providerCalls, 1);
+  assert.equal(store.messages[0].status, 'unknown');
+  assert.equal(store.messages[0].providerMessageId, 'wamid.correlation-pending-a');
+  assert.equal(store.messages[0].metadata.correlationPending, true);
+  assert.equal(store.sessions[0].providerMessageId, 'wamid.correlation-pending-a');
+  assert.equal(store.sessions[0].sentAt instanceof Date, true);
+
+  await assert.rejects(
+    resolveProactiveWhatsAppFlowUncertainty({
+      prisma: store.prisma,
+      access: access(),
+      conversationId: 'conversation-a',
+      blueprintKey: 'incident-report',
+      messageId: store.messages[0].id,
+      confirmation: 'ACEPTO_RIESGO_DE_DUPLICADO',
+      clock: () => new Date(NOW.getTime() + 3 * 60 * 1_000),
+    }),
+    (error) => error?.code === 'WHATSAPP_FLOW_TEMPLATE_DELIVERY_PROVEN',
+  );
+  await assert.rejects(
+    sendProactiveWhatsAppFlowTemplate({
+      prisma: store.prisma,
+      access: access(),
+      conversationId: 'conversation-a',
+      blueprintKey: 'incident-report',
+      idempotencyKey: 'flow-correlation-pending-b',
+      sendTemplate: async () => {
+        providerCalls += 1;
+        return { messages: [{ id: 'must-not-dispatch' }] };
+      },
+      clock: () => new Date(NOW.getTime() + 3 * 60 * 1_000),
+      env: CONFIGURED_META_ENV,
+    }),
+    (error) => error?.code === 'WHATSAPP_FLOW_TEMPLATE_UNRESOLVED',
+  );
+  assert.equal(providerCalls, 1);
+});
+
+test('provider acceptance wins atomically over a concurrent manual uncertainty resolution', async () => {
+  const store = createDatabase();
+  await assert.rejects(
+    sendProactiveWhatsAppFlowTemplate({
+      prisma: store.prisma,
+      access: access(),
+      conversationId: 'conversation-a',
+      blueprintKey: 'incident-report',
+      idempotencyKey: 'flow-resolution-race-a',
+      sendTemplate: async () => {
+        throw Object.assign(new Error('timeout'), {
+          code: 'META_FLOW_TEMPLATE_DELIVERY_RETRYABLE',
+        });
+      },
+      clock: () => NOW,
+      env: CONFIGURED_META_ENV,
+    }),
+    (error) => error?.code === 'WHATSAPP_FLOW_TEMPLATE_DELIVERY_UNKNOWN',
+  );
+
+  const updateMany = store.prisma.whatsAppFlowSession.updateMany;
+  store.prisma.whatsAppFlowSession.updateMany = async (args) => {
+    if (args.data.deliveryRejectedAt) {
+      store.sessions[0].providerMessageId = 'wamid.concurrent-provider-win';
+      store.sessions[0].sentAt = new Date(NOW.getTime() + 2 * 60 * 1_000);
+    }
+    return updateMany(args);
+  };
+
+  await assert.rejects(
+    resolveProactiveWhatsAppFlowUncertainty({
+      prisma: store.prisma,
+      access: access(),
+      conversationId: 'conversation-a',
+      blueprintKey: 'incident-report',
+      messageId: store.messages[0].id,
+      confirmation: 'ACEPTO_RIESGO_DE_DUPLICADO',
+      clock: () => new Date(NOW.getTime() + 3 * 60 * 1_000),
+    }),
+    (error) => error?.code === 'WHATSAPP_FLOW_TEMPLATE_DELIVERY_PROVEN',
+  );
+  assert.equal(store.sessions[0].deliveryRejectedAt, null);
+  assert.equal(store.messages[0].status, 'unknown');
+  assert.equal(store.audits.some(
+    (entry) => entry.action === 'whatsapp.inbox.flow_template_uncertainty_resolved',
+  ), false);
+});
+
+test('a consumed ambiguous Flow session is hard proof and keeps duplicate dispatch blocked', async () => {
+  const store = createDatabase();
+  let flowToken = '';
+  let providerCalls = 0;
+  await assert.rejects(
+    sendProactiveWhatsAppFlowTemplate({
+      prisma: store.prisma,
+      access: access(),
+      conversationId: 'conversation-a',
+      blueprintKey: 'incident-report',
+      idempotencyKey: 'flow-consumed-unknown-a',
+      sendTemplate: async (payload) => {
+        providerCalls += 1;
+        flowToken = payload.flowToken;
+        throw Object.assign(new Error('timeout'), {
+          code: 'META_FLOW_TEMPLATE_DELIVERY_RETRYABLE',
+        });
+      },
+      clock: () => NOW,
+      env: CONFIGURED_META_ENV,
+    }),
+    (error) => error?.code === 'WHATSAPP_FLOW_TEMPLATE_DELIVERY_UNKNOWN',
+  );
+  await consumeWhatsAppFlowSession(store.prisma, {
+    token: flowToken,
+    consumedExternalId: 'wamid.flow-consumed-unknown-a',
+    organizationId: 'organization-a',
+    projectId: 'project-a',
+    workerId: 'worker-a',
+    phoneNumberId: '123456789012345',
+    recipientPhone: '5491111111111',
+    blueprintKey: 'incident-report',
+    flowId: store.template.flowId,
+    screenId: store.template.screenId,
+    flowType: 'incident',
+  }, {
+    secret: FLOW_SECRET,
+    now: new Date(NOW.getTime() + 30_000),
+  });
+
+  await assert.rejects(
+    resolveProactiveWhatsAppFlowUncertainty({
+      prisma: store.prisma,
+      access: access(),
+      conversationId: 'conversation-a',
+      blueprintKey: 'incident-report',
+      messageId: store.messages[0].id,
+      confirmation: 'ACEPTO_RIESGO_DE_DUPLICADO',
+      clock: () => new Date(NOW.getTime() + 3 * 60 * 1_000),
+    }),
+    (error) => error?.code === 'WHATSAPP_FLOW_TEMPLATE_DELIVERY_PROVEN',
+  );
+  await assert.rejects(
+    sendProactiveWhatsAppFlowTemplate({
+      prisma: store.prisma,
+      access: access(),
+      conversationId: 'conversation-a',
+      blueprintKey: 'incident-report',
+      idempotencyKey: 'flow-consumed-unknown-b',
+      sendTemplate: async () => {
+        providerCalls += 1;
+        return { messages: [{ id: 'must-not-dispatch' }] };
+      },
+      clock: () => new Date(NOW.getTime() + 3 * 60 * 1_000),
+      env: CONFIGURED_META_ENV,
+    }),
+    (error) => error?.code === 'WHATSAPP_FLOW_TEMPLATE_UNRESOLVED',
+  );
+  assert.equal(providerCalls, 1);
 });
 
 test('conversation lookup remains tenant and project scoped', async () => {
@@ -627,4 +1236,61 @@ test('proactive Flow route validates project, body fields, and idempotency befor
   }), routeContext());
   assert.equal(mismatchedProject.status, 403);
   assert.equal(sends.length, 1);
+
+  for (const idempotencyKey of [undefined, 'short-7', `a${'b'.repeat(128)}`]) {
+    const invalidKey = await handlers.POST(routeRequest({
+      method: 'POST',
+      idempotencyKey,
+      body: { projectId: 'project-a', blueprintKey: 'incident-report' },
+    }), routeContext());
+    assert.equal(invalidKey.status, 400);
+  }
+  assert.equal(sends.length, 1);
+});
+
+test('uncertainty resolution route requires manage permission and forwards exact audited input', async () => {
+  const permissions = [];
+  const resolutions = [];
+  const handlers = createWhatsAppProactiveFlowHandlers({
+    resolveAccess: async () => access(),
+    authorize: (_access, permission) => permissions.push(permission),
+    prismaFactory: routeProjectPrisma,
+    resolveUncertainty: async (input) => {
+      resolutions.push(input);
+      return {
+        conversationId: input.conversationId,
+        resolvedAttempt: { id: input.messageId, status: 'failed' },
+      };
+    },
+    clock: () => NOW,
+    env: CONFIGURED_META_ENV,
+  });
+  const valid = await handlers.PATCH(routeRequest({
+    method: 'PATCH',
+    body: {
+      projectId: 'project-a',
+      blueprintKey: 'incident-report',
+      messageId: 'outbound-unknown-a',
+      confirmation: 'ACEPTO_RIESGO_DE_DUPLICADO',
+    },
+  }), routeContext());
+  assert.equal(valid.status, 200);
+  assert.deepEqual(permissions, ['org:conversations:manage']);
+  assert.equal(resolutions.length, 1);
+  assert.equal(resolutions[0].conversationId, 'conversation-a');
+  assert.equal(resolutions[0].access.organization.id, 'organization-a');
+  assert.equal(resolutions[0].messageId, 'outbound-unknown-a');
+
+  const extraField = await handlers.PATCH(routeRequest({
+    method: 'PATCH',
+    body: {
+      projectId: 'project-a',
+      blueprintKey: 'incident-report',
+      messageId: 'outbound-unknown-a',
+      confirmation: 'ACEPTO_RIESGO_DE_DUPLICADO',
+      status: 'accepted',
+    },
+  }), routeContext());
+  assert.equal(extraField.status, 400);
+  assert.equal(resolutions.length, 1);
 });

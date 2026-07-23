@@ -1124,7 +1124,7 @@
   font-size: 0.95rem;
 }
 
-.flowLauncherHeader > div {
+.flowLauncherCopy {
   display: grid;
   min-width: 0;
   gap: 1px;
@@ -1132,14 +1132,14 @@
 
 .flowLauncherHeader strong {
   color: var(--text-primary);
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   font-weight: 850;
 }
 
 .flowLauncherHeader small {
   overflow: hidden;
   color: var(--text-secondary);
-  font-size: 0.64rem;
+  font-size: 0.75rem;
   line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1155,9 +1155,43 @@
   border-radius: 999px;
   color: #7ee9ae;
   background: rgba(72, 216, 141, 0.07);
-  font-size: 0.6rem;
+  font-size: 0.75rem;
   font-weight: 800;
   white-space: nowrap;
+}
+
+.flowHeaderActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.flowToggle {
+  display: inline-flex;
+  min-height: 32px;
+  padding: 0 9px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--border-color);
+  border-radius: 9px;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.035);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 780;
+}
+
+.flowToggle:focus-visible,
+.flowConfirmationActions button:focus-visible,
+.flowUnresolved button:focus-visible {
+  outline: 2px solid rgba(72, 216, 141, 0.58);
+  outline-offset: 2px;
+}
+
+.flowLauncherBody {
+  min-width: 0;
 }
 
 .flowOptions {
@@ -1170,7 +1204,7 @@
 .flowOption {
   display: grid;
   min-width: 0;
-  min-height: 52px;
+  min-height: 62px;
   padding: 7px 8px;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
@@ -1218,7 +1252,7 @@
 
 .flowOptionCopy strong {
   overflow: hidden;
-  font-size: 0.69rem;
+  font-size: 0.8125rem;
   font-weight: 830;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1227,7 +1261,16 @@
 .flowOptionCopy small {
   overflow: hidden;
   color: var(--text-secondary);
-  font-size: 0.58rem;
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flowRejectionReason {
+  overflow: hidden;
+  color: #ffaaa0;
+  font-size: 0.75rem;
+  line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1241,7 +1284,7 @@
   border-radius: 999px;
   color: var(--text-secondary);
   background: rgba(255, 255, 255, 0.025);
-  font-size: 0.55rem;
+  font-size: 0.75rem;
   font-weight: 780;
   white-space: nowrap;
 }
@@ -1258,6 +1301,12 @@
   background: rgba(239, 68, 68, 0.06);
 }
 
+.flowTemplateStatus[data-tone='warning'] {
+  border-color: rgba(242, 138, 66, 0.25);
+  color: #efb48a;
+  background: rgba(242, 138, 66, 0.08);
+}
+
 .flowLauncherState,
 .flowSuccess {
   display: flex;
@@ -1270,7 +1319,7 @@
   border-radius: 9px;
   color: var(--text-secondary);
   background: rgba(255, 255, 255, 0.025);
-  font-size: 0.64rem;
+  font-size: 0.75rem;
   line-height: 1.4;
 }
 
@@ -1303,6 +1352,52 @@
   background: rgba(72, 216, 141, 0.07);
 }
 
+.flowUnresolved {
+  display: flex;
+  min-height: 48px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid rgba(242, 138, 66, 0.18);
+  border-radius: 10px;
+  color: #efb48a;
+  background: rgba(242, 138, 66, 0.07);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.flowUnresolved > div {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.flowUnresolved span {
+  display: grid;
+  gap: 1px;
+}
+
+.flowUnresolved strong {
+  color: var(--text-primary);
+}
+
+.flowUnresolved button {
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid rgba(242, 138, 66, 0.25);
+  border-radius: 9px;
+  color: inherit;
+  background: rgba(242, 138, 66, 0.08);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 820;
+}
+
 .flowConfirmation {
   display: grid;
   margin-top: 8px;
@@ -1315,6 +1410,11 @@
   background: rgba(5, 17, 13, 0.62);
 }
 
+.flowConfirmation[data-tone='warning'] {
+  border-color: rgba(242, 138, 66, 0.28);
+  background: rgba(30, 17, 8, 0.66);
+}
+
 .flowConfirmation > div:first-child {
   display: grid;
   min-width: 0;
@@ -1323,7 +1423,7 @@
 
 .flowConfirmation > div:first-child > span {
   color: #7ee9ae;
-  font-size: 0.55rem;
+  font-size: 0.75rem;
   font-weight: 850;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1331,12 +1431,12 @@
 
 .flowConfirmation strong {
   color: var(--text-primary);
-  font-size: 0.72rem;
+  font-size: 0.8125rem;
 }
 
 .flowConfirmation small {
   color: var(--text-secondary);
-  font-size: 0.61rem;
+  font-size: 0.75rem;
   line-height: 1.4;
 }
 
@@ -1359,7 +1459,7 @@
   background: rgba(255, 255, 255, 0.035);
   cursor: pointer;
   font: inherit;
-  font-size: 0.62rem;
+  font-size: 0.8125rem;
   font-weight: 820;
 }
 
@@ -1383,7 +1483,7 @@
   gap: 6px;
   border-top: 1px solid rgba(239, 68, 68, 0.12);
   color: #ffaaa0;
-  font-size: 0.62rem;
+  font-size: 0.75rem;
   line-height: 1.4;
 }
 
@@ -1790,6 +1890,16 @@
   background: rgba(255, 255, 255, 0.94);
 }
 
+:global(body.light-theme) .flowConfirmation[data-tone='warning'],
+:global(body.light-theme) .flowUnresolved {
+  color: #8f3600;
+  background: rgba(255, 247, 237, 0.96);
+}
+
+:global(body.light-theme) .flowTemplateStatus[data-tone='warning'] {
+  color: #8f3600;
+}
+
 :global(body.light-theme) .flowLauncherState[data-tone='warning'] {
   color: #8f3600;
 }
@@ -1938,7 +2048,11 @@
   }
 
   .composer {
+    max-height: min(54dvh, 430px);
     padding: 8px 10px 10px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
   }
 
   .flowLauncher {
@@ -1951,7 +2065,19 @@
   }
 
   .flowLauncherHeader {
-    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .flowToggle span {
+    display: none;
+  }
+
+  .flowLauncherBody {
+    max-height: min(42dvh, 300px);
+    padding-right: 3px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
   }
 
   .flowOptions {
@@ -1963,7 +2089,18 @@
   }
 
   .flowConfirmationActions {
+    flex-wrap: wrap;
     justify-content: flex-end;
+  }
+
+  .flowUnresolved {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .flowUnresolved button {
+    width: fit-content;
+    align-self: flex-end;
   }
 
   .sendError {

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -554,11 +555,16 @@ export default function InboxClient({
   const mobileDetailHeadingRef = useRef(null);
   const conversationButtonRefs = useRef(new Map());
   const restoreConversationFocusRef = useRef('');
+  const selectedConversationIdRef = useRef('');
 
   const selectedConversation = useMemo(() => (
     conversations.find((conversation) => conversation.id === selectedId) || null
   ), [conversations, selectedId]);
   const selectedConversationId = selectedConversation?.id || '';
+
+  useLayoutEffect(() => {
+    selectedConversationIdRef.current = selectedConversationId;
+  }, [selectedConversationId]);
 
   const filteredConversations = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase('es');
@@ -1205,8 +1211,13 @@ export default function InboxClient({
   }
 
   async function handleProactiveFlowSent(payload) {
+    const targetConversationId = textValue(payload?.conversationId);
     const sentMessage = normalizeMessage(payload?.message);
-    if (sentMessage) {
+    const isCurrentConversation = Boolean(
+      targetConversationId
+      && selectedConversationIdRef.current === targetConversationId,
+    );
+    if (sentMessage && isCurrentConversation) {
       shouldStickToBottomRef.current = true;
       knownMessageIdsRef.current = new Set([
         ...knownMessageIdsRef.current,
@@ -1216,13 +1227,17 @@ export default function InboxClient({
       setMessages((current) => mergeMessagePage(current, [sentMessage]));
       setMessageAnnouncement({
         id: sentMessage.id,
-        text: `${textValue(payload?.flow?.title, 'Formulario')} enviado por WhatsApp.`,
+        text: sentMessage.status === 'FAILED'
+          ? `${textValue(payload?.flow?.title, 'Formulario')} rechazado por Meta.`
+          : sentMessage.status === 'UNKNOWN' || sentMessage.status === 'SENDING'
+            ? `La entrega de ${textValue(payload?.flow?.title, 'formulario')} sigue sin confirmación.`
+            : `${textValue(payload?.flow?.title, 'Formulario')} aceptado por Meta.`,
       });
     }
     setNow(new Date());
     void loadInbox();
-    if (selectedConversation?.id) {
-      void loadMessages(selectedConversation.id, { mode: 'refresh' });
+    if (targetConversationId && selectedConversationIdRef.current === targetConversationId) {
+      void loadMessages(targetConversationId, { mode: 'refresh' });
     }
   }
 
