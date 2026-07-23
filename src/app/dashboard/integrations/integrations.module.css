@@ -405,11 +405,15 @@
 .flowRuntimeMeta span[data-state='blocked'] { color: #dca098; }
 .flowRuntimeMeta span[data-state='blocked'] i { color: #ff8e80; }
 .flowCardFooter { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-top: auto; padding-top: 18px; border-top: 1px solid rgba(255, 255, 255, 0.07); }
-.flowCardFooter > div { min-width: 0; }
+.flowCardFooter > div:first-child { min-width: 0; }
 .flowCardFooter span { display: block; margin-bottom: 4px; color: #718079; font-size: 0.68rem; text-transform: uppercase; }
 .flowCardFooter strong { display: block; overflow: hidden; max-width: 220px; color: #d8dfdc; font-size: 0.76rem; text-overflow: ellipsis; white-space: nowrap; }
+.flowActions { display: grid; min-width: 156px; gap: 8px; }
 .flowButton { min-height: 42px; padding: 0 14px; border: 0; border-radius: 11px; color: #09120f; background: #48d88d; cursor: pointer; font: inherit; font-size: 0.78rem; font-weight: 850; white-space: nowrap; }
 .flowButton:disabled { cursor: not-allowed; filter: grayscale(0.5); opacity: 0.48; }
+.templateButton { min-height: 40px; padding: 0 13px; border: 1px solid rgba(112, 214, 161, 0.22); border-radius: 11px; color: #bcebd3; background: rgba(72, 216, 141, 0.075); cursor: pointer; font: inherit; font-size: 0.75rem; font-weight: 800; white-space: nowrap; }
+.templateButton:hover:not(:disabled) { border-color: rgba(112, 214, 161, 0.42); background: rgba(72, 216, 141, 0.13); }
+.templateButton:disabled { cursor: not-allowed; filter: grayscale(0.35); opacity: 0.5; }
 .flowGovernance { display: flex; align-items: flex-start; gap: 15px; margin-top: 22px; padding: 18px 20px; border: 1px solid rgba(233, 135, 69, 0.14); border-radius: 17px; color: #d8dfdc; background: rgba(233, 135, 69, 0.055); }
 .flowGovernance > i { margin-top: 3px; color: #e98745; }
 .flowGovernance strong, .flowGovernance span { display: block; }
@@ -440,7 +444,7 @@
   .flowsSection { padding-inline: 18px; }
   .flowCard { min-height: 0; padding: 20px; }
   .flowCardFooter { align-items: stretch; flex-direction: column; }
-  .flowButton { width: 100%; }
+  .flowActions, .flowButton, .templateButton { width: 100%; }
   .aiSection { padding-inline: 18px; }
   .aiFooter .primaryButton { width: 100%; }
 }

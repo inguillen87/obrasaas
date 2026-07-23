@@ -13,7 +13,7 @@ registerHooks({
   },
 });
 
-const { synchronizeWhatsAppConnectionStatus } = await import(
+const { applyWhatsAppTemplateStatusEvent, synchronizeWhatsAppConnectionStatus } = await import(
   '../src/lib/whatsapp/webhook-worker.js'
 );
 
@@ -144,4 +144,32 @@ test('status webhook treats a connection removed during retry as a safe no-op', 
     ),
     { updated: false, reason: 'not_found' },
   );
+});
+
+test('template status events use the dedicated owned-template synchronizer', async () => {
+  const calls = [];
+  const event = accountEvent({
+    field: 'message_template_status_update',
+    event: 'APPROVED',
+    whatsappBusinessId: '123456789012345',
+    value: { message_template_id: '555555555555555' },
+  });
+  const scope = {
+    projectId: 'project-a',
+    whatsappBusinessId: '123456789012345',
+  };
+  const prisma = { marker: 'tenant-prisma' };
+  const result = await applyWhatsAppTemplateStatusEvent(event, scope, {
+    prisma,
+    synchronize: async (...args) => {
+      calls.push(args);
+      return { updated: true, status: 'APPROVED' };
+    },
+  });
+
+  assert.deepEqual(result, { updated: true, status: 'APPROVED' });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][0], event);
+  assert.equal(calls[0][1], scope);
+  assert.equal(calls[0][2].prisma, prisma);
 });

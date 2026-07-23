@@ -3,13 +3,79 @@ import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import {
   buildWhatsAppFlowMessage,
+  buildWhatsAppFlowTemplateMessage,
   downloadWhatsAppMedia,
   isAllowedMetaMediaUrl,
   normalizeMetaWebhook,
   sendWhatsAppFlow,
+  sendWhatsAppFlowTemplate,
   verifyMetaSignature,
   verifyMetaSubscription,
 } from "../src/lib/whatsapp/meta.js";
+
+test("approved Flow templates use Meta's official button action envelope", () => {
+  const message = buildWhatsAppFlowTemplateMessage({
+    to: "+5491112345678",
+    templateName: "obrasaas_incident_report_a1b2c3d4e5_f6a7b8c9d0",
+    language: "es_AR",
+    flowToken: "flow-session-token-123",
+    flowActionData: { project_id: "project-a" },
+  });
+
+  assert.equal(message.type, "template");
+  assert.equal(message.template.language.code, "es_AR");
+  const button = message.template.components[0];
+  assert.equal(button.type, "button");
+  assert.equal(button.sub_type, "flow");
+  assert.equal(button.index, "0");
+  assert.deepEqual(button.parameters[0], {
+    type: "action",
+    action: {
+      flow_token: "flow-session-token-123",
+      flow_action_data: { project_id: "project-a" },
+    },
+  });
+});
+
+test("Flow template delivery remains phone-scoped and never logs provider bodies", async () => {
+  let call;
+  const input = {
+    to: "5491112345678",
+    phoneNumberId: "123456789012345",
+    templateName: "obrasaas_incident_report_a1b2c3d4e5_f6a7b8c9d0",
+    language: "es_AR",
+    flowToken: "flow-session-token-123",
+    credentials: {
+      version: "v25.0",
+      phoneNumberId: "123456789012345",
+      accessToken: "tenant-template-token",
+      appSecret: "meta-app-secret",
+    },
+  };
+  const result = await sendWhatsAppFlowTemplate({
+    ...input,
+    fetchImpl: async (url, options) => {
+      call = { url: new URL(url), options };
+      return Response.json({ messages: [{ id: "wamid.template-flow" }] });
+    },
+  });
+
+  assert.equal(result.messages[0].id, "wamid.template-flow");
+  assert.match(call.url.searchParams.get("appsecret_proof"), /^[a-f0-9]{64}$/);
+  assert.equal(JSON.parse(call.options.body).template.name, input.templateName);
+
+  await assert.rejects(
+    sendWhatsAppFlowTemplate({
+      ...input,
+      fetchImpl: async () => Response.json({
+        error: { code: 132001, message: `Rejected ${input.flowToken}` },
+      }, { status: 400 }),
+    }),
+    (error) => error.code === "META_FLOW_TEMPLATE_REJECTED"
+      && error.providerCode === 132001
+      && !error.message.includes(input.flowToken),
+  );
+});
 
 test("published WhatsApp Flow messages use the official interactive v3 envelope", () => {
   const message = buildWhatsAppFlowMessage({

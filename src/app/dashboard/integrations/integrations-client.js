@@ -59,6 +59,13 @@ function normalizeFlowCatalogPayload(payload) {
   };
 }
 
+function normalizeTemplateCatalogPayload(payload) {
+  if (!isPlainRecord(payload) || !Array.isArray(payload.templates)) {
+    throw new Error('La respuesta de plantillas de WhatsApp no tiene un formato v\u00e1lido.');
+  }
+  return payload.templates;
+}
+
 function flowEndpointPresentation(endpoint, connected, verificationFailed) {
   if (!connected) return { label: 'Conectá WhatsApp para activarlo', tone: 'idle' };
   if (verificationFailed) return { label: 'No se pudo verificar', tone: 'blocked' };
@@ -104,6 +111,28 @@ function flowActionLabel({
   return remoteStatus === 'DRAFT' ? 'Actualizar borrador' : 'Crear borrador';
 }
 
+function templatePresentation(template) {
+  if (!template) return { label: 'Sin plantilla aprobada', tone: 'idle' };
+  if (template.status === 'APPROVED') return { label: 'Plantilla aprobada', tone: 'ready' };
+  if (template.status === 'PENDING' || template.status === 'IN_APPEAL') {
+    return { label: 'En revisi\u00f3n de Meta', tone: 'pending' };
+  }
+  if (template.status === 'MISSING') return { label: 'Reconciliaci\u00f3n pendiente', tone: 'pending' };
+  if (['REJECTED', 'DISABLED', 'FLAGGED', 'DELETED'].includes(template.status)) {
+    return { label: `Plantilla ${template.status.toLowerCase()}`, tone: 'blocked' };
+  }
+  return { label: 'Estado de plantilla pendiente', tone: 'pending' };
+}
+
+function templateActionLabel(template, pending) {
+  if (pending) return 'Preparando\u2026';
+  if (!template) return 'Crear plantilla';
+  if (template.status === 'APPROVED') return 'Plantilla aprobada';
+  if (template.status === 'MISSING') return 'Reconciliar plantilla';
+  if (template.status === 'PENDING' || template.status === 'IN_APPEAL') return 'En revisi\u00f3n';
+  return 'Revisar en Meta';
+}
+
 async function readFlowCatalog({ signal } = {}) {
   const response = await fetch('/api/integrations/whatsapp/flows', {
     cache: 'no-store',
@@ -112,6 +141,16 @@ async function readFlowCatalog({ signal } = {}) {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(payload.error || 'No se pudieron consultar los Flows.');
   return normalizeFlowCatalogPayload(payload);
+}
+
+async function readTemplateCatalog({ signal } = {}) {
+  const response = await fetch('/api/integrations/whatsapp/templates', {
+    cache: 'no-store',
+    signal,
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error || 'No se pudieron consultar las plantillas.');
+  return normalizeTemplateCatalogPayload(payload);
 }
 
 export default function IntegrationsClient({
@@ -136,6 +175,9 @@ export default function IntegrationsClient({
   );
   const [flowPendingKey, setFlowPendingKey] = useState(null);
   const [flowNotice, setFlowNotice] = useState(null);
+  const [templateCatalog, setTemplateCatalog] = useState([]);
+  const [templatePendingKey, setTemplatePendingKey] = useState(null);
+  const [templateNotice, setTemplateNotice] = useState(null);
   const [flowEndpoint, setFlowEndpoint] = useState(
     initialConnection?.enabled && initialConnection.connectionStatus === 'CONNECTED'
       ? undefined
@@ -291,6 +333,15 @@ export default function IntegrationsClient({
         if (!active || error.name === 'AbortError') return;
         setFlowNotice({ type: 'error', text: error.message });
       });
+    readTemplateCatalog({ signal: controller.signal })
+      .then((templates) => {
+        if (!active) return;
+        setTemplateCatalog(templates);
+      })
+      .catch((error) => {
+        if (!active || error.name === 'AbortError') return;
+        setTemplateNotice({ type: 'error', text: error.message });
+      });
     return () => {
       active = false;
       controller.abort();
@@ -349,6 +400,8 @@ export default function IntegrationsClient({
       setFlowCatalog(Array.isArray(initialFlowCatalog) ? initialFlowCatalog : []);
       setFlowEndpoint(null);
       setFlowNotice(null);
+      setTemplateCatalog([]);
+      setTemplateNotice(null);
       let healthRefreshFailed = false;
       try {
         await synchronizeChannelHealth();
@@ -388,10 +441,18 @@ export default function IntegrationsClient({
     setFlowPendingKey('refresh');
     setFlowNotice({ type: 'progress', text: 'Consultando el estado real en Meta…' });
     try {
-      const payload = await readFlowCatalog();
+      const [payload, templates] = await Promise.all([
+        readFlowCatalog(),
+        readTemplateCatalog(),
+      ]);
       setFlowCatalog(payload.catalog);
       setFlowEndpoint(payload.endpoint || null);
-      setFlowNotice({ type: 'success', text: 'Estado de Flows sincronizado con la cuenta de WhatsApp.' });
+      setTemplateCatalog(templates);
+      setTemplateNotice(null);
+      setFlowNotice({
+        type: 'success',
+        text: 'Flows, Data Endpoint y plantillas sincronizados con la cuenta de WhatsApp.',
+      });
     } catch (error) {
       setFlowNotice({ type: 'error', text: error.message });
     } finally {
@@ -429,6 +490,48 @@ export default function IntegrationsClient({
       setFlowNotice({ type: 'error', text: error.message });
     } finally {
       setFlowPendingKey(null);
+    }
+  }
+
+  async function provisionTemplate(blueprintKey) {
+    setTemplatePendingKey(blueprintKey);
+    setTemplateNotice({
+      type: 'progress',
+      text: 'Preparando una plantilla operativa propia y envi\u00e1ndola a revisi\u00f3n de Meta\u2026',
+    });
+    try {
+      const response = await fetch('/api/integrations/whatsapp/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ blueprintKey }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'No se pudo preparar la plantilla.');
+      if (!isPlainRecord(payload.result) || !isPlainRecord(payload.result.template)) {
+        throw new Error('Meta respondi\u00f3 sin el estado reconciliado de la plantilla.');
+      }
+      const entry = {
+        blueprintKey,
+        expectedName: payload.result.expectedName,
+        contentSha256: payload.result.contentSha256,
+        template: payload.result.template,
+      };
+      setTemplateCatalog((current) => {
+        const exists = current.some((item) => item.blueprintKey === blueprintKey);
+        return exists
+          ? current.map((item) => (item.blueprintKey === blueprintKey ? entry : item))
+          : [...current, entry];
+      });
+      setTemplateNotice({
+        type: 'success',
+        text: payload.result.template.status === 'APPROVED'
+          ? 'Plantilla aprobada y lista para mensajes operativos iniciados por la empresa.'
+          : 'Plantilla enviada a Meta. ObraSaaS la habilitar\u00e1 s\u00f3lo cuando el estado sea APPROVED.',
+      });
+    } catch (error) {
+      setTemplateNotice({ type: 'error', text: error.message });
+    } finally {
+      setTemplatePendingKey(null);
     }
   }
 
@@ -622,7 +725,7 @@ export default function IntegrationsClient({
               type="button"
               className={styles.secondaryButton}
               onClick={refreshFlows}
-              disabled={!connected || Boolean(flowPendingKey)}
+              disabled={!connected || Boolean(flowPendingKey) || Boolean(templatePendingKey)}
             >
               <i className="fa-solid fa-arrows-rotate" aria-hidden="true" />
               Sincronizar
@@ -668,6 +771,12 @@ export default function IntegrationsClient({
               && flow.remoteDataEndpointReady === true
               && !publishedHealthBlocked;
             const isPending = flowPendingKey === flow.key;
+            const templateEntry = templateCatalog.find((item) => item.blueprintKey === flow.key);
+            const template = templateEntry?.template || null;
+            const templateState = templatePresentation(template);
+            const templatePending = templatePendingKey === flow.key;
+            const templateCanProvision = runtimeActive
+              && (!template || template.status === 'MISSING');
             const actionLabel = flowActionLabel({
               isPending,
               isPublished,
@@ -705,6 +814,12 @@ export default function IntegrationsClient({
                       : 'fa-regular fa-clock'} aria-hidden="true" />
                     {runtimePresentation.label}
                   </span>
+                  <span data-state={templateState.tone}>
+                    <i className={template?.status === 'APPROVED'
+                      ? 'fa-solid fa-circle-check'
+                      : 'fa-regular fa-message'} aria-hidden="true" />
+                    {templateState.label}
+                  </span>
                 </div>
                 {flow.remote.validationErrors.length > 0 && (
                   <div className={`${styles.notice} ${styles.error}`} role="alert">
@@ -716,20 +831,35 @@ export default function IntegrationsClient({
                     <span>Activo Meta</span>
                     <strong>{flow.remote.id || 'Se crea al conectar un WABA'}</strong>
                   </div>
-                  <button
-                    type="button"
-                    className={styles.flowButton}
-                    onClick={() => provisionFlowDraft(flow.key)}
-                    disabled={
-                      !connected
-                      || !platformReady
-                      || Boolean(flowPendingKey)
-                      || runtimeActive
-                      || (isPublished && !publishedCanReconcile)
-                    }
-                  >
-                    {actionLabel}
-                  </button>
+                  <div className={styles.flowActions}>
+                    <button
+                      type="button"
+                      className={styles.flowButton}
+                      onClick={() => provisionFlowDraft(flow.key)}
+                      disabled={
+                        !connected
+                        || !platformReady
+                        || Boolean(flowPendingKey)
+                        || runtimeActive
+                        || (isPublished && !publishedCanReconcile)
+                      }
+                    >
+                      {actionLabel}
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.templateButton}
+                      onClick={() => provisionTemplate(flow.key)}
+                      disabled={
+                        !connected
+                        || !platformReady
+                        || Boolean(templatePendingKey)
+                        || !templateCanProvision
+                      }
+                    >
+                      {templateActionLabel(template, templatePending)}
+                    </button>
+                  </div>
                 </div>
               </article>
             );
@@ -742,6 +872,12 @@ export default function IntegrationsClient({
           </div>
         )}
 
+        {templateNotice && (
+          <div className={`${styles.notice} ${styles[templateNotice.type]}`} role="status">
+            {templateNotice.text}
+          </div>
+        )}
+
         <div className={styles.flowGovernance}>
           <i className="fa-solid fa-shield-halved" aria-hidden="true" />
           <div>
@@ -749,6 +885,7 @@ export default function IntegrationsClient({
             <span>
               Publicar en Meta vuelve el JSON inmutable. Por eso esta beta valida y provisiona borradores,
               pero reserva la publicación para cuando exista número real, prueba end-to-end y aprobación del tenant.
+              Las plantillas se versionan por contenido y sólo se habilitan después de la aprobación de Meta.
             </span>
           </div>
         </div>

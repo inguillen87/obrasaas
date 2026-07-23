@@ -186,34 +186,34 @@ model CrmAccount {
 }
 
 model PlatformUser {
-  id           String             @id @default(cuid())
-  clerkUserId  String             @unique
-  primaryEmail String             @unique
-  fullName     String?
-  avatarUrl    String?
-  systemRole   SystemRole         @default(TENANT_USER)
-  memberships  TenantMembership[]
-  auditLogs    AuditLog[]
+  id                     String                  @id @default(cuid())
+  clerkUserId            String                  @unique
+  primaryEmail           String                  @unique
+  fullName               String?
+  avatarUrl              String?
+  systemRole             SystemRole              @default(TENANT_USER)
+  memberships            TenantMembership[]
+  auditLogs              AuditLog[]
   conversationReadStates ConversationReadState[]
-  lastSeenAt   DateTime           @default(now())
-  createdAt    DateTime           @default(now())
-  updatedAt    DateTime           @updatedAt
+  lastSeenAt             DateTime                @default(now())
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
 
   @@index([systemRole, createdAt])
 }
 
 model TenantMembership {
-  id             String           @id @default(cuid())
-  organizationId String
-  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  userId         String
-  user           PlatformUser     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  clerkRole      String           @default("org:member")
-  tenantRole     TenantRole       @default(AUDITOR)
-  status         MembershipStatus @default(ACTIVE)
+  id                 String              @id @default(cuid())
+  organizationId     String
+  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId             String
+  user               PlatformUser        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clerkRole          String              @default("org:member")
+  tenantRole         TenantRole          @default(AUDITOR)
+  status             MembershipStatus    @default(ACTIVE)
   projectMemberships ProjectMembership[]
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
 
   @@unique([organizationId, userId])
   @@index([userId, status])
@@ -239,32 +239,32 @@ model AuditLog {
 }
 
 model Project {
-  id             String                @id @default(cuid())
-  organizationId String
-  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  name           String
-  slug           String
-  status         ProjectStatus         @default(ACTIVE)
-  address        String?
-  latitude       Decimal?              @db.Decimal(10, 7)
-  longitude      Decimal?              @db.Decimal(10, 7)
-  geofenceMeters Int                   @default(100)
-  startsAt       DateTime?
-  endsAt         DateTime?
-  metadata       Json?
-  snapshot       ProjectSnapshot?
-  workers        Worker[]
-  tasks          Task[]
-  incidents      Incident[]
-  attendances    AttendanceEntry[]
-  conversations  Conversation[]
-  webhookEvents  WebhookEvent[]
-  flowSessions   WhatsAppFlowSession[]
-  proposals      OperationalProposal[]
-  whatsapp       WhatsAppConnection?
+  id                 String                @id @default(cuid())
+  organizationId     String
+  organization       Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name               String
+  slug               String
+  status             ProjectStatus         @default(ACTIVE)
+  address            String?
+  latitude           Decimal?              @db.Decimal(10, 7)
+  longitude          Decimal?              @db.Decimal(10, 7)
+  geofenceMeters     Int                   @default(100)
+  startsAt           DateTime?
+  endsAt             DateTime?
+  metadata           Json?
+  snapshot           ProjectSnapshot?
+  workers            Worker[]
+  tasks              Task[]
+  incidents          Incident[]
+  attendances        AttendanceEntry[]
+  conversations      Conversation[]
+  webhookEvents      WebhookEvent[]
+  flowSessions       WhatsAppFlowSession[]
+  proposals          OperationalProposal[]
+  whatsapp           WhatsAppConnection?
   projectMemberships ProjectMembership[]
-  createdAt      DateTime              @default(now())
-  updatedAt      DateTime              @updatedAt
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
 
   @@unique([organizationId, slug])
   @@index([organizationId, status])
@@ -286,58 +286,58 @@ model ProjectMembership {
 }
 
 model WhatsAppConnection {
-  id                    String                   @id @default(cuid())
-  projectId             String                   @unique
-  project               Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  phoneNumberId         String                   @unique
-  whatsappBusinessId    String?
-  displayPhoneNumber    String?
-  verifiedBusinessName  String?
-  enabled               Boolean                  @default(true)
-  connectionStatus      WhatsAppConnectionStatus @default(PENDING)
-  encryptedAccessToken  String?                  @db.Text
-  encryptedPin          String?                  @db.Text
-  tokenLastFour         String?
-  embeddedSignupVersion String                   @default("v4")
-  connectedAt           DateTime?
-  lastVerifiedAt        DateTime?
-  lastError             String?                  @db.Text
-  metadata              Json?
-  flowProvisioningLeaseId         String?        @db.Uuid
-  flowProvisioningBlueprintKey    String?        @db.VarChar(64)
+  id                              String                   @id @default(cuid())
+  projectId                       String                   @unique
+  project                         Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  phoneNumberId                   String                   @unique
+  whatsappBusinessId              String?
+  displayPhoneNumber              String?
+  verifiedBusinessName            String?
+  enabled                         Boolean                  @default(true)
+  connectionStatus                WhatsAppConnectionStatus @default(PENDING)
+  encryptedAccessToken            String?                  @db.Text
+  encryptedPin                    String?                  @db.Text
+  tokenLastFour                   String?
+  embeddedSignupVersion           String                   @default("v4")
+  connectedAt                     DateTime?
+  lastVerifiedAt                  DateTime?
+  lastError                       String?                  @db.Text
+  metadata                        Json?
+  flowProvisioningLeaseId         String?                  @db.Uuid
+  flowProvisioningBlueprintKey    String?                  @db.VarChar(64)
   flowProvisioningLeaseAcquiredAt DateTime?
   flowProvisioningLeaseExpiresAt  DateTime?
-  flowEndpoint          WhatsAppFlowEndpoint?
-  flowTemplates         WhatsAppFlowTemplate[]
-  createdAt             DateTime                 @default(now())
-  updatedAt             DateTime                 @updatedAt
+  flowEndpoint                    WhatsAppFlowEndpoint?
+  flowTemplates                   WhatsAppFlowTemplate[]
+  createdAt                       DateTime                 @default(now())
+  updatedAt                       DateTime                 @updatedAt
 
   @@index([whatsappBusinessId])
 }
 
 model WhatsAppFlowTemplate {
-  id                   String             @id @default(cuid())
-  connectionId         String
-  connection           WhatsAppConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
-  whatsappBusinessId   String             @db.VarChar(40)
-  blueprintKey         String             @db.VarChar(100)
-  providerTemplateId   String?            @unique(map: "WAFlowTemplate_provider_id_key") @db.VarChar(40)
-  name                 String             @db.VarChar(512)
-  language             String             @db.VarChar(35)
-  category             String             @db.VarChar(32)
-  status               String             @db.VarChar(40)
-  contentSha256        String             @db.Char(64)
-  flowId               String             @db.VarChar(40)
-  screenId             String             @db.VarChar(30)
-  bodyText             String             @db.VarChar(1024)
-  buttonText           String             @db.VarChar(25)
-  rejectionReason      String?            @db.Text
-  submittedAt          DateTime?
-  lastSyncedAt         DateTime?
-  statusChangedAt      DateTime?
-  metadata             Json?
-  createdAt            DateTime           @default(now())
-  updatedAt            DateTime           @updatedAt
+  id                 String             @id @default(cuid())
+  connectionId       String
+  connection         WhatsAppConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  whatsappBusinessId String             @db.VarChar(40)
+  blueprintKey       String             @db.VarChar(100)
+  providerTemplateId String?            @unique(map: "WAFlowTemplate_provider_id_key") @db.VarChar(40)
+  name               String             @db.VarChar(512)
+  language           String             @db.VarChar(35)
+  category           String             @db.VarChar(32)
+  status             String             @db.VarChar(40)
+  contentSha256      String             @db.Char(64)
+  flowId             String             @db.VarChar(40)
+  screenId           String             @db.VarChar(30)
+  bodyText           String             @db.VarChar(1024)
+  buttonText         String             @db.VarChar(25)
+  rejectionReason    String?            @db.Text
+  submittedAt        DateTime?
+  lastSyncedAt       DateTime?
+  statusChangedAt    DateTime?
+  metadata           Json?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
 
   @@unique([connectionId, name, language], map: "WAFlowTemplate_name_language_key")
   @@unique([connectionId, blueprintKey, language, contentSha256], map: "WAFlowTemplate_blueprint_hash_key")
@@ -535,18 +535,18 @@ model AttendanceEntry {
 }
 
 model Conversation {
-  id          String    @id @default(cuid())
-  projectId   String
-  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  channel     String    @default("whatsapp")
-  externalId  String
-  displayName String?
-  metadata    Json?
-  messages    Message[]
-  readStates  ConversationReadState[]
+  id                      String                  @id @default(cuid())
+  projectId               String
+  project                 Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  channel                 String                  @default("whatsapp")
+  externalId              String
+  displayName             String?
+  metadata                Json?
+  messages                Message[]
+  readStates              ConversationReadState[]
   unreadTrackingStartedAt DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt               DateTime                @default(now())
+  updatedAt               DateTime                @updatedAt
 
   @@unique([projectId, channel, externalId])
   @@index([projectId, channel, updatedAt, id])
@@ -614,31 +614,31 @@ model WebhookEvent {
 }
 
 model WhatsAppFlowSession {
-  id                  String       @id @db.Uuid
+  id                  String                        @id @db.Uuid
   organizationId      String
-  organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization        Organization                  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   projectId           String
-  project             Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project             Project                       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   workerId            String
-  worker              Worker       @relation(fields: [workerId], references: [id], onDelete: Cascade)
-  phoneNumberId       String       @db.VarChar(40)
-  recipientPhone      String       @db.VarChar(20)
-  blueprintKey        String       @db.VarChar(100)
-  flowId              String       @db.VarChar(40)
-  screenId            String       @db.VarChar(30)
-  flowType            String       @db.VarChar(64)
-  sourceExternalId    String       @db.VarChar(512)
-  tokenSha256         String       @unique @db.Char(64)
+  worker              Worker                        @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  phoneNumberId       String                        @db.VarChar(40)
+  recipientPhone      String                        @db.VarChar(20)
+  blueprintKey        String                        @db.VarChar(100)
+  flowId              String                        @db.VarChar(40)
+  screenId            String                        @db.VarChar(30)
+  flowType            String                        @db.VarChar(64)
+  sourceExternalId    String                        @db.VarChar(512)
+  tokenSha256         String                        @unique @db.Char(64)
   expiresAt           DateTime
   deliveryAttemptedAt DateTime?
   deliveryRejectedAt  DateTime?
   sentAt              DateTime?
-  providerMessageId   String?      @unique @db.VarChar(500)
+  providerMessageId   String?                       @unique @db.VarChar(500)
   consumedAt          DateTime?
-  consumedExternalId  String?      @db.VarChar(512)
+  consumedExternalId  String?                       @db.VarChar(512)
   endpointRequests    WhatsAppFlowEndpointRequest[]
-  createdAt           DateTime     @default(now())
-  updatedAt           DateTime     @updatedAt
+  createdAt           DateTime                      @default(now())
+  updatedAt           DateTime                      @updatedAt
 
   @@unique([projectId, sourceExternalId, blueprintKey])
   @@unique([projectId, consumedExternalId])
