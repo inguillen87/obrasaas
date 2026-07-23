@@ -32,6 +32,12 @@ const PUBLIC_DELIVERY_STATUSES = new Set([
   'failed',
   'unknown',
 ]);
+const SOURCE_EVIDENCE_KINDS = new Set([
+  'IMAGE',
+  'AUDIO',
+  'VIDEO',
+  'DOCUMENT',
+]);
 const MANUAL_SEND_RATE_LIMITS = Object.freeze({
   actorPerMinute: 20,
   organizationPerMinute: 120,
@@ -232,7 +238,7 @@ function publicMessage(message, {
   })[0] || message;
   const metadata = jsonMetadata(safeMessage?.metadata);
   const kind = String(safeMessage.kind || 'TEXT').toUpperCase();
-  const containsSourceEvidence = kind !== 'TEXT'
+  const containsSourceEvidence = SOURCE_EVIDENCE_KINDS.has(kind)
     || Boolean(metadata.media)
     || Boolean(metadata.transcription);
   const sourceRestricted = containsSourceEvidence && !includeSourceEvidence;

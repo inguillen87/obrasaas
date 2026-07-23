@@ -1082,6 +1082,311 @@
   background: color-mix(in srgb, var(--bg-main) 91%, transparent);
 }
 
+.flowLauncher {
+  max-width: 930px;
+  margin: 0 auto 9px;
+  padding: 10px;
+  border: 1px solid rgba(72, 216, 141, 0.16);
+  border-radius: 14px;
+  background:
+    linear-gradient(135deg, rgba(72, 216, 141, 0.065), transparent 45%),
+    rgba(255, 255, 255, 0.025);
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.08);
+}
+
+.flowLauncher[data-window='closed'] {
+  border-color: rgba(72, 216, 141, 0.26);
+  background:
+    linear-gradient(135deg, rgba(72, 216, 141, 0.1), transparent 52%),
+    rgba(255, 255, 255, 0.025);
+}
+
+.flowLauncherHeader {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+}
+
+.flowLauncherIcon,
+.flowOptionIcon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  color: #07110e;
+  background: #48d88d;
+}
+
+.flowLauncherIcon {
+  width: 31px;
+  height: 31px;
+  border-radius: 9px;
+  font-size: 0.95rem;
+}
+
+.flowLauncherHeader > div {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.flowLauncherHeader strong {
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  font-weight: 850;
+}
+
+.flowLauncherHeader small {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 0.64rem;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flowWindowBadge {
+  display: inline-flex;
+  min-height: 25px;
+  padding: 0 8px;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid rgba(72, 216, 141, 0.2);
+  border-radius: 999px;
+  color: #7ee9ae;
+  background: rgba(72, 216, 141, 0.07);
+  font-size: 0.6rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.flowOptions {
+  display: grid;
+  margin-top: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.flowOption {
+  display: grid;
+  min-width: 0;
+  min-height: 52px;
+  padding: 7px 8px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 11px;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.025);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  transition: border-color 150ms ease, background 150ms ease, transform 150ms ease;
+}
+
+.flowOption:hover:not(:disabled),
+.flowOption[data-selected='true'] {
+  border-color: rgba(72, 216, 141, 0.34);
+  background: rgba(72, 216, 141, 0.06);
+  transform: translateY(-1px);
+}
+
+.flowOption:focus-visible {
+  outline: 2px solid rgba(72, 216, 141, 0.58);
+  outline-offset: 2px;
+}
+
+.flowOption:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.flowOptionIcon {
+  width: 29px;
+  height: 29px;
+  border-radius: 8px;
+  background: rgba(72, 216, 141, 0.9);
+  font-size: 0.72rem;
+}
+
+.flowOptionCopy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.flowOptionCopy strong {
+  overflow: hidden;
+  font-size: 0.69rem;
+  font-weight: 830;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flowOptionCopy small {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 0.58rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flowTemplateStatus {
+  display: inline-flex;
+  min-height: 21px;
+  padding: 0 7px;
+  align-items: center;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.025);
+  font-size: 0.55rem;
+  font-weight: 780;
+  white-space: nowrap;
+}
+
+.flowTemplateStatus[data-tone='approved'] {
+  border-color: rgba(72, 216, 141, 0.2);
+  color: #7ee9ae;
+  background: rgba(72, 216, 141, 0.06);
+}
+
+.flowTemplateStatus[data-tone='blocked'] {
+  border-color: rgba(239, 68, 68, 0.2);
+  color: #ffaaa0;
+  background: rgba(239, 68, 68, 0.06);
+}
+
+.flowLauncherState,
+.flowSuccess {
+  display: flex;
+  min-height: 34px;
+  margin-top: 8px;
+  padding: 7px 9px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-radius: 9px;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.025);
+  font-size: 0.64rem;
+  line-height: 1.4;
+}
+
+.flowLauncherState[data-tone='warning'] {
+  color: #e6ad82;
+  background: rgba(242, 138, 66, 0.07);
+}
+
+.flowLauncherState[data-tone='error'] {
+  color: #ffaaa0;
+  background: rgba(239, 68, 68, 0.07);
+}
+
+.flowLauncherState button,
+.flowLauncherState a {
+  flex: 0 0 auto;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 820;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.flowSuccess {
+  justify-content: flex-start;
+  color: #7ee9ae;
+  background: rgba(72, 216, 141, 0.07);
+}
+
+.flowConfirmation {
+  display: grid;
+  margin-top: 8px;
+  padding: 9px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid rgba(72, 216, 141, 0.22);
+  border-radius: 11px;
+  background: rgba(5, 17, 13, 0.62);
+}
+
+.flowConfirmation > div:first-child {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.flowConfirmation > div:first-child > span {
+  color: #7ee9ae;
+  font-size: 0.55rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.flowConfirmation strong {
+  color: var(--text-primary);
+  font-size: 0.72rem;
+}
+
+.flowConfirmation small {
+  color: var(--text-secondary);
+  font-size: 0.61rem;
+  line-height: 1.4;
+}
+
+.flowConfirmationActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.flowConfirmationActions button {
+  display: inline-flex;
+  min-height: 34px;
+  padding: 0 10px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--border-color);
+  border-radius: 9px;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.035);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.62rem;
+  font-weight: 820;
+}
+
+.flowConfirmationActions button:last-child {
+  border-color: transparent;
+  color: #07110e;
+  background: #48d88d;
+}
+
+.flowConfirmationActions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.flowSendError {
+  display: flex;
+  margin: 0;
+  padding-top: 7px;
+  grid-column: 1 / -1;
+  align-items: flex-start;
+  gap: 6px;
+  border-top: 1px solid rgba(239, 68, 68, 0.12);
+  color: #ffaaa0;
+  font-size: 0.62rem;
+  line-height: 1.4;
+}
+
 .sendError,
 .composerGuard {
   display: flex;
@@ -1459,6 +1764,41 @@
   background: rgba(239, 68, 68, 0.06);
 }
 
+:global(body.light-theme) .flowLauncher,
+:global(body.light-theme) .flowOption {
+  background: rgba(255, 255, 255, 0.88);
+}
+
+:global(body.light-theme) .flowLauncher {
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.05);
+}
+
+:global(body.light-theme) .flowLauncher[data-window='closed'] {
+  background:
+    linear-gradient(135deg, rgba(16, 185, 129, 0.09), transparent 52%),
+    rgba(255, 255, 255, 0.9);
+}
+
+:global(body.light-theme) .flowWindowBadge,
+:global(body.light-theme) .flowTemplateStatus[data-tone='approved'],
+:global(body.light-theme) .flowSuccess,
+:global(body.light-theme) .flowConfirmation > div:first-child > span {
+  color: #087a4c;
+}
+
+:global(body.light-theme) .flowConfirmation {
+  background: rgba(255, 255, 255, 0.94);
+}
+
+:global(body.light-theme) .flowLauncherState[data-tone='warning'] {
+  color: #8f3600;
+}
+
+:global(body.light-theme) .flowLauncherState[data-tone='error'],
+:global(body.light-theme) .flowSendError {
+  color: #a52318;
+}
+
 @media (max-width: 1080px) {
   .shell {
     padding-inline: 24px;
@@ -1601,6 +1941,31 @@
     padding: 8px 10px 10px;
   }
 
+  .flowLauncher {
+    padding: 8px;
+    border-radius: 12px;
+  }
+
+  .flowWindowBadge {
+    display: none;
+  }
+
+  .flowLauncherHeader {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .flowOptions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .flowConfirmation {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .flowConfirmationActions {
+    justify-content: flex-end;
+  }
+
   .sendError {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
@@ -1675,6 +2040,20 @@
   .sendError {
     font-size: 0.65rem;
   }
+
+  .flowOption {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .flowTemplateStatus {
+    grid-column: 2;
+    width: fit-content;
+  }
+
+  .flowLauncherHeader small,
+  .flowOptionCopy small {
+    white-space: normal;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1682,12 +2061,14 @@
   .conversationList button,
   .search input,
   .composerRow textarea,
-  .composerRow > button {
+  .composerRow > button,
+  .flowOption {
     transition: none;
   }
 
   .refreshButton:hover:not(:disabled),
-  .composerRow > button:hover:not(:disabled) {
+  .composerRow > button:hover:not(:disabled),
+  .flowOption:hover:not(:disabled) {
     transform: none;
   }
 

@@ -881,6 +881,39 @@ test('conversation readers see operational text but not audio transcripts withou
   assert.equal(payload.messages[1].media, null);
 });
 
+test('interactive Flow template messages remain visible without exposing binary evidence', async () => {
+  const templateBody = 'Completá el reporte para dejar la incidencia trazable en la bitácora.';
+  const { prisma } = routePrisma({
+    messages: [
+      message({
+        direction: 'OUTBOUND',
+        kind: 'INTERACTIVE',
+        body: templateBody,
+        status: 'accepted',
+        metadata: {
+          messageType: 'whatsapp_flow_template',
+          blueprintKey: 'incident-report',
+        },
+      }),
+    ],
+  });
+  const handlers = createWhatsAppConversationMessageHandlers({
+    resolveAccess: async () => access({ tenantRole: 'SITE_MANAGER' }),
+    authorize: () => undefined,
+    prismaFactory: () => prisma,
+    clock: () => NOW,
+  });
+
+  const response = await handlers.GET(messagesRequest(), routeContext());
+  const payload = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.messages[0].kind, 'interactive');
+  assert.equal(payload.messages[0].body, templateBody);
+  assert.equal(payload.messages[0].status, 'accepted');
+  assert.equal(payload.messages[0].media, null);
+});
+
 test('read and manual-send handlers enforce distinct RBAC permissions before database access', async () => {
   const forbidden = () => {
     throw new AccessError('Permission required.', {

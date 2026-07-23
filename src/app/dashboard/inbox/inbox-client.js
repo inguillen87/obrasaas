@@ -10,6 +10,7 @@ import {
 } from 'react';
 
 import styles from './inbox.module.css';
+import ProactiveFlowLauncher from './proactive-flow-launcher';
 
 const DEFAULT_TIME_ZONE = 'America/Argentina/Buenos_Aires';
 const DELIVERY_STATES = new Set([
@@ -1203,6 +1204,28 @@ export default function InboxClient({
     }
   }
 
+  async function handleProactiveFlowSent(payload) {
+    const sentMessage = normalizeMessage(payload?.message);
+    if (sentMessage) {
+      shouldStickToBottomRef.current = true;
+      knownMessageIdsRef.current = new Set([
+        ...knownMessageIdsRef.current,
+        sentMessage.id,
+      ]);
+      knownMessageStatusRef.current.set(sentMessage.id, sentMessage.status);
+      setMessages((current) => mergeMessagePage(current, [sentMessage]));
+      setMessageAnnouncement({
+        id: sentMessage.id,
+        text: `${textValue(payload?.flow?.title, 'Formulario')} enviado por WhatsApp.`,
+      });
+    }
+    setNow(new Date());
+    void loadInbox();
+    if (selectedConversation?.id) {
+      void loadMessages(selectedConversation.id, { mode: 'refresh' });
+    }
+  }
+
   function composerBlockReason() {
     if (!online) return 'Sin conexión a internet. El borrador queda en esta pantalla hasta que vuelvas a estar en línea.';
     if (!connection.operational) return 'El canal de WhatsApp de esta obra no está operativo.';
@@ -1604,6 +1627,16 @@ export default function InboxClient({
                     )}
                   </div>
                 )}
+
+                <ProactiveFlowLauncher
+                  canManageIntegrations={canManageIntegrations}
+                  conversationId={selectedConversation.id}
+                  key={selectedConversation.id}
+                  online={online}
+                  onMessageSent={handleProactiveFlowSent}
+                  projectId={projectId}
+                  replyWindowOpen={replyWindow.isOpen}
+                />
 
                 {!canCompose && (
                   <div className={styles.composerGuard} role="status">
