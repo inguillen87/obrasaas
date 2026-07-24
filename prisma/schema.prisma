@@ -126,6 +126,9 @@ enum BudgetEntryKind {
   ACTUAL
   FORECAST
 }
+enum CashFundStatus { ACTIVE CLOSED }
+enum CashMovementKind { FUNDING EXPENSE REIMBURSEMENT ADJUSTMENT }
+enum CashMovementStatus { DRAFT PENDING_APPROVAL APPROVED REJECTED }
 
 enum IncidentSeverity {
   INFO
@@ -393,6 +396,7 @@ model PlatformUser {
   updatedAt                          DateTime                       @updatedAt
   notificationDeliveries             NotificationDelivery[]
   notificationPreferences            NotificationPreference[]
+  cashFunds                          CashFund[]
 
   @@index([systemRole, createdAt])
 }
@@ -461,6 +465,7 @@ model Project {
   replanScenarios               ReplanScenario[]
   extraWorkSessions             ExtraWorkSession[]
   budgetVersions                BudgetVersion[]
+  cashFunds                     CashFund[]
   incidents                     Incident[]
   attendances                   AttendanceEntry[]
   attendanceShifts              AttendanceShift[]
@@ -984,6 +989,44 @@ model BudgetEntry {
   @@unique([projectId, idempotencyKey])
   @@index([projectId, budgetLineId, kind, occurredAt])
   @@index([projectId, kind, occurredAt])
+}
+
+model CashFund {
+  id          String          @id @default(cuid())
+  projectId   String
+  project     Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String          @db.VarChar(160)
+  currency    String          @db.Char(3)
+  custodianId String
+  custodian   PlatformUser    @relation(fields: [custodianId], references: [id], onDelete: Restrict)
+  status      CashFundStatus  @default(ACTIVE)
+  revision    Int             @default(0)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  movements   CashMovement[]
+  @@unique([projectId, id])
+  @@index([projectId, status])
+}
+
+model CashMovement {
+  idempotencyKey String             @db.VarChar(190)
+  id             String             @id @default(cuid())
+  projectId      String
+  fundId         String
+  fund           CashFund           @relation(fields: [projectId, fundId], references: [projectId, id], onDelete: Cascade)
+  kind           CashMovementKind
+  status         CashMovementStatus @default(DRAFT)
+  amount         Decimal            @db.Decimal(14, 2)
+  category       String             @db.VarChar(96)
+  description    String?            @db.VarChar(500)
+  receipt       Json?
+  revision      Int                @default(0)
+  approvedAt    DateTime?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  @@unique([projectId, id])
+  @@unique([projectId, idempotencyKey])
+  @@index([projectId, fundId, status, createdAt])
 }
 
 model NotificationPreference {
