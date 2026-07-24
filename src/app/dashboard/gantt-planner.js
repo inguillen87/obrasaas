@@ -72,7 +72,10 @@ function StatusPill({ tone, children }) {
 
 export default function GanttPlanner({
   canManage,
+  canonicalMode = false,
   fieldWorkers,
+  onCanonicalTaskChange,
+  onCanonicalTaskDelete,
   onTasksChange,
   onToast,
   project,
@@ -266,6 +269,49 @@ export default function GanttPlanner({
       setError('Esta selección crea una dependencia circular. Quitá una predecesora antes de guardar.');
       return;
     }
+    if (canonicalMode) {
+      setBusy(true);
+      setError('');
+      try {
+        const startsAt = projectStartsAt
+          ? ganttDateForDay(projectStartsAt, alignedStartDay)?.toISOString?.() || null
+          : null;
+        const endsAt = startsAt
+          ? ganttDateForDay(projectStartsAt, alignedStartDay + integer(editor.duration, 1, 1, 3_650) - 1)?.toISOString?.() || null
+          : null;
+        const progress = integer(editor.progress, 0, 0, 100);
+        const payload = {
+          title: name,
+          assignee: worker?.name || null,
+          progress,
+          status: progress >= 100 ? 'DONE' : progress > 0 ? 'IN_PROGRESS' : 'READY',
+          startsAt,
+          endsAt,
+          dependencies: editor.dependencies,
+          ...(editor.id ? { expectedRevision: Number(previous.revision) || 0 } : {}),
+        };
+        const response = await fetch(
+          editor.id ? `/api/tasks/${encodeURIComponent(editor.id)}` : '/api/tasks',
+          {
+            method: editor.id ? 'PATCH' : 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(payload),
+          },
+        );
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.task) {
+          throw new Error(result.error || 'No se pudo guardar la tarea canónica.');
+        }
+        onCanonicalTaskChange?.(result.task);
+        onToast?.(editor.id ? 'Tarea canónica actualizada.' : 'Tarea canónica incorporada al WBS.', 'success');
+        setEditor(null);
+      } catch (canonicalError) {
+        setError(canonicalError.message);
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     const saved = await persist(
       nextTasks,
       editor.id ? 'Tarea y secuencia actualizadas.' : 'Tarea incorporada al cronograma.',
@@ -287,6 +333,23 @@ export default function GanttPlanner({
       ? `También se quitará esta predecesora de ${dependentCount} tarea${dependentCount === 1 ? '' : 's'} dependiente${dependentCount === 1 ? '' : 's'}.`
       : 'Esta acción no borra incidencias, asistencia ni evidencias.';
     if (!window.confirm(`¿Eliminar “${tasks[editor.id]?.name || 'esta tarea'}”? ${warning}`)) return;
+    if (canonicalMode) {
+      setBusy(true);
+      setError('');
+      try {
+        const response = await fetch(`/api/tasks/${encodeURIComponent(editor.id)}`, { method: 'DELETE' });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || 'No se pudo eliminar la tarea canónica.');
+        onCanonicalTaskDelete?.(editor.id);
+        onToast?.('Tarea canónica eliminada.', 'success');
+        setEditor(null);
+      } catch (deleteError) {
+        setError(deleteError.message);
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     const nextTasks = Object.fromEntries(
       Object.entries(tasks)
         .filter(([id]) => id !== editor.id)
@@ -356,7 +419,7 @@ export default function GanttPlanner({
             <span><i className={styles.legendDone} /> Finalizada</span>
             <span><i className={styles.legendRisk} /> Conflicto</span>
           </div>
-          {canManage && model.tasks.length > 0 && (
+          {canManage && !canonicalMode && model.tasks.length > 0 && (
             <button type="button" className={styles.clearButton} disabled={busy} onClick={clearSchedule}>Vaciar sólo cronograma</button>
           )}
         </div>

@@ -11,13 +11,14 @@ El Gantt historico usaba `ProjectSnapshot.state.tasks` como autoridad. S3 agrega
 - `parentId`, predecessor y successor deben pertenecer al mismo proyecto mediante FK compuesta.
 - Las dependencias admiten FS, SS, FF y SF con `lagDays` acotado; el servicio rechaza ciclos antes de persistir.
 - Toda mutacion crea `AuditLog` con actor, obra, entidad y revision.
-- El Gantt consume tareas canonicas cuando existen. Mientras la pantalla de edicion legacy no este conectada a `/api/tasks`, queda en modo consulta para evitar dos fuentes de verdad.
+- El Gantt consume tareas canonicas cuando existen. Su alta, edicion y baja usan `/api/tasks` con CAS; el boton de vaciado legacy queda oculto en modo canonico para evitar dos fuentes de verdad.
 
 ## APIs
 
 - `GET /api/tasks?cursor=&limit=`: lectura paginada y sin metadata interna.
 - `POST /api/tasks`: crea una tarea WBS; requiere `org:tasks:manage`.
 - `PATCH /api/tasks/:taskId`: actualiza con `expectedRevision`; requiere `org:tasks:manage`.
+- `DELETE /api/tasks/:taskId`: elimina solo tareas sin subtareas; dependencias se eliminan por FK y queda auditoria.
 - `POST /api/tasks/dependencies`: agrega dependencia y valida ciclo; requiere `org:tasks:manage`.
 
 La UI nunca decide el alcance: la autorizacion, el proyecto y el estado de solo lectura se validan en servidor.

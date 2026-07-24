@@ -57,6 +57,15 @@ function safeRevision(value, field = 'expectedRevision') {
   return result;
 }
 
+function dependencyIds(value) {
+  if (value === undefined || value === null) return null;
+  if (!Array.isArray(value) || value.length > 100) {
+    throw new CanonicalTaskError('dependencies debe ser una lista de hasta 100 tareas.');
+  }
+  return [...new Set(value.map((item) => text(item, 'dependencyId', 190, { required: true })))]
+    .filter(Boolean);
+}
+
 export function normalizeCanonicalTaskInput(input = {}, { partial = false } = {}) {
   const title = input.title === undefined && partial ? undefined : text(input.title, 'title', MAX_TITLE, { required: true });
   const description = input.description === undefined && partial
@@ -178,6 +187,7 @@ export async function createCanonicalTask(prisma, {
   input,
 } = {}) {
   const normalized = normalizeCanonicalTaskInput(input);
+  const requestedDependencies = dependencyIds(input?.dependencies) || [];
   const projectId = text(scope?.projectId, 'projectId', 190, { required: true });
   const organizationId = text(scope?.organizationId, 'organizationId', 190, { required: true });
   const actor = text(actorId, 'actorId', 190, { required: true });
@@ -194,17 +204,47 @@ export async function createCanonicalTask(prisma, {
       },
       include: taskInclude(),
     });
+    if (requestedDependencies.length > 0) {
+      const existingEdges = await transaction.taskDependency.findMany({
+        where: { projectId },
+        select: { predecessorId: true, successorId: true },
+      });
+      const dependencyTasks = await transaction.task.findMany({
+        where: {
+          projectId,
+          id: { in: requestedDependencies },
+          metadata: { path: ['source'], equals: 'canonical-task-v1' },
+        },
+        select: { id: true },
+      });
+      if (dependencyTasks.length !== requestedDependencies.length) {
+        throw new CanonicalTaskError('Toda predecesora debe pertenecer a esta obra.', 'CANONICAL_TASK_SCOPE', 409);
+      }
+      for (const predecessorId of requestedDependencies) {
+        assertDependencyAcyclic(existingEdges, { predecessorId, successorId: created.id });
+      }
+      await transaction.taskDependency.createMany({
+        data: requestedDependencies.map((predecessorId) => ({
+          projectId,
+          predecessorId,
+          successorId: created.id,
+        })),
+      });
+    }
+    const persisted = requestedDependencies.length > 0
+      ? await transaction.task.findFirst({ where: { id: created.id, projectId }, include: taskInclude() })
+      : created;
     await transaction.auditLog.create({
       data: {
         organizationId,
         actorId: actor,
         action: 'task.created',
         entityType: 'Task',
-        entityId: created.id,
-        metadata: { projectId, code: created.code, title: created.title, revision: created.revision },
+        entityId: persisted.id,
+        metadata: { projectId, code: persisted.code, title: persisted.title, revision: persisted.revision },
       },
     });
-    return serializeTask(created);
+    return serializeTask(persisted);
   });
 }
 
@@ -221,17 +261,46 @@ export async function updateCanonicalTask(prisma, {
   const id = text(taskId, 'taskId', 190, { required: true });
   const revision = safeRevision(expectedRevision);
   const normalized = normalizeCanonicalTaskInput(input, { partial: true });
+  const requestedDependencies = dependencyIds(input?.dependencies);
   return runOperationalProjectMutation(prisma, { organizationId, projectId }, async (transaction) => {
     if (normalized.parentId) {
       if (normalized.parentId === id) throw new CanonicalTaskError('Una tarea no puede ser su propio padre.');
       const parent = await transaction.task.findFirst({ where: { id: normalized.parentId, projectId }, select: { id: true } });
       if (!parent) throw new CanonicalTaskError('La tarea padre no pertenece a esta obra.', 'CANONICAL_TASK_PARENT_SCOPE', 409);
     }
+    if (requestedDependencies) {
+      const dependencyTasks = await transaction.task.findMany({
+        where: {
+          projectId,
+          id: { in: requestedDependencies },
+          metadata: { path: ['source'], equals: 'canonical-task-v1' },
+        },
+        select: { id: true },
+      });
+      if (dependencyTasks.length !== requestedDependencies.length || requestedDependencies.includes(id)) {
+        throw new CanonicalTaskError('Las predecesoras deben pertenecer a la obra y no pueden incluir la tarea actual.', 'CANONICAL_TASK_SCOPE', 409);
+      }
+      const otherEdges = await transaction.taskDependency.findMany({
+        where: { projectId, successorId: { not: id } },
+        select: { predecessorId: true, successorId: true },
+      });
+      for (const predecessorId of requestedDependencies) {
+        assertDependencyAcyclic(otherEdges, { predecessorId, successorId: id });
+      }
+    }
     const updated = await transaction.task.updateMany({
       where: { id, projectId, revision, metadata: { path: ['source'], equals: 'canonical-task-v1' } },
       data: { ...normalized, revision: { increment: 1 } },
     });
     if (updated.count !== 1) throw new CanonicalTaskError('La tarea cambió; recargá y reintentá.', 'CANONICAL_TASK_STALE', 409);
+    if (requestedDependencies) {
+      await transaction.taskDependency.deleteMany({ where: { projectId, successorId: id } });
+      if (requestedDependencies.length > 0) {
+        await transaction.taskDependency.createMany({
+          data: requestedDependencies.map((predecessorId) => ({ projectId, predecessorId, successorId: id })),
+        });
+      }
+    }
     const result = await transaction.task.findFirst({ where: { id, projectId }, include: taskInclude() });
     await transaction.auditLog.create({ data: { organizationId, actorId: actor, action: 'task.updated', entityType: 'Task', entityId: id, metadata: { projectId, revision: revision + 1 } } });
     return serializeTask(result);
@@ -262,6 +331,29 @@ export async function createCanonicalTaskDependency(prisma, {
     const dependency = await transaction.taskDependency.create({ data: { projectId, predecessorId: predecessor, successorId: successor, type, lagDays: lag } });
     await transaction.auditLog.create({ data: { organizationId, actorId: actor, action: 'task.dependency.created', entityType: 'TaskDependency', entityId: dependency.id, metadata: { projectId, predecessorId: predecessor, successorId: successor, type, lagDays: lag } } });
     return dependency;
+  });
+}
+
+export async function deleteCanonicalTask(prisma, {
+  scope,
+  actorId,
+  taskId,
+} = {}) {
+  const projectId = text(scope?.projectId, 'projectId', 190, { required: true });
+  const organizationId = text(scope?.organizationId, 'organizationId', 190, { required: true });
+  const actor = text(actorId, 'actorId', 190, { required: true });
+  const id = text(taskId, 'taskId', 190, { required: true });
+  return runOperationalProjectMutation(prisma, { organizationId, projectId }, async (transaction) => {
+    const task = await transaction.task.findFirst({
+      where: { id, projectId, metadata: { path: ['source'], equals: 'canonical-task-v1' } },
+      select: { id: true, title: true, revision: true },
+    });
+    if (!task) throw new CanonicalTaskError('La tarea canónica no existe en esta obra.', 'CANONICAL_TASK_NOT_FOUND', 404);
+    const children = await transaction.task.count({ where: { projectId, parentId: id } });
+    if (children > 0) throw new CanonicalTaskError('No se puede eliminar una tarea con subtareas.', 'CANONICAL_TASK_HAS_CHILDREN', 409);
+    await transaction.task.delete({ where: { id } });
+    await transaction.auditLog.create({ data: { organizationId, actorId: actor, action: 'task.deleted', entityType: 'Task', entityId: id, metadata: { projectId, title: task.title, revision: task.revision } } });
+    return { id, deleted: true };
   });
 }
 

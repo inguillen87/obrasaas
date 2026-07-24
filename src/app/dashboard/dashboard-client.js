@@ -171,6 +171,7 @@ function canonicalTasksToGanttCatalog(tasks, projectStartsAt) {
         .map((dependency) => dependency.predecessorId),
       status: task.status,
       canonicalTaskId: task.id,
+      revision: task.revision,
     };
   }
   return catalog;
@@ -256,10 +257,22 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
   const approvalOnboardingRequested = searchParams.get('onboarding') === 'approval';
   // Application State
   const [state, setState] = useState(() => normalizeAppState(initialState));
-  const canonicalTaskCatalog = useMemo(
-    () => canonicalTasksToGanttCatalog(setup.canonicalTasks, platformAccess.project.startsAt),
-    [setup.canonicalTasks, platformAccess.project.startsAt],
+  const [canonicalTasks, setCanonicalTasks] = useState(
+    () => (Array.isArray(setup.canonicalTasks) ? setup.canonicalTasks : []),
   );
+  const canonicalTaskCatalog = useMemo(
+    () => canonicalTasksToGanttCatalog(canonicalTasks, platformAccess.project.startsAt),
+    [canonicalTasks, platformAccess.project.startsAt],
+  );
+  const handleCanonicalTaskChange = useCallback((task) => {
+    setCanonicalTasks((current) => {
+      const next = current.filter((candidate) => candidate.id !== task.id);
+      return [...next, task].sort((left, right) => String(left.id).localeCompare(String(right.id)));
+    });
+  }, []);
+  const handleCanonicalTaskDelete = useCallback((taskId) => {
+    setCanonicalTasks((current) => current.filter((candidate) => candidate.id !== taskId));
+  }, []);
   const stateVersionRef = useRef(validProjectStateVersion(setup.initialStateVersion) ?? 0);
   const stateWriteQueueRef = useRef(Promise.resolve());
   const stateWriteGenerationRef = useRef(0);
@@ -2281,7 +2294,10 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
           <section id="sec-gantt" className={`content-section animate-fade-in-up ${activeTab === 'sec-gantt' ? 'active' : ''}`}>
             <GanttPlanner
               canManage={setup.canManageProjects}
+              canonicalMode={Boolean(canonicalTaskCatalog)}
               fieldWorkers={fieldWorkers}
+              onCanonicalTaskChange={handleCanonicalTaskChange}
+              onCanonicalTaskDelete={handleCanonicalTaskDelete}
               onTasksChange={handleTasksChange}
               onToast={addToast}
               project={platformAccess.project}
