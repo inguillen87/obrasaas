@@ -147,6 +147,13 @@ enum CashMovementStatus {
   REJECTED
 }
 
+enum PurchaseOrderStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  CANCELLED
+}
+
 enum IncidentSeverity {
   INFO
   LOW
@@ -366,28 +373,68 @@ model Organization {
   crmAccount             CrmAccount?
   whatsappFlowSessions   WhatsAppFlowSession[]
   suppliers              Supplier[]
+  purchaseOrders         PurchaseOrder[]
   createdAt              DateTime               @default(now())
   updatedAt              DateTime               @updatedAt
 }
 
 model Supplier {
-  id             String       @id @default(cuid())
+  id             String          @id @default(cuid())
   organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  legalName      String       @db.VarChar(220)
-  taxId          String?      @db.VarChar(64)
-  email          String?      @db.VarChar(190)
-  phone          String?      @db.VarChar(64)
-  currency       String       @default("ARS") @db.Char(3)
-  paymentTerms   String?      @db.VarChar(160)
-  active         Boolean      @default(true)
-  revision       Int          @default(0)
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  legalName      String          @db.VarChar(220)
+  taxId          String?         @db.VarChar(64)
+  email          String?         @db.VarChar(190)
+  phone          String?         @db.VarChar(64)
+  currency       String          @default("ARS") @db.Char(3)
+  paymentTerms   String?         @db.VarChar(160)
+  active         Boolean         @default(true)
+  revision       Int             @default(0)
+  purchaseOrders PurchaseOrder[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 
   @@unique([organizationId, id])
   @@unique([organizationId, taxId])
   @@index([organizationId, active, legalName])
+}
+
+model PurchaseOrder {
+  id             String              @id @default(cuid())
+  organizationId String
+  projectId      String
+  supplierId     String
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project        Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  supplier       Supplier            @relation(fields: [organizationId, supplierId], references: [organizationId, id], onDelete: Restrict)
+  operationKey   String              @db.VarChar(190)
+  number         String              @db.VarChar(64)
+  currency       String              @db.Char(3)
+  status         PurchaseOrderStatus @default(DRAFT)
+  total          Decimal             @db.Decimal(14, 2)
+  revision       Int                 @default(0)
+  lines          PurchaseOrderLine[]
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@unique([projectId, id])
+  @@unique([projectId, operationKey])
+  @@unique([projectId, number])
+  @@index([projectId, status, createdAt])
+}
+
+model PurchaseOrderLine {
+  id              String        @id @default(cuid())
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  description     String        @db.VarChar(220)
+  unit            String        @db.VarChar(32)
+  quantity        Decimal       @db.Decimal(14, 3)
+  unitPrice       Decimal       @db.Decimal(14, 2)
+  costCode        String?       @db.VarChar(96)
+  createdAt       DateTime      @default(now())
+
+  @@index([purchaseOrderId])
 }
 
 model CrmAccount {
@@ -524,6 +571,7 @@ model Project {
   projectMemberships            ProjectMembership[]
   createdAt                     DateTime                       @default(now())
   updatedAt                     DateTime                       @updatedAt
+  purchaseOrders                PurchaseOrder[]
 
   @@unique([organizationId, slug])
   @@index([organizationId, status])
