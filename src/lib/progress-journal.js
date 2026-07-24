@@ -20,11 +20,19 @@ function serializeLog(log) { return { ...log, workDate: log.workDate?.toISOStrin
 function serializeEvidence(item) { return { ...item, capturedAt: item.capturedAt?.toISOString?.() || null, reviewedAt: item.reviewedAt?.toISOString?.() || null, latitude: item.latitude?.toString?.() || null, longitude: item.longitude?.toString?.() || null, accuracyMeters: item.accuracyMeters?.toString?.() || null, createdAt: item.createdAt?.toISOString?.() || null }; }
 
 export async function listProgressJournal(prisma, { projectId }) {
-  const [dailyLogs, evidence] = await Promise.all([
+  const [dailyLogs, evidence, blockers, incidents] = await Promise.all([
     prisma.dailyLog.findMany({ where: { projectId }, orderBy: [{ workDate: 'desc' }, { createdAt: 'desc' }], take: 100 }),
     prisma.progressEvidence.findMany({ where: { projectId }, orderBy: { capturedAt: 'desc' }, take: 100 }),
+    prisma.projectBlocker.findMany({ where: { projectId }, orderBy: { createdAt: 'desc' }, take: 100, select: { id: true, title: true, status: true, severity: true, taskId: true, createdAt: true, updatedAt: true } }),
+    prisma.incident.findMany({ where: { projectId }, orderBy: { occurredAt: 'desc' }, take: 100, select: { id: true, title: true, severity: true, status: true, occurredAt: true } }),
   ]);
-  return { dailyLogs: dailyLogs.map(serializeLog), evidence: evidence.map(serializeEvidence) };
+  const timeline = [
+    ...dailyLogs.map((item) => ({ id: item.id, kind: 'DAILY_LOG', occurredAt: item.createdAt?.toISOString?.() || null, taskId: item.taskId || null, title: item.title, status: item.status, severity: null })),
+    ...evidence.map((item) => ({ id: item.id, kind: 'EVIDENCE', occurredAt: item.capturedAt?.toISOString?.() || null, taskId: item.taskId, title: item.caption || 'Evidencia de avance', status: item.status, severity: null })),
+    ...blockers.map((item) => ({ id: item.id, kind: 'BLOCKER', occurredAt: item.createdAt?.toISOString?.() || null, taskId: item.taskId || null, title: item.title, status: item.status, severity: item.severity })),
+    ...incidents.map((item) => ({ id: item.id, kind: 'INCIDENT', occurredAt: item.occurredAt?.toISOString?.() || null, taskId: null, title: item.title, status: item.status, severity: item.severity })),
+  ].sort((left, right) => String(right.occurredAt).localeCompare(String(left.occurredAt))).slice(0, 200);
+  return { dailyLogs: dailyLogs.map(serializeLog), evidence: evidence.map(serializeEvidence), timeline };
 }
 
 export async function createProgressJournalRecord(prisma, { scope: rawScope, actorId, input }) {
