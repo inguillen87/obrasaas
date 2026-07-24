@@ -359,6 +359,7 @@ model PlatformUser {
   createdAt                          DateTime                       @default(now())
   updatedAt                          DateTime                       @updatedAt
   notificationDeliveries             NotificationDelivery[]
+  notificationPreferences            NotificationPreference[]
 
   @@index([systemRole, createdAt])
 }
@@ -801,6 +802,20 @@ model ProjectBlocker {
   @@unique([projectId, id])
   @@index([projectId, status, severity, dueAt])
   @@index([projectId, taskId, status])
+}
+
+model NotificationPreference {
+  id         String              @id @default(cuid())
+  userId     String
+  user       PlatformUser        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel    NotificationChannel
+  enabled    Boolean             @default(false)
+  quietHours Json?
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+
+  @@unique([userId, channel])
+  @@index([userId, enabled])
 }
 
 model NotificationDelivery {

@@ -110,6 +110,8 @@ jobs:
         run: npm run verify:progress-journal-migration
       - name: Verify notification outbox migration
         run: npm run verify:notification-outbox-migration
+      - name: Verify notification preferences migration
+        run: npm run verify:notification-preferences-migration
 
       - name: Verify migration history status
         run: npx prisma migrate status
