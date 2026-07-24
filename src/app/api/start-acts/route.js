@@ -12,8 +12,10 @@ export async function GET(request) {
   try {
     const access = await getPlatformAccess();
     requireTenantPermission(access, 'org:execution:read', { subscriptionMode: 'read' });
-    const status = new URL(request.url).searchParams.get('status') || undefined;
-    return Response.json(await listProjectStartActs(getPrisma(), { projectId: access.project.id, status }), { headers: { 'Cache-Control': 'private, no-store' } });
+    const params = new URL(request.url).searchParams;
+    const status = params.get('status') || undefined;
+    const limit = params.get('limit') || undefined;
+    return Response.json(await listProjectStartActs(getPrisma(), { projectId: access.project.id, status, limit }), { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     return known(error) || Response.json({ error: 'No se pudieron cargar las actas de inicio.', code: 'START_ACT_READ_FAILED' }, { status: 500 });
   }

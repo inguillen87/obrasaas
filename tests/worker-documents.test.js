@@ -48,14 +48,15 @@ test('document reads are project-scoped, bounded and omit private storage fields
     reviewedById: 'reviewer-1', rejectionReason: null, createdAt: new Date('2026-01-02T00:00:00Z'),
     updatedAt: new Date('2026-01-02T00:00:00Z'),
   }]; } } };
-  const result = await listWorkerDocuments(prisma, { projectId: 'project-1', workerId: 'worker-1', status: 'valid' });
+  const result = await listWorkerDocuments(prisma, { projectId: 'project-1', workerId: 'worker-1', status: 'valid', limit: 25 });
   assert.deepEqual(query.where, { projectId: 'project-1', workerId: 'worker-1', status: 'VALID' });
-  assert.equal(query.take, 500);
+  assert.equal(query.take, 25);
   assert.equal('storage' in query.select, false);
   assert.equal('sha256' in query.select, false);
   assert.equal(result.documents[0].issuedAt, '2026-01-01T00:00:00.000Z');
   assert.equal('storage' in result.documents[0], false);
   assert.equal('sha256' in result.documents[0], false);
+  assert.rejects(() => listWorkerDocuments(prisma, { projectId: 'project-1', limit: 501 }), /limit/);
 });
 
 test('start act reads are project-scoped and omit document and signature payloads', async () => {

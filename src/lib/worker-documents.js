@@ -2,6 +2,8 @@ const SHA256 = /^[a-f0-9]{64}$/;
 const DOCUMENT_TYPES = new Set(['DNI', 'OBRA_SOCIAL', 'ART', 'CERTIFICATION', 'OTHER']);
 const DOCUMENT_STATUSES = new Set(['PENDING_REVIEW', 'VALID', 'EXPIRED', 'REJECTED', 'ARCHIVED']);
 const ACT_STATUSES = new Set(['DRAFT', 'PENDING_SIGNATURES', 'SIGNED', 'VOIDED']);
+const MAX_DOCUMENT_READ = 500;
+const MAX_ACT_READ = 100;
 
 export class WorkerDocumentError extends Error {
   constructor(message, code = 'WORKER_DOCUMENT_INVALID', status = 400) {
@@ -31,6 +33,15 @@ function jsonObject(value, field) {
     throw new WorkerDocumentError(`${field} inválido.`);
   }
   return value;
+}
+
+function boundedReadLimit(value, fallback, maximum) {
+  if (value === undefined || value === null || value === '') return fallback;
+  const limit = Number(value);
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > maximum) {
+    throw new WorkerDocumentError('limit invÃ¡lido.', 'WORKER_DOCUMENT_LIMIT');
+  }
+  return limit;
 }
 
 export function normalizeWorkerDocumentInput(input = {}) {
@@ -116,21 +127,21 @@ export function assertStartActTransition(from, to) {
   return next;
 }
 
-export async function listWorkerDocuments(prisma, { projectId, workerId, status } = {}) {
+export async function listWorkerDocuments(prisma, { projectId, workerId, status, limit } = {}) {
   const rows = await prisma.workerDocument.findMany({
     where: { projectId, ...(workerId ? { workerId } : {}), ...(status ? { status: normalizeWorkerDocumentStatus(status) } : {}) },
     orderBy: [{ expiresAt: 'asc' }, { createdAt: 'desc' }],
-    take: 500,
+    take: boundedReadLimit(limit, MAX_DOCUMENT_READ, MAX_DOCUMENT_READ),
     select: { id: true, workerId: true, type: true, version: true, status: true, issuedAt: true, expiresAt: true, reviewedAt: true, reviewedById: true, rejectionReason: true, createdAt: true, updatedAt: true },
   });
   return { documents: rows.map((row) => ({ ...row, issuedAt: row.issuedAt?.toISOString?.() ?? null, expiresAt: row.expiresAt?.toISOString?.() ?? null, reviewedAt: row.reviewedAt?.toISOString?.() ?? null, createdAt: row.createdAt?.toISOString?.() ?? null, updatedAt: row.updatedAt?.toISOString?.() ?? null })) };
 }
 
-export async function listProjectStartActs(prisma, { projectId, status } = {}) {
+export async function listProjectStartActs(prisma, { projectId, status, limit } = {}) {
   const rows = await prisma.projectStartAct.findMany({
     where: { projectId, ...(status ? { status: normalizeStartActStatus(status) } : {}) },
     orderBy: [{ version: 'desc' }],
-    take: 100,
+    take: boundedReadLimit(limit, MAX_ACT_READ, MAX_ACT_READ),
     select: { id: true, projectId: true, version: true, status: true, effectiveAt: true, signedAt: true, voidedAt: true, createdAt: true, updatedAt: true, participants: { select: { id: true, subjectType: true, subjectId: true, displayName: true, role: true, signedAt: true } } },
   });
   return { acts: rows.map((row) => ({ ...row, effectiveAt: row.effectiveAt?.toISOString?.() ?? null, signedAt: row.signedAt?.toISOString?.() ?? null, voidedAt: row.voidedAt?.toISOString?.() ?? null, createdAt: row.createdAt?.toISOString?.() ?? null, updatedAt: row.updatedAt?.toISOString?.() ?? null, participants: row.participants.map((participant) => ({ ...participant, signedAt: participant.signedAt?.toISOString?.() ?? null })) })) };
