@@ -14,8 +14,8 @@ export async function enqueueNotification(prisma, input) {
   return row;
 }
 
-export async function claimDueNotifications(prisma, { organizationId, limit = 50, now = new Date(), leaseMinutes = 5 } = {}) {
-  const rows = await prisma.notificationDelivery.findMany({ where: { organizationId, status: { in: ['PENDING', 'FAILED'] }, nextAttemptAt: { lte: now }, attempts: { lt: MAX_ATTEMPTS } }, orderBy: [{ nextAttemptAt: 'asc' }, { createdAt: 'asc' }], take: Math.min(Math.max(Number(limit) || 50, 1), 100) });
+export async function claimDueNotifications(prisma, { organizationId, channel: selectedChannel = null, limit = 50, now = new Date(), leaseMinutes = 5 } = {}) {
+  const rows = await prisma.notificationDelivery.findMany({ where: { organizationId, ...(selectedChannel ? { channel: selectedChannel } : {}), status: { in: ['PENDING', 'FAILED'] }, nextAttemptAt: { lte: now }, attempts: { lt: MAX_ATTEMPTS } }, orderBy: [{ nextAttemptAt: 'asc' }, { createdAt: 'asc' }], take: Math.min(Math.max(Number(limit) || 50, 1), 100) });
   const claimed = []; const leasedAt = now; const nextAttemptAt = new Date(now.getTime() + leaseMinutes * 60_000);
   for (const row of rows) { const result = await prisma.notificationDelivery.updateMany({ where: { id: row.id, status: row.status, attempts: row.attempts }, data: { status: 'PROCESSING', leasedAt, attempts: { increment: 1 }, nextAttemptAt } }); if (result.count === 1) claimed.push({ ...row, status: 'PROCESSING', leasedAt, attempts: row.attempts + 1 }); }
   return claimed;
