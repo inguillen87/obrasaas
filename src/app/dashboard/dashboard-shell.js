@@ -53,6 +53,7 @@ function NavigationGroup({
   location,
   onNavigate,
   pendingApprovalCount,
+  unreadNotificationCount,
 }) {
   return (
     <section className="dashboard-nav-group">
@@ -60,7 +61,7 @@ function NavigationGroup({
       <ul className="nav-menu">
         {destinations.map((destination) => {
           const active = dashboardDestinationIsActive(destination, location);
-          const count = destination.key === 'approvals' ? pendingApprovalCount : 0;
+          const count = destination.key === 'approvals' ? pendingApprovalCount : destination.key === 'notifications' ? unreadNotificationCount : 0;
           return (
             <li className={`nav-item ${active ? 'active' : ''}`} key={destination.key}>
               <Link
@@ -105,6 +106,7 @@ export default function DashboardShell({ children, model }) {
   const [pendingApprovalCount, setPendingApprovalCount] = useState(
     model.pendingApprovalCount,
   );
+  const unreadNotificationCount = model.unreadNotificationCount || 0;
 
   const location = {
     pathname,
@@ -343,6 +345,7 @@ export default function DashboardShell({ children, model }) {
             location={location}
             onNavigate={() => setMobileOpen(false)}
             pendingApprovalCount={pendingApprovalCount}
+            unreadNotificationCount={unreadNotificationCount}
           />
           <NavigationGroup
             destinations={controlDestinations}
@@ -350,6 +353,7 @@ export default function DashboardShell({ children, model }) {
             location={location}
             onNavigate={() => setMobileOpen(false)}
             pendingApprovalCount={pendingApprovalCount}
+            unreadNotificationCount={unreadNotificationCount}
           />
           <NavigationGroup
             destinations={exploreDestinations}
@@ -357,6 +361,7 @@ export default function DashboardShell({ children, model }) {
             location={location}
             onNavigate={() => setMobileOpen(false)}
             pendingApprovalCount={0}
+            unreadNotificationCount={0}
           />
           {model.identity.isSuperadmin && (
             <NavigationGroup
@@ -371,6 +376,7 @@ export default function DashboardShell({ children, model }) {
               location={location}
               onNavigate={() => setMobileOpen(false)}
               pendingApprovalCount={0}
+              unreadNotificationCount={0}
             />
           )}
         </nav>

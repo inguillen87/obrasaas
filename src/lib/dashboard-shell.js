@@ -34,7 +34,8 @@ export const getDashboardShellModel = cache(async () => {
     'org:operational-proposals:read',
   );
   const prisma = getPrisma();
-  const [projectRows, pendingApprovalCount, whatsapp] = await Promise.all([
+  const canReadExecution = hasTenantPermission(access, 'org:execution:read');
+  const [projectRows, pendingApprovalCount, whatsapp, unreadNotificationCount] = await Promise.all([
     prisma.project.findMany({
       where: projectAccessWhere(access, {
         status: { not: 'ARCHIVED' },
@@ -56,6 +57,7 @@ export const getDashboardShellModel = cache(async () => {
       where: { projectId: access.project.id },
       select: { enabled: true, connectionStatus: true },
     }),
+    canReadExecution ? prisma.notificationDelivery.count({ where: { organizationId: access.organization.id, projectId: access.project.id, recipientId: access.databaseUserId, status: { in: ['SENT', 'FAILED'] } } }) : Promise.resolve(0),
   ]);
 
   const visibleProjects = projectRows.slice(0, PROJECT_SWITCHER_LIMIT);
@@ -93,6 +95,7 @@ export const getDashboardShellModel = cache(async () => {
     projects: visibleProjects.map(serializeProjectOption),
     hasMoreProjects: projectRows.length > PROJECT_SWITCHER_LIMIT,
     pendingApprovalCount,
+    unreadNotificationCount,
     whatsappConnected: Boolean(
       whatsapp?.enabled && whatsapp.connectionStatus === 'CONNECTED',
     ),
@@ -101,7 +104,7 @@ export const getDashboardShellModel = cache(async () => {
       canReadInbox: hasTenantPermission(access, 'org:conversations:read'),
       canReadReports: hasTenantPermission(access, 'org:reports:read'),
       canReadAttendance: hasTenantPermission(access, 'org:attendance:read'),
-      canReadExecution: hasTenantPermission(access, 'org:execution:read'),
+      canReadExecution,
       canReadTeam: hasTenantPermission(access, 'tenant:members:read'),
       canManageIntegrations: hasTenantPermission(access, 'org:integrations:manage'),
       canManageProjects: hasTenantPermission(access, 'org:projects:manage'),
