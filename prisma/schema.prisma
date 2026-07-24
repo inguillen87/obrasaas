@@ -79,6 +79,21 @@ enum ProgressEvidenceStatus {
   REJECTED
 }
 
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  WHATSAPP
+}
+
+enum NotificationDeliveryStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
+  DEAD_LETTER
+  READ
+}
+
 enum IncidentSeverity {
   INFO
   LOW
@@ -279,25 +294,26 @@ enum OperationalProposalStatus {
 }
 
 model Organization {
-  id                   String                @id @default(cuid())
-  clerkOrganizationId  String?               @unique
-  name                 String
-  slug                 String                @unique
-  country              String                @default("AR")
-  timezone             String                @default("America/Argentina/Buenos_Aires")
-  subscriptionPlan     SubscriptionPlan      @default(TRIAL)
-  subscriptionStatus   SubscriptionStatus    @default(TRIALING)
-  trialEndsAt          DateTime?
-  stripeCustomerId     String?               @unique
-  stripeSubscriptionId String?               @unique
-  metadata             Json?
-  projects             Project[]
-  memberships          TenantMembership[]
-  auditLogs            AuditLog[]
-  crmAccount           CrmAccount?
-  whatsappFlowSessions WhatsAppFlowSession[]
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime              @updatedAt
+  id                     String                 @id @default(cuid())
+  clerkOrganizationId    String?                @unique
+  name                   String
+  slug                   String                 @unique
+  country                String                 @default("AR")
+  timezone               String                 @default("America/Argentina/Buenos_Aires")
+  subscriptionPlan       SubscriptionPlan       @default(TRIAL)
+  subscriptionStatus     SubscriptionStatus     @default(TRIALING)
+  trialEndsAt            DateTime?
+  stripeCustomerId       String?                @unique
+  stripeSubscriptionId   String?                @unique
+  metadata               Json?
+  projects               Project[]
+  memberships            TenantMembership[]
+  auditLogs              AuditLog[]
+  notificationDeliveries NotificationDelivery[]
+  crmAccount             CrmAccount?
+  whatsappFlowSessions   WhatsAppFlowSession[]
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
 }
 
 model CrmAccount {
@@ -342,6 +358,7 @@ model PlatformUser {
   lastSeenAt                         DateTime                       @default(now())
   createdAt                          DateTime                       @default(now())
   updatedAt                          DateTime                       @updatedAt
+  notificationDeliveries             NotificationDelivery[]
 
   @@index([systemRole, createdAt])
 }
@@ -405,6 +422,7 @@ model Project {
   projectBlockers               ProjectBlocker[]
   dailyLogs                     DailyLog[]
   progressEvidence              ProgressEvidence[]
+  notificationDeliveries        NotificationDelivery[]
   incidents                     Incident[]
   attendances                   AttendanceEntry[]
   attendanceShifts              AttendanceShift[]
@@ -783,6 +801,34 @@ model ProjectBlocker {
   @@unique([projectId, id])
   @@index([projectId, status, severity, dueAt])
   @@index([projectId, taskId, status])
+}
+
+model NotificationDelivery {
+  id             String                     @id @default(cuid())
+  organizationId String
+  organization   Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  projectId      String?
+  project        Project?                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  recipientId    String
+  recipient      PlatformUser               @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  eventKey       String                     @db.VarChar(190)
+  channel        NotificationChannel
+  status         NotificationDeliveryStatus @default(PENDING)
+  title          String                     @db.VarChar(220)
+  body           String                     @db.Text
+  payload        Json?
+  attempts       Int                        @default(0)
+  nextAttemptAt  DateTime                   @default(now())
+  leasedAt       DateTime?
+  sentAt         DateTime?
+  readAt         DateTime?
+  lastError      String?                    @db.Text
+  createdAt      DateTime                   @default(now())
+  updatedAt      DateTime                   @updatedAt
+
+  @@unique([recipientId, channel, eventKey])
+  @@index([organizationId, status, nextAttemptAt])
+  @@index([projectId, recipientId, status, createdAt])
 }
 
 model DailyLog {

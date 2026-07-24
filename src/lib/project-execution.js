@@ -1,4 +1,5 @@
 import { runOperationalProjectMutation } from './project-write-policy.js';
+import { enqueueNotification } from './notification-outbox.js';
 
 const TEAM_STATUSES = new Set(['ACTIVE', 'ARCHIVED']);
 const MEMBER_ROLES = new Set(['LEAD', 'MEMBER']);
@@ -159,6 +160,10 @@ export async function createExecutionRecord(prisma, { scope: scopeInput, actorId
       if (ownerWorkerId && !ownerWorker || ownerTeamId && !ownerTeam) throw new ProjectExecutionError('El owner del blocker está fuera del alcance de la obra.', 'PROJECT_EXECUTION_OWNER_SCOPE', 409);
       const blocker = await tx.projectBlocker.create({ data: { projectId: scope.projectId, taskId, ownerWorkerId, ownerTeamId, title, description, severity, status, dueAt }, select: BLOCKER_SELECT });
       await tx.auditLog.create({ data: { organizationId: scope.organizationId, actorId: actor, action: 'execution.blocker.created', entityType: 'ProjectBlocker', entityId: blocker.id, metadata: { projectId: scope.projectId, taskId, severity, ownerWorkerId, ownerTeamId } } });
+      if (['HIGH', 'CRITICAL'].includes(severity)) {
+        const recipients = await tx.projectMembership.findMany({ where: { projectId: scope.projectId, status: 'ACTIVE' }, select: { tenantMembership: { select: { userId: true } } } });
+        for (const recipient of recipients) await enqueueNotification(tx, { organizationId: scope.organizationId, projectId: scope.projectId, recipientId: recipient.tenantMembership.userId, eventKey: `blocker:${blocker.id}`, channel: 'IN_APP', title: `Blocker ${severity.toLowerCase()}`, body: blocker.title, payload: { blockerId: blocker.id, severity, taskId } });
+      }
       return { kind, blocker: serializeBlocker(blocker) };
     }
     throw new ProjectExecutionError('Tipo de registro de ejecución inválido.');

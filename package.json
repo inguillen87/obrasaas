@@ -18,6 +18,7 @@
     "verify:canonical-tasks-migration": "node scripts/verify-canonical-tasks-migration.mjs",
     "verify:project-execution-migration": "node scripts/verify-project-execution-migration.mjs",
     "verify:progress-journal-migration": "node scripts/verify-progress-journal-migration.mjs",
+    "verify:notification-outbox-migration": "node scripts/verify-notification-outbox-migration.mjs",
     "seed:attendance-migration-fixtures": "node scripts/seed-attendance-ledger-legacy-fixtures.mjs",
     "verify:inbox-postgres": "tsx scripts/verify-whatsapp-inbox-postgres.mjs",
     "db:generate": "prisma generate",
