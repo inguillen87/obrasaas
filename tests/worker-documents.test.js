@@ -9,8 +9,18 @@ import {
   listWorkerDocuments,
 } from '../src/lib/worker-documents.js';
 import { assertWorkerDocumentObjectKey, buildWorkerDocumentObjectKey } from '../src/lib/private-storage.js';
+import { assertTechnicalDocumentTransition, normalizeTechnicalDocumentInput } from '../src/lib/technical-documents.js';
 
 const HASH = 'a'.repeat(64);
+
+test('technical documents enforce immutable revisions and issued lifecycle', () => {
+  const document = normalizeTechnicalDocumentInput({ name: 'Plano estructura', discipline: 'Estructura', type: 'pdf', revision: 'r02', sha256: HASH, effectiveAt: '2026-07-24T00:00:00Z', supersedesId: 'doc-r01' });
+  assert.equal(document.revision, 'R02');
+  assert.equal(assertTechnicalDocumentTransition('DRAFT', 'ISSUED'), 'ISSUED');
+  assert.equal(assertTechnicalDocumentTransition('ISSUED', 'SUPERSEDED'), 'SUPERSEDED');
+  assert.throws(() => assertTechnicalDocumentTransition('SUPERSEDED', 'ISSUED'), /Transición/);
+  assert.throws(() => normalizeTechnicalDocumentInput({ ...document, revision: 'bad revision' }), /revision/);
+});
 
 test('private storage object keys are server-scoped and traversal-safe', () => {
   assert.equal(buildWorkerDocumentObjectKey({ organizationId: 'org-1', projectId: 'project-1', workerId: 'worker-1', documentId: 'doc-1', version: 2 }), 'obrasaas/org-1/project-1/workers/worker-1/documents/doc-1/v2');
