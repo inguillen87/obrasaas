@@ -30,7 +30,7 @@ npm run lint
 npm run build
 ```
 
-Las migraciones deben ejecutarse con `prisma migrate deploy` en un entorno con PostgreSQL disponible. El build local no demuestra que una migración haya sido aplicada; verificarla con `scripts/verify-s9-migrations.mjs` y el verificador de S10 cuando exista una base de staging.
+Las migraciones deben ejecutarse con `prisma migrate deploy` en un entorno con PostgreSQL disponible. El build local no demuestra que una migración haya sido aplicada; verificarla con `npm run verify:s10-migrations` (y el verificador S9) apuntando a la base de staging.
 
 ## Criterios de aceptación
 
