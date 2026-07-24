@@ -313,6 +313,29 @@ enum MembershipStatus {
   DISABLED
 }
 
+enum WorkerDocumentType {
+  DNI
+  OBRA_SOCIAL
+  ART
+  CERTIFICATION
+  OTHER
+}
+
+enum WorkerDocumentStatus {
+  PENDING_REVIEW
+  VALID
+  EXPIRED
+  REJECTED
+  ARCHIVED
+}
+
+enum ProjectStartActStatus {
+  DRAFT
+  PENDING_SIGNATURES
+  SIGNED
+  VOIDED
+}
+
 enum TenantRole {
   ADMIN
   DIRECTOR
@@ -660,6 +683,8 @@ model Project {
   purchaseOrders                PurchaseOrder[]
   goodsReceipts                 GoodsReceipt[]
   supplierInvoices              SupplierInvoice[]
+  workerDocuments               WorkerDocument[]
+  startActs                     ProjectStartAct[]
 
   @@unique([organizationId, slug])
   @@index([organizationId, status])
@@ -844,12 +869,75 @@ model Worker {
   requestedExtraWork             ExtraWorkRequest[]             @relation("ExtraWorkRequester")
   extraWorkSessions              ExtraWorkSession[]
   whatsappFlowSessions           WhatsAppFlowSession[]
+  documents                      WorkerDocument[]
   createdAt                      DateTime                       @default(now())
   updatedAt                      DateTime                       @updatedAt
 
   @@unique([projectId, phone])
   @@unique([projectId, id], map: "Worker_projectId_id_key")
   @@index([externalId])
+}
+
+model WorkerDocument {
+  id              String               @id @default(cuid())
+  projectId       String
+  project         Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workerId        String
+  worker          Worker               @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  type            WorkerDocumentType
+  version         Int                  @default(1)
+  status          WorkerDocumentStatus @default(PENDING_REVIEW)
+  storage         Json
+  sha256          String               @db.Char(64)
+  issuedAt        DateTime?
+  expiresAt       DateTime?
+  reviewedAt      DateTime?
+  reviewedById    String?
+  rejectionReason String?              @db.VarChar(500)
+  metadata        Json?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@unique([projectId, workerId, type, version])
+  @@index([projectId, status, expiresAt])
+  @@index([workerId, type, status])
+  @@index([expiresAt, status])
+}
+
+model ProjectStartAct {
+  id           String                       @id @default(cuid())
+  projectId    String
+  project      Project                      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  version      Int                          @default(1)
+  status       ProjectStartActStatus        @default(DRAFT)
+  document     Json
+  sha256       String                       @db.Char(64)
+  effectiveAt  DateTime?
+  signedAt     DateTime?
+  voidedAt     DateTime?
+  participants ProjectStartActParticipant[]
+  createdAt    DateTime                     @default(now())
+  updatedAt    DateTime                     @updatedAt
+
+  @@unique([projectId, version])
+  @@index([projectId, status])
+}
+
+model ProjectStartActParticipant {
+  id          String          @id @default(cuid())
+  actId       String
+  act         ProjectStartAct @relation(fields: [actId], references: [id], onDelete: Cascade)
+  subjectType String          @db.VarChar(32)
+  subjectId   String          @db.VarChar(190)
+  displayName String          @db.VarChar(190)
+  role        String          @db.VarChar(64)
+  signedAt    DateTime?
+  signature   Json?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@unique([actId, subjectType, subjectId])
+  @@index([subjectId, subjectType])
 }
 
 model OperationalProposal {
