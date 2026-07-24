@@ -8,5 +8,7 @@ export async function processInAppNotifications(prisma, { maxOrganizations = 20,
     claimed += rows.length;
     for (const row of rows) { const result = await markNotificationSent(prisma, { id: row.id }); if (result.count === 1) sent += 1; }
   }
-  return { organizations: organizations.length, claimed, sent, hasMore: organizations.length === maxOrganizations };
+  const healthRows = await prisma.notificationDelivery.groupBy({ by: ['status', 'channel'], where: { channel: 'IN_APP' }, _count: { _all: true } });
+  const health = Object.fromEntries(healthRows.map((row) => [`${row.channel}:${row.status}`, row._count._all]));
+  return { organizations: organizations.length, claimed, sent, hasMore: organizations.length === maxOrganizations, health };
 }
