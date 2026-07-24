@@ -161,6 +161,13 @@ enum GoodsReceiptStatus {
   VOIDED
 }
 
+enum SupplierInvoiceStatus {
+  RECEIVED
+  APPROVED
+  PAID
+  VOIDED
+}
+
 enum IncidentSeverity {
   INFO
   LOW
@@ -380,6 +387,7 @@ model Organization {
   crmAccount             CrmAccount?
   whatsappFlowSessions   WhatsAppFlowSession[]
   suppliers              Supplier[]
+  supplierInvoices       SupplierInvoice[]
   purchaseOrders         PurchaseOrder[]
   goodsReceipts          GoodsReceipt[]
   createdAt              DateTime               @default(now())
@@ -387,24 +395,52 @@ model Organization {
 }
 
 model Supplier {
-  id             String          @id @default(cuid())
+  id             String            @id @default(cuid())
   organizationId String
-  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  legalName      String          @db.VarChar(220)
-  taxId          String?         @db.VarChar(64)
-  email          String?         @db.VarChar(190)
-  phone          String?         @db.VarChar(64)
-  currency       String          @default("ARS") @db.Char(3)
-  paymentTerms   String?         @db.VarChar(160)
-  active         Boolean         @default(true)
-  revision       Int             @default(0)
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  legalName      String            @db.VarChar(220)
+  taxId          String?           @db.VarChar(64)
+  email          String?           @db.VarChar(190)
+  phone          String?           @db.VarChar(64)
+  currency       String            @default("ARS") @db.Char(3)
+  paymentTerms   String?           @db.VarChar(160)
+  active         Boolean           @default(true)
+  revision       Int               @default(0)
   purchaseOrders PurchaseOrder[]
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  invoices       SupplierInvoice[]
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
 
   @@unique([organizationId, id])
   @@unique([organizationId, taxId])
   @@index([organizationId, active, legalName])
+}
+
+model SupplierInvoice {
+  id              String                @id @default(cuid())
+  organizationId  String
+  projectId       String
+  supplierId      String
+  purchaseOrderId String?
+  operationKey    String                @db.VarChar(190)
+  invoiceNumber   String                @db.VarChar(96)
+  currency        String                @db.Char(3)
+  amount          Decimal               @db.Decimal(14, 2)
+  status          SupplierInvoiceStatus @default(RECEIVED)
+  dueAt           DateTime?
+  receipt         Json?
+  revision        Int                   @default(0)
+  organization    Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project         Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  supplier        Supplier              @relation(fields: [organizationId, supplierId], references: [organizationId, id], onDelete: Restrict)
+  purchaseOrder   PurchaseOrder?        @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  @@unique([projectId, id])
+  @@unique([projectId, operationKey])
+  @@unique([organizationId, supplierId, invoiceNumber])
+  @@index([projectId, status, dueAt])
 }
 
 model PurchaseOrder {
@@ -423,6 +459,7 @@ model PurchaseOrder {
   revision       Int                 @default(0)
   lines          PurchaseOrderLine[]
   receipts       GoodsReceipt[]
+  invoices       SupplierInvoice[]
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
 
@@ -622,6 +659,7 @@ model Project {
   updatedAt                     DateTime                       @updatedAt
   purchaseOrders                PurchaseOrder[]
   goodsReceipts                 GoodsReceipt[]
+  supplierInvoices              SupplierInvoice[]
 
   @@unique([organizationId, slug])
   @@index([organizationId, status])
