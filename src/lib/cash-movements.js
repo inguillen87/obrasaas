@@ -14,3 +14,4 @@ export async function decideCashMovement(prisma, { scope: rawScope, actorId, id,
 export async function cashBalance(prisma, { projectId, fundId }) { const rows = await prisma.cashMovement.findMany({ where: { projectId, fundId, status: 'APPROVED' }, select: { kind: true, amount: true } }); return { balance: rows.reduce((total, row) => total + (['FUNDING', 'REIMBURSEMENT'].includes(row.kind) ? Number(row.amount) : -Number(row.amount)), 0) }; }
 export function cashMovementErrorResponse(error) { if (!(error instanceof CashMovementError)) return null; return Response.json({ error: error.message, code: error.code }, { status: error.status }); }
 
+

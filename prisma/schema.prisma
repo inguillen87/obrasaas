@@ -142,6 +142,7 @@ enum CashMovementKind {
 enum CashMovementStatus {
   DRAFT
   PENDING_APPROVAL
+  PARTIALLY_APPROVED
   APPROVED
   REJECTED
 }
@@ -411,6 +412,8 @@ model PlatformUser {
   createdAt                          DateTime                       @default(now())
   updatedAt                          DateTime                       @updatedAt
   notificationDeliveries             NotificationDelivery[]
+  cashMovementsFirstApproved         CashMovement[]                 @relation("CashMovementFirstApprover")
+  cashMovementsSecondApproved        CashMovement[]                 @relation("CashMovementSecondApprover")
   notificationPreferences            NotificationPreference[]
   cashFunds                          CashFund[]
 
@@ -1026,22 +1029,26 @@ model CashFund {
 }
 
 model CashMovement {
-  idempotencyKey String             @db.VarChar(190)
-  id             String             @id @default(cuid())
-  projectId      String
-  fundId         String
-  fund           CashFund           @relation(fields: [projectId, fundId], references: [projectId, id], onDelete: Cascade)
-  kind           CashMovementKind
-  status         CashMovementStatus @default(DRAFT)
-  amount         Decimal            @db.Decimal(14, 2)
-  category       String             @db.VarChar(96)
-  description    String?            @db.VarChar(500)
-  receipt        Json?
-  fingerprint    String?            @db.VarChar(64)
-  revision       Int                @default(0)
-  approvedAt     DateTime?
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
+  idempotencyKey   String             @db.VarChar(190)
+  id               String             @id @default(cuid())
+  projectId        String
+  fundId           String
+  fund             CashFund           @relation(fields: [projectId, fundId], references: [projectId, id], onDelete: Cascade)
+  kind             CashMovementKind
+  status           CashMovementStatus @default(DRAFT)
+  amount           Decimal            @db.Decimal(14, 2)
+  category         String             @db.VarChar(96)
+  description      String?            @db.VarChar(500)
+  receipt          Json?
+  fingerprint      String?            @db.VarChar(64)
+  revision         Int                @default(0)
+  approvedAt       DateTime?
+  firstApproverId  String?
+  firstApprover    PlatformUser?      @relation("CashMovementFirstApprover", fields: [firstApproverId], references: [id], onDelete: SetNull)
+  secondApproverId String?
+  secondApprover   PlatformUser?      @relation("CashMovementSecondApprover", fields: [secondApproverId], references: [id], onDelete: SetNull)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
 
   @@unique([projectId, id])
   @@unique([projectId, idempotencyKey])
