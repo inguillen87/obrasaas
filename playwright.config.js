@@ -6,6 +6,12 @@ dotenv.config({ path: '.env.local', quiet: true });
 const baseURL = process.env.E2E_BASE_URL || 'http://localhost:3100';
 const target = new URL(baseURL);
 const localTarget = ['127.0.0.1', 'localhost'].includes(target.hostname);
+const browserUse = {
+  ...devices['Desktop Chrome'],
+  ...(process.env.PLAYWRIGHT_CHANNEL
+    ? { channel: process.env.PLAYWRIGHT_CHANNEL }
+    : {}),
+};
 
 export default defineConfig({
   testDir: './e2e',
@@ -40,17 +46,19 @@ export default defineConfig({
     : undefined,
   projects: [
     {
+      name: 'public',
+      testMatch: /landing\.spec\.js/,
+      use: browserUse,
+    },
+    {
       name: 'setup',
       testMatch: /global\.setup\.js/,
     },
     {
-      name: 'chrome',
+      name: 'authenticated',
       dependencies: ['setup'],
-      testIgnore: /global\.setup\.js/,
-      use: {
-        ...devices['Desktop Chrome'],
-        channel: process.env.PLAYWRIGHT_CHANNEL || 'chrome',
-      },
+      testMatch: /auth\.spec\.js/,
+      use: browserUse,
     },
   ],
 });

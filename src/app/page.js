@@ -41,9 +41,9 @@ const trustControls = [
 
 const faqs = [
   ['¿La cuadrilla tiene que instalar una app?', 'No para los flujos principales. La propuesta es operar desde WhatsApp mediante mensajes, ubicación y WhatsApp Flows. El panel web queda para supervisión, planificación y administración.'],
-  ['¿ObraSaaS reemplaza un ERP o una plataforma BIM?', 'No pretende reemplazar todo. Funciona como capa operativa entre campo y gestión: captura la realidad de obra y puede integrarla con ERP, BIM, almacenamiento y analítica mediante APIs.'],
+  ['¿ObraSaaS reemplaza un ERP o una plataforma BIM?', 'No. Funciona como capa operativa entre campo y gestión. Las integraciones específicas con ERP, BIM o analítica se habilitan sólo después de conectar y validar el proveedor correspondiente.'],
   ['¿La IA modifica el cronograma o compra sin control?', 'No. La versión actual clasifica información y propone acciones, pero no emite órdenes ni mensajes externos. Los cambios operativos permitidos dependen del rol y quedan registrados.'],
-  ['¿Puede funcionar en varias obras y empresas?', 'Sí. Cada empresa opera como un tenant separado, con usuarios, roles, proyectos y datos aislados por organización. Enterprise agrega portfolio multiempresa, permisos avanzados e integraciones dedicadas.'],
+  ['¿Puede funcionar en varias obras y empresas?', 'Puede operar varias obras dentro de una empresa. Cada empresa se mantiene como un tenant separado. La consolidación multiempresa y las integraciones dedicadas todavía requieren alcance e implementación específicos.'],
   ['¿Qué se necesita para conectar WhatsApp oficial?', 'Una cuenta comercial de Meta, un WABA, un número habilitado, plantillas aprobadas, webhook HTTPS y credenciales de Cloud API. Para un SaaS multicliente también corresponde implementar Embedded Signup.'],
 ];
 
@@ -153,11 +153,11 @@ export default function Home() {
       </section>
 
       <section className={styles.positioning}>
-        <div className={styles.positioningCopy}><span className={styles.sectionKicker}>Nuestra ventaja</span><h2>No es otra app que la cuadrilla tiene que recordar abrir.</h2><p>Las plataformas globales demostraron el valor de una fuente única de verdad. ObraSaaS acerca esa disciplina al canal que el campo latinoamericano ya usa todos los días.</p><ul><li><CheckIcon /><span><strong>Adopción primero.</strong> WhatsApp en campo, panel especializado en oficina.</span></li><li><CheckIcon /><span><strong>IA con control.</strong> Estructura información y propone acciones dentro de reglas y permisos.</span></li><li><CheckIcon /><span><strong>Arquitectura abierta.</strong> Preparada para ERP, BIM, almacenamiento, cámaras y sensores.</span></li></ul></div>
+        <div className={styles.positioningCopy}><span className={styles.sectionKicker}>Nuestra ventaja</span><h2>No es otra app que la cuadrilla tiene que recordar abrir.</h2><p>Las plataformas globales demostraron el valor de una fuente única de verdad. ObraSaaS acerca esa disciplina al canal que el campo latinoamericano ya usa todos los días.</p><ul><li><CheckIcon /><span><strong>Adopción primero.</strong> WhatsApp en campo, panel especializado en oficina.</span></li><li><CheckIcon /><span><strong>IA con control.</strong> Estructura información y propone acciones dentro de reglas y permisos.</span></li><li><CheckIcon /><span><strong>Arquitectura extensible.</strong> Los proveedores externos se conectan y validan antes de presentarlos como productivos.</span></li></ul></div>
         <div className={styles.architectureCard}>
-          <div className={styles.architectureHeader}><span>Arquitectura operativa</span><small>Evento → contexto → acción</small></div>
+          <div className={styles.architectureHeader}><span>Arquitectura operativa</span><small>Núcleo actual + perímetro planificado</small></div>
           <div className={styles.architectureStack}><div><span className={styles.nodeIcon}>WA</span><p><strong>Canales de campo</strong><small>WhatsApp · webviews · sensores</small></p></div><i aria-hidden="true" /><div><span className={styles.nodeIcon}>AI</span><p><strong>Motor ObraSaaS</strong><small>Identidad · intención · políticas</small></p></div><i aria-hidden="true" /><div><span className={styles.nodeIcon}>OS</span><p><strong>Registro operativo</strong><small>Gantt · RRHH · stock · evidencia</small></p></div></div>
-          <div className={styles.architectureOutput}><span>API</span><span>ERP</span><span>BIM</span><span>PDF</span><span>BI</span></div>
+          <div className={styles.architectureOutput}><span>PDF activo</span><span>API roadmap</span><span>ERP roadmap</span><span>BIM demo</span><span>BI roadmap</span></div>
         </div>
       </section>
 

@@ -10,6 +10,7 @@
     "lint": "eslint",
     "test": "node --test tests/*.test.js",
     "test:e2e": "playwright test",
+    "test:e2e:public": "playwright test --project=public",
     "verify:task-migration": "tsx scripts/verify-project-task-migration.mjs",
     "verify:project-access-migration": "tsx scripts/verify-project-membership-migration.mjs",
     "verify:inbox-postgres": "tsx scripts/verify-whatsapp-inbox-postgres.mjs",

@@ -17,6 +17,8 @@ Plataforma multi-tenant para convertir reportes de campo enviados por WhatsApp e
 
 Las superficies BIM y visión perimetral están identificadas como **Demo Lab** hasta conectar proveedores reales. La aplicación no presenta esas demos como integraciones productivas.
 
+El diagnóstico verificable, los gates de producción y el plan multitrimestre están en [docs/PRODUCT_ROADMAP.md](docs/PRODUCT_ROADMAP.md). La especificación de la clienta se incorporará allí mediante requisitos y pruebas trazables cuando sea recibida.
+
 ## Planes
 
 | Plan | Precio | Alcance principal |
@@ -45,9 +47,12 @@ Copiar `.env.example` a `.env.local` y completar únicamente credenciales dedica
 ```powershell
 npm test
 npm run lint
+npm run test:e2e:public
 npm run build
 npm audit --omit=dev
 ```
+
+GitHub Actions ejecuta estos gates sobre pull requests y pushes a `master` o `codex/**`. El journey E2E autenticado se mantiene separado porque requiere identidades de prueba Clerk dedicadas; todavía debe ampliarse y convertirse en gate antes de producción comercial.
 
 El alias estable publicado es `https://obrasaas.vercel.app`; `https://obrasaas-preview.vercel.app` queda reservado para validaciones de Preview. Mientras no exista un dominio propio, ambos entornos usan la instancia dedicada de desarrollo de Clerk y no se contratan add-ons ni una instancia productiva.
 

@@ -18,6 +18,20 @@ function json(body, status = 200) {
   });
 }
 
+function webhookRecoveryHealth({ failed, blocked, flowRequestGc }) {
+  const reasons = [];
+  if (failed > 0) reasons.push("WEBHOOK_EVENTS_FAILED");
+  if (blocked > 0) reasons.push("WEBHOOK_PROJECTS_BLOCKED");
+  if (Number(flowRequestGc?.failedEndpoints || 0) > 0) {
+    reasons.push("FLOW_REQUEST_GC_FAILED");
+  }
+  return {
+    workHealthy: reasons.length === 0,
+    status: reasons.length === 0 ? "healthy" : "degraded",
+    reasons,
+  };
+}
+
 export async function GET(request) {
   const secret = process.env.CRON_SECRET;
   if (!secret) return json({ error: "Webhook recovery cron is not configured" }, 503);
@@ -58,8 +72,10 @@ export async function GET(request) {
     });
   }
 
+  const health = webhookRecoveryHealth({ failed, blocked, flowRequestGc });
   return json({
     ok: true,
+    ...health,
     projects: projectIds.length,
     completed,
     failed,

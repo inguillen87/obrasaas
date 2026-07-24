@@ -1,5 +1,10 @@
 const RECOVERY_TIMEOUT_MS = 55_000;
 const RECOVERY_ORIGIN = "https://obrasaas.vercel.app";
+const RECOVERY_REASON_ORDER = [
+  "WEBHOOK_EVENTS_FAILED",
+  "WEBHOOK_PROJECTS_BLOCKED",
+  "FLOW_REQUEST_GC_FAILED",
+];
 
 function configuredRecoveryUrl(value) {
   try {
@@ -18,6 +23,62 @@ function configuredRecoveryUrl(value) {
   }
 }
 
+function recoveryError(message, code) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
+
+function responseCount(value, field) {
+  if (value === undefined || value === null) return 0;
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
+    throw recoveryError(
+      `ObraSaaS recovery response has an invalid ${field} counter.`,
+      "WEBHOOK_RECOVERY_INVALID_RESPONSE",
+    );
+  }
+  return value;
+}
+
+function recoveryResult(body) {
+  if (body?.workHealthy !== undefined && typeof body.workHealthy !== "boolean") {
+    throw recoveryError(
+      "ObraSaaS recovery response has an invalid workHealthy flag.",
+      "WEBHOOK_RECOVERY_INVALID_RESPONSE",
+    );
+  }
+  const failed = responseCount(body?.failed, "failed");
+  const blocked = responseCount(body?.blocked, "blocked");
+  const flowRequestGcFailed = responseCount(
+    body?.flowRequestGc?.failedEndpoints,
+    "flowRequestGc.failedEndpoints",
+  );
+  const countersHealthy = failed === 0 && blocked === 0 && flowRequestGcFailed === 0;
+  const workHealthy = body?.workHealthy === undefined
+    ? countersHealthy
+    : body.workHealthy === true && countersHealthy;
+  const reportedReasons = Array.isArray(body?.reasons)
+    ? RECOVERY_REASON_ORDER.filter((reason) => body.reasons.includes(reason))
+    : [];
+  const reasons = reportedReasons.length > 0
+    ? reportedReasons
+    : [
+        failed > 0 ? "WEBHOOK_EVENTS_FAILED" : null,
+        blocked > 0 ? "WEBHOOK_PROJECTS_BLOCKED" : null,
+        flowRequestGcFailed > 0 ? "FLOW_REQUEST_GC_FAILED" : null,
+      ].filter(Boolean);
+  if (!workHealthy && reasons.length === 0) reasons.push("RECOVERY_REPORTED_DEGRADED");
+  return {
+    workHealthy,
+    reasons,
+    projects: responseCount(body?.projects, "projects"),
+    completed: responseCount(body?.completed, "completed"),
+    failed,
+    blocked,
+    flowRequestGcFailed,
+  };
+}
+
 export async function invokeWebhookRecovery(env, fetchImpl = fetch) {
   const url = configuredRecoveryUrl(env?.RECOVERY_URL);
   const secret = typeof env?.CRON_SECRET === "string" ? env.CRON_SECRET : "";
@@ -33,28 +94,43 @@ export async function invokeWebhookRecovery(env, fetchImpl = fetch) {
     signal: AbortSignal.timeout(RECOVERY_TIMEOUT_MS),
   });
   const body = await response.json().catch(() => null);
-  if (!response.ok || body?.ok !== true) {
-    throw new Error(`ObraSaaS recovery endpoint returned HTTP ${response.status}.`);
+  if (!response.ok) {
+    throw recoveryError(
+      `ObraSaaS recovery endpoint returned HTTP ${response.status}.`,
+      "WEBHOOK_RECOVERY_ENDPOINT_ERROR",
+    );
   }
-  return {
-    projects: Number(body.projects || 0),
-    completed: Number(body.completed || 0),
-    failed: Number(body.failed || 0),
-    blocked: Number(body.blocked || 0),
-  };
+  if (body?.ok !== true) {
+    throw recoveryError(
+      "ObraSaaS recovery endpoint returned an invalid success response.",
+      "WEBHOOK_RECOVERY_INVALID_RESPONSE",
+    );
+  }
+  return recoveryResult(body);
+}
+
+function unhealthyRecoveryError(result) {
+  const reasons = result.reasons.join(",");
+  return recoveryError(
+    `ObraSaaS recovery work is degraded (${reasons}; failed=${result.failed}; blocked=${result.blocked}; flowGcFailed=${result.flowRequestGcFailed}).`,
+    "WEBHOOK_RECOVERY_UNHEALTHY",
+  );
 }
 
 const webhookRecoveryWorker = {
-  async scheduled(_controller, env, context) {
+  async scheduled(controller, env, context) {
+    controller.noRetry();
     context.waitUntil(
       invokeWebhookRecovery(env)
         .then((result) => {
+          if (!result.workHealthy) throw unhealthyRecoveryError(result);
           console.log(JSON.stringify({ event: "webhook_recovery", ok: true, ...result }));
         })
         .catch((error) => {
           console.error(JSON.stringify({
             event: "webhook_recovery",
             ok: false,
+            code: error?.code || "WEBHOOK_RECOVERY_UNKNOWN",
             error: error instanceof Error ? error.message : "Unknown recovery error",
           }));
           throw error;
