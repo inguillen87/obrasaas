@@ -35,6 +35,17 @@ function jsonObject(value, field) {
   return value;
 }
 
+function normalizePrivateStorage(value) {
+  const storage = jsonObject(value, 'storage');
+  const provider = boundedText(storage.provider, 'storage.provider', 48).toLowerCase();
+  const key = boundedText(storage.key ?? storage.objectKey, 'storage.key', 512);
+  const visibility = boundedText(storage.visibility, 'storage.visibility', 16).toLowerCase();
+  if (visibility !== 'private') throw new WorkerDocumentError('El almacenamiento debe ser privado.', 'WORKER_DOCUMENT_STORAGE_VISIBILITY');
+  if (!['s3', 'r2', 'gcs', 'azure_blob'].includes(provider)) throw new WorkerDocumentError('Proveedor de almacenamiento no permitido.', 'WORKER_DOCUMENT_STORAGE_PROVIDER');
+  if (/^(https?:|data:|javascript:)/i.test(key) || key.includes('..')) throw new WorkerDocumentError('Clave de almacenamiento invÃ¡lida.', 'WORKER_DOCUMENT_STORAGE_KEY');
+  return { provider, key, visibility: 'private' };
+}
+
 function boundedReadLimit(value, fallback, maximum) {
   if (value === undefined || value === null || value === '') return fallback;
   const limit = Number(value);
@@ -59,7 +70,7 @@ export function normalizeWorkerDocumentInput(input = {}) {
     type,
     version,
     sha256,
-    storage: jsonObject(input.storage, 'storage'),
+    storage: normalizePrivateStorage(input.storage),
     issuedAt,
     expiresAt,
     metadata: input.metadata === undefined || input.metadata === null ? null : jsonObject(input.metadata, 'metadata'),

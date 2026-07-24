@@ -14,12 +14,15 @@ const HASH = 'a'.repeat(64);
 test('normalizes a private worker document and rejects invalid dates', () => {
   const result = normalizeWorkerDocumentInput({
     workerId: 'worker-1', type: 'art', version: 2, sha256: HASH,
-    storage: { provider: 'cloudinary', publicId: 'private/doc-1', visibility: 'private' },
+    storage: { provider: 's3', key: 'private/doc-1', visibility: 'private' },
     issuedAt: '2026-07-01T00:00:00Z', expiresAt: '2027-07-01T00:00:00Z',
   });
   assert.equal(result.type, 'ART');
   assert.equal(result.version, 2);
+  assert.deepEqual(result.storage, { provider: 's3', key: 'private/doc-1', visibility: 'private' });
   assert.throws(() => normalizeWorkerDocumentInput({ ...result, expiresAt: '2026-06-01T00:00:00Z' }), /expiresAt/);
+  assert.throws(() => normalizeWorkerDocumentInput({ ...result, storage: { provider: 's3', key: 'https://public.example/doc', visibility: 'private' } }), /Clave/);
+  assert.throws(() => normalizeWorkerDocumentInput({ ...result, storage: { provider: 's3', key: 'private/doc', visibility: 'public' } }), /privado/);
 });
 
 test('document lifecycle is terminal after archive and rejects illegal transitions', () => {
