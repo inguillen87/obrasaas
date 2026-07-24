@@ -426,7 +426,10 @@ model PurchaseOrder {
 model PurchaseOrderLine {
   id              String        @id @default(cuid())
   purchaseOrderId String
+  projectId       String
+  budgetLineId    String?
   purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  budgetLine      BudgetLine?   @relation(fields: [projectId, budgetLineId], references: [projectId, id], onDelete: Restrict)
   description     String        @db.VarChar(220)
   unit            String        @db.VarChar(32)
   quantity        Decimal       @db.Decimal(14, 3)
@@ -435,6 +438,7 @@ model PurchaseOrderLine {
   createdAt       DateTime      @default(now())
 
   @@index([purchaseOrderId])
+  @@index([projectId, budgetLineId])
 }
 
 model CrmAccount {
@@ -1037,21 +1041,22 @@ model BudgetVersion {
 }
 
 model BudgetLine {
-  id              String        @id @default(cuid())
-  projectId       String
-  budgetVersionId String
-  budgetVersion   BudgetVersion @relation(fields: [projectId, budgetVersionId], references: [projectId, id], onDelete: Cascade)
-  taskId          String?
-  task            Task?         @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict)
-  costCode        String        @db.VarChar(64)
-  description     String        @db.VarChar(220)
-  quantity        Decimal?      @db.Decimal(14, 4)
-  unit            String?       @db.VarChar(32)
-  unitRate        Decimal?      @db.Decimal(14, 2)
-  amount          Decimal       @db.Decimal(14, 2)
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  entries         BudgetEntry[]
+  id                 String              @id @default(cuid())
+  projectId          String
+  budgetVersionId    String
+  budgetVersion      BudgetVersion       @relation(fields: [projectId, budgetVersionId], references: [projectId, id], onDelete: Cascade)
+  taskId             String?
+  task               Task?               @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict)
+  costCode           String              @db.VarChar(64)
+  description        String              @db.VarChar(220)
+  quantity           Decimal?            @db.Decimal(14, 4)
+  unit               String?             @db.VarChar(32)
+  unitRate           Decimal?            @db.Decimal(14, 2)
+  amount             Decimal             @db.Decimal(14, 2)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  entries            BudgetEntry[]
+  purchaseOrderLines PurchaseOrderLine[]
 
   @@unique([projectId, id])
   @@index([projectId, budgetVersionId, costCode])
