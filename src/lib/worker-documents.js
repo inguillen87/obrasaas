@@ -115,3 +115,13 @@ export function assertStartActTransition(from, to) {
   if (!allowed[current].has(next)) throw new WorkerDocumentError('Transición de acta no permitida.', 'START_ACT_TRANSITION', 409);
   return next;
 }
+
+export async function listWorkerDocuments(prisma, { projectId, workerId, status } = {}) {
+  const rows = await prisma.workerDocument.findMany({
+    where: { projectId, ...(workerId ? { workerId } : {}), ...(status ? { status: normalizeWorkerDocumentStatus(status) } : {}) },
+    orderBy: [{ expiresAt: 'asc' }, { createdAt: 'desc' }],
+    take: 500,
+    select: { id: true, workerId: true, type: true, version: true, status: true, issuedAt: true, expiresAt: true, reviewedAt: true, reviewedById: true, rejectionReason: true, createdAt: true, updatedAt: true },
+  });
+  return { documents: rows.map((row) => ({ ...row, issuedAt: row.issuedAt?.toISOString?.() ?? null, expiresAt: row.expiresAt?.toISOString?.() ?? null, reviewedAt: row.reviewedAt?.toISOString?.() ?? null, createdAt: row.createdAt?.toISOString?.() ?? null, updatedAt: row.updatedAt?.toISOString?.() ?? null })) };
+}
