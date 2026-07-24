@@ -125,3 +125,13 @@ export async function listWorkerDocuments(prisma, { projectId, workerId, status 
   });
   return { documents: rows.map((row) => ({ ...row, issuedAt: row.issuedAt?.toISOString?.() ?? null, expiresAt: row.expiresAt?.toISOString?.() ?? null, reviewedAt: row.reviewedAt?.toISOString?.() ?? null, createdAt: row.createdAt?.toISOString?.() ?? null, updatedAt: row.updatedAt?.toISOString?.() ?? null })) };
 }
+
+export async function listProjectStartActs(prisma, { projectId, status } = {}) {
+  const rows = await prisma.projectStartAct.findMany({
+    where: { projectId, ...(status ? { status: normalizeStartActStatus(status) } : {}) },
+    orderBy: [{ version: 'desc' }],
+    take: 100,
+    select: { id: true, projectId: true, version: true, status: true, effectiveAt: true, signedAt: true, voidedAt: true, createdAt: true, updatedAt: true, participants: { select: { id: true, subjectType: true, subjectId: true, displayName: true, role: true, signedAt: true } } },
+  });
+  return { acts: rows.map((row) => ({ ...row, effectiveAt: row.effectiveAt?.toISOString?.() ?? null, signedAt: row.signedAt?.toISOString?.() ?? null, voidedAt: row.voidedAt?.toISOString?.() ?? null, createdAt: row.createdAt?.toISOString?.() ?? null, updatedAt: row.updatedAt?.toISOString?.() ?? null, participants: row.participants.map((participant) => ({ ...participant, signedAt: participant.signedAt?.toISOString?.() ?? null })) })) };
+}
