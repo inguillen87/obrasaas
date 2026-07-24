@@ -1037,6 +1037,7 @@ model CashMovement {
   category       String             @db.VarChar(96)
   description    String?            @db.VarChar(500)
   receipt        Json?
+  fingerprint    String?            @db.VarChar(64)
   revision       Int                @default(0)
   approvedAt     DateTime?
   createdAt      DateTime           @default(now())
@@ -1045,6 +1046,7 @@ model CashMovement {
   @@unique([projectId, id])
   @@unique([projectId, idempotencyKey])
   @@index([projectId, fundId, status, createdAt])
+  @@index([projectId, fingerprint])
 }
 
 model NotificationPreference {
