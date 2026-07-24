@@ -66,6 +66,19 @@ enum ProjectBlockerSeverity {
   CRITICAL
 }
 
+enum DailyLogStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+enum ProgressEvidenceStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum IncidentSeverity {
   INFO
   LOW
@@ -390,6 +403,8 @@ model Project {
   workTeams                     WorkTeam[]
   taskAssignments               TaskAssignment[]
   projectBlockers               ProjectBlocker[]
+  dailyLogs                     DailyLog[]
+  progressEvidence              ProgressEvidence[]
   incidents                     Incident[]
   attendances                   AttendanceEntry[]
   attendanceShifts              AttendanceShift[]
@@ -587,6 +602,8 @@ model Worker {
   teamMemberships                WorkTeamMember[]
   taskAssignments                TaskAssignment[]
   ownedProjectBlockers           ProjectBlocker[]
+  dailyLogs                      DailyLog[]
+  progressEvidence               ProgressEvidence[]
   whatsappFlowSessions           WhatsAppFlowSession[]
   createdAt                      DateTime                       @default(now())
   updatedAt                      DateTime                       @updatedAt
@@ -631,30 +648,32 @@ model OperationalProposal {
 }
 
 model Task {
-  id           String           @id @default(cuid())
-  projectId    String
-  project      Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  externalId   String?
-  code         String?          @db.VarChar(64)
-  title        String
-  description  String?
-  type         TaskType         @default(TASK)
-  status       TaskStatus       @default(BACKLOG)
-  progress     Int              @default(0)
-  startsAt     DateTime?
-  endsAt       DateTime?
-  assignee     String?
-  revision     Int              @default(0)
-  parentId     String?
-  parent       Task?            @relation("TaskHierarchy", fields: [projectId, parentId], references: [projectId, id], onDelete: Restrict)
-  children     Task[]           @relation("TaskHierarchy")
-  predecessors TaskDependency[] @relation("TaskDependencySuccessor")
-  successors   TaskDependency[] @relation("TaskDependencyPredecessor")
-  assignments  TaskAssignment[]
-  blockers     ProjectBlocker[]
-  metadata     Json?
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
+  id               String             @id @default(cuid())
+  projectId        String
+  project          Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  externalId       String?
+  code             String?            @db.VarChar(64)
+  title            String
+  description      String?
+  type             TaskType           @default(TASK)
+  status           TaskStatus         @default(BACKLOG)
+  progress         Int                @default(0)
+  startsAt         DateTime?
+  endsAt           DateTime?
+  assignee         String?
+  revision         Int                @default(0)
+  parentId         String?
+  parent           Task?              @relation("TaskHierarchy", fields: [projectId, parentId], references: [projectId, id], onDelete: Restrict)
+  children         Task[]             @relation("TaskHierarchy")
+  predecessors     TaskDependency[]   @relation("TaskDependencySuccessor")
+  successors       TaskDependency[]   @relation("TaskDependencyPredecessor")
+  assignments      TaskAssignment[]
+  blockers         ProjectBlocker[]
+  dailyLogs        DailyLog[]
+  progressEvidence ProgressEvidence[]
+  metadata         Json?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
 
   @@unique([projectId, externalId])
   @@unique([projectId, id])
@@ -764,6 +783,56 @@ model ProjectBlocker {
   @@unique([projectId, id])
   @@index([projectId, status, severity, dueAt])
   @@index([projectId, taskId, status])
+}
+
+model DailyLog {
+  id              String         @id @default(cuid())
+  projectId       String
+  project         Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  taskId          String?
+  task            Task?          @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict)
+  authorWorkerId  String?
+  authorWorker    Worker?        @relation(fields: [projectId, authorWorkerId], references: [projectId, id], onDelete: Restrict)
+  workDate        DateTime       @db.Date
+  title           String         @db.VarChar(220)
+  summary         String         @db.Text
+  status          DailyLogStatus @default(DRAFT)
+  revision        Int            @default(0)
+  submittedAt     DateTime?
+  approvedAt      DateTime?
+  rejectionReason String?        @db.Text
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@unique([projectId, id])
+  @@index([projectId, workDate, status])
+  @@index([projectId, taskId, workDate])
+}
+
+model ProgressEvidence {
+  id             String                 @id @default(cuid())
+  projectId      String
+  project        Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  taskId         String
+  task           Task                   @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict)
+  authorWorkerId String?
+  authorWorker   Worker?                @relation(fields: [projectId, authorWorkerId], references: [projectId, id], onDelete: Restrict)
+  capturedAt     DateTime
+  caption        String?                @db.Text
+  media          Json
+  latitude       Decimal?               @db.Decimal(10, 7)
+  longitude      Decimal?               @db.Decimal(10, 7)
+  accuracyMeters Decimal?               @db.Decimal(9, 2)
+  status         ProgressEvidenceStatus @default(PENDING)
+  reviewNote     String?                @db.Text
+  revision       Int                    @default(0)
+  reviewedAt     DateTime?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  @@unique([projectId, id])
+  @@index([projectId, taskId, capturedAt])
+  @@index([projectId, status, capturedAt])
 }
 
 model Incident {

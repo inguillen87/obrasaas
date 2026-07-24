@@ -1,0 +1,8 @@
+import { AccessError, accessErrorResponse, getPlatformAccess, requireTenantPermission } from '@/lib/access';
+import { getPrisma } from '@/lib/prisma';
+import { RequestBodyError, readJsonRequest, requestBodyErrorResponse } from '@/lib/request-body';
+import { createProgressJournalRecord, listProgressJournal, progressJournalErrorResponse } from '@/lib/progress-journal';
+
+function known(error) { if (error instanceof AccessError) return accessErrorResponse(error); if (error instanceof RequestBodyError) return requestBodyErrorResponse(error); return progressJournalErrorResponse(error); }
+export async function GET() { try { const access = await getPlatformAccess(); requireTenantPermission(access, 'org:execution:read', { subscriptionMode: 'read' }); return Response.json(await listProgressJournal(getPrisma(), { projectId: access.project.id }), { headers: { 'Cache-Control': 'private, no-store' } }); } catch (error) { return known(error) || Response.json({ error: 'No se pudo cargar la bitácora.', code: 'PROGRESS_READ_FAILED' }, { status: 500 }); } }
+export async function POST(request) { try { const access = await getPlatformAccess(); requireTenantPermission(access, 'org:execution:manage', { subscriptionMode: 'write' }); const input = await readJsonRequest(request, { maxBytes: 64 * 1024 }); return Response.json(await createProgressJournalRecord(getPrisma(), { scope: { organizationId: access.organization.id, projectId: access.project.id }, actorId: access.databaseUserId, input }), { status: 201 }); } catch (error) { return known(error) || Response.json({ error: 'No se pudo guardar el registro.', code: 'PROGRESS_WRITE_FAILED' }, { status: 500 }); } }
