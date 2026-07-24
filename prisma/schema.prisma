@@ -641,8 +641,6 @@ model Worker {
   dailyLogs                      DailyLog[]
   progressEvidence               ProgressEvidence[]
   requestedExtraWork             ExtraWorkRequest[]             @relation("ExtraWorkRequester")
-  extraWorkRequests              ExtraWorkRequest[]
-  replanScenarios                ReplanScenario[]
   whatsappFlowSessions           WhatsAppFlowSession[]
   createdAt                      DateTime                       @default(now())
   updatedAt                      DateTime                       @updatedAt
@@ -840,8 +838,6 @@ model ReplanScenario {
   decisionNote String?              @db.Text
   createdAt    DateTime             @default(now())
   updatedAt    DateTime             @updatedAt
-  worker       Worker?              @relation(fields: [workerId], references: [id])
-  workerId     String?
 
   @@unique([projectId, id])
   @@index([projectId, status, createdAt])
@@ -869,8 +865,6 @@ model ExtraWorkRequest {
   decisionNote        String?          @db.Text
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
-  worker              Worker?          @relation(fields: [workerId], references: [id])
-  workerId            String?
   replanScenarios     ReplanScenario[]
 
   @@unique([projectId, id])
