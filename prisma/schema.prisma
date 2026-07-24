@@ -126,9 +126,25 @@ enum BudgetEntryKind {
   ACTUAL
   FORECAST
 }
-enum CashFundStatus { ACTIVE CLOSED }
-enum CashMovementKind { FUNDING EXPENSE REIMBURSEMENT ADJUSTMENT }
-enum CashMovementStatus { DRAFT PENDING_APPROVAL APPROVED REJECTED }
+
+enum CashFundStatus {
+  ACTIVE
+  CLOSED
+}
+
+enum CashMovementKind {
+  FUNDING
+  EXPENSE
+  REIMBURSEMENT
+  ADJUSTMENT
+}
+
+enum CashMovementStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+}
 
 enum IncidentSeverity {
   INFO
@@ -992,18 +1008,19 @@ model BudgetEntry {
 }
 
 model CashFund {
-  id          String          @id @default(cuid())
+  id          String         @id @default(cuid())
   projectId   String
-  project     Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  name        String          @db.VarChar(160)
-  currency    String          @db.Char(3)
+  project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String         @db.VarChar(160)
+  currency    String         @db.Char(3)
   custodianId String
-  custodian   PlatformUser    @relation(fields: [custodianId], references: [id], onDelete: Restrict)
-  status      CashFundStatus  @default(ACTIVE)
-  revision    Int             @default(0)
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  custodian   PlatformUser   @relation(fields: [custodianId], references: [id], onDelete: Restrict)
+  status      CashFundStatus @default(ACTIVE)
+  revision    Int            @default(0)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
   movements   CashMovement[]
+
   @@unique([projectId, id])
   @@index([projectId, status])
 }
@@ -1019,11 +1036,12 @@ model CashMovement {
   amount         Decimal            @db.Decimal(14, 2)
   category       String             @db.VarChar(96)
   description    String?            @db.VarChar(500)
-  receipt       Json?
-  revision      Int                @default(0)
-  approvedAt    DateTime?
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
+  receipt        Json?
+  revision       Int                @default(0)
+  approvedAt     DateTime?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
   @@unique([projectId, id])
   @@unique([projectId, idempotencyKey])
   @@index([projectId, fundId, status, createdAt])
