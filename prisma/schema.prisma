@@ -114,7 +114,12 @@ enum ReplanScenarioStatus {
   REJECTED
   APPLIED
 }
-enum BudgetVersionStatus { DRAFT ACTIVE SUPERSEDED }
+
+enum BudgetVersionStatus {
+  DRAFT
+  ACTIVE
+  SUPERSEDED
+}
 
 enum IncidentSeverity {
   INFO
@@ -926,26 +931,28 @@ model BudgetVersion {
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
   lines       BudgetLine[]
+
   @@unique([projectId, id])
   @@unique([projectId, version])
   @@index([projectId, status])
 }
 
 model BudgetLine {
-  id            String        @id @default(cuid())
-  projectId     String
+  id              String        @id @default(cuid())
+  projectId       String
   budgetVersionId String
-  budgetVersion BudgetVersion @relation(fields: [projectId, budgetVersionId], references: [projectId, id], onDelete: Cascade)
-  taskId        String?
-  task          Task?         @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict)
-  costCode      String        @db.VarChar(64)
-  description   String        @db.VarChar(220)
-  quantity      Decimal?      @db.Decimal(14, 4)
-  unit          String?       @db.VarChar(32)
-  unitRate      Decimal?      @db.Decimal(14, 2)
-  amount        Decimal       @db.Decimal(14, 2)
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  budgetVersion   BudgetVersion @relation(fields: [projectId, budgetVersionId], references: [projectId, id], onDelete: Cascade)
+  taskId          String?
+  task            Task?         @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict)
+  costCode        String        @db.VarChar(64)
+  description     String        @db.VarChar(220)
+  quantity        Decimal?      @db.Decimal(14, 4)
+  unit            String?       @db.VarChar(32)
+  unitRate        Decimal?      @db.Decimal(14, 2)
+  amount          Decimal       @db.Decimal(14, 2)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
   @@unique([projectId, id])
   @@index([projectId, budgetVersionId, costCode])
   @@index([projectId, taskId])
