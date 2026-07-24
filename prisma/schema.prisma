@@ -456,6 +456,7 @@ model GoodsReceipt {
   operationKey    String             @db.VarChar(190)
   status          GoodsReceiptStatus @default(POSTED)
   notes           String?            @db.VarChar(500)
+  receipt         Json?
   receivedAt      DateTime           @default(now())
   revision        Int                @default(0)
   project         Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
