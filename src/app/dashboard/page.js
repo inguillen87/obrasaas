@@ -2,6 +2,7 @@ import DashboardClient from './dashboard-client';
 import { getPlatformAccess, hasTenantPermission, requireTenantPermission } from '@/lib/access';
 import { getAppStateSnapshot, getMessages } from '@/lib/db';
 import { getPrisma } from '@/lib/prisma';
+import { listCanonicalTasks } from '@/lib/canonical-tasks';
 import { fieldWorkerWhatsAppRole } from '@/lib/field-workers';
 import { publicTenantAiSettings } from '@/lib/ai/tenant-settings';
 import {
@@ -35,6 +36,7 @@ export default async function DashboardPage() {
     access,
     'org:operational-proposals:read',
   );
+  const canReadCanonicalTasks = hasTenantPermission(access, 'org:tasks:read');
   const aiSettings = publicTenantAiSettings(access.organization.metadata);
   const [
     initialSnapshot,
@@ -43,6 +45,7 @@ export default async function DashboardPage() {
     membershipCount,
     fieldWorkers,
     pendingOperationalProposalCount,
+    canonicalTasks,
   ] = await Promise.all([
     getAppStateSnapshot(access),
     getMessages(access, {
@@ -72,6 +75,9 @@ export default async function DashboardPage() {
           },
         })
       : Promise.resolve(0),
+    canReadCanonicalTasks
+      ? listCanonicalTasks(prisma, { projectId: access.project.id, limit: 500 })
+      : Promise.resolve({ tasks: [] }),
   ]);
   return (
     <DashboardClient
@@ -94,6 +100,8 @@ export default async function DashboardPage() {
         canViewTeam: hasTenantPermission(access, 'tenant:members:read'),
         canManageIntegrations: hasTenantPermission(access, 'org:integrations:manage'),
         canReadOperationalProposals,
+        canReadCanonicalTasks,
+        canonicalTasks: canonicalTasks.tasks,
         canManageOperationalProposals: hasTenantPermission(
           access,
           'org:operational-proposals:manage',

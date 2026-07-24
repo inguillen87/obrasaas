@@ -63,7 +63,8 @@ jobs:
           mkdir -p "$RUNNER_TEMP/attendance-migrations"
           for migration in \
             prisma/migrations/2026072315* \
-            prisma/migrations/20260724*_attendance_s2_*; do
+            prisma/migrations/20260724*_attendance_s2_* \
+            prisma/migrations/20260724*_canonical_*; do
             mv "$migration" "$RUNNER_TEMP/attendance-migrations/"
           done
 
@@ -78,7 +79,8 @@ jobs:
         run: |
           for migration in \
             "$RUNNER_TEMP"/attendance-migrations/2026072315* \
-            "$RUNNER_TEMP"/attendance-migrations/20260724*_attendance_s2_*; do
+            "$RUNNER_TEMP"/attendance-migrations/20260724*_attendance_s2_* \
+            "$RUNNER_TEMP"/attendance-migrations/20260724*_canonical_*; do
             mv "$migration" prisma/migrations/
           done
 
@@ -94,6 +96,11 @@ jobs:
         env:
           ATTENDANCE_MIGRATION_DATABASE_URL: postgresql://obrasaas_ci:obrasaas_ci@127.0.0.1:5432/obrasaas_ci?schema=public
         run: npm run verify:attendance-s2-migration
+
+      - name: Verify canonical task and WBS contracts on PostgreSQL TCP
+        env:
+          CANONICAL_TASKS_MIGRATION_DATABASE_URL: postgresql://obrasaas_ci:obrasaas_ci@127.0.0.1:5432/obrasaas_ci?schema=public
+        run: npm run verify:canonical-tasks-migration
 
       - name: Verify migration history status
         run: npx prisma migrate status

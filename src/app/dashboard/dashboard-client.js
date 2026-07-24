@@ -145,6 +145,37 @@ function normalizeAppState(candidate) {
   };
 }
 
+function canonicalTasksToGanttCatalog(tasks, projectStartsAt) {
+  if (!Array.isArray(tasks) || tasks.length === 0) return null;
+  const projectStart = projectStartsAt ? new Date(projectStartsAt).getTime() : NaN;
+  const catalog = {};
+  for (const task of tasks) {
+    const start = task.startsAt ? new Date(task.startsAt).getTime() : NaN;
+    const end = task.endsAt ? new Date(task.endsAt).getTime() : NaN;
+    const startOffset = Number.isFinite(start) && Number.isFinite(projectStart)
+      ? Math.max(0, Math.round((start - projectStart) / 86_400_000))
+      : 0;
+    const duration = Number.isFinite(start) && Number.isFinite(end)
+      ? Math.max(1, Math.round((end - start) / 86_400_000) + 1)
+      : 1;
+    catalog[task.id] = {
+      name: task.title,
+      description: task.description || '',
+      assignee: task.assignee || '',
+      progress: task.progress,
+      duration,
+      startOffset,
+      startDay: startOffset + 1,
+      dependencies: (task.dependencies || [])
+        .filter((dependency) => dependency.successorId === task.id)
+        .map((dependency) => dependency.predecessorId),
+      status: task.status,
+      canonicalTaskId: task.id,
+    };
+  }
+  return catalog;
+}
+
 const initialChatMessages = [
   {
       sender: "bot",
@@ -225,6 +256,10 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
   const approvalOnboardingRequested = searchParams.get('onboarding') === 'approval';
   // Application State
   const [state, setState] = useState(() => normalizeAppState(initialState));
+  const canonicalTaskCatalog = useMemo(
+    () => canonicalTasksToGanttCatalog(setup.canonicalTasks, platformAccess.project.startsAt),
+    [setup.canonicalTasks, platformAccess.project.startsAt],
+  );
   const stateVersionRef = useRef(validProjectStateVersion(setup.initialStateVersion) ?? 0);
   const stateWriteQueueRef = useRef(Promise.resolve());
   const stateWriteGenerationRef = useRef(0);
@@ -1885,7 +1920,7 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
 
             <StockpilePanel
               stockpiles={state.stockpiles}
-              canManage={setup.canManageProjects}
+              canManage={setup.canManageProjects && !canonicalTaskCatalog}
               createId={() => createClientEntityId('material')}
               onCommit={handleStockpileCommit}
             />
@@ -2250,7 +2285,7 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
               onTasksChange={handleTasksChange}
               onToast={addToast}
               project={platformAccess.project}
-              tasks={state.tasks}
+              tasks={canonicalTaskCatalog || state.tasks}
             />
           </section>
 

@@ -23,6 +23,18 @@ enum TaskStatus {
   DONE
 }
 
+enum TaskType {
+  TASK
+  MILESTONE
+}
+
+enum TaskDependencyType {
+  FINISH_TO_START
+  START_TO_START
+  FINISH_TO_FINISH
+  START_TO_FINISH
+}
+
 enum IncidentSeverity {
   INFO
   LOW
@@ -343,6 +355,7 @@ model Project {
   snapshot                      ProjectSnapshot?
   workers                       Worker[]
   tasks                         Task[]
+  taskDependencies              TaskDependency[]
   incidents                     Incident[]
   attendances                   AttendanceEntry[]
   attendanceShifts              AttendanceShift[]
@@ -581,23 +594,50 @@ model OperationalProposal {
 }
 
 model Task {
-  id          String     @id @default(cuid())
-  projectId   String
-  project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  externalId  String?
-  title       String
-  description String?
-  status      TaskStatus @default(BACKLOG)
-  progress    Int        @default(0)
-  startsAt    DateTime?
-  endsAt      DateTime?
-  assignee    String?
-  metadata    Json?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  id           String           @id @default(cuid())
+  projectId    String
+  project      Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  externalId   String?
+  code         String?          @db.VarChar(64)
+  title        String
+  description  String?
+  type         TaskType         @default(TASK)
+  status       TaskStatus       @default(BACKLOG)
+  progress     Int              @default(0)
+  startsAt     DateTime?
+  endsAt       DateTime?
+  assignee     String?
+  revision     Int              @default(0)
+  parentId     String?
+  parent       Task?            @relation("TaskHierarchy", fields: [projectId, parentId], references: [projectId, id], onDelete: Restrict)
+  children     Task[]           @relation("TaskHierarchy")
+  predecessors TaskDependency[] @relation("TaskDependencySuccessor")
+  successors   TaskDependency[] @relation("TaskDependencyPredecessor")
+  metadata     Json?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
 
   @@unique([projectId, externalId])
+  @@unique([projectId, id])
+  @@unique([projectId, code])
   @@index([projectId, status])
+  @@index([projectId, parentId])
+}
+
+model TaskDependency {
+  id            String             @id @default(cuid())
+  projectId     String
+  project       Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  predecessorId String
+  predecessor   Task               @relation("TaskDependencyPredecessor", fields: [projectId, predecessorId], references: [projectId, id], onDelete: Cascade)
+  successorId   String
+  successor     Task               @relation("TaskDependencySuccessor", fields: [projectId, successorId], references: [projectId, id], onDelete: Cascade)
+  type          TaskDependencyType @default(FINISH_TO_START)
+  lagDays       Int                @default(0)
+  createdAt     DateTime           @default(now())
+
+  @@unique([projectId, predecessorId, successorId], map: "TaskDependency_project_predecessor_successor_key")
+  @@index([projectId, successorId])
 }
 
 model Incident {
