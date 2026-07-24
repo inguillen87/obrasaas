@@ -3,6 +3,7 @@ CREATE TYPE "ExtraWorkSessionStatus" AS ENUM ('OPEN', 'CLOSED', 'VOIDED');
 
 CREATE TABLE "ExtraWorkSession" (
   "id" TEXT NOT NULL,
+  "operationKey" VARCHAR(190) NOT NULL,
   "projectId" TEXT NOT NULL,
   "extraWorkId" TEXT NOT NULL,
   "workerId" TEXT NOT NULL,
@@ -27,5 +28,6 @@ CREATE TABLE "ExtraWorkSession" (
   CONSTRAINT "ExtraWorkSession_accuracy_check" CHECK (("startAccuracy" IS NULL OR "startAccuracy" >= 0) AND ("finishAccuracy" IS NULL OR "finishAccuracy" >= 0))
 );
 CREATE UNIQUE INDEX "ExtraWorkSession_projectId_id_key" ON "ExtraWorkSession"("projectId", "id");
+CREATE UNIQUE INDEX "ExtraWorkSession_projectId_operationKey_key" ON "ExtraWorkSession"("projectId", "operationKey");
 CREATE INDEX "ExtraWorkSession_projectId_extraWorkId_status_idx" ON "ExtraWorkSession"("projectId", "extraWorkId", "status");
 CREATE INDEX "ExtraWorkSession_projectId_workerId_status_idx" ON "ExtraWorkSession"("projectId", "workerId", "status");

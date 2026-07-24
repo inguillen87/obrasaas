@@ -883,6 +883,7 @@ model ExtraWorkRequest {
 
 model ExtraWorkSession {
   id              String                 @id @default(cuid())
+  operationKey    String                 @db.VarChar(190)
   projectId       String
   project         Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
   extraWorkId     String
@@ -904,6 +905,7 @@ model ExtraWorkSession {
   updatedAt       DateTime               @updatedAt
 
   @@unique([projectId, id])
+  @@unique([projectId, operationKey])
   @@index([projectId, extraWorkId, status])
   @@index([projectId, workerId, status])
 }
