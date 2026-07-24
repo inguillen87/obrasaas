@@ -33,6 +33,9 @@ test("Cloudflare recovery calls only the configured HTTPS cron endpoint with bea
     failed: 0,
     blocked: 0,
     flowRequestGcFailed: 0,
+    attendanceExpiryFailedProjects: 0,
+    attendanceExpiryBacklog: false,
+    attendanceExpiryBacklogCheckFailed: false,
   });
 });
 
@@ -52,6 +55,27 @@ test("Cloudflare recovery returns explicit and legacy degradation without trusti
   assert.equal(explicit.workHealthy, false);
   assert.deepEqual(explicit.reasons, ["FLOW_REQUEST_GC_FAILED"]);
   assert.equal(explicit.flowRequestGcFailed, 1);
+
+  const attendance = await invokeWebhookRecovery(env, async () => Response.json({
+    ok: true,
+    workHealthy: false,
+    reasons: ["ATTENDANCE_EXPIRY_FAILED", "ATTENDANCE_EXPIRY_BACKLOG"],
+    failed: 0,
+    blocked: 0,
+    flowRequestGc: { failedEndpoints: 0 },
+    attendanceExpiry: {
+      failedProjects: 1,
+      hasMore: true,
+      backlogCheckFailed: false,
+    },
+  }));
+  assert.equal(attendance.workHealthy, false);
+  assert.deepEqual(attendance.reasons, [
+    "ATTENDANCE_EXPIRY_FAILED",
+    "ATTENDANCE_EXPIRY_BACKLOG",
+  ]);
+  assert.equal(attendance.attendanceExpiryFailedProjects, 1);
+  assert.equal(attendance.attendanceExpiryBacklog, true);
 
   const legacy = await invokeWebhookRecovery(env, async () => Response.json({
     ok: true,
@@ -82,6 +106,13 @@ test("Cloudflare recovery rejects malformed health contracts", async () => {
   );
   await assert.rejects(
     invokeWebhookRecovery(env, async () => Response.json({ ok: true, workHealthy: "true" })),
+    (error) => error?.code === "WEBHOOK_RECOVERY_INVALID_RESPONSE",
+  );
+  await assert.rejects(
+    invokeWebhookRecovery(env, async () => Response.json({
+      ok: true,
+      attendanceExpiry: { failedProjects: 0, hasMore: "false" },
+    })),
     (error) => error?.code === "WEBHOOK_RECOVERY_INVALID_RESPONSE",
   );
   await assert.rejects(

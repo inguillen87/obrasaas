@@ -18,6 +18,6 @@ npx wrangler deployments status --config infra/cloudflare/webhook-recovery/wrang
 npx wrangler versions view <VERSION_ID> --config infra/cloudflare/webhook-recovery/wrangler.jsonc
 ```
 
-Después de desplegar, los logs del deployment de producción en Vercel deben mostrar un `GET /api/cron/webhooks` por minuto con estado `200`, dominio `obrasaas.vercel.app` y `workHealthy=true` en el cuerpo. El HTTP `200` confirma que la corrida fue aceptada; `workHealthy=false` identifica eventos fallidos, proyectos bloqueados o fallas del GC y hace fallar la ejecución programada del Worker sin reintento inmediato. La siguiente corrida natural ocurre al minuto.
+Después de desplegar, los logs del deployment de producción en Vercel deben mostrar un `GET /api/cron/webhooks` por minuto con estado `200`, dominio `obrasaas.vercel.app` y `workHealthy=true` en el cuerpo. El HTTP `200` confirma que la corrida fue aceptada; `workHealthy=false` identifica expiración de asistencia fallida/con backlog, eventos fallidos, proyectos bloqueados o fallas del GC y hace fallar la ejecución programada del Worker sin reintento inmediato. La siguiente corrida natural ocurre al minuto.
 
 `GET /health` sólo confirma liveness del Worker; no representa el resultado de la última recuperación. Hasta persistir ese estado en un backend de observabilidad, la salud de trabajo se verifica mediante la respuesta estructurada y los logs del Cron.

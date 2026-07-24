@@ -33,10 +33,40 @@ enum IncidentSeverity {
 
 enum AttendanceStatus {
   PRESENT
-  PENDING_GEO
   OUTSIDE_GEOFENCE
   EXCUSED
   ABSENT
+  PENDING_GEO
+  EXPIRED
+}
+
+enum AttendanceEventType {
+  CHECK_IN
+  BREAK_START
+  BREAK_END
+  CHECK_OUT
+}
+
+enum AttendanceVerificationStatus {
+  LEGACY
+  PENDING
+  VERIFIED
+  REVIEW_REQUIRED
+  NOT_REQUIRED
+  EXPIRED
+  VOIDED
+}
+
+enum AttendanceShiftStatus {
+  OPEN
+  CLOSED
+  LEGACY_INCOMPLETE
+  VOIDED
+}
+
+enum AttendanceShiftPhase {
+  WORKING
+  ON_BREAK
 }
 
 enum MessageDirection {
@@ -257,6 +287,7 @@ model Project {
   tasks              Task[]
   incidents          Incident[]
   attendances        AttendanceEntry[]
+  attendanceShifts   AttendanceShift[]
   conversations      Conversation[]
   webhookEvents      WebhookEvent[]
   flowSessions       WhatsAppFlowSession[]
@@ -432,6 +463,7 @@ model Worker {
   active                   Boolean               @default(true)
   metadata                 Json?
   attendances              AttendanceEntry[]
+  attendanceShifts         AttendanceShift[]
   proposedOperationalItems OperationalProposal[] @relation("OperationalProposalProposer")
   resolvedOperationalItems OperationalProposal[] @relation("OperationalProposalResolver")
   whatsappFlowSessions     WhatsAppFlowSession[]
@@ -439,6 +471,7 @@ model Worker {
   updatedAt                DateTime              @updatedAt
 
   @@unique([projectId, phone])
+  @@unique([projectId, id], map: "Worker_projectId_id_key")
   @@index([externalId])
 }
 
@@ -516,22 +549,60 @@ model Incident {
 }
 
 model AttendanceEntry {
-  id             String           @id @default(cuid())
-  projectId      String
-  project        Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  workerId       String
-  worker         Worker           @relation(fields: [workerId], references: [id], onDelete: Cascade)
-  status         AttendanceStatus
-  latitude       Decimal?         @db.Decimal(10, 7)
-  longitude      Decimal?         @db.Decimal(10, 7)
-  distanceMeters Int?
-  source         String           @default("whatsapp")
-  checkedInAt    DateTime         @default(now())
-  metadata       Json?
-  createdAt      DateTime         @default(now())
+  id                   String                       @id @default(cuid())
+  projectId            String
+  project              Project                      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workerId             String
+  worker               Worker                       @relation(fields: [projectId, workerId], references: [projectId, id], onDelete: Cascade, map: "AttendanceEntry_worker_scope_fkey")
+  shiftId              String?
+  shift                AttendanceShift?             @relation(fields: [shiftId, projectId, workerId], references: [id, projectId, workerId], onDelete: NoAction, map: "AttendanceEntry_shift_scope_fkey")
+  eventType            AttendanceEventType          @default(CHECK_IN)
+  verificationStatus   AttendanceVerificationStatus @default(LEGACY)
+  occurredAt           DateTime                     @default(now())
+  sourceOccurredAt     DateTime?
+  sequence             Int?
+  idempotencyKey       String                       @unique(map: "AttendanceEntry_idempotencyKey_key") @default(dbgenerated("(gen_random_uuid())::text")) @db.VarChar(190)
+  requestFingerprint   String?                      @db.Char(64)
+  status               AttendanceStatus
+  latitude             Decimal?                     @db.Decimal(10, 7)
+  longitude            Decimal?                     @db.Decimal(10, 7)
+  accuracyMeters       Decimal?                     @db.Decimal(9, 2)
+  distanceMeters       Int?
+  geofenceRadiusMeters Int?
+  source               String                       @default("whatsapp")
+  privacyNoticeVersion String?                      @db.VarChar(64)
+  evidence             Json?
+  checkedInAt          DateTime                     @default(now())
+  metadata             Json?
+  createdAt            DateTime                     @default(now())
 
+  @@unique([shiftId, sequence], map: "AttendanceEntry_shift_sequence_key")
   @@index([projectId, checkedInAt])
   @@index([workerId, checkedInAt])
+  @@index([projectId, workerId, occurredAt], map: "AttendanceEntry_project_worker_occurred_idx")
+}
+
+model AttendanceShift {
+  id        String                @id @default(cuid())
+  projectId String
+  project   Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workerId  String
+  worker    Worker                @relation(fields: [projectId, workerId], references: [projectId, id], onDelete: Cascade, map: "AttendanceShift_worker_scope_fkey")
+  workDate  DateTime              @db.Date
+  timezone  String                @db.VarChar(64)
+  status    AttendanceShiftStatus @default(OPEN)
+  phase     AttendanceShiftPhase  @default(WORKING)
+  openedAt  DateTime
+  closedAt  DateTime?
+  revision  Int                   @default(0)
+  metadata  Json?
+  events    AttendanceEntry[]
+  createdAt DateTime              @default(now())
+  updatedAt DateTime              @updatedAt
+
+  @@unique([id, projectId, workerId], map: "AttendanceShift_id_project_worker_key")
+  @@index([projectId, workDate, status], map: "AttendanceShift_project_date_status_idx")
+  @@index([workerId, openedAt], map: "AttendanceShift_worker_opened_idx")
 }
 
 model Conversation {

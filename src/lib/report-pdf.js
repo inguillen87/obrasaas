@@ -501,7 +501,7 @@ export async function renderWeeklyReportPdf(report) {
   });
   const contextItems = [
     ['DOCUMENTO', report.reportId],
-    ['PERIODO', `${formatDate(report.periodStart, { day: '2-digit', month: 'short' })} - ${formatDate(report.generatedAt, { day: '2-digit', month: 'short', year: 'numeric' })}`],
+    ['PERIODO', `${formatDate(report.periodStart, { timeZone: report.timeZone, day: '2-digit', month: 'short' })} - ${formatDate(report.generatedAt, { timeZone: report.timeZone, day: '2-digit', month: 'short', year: 'numeric' })}`],
     ['VERSION', snapshotLabel(report.snapshotVersion)],
   ];
   const contextColumnWidth = CONTENT_WIDTH / contextItems.length;
@@ -525,7 +525,7 @@ export async function renderWeeklyReportPdf(report) {
     ['Avance fisico', `${Number(report.progress) || 0}%`, `${Number(report.tasksDone) || 0}/${Array.isArray(report.tasks) ? report.tasks.length : 0} tareas`],
     ['Plazo consumido', `${Number(report.timelinePercentage) || 0}%`, `Dia ${Number(report.currentDay) || 0} de ${Number(report.totalDays) || 0}`],
     ['Alertas activas', String(Number(report.alertsCount) || 0), `${Number(report.criticalIncidents) || 0} prioridad alta`],
-    ['Presentismo', `${Number(report.presentWorkers) || 0}/${Array.isArray(report.attendance) ? report.attendance.length : 0}`, 'personas registradas'],
+    ['Ingresos verificados', `${Number(report.presentWorkers) || 0}/${Array.isArray(report.attendance) ? report.attendance.length : 0}`, 'personas del periodo'],
   ];
   metrics.forEach(([label, value, detail], index) => {
     const x = MARGIN + (index * (metricWidth + metricGap));
@@ -622,13 +622,14 @@ export async function renderWeeklyReportPdf(report) {
   drawTable({
     title: 'Asistencia',
     columns: [
-      { label: 'Persona', width: 198, maximumLines: 2 },
-      { label: 'Funcion', width: 170, maximumLines: 2 },
-      { label: 'Estado', width: CONTENT_WIDTH - 368, maximumLines: 2 },
+      { label: 'Persona', width: 118, maximumLines: 2 },
+      { label: 'Funcion', width: 95, maximumLines: 2 },
+      { label: 'Ultima jornada', width: 190, maximumLines: 3 },
+      { label: 'Estado', width: CONTENT_WIDTH - 403, maximumLines: 3 },
     ],
     rows: visibleAttendance.map((entry) => ({
       tone: entry.tone,
-      cells: [entry.name, entry.role, entry.status],
+      cells: [entry.name, entry.role, entry.journeyLabel, entry.status],
     })),
     emptyLabel: 'No hay registros de asistencia.',
     omitted: Math.max(0, attendance.length - visibleAttendance.length),
@@ -717,7 +718,7 @@ export async function renderWeeklyReportPdf(report) {
   page.drawText('CONTROL DOCUMENTAL', { x: MARGIN + 16, y: cursorY - 19, size: 6.6, font: bold, color: COLOR.green });
   drawLines([
     `Emitido por: ${pdfSafeText(report.issuedBy, 100)} (${pdfSafeText(report.issuedByEmail, 140)})`,
-    `Generado: ${formatDate(report.generatedAt, { dateStyle: 'short', timeStyle: 'short' })} - America/Argentina/Buenos_Aires`,
+    `Generado: ${formatDate(report.generatedAt, { timeZone: report.timeZone, dateStyle: 'short', timeStyle: 'short' })} - ${report.timeZone}`,
     `Version de datos: ${snapshotLabel(report.snapshotVersion)} - Documento aislado por tenant y proyecto`,
   ], {
     x: MARGIN + 16,

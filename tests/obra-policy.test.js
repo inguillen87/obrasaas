@@ -7,6 +7,8 @@ import {
   classifyObraIntent,
   countPresentAttendanceEntries,
   prependUniqueEventIncident,
+  replaceWorkerAttendance,
+  requestedAttendanceAction,
   setWorkerAttendance,
 } from '../src/lib/whatsapp/obra-policy.js';
 
@@ -48,6 +50,20 @@ test('attendance, incident and medical inputs classify before mutation', () => {
   assert.equal(classifyObraIntent({ kind: 'text', text: 'quiero fichar' }), FIELD_WORKER_INTENTS.ATTENDANCE_START);
   assert.equal(classifyObraIntent({ kind: 'text', text: 'accidente urgente' }), FIELD_WORKER_INTENTS.INCIDENT);
   assert.equal(classifyObraIntent({ kind: 'text', text: 'certificado médico' }), FIELD_WORKER_INTENTS.MEDICAL);
+});
+
+test('attendance action commands distinguish journey transitions without using audio', () => {
+  assert.equal(requestedAttendanceAction('quiero fichar'), 'CHECK_IN');
+  assert.equal(requestedAttendanceAction('almuerzo'), 'BREAK_START');
+  assert.equal(requestedAttendanceAction('volví'), 'BREAK_END');
+  assert.equal(requestedAttendanceAction('chau'), 'CHECK_OUT');
+  assert.equal(requestedAttendanceAction('salida de materiales'), null);
+  for (const text of ['almuerzo', 'volví', 'chau']) {
+    assert.equal(
+      classifyObraIntent({ kind: 'text', text }),
+      FIELD_WORKER_INTENTS.ATTENDANCE_START,
+    );
+  }
 });
 
 test('Meta Flow intent comes from the trusted session, never client flow_type', () => {
@@ -132,6 +148,41 @@ test('workers with the same display name retain independent attendance records',
   assert.equal(attendance['worker-a'].name, 'Juan Gómez');
   assert.equal(attendance['worker-b'].name, 'Juan Gómez');
   assert.equal(countPresentAttendanceEntries(attendance), 1);
+});
+
+test('a new check-in replaces every field from the matching legacy journey', () => {
+  const attendance = {
+    'Ana Pérez': {
+      role: 'Capataz',
+      status: 'Jornada cerrada',
+      checkout: '18:10',
+      breakStartedAt: '13:00',
+      breakEndedAt: '13:30',
+      shiftId: 'shift-old',
+    },
+  };
+
+  replaceWorkerAttendance(attendance, {
+    id: 'worker-ana',
+    name: 'Ana Pérez',
+    role: 'Capataz',
+  }, {
+    checkin: '08:05',
+    status: 'Presente (ubicación informada)',
+    shiftId: 'shift-new',
+    shiftState: 'WORKING',
+  });
+
+  assert.equal(attendance['Ana Pérez'], undefined);
+  assert.deepEqual(attendance['worker-ana'], {
+    workerId: 'worker-ana',
+    name: 'Ana Pérez',
+    role: 'Capataz',
+    checkin: '08:05',
+    status: 'Presente (ubicación informada)',
+    shiftId: 'shift-new',
+    shiftState: 'WORKING',
+  });
 });
 
 test('retried external events cannot append or count the same incident twice', () => {

@@ -83,7 +83,14 @@ const ATTENDANCE_FIELDS = new Set([
   'name',
   'role',
   'checkin',
+  'checkout',
+  'breakStartedAt',
+  'breakEndedAt',
   'status',
+  'shiftId',
+  'shiftState',
+  'lastEventType',
+  'reviewRequired',
   'latitude',
   'longitude',
   'accuracy',
@@ -140,8 +147,14 @@ const ATTENDANCE_STATUSES = new Set([
   'GPS pendiente · EPP incompleto',
   'Presente (ubicación informada)',
   'Presente · EPP verificado',
+  'Presente · en pausa',
+  'Presente · actividad retomada',
   'Desvío (ubicación informada)',
   'Desvío (GPS)',
+  'Desvío · en pausa',
+  'Desvío · actividad retomada',
+  'Jornada cerrada',
+  'Jornada cerrada · revisar ubicación',
   'Ausente Justificado',
   'Registro operativo restringido',
 ]);
@@ -176,6 +189,36 @@ export class ProjectStateVersionConflictError extends Error {
     this.expectedVersion = parseNumericStateVersion(expectedVersion);
     this.currentVersion = parseNumericStateVersion(currentVersion);
   }
+}
+
+function canonicalProjectionValue(value) {
+  if (Array.isArray(value)) return value.map(canonicalProjectionValue);
+  if (!isPlainObject(value)) return value;
+  return Object.fromEntries(
+    Object.keys(value)
+      .sort()
+      .map((key) => [key, canonicalProjectionValue(value[key])]),
+  );
+}
+
+/**
+ * Attendance is a compatibility projection written by the canonical ledger.
+ * Generic dashboard state writes must preserve it byte-for-byte semantically;
+ * corrections need their own append-only workflow instead of replacing facts.
+ */
+export function assertAttendanceProjectionUnchanged(beforeState, afterState) {
+  const before = isPlainObject(beforeState?.attendance) ? beforeState.attendance : {};
+  const after = isPlainObject(afterState?.attendance) ? afterState.attendance : {};
+  if (
+    JSON.stringify(canonicalProjectionValue(before))
+    !== JSON.stringify(canonicalProjectionValue(after))
+  ) {
+    throw new ProjectStateInputError(
+      'La asistencia se administra desde el ledger de fichajes y no puede sobrescribirse desde el estado general de la obra.',
+      { code: 'ATTENDANCE_LEDGER_REQUIRED', status: 409 },
+    );
+  }
+  return afterState;
 }
 
 function isPlainObject(value) {
@@ -570,7 +613,32 @@ function assertAttendanceCatalog(attendance) {
       assertShortString(entry.role, `${path}.role`, { required: true, max: 180 });
     }
     if (Object.hasOwn(entry, 'checkin')) assertCheckin(entry.checkin, `${path}.checkin`);
+    for (const field of ['checkout', 'breakStartedAt', 'breakEndedAt']) {
+      if (Object.hasOwn(entry, field)) assertCheckin(entry[field], `${path}.${field}`);
+    }
     if (Object.hasOwn(entry, 'status')) assertAttendanceStatus(entry.status, `${path}.status`);
+    if (Object.hasOwn(entry, 'shiftId')) {
+      assertShortString(entry.shiftId, `${path}.shiftId`, { required: true, max: 180 });
+    }
+    if (Object.hasOwn(entry, 'shiftState')) {
+      assertEnum(
+        entry.shiftState,
+        `${path}.shiftState`,
+        new Set(['WORKING', 'ON_BREAK', 'CLOSED']),
+        { required: true },
+      );
+    }
+    if (Object.hasOwn(entry, 'lastEventType')) {
+      assertEnum(
+        entry.lastEventType,
+        `${path}.lastEventType`,
+        new Set(['CHECK_IN', 'BREAK_START', 'BREAK_END', 'CHECK_OUT']),
+        { required: true },
+      );
+    }
+    if (Object.hasOwn(entry, 'reviewRequired')) {
+      assertBoolean(entry.reviewRequired, `${path}.reviewRequired`);
+    }
     if (Object.hasOwn(entry, 'latitude')) {
       assertNumber(entry.latitude, `${path}.latitude`, { min: -90, max: 90 });
     }

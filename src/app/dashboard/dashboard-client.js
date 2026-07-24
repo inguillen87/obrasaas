@@ -570,8 +570,8 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
     || setup.membershipCount <= 1;
   const attendanceInsight = useMemo(() => {
     const measured = hrAttendanceEntries
-      .map(([name, item]) => ({
-        name,
+      .map(([key, item]) => ({
+        name: item?.name || key,
         role: item?.role || 'Cuadrilla de obra',
         presents: Number(item?.presents),
       }))
@@ -1511,31 +1511,28 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
       return;
     }
     const updatedHrAttendance = { ...state.hrAttendance };
-    const attendee = updatedHrAttendance[worker.name];
-    if (attendee) {
-      updatedHrAttendance[worker.name] = {
-        ...attendee,
-        excused: (Number(attendee.excused) || 0) + 1,
-        status: 'Ausente Justificado',
-      };
-    } else {
-      updatedHrAttendance[worker.name] = {
-        role: worker.role || 'Cuadrilla de obra',
-        presents: 0,
-        excused: 1,
-        unexcused: 0,
-        status: 'Ausente Justificado',
-      };
+    const legacyAttendee = updatedHrAttendance[worker.name];
+    const sameNameWorkers = fieldWorkers.filter((candidate) => candidate.name === worker.name);
+    const canMigrateLegacy = legacyAttendee && (
+      legacyAttendee.workerId === worker.id
+      || (!legacyAttendee.workerId && sameNameWorkers.length === 1)
+    );
+    const attendee = updatedHrAttendance[worker.id]
+      || (canMigrateLegacy ? legacyAttendee : null)
+      || {};
+    if (canMigrateLegacy && worker.name !== worker.id) {
+      delete updatedHrAttendance[worker.name];
     }
-
-    const updatedAttendance = { ...state.attendance };
-    const attendanceRecord = attendanceRecordByName(updatedAttendance, worker.name);
-    if (attendanceRecord) {
-      updatedAttendance[attendanceRecord.key] = {
-        ...attendanceRecord.entry,
-        status: "Ausente Justificado",
-      };
-    }
+    updatedHrAttendance[worker.id] = {
+      ...attendee,
+      workerId: worker.id,
+      name: worker.name,
+      role: worker.role || attendee.role || 'Cuadrilla de obra',
+      presents: Number(attendee.presents) || 0,
+      excused: (Number(attendee.excused) || 0) + 1,
+      unexcused: Number(attendee.unexcused) || 0,
+      status: 'Ausente Justificado',
+    };
 
     const newIncident = {
       id: createClientEntityId('inc-med'),
@@ -1552,7 +1549,6 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
     const nextState = {
       ...state,
       hrAttendance: updatedHrAttendance,
-      attendance: updatedAttendance,
       incidents: [newIncident, ...state.incidents]
     };
 
@@ -1792,14 +1788,16 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
                     <tr>
                       <th>Operario</th>
                       <th>Especialidad</th>
-                      <th>Check-in</th>
+                      <th>Entrada</th>
+                      <th>Pausa</th>
+                      <th>Salida</th>
                       <th>Estado</th>
                     </tr>
                   </thead>
                   <tbody>
                     {attendanceRecords(state.attendance).length === 0 ? (
                       <tr>
-                        <td colSpan={4} style={{ color: 'var(--text-secondary)', textAlign: 'center' }}>
+                        <td colSpan={6} style={{ color: 'var(--text-secondary)', textAlign: 'center' }}>
                           Todavía no hay fichajes registrados para esta obra.
                         </td>
                       </tr>
@@ -1809,12 +1807,19 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
                       if (status.includes('Presente')) badgeClass = 'badge-success';
                       if (status.includes('GPS')) badgeClass = 'badge-info';
                       if (status.includes('Desvío')) badgeClass = 'badge-danger';
+                      if (status.includes('Jornada cerrada')) badgeClass = 'badge-info';
+
+                      const breakLabel = item.breakStartedAt
+                        ? `${item.breakStartedAt} — ${item.breakEndedAt || 'activa'}`
+                        : '—';
 
                       return (
                         <tr key={key}>
                           <td>{name}</td>
                           <td>{item.role || 'Cuadrilla de obra'}</td>
                           <td>{item.checkin || '—'}</td>
+                          <td>{breakLabel}</td>
+                          <td>{item.checkout || '—'}</td>
                           <td>
                             <span className={`badge ${badgeClass}`}>{status}</span>
                           </td>
@@ -2405,8 +2410,12 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
                         </td>
                       </tr>
                     )}
-                    {hrAttendanceEntries.map(([name, item]) => {
-                      const currentAttendance = attendanceRecordByName(state.attendance, name);
+                    {hrAttendanceEntries.map(([key, item]) => {
+                      const workerName = item.name || key;
+                      const currentAttendance = attendanceRecordByName(
+                        state.attendance,
+                        item.workerId || workerName,
+                      );
                       const currentStatus = attendanceStatus(currentAttendance?.entry);
 
                       let statusBadge = <span className="badge badge-info">Sin registro actual</span>;
@@ -2423,8 +2432,8 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
                       }
 
                       return (
-                        <tr key={name} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                          <td style={{ padding: '10px' }}><strong>{name}</strong></td>
+                        <tr key={item.workerId || key} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                          <td style={{ padding: '10px' }}><strong>{workerName}</strong></td>
                           <td style={{ padding: '10px' }}>{item.role || 'Cuadrilla de obra'}</td>
                           <td style={{ padding: '10px', textAlign: 'center' }}>{Number(item.presents) || 0}</td>
                           <td style={{ padding: '10px', textAlign: 'center' }}>{Number(item.excused) || 0}</td>

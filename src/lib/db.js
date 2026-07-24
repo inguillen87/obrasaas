@@ -435,6 +435,7 @@ export async function persistProjectStateTransaction(transaction, {
   expectedVersion = null,
   activities = [],
   deriveActivities = null,
+  preserveAttendanceProjection = false,
 }) {
   await requireOperationalProjectWrite(transaction, {
     organizationId: context.organization?.id || context.project.organizationId,
@@ -447,8 +448,18 @@ export async function persistProjectStateTransaction(transaction, {
   });
   const currentVersion = assertProjectStateVersion(expectedVersion, current?.version ?? 0);
   const currentState = current?.state || createEmptyAppState();
+  const nextState = preserveAttendanceProjection
+    ? {
+        ...state,
+        attendance: clone(
+          currentState?.attendance && typeof currentState.attendance === "object"
+            ? currentState.attendance
+            : {},
+        ),
+      }
+    : state;
   const derivedActivities = typeof deriveActivities === "function"
-    ? deriveActivities(currentState, state)
+    ? deriveActivities(currentState, nextState)
     : [];
   const auditActivities = [
     ...(Array.isArray(activities) ? activities : []),
@@ -457,14 +468,14 @@ export async function persistProjectStateTransaction(transaction, {
   const nextVersion = currentVersion + 1;
   await synchronizeProjectTaskProjection(transaction, {
     projectId: context.project.id,
-    nextTasks: state.tasks,
+    nextTasks: nextState.tasks,
     projectStartsAt: context.project.startsAt,
     stateVersion: nextVersion,
   });
   const stored = await transaction.projectSnapshot.upsert({
     where: { projectId: context.project.id },
-    update: { state, version: nextVersion },
-    create: { projectId: context.project.id, state, version: nextVersion },
+    update: { state: nextState, version: nextVersion },
+    create: { projectId: context.project.id, state: nextState, version: nextVersion },
     select: { state: true, version: true, updatedAt: true },
   });
   if (auditActivities.length > 0) {
@@ -479,20 +490,31 @@ export async function saveAppStateSnapshot(state, scope, {
   activities = [],
   expectedVersion = null,
   deriveActivities = null,
+  preserveAttendanceProjection = false,
 } = {}) {
   if (!hasDurableDatabase()) {
     const db = readLocalDb();
     const current = localProjectStateSnapshot(db);
     const currentVersion = assertProjectStateVersion(expectedVersion, current.version);
+    const nextState = preserveAttendanceProjection
+      ? {
+          ...state,
+          attendance: clone(
+            current.state?.attendance && typeof current.state.attendance === 'object'
+              ? current.state.attendance
+              : {},
+          ),
+        }
+      : state;
     const derivedActivities = typeof deriveActivities === "function"
-      ? deriveActivities(current.state, state)
+      ? deriveActivities(current.state, nextState)
       : [];
     const auditActivities = [
       ...(Array.isArray(activities) ? activities : []),
       ...(Array.isArray(derivedActivities) ? derivedActivities : []),
     ];
     const updatedAt = new Date();
-    db.appState = clone(state);
+    db.appState = clone(nextState);
     db.appStateVersion = currentVersion + 1;
     db.appStateUpdatedAt = updatedAt.toISOString();
     db.activities ||= [];
@@ -504,7 +526,7 @@ export async function saveAppStateSnapshot(state, scope, {
     db.activities = db.activities.slice(-500);
     writeLocalDb(db);
     return {
-      state: clone(state),
+      state: clone(nextState),
       version: db.appStateVersion,
       updatedAt,
       exists: true,
@@ -519,6 +541,7 @@ export async function saveAppStateSnapshot(state, scope, {
     expectedVersion,
     activities,
     deriveActivities,
+    preserveAttendanceProjection,
   }));
 }
 
@@ -2195,7 +2218,10 @@ export async function resetState(scope, { expectedVersion = null } = {}) {
     messages: clone(defaultMessages),
   };
   if (useDevelopmentDemo) {
-    const snapshot = await saveAppStateSnapshot(fresh.appState, scope, { expectedVersion });
+    const snapshot = await saveAppStateSnapshot(fresh.appState, scope, {
+      expectedVersion,
+      preserveAttendanceProjection: true,
+    });
     await saveMessages(fresh.messages, scope);
     return { ...fresh, snapshot, version: snapshot.version };
   }
@@ -2208,10 +2234,12 @@ export async function resetState(scope, { expectedVersion = null } = {}) {
       scope,
       state: fresh.appState,
       expectedVersion,
+      preserveAttendanceProjection: true,
     });
     await replaceDurableMessages(transactionContext, fresh.messages);
     return stored;
   });
+  fresh.appState = snapshot.state;
   return { ...fresh, snapshot, version: snapshot.version };
 }
 

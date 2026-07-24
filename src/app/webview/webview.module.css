@@ -93,6 +93,18 @@
   line-height: 1.65;
 }
 
+.projectContext {
+  display: inline-flex;
+  margin: 12px 0 0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  padding: 6px 9px;
+  color: #c5d0cd;
+  background: rgba(255, 255, 255, 0.035);
+  font-size: 0.68rem;
+  font-weight: 750;
+}
+
 .locationVisual {
   position: relative;
   display: grid;
@@ -114,6 +126,18 @@
 }
 
 .locationPin { color: #ffad5f; font-size: 1.25rem; filter: drop-shadow(0 0 9px #ef9643); }
+
+.timeVisual {
+  display: grid;
+  width: 108px;
+  height: 108px;
+  place-items: center;
+  border: 1px solid rgba(151, 215, 187, 0.26);
+  border-radius: 50%;
+  color: #9cd6bd;
+  background: radial-gradient(circle, rgba(65, 137, 109, 0.16), transparent 68%);
+  font-size: 2.2rem;
+}
 
 .documentVisual {
   position: relative;
@@ -154,6 +178,31 @@
 .status.error { color: #ffc0af; border-color: rgba(231, 106, 75, 0.3); background: rgba(151, 55, 35, 0.1); }
 .status.loading { color: #f6c999; border-color: rgba(239, 150, 67, 0.3); }
 
+.locationConsent {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  border: 1px solid rgba(151, 215, 187, 0.16);
+  border-radius: 14px;
+  padding: 14px;
+  color: #8ea19c;
+  background: rgba(65, 137, 109, 0.055);
+  font-size: 0.72rem;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.locationConsent input {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  margin: 1px 0 0;
+  accent-color: #ef9643;
+}
+
+.locationConsent input:focus-visible { outline: 2px solid #ffbd66; outline-offset: 3px; }
+.locationConsent strong { display: block; margin-bottom: 2px; color: #e2e8e5; }
+
 .primaryButton {
   display: flex;
   width: 100%;
@@ -174,7 +223,7 @@
 }
 
 .primaryButton:hover:not(:disabled) { transform: translateY(-2px); filter: brightness(1.05); }
-.primaryButton:disabled { cursor: wait; opacity: 0.68; }
+.primaryButton:disabled { cursor: not-allowed; opacity: 0.68; }
 .privacy { margin: 14px 8px 0; color: #60736e; font-size: 0.67rem; line-height: 1.55; text-align: center; }
 
 .field { display: grid; gap: 8px; color: #b7c4c0; font-size: 0.76rem; font-weight: 750; }
@@ -198,6 +247,7 @@
 @media (max-width: 430px) {
   .heroCard { grid-template-columns: minmax(0, 1fr) 72px; padding: 24px 20px; }
   .locationVisual { width: 72px; height: 72px; }
+  .timeVisual { width: 72px; height: 72px; font-size: 1.65rem; }
   .documentVisual { width: 60px; height: 78px; }
   .steps { grid-template-columns: 1fr; }
   .steps span { display: flex; align-items: center; gap: 9px; }

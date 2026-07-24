@@ -95,13 +95,13 @@ Las tres categorías comerciales del PDF no son un modelo de autorización sufic
 
 | ID | Requisito original | Estado | Evidencia y decisión | Gap / criterio de aceptación | Secuencia |
 | --- | --- | --- | --- | --- | --- |
-| SPEC-PER-01 | Entrada con foto, GPS y timestamp | Parcial | Check-in, hora y geocerca existen; el request actual sólo transporta ubicación (`attendance-client.js:25-43`) | Conservar la foto como requisito original, sujeto a decisión legal/privacidad separada; evento idempotente con evidencia, accuracy y consentimiento | S1, R0 |
-| SPEC-PER-02 | Salida con foto, GPS y timestamp | Ausente | `AttendanceEntry` sólo posee `checkedInAt` (`schema.prisma:518-531`) | `CHECK_OUT` asociado a jornada activa; conservar foto requerida por el PDF hasta que una política aprobada la haga opcional o la descarte | S1 |
-| SPEC-PER-03 | Inicio y fin de almuerzo | Ausente | No hay eventos de pausa | Ledger `BREAK_START/BREAK_END`, sin solapamientos y con corrección aprobada | S1 |
+| SPEC-PER-01 | Entrada con foto, GPS y timestamp | Parcial | `CHECK_IN` canónico usa hora servidor, GPS+accuracy+`capturedAt`, consentimiento, frescura de dos minutos, geocerca conservadora, enlace ligado al pending e idempotencia (`attendance.js`, `attendance-client.js`) | La foto sigue sujeta a decisión legal/privacidad, retención y alternativa operativa; no habilitar biometría implícita | S1, R0 |
+| SPEC-PER-02 | Salida con foto, GPS y timestamp | Parcial | `CHECK_OUT` cierra sólo la jornada/revisión firmada, exige GPS puntual fresco y queda en el mismo ledger/auditoría (`attendance.js`, `attendance/route.js`) | Resolver el mismo gate legal de foto y validar el journey en teléfono/WABA real | S1, R0 |
+| SPEC-PER-03 | Inicio y fin de almuerzo | Parcial | `BREAK_START/BREAK_END` están implementados, no se solapan y la salida no cierra una pausa implícitamente | Agregar corrección append-only aprobada y reglas de turno en S2 | S1-S2 |
 | SPEC-PER-04 | Presentes, ausentes y llegadas tarde | Parcial | Hay estados de presencia; no hay horario esperado | Turno/calendario, tolerancia, no-show idempotente y excepción auditada | S2, S15 |
 | SPEC-PER-05 | DNI, obra social, ART y certificaciones | Parcial | Certificado médico protegido y redacción clínica existen; el legajo laboral no | Vault restringido, tipos, versión, vencimiento, retención, descarga auditada y alerta; nunca en snapshot/inbox general | S14-S15 |
 | SPEC-PER-06 | Acta de inicio firmada por las partes | Ausente | No existe documento/versión ni firma de negocio | Definir jurisdicción y nivel jurídico; integrar proveedor con identidad, intención, hash, versión y timestamp. No fabricar firma propia | S13-S14, R0 |
-| SPEC-PER-07 | Flujo diario “Hola” → almuerzo → “Chau” | Parcial | WhatsApp reconoce inicio, pero no almuerzo/salida | Máquina de estados recuperable, idempotente y contextual por jornada/obra | S1-S2, R0 |
+| SPEC-PER-07 | Flujo diario “Hola” → almuerzo → “Chau” | Parcial | WhatsApp reconoce comandos de ingreso, pausa, reanudación y salida sobre una máquina idempotente contextual por jornada/obra | Validar wording real con la clienta, teléfono/WABA, expiración y fallback; sumar schedule/excepciones en S2 | S1-S2, R0 |
 
 Decisión pendiente explícita: foto en entrada/salida no se elimina silenciosamente. La socia y la revisión legal deben definir necesidad, propósito, acceso, retención y alternativa manual; GPS sigue siendo evidencia puntual, no biometría ni tracking.
 
@@ -177,7 +177,7 @@ Un audio accionable crea una propuesta, pero un comando textual permitido a capa
 
 | ID | Requisito original | Estado | Evidencia y decisión | Gap / criterio de aceptación | Secuencia |
 | --- | --- | --- | --- | --- | --- |
-| SPEC-REP-01 | PDF semanal para Cliente y Equipo Líder | Parcial | Reporte tenant-aware y PDF real | Artefacto reproducible, programación, publicación, distribución y portal externo | S10, S15-S16 |
+| SPEC-REP-01 | PDF semanal para Cliente y Equipo Líder | Parcial | Reporte tenant-aware y PDF real; asistencia deriva del ledger completo, paginado y con zona histórica | Artefacto reproducible persistido, programación, publicación, distribución y portal externo | S10, S15-S16 |
 | SPEC-REP-02 | Dashboard con avance, pendientes, gastos y asistencia | Parcial | Hoy/Gantt/asistencia/riesgos/stock existen; costos y caja no son canónicos | KPIs con definición/fuente/frescura, drill-down y vistas por rol | S7-S10, S16 |
 | SPEC-REP-03 | Historial de certificaciones/quincenas | Ausente | No existe certificación canónica | Historial por período, versión, estado, aprobadores, importe y PDF | S10 |
 

@@ -147,6 +147,20 @@ test('a valid Meta Flow uses the trusted session and persists only non-secret re
 
 test('attendance Flow persists its server-owned task and work-area references', async () => {
   const state = emptyState();
+  state.attendance[worker.id] = {
+    workerId: worker.id,
+    name: worker.name,
+    role: worker.role,
+    checkin: '08:00',
+    checkout: '17:00',
+    breakStartedAt: '12:00',
+    breakEndedAt: '12:30',
+    status: 'Jornada cerrada · revisar ubicación',
+    shiftId: 'previous-closed-shift',
+    shiftState: 'CLOSED',
+    lastEventType: 'CHECK_OUT',
+    reviewRequired: true,
+  };
   const createdEntries = [];
   const prisma = {
     attendanceEntry: {
@@ -168,6 +182,7 @@ test('attendance Flow persists its server-owned task and work-area references', 
   assert.equal(result.stateChanged, true);
   assert.equal(createdEntries.length, 1);
   assert.deepEqual(createdEntries[0].metadata, {
+    attendanceTimezone: 'America/Argentina/Buenos_Aires',
     ppeStatus: 'complete',
     source: 'whatsapp-flow',
     workArea: 'Estructura nivel 2',
@@ -175,6 +190,13 @@ test('attendance Flow persists its server-owned task and work-area references', 
   });
   assert.equal(state.incidents[0].metadata.taskRef, 'task-structure-02');
   assert.equal(state.incidents[0].metadata.workArea, 'Estructura nivel 2');
+  assert.equal(state.attendance[worker.id].lastEventType, 'CHECK_IN');
+  assert.equal(state.attendance[worker.id].reviewRequired, false);
+  assert.equal(state.attendance[worker.id].shiftId, undefined);
+  assert.equal(state.attendance[worker.id].shiftState, undefined);
+  assert.equal(state.attendance[worker.id].checkout, undefined);
+  assert.equal(state.attendance[worker.id].breakStartedAt, undefined);
+  assert.equal(state.attendance[worker.id].breakEndedAt, undefined);
 });
 
 test('an expired trusted Flow ignores its payload and requests one safe replacement', async () => {

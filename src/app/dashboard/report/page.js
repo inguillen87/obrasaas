@@ -69,9 +69,9 @@ export default async function ReportPage({ searchParams }) {
 
         <section className={styles.contextGrid} aria-label="Contexto del reporte">
           <div><span>Organización</span><strong>{report.organizationName}</strong></div>
-          <div><span>Período</span><strong>{formatDate(report.periodStart, { day: '2-digit', month: 'short' })} — {formatDate(report.generatedAt, { day: '2-digit', month: 'short', year: 'numeric' })}</strong></div>
+          <div><span>Período</span><strong>{formatDate(report.periodStart, { timeZone: report.timeZone, day: '2-digit', month: 'short' })} — {formatDate(report.generatedAt, { timeZone: report.timeZone, day: '2-digit', month: 'short', year: 'numeric' })}</strong></div>
           <div><span>Ubicación</span><strong>{report.projectAddress}</strong></div>
-          <div><span>Actualización</span><strong>{report.lastUpdatedAt ? formatDate(report.lastUpdatedAt, { dateStyle: 'short', timeStyle: 'short' }) : 'Sin actividad persistida'}</strong></div>
+          <div><span>Actualización</span><strong>{report.lastUpdatedAt ? formatDate(report.lastUpdatedAt, { timeZone: report.timeZone, dateStyle: 'short', timeStyle: 'short' }) : 'Sin actividad persistida'}</strong></div>
         </section>
 
         {report.isEmptyState && (
@@ -84,7 +84,7 @@ export default async function ReportPage({ searchParams }) {
           <article><span>Avance físico</span><strong>{report.progress}%</strong><small>{report.tasksDone} de {report.tasks.length} tareas finalizadas</small></article>
           <article><span>Plazo consumido</span><strong>{report.timelinePercentage}%</strong><small>Día {report.currentDay} de {report.totalDays}</small></article>
           <article><span>Alertas activas</span><strong>{report.alertsCount}</strong><small>{report.criticalIncidents} de prioridad alta</small></article>
-          <article><span>Presentismo</span><strong>{report.presentWorkers}/{report.attendance.length}</strong><small>personas registradas hoy</small></article>
+          <article><span>Con ingreso verificado</span><strong>{report.presentWorkers}/{report.attendance.length}</strong><small>personas registradas en el período</small></article>
         </section>
 
         <section className={styles.executiveSummary}>
@@ -128,10 +128,14 @@ export default async function ReportPage({ searchParams }) {
             <div className={styles.sectionHeading}><div><span className={styles.sectionKicker}>Campo</span><h2>Asistencia</h2></div></div>
             <div className={styles.tableWrap}>
               <table>
-                <thead><tr><th>Persona</th><th>Función</th><th>Estado</th></tr></thead>
+                <thead><tr><th>Persona</th><th>Última jornada</th><th>Estado</th></tr></thead>
                 <tbody>
                   {report.attendance.length === 0 ? <EmptyRow columns={3}>Sin registros de asistencia.</EmptyRow> : report.attendance.map((entry) => (
-                    <tr key={entry.name}><td><strong>{entry.name}</strong></td><td>{entry.role}</td><td><StatusBadge tone={entry.tone}>{entry.status}</StatusBadge></td></tr>
+                    <tr key={entry.name}>
+                      <td><strong>{entry.name}</strong><br /><small>{entry.role} · {entry.daysPresent}/{entry.daysRegistered} días verificados</small></td>
+                      <td>{entry.journeyLabel}</td>
+                      <td><StatusBadge tone={entry.tone}>{entry.status}</StatusBadge></td>
+                    </tr>
                   ))}
                 </tbody>
               </table>
@@ -192,7 +196,7 @@ export default async function ReportPage({ searchParams }) {
         <footer className={styles.footer}>
           <div><span>Emitido por</span><strong>{report.issuedBy}</strong><small>{report.issuedByEmail}</small></div>
           <div><span>Control documental</span><strong>{report.snapshotVersion ? `Versión ${report.snapshotVersion}` : 'Sin snapshot'}</strong><small>Datos aislados por tenant</small></div>
-          <div><span>Vista actualizada</span><strong>{formatDate(report.generatedAt, { dateStyle: 'short', timeStyle: 'short' })}</strong><small>El PDF descargado conserva su propia emisión</small></div>
+          <div><span>Vista actualizada</span><strong>{formatDate(report.generatedAt, { timeZone: report.timeZone, dateStyle: 'short', timeStyle: 'short' })}</strong><small>{report.timeZone} · el PDF descargado conserva su propia emisión</small></div>
         </footer>
       </article>
     </div>

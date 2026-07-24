@@ -75,6 +75,7 @@ export function buildWeeklyReportModel({
   actorEmail = null,
   generatedAt = new Date(),
   snapshot = null,
+  timeZone = organization?.timezone || 'America/Argentina/Buenos_Aires',
 } = {}) {
   const parsedGenerated = new Date(generatedAt);
   const generated = Number.isNaN(parsedGenerated.getTime())
@@ -103,18 +104,48 @@ export function buildWeeklyReportModel({
       dependencyConflict: task.dependencyConflict,
     };
   });
-  const attendance = entries(state.attendance).map(([name, attendanceValue]) => {
+  const attendance = entries(state.attendance).map(([recordKey, attendanceValue]) => {
     const item = record(attendanceValue);
     const status = text(item.status, 'Sin estado');
     const normalized = status.toLowerCase();
+    const explicitPresence = Object.hasOwn(item, 'present');
+    const present = explicitPresence
+      ? item.present === true
+      : normalized.includes('presente') || normalized.includes('voz');
+    const checkin = text(item.checkin, '—');
+    const breakStartedAt = text(item.breakStartedAt, '—');
+    const breakEndedAt = text(item.breakEndedAt, '—');
+    const checkout = text(item.checkout, '—');
+    const workDateLabel = text(item.workDateLabel, 'Última jornada');
+    const pauseLabel = breakStartedAt === '—' && breakEndedAt === '—'
+      ? 'sin pausa registrada'
+      : `${breakStartedAt}–${breakEndedAt}`;
     return {
-      name,
+      name: text(item.name, recordKey),
       role: text(item.role, 'Sin función'),
       status,
-      tone: normalized.includes('presente') || normalized.includes('voz')
-        ? 'success'
+      present,
+      daysPresent: Math.max(0, number(item.daysPresent, present ? 1 : 0)),
+      daysRegistered: Math.max(0, number(item.daysRegistered, 1)),
+      workDateLabel,
+      checkin,
+      breakStartedAt,
+      breakEndedAt,
+      checkout,
+      journeyLabel: item.legacyException === true
+        ? 'Sin jornada canónica · excepción pendiente de migración'
+        : `${workDateLabel} · ${checkin} → ${checkout} · pausa ${pauseLabel}`,
+      legacyException: item.legacyException === true,
+      tone: item.legacyException === true
+        ? 'warning'
+        : item.reviewRequired === true || normalized.includes('revisi')
+        ? 'warning'
         : normalized.includes('licencia') || normalized.includes('justific')
           ? 'warning'
+          : normalized.includes('jornada cerrada')
+            ? 'neutral'
+            : present
+              ? 'success'
           : 'danger',
     };
   });
@@ -186,7 +217,7 @@ export function buildWeeklyReportModel({
     : Math.max(0, number(summary.operationalMessageCount));
   const evidenceTruncated = evidenceSummary != null && summary.truncated === true;
   const evidenceMessageLimit = Math.max(1, number(summary.messageLimit, 500));
-  const presentWorkers = attendance.filter((entry) => entry.tone === 'success').length;
+  const presentWorkers = attendance.filter((entry) => entry.present).length;
   const criticalIncidents = allIncidents.filter((incident) => (
     incident.active && incident.tone === 'danger'
   )).length;
@@ -194,7 +225,8 @@ export function buildWeeklyReportModel({
   const alertsCount = Math.max(number(state.alertsCount), allIncidents.filter((item) => (
     item.active && (item.tone === 'danger' || item.tone === 'warning')
   )).length);
-  const periodStart = weeklyReportPeriodStart(generated);
+  const reportTimeZone = supportedReportTimeZone(timeZone);
+  const periodStart = weeklyReportPeriodStart(generated, reportTimeZone);
   const scheduleGap = schedule.percentage - progress;
   const hasOperationalData = tasks.length > 0
     || attendance.length > 0
@@ -214,7 +246,7 @@ export function buildWeeklyReportModel({
       ? `El avance mantiene una relación razonable con el plazo, pero existen ${alertsCount} alertas que requieren seguimiento. Priorizar las incidencias críticas evita trasladar riesgo a la próxima semana.`
       : 'El avance físico acompaña el plazo informado y no se observan alertas activas. Mantener la captura diaria de evidencia permitirá sostener esta lectura con trazabilidad.';
   const projectIdSuffix = text(project.id, 'LOCAL').slice(-7).toUpperCase();
-  const dateId = weeklyReportDocumentTimestamp(generated);
+  const dateId = weeklyReportDocumentTimestamp(generated, reportTimeZone);
 
   return {
     organizationName: text(organization.name, 'Organización sin nombre'),
@@ -224,6 +256,7 @@ export function buildWeeklyReportModel({
     issuedBy: text(organization.name, 'ObraSaaS'),
     issuedByEmail: text(actorEmail || organization.contactEmail, 'Responsable autorizado del tenant'),
     generatedAt: generated,
+    timeZone: reportTimeZone,
     periodStart,
     lastUpdatedAt: snapshot?.updatedAt ? new Date(snapshot.updatedAt) : null,
     snapshotVersion: snapshot && snapshot.exists !== false
@@ -256,29 +289,109 @@ export function buildWeeklyReportModel({
   };
 }
 
-const BUENOS_AIRES_OFFSET_MS = 3 * 60 * 60 * 1_000;
+const DEFAULT_REPORT_TIMEZONE = 'America/Argentina/Buenos_Aires';
 
-export function weeklyReportPeriodStart(value) {
-  const generated = value instanceof Date ? new Date(value) : new Date(value);
-  const safeGenerated = Number.isNaN(generated.getTime()) ? new Date() : generated;
-  const buenosAiresWallClock = new Date(safeGenerated.getTime() - BUENOS_AIRES_OFFSET_MS);
-  buenosAiresWallClock.setUTCHours(0, 0, 0, 0);
-  buenosAiresWallClock.setUTCDate(buenosAiresWallClock.getUTCDate() - 6);
-  return new Date(buenosAiresWallClock.getTime() + BUENOS_AIRES_OFFSET_MS);
+function safeReportDate(value) {
+  try {
+    const parsed = value instanceof Date ? new Date(value) : new Date(value);
+    return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+  } catch {
+    return new Date();
+  }
 }
 
-function weeklyReportDocumentTimestamp(value) {
-  const generated = value instanceof Date ? new Date(value) : new Date(value);
-  const safeGenerated = Number.isNaN(generated.getTime()) ? new Date() : generated;
-  const wallClock = new Date(safeGenerated.getTime() - BUENOS_AIRES_OFFSET_MS);
-  const parts = [
-    wallClock.getUTCFullYear(),
-    String(wallClock.getUTCMonth() + 1).padStart(2, '0'),
-    String(wallClock.getUTCDate()).padStart(2, '0'),
-    String(wallClock.getUTCHours()).padStart(2, '0'),
-    String(wallClock.getUTCMinutes()).padStart(2, '0'),
-    String(wallClock.getUTCSeconds()).padStart(2, '0'),
-    String(wallClock.getUTCMilliseconds()).padStart(3, '0'),
-  ];
-  return `${parts.slice(0, 3).join('')}-${parts.slice(3).join('')}`;
+function supportedReportTimeZone(value) {
+  const candidate = String(value || DEFAULT_REPORT_TIMEZONE).trim();
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: candidate }).format(new Date(0));
+    return candidate;
+  } catch {
+    return DEFAULT_REPORT_TIMEZONE;
+  }
+}
+
+function zonedParts(value, timeZone) {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  });
+  return Object.fromEntries(
+    formatter.formatToParts(value)
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, Number(part.value)]),
+  );
+}
+
+function shiftedCalendarDate(parts, days) {
+  const shifted = new Date(Date.UTC(parts.year, parts.month - 1, parts.day + days));
+  return {
+    year: shifted.getUTCFullYear(),
+    month: shifted.getUTCMonth() + 1,
+    day: shifted.getUTCDate(),
+  };
+}
+
+function calendarDateKey(parts) {
+  return [parts.year, parts.month, parts.day]
+    .map((part, index) => String(part).padStart(index === 0 ? 4 : 2, '0'))
+    .join('-');
+}
+
+function zonedMidnightUtc(parts, timeZone) {
+  const nominalUtc = Date.UTC(parts.year, parts.month - 1, parts.day);
+  const targetDate = calendarDateKey(parts);
+  let lower = nominalUtc - (36 * 60 * 60 * 1_000);
+  let upper = nominalUtc + (36 * 60 * 60 * 1_000);
+  while (lower < upper) {
+    const midpoint = lower + Math.floor((upper - lower) / 2);
+    const renderedDate = calendarDateKey(zonedParts(new Date(midpoint), timeZone));
+    if (renderedDate >= targetDate) upper = midpoint;
+    else lower = midpoint + 1;
+  }
+  const firstInstant = new Date(lower);
+  if (calendarDateKey(zonedParts(firstInstant, timeZone)) !== targetDate) {
+    throw new RangeError(`No existe el día local ${targetDate} en ${timeZone}.`);
+  }
+  return firstInstant;
+}
+
+function databaseDate(parts) {
+  return new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
+}
+
+export function weeklyReportWorkDateRange(value, timeZone = DEFAULT_REPORT_TIMEZONE) {
+  const generated = safeReportDate(value);
+  const zone = supportedReportTimeZone(timeZone);
+  const current = zonedParts(generated, zone);
+  const start = shiftedCalendarDate(current, -6);
+  const end = shiftedCalendarDate(current, 0);
+  return {
+    start: databaseDate(start),
+    end: databaseDate(end),
+    timeZone: zone,
+  };
+}
+
+export function weeklyReportPeriodStart(value, timeZone = DEFAULT_REPORT_TIMEZONE) {
+  const generated = safeReportDate(value);
+  const zone = supportedReportTimeZone(timeZone);
+  const start = shiftedCalendarDate(zonedParts(generated, zone), -6);
+  return zonedMidnightUtc(start, zone);
+}
+
+function weeklyReportDocumentTimestamp(value, timeZone = DEFAULT_REPORT_TIMEZONE) {
+  const generated = safeReportDate(value);
+  const parts = zonedParts(generated, supportedReportTimeZone(timeZone));
+  const dateParts = [parts.year, parts.month, parts.day]
+    .map((part, index) => String(part).padStart(index === 0 ? 4 : 2, '0'));
+  const timeParts = [parts.hour, parts.minute, parts.second]
+    .map((part) => String(part).padStart(2, '0'));
+  timeParts.push(String(generated.getUTCMilliseconds()).padStart(3, '0'));
+  return `${dateParts.join('')}-${timeParts.join('')}`;
 }

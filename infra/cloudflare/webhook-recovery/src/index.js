@@ -1,6 +1,8 @@
 const RECOVERY_TIMEOUT_MS = 55_000;
 const RECOVERY_ORIGIN = "https://obrasaas.vercel.app";
 const RECOVERY_REASON_ORDER = [
+  "ATTENDANCE_EXPIRY_FAILED",
+  "ATTENDANCE_EXPIRY_BACKLOG",
   "WEBHOOK_EVENTS_FAILED",
   "WEBHOOK_PROJECTS_BLOCKED",
   "FLOW_REQUEST_GC_FAILED",
@@ -53,7 +55,29 @@ function recoveryResult(body) {
     body?.flowRequestGc?.failedEndpoints,
     "flowRequestGc.failedEndpoints",
   );
-  const countersHealthy = failed === 0 && blocked === 0 && flowRequestGcFailed === 0;
+  const attendanceExpiryFailedProjects = responseCount(
+    body?.attendanceExpiry?.failedProjects,
+    "attendanceExpiry.failedProjects",
+  );
+  for (const [field, value] of [
+    ["attendanceExpiry.hasMore", body?.attendanceExpiry?.hasMore],
+    ["attendanceExpiry.backlogCheckFailed", body?.attendanceExpiry?.backlogCheckFailed],
+  ]) {
+    if (value !== undefined && typeof value !== "boolean") {
+      throw recoveryError(
+        `ObraSaaS recovery response has an invalid ${field} flag.`,
+        "WEBHOOK_RECOVERY_INVALID_RESPONSE",
+      );
+    }
+  }
+  const attendanceExpiryBacklog = body?.attendanceExpiry?.hasMore === true;
+  const attendanceExpiryBacklogCheckFailed = body?.attendanceExpiry?.backlogCheckFailed === true;
+  const countersHealthy = failed === 0
+    && blocked === 0
+    && flowRequestGcFailed === 0
+    && attendanceExpiryFailedProjects === 0
+    && !attendanceExpiryBacklog
+    && !attendanceExpiryBacklogCheckFailed;
   const workHealthy = body?.workHealthy === undefined
     ? countersHealthy
     : body.workHealthy === true && countersHealthy;
@@ -67,6 +91,15 @@ function recoveryResult(body) {
         blocked > 0 ? "WEBHOOK_PROJECTS_BLOCKED" : null,
         flowRequestGcFailed > 0 ? "FLOW_REQUEST_GC_FAILED" : null,
       ].filter(Boolean);
+  if (attendanceExpiryFailedProjects > 0 || attendanceExpiryBacklogCheckFailed) {
+    if (!reasons.includes("ATTENDANCE_EXPIRY_FAILED")) {
+      reasons.unshift("ATTENDANCE_EXPIRY_FAILED");
+    }
+  }
+  if (attendanceExpiryBacklog && !reasons.includes("ATTENDANCE_EXPIRY_BACKLOG")) {
+    const failedIndex = reasons.indexOf("ATTENDANCE_EXPIRY_FAILED");
+    reasons.splice(failedIndex >= 0 ? failedIndex + 1 : 0, 0, "ATTENDANCE_EXPIRY_BACKLOG");
+  }
   if (!workHealthy && reasons.length === 0) reasons.push("RECOVERY_REPORTED_DEGRADED");
   return {
     workHealthy,
@@ -76,6 +109,9 @@ function recoveryResult(body) {
     failed,
     blocked,
     flowRequestGcFailed,
+    attendanceExpiryFailedProjects,
+    attendanceExpiryBacklog,
+    attendanceExpiryBacklogCheckFailed,
   };
 }
 
@@ -112,7 +148,7 @@ export async function invokeWebhookRecovery(env, fetchImpl = fetch) {
 function unhealthyRecoveryError(result) {
   const reasons = result.reasons.join(",");
   return recoveryError(
-    `ObraSaaS recovery work is degraded (${reasons}; failed=${result.failed}; blocked=${result.blocked}; flowGcFailed=${result.flowRequestGcFailed}).`,
+    `ObraSaaS recovery work is degraded (${reasons}; failed=${result.failed}; blocked=${result.blocked}; flowGcFailed=${result.flowRequestGcFailed}; attendanceExpiryFailed=${result.attendanceExpiryFailedProjects}; attendanceExpiryBacklog=${result.attendanceExpiryBacklog}).`,
     "WEBHOOK_RECOVERY_UNHEALTHY",
   );
 }

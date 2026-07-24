@@ -1,6 +1,7 @@
 import { getAppStateSnapshot, resetState, saveAppStateSnapshot } from '@/lib/db';
-import { AccessError, accessErrorResponse, getPlatformAccess, requireTenantPermission } from '@/lib/access';
+import { AccessError, accessErrorResponse, getPlatformAccess, hasTenantPermission, requireTenantPermission } from '@/lib/access';
 import {
+    assertAttendanceProjectionUnchanged,
     assertProjectStateVersion,
     formatProjectStateEtag,
     deriveProjectStateActivities,
@@ -12,7 +13,10 @@ import {
     validateProjectStateInput,
 } from '@/lib/project-state';
 import { projectWritePolicyErrorResponse } from '@/lib/project-write-policy';
-import { sanitizeProjectStateMedicalData } from '@/lib/medical-privacy';
+import {
+    sanitizeProjectStateMedicalData,
+    SOURCE_EVIDENCE_PERMISSION,
+} from '@/lib/medical-privacy';
 import {
     readJsonRequest,
     RequestBodyError,
@@ -29,8 +33,10 @@ function projectStateHeaders(version) {
     };
 }
 
-function projectStateResponse(snapshot, { status = 200 } = {}) {
-    return Response.json(sanitizeProjectStateMedicalData(snapshot.state), {
+function projectStateResponse(snapshot, access, { status = 200 } = {}) {
+    return Response.json(sanitizeProjectStateMedicalData(snapshot.state, {
+        includeAttendanceLocation: hasTenantPermission(access, SOURCE_EVIDENCE_PERMISSION),
+    }), {
         status,
         headers: projectStateHeaders(snapshot.version),
     });
@@ -67,7 +73,7 @@ export async function GET() {
         const access = await getPlatformAccess();
         requireTenantPermission(access, 'org:projects:read');
         const snapshot = await getAppStateSnapshot(access);
-        return projectStateResponse(snapshot);
+        return projectStateResponse(snapshot, access);
     } catch (error) {
         if (error instanceof AccessError) return accessErrorResponse(error);
         console.error("Error fetching state:", error);
@@ -90,17 +96,27 @@ export async function POST(request) {
         const validationContext = { previousState: currentSnapshot.state };
         const body = validateProjectStateInput(writeRequest.state, validationContext);
         flagStockRisks(body);
+        const includeAttendanceLocation = hasTenantPermission(
+            access,
+            SOURCE_EVIDENCE_PERMISSION,
+        );
         const validatedBody = validateProjectStateInput(
             sanitizeProjectStateMedicalData(body, {
                 inferLegacyMedicalText: false,
+                includeAttendanceLocation,
             }),
             validationContext,
         );
+        const publicCurrentState = sanitizeProjectStateMedicalData(currentSnapshot.state, {
+            includeAttendanceLocation,
+        });
+        assertAttendanceProjectionUnchanged(publicCurrentState, validatedBody);
         const updated = await saveAppStateSnapshot(validatedBody, access, {
             expectedVersion: writeRequest.expectedVersion,
             deriveActivities: deriveProjectStateActivities,
+            preserveAttendanceProjection: true,
         });
-        return projectStateResponse(updated);
+        return projectStateResponse(updated, access);
     } catch (error) {
         if (error instanceof AccessError) return accessErrorResponse(error);
         if (error instanceof RequestBodyError) return requestBodyErrorResponse(error);
@@ -117,7 +133,7 @@ export async function DELETE(request) {
         requireTenantPermission(access, 'org:projects:manage');
         const expectedVersion = parseProjectStateVersion(request.headers.get('if-match'));
         const fresh = await resetState(access, { expectedVersion });
-        return projectStateResponse(fresh.snapshot);
+        return projectStateResponse(fresh.snapshot, access);
     } catch (error) {
         if (error instanceof AccessError) return accessErrorResponse(error);
         const stateError = projectStateErrorResponse(error);

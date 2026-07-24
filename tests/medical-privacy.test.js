@@ -125,6 +125,46 @@ test('project state exposes license status without diagnosis or certificate stor
   assert.match(sanitized.incidents[1].description, /cemento/);
 });
 
+test('shared state keeps the complete public attendance journey projection', () => {
+  const attendance = {
+    'worker-a': {
+      workerId: 'worker-a',
+      name: 'Ana Pérez',
+      role: 'Operaria',
+      checkin: '08:02',
+      checkout: '17:10',
+      breakStartedAt: '12:00',
+      breakEndedAt: '12:30',
+      status: 'Jornada cerrada',
+      shiftId: 'shift-a',
+      shiftState: 'CLOSED',
+      lastEventType: 'CHECK_OUT',
+      reviewRequired: false,
+      latitude: -34.6037,
+      longitude: -58.3816,
+      accuracy: 12,
+      distanceMeters: 45,
+    },
+  };
+
+  const publicAttendance = sanitizeProjectStateMedicalData({ attendance }).attendance;
+  assert.equal(publicAttendance['worker-a'].checkout, '17:10');
+  assert.equal(publicAttendance['worker-a'].breakStartedAt, '12:00');
+  assert.equal(publicAttendance['worker-a'].shiftId, 'shift-a');
+  assert.equal(publicAttendance['worker-a'].lastEventType, 'CHECK_OUT');
+  assert.equal(Object.hasOwn(publicAttendance['worker-a'], 'latitude'), false);
+  assert.equal(Object.hasOwn(publicAttendance['worker-a'], 'longitude'), false);
+  assert.equal(Object.hasOwn(publicAttendance['worker-a'], 'accuracy'), false);
+  assert.equal(publicAttendance['worker-a'].distanceMeters, 45);
+
+  assert.deepEqual(
+    sanitizeProjectStateMedicalData({ attendance }, {
+      includeAttendanceLocation: true,
+    }).attendance,
+    attendance,
+  );
+});
+
 test('medical text detection catches clinical data without confusing construction language', () => {
   assert.equal(
     isSensitiveMedicalText('Hay una demora porque Juan tiene cáncer y está bajo tratamiento médico.'),

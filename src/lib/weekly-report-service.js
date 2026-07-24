@@ -1,6 +1,12 @@
 import 'server-only';
 
 import { hasTenantPermission } from './access.js';
+import { loadWeeklyAttendanceShifts } from './attendance-report-query.js';
+import {
+  attendanceEventsFromShifts,
+  buildAttendancePeriodProjection,
+  mergeAttendanceReportProjection,
+} from './attendance-reporting.js';
 import { getAppStateSnapshot, getOperationalMessages } from './db.js';
 import { FIRST_VALUE_REPORT_ACTION } from './first-value-onboarding.js';
 import {
@@ -13,6 +19,7 @@ import { reserveWeeklyReportRateLimit } from './report-rate-limit.js';
 import {
   buildWeeklyReportModel,
   weeklyReportPeriodStart,
+  weeklyReportWorkDateRange,
 } from './reporting.js';
 
 export async function reserveWeeklyReportGeneration(access, {
@@ -29,7 +36,16 @@ export async function reserveWeeklyReportGeneration(access, {
   }, { isolationLevel: 'ReadCommitted' });
 }
 
-export async function loadWeeklyReportModel(access, { generatedAt = new Date() } = {}) {
+export async function loadWeeklyReportModel(access, {
+  generatedAt = new Date(),
+  prisma = getPrisma(),
+} = {}) {
+  const parsedGeneratedAt = generatedAt instanceof Date
+    ? new Date(generatedAt)
+    : new Date(generatedAt);
+  const safeGeneratedAt = Number.isNaN(parsedGeneratedAt.getTime())
+    ? new Date()
+    : parsedGeneratedAt;
   const includeMedicalEvidence = hasTenantPermission(
     access,
     MEDICAL_EVIDENCE_PERMISSION,
@@ -39,16 +55,26 @@ export async function loadWeeklyReportModel(access, { generatedAt = new Date() }
     SOURCE_EVIDENCE_PERMISSION,
   );
 
-  const [snapshot, loadedMessages] = await Promise.all([
+  const reportTimeZone = access.organization.timezone
+    || 'America/Argentina/Buenos_Aires';
+  const periodStart = weeklyReportPeriodStart(safeGeneratedAt, reportTimeZone);
+  const workDateRange = weeklyReportWorkDateRange(safeGeneratedAt, reportTimeZone);
+  const [snapshot, loadedMessages, loadedShifts] = await Promise.all([
     getAppStateSnapshot(access, { initializeIfMissing: false }),
     getOperationalMessages(access, {
       includeMedicalEvidence,
       includeSourceEvidence,
-      sentAtGte: weeklyReportPeriodStart(generatedAt),
-      sentAtLte: generatedAt,
+      sentAtGte: periodStart,
+      sentAtLte: safeGeneratedAt,
       take: 501,
     }),
+    loadWeeklyAttendanceShifts(prisma, {
+      projectId: access.project.id,
+      workDateRange,
+      generatedAt: safeGeneratedAt,
+    }),
   ]);
+  const loadedAttendance = attendanceEventsFromShifts(loadedShifts);
 
   const evidenceTruncated = loadedMessages.length > 500;
   const messages = evidenceTruncated ? loadedMessages.slice(-500) : loadedMessages;
@@ -78,13 +104,27 @@ export async function loadWeeklyReportModel(access, { generatedAt = new Date() }
     messageLimit: 500,
   });
 
+  const attendance = buildAttendancePeriodProjection(loadedAttendance, {
+    timeZone: reportTimeZone,
+  });
+  const sanitizedState = sanitizeProjectStateMedicalData(snapshot.state) || {};
+  const reportState = {
+    ...sanitizedState,
+    attendance: mergeAttendanceReportProjection({
+      canonical: attendance,
+      attendance: sanitizedState.attendance,
+      hrAttendance: sanitizedState.hrAttendance,
+    }),
+  };
+
   return buildWeeklyReportModel({
-    state: sanitizeProjectStateMedicalData(snapshot.state),
+    state: reportState,
     evidenceSummary,
     organization: access.organization,
     project: access.project,
     actorEmail: access.email,
-    generatedAt,
+    generatedAt: safeGeneratedAt,
+    timeZone: reportTimeZone,
     snapshot: snapshot.exists ? snapshot : null,
   });
 }

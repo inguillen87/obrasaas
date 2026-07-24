@@ -75,7 +75,9 @@ export default async function DashboardPage() {
   ]);
   return (
     <DashboardClient
-      initialState={sanitizeProjectStateMedicalData(initialSnapshot.state)}
+      initialState={sanitizeProjectStateMedicalData(initialSnapshot.state, {
+        includeAttendanceLocation: canReadSourceEvidence,
+      })}
       initialMessages={initialMessages}
       setup={{
         initialLoadedAt: new Date().toISOString(),

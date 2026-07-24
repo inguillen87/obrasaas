@@ -83,11 +83,20 @@ const SHARED_ATTENDANCE_FIELDS = Object.freeze([
   'name',
   'role',
   'checkin',
+  'checkout',
+  'breakStartedAt',
+  'breakEndedAt',
   'status',
+  'shiftId',
+  'shiftState',
+  'lastEventType',
+  'reviewRequired',
+  'distanceMeters',
+]);
+const SHARED_ATTENDANCE_LOCATION_FIELDS = Object.freeze([
   'latitude',
   'longitude',
   'accuracy',
-  'distanceMeters',
 ]);
 const SHARED_HR_ATTENDANCE_FIELDS = Object.freeze([
   'workerId',
@@ -391,6 +400,7 @@ function projectSharedBonuses(bonuses) {
 
 function projectSharedState(state, {
   inferLegacyMedicalText,
+  includeAttendanceLocation = false,
 } = {}) {
   const source = jsonObject(state);
   const projected = {};
@@ -410,7 +420,9 @@ function projectSharedState(state, {
     } else if (field === 'attendance') {
       projected.attendance = projectSharedRecordCollection(
         value,
-        SHARED_ATTENDANCE_FIELDS,
+        includeAttendanceLocation
+          ? [...SHARED_ATTENDANCE_FIELDS, ...SHARED_ATTENDANCE_LOCATION_FIELDS]
+          : SHARED_ATTENDANCE_FIELDS,
         {
           idPrefix: 'private-worker',
           stringPlaceholder: 'Registro operativo restringido',
@@ -669,9 +681,13 @@ function isMedicalLeaveIncident(incident) {
 
 export function sanitizeProjectStateMedicalData(state, {
   inferLegacyMedicalText = true,
+  includeAttendanceLocation = false,
 } = {}) {
   if (!state || typeof state !== 'object' || Array.isArray(state)) return state;
-  return projectSharedState(state, { inferLegacyMedicalText });
+  return projectSharedState(state, {
+    inferLegacyMedicalText,
+    includeAttendanceLocation,
+  });
 }
 
 export function medicalOperationalDescription() {
@@ -719,7 +735,9 @@ export function sanitizeObraEngineResultForMedicalPrivacy(result, {
   return {
     ...result,
     ...(replyRestricted ? { reply: RESTRICTED_ENGINE_REPLY } : {}),
-    state: sanitizeProjectStateMedicalData(result.state),
+    state: sanitizeProjectStateMedicalData(result.state, {
+      includeAttendanceLocation: includeSourceEvidence,
+    }),
     newMessages: sanitizeMessagesForMedicalPrivacy(rawMessages, {
       includeMedicalEvidence,
       includeSourceEvidence,

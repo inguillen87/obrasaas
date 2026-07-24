@@ -1,7 +1,10 @@
 import { generateWebviewToken } from "@/lib/auth";
 import {
+  AttendanceDomainError,
   completePendingGeoAttendance,
   ensurePendingGeoAttendance,
+  getAttendanceJourney,
+  recordAttendanceAction,
 } from "@/lib/attendance";
 import { appendMessages, getAppState, getProjectSettings, saveAppState } from "@/lib/db";
 import {
@@ -10,7 +13,11 @@ import {
   fieldWorkerWhatsAppRole,
 } from "@/lib/field-workers";
 import { FIRST_VALUE_APPROVAL_SIMULATOR_SCENARIO } from "@/lib/field-simulator-scenarios";
-import { getDistanceMeters, validateProjectGeofence } from "@/lib/geo";
+import {
+  getDistanceMeters,
+  validateProjectGeofence,
+  validateReportedLocation,
+} from "@/lib/geo";
 import { medicalFlowRecord } from "@/lib/medical-upload";
 import {
   isSensitiveMedicalText,
@@ -31,6 +38,8 @@ import { getPrisma } from "@/lib/prisma";
 import {
   classifyObraIntent,
   countPresentAttendanceEntries,
+  replaceWorkerAttendance,
+  requestedAttendanceAction,
   setWorkerAttendance,
 } from "@/lib/whatsapp/obra-policy";
 import { validateWhatsAppFlowReply } from "@/lib/whatsapp/flows";
@@ -108,27 +117,166 @@ const addIncident = appendOperationalIncident;
 const ensureStateCollections = ensureOperationalStateCollections;
 const selectTask = selectOperationalTask;
 
+function secureAttendanceLink(appUrl, workerId, projectId, action, binding) {
+  const query = new URLSearchParams({
+    worker: workerId,
+    token: generateWebviewToken(workerId, {
+      purpose: "attendance",
+      scope: projectId,
+      action,
+      ...(action === "CHECK_IN"
+        ? { pendingEntryId: binding?.pendingEntryId }
+        : {
+            shiftId: binding?.shiftId,
+            shiftRevision: binding?.shiftRevision,
+          }),
+    }),
+  }).toString();
+  return `${appUrl}/webview/attendance?${query}`;
+}
+
 function secureLinks(workerId, projectId) {
   const deploymentUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
     ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
     : null;
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL || deploymentUrl || "http://localhost:3000").replace(/\/$/, "");
-  const attendanceQuery = new URLSearchParams({
-    worker: workerId,
-    token: generateWebviewToken(workerId, { purpose: "attendance", scope: projectId }),
-  }).toString();
   const medicalQuery = new URLSearchParams({
     worker: workerId,
     token: generateWebviewToken(workerId, { purpose: "medical", scope: projectId }),
   }).toString();
   return {
-    attendance: `${appUrl}/webview/attendance?${attendanceQuery}`,
+    attendance: (action, binding) => (
+      secureAttendanceLink(appUrl, workerId, projectId, action, binding)
+    ),
     medical: `${appUrl}/webview/medical?${medicalQuery}`,
   };
 }
 
+function attendanceErrorReply(error) {
+  const messages = {
+    ATTENDANCE_SHIFT_ALREADY_OPEN: "Ya tenés una jornada abierta. Usá “pausa” o “salida” según corresponda.",
+    ATTENDANCE_SHIFT_NOT_OPEN: "No hay una jornada abierta. Escribí “fichar” para registrar el ingreso.",
+    ATTENDANCE_BREAK_ALREADY_OPEN: "La jornada ya está en pausa. Escribí “volví” cuando retomes.",
+    ATTENDANCE_BREAK_NOT_OPEN: "No hay una pausa activa para finalizar.",
+    ATTENDANCE_BREAK_OPEN: "Primero escribí “volví” para finalizar la pausa y después registrá la salida.",
+    ATTENDANCE_TRANSITION_INVALID: "La acción no coincide con el estado actual de la jornada.",
+    ATTENDANCE_CONCURRENT_MODIFICATION: "La jornada cambió al mismo tiempo. Repetí la acción para ver el estado vigente.",
+    ATTENDANCE_IDEMPOTENCY_CONFLICT: "La solicitud ya fue usada con datos distintos. Pedí un enlace nuevo.",
+  };
+  return messages[error?.code] || "No pude aplicar la acción de asistencia de forma segura. Reintentá desde el chat oficial.";
+}
+
 function updatePresentCount(state) {
   state.operariosCount = countPresentAttendanceEntries(state.attendance);
+}
+
+function attendanceEventTime(result, timeZone) {
+  const occurredAt = new Date(result?.occurredAt || Date.now());
+  return new Intl.DateTimeFormat("es-AR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: trustedTimeZone(timeZone),
+  }).format(occurredAt);
+}
+
+function projectAttendanceEvent(state, worker, result, timeZone) {
+  const action = result.eventType;
+  const eventTime = attendanceEventTime(result, timeZone);
+  const previous = state.attendance?.[worker.id] || {};
+  const reviewRequired = action === "CHECK_IN"
+    ? result.verificationStatus === "REVIEW_REQUIRED"
+    : previous.reviewRequired === true
+      || result.verificationStatus === "REVIEW_REQUIRED";
+
+  if (action === "CHECK_IN") {
+    replaceWorkerAttendance(state.attendance, worker, {
+      checkin: eventTime,
+      status: reviewRequired
+        ? "Desvío (ubicación informada)"
+        : "Presente (ubicación informada)",
+      shiftId: result.shift?.id,
+      shiftState: "WORKING",
+      lastEventType: action,
+      reviewRequired,
+      latitude: result.latitude,
+      longitude: result.longitude,
+      accuracy: result.accuracyMeters,
+      distanceMeters: result.distanceMeters,
+    });
+  } else if (action === "BREAK_START") {
+    if (state.attendance?.[worker.id]) {
+      delete state.attendance[worker.id].breakEndedAt;
+    }
+    setWorkerAttendance(state.attendance, worker, {
+      status: reviewRequired ? "Desvío · en pausa" : "Presente · en pausa",
+      breakStartedAt: eventTime,
+      shiftId: result.shift?.id,
+      shiftState: "ON_BREAK",
+      lastEventType: action,
+      reviewRequired,
+    });
+  } else if (action === "BREAK_END") {
+    setWorkerAttendance(state.attendance, worker, {
+      status: reviewRequired ? "Desvío · actividad retomada" : "Presente · actividad retomada",
+      breakEndedAt: eventTime,
+      shiftId: result.shift?.id,
+      shiftState: "WORKING",
+      lastEventType: action,
+      reviewRequired,
+    });
+  } else if (action === "CHECK_OUT") {
+    setWorkerAttendance(state.attendance, worker, {
+      status: reviewRequired
+        ? "Jornada cerrada · revisar ubicación"
+        : "Jornada cerrada",
+      checkout: eventTime,
+      shiftId: result.shift?.id,
+      shiftState: "CLOSED",
+      lastEventType: action,
+      reviewRequired,
+    });
+  }
+  updatePresentCount(state);
+  return eventTime;
+}
+
+function attendanceActionReply(action, result, eventTime) {
+  if (action === "CHECK_IN") {
+    return result.verificationStatus === "REVIEW_REQUIRED"
+      ? `Registré tu entrada a las ${eventTime}. La ubicación quedó fuera de la geocerca y requiere revisión.`
+      : `Registré tu entrada a las ${eventTime} dentro de la geocerca configurada (${result.distanceMeters} m).`;
+  }
+  if (action === "BREAK_START") return `Registré el inicio de tu pausa a las ${eventTime}.`;
+  if (action === "BREAK_END") return `Registré tu regreso de la pausa a las ${eventTime}.`;
+  return result.verificationStatus === "REVIEW_REQUIRED"
+    ? `Registré tu salida a las ${eventTime}. La ubicación quedó fuera de la geocerca y requiere revisión.`
+    : `Registré tu salida a las ${eventTime} dentro de la geocerca configurada (${result.distanceMeters} m).`;
+}
+
+function addAttendanceIncident(state, worker, event, action, result, eventTime, timeZone) {
+  const labels = {
+    CHECK_IN: "Entrada registrada",
+    BREAK_START: "Pausa iniciada",
+    BREAK_END: "Actividad retomada",
+    CHECK_OUT: "Salida registrada",
+  };
+  const reviewRequired = result.verificationStatus === "REVIEW_REQUIRED";
+  const distanceCopy = result.distanceMeters == null
+    ? ""
+    : ` Ubicación informada a ${result.distanceMeters} m del punto de obra (radio: ${result.geofenceRadiusMeters} m).`;
+  const added = addIncident(state, event, {
+    title: reviewRequired ? `${labels[action]} · revisar ubicación` : labels[action],
+    description: `${worker.name} registró ${labels[action].toLowerCase()} a las ${eventTime}.${distanceCopy}`,
+    type: reviewRequired ? "critical" : action === "CHECK_OUT" ? "info" : "success",
+    badge: reviewRequired ? "Revisar GPS" : "Asistencia",
+    reporter: worker.name,
+    icon: action === "BREAK_START" || action === "BREAK_END"
+      ? "fa-solid fa-mug-hot"
+      : "fa-solid fa-location-dot",
+    now: new Date(result.occurredAt),
+    timeZone,
+  });
+  if (added && reviewRequired) state.alertsCount += 1;
 }
 
 const updateOverallProgress = recalculateOverallProgress;
@@ -284,6 +432,7 @@ async function processFlowReply({
         uploadLink: links.medical,
       })
     : null;
+  let attendanceLink = null;
   if (isMedical) {
     setWorkerAttendance(state.attendance, worker, {
       checkin: "--:--",
@@ -292,10 +441,14 @@ async function processFlowReply({
   }
   if (isAttendance) {
     const ppeComplete = response.ppe_status === "complete";
-    await ensurePendingGeoAttendance(prisma, {
+    const pending = await ensurePendingGeoAttendance(prisma, {
       projectId,
       workerId: worker.id,
       now,
+      source: event.provider || "whatsapp",
+      idempotencyKey: event.externalId || `flow:${flowSession?.id || now.toISOString()}`,
+      sourceOccurredAt: event.timestamp || null,
+      timezone: timeZone,
       metadata: {
         ppeStatus: ppeComplete ? "complete" : "incomplete",
         source: "whatsapp-flow",
@@ -303,13 +456,16 @@ async function processFlowReply({
         ...(response.task_ref ? { taskRef: response.task_ref } : {}),
       },
     });
-    setWorkerAttendance(state.attendance, worker, {
+    attendanceLink = links.attendance("CHECK_IN", { pendingEntryId: pending.id });
+    replaceWorkerAttendance(state.attendance, worker, {
       checkin: new Intl.DateTimeFormat("es-AR", {
         hour: "2-digit",
         minute: "2-digit",
         timeZone: trustedTimeZone(timeZone),
       }).format(now),
       status: ppeComplete ? "GPS pendiente · EPP verificado" : "GPS pendiente · EPP incompleto",
+      lastEventType: "CHECK_IN",
+      reviewRequired: false,
     });
     updatePresentCount(state);
   }
@@ -374,8 +530,8 @@ async function processFlowReply({
     ? medicalRecord.reply
     : isAttendance
       ? response.ppe_status === "complete"
-        ? `EPP confirmado. Para completar el ingreso todavía falta informar y contrastar tu ubicación:\n${links.attendance}`
-        : `EPP incompleto: no inicies la tarea hasta regularizarlo. El ingreso sigue pendiente de ubicación:\n${links.attendance}`
+        ? `EPP confirmado. Para completar el ingreso todavía falta informar y contrastar tu ubicación:\n${attendanceLink}`
+        : `EPP incompleto: no inicies la tarea hasta regularizarlo. El ingreso sigue pendiente de ubicación:\n${attendanceLink}`
     : "Formulario recibido. Lo registré en la bitácora de la obra y ya está visible para el equipo de gestión.";
 }
 
@@ -410,6 +566,9 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
       : eventText || transcriptionText,
   ).trim();
   const lowerBody = normalize(body);
+  const requestedAction = event.kind === "audio"
+    ? null
+    : requestedAttendanceAction(body);
   const evidence = event.media
     ? {
         kind: event.media.kind || event.kind,
@@ -430,6 +589,7 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
   let stateChanged = false;
   let audioProposal = null;
   let operationalProposal = null;
+  let attendanceResult = null;
   let authorized = true;
   const isMetaFlowReply = (
     event.provider === "meta"
@@ -526,7 +686,7 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
       worker,
       event,
       flowSession: trustedFlowSession,
-      now,
+      now: processingNow,
       projectId: projectSettings.id,
       links,
       prisma: options.prisma || getPrisma(),
@@ -534,57 +694,114 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
       timeZone,
     });
     stateChanged = true;
-  } else if (event.location) {
-    const geofence = validateProjectGeofence(projectSettings);
-    if (!geofence.valid) {
-      reply = "La obra todavía no tiene una geocerca configurada. Un administrador debe registrar sus coordenadas antes de validar ingresos por ubicación.";
-    } else {
-      const distance = Math.round(
-        getDistanceMeters(
-          event.location.latitude,
-          event.location.longitude,
-          geofence.latitude,
-          geofence.longitude,
-        ),
-      );
-      const inside = distance <= geofence.geofenceMeters;
+  } else if (event.attendanceAction || event.location) {
+    const action = event.attendanceAction || "CHECK_IN";
+    const needsLocation = action === "CHECK_IN" || action === "CHECK_OUT";
+    let location = null;
+    let geofence = null;
+    let distance = null;
 
-      const completedAttendance = await completePendingGeoAttendance(options.prisma || getPrisma(), {
+    if (needsLocation) {
+      const reportedLocation = validateReportedLocation(event.location || {});
+      if (!reportedLocation.valid) {
+        if (event.attendanceAction) {
+          throw new AttendanceDomainError(
+            "The attendance location is invalid or insufficiently accurate.",
+            reportedLocation.reason === "INVALID_COORDINATES"
+              ? "ATTENDANCE_LOCATION_INVALID"
+              : "ATTENDANCE_LOCATION_ACCURACY_INVALID",
+            422,
+          );
+        }
+        reply = "Para validar el fichaje necesito una lectura GPS con precisión informada; un pin compartido no alcanza. Escribí “fichar” para solicitar un enlace nuevo ligado a este ingreso.";
+      } else {
+        geofence = validateProjectGeofence(projectSettings);
+        if (!geofence.valid) {
+          if (event.attendanceAction) {
+            throw new AttendanceDomainError(
+              "The project geofence is not configured.",
+              "GEOFENCE_NOT_CONFIGURED",
+              409,
+            );
+          }
+          reply = "La obra todavía no tiene una geocerca configurada. Un administrador debe registrar sus coordenadas antes de validar fichajes por ubicación.";
+        } else {
+          location = reportedLocation;
+          const measuredDistance = getDistanceMeters(
+            location.latitude,
+            location.longitude,
+            geofence.latitude,
+            geofence.longitude,
+          );
+          if (!Number.isFinite(measuredDistance)) {
+            throw new AttendanceDomainError(
+              "The attendance distance could not be calculated.",
+              "ATTENDANCE_GEOFENCE_INVALID",
+              422,
+            );
+          }
+          distance = measuredDistance;
+        }
+      }
+    }
+
+    if (!reply) {
+      const commonInput = {
         projectId: projectSettings.id,
         workerId: worker.id,
-        now,
-        latitude: event.location.latitude,
-        longitude: event.location.longitude,
-        distanceMeters: distance,
-        inside,
-        accuracy: event.location.accuracy,
-      });
-      if (!completedAttendance) {
-        reply = "No encontré un ingreso pendiente vigente. Escribí “fichar” para iniciar el control y después informá la ubicación desde el enlace seguro.";
+        now: processingNow,
+        source: event.provider || "whatsapp",
+        idempotencyKey: event.attendanceIdempotencyKey || event.externalId,
+        sourceOccurredAt: event.attendanceLocationCapturedAt || now,
+        timezone: timeZone,
+        evidence: null,
+        ...(action === "CHECK_IN" && event.attendancePendingEntryId
+          ? { pendingEntryId: event.attendancePendingEntryId }
+          : {}),
+        ...(action !== "CHECK_IN" && event.attendanceShiftId
+          ? {
+              shiftId: event.attendanceShiftId,
+              expectedRevision: event.attendanceExpectedRevision,
+            }
+          : {}),
+        ...(location
+          ? {
+              latitude: location.latitude,
+              longitude: location.longitude,
+              accuracyMeters: location.accuracy,
+              distanceMeters: distance,
+              geofenceRadiusMeters: geofence.geofenceMeters,
+              privacyNoticeVersion: event.attendancePrivacyNoticeVersion || "user-shared-location",
+            }
+          : {}),
+      };
+      attendanceResult = action === "CHECK_IN"
+        ? await completePendingGeoAttendance(options.prisma || getPrisma(), commonInput)
+        : await recordAttendanceAction(options.prisma || getPrisma(), {
+            ...commonInput,
+            eventType: action,
+          });
+      if (!attendanceResult) {
+        if (event.attendanceAction) {
+          throw new AttendanceDomainError(
+            "No pending check-in exists for this attendance capture.",
+            "NO_PENDING_CHECK_IN",
+            409,
+          );
+        }
+        reply = "No encontré un ingreso pendiente vigente. Escribí “fichar” para iniciar el control y después usá el enlace seguro.";
       } else {
-        setWorkerAttendance(state.attendance, worker, {
-          checkin: time,
-          status: inside ? "Presente (ubicación informada)" : "Desvío (ubicación informada)",
-        });
-        updatePresentCount(state);
-        const incidentAdded = addIncident(
+        const eventTime = projectAttendanceEvent(state, worker, attendanceResult, timeZone);
+        addAttendanceIncident(
           state,
+          worker,
           event,
-          {
-            title: inside ? "Ubicación informada dentro de geocerca" : "Ubicación informada fuera de geocerca",
-            description: `${worker.name} informó una ubicación a ${distance} m del punto de obra (radio configurado: ${geofence.geofenceMeters} m).`,
-            type: inside ? "success" : "critical",
-            badge: inside ? "Presente" : "Revisar GPS",
-            reporter: worker.name,
-            icon: "fa-solid fa-location-dot",
-            now,
-            timeZone,
-          },
+          action,
+          attendanceResult,
+          eventTime,
+          timeZone,
         );
-        if (incidentAdded && !inside) state.alertsCount += 1;
-        reply = inside
-          ? `Ubicación informada y contrastada con la geocerca. Registré tu ingreso a las ${time} dentro del radio configurado (${distance} m).`
-          : `La ubicación informada está a ${distance} m de la obra, fuera del radio configurado de ${geofence.geofenceMeters} m. El ingreso quedó marcado para revisión.`;
+        reply = attendanceActionReply(action, attendanceResult, eventTime);
         stateChanged = true;
       }
     }
@@ -674,32 +891,91 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
     }
   } else if (lowerBody.includes("licencia") || lowerBody.includes("certificado")) {
     reply = `Cargá el certificado desde este enlace seguro, válido por dos horas:\n${links.medical}`;
-  } else if (["fichar", "ingreso", "ingresar", "entrada", "arranco"].some((term) => lowerBody.includes(term))) {
+  } else if (requestedAction === "CHECK_IN") {
     flowPrompt = "shift-check-in";
-    await ensurePendingGeoAttendance(options.prisma || getPrisma(), {
+    try {
+      const pending = await ensurePendingGeoAttendance(options.prisma || getPrisma(), {
+        projectId: projectSettings.id,
+        workerId: worker.id,
+        now: processingNow,
+        source: event.provider || "whatsapp",
+        idempotencyKey: event.externalId || `message:${processingNow.toISOString()}`,
+        sourceOccurredAt: now,
+        timezone: timeZone,
+        metadata: { source: event.provider || "whatsapp", externalId: event.externalId || null },
+      });
+      const attendanceLink = links.attendance("CHECK_IN", { pendingEntryId: pending.id });
+      replaceWorkerAttendance(state.attendance, worker, {
+        checkin: attendanceEventTime({ occurredAt: processingNow }, timeZone),
+        status: "GPS pendiente",
+        lastEventType: "CHECK_IN",
+        reviewRequired: false,
+      });
+      updatePresentCount(state);
+      addIncident(
+        state,
+        event,
+        {
+          title: "Ingreso pendiente de ubicación",
+          description: `${worker.name} inició el control de ingreso. Todavía no cuenta como presente hasta informar una ubicación y contrastarla con la geocerca.`,
+          type: "info",
+          badge: "GPS pendiente",
+          reporter: worker.name,
+          icon: "fa-solid fa-user-check",
+          now: processingNow,
+          timeZone,
+        },
+      );
+      reply = `Inicié el control, pero todavía no figurás presente. Informá una lectura puntual de ubicación desde este enlace seguro:\n${attendanceLink}`;
+      stateChanged = true;
+    } catch (error) {
+      if (!(error instanceof AttendanceDomainError)) throw error;
+      reply = attendanceErrorReply(error);
+    }
+  } else if (requestedAction === "BREAK_START" || requestedAction === "BREAK_END") {
+    try {
+      attendanceResult = await recordAttendanceAction(options.prisma || getPrisma(), {
+        projectId: projectSettings.id,
+        workerId: worker.id,
+        eventType: requestedAction,
+        now: processingNow,
+        source: event.provider || "whatsapp",
+        idempotencyKey: event.externalId || `message:${processingNow.toISOString()}`,
+        sourceOccurredAt: now,
+      });
+      const eventTime = projectAttendanceEvent(state, worker, attendanceResult, timeZone);
+      addAttendanceIncident(
+        state,
+        worker,
+        event,
+        requestedAction,
+        attendanceResult,
+        eventTime,
+        timeZone,
+      );
+      reply = attendanceActionReply(requestedAction, attendanceResult, eventTime);
+      stateChanged = true;
+    } catch (error) {
+      if (!(error instanceof AttendanceDomainError)) throw error;
+      reply = attendanceErrorReply(error);
+    }
+  } else if (requestedAction === "CHECK_OUT") {
+    const journey = await getAttendanceJourney(options.prisma || getPrisma(), {
       projectId: projectSettings.id,
       workerId: worker.id,
-      now,
-      metadata: { source: event.provider || "whatsapp", externalId: event.externalId || null },
+      now: processingNow,
     });
-    setWorkerAttendance(state.attendance, worker, { checkin: time, status: "GPS pendiente" });
-    updatePresentCount(state);
-    addIncident(
-      state,
-      event,
-      {
-        title: "Ingreso pendiente de ubicación",
-        description: `${worker.name} inició el control de ingreso. Todavía no cuenta como presente hasta informar una ubicación y contrastarla con la geocerca.`,
-        type: "info",
-        badge: "GPS pendiente",
-        reporter: worker.name,
-        icon: "fa-solid fa-user-check",
-        now,
-        timeZone,
-      },
-    );
-    reply = `Inicié el control a las ${time}, pero todavía no figurás presente. Informá tu ubicación para contrastarla con la geocerca desde este enlace seguro:\n${links.attendance}`;
-    stateChanged = true;
+    if (!journey || journey.shift.status !== "OPEN") {
+      reply = "No hay una jornada abierta. Escribí “fichar” si necesitás registrar un nuevo ingreso.";
+    } else if (journey.shift.phase === "ON_BREAK") {
+      reply = "La pausa sigue abierta. Escribí “volví” para finalizarla y después pedí la salida.";
+    } else {
+      const attendanceLink = links.attendance("CHECK_OUT", {
+        shiftId: journey.shift.id,
+        shiftRevision: journey.shift.revision,
+      });
+      reply = `Para registrar la salida necesitamos una lectura puntual de ubicación. Usá este enlace seguro:\n${attendanceLink}`;
+    }
   } else if (["incidencia", "reportar incidencia", "nueva incidencia"].includes(lowerBody)) {
     flowPrompt = "incident-report";
     reply = "Contame qué ocurrió, en qué sector y qué nivel de riesgo observás. Lo voy a registrar en la bitácora de la obra.";
@@ -757,9 +1033,9 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
     if (stateChanged) state.alertsCount += 1;
     reply = "Demora registrada. Quedó pendiente de impacto y reprogramación por el responsable de planificación.";
   } else if (lowerBody.includes("ayuda") || lowerBody.includes("menu") || lowerBody.includes("menú")) {
-    reply = "Puedo ayudarte a: registrar ingreso y ubicación, informar avance con porcentaje y tarea, reportar una incidencia, adjuntar evidencia o cargar un certificado médico.";
+    reply = "Puedo ayudarte a: registrar ingreso (“fichar”), iniciar pausa (“almuerzo”), volver (“volví”), registrar salida (“chau”), informar avances, reportar incidencias, adjuntar evidencia o cargar un certificado médico.";
   } else {
-    reply = "Guardé el reporte en la bitácora. Para convertirlo en una acción, indicá “avance 60% tarea 3”, “incidencia urgente”, “fichar” o “licencia”.";
+    reply = "Guardé el reporte en la bitácora. Para convertirlo en una acción, indicá “fichar”, “almuerzo”, “volví”, “chau”, “avance 60% tarea 3”, “incidencia urgente” o “licencia”.";
   }
 
   const newMessages = [{
@@ -842,6 +1118,7 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
     intent,
     stateChanged,
     newMessages,
+    attendanceResult,
     operationalProposal: publicOperationalProposal(operationalProposal),
   };
 }

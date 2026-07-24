@@ -149,20 +149,63 @@ function webhookEntry(event) {
 }
 
 function attendanceEntry(entry) {
-  const outside = entry.status === 'OUTSIDE_GEOFENCE';
+  const eventType = entry.eventType || 'CHECK_IN';
+  const verification = entry.verificationStatus || (
+    entry.status === 'OUTSIDE_GEOFENCE' ? 'REVIEW_REQUIRED' : 'LEGACY'
+  );
+  const needsReview = verification === 'REVIEW_REQUIRED';
+  const pending = verification === 'PENDING';
+  const expired = verification === 'EXPIRED';
+  const justifiedAbsence = entry.status === 'EXCUSED';
+  const legacyAbsence = entry.status === 'ABSENT';
+  const unclassifiedLegacy = verification === 'LEGACY' && !entry.shiftId;
+  const labels = {
+    CHECK_IN: 'Ingreso registrado',
+    BREAK_START: 'Pausa iniciada',
+    BREAK_END: 'Actividad retomada',
+    CHECK_OUT: 'Salida registrada',
+  };
+  const title = justifiedAbsence
+    ? 'Ausencia justificada registrada'
+    : legacyAbsence
+      ? 'Ausencia histórica sin clasificación canónica'
+      : unclassifiedLegacy
+        ? 'Registro histórico de asistencia'
+        : pending
+    ? 'Ingreso pendiente de ubicación'
+    : expired
+      ? 'Solicitud de ingreso vencida'
+      : needsReview
+        ? `${labels[eventType] || 'Fichaje registrado'} · revisar ubicación`
+        : labels[eventType] || 'Fichaje registrado';
+  const description = justifiedAbsence
+    ? `${entry.worker.name} tiene una excepción justificada heredada; su fecha y vigencia requieren migración al ledger de excepciones.`
+    : legacyAbsence
+      ? `El registro histórico de ${entry.worker.name} no permite distinguir una ausencia laboral de un intento técnico vencido.`
+      : unclassifiedLegacy
+        ? `El registro de ${entry.worker.name} proviene del modelo anterior y no se interpreta como entrada, salida ni presencia verificada.`
+        : needsReview
+    ? `${entry.worker.name} informó una ubicación a ${entry.distanceMeters ?? '—'} m del punto configurado.`
+    : pending
+      ? `${entry.worker.name} inició el control y todavía no confirmó una ubicación válida.`
+      : expired
+        ? `El intento de ${entry.worker.name} venció sin convertirse en una ausencia laboral.`
+        : `${entry.worker.name} registró ${eventType === 'CHECK_IN' ? 'su entrada' : eventType === 'CHECK_OUT' ? 'su salida' : eventType === 'BREAK_START' ? 'el inicio de una pausa' : 'el fin de una pausa'}.`;
   return {
     id: `attendance-${entry.id}`,
-    occurredAt: entry.checkedInAt.toISOString(),
+    occurredAt: (entry.occurredAt || entry.checkedInAt).toISOString(),
     group: 'FIELD',
     category: 'ATTENDANCE',
-    severity: outside ? 'WARNING' : 'SUCCESS',
+    severity: needsReview || pending || legacyAbsence
+      ? 'WARNING'
+      : expired || justifiedAbsence || unclassifiedLegacy
+        ? 'INFO'
+        : 'SUCCESS',
     source: entry.source || 'whatsapp',
-    title: outside ? 'Fichaje fuera de geocerca' : 'Ingreso registrado',
-    description: outside
-      ? `${entry.worker.name} quedó a ${entry.distanceMeters ?? '—'} m del punto configurado.`
-      : `${entry.worker.name} confirmó presencia en la obra.`,
+    title,
+    description,
     actor: entry.worker.name,
-    reference: entry.status,
+    reference: `${eventType} · ${verification}`,
   };
 }
 
@@ -199,7 +242,7 @@ async function loadActivity(access) {
     prisma.attendanceEntry.findMany({
       where: { projectId },
       include: { worker: { select: { name: true } } },
-      orderBy: { checkedInAt: 'desc' },
+      orderBy: { occurredAt: 'desc' },
       take: 80,
     }),
   ]);

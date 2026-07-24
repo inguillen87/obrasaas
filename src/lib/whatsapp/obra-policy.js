@@ -17,6 +17,30 @@ function flowKind(event) {
   );
 }
 
+export function requestedAttendanceAction(value) {
+  const text = normalizePolicyText(value).trim();
+  if (!text) return null;
+  if (
+    ['almuerzo', 'pausa', 'descanso', 'iniciar pausa', 'inicio pausa', 'salgo a almorzar']
+      .some((term) => text === term || text.startsWith(`${term} `))
+  ) return 'BREAK_START';
+  if (
+    ['volvi', 'regreso', 'fin pausa', 'terminar pausa', 'retomo', 'retomar actividad']
+      .some((term) => text === term || text.startsWith(`${term} `))
+  ) return 'BREAK_END';
+  if (
+    ['chau', 'salida', 'egreso', 'me voy', 'termine'].includes(text)
+    || ['finalizar jornada', 'cerrar jornada'].some(
+      (term) => text === term || text.startsWith(`${term} `),
+    )
+  ) return 'CHECK_OUT';
+  if (
+    ['fichar', 'ingreso', 'ingresar', 'entrada', 'arranco']
+      .some((term) => text === term || text.includes(term))
+  ) return 'CHECK_IN';
+  return null;
+}
+
 export function classifyObraIntent(event, { trustedFlowType = null } = {}) {
   const body = String(event.text || event.transcription?.text || '').trim();
   const lowerBody = normalizePolicyText(body);
@@ -41,7 +65,7 @@ export function classifyObraIntent(event, { trustedFlowType = null } = {}) {
   if (lowerBody.includes('licencia') || lowerBody.includes('certificado')) {
     return FIELD_WORKER_INTENTS.MEDICAL;
   }
-  if (['fichar', 'ingreso', 'ingresar', 'entrada', 'arranco'].some((term) => lowerBody.includes(term))) {
+  if (requestedAttendanceAction(lowerBody)) {
     return FIELD_WORKER_INTENTS.ATTENDANCE_START;
   }
   if (/\b([0-9]{1,3})\s*%/.test(lowerBody)) return FIELD_WORKER_INTENTS.TASK_PROGRESS;
@@ -82,13 +106,43 @@ export function setWorkerAttendance(attendance, worker, entry) {
     delete attendance[worker.name];
   }
 
+  const currentEntry = attendance[worker.id]
+    || (
+      legacyEntry
+      && (!legacyEntry.workerId || legacyEntry.workerId === worker.id)
+        ? legacyEntry
+        : null
+    )
+    || {};
   attendance[worker.id] = {
+    ...currentEntry,
     ...entry,
     workerId: worker.id,
     name: worker.name,
     role: worker.role || 'Cuadrilla de obra',
   };
   return attendance[worker.id];
+}
+
+export function replaceWorkerAttendance(attendance, worker, entry) {
+  if (!attendance || typeof attendance !== 'object' || Array.isArray(attendance)) {
+    throw new Error('A valid attendance snapshot is required.');
+  }
+  if (!worker?.id || !worker?.name) {
+    throw new Error('A trusted worker identity is required.');
+  }
+
+  const legacyEntry = attendance[worker.name];
+  delete attendance[worker.id];
+  if (
+    worker.name !== worker.id
+    && legacyEntry
+    && (!legacyEntry.workerId || legacyEntry.workerId === worker.id)
+  ) {
+    delete attendance[worker.name];
+  }
+
+  return setWorkerAttendance(attendance, worker, entry);
 }
 
 export function countPresentAttendanceEntries(attendance) {

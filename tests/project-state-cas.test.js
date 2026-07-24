@@ -139,6 +139,36 @@ test('state CAS locks, reads, derives activities and increments in one transacti
   assert.deepEqual(stored.state, after);
 });
 
+test('generic snapshot writes preserve the server-owned attendance projection', async () => {
+  const attendance = {
+    'worker-a': {
+      workerId: 'worker-a',
+      shiftId: 'shift-a',
+      status: 'Jornada cerrada',
+      checkout: '17:10',
+    },
+  };
+  const { calls, transaction } = transactionDouble({
+    state: { tasks: {}, attendance },
+    version: 4,
+    updatedAt: new Date(),
+  });
+
+  const stored = await persistProjectStateTransaction(transaction, {
+    context: durableContext(),
+    scope: {},
+    state: { tasks: {}, attendance: {} },
+    expectedVersion: 4,
+    preserveAttendanceProjection: true,
+  });
+
+  assert.deepEqual(stored.state.attendance, attendance);
+  assert.deepEqual(
+    calls.find(([name]) => name === 'write')[1].update.state.attendance,
+    attendance,
+  );
+});
+
 test('state CAS rejects a stale writer before writing or auditing', async () => {
   const { calls, transaction } = transactionDouble({
     state: { tasks: {} },

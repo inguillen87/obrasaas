@@ -34,7 +34,7 @@ Política de automatización objetivo:
 
 ## Línea base comprobada
 
-ObraSaaS ya es una base SaaS real; no es sólo una maqueta. Tiene tenancy B2B, roles operativos, alcance por obra, auditoría, proyectos, Gantt, WhatsApp persistente, Flows gobernados, aprobaciones humanas, evidencia privada, asistencia y reportes PDF. La suite contractual tiene 733 pruebas unitarias y de integración liviana en esta iteración.
+ObraSaaS ya es una base SaaS real; no es sólo una maqueta. Tiene tenancy B2B, roles operativos, alcance por obra, auditoría, proyectos, Gantt, WhatsApp persistente, Flows gobernados, aprobaciones humanas, evidencia privada, asistencia y reportes PDF. La suite contractual tiene 787 pruebas unitarias y de integración liviana en esta iteración.
 
 Eso todavía no demuestra una operación Enterprise con clientes reales. Los principales límites actuales son la falta de validación externa con un WABA real, Clerk sobre instancia development, journeys E2E operativos insuficientes, estado centralizado en un snapshot JSON y dominios profesionales incompletos en costos, documentos, calidad, contratos, stock y colaboración externa.
 
@@ -47,7 +47,7 @@ Eso todavía no demuestra una operación Enterprise con clientes reales. Los pri
 | Gantt y tareas | Parcial | Gantt con CAS y proyección relacional; `ProjectSnapshot.state.tasks` sigue siendo autoridad | Hacer `Task` y WBS canónicos antes de conectar costos |
 | WhatsApp e Inbox | Confirmado por contrato; externo pendiente | Firma, idempotencia, leases, inbox, Flows y evidencia privada | Ejecutar los nueve gates con WABA real antes de afirmar E2E operativo |
 | Propuestas y aprobación humana | Confirmado | Avance, demora e incidente crítico con decisión auditada | Extender el patrón a diarios, calidad, costos y cambios |
-| Asistencia y salud | Parcial | Check-in, geocerca y evidencia médica aislada | Incorporar salida, turno, horas y excepciones; no venderlo como nómina |
+| Asistencia y salud | Parcial | Ledger canónico con ingreso, pausas, salida, GPS conservador, idempotencia, jornada y reporte; evidencia médica aislada | Completar S2 (turnos, tolerancia, excepciones y corrección aprobada) y el gate legal; no venderlo como nómina |
 | Incidencias y seguridad | Parcial | Captura y propuestas; el modelo relacional no es el workflow canónico | Crear propietario, SLA, causa, acciones correctivas y cierre |
 | Acopios | Parcial | Catálogo y niveles básicos | Migrar a ledger inmutable de recepción, consumo, ajuste y ubicación |
 | Costos y rol Finance | No suficiente | Sólo total/ejecutado en snapshot; permiso nominal sin superficie propia | Crear presupuesto, comprometido, real, forecast y cambios sobre la misma WBS |
@@ -62,10 +62,10 @@ Eso todavía no demuestra una operación Enterprise con clientes reales. Los pri
 | API pública e integraciones | No implementado | Integraciones internas con proveedores; sin API pública versionada | API, scopes, rate limit, webhooks tenant y conectores antes de prometer ERP/BI |
 | Billing | Parcial y cerrado por defecto | Backend Stripe/webhook; checkout exige flag exacto, entrada estricta y versiones vigentes, pero no hay intención/consentimiento durable ni control de concurrencia | Mantener deshabilitado hasta cerrar intención idempotente, UI, evidencia contractual, reconciliación y E2E |
 | Observabilidad y operaciones | No suficiente | Analytics web anonimizado; sin APM, SLO, alertas ni DR probado | Es gate de producción, no mejora opcional |
-| CI y E2E | En implementación | 733 tests; E2E público separado y workflow CI agregados en esta rama | Requiere ejecución remota verde y expansión a journeys autenticados |
+| CI y E2E | En implementación | 787 tests; E2E público separado y workflow CI agregados en esta rama | Requiere ejecución remota verde y expansión a journeys autenticados |
 | Internacionalización | No implementado | UI y formatos mayormente `es-AR` | Agregar español regional, portugués, zona horaria y multimoneda sin mezclar fiscalidad |
 
-Fuentes internas principales: [autenticación y tenancy](./AUTH_AND_TENANCY.md), [contrato transitorio de tareas](./OPERATIONAL_TASKS.md) y [estado verificable de Meta](./WHATSAPP_META.md).
+Fuentes internas principales: [autenticación y tenancy](./AUTH_AND_TENANCY.md), [ledger de asistencia](./ATTENDANCE_LEDGER.md), [contrato transitorio de tareas](./OPERATIONAL_TASKS.md) y [estado verificable de Meta](./WHATSAPP_META.md).
 
 ## Gates P0 antes de declarar producción comercial
 
@@ -74,13 +74,13 @@ Estos gates pueden avanzar en paralelo, pero ninguno se reemplaza con una captur
 | Gate | Evidencia de salida | Estado al 23/07/2026 |
 | --- | --- | --- |
 | Especificación de la clienta trazada | Requisito, decisión, secuencia y criterio de aceptación por cada ítem | 91 IDs integrados; validación con la socia y casos de prueba detallados pendientes por vertical |
-| Calidad automatizada | CI remota verde con instalación exacta, lint, 733+ tests, auditoría, build y smoke público | Implementado y verde localmente; ejecución GitHub pendiente |
+| Calidad automatizada | CI remota verde con instalación exacta, lint, 787+ tests, auditoría, build y smoke público | Implementado y verde localmente; ejecución GitHub pendiente |
 | Journey operativo E2E | Admin crea obra/trabajador/tarea, aprueba propuesta y descarga reporte; roles restringidos fallan correctamente | Pendiente |
 | WhatsApp real | Embedded Signup, inbound/outbound, estados, ambos Flows, reintento, expiración y fallback en teléfono real | Pendiente externo |
 | Identidad productiva | Dominio propio, Clerk Production, cutover y rollback ensayados, alta/invitación/baja verificadas | Pendiente externo |
 | Billing coherente | Checkout explícitamente deshabilitado o intención idempotente, UI, consentimiento, términos, precios y webhooks reconciliados | Cerrado por defecto; versiones exactas requeridas; intención durable, concurrencia, UI y webhook pendientes |
 | Salud operacional | Errores, backlog, latencia y proveedores con señal, correlación, redacción y alerta accionable | Parcial; primer control de cron en esta rama |
-| Migraciones gobernadas | Postgres efímero, `migrate deploy`, estado, diff sin drift, smoke y rollback documentados | Gate CI y drift UUID corregidos localmente; ejecución remota, smoke portable y runbook pendientes |
+| Migraciones gobernadas | Postgres efímero, `migrate deploy`, estado, diff sin drift, smoke y rollback documentados | Gate CI y drift UUID corregidos localmente; ejecución remota y smoke de promoción atómica/drenaje pendientes; no admitir pods v1/v2 balanceados |
 | Backup, restauración y borrado | RPO/RTO, restore drill y ledger de exportación/borrado sobre todos los proveedores | Pendiente |
 | Gobierno de plataforma | Dos custodios, MFA/step-up y procedimiento break-glass para administración global | Pendiente |
 | Seguridad, privacidad y legal por dominio | Threat model y revisión focal antes de datos laborales, finanzas, contratos, documentos sensibles, externos e IA | Pendiente; gates definidos en este roadmap |
@@ -105,8 +105,8 @@ La cadencia candidata es de diez días hábiles por sprint. Sin capacidad de equ
 
 **Objetivo:** impedir releases engañosas o silenciosamente rotas con controles que sí dependen del equipo.
 
-- CI: Node 24, instalación exacta, lint, 733+ tests, auditoría, build, E2E público y artefactos de diagnóstico;
-- Postgres 17 efímero: `validate`, 23 migraciones desde cero, `status` y diff sin drift;
+- CI: Node 24, instalación exacta, lint, 787+ tests, auditoría, build, E2E público y artefactos de diagnóstico;
+- Postgres 17 efímero: `validate`, 43 migraciones totales desde cero (20 del ledger S1), `status` y diff sin drift;
 - checkout cerrado por defecto y request estricto; no habilitarlo sin intención durable, idempotencia, consentimiento verificable y reconciliación;
 - E2E autenticado de los journeys críticos y denegaciones por tenant/obra/rol;
 - observabilidad mínima, correlation ID y runbooks de migración/incidente/rollback.
@@ -116,7 +116,7 @@ La cadencia candidata es de diez días hábiles por sprint. Sin capacidad de equ
 Estado de esta iteración:
 
 - implementados localmente: CI base, E2E público sin secretos Clerk, artefactos Playwright, health de recuperación WhatsApp, gate de checkout, gate de migraciones, corrección de drift UUID y trazabilidad del PDF;
-- verificados: 733/733 tests, lint, Prisma válido, auditoría sin vulnerabilidades, build Next 16 y 2/2 smoke públicos;
+- verificados: 787/787 tests, lint, Prisma válido, auditoría sin vulnerabilidades, build Next 16 y 2/2 smoke públicos;
 - pendientes internos de S0: primera ejecución remota, E2E autenticado/core, observabilidad integral y runbooks completos.
 
 ### Release Gate R0 — Dependencias externas, sin duración ficticia
@@ -159,6 +159,12 @@ S23 consolida y certifica controles ya revisados; no es la primera vez que se bu
 | S4 | Equipos y blockers | cuadrillas/responsables por ID, asignación versionada, bloqueo/causa/owner/recuperación | asignaciones no dependen de nombres libres; conflicto concurrente no pierde cambios |
 | S5 | Bitácora, evidencia e incidencia | `DailyLog`, `ProgressEvidence`, `Incident`, media+GPS+task bajo un ID, owner/SLA/cierre | web/WhatsApp conservan evidencia y llegan al registro final sin reingreso ni fuga |
 | S6 | Trabajo extra y replanificación | `ExtraWork`, start/finish, vicio oculto, impacto preliminar y propuesta de escenario | texto/audio/foto requieren la misma aprobación; ningún extra reescribe baseline/costo |
+
+Estado local de S1 en esta iteración:
+
+- implementado: ledger `AttendanceShift`/`AttendanceEntry`, máquina de estados completa, hora y zona del servidor, GPS puntual con `capturedAt` y control de frescura, idempotencia/CAS, enlaces firmados por acción y ligados a pending/jornada+revisión, WhatsApp, proyección restringida, bitácora y reporte semanal paginado;
+- gobernado: migración expand/backfill/contract separada en pasos compatibles, verificador semántico, fixture legacy, bridge v1 con sunset y rollback sin destruir datos;
+- aún abierto para cerrar S1 comercialmente: CI remota PostgreSQL, WABA/teléfono real, interrupción de red, observabilidad/runbook y decisión legal de GPS/foto/retención. La corrección append-only, turnos y excepciones fechadas pertenecen a S2.
 
 ### Ola 2 — Control económico y abastecimiento
 

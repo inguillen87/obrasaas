@@ -4,6 +4,20 @@ import test from "node:test";
 
 const TEST_STATE = Symbol.for("obrasaas.whatsapp-webhook-cron-flow-gc-test");
 globalThis[TEST_STATE] = {
+  callOrder: [],
+  attendanceExpiryCalls: [],
+  attendanceExpiryResult: {
+    scannedEntries: 0,
+    processedProjects: 0,
+    failedProjects: 0,
+    expiredCount: 0,
+    reconciledProjections: 0,
+    hasMore: false,
+    backlogCheckFailed: false,
+    failureCodes: [],
+    cutoff: "2026-07-23T10:00:00.000Z",
+  },
+  attendanceExpiryError: null,
   gcCalls: [],
   projectIds: ["project-1"],
   drainResult: { completed: 2, failed: 0, blocked: false },
@@ -17,6 +31,7 @@ globalThis[TEST_STATE] = {
 };
 
 const mockModules = new Map([
+  ["@/lib/attendance-expiry", "mock:attendance-expiry"],
   ["@/lib/cron-auth", "mock:cron-auth"],
   ["@/lib/db", "mock:db"],
   ["@/lib/prisma", "mock:prisma"],
@@ -35,6 +50,21 @@ registerHooks({
     return nextResolve(specifier, context);
   },
   load(url, context, nextLoad) {
+    if (url === "mock:attendance-expiry") {
+      return {
+        format: "module",
+        shortCircuit: true,
+        source: `
+          const state = globalThis[Symbol.for("obrasaas.whatsapp-webhook-cron-flow-gc-test")];
+          export async function expireStalePendingAttendanceBatch(...args) {
+            state.callOrder.push("attendance-expiry");
+            state.attendanceExpiryCalls.push(args);
+            if (state.attendanceExpiryError) throw state.attendanceExpiryError;
+            return state.attendanceExpiryResult;
+          }
+        `,
+      };
+    }
     if (url === "mock:cron-auth") {
       return {
         format: "module",
@@ -48,7 +78,10 @@ registerHooks({
         shortCircuit: true,
         source: `
           const state = globalThis[Symbol.for("obrasaas.whatsapp-webhook-cron-flow-gc-test")];
-          export async function listDueWebhookProjectIds() { return state.projectIds; }
+          export async function listDueWebhookProjectIds() {
+            state.callOrder.push("list-webhooks");
+            return state.projectIds;
+          }
         `,
       };
     }
@@ -69,6 +102,7 @@ registerHooks({
         source: `
           const state = globalThis[Symbol.for("obrasaas.whatsapp-webhook-cron-flow-gc-test")];
           export async function garbageCollectWhatsAppFlowEndpointRequestBacklog(...args) {
+            state.callOrder.push("flow-gc");
             state.gcCalls.push(args);
             if (state.gcError) throw state.gcError;
             return state.gcResult;
@@ -83,6 +117,7 @@ registerHooks({
         source: `
           const state = globalThis[Symbol.for("obrasaas.whatsapp-webhook-cron-flow-gc-test")];
           export async function drainProjectWebhookEvents() {
+            state.callOrder.push("drain-webhooks");
             return state.drainResult;
           }
         `,
@@ -134,6 +169,20 @@ test("webhook recovery cron distinguishes accepted runs from healthy work", asyn
   ];
 
   for (const scenario of scenarios) {
+    state.callOrder = [];
+    state.attendanceExpiryCalls = [];
+    state.attendanceExpiryError = null;
+    state.attendanceExpiryResult = {
+      scannedEntries: 0,
+      processedProjects: 0,
+      failedProjects: 0,
+      expiredCount: 0,
+      reconciledProjections: 0,
+      hasMore: false,
+      backlogCheckFailed: false,
+      failureCodes: [],
+      cutoff: "2026-07-23T10:00:00.000Z",
+    };
     state.gcCalls = [];
     state.drainResult = scenario.drainResult;
     state.gcResult = scenario.gcResult;
@@ -149,12 +198,52 @@ test("webhook recovery cron distinguishes accepted runs from healthy work", asyn
     }, scenario.expected, scenario.name);
     assert.deepEqual(body.flowRequestGc, scenario.gcResult, scenario.name);
     assert.equal(state.gcCalls.length, 1, scenario.name);
+    assert.equal(state.attendanceExpiryCalls.length, 1, scenario.name);
+    assert.deepEqual(state.attendanceExpiryCalls[0][0], { source: "cron-test" });
+    assert.deepEqual(state.attendanceExpiryCalls[0][1], { maxEntries: 100 });
+    assert.equal(state.callOrder[0], "attendance-expiry", scenario.name);
   }
+
+  state.callOrder = [];
+  state.gcCalls = [];
+  state.attendanceExpiryCalls = [];
+  state.drainResult = { completed: 1, failed: 0, blocked: false };
+  state.gcResult = { scannedEndpoints: 0, failedEndpoints: 0, deletedCount: 0, hasMore: false };
+  state.gcError = null;
+  state.attendanceExpiryResult = {
+    scannedEntries: 100,
+    processedProjects: 2,
+    failedProjects: 1,
+    expiredCount: 99,
+    reconciledProjections: 98,
+    hasMore: true,
+    backlogCheckFailed: false,
+    failureCodes: ["P2034"],
+    cutoff: "2026-07-23T10:00:00.000Z",
+  };
+  const attendanceDegradedResponse = await GET(request.clone());
+  const attendanceDegradedBody = await attendanceDegradedResponse.json();
+  assert.deepEqual(attendanceDegradedBody.reasons, [
+    "ATTENDANCE_EXPIRY_FAILED",
+    "ATTENDANCE_EXPIRY_BACKLOG",
+  ]);
+  assert.equal(attendanceDegradedBody.attendanceExpiry.expiredCount, 99);
 
   const gcError = new Error("simulated Flow request GC outage");
   gcError.code = "WHATSAPP_FLOW_ENDPOINT_REQUEST_PERSISTENCE_UNAVAILABLE";
   gcError.status = 503;
   state.gcCalls = [];
+  state.attendanceExpiryResult = {
+    scannedEntries: 0,
+    processedProjects: 0,
+    failedProjects: 0,
+    expiredCount: 0,
+    reconciledProjections: 0,
+    hasMore: false,
+    backlogCheckFailed: false,
+    failureCodes: [],
+    cutoff: "2026-07-23T10:00:00.000Z",
+  };
   state.drainResult = { completed: 2, failed: 1, blocked: true };
   state.gcError = gcError;
   const degradedResponse = await GET(request.clone());
@@ -169,4 +258,23 @@ test("webhook recovery cron distinguishes accepted runs from healthy work", asyn
   assert.deepEqual(state.gcCalls[0][0], { source: "cron-test" });
   assert.deepEqual(state.gcCalls[0][1], { maxEndpoints: 2, batchSize: 250 });
   assert.equal(errorLog.mock.callCount(), 1);
+
+  const expiryError = new Error("simulated attendance expiry outage");
+  expiryError.code = "P1001";
+  state.callOrder = [];
+  state.drainResult = { completed: 1, failed: 0, blocked: false };
+  state.gcError = null;
+  state.gcResult = { scannedEndpoints: 0, failedEndpoints: 0, deletedCount: 0, hasMore: false };
+  state.attendanceExpiryError = expiryError;
+  const expiryFailureResponse = await GET(request.clone());
+  const expiryFailureBody = await expiryFailureResponse.json();
+  assert.equal(expiryFailureResponse.status, 200);
+  assert.deepEqual(expiryFailureBody.reasons, [
+    "ATTENDANCE_EXPIRY_FAILED",
+    "ATTENDANCE_EXPIRY_BACKLOG",
+  ]);
+  assert.equal(expiryFailureBody.attendanceExpiry.backlogCheckFailed, true);
+  assert.deepEqual(expiryFailureBody.attendanceExpiry.failureCodes, ["P1001"]);
+  assert.equal(state.callOrder[0], "attendance-expiry");
+  assert.equal(errorLog.mock.callCount(), 2);
 });

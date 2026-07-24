@@ -57,8 +57,34 @@ jobs:
       - name: Validate Prisma schema
         run: npx prisma validate
 
-      - name: Rebuild schema from migration history
+      - name: Isolate attendance target migrations
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/attendance-migrations"
+          for migration in prisma/migrations/2026072315*; do
+            mv "$migration" "$RUNNER_TEMP/attendance-migrations/"
+          done
+
+      - name: Rebuild legacy schema from migration history
         run: npm run db:migrate:deploy
+
+      - name: Seed representative legacy attendance rows
+        run: npm run seed:attendance-migration-fixtures
+
+      - name: Restore attendance target migrations
+        shell: bash
+        run: |
+          for migration in "$RUNNER_TEMP"/attendance-migrations/2026072315*; do
+            mv "$migration" prisma/migrations/
+          done
+
+      - name: Deploy attendance expand, backfill and contract
+        run: npm run db:migrate:deploy
+
+      - name: Verify attendance ledger on PostgreSQL TCP
+        env:
+          ATTENDANCE_MIGRATION_DATABASE_URL: postgresql://obrasaas_ci:obrasaas_ci@127.0.0.1:5432/obrasaas_ci?schema=public
+        run: npm run verify:attendance-migration
 
       - name: Verify migration history status
         run: npx prisma migrate status

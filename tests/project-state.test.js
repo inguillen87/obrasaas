@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  assertAttendanceProjectionUnchanged,
   assertProjectStateVersion,
   deriveProjectStateActivities,
   flagStockRisks,
@@ -62,6 +63,40 @@ test('project state validation accepts a bounded operational snapshot and clones
   const validated = validateProjectStateInput(input);
   assert.deepEqual(validated, input);
   assert.notEqual(validated, input);
+});
+
+test('generic project state writes cannot replace the attendance ledger projection', () => {
+  const before = state({
+    attendance: {
+      'worker-a': {
+        workerId: 'worker-a',
+        name: 'Ana Pérez',
+        role: 'Operaria',
+        checkin: '08:02',
+        status: 'Presente',
+      },
+    },
+  });
+  const reordered = state({
+    attendance: {
+      'worker-a': {
+        status: 'Presente',
+        checkin: '08:02',
+        role: 'Operaria',
+        name: 'Ana Pérez',
+        workerId: 'worker-a',
+      },
+    },
+  });
+  assert.equal(assertAttendanceProjectionUnchanged(before, reordered), reordered);
+  assert.throws(
+    () => assertAttendanceProjectionUnchanged(before, state({ attendance: {} })),
+    (error) => (
+      error instanceof ProjectStateInputError
+      && error.code === 'ATTENDANCE_LEDGER_REQUIRED'
+      && error.status === 409
+    ),
+  );
 });
 
 test('project state validation preserves every current persisted snapshot shape', () => {

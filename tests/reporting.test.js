@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   buildWeeklyReportModel,
   weeklyReportPeriodStart,
+  weeklyReportWorkDateRange,
 } from '../src/lib/reporting.js';
 
 test('weekly reports use tenant and project data without inventing a budget', () => {
@@ -14,7 +15,9 @@ test('weekly reports use tenant and project data without inventing a budget', ()
       avancePercentage: 42,
       diasEstimados: 'Día 12/35',
       tasks: { a: { name: 'Fundaciones', progress: 100, duration: 4 } },
-      attendance: { Ana: { role: 'Jefa de obra', status: 'Presente' } },
+      attendance: {
+        'worker-a': { name: 'Ana', role: 'Jefa de obra', status: 'Presente' },
+      },
       incidents: [],
     },
     generatedAt: new Date('2026-07-15T12:00:00.000Z'),
@@ -26,9 +29,46 @@ test('weekly reports use tenant and project data without inventing a budget', ()
   assert.equal(report.timelinePercentage, 34);
   assert.equal(report.tasksDone, 1);
   assert.equal(report.presentWorkers, 1);
+  assert.equal(report.attendance[0].name, 'Ana');
   assert.equal(report.budget, null);
   assert.equal(report.isEmptyState, false);
   assert.match(report.reportId, /^OS-1234567-20260715-090000000$/);
+});
+
+test('weekly reports count only explicitly verified attendance and preserve the ledger journey', () => {
+  const report = buildWeeklyReportModel({
+    state: {
+      attendance: {
+        verified: {
+          name: 'Ana',
+          status: 'Jornada cerrada',
+          present: true,
+          daysPresent: 2,
+          daysRegistered: 2,
+          workDateLabel: '22 jul',
+          checkin: '08:05',
+          breakStartedAt: '12:00',
+          breakEndedAt: '12:30',
+          checkout: '17:10',
+        },
+        review: {
+          name: 'Bruno',
+          status: 'Ingreso pendiente de revisión',
+          present: false,
+          reviewRequired: true,
+          workDateLabel: '22 jul',
+          checkin: '08:20',
+        },
+      },
+    },
+    snapshot: { exists: true, version: 3 },
+  });
+
+  assert.equal(report.presentWorkers, 1);
+  assert.equal(report.attendance[0].daysPresent, 2);
+  assert.equal(report.attendance[0].journeyLabel, '22 jul · 08:05 → 17:10 · pausa 12:00–12:30');
+  assert.equal(report.attendance[1].tone, 'warning');
+  assert.equal(report.attendance[1].present, false);
 });
 
 test('weekly report boundaries use Buenos Aires calendar days around UTC midnight', () => {
@@ -40,6 +80,51 @@ test('weekly report boundaries use Buenos Aires calendar days around UTC midnigh
 
   assert.equal(weeklyReportPeriodStart(generatedAt).toISOString(), '2026-07-09T03:00:00.000Z');
   assert.match(report.reportId, /^OS-IMEZONE-20260715-223000000$/);
+});
+
+test('weekly report boundaries and IDs follow the tenant timezone', () => {
+  const generatedAt = new Date('2026-07-16T03:30:00.000Z');
+  const timeZone = 'America/Santiago';
+  const range = weeklyReportWorkDateRange(generatedAt, timeZone);
+  const report = buildWeeklyReportModel({
+    generatedAt,
+    timeZone,
+    project: { id: 'project_timezone' },
+  });
+
+  assert.equal(weeklyReportPeriodStart(generatedAt, timeZone).toISOString(), '2026-07-09T04:00:00.000Z');
+  assert.equal(range.start.toISOString(), '2026-07-09T00:00:00.000Z');
+  assert.equal(range.end.toISOString(), '2026-07-15T00:00:00.000Z');
+  assert.equal(report.timeZone, timeZone);
+  assert.match(report.reportId, /^OS-IMEZONE-20260715-233000000$/);
+});
+
+test('weekly report starts at the first valid instant when DST skips local midnight', () => {
+  const start = weeklyReportPeriodStart(
+    new Date('2026-09-12T12:00:00.000Z'),
+    'America/Santiago',
+  );
+  const localParts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Santiago',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    }).formatToParts(start)
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, part.value]),
+  );
+
+  assert.deepEqual(localParts, {
+    month: '09',
+    day: '06',
+    year: '2026',
+    hour: '01',
+    minute: '00',
+  });
 });
 
 test('an explicit evidence summary keeps report generation data-minimal', () => {
