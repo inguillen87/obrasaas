@@ -124,7 +124,9 @@ export function normalizeStartActInput(input = {}) {
       role: boundedText(participant.role, 'role', 64),
     };
   });
-  return { version, document: jsonObject(input.document, 'document'), sha256: boundedText(input.sha256, 'sha256', 64).toLowerCase(), participants: normalizedParticipants };
+  const sha256 = boundedText(input.sha256, 'sha256', 64).toLowerCase();
+  if (!SHA256.test(sha256)) throw new WorkerDocumentError('sha256 invÃ¡lido.', 'START_ACT_HASH');
+  return { version, document: jsonObject(input.document, 'document'), sha256, participants: normalizedParticipants };
 }
 
 export function normalizeStartActStatus(status) {
