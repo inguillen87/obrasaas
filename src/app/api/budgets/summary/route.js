@@ -1,0 +1,4 @@
+import { AccessError, accessErrorResponse, getPlatformAccess, requireTenantPermission } from '@/lib/access';
+import { getPrisma } from '@/lib/prisma';
+import { summarizeBudget } from '@/lib/budget-summary';
+export async function GET(request) { try { const access = await getPlatformAccess(); requireTenantPermission(access, 'org:execution:read', { subscriptionMode: 'read' }); const budgetVersionId = new URL(request.url).searchParams.get('budgetVersionId') || undefined; return Response.json(await summarizeBudget(getPrisma(), { projectId: access.project.id, budgetVersionId }), { headers: { 'Cache-Control': 'private, no-store' } }); } catch (error) { if (error instanceof AccessError) return accessErrorResponse(error); return Response.json({ error: 'No se pudo calcular el resumen financiero.', code: 'BUDGET_SUMMARY_FAILED' }, { status: 500 }); } }
