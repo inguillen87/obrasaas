@@ -23,6 +23,8 @@ test('normalizes a private worker document and rejects invalid dates', () => {
   assert.throws(() => normalizeWorkerDocumentInput({ ...result, expiresAt: '2026-06-01T00:00:00Z' }), /expiresAt/);
   assert.throws(() => normalizeWorkerDocumentInput({ ...result, storage: { provider: 's3', key: 'https://public.example/doc', visibility: 'private' } }), /Clave/);
   assert.throws(() => normalizeWorkerDocumentInput({ ...result, storage: { provider: 's3', key: 'private/doc', visibility: 'public' } }), /privado/);
+  assert.throws(() => normalizeWorkerDocumentInput({ ...result, storage: { provider: 's3', key: 'private/doc', visibility: 'private', contentType: 'application/zip' } }), /MIME/);
+  assert.throws(() => normalizeWorkerDocumentInput({ ...result, storage: { provider: 's3', key: 'private/doc', visibility: 'private', sizeBytes: 26 * 1024 * 1024 } }), /Tama/);
 });
 
 test('document lifecycle is terminal after archive and rejects illegal transitions', () => {

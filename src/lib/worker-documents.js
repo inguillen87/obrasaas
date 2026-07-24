@@ -43,7 +43,15 @@ function normalizePrivateStorage(value) {
   if (visibility !== 'private') throw new WorkerDocumentError('El almacenamiento debe ser privado.', 'WORKER_DOCUMENT_STORAGE_VISIBILITY');
   if (!['s3', 'r2', 'gcs', 'azure_blob'].includes(provider)) throw new WorkerDocumentError('Proveedor de almacenamiento no permitido.', 'WORKER_DOCUMENT_STORAGE_PROVIDER');
   if (/^(https?:|data:|javascript:)/i.test(key) || key.includes('..')) throw new WorkerDocumentError('Clave de almacenamiento invÃ¡lida.', 'WORKER_DOCUMENT_STORAGE_KEY');
-  return { provider, key, visibility: 'private' };
+  const contentType = storage.contentType === undefined ? undefined : boundedText(storage.contentType, 'storage.contentType', 120).toLowerCase();
+  if (contentType && !['application/pdf', 'image/jpeg', 'image/png'].includes(contentType)) {
+    throw new WorkerDocumentError('Tipo MIME de documento no permitido.', 'WORKER_DOCUMENT_STORAGE_CONTENT_TYPE');
+  }
+  const sizeBytes = storage.sizeBytes === undefined ? undefined : Number(storage.sizeBytes);
+  if (sizeBytes !== undefined && (!Number.isSafeInteger(sizeBytes) || sizeBytes < 1 || sizeBytes > 25 * 1024 * 1024)) {
+    throw new WorkerDocumentError('TamaÃ±o de documento invÃ¡lido.', 'WORKER_DOCUMENT_STORAGE_SIZE');
+  }
+  return { provider, key, visibility: 'private', ...(contentType ? { contentType } : {}), ...(sizeBytes !== undefined ? { sizeBytes } : {}) };
 }
 
 function boundedReadLimit(value, fallback, maximum) {
