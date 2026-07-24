@@ -27,6 +27,7 @@ const WORKSPACE_DESTINATIONS = Object.freeze([
   { key: 'notifications', href: '/dashboard/notifications', exact: true, label: 'Notificaciones', icon: 'fa-solid fa-bell', permission: 'canReadExecution' },
   { key: 'extra-work', href: '/dashboard/extra-work', exact: true, label: 'Trabajo extra', icon: 'fa-solid fa-person-digging', permission: 'canReadExecution' },
   { key: 'replan', href: '/dashboard/replan', exact: true, label: 'Escenarios de plan', icon: 'fa-solid fa-code-branch', permission: 'canReadExecution' },
+  { key: 'cash', href: '/dashboard/cash', exact: true, label: 'Caja chica', icon: 'fa-solid fa-wallet', permission: 'canReadExecution' },
   { key: 'activity', href: '/dashboard/activity', exact: true, label: 'Bitácora', icon: 'fa-solid fa-shield-halved' },
   { key: 'people', href: '/dashboard?tab=sec-personal', tab: 'sec-personal', label: 'Personal de obra', icon: 'fa-solid fa-users-gear' },
 ]);
@@ -34,6 +35,7 @@ const WORKSPACE_DESTINATIONS = Object.freeze([
 const CONTROL_DESTINATIONS = Object.freeze([
   { key: 'projects', href: '/dashboard/projects', exact: true, label: 'Obras y portfolio', icon: 'fa-solid fa-building-circle-check' },
   { key: 'report', href: '/dashboard/report', exact: true, label: 'Reporte semanal', icon: 'fa-solid fa-file-lines', permission: 'canReadReports' },
+  { key: 'budgets', href: '/dashboard/budgets', exact: true, label: 'Presupuesto y costos', icon: 'fa-solid fa-coins', permission: 'canReadExecution' },
   { key: 'activation', href: '/dashboard/getting-started', exact: true, label: 'Puesta en marcha', icon: 'fa-solid fa-route' },
   { key: 'team', href: '/dashboard/team', exact: true, label: 'Equipo y roles', icon: 'fa-solid fa-user-shield', permission: 'canReadTeam' },
   { key: 'integrations', href: '/dashboard/integrations', exact: true, label: 'Integraciones', icon: 'fa-solid fa-plug-circle-bolt', permission: 'canManageIntegrations' },
