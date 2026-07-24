@@ -112,6 +112,8 @@ jobs:
         run: npm run verify:notification-outbox-migration
       - name: Verify notification preferences migration
         run: npm run verify:notification-preferences-migration
+      - name: Verify S6 migrations
+        run: npm run verify:s6-migrations
 
       - name: Verify migration history status
         run: npx prisma migrate status
