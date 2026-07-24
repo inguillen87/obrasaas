@@ -1,6 +1,7 @@
 CREATE TYPE "BudgetEntryKind" AS ENUM ('COMMITMENT', 'ACTUAL', 'FORECAST');
 CREATE TABLE "BudgetEntry" (
   "id" TEXT NOT NULL,
+  "idempotencyKey" VARCHAR(190) NOT NULL,
   "projectId" TEXT NOT NULL,
   "budgetLineId" TEXT NOT NULL,
   "kind" "BudgetEntryKind" NOT NULL,
@@ -16,5 +17,6 @@ CREATE TABLE "BudgetEntry" (
   CONSTRAINT "BudgetEntry_amount_check" CHECK ("amount" >= 0)
 );
 CREATE UNIQUE INDEX "BudgetEntry_projectId_id_key" ON "BudgetEntry"("projectId", "id");
+CREATE UNIQUE INDEX "BudgetEntry_projectId_idempotencyKey_key" ON "BudgetEntry"("projectId", "idempotencyKey");
 CREATE INDEX "BudgetEntry_projectId_budgetLineId_kind_occurredAt_idx" ON "BudgetEntry"("projectId", "budgetLineId", "kind", "occurredAt");
 CREATE INDEX "BudgetEntry_projectId_kind_occurredAt_idx" ON "BudgetEntry"("projectId", "kind", "occurredAt");

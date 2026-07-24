@@ -966,20 +966,22 @@ model BudgetLine {
 }
 
 model BudgetEntry {
-  id           String          @id @default(cuid())
-  projectId    String
-  budgetLineId String
-  budgetLine   BudgetLine      @relation(fields: [projectId, budgetLineId], references: [projectId, id], onDelete: Cascade)
-  kind         BudgetEntryKind
-  amount       Decimal         @db.Decimal(14, 2)
-  externalRef  String?         @db.VarChar(190)
-  description  String?         @db.VarChar(500)
-  occurredAt   DateTime        @default(now())
-  revision     Int             @default(0)
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
+  id             String          @id @default(cuid())
+  idempotencyKey String          @db.VarChar(190)
+  projectId      String
+  budgetLineId   String
+  budgetLine     BudgetLine      @relation(fields: [projectId, budgetLineId], references: [projectId, id], onDelete: Cascade)
+  kind           BudgetEntryKind
+  amount         Decimal         @db.Decimal(14, 2)
+  externalRef    String?         @db.VarChar(190)
+  description    String?         @db.VarChar(500)
+  occurredAt     DateTime        @default(now())
+  revision       Int             @default(0)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 
   @@unique([projectId, id])
+  @@unique([projectId, idempotencyKey])
   @@index([projectId, budgetLineId, kind, occurredAt])
   @@index([projectId, kind, occurredAt])
 }
