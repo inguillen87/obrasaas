@@ -32,3 +32,14 @@ export function buildWorkerDocumentObjectKey({ organizationId, projectId, worker
   ].join('/');
 }
 
+export function assertWorkerDocumentObjectKey(scope, objectKey) {
+  const expectedPrefix = buildWorkerDocumentObjectKey({ ...scope, documentId: 'placeholder', version: 1 }).replace('/documents/placeholder/v1', '/documents/');
+  if (typeof objectKey !== 'string' || !objectKey.startsWith(expectedPrefix)) {
+    throw new PrivateStorageError('La clave no pertenece al scope solicitado.', 'PRIVATE_STORAGE_SCOPE_MISMATCH');
+  }
+  const suffix = objectKey.slice(expectedPrefix.length);
+  if (!/^[-A-Za-z0-9._]{1,128}\/v[1-9][0-9]*$/.test(suffix)) {
+    throw new PrivateStorageError('Clave de objeto inválida.', 'PRIVATE_STORAGE_KEY_INVALID');
+  }
+  return objectKey;
+}

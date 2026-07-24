@@ -8,7 +8,7 @@ import {
   listProjectStartActs,
   listWorkerDocuments,
 } from '../src/lib/worker-documents.js';
-import { buildWorkerDocumentObjectKey } from '../src/lib/private-storage.js';
+import { assertWorkerDocumentObjectKey, buildWorkerDocumentObjectKey } from '../src/lib/private-storage.js';
 
 const HASH = 'a'.repeat(64);
 
@@ -16,6 +16,11 @@ test('private storage object keys are server-scoped and traversal-safe', () => {
   assert.equal(buildWorkerDocumentObjectKey({ organizationId: 'org-1', projectId: 'project-1', workerId: 'worker-1', documentId: 'doc-1', version: 2 }), 'obrasaas/org-1/project-1/workers/worker-1/documents/doc-1/v2');
   assert.throws(() => buildWorkerDocumentObjectKey({ organizationId: '../org', projectId: 'project-1', workerId: 'worker-1', documentId: 'doc-1', version: 1 }), /organizationId/);
   assert.throws(() => buildWorkerDocumentObjectKey({ organizationId: 'org-1', projectId: 'project-1', workerId: 'worker-1', documentId: 'doc-1', version: 0 }), /version/);
+  const scope = { organizationId: 'org-1', projectId: 'project-1', workerId: 'worker-1' };
+  const key = buildWorkerDocumentObjectKey({ ...scope, documentId: 'doc-1', version: 2 });
+  assert.equal(assertWorkerDocumentObjectKey(scope, key), key);
+  assert.throws(() => assertWorkerDocumentObjectKey({ ...scope, projectId: 'other-project' }, key), /scope/);
+  assert.throws(() => assertWorkerDocumentObjectKey(scope, `${key}/extra`), /Clave/);
 });
 
 test('normalizes a private worker document and rejects invalid dates', () => {
