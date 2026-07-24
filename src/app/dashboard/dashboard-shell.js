@@ -26,6 +26,7 @@ const WORKSPACE_DESTINATIONS = Object.freeze([
   { key: 'progress', href: '/dashboard/progress', exact: true, label: 'Bitácora de avance', icon: 'fa-solid fa-camera-retro', permission: 'canReadExecution' },
   { key: 'notifications', href: '/dashboard/notifications', exact: true, label: 'Notificaciones', icon: 'fa-solid fa-bell', permission: 'canReadExecution' },
   { key: 'extra-work', href: '/dashboard/extra-work', exact: true, label: 'Trabajo extra', icon: 'fa-solid fa-person-digging', permission: 'canReadExecution' },
+  { key: 'replan', href: '/dashboard/replan', exact: true, label: 'Escenarios de plan', icon: 'fa-solid fa-code-branch', permission: 'canReadExecution' },
   { key: 'activity', href: '/dashboard/activity', exact: true, label: 'Bitácora', icon: 'fa-solid fa-shield-halved' },
   { key: 'people', href: '/dashboard?tab=sec-personal', tab: 'sec-personal', label: 'Personal de obra', icon: 'fa-solid fa-users-gear' },
 ]);
