@@ -114,6 +114,7 @@ enum ReplanScenarioStatus {
   REJECTED
   APPLIED
 }
+enum BudgetVersionStatus { DRAFT ACTIVE SUPERSEDED }
 
 enum IncidentSeverity {
   INFO
@@ -448,6 +449,7 @@ model Project {
   extraWorkRequests             ExtraWorkRequest[]
   replanScenarios               ReplanScenario[]
   extraWorkSessions             ExtraWorkSession[]
+  budgetVersions                BudgetVersion[]
   incidents                     Incident[]
   attendances                   AttendanceEntry[]
   attendanceShifts              AttendanceShift[]
@@ -717,6 +719,7 @@ model Task {
   dailyLogs         DailyLog[]
   progressEvidence  ProgressEvidence[]
   extraWorkRequests ExtraWorkRequest[]
+  budgetLines       BudgetLine[]
   metadata          Json?
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
@@ -908,6 +911,44 @@ model ExtraWorkSession {
   @@unique([projectId, operationKey])
   @@index([projectId, extraWorkId, status])
   @@index([projectId, workerId, status])
+}
+
+model BudgetVersion {
+  id          String              @id @default(cuid())
+  projectId   String
+  project     Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  version     Int                 @default(1)
+  status      BudgetVersionStatus @default(DRAFT)
+  currency    String              @db.Char(3)
+  baseVersion Int?
+  revision    Int                 @default(0)
+  approvedAt  DateTime?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  lines       BudgetLine[]
+  @@unique([projectId, id])
+  @@unique([projectId, version])
+  @@index([projectId, status])
+}
+
+model BudgetLine {
+  id            String        @id @default(cuid())
+  projectId     String
+  budgetVersionId String
+  budgetVersion BudgetVersion @relation(fields: [projectId, budgetVersionId], references: [projectId, id], onDelete: Cascade)
+  taskId        String?
+  task          Task?         @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict)
+  costCode      String        @db.VarChar(64)
+  description   String        @db.VarChar(220)
+  quantity      Decimal?      @db.Decimal(14, 4)
+  unit          String?       @db.VarChar(32)
+  unitRate      Decimal?      @db.Decimal(14, 2)
+  amount        Decimal       @db.Decimal(14, 2)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  @@unique([projectId, id])
+  @@index([projectId, budgetVersionId, costCode])
+  @@index([projectId, taskId])
 }
 
 model NotificationPreference {
