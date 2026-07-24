@@ -121,6 +121,12 @@ enum BudgetVersionStatus {
   SUPERSEDED
 }
 
+enum BudgetEntryKind {
+  COMMITMENT
+  ACTUAL
+  FORECAST
+}
+
 enum IncidentSeverity {
   INFO
   LOW
@@ -952,10 +958,30 @@ model BudgetLine {
   amount          Decimal       @db.Decimal(14, 2)
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
+  entries         BudgetEntry[]
 
   @@unique([projectId, id])
   @@index([projectId, budgetVersionId, costCode])
   @@index([projectId, taskId])
+}
+
+model BudgetEntry {
+  id           String          @id @default(cuid())
+  projectId    String
+  budgetLineId String
+  budgetLine   BudgetLine      @relation(fields: [projectId, budgetLineId], references: [projectId, id], onDelete: Cascade)
+  kind         BudgetEntryKind
+  amount       Decimal         @db.Decimal(14, 2)
+  externalRef  String?         @db.VarChar(190)
+  description  String?         @db.VarChar(500)
+  occurredAt   DateTime        @default(now())
+  revision     Int             @default(0)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@unique([projectId, id])
+  @@index([projectId, budgetLineId, kind, occurredAt])
+  @@index([projectId, kind, occurredAt])
 }
 
 model NotificationPreference {
