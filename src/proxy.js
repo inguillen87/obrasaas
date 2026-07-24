@@ -1,5 +1,7 @@
 import { clerkMiddleware } from '@clerk/nextjs/server';
+import { NextResponse } from 'next/server';
 import { resolveClerkAuthorizedParties } from '@/lib/clerk-authorized-parties';
+import { resolveRequestCorrelationId } from '@/lib/request-correlation';
 
 const PROTECTED_ROUTE_ROOTS = [
   '/dashboard',
@@ -18,6 +20,12 @@ const PROTECTED_ROUTE_ROOTS = [
   '/api/superadmin',
   '/api/tenant',
   '/api/whatsapp',
+  '/api/cash-funds',
+  '/api/cash-movements',
+  '/api/goods-receipts',
+  '/api/purchase-orders',
+  '/api/supplier-invoices',
+  '/api/suppliers',
 ];
 
 function isProtectedPathname(pathname) {
@@ -27,6 +35,9 @@ function isProtectedPathname(pathname) {
 export default clerkMiddleware(
   async (auth, request) => {
     if (isProtectedPathname(request.nextUrl.pathname)) await auth.protect();
+    const response = NextResponse.next();
+    response.headers.set('x-request-id', resolveRequestCorrelationId(request));
+    return response;
   },
   {
     authorizedParties: resolveClerkAuthorizedParties(),
@@ -53,6 +64,12 @@ export const config = {
     '/api/superadmin/:path*',
     '/api/tenant/:path*',
     '/api/whatsapp/:path*',
+    '/api/cash-funds/:path*',
+    '/api/cash-movements/:path*',
+    '/api/goods-receipts/:path*',
+    '/api/purchase-orders/:path*',
+    '/api/supplier-invoices/:path*',
+    '/api/suppliers/:path*',
     '/__clerk/:path*',
   ],
 };
