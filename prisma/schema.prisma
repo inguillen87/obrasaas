@@ -35,6 +35,37 @@ enum TaskDependencyType {
   START_TO_FINISH
 }
 
+enum WorkTeamStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum WorkTeamMemberRole {
+  LEAD
+  MEMBER
+}
+
+enum TaskAssignmentStatus {
+  PLANNED
+  ACTIVE
+  ENDED
+  CANCELLED
+}
+
+enum ProjectBlockerStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CANCELLED
+}
+
+enum ProjectBlockerSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
 enum IncidentSeverity {
   INFO
   LOW
@@ -356,6 +387,9 @@ model Project {
   workers                       Worker[]
   tasks                         Task[]
   taskDependencies              TaskDependency[]
+  workTeams                     WorkTeam[]
+  taskAssignments               TaskAssignment[]
+  projectBlockers               ProjectBlocker[]
   incidents                     Incident[]
   attendances                   AttendanceEntry[]
   attendanceShifts              AttendanceShift[]
@@ -550,6 +584,9 @@ model Worker {
   attendanceAlertEvents          AttendanceAlertEvent[]
   proposedOperationalItems       OperationalProposal[]          @relation("OperationalProposalProposer")
   resolvedOperationalItems       OperationalProposal[]          @relation("OperationalProposalResolver")
+  teamMemberships                WorkTeamMember[]
+  taskAssignments                TaskAssignment[]
+  ownedProjectBlockers           ProjectBlocker[]
   whatsappFlowSessions           WhatsAppFlowSession[]
   createdAt                      DateTime                       @default(now())
   updatedAt                      DateTime                       @updatedAt
@@ -613,6 +650,8 @@ model Task {
   children     Task[]           @relation("TaskHierarchy")
   predecessors TaskDependency[] @relation("TaskDependencySuccessor")
   successors   TaskDependency[] @relation("TaskDependencyPredecessor")
+  assignments  TaskAssignment[]
+  blockers     ProjectBlocker[]
   metadata     Json?
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
@@ -638,6 +677,93 @@ model TaskDependency {
 
   @@unique([projectId, predecessorId, successorId], map: "TaskDependency_project_predecessor_successor_key")
   @@index([projectId, successorId])
+}
+
+model WorkTeam {
+  id          String           @id @default(cuid())
+  projectId   String
+  project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  code        String?          @db.VarChar(64)
+  name        String           @db.VarChar(160)
+  status      WorkTeamStatus   @default(ACTIVE)
+  revision    Int              @default(0)
+  members     WorkTeamMember[]
+  assignments TaskAssignment[]
+  blockers    ProjectBlocker[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@unique([projectId, id])
+  @@unique([projectId, code])
+  @@index([projectId, status, name])
+}
+
+model WorkTeamMember {
+  id        String             @id @default(cuid())
+  projectId String
+  teamId    String
+  team      WorkTeam           @relation(fields: [projectId, teamId], references: [projectId, id], onDelete: Cascade)
+  workerId  String
+  worker    Worker             @relation(fields: [projectId, workerId], references: [projectId, id], onDelete: Cascade)
+  role      WorkTeamMemberRole @default(MEMBER)
+  startsAt  DateTime           @default(now())
+  endsAt    DateTime?
+  revision  Int                @default(0)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  @@unique([projectId, teamId, workerId, startsAt])
+  @@index([projectId, workerId, endsAt])
+  @@index([projectId, teamId, endsAt])
+}
+
+model TaskAssignment {
+  id        String               @id @default(cuid())
+  projectId String
+  taskId    String
+  task      Task                 @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Cascade)
+  workerId  String?
+  worker    Worker?              @relation(fields: [projectId, workerId], references: [projectId, id], onDelete: Cascade)
+  teamId    String?
+  team      WorkTeam?            @relation(fields: [projectId, teamId], references: [projectId, id], onDelete: Cascade)
+  status    TaskAssignmentStatus @default(PLANNED)
+  startsAt  DateTime?
+  endsAt    DateTime?
+  revision  Int                  @default(0)
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+  project   Project              @relation(fields: [projectId], references: [id])
+
+  @@unique([projectId, id])
+  @@index([projectId, taskId, status])
+  @@index([projectId, workerId, status])
+  @@index([projectId, teamId, status])
+}
+
+model ProjectBlocker {
+  id            String                 @id @default(cuid())
+  projectId     String
+  project       Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  taskId        String?
+  task          Task?                  @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict)
+  ownerWorkerId String?
+  ownerWorker   Worker?                @relation(fields: [projectId, ownerWorkerId], references: [projectId, id], onDelete: Restrict)
+  ownerTeamId   String?
+  ownerTeam     WorkTeam?              @relation(fields: [projectId, ownerTeamId], references: [projectId, id], onDelete: Restrict)
+  title         String                 @db.VarChar(220)
+  description   String?                @db.Text
+  severity      ProjectBlockerSeverity @default(MEDIUM)
+  status        ProjectBlockerStatus   @default(OPEN)
+  dueAt         DateTime?
+  resolvedAt    DateTime?
+  resolution    String?                @db.Text
+  revision      Int                    @default(0)
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+
+  @@unique([projectId, id])
+  @@index([projectId, status, severity, dueAt])
+  @@index([projectId, taskId, status])
 }
 
 model Incident {

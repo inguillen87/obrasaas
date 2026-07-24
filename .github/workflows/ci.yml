@@ -102,6 +102,11 @@ jobs:
           CANONICAL_TASKS_MIGRATION_DATABASE_URL: postgresql://obrasaas_ci:obrasaas_ci@127.0.0.1:5432/obrasaas_ci?schema=public
         run: npm run verify:canonical-tasks-migration
 
+      - name: Verify teams, assignments and blockers on PostgreSQL TCP
+        env:
+          PROJECT_EXECUTION_MIGRATION_DATABASE_URL: postgresql://obrasaas_ci:obrasaas_ci@127.0.0.1:5432/obrasaas_ci?schema=public
+        run: npm run verify:project-execution-migration
+
       - name: Verify migration history status
         run: npx prisma migrate status
 
