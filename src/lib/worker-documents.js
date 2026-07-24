@@ -32,6 +32,9 @@ function jsonObject(value, field) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new WorkerDocumentError(`${field} inválido.`);
   }
+  let serialized;
+  try { serialized = JSON.stringify(value); } catch { throw new WorkerDocumentError(`${field} invalido.`); }
+  if (serialized.length > 256 * 1024) throw new WorkerDocumentError(`${field} supera el tamano permitido.`, 'WORKER_DOCUMENT_PAYLOAD_TOO_LARGE', 413);
   return value;
 }
 

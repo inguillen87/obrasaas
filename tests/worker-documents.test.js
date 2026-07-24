@@ -41,6 +41,7 @@ test('start act requires unique participants and follows signature lifecycle', (
   assert.equal(act.participants.length, 1);
   assert.equal(act.sha256, HASH);
   assert.throws(() => normalizeStartActInput({ ...act, sha256: 'not-a-sha' }), /sha256/);
+  assert.throws(() => normalizeStartActInput({ ...act, document: { payload: 'x'.repeat(256 * 1024 + 1) } }), /tamano/);
   assert.throws(() => normalizeStartActInput({ ...act, participants: [...act.participants, act.participants[0]] }), /duplicado/);
   assert.equal(assertStartActTransition('DRAFT', 'PENDING_SIGNATURES'), 'PENDING_SIGNATURES');
   assert.equal(assertStartActTransition('PENDING_SIGNATURES', 'SIGNED'), 'SIGNED');
