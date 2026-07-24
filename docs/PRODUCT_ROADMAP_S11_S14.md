@@ -11,6 +11,10 @@
 
 **Salida:** no hay carreras de estado, aislamiento entre obras ni migraciones ambiguas.
 
+### Correlación de requests
+
+El proxy genera o valida `x-request-id` para las rutas financieras. Actualmente se devuelve al cliente, pero todavía no se persiste de forma uniforme en cada `auditLog` ni se propaga a todos los webhooks. La integración completa es un criterio de salida de S11; no debe considerarse cumplida solo porque el header exista.
+
 ## S12 — Contabilidad e impuestos por país
 
 **Objetivo:** preparar exportaciones contables sin inventar reglas fiscales.
