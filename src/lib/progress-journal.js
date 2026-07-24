@@ -19,20 +19,27 @@ function scope(scope) { if (!scope?.projectId || !scope?.organizationId) throw n
 function serializeLog(log) { return { ...log, workDate: log.workDate?.toISOString?.().slice(0, 10), submittedAt: log.submittedAt?.toISOString?.() || null, approvedAt: log.approvedAt?.toISOString?.() || null, createdAt: log.createdAt?.toISOString?.() || null, updatedAt: log.updatedAt?.toISOString?.() || null }; }
 function serializeEvidence(item) { return { ...item, capturedAt: item.capturedAt?.toISOString?.() || null, reviewedAt: item.reviewedAt?.toISOString?.() || null, latitude: item.latitude?.toString?.() || null, longitude: item.longitude?.toString?.() || null, accuracyMeters: item.accuracyMeters?.toString?.() || null, createdAt: item.createdAt?.toISOString?.() || null }; }
 
-export async function listProgressJournal(prisma, { projectId }) {
+export async function listProgressJournal(prisma, { projectId, limit = 50, before = null, kind = null, status = null, taskId = null } = {}) {
+  const take = Math.min(Math.max(Number(limit) || 50, 1), 100);
+  const beforeDate = before ? new Date(before) : null;
+  if (before && Number.isNaN(beforeDate?.getTime?.())) throw new ProgressJournalError('before no es una fecha válida.');
+  const dateFilter = beforeDate ? { lt: beforeDate } : undefined;
+  const normalizedKind = kind ? String(kind).toUpperCase() : null;
+  const normalizedStatus = status ? String(status).toUpperCase() : null;
+  if (normalizedKind && !['DAILY_LOG', 'EVIDENCE', 'BLOCKER', 'INCIDENT'].includes(normalizedKind)) throw new ProgressJournalError('kind de timeline inválido.');
   const [dailyLogs, evidence, blockers, incidents] = await Promise.all([
-    prisma.dailyLog.findMany({ where: { projectId }, orderBy: [{ workDate: 'desc' }, { createdAt: 'desc' }], take: 100 }),
-    prisma.progressEvidence.findMany({ where: { projectId }, orderBy: { capturedAt: 'desc' }, take: 100 }),
-    prisma.projectBlocker.findMany({ where: { projectId }, orderBy: { createdAt: 'desc' }, take: 100, select: { id: true, title: true, status: true, severity: true, taskId: true, createdAt: true, updatedAt: true } }),
-    prisma.incident.findMany({ where: { projectId }, orderBy: { occurredAt: 'desc' }, take: 100, select: { id: true, title: true, severity: true, status: true, occurredAt: true } }),
+    (!normalizedKind || normalizedKind === 'DAILY_LOG') ? prisma.dailyLog.findMany({ where: { projectId, ...(taskId ? { taskId } : {}), ...(normalizedStatus ? { status: normalizedStatus } : {}), ...(dateFilter ? { createdAt: dateFilter } : {}) }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take }) : [],
+    (!normalizedKind || normalizedKind === 'EVIDENCE') ? prisma.progressEvidence.findMany({ where: { projectId, ...(taskId ? { taskId } : {}), ...(normalizedStatus ? { status: normalizedStatus } : {}), ...(dateFilter ? { capturedAt: dateFilter } : {}) }, orderBy: [{ capturedAt: 'desc' }, { id: 'desc' }], take }) : [],
+    (!normalizedKind || normalizedKind === 'BLOCKER') ? prisma.projectBlocker.findMany({ where: { projectId, ...(taskId ? { taskId } : {}), ...(normalizedStatus ? { status: normalizedStatus } : {}), ...(dateFilter ? { createdAt: dateFilter } : {}) }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take, select: { id: true, title: true, status: true, severity: true, taskId: true, createdAt: true, updatedAt: true } }) : [],
+    (!normalizedKind || normalizedKind === 'INCIDENT') ? prisma.incident.findMany({ where: { projectId, ...(normalizedStatus ? { status: normalizedStatus } : {}), ...(dateFilter ? { occurredAt: dateFilter } : {}) }, orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take, select: { id: true, title: true, severity: true, status: true, occurredAt: true } }) : [],
   ]);
   const timeline = [
     ...dailyLogs.map((item) => ({ id: item.id, kind: 'DAILY_LOG', occurredAt: item.createdAt?.toISOString?.() || null, taskId: item.taskId || null, title: item.title, status: item.status, severity: null })),
     ...evidence.map((item) => ({ id: item.id, kind: 'EVIDENCE', occurredAt: item.capturedAt?.toISOString?.() || null, taskId: item.taskId, title: item.caption || 'Evidencia de avance', status: item.status, severity: null })),
     ...blockers.map((item) => ({ id: item.id, kind: 'BLOCKER', occurredAt: item.createdAt?.toISOString?.() || null, taskId: item.taskId || null, title: item.title, status: item.status, severity: item.severity })),
     ...incidents.map((item) => ({ id: item.id, kind: 'INCIDENT', occurredAt: item.occurredAt?.toISOString?.() || null, taskId: null, title: item.title, status: item.status, severity: item.severity })),
-  ].sort((left, right) => String(right.occurredAt).localeCompare(String(left.occurredAt))).slice(0, 200);
-  return { dailyLogs: dailyLogs.map(serializeLog), evidence: evidence.map(serializeEvidence), timeline };
+  ].sort((left, right) => String(right.occurredAt).localeCompare(String(left.occurredAt)) || String(right.id).localeCompare(String(left.id))).slice(0, take);
+  return { dailyLogs: dailyLogs.map(serializeLog), evidence: evidence.map(serializeEvidence), timeline, page: { limit: take, nextBefore: timeline.length === take ? timeline[timeline.length - 1].occurredAt : null, hasMore: timeline.length === take } };
 }
 
 export async function createProgressJournalRecord(prisma, { scope: rawScope, actorId, input }) {
