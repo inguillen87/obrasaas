@@ -51,7 +51,7 @@ const REQUIRED_ENUMS = Object.freeze({
     'EXPIRED',
     'VOIDED',
   ],
-  AttendanceShiftStatus: ['OPEN', 'CLOSED', 'LEGACY_INCOMPLETE', 'VOIDED'],
+  AttendanceShiftStatus: ['OPEN', 'PENDING_CLOSE', 'CLOSED', 'LEGACY_INCOMPLETE', 'VOIDED'],
   AttendanceShiftPhase: ['WORKING', 'ON_BREAK'],
 });
 const REQUIRED_ENTRY_COLUMNS = Object.freeze([
@@ -80,6 +80,7 @@ const REQUIRED_SHIFT_COLUMNS = Object.freeze([
   'closedAt',
   'revision',
   'metadata',
+  'expectationId',
   'createdAt',
   'updatedAt',
 ]);

@@ -1,4 +1,5 @@
 import { isAuthorizedCronRequest } from "@/lib/cron-auth";
+import { runAttendanceAutomationBatch } from "@/lib/attendance-control";
 import { expireStalePendingAttendanceBatch } from "@/lib/attendance-expiry";
 import { listDueWebhookProjectIds } from "@/lib/db";
 import { getPrisma } from "@/lib/prisma";
@@ -20,7 +21,13 @@ function json(body, status = 200) {
   });
 }
 
-function webhookRecoveryHealth({ failed, blocked, flowRequestGc, attendanceExpiry }) {
+function webhookRecoveryHealth({
+  failed,
+  blocked,
+  flowRequestGc,
+  attendanceExpiry,
+  attendanceAutomation,
+}) {
   const reasons = [];
   if (failed > 0) reasons.push("WEBHOOK_EVENTS_FAILED");
   if (blocked > 0) reasons.push("WEBHOOK_PROJECTS_BLOCKED");
@@ -35,6 +42,9 @@ function webhookRecoveryHealth({ failed, blocked, flowRequestGc, attendanceExpir
   }
   if (attendanceExpiry?.hasMore === true) {
     reasons.push("ATTENDANCE_EXPIRY_BACKLOG");
+  }
+  if (Number(attendanceAutomation?.failedProjects || 0) > 0) {
+    reasons.push("ATTENDANCE_AUTOMATION_FAILED");
   }
   return {
     workHealthy: reasons.length === 0,
@@ -81,6 +91,38 @@ export async function GET(request) {
     });
   }
 
+  let attendanceAutomation = {
+    eligibleProjects: 0,
+    processedProjects: 0,
+    failedProjects: 0,
+    hasMore: false,
+    totals: {
+      materialized: 0,
+      evaluated: 0,
+      shiftsMarkedPendingClose: 0,
+      alertsOpened: 0,
+      alertsResolved: 0,
+    },
+    failureCodes: [],
+  };
+  try {
+    // Attendance classification and durable alert transitions are also
+    // clock-driven correctness work; execute them before unrelated backlogs.
+    attendanceAutomation = await runAttendanceAutomationBatch(getPrisma(), {
+      maxProjects: MAX_PROJECTS_PER_RUN,
+    });
+  } catch (error) {
+    attendanceAutomation.failedProjects = 1;
+    attendanceAutomation.failureCodes = [
+      String(error?.code || error?.name || "ATTENDANCE_AUTOMATION_FAILED").slice(0, 100),
+    ];
+    console.error("Attendance automation batch failed:", {
+      code: error?.code,
+      name: error?.name,
+      status: error?.status,
+    });
+  }
+
   const projectIds = await listDueWebhookProjectIds({ limit: MAX_PROJECTS_PER_RUN });
   let completed = 0;
   let failed = 0;
@@ -114,7 +156,13 @@ export async function GET(request) {
     });
   }
 
-  const health = webhookRecoveryHealth({ failed, blocked, flowRequestGc, attendanceExpiry });
+  const health = webhookRecoveryHealth({
+    failed,
+    blocked,
+    flowRequestGc,
+    attendanceExpiry,
+    attendanceAutomation,
+  });
   return json({
     ok: true,
     ...health,
@@ -124,5 +172,6 @@ export async function GET(request) {
     blocked,
     flowRequestGc,
     attendanceExpiry,
+    attendanceAutomation,
   });
 }

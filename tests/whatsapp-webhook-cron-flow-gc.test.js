@@ -18,6 +18,22 @@ globalThis[TEST_STATE] = {
     cutoff: "2026-07-23T10:00:00.000Z",
   },
   attendanceExpiryError: null,
+  attendanceAutomationCalls: [],
+  attendanceAutomationResult: {
+    eligibleProjects: 1,
+    processedProjects: 1,
+    failedProjects: 0,
+    hasMore: false,
+    totals: {
+      materialized: 1,
+      evaluated: 1,
+      shiftsMarkedPendingClose: 0,
+      alertsOpened: 0,
+      alertsResolved: 0,
+    },
+    failureCodes: [],
+  },
+  attendanceAutomationError: null,
   gcCalls: [],
   projectIds: ["project-1"],
   drainResult: { completed: 2, failed: 0, blocked: false },
@@ -31,6 +47,7 @@ globalThis[TEST_STATE] = {
 };
 
 const mockModules = new Map([
+  ["@/lib/attendance-control", "mock:attendance-control"],
   ["@/lib/attendance-expiry", "mock:attendance-expiry"],
   ["@/lib/cron-auth", "mock:cron-auth"],
   ["@/lib/db", "mock:db"],
@@ -50,6 +67,21 @@ registerHooks({
     return nextResolve(specifier, context);
   },
   load(url, context, nextLoad) {
+    if (url === "mock:attendance-control") {
+      return {
+        format: "module",
+        shortCircuit: true,
+        source: `
+          const state = globalThis[Symbol.for("obrasaas.whatsapp-webhook-cron-flow-gc-test")];
+          export async function runAttendanceAutomationBatch(...args) {
+            state.callOrder.push("attendance-automation");
+            state.attendanceAutomationCalls.push(args);
+            if (state.attendanceAutomationError) throw state.attendanceAutomationError;
+            return state.attendanceAutomationResult;
+          }
+        `,
+      };
+    }
     if (url === "mock:attendance-expiry") {
       return {
         format: "module",
@@ -171,6 +203,8 @@ test("webhook recovery cron distinguishes accepted runs from healthy work", asyn
   for (const scenario of scenarios) {
     state.callOrder = [];
     state.attendanceExpiryCalls = [];
+    state.attendanceAutomationCalls = [];
+    state.attendanceAutomationError = null;
     state.attendanceExpiryError = null;
     state.attendanceExpiryResult = {
       scannedEntries: 0,
@@ -199,9 +233,13 @@ test("webhook recovery cron distinguishes accepted runs from healthy work", asyn
     assert.deepEqual(body.flowRequestGc, scenario.gcResult, scenario.name);
     assert.equal(state.gcCalls.length, 1, scenario.name);
     assert.equal(state.attendanceExpiryCalls.length, 1, scenario.name);
+    assert.equal(state.attendanceAutomationCalls.length, 1, scenario.name);
     assert.deepEqual(state.attendanceExpiryCalls[0][0], { source: "cron-test" });
     assert.deepEqual(state.attendanceExpiryCalls[0][1], { maxEntries: 100 });
+    assert.deepEqual(state.attendanceAutomationCalls[0][0], { source: "cron-test" });
+    assert.deepEqual(state.attendanceAutomationCalls[0][1], { maxProjects: 4 });
     assert.equal(state.callOrder[0], "attendance-expiry", scenario.name);
+    assert.equal(state.callOrder[1], "attendance-automation", scenario.name);
   }
 
   state.callOrder = [];

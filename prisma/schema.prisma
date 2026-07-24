@@ -59,6 +59,7 @@ enum AttendanceVerificationStatus {
 
 enum AttendanceShiftStatus {
   OPEN
+  PENDING_CLOSE
   CLOSED
   LEGACY_INCOMPLETE
   VOIDED
@@ -67,6 +68,56 @@ enum AttendanceShiftStatus {
 enum AttendanceShiftPhase {
   WORKING
   ON_BREAK
+}
+
+enum AttendanceScheduleStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum AttendanceScheduleVersionStatus {
+  DRAFT
+  PUBLISHED
+  RETIRED
+}
+
+enum AttendanceLatePolicy {
+  FULL_FROM_SCHEDULE
+  EXCLUDE_GRACE
+}
+
+enum AttendanceExpectationKind {
+  WORKING
+  NON_WORKING
+  EXCUSED
+}
+
+enum AttendanceExceptionAction {
+  SET
+  CANCEL
+}
+
+enum AttendanceExceptionType {
+  EXCUSED_ABSENCE
+  APPROVED_LEAVE
+  NON_WORKING_DAY
+  OFFSITE_WORK
+}
+
+enum AttendanceCorrectionDecisionKind {
+  APPROVED
+  REJECTED
+}
+
+enum AttendanceAlertType {
+  NO_SHOW
+  PENDING_CLOSE
+}
+
+enum AttendanceAlertTransition {
+  OPENED
+  ACKNOWLEDGED
+  RESOLVED
 }
 
 enum MessageDirection {
@@ -216,18 +267,25 @@ model CrmAccount {
 }
 
 model PlatformUser {
-  id                     String                  @id @default(cuid())
-  clerkUserId            String                  @unique
-  primaryEmail           String                  @unique
-  fullName               String?
-  avatarUrl              String?
-  systemRole             SystemRole              @default(TENANT_USER)
-  memberships            TenantMembership[]
-  auditLogs              AuditLog[]
-  conversationReadStates ConversationReadState[]
-  lastSeenAt             DateTime                @default(now())
-  createdAt              DateTime                @default(now())
-  updatedAt              DateTime                @updatedAt
+  id                                 String                         @id @default(cuid())
+  clerkUserId                        String                         @unique
+  primaryEmail                       String                         @unique
+  fullName                           String?
+  avatarUrl                          String?
+  systemRole                         SystemRole                     @default(TENANT_USER)
+  memberships                        TenantMembership[]
+  auditLogs                          AuditLog[]
+  conversationReadStates             ConversationReadState[]
+  attendanceScheduleVersions         AttendanceScheduleVersion[]    @relation("AttendanceScheduleVersionCreator")
+  attendanceScheduleAssignments      AttendanceScheduleAssignment[] @relation("AttendanceScheduleAssignmentCreator")
+  endedAttendanceScheduleAssignments AttendanceScheduleAssignment[] @relation("AttendanceScheduleAssignmentEnder")
+  attendanceExceptionRevisions       AttendanceExceptionRevision[]  @relation("AttendanceExceptionRevisionCreator")
+  attendanceCorrectionRequests       AttendanceCorrectionRequest[]  @relation("AttendanceCorrectionPlatformRequester")
+  attendanceCorrectionDecisions      AttendanceCorrectionDecision[] @relation("AttendanceCorrectionDecider")
+  attendanceAlertEvents              AttendanceAlertEvent[]         @relation("AttendanceAlertActor")
+  lastSeenAt                         DateTime                       @default(now())
+  createdAt                          DateTime                       @default(now())
+  updatedAt                          DateTime                       @updatedAt
 
   @@index([systemRole, createdAt])
 }
@@ -269,33 +327,40 @@ model AuditLog {
 }
 
 model Project {
-  id                 String                @id @default(cuid())
-  organizationId     String
-  organization       Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  name               String
-  slug               String
-  status             ProjectStatus         @default(ACTIVE)
-  address            String?
-  latitude           Decimal?              @db.Decimal(10, 7)
-  longitude          Decimal?              @db.Decimal(10, 7)
-  geofenceMeters     Int                   @default(100)
-  startsAt           DateTime?
-  endsAt             DateTime?
-  metadata           Json?
-  snapshot           ProjectSnapshot?
-  workers            Worker[]
-  tasks              Task[]
-  incidents          Incident[]
-  attendances        AttendanceEntry[]
-  attendanceShifts   AttendanceShift[]
-  conversations      Conversation[]
-  webhookEvents      WebhookEvent[]
-  flowSessions       WhatsAppFlowSession[]
-  proposals          OperationalProposal[]
-  whatsapp           WhatsAppConnection?
-  projectMemberships ProjectMembership[]
-  createdAt          DateTime              @default(now())
-  updatedAt          DateTime              @updatedAt
+  id                            String                         @id @default(cuid())
+  organizationId                String
+  organization                  Organization                   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name                          String
+  slug                          String
+  status                        ProjectStatus                  @default(ACTIVE)
+  address                       String?
+  latitude                      Decimal?                       @db.Decimal(10, 7)
+  longitude                     Decimal?                       @db.Decimal(10, 7)
+  geofenceMeters                Int                            @default(100)
+  startsAt                      DateTime?
+  endsAt                        DateTime?
+  metadata                      Json?
+  snapshot                      ProjectSnapshot?
+  workers                       Worker[]
+  tasks                         Task[]
+  incidents                     Incident[]
+  attendances                   AttendanceEntry[]
+  attendanceShifts              AttendanceShift[]
+  attendanceSchedules           AttendanceSchedule[]
+  attendanceScheduleVersions    AttendanceScheduleVersion[]
+  attendanceScheduleAssignments AttendanceScheduleAssignment[]
+  attendanceExpectations        AttendanceExpectation[]
+  attendanceExceptions          AttendanceException[]
+  attendanceCorrectionRequests  AttendanceCorrectionRequest[]
+  attendanceAlertEvents         AttendanceAlertEvent[]
+  conversations                 Conversation[]
+  webhookEvents                 WebhookEvent[]
+  flowSessions                  WhatsAppFlowSession[]
+  proposals                     OperationalProposal[]
+  whatsapp                      WhatsAppConnection?
+  projectMemberships            ProjectMembership[]
+  createdAt                     DateTime                       @default(now())
+  updatedAt                     DateTime                       @updatedAt
 
   @@unique([organizationId, slug])
   @@index([organizationId, status])
@@ -453,22 +518,28 @@ model ProjectSnapshot {
 }
 
 model Worker {
-  id                       String                @id @default(cuid())
-  projectId                String
-  project                  Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  externalId               String?
-  phone                    String
-  name                     String
-  role                     String?
-  active                   Boolean               @default(true)
-  metadata                 Json?
-  attendances              AttendanceEntry[]
-  attendanceShifts         AttendanceShift[]
-  proposedOperationalItems OperationalProposal[] @relation("OperationalProposalProposer")
-  resolvedOperationalItems OperationalProposal[] @relation("OperationalProposalResolver")
-  whatsappFlowSessions     WhatsAppFlowSession[]
-  createdAt                DateTime              @default(now())
-  updatedAt                DateTime              @updatedAt
+  id                             String                         @id @default(cuid())
+  projectId                      String
+  project                        Project                        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  externalId                     String?
+  phone                          String
+  name                           String
+  role                           String?
+  active                         Boolean                        @default(true)
+  metadata                       Json?
+  attendances                    AttendanceEntry[]
+  attendanceShifts               AttendanceShift[]
+  attendanceScheduleAssignments  AttendanceScheduleAssignment[]
+  attendanceExpectations         AttendanceExpectation[]
+  attendanceExceptions           AttendanceException[]
+  attendanceCorrectionRequests   AttendanceCorrectionRequest[]  @relation("AttendanceCorrectionSubject")
+  requestedAttendanceCorrections AttendanceCorrectionRequest[]  @relation("AttendanceCorrectionWorkerRequester")
+  attendanceAlertEvents          AttendanceAlertEvent[]
+  proposedOperationalItems       OperationalProposal[]          @relation("OperationalProposalProposer")
+  resolvedOperationalItems       OperationalProposal[]          @relation("OperationalProposalResolver")
+  whatsappFlowSessions           WhatsAppFlowSession[]
+  createdAt                      DateTime                       @default(now())
+  updatedAt                      DateTime                       @updatedAt
 
   @@unique([projectId, phone])
   @@unique([projectId, id], map: "Worker_projectId_id_key")
@@ -549,60 +620,345 @@ model Incident {
 }
 
 model AttendanceEntry {
-  id                   String                       @id @default(cuid())
-  projectId            String
-  project              Project                      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  workerId             String
-  worker               Worker                       @relation(fields: [projectId, workerId], references: [projectId, id], onDelete: Cascade, map: "AttendanceEntry_worker_scope_fkey")
-  shiftId              String?
-  shift                AttendanceShift?             @relation(fields: [shiftId, projectId, workerId], references: [id, projectId, workerId], onDelete: NoAction, map: "AttendanceEntry_shift_scope_fkey")
-  eventType            AttendanceEventType          @default(CHECK_IN)
-  verificationStatus   AttendanceVerificationStatus @default(LEGACY)
-  occurredAt           DateTime                     @default(now())
-  sourceOccurredAt     DateTime?
-  sequence             Int?
-  idempotencyKey       String                       @unique(map: "AttendanceEntry_idempotencyKey_key") @default(dbgenerated("(gen_random_uuid())::text")) @db.VarChar(190)
-  requestFingerprint   String?                      @db.Char(64)
-  status               AttendanceStatus
-  latitude             Decimal?                     @db.Decimal(10, 7)
-  longitude            Decimal?                     @db.Decimal(10, 7)
-  accuracyMeters       Decimal?                     @db.Decimal(9, 2)
-  distanceMeters       Int?
-  geofenceRadiusMeters Int?
-  source               String                       @default("whatsapp")
-  privacyNoticeVersion String?                      @db.VarChar(64)
-  evidence             Json?
-  checkedInAt          DateTime                     @default(now())
-  metadata             Json?
-  createdAt            DateTime                     @default(now())
+  id                              String                        @id @default(cuid())
+  projectId                       String
+  project                         Project                       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workerId                        String
+  worker                          Worker                        @relation(fields: [projectId, workerId], references: [projectId, id], onDelete: Cascade, map: "AttendanceEntry_worker_scope_fkey")
+  shiftId                         String?
+  shift                           AttendanceShift?              @relation(fields: [shiftId, projectId, workerId], references: [id, projectId, workerId], onDelete: NoAction, map: "AttendanceEntry_shift_scope_fkey")
+  eventType                       AttendanceEventType           @default(CHECK_IN)
+  verificationStatus              AttendanceVerificationStatus  @default(LEGACY)
+  occurredAt                      DateTime                      @default(now())
+  sourceOccurredAt                DateTime?
+  sequence                        Int?
+  idempotencyKey                  String                        @unique(map: "AttendanceEntry_idempotencyKey_key") @default(dbgenerated("(gen_random_uuid())::text")) @db.VarChar(190)
+  requestFingerprint              String?                       @db.Char(64)
+  status                          AttendanceStatus
+  latitude                        Decimal?                      @db.Decimal(10, 7)
+  longitude                       Decimal?                      @db.Decimal(10, 7)
+  accuracyMeters                  Decimal?                      @db.Decimal(9, 2)
+  distanceMeters                  Int?
+  geofenceRadiusMeters            Int?
+  source                          String                        @default("whatsapp")
+  privacyNoticeVersion            String?                       @db.VarChar(64)
+  evidence                        Json?
+  checkedInAt                     DateTime                      @default(now())
+  metadata                        Json?
+  targetedByAttendanceCorrections AttendanceCorrectionRequest[]
+  createdAt                       DateTime                      @default(now())
 
   @@unique([shiftId, sequence], map: "AttendanceEntry_shift_sequence_key")
+  @@unique([id, projectId, workerId], map: "AttendanceEntry_id_project_worker_key")
   @@index([projectId, checkedInAt])
   @@index([workerId, checkedInAt])
   @@index([projectId, workerId, occurredAt], map: "AttendanceEntry_project_worker_occurred_idx")
 }
 
 model AttendanceShift {
-  id        String                @id @default(cuid())
-  projectId String
-  project   Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  workerId  String
-  worker    Worker                @relation(fields: [projectId, workerId], references: [projectId, id], onDelete: Cascade, map: "AttendanceShift_worker_scope_fkey")
-  workDate  DateTime              @db.Date
-  timezone  String                @db.VarChar(64)
-  status    AttendanceShiftStatus @default(OPEN)
-  phase     AttendanceShiftPhase  @default(WORKING)
-  openedAt  DateTime
-  closedAt  DateTime?
-  revision  Int                   @default(0)
-  metadata  Json?
-  events    AttendanceEntry[]
-  createdAt DateTime              @default(now())
-  updatedAt DateTime              @updatedAt
+  id                 String                        @id @default(cuid())
+  projectId          String
+  project            Project                       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workerId           String
+  worker             Worker                        @relation(fields: [projectId, workerId], references: [projectId, id], onDelete: Cascade, map: "AttendanceShift_worker_scope_fkey")
+  workDate           DateTime                      @db.Date
+  timezone           String                        @db.VarChar(64)
+  status             AttendanceShiftStatus         @default(OPEN)
+  phase              AttendanceShiftPhase          @default(WORKING)
+  openedAt           DateTime
+  closedAt           DateTime?
+  revision           Int                           @default(0)
+  metadata           Json?
+  expectationId      String?
+  expectation        AttendanceExpectation?        @relation(fields: [expectationId, projectId, workerId], references: [id, projectId, workerId], onDelete: NoAction, map: "AttendanceShift_expectation_scope_fkey")
+  events             AttendanceEntry[]
+  correctionRequests AttendanceCorrectionRequest[]
+  alertEvents        AttendanceAlertEvent[]
+  createdAt          DateTime                      @default(now())
+  updatedAt          DateTime                      @updatedAt
 
   @@unique([id, projectId, workerId], map: "AttendanceShift_id_project_worker_key")
+  @@unique([expectationId, projectId, workerId], map: "AttendanceShift_expectation_scope_key")
   @@index([projectId, workDate, status], map: "AttendanceShift_project_date_status_idx")
   @@index([workerId, openedAt], map: "AttendanceShift_worker_opened_idx")
+}
+
+model AttendanceSchedule {
+  id        String                      @id @default(cuid())
+  projectId String
+  project   Project                     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name      String                      @db.VarChar(120)
+  status    AttendanceScheduleStatus    @default(ACTIVE)
+  revision  Int                         @default(0)
+  versions  AttendanceScheduleVersion[]
+  createdAt DateTime                    @default(now())
+  updatedAt DateTime                    @updatedAt
+
+  @@unique([id, projectId], map: "AttendanceSchedule_id_project_key")
+  @@unique([projectId, name], map: "AttendanceSchedule_project_name_key")
+  @@index([projectId, status, createdAt], map: "AttendanceSchedule_project_status_idx")
+}
+
+model AttendanceScheduleVersion {
+  id                          String                          @id @default(cuid())
+  projectId                   String
+  project                     Project                         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  scheduleId                  String
+  schedule                    AttendanceSchedule              @relation(fields: [scheduleId, projectId], references: [id, projectId], onDelete: Cascade, map: "AttendanceScheduleVersion_schedule_scope_fkey")
+  version                     Int
+  effectiveFrom               DateTime                        @db.Date
+  timezone                    String                          @db.VarChar(64)
+  earlyCheckInMinutes         Int                             @default(120) @db.SmallInt
+  lateToleranceMinutes        Int                             @default(10) @db.SmallInt
+  latePolicy                  AttendanceLatePolicy            @default(FULL_FROM_SCHEDULE)
+  noShowAfterMinutes          Int                             @default(30) @db.SmallInt
+  pendingCloseAfterMinutes    Int                             @default(60) @db.SmallInt
+  absenceFinalizeAfterMinutes Int                             @default(120) @db.SmallInt
+  status                      AttendanceScheduleVersionStatus @default(PUBLISHED)
+  configHash                  String                          @db.Char(64)
+  idempotencyKey              String                          @unique(map: "AttendanceScheduleVersion_idempotency_key") @db.VarChar(190)
+  requestFingerprint          String                          @db.Char(64)
+  createdById                 String?
+  createdBy                   PlatformUser?                   @relation("AttendanceScheduleVersionCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  publishedAt                 DateTime?
+  days                        AttendanceScheduleDay[]
+  assignments                 AttendanceScheduleAssignment[]
+  expectationRevisions        AttendanceExpectationRevision[]
+  createdAt                   DateTime                        @default(now())
+
+  @@unique([id, projectId], map: "AttendanceScheduleVersion_id_project_key")
+  @@unique([scheduleId, version], map: "AttendanceScheduleVersion_schedule_version_key")
+  @@unique([scheduleId, effectiveFrom], map: "AttendanceScheduleVersion_schedule_effective_key")
+  @@index([projectId, status, effectiveFrom], map: "AttendanceScheduleVersion_project_effective_idx")
+}
+
+model AttendanceScheduleDay {
+  id                   String                          @id @default(cuid())
+  projectId            String
+  scheduleVersionId    String
+  scheduleVersion      AttendanceScheduleVersion       @relation(fields: [scheduleVersionId, projectId], references: [id, projectId], onDelete: Cascade, map: "AttendanceScheduleDay_version_scope_fkey")
+  isoWeekday           Int                             @db.SmallInt
+  isWorkingDay         Boolean                         @default(true)
+  startMinute          Int?                            @db.SmallInt
+  endMinute            Int?                            @db.SmallInt
+  endDayOffset         Int                             @default(0) @db.SmallInt
+  expectedBreakMinutes Int                             @default(0) @db.SmallInt
+  expectationRevisions AttendanceExpectationRevision[]
+
+  @@unique([scheduleVersionId, isoWeekday], map: "AttendanceScheduleDay_version_weekday_key")
+  @@unique([id, scheduleVersionId, projectId], map: "AttendanceScheduleDay_id_version_project_key")
+}
+
+model AttendanceScheduleAssignment {
+  id                 String                    @id @default(cuid())
+  projectId          String
+  project            Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workerId           String
+  worker             Worker                    @relation(fields: [projectId, workerId], references: [projectId, id], onDelete: Cascade, map: "AttendanceScheduleAssignment_worker_scope_fkey")
+  scheduleVersionId  String
+  scheduleVersion    AttendanceScheduleVersion @relation(fields: [scheduleVersionId, projectId], references: [id, projectId], onDelete: Restrict, map: "AttendanceScheduleAssignment_version_scope_fkey")
+  effectiveFrom      DateTime                  @db.Date
+  effectiveThrough   DateTime?                 @db.Date
+  reasonCode         String?                   @db.VarChar(64)
+  idempotencyKey     String                    @unique(map: "AttendanceScheduleAssignment_idempotency_key") @db.VarChar(190)
+  requestFingerprint String                    @db.Char(64)
+  createdById        String?
+  createdBy          PlatformUser?             @relation("AttendanceScheduleAssignmentCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  endedById          String?
+  endedBy            PlatformUser?             @relation("AttendanceScheduleAssignmentEnder", fields: [endedById], references: [id], onDelete: SetNull)
+  endedAt            DateTime?
+  createdAt          DateTime                  @default(now())
+
+  @@unique([projectId, workerId, effectiveFrom], map: "AttendanceScheduleAssignment_worker_from_key")
+  @@index([projectId, effectiveFrom, effectiveThrough], map: "AttendanceScheduleAssignment_project_effective_idx")
+  @@index([workerId, effectiveFrom, effectiveThrough], map: "AttendanceScheduleAssignment_worker_effective_idx")
+}
+
+model AttendanceExpectation {
+  id                 String                          @id @default(cuid())
+  projectId          String
+  project            Project                         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workerId           String
+  worker             Worker                          @relation(fields: [projectId, workerId], references: [projectId, id], onDelete: Cascade, map: "AttendanceExpectation_worker_scope_fkey")
+  workDate           DateTime                        @db.Date
+  revision           Int                             @default(0)
+  revisions          AttendanceExpectationRevision[]
+  shift              AttendanceShift?
+  correctionRequests AttendanceCorrectionRequest[]
+  alertEvents        AttendanceAlertEvent[]
+  createdAt          DateTime                        @default(now())
+  updatedAt          DateTime                        @updatedAt
+
+  @@unique([id, projectId, workerId], map: "AttendanceExpectation_id_project_worker_key")
+  @@unique([id, projectId, workerId, workDate], map: "AttendanceExpectation_id_scope_date_key")
+  @@unique([projectId, workerId, workDate], map: "AttendanceExpectation_worker_date_key")
+  @@index([projectId, workDate], map: "AttendanceExpectation_project_date_idx")
+}
+
+model AttendanceExpectationRevision {
+  id                   String                       @id @default(cuid())
+  projectId            String
+  workerId             String
+  workDate             DateTime                     @db.Date
+  expectationId        String
+  expectation          AttendanceExpectation        @relation(fields: [expectationId, projectId, workerId, workDate], references: [id, projectId, workerId, workDate], onDelete: Cascade, map: "AttendanceExpectationRevision_expectation_scope_fkey")
+  revision             Int
+  kind                 AttendanceExpectationKind
+  scheduleVersionId    String?
+  scheduleVersion      AttendanceScheduleVersion?   @relation(fields: [scheduleVersionId, projectId], references: [id, projectId], onDelete: NoAction, map: "AttendanceExpectationRevision_version_scope_fkey")
+  scheduleDayId        String?
+  scheduleDay          AttendanceScheduleDay?       @relation(fields: [scheduleDayId, scheduleVersionId, projectId], references: [id, scheduleVersionId, projectId], onDelete: NoAction, map: "AttendanceExpectationRevision_day_scope_fkey")
+  exceptionRevisionId  String?
+  exceptionRevision    AttendanceExceptionRevision? @relation(fields: [exceptionRevisionId, projectId, workerId, workDate], references: [id, projectId, workerId, workDate], onDelete: NoAction, map: "AttendanceExpectationRevision_exception_scope_fkey")
+  alertEvents          AttendanceAlertEvent[]
+  timezone             String                       @db.VarChar(64)
+  expectedStartAt      DateTime?
+  expectedEndAt        DateTime?
+  graceEndsAt          DateTime?
+  noShowAt             DateTime?
+  pendingCloseAt       DateTime?
+  absenceAt            DateTime?
+  latePolicy           AttendanceLatePolicy?
+  expectedBreakMinutes Int?                         @db.SmallInt
+  classifierVersion    String                       @db.VarChar(64)
+  policyHash           String                       @db.Char(64)
+  createdAt            DateTime                     @default(now())
+
+  @@unique([expectationId, revision], map: "AttendanceExpectationRevision_expectation_revision_key")
+  @@unique([id, expectationId, projectId, workerId], map: "AttendanceExpectationRevision_id_expectation_scope_key")
+  @@index([noShowAt, id], map: "AttendanceExpectationRevision_no_show_idx")
+  @@index([pendingCloseAt, id], map: "AttendanceExpectationRevision_pending_close_idx")
+}
+
+model AttendanceException {
+  id          String                        @id @default(cuid())
+  projectId   String
+  project     Project                       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workerId    String
+  worker      Worker                        @relation(fields: [projectId, workerId], references: [projectId, id], onDelete: Cascade, map: "AttendanceException_worker_scope_fkey")
+  workDate    DateTime                      @db.Date
+  revision    Int                           @default(0)
+  active      Boolean                       @default(false)
+  currentType AttendanceExceptionType?
+  revisions   AttendanceExceptionRevision[]
+  createdAt   DateTime                      @default(now())
+  updatedAt   DateTime                      @updatedAt
+
+  @@unique([id, projectId, workerId], map: "AttendanceException_id_project_worker_key")
+  @@unique([id, projectId, workerId, workDate], map: "AttendanceException_id_scope_date_key")
+  @@unique([projectId, workerId, workDate], map: "AttendanceException_worker_date_key")
+  @@index([projectId, workDate, active], map: "AttendanceException_project_date_idx")
+}
+
+model AttendanceExceptionRevision {
+  id                   String                          @id @default(cuid())
+  projectId            String
+  workerId             String
+  workDate             DateTime                        @db.Date
+  exceptionId          String
+  exception            AttendanceException             @relation(fields: [exceptionId, projectId, workerId, workDate], references: [id, projectId, workerId, workDate], onDelete: Cascade, map: "AttendanceExceptionRevision_exception_scope_fkey")
+  revision             Int
+  action               AttendanceExceptionAction
+  type                 AttendanceExceptionType?
+  reasonCode           String                          @db.VarChar(64)
+  note                 String?                         @db.VarChar(280)
+  idempotencyKey       String                          @unique(map: "AttendanceExceptionRevision_idempotency_key") @db.VarChar(190)
+  requestFingerprint   String                          @db.Char(64)
+  createdById          String?
+  createdBy            PlatformUser?                   @relation("AttendanceExceptionRevisionCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  expectationRevisions AttendanceExpectationRevision[]
+  createdAt            DateTime                        @default(now())
+
+  @@unique([exceptionId, revision], map: "AttendanceExceptionRevision_exception_revision_key")
+  @@unique([id, projectId, workerId, workDate], map: "AttendanceExceptionRevision_id_scope_date_key")
+}
+
+model AttendanceCorrectionRequest {
+  id                        String                        @id @default(cuid())
+  projectId                 String
+  project                   Project                       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workerId                  String
+  worker                    Worker                        @relation("AttendanceCorrectionSubject", fields: [projectId, workerId], references: [projectId, id], onDelete: Cascade, map: "AttendanceCorrectionRequest_worker_scope_fkey")
+  expectationId             String?
+  expectation               AttendanceExpectation?        @relation(fields: [expectationId, projectId, workerId], references: [id, projectId, workerId], onDelete: Restrict, map: "AttendanceCorrectionRequest_expectation_scope_fkey")
+  shiftId                   String
+  shift                     AttendanceShift               @relation(fields: [shiftId, projectId, workerId], references: [id, projectId, workerId], onDelete: Restrict, map: "AttendanceCorrectionRequest_shift_scope_fkey")
+  targetEntryId             String?
+  targetEntry               AttendanceEntry?              @relation(fields: [targetEntryId, projectId, workerId], references: [id, projectId, workerId], onDelete: Restrict, map: "AttendanceCorrectionRequest_entry_scope_fkey")
+  baseShiftRevision         Int
+  baseEffectiveHash         String                        @db.Char(64)
+  proposedEvents            Json
+  proposedEffectiveHash     String                        @db.Char(64)
+  reasonCode                String                        @db.VarChar(64)
+  note                      String?                       @db.VarChar(280)
+  requestedByPlatformUserId String?
+  requestedByPlatformUser   PlatformUser?                 @relation("AttendanceCorrectionPlatformRequester", fields: [requestedByPlatformUserId], references: [id], onDelete: Restrict)
+  requestedByWorkerId       String?
+  requestedByWorker         Worker?                       @relation("AttendanceCorrectionWorkerRequester", fields: [projectId, requestedByWorkerId], references: [projectId, id], onDelete: NoAction, map: "AttendanceCorrectionRequest_requester_scope_fkey")
+  idempotencyKey            String                        @unique(map: "AttendanceCorrectionRequest_idempotency_key") @db.VarChar(190)
+  requestFingerprint        String                        @db.Char(64)
+  expiresAt                 DateTime
+  decision                  AttendanceCorrectionDecision?
+  adjustment                AttendanceAdjustment?
+  createdAt                 DateTime                      @default(now())
+
+  @@index([projectId, createdAt, id], map: "AttendanceCorrectionRequest_project_created_idx")
+  @@index([shiftId, createdAt], map: "AttendanceCorrectionRequest_shift_created_idx")
+}
+
+model AttendanceCorrectionDecision {
+  id                 String                           @id @default(cuid())
+  requestId          String                           @unique(map: "AttendanceCorrectionDecision_request_key")
+  request            AttendanceCorrectionRequest      @relation(fields: [requestId], references: [id], onDelete: Restrict)
+  decision           AttendanceCorrectionDecisionKind
+  reasonCode         String                           @db.VarChar(64)
+  note               String?                          @db.VarChar(280)
+  decidedById        String
+  decidedBy          PlatformUser                     @relation("AttendanceCorrectionDecider", fields: [decidedById], references: [id], onDelete: Restrict)
+  idempotencyKey     String                           @unique(map: "AttendanceCorrectionDecision_idempotency_key") @db.VarChar(190)
+  requestFingerprint String                           @db.Char(64)
+  createdAt          DateTime                         @default(now())
+}
+
+model AttendanceAdjustment {
+  id                   String                      @id @default(cuid())
+  correctionRequestId  String                      @unique(map: "AttendanceAdjustment_request_key")
+  correctionRequest    AttendanceCorrectionRequest @relation(fields: [correctionRequestId], references: [id], onDelete: Restrict)
+  appliedShiftRevision Int
+  baseLedgerSequence   Int
+  baseEffectiveHash    String                      @db.Char(64)
+  effectiveHash        String                      @db.Char(64)
+  effectiveEvents      Json
+  createdAt            DateTime                    @default(now())
+
+  @@index([createdAt, id], map: "AttendanceAdjustment_created_idx")
+}
+
+model AttendanceAlertEvent {
+  id                    String                        @id @default(cuid())
+  projectId             String
+  project               Project                       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workerId              String
+  worker                Worker                        @relation(fields: [projectId, workerId], references: [projectId, id], onDelete: Cascade, map: "AttendanceAlertEvent_worker_scope_fkey")
+  expectationId         String
+  expectation           AttendanceExpectation         @relation(fields: [expectationId, projectId, workerId], references: [id, projectId, workerId], onDelete: Cascade, map: "AttendanceAlertEvent_expectation_scope_fkey")
+  expectationRevisionId String
+  expectationRevision   AttendanceExpectationRevision @relation(fields: [expectationRevisionId, expectationId, projectId, workerId], references: [id, expectationId, projectId, workerId], onDelete: NoAction, map: "AttendanceAlertEvent_revision_scope_fkey")
+  shiftId               String?
+  shift                 AttendanceShift?              @relation(fields: [shiftId, projectId, workerId], references: [id, projectId, workerId], onDelete: NoAction, map: "AttendanceAlertEvent_shift_scope_fkey")
+  type                  AttendanceAlertType
+  transition            AttendanceAlertTransition
+  dedupeKey             String                        @unique(map: "AttendanceAlertEvent_dedupe_key") @db.VarChar(190)
+  causationId           String?                       @db.VarChar(190)
+  classifierVersion     String                        @db.VarChar(64)
+  payload               Json?
+  actorId               String?
+  actor                 PlatformUser?                 @relation("AttendanceAlertActor", fields: [actorId], references: [id], onDelete: SetNull)
+  occurredAt            DateTime                      @default(now())
+  createdAt             DateTime                      @default(now())
+
+  @@index([projectId, occurredAt, id], map: "AttendanceAlertEvent_project_occurred_idx")
+  @@index([expectationId, type, occurredAt], map: "AttendanceAlertEvent_expectation_type_idx")
 }
 
 model Conversation {

@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
 
+import { resolveAttendanceExpectationForCheckIn } from './attendance-expectations.js';
+import { hashEffectiveAttendanceEvents } from './attendance-corrections.js';
 import { validateReportedLocation } from './geo.js';
 
 export const ATTENDANCE_GEO_WINDOW_MS = 2 * 60 * 60 * 1_000;
@@ -205,6 +207,7 @@ function publicShift(shift) {
     id: shift.id,
     projectId: shift.projectId,
     workerId: shift.workerId,
+    expectationId: shift.expectationId || null,
     workDate: dateIso(shift.workDate)?.slice(0, 10) || null,
     timezone: shift.timezone,
     status: shift.status,
@@ -344,7 +347,7 @@ async function findBoundOpenShift(prisma, scope, binding) {
   });
   if (
     !shift
-    || shift.status !== 'OPEN'
+    || !['OPEN', 'PENDING_CLOSE'].includes(shift.status)
     || Number(shift.revision) !== binding.expectedRevision
   ) {
     throw domainError(
@@ -550,20 +553,51 @@ export async function completePendingGeoAttendance(prisma, {
       const timezone = validTimezone(
         timezoneInput || pending.metadata?.attendanceTimezone || DEFAULT_ATTENDANCE_TIMEZONE,
       );
+      const expectationBinding = await resolveAttendanceExpectationForCheckIn(transaction, {
+        ...scope,
+        now,
+      });
+      if (expectationBinding) {
+        const existingShift = await transaction.attendanceShift.findFirst({
+          where: {
+            ...scope,
+            expectationId: expectationBinding.expectation.id,
+          },
+          select: { id: true, status: true },
+        });
+        if (existingShift) {
+          throw domainError(
+            'The scheduled attendance day already has a shift.',
+            'ATTENDANCE_EXPECTATION_ALREADY_RECORDED',
+            409,
+            { shiftId: existingShift.id, status: existingShift.status },
+          );
+        }
+      }
+      const shiftTimezone = expectationBinding?.revision.timezone || timezone;
       const shift = await transaction.attendanceShift.create({
         data: {
           ...scope,
-          workDate: localWorkDate(now, timezone),
-          timezone,
+          workDate: expectationBinding?.expectation.workDate || localWorkDate(now, shiftTimezone),
+          timezone: shiftTimezone,
           status: 'OPEN',
           phase: 'WORKING',
           openedAt: now,
           closedAt: null,
           revision: 0,
+          ...(expectationBinding
+            ? { expectationId: expectationBinding.expectation.id }
+            : {}),
           metadata: {
             attendanceVersion: 1,
             openedFromPendingEntryId: pending.id,
             initialVerificationStatus: gps.verificationStatus,
+            ...(expectationBinding
+              ? {
+                  expectationRevision: expectationBinding.revision.revision,
+                  expectationPolicyHash: expectationBinding.revision.policyHash,
+                }
+              : {}),
           },
         },
       });
@@ -637,8 +671,15 @@ export async function completePendingGeoAttendance(prisma, {
 }
 
 function actionTransition(eventType, shift) {
-  if (shift.status !== 'OPEN') {
+  if (!['OPEN', 'PENDING_CLOSE'].includes(shift.status)) {
     throw domainError('The attendance shift is not open.', 'ATTENDANCE_SHIFT_NOT_OPEN', 409);
+  }
+  if (shift.status === 'PENDING_CLOSE' && eventType !== 'CHECK_OUT') {
+    throw domainError(
+      'A pending-close shift only accepts its final check-out.',
+      'ATTENDANCE_SHIFT_PENDING_CLOSE',
+      409,
+    );
   }
   if (eventType === 'BREAK_START') {
     if (shift.phase !== 'WORKING') {
@@ -729,7 +770,7 @@ export async function recordAttendanceAction(prisma, {
         where: {
           id: shift.id,
           ...scope,
-          status: 'OPEN',
+          status: shift.status,
           phase: shift.phase,
           revision: shift.revision,
         },
@@ -811,6 +852,10 @@ async function findJourneyShift(prisma, scope, { shiftId = null, workDate = null
     events: {
       orderBy: [{ sequence: 'asc' }, { occurredAt: 'asc' }, { id: 'asc' }],
     },
+    correctionRequests: {
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      include: { decision: true, adjustment: true },
+    },
   };
   if (shiftId) {
     return prisma.attendanceShift.findFirst({
@@ -826,7 +871,7 @@ async function findJourneyShift(prisma, scope, { shiftId = null, workDate = null
     });
   }
   const open = await prisma.attendanceShift.findFirst({
-    where: { ...scope, status: 'OPEN' },
+    where: { ...scope, status: { in: ['OPEN', 'PENDING_CLOSE'] } },
     orderBy: { openedAt: 'desc' },
     include,
   });
@@ -836,6 +881,50 @@ async function findJourneyShift(prisma, scope, { shiftId = null, workDate = null
     orderBy: { openedAt: 'desc' },
     include,
   });
+}
+
+function effectiveJourneyEvents(shift) {
+  const approved = [...(shift?.correctionRequests || [])]
+    .filter((request) => (
+      request.decision?.decision === 'APPROVED'
+      && Array.isArray(request.adjustment?.effectiveEvents)
+    ))
+    .sort((left, right) => (
+      Number(right.adjustment.appliedShiftRevision)
+      - Number(left.adjustment.appliedShiftRevision)
+      || new Date(right.adjustment.createdAt) - new Date(left.adjustment.createdAt)
+      || String(right.adjustment.id).localeCompare(String(left.adjustment.id))
+    ))[0];
+  if (!approved) return { adjusted: false, events: shift?.events || [] };
+  if (
+    hashEffectiveAttendanceEvents(approved.adjustment.effectiveEvents)
+    !== approved.adjustment.effectiveHash
+  ) {
+    throw domainError(
+      'The approved attendance adjustment failed its integrity check.',
+      'ATTENDANCE_ADJUSTMENT_CORRUPT',
+      500,
+    );
+  }
+  const manualEvents = approved.adjustment.effectiveEvents.map((event, index) => ({
+    id: event.logicalId,
+    projectId: shift.projectId,
+    workerId: shift.workerId,
+    shiftId: shift.id,
+    eventType: event.eventType,
+    verificationStatus: 'MANUAL_APPROVED',
+    status: 'PRESENT',
+    occurredAt: new Date(event.occurredAt),
+    sourceOccurredAt: null,
+    sequence: index + 1,
+    source: 'manual_correction',
+    evidence: null,
+  }));
+  const baseLedgerSequence = Number(approved.adjustment.baseLedgerSequence) || 0;
+  const laterLedgerEvents = (shift.events || []).filter((event) => (
+    Number(event.sequence) > baseLedgerSequence
+  ));
+  return { adjusted: true, events: [...manualEvents, ...laterLedgerEvents] };
 }
 
 function journeyDurations(shift, events, now) {
@@ -875,16 +964,20 @@ export async function getAttendanceJourney(prisma, {
   const now = trustedNow(nowInput);
   const shift = await findJourneyShift(prisma, scope, { shiftId, workDate });
   if (!shift) return null;
-  const events = Array.isArray(shift.events) ? shift.events : [];
-  const nextAllowedActions = shift.status !== 'OPEN'
-    ? []
-    : shift.phase === 'ON_BREAK'
-      ? ['BREAK_END']
-      : ['BREAK_START', 'CHECK_OUT'];
+  const effective = effectiveJourneyEvents(shift);
+  const events = effective.events;
+  const nextAllowedActions = shift.status === 'PENDING_CLOSE'
+    ? ['CHECK_OUT']
+    : shift.status !== 'OPEN'
+      ? []
+      : shift.phase === 'ON_BREAK'
+        ? ['BREAK_END']
+        : ['BREAK_START', 'CHECK_OUT'];
   return {
     shift: publicShift(shift),
     events: events.map((event) => publicEvent(event, shift)),
     totals: journeyDurations(shift, events, now),
     nextAllowedActions,
+    adjusted: effective.adjusted,
   };
 }

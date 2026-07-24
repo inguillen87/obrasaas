@@ -57,11 +57,13 @@ jobs:
       - name: Validate Prisma schema
         run: npx prisma validate
 
-      - name: Isolate attendance target migrations
+      - name: Isolate S1 and S2 attendance target migrations
         shell: bash
         run: |
           mkdir -p "$RUNNER_TEMP/attendance-migrations"
-          for migration in prisma/migrations/2026072315*; do
+          for migration in \
+            prisma/migrations/2026072315* \
+            prisma/migrations/20260724*_attendance_s2_*; do
             mv "$migration" "$RUNNER_TEMP/attendance-migrations/"
           done
 
@@ -71,20 +73,27 @@ jobs:
       - name: Seed representative legacy attendance rows
         run: npm run seed:attendance-migration-fixtures
 
-      - name: Restore attendance target migrations
+      - name: Restore S1 and S2 attendance target migrations
         shell: bash
         run: |
-          for migration in "$RUNNER_TEMP"/attendance-migrations/2026072315*; do
+          for migration in \
+            "$RUNNER_TEMP"/attendance-migrations/2026072315* \
+            "$RUNNER_TEMP"/attendance-migrations/20260724*_attendance_s2_*; do
             mv "$migration" prisma/migrations/
           done
 
-      - name: Deploy attendance expand, backfill and contract
+      - name: Deploy attendance ledger and schedule contracts
         run: npm run db:migrate:deploy
 
       - name: Verify attendance ledger on PostgreSQL TCP
         env:
           ATTENDANCE_MIGRATION_DATABASE_URL: postgresql://obrasaas_ci:obrasaas_ci@127.0.0.1:5432/obrasaas_ci?schema=public
         run: npm run verify:attendance-migration
+
+      - name: Verify attendance S2 contracts on PostgreSQL TCP
+        env:
+          ATTENDANCE_MIGRATION_DATABASE_URL: postgresql://obrasaas_ci:obrasaas_ci@127.0.0.1:5432/obrasaas_ci?schema=public
+        run: npm run verify:attendance-s2-migration
 
       - name: Verify migration history status
         run: npx prisma migrate status

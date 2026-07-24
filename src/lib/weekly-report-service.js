@@ -1,10 +1,15 @@
 import 'server-only';
 
 import { hasTenantPermission } from './access.js';
-import { loadWeeklyAttendanceShifts } from './attendance-report-query.js';
+import {
+  loadWeeklyAttendanceExpectations,
+  loadWeeklyAttendanceShifts,
+} from './attendance-report-query.js';
 import {
   attendanceEventsFromShifts,
+  buildAttendanceExpectationPeriodProjection,
   buildAttendancePeriodProjection,
+  mergeAttendanceExpectationProjection,
   mergeAttendanceReportProjection,
 } from './attendance-reporting.js';
 import { getAppStateSnapshot, getOperationalMessages } from './db.js';
@@ -59,7 +64,7 @@ export async function loadWeeklyReportModel(access, {
     || 'America/Argentina/Buenos_Aires';
   const periodStart = weeklyReportPeriodStart(safeGeneratedAt, reportTimeZone);
   const workDateRange = weeklyReportWorkDateRange(safeGeneratedAt, reportTimeZone);
-  const [snapshot, loadedMessages, loadedShifts] = await Promise.all([
+  const [snapshot, loadedMessages, loadedShifts, loadedExpectations] = await Promise.all([
     getAppStateSnapshot(access, { initializeIfMissing: false }),
     getOperationalMessages(access, {
       includeMedicalEvidence,
@@ -69,6 +74,11 @@ export async function loadWeeklyReportModel(access, {
       take: 501,
     }),
     loadWeeklyAttendanceShifts(prisma, {
+      projectId: access.project.id,
+      workDateRange,
+      generatedAt: safeGeneratedAt,
+    }),
+    loadWeeklyAttendanceExpectations(prisma, {
       projectId: access.project.id,
       workDateRange,
       generatedAt: safeGeneratedAt,
@@ -104,9 +114,17 @@ export async function loadWeeklyReportModel(access, {
     messageLimit: 500,
   });
 
-  const attendance = buildAttendancePeriodProjection(loadedAttendance, {
+  const physicalAttendance = buildAttendancePeriodProjection(loadedAttendance, {
     timeZone: reportTimeZone,
   });
+  const expectedAttendance = buildAttendanceExpectationPeriodProjection(
+    loadedExpectations,
+    { generatedAt: safeGeneratedAt, timeZone: reportTimeZone },
+  );
+  const attendance = mergeAttendanceExpectationProjection(
+    physicalAttendance,
+    expectedAttendance,
+  );
   const sanitizedState = sanitizeProjectStateMedicalData(snapshot.state) || {};
   const reportState = {
     ...sanitizedState,

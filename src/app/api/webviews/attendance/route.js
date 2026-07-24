@@ -10,6 +10,8 @@ import {
   getAttendanceJourney,
 } from "@/lib/attendance";
 import { expirePendingAttendanceForWorker } from "@/lib/attendance-expiry";
+import { AttendanceExpectationError } from "@/lib/attendance-expectations";
+import { AttendanceScheduleDomainError } from "@/lib/attendance-schedules";
 import {
   DirectObraMessageError,
   applyDirectObraMessageAtomically,
@@ -434,6 +436,18 @@ export async function POST(request) {
       return attendanceResponse(
         {
           error: ATTENDANCE_ERROR_MESSAGES[error.code] || error.message,
+          code: error.code,
+        },
+        { status: error.status || 409 },
+      );
+    }
+    if (
+      error instanceof AttendanceExpectationError
+      || error instanceof AttendanceScheduleDomainError
+    ) {
+      return attendanceResponse(
+        {
+          error: "El horario de esta jornada necesita revisión antes de fichar.",
           code: error.code,
         },
         { status: error.status || 409 },

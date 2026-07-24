@@ -3,10 +3,12 @@ import test from 'node:test';
 
 import {
   attendanceEventsFromShifts,
+  buildAttendanceExpectationPeriodProjection,
   buildAttendancePeriodProjection,
   buildLegacyAttendanceExceptionProjection,
   mergeAttendanceReportProjection,
 } from '../src/lib/attendance-reporting.js';
+import { hashEffectiveAttendanceEvents } from '../src/lib/attendance-corrections.js';
 import { loadWeeklyAttendanceShifts } from '../src/lib/attendance-report-query.js';
 
 function event({
@@ -67,6 +69,96 @@ test('weekly attendance projection summarizes canonical shifts per worker', () =
   });
   assert.equal(Object.hasOwn(projection[0], 'latitude'), false);
   assert.equal(Object.hasOwn(projection[0], 'evidence'), false);
+});
+
+test('weekly expectation projection includes absent and excused workers without inventing events', () => {
+  const workingRevision = {
+    id: 'revision-working',
+    kind: 'WORKING',
+    timezone: 'America/Argentina/Buenos_Aires',
+    expectedStartAt: new Date('2026-07-22T11:00:00.000Z'),
+    expectedEndAt: new Date('2026-07-22T20:00:00.000Z'),
+    graceEndsAt: new Date('2026-07-22T11:10:00.000Z'),
+    noShowAt: new Date('2026-07-22T11:30:00.000Z'),
+    pendingCloseAt: new Date('2026-07-22T21:00:00.000Z'),
+    absenceAt: new Date('2026-07-22T22:00:00.000Z'),
+    latePolicy: 'FULL_FROM_SCHEDULE',
+    expectedBreakMinutes: 60,
+    classifierVersion: 'attendance-day:v1',
+    policyHash: 'a'.repeat(64),
+  };
+  const projection = buildAttendanceExpectationPeriodProjection([
+    {
+      id: 'expectation-absent',
+      workerId: 'worker-absent',
+      workDate: new Date('2026-07-22T00:00:00.000Z'),
+      worker: { name: 'Ana Ausente', role: 'Operaria' },
+      revisions: [workingRevision],
+      shift: null,
+    },
+    {
+      id: 'expectation-excused',
+      workerId: 'worker-excused',
+      workDate: new Date('2026-07-22T00:00:00.000Z'),
+      worker: { name: 'Bruno Justificado', role: 'Operario' },
+      revisions: [{
+        ...workingRevision,
+        id: 'revision-excused',
+        kind: 'EXCUSED',
+        expectedStartAt: null,
+        expectedEndAt: null,
+        graceEndsAt: null,
+        noShowAt: null,
+        pendingCloseAt: null,
+        absenceAt: null,
+        latePolicy: null,
+        expectedBreakMinutes: null,
+      }],
+      shift: null,
+    },
+  ], { generatedAt: new Date('2026-07-23T12:00:00.000Z') });
+
+  assert.equal(projection.length, 2);
+  assert.equal(projection[0].workerId, 'worker-absent');
+  assert.equal(projection[0].daysAbsent, 1);
+  assert.equal(projection[0].present, false);
+  assert.equal(projection[0].checkin, null);
+  assert.equal(projection[1].workerId, 'worker-excused');
+  assert.equal(projection[1].daysExcused, 1);
+  assert.equal(projection[1].status, '1 justificada');
+});
+
+test('weekly physical projection uses the latest approved adjustment and its ledger cut', () => {
+  const effectiveEvents = [
+    { logicalId: 'manual-in', eventType: 'CHECK_IN', occurredAt: '2026-07-22T11:15:00.000Z' },
+    { logicalId: 'manual-out', eventType: 'CHECK_OUT', occurredAt: '2026-07-22T20:30:00.000Z' },
+  ];
+  const [projection] = buildAttendancePeriodProjection(attendanceEventsFromShifts([{
+    id: 'shift-adjusted',
+    workerId: 'worker-1',
+    workDate: new Date('2026-07-22T00:00:00.000Z'),
+    timezone: 'America/Argentina/Buenos_Aires',
+    worker: { name: 'Ana Torres', role: 'Jefa de obra' },
+    events: [
+      { id: 'original-in', workerId: 'worker-1', shiftId: 'shift-adjusted', eventType: 'CHECK_IN', verificationStatus: 'VERIFIED', occurredAt: new Date('2026-07-22T11:00:00.000Z'), sequence: 1 },
+      { id: 'original-out', workerId: 'worker-1', shiftId: 'shift-adjusted', eventType: 'CHECK_OUT', verificationStatus: 'VERIFIED', occurredAt: new Date('2026-07-22T20:00:00.000Z'), sequence: 2 },
+    ],
+    correctionRequests: [{
+      decision: { decision: 'APPROVED' },
+      adjustment: {
+        id: 'adjustment-1',
+        appliedShiftRevision: 2,
+        baseLedgerSequence: 2,
+        effectiveEvents,
+        effectiveHash: hashEffectiveAttendanceEvents(effectiveEvents),
+        createdAt: new Date('2026-07-22T21:00:00.000Z'),
+      },
+    }],
+  }]));
+
+  assert.equal(projection.checkin, '08:15');
+  assert.equal(projection.checkout, '17:30');
+  assert.equal(projection.present, true);
 });
 
 test('pending, expired, voided and legacy entries never become verified attendance', () => {

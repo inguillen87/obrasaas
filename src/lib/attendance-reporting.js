@@ -1,7 +1,11 @@
+import { hashEffectiveAttendanceEvents } from './attendance-corrections.js';
+import { evaluateAttendanceDay } from './attendance-schedules.js';
+
 const REPORTABLE_VERIFICATION_STATUSES = new Set([
   'VERIFIED',
   'REVIEW_REQUIRED',
   'NOT_REQUIRED',
+  'MANUAL_APPROVED',
 ]);
 
 const EVENT_TYPES = new Set([
@@ -114,7 +118,8 @@ function summarizeShift(events, timeZone) {
   const reviewRequired = ordered.some((event) => (
     event.verificationStatus === 'REVIEW_REQUIRED'
   ));
-  const verifiedCheckIn = checkIn?.verificationStatus === 'VERIFIED';
+  const verifiedCheckIn = checkIn?.verificationStatus === 'VERIFIED'
+    || checkIn?.verificationStatus === 'MANUAL_APPROVED';
 
   return {
     shiftId: representative.shiftId,
@@ -242,7 +247,7 @@ export function buildLegacyAttendanceExceptionProjection(collection) {
 
 export function attendanceEventsFromShifts(shifts) {
   return (Array.isArray(shifts) ? shifts : []).flatMap((shift) => (
-    (Array.isArray(shift?.events) ? shift.events : []).map((event) => ({
+    effectiveReportEvents(shift).map((event) => ({
       ...event,
       worker: shift.worker,
       shift: {
@@ -251,6 +256,148 @@ export function attendanceEventsFromShifts(shifts) {
       },
     }))
   ));
+}
+
+function latestApprovedAdjustment(shift) {
+  const request = [...(shift?.correctionRequests || [])]
+    .filter((candidate) => (
+      candidate.decision?.decision === 'APPROVED'
+      && Array.isArray(candidate.adjustment?.effectiveEvents)
+    ))
+    .sort((left, right) => (
+      Number(right.adjustment.appliedShiftRevision)
+      - Number(left.adjustment.appliedShiftRevision)
+      || new Date(right.adjustment.createdAt) - new Date(left.adjustment.createdAt)
+      || String(right.adjustment.id).localeCompare(String(left.adjustment.id))
+    ))[0];
+  if (!request) return null;
+  if (
+    hashEffectiveAttendanceEvents(request.adjustment.effectiveEvents)
+    !== request.adjustment.effectiveHash
+  ) {
+    throw new Error('An approved attendance adjustment failed its integrity check.');
+  }
+  return request.adjustment;
+}
+
+function effectiveReportEvents(shift) {
+  const adjustment = latestApprovedAdjustment(shift);
+  if (!adjustment) return Array.isArray(shift?.events) ? shift.events : [];
+  const manual = adjustment.effectiveEvents.map((event, index) => ({
+    id: event.logicalId,
+    workerId: shift.workerId,
+    shiftId: shift.id,
+    eventType: event.eventType,
+    verificationStatus: 'MANUAL_APPROVED',
+    occurredAt: new Date(event.occurredAt),
+    sequence: index + 1,
+  }));
+  const baseLedgerSequence = Number(adjustment.baseLedgerSequence) || 0;
+  const laterLedger = (shift.events || []).filter((event) => (
+    Number(event.sequence) > baseLedgerSequence
+  ));
+  return [...manual, ...laterLedger];
+}
+
+function expectationStatus(evaluation) {
+  if (evaluation.classification === 'ABSENT') return 'Ausente';
+  if (evaluation.classification === 'NO_SHOW') return 'Sin ingreso registrado';
+  if (evaluation.classification === 'EXCUSED') return 'Ausencia justificada';
+  if (evaluation.classification === 'LATE') return `Presente · ${evaluation.delayMinutes} min tarde`;
+  if (evaluation.classification === 'PENDING_CLOSE') return 'Presente · salida pendiente';
+  if (evaluation.classification === 'REVIEW_REQUIRED') return 'Presente · revisar ubicación';
+  if (evaluation.classification === 'PRESENT') return 'Presente';
+  if (evaluation.classification === 'EXPECTED') return 'Jornada esperada';
+  return 'Sin jornada programada';
+}
+
+function reportEventLabel(value, timeZone) {
+  return eventLabel(value, supportedTimeZone(timeZone, 'America/Argentina/Buenos_Aires'));
+}
+
+/**
+ * Produces weekly attendance from versioned expectations, so workers without
+ * a physical shift remain visible as absent/excused instead of disappearing.
+ */
+export function buildAttendanceExpectationPeriodProjection(expectations, {
+  generatedAt = new Date(),
+  timeZone = 'America/Argentina/Buenos_Aires',
+} = {}) {
+  const cutoff = safeDate(generatedAt) || new Date();
+  const byWorker = new Map();
+  for (const expectation of Array.isArray(expectations) ? expectations : []) {
+    const revision = expectation?.revisions?.[0];
+    if (!revision) continue;
+    const shift = expectation.shift || null;
+    const evaluation = evaluateAttendanceDay({
+      expectationRevision: revision,
+      events: shift ? effectiveReportEvents(shift) : [],
+      shift,
+      asOf: cutoff,
+      workDate: safeDate(expectation.workDate)?.toISOString().slice(0, 10),
+    });
+    const rows = byWorker.get(expectation.workerId) || [];
+    rows.push({ expectation, evaluation });
+    byWorker.set(expectation.workerId, rows);
+  }
+
+  return [...byWorker.entries()].map(([workerId, rows]) => {
+    const ordered = [...rows].sort((left, right) => (
+      safeDate(right.expectation.workDate) - safeDate(left.expectation.workDate)
+    ));
+    const latest = ordered[0];
+    const worker = latest.expectation.worker || {};
+    const daysPresent = ordered.filter(({ evaluation }) => (
+      ['PRESENT', 'REVIEW_REQUIRED'].includes(evaluation.presence)
+    )).length;
+    const daysAbsent = ordered.filter(({ evaluation }) => evaluation.presence === 'ABSENT').length;
+    const daysExcused = ordered.filter(({ evaluation }) => evaluation.presence === 'EXCUSED').length;
+    const lateDays = ordered.filter(({ evaluation }) => evaluation.punctuality === 'LATE').length;
+    const statusParts = [];
+    if (daysAbsent > 0) statusParts.push(`${daysAbsent} ausente${daysAbsent === 1 ? '' : 's'}`);
+    if (lateDays > 0) statusParts.push(`${lateDays} tardanza${lateDays === 1 ? '' : 's'}`);
+    if (daysExcused > 0) statusParts.push(`${daysExcused} justificad${daysExcused === 1 ? 'a' : 'as'}`);
+    const latestEvaluation = latest.evaluation;
+    const rowTimeZone = latestEvaluation.timezone || timeZone;
+    return {
+      workerId,
+      name: text(worker.name, 'Persona sin nombre'),
+      role: text(worker.role, 'Sin función'),
+      status: statusParts.length > 0 ? statusParts.join(' · ') : expectationStatus(latestEvaluation),
+      present: daysPresent > 0,
+      daysPresent,
+      daysRegistered: ordered.length,
+      daysAbsent,
+      daysExcused,
+      lateDays,
+      workDate: latestEvaluation.workDate,
+      workDateLabel: workDateLabel(latest.expectation.workDate),
+      checkin: reportEventLabel(latestEvaluation.actualCheckInAt, rowTimeZone),
+      breakStartedAt: null,
+      breakEndedAt: null,
+      checkout: reportEventLabel(latestEvaluation.actualCheckOutAt, rowTimeZone),
+      reviewRequired: ordered.some(({ evaluation }) => evaluation.reviewRequired),
+      scheduled: true,
+    };
+  }).sort((left, right) => left.name.localeCompare(right.name, 'es'));
+}
+
+export function mergeAttendanceExpectationProjection(canonical, expected) {
+  const byWorker = new Map(
+    (Array.isArray(canonical) ? canonical : [])
+      .filter((entry) => entry?.workerId)
+      .map((entry) => [entry.workerId, entry]),
+  );
+  for (const entry of Array.isArray(expected) ? expected : []) {
+    const unscheduled = byWorker.get(entry.workerId);
+    byWorker.set(entry.workerId, unscheduled
+      ? {
+          ...entry,
+          reviewRequired: entry.reviewRequired || unscheduled.reviewRequired,
+        }
+      : entry);
+  }
+  return [...byWorker.values()].sort((left, right) => left.name.localeCompare(right.name, 'es'));
 }
 
 export function mergeAttendanceReportProjection({
