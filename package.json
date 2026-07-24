@@ -21,6 +21,7 @@
     "verify:notification-outbox-migration": "node scripts/verify-notification-outbox-migration.mjs",
     "verify:notification-preferences-migration": "node scripts/verify-notification-preferences-migration.mjs",
     "verify:s6-migrations": "node scripts/verify-s6-migrations.mjs",
+    "verify:s10-migrations": "node scripts/verify-s10-migrations.mjs",
     "seed:attendance-migration-fixtures": "node scripts/seed-attendance-ledger-legacy-fixtures.mjs",
     "verify:inbox-postgres": "tsx scripts/verify-whatsapp-inbox-postgres.mjs",
     "db:generate": "prisma generate",
