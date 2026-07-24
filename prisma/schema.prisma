@@ -154,6 +154,11 @@ enum PurchaseOrderStatus {
   CANCELLED
 }
 
+enum GoodsReceiptStatus {
+  POSTED
+  VOIDED
+}
+
 enum IncidentSeverity {
   INFO
   LOW
@@ -374,6 +379,7 @@ model Organization {
   whatsappFlowSessions   WhatsAppFlowSession[]
   suppliers              Supplier[]
   purchaseOrders         PurchaseOrder[]
+  goodsReceipts          GoodsReceipt[]
   createdAt              DateTime               @default(now())
   updatedAt              DateTime               @updatedAt
 }
@@ -414,6 +420,7 @@ model PurchaseOrder {
   total          Decimal             @db.Decimal(14, 2)
   revision       Int                 @default(0)
   lines          PurchaseOrderLine[]
+  receipts       GoodsReceipt[]
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
 
@@ -424,21 +431,56 @@ model PurchaseOrder {
 }
 
 model PurchaseOrderLine {
-  id              String        @id @default(cuid())
+  id              String             @id @default(cuid())
   purchaseOrderId String
   projectId       String
   budgetLineId    String?
-  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
-  budgetLine      BudgetLine?   @relation(fields: [projectId, budgetLineId], references: [projectId, id], onDelete: Restrict)
-  description     String        @db.VarChar(220)
-  unit            String        @db.VarChar(32)
-  quantity        Decimal       @db.Decimal(14, 3)
-  unitPrice       Decimal       @db.Decimal(14, 2)
-  costCode        String?       @db.VarChar(96)
-  createdAt       DateTime      @default(now())
+  purchaseOrder   PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  budgetLine      BudgetLine?        @relation(fields: [projectId, budgetLineId], references: [projectId, id], onDelete: Restrict)
+  receiptLines    GoodsReceiptLine[]
+  description     String             @db.VarChar(220)
+  unit            String             @db.VarChar(32)
+  quantity        Decimal            @db.Decimal(14, 3)
+  unitPrice       Decimal            @db.Decimal(14, 2)
+  costCode        String?            @db.VarChar(96)
+  createdAt       DateTime           @default(now())
 
   @@index([purchaseOrderId])
   @@index([projectId, budgetLineId])
+}
+
+model GoodsReceipt {
+  id              String             @id @default(cuid())
+  projectId       String
+  purchaseOrderId String
+  operationKey    String             @db.VarChar(190)
+  status          GoodsReceiptStatus @default(POSTED)
+  notes           String?            @db.VarChar(500)
+  receivedAt      DateTime           @default(now())
+  revision        Int                @default(0)
+  project         Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  purchaseOrder   PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
+  lines           GoodsReceiptLine[]
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  organization    Organization?      @relation(fields: [organizationId], references: [id])
+  organizationId  String?
+
+  @@unique([projectId, id])
+  @@unique([projectId, operationKey])
+  @@index([projectId, purchaseOrderId, receivedAt])
+}
+
+model GoodsReceiptLine {
+  id                  String            @id @default(cuid())
+  goodsReceiptId      String
+  purchaseOrderLineId String
+  quantity            Decimal           @db.Decimal(14, 3)
+  goodsReceipt        GoodsReceipt      @relation(fields: [goodsReceiptId], references: [id], onDelete: Cascade)
+  purchaseOrderLine   PurchaseOrderLine @relation(fields: [purchaseOrderLineId], references: [id], onDelete: Restrict)
+
+  @@unique([goodsReceiptId, purchaseOrderLineId])
+  @@index([purchaseOrderLineId])
 }
 
 model CrmAccount {
@@ -576,6 +618,7 @@ model Project {
   createdAt                     DateTime                       @default(now())
   updatedAt                     DateTime                       @updatedAt
   purchaseOrders                PurchaseOrder[]
+  goodsReceipts                 GoodsReceipt[]
 
   @@unique([organizationId, slug])
   @@index([organizationId, status])
