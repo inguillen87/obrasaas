@@ -94,6 +94,14 @@ enum NotificationDeliveryStatus {
   READ
 }
 
+enum ExtraWorkStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
 enum IncidentSeverity {
   INFO
   LOW
@@ -424,6 +432,7 @@ model Project {
   dailyLogs                     DailyLog[]
   progressEvidence              ProgressEvidence[]
   notificationDeliveries        NotificationDelivery[]
+  extraWorkRequests             ExtraWorkRequest[]
   incidents                     Incident[]
   attendances                   AttendanceEntry[]
   attendanceShifts              AttendanceShift[]
@@ -623,6 +632,8 @@ model Worker {
   ownedProjectBlockers           ProjectBlocker[]
   dailyLogs                      DailyLog[]
   progressEvidence               ProgressEvidence[]
+  requestedExtraWork             ExtraWorkRequest[]             @relation("ExtraWorkRequester")
+  extraWorkRequests              ExtraWorkRequest[]
   whatsappFlowSessions           WhatsAppFlowSession[]
   createdAt                      DateTime                       @default(now())
   updatedAt                      DateTime                       @updatedAt
@@ -667,32 +678,33 @@ model OperationalProposal {
 }
 
 model Task {
-  id               String             @id @default(cuid())
-  projectId        String
-  project          Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  externalId       String?
-  code             String?            @db.VarChar(64)
-  title            String
-  description      String?
-  type             TaskType           @default(TASK)
-  status           TaskStatus         @default(BACKLOG)
-  progress         Int                @default(0)
-  startsAt         DateTime?
-  endsAt           DateTime?
-  assignee         String?
-  revision         Int                @default(0)
-  parentId         String?
-  parent           Task?              @relation("TaskHierarchy", fields: [projectId, parentId], references: [projectId, id], onDelete: Restrict)
-  children         Task[]             @relation("TaskHierarchy")
-  predecessors     TaskDependency[]   @relation("TaskDependencySuccessor")
-  successors       TaskDependency[]   @relation("TaskDependencyPredecessor")
-  assignments      TaskAssignment[]
-  blockers         ProjectBlocker[]
-  dailyLogs        DailyLog[]
-  progressEvidence ProgressEvidence[]
-  metadata         Json?
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
+  id                String             @id @default(cuid())
+  projectId         String
+  project           Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  externalId        String?
+  code              String?            @db.VarChar(64)
+  title             String
+  description       String?
+  type              TaskType           @default(TASK)
+  status            TaskStatus         @default(BACKLOG)
+  progress          Int                @default(0)
+  startsAt          DateTime?
+  endsAt            DateTime?
+  assignee          String?
+  revision          Int                @default(0)
+  parentId          String?
+  parent            Task?              @relation("TaskHierarchy", fields: [projectId, parentId], references: [projectId, id], onDelete: Restrict)
+  children          Task[]             @relation("TaskHierarchy")
+  predecessors      TaskDependency[]   @relation("TaskDependencySuccessor")
+  successors        TaskDependency[]   @relation("TaskDependencyPredecessor")
+  assignments       TaskAssignment[]
+  blockers          ProjectBlocker[]
+  dailyLogs         DailyLog[]
+  progressEvidence  ProgressEvidence[]
+  extraWorkRequests ExtraWorkRequest[]
+  metadata          Json?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
 
   @@unique([projectId, externalId])
   @@unique([projectId, id])
@@ -801,6 +813,35 @@ model ProjectBlocker {
 
   @@unique([projectId, id])
   @@index([projectId, status, severity, dueAt])
+  @@index([projectId, taskId, status])
+}
+
+model ExtraWorkRequest {
+  id                  String          @id @default(cuid())
+  projectId           String
+  project             Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  taskId              String?
+  task                Task?           @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict)
+  requestedByWorkerId String?
+  requestedByWorker   Worker?         @relation("ExtraWorkRequester", fields: [projectId, requestedByWorkerId], references: [projectId, id], onDelete: Restrict)
+  title               String          @db.VarChar(220)
+  reason              String          @db.Text
+  description         String?         @db.Text
+  impactDays          Int?
+  impactCost          Decimal?        @db.Decimal(12, 2)
+  currency            String?         @db.Char(3)
+  status              ExtraWorkStatus @default(DRAFT)
+  revision            Int             @default(0)
+  submittedAt         DateTime?
+  decidedAt           DateTime?
+  decisionNote        String?         @db.Text
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  worker              Worker?         @relation(fields: [workerId], references: [id])
+  workerId            String?
+
+  @@unique([projectId, id])
+  @@index([projectId, status, createdAt])
   @@index([projectId, taskId, status])
 }
 

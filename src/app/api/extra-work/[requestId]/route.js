@@ -1,0 +1,6 @@
+import { AccessError, accessErrorResponse, getPlatformAccess, requireTenantPermission } from '@/lib/access';
+import { getPrisma } from '@/lib/prisma';
+import { RequestBodyError, readJsonRequest, requestBodyErrorResponse } from '@/lib/request-body';
+import { decideExtraWork, extraWorkErrorResponse } from '@/lib/extra-work';
+function known(error) { if (error instanceof AccessError) return accessErrorResponse(error); if (error instanceof RequestBodyError) return requestBodyErrorResponse(error); return extraWorkErrorResponse(error); }
+export async function PATCH(request, { params }) { try { const access = await getPlatformAccess(); requireTenantPermission(access, 'org:execution:manage', { subscriptionMode: 'write' }); const body = await readJsonRequest(request, { maxBytes: 16 * 1024 }); const { requestId } = await params; return Response.json(await decideExtraWork(getPrisma(), { scope: { organizationId: access.organization.id, projectId: access.project.id }, actorId: access.databaseUserId, id: requestId, expectedRevision: body.expectedRevision, status: body.status, decisionNote: body.decisionNote })); } catch (error) { return known(error) || Response.json({ error: 'No se pudo decidir trabajo extra.', code: 'EXTRA_WORK_DECISION_FAILED' }, { status: 500 }); } }
