@@ -4,7 +4,7 @@
 
 **Rama de trabajo:** `codex/platform-ux-foundation`
 
-**Estado:** backlog base aprobado por evidencia del repositorio; pendiente de cruzar con la especificación de la clienta y socia.
+**Estado:** especificación funcional v1.0 de la clienta integrada y contrastada contra el repositorio.
 
 ## Propósito
 
@@ -15,7 +15,7 @@ Este documento convierte el estado real de ObraSaaS en un plan ejecutable. Disti
 - **Pendiente de validación externa:** el contrato está implementado, pero depende de un proveedor o ambiente real.
 - **No implementado:** es una capacidad de roadmap y no se debe presentar como disponible.
 
-La especificación mencionada por la clienta **no fue recibida todavía en este hilo**. Cuando llegue, cada requisito se incorporará a la matriz de trazabilidad al final de este documento. Hasta entonces, este roadmap es una base técnica y competitiva, no una interpretación inventada de ese material.
+La especificación recibida el 23 de julio de 2026 fue revisada página por página y normalizada en [CLIENT_SPEC_TRACEABILITY.md](./CLIENT_SPEC_TRACEABILITY.md). Ese documento conserva el requisito original, el estado comprobado, la decisión de producto y el sprint objetivo. Este roadmap define la secuencia ejecutable; no interpreta como obligación literal formulaciones riesgosas como “100% WhatsApp”, certificación automática desde una foto o pago automático.
 
 ## Posicionamiento recomendado
 
@@ -34,7 +34,7 @@ Política de automatización objetivo:
 
 ## Línea base comprobada
 
-ObraSaaS ya es una base SaaS real; no es sólo una maqueta. Tiene tenancy B2B, roles operativos, alcance por obra, auditoría, proyectos, Gantt, WhatsApp persistente, Flows gobernados, aprobaciones humanas, evidencia privada, asistencia y reportes PDF. La suite contractual tiene 722 pruebas unitarias y de integración liviana.
+ObraSaaS ya es una base SaaS real; no es sólo una maqueta. Tiene tenancy B2B, roles operativos, alcance por obra, auditoría, proyectos, Gantt, WhatsApp persistente, Flows gobernados, aprobaciones humanas, evidencia privada, asistencia y reportes PDF. La suite contractual tiene 733 pruebas unitarias y de integración liviana en esta iteración.
 
 Eso todavía no demuestra una operación Enterprise con clientes reales. Los principales límites actuales son la falta de validación externa con un WABA real, Clerk sobre instancia development, journeys E2E operativos insuficientes, estado centralizado en un snapshot JSON y dominios profesionales incompletos en costos, documentos, calidad, contratos, stock y colaboración externa.
 
@@ -60,9 +60,9 @@ Eso todavía no demuestra una operación Enterprise con clientes reales. Los pri
 | Portal de cliente/subcontratista | No implementado | No existe una experiencia externa gobernada | Agregar enlaces/portal con permisos mínimos y evidencia aprobada |
 | Offline/PWA | No implementado | Manifest y estado online; sin service worker ni cola local | Diseñar sincronización y conflictos después de estabilizar APIs canónicas |
 | API pública e integraciones | No implementado | Integraciones internas con proveedores; sin API pública versionada | API, scopes, rate limit, webhooks tenant y conectores antes de prometer ERP/BI |
-| Billing | Parcial | Backend Stripe y webhook; sin UI coherente ni pruebas específicas | Decidir activación o deshabilitar checkout; alinear precios, términos y consentimiento |
+| Billing | Parcial y cerrado por defecto | Backend Stripe/webhook; checkout exige flag exacto, entrada estricta y versiones vigentes, pero no hay intención/consentimiento durable ni control de concurrencia | Mantener deshabilitado hasta cerrar intención idempotente, UI, evidencia contractual, reconciliación y E2E |
 | Observabilidad y operaciones | No suficiente | Analytics web anonimizado; sin APM, SLO, alertas ni DR probado | Es gate de producción, no mejora opcional |
-| CI y E2E | En implementación | 722 tests; E2E público separado y workflow CI agregados en esta rama | Requiere commit, ejecución remota verde y expansión a journeys autenticados |
+| CI y E2E | En implementación | 733 tests; E2E público separado y workflow CI agregados en esta rama | Requiere ejecución remota verde y expansión a journeys autenticados |
 | Internacionalización | No implementado | UI y formatos mayormente `es-AR` | Agregar español regional, portugués, zona horaria y multimoneda sin mezclar fiscalidad |
 
 Fuentes internas principales: [autenticación y tenancy](./AUTH_AND_TENANCY.md), [contrato transitorio de tareas](./OPERATIONAL_TASKS.md) y [estado verificable de Meta](./WHATSAPP_META.md).
@@ -73,18 +73,19 @@ Estos gates pueden avanzar en paralelo, pero ninguno se reemplaza con una captur
 
 | Gate | Evidencia de salida | Estado al 23/07/2026 |
 | --- | --- | --- |
-| Especificación de la clienta trazada | Requisito, decisión, sprint y test de aceptación por cada ítem | Pendiente de recepción |
-| Calidad automatizada | CI remota verde con instalación exacta, lint, 722+ tests, auditoría, build y smoke público | Implementado y verde localmente; ejecución GitHub pendiente |
+| Especificación de la clienta trazada | Requisito, decisión, secuencia y criterio de aceptación por cada ítem | 91 IDs integrados; validación con la socia y casos de prueba detallados pendientes por vertical |
+| Calidad automatizada | CI remota verde con instalación exacta, lint, 733+ tests, auditoría, build y smoke público | Implementado y verde localmente; ejecución GitHub pendiente |
 | Journey operativo E2E | Admin crea obra/trabajador/tarea, aprueba propuesta y descarga reporte; roles restringidos fallan correctamente | Pendiente |
 | WhatsApp real | Embedded Signup, inbound/outbound, estados, ambos Flows, reintento, expiración y fallback en teléfono real | Pendiente externo |
 | Identidad productiva | Dominio propio, Clerk Production, cutover y rollback ensayados, alta/invitación/baja verificadas | Pendiente externo |
-| Billing coherente | Checkout explícitamente deshabilitado o UI, consentimiento, términos, precios y webhooks reconciliados | Pendiente |
+| Billing coherente | Checkout explícitamente deshabilitado o intención idempotente, UI, consentimiento, términos, precios y webhooks reconciliados | Cerrado por defecto; versiones exactas requeridas; intención durable, concurrencia, UI y webhook pendientes |
 | Salud operacional | Errores, backlog, latencia y proveedores con señal, correlación, redacción y alerta accionable | Parcial; primer control de cron en esta rama |
-| Migraciones gobernadas | Expand/backfill/contract, Postgres efímero, `migrate deploy`, smoke y rollback documentados | Pendiente |
+| Migraciones gobernadas | Postgres efímero, `migrate deploy`, estado, diff sin drift, smoke y rollback documentados | Gate CI y drift UUID corregidos localmente; ejecución remota, smoke portable y runbook pendientes |
 | Backup, restauración y borrado | RPO/RTO, restore drill y ledger de exportación/borrado sobre todos los proveedores | Pendiente |
 | Gobierno de plataforma | Dos custodios, MFA/step-up y procedimiento break-glass para administración global | Pendiente |
+| Seguridad, privacidad y legal por dominio | Threat model y revisión focal antes de datos laborales, finanzas, contratos, documentos sensibles, externos e IA | Pendiente; gates definidos en este roadmap |
 
-La revisión formal y exhaustiva de seguridad, el pentest y la validación legal especializada son gates posteriores específicos. Este diagnóstico no los sustituye.
+Los dominios sensibles requieren revisión focal antes de implementarse y una revisión independiente antes del release que los exponga. El pentest y la validación legal especializada siguen siendo gates propios; este diagnóstico no los sustituye.
 
 ## Principios de secuenciación
 
@@ -98,282 +99,109 @@ La revisión formal y exhaustiva de seguridad, el pentest y la validación legal
 
 ## Roadmap ejecutable
 
-Las duraciones propuestas son de diez días hábiles por sprint. Es un programa multitrimestre de catorce sprints, no una promesa comercial cerrada. Se reestima después de incorporar la especificación y observar el primer piloto. Los gates externos de Meta, dominio y proveedores pueden exceder un sprint y se siguen como carril paralelo.
+La cadencia candidata es de diez días hábiles por sprint. Sin capacidad de equipo, reglas contractuales cerradas ni métricas del piloto, esto no es una fecha comercial. Cada sprint de abajo tiene un solo vertical de salida; si no entra, se divide antes de empezar y no se oculta alcance como “carry-over”. La estimación de 4-6 semanas del PDF no contempla privacidad, migraciones, concurrencia, operación ni validaciones externas y no es defendible como compromiso.
 
-### Sprint 0 — Verdad de producción y calidad continua
+### Sprint 0 — Ingeniería interna de readiness
 
-**Objetivo:** impedir releases engañosas o silenciosamente rotas y producir evidencia de readiness.
+**Objetivo:** impedir releases engañosas o silenciosamente rotas con controles que sí dependen del equipo.
 
-Entregables:
+- CI: Node 24, instalación exacta, lint, 733+ tests, auditoría, build, E2E público y artefactos de diagnóstico;
+- Postgres 17 efímero: `validate`, 23 migraciones desde cero, `status` y diff sin drift;
+- checkout cerrado por defecto y request estricto; no habilitarlo sin intención durable, idempotencia, consentimiento verificable y reconciliación;
+- E2E autenticado de los journeys críticos y denegaciones por tenant/obra/rol;
+- observabilidad mínima, correlation ID y runbooks de migración/incidente/rollback.
 
-- workflow CI con Node 24, instalación exacta, lint, tests, auditoría de dependencias, build y E2E público;
-- Playwright público independiente de secretos Clerk y browser portable;
-- contrato de salud del recuperador de WhatsApp que diferencie solicitud exitosa de trabajo saludable;
-- copy comercial alineado a capacidades activas, demo, roadmap y dependencias externas;
-- decisión explícita sobre checkout Stripe hasta contar con UI y términos coherentes;
-- runbook de ambientes, migraciones, WABA real, incidentes, restauración y borrado;
-- observabilidad mínima: request/correlation ID, errores server, proveedor, backlog y alertas sin PII;
-- journeys E2E Admin/Jefe/Finance/Auditor, incluyendo móvil de 390 px.
-
-Criterio de salida:
-
-- CI remota verde en la rama y obligatoria para integrar;
-- una falla terminal/bloqueo/GC de webhook genera señal `workHealthy=false` y fallo visible del monitor;
-- no hay claims públicos de multiempresa, ERP, BIM, billing o WhatsApp real que excedan la evidencia;
-- cada gate externo tiene responsable, fecha, ambiente y registro sanitizado;
-- no se declara producción mientras Clerk, WABA, billing, DR o E2E core sigan pendientes.
+**Salida:** checks remotos verdes y requeridos, migración idempotente, fallas de proveedor visibles y ningún camino comercial habilitado por accidente.
 
 Estado de esta iteración:
 
-- implementados en la rama: CI, E2E público desacoplado de Clerk, artefactos Playwright en fallos, señal de salud del cron, copy comercial honesto y este roadmap;
-- verificados localmente: 722/722 tests, lint, auditoría sin vulnerabilidades, build de producción y 2/2 smoke tests públicos;
-- pendiente para cerrar Sprint 0: primera ejecución remota, E2E autenticado/core, billing, observabilidad integral, migraciones gobernadas, DR y gates externos.
-
-### Sprint 1 — WBS y tareas como núcleo canónico
-
-**Objetivo:** retirar gradualmente la autoridad de escritura de `ProjectSnapshot.state.tasks`.
-
-Entregables:
-
-- `Task`, `TaskDependency`, WBS/código, hitos, baseline, fechas reales, prioridad, restricciones y responsable por ID;
-- API lossless con CAS, validación de ciclos, filtros por obra y permisos por rol;
-- adaptador transitorio de lectura/escritura para consumidores del snapshot;
-- Gantt escribiendo la API canónica;
-- migración, backfill idempotente, verificador de paridad y rollback.
-
-Criterio de salida:
-
-- todos los caminos productivos escriben la misma transacción canónica;
-- cero drift en el verificador sobre datos de prueba representativos;
-- una edición concurrente devuelve conflicto controlado y no pierde cambios;
-- WhatsApp, aprobaciones, portfolio y reporte conservan identidad y resultado.
-
-### Sprint 2 — Bitácora diaria e incidencias canónicas
-
-**Objetivo:** reemplazar notas dispersas por dos workflows operativos completos y alertables.
-
-Entregables:
-
-- `DailyLog`, `Incident`, evidencia y estados canónicos;
-- propietario, severidad, vencimiento, causa, acción correctiva básica y cierre;
-- relación con proyecto, WBS/tarea, autor, ubicación y evidencia;
-- outbox mínimo para incidentes críticos con deduplicación, reintento y escalamiento;
-- captura web/WhatsApp como propuesta revisable, todavía sin agente autónomo ni form builder.
-
-Criterio de salida:
-
-- un reporte de campo llega a revisión y registro final sin perder su evidencia;
-- un crítico genera una notificación durable aunque ninguna pestaña esté abierta;
-- permisos negativos, duplicados, reintentos y cruces de tenant están probados;
-- dashboard y reporte consumen la fuente relacional, no una copia divergente.
-
-### Sprint 3 — IA gobernada para captura de campo
-
-**Objetivo:** estructurar texto, audio y foto sin ocultar incertidumbre ni conceder capacidad de mutación autónoma.
-
-Entregables:
-
-- esquemas de salida por intención, fuente original, campos inciertos y confianza visible;
-- borradores de diario, incidencia y avance bajo feature flag;
-- cola de aprobación, corrección y rechazo con versión de configuración/modelo auditada;
-- evaluaciones de fuga entre tenants, permiso, alucinación, duplicado y prompt injection;
-- handoff humano y fallback determinista cuando la extracción no es confiable.
-
-Criterio de salida:
-
-- ninguna propuesta modifica cronograma, seguridad, costo o contrato sin autorización;
-- el revisor puede contrastar cada campo contra su evidencia;
-- las correcciones quedan registradas y alimentan métricas de calidad;
-- los umbrales se fijan con datos del piloto, no con afirmaciones comerciales.
-
-### Sprint 4 — Costos y control económico conectado
-
-**Objetivo:** dar al rol Finance una superficie real sin permitirle editar Gantt o RRHH.
-
-Entregables:
-
-- `CostCode`, presupuesto base/versiones, comprometido, real, forecast y moneda;
-- UI y API exclusivas para Finance; Auditor de sólo lectura;
-- importación/exportación CSV validada y trazabilidad hacia WBS, proveedor y aprobación;
-- orden de cambio básica con impacto antes de aprobar;
-- decisión de catálogo Stripe, Price IDs, idempotencia/reconciliación y auditoría de billing.
-
-Criterio de salida:
-
-- presupuesto + cambios aprobados = presupuesto vigente con fórmula reproducible;
-- comprometido, real y forecast se reconcilian por WBS y período;
-- Finance puede operar costos y no puede mutar planificación;
-- cambios contractuales o sobre umbral requieren validación reforzada.
-
-Quedan fuera de este sprint: contabilidad general, nómina, impuestos locales, multimoneda transaccional y un ERP fiscal propio.
-
-### Sprint 5 — Stock como ledger
-
-**Objetivo:** reemplazar contadores mutables por movimientos auditables.
-
-Entregables:
-
-- movimientos de recepción, consumo, transferencia y ajuste;
-- depósito, proveedor, referencia, costo y entregas parciales;
-- mínimos y alertas deduplicadas;
-- conciliación con capturas WhatsApp y evidencia.
-
-Criterio de salida:
-
-- el stock actual se deriva del ledger y cada ajuste tiene actor y motivo;
-- dos recepciones repetidas no duplican inventario;
-- una transferencia conserva origen, destino y balance;
-- reporte y alertas usan la misma fuente canónica.
-
-Procurement avanzado, órdenes de compra automáticas y maquinaria quedan fuera.
-
-### Sprint 6 — Asistencia, turnos y seguridad de campo
-
-**Objetivo:** completar el control de presencia sin presentarlo como nómina o HR integral.
-
-Entregables:
-
-- check-in/check-out, turno, horas, excepción y aprobación;
-- reglas de geocerca, duplicados, fichaje tardío y corrección auditada;
-- permisos separados para datos médicos y de seguridad;
-- conciliación con WhatsApp/webview y reportes.
-
-Criterio de salida:
-
-- horas trabajadas se reproducen desde eventos y excepciones aprobadas;
-- no se puede fichar en otra obra o reutilizar una sesión vencida;
-- datos médicos siguen siendo invisibles para roles no autorizados;
-- la UI diferencia control de obra de liquidación de sueldos.
-
-### Sprint 7 — Documentos, planos y versiones
-
-**Objetivo:** construir la base documental previa a RFI, submittal, QA y offline.
-
-Entregables:
-
-- documento, carpeta, versión, revisión, aprobación, vigencia y permisos;
-- preview y vínculo con obra, WBS/tarea, incidencia y evidencia;
-- plano versionado y anotación/issue básico;
-- reporte semanal persistido como artefacto privado, inmutable y reproducible;
-- búsqueda permission-aware y retención documentada.
-
-Criterio de salida:
-
-- nunca se confunde una revisión obsoleta con la vigente;
-- cada issue referencia versión, ubicación, responsable y evidencia;
-- el PDF descargado posteriormente reproduce el SHA registrado;
-- móvil y escritorio pasan pruebas de permisos, accesibilidad y tamaño.
-
-### Sprint 8 — Workflow contractual o QA acotado
-
-**Objetivo:** validar una vertical profesional sobre la base documental, sin intentar construir todos los módulos juntos.
-
-Entregables:
-
-- primitivas compartidas de numeración, revisión, responsable, SLA, evidencia y cierre;
-- **una** vertical prioritaria definida por la especificación/piloto: RFI, submittal o inspección/no conformidad;
-- comentarios, historial, exportación y dashboard de vencimientos;
-- borradores de IA basados sólo en documentos autorizados, con citas y aprobación.
-
-Criterio de salida:
-
-- cada cambio de estado conserva actor, versión y motivo;
-- una respuesta sólo usa documentos visibles para ese rol;
-- la vertical elegida tiene E2E completo, no tres demos parciales;
-- los otros workflows permanecen explícitamente en backlog.
-
-### Sprint 9 — Notificaciones y portal externo acotado
-
-**Objetivo:** dar participación externa sin abrir el tenant ni crear un portal genérico prematuro.
-
-Entregables:
-
-- centro de notificaciones durable, preferencias, lectura, deduplicación y escalamiento;
-- un rol externo y un workflow ya estable, idealmente el elegido en Sprint 8;
-- enlaces seguros con scope mínimo, expiración, revocación y auditoría;
-- resúmenes WhatsApp aprobados y exportaciones completas con hash.
-
-Criterio de salida:
-
-- un invitado no puede enumerar otra obra, documento o versión;
-- vencimientos y escalaciones no dependen de una pestaña abierta;
-- ningún resumen externo incluye datos no aprobados o restringidos;
-- revocar acceso corta sesiones y enlaces activos.
-
-### Sprint 10 — Offline de campo acotado
-
-**Objetivo:** operar con conectividad intermitente sobre workflows ya canónicos.
-
-Entregables:
-
-- PWA con service worker y cola offline para incidentes, asistencia y evidencia;
-- almacenamiento local acorde al riesgo, expiración y limpieza remota/operativa;
-- estrategia explícita de conflicto, reintento, adjuntos e idempotencia;
-- telemetría de sincronización sin contenido sensible.
-
-Criterio de salida:
-
-- captura y sincronización se prueban sin red y con red degradada;
-- conflictos nunca pisan silenciosamente una versión más nueva;
-- una pérdida de dispositivo tiene mitigación y política de retención;
-- el alcance offline excluido queda visible en la UI.
-
-### Sprint 11 — Localización y configuración regional
-
-**Objetivo:** retirar constantes `es-AR` sin fingir que existe fiscalidad pan-LATAM completa.
-
-Entregables:
-
-- infraestructura de locale, zona horaria, unidades y moneda por tenant/proyecto;
-- español regional y portugués en journeys priorizados;
-- catálogos traducibles y formatos server/client consistentes;
-- pruebas de nombres, acentos, DST, separadores y monedas.
-
-Criterio de salida:
-
-- idioma, moneda y fecha no dependen de constantes globales;
-- un reporte reproduce la zona horaria y moneda de la obra;
-- no se mezclan importes de monedas distintas sin conversión explícita;
-- requisitos fiscales nacionales permanecen en integraciones especializadas.
-
-### Sprint 12 — API pública e integración prioritaria
-
-**Objetivo:** integrar una vertical real sin prometer reemplazar ERP o BIM.
-
-Entregables:
-
-- API v1 inicialmente acotada, contrato OpenAPI, scopes, rate limits e idempotencia;
-- webhooks salientes firmados, reintentos, dead letter y replay;
-- **una** integración elegida por demanda del piloto: ERP/contable, BI o proveedor documental/BIM;
-- importación/exportación con mapping, validación y reconciliación.
-
-Criterio de salida:
-
-- pruebas de compatibilidad protegen el contrato versionado;
-- credenciales son rotables y de alcance mínimo;
-- duplicados y eventos fuera de orden no corrompen estado;
-- la integración tiene owner, SLO, runbook y estado visible.
-
-### Sprint 13 — Certificación de confiabilidad y gobierno Enterprise
-
-**Objetivo:** demostrar a escala los controles construidos desde Sprint 0; no agregarlos recién al final.
-
-Entregables:
-
-- pruebas de carga, límites, SLO/SLI y tableros por proveedor;
-- restore drill, PITR, RPO/RTO e incidente simulado con tiempos reales;
-- gobierno de Platform Admin, MFA/step-up, custodios y break-glass verificados;
-- defensa adicional de tenant, auditoría append-only y rotación de claves;
-- SSO/SCIM sólo si existe demanda contractual;
-- typecheck progresivo, división de clientes monolíticos y budgets de rendimiento;
-- WCAG 2.2 AA automatizada, pruebas visuales y revisión formal de seguridad independiente.
-
-Criterio de salida:
-
-- objetivos de disponibilidad y backlog se miden antes de publicar SLA;
-- cero hallazgos críticos/altos abiertos en el release candidato;
-- journeys críticos pasan por rol, tenant, móvil, accesibilidad y carga objetivo;
-- limitaciones, capacidad máxima y procedimiento de incidentes son contractualmente claros.
+- implementados localmente: CI base, E2E público sin secretos Clerk, artefactos Playwright, health de recuperación WhatsApp, gate de checkout, gate de migraciones, corrección de drift UUID y trazabilidad del PDF;
+- verificados: 733/733 tests, lint, Prisma válido, auditoría sin vulnerabilidades, build Next 16 y 2/2 smoke públicos;
+- pendientes internos de S0: primera ejecución remota, E2E autenticado/core, observabilidad integral y runbooks completos.
+
+### Release Gate R0 — Dependencias externas, sin duración ficticia
+
+R0 avanza en paralelo y no se declara cerrado por pasar un sprint:
+
+| Gate | Evidencia necesaria |
+| --- | --- |
+| Identidad | dominio, Clerk Production, invitación/baja/cutover/rollback ensayados |
+| WhatsApp | WABA real, App Review, inbound/outbound/estados/Flows/reintentos en teléfono real |
+| Datos | storage privado productivo, backup, restore, retención y borrado verificados |
+| Billing | `BillingCheckoutIntent` durable, lock/CAS, idempotencia Stripe, UI/versión aceptada y webhook reconciliado |
+| Gobierno | owners, required checks, secretos rotables, incident response y aprobaciones legales aplicables |
+
+No se ofrece producción comercial mientras un gate obligatorio para el alcance contratado siga abierto.
+
+### Gates focalizados antes de dominios sensibles
+
+La revisión legal, de privacidad y de seguridad no espera hasta S23:
+
+| Antes de | Gate focalizado |
+| --- | --- |
+| S1-S2 | base laboral, proporcionalidad de foto/GPS, consentimiento, retención y excepciones |
+| S7-S8 | segregación financiera, política de comprobantes, límites contables/fiscales y fraude |
+| S9-S10 | contrato, unidades, retenciones, cadena de aprobación y significado jurídico del certificado |
+| S13-S14 | clasificación documental, legajos sensibles, malware, retención y proveedor/nivel de firma |
+| S16 | acuerdo de tratamiento y publicación de datos a actores externos |
+| S17 | base legal/dataset, evaluación de riesgo y criterio de abstención de IA visual |
+| cada release | revisión de amenazas del cambio y pruebas negativas; revisión independiente según riesgo |
+
+S23 consolida y certifica controles ya revisados; no es la primera vez que se buscan riesgos.
+
+### Ola 1 — Núcleo de campo canónico
+
+| Sprint | Vertical de salida | Incluye | Criterio de salida |
+| --- | --- | --- | --- |
+| S1 | Ledger de asistencia | `CHECK_IN`, `BREAK_START`, `BREAK_END`, `CHECK_OUT`; hora servidor, GPS/accuracy, origen, evidencia y idempotency key | jornada reconstruible; sin pausas solapadas/doble cierre; replay y cruce de tenant fallan |
+| S2 | Turnos y excepciones | calendario, tolerancia, tardanza, no-show, cierre pendiente, corrección aprobada y evento de alerta | presente/tarde/ausente deriva del schedule; horas y excepciones son reproducibles |
+| S3 | WBS, tarea y baseline | WBS/código, dependencias, hitos, baseline/revisión, forecast/real, CAS, backfill y paridad | Gantt y consumidores escriben una fuente; baseline no se reescribe; cero drift |
+| S4 | Equipos y blockers | cuadrillas/responsables por ID, asignación versionada, bloqueo/causa/owner/recuperación | asignaciones no dependen de nombres libres; conflicto concurrente no pierde cambios |
+| S5 | Bitácora, evidencia e incidencia | `DailyLog`, `ProgressEvidence`, `Incident`, media+GPS+task bajo un ID, owner/SLA/cierre | web/WhatsApp conservan evidencia y llegan al registro final sin reingreso ni fuga |
+| S6 | Trabajo extra y replanificación | `ExtraWork`, start/finish, vicio oculto, impacto preliminar y propuesta de escenario | texto/audio/foto requieren la misma aprobación; ningún extra reescribe baseline/costo |
+
+### Ola 2 — Control económico y abastecimiento
+
+| Sprint | Vertical de salida | Incluye | Criterio de salida |
+| --- | --- | --- | --- |
+| S7 | Presupuesto y costos canónicos | `BudgetVersion`, `CostCode`, `Commitment`, `Actual`, `Forecast`, `ApprovedChange`, WBS y moneda | presupuesto vigente = base + cambios aprobados; committed/actual/forecast reconcilian |
+| S8 | Caja chica | fondo/custodio, ledger, comprobante, categoría, duplicado, umbral y doble aprobación | saldo deriva de movimientos; replay no descuenta dos veces; sin autoaprobación |
+| S9 | Medición de avance | unidad/cantidad base/ejecutada, método, período, evidencia, corrección y aprobación | un porcentaje aislado no es medición; cada línea tiene base y trazabilidad |
+| S10 | Certificación y reportes | certificado versionado, retenciones/ajustes, estado de pago separado, PDF/hash e informe semanal persistido | corregir crea versión; certificado no paga; re-descarga reproduce artefacto y SHA |
+| S11 | Proveedores y compras | vendor, requisición/BOM por WBS, cotización, selección y OC versionada/aprobada | solicitar/aprobar son roles distintos; ninguna sugerencia IA compra automáticamente |
+| S12 | Recepción y stock ledger | entregas parciales, remito/evidencia, aceptado/rechazado, consumo/transferencia/ajuste y readiness | duplicado no suma; faltante queda abierto; conformidad sólo alimenta revisión financiera |
+
+Quedan fuera: nómina, impuestos, contabilidad general, cuentas por pagar automáticas y ERP fiscal propio.
+
+### Ola 3 — Documentos y colaboración externa
+
+| Sprint | Vertical de salida | Incluye | Criterio de salida |
+| --- | --- | --- | --- |
+| S13 | Documentos y planos | `Document`/`Version`, disciplina, revisión, vigencia, PDF/DWG seguro, vínculos y búsqueda | sólo una revisión vigente; obsoletas inmutables; permisos y archivos privados probados |
+| S14 | Legajos y firma integrada | vault DNI/obra social/ART/certificados, expiración/retención y acta con proveedor aprobado | rol común no enumera legajos; hash/identidad/intención/versiones verificables; sin firma casera |
+| S15 | Outbox y notificaciones | evento, destinatario, preferencia, canal, entrega/lectura, retry, dead letter y escalamiento | alerta durable, deduplicada y observable aunque no haya pestaña abierta |
+| S16 | Portal de Cliente | `ExternalPrincipal`/`ProjectAccessGrant`, publicación aprobada, enlaces expirables y revocación | no consume/infiere `TenantMembership`; sólo ve artefactos publicados de su obra |
+
+### Ola 4 — Inteligencia y operación avanzada
+
+| Sprint | Vertical de salida | Incluye | Criterio de salida |
+| --- | --- | --- | --- |
+| S17 | Piloto de visión IA | dataset consentido, ground truth, adapter, rango/confianza/abstención, review y evals | una foto nunca certifica/paga; fuera de distribución deriva a humano; go/no-go medido |
+| S18 | Una vertical QA/QC | inspección **o** no conformidad end-to-end, evidencia, owner, SLA, cierre y exportación | un workflow completo con E2E; restantes QA/RFI/submittal quedan visibles en backlog |
+| S19 | Cambio contractual acotado | extra aprobado → solicitud de cambio → impacto plazo/costo → decisión reforzada | presupuesto/baseline cambian sólo tras aprobación; RFI/submittal/transmittal siguen backlog si no se priorizan |
+| S20 | PWA offline | service worker, cola para asistencia/bitácora/evidencia, conflictos, adjuntos y limpieza | sin red/degradada pasa; conflicto no pisa versión; pérdida de dispositivo mitigada |
+
+Una app nativa sólo se evalúa si S20 demuestra gaps concretos de background sync, cámara, GPS, push, MDM o stores.
+
+### Ola 5 — LATAM, integraciones y Enterprise
+
+| Sprint | Vertical de salida | Incluye | Criterio de salida |
+| --- | --- | --- | --- |
+| S21 | Configuración regional | locale, zona horaria, unidades, moneda, español regional y portugués priorizado | reportes reproducen configuración de obra; monedas no se mezclan implícitamente |
+| S22 | API e integración piloto | API v1/OpenAPI, scopes/rate limit/idempotencia, webhooks y una integración ERP/BI/BIM | contrato versionado, credenciales rotables, replay/out-of-order seguros y runbook |
+| S23 | Confiabilidad Enterprise | carga/capacidad, SLI/SLO, restore/PITR, Platform Admin, break-glass, WCAG y revisión independiente | cero críticos/altos abiertos; journeys por rol/tenant/móvil/carga; límites contractuales claros |
+
+SSO/SCIM, más verticales QA/RFI/submittal, transmittals y conectores adicionales se priorizan por contrato después del primer vertical probado; no se simulan como demos incompletas.
 
 ## Definition of Done transversal
 
@@ -410,11 +238,28 @@ Objetivos internos iniciales, todavía no SLA comercial: cero fuga entre tenants
 
 ## Matriz de trazabilidad de la especificación
 
-Al recibir el material de la clienta, no se copia directamente al backlog. Se normaliza y se decide con evidencia:
+La matriz completa está en [CLIENT_SPEC_TRACEABILITY.md](./CLIENT_SPEC_TRACEABILITY.md). Cubre objetivo, roles, ocho módulos, alertas, requisitos técnicos, definiciones, fases, próximos pasos y capacidades profesionales omitidas por el PDF. Cada fila conserva ID estable, estado verificable, gap/criterio y secuencia.
 
-| ID | Requisito exacto | Persona/problema | Evidencia actual | Gap | Decisión | Sprint | Test de aceptación | Estado |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| CLI-001 | Pendiente de recepción | — | — | — | Analizar | — | — | Pendiente |
+Resumen de cobertura:
+
+| Familia | Alcance | Sprints principales |
+| --- | --- | --- |
+| `SPEC-OBJ-*` | objetivo, geolocalización y arquitectura de canal | R0, S1-S23 |
+| `SPEC-ROL-*` | Cliente, Equipo Líder y trabajadores de campo | S1-S20 |
+| `SPEC-PER-*` | asistencia, jornada, legajos y acta | S1-S2, S14 |
+| `SPEC-PLN-*` | Gantt, baseline, equipos, blockers y certificación | S3-S6, S9-S10 |
+| `SPEC-AVA-*` | evidencia, avance, reportes e IA visual | S5-S6, S9-S10, S17 |
+| `SPEC-MAT-*` | materiales, proveedores, compras, recepción y stock | S4, S11-S12 |
+| `SPEC-DOC-*` | planos, versiones, alertas y consulta | S13, S15 |
+| `SPEC-EXT-*` | imprevistos, vicios ocultos y trabajo extra | S5-S7, S19 |
+| `SPEC-CASH-*` | caja chica, comprobantes y saldo | S7-S8 |
+| `SPEC-REP-*` | dashboard, reportes y certificaciones | S7-S10, S15-S16 |
+| `SPEC-ALT-*` | seis alertas pedidas | S2, S6, S8, S10-S16 |
+| `SPEC-TEC-*` | WhatsApp, GPS, storage, IA, DB, PDF y push | S0, R0, S1-S23 |
+| `SPEC-DEF-*` | definiciones operativas del documento | S3-S12, S19 |
+| `SPEC-FAS-*` | cuatro fases y estimaciones originales | Reestimadas en S0/R0/S1-S23 |
+| `SPEC-NEXT-*` | decisiones de arquitectura, stack y piloto | S0, R0, S1-S22 |
+| `PRO-*` | gaps world-class no incluidos en la especificación | S0, R0, S7, S18-S23 |
 
 Reglas de decisión:
 

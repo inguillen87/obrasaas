@@ -19,6 +19,53 @@ env:
   NEXT_TELEMETRY_DISABLED: '1'
 
 jobs:
+  migrations:
+    name: Prisma migrations on PostgreSQL 17
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+        env:
+          POSTGRES_USER: obrasaas_ci
+          POSTGRES_PASSWORD: obrasaas_ci
+          POSTGRES_DB: obrasaas_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U obrasaas_ci -d obrasaas_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      DATABASE_URL: postgresql://obrasaas_ci:obrasaas_ci@127.0.0.1:5432/obrasaas_ci?schema=public
+      DATABASE_URL_UNPOOLED: postgresql://obrasaas_ci:obrasaas_ci@127.0.0.1:5432/obrasaas_ci?schema=public
+      DIRECT_URL: postgresql://obrasaas_ci:obrasaas_ci@127.0.0.1:5432/obrasaas_ci?schema=public
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Validate Prisma schema
+        run: npx prisma validate
+
+      - name: Rebuild schema from migration history
+        run: npm run db:migrate:deploy
+
+      - name: Verify migration history status
+        run: npx prisma migrate status
+
+      - name: Detect schema drift
+        run: npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
+
   quality:
     name: Tests, lint, build and dependency audit
     runs-on: ubuntu-latest

@@ -20,6 +20,7 @@ export default function TermsPage() {
       eyebrow="Acuerdo de servicio"
       title="Términos de uso"
       lead="Estas condiciones regulan el acceso y uso de ObraSaaS por empresas, profesionales, equipos de obra y organismos habilitados."
+      updatedAt="23 de julio de 2026 · versión 2026-07-23"
     >
       <LegalCallout>
         Al crear una cuenta o usar la plataforma, la organización confirma que su representante tiene autoridad
@@ -36,8 +37,16 @@ export default function TermsPage() {
       <LegalSection title="2. Prueba y planes">
         <p>
           La prueba inicial dura 14 días, salvo oferta distinta. Luego, el servicio puede continuar bajo un plan Pro
-          o Enterprise acordado. Los medios de cobro pueden incluir transferencia, Mercado Pago o Stripe. La
-          automatización de mensualidades puede habilitarse más adelante y se informará antes de cualquier débito.
+          o Enterprise acordado. Los medios de cobro pueden incluir transferencia, Mercado Pago o Stripe. La creación
+          online de suscripciones recurrentes con Stripe está deshabilitada por defecto y no se habilita por el solo
+          hecho de configurar credenciales del proveedor.
+        </p>
+        <p>
+          Antes de habilitar un Checkout recurrente, ObraSaaS debe mostrar el plan, el ciclo de facturación, la moneda,
+          el precio aplicable y la versión vigente de estas condiciones, y pedir una aceptación expresa antes de
+          redirigir a Stripe. Si las condiciones o el precio cambian, esa aceptación deja de ser válida y debe
+          solicitarse nuevamente. Mientras ese circuito no esté implementado y validado, la contratación de planes
+          pagos se gestiona de forma comercial asistida y no mediante Checkout automático.
         </p>
       </LegalSection>
 

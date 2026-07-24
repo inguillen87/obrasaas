@@ -17,7 +17,7 @@ Plataforma multi-tenant para convertir reportes de campo enviados por WhatsApp e
 
 Las superficies BIM y visión perimetral están identificadas como **Demo Lab** hasta conectar proveedores reales. La aplicación no presenta esas demos como integraciones productivas.
 
-El diagnóstico verificable, los gates de producción y el plan multitrimestre están en [docs/PRODUCT_ROADMAP.md](docs/PRODUCT_ROADMAP.md). La especificación de la clienta se incorporará allí mediante requisitos y pruebas trazables cuando sea recibida.
+El diagnóstico verificable, los gates de producción y el plan multitrimestre están en [docs/PRODUCT_ROADMAP.md](docs/PRODUCT_ROADMAP.md). La especificación funcional v1.0 de la clienta ya fue contrastada contra el producto, requisito por requisito, en [docs/CLIENT_SPEC_TRACEABILITY.md](docs/CLIENT_SPEC_TRACEABILITY.md).
 
 ## Planes
 

@@ -346,7 +346,7 @@ model WhatsAppFlowTemplate {
 }
 
 model WhatsAppFlowEndpoint {
-  id           String                        @id @default(uuid()) @db.Uuid
+  id           String                        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   connectionId String                        @unique
   connection   WhatsAppConnection            @relation(fields: [connectionId], references: [id], onDelete: Cascade)
   enabled      Boolean                       @default(true)
@@ -357,7 +357,7 @@ model WhatsAppFlowEndpoint {
 }
 
 model WhatsAppFlowEndpointKey {
-  id                  String                        @id @default(uuid()) @db.Uuid
+  id                  String                        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   endpointId          String                        @db.Uuid
   endpoint            WhatsAppFlowEndpoint          @relation(fields: [endpointId], references: [id], onDelete: Cascade)
   version             Int
@@ -382,7 +382,7 @@ model WhatsAppFlowEndpointKey {
 }
 
 model WhatsAppFlowEndpointRequest {
-  id                 String                            @id @default(uuid()) @db.Uuid
+  id                 String                            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   endpointId         String                            @db.Uuid
   endpoint           WhatsAppFlowEndpoint              @relation(fields: [endpointId], references: [id], onDelete: Cascade)
   flowSessionId      String?                           @db.Uuid
