@@ -11,6 +11,7 @@ Alcance: fundación técnica de S14, sin acceso ni cambios sobre bases externas.
 - Lecturas GET tenant-scoped para documentos y actas, con permisos `org:execution:read`.
 - Respuestas mínimas: no exponen claves de almacenamiento, hashes, documentos ni payloads de firma.
 - Verificador de migración D1 (`npm run verify:d1-migrations`) que debe ejecutarse contra una base autorizada antes del rollout.
+- Generador y validador de claves privadas server-owned (`src/lib/private-storage.js`) para impedir traversal y cruces de organización/obra/trabajador.
 - Tests unitarios de normalización y lifecycle; lint y build pasan localmente.
 
 ## Deliberadamente pendiente
@@ -28,4 +29,3 @@ Esto no se considera S14 comercialmente terminado todavía:
 ## Gate de salida
 
 S14 sólo puede marcarse como listo cuando exista evidencia de migración aplicada, almacenamiento privado probado, firma verificable, auditoría completa y pruebas de fuga cross-tenant en CI. Hasta entonces, las rutas nuevas son únicamente de lectura y no habilitan carga de legajos ni firma.
-
