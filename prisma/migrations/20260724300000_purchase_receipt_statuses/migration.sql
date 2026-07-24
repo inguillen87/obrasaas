@@ -1,0 +1,2 @@
+ALTER TYPE "PurchaseOrderStatus" ADD VALUE 'PARTIALLY_RECEIVED';
+ALTER TYPE "PurchaseOrderStatus" ADD VALUE 'RECEIVED';
