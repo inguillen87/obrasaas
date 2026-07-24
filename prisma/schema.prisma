@@ -365,8 +365,29 @@ model Organization {
   notificationDeliveries NotificationDelivery[]
   crmAccount             CrmAccount?
   whatsappFlowSessions   WhatsAppFlowSession[]
+  suppliers              Supplier[]
   createdAt              DateTime               @default(now())
   updatedAt              DateTime               @updatedAt
+}
+
+model Supplier {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  legalName      String       @db.VarChar(220)
+  taxId          String?      @db.VarChar(64)
+  email          String?      @db.VarChar(190)
+  phone          String?      @db.VarChar(64)
+  currency       String       @default("ARS") @db.Char(3)
+  paymentTerms   String?      @db.VarChar(160)
+  active         Boolean      @default(true)
+  revision       Int          @default(0)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, taxId])
+  @@index([organizationId, active, legalName])
 }
 
 model CrmAccount {
