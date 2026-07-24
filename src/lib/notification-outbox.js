@@ -10,6 +10,10 @@ function channel(value) { const result = text(value, 'channel', 20).toUpperCase(
 
 export async function enqueueNotification(prisma, input) {
   const organizationId = text(input.organizationId, 'organizationId', 190); const recipientId = text(input.recipientId, 'recipientId', 190); const eventKey = text(input.eventKey, 'eventKey', 190); const selectedChannel = channel(input.channel); const title = text(input.title, 'title', 220); const body = text(input.body, 'body', 10000);
+  if (selectedChannel !== 'IN_APP') {
+    const preference = await prisma.notificationPreference.findUnique({ where: { userId_channel: { userId: recipientId, channel: selectedChannel } }, select: { enabled: true } });
+    if (preference?.enabled !== true) return null;
+  }
   const row = await prisma.notificationDelivery.upsert({ where: { recipientId_channel_eventKey: { recipientId, channel: selectedChannel, eventKey } }, create: { organizationId, projectId: input.projectId || null, recipientId, eventKey, channel: selectedChannel, title, body, payload: input.payload || null }, update: {} });
   return row;
 }
