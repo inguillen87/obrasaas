@@ -78,7 +78,7 @@ R0 no es un sprint de duración prometida: sus dependencias externas avanzan con
 | SPEC-OBJ-01 | Orden, claridad, transparencia, efectividad y control del personal | Parcial | Dashboard, auditoría, asistencia y evidencia existen, pero varios dominios siguen en snapshot o ausentes | Definir KPIs verificables de adopción, control, tiempo y error; no prometer resultados económicos sin baseline | S0-S23 |
 | SPEC-OBJ-02 | Geolocalización y tiempo real | Reformular | La app usa lecturas GPS puntuales y declara que no hace seguimiento continuo (`dashboard-client.js:2224-2230`) | Hora servidor, accuracy, geocerca, consentimiento y excepción; nunca presentarlo como tracking o identidad infalible | S1-S2 |
 | SPEC-OBJ-03 | Operar 100% vía WhatsApp | Reformular | WhatsApp e Inbox existen; dashboard, aprobaciones y reportes requieren web autenticada | WhatsApp captura/notifica; web/PWA gobierna y ofrece fallback. Una caída de Meta no bloquea administración ni lectura | R0, S15-S16, S20 |
-| SPEC-OBJ-04 | WhatsApp chatbot con integraciones web/app | Parcial | Arquitectura híbrida ya implementada por contrato, pero falta WABA real y offline | Validar inbound/outbound/Flows en teléfono real y completar PWA sobre APIs canónicas | R0, S20 |
+| SPEC-OBJ-04 | WhatsApp chatbot con integraciones web/app | Parcial | Arquitectura híbrida implementada por contrato; Meta ya asignó un número de prueba, verificó un destinatario propio y aceptó una solicitud outbound de plantilla con token temporal, pero no existe circuito bidireccional sobre un tenant real ni offline | Rotar el token temporal, instalar credenciales permanentes en Vercel, validar webhook firmado/inbound/estados/Flows en teléfono y tenant reales y completar PWA sobre APIs canónicas | R0, S20 |
 
 ## Roles
 
@@ -198,11 +198,11 @@ Todas las alertas salen de un outbox durable. Toasts, polling o un envío direct
 
 | ID | Requisito original | Estado | Evidencia y decisión | Gap / criterio de aceptación | Secuencia |
 | --- | --- | --- | --- | --- | --- |
-| SPEC-TEC-01 | WhatsApp Business API | Externo pendiente | Meta Cloud API, Embedded Signup, webhooks, Inbox y Flows tienen contrato y pruebas; falta WABA real/App Review (`WHATSAPP_META.md:140-154`) | Inbound/outbound/estados/ambos Flows/retry/expiración/fallback en teléfono y tenant reales | R0 |
+| SPEC-TEC-01 | WhatsApp Business API | Externo pendiente | Meta Cloud API directa es el camino primario; la app/caso de uso están presentes y Meta asignó test number, verificó un celular propio y aceptó una solicitud outbound de plantilla con token temporal. Sin exponer IDs, teléfonos ni token, esta evidencia no prueba entrega, inbound, estados, webhook firmado, Flows ni E2E (`WHATSAPP_META.md`) | Revocar/rotar el token temporal, instalar credenciales permanentes en Vercel y probar inbound/outbound correlacionado, estados, ambos Flows, retry, expiración y fallback en teléfono y tenant reales; Twilio no sustituye los gates nativos de Meta | R0 |
 | SPEC-TEC-02 | Geolocalización GPS | Parcial | Coordenadas, accuracy y geocerca se validan (`geo.js:25-57`) | Aplicar a jornada/trabajo extra con consentimiento, excepción y copy anti-spoof | S1-S2, S6 |
 | SPEC-TEC-03 | Nube para fotos/videos | Externo pendiente | Vercel Blob privado/Cloudinary autenticado y pruebas contractuales existen; ambiente, retención y DR no están demostrados | Configuración real, acceso tenant-scoped, límites/tipos, borrado, restore y degradación probados | S0, R0, S23 |
 | SPEC-TEC-04 | IA de imágenes | Reformular | No hay visión productiva | Adapter tras benchmark, dataset/ground truth, confianza/abstención y revisión humana | S17 |
-| SPEC-TEC-05 | Base relacional | Parcial | Neon/Prisma tiene 23 modelos; tareas, stock, costos y documentos siguen parcial o totalmente fuera de un dominio canónico | Migración/backfill/verificador y APIs canónicas por vertical | S3-S14 |
+| SPEC-TEC-05 | Base relacional | Parcial | Prisma tiene 66 modelos al corte; tareas, stock, costos y documentos siguen parcial o totalmente fuera de un dominio canónico | Migración/backfill/verificador y APIs canónicas por vertical | S3-S14 |
 | SPEC-TEC-06 | Generación PDF | Parcial | PDF semanal real; faltan certificado e historial documental | Artefactos privados, persistidos, versionados y reproducibles | S10, S13 |
 | SPEC-TEC-07 | Notificaciones push | Reformular | No hay push/outbox; manifest no equivale a PWA | Priorizar centro in-app + WhatsApp/email gobernados; push web sólo si el piloto demuestra necesidad | S15, S20 |
 
@@ -234,7 +234,7 @@ Estas filas conservan las estimaciones recibidas como hipótesis. No son comprom
 | --- | --- | --- | --- | --- | --- |
 | SPEC-NEXT-01 | Revisar y ajustar el documento juntos | Parcial | Revisión técnica completada; reglas de negocio siguen pendientes con la socia | Resolver preguntas de cliente, turnos, caja, certificación, firma, compras, IA y offline; registrar decisiones | Antes de cada vertical |
 | SPEC-NEXT-02 | Elegir bot puro, web+WhatsApp o híbrida | Implementado | Decisión: híbrida; WhatsApp captura/notifica, web gobierna y PWA cubre conectividad intermitente | Mantener una sola fuente de verdad y fallback por canal | S0, S15-S16, S20 |
-| SPEC-NEXT-03 | Elegir Twilio/Vision/Firebase/Node | Parcial | Meta Cloud API directa y stack Next.js/Node/Postgres/Prisma/Clerk/Vercel definidos; visión pendiente de benchmark | No migrar ni sumar proveedor sin problema/evidencia; adapter de visión tras piloto | R0, S17, S22 |
+| SPEC-NEXT-03 | Elegir Twilio/Vision/Firebase/Node | Parcial | Meta Cloud API directa es la decisión primaria y la app/caso de uso ya están presentes; Twilio queda como fallback no habilitado. Stack Next.js/Node/Postgres/Prisma/Clerk/Vercel definido; visión pendiente de benchmark | Completar piloto Meta; implementar adaptador Twilio sólo si una contingencia concreta lo justifica; adapter de visión tras piloto | R0, S17, S22 |
 | SPEC-NEXT-04 | Diseñar base con entidades principales | Parcial | Núcleo SaaS y operativo existe; faltan dominios canónicos definidos en esta matriz | Modelo/migración/API/autoridad por sprint, con backfill, verificador y rollback | S1-S19 |
 | SPEC-NEXT-05 | Empezar MVP con una obra piloto | Externo pendiente | No existe evidencia de piloto real aprobado | Obra, responsables, consentimiento, datos iniciales, ambiente, soporte, métricas y criterio de salida definidos | R0 y carril piloto |
 
@@ -253,6 +253,7 @@ Estas filas conservan las estimaciones recibidas como hipótesis. No son comprom
 | PRO-09 | Accesibilidad, rendimiento y type safety | Parcial | Hay prácticas aisladas, sin gates suficientes | Gates progresivos desde S0 y certificación en S23 | S0, S23 |
 | PRO-10 | Localización, zona horaria, unidades y moneda | Parcial | Mayormente `es-AR`; organization guarda país/zona | Locale/unidades/moneda por tenant/obra; journeys regionales elegidos | S21 |
 | PRO-11 | Presupuesto, comprometido, real, forecast y cambios | Ausente | Sólo total/ejecutado en snapshot | Ledger/códigos/versiones canónicos antes de certificación, compras y change control | S7, S9-S12, S19 |
+| PRO-12 | Identidad laboral y destino de cobro protegidos | Parcial | Módulo local valida CUIL/CBU/CVU/alias, exige consentimiento versionado, cifra con AAD/keyring y serializa enmascarado; el esquema Prisma y las migraciones locales ya modelan identidad y destinos de cobro, pero no están desplegados ni verificados en Neon y no hay API, Flow/UI ni aprobación productiva | Desplegar y verificar la migración, exponer API tenant-scoped con permisos específicos, revisión/doble control, auditoría sin secretos, opt-in y comprobante privado; nunca ejecutar pagos desde IA/WhatsApp | Piloto H3-H4, S14, R0 |
 
 ## Decisiones pendientes de la socia/cliente
 
@@ -267,6 +268,7 @@ Estas filas conservan las estimaciones recibidas como hipótesis. No son comprom
 9. ¿Qué tipologías tienen ground truth suficiente para evaluar visión?
 10. ¿Qué alertas puede recibir el Cliente sin revisión previa?
 11. ¿Qué conectividad tiene la obra piloto y qué operaciones deben funcionar offline?
+12. ¿Qué dato de identidad laboral es obligatorio, quién verifica CUIL/titularidad y qué doble control rige cambios de CBU/CVU/alias y envío de comprobantes?
 
 ## Criterio de trazabilidad y cierre
 

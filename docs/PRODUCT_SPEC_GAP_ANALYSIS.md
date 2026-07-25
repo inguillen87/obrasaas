@@ -14,19 +14,20 @@ Se contrastó el documento `Documento_Especificaciones_App_Obra.pdf` (versión 1
 | Materiales, proveedores, órdenes y recepción | Implementado en gran parte | S9: proveedores, órdenes, recepciones parciales, remitos privados y estado automático |
 | Facturas y control de tres vías | Implementado en gran parte | S10: facturas, vencimientos, evidencia privada, match pedido-recepción-factura |
 | Dashboard operativo y financiero | Implementado | Dashboard de compras, cuentas a pagar y caja chica |
-| WhatsApp como canal operativo | Implementado en gran parte | Embedded Signup, salud verificable, inbox, plantillas y Flows dinámicos |
+| WhatsApp como canal operativo | Implementado por contrato; E2E externo pendiente | Meta Cloud API directa como vía primaria; test number asignado, celular propio verificado y solicitud outbound de plantilla aceptada con token temporal. Esto no prueba entrega ni bidireccionalidad; faltan credenciales permanentes en Vercel, webhook firmado, inbound, estados, Flows y tenant real |
+| Identidad laboral y destino de cobro | Fundación local no desplegada | CUIL/CBU/CVU/alias validados, consentimiento versionado, cifrado AAD/keyring, fingerprint HMAC y DTO enmascarado; esquema Prisma y migraciones locales presentes, todavía no desplegados ni verificados en Neon; faltan API, Flow/UI y revisión |
 | Auditoría, correlación y observabilidad | Parcial | Helper central y `x-request-id`; falta persistir correlación en todas las mutaciones heredadas |
 
 ## Gaps críticos del documento
 
 ### 1. Acta de inicio y documentación laboral
 
-El PDF pide acta de inicio firmada, DNI, obra social, ART y certificaciones. El producto tiene identidad y permisos, pero falta un expediente laboral versionado por obra con vencimientos, visibilidad y evidencia privada.
+El PDF pide acta de inicio firmada, DNI, obra social, ART y certificaciones. Ya existen el esquema/migración de expediente y acta, versiones, hashes, lifecycle, lecturas tenant-scoped y claves de storage server-owned. Faltan upload productivo, antivirus, retención/borrado, descargas auditadas y proveedor de firma.
 
 **Sprint D1 - expediente y acta**
 
-- Crear expediente documental por trabajador y obra, con tipo, versión, fecha de emisión, vencimiento, estado y hash.
-- Agregar acta de inicio con participantes, firma/aceptación, versión inmutable y auditoría.
+- Completar el expediente documental ya modelado con upload privado idempotente, antivirus, revisión y descargas auditadas.
+- Integrar el acta ya modelada con un proveedor de firma/aceptación aprobado; no fabricar una firma propia.
 - Alertar documentos próximos a vencer sin exponer datos sensibles al cliente.
 - Definir retención y borrado lógico antes de aceptar documentos productivos.
 
@@ -98,3 +99,5 @@ La especificación requiere inicio/fin con evidencia y su impacto en el plan. Fa
 ## Decisión de arquitectura recomendada
 
 WhatsApp debe permanecer como canal de captura, alertas y acciones breves. La web es la superficie de revisión, planificación, documentos, certificaciones y reportes. La base relacional y los ledgers son la fuente de verdad; Cloudinary/almacenamiento privado sólo guarda evidencia, nunca estados de negocio.
+
+La vía primaria es Meta WhatsApp Cloud API directa porque valida webhooks firmados, estados, media, Flows, Data Endpoint e Embedded Signup. Twilio Sandbox queda como fallback opcional y requeriría un adaptador propio; no sustituye el piloto Meta. Meta ya asignó el número de prueba, verificó un destinatario propio y aceptó una solicitud outbound de plantilla con un token temporal; no se documentan sus valores. Esa aceptación no prueba entrega ni un canal operativo bidireccional. El token temporal no es credencial de release y debe revocarse o rotarse: antes del piloto faltan credenciales permanentes en Vercel, webhook firmado, inbound, estados, Flows, App Review y WABA/número del tenant real.

@@ -8,6 +8,10 @@ La vía principal es Meta WhatsApp Cloud API con el número de prueba que ofrece
 
 Twilio Sandbox queda como fallback. El endpoint legado actual responde `410` y reactivarlo exigiría un adaptador aislado de entrada/salida, media, firmas, estados e idempotencia. Aun así, Twilio no probaría los Flows/Data Endpoints nativos de Meta, por lo que no reemplaza el piloto Meta.
 
+Evidencia externa disponible al corte: en la cuenta Meta de ObraSaaS están presentes la app dedicada y el caso de uso WhatsApp; Meta asignó un número de prueba, se verificó un celular propio como destinatario, se generó un token temporal y Meta aceptó una solicitud outbound de plantilla. No se copian en este repositorio identificadores, teléfonos ni el valor del token.
+
+Este resultado acredita sólo aceptación outbound en el entorno de prueba. No acredita entrega, inbound, eventos de estado, webhook firmado, Flows, aislamiento sobre un tenant real ni mensajería bidireccional end-to-end. También faltan credenciales permanentes de release gestionadas como secretos en Vercel. El token temporal debe revocarse o rotarse y sustituirse; no es una credencial apta para Preview o Production.
+
 ## Qué puede probarse hoy
 
 - Dashboard interno: tenant, obra, cuadrilla, tareas, Gantt, Inbox, asistencia y aprobaciones.
@@ -16,7 +20,7 @@ Twilio Sandbox queda como fallback. El endpoint legado actual responde `410` y r
 - Recepción de texto, audio, imagen, video y documentos; media privada con SHA-256.
 - Propuestas de avance por texto/audio que requieren aprobación y no reescriben el Gantt directamente.
 
-No debe presentarse todavía como completo: el simulador web no adjunta una imagen real; la foto de WhatsApp no se convierte aún en `ProgressEvidence` asociado a una tarea; no existe autoalta ni perfil de cobro; no existe visión productiva ni forecast derivado de evidencia.
+No debe presentarse todavía como completo: el simulador web no adjunta una imagen real; la foto de WhatsApp no se convierte aún en `ProgressEvidence` asociado a una tarea; no existe autoalta ni perfil de cobro operativo; no existe visión productiva ni forecast derivado de evidencia. Ya existen un módulo criptográfico local para normalizar identidad/CUIL y destinos CBU/CVU/alias, cifrarlos con AAD tenant/subject-scoped y emitir DTO enmascarado, además del esquema Prisma y migraciones locales para identidad y destinos de cobro. Esa persistencia todavía no fue desplegada ni verificada en Neon y faltan API tenant-scoped, Flow y pantalla productiva.
 
 ## Hitos de prueba
 
@@ -26,17 +30,22 @@ Datos server-owned: empresa, obra, geocerca, horario, tareas y Carlitos precarga
 
 ### H1 - Meta test number: asistencia real básica
 
-Gate de salida:
+Evidencia parcial ya obtenida:
 
-- app Meta y test number disponibles;
-- uno a cinco celulares de prueba verificados;
-- webhook HTTPS de Vercel, verify token y app secret configurados;
-- tenant/obra/trabajador cargados en Neon y teléfono del trabajador normalizado;
-- storage privado y migraciones verificadas;
-- inbound, outbound, estados, retry y aislamiento cross-tenant probados;
+- app Meta y caso de uso presentes en la cuenta revisada;
+- número de prueba asignado y un celular propio verificado como destinatario;
+- token temporal generado y solicitud outbound de plantilla aceptada por Meta, sin que eso pruebe entrega.
+
+Gate de salida aún pendiente:
+
+- token temporal revocado o rotado y credenciales permanentes configuradas como secretos en Vercel;
+- webhook HTTPS configurado y validado con una solicitud inbound firmada por Meta y eventos de estado reales;
+- tenant, obra y trabajador reales cargados en Neon, con el teléfono normalizado y aislamiento cross-tenant probado;
+- storage privado y migraciones verificadas en el ambiente del piloto;
+- inbound, outbound correlacionado, estados, retry y ambos Flows probados end-to-end;
 - ingreso, almuerzo, regreso y salida visibles en dashboard.
 
-Estimación condicional: 2 a 4 días hábiles desde que credenciales y ambiente estén disponibles. Esta prueba no incluye foto de asistencia, autoalta, cobro ni IA visual.
+Estimación condicional: 2 a 4 días hábiles desde que las credenciales permanentes, Vercel y el tenant real del piloto estén disponibles. Esta prueba no incluye foto de asistencia, autoalta, cobro ni IA visual.
 
 ### H2 - Foto + comentario + GPS como evidencia canónica
 
@@ -61,7 +70,11 @@ Estimación: un sprint después de H2.
 
 ### H4 - Datos de cobro y comprobante
 
-Se modelan persona, asignación a obra, cuenta sueldo/CBU, CUIL, titularidad, versión, verificación y cambios con doble control. Los valores completos quedan cifrados y fuera de logs, snapshots, Inbox común y prompts de IA. ObraSaaS registra/exporta la instrucción inicialmente; no mueve dinero automáticamente.
+Base local ya disponible: validación estricta de CUIL, CBU, CVU y alias; consentimiento de privacidad versionado; cifrado AES-256-GCM con AAD; keyring rotatable; fingerprint HMAC por tenant; serialización enmascarada; y esquema Prisma con migraciones locales para identidad laboral y destinos de cobro. Esta base no equivale a un perfil operativo: la migración no está desplegada ni verificada en Neon y todavía faltan API tenant-scoped, permisos específicos, revisión/doble control, Flow/UI y auditoría de cambios.
+
+Antes de producción también hay que retirar la autoridad del teléfono legado en texto plano de `Worker` mediante dual-read, backfill verificado y una fase contract que lo vuelva nullable. Durante una rotación de la clave HMAC, la API deberá buscar las huellas de ambas claves y serializar la deduplicación con una transacción/lock estable; el índice por `fingerprintKeyId` sólo evita carreras dentro de una misma clave.
+
+El objetivo del hito es completar esos componentes y mantener los valores completos fuera de logs, snapshots, Inbox común y prompts de IA. ObraSaaS registra/exporta la instrucción inicialmente; no mueve dinero automáticamente.
 
 El comprobante se entrega mediante plantilla y enlace privado de corta duración. `DELIVERED` no equivale a firma ni conformidad.
 
@@ -91,4 +104,3 @@ Ventana honesta: 6 a 10 semanas de trabajo focalizado desde H1, siempre que Meta
 8. Dashboard e Inbox reflejan cada estado y su auditoría.
 9. El pago se registra por circuito autorizado y Carlitos recibe un enlace privado al comprobante si dio opt-in.
 10. El cliente sólo ve artefactos publicados y nunca datos laborales/bancarios del operario.
-

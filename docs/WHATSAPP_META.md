@@ -4,6 +4,8 @@
 
 ObraSaaS usa una app de Meta dedicada. La aplicación no comparte credenciales, WABA, números, claves de cifrado ni sesiones de Flow con otras plataformas.
 
+La integración primaria es **Meta WhatsApp Cloud API directa**. Twilio Sandbox queda únicamente como fallback de contingencia para pruebas acotadas: el endpoint legado está retirado y reactivarlo requeriría un adaptador aislado; además, no validaría WhatsApp Flows, Data Endpoints ni Embedded Signup y por eso no reemplaza el piloto Meta.
+
 - `NEXT_PUBLIC_META_APP_ID` identifica la app de Meta usada por ObraSaaS.
 - `NEXT_PUBLIC_META_EMBEDDED_SIGNUP_CONFIG_ID` identifica su configuración de Embedded Signup.
 - Cada tenant conecta su propio WABA, número y token mediante Embedded Signup.
@@ -11,7 +13,9 @@ ObraSaaS usa una app de Meta dedicada. La aplicación no comparte credenciales, 
 - El webhook general está implementado en `/api/webhooks/whatsapp`.
 - Cada conexión recibe un Data Endpoint opaco independiente en `/api/webhooks/whatsapp/flows/{opaqueEndpointId}`.
 
-Los identificadores existentes en pruebas o documentación no demuestran por sí solos que la app, la suscripción o el callback estén activos en Meta. Esa verificación debe realizarse contra la app y el WABA reales del ambiente que se va a liberar.
+En la cuenta de Meta revisada para ObraSaaS ya están presentes la app dedicada y el caso de uso de WhatsApp. Meta también asignó un número de prueba, se verificó un celular propio como destinatario, se generó un token temporal y Meta aceptó una solicitud outbound de plantilla. Esta documentación omite deliberadamente App IDs, WABA IDs, Phone Number IDs, teléfonos y el valor del token.
+
+La evidencia anterior prueba únicamente que Meta aceptó ese envío outbound en su entorno de prueba; no prueba entrega, inbound, eventos de estado, webhook firmado, Flows, aislamiento sobre un tenant real ni un circuito bidireccional end-to-end. Todavía faltan credenciales permanentes gestionadas como secretos en Vercel y una conexión tenant-scoped de liberación. El token temporal no es una credencial de release: debe revocarse o rotarse y sustituirse antes de Preview o Production, sin copiarlo al repositorio, logs ni documentación.
 
 ## Activación y salud verificables
 
@@ -123,6 +127,7 @@ No deben agregarse nuevas suscripciones hasta contar con consumidor, persistenci
 
 Implementado:
 
+- decisión de proveedor: Cloud API directa como camino primario y Twilio como fallback no habilitado;
 - Embedded Signup tenant-scoped y preservación de metadata de Flows al actualizar una conexión;
 - readiness de seis estados con revalidación remota, evidencia bidireccional y endpoint de salud tenant-scoped;
 - blueprints `Incidencia de obra` y `Fichaje y seguridad` en Flow JSON `7.3`;
@@ -135,17 +140,17 @@ Implementado:
 - fallback a texto cuando el Flow publicado no está disponible;
 - ausencia deliberada de publicación automática.
 
-Esta lista describe el código y sus pruebas de contrato. No afirma que un WABA real ya haya completado el circuito ni que las variables sensibles estén instaladas en Preview o Production.
+Esta lista describe el código y sus pruebas de contrato. Como evidencia externa separada, Meta ya asignó el número de prueba, verificó un destinatario propio y aceptó una solicitud outbound de plantilla con un token temporal. Eso no afirma entrega ni que un WABA/tenant real haya completado el circuito; tampoco acredita que las credenciales permanentes estén instaladas en Vercel Preview o Production.
 
 ## Pendiente para validar con un WABA real
 
 Antes de afirmar que WhatsApp Flows está operativo end-to-end para un cliente hay que completar, en este orden:
 
-1. confirmar en Meta que la app dedicada de ObraSaaS, su Embedded Signup y los productos WhatsApp correctos están activos;
-2. cargar `META_APP_SECRET`, `META_VERIFY_TOKEN`, `NEXT_PUBLIC_META_APP_ID`, `NEXT_PUBLIC_META_EMBEDDED_SIGNUP_CONFIG_ID`, `WHATSAPP_CREDENTIALS_ENCRYPTION_KEY`, `WHATSAPP_FLOW_TOKEN_SECRET` y el registro KEK en los ambientes necesarios, sin exponer sus valores;
+1. revocar o rotar el token temporal usado en la prueba y sustituirlo por credenciales permanentes de release con el alcance mínimo necesario;
+2. cargar en Vercel `META_APP_SECRET`, `META_VERIFY_TOKEN`, `NEXT_PUBLIC_META_APP_ID`, `NEXT_PUBLIC_META_EMBEDDED_SIGNUP_CONFIG_ID`, `WHATSAPP_CREDENTIALS_ENCRYPTION_KEY`, `WHATSAPP_FLOW_TOKEN_SECRET` y el registro KEK para los ambientes necesarios, sin exponer sus valores; el token permanente de cada tenant debe persistirse sólo cifrado mediante el flujo previsto;
 3. definir `NEXT_PUBLIC_APP_URL` con una URL HTTPS estable y desplegar las migraciones del keyring y de solicitudes del Data Endpoint;
-4. verificar el callback del webhook general y sus seis campos suscritos usando una solicitud real firmada por Meta;
-5. completar Embedded Signup con un WABA y número reales de prueba;
+4. verificar el callback del webhook general y sus seis campos suscritos con solicitudes reales firmadas por Meta; persistir al menos un inbound y los eventos de estado correlacionados con un outbound aceptado;
+5. completar Embedded Signup con el WABA y número del tenant real del piloto; el número de prueba asignado por Meta no cierra este gate;
 6. ejecutar el provisionamiento desde Integraciones y comprobar en Meta la clave pública `VALID`, `endpoint_uri`, `application_id`, Flow JSON `7.3`, Data API `4.0` y el estado de salud del endpoint;
 7. recorrer ambos Flows en un teléfono real, incluyendo reintento, expiración, respuesta `nfm_reply`, persistencia tenant-scoped y fallback;
 8. aprobar y publicar manualmente los Flows desde Meta y luego enviar el Flow publicado mediante Cloud API;
