@@ -31,7 +31,10 @@ const BASE_INTENTS = [
 ];
 
 export const FIELD_WORKER_INTENT_MATRIX = Object.freeze({
-  WORKER: Object.freeze([...BASE_INTENTS]),
+  WORKER: Object.freeze([
+    ...BASE_INTENTS,
+    FIELD_WORKER_INTENTS.TASK_PROGRESS,
+  ]),
   FOREMAN: Object.freeze([
     ...BASE_INTENTS,
     FIELD_WORKER_INTENTS.TASK_PROGRESS,
@@ -153,8 +156,8 @@ export function metadataWithWhatsAppRole(metadata, whatsappRole) {
 }
 
 export function canFieldWorkerHandleIntent(role, intent) {
-  const normalizedRole = isFieldWorkerWhatsAppRole(role) ? role : 'WORKER';
-  return FIELD_WORKER_INTENT_MATRIX[normalizedRole].includes(intent);
+  if (!isFieldWorkerWhatsAppRole(role)) return false;
+  return FIELD_WORKER_INTENT_MATRIX[role].includes(intent);
 }
 
 export function normalizeFieldWorkerCreateInput(input) {

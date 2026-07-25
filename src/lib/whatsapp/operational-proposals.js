@@ -298,6 +298,7 @@ export async function createOperationalProposal(prisma, {
   now = new Date(),
   auditActorId = null,
   auditSource = null,
+  sourceKind = 'voice',
 }) {
   const project = cleanText(projectId, 256);
   const organization = cleanText(organizationId, 256);
@@ -367,7 +368,7 @@ export async function createOperationalProposal(prisma, {
   });
   await createProposalAudit(prisma, {
     organizationId: organization,
-    action: 'voice.proposal.created',
+    action: sourceKind === 'text' ? 'text.proposal.created' : 'voice.proposal.created',
     record,
     actorId: auditActorId,
     auditSource,

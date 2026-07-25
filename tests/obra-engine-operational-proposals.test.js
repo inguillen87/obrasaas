@@ -202,6 +202,34 @@ test('audio creates a pending proposal and an exact confirmation applies it once
   assert.equal(audits.filter((audit) => audit.action === 'voice.proposal.applied').length, 1);
 });
 
+test('worker text progress creates a proposal without mutating the Gantt', async () => {
+  const { prisma, proposals, audits } = memoryPrisma();
+  const currentState = state();
+  const result = await processIncomingObraMessage({
+    externalId: 'wamid.text-progress-worker',
+    provider: 'meta',
+    from: '+5491112345678',
+    kind: 'text',
+    text: 'Avance 75% tarea 3',
+    timestamp: audioTime,
+  }, scope, {
+    state: currentState,
+    projectSettings,
+    worker: worker({ metadata: { whatsappRole: 'WORKER' } }),
+    prisma,
+    persist: false,
+    processingTime: audioTime,
+  });
+
+  assert.equal(result.stateChanged, false);
+  assert.equal(currentState.tasks[3].progress, 20);
+  assert.equal(proposals.length, 1);
+  assert.equal(proposals[0].type, 'TASK_PROGRESS');
+  assert.equal(proposals[0].action.percentage, 75);
+  assert.match(result.reply, /no modifiqué el Gantt/i);
+  assert.equal(audits.at(-1).action, 'text.proposal.created');
+});
+
 test('the explicit first-value simulator scenario creates a pending delay proposal without applying project changes', async () => {
   const { prisma, proposals, audits } = memoryPrisma();
   const currentState = state();

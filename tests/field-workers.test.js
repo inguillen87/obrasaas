@@ -79,12 +79,12 @@ test('WhatsApp role metadata defaults safely and preserves unrelated metadata', 
   });
 });
 
-test('intent matrix grants progress and delay mutations only to foremen and site managers', () => {
+test('intent matrix lets workers report progress but keeps approval authority with supervisors', () => {
   for (const role of ['WORKER', 'FOREMAN', 'SITE_MANAGER', 'SAFETY']) {
     assert.equal(canFieldWorkerHandleIntent(role, FIELD_WORKER_INTENTS.INCIDENT), true);
     assert.equal(canFieldWorkerHandleIntent(role, FIELD_WORKER_INTENTS.ATTENDANCE_START), true);
   }
-  assert.equal(canFieldWorkerHandleIntent('WORKER', FIELD_WORKER_INTENTS.TASK_PROGRESS), false);
+  assert.equal(canFieldWorkerHandleIntent('WORKER', FIELD_WORKER_INTENTS.TASK_PROGRESS), true);
   assert.equal(canFieldWorkerHandleIntent('SAFETY', FIELD_WORKER_INTENTS.TASK_PROGRESS), false);
   assert.equal(canFieldWorkerHandleIntent('FOREMAN', FIELD_WORKER_INTENTS.TASK_PROGRESS), true);
   assert.equal(canFieldWorkerHandleIntent('SITE_MANAGER', FIELD_WORKER_INTENTS.TASK_PROGRESS), true);

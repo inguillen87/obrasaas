@@ -29,7 +29,6 @@ import {
   DEFAULT_OPERATIONAL_TIME_ZONE,
   appendOperationalIncident,
   ensureOperationalStateCollections,
-  recalculateOverallProgress,
   selectOperationalTask,
   trustedOperationalTimeZone,
 } from "@/lib/operational-state-effects";
@@ -278,8 +277,6 @@ function addAttendanceIncident(state, worker, event, action, result, eventTime, 
   });
   if (added && reviewRequired) state.alertsCount += 1;
 }
-
-const updateOverallProgress = recalculateOverallProgress;
 
 function publicOperationalProposal(record) {
   if (!record) return null;
@@ -980,16 +977,39 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
     flowPrompt = "incident-report";
     reply = "Contame qué ocurrió, en qué sector y qué nivel de riesgo observás. Lo voy a registrar en la bitácora de la obra.";
   } else if (/\b([0-9]{1,3})\s*%/.test(lowerBody)) {
-    const progress = Math.min(100, Number(lowerBody.match(/\b([0-9]{1,3})\s*%/)?.[1] || 0));
-    const [, task] = selectTask(state, lowerBody);
-    if (task) {
-      const previousProgress = Number(task.progress) || 0;
-      task.progress = progress;
-      reply = `Actualicé “${task.name}” al ${progress}% y registré el cambio en la bitácora.`;
-      const aggregateChanged = updateOverallProgress(state);
-      stateChanged = previousProgress !== progress || aggregateChanged;
+    const proposal = classifyReportProposal(body);
+    const operation = reportProposalOperation(state, proposal);
+    if (!operation || !event.externalId || !organizationId) {
+      reply = "No pude crear una propuesta trazable. Reintentá indicando el porcentaje y la tarea.";
     } else {
-      reply = `Detecté un avance del ${progress}%, pero necesito el nombre o número de la tarea para aplicarlo sin ambigüedad.`;
+      requireOperationalAtomicContext(options);
+      const created = await createOperationalProposal(options.prisma || getPrisma(), {
+        projectId: projectSettings.id,
+        organizationId,
+        proposedByWorkerId: worker.id,
+        sourceProvider: event.provider || "whatsapp",
+        sourceExternalId: event.externalId,
+        type: operation.type,
+        summary: proposal.summary,
+        transcript: body,
+        action: operation.action,
+        precondition: operation.precondition,
+        now: processingNow,
+        auditActorId: options.auditActorId || null,
+        auditSource,
+        sourceKind: "text",
+      });
+      operationalProposal = created.record;
+      const code = operationalProposal.confirmationCode;
+      const taskLabel = operationalProposal.action?.taskName
+        ? ` para “${operationalProposal.action.taskName}”`
+        : "";
+      const taskInstruction = operationalProposal.action?.taskKey
+        ? ""
+        : " TAREA <número o nombre>";
+      const requiresSupervisor = !["FOREMAN", "SITE_MANAGER"].includes(worker.whatsappRole);
+      reply = `Registré una propuesta de avance del ${proposal.percentage}%${taskLabel}; no modifiqué el Gantt. ${requiresSupervisor ? "Debe aprobarla un capataz o jefe de obra autorizado" : "Confirmala"} con “CONFIRMAR ${code}${taskInstruction}”.`;
+      stateChanged = false;
     }
   } else if (["fuga", "roto", "accidente", "riesgo", "urgente", "peligro"].some((term) => lowerBody.includes(term))) {
     flowPrompt = "incident-report";
