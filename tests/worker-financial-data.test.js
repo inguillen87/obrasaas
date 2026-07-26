@@ -4,6 +4,7 @@ import test from 'node:test';
 
 import {
   WorkerFinancialDataError,
+  WORKER_FINANCIAL_FIELDS,
   WORKER_FINANCIAL_PURPOSES,
   decryptWorkerFinancialPayload,
   encryptWorkerFinancialPayload,
@@ -14,6 +15,8 @@ import {
   normalizeWorkerIdentityInput,
   normalizeWorkerPaymentAlias,
   normalizeWorkerPaymentDestinationInput,
+  normalizeWorkerWhatsAppAddress,
+  normalizeWorkerWhatsAppProviderSubject,
   readWorkerFinancialFingerprintKey,
   readWorkerFinancialFingerprintKeyRegistry,
   readWorkerFinancialKeyConfiguration,
@@ -91,7 +94,67 @@ function paymentBinding(overrides = {}) {
     recordVersion: 1,
     purpose: WORKER_FINANCIAL_PURPOSES.PAYMENT_DESTINATION,
     destinationType: 'CBU',
+    field: WORKER_FINANCIAL_FIELDS.PAYMENT_DESTINATION,
     ...overrides,
+  };
+}
+
+function channelBinding(overrides = {}) {
+  return {
+    organizationId: 'org-a',
+    subjectId: 'person-a',
+    recordId: 'channel-a',
+    recordVersion: 1,
+    purpose: WORKER_FINANCIAL_PURPOSES.CHANNEL_ADDRESS,
+    destinationType: 'WHATSAPP_E164',
+    field: WORKER_FINANCIAL_FIELDS.CHANNEL_ADDRESS,
+    ...overrides,
+  };
+}
+
+function legacyV2Envelope(payload, binding, keyRegistry) {
+  const wrappingKeyId = keyRegistry.currentKeyId;
+  const kek = keyRegistry.keys.get(wrappingKeyId);
+  const normalizedBinding = {
+    domain: 'obrasaas:worker-financial-data',
+    envelopeVersion: 'v2',
+    organizationId: binding.organizationId,
+    subjectId: binding.subjectId,
+    recordId: binding.recordId,
+    recordVersion: binding.recordVersion,
+    purpose: binding.purpose,
+    destinationType: binding.destinationType,
+    wrappingKeyId,
+  };
+  const payloadBinding = { ...normalizedBinding };
+  delete payloadBinding.wrappingKeyId;
+  const plaintext = JSON.stringify(payload);
+  const dek = crypto.randomBytes(32);
+  const dataIv = crypto.randomBytes(12);
+  const wrappingIv = crypto.randomBytes(12);
+  const dataCipher = crypto.createCipheriv('aes-256-gcm', dek, dataIv);
+  dataCipher.setAAD(Buffer.from(JSON.stringify({ ...payloadBinding, component: 'payload' })), {
+    plaintextLength: Buffer.byteLength(plaintext),
+  });
+  const ciphertext = Buffer.concat([dataCipher.update(plaintext, 'utf8'), dataCipher.final()]);
+  const wrappingCipher = crypto.createCipheriv('aes-256-gcm', kek, wrappingIv);
+  wrappingCipher.setAAD(Buffer.from(JSON.stringify({
+    ...normalizedBinding,
+    component: 'wrapped-dek',
+  })), { plaintextLength: dek.length });
+  const wrappedDek = Buffer.concat([wrappingCipher.update(dek), wrappingCipher.final()]);
+  dek.fill(0);
+  return {
+    encryptedPayload: [
+      'v2',
+      dataIv.toString('base64url'),
+      dataCipher.getAuthTag().toString('base64url'),
+      ciphertext.toString('base64url'),
+      wrappingIv.toString('base64url'),
+      wrappingCipher.getAuthTag().toString('base64url'),
+      wrappedDek.toString('base64url'),
+    ].join('.'),
+    wrappingKeyId,
   };
 }
 
@@ -133,6 +196,13 @@ test('payment aliases are bounded, canonical and never treated as verified', () 
     currency: 'ARS',
     verificationStatus: 'PENDING_VERIFICATION',
   });
+});
+
+test('WhatsApp addresses and provider subjects have strict canonical forms', () => {
+  assert.equal(normalizeWorkerWhatsAppAddress(' +54 9 261 555-0123 '), '+5492615550123');
+  assert.equal(normalizeWorkerWhatsAppProviderSubject('+54 9 261 555-0123'), '5492615550123');
+  assert.throws(() => normalizeWorkerWhatsAppAddress('0261 555 0123'));
+  assert.throws(() => normalizeWorkerWhatsAppProviderSubject('wa:user@example.com'));
 });
 
 test('worker identity requires explicit versioned privacy acceptance and starts pending', () => {
@@ -188,11 +258,50 @@ test('financial payloads use randomized authenticated encryption and round-trip'
   const first = encryptWorkerFinancialPayload(payload, paymentBinding(), { registry: keyRegistry });
   const second = encryptWorkerFinancialPayload(payload, paymentBinding(), { registry: keyRegistry });
   assert.notEqual(first.encryptedPayload, second.encryptedPayload);
+  assert.match(first.encryptedPayload, /^v3\./);
   assert.equal(first.encryptedPayload.includes(CBU), false);
   assert.equal(first.encryptedPayload.includes(payload.holderCuil), false);
   assert.deepEqual(
     decryptWorkerFinancialPayload(first, paymentBinding(), { registry: keyRegistry }),
     payload,
+  );
+});
+
+test('new encryption requires an explicit authenticated field', () => {
+  assert.throws(
+    () => encryptWorkerFinancialPayload({ value: CBU }, {
+      ...paymentBinding(),
+      field: undefined,
+    }, { registry: registry() }),
+    (error) => error.code === 'WORKER_FINANCIAL_INPUT_INVALID',
+  );
+});
+
+test('new encryption accepts only the canonical field for each purpose and value type', () => {
+  const keyRegistry = registry();
+  assert.throws(
+    () => encryptWorkerFinancialPayload(
+      { value: CBU },
+      paymentBinding({ field: WORKER_FINANCIAL_FIELDS.PAYMENT_RESOLUTION }),
+      { registry: keyRegistry },
+    ),
+    (error) => error.code === 'WORKER_FINANCIAL_INPUT_INVALID',
+  );
+  assert.throws(
+    () => encryptWorkerFinancialPayload(
+      { cuil: CUIL_DIGITS },
+      {
+        organizationId: 'org-a',
+        subjectId: 'person-a',
+        recordId: 'claim-a',
+        recordVersion: 1,
+        purpose: WORKER_FINANCIAL_PURPOSES.ONBOARDING_CLAIM,
+        destinationType: 'CUIL',
+        field: WORKER_FINANCIAL_FIELDS.CLAIM_IDENTITY,
+      },
+      { registry: keyRegistry },
+    ),
+    (error) => error.code === 'WORKER_FINANCIAL_INPUT_INVALID',
   );
 });
 
@@ -220,12 +329,28 @@ test('ciphertext tampering and every AAD scope change fail authentication', () =
     paymentBinding({ recordId: 'destination-b' }),
     paymentBinding({ recordVersion: 2 }),
     paymentBinding({ destinationType: 'CVU' }),
+    paymentBinding({ field: WORKER_FINANCIAL_FIELDS.PAYMENT_RESOLUTION }),
   ]) {
     assert.throws(
       () => decryptWorkerFinancialPayload(encrypted, changedBinding, { registry: keyRegistry }),
       (error) => error.code === 'WORKER_FINANCIAL_DECRYPTION_FAILED',
     );
   }
+});
+
+test('ciphertexts cannot be swapped between sensitive fields in the same record', () => {
+  const keyRegistry = registry();
+  const encrypted = encryptWorkerFinancialPayload(
+    { address: '+5492615550123' },
+    channelBinding(),
+    { registry: keyRegistry },
+  );
+  assert.throws(
+    () => decryptWorkerFinancialPayload(encrypted, channelBinding({
+      field: WORKER_FINANCIAL_FIELDS.CLAIM_SENDER,
+    }), { registry: keyRegistry }),
+    (error) => error.code === 'WORKER_FINANCIAL_DECRYPTION_FAILED',
+  );
 });
 
 test('envelope data keys can be rewrapped onto a rotated KEK', () => {
@@ -255,6 +380,57 @@ test('envelope data keys can be rewrapped onto a rotated KEK', () => {
   assert.deepEqual(
     decryptWorkerFinancialPayload(rewrapped, paymentBinding(), { registry: keyRegistry }),
     { value: CBU },
+  );
+});
+
+test('safe legacy v2 payment envelopes remain readable and rewrappable', () => {
+  const oldKeyId = 'worker-financial-kek-old';
+  const newKeyId = 'worker-financial-kek-new';
+  const keyRegistry = {
+    currentKeyId: newKeyId,
+    keys: new Map([
+      [oldKeyId, crypto.randomBytes(32)],
+      [newKeyId, crypto.randomBytes(32)],
+    ]),
+  };
+  const legacyRegistry = { currentKeyId: oldKeyId, keys: keyRegistry.keys };
+  const binding = paymentBinding();
+  const legacy = legacyV2Envelope({ value: CBU }, binding, legacyRegistry);
+  assert.deepEqual(
+    decryptWorkerFinancialPayload(legacy, { ...binding, field: undefined }, { registry: keyRegistry }),
+    { value: CBU },
+  );
+  const rewrapped = rewrapWorkerFinancialPayload(legacy, binding, {
+    registry: keyRegistry,
+    targetKeyId: newKeyId,
+  });
+  assert.match(rewrapped.encryptedPayload, /^v2\./);
+  assert.equal(rewrapped.wrappingKeyId, newKeyId);
+  assert.deepEqual(
+    decryptWorkerFinancialPayload(rewrapped, binding, { registry: keyRegistry }),
+    { value: CBU },
+  );
+});
+
+test('ambiguous legacy v2 onboarding envelopes fail closed', () => {
+  const keyRegistry = registry();
+  const binding = {
+    organizationId: 'org-a',
+    subjectId: 'person-a',
+    recordId: 'claim-a',
+    recordVersion: 1,
+    purpose: WORKER_FINANCIAL_PURPOSES.ONBOARDING_CLAIM,
+    destinationType: 'CUIL',
+    field: WORKER_FINANCIAL_FIELDS.CLAIM_IDENTITY,
+  };
+  const legacy = legacyV2Envelope({ cuil: CUIL_DIGITS }, binding, keyRegistry);
+  assert.throws(
+    () => decryptWorkerFinancialPayload(legacy, binding, { registry: keyRegistry }),
+    (error) => error.code === 'WORKER_FINANCIAL_DECRYPTION_FAILED',
+  );
+  assert.throws(
+    () => rewrapWorkerFinancialPayload(legacy, binding, { registry: keyRegistry }),
+    (error) => error.code === 'WORKER_FINANCIAL_DECRYPTION_FAILED',
   );
 });
 
@@ -336,6 +512,27 @@ test('keyed fingerprints are stable but tenant and value type scoped', () => {
     organizationId: 'org-a',
     valueType: 'CVU',
   }, { registry: keyRegistry }).fingerprint, first.fingerprint);
+});
+
+test('WhatsApp fingerprints and suffixes are canonical without exposing addresses', () => {
+  const keyRegistry = fingerprintRegistry();
+  const formatted = '+54 9 261 555-0123';
+  const canonical = '+5492615550123';
+  const address = workerFinancialFingerprint(formatted, {
+    organizationId: 'org-a',
+    valueType: 'WHATSAPP_E164',
+  }, { registry: keyRegistry });
+  assert.deepEqual(workerFinancialFingerprint(canonical, {
+    organizationId: 'org-a',
+    valueType: 'WHATSAPP_E164',
+  }, { registry: keyRegistry }), address);
+  assert.match(address.fingerprint, /^[a-f0-9]{64}$/);
+  assert.equal(address.fingerprint.includes('5492615550123'), false);
+  assert.equal(workerFinancialLastFour(formatted, 'WHATSAPP_E164'), '0123');
+  assert.equal(
+    workerFinancialLastFour('5492615550123', 'WHATSAPP_PROVIDER_SUBJECT'),
+    '0123',
+  );
 });
 
 test('dual fingerprint candidates support controlled key rotation', () => {

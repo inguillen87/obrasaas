@@ -145,6 +145,71 @@ test('signed Meta batch persists 1,000 updates in bulk and replay is entirely id
   assert.equal(prisma.storedKeys.size, META_WEBHOOK_MAX_UPDATES);
 });
 
+test('WebhookEvent persistence excludes raw Flow tokens and sensitive response values', async () => {
+  const rawFlowToken = `ofs1.1f967f35-9f99-4db0-bd42-2d88f734cc72.${'A'.repeat(43)}`;
+  const sensitiveDescription = 'CUIT 20-12345678-9 y CBU 0000000000000000000000';
+  const events = normalizeMetaWebhook({
+    object: 'whatsapp_business_account',
+    entry: [{
+      id: '102290129340398',
+      changes: [{
+        field: 'messages',
+        value: {
+          metadata: {
+            display_phone_number: '15550783881',
+            phone_number_id: '106540352242922',
+          },
+          messages: [{
+            from: '16505550001',
+            id: 'wamid.flow-sensitive',
+            timestamp: '1784030400',
+            type: 'interactive',
+            interactive: {
+              type: 'nfm_reply',
+              nfm_reply: {
+                name: 'flow',
+                body: 'Incidencia enviada',
+                response_json: JSON.stringify({
+                  flow_token: rawFlowToken,
+                  flow_type: 'incident',
+                  severity: 'critical',
+                  area: 'Planta baja',
+                  description: sensitiveDescription,
+                  task_ref: 'task-structure-02',
+                }),
+              },
+            },
+          }],
+        },
+      }],
+    }],
+  });
+  const prisma = fakeDurablePrisma();
+
+  const result = await persistDurableMetaWebhookBatch(prisma, events);
+
+  assert.equal(result.accepted, 1);
+  const stored = prisma.insertCalls[0].data[0].payload;
+  const serialized = JSON.stringify(stored);
+  assert.equal(serialized.includes(rawFlowToken), false);
+  assert.equal(serialized.includes(sensitiveDescription), false);
+  assert.deepEqual(stored.event.interactive.response, {
+    flow_type: 'incident',
+    severity: 'critical',
+    area: 'Planta baja',
+    description: '[contenido restringido]',
+    task_ref: 'task-structure-02',
+  });
+  assert.deepEqual(
+    JSON.parse(stored.event.raw.interactive.nfm_reply.response_json),
+    stored.event.interactive.response,
+  );
+  assert.deepEqual(stored.event.interactive.flowToken, {
+    sessionId: '1f967f35-9f99-4db0-bd42-2d88f734cc72',
+    tokenSha256: crypto.createHash('sha256').update(rawFlowToken).digest('hex'),
+  });
+});
+
 test('Meta batch limit counts official changes updates and rejects update 1,001', () => {
   assert.equal(assertMetaWebhookBatchLimit(syntheticPayload(1_000)), 1_000);
   assert.throws(

@@ -1,3 +1,5 @@
+import { projectWhatsAppFlowReplyForPersistence } from './whatsapp/flows.js';
+
 export const WEBHOOK_MAX_ATTEMPTS = 8;
 export const WEBHOOK_LEASE_MS = 120_000;
 export const WEBHOOK_RETRY_BASE_MS = 5_000;
@@ -23,6 +25,7 @@ const MESSAGE_OUTCOME_VERSION = 1;
 const MAX_WHATSAPP_TEXT_LENGTH = 4_096;
 const FLOW_PROMPT_PATTERN = /^[a-z0-9][a-z0-9-]{0,99}$/;
 const FLOW_SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const SHA256_PATTERN = /^[a-f0-9]{64}$/;
 
 function invalidWebhookOutcome() {
   const error = new Error("Stored webhook outcome is not a supported delivery envelope.");
@@ -174,10 +177,75 @@ export function shouldDeadLetterWebhookEvent(event, now = new Date()) {
     && (!leaseExpiresAt || leaseExpiresAt.getTime() <= currentTime);
 }
 
+function boundedPersistenceText(value, maxLength) {
+  if (typeof value !== 'string') return null;
+  const normalized = value
+    .replace(/[\u0000-\u001f\u007f]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return normalized ? normalized.slice(0, maxLength) : null;
+}
+
+function persistedFlowTokenEvidence(value) {
+  const sessionId = String(value?.sessionId || '').trim().toLowerCase();
+  const tokenSha256 = String(value?.tokenSha256 || '').trim().toLowerCase();
+  if (!FLOW_SESSION_ID_PATTERN.test(sessionId) || !SHA256_PATTERN.test(tokenSha256)) return null;
+  return { sessionId, tokenSha256 };
+}
+
+function persistedMetaFlowRaw(event, response) {
+  const raw = event?.raw;
+  const name = boundedPersistenceText(event?.interactive?.name, 200);
+  const body = boundedPersistenceText(event?.text, MAX_WHATSAPP_TEXT_LENGTH);
+  return {
+    id: boundedPersistenceText(raw?.id || event?.externalId, 500),
+    from: boundedPersistenceText(raw?.from || event?.from, 80),
+    timestamp: boundedPersistenceText(raw?.timestamp, 32),
+    type: 'interactive',
+    interactive: {
+      type: 'nfm_reply',
+      nfm_reply: {
+        ...(name ? { name } : {}),
+        ...(body ? { body } : {}),
+        response_json: JSON.stringify(response),
+      },
+    },
+  };
+}
+
+function persistedWebhookEvent(event) {
+  if (event?.provider !== 'meta' || event?.interactive?.type !== 'flow') return event;
+
+  const response = projectWhatsAppFlowReplyForPersistence(event.interactive.response);
+  return {
+    provider: 'meta',
+    eventType: 'message',
+    externalId: event.externalId,
+    phoneNumberId: event.phoneNumberId || null,
+    businessDisplayPhone: event.businessDisplayPhone || null,
+    from: event.from || '',
+    displayName: event.displayName || null,
+    timestamp: event.timestamp,
+    kind: 'interactive',
+    text: boundedPersistenceText(event.text, MAX_WHATSAPP_TEXT_LENGTH)
+      || 'Formulario de WhatsApp completado',
+    location: null,
+    media: null,
+    interactive: {
+      type: 'flow',
+      name: boundedPersistenceText(event.interactive.name, 200),
+      response,
+      flowToken: persistedFlowTokenEvidence(event.interactive.flowToken),
+    },
+    context: null,
+    raw: persistedMetaFlowRaw(event, response),
+  };
+}
+
 export function serializeWebhookPayload(event, scope) {
   return JSON.parse(JSON.stringify({
     version: 1,
-    event,
+    event: persistedWebhookEvent(event),
     scope: {
       projectId: scope?.projectId || null,
       organizationId: scope?.organizationId || null,

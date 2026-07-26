@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { tsImport } from 'tsx/esm/api';
+import {
+  deserializeWebhookPayload,
+  serializeWebhookPayload,
+} from '../src/lib/webhook-queue.js';
 
 const { processIncomingObraMessage } = await tsImport(
   '../src/lib/whatsapp/obra-engine.js',
@@ -119,8 +123,21 @@ function engineOptions(state, flowSession, overrides = {}) {
 test('a valid Meta Flow uses the trusted session and persists only non-secret references', async () => {
   const state = emptyState();
   const session = incidentSession();
+  const sensitiveDescription = 'CUIT 20-12345678-9 y CBU 0000000000000000000000';
+  const persistedEvent = deserializeWebhookPayload(serializeWebhookPayload(
+    incidentEvent({ description: sensitiveDescription }),
+    {
+      projectId,
+      organizationId: 'organization-meta-flow',
+      phoneNumberId,
+    },
+  )).event;
+  assert.equal(
+    persistedEvent.interactive.response.description,
+    '[contenido restringido]',
+  );
   const result = await processIncomingObraMessage(
-    incidentEvent(),
+    persistedEvent,
     {
       projectId,
       organizationId: 'organization-meta-flow',
@@ -143,6 +160,9 @@ test('a valid Meta Flow uses the trusted session and persists only non-secret re
   );
   assert.equal(JSON.stringify(result.newMessages).includes('flow_token'), false);
   assert.equal(JSON.stringify(result.newMessages).includes('tokenSha256'), false);
+  assert.equal(JSON.stringify({ result, state }).includes(sensitiveDescription), false);
+  assert.equal(JSON.stringify(result.newMessages).includes('20-12345678-9'), false);
+  assert.equal(JSON.stringify(result.newMessages).includes('0000000000000000000000'), false);
 });
 
 test('attendance Flow persists its server-owned task and work-area references', async () => {
@@ -172,8 +192,21 @@ test('attendance Flow persists its server-owned task and work-area references', 
       },
     },
   };
+  const sensitiveObservations = 'Alias sueldo.carlos y CBU 0000000000000000000000';
+  const persistedEvent = deserializeWebhookPayload(serializeWebhookPayload(
+    attendanceEvent({ observations: sensitiveObservations }),
+    {
+      projectId,
+      organizationId: 'organization-meta-flow',
+      phoneNumberId,
+    },
+  )).event;
+  assert.equal(
+    persistedEvent.interactive.response.observations,
+    '[contenido restringido]',
+  );
   const result = await processIncomingObraMessage(
-    attendanceEvent(),
+    persistedEvent,
     { projectId, organizationId: 'organization-meta-flow', phoneNumberId },
     engineOptions(state, attendanceSession(), { prisma }),
   );
@@ -197,6 +230,7 @@ test('attendance Flow persists its server-owned task and work-area references', 
   assert.equal(state.attendance[worker.id].checkout, undefined);
   assert.equal(state.attendance[worker.id].breakStartedAt, undefined);
   assert.equal(state.attendance[worker.id].breakEndedAt, undefined);
+  assert.equal(JSON.stringify({ result, state, createdEntries }).includes(sensitiveObservations), false);
 });
 
 test('an expired trusted Flow ignores its payload and requests one safe replacement', async () => {

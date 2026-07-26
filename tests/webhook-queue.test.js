@@ -155,6 +155,124 @@ test("stored webhook payload preserves normalized event and trusted tenant scope
   assert.equal(restored.scope.phoneNumberId, "phone-1");
 });
 
+test("durable Flow payload keeps only token evidence and its schema projection", () => {
+  const rawFlowToken = "ofs1.raw-token-that-must-never-persist";
+  const sensitiveDescription = "CUIT 20-12345678-9, CBU 0000000000000000000000";
+  const payload = serializeWebhookPayload({
+    provider: "meta",
+    eventType: "message",
+    externalId: "wamid.flow-1",
+    phoneNumberId: "phone-1",
+    businessDisplayPhone: "5491100000000",
+    from: "5491112345678",
+    displayName: "Operario",
+    timestamp: new Date("2026-07-16T12:00:00.000Z"),
+    kind: "interactive",
+    text: "Incidencia enviada",
+    interactive: {
+      type: "flow",
+      name: "flow",
+      response: {
+        flow_type: "incident",
+        severity: "high",
+        area: "Planta baja",
+        description: sensitiveDescription,
+        task_ref: "task-structure-02",
+      },
+      flowToken: {
+        sessionId: "1f967f35-9f99-4db0-bd42-2d88f734cc72",
+        tokenSha256: "a".repeat(64),
+        rawFlowToken,
+      },
+    },
+    futureBankAccount: "alias.sueldo.carlos",
+    raw: {
+      id: "wamid.flow-1",
+      from: "5491112345678",
+      timestamp: "1784030410",
+      type: "interactive",
+      unexpectedSensitiveEnvelope: "alias.sueldo.carlos",
+      interactive: {
+        type: "nfm_reply",
+        nfm_reply: {
+          response_json: JSON.stringify({
+            flow_token: rawFlowToken,
+            description: sensitiveDescription,
+          }),
+        },
+      },
+    },
+  }, {
+    projectId: "project-1",
+    organizationId: "organization-1",
+    phoneNumberId: "phone-1",
+    whatsappBusinessId: "waba-1",
+  });
+
+  const serialized = JSON.stringify(payload);
+  assert.equal(serialized.includes(rawFlowToken), false);
+  assert.equal(serialized.includes(sensitiveDescription), false);
+  assert.equal(serialized.includes("alias.sueldo.carlos"), false);
+  assert.deepEqual(payload.event.interactive.flowToken, {
+    sessionId: "1f967f35-9f99-4db0-bd42-2d88f734cc72",
+    tokenSha256: "a".repeat(64),
+  });
+  assert.deepEqual(payload.event.interactive.response, {
+    flow_type: "incident",
+    severity: "high",
+    area: "Planta baja",
+    description: "[contenido restringido]",
+    task_ref: "task-structure-02",
+  });
+  assert.deepEqual(
+    JSON.parse(payload.event.raw.interactive.nfm_reply.response_json),
+    payload.event.interactive.response,
+  );
+});
+
+test("durable Flow payload stores an empty response for future or invalid schemas", () => {
+  const sensitiveValue = "alias.sueldo.carlos";
+  const payload = serializeWebhookPayload({
+    provider: "meta",
+    eventType: "message",
+    externalId: "wamid.future-flow",
+    phoneNumberId: "phone-1",
+    from: "5491112345678",
+    timestamp: new Date("2026-07-16T12:00:00.000Z"),
+    kind: "interactive",
+    interactive: {
+      type: "flow",
+      name: "future-onboarding",
+      response: {
+        flow_type: "worker-onboarding-future",
+        full_name: "Carlos Pérez",
+        cuit: "20-12345678-9",
+        alias: sensitiveValue,
+      },
+      flowToken: {
+        sessionId: "1f967f35-9f99-4db0-bd42-2d88f734cc72",
+        tokenSha256: "b".repeat(64),
+      },
+    },
+    raw: {
+      interactive: {
+        type: "nfm_reply",
+        nfm_reply: { response_json: JSON.stringify({ alias: sensitiveValue }) },
+      },
+    },
+  }, {
+    projectId: "project-1",
+    organizationId: "organization-1",
+    phoneNumberId: "phone-1",
+  });
+
+  assert.deepEqual(payload.event.interactive.response, {});
+  assert.deepEqual(JSON.parse(payload.event.raw.interactive.nfm_reply.response_json), {});
+  assert.equal(JSON.stringify(payload).includes(sensitiveValue), false);
+  assert.equal(JSON.stringify(payload).includes("Carlos Pérez"), false);
+  assert.equal(JSON.stringify(payload).includes("20-12345678-9"), false);
+});
+
 test("storage IDs are stable and tenant-scoped without changing provider payload IDs", () => {
   assert.equal(
     scopedWebhookExternalId("project-1", "wamid.1"),

@@ -392,11 +392,13 @@ test("Meta webhook messages and WhatsApp Flow replies normalize into stable even
                     nfm_reply: {
                       name: "flow",
                       body: "Incidencia enviada",
+                      bank_account: "must-not-persist-from-raw-envelope",
                       response_json: JSON.stringify({
                         flow_token: flowToken,
-                        flow_type: "incident-report",
+                        flow_type: "incident",
                         severity: "high",
                         area: "PB",
+                        description: "CUIT 20-12345678-9 y CBU 0000000000000000000000",
                       }),
                     },
                   },
@@ -423,17 +425,61 @@ test("Meta webhook messages and WhatsApp Flow replies normalize into stable even
   assert.equal(events[0].displayName, "Juan Gómez");
   assert.equal(events[1].interactive.type, "flow");
   assert.equal(events[1].interactive.response.severity, "high");
+  assert.equal(events[1].interactive.response.description, "[contenido restringido]");
   assert.equal("flow_token" in events[1].interactive.response, false);
   assert.deepEqual(events[1].interactive.flowToken, {
     sessionId: "1f967f35-9f99-4db0-bd42-2d88f734cc72",
     tokenSha256: crypto.createHash("sha256").update(flowToken).digest("hex"),
   });
   assert.equal(JSON.stringify(events[1]).includes(flowToken), false);
+  assert.equal(JSON.stringify(events[1]).includes("20-12345678-9"), false);
+  assert.equal(JSON.stringify(events[1]).includes("0000000000000000000000"), false);
+  assert.equal(JSON.stringify(events[1]).includes("must-not-persist-from-raw-envelope"), false);
   assert.equal(
     JSON.parse(events[1].raw.interactive.nfm_reply.response_json).flow_token,
     undefined,
   );
   assert.equal(events[2].externalId, "status:wamid.outbound-1:delivered:1784030420");
+});
+
+test("unknown or future Flow fields are projected to an empty durable response", () => {
+  const futureSensitiveValue = "alias.sueldo.carlos";
+  const [event] = normalizeMetaWebhook({
+    object: "whatsapp_business_account",
+    entry: [{
+      id: "waba-1",
+      changes: [{
+        field: "messages",
+        value: {
+          metadata: { phone_number_id: "phone-1" },
+          messages: [{
+            id: "wamid.future-flow",
+            from: "5491112345678",
+            timestamp: "1784030410",
+            type: "interactive",
+            interactive: {
+              type: "nfm_reply",
+              nfm_reply: {
+                name: "future-onboarding",
+                response_json: JSON.stringify({
+                  flow_type: "worker-onboarding-future",
+                  full_name: "Carlos Pérez",
+                  cuit: "20-12345678-9",
+                  alias: futureSensitiveValue,
+                }),
+              },
+            },
+          }],
+        },
+      }],
+    }],
+  });
+
+  assert.deepEqual(event.interactive.response, {});
+  assert.deepEqual(JSON.parse(event.raw.interactive.nfm_reply.response_json), {});
+  assert.equal(JSON.stringify(event).includes(futureSensitiveValue), false);
+  assert.equal(JSON.stringify(event).includes("Carlos Pérez"), false);
+  assert.equal(JSON.stringify(event).includes("20-12345678-9"), false);
 });
 
 test("Meta Embedded Signup account updates retain the WABA scope", () => {

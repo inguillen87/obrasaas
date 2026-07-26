@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { decryptCredential } from "../credentials.js";
+import { projectWhatsAppFlowReplyForPersistence } from "./flows.js";
 import { whatsAppFlowTokenEvidence } from "./flow-sessions.js";
 
 const MEDIA_POLICIES = Object.freeze({
@@ -141,9 +142,18 @@ function safeJson(value) {
   }
 }
 
+function safeProviderText(value, maxLength) {
+  if (typeof value !== "string") return null;
+  const normalized = value
+    .replace(/[\u0000-\u001f\u007f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return normalized ? normalized.slice(0, maxLength) : null;
+}
+
 function normalizeFlowResponse(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return { response: value, flowToken: null };
+    return { response: {}, flowToken: null };
   }
 
   const { flow_token: rawFlowToken, ...response } = value;
@@ -156,7 +166,10 @@ function normalizeFlowResponse(value) {
       // consumer. The raw token must never enter persisted payloads or logs.
     }
   }
-  return { response, flowToken };
+  return {
+    response: projectWhatsAppFlowReplyForPersistence(response),
+    flowToken,
+  };
 }
 
 function normalizeInteractive(interactive) {
@@ -179,11 +192,12 @@ function normalizeInteractive(interactive) {
   if (interactive.type === "nfm_reply") {
     const parsed = safeJson(interactive.nfm_reply?.response_json);
     const { response, flowToken } = normalizeFlowResponse(parsed);
+    const body = safeProviderText(interactive.nfm_reply?.body, 4_096);
     return {
-      text: interactive.nfm_reply?.body || "Formulario de WhatsApp completado",
+      text: body || "Formulario de WhatsApp completado",
       interactive: {
         type: "flow",
-        name: interactive.nfm_reply?.name || null,
+        name: safeProviderText(interactive.nfm_reply?.name, 200),
         response,
         flowToken,
       },
@@ -196,17 +210,18 @@ function normalizeInteractive(interactive) {
 function sanitizedRawMessage(message, normalizedInteractive) {
   if (message?.interactive?.type !== "nfm_reply") return message;
 
-  const {
-    response_json: _rawResponse,
-    flow_token: _unexpectedRawToken,
-    ...safeNfmReply
-  } = message.interactive.nfm_reply || {};
+  const name = safeProviderText(message.interactive.nfm_reply?.name, 200);
+  const body = safeProviderText(message.interactive.nfm_reply?.body, 4_096);
   return {
-    ...message,
+    id: typeof message.id === "string" ? message.id : null,
+    from: typeof message.from === "string" ? message.from : null,
+    timestamp: typeof message.timestamp === "string" ? message.timestamp : null,
+    type: "interactive",
     interactive: {
-      ...message.interactive,
+      type: "nfm_reply",
       nfm_reply: {
-        ...safeNfmReply,
+        ...(name ? { name } : {}),
+        ...(body ? { body } : {}),
         response_json: JSON.stringify(normalizedInteractive?.response ?? null),
       },
     },

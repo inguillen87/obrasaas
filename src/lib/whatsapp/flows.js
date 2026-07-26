@@ -230,6 +230,97 @@ const BLUEPRINTS = [
   },
 ];
 
+// Contracts stay separate from the public blueprint DTO so the two existing
+// blueprints keep exactly the same outward shape. Each screen declares the
+// values owned by the server, the fields the client may submit, and the fields
+// that only the server may add to the terminal receipt.
+const FLOW_DEFINITION_CONTRACTS = Object.freeze({
+  'incident-report': Object.freeze({
+    screens: Object.freeze({
+      INCIDENT_REPORT: Object.freeze({
+        serverOwnedFields: Object.freeze({
+          project_name: Object.freeze({ type: 'string' }),
+          worker_name: Object.freeze({ type: 'string' }),
+          work_areas: Object.freeze({
+            type: 'array',
+            items: Object.freeze({
+              type: 'object',
+              properties: Object.freeze({
+                id: Object.freeze({ type: 'string' }),
+                title: Object.freeze({ type: 'string' }),
+              }),
+            }),
+          }),
+        }),
+        formFields: Object.freeze({
+          severity: Object.freeze({ componentTypes: Object.freeze(['RadioButtonsGroup']) }),
+          area: Object.freeze({
+            componentTypes: Object.freeze(['Dropdown']),
+            dataSourceField: 'work_areas',
+          }),
+          description: Object.freeze({ componentTypes: Object.freeze(['TextArea']) }),
+        }),
+        terminalReceiptFields: Object.freeze({
+          flow_type: Object.freeze({ type: 'string' }),
+          task_ref: Object.freeze({ type: 'string', optional: true }),
+        }),
+        persistenceProjection: Object.freeze({
+          flow_type: Object.freeze({ strategy: 'constant', value: 'incident' }),
+          severity: Object.freeze({
+            strategy: 'enum',
+            values: Object.freeze(['low', 'medium', 'high', 'critical']),
+          }),
+          area: Object.freeze({ strategy: 'server-option-title' }),
+          description: Object.freeze({ strategy: 'redacted-text' }),
+          task_ref: Object.freeze({ strategy: 'opaque-reference' }),
+        }),
+      }),
+    }),
+  }),
+  'shift-check-in': Object.freeze({
+    screens: Object.freeze({
+      SHIFT_CHECK_IN: Object.freeze({
+        serverOwnedFields: Object.freeze({
+          project_name: Object.freeze({ type: 'string' }),
+          worker_name: Object.freeze({ type: 'string' }),
+          work_areas: Object.freeze({
+            type: 'array',
+            items: Object.freeze({
+              type: 'object',
+              properties: Object.freeze({
+                id: Object.freeze({ type: 'string' }),
+                title: Object.freeze({ type: 'string' }),
+              }),
+            }),
+          }),
+        }),
+        formFields: Object.freeze({
+          work_area: Object.freeze({
+            componentTypes: Object.freeze(['Dropdown']),
+            dataSourceField: 'work_areas',
+          }),
+          ppe_status: Object.freeze({ componentTypes: Object.freeze(['RadioButtonsGroup']) }),
+          observations: Object.freeze({ componentTypes: Object.freeze(['TextArea']) }),
+        }),
+        terminalReceiptFields: Object.freeze({
+          flow_type: Object.freeze({ type: 'string' }),
+          task_ref: Object.freeze({ type: 'string', optional: true }),
+        }),
+        persistenceProjection: Object.freeze({
+          flow_type: Object.freeze({ strategy: 'constant', value: 'attendance' }),
+          work_area: Object.freeze({ strategy: 'server-option-title' }),
+          ppe_status: Object.freeze({
+            strategy: 'enum',
+            values: Object.freeze(['complete', 'incomplete']),
+          }),
+          observations: Object.freeze({ strategy: 'redacted-text' }),
+          task_ref: Object.freeze({ strategy: 'opaque-reference' }),
+        }),
+      }),
+    }),
+  }),
+});
+
 function clone(value) {
   return structuredClone(value);
 }
@@ -246,26 +337,152 @@ function collectComponents(children, predicate, result = []) {
   return result;
 }
 
-function collectInputNames(children) {
-  return collectComponents(
-    children,
-    (child) => typeof child?.name === 'string' && child.type !== 'Form',
-  ).map((child) => child.name);
+function validContractFieldName(value) {
+  return /^[a-z][a-z0-9_]{0,63}$/.test(String(value || ''));
 }
 
-function validTrustedDataSchema(data) {
-  if (!isPlainObject(data) || Object.keys(data).length !== 3) return false;
-  if (data.project_name?.type !== 'string' || data.worker_name?.type !== 'string') return false;
-  const areas = data.work_areas;
-  return areas?.type === 'array'
-    && areas.items?.type === 'object'
-    && areas.items.properties?.id?.type === 'string'
-    && areas.items.properties?.title?.type === 'string';
+function sameFields(actual, expected) {
+  const actualFields = [...actual].sort();
+  const expectedFields = [...expected].sort();
+  return actualFields.length === expectedFields.length
+    && actualFields.every((field, index) => field === expectedFields[index]);
 }
 
-export function validateWhatsAppFlowDefinition(definition) {
+function hasOnlyKeys(value, keys) {
+  return isPlainObject(value) && sameFields(Object.keys(value), keys);
+}
+
+function validPersistenceProjection(projection, formFields, terminalReceiptFields) {
+  if (!isPlainObject(projection)) return false;
+  const formFieldNames = Object.keys(formFields);
+  const receiptFieldNames = Object.keys(terminalReceiptFields);
+  if (!sameFields(Object.keys(projection), [...formFieldNames, ...receiptFieldNames])) return false;
+
+  return Object.entries(projection).every(([field, policy]) => {
+    if (!isPlainObject(policy)) return false;
+    if (formFieldNames.includes(field)) {
+      if (policy.strategy === 'enum') {
+        return hasOnlyKeys(policy, ['strategy', 'values'])
+          && Array.isArray(policy.values)
+          && policy.values.length > 0
+          && policy.values.length === new Set(policy.values).size
+          && policy.values.every((value) => (
+            typeof value === 'string' && value.length > 0 && value.length <= 100
+          ));
+      }
+      return new Set(['server-option-title', 'redacted-text']).has(policy.strategy)
+        && hasOnlyKeys(policy, ['strategy']);
+    }
+    if (policy.strategy === 'constant') {
+      return hasOnlyKeys(policy, ['strategy', 'value'])
+        && typeof policy.value === 'string'
+        && policy.value.length > 0
+        && policy.value.length <= 100;
+    }
+    return policy.strategy === 'opaque-reference'
+      && hasOnlyKeys(policy, ['strategy']);
+  });
+}
+
+function validFieldSchema(schema) {
+  if (!isPlainObject(schema) || !['string', 'array', 'object'].includes(schema.type)) return false;
+  if (schema.optional !== undefined && typeof schema.optional !== 'boolean') return false;
+  if (schema.type === 'array') return validFieldSchema(schema.items);
+  if (schema.type !== 'object') return true;
+  return isPlainObject(schema.properties)
+    && Object.entries(schema.properties).every(([field, value]) => (
+      validContractFieldName(field) && validFieldSchema(value)
+    ));
+}
+
+function fieldSchemaMatches(actual, expected) {
+  if (!isPlainObject(actual) || !validFieldSchema(expected) || actual.type !== expected.type) {
+    return false;
+  }
+  if (expected.type === 'array') return fieldSchemaMatches(actual.items, expected.items);
+  if (expected.type !== 'object') return true;
+  if (!isPlainObject(actual.properties)) return false;
+  const actualFields = Object.keys(actual.properties).sort();
+  const expectedFields = Object.keys(expected.properties).sort();
+  return actualFields.length === expectedFields.length
+    && actualFields.every((field, index) => field === expectedFields[index])
+    && expectedFields.every((field) => (
+      fieldSchemaMatches(actual.properties[field], expected.properties[field])
+    ));
+}
+
+function definitionContractFor(definition) {
+  const screenIds = Array.isArray(definition?.screens)
+    ? new Set(definition.screens.map((screen) => String(screen?.id || '')))
+    : new Set();
+  const blueprint = BLUEPRINTS.find((candidate) => screenIds.has(candidate.screenId));
+  return blueprint ? FLOW_DEFINITION_CONTRACTS[blueprint.key] || null : null;
+}
+
+function validDefinitionContract(contract) {
+  if (!isPlainObject(contract) || !isPlainObject(contract.screens)) return false;
+  if (Object.keys(contract.screens).length === 0) return false;
+  return Object.entries(contract.screens).every(([screenId, screenContract]) => {
+    if (!SCREEN_ID_PATTERN.test(screenId) || !isPlainObject(screenContract)) return false;
+    const {
+      serverOwnedFields,
+      formFields,
+      terminalReceiptFields,
+      persistenceProjection,
+    } = screenContract;
+    if (
+      !isPlainObject(serverOwnedFields)
+      || !isPlainObject(formFields)
+      || !isPlainObject(terminalReceiptFields)
+    ) return false;
+    const groups = [serverOwnedFields, formFields, terminalReceiptFields];
+    if (groups.some((group) => Object.keys(group).some((field) => !validContractFieldName(field)))) {
+      return false;
+    }
+    const allFields = groups.flatMap((group) => Object.keys(group));
+    if (new Set(allFields).size !== allFields.length) return false;
+    if (!Object.values(serverOwnedFields).every(validFieldSchema)) return false;
+    if (!Object.values(terminalReceiptFields).every(validFieldSchema)) return false;
+    if (!Object.values(formFields).every((field) => (
+      isPlainObject(field)
+      && Array.isArray(field.componentTypes)
+      && field.componentTypes.length > 0
+      && field.componentTypes.every((type) => typeof type === 'string' && type.length > 0)
+      && (
+        field.dataSourceField === undefined
+        || (
+          validContractFieldName(field.dataSourceField)
+          && serverOwnedFields[field.dataSourceField]?.type === 'array'
+        )
+      )
+    ))) return false;
+    return validPersistenceProjection(
+      persistenceProjection,
+      formFields,
+      terminalReceiptFields,
+    );
+  });
+}
+
+function trustedDataSchemaMatches(data, serverOwnedFields) {
+  if (!isPlainObject(data)) return false;
+  const actualFields = Object.keys(data).sort();
+  const expectedFields = Object.keys(serverOwnedFields).sort();
+  return actualFields.length === expectedFields.length
+    && actualFields.every((field, index) => field === expectedFields[index])
+    && expectedFields.every((field) => fieldSchemaMatches(data[field], serverOwnedFields[field]));
+}
+
+export function validateWhatsAppFlowDefinition(
+  definition,
+  contract = definitionContractFor(definition),
+) {
   const errors = [];
   if (!isPlainObject(definition)) return ['La definición debe ser un objeto.'];
+  const contractIsValid = validDefinitionContract(contract);
+  if (!contractIsValid) {
+    errors.push('El Flow debe declarar un contrato válido de contexto, formulario y recibo terminal.');
+  }
   if (definition.version !== WHATSAPP_FLOW_JSON_VERSION) {
     errors.push(`Flow JSON debe usar la versión ${WHATSAPP_FLOW_JSON_VERSION}.`);
   }
@@ -284,6 +501,9 @@ export function validateWhatsAppFlowDefinition(definition) {
   let terminalCount = 0;
   for (const screen of definition.screens) {
     const screenId = String(screen?.id || '');
+    const screenContract = contractIsValid && isPlainObject(contract?.screens?.[screenId])
+      ? contract.screens[screenId]
+      : null;
     if (!SCREEN_ID_PATTERN.test(screenId)) {
       errors.push(`El identificador de pantalla ${screenId || '(vacío)'} no es válido.`);
     } else if (ids.has(screenId)) {
@@ -296,7 +516,9 @@ export function validateWhatsAppFlowDefinition(definition) {
     if (!Array.isArray(routes) || routes.some((route) => !SCREEN_ID_PATTERN.test(String(route)))) {
       errors.push(`La pantalla ${screenId || '(sin id)'} debe tener una ruta válida en routing_model.`);
     }
-    if (!validTrustedDataSchema(screen?.data)) {
+    if (!screenContract) {
+      errors.push(`La pantalla ${screenId || '(sin id)'} no está declarada en el contrato del Flow.`);
+    } else if (!trustedDataSchemaMatches(screen?.data, screenContract.serverOwnedFields)) {
       errors.push(`La pantalla ${screenId || '(sin id)'} debe declarar el contexto confiable de obra.`);
     }
     if (screen?.layout?.type !== 'SingleColumnLayout' || !Array.isArray(screen.layout.children)) {
@@ -304,17 +526,42 @@ export function validateWhatsAppFlowDefinition(definition) {
       continue;
     }
 
-    const inputNames = collectInputNames(screen.layout.children);
+    const inputComponents = collectComponents(
+      screen.layout.children,
+      (child) => typeof child?.name === 'string' && child.type !== 'Form',
+    );
+    const inputNames = inputComponents.map((component) => component.name);
     const duplicateNames = inputNames.filter((name, index) => inputNames.indexOf(name) !== index);
     if (duplicateNames.length > 0) {
       errors.push(`La pantalla ${screenId} repite campos: ${[...new Set(duplicateNames)].join(', ')}.`);
     }
-    const dynamicAreaDropdowns = collectComponents(
-      screen.layout.children,
-      (child) => child?.type === 'Dropdown' && child['data-source'] === '${data.work_areas}',
-    );
-    if (dynamicAreaDropdowns.length !== 1) {
-      errors.push(`La pantalla ${screenId} debe usar un único selector dinámico de sectores.`);
+    if (screenContract) {
+      const declaredFormFields = Object.keys(screenContract.formFields);
+      for (const component of inputComponents) {
+        const fieldContract = screenContract.formFields[component.name];
+        if (!fieldContract) {
+          errors.push(`La pantalla ${screenId} contiene el campo de cliente no declarado ${component.name}.`);
+          continue;
+        }
+        if (!fieldContract.componentTypes.includes(component.type)) {
+          errors.push(`La pantalla ${screenId} usa un componente inválido para ${component.name}.`);
+        }
+        if (fieldContract.dataSourceField) {
+          const expectedSource = `\${data.${fieldContract.dataSourceField}}`;
+          if (component['data-source'] !== expectedSource) {
+            errors.push(`La pantalla ${screenId} debe usar el selector dinámico declarado para ${component.name}.`);
+          }
+        } else if (
+          typeof component['data-source'] === 'string'
+          && component['data-source'].startsWith('${data.')
+        ) {
+          errors.push(`La pantalla ${screenId} usa contexto de servidor no declarado para ${component.name}.`);
+        }
+      }
+      const missingFormFields = declaredFormFields.filter((field) => !inputNames.includes(field));
+      if (missingFormFields.length > 0) {
+        errors.push(`La pantalla ${screenId} omite campos declarados: ${missingFormFields.join(', ')}.`);
+      }
     }
 
     if (screen?.terminal) {
@@ -326,8 +573,10 @@ export function validateWhatsAppFlowDefinition(definition) {
       } else if (!isPlainObject(action.payload)) {
         errors.push(`La pantalla terminal ${screenId} debe enviar un payload válido.`);
       } else {
-        if (Object.hasOwn(action.payload, 'flow_type')) {
-          errors.push(`La pantalla terminal ${screenId} no puede confiar flow_type al cliente.`);
+        for (const field of Object.keys(screenContract?.terminalReceiptFields || {})) {
+          if (Object.hasOwn(action.payload, field)) {
+            errors.push(`La pantalla terminal ${screenId} no puede confiar ${field} al cliente.`);
+          }
         }
         for (const [field, reference] of Object.entries(action.payload)) {
           if (!inputNames.includes(field) || reference !== `\${form.${field}}`) {
@@ -355,13 +604,25 @@ export function validateWhatsAppFlowDefinition(definition) {
       break;
     }
   }
+  const contractScreenIds = isPlainObject(contract?.screens) ? Object.keys(contract.screens) : [];
+  if (contractScreenIds.some((screenId) => !ids.has(screenId))) {
+    errors.push('El contrato del Flow declara pantallas inexistentes.');
+  }
   if (terminalCount === 0) errors.push('El Flow necesita al menos una pantalla terminal.');
   return errors;
 }
 
 for (const blueprint of BLUEPRINTS) {
-  const errors = validateWhatsAppFlowDefinition(blueprint.definition);
+  const errors = validateWhatsAppFlowDefinition(
+    blueprint.definition,
+    FLOW_DEFINITION_CONTRACTS[blueprint.key],
+  );
   if (errors.length > 0) throw new Error(`Invalid WhatsApp Flow blueprint ${blueprint.key}: ${errors.join(' ')}`);
+}
+
+export function getWhatsAppFlowDefinitionContract(key) {
+  const contract = FLOW_DEFINITION_CONTRACTS[key];
+  return contract ? clone(contract) : null;
 }
 
 export function getWhatsAppFlowBlueprint(key) {
@@ -491,6 +752,50 @@ export function validateWhatsAppFlowReply(blueprintKey, response) {
   }
 
   throw new WhatsAppFlowReplyError('WhatsApp Flow reply is not supported by this runtime.');
+}
+
+/**
+ * Produce the only Flow response shape allowed in the generic webhook queue.
+ * The session-bound consumer still performs the authoritative validation. This
+ * early projection exists solely to keep client-controlled or future sensitive
+ * fields out of generic WebhookEvent JSON, message metadata, logs and audits.
+ */
+export function projectWhatsAppFlowReplyForPersistence(response) {
+  if (!isPlainObject(response)) return {};
+  const blueprint = BLUEPRINTS.find((candidate) => candidate.flowType === response.flow_type);
+  if (!blueprint) return {};
+
+  let validated;
+  try {
+    validated = validateWhatsAppFlowReply(blueprint.key, response);
+  } catch (error) {
+    if (error instanceof WhatsAppFlowReplyError) return {};
+    throw error;
+  }
+
+  const projection = FLOW_DEFINITION_CONTRACTS[blueprint.key]
+    ?.screens?.[blueprint.screenId]
+    ?.persistenceProjection;
+  if (!isPlainObject(projection)) return {};
+
+  const persisted = {};
+  for (const [field, policy] of Object.entries(projection)) {
+    if (!Object.hasOwn(validated, field)) continue;
+    if (policy.strategy === 'redacted-text') {
+      persisted[field] = '[contenido restringido]';
+      continue;
+    }
+    if (policy.strategy === 'constant') {
+      persisted[field] = policy.value;
+      continue;
+    }
+    if (
+      policy.strategy === 'enum'
+      && !policy.values.includes(validated[field])
+    ) return {};
+    persisted[field] = validated[field];
+  }
+  return persisted;
 }
 
 export function getPublishedWhatsAppFlowReference(metadata, blueprintKey) {

@@ -9,6 +9,7 @@ import {
   getWhatsAppBusinessEncryptionPublicKey,
   getWhatsAppFlowBlueprint,
   getWhatsAppFlowCatalog,
+  getWhatsAppFlowDefinitionContract,
   getWhatsAppFlowProvisioningReference,
   getWhatsAppFlowScopedName,
   getWhatsAppFlowSessionTtlMs,
@@ -16,6 +17,7 @@ import {
   normalizeWhatsAppBusinessEncryption,
   normalizeWhatsAppFlowPublicKey,
   provisionWhatsAppFlowDraft,
+  projectWhatsAppFlowReplyForPersistence,
   reconcileWhatsAppFlowLifecycleMetadata,
   setWhatsAppBusinessEncryption,
   setWhatsAppBusinessEncryptionPublicKey,
@@ -71,6 +73,71 @@ function terminalFooter(blueprint) {
   return terminalForm(blueprint).children.find((component) => component.type === 'Footer');
 }
 
+function noSectorDefinition() {
+  return {
+    version: WHATSAPP_FLOW_JSON_VERSION,
+    data_api_version: WHATSAPP_FLOW_DATA_API_VERSION,
+    routing_model: { WORKER_PROFILE: [] },
+    screens: [
+      {
+        id: 'WORKER_PROFILE',
+        title: 'Perfil',
+        terminal: true,
+        success: true,
+        data: {
+          project_name: { type: 'string', __example__: 'Torre del Parque' },
+        },
+        layout: {
+          type: 'SingleColumnLayout',
+          children: [
+            {
+              type: 'Form',
+              name: 'profile_form',
+              children: [
+                { type: 'TextBody', text: '${data.project_name}' },
+                {
+                  type: 'TextInput',
+                  name: 'given_names',
+                  label: 'Nombres',
+                  required: true,
+                },
+                {
+                  type: 'Footer',
+                  label: 'Continuar',
+                  'on-click-action': {
+                    name: 'data_exchange',
+                    payload: { given_names: '${form.given_names}' },
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      },
+    ],
+  };
+}
+
+function noSectorContract() {
+  return {
+    screens: {
+      WORKER_PROFILE: {
+        serverOwnedFields: { project_name: { type: 'string' } },
+        formFields: { given_names: { componentTypes: ['TextInput'] } },
+        terminalReceiptFields: {
+          flow_type: { type: 'string' },
+          submission_id: { type: 'string' },
+        },
+        persistenceProjection: {
+          given_names: { strategy: 'redacted-text' },
+          flow_type: { strategy: 'constant', value: 'worker-profile' },
+          submission_id: { strategy: 'opaque-reference' },
+        },
+      },
+    },
+  };
+}
+
 function remoteFlow(overrides = {}) {
   return {
     id: FLOW_ID,
@@ -103,6 +170,19 @@ test('ObraSaaS blueprints use Flow JSON 7.3 and the dynamic Data API 4.0 contrac
     const area = form.children.find((component) => component.name === areaField);
 
     assert.deepEqual(validateWhatsAppFlowDefinition(blueprint.definition), []);
+    assert.deepEqual(Object.keys(blueprint).sort(), [
+      'capabilities',
+      'categories',
+      'definition',
+      'description',
+      'flowType',
+      'key',
+      'message',
+      'name',
+      'screenId',
+      'sessionTtlMs',
+      'title',
+    ]);
     assert.equal(blueprint.definition.version, '7.3');
     assert.equal(blueprint.definition.data_api_version, '4.0');
     assert.deepEqual(blueprint.definition.routing_model, { [screen.id]: [] });
@@ -118,6 +198,133 @@ test('ObraSaaS blueprints use Flow JSON 7.3 and the dynamic Data API 4.0 contrac
     assert.equal(item.dataApiVersion, '4.0');
     assert.equal(item.remote.status, 'NOT_CREATED');
   }
+});
+
+test('Flow definition contracts separate server context, client fields, and terminal receipts', () => {
+  const incident = getWhatsAppFlowDefinitionContract('incident-report');
+  const shift = getWhatsAppFlowDefinitionContract('shift-check-in');
+
+  assert.deepEqual(Object.keys(incident.screens.INCIDENT_REPORT.serverOwnedFields).sort(), [
+    'project_name',
+    'work_areas',
+    'worker_name',
+  ]);
+  assert.deepEqual(Object.keys(incident.screens.INCIDENT_REPORT.formFields).sort(), [
+    'area',
+    'description',
+    'severity',
+  ]);
+  assert.deepEqual(Object.keys(incident.screens.INCIDENT_REPORT.terminalReceiptFields).sort(), [
+    'flow_type',
+    'task_ref',
+  ]);
+  assert.equal(
+    shift.screens.SHIFT_CHECK_IN.formFields.work_area.dataSourceField,
+    'work_areas',
+  );
+  assert.equal(
+    incident.screens.INCIDENT_REPORT.persistenceProjection.description.strategy,
+    'redacted-text',
+  );
+  assert.equal(
+    shift.screens.SHIFT_CHECK_IN.persistenceProjection.task_ref.strategy,
+    'opaque-reference',
+  );
+  assert.equal(getWhatsAppFlowDefinitionContract('unknown-flow'), null);
+});
+
+test('Flow persistence projection keeps operational receipts but redacts free text', () => {
+  assert.deepEqual(projectWhatsAppFlowReplyForPersistence({
+    flow_type: 'incident',
+    severity: 'critical',
+    area: 'Planta baja',
+    description: 'CUIT 20-12345678-9, CBU 0000000000000000000000',
+    task_ref: 'task-structure-02',
+  }), {
+    flow_type: 'incident',
+    severity: 'critical',
+    area: 'Planta baja',
+    description: '[contenido restringido]',
+    task_ref: 'task-structure-02',
+  });
+  assert.deepEqual(projectWhatsAppFlowReplyForPersistence({
+    flow_type: 'attendance',
+    work_area: 'Estructura nivel 2',
+    ppe_status: 'complete',
+    observations: 'Alias sueldo.carlos y CBU 0000000000000000000000',
+  }), {
+    flow_type: 'attendance',
+    work_area: 'Estructura nivel 2',
+    ppe_status: 'complete',
+    observations: '[contenido restringido]',
+  });
+});
+
+test('Flow persistence projection fails closed for unknown sensitive fields or blueprints', () => {
+  assert.deepEqual(projectWhatsAppFlowReplyForPersistence({
+    flow_type: 'incident',
+    severity: 'high',
+    area: 'Planta baja',
+    description: 'Pérdida de agua',
+    cbu: '0000000000000000000000',
+  }), {});
+  assert.deepEqual(projectWhatsAppFlowReplyForPersistence({
+    flow_type: 'worker-onboarding-future',
+    full_name: 'Carlos Pérez',
+    cuit: '20-12345678-9',
+    alias: 'sueldo.carlos',
+  }), {});
+});
+
+test('a Flow without work areas is valid only under its declared screen contract', () => {
+  const definition = noSectorDefinition();
+  const contract = noSectorContract();
+
+  assert.deepEqual(validateWhatsAppFlowDefinition(definition, contract), []);
+
+  const missingServerDeclaration = structuredClone(contract);
+  delete missingServerDeclaration.screens.WORKER_PROFILE.serverOwnedFields.project_name;
+  const missingDeclarationErrors = validateWhatsAppFlowDefinition(
+    definition,
+    missingServerDeclaration,
+  );
+  assert.equal(
+    missingDeclarationErrors.some((error) => error.includes('contexto confiable')),
+    true,
+  );
+  assert.equal(
+    validateWhatsAppFlowDefinition(definition).some((error) => error.includes('contrato válido')),
+    true,
+  );
+});
+
+test('Flow validation rejects client fields absent from the blueprint contract', () => {
+  const definition = noSectorDefinition();
+  const contract = noSectorContract();
+  const form = terminalForm({ definition });
+  form.children.splice(-1, 0, {
+    type: 'TextInput',
+    name: 'undeclared_cuil',
+    label: 'Dato no declarado',
+    required: true,
+  });
+  terminalFooter({ definition })['on-click-action'].payload.undeclared_cuil = '${form.undeclared_cuil}';
+
+  const errors = validateWhatsAppFlowDefinition(definition, contract);
+  assert.equal(
+    errors.some((error) => error.includes('campo de cliente no declarado undeclared_cuil')),
+    true,
+  );
+});
+
+test('malformed Flow definition contracts fail closed without throwing', () => {
+  const malformedContract = noSectorContract();
+  malformedContract.screens.WORKER_PROFILE.formFields.given_names = {};
+
+  const errors = validateWhatsAppFlowDefinition(noSectorDefinition(), malformedContract);
+
+  assert.equal(errors.some((error) => error.includes('contrato válido')), true);
+  assert.equal(errors.some((error) => error.includes('no está declarada en el contrato')), true);
 });
 
 test('Flow session lifetime follows each blueprint operational risk', () => {

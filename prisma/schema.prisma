@@ -387,6 +387,22 @@ enum WorkerPaymentDestinationStatus {
   REVOKED
 }
 
+enum WorkerPaymentSubmissionSource {
+  TENANT_MEMBERSHIP
+  WORKER_CHANNEL
+}
+
+enum WorkerSensitiveDecisionAction {
+  IDENTITY_VERIFIED
+  IDENTITY_REJECTED
+  ONBOARDING_APPROVED
+  ONBOARDING_REJECTED
+  PAYMENT_VERIFIED
+  PAYMENT_REJECTED
+  PAYMENT_ACTIVATED
+  PAYMENT_REVOKED
+}
+
 enum ProjectStartActStatus {
   DRAFT
   PENDING_SIGNATURES
@@ -475,6 +491,7 @@ model Organization {
   workerChannelIdentities   WorkerChannelIdentity[]
   workerOnboardingClaims    WorkerOnboardingClaim[]
   workerPaymentDestinations WorkerPaymentDestination[]
+  workerSensitiveDecisions  WorkerSensitiveDecision[]
   createdAt                 DateTime                   @default(now())
   updatedAt                 DateTime                   @updatedAt
   workers                   Worker[]
@@ -665,19 +682,29 @@ model PlatformUser {
 }
 
 model TenantMembership {
-  id                 String              @id @default(cuid())
-  organizationId     String
-  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  userId             String
-  user               PlatformUser        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  clerkRole          String              @default("org:member")
-  tenantRole         TenantRole          @default(AUDITOR)
-  status             MembershipStatus    @default(ACTIVE)
-  projectMemberships ProjectMembership[]
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
+  id                                 String                     @id @default(cuid())
+  organizationId                     String
+  organization                       Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId                             String
+  user                               PlatformUser               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clerkRole                          String                     @default("org:member")
+  tenantRole                         TenantRole                 @default(AUDITOR)
+  status                             MembershipStatus           @default(ACTIVE)
+  projectMemberships                 ProjectMembership[]
+  verifiedWorkerIdentities           WorkerPerson[]             @relation("WorkerIdentityVerifierMembership")
+  rejectedWorkerIdentities           WorkerPerson[]             @relation("WorkerIdentityRejecterMembership")
+  reviewedWorkerOnboardingClaims     WorkerOnboardingClaim[]    @relation("WorkerOnboardingReviewerMembership")
+  submittedWorkerPaymentDestinations WorkerPaymentDestination[] @relation("WorkerPaymentSubmitterMembership")
+  verifiedWorkerPaymentDestinations  WorkerPaymentDestination[] @relation("WorkerPaymentVerifierMembership")
+  activatedWorkerPaymentDestinations WorkerPaymentDestination[] @relation("WorkerPaymentActivatorMembership")
+  rejectedWorkerPaymentDestinations  WorkerPaymentDestination[] @relation("WorkerPaymentRejecterMembership")
+  revokedWorkerPaymentDestinations   WorkerPaymentDestination[] @relation("WorkerPaymentRevokerMembership")
+  workerSensitiveDecisions           WorkerSensitiveDecision[]  @relation("WorkerSensitiveDecisionActor")
+  createdAt                          DateTime                   @default(now())
+  updatedAt                          DateTime                   @updatedAt
 
   @@unique([organizationId, userId])
+  @@unique([organizationId, id], map: "TenantMembership_organizationId_id_key")
   @@index([userId, status])
   @@index([organizationId, tenantRole, status])
 }
@@ -921,11 +948,11 @@ model Worker {
   organization                   Organization?                  @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   tenantScopedProject            Project?                       @relation("WorkerTenantProject", fields: [organizationId, projectId], references: [organizationId, id], onDelete: NoAction)
   personId                       String?
-  person                         WorkerPerson?                  @relation(fields: [organizationId, personId], references: [organizationId, id], onDelete: SetNull)
+  person                         WorkerPerson?                  @relation(fields: [organizationId, personId], references: [organizationId, id], onDelete: Restrict)
   externalId                     String?
-  /// Legacy transitional channel authority. Migrate through dual-read/backfill
-  /// to WorkerChannelIdentity before making this nullable in a contract phase.
-  phone                          String
+  /// Legacy transitional channel authority. New identities live in
+  /// WorkerChannelIdentity; null is valid after the dual-read/backfill cutover.
+  phone                          String?
   name                           String
   role                           String?
   active                         Boolean                        @default(true)
@@ -956,43 +983,56 @@ model Worker {
   @@unique([projectId, phone])
   @@unique([projectId, id], map: "Worker_projectId_id_key")
   @@unique([organizationId, personId, projectId, id], map: "Worker_org_person_project_id_key")
+  // PostgreSQL additionally enforces one non-null person per project with the
+  // partial Worker_one_person_per_project_idx index from the hardening migration.
   @@index([organizationId, personId])
   @@index([externalId])
 }
 
 model WorkerPerson {
-  id                       String                     @id @default(cuid())
-  organizationId           String
-  organization             Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  status                   WorkerPersonStatus         @default(ACTIVE)
-  identityStatus           WorkerIdentityStatus       @default(UNVERIFIED)
-  encryptedIdentityPayload String?                    @db.Text
-  cuilFingerprint          String?                    @db.Char(64)
-  cuilFingerprintKeyId     String?                    @db.VarChar(100)
-  cuilLastFour             String?                    @db.VarChar(4)
-  wrappingKeyId            String?                    @db.VarChar(100)
-  recordVersion            Int                        @default(1)
-  privacyNoticeVersion     String?                    @db.VarChar(64)
-  privacyAcceptedAt        DateTime?
-  identityVerifiedAt       DateTime?
-  identityVerifiedById     String?
-  identityVerifiedBy       PlatformUser?              @relation("WorkerIdentityVerifier", fields: [identityVerifiedById], references: [id], onDelete: SetNull)
-  identityRejectedAt       DateTime?
-  identityRejectedById     String?
-  identityRejectedBy       PlatformUser?              @relation("WorkerIdentityRejecter", fields: [identityRejectedById], references: [id], onDelete: SetNull)
-  identityRejectionReason  String?                    @db.VarChar(500)
-  revision                 Int                        @default(0)
-  workers                  Worker[]
-  channelIdentities        WorkerChannelIdentity[]
-  onboardingClaims         WorkerOnboardingClaim[]    @relation("WorkerOnboardingResultPerson")
-  paymentDestinations      WorkerPaymentDestination[]
-  createdAt                DateTime                   @default(now())
-  updatedAt                DateTime                   @updatedAt
+  id                             String                     @id @default(cuid())
+  organizationId                 String
+  organization                   Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  status                         WorkerPersonStatus         @default(ACTIVE)
+  identityStatus                 WorkerIdentityStatus       @default(UNVERIFIED)
+  encryptedIdentityPayload       String?                    @db.Text
+  cuilFingerprint                String?                    @db.Char(64)
+  cuilFingerprintKeyId           String?                    @db.VarChar(100)
+  cuilLastFour                   String?                    @db.VarChar(4)
+  wrappingKeyId                  String?                    @db.VarChar(100)
+  recordVersion                  Int                        @default(1)
+  privacyNoticeVersion           String?                    @db.VarChar(64)
+  privacyAcceptedAt              DateTime?
+  identityVerifiedAt             DateTime?
+  /// Legacy transitional platform-user actor. New decisions bind the tenant
+  /// membership below so an actor cannot cross organization boundaries.
+  identityVerifiedById           String?
+  identityVerifiedBy             PlatformUser?              @relation("WorkerIdentityVerifier", fields: [identityVerifiedById], references: [id], onDelete: SetNull)
+  identityVerifiedByMembershipId String?
+  identityVerifiedByMembership   TenantMembership?          @relation("WorkerIdentityVerifierMembership", fields: [organizationId, identityVerifiedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "WorkerPerson_verifier_membership_fkey")
+  identityRejectedAt             DateTime?
+  /// Legacy transitional platform-user actor; retained for expand/contract.
+  identityRejectedById           String?
+  identityRejectedBy             PlatformUser?              @relation("WorkerIdentityRejecter", fields: [identityRejectedById], references: [id], onDelete: SetNull)
+  identityRejectedByMembershipId String?
+  identityRejectedByMembership   TenantMembership?          @relation("WorkerIdentityRejecterMembership", fields: [organizationId, identityRejectedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "WorkerPerson_rejecter_membership_fkey")
+  identityDecisionEvidenceHash   String?                    @db.Char(64)
+  identityRejectionReason        String?                    @db.VarChar(500)
+  revision                       Int                        @default(0)
+  workers                        Worker[]
+  channelIdentities              WorkerChannelIdentity[]
+  onboardingClaims               WorkerOnboardingClaim[]    @relation("WorkerOnboardingResultPerson")
+  paymentDestinations            WorkerPaymentDestination[]
+  sensitiveDecisions             WorkerSensitiveDecision[]  @relation("WorkerSensitiveDecisionPerson")
+  createdAt                      DateTime                   @default(now())
+  updatedAt                      DateTime                   @updatedAt
 
   @@unique([organizationId, id])
   @@unique([organizationId, cuilFingerprintKeyId, cuilFingerprint], map: "WorkerPerson_org_cuil_fp_key")
   @@index([organizationId, status, identityStatus])
   @@index([identityVerifiedById, identityVerifiedAt])
+  @@index([identityVerifiedByMembershipId, identityVerifiedAt], map: "WorkerPerson_verifier_membership_idx")
+  @@index([identityRejectedByMembershipId, identityRejectedAt], map: "WorkerPerson_rejecter_membership_idx")
 }
 
 model WorkerChannelIdentity {
@@ -1017,6 +1057,7 @@ model WorkerChannelIdentity {
   revokedAt                       DateTime?
   revision                        Int                         @default(0)
   onboardingClaims                WorkerOnboardingClaim[]     @relation("WorkerOnboardingResultChannel")
+  submittedPaymentDestinations    WorkerPaymentDestination[]  @relation("WorkerPaymentSubmitterChannel")
   createdAt                       DateTime                    @default(now())
   updatedAt                       DateTime                    @updatedAt
 
@@ -1055,8 +1096,12 @@ model WorkerOnboardingClaim {
   expiresAt                       DateTime
   submittedAt                     DateTime?
   reviewedAt                      DateTime?
+  /// Legacy transitional platform-user actor; retained for expand/contract.
   reviewedById                    String?
   reviewedBy                      PlatformUser?               @relation("WorkerOnboardingReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedByMembershipId          String?
+  reviewedByMembership            TenantMembership?           @relation("WorkerOnboardingReviewerMembership", fields: [organizationId, reviewedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "WorkerClaim_reviewer_membership_fkey")
+  reviewEvidenceHash              String?                     @db.Char(64)
   rejectionReason                 String?                     @db.VarChar(500)
   resolvedPersonId                String?
   resolvedPerson                  WorkerPerson?               @relation("WorkerOnboardingResultPerson", fields: [organizationId, resolvedPersonId], references: [organizationId, id], onDelete: Restrict)
@@ -1067,6 +1112,7 @@ model WorkerOnboardingClaim {
   operationKey                    String                      @db.VarChar(190)
   requestFingerprint              String                      @db.Char(64)
   revision                        Int                         @default(0)
+  sensitiveDecisions              WorkerSensitiveDecision[]   @relation("WorkerSensitiveDecisionOnboardingClaim")
   createdAt                       DateTime                    @default(now())
   updatedAt                       DateTime                    @updatedAt
 
@@ -1075,48 +1121,72 @@ model WorkerOnboardingClaim {
   @@index([organizationId, senderFingerprintKeyId, senderFingerprint, status], map: "WorkerClaim_org_sender_status_idx")
   @@index([projectId, status, expiresAt])
   @@index([resolvedPersonId, status])
+  @@index([reviewedByMembershipId, reviewedAt], map: "WorkerClaim_reviewer_membership_idx")
 }
 
 model WorkerPaymentDestination {
-  id                         String                         @id @default(cuid())
-  organizationId             String
-  organization               Organization                   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  personId                   String
-  person                     WorkerPerson                   @relation(fields: [organizationId, personId], references: [organizationId, id], onDelete: Restrict)
-  purpose                    WorkerPaymentPurpose
-  type                       WorkerPaymentDestinationType
-  rail                       WorkerPaymentRail?
-  currency                   String                         @default("ARS") @db.Char(3)
-  encryptedPayload           String                         @db.Text
-  fingerprint                String                         @db.Char(64)
-  fingerprintKeyId           String                         @db.VarChar(100)
-  lastFour                   String                         @db.VarChar(4)
-  wrappingKeyId              String                         @db.VarChar(100)
-  recordVersion              Int                            @default(1)
-  holderCuilFingerprint      String                         @db.Char(64)
-  holderCuilFingerprintKeyId String                         @db.VarChar(100)
-  status                     WorkerPaymentDestinationStatus @default(PENDING_VERIFICATION)
-  version                    Int                            @default(1)
-  revision                   Int                            @default(0)
-  activeSlot                 String?                        @unique @db.Char(64)
-  previousDestinationId      String?
-  previousDestination        WorkerPaymentDestination?      @relation("WorkerPaymentDestinationVersions", fields: [organizationId, personId, purpose, previousDestinationId], references: [organizationId, personId, purpose, id], onDelete: Restrict, map: "WorkerPayment_previous_scope_fkey")
-  supersedingDestinations    WorkerPaymentDestination[]     @relation("WorkerPaymentDestinationVersions")
-  operationKey               String                         @db.VarChar(190)
-  requestFingerprint         String                         @db.Char(64)
-  verificationProvider       String?                        @db.VarChar(64)
-  providerReferenceHash      String?                        @db.Char(64)
-  verificationEvidenceHash   String?                        @db.Char(64)
-  verifiedAt                 DateTime?
-  verifiedById               String?
-  verifiedBy                 PlatformUser?                  @relation("WorkerPaymentDestinationVerifier", fields: [verifiedById], references: [id], onDelete: SetNull)
-  availableFrom              DateTime?
-  rejectedAt                 DateTime?
-  rejectionReason            String?                        @db.VarChar(500)
-  revokedAt                  DateTime?
-  revocationReason           String?                        @db.VarChar(500)
-  createdAt                  DateTime                       @default(now())
-  updatedAt                  DateTime                       @updatedAt
+  id                           String                         @id @default(cuid())
+  organizationId               String
+  organization                 Organization                   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  personId                     String
+  person                       WorkerPerson                   @relation(fields: [organizationId, personId], references: [organizationId, id], onDelete: Restrict)
+  purpose                      WorkerPaymentPurpose
+  type                         WorkerPaymentDestinationType
+  rail                         WorkerPaymentRail?
+  currency                     String                         @default("ARS") @db.Char(3)
+  encryptedPayload             String                         @db.Text
+  fingerprint                  String                         @db.Char(64)
+  fingerprintKeyId             String                         @db.VarChar(100)
+  lastFour                     String                         @db.VarChar(4)
+  wrappingKeyId                String                         @db.VarChar(100)
+  recordVersion                Int                            @default(1)
+  holderCuilFingerprint        String                         @db.Char(64)
+  holderCuilFingerprintKeyId   String                         @db.VarChar(100)
+  status                       WorkerPaymentDestinationStatus @default(PENDING_VERIFICATION)
+  version                      Int                            @default(1)
+  revision                     Int                            @default(0)
+  activeSlot                   String?                        @unique @db.Char(64)
+  previousDestinationId        String?
+  previousDestination          WorkerPaymentDestination?      @relation("WorkerPaymentDestinationVersions", fields: [organizationId, personId, purpose, previousDestinationId], references: [organizationId, personId, purpose, id], onDelete: Restrict, map: "WorkerPayment_previous_scope_fkey")
+  supersedingDestinations      WorkerPaymentDestination[]     @relation("WorkerPaymentDestinationVersions")
+  operationKey                 String                         @db.VarChar(190)
+  requestFingerprint           String                         @db.Char(64)
+  submissionSource             WorkerPaymentSubmissionSource?
+  submittedAt                  DateTime?
+  submittedByMembershipId      String?
+  submittedByMembership        TenantMembership?              @relation("WorkerPaymentSubmitterMembership", fields: [organizationId, submittedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "WorkerPayment_submitter_membership_fkey")
+  submittedByChannelIdentityId String?
+  submittedByChannelIdentity   WorkerChannelIdentity?         @relation("WorkerPaymentSubmitterChannel", fields: [organizationId, personId, submittedByChannelIdentityId], references: [organizationId, personId, id], onDelete: Restrict, map: "WorkerPayment_submitter_channel_fkey")
+  resolvedType                 WorkerPaymentDestinationType?
+  resolvedEncryptedPayload     String?                        @db.Text
+  resolvedFingerprint          String?                        @db.Char(64)
+  resolvedFingerprintKeyId     String?                        @db.VarChar(100)
+  resolvedWrappingKeyId        String?                        @db.VarChar(100)
+  resolvedRecordVersion        Int?
+  verificationProvider         String?                        @db.VarChar(64)
+  providerReferenceHash        String?                        @db.Char(64)
+  verificationEvidenceHash     String?                        @db.Char(64)
+  verifiedAt                   DateTime?
+  /// Legacy transitional platform-user actor; retained for expand/contract.
+  verifiedById                 String?
+  verifiedBy                   PlatformUser?                  @relation("WorkerPaymentDestinationVerifier", fields: [verifiedById], references: [id], onDelete: SetNull)
+  verifiedByMembershipId       String?
+  verifiedByMembership         TenantMembership?              @relation("WorkerPaymentVerifierMembership", fields: [organizationId, verifiedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "WorkerPayment_verifier_membership_fkey")
+  activatedAt                  DateTime?
+  activatedByMembershipId      String?
+  activatedByMembership        TenantMembership?              @relation("WorkerPaymentActivatorMembership", fields: [organizationId, activatedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "WorkerPayment_activator_membership_fkey")
+  availableFrom                DateTime?
+  rejectedAt                   DateTime?
+  rejectedByMembershipId       String?
+  rejectedByMembership         TenantMembership?              @relation("WorkerPaymentRejecterMembership", fields: [organizationId, rejectedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "WorkerPayment_rejecter_membership_fkey")
+  rejectionReason              String?                        @db.VarChar(500)
+  revokedAt                    DateTime?
+  revokedByMembershipId        String?
+  revokedByMembership          TenantMembership?              @relation("WorkerPaymentRevokerMembership", fields: [organizationId, revokedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "WorkerPayment_revoker_membership_fkey")
+  revocationReason             String?                        @db.VarChar(500)
+  sensitiveDecisions           WorkerSensitiveDecision[]      @relation("WorkerSensitiveDecisionPaymentDestination")
+  createdAt                    DateTime                       @default(now())
+  updatedAt                    DateTime                       @updatedAt
 
   @@unique([organizationId, id])
   @@unique([organizationId, personId, purpose, id], map: "WorkerPayment_org_person_purpose_id_key")
@@ -1126,6 +1196,39 @@ model WorkerPaymentDestination {
   @@index([organizationId, personId, purpose, status], map: "WorkerPayment_org_person_purpose_status_idx")
   @@index([status, availableFrom])
   @@index([verifiedById, verifiedAt])
+  @@index([verifiedByMembershipId, verifiedAt])
+  @@index([activatedByMembershipId, activatedAt], map: "WorkerPayment_activator_membership_idx")
+  @@index([rejectedByMembershipId, rejectedAt])
+  @@index([revokedByMembershipId, revokedAt])
+}
+
+/// Immutable decision ledger for identity, onboarding, and payment controls.
+/// It stores only tenant-scoped identifiers and cryptographic evidence hashes.
+model WorkerSensitiveDecision {
+  id                   String                        @id @default(cuid())
+  organizationId       String
+  organization         Organization                  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  actorMembershipId    String
+  actorMembership      TenantMembership              @relation("WorkerSensitiveDecisionActor", fields: [organizationId, actorMembershipId], references: [organizationId, id], onDelete: Restrict, map: "WSD_actor_membership_fkey")
+  action               WorkerSensitiveDecisionAction
+  workerPersonId       String?
+  workerPerson         WorkerPerson?                 @relation("WorkerSensitiveDecisionPerson", fields: [organizationId, workerPersonId], references: [organizationId, id], onDelete: Restrict, map: "WSD_worker_person_fkey")
+  onboardingClaimId    String?
+  onboardingClaim      WorkerOnboardingClaim?        @relation("WorkerSensitiveDecisionOnboardingClaim", fields: [organizationId, onboardingClaimId], references: [organizationId, id], onDelete: Restrict, map: "WSD_onboarding_claim_fkey")
+  paymentDestinationId String?
+  paymentDestination   WorkerPaymentDestination?     @relation("WorkerSensitiveDecisionPaymentDestination", fields: [organizationId, paymentDestinationId], references: [organizationId, id], onDelete: Restrict, map: "WSD_payment_destination_fkey")
+  policyVersion        String                        @db.VarChar(64)
+  evidenceHash         String                        @db.Char(64)
+  operationKey         String                        @db.VarChar(190)
+  requestFingerprint   String                        @db.Char(64)
+  createdAt            DateTime                      @default(now())
+
+  @@unique([organizationId, id], map: "WSD_org_id_key")
+  @@unique([organizationId, operationKey], map: "WSD_org_operation_key")
+  @@index([organizationId, action, createdAt], map: "WSD_org_action_created_idx")
+  @@index([organizationId, workerPersonId, createdAt], map: "WSD_org_person_created_idx")
+  @@index([organizationId, onboardingClaimId, createdAt], map: "WSD_org_claim_created_idx")
+  @@index([organizationId, paymentDestinationId, createdAt], map: "WSD_org_payment_created_idx")
 }
 
 model WorkerDocument {
