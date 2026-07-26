@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
+    "build:vercel": "node scripts/vercel-build.mjs",
     "start": "next start",
     "lint": "eslint",
     "test": "node --test tests/*.test.js",
@@ -23,6 +24,7 @@
     "verify:s6-migrations": "node scripts/verify-s6-migrations.mjs",
     "verify:s10-migrations": "node scripts/verify-s10-migrations.mjs",
     "verify:d1-migrations": "node scripts/verify-d1-migrations.mjs",
+    "verify:worker-identity-migrations": "node scripts/verify-worker-identity-migrations.mjs",
     "seed:attendance-migration-fixtures": "node scripts/seed-attendance-ledger-legacy-fixtures.mjs",
     "verify:inbox-postgres": "tsx scripts/verify-whatsapp-inbox-postgres.mjs",
     "db:generate": "prisma generate",

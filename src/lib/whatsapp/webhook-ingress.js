@@ -8,7 +8,10 @@ import { resolveWhatsAppConnectionScopesBulk } from './webhook-scope.js';
 // Meta documents a maximum of 1,000 updates in one webhook POST. An update is
 // one item in an entry's changes array, not one normalized message/status row.
 export const META_WEBHOOK_MAX_UPDATES = 1_000;
-export const META_WEBHOOK_MAX_BODY_BYTES = 4 * 1024 * 1024;
+// Meta's current webhook contract caps a delivery at 3 MiB. Reject anything
+// larger before HMAC parsing so an oversized request cannot consume JSON/queue
+// capacity that the provider itself does not legitimately need.
+export const META_WEBHOOK_MAX_BODY_BYTES = 3 * 1024 * 1024;
 
 export class MetaWebhookBatchError extends Error {
   constructor(message, { code = 'META_WEBHOOK_BATCH_INVALID', status = 400 } = {}) {

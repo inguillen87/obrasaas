@@ -115,6 +115,11 @@ jobs:
       - name: Verify S6 migrations
         run: npm run verify:s6-migrations
 
+      - name: Verify worker identity and payment controls
+        env:
+          WORKER_IDENTITY_MIGRATION_DATABASE_URL: postgresql://obrasaas_ci:obrasaas_ci@127.0.0.1:5432/obrasaas_ci?schema=public
+        run: npm run verify:worker-identity-migrations
+
       - name: Verify migration history status
         run: npx prisma migrate status
 

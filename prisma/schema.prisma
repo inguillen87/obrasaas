@@ -1049,6 +1049,8 @@ model WorkerChannelIdentity {
   addressLastFour                 String                      @db.VarChar(4)
   wrappingKeyId                   String                      @db.VarChar(100)
   recordVersion                   Int                         @default(1)
+  /// A database CHECK requires this provider-subject bundle for VERIFIED rows.
+  /// Rollout installs it NOT VALID, preflights legacy rows, then validates it.
   encryptedProviderSubjectPayload String?                     @db.Text
   providerSubjectFingerprint      String?                     @db.Char(64)
   providerSubjectFingerprintKeyId String?                     @db.VarChar(100)
@@ -1163,6 +1165,14 @@ model WorkerPaymentDestination {
   resolvedFingerprintKeyId     String?                        @db.VarChar(100)
   resolvedWrappingKeyId        String?                        @db.VarChar(100)
   resolvedRecordVersion        Int?
+  /// Canonical account identity is database-derived: direct CBU/CVU records use
+  /// their submitted fingerprint; resolved aliases use the resolved fingerprint.
+  /// Nullable only while an alias is unresolved. Database uniqueness applies
+  /// within one fingerprint-key epoch; the service deduplicates across accepted
+  /// key epochs under a tenant/person/purpose advisory lock.
+  canonicalType                WorkerPaymentDestinationType?
+  canonicalFingerprint         String?                        @db.Char(64)
+  canonicalFingerprintKeyId    String?                        @db.VarChar(100)
   verificationProvider         String?                        @db.VarChar(64)
   providerReferenceHash        String?                        @db.Char(64)
   verificationEvidenceHash     String?                        @db.Char(64)
@@ -1192,6 +1202,7 @@ model WorkerPaymentDestination {
   @@unique([organizationId, personId, purpose, id], map: "WorkerPayment_org_person_purpose_id_key")
   @@unique([organizationId, personId, purpose, version], map: "WorkerPayment_org_person_purpose_version_key")
   @@unique([organizationId, personId, purpose, type, fingerprintKeyId, fingerprint], map: "WorkerPayment_org_person_purpose_type_fp_key")
+  @@unique([organizationId, personId, purpose, canonicalType, canonicalFingerprintKeyId, canonicalFingerprint], map: "WorkerPayment_canonical_identity_key")
   @@unique([organizationId, personId, operationKey], map: "WorkerPayment_org_person_operation_key")
   @@index([organizationId, personId, purpose, status], map: "WorkerPayment_org_person_purpose_status_idx")
   @@index([status, availableFrom])

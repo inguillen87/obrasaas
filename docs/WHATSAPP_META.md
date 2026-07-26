@@ -119,7 +119,7 @@ El webhook general procesa los campos que el backend conoce:
 - `phone_number_quality_update`;
 - `message_template_status_update`.
 
-El challenge `GET` compara `hub.verify_token` en tiempo constante. Cada `POST` valida `x-hub-signature-256` sobre el cuerpo original con `META_APP_SECRET`. El ingreso persiste los eventos de forma idempotente antes de responder; el procesamiento operativo usa leases y recuperación de pendientes. Un `phone_number_id` o WABA desconocido no obtiene acceso a otra organización.
+El challenge `GET` compara `hub.verify_token` en tiempo constante. Cada `POST` valida `x-hub-signature-256` sobre el cuerpo original con `META_APP_SECRET`. El ingreso acepta como máximo 3 MiB, persiste los eventos de forma idempotente antes de responder y procesa después mediante leases y recuperación de pendientes. El límite se aplica al cuerpo crudo antes de verificar firma o tocar persistencia; un `phone_number_id` o WABA desconocido no obtiene acceso a otra organización.
 
 No deben agregarse nuevas suscripciones hasta contar con consumidor, persistencia idempotente y pruebas para ese contrato.
 

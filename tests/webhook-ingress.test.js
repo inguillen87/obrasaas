@@ -107,6 +107,10 @@ function fakeDurablePrisma(connections = [connection()]) {
   };
 }
 
+test('Meta webhook envelope follows the provider 3 MiB delivery contract', () => {
+  assert.equal(META_WEBHOOK_MAX_BODY_BYTES, 3 * 1024 * 1024);
+});
+
 test('signed Meta batch persists 1,000 updates in bulk and replay is entirely idempotent', async () => {
   const payload = syntheticPayload(META_WEBHOOK_MAX_UPDATES);
   const rawBody = JSON.stringify(payload);

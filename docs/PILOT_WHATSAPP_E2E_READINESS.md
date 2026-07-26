@@ -1,6 +1,6 @@
 # Piloto WhatsApp E2E - readiness y gates
 
-Fecha de corte: 2026-07-24
+Fecha de corte: 2026-07-25
 
 ## Decisión de canal
 
@@ -20,7 +20,7 @@ Este resultado acredita sólo aceptación outbound en el entorno de prueba. No a
 - Recepción de texto, audio, imagen, video y documentos; media privada con SHA-256.
 - Propuestas de avance por texto/audio que requieren aprobación y no reescriben el Gantt directamente.
 
-No debe presentarse todavía como completo: el simulador web no adjunta una imagen real; la foto de WhatsApp no se convierte aún en `ProgressEvidence` asociado a una tarea; no existe autoalta ni perfil de cobro operativo; no existe visión productiva ni forecast derivado de evidencia. Ya existen un módulo criptográfico local para normalizar identidad/CUIL y destinos CBU/CVU/alias, cifrarlos con AAD tenant/subject-scoped y emitir DTO enmascarado, además del esquema Prisma y migraciones locales para identidad y destinos de cobro. Esa persistencia todavía no fue desplegada ni verificada en Neon y faltan API tenant-scoped, Flow y pantalla productiva.
+No debe presentarse todavía como completo: el simulador web no adjunta una imagen real; la foto de WhatsApp no se convierte aún en `ProgressEvidence` asociado a una tarea; no existe visión productiva ni forecast derivado de evidencia. El onboarding y los destinos de cobro ya tienen servicios y API autenticada tenant-scoped, cifrado AAD, DTO enmascarado, idempotencia, CAS, permisos y decisiones maker-checker-activator auditadas. Esa persistencia todavía no fue desplegada ni verificada en una rama Neon aislada; además faltan el Flow especializado, la pantalla productiva y un proveedor confiable de titularidad bancaria.
 
 ## Hitos de prueba
 
@@ -40,6 +40,7 @@ Gate de salida aún pendiente:
 
 - token temporal revocado o rotado y credenciales permanentes configuradas como secretos en Vercel;
 - webhook HTTPS configurado y validado con una solicitud inbound firmada por Meta y eventos de estado reales;
+- Preview nuevo creado con la ramificación automática Vercel-Neon ya habilitada, identidad de base distinta de Production y migraciones verificadas; el Preview anterior no cumple este gate;
 - tenant, obra y trabajador reales cargados en Neon, con el teléfono normalizado y aislamiento cross-tenant probado;
 - storage privado y migraciones verificadas en el ambiente del piloto;
 - inbound, outbound correlacionado, estados, retry y ambos Flows probados end-to-end;
@@ -66,11 +67,13 @@ Flujo: contacto desconocido -> cuarentena -> invitación o preautorización admi
 
 El número prueba control del canal, no identidad civil. Teléfonos compartidos o conflictos requieren revisión asistida. Nadie queda habilitado sólo por escribir "soy Carlitos".
 
+Base local implementada: claim de un solo uso con token almacenado sólo como hash, un claim abierto por obra/remitente aun con varias conexiones, captura de identidad cifrada, revisión administrativa, enlace a `WorkerChannelIdentity`, CAS, idempotencia y ledger de decisiones. Sigue pendiente desplegar/verificar la migración y crear una sesión/Flow de onboarding ligada al claim que no presuponga un `Worker` ya existente.
+
 Estimación: un sprint después de H2.
 
 ### H4 - Datos de cobro y comprobante
 
-Base local ya disponible: validación estricta de CUIL, CBU, CVU y alias; consentimiento de privacidad versionado; cifrado AES-256-GCM con AAD; keyring rotatable; fingerprint HMAC por tenant; serialización enmascarada; y esquema Prisma con migraciones locales para identidad laboral y destinos de cobro. Esta base no equivale a un perfil operativo: la migración no está desplegada ni verificada en Neon y todavía faltan API tenant-scoped, permisos específicos, revisión/doble control, Flow/UI y auditoría de cambios.
+Base local ya disponible: validación estricta de CUIL, CBU, CVU y alias; consentimiento de privacidad versionado; cifrado AES-256-GCM con AAD; keyring rotatable; fingerprint HMAC por tenant; serialización enmascarada; API autenticada tenant-scoped; revisión maker-checker-activator; ledger append-only; y esquema Prisma con migraciones gobernadas. Esta base no equivale todavía a un perfil operativo: la migración no está desplegada ni verificada en Neon, el verificador bancario permanece cerrado con `503` hasta integrar un proveedor confiable de titularidad y faltan Flow/UI y comprobante privado.
 
 Antes de producción también hay que retirar la autoridad del teléfono legado en texto plano de `Worker` mediante dual-read, backfill verificado y una fase contract que lo vuelva nullable. Durante una rotación de la clave HMAC, la API deberá buscar las huellas de ambas claves y serializar la deduplicación con una transacción/lock estable; el índice por `fingerprintKeyId` sólo evita carreras dentro de una misma clave.
 
