@@ -1,5 +1,11 @@
 {
   "version": 2,
   "framework": "nextjs",
-  "buildCommand": "npm run build:vercel"
+  "buildCommand": "npm run build:vercel",
+  "crons": [
+    {
+      "path": "/api/cron/protected-uploads",
+      "schedule": "17 3 * * *"
+    }
+  ]
 }

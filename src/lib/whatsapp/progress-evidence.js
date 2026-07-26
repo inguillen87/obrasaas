@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { isMedicalEvidenceRecord } from '../medical-privacy.js';
+import { isWhatsAppProgressMediaForProject } from '../private-receipts.js';
 import { subscriptionAllowsWrites } from '../plans.js';
 import { runOperationalProjectMutation } from '../project-write-policy.js';
 import { serializeProgressEvidence } from '../progress-journal.js';
@@ -267,6 +268,18 @@ async function executeLink(prisma, context) {
     if (!message) throw sourceNotFound();
 
     const source = validateSourceMessage(message);
+    const connection = await transaction.whatsAppConnection.findFirst({
+      where: { projectId: context.scope.projectId, enabled: true },
+      select: { projectId: true, phoneNumberId: true, enabled: true },
+    });
+    if (!isWhatsAppProgressMediaForProject({
+      media: source.media,
+      sourceMessage: message,
+      connection,
+      projectId: context.scope.projectId,
+    })) {
+      throw invalidSource('La foto privada no pertenece a la conexión Meta de esta obra.');
+    }
     message.sentAt = source.sentAt;
 
     const task = await transaction.task.findFirst({

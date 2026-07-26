@@ -1,10 +1,12 @@
-export const AI_PROCESSING_DISCLOSURE_VERSION = '2026-07-16';
+export const AI_PROCESSING_DISCLOSURE_VERSION = '2026-07-26';
 
 const AI_PROCESSING_METADATA_KEY = 'aiProcessing';
 const UPDATE_FIELDS = new Set([
   'supervisorEnabled',
   'audioTranscriptionEnabled',
+  'visualProgressEnabled',
   'organizationAuthorizationConfirmed',
+  'expectedRevision',
 ]);
 
 function record(value) {
@@ -17,11 +19,24 @@ function validIsoDate(value) {
     && !Number.isNaN(new Date(value).getTime());
 }
 
+function storedRevision(value) {
+  return Number.isSafeInteger(value) && value >= 0 ? value : 0;
+}
+
 export class TenantAiSettingsInputError extends Error {
   constructor(message, code = 'INVALID_AI_SETTINGS') {
     super(message);
     this.name = 'TenantAiSettingsInputError';
     this.code = code;
+  }
+}
+
+export class TenantAiSettingsConflictError extends Error {
+  constructor(currentSettings) {
+    super('La configuración de IA cambió mientras la estabas editando.');
+    this.name = 'TenantAiSettingsConflictError';
+    this.code = 'AI_SETTINGS_CONFLICT';
+    this.currentSettings = currentSettings;
   }
 }
 
@@ -36,6 +51,8 @@ export function tenantAiSettingsFromMetadata(metadata) {
     supervisorEnabled: attestationCurrent && stored.supervisorEnabled === true,
     audioTranscriptionEnabled: attestationCurrent
       && stored.audioTranscriptionEnabled === true,
+    visualProgressEnabled: attestationCurrent
+      && stored.visualProgressEnabled === true,
     disclosureVersion: typeof stored.disclosureVersion === 'string'
       ? stored.disclosureVersion
       : null,
@@ -44,6 +61,7 @@ export function tenantAiSettingsFromMetadata(metadata) {
       ? stored.authorizationAttestedAt
       : null,
     updatedAt: validIsoDate(stored.updatedAt) ? stored.updatedAt : null,
+    revision: storedRevision(stored.revision),
   };
 }
 
@@ -64,6 +82,7 @@ export function buildTenantAiSettingsUpdate(input, currentMetadata, {
   if (
     typeof input.supervisorEnabled !== 'boolean'
     || typeof input.audioTranscriptionEnabled !== 'boolean'
+    || typeof input.visualProgressEnabled !== 'boolean'
   ) {
     throw new TenantAiSettingsInputError(
       'Indicá explícitamente qué funciones de IA querés activar.',
@@ -77,6 +96,12 @@ export function buildTenantAiSettingsUpdate(input, currentMetadata, {
       'AI_AUTHORIZATION_INVALID',
     );
   }
+  if (!Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 0) {
+    throw new TenantAiSettingsInputError(
+      'La revisión esperada debe ser un entero no negativo.',
+      'AI_SETTINGS_REVISION_REQUIRED',
+    );
+  }
   if (typeof actorId !== 'string' || !actorId.trim()) {
     throw new TenantAiSettingsInputError(
       'No se pudo atribuir la configuración a un administrador.',
@@ -85,10 +110,15 @@ export function buildTenantAiSettingsUpdate(input, currentMetadata, {
   }
 
   const current = tenantAiSettingsFromMetadata(currentMetadata);
+  if (input.expectedRevision !== current.revision) {
+    throw new TenantAiSettingsConflictError(publicTenantAiSettings(currentMetadata));
+  }
   const enablesSupervisor = input.supervisorEnabled && !current.supervisorEnabled;
   const enablesTranscription = input.audioTranscriptionEnabled
     && !current.audioTranscriptionEnabled;
-  const requiresAttestation = enablesSupervisor || enablesTranscription;
+  const enablesVisualProgress = input.visualProgressEnabled
+    && !current.visualProgressEnabled;
+  const requiresAttestation = enablesSupervisor || enablesTranscription || enablesVisualProgress;
   if (requiresAttestation && input.organizationAuthorizationConfirmed !== true) {
     throw new TenantAiSettingsInputError(
       'Para activar IA, un administrador debe confirmar que la organización informó a las personas involucradas y cuenta con una base legal o autorización aplicable.',
@@ -98,6 +128,7 @@ export function buildTenantAiSettingsUpdate(input, currentMetadata, {
   if (
     input.supervisorEnabled === current.supervisorEnabled
     && input.audioTranscriptionEnabled === current.audioTranscriptionEnabled
+    && input.visualProgressEnabled === current.visualProgressEnabled
   ) {
     throw new TenantAiSettingsInputError(
       'No hay cambios en la configuración de IA.',
@@ -111,6 +142,7 @@ export function buildTenantAiSettingsUpdate(input, currentMetadata, {
     ...stored,
     supervisorEnabled: input.supervisorEnabled,
     audioTranscriptionEnabled: input.audioTranscriptionEnabled,
+    visualProgressEnabled: input.visualProgressEnabled,
     disclosureVersion: requiresAttestation
       ? AI_PROCESSING_DISCLOSURE_VERSION
       : stored.disclosureVersion || current.disclosureVersion,
@@ -122,6 +154,7 @@ export function buildTenantAiSettingsUpdate(input, currentMetadata, {
       : stored.authorizationAttestedBy || null,
     updatedAt: timestamp,
     updatedBy: actorId.trim(),
+    revision: current.revision + 1,
   };
 }
 
@@ -130,9 +163,11 @@ export function publicTenantAiSettings(metadata) {
   return {
     supervisorEnabled: settings.supervisorEnabled,
     audioTranscriptionEnabled: settings.audioTranscriptionEnabled,
+    visualProgressEnabled: settings.visualProgressEnabled,
     disclosureVersion: settings.disclosureVersion,
     disclosureCurrent: settings.disclosureCurrent,
     authorizationAttestedAt: settings.authorizationAttestedAt,
     updatedAt: settings.updatedAt,
+    revision: settings.revision,
   };
 }

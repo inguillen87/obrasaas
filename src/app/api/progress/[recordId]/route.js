@@ -7,6 +7,7 @@ import {
 } from "@/lib/access";
 import { SOURCE_EVIDENCE_PERMISSION } from "@/lib/medical-privacy";
 import { getPrisma } from "@/lib/prisma";
+import { projectWritePolicyErrorResponse } from "@/lib/project-write-policy";
 import {
   RequestBodyError,
   readJsonRequest,
@@ -20,7 +21,7 @@ import {
 function known(error) {
   if (error instanceof AccessError) return accessErrorResponse(error);
   if (error instanceof RequestBodyError) return requestBodyErrorResponse(error);
-  return progressJournalErrorResponse(error);
+  return progressJournalErrorResponse(error) || projectWritePolicyErrorResponse(error);
 }
 export async function PATCH(request, { params }) {
   try {

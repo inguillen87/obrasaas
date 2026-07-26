@@ -25,6 +25,6 @@ La UI nunca decide el alcance: la autorizacion, el proyecto y el estado de solo 
 
 ## Migracion y gates
 
-`20260724110000_canonical_tasks_wbs` agrega enums, columnas, checks, indices y FK compuestas. Debe probarse en PostgreSQL 17 con fixtures de tareas legacy antes de aplicar en produccion. El rollout no debe habilitar edicion del Gantt canonico hasta que exista una UI cliente que use CAS y la misma API.
+`20260724110000_canonical_tasks_wbs` agrega enums, columnas, checks, indices y FK compuestas. La UI del Gantt ya usa CAS y la misma API en modo canónico; eso no demuestra todavía el cutover de una obra productiva. La migración debe probarse en PostgreSQL 17 con fixtures legacy y cada obra debe pasar el checklist de paridad/rollback de `OPERATIONAL_TASKS.md` antes de retirar su writer histórico.
 
 S3 todavia no incluye baseline aprobada, calendario de recursos, progreso con evidencia ni costos. Esas piezas siguen en S5-S10 y deben referenciar `Task.id`, no nombres libres ni claves del snapshot.

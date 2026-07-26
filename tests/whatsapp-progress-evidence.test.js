@@ -71,6 +71,7 @@ after(() => {
 const NOW = new Date('2026-07-26T18:00:00.000Z');
 const CAPTURED_AT = new Date('2026-07-26T17:45:00.000Z');
 const SHA256 = 'a'.repeat(64);
+const PHONE_NUMBER_ID = '1225843560610854';
 
 function sourceMedia(overrides = {}) {
   const media = {
@@ -85,8 +86,9 @@ function sourceMedia(overrides = {}) {
       provider: 'cloudinary',
       status: 'stored',
       assetId: 'asset-secret-a',
-      publicId: 'project-secret/source-a',
+      publicId: `obrasaas/whatsapp/${PHONE_NUMBER_ID}/source-a`,
       resourceType: 'image',
+      format: 'jpg',
       bytes: 4_096,
     },
     ...overrides,
@@ -107,6 +109,7 @@ function sourceMessage(overrides = {}) {
     metadata: {
       provider: 'meta',
       authorized: true,
+      phoneNumberId: PHONE_NUMBER_ID,
       workerId: 'worker-a',
       workerRole: 'FIELD_WORKER',
       sourceContentRestricted: true,
@@ -177,6 +180,14 @@ function fakePrisma({
               subscriptionStatus,
               trialEndsAt: null,
             }
+          : null;
+      },
+    },
+    whatsAppConnection: {
+      async findFirst({ where }) {
+        calls.push(['connection-find', where]);
+        return where.projectId === 'project-a'
+          ? { projectId: 'project-a', phoneNumberId: PHONE_NUMBER_ID, enabled: true }
           : null;
       },
     },

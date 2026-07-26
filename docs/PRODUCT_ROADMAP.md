@@ -1,6 +1,6 @@
 # Roadmap de producto y profesionalización
 
-**Corte de evidencia:** 24 de julio de 2026
+**Corte de evidencia:** 26 de julio de 2026
 
 **Rama de trabajo:** `codex/platform-ux-foundation`
 
@@ -10,7 +10,7 @@
 
 Este documento convierte el estado real de ObraSaaS en un plan ejecutable. Distingue cuatro situaciones que no deben mezclarse:
 
-- **Confirmado:** existe código productivo, autorización, persistencia y pruebas relevantes.
+- **Confirmado:** existe código de aplicación, autorización, persistencia y pruebas relevantes; no implica despliegue o proveedor real salvo indicación explícita.
 - **Parcial:** existe una superficie útil, pero el dominio o el workflow todavía no es completo.
 - **Pendiente de validación externa:** el contrato está implementado, pero depende de un proveedor o ambiente real.
 - **No implementado:** es una capacidad de roadmap y no se debe presentar como disponible.
@@ -34,9 +34,9 @@ Política de automatización objetivo:
 
 ## Línea base comprobada
 
-ObraSaaS ya es una base SaaS real; no es sólo una maqueta. Tiene tenancy B2B, roles operativos, alcance por obra, auditoría, proyectos, Gantt, WhatsApp persistente, Flows gobernados, aprobaciones humanas, evidencia privada, asistencia y reportes PDF. La suite contractual tiene 866 pruebas unitarias y de integración liviana en esta iteración.
+ObraSaaS ya es una base SaaS real; no es sólo una maqueta. Tiene tenancy B2B, roles operativos, alcance por obra, auditoría, proyectos, Gantt, WhatsApp persistente, Flows gobernados, aprobaciones humanas, evidencia privada, asistencia y reportes PDF. La suite local alcanza 1.177 pruebas unitarias y de integración liviana en este corte; siguen faltando los gates externos y E2E descritos abajo.
 
-Eso todavía no demuestra una operación Enterprise con clientes reales. Los principales límites actuales son la falta de validación externa con un WABA real, Clerk sobre instancia development, journeys E2E operativos insuficientes, estado centralizado en un snapshot JSON y dominios profesionales incompletos en costos, documentos, calidad, contratos, stock y colaboración externa.
+Eso todavía no demuestra una operación Enterprise con clientes reales. Los principales límites actuales son la falta de validación externa con un WABA real, Clerk sobre instancia development, journeys E2E operativos insuficientes, convivencia temporal entre WBS canónica y snapshot legacy, ausencia de baseline versionada/forecast determinista y dominios profesionales incompletos en costos, documentos, calidad, contratos, stock y colaboración externa.
 
 ### Matriz de capacidades
 
@@ -44,26 +44,29 @@ Eso todavía no demuestra una operación Enterprise con clientes reales. Los pri
 | --- | --- | --- | --- |
 | Tenancy, roles y alcance por obra | Confirmado | Clerk Organizations, permisos en servidor, `ProjectMembership` y pruebas negativas | Conservar; preparar gobierno de Platform Admin y futura defensa en profundidad |
 | Portfolio y onboarding | Confirmado | Alta/configuración/archivo de obras, límites por plan y puesta en marcha | Medir tiempo hasta primera obra operativa |
-| Gantt y tareas | Parcial | Gantt con CAS y proyección relacional; `ProjectSnapshot.state.tasks` sigue siendo autoridad | Hacer `Task` y WBS canónicos antes de conectar costos |
-| WhatsApp e Inbox | Confirmado por contrato; externo pendiente | Meta Cloud API directa como camino primario; app/caso de uso presentes; test number asignado, un celular propio verificado y solicitud outbound de plantilla aceptada con token temporal. Firma, idempotencia, leases, Inbox, Flows y evidencia privada están cubiertos por código/contrato | La aceptación outbound no prueba entrega ni E2E. Rotar el token temporal, instalar credenciales permanentes en Vercel y completar webhook firmado, inbound, estados, Flows y tenant real; Twilio no sustituye esos gates |
+| Gantt y tareas | Parcial | WBS `Task`/`TaskDependency`, CAS y Gantt canónico ya existen; el snapshot queda como modo legacy por obra | Crear baseline/versiones/forecast y ejecutar cutover con cero drift antes de conectar costos contractuales |
+| WhatsApp e Inbox | Confirmado por contrato; externo pendiente | Meta Cloud API directa como camino primario; app/caso de uso presentes; test number asignado, un celular propio verificado y solicitud outbound de plantilla aceptada con token temporal. Firma, idempotencia, leases, Inbox, Flows, media privada y vínculo foto→`ProgressEvidence` están cubiertos localmente | La aceptación outbound no prueba entrega ni E2E. Rotar el token temporal, instalar credenciales permanentes en Vercel y completar webhook firmado, inbound, estados, Flows, storage y tenant real; Twilio no sustituye esos gates |
+| IA visual y OCR | Piloto local, no desplegado | `VisualProgressAssessment`, opt-in tenant, lease recuperable, sanitización, OpenAI `gpt-5.6-sol` primario, abstención y revisión CAS; smoke API controlado de abstención sobre un render BIM. HF/Z.ai sólo tienen pruebas de contrato | Desplegar Preview, probar foto Meta real y benchmark consentido antes de cualquier claim productivo; verificar DPA/ZDR o retención aceptada por proveedor y nunca certificar/pagar/reprogramar desde una foto |
 | Propuestas y aprobación humana | Confirmado | Avance, demora e incidente crítico con decisión auditada | Extender el patrón a diarios, calidad, costos y cambios |
 | Asistencia y salud | Parcial | Ledger canónico con ingreso, pausas, salida, GPS conservador, idempotencia, jornada y reporte; evidencia médica aislada | Completar S2 (turnos, tolerancia, excepciones y corrección aprobada) y el gate legal; no venderlo como nómina |
-| Identidad laboral y destino de cobro | Parcial, esquema local no desplegado | Validación CUIL/CBU/CVU/alias, consentimiento versionado, cifrado AAD/keyring, fingerprint HMAC y DTO enmascarado; modelos Prisma y migraciones locales presentes | Desplegar/verificar migraciones y agregar API tenant-scoped, Flow/UI, permisos específicos, revisión y doble control; nunca guardar en snapshot/Inbox común ni ejecutar pagos automáticamente |
+| Identidad laboral y destino de cobro | Parcial, base local no desplegada | Validación CUIL/CBU/CVU/alias, consentimiento versionado, cifrado AAD/keyring, fingerprint HMAC, DTO enmascarado y APIs tenant-scoped con maker-checker-activator | Desplegar/verificar migraciones y completar Flow/UI, proveedor de titularidad y comprobante; nunca guardar en snapshot/Inbox común ni ejecutar pagos automáticamente |
 | Incidencias y seguridad | Parcial | Captura y propuestas; el modelo relacional no es el workflow canónico | Crear propietario, SLA, causa, acciones correctivas y cierre |
 | Acopios | Parcial | Catálogo y niveles básicos | Migrar a ledger inmutable de recepción, consumo, ajuste y ubicación |
-| Costos y rol Finance | No suficiente | Sólo total/ejecutado en snapshot; permiso nominal sin superficie propia | Crear presupuesto, comprometido, real, forecast y cambios sobre la misma WBS |
+| Costos y rol Finance | Parcial, base local no desplegada | `BudgetVersion`, `BudgetLine` y `BudgetEntry` separan presupuesto, comprometido, real y forecast; hay dashboards de presupuesto, compras, cuentas a pagar y caja | Completar cambios aprobados, reconciliación, KPIs/drill-down, cutover sobre la misma WBS y validar Preview/E2E |
+| Caja chica y comprobantes | Parcial, base local no desplegada | `CashFund`/`CashMovement`, saldo derivado, categoría, idempotencia y comprobante privado server-owned | Implementar umbral y segundo aprobador distinto, reposición/cierre/conciliación, Preview y E2E |
+| Evidencia y adjuntos privados | Parcial, base local no desplegada | `ProtectedUpload` de un solo uso para progreso web, caja, recepción y factura; intent durable, scope, expiración, CAS, cuotas, hash, entrega server-side y cron diario autenticado configurado | Validar migración y ejecución del cron en Preview/Production, alertas, retención/purga, restore, carga directa para más de 4 MiB y degradación de ambos adapters |
 | Reporte semanal | Parcial | PDF real con hash y auditoría, generado al vuelo | Persistir artefacto y snapshot reproducible con historial y retención |
 | Bitácora | Parcial | Agrega fuentes reales, pero recorta a eventos recientes | Cursor estable, filtros server-side y exportación completa con hash |
 | Documentos, planos y versiones | No implementado | No hay modelo canónico | Construir control documental antes de RFI/submittal avanzados |
 | QA/QC, inspecciones y no conformidades | No implementado | Sin workflow canónico | Compartir formularios, evidencia, responsable, SLA y cierre |
 | RFI, submittal y transmittal | No implementado | Sin modelos ni rutas | Implementar después de documentos/versiones y notificaciones |
-| Notificaciones durables | No implementado | Polling, toasts y mensajes puntuales | Crear outbox, preferencias, entrega, lectura y escalamiento |
+| Notificaciones durables | Parcial | `NotificationDelivery`, preferencias y deduplicación existen; faltan workers/proveedores y DLQ operacional completa | Completar entrega email/WhatsApp, métricas, retry/dead-letter, lectura y escalamiento |
 | Portal de cliente/subcontratista | No implementado | No existe una experiencia externa gobernada | Agregar enlaces/portal con permisos mínimos y evidencia aprobada |
 | Offline/PWA | No implementado | Manifest y estado online; sin service worker ni cola local | Diseñar sincronización y conflictos después de estabilizar APIs canónicas |
 | API pública e integraciones | No implementado | Integraciones internas con proveedores; sin API pública versionada | API, scopes, rate limit, webhooks tenant y conectores antes de prometer ERP/BI |
 | Billing | Parcial y cerrado por defecto | Backend Stripe/webhook; checkout exige flag exacto, entrada estricta y versiones vigentes, pero no hay intención/consentimiento durable ni control de concurrencia | Mantener deshabilitado hasta cerrar intención idempotente, UI, evidencia contractual, reconciliación y E2E |
 | Observabilidad y operaciones | No suficiente | Analytics web anonimizado; sin APM, SLO, alertas ni DR probado | Es gate de producción, no mejora opcional |
-| CI y E2E | En implementación | 866 tests; E2E público separado y workflow CI agregados en esta rama | Requiere ejecución remota verde y expansión a journeys autenticados |
+| CI y E2E | En implementación | 1.177 tests locales; E2E público separado y workflow CI agregados | Requiere ejecución remota verde y expansión a journeys autenticados/Meta/storage/visión |
 | Internacionalización | No implementado | UI y formatos mayormente `es-AR` | Agregar español regional, portugués, zona horaria y multimoneda sin mezclar fiscalidad |
 
 Fuentes internas principales: [autenticación y tenancy](./AUTH_AND_TENANCY.md), [ledger de asistencia](./ATTENDANCE_LEDGER.md), [contrato transitorio de tareas](./OPERATIONAL_TASKS.md) y [estado verificable de Meta](./WHATSAPP_META.md).
@@ -72,10 +75,10 @@ Fuentes internas principales: [autenticación y tenancy](./AUTH_AND_TENANCY.md),
 
 Estos gates pueden avanzar en paralelo, pero ninguno se reemplaza con una captura o una prueba unitaria.
 
-| Gate | Evidencia de salida | Estado al 24/07/2026 |
+| Gate | Evidencia de salida | Estado al 26/07/2026 |
 | --- | --- | --- |
-| Especificación de la clienta trazada | Requisito, decisión, secuencia y criterio de aceptación por cada ítem | 91 IDs integrados; validación con la socia y casos de prueba detallados pendientes por vertical |
-| Calidad automatizada | CI remota verde con instalación exacta, lint, 866 tests, auditoría, build y smoke público | Implementado y verde localmente; ejecución GitHub pendiente |
+| Especificación de la clienta trazada | Requisito, decisión, secuencia y criterio de aceptación por cada ítem | 92 IDs únicos integrados (80 SPEC + 12 PRO); validación con la socia y casos de prueba detallados pendientes por vertical |
+| Calidad automatizada | CI remota verde con instalación exacta, lint, suite completa, auditoría, build y smoke público | 1.177/1.177, Prisma, lint, build y auditoría de dependencias de producción verdes localmente; ejecución GitHub y E2E remoto pendientes |
 | Journey operativo E2E | Admin crea obra/trabajador/tarea, aprueba propuesta y descarga reporte; roles restringidos fallan correctamente | Pendiente |
 | WhatsApp real | Embedded Signup, inbound/outbound, estados, ambos Flows, reintento, expiración y fallback en teléfono real | Test number asignado, celular propio verificado y outbound de plantilla aceptado por Meta con token temporal. No es bidireccional/E2E: faltan credenciales permanentes en Vercel, webhook firmado, inbound, estados, Flows, App Review y tenant real |
 | Identidad productiva | Dominio propio, Clerk Production, cutover y rollback ensayados, alta/invitación/baja verificadas | Pendiente externo |
@@ -106,8 +109,8 @@ La cadencia candidata es de diez días hábiles por sprint. Sin capacidad de equ
 
 **Objetivo:** impedir releases engañosas o silenciosamente rotas con controles que sí dependen del equipo.
 
-- CI: Node 24, instalación exacta, lint, 866 tests, auditoría, build, E2E público y artefactos de diagnóstico;
-- Postgres 17 efímero: `validate`, las 76 migraciones actuales desde cero (incluido el ledger S1), `status` y diff sin drift;
+- CI: Node 24, instalación exacta, lint, suite completa, auditoría, build, E2E público y artefactos de diagnóstico;
+- Postgres 17 efímero: `validate`, las 93 migraciones locales actuales desde cero, `status` y diff sin drift;
 - checkout cerrado por defecto y request estricto; no habilitarlo sin intención durable, idempotencia, consentimiento verificable y reconciliación;
 - E2E autenticado de los journeys críticos y denegaciones por tenant/obra/rol;
 - observabilidad mínima, correlation ID y runbooks de migración/incidente/rollback.
@@ -117,7 +120,8 @@ La cadencia candidata es de diez días hábiles por sprint. Sin capacidad de equ
 Estado de esta iteración:
 
 - implementados localmente: CI base, E2E público sin secretos Clerk, artefactos Playwright, health de recuperación WhatsApp, gate de checkout, gate de migraciones, corrección de drift UUID y trazabilidad del PDF;
-- verificados: 866/866 tests, lint, Prisma válido, auditoría sin vulnerabilidades, build Next 16 y 2/2 smoke públicos;
+- verificados en este WIP local: 1.177/1.177 tests, Prisma válido/generado, lint, build y auditoría de dependencias de producción sin vulnerabilidades; CI remota, migración desde cero en Postgres y E2E deben volver a ejecutarse después de integrar el sprint;
+- seguridad de tooling: `@prisma/dev` queda temporalmente fijado a Valibot 1.4.2 mediante override acotado por el advisory vigente; retirarlo cuando Prisma publique el pin corregido y mantener auditadas por separado las dependencias exclusivas de desarrollo;
 - pendientes internos de S0: primera ejecución remota, E2E autenticado/core, observabilidad integral y runbooks completos.
 
 ### Release Gate R0 — Dependencias externas, sin duración ficticia
@@ -128,7 +132,7 @@ R0 avanza en paralelo y no se declara cerrado por pasar un sprint:
 | --- | --- |
 | Identidad | dominio, Clerk Production, invitación/baja/cutover/rollback ensayados |
 | WhatsApp | Conservar la evidencia parcial del test number y outbound aceptado; revocar/rotar el token temporal, instalar credenciales permanentes en Vercel y completar webhook firmado, WABA/número del tenant real, App Review, inbound/outbound correlacionado, estados, Flows y reintentos. Meta directo es primario; Twilio sólo fallback |
-| Datos | storage privado productivo, backup, restore, retención y borrado verificados |
+| Datos | storage privado productivo; cron de limpieza de reservas desplegado y observado; backup, restore, retención y borrado verificados |
 | Billing | `BillingCheckoutIntent` durable, lock/CAS, idempotencia Stripe, UI/versión aceptada y webhook reconciliado |
 | Gobierno | owners, required checks, secretos rotables, incident response y aprobaciones legales aplicables |
 
@@ -159,7 +163,7 @@ S23 consolida y certifica controles ya revisados; no es la primera vez que se bu
 | S3 | WBS, tarea y baseline | WBS/código, dependencias, hitos, baseline/revisión, forecast/real, CAS, backfill y paridad | Gantt y consumidores escriben una fuente; baseline no se reescribe; cero drift |
 | S4 | Equipos y blockers | cuadrillas/responsables por ID, asignación versionada, bloqueo/causa/owner/recuperación | asignaciones no dependen de nombres libres; conflicto concurrente no pierde cambios |
 | S5 | Bitácora, evidencia e incidencia | `DailyLog`, `ProgressEvidence`, `Incident`, media+GPS+task bajo un ID, owner/SLA/cierre | web/WhatsApp conservan evidencia y llegan al registro final sin reingreso ni fuga |
-| S6 | Trabajo extra y replanificación | `ExtraWork`, start/finish, vicio oculto, impacto preliminar y propuesta de escenario | texto/audio/foto requieren la misma aprobación; ningún extra reescribe baseline/costo |
+| S6 | Trabajo extra y replanificación | `ExtraWorkRequest`, `ExtraWorkSession`, vicio oculto, impacto preliminar y `ReplanScenario` | texto/audio/foto requieren la misma aprobación; ningún extra reescribe baseline/costo |
 
 Estado local de S1 en esta iteración:
 
@@ -189,7 +193,7 @@ Quedan fuera: nómina, impuestos, contabilidad general, cuentas por pagar autom�
 | S15 | Outbox y notificaciones | evento, destinatario, preferencia, canal, entrega/lectura, retry, dead letter y escalamiento | alerta durable, deduplicada y observable aunque no haya pestaña abierta |
 | S16 | Portal de Cliente | `ExternalPrincipal`/`ProjectAccessGrant`, publicación aprobada, enlaces expirables y revocación | no consume/infiere `TenantMembership`; sólo ve artefactos publicados de su obra |
 
-Estado local de identidad laboral/cobro al corte: el módulo criptográfico, sus validaciones, el esquema Prisma y las migraciones están implementados localmente. Las migraciones no fueron desplegadas ni verificadas en Neon y todavía faltan API tenant-scoped, Flow y UI. Por lo tanto, los hitos H3 y H4 de [readiness del piloto WhatsApp](./PILOT_WHATSAPP_E2E_READINESS.md) siguen **en progreso** y no deben presentarse como funcionalidad disponible.
+Estado local de identidad laboral/cobro al corte: el módulo criptográfico, sus validaciones, servicios y APIs tenant-scoped, el esquema Prisma y las migraciones están implementados localmente. Las migraciones no fueron desplegadas ni verificadas en Neon y todavía faltan Flow y UI productivos, journey E2E y proveedor confiable de verificación bancaria. Por lo tanto, los hitos H3 y H4 de [readiness del piloto WhatsApp](./PILOT_WHATSAPP_E2E_READINESS.md) siguen **en progreso** y no deben presentarse como funcionalidad disponible.
 
 ### Ola 4 — Inteligencia y operación avanzada
 

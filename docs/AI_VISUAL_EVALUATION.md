@@ -1,0 +1,155 @@
+# IA visual, OCR y evaluación de modelos
+
+Fecha de corte: 2026-07-26
+
+## Estado verificable
+
+ObraSaaS tiene una primera vertical local de lectura visual gobernada. Incluye:
+
+- `VisualProgressAssessment` tenant/project/task/evidence scoped, con idempotencia, huellas SHA-256, baseline hash, estados de proveedor y revisión humana CAS;
+- imagen privada leída servidor a servidor, límite de bytes y píxeles, MIME contrastado con magic bytes y rechazo de WebP animado;
+- derivado JPEG/PNG/WebP sin metadatos EXIF/XMP/textuales antes de abandonar ObraSaaS;
+- opt-in separado por tenant y atestación versionada;
+- revalidación de suscripción, opt-in, tarea y evidencia en la última frontera antes de llamar al proveedor;
+- lease persistente de dos minutos para `RUNNING`, renovado mediante CAS inmediatamente antes del proveedor y usado como fencing en todo cierre terminal: al vencer, listados y replays recuperan la ejecución a `FAILED` con una sola auditoría; una recuperación ganadora impide el despacho y una respuesta tardía no puede persistirse;
+- rango de avance entero, hechos visibles, calidad, limitaciones y abstención; no se conserva prompt, respuesta cruda, URL firmada ni secreto;
+- revisión `APPROVED/CORRECTED/REJECTED` que conserva el resultado original y no modifica `Task`, baseline, Gantt, certificado, asistencia ni pago.
+
+La migración y el flujo completo todavía no están verificados en una rama Neon de Preview. Tampoco se probó aún una foto real recibida por Meta dentro del tenant piloto. Por lo tanto, esta capacidad es **piloto local**, no una función productiva anunciable.
+
+El 26 de julio de 2026 se ejecutó un smoke API real y acotado contra OpenAI usando un render BIM no personal del propio repositorio; no fue una foto real de obra. El primer intento fue bloqueado localmente porque el archivo tenía bytes JPEG aunque su extensión era `.png`. Con el MIME binario correcto, `gpt-5.6-sol` se abstuvo como `not_construction_progress`, dejó el rango en `null` y explicó que un modelo digital no demuestra ejecución física. No se guardaron IDs, tokens ni respuesta cruda en el repositorio.
+
+## Registro de proveedores
+
+| Carga | Proveedor/modelo | Rol | Estado y regla |
+| --- | --- | --- | --- |
+| Lectura visual | OpenAI `gpt-5.6-sol` | Primario de piloto | Adapter Responses probado; `store:false`, `detail:high` por defecto, Structured Outputs estricto y `safety_identifier` HMAC seudónimo por operador |
+| Lectura visual | Hugging Face `Qwen/Qwen3-VL-32B-Instruct` | Shadow | Adapter implementado y probado por contrato; exige token y `featherless-ai` en allowlist explícita, con `X-HF-Bill-To` opcional para imputación organizacional. No fue ejecutado contra API real ni se invoca por defecto/fan-out |
+| Lectura visual | Z.ai `glm-5v-turbo` | Challenger | Adapter implementado y probado por contrato; modelo visual separado, secreto y rollout explícitos. Sin smoke real todavía |
+| OCR | Z.ai `glm-ocr` | Especialista | Adapter de layout implementado con ventana canónica de 30 páginas y límites de items/caracteres. Documentos mayores requieren chunking explícito; aún no está conectado a remitos/facturas ni probado contra API real |
+| Texto estructurado | Z.ai `glm-5.2` | Especialista | Adapter implementado **sólo para texto/JSON**, razonamiento `none` explícito y validador de negocio obligatorio. Sin smoke real; puede evaluar JSON extraído, nunca una foto |
+
+“Usar toda la suite” significa registrar capacidades compatibles, fijar proveedor/revisión y compararlas sobre un dataset gobernado. No significa enviar cada foto a todos los modelos: eso aumentaría costo, latencia y exposición de datos sin mejorar por sí mismo la calidad.
+
+La selección neutral resuelve exactamente un modelo y exige habilitar de forma explícita rol + adapter para cualquier shadow, challenger o especialista. El comparador de benchmark es puro: consume observaciones ya generadas sobre el mismo set de casos, rechaza duplicados/cobertura desigual y no realiza llamadas a proveedores.
+
+Fuentes primarias:
+
+- [OpenAI GPT-5.6 Sol](https://developers.openai.com/api/docs/models/gpt-5.6-sol), [visión](https://developers.openai.com/api/docs/guides/images-vision) y [Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs);
+- [Qwen3-VL-32B-Instruct](https://huggingface.co/Qwen/Qwen3-VL-32B-Instruct) y [seguridad de Inference Endpoints](https://huggingface.co/docs/inference-endpoints/security);
+- [Z.ai GLM-5V Turbo](https://docs.z.ai/guides/vlm/glm-5v-turbo), [GLM-OCR](https://docs.z.ai/guides/vlm/glm-ocr) y [GLM-5.2 text-only](https://docs.z.ai/guides/llm/glm-5.2).
+
+La revisión de catálogo del 26 de julio de 2026 confirmó que OpenAI presenta
+`gpt-5.6-sol` como su modelo de capacidad insignia con entrada de imágenes; el
+mapping público de Hugging Face exponía `Qwen/Qwen3-VL-32B-Instruct` mediante
+`featherless-ai` en estado `live`; y Z.ai documentaba `glm-5.2` como modelo de
+texto, `glm-5v-turbo` como VLM y `glm-ocr` como parser documental. Esto confirma
+el contrato, no la habilitación de nuestra cuenta ni el rendimiento sobre obra.
+
+"Siempre el mejor" se implementa mediante una política de actualización, no
+mediante aliases móviles en producción. Cada ID queda fijado en el registro y
+una versión posterior sólo puede entrar con adapter explícito, pruebas de
+contrato, revisión de datos/costos, benchmark sobre el mismo gold set y decisión
+humana de promoción. Un cambio arbitrario de `HF_VISION_MODEL`,
+`ZAI_VISION_MODEL` o `ZAI_TEXT_MODEL` se rechaza si no coincide con un modelo
+registrado; así se evita que una actualización silenciosa cambie calidad,
+precio, residencia de datos o formato de salida.
+
+## OCR de clase profesional
+
+`glm-ocr` es el primer especialista integrado, pero un modelo por sí solo no
+convierte el proceso en OCR productivo. El cierre profesional exige:
+
+- ingreso por `ProtectedUpload`, hash e idempotencia, sin descriptor de storage
+  controlado por el navegador;
+- MIME/magic bytes, límites y preprocesado seguro antes del proveedor;
+- chunking explícito para documentos de más de 30 páginas, orden estable y
+  detección de páginas faltantes o repetidas;
+- salida de texto/layout acotada, más extracción de campos con esquema y
+  validador de negocio obligatorio;
+- reconciliación determinista de remito/factura con proveedor, OC, cantidades,
+  moneda e importes; ninguna coincidencia se autoaprueba;
+- vista humana que muestre documento fuente, campo extraído, advertencias y
+  corrección auditada;
+- benchmark por tipo de documento con CER/WER, exactitud de campos/tablas,
+  rechazo de baja calidad, p95, costo y tasa de corrección;
+- retención, borrado, DPA y observabilidad sin contenido sensible.
+
+La conexión de este pipeline a remitos y facturas sigue pendiente. Hasta que
+ese recorrido y el benchmark estén verdes, ObraSaaS puede describir el adapter
+como integrado por contrato, pero no el OCR como productivo.
+
+## Contrato de salida
+
+La salida v1 separa:
+
+- `facts`: hechos visibles, no inferencias contractuales;
+- `quality`: ángulo, iluminación, oclusión y suficiencia general;
+- `progressMin/progressMax`: rango prudente o ambos `null`;
+- `confidence`: autoconfianza del proveedor, visible sólo como señal orientativa y nunca como calibración probada;
+- `limitations` y `abstentionReason`;
+- `summary` y `elementType` acotados.
+
+Se obliga la abstención cuando la imagen no es evidencia de avance, falta contexto de tarea, la calidad es insuficiente o la solicitud no es segura/soportada. Una abstención puede tener alta confianza: esa confianza describe la decisión de abstenerse, no un porcentaje de avance.
+
+## Flujo gobernado
+
+1. Una imagen Meta autorizada se guarda en storage privado y se verifica con SHA-256.
+2. Un rol con permisos de evidencia la vincula idempotentemente a una tarea canónica.
+3. Un administrador activa por separado la lectura visual y confirma la base legal/autorización organizacional aplicable.
+4. El servicio reserva una evaluación `RUNNING` con lease mayor que el timeout máximo de la ruta/proveedor, vuelve a validar tenant/suscripción y lee el archivo privado.
+5. Antes del envío vuelve a validar consentimiento, suscripción, SHA y revisión de la tarea, y renueva el lease con identidad exacta (`revision`, intento y vencimiento). Si ese CAS pierde contra la recuperación, no se llama al proveedor.
+6. El proveedor devuelve un rango o se abstiene; el resultado queda `PENDING` de revisión.
+7. El Director aprueba, corrige con motivo/rango o rechaza mediante CAS.
+8. La revisión no cambia el plan. Un escenario forecast posterior debe usar una baseline inmutable y un motor determinista separado.
+
+Una evidencia admite como máximo una ejecución activa o un resultado pendiente de revisión. La regla se aplica bajo el lock de escritura del proyecto y mediante un índice parcial único en PostgreSQL, por lo que dos pestañas con claves distintas no duplican llamadas al proveedor. Si la foto, la tarea o el plan cambian, la lectura queda marcada como obsoleta para la decisión: sólo puede rechazarse con motivo y, una vez cerrada, se habilita un intento nuevo.
+
+Si el proceso cae, el lease vencido se cierra como `FAILED` con
+`VISUAL_PROGRESS_LEASE_EXPIRED`. La recuperación es tenant/project scoped, usa
+revisión CAS y emite una sola auditoría aun bajo carreras. El operador inicia un
+nuevo intento con otra clave de idempotencia; no hay reenvío automático porque
+ningún adapter puede prometer `exactly once` frente a un proveedor externo.
+
+La recuperación actual es **bajo demanda**: cada listado recupera exactamente
+los leases vencidos incluidos en la página que va a devolver y cada replay
+recupera su propia ejecución. Todavía no existe un sweeper cron global; por eso
+una evaluación que nadie vuelva a consultar puede permanecer `RUNNING` en base
+hasta el próximo acceso. Ese cron autenticado y observable es un gate operativo
+antes de declarar la capacidad productiva a escala.
+
+## Benchmark antes de producción
+
+El gold set debe ser privado, consentido y desidentificado, con split congelado y doble etiquetado profesional más arbitraje. Debe cubrir tipologías, etapas, antes/después, baja luz, desenfoque, oclusión, fotos irrelevantes, BIM/planos, remitos y casos fuera de distribución.
+
+Métricas mínimas:
+
+- macro-F1 de etapa/elemento y tasa de afirmaciones sin respaldo;
+- MAE y cobertura del intervalo de avance, sólo donde exista ground truth válido;
+- precisión/recall de abstención y de señales de riesgo;
+- OCR CER/WER y exactitud de campos/tablas;
+- JSON válido, aceptación/corrección/rechazo humano;
+- p50/p95, errores, reintentos y costo por evidencia;
+- comparación por configuración completa: modelo + proveedor + revisión + prompt + esquema.
+
+Cada costo debe conservar fuente y fecha de precio fuera del comparador; éste valida que `registryModelId`, proveedor y modelo coincidan, pero nunca consulta precios ni promueve un modelo automáticamente. Toda promoción es una decisión humana documentada sobre un gold set con cobertura mínima acordada.
+
+Rollout: `offline eval -> shadow muestreado -> sugerencia visible -> eventual automatización sólo de campos descriptivos no críticos`. Pagos, certificación, seguridad, identidad laboral, asistencia y mutaciones de baseline conservan revisión humana.
+
+En este corte, sólo OpenAI tuvo un smoke API real controlado, sobre un render BIM y no sobre evidencia de campo. Que los adapters HF/Z.ai pasen pruebas de contrato demuestra forma, validación y límites locales; no demuestra disponibilidad, calidad, costo ni compatibilidad efectiva del proveedor hasta ejecutar el benchmark con credenciales dedicadas y datos autorizados.
+
+`store:false` deshabilita el almacenamiento de estado de Responses, pero **no equivale por sí solo a Zero Data Retention**. Antes de enviar fotos reales deben verificarse los controles de datos del proyecto OpenAI (ZDR o Modified Abuse Monitoring cuando corresponda), DPA, consentimiento y retención aplicable. `detail:original` queda como opt-in justificado; el piloto usa `high` para limitar costo y latencia. HF/Featherless y Z.ai requieren la misma revisión contractual antes de recibir evidencia real.
+
+## Gate para la foto real del piloto
+
+Antes de probar “pared a medio terminar” desde WhatsApp deben estar verdes:
+
+- migración desplegada en Neon Preview aislado y verificada;
+- `META_APP_SECRET`, webhook firmado y conexión del tenant piloto activos;
+- storage privado y ruta Meta -> Inbox -> `ProgressEvidence` probados con un archivo real;
+- opt-in visual activado por el administrador en ese tenant;
+- controles de retención/DPA del proveedor verificados; `store:false` solo no satisface este gate;
+- tarea/baseline identificables, permisos y revisión del Director;
+- observabilidad de latencia/error/costo sin contenido, teléfono ni URL privada en logs.
+
+La prueba se considera exitosa si la foto llega, conserva comentario/tarea, produce una descripción y rango razonables **o una abstención correcta**, y la decisión humana queda auditada. No exige ni permite que una sola foto certifique o reprograme la obra.

@@ -79,6 +79,21 @@ enum ProgressEvidenceStatus {
   REJECTED
 }
 
+enum VisualProgressAssessmentStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  ABSTAINED
+  FAILED
+}
+
+enum VisualProgressAssessmentReviewStatus {
+  PENDING
+  APPROVED
+  CORRECTED
+  REJECTED
+}
+
 enum NotificationChannel {
   IN_APP
   EMAIL
@@ -166,6 +181,21 @@ enum SupplierInvoiceStatus {
   APPROVED
   PAID
   VOIDED
+}
+
+enum ProtectedUploadPurpose {
+  CASH_RECEIPT
+  GOODS_RECEIPT
+  SUPPLIER_INVOICE
+  PROGRESS_EVIDENCE
+}
+
+enum ProtectedUploadStatus {
+  UPLOADING
+  AVAILABLE
+  CLAIMED
+  DELETE_PENDING
+  DELETED
 }
 
 enum IncidentSeverity {
@@ -520,28 +550,32 @@ model Supplier {
 }
 
 model SupplierInvoice {
-  id              String                @id @default(cuid())
-  organizationId  String
-  projectId       String
-  supplierId      String
-  purchaseOrderId String?
-  operationKey    String                @db.VarChar(190)
-  invoiceNumber   String                @db.VarChar(96)
-  currency        String                @db.Char(3)
-  amount          Decimal               @db.Decimal(14, 2)
-  status          SupplierInvoiceStatus @default(RECEIVED)
-  dueAt           DateTime?
-  receipt         Json?
-  revision        Int                   @default(0)
-  organization    Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  project         Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  supplier        Supplier              @relation(fields: [organizationId, supplierId], references: [organizationId, id], onDelete: Restrict)
-  purchaseOrder   PurchaseOrder?        @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
-  createdAt       DateTime              @default(now())
-  updatedAt       DateTime              @updatedAt
+  id                 String                @id @default(cuid())
+  organizationId     String
+  projectId          String
+  supplierId         String
+  purchaseOrderId    String?
+  operationKey       String                @db.VarChar(190)
+  invoiceNumber      String                @db.VarChar(96)
+  currency           String                @db.Char(3)
+  amount             Decimal               @db.Decimal(14, 2)
+  status             SupplierInvoiceStatus @default(RECEIVED)
+  dueAt              DateTime?
+  receipt            Json?
+  protectedUploadId  String?
+  protectedUpload    ProtectedUpload?      @relation("SupplierInvoiceProtectedUpload", fields: [projectId, protectedUploadId], references: [projectId, id], onDelete: Restrict, map: "SupplierInvoice_protected_upload_fkey")
+  requestFingerprint String?               @db.Char(64)
+  revision           Int                   @default(0)
+  organization       Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project            Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  supplier           Supplier              @relation(fields: [organizationId, supplierId], references: [organizationId, id], onDelete: Restrict)
+  purchaseOrder      PurchaseOrder?        @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
 
   @@unique([projectId, id])
   @@unique([projectId, operationKey])
+  @@unique([projectId, protectedUploadId], map: "SupplierInvoice_project_protected_upload_key")
   @@unique([organizationId, supplierId, invoiceNumber])
   @@index([projectId, status, dueAt])
 }
@@ -592,25 +626,29 @@ model PurchaseOrderLine {
 }
 
 model GoodsReceipt {
-  id              String             @id @default(cuid())
-  projectId       String
-  purchaseOrderId String
-  operationKey    String             @db.VarChar(190)
-  status          GoodsReceiptStatus @default(POSTED)
-  notes           String?            @db.VarChar(500)
-  receipt         Json?
-  receivedAt      DateTime           @default(now())
-  revision        Int                @default(0)
-  project         Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  purchaseOrder   PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
-  lines           GoodsReceiptLine[]
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
-  organization    Organization?      @relation(fields: [organizationId], references: [id])
-  organizationId  String?
+  id                 String             @id @default(cuid())
+  projectId          String
+  purchaseOrderId    String
+  operationKey       String             @db.VarChar(190)
+  status             GoodsReceiptStatus @default(POSTED)
+  notes              String?            @db.VarChar(500)
+  receipt            Json?
+  protectedUploadId  String?
+  protectedUpload    ProtectedUpload?   @relation("GoodsReceiptProtectedUpload", fields: [projectId, protectedUploadId], references: [projectId, id], onDelete: Restrict, map: "GoodsReceipt_protected_upload_fkey")
+  requestFingerprint String?            @db.Char(64)
+  receivedAt         DateTime           @default(now())
+  revision           Int                @default(0)
+  project            Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  purchaseOrder      PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
+  lines              GoodsReceiptLine[]
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  organization       Organization?      @relation(fields: [organizationId], references: [id])
+  organizationId     String?
 
   @@unique([projectId, id])
   @@unique([projectId, operationKey])
+  @@unique([projectId, protectedUploadId], map: "GoodsReceipt_project_protected_upload_key")
   @@index([projectId, purchaseOrderId, receivedAt])
 }
 
@@ -677,6 +715,9 @@ model PlatformUser {
   rejectedWorkerIdentities           WorkerPerson[]                 @relation("WorkerIdentityRejecter")
   reviewedWorkerOnboardingClaims     WorkerOnboardingClaim[]        @relation("WorkerOnboardingReviewer")
   verifiedWorkerPaymentDestinations  WorkerPaymentDestination[]     @relation("WorkerPaymentDestinationVerifier")
+  requestedVisualAssessments         VisualProgressAssessment[]     @relation("VisualProgressAssessmentRequester")
+  reviewedVisualAssessments          VisualProgressAssessment[]     @relation("VisualProgressAssessmentReviewer")
+  protectedUploads                   ProtectedUpload[]              @relation("ProtectedUploadActor")
 
   @@index([systemRole, createdAt])
 }
@@ -751,6 +792,7 @@ model Project {
   projectBlockers               ProjectBlocker[]
   dailyLogs                     DailyLog[]
   progressEvidence              ProgressEvidence[]
+  visualProgressAssessments     VisualProgressAssessment[]
   notificationDeliveries        NotificationDelivery[]
   extraWorkRequests             ExtraWorkRequest[]
   replanScenarios               ReplanScenario[]
@@ -781,10 +823,60 @@ model Project {
   workerDocuments               WorkerDocument[]
   startActs                     ProjectStartAct[]
   workerOnboardingClaims        WorkerOnboardingClaim[]
+  protectedUploads              ProtectedUpload[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, slug])
   @@index([organizationId, status])
+}
+
+model ProtectedUpload {
+  id                       String                 @id @default(cuid())
+  organizationId           String
+  projectId                String
+  project                  Project                @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "ProtectedUpload_project_scope_fkey")
+  actorId                  String
+  actor                    PlatformUser           @relation("ProtectedUploadActor", fields: [actorId], references: [id], onDelete: Restrict)
+  purpose                  ProtectedUploadPurpose
+  status                   ProtectedUploadStatus  @default(UPLOADING)
+  operationKeyHash         String                 @db.Char(64)
+  requestFingerprint       String                 @db.Char(64)
+  storageProvider          String                 @db.VarChar(32)
+  storage                  Json
+  mimeType                 String                 @db.VarChar(120)
+  filename                 String                 @db.VarChar(255)
+  size                     Int
+  sha256                   String                 @db.Char(64)
+  expiresAt                DateTime
+  uploadAttemptCount       Int                    @default(1)
+  uploadLeaseExpiresAt     DateTime?
+  claimedAt                DateTime?
+  claimedEntityType        String?                @db.VarChar(64)
+  claimedEntityId          String?                @db.VarChar(190)
+  claimFingerprint         String?                @db.Char(64)
+  deleteOperationKeyHash   String?                @db.Char(64)
+  deleteRequestFingerprint String?                @db.Char(64)
+  deleteRequestedAt        DateTime?
+  deleteAttemptCount       Int                    @default(0)
+  deleteLeaseExpiresAt     DateTime?
+  nextDeleteAttemptAt      DateTime?
+  deletedAt                DateTime?
+  lastErrorCode            String?                @db.VarChar(64)
+  createdAt                DateTime               @default(now())
+  updatedAt                DateTime               @updatedAt
+  cashMovement             CashMovement?          @relation("CashMovementProtectedUpload")
+  goodsReceipt             GoodsReceipt?          @relation("GoodsReceiptProtectedUpload")
+  supplierInvoice          SupplierInvoice?       @relation("SupplierInvoiceProtectedUpload")
+  progressEvidence         ProgressEvidence?      @relation("ProgressEvidenceProtectedUpload")
+
+  @@unique([projectId, id])
+  @@unique([projectId, actorId, purpose, operationKeyHash], map: "ProtectedUpload_project_purpose_operation_key")
+  @@unique([projectId, actorId, purpose, deleteOperationKeyHash], map: "ProtectedUpload_project_purpose_delete_key")
+  @@index([projectId, actorId, status, expiresAt], map: "ProtectedUpload_actor_project_active_idx")
+  @@index([projectId, status, expiresAt], map: "ProtectedUpload_project_active_idx")
+  @@index([organizationId, createdAt], map: "ProtectedUpload_org_created_idx")
+  @@index([status, expiresAt, id], map: "ProtectedUpload_expiry_cleanup_idx")
+  @@index([status, nextDeleteAttemptAt, id], map: "ProtectedUpload_delete_cleanup_idx")
 }
 
 model ProjectMembership {
@@ -1339,34 +1431,35 @@ model OperationalProposal {
 }
 
 model Task {
-  id                String             @id @default(cuid())
-  projectId         String
-  project           Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  externalId        String?
-  code              String?            @db.VarChar(64)
-  title             String
-  description       String?
-  type              TaskType           @default(TASK)
-  status            TaskStatus         @default(BACKLOG)
-  progress          Int                @default(0)
-  startsAt          DateTime?
-  endsAt            DateTime?
-  assignee          String?
-  revision          Int                @default(0)
-  parentId          String?
-  parent            Task?              @relation("TaskHierarchy", fields: [projectId, parentId], references: [projectId, id], onDelete: Restrict)
-  children          Task[]             @relation("TaskHierarchy")
-  predecessors      TaskDependency[]   @relation("TaskDependencySuccessor")
-  successors        TaskDependency[]   @relation("TaskDependencyPredecessor")
-  assignments       TaskAssignment[]
-  blockers          ProjectBlocker[]
-  dailyLogs         DailyLog[]
-  progressEvidence  ProgressEvidence[]
-  extraWorkRequests ExtraWorkRequest[]
-  budgetLines       BudgetLine[]
-  metadata          Json?
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
+  id                        String                     @id @default(cuid())
+  projectId                 String
+  project                   Project                    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  externalId                String?
+  code                      String?                    @db.VarChar(64)
+  title                     String
+  description               String?
+  type                      TaskType                   @default(TASK)
+  status                    TaskStatus                 @default(BACKLOG)
+  progress                  Int                        @default(0)
+  startsAt                  DateTime?
+  endsAt                    DateTime?
+  assignee                  String?
+  revision                  Int                        @default(0)
+  parentId                  String?
+  parent                    Task?                      @relation("TaskHierarchy", fields: [projectId, parentId], references: [projectId, id], onDelete: Restrict)
+  children                  Task[]                     @relation("TaskHierarchy")
+  predecessors              TaskDependency[]           @relation("TaskDependencySuccessor")
+  successors                TaskDependency[]           @relation("TaskDependencyPredecessor")
+  assignments               TaskAssignment[]
+  blockers                  ProjectBlocker[]
+  dailyLogs                 DailyLog[]
+  progressEvidence          ProgressEvidence[]
+  visualProgressAssessments VisualProgressAssessment[]
+  extraWorkRequests         ExtraWorkRequest[]
+  budgetLines               BudgetLine[]
+  metadata                  Json?
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
 
   @@unique([projectId, externalId])
   @@unique([projectId, id])
@@ -1639,29 +1732,33 @@ model CashFund {
 }
 
 model CashMovement {
-  idempotencyKey   String             @db.VarChar(190)
-  id               String             @id @default(cuid())
-  projectId        String
-  fundId           String
-  fund             CashFund           @relation(fields: [projectId, fundId], references: [projectId, id], onDelete: Cascade)
-  kind             CashMovementKind
-  status           CashMovementStatus @default(DRAFT)
-  amount           Decimal            @db.Decimal(14, 2)
-  category         String             @db.VarChar(96)
-  description      String?            @db.VarChar(500)
-  receipt          Json?
-  fingerprint      String?            @db.VarChar(64)
-  revision         Int                @default(0)
-  approvedAt       DateTime?
-  firstApproverId  String?
-  firstApprover    PlatformUser?      @relation("CashMovementFirstApprover", fields: [firstApproverId], references: [id], onDelete: SetNull)
-  secondApproverId String?
-  secondApprover   PlatformUser?      @relation("CashMovementSecondApprover", fields: [secondApproverId], references: [id], onDelete: SetNull)
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
+  idempotencyKey     String             @db.VarChar(190)
+  id                 String             @id @default(cuid())
+  projectId          String
+  fundId             String
+  fund               CashFund           @relation(fields: [projectId, fundId], references: [projectId, id], onDelete: Cascade)
+  kind               CashMovementKind
+  status             CashMovementStatus @default(DRAFT)
+  amount             Decimal            @db.Decimal(14, 2)
+  category           String             @db.VarChar(96)
+  description        String?            @db.VarChar(500)
+  receipt            Json?
+  protectedUploadId  String?
+  protectedUpload    ProtectedUpload?   @relation("CashMovementProtectedUpload", fields: [projectId, protectedUploadId], references: [projectId, id], onDelete: Restrict, map: "CashMovement_protected_upload_fkey")
+  requestFingerprint String?            @db.Char(64)
+  fingerprint        String?            @db.VarChar(64)
+  revision           Int                @default(0)
+  approvedAt         DateTime?
+  firstApproverId    String?
+  firstApprover      PlatformUser?      @relation("CashMovementFirstApprover", fields: [firstApproverId], references: [id], onDelete: SetNull)
+  secondApproverId   String?
+  secondApprover     PlatformUser?      @relation("CashMovementSecondApprover", fields: [secondApproverId], references: [id], onDelete: SetNull)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
 
   @@unique([projectId, id])
   @@unique([projectId, idempotencyKey])
+  @@unique([projectId, protectedUploadId], map: "CashMovement_project_protected_upload_key")
   @@index([projectId, fundId, status, createdAt])
   @@index([projectId, fingerprint])
 }
@@ -1733,37 +1830,96 @@ model DailyLog {
 }
 
 model ProgressEvidence {
-  id                       String                 @id @default(cuid())
-  projectId                String
-  project                  Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  taskId                   String
-  task                     Task                   @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict)
-  authorWorkerId           String?
-  authorWorker             Worker?                @relation(fields: [projectId, authorWorkerId], references: [projectId, id], onDelete: Restrict)
-  sourceConversationId     String?
-  sourceConversation       Conversation?          @relation("ProgressEvidenceSourceConversation", fields: [projectId, sourceConversationId], references: [projectId, id], onDelete: NoAction, map: "ProgressEvidence_source_conversation_scope_fkey")
-  sourceMessageId          String?                @unique(map: "ProgressEvidence_sourceMessageId_key")
-  sourceMessage            Message?               @relation("ProgressEvidenceSourceMessage", fields: [sourceConversationId, sourceMessageId], references: [conversationId, id], onDelete: NoAction, map: "ProgressEvidence_source_message_scope_fkey")
-  sourceOperationKeyHash   String?                @db.Char(64)
-  sourceRequestFingerprint String?                @db.Char(64)
-  capturedAt               DateTime
-  caption                  String?                @db.Text
-  media                    Json
-  latitude                 Decimal?               @db.Decimal(10, 7)
-  longitude                Decimal?               @db.Decimal(10, 7)
-  accuracyMeters           Decimal?               @db.Decimal(9, 2)
-  status                   ProgressEvidenceStatus @default(PENDING)
-  reviewNote               String?                @db.Text
-  revision                 Int                    @default(0)
-  reviewedAt               DateTime?
-  createdAt                DateTime               @default(now())
-  updatedAt                DateTime               @updatedAt
+  id                        String                     @id @default(cuid())
+  projectId                 String
+  project                   Project                    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  taskId                    String
+  task                      Task                       @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict)
+  authorWorkerId            String?
+  authorWorker              Worker?                    @relation(fields: [projectId, authorWorkerId], references: [projectId, id], onDelete: Restrict)
+  sourceConversationId      String?
+  sourceConversation        Conversation?              @relation("ProgressEvidenceSourceConversation", fields: [projectId, sourceConversationId], references: [projectId, id], onDelete: NoAction, map: "ProgressEvidence_source_conversation_scope_fkey")
+  sourceMessageId           String?                    @unique(map: "ProgressEvidence_sourceMessageId_key")
+  sourceMessage             Message?                   @relation("ProgressEvidenceSourceMessage", fields: [sourceConversationId, sourceMessageId], references: [conversationId, id], onDelete: NoAction, map: "ProgressEvidence_source_message_scope_fkey")
+  sourceOperationKeyHash    String?                    @db.Char(64)
+  sourceRequestFingerprint  String?                    @db.Char(64)
+  protectedUploadId         String?
+  protectedUpload           ProtectedUpload?           @relation("ProgressEvidenceProtectedUpload", fields: [projectId, protectedUploadId], references: [projectId, id], onDelete: Restrict, map: "ProgressEvidence_protected_upload_fkey")
+  capturedAt                DateTime
+  caption                   String?                    @db.Text
+  media                     Json
+  latitude                  Decimal?                   @db.Decimal(10, 7)
+  longitude                 Decimal?                   @db.Decimal(10, 7)
+  accuracyMeters            Decimal?                   @db.Decimal(9, 2)
+  status                    ProgressEvidenceStatus     @default(PENDING)
+  reviewNote                String?                    @db.Text
+  revision                  Int                        @default(0)
+  reviewedAt                DateTime?
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
+  visualProgressAssessments VisualProgressAssessment[]
 
   @@unique([projectId, id])
   @@unique([projectId, sourceOperationKeyHash], map: "ProgressEvidence_project_operation_key")
+  @@unique([projectId, protectedUploadId], map: "ProgressEvidence_project_protected_upload_key")
   @@unique([sourceConversationId, sourceMessageId], map: "ProgressEvidence_source_conversation_message_key")
   @@index([projectId, taskId, capturedAt])
   @@index([projectId, status, capturedAt])
+}
+
+model VisualProgressAssessment {
+  id                        String                                @id @default(cuid())
+  projectId                 String
+  project                   Project                               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  taskId                    String
+  task                      Task                                  @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict, map: "VisualProgressAssessment_project_task_fkey")
+  evidenceId                String
+  evidence                  ProgressEvidence                      @relation(fields: [projectId, evidenceId], references: [projectId, id], onDelete: Restrict, map: "VisualProgressAssessment_project_evidence_fkey")
+  operationKeyHash          String                                @db.Char(64)
+  requestFingerprint        String                                @db.Char(64)
+  provider                  String                                @db.VarChar(64)
+  providerModel             String                                @db.VarChar(120)
+  analyzerVersion           String                                @db.VarChar(64)
+  inputSha256               String                                @db.Char(64)
+  baselineHash              String                                @db.Char(64)
+  taskRevisionAtRequest     Int
+  evidenceRevisionAtRequest Int
+  status                    VisualProgressAssessmentStatus        @default(PENDING)
+  leaseExpiresAt            DateTime?
+  attemptCount              Int                                   @default(0)
+  summary                   String?                               @db.Text
+  elementType               String?                               @db.VarChar(120)
+  progressMin               Int?
+  progressMax               Int?
+  confidence                Decimal?                              @db.Decimal(5, 4)
+  quality                   Json?
+  observations              Json?
+  limitations               Json?
+  providerResponseId        String?                               @db.VarChar(190)
+  failureCode               String?                               @db.VarChar(64)
+  completedAt               DateTime?
+  requestedById             String?
+  requestedBy               PlatformUser?                         @relation("VisualProgressAssessmentRequester", fields: [requestedById], references: [id], onDelete: Restrict)
+  reviewStatus              VisualProgressAssessmentReviewStatus?
+  reviewedById              String?
+  reviewedBy                PlatformUser?                         @relation("VisualProgressAssessmentReviewer", fields: [reviewedById], references: [id], onDelete: Restrict)
+  reviewedAt                DateTime?
+  reviewNote                String?                               @db.Text
+  correctedProgressMin      Int?
+  correctedProgressMax      Int?
+  revision                  Int                                   @default(0)
+  createdAt                 DateTime                              @default(now())
+  updatedAt                 DateTime                              @updatedAt
+
+  @@unique([projectId, id])
+  @@unique([projectId, operationKeyHash], map: "VisualProgressAssessment_project_operation_key")
+  @@index([projectId, requestFingerprint], map: "VisualProgressAssessment_project_fingerprint_idx")
+  @@index([projectId, status, leaseExpiresAt], map: "VPA_project_status_lease_idx")
+  @@index([projectId, taskId, status, createdAt], map: "VPA_project_task_status_created_idx")
+  @@index([projectId, evidenceId, createdAt], map: "VPA_project_evidence_created_idx")
+  @@index([projectId, reviewStatus, createdAt], map: "VPA_project_review_created_idx")
+  @@index([requestedById, createdAt], map: "VPA_requester_created_idx")
+  @@index([reviewedById, reviewedAt], map: "VPA_reviewer_reviewed_idx")
 }
 
 model Incident {

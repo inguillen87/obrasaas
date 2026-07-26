@@ -881,6 +881,102 @@ test('conversation readers see operational text but not audio transcripts withou
   assert.equal(payload.messages[1].media, null);
 });
 
+test('message DTO marks only authorized inbound Meta images as progress-evidence candidates', async () => {
+  const imageMetadata = {
+    provider: 'meta',
+    authorized: true,
+    sourceContentRestricted: true,
+    workerId: 'worker-a',
+    media: { kind: 'image', filename: 'frente.webp', mimeType: 'image/webp' },
+  };
+  const messages = [
+    message({
+      id: 'message-image-eligible',
+      kind: 'IMAGE',
+      body: 'Mampostería del frente a media altura.',
+      mediaUrl: 'https://private.blob.vercel-storage.com/tenant-a/frente.webp',
+      metadata: imageMetadata,
+    }),
+    message({
+      id: 'message-image-linked',
+      kind: 'IMAGE',
+      body: 'Foto ya incorporada al avance.',
+      metadata: imageMetadata,
+      progressEvidenceSource: { id: 'progress-evidence-a' },
+      createdAt: new Date('2026-07-17T17:30:30.000Z'),
+      sentAt: new Date('2026-07-17T17:30:30.000Z'),
+    }),
+    message({
+      id: 'message-image-unauthorized',
+      kind: 'IMAGE',
+      metadata: { ...imageMetadata, authorized: false },
+      createdAt: new Date('2026-07-17T17:31:00.000Z'),
+      sentAt: new Date('2026-07-17T17:31:00.000Z'),
+    }),
+    message({
+      id: 'message-image-quarantined',
+      kind: 'IMAGE',
+      mediaUrl: 'https://private.blob.vercel-storage.com/tenant-a/quarantine.webp',
+      metadata: { ...imageMetadata, quarantined: true },
+      createdAt: new Date('2026-07-17T17:32:00.000Z'),
+      sentAt: new Date('2026-07-17T17:32:00.000Z'),
+    }),
+    message({
+      id: 'message-image-outbound',
+      direction: 'OUTBOUND',
+      kind: 'IMAGE',
+      metadata: imageMetadata,
+      createdAt: new Date('2026-07-17T17:33:00.000Z'),
+      sentAt: new Date('2026-07-17T17:33:00.000Z'),
+    }),
+    message({
+      id: 'message-image-medical',
+      kind: 'IMAGE',
+      metadata: { ...imageMetadata, sensitivity: 'medical' },
+      createdAt: new Date('2026-07-17T17:34:00.000Z'),
+      sentAt: new Date('2026-07-17T17:34:00.000Z'),
+    }),
+  ];
+  const { prisma } = routePrisma({ messages });
+
+  const authorizedResponse = await createWhatsAppConversationMessageHandlers({
+    resolveAccess: async () => access({ tenantRole: 'DIRECTOR' }),
+    authorize: () => undefined,
+    prismaFactory: () => prisma,
+    clock: () => NOW,
+  }).GET(messagesRequest(), routeContext());
+  const authorizedPayload = await authorizedResponse.json();
+  const messageById = new Map(authorizedPayload.messages.map((item) => [item.id, item]));
+
+  assert.equal(messageById.get('message-image-eligible').progressEvidenceEligible, true);
+  assert.equal(messageById.get('message-image-eligible').sourceEvidenceViewable, true);
+  assert.equal(messageById.get('message-image-eligible').progressEvidenceLinked, false);
+  assert.equal(messageById.get('message-image-linked').progressEvidenceEligible, false);
+  assert.equal(messageById.get('message-image-linked').progressEvidenceLinked, true);
+  assert.equal(messageById.get('message-image-unauthorized').progressEvidenceEligible, false);
+  assert.equal(messageById.get('message-image-quarantined').progressEvidenceEligible, false);
+  assert.equal(messageById.get('message-image-quarantined').sourceEvidenceViewable, false);
+  assert.equal(messageById.get('message-image-outbound').progressEvidenceEligible, false);
+  assert.equal(messageById.get('message-image-medical').progressEvidenceEligible, false);
+  assert.equal(JSON.stringify(authorizedPayload).includes('private.blob.vercel-storage.com'), false);
+
+  const restrictedResponse = await createWhatsAppConversationMessageHandlers({
+    resolveAccess: async () => access({ tenantRole: 'SITE_MANAGER' }),
+    authorize: () => undefined,
+    prismaFactory: () => prisma,
+    clock: () => NOW,
+  }).GET(messagesRequest(), routeContext());
+  const restrictedPayload = await restrictedResponse.json();
+  assert.equal(
+    restrictedPayload.messages.every((item) => (
+      item.progressEvidenceEligible === false
+      && item.progressEvidenceLinked === false
+      && item.sourceEvidenceViewable === false
+    )),
+    true,
+  );
+});
+
 test('interactive Flow template messages remain visible without exposing binary evidence', async () => {
   const templateBody = 'Completá el reporte para dejar la incidencia trazable en la bitácora.';
   const { prisma } = routePrisma({
@@ -1613,6 +1709,53 @@ test('an ambiguous Meta transport failure remains unknown and is never auto-retr
   assert.equal(retry.message.status, 'unknown');
 });
 
+test('an idempotent reconciliation reads a terminal delivery after the channel becomes unavailable', async () => {
+  const { prisma, records } = manualSendPrisma();
+  let providerCalls = 0;
+  const input = {
+    prisma,
+    access: access(),
+    conversationId: 'conversation-a',
+    body: 'Mensaje que luego confirma el webhook.',
+    idempotencyKey: 'manual-message-reconcile-a',
+    sendText: async () => {
+      providerCalls += 1;
+      return { messages: [{ id: 'wamid.reconcile-a' }] };
+    },
+    clock: () => NOW,
+    env: CONFIGURED_META_ENV,
+  };
+
+  await sendManualWhatsAppMessage(input);
+  const stored = [...records.values()][0];
+  stored.status = 'delivered';
+  prisma.project.findFirst = async () => ({
+    ...access().project,
+    status: 'COMPLETED',
+    organization: {
+      subscriptionPlan: 'PRO',
+      subscriptionStatus: 'CANCELED',
+      trialEndsAt: null,
+    },
+  });
+  prisma.whatsAppConnection.findUnique = async () => connection({
+    enabled: false,
+    connectionStatus: 'DISCONNECTED',
+  });
+  prisma.message.findFirst = async (args) => (
+    args?.where?.direction === 'INBOUND'
+      ? message({ sentAt: new Date(NOW.getTime() - 2 * DAY_MS) })
+      : null
+  );
+
+  const reconciled = await sendManualWhatsAppMessage(input);
+
+  assert.equal(providerCalls, 1);
+  assert.equal(reconciled.idempotent, true);
+  assert.equal(reconciled.message.status, 'delivered');
+  assert.equal(reconciled.window.isOpen, false);
+});
+
 test('manual delivery fails before claiming a message when secure Meta config is incomplete', async () => {
   const { prisma, records } = manualSendPrisma();
   let providerCalls = 0;
@@ -1691,4 +1834,32 @@ test('a local correlation failure after Meta accepts is unknown, never rejected'
 
   assert.equal(correlationFailures, 1);
   assert.equal([...records.values()][0].status, 'unknown');
+});
+
+test('Inbox composer reconciles UNKNOWN with the same key and preserves the pending body', async () => {
+  const clientSource = await readFile(
+    new URL('../src/app/dashboard/inbox/inbox-client.js', import.meta.url),
+    'utf8',
+  );
+
+  assert.doesNotMatch(clientSource, /if \(sendResolution === 'UNKNOWN'\) return/);
+  assert.match(
+    clientSource,
+    /const pendingAttempt = reconcileUnknown \? unresolvedSendRef\.current : null;[\s\S]{0,220}pendingAttempt\.body/,
+  );
+  assert.match(
+    clientSource,
+    /const idempotencyKey = reconcileUnknown[\s\S]{0,120}pendingAttempt\.idempotencyKey/,
+  );
+  assert.match(clientSource, /'Idempotency-Key': idempotencyKey/);
+  assert.match(clientSource, /unresolvedSendRef\.current = attempt;[\s\S]{0,100}setSendResolution\('UNKNOWN'\)/);
+  assert.match(
+    clientSource,
+    /sendResolution === 'UNKNOWN'[\s\S]{0,300}submitMessage\(\{ reconcileUnknown: true \}\)/,
+  );
+  assert.match(
+    clientSource,
+    /UNRESOLVED_SEND_STATES\.has\(reconciled\.status\)[\s\S]{0,360}setSendResolution\('FAILED'\)[\s\S]{0,300}setSendResolution\(''\)/,
+  );
+  assert.match(clientSource, /current\.trim\(\) === body \? '' : current/);
 });

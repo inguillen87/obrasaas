@@ -21,6 +21,12 @@ const WORKER_IDENTITY_VERIFIER_PATH = fileURLToPath(
 const PROGRESS_JOURNAL_VERIFIER_PATH = fileURLToPath(
   new URL("./verify-progress-journal-migration.mjs", import.meta.url),
 );
+const PROTECTED_UPLOAD_VERIFIER_PATH = fileURLToPath(
+  new URL("./verify-protected-upload-migration.mjs", import.meta.url),
+);
+const VISUAL_PROGRESS_VERIFIER_PATH = fileURLToPath(
+  new URL("./verify-visual-progress-migration.mjs", import.meta.url),
+);
 
 export const PRODUCTION_DATABASE_IDENTITY_ENV =
   "OBRASAAS_PRODUCTION_DATABASE_IDENTITY_SHA256";
@@ -300,6 +306,8 @@ export async function runVercelBuild({
     next: require.resolve("next/dist/bin/next"),
     workerIdentityVerifier: WORKER_IDENTITY_VERIFIER_PATH,
     progressJournalVerifier: PROGRESS_JOURNAL_VERIFIER_PATH,
+    protectedUploadVerifier: PROTECTED_UPLOAD_VERIFIER_PATH,
+    visualProgressVerifier: VISUAL_PROGRESS_VERIFIER_PATH,
   },
 } = {}) {
   const plan = evaluateMigrationGate(environment);
@@ -327,6 +335,12 @@ export async function runVercelBuild({
       PROGRESS_JOURNAL_MIGRATION_DATABASE_URL:
         environment[plan.migrationDatabaseEnvironment],
       PROGRESS_JOURNAL_MIGRATION_SCHEMA: "public",
+      PROTECTED_UPLOAD_MIGRATION_DATABASE_URL:
+        environment[plan.migrationDatabaseEnvironment],
+      PROTECTED_UPLOAD_MIGRATION_SCHEMA: "public",
+      VISUAL_PROGRESS_MIGRATION_DATABASE_URL:
+        environment[plan.migrationDatabaseEnvironment],
+      VISUAL_PROGRESS_MIGRATION_SCHEMA: "public",
     };
     await runner(
       process.execPath,
@@ -336,6 +350,16 @@ export async function runVercelBuild({
     await runner(
       process.execPath,
       [cliPaths.progressJournalVerifier],
+      { ...sharedOptions, env: verificationEnvironment },
+    );
+    await runner(
+      process.execPath,
+      [cliPaths.protectedUploadVerifier],
+      { ...sharedOptions, env: verificationEnvironment },
+    );
+    await runner(
+      process.execPath,
+      [cliPaths.visualProgressVerifier],
       { ...sharedOptions, env: verificationEnvironment },
     );
   }

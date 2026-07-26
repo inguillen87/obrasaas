@@ -17,15 +17,18 @@ export default function AiProcessingControls({ initialSettings, canManage }) {
   const [draft, setDraft] = useState({
     supervisorEnabled: initialSettings.supervisorEnabled,
     audioTranscriptionEnabled: initialSettings.audioTranscriptionEnabled,
+    visualProgressEnabled: initialSettings.visualProgressEnabled,
   });
   const [authorizationConfirmed, setAuthorizationConfirmed] = useState(false);
   const [pending, setPending] = useState(false);
   const [notice, setNotice] = useState(null);
   const changed = draft.supervisorEnabled !== settings.supervisorEnabled
-    || draft.audioTranscriptionEnabled !== settings.audioTranscriptionEnabled;
+    || draft.audioTranscriptionEnabled !== settings.audioTranscriptionEnabled
+    || draft.visualProgressEnabled !== settings.visualProgressEnabled;
   const requiresAttestation = useMemo(() => (
     (draft.supervisorEnabled && !settings.supervisorEnabled)
     || (draft.audioTranscriptionEnabled && !settings.audioTranscriptionEnabled)
+    || (draft.visualProgressEnabled && !settings.visualProgressEnabled)
   ), [draft, settings]);
 
   function toggle(key) {
@@ -48,24 +51,42 @@ export default function AiProcessingControls({ initialSettings, canManage }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...draft,
+          expectedRevision: settings.revision,
           organizationAuthorizationConfirmed: requiresAttestation
             ? authorizationConfirmed
             : false,
         }),
       });
       const payload = await response.json().catch(() => ({}));
+      if (response.status === 409 && payload.settings) {
+        setSettings(payload.settings);
+        setDraft({
+          supervisorEnabled: payload.settings.supervisorEnabled,
+          audioTranscriptionEnabled: payload.settings.audioTranscriptionEnabled,
+          visualProgressEnabled: payload.settings.visualProgressEnabled,
+        });
+        setAuthorizationConfirmed(false);
+        setNotice({
+          type: 'error',
+          text: 'Otro administrador cambió esta configuración. Recargamos la versión vigente; revisala antes de volver a guardar.',
+        });
+        return;
+      }
       if (!response.ok) throw new Error(payload.error || 'No se pudo guardar la configuración.');
       setSettings(payload.settings);
       setDraft({
         supervisorEnabled: payload.settings.supervisorEnabled,
         audioTranscriptionEnabled: payload.settings.audioTranscriptionEnabled,
+        visualProgressEnabled: payload.settings.visualProgressEnabled,
       });
       setAuthorizationConfirmed(false);
       setNotice({
         type: 'success',
-        text: payload.settings.supervisorEnabled || payload.settings.audioTranscriptionEnabled
+        text: payload.settings.supervisorEnabled
+          || payload.settings.audioTranscriptionEnabled
+          || payload.settings.visualProgressEnabled
           ? 'Procesamiento actualizado y atribuido al administrador de la organización.'
-          : 'Procesamiento con OpenAI desactivado para esta organización.',
+          : 'Procesamiento con IA desactivado para esta organización.',
       });
     } catch (error) {
       setNotice({ type: 'error', text: error.message });
@@ -79,18 +100,22 @@ export default function AiProcessingControls({ initialSettings, canManage }) {
       <header className={styles.aiHeader}>
         <div>
           <p className={styles.eyebrow}>Privacidad y procesamiento externo</p>
-          <h2 id="ai-processing-title">Funciones con OpenAI</h2>
+          <h2 id="ai-processing-title">Funciones con proveedores de IA</h2>
           <p>
             Están apagadas hasta que un administrador las active. Cada finalidad se controla
-            por separado y desactivarla impide nuevas solicitudes a OpenAI.
+            por separado y desactivarla impide nuevas solicitudes al proveedor configurado.
           </p>
         </div>
         <span className={`${styles.state} ${
-          settings.supervisorEnabled || settings.audioTranscriptionEnabled
+          settings.supervisorEnabled
+            || settings.audioTranscriptionEnabled
+            || settings.visualProgressEnabled
             ? styles.connected
             : styles.pendingState
         }`}>
-          {settings.supervisorEnabled || settings.audioTranscriptionEnabled
+          {settings.supervisorEnabled
+            || settings.audioTranscriptionEnabled
+            || settings.visualProgressEnabled
             ? 'Activación parcial o total'
             : 'Sin procesamiento IA'}
         </span>
@@ -125,6 +150,22 @@ export default function AiProcessingControls({ initialSettings, canManage }) {
               <strong>Transcripción de audios</strong>
               <small>
                 Envía a OpenAI los nuevos audios compatibles recibidos por WhatsApp para obtener texto.
+              </small>
+            </span>
+          </button>
+          <button
+            type="button"
+            className={`${styles.aiOption} ${draft.visualProgressEnabled ? styles.aiOptionEnabled : ''}`}
+            onClick={() => toggle('visualProgressEnabled')}
+            disabled={!canManage || pending}
+            aria-pressed={draft.visualProgressEnabled}
+          >
+            <span className={styles.aiToggle} aria-hidden="true"><i /></span>
+            <span>
+              <strong>Lectura visual de avance</strong>
+              <small>
+                Envía una copia sin metadatos de la foto y contexto acotado de su tarea para
+                proponer un rango revisable. No certifica, paga ni modifica el Gantt.
               </small>
             </span>
           </button>

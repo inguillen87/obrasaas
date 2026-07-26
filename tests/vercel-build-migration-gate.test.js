@@ -251,6 +251,8 @@ test("preview runner migrates before generating and building without a shell", a
       next: "next-cli",
       workerIdentityVerifier: "worker-verifier",
       progressJournalVerifier: "progress-verifier",
+      protectedUploadVerifier: "protected-upload-verifier",
+      visualProgressVerifier: "visual-progress-verifier",
     },
   });
 
@@ -260,6 +262,8 @@ test("preview runner migrates before generating and building without a shell", a
       ["prisma-cli", "migrate", "deploy"],
       ["worker-verifier"],
       ["progress-verifier"],
+      ["protected-upload-verifier"],
+      ["visual-progress-verifier"],
       ["prisma-cli", "generate"],
       ["next-cli", "build"],
     ],
@@ -289,6 +293,32 @@ test("preview runner migrates before generating and building without a shell", a
     progressVerificationCall.options.env.PROGRESS_JOURNAL_MIGRATION_SCHEMA,
     "public",
   );
+  const protectedUploadVerificationCall = calls[3];
+  assert.equal(
+    protectedUploadVerificationCall.args[0],
+    "protected-upload-verifier",
+  );
+  assert.equal(
+    protectedUploadVerificationCall.options.env.PROTECTED_UPLOAD_MIGRATION_DATABASE_URL,
+    PREVIEW_URL,
+  );
+  assert.equal(
+    protectedUploadVerificationCall.options.env.PROTECTED_UPLOAD_MIGRATION_SCHEMA,
+    "public",
+  );
+  const visualProgressVerificationCall = calls[4];
+  assert.equal(
+    visualProgressVerificationCall.args[0],
+    "visual-progress-verifier",
+  );
+  assert.equal(
+    visualProgressVerificationCall.options.env.VISUAL_PROGRESS_MIGRATION_DATABASE_URL,
+    PREVIEW_URL,
+  );
+  assert.equal(
+    visualProgressVerificationCall.options.env.VISUAL_PROGRESS_MIGRATION_SCHEMA,
+    "public",
+  );
 });
 
 test("authorized production runs migration verification before the build", async () => {
@@ -310,6 +340,8 @@ test("authorized production runs migration verification before the build", async
       next: "next-cli",
       workerIdentityVerifier: "worker-verifier",
       progressJournalVerifier: "progress-verifier",
+      protectedUploadVerifier: "protected-upload-verifier",
+      visualProgressVerifier: "visual-progress-verifier",
     },
   });
 
@@ -319,6 +351,8 @@ test("authorized production runs migration verification before the build", async
       ["prisma-cli", "migrate", "deploy"],
       ["worker-verifier"],
       ["progress-verifier"],
+      ["protected-upload-verifier"],
+      ["visual-progress-verifier"],
       ["prisma-cli", "generate"],
       ["next-cli", "build"],
     ],
@@ -337,6 +371,22 @@ test("authorized production runs migration verification before the build", async
   );
   assert.equal(
     calls[2].options.env.PROGRESS_JOURNAL_MIGRATION_SCHEMA,
+    "public",
+  );
+  assert.equal(
+    calls[3].options.env.PROTECTED_UPLOAD_MIGRATION_DATABASE_URL,
+    PRODUCTION_URL,
+  );
+  assert.equal(
+    calls[3].options.env.PROTECTED_UPLOAD_MIGRATION_SCHEMA,
+    "public",
+  );
+  assert.equal(
+    calls[4].options.env.VISUAL_PROGRESS_MIGRATION_DATABASE_URL,
+    PRODUCTION_URL,
+  );
+  assert.equal(
+    calls[4].options.env.VISUAL_PROGRESS_MIGRATION_SCHEMA,
     "public",
   );
 });
@@ -371,6 +421,8 @@ test("development runner skips migration and performs the normal build", async (
       next: "next-cli",
       workerIdentityVerifier: "worker-verifier",
       progressJournalVerifier: "progress-verifier",
+      protectedUploadVerifier: "protected-upload-verifier",
+      visualProgressVerifier: "visual-progress-verifier",
     },
   });
 

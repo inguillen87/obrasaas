@@ -1,6 +1,27 @@
 import { AccessError, accessErrorResponse, getPlatformAccess, requireTenantPermission } from '@/lib/access';
+import { isPrivateReceiptForProject, privateReceiptFileResponse } from '@/lib/private-receipts';
 import { getPrisma } from '@/lib/prisma';
-import { cloudinaryPrivateDownloadUrl } from '@/lib/cloudinary';
+import { readProtectedFile } from '@/lib/storage';
 
-function known(error) { if (error instanceof AccessError) return accessErrorResponse(error); return null; }
-export async function GET(request, { params }) { try { const access = await getPlatformAccess(); requireTenantPermission(access, 'org:execution:read', { subscriptionMode: 'read' }); const { movementId } = await params; const row = await getPrisma().cashMovement.findFirst({ where: { id: movementId, projectId: access.project.id }, select: { receipt: true, status: true } }); if (!row) return Response.json({ error: 'Movimiento no encontrado.', code: 'CASH_MOVEMENT_NOT_FOUND' }, { status: 404 }); if (!row.receipt || typeof row.receipt !== 'object') return Response.json({ error: 'El movimiento no tiene comprobante.', code: 'CASH_RECEIPT_NOT_FOUND' }, { status: 404 }); const storage = row.receipt.storage; if (!storage || storage.provider !== 'cloudinary' || !storage.publicId || !storage.format) return Response.json({ error: 'Comprobante inválido.', code: 'CASH_RECEIPT_INVALID' }, { status: 409 }); const url = cloudinaryPrivateDownloadUrl(storage); return Response.json({ url, expiresInSeconds: 60 }, { headers: { 'Cache-Control': 'private, no-store' } }); } catch (error) { return known(error) || Response.json({ error: 'No se pudo autorizar el comprobante.', code: 'CASH_RECEIPT_DOWNLOAD_FAILED' }, { status: 500 }); } }
+export const runtime = 'nodejs';
+
+function json(payload, status) {
+  return Response.json(payload, { status, headers: { 'Cache-Control': 'private, no-store' } });
+}
+
+export async function GET(request, { params }) {
+  try {
+    const access = await getPlatformAccess();
+    requireTenantPermission(access, 'org:execution:read', { subscriptionMode: 'read' });
+    const { movementId } = await params;
+    const row = await getPrisma().cashMovement.findFirst({ where: { id: movementId, projectId: access.project.id }, select: { receipt: true } });
+    if (!row) return json({ error: 'Movimiento no encontrado.', code: 'CASH_MOVEMENT_NOT_FOUND' }, 404);
+    if (!isPrivateReceiptForProject(row.receipt, access.project.id, 'cash')) return json({ error: 'El movimiento no tiene un comprobante válido.', code: 'CASH_RECEIPT_NOT_FOUND' }, 404);
+    const downloaded = await readProtectedFile(row.receipt.storage);
+    if (!downloaded) return json({ error: 'El comprobante ya no está disponible.', code: 'CASH_RECEIPT_NOT_FOUND' }, 404);
+    return privateReceiptFileResponse(row.receipt, downloaded);
+  } catch (error) {
+    if (error instanceof AccessError) return accessErrorResponse(error);
+    return json({ error: 'No se pudo entregar el comprobante privado.', code: 'CASH_RECEIPT_DOWNLOAD_FAILED' }, 500);
+  }
+}

@@ -8,6 +8,7 @@ import {
 import {
   buildTenantAiSettingsUpdate,
   publicTenantAiSettings,
+  TenantAiSettingsConflictError,
   TenantAiSettingsInputError,
 } from '@/lib/ai/tenant-settings';
 import { getPrisma } from '@/lib/prisma';
@@ -95,12 +96,16 @@ export async function PATCH(request) {
             previous: {
               supervisorEnabled: previous.supervisorEnabled,
               audioTranscriptionEnabled: previous.audioTranscriptionEnabled,
+              visualProgressEnabled: previous.visualProgressEnabled,
             },
             next: {
               supervisorEnabled: next.supervisorEnabled,
               audioTranscriptionEnabled: next.audioTranscriptionEnabled,
+              visualProgressEnabled: next.visualProgressEnabled,
             },
             disclosureVersion: next.disclosureVersion,
+            previousRevision: previous.revision,
+            nextRevision: next.revision,
             authorizationAttested: input.organizationAuthorizationConfirmed === true,
           },
         },
@@ -112,6 +117,14 @@ export async function PATCH(request) {
   } catch (error) {
     if (error instanceof AccessError) return accessErrorResponse(error);
     if (error instanceof RequestBodyError) return requestBodyErrorResponse(error);
+    if (error instanceof TenantAiSettingsConflictError) {
+      return json({
+        error: error.message,
+        code: error.code,
+        settings: error.currentSettings,
+        canManage: true,
+      }, { status: 409 });
+    }
     if (error instanceof TenantAiSettingsInputError) {
       return json({ error: error.message, code: error.code }, { status: 400 });
     }

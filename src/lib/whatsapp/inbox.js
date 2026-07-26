@@ -1,6 +1,9 @@
 import { createHash } from 'node:crypto';
 
-import { sanitizeMessagesForMedicalPrivacy } from '@/lib/medical-privacy';
+import {
+  isMedicalEvidenceRecord,
+  sanitizeMessagesForMedicalPrivacy,
+} from '@/lib/medical-privacy';
 import { subscriptionAllowsWrites } from '@/lib/plans';
 import {
   ProjectWritePolicyError,
@@ -246,6 +249,30 @@ function publicMessage(message, {
   const status = String(safeMessage.direction || '').toUpperCase() === 'OUTBOUND'
     ? (PUBLIC_DELIVERY_STATUSES.has(rawStatus) ? rawStatus : 'unknown')
     : null;
+  const progressEvidenceLinked = Boolean(
+    includeSourceEvidence
+    && safeMessage.progressEvidenceSource?.id
+  );
+  const sourceEvidenceViewable = Boolean(
+    includeSourceEvidence
+    && String(safeMessage.direction || '').toUpperCase() === 'INBOUND'
+    && containsSourceEvidence
+    && safeMessage.mediaUrl
+    && metadata.media
+    && metadata.quarantined !== true
+  );
+  const progressEvidenceEligible = Boolean(
+    includeSourceEvidence
+    && !progressEvidenceLinked
+    && sourceEvidenceViewable
+    && String(safeMessage.direction || '').toUpperCase() === 'INBOUND'
+    && kind === 'IMAGE'
+    && metadata.provider === 'meta'
+    && metadata.authorized === true
+    && metadata.quarantined !== true
+    && metadata.media
+    && !isMedicalEvidenceRecord(safeMessage)
+  );
   return {
     id: safeMessage.id,
     direction: safeMessage.direction,
@@ -254,6 +281,9 @@ function publicMessage(message, {
       ? 'Evidencia adjunta recibida. El archivo y su contenido están restringidos para este rol.'
       : safeMessage.body || '',
     status,
+    sourceEvidenceViewable,
+    progressEvidenceEligible,
+    progressEvidenceLinked,
     sentAt: validDate(safeMessage.sentAt)?.toISOString() || null,
     recordedAt: validDate(safeMessage.createdAt)?.toISOString() || null,
     media: sourceRestricted || metadata.sourceContentRestricted && !includeSourceEvidence
@@ -575,6 +605,7 @@ export async function listWhatsAppInbox({
             metadata: true,
             sentAt: true,
             createdAt: true,
+            progressEvidenceSource: { select: { id: true } },
           },
         },
       },
@@ -646,6 +677,7 @@ async function findScopedConversation(
                 metadata: true,
                 sentAt: true,
                 createdAt: true,
+                progressEvidenceSource: { select: { id: true } },
               },
             },
           }
@@ -714,6 +746,7 @@ export async function getWhatsAppConversationMessages({
         metadata: true,
         sentAt: true,
         createdAt: true,
+        progressEvidenceSource: { select: { id: true } },
       },
     }),
     prisma.message.findFirst({
@@ -1151,6 +1184,19 @@ function manualMessageMetadata({ access, identity, payloadDigest, extra = {} }) 
   };
 }
 
+function assertManualSendReplay(existing, { conversationId, payloadDigest }) {
+  if (
+    existing.conversationId !== conversationId
+    || jsonMetadata(existing.metadata).payloadDigest !== payloadDigest
+  ) {
+    throw new WhatsAppInboxError(
+      'La clave de idempotencia ya fue usada con otro mensaje.',
+      { code: 'IDEMPOTENCY_PAYLOAD_MISMATCH', status: 409 },
+    );
+  }
+  return existing;
+}
+
 async function reconcileStaleManualSend(transaction, {
   message,
   access,
@@ -1247,6 +1293,50 @@ export async function sendManualWhatsAppMessage({
     }),
   ]);
 
+  const identity = manualMessageExternalId(scope, conversation.id, key);
+  const payloadDigest = createHash('sha256').update(text).digest('hex');
+  const existingSnapshot = await prisma.message.findUnique({
+    where: { externalId: identity.externalId },
+  });
+  if (existingSnapshot) {
+    assertManualSendReplay(existingSnapshot, {
+      conversationId: conversation.id,
+      payloadDigest,
+    });
+    let reconciled = existingSnapshot;
+    if (String(existingSnapshot.status || '').toLowerCase() === 'sending') {
+      reconciled = await prisma.$transaction(async (transaction) => {
+        await lockManualSendRateLane(transaction, scope.organizationId);
+        const current = await transaction.message.findUnique({
+          where: { externalId: identity.externalId },
+        });
+        if (!current) {
+          throw new WhatsAppInboxError('No pudimos reconciliar el mensaje enviado.', {
+            code: 'WHATSAPP_SEND_RECONCILIATION_FAILED',
+            status: 409,
+          });
+        }
+        assertManualSendReplay(current, {
+          conversationId: conversation.id,
+          payloadDigest,
+        });
+        return reconcileStaleManualSend(transaction, {
+          message: current,
+          access,
+          scope,
+          identity,
+          payloadDigest,
+          observedAt,
+        });
+      }, { isolationLevel: 'ReadCommitted' });
+    }
+    return {
+      message: manualPublicMessage(reconciled, { includeMedicalEvidence }),
+      window: whatsAppCustomerCareWindow(inbound?.sentAt, observedAt),
+      idempotent: true,
+    };
+  }
+
   if (!project || !['PLANNING', 'ACTIVE', 'PAUSED'].includes(project.status)) {
     throw new WhatsAppInboxError('La obra está en modo solo lectura.', {
       code: 'PROJECT_READ_ONLY',
@@ -1261,31 +1351,18 @@ export async function sendManualWhatsAppMessage({
     env,
   });
 
-  const identity = manualMessageExternalId(scope, conversation.id, key);
-  const payloadDigest = createHash('sha256').update(text).digest('hex');
   let claimed;
   try {
     const reservation = await prisma.$transaction(async (transaction) => {
       await lockManualSendRateLane(transaction, scope.organizationId);
-      const fresh = await loadManualSendState(transaction, {
-        scope,
-        conversationId: conversation.id,
-        observedAt,
-        env,
-      });
       const existing = await transaction.message.findUnique({
         where: { externalId: identity.externalId },
       });
       if (existing) {
-        if (
-          existing.conversationId !== fresh.conversation.id
-          || jsonMetadata(existing.metadata).payloadDigest !== payloadDigest
-        ) {
-          throw new WhatsAppInboxError(
-            'La clave de idempotencia ya fue usada con otro mensaje.',
-            { code: 'IDEMPOTENCY_PAYLOAD_MISMATCH', status: 409 },
-          );
-        }
+        assertManualSendReplay(existing, {
+          conversationId: conversation.id,
+          payloadDigest,
+        });
         const reconciled = await reconcileStaleManualSend(transaction, {
           message: existing,
           access,
@@ -1294,8 +1371,18 @@ export async function sendManualWhatsAppMessage({
           payloadDigest,
           observedAt,
         });
-        return { message: reconciled, idempotent: true, window: fresh.window };
+        return {
+          message: reconciled,
+          idempotent: true,
+          window: whatsAppCustomerCareWindow(inbound?.sentAt, observedAt),
+        };
       }
+      const fresh = await loadManualSendState(transaction, {
+        scope,
+        conversationId: conversation.id,
+        observedAt,
+        env,
+      });
       await assertManualSendRateLimit(transaction, {
         scope,
         actorId: access.databaseUserId || null,

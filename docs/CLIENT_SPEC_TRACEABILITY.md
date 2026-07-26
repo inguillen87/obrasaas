@@ -109,38 +109,38 @@ Decisión pendiente explícita: foto en entrada/salida no se elimina silenciosam
 
 | ID | Requisito original | Estado | Evidencia y decisión | Gap / criterio de aceptación | Secuencia |
 | --- | --- | --- | --- | --- | --- |
-| SPEC-PLN-01 | Gantt ideal con tareas, plazos y responsables | Parcial | Gantt, dependencias, ciclos, CAS y proyección `Task`; snapshot sigue como writer (`OPERATIONAL_TASKS.md:5`) | WBS, baseline/revisiones, fechas forecast/real y responsable por ID; cero drift antes de retirar writer legado | S3 |
+| SPEC-PLN-01 | Gantt ideal con tareas, plazos y responsables | Parcial | `Task`/`TaskDependency` son la autoridad canónica para el Gantt y usan revisión CAS; el snapshot quedó como compatibilidad legacy | Falta baseline inmutable/versionada, fechas forecast/real y responsable por ID; retirar el writer legacy sólo después de probar paridad/cutover | S3 |
 | SPEC-PLN-02 | Asignar tareas a equipos con anticipación | Parcial | Responsable actual se persiste por nombre; workers existen | Equipo/cuadrilla canónica, asignación versionada, vigencia y acuse/notificación durable | S4, S15 |
 | SPEC-PLN-03 | Plan real adaptativo por avances/retrasos | Reformular | Existen Gantt y propuestas, no motor de impacto | Calcular escenario/camino afectado y requerir aprobación; baseline nunca se reescribe | S6 |
 | SPEC-PLN-04 | Pendiente y motivo de lo no ejecutado | Parcial | `isDelayed`, incidentes y demoras existen | Blocker con causa, owner, evidencia, impacto y fecha de recuperación | S4-S6 |
 | SPEC-PLN-05 | Certificación de avance para quincena | Ausente | Hay porcentaje/aprobación operativa, no medición ni certificado contractual | Separar cantidad medida, aprobación técnica, certificado, conformidad financiera y referencia de pago | S9-S10 |
-| SPEC-PLN-06 | Asignación → WhatsApp → evidencia → validación | Parcial | Las primitivas existen separadas | Orquestación durable por estados; ninguna notificación o retry duplica la operación | S4-S6, S15, R0 |
+| SPEC-PLN-06 | Asignación → WhatsApp → evidencia → validación | Parcial | Inbox ya vincula una foto Meta autorizada a una tarea canónica como `ProgressEvidence` idempotente; la revisión visual queda separada | Completar GPS/contexto, Flow/offline, despliegue real y forecast posterior; ninguna notificación o retry duplica la operación | S4-S6, S15, R0 |
 
 ## Módulo 3 - Reportes y avances
 
 | ID | Requisito original | Estado | Evidencia y decisión | Gap / criterio de aceptación | Secuencia |
 | --- | --- | --- | --- | --- | --- |
-| SPEC-AVA-01 | Avance con foto/video y GPS | Parcial | Media privada, hash y ubicación existen como eventos separados | `ProgressEvidence` une tarea/WBS, autor, hora, ubicación, media y hashes bajo un ID | S5 |
-| SPEC-AVA-02 | IA estima porcentaje por foto | Reformular | No hay visión productiva; IA actual es textual/transcripción opt-in | Piloto por tipología, ground truth, rango/confianza y abstención; una foto aislada nunca certifica | S17 |
-| SPEC-AVA-03 | Director aprueba/corrige estimación | Parcial | Existe bandeja de propuestas con precondiciones; no hay corrección visual/medición | Aprobar/corregir/rechazar con motivo y evidencia; mismo control para texto, audio y foto | S5, S9, S17 |
+| SPEC-AVA-01 | Avance con foto/video y GPS | Parcial | `ProgressEvidence` ya une foto privada, hash, tarea, autor, hora y ubicación opcional; Inbox crea el vínculo de imagen Meta | Correlacionar GPS fresco con el contexto de evidencia, completar video y probar storage/replay/cross-tenant en Preview real | S5 |
+| SPEC-AVA-02 | IA estima porcentaje por foto | Reformular | Piloto local implementado: OpenAI `gpt-5.6-sol`, derivado sin metadatos, salida estricta, rango o abstención y smoke API controlado con un render BIM; no está desplegado ni calibrado y `store:false` no satisface ZDR por sí solo | Dataset consentido, ground truth, privacidad/DPA/retención, benchmark visual OpenAI/Qwen3-VL/GLM-5V por tipología y evals separadas de GLM-OCR/GLM-5.2 para OCR/texto; una foto aislada nunca certifica | S17 |
+| SPEC-AVA-03 | Director aprueba/corrige estimación | Parcial | `VisualProgressAssessment` conserva resultado, revisión CAS y corrección/rechazo con motivo; el lease recupera un crash, audita el fallo y bloquea respuestas tardías; no muta plan | Desplegar migración/UI y ejecutar journey real; unificar políticas de texto/audio/foto sin confundir revisión visual con medición contractual | S5, S9, S17 |
 | SPEC-AVA-04 | Certificado de avance | Ausente | Sólo existe reporte semanal | Artefacto privado, versionado, inmutable y reproducible ligado a período, WBS, medición y aprobadores | S10 |
 | SPEC-AVA-05 | Reporte semanal automático con fotos/gráficos | Parcial | PDF A4 real con hash bajo demanda; no persiste artefacto ni fotos aprobadas | Programar, persistir snapshot/artefacto, historial, publicación y distribución autorizada | S10, S15-S16 |
 | SPEC-AVA-06 | Reporte de retrasos y causa | Parcial | Clasificación/propuesta de demora e incidentes existen | Canonizar causa, impacto, owner y recuperación; reporte y Gantt consumen el mismo registro | S4-S6 |
 | SPEC-AVA-07 | Reporte de faltantes para avanzar | Parcial | Riesgos de stock e incidentes existen | Blocker ligado a tarea, material, cantidad y fecha necesaria | S4, S11 |
 | SPEC-AVA-08 | Avance validado actualiza plan y habilita certificación | Reformular | La actualización operativa y el certificado no están conectados | Aprobación actualiza forecast; una medición posterior inicia certificación. Nunca habilita pago automáticamente | S6, S9-S10 |
 
-### Riesgo P0 vigente - avance textual
+### Riesgo P0 de avance textual - cerrado localmente
 
-Un audio accionable crea una propuesta, pero un comando textual permitido a capataz/jefe modifica directamente `task.progress` en `src/lib/whatsapp/obra-engine.js:706-714`. Hasta S5, el estado correcto es **Parcial**: texto, audio y foto no comparten aún la misma aprobación. S5 debe eliminar ese bypass o convertirlo en propuesta con precondición/idempotencia antes de incorporar IA visual o certificación.
+Texto y audio accionables crean `OperationalProposal` con precondición, idempotencia y confirmación; el branch textual ya no modifica `task.progress` ni el Gantt directamente. La foto se vincula a `ProgressEvidence` y su lectura visual queda pendiente de revisión humana. El riesgo residual P1 es que los tres canales todavía terminan en registros de aprobación diferentes y no existe un motor forecast sobre baseline inmutable; no deben presentarse como medición/certificación unificada.
 
 ## Módulo 4 - Materiales y proveedores
 
 | ID | Requisito original | Estado | Evidencia y decisión | Gap / criterio de aceptación | Secuencia |
 | --- | --- | --- | --- | --- | --- |
 | SPEC-MAT-01 | Materiales requeridos según tarea | Ausente | Tareas y acopios no comparten BOM | Requerimiento/BOM versionado por WBS, unidad, cantidad y fuente; sugerencia explicable | S11 |
-| SPEC-MAT-02 | Pedido u orden a proveedor | Ausente | No hay proveedor, cotización ni orden canónica | Requisición → comparación/selección → OC aprobada; nunca compra automática | S11 |
-| SPEC-MAT-03 | Recepción con foto y remito firmado | Parcial | Recepción manual suma stock y acepta referencia textual | `GoodsReceipt`, entregas parciales, líneas aceptadas/rechazadas, remito/evidencia, OC, proveedor y receptor | S12 |
-| SPEC-MAT-04 | Registrar faltantes de entrega | Ausente | Stock bajo no compara pedido contra recibido | Diferencia por línea de OC, daño/exceso/rechazo, pendiente, owner y SLA | S12, S15 |
+| SPEC-MAT-02 | Pedido u orden a proveedor | Parcial | Proveedores, OC y líneas canónicas existen; no hay requisición/BOM, comparación de cotizaciones ni segregación completa | Requisición → comparación/selección → OC aprobada; nunca compra automática | S11 |
+| SPEC-MAT-03 | Recepción con foto y remito firmado | Parcial | `GoodsReceipt` admite líneas parciales, impide sobre-recepción, actualiza el estado de OC y vincula remito privado mediante `ProtectedUpload` | Completar líneas aceptadas/rechazadas, firma jurídica, retención, proveedor/receptor visibles y Preview/E2E | S12 |
+| SPEC-MAT-04 | Registrar faltantes de entrega | Parcial | El sistema calcula `PARTIALLY_RECEIVED/RECEIVED` y evita sobre-recepción por línea de OC | Agregar daño/exceso/rechazo, ETA, pendiente, owner, SLA y outbox | S12, S15 |
 | SPEC-MAT-05 | Stock actualizado | Parcial | Catálogo actual sólo contiene nombre, unidad, actual, mínimo, máximo y estado (`stockpiles.js:81-97`) | Saldo derivado de ledger de recepción, consumo, transferencia y ajuste por ubicación | S12 |
 | SPEC-MAT-06 | Recepción marca tarea “con materiales disponibles” | Reformular | No existe readiness material-tarea | Derivar readiness de BOM y recepciones confirmadas; foto/OCR sólo crea borrador y nunca habilita una tarea por sí solo | S12 |
 
@@ -157,28 +157,28 @@ Un audio accionable crea una propuesta, pero un comando textual permitido a capa
 
 | ID | Requisito original | Estado | Evidencia y decisión | Gap / criterio de aceptación | Secuencia |
 | --- | --- | --- | --- | --- | --- |
-| SPEC-EXT-01 | Registrar tarea extra | Ausente | Incidencias/propuestas son primitivas reutilizables, no un `ExtraWork` | Registro canónico con causa, WBS, impacto preliminar, estado y aprobación | S6 |
-| SPEC-EXT-02 | Inicio/fin con foto y GPS | Ausente | No hay sesión temporal de trabajo extra | START/FINISH idempotentes, evidencia, ubicación y duración reproducible | S6 |
+| SPEC-EXT-01 | Registrar tarea extra | Parcial, base local | `ExtraWorkRequest` conserva causa, tarea, impacto preliminar, estado, revisión y decisión auditada | Integrar UI/journey, change control contractual, Preview y E2E | S6, S19 |
+| SPEC-EXT-02 | Inicio/fin con foto y GPS | Parcial, base local | `ExtraWorkSession` implementa START/FINISH idempotentes, GPS inicial/final, duración y evidencia vinculada | Completar UI/WhatsApp, reglas laborales, offline y E2E | S6, S20 |
 | SPEC-EXT-03 | Registrar vicio oculto | Parcial | Puede capturarse como incidencia genérica | Clasificación, alcance contractual, owner, evidencia, impacto y workflow de cambio | S5-S6, S19 |
 | SPEC-EXT-04 | Foto, GPS y descripción | Parcial | Evidencia y geolocalización existen por canales separados | Un registro compuesto conserva fuente, WBS/tarea, lugar, tiempo y hashes | S5 |
-| SPEC-EXT-05 | Director valida y suma al plan real | Ausente | Existen propuestas genéricas, pero no alta/aprobación completa de trabajo extra | Aprobación crea tarea/revisión o change request; impacto en baseline/presupuesto requiere workflow posterior | S6-S7, S19 |
+| SPEC-EXT-05 | Director valida y suma al plan real | Parcial, base local | El Director puede decidir `ExtraWorkRequest` y evaluar `ReplanScenario`; la aprobación todavía no crea baseline/versiones ni change request contractual | Aprobación crea tarea/revisión o change request; impacto en baseline/presupuesto requiere workflow posterior | S6-S7, S19 |
 
 ## Módulo 7 - Caja chica
 
 | ID | Requisito original | Estado | Evidencia y decisión | Gap / criterio de aceptación | Secuencia |
 | --- | --- | --- | --- | --- | --- |
-| SPEC-CASH-01 | Registrar gasto por usuario interno | Ausente | Sólo hay resumen presupuestario en snapshot | Fondo/ledger por obra, custodio, moneda, actor, estado y política por rol | S8 |
-| SPEC-CASH-02 | Foto de ticket/factura | Ausente | Storage privado es reutilizable, pero no existe dominio gasto | Evidencia vinculada, hash, proveedor, fecha fiscal, OCR opcional y detección de duplicado | S8 |
-| SPEC-CASH-03 | Categorizar gasto | Ausente | No hay categorías/cost codes operables | Categoría tenant + WBS/cost code, corrección y auditoría | S7-S8 |
-| SPEC-CASH-04 | Saldo en tiempo real | Ausente | `budget.total/executed` no es caja | Saldo derivado de apertura, gasto, reposición, devolución, ajuste y cierre | S8 |
-| SPEC-CASH-05 | Cargar gasto y descontar saldo automáticamente | Reformular | Una asignación mutable no es conciliable ni segura | Empleado propone; custodio revisa; segundo rol aprueba sobre umbral; movimiento inmutable e idempotente | S8 |
+| SPEC-CASH-01 | Registrar gasto por usuario interno | Parcial, base local | `CashFund`/`CashMovement` operan por obra con custodio, moneda, actor, ledger auditado e idempotency key | Completar permisos finos, reposición/cierre/conciliación, Preview y E2E | S8 |
+| SPEC-CASH-02 | Foto de ticket/factura | Parcial, base local | Comprobante privado mediante reserva `ProtectedUpload` server-owned y `uploadId`; descriptor cliente prohibido, MIME/magic bytes/SHA-256 y entrega autorizada | Agregar datos fiscales, OCR opcional, retención/restore y smoke real | S8 |
+| SPEC-CASH-03 | Categorizar gasto | Parcial, base local | `category` acotada ya se persiste y audita | Catálogo tenant, cost code/WBS, corrección y gobierno | S7-S8 |
+| SPEC-CASH-04 | Saldo en tiempo real | Parcial, base local | `cashBalance` deriva el saldo sólo de movimientos aprobados | Cerrar semántica contractual de apertura, ajuste, devolución, cierre y conciliación concurrente | S8 |
+| SPEC-CASH-05 | Cargar gasto y descontar saldo automáticamente | Reformular | El movimiento entra `PENDING_APPROVAL`, es idempotente y se decide con CAS. Desde `100000` exige dos aprobadores distintos y sólo impacta saldo al finalizar; el umbral aún es fijo y el creador no está separado del primer aprobador | Hacer el umbral configurable por tenant, registrar maker y prohibir que apruebe su propio gasto; conservar movimiento inmutable e idempotente | S8 |
 
 ## Módulo 8 - Dashboard, reportes y certificaciones
 
 | ID | Requisito original | Estado | Evidencia y decisión | Gap / criterio de aceptación | Secuencia |
 | --- | --- | --- | --- | --- | --- |
 | SPEC-REP-01 | PDF semanal para Cliente y Equipo Líder | Parcial | Reporte tenant-aware y PDF real; asistencia deriva del ledger completo, paginado y con zona histórica | Artefacto reproducible persistido, programación, publicación, distribución y portal externo | S10, S15-S16 |
-| SPEC-REP-02 | Dashboard con avance, pendientes, gastos y asistencia | Parcial | Hoy/Gantt/asistencia/riesgos/stock existen; costos y caja no son canónicos | KPIs con definición/fuente/frescura, drill-down y vistas por rol | S7-S10, S16 |
+| SPEC-REP-02 | Dashboard con avance, pendientes, gastos y asistencia | Parcial | Hoy/Gantt/asistencia/riesgos/stock y dashboards relacionales de presupuestos, compras, cuentas a pagar y caja existen | KPIs unificados con definición/fuente/frescura, forecast/cambios, drill-down, vistas por rol y validación externa | S7-S10, S16 |
 | SPEC-REP-03 | Historial de certificaciones/quincenas | Ausente | No existe certificación canónica | Historial por período, versión, estado, aprobadores, importe y PDF | S10 |
 
 ## Alertas y notificaciones
@@ -187,9 +187,9 @@ Un audio accionable crea una propuesta, pero un comando textual permitido a capa
 | --- | --- | --- | --- | --- | --- |
 | SPEC-ALT-01 | Falta de entrada a horario → Director | Ausente | No hay turno esperado ni outbox | Derivar de calendario/tolerancia; una alerta activa, deduplicada y resoluble | S2, S15 |
 | SPEC-ALT-02 | Tarea retrasada → Director + Cliente | Parcial | Indicador/incidencia internos existen | Director recibe evento durable; Cliente sólo comunicación aprobada/configurable | S6, S15-S16 |
-| SPEC-ALT-03 | Material no llegó → Compras + Director | Ausente | No hay OC/ETA/recepción conciliada | Detectar OC vencida o entrega parcial; owner y escalamiento | S11-S12, S15 |
+| SPEC-ALT-03 | Material no llegó → Compras + Director | Parcial | Existen OC y conciliación de recepción parcial/completa; todavía no hay ETA ni alerta durable | Agregar fecha esperada, detección de vencimiento/faltante, owner, outbox y escalamiento | S11-S12, S15 |
 | SPEC-ALT-04 | Cambio de plano → usuarios de obra | Ausente | No hay revisión documental ni outbox | Notificar sólo roles/disciplina autorizados, con revisión y acuse | S13, S15 |
-| SPEC-ALT-05 | Caja bajo umbral → Administrador | Ausente | No hay fondo/ledger | Umbral por fondo/moneda, deduplicación y resolución por reposición/cierre | S8, S15 |
+| SPEC-ALT-05 | Caja bajo umbral → Administrador | Parcial | Fondo/ledger existen; no hay política de umbral ni evento durable/outbox | Umbral por fondo/moneda, deduplicación y resolución por reposición/cierre | S8, S15 |
 | SPEC-ALT-06 | Quincena por certificar → Director | Ausente | No hay período/certificación canónicos | Crear borrador una vez, vencimiento, owner y escalamiento | S10, S15 |
 
 Todas las alertas salen de un outbox durable. Toasts, polling o un envío directo dentro de la mutación no cumplen el requisito.
@@ -200,9 +200,9 @@ Todas las alertas salen de un outbox durable. Toasts, polling o un envío direct
 | --- | --- | --- | --- | --- | --- |
 | SPEC-TEC-01 | WhatsApp Business API | Externo pendiente | Meta Cloud API directa es el camino primario; la app/caso de uso están presentes y Meta asignó test number, verificó un celular propio y aceptó una solicitud outbound de plantilla con token temporal. Sin exponer IDs, teléfonos ni token, esta evidencia no prueba entrega, inbound, estados, webhook firmado, Flows ni E2E (`WHATSAPP_META.md`) | Revocar/rotar el token temporal, instalar credenciales permanentes en Vercel y probar inbound/outbound correlacionado, estados, ambos Flows, retry, expiración y fallback en teléfono y tenant reales; Twilio no sustituye los gates nativos de Meta | R0 |
 | SPEC-TEC-02 | Geolocalización GPS | Parcial | Coordenadas, accuracy y geocerca se validan (`geo.js:25-57`) | Aplicar a jornada/trabajo extra con consentimiento, excepción y copy anti-spoof | S1-S2, S6 |
-| SPEC-TEC-03 | Nube para fotos/videos | Externo pendiente | Vercel Blob privado/Cloudinary autenticado y pruebas contractuales existen; ambiente, retención y DR no están demostrados | Configuración real, acceso tenant-scoped, límites/tipos, borrado, restore y degradación probados | S0, R0, S23 |
-| SPEC-TEC-04 | IA de imágenes | Reformular | No hay visión productiva | Adapter tras benchmark, dataset/ground truth, confianza/abstención y revisión humana | S17 |
-| SPEC-TEC-05 | Base relacional | Parcial | Prisma tiene 67 modelos al corte; tareas, stock, costos y documentos siguen parcial o totalmente fuera de un dominio canónico | Migración/backfill/verificador y APIs canónicas por vertical | S3-S14 |
+| SPEC-TEC-03 | Nube para fotos/videos | Externo pendiente | Vercel Blob privado/Cloudinary autenticado, validación binaria y `ProtectedUpload` server-owned para subidas web existen localmente; incluye intent durable y cron autenticado diario configurado, sin descriptor de storage aportado por el cliente | Desplegar y observar ambiente/cron, retención, restore, DR, carga directa para más de 4 MiB y degradación; configuración local no equivale a ejecución productiva | S0, R0, S23 |
+| SPEC-TEC-04 | IA de imágenes | Reformular | OpenAI tiene un smoke API controlado con render BIM; Qwen3-VL/GLM-5V son challengers visuales y GLM-OCR/GLM-5.2 especialistas OCR/texto probados sólo por contrato. No hay fan-out | Desplegar Preview, verificar privacidad/DPA/retención, dataset/ground truth, benchmark, calibración/abstención y journey Meta real antes de producción | S17 |
+| SPEC-TEC-05 | Base relacional | Parcial | Prisma tiene 69 modelos en este WIP local; documentos, calidad, contratos y stock profesional siguen incompletos | Migración/backfill/verificador y APIs canónicas por vertical | S3-S14 |
 | SPEC-TEC-06 | Generación PDF | Parcial | PDF semanal real; faltan certificado e historial documental | Artefactos privados, persistidos, versionados y reproducibles | S10, S13 |
 | SPEC-TEC-07 | Notificaciones push | Reformular | No hay push/outbox; manifest no equivale a PWA | Priorizar centro in-app + WhatsApp/email gobernados; push web sólo si el piloto demuestra necesidad | S15, S20 |
 
@@ -210,12 +210,12 @@ Todas las alertas salen de un outbox durable. Toasts, polling o un envío direct
 
 | ID | Definición original | Estado | Evidencia y decisión | Criterio objetivo | Secuencia |
 | --- | --- | --- | --- | --- | --- |
-| SPEC-DEF-01 | Tarea: unidad asignada a empleado/equipo | Parcial | Existe `Task`, pero el writer canónico sigue en snapshot | WBS/ID, equipo/responsable, baseline, estado y dependencias canónicos | S3-S4 |
+| SPEC-DEF-01 | Tarea: unidad asignada a empleado/equipo | Parcial | `Task` es la autoridad canónica; `ProjectSnapshot` conserva compatibilidad/writer legacy sólo para obras en ese modo | Completar cutover, baseline versionada, responsable/equipo por ID y demostrar cero drift | S3-S4 |
 | SPEC-DEF-02 | Avance: porcentaje de completitud | Parcial | Existe `progress` 0-100 | Guardar método, cantidad base/ejecutada, evidencia, autor y aprobación; porcentaje solo no certifica | S5, S9 |
 | SPEC-DEF-03 | Certificación: documento que valida avance para pago | Reformular | No existe certificado; la definición mezcla validación y pago | Separar medición, certificado contractual, conformidad y referencia de pago | S9-S10 |
-| SPEC-DEF-04 | Tarea no contemplada: trabajo extra necesario | Ausente | Incidente genérico no equivale a trabajo extra | `ExtraWork` con causa, impacto, aprobación y eventual change request | S6, S19 |
+| SPEC-DEF-04 | Tarea no contemplada: trabajo extra necesario | Parcial, base local | `ExtraWorkRequest` y `ExtraWorkSession` cubren solicitud, decisión y ejecución trazable; falta el change request contractual | Causa, impacto, aprobación, ejecución y eventual change request sobre baseline/presupuesto | S6, S19 |
 | SPEC-DEF-05 | Vicio oculto: problema que retrasa el plan | Parcial | Puede capturarse como incidente | Tipo, evidencia, ubicación, owner, impacto y reserva contractual | S5-S6, S19 |
-| SPEC-DEF-06 | Remito: documento de recepción | Parcial | Sólo existe referencia textual opcional en recepción básica | Documento/evidencia unido a `GoodsReceipt` y reconciliado contra OC | S12 |
+| SPEC-DEF-06 | Remito: documento de recepción | Parcial | Evidencia privada ligada a `GoodsReceipt` y reconciliada contra OC mediante reserva server-owned | Completar firma jurídica/OCR, retención productiva y E2E | S12 |
 
 ## Fases originales del PDF
 
@@ -234,7 +234,7 @@ Estas filas conservan las estimaciones recibidas como hipótesis. No son comprom
 | --- | --- | --- | --- | --- | --- |
 | SPEC-NEXT-01 | Revisar y ajustar el documento juntos | Parcial | Revisión técnica completada; reglas de negocio siguen pendientes con la socia | Resolver preguntas de cliente, turnos, caja, certificación, firma, compras, IA y offline; registrar decisiones | Antes de cada vertical |
 | SPEC-NEXT-02 | Elegir bot puro, web+WhatsApp o híbrida | Implementado | Decisión: híbrida; WhatsApp captura/notifica, web gobierna y PWA cubre conectividad intermitente | Mantener una sola fuente de verdad y fallback por canal | S0, S15-S16, S20 |
-| SPEC-NEXT-03 | Elegir Twilio/Vision/Firebase/Node | Parcial | Meta Cloud API directa es la decisión primaria y la app/caso de uso ya están presentes; Twilio queda como fallback no habilitado. Stack Next.js/Node/Postgres/Prisma/Clerk/Vercel definido; visión pendiente de benchmark | Completar piloto Meta; implementar adaptador Twilio sólo si una contingencia concreta lo justifica; adapter de visión tras piloto | R0, S17, S22 |
+| SPEC-NEXT-03 | Elegir Twilio/Vision/Firebase/Node | Parcial | Meta Cloud API directa es primaria y Twilio queda como fallback no habilitado. Stack Next.js/Node/Postgres/Prisma/Clerk/Vercel definido. OpenAI es primario visual; HF Qwen y GLM-5V/OCR/texto quedan registrados por capacidad | Completar piloto Meta y benchmark visual; implementar Twilio sólo si una contingencia concreta lo justifica. Sólo OpenAI tuvo smoke API; ningún challenger recibe evidencia real sin benchmark y revisión contractual | R0, S17, S22 |
 | SPEC-NEXT-04 | Diseñar base con entidades principales | Parcial | Núcleo SaaS y operativo existe; faltan dominios canónicos definidos en esta matriz | Modelo/migración/API/autoridad por sprint, con backfill, verificador y rollback | S1-S19 |
 | SPEC-NEXT-05 | Empezar MVP con una obra piloto | Externo pendiente | No existe evidencia de piloto real aprobado | Obra, responsables, consentimiento, datos iniciales, ambiente, soporte, métricas y criterio de salida definidos | R0 y carril piloto |
 
@@ -252,7 +252,7 @@ Estas filas conservan las estimaciones recibidas como hipótesis. No son comprom
 | PRO-08 | API/webhooks e integración ERP/BIM/BI | Ausente | No hay API pública versionada | API/scopes/webhooks y una integración priorizada por piloto | S22 |
 | PRO-09 | Accesibilidad, rendimiento y type safety | Parcial | Hay prácticas aisladas, sin gates suficientes | Gates progresivos desde S0 y certificación en S23 | S0, S23 |
 | PRO-10 | Localización, zona horaria, unidades y moneda | Parcial | Mayormente `es-AR`; organization guarda país/zona | Locale/unidades/moneda por tenant/obra; journeys regionales elegidos | S21 |
-| PRO-11 | Presupuesto, comprometido, real, forecast y cambios | Ausente | Sólo total/ejecutado en snapshot | Ledger/códigos/versiones canónicos antes de certificación, compras y change control | S7, S9-S12, S19 |
+| PRO-11 | Presupuesto, comprometido, real, forecast y cambios | Parcial, base local | Existen `BudgetVersion`, `BudgetLine`, `BudgetEntry` y clases `COMMITMENT/ACTUAL/FORECAST` | Faltan cambios aprobados, reconciliación completa, cutover y Preview antes de certificación/compras/change control | S7, S9-S12, S19 |
 | PRO-12 | Identidad laboral y destino de cobro protegidos | Parcial | El módulo local valida CUIL/CBU/CVU/alias, exige consentimiento versionado, cifra con AAD/keyring y serializa enmascarado. Ya existen API tenant-scoped, CAS, idempotencia, separación maker-checker-activator, titular verificado y ledger append-only; todavía no fueron desplegados ni verificados en Neon y el proveedor bancario falla cerrado hasta una integración confiable | Desplegar y verificar en Preview aislado, completar Flow/UI, proveedor de titularidad, opt-in y comprobante privado; nunca ejecutar pagos desde IA/WhatsApp | Piloto H3-H4, S14, R0 |
 
 ## Decisiones pendientes de la socia/cliente

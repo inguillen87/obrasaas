@@ -608,9 +608,13 @@ export async function downloadWhatsAppMedia({
   if (buffer.length !== declaredSize) {
     throw new Error("Downloaded WhatsApp media size does not match Meta metadata.");
   }
-  const computedSha256 = crypto.createHash("sha256").update(buffer).digest("base64");
+  const computedDigest = crypto.createHash("sha256").update(buffer).digest();
+  // Meta exposes media SHA-256 values as Base64. Keep that representation only
+  // at the provider trust boundary, then return the application's canonical hex
+  // digest so persisted media can be consumed consistently by evidence flows.
+  const computedProviderSha256 = computedDigest.toString("base64");
   const trustedSha256 = metadata.sha256 || expectedSha256;
-  if (trustedSha256 && !timingSafeEqual(trustedSha256, computedSha256)) {
+  if (trustedSha256 && !timingSafeEqual(trustedSha256, computedProviderSha256)) {
     throw new Error("Downloaded WhatsApp media failed SHA-256 verification.");
   }
 
@@ -620,7 +624,7 @@ export async function downloadWhatsAppMedia({
     kind: policy.kind,
     mimeType: policy.mimeType,
     size: buffer.length,
-    sha256: computedSha256,
+    sha256: computedDigest.toString("hex"),
   };
 }
 

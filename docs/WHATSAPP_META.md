@@ -123,6 +123,19 @@ El challenge `GET` compara `hub.verify_token` en tiempo constante. Cada `POST` v
 
 No deben agregarse nuevas suscripciones hasta contar con consumidor, persistencia idempotente y pruebas para ese contrato.
 
+## Media privada y evidencia de avance
+
+Una imagen entrante no se convierte automáticamente en avance, asistencia ni tarea. El circuito local implementado es:
+
+1. el webhook firmado persiste el mensaje y su identidad Meta de forma idempotente;
+2. el backend autorizado descarga el binario desde Meta, valida tamaño/MIME, calcula SHA-256 y lo guarda en storage privado bajo el proyecto correcto;
+3. Inbox muestra sólo la fuente protegida a roles con permiso de evidencia;
+4. un rol autorizado elige una tarea WBS canónica y crea un único `ProgressEvidence` mediante clave de idempotencia estable;
+5. después de recargar, el mensaje queda marcado como ya incorporado y no vuelve a ofrecer la mutación;
+6. la revisión de evidencia y, si el tenant hizo opt-in, la lectura visual asistida ocurren en Bitácora.
+
+La foto original no se vuelve pública ni se entrega al navegador mediante una URL firmada del proveedor. La lectura visual tiene su propio gate y revisión humana; no modifica Gantt, certificación, pago ni asistencia. Su contrato y estado están en [AI_VISUAL_EVALUATION.md](AI_VISUAL_EVALUATION.md).
+
 ## Estado verificable en el repositorio
 
 Implementado:
@@ -138,6 +151,7 @@ Implementado:
 - provisionamiento de borradores con verificación de clave y configuración remota;
 - envío interactivo de Flows publicados con `data_exchange` o `navigate` según su metadata;
 - fallback a texto cuando el Flow publicado no está disponible;
+- media Meta privada con hash canónico y vínculo idempotente de foto → tarea → `ProgressEvidence`;
 - ausencia deliberada de publicación automática.
 
 Esta lista describe el código y sus pruebas de contrato. Como evidencia externa separada, Meta ya asignó el número de prueba, verificó un destinatario propio y aceptó una solicitud outbound de plantilla con un token temporal. Eso no afirma entrega ni que un WABA/tenant real haya completado el circuito; tampoco acredita que las credenciales permanentes estén instaladas en Vercel Preview o Production.

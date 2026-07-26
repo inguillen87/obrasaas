@@ -19,7 +19,7 @@ Registrar facturas de proveedores con evidencia privada, vincularlas a órdenes 
 - Las mutaciones adquieren bloqueo advisory por obra y usan `ReadCommitted`.
 - Las decisiones de factura usan `revision` como CAS y son idempotentes donde corresponde.
 - Una factura vinculada a orden no puede superar el valor recibido menos facturas aprobadas/pagadas.
-- Los comprobantes se almacenan privados, con SHA-256 y URL firmada de 60 segundos.
+- Los comprobantes se almacenan privados con SHA-256 y se descargan por un proxy autenticado que revalida tenant, obra y permiso en cada solicitud; no se expone la URL del proveedor.
 - Las exportaciones CSV no exponen datos de otras obras y validan el filtro de estado.
 
 ## Verificación antes de desplegar

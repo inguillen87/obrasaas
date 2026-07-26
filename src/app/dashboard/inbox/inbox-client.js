@@ -23,6 +23,7 @@ const DELIVERY_STATES = new Set([
   'FAILED',
   'UNKNOWN',
 ]);
+const UNRESOLVED_SEND_STATES = new Set(['SENDING', 'UNKNOWN']);
 const ATTACHMENT_PRESENTATIONS = Object.freeze({
   image: { icon: 'fa-regular fa-image', label: 'Imagen' },
   audio: { icon: 'fa-solid fa-microphone', label: 'Audio' },
@@ -34,6 +35,13 @@ const STICK_TO_BOTTOM_THRESHOLD = 96;
 const CONVERSATION_PAGE_SIZE = 30;
 const CONVERSATION_REFRESH_LIMIT = 80;
 const MESSAGE_PAGE_SIZE = 60;
+const TASK_STATUS_LABELS = Object.freeze({
+  BACKLOG: 'Pendiente',
+  READY: 'Lista',
+  IN_PROGRESS: 'En curso',
+  BLOCKED: 'Bloqueada',
+  DONE: 'Finalizada',
+});
 const UNVERIFIED_COMPOSER_CAPABILITY = Object.freeze({
   allowed: false,
   code: 'CAPABILITY_UNAVAILABLE',
@@ -100,6 +108,9 @@ function normalizeMessage(raw) {
     sentAt: source.sentAt || source.createdAt || source.timestamp || null,
     recordedAt: source.recordedAt || source.createdAt || source.sentAt || null,
     status: deliveryStatus(source.status || source.deliveryStatus),
+    sourceEvidenceViewable: source.sourceEvidenceViewable === true,
+    progressEvidenceEligible: source.progressEvidenceEligible === true,
+    progressEvidenceLinked: source.progressEvidenceLinked === true,
   };
 }
 
@@ -242,11 +253,11 @@ function sendFailureResolution(error) {
   return '';
 }
 
-function createIdempotencyKey() {
+function createIdempotencyKey(prefix = 'inbox') {
   const suffix = globalThis.crypto?.randomUUID
     ? globalThis.crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  return `inbox-${suffix}`;
+  return `${prefix}-${suffix}`;
 }
 
 function contactLabel(conversation) {
@@ -439,7 +450,7 @@ function attachmentPresentation(message) {
   return presentation ? { ...presentation, kind } : null;
 }
 
-function AttachmentCard({ message }) {
+function AttachmentCard({ canOpenSourceEvidence = false, message }) {
   const presentation = attachmentPresentation(message);
   if (!presentation) return null;
 
@@ -460,8 +471,211 @@ function AttachmentCard({ message }) {
             : mimeType || 'Adjunto protegido sin enlace directo'}
         </small>
       </span>
-      <i className={`fa-solid fa-shield-halved ${styles.attachmentShield}`} aria-hidden="true" />
+      {canOpenSourceEvidence && message.sourceEvidenceViewable ? (
+        <a
+          className={styles.attachmentOpenLink}
+          href={`/api/evidence/${encodeURIComponent(message.id)}?preview=1`}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <i className="fa-solid fa-arrow-up-right-from-square" aria-hidden="true" />
+          <span>Abrir</span>
+          <span className={styles.srOnly}> {presentation.label.toLowerCase()} protegida</span>
+        </a>
+      ) : (
+        <i className={`fa-solid fa-shield-halved ${styles.attachmentShield}`} aria-hidden="true" />
+      )}
     </div>
+  );
+}
+
+function canonicalTaskLabel(task) {
+  const code = textValue(task?.code);
+  const title = textValue(task?.title, 'Tarea sin título');
+  const status = TASK_STATUS_LABELS[textValue(task?.status).toUpperCase()] || 'Estado sin confirmar';
+  return `${code ? `${code} · ` : ''}${title} — ${status}`;
+}
+
+function ProgressEvidenceLinkedState() {
+  return (
+    <div className={styles.progressEvidenceLinked} role="status">
+      <span aria-hidden="true"><i className="fa-solid fa-circle-check" /></span>
+      <div>
+        <strong>Foto ya incorporada al avance</strong>
+        <small>
+          El vínculo está confirmado. No hace falta reenviarla ni crear otra evidencia.
+        </small>
+      </div>
+    </div>
+  );
+}
+
+function ProgressEvidenceAction({
+  conversationId,
+  message,
+  online,
+  projectId,
+  tasks,
+}) {
+  const [selectedTaskId, setSelectedTaskId] = useState('');
+  const [linkState, setLinkState] = useState({ tone: 'idle', message: '' });
+  const attemptRef = useRef(null);
+  const requestPendingRef = useRef(false);
+  const confirmedRef = useRef(false);
+  const selectedTask = useMemo(
+    () => tasks.find((task) => task.id === selectedTaskId) || null,
+    [selectedTaskId, tasks],
+  );
+  const pending = linkState.tone === 'pending';
+  const confirmed = linkState.tone === 'success' || linkState.tone === 'replay';
+
+  function changeTask(event) {
+    if (pending || confirmed) return;
+    setSelectedTaskId(event.target.value);
+    attemptRef.current = null;
+    setLinkState({ tone: 'idle', message: '' });
+  }
+
+  async function linkEvidence(event) {
+    event.preventDefault();
+    if (
+      requestPendingRef.current
+      || confirmedRef.current
+      || !online
+      || !selectedTask
+    ) {
+      return;
+    }
+
+    const attempt = attemptRef.current?.taskId === selectedTask.id
+      ? attemptRef.current
+      : {
+          taskId: selectedTask.id,
+          idempotencyKey: createIdempotencyKey('progress-evidence'),
+        };
+    attemptRef.current = attempt;
+    requestPendingRef.current = true;
+    setLinkState({ tone: 'pending', message: 'Vinculando la foto con la tarea…' });
+
+    try {
+      const response = await fetch(
+        `/api/whatsapp/inbox/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(message.id)}/progress-evidence?projectId=${encodeURIComponent(projectId)}`,
+        {
+          method: 'POST',
+          cache: 'no-store',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            'Idempotency-Key': attempt.idempotencyKey,
+          },
+          body: JSON.stringify({
+            projectId,
+            taskId: selectedTask.id,
+          }),
+        },
+      );
+      const payload = await readResponse(
+        response,
+        'No pudimos confirmar el vínculo. Reintentá para consultar la misma operación segura.',
+      );
+      confirmedRef.current = true;
+      setLinkState(payload.replayed === true
+        ? {
+            tone: 'replay',
+            message: `El vínculo con “${selectedTask.title}” ya estaba confirmado. No se creó un duplicado.`,
+          }
+        : {
+            tone: 'success',
+            message: `Foto vinculada a “${selectedTask.title}”. Quedó pendiente de revisión en Progreso.`,
+          });
+    } catch (error) {
+      setLinkState({
+        tone: 'error',
+        message: safeErrorMessage(
+          error,
+          'No pudimos confirmar el vínculo. Reintentá para consultar la misma operación segura.',
+        ),
+      });
+    } finally {
+      requestPendingRef.current = false;
+    }
+  }
+
+  return (
+    <form className={styles.progressEvidenceAction} onSubmit={linkEvidence}>
+      <header>
+        <span aria-hidden="true"><i className="fa-solid fa-link" /></span>
+        <div>
+          <strong>Incorporar al avance de obra</strong>
+          <small>Elegí la tarea canónica. La foto no modifica el Gantt automáticamente.</small>
+        </div>
+      </header>
+
+      {tasks.length > 0 ? (
+        <div className={styles.progressEvidenceControls}>
+          <label>
+            <span>Tarea canónica</span>
+            <select
+              value={selectedTaskId}
+              onChange={changeTask}
+              disabled={pending || confirmed}
+              aria-label="Tarea canónica para la evidencia"
+            >
+              <option value="">Seleccionar tarea…</option>
+              {tasks.map((task) => (
+                <option key={task.id} value={task.id}>{canonicalTaskLabel(task)}</option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="submit"
+            disabled={!online || !selectedTask || pending || confirmed}
+          >
+            <i
+              className={pending
+                ? 'fa-solid fa-circle-notch fa-spin'
+                : confirmed
+                  ? 'fa-solid fa-check'
+                  : 'fa-solid fa-link'}
+              aria-hidden="true"
+            />
+            {pending
+              ? 'Vinculando…'
+              : confirmed
+                ? 'Evidencia vinculada'
+                : linkState.tone === 'error'
+                  ? 'Reintentar vínculo'
+                  : 'Vincular evidencia'}
+          </button>
+        </div>
+      ) : (
+        <p className={styles.progressEvidenceEmpty}>
+          Primero creá una tarea canónica en Ejecución para poder clasificar esta evidencia.
+        </p>
+      )}
+
+      {!online && !confirmed && (
+        <p className={styles.progressEvidenceOffline}>Conectate a internet para guardar el vínculo.</p>
+      )}
+      {linkState.message && (
+        <p
+          className={styles.progressEvidenceState}
+          data-tone={linkState.tone}
+          role={linkState.tone === 'error' ? 'alert' : 'status'}
+          aria-live="polite"
+        >
+          <i
+            className={linkState.tone === 'error'
+              ? 'fa-solid fa-circle-exclamation'
+              : linkState.tone === 'pending'
+                ? 'fa-regular fa-clock'
+                : 'fa-solid fa-circle-check'}
+            aria-hidden="true"
+          />
+          <span>{linkState.message}</span>
+        </p>
+      )}
+    </form>
   );
 }
 
@@ -501,10 +715,13 @@ function LoadingWorkspace() {
 }
 
 export default function InboxClient({
+  canLinkProgressEvidence = false,
   canManageIntegrations = false,
+  canViewSourceEvidence = false,
   organizationName,
   projectId,
   projectName,
+  progressEvidenceTasks = [],
   timeZone = DEFAULT_TIME_ZONE,
 }) {
   const [conversations, setConversations] = useState([]);
@@ -542,6 +759,7 @@ export default function InboxClient({
   const readStateAbortRef = useRef(null);
   const failedReadTargetRef = useRef(null);
   const draftKeyRef = useRef(createIdempotencyKey());
+  const unresolvedSendRef = useRef(null);
   const knownMessageIdsRef = useRef(new Set());
   const knownMessageStatusRef = useRef(new Map());
   const shouldStickToBottomRef = useRef(true);
@@ -924,6 +1142,7 @@ export default function InboxClient({
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
       if (!selectedId) {
+        unresolvedSendRef.current = null;
         setMessages([]);
         setWindowState(normalizeWindow(null));
         setComposerCapability(null);
@@ -935,6 +1154,7 @@ export default function InboxClient({
         return;
       }
       readStateAbortRef.current?.abort();
+      unresolvedSendRef.current = null;
       setDraft('');
       setSendError('');
       setSendResolution('');
@@ -966,6 +1186,28 @@ export default function InboxClient({
       window.removeEventListener('offline', updateOnline);
     };
   }, []);
+
+  useEffect(() => {
+    if (sendResolution !== 'UNKNOWN') return;
+    const unresolved = unresolvedSendRef.current;
+    if (!unresolved?.messageId || unresolved.conversationId !== selectedId) return;
+    const reconciled = messages.find((message) => message.id === unresolved.messageId);
+    if (!reconciled || UNRESOLVED_SEND_STATES.has(reconciled.status)) return;
+
+    unresolvedSendRef.current = null;
+    draftKeyRef.current = createIdempotencyKey();
+    if (reconciled.status === 'FAILED') {
+      setSendResolution('FAILED');
+      setSendError(
+        'Meta confirmó que este intento falló. El borrador se conservó y podés enviarlo como una operación nueva.',
+      );
+      return;
+    }
+
+    setSendResolution('');
+    setSendError('');
+    if (draft.trim() === unresolved.body) setDraft('');
+  }, [draft, messages, selectedId, sendResolution]);
 
   useEffect(() => {
     if (!online) return undefined;
@@ -1127,20 +1369,37 @@ export default function InboxClient({
     void submitMessage();
   }
 
-  async function submitMessage({ asNewAttempt = false } = {}) {
-    const body = draft.trim();
-    if (!body || !selectedConversation || sending || !canCompose) return;
-    if (sendResolution === 'UNKNOWN') return;
+  async function submitMessage({ asNewAttempt = false, reconcileUnknown = false } = {}) {
+    const pendingAttempt = reconcileUnknown ? unresolvedSendRef.current : null;
+    const body = pendingAttempt?.conversationId === selectedConversation?.id
+      ? pendingAttempt.body
+      : draft.trim();
+    if (
+      !body
+      || !selectedConversation
+      || sending
+      || (!reconcileUnknown && !canCompose)
+      || (reconcileUnknown && (!online || !pendingAttempt))
+    ) return;
+    if (sendResolution === 'UNKNOWN' && !reconcileUnknown) return;
     if (sendResolution === 'FAILED' && !asNewAttempt) return;
 
-    const idempotencyKey = asNewAttempt
-      ? createIdempotencyKey()
-      : draftKeyRef.current;
+    const idempotencyKey = reconcileUnknown
+      ? pendingAttempt.idempotencyKey
+      : asNewAttempt
+        ? createIdempotencyKey()
+        : draftKeyRef.current;
     if (asNewAttempt) draftKeyRef.current = idempotencyKey;
+    const attempt = {
+      body,
+      conversationId: selectedConversation.id,
+      idempotencyKey,
+      messageId: pendingAttempt?.messageId || null,
+    };
 
     setSending(true);
-    setSendError('');
-    setSendResolution('');
+    if (!reconcileUnknown) setSendError('');
+    setSendResolution(reconcileUnknown ? 'UNKNOWN' : '');
 
     try {
       const response = await fetch(
@@ -1163,8 +1422,10 @@ export default function InboxClient({
         response,
         'No pudimos confirmar el envío. Reintentá sin cambiar el mensaje.',
       );
+      if (reconcileUnknown && unresolvedSendRef.current === null) return;
       const sentMessage = normalizeMessage(payload.message);
       if (sentMessage) {
+        attempt.messageId = sentMessage.id;
         shouldStickToBottomRef.current = true;
         knownMessageIdsRef.current = new Set([
           ...knownMessageIdsRef.current,
@@ -1188,22 +1449,41 @@ export default function InboxClient({
       setNow(new Date());
       void loadInbox();
 
-      if (sentMessage?.status === 'FAILED' || sentMessage?.status === 'UNKNOWN') {
-        setSendResolution(sentMessage.status);
-        setSendError(sentMessage.status === 'FAILED'
-          ? 'Meta rechazó este intento. Podés revisarlo y enviarlo nuevamente como una operación nueva.'
-          : 'Meta no confirmó la entrega. El borrador queda en esta pantalla y no lo reenviaremos para evitar duplicados.');
+      if (sentMessage && UNRESOLVED_SEND_STATES.has(sentMessage.status)) {
+        unresolvedSendRef.current = attempt;
+        setSendResolution('UNKNOWN');
+        setSendError(
+          'Meta todavía no confirmó la entrega. Conservamos el borrador y la misma clave segura para comprobar o reintentar esta operación sin duplicarla.',
+        );
         return;
       }
 
-      setDraft('');
+      if (sentMessage?.status === 'FAILED') {
+        unresolvedSendRef.current = null;
+        setSendResolution('FAILED');
+        setSendError(
+          'Meta confirmó que este intento falló. El borrador se conservó y podés enviarlo como una operación nueva.',
+        );
+        return;
+      }
+
+      unresolvedSendRef.current = null;
+      setDraft((current) => (current.trim() === body ? '' : current));
       draftKeyRef.current = createIdempotencyKey();
     } catch (error) {
       const resolution = sendFailureResolution(error);
-      setSendResolution(resolution);
+      if (resolution === 'UNKNOWN' || reconcileUnknown) {
+        unresolvedSendRef.current = attempt;
+        setSendResolution('UNKNOWN');
+      } else {
+        unresolvedSendRef.current = null;
+        setSendResolution(resolution);
+      }
       setSendError(safeErrorMessage(
         error,
-        'No pudimos confirmar el envío. El borrador queda en esta pantalla para un reintento seguro.',
+        reconcileUnknown
+          ? 'No pudimos obtener el estado final. La operación conserva su clave segura y el borrador sigue disponible.'
+          : 'No pudimos confirmar el envío. El borrador queda en esta pantalla para un reintento seguro.',
       ));
     } finally {
       setSending(false);
@@ -1591,7 +1871,21 @@ export default function InboxClient({
                             aria-label={outbound ? 'Mensaje enviado' : 'Mensaje recibido'}
                           >
                             {message.body && <p>{message.body}</p>}
-                            <AttachmentCard message={message} />
+                            <AttachmentCard
+                              canOpenSourceEvidence={canViewSourceEvidence}
+                              message={message}
+                            />
+                            {canLinkProgressEvidence && message.progressEvidenceLinked ? (
+                              <ProgressEvidenceLinkedState />
+                            ) : canLinkProgressEvidence && message.progressEvidenceEligible ? (
+                              <ProgressEvidenceAction
+                                conversationId={selectedConversation.id}
+                                message={message}
+                                online={online}
+                                projectId={projectId}
+                                tasks={progressEvidenceTasks}
+                              />
+                            ) : null}
                             {!message.body
                               && !attachmentPresentation(message)
                               && <p>Contenido no disponible en esta bandeja.</p>}
@@ -1638,6 +1932,16 @@ export default function InboxClient({
                         disabled={!canCompose || !draft.trim() || sending}
                       >
                         {sending ? 'Enviando…' : 'Enviar como nuevo intento'}
+                      </button>
+                    )}
+                    {sendResolution === 'UNKNOWN' && (
+                      <button
+                        className={styles.sendRetryButton}
+                        type="button"
+                        onClick={() => void submitMessage({ reconcileUnknown: true })}
+                        disabled={!online || sending}
+                      >
+                        {sending ? 'Comprobando…' : 'Comprobar / reintentar seguro'}
                       </button>
                     )}
                   </div>

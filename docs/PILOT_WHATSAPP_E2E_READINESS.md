@@ -1,6 +1,6 @@
 # Piloto WhatsApp E2E - readiness y gates
 
-Fecha de corte: 2026-07-25
+Fecha de corte: 2026-07-26
 
 ## Decisión de canal
 
@@ -12,15 +12,19 @@ Evidencia externa disponible al corte: en la cuenta Meta de ObraSaaS están pres
 
 Este resultado acredita sólo aceptación outbound en el entorno de prueba. No acredita entrega, inbound, eventos de estado, webhook firmado, Flows, aislamiento sobre un tenant real ni mensajería bidireccional end-to-end. También faltan credenciales permanentes de release gestionadas como secretos en Vercel. El token temporal debe revocarse o rotarse y sustituirse; no es una credencial apta para Preview o Production.
 
-## Qué puede probarse hoy
+## Qué está implementado para probar localmente o por contrato
+
+Las operaciones dependientes de Meta no pueden recorrerse end-to-end hasta completar H1.
 
 - Dashboard interno: tenant, obra, cuadrilla, tareas, Gantt, Inbox, asistencia y aprobaciones.
 - Operario previamente creado y ligado a su teléfono dentro de una obra.
 - Entrada, pausa, regreso y salida con hora de servidor, GPS fresco, accuracy, geocerca e idempotencia.
 - Recepción de texto, audio, imagen, video y documentos; media privada con SHA-256.
 - Propuestas de avance por texto/audio que requieren aprobación y no reescriben el Gantt directamente.
+- Vinculación desde Inbox de una foto Meta autorizada a una tarea canónica como `ProgressEvidence`, con permisos, idempotencia y revisión.
+- Evaluación visual opt-in con OpenAI, rango o abstención, derivado sin metadatos y revisión humana CAS. Un smoke API controlado ya confirmó abstención ante un render BIM que no era evidencia física. Las ejecuciones `RUNNING` tienen lease persistente: un crash se recupera una sola vez a `FAILED`, queda auditado y una respuesta tardía no puede pisarlo; el reintento es explícito con otra clave.
 
-No debe presentarse todavía como completo: el simulador web no adjunta una imagen real; la foto de WhatsApp no se convierte aún en `ProgressEvidence` asociado a una tarea; no existe visión productiva ni forecast derivado de evidencia. El onboarding y los destinos de cobro ya tienen servicios y API autenticada tenant-scoped, cifrado AAD, DTO enmascarado, idempotencia, CAS, permisos y decisiones maker-checker-activator auditadas. Esa persistencia todavía no fue desplegada ni verificada en una rama Neon aislada; además faltan el Flow especializado, la pantalla productiva y un proveedor confiable de titularidad bancaria.
+No debe presentarse todavía como completo: la nueva cadena foto → evidencia → evaluación visual está implementada y probada localmente, pero no fue migrada ni verificada en Neon Preview ni recorrida con una foto entrante real de Meta. La ubicación sigue siendo un evento separado y no está correlacionada automáticamente con la foto; tampoco existe aún una baseline inmutable/forecast determinista derivado de la revisión. El onboarding y los destinos de cobro ya tienen servicios y API autenticada tenant-scoped, cifrado AAD, DTO enmascarado, idempotencia, CAS, permisos y decisiones maker-checker-activator auditadas. Esa persistencia todavía no fue desplegada ni verificada en una rama Neon aislada; además faltan el Flow especializado, la pantalla productiva y un proveedor confiable de titularidad bancaria.
 
 ## Hitos de prueba
 
@@ -40,7 +44,7 @@ Gate de salida aún pendiente:
 
 - token temporal revocado o rotado y credenciales permanentes configuradas como secretos en Vercel;
 - webhook HTTPS configurado y validado con una solicitud inbound firmada por Meta y eventos de estado reales;
-- Preview nuevo creado con la ramificación automática Vercel-Neon ya habilitada, identidad de base distinta de Production y migraciones verificadas; el Preview anterior no cumple este gate;
+- crear un Preview nuevo y comprobar que la integración Vercel-Neon genera una rama aislada, con identidad de base distinta de Production y migraciones verificadas;
 - tenant, obra y trabajador reales cargados en Neon, con el teléfono normalizado y aislamiento cross-tenant probado;
 - storage privado y migraciones verificadas en el ambiente del piloto;
 - inbound, outbound correlacionado, estados, retry y ambos Flows probados end-to-end;
@@ -50,16 +54,25 @@ Estimación condicional: 2 a 4 días hábiles desde que las credenciales permane
 
 ### H2 - Foto + comentario + GPS como evidencia canónica
 
-Gate de salida:
+Base local completada:
 
 - imagen de WhatsApp almacenada de forma privada;
-- caption/comentario y ubicación ligados al mismo evento;
-- desambiguación/Flow para elegir tarea;
-- creación idempotente de `ProgressEvidence`;
-- revisión humana en Inbox/Progreso;
-- URL privada expirable y pruebas de replay/cross-tenant.
+- caption/comentario conservado con la evidencia;
+- selector de tarea canónica en Inbox con permisos mínimos;
+- creación idempotente de `ProgressEvidence`, integridad SHA-256 y pruebas de replay/cross-tenant;
+- revisión humana en Progreso y entrega privada server-side de la fuente Meta.
+- las subidas desde dashboard usan una reserva server-owned de un solo uso y sólo exponen `uploadId`; la evidencia Meta permanece anclada al mensaje y a la conexión autorizados.
 
-Estimación: un sprint de 5 a 8 días hábiles después de H1.
+Gate de salida aún pendiente:
+
+- desplegar y verificar migraciones/storage en Neon Preview aislado;
+- ejecutar el recorrido con inbound Meta real y observarlo en Inbox/Progreso;
+- ligar una ubicación fresca al mismo contexto operacional sin inferir GPS desde metadatos de la imagen;
+- definir si la selección de tarea final será Inbox, Flow o ambas, y probar reintento/offline;
+- desplegar e invocar el cron autenticado de limpieza ya configurado, observar sus métricas/backlog, completar retención/purga y ejecutar smoke de descarga privada para ambos adapters de storage. Vercel sólo lo agenda automáticamente en Production; Preview requiere llamada manual;
+- respetar el máximo actual de 4 MiB en rutas serverless; un piloto con archivos mayores necesita carga directa autorizada al storage, no un aumento nominal del formulario.
+
+Estimación residual: 2 a 4 días hábiles desde H1 y un Preview con secretos/storage listos; no es una fecha hasta que esas dependencias existan.
 
 ### H3 - Onboarding simple y seguro del operario
 
@@ -79,13 +92,19 @@ Antes de producción también hay que retirar la autoridad del teléfono legado 
 
 El objetivo del hito es completar esos componentes y mantener los valores completos fuera de logs, snapshots, Inbox común y prompts de IA. ObraSaaS registra/exporta la instrucción inicialmente; no mueve dinero automáticamente.
 
-El comprobante se entrega mediante plantilla y enlace privado de corta duración. `DELIVERED` no equivale a firma ni conformidad.
+El objetivo de H4 es entregar el comprobante mediante plantilla y enlace privado de corta duración; ese recorrido todavía no está implementado E2E. `DELIVERED` no equivale a firma ni conformidad.
 
 Estimación: 1 a 2 sprints, condicionada a revisión laboral, privacidad, retención y proveedor de firma.
 
 ### H5 - Visión con revisión humana + escenario Gantt
 
 La IA describe el elemento (por ejemplo, mampostería parcial), propone un rango de avance, confianza, evidencia y abstención. Nunca certifica ni cambia el cronograma por sí sola. El Director aprueba/corrige y recién entonces se genera un escenario de forecast; la baseline permanece inmutable.
+
+Base local completada: modelo Prisma/migración gobernados, provider registry, adaptador OpenAI Responses, sanitización binaria/EXIF, tenant opt-in con CAS entre administradores, recheck de suscripción/autorización en la última frontera, rutas idempotentes, un solo análisis abierto por evidencia, estados de fallo seguros y revisión humana CAS. Una lectura obsoleta puede rechazarse con trazabilidad para liberar un intento nuevo. El smoke API controlado con `gpt-5.6-sol` se abstuvo correctamente frente a un render BIM y no inventó avance. Qwen3-VL y GLM-5V son challengers visuales; GLM-OCR y GLM-5.2 son especialistas OCR/texto, y GLM-5.2 nunca recibe fotos. HF/Z.ai sólo tienen pruebas de contrato.
+
+Gate pendiente: migración/Preview, foto Meta real, UI/journey E2E, dataset y benchmark calibrado, observabilidad de costo/latencia, controles de datos/DPA/retención del proveedor y motor de escenario sobre baseline inmutable. `store:false` no equivale a ZDR y `detail:original` requiere opt-in justificado. La revisión visual actual no muta `Task` ni crea todavía el forecast, deliberadamente.
+
+Contrato técnico y benchmark: [AI_VISUAL_EVALUATION.md](./AI_VISUAL_EVALUATION.md).
 
 Estimación: prototipo controlado en un sprint; nivel productivo comparables con líderes del mercado requiere 2 a 4 sprints adicionales para dataset, ground truth, evaluación por tipología, observabilidad y criterios de abstención.
 
@@ -96,6 +115,8 @@ Operario real + administrativo + Director + cliente externo con permisos mínimo
 Ventana honesta: 6 a 10 semanas de trabajo focalizado desde H1, siempre que Meta, credenciales, revisión legal y proveedores no bloqueen gates. No se anuncia como listo antes de completar H5.
 
 ## Escenario de aceptación del piloto
+
+Este es el recorrido objetivo de aceptación H6; los pasos de forecast y comprobante no están disponibles hoy.
 
 1. El administrativo crea la empresa, obra, geocerca, horario y tareas.
 2. Invita a Carlitos y aprueba su identidad de canal.

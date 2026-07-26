@@ -1,11 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import {
   ingestAndPersistInboundWhatsAppMedia,
   ingestInboundWhatsAppMedia,
   isEnrichedInboundWhatsAppMediaEvent,
   whatsAppMediaUploadIdempotencyKey,
 } from "../src/lib/whatsapp/media.js";
+import { downloadWhatsAppMedia } from "../src/lib/whatsapp/meta.js";
 
 const baseEvent = {
   provider: "meta",
@@ -67,6 +69,73 @@ test("WhatsApp media ingestion stores an authenticated asset and attaches its tr
   assert.equal(event.transcription.status, "completed");
   assert.equal(isEnrichedInboundWhatsAppMediaEvent(event), true);
   assert.equal(event.text, "Hay una demora con el hormigón.");
+});
+
+test("Meta Base64 media integrity becomes canonical hex before durable ingestion", async () => {
+  const content = Buffer.from("realistic jpeg bytes from Meta");
+  const providerSha256 = crypto.createHash("sha256").update(content).digest("base64");
+  const canonicalSha256 = crypto.createHash("sha256").update(content).digest("hex");
+  const inbound = {
+    ...baseEvent,
+    externalId: "wamid.image-1",
+    kind: "image",
+    text: "Pared norte a medio terminar",
+    media: {
+      ...baseEvent.media,
+      id: "223456789012345",
+      mimeType: "image/jpeg",
+      filename: "pared-norte.jpg",
+      sha256: providerSha256,
+    },
+  };
+  const fetchImpl = async (input) => {
+    const url = new URL(input);
+    if (url.hostname === "graph.facebook.com") {
+      return Response.json({
+        id: inbound.media.id,
+        url: "https://lookaside.fbsbx.com/whatsapp_business/attachments/?mid=223",
+        mime_type: inbound.media.mimeType,
+        sha256: providerSha256,
+        file_size: content.length,
+      });
+    }
+    return new Response(content, {
+      status: 200,
+      headers: { "content-type": inbound.media.mimeType },
+    });
+  };
+
+  const event = await ingestInboundWhatsAppMedia(inbound, {
+    storageConfigured: () => true,
+    download: (options) => downloadWhatsAppMedia({
+      ...options,
+      fetchImpl,
+      credentials: {
+        version: "v25.0",
+        accessToken: "test-access-token",
+        phoneNumberId: inbound.phoneNumberId,
+        appSecret: "test-app-secret",
+      },
+    }),
+    upload: async (file, options) => {
+      assert.equal(Buffer.from(await file.arrayBuffer()).compare(content), 0);
+      assert.match(options.idempotencyKey, /^whatsapp-media:v1:[a-f0-9]{64}$/);
+      return {
+        provider: "cloudinary",
+        assetId: "asset-image-1",
+        publicId: "tenant/image-1",
+        resourceType: "image",
+        format: "jpg",
+        bytes: content.length,
+        secureUrl: "https://res.cloudinary.com/obrasaas/authenticated/image-1.jpg",
+      };
+    },
+  });
+
+  assert.equal(event.media.sha256, canonicalSha256);
+  assert.notEqual(event.media.sha256, providerSha256);
+  assert.match(event.media.sha256, /^[a-f0-9]{64}$/);
+  assert.equal(isEnrichedInboundWhatsAppMediaEvent(event), true);
 });
 
 test("enriched WhatsApp media is reused without another download, upload or transcription", async () => {

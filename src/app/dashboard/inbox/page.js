@@ -3,6 +3,9 @@ import {
   hasTenantPermission,
   requireTenantPermission,
 } from '@/lib/access';
+import { listCanonicalTasks } from '@/lib/canonical-tasks';
+import { SOURCE_EVIDENCE_PERMISSION } from '@/lib/medical-privacy';
+import { getPrisma } from '@/lib/prisma';
 
 import InboxClient from './inbox-client';
 import styles from './inbox.module.css';
@@ -18,6 +21,23 @@ export const metadata = {
 export default async function InboxPage() {
   const access = await getPlatformAccess();
   requireTenantPermission(access, 'org:conversations:read');
+  const canViewSourceEvidence = hasTenantPermission(access, SOURCE_EVIDENCE_PERMISSION);
+  const canLinkProgressEvidence = (
+    hasTenantPermission(access, 'org:execution:manage')
+    && hasTenantPermission(access, SOURCE_EVIDENCE_PERMISSION)
+  );
+  const progressEvidenceTasks = canLinkProgressEvidence
+      ? (await listCanonicalTasks(getPrisma(), {
+        projectId: access.project.id,
+        limit: 500,
+      })).tasks.map((task) => ({
+        id: task.id,
+        code: task.code,
+        status: task.status,
+        title: task.title,
+        type: task.type,
+      }))
+    : [];
 
   return (
     <div className={styles.shell}>
@@ -40,10 +60,13 @@ export default async function InboxPage() {
 
       <InboxClient
         key={`${access.organization.id}:${access.project.id}`}
+        canLinkProgressEvidence={canLinkProgressEvidence}
         canManageIntegrations={hasTenantPermission(access, 'org:integrations:manage')}
+        canViewSourceEvidence={canViewSourceEvidence}
         organizationName={access.organization.name}
         projectId={access.project.id}
         projectName={access.project.name}
+        progressEvidenceTasks={progressEvidenceTasks}
         timeZone={access.organization.timezone}
       />
     </div>

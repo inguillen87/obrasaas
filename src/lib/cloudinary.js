@@ -46,8 +46,20 @@ function safeFolder(value) {
     .join("/");
 }
 
-function fileFormat(fileName) {
-  return safePathSegment(path.extname(fileName).replace(/^\./, "").toLowerCase(), "bin");
+function fileFormat(fileName, mimeType = "") {
+  const canonicalByMime = {
+    "application/pdf": "pdf",
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "video/mp4": "mp4",
+  };
+  const canonical = canonicalByMime[String(mimeType).trim().toLowerCase()];
+  if (canonical) return canonical;
+  return safePathSegment(
+    path.extname(fileName).replace(/^\./, "").toLowerCase(),
+    "bin",
+  ).slice(0, 16);
 }
 
 function normalizedResourceType(value, { upload = false } = {}) {
@@ -57,6 +69,31 @@ function normalizedResourceType(value, { upload = false } = {}) {
     throw new Error("Cloudinary protected media has an unsupported resource type.");
   }
   return normalized;
+}
+
+export function protectedCloudinaryUploadIdentity(file, options = {}) {
+  if (!(file instanceof File) || file.size < 1) {
+    throw new Error("A non-empty file is required for Cloudinary protected storage.");
+  }
+  const resourceType = normalizedResourceType(options.resourceType, { upload: true });
+  if (resourceType === "auto") {
+    throw new Error("A deterministic protected upload requires an explicit resource type.");
+  }
+  const idempotentId = deterministicPublicId(options.idempotencyKey);
+  if (!idempotentId) {
+    throw new Error("A deterministic protected upload requires an idempotency key.");
+  }
+  const folder = safeFolder(options.folder);
+  const extension = fileFormat(file.name, file.type);
+  return {
+    assetId: null,
+    publicId: `${folder}/${idempotentId}${resourceType === "raw" ? `.${extension}` : ""}`,
+    pathname: null,
+    resourceType,
+    format: extension,
+    bytes: file.size,
+    reused: false,
+  };
 }
 
 export function cloudinaryApiSignature(params, apiSecret) {
@@ -76,7 +113,7 @@ function cloudinaryBasicAuthorization(config) {
 function storedCloudinaryAsset(result, file, { requestedPublicId = null } = {}) {
   const resourceType = normalizedResourceType(result.resource_type);
   const publicId = String(result.public_id || requestedPublicId || "").trim();
-  const format = String(result.format || fileFormat(file.name)).trim().toLowerCase();
+  const format = String(result.format || fileFormat(file.name, file.type)).trim().toLowerCase();
   if (!publicId || !format) {
     throw new Error("Cloudinary did not return a reusable protected asset identity.");
   }
@@ -92,7 +129,7 @@ function storedCloudinaryAsset(result, file, { requestedPublicId = null } = {}) 
   };
 }
 
-async function findCloudinaryResource(config, publicId, preferredResourceType, fetchImpl) {
+async function findCloudinaryResource(config, publicId, preferredResourceType, fetchImpl, signal) {
   const candidates = preferredResourceType === "auto"
     ? ["image", "video", "raw"]
     : [normalizedResourceType(preferredResourceType)];
@@ -102,6 +139,7 @@ async function findCloudinaryResource(config, publicId, preferredResourceType, f
       {
         headers: { Authorization: cloudinaryBasicAuthorization(config) },
         cache: "no-store",
+        signal,
       },
     );
     if (response.status === 404) continue;
@@ -114,6 +152,26 @@ async function findCloudinaryResource(config, publicId, preferredResourceType, f
   return null;
 }
 
+async function reconcileDeterministicCloudinaryUpload({
+  config,
+  requestedPublicId,
+  resourceType,
+  fetchImpl,
+}) {
+  if (!requestedPublicId) return null;
+  try {
+    return await findCloudinaryResource(
+      config,
+      requestedPublicId,
+      resourceType,
+      fetchImpl,
+      AbortSignal.timeout(8_000),
+    );
+  } catch {
+    return null;
+  }
+}
+
 export async function uploadProtectedFile(file, options = {}) {
   const config = resolveCloudinaryConfig();
   if (!config) throw new Error("Cloudinary protected media storage is not configured.");
@@ -123,12 +181,11 @@ export async function uploadProtectedFile(file, options = {}) {
 
   const fetchImpl = options.fetchImpl || fetch;
   const resourceType = normalizedResourceType(options.resourceType, { upload: true });
-  const idempotentId = deterministicPublicId(options.idempotencyKey);
-  const folder = safeFolder(options.folder);
-  const extension = fileFormat(file.name);
-  const requestedPublicId = idempotentId
-    ? `${folder}/${idempotentId}${resourceType === "raw" ? `.${extension}` : ""}`
+  const deterministicIdentity = options.idempotencyKey
+    ? protectedCloudinaryUploadIdentity(file, { ...options, resourceType })
     : null;
+  const requestedPublicId = deterministicIdentity?.publicId || null;
+  const folder = safeFolder(options.folder);
   const timestamp = Math.floor((options.now || Date.now()) / 1_000);
   const signedParams = {
     timestamp,
@@ -147,13 +204,32 @@ export async function uploadProtectedFile(file, options = {}) {
   formData.append("api_key", config.apiKey);
   formData.append("signature", cloudinaryApiSignature(signedParams, config.apiSecret));
 
-  const response = await fetchImpl(
-    `https://api.cloudinary.com/v1_1/${encodeURIComponent(config.cloudName)}/${resourceType}/upload`,
-    { method: "POST", body: formData },
-  );
+  let response;
+  try {
+    response = await fetchImpl(
+      `https://api.cloudinary.com/v1_1/${encodeURIComponent(config.cloudName)}/${resourceType}/upload`,
+      { method: "POST", body: formData, signal: options.signal },
+    );
+  } catch (error) {
+    const existing = await reconcileDeterministicCloudinaryUpload({
+      config,
+      requestedPublicId,
+      resourceType,
+      fetchImpl,
+    });
+    if (existing) return storedCloudinaryAsset(existing, file, { requestedPublicId });
+    throw error;
+  }
   let result = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(`Cloudinary upload failed (${response.status}): ${JSON.stringify(result)}`);
+    const existing = await reconcileDeterministicCloudinaryUpload({
+      config,
+      requestedPublicId,
+      resourceType,
+      fetchImpl,
+    });
+    if (existing) return storedCloudinaryAsset(existing, file, { requestedPublicId });
+    throw new Error(`Cloudinary upload failed (${response.status}).`);
   }
   if (
     result.existing === true
@@ -165,6 +241,7 @@ export async function uploadProtectedFile(file, options = {}) {
       requestedPublicId,
       resourceType,
       fetchImpl,
+      options.signal,
     );
     if (!existing) {
       throw new Error("Cloudinary reported an existing asset but it could not be verified.");
@@ -241,7 +318,7 @@ export async function deleteProtectedFile(storage, options = {}) {
   formData.append("signature", cloudinaryApiSignature(params, config.apiSecret));
   const response = await (options.fetchImpl || fetch)(
     `https://api.cloudinary.com/v1_1/${encodeURIComponent(config.cloudName)}/${resourceType}/destroy`,
-    { method: "POST", body: formData },
+    { method: "POST", body: formData, signal: options.signal },
   );
   const result = await response.json().catch(() => ({}));
   if (!response.ok || !["ok", "not found"].includes(result.result)) {

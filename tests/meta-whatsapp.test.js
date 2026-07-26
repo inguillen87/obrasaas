@@ -236,7 +236,8 @@ test("Meta media URLs reject non-Meta hosts and ambiguous suffixes", () => {
 
 test("WhatsApp media retrieval is phone-scoped and verifies the downloaded SHA-256", async () => {
   const content = Buffer.from("verified voice note");
-  const sha256 = crypto.createHash("sha256").update(content).digest("base64");
+  const providerSha256 = crypto.createHash("sha256").update(content).digest("base64");
+  const canonicalSha256 = crypto.createHash("sha256").update(content).digest("hex");
   const calls = [];
   const fetchImpl = async (input, init) => {
     const url = new URL(input);
@@ -246,7 +247,7 @@ test("WhatsApp media retrieval is phone-scoped and verifies the downloaded SHA-2
         id: "123456789012345",
         url: "https://lookaside.fbsbx.com/whatsapp_business/attachments/?mid=123",
         mime_type: "audio/ogg; codecs=opus",
-        sha256,
+        sha256: providerSha256,
         file_size: content.length,
       });
     }
@@ -264,7 +265,7 @@ test("WhatsApp media retrieval is phone-scoped and verifies the downloaded SHA-2
     phoneNumberId: "987654321098765",
     expectedKind: "audio",
     expectedMimeType: "audio/ogg",
-    expectedSha256: sha256,
+    expectedSha256: providerSha256,
     fetchImpl,
     credentials: {
       version: "v25.0",
@@ -275,12 +276,51 @@ test("WhatsApp media retrieval is phone-scoped and verifies the downloaded SHA-2
   });
 
   assert.equal(result.buffer.toString(), content.toString());
-  assert.equal(result.sha256, sha256);
+  assert.equal(result.sha256, canonicalSha256);
+  assert.match(result.sha256, /^[a-f0-9]{64}$/);
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url.searchParams.get("phone_number_id"), "987654321098765");
   assert.match(calls[0].url.searchParams.get("appsecret_proof"), /^[a-f0-9]{64}$/);
   assert.equal(calls[0].init.headers.Authorization, "Bearer test-access-token");
   assert.equal(calls[1].init.redirect, "manual");
+});
+
+test("WhatsApp media retrieval rejects bytes that differ from Meta's Base64 SHA-256", async () => {
+  const declaredContent = Buffer.from("declared image bytes");
+  const downloadedContent = Buffer.from("tampered image bytes");
+  const providerSha256 = crypto.createHash("sha256").update(declaredContent).digest("base64");
+
+  await assert.rejects(
+    downloadWhatsAppMedia({
+      mediaId: "123456789012345",
+      phoneNumberId: "987654321098765",
+      expectedKind: "image",
+      expectedMimeType: "image/jpeg",
+      expectedSha256: providerSha256,
+      credentials: {
+        version: "v25.0",
+        accessToken: "test-access-token",
+        phoneNumberId: "987654321098765",
+      },
+      fetchImpl: async (input) => {
+        const url = new URL(input);
+        if (url.hostname === "graph.facebook.com") {
+          return Response.json({
+            id: "123456789012345",
+            url: "https://lookaside.fbsbx.com/whatsapp_business/attachments/?mid=123",
+            mime_type: "image/jpeg",
+            sha256: providerSha256,
+            file_size: downloadedContent.length,
+          });
+        }
+        return new Response(downloadedContent, {
+          status: 200,
+          headers: { "content-type": "image/jpeg" },
+        });
+      },
+    }),
+    /failed SHA-256 verification/,
+  );
 });
 
 test("WhatsApp media retrieval rejects untrusted download hosts", async () => {

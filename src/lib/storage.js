@@ -5,6 +5,7 @@ import {
   deleteProtectedFile as deleteCloudinaryProtectedFile,
   downloadProtectedFile as downloadCloudinaryProtectedFile,
   isCloudinaryConfigured,
+  protectedCloudinaryUploadIdentity,
   uploadProtectedFile as uploadCloudinaryProtectedFile,
 } from "./cloudinary.js";
 
@@ -41,11 +42,34 @@ function fileFormat(fileName) {
 }
 
 export function isProtectedStorageConfigured() {
+  try {
+    resolveProtectedStorageProvider();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function resolveProtectedStorageProvider() {
   const selectedProvider = String(process.env.PRIVATE_MEDIA_PROVIDER || "").trim();
-  if (selectedProvider === "vercel-blob") return isVercelBlobConfigured();
-  if (selectedProvider === "cloudinary") return isCloudinaryConfigured();
-  if (selectedProvider) return false;
-  return isVercelBlobConfigured() || isCloudinaryConfigured();
+  if (selectedProvider && !["vercel-blob", "cloudinary"].includes(selectedProvider)) {
+    throw new Error("The selected protected media provider is not supported.");
+  }
+  if (selectedProvider === "vercel-blob") {
+    if (!isVercelBlobConfigured()) {
+      throw new Error("The selected Vercel Blob protected media provider is not configured.");
+    }
+    return selectedProvider;
+  }
+  if (selectedProvider === "cloudinary") {
+    if (!isCloudinaryConfigured()) {
+      throw new Error("The selected Cloudinary protected media provider is not configured.");
+    }
+    return selectedProvider;
+  }
+  if (isVercelBlobConfigured()) return "vercel-blob";
+  if (isCloudinaryConfigured()) return "cloudinary";
+  throw new Error("Protected media storage is not configured.");
 }
 
 function normalizeContentType(value) {
@@ -77,9 +101,9 @@ function assertMatchingStoredBlob(blob, file, pathname) {
   }
 }
 
-async function findVercelPrivateBlob(pathname, file) {
+async function findVercelPrivateBlob(pathname, file, abortSignal) {
   try {
-    const blob = await head(pathname);
+    const blob = await head(pathname, { abortSignal });
     assertMatchingStoredBlob(blob, file, pathname);
     return storedVercelBlob(blob, file, { reused: true });
   } catch (error) {
@@ -96,7 +120,7 @@ async function uploadVercelPrivateBlob(file, options) {
   });
   const deterministic = Boolean(idempotencyDigest(options.idempotencyKey));
   if (deterministic) {
-    const existing = await findVercelPrivateBlob(pathname, file);
+    const existing = await findVercelPrivateBlob(pathname, file, options.signal);
     if (existing) return existing;
   }
 
@@ -108,13 +132,14 @@ async function uploadVercelPrivateBlob(file, options) {
       allowOverwrite: false,
       cacheControlMaxAge: 3600,
       contentType: file.type || "application/octet-stream",
+      abortSignal: options.signal,
     });
   } catch (error) {
     // A timeout or concurrent retry can happen after Blob accepted the write.
     // Re-read only deterministic paths and reuse the object if it matches.
     if (deterministic) {
       try {
-        const existing = await findVercelPrivateBlob(pathname, file);
+        const existing = await findVercelPrivateBlob(pathname, file, options.signal);
         if (existing) return existing;
       } catch {
         // Preserve the original write error; it is the actionable failure.
@@ -126,38 +151,53 @@ async function uploadVercelPrivateBlob(file, options) {
   return storedVercelBlob({ ...blob, size: file.size }, file, { reused: false });
 }
 
+export function protectedUploadExpectedStorage(file, options = {}) {
+  if (!(file instanceof File) || file.size < 1) {
+    throw new Error("A non-empty file is required for protected storage.");
+  }
+  const provider = options.provider || resolveProtectedStorageProvider();
+  if (provider === "cloudinary") {
+    return {
+      provider,
+      ...protectedCloudinaryUploadIdentity(file, options),
+    };
+  }
+  if (provider !== "vercel-blob") {
+    throw new Error("The selected protected media provider is not supported.");
+  }
+  const pathname = protectedUploadPathname({
+    folder: options.folder,
+    fileName: file.name,
+    idempotencyKey: options.idempotencyKey,
+  });
+  return {
+    provider,
+    assetId: null,
+    publicId: pathname,
+    pathname,
+    resourceType: options.resourceType || file.type?.split("/", 1)[0] || "raw",
+    format: fileFormat(file.name),
+    bytes: file.size,
+    reused: false,
+  };
+}
+
 export async function uploadProtectedFile(file, options = {}) {
   if (!(file instanceof File) || file.size === 0) {
     throw new Error("A non-empty file is required for protected storage.");
   }
 
-  const selectedProvider = String(process.env.PRIVATE_MEDIA_PROVIDER || "").trim();
-  if (selectedProvider && !["vercel-blob", "cloudinary"].includes(selectedProvider)) {
-    throw new Error("The selected protected media provider is not supported.");
-  }
+  const selectedProvider = options.provider || resolveProtectedStorageProvider();
   if (selectedProvider === "cloudinary") {
-    if (!isCloudinaryConfigured()) {
-      throw new Error("The selected Cloudinary protected media provider is not configured.");
-    }
     return {
       provider: "cloudinary",
       ...await uploadCloudinaryProtectedFile(file, options),
     };
   }
   if (selectedProvider === "vercel-blob") {
-    if (!isVercelBlobConfigured()) {
-      throw new Error("The selected Vercel Blob protected media provider is not configured.");
-    }
     return uploadVercelPrivateBlob(file, options);
   }
-  if (isVercelBlobConfigured()) return uploadVercelPrivateBlob(file, options);
-  if (isCloudinaryConfigured()) {
-    return {
-      provider: "cloudinary",
-      ...await uploadCloudinaryProtectedFile(file, options),
-    };
-  }
-  throw new Error("Protected media storage is not configured.");
+  throw new Error("The selected protected media provider is not supported.");
 }
 
 export function isPrivateVercelBlobUrl(value) {
@@ -203,7 +243,7 @@ export async function deleteProtectedFile(storage, options = {}) {
   if (storage?.provider === "vercel-blob") {
     const identity = storage.pathname || storage.assetId;
     if (!identity) throw new Error("Vercel Blob protected media identity is incomplete.");
-    await del(identity);
+    await del(identity, { abortSignal: options.signal });
     return true;
   }
   if (storage?.provider === "cloudinary") {

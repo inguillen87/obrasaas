@@ -19,6 +19,24 @@ import {
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
+const SAFE_INLINE_EVIDENCE_TYPES = new Set([
+  "application/pdf",
+  "audio/aac",
+  "audio/mp4",
+  "audio/mpeg",
+  "audio/ogg",
+  "audio/wav",
+  "audio/webm",
+  "image/avif",
+  "image/gif",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "video/mp4",
+  "video/quicktime",
+  "video/webm",
+]);
+
 function safeFileName(value, fallback) {
   const name = String(value || fallback)
     .replace(/[\r\n"\\/]+/g, "-")
@@ -83,7 +101,14 @@ export async function GET(request, { params }) {
     }
 
     const fileName = safeFileName(media.filename, `evidence-${message.id}`);
-    const asDownload = new URL(request.url).searchParams.get("download") === "1";
+    const searchParams = new URL(request.url).searchParams;
+    const asDownload = searchParams.get("download") === "1";
+    const contentType = result.contentType || media.mimeType || "application/octet-stream";
+    const normalizedContentType = String(contentType).split(";", 1)[0].trim().toLowerCase();
+    const inlinePreview = (
+      searchParams.get("preview") === "1"
+      && SAFE_INLINE_EVIDENCE_TYPES.has(normalizedContentType)
+    );
     const contentLength = Number.isSafeInteger(result.size)
       ? { "Content-Length": String(result.size) }
       : {};
@@ -92,10 +117,12 @@ export async function GET(request, { params }) {
       status: 200,
       headers: {
         "Cache-Control": "private, no-store",
-        "Content-Disposition": `${restrictedEvidence || asDownload ? "attachment" : "inline"}; filename="${fileName}"`,
+        "Content-Disposition": `${asDownload || (restrictedEvidence && !inlinePreview) ? "attachment" : "inline"}; filename="${fileName}"`,
         ...contentLength,
-        "Content-Type": result.contentType || media.mimeType || "application/octet-stream",
+        "Content-Type": contentType,
         "Content-Security-Policy": "sandbox",
+        "Cross-Origin-Resource-Policy": "same-origin",
+        "Referrer-Policy": "no-referrer",
         "X-Content-Type-Options": "nosniff",
       },
     });

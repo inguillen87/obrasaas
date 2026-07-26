@@ -1,14 +1,18 @@
 import { AccessError, accessErrorResponse, getPlatformAccess, requireTenantPermission } from '@/lib/access';
 import { getPrisma } from '@/lib/prisma';
+import { projectWritePolicyErrorResponse } from '@/lib/project-write-policy';
 import { RequestBodyError, readJsonRequest, requestBodyErrorResponse } from '@/lib/request-body';
 import { resolveRequestCorrelationId, withCorrelationId } from '@/lib/request-correlation';
 import { createSupplierInvoice, decideSupplierInvoice, listSupplierInvoices, supplierInvoiceErrorResponse } from '@/lib/supplier-invoices';
+import { protectedUploadErrorResponse } from '@/lib/protected-uploads';
 
 function respond(request, response) { return withCorrelationId(response, resolveRequestCorrelationId(request)); }
 function known(request, error) {
   if (error instanceof AccessError) return respond(request, accessErrorResponse(error));
   if (error instanceof RequestBodyError) return respond(request, requestBodyErrorResponse(error));
-  const domain = supplierInvoiceErrorResponse(error);
+  const domain = projectWritePolicyErrorResponse(error)
+    || protectedUploadErrorResponse(error)
+    || supplierInvoiceErrorResponse(error);
   return domain ? respond(request, domain) : null;
 }
 

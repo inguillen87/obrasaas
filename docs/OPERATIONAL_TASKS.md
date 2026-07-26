@@ -1,73 +1,110 @@
-# Tareas operativas: contrato y proyección
+# Tareas operativas: autoridad canónica y compatibilidad
 
-## Autoridad durante la transición
+Fecha de corte: 2026-07-26
 
-`ProjectSnapshot.state.tasks` sigue siendo la autoridad de escritura y el contrato compatible del Gantt, reportes, supervisor y propuestas de avance. La tabla `Task` es una proyección relacional administrada para consumidores que necesitan consultas acotadas, especialmente WhatsApp Flows y el portfolio.
+## Dos modos explícitos, nunca una mezcla
 
-No se superponen filas `Task` sobre una lectura del snapshot. Esa mezcla produciría versiones partidas y permitiría que un cliente con un ETag válido reescribiera tareas de otra versión.
+Las obras nuevas o migradas a WBS usan filas `Task` con `metadata.source = canonical-task-v1` como autoridad de tareas. El Gantt, ejecución, evidencia, trabajo extra, Inbox y selectores de WhatsApp deben referenciar su `Task.id` opaco.
 
-La proyección administrada se reconoce por dos condiciones simultáneas:
+Las obras históricas pueden conservar temporalmente `ProjectSnapshot.state.tasks`. Su proyección compatible usa `metadata.source = project-snapshot-v1` y `externalId` namespaced. Esas filas no se presentan como WBS canónica y no se mezclan con las canónicas en una misma lectura o mutación.
 
-- `externalId = snapshot:<clave de state.tasks>`;
-- `metadata.source = project-snapshot-v1`.
+Regla de modo:
 
-Las filas legacy o manuales de `Task` no se convierten, cuentan ni eliminan como parte de esta proyección.
+- si una obra tiene tareas `canonical-task-v1`, el Gantt lee y escribe exclusivamente `/api/tasks` y `/api/tasks/:taskId` con CAS;
+- si todavía no las tiene, el Gantt puede leer el snapshot/proyección legacy hasta ejecutar un cutover verificado;
+- ninguna operación convierte una fila por nombre ni superpone ambos conjuntos;
+- una referencia de Meta/Flow se vuelve a resolver dentro del `projectId`; nunca se acepta un nombre cliente como identidad.
 
-## Escritura atómica
+## Contrato canónico
 
-Cada camino productivo que puede cambiar tareas ejecuta `synchronizeProjectTaskProjection` dentro de la misma transacción y después de adquirir el advisory lock del proyecto:
+`Task` y `TaskDependency` aportan:
 
-1. edición del Gantt mediante `/api/state` y CAS de `ProjectSnapshot.version`;
-2. mensajes del simulador;
-3. mensajes reales procesados desde el webhook de Meta;
-4. aprobación o rechazo de propuestas operativas;
-5. reprogramación de la fecha inicial de la obra.
+- alcance compuesto por proyecto y FK tenant-safe;
+- `revision` CAS por tarea;
+- código WBS, jerarquía, tipo tarea/hito, estado y progreso entero 0-100;
+- inicio/fin absolutos y dependencias FS/SS/FF/SF con `lagDays`;
+- rechazo de ciclos antes de persistir;
+- auditoría de alta, edición, dependencia y baja;
+- política de obra operativa: una obra finalizada/archivada queda sólo lectura.
 
-La sincronización relee las filas administradas, repara drift, elimina las que ya no existen y actualiza solo las que cambiaron. Si falla una operación de `Task`, no se confirma el snapshot, la propuesta, el mensaje ni su auditoría.
+Las APIs productivas son:
 
-El mapeo actual es:
+- `GET/POST /api/tasks`;
+- `PATCH/DELETE /api/tasks/:taskId`;
+- `POST /api/tasks/dependencies`.
 
-| Snapshot | Proyección `Task` |
+El Gantt canónico usa esas APIs y no llama `/api/state` para editar tareas. Evidencia, blockers, asignaciones y extras usan `Task.id`, no claves de snapshot ni nombres libres.
+
+## Compatibilidad legacy
+
+Los caminos que todavía modifican un `ProjectSnapshot` llaman `synchronizeProjectTaskProjection` dentro de la misma transacción y bajo el advisory lock de la obra. La proyección `project-snapshot-v1` existe para que consumidores históricos mantengan consistencia mientras se retiran, no para crear una segunda autoridad.
+
+El mapeo legacy conserva:
+
+| Snapshot | Proyección compatible |
 | --- | --- |
-| clave del catálogo | `metadata.snapshotTaskId` y `externalId` namespaced |
+| clave de `state.tasks` | `metadata.snapshotTaskId` + `externalId` namespaced |
 | `name` | `title` |
 | `progress` | `progress` y estado derivado |
-| `assignee` | `assignee` |
-| `startDay` + `duration` | `startsAt` y `endsAt` relativas a `Project.startsAt` |
-| tarea completa | `metadata.snapshot` |
-| versión que modificó la tarea | `metadata.projectStateVersion` |
+| `assignee` | `assignee` libre temporal |
+| `startDay` + `duration` | `startsAt`/`endsAt` relativas a la obra |
+| objeto completo | `metadata.snapshot` para reconciliación |
 
-`DONE` corresponde a 100%, `BLOCKED` a una tarea demorada, `IN_PROGRESS` a 1-99% y `READY` a 0%.
+Un comando de avance por texto/audio ya no debe mutar ese snapshot directamente: crea `OperationalProposal` con precondición e idempotencia. La foto se convierte en `ProgressEvidence` y cualquier evaluación visual queda separada de la mutación del plan.
 
-## WhatsApp Flow
+## Cutover por obra
 
-El Data Endpoint lista exclusivamente tareas proyectadas del `projectId` autenticado. La opción que ve Meta contiene solo un ID opaco y un título; la referencia real de la tarea no se acepta desde el formulario.
+El cutover no se infiere por deploy. Requiere:
 
-Al confirmar, el servidor vuelve a resolver la opción y agrega `task_ref` del lado confiable. Esa referencia queda en la asistencia o incidencia junto con `workArea`. Si dos tareas comparten nombre, el selector agrega un sufijo estable para que el trabajador pueda distinguirlas, pero la identidad continúa siendo la clave del snapshot.
+1. congelar o serializar escrituras de la obra;
+2. expandir `state.tasks` a WBS/tareas/dependencias canónicas con IDs nuevos y mapa auditable;
+3. comparar títulos, fechas, progreso, responsables y dependencias;
+4. cambiar Gantt y consumidores al modo canónico;
+5. ejecutar smoke de Gantt, Flow, propuesta, evidencia, reporte y rollback;
+6. retirar el writer legacy sólo después de demostrar cero drift.
 
-Una tarea eliminada deja de ser una opción válida de inmediato. Un submit viejo falla cerrado en lugar de vincularse por nombre a otra tarea.
+La migración `20260724110000_canonical_tasks_wbs` crea el contrato relacional y su verificador; no fabrica una baseline aprobada ni autoriza por sí sola el cutover de Production.
 
-## Backfill y despliegue
+## Gap abierto: baseline y forecast
 
-La migración `20260717050000_project_task_projection`:
+`Task.startsAt/endsAt` representan el plan canónico actual, pero todavía no existe una baseline inmutable/versionada con revisiones aprobadas, calendario y fechas forecast/real separadas. Por eso:
 
-- se ejecuta en una transacción explícita;
-- toma los mismos advisory locks por proyecto que el runtime;
-- acepta valores numéricos históricos y los normaliza al contrato actual;
-- es idempotente por `(projectId, externalId)`;
-- elimina solo proyecciones administradas huérfanas;
-- preserva filas legacy y manuales.
+- el endpoint de comparación de replan devuelve honestamente `baselineTasks` como **plan canónico actual** y no inventa `baselineVersion`;
+- `VisualProgressAssessment.baselineHash` detecta que el plan cambió, pero no sustituye una baseline contractual;
+- revisar una foto no crea fechas ni modifica el Gantt;
+- el motor ideal-vs-real debe llegar como vertical propia antes de afirmar cálculo contractual de plazo.
 
-Secuencia de release:
+Presupuesto, medición, certificación y pago deben referenciar la misma WBS, pero conservan estados y aprobaciones separados.
 
-1. verificar código y migración;
-2. desplegar la nueva aplicación y promover el alias estable;
-3. aplicar la migración con el runtime nuevo ya activo;
-4. comparar snapshot y proyección por proyecto;
-5. ejecutar smoke tests de portfolio y Flow.
+## Reservas de archivos privados
 
-La prueba `npm run verify:task-migration` usa tablas temporales dentro de una transacción Serializable y fuerza rollback. No modifica las tablas productivas.
+Las cargas iniciadas desde dashboard usan una reserva `ProtectedUpload`: el navegador sólo recibe un `uploadId`; caja, recepción de bienes, facturas de proveedor y evidencia de progreso reclaman esa reserva mediante CAS dentro de la misma transacción que crea el registro. La identidad de storage se construye y valida únicamente en servidor. Los registros anteriores y la ingesta autorizada desde WhatsApp conservan su ruta compatible.
 
-## Siguiente fase
+Antes de escribir en Vercel Blob o Cloudinary se persiste un intent
+`UPLOADING` con proveedor e identidad esperada fijados, fingerprint, lease y
+cuotas por actor/obra/organización. La llamada externa tiene timeout menor que
+el lease; un reintento conserva la misma clave, proveedor e identidad. Un
+descriptor devuelto fuera del prefijo nunca se elimina ni se adopta. Sólo una
+respuesta que coincide con la identidad reservada puede pasar a `AVAILABLE`.
 
-`Task` no debe declararse fuente canónica hasta que exista una API de tareas lossless con CAS propio o compartido, dependencias normalizadas y Gantt escribiendo esa API. Hasta entonces, toda nueva mutación de tareas debe entrar por los caminos transaccionales descritos arriba.
+La eliminación usa `DELETE_PENDING` antes de contactar al proveedor, lease
+propio, backoff y tombstone `DELETED`. El proyecto tiene FK `RESTRICT` mientras
+exista la identidad de storage, para que un cascade no borre la única referencia
+necesaria para limpiar el objeto. La política final de retención/purga de esos
+tombstones sigue pendiente y debe preceder cualquier borrado físico de obra.
+
+`GET /api/cron/protected-uploads` reserva y elimina en cupos separados de hasta
+100 objetos por lote y drena hasta 10 lotes dentro de un presupuesto total de
+45 segundos. Autentica `Bearer CRON_SECRET` y sólo devuelve métricas agregadas. Un fallo de
+borrado produce HTTP 503; un backlog sin fallas conserva HTTP 200 pero marca
+`status=degraded`. `vercel.json` lo agenda una vez al día a las `03:17 UTC`, una
+frecuencia compatible con Hobby. Vercel Cron sólo programa Production: en
+Preview el smoke debe invocarse manualmente con el secreto del ambiente. Código
+y agenda locales no demuestran que el cron esté activo hasta desplegar y
+observar al menos una ejecución real.
+
+Las rutas serverless aceptan hoy como máximo `4 MiB` por archivo para permanecer
+debajo del límite de cuerpo de Vercel Functions. Videos o documentos mayores
+requieren una futura carga directa al storage con autorización corta, checksum,
+finalización server-side y la misma reserva; no corresponde aumentar el límite
+de la ruta actual y asumir que Vercel la recibirá.

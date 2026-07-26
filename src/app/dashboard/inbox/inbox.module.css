@@ -1033,6 +1033,221 @@
   font-size: 0.7rem;
 }
 
+.attachmentOpenLink {
+  display: inline-flex;
+  min-height: 30px;
+  padding: 0 8px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid rgba(72, 216, 141, 0.26);
+  border-radius: 8px;
+  color: #8beab6;
+  background: rgba(72, 216, 141, 0.08);
+  font-size: 0.68rem;
+  font-weight: 820;
+  text-decoration: none;
+}
+
+.attachmentOpenLink:hover {
+  background: rgba(72, 216, 141, 0.14);
+}
+
+.attachmentOpenLink:focus-visible {
+  outline: 2px solid rgba(72, 216, 141, 0.55);
+  outline-offset: 2px;
+}
+
+.progressEvidenceAction {
+  display: grid;
+  width: min(440px, 68vw);
+  max-width: 100%;
+  margin-top: 9px;
+  padding: 10px;
+  gap: 9px;
+  border: 1px solid rgba(72, 216, 141, 0.2);
+  border-radius: 12px;
+  background: rgba(4, 17, 12, 0.48);
+}
+
+.progressEvidenceLinked {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  width: min(440px, 68vw);
+  max-width: 100%;
+  margin-top: 9px;
+  padding: 10px;
+  align-items: start;
+  gap: 8px;
+  border: 1px solid rgba(72, 216, 141, 0.26);
+  border-radius: 12px;
+  background: rgba(72, 216, 141, 0.075);
+}
+
+.progressEvidenceLinked > span {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 8px;
+  color: #8beab6;
+  background: rgba(72, 216, 141, 0.12);
+  font-size: 0.72rem;
+}
+
+.progressEvidenceLinked > div {
+  display: grid;
+  gap: 2px;
+}
+
+.progressEvidenceLinked strong {
+  color: #8beab6;
+  font-size: 0.74rem;
+}
+
+.progressEvidenceLinked small {
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  line-height: 1.4;
+}
+
+.progressEvidenceAction > header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+}
+
+.progressEvidenceAction > header > span {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 8px;
+  color: #8beab6;
+  background: rgba(72, 216, 141, 0.1);
+  font-size: 0.7rem;
+}
+
+.progressEvidenceAction > header > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.progressEvidenceAction > header strong {
+  color: var(--text-primary);
+  font-size: 0.74rem;
+}
+
+.progressEvidenceAction > header small {
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  line-height: 1.35;
+}
+
+.progressEvidenceControls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px;
+}
+
+.progressEvidenceControls label {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.progressEvidenceControls label > span {
+  color: var(--text-secondary);
+  font-size: 0.66rem;
+  font-weight: 760;
+}
+
+.progressEvidenceControls select {
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  padding: 0 30px 0 9px;
+  border: 1px solid var(--border-color);
+  border-radius: 9px;
+  outline: none;
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--bg-main) 90%, transparent);
+  font: inherit;
+  font-size: 0.7rem;
+}
+
+.progressEvidenceControls select:focus-visible,
+.progressEvidenceControls button:focus-visible {
+  outline: 2px solid rgba(72, 216, 141, 0.52);
+  outline-offset: 2px;
+}
+
+.progressEvidenceControls select:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.progressEvidenceControls button {
+  display: inline-flex;
+  min-height: 38px;
+  padding: 0 11px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid rgba(72, 216, 141, 0.24);
+  border-radius: 9px;
+  color: #06150f;
+  background: #72e3a9;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.progressEvidenceControls button:disabled {
+  cursor: not-allowed;
+  filter: grayscale(0.45);
+  opacity: 0.52;
+}
+
+.progressEvidenceAction .progressEvidenceEmpty,
+.progressEvidenceAction .progressEvidenceOffline,
+.progressEvidenceAction .progressEvidenceState {
+  margin: 0;
+  font-size: 0.68rem;
+  line-height: 1.4;
+}
+
+.progressEvidenceAction .progressEvidenceEmpty,
+.progressEvidenceAction .progressEvidenceOffline {
+  color: #e6ad82;
+}
+
+.progressEvidenceAction .progressEvidenceState {
+  display: flex;
+  padding: 7px 8px;
+  align-items: flex-start;
+  gap: 6px;
+  border-radius: 8px;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.progressEvidenceAction .progressEvidenceState[data-tone='success'],
+.progressEvidenceAction .progressEvidenceState[data-tone='replay'] {
+  color: #8beab6;
+  background: rgba(72, 216, 141, 0.075);
+}
+
+.progressEvidenceAction .progressEvidenceState[data-tone='error'] {
+  color: #ffaaa0;
+  background: rgba(239, 68, 68, 0.075);
+}
+
 .inboundMessage footer,
 .outboundMessage footer {
   display: flex;
@@ -1853,6 +2068,37 @@
   background: rgba(15, 23, 42, 0.045);
 }
 
+:global(body.light-theme) .attachmentOpenLink {
+  border-color: rgba(8, 122, 76, 0.24);
+  color: #087a4c;
+  background: rgba(8, 122, 76, 0.06);
+}
+
+:global(body.light-theme) .progressEvidenceAction {
+  border-color: rgba(8, 122, 76, 0.2);
+  background: rgba(255, 255, 255, 0.78);
+}
+
+:global(body.light-theme) .progressEvidenceLinked {
+  border-color: rgba(8, 122, 76, 0.22);
+  background: rgba(8, 122, 76, 0.065);
+}
+
+:global(body.light-theme) .progressEvidenceLinked strong,
+:global(body.light-theme) .progressEvidenceLinked > span {
+  color: #087a4c;
+}
+
+:global(body.light-theme) .progressEvidenceControls button {
+  color: #052e1d;
+  background: #74e0aa;
+}
+
+:global(body.light-theme) .progressEvidenceAction .progressEvidenceState[data-tone='success'],
+:global(body.light-theme) .progressEvidenceAction .progressEvidenceState[data-tone='replay'] {
+  color: #087a4c;
+}
+
 :global(body.light-theme) .sendError {
   color: #a52318;
   background: rgba(239, 68, 68, 0.07);
@@ -2045,6 +2291,18 @@
   .inboundMessage,
   .outboundMessage {
     max-width: 88%;
+  }
+
+  .progressEvidenceAction {
+    width: min(100%, 76vw);
+  }
+
+  .progressEvidenceControls {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .progressEvidenceControls button {
+    width: 100%;
   }
 
   .composer {

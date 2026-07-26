@@ -13,4 +13,4 @@ Endpoints:
 - `POST /api/progress`: crea `DAILY_LOG` o `EVIDENCE` con validación de tarea/autor.
 - `PATCH /api/progress/:recordId`: revisa mediante `kind`, `status` y `expectedRevision`.
 
-Pendientes explícitos del siguiente corte: UI de carga/revisión, resolver media privada mediante storage firmado, vincular incidentes canónicos al mismo timeline y agregar notificaciones durable/outbox. La migración debe verificarse en PostgreSQL antes de producción.
+La UI de carga/revisión y la entrega server-side de media privada ya existen localmente mediante `ProtectedUpload`. Pendientes explícitos: vincular incidentes canónicos al mismo timeline, agregar notificaciones durable/outbox y verificar las migraciones en PostgreSQL Preview antes de producción.

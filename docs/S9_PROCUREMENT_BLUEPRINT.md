@@ -19,7 +19,7 @@ Convertir una necesidad de obra en una orden trazable, recibir materiales contra
 3. Aprobar, cancelar y recibir usan `expectedRevision` y dejan auditoría.
 4. La suma recibida no puede superar la cantidad ordenada salvo permiso explícito y motivo obligatorio.
 5. Precio, moneda y código de costo quedan congelados en la orden; cambios posteriores son una nueva revisión.
-6. Evidencias de recepción son privadas, tienen hash y se sirven mediante URL firmada temporal.
+6. Las evidencias de recepción son privadas, tienen hash y se entregan mediante un endpoint autenticado que vuelve a validar tenant, obra y permiso; el navegador no recibe una URL del proveedor.
 
 ## Entrega por sprint
 

@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   cloudinaryPrivateDownloadUrl,
   downloadProtectedFile,
+  protectedCloudinaryUploadIdentity,
   uploadProtectedFile,
 } from '../src/lib/cloudinary.js';
 
@@ -70,6 +71,58 @@ test('Cloudinary authenticated uploads use deterministic non-overwriting identit
   assert.doesNotMatch(request.init.body.get('signature'), /server-only-secret/);
   assert.equal(stored.resourceType, 'raw');
   assert.equal(stored.reused, false);
+}));
+
+test('Cloudinary deterministic identities derive a bounded format from verified MIME', () => {
+  const identity = protectedCloudinaryUploadIdentity(
+    new File(['image'], 'avance.extension-demasiado-larga-y-no-confiable', {
+      type: 'image/jpeg',
+    }),
+    {
+      folder: 'obrasaas/projects/project-1/progress',
+      idempotencyKey: 'protected-upload:v1:stable-format',
+      resourceType: 'image',
+    },
+  );
+
+  assert.equal(identity.format, 'jpg');
+  assert.match(identity.publicId, /^obrasaas\/projects\/project-1\/progress\/[a-f0-9]{40}$/);
+});
+
+test('Cloudinary reconciles a deterministic asset after an upload response is lost', () => withCloudinaryEnvironment(async () => {
+  const file = new File(['%PDF-1.7 certificate'], 'certificado.pdf', {
+    type: 'application/pdf',
+  });
+  let requestedPublicId;
+  const calls = [];
+  const stored = await uploadProtectedFile(file, {
+    folder: 'obrasaas/medical-certificates',
+    idempotencyKey: 'medical-certificate:v1:response-loss',
+    resourceType: 'raw',
+    fetchImpl: async (url, init = {}) => {
+      calls.push({ url, init });
+      if (/\/raw\/upload$/.test(url)) {
+        requestedPublicId = init.body.get('public_id');
+        assert.equal(init.body.get('overwrite'), 'false');
+        throw new TypeError('response lost after provider commit');
+      }
+      assert.match(url, /\/resources\/raw\/authenticated\//);
+      assert.ok(url.includes(encodeURIComponent(requestedPublicId)));
+      return Response.json({
+        asset_id: 'asset-existing',
+        public_id: requestedPublicId,
+        resource_type: 'raw',
+        format: 'pdf',
+        bytes: file.size,
+        existing: true,
+      });
+    },
+  });
+
+  assert.equal(calls.length, 2);
+  assert.equal(stored.publicId, requestedPublicId);
+  assert.equal(stored.bytes, file.size);
+  assert.equal(stored.reused, true);
 }));
 
 test('Cloudinary protected delivery is server-signed, short-lived and proxyable', () => withCloudinaryEnvironment(async () => {

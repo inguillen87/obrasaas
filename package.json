@@ -19,6 +19,8 @@
     "verify:canonical-tasks-migration": "node scripts/verify-canonical-tasks-migration.mjs",
     "verify:project-execution-migration": "node scripts/verify-project-execution-migration.mjs",
     "verify:progress-journal-migration": "node scripts/verify-progress-journal-migration.mjs",
+    "verify:protected-upload-migration": "node scripts/verify-protected-upload-migration.mjs",
+    "verify:visual-progress-migration": "node scripts/verify-visual-progress-migration.mjs",
     "verify:notification-outbox-migration": "node scripts/verify-notification-outbox-migration.mjs",
     "verify:notification-preferences-migration": "node scripts/verify-notification-preferences-migration.mjs",
     "verify:s6-migrations": "node scripts/verify-s6-migrations.mjs",
@@ -69,6 +71,9 @@
     "typescript": "^6.0.3"
   },
   "overrides": {
+    "@prisma/dev": {
+      "valibot": "1.4.2"
+    },
     "find-my-way": "9.7.0",
     "postcss": "8.5.19",
     "sharp": "0.35.3"

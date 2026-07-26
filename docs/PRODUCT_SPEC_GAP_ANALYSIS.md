@@ -6,16 +6,19 @@ Se contrastó el documento `Documento_Especificaciones_App_Obra.pdf` (versión 1
 
 ## Lo que ya está cubierto
 
+“Cubierto” describe el repositorio local; no equivale a despliegue, migración Preview ni E2E externo.
+
 | Área del PDF | Estado actual | Evidencia del producto |
 | --- | --- | --- |
 | Asistencia con GPS, hora de servidor, estados pendientes y recuperación | Implementado | Ledger de asistencia, geocerca, frescura, idempotencia y cron de expiración |
 | Tareas, dependencias y avance real | Implementado en gran parte | Tareas operativas, grafo DAG, evidencias y revisión |
-| Caja chica y aprobaciones | Implementado | Fondos, movimientos, duplicados semánticos, doble aprobación de alto valor y exportación |
-| Materiales, proveedores, órdenes y recepción | Implementado en gran parte | S9: proveedores, órdenes, recepciones parciales, remitos privados y estado automático |
-| Facturas y control de tres vías | Implementado en gran parte | S10: facturas, vencimientos, evidencia privada, match pedido-recepción-factura |
+| Caja chica y aprobaciones | Parcial, base local no desplegada | `CashFund`/`CashMovement`, custodio validado por membresía, moneda, idempotencia, deduplicación acotada, comprobante privado y saldo derivado existen. Desde `100000` hay dos aprobaciones distintas con CAS; faltan política de umbral configurable por tenant, separación maker-checker respecto del creador, Preview y E2E |
+| Materiales, proveedores, órdenes y recepción | Base local implementada en gran parte | Proveedores, órdenes, recepciones parciales, remitos privados y estado automático; faltan BOM/requisición, rechazo/daño y validación externa |
+| Facturas y control de tres vías | Base local implementada en gran parte | Facturas, vencimientos, evidencia privada y match pedido-recepción-factura; faltan excepciones operativas, Preview y E2E |
 | Dashboard operativo y financiero | Implementado | Dashboard de compras, cuentas a pagar y caja chica |
 | WhatsApp como canal operativo | Implementado por contrato; E2E externo pendiente | Meta Cloud API directa como vía primaria; test number asignado, celular propio verificado y solicitud outbound de plantilla aceptada con token temporal. Esto no prueba entrega ni bidireccionalidad; faltan credenciales permanentes en Vercel, webhook firmado, inbound, estados, Flows y tenant real |
-| Identidad laboral y destino de cobro | Fundación local no desplegada | CUIL/CBU/CVU/alias validados, consentimiento versionado, cifrado AAD/keyring, fingerprint HMAC y DTO enmascarado; esquema Prisma y migraciones locales presentes, todavía no desplegados ni verificados en Neon; faltan API, Flow/UI y revisión |
+| Foto de avance y lectura visual | Piloto local no desplegado | Foto Meta autorizada → `ProgressEvidence` por tarea; `VisualProgressAssessment` con integridad, opt-in, lease recuperable, OpenAI primario, Qwen3-VL/GLM-5V como challengers visuales y GLM-OCR/GLM-5.2 como especialistas OCR/texto. Falta Preview/Neon, foto Meta real, benchmark y baseline/forecast; nunca certifica, paga ni reprograma por sí sola |
+| Identidad laboral y destino de cobro | Fundación local no desplegada | CUIL/CBU/CVU/alias validados, consentimiento versionado, cifrado AAD/keyring, fingerprint HMAC, DTO enmascarado, servicios y APIs tenant-scoped; esquema Prisma y migraciones locales todavía no desplegados ni verificados en Neon. Faltan Flow/UI productivos, revisión E2E y verificación bancaria confiable |
 | Auditoría, correlación y observabilidad | Parcial | Helper central y `x-request-id`; falta persistir correlación en todas las mutaciones heredadas |
 
 ## Gaps críticos del documento
@@ -45,7 +48,7 @@ La especificación conecta avance validado con pago quincenal. Las tareas y evid
 
 ### 3. Inventario y consumo de materiales
 
-S9 cubre compra y recepción, pero el PDF también requiere stock disponible y vinculación con tareas. Falta el ledger de inventario; no se debe calcular stock sumando documentos de forma ad hoc.
+La base local de compras y recepción cubre OC, líneas y recepciones parciales; el roadmap la ubica en S11/S12. El PDF también requiere stock disponible y vinculación con tareas. Falta el ledger de inventario; no se debe calcular stock sumando documentos de forma ad hoc.
 
 **Sprint D3 - inventario trazable**
 
@@ -67,7 +70,7 @@ El PDF exige PDF/DWG, versiones y alertas. No se debe mezclar documentación té
 
 ### 5. Tareas no contempladas y vicios ocultos
 
-La especificación requiere inicio/fin con evidencia y su impacto en el plan. Falta un flujo explícito que no contamine silenciosamente el Gantt base.
+Ya existe una base local explícita con `ExtraWorkRequest`, `ExtraWorkSession` y `ReplanScenario`, con decisión y auditoría; todavía faltan UI/WhatsApp, tipificación contractual de vicio oculto, baseline/forecast determinista y change control antes de aplicar impacto al plan.
 
 **Sprint D5 - extras e incidencias**
 
@@ -85,13 +88,13 @@ La especificación requiere inicio/fin con evidencia y su impacto en el plan. Fa
 5. **D4 - planos versionados y notificaciones (2 semanas).**
 6. **D5 - extras, vicios e impacto en cronograma (2 semanas).**
 7. **D6 - outbox de notificaciones (2 semanas):** WhatsApp, email y push con reintentos, deduplicación, preferencias, ventanas horarias y DLQ.
-8. **D7 - IA gobernada (2 semanas):** análisis asíncrono, consentimiento, retención, confianza, revisión humana obligatoria y métricas de precisión; nunca habilitar pagos automáticamente.
+8. **D7 - IA gobernada (2 semanas):** desplegar la vertical visual ya implementada localmente, verificar controles de datos/DPA/retención por proveedor, ejecutar benchmark visual OpenAI/Qwen3-VL/GLM-5V y evaluaciones separadas de GLM-OCR y GLM-5.2 para OCR/texto sobre gold sets consentidos, calibrar abstención/costo/latencia y conectar sólo resultados revisados a escenarios; nunca habilitar pagos, certificación o mutación de baseline automáticamente.
 9. **D8 - hardening enterprise (2 semanas):** multiobra, exportación/portabilidad, auditoría completa con correlación, observabilidad, pruebas de carga, RPO/RTO y controles de privacidad.
 
 ## Criterios de aceptación transversales
 
 - Todo cambio económico o contractual es idempotente, auditable, tenant-scoped y protegido por control de concurrencia.
-- Toda evidencia es privada por defecto, con hash, enlaces firmados y expiración.
+- Toda evidencia es privada por defecto, con hash y entrega server-side autorizada o enlace firmado/expirable según el canal.
 - Ninguna sugerencia de IA cambia estados contractuales sin decisión humana explícita.
 - Todo evento de notificación tiene estado durable, reintentos acotados y trazabilidad.
 - Toda migración se valida en staging, tiene rollback documentado y no se ejecuta sobre producción por inferencia.
