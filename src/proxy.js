@@ -20,6 +20,7 @@ const PROTECTED_ROUTE_ROOTS = [
   '/api/superadmin',
   '/api/tenant',
   '/api/whatsapp',
+  '/api/worker-onboarding',
   '/api/cash-funds',
   '/api/cash-movements',
   '/api/goods-receipts',
@@ -28,7 +29,7 @@ const PROTECTED_ROUTE_ROOTS = [
   '/api/suppliers',
 ];
 
-function isProtectedPathname(pathname) {
+export function isProtectedPathname(pathname) {
   return PROTECTED_ROUTE_ROOTS.some((root) => pathname === root || pathname.startsWith(`${root}/`));
 }
 
@@ -64,6 +65,7 @@ export const config = {
     '/api/superadmin/:path*',
     '/api/tenant/:path*',
     '/api/whatsapp/:path*',
+    '/api/worker-onboarding/:path*',
     '/api/cash-funds/:path*',
     '/api/cash-movements/:path*',
     '/api/goods-receipts/:path*',
