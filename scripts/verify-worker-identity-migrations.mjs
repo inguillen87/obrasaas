@@ -52,6 +52,21 @@ function quoteIdentifier(identifier) {
 
 const databaseSchema = resolveDatabaseSchema(connectionString);
 
+function hardenedVerifierConnectionString(value) {
+  const parsed = new URL(value);
+  const hostname = parsed.hostname.toLowerCase().replace(/\.$/, '');
+  const sslMode = parsed.searchParams.get('sslmode');
+  if (
+    hostname.endsWith('.neon.tech')
+    && ['prefer', 'require', 'verify-ca'].includes(sslMode)
+  ) {
+    parsed.searchParams.set('sslmode', 'verify-full');
+  }
+  return parsed.toString();
+}
+
+const verifierConnectionString = hardenedVerifierConnectionString(connectionString);
+
 const EXPECTED_MIGRATIONS = Object.freeze([
   '20260724330000_worker_identity_scope_indexes',
   '20260724330050_worker_identity_channel_scope_index',
@@ -250,7 +265,7 @@ async function assertTables(client) {
 async function assertEnums(client) {
   const result = await client.query(
     `SELECT type.typname,
-            array_agg(enum.enumlabel ORDER BY enum.enumsortorder) AS labels
+            array_agg(enum.enumlabel::text ORDER BY enum.enumsortorder) AS labels
        FROM pg_type AS type
        JOIN pg_enum AS enum ON enum.enumtypid = type.oid
        JOIN pg_namespace AS namespace ON namespace.oid = type.typnamespace
@@ -559,7 +574,7 @@ async function assertCanonicalPaymentIdentity(client) {
 }
 
 const client = new pg.Client({
-  connectionString,
+  connectionString: verifierConnectionString,
   application_name: 'obrasaas-worker-identity-migration-verifier',
   statement_timeout: 30_000,
   query_timeout: 35_000,
