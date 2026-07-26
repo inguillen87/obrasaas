@@ -184,45 +184,46 @@ const EXPECTED_VALIDATED_CONSTRAINTS = Object.freeze({
 const EXPECTED_INDEXES = Object.freeze({
   TenantMembership_organizationId_id_key: {
     table: 'TenantMembership',
-    patterns: [/CREATE UNIQUE INDEX/, /\("organizationId", "id"\)/],
+    columns: ['organizationId', 'id'],
+    requiresUnique: true,
+    requiresUnconditional: true,
   },
   Worker_one_person_per_project_idx: {
     table: 'Worker',
-    patterns: [
-      /CREATE UNIQUE INDEX/,
-      /\("organizationId", "personId", "projectId"\)/,
-      /WHERE \("personId" IS NOT NULL\)/,
-    ],
+    columns: ['organizationId', 'personId', 'projectId'],
+    requiresUnique: true,
+    predicateFragments: ['personId IS NOT NULL'],
   },
   WorkerClaim_one_open_per_sender_idx: {
     table: 'WorkerOnboardingClaim',
-    patterns: [
-      /CREATE UNIQUE INDEX/,
-      /\("projectId", "senderFingerprintKeyId", "senderFingerprint"\)/,
-      /PENDING/,
-      /SUBMITTED/,
-    ],
+    columns: ['projectId', 'senderFingerprintKeyId', 'senderFingerprint'],
+    requiresUnique: true,
+    predicateFragments: ['PENDING', 'SUBMITTED'],
   },
   WorkerPayment_one_active_per_purpose_idx: {
     table: 'WorkerPaymentDestination',
-    patterns: [
-      /CREATE UNIQUE INDEX/,
-      /\("organizationId", "personId", "purpose"\)/,
-      /ACTIVE/,
-    ],
+    columns: ['organizationId', 'personId', 'purpose'],
+    requiresUnique: true,
+    predicateFragments: ['ACTIVE'],
   },
   WSD_org_operation_key: {
     table: 'WorkerSensitiveDecision',
-    patterns: [/CREATE UNIQUE INDEX/, /\("organizationId", "operationKey"\)/],
+    columns: ['organizationId', 'operationKey'],
+    requiresUnique: true,
+    requiresUnconditional: true,
   },
   WorkerPayment_canonical_identity_key: {
     table: 'WorkerPaymentDestination',
+    columns: [
+      'organizationId',
+      'personId',
+      'purpose',
+      'canonicalType',
+      'canonicalFingerprintKeyId',
+      'canonicalFingerprint',
+    ],
     requiresUnique: true,
     requiresUnconditional: true,
-    patterns: [
-      /CREATE UNIQUE INDEX/,
-      /\("organizationId", "personId", "purpose", "canonicalType", "canonicalFingerprintKeyId", "canonicalFingerprint"\)/,
-    ],
   },
 });
 
@@ -463,9 +464,15 @@ async function assertValidatedConstraints(client) {
 async function assertIndexes(client) {
   const indexNames = Object.keys(EXPECTED_INDEXES);
   const result = await client.query(
-    `SELECT indexes.tablename, indexes.indexname, indexes.indexdef,
+    `SELECT indexes.tablename, indexes.indexname,
             index_state.indisvalid, index_state.indisready, index_state.indisunique,
-            index_state.indpred IS NULL AS is_unconditional
+            index_state.indpred IS NULL AS is_unconditional,
+            ARRAY(
+              SELECT pg_get_indexdef(index_state.indexrelid, position, true)
+                FROM generate_series(1, index_state.indnkeyatts) AS position
+               ORDER BY position
+            ) AS key_columns,
+            pg_get_expr(index_state.indpred, index_state.indrelid, true) AS predicate
        FROM pg_indexes AS indexes
        JOIN pg_class AS index_class ON index_class.relname = indexes.indexname
        JOIN pg_namespace AS index_namespace
@@ -491,8 +498,17 @@ async function assertIndexes(client) {
     if (contract.requiresUnconditional) {
       assert(index.is_unconditional, `Index ${name} is partial and does not govern every row.`);
     }
-    for (const pattern of contract.patterns) {
-      assert(pattern.test(index.indexdef), `Index ${name} does not match its governed definition.`);
+    const actualColumns = index.key_columns.map((column) => column.replaceAll('"', '').trim());
+    assert(
+      sameValues(actualColumns, contract.columns),
+      `Index ${name} does not have the governed ordered key columns.`,
+    );
+    const predicate = normalizeConstraintDefinition(index.predicate);
+    for (const fragment of contract.predicateFragments || []) {
+      assert(
+        predicate.includes(fragment),
+        `Index ${name} does not have its governed predicate.`,
+      );
     }
   }
 }
