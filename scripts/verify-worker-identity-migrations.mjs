@@ -235,6 +235,15 @@ function sameValues(actual, expected) {
     && actual.every((value, index) => value === expected[index]);
 }
 
+function normalizeConstraintDefinition(value) {
+  return String(value || '')
+    .replace(/::(?:"[^"]+"|[A-Za-z_][A-Za-z0-9_.$]*(?:\[\])?)/g, '')
+    .replaceAll('"', '')
+    .replace(/[()]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 async function assertMigrations(client) {
   const result = await client.query(
     `SELECT "migration_name"
@@ -419,8 +428,9 @@ async function assertValidatedConstraints(client) {
       'WorkerSensitiveDecision exact-subject contract does not match the governed action families.',
     );
   }
-  const canonicalSource = (definitions.get('WorkerPayment_canonical_source_check') || '')
-    .replaceAll('"', '');
+  const canonicalSource = normalizeConstraintDefinition(
+    definitions.get('WorkerPayment_canonical_source_check'),
+  );
   assert(
     [
       'CBU',
@@ -440,8 +450,9 @@ async function assertValidatedConstraints(client) {
     ].every((fragment) => canonicalSource.includes(fragment)),
     'Resolved aliases are not bound to canonical identity in PostgreSQL.',
   );
-  const canonicalState = (definitions.get('WorkerPayment_canonical_state_check') || '')
-    .replaceAll('"', '');
+  const canonicalState = normalizeConstraintDefinition(
+    definitions.get('WorkerPayment_canonical_state_check'),
+  );
   assert(
     ['VERIFIED', 'ACTIVE', 'SUPERSEDED', 'canonicalFingerprint IS NOT NULL']
       .every((fragment) => canonicalState.includes(fragment)),
