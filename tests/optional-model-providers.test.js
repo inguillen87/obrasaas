@@ -206,7 +206,7 @@ test("GLM-OCR stays on layout parsing workload and returns a bounded normalized 
   assert.equal(result.pages, 1);
 });
 
-test("GLM-OCR PDF requests are explicitly bounded to the canonical 30-page window", async () => {
+test("GLM-OCR PDF requests follow the internal 30-page chunk policy", async () => {
   let request;
   const result = await extractDocumentWithGlmOcr({
     fileBuffer: Buffer.from("%PDF-1.7\nminimal test fixture"),

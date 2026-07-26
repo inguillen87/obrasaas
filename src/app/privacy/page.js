@@ -87,8 +87,9 @@ export default function PrivacyPage() {
           significa retención cero: por defecto, Responses puede generar registros de control de abuso conservados hasta
           30 días, salvo configuración contractual distinta o exigencia legal. La tabla vigente de OpenAI informa que
           <code>/v1/audio/transcriptions</code> no conserva estado de aplicación ni registros de abuso. Los proveedores
-          alternativos de evaluación, incluidos endpoints privados de Hugging Face o Z.ai, permanecen desactivados
-          hasta que exista una configuración contractual y técnica específica para el tenant. Consultá los
+          alternativos de evaluación usan, cuando se habiliten, el router público de Hugging Face hacia Featherless
+          o las APIs públicas directas de Z.ai; no son endpoints privados de ObraSaaS y permanecen desactivados hasta
+          que exista una configuración contractual y técnica específica para el tenant. Consultá los
           detalles y excepciones en los <a href="https://developers.openai.com/api/docs/guides/your-data">controles de datos de OpenAI</a>.
         </p>
         <p>

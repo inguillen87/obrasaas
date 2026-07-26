@@ -27,6 +27,9 @@ const PROTECTED_UPLOAD_VERIFIER_PATH = fileURLToPath(
 const VISUAL_PROGRESS_VERIFIER_PATH = fileURLToPath(
   new URL("./verify-visual-progress-migration.mjs", import.meta.url),
 );
+const SCHEDULE_SNAPSHOT_VERIFIER_PATH = fileURLToPath(
+  new URL("./verify-schedule-snapshot-migration.mjs", import.meta.url),
+);
 
 export const PRODUCTION_DATABASE_IDENTITY_ENV =
   "OBRASAAS_PRODUCTION_DATABASE_IDENTITY_SHA256";
@@ -308,6 +311,7 @@ export async function runVercelBuild({
     progressJournalVerifier: PROGRESS_JOURNAL_VERIFIER_PATH,
     protectedUploadVerifier: PROTECTED_UPLOAD_VERIFIER_PATH,
     visualProgressVerifier: VISUAL_PROGRESS_VERIFIER_PATH,
+    scheduleSnapshotVerifier: SCHEDULE_SNAPSHOT_VERIFIER_PATH,
   },
 } = {}) {
   const plan = evaluateMigrationGate(environment);
@@ -341,6 +345,9 @@ export async function runVercelBuild({
       VISUAL_PROGRESS_MIGRATION_DATABASE_URL:
         environment[plan.migrationDatabaseEnvironment],
       VISUAL_PROGRESS_MIGRATION_SCHEMA: "public",
+      SCHEDULE_SNAPSHOT_MIGRATION_DATABASE_URL:
+        environment[plan.migrationDatabaseEnvironment],
+      SCHEDULE_SNAPSHOT_MIGRATION_SCHEMA: "public",
     };
     await runner(
       process.execPath,
@@ -360,6 +367,11 @@ export async function runVercelBuild({
     await runner(
       process.execPath,
       [cliPaths.visualProgressVerifier],
+      { ...sharedOptions, env: verificationEnvironment },
+    );
+    await runner(
+      process.execPath,
+      [cliPaths.scheduleSnapshotVerifier],
       { ...sharedOptions, env: verificationEnvironment },
     );
   }

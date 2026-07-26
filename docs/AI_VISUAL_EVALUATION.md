@@ -9,6 +9,7 @@ ObraSaaS tiene una primera vertical local de lectura visual gobernada. Incluye:
 - `VisualProgressAssessment` tenant/project/task/evidence scoped, con idempotencia, huellas SHA-256, baseline hash, estados de proveedor y revisión humana CAS;
 - imagen privada leída servidor a servidor, límite de bytes y píxeles, MIME contrastado con magic bytes y rechazo de WebP animado;
 - derivado JPEG/PNG/WebP sin metadatos EXIF/XMP/textuales antes de abandonar ObraSaaS;
+- `safety_identifier` seudónimo estable firmado con `AI_SAFETY_IDENTIFIER_SECRET`: el despacho falla cerrado si el secreto dedicado falta o tiene menos de 32 bytes y nunca deriva este identificador de `OPENAI_API_KEY`;
 - opt-in separado por tenant y atestación versionada;
 - revalidación de suscripción, opt-in, tarea y evidencia en la última frontera antes de llamar al proveedor;
 - lease persistente de dos minutos para `RUNNING`, renovado mediante CAS inmediatamente antes del proveedor y usado como fencing en todo cierre terminal: al vencer, listados y replays recuperan la ejecución a `FAILED` con una sola auditoría; una recuperación ganadora impide el despacho y una respuesta tardía no puede persistirse;
@@ -23,10 +24,10 @@ El 26 de julio de 2026 se ejecutó un smoke API real y acotado contra OpenAI usa
 
 | Carga | Proveedor/modelo | Rol | Estado y regla |
 | --- | --- | --- | --- |
-| Lectura visual | OpenAI `gpt-5.6-sol` | Primario de piloto | Adapter Responses probado; `store:false`, `detail:high` por defecto, Structured Outputs estricto y `safety_identifier` HMAC seudónimo por operador |
-| Lectura visual | Hugging Face `Qwen/Qwen3-VL-32B-Instruct` | Shadow | Adapter implementado y probado por contrato; exige token y `featherless-ai` en allowlist explícita, con `X-HF-Bill-To` opcional para imputación organizacional. No fue ejecutado contra API real ni se invoca por defecto/fan-out |
-| Lectura visual | Z.ai `glm-5v-turbo` | Challenger | Adapter implementado y probado por contrato; modelo visual separado, secreto y rollout explícitos. Sin smoke real todavía |
-| OCR | Z.ai `glm-ocr` | Especialista | Adapter de layout implementado con ventana canónica de 30 páginas y límites de items/caracteres. Documentos mayores requieren chunking explícito; aún no está conectado a remitos/facturas ni probado contra API real |
+| Lectura visual | OpenAI `gpt-5.6-sol` | Primario de piloto | Adapter Responses probado; `store:false`, `detail:high` por defecto, Structured Outputs estricto y `safety_identifier` HMAC seudónimo por operador con secreto estable separado de la API key |
+| Lectura visual | Hugging Face `Qwen/Qwen3-VL-32B-Instruct` | Shadow | Adapter implementado y probado por contrato; usa el router público de Inference Providers hacia el proveedor externo `featherless-ai`, fijado en allowlist, con `X-HF-Bill-To` opcional. No fue ejecutado contra API real ni se invoca por defecto/fan-out |
+| Lectura visual | Z.ai `glm-5v-turbo` | Challenger | Adapter implementado y probado por contrato contra la API pública directa de Z.ai; modelo visual separado, secreto y rollout explícitos. Sin smoke real todavía |
+| OCR | Z.ai `glm-ocr` | Especialista | Adapter de layout implementado contra la API pública de Z.ai. ObraSaaS impone un chunk interno de 30 páginas para acotar costo/salida, aunque el proveedor documenta un máximo superior; aún no está conectado a remitos/facturas ni probado contra API real |
 | Texto estructurado | Z.ai `glm-5.2` | Especialista | Adapter implementado **sólo para texto/JSON**, razonamiento `none` explícito y validador de negocio obligatorio. Sin smoke real; puede evaluar JSON extraído, nunca una foto |
 
 “Usar toda la suite” significa registrar capacidades compatibles, fijar proveedor/revisión y compararlas sobre un dataset gobernado. No significa enviar cada foto a todos los modelos: eso aumentaría costo, latencia y exposición de datos sin mejorar por sí mismo la calidad.
@@ -36,8 +37,8 @@ La selección neutral resuelve exactamente un modelo y exige habilitar de forma 
 Fuentes primarias:
 
 - [OpenAI GPT-5.6 Sol](https://developers.openai.com/api/docs/models/gpt-5.6-sol), [visión](https://developers.openai.com/api/docs/guides/images-vision) y [Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs);
-- [Qwen3-VL-32B-Instruct](https://huggingface.co/Qwen/Qwen3-VL-32B-Instruct) y [seguridad de Inference Endpoints](https://huggingface.co/docs/inference-endpoints/security);
-- [Z.ai GLM-5V Turbo](https://docs.z.ai/guides/vlm/glm-5v-turbo), [GLM-OCR](https://docs.z.ai/guides/vlm/glm-ocr) y [GLM-5.2 text-only](https://docs.z.ai/guides/llm/glm-5.2).
+- [Qwen3-VL-32B-Instruct](https://huggingface.co/Qwen/Qwen3-VL-32B-Instruct) y [seguridad de Inference Providers](https://huggingface.co/docs/inference-providers/security);
+- [Z.ai GLM-5V Turbo](https://docs.z.ai/guides/vlm/glm-5v-turbo), [GLM-OCR](https://docs.z.ai/guides/vlm/glm-ocr), [GLM-5.2 text-only](https://docs.z.ai/guides/llm/glm-5.2) y [política de privacidad](https://docs.z.ai/legal-agreement/privacy-policy).
 
 La revisión de catálogo del 26 de julio de 2026 confirmó que OpenAI presenta
 `gpt-5.6-sol` como su modelo de capacidad insignia con entrada de imágenes; el
@@ -63,7 +64,7 @@ convierte el proceso en OCR productivo. El cierre profesional exige:
 - ingreso por `ProtectedUpload`, hash e idempotencia, sin descriptor de storage
   controlado por el navegador;
 - MIME/magic bytes, límites y preprocesado seguro antes del proveedor;
-- chunking explícito para documentos de más de 30 páginas, orden estable y
+- chunking explícito para documentos de más de 30 páginas por política interna de ObraSaaS —no por un máximo actual del proveedor—, orden estable y
   detección de páginas faltantes o repetidas;
 - salida de texto/layout acotada, más extracción de campos con esquema y
   validador de negocio obligatorio;
@@ -138,7 +139,7 @@ Rollout: `offline eval -> shadow muestreado -> sugerencia visible -> eventual au
 
 En este corte, sólo OpenAI tuvo un smoke API real controlado, sobre un render BIM y no sobre evidencia de campo. Que los adapters HF/Z.ai pasen pruebas de contrato demuestra forma, validación y límites locales; no demuestra disponibilidad, calidad, costo ni compatibilidad efectiva del proveedor hasta ejecutar el benchmark con credenciales dedicadas y datos autorizados.
 
-`store:false` deshabilita el almacenamiento de estado de Responses, pero **no equivale por sí solo a Zero Data Retention**. Antes de enviar fotos reales deben verificarse los controles de datos del proyecto OpenAI (ZDR o Modified Abuse Monitoring cuando corresponda), DPA, consentimiento y retención aplicable. `detail:original` queda como opt-in justificado; el piloto usa `high` para limitar costo y latencia. HF/Featherless y Z.ai requieren la misma revisión contractual antes de recibir evidencia real.
+`store:false` deshabilita el almacenamiento de estado de Responses, pero **no equivale por sí solo a Zero Data Retention**. Antes de enviar fotos reales deben verificarse los controles de datos del proyecto OpenAI (ZDR o Modified Abuse Monitoring cuando corresponda), DPA, consentimiento y retención aplicable. `detail:original` queda como opt-in justificado; el piloto usa `high` para limitar costo y latencia. El router público de HF y su proveedor externo Featherless, así como las APIs públicas de Z.ai, requieren revisión contractual propia antes de recibir evidencia real; no son endpoints privados de ObraSaaS.
 
 ## Gate para la foto real del piloto
 
@@ -148,6 +149,7 @@ Antes de probar “pared a medio terminar” desde WhatsApp deben estar verdes:
 - `META_APP_SECRET`, webhook firmado y conexión del tenant piloto activos;
 - storage privado y ruta Meta -> Inbox -> `ProgressEvidence` probados con un archivo real;
 - opt-in visual activado por el administrador en ese tenant;
+- `AI_SAFETY_IDENTIFIER_SECRET` dedicado, aleatorio y de al menos 32 bytes configurado; rotar `OPENAI_API_KEY` no debe alterar el seudónimo y rotar este secreto sí lo hace;
 - controles de retención/DPA del proveedor verificados; `store:false` solo no satisface este gate;
 - tarea/baseline identificables, permisos y revisión del Director;
 - observabilidad de latencia/error/costo sin contenido, teléfono ni URL privada en logs.

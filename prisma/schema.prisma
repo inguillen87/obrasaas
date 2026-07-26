@@ -130,6 +130,21 @@ enum ReplanScenarioStatus {
   APPLIED
 }
 
+enum ScheduleBaselineStatus {
+  ACTIVE
+  SUPERSEDED
+}
+
+enum ScheduleCalendarPolicy {
+  CIVIL_CALENDAR_DAYS_V1
+}
+
+enum ScheduleProgressSource {
+  CANONICAL_TASK
+  MANUAL_OVERRIDE
+  REVIEWED_EVIDENCE
+}
+
 enum BudgetVersionStatus {
   DRAFT
   ACTIVE
@@ -796,6 +811,8 @@ model Project {
   notificationDeliveries        NotificationDelivery[]
   extraWorkRequests             ExtraWorkRequest[]
   replanScenarios               ReplanScenario[]
+  scheduleBaselines             ScheduleBaseline[]
+  scheduleForecastRuns          ScheduleForecastRun[]
   extraWorkSessions             ExtraWorkSession[]
   budgetVersions                BudgetVersion[]
   cashFunds                     CashFund[]
@@ -1572,24 +1589,173 @@ model ProjectBlocker {
 }
 
 model ReplanScenario {
-  id           String               @id @default(cuid())
+  id           String                @id @default(cuid())
   projectId    String
-  project      Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project      Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
   extraWorkId  String?
-  extraWork    ExtraWorkRequest?    @relation(fields: [extraWorkId], references: [id], onDelete: Restrict)
-  name         String               @db.VarChar(220)
+  extraWork    ExtraWorkRequest?     @relation(fields: [extraWorkId], references: [id], onDelete: Restrict)
+  name         String                @db.VarChar(220)
   assumptions  Json
   impact       Json
-  status       ReplanScenarioStatus @default(PROPOSED)
-  revision     Int                  @default(0)
+  status       ReplanScenarioStatus  @default(PROPOSED)
+  revision     Int                   @default(0)
   decidedAt    DateTime?
-  decisionNote String?              @db.Text
-  createdAt    DateTime             @default(now())
-  updatedAt    DateTime             @updatedAt
+  decisionNote String?               @db.Text
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+  forecastRuns ScheduleForecastRun[]
 
   @@unique([projectId, id])
   @@index([projectId, status, createdAt])
   @@index([projectId, extraWorkId])
+}
+
+model ScheduleBaseline {
+  id               String                       @id @default(cuid())
+  organizationId   String
+  projectId        String
+  project          Project                      @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade, map: "ScheduleBaseline_project_scope_fkey")
+  version          Int
+  status           ScheduleBaselineStatus       @default(ACTIVE)
+  name             String                       @db.VarChar(220)
+  timeZone         String                       @db.VarChar(64)
+  calendarPolicy   ScheduleCalendarPolicy       @default(CIVIL_CALENDAR_DAYS_V1)
+  operationKeyHash String                       @db.Char(64)
+  sourcePlanHash   String                       @db.Char(64)
+  contentHash      String                       @db.Char(64)
+  taskCount        Int
+  dependencyCount  Int
+  publishedAt      DateTime                     @default(now())
+  createdAt        DateTime                     @default(now())
+  supersededAt     DateTime?
+  supersededById   String?
+  supersessionHash String?                      @db.Char(64)
+  supersededBy     ScheduleBaseline?            @relation("ScheduleBaselineSupersession", fields: [organizationId, projectId, supersededById], references: [organizationId, projectId, id], onDelete: Restrict, onUpdate: Cascade, map: "ScheduleBaseline_superseded_by_scope_fkey")
+  supersedes       ScheduleBaseline?            @relation("ScheduleBaselineSupersession")
+  tasks            ScheduleBaselineTask[]
+  dependencies     ScheduleBaselineDependency[]
+  forecastRuns     ScheduleForecastRun[]
+
+  @@unique([organizationId, projectId, id], map: "ScheduleBaseline_scope_id_key")
+  @@unique([organizationId, projectId, version], map: "ScheduleBaseline_scope_version_key")
+  @@unique([organizationId, projectId, operationKeyHash], map: "ScheduleBaseline_scope_operation_key")
+  @@unique([organizationId, projectId, supersededById], map: "ScheduleBaseline_scope_superseded_by_key")
+  @@unique([organizationId, projectId, supersessionHash], map: "ScheduleBaseline_scope_supersession_hash_key")
+  @@index([organizationId, projectId, status, version], map: "ScheduleBaseline_scope_status_version_idx")
+}
+
+model ScheduleBaselineTask {
+  id                      String                       @id @default(cuid())
+  organizationId          String
+  projectId               String
+  baselineId              String
+  baseline                ScheduleBaseline             @relation(fields: [organizationId, projectId, baselineId], references: [organizationId, projectId, id], onDelete: Restrict, onUpdate: Cascade, map: "ScheduleBaselineTask_baseline_scope_fkey")
+  sourceTaskId            String                       @db.VarChar(190)
+  sourceTaskRevision      Int
+  code                    String?                      @db.VarChar(64)
+  title                   String                       @db.VarChar(160)
+  description             String?                      @db.Text
+  type                    TaskType                     @default(TASK)
+  parentSourceTaskId      String?                      @db.VarChar(190)
+  parent                  ScheduleBaselineTask?        @relation("ScheduleBaselineTaskHierarchy", fields: [organizationId, projectId, baselineId, parentSourceTaskId], references: [organizationId, projectId, baselineId, sourceTaskId], onDelete: Restrict, onUpdate: Cascade, map: "ScheduleBaselineTask_parent_scope_fkey")
+  children                ScheduleBaselineTask[]       @relation("ScheduleBaselineTaskHierarchy")
+  plannedStart            DateTime                     @db.Date
+  plannedFinish           DateTime                     @db.Date
+  plannedDurationDays     Int
+  createdAt               DateTime                     @default(now())
+  predecessorDependencies ScheduleBaselineDependency[] @relation("ScheduleBaselineDependencySuccessor")
+  successorDependencies   ScheduleBaselineDependency[] @relation("ScheduleBaselineDependencyPredecessor")
+  forecastTasks           ScheduleForecastTask[]       @relation("ScheduleForecastTaskBaseline")
+
+  @@unique([organizationId, projectId, baselineId, sourceTaskId], map: "ScheduleBaselineTask_scope_source_key")
+  @@index([organizationId, projectId, baselineId, parentSourceTaskId], map: "ScheduleBaselineTask_scope_parent_idx")
+}
+
+model ScheduleBaselineDependency {
+  id                      String               @id @default(cuid())
+  organizationId          String
+  projectId               String
+  baselineId              String
+  baseline                ScheduleBaseline     @relation(fields: [organizationId, projectId, baselineId], references: [organizationId, projectId, id], onDelete: Restrict, onUpdate: Cascade, map: "ScheduleBaselineDependency_baseline_scope_fkey")
+  predecessorSourceTaskId String               @db.VarChar(190)
+  predecessor             ScheduleBaselineTask @relation("ScheduleBaselineDependencyPredecessor", fields: [organizationId, projectId, baselineId, predecessorSourceTaskId], references: [organizationId, projectId, baselineId, sourceTaskId], onDelete: Restrict, onUpdate: Cascade, map: "ScheduleBaselineDependency_predecessor_scope_fkey")
+  successorSourceTaskId   String               @db.VarChar(190)
+  successor               ScheduleBaselineTask @relation("ScheduleBaselineDependencySuccessor", fields: [organizationId, projectId, baselineId, successorSourceTaskId], references: [organizationId, projectId, baselineId, sourceTaskId], onDelete: Restrict, onUpdate: Cascade, map: "ScheduleBaselineDependency_successor_scope_fkey")
+  type                    TaskDependencyType   @default(FINISH_TO_START)
+  lagDays                 Int                  @default(0)
+  createdAt               DateTime             @default(now())
+
+  @@unique([organizationId, projectId, baselineId, predecessorSourceTaskId, successorSourceTaskId], map: "ScheduleBaselineDependency_scope_edge_key")
+  @@index([organizationId, projectId, baselineId, successorSourceTaskId], map: "ScheduleBaselineDependency_scope_successor_idx")
+}
+
+model ScheduleForecastRun {
+  id                 String                 @id @default(cuid())
+  organizationId     String
+  projectId          String
+  project            Project                @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade, map: "ScheduleForecastRun_project_scope_fkey")
+  baselineId         String
+  baseline           ScheduleBaseline       @relation(fields: [organizationId, projectId, baselineId], references: [organizationId, projectId, id], onDelete: Restrict, onUpdate: Cascade, map: "ScheduleForecastRun_baseline_scope_fkey")
+  scenarioId         String?
+  scenario           ReplanScenario?        @relation(fields: [projectId, scenarioId], references: [projectId, id], onDelete: Restrict, onUpdate: Cascade, map: "ScheduleForecastRun_scenario_scope_fkey")
+  scenarioRevision   Int?
+  scenarioInputHash  String?                @db.Char(64)
+  schemaVersion      Int                    @default(1)
+  engineVersion      String                 @db.VarChar(64)
+  calendarPolicy     ScheduleCalendarPolicy @default(CIVIL_CALENDAR_DAYS_V1)
+  operationKeyHash   String                 @db.Char(64)
+  inputHash          String                 @db.Char(64)
+  resultHash         String                 @db.Char(64)
+  asOfDate           DateTime               @db.Date
+  baselineStartDate  DateTime               @db.Date
+  baselineFinishDate DateTime               @db.Date
+  forecastStartDate  DateTime               @db.Date
+  forecastFinishDate DateTime               @db.Date
+  startDeltaDays     Int
+  finishDeltaDays    Int
+  taskCount          Int
+  topologicalOrder   Json
+  createdAt          DateTime               @default(now())
+  tasks              ScheduleForecastTask[]
+
+  @@unique([organizationId, projectId, id], map: "ScheduleForecastRun_scope_id_key")
+  @@unique([organizationId, projectId, id, baselineId], map: "ScheduleForecastRun_scope_baseline_key")
+  @@unique([organizationId, projectId, operationKeyHash], map: "ScheduleForecastRun_scope_operation_key")
+  @@index([projectId, scenarioId, createdAt], map: "ScheduleForecastRun_project_scenario_created_idx")
+  @@index([organizationId, projectId, baselineId, createdAt], map: "ScheduleForecastRun_scope_baseline_created_idx")
+}
+
+model ScheduleForecastTask {
+  id                      String                 @id @default(cuid())
+  organizationId          String
+  projectId               String
+  forecastRunId           String
+  baselineId              String
+  forecastRun             ScheduleForecastRun    @relation(fields: [organizationId, projectId, forecastRunId, baselineId], references: [organizationId, projectId, id, baselineId], onDelete: Restrict, onUpdate: Cascade, map: "ScheduleForecastTask_run_baseline_scope_fkey")
+  sourceTaskId            String                 @db.VarChar(190)
+  baselineTask            ScheduleBaselineTask   @relation("ScheduleForecastTaskBaseline", fields: [organizationId, projectId, baselineId, sourceTaskId], references: [organizationId, projectId, baselineId, sourceTaskId], onDelete: Restrict, onUpdate: Cascade, map: "ScheduleForecastTask_baseline_task_scope_fkey")
+  observedTaskRevision    Int
+  progressSource          ScheduleProgressSource
+  progressPercent         Int
+  observedOn              DateTime               @db.Date
+  actualStart             DateTime?              @db.Date
+  actualFinish            DateTime?              @db.Date
+  remainingDurationDays   Int?
+  baselineStart           DateTime               @db.Date
+  baselineFinish          DateTime               @db.Date
+  forecastStart           DateTime               @db.Date
+  forecastFinish          DateTime               @db.Date
+  forecastDurationDays    Int
+  forecastRemainingDays   Int
+  startDeltaDays          Int
+  finishDeltaDays         Int
+  durationDeltaDays       Int
+  driver                  Json
+  relationshipConstraints Json
+  createdAt               DateTime               @default(now())
+
+  @@unique([organizationId, projectId, forecastRunId, sourceTaskId], map: "ScheduleForecastTask_scope_source_key")
+  @@index([organizationId, projectId, forecastRunId, finishDeltaDays], map: "ScheduleForecastTask_scope_finish_delta_idx")
 }
 
 model ExtraWorkRequest {

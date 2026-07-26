@@ -1,5 +1,7 @@
 # Webhook recovery Worker
 
+`vercel.json` agenda el mismo endpoint cada minuto en Production sobre Vercel Pro. Este Worker queda como recuperador externo opcional: no debe mantenerse como segundo scheduler primario salvo durante un failover controlado. La ruta conserva leases e idempotencia porque tanto Vercel como un scheduler externo pueden repetir una ejecución.
+
 Este Worker ejecuta cada minuto la recuperación acotada de webhooks y el GC de solicitudes de WhatsApp Flows. El destino autorizado es exclusivamente:
 
 ```text

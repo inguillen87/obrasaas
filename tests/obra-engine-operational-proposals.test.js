@@ -431,6 +431,10 @@ test('audio and media captions remain evidence even when they contain a valid co
 
   assert.equal(audio.intent, 'EVIDENCE');
   assert.equal(image.intent, 'EVIDENCE');
+  assert.equal(
+    image.reply,
+    'Evidencia recibida y guardada de forma privada. El equipo de gestión la vinculará desde la Bandeja a la tarea correcta; no actualicé el avance ni el Gantt.',
+  );
   assert.equal(currentState.tasks[3].progress, 20);
   assert.equal(proposals[0].status, OPERATIONAL_PROPOSAL_STATUSES.PENDING);
   assert.equal(audits.some((audit) => audit.action === 'voice.proposal.applied'), false);

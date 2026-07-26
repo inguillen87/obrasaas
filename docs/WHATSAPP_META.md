@@ -13,9 +13,9 @@ La integración primaria es **Meta WhatsApp Cloud API directa**. Twilio Sandbox 
 - El webhook general está implementado en `/api/webhooks/whatsapp`.
 - Cada conexión recibe un Data Endpoint opaco independiente en `/api/webhooks/whatsapp/flows/{opaqueEndpointId}`.
 
-En la cuenta de Meta revisada para ObraSaaS ya están presentes la app dedicada y el caso de uso de WhatsApp. Meta también asignó un número de prueba, se verificó un celular propio como destinatario, se generó un token temporal y Meta aceptó una solicitud outbound de plantilla. Esta documentación omite deliberadamente App IDs, WABA IDs, Phone Number IDs, teléfonos y el valor del token.
+En la cuenta de Meta revisada para ObraSaaS ya están presentes la app dedicada y el caso de uso de WhatsApp. Meta también asignó un número de prueba y se verificó un celular propio como destinatario. En una ejecución histórica se generó un token temporal y Meta aceptó una solicitud outbound de plantilla; el panel actual requiere generar una credencial nueva y la anterior no se considera reutilizable. Esta documentación omite deliberadamente App IDs, WABA IDs, Phone Number IDs, teléfonos y valores secretos.
 
-La evidencia anterior prueba únicamente que Meta aceptó ese envío outbound en su entorno de prueba; no prueba entrega, inbound, eventos de estado, webhook firmado, Flows, aislamiento sobre un tenant real ni un circuito bidireccional end-to-end. Todavía faltan credenciales permanentes gestionadas como secretos en Vercel y una conexión tenant-scoped de liberación. El token temporal no es una credencial de release: debe revocarse o rotarse y sustituirse antes de Preview o Production, sin copiarlo al repositorio, logs ni documentación.
+La evidencia anterior prueba únicamente que Meta aceptó ese envío outbound en su entorno de prueba; no prueba entrega, inbound, eventos de estado, webhook firmado, Flows, aislamiento sobre un tenant real ni un circuito bidireccional end-to-end. Un piloto aislado puede usar un token temporal recién generado, guardado como secreto y con vencimiento operativo explícito. Una liberación sostenida exige un System User token con permisos mínimos y rotación gestionada; ninguna credencial temporal es apta para Production.
 
 ## Activación y salud verificables
 
@@ -64,7 +64,7 @@ Una firma Meta inválida responde `432`. La incompatibilidad de la clave RSA res
 
 La implementación limita atómicamente cada conexión a 600 solicitudes nuevas por minuto y usa un lease de 12 segundos para evitar procesadores concurrentes. Un fallo sin respuesta cifrada funciona como caché negativa durante 24 horas y luego puede recuperarse. Cuando ya existe una respuesta cifrada, el hash y su ciphertext pasan a ser un tombstone criptográfico: se reproducen byte a byte y no se eliminan sólo por `expiresAt` mientras la versión RSA correspondiente siga `ACTIVE` o `RETIRING`. Esto evita reutilizar el nonce AES-GCM obligatorio del protocolo con otro plaintext. La función tiene un máximo operativo de 10 segundos. No llama a OpenAI, Cloudinary ni otros servicios ajenos al contrato del Flow durante ese camino síncrono.
 
-El GC usa `garbageCollectWhatsAppFlowEndpointRequests` en lotes acotados y por endpoint. Puede eliminar cachés negativas y leases vencidos después de 24 horas. Un registro que ya contiene ciphertext sólo es elegible cuando su versión RSA está `REVOKED`, o `RETIRING` ya vencida, y pasó además una gracia de 10 minutos para drenar handlers que hubieran cargado el keyring antes del retiro. Las versiones `ACTIVE`, `STAGED`, `RETIRING` vigentes, las versiones desconocidas y los tombstones sin `keyVersion` se conservan. El cron de recuperación lo invoca cada minuto en modo best-effort, con un máximo de 2 endpoints y 250 filas por endpoint; `hasMore=true` deja el remanente para la ejecución siguiente sin agregar latencia al Data Endpoint.
+El GC usa `garbageCollectWhatsAppFlowEndpointRequests` en lotes acotados y por endpoint. Puede eliminar cachés negativas y leases vencidos después de 24 horas. Un registro que ya contiene ciphertext sólo es elegible cuando su versión RSA está `REVOKED`, o `RETIRING` ya vencida, y pasó además una gracia de 10 minutos para drenar handlers que hubieran cargado el keyring antes del retiro. Las versiones `ACTIVE`, `STAGED`, `RETIRING` vigentes, las versiones desconocidas y los tombstones sin `keyVersion` se conservan. `vercel.json` agenda `/api/cron/webhooks` cada minuto en Production, una frecuencia que requiere Vercel Pro; Preview debe invocarlo manualmente. La ruta ejecuta el GC en modo best-effort, con un máximo de 2 endpoints y 250 filas por endpoint; `hasMore=true` deja el remanente para la ejecución siguiente sin agregar latencia al Data Endpoint. Vercel puede entregar una corrida más de una vez, por lo que los leases y la idempotencia siguen siendo parte del contrato operativo.
 
 ## Cifrado y rotación de claves
 
@@ -154,15 +154,15 @@ Implementado:
 - media Meta privada con hash canónico y vínculo idempotente de foto → tarea → `ProgressEvidence`;
 - ausencia deliberada de publicación automática.
 
-Esta lista describe el código y sus pruebas de contrato. Como evidencia externa separada, Meta ya asignó el número de prueba, verificó un destinatario propio y aceptó una solicitud outbound de plantilla con un token temporal. Eso no afirma entrega ni que un WABA/tenant real haya completado el circuito; tampoco acredita que las credenciales permanentes estén instaladas en Vercel Preview o Production.
+Esta lista describe el código y sus pruebas de contrato. Como evidencia externa separada, Meta ya asignó el número de prueba, verificó un destinatario propio y aceptó históricamente una solicitud outbound de plantilla con un token temporal. Eso no afirma entrega ni que un WABA/tenant real haya completado el circuito. El Preview aislado ya verificó las migraciones de esta rama, pero todavía necesita un App Secret y un token nuevo limitados a la rama antes de recorrer Meta end-to-end.
 
 ## Pendiente para validar con un WABA real
 
 Antes de afirmar que WhatsApp Flows está operativo end-to-end para un cliente hay que completar, en este orden:
 
-1. revocar o rotar el token temporal usado en la prueba y sustituirlo por credenciales permanentes de release con el alcance mínimo necesario;
-2. cargar en Vercel `META_APP_SECRET`, `META_VERIFY_TOKEN`, `NEXT_PUBLIC_META_APP_ID`, `NEXT_PUBLIC_META_EMBEDDED_SIGNUP_CONFIG_ID`, `WHATSAPP_CREDENTIALS_ENCRYPTION_KEY`, `WHATSAPP_FLOW_TOKEN_SECRET` y el registro KEK para los ambientes necesarios, sin exponer sus valores; el token permanente de cada tenant debe persistirse sólo cifrado mediante el flujo previsto;
-3. definir `NEXT_PUBLIC_APP_URL` con una URL HTTPS estable y desplegar las migraciones del keyring y de solicitudes del Data Endpoint;
+1. para el piloto, generar un token temporal nuevo, guardarlo sólo como secreto de la rama y registrar su vencimiento; para release, sustituirlo por credenciales permanentes de System User con el alcance mínimo necesario;
+2. completar en Vercel los secretos faltantes —en particular `META_APP_SECRET`— y verificar `META_VERIFY_TOKEN`, `NEXT_PUBLIC_META_APP_ID`, `NEXT_PUBLIC_META_EMBEDDED_SIGNUP_CONFIG_ID`, `WHATSAPP_CREDENTIALS_ENCRYPTION_KEY`, `WHATSAPP_FLOW_TOKEN_SECRET` y el registro KEK, sin exponer sus valores; el token de cada tenant debe persistirse sólo cifrado mediante el flujo previsto;
+3. redesplegar la rama con `NEXT_PUBLIC_APP_URL` estable y comprobar el dominio de Preview. Las migraciones del keyring, Data Endpoint y demás capacidades de esta rama ya fueron verificadas contra su Neon aislado;
 4. verificar el callback del webhook general y sus seis campos suscritos con solicitudes reales firmadas por Meta; persistir al menos un inbound y los eventos de estado correlacionados con un outbound aceptado;
 5. completar Embedded Signup con el WABA y número del tenant real del piloto; el número de prueba asignado por Meta no cierra este gate;
 6. ejecutar el provisionamiento desde Integraciones y comprobar en Meta la clave pública `VALID`, `endpoint_uri`, `application_id`, Flow JSON `7.3`, Data API `4.0` y el estado de salud del endpoint;
@@ -171,3 +171,11 @@ Antes de afirmar que WhatsApp Flows está operativo end-to-end para un cliente h
 9. completar App Review, permisos avanzados y el paso a modo Live cuando Meta lo exija para tenants externos.
 
 El envío de un Flow publicado puede contrastarse con la colección oficial [Send Published Flow by ID](https://www.postman.com/meta/whatsapp-business-platform/request/1i6xpic/send-published-flow-by-id). Hasta que las pruebas anteriores se ejecuten con un WABA real, el estado correcto es **implementado y validado por contrato, pendiente de validación externa end-to-end**.
+
+Referencias operativas oficiales verificadas para este corte:
+
+- [inicio con WhatsApp Cloud API](https://developers.facebook.com/documentation/business-messaging/whatsapp/get-started) y [tokens de acceso](https://developers.facebook.com/documentation/business-messaging/whatsapp/access-tokens);
+- [creación del endpoint webhook](https://developers.facebook.com/documentation/business-messaging/whatsapp/webhooks/create-webhook-endpoint/) y [ciclo de webhooks](https://developers.facebook.com/documentation/business-messaging/whatsapp/webhooks/overview);
+- [ventana de atención de 24 horas](https://developers.facebook.com/documentation/business-messaging/whatsapp/messages/send-messages#customer-service-windows);
+- [prueba y depuración de Flows](https://developers.facebook.com/documentation/business-messaging/whatsapp/flows/guides/testingdebugging/) y [Data Endpoint](https://developers.facebook.com/documentation/business-messaging/whatsapp/flows/guides/implementingyourflowendpoint/);
+- [media de números Business](https://developers.facebook.com/documentation/business-messaging/whatsapp/business-phone-numbers/media).

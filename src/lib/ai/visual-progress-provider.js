@@ -15,6 +15,8 @@ const MIN_IMAGE_SIDE = 32;
 const MAX_CONTEXT_CHARACTERS = 4_500;
 const MAX_CONTEXT_DEPTH = 4;
 const MAX_CONTEXT_COLLECTION_ITEMS = 30;
+const MIN_SAFETY_IDENTIFIER_SECRET_BYTES = 32;
+const SAFETY_IDENTIFIER_DOMAIN = "obrasaas-openai-safety-v1";
 const PNG_CRITICAL_CHUNKS = new Set(["IHDR", "PLTE", "IDAT", "IEND"]);
 const PNG_VISUAL_ANCILLARY_CHUNKS = new Set([
   "tRNS",
@@ -555,6 +557,7 @@ export async function analyzeVisualProgressWithOpenAI({
   caption,
   safetySubjectId,
   apiKey = process.env.OPENAI_API_KEY?.trim(),
+  safetyIdentifierSecret = process.env.AI_SAFETY_IDENTIFIER_SECRET?.trim(),
   model = process.env.OPENAI_VISION_MODEL?.trim() || resolvePrimaryVisualProgressModel().model,
   imageDetail = process.env.OPENAI_VISION_DETAIL?.trim() || "high",
   fetchImpl = globalThis.fetch,
@@ -564,6 +567,15 @@ export async function analyzeVisualProgressWithOpenAI({
   if (!apiKey) fail("PROVIDER_NOT_CONFIGURED", "OpenAI visual analysis is not configured.");
   if (model !== registeredModel.model) {
     fail("PROVIDER_MODEL_INVALID", "OpenAI visual model is not registered for this workload.");
+  }
+  const normalizedSafetyIdentifierSecret = typeof safetyIdentifierSecret === "string"
+    ? safetyIdentifierSecret.trim()
+    : "";
+  if (Buffer.byteLength(normalizedSafetyIdentifierSecret, "utf8") < MIN_SAFETY_IDENTIFIER_SECRET_BYTES) {
+    fail(
+      "PROVIDER_NOT_CONFIGURED",
+      "OpenAI visual analysis requires an independent safety identifier secret.",
+    );
   }
   if (!boundedText(organizationId, 300)) fail("ORGANIZATION_REQUIRED", "Organization context is required.");
   if (!["high", "original"].includes(imageDetail)) {
@@ -575,9 +587,9 @@ export async function analyzeVisualProgressWithOpenAI({
   const safetySubject = boundedText(safetySubjectId, 300) || "tenant-operator";
   const safetyIdentifier = `usr_${createHmac(
     "sha256",
-    createHash("sha256").update("obrasaas-openai-safety-v1\0").update(apiKey).digest(),
+    normalizedSafetyIdentifierSecret,
   )
-    .update(`${organizationId}\0${safetySubject}`)
+    .update(`${SAFETY_IDENTIFIER_DOMAIN}\0${organizationId}\0${safetySubject}`)
     .digest("hex")
     .slice(0, 32)}`;
   const body = {

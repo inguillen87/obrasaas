@@ -4,6 +4,10 @@
   "buildCommand": "npm run build:vercel",
   "crons": [
     {
+      "path": "/api/cron/webhooks",
+      "schedule": "* * * * *"
+    },
+    {
       "path": "/api/cron/protected-uploads",
       "schedule": "17 3 * * *"
     }

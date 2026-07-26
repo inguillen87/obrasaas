@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { registerHooks } from "node:module";
 import test from "node:test";
 
@@ -160,6 +161,19 @@ registerHooks({
 });
 
 const { GET } = await import("../src/app/api/cron/webhooks/route.js");
+
+test("vercel config schedules exactly one per-minute webhook recovery cron", async () => {
+  const config = JSON.parse(await readFile(new URL("../vercel.json", import.meta.url), "utf8"));
+  const webhookRecoveryCrons = config.crons.filter(
+    (cron) => cron.path === "/api/cron/webhooks",
+  );
+
+  assert.deepEqual(webhookRecoveryCrons, [{
+    path: "/api/cron/webhooks",
+    schedule: "* * * * *",
+  }]);
+  assert.equal(webhookRecoveryCrons[0].schedule.trim().split(/\s+/).length, 5);
+});
 
 test("webhook recovery cron distinguishes accepted runs from healthy work", async (context) => {
   const originalSecret = process.env.CRON_SECRET;

@@ -2,15 +2,23 @@
 
 Fecha de corte: 2026-07-26
 
+## Estado operativo del corte
+
+- La rama `codex/platform-ux-foundation` usa una rama Neon aislada y ya recorrió sus migraciones y verificadores PostgreSQL; Production no fue modificada.
+- El importador Meta está apagado para Preview global y habilitado sólo en esta rama. Su allowlist, token de verificación del webhook y secretos de IA están limitados a la misma rama.
+- Falta ingresar `META_APP_SECRET`, generar un token temporal nuevo en Meta, redesplegar y mover el dominio estable de Preview al despliegue actual. El panel de Meta mantiene una reautenticación humana pendiente; ninguna contraseña se captura ni automatiza.
+- Después de ese redespliegue todavía hay que crear o seleccionar un tenant externo con obra, administrador no-superadmin y operario preautorizado. Un contacto desconocido continúa en cuarentena y no se auto-habilita por declarar un nombre.
+- El primer smoke real habilitable es H1: plantilla outbound, respuesta inbound, estados, webhook firmado y asistencia con ubicación. H2 agrega foto privada y comentario. H5 no se considera cerrado hasta persistir una baseline inmutable, generar el forecast y mostrar deltas Gantt revisados; el motor determinista puro es sólo una parte de ese hito.
+
 ## Decisión de canal
 
-La vía principal es Meta WhatsApp Cloud API con el número de prueba que ofrece Meta y hasta cinco teléfonos propios registrados como destinatarios de prueba. Es la única vía que valida la arquitectura real de ObraSaaS: webhooks firmados, estados, media, plantillas, WhatsApp Flows, Data Endpoint e Embedded Signup.
+La vía principal es Meta WhatsApp Cloud API con el número de prueba que ofrece Meta y un celular propio habilitado como destinatario de prueba. Es la única vía que valida la arquitectura real de ObraSaaS: webhooks firmados, estados, media, plantillas, WhatsApp Flows, Data Endpoint e Embedded Signup. La cantidad concreta de destinatarios que muestre el panel se trata como una condición de esa cuenta, no como una garantía contractual fija de Meta.
 
 Twilio Sandbox queda como fallback. El endpoint legado actual responde `410` y reactivarlo exigiría un adaptador aislado de entrada/salida, media, firmas, estados e idempotencia. Aun así, Twilio no probaría los Flows/Data Endpoints nativos de Meta, por lo que no reemplaza el piloto Meta.
 
-Evidencia externa disponible al corte: en la cuenta Meta de ObraSaaS están presentes la app dedicada y el caso de uso WhatsApp; Meta asignó un número de prueba, se verificó un celular propio como destinatario, se generó un token temporal y Meta aceptó una solicitud outbound de plantilla. No se copian en este repositorio identificadores, teléfonos ni el valor del token.
+Evidencia externa disponible al corte: en la cuenta Meta de ObraSaaS están presentes la app dedicada y el caso de uso WhatsApp; Meta asignó un número de prueba y se verificó un celular propio como destinatario. Una ejecución histórica generó un token temporal y Meta aceptó una solicitud outbound de plantilla. El panel actual exige generar una credencial temporal nueva; la anterior no se considera reutilizable. No se copian en este repositorio identificadores, teléfonos ni valores secretos.
 
-Este resultado acredita sólo aceptación outbound en el entorno de prueba. No acredita entrega, inbound, eventos de estado, webhook firmado, Flows, aislamiento sobre un tenant real ni mensajería bidireccional end-to-end. También faltan credenciales permanentes de release gestionadas como secretos en Vercel. El token temporal debe revocarse o rotarse y sustituirse; no es una credencial apta para Preview o Production.
+Ese resultado histórico acredita sólo aceptación outbound en el entorno de prueba. No acredita entrega, inbound, eventos de estado, webhook firmado, Flows, aislamiento sobre un tenant real ni mensajería bidireccional end-to-end. Para el piloto aislado se admite un token temporal recién generado, guardado como secreto y con vencimiento operativo explícito; para una liberación sostenida se exige un System User token con permisos mínimos y rotación gestionada. Ninguna credencial temporal se considera apta para Production.
 
 ## Qué está implementado para probar localmente o por contrato
 
@@ -19,12 +27,13 @@ Las operaciones dependientes de Meta no pueden recorrerse end-to-end hasta compl
 - Dashboard interno: tenant, obra, cuadrilla, tareas, Gantt, Inbox, asistencia y aprobaciones.
 - Operario previamente creado y ligado a su teléfono dentro de una obra.
 - Entrada, pausa, regreso y salida con hora de servidor, GPS fresco, accuracy, geocerca e idempotencia.
+- El pin de ubicación enviado como mensaje de WhatsApp no incluye una precisión confiable y no se acepta como presencia verificada. El ingreso/salida usa un enlace seguro ligado a la operación para obtener una lectura puntual con `accuracy` y `capturedAt`; la geocerca aporta evidencia de plausibilidad, no triangulación criptográfica ni prueba de quién sostiene el dispositivo.
 - Recepción de texto, audio, imagen, video y documentos; media privada con SHA-256.
 - Propuestas de avance por texto/audio que requieren aprobación y no reescriben el Gantt directamente.
 - Vinculación desde Inbox de una foto Meta autorizada a una tarea canónica como `ProgressEvidence`, con permisos, idempotencia y revisión.
 - Evaluación visual opt-in con OpenAI, rango o abstención, derivado sin metadatos y revisión humana CAS. Un smoke API controlado ya confirmó abstención ante un render BIM que no era evidencia física. Las ejecuciones `RUNNING` tienen lease persistente: un crash se recupera una sola vez a `FAILED`, queda auditado y una respuesta tardía no puede pisarlo; el reintento es explícito con otra clave.
 
-No debe presentarse todavía como completo: la nueva cadena foto → evidencia → evaluación visual está implementada y probada localmente, pero no fue migrada ni verificada en Neon Preview ni recorrida con una foto entrante real de Meta. La ubicación sigue siendo un evento separado y no está correlacionada automáticamente con la foto; tampoco existe aún una baseline inmutable/forecast determinista derivado de la revisión. El onboarding y los destinos de cobro ya tienen servicios y API autenticada tenant-scoped, cifrado AAD, DTO enmascarado, idempotencia, CAS, permisos y decisiones maker-checker-activator auditadas. Esa persistencia todavía no fue desplegada ni verificada en una rama Neon aislada; además faltan el Flow especializado, la pantalla productiva y un proveedor confiable de titularidad bancaria.
+No debe presentarse todavía como completo: la nueva cadena foto → evidencia → evaluación visual está implementada, probada y sus migraciones se verificaron en la rama Neon aislada del Preview, pero todavía no fue recorrida con una foto entrante real de Meta. La ubicación sigue siendo un evento separado y no está correlacionada automáticamente con la foto; tampoco existe aún una baseline inmutable ni un forecast persistido derivado de la revisión. El onboarding y los destinos de cobro ya tienen servicios y API autenticada tenant-scoped, cifrado AAD, DTO enmascarado, idempotencia, CAS, permisos y decisiones maker-checker-activator auditadas. Sus migraciones también fueron verificadas en esa rama aislada; faltan el Flow especializado, la pantalla productiva y un proveedor confiable de titularidad bancaria.
 
 ## Hitos de prueba
 
@@ -38,15 +47,17 @@ Evidencia parcial ya obtenida:
 
 - app Meta y caso de uso presentes en la cuenta revisada;
 - número de prueba asignado y un celular propio verificado como destinatario;
-- token temporal generado y solicitud outbound de plantilla aceptada por Meta, sin que eso pruebe entrega.
+- una prueba histórica generó un token temporal y Meta aceptó una solicitud outbound de plantilla, sin que eso pruebe entrega ni que esa credencial siga vigente;
+- rama Neon aislada creada y el conjunto completo de migraciones de esta rama verificado contra PostgreSQL;
+- flags y allowlist del importador limitados únicamente a `codex/platform-ux-foundation`; el flag global de Preview permanece desactivado.
 
 Gate de salida aún pendiente:
 
-- token temporal revocado o rotado y credenciales permanentes configuradas como secretos en Vercel;
+- App Secret y un token temporal nuevo configurados como secretos exclusivos de la rama; para Production, reemplazarlos por credenciales permanentes de System User;
 - webhook HTTPS configurado y validado con una solicitud inbound firmada por Meta y eventos de estado reales;
-- crear un Preview nuevo y comprobar que la integración Vercel-Neon genera una rama aislada, con identidad de base distinta de Production y migraciones verificadas;
-- tenant, obra y trabajador reales cargados en Neon, con el teléfono normalizado y aislamiento cross-tenant probado;
-- storage privado y migraciones verificadas en el ambiente del piloto;
+- redesplegar el Preview con las variables finales y apuntar el dominio estable de prueba a ese despliegue, sin mover Production;
+- tenant externo, obra, administrador no-superadmin y trabajador de prueba cargados en Neon, con el teléfono normalizado y aislamiento cross-tenant probado;
+- storage privado recorrido con media entrante real en el ambiente del piloto;
 - inbound, outbound correlacionado, estados, retry y ambos Flows probados end-to-end;
 - ingreso, almuerzo, regreso y salida visibles en dashboard.
 
@@ -65,7 +76,7 @@ Base local completada:
 
 Gate de salida aún pendiente:
 
-- desplegar y verificar migraciones/storage en Neon Preview aislado;
+- redesplegar el Preview final y recorrer storage con una imagen Meta real; el esquema y las migraciones ya están verificados en Neon aislado;
 - ejecutar el recorrido con inbound Meta real y observarlo en Inbox/Progreso;
 - ligar una ubicación fresca al mismo contexto operacional sin inferir GPS desde metadatos de la imagen;
 - definir si la selección de tarea final será Inbox, Flow o ambas, y probar reintento/offline;
@@ -80,13 +91,13 @@ Flujo: contacto desconocido -> cuarentena -> invitación o preautorización admi
 
 El número prueba control del canal, no identidad civil. Teléfonos compartidos o conflictos requieren revisión asistida. Nadie queda habilitado sólo por escribir "soy Carlitos".
 
-Base local implementada: claim de un solo uso con token almacenado sólo como hash, un claim abierto por obra/remitente aun con varias conexiones, captura de identidad cifrada, revisión administrativa, enlace a `WorkerChannelIdentity`, CAS, idempotencia y ledger de decisiones. Sigue pendiente desplegar/verificar la migración y crear una sesión/Flow de onboarding ligada al claim que no presuponga un `Worker` ya existente.
+Base implementada: claim de un solo uso con token almacenado sólo como hash, un claim abierto por obra/remitente aun con varias conexiones, captura de identidad cifrada, revisión administrativa, enlace a `WorkerChannelIdentity`, CAS, idempotencia y ledger de decisiones. La migración fue verificada en Neon aislado. Sigue pendiente crear una sesión/Flow de onboarding ligada al claim que no presuponga un `Worker` ya existente y recorrerla end-to-end.
 
 Estimación: un sprint después de H2.
 
 ### H4 - Datos de cobro y comprobante
 
-Base local ya disponible: validación estricta de CUIL, CBU, CVU y alias; consentimiento de privacidad versionado; cifrado AES-256-GCM con AAD; keyring rotatable; fingerprint HMAC por tenant; serialización enmascarada; API autenticada tenant-scoped; revisión maker-checker-activator; ledger append-only; y esquema Prisma con migraciones gobernadas. Esta base no equivale todavía a un perfil operativo: la migración no está desplegada ni verificada en Neon, el verificador bancario permanece cerrado con `503` hasta integrar un proveedor confiable de titularidad y faltan Flow/UI y comprobante privado.
+Base ya disponible: validación estricta de CUIL, CBU, CVU y alias; consentimiento de privacidad versionado; cifrado AES-256-GCM con AAD; keyring rotatable; fingerprint HMAC por tenant; serialización enmascarada; API autenticada tenant-scoped; revisión maker-checker-activator; ledger append-only; y esquema Prisma con migraciones gobernadas y verificadas en Neon aislado. Esta base no equivale todavía a un perfil operativo: el verificador bancario permanece cerrado con `503` hasta integrar un proveedor confiable de titularidad y faltan Flow/UI y comprobante privado.
 
 Antes de producción también hay que retirar la autoridad del teléfono legado en texto plano de `Worker` mediante dual-read, backfill verificado y una fase contract que lo vuelva nullable. Durante una rotación de la clave HMAC, la API deberá buscar las huellas de ambas claves y serializar la deduplicación con una transacción/lock estable; el índice por `fingerprintKeyId` sólo evita carreras dentro de una misma clave.
 
@@ -102,7 +113,7 @@ La IA describe el elemento (por ejemplo, mampostería parcial), propone un rango
 
 Base local completada: modelo Prisma/migración gobernados, provider registry, adaptador OpenAI Responses, sanitización binaria/EXIF, tenant opt-in con CAS entre administradores, recheck de suscripción/autorización en la última frontera, rutas idempotentes, un solo análisis abierto por evidencia, estados de fallo seguros y revisión humana CAS. Una lectura obsoleta puede rechazarse con trazabilidad para liberar un intento nuevo. El smoke API controlado con `gpt-5.6-sol` se abstuvo correctamente frente a un render BIM y no inventó avance. Qwen3-VL y GLM-5V son challengers visuales; GLM-OCR y GLM-5.2 son especialistas OCR/texto, y GLM-5.2 nunca recibe fotos. HF/Z.ai sólo tienen pruebas de contrato.
 
-Gate pendiente: migración/Preview, foto Meta real, UI/journey E2E, dataset y benchmark calibrado, observabilidad de costo/latencia, controles de datos/DPA/retención del proveedor y motor de escenario sobre baseline inmutable. `store:false` no equivale a ZDR y `detail:original` requiere opt-in justificado. La revisión visual actual no muta `Task` ni crea todavía el forecast, deliberadamente.
+Gate pendiente: redespliegue del Preview, foto Meta real, UI/journey E2E, dataset y benchmark calibrado, observabilidad de costo/latencia, controles de datos/DPA/retención del proveedor y motor de escenario sobre baseline inmutable. El esquema y las migraciones visuales ya fueron verificados en Neon aislado. `store:false` no equivale a ZDR y `detail:original` requiere opt-in justificado. La revisión visual actual no muta `Task` ni crea todavía el forecast, deliberadamente.
 
 Contrato técnico y benchmark: [AI_VISUAL_EVALUATION.md](./AI_VISUAL_EVALUATION.md).
 

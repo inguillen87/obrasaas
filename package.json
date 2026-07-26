@@ -21,6 +21,7 @@
     "verify:progress-journal-migration": "node scripts/verify-progress-journal-migration.mjs",
     "verify:protected-upload-migration": "node scripts/verify-protected-upload-migration.mjs",
     "verify:visual-progress-migration": "node scripts/verify-visual-progress-migration.mjs",
+    "verify:schedule-snapshot-migration": "node scripts/verify-schedule-snapshot-migration.mjs",
     "verify:notification-outbox-migration": "node scripts/verify-notification-outbox-migration.mjs",
     "verify:notification-preferences-migration": "node scripts/verify-notification-preferences-migration.mjs",
     "verify:s6-migrations": "node scripts/verify-s6-migrations.mjs",

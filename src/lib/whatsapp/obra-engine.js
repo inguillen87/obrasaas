@@ -821,7 +821,7 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
         timeZone,
       },
     );
-    reply = "Evidencia recibida y registrada. Para vincularla a una tarea, respondé con el nombre de la tarea o su número.";
+    reply = "Evidencia recibida y guardada de forma privada. El equipo de gestión la vinculará desde la Bandeja a la tarea correcta; no actualicé el avance ni el Gantt.";
   } else if (event.kind === "audio") {
     const transcriptionCompleted = event.transcription?.status === "completed" && body;
     const transcriptionDisabled = event.transcription?.status === "disabled_by_tenant";

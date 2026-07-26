@@ -269,12 +269,15 @@ test("protected upload cron sanitizes thrown errors in responses and logs", asyn
   assert.equal(JSON.stringify(body).includes("private/path"), false);
 });
 
-test("vercel config schedules exactly one Hobby-compatible daily protected upload cron", async () => {
+test("vercel config schedules exactly one daily protected upload cron", async () => {
   const config = JSON.parse(await readFile(new URL("../vercel.json", import.meta.url), "utf8"));
+  const protectedUploadCrons = config.crons.filter(
+    (cron) => cron.path === "/api/cron/protected-uploads",
+  );
 
-  assert.deepEqual(config.crons, [{
+  assert.deepEqual(protectedUploadCrons, [{
     path: "/api/cron/protected-uploads",
     schedule: "17 3 * * *",
   }]);
-  assert.equal(config.crons[0].schedule.trim().split(/\s+/).length, 5);
+  assert.equal(protectedUploadCrons[0].schedule.trim().split(/\s+/).length, 5);
 });

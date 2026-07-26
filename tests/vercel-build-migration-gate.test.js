@@ -253,6 +253,7 @@ test("preview runner migrates before generating and building without a shell", a
       progressJournalVerifier: "progress-verifier",
       protectedUploadVerifier: "protected-upload-verifier",
       visualProgressVerifier: "visual-progress-verifier",
+      scheduleSnapshotVerifier: "schedule-snapshot-verifier",
     },
   });
 
@@ -264,6 +265,7 @@ test("preview runner migrates before generating and building without a shell", a
       ["progress-verifier"],
       ["protected-upload-verifier"],
       ["visual-progress-verifier"],
+      ["schedule-snapshot-verifier"],
       ["prisma-cli", "generate"],
       ["next-cli", "build"],
     ],
@@ -319,6 +321,19 @@ test("preview runner migrates before generating and building without a shell", a
     visualProgressVerificationCall.options.env.VISUAL_PROGRESS_MIGRATION_SCHEMA,
     "public",
   );
+  const scheduleSnapshotVerificationCall = calls[5];
+  assert.equal(
+    scheduleSnapshotVerificationCall.args[0],
+    "schedule-snapshot-verifier",
+  );
+  assert.equal(
+    scheduleSnapshotVerificationCall.options.env.SCHEDULE_SNAPSHOT_MIGRATION_DATABASE_URL,
+    PREVIEW_URL,
+  );
+  assert.equal(
+    scheduleSnapshotVerificationCall.options.env.SCHEDULE_SNAPSHOT_MIGRATION_SCHEMA,
+    "public",
+  );
 });
 
 test("authorized production runs migration verification before the build", async () => {
@@ -342,6 +357,7 @@ test("authorized production runs migration verification before the build", async
       progressJournalVerifier: "progress-verifier",
       protectedUploadVerifier: "protected-upload-verifier",
       visualProgressVerifier: "visual-progress-verifier",
+      scheduleSnapshotVerifier: "schedule-snapshot-verifier",
     },
   });
 
@@ -353,6 +369,7 @@ test("authorized production runs migration verification before the build", async
       ["progress-verifier"],
       ["protected-upload-verifier"],
       ["visual-progress-verifier"],
+      ["schedule-snapshot-verifier"],
       ["prisma-cli", "generate"],
       ["next-cli", "build"],
     ],
@@ -389,6 +406,14 @@ test("authorized production runs migration verification before the build", async
     calls[4].options.env.VISUAL_PROGRESS_MIGRATION_SCHEMA,
     "public",
   );
+  assert.equal(
+    calls[5].options.env.SCHEDULE_SNAPSHOT_MIGRATION_DATABASE_URL,
+    PRODUCTION_URL,
+  );
+  assert.equal(
+    calls[5].options.env.SCHEDULE_SNAPSHOT_MIGRATION_SCHEMA,
+    "public",
+  );
 });
 
 test("a rejected gate invokes no subprocess", async () => {
@@ -423,6 +448,7 @@ test("development runner skips migration and performs the normal build", async (
       progressJournalVerifier: "progress-verifier",
       protectedUploadVerifier: "protected-upload-verifier",
       visualProgressVerifier: "visual-progress-verifier",
+      scheduleSnapshotVerifier: "schedule-snapshot-verifier",
     },
   });
 

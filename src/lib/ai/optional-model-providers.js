@@ -20,8 +20,9 @@ const DEFAULT_TIMEOUT_MS = 55_000;
 const ZAI_VISION_MAX_BYTES = 5 * 1024 * 1024;
 const ZAI_OCR_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
 const ZAI_OCR_PDF_MAX_BYTES = 50 * 1024 * 1024;
-// The canonical layout_parsing API currently documents a 30-page window.
-const MAX_OCR_PAGES = 30;
+// ObraSaaS intentionally chunks OCR at 30 pages to bound cost and output.
+// This is an internal policy, not the provider's documented maximum.
+const OBRASAAS_OCR_CHUNK_MAX_PAGES = 30;
 const MAX_OCR_LAYOUT_ITEMS = 10_000;
 const MAX_OCR_LAYOUT_CHARACTERS = 2_000_000;
 const MAX_OCR_ITEM_CHARACTERS = 20_000;
@@ -338,7 +339,7 @@ function normalizeOcrLayout(value) {
   const pages = [];
   let remainingItems = MAX_OCR_LAYOUT_ITEMS;
   let remainingCharacters = MAX_OCR_LAYOUT_CHARACTERS;
-  for (const sourcePage of value.slice(0, MAX_OCR_PAGES)) {
+  for (const sourcePage of value.slice(0, OBRASAAS_OCR_CHUNK_MAX_PAGES)) {
     if (remainingItems === 0 || remainingCharacters === 0) break;
     const page = [];
     for (const item of Array.isArray(sourcePage) ? sourcePage : []) {
@@ -395,7 +396,7 @@ export async function extractDocumentWithGlmOcr({
     need_layout_visualization: false,
     user_id: pseudonymousUserId(organizationId, "zai-ocr"),
     ...(input.mimeType === "application/pdf"
-      ? { start_page_id: 0, end_page_id: MAX_OCR_PAGES - 1 }
+      ? { start_page_id: 0, end_page_id: OBRASAAS_OCR_CHUNK_MAX_PAGES - 1 }
       : {}),
   };
   const { result, requestId } = await fetchProviderJson({
@@ -422,7 +423,11 @@ export async function extractDocumentWithGlmOcr({
     usage: normalizeUsage(result.usage),
     input: { mimeType: input.mimeType, bytes: input.buffer.length, inputSha256 },
     pageWindow: input.mimeType === "application/pdf"
-      ? { startPageId: 0, endPageId: MAX_OCR_PAGES - 1, chunkingRequiredAbove: MAX_OCR_PAGES }
+      ? {
+        startPageId: 0,
+        endPageId: OBRASAAS_OCR_CHUNK_MAX_PAGES - 1,
+        chunkingRequiredAbove: OBRASAAS_OCR_CHUNK_MAX_PAGES,
+      }
       : null,
   };
 }
