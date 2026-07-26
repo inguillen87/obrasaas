@@ -158,6 +158,81 @@ test("an active exact-scope tenant connection sends with its tenant credential",
   );
 });
 
+test("tenant credential expiry fails closed at and after the exact boundary", async () => {
+  const requestedPhoneNumberId = "123456789012345";
+  const scope = { organizationId: "organization-a", projectId: "project-a" };
+  const now = new Date("2026-07-26T12:00:00.000Z");
+  const expiryBoundary = Math.floor(now.getTime() / 1_000);
+  const scenarios = [
+    { name: "exact boundary", expiresAt: expiryBoundary },
+    { name: "already expired", expiresAt: expiryBoundary - 1 },
+  ];
+
+  for (const scenario of scenarios) {
+    let fetchCalls = 0;
+    globalThis.__obraSaasPrisma = prismaForConnections([{
+      phoneNumberId: requestedPhoneNumberId,
+      projectId: scope.projectId,
+      project: { organizationId: scope.organizationId },
+      enabled: true,
+      connectionStatus: "CONNECTED",
+      encryptedAccessToken: "expired-token-must-not-be-decrypted",
+      metadata: { channelHealth: { expiresAt: scenario.expiresAt } },
+    }]);
+
+    await assert.rejects(
+      sendWhatsAppText({
+        to: "5491112345678",
+        text: `blocked-${scenario.name}`,
+        phoneNumberId: requestedPhoneNumberId,
+        scope,
+        now,
+        fetchImpl: async () => {
+          fetchCalls += 1;
+          return Response.json({ messages: [{ id: "must-not-send" }] });
+        },
+      }),
+      (error) => error?.code === "META_CREDENTIAL_EXPIRED"
+        && /credential has expired/.test(error.message),
+      scenario.name,
+    );
+    assert.equal(fetchCalls, 0, `${scenario.name} must fail before calling Meta`);
+  }
+});
+
+test("tenant credential remains usable while its persisted expiry is in the future", async () => {
+  const requestedPhoneNumberId = "123456789012345";
+  const scope = { organizationId: "organization-a", projectId: "project-a" };
+  const now = new Date("2026-07-26T12:00:00.000Z");
+  globalThis.__obraSaasPrisma = prismaForConnections([{
+    phoneNumberId: requestedPhoneNumberId,
+    projectId: scope.projectId,
+    project: { organizationId: scope.organizationId },
+    enabled: true,
+    connectionStatus: "CONNECTED",
+    encryptedAccessToken: encryptCredential("future-tenant-token"),
+    metadata: {
+      channelHealth: { expiresAt: Math.floor(now.getTime() / 1_000) + 1 },
+    },
+  }]);
+
+  let request = null;
+  const result = await sendWhatsAppText({
+    to: "5491112345678",
+    text: "Credential still current",
+    phoneNumberId: requestedPhoneNumberId,
+    scope,
+    now,
+    fetchImpl: async (url, options) => {
+      request = { url: new URL(url), options };
+      return Response.json({ messages: [{ id: "wamid.current-credential" }] });
+    },
+  });
+
+  assert.equal(result.messages[0].id, "wamid.current-credential");
+  assert.equal(request.options.headers.Authorization, "Bearer future-tenant-token");
+});
+
 test("global Meta credentials remain available only when no phone ID is requested", async () => {
   globalThis.__obraSaasPrisma = {
     whatsAppConnection: {

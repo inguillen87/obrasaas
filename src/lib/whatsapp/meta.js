@@ -375,7 +375,49 @@ function requireMetaTenantScope(scope) {
   return { organizationId, projectId };
 }
 
-async function requireMetaPhoneConfig(requestedPhoneNumberId, expectedScope) {
+function metaCredentialError(message, code) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
+
+function assertMetaCredentialIsCurrent(metadata, now = new Date()) {
+  const observedAt = now instanceof Date ? now : new Date(now);
+  if (!Number.isFinite(observedAt.getTime())) {
+    throw metaCredentialError(
+      "WhatsApp credential validation requires a valid clock value.",
+      "META_CREDENTIAL_CLOCK_INVALID",
+    );
+  }
+
+  const health = metadata && typeof metadata === "object" && !Array.isArray(metadata)
+    ? metadata.channelHealth
+    : null;
+  const rawExpiresAt = health && typeof health === "object" && !Array.isArray(health)
+    ? health.expiresAt ?? metadata.expiresAt
+    : metadata && typeof metadata === "object" && !Array.isArray(metadata)
+      ? metadata.expiresAt
+      : null;
+  if (rawExpiresAt === null || rawExpiresAt === undefined || rawExpiresAt === "") return;
+
+  const expiresAt = Number(rawExpiresAt);
+  if (!Number.isFinite(expiresAt) || expiresAt < 0) {
+    throw metaCredentialError(
+      "WhatsApp credential expiry metadata is invalid for this tenant project.",
+      "META_CREDENTIAL_EXPIRY_INVALID",
+    );
+  }
+  if (expiresAt > 0 && expiresAt * 1_000 <= observedAt.getTime()) {
+    throw metaCredentialError(
+      "WhatsApp credential has expired for this tenant project and phone number ID.",
+      "META_CREDENTIAL_EXPIRED",
+    );
+  }
+}
+
+async function requireMetaPhoneConfig(requestedPhoneNumberId, expectedScope, {
+  now = new Date(),
+} = {}) {
   const version = process.env.META_GRAPH_API_VERSION || "v25.0";
   const normalizedPhoneNumberId = requestedPhoneNumberId
     ? String(requestedPhoneNumberId).trim()
@@ -401,6 +443,7 @@ async function requireMetaPhoneConfig(requestedPhoneNumberId, expectedScope) {
         enabled: true,
         connectionStatus: true,
         encryptedAccessToken: true,
+        metadata: true,
         project: { select: { organizationId: true } },
       },
     });
@@ -412,6 +455,7 @@ async function requireMetaPhoneConfig(requestedPhoneNumberId, expectedScope) {
       && connection.connectionStatus === "CONNECTED"
       && connection.encryptedAccessToken
     ) {
+      assertMetaCredentialIsCurrent(connection.metadata, now);
       return {
         version,
         accessToken: decryptCredential(connection.encryptedAccessToken),
@@ -603,10 +647,12 @@ export async function sendWhatsAppText({
   phoneNumberId: requestedPhoneNumberId,
   scope,
   fetchImpl = fetch,
+  now = new Date(),
 }) {
   const { version, accessToken, phoneNumberId, appSecret } = await requireMetaPhoneConfig(
     requestedPhoneNumberId,
     scope,
+    { now },
   );
   const url = new URL(`https://graph.facebook.com/${version}/${phoneNumberId}/messages`);
   if (appSecret) {
