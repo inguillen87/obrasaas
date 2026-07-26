@@ -1733,27 +1733,35 @@ model DailyLog {
 }
 
 model ProgressEvidence {
-  id             String                 @id @default(cuid())
-  projectId      String
-  project        Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  taskId         String
-  task           Task                   @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict)
-  authorWorkerId String?
-  authorWorker   Worker?                @relation(fields: [projectId, authorWorkerId], references: [projectId, id], onDelete: Restrict)
-  capturedAt     DateTime
-  caption        String?                @db.Text
-  media          Json
-  latitude       Decimal?               @db.Decimal(10, 7)
-  longitude      Decimal?               @db.Decimal(10, 7)
-  accuracyMeters Decimal?               @db.Decimal(9, 2)
-  status         ProgressEvidenceStatus @default(PENDING)
-  reviewNote     String?                @db.Text
-  revision       Int                    @default(0)
-  reviewedAt     DateTime?
-  createdAt      DateTime               @default(now())
-  updatedAt      DateTime               @updatedAt
+  id                       String                 @id @default(cuid())
+  projectId                String
+  project                  Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  taskId                   String
+  task                     Task                   @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict)
+  authorWorkerId           String?
+  authorWorker             Worker?                @relation(fields: [projectId, authorWorkerId], references: [projectId, id], onDelete: Restrict)
+  sourceConversationId     String?
+  sourceConversation       Conversation?          @relation("ProgressEvidenceSourceConversation", fields: [projectId, sourceConversationId], references: [projectId, id], onDelete: NoAction, map: "ProgressEvidence_source_conversation_scope_fkey")
+  sourceMessageId          String?                @unique(map: "ProgressEvidence_sourceMessageId_key")
+  sourceMessage            Message?               @relation("ProgressEvidenceSourceMessage", fields: [sourceConversationId, sourceMessageId], references: [conversationId, id], onDelete: NoAction, map: "ProgressEvidence_source_message_scope_fkey")
+  sourceOperationKeyHash   String?                @db.Char(64)
+  sourceRequestFingerprint String?                @db.Char(64)
+  capturedAt               DateTime
+  caption                  String?                @db.Text
+  media                    Json
+  latitude                 Decimal?               @db.Decimal(10, 7)
+  longitude                Decimal?               @db.Decimal(10, 7)
+  accuracyMeters           Decimal?               @db.Decimal(9, 2)
+  status                   ProgressEvidenceStatus @default(PENDING)
+  reviewNote               String?                @db.Text
+  revision                 Int                    @default(0)
+  reviewedAt               DateTime?
+  createdAt                DateTime               @default(now())
+  updatedAt                DateTime               @updatedAt
 
   @@unique([projectId, id])
+  @@unique([projectId, sourceOperationKeyHash], map: "ProgressEvidence_project_operation_key")
+  @@unique([sourceConversationId, sourceMessageId], map: "ProgressEvidence_source_conversation_message_key")
   @@index([projectId, taskId, capturedAt])
   @@index([projectId, status, capturedAt])
 }
@@ -2128,12 +2136,14 @@ model Conversation {
   displayName             String?
   metadata                Json?
   messages                Message[]
+  progressEvidenceSources ProgressEvidence[]      @relation("ProgressEvidenceSourceConversation")
   readStates              ConversationReadState[]
   unreadTrackingStartedAt DateTime?
   createdAt               DateTime                @default(now())
   updatedAt               DateTime                @updatedAt
 
   @@unique([projectId, channel, externalId])
+  @@unique([projectId, id], map: "Conversation_projectId_id_key")
   @@index([projectId, channel, updatedAt, id])
 }
 
@@ -2152,20 +2162,22 @@ model ConversationReadState {
 }
 
 model Message {
-  id                String           @id @default(cuid())
-  conversationId    String
-  conversation      Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  externalId        String?          @unique
-  providerMessageId String?          @unique
-  direction         MessageDirection
-  kind              MessageKind      @default(TEXT)
-  body              String?
-  mediaUrl          String?
-  status            String?
-  metadata          Json?
-  sentAt            DateTime         @default(now())
-  createdAt         DateTime         @default(now())
+  id                     String            @id @default(cuid())
+  conversationId         String
+  conversation           Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  externalId             String?           @unique
+  providerMessageId      String?           @unique
+  direction              MessageDirection
+  kind                   MessageKind       @default(TEXT)
+  body                   String?
+  mediaUrl               String?
+  status                 String?
+  metadata               Json?
+  progressEvidenceSource ProgressEvidence? @relation("ProgressEvidenceSourceMessage")
+  sentAt                 DateTime          @default(now())
+  createdAt              DateTime          @default(now())
 
+  @@unique([conversationId, id], map: "Message_conversationId_id_key")
   @@index([conversationId, sentAt])
   @@index([conversationId, createdAt, id])
   @@index([conversationId, direction, createdAt, id])

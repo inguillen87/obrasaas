@@ -250,6 +250,7 @@ test("preview runner migrates before generating and building without a shell", a
       prisma: "prisma-cli",
       next: "next-cli",
       workerIdentityVerifier: "worker-verifier",
+      progressJournalVerifier: "progress-verifier",
     },
   });
 
@@ -258,6 +259,7 @@ test("preview runner migrates before generating and building without a shell", a
     [
       ["prisma-cli", "migrate", "deploy"],
       ["worker-verifier"],
+      ["progress-verifier"],
       ["prisma-cli", "generate"],
       ["next-cli", "build"],
     ],
@@ -275,6 +277,16 @@ test("preview runner migrates before generating and building without a shell", a
   );
   assert.equal(
     verificationCall.options.env.WORKER_IDENTITY_MIGRATION_SCHEMA,
+    "public",
+  );
+  const progressVerificationCall = calls[2];
+  assert.equal(progressVerificationCall.args[0], "progress-verifier");
+  assert.equal(
+    progressVerificationCall.options.env.PROGRESS_JOURNAL_MIGRATION_DATABASE_URL,
+    PREVIEW_URL,
+  );
+  assert.equal(
+    progressVerificationCall.options.env.PROGRESS_JOURNAL_MIGRATION_SCHEMA,
     "public",
   );
 });
@@ -297,6 +309,7 @@ test("authorized production runs migration verification before the build", async
       prisma: "prisma-cli",
       next: "next-cli",
       workerIdentityVerifier: "worker-verifier",
+      progressJournalVerifier: "progress-verifier",
     },
   });
 
@@ -305,6 +318,7 @@ test("authorized production runs migration verification before the build", async
     [
       ["prisma-cli", "migrate", "deploy"],
       ["worker-verifier"],
+      ["progress-verifier"],
       ["prisma-cli", "generate"],
       ["next-cli", "build"],
     ],
@@ -315,6 +329,14 @@ test("authorized production runs migration verification before the build", async
   );
   assert.equal(
     calls[1].options.env.WORKER_IDENTITY_MIGRATION_SCHEMA,
+    "public",
+  );
+  assert.equal(
+    calls[2].options.env.PROGRESS_JOURNAL_MIGRATION_DATABASE_URL,
+    PRODUCTION_URL,
+  );
+  assert.equal(
+    calls[2].options.env.PROGRESS_JOURNAL_MIGRATION_SCHEMA,
     "public",
   );
 });
@@ -348,6 +370,7 @@ test("development runner skips migration and performs the normal build", async (
       prisma: "prisma-cli",
       next: "next-cli",
       workerIdentityVerifier: "worker-verifier",
+      progressJournalVerifier: "progress-verifier",
     },
   });
 

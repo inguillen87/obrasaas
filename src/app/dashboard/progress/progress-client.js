@@ -1,15 +1,432 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import styles from './progress.module.css';
+import { useState } from "react";
+import styles from "./progress.module.css";
 
-async function api(path, options = {}) { const response = await fetch(path, { ...options, headers: { 'Content-Type': 'application/json', ...(options.headers || {}) } }); const body = await response.json().catch(() => ({})); if (!response.ok) { const error = new Error(body.error || 'No se pudo completar la operación.'); error.status = response.status; throw error; } return body; }
+async function api(path, options = {}) {
+  const response = await fetch(path, {
+    ...options,
+    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(body.error || "No se pudo completar la operación.");
+    error.status = response.status;
+    throw error;
+  }
+  return body;
+}
 
-export default function ProgressClient({ initialData, tasks, workers, permissions, projectName }) {
-  const [data, setData] = useState(initialData); const [title, setTitle] = useState(''); const [summary, setSummary] = useState(''); const [taskId, setTaskId] = useState(''); const [workDate, setWorkDate] = useState(new Date().toISOString().slice(0, 10)); const [authorWorkerId, setAuthorWorkerId] = useState(''); const [evidenceTaskId, setEvidenceTaskId] = useState(''); const [caption, setCaption] = useState(''); const [evidenceFile, setEvidenceFile] = useState(null); const [timelineKind, setTimelineKind] = useState(''); const [timelineStatus, setTimelineStatus] = useState(''); const [notice, setNotice] = useState(null); const [busy, setBusy] = useState(false);
-  async function createLog(event) { event.preventDefault(); setBusy(true); try { const result = await api('/api/progress', { method: 'POST', body: JSON.stringify({ kind: 'DAILY_LOG', title, summary, taskId: taskId || undefined, workDate, authorWorkerId: authorWorkerId || undefined }) }); setData((current) => ({ ...current, dailyLogs: [result.dailyLog, ...current.dailyLogs] })); setTitle(''); setSummary(''); setNotice('Bitácora guardada como borrador.'); } catch (error) { setNotice(error.message); } finally { setBusy(false); } }
-  async function createEvidence(event) { event.preventDefault(); if (!evidenceFile) { setNotice('Seleccioná una imagen, video o PDF.'); return; } setBusy(true); let uploadedMedia = null; try { const form = new FormData(); form.append('file', evidenceFile); const upload = await fetch('/api/progress/upload', { method: 'POST', body: form }); const uploaded = await upload.json(); if (!upload.ok) { const error = new Error(uploaded.error || 'No se pudo cargar la media.'); error.status = upload.status; throw error; } uploadedMedia = uploaded.media; const result = await api('/api/progress', { method: 'POST', body: JSON.stringify({ kind: 'EVIDENCE', taskId: evidenceTaskId, caption, media: uploadedMedia, capturedAt: new Date().toISOString(), authorWorkerId: authorWorkerId || undefined }) }); setData((current) => ({ ...current, evidence: [result.evidence, ...current.evidence] })); setCaption(''); setEvidenceFile(null); setNotice('Evidencia privada guardada para revisión humana.'); } catch (error) { if (uploadedMedia && error.status >= 400 && error.status < 500) { await fetch('/api/progress/upload', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ media: uploadedMedia }) }).catch(() => {}); } setNotice(error.message); } finally { setBusy(false); } }
-  async function review(item, kind, status) { setBusy(true); try { const result = await api(`/api/progress/${item.id}`, { method: 'PATCH', body: JSON.stringify({ kind, status, expectedRevision: item.revision }) }); setData((current) => ({ ...current, dailyLogs: kind === 'DAILY_LOG' ? current.dailyLogs.map((entry) => entry.id === item.id ? result.dailyLog : entry) : current.dailyLogs, evidence: kind === 'EVIDENCE' ? current.evidence.map((entry) => entry.id === item.id ? result.evidence : entry) : current.evidence })); } catch (error) { setNotice(error.message); } finally { setBusy(false); } }
-  async function reloadTimeline() { setBusy(true); try { const query = new URLSearchParams({ limit: '50' }); if (timelineKind) query.set('kind', timelineKind); if (timelineStatus) query.set('status', timelineStatus); const result = await api(`/api/progress?${query}`); setData((current) => ({ ...current, timeline: result.timeline, page: result.page })); } catch (error) { setNotice(error.message); } finally { setBusy(false); } }
-  return <main className={styles.shell}><header className={styles.hero}><div><span className={styles.eyebrow}>Avance verificable</span><h1>Bitácora y evidencia</h1><p>{projectName} · cada registro queda ligado a una tarea canónica y la evidencia requiere revisión humana.</p></div></header>{notice && <div className={styles.notice}>{notice}<button type="button" onClick={() => setNotice(null)}>×</button></div>}<div className={styles.grid}><section className={styles.panel}><h2>Nueva bitácora</h2>{permissions.canManage ? <form onSubmit={createLog}><input required value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Título" maxLength={220} /><textarea required value={summary} onChange={(event) => setSummary(event.target.value)} placeholder="Qué ocurrió hoy" maxLength={10000} /><div className={styles.row}><input type="date" required value={workDate} onChange={(event) => setWorkDate(event.target.value)} /><select value={taskId} onChange={(event) => setTaskId(event.target.value)}><option value="">Sin tarea</option>{tasks.map((task) => <option key={task.id} value={task.id}>{task.title}</option>)}</select></div><select value={authorWorkerId} onChange={(event) => setAuthorWorkerId(event.target.value)}><option value="">Autor opcional</option>{workers.map((worker) => <option key={worker.id} value={worker.id}>{worker.name}</option>)}</select><button disabled={busy} type="submit">Guardar borrador</button></form> : <p>Tu rol puede consultar registros, pero no crearlos.</p>}</section><section className={styles.panel}><h2>Nueva evidencia</h2>{permissions.canManage ? <form onSubmit={createEvidence}><select required value={evidenceTaskId} onChange={(event) => setEvidenceTaskId(event.target.value)}><option value="">Elegí tarea canónica</option>{tasks.map((task) => <option key={task.id} value={task.id}>{task.title}</option>)}</select><input type="file" required accept="image/jpeg,image/png,image/webp,video/mp4,application/pdf" onChange={(event) => setEvidenceFile(event.target.files?.[0] || null)} /><input value={caption} onChange={(event) => setCaption(event.target.value)} placeholder="Descripción breve" maxLength={2000} /><small>Media privada, límite 20 MB; el archivo no queda expuesto públicamente.</small><button disabled={busy} type="submit">Enviar a revisión</button></form> : <p>Tu rol puede consultar evidencia, pero no crearla.</p>}</section></div><section className={styles.panel}><h2>Bitácoras recientes</h2>{data.dailyLogs.length === 0 ? <p>No hay bitácoras.</p> : <ul>{data.dailyLogs.map((item) => <li key={item.id}><div><strong>{item.title}</strong><span>{item.workDate} · {item.status}</span><p>{item.summary}</p></div>{permissions.canManage && item.status !== 'APPROVED' && <div><button disabled={busy} onClick={() => review(item, 'DAILY_LOG', 'SUBMITTED')}>Enviar</button><button disabled={busy} onClick={() => review(item, 'DAILY_LOG', 'APPROVED')}>Aprobar</button></div>}</li>)}</ul>}</section><section className={styles.panel}><h2>Evidencia pendiente/revisada</h2>{data.evidence.length === 0 ? <p>No hay evidencia.</p> : <ul>{data.evidence.map((item) => <li key={item.id}><div><strong>{item.caption || 'Evidencia sin descripción'}</strong><span>{item.capturedAt} · {item.status}</span></div>{permissions.canManage && item.status === 'PENDING' && <div><button disabled={busy} onClick={() => review(item, 'EVIDENCE', 'APPROVED')}>Aprobar</button><button disabled={busy} onClick={() => review(item, 'EVIDENCE', 'REJECTED')}>Rechazar</button></div>}</li>)}</ul>}</section><section className={styles.panel}><div className={styles.timelineHead}><div><h2>Timeline operativo</h2><small>{data.page?.hasMore ? 'Hay más actividad histórica.' : 'Mostrando la actividad disponible.'}</small></div><div className={styles.filters}><select value={timelineKind} onChange={(event) => setTimelineKind(event.target.value)}><option value="">Todos los tipos</option><option value="DAILY_LOG">Bitácoras</option><option value="EVIDENCE">Evidencia</option><option value="BLOCKER">Blockers</option><option value="INCIDENT">Incidentes</option></select><select value={timelineStatus} onChange={(event) => setTimelineStatus(event.target.value)}><option value="">Todos los estados</option><option value="PENDING">Pendiente</option><option value="OPEN">Abierto</option><option value="APPROVED">Aprobado</option><option value="RESOLVED">Resuelto</option><option value="REJECTED">Rechazado</option></select><button disabled={busy} type="button" onClick={reloadTimeline}>Filtrar</button></div></div>{data.timeline?.length ? <ul>{data.timeline.map((item) => <li key={`${item.kind}-${item.id}`}><div><strong>{item.kind} · {item.title}</strong><span>{item.occurredAt || 'Sin fecha'} · {item.status}{item.severity ? ` · ${item.severity}` : ''}</span></div></li>)}</ul> : <p>No hay actividad operativa registrada.</p>}</section></main>;
+export default function ProgressClient({
+  initialData,
+  tasks,
+  workers,
+  permissions,
+  projectName,
+}) {
+  const [data, setData] = useState(initialData);
+  const [title, setTitle] = useState("");
+  const [summary, setSummary] = useState("");
+  const [taskId, setTaskId] = useState("");
+  const [workDate, setWorkDate] = useState(
+    new Date().toISOString().slice(0, 10),
+  );
+  const [authorWorkerId, setAuthorWorkerId] = useState("");
+  const [evidenceTaskId, setEvidenceTaskId] = useState("");
+  const [caption, setCaption] = useState("");
+  const [evidenceFile, setEvidenceFile] = useState(null);
+  const [timelineKind, setTimelineKind] = useState("");
+  const [timelineStatus, setTimelineStatus] = useState("");
+  const [notice, setNotice] = useState(null);
+  const [busy, setBusy] = useState(false);
+  async function createLog(event) {
+    event.preventDefault();
+    setBusy(true);
+    try {
+      const result = await api("/api/progress", {
+        method: "POST",
+        body: JSON.stringify({
+          kind: "DAILY_LOG",
+          title,
+          summary,
+          taskId: taskId || undefined,
+          workDate,
+          authorWorkerId: authorWorkerId || undefined,
+        }),
+      });
+      setData((current) => ({
+        ...current,
+        dailyLogs: [result.dailyLog, ...current.dailyLogs],
+      }));
+      setTitle("");
+      setSummary("");
+      setNotice("Bitácora guardada como borrador.");
+    } catch (error) {
+      setNotice(error.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function createEvidence(event) {
+    event.preventDefault();
+    if (!evidenceFile) {
+      setNotice("Seleccioná una imagen, video o PDF.");
+      return;
+    }
+    setBusy(true);
+    let uploadedMedia = null;
+    try {
+      const form = new FormData();
+      form.append("file", evidenceFile);
+      const upload = await fetch("/api/progress/upload", {
+        method: "POST",
+        body: form,
+      });
+      const uploaded = await upload.json();
+      if (!upload.ok) {
+        const error = new Error(
+          uploaded.error || "No se pudo cargar la media.",
+        );
+        error.status = upload.status;
+        throw error;
+      }
+      uploadedMedia = uploaded.media;
+      const result = await api("/api/progress", {
+        method: "POST",
+        body: JSON.stringify({
+          kind: "EVIDENCE",
+          taskId: evidenceTaskId,
+          caption,
+          media: uploadedMedia,
+          capturedAt: new Date().toISOString(),
+          authorWorkerId: authorWorkerId || undefined,
+        }),
+      });
+      setData((current) => ({
+        ...current,
+        evidence: [result.evidence, ...current.evidence],
+      }));
+      setCaption("");
+      setEvidenceFile(null);
+      setNotice("Evidencia privada guardada para revisión humana.");
+    } catch (error) {
+      if (uploadedMedia && error.status >= 400 && error.status < 500) {
+        await fetch("/api/progress/upload", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ media: uploadedMedia }),
+        }).catch(() => {});
+      }
+      setNotice(error.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function review(item, kind, status) {
+    setBusy(true);
+    try {
+      const result = await api(`/api/progress/${item.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ kind, status, expectedRevision: item.revision }),
+      });
+      setData((current) => ({
+        ...current,
+        dailyLogs:
+          kind === "DAILY_LOG"
+            ? current.dailyLogs.map((entry) =>
+                entry.id === item.id ? result.dailyLog : entry,
+              )
+            : current.dailyLogs,
+        evidence:
+          kind === "EVIDENCE"
+            ? current.evidence.map((entry) =>
+                entry.id === item.id ? result.evidence : entry,
+              )
+            : current.evidence,
+      }));
+    } catch (error) {
+      setNotice(error.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function reloadTimeline() {
+    setBusy(true);
+    try {
+      const query = new URLSearchParams({ limit: "50" });
+      if (timelineKind) query.set("kind", timelineKind);
+      if (timelineStatus) query.set("status", timelineStatus);
+      const result = await api(`/api/progress?${query}`);
+      setData((current) => ({
+        ...current,
+        timeline: result.timeline,
+        page: result.page,
+      }));
+    } catch (error) {
+      setNotice(error.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <main className={styles.shell}>
+      <header className={styles.hero}>
+        <div>
+          <span className={styles.eyebrow}>Avance verificable</span>
+          <h1>Bitácora y evidencia</h1>
+          <p>
+            {projectName} · cada registro queda ligado a una tarea canónica y la
+            evidencia requiere revisión humana.
+          </p>
+        </div>
+      </header>
+      {notice && (
+        <div className={styles.notice}>
+          {notice}
+          <button type="button" onClick={() => setNotice(null)}>
+            ×
+          </button>
+        </div>
+      )}
+      <div className={styles.grid}>
+        <section className={styles.panel}>
+          <h2>Nueva bitácora</h2>
+          {permissions.canManage ? (
+            <form onSubmit={createLog}>
+              <input
+                required
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                placeholder="Título"
+                maxLength={220}
+              />
+              <textarea
+                required
+                value={summary}
+                onChange={(event) => setSummary(event.target.value)}
+                placeholder="Qué ocurrió hoy"
+                maxLength={10000}
+              />
+              <div className={styles.row}>
+                <input
+                  type="date"
+                  required
+                  value={workDate}
+                  onChange={(event) => setWorkDate(event.target.value)}
+                />
+                <select
+                  value={taskId}
+                  onChange={(event) => setTaskId(event.target.value)}
+                >
+                  <option value="">Sin tarea</option>
+                  {tasks.map((task) => (
+                    <option key={task.id} value={task.id}>
+                      {task.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <select
+                value={authorWorkerId}
+                onChange={(event) => setAuthorWorkerId(event.target.value)}
+              >
+                <option value="">Autor opcional</option>
+                {workers.map((worker) => (
+                  <option key={worker.id} value={worker.id}>
+                    {worker.name}
+                  </option>
+                ))}
+              </select>
+              <button disabled={busy} type="submit">
+                Guardar borrador
+              </button>
+            </form>
+          ) : (
+            <p>Tu rol puede consultar registros, pero no crearlos.</p>
+          )}
+        </section>
+        <section className={styles.panel}>
+          <h2>Nueva evidencia</h2>
+          {permissions.canManage ? (
+            <form onSubmit={createEvidence}>
+              <select
+                required
+                value={evidenceTaskId}
+                onChange={(event) => setEvidenceTaskId(event.target.value)}
+              >
+                <option value="">Elegí tarea canónica</option>
+                {tasks.map((task) => (
+                  <option key={task.id} value={task.id}>
+                    {task.title}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="file"
+                required
+                accept="image/jpeg,image/png,image/webp,video/mp4,application/pdf"
+                onChange={(event) =>
+                  setEvidenceFile(event.target.files?.[0] || null)
+                }
+              />
+              <input
+                value={caption}
+                onChange={(event) => setCaption(event.target.value)}
+                placeholder="Descripción breve"
+                maxLength={2000}
+              />
+              <small>
+                Media privada, límite 20 MB; el archivo no queda expuesto
+                públicamente.
+              </small>
+              <button disabled={busy} type="submit">
+                Enviar a revisión
+              </button>
+            </form>
+          ) : (
+            <p>Tu rol puede consultar evidencia, pero no crearla.</p>
+          )}
+        </section>
+      </div>
+      <section className={styles.panel}>
+        <h2>Bitácoras recientes</h2>
+        {data.dailyLogs.length === 0 ? (
+          <p>No hay bitácoras.</p>
+        ) : (
+          <ul>
+            {data.dailyLogs.map((item) => (
+              <li key={item.id}>
+                <div>
+                  <strong>{item.title}</strong>
+                  <span>
+                    {item.workDate} · {item.status}
+                  </span>
+                  <p>{item.summary}</p>
+                </div>
+                {permissions.canManage && item.status !== "APPROVED" && (
+                  <div>
+                    <button
+                      disabled={busy}
+                      onClick={() => review(item, "DAILY_LOG", "SUBMITTED")}
+                    >
+                      Enviar
+                    </button>
+                    <button
+                      disabled={busy}
+                      onClick={() => review(item, "DAILY_LOG", "APPROVED")}
+                    >
+                      Aprobar
+                    </button>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+      <section className={styles.panel}>
+        <h2>Evidencia pendiente/revisada</h2>
+        {data.evidence.length === 0 ? (
+          <p>No hay evidencia.</p>
+        ) : (
+          <ul>
+            {data.evidence.map((item) => (
+              <li key={item.id}>
+                <div>
+                  <strong>{item.caption || "Evidencia sin descripción"}</strong>
+                  <span>
+                    {item.capturedAt} · {item.status}
+                    {item.source?.channel === "whatsapp" ? " · WhatsApp" : ""}
+                  </span>
+                  {item.attachment?.href && (
+                    <a
+                      className={styles.protectedLink}
+                      href={item.attachment.href}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Abrir archivo protegido
+                    </a>
+                  )}
+                </div>
+                {permissions.canManage && item.status === "PENDING" && (
+                  <div>
+                    <button
+                      disabled={busy}
+                      onClick={() => review(item, "EVIDENCE", "APPROVED")}
+                    >
+                      Aprobar
+                    </button>
+                    <button
+                      disabled={busy}
+                      onClick={() => review(item, "EVIDENCE", "REJECTED")}
+                    >
+                      Rechazar
+                    </button>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+      <section className={styles.panel}>
+        <div className={styles.timelineHead}>
+          <div>
+            <h2>Timeline operativo</h2>
+            <small>
+              {data.page?.hasMore
+                ? "Hay más actividad histórica."
+                : "Mostrando la actividad disponible."}
+            </small>
+          </div>
+          <div className={styles.filters}>
+            <select
+              value={timelineKind}
+              onChange={(event) => setTimelineKind(event.target.value)}
+            >
+              <option value="">Todos los tipos</option>
+              <option value="DAILY_LOG">Bitácoras</option>
+              <option value="EVIDENCE">Evidencia</option>
+              <option value="BLOCKER">Blockers</option>
+              <option value="INCIDENT">Incidentes</option>
+            </select>
+            <select
+              value={timelineStatus}
+              onChange={(event) => setTimelineStatus(event.target.value)}
+            >
+              <option value="">Todos los estados</option>
+              <option value="PENDING">Pendiente</option>
+              <option value="OPEN">Abierto</option>
+              <option value="APPROVED">Aprobado</option>
+              <option value="RESOLVED">Resuelto</option>
+              <option value="REJECTED">Rechazado</option>
+            </select>
+            <button disabled={busy} type="button" onClick={reloadTimeline}>
+              Filtrar
+            </button>
+          </div>
+        </div>
+        {data.timeline?.length ? (
+          <ul>
+            {data.timeline.map((item) => (
+              <li key={`${item.kind}-${item.id}`}>
+                <div>
+                  <strong>
+                    {item.kind} · {item.title}
+                  </strong>
+                  <span>
+                    {item.occurredAt || "Sin fecha"} · {item.status}
+                    {item.severity ? ` · ${item.severity}` : ""}
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p>No hay actividad operativa registrada.</p>
+        )}
+      </section>
+    </main>
+  );
 }

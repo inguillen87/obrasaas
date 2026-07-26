@@ -18,6 +18,9 @@ const PRISMA_DATABASE_ENVIRONMENTS = Object.freeze([
 const WORKER_IDENTITY_VERIFIER_PATH = fileURLToPath(
   new URL("./verify-worker-identity-migrations.mjs", import.meta.url),
 );
+const PROGRESS_JOURNAL_VERIFIER_PATH = fileURLToPath(
+  new URL("./verify-progress-journal-migration.mjs", import.meta.url),
+);
 
 export const PRODUCTION_DATABASE_IDENTITY_ENV =
   "OBRASAAS_PRODUCTION_DATABASE_IDENTITY_SHA256";
@@ -296,6 +299,7 @@ export async function runVercelBuild({
     prisma: require.resolve("prisma/build/index.js"),
     next: require.resolve("next/dist/bin/next"),
     workerIdentityVerifier: WORKER_IDENTITY_VERIFIER_PATH,
+    progressJournalVerifier: PROGRESS_JOURNAL_VERIFIER_PATH,
   },
 } = {}) {
   const plan = evaluateMigrationGate(environment);
@@ -320,10 +324,18 @@ export async function runVercelBuild({
       WORKER_IDENTITY_MIGRATION_DATABASE_URL:
         environment[plan.migrationDatabaseEnvironment],
       WORKER_IDENTITY_MIGRATION_SCHEMA: "public",
+      PROGRESS_JOURNAL_MIGRATION_DATABASE_URL:
+        environment[plan.migrationDatabaseEnvironment],
+      PROGRESS_JOURNAL_MIGRATION_SCHEMA: "public",
     };
     await runner(
       process.execPath,
       [cliPaths.workerIdentityVerifier],
+      { ...sharedOptions, env: verificationEnvironment },
+    );
+    await runner(
+      process.execPath,
+      [cliPaths.progressJournalVerifier],
       { ...sharedOptions, env: verificationEnvironment },
     );
   }
