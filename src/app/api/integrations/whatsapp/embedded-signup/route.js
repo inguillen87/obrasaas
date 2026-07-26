@@ -15,6 +15,7 @@ import {
   requestBodyErrorResponse,
 } from '@/lib/request-body';
 import {
+  buildDisabledWhatsAppConnectionData,
   completeEmbeddedSignup,
   mergeWhatsAppConnectionMetadata,
   MetaIntegrationError,
@@ -306,14 +307,7 @@ export async function DELETE(request) {
       connectionId: existing.id,
       leaseId: acquired.lease.id,
       requireActive: false,
-      buildConnectionData: () => ({
-        enabled: false,
-        connectionStatus: 'DISABLED',
-        encryptedAccessToken: null,
-        encryptedPin: null,
-        tokenLastFour: null,
-        lastError: null,
-      }),
+      buildConnectionData: buildDisabledWhatsAppConnectionData,
       createAuditLog: (tx) => tx.auditLog.create({
         data: {
           organizationId: access.organization.id,

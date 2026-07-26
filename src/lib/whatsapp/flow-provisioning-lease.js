@@ -6,7 +6,8 @@ export const WHATSAPP_FLOW_PROVISIONING_LEASE = Object.freeze({
   maxCasAttempts: 5,
 });
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const CONNECTION_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 const BLUEPRINT_KEY_PATTERN = /^[a-z][a-z0-9_.-]{0,63}$/;
 const META_RESOURCE_ID_PATTERN = /^\d{1,32}$/;
@@ -53,7 +54,8 @@ function storedMetadata(value) {
 }
 
 function validDate(value, name) {
-  const date = value instanceof Date ? new Date(value.getTime()) : new Date(value);
+  const date =
+    value instanceof Date ? new Date(value.getTime()) : new Date(value);
   if (Number.isNaN(date.getTime())) {
     throw leaseError(
       `Invalid WhatsApp Flow provisioning ${name}.`,
@@ -89,7 +91,9 @@ function normalizedBlueprintKey(value) {
 }
 
 function normalizedLeaseId(value) {
-  const id = String(value || "").trim().toLowerCase();
+  const id = String(value || "")
+    .trim()
+    .toLowerCase();
   if (!UUID_PATTERN.test(id)) {
     throw leaseError(
       "Invalid WhatsApp Flow provisioning lease identity.",
@@ -107,14 +111,15 @@ function hashEncryptedAccessToken(value) {
 function normalizedExpectedConnectionIdentity(value) {
   const phoneNumberId = String(value?.phoneNumberId || "").trim();
   const whatsappBusinessId = String(value?.whatsappBusinessId || "").trim();
-  const encryptedAccessToken = typeof value?.encryptedAccessToken === "string"
-    ? value.encryptedAccessToken
-    : "";
+  const encryptedAccessToken =
+    typeof value?.encryptedAccessToken === "string"
+      ? value.encryptedAccessToken
+      : "";
   if (
-    !META_RESOURCE_ID_PATTERN.test(phoneNumberId)
-    || !META_RESOURCE_ID_PATTERN.test(whatsappBusinessId)
-    || !encryptedAccessToken
-    || Buffer.byteLength(encryptedAccessToken, "utf8") > 131_072
+    !META_RESOURCE_ID_PATTERN.test(phoneNumberId) ||
+    !META_RESOURCE_ID_PATTERN.test(whatsappBusinessId) ||
+    !encryptedAccessToken ||
+    Buffer.byteLength(encryptedAccessToken, "utf8") > 131_072
   ) {
     throw leaseError(
       "Invalid WhatsApp connection identity snapshot.",
@@ -135,11 +140,13 @@ function normalizedConnectionIdentityFingerprint(value) {
   const whatsappBusinessId = String(value?.whatsappBusinessId || "").trim();
   const encryptedAccessTokenSha256 = String(
     value?.encryptedAccessTokenSha256 || "",
-  ).trim().toLowerCase();
+  )
+    .trim()
+    .toLowerCase();
   if (
-    !META_RESOURCE_ID_PATTERN.test(phoneNumberId)
-    || !META_RESOURCE_ID_PATTERN.test(whatsappBusinessId)
-    || !SHA256_PATTERN.test(encryptedAccessTokenSha256)
+    !META_RESOURCE_ID_PATTERN.test(phoneNumberId) ||
+    !META_RESOURCE_ID_PATTERN.test(whatsappBusinessId) ||
+    !SHA256_PATTERN.test(encryptedAccessTokenSha256)
   ) {
     throw leaseError(
       "Invalid WhatsApp connection identity fingerprint.",
@@ -159,19 +166,21 @@ function publicConnectionIdentity(identity) {
 }
 
 function connectionMatchesIdentity(connection, expected) {
-  return connection.phoneNumberId === expected.phoneNumberId
-    && connection.whatsappBusinessId === expected.whatsappBusinessId
-    && typeof connection.encryptedAccessToken === "string"
-    && hashEncryptedAccessToken(connection.encryptedAccessToken)
-      === expected.encryptedAccessTokenSha256;
+  return (
+    connection.phoneNumberId === expected.phoneNumberId &&
+    connection.whatsappBusinessId === expected.whatsappBusinessId &&
+    typeof connection.encryptedAccessToken === "string" &&
+    hashEncryptedAccessToken(connection.encryptedAccessToken) ===
+      expected.encryptedAccessTokenSha256
+  );
 }
 
 function connectionDelegate(prisma) {
   const delegate = prisma?.whatsAppConnection;
   if (
-    !delegate
-    || typeof delegate.findUnique !== "function"
-    || typeof delegate.updateMany !== "function"
+    !delegate ||
+    typeof delegate.findUnique !== "function" ||
+    typeof delegate.updateMany !== "function"
   ) {
     throw leaseError(
       "WhatsApp Flow provisioning lease persistence is unavailable.",
@@ -200,7 +209,9 @@ function leaseFromConnection(connection) {
   );
   return {
     id: normalizedLeaseId(connection.flowProvisioningLeaseId),
-    blueprintKey: normalizedBlueprintKey(connection.flowProvisioningBlueprintKey),
+    blueprintKey: normalizedBlueprintKey(
+      connection.flowProvisioningBlueprintKey,
+    ),
     acquiredAt,
     expiresAt,
   };
@@ -217,6 +228,7 @@ async function readConnection(delegate, connectionId) {
       phoneNumberId: true,
       whatsappBusinessId: true,
       encryptedAccessToken: true,
+      encryptedPin: true,
       flowProvisioningLeaseId: true,
       flowProvisioningBlueprintKey: true,
       flowProvisioningLeaseAcquiredAt: true,
@@ -240,7 +252,10 @@ async function readConnection(delegate, connectionId) {
 
 function activeLeaseRetryAfter(lease, now) {
   if (!lease || lease.expiresAt <= now) return null;
-  return Math.max(1, Math.ceil((lease.expiresAt.getTime() - now.getTime()) / 1_000));
+  return Math.max(
+    1,
+    Math.ceil((lease.expiresAt.getTime() - now.getTime()) / 1_000),
+  );
 }
 
 function publicLease(lease) {
@@ -313,9 +328,9 @@ export async function acquireWhatsAppConnectionLease(
   const acquiredAt = validDate(now, "clock");
   const leaseId = normalizedLeaseId(requestedLeaseId);
   if (
-    !Number.isSafeInteger(ttlMs)
-    || ttlMs < 1_000
-    || ttlMs > WHATSAPP_FLOW_PROVISIONING_LEASE.maxTtlMs
+    !Number.isSafeInteger(ttlMs) ||
+    ttlMs < 1_000 ||
+    ttlMs > WHATSAPP_FLOW_PROVISIONING_LEASE.maxTtlMs
   ) {
     throw leaseError(
       "Invalid WhatsApp Flow provisioning lease duration.",
@@ -324,18 +339,28 @@ export async function acquireWhatsAppConnectionLease(
     );
   }
   const expiresAt = new Date(acquiredAt.getTime() + ttlMs);
-  const lease = { id: leaseId, blueprintKey: operationKey, acquiredAt, expiresAt };
+  const lease = {
+    id: leaseId,
+    blueprintKey: operationKey,
+    acquiredAt,
+    expiresAt,
+  };
 
   const claimed = await delegate.updateMany({
     where: {
       id: connectionId,
       updatedAt: expectedUpdatedAt,
-      ...(requireActive ? { enabled: true, connectionStatus: "CONNECTED" } : {}),
-      ...(expectedConnectionIdentity ? {
-        phoneNumberId: expectedConnectionIdentity.phoneNumberId,
-        whatsappBusinessId: expectedConnectionIdentity.whatsappBusinessId,
-        encryptedAccessToken: expectedConnectionIdentity.encryptedAccessToken,
-      } : {}),
+      ...(requireActive
+        ? { enabled: true, connectionStatus: "CONNECTED" }
+        : {}),
+      ...(expectedConnectionIdentity
+        ? {
+            phoneNumberId: expectedConnectionIdentity.phoneNumberId,
+            whatsappBusinessId: expectedConnectionIdentity.whatsappBusinessId,
+            encryptedAccessToken:
+              expectedConnectionIdentity.encryptedAccessToken,
+          }
+        : {}),
       OR: [
         { flowProvisioningLeaseId: null },
         { flowProvisioningLeaseExpiresAt: { lte: acquiredAt } },
@@ -351,15 +376,12 @@ export async function acquireWhatsAppConnectionLease(
   const observed = await readConnection(delegate, connectionId);
   if (claimed.count === 1) {
     if (
-      observed.lease?.id === leaseId
-      && (!requireActive || (
-        observed.enabled === true
-        && observed.connectionStatus === "CONNECTED"
-      ))
-      && (!expectedConnectionIdentity || connectionMatchesIdentity(
-        observed,
-        expectedConnectionIdentity,
-      ))
+      observed.lease?.id === leaseId &&
+      (!requireActive ||
+        (observed.enabled === true &&
+          observed.connectionStatus === "CONNECTED")) &&
+      (!expectedConnectionIdentity ||
+        connectionMatchesIdentity(observed, expectedConnectionIdentity))
     ) {
       return {
         lease: publicLease(lease),
@@ -450,7 +472,11 @@ export async function commitWhatsAppConnectionLease(
     );
   }
 
-  for (let attempt = 0; attempt < WHATSAPP_FLOW_PROVISIONING_LEASE.maxCasAttempts; attempt += 1) {
+  for (
+    let attempt = 0;
+    attempt < WHATSAPP_FLOW_PROVISIONING_LEASE.maxCasAttempts;
+    attempt += 1
+  ) {
     const delegate = connectionDelegate(prisma);
     const observed = await readConnection(delegate, connectionId);
     if (observed.lease?.id !== leaseId) {
@@ -461,14 +487,11 @@ export async function commitWhatsAppConnectionLease(
       );
     }
     if (
-      (requireActive && (
-        observed.enabled !== true
-        || observed.connectionStatus !== "CONNECTED"
-      ))
-      || (expectedConnectionIdentity && !connectionMatchesIdentity(
-        observed,
-        expectedConnectionIdentity,
-      ))
+      (requireActive &&
+        (observed.enabled !== true ||
+          observed.connectionStatus !== "CONNECTED")) ||
+      (expectedConnectionIdentity &&
+        !connectionMatchesIdentity(observed, expectedConnectionIdentity))
     ) {
       throw leaseError(
         "WhatsApp connection changed during Flow provisioning.",
@@ -476,7 +499,9 @@ export async function commitWhatsAppConnectionLease(
         409,
       );
     }
-    const nextMutation = normalizedConnectionMutation(buildConnectionData(observed));
+    const nextMutation = normalizedConnectionMutation(
+      buildConnectionData(observed),
+    );
     const version = nextUpdatedAt(observed.updatedAt, requestedAt);
 
     const performUpdate = async (transaction) => {
@@ -507,10 +532,10 @@ export async function commitWhatsAppConnectionLease(
           503,
         );
       }
-      committed = await prisma.$transaction(
-        performUpdate,
-        { maxWait: 3_000, timeout: 5_000 },
-      );
+      committed = await prisma.$transaction(performUpdate, {
+        maxWait: 3_000,
+        timeout: 5_000,
+      });
     } else {
       committed = await performUpdate(prisma);
     }
@@ -534,11 +559,7 @@ export async function commitWhatsAppConnectionLease(
 
 export function commitWhatsAppFlowProvisioningLease(
   prisma,
-  {
-    buildMetadata,
-    expectedConnectionIdentity,
-    ...options
-  },
+  { buildMetadata, expectedConnectionIdentity, ...options },
 ) {
   if (typeof buildMetadata !== "function") {
     throw leaseError(
@@ -571,4 +592,5 @@ export async function releaseWhatsAppConnectionLease(
   return released.count === 1;
 }
 
-export const releaseWhatsAppFlowProvisioningLease = releaseWhatsAppConnectionLease;
+export const releaseWhatsAppFlowProvisioningLease =
+  releaseWhatsAppConnectionLease;
