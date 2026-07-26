@@ -291,7 +291,9 @@ async function assertValidatedConstraints(client) {
               constraint_record.contype, constraint_record.confdeltype,
               pg_get_constraintdef(constraint_record.oid, true) AS definition
          FROM pg_constraint AS constraint_record
-        WHERE constraint_record.conrelid = to_regclass(format('%I.%I', current_schema(), $1))
+        WHERE constraint_record.conrelid = to_regclass(
+                format('%I.%I', current_schema(), $1::text)
+              )
           AND constraint_record.conname = ANY($2::text[])`,
       [table, names],
     );
