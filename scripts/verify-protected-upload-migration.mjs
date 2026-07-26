@@ -525,7 +525,7 @@ async function assertForeignKeys(client) {
             constraint_record.confupdtype,
             constraint_record.confmatchtype,
             ARRAY(
-              SELECT source_attribute.attname
+              SELECT source_attribute.attname::text
                 FROM unnest(constraint_record.conkey) WITH ORDINALITY AS key_record(attnum, position)
                 JOIN pg_attribute AS source_attribute
                   ON source_attribute.attrelid = constraint_record.conrelid
@@ -533,7 +533,7 @@ async function assertForeignKeys(client) {
                ORDER BY key_record.position
             ) AS source_columns,
             ARRAY(
-              SELECT target_attribute.attname
+              SELECT target_attribute.attname::text
                 FROM unnest(constraint_record.confkey) WITH ORDINALITY AS key_record(attnum, position)
                 JOIN pg_attribute AS target_attribute
                   ON target_attribute.attrelid = constraint_record.confrelid
@@ -615,11 +615,11 @@ const INSERT_UPLOAD_SQL = `
   INSERT INTO "ProtectedUpload" (
     "id", "organizationId", "projectId", "actorId", "purpose", "status",
     "operationKeyHash", "requestFingerprint", "storageProvider", "storage",
-    "mimeType", "filename", "size", "sha256", "expiresAt", "updatedAt",
+    "mimeType", "filename", "size", "sha256", "expiresAt", "createdAt", "updatedAt",
     "uploadLeaseExpiresAt"
   ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb,
-    $11, $12, $13, $14, $15, $16, $17
+    $11, $12, $13, $14, $15, $16, $16, $17
   )`;
 
 async function assertTransactionalSmoke(client) {

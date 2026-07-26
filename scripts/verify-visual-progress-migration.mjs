@@ -129,8 +129,12 @@ const REQUIRED_TABLES = Object.freeze([
 
 const TEXT = Object.freeze({ nullable: 'NO', dataType: 'text', udtName: 'text' });
 const NULLABLE_TEXT = Object.freeze({ nullable: 'YES', dataType: 'text', udtName: 'text' });
-const INTEGER = Object.freeze({ nullable: 'NO', dataType: 'integer', udtName: 'int4' });
-const NULLABLE_INTEGER = Object.freeze({ nullable: 'YES', dataType: 'integer', udtName: 'int4' });
+const INTEGER = Object.freeze({
+  nullable: 'NO', dataType: 'integer', udtName: 'int4', numericPrecision: 32, numericScale: 0,
+});
+const NULLABLE_INTEGER = Object.freeze({
+  nullable: 'YES', dataType: 'integer', udtName: 'int4', numericPrecision: 32, numericScale: 0,
+});
 const NULLABLE_TIMESTAMP = Object.freeze({
   nullable: 'YES', dataType: 'timestamp without time zone', udtName: 'timestamp', datetimePrecision: 3,
 });
@@ -239,11 +243,13 @@ const EXPECTED_CHECKS = Object.freeze({
   ],
   VisualProgressAssessment_element_type_check: ['elementType'],
   VisualProgressAssessment_progress_range_check: [
-    'progressMin BETWEEN 0 AND 100',
-    'progressMax BETWEEN 0 AND 100',
+    'progressMin >= 0',
+    'progressMin <= 100',
+    'progressMax >= 0',
+    'progressMax <= 100',
     'progressMin <= progressMax',
   ],
-  VisualProgressAssessment_confidence_check: ['confidence BETWEEN 0 AND 1'],
+  VisualProgressAssessment_confidence_check: ['confidence >= 0', 'confidence <= 1'],
   VisualProgressAssessment_json_shape_check: [
     "jsonb_typeofquality = 'object'",
     "jsonb_typeofobservations = 'array'",
@@ -267,8 +273,10 @@ const EXPECTED_CHECKS = Object.freeze({
     "reviewStatus = 'PENDING'",
     "reviewStatus = 'APPROVED'",
     "reviewStatus = 'CORRECTED'",
-    'correctedProgressMin BETWEEN 0 AND 100',
-    'correctedProgressMax BETWEEN 0 AND 100',
+    'correctedProgressMin >= 0',
+    'correctedProgressMin <= 100',
+    'correctedProgressMax >= 0',
+    'correctedProgressMax <= 100',
     'correctedProgressMin <= correctedProgressMax',
     "reviewStatus = 'REJECTED'",
   ],
@@ -543,7 +551,7 @@ async function assertForeignKeys(client) {
             constraint_record.confupdtype,
             constraint_record.confmatchtype,
             ARRAY(
-              SELECT source_attribute.attname
+              SELECT source_attribute.attname::text
                 FROM unnest(constraint_record.conkey) WITH ORDINALITY AS key_record(attnum, position)
                 JOIN pg_attribute AS source_attribute
                   ON source_attribute.attrelid = constraint_record.conrelid
@@ -551,7 +559,7 @@ async function assertForeignKeys(client) {
                ORDER BY key_record.position
             ) AS source_columns,
             ARRAY(
-              SELECT target_attribute.attname
+              SELECT target_attribute.attname::text
                 FROM unnest(constraint_record.confkey) WITH ORDINALITY AS key_record(attnum, position)
                 JOIN pg_attribute AS target_attribute
                   ON target_attribute.attrelid = constraint_record.confrelid
@@ -620,15 +628,20 @@ const INSERT_ASSESSMENT_SQL = `
     "quality", "observations", "limitations", "providerResponseId",
     "failureCode", "completedAt", "requestedById", "reviewStatus",
     "reviewedById", "reviewedAt", "reviewNote", "correctedProgressMin",
-    "correctedProgressMax", "updatedAt"
+    "correctedProgressMax", "createdAt", "updatedAt"
   ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
     $14, $15, $16, $17, $18, $19, $20, $21, $22::jsonb, $23::jsonb,
-    $24::jsonb, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35
+    $24::jsonb, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $35
   )`;
+
+function jsonParameter(value) {
+  return value == null ? null : JSON.stringify(value);
+}
 
 function assessmentParameters(fixtures, overrides = {}) {
   const status = overrides.status || 'PENDING';
+  const recordedAt = overrides.updatedAt ?? overrides.completedAt ?? new Date();
   return [
     overrides.id || `vpa_${randomUUID()}`,
     overrides.projectId || fixtures.projectId,
@@ -651,9 +664,9 @@ function assessmentParameters(fixtures, overrides = {}) {
     overrides.progressMin ?? null,
     overrides.progressMax ?? null,
     overrides.confidence ?? null,
-    JSON.stringify(overrides.quality ?? null),
-    JSON.stringify(overrides.observations ?? null),
-    JSON.stringify(overrides.limitations ?? null),
+    jsonParameter(overrides.quality),
+    jsonParameter(overrides.observations),
+    jsonParameter(overrides.limitations),
     overrides.providerResponseId ?? null,
     overrides.failureCode ?? null,
     overrides.completedAt ?? null,
@@ -664,7 +677,7 @@ function assessmentParameters(fixtures, overrides = {}) {
     overrides.reviewNote ?? null,
     overrides.correctedProgressMin ?? null,
     overrides.correctedProgressMax ?? null,
-    overrides.updatedAt || new Date(),
+    recordedAt,
   ];
 }
 

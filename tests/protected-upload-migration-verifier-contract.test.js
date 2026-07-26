@@ -90,6 +90,8 @@ test('protected upload verifier governs ordered indexes and immediate RESTRICT f
 
   assert.match(verifier, /ProtectedUpload_project_scope_fkey:[\s\S]*target: 'Project'[\s\S]*deleteAction: 'r'/);
   assert.match(verifier, /ProtectedUpload_actorId_fkey:[\s\S]*deleteAction: 'r'/);
+  assert.match(verifier, /source_attribute\.attname::text/);
+  assert.match(verifier, /target_attribute\.attname::text/);
   assert.match(
     migration,
     /CONSTRAINT "ProtectedUpload_project_scope_fkey"[\s\S]*?ON DELETE RESTRICT ON UPDATE CASCADE/,
@@ -123,6 +125,7 @@ test('protected upload verifier runs rollback-only semantic fixtures', () => {
   assert.match(verifier, /ProtectedUpload AVAILABLE claim-field guard/);
   assert.match(verifier, /ProtectedUpload AVAILABLE delete-field guard/);
   assert.match(verifier, /ProtectedUpload maximum size guard/);
+  assert.match(verifier, /"expiresAt", "createdAt", "updatedAt"/);
   assert.match(verifier, /ProtectedUpload storage-provider binding/);
   assert.match(verifier, /ProtectedUpload cross-tenant project scope/);
   assert.match(verifier, /ProtectedUpload cross-project entity scope/);

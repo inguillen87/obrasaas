@@ -36,6 +36,7 @@ test('visual progress verifier catalogs the applied migration, exact enums and c
   assert.match(verifier, /FROM "_prisma_migrations"/);
   assert.match(verifier, /JOIN pg_enum/);
   assert.match(verifier, /FROM information_schema\.columns/);
+  assert.match(verifier, /dataType: 'integer', udtName: 'int4', numericPrecision: 32, numericScale: 0/);
   assert.match(verifier, /VisualProgressAssessmentStatus:[\s\S]*PENDING[\s\S]*RUNNING[\s\S]*COMPLETED[\s\S]*ABSTAINED[\s\S]*FAILED/);
   assert.match(verifier, /VisualProgressAssessmentReviewStatus:[\s\S]*PENDING[\s\S]*APPROVED[\s\S]*CORRECTED[\s\S]*REJECTED/);
 
@@ -77,6 +78,11 @@ test('visual progress verifier requires every lifecycle and review check to be v
   }
   assert.match(verifier, /constraint_record\.convalidated/);
   assert.match(verifier, /check\.convalidated === true/);
+  assert.match(verifier, /progressMin >= 0/);
+  assert.match(verifier, /progressMax <= 100/);
+  assert.match(verifier, /confidence >= 0/);
+  assert.match(verifier, /correctedProgressMin >= 0/);
+  assert.match(verifier, /correctedProgressMax <= 100/);
 });
 
 test('visual progress verifier governs all indexes and the exact open-evidence predicate', () => {
@@ -114,6 +120,8 @@ test('visual progress verifier requires scoped immediate foreign keys', () => {
   assert.match(verifier, /foreignKey\.contype === 'f' && foreignKey\.convalidated/);
   assert.match(verifier, /!foreignKey\.condeferrable && !foreignKey\.condeferred/);
   assert.match(verifier, /foreignKey\.confupdtype === 'c'/);
+  assert.match(verifier, /source_attribute\.attname::text/);
+  assert.match(verifier, /target_attribute\.attname::text/);
 });
 
 test('visual progress verifier smoke is semantic and rollback-only', () => {
@@ -130,6 +138,10 @@ test('visual progress verifier smoke is semantic and rollback-only', () => {
   assert.match(verifier, /VisualProgressAssessment cross-project task scope/);
   assert.match(verifier, /VisualProgressAssessment cross-project evidence scope/);
   assert.match(verifier, /VisualProgressAssessment requester retention policy/);
+  assert.match(verifier, /return value == null \? null : JSON\.stringify\(value\)/);
+  assert.match(verifier, /"correctedProgressMax", "createdAt", "updatedAt"/);
+  assert.match(verifier, /\$34, \$35, \$35/);
+  assert.match(verifier, /overrides\.updatedAt \?\? overrides\.completedAt \?\? new Date\(\)/);
   assert.match(verifier, /'23514'/);
   assert.match(verifier, /'23503'/);
   assert.match(verifier, /'23505'/);
