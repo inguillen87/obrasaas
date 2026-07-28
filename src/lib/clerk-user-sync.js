@@ -1,6 +1,7 @@
 import { systemRoleForVerifiedEmail } from './platform-identity.js';
 import {
   canUseClerkIdentitySyncLock,
+  clerkIdentityRuntimeLockKeys,
   isClerkIdentityTransaction,
   withClerkIdentitySyncLock,
 } from './clerk-identity-lock.js';
@@ -74,6 +75,9 @@ export async function syncPlatformUserFromClerk(
     return withClerkIdentitySyncLock(
       prisma,
       (transaction) => syncPlatformUserFromClerk(transaction, clerkUser, options),
+      {
+        identityKeys: clerkIdentityRuntimeLockKeys({ clerkUserId: clerkUser?.id }),
+      },
     );
   }
   const email = requireVerifiedClerkUser(clerkUser);
@@ -216,6 +220,9 @@ export async function preserveDeletedClerkUser(prisma, clerkUserId) {
     return withClerkIdentitySyncLock(
       prisma,
       (transaction) => preserveDeletedClerkUser(transaction, clerkUserId),
+      {
+        identityKeys: clerkIdentityRuntimeLockKeys({ clerkUserId }),
+      },
     );
   }
   const preserve = async (transaction) => {

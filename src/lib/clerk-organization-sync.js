@@ -4,6 +4,7 @@ import {
 } from './organization-policy.js';
 import {
   canUseClerkIdentitySyncLock,
+  clerkIdentityRuntimeLockKeys,
   isClerkIdentityTransaction,
   withClerkIdentitySyncLock,
 } from './clerk-identity-lock.js';
@@ -84,6 +85,11 @@ export async function syncClerkOrganization(
         allowRebind,
         expectedPreviousClerkOrganizationId,
       }),
+      {
+        identityKeys: clerkIdentityRuntimeLockKeys({
+          clerkOrganizationId: organization?.id,
+        }),
+      },
     );
   }
   if (!organization?.id) throw new Error('Clerk organization ID is required.');

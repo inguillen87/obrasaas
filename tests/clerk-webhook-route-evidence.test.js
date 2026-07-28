@@ -10,6 +10,7 @@ registerHooks({
       '@clerk/nextjs/webhooks': 'mock:clerk-webhooks',
       '@/lib/clerk-membership-state': 'mock:clerk-membership-state',
       '@/lib/clerk-membership-sync': 'mock:clerk-membership-sync',
+      '@/lib/clerk-identity-lock': 'mock:clerk-identity-lock',
       '@/lib/clerk-organization-sync': 'mock:clerk-organization-sync',
       '@/lib/clerk-user-sync': 'mock:clerk-user-sync',
       '@/lib/internal-organization': 'mock:internal-organization',
@@ -33,7 +34,33 @@ registerHooks({
         source: `
           export async function clerkClient() {
             globalThis.__clerkWebhookRouteState.effects.push('clerkClient');
-            return {};
+            return globalThis.__clerkWebhookRouteState.clerk || { organizations: {} };
+          }
+        `,
+      };
+    }
+    if (url === 'mock:clerk-identity-lock') {
+      return {
+        format: 'module',
+        shortCircuit: true,
+        source: `
+          export function clerkIdentityRuntimeLockKeys(identity) {
+            return [
+              identity.clerkOrganizationId && 'org:' + identity.clerkOrganizationId,
+              identity.clerkUserId && 'user:' + identity.clerkUserId,
+              identity.clerkOrganizationId && identity.clerkUserId
+                && 'membership:' + identity.clerkOrganizationId + ':' + identity.clerkUserId,
+            ].filter(Boolean);
+          }
+          export async function withClerkIdentitySyncLock(database, callback, options = {}) {
+            const state = globalThis.__clerkWebhookRouteState;
+            state.effects.push('identity-lock:start');
+            state.effects.push('identity-lock:keys:' + options.identityKeys.join(','));
+            try {
+              return await callback(state.identityTransaction || database);
+            } finally {
+              state.effects.push('identity-lock:end');
+            }
           }
         `,
       };
@@ -86,8 +113,12 @@ registerHooks({
         format: 'module',
         shortCircuit: true,
         source: `
-          export async function disableDeletedClerkTenantMembership() {}
-          export async function persistClerkTenantMembership() {}
+          export async function disableDeletedClerkTenantMembership() {
+            globalThis.__clerkWebhookRouteState.effects.push('membership:disable');
+          }
+          export async function persistClerkTenantMembership() {
+            globalThis.__clerkWebhookRouteState.effects.push('membership:persist');
+          }
         `,
       };
     }
@@ -111,7 +142,11 @@ registerHooks({
         shortCircuit: true,
         source: `
           export class ClerkMembershipStatePendingError extends Error {}
-          export async function getCurrentClerkOrganizationMembership() { return null; }
+          export async function getCurrentClerkOrganizationMembership() {
+            const state = globalThis.__clerkWebhookRouteState;
+            state.effects.push('clerk:membership-read');
+            return state.currentClerkMembership || null;
+          }
           export function resolveClerkMembershipEventState() { return { active: false }; }
           export function resolveClerkTenantRole() { return 'AUDITOR'; }
         `,
@@ -146,11 +181,13 @@ function databaseDouble() {
     },
     webhookEvent: {
       async createMany({ data }) {
+        globalThis.__clerkWebhookRouteState.effects.push('claim:create');
         if (record) return { count: 0 };
         record = { id: 'event-db', ...data[0] };
         return { count: 1 };
       },
       async updateMany({ where, data }) {
+        globalThis.__clerkWebhookRouteState.effects.push('claim:' + data.status);
         if (!record || record.provider !== where.provider || record.externalId !== where.externalId) {
           return { count: 0 };
         }
@@ -173,6 +210,7 @@ function databaseDouble() {
         return { count: 1 };
       },
       async findUnique() {
+        globalThis.__clerkWebhookRouteState.effects.push('claim:read');
         return record ? { ...record } : null;
       },
     },
@@ -253,9 +291,15 @@ test('Clerk route verifies a rebuilt bounded request and redacts only after comp
     assert.deepEqual(state.effects, [
       'verify',
       'prisma',
-      'prisma',
+      'claim:create',
+      'claim:PROCESSING',
+      'claim:read',
+      'identity-lock:start',
+      'identity-lock:keys:user:user_a',
       'clerkClient',
       'preserve:user_a',
+      'identity-lock:end',
+      'claim:PROCESSED',
     ]);
     assert.equal(state.database.record.status, 'PROCESSED');
     assert.deepEqual(state.database.record.payload, {
@@ -281,7 +325,77 @@ test('Clerk route verifies a rebuilt bounded request and redacts only after comp
     assert.equal(replayResponse.status, 200);
     assert.equal(state.database.record.attempts, 1);
     assert.deepEqual(state.database.record.payload, completedPayload);
-    assert.deepEqual(state.effects.slice(-2), ['verify', 'prisma']);
+    assert.deepEqual(state.effects.slice(-5), [
+      'verify',
+      'prisma',
+      'claim:create',
+      'claim:PROCESSING',
+      'claim:read',
+    ]);
+    assert.equal(state.effects.filter((effect) => effect === 'identity-lock:start').length, 1);
+  })
+));
+
+test('membership BAPI snapshot and database mutation stay inside one shared identity lock', () => (
+  withRouteState({}, async (state) => {
+    const response = await POST(webhookRequest(JSON.stringify({
+      instance_id: 'ins_Development123',
+      type: 'organizationMembership.deleted',
+      data: {
+        organization: { id: 'org_a' },
+        public_user_data: { user_id: 'user_a' },
+      },
+    })));
+
+    assert.equal(response.status, 200);
+    const lockStart = state.effects.indexOf('identity-lock:start');
+    const runtimeLocks = state.effects.indexOf(
+      'identity-lock:keys:org:org_a,user:user_a,membership:org_a:user_a',
+    );
+    const clerkRead = state.effects.indexOf('clerk:membership-read');
+    const databaseWrite = state.effects.indexOf('membership:disable');
+    const lockEnd = state.effects.indexOf('identity-lock:end');
+    assert.ok(lockStart > state.effects.indexOf('claim:read'));
+    assert.ok(runtimeLocks > lockStart);
+    assert.ok(clerkRead > runtimeLocks);
+    assert.ok(databaseWrite > clerkRead);
+    assert.ok(lockEnd > databaseWrite);
+    assert.ok(state.effects.indexOf('claim:PROCESSED') > lockEnd);
+  })
+));
+
+test('organization deletion reads and suspends the tenant inside the shared identity lock', () => (
+  withRouteState({}, async (state) => {
+    state.identityTransaction = {
+      organization: {
+        async findUnique() {
+          state.effects.push('organization:find');
+          return { id: 'database_org', metadata: { source: 'existing' } };
+        },
+        async update() {
+          state.effects.push('organization:suspend');
+          return { id: 'database_org' };
+        },
+      },
+    };
+    const response = await POST(webhookRequest(JSON.stringify({
+      instance_id: 'ins_Development123',
+      type: 'organization.deleted',
+      data: { id: 'org_a' },
+    })));
+
+    assert.equal(response.status, 200);
+    const claim = state.effects.indexOf('claim:read');
+    const lockStart = state.effects.indexOf('identity-lock:start');
+    const organizationRead = state.effects.indexOf('organization:find');
+    const organizationWrite = state.effects.indexOf('organization:suspend');
+    const lockEnd = state.effects.indexOf('identity-lock:end');
+    const completion = state.effects.indexOf('claim:PROCESSED');
+    assert.ok(lockStart > claim);
+    assert.ok(organizationRead > lockStart);
+    assert.ok(organizationWrite > organizationRead);
+    assert.ok(lockEnd > organizationWrite);
+    assert.ok(completion > lockEnd);
   })
 ));
 

@@ -32,6 +32,10 @@ import {
 } from '@/lib/clerk-membership-state';
 import { internalOrganizationMembershipAllowed } from '@/lib/internal-organization';
 import {
+  clerkIdentityRuntimeLockKeys,
+  withClerkIdentitySyncLock,
+} from '@/lib/clerk-identity-lock';
+import {
   CLERK_WEBHOOK_MAX_BODY_BYTES,
   ClerkWebhookEvidenceError,
   claimClerkWebhookEvent,
@@ -51,8 +55,23 @@ async function syncOrganization(prisma, organization) {
   return syncClerkOrganization(prisma, { organization });
 }
 
-async function processEvent(event) {
-  const prisma = getPrisma();
+function webhookIdentityLockKeys(event) {
+  if (event.type.startsWith('user.')) {
+    return clerkIdentityRuntimeLockKeys({ clerkUserId: event.data.id });
+  }
+  if (event.type.startsWith('organizationMembership.')) {
+    return clerkIdentityRuntimeLockKeys({
+      clerkOrganizationId: event.data.organization?.id,
+      clerkUserId: event.data.public_user_data?.user_id,
+    });
+  }
+  if (event.type.startsWith('organization.')) {
+    return clerkIdentityRuntimeLockKeys({ clerkOrganizationId: event.data.id });
+  }
+  return [];
+}
+
+async function processEvent(event, prisma) {
   const clerk = await clerkClient();
 
   if (event.type === 'user.created' || event.type === 'user.updated') {
@@ -247,7 +266,11 @@ export async function POST(request) {
   }
 
   try {
-    await processEvent(claim.event.payload);
+    await withClerkIdentitySyncLock(
+      prisma,
+      (transaction) => processEvent(claim.event.payload, transaction),
+      { identityKeys: webhookIdentityLockKeys(claim.event.payload) },
+    );
     const completed = await completeClerkWebhookEvent(prisma, {
       eventId,
       leaseToken: claim.leaseToken,

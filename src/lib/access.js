@@ -39,7 +39,10 @@ import {
   internalOrganizationClerkContext,
   platformOrganizationMode,
 } from '@/lib/internal-organization';
-import { withClerkIdentitySyncLock } from '@/lib/clerk-identity-lock';
+import {
+  clerkIdentityRuntimeLockKeys,
+  withClerkIdentitySyncLock,
+} from '@/lib/clerk-identity-lock';
 
 export { SUPERADMIN_EMAIL };
 
@@ -54,13 +57,20 @@ export class AccessError extends Error {
   }
 }
 
-async function ensureTenantOrganization({ prisma, clerk, orgId, orgSlug }) {
+async function ensureTenantOrganization({
+  prisma,
+  clerk,
+  orgId,
+  orgSlug,
+  internalClerkOrgId,
+}) {
   const clerkOrganization = await clerk.organizations.getOrganization({
     organizationId: orgId,
   });
   return syncClerkOrganization(prisma, {
     organization: clerkOrganization,
     orgSlug,
+    internalClerkOrgId,
     trialDays: TRIAL_DAYS,
   });
 }
@@ -134,6 +144,192 @@ export async function resolveActiveProject(
   return ensureDefaultProject(prisma, access);
 }
 
+export async function resolveLockedPlatformIdentity({
+  prisma,
+  clerk,
+  session,
+  internalClerkOrgId = process.env.OBRASAAS_INTERNAL_CLERK_ORG_ID || null,
+}) {
+  return withClerkIdentitySyncLock(
+    prisma,
+    async (database) => {
+      const clerkUser = await clerk.users.getUser(session.userId);
+      const user = await syncPlatformUserFromClerk(database, clerkUser, {
+        touchLastSeenAt: true,
+      });
+      const email = user.primaryEmail;
+      const isSuperadmin = isSuperadminEmail(email);
+      const organizationMode = platformOrganizationMode({
+        isSuperadmin,
+        sessionOrganizationId: session.orgId,
+        internalClerkOrganizationId: internalClerkOrgId,
+      });
+      if (organizationMode === 'forbidden') {
+        throw new AccessError('The internal ObraSaaS workspace is reserved for the canonical superadmin.', {
+          code: 'INTERNAL_ORGANIZATION_FORBIDDEN',
+          status: 403,
+        });
+      }
+
+      let organization = null;
+      let membership = null;
+      let membershipMissing = false;
+      if (organizationMode === 'internal') {
+        organization = await ensureInternalOrganization(database, {
+          configuredClerkOrganizationId: internalClerkOrgId,
+        });
+      } else if (organizationMode === 'tenant') {
+        organization = await ensureTenantOrganization({
+          prisma: database,
+          clerk,
+          orgId: session.orgId,
+          orgSlug: session.orgSlug,
+          internalClerkOrgId,
+        });
+        if (!internalOrganizationMembershipAllowed(organization, email)) {
+          throw new AccessError('The internal ObraSaaS workspace is reserved for the canonical superadmin.', {
+            code: 'INTERNAL_ORGANIZATION_FORBIDDEN',
+            status: 403,
+          });
+        }
+
+        const [boundOrganization, boundUser, currentMembership] = await Promise.all([
+          database.organization.findUnique({
+            where: { id: organization.id },
+            select: { clerkOrganizationId: true },
+          }),
+          database.platformUser.findUnique({
+            where: { id: user.id },
+            select: { clerkUserId: true },
+          }),
+          database.tenantMembership.findUnique({
+            where: {
+              organizationId_userId: {
+                organizationId: organization.id,
+                userId: user.id,
+              },
+            },
+          }),
+        ]);
+        if (
+          boundOrganization?.clerkOrganizationId !== session.orgId
+          || boundUser?.clerkUserId !== session.userId
+        ) {
+          throw new AccessError('Clerk identity changed while resolving the active organization.', {
+            code: 'CLERK_IDENTITY_STALE',
+            status: 409,
+          });
+        }
+
+        const currentClerkMembership = await getCurrentClerkOrganizationMembership(
+          clerk.organizations,
+          {
+            organizationId: session.orgId,
+            userId: session.userId,
+          },
+        );
+        if (!currentClerkMembership) {
+          await disableDeletedClerkTenantMembership(database, {
+            clerkOrganizationId: session.orgId,
+            clerkUserId: session.userId,
+            eventType: 'session.membership_missing',
+          });
+          membershipMissing = true;
+        } else {
+          const startsNewLifecycle = !currentMembership || currentMembership.status !== 'ACTIVE';
+          let invitedTenantRole = null;
+          if (startsNewLifecycle && currentClerkMembership.role !== 'org:admin') {
+            try {
+              const acceptedInvitations = await clerk.organizations.getOrganizationInvitationList({
+                organizationId: session.orgId,
+                status: ['accepted'],
+                limit: 100,
+              });
+              invitedTenantRole = acceptedInvitationRole(acceptedInvitations.data, email);
+            } catch {
+              console.error('Accepted Clerk invitation lookup failed; using least privilege.');
+            }
+          }
+          const resolvedClerkRole = currentClerkMembership.role || 'org:member';
+          const resolvedTenantRole = resolveClerkTenantRole({
+            clerkRole: resolvedClerkRole,
+            databaseMembership: currentMembership,
+            clerkMembership: currentClerkMembership,
+            invitedTenantRole,
+          });
+          const resolvedMembership = await database.tenantMembership.upsert({
+            where: {
+              organizationId_userId: {
+                organizationId: organization.id,
+                userId: user.id,
+              },
+            },
+            update: {
+              clerkRole: resolvedClerkRole,
+              tenantRole: resolvedTenantRole,
+              status: 'ACTIVE',
+            },
+            create: {
+              organizationId: organization.id,
+              userId: user.id,
+              clerkRole: resolvedClerkRole,
+              tenantRole: resolvedTenantRole,
+            },
+          });
+          const resetProjectAccess = currentMembership && (
+            membershipTransitionRequiresProjectAccessReset({
+              previousTenantRole: currentMembership.tenantRole,
+              nextTenantRole: resolvedTenantRole,
+              previousStatus: currentMembership.status,
+              nextStatus: 'ACTIVE',
+            })
+          );
+          if (resetProjectAccess) {
+            const reset = await resetTenantMembershipProjectAccess(
+              database,
+              resolvedMembership.id,
+            );
+            await database.auditLog.create({
+              data: {
+                organizationId: organization.id,
+                actorId: user.id,
+                action: 'tenant.membership.project_access_reset',
+                entityType: 'TenantMembership',
+                entityId: resolvedMembership.id,
+                metadata: {
+                  source: 'session_membership_sync',
+                  previousRole: currentMembership.tenantRole,
+                  nextRole: resolvedTenantRole,
+                  previousStatus: currentMembership.status,
+                  nextStatus: 'ACTIVE',
+                  resetProjectAccessCount: reset.count,
+                },
+              },
+            });
+          }
+          membership = resolvedMembership;
+        }
+      }
+
+      return {
+        user,
+        email,
+        isSuperadmin,
+        systemRole: user.systemRole,
+        organization,
+        membership,
+        membershipMissing,
+      };
+    },
+    {
+      identityKeys: clerkIdentityRuntimeLockKeys({
+        clerkUserId: session.userId,
+        clerkOrganizationId: session.orgId,
+      }),
+    },
+  );
+}
+
 const resolvePlatformAccess = cache(async () => {
   const session = await auth();
   if (!session.userId) {
@@ -144,11 +340,10 @@ const resolvePlatformAccess = cache(async () => {
   }
 
   const clerk = await clerkClient();
-  const clerkUser = await clerk.users.getUser(session.userId);
   const prisma = getPrisma();
-  let user;
+  let identity;
   try {
-    user = await syncPlatformUserFromClerk(prisma, clerkUser, { touchLastSeenAt: true });
+    identity = await resolveLockedPlatformIdentity({ prisma, clerk, session });
   } catch (error) {
     if (error instanceof ClerkVerifiedEmailRequiredError) {
       throw new AccessError('A verified primary email is required.', {
@@ -158,167 +353,23 @@ const resolvePlatformAccess = cache(async () => {
     }
     throw error;
   }
-  const email = user.primaryEmail;
-  const isSuperadmin = isSuperadminEmail(email);
-  const systemRole = user.systemRole;
-
-  let organization = null;
-  let project = null;
-  let membership = null;
-  const organizationMode = platformOrganizationMode({
+  const {
+    user,
+    email,
     isSuperadmin,
-    sessionOrganizationId: session.orgId,
-    internalClerkOrganizationId: process.env.OBRASAAS_INTERNAL_CLERK_ORG_ID || null,
-  });
-  if (organizationMode === 'forbidden') {
-    throw new AccessError('The internal ObraSaaS workspace is reserved for the canonical superadmin.', {
-      code: 'INTERNAL_ORGANIZATION_FORBIDDEN',
+    systemRole,
+    organization,
+    membership,
+    membershipMissing,
+  } = identity;
+  if (membershipMissing) {
+    throw new AccessError('The active Clerk organization membership no longer exists.', {
+      code: 'ORGANIZATION_MEMBERSHIP_REQUIRED',
       status: 403,
     });
   }
-  if (organizationMode === 'internal') {
-    organization = await ensureInternalOrganization(prisma);
-  } else if (organizationMode === 'tenant') {
-    organization = await ensureTenantOrganization({
-      prisma,
-      clerk,
-      orgId: session.orgId,
-      orgSlug: session.orgSlug,
-    });
-    if (!internalOrganizationMembershipAllowed(organization, email)) {
-      throw new AccessError('The internal ObraSaaS workspace is reserved for the canonical superadmin.', {
-        code: 'INTERNAL_ORGANIZATION_FORBIDDEN',
-        status: 403,
-      });
-    }
-    const currentMembership = await prisma.tenantMembership.findUnique({
-      where: {
-        organizationId_userId: {
-          organizationId: organization.id,
-          userId: user.id,
-        },
-      },
-    });
-    const currentClerkMembership = await getCurrentClerkOrganizationMembership(
-      clerk.organizations,
-      {
-        organizationId: session.orgId,
-        userId: session.userId,
-      },
-    );
-    if (!currentClerkMembership) {
-      await disableDeletedClerkTenantMembership(prisma, {
-        clerkOrganizationId: session.orgId,
-        clerkUserId: session.userId,
-        eventType: 'session.membership_missing',
-      });
-      throw new AccessError('The active Clerk organization membership no longer exists.', {
-        code: 'ORGANIZATION_MEMBERSHIP_REQUIRED',
-        status: 403,
-      });
-    }
-    const startsNewLifecycle = !currentMembership || currentMembership.status !== 'ACTIVE';
-    let invitedTenantRole = null;
-    if (startsNewLifecycle && currentClerkMembership.role !== 'org:admin') {
-      try {
-        const acceptedInvitations = await clerk.organizations.getOrganizationInvitationList({
-          organizationId: session.orgId,
-          status: ['accepted'],
-          limit: 100,
-        });
-        invitedTenantRole = acceptedInvitationRole(acceptedInvitations.data, email);
-      } catch (error) {
-        console.error('Accepted Clerk invitation lookup failed; using least privilege:', error);
-      }
-    }
-    const resolvedClerkRole = currentClerkMembership.role || 'org:member';
-    membership = await withClerkIdentitySyncLock(prisma, async (database) => {
-      const [boundOrganization, boundUser, lockedCurrentMembership] = await Promise.all([
-        database.organization.findUnique({
-          where: { id: organization.id },
-          select: { clerkOrganizationId: true },
-        }),
-        database.platformUser.findUnique({
-          where: { id: user.id },
-          select: { clerkUserId: true },
-        }),
-        database.tenantMembership.findUnique({
-          where: {
-            organizationId_userId: {
-              organizationId: organization.id,
-              userId: user.id,
-            },
-          },
-        }),
-      ]);
-      if (
-        boundOrganization?.clerkOrganizationId !== session.orgId
-        || boundUser?.clerkUserId !== session.userId
-      ) {
-        throw new AccessError('Clerk identity changed while resolving the active organization.', {
-          code: 'CLERK_IDENTITY_STALE',
-          status: 409,
-        });
-      }
-      const resolvedTenantRole = resolveClerkTenantRole({
-        clerkRole: resolvedClerkRole,
-        databaseMembership: lockedCurrentMembership,
-        clerkMembership: currentClerkMembership,
-        invitedTenantRole,
-      });
-      const resolvedMembership = await database.tenantMembership.upsert({
-        where: {
-          organizationId_userId: {
-            organizationId: organization.id,
-            userId: user.id,
-          },
-        },
-        update: {
-          clerkRole: resolvedClerkRole,
-          tenantRole: resolvedTenantRole,
-          status: 'ACTIVE',
-        },
-        create: {
-          organizationId: organization.id,
-          userId: user.id,
-          clerkRole: resolvedClerkRole,
-          tenantRole: resolvedTenantRole,
-        },
-      });
-      const resetProjectAccess = lockedCurrentMembership && (
-        membershipTransitionRequiresProjectAccessReset({
-          previousTenantRole: lockedCurrentMembership.tenantRole,
-          nextTenantRole: resolvedTenantRole,
-          previousStatus: lockedCurrentMembership.status,
-          nextStatus: 'ACTIVE',
-        })
-      );
-      if (resetProjectAccess) {
-        const reset = await resetTenantMembershipProjectAccess(
-          database,
-          resolvedMembership.id,
-        );
-        await database.auditLog.create({
-          data: {
-            organizationId: organization.id,
-            actorId: user.id,
-            action: 'tenant.membership.project_access_reset',
-            entityType: 'TenantMembership',
-            entityId: resolvedMembership.id,
-            metadata: {
-              source: 'session_membership_sync',
-              previousRole: lockedCurrentMembership.tenantRole,
-              nextRole: resolvedTenantRole,
-              previousStatus: lockedCurrentMembership.status,
-              nextStatus: 'ACTIVE',
-              resetProjectAccessCount: reset.count,
-            },
-          },
-        });
-      }
-      return resolvedMembership;
-    });
-  }
+
+  let project = null;
 
   const tenantRole = isSuperadmin ? 'SUPERADMIN' : membership?.tenantRole || null;
   if (organization) {

@@ -6,9 +6,15 @@ import {
 } from '@/lib/access';
 import { getPrisma } from '@/lib/prisma';
 import {
+  acquireClerkRuntimeIdentityLocks,
+  clerkIdentityRuntimeLockKeys,
+  withClerkIdentitySyncLock,
+} from '@/lib/clerk-identity-lock';
+import {
   membershipTransitionRequiresProjectAccessReset,
   resetTenantMembershipProjectAccess,
 } from '@/lib/project-access';
+import { getSubscriptionEntitlements } from '@/lib/plans';
 import {
   RequestBodyError,
   readJsonRequest,
@@ -75,61 +81,167 @@ export async function patchTenantMemberRole(
     }
 
     const prisma = prismaFactory();
-    const membership = await prisma.tenantMembership.findFirst({
-      where: {
-        id: body.membershipId,
-        organizationId: access.organization.id,
+    const updateResult = await withClerkIdentitySyncLock(
+      prisma,
+      async (tx) => {
+        const targetIdentity = await tx.tenantMembership.findFirst({
+          where: {
+            id: body.membershipId,
+            organizationId: access.organization.id,
+          },
+          select: {
+            user: { select: { clerkUserId: true } },
+          },
+        });
+        if (!targetIdentity) return { state: 'not_found' };
+        if (!targetIdentity.user?.clerkUserId) {
+          throw new AccessError('The target Clerk user identity is unavailable.', {
+            code: 'CLERK_IDENTITY_STALE',
+            status: 409,
+          });
+        }
+
+        await acquireClerkRuntimeIdentityLocks(
+          tx,
+          clerkIdentityRuntimeLockKeys({
+            clerkOrganizationId: access.orgId,
+            clerkUserId: targetIdentity.user.clerkUserId,
+          }),
+        );
+        await tx.$queryRawUnsafe(
+          `SELECT "id"
+           FROM "TenantMembership"
+           WHERE "organizationId" = $1
+             AND ("id" = $2 OR "userId" = $3)
+           ORDER BY "id"
+           FOR NO KEY UPDATE`,
+          access.organization.id,
+          body.membershipId,
+          access.databaseUserId,
+        );
+
+        const [boundOrganization, actorMembership, membership] = await Promise.all([
+          tx.organization.findUnique({
+            where: { id: access.organization.id },
+            select: {
+              clerkOrganizationId: true,
+              metadata: true,
+              subscriptionPlan: true,
+              subscriptionStatus: true,
+              trialEndsAt: true,
+            },
+          }),
+          tx.tenantMembership.findUnique({
+            where: {
+              organizationId_userId: {
+                organizationId: access.organization.id,
+                userId: access.databaseUserId,
+              },
+            },
+          }),
+          tx.tenantMembership.findFirst({
+            where: {
+              id: body.membershipId,
+              organizationId: access.organization.id,
+            },
+            include: { user: true },
+          }),
+        ]);
+
+        if (boundOrganization?.clerkOrganizationId !== access.orgId) {
+          throw new AccessError('Clerk organization identity changed before the role update.', {
+            code: 'CLERK_IDENTITY_STALE',
+            status: 409,
+          });
+        }
+        if (!membership) return { state: 'not_found' };
+        if (membership.user.clerkUserId !== targetIdentity.user.clerkUserId) {
+          throw new AccessError('Clerk user identity changed before the role update.', {
+            code: 'CLERK_IDENTITY_STALE',
+            status: 409,
+          });
+        }
+
+        const lockedAccess = {
+          ...access,
+          organization: { ...access.organization, ...boundOrganization },
+          subscription: getSubscriptionEntitlements(boundOrganization),
+          tenantMembershipId: actorMembership?.id || null,
+          tenantRole: actorMembership?.status === 'ACTIVE'
+            ? actorMembership.tenantRole
+            : null,
+        };
+        requireTenantPermission(lockedAccess, 'tenant:members:manage');
+
+        if (membership.status !== 'ACTIVE') {
+          return {
+            state: 'conflict',
+            error: 'La membresía debe estar activa para cambiar su rol.',
+          };
+        }
+        if (membership.clerkRole === 'org:admin' && body.tenantRole !== 'ADMIN') {
+          return {
+            state: 'conflict',
+            error: 'Primero quitá el rol Admin en Clerk Organizations para aplicar un rol operativo.',
+          };
+        }
+        if (membership.clerkRole !== 'org:admin' && body.tenantRole === 'ADMIN') {
+          return {
+            state: 'conflict',
+            error: 'El rol Administrador requiere que la persona sea Admin de la organización en Clerk.',
+          };
+        }
+
+        const result = await tx.tenantMembership.update({
+          where: { id: membership.id },
+          data: { tenantRole: body.tenantRole },
+          include: { user: true },
+        });
+        const projectAccessResetApplied = membershipTransitionRequiresProjectAccessReset({
+          previousTenantRole: membership.tenantRole,
+          nextTenantRole: result.tenantRole,
+          previousStatus: membership.status,
+          nextStatus: result.status,
+        });
+        let resetProjectAccessCount = 0;
+        if (projectAccessResetApplied) {
+          const reset = await resetTenantMembershipProjectAccess(tx, membership.id);
+          resetProjectAccessCount = reset.count;
+        }
+        await tx.auditLog.create({
+          data: {
+            organizationId: access.organization.id,
+            actorId: access.databaseUserId,
+            action: 'tenant.membership.role_updated',
+            entityType: 'TenantMembership',
+            entityId: membership.id,
+            metadata: {
+              userEmail: membership.user.primaryEmail,
+              previousRole: membership.tenantRole,
+              nextRole: body.tenantRole,
+              resetProjectAccessCount,
+            },
+          },
+        });
+        return {
+          state: 'updated',
+          membership: result,
+          projectAccessResetApplied,
+        };
       },
-      include: { user: true },
-    });
-    if (!membership) {
+      {
+        identityKeys: clerkIdentityRuntimeLockKeys({
+          clerkOrganizationId: access.orgId,
+        }),
+      },
+    );
+
+    if (updateResult.state === 'not_found') {
       return Response.json({ error: 'La membresía no pertenece a este tenant.' }, { status: 404 });
     }
-    if (membership.clerkRole === 'org:admin' && body.tenantRole !== 'ADMIN') {
-      return Response.json({
-        error: 'Primero quitá el rol Admin en Clerk Organizations para aplicar un rol operativo.',
-      }, { status: 409 });
+    if (updateResult.state === 'conflict') {
+      return Response.json({ error: updateResult.error }, { status: 409 });
     }
-    if (membership.clerkRole !== 'org:admin' && body.tenantRole === 'ADMIN') {
-      return Response.json({
-        error: 'El rol Administrador requiere que la persona sea Admin de la organización en Clerk.',
-      }, { status: 409 });
-    }
-
-    const updateResult = await prisma.$transaction(async (tx) => {
-      const result = await tx.tenantMembership.update({
-        where: { id: membership.id },
-        data: { tenantRole: body.tenantRole },
-        include: { user: true },
-      });
-      const projectAccessResetApplied = membershipTransitionRequiresProjectAccessReset({
-        previousTenantRole: membership.tenantRole,
-        nextTenantRole: result.tenantRole,
-        previousStatus: membership.status,
-        nextStatus: result.status,
-      });
-      let resetProjectAccessCount = 0;
-      if (projectAccessResetApplied) {
-        const reset = await resetTenantMembershipProjectAccess(tx, membership.id);
-        resetProjectAccessCount = reset.count;
-      }
-      await tx.auditLog.create({
-        data: {
-          organizationId: access.organization.id,
-          actorId: access.databaseUserId,
-          action: 'tenant.membership.role_updated',
-          entityType: 'TenantMembership',
-          entityId: membership.id,
-          metadata: {
-            userEmail: membership.user.primaryEmail,
-            previousRole: membership.tenantRole,
-            nextRole: body.tenantRole,
-            resetProjectAccessCount,
-          },
-        },
-      });
-      return { membership: result, projectAccessResetApplied };
-    });
 
     return Response.json({
       membership: {

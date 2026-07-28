@@ -4,6 +4,7 @@ import {
 } from './project-access.js';
 import {
   canUseClerkIdentitySyncLock,
+  clerkIdentityRuntimeLockKeys,
   isClerkIdentityTransaction,
   withClerkIdentitySyncLock,
 } from './clerk-identity-lock.js';
@@ -13,6 +14,12 @@ export async function persistClerkTenantMembership(prisma, input) {
     return withClerkIdentitySyncLock(
       prisma,
       (transaction) => persistClerkTenantMembership(transaction, input),
+      {
+        identityKeys: clerkIdentityRuntimeLockKeys({
+          clerkOrganizationId: input.expectedClerkOrganizationId,
+          clerkUserId: input.expectedClerkUserId,
+        }),
+      },
     );
   }
   const {
@@ -122,6 +129,12 @@ export async function disableDeletedClerkTenantMembership(prisma, {
         clerkUserId,
         eventType,
       }),
+      {
+        identityKeys: clerkIdentityRuntimeLockKeys({
+          clerkOrganizationId,
+          clerkUserId,
+        }),
+      },
     );
   }
   if (!clerkOrganizationId || !clerkUserId) {
