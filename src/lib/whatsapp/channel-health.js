@@ -1,4 +1,5 @@
 import { deriveWhatsAppChannelReadiness } from './channel-readiness.js';
+import { inspectWhatsAppPublicAppUrl } from './public-app-url.js';
 
 const BAD_QUALITY_SIGNALS = new Set(['DEGRADED', 'FLAGGED', 'RED', 'YELLOW', 'POOR']);
 const GOOD_QUALITY_SIGNALS = new Set(['GREEN', 'HEALTHY']);
@@ -132,7 +133,10 @@ function flowEndpointStatus(endpoint, metadata, connection) {
 }
 
 export function whatsAppPlatformConfiguration(env = process.env) {
+  const publicAppUrl = inspectWhatsAppPublicAppUrl(env);
   return {
+    publicAppUrlConfigured: publicAppUrl.configured,
+    publicAppUrlStatus: publicAppUrl.status,
     appIdConfigured: Boolean(env.NEXT_PUBLIC_META_APP_ID),
     appSecretConfigured: Boolean(env.META_APP_SECRET),
     embeddedSignupConfigConfigured: Boolean(env.NEXT_PUBLIC_META_EMBEDDED_SIGNUP_CONFIG_ID),

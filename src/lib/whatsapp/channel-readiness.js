@@ -124,18 +124,43 @@ export function deriveWhatsAppChannelReadiness(input = {}) {
   const traffic = record(source.traffic);
   const flows = record(source.flows);
 
+  const publicAppUrlConfigured = platform.publicAppUrlConfigured === true;
+  const publicAppUrlStatus = ['CONFIGURED', 'MISSING', 'INVALID', 'PRODUCTION_LEAK']
+    .includes(platform.publicAppUrlStatus)
+    ? platform.publicAppUrlStatus
+    : publicAppUrlConfigured ? 'CONFIGURED' : 'MISSING';
   const appIdConfigured = platform.appIdConfigured === true;
   const appSecretConfigured = platform.appSecretConfigured === true;
   const embeddedSignupConfigConfigured = platform.embeddedSignupConfigConfigured === true;
   const webhookVerifyTokenConfigured = platform.webhookVerifyTokenConfigured === true;
   const credentialEncryptionConfigured = platform.credentialEncryptionConfigured === true;
   const missingPlatformConfig = [
+    ['PUBLIC_APP_URL_MISSING', 'publicAppUrl', publicAppUrlConfigured, 'Falta configurar la URL pÃºblica estable usada por los webviews de WhatsApp.'],
     ['META_APP_ID_MISSING', 'appId', appIdConfigured, 'Falta configurar el identificador de la app de Meta.'],
     ['META_APP_SECRET_MISSING', 'appSecret', appSecretConfigured, 'Falta configurar el secreto de la app de Meta.'],
     ['META_EMBEDDED_SIGNUP_CONFIG_MISSING', 'embeddedSignupConfig', embeddedSignupConfigConfigured, 'Falta configurar Embedded Signup para ObraSaaS.'],
     ['WEBHOOK_VERIFY_TOKEN_MISSING', 'webhookVerifyToken', webhookVerifyTokenConfigured, 'Falta configurar el token de verificación del webhook.'],
     ['CREDENTIAL_ENCRYPTION_MISSING', 'credentialEncryption', credentialEncryptionConfigured, 'Falta configurar el cifrado de credenciales por tenant.'],
-  ].filter(([, , configured]) => !configured);
+  ].filter(([, , configured]) => !configured).map((issue) => {
+    if (issue[1] !== 'publicAppUrl') return issue;
+    if (publicAppUrlStatus === 'INVALID') {
+      return [
+        'PUBLIC_APP_URL_INVALID',
+        'publicAppUrl',
+        false,
+        'La URL pública de los webviews de WhatsApp no es válida.',
+      ];
+    }
+    if (publicAppUrlStatus === 'PRODUCTION_LEAK') {
+      return [
+        'PUBLIC_APP_URL_PRODUCTION_LEAK',
+        'publicAppUrl',
+        false,
+        'Preview intenta usar la URL de Producción para los webviews de WhatsApp.',
+      ];
+    }
+    return issue;
+  });
   const platformConfigured = missingPlatformConfig.length === 0;
 
   const linked = account.linked === true;

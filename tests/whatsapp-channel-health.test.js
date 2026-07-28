@@ -13,6 +13,7 @@ const NOW = new Date('2026-07-17T15:00:00.000Z');
 const FLOW_ENDPOINT_ID = '11111111-1111-4111-8111-111111111111';
 const FLOW_KEY_FINGERPRINT = 'a'.repeat(64);
 const ENV = Object.freeze({
+  NEXT_PUBLIC_APP_URL: 'https://preview.obrasaas.test',
   NEXT_PUBLIC_META_APP_ID: 'app-public-id',
   META_APP_SECRET: 'app-secret',
   NEXT_PUBLIC_META_EMBEDDED_SIGNUP_CONFIG_ID: 'signup-config',
@@ -66,6 +67,8 @@ function connection(overrides = {}) {
 
 test('platform configuration is reduced to booleans without exposing values', () => {
   assert.deepEqual(whatsAppPlatformConfiguration(ENV), {
+    publicAppUrlConfigured: true,
+    publicAppUrlStatus: 'CONFIGURED',
     appIdConfigured: true,
     appSecretConfigured: true,
     embeddedSignupConfigConfigured: true,

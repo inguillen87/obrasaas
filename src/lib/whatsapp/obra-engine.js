@@ -47,6 +47,7 @@ import {
   createOperationalProposal,
   parseOperationalProposalDecision,
 } from "@/lib/whatsapp/operational-proposals";
+import { resolveWhatsAppPublicAppUrl } from "@/lib/whatsapp/public-app-url";
 import {
   REPORT_PROPOSAL_TYPES,
   classifyReportProposal,
@@ -134,20 +135,23 @@ function secureAttendanceLink(appUrl, workerId, projectId, action, binding) {
   return `${appUrl}/webview/attendance?${query}`;
 }
 
-function secureLinks(workerId, projectId) {
-  const deploymentUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
-    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-    : null;
-  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || deploymentUrl || "http://localhost:3000").replace(/\/$/, "");
-  const medicalQuery = new URLSearchParams({
-    worker: workerId,
-    token: generateWebviewToken(workerId, { purpose: "medical", scope: projectId }),
-  }).toString();
+function secureLinks(workerId, projectId, environment = process.env) {
+  let appUrl = null;
+  const publicAppUrl = () => {
+    appUrl ||= resolveWhatsAppPublicAppUrl(environment);
+    return appUrl;
+  };
   return {
     attendance: (action, binding) => (
-      secureAttendanceLink(appUrl, workerId, projectId, action, binding)
+      secureAttendanceLink(publicAppUrl(), workerId, projectId, action, binding)
     ),
-    medical: `${appUrl}/webview/medical?${medicalQuery}`,
+    get medical() {
+      const medicalQuery = new URLSearchParams({
+        worker: workerId,
+        token: generateWebviewToken(workerId, { purpose: "medical", scope: projectId }),
+      }).toString();
+      return `${publicAppUrl()}/webview/medical?${medicalQuery}`;
+    },
   };
 }
 
@@ -554,7 +558,11 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
     || scope?.organization?.id
     || scope?.organizationId
     || null;
-  const links = secureLinks(worker.id, projectSettings.id);
+  const links = secureLinks(
+    worker.id,
+    projectSettings.id,
+    options.environment || process.env,
+  );
   const eventText = String(event.text || "").trim();
   const transcriptionText = String(event.transcription?.text || "").trim();
   const body = String(

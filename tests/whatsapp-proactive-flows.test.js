@@ -62,6 +62,7 @@ const [
 const NOW = new Date('2026-07-23T12:00:00.000Z');
 const FLOW_SECRET = 'whatsapp-flow-test-secret-with-at-least-32-bytes';
 const CONFIGURED_META_ENV = Object.freeze({
+  NEXT_PUBLIC_APP_URL: 'https://preview.obrasaas.test',
   NEXT_PUBLIC_META_APP_ID: 'app-a',
   META_APP_SECRET: 'secret-a',
   NEXT_PUBLIC_META_EMBEDDED_SIGNUP_CONFIG_ID: 'config-a',

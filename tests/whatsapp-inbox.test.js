@@ -74,6 +74,7 @@ after(() => {
 const NOW = new Date('2026-07-17T18:00:00.000Z');
 const DAY_MS = 24 * 60 * 60 * 1_000;
 const CONFIGURED_META_ENV = Object.freeze({
+  NEXT_PUBLIC_APP_URL: 'https://preview.obrasaas.test',
   NEXT_PUBLIC_META_APP_ID: 'app-a',
   META_APP_SECRET: 'secret-a',
   NEXT_PUBLIC_META_EMBEDDED_SIGNUP_CONFIG_ID: 'config-a',

@@ -8,6 +8,7 @@ import {
 } from '../src/lib/whatsapp/channel-readiness.js';
 
 const CONFIGURED_PLATFORM = Object.freeze({
+  publicAppUrlConfigured: true,
   appIdConfigured: true,
   appSecretConfigured: true,
   embeddedSignupConfigConfigured: true,
@@ -73,6 +74,7 @@ test('empty or malformed input is unconfigured and fails closed', () => {
   assert.equal(model.operational, false);
   assert.equal(model.messagingOperational, false);
   assert.deepEqual(model.checks.platform.missing, [
+    'publicAppUrl',
     'appId',
     'appSecret',
     'embeddedSignupConfig',
@@ -90,6 +92,7 @@ test('empty or malformed input is unconfigured and fails closed', () => {
 test('partial platform configuration identifies exactly what is missing', () => {
   const model = deriveWhatsAppChannelReadiness({
     platform: {
+      publicAppUrlConfigured: true,
       appIdConfigured: true,
       appSecretConfigured: false,
       embeddedSignupConfigConfigured: true,
@@ -102,6 +105,24 @@ test('partial platform configuration identifies exactly what is missing', () => 
   assert.deepEqual(model.checks.platform.missing, ['appSecret']);
   assert.deepEqual(reasonCodes(model), ['META_APP_SECRET_MISSING']);
   assert.deepEqual(actionCodes(model), ['CONFIGURE_META_PLATFORM']);
+});
+
+test('invalid and cross-environment public URLs expose distinct safe readiness blockers', () => {
+  for (const [publicAppUrlStatus, expectedCode] of [
+    ['INVALID', 'PUBLIC_APP_URL_INVALID'],
+    ['PRODUCTION_LEAK', 'PUBLIC_APP_URL_PRODUCTION_LEAK'],
+  ]) {
+    const model = deriveWhatsAppChannelReadiness({
+      platform: {
+        ...CONFIGURED_PLATFORM,
+        publicAppUrlConfigured: false,
+        publicAppUrlStatus,
+      },
+    });
+    assert.equal(model.operational, false);
+    assert.equal(reasonCodes(model).includes(expectedCode), true);
+    assert.equal(model.checks.platform.missing.includes('publicAppUrl'), true);
+  }
 });
 
 test('configured platform without an account is ready to connect, not connected', () => {
