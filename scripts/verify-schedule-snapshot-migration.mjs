@@ -1834,7 +1834,10 @@ async function assertTransactionalSmoke(client) {
     );
     await expectSqlFailure(
       client,
-      () => client.query(`TRUNCATE TABLE "${target.table}"`),
+      // CASCADE bypasses PostgreSQL's earlier inbound-FK refusal so this smoke
+      // reaches the table's own BEFORE TRUNCATE append-only trigger. The whole
+      // verifier still runs inside a rollback-only transaction and savepoint.
+      () => client.query(`TRUNCATE TABLE "${target.table}" CASCADE`),
       '55000',
       null,
       `${target.table} TRUNCATE immutability`,

@@ -187,6 +187,7 @@ test('semantic verifier is dedicated, schema-bound, TLS-hardened and rollback-on
   assert.match(verifier, /await client\.query\('BEGIN'\)/);
   assert.match(verifier, /SAVEPOINT/);
   assert.match(verifier, /ROLLBACK TO SAVEPOINT/);
+  assert.match(verifier, /TRUNCATE TABLE .* CASCADE/);
   assert.match(verifier, /await client\.query\('ROLLBACK'\)/);
   assert.doesNotMatch(verifier, /client\.query\(['"]COMMIT['"]\)/);
   for (const smoke of [
