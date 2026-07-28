@@ -1,18 +1,100 @@
 import assert from 'node:assert/strict';
+import { createHmac } from 'node:crypto';
 import test from 'node:test';
 
 import {
+  CLERK_WEBHOOK_MAX_BODY_BYTES,
   claimClerkWebhookEvent,
   clerkWebhookRetryResponse,
   completeClerkWebhookEvent,
+  createClerkWebhookBodyEvidence,
   failClerkWebhookEvent,
 } from '../src/lib/clerk-webhook-claim.js';
+
+const SIGNING_SECRET = `whsec_${'a'.repeat(48)}`;
+const EVIDENCE_SECRET = `evidence_${'d'.repeat(48)}`;
+const EVIDENCE_KEY_ID = 'clerk-webhook-evidence-v1';
+const EVIDENCE_DOMAIN = 'obrasaas:clerk-webhook:verified-body:v1';
+
+function bodyEvidence({
+  rawBody = new TextEncoder().encode('{"type":"user.updated","data":{"id":"user_a"}}'),
+  instanceId = 'ins_Development123',
+  eventId = 'svix-event-a',
+  eventType = 'user.updated',
+  evidenceSecret = EVIDENCE_SECRET,
+  evidenceKeyId = EVIDENCE_KEY_ID,
+  signingSecret = SIGNING_SECRET,
+} = {}) {
+  return createClerkWebhookBodyEvidence(rawBody, {
+    instanceId,
+    eventId,
+    eventType,
+    evidenceSecret,
+    evidenceKeyId,
+    signingSecret,
+  });
+}
+
+function redactedPayload(evidence) {
+  return { version: 1, redacted: true, bodyEvidence: evidence };
+}
 
 test('an in-progress Clerk delivery returns a retryable non-2xx response', async () => {
   const response = clerkWebhookRetryResponse('Processing in progress');
   assert.equal(response.status, 503);
   assert.equal(response.headers.get('Retry-After'), '5');
   assert.equal(await response.text(), 'Processing in progress');
+});
+
+test('verified Clerk body evidence is domain-separated, envelope-bound and contains no source data', () => {
+  const rawBody = new TextEncoder().encode(
+    '{\r\n  "type": "user.updated", "email": "persona@example.com"\r\n}\r\n',
+  );
+  const evidence = bodyEvidence({ rawBody });
+  const expectedDigest = createHmac('sha256', EVIDENCE_SECRET)
+    .update(`${EVIDENCE_DOMAIN}\0`, 'utf8')
+    .update(`${EVIDENCE_KEY_ID}\0ins_Development123\0svix-event-a\0user.updated\0`, 'utf8')
+    .update(rawBody)
+    .digest('hex');
+
+  assert.deepEqual(evidence, {
+    version: 1,
+    algorithm: 'hmac-sha256',
+    domain: EVIDENCE_DOMAIN,
+    keyId: EVIDENCE_KEY_ID,
+    instanceId: 'ins_Development123',
+    digest: expectedDigest,
+  });
+  assert.notEqual(bodyEvidence({ rawBody, instanceId: 'ins_Production123' }).digest, evidence.digest);
+  assert.notEqual(bodyEvidence({ rawBody, eventId: 'svix-event-b' }).digest, evidence.digest);
+  assert.notEqual(bodyEvidence({
+    rawBody: new TextEncoder().encode(
+      '{"type":"user.updated","email":"persona@example.com"}',
+    ),
+  }).digest, evidence.digest);
+  assert.notEqual(bodyEvidence({
+    rawBody,
+    evidenceSecret: `evidence_${'c'.repeat(48)}`,
+  }).digest, evidence.digest);
+  assert.notEqual(bodyEvidence({
+    rawBody,
+    evidenceKeyId: 'clerk-webhook-evidence-v2',
+  }).digest, evidence.digest);
+  assert.equal(JSON.stringify(evidence).includes('persona@example.com'), false);
+  assert.equal(JSON.stringify(evidence).includes(EVIDENCE_SECRET), false);
+  assert.equal(JSON.stringify(evidence).includes(SIGNING_SECRET), false);
+  assert.throws(
+    () => bodyEvidence({ rawBody: new Uint8Array(CLERK_WEBHOOK_MAX_BODY_BYTES + 1) }),
+    /bounded Clerk webhook body bytes/,
+  );
+  assert.throws(
+    () => bodyEvidence({ evidenceSecret: SIGNING_SECRET }),
+    /Independent Clerk webhook evidence key configuration/,
+  );
+  assert.throws(
+    () => bodyEvidence({ evidenceKeyId: 'unversioned-key' }),
+    /Independent Clerk webhook evidence key configuration/,
+  );
 });
 
 function databaseDouble() {
@@ -89,13 +171,16 @@ test('completed Clerk webhook is replayed as processed without another claim', a
       first_name: 'Persona',
     },
   };
+  const rawBody = new TextEncoder().encode(JSON.stringify(originalPayload));
+  const evidence = bodyEvidence({ rawBody });
   const first = await claim(database, { payload: originalPayload });
   assert.deepEqual(database.record.payload, originalPayload);
   assert.equal(await completeClerkWebhookEvent(database, {
     eventId: 'svix-event-a',
     leaseToken: first.leaseToken,
+    bodyEvidence: evidence,
   }), true);
-  assert.deepEqual(database.record.payload, { version: 1, redacted: true });
+  assert.deepEqual(database.record.payload, redactedPayload(evidence));
   assert.equal(database.record.provider, 'clerk');
   assert.equal(database.record.externalId, 'svix-event-a');
   assert.equal(database.record.eventType, 'user.updated');
@@ -103,8 +188,36 @@ test('completed Clerk webhook is replayed as processed without another claim', a
   assert.equal(database.record.attempts, 1);
   const replay = await claim(database, { leaseToken: 'lease-b' });
   assert.equal(replay.state, 'processed');
-  assert.deepEqual(replay.event.payload, { version: 1, redacted: true });
+  assert.deepEqual(replay.event.payload, redactedPayload(evidence));
   assert.equal(database.record.attempts, 1);
+});
+
+test('completion rejects malformed body evidence without mutating the retry payload', async () => {
+  const database = databaseDouble();
+  await claim(database);
+
+  const validEvidence = bodyEvidence();
+  const invalidEvidence = [
+    null,
+    { ...validEvidence, digest: 'not-a-sha256' },
+    { ...validEvidence, domain: 'another-domain' },
+    { ...validEvidence, rawBody: 'must never be persisted' },
+  ];
+  for (const candidate of invalidEvidence) {
+    await assert.rejects(
+      completeClerkWebhookEvent(database, {
+        eventId: 'svix-event-a',
+        leaseToken: 'lease-a',
+        bodyEvidence: candidate,
+      }),
+      /Valid Clerk webhook body evidence/,
+    );
+  }
+  assert.equal(database.record.status, 'PROCESSING');
+  assert.deepEqual(database.record.payload, {
+    type: 'user.updated',
+    data: { id: 'user_a' },
+  });
 });
 
 test('a lost completion lease cannot redact payload needed by the active processor', async () => {
@@ -121,6 +234,10 @@ test('a lost completion lease cannot redact payload needed by the active process
   assert.equal(await completeClerkWebhookEvent(database, {
     eventId: 'svix-event-a',
     leaseToken: 'lease-lost',
+    bodyEvidence: bodyEvidence({
+      rawBody: new TextEncoder().encode(JSON.stringify(originalPayload)),
+      eventType: 'organizationMembership.updated',
+    }),
   }), false);
   assert.equal(database.record.status, 'PROCESSING');
   assert.deepEqual(database.record.payload, originalPayload);

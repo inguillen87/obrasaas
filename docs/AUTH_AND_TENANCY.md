@@ -9,8 +9,9 @@
 - Clerk crea la primera organización durante el alta y la deja activa en la sesión.
 - Cada usuario nuevo puede crear como máximo **una** organización. Puede ser invitado a otras, pero no multiplicar trials propios.
 - El backend crea bajo demanda el tenant y la membresía. Sólo los roles con alcance de portfolio pueden crear la obra inicial automáticamente.
-- El webhook Clerk de producción pública verifica la firma, acepta únicamente eventos de identidad/organización/membresía y conserva un registro idempotente de procesamiento.
-- El payload firmado se conserva sólo mientras el evento necesita procesamiento o reintento. Al completarlo se redacta y quedan únicamente la identidad técnica del evento, su tipo, estado, intentos y timestamps, sin duplicar PII de Clerk.
+- El webhook Clerk de producción pública verifica la firma y exige que el `instance_id` firmado coincida exactamente con `CLERK_EXPECTED_INSTANCE_ID` antes de tocar Neon; acepta únicamente eventos de identidad/organización/membresía y conserva un registro idempotente de procesamiento.
+- El payload firmado se conserva sólo mientras el evento necesita procesamiento o reintento. Al completarlo se redacta y quedan únicamente la identidad técnica del evento, su tipo, estado, intentos, timestamps y una huella HMAC-SHA256 v1 de los bytes verificados, ligada a key ID/instancia/ID/tipo bajo el dominio `obrasaas:clerk-webhook:verified-body:v1`; no se duplican PII ni secretos.
+- `CLERK_WEBHOOK_EVIDENCE_SECRET` es independiente de `CLERK_WEBHOOK_SIGNING_SECRET` y exige al menos 32 caracteres. `CLERK_WEBHOOK_EVIDENCE_KEY_ID` usa la forma versionada `clerk-webhook-evidence-vN`; cada rotación incrementa ese ID y conserva el par histórico exclusivamente en el keyring del gestor de secretos durante la retención forense aprobada, no en el runtime ni en Neon.
 
 ## Superadmin y tenants
 

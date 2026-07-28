@@ -2,6 +2,12 @@ import { verifyWebhook } from '@clerk/nextjs/webhooks';
 import { clerkClient } from '@clerk/nextjs/server';
 import { getPrisma } from '@/lib/prisma';
 import {
+  decodeUtf8RequestBytes,
+  readLimitedRequestBytes,
+  RequestBodyError,
+  requestBodyErrorResponse,
+} from '@/lib/request-body';
+import {
   disableDeletedClerkTenantMembership,
   persistClerkTenantMembership,
 } from '@/lib/clerk-membership-sync';
@@ -13,7 +19,11 @@ import {
   syncClerkOrganization,
 } from '@/lib/clerk-organization-sync';
 import { acceptedInvitationRole } from '@/lib/invitations';
-import { isSupportedClerkWebhookEvent } from '@/lib/clerk-webhook-events';
+import {
+  ClerkWebhookInstanceError,
+  isSupportedClerkWebhookEvent,
+  requireExpectedClerkWebhookInstance,
+} from '@/lib/clerk-webhook-events';
 import {
   ClerkMembershipStatePendingError,
   getCurrentClerkOrganizationMembership,
@@ -22,9 +32,12 @@ import {
 } from '@/lib/clerk-membership-state';
 import { internalOrganizationMembershipAllowed } from '@/lib/internal-organization';
 import {
+  CLERK_WEBHOOK_MAX_BODY_BYTES,
+  ClerkWebhookEvidenceError,
   claimClerkWebhookEvent,
   clerkWebhookRetryResponse,
   completeClerkWebhookEvent,
+  createClerkWebhookBodyEvidence,
   failClerkWebhookEvent,
 } from '@/lib/clerk-webhook-claim';
 
@@ -180,9 +193,38 @@ async function processEvent(event) {
 
 export async function POST(request) {
   let event;
+  let eventId;
+  let instanceId;
+  let bodyEvidence;
   try {
-    event = await verifyWebhook(request);
+    const rawBody = await readLimitedRequestBytes(request, {
+      maxBytes: CLERK_WEBHOOK_MAX_BODY_BYTES,
+      requireJson: true,
+    });
+    const verificationRequest = new Request(request.url, {
+      method: request.method,
+      headers: new Headers(request.headers),
+      body: rawBody,
+    });
+    event = await verifyWebhook(verificationRequest);
+    const signedPayload = JSON.parse(decodeUtf8RequestBytes(rawBody));
+    instanceId = requireExpectedClerkWebhookInstance(signedPayload);
+    eventId = request.headers.get('svix-id')?.trim() || null;
+    bodyEvidence = createClerkWebhookBodyEvidence(rawBody, {
+      instanceId,
+      eventId,
+      eventType: event.type,
+    });
   } catch (error) {
+    if (error instanceof RequestBodyError) return requestBodyErrorResponse(error);
+    if (error instanceof ClerkWebhookEvidenceError) {
+      console.error(`Clerk webhook evidence failed: ${error.code}`);
+      return new Response('Webhook evidence unavailable', { status: error.status });
+    }
+    if (error instanceof ClerkWebhookInstanceError) {
+      console.error(`Clerk webhook instance validation failed: ${error.code}`);
+      return new Response('Webhook instance rejected', { status: error.status });
+    }
     console.error('Clerk webhook verification failed:', error);
     return new Response('Verification failed', { status: 400 });
   }
@@ -191,7 +233,6 @@ export async function POST(request) {
     return new Response('Ignored', { status: 200 });
   }
 
-  const eventId = request.headers.get('svix-id');
   if (!eventId) return new Response('Missing event id', { status: 400 });
 
   const prisma = getPrisma();
@@ -210,6 +251,7 @@ export async function POST(request) {
     const completed = await completeClerkWebhookEvent(prisma, {
       eventId,
       leaseToken: claim.leaseToken,
+      bodyEvidence,
     });
     if (!completed) return new Response('Processing lease lost', { status: 409 });
     return new Response('OK', { status: 200 });
