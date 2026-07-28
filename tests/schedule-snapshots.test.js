@@ -381,7 +381,33 @@ test('forecast calculation persists a reproducible complete run child-first', as
   const second = harness.captured.taskBatches[0].find((task) => task.sourceTaskId === 'task-b');
   assert.equal(second.driver.kind, 'DEPENDENCY');
   assert.equal(second.relationshipConstraints[0].predecessorId, 'task-a');
+  assert.ok(harness.captured.taskBatches[0].every((task) => task.progressSource === 'CANONICAL_TASK'));
   assert.equal(harness.captured.audit[0].action, 'schedule.forecast.calculated');
+});
+
+test('forecast fails closed for reviewed evidence without durable provenance before opening a transaction', async () => {
+  let transactions = 0;
+  const input = forecastInput();
+  input.observations[0].progressSource = 'REVIEWED_EVIDENCE';
+  input.observations[0].progressPercent = 35;
+
+  await assert.rejects(
+    calculateScheduleForecast({
+      async $transaction() {
+        transactions += 1;
+      },
+    }, {
+      scope: SCOPE,
+      actorId: ACTOR_ID,
+      idempotencyKey: 'forecast-reviewed-evidence-0001',
+      input,
+    }),
+    (error) => error instanceof ScheduleSnapshotError
+      && error.status === 409
+      && error.code === 'SCHEDULE_FORECAST_REVIEWED_EVIDENCE_PROVENANCE_REQUIRED'
+      && error.details?.index === 0,
+  );
+  assert.equal(transactions, 0);
 });
 
 test('forecast rejects unknown observation fields before opening a transaction', async () => {

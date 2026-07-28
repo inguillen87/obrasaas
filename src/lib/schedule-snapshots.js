@@ -539,6 +539,17 @@ function normalizedObservation(value, index) {
   const progressPercent = safeInteger(value.progressPercent, `observations[${index}].progressPercent`, 0, 100);
   const progressSource = String(value.progressSource || 'CANONICAL_TASK');
   if (!PROGRESS_SOURCES.has(progressSource)) fail('progressSource no es válido.', 'SCHEDULE_FORECAST_INPUT_INVALID', 400, { index });
+  // REVIEWED_EVIDENCE must never be treated as a client assertion. Enable it
+  // only after an observation carries durable assessment/review identifiers
+  // that the forecast transaction can validate against the scoped database.
+  if (progressSource === 'REVIEWED_EVIDENCE') {
+    fail(
+      'El avance por evidencia revisada exige una evaluación y revisión persistidas y validadas.',
+      'SCHEDULE_FORECAST_REVIEWED_EVIDENCE_PROVENANCE_REQUIRED',
+      409,
+      { index },
+    );
+  }
   const actualStartDate = value.actualStartDate == null ? null : dateKey(value.actualStartDate, `observations[${index}].actualStartDate`);
   const actualFinishDate = value.actualFinishDate == null ? null : dateKey(value.actualFinishDate, `observations[${index}].actualFinishDate`);
   const remainingDurationDays = value.remainingDurationDays == null ? null : safeInteger(value.remainingDurationDays, `observations[${index}].remainingDurationDays`, 0, MAX_DURATION_DAYS);
