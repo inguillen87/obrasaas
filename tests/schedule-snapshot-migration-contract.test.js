@@ -11,6 +11,13 @@ const migration = await readFile(
   ),
   'utf8',
 );
+const requestFingerprintMigration = await readFile(
+  new URL(
+    'prisma/migrations/20260728040000_schedule_snapshot_request_fingerprints/migration.sql',
+    root,
+  ),
+  'utf8',
+);
 const verifier = await readFile(
   new URL('scripts/verify-schedule-snapshot-migration.mjs', root),
   'utf8',
@@ -37,6 +44,7 @@ test('Prisma models immutable baseline, dependency and reproducible forecast sna
   assert.match(baseline, /contentHash\s+String\s+@db\.Char\(64\)/);
   assert.match(baseline, /supersededById\s+String\?/);
   assert.match(baseline, /supersessionHash\s+String\?\s+@db\.Char\(64\)/);
+  assert.match(baseline, /requestFingerprint\s+String\s+@db\.Char\(64\)/);
   assert.match(baseline, /@@unique\(\[organizationId, projectId, version\]/);
   assert.match(baseline, /@@unique\(\[organizationId, projectId, operationKeyHash\]/);
 
@@ -52,6 +60,7 @@ test('Prisma models immutable baseline, dependency and reproducible forecast sna
   assert.match(forecastRun, /topologicalOrder\s+Json/);
   assert.match(forecastRun, /scenarioRevision\s+Int\?/);
   assert.match(forecastRun, /scenarioInputHash\s+String\?\s+@db\.Char\(64\)/);
+  assert.match(forecastRun, /requestFingerprint\s+String\s+@db\.Char\(64\)/);
 
   const forecastTask = model('ScheduleForecastTask');
   for (const field of [
@@ -160,8 +169,12 @@ test('all snapshot rows reject delete, truncate and content updates', () => {
 });
 
 test('semantic verifier is dedicated, schema-bound, TLS-hardened and rollback-only', () => {
+  assert.doesNotMatch(verifier, /\bconst\s+JSON\s*=/);
+  assert.match(verifier, /const JSONB = Object\.freeze/);
+  assert.match(verifier, /JSON\.stringify\(overrides\.driver\)/);
   assert.match(verifier, /SCHEDULE_SNAPSHOT_MIGRATION_DATABASE_URL/);
   assert.match(verifier, /SCHEDULE_SNAPSHOT_MIGRATION_SCHEMA/);
+  assert.match(verifier, /20260728040000_schedule_snapshot_request_fingerprints/);
   assert.match(verifier, /DATABASE_URL is intentionally ignored/);
   assert.match(verifier, /conflicting schema parameters/);
   assert.match(verifier, /sslmode', 'verify-full'/);
@@ -194,6 +207,16 @@ test('semantic verifier is dedicated, schema-bound, TLS-hardened and rollback-on
   assert.match(verifier, /'23505'/);
   assert.match(verifier, /'23514'/);
   assert.match(verifier, /'55000'/);
+});
+
+test('additive request fingerprints preserve applied migration history and fail closed for new writes', () => {
+  assert.match(requestFingerprintMigration, /ALTER TABLE "ScheduleBaseline"[\s\S]*ADD COLUMN "requestFingerprint" CHAR\(64\) NOT NULL/);
+  assert.match(requestFingerprintMigration, /ALTER TABLE "ScheduleForecastRun"[\s\S]*ADD COLUMN "requestFingerprint" CHAR\(64\) NOT NULL/);
+  assert.match(requestFingerprintMigration, /DEFAULT repeat\('0', 64\)/);
+  assert.match(requestFingerprintMigration, /ALTER COLUMN "requestFingerprint" DROP DEFAULT/g);
+  assert.match(requestFingerprintMigration, /ScheduleBaseline_request_fingerprint_check/);
+  assert.match(requestFingerprintMigration, /ScheduleForecastRun_request_fingerprint_check/);
+  assert.doesNotMatch(requestFingerprintMigration, /UPDATE\s+"Schedule(?:Baseline|ForecastRun)"/);
 });
 
 test('Vercel gates preview and production after deploy and before generation', () => {

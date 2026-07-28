@@ -132,7 +132,7 @@ test('every API Route Handler is exhaustively classified behind Clerk or its own
     );
   }
 
-  assert.equal(protectedRouteCount, 78, 'the complete current Clerk surface must remain classified');
+  assert.equal(protectedRouteCount, 80, 'the complete current Clerk surface must remain classified');
   assert.deepEqual(discoveredPublicRoutes.sort(), PUBLIC_SELF_AUTHENTICATED_API_PATHS.toSorted());
 });
 

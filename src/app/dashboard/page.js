@@ -77,7 +77,7 @@ export default async function DashboardPage() {
       : Promise.resolve(0),
     canReadCanonicalTasks
       ? listCanonicalTasks(prisma, { projectId: access.project.id, limit: 500 })
-      : Promise.resolve({ tasks: [] }),
+      : Promise.resolve({ tasks: [], hasMore: false }),
   ]);
   return (
     <DashboardClient
@@ -101,7 +101,9 @@ export default async function DashboardPage() {
         canManageIntegrations: hasTenantPermission(access, 'org:integrations:manage'),
         canReadOperationalProposals,
         canReadCanonicalTasks,
+        canManageCanonicalTasks: hasTenantPermission(access, 'org:tasks:manage'),
         canonicalTasks: canonicalTasks.tasks,
+        canonicalTasksHasMore: canonicalTasks.hasMore,
         canManageOperationalProposals: hasTenantPermission(
           access,
           'org:operational-proposals:manage',

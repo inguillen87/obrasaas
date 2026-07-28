@@ -102,6 +102,7 @@ const verifierConnectionString = hardenedVerifierConnectionString(connectionStri
 
 const EXPECTED_MIGRATIONS = Object.freeze([
   '20260726190000_schedule_baseline_forecast_snapshots',
+  '20260728040000_schedule_snapshot_request_fingerprints',
 ]);
 
 const EXPECTED_ENUMS = Object.freeze({
@@ -134,7 +135,7 @@ const NULLABLE_TEXT = Object.freeze({ nullable: 'YES', dataType: 'text', udtName
 const INTEGER = Object.freeze({ nullable: 'NO', dataType: 'integer', udtName: 'int4' });
 const DATE = Object.freeze({ nullable: 'NO', dataType: 'date', udtName: 'date' });
 const NULLABLE_DATE = Object.freeze({ nullable: 'YES', dataType: 'date', udtName: 'date' });
-const JSON = Object.freeze({ nullable: 'NO', dataType: 'jsonb', udtName: 'jsonb' });
+const JSONB = Object.freeze({ nullable: 'NO', dataType: 'jsonb', udtName: 'jsonb' });
 const TIMESTAMP = Object.freeze({
   nullable: 'NO',
   dataType: 'timestamp without time zone',
@@ -190,6 +191,7 @@ const EXPECTED_COLUMNS = Object.freeze({
     ['supersededAt', { ...TIMESTAMP, nullable: 'YES' }],
     ['supersededById', NULLABLE_TEXT],
     ['supersessionHash', { ...char(64), nullable: 'YES' }],
+    ['requestFingerprint', char(64)],
   ],
   ScheduleBaselineTask: [
     ['id', TEXT],
@@ -241,8 +243,9 @@ const EXPECTED_COLUMNS = Object.freeze({
     ['startDeltaDays', INTEGER],
     ['finishDeltaDays', INTEGER],
     ['taskCount', INTEGER],
-    ['topologicalOrder', JSON],
+    ['topologicalOrder', JSONB],
     ['createdAt', CREATED_AT],
+    ['requestFingerprint', char(64)],
   ],
   ScheduleForecastTask: [
     ['id', TEXT],
@@ -267,8 +270,8 @@ const EXPECTED_COLUMNS = Object.freeze({
     ['startDeltaDays', INTEGER],
     ['finishDeltaDays', INTEGER],
     ['durationDeltaDays', INTEGER],
-    ['driver', JSON],
-    ['relationshipConstraints', JSON],
+    ['driver', JSONB],
+    ['relationshipConstraints', JSONB],
     ['createdAt', CREATED_AT],
   ],
 });
@@ -308,6 +311,10 @@ const EXPECTED_CHECKS = Object.freeze({
       'supersessionHash IS NOT NULL',
       '^[0-9a-f]{64}$',
     ],
+  },
+  ScheduleBaseline_request_fingerprint_check: {
+    table: 'ScheduleBaseline',
+    fragments: ['requestFingerprint', '^[0-9a-f]{64}$'],
   },
   ScheduleBaselineTask_identity_check: {
     table: 'ScheduleBaselineTask',
@@ -354,6 +361,10 @@ const EXPECTED_CHECKS = Object.freeze({
   ScheduleForecastRun_hashes_check: {
     table: 'ScheduleForecastRun',
     fragments: ['operationKeyHash', 'inputHash', 'resultHash', '^[0-9a-f]{64}$'],
+  },
+  ScheduleForecastRun_request_fingerprint_check: {
+    table: 'ScheduleForecastRun',
+    fragments: ['requestFingerprint', '^[0-9a-f]{64}$'],
   },
   ScheduleForecastRun_range_check: {
     table: 'ScheduleForecastRun',
@@ -1065,9 +1076,9 @@ async function insertBaselineRoot(client, fixtures, overrides) {
     `INSERT INTO "ScheduleBaseline" (
        "id", "organizationId", "projectId", "version", "status", "name",
        "timeZone", "calendarPolicy", "operationKeyHash", "sourcePlanHash",
-       "contentHash", "taskCount", "dependencyCount"
+       "contentHash", "taskCount", "dependencyCount", "requestFingerprint"
      ) VALUES (
-       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
      )`,
     [
       overrides.id,
@@ -1083,6 +1094,7 @@ async function insertBaselineRoot(client, fixtures, overrides) {
       overrides.contentHash || sha256Fixture(300 + overrides.version),
       overrides.taskCount,
       overrides.dependencyCount,
+      overrides.requestFingerprint || sha256Fixture(400 + overrides.version),
     ],
   );
 }
@@ -1248,10 +1260,11 @@ async function insertForecastRun(client, fixtures, overrides) {
        "schemaVersion", "engineVersion", "calendarPolicy", "operationKeyHash",
        "inputHash", "resultHash", "asOfDate", "baselineStartDate",
        "baselineFinishDate", "forecastStartDate", "forecastFinishDate",
-       "startDeltaDays", "finishDeltaDays", "taskCount", "topologicalOrder"
+       "startDeltaDays", "finishDeltaDays", "taskCount", "topologicalOrder",
+       "requestFingerprint"
      ) VALUES (
        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
-       $15, $16, $17, $18, $19, $20::jsonb
+       $15, $16, $17, $18, $19, $20::jsonb, $21
      )`,
     [
       overrides.id,
@@ -1277,6 +1290,7 @@ async function insertForecastRun(client, fixtures, overrides) {
         fixtures.firstSourceTaskId,
         fixtures.secondSourceTaskId,
       ]),
+      overrides.requestFingerprint || sha256Fixture((overrides.hashSeed || 500) + 3),
     ],
   );
 }
@@ -1375,6 +1389,17 @@ async function assertTransactionalSmoke(client) {
     '55000',
     null,
     'ScheduleBaseline content immutability guard',
+  );
+  await expectSqlFailure(
+    client,
+    () => client.query(
+      `UPDATE "ScheduleBaseline" SET "requestFingerprint" = $2
+        WHERE "id" = $1`,
+      [fixtures.baselineV2Id, sha256Fixture(998)],
+    ),
+    '55000',
+    null,
+    'ScheduleBaseline request fingerprint immutability guard',
   );
   await expectSqlFailure(
     client,
@@ -1596,6 +1621,18 @@ async function assertTransactionalSmoke(client) {
   });
   await client.query('SET CONSTRAINTS ALL IMMEDIATE');
   await client.query('SET CONSTRAINTS ALL DEFERRED');
+
+  await expectSqlFailure(
+    client,
+    () => client.query(
+      `UPDATE "ScheduleForecastRun" SET "requestFingerprint" = $2
+        WHERE "id" = $1`,
+      [fixtures.forecastRunId, sha256Fixture(999)],
+    ),
+    '55000',
+    null,
+    'ScheduleForecastRun request fingerprint immutability guard',
+  );
 
   await expectSqlFailure(
     client,

@@ -1611,30 +1611,31 @@ model ReplanScenario {
 }
 
 model ScheduleBaseline {
-  id               String                       @id @default(cuid())
-  organizationId   String
-  projectId        String
-  project          Project                      @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade, map: "ScheduleBaseline_project_scope_fkey")
-  version          Int
-  status           ScheduleBaselineStatus       @default(ACTIVE)
-  name             String                       @db.VarChar(220)
-  timeZone         String                       @db.VarChar(64)
-  calendarPolicy   ScheduleCalendarPolicy       @default(CIVIL_CALENDAR_DAYS_V1)
-  operationKeyHash String                       @db.Char(64)
-  sourcePlanHash   String                       @db.Char(64)
-  contentHash      String                       @db.Char(64)
-  taskCount        Int
-  dependencyCount  Int
-  publishedAt      DateTime                     @default(now())
-  createdAt        DateTime                     @default(now())
-  supersededAt     DateTime?
-  supersededById   String?
-  supersessionHash String?                      @db.Char(64)
-  supersededBy     ScheduleBaseline?            @relation("ScheduleBaselineSupersession", fields: [organizationId, projectId, supersededById], references: [organizationId, projectId, id], onDelete: Restrict, onUpdate: Cascade, map: "ScheduleBaseline_superseded_by_scope_fkey")
-  supersedes       ScheduleBaseline?            @relation("ScheduleBaselineSupersession")
-  tasks            ScheduleBaselineTask[]
-  dependencies     ScheduleBaselineDependency[]
-  forecastRuns     ScheduleForecastRun[]
+  id                 String                       @id @default(cuid())
+  organizationId     String
+  projectId          String
+  project            Project                      @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade, map: "ScheduleBaseline_project_scope_fkey")
+  version            Int
+  status             ScheduleBaselineStatus       @default(ACTIVE)
+  name               String                       @db.VarChar(220)
+  timeZone           String                       @db.VarChar(64)
+  calendarPolicy     ScheduleCalendarPolicy       @default(CIVIL_CALENDAR_DAYS_V1)
+  operationKeyHash   String                       @db.Char(64)
+  sourcePlanHash     String                       @db.Char(64)
+  contentHash        String                       @db.Char(64)
+  taskCount          Int
+  dependencyCount    Int
+  publishedAt        DateTime                     @default(now())
+  createdAt          DateTime                     @default(now())
+  supersededAt       DateTime?
+  supersededById     String?
+  supersessionHash   String?                      @db.Char(64)
+  requestFingerprint String                       @db.Char(64)
+  supersededBy       ScheduleBaseline?            @relation("ScheduleBaselineSupersession", fields: [organizationId, projectId, supersededById], references: [organizationId, projectId, id], onDelete: Restrict, onUpdate: Cascade, map: "ScheduleBaseline_superseded_by_scope_fkey")
+  supersedes         ScheduleBaseline?            @relation("ScheduleBaselineSupersession")
+  tasks              ScheduleBaselineTask[]
+  dependencies       ScheduleBaselineDependency[]
+  forecastRuns       ScheduleForecastRun[]
 
   @@unique([organizationId, projectId, id], map: "ScheduleBaseline_scope_id_key")
   @@unique([organizationId, projectId, version], map: "ScheduleBaseline_scope_version_key")
@@ -1716,6 +1717,7 @@ model ScheduleForecastRun {
   taskCount          Int
   topologicalOrder   Json
   createdAt          DateTime               @default(now())
+  requestFingerprint String                 @db.Char(64)
   tasks              ScheduleForecastTask[]
 
   @@unique([organizationId, projectId, id], map: "ScheduleForecastRun_scope_id_key")

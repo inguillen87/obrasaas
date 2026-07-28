@@ -13,6 +13,7 @@ import {
 import GanttPlanner from './gantt-planner';
 import OperationalPulse from './operational-pulse';
 import PlatformReadiness from './platform-readiness';
+import ScheduleSnapshotsPanel from './schedule-snapshots-panel';
 import StockpilePanel from './stockpile-panel';
 
 const initialAppState = {
@@ -146,7 +147,7 @@ function normalizeAppState(candidate) {
 }
 
 function canonicalTasksToGanttCatalog(tasks, projectStartsAt) {
-  if (!Array.isArray(tasks) || tasks.length === 0) return null;
+  if (!Array.isArray(tasks)) return null;
   const projectStart = projectStartsAt ? new Date(projectStartsAt).getTime() : NaN;
   const catalog = {};
   for (const task of tasks) {
@@ -160,6 +161,7 @@ function canonicalTasksToGanttCatalog(tasks, projectStartsAt) {
       : 1;
     catalog[task.id] = {
       name: task.title,
+      title: task.title,
       description: task.description || '',
       assignee: task.assignee || '',
       progress: task.progress,
@@ -170,6 +172,9 @@ function canonicalTasksToGanttCatalog(tasks, projectStartsAt) {
         .filter((dependency) => dependency.successorId === task.id)
         .map((dependency) => dependency.predecessorId),
       status: task.status,
+      type: task.type,
+      startsAt: task.startsAt,
+      endsAt: task.endsAt,
       canonicalTaskId: task.id,
       revision: task.revision,
     };
@@ -274,6 +279,7 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
     setCanonicalTasks((current) => current.filter((candidate) => candidate.id !== taskId));
   }, []);
   const stateVersionRef = useRef(validProjectStateVersion(setup.initialStateVersion) ?? 0);
+  const getProjectStateVersion = useCallback(() => stateVersionRef.current, []);
   const stateWriteQueueRef = useRef(Promise.resolve());
   const stateWriteGenerationRef = useRef(0);
   const latestStateWriteSequenceRef = useRef(0);
@@ -2292,16 +2298,27 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
 
           {/* SECTION 3: GANTT CHART */}
           <section id="sec-gantt" className={`content-section animate-fade-in-up ${activeTab === 'sec-gantt' ? 'active' : ''}`}>
+            {activeTab === 'sec-gantt' && setup.canReadCanonicalTasks && (
+              <ScheduleSnapshotsPanel
+                canManage={setup.canManageCanonicalTasks}
+                getProjectStateVersion={getProjectStateVersion}
+                initialTasks={canonicalTasks}
+                key={platformAccess.project.id}
+                onToast={addToast}
+                project={platformAccess.project}
+                tasksTruncated={setup.canonicalTasksHasMore}
+              />
+            )}
             <GanttPlanner
-              canManage={setup.canManageProjects}
-              canonicalMode={Boolean(canonicalTaskCatalog)}
+              canManage={setup.canReadCanonicalTasks ? setup.canManageCanonicalTasks : setup.canManageProjects}
+              canonicalMode={setup.canReadCanonicalTasks}
               fieldWorkers={fieldWorkers}
               onCanonicalTaskChange={handleCanonicalTaskChange}
               onCanonicalTaskDelete={handleCanonicalTaskDelete}
               onTasksChange={handleTasksChange}
               onToast={addToast}
               project={platformAccess.project}
-              tasks={canonicalTaskCatalog || state.tasks}
+              tasks={setup.canReadCanonicalTasks ? (canonicalTaskCatalog || {}) : state.tasks}
             />
           </section>
 
