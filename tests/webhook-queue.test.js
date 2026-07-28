@@ -74,9 +74,11 @@ test("corrupt applied outcomes fail terminally instead of repeating internal eff
   );
 });
 
-test("unknown or ambiguous WhatsApp identities are terminal before media processing", () => {
+test("unusable or corrupt WhatsApp identities are terminal before media processing", () => {
   assert.equal(isTerminalWebhookFailure({ code: "FIELD_WORKER_UNKNOWN" }), true);
   assert.equal(isTerminalWebhookFailure({ code: "FIELD_WORKER_AMBIGUOUS" }), true);
+  assert.equal(isTerminalWebhookFailure({ code: "FIELD_WORKER_CANONICAL_BLOCKED" }), true);
+  assert.equal(isTerminalWebhookFailure({ code: "FIELD_WORKER_CANONICAL_IDENTITY_CORRUPT" }), true);
   assert.equal(isTerminalWebhookFailure({ code: "FIELD_WORKER_INVALID_PHONE" }), true);
   assert.equal(isTerminalWebhookFailure({ code: "WEBHOOK_PAYLOAD_INVALID" }), true);
   assert.equal(isTerminalWebhookFailure({ code: "WEBHOOK_SUBSCRIPTION_BLOCKED" }), true);
@@ -88,6 +90,7 @@ test("unknown or ambiguous WhatsApp identities are terminal before media process
   assert.equal(isTerminalWebhookFailure({ code: "WHATSAPP_FLOW_SESSION_USED" }), true);
   assert.equal(isTerminalWebhookFailure({ code: "WHATSAPP_FLOW_TOKEN_SECRET_INVALID" }), false);
   assert.equal(isTerminalWebhookFailure({ code: "WHATSAPP_FLOW_DELIVERY_UNRESOLVED" }), false);
+  assert.equal(isTerminalWebhookFailure({ code: "FIELD_WORKER_CANONICAL_IDENTITY_CONFIGURATION_INVALID" }), false);
   assert.equal(isTerminalWebhookFailure({ code: "META_TEMPORARY_FAILURE" }), false);
 });
 

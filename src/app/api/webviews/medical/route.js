@@ -4,6 +4,11 @@ import {
   applyDirectObraMessageAtomically,
 } from "@/lib/db";
 import {
+  FIELD_WORKER_CANONICAL_PERSON_SELECT,
+  FIELD_WORKER_RESOLUTION,
+  evaluateActiveFieldWorkerById,
+} from "@/lib/field-workers";
+import {
   MAX_MEDICAL_CERTIFICATE_BYTES,
   MAX_MEDICAL_CERTIFICATE_MEGABYTES,
   MAX_MEDICAL_MULTIPART_BYTES,
@@ -75,6 +80,7 @@ export async function POST(request) {
     const fieldWorker = await prisma.worker.findFirst({
       where: { id: worker, projectId: tokenPayload.ctx, active: true },
       include: {
+        person: { select: FIELD_WORKER_CANONICAL_PERSON_SELECT },
         project: {
           select: {
             organizationId: true,
@@ -89,7 +95,13 @@ export async function POST(request) {
         },
       },
     });
-    if (!fieldWorker) {
+    const fieldWorkerResolution = fieldWorker?.project?.organizationId
+      ? evaluateActiveFieldWorkerById(fieldWorker, {
+          organizationId: fieldWorker.project.organizationId,
+          projectId: tokenPayload.ctx,
+        })
+      : { status: FIELD_WORKER_RESOLUTION.UNKNOWN };
+    if (fieldWorkerResolution.status !== FIELD_WORKER_RESOLUTION.RESOLVED) {
       return Response.json({ error: "La persona ya no está autorizada en esta obra." }, { status: 403 });
     }
     assertSubscriptionAllowsWrites(fieldWorker.project.organization);

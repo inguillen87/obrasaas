@@ -59,7 +59,7 @@ const worker = {
   project: { organizationId: project.organizationId },
 };
 
-function transactionDouble({ priorOperation = null } = {}) {
+function transactionDouble({ priorOperation = null, workerOverrides = {} } = {}) {
   const calls = [];
   const transaction = {
     async $executeRawUnsafe(query, projectId) {
@@ -74,7 +74,7 @@ function transactionDouble({ priorOperation = null } = {}) {
     worker: {
       async findFirst(args) {
         calls.push(['worker', args]);
-        return structuredClone(worker);
+        return structuredClone({ ...worker, ...workerOverrides });
       },
     },
     auditLog: {
@@ -268,6 +268,57 @@ test('direct field effects fail closed inside the project lock when the subscrip
 
   assert.equal(applied, false);
   assert.deepEqual(calls.map(([name]) => name), ['transaction', 'lock', 'project']);
+});
+
+test('direct field effects reject suspended people and revoked canonical channels', async (t) => {
+  for (const candidate of [
+    { personStatus: 'SUSPENDED', channelStatus: 'VERIFIED' },
+    { personStatus: 'ACTIVE', channelStatus: 'REVOKED' },
+  ]) {
+    await t.test(`${candidate.personStatus}/${candidate.channelStatus}`, async () => {
+      const channelVerified = candidate.channelStatus === 'VERIFIED';
+      const { calls, prisma } = transactionDouble({
+        workerOverrides: {
+          organizationId: project.organizationId,
+          personId: 'person-direct-a',
+          phone: null,
+          person: {
+            status: candidate.personStatus,
+            identityStatus: 'VERIFIED',
+            channelIdentities: [{
+              id: 'channel-direct-a',
+              status: candidate.channelStatus,
+              verifiedAt: channelVerified ? new Date('2026-07-20T12:00:00.000Z') : null,
+              revokedAt: channelVerified ? null : new Date('2026-07-28T12:00:00.000Z'),
+            }],
+          },
+        },
+      });
+      globalThis.__obraSaasPrisma = prisma;
+      let applied = false;
+
+      await assert.rejects(
+        applyDirectObraMessageAtomically({
+          event: { externalId: 'direct-canonical-blocked', provider: 'webview', kind: 'text' },
+          scope: { projectId: project.id, organizationId: project.organizationId },
+          workerId: worker.id,
+          apply: async () => {
+            applied = true;
+            return null;
+          },
+        }),
+        (error) => error.code === 'FIELD_WORKER_REQUIRED' && error.status === 403,
+      );
+
+      assert.equal(applied, false);
+      assert.deepEqual(calls.map(([name]) => name), [
+        'transaction',
+        'lock',
+        'project',
+        'worker',
+      ]);
+    });
+  }
 });
 
 test('an idempotent direct retry returns its stored outcome without reapplying effects', async () => {

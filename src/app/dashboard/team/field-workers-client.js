@@ -26,8 +26,37 @@ const CHANNEL_ROLES = [
   },
 ];
 
+const CHANNEL_STATUS_LABELS = Object.freeze({
+  VERIFIED: 'Verificado',
+  PENDING: 'Pendiente',
+  REVOKED: 'Revocado',
+  CONFLICT: 'En conflicto',
+});
+
 function workerRoleLabel(role) {
   return CHANNEL_ROLES.find((option) => option.key === role)?.label || 'Operario';
+}
+
+function workerChannel(worker) {
+  const channels = Array.isArray(worker.channels) ? worker.channels : [];
+  return channels.find((channel) => channel.status === 'VERIFIED') || channels[0] || null;
+}
+
+function workerChannelLabel(worker) {
+  return worker.phone || workerChannel(worker)?.addressMasked || 'Canal no disponible';
+}
+
+function workerChannelStatusLabel(worker) {
+  const channel = workerChannel(worker);
+  if (!channel) return 'Registro anterior';
+  return CHANNEL_STATUS_LABELS[channel.status] || 'Estado no disponible';
+}
+
+function hasUsableChannel(worker) {
+  if (!worker.active) return false;
+  if (worker.phone) return true;
+  const channel = workerChannel(worker);
+  return channel?.status === 'VERIFIED' && Boolean(channel.verifiedAt);
 }
 
 export default function FieldWorkersClient({ initialWorkers, canManage, projectName }) {
@@ -88,7 +117,7 @@ export default function FieldWorkersClient({ initialWorkers, canManage, projectN
     }
   }
 
-  const activeCount = workers.filter((worker) => worker.active).length;
+  const activeCount = workers.filter(hasUsableChannel).length;
 
   return (
     <section className={styles.fieldPanel} aria-labelledby="field-workers-title">
@@ -101,9 +130,9 @@ export default function FieldWorkersClient({ initialWorkers, canManage, projectN
             queda bloqueado antes de descargar o transcribir archivos.
           </p>
         </div>
-        <div className={styles.fieldMetric} aria-label={`${activeCount} números activos`}>
+        <div className={styles.fieldMetric} aria-label={`${activeCount} canales activos`}>
           <strong>{activeCount}</strong>
-          <span>números activos</span>
+          <span>canales activos</span>
         </div>
       </div>
 
@@ -185,12 +214,15 @@ export default function FieldWorkersClient({ initialWorkers, canManage, projectN
               <span className={styles.channelBadge} aria-hidden="true">WA</span>
               <div>
                 <strong>{worker.name}</strong>
-                <span>{worker.phone}</span>
+                <span>{workerChannelLabel(worker)}</span>
               </div>
             </div>
             <div className={styles.workerDetails}>
               <span>{worker.role || 'Cuadrilla de obra'}</span>
-              <strong>{workerRoleLabel(worker.whatsappRole)}</strong>
+              <strong>
+                {workerRoleLabel(worker.whatsappRole)}
+                {` · ${workerChannelStatusLabel(worker)}`}
+              </strong>
             </div>
             {canManage ? (
               <div className={styles.workerActions}>

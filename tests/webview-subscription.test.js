@@ -158,6 +158,57 @@ function validMedicalRequest(currentOrganization, freshOrganization) {
   };
 }
 
+function canonicalWorkerOverrides({
+  personStatus = 'ACTIVE',
+  identityStatus = 'VERIFIED',
+  channelStatus = 'VERIFIED',
+} = {}) {
+  return {
+    organizationId: 'organization-subscription-a',
+    personId: 'person-subscription-a',
+    phone: null,
+    person: {
+      status: personStatus,
+      identityStatus,
+      channelIdentities: [{
+        id: 'channel-subscription-a',
+        status: channelStatus,
+        verifiedAt: channelStatus === 'VERIFIED'
+          ? new Date('2026-07-20T12:00:00.000Z')
+          : null,
+        revokedAt: channelStatus === 'REVOKED'
+          ? new Date('2026-07-28T12:00:00.000Z')
+          : null,
+      }],
+    },
+  };
+}
+
+function installCanonicalWorker(currentOrganization, overrides) {
+  const calls = [];
+  globalThis.__obraSaasPrisma = {
+    worker: {
+      async findFirst(query) {
+        calls.push(['worker', query]);
+        return {
+          id: workerId,
+          projectId,
+          name: 'Persona canónica',
+          role: 'Operario',
+          active: true,
+          metadata: { whatsappRole: 'WORKER' },
+          project: {
+            organizationId: 'organization-subscription-a',
+            organization: currentOrganization,
+          },
+          ...overrides,
+        };
+      },
+    },
+  };
+  return calls;
+}
+
 test('attendance and medical webviews block every read-only subscription before field validation', async () => {
   const blocked = [
     organization('TRIALING', new Date('2000-01-01T00:00:00.000Z')),
@@ -211,6 +262,73 @@ test('medical upload revalidates the current subscription immediately before sto
     code: 'SUBSCRIPTION_READ_ONLY',
   });
   assert.equal(calls.filter(([name]) => name === 'organization').length, 1);
+});
+
+test('revoked canonical identities stop both webviews before journey, expiry or upload work', async (t) => {
+  for (const candidate of [
+    {
+      name: 'suspended person',
+      overrides: canonicalWorkerOverrides({ personStatus: 'SUSPENDED' }),
+    },
+    {
+      name: 'revoked WhatsApp channel',
+      overrides: canonicalWorkerOverrides({ channelStatus: 'REVOKED' }),
+    },
+  ]) {
+    await t.test(candidate.name, async () => {
+      const active = organization('ACTIVE');
+      let calls = installCanonicalWorker(active, candidate.overrides);
+      const attendanceToken = generateWebviewToken(workerId, {
+        purpose: 'attendance',
+        scope: projectId,
+        pendingEntryId: 'pending-canonical-blocked',
+      });
+      const attendanceResponse = await postAttendance(new Request(
+        'http://localhost/api/webviews/attendance',
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            worker: workerId,
+            token: attendanceToken,
+            action: ATTENDANCE_ACTIONS.CHECK_IN,
+            idempotencyKey: 'canonical-blocked-attendance-0001',
+            location: {
+              latitude: -34.6,
+              longitude: -58.4,
+              accuracy: 10,
+              capturedAt: new Date().toISOString(),
+            },
+            locationNoticeAcknowledged: true,
+            locationNoticeVersion: '2026-07-23',
+          }),
+        },
+      ));
+      assert.equal(attendanceResponse.status, 403);
+      assert.deepEqual(calls.map(([name]) => name), ['worker']);
+
+      calls = installCanonicalWorker(active, candidate.overrides);
+      const medicalToken = generateWebviewToken(workerId, {
+        purpose: 'medical',
+        scope: projectId,
+      });
+      const form = new FormData();
+      form.set('worker', workerId);
+      form.set('token', medicalToken);
+      form.set('days', '2');
+      form.set('certificate', new File(
+        [Buffer.from('%PDF-1.7\n')],
+        'certificado.pdf',
+        { type: 'application/pdf' },
+      ));
+      const medicalResponse = await postMedical(new Request(
+        'http://localhost/api/webviews/medical',
+        { method: 'POST', body: form },
+      ));
+      assert.equal(medicalResponse.status, 403);
+      assert.deepEqual(calls.map(([name]) => name), ['worker']);
+    });
+  }
 });
 
 test('attendance webview rejects action tampering before any durable operation', async () => {

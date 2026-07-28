@@ -45,6 +45,33 @@ export const WORKER_FINANCIAL_FIELDS = Object.freeze({
   PAYMENT_RESOLUTION: 'PAYMENT_RESOLUTION',
 });
 
+export function workerChannelAddressBinding(channel, recordVersion = channel?.recordVersion) {
+  return {
+    organizationId: channel?.organizationId,
+    subjectId: channel?.personId,
+    recordId: channel?.id,
+    recordVersion: Number(recordVersion),
+    purpose: WORKER_FINANCIAL_PURPOSES.CHANNEL_ADDRESS,
+    destinationType: 'WHATSAPP_E164',
+    field: WORKER_FINANCIAL_FIELDS.CHANNEL_ADDRESS,
+  };
+}
+
+export function workerChannelProviderSubjectBinding(
+  channel,
+  recordVersion = channel?.recordVersion,
+) {
+  return {
+    organizationId: channel?.organizationId,
+    subjectId: channel?.personId,
+    recordId: channel?.id,
+    recordVersion: Number(recordVersion),
+    purpose: WORKER_FINANCIAL_PURPOSES.CHANNEL_ADDRESS,
+    destinationType: 'WHATSAPP_PROVIDER_SUBJECT',
+    field: WORKER_FINANCIAL_FIELDS.CHANNEL_PROVIDER_SUBJECT,
+  };
+}
+
 export const WORKER_SENSITIVE_VALUE_TYPES = Object.freeze([
   'CUIL',
   ...WORKER_PAYMENT_DESTINATION_TYPES,

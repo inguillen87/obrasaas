@@ -29,6 +29,8 @@ const MAX_FIELD_WORKER_REQUEST_BYTES = 16 * 1024;
 
 const WORKER_SELECT = {
   id: true,
+  organizationId: true,
+  personId: true,
   phone: true,
   name: true,
   role: true,
@@ -36,6 +38,21 @@ const WORKER_SELECT = {
   metadata: true,
   createdAt: true,
   updatedAt: true,
+  person: {
+    select: {
+      channelIdentities: {
+        where: { provider: 'WHATSAPP' },
+        orderBy: { id: 'asc' },
+        select: {
+          id: true,
+          provider: true,
+          status: true,
+          addressLastFour: true,
+          verifiedAt: true,
+        },
+      },
+    },
+  },
 };
 
 class FieldWorkerCapacityError extends Error {
@@ -222,6 +239,13 @@ export async function PATCH(request) {
           'La persona no pertenece a la obra seleccionada.',
           'WORKER_NOT_FOUND',
           404,
+        );
+      }
+      if (current.personId && Object.hasOwn(data, 'phone')) {
+        throw new FieldWorkerMutationError(
+          'El WhatsApp verificado se administra desde la identidad canónica y no puede editarse como teléfono legado.',
+          'CANONICAL_PHONE_IMMUTABLE',
+          409,
         );
       }
       const phoneToValidate = data.phone || (data.active === true ? current.phone : null);

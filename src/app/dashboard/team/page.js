@@ -9,7 +9,7 @@ import {
   requireTenantPermission,
 } from '@/lib/access';
 import { getPrisma } from '@/lib/prisma';
-import { fieldWorkerWhatsAppRole } from '@/lib/field-workers';
+import { serializeFieldWorker } from '@/lib/field-workers';
 import { PLAN_CATALOG } from '@/lib/plans';
 import {
   projectAccessWhere,
@@ -49,8 +49,28 @@ export default async function TeamPage() {
       }))
       : Promise.resolve({ data: [] }),
     prisma.worker.findMany({
-      where: { projectId: access.project.id },
+      where: {
+        projectId: access.project.id,
+        project: { organizationId: access.organization.id },
+      },
       orderBy: [{ active: 'desc' }, { name: 'asc' }],
+      include: {
+        person: {
+          select: {
+            channelIdentities: {
+              where: { provider: 'WHATSAPP' },
+              orderBy: { id: 'asc' },
+              select: {
+                id: true,
+                provider: true,
+                status: true,
+                addressLastFour: true,
+                verifiedAt: true,
+              },
+            },
+          },
+        },
+      },
     }),
     prisma.project.findMany({
       where: projectAccessWhere(access, {
@@ -136,16 +156,7 @@ export default async function TeamPage() {
       <FieldWorkersClient
         canManage={canManageField}
         projectName={access.project.name}
-        initialWorkers={workers.map((worker) => ({
-          id: worker.id,
-          name: worker.name,
-          phone: worker.phone,
-          role: worker.role,
-          active: worker.active,
-          whatsappRole: fieldWorkerWhatsAppRole(worker),
-          createdAt: worker.createdAt.toISOString(),
-          updatedAt: worker.updatedAt.toISOString(),
-        }))}
+        initialWorkers={workers.map(serializeFieldWorker)}
       />
     </div>
   );

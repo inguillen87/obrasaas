@@ -17,6 +17,11 @@ import {
   applyDirectObraMessageAtomically,
 } from "@/lib/db";
 import {
+  FIELD_WORKER_CANONICAL_PERSON_SELECT,
+  FIELD_WORKER_RESOLUTION,
+  evaluateActiveFieldWorkerById,
+} from "@/lib/field-workers";
+import {
   MAX_REPORTED_LOCATION_ACCURACY_METERS,
   validateReportedLocation,
 } from "@/lib/geo";
@@ -189,9 +194,10 @@ function attendanceTokenBinding(tokenPayload) {
 }
 
 async function activeFieldWorker(workerId, projectId) {
-  return getPrisma().worker.findFirst({
+  const worker = await getPrisma().worker.findFirst({
     where: { id: workerId, projectId, active: true },
     include: {
+      person: { select: FIELD_WORKER_CANONICAL_PERSON_SELECT },
       project: {
         select: {
           organizationId: true,
@@ -206,6 +212,12 @@ async function activeFieldWorker(workerId, projectId) {
       },
     },
   });
+  if (!worker?.project?.organizationId) return null;
+  const resolution = evaluateActiveFieldWorkerById(worker, {
+    organizationId: worker.project.organizationId,
+    projectId,
+  });
+  return resolution.status === FIELD_WORKER_RESOLUTION.RESOLVED ? worker : null;
 }
 
 export async function GET(request) {

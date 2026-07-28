@@ -16,6 +16,8 @@ import {
   workerFinancialFingerprint,
   workerFinancialFingerprintCandidates,
   workerFinancialLastFour,
+  workerChannelAddressBinding,
+  workerChannelProviderSubjectBinding,
 } from './worker-financial-data.js';
 
 const CLAIM_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
@@ -417,30 +419,6 @@ function personIdentityBinding(person, recordVersion = person.recordVersion) {
     purpose: WORKER_FINANCIAL_PURPOSES.IDENTITY_CUIL,
     destinationType: 'CUIL',
     field: WORKER_FINANCIAL_FIELDS.IDENTITY_CUIL,
-  };
-}
-
-function channelAddressBinding(channel, recordVersion = channel.recordVersion) {
-  return {
-    organizationId: channel.organizationId,
-    subjectId: channel.personId,
-    recordId: channel.id,
-    recordVersion: Number(recordVersion),
-    purpose: WORKER_FINANCIAL_PURPOSES.CHANNEL_ADDRESS,
-    destinationType: 'WHATSAPP_E164',
-    field: WORKER_FINANCIAL_FIELDS.CHANNEL_ADDRESS,
-  };
-}
-
-function channelProviderSubjectBinding(channel, recordVersion = channel.recordVersion) {
-  return {
-    organizationId: channel.organizationId,
-    subjectId: channel.personId,
-    recordId: channel.id,
-    recordVersion: Number(recordVersion),
-    purpose: WORKER_FINANCIAL_PURPOSES.CHANNEL_ADDRESS,
-    destinationType: 'WHATSAPP_PROVIDER_SUBJECT',
-    field: WORKER_FINANCIAL_FIELDS.CHANNEL_PROVIDER_SUBJECT,
   };
 }
 
@@ -1281,7 +1259,7 @@ function decryptChannelAddress(channel, dependencies) {
   const payload = decryptPayload(
     channel.encryptedAddressPayload,
     channel.wrappingKeyId,
-    channelAddressBinding(channel),
+    workerChannelAddressBinding(channel),
     dependencies,
   );
   if (Object.keys(payload).length !== 1 || !Object.hasOwn(payload, 'address')) {
@@ -1307,7 +1285,7 @@ function decryptChannelProviderSubject(channel, dependencies) {
   const payload = decryptPayload(
     channel.encryptedProviderSubjectPayload,
     channel.wrappingKeyId,
-    channelProviderSubjectBinding(channel),
+    workerChannelProviderSubjectBinding(channel),
     dependencies,
   );
   if (Object.keys(payload).length !== 1 || !Object.hasOwn(payload, 'providerSubject')) {
@@ -1442,12 +1420,12 @@ async function createOrVerifyChannel(transaction, scope, person, sender, now, de
   };
   const encryptedAddress = encryptPayload(
     { address: sender.address },
-    channelAddressBinding(baseChannel),
+    workerChannelAddressBinding(baseChannel),
     dependencies,
   );
   const encryptedProviderSubject = encryptPayload(
     { providerSubject: sender.providerSubject },
-    channelProviderSubjectBinding(baseChannel),
+    workerChannelProviderSubjectBinding(baseChannel),
     dependencies,
   );
   if (encryptedAddress.wrappingKeyId !== encryptedProviderSubject.wrappingKeyId) {
