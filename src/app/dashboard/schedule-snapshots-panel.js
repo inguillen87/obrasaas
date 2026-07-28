@@ -145,6 +145,7 @@ export default function ScheduleSnapshotsPanel({
   const activeBaseline = baselines.find((baseline) => baseline.status === 'ACTIVE') || null;
   const latestForecast = forecasts[0] || null;
   const missingDateTasks = useMemo(() => tasks.filter((task) => !taskDatesComplete(task)), [tasks]);
+  const projectStartMissing = !project?.startsAt;
   const requirements = useMemo(() => {
     if (tasks.length === 0) return [];
     try {
@@ -340,7 +341,19 @@ export default function ScheduleSnapshotsPanel({
             <span>{tasks.length} tareas canónicas</span>
             <span className={missingDateTasks.length ? styles.invalid : styles.valid}>{missingDateTasks.length ? `${missingDateTasks.length} sin fechas` : 'Fechas completas'}</span>
           </div>
-          <button disabled={!canManage || loading || Boolean(busy) || (activeBaseline && !replaceActiveBaseline)} type="submit">
+          {missingDateTasks.length > 0 && (
+            <p className={styles.readinessWarning} role="status">
+              {projectStartMissing ? (
+                <>
+                  El cronograma sigue relativo porque la obra no tiene fecha de inicio.{' '}
+                  <a href="/dashboard/projects">Completá el inicio de la obra</a> para convertir las tareas a fechas calendario.
+                </>
+              ) : (
+                <>Editá las tareas sin calendario y completá sus fechas de inicio y fin antes de sellar el plan.</>
+              )}
+            </p>
+          )}
+          <button disabled={!canManage || loading || Boolean(busy) || tasks.length === 0 || missingDateTasks.length > 0 || (activeBaseline && !replaceActiveBaseline)} type="submit">
             {busy === 'baseline' ? 'Sellando…' : activeBaseline ? 'Publicar nueva versión' : 'Publicar baseline'}
           </button>
         </form>

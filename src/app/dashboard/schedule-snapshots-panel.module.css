@@ -8,3 +8,4 @@
 @media(max-width:1040px){.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.actionsGrid{grid-template-columns:1fr}}
 @media(max-width:640px){.panel{padding:14px;border-radius:16px}.heading{display:block}.health{margin-top:12px}.metrics{grid-template-columns:1fr 1fr}.requirements fieldset{grid-template-columns:1fr}.history>div:first-child{display:block}.history>div:first-child span{display:block;margin-top:4px}}
 @media(prefers-reduced-motion:reduce){.actionCard>button{transition:none}}
+.readinessWarning{margin:0;padding:10px 11px;border:1px solid rgba(245,158,11,.28);border-radius:9px;background:rgba(245,158,11,.08);color:#fbbf24;font-size:.72rem;line-height:1.5}.readinessWarning a{color:inherit;font-weight:900;text-underline-offset:3px}

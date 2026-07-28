@@ -4,6 +4,7 @@ import {
   activeProjectCapacity,
   projectConsumesActiveCapacity,
 } from './projects.js';
+import { reprojectCanonicalTaskSchedules } from './canonical-tasks.js';
 import { projectAccessWhere } from './project-access.js';
 import { synchronizeProjectTaskProjection } from './project-tasks.js';
 import { lockProjectTransaction } from './project-write-policy.js';
@@ -181,6 +182,7 @@ export async function updateTenantProject(prisma, access, input) {
           });
           resetProjectAccessCount = reset.count;
         }
+        let canonicalScheduleReprojectedCount = 0;
         if (changedFields.includes('startsAt')) {
           const snapshot = await transaction.projectSnapshot.findUnique({
             where: { projectId: current.id },
@@ -191,6 +193,10 @@ export async function updateTenantProject(prisma, access, input) {
             nextTasks: snapshot?.state?.tasks,
             projectStartsAt: updated.startsAt,
             stateVersion: snapshot?.version ?? 0,
+          });
+          canonicalScheduleReprojectedCount = await reprojectCanonicalTaskSchedules(transaction, {
+            projectId: current.id,
+            projectStartsAt: updated.startsAt,
           });
         }
         const action = projectLifecycleAuditAction(current.status, nextStatus);
@@ -206,6 +212,7 @@ export async function updateTenantProject(prisma, access, input) {
               previousStatus: current.status,
               nextStatus,
               resetProjectAccessCount,
+              canonicalScheduleReprojectedCount,
             },
           },
         });

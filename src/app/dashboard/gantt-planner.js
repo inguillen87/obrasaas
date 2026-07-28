@@ -250,6 +250,11 @@ export default function GanttPlanner({
     const worker = fieldWorkers.find((candidate) => candidate.id === editor.assigneeId);
     const requestedStartDay = integer(editor.startDay, 1, 1, 3_650);
     const alignedStartDay = earliestGanttStartDay(tasks, editor.dependencies, requestedStartDay);
+    const duration = integer(editor.duration, 1, 1, 3_650);
+    if (alignedStartDay + duration - 1 > 3_650) {
+      setError('La duración supera el horizonte máximo de 3.650 días para esta fecha de inicio.');
+      return;
+    }
     const previous = tasks[id] || {};
     const nextTasks = {
       ...tasks,
@@ -258,7 +263,7 @@ export default function GanttPlanner({
         name,
         assignee: worker?.name || 'Sin asignar',
         progress: integer(editor.progress, 0, 0, 100),
-        duration: integer(editor.duration, 1, 1, 3_650),
+        duration,
         startDay: alignedStartDay,
         startOffset: legacyOffset(alignedStartDay),
         dependencies: editor.dependencies,
@@ -277,7 +282,7 @@ export default function GanttPlanner({
           ? ganttDateForDay(projectStartsAt, alignedStartDay)?.toISOString?.() || null
           : null;
         const endsAt = startsAt
-          ? ganttDateForDay(projectStartsAt, alignedStartDay + integer(editor.duration, 1, 1, 3_650) - 1)?.toISOString?.() || null
+          ? ganttDateForDay(projectStartsAt, alignedStartDay + duration - 1)?.toISOString?.() || null
           : null;
         const progress = integer(editor.progress, 0, 0, 100);
         const payload = {
@@ -287,6 +292,10 @@ export default function GanttPlanner({
           status: progress >= 100 ? 'DONE' : progress > 0 ? 'IN_PROGRESS' : 'READY',
           startsAt,
           endsAt,
+          schedule: {
+            startDay: alignedStartDay,
+            durationDays: duration,
+          },
           dependencies: editor.dependencies,
           ...(editor.id ? { expectedRevision: Number(previous.revision) || 0 } : {}),
         };

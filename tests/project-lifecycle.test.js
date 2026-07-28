@@ -62,6 +62,7 @@ function prismaDouble({
   snapshotState = { tasks: {} },
   snapshotVersion = 0,
   projectedTasks = [],
+  canonicalTasks = [],
 } = {}) {
   const calls = [];
   let currentIndex = 0;
@@ -116,7 +117,11 @@ function prismaDouble({
     task: {
       async findMany(args) {
         calls.push(['task-find', args]);
-        return structuredClone(projectedTasks);
+        return structuredClone(
+          args.where?.metadata?.equals === 'canonical-task-v1'
+            ? canonicalTasks
+            : projectedTasks,
+        );
       },
       async upsert(args) {
         calls.push(['task-upsert', args]);
@@ -125,6 +130,10 @@ function prismaDouble({
       async deleteMany(args) {
         calls.push(['task-delete', args]);
         return { count: args.where.externalId.in.length };
+      },
+      async updateMany(args) {
+        calls.push(['task-updateMany', args]);
+        return { count: 1 };
       },
     },
     projectMembership: {
@@ -215,7 +224,7 @@ test('restricted lifecycle reads and writes require the actor project assignment
   assert.deepEqual(callsNamed(calls, 'update')[0][1].where, expectedScope);
 });
 
-test('changing the project start date reprojects canonical task dates inside the lifecycle transaction', async () => {
+test('changing the project start date reprojects legacy snapshot task dates inside the lifecycle transaction', async () => {
   const { calls, prisma } = prismaDouble({
     snapshotState: {
       tasks: {
@@ -245,6 +254,7 @@ test('changing the project start date reprojects canonical task dates inside the
     'snapshot-read',
     'task-find',
     'task-upsert',
+    'task-find',
     'audit',
     'count',
   ]);
@@ -265,6 +275,45 @@ test('changing the project start date reprojects canonical task dates inside the
   assert.equal(projectionWrite.create.metadata.projectStateVersion, 7);
   assert.equal(projectionWrite.create.startsAt.toISOString(), '2026-08-06T00:00:00.000Z');
   assert.equal(projectionWrite.create.endsAt.toISOString(), '2026-08-08T00:00:00.000Z');
+});
+
+test('changing the project start date rehydrates anchored canonical task dates atomically', async () => {
+  const { calls, prisma } = prismaDouble({
+    canonicalTasks: [{
+      id: 'canonical-a',
+      revision: 4,
+      startsAt: null,
+      endsAt: null,
+      metadata: {
+        schemaVersion: 1,
+        source: 'canonical-task-v1',
+        schedule: {
+          schemaVersion: 1,
+          anchor: 'PROJECT_START',
+          startDay: 2,
+          durationDays: 3,
+        },
+      },
+    }],
+  });
+
+  await updateTenantProject(
+    prisma,
+    access(),
+    patch({ startsAt: new Date('2026-08-05T00:00:00.000Z') }),
+  );
+
+  const canonicalWrite = callsNamed(calls, 'task-updateMany')[0][1];
+  assert.deepEqual(canonicalWrite.where, {
+    id: 'canonical-a',
+    projectId: 'project-a',
+    revision: 4,
+    metadata: { path: ['source'], equals: 'canonical-task-v1' },
+  });
+  assert.equal(canonicalWrite.data.startsAt.toISOString(), '2026-08-06T00:00:00.000Z');
+  assert.equal(canonicalWrite.data.endsAt.toISOString(), '2026-08-08T00:00:00.000Z');
+  assert.deepEqual(canonicalWrite.data.revision, { increment: 1 });
+  assert.equal(callsNamed(calls, 'audit')[0][1].data.metadata.canonicalScheduleReprojectedCount, 1);
 });
 
 test('a stale lifecycle version conflicts after the locked tenant read and before writes', async () => {

@@ -153,12 +153,22 @@ function canonicalTasksToGanttCatalog(tasks, projectStartsAt) {
   for (const task of tasks) {
     const start = task.startsAt ? new Date(task.startsAt).getTime() : NaN;
     const end = task.endsAt ? new Date(task.endsAt).getTime() : NaN;
+    const scheduledStartDay = Number(task?.schedule?.startDay);
+    const scheduledDurationDays = Number(task?.schedule?.durationDays);
+    const hasRelativeSchedule = (
+      Number.isInteger(scheduledStartDay)
+      && scheduledStartDay >= 1
+      && scheduledStartDay <= 3_650
+      && Number.isInteger(scheduledDurationDays)
+      && scheduledDurationDays >= 1
+      && scheduledDurationDays <= 3_650
+    );
     const startOffset = Number.isFinite(start) && Number.isFinite(projectStart)
       ? Math.max(0, Math.round((start - projectStart) / 86_400_000))
-      : 0;
+      : hasRelativeSchedule ? scheduledStartDay - 1 : 0;
     const duration = Number.isFinite(start) && Number.isFinite(end)
       ? Math.max(1, Math.round((end - start) / 86_400_000) + 1)
-      : 1;
+      : hasRelativeSchedule ? scheduledDurationDays : 1;
     catalog[task.id] = {
       name: task.title,
       title: task.title,

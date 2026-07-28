@@ -1,3 +1,4 @@
+import { MAX_GANTT_DAYS, ganttDateForDay } from './gantt.js';
 import { runOperationalProjectMutation } from './project-write-policy.js';
 
 const MAX_TITLE = 160;
@@ -10,6 +11,94 @@ const DEPENDENCY_TYPES = new Set([
   'FINISH_TO_FINISH',
   'START_TO_FINISH',
 ]);
+const CANONICAL_TASK_SOURCE = 'canonical-task-v1';
+const SCHEDULE_ANCHOR = 'PROJECT_START';
+const SCHEDULE_SCHEMA_VERSION = 1;
+
+function record(value) {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+}
+
+function boundedInteger(value, field, { minimum = 1, maximum = MAX_GANTT_DAYS } = {}) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < minimum || parsed > maximum) {
+    throw new CanonicalTaskError(`${field} debe ser un entero entre ${minimum} y ${maximum}.`);
+  }
+  return parsed;
+}
+
+function validAnchoredSchedule(value) {
+  const schedule = record(value);
+  if (
+    schedule.schemaVersion !== SCHEDULE_SCHEMA_VERSION
+    || schedule.anchor !== SCHEDULE_ANCHOR
+  ) return null;
+  const startDay = Number(schedule.startDay);
+  const durationDays = Number(schedule.durationDays);
+  if (
+    !Number.isInteger(startDay)
+    || !Number.isInteger(durationDays)
+    || startDay < 1
+    || startDay > MAX_GANTT_DAYS
+    || durationDays < 1
+    || durationDays > MAX_GANTT_DAYS
+    || startDay + durationDays - 1 > MAX_GANTT_DAYS
+  ) return null;
+  return {
+    schemaVersion: SCHEDULE_SCHEMA_VERSION,
+    anchor: SCHEDULE_ANCHOR,
+    startDay,
+    durationDays,
+  };
+}
+
+function dateFingerprint(value) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function canonicalMetadata(existingMetadata, schedule = undefined) {
+  const metadata = record(existingMetadata);
+  const next = {
+    ...metadata,
+    schemaVersion: Math.max(1, Number(metadata.schemaVersion) || 1),
+    source: CANONICAL_TASK_SOURCE,
+  };
+  if (schedule === null) {
+    delete next.schedule;
+  } else if (schedule !== undefined) {
+    next.schedule = schedule;
+  }
+  return next;
+}
+
+export function canonicalTaskScheduleFromMetadata(metadata) {
+  return validAnchoredSchedule(record(metadata).schedule);
+}
+
+export function normalizeCanonicalTaskSchedule(input = {}) {
+  if (!Object.hasOwn(input, 'schedule') || input.schedule === undefined) return undefined;
+  if (input.schedule === null) return null;
+  if (!input.schedule || typeof input.schedule !== 'object' || Array.isArray(input.schedule)) {
+    throw new CanonicalTaskError('schedule debe ser un objeto válido.');
+  }
+  const unknownFields = Object.keys(input.schedule).filter((field) => !['startDay', 'durationDays'].includes(field));
+  if (unknownFields.length > 0) {
+    throw new CanonicalTaskError(`Campo de schedule no permitido: ${unknownFields[0]}.`);
+  }
+  const startDay = boundedInteger(input.schedule.startDay, 'schedule.startDay');
+  const durationDays = boundedInteger(input.schedule.durationDays, 'schedule.durationDays');
+  if (startDay + durationDays - 1 > MAX_GANTT_DAYS) {
+    throw new CanonicalTaskError(`schedule supera el horizonte máximo de ${MAX_GANTT_DAYS} días.`);
+  }
+  return {
+    schemaVersion: SCHEDULE_SCHEMA_VERSION,
+    anchor: SCHEDULE_ANCHOR,
+    startDay,
+    durationDays,
+  };
+}
 
 export class CanonicalTaskError extends Error {
   constructor(message, code = 'CANONICAL_TASK_INVALID', status = 400, details = null) {
@@ -144,6 +233,7 @@ function serializeTask(task) {
     progress: task.progress,
     startsAt: task.startsAt?.toISOString?.() || null,
     endsAt: task.endsAt?.toISOString?.() || null,
+    schedule: canonicalTaskScheduleFromMetadata(task.metadata),
     assignee: task.assignee || null,
     revision: task.revision,
     parentId: task.parentId || null,
@@ -187,6 +277,7 @@ export async function createCanonicalTask(prisma, {
   input,
 } = {}) {
   const normalized = normalizeCanonicalTaskInput(input);
+  const schedule = normalizeCanonicalTaskSchedule(input);
   const requestedDependencies = dependencyIds(input?.dependencies) || [];
   const projectId = text(scope?.projectId, 'projectId', 190, { required: true });
   const organizationId = text(scope?.organizationId, 'organizationId', 190, { required: true });
@@ -200,7 +291,7 @@ export async function createCanonicalTask(prisma, {
       data: {
         projectId,
         ...normalized,
-        metadata: { schemaVersion: 1, source: 'canonical-task-v1' },
+        metadata: canonicalMetadata(null, schedule),
       },
       include: taskInclude(),
     });
@@ -261,6 +352,7 @@ export async function updateCanonicalTask(prisma, {
   const id = text(taskId, 'taskId', 190, { required: true });
   const revision = safeRevision(expectedRevision);
   const normalized = normalizeCanonicalTaskInput(input, { partial: true });
+  const schedule = normalizeCanonicalTaskSchedule(input);
   const requestedDependencies = dependencyIds(input?.dependencies);
   return runOperationalProjectMutation(prisma, { organizationId, projectId }, async (transaction) => {
     if (normalized.parentId) {
@@ -288,9 +380,18 @@ export async function updateCanonicalTask(prisma, {
         assertDependencyAcyclic(otherEdges, { predecessorId, successorId: id });
       }
     }
+    let metadata;
+    if (schedule !== undefined) {
+      const current = await transaction.task.findFirst({
+        where: { id, projectId, revision, metadata: { path: ['source'], equals: CANONICAL_TASK_SOURCE } },
+        select: { metadata: true },
+      });
+      if (!current) throw new CanonicalTaskError('La tarea cambiÃ³; recargÃ¡ y reintentÃ¡.', 'CANONICAL_TASK_STALE', 409);
+      metadata = canonicalMetadata(current.metadata, schedule);
+    }
     const updated = await transaction.task.updateMany({
       where: { id, projectId, revision, metadata: { path: ['source'], equals: 'canonical-task-v1' } },
-      data: { ...normalized, revision: { increment: 1 } },
+      data: { ...normalized, ...(metadata ? { metadata } : {}), revision: { increment: 1 } },
     });
     if (updated.count !== 1) throw new CanonicalTaskError('La tarea cambió; recargá y reintentá.', 'CANONICAL_TASK_STALE', 409);
     if (requestedDependencies) {
@@ -305,6 +406,65 @@ export async function updateCanonicalTask(prisma, {
     await transaction.auditLog.create({ data: { organizationId, actorId: actor, action: 'task.updated', entityType: 'Task', entityId: id, metadata: { projectId, revision: revision + 1 } } });
     return serializeTask(result);
   });
+}
+
+export async function reprojectCanonicalTaskSchedules(transaction, {
+  projectId,
+  projectStartsAt = null,
+} = {}) {
+  const safeProjectId = text(projectId, 'projectId', 190, { required: true });
+  if (
+    typeof transaction?.task?.findMany !== 'function'
+    || typeof transaction?.task?.updateMany !== 'function'
+  ) {
+    throw new Error('Canonical task schedule persistence is unavailable.');
+  }
+  const tasks = await transaction.task.findMany({
+    where: {
+      projectId: safeProjectId,
+      metadata: { path: ['source'], equals: CANONICAL_TASK_SOURCE },
+    },
+    select: {
+      id: true,
+      revision: true,
+      startsAt: true,
+      endsAt: true,
+      metadata: true,
+    },
+  });
+  let reprojected = 0;
+  for (const task of tasks) {
+    const schedule = canonicalTaskScheduleFromMetadata(task.metadata);
+    if (!schedule) continue;
+    const startsAt = projectStartsAt
+      ? ganttDateForDay(projectStartsAt, schedule.startDay)
+      : null;
+    const endsAt = startsAt
+      ? ganttDateForDay(projectStartsAt, schedule.startDay + schedule.durationDays - 1)
+      : null;
+    if (
+      dateFingerprint(task.startsAt) === dateFingerprint(startsAt)
+      && dateFingerprint(task.endsAt) === dateFingerprint(endsAt)
+    ) continue;
+    const updated = await transaction.task.updateMany({
+      where: {
+        id: task.id,
+        projectId: safeProjectId,
+        revision: task.revision,
+        metadata: { path: ['source'], equals: CANONICAL_TASK_SOURCE },
+      },
+      data: {
+        startsAt,
+        endsAt,
+        revision: { increment: 1 },
+      },
+    });
+    if (updated.count !== 1) {
+      throw new CanonicalTaskError('La tarea cambiÃ³ durante la replanificaciÃ³n; recargÃ¡ y reintentÃ¡.', 'CANONICAL_TASK_STALE', 409);
+    }
+    reprojected += 1;
+  }
+  return reprojected;
 }
 
 export async function createCanonicalTaskDependency(prisma, {

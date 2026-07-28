@@ -3,11 +3,12 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const root = new URL('../', import.meta.url);
-const [page, dashboard, panel, css] = await Promise.all([
+const [page, dashboard, panel, css, planner] = await Promise.all([
   readFile(new URL('src/app/dashboard/page.js', root), 'utf8'),
   readFile(new URL('src/app/dashboard/dashboard-client.js', root), 'utf8'),
   readFile(new URL('src/app/dashboard/schedule-snapshots-panel.js', root), 'utf8'),
   readFile(new URL('src/app/dashboard/schedule-snapshots-panel.module.css', root), 'utf8'),
+  readFile(new URL('src/app/dashboard/gantt-planner.js', root), 'utf8'),
 ]);
 
 test('dashboard uses canonical task capability from the first task and exact manage permission', () => {
@@ -31,5 +32,16 @@ test('contractual schedule panel is API-backed, replay-safe and never claims pla
   assert.match(panel, /Las fechas reales no se autocompletan con el plan/);
   assert.match(panel, /expectedProjectStateVersion: projectStateVersion\(\)/);
   assert.match(panel, /baselineMatchesVisiblePlan/);
+  assert.match(panel, /projectStartMissing = !project\?\.startsAt/);
+  assert.match(panel, /href="\/dashboard\/projects">Completá el inicio de la obra/);
+  assert.match(panel, /tasks\.length === 0 \|\| missingDateTasks\.length > 0/);
+  assert.match(css, /\.readinessWarning/);
   assert.match(css, /@media\(max-width:640px\)/);
+});
+
+test('canonical Gantt keeps its relative anchor when a project calendar is not yet set', () => {
+  assert.match(dashboard, /const scheduledStartDay = Number\(task\?\.schedule\?\.startDay\)/);
+  assert.match(dashboard, /hasRelativeSchedule \? scheduledStartDay - 1 : 0/);
+  assert.match(dashboard, /hasRelativeSchedule \? scheduledDurationDays : 1/);
+  assert.match(planner, /schedule: \{\s*startDay: alignedStartDay,\s*durationDays:/);
 });
