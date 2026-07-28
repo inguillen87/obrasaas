@@ -120,6 +120,7 @@ function message(overrides = {}) {
     kind: 'TEXT',
     body: 'Necesitamos hormigón.',
     mediaUrl: null,
+    whatsappMediaAsset: null,
     status: 'received',
     metadata: null,
     sentAt: new Date('2026-07-17T17:30:00.000Z'),

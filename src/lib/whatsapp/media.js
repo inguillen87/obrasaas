@@ -3,6 +3,13 @@ import path from "node:path";
 import { canTranscribeMimeType, isOpenAIConfigured, transcribeAudio } from "../ai/openai.js";
 import { isProtectedStorageConfigured, uploadProtectedFile } from "../storage.js";
 import { downloadWhatsAppMedia } from "./meta.js";
+import {
+  WHATSAPP_MEDIA_UPLOAD_CERTAINTY,
+  WhatsAppMediaAssetError,
+  createOrResumeWhatsAppMediaAssetIntent,
+  markWhatsAppMediaAssetAvailable,
+  markWhatsAppMediaAssetUploadFailure,
+} from "./media-assets.js";
 
 const EXTENSIONS_BY_MIME = new Map([
   ["audio/aac", "aac"],
@@ -57,6 +64,7 @@ export function isEnrichedInboundWhatsAppMediaEvent(event) {
   const media = event?.media;
   const storage = media?.storage;
   const storedIdentity = storage?.assetId || storage?.publicId || storage?.pathname;
+  const managedAssetId = typeof media?.assetId === "string" ? media.assetId.trim() : "";
   if (
     !media?.id
     || !media.filename
@@ -69,6 +77,8 @@ export function isEnrichedInboundWhatsAppMediaEvent(event) {
     || storage?.status !== "stored"
     || !storage?.provider
     || !storedIdentity
+    || (Object.hasOwn(media || {}, "assetId") && !managedAssetId)
+    || (managedAssetId && storage?.ledgerAssetId !== managedAssetId)
   ) {
     return false;
   }
@@ -116,6 +126,10 @@ export async function ingestAndPersistInboundWhatsAppMedia({
   const wasEnriched = isEnrichedInboundWhatsAppMediaEvent(event);
   const enrichedEvent = await ingest(event, {
     scope,
+    mediaAssetContext: {
+      webhookEventId: leasedEvent?.id,
+      webhookLeaseToken: leasedEvent?.leaseToken,
+    },
     transcriptionEnabled,
     beforeTranscribe,
   });
@@ -140,6 +154,11 @@ export async function ingestInboundWhatsAppMedia(event, {
   aiConfigured = isOpenAIConfigured,
   transcriptionEnabled = false,
   beforeTranscribe = null,
+  mediaAssetContext = null,
+  prisma = null,
+  createMediaAssetIntent = createOrResumeWhatsAppMediaAssetIntent,
+  finalizeMediaAsset = markWhatsAppMediaAssetAvailable,
+  failMediaAssetUpload = markWhatsAppMediaAssetUploadFailure,
 } = {}) {
   if (!event?.media?.id) return event;
   if (isEnrichedInboundWhatsAppMediaEvent(event)) return event;
@@ -157,9 +176,79 @@ export async function ingestInboundWhatsAppMedia(event, {
   });
   const fileName = safeFileName(event.media.filename, downloaded.id, downloaded.mimeType);
   const idempotencyKey = whatsAppMediaUploadIdempotencyKey(event, downloaded);
-  const uploadResult = await upload(
-    new File([downloaded.buffer], fileName, { type: downloaded.mimeType }),
-    {
+  const file = new File([downloaded.buffer], fileName, { type: downloaded.mimeType });
+  let uploadResult;
+  let managedAsset = null;
+  if (mediaAssetContext) {
+    const database = prisma || (await import("../prisma.js")).getPrisma();
+    const intent = await createMediaAssetIntent(database, {
+      scope: {
+        organizationId: scope?.organizationId,
+        projectId: scope?.projectId,
+        phoneNumberId: event.phoneNumberId,
+      },
+      webhookEventId: mediaAssetContext.webhookEventId,
+      webhookLeaseToken: mediaAssetContext.webhookLeaseToken,
+      providerMessageId: event.externalId,
+      providerMediaId: event.media.id,
+      mediaKind: event.kind,
+      declaredMimeType: downloaded.mimeType,
+      file,
+      contentSha256: downloaded.sha256,
+    });
+    if (intent.dispatch) {
+      try {
+        uploadResult = await upload(file, intent.upload.options);
+      } catch (error) {
+        let isolated = false;
+        try {
+          await failMediaAssetUpload(database, {
+            scope,
+            mediaAssetId: intent.mediaAssetId,
+            uploadLeaseToken: intent.uploadLeaseToken,
+            certainty: WHATSAPP_MEDIA_UPLOAD_CERTAINTY.UNCERTAIN,
+            errorCode: error?.code,
+          });
+          isolated = true;
+        } catch {
+          // The durable upload lease still prevents an immediate redispatch.
+          // A later worker pass will isolate the expired intent for cleanup.
+        }
+        if (isolated) {
+          throw new WhatsAppMediaAssetError(
+            "El proveedor no confirmó la carga privada; el objeto quedó aislado para limpieza.",
+            "WHATSAPP_MEDIA_ASSET_UPLOAD_UNCERTAIN",
+            409,
+          );
+        }
+        throw error;
+      }
+      managedAsset = await finalizeMediaAsset(database, {
+        scope,
+        mediaAssetId: intent.mediaAssetId,
+        uploadLeaseToken: intent.uploadLeaseToken,
+        uploaded: uploadResult,
+        fileName,
+        mimeType: downloaded.mimeType,
+      });
+    } else {
+      managedAsset = intent;
+    }
+    if (!managedAsset?.descriptor || managedAsset.descriptor.assetId !== managedAsset.mediaAssetId) {
+      throw new WhatsAppMediaAssetError(
+        "El registro durable del medio no devolvió un descriptor verificable.",
+        "WHATSAPP_MEDIA_ASSET_DESCRIPTOR_INVALID",
+        500,
+      );
+    }
+    uploadResult = {
+      ...managedAsset.descriptor.storage,
+      secureUrl: managedAsset.descriptor.url,
+    };
+  } else {
+    // Kept only for isolated/local callers. Production webhook ingestion always
+    // supplies mediaAssetContext through ingestAndPersistInboundWhatsAppMedia.
+    uploadResult = await upload(file, {
       folder: `obrasaas/whatsapp/${safeContextValue(event.phoneNumberId)}`,
       context: [
         `phone_number_id=${safeContextValue(event.phoneNumberId)}`,
@@ -167,8 +256,8 @@ export async function ingestInboundWhatsAppMedia(event, {
         `kind=${safeContextValue(event.kind)}`,
       ].join("|"),
       idempotencyKey,
-    },
-  );
+    });
+  }
 
   let transcription = null;
   if (event.kind === "audio") {
@@ -201,6 +290,7 @@ export async function ingestInboundWhatsAppMedia(event, {
     transcription,
     media: {
       ...event.media,
+      ...(managedAsset ? { assetId: managedAsset.mediaAssetId } : {}),
       filename: fileName,
       mimeType: downloaded.mimeType,
       sha256: downloaded.sha256,
@@ -216,6 +306,7 @@ export async function ingestInboundWhatsAppMedia(event, {
         bytes: uploadResult.bytes,
         pathname: uploadResult.pathname || null,
         reused: uploadResult.reused === true,
+        ...(managedAsset ? { ledgerAssetId: managedAsset.mediaAssetId } : {}),
       },
     },
   };

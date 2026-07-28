@@ -323,6 +323,95 @@ test("freshly enriched webhook media is persisted under the active lease before 
   assert.deepEqual(calls, ["ingest", "persist"]);
 });
 
+test("managed webhook media commits intent, provider result and durable payload in order", async () => {
+  const calls = [];
+  const managedEvent = {
+    ...baseEvent,
+    externalId: "wamid.managed-image-1",
+    kind: "image",
+    media: {
+      ...baseEvent.media,
+      id: "managed-image-1",
+      mimeType: "image/jpeg",
+      filename: "pared.jpg",
+    },
+  };
+  const pathname = "obrasaas/projects/project-1/whatsapp/987654321098765/managed-image.jpg";
+  const storage = {
+    provider: "vercel-blob",
+    assetId: `https://tenant.private.blob.vercel-storage.com/${pathname}`,
+    publicId: pathname,
+    pathname,
+    resourceType: "image",
+    format: "jpg",
+    bytes: 5,
+    reused: false,
+  };
+  const result = await ingestAndPersistInboundWhatsAppMedia({
+    leasedEvent: { id: "webhook-managed-1", leaseToken: "lease-managed-1" },
+    event: managedEvent,
+    scope: { projectId: "project-1", organizationId: "org-1" },
+  }, {
+    ingest: (event, options) => ingestInboundWhatsAppMedia(event, {
+      ...options,
+      prisma: { source: "managed-test" },
+      storageConfigured: () => true,
+      download: async () => ({
+        id: managedEvent.media.id,
+        buffer: Buffer.from("photo"),
+        kind: "image",
+        mimeType: "image/jpeg",
+        size: 5,
+        sha256: "a".repeat(64),
+      }),
+      createMediaAssetIntent: async (_prisma, input) => {
+        calls.push("intent");
+        assert.equal(input.webhookEventId, "webhook-managed-1");
+        assert.equal(input.webhookLeaseToken, "lease-managed-1");
+        return {
+          mediaAssetId: "asset-ledger-1",
+          status: "UPLOADING",
+          dispatch: true,
+          uploadLeaseToken: "upload-lease-1",
+          upload: { options: { provider: "vercel-blob", idempotencyKey: "managed-key" } },
+        };
+      },
+      upload: async (_file, options) => {
+        calls.push("upload");
+        assert.equal(options.idempotencyKey, "managed-key");
+        return { ...storage, secureUrl: storage.assetId };
+      },
+      finalizeMediaAsset: async () => {
+        calls.push("finalize");
+        return {
+          mediaAssetId: "asset-ledger-1",
+          status: "AVAILABLE",
+          descriptor: {
+            assetId: "asset-ledger-1",
+            provider: "vercel-blob",
+            storage,
+            url: storage.assetId,
+            visibility: "private",
+            mimeType: "image/jpeg",
+            filename: "pared.jpg",
+            size: 5,
+            sha256: "a".repeat(64),
+          },
+        };
+      },
+    }),
+    persist: async ({ event }) => {
+      calls.push("persist");
+      assert.equal(event.media.assetId, "asset-ledger-1");
+      assert.equal(event.media.storage.ledgerAssetId, "asset-ledger-1");
+      assert.equal(isEnrichedInboundWhatsAppMediaEvent(event), true);
+    },
+  });
+
+  assert.equal(result.media.assetId, "asset-ledger-1");
+  assert.deepEqual(calls, ["intent", "upload", "finalize", "persist"]);
+});
+
 test("already-enriched webhook media does not perform a redundant durable payload write", async () => {
   const enriched = {
     ...baseEvent,

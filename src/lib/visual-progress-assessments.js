@@ -21,11 +21,17 @@ import {
 import { runOperationalProjectMutation } from './project-write-policy.js';
 import { readProtectedFile } from './storage.js';
 import { roleHasPermission } from './tenant-roles.js';
+import {
+  resolveClaimedWhatsAppMessageMedia,
+  WHATSAPP_MEDIA_ASSET_DESCRIPTOR_SELECT,
+  WhatsAppMediaAssetError,
+} from './whatsapp/media-assets.js';
 
 const CONTRACT_VERSION = 'visual-progress-assessment:v1';
 const ANALYZER_VERSION = `visual-progress-v${VISUAL_PROGRESS_SCHEMA_VERSION}`;
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,189}$/;
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
+const VISUAL_PROGRESS_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const REVIEW_STATUSES = new Set(['APPROVED', 'CORRECTED', 'REJECTED']);
 export const VISUAL_PROGRESS_LEASE_MS = 2 * 60 * 1000;
 export const VISUAL_PROGRESS_LEASE_EXPIRED_CODE = 'VISUAL_PROGRESS_LEASE_EXPIRED';
@@ -301,6 +307,27 @@ const PLAN_SELECT = {
   },
 };
 
+const SOURCE_MESSAGE_SELECT = {
+  id: true,
+  conversationId: true,
+  externalId: true,
+  direction: true,
+  kind: true,
+  mediaUrl: true,
+  metadata: true,
+  conversation: {
+    select: {
+      id: true,
+      projectId: true,
+      channel: true,
+      externalId: true,
+    },
+  },
+  whatsappMediaAsset: {
+    select: WHATSAPP_MEDIA_ASSET_DESCRIPTOR_SELECT,
+  },
+};
+
 function taskProviderContext(task, baselineHash) {
   return {
     title: String(task.title || '').slice(0, 300),
@@ -315,9 +342,81 @@ function taskProviderContext(task, baselineHash) {
   };
 }
 
-function mediaSource(evidence, connection = null) {
+function invalidVisualEvidence() {
+  return error(
+    'La evidencia no contiene una imagen privada verificable.',
+    'VISUAL_PROGRESS_EVIDENCE_INVALID',
+    422,
+  );
+}
+
+function durableWhatsAppMediaSource(evidence, scope) {
+  const snapshot = record(evidence.media);
+  let durable;
+  try {
+    durable = resolveClaimedWhatsAppMessageMedia(evidence.sourceMessage, { scope });
+  } catch (cause) {
+    if (cause instanceof WhatsAppMediaAssetError) throw invalidVisualEvidence();
+    throw cause;
+  }
+  if (durable === null) return null;
+
+  const { asset, descriptor } = durable;
+  const storageIdentity = protectedStorageLookup(descriptor.storage);
+  const snapshotSha256 = String(snapshot.sha256 || '').toLowerCase();
+  const snapshotMimeType = String(snapshot.mimeType || '')
+    .split(';', 1)[0]
+    .trim()
+    .toLowerCase();
+  const exactSource = (
+    evidence.sourceConversationId
+    && evidence.sourceMessageId
+    && evidence.sourceMessage?.id === evidence.sourceMessageId
+    && evidence.sourceMessage?.conversationId === evidence.sourceConversationId
+    && evidence.sourceMessage?.conversation?.id === evidence.sourceConversationId
+    && evidence.sourceMessage?.conversation?.projectId === evidence.projectId
+    && evidence.sourceMessage?.conversation?.channel === 'whatsapp'
+    && String(evidence.sourceMessage?.conversation?.externalId || '').startsWith('meta:')
+    && asset.mediaKind === 'IMAGE'
+    && snapshot.schemaVersion === 2
+    && snapshot.source === 'whatsapp-media-asset'
+    && snapshot.assetId === descriptor.assetId
+    && snapshot.kind === 'image'
+    && snapshotSha256 === descriptor.sha256
+    && snapshotMimeType === descriptor.mimeType
+    && snapshot.filename === descriptor.filename
+    && snapshot.size === descriptor.size
+    && VISUAL_PROGRESS_MIME_TYPES.has(descriptor.mimeType)
+    && Number.isSafeInteger(descriptor.size)
+    && descriptor.size > 0
+    && descriptor.size <= MAX_IMAGE_BYTES
+    && storageIdentity
+  );
+  if (!exactSource) throw invalidVisualEvidence();
+
+  return {
+    assetId: descriptor.assetId,
+    expectedSha256: descriptor.sha256,
+    mimeType: descriptor.mimeType,
+    storage: descriptor.storage,
+    size: descriptor.size,
+    identity: [
+      'whatsapp-media-asset',
+      descriptor.assetId,
+      asset.claimFingerprint,
+      descriptor.storage.provider,
+      storageIdentity.value,
+    ].join(':'),
+  };
+}
+
+function mediaSource(evidence, connection = null, scope = null) {
   const media = record(evidence.media);
   const fromWhatsApp = Boolean(evidence.sourceMessageId);
+  if (fromWhatsApp) {
+    const durable = durableWhatsAppMediaSource(evidence, scope);
+    if (durable) return durable;
+  }
   const valid = fromWhatsApp
     ? isWhatsAppProgressMediaForProject({
         media,
@@ -342,11 +441,7 @@ function mediaSource(evidence, connection = null) {
     !valid
     || !identity
   ) {
-    throw error(
-      'La evidencia no contiene una imagen privada verificable.',
-      'VISUAL_PROGRESS_EVIDENCE_INVALID',
-      422,
-    );
+    throw invalidVisualEvidence();
   }
   return {
     expectedSha256,
@@ -668,18 +763,13 @@ async function freshProviderGate(prisma, context, now) {
       select: {
         id: true,
         projectId: true,
+        sourceConversationId: true,
         sourceMessageId: true,
         status: true,
         media: true,
         task: { select: { revision: true } },
         sourceMessage: {
-          select: {
-            direction: true,
-            kind: true,
-            mediaUrl: true,
-            metadata: true,
-            conversation: { select: { projectId: true, channel: true, externalId: true } },
-          },
+          select: SOURCE_MESSAGE_SELECT,
         },
       },
     }),
@@ -750,7 +840,7 @@ async function freshProviderGate(prisma, context, now) {
     : null;
   let freshSource = null;
   try {
-    if (evidence) freshSource = mediaSource(evidence, connection);
+    if (evidence) freshSource = mediaSource(evidence, connection, context.scope);
   } catch {
     freshSource = null;
   }
@@ -820,6 +910,7 @@ async function prepareAssessment(prisma, {
         media: true,
         status: true,
         revision: true,
+        sourceConversationId: true,
         sourceMessageId: true,
         task: {
           select: {
@@ -836,13 +927,7 @@ async function prepareAssessment(prisma, {
           },
         },
         sourceMessage: {
-          select: {
-            direction: true,
-            kind: true,
-            mediaUrl: true,
-            metadata: true,
-            conversation: { select: { projectId: true, channel: true, externalId: true } },
-          },
+          select: SOURCE_MESSAGE_SELECT,
         },
       },
     });
@@ -880,7 +965,7 @@ async function prepareAssessment(prisma, {
           select: { projectId: true, phoneNumberId: true, enabled: true },
         })
       : null;
-    const source = mediaSource(evidence, connection);
+    const source = mediaSource(evidence, connection, scope);
     const planTasks = await transaction.task.findMany({
       where: { projectId: scope.projectId },
       select: PLAN_SELECT,
@@ -893,6 +978,7 @@ async function prepareAssessment(prisma, {
       evidenceId: evidence.id,
       evidenceRevision: evidence.revision,
       inputSha256: source.expectedSha256,
+      sourceIdentity: source.identity,
       taskId: evidence.taskId,
       taskRevision: evidence.task.revision,
       baselineHash,

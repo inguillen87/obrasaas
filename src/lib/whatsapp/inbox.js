@@ -13,6 +13,10 @@ import {
   deriveStoredWhatsAppChannelReadiness,
   whatsAppPlatformConfiguration,
 } from '@/lib/whatsapp/channel-health';
+import {
+  WHATSAPP_MEDIA_ASSET_DESCRIPTOR_SELECT,
+  resolveClaimedWhatsAppMessageMedia,
+} from '@/lib/whatsapp/media-assets';
 import { sendWhatsAppText } from '@/lib/whatsapp/meta';
 
 const CUSTOMER_CARE_WINDOW_MS = 24 * 60 * 60 * 1_000;
@@ -238,6 +242,12 @@ function publicMessage(message, {
   includeMedicalEvidence = false,
   includeSourceEvidence = false,
 } = {}) {
+  const messageHasSourceMedia = SOURCE_EVIDENCE_KINDS.has(
+    String(message?.kind || '').toUpperCase(),
+  ) || Boolean(jsonMetadata(message?.metadata).media);
+  const managedMedia = includeSourceEvidence && messageHasSourceMedia
+    ? resolveClaimedWhatsAppMessageMedia(message)
+    : null;
   const safeMessage = sanitizeMessagesForMedicalPrivacy([message], {
     includeMedicalEvidence,
     // Conversation readers may see operational text. Binary/source evidence
@@ -245,7 +255,23 @@ function publicMessage(message, {
     // storage identity, transcription, or provider metadata.
     includeSourceEvidence: true,
   })[0] || message;
-  const metadata = jsonMetadata(safeMessage?.metadata);
+  const rawMetadata = jsonMetadata(safeMessage?.metadata);
+  const managedDescriptor = rawMetadata.redacted === true
+    ? null
+    : managedMedia?.descriptor || null;
+  const managedMediaMetadata = managedDescriptor
+    ? {
+        kind: String(message.kind || '').toLowerCase() || null,
+        assetId: managedDescriptor.assetId,
+        mimeType: managedDescriptor.mimeType,
+        filename: managedDescriptor.filename,
+        size: managedDescriptor.size,
+        sha256: managedDescriptor.sha256,
+      }
+    : null;
+  const metadata = managedMediaMetadata
+    ? { ...rawMetadata, media: managedMediaMetadata }
+    : rawMetadata;
   const kind = String(safeMessage.kind || 'TEXT').toUpperCase();
   const containsSourceEvidence = SOURCE_EVIDENCE_KINDS.has(kind)
     || Boolean(metadata.media)
@@ -263,8 +289,7 @@ function publicMessage(message, {
     includeSourceEvidence
     && String(safeMessage.direction || '').toUpperCase() === 'INBOUND'
     && containsSourceEvidence
-    && safeMessage.mediaUrl
-    && metadata.media
+    && (managedDescriptor || (safeMessage.mediaUrl && metadata.media))
     && metadata.quarantined !== true
   );
   const progressEvidenceEligible = Boolean(
@@ -276,7 +301,7 @@ function publicMessage(message, {
     && metadata.provider === 'meta'
     && metadata.authorized === true
     && metadata.quarantined !== true
-    && metadata.media
+    && (managedDescriptor || metadata.media)
     && !isMedicalEvidenceRecord(safeMessage)
   );
   return {
@@ -605,14 +630,18 @@ export async function listWhatsAppInbox({
           take: 1,
           select: {
             id: true,
+            conversationId: true,
+            externalId: true,
             direction: true,
             kind: true,
             body: true,
+            mediaUrl: true,
             status: true,
             metadata: true,
             sentAt: true,
             createdAt: true,
             progressEvidenceSource: { select: { id: true } },
+            whatsappMediaAsset: { select: WHATSAPP_MEDIA_ASSET_DESCRIPTOR_SELECT },
           },
         },
       },
@@ -677,14 +706,18 @@ async function findScopedConversation(
               take: 1,
               select: {
                 id: true,
+                conversationId: true,
+                externalId: true,
                 direction: true,
                 kind: true,
                 body: true,
+                mediaUrl: true,
                 status: true,
                 metadata: true,
                 sentAt: true,
                 createdAt: true,
                 progressEvidenceSource: { select: { id: true } },
+                whatsappMediaAsset: { select: WHATSAPP_MEDIA_ASSET_DESCRIPTOR_SELECT },
               },
             },
           }
@@ -746,14 +779,18 @@ export async function getWhatsAppConversationMessages({
       take: requestedLimit + 1,
       select: {
         id: true,
+        conversationId: true,
+        externalId: true,
         direction: true,
         kind: true,
         body: true,
+        mediaUrl: true,
         status: true,
         metadata: true,
         sentAt: true,
         createdAt: true,
         progressEvidenceSource: { select: { id: true } },
+        whatsappMediaAsset: { select: WHATSAPP_MEDIA_ASSET_DESCRIPTOR_SELECT },
       },
     }),
     prisma.message.findFirst({

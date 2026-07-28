@@ -17,6 +17,7 @@ const originalDatabaseUrl = process.env.DATABASE_URL;
 process.env.DATABASE_URL = 'postgresql://unit-test.invalid/obrasaas';
 
 const { persistEnrichedWebhookEvent } = await import('../src/lib/db.js');
+const { whatsAppMediaAssetHash } = await import('../src/lib/whatsapp/media-assets.js');
 
 after(() => {
   if (originalDatabaseUrl === undefined) delete process.env.DATABASE_URL;
@@ -37,7 +38,7 @@ const project = {
   whatsapp: { enabled: true, phoneNumberId: scope.phoneNumberId },
 };
 
-function prismaDouble(count) {
+function prismaDouble(count, { mediaAsset = null } = {}) {
   let updateArgs;
   return {
     prisma: {
@@ -50,8 +51,71 @@ function prismaDouble(count) {
           return { count };
         },
       },
+      whatsAppMediaAsset: {
+        findFirst: async () => mediaAsset,
+      },
     },
     updateArgs: () => updateArgs,
+  };
+}
+
+function managedMediaFixture() {
+  const pathname = `obrasaas/projects/${scope.projectId}/whatsapp/${scope.phoneNumberId}/photo.jpg`;
+  const url = `https://tenant.private.blob.vercel-storage.com/${pathname}`;
+  const storage = {
+    provider: 'vercel-blob',
+    assetId: url,
+    publicId: pathname,
+    pathname,
+    resourceType: 'image',
+    format: 'jpg',
+    bytes: 5,
+    reused: false,
+  };
+  const event = {
+    eventType: 'message',
+    externalId: 'wamid.managed-media-a',
+    phoneNumberId: scope.phoneNumberId,
+    from: '+5491112345678',
+    kind: 'image',
+    media: {
+      id: 'meta-media-a',
+      assetId: 'managed-asset-a',
+      filename: 'photo.jpg',
+      mimeType: 'image/jpeg',
+      sha256: 'a'.repeat(64),
+      size: 5,
+      url,
+      storage: { ...storage, status: 'stored', ledgerAssetId: 'managed-asset-a' },
+    },
+  };
+  return {
+    event,
+    asset: {
+      id: 'managed-asset-a',
+      organizationId: scope.organizationId,
+      projectId: scope.projectId,
+      webhookEventId: 'webhook-managed-a',
+      status: 'AVAILABLE',
+      mediaKind: 'IMAGE',
+      declaredMimeType: 'image/jpeg',
+      storageProvider: 'vercel-blob',
+      storage,
+      storageLocatorHash: whatsAppMediaAssetHash(JSON.stringify({
+        path: ['storage', 'pathname'],
+        provider: 'vercel-blob',
+        value: pathname,
+      })),
+      fileName: 'photo.jpg',
+      mimeType: 'image/jpeg',
+      contentSha256: 'a'.repeat(64),
+      sizeBytes: 5,
+      messageConversationId: null,
+      messageId: null,
+      claimFingerprint: null,
+      providerMessageIdHash: whatsAppMediaAssetHash(event.externalId),
+      providerMediaIdHash: whatsAppMediaAssetHash(event.media.id),
+    },
   };
 }
 
@@ -110,5 +174,32 @@ test('enriched media fails with WEBHOOK_LEASE_LOST when its lease changed', asyn
       scope,
     }),
     (error) => error.code === 'WEBHOOK_LEASE_LOST',
+  );
+});
+
+test('managed media payload is accepted only when its durable asset matches the leased webhook', async () => {
+  const fixture = managedMediaFixture();
+  const { prisma, updateArgs } = prismaDouble(1, { mediaAsset: fixture.asset });
+  globalThis.__obraSaasPrisma = prisma;
+
+  assert.equal(await persistEnrichedWebhookEvent({
+    eventId: 'webhook-managed-a',
+    leaseToken: 'lease-managed-a',
+    event: fixture.event,
+    scope,
+  }), true);
+  assert.equal(updateArgs().data.payload.event.media.assetId, fixture.asset.id);
+
+  globalThis.__obraSaasPrisma = prismaDouble(1, {
+    mediaAsset: { ...fixture.asset, providerMessageIdHash: 'b'.repeat(64) },
+  }).prisma;
+  await assert.rejects(
+    persistEnrichedWebhookEvent({
+      eventId: 'webhook-managed-a',
+      leaseToken: 'lease-managed-a',
+      event: fixture.event,
+      scope,
+    }),
+    (error) => error.code === 'WEBHOOK_PAYLOAD_INVALID',
   );
 });

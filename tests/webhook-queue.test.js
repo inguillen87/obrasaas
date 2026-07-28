@@ -90,6 +90,30 @@ test("unusable or corrupt WhatsApp identities are terminal before media processi
   assert.equal(isTerminalWebhookFailure({ code: "WHATSAPP_FLOW_SESSION_USED" }), true);
   assert.equal(isTerminalWebhookFailure({ code: "WHATSAPP_AUTOMATIC_DELIVERY_REJECTED" }), true);
   assert.equal(isTerminalWebhookFailure({ code: "WHATSAPP_AUTOMATIC_DELIVERY_UNKNOWN" }), true);
+  for (const code of [
+    "WHATSAPP_MEDIA_ASSET_UPLOAD_UNCERTAIN",
+    "WHATSAPP_MEDIA_ASSET_UPLOAD_FAILED",
+    "WHATSAPP_MEDIA_ASSET_IDEMPOTENCY_REUSED",
+    "WHATSAPP_MEDIA_ASSET_STORAGE_SCOPE",
+    "WHATSAPP_MEDIA_ASSET_STORAGE_INVALID",
+    "WHATSAPP_MEDIA_ASSET_PROVIDER_DRIFT",
+    "WHATSAPP_MEDIA_ASSET_SIZE_MISMATCH",
+    "WHATSAPP_MEDIA_ASSET_MIME_MISMATCH",
+    "WHATSAPP_MEDIA_ASSET_KIND_MIME_MISMATCH",
+    "WHATSAPP_MEDIA_ASSET_RESOURCE_TYPE_MISMATCH",
+    "WHATSAPP_MEDIA_ASSET_DELIVERY_URL_INVALID",
+    "WHATSAPP_MEDIA_ASSET_RETENTION_EXPIRED",
+    "WHATSAPP_MEDIA_ASSET_DESCRIPTOR_INVALID",
+    "WHATSAPP_MEDIA_ASSET_NOT_AVAILABLE",
+    "WHATSAPP_MEDIA_ASSET_EXPIRED",
+    "WHATSAPP_MEDIA_ASSET_ALREADY_CLAIMED",
+    "WHATSAPP_MEDIA_ASSET_MESSAGE_SCOPE_MISMATCH",
+    "WHATSAPP_MEDIA_ASSET_CLAIM_CONFLICT",
+  ]) {
+    assert.equal(isTerminalWebhookFailure({ code }), true, `${code} must not be auto-retried`);
+  }
+  assert.equal(isTerminalWebhookFailure({ code: "WHATSAPP_MEDIA_ASSET_UPLOAD_IN_PROGRESS" }), false);
+  assert.equal(isTerminalWebhookFailure({ code: "WHATSAPP_MEDIA_ASSET_UPLOAD_LEASE_LOST" }), false);
   assert.equal(isTerminalWebhookFailure({ code: "WHATSAPP_FLOW_TOKEN_SECRET_INVALID" }), false);
   assert.equal(isTerminalWebhookFailure({ code: "WHATSAPP_FLOW_DELIVERY_UNRESOLVED" }), false);
   assert.equal(isTerminalWebhookFailure({ code: "WHATSAPP_AUTOMATIC_DELIVERY_SETTLEMENT_PENDING" }), false);

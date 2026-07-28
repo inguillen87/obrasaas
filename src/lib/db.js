@@ -46,6 +46,13 @@ import {
   WorkerOnboardingFlowSessionError,
 } from "@/lib/whatsapp/worker-onboarding-flow-sessions";
 import { whatsAppConversationIdentity } from "@/lib/whatsapp/inbox";
+import {
+  WHATSAPP_MEDIA_ASSET_DESCRIPTOR_SELECT,
+  claimWhatsAppMediaAsset,
+  resolveClaimedWhatsAppMessageMedia,
+  whatsAppMediaAssetDescriptor,
+  whatsAppMediaAssetHash,
+} from "@/lib/whatsapp/media-assets";
 import { resolveWhatsAppConnectionScopes } from "@/lib/whatsapp/webhook-scope";
 import { persistDurableMetaWebhookBatch } from "@/lib/whatsapp/webhook-ingress";
 
@@ -209,6 +216,55 @@ function durableMessageData(message, conversationId, fallbackDate) {
     metadata: storedMessageMetadata(message),
     sentAt: storedMessageDate(message.sentAt, fallbackDate),
   };
+}
+
+function managedWhatsAppMediaAssetId(event) {
+  if (!event?.media || typeof event.media !== "object" || Array.isArray(event.media)) return null;
+  const declared = Object.hasOwn(event.media, "assetId");
+  const mediaAssetId = typeof event.media.assetId === "string"
+    ? event.media.assetId.trim()
+    : "";
+  const ledgerAssetId = typeof event.media.storage?.ledgerAssetId === "string"
+    ? event.media.storage.ledgerAssetId.trim()
+    : "";
+  if (!declared && !ledgerAssetId) return null;
+  if (!mediaAssetId || ledgerAssetId !== mediaAssetId) {
+    throw webhookProcessingError(
+      "Managed WhatsApp media has an invalid durable asset reference.",
+      "WEBHOOK_PAYLOAD_INVALID",
+    );
+  }
+  return mediaAssetId;
+}
+
+function assertManagedWhatsAppMediaEvent(event, row, descriptor) {
+  const media = event?.media;
+  const storage = media?.storage;
+  if (
+    !row
+    || row.webhookEventId == null
+    || descriptor.assetId !== media?.assetId
+    || storage?.ledgerAssetId !== row.id
+    || row.providerMessageIdHash !== whatsAppMediaAssetHash(event.externalId || "")
+    || row.providerMediaIdHash !== whatsAppMediaAssetHash(media?.id || "")
+    || media.filename !== descriptor.filename
+    || media.mimeType !== descriptor.mimeType
+    || media.sha256 !== descriptor.sha256
+    || media.size !== descriptor.size
+    || media.url !== descriptor.url
+    || storage?.provider !== descriptor.storage.provider
+    || storage?.assetId !== descriptor.storage.assetId
+    || storage?.publicId !== descriptor.storage.publicId
+    || storage?.pathname !== descriptor.storage.pathname
+    || storage?.resourceType !== descriptor.storage.resourceType
+    || storage?.format !== descriptor.storage.format
+    || storage?.bytes !== descriptor.storage.bytes
+  ) {
+    throw webhookProcessingError(
+      "Managed WhatsApp media does not match its durable asset.",
+      "WEBHOOK_PAYLOAD_INVALID",
+    );
+  }
 }
 
 function hasDurableDatabase() {
@@ -561,17 +617,41 @@ function serializeDurableMessages(messages, {
   includeSourceEvidence = includeMedicalEvidence,
 } = {}) {
   const serialized = messages.map((message) => {
-    const metadata = message.metadata && typeof message.metadata === "object" && !Array.isArray(message.metadata)
+    const rawMetadata = message.metadata && typeof message.metadata === "object" && !Array.isArray(message.metadata)
       ? message.metadata
       : {};
+    const hasSourceMedia = Boolean(message.mediaUrl || rawMetadata.media);
+    const managedMedia = Object.hasOwn(message, "whatsappMediaAsset") || hasSourceMedia
+      ? resolveClaimedWhatsAppMessageMedia(message)
+      : null;
+    const managedDescriptor = managedMedia?.descriptor || null;
+    const media = managedDescriptor
+      ? {
+          kind: String(message.kind || "").toLowerCase() || null,
+          assetId: managedDescriptor.assetId,
+          filename: managedDescriptor.filename,
+          mimeType: managedDescriptor.mimeType,
+          sha256: managedDescriptor.sha256,
+          size: managedDescriptor.size,
+          url: managedDescriptor.url,
+          storage: {
+            ...managedDescriptor.storage,
+            status: "stored",
+            ledgerAssetId: managedDescriptor.assetId,
+          },
+        }
+      : rawMetadata.media || null;
+    const metadata = managedDescriptor
+      ? { ...rawMetadata, media }
+      : rawMetadata;
     return {
       id: message.id,
       externalId: message.externalId,
       sender: message.direction === "OUTBOUND" ? "bot" : "user",
       kind: message.kind.toLowerCase(),
       text: message.body || "",
-      mediaUrl: message.mediaUrl,
-      media: metadata.media || null,
+      mediaUrl: managedDescriptor?.url || message.mediaUrl,
+      media,
       transcription: metadata.transcription || null,
       status: message.status,
       metadata,
@@ -646,6 +726,9 @@ export async function getMessages(scope, {
     where: messageWhere,
     orderBy: [{ sentAt: "desc" }, { createdAt: "desc" }],
     take: normalizedTake,
+    include: {
+      whatsappMediaAsset: { select: WHATSAPP_MEDIA_ASSET_DESCRIPTOR_SELECT },
+    },
   });
 
   if (messages.length === 0 && initializeIfEmpty) {
@@ -662,6 +745,9 @@ export async function getMessages(scope, {
       where: messageWhere,
       orderBy: [{ sentAt: "desc" }, { createdAt: "desc" }],
       take: normalizedTake,
+      include: {
+        whatsappMediaAsset: { select: WHATSAPP_MEDIA_ASSET_DESCRIPTOR_SELECT },
+      },
     });
   }
 
@@ -706,6 +792,9 @@ export async function getOperationalMessages(scope, {
     },
     orderBy: [{ sentAt: "desc" }, { createdAt: "desc" }],
     take: normalizedTake,
+    include: {
+      whatsappMediaAsset: { select: WHATSAPP_MEDIA_ASSET_DESCRIPTOR_SELECT },
+    },
   });
   messages.reverse();
   return serializeDurableMessages(messages, {
@@ -749,6 +838,7 @@ export async function saveMessages(messages, scope) {
 
 async function appendDurableMessages(context, messages, { conversationIdentity = null } = {}) {
   const conversation = await durableConversation(context, conversationIdentity);
+  const persistedMessages = [];
   for (const [index, message] of messages.entries()) {
     const data = durableMessageData(
       message,
@@ -756,7 +846,8 @@ async function appendDurableMessages(context, messages, { conversationIdentity =
       new Date(Date.now() + index),
     );
     if (!data.externalId) {
-      await context.prisma.message.create({ data });
+      const created = await context.prisma.message.create({ data });
+      persistedMessages.push(created || data);
       continue;
     }
 
@@ -771,9 +862,11 @@ async function appendDurableMessages(context, messages, { conversationIdentity =
       const update = { ...data };
       delete update.conversationId;
       delete update.externalId;
-      await context.prisma.message.update({ where: { id: existing.id }, data: update });
+      const updated = await context.prisma.message.update({ where: { id: existing.id }, data: update });
+      persistedMessages.push(updated || { ...data, id: existing.id });
     } else {
-      await context.prisma.message.create({ data });
+      const created = await context.prisma.message.create({ data });
+      persistedMessages.push(created || data);
     }
   }
   if (conversationIdentity && messages.length > 0) {
@@ -787,7 +880,7 @@ async function appendDurableMessages(context, messages, { conversationIdentity =
       },
     });
   }
-  return messages;
+  return persistedMessages;
 }
 
 export async function appendMessages(messages, scope) {
@@ -1949,7 +2042,7 @@ export async function applyWebhookMessageAtomically({
       eventId: normalized.eventId,
       inboundExternalId: event.externalId,
     });
-    await appendDurableMessages(
+    const persistedMessages = await appendDurableMessages(
       { prisma: transaction, project },
       automaticMessages,
       {
@@ -1959,6 +2052,27 @@ export async function applyWebhookMessageAtomically({
         }),
       },
     );
+    const mediaAssetId = managedWhatsAppMediaAssetId(event);
+    if (mediaAssetId) {
+      const inboundMessages = persistedMessages.filter((message) => (
+        message?.direction === "INBOUND"
+        && message.externalId === event.externalId
+        && typeof message.id === "string"
+        && typeof message.conversationId === "string"
+      ));
+      if (inboundMessages.length !== 1) {
+        throw webhookProcessingError(
+          "Managed WhatsApp media requires one durable inbound message.",
+          "WEBHOOK_OUTCOME_INVALID",
+        );
+      }
+      await claimWhatsAppMediaAsset(transaction, {
+        scope: normalized,
+        mediaAssetId,
+        messageConversationId: inboundMessages[0].conversationId,
+        messageId: inboundMessages[0].id,
+      });
+    }
 
     const appliedAt = new Date();
     const accepted = await transaction.webhookEvent.updateMany({
@@ -2336,6 +2450,32 @@ export async function persistEnrichedWebhookEvent({
   }
 
   const context = await durableContext(scope);
+  const mediaAssetId = managedWhatsAppMediaAssetId(event);
+  if (mediaAssetId) {
+    const mediaAsset = await context.prisma.whatsAppMediaAsset.findFirst({
+      where: {
+        id: mediaAssetId,
+        organizationId: context.organization.id,
+        projectId: context.project.id,
+        webhookEventId: normalizedEventId,
+        status: { in: ["AVAILABLE", "CLAIMED"] },
+      },
+      select: WHATSAPP_MEDIA_ASSET_DESCRIPTOR_SELECT,
+    });
+    if (!mediaAsset) {
+      throw webhookProcessingError(
+        "Managed WhatsApp media does not belong to the leased webhook.",
+        "WEBHOOK_MESSAGE_SCOPE_MISMATCH",
+      );
+    }
+    const descriptor = whatsAppMediaAssetDescriptor(mediaAsset, {
+      scope: {
+        organizationId: context.organization.id,
+        projectId: context.project.id,
+      },
+    });
+    assertManagedWhatsAppMediaEvent(event, mediaAsset, descriptor);
+  }
   const updated = await context.prisma.webhookEvent.updateMany({
     where: {
       id: normalizedEventId,

@@ -46,7 +46,7 @@ test('Inbox opens authorized inbound media only through the protected evidence e
   assert.ok(attachmentAction >= 0);
   assert.ok(progressAction > attachmentAction);
   assert.doesNotMatch(clientSource, /href=\{message\.(?:mediaUrl|storage)/);
-  assert.match(evidenceRouteSource, /requireTenantPermission\(access, SOURCE_EVIDENCE_PERMISSION\)/);
+  assert.match(evidenceRouteSource, /authorize\(access, SOURCE_EVIDENCE_PERMISSION\)/);
   assert.match(evidenceRouteSource, /SAFE_INLINE_EVIDENCE_TYPES\.has\(normalizedContentType\)/);
   assert.match(evidenceRouteSource, /"Cache-Control": "private, no-store"/);
   assert.match(evidenceRouteSource, /"Content-Security-Policy": "sandbox"/);

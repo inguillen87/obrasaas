@@ -53,12 +53,14 @@ const [
     linkWhatsAppMessageToProgressEvidence,
     WhatsAppProgressEvidenceError,
   },
+  { whatsAppMediaAssetHash },
   { createWhatsAppProgressEvidenceHandlers },
 ] = await Promise.all([
   import('../src/lib/access.js'),
   import('../src/lib/project-write-policy.js'),
   import('../src/lib/progress-journal.js'),
   import('../src/lib/whatsapp/progress-evidence.js'),
+  import('../src/lib/whatsapp/media-assets.js'),
   import('../src/app/api/whatsapp/inbox/[conversationId]/messages/[messageId]/progress-evidence/route.js'),
 ]);
 
@@ -119,12 +121,54 @@ function sourceMessage(overrides = {}) {
     },
     sentAt: CAPTURED_AT,
     createdAt: CAPTURED_AT,
+    whatsappMediaAsset: null,
     conversation: {
       id: 'conversation-a',
       projectId: 'project-a',
       channel: 'whatsapp',
       externalId: 'meta:5491111111111',
     },
+    ...overrides,
+  };
+}
+
+function managedMediaAsset(overrides = {}) {
+  const pathname = `obrasaas/projects/project-a/whatsapp/${PHONE_NUMBER_ID}/source-a.jpg`;
+  const url = `https://tenant.private.blob.vercel-storage.com/${pathname}`;
+  const storage = {
+    provider: 'vercel-blob',
+    assetId: url,
+    publicId: pathname,
+    pathname,
+    resourceType: 'image',
+    format: 'jpg',
+    bytes: 4_096,
+    reused: false,
+  };
+  return {
+    id: 'media-asset-a',
+    organizationId: 'organization-a',
+    projectId: 'project-a',
+    webhookEventId: 'webhook-a',
+    status: 'CLAIMED',
+    mediaKind: 'IMAGE',
+    declaredMimeType: 'image/jpeg',
+    storageProvider: 'vercel-blob',
+    storage,
+    storageLocatorHash: whatsAppMediaAssetHash(JSON.stringify({
+      path: ['storage', 'pathname'],
+      provider: 'vercel-blob',
+      value: pathname,
+    })),
+    fileName: 'pared-ledger.jpg',
+    mimeType: 'image/jpeg',
+    contentSha256: 'b'.repeat(64),
+    sizeBytes: 4_096,
+    messageConversationId: 'conversation-a',
+    messageId: 'message-a',
+    claimFingerprint: 'c'.repeat(64),
+    providerMessageIdHash: whatsAppMediaAssetHash('wamid.source-a'),
+    providerMediaIdHash: whatsAppMediaAssetHash('meta-media-a'),
     ...overrides,
   };
 }
@@ -348,11 +392,93 @@ test('links one trusted Meta image with server-owned provenance and never mutate
   assert.equal(database.audits[0].action, 'progress.evidence.linked_from_whatsapp');
   assert.equal(database.audits[0].metadata.correlationId, 'request-a');
   assert.equal(database.tasks[0].progress, 37);
+  assert.equal(database.calls.filter(([name]) => name === 'connection-find').length, 1);
   assert.equal(database.calls.some(([name]) => name.includes('update')), false);
   const publicJson = JSON.stringify(result);
   assert.doesNotMatch(publicJson, /asset-secret|project-secret|private\.example|sourceOperationKeyHash|sourceRequestFingerprint|"sha256"/);
   const auditJson = JSON.stringify(database.audits);
   assert.doesNotMatch(auditJson, /asset-secret|project-secret|private\.example|pared-norte\.jpg|Pared norte/);
+});
+
+test('uses a CLAIMED WhatsAppMediaAsset as exclusive v2 authority and ignores legacy media JSON', async () => {
+  const message = sourceMessage();
+  message.whatsappMediaAsset = managedMediaAsset();
+  message.mediaUrl = 'https://legacy.invalid/forged.jpg';
+  message.metadata.media = sourceMedia({
+    mimeType: 'application/pdf',
+    filename: 'forged.pdf',
+    sha256: 'not-a-sha',
+    size: 1,
+    url: message.mediaUrl,
+  });
+  const database = fakePrisma({ message });
+
+  const result = await linkWhatsAppMessageToProgressEvidence(database.prisma, linkInput());
+
+  assert.equal(result.replayed, false);
+  assert.deepEqual(database.evidence[0].media, {
+    schemaVersion: 2,
+    source: 'whatsapp-media-asset',
+    assetId: 'media-asset-a',
+    kind: 'image',
+    mimeType: 'image/jpeg',
+    filename: 'pared-ledger.jpg',
+    size: 4_096,
+    sha256: 'b'.repeat(64),
+  });
+  assert.equal(database.calls.some(([name]) => name === 'connection-find'), false);
+  assert.equal(database.audits[0].metadata.mediaAssetId, 'media-asset-a');
+  assert.doesNotMatch(JSON.stringify(result), /legacy\.invalid|forged\.pdf|"assetId"/);
+});
+
+test('v2 request fingerprint binds the durable asset id', async () => {
+  const firstMessage = sourceMessage({ whatsappMediaAsset: managedMediaAsset() });
+  const secondMessage = sourceMessage({
+    whatsappMediaAsset: managedMediaAsset({ id: 'media-asset-b' }),
+  });
+  const first = fakePrisma({ message: firstMessage });
+  const second = fakePrisma({ message: secondMessage });
+
+  await linkWhatsAppMessageToProgressEvidence(first.prisma, linkInput());
+  await linkWhatsAppMessageToProgressEvidence(second.prisma, linkInput());
+
+  assert.notEqual(
+    first.evidence[0].sourceRequestFingerprint,
+    second.evidence[0].sourceRequestFingerprint,
+  );
+  assert.equal(first.evidence[0].media.assetId, 'media-asset-a');
+  assert.equal(second.evidence[0].media.assetId, 'media-asset-b');
+});
+
+test('a present invalid durable relation blocks every legacy fallback', async () => {
+  const cases = [
+    managedMediaAsset({ status: 'AVAILABLE', claimFingerprint: null }),
+    managedMediaAsset({ organizationId: 'organization-foreign' }),
+    managedMediaAsset({ messageId: 'message-foreign' }),
+    managedMediaAsset({ mediaKind: 'VIDEO' }),
+    managedMediaAsset({ contentSha256: 'not-a-sha' }),
+  ];
+  for (const relation of cases) {
+    const message = sourceMessage({ whatsappMediaAsset: relation });
+    const database = fakePrisma({ message });
+    await assert.rejects(
+      linkWhatsAppMessageToProgressEvidence(database.prisma, linkInput()),
+      (error) => error?.code === 'WHATSAPP_PROGRESS_EVIDENCE_SOURCE_INVALID'
+        && error?.status === 422,
+    );
+    assert.equal(database.evidence.length, 0);
+    assert.equal(database.calls.some(([name]) => name === 'connection-find'), false);
+  }
+
+  const relationNotSelected = sourceMessage();
+  delete relationNotSelected.whatsappMediaAsset;
+  const missing = fakePrisma({ message: relationNotSelected });
+  await assert.rejects(
+    linkWhatsAppMessageToProgressEvidence(missing.prisma, linkInput()),
+    (error) => error?.code === 'WHATSAPP_PROGRESS_EVIDENCE_SOURCE_INVALID'
+      && error?.status === 422,
+  );
+  assert.equal(missing.calls.some(([name]) => name === 'connection-find'), false);
 });
 
 test('replays the exact link once and rejects key or source reuse with another payload', async () => {

@@ -5,6 +5,10 @@ import { subscriptionAllowsWrites } from '../plans.js';
 import { runOperationalProjectMutation } from '../project-write-policy.js';
 import { serializeProgressEvidence } from '../progress-journal.js';
 import { isEnrichedInboundWhatsAppMediaEvent } from './media.js';
+import {
+  resolveClaimedWhatsAppMessageMedia,
+  WHATSAPP_MEDIA_ASSET_DESCRIPTOR_SELECT,
+} from './media-assets.js';
 
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/;
 const SAFE_CORRELATION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
@@ -13,6 +17,8 @@ const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp
 const ALLOWED_STORAGE_PROVIDERS = new Set(['cloudinary', 'vercel-blob']);
 const SOURCE_CONVERSATION_PREFIX = 'meta:';
 const SOURCE_CONTRACT_VERSION = 'whatsapp-progress-evidence:v1';
+const MANAGED_SOURCE_CONTRACT_VERSION = 'whatsapp-progress-evidence:v2';
+const MAX_PROGRESS_IMAGE_BYTES = 20 * 1024 * 1024;
 
 export class WhatsAppProgressEvidenceError extends Error {
   constructor(message, {
@@ -80,7 +86,7 @@ function sourceOperationKeyHash(scope, idempotencyKey) {
 }
 
 function sourceRequestFingerprint({ scope, conversationId, message, taskId, workerId, media, caption }) {
-  return sha256(`${SOURCE_CONTRACT_VERSION}:request`, {
+  const payload = {
     organizationId: scope.organizationId,
     projectId: scope.projectId,
     conversationId,
@@ -91,7 +97,15 @@ function sourceRequestFingerprint({ scope, conversationId, message, taskId, work
     capturedAt: message.sentAt.toISOString(),
     captionSha256: sha256(`${SOURCE_CONTRACT_VERSION}:caption`, caption || ''),
     mediaSha256: media.sha256,
-  });
+  };
+  if (media.assetId) {
+    payload.mediaAssetId = media.assetId;
+    payload.mediaSchemaVersion = media.schemaVersion;
+  }
+  return sha256(
+    `${media.assetId ? MANAGED_SOURCE_CONTRACT_VERSION : SOURCE_CONTRACT_VERSION}:request`,
+    payload,
+  );
 }
 
 function sourceNotFound() {
@@ -142,7 +156,40 @@ function canonicalPrivateMedia(message) {
   };
 }
 
-function validateSourceMessage(message) {
+function canonicalManagedPrivateMedia(message, scope) {
+  let managed;
+  try {
+    managed = resolveClaimedWhatsAppMessageMedia(message, { scope });
+  } catch {
+    throw invalidSource('El activo durable de la foto no coincide con su mensaje de origen.');
+  }
+  if (managed === null) return null;
+  const { asset, descriptor } = managed;
+  if (
+    asset.mediaKind !== 'IMAGE'
+    || !ALLOWED_IMAGE_MIME_TYPES.has(descriptor.mimeType)
+    || !ALLOWED_STORAGE_PROVIDERS.has(descriptor.provider)
+    || !SHA256_PATTERN.test(String(descriptor.sha256 || '').toLowerCase())
+    || !Number.isSafeInteger(descriptor.size)
+    || descriptor.size < 1
+    || descriptor.size > MAX_PROGRESS_IMAGE_BYTES
+    || descriptor.assetId !== asset.id
+  ) {
+    throw invalidSource('El activo durable no contiene una foto privada operativa válida.');
+  }
+  return {
+    schemaVersion: 2,
+    source: 'whatsapp-media-asset',
+    assetId: descriptor.assetId,
+    kind: 'image',
+    mimeType: descriptor.mimeType,
+    filename: descriptor.filename,
+    size: descriptor.size,
+    sha256: String(descriptor.sha256).toLowerCase(),
+  };
+}
+
+function validateSourceMessage(message, scope) {
   const metadata = jsonObject(message.metadata);
   if (
     message.direction !== 'INBOUND'
@@ -170,7 +217,7 @@ function validateSourceMessage(message) {
     workerId,
     sentAt,
     caption: canonicalCaption(message.body),
-    media: canonicalPrivateMedia(message),
+    media: canonicalManagedPrivateMedia(message, scope) || canonicalPrivateMedia(message),
   };
 }
 
@@ -263,22 +310,27 @@ async function executeLink(prisma, context) {
             externalId: true,
           },
         },
+        whatsappMediaAsset: {
+          select: WHATSAPP_MEDIA_ASSET_DESCRIPTOR_SELECT,
+        },
       },
     });
     if (!message) throw sourceNotFound();
 
-    const source = validateSourceMessage(message);
-    const connection = await transaction.whatsAppConnection.findFirst({
-      where: { projectId: context.scope.projectId, enabled: true },
-      select: { projectId: true, phoneNumberId: true, enabled: true },
-    });
-    if (!isWhatsAppProgressMediaForProject({
-      media: source.media,
-      sourceMessage: message,
-      connection,
-      projectId: context.scope.projectId,
-    })) {
-      throw invalidSource('La foto privada no pertenece a la conexión Meta de esta obra.');
+    const source = validateSourceMessage(message, context.scope);
+    if (source.media.schemaVersion === 1) {
+      const connection = await transaction.whatsAppConnection.findFirst({
+        where: { projectId: context.scope.projectId, enabled: true },
+        select: { projectId: true, phoneNumberId: true, enabled: true },
+      });
+      if (!isWhatsAppProgressMediaForProject({
+        media: source.media,
+        sourceMessage: message,
+        connection,
+        projectId: context.scope.projectId,
+      })) {
+        throw invalidSource('La foto privada no pertenece a la conexión Meta de esta obra.');
+      }
     }
     message.sentAt = source.sentAt;
 
@@ -354,6 +406,7 @@ async function executeLink(prisma, context) {
           sourceOperationKeyHash: context.operationKeyHash,
           sourceRequestFingerprint: fingerprint,
           mediaSha256: source.media.sha256,
+          ...(source.media.assetId ? { mediaAssetId: source.media.assetId } : {}),
           ...(context.correlationId ? { correlationId: context.correlationId } : {}),
         },
       },

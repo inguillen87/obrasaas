@@ -252,6 +252,7 @@ test("preview runner migrates before generating and building without a shell", a
       workerIdentityVerifier: "worker-verifier",
       progressJournalVerifier: "progress-verifier",
       protectedUploadVerifier: "protected-upload-verifier",
+      whatsappMediaAssetVerifier: "whatsapp-media-asset-verifier",
       visualProgressVerifier: "visual-progress-verifier",
       scheduleSnapshotVerifier: "schedule-snapshot-verifier",
     },
@@ -264,6 +265,7 @@ test("preview runner migrates before generating and building without a shell", a
       ["worker-verifier"],
       ["progress-verifier"],
       ["protected-upload-verifier"],
+      ["whatsapp-media-asset-verifier"],
       ["visual-progress-verifier"],
       ["schedule-snapshot-verifier"],
       ["prisma-cli", "generate"],
@@ -308,7 +310,20 @@ test("preview runner migrates before generating and building without a shell", a
     protectedUploadVerificationCall.options.env.PROTECTED_UPLOAD_MIGRATION_SCHEMA,
     "public",
   );
-  const visualProgressVerificationCall = calls[4];
+  const mediaAssetVerificationCall = calls[4];
+  assert.equal(
+    mediaAssetVerificationCall.args[0],
+    "whatsapp-media-asset-verifier",
+  );
+  assert.equal(
+    mediaAssetVerificationCall.options.env.WHATSAPP_MEDIA_ASSET_MIGRATION_DATABASE_URL,
+    PREVIEW_URL,
+  );
+  assert.equal(
+    mediaAssetVerificationCall.options.env.WHATSAPP_MEDIA_ASSET_MIGRATION_SCHEMA,
+    "public",
+  );
+  const visualProgressVerificationCall = calls[5];
   assert.equal(
     visualProgressVerificationCall.args[0],
     "visual-progress-verifier",
@@ -321,7 +336,7 @@ test("preview runner migrates before generating and building without a shell", a
     visualProgressVerificationCall.options.env.VISUAL_PROGRESS_MIGRATION_SCHEMA,
     "public",
   );
-  const scheduleSnapshotVerificationCall = calls[5];
+  const scheduleSnapshotVerificationCall = calls[6];
   assert.equal(
     scheduleSnapshotVerificationCall.args[0],
     "schedule-snapshot-verifier",
@@ -356,6 +371,7 @@ test("authorized production runs migration verification before the build", async
       workerIdentityVerifier: "worker-verifier",
       progressJournalVerifier: "progress-verifier",
       protectedUploadVerifier: "protected-upload-verifier",
+      whatsappMediaAssetVerifier: "whatsapp-media-asset-verifier",
       visualProgressVerifier: "visual-progress-verifier",
       scheduleSnapshotVerifier: "schedule-snapshot-verifier",
     },
@@ -368,6 +384,7 @@ test("authorized production runs migration verification before the build", async
       ["worker-verifier"],
       ["progress-verifier"],
       ["protected-upload-verifier"],
+      ["whatsapp-media-asset-verifier"],
       ["visual-progress-verifier"],
       ["schedule-snapshot-verifier"],
       ["prisma-cli", "generate"],
@@ -399,19 +416,27 @@ test("authorized production runs migration verification before the build", async
     "public",
   );
   assert.equal(
-    calls[4].options.env.VISUAL_PROGRESS_MIGRATION_DATABASE_URL,
+    calls[4].options.env.WHATSAPP_MEDIA_ASSET_MIGRATION_DATABASE_URL,
     PRODUCTION_URL,
   );
   assert.equal(
-    calls[4].options.env.VISUAL_PROGRESS_MIGRATION_SCHEMA,
+    calls[4].options.env.WHATSAPP_MEDIA_ASSET_MIGRATION_SCHEMA,
     "public",
   );
   assert.equal(
-    calls[5].options.env.SCHEDULE_SNAPSHOT_MIGRATION_DATABASE_URL,
+    calls[5].options.env.VISUAL_PROGRESS_MIGRATION_DATABASE_URL,
     PRODUCTION_URL,
   );
   assert.equal(
-    calls[5].options.env.SCHEDULE_SNAPSHOT_MIGRATION_SCHEMA,
+    calls[5].options.env.VISUAL_PROGRESS_MIGRATION_SCHEMA,
+    "public",
+  );
+  assert.equal(
+    calls[6].options.env.SCHEDULE_SNAPSHOT_MIGRATION_DATABASE_URL,
+    PRODUCTION_URL,
+  );
+  assert.equal(
+    calls[6].options.env.SCHEDULE_SNAPSHOT_MIGRATION_SCHEMA,
     "public",
   );
 });
@@ -447,6 +472,7 @@ test("development runner skips migration and performs the normal build", async (
       workerIdentityVerifier: "worker-verifier",
       progressJournalVerifier: "progress-verifier",
       protectedUploadVerifier: "protected-upload-verifier",
+      whatsappMediaAssetVerifier: "whatsapp-media-asset-verifier",
       visualProgressVerifier: "visual-progress-verifier",
       scheduleSnapshotVerifier: "schedule-snapshot-verifier",
     },

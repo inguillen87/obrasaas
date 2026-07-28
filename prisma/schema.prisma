@@ -213,6 +213,15 @@ enum ProtectedUploadStatus {
   DELETED
 }
 
+enum WhatsAppMediaAssetStatus {
+  UPLOADING
+  AVAILABLE
+  CLAIMED
+  DELETE_PENDING
+  DELETED
+  FAILED
+}
+
 enum IncidentSeverity {
   INFO
   LOW
@@ -843,6 +852,7 @@ model Project {
   startActs                     ProjectStartAct[]
   workerOnboardingClaims        WorkerOnboardingClaim[]
   protectedUploads              ProtectedUpload[]
+  whatsappMediaAssets           WhatsAppMediaAsset[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, slug])
@@ -896,6 +906,63 @@ model ProtectedUpload {
   @@index([organizationId, createdAt], map: "ProtectedUpload_org_created_idx")
   @@index([status, expiresAt, id], map: "ProtectedUpload_expiry_cleanup_idx")
   @@index([status, nextDeleteAttemptAt, id], map: "ProtectedUpload_delete_cleanup_idx")
+}
+
+model WhatsAppMediaAsset {
+  id                       String                      @id @default(cuid())
+  organizationId           String
+  projectId                String
+  project                  Project                     @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "WhatsAppMediaAsset_project_scope_fkey")
+  webhookEventId           String
+  webhookEvent             WebhookEvent                @relation(fields: [projectId, webhookEventId], references: [projectId, id], onDelete: Restrict, map: "WhatsAppMediaAsset_webhook_event_scope_fkey")
+  providerMediaIdHash      String                      @db.Char(64)
+  providerMessageIdHash    String                      @db.Char(64)
+  mediaKind                MessageKind
+  declaredMimeType         String                      @db.VarChar(120)
+  status                   WhatsAppMediaAssetStatus    @default(UPLOADING)
+  operationKeyHash         String                      @db.Char(64)
+  requestFingerprint       String                      @db.Char(64)
+  storageProvider          String?                     @db.VarChar(32)
+  storage                  Json?
+  fileName                 String?                     @db.VarChar(255)
+  mimeType                 String?                     @db.VarChar(120)
+  contentSha256            String?                     @db.Char(64)
+  sizeBytes                Int?
+  storageLocatorHash       String?                     @db.Char(64)
+  uploadAttemptCount       Int                         @default(1)
+  uploadLeaseToken         String?                     @db.Uuid
+  uploadLeaseExpiresAt     DateTime?
+  nextUploadAttemptAt      DateTime?
+  purgeEligibleAt          DateTime?
+  messageConversationId    String?
+  messageConversation      Conversation?               @relation("WhatsAppMediaAssetConversation", fields: [projectId, messageConversationId], references: [projectId, id], onDelete: Restrict, map: "WhatsAppMediaAsset_conversation_scope_fkey")
+  messageId                String?
+  message                  Message?                    @relation("WhatsAppMediaAssetMessage", fields: [messageConversationId, messageId], references: [conversationId, id], onDelete: Restrict, map: "WhatsAppMediaAsset_message_scope_fkey")
+  claimedAt                DateTime?
+  claimFingerprint         String?                     @db.Char(64)
+  deleteOperationKeyHash   String?                     @db.Char(64)
+  deleteRequestFingerprint String?                     @db.Char(64)
+  deleteRequestedAt        DateTime?
+  deleteAttemptCount       Int                         @default(0)
+  deleteLeaseToken         String?                     @db.Uuid
+  deleteLeaseExpiresAt     DateTime?
+  nextDeleteAttemptAt      DateTime?
+  deletedAt                DateTime?
+  tombstoneSha256          String?                     @db.Char(64)
+  lastErrorCode            String?                     @db.VarChar(64)
+  createdAt                DateTime                    @default(now())
+  updatedAt                DateTime                    @updatedAt
+
+  @@unique([projectId, id], map: "WhatsAppMediaAsset_projectId_id_key")
+  @@unique([projectId, operationKeyHash], map: "WhatsAppMediaAsset_project_operation_key")
+  @@unique([projectId, providerMessageIdHash, providerMediaIdHash], map: "WhatsAppMediaAsset_project_provider_identity_key")
+  @@unique([projectId, messageConversationId, messageId], map: "WhatsAppMediaAsset_project_message_key")
+  @@unique([messageConversationId, messageId], map: "WhatsAppMediaAsset_conversation_message_key")
+  @@index([projectId, status, nextUploadAttemptAt, id], map: "WhatsAppMediaAsset_upload_queue_idx")
+  @@index([status, uploadLeaseExpiresAt, id], map: "WhatsAppMediaAsset_upload_lease_idx")
+  @@index([status, nextDeleteAttemptAt, id], map: "WhatsAppMediaAsset_delete_queue_idx")
+  @@index([organizationId, createdAt, id], map: "WhatsAppMediaAsset_org_created_idx")
+  @@index([webhookEventId, createdAt], map: "WhatsAppMediaAsset_webhook_created_idx")
 }
 
 model ProjectMembership {
@@ -2471,6 +2538,7 @@ model Conversation {
   displayName             String?
   metadata                Json?
   messages                Message[]
+  whatsappMediaAssets     WhatsAppMediaAsset[]     @relation("WhatsAppMediaAssetConversation")
   progressEvidenceSources ProgressEvidence[]      @relation("ProgressEvidenceSourceConversation")
   readStates              ConversationReadState[]
   unreadTrackingStartedAt DateTime?
@@ -2509,6 +2577,7 @@ model Message {
   status                 String?
   metadata               Json?
   progressEvidenceSource ProgressEvidence? @relation("ProgressEvidenceSourceMessage")
+  whatsappMediaAsset     WhatsAppMediaAsset? @relation("WhatsAppMediaAssetMessage")
   sentAt                 DateTime          @default(now())
   createdAt              DateTime          @default(now())
 
@@ -2537,8 +2606,10 @@ model WebhookEvent {
   processedAt    DateTime?
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
+  mediaAssets    WhatsAppMediaAsset[]
 
   @@unique([provider, externalId])
+  @@unique([projectId, id], map: "WebhookEvent_projectId_id_key")
   @@index([status, createdAt])
   @@index([projectId, createdAt])
   @@index([projectId, status, nextAttemptAt, createdAt])

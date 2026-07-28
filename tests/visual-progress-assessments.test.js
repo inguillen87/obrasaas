@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import { VisualProgressProviderError } from '../src/lib/ai/visual-progress-provider.js';
+import { whatsAppMediaAssetHash } from '../src/lib/whatsapp/media-assets.js';
 import {
   listVisualProgressAssessments,
   recoverExpiredVisualProgressAssessments,
@@ -22,6 +23,169 @@ const scope = Object.freeze({
 const actorId = 'user-director';
 const image = Buffer.from('private-construction-image');
 const imageSha256 = createHash('sha256').update(image).digest('hex');
+const whatsAppPhoneNumberId = '1225843560610854';
+const whatsAppConversationId = 'conversation-whatsapp-a';
+const whatsAppMessageId = 'message-whatsapp-a';
+const whatsAppProviderMessageId = 'wamid.visual-progress-a';
+
+function v2WhatsAppStorage() {
+  const pathname = `obrasaas/projects/${scope.projectId}/whatsapp/${whatsAppPhoneNumberId}/muro-norte.png`;
+  return {
+    provider: 'vercel-blob',
+    assetId: `https://tenant.private.blob.vercel-storage.com/${pathname}`,
+    publicId: pathname,
+    pathname,
+    resourceType: 'image',
+    format: 'png',
+    bytes: image.length,
+    reused: false,
+  };
+}
+
+function claimedWhatsAppMediaAsset(overrides = {}) {
+  const storage = v2WhatsAppStorage();
+  return {
+    id: 'media-asset-visual-a',
+    organizationId: scope.organizationId,
+    projectId: scope.projectId,
+    webhookEventId: 'webhook-event-visual-a',
+    status: 'CLAIMED',
+    mediaKind: 'IMAGE',
+    declaredMimeType: 'image/png',
+    storageProvider: 'vercel-blob',
+    storage,
+    storageLocatorHash: whatsAppMediaAssetHash(JSON.stringify({
+      path: ['storage', 'pathname'],
+      provider: 'vercel-blob',
+      value: storage.pathname,
+    })),
+    fileName: 'muro-norte.png',
+    mimeType: 'image/png',
+    contentSha256: imageSha256,
+    sizeBytes: image.length,
+    messageConversationId: whatsAppConversationId,
+    messageId: whatsAppMessageId,
+    claimFingerprint: 'c'.repeat(64),
+    providerMessageIdHash: whatsAppMediaAssetHash(whatsAppProviderMessageId),
+    providerMediaIdHash: 'd'.repeat(64),
+    ...overrides,
+  };
+}
+
+function durableWhatsAppEvidence() {
+  const asset = claimedWhatsAppMediaAsset();
+  const legacyStorage = {
+    provider: 'vercel-blob',
+    assetId: `https://tenant.private.blob.vercel-storage.com/obrasaas/whatsapp/${whatsAppPhoneNumberId}/legacy.png`,
+    pathname: `obrasaas/whatsapp/${whatsAppPhoneNumberId}/legacy.png`,
+    publicId: `obrasaas/whatsapp/${whatsAppPhoneNumberId}/legacy.png`,
+    resourceType: 'image',
+    format: 'png',
+    bytes: image.length,
+  };
+  return {
+    media: {
+      schemaVersion: 2,
+      source: 'whatsapp-media-asset',
+      assetId: asset.id,
+      kind: 'image',
+      mimeType: asset.mimeType,
+      filename: asset.fileName,
+      size: asset.sizeBytes,
+      sha256: asset.contentSha256,
+    },
+    sourceConversationId: whatsAppConversationId,
+    sourceMessageId: whatsAppMessageId,
+    sourceMessage: {
+      id: whatsAppMessageId,
+      conversationId: whatsAppConversationId,
+      externalId: whatsAppProviderMessageId,
+      direction: 'INBOUND',
+      kind: 'IMAGE',
+      body: 'Muro norte al mediodia',
+      mediaUrl: legacyStorage.assetId,
+      metadata: {
+        provider: 'meta',
+        authorized: true,
+        quarantined: false,
+        phoneNumberId: whatsAppPhoneNumberId,
+        media: {
+          url: legacyStorage.assetId,
+          mimeType: 'image/png',
+          filename: 'legacy.png',
+          size: image.length,
+          sha256: imageSha256,
+          storage: { ...legacyStorage, status: 'stored' },
+        },
+      },
+      conversation: {
+        id: whatsAppConversationId,
+        projectId: scope.projectId,
+        channel: 'whatsapp',
+        externalId: 'meta:+5492613000000',
+      },
+      whatsappMediaAsset: asset,
+    },
+  };
+}
+
+function legacyWhatsAppEvidence() {
+  const pathname = `obrasaas/whatsapp/${whatsAppPhoneNumberId}/legacy-muro.png`;
+  const url = `https://tenant.private.blob.vercel-storage.com/${pathname}`;
+  const storage = {
+    provider: 'vercel-blob',
+    assetId: url,
+    publicId: pathname,
+    pathname,
+    resourceType: 'image',
+    format: 'png',
+    bytes: image.length,
+    status: 'stored',
+  };
+  return {
+    media: {
+      schemaVersion: 1,
+      source: 'whatsapp-message',
+      kind: 'image',
+      mimeType: 'image/png',
+      filename: 'legacy-muro.png',
+      size: image.length,
+      sha256: imageSha256,
+    },
+    sourceConversationId: whatsAppConversationId,
+    sourceMessageId: whatsAppMessageId,
+    sourceMessage: {
+      id: whatsAppMessageId,
+      conversationId: whatsAppConversationId,
+      externalId: whatsAppProviderMessageId,
+      direction: 'INBOUND',
+      kind: 'IMAGE',
+      body: 'Muro norte al mediodia',
+      mediaUrl: url,
+      metadata: {
+        provider: 'meta',
+        authorized: true,
+        quarantined: false,
+        phoneNumberId: whatsAppPhoneNumberId,
+        media: {
+          url,
+          mimeType: 'image/png',
+          filename: 'legacy-muro.png',
+          size: image.length,
+          sha256: imageSha256,
+          storage,
+        },
+      },
+      conversation: {
+        id: whatsAppConversationId,
+        projectId: scope.projectId,
+        channel: 'whatsapp',
+        externalId: 'meta:+5492613000000',
+      },
+      whatsappMediaAsset: null,
+    },
+  };
+}
 
 function aiMetadata(enabled = true) {
   return {
@@ -139,6 +303,7 @@ function databaseFixture({
   evidenceProjectId = scope.projectId,
   evidenceSha256 = imageSha256,
   evidenceSize = image.length,
+  evidenceSource = 'dashboard',
   projectStatus = 'ACTIVE',
   beforeAssessmentUpdate = null,
 } = {}) {
@@ -205,6 +370,16 @@ function databaseFixture({
       revision: 2,
       sourceMessageId: null,
       sourceMessage: null,
+      ...(evidenceSource === 'whatsapp-v2'
+        ? durableWhatsAppEvidence()
+        : evidenceSource === 'whatsapp-legacy'
+          ? legacyWhatsAppEvidence()
+          : {}),
+    },
+    whatsAppConnection: {
+      projectId: scope.projectId,
+      phoneNumberId: whatsAppPhoneNumberId,
+      enabled: true,
     },
     assessments: [],
     audits: [],
@@ -253,6 +428,14 @@ function databaseFixture({
       async findFirst({ where }) {
         calls.push(['evidence-find', where]);
         return evidenceFor(where);
+      },
+    },
+    whatsAppConnection: {
+      async findFirst({ where }) {
+        calls.push(['whatsapp-connection-find', where]);
+        return where.projectId === state.whatsAppConnection.projectId
+          ? { ...state.whatsAppConnection }
+          : null;
       },
     },
     task: {
@@ -509,6 +692,220 @@ test('private evidence enforces declared size and SHA before exactly one provide
     assert.equal(database.state.assessments[0].leaseExpiresAt, null);
     assert.equal(database.state.audits.at(-1).action, 'progress.visual_assessment.completed');
   });
+});
+
+test('claimed WhatsAppMediaAsset v2 is the exclusive visual source and binds the request fingerprint', async () => {
+  const database = databaseFixture({ evidenceSource: 'whatsapp-v2' });
+  let providerCalls = 0;
+  let selectedStorage = null;
+  const result = await requestVisualProgressAssessment(database.prisma, requestInput({
+    readFile: async (storage) => {
+      selectedStorage = structuredClone(storage);
+      return { stream: image, size: image.length };
+    },
+    analyze: async () => {
+      providerCalls += 1;
+      return providerResult();
+    },
+  }));
+
+  assert.equal(result.assessment.status, 'COMPLETED');
+  assert.equal(providerCalls, 1);
+  assert.equal(
+    selectedStorage.pathname,
+    v2WhatsAppStorage().pathname,
+  );
+  assert.notEqual(
+    selectedStorage.pathname,
+    database.state.evidence.sourceMessage.metadata.media.storage.pathname,
+  );
+
+  const alternate = databaseFixture({ evidenceSource: 'whatsapp-v2' });
+  alternate.state.evidence.sourceMessage.whatsappMediaAsset.id = 'media-asset-visual-b';
+  alternate.state.evidence.media.assetId = 'media-asset-visual-b';
+  await requestVisualProgressAssessment(alternate.prisma, requestInput({
+    idempotencyKey: 'visual-request-asset-b',
+  }));
+  assert.notEqual(
+    database.state.assessments[0].requestFingerprint,
+    alternate.state.assessments[0].requestFingerprint,
+  );
+});
+
+test('durable WhatsApp media fails closed for invalid, cross-scope, or incomplete relations', async (t) => {
+  const scenarios = [
+    {
+      name: 'asset is not CLAIMED even when a valid legacy descriptor is present',
+      mutate(state) {
+        const legacy = legacyWhatsAppEvidence();
+        state.evidence.media = legacy.media;
+        state.evidence.sourceMessage.mediaUrl = legacy.sourceMessage.mediaUrl;
+        state.evidence.sourceMessage.metadata = legacy.sourceMessage.metadata;
+        state.evidence.sourceMessage.whatsappMediaAsset.status = 'AVAILABLE';
+      },
+    },
+    {
+      name: 'asset organization differs',
+      mutate(state) {
+        state.evidence.sourceMessage.whatsappMediaAsset.organizationId = 'organization-foreign';
+      },
+    },
+    {
+      name: 'asset project differs',
+      mutate(state) {
+        state.evidence.sourceMessage.whatsappMediaAsset.projectId = 'project-foreign';
+      },
+    },
+    {
+      name: 'asset is claimed by another message',
+      mutate(state) {
+        state.evidence.sourceMessage.whatsappMediaAsset.messageId = 'message-foreign';
+      },
+    },
+    {
+      name: 'asset is claimed by another conversation',
+      mutate(state) {
+        state.evidence.sourceMessage.whatsappMediaAsset.messageConversationId = 'conversation-foreign';
+      },
+    },
+    {
+      name: 'provider message hash differs from Message.externalId',
+      mutate(state) {
+        state.evidence.sourceMessage.whatsappMediaAsset.providerMessageIdHash = 'f'.repeat(64);
+      },
+    },
+    {
+      name: 'asset is not an image',
+      mutate(state) {
+        state.evidence.sourceMessage.whatsappMediaAsset.mediaKind = 'AUDIO';
+      },
+    },
+    {
+      name: 'asset MIME is not eligible for visual analysis',
+      mutate(state) {
+        const asset = state.evidence.sourceMessage.whatsappMediaAsset;
+        asset.declaredMimeType = 'application/pdf';
+        asset.mimeType = 'application/pdf';
+        state.evidence.media.mimeType = 'application/pdf';
+      },
+    },
+    {
+      name: 'asset exceeds the visual analysis limit',
+      mutate(state) {
+        const excessiveSize = 20 * 1024 * 1024 + 1;
+        const asset = state.evidence.sourceMessage.whatsappMediaAsset;
+        asset.sizeBytes = excessiveSize;
+        asset.storage.bytes = excessiveSize;
+        state.evidence.media.size = excessiveSize;
+      },
+    },
+    {
+      name: 'ProgressEvidence snapshot does not bind the asset id',
+      mutate(state) {
+        state.evidence.media.assetId = 'media-asset-foreign';
+      },
+    },
+    {
+      name: 'ProgressEvidence snapshot SHA differs',
+      mutate(state) {
+        state.evidence.media.sha256 = '0'.repeat(64);
+      },
+    },
+    {
+      name: 'ProgressEvidence snapshot MIME differs',
+      mutate(state) {
+        state.evidence.media.mimeType = 'image/jpeg';
+      },
+    },
+    {
+      name: 'ProgressEvidence snapshot size differs',
+      mutate(state) {
+        state.evidence.media.size += 1;
+      },
+    },
+    {
+      name: 'ProgressEvidence snapshot filename differs',
+      mutate(state) {
+        state.evidence.media.filename = 'otra-foto.png';
+      },
+    },
+    {
+      name: 'selected relation is missing rather than explicitly legacy null',
+      mutate(state) {
+        delete state.evidence.sourceMessage.whatsappMediaAsset;
+      },
+    },
+  ];
+
+  for (const scenario of scenarios) {
+    await t.test(scenario.name, async () => {
+      const database = databaseFixture({ evidenceSource: 'whatsapp-v2' });
+      scenario.mutate(database.state);
+      let readCalls = 0;
+      let providerCalls = 0;
+      await assert.rejects(
+        requestVisualProgressAssessment(database.prisma, requestInput({
+          readFile: async () => {
+            readCalls += 1;
+            return { stream: image, size: image.length };
+          },
+          analyze: async () => {
+            providerCalls += 1;
+            return providerResult();
+          },
+        })),
+        assertAssessmentError('VISUAL_PROGRESS_EVIDENCE_INVALID', 422),
+      );
+      assert.equal(readCalls, 0);
+      assert.equal(providerCalls, 0);
+      assert.equal(database.state.assessments.length, 0);
+    });
+  }
+});
+
+test('durable source identity is rechecked after private read and before OpenAI dispatch', async () => {
+  const database = databaseFixture({ evidenceSource: 'whatsapp-v2' });
+  let providerCalls = 0;
+  await assert.rejects(
+    requestVisualProgressAssessment(database.prisma, requestInput({
+      readFile: async () => {
+        database.state.evidence.sourceMessage.whatsappMediaAsset.id = 'media-asset-visual-changed';
+        database.state.evidence.media.assetId = 'media-asset-visual-changed';
+        return { stream: image, size: image.length };
+      },
+      analyze: async () => {
+        providerCalls += 1;
+        return providerResult();
+      },
+    })),
+    assertAssessmentError('VISUAL_PROGRESS_SOURCE_CHANGED', 409),
+  );
+  assert.equal(providerCalls, 0);
+  assert.equal(database.state.assessments[0].status, 'FAILED');
+  assert.equal(database.state.assessments[0].failureCode, 'VISUAL_PROGRESS_SOURCE_CHANGED');
+});
+
+test('legacy WhatsApp evidence remains readable only when the selected asset relation is null', async () => {
+  const database = databaseFixture({ evidenceSource: 'whatsapp-legacy' });
+  let providerCalls = 0;
+  let selectedStorage = null;
+  const result = await requestVisualProgressAssessment(database.prisma, requestInput({
+    readFile: async (storage) => {
+      selectedStorage = structuredClone(storage);
+      return { stream: image, size: image.length };
+    },
+    analyze: async () => {
+      providerCalls += 1;
+      return providerResult();
+    },
+  }));
+  assert.equal(result.assessment.status, 'COMPLETED');
+  assert.equal(providerCalls, 1);
+  assert.equal(database.state.evidence.sourceMessage.whatsappMediaAsset, null);
+  assert.equal(
+    selectedStorage.pathname,
+    `obrasaas/whatsapp/${whatsAppPhoneNumberId}/legacy-muro.png`,
+  );
 });
 
 test('expired RUNNING lease recovers once, survives a late provider, and allows an explicit new attempt', async () => {

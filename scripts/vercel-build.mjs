@@ -24,6 +24,9 @@ const PROGRESS_JOURNAL_VERIFIER_PATH = fileURLToPath(
 const PROTECTED_UPLOAD_VERIFIER_PATH = fileURLToPath(
   new URL("./verify-protected-upload-migration.mjs", import.meta.url),
 );
+const WHATSAPP_MEDIA_ASSET_VERIFIER_PATH = fileURLToPath(
+  new URL("./verify-whatsapp-media-asset-migration.mjs", import.meta.url),
+);
 const VISUAL_PROGRESS_VERIFIER_PATH = fileURLToPath(
   new URL("./verify-visual-progress-migration.mjs", import.meta.url),
 );
@@ -310,6 +313,7 @@ export async function runVercelBuild({
     workerIdentityVerifier: WORKER_IDENTITY_VERIFIER_PATH,
     progressJournalVerifier: PROGRESS_JOURNAL_VERIFIER_PATH,
     protectedUploadVerifier: PROTECTED_UPLOAD_VERIFIER_PATH,
+    whatsappMediaAssetVerifier: WHATSAPP_MEDIA_ASSET_VERIFIER_PATH,
     visualProgressVerifier: VISUAL_PROGRESS_VERIFIER_PATH,
     scheduleSnapshotVerifier: SCHEDULE_SNAPSHOT_VERIFIER_PATH,
   },
@@ -342,6 +346,9 @@ export async function runVercelBuild({
       PROTECTED_UPLOAD_MIGRATION_DATABASE_URL:
         environment[plan.migrationDatabaseEnvironment],
       PROTECTED_UPLOAD_MIGRATION_SCHEMA: "public",
+      WHATSAPP_MEDIA_ASSET_MIGRATION_DATABASE_URL:
+        environment[plan.migrationDatabaseEnvironment],
+      WHATSAPP_MEDIA_ASSET_MIGRATION_SCHEMA: "public",
       VISUAL_PROGRESS_MIGRATION_DATABASE_URL:
         environment[plan.migrationDatabaseEnvironment],
       VISUAL_PROGRESS_MIGRATION_SCHEMA: "public",
@@ -362,6 +369,11 @@ export async function runVercelBuild({
     await runner(
       process.execPath,
       [cliPaths.protectedUploadVerifier],
+      { ...sharedOptions, env: verificationEnvironment },
+    );
+    await runner(
+      process.execPath,
+      [cliPaths.whatsappMediaAssetVerifier],
       { ...sharedOptions, env: verificationEnvironment },
     );
     await runner(
