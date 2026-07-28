@@ -8,6 +8,7 @@ import { serializeAttendanceCorrection } from '@/lib/attendance-corrections';
 import { getPrisma } from '@/lib/prisma';
 
 import AttendanceClient from './attendance-client';
+import styles from './attendance.module.css';
 
 export const dynamic = 'force-dynamic';
 
@@ -75,13 +76,15 @@ async function loadScheduleAssignments(prisma, projectId, control) {
   const versionIds = [...scheduleByVersionId.keys()];
   if (versionIds.length === 0) return {};
 
+  const workDate = new Date(`${control.workDate}T00:00:00.000Z`);
   const assignments = await prisma.attendanceScheduleAssignment.findMany({
     where: {
       projectId,
       scheduleVersionId: { in: versionIds },
+      effectiveFrom: { lte: workDate },
       OR: [
         { effectiveThrough: null },
-        { effectiveThrough: { gte: new Date(`${control.workDate}T00:00:00.000Z`) } },
+        { effectiveThrough: { gte: workDate } },
       ],
     },
     select: { scheduleVersionId: true, workerId: true },
@@ -144,17 +147,18 @@ export default async function AttendancePage() {
   const project = { id: access.project.id, name: access.project.name };
 
   return (
-    <main className="shell">
-      <header className="hero">
+    <main className={styles.shell}>
+      <header className={styles.hero}>
         <div>
-          <p className="eyebrow">Personas · jornada · trazabilidad</p>
+          <p className={styles.eyebrow}>Personas · jornada · trazabilidad</p>
           <h1>Asistencia bajo control, sin inventar presencia.</h1>
-          <p className="lead">
+          <p className={styles.lead}>
             Configurá la obligación horaria, atendé desvíos y resolvé correcciones con
-            historial. Las coordenadas y la evidencia de campo no se exponen en esta vista.
+            historial. La ubicación valida plausibilidad; no reemplaza la identidad ni
+            expone coordenadas en esta vista.
           </p>
         </div>
-        <aside className="contextCard" aria-label="Contexto activo">
+        <aside className={styles.contextCard} aria-label="Contexto activo">
           <span><i aria-hidden="true" /> Obra activa</span>
           <strong>{project.name}</strong>
           <small>{control.timezone} · datos aislados por organización y proyecto</small>
