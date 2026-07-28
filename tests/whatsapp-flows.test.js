@@ -159,16 +159,17 @@ test('ObraSaaS blueprints use Flow JSON 7.3 and the dynamic Data API 4.0 contrac
   const catalog = getWhatsAppFlowCatalog();
   assert.equal(WHATSAPP_FLOW_JSON_VERSION, '7.3');
   assert.equal(WHATSAPP_FLOW_DATA_API_VERSION, '4.0');
-  assert.deepEqual(catalog.map((item) => item.key), ['incident-report', 'shift-check-in']);
+  assert.deepEqual(catalog.map((item) => item.key), [
+    'incident-report',
+    'shift-check-in',
+    'worker-onboarding',
+  ]);
 
   for (const item of catalog) {
     const blueprint = getWhatsAppFlowBlueprint(item.key);
     const screen = blueprint.definition.screens[0];
     const form = terminalForm(blueprint);
     const footer = terminalFooter(blueprint);
-    const areaField = item.key === 'incident-report' ? 'area' : 'work_area';
-    const area = form.children.find((component) => component.name === areaField);
-
     assert.deepEqual(validateWhatsAppFlowDefinition(blueprint.definition), []);
     assert.deepEqual(Object.keys(blueprint).sort(), [
       'capabilities',
@@ -186,12 +187,31 @@ test('ObraSaaS blueprints use Flow JSON 7.3 and the dynamic Data API 4.0 contrac
     assert.equal(blueprint.definition.version, '7.3');
     assert.equal(blueprint.definition.data_api_version, '4.0');
     assert.deepEqual(blueprint.definition.routing_model, { [screen.id]: [] });
-    assert.deepEqual(Object.keys(screen.data).sort(), ['project_name', 'work_areas', 'worker_name']);
-    assert.deepEqual(Object.keys(screen.data.work_areas.items.properties).sort(), ['id', 'title']);
-    assert.equal(screen.data.work_areas.items.properties.id.type, 'string');
-    assert.equal(screen.data.work_areas.items.properties.title.type, 'string');
-    assert.equal(area.type, 'Dropdown');
-    assert.equal(area['data-source'], '${data.work_areas}');
+    if (item.key === 'worker-onboarding') {
+      assert.deepEqual(Object.keys(screen.data).sort(), [
+        'expires_label',
+        'privacy_notice_text',
+        'privacy_notice_version',
+        'project_name',
+      ]);
+      assert.deepEqual(
+        form.children.filter((component) => component.name).map((component) => component.name),
+        ['given_names', 'family_name', 'cuil', 'privacy_accepted'],
+      );
+      assert.equal(
+        form.children.find((component) => component.name === 'privacy_accepted').type,
+        'OptIn',
+      );
+    } else {
+      const areaField = item.key === 'incident-report' ? 'area' : 'work_area';
+      const area = form.children.find((component) => component.name === areaField);
+      assert.deepEqual(Object.keys(screen.data).sort(), ['project_name', 'work_areas', 'worker_name']);
+      assert.deepEqual(Object.keys(screen.data.work_areas.items.properties).sort(), ['id', 'title']);
+      assert.equal(screen.data.work_areas.items.properties.id.type, 'string');
+      assert.equal(screen.data.work_areas.items.properties.title.type, 'string');
+      assert.equal(area.type, 'Dropdown');
+      assert.equal(area['data-source'], '${data.work_areas}');
+    }
     assert.equal(footer['on-click-action'].name, 'data_exchange');
     assert.equal(Object.hasOwn(footer['on-click-action'].payload, 'flow_type'), false);
     assert.equal(Object.hasOwn(footer['on-click-action'].payload, 'task_ref'), false);
@@ -203,6 +223,7 @@ test('ObraSaaS blueprints use Flow JSON 7.3 and the dynamic Data API 4.0 contrac
 test('Flow definition contracts separate server context, client fields, and terminal receipts', () => {
   const incident = getWhatsAppFlowDefinitionContract('incident-report');
   const shift = getWhatsAppFlowDefinitionContract('shift-check-in');
+  const onboarding = getWhatsAppFlowDefinitionContract('worker-onboarding');
 
   assert.deepEqual(Object.keys(incident.screens.INCIDENT_REPORT.serverOwnedFields).sort(), [
     'project_name',
@@ -229,6 +250,14 @@ test('Flow definition contracts separate server context, client fields, and term
   assert.equal(
     shift.screens.SHIFT_CHECK_IN.persistenceProjection.task_ref.strategy,
     'opaque-reference',
+  );
+  assert.deepEqual(
+    Object.keys(onboarding.screens.WORKER_ONBOARDING.formFields).sort(),
+    ['cuil', 'family_name', 'given_names', 'privacy_accepted'],
+  );
+  assert.equal(
+    onboarding.screens.WORKER_ONBOARDING.persistenceProjection.cuil.strategy,
+    'drop-sensitive',
   );
   assert.equal(getWhatsAppFlowDefinitionContract('unknown-flow'), null);
 });
@@ -257,6 +286,15 @@ test('Flow persistence projection keeps operational receipts but redacts free te
     work_area: 'Estructura nivel 2',
     ppe_status: 'complete',
     observations: '[contenido restringido]',
+  });
+  assert.deepEqual(projectWhatsAppFlowReplyForPersistence({
+    flow_type: 'worker_onboarding',
+    claim_ref: 'claim_opaque_reference',
+    submission_status: 'submitted',
+  }), {
+    flow_type: 'worker_onboarding',
+    claim_ref: 'claim_opaque_reference',
+    submission_status: 'submitted',
   });
 });
 
@@ -330,6 +368,7 @@ test('malformed Flow definition contracts fail closed without throwing', () => {
 test('Flow session lifetime follows each blueprint operational risk', () => {
   assert.equal(getWhatsAppFlowSessionTtlMs('shift-check-in'), 30 * 60 * 1_000);
   assert.equal(getWhatsAppFlowSessionTtlMs('incident-report'), 4 * 60 * 60 * 1_000);
+  assert.equal(getWhatsAppFlowSessionTtlMs('worker-onboarding'), 60 * 60 * 1_000);
   assert.equal(
     getWhatsAppFlowBlueprint('incident-report').sessionTtlMs,
     WHATSAPP_FLOW_SESSION_TTL_MS['incident-report'],

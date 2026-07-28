@@ -453,6 +453,8 @@ test('GET inbox stays tenant/project scoped and keeps one thread per WhatsApp co
   assert.equal(payload.project.id, 'project-a');
   assert.equal(payload.connection.operational, true);
   assert.equal(payload.conversations.length, 2);
+  assert.equal(payload.conversations[0].phone, '•••• 1111');
+  assert.equal(JSON.stringify(payload).includes('5491111111111'), false);
   assert.equal(payload.unreadTotal, 0);
   assert.deepEqual(payload.pageInfo, { hasMore: false, nextCursor: null });
   assert.deepEqual(
@@ -547,6 +549,8 @@ test('GET messages returns only the scoped conversation and its chronological me
   assert.match(response.headers.get('cache-control') || '', /no-store/i);
   assert.deepEqual(permissions, ['org:conversations:read']);
   assert.equal(payload.conversation.id, 'conversation-a');
+  assert.equal(payload.conversation.phone, '•••• 1111');
+  assert.equal(JSON.stringify(payload).includes('5491111111111'), false);
   assert.deepEqual(payload.messages.map((item) => item.id), ['message-a', 'message-b']);
   assert.equal(JSON.stringify(payload).includes('wamid.outbound-b'), false);
   assert.deepEqual(payload.pageInfo, { hasMore: false, nextCursor: null });
@@ -560,6 +564,70 @@ test('GET messages returns only the scoped conversation and its chronological me
   assert.match(queryEvidence, /conversation-a/);
   assert.match(queryEvidence, /project-a/);
   assert.doesNotMatch(queryEvidence, /conversation-foreign|project-foreign/);
+});
+
+test('GET messages projects server-owned onboarding state for an authorized manager', async () => {
+  const { prisma } = routePrisma();
+  let onboardingInput = null;
+  const response = await createWhatsAppConversationMessageHandlers({
+    resolveAccess: async () => access({ tenantRole: 'DIRECTOR' }),
+    authorize: () => undefined,
+    prismaFactory: () => prisma,
+    loadOnboardingState: async (input) => {
+      onboardingInput = input;
+      return {
+        state: 'eligible',
+        capability: {
+          allowed: true,
+          code: 'READY',
+          reason: 'Puede iniciar el alta segura.',
+        },
+        invitation: null,
+        contact: { status: 'UNASSIGNED' },
+      };
+    },
+    clock: () => NOW,
+    env: CONFIGURED_META_ENV,
+  }).GET(messagesRequest(), routeContext());
+  const payload = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(payload.onboarding, {
+    state: 'eligible',
+    reason: 'Puede iniciar el alta segura.',
+  });
+  assert.equal(onboardingInput.conversationId, 'conversation-a');
+  assert.equal(onboardingInput.access.organization.id, 'organization-a');
+  assert.equal(onboardingInput.access.project.id, 'project-a');
+  assert.equal(onboardingInput.canManage, true);
+  assert.equal(JSON.stringify(payload.onboarding).includes('UNASSIGNED'), false);
+});
+
+test('GET messages fails contact onboarding closed without hiding the conversation', async () => {
+  const { prisma } = routePrisma();
+  const originalError = console.error;
+  console.error = () => undefined;
+  try {
+    const response = await createWhatsAppConversationMessageHandlers({
+      resolveAccess: async () => access({ tenantRole: 'DIRECTOR' }),
+      authorize: () => undefined,
+      prismaFactory: () => prisma,
+      loadOnboardingState: async () => {
+        const error = new Error('sensitive provider detail');
+        error.code = 'ONBOARDING_STATE_UNAVAILABLE';
+        throw error;
+      },
+      clock: () => NOW,
+    }).GET(messagesRequest(), routeContext());
+    const payload = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(payload.conversation.id, 'conversation-a');
+    assert.deepEqual(payload.onboarding, { state: 'closed', reason: '' });
+    assert.equal(JSON.stringify(payload).includes('sensitive provider detail'), false);
+  } finally {
+    console.error = originalError;
+  }
 });
 
 test('conversation pagination uses a project-bound updatedAt and id keyset cursor', async () => {

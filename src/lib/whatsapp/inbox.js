@@ -225,6 +225,11 @@ function phoneFromConversation(conversation) {
   return normalizeWhatsAppPhone(externalId.slice(META_CONVERSATION_PREFIX.length));
 }
 
+function maskedWhatsAppPhone(value) {
+  const phone = normalizeWhatsAppPhone(value);
+  return phone ? `•••• ${phone.slice(-4)}` : '';
+}
+
 function jsonMetadata(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
 }
@@ -303,10 +308,11 @@ function publicConversation(conversation, options = {}) {
   const lastMessage = Array.isArray(conversation.messages)
     ? conversation.messages[0] || null
     : null;
+  const maskedPhone = maskedWhatsAppPhone(phoneFromConversation(conversation));
   return {
     id: conversation.id,
-    displayName: conversation.displayName || phoneFromConversation(conversation),
-    phone: phoneFromConversation(conversation),
+    displayName: conversation.displayName || (maskedPhone ? `Contacto ${maskedPhone}` : 'Contacto de WhatsApp'),
+    phone: maskedPhone,
     lastMessage: lastMessage ? publicMessage(lastMessage, options) : null,
     lastMessageAt: validDate(lastMessage?.createdAt || conversation.updatedAt)?.toISOString() || null,
     unreadCount: Math.max(0, Number(options.unreadCount) || 0),

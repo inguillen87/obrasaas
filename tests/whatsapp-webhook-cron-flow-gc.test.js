@@ -35,6 +35,17 @@ globalThis[TEST_STATE] = {
     failureCodes: [],
   },
   attendanceAutomationError: null,
+  retentionCalls: [],
+  retentionResult: {
+    scanned: 0,
+    expired: 0,
+    purged: 0,
+    auditRows: 0,
+    hasMore: false,
+    failedBatches: 0,
+    failureCodes: [],
+  },
+  retentionError: null,
   gcCalls: [],
   projectIds: ["project-1"],
   drainResult: { completed: 2, failed: 0, blocked: false },
@@ -53,6 +64,7 @@ const mockModules = new Map([
   ["@/lib/cron-auth", "mock:cron-auth"],
   ["@/lib/db", "mock:db"],
   ["@/lib/prisma", "mock:prisma"],
+  ["@/lib/worker-onboarding-retention", "mock:worker-onboarding-retention"],
   ["@/lib/whatsapp/flow-endpoint-requests", "mock:flow-endpoint-requests"],
   ["@/lib/whatsapp/webhook-worker", "mock:webhook-worker"],
 ]);
@@ -125,6 +137,21 @@ registerHooks({
         source: `
           const prisma = { source: "cron-test" };
           export function getPrisma() { return prisma; }
+        `,
+      };
+    }
+    if (url === "mock:worker-onboarding-retention") {
+      return {
+        format: "module",
+        shortCircuit: true,
+        source: `
+          const state = globalThis[Symbol.for("obrasaas.whatsapp-webhook-cron-flow-gc-test")];
+          export async function expireAndPurgeWorkerOnboardingClaimsBatch(...args) {
+            state.callOrder.push("onboarding-retention");
+            state.retentionCalls.push(args);
+            if (state.retentionError) throw state.retentionError;
+            return state.retentionResult;
+          }
         `,
       };
     }
@@ -220,6 +247,17 @@ test("webhook recovery cron distinguishes accepted runs from healthy work", asyn
     state.attendanceAutomationCalls = [];
     state.attendanceAutomationError = null;
     state.attendanceExpiryError = null;
+    state.retentionCalls = [];
+    state.retentionError = null;
+    state.retentionResult = {
+      scanned: 0,
+      expired: 0,
+      purged: 0,
+      auditRows: 0,
+      hasMore: false,
+      failedBatches: 0,
+      failureCodes: [],
+    };
     state.attendanceExpiryResult = {
       scannedEntries: 0,
       processedProjects: 0,
@@ -248,12 +286,16 @@ test("webhook recovery cron distinguishes accepted runs from healthy work", asyn
     assert.equal(state.gcCalls.length, 1, scenario.name);
     assert.equal(state.attendanceExpiryCalls.length, 1, scenario.name);
     assert.equal(state.attendanceAutomationCalls.length, 1, scenario.name);
+    assert.equal(state.retentionCalls.length, 1, scenario.name);
+    assert.deepEqual(state.retentionCalls[0][0], { source: "cron-test" });
+    assert.deepEqual(state.retentionCalls[0][1], { batchSize: 100 });
     assert.deepEqual(state.attendanceExpiryCalls[0][0], { source: "cron-test" });
     assert.deepEqual(state.attendanceExpiryCalls[0][1], { maxEntries: 100 });
     assert.deepEqual(state.attendanceAutomationCalls[0][0], { source: "cron-test" });
     assert.deepEqual(state.attendanceAutomationCalls[0][1], { maxProjects: 4 });
-    assert.equal(state.callOrder[0], "attendance-expiry", scenario.name);
-    assert.equal(state.callOrder[1], "attendance-automation", scenario.name);
+    assert.equal(state.callOrder[0], "onboarding-retention", scenario.name);
+    assert.equal(state.callOrder[1], "attendance-expiry", scenario.name);
+    assert.equal(state.callOrder[2], "attendance-automation", scenario.name);
   }
 
   state.callOrder = [];
@@ -327,6 +369,52 @@ test("webhook recovery cron distinguishes accepted runs from healthy work", asyn
   ]);
   assert.equal(expiryFailureBody.attendanceExpiry.backlogCheckFailed, true);
   assert.deepEqual(expiryFailureBody.attendanceExpiry.failureCodes, ["P1001"]);
-  assert.equal(state.callOrder[0], "attendance-expiry");
+  assert.equal(state.callOrder[0], "onboarding-retention");
+  assert.equal(state.callOrder[1], "attendance-expiry");
   assert.equal(errorLog.mock.callCount(), 2);
+
+  state.callOrder = [];
+  state.attendanceExpiryError = null;
+  state.drainResult = { completed: 1, failed: 0, blocked: false };
+  state.retentionResult = {
+    scanned: 100,
+    expired: 100,
+    purged: 100,
+    auditRows: 100,
+    hasMore: true,
+    failedBatches: 0,
+    failureCodes: [],
+    leakedPhone: "+5491112345678",
+  };
+  const retentionBacklogResponse = await GET(request.clone());
+  const retentionBacklogBody = await retentionBacklogResponse.json();
+  assert.deepEqual(retentionBacklogBody.reasons, ["WORKER_ONBOARDING_RETENTION_BACKLOG"]);
+  assert.deepEqual(retentionBacklogBody.workerOnboardingRetention, {
+    scanned: 100,
+    expired: 100,
+    purged: 100,
+    auditRows: 100,
+    hasMore: true,
+    failedBatches: 0,
+    failureCodes: [],
+  });
+  assert.equal(JSON.stringify(retentionBacklogBody).includes("+5491112345678"), false);
+
+  const retentionSecret = "20-12345678-9";
+  state.retentionError = Object.assign(new Error(retentionSecret), {
+    code: "WORKER_ONBOARDING_RETENTION_UNAVAILABLE",
+    status: 503,
+  });
+  const retentionFailureResponse = await GET(request.clone());
+  const retentionFailureBody = await retentionFailureResponse.json();
+  assert.equal(retentionFailureResponse.status, 200);
+  assert.deepEqual(retentionFailureBody.reasons, [
+    "WORKER_ONBOARDING_RETENTION_FAILED",
+    "WORKER_ONBOARDING_RETENTION_BACKLOG",
+  ]);
+  assert.deepEqual(retentionFailureBody.workerOnboardingRetention.failureCodes, [
+    "WORKER_ONBOARDING_RETENTION_UNAVAILABLE",
+  ]);
+  assert.equal(JSON.stringify(retentionFailureBody).includes(retentionSecret), false);
+  assert.equal(JSON.stringify(errorLog.mock.calls.at(-1)?.arguments || []).includes(retentionSecret), false);
 });

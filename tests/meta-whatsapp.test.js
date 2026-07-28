@@ -482,6 +482,55 @@ test("Meta webhook messages and WhatsApp Flow replies normalize into stable even
   assert.equal(events[2].externalId, "status:wamid.outbound-1:delivered:1784030420");
 });
 
+test("pre-worker Flow replies retain only domain-separated token evidence and a safe receipt", () => {
+  const flowToken = `wofs1.1f967f35-9f99-4db0-bd42-2d88f734cc72.${"B".repeat(43)}`;
+  const [event] = normalizeMetaWebhook({
+    object: "whatsapp_business_account",
+    entry: [{
+      id: "waba-1",
+      changes: [{
+        field: "messages",
+        value: {
+          metadata: { phone_number_id: "phone-1" },
+          messages: [{
+            id: "wamid.worker-onboarding-receipt",
+            from: "5491112345678",
+            timestamp: "1784030410",
+            type: "interactive",
+            interactive: {
+              type: "nfm_reply",
+              nfm_reply: {
+                name: "worker-onboarding",
+                body: "Alta enviada",
+                cuil: "20-12345678-9",
+                response_json: JSON.stringify({
+                  flow_token: flowToken,
+                  flow_type: "worker_onboarding",
+                  claim_ref: "claim-opaque-reference",
+                  submission_status: "submitted",
+                }),
+              },
+            },
+          }],
+        },
+      }],
+    }],
+  });
+
+  assert.deepEqual(event.interactive.flowToken, {
+    kind: "worker_onboarding",
+    sessionId: "1f967f35-9f99-4db0-bd42-2d88f734cc72",
+    tokenSha256: crypto.createHash("sha256").update(flowToken).digest("hex"),
+  });
+  assert.deepEqual(event.interactive.response, {
+    flow_type: "worker_onboarding",
+    claim_ref: "claim-opaque-reference",
+    submission_status: "submitted",
+  });
+  assert.equal(JSON.stringify(event).includes(flowToken), false);
+  assert.equal(JSON.stringify(event).includes("20-12345678-9"), false);
+});
+
 test("unknown or future Flow fields are projected to an empty durable response", () => {
   const futureSensitiveValue = "alias.sueldo.carlos";
   const [event] = normalizeMetaWebhook({

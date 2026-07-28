@@ -19,6 +19,15 @@ import {
   workerChannelAddressBinding,
   workerChannelProviderSubjectBinding,
 } from './worker-financial-data.js';
+import {
+  assertWorkerOnboardingPrivacyNoticeEvidence,
+  CURRENT_WORKER_ONBOARDING_PRIVACY_NOTICE_VERSION,
+  getWorkerOnboardingPrivacyNotice,
+  WorkerOnboardingPrivacyNoticeError,
+} from './worker-onboarding-privacy-notices.js';
+import { workerOnboardingSensitivePurgeData } from './worker-onboarding-retention.js';
+
+export { CURRENT_WORKER_ONBOARDING_PRIVACY_NOTICE_VERSION };
 
 const CLAIM_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/;
@@ -29,6 +38,9 @@ const MIN_CLAIM_LIFETIME_MS = 5 * 60 * 1_000;
 const DEFAULT_LIST_LIMIT = 50;
 const MAX_LIST_LIMIT = 100;
 const MAX_PRISMA_INT = 2_147_483_647;
+const WORKER_ONBOARDING_FLOW_BLUEPRINT_KEY = 'worker-onboarding';
+const WORKER_ONBOARDING_FLOW_SCREEN_ID = 'WORKER_ONBOARDING';
+const WORKER_ONBOARDING_FLOW_TYPE = 'worker_onboarding';
 const ONBOARDING_READ_PERMISSION = 'org:workers:onboarding:read';
 const ONBOARDING_MANAGE_PERMISSION = 'org:workers:onboarding:manage';
 const PORTFOLIO_ROLES = new Set(['ADMIN', 'DIRECTOR']);
@@ -40,6 +52,11 @@ const CLAIM_STATUSES = new Set([
   'EXPIRED',
   'CANCELLED',
 ]);
+const ONBOARDING_RECEIPT_EVIDENCE = Object.freeze({
+  MISSING: 'MISSING',
+  CORRUPT: 'CORRUPT',
+  VERIFIED: 'VERIFIED',
+});
 
 const ERROR_STATUS = Object.freeze({
   WORKER_ONBOARDING_INPUT_INVALID: 400,
@@ -57,6 +74,9 @@ const ERROR_STATUS = Object.freeze({
   WORKER_ONBOARDING_CHANNEL_CONFLICT: 409,
   WORKER_ONBOARDING_LEGACY_AMBIGUITY: 409,
   WORKER_ONBOARDING_CONCURRENT_MODIFICATION: 409,
+  WORKER_ONBOARDING_FLOW_SESSION_INVALID: 409,
+  WORKER_ONBOARDING_TERMINAL_RECEIPT_REQUIRED: 409,
+  WORKER_ONBOARDING_RETIRED: 410,
   WORKER_ONBOARDING_STATE_CORRUPT: 500,
 });
 
@@ -171,6 +191,17 @@ function normalizeEvidenceHash(value) {
   if (!HASH_PATTERN.test(hash)) {
     throw onboardingError(
       'evidenceHash debe ser un SHA-256 valido.',
+      'WORKER_ONBOARDING_INPUT_INVALID',
+    );
+  }
+  return hash;
+}
+
+function normalizeFlowTokenSha256(value) {
+  const hash = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  if (!HASH_PATTERN.test(hash)) {
+    throw onboardingError(
+      'La evidencia de sesion de WhatsApp no es valida.',
       'WORKER_ONBOARDING_INPUT_INVALID',
     );
   }
@@ -437,7 +468,17 @@ function decryptPayload(encryptedPayload, wrappingKeyId, binding, dependencies) 
   );
 }
 
+function assertClaimNotRetired(claim) {
+  if (claim?.sensitiveDataPurgedAt) {
+    throw onboardingError(
+      'El alta fue cerrada y sus datos transitorios ya fueron eliminados.',
+      'WORKER_ONBOARDING_RETIRED',
+    );
+  }
+}
+
 function decryptClaimSender(claim, dependencies) {
+  assertClaimNotRetired(claim);
   const payload = decryptPayload(
     claim.senderEncryptedPayload,
     claim.senderWrappingKeyId,
@@ -467,6 +508,7 @@ function encryptedIdentityPayload(identity) {
 }
 
 function decryptClaimIdentity(claim, dependencies) {
+  assertClaimNotRetired(claim);
   const payload = decryptPayload(
     claim.claimedIdentityEncryptedPayload,
     claim.claimedIdentityWrappingKeyId,
@@ -542,6 +584,56 @@ function effectiveClaimStatus(claim, now) {
   return claim.status;
 }
 
+function serializeClaimRetention(claim, now = new Date()) {
+  const purged = claim.sensitiveDataPurgedAt !== null
+    && claim.sensitiveDataPurgedAt !== undefined;
+  if (purged) return { state: 'PURGED', purgedAt: dateIso(claim.sensitiveDataPurgedAt) };
+  if (effectiveClaimStatus(claim, now) === 'EXPIRED') {
+    return { state: 'PENDING_PURGE', purgedAt: null };
+  }
+  return { state: 'ACTIVE', purgedAt: null };
+}
+
+function inspectConsumedOnboardingReceipt(claim, session) {
+  if (
+    !session
+    || !session.deliveryAttemptedAt
+    || session.deliveryRejectedAt
+    || !session.privacyPresentedAt
+    || !session.submittedAt
+    || !session.consumedAt
+    || typeof session.consumedExternalId !== 'string'
+    || !session.consumedExternalId.trim()
+  ) return ONBOARDING_RECEIPT_EVIDENCE.MISSING;
+
+  const claimSubmittedAt = new Date(claim.submittedAt);
+  const deliveryAttemptedAt = new Date(session.deliveryAttemptedAt);
+  const privacyPresentedAt = new Date(session.privacyPresentedAt);
+  const flowSubmittedAt = new Date(session.submittedAt);
+  const consumedAt = new Date(session.consumedAt);
+  if (
+    [claimSubmittedAt, deliveryAttemptedAt, privacyPresentedAt, flowSubmittedAt, consumedAt]
+      .some((value) => Number.isNaN(value.getTime()))
+    || session.noticeVersion !== claim.privacyNoticeVersion
+    || session.noticeContentSha256 !== claim.privacyNoticeContentSha256
+    || deliveryAttemptedAt.getTime() > privacyPresentedAt.getTime()
+    || privacyPresentedAt.getTime() > claimSubmittedAt.getTime()
+    || deliveryAttemptedAt.getTime() > flowSubmittedAt.getTime()
+    || flowSubmittedAt.getTime() < claimSubmittedAt.getTime()
+    || consumedAt.getTime() < flowSubmittedAt.getTime()
+  ) return ONBOARDING_RECEIPT_EVIDENCE.CORRUPT;
+
+  return ONBOARDING_RECEIPT_EVIDENCE.VERIFIED;
+}
+
+function onboardingVerificationState(claim, session, receiptEvidence) {
+  if (session?.deliveryRejectedAt) return 'REJECTED';
+  if (receiptEvidence === ONBOARDING_RECEIPT_EVIDENCE.VERIFIED) return 'VERIFIED';
+  if (claim.submittedAt || session?.submittedAt) return 'AWAITING_RECEIPT';
+  if (session?.deliveryAttemptedAt || session?.privacyPresentedAt) return 'AWAITING_SUBMISSION';
+  return 'PREPARED';
+}
+
 /**
  * A privacy-minimal DTO. The claim token, ciphertexts, raw identity values,
  * fingerprints, wrapping keys, operation keys and audit metadata never cross
@@ -549,14 +641,17 @@ function effectiveClaimStatus(claim, now) {
  */
 function serializeClaim(claim, { now, replayed = false, legalName = null } = {}) {
   const currentTime = now ?? new Date();
+  const retention = serializeClaimRetention(claim, currentTime);
   return {
     id: claim.id,
     projectId: claim.projectId,
     connectionId: claim.connectionId,
     status: effectiveClaimStatus(claim, currentTime),
     revision: Number(claim.revision),
-    sender: maskWorkerFinancialValue('WHATSAPP_E164', claim.senderLastFour),
-    identity: claim.claimedCuilLastFour
+    sender: retention.state !== 'ACTIVE' || !claim.senderLastFour
+      ? null
+      : maskWorkerFinancialValue('WHATSAPP_E164', claim.senderLastFour),
+    identity: retention.state === 'ACTIVE' && claim.claimedCuilLastFour
       ? {
           maskedCuil: maskWorkerFinancialValue('CUIL', claim.claimedCuilLastFour),
           hasLegalName: true,
@@ -569,6 +664,7 @@ function serializeClaim(claim, { now, replayed = false, legalName = null } = {})
     submittedAt: dateIso(claim.submittedAt),
     reviewedAt: dateIso(claim.reviewedAt),
     hasRejectionReason: Boolean(claim.rejectionReason),
+    retention,
     resolution: claim.status === 'APPROVED'
       ? {
           personId: claim.resolvedPersonId,
@@ -577,6 +673,60 @@ function serializeClaim(claim, { now, replayed = false, legalName = null } = {})
         }
       : null,
     replayed: Boolean(replayed),
+  };
+}
+
+/**
+ * Exclusive list DTO. Internal tenant, channel, civil-identity and provider
+ * identifiers stay server-side; the only terminal resolution reference is the
+ * worker anchor used by Equipo.
+ */
+function serializeClaimListItem(claim, { now, legalName = null } = {}) {
+  const currentTime = now ?? new Date();
+  const status = effectiveClaimStatus(claim, currentTime);
+  const retention = serializeClaimRetention(claim, currentTime);
+  const receiptEvidence = inspectConsumedOnboardingReceipt(claim, claim.flowSession);
+  const verificationState = onboardingVerificationState(
+    claim,
+    claim.flowSession,
+    receiptEvidence,
+  );
+  return {
+    id: claim.id,
+    status,
+    revision: Number(claim.revision),
+    sender: retention.state !== 'ACTIVE' || !claim.senderLastFour
+      ? null
+      : maskWorkerFinancialValue('WHATSAPP_E164', claim.senderLastFour),
+    identity: retention.state === 'ACTIVE' && claim.claimedCuilLastFour
+      ? {
+          maskedCuil: maskWorkerFinancialValue('CUIL', claim.claimedCuilLastFour),
+          hasLegalName: true,
+          privacyNoticeVersion: claim.privacyNoticeVersion,
+          ...(legalName ? { legalName } : {}),
+        }
+      : null,
+    createdAt: dateIso(claim.createdAt),
+    expiresAt: dateIso(claim.expiresAt),
+    submittedAt: dateIso(claim.submittedAt),
+    reviewedAt: dateIso(claim.reviewedAt),
+    hasRejectionReason: Boolean(claim.rejectionReason),
+    retention,
+    verification: {
+      state: verificationState,
+      deliveryAttemptedAt: dateIso(claim.flowSession?.deliveryAttemptedAt),
+      noticeServedAt: dateIso(claim.flowSession?.privacyPresentedAt),
+      submittedAt: dateIso(claim.flowSession?.submittedAt),
+      verifiedAt: receiptEvidence === ONBOARDING_RECEIPT_EVIDENCE.VERIFIED
+        ? dateIso(claim.flowSession?.consumedAt)
+        : null,
+      rejectedAt: dateIso(claim.flowSession?.deliveryRejectedAt),
+    },
+    reviewReady: status === 'SUBMITTED'
+      && receiptEvidence === ONBOARDING_RECEIPT_EVIDENCE.VERIFIED,
+    resolution: claim.status === 'APPROVED' && claim.resolvedWorkerId
+      ? { workerId: claim.resolvedWorkerId }
+      : null,
   };
 }
 
@@ -720,7 +870,7 @@ function isUniqueConstraintError(error) {
  * canonical 256-bit token, retain it only long enough to deliver it, and pass
  * it here. This persistence boundary stores only the scoped SHA-256 hash.
  */
-export async function issueWorkerOnboardingClaim(prisma, {
+async function issueWorkerOnboardingClaimOperation(prisma, {
   scope: scopeInput,
   connectionId: connectionIdInput,
   sender: senderInput,
@@ -730,7 +880,7 @@ export async function issueWorkerOnboardingClaim(prisma, {
   idempotencyKey: idempotencyKeyInput,
   now: nowInput,
   dependencies = {},
-}) {
+}, reserve = null) {
   const scope = normalizeScope(scopeInput);
   const connectionId = requiredIdentifier(connectionIdInput, 'connectionId');
   const sender = normalizeSender(senderInput);
@@ -807,7 +957,21 @@ export async function issueWorkerOnboardingClaim(prisma, {
       const operationReplay = await transaction.workerOnboardingClaim.findFirst({
         where: { connectionId, operationKey },
       });
-      if (operationReplay) return assertIssueReplay(operationReplay, expected, currentTime);
+      if (operationReplay) {
+        const claim = assertIssueReplay(operationReplay, expected, currentTime);
+        const reservation = reserve
+          ? await reserve(transaction, {
+              claim: operationReplay,
+              sender,
+              scope,
+              connectionId,
+              expiresAt,
+              currentTime,
+              replayed: true,
+            })
+          : null;
+        return reserve ? { claim, reservation } : claim;
+      }
       assertNewClaimExpiry(expiresAt, currentTime);
 
       await lockSensitiveKeys(transaction, [
@@ -818,7 +982,7 @@ export async function issueWorkerOnboardingClaim(prisma, {
         'senderFingerprint',
         senderCandidates,
       );
-      await transaction.workerOnboardingClaim.updateMany({
+      const expiredClaims = await transaction.workerOnboardingClaim.findMany({
         where: {
           organizationId: scope.organizationId,
           projectId: scope.projectId,
@@ -826,12 +990,51 @@ export async function issueWorkerOnboardingClaim(prisma, {
           expiresAt: { lte: currentTime },
           OR: senderWhere,
         },
-        data: {
-          status: 'EXPIRED',
-          openClaimKey: null,
-          revision: { increment: 1 },
+        select: {
+          id: true,
+          revision: true,
         },
       });
+      for (const expiredClaim of expiredClaims) {
+        const expiredRevision = Number(expiredClaim.revision);
+        const expired = await transaction.workerOnboardingClaim.updateMany({
+          where: {
+            id: expiredClaim.id,
+            organizationId: scope.organizationId,
+            projectId: scope.projectId,
+            status: { in: ['PENDING', 'SUBMITTED'] },
+            expiresAt: { lte: currentTime },
+            revision: expiredRevision,
+            sensitiveDataPurgedAt: null,
+          },
+          data: workerOnboardingSensitivePurgeData({
+            status: 'EXPIRED',
+            purgedAt: currentTime,
+          }),
+        });
+        if (expired.count !== 1) {
+          throw onboardingError(
+            'Un alta vencida cambio durante la depuracion de datos sensibles.',
+            'WORKER_ONBOARDING_CONCURRENT_MODIFICATION',
+          );
+        }
+        await transaction.auditLog.create({
+          data: {
+            organizationId: scope.organizationId,
+            actorId: issuer.userId,
+            action: 'worker.onboarding.expired',
+            entityType: 'WorkerOnboardingClaim',
+            entityId: expiredClaim.id,
+            metadata: {
+              projectId: scope.projectId,
+              status: 'EXPIRED',
+              revision: expiredRevision + 1,
+              retentionState: 'PURGED',
+            },
+            createdAt: currentTime,
+          },
+        });
+      }
       const activeClaims = await transaction.workerOnboardingClaim.findMany({
         where: {
           organizationId: scope.organizationId,
@@ -889,25 +1092,78 @@ export async function issueWorkerOnboardingClaim(prisma, {
           createdAt: currentTime,
         },
       });
-      return serializeClaim(claim, { now: currentTime });
+      const serialized = serializeClaim(claim, { now: currentTime });
+      const reservation = reserve
+        ? await reserve(transaction, {
+            claim,
+            sender,
+            scope,
+            connectionId,
+            expiresAt,
+            currentTime,
+            replayed: false,
+          })
+        : null;
+      return reserve ? { claim: serialized, reservation } : serialized;
     });
   } catch (error) {
     if (!isUniqueConstraintError(error)) throw error;
-    await requireMembership(
-      prisma,
-      scope,
-      issuedByMembershipId,
-      ONBOARDING_MANAGE_PERMISSION,
-    );
-    const replay = await prisma.workerOnboardingClaim.findFirst({
-      where: { connectionId, operationKey },
+    return runOperationalProjectMutation(prisma, scope, async (transaction) => {
+      await assertOrganizationSubscriptionAllowsWrites(transaction, scope.organizationId, {
+        code: 'WORKER_ONBOARDING_SUBSCRIPTION_READ_ONLY',
+      });
+      await requireMembership(
+        transaction,
+        scope,
+        issuedByMembershipId,
+        ONBOARDING_MANAGE_PERMISSION,
+      );
+      await requireConnection(transaction, scope, connectionId);
+      const replay = await transaction.workerOnboardingClaim.findFirst({
+        where: { connectionId, operationKey },
+      });
+      if (!replay) {
+        throw onboardingError(
+          'Otra operacion creo el alta al mismo tiempo.',
+          'WORKER_ONBOARDING_CONCURRENT_MODIFICATION',
+        );
+      }
+      const claim = assertIssueReplay(replay, expected, currentTime);
+      const reservation = reserve
+        ? await reserve(transaction, {
+            claim: replay,
+            sender,
+            scope,
+            connectionId,
+            expiresAt,
+            currentTime,
+            replayed: true,
+          })
+        : null;
+      return reserve ? { claim, reservation } : claim;
     });
-    if (replay) return assertIssueReplay(replay, expected, currentTime);
-    throw onboardingError(
-      'Otra operacion creo el alta al mismo tiempo.',
-      'WORKER_ONBOARDING_CONCURRENT_MODIFICATION',
-    );
   }
+}
+
+export async function issueWorkerOnboardingClaim(prisma, input) {
+  return issueWorkerOnboardingClaimOperation(prisma, input);
+}
+
+/**
+ * Internal orchestration boundary for transports that must reserve their
+ * session and outbound journal in the same transaction as the claim. The
+ * callback receives the encrypted claim record and trusted sender only on the
+ * server; callers must never return those values across an API boundary.
+ */
+export async function issueWorkerOnboardingClaimWithReservation(
+  prisma,
+  input,
+  reserve,
+) {
+  if (typeof reserve !== 'function') {
+    throw new TypeError('A worker onboarding reservation callback is required.');
+  }
+  return issueWorkerOnboardingClaimOperation(prisma, input, reserve);
 }
 
 function assertClaimSender(claim, sender, candidates, dependencies) {
@@ -935,6 +1191,7 @@ function assertClaimSender(claim, sender, candidates, dependencies) {
 }
 
 function submissionRequestFingerprint(scope, connectionId, claim, sender, identity, cuilFingerprint) {
+  const privacyNoticeContentSha256 = identity.privacyNoticeContentSha256;
   return canonicalHash('obrasaas:worker-onboarding:submit:v1', {
     scope,
     connectionId,
@@ -949,9 +1206,188 @@ function submissionRequestFingerprint(scope, connectionId, claim, sender, identi
       familyName: identity.familyName,
       cuilFingerprint,
       privacyNoticeVersion: identity.privacyNoticeVersion,
+      privacyNoticeContentSha256,
     },
     privacyAccepted: true,
   });
+}
+
+function submissionPrivacyNoticeEvidence(identity, pinnedEvidence = null) {
+  try {
+    const notice = pinnedEvidence
+      ? assertWorkerOnboardingPrivacyNoticeEvidence(
+          pinnedEvidence.version,
+          pinnedEvidence.contentSha256,
+        )
+      : getWorkerOnboardingPrivacyNotice(identity.privacyNoticeVersion);
+    if (notice.version !== identity.privacyNoticeVersion) {
+      throw new WorkerOnboardingPrivacyNoticeError(
+        'La version aceptada no coincide con el aviso fijado.',
+      );
+    }
+    return notice;
+  } catch (error) {
+    if (!(error instanceof WorkerOnboardingPrivacyNoticeError)) throw error;
+    throw onboardingError(
+      'La evidencia del aviso de privacidad no es valida.',
+      pinnedEvidence
+        ? 'WORKER_ONBOARDING_STATE_CORRUPT'
+        : 'WORKER_ONBOARDING_PRIVACY_REQUIRED',
+      { cause: error },
+    );
+  }
+}
+
+async function submitWorkerOnboardingClaimRecord(transaction, {
+  scope,
+  connectionId,
+  claim,
+  sender,
+  identity,
+  currentTime,
+  cryptoDependencies,
+  tokenHash = null,
+  privacyNoticeEvidence: pinnedNoticeEvidence = null,
+}) {
+  assertClaimNotRetired(claim);
+  const privacyNotice = submissionPrivacyNoticeEvidence(identity, pinnedNoticeEvidence);
+  const identityWithEvidence = {
+    ...identity,
+    privacyNoticeContentSha256: privacyNotice.contentSha256,
+  };
+  const senderCandidates = fingerprintCandidates(
+    sender.address,
+    scope.organizationId,
+    'WHATSAPP_E164',
+    cryptoDependencies,
+  );
+  await lockSensitiveKeys(transaction, [
+    ...sensitiveCandidateLockKeys('sender', scope.organizationId, senderCandidates),
+  ]);
+  assertClaimSender(claim, sender, senderCandidates, cryptoDependencies);
+  if (new Date(claim.expiresAt).getTime() <= currentTime.getTime()) {
+    throw onboardingError(
+      'El token de alta expiro y ya no puede utilizarse.',
+      'WORKER_ONBOARDING_EXPIRED',
+    );
+  }
+  const cuilFingerprint = claim.status === 'SUBMITTED'
+    ? fingerprintWithKey(
+        identity.cuil,
+        scope.organizationId,
+        'CUIL',
+        claim.claimedCuilFingerprintKeyId,
+        cryptoDependencies,
+      )
+    : activeFingerprint(
+        identity.cuil,
+        scope.organizationId,
+        'CUIL',
+        cryptoDependencies,
+      );
+  const submissionFingerprint = submissionRequestFingerprint(
+    scope,
+    connectionId,
+    claim,
+    sender,
+    identityWithEvidence,
+    cuilFingerprint,
+  );
+  if (claim.status === 'SUBMITTED') {
+    const storedIdentity = decryptClaimIdentity(claim, cryptoDependencies);
+    if (
+      claim.requestFingerprint !== submissionFingerprint
+      || claim.claimedCuilFingerprint !== cuilFingerprint.fingerprint
+      || claim.privacyNoticeContentSha256 !== privacyNotice.contentSha256
+      || !sameIdentity(storedIdentity, identity)
+    ) {
+      throw onboardingError(
+        'El token ya fue utilizado con otra declaracion.',
+        'WORKER_ONBOARDING_IDEMPOTENCY_CONFLICT',
+      );
+    }
+    return serializeClaim(claim, { now: currentTime, replayed: true });
+  }
+  if (claim.status !== 'PENDING') {
+    throw onboardingError(
+      'El token ya no admite una nueva declaracion.',
+      'WORKER_ONBOARDING_ALREADY_DECIDED',
+    );
+  }
+
+  const recordVersion = 1;
+  const encryptedIdentity = encryptPayload(
+    encryptedIdentityPayload(identity),
+    claimIdentityBinding(claim, recordVersion),
+    cryptoDependencies,
+  );
+  const updated = await transaction.workerOnboardingClaim.updateMany({
+    where: {
+      id: claim.id,
+      organizationId: scope.organizationId,
+      projectId: scope.projectId,
+      connectionId,
+      status: 'PENDING',
+      revision: Number(claim.revision),
+      ...(tokenHash ? { claimTokenHash: tokenHash } : {}),
+    },
+    data: {
+      claimedIdentityEncryptedPayload: encryptedIdentity.encryptedPayload,
+      claimedCuilFingerprint: cuilFingerprint.fingerprint,
+      claimedCuilFingerprintKeyId: cuilFingerprint.fingerprintKeyId,
+      claimedCuilLastFour: workerFinancialLastFour(identity.cuil, 'CUIL'),
+      claimedIdentityWrappingKeyId: encryptedIdentity.wrappingKeyId,
+      claimedIdentityRecordVersion: recordVersion,
+      privacyNoticeVersion: identity.privacyNoticeVersion,
+      privacyNoticeContentSha256: privacyNotice.contentSha256,
+      privacyAcceptedAt: identity.privacyAcceptedAt,
+      status: 'SUBMITTED',
+      submittedAt: currentTime,
+      requestFingerprint: submissionFingerprint,
+      revision: { increment: 1 },
+    },
+  });
+  if (updated.count !== 1) {
+    throw onboardingError(
+      'El alta cambio durante la declaracion.',
+      'WORKER_ONBOARDING_CONCURRENT_MODIFICATION',
+    );
+  }
+  const submitted = {
+    ...claim,
+    claimedIdentityEncryptedPayload: encryptedIdentity.encryptedPayload,
+    claimedCuilFingerprint: cuilFingerprint.fingerprint,
+    claimedCuilFingerprintKeyId: cuilFingerprint.fingerprintKeyId,
+    claimedCuilLastFour: workerFinancialLastFour(identity.cuil, 'CUIL'),
+    claimedIdentityWrappingKeyId: encryptedIdentity.wrappingKeyId,
+    claimedIdentityRecordVersion: recordVersion,
+    privacyNoticeVersion: identity.privacyNoticeVersion,
+    privacyNoticeContentSha256: privacyNotice.contentSha256,
+    privacyAcceptedAt: identity.privacyAcceptedAt,
+    status: 'SUBMITTED',
+    submittedAt: currentTime,
+    requestFingerprint: submissionFingerprint,
+    revision: Number(claim.revision) + 1,
+  };
+  await transaction.auditLog.create({
+    data: {
+      organizationId: scope.organizationId,
+      actorId: null,
+      action: 'worker.onboarding.claim_submitted',
+      entityType: 'WorkerOnboardingClaim',
+      entityId: claim.id,
+      metadata: {
+        projectId: scope.projectId,
+        connectionId,
+        status: 'SUBMITTED',
+        revision: submitted.revision,
+        privacyNoticeVersion: privacyNotice.version,
+        privacyNoticeContentSha256: privacyNotice.contentSha256,
+      },
+      createdAt: currentTime,
+    },
+  });
+  return serializeClaim(submitted, { now: currentTime });
 }
 
 export async function submitWorkerOnboardingClaim(prisma, {
@@ -971,12 +1407,6 @@ export async function submitWorkerOnboardingClaim(prisma, {
   const identity = normalizeWorkerIdentityInput(identityInput, { now: currentTime });
   const cryptoDependencies = resolveCryptoDependencies(dependencies);
   const tokenHash = claimTokenHash(token, scope, connectionId);
-  const senderCandidates = fingerprintCandidates(
-    sender.address,
-    scope.organizationId,
-    'WHATSAPP_E164',
-    cryptoDependencies,
-  );
   return runOperationalProjectMutation(prisma, scope, async (transaction) => {
     await assertOrganizationSubscriptionAllowsWrites(transaction, scope.organizationId, {
       code: 'WORKER_ONBOARDING_SUBSCRIPTION_READ_ONLY',
@@ -996,128 +1426,229 @@ export async function submitWorkerOnboardingClaim(prisma, {
         'WORKER_ONBOARDING_NOT_FOUND',
       );
     }
-    await lockSensitiveKeys(transaction, [
-      ...sensitiveCandidateLockKeys('sender', scope.organizationId, senderCandidates),
-    ]);
-    assertClaimSender(claim, sender, senderCandidates, cryptoDependencies);
-    if (new Date(claim.expiresAt).getTime() <= currentTime.getTime()) {
-      throw onboardingError(
-        'El token de alta expiro y ya no puede utilizarse.',
-        'WORKER_ONBOARDING_EXPIRED',
-      );
-    }
-    const cuilFingerprint = claim.status === 'SUBMITTED'
-      ? fingerprintWithKey(
-          identity.cuil,
-          scope.organizationId,
-          'CUIL',
-          claim.claimedCuilFingerprintKeyId,
-          cryptoDependencies,
-        )
-      : activeFingerprint(
-          identity.cuil,
-          scope.organizationId,
-          'CUIL',
-          cryptoDependencies,
-        );
-    const submissionFingerprint = submissionRequestFingerprint(
+    return submitWorkerOnboardingClaimRecord(transaction, {
       scope,
       connectionId,
       claim,
       sender,
       identity,
-      cuilFingerprint,
-    );
-    if (claim.status === 'SUBMITTED') {
-      const storedIdentity = decryptClaimIdentity(claim, cryptoDependencies);
-      if (
-        claim.requestFingerprint !== submissionFingerprint
-        || claim.claimedCuilFingerprint !== cuilFingerprint.fingerprint
-        || !sameIdentity(storedIdentity, identity)
-      ) {
-        throw onboardingError(
-          'El token ya fue utilizado con otra declaracion.',
-          'WORKER_ONBOARDING_IDEMPOTENCY_CONFLICT',
-        );
-      }
-      return serializeClaim(claim, { now: currentTime, replayed: true });
-    }
-    if (claim.status !== 'PENDING') {
-      throw onboardingError(
-        'El token ya no admite una nueva declaracion.',
-        'WORKER_ONBOARDING_ALREADY_DECIDED',
-      );
-    }
-
-    const recordVersion = 1;
-    const encryptedIdentity = encryptPayload(
-      encryptedIdentityPayload(identity),
-      claimIdentityBinding(claim, recordVersion),
+      currentTime,
       cryptoDependencies,
-    );
-    const updated = await transaction.workerOnboardingClaim.updateMany({
+      tokenHash,
+    });
+  });
+}
+
+/**
+ * Trusted counterpart used only after a dedicated onboarding Flow session has
+ * authenticated its HMAC, endpoint scope and claim binding. It deliberately
+ * accepts a claim identity instead of a bearer claim token so that the raw
+ * 256-bit claim secret never needs to be delivered, persisted or replayed.
+ */
+export async function submitAuthenticatedWorkerOnboardingClaim(prisma, {
+  scope: scopeInput,
+  connectionId: connectionIdInput,
+  claimId: claimIdInput,
+  identity: identityInput,
+  now: nowInput,
+  dependencies = {},
+}) {
+  const scope = normalizeScope(scopeInput);
+  const connectionId = requiredIdentifier(connectionIdInput, 'connectionId');
+  const claimId = requiredIdentifier(claimIdInput, 'claimId');
+  const currentTime = operationNow(nowInput, dependencies);
+  const identity = normalizeWorkerIdentityInput(identityInput, { now: currentTime });
+  const cryptoDependencies = resolveCryptoDependencies(dependencies);
+  return runOperationalProjectMutation(prisma, scope, async (transaction) => {
+    await assertOrganizationSubscriptionAllowsWrites(transaction, scope.organizationId, {
+      code: 'WORKER_ONBOARDING_SUBSCRIPTION_READ_ONLY',
+    });
+    await requireConnection(transaction, scope, connectionId);
+    const claim = await transaction.workerOnboardingClaim.findFirst({
       where: {
-        id: claim.id,
+        id: claimId,
         organizationId: scope.organizationId,
         projectId: scope.projectId,
         connectionId,
-        status: 'PENDING',
-        revision: Number(claim.revision),
-        claimTokenHash: tokenHash,
-      },
-      data: {
-        claimedIdentityEncryptedPayload: encryptedIdentity.encryptedPayload,
-        claimedCuilFingerprint: cuilFingerprint.fingerprint,
-        claimedCuilFingerprintKeyId: cuilFingerprint.fingerprintKeyId,
-        claimedCuilLastFour: workerFinancialLastFour(identity.cuil, 'CUIL'),
-        claimedIdentityWrappingKeyId: encryptedIdentity.wrappingKeyId,
-        claimedIdentityRecordVersion: recordVersion,
-        privacyNoticeVersion: identity.privacyNoticeVersion,
-        privacyAcceptedAt: identity.privacyAcceptedAt,
-        status: 'SUBMITTED',
-        submittedAt: currentTime,
-        requestFingerprint: submissionFingerprint,
-        revision: { increment: 1 },
       },
     });
-    if (updated.count !== 1) {
+    if (!claim) {
       throw onboardingError(
-        'El alta cambio durante la declaracion.',
-        'WORKER_ONBOARDING_CONCURRENT_MODIFICATION',
+        'El alta no existe dentro del alcance activo.',
+        'WORKER_ONBOARDING_NOT_FOUND',
       );
     }
-    const submitted = {
-      ...claim,
-      claimedIdentityEncryptedPayload: encryptedIdentity.encryptedPayload,
-      claimedCuilFingerprint: cuilFingerprint.fingerprint,
-      claimedCuilFingerprintKeyId: cuilFingerprint.fingerprintKeyId,
-      claimedCuilLastFour: workerFinancialLastFour(identity.cuil, 'CUIL'),
-      claimedIdentityWrappingKeyId: encryptedIdentity.wrappingKeyId,
-      claimedIdentityRecordVersion: recordVersion,
-      privacyNoticeVersion: identity.privacyNoticeVersion,
-      privacyAcceptedAt: identity.privacyAcceptedAt,
-      status: 'SUBMITTED',
-      submittedAt: currentTime,
-      requestFingerprint: submissionFingerprint,
-      revision: Number(claim.revision) + 1,
-    };
-    await transaction.auditLog.create({
-      data: {
+    const sender = decryptClaimSender(claim, cryptoDependencies);
+    return submitWorkerOnboardingClaimRecord(transaction, {
+      scope,
+      connectionId,
+      claim,
+      sender,
+      identity,
+      currentTime,
+      cryptoDependencies,
+    });
+  });
+}
+
+/**
+ * Commits the civil-identity submission and the authenticated WhatsApp Flow
+ * session fence in one database transaction. The caller must first validate
+ * the signed Flow token; this boundary rechecks the immutable token hash and
+ * full endpoint/session binding before touching the claim.
+ */
+export async function submitAuthenticatedWorkerOnboardingFlow(prisma, {
+  scope: scopeInput,
+  connectionId: connectionIdInput,
+  phoneNumberId: phoneNumberIdInput,
+  claimId: claimIdInput,
+  sessionId: sessionIdInput,
+  flowId: flowIdInput,
+  tokenSha256: tokenSha256Input,
+  identity: identityInput,
+  now: nowInput,
+  dependencies = {},
+}) {
+  const scope = normalizeScope(scopeInput);
+  const connectionId = requiredIdentifier(connectionIdInput, 'connectionId');
+  const phoneNumberId = requiredIdentifier(phoneNumberIdInput, 'phoneNumberId', 40);
+  const claimId = requiredIdentifier(claimIdInput, 'claimId');
+  const sessionId = requiredIdentifier(sessionIdInput, 'sessionId');
+  const flowId = requiredIdentifier(flowIdInput, 'flowId', 40);
+  const tokenSha256 = normalizeFlowTokenSha256(tokenSha256Input);
+  const currentTime = operationNow(nowInput, dependencies);
+  const cryptoDependencies = resolveCryptoDependencies(dependencies);
+
+  return runOperationalProjectMutation(prisma, scope, async (transaction) => {
+    await assertOrganizationSubscriptionAllowsWrites(transaction, scope.organizationId, {
+      code: 'WORKER_ONBOARDING_SUBSCRIPTION_READ_ONLY',
+    });
+    await requireConnection(transaction, scope, connectionId);
+    const session = await transaction.workerOnboardingFlowSession.findFirst({
+      where: {
+        id: sessionId,
+        claimId,
         organizationId: scope.organizationId,
-        actorId: null,
-        action: 'worker.onboarding.claim_submitted',
-        entityType: 'WorkerOnboardingClaim',
-        entityId: claim.id,
-        metadata: {
-          projectId: scope.projectId,
-          connectionId,
-          status: 'SUBMITTED',
-          revision: submitted.revision,
-        },
-        createdAt: currentTime,
+        projectId: scope.projectId,
+        connectionId,
+        phoneNumberId,
+        blueprintKey: WORKER_ONBOARDING_FLOW_BLUEPRINT_KEY,
+        flowId,
+        screenId: WORKER_ONBOARDING_FLOW_SCREEN_ID,
+        flowType: WORKER_ONBOARDING_FLOW_TYPE,
+        tokenSha256,
       },
     });
-    return serializeClaim(submitted, { now: currentTime });
+    const sessionExpiresAt = session ? new Date(session.expiresAt) : null;
+    const deliveryAttemptedAt = session?.deliveryAttemptedAt
+      ? new Date(session.deliveryAttemptedAt)
+      : null;
+    const privacyPresentedAt = session?.privacyPresentedAt
+      ? new Date(session.privacyPresentedAt)
+      : null;
+    if (
+      !session
+      || !deliveryAttemptedAt
+      || session.deliveryRejectedAt
+      || session.consumedAt
+      || !privacyPresentedAt
+      || !sessionExpiresAt
+      || Number.isNaN(deliveryAttemptedAt.getTime())
+      || Number.isNaN(privacyPresentedAt.getTime())
+      || Number.isNaN(sessionExpiresAt.getTime())
+      || privacyPresentedAt.getTime() < deliveryAttemptedAt.getTime()
+      || privacyPresentedAt.getTime() > currentTime.getTime()
+      || sessionExpiresAt.getTime() <= currentTime.getTime()
+    ) {
+      throw onboardingError(
+        'La sesion de alta de WhatsApp cambio o ya no admite esta declaracion.',
+        'WORKER_ONBOARDING_FLOW_SESSION_INVALID',
+      );
+    }
+    let pinnedPrivacyNotice;
+    try {
+      pinnedPrivacyNotice = assertWorkerOnboardingPrivacyNoticeEvidence(
+        session.noticeVersion,
+        session.noticeContentSha256,
+      );
+    } catch (error) {
+      if (!(error instanceof WorkerOnboardingPrivacyNoticeError)) throw error;
+      throw onboardingError(
+        'La evidencia fijada del aviso de privacidad fue alterada.',
+        'WORKER_ONBOARDING_STATE_CORRUPT',
+        { cause: error },
+      );
+    }
+    const identity = normalizeWorkerIdentityInput({
+      givenNames: identityInput?.givenNames,
+      familyName: identityInput?.familyName,
+      cuil: identityInput?.cuil,
+      privacyNoticeVersion: pinnedPrivacyNotice.version,
+      privacyAccepted: identityInput?.privacyAccepted,
+    }, { now: currentTime });
+    const claim = await transaction.workerOnboardingClaim.findFirst({
+      where: {
+        id: claimId,
+        organizationId: scope.organizationId,
+        projectId: scope.projectId,
+        connectionId,
+      },
+    });
+    if (!claim) {
+      throw onboardingError(
+        'El alta no existe dentro del alcance activo.',
+        'WORKER_ONBOARDING_NOT_FOUND',
+      );
+    }
+    if (session.submittedAt && claim.status !== 'SUBMITTED') {
+      throw onboardingError(
+        'La sesion y el alta de WhatsApp no conservan el mismo estado.',
+        'WORKER_ONBOARDING_STATE_CORRUPT',
+      );
+    }
+    const sender = decryptClaimSender(claim, cryptoDependencies);
+    const submitted = await submitWorkerOnboardingClaimRecord(transaction, {
+      scope,
+      connectionId,
+      claim,
+      sender,
+      identity,
+      currentTime,
+      cryptoDependencies,
+      privacyNoticeEvidence: {
+        version: pinnedPrivacyNotice.version,
+        contentSha256: pinnedPrivacyNotice.contentSha256,
+      },
+    });
+    if (session.submittedAt) return submitted;
+
+    const marked = await transaction.workerOnboardingFlowSession.updateMany({
+      where: {
+        id: session.id,
+        claimId,
+        organizationId: scope.organizationId,
+        projectId: scope.projectId,
+        connectionId,
+        phoneNumberId,
+        tokenSha256,
+        noticeVersion: pinnedPrivacyNotice.version,
+        noticeContentSha256: pinnedPrivacyNotice.contentSha256,
+        expiresAt: { gt: currentTime },
+        deliveryAttemptedAt: session.deliveryAttemptedAt,
+        deliveryRejectedAt: null,
+        privacyPresentedAt: session.privacyPresentedAt,
+        submittedAt: null,
+        consumedAt: null,
+      },
+      data: { submittedAt: currentTime },
+    });
+    if (marked.count !== 1) {
+      throw onboardingError(
+        'La sesion de WhatsApp cambio durante la declaracion.',
+        'WORKER_ONBOARDING_FLOW_SESSION_INVALID',
+      );
+    }
+    return submitted;
   });
 }
 
@@ -1688,6 +2219,34 @@ async function loadExactDecisionReplay(prisma, expected, now) {
   return serializeClaim(claim, { now, replayed: true });
 }
 
+async function requireConsumedOnboardingReceipt(transaction, scope, claim) {
+  const session = await transaction.workerOnboardingFlowSession.findFirst({
+    where: {
+      claimId: claim.id,
+      organizationId: scope.organizationId,
+      projectId: scope.projectId,
+      connectionId: claim.connectionId,
+      blueprintKey: WORKER_ONBOARDING_FLOW_BLUEPRINT_KEY,
+      screenId: WORKER_ONBOARDING_FLOW_SCREEN_ID,
+      flowType: WORKER_ONBOARDING_FLOW_TYPE,
+    },
+  });
+  const receiptEvidence = inspectConsumedOnboardingReceipt(claim, session);
+  if (receiptEvidence === ONBOARDING_RECEIPT_EVIDENCE.MISSING) {
+    throw onboardingError(
+      'La confirmacion final de WhatsApp todavia no fue verificada.',
+      'WORKER_ONBOARDING_TERMINAL_RECEIPT_REQUIRED',
+    );
+  }
+  if (receiptEvidence === ONBOARDING_RECEIPT_EVIDENCE.CORRUPT) {
+    throw onboardingError(
+      'La secuencia de verificacion de WhatsApp no supera la validacion de integridad.',
+      'WORKER_ONBOARDING_STATE_CORRUPT',
+    );
+  }
+  return session;
+}
+
 export async function decideWorkerOnboardingClaim(prisma, {
   scope: scopeInput,
   claimId: claimIdInput,
@@ -1813,6 +2372,9 @@ export async function decideWorkerOnboardingClaim(prisma, {
         'WORKER_ONBOARDING_EXPIRED',
       );
     }
+    if (decision === 'APPROVED') {
+      await requireConsumedOnboardingReceipt(transaction, scope, claim);
+    }
 
     const sender = decryptClaimSender(claim, cryptoDependencies);
     const identity = decryptClaimIdentity(claim, cryptoDependencies);
@@ -1848,8 +2410,10 @@ export async function decideWorkerOnboardingClaim(prisma, {
     }
 
     const claimUpdate = {
-      status: decision,
-      openClaimKey: null,
+      ...workerOnboardingSensitivePurgeData({
+        status: decision,
+        purgedAt: currentTime,
+      }),
       reviewedAt: currentTime,
       reviewedById: membership.userId,
       reviewedByMembershipId: membership.id,
@@ -1858,7 +2422,6 @@ export async function decideWorkerOnboardingClaim(prisma, {
       resolvedPersonId: resolution?.person.id ?? null,
       resolvedChannelIdentityId: resolution?.channel.id ?? null,
       resolvedWorkerId: resolution?.worker.id ?? null,
-      revision: { increment: 1 },
     };
     const updated = await transaction.workerOnboardingClaim.updateMany({
       where: {
@@ -1867,6 +2430,7 @@ export async function decideWorkerOnboardingClaim(prisma, {
         projectId: scope.projectId,
         status: 'SUBMITTED',
         revision: expectedRevision,
+        sensitiveDataPurgedAt: null,
       },
       data: claimUpdate,
     });
@@ -2003,34 +2567,45 @@ export async function listWorkerOnboardingClaims(prisma, {
     select: {
       id: true,
       organizationId: true,
-      projectId: true,
-      connectionId: true,
       status: true,
       revision: true,
       senderLastFour: true,
       claimedCuilLastFour: true,
+      sensitiveDataPurgedAt: true,
       privacyNoticeVersion: true,
+      privacyNoticeContentSha256: true,
       expiresAt: true,
       submittedAt: true,
       reviewedAt: true,
       rejectionReason: true,
-      resolvedPersonId: true,
-      resolvedChannelIdentityId: true,
       resolvedWorkerId: true,
       claimedIdentityEncryptedPayload: true,
       claimedIdentityWrappingKeyId: true,
       claimedIdentityRecordVersion: true,
       privacyAcceptedAt: true,
       createdAt: true,
+      flowSession: {
+        select: {
+          noticeVersion: true,
+          noticeContentSha256: true,
+          deliveryAttemptedAt: true,
+          deliveryRejectedAt: true,
+          privacyPresentedAt: true,
+          submittedAt: true,
+          consumedAt: true,
+          consumedExternalId: true,
+        },
+      },
     },
   });
   const hasMore = claims.length > limit;
   const page = hasMore ? claims.slice(0, limit) : claims;
   const items = page.map((claim) => {
-    const legalName = claim.claimedIdentityEncryptedPayload
+    const legalName = serializeClaimRetention(claim, currentTime).state === 'ACTIVE'
+      && claim.claimedIdentityEncryptedPayload
       ? decryptClaimIdentity(claim, cryptoDependencies).legalName
       : null;
-    return serializeClaim(claim, { now: currentTime, legalName });
+    return serializeClaimListItem(claim, { now: currentTime, legalName });
   });
   return {
     items,

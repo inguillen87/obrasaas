@@ -735,6 +735,113 @@
   background: rgba(255, 255, 255, 0.018);
 }
 
+.contactOnboardingCard {
+  display: grid;
+  min-height: 72px;
+  padding: 11px 16px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid rgba(242, 138, 66, 0.16);
+  background: rgba(242, 138, 66, 0.055);
+}
+
+.contactOnboardingCard[data-tone='pending'] {
+  border-bottom-color: rgba(219, 176, 80, 0.17);
+  background: rgba(219, 176, 80, 0.05);
+}
+
+.contactOnboardingCard[data-tone='conflict'] {
+  border-bottom-color: rgba(255, 93, 77, 0.2);
+  background: rgba(255, 93, 77, 0.065);
+}
+
+.contactOnboardingIcon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 11px;
+  color: #1d1008;
+  background: #f2a269;
+}
+
+.contactOnboardingCard[data-tone='pending'] .contactOnboardingIcon {
+  color: #211707;
+  background: #ddb65c;
+}
+
+.contactOnboardingCard[data-tone='conflict'] .contactOnboardingIcon {
+  color: #210a07;
+  background: #ff7868;
+}
+
+.contactOnboardingCopy {
+  min-width: 0;
+}
+
+.contactOnboardingCopy strong,
+.contactOnboardingCopy p,
+.contactOnboardingCopy small {
+  display: block;
+}
+
+.contactOnboardingCopy strong {
+  color: var(--text-primary);
+  font-size: 0.78rem;
+}
+
+.contactOnboardingCopy p {
+  margin: 3px 0 0;
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
+
+.contactOnboardingCopy small {
+  margin-top: 5px;
+  color: #efb287;
+  font-size: 0.66rem;
+  line-height: 1.4;
+}
+
+.contactOnboardingCopy .contactOnboardingError {
+  color: #ffc0b8;
+}
+
+.contactOnboardingCard > button,
+.contactOnboardingCard > a {
+  min-height: 38px;
+  display: inline-flex;
+  padding: 8px 12px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(242, 162, 105, 0.26);
+  border-radius: 9px;
+  color: #ffd4b7;
+  background: rgba(242, 162, 105, 0.1);
+  font: inherit;
+  font-size: 0.69rem;
+  font-weight: 850;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.contactOnboardingCard > button {
+  cursor: pointer;
+}
+
+.contactOnboardingCard > button:disabled {
+  opacity: 0.48;
+  cursor: wait;
+}
+
+.contactOnboardingCard > button:focus-visible,
+.contactOnboardingCard > a:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
 .mobileBack {
   display: none;
 }
@@ -2262,6 +2369,17 @@
   .messageHeader {
     min-height: 68px;
     padding: 9px 11px;
+  }
+
+  .contactOnboardingCard {
+    padding: 10px 11px;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .contactOnboardingCard > button,
+  .contactOnboardingCard > a {
+    width: 100%;
+    grid-column: 2;
   }
 
   .avatarLarge {

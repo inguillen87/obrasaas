@@ -11,6 +11,9 @@ import {
 } from 'react';
 
 import styles from './inbox.module.css';
+import ContactOnboardingAction, {
+  normalizeContactOnboarding,
+} from './contact-onboarding-action';
 import ProactiveFlowLauncher from './proactive-flow-launcher';
 
 const DEFAULT_TIME_ZONE = 'America/Argentina/Buenos_Aires';
@@ -719,6 +722,7 @@ function LoadingWorkspace() {
 export default function InboxClient({
   canLinkProgressEvidence = false,
   canManageIntegrations = false,
+  canManageOnboarding = false,
   canViewSourceEvidence = false,
   organizationName,
   projectId,
@@ -736,6 +740,9 @@ export default function InboxClient({
   const [messagePageInfo, setMessagePageInfo] = useState(() => normalizePageInfo(null));
   const [windowState, setWindowState] = useState(() => normalizeWindow(null));
   const [composerCapability, setComposerCapability] = useState(null);
+  const [contactOnboarding, setContactOnboarding] = useState(() => (
+    normalizeContactOnboarding(null)
+  ));
   const [query, setQuery] = useState('');
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(true);
@@ -962,6 +969,7 @@ export default function InboxClient({
       const detailConversation = normalizeConversation(payload.conversation);
       const nextMessages = normalizeMessageList(payload);
       const nextPageInfo = normalizePageInfo(payload);
+      const nextOnboarding = normalizeContactOnboarding(payload.onboarding);
       const previousIds = knownMessageIdsRef.current;
       const previousStatuses = knownMessageStatusRef.current;
       const additions = refreshingMessages
@@ -1005,6 +1013,7 @@ export default function InboxClient({
         normalizeComposerCapability(payload.composerCapability)
           || UNVERIFIED_COMPOSER_CAPABILITY,
       );
+      if (!loadingOlder) setContactOnboarding(nextOnboarding);
       if (additions.length > 0) {
         const latestAddition = additions[additions.length - 1];
         const inboundCount = additions.filter((message) => message.direction === 'INBOUND').length;
@@ -1045,6 +1054,7 @@ export default function InboxClient({
         messagePageInfoRef.current = nextPageInfo;
       }
       setNow(new Date());
+      return nextOnboarding;
     } catch (error) {
       if (error.name !== 'AbortError') {
         const safeMessage = safeErrorMessage(
@@ -1056,6 +1066,7 @@ export default function InboxClient({
         if (loadingOlder) setHistoryPageError(safeMessage);
         else if (!refreshingMessages) setMessageError(safeMessage);
       }
+      return null;
     } finally {
       if (messageRequestRef.current?.controller === controller) {
         messageRequestRef.current = null;
@@ -1148,6 +1159,7 @@ export default function InboxClient({
         setMessages([]);
         setWindowState(normalizeWindow(null));
         setComposerCapability(null);
+        setContactOnboarding(normalizeContactOnboarding(null));
         setLoadedConversationId('');
         setMessagePageInfo(normalizePageInfo(null));
         messagePageInfoRef.current = normalizePageInfo(null);
@@ -1164,6 +1176,7 @@ export default function InboxClient({
       failedReadTargetRef.current = null;
       setHistoryPageError('');
       setComposerCapability(null);
+      setContactOnboarding(normalizeContactOnboarding(null));
       setMessageAnnouncement({ id: `conversation-${selectedId}`, text: '' });
       knownMessageIdsRef.current = new Set();
       knownMessageStatusRef.current = new Map();
@@ -1781,6 +1794,16 @@ export default function InboxClient({
                   <small>{replyWindow.detail}</small>
                 </div>
               </header>
+
+              <ContactOnboardingAction
+                canManageOnboarding={canManageOnboarding}
+                conversationId={selectedConversation.id}
+                key={`${selectedConversation.id}:${contactOnboarding.state}`}
+                onboarding={contactOnboarding}
+                online={online}
+                onRefresh={() => loadMessages(selectedConversation.id, { mode: 'refresh' })}
+                projectId={projectId}
+              />
 
               <div className={styles.srOnly} role="status" aria-live="polite" aria-atomic="true">
                 <span key={messageAnnouncement.id}>{messageAnnouncement.text}</span>

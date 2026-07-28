@@ -6,7 +6,7 @@ Este plan mantiene la secuencia del PDF y separa capacidades operativas de capac
 
 El estado se expresa por nivel de evidencia: código y pruebas locales, migración en Preview aislado, journey UI en Preview y E2E externo. No se usa “desplegado” como sinónimo de “operativo con un proveedor real”.
 
-- `npm test`: 1292/1292 verde; lint y build de Next 16.2.11 verdes en el worktree;
+- `npm test`: 1369/1369 verde; lint y build de Next 16.2.11 verdes en el worktree;
 - las migraciones y verificadores de baseline/forecast fueron aprobados en el Preview aislado de la rama `codex/platform-ux-foundation`; Production permanece fuera del alcance;
 - falta cerrar el smoke UI de publicación de baseline y forecast en el tenant de prueba, porque el acceso local directo a la conexión Preview está deliberadamente protegido y no se sustituye con una conexión de Production;
 - Meta, media entrante, identidad/cobro y Vision siguen siendo gates externos o de credencial explícita.
@@ -37,11 +37,13 @@ El estado se expresa por nivel de evidencia: código y pruebas locales, migraci�
 - faltan foto Meta real, dataset consentido, ground truth, benchmark, DPA/retención y observabilidad de costo/latencia;
 - las cargas web privadas siguen limitadas a 4 MiB; carga directa autorizada, checksum y finalización server-side quedan como cierre para videos/documentos mayores.
 
-## H3/H4 — alta de operario y cobro seguro
+## H3.1/H4 — alta de operario y cobro seguro
 
-- alta conversacional con nombre y apellido declarados, enlace a una identidad de canal preautorizada y revisión administrativa; el número de WhatsApp no prueba identidad civil ni titularidad;
-- CUIL/CBU/CVU/alias y comprobante se manejan en un dominio cifrado, enmascarado y auditado, nunca en Inbox o snapshots compartidos;
-- falta Flow/UI productivo, proveedor confiable de titularidad, consentimiento y comprobante privado. Nunca se ejecuta un pago automático.
+- H3.1 está implementado sólo en código y pruebas locales: invitación desde Inbox, sesión/Flow pre-operario, aviso fijado en `INIT`, submit autenticado, acuse terminal, readiness fail-closed, cola CRM, decisión administrativa y purga periódica del claim transitorio;
+- `privacyPresentedAt` acredita que el Data Endpoint sirvió el aviso, no lectura ni comprensión; el copy y el circuito laboral deben pasar revisión legal antes de trabajadores reales;
+- la purga H3.1 no es un DSAR integral: `WorkerPerson`, `WorkerChannelIdentity`, `Worker`, conversaciones, mensajes y backups requieren otro sprint. El teléfono raw interno de `Conversation.externalId` también es deuda pendiente;
+- cierre H3.1: ejecutar migración/verificador y deploy en Preview, observar cron/readiness y completar Meta E2E. Ninguna de esas evidencias externas existe todavía;
+- H4 mantiene CUIL/CBU/CVU/alias en un dominio cifrado, enmascarado y auditado, nunca en Inbox o snapshots compartidos; faltan Flow/UI de cobro, proveedor confiable de titularidad y comprobante privado. Nunca se ejecuta un pago automático.
 
 ## S20 — campo offline confiable
 

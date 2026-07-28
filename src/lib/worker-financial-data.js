@@ -16,6 +16,8 @@ const PRIVACY_VERSION_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/;
 const ALIAS_PATTERN = /^[a-z0-9.-]{6,20}$/;
 const WHATSAPP_INPUT_PATTERN = /^\+?[0-9().\s-]+$/;
 const WHATSAPP_DIGITS_PATTERN = /^[1-9][0-9]{7,14}$/;
+const HUMAN_NAME_PATTERN = /^[\p{L}\p{M}][\p{L}\p{M}'’.-]*(?: [\p{L}\p{M}][\p{L}\p{M}'’.-]*)*$/u;
+const INVISIBLE_OR_BIDI_PATTERN = /[\u00ad\u061c\u200b-\u200f\u202a-\u202e\u2060\u2066-\u2069\ufeff]/u;
 const MAX_KEK_REGISTRY_BYTES = 32 * 1024;
 const MAX_FINANCIAL_PAYLOAD_BYTES = 8 * 1024;
 const CUIT_WEIGHTS = Object.freeze([5, 4, 3, 2, 7, 6, 5, 4, 3, 2]);
@@ -198,6 +200,14 @@ function boundedText(value, { field, min = 1, max }) {
   return normalized;
 }
 
+function normalizedHumanName(value, { field }) {
+  const normalized = boundedText(value, { field, min: 2, max: 100 });
+  if (INVISIBLE_OR_BIDI_PATTERN.test(normalized) || !HUMAN_NAME_PATTERN.test(normalized)) {
+    throw financialError(`${field} es invalido.`, 'WORKER_FINANCIAL_INPUT_INVALID');
+  }
+  return normalized;
+}
+
 function normalizedDigits(value, { field, length, code }) {
   if (typeof value !== 'string' && typeof value !== 'number') {
     throw financialError(`${field} es invalido.`, code);
@@ -349,16 +359,8 @@ export function normalizeWorkerIdentityInput(input, { now = new Date() } = {}) {
   if (Number.isNaN(acceptedAt.getTime())) {
     throw financialError('La fecha de aceptacion es invalida.', 'WORKER_FINANCIAL_INPUT_INVALID');
   }
-  const givenNames = boundedText(body.givenNames, {
-    field: 'Los nombres',
-    min: 2,
-    max: 100,
-  });
-  const familyName = boundedText(body.familyName, {
-    field: 'El apellido',
-    min: 2,
-    max: 100,
-  });
+  const givenNames = normalizedHumanName(body.givenNames, { field: 'Los nombres' });
+  const familyName = normalizedHumanName(body.familyName, { field: 'El apellido' });
   const privacyNoticeVersion = boundedText(body.privacyNoticeVersion, {
     field: 'La version del aviso de privacidad',
     max: 64,

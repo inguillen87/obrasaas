@@ -85,7 +85,8 @@ Reglas operativas:
 - mientras esa clave `RETIRING` siga vigente no se crea ni se sube una nueva rotación; al vencer, se revoca dentro del mismo lock transaccional antes de generar la siguiente `STAGED`;
 - el keyring del Data Endpoint puede incluir temporalmente la única `STAGED`, incluso sin `uploadedAt`, para recuperar el crash posterior al registro en Meta; la readiness y la promoción del Flow siguen exigiendo una clave `ACTIVE` verificada;
 - las entradas KEK antiguas se conservan hasta que todas las claves privadas que dependen de ellas hayan sido reenvueltas;
-- `WHATSAPP_FLOW_TOKEN_SECRET` es otro secreto independiente, usado para vincular la sesión persistida al tenant, Flow, proyecto y destinatario correctos.
+- `WHATSAPP_FLOW_TOKEN_SECRET` es un secreto independiente usado sólo por las sesiones operativas de Flow.
+- `WORKER_ONBOARDING_FLOW_TOKEN_SECRET` pertenece a un dominio HMAC separado y vincula cada sesión pre-operario con su tenant, proyecto, conexión, Flow, remitente y aviso de privacidad fijado. No reutiliza la clave de los Flows operativos ni tokens de Meta.
 
 ## Provisionamiento reversible
 
@@ -107,6 +108,16 @@ Cada registro lifecycle incluye el `whatsappBusinessId` propietario. Antes de co
 El listado recorre todas las páginas de `/{WABA_ACTUAL}/flows` mediante cursores y reconstruye cada solicitud contra `graph.facebook.com`; nunca sigue una URL de paginación arbitraria. El nombre scoped determinístico y el lease durable impiden dos altas iniciales concurrentes desde ObraSaaS. Si Meta creó un DRAFT pero falla el commit local, la compensación sólo intenta `DELETE` después de volver a probar en el WABA actual el ID exacto, el nombre scoped exacto y el estado `DRAFT`; un Flow publicado o cuya pertenencia no se confirma nunca se elimina.
 
 La metadata separa el outbound activo (`whatsappFlows`) del candidato pendiente (`whatsappFlowDrafts`). El Flow publicado anterior sigue en uso mientras el candidato espera que Meta lo marque `PUBLISHED`. Solo tras validar el Data Endpoint, la app de Meta y la clave, el candidato pasa a activo y deja de figurar como pendiente. Crear o actualizar un borrador nunca interrumpe el outbound vigente.
+
+### Alta pre-operario y aviso fijado
+
+Cada invitación de alta fija en su sesión la versión y el SHA-256 de un aviso incluido en el registro inmutable de producto. El HMAC de la sesión incluye ambos valores: una rotación posterior del aviso no puede cambiar el texto servido por `INIT` ni la evidencia que finalmente queda en el claim. `privacyPresentedAt` acredita que el Data Endpoint sirvió `INIT` con esa copia exacta; no acredita que una persona la haya leído o comprendido. `data_exchange` falla cerrado si no existe ese evento previo, y el submit transaccional copia versión y hash desde la sesión autenticada, nunca desde el cliente ni desde la versión vigente al momento de enviar la respuesta.
+
+El texto actual es copy de producto con revisión legal pendiente. No se presenta como asesoramiento legal ni como texto jurídicamente validado.
+
+H3.1 está implementado sólo en código y pruebas locales: invitación desde Inbox, sesión y Flow pre-operario separados, submit autenticado, acuse terminal `nfm_reply`, readiness fail-closed, cola CRM para revisión y decisión administrativa. Una aprobación exige el acuse terminal exacto de esa sesión; un rechazo sigue disponible para cerrar el caso sin crear una identidad activa.
+
+El cron expira claims transitorios vencidos y purga atómicamente sus bundles cifrados, huellas y últimos dígitos, dejando estado, revisión y auditoría sin PII. Esa limpieza no es un DSAR ni un borrado integral de la persona: `WorkerPerson`, `WorkerChannelIdentity`, `Worker`, conversaciones, mensajes y backups requieren una política y un sprint separados. Además, `Conversation.externalId` todavía conserva internamente el teléfono raw necesario para correlación del canal; eliminar o tokenizar esa dependencia es deuda explícita de privacidad.
 
 ## Webhook general
 
@@ -151,24 +162,27 @@ Implementado:
 - provisionamiento de borradores con verificación de clave y configuración remota;
 - envío interactivo de Flows publicados con `data_exchange` o `navigate` según su metadata;
 - fallback a texto cuando el Flow publicado no está disponible;
+- Flow H3.1 pre-operario, aviso fijado en `INIT`, submit autenticado y acuse terminal, cubiertos por pruebas locales de contrato;
+- CRM de revisión, readiness fail-closed y purga periódica acotada del claim transitorio, implementados localmente;
 - media Meta privada con hash canónico y vínculo idempotente de foto → tarea → `ProgressEvidence`;
 - ausencia deliberada de publicación automática.
 
-Esta lista describe el código y sus pruebas de contrato. Como evidencia externa separada, Meta ya asignó el número de prueba, verificó un destinatario propio y aceptó históricamente una solicitud outbound de plantilla con un token temporal. Eso no afirma entrega ni que un WABA/tenant real haya completado el circuito. El Preview aislado ya verificó las migraciones de esta rama, pero todavía necesita un App Secret y un token nuevo limitados a la rama antes de recorrer Meta end-to-end.
+Esta lista describe el código y sus pruebas de contrato. Como evidencia externa separada, Meta ya asignó el número de prueba, verificó un destinatario propio y aceptó históricamente una solicitud outbound de plantilla con un token temporal. Eso no afirma entrega ni que un WABA/tenant real haya completado el circuito. El Preview aislado verificó las migraciones anteriores de esta rama; la migración H3.1, su despliegue y su verificador siguen pendientes allí. También faltan un App Secret y un token nuevo limitados a la rama antes de recorrer Meta end-to-end.
 
 ## Pendiente para validar con un WABA real
 
 Antes de afirmar que WhatsApp Flows está operativo end-to-end para un cliente hay que completar, en este orden:
 
 1. para el piloto, generar un token temporal nuevo, guardarlo sólo como secreto de la rama y registrar su vencimiento; para release, sustituirlo por credenciales permanentes de System User con el alcance mínimo necesario;
-2. completar en Vercel los secretos faltantes —en particular `META_APP_SECRET`— y verificar `META_VERIFY_TOKEN`, `NEXT_PUBLIC_META_APP_ID`, `NEXT_PUBLIC_META_EMBEDDED_SIGNUP_CONFIG_ID`, `WHATSAPP_CREDENTIALS_ENCRYPTION_KEY`, `WHATSAPP_FLOW_TOKEN_SECRET` y el registro KEK, sin exponer sus valores; el token de cada tenant debe persistirse sólo cifrado mediante el flujo previsto;
-3. redesplegar la rama con `NEXT_PUBLIC_APP_URL` estable y comprobar el dominio de Preview. Las migraciones del keyring, Data Endpoint y demás capacidades de esta rama ya fueron verificadas contra su Neon aislado;
+2. completar en Vercel los secretos faltantes —en particular `META_APP_SECRET`— y verificar `META_VERIFY_TOKEN`, `NEXT_PUBLIC_META_APP_ID`, `NEXT_PUBLIC_META_EMBEDDED_SIGNUP_CONFIG_ID`, `WHATSAPP_CREDENTIALS_ENCRYPTION_KEY`, `WHATSAPP_FLOW_TOKEN_SECRET`, `WORKER_ONBOARDING_FLOW_TOKEN_SECRET` y el registro KEK, sin exponer sus valores; el token de cada tenant debe persistirse sólo cifrado mediante el flujo previsto;
+3. ejecutar `migrate deploy` y el verificador H3.1 en la rama Neon aislada, redesplegar con `NEXT_PUBLIC_APP_URL` estable y comprobar el dominio de Preview. Las migraciones anteriores del keyring y Data Endpoint sí fueron verificadas; H3.1 todavía no;
 4. verificar el callback del webhook general y sus seis campos suscritos con solicitudes reales firmadas por Meta; persistir al menos un inbound y los eventos de estado correlacionados con un outbound aceptado;
 5. completar Embedded Signup con el WABA y número del tenant real del piloto; el número de prueba asignado por Meta no cierra este gate;
 6. ejecutar el provisionamiento desde Integraciones y comprobar en Meta la clave pública `VALID`, `endpoint_uri`, `application_id`, Flow JSON `7.3`, Data API `4.0` y el estado de salud del endpoint;
-7. recorrer ambos Flows en un teléfono real, incluyendo reintento, expiración, respuesta `nfm_reply`, persistencia tenant-scoped y fallback;
+7. recorrer los Flows operativos y el Flow pre-operario H3.1 en un teléfono real, incluyendo reintento, expiración, respuesta `nfm_reply`, persistencia tenant-scoped y fallback;
 8. aprobar y publicar manualmente los Flows desde Meta y luego enviar el Flow publicado mediante Cloud API;
-9. completar App Review, permisos avanzados y el paso a modo Live cuando Meta lo exija para tenants externos.
+9. obtener revisión legal del aviso, la base de tratamiento, la retención y el circuito laboral antes de incorporar trabajadores reales;
+10. completar App Review, permisos avanzados y el paso a modo Live cuando Meta lo exija para tenants externos.
 
 El envío de un Flow publicado puede contrastarse con la colección oficial [Send Published Flow by ID](https://www.postman.com/meta/whatsapp-business-platform/request/1i6xpic/send-published-flow-by-id). Hasta que las pruebas anteriores se ejecuten con un WABA real, el estado correcto es **implementado y validado por contrato, pendiente de validación externa end-to-end**.
 

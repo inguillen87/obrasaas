@@ -31,7 +31,7 @@
   gap: 10px;
 }
 
-.roleGrid article, .membersPanel, .fieldPanel {
+.roleGrid article, .membersPanel, .fieldPanel, .onboardingPanel {
   border: 1px solid rgba(255,255,255,.1);
   background: rgba(255,255,255,.035);
   border-radius: 18px;
@@ -42,6 +42,234 @@
 
 .membersPanel { max-width: 1180px; margin: 0 auto; padding: 24px; }
 .fieldPanel { max-width: 1180px; margin: 24px auto 0; padding: 24px; }
+.onboardingPanel { max-width: 1180px; margin: 24px auto 0; padding: 24px; }
+.onboardingPanelHeader {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 18px;
+}
+.onboardingPanelHeader h2 { margin: 5px 0 7px; font-size: clamp(1.45rem, 3vw, 2rem); }
+.onboardingPanelHeader p { max-width: 760px; margin: 0; color: #999991; font-size: .8rem; line-height: 1.6; }
+.onboardingRefreshButton, .onboardingLoadMore {
+  min-height: 40px;
+  border: 1px solid rgba(255,255,255,.11);
+  border-radius: 10px;
+  padding: 9px 13px;
+  color: #d8d8d1;
+  background: rgba(255,255,255,.055);
+  font-weight: 800;
+  cursor: pointer;
+}
+.onboardingRefreshButton { display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.onboardingRefreshButton:disabled, .onboardingLoadMore:disabled { opacity: .5; cursor: wait; }
+.onboardingFilters {
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+  margin: 0 0 18px;
+  padding: 3px 0 7px;
+  scrollbar-width: thin;
+}
+.onboardingFilters button {
+  min-height: 38px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(255,255,255,.075);
+  border-radius: 999px;
+  padding: 8px 12px;
+  color: #a5a59e;
+  background: #111315;
+  font-size: .72rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+.onboardingFilters button[aria-pressed="true"] {
+  border-color: rgba(255,159,67,.42);
+  color: #ffd1a5;
+  background: rgba(255,159,67,.11);
+}
+.onboardingFilters small {
+  min-width: 22px;
+  padding: 3px 6px;
+  border-radius: 999px;
+  color: #c9c9c1;
+  background: rgba(255,255,255,.07);
+  text-align: center;
+}
+.onboardingFilters button:focus-visible, .onboardingRefreshButton:focus-visible,
+.onboardingLoadMore:focus-visible, .onboardingClaimActions button:focus-visible,
+.onboardingDecisionActions button:focus-visible, .onboardingWorkerLink:focus-visible,
+.onboardingReasonField textarea:focus-visible {
+  outline: 2px solid #ff9f43;
+  outline-offset: 2px;
+}
+.onboardingNotice, .onboardingLoadError {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 11px 13px;
+  border-radius: 11px;
+  font-size: .76rem;
+  line-height: 1.5;
+}
+.onboardingNotice[data-tone="success"] { color: #a7efc5; background: rgba(41,176,102,.12); }
+.onboardingNotice[data-tone="warning"] { color: #ffd19e; background: rgba(255,159,67,.11); }
+.onboardingNotice[data-tone="error"], .onboardingLoadError { color: #ffc0b8; background: rgba(255,79,59,.11); }
+.onboardingLoadError { justify-content: space-between; }
+.onboardingLoadError button {
+  border: 0;
+  border-radius: 8px;
+  padding: 7px 10px;
+  color: #ffc0b8;
+  background: rgba(255,255,255,.07);
+  font-weight: 800;
+  cursor: pointer;
+}
+.onboardingClaimList { display: grid; gap: 10px; }
+.onboardingLoading, .onboardingEmpty {
+  min-height: 150px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  padding: 28px;
+  border: 1px dashed rgba(255,255,255,.11);
+  border-radius: 14px;
+  color: #92928b;
+  text-align: center;
+}
+.onboardingLoading { grid-template-columns: auto auto; }
+.onboardingEmpty > i { color: #ffad61; font-size: 1.4rem; }
+.onboardingEmpty strong { color: #d7d7d0; }
+.onboardingEmpty p { max-width: 580px; margin: 0; font-size: .74rem; line-height: 1.55; }
+.onboardingClaimCard {
+  padding: 16px;
+  border: 1px solid rgba(255,255,255,.065);
+  border-left: 3px solid #888;
+  border-radius: 14px;
+  background: linear-gradient(145deg, #111315, #0e1012);
+}
+.onboardingClaimCard[data-status="review"] { border-left-color: #ff9f43; }
+.onboardingClaimCard[data-status="pending"] { border-left-color: #dfb459; }
+.onboardingClaimCard[data-status="approved"] { border-left-color: #63d391; }
+.onboardingClaimCard[data-status="rejected"] { border-left-color: #ff7868; }
+.onboardingClaimCard[data-status="expired"], .onboardingClaimCard[data-status="cancelled"] { border-left-color: #777770; }
+.onboardingClaimHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+.onboardingClaimIdentity { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.onboardingClaimIdentity > span {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  color: #0b2014;
+  background: #63d391;
+}
+.onboardingClaimIdentity > div { min-width: 0; display: grid; gap: 4px; }
+.onboardingClaimIdentity strong, .onboardingClaimIdentity small { overflow: hidden; text-overflow: ellipsis; }
+.onboardingClaimIdentity small { color: #8d8d86; font-size: .72rem; }
+.onboardingStatus {
+  flex: 0 0 auto;
+  padding: 6px 9px;
+  border-radius: 999px;
+  color: #c5c5be;
+  background: rgba(255,255,255,.06);
+  font-size: .66rem;
+  font-weight: 850;
+}
+.onboardingStatus[data-tone="review"] { color: #ffd1a5; background: rgba(255,159,67,.11); }
+.onboardingStatus[data-tone="pending"] { color: #f3d69b; background: rgba(214,164,58,.11); }
+.onboardingStatus[data-tone="approved"] { color: #9ceabd; background: rgba(41,176,102,.11); }
+.onboardingStatus[data-tone="rejected"] { color: #ffc0b8; background: rgba(255,79,59,.11); }
+.onboardingClaimFacts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 9px;
+  margin: 14px 0 0;
+}
+.onboardingClaimFacts div { min-width: 0; padding: 10px; border-radius: 10px; background: rgba(255,255,255,.027); }
+.onboardingClaimFacts dt { margin-bottom: 4px; color: #777770; font-size: .63rem; }
+.onboardingClaimFacts dd { margin: 0; overflow: hidden; color: #cacac3; font-size: .72rem; text-overflow: ellipsis; }
+.onboardingDecisionRecorded { margin: 12px 0 0; color: #999991; font-size: .7rem; }
+.onboardingDecisionRecorded i { margin-right: 6px; }
+.onboardingVerificationPending {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 10px 11px;
+  border: 1px solid rgba(214,164,58,.2);
+  border-radius: 10px;
+  color: #c9b98f;
+  background: rgba(214,164,58,.055);
+  font-size: .7rem;
+  line-height: 1.5;
+}
+.onboardingVerificationPending i { margin-top: 2px; color: #e0bd69; }
+.onboardingVerificationPending strong { color: #f3d69b; }
+.onboardingWorkerLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 13px;
+  color: #93ebba;
+  font-size: .72rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+.onboardingClaimActions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.onboardingClaimActions button, .onboardingDecisionActions button {
+  min-height: 38px;
+  border: 0;
+  border-radius: 9px;
+  padding: 8px 12px;
+  color: #ffb1a7;
+  background: rgba(255,79,59,.1);
+  font-weight: 800;
+  cursor: pointer;
+}
+.onboardingClaimActions button:disabled, .onboardingDecisionActions button:disabled { opacity: .5; cursor: wait; }
+.onboardingClaimActions .onboardingApproveButton, .onboardingDecisionActions .onboardingApproveConfirm {
+  color: #092015;
+  background: #63d391;
+}
+.onboardingClaimActions .onboardingApproveButton:disabled { cursor: not-allowed; }
+.onboardingDecisionPanel {
+  display: grid;
+  gap: 13px;
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid rgba(255,159,67,.18);
+  border-radius: 12px;
+  background: rgba(255,159,67,.045);
+}
+.onboardingDecisionPanel strong { color: #eee; font-size: .84rem; }
+.onboardingDecisionPanel p { margin: 4px 0 0; color: #96968f; font-size: .7rem; line-height: 1.5; }
+.onboardingReasonField { display: grid; gap: 6px; }
+.onboardingReasonField > span, .onboardingReasonField small { color: #999991; font-size: .66rem; }
+.onboardingReasonField textarea {
+  width: 100%;
+  min-height: 82px;
+  resize: vertical;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 10px;
+  padding: 10px 11px;
+  color: #f7f7f4;
+  background: #111315;
+  font: inherit;
+}
+.onboardingReasonField small { justify-self: end; }
+.onboardingDecisionActions { display: flex; justify-content: flex-end; gap: 8px; }
+.onboardingDecisionActions button:first-child { color: #c1c1ba; background: rgba(255,255,255,.07); }
+.onboardingDecisionActions .onboardingRejectConfirm { color: #ffc0b8; background: rgba(255,79,59,.15); }
+.onboardingLoadMore { display: block; margin: 14px auto 0; }
+.onboardingReadOnlyNote { margin: 15px 0 0; color: #85857f; font-size: .7rem; text-align: center; }
 .fieldPanelHeader {
   display: flex;
   justify-content: space-between;
@@ -65,6 +293,17 @@
   border-radius: 16px;
   background: linear-gradient(135deg, rgba(44, 193, 122, .07), rgba(255,255,255,.018));
 }
+.legacyWorkerNotice {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255,159,67,.2);
+  border-radius: 10px;
+  background: rgba(255,159,67,.07);
+}
+.legacyWorkerNotice strong { color: #ffd1a5; font-size: .72rem; }
+.legacyWorkerNotice span { color: #96968f; font-size: .68rem; line-height: 1.45; }
 .workerForm label { display: grid; gap: 6px; }
 .workerForm label > span { color: #a3a39c; font-size: .68rem; }
 .workerForm input, .workerForm select, .workerActions select {
@@ -343,6 +582,7 @@
   .workerCard { grid-template-columns: 1fr 1fr; }
   .workerActions { grid-column: 1 / -1; }
   .roleLegend { grid-template-columns: 1fr 1fr; }
+  .onboardingClaimFacts { grid-template-columns: 1fr 1fr; }
 }
 
 @media (max-width: 620px) {
@@ -354,6 +594,14 @@
   .panelHeading { align-items: flex-start; flex-direction: column; }
   .membersPanel { padding: 16px; }
   .fieldPanel { padding: 16px; }
+  .onboardingPanel { padding: 16px; }
+  .onboardingPanelHeader { align-items: flex-start; flex-direction: column; }
+  .onboardingRefreshButton { width: 100%; justify-content: center; }
+  .onboardingClaimHeader { align-items: flex-start; flex-direction: column; }
+  .onboardingClaimFacts { grid-template-columns: 1fr; }
+  .onboardingClaimActions, .onboardingDecisionActions { display: grid; grid-template-columns: 1fr; }
+  .onboardingClaimActions button, .onboardingDecisionActions button { width: 100%; }
+  .onboardingLoadError { align-items: flex-start; flex-direction: column; }
   .fieldPanelHeader { align-items: flex-start; flex-direction: column; }
   .fieldMetric { text-align: left; }
   .invitePanel { margin: 0 0 24px; padding: 16px; }

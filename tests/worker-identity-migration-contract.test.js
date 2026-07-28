@@ -24,6 +24,13 @@ const migrationSql = migrations.join('\n');
 const initialMigrationSql = migrations.slice(0, 7).join('\n');
 const hardeningSql = migrations[9];
 const hardeningValidationSql = migrations[10];
+const onboardingRetentionSql = readFileSync(
+  new URL(
+    '../prisma/migrations/20260728063000_worker_onboarding_claim_retention/migration.sql',
+    import.meta.url,
+  ),
+  'utf8',
+);
 
 function modelBody(name) {
   const match = schema.match(new RegExp(`model ${name} \\{([\\s\\S]*?)\\n\\}`));
@@ -217,4 +224,86 @@ test('final envelope constraints accept strict v2 and v3 shapes after validated 
       new RegExp(`VALIDATE CONSTRAINT "[^"]+_v3_check"[\\s\\S]*?DROP CONSTRAINT "${constraint}"[\\s\\S]*?TO "${constraint}"`),
     );
   }
+});
+
+test('terminal onboarding claims retain evidence while cryptoshredding both sensitive bundles', () => {
+  const claim = modelBody('WorkerOnboardingClaim');
+  for (const field of [
+    'senderEncryptedPayload',
+    'senderFingerprint',
+    'senderFingerprintKeyId',
+    'senderLastFour',
+    'senderWrappingKeyId',
+  ]) {
+    assert.match(claim, new RegExp(`^\\s+${field}\\s+String\\?`, 'm'));
+    assert.match(onboardingRetentionSql, new RegExp(`ALTER COLUMN "${field}" DROP NOT NULL`));
+  }
+  assert.match(claim, /^\s+senderRecordVersion\s+Int\?/m);
+  assert.match(onboardingRetentionSql, /ALTER COLUMN "senderRecordVersion" DROP NOT NULL/);
+  assert.match(claim, /^\s+sensitiveDataPurgedAt\s+DateTime\?/m);
+
+  const terminalBackfill = onboardingRetentionSql.match(
+    /WITH terminal_claims AS \(([\s\S]*?)\n WHERE claim\."id" = terminal_claims\."id";/,
+  )?.[0] || '';
+  assert.match(
+    terminalBackfill,
+    /"status" IN \('APPROVED', 'REJECTED', 'EXPIRED', 'CANCELLED'\)[\s\S]*?UPDATE "WorkerOnboardingClaim"/,
+  );
+  for (const field of [
+    'senderEncryptedPayload',
+    'senderFingerprint',
+    'senderFingerprintKeyId',
+    'senderLastFour',
+    'senderWrappingKeyId',
+    'senderRecordVersion',
+    'claimedIdentityEncryptedPayload',
+    'claimedCuilFingerprint',
+    'claimedCuilFingerprintKeyId',
+    'claimedCuilLastFour',
+    'claimedIdentityWrappingKeyId',
+    'claimedIdentityRecordVersion',
+  ]) {
+    assert.match(terminalBackfill, new RegExp(`"${field}" = NULL`));
+  }
+  assert.doesNotMatch(
+    terminalBackfill,
+    /"(?:privacyNoticeVersion|privacyNoticeContentSha256|privacyAcceptedAt|claimTokenHash|requestFingerprint|reviewEvidenceHash)"\s*=\s*NULL/,
+  );
+
+  assert.match(
+    onboardingRetentionSql,
+    /WorkerOnboardingClaim_sender_check[\s\S]*?num_nonnulls\([\s\S]*?senderEncryptedPayload[\s\S]*?\) = 0[\s\S]*?OR[\s\S]*?num_nonnulls\([\s\S]*?senderEncryptedPayload[\s\S]*?\) = 6/,
+  );
+  assert.match(
+    onboardingRetentionSql,
+    /WorkerOnboardingClaim_identity_bundle_check[\s\S]*?num_nonnulls\([\s\S]*?claimedIdentityEncryptedPayload[\s\S]*?\) = 0[\s\S]*?OR[\s\S]*?num_nonnulls\([\s\S]*?claimedIdentityEncryptedPayload[\s\S]*?\) = 6/,
+  );
+  const privacyConstraint = onboardingRetentionSql.match(
+    /ADD CONSTRAINT "WorkerClaim_privacy_notice_evidence_check"([\s\S]*?)\n  ADD CONSTRAINT "WorkerClaim_sensitive_retention_check"/,
+  )?.[1] || '';
+  assert.match(privacyConstraint, /num_nonnulls\([\s\S]*?privacyNoticeVersion[\s\S]*?\) = 0/);
+  assert.match(privacyConstraint, /num_nonnulls\([\s\S]*?privacyNoticeVersion[\s\S]*?\) = 3/);
+  assert.doesNotMatch(privacyConstraint, /claimedIdentity/);
+
+  const retentionConstraint = onboardingRetentionSql.match(
+    /ADD CONSTRAINT "WorkerClaim_sensitive_retention_check"([\s\S]*?)\n  ADD CONSTRAINT "WorkerOnboardingClaim_state_check"/,
+  )?.[1] || '';
+  assert.match(retentionConstraint, /status" IN \('PENDING', 'SUBMITTED'\)/);
+  assert.match(retentionConstraint, /sensitiveDataPurgedAt" IS NULL/);
+  assert.match(retentionConstraint, /status" IN \('APPROVED', 'REJECTED', 'EXPIRED', 'CANCELLED'\)/);
+  assert.match(retentionConstraint, /sensitiveDataPurgedAt" IS NOT NULL/);
+
+  assert.match(
+    onboardingRetentionSql,
+    /CREATE INDEX "WorkerClaim_sensitive_retention_due_idx"[\s\S]*?\("expiresAt", "id"\)[\s\S]*?WHERE "status" IN \('PENDING', 'SUBMITTED'\)[\s\S]*?"sensitiveDataPurgedAt" IS NULL/,
+  );
+  assert.match(
+    onboardingRetentionSql,
+    /COMMENT ON COLUMN "WorkerOnboardingClaim"\."claimTokenHash" IS[\s\S]*?one-way SHA-256 commitment[\s\S]*?raw bearer token/,
+  );
+  assert.doesNotMatch(onboardingRetentionSql, /"claimTokenHash"\s*=\s*NULL/);
+  assert.doesNotMatch(
+    onboardingRetentionSql,
+    /DROP CONSTRAINT "(?:WSD_onboarding_claim_fkey|WorkerClaim_review_actor_check|WorkerClaim_reviewer_membership_fkey|WorkerClaim_resolved_(?:channel|worker)_scope_fkey)"/,
+  );
 });

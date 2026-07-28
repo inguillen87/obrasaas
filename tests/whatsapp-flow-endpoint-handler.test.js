@@ -158,6 +158,27 @@ test("a valid request is encrypted, committed, and returned as plain base64", as
   assert.equal(completions[0].responseStatus, 200);
 });
 
+test("pre-worker success is journaled against the isolated onboarding session", async () => {
+  const onboardingSessionId = "523e4567-e89b-42d3-a456-426614174000";
+  const { dependencies, completions } = successfulDependencies({
+    dispatchRequest: async () => ({
+      response: { data: { extension_message_response: { params: {} } } },
+      session: { id: onboardingSessionId, kind: "worker_onboarding" },
+    }),
+  });
+  const response = await handleWhatsAppFlowDataEndpointRequest(
+    signedRequest(),
+    { endpointId: ENDPOINT_ID, prisma: {}, appSecret: APP_SECRET },
+    dependencies,
+  );
+  assert.equal(response.status, 200);
+  assert.equal(completions[0].flowSessionId, null);
+  assert.equal(
+    completions[0].workerOnboardingFlowSessionId,
+    onboardingSessionId,
+  );
+});
+
 test("421 is reserved exclusively for RSA key mismatch and is durably classified", async () => {
   const { dependencies, completions } = successfulDependencies({
     decryptRequest: () => {

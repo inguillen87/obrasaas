@@ -138,6 +138,13 @@ export default function FieldWorkersClient({ initialWorkers, canManage, projectN
 
       {canManage && (
         <form className={styles.workerForm} onSubmit={createWorker}>
+          <div className={styles.legacyWorkerNotice}>
+            <strong>Alta administrativa heredada · uso excepcional</strong>
+            <span>
+              Priorizá el alta protegida por WhatsApp. Usá este formulario sólo para una
+              contingencia administrativa documentada.
+            </span>
+          </div>
           <label>
             <span>Nombre y apellido</span>
             <input
@@ -185,7 +192,7 @@ export default function FieldWorkersClient({ initialWorkers, canManage, projectN
             </select>
           </label>
           <button disabled={pending === 'create'} type="submit">
-            {pending === 'create' ? 'Autorizando…' : 'Autorizar número'}
+            {pending === 'create' ? 'Autorizando…' : 'Crear alta excepcional'}
           </button>
         </form>
       )}
@@ -209,7 +216,11 @@ export default function FieldWorkersClient({ initialWorkers, canManage, projectN
             </p>
           </div>
         ) : workers.map((worker) => (
-          <article className={`${styles.workerCard} ${!worker.active ? styles.workerInactive : ''}`} key={worker.id}>
+          <article
+            className={`${styles.workerCard} ${!worker.active ? styles.workerInactive : ''}`}
+            id={`field-worker-${worker.id}`}
+            key={worker.id}
+          >
             <div className={styles.workerIdentity}>
               <span className={styles.channelBadge} aria-hidden="true">WA</span>
               <div>

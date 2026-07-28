@@ -15,8 +15,16 @@ registerHooks({
 
 const originalDatabaseUrl = process.env.DATABASE_URL;
 const originalFlowTokenSecret = process.env.WHATSAPP_FLOW_TOKEN_SECRET;
+const originalOnboardingFlowTokenSecret = process.env.WORKER_ONBOARDING_FLOW_TOKEN_SECRET;
+const originalFingerprintKeyId = process.env.WORKER_FINANCIAL_FINGERPRINT_KEY_ID;
+const originalFingerprintKeyRegistry = process.env.WORKER_FINANCIAL_FINGERPRINT_KEY_REGISTRY_JSON;
 process.env.DATABASE_URL = 'postgresql://unit-test.invalid/obrasaas';
 process.env.WHATSAPP_FLOW_TOKEN_SECRET = 'unit-test-whatsapp-flow-session-secret';
+process.env.WORKER_ONBOARDING_FLOW_TOKEN_SECRET = 'unit-test-worker-onboarding-flow-secret';
+process.env.WORKER_FINANCIAL_FINGERPRINT_KEY_ID = 'webhook-receipt-fingerprint-v1';
+process.env.WORKER_FINANCIAL_FINGERPRINT_KEY_REGISTRY_JSON = JSON.stringify({
+  'webhook-receipt-fingerprint-v1': Buffer.alloc(32, 47).toString('base64'),
+});
 
 const {
   applyWebhookMessageAtomically,
@@ -27,12 +35,38 @@ const {
   markWhatsAppFlowSessionDeliveryAttempted,
   whatsAppFlowTokenEvidence,
 } = await import('../src/lib/whatsapp/flow-sessions.js');
+const {
+  issueWorkerOnboardingFlowSession,
+  markWorkerOnboardingFlowPrivacyPresented,
+  markWorkerOnboardingFlowSessionDeliveryAttempted,
+  markWorkerOnboardingFlowSessionSubmitted,
+  workerOnboardingFlowTokenEvidence,
+} = await import('../src/lib/whatsapp/worker-onboarding-flow-sessions.js');
+const {
+  getCurrentWorkerOnboardingPrivacyNotice,
+} = await import('../src/lib/worker-onboarding-privacy-notices.js');
+const {
+  readWorkerFinancialFingerprintKeyRegistry,
+  workerFinancialFingerprint,
+} = await import('../src/lib/worker-financial-data.js');
 
 after(() => {
   if (originalDatabaseUrl === undefined) delete process.env.DATABASE_URL;
   else process.env.DATABASE_URL = originalDatabaseUrl;
   if (originalFlowTokenSecret === undefined) delete process.env.WHATSAPP_FLOW_TOKEN_SECRET;
   else process.env.WHATSAPP_FLOW_TOKEN_SECRET = originalFlowTokenSecret;
+  if (originalOnboardingFlowTokenSecret === undefined) {
+    delete process.env.WORKER_ONBOARDING_FLOW_TOKEN_SECRET;
+  } else {
+    process.env.WORKER_ONBOARDING_FLOW_TOKEN_SECRET = originalOnboardingFlowTokenSecret;
+  }
+  if (originalFingerprintKeyId === undefined) delete process.env.WORKER_FINANCIAL_FINGERPRINT_KEY_ID;
+  else process.env.WORKER_FINANCIAL_FINGERPRINT_KEY_ID = originalFingerprintKeyId;
+  if (originalFingerprintKeyRegistry === undefined) {
+    delete process.env.WORKER_FINANCIAL_FINGERPRINT_KEY_REGISTRY_JSON;
+  } else {
+    process.env.WORKER_FINANCIAL_FINGERPRINT_KEY_REGISTRY_JSON = originalFingerprintKeyRegistry;
+  }
   delete globalThis.__obraSaasPrisma;
 });
 
@@ -90,6 +124,64 @@ function inMemoryFlowSessions(calls) {
     records,
     get record() {
       return records.at(-1) || null;
+    },
+  };
+}
+
+function inMemoryWorkerOnboardingFlowSessions(claim, calls) {
+  const records = [];
+  const matches = (record, where) => Object.entries(where).every(([field, expected]) => {
+    const actual = record[field];
+    if (expected && typeof expected === 'object' && !Array.isArray(expected)) {
+      if (Object.hasOwn(expected, 'gt')) return actual > expected.gt;
+      if (Object.hasOwn(expected, 'lte')) return actual <= expected.lte;
+      if (Object.hasOwn(expected, 'not')) return actual !== expected.not;
+    }
+    return actual === expected;
+  });
+  return {
+    records,
+    claims: [claim],
+    sessionDelegate: {
+      async findUnique({ where }) {
+        calls.push(['onboarding-flow-read', where]);
+        if (where.id) return records.find((record) => record.id === where.id) || null;
+        const binding = where.projectId_sourceExternalId_blueprintKey;
+        return records.find((record) => binding && (
+          record.projectId === binding.projectId
+          && record.sourceExternalId === binding.sourceExternalId
+          && record.blueprintKey === binding.blueprintKey
+        )) || null;
+      },
+      async create({ data }) {
+        calls.push(['onboarding-flow-create', data]);
+        const record = {
+          ...data,
+          deliveryAttemptedAt: null,
+          deliveryRejectedAt: null,
+          sentAt: null,
+          providerMessageId: null,
+          privacyPresentedAt: null,
+          submittedAt: null,
+          consumedAt: null,
+          consumedExternalId: null,
+          updatedAt: data.createdAt,
+        };
+        records.push(record);
+        return record;
+      },
+      async updateMany({ where, data }) {
+        calls.push(['onboarding-flow-update', { where, data }]);
+        const matching = records.filter((record) => matches(record, where));
+        for (const record of matching) Object.assign(record, data, { updatedAt: new Date() });
+        return { count: matching.length };
+      },
+    },
+    claimDelegate: {
+      async findFirst({ where }) {
+        calls.push(['onboarding-claim-read', where]);
+        return [claim].find((record) => matches(record, where)) || null;
+      },
     },
   };
 }
@@ -418,6 +510,250 @@ test('an unknown Meta contact is durably quarantined without engine or operation
     calls.findIndex(([name]) => name === 'message-create')
       < calls.findIndex(([name]) => name === 'event-apply'),
   );
+});
+
+test('a pre-worker receipt consumes only its sender-bound session and remains quarantined on mismatch or replay', async () => {
+  const scope = {
+    projectId: 'project-onboarding-receipt',
+    organizationId: 'organization-onboarding-receipt',
+    phoneNumberId: '123456789012345',
+  };
+  const connectionId = 'connection-onboarding-receipt';
+  const senderAddress = '+5491155551212';
+  const fingerprintRegistry = readWorkerFinancialFingerprintKeyRegistry();
+  const senderFingerprint = workerFinancialFingerprint(senderAddress, {
+    organizationId: scope.organizationId,
+    valueType: 'WHATSAPP_E164',
+  }, { registry: fingerprintRegistry });
+  const calls = [];
+  const claim = {
+    id: 'claim-onboarding-receipt',
+    organizationId: scope.organizationId,
+    projectId: scope.projectId,
+    connectionId,
+    senderFingerprint: senderFingerprint.fingerprint,
+    senderFingerprintKeyId: senderFingerprint.fingerprintKeyId,
+    senderRecordVersion: 1,
+    claimTokenHash: 'd'.repeat(64),
+    status: 'PENDING',
+    expiresAt: new Date('2099-01-01T00:00:00.000Z'),
+  };
+  const onboardingStore = inMemoryWorkerOnboardingFlowSessions(claim, calls);
+  const issuedAt = new Date();
+  const privacyNotice = getCurrentWorkerOnboardingPrivacyNotice();
+  const issued = await issueWorkerOnboardingFlowSession({
+    workerOnboardingFlowSession: onboardingStore.sessionDelegate,
+    workerOnboardingClaim: onboardingStore.claimDelegate,
+  }, {
+    claimId: claim.id,
+    organizationId: scope.organizationId,
+    projectId: scope.projectId,
+    connectionId,
+    phoneNumberId: scope.phoneNumberId,
+    blueprintKey: 'worker-onboarding',
+    flowId: '987654321012345',
+    screenId: 'WORKER_ONBOARDING',
+    flowType: 'worker_onboarding',
+    sourceExternalId: 'obrasaas-worker-onboarding:receipt-test',
+    noticeVersion: privacyNotice.version,
+    noticeContentSha256: privacyNotice.contentSha256,
+  }, { now: issuedAt });
+  await markWorkerOnboardingFlowSessionDeliveryAttempted({
+    workerOnboardingFlowSession: onboardingStore.sessionDelegate,
+    workerOnboardingClaim: onboardingStore.claimDelegate,
+  }, { sessionId: issued.session.id }, { now: issuedAt });
+  await markWorkerOnboardingFlowPrivacyPresented({
+    workerOnboardingFlowSession: onboardingStore.sessionDelegate,
+    workerOnboardingClaim: onboardingStore.claimDelegate,
+  }, {
+    token: issued.token,
+    organizationId: scope.organizationId,
+    projectId: scope.projectId,
+    connectionId,
+    phoneNumberId: scope.phoneNumberId,
+  }, { now: issuedAt });
+  claim.status = 'SUBMITTED';
+  await markWorkerOnboardingFlowSessionSubmitted({
+    workerOnboardingFlowSession: onboardingStore.sessionDelegate,
+    workerOnboardingClaim: onboardingStore.claimDelegate,
+  }, {
+    sessionId: issued.session.id,
+    claimId: claim.id,
+  }, { now: issuedAt });
+
+  const messages = [];
+  const conversations = new Map();
+  const outcomes = [];
+  const transaction = {
+    async $executeRawUnsafe() {
+      calls.push(['lock']);
+    },
+    webhookEvent: {
+      async findFirst({ where }) {
+        calls.push(['event-read', where.id]);
+        return { id: where.id, appliedAt: null, outcome: null };
+      },
+      async updateMany(args) {
+        calls.push(['event-apply', args.where.id]);
+        outcomes.push(structuredClone(args.data.outcome));
+        return { count: 1 };
+      },
+    },
+    project: {
+      async findFirst() {
+        return {
+          id: scope.projectId,
+          organizationId: scope.organizationId,
+          status: 'ACTIVE',
+          latitude: null,
+          longitude: null,
+          geofenceMeters: 100,
+          startsAt: null,
+          organization: {
+            timezone: 'America/Argentina/Buenos_Aires',
+            subscriptionPlan: 'PRO',
+            subscriptionStatus: 'ACTIVE',
+            trialEndsAt: null,
+          },
+          snapshot: { state: { incidents: [], attendance: {}, tasks: {} }, version: 1 },
+          whatsapp: {
+            id: connectionId,
+            phoneNumberId: scope.phoneNumberId,
+            enabled: true,
+            metadata: null,
+          },
+        };
+      },
+    },
+    worker: {
+      async findMany() {
+        return [];
+      },
+    },
+    conversation: {
+      async upsert({ where, create, update }) {
+        const key = JSON.stringify(where.projectId_channel_externalId);
+        const current = conversations.get(key);
+        if (current) {
+          Object.assign(current, update);
+          return current;
+        }
+        const created = { id: `conversation-${conversations.size + 1}`, ...create };
+        conversations.set(key, created);
+        return created;
+      },
+      async update({ where, data }) {
+        const conversation = [...conversations.values()].find((item) => item.id === where.id);
+        Object.assign(conversation, data);
+        return conversation;
+      },
+    },
+    message: {
+      async findUnique({ where }) {
+        return messages.find((message) => message.externalId === where.externalId) || null;
+      },
+      async create({ data }) {
+        const message = { id: `message-${messages.length + 1}`, ...data };
+        messages.push(message);
+        return message;
+      },
+      async update({ where, data }) {
+        const message = messages.find((item) => item.id === where.id);
+        Object.assign(message, data);
+        return message;
+      },
+    },
+    workerOnboardingFlowSession: onboardingStore.sessionDelegate,
+    workerOnboardingClaim: onboardingStore.claimDelegate,
+  };
+  globalThis.__obraSaasPrisma = {
+    async $transaction(callback) {
+      return callback(transaction);
+    },
+  };
+  const validEvidence = workerOnboardingFlowTokenEvidence(issued.token);
+  const receiptResponse = {
+    flow_type: 'worker_onboarding',
+    claim_ref: claim.id,
+    submission_status: 'submitted',
+  };
+  let engineCalls = 0;
+  const processReceipt = (suffix, { from = senderAddress, flowToken = validEvidence } = {}) => (
+    applyWebhookMessageAtomically({
+      eventId: `event-${suffix}`,
+      leaseToken: `lease-${suffix}`,
+      event: {
+        provider: 'meta',
+        eventType: 'message',
+        externalId: `wamid.${suffix}`,
+        phoneNumberId: scope.phoneNumberId,
+        from,
+        displayName: 'Nombre de Meta que no debe duplicarse',
+        kind: 'interactive',
+        text: 'Alta enviada',
+        interactive: {
+          type: 'flow',
+          flowToken,
+          response: receiptResponse,
+        },
+      },
+      scope,
+      apply: async () => {
+        engineCalls += 1;
+        throw new Error('A pre-worker receipt must never reach the obra engine.');
+      },
+    })
+  );
+
+  const finalTokenCharacter = issued.token.slice(-1);
+  const tamperedToken = `${issued.token.slice(0, -1)}${finalTokenCharacter === 'A' ? 'B' : 'A'}`;
+  const missing = await processReceipt('onboarding-token-missing', { flowToken: null });
+  assert.equal(missing.quarantined, true);
+  assert.equal(onboardingStore.records[0].consumedAt, null);
+  assert.equal(messages.at(-1).metadata.workerOnboardingReceipt, 'UNVERIFIED');
+
+  const tampered = await processReceipt('onboarding-token-tampered', {
+    flowToken: workerOnboardingFlowTokenEvidence(tamperedToken),
+  });
+  assert.equal(tampered.quarantined, true);
+  assert.equal(onboardingStore.records[0].consumedAt, null);
+  assert.equal(messages.at(-1).metadata.workerOnboardingReceipt, 'UNVERIFIED');
+
+  const mismatch = await processReceipt('onboarding-sender-mismatch', {
+    from: '+5491155559999',
+  });
+  assert.equal(mismatch.quarantined, true);
+  assert.equal(onboardingStore.records[0].consumedAt, null);
+  assert.equal(messages.at(-1).metadata.workerOnboardingReceipt, 'UNVERIFIED');
+
+  const valid = await processReceipt('onboarding-valid');
+  assert.equal(valid.quarantined, true);
+  assert.equal(onboardingStore.records[0].consumedExternalId, 'wamid.onboarding-valid');
+  assert.ok(onboardingStore.records[0].consumedAt instanceof Date);
+  assert.equal(messages.at(-1).metadata.workerOnboardingReceipt, 'VERIFIED');
+  assert.equal(Object.hasOwn(messages.at(-1).metadata, 'from'), false);
+  assert.equal(Object.hasOwn(messages.at(-1).metadata, 'providerDisplayName'), false);
+
+  claim.status = 'APPROVED';
+  claim.sensitiveDataPurgedAt = new Date();
+  claim.senderFingerprint = null;
+  claim.senderFingerprintKeyId = null;
+  claim.senderRecordVersion = null;
+  const retired = await processReceipt('onboarding-retired');
+  assert.equal(retired.quarantined, true);
+  assert.equal(messages.at(-1).metadata.workerOnboardingReceipt, 'UNVERIFIED');
+  assert.equal(
+    onboardingStore.records[0].consumedExternalId,
+    'wamid.onboarding-valid',
+  );
+  assert.equal(JSON.stringify(messages.at(-1).metadata).includes(senderAddress), false);
+
+  const replay = await processReceipt('onboarding-replay');
+  assert.equal(replay.quarantined, true);
+  assert.equal(onboardingStore.records[0].consumedExternalId, 'wamid.onboarding-valid');
+  assert.equal(messages.at(-1).metadata.workerOnboardingReceipt, 'UNVERIFIED');
+  assert.equal(engineCalls, 0);
+  assert.equal(outcomes.every((outcome) => outcome.deliverySuppressed === true), true);
 });
 
 test('a quarantined Meta contact remains quarantined when its applied outcome is retried', async () => {

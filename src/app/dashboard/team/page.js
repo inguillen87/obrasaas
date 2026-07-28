@@ -2,6 +2,7 @@ import { clerkClient } from '@clerk/nextjs/server';
 
 import TeamClient from './team-client';
 import FieldWorkersClient from './field-workers-client';
+import WorkerOnboardingClient from './worker-onboarding-client';
 import styles from './team.module.css';
 import {
   getPlatformAccess,
@@ -25,6 +26,8 @@ export default async function TeamPage() {
   requireTenantPermission(access, 'tenant:members:read');
   const canManage = hasTenantPermission(access, 'tenant:members:manage');
   const canManageField = hasTenantPermission(access, 'org:field:manage');
+  const canReadOnboarding = hasTenantPermission(access, 'org:workers:onboarding:read');
+  const canManageOnboarding = hasTenantPermission(access, 'org:workers:onboarding:manage');
   const prisma = getPrisma();
   const [memberships, invitationResult, workers, projects] = await Promise.all([
     prisma.tenantMembership.findMany({
@@ -152,6 +155,15 @@ export default async function TeamPage() {
           portfolioAccess: tenantRoleHasPortfolioAccess(role.key),
         }))}
       />
+
+      {canReadOnboarding && (
+        <WorkerOnboardingClient
+          canManage={canManageOnboarding}
+          canRead={canReadOnboarding}
+          projectName={access.project.name}
+          timeZone={access.organization.timezone}
+        />
+      )}
 
       <FieldWorkersClient
         canManage={canManageField}

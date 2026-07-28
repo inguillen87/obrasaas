@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { decryptCredential } from "../credentials.js";
 import { projectWhatsAppFlowReplyForPersistence } from "./flows.js";
 import { whatsAppFlowTokenEvidence } from "./flow-sessions.js";
+import { workerOnboardingFlowTokenEvidence } from "./worker-onboarding-flow-sessions.js";
 
 const MEDIA_POLICIES = Object.freeze({
   audio: {
@@ -160,7 +161,9 @@ function normalizeFlowResponse(value) {
   let flowToken = null;
   if (typeof rawFlowToken === "string") {
     try {
-      flowToken = whatsAppFlowTokenEvidence(rawFlowToken);
+      flowToken = rawFlowToken.trim().startsWith("wofs1.")
+        ? workerOnboardingFlowTokenEvidence(rawFlowToken)
+        : whatsAppFlowTokenEvidence(rawFlowToken);
     } catch {
       // Keep webhook ingestion durable and fail closed in the transactional
       // consumer. The raw token must never enter persisted payloads or logs.

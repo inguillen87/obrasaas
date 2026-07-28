@@ -20,12 +20,20 @@ import {
   sendManualWhatsAppMessage,
   WhatsAppInboxError,
 } from '@/lib/whatsapp/inbox';
+import { getWorkerOnboardingInvitationState } from '@/lib/whatsapp/worker-onboarding-invitations';
 
 export const runtime = 'nodejs';
 
 const MAX_SEND_BODY_BYTES = 20_000;
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/;
 const SEND_FIELDS = new Set(['projectId', 'body', 'idempotencyKey']);
+const ONBOARDING_STATES = new Set([
+  'eligible',
+  'already_pending',
+  'authorized',
+  'conflict',
+  'closed',
+]);
 
 function json(payload, init = {}) {
   return Response.json(payload, {
@@ -133,11 +141,53 @@ function assertSendInput(input) {
   }
 }
 
+function onboardingProjection(result) {
+  const state = String(result?.state || '').trim().toLowerCase();
+  const reason = typeof result?.capability?.reason === 'string'
+    ? result.capability.reason.trim().slice(0, 280)
+    : '';
+  return {
+    state: ONBOARDING_STATES.has(state) ? state : 'closed',
+    reason,
+  };
+}
+
+async function loadContactOnboarding({
+  loadOnboardingState,
+  prisma,
+  access,
+  conversationId,
+  clock,
+  env,
+}) {
+  if (
+    typeof loadOnboardingState !== 'function'
+    || !hasTenantPermission(access, 'org:workers:onboarding:manage')
+  ) return { state: 'closed', reason: '' };
+  try {
+    return onboardingProjection(await loadOnboardingState({
+      prisma,
+      access,
+      conversationId,
+      canManage: true,
+      clock,
+      env,
+    }));
+  } catch (error) {
+    console.error('WhatsApp contact onboarding state failed:', {
+      name: error?.name,
+      code: error?.code,
+    });
+    return { state: 'closed', reason: '' };
+  }
+}
+
 export function createWhatsAppConversationMessageHandlers({
   resolveAccess = getPlatformAccess,
   authorize = requireTenantPermission,
   prismaFactory = getPrisma,
   loadMessages = getWhatsAppConversationMessages,
+  loadOnboardingState = null,
   sendMessage = sendManualWhatsAppMessage,
   parseBody = (request) => readJsonRequest(request, { maxBytes: MAX_SEND_BODY_BYTES }),
   clock = () => new Date(),
@@ -152,23 +202,34 @@ export function createWhatsAppConversationMessageHandlers({
       const conversationId = await conversationIdFromContext(context);
       const prisma = prismaFactory();
       await assertActiveProject(prisma, access, projectId);
-      return json(await loadMessages({
-        prisma,
-        access,
-        conversationId,
-        ...pagination,
-        includeMedicalEvidence: hasTenantPermission(
+      const [messages, onboarding] = await Promise.all([
+        loadMessages({
+          prisma,
           access,
-          MEDICAL_EVIDENCE_PERMISSION,
-        ),
-        includeSourceEvidence: hasTenantPermission(
+          conversationId,
+          ...pagination,
+          includeMedicalEvidence: hasTenantPermission(
+            access,
+            MEDICAL_EVIDENCE_PERMISSION,
+          ),
+          includeSourceEvidence: hasTenantPermission(
+            access,
+            SOURCE_EVIDENCE_PERMISSION,
+          ),
+          canManage: hasTenantPermission(access, 'org:conversations:manage'),
+          clock,
+          env,
+        }),
+        loadContactOnboarding({
+          loadOnboardingState,
+          prisma,
           access,
-          SOURCE_EVIDENCE_PERMISSION,
-        ),
-        canManage: hasTenantPermission(access, 'org:conversations:manage'),
-        clock,
-        env,
-      }));
+          conversationId,
+          clock,
+          env,
+        }),
+      ]);
+      return json({ ...messages, onboarding });
     } catch (error) {
       const response = inboxErrorResponse(error);
       if (response) return response;
@@ -221,4 +282,6 @@ export function createWhatsAppConversationMessageHandlers({
   return { GET, POST };
 }
 
-export const { GET, POST } = createWhatsAppConversationMessageHandlers();
+export const { GET, POST } = createWhatsAppConversationMessageHandlers({
+  loadOnboardingState: getWorkerOnboardingInvitationState,
+});

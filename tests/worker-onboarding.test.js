@@ -6,10 +6,17 @@ import {
   WorkerOnboardingError,
   decideWorkerOnboardingClaim,
   issueWorkerOnboardingClaim,
+  issueWorkerOnboardingClaimWithReservation,
   listWorkerOnboardingClaims,
+  submitAuthenticatedWorkerOnboardingClaim,
+  submitAuthenticatedWorkerOnboardingFlow,
   submitWorkerOnboardingClaim,
 } from '../src/lib/worker-onboarding.js';
 import { workerFinancialFingerprint } from '../src/lib/worker-financial-data.js';
+import {
+  getCurrentWorkerOnboardingPrivacyNotice,
+  getWorkerOnboardingPrivacyNotice,
+} from '../src/lib/worker-onboarding-privacy-notices.js';
 
 const NOW = new Date('2026-07-25T12:00:00.000Z');
 const EXPIRES_AT = new Date('2026-07-25T13:00:00.000Z');
@@ -25,6 +32,26 @@ const SENDER = Object.freeze({
 });
 const CUIL = '20123456786';
 const EVIDENCE_HASH = 'a'.repeat(64);
+const CURRENT_NOTICE = getCurrentWorkerOnboardingPrivacyNotice();
+const CLAIM_SENSITIVE_FIELDS = Object.freeze([
+  'senderEncryptedPayload',
+  'senderFingerprint',
+  'senderFingerprintKeyId',
+  'senderLastFour',
+  'senderWrappingKeyId',
+  'senderRecordVersion',
+  'claimedIdentityEncryptedPayload',
+  'claimedCuilFingerprint',
+  'claimedCuilFingerprintKeyId',
+  'claimedCuilLastFour',
+  'claimedIdentityWrappingKeyId',
+  'claimedIdentityRecordVersion',
+]);
+
+function assertClaimSensitiveDataPurged(claim, purgedAt) {
+  for (const field of CLAIM_SENSITIVE_FIELDS) assert.equal(claim[field], null, field);
+  assert.equal(new Date(claim.sensitiveDataPurgedAt).getTime(), new Date(purgedAt).getTime());
+}
 
 function token(byte = 7) {
   return createHash('sha256')
@@ -37,7 +64,7 @@ function identity(overrides = {}) {
     givenNames: 'Carlos Alberto',
     familyName: 'Perez',
     cuil: CUIL,
-    privacyNoticeVersion: 'worker-privacy-v1',
+    privacyNoticeVersion: CURRENT_NOTICE.version,
     privacyAccepted: true,
     ...overrides,
   };
@@ -156,6 +183,7 @@ function initialDatabase() {
       connectionStatus: 'CONNECTED',
     }],
     claims: [],
+    flowSessions: [],
     people: [],
     channels: [],
     workers: [],
@@ -230,7 +258,10 @@ function createFakePrisma(seed = initialDatabase()) {
   const calls = [];
   const controls = {
     failAuditAction: null,
+    failExpiredClaimCas: false,
+    failFlowSessionSubmit: false,
     injectDecisionUniqueRace: false,
+    injectIssueUniqueRace: null,
   };
 
   function makeClient(getTarget) {
@@ -283,7 +314,8 @@ function createFakePrisma(seed = initialDatabase()) {
           return selected(row || null, select);
         },
         async findMany({ where, take, orderBy, select } = {}) {
-          let rows = getTarget().claims.filter((row) => rowMatches(row, where));
+          const target = getTarget();
+          let rows = target.claims.filter((row) => rowMatches(row, where));
           if (orderBy) {
             rows = rows.sort((left, right) => {
               const created = new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime();
@@ -291,7 +323,14 @@ function createFakePrisma(seed = initialDatabase()) {
             });
           }
           if (take) rows = rows.slice(0, take);
-          return rows.map((row) => selected(row, select));
+          return rows.map((row) => {
+            const result = selected(row, select);
+            if (select?.flowSession) {
+              const flowSession = target.flowSessions.find((candidate) => candidate.claimId === row.id);
+              result.flowSession = selected(flowSession || null, select.flowSession.select);
+            }
+            return result;
+          });
         },
         async create({ data }) {
           const target = getTarget();
@@ -313,6 +352,7 @@ function createFakePrisma(seed = initialDatabase()) {
             claimedCuilLastFour: null,
             claimedIdentityWrappingKeyId: null,
             claimedIdentityRecordVersion: null,
+            sensitiveDataPurgedAt: null,
             privacyNoticeVersion: null,
             privacyAcceptedAt: null,
             submittedAt: null,
@@ -327,11 +367,37 @@ function createFakePrisma(seed = initialDatabase()) {
             updatedAt: data.createdAt,
             ...structuredClone(data),
           };
+          if (typeof controls.injectIssueUniqueRace === 'function') {
+            const mutateConcurrentState = controls.injectIssueUniqueRace;
+            controls.injectIssueUniqueRace = null;
+            target.claims.push(row);
+            database = structuredClone(target);
+            mutateConcurrentState(database);
+            const error = new Error('Unique constraint failed');
+            error.code = 'P2002';
+            throw error;
+          }
           target.claims.push(row);
           return structuredClone(row);
         },
         async updateMany({ where, data }) {
+          if (controls.failExpiredClaimCas && data.status === 'EXPIRED') {
+            controls.failExpiredClaimCas = false;
+            return { count: 0 };
+          }
           const rows = getTarget().claims.filter((row) => rowMatches(row, where));
+          rows.forEach((row) => applyData(row, data));
+          return { count: rows.length };
+        },
+      },
+      workerOnboardingFlowSession: {
+        async findFirst({ where, select }) {
+          const row = getTarget().flowSessions.find((candidate) => rowMatches(candidate, where));
+          return selected(row || null, select);
+        },
+        async updateMany({ where, data }) {
+          if (controls.failFlowSessionSubmit) return { count: 0 };
+          const rows = getTarget().flowSessions.filter((row) => rowMatches(row, where));
           rows.forEach((row) => applyData(row, data));
           return { count: rows.length };
         },
@@ -515,7 +581,69 @@ async function issuedAndSubmitted(database, dependencies, overrides = {}) {
     dependencies,
     ...overrides.submit,
   });
+  const submittedAt = new Date(submitted.submittedAt);
+  database.mutate((state) => {
+    state.flowSessions.push({
+      id: `flow-session-${submitted.id}`,
+      claimId: submitted.id,
+      organizationId: SCOPE.organizationId,
+      projectId: SCOPE.projectId,
+      connectionId: 'connection-a',
+      phoneNumberId: '123456789012345',
+      blueprintKey: 'worker-onboarding',
+      flowId: '887654321012345',
+      screenId: 'WORKER_ONBOARDING',
+      flowType: 'worker_onboarding',
+      sourceExternalId: `obrasaas-worker-onboarding:${submitted.id}`,
+      tokenSha256: 'b'.repeat(64),
+      noticeVersion: CURRENT_NOTICE.version,
+      noticeContentSha256: CURRENT_NOTICE.contentSha256,
+      expiresAt: new Date(EXPIRES_AT),
+      deliveryAttemptedAt: new Date(NOW.getTime() + 30_000),
+      deliveryRejectedAt: null,
+      sentAt: new Date(NOW.getTime() + 35_000),
+      privacyPresentedAt: new Date(NOW.getTime() + 45_000),
+      submittedAt,
+      consumedAt: new Date(submittedAt.getTime() + 1_000),
+      consumedExternalId: `wamid.receipt-${submitted.id}`,
+      createdAt: NOW,
+      updatedAt: new Date(submittedAt.getTime() + 1_000),
+      ...structuredClone(overrides.flowSession || {}),
+    });
+  });
   return { issued, submitted };
+}
+
+function seedPendingFlowSession(database, claimId, overrides = {}) {
+  const session = {
+    id: `flow-session-${claimId}`,
+    claimId,
+    organizationId: SCOPE.organizationId,
+    projectId: SCOPE.projectId,
+    connectionId: 'connection-a',
+    phoneNumberId: '123456789012345',
+    blueprintKey: 'worker-onboarding',
+    flowId: '887654321012345',
+    screenId: 'WORKER_ONBOARDING',
+    flowType: 'worker_onboarding',
+    sourceExternalId: `obrasaas-worker-onboarding:${claimId}`,
+    tokenSha256: 'c'.repeat(64),
+    noticeVersion: CURRENT_NOTICE.version,
+    noticeContentSha256: CURRENT_NOTICE.contentSha256,
+    expiresAt: new Date(EXPIRES_AT),
+    deliveryAttemptedAt: new Date(NOW.getTime() + 30_000),
+    deliveryRejectedAt: null,
+    sentAt: new Date(NOW.getTime() + 35_000),
+    privacyPresentedAt: new Date(NOW.getTime() + 45_000),
+    submittedAt: null,
+    consumedAt: null,
+    consumedExternalId: null,
+    createdAt: NOW,
+    updatedAt: NOW,
+    ...structuredClone(overrides),
+  };
+  database.mutate((state) => state.flowSessions.push(session));
+  return session;
 }
 
 test('issue is an exact replay, rejects changed payload, and never returns the bearer token', async () => {
@@ -571,6 +699,51 @@ test('issue is an exact replay, rejects changed payload, and never returns the b
   );
 });
 
+test('a P2002 issue race revalidates membership and connection before any reservation', async (t) => {
+  for (const candidate of [
+    {
+      name: 'membership revoked',
+      mutate(state) {
+        state.memberships.find((row) => row.id === 'membership-director').status = 'DISABLED';
+      },
+      expectedCode: 'WORKER_ONBOARDING_FORBIDDEN',
+    },
+    {
+      name: 'connection revoked',
+      mutate(state) {
+        state.connections.find((row) => row.id === 'connection-a').enabled = false;
+      },
+      expectedCode: 'WORKER_ONBOARDING_SCOPE_INVALID',
+    },
+  ]) {
+    await t.test(candidate.name, async () => {
+      const database = createFakePrisma();
+      const dependencies = createDependencies();
+      database.controls.injectIssueUniqueRace = candidate.mutate;
+      let reservations = 0;
+
+      await assert.rejects(
+        issueWorkerOnboardingClaimWithReservation(
+          database.prisma,
+          issueArgs(dependencies, {
+            idempotencyKey: `issue-race-${candidate.name.replace(/\s+/g, '-')}`,
+          }),
+          async () => {
+            reservations += 1;
+            return { reserved: true };
+          },
+        ),
+        (error) => error instanceof WorkerOnboardingError
+          && error.code === candidate.expectedCode,
+      );
+
+      assert.equal(reservations, 0);
+      assert.equal(database.state().claims.length, 1);
+      assert.equal(database.state().audits.length, 0);
+    });
+  }
+});
+
 test('one open claim is enforced per project and sender across WhatsApp connections', async () => {
   const database = createFakePrisma();
   const dependencies = createDependencies();
@@ -604,6 +777,87 @@ test('one open claim is enforced per project and sender across WhatsApp connecti
   assert.ok(state.claims.find((claim) => claim.id === claimB.id).openClaimKey);
 });
 
+test('issuing a replacement expires and purges each stale claim with a PII-free audit', async () => {
+  const database = createFakePrisma();
+  const dependencies = createDependencies();
+  const { submitted } = await issuedAndSubmitted(database, dependencies);
+  const before = database.state().claims[0];
+  const purgedAt = new Date(EXPIRES_AT.getTime() + 1);
+
+  await issueWorkerOnboardingClaim(database.prisma, issueArgs(dependencies, {
+    claimToken: token(8),
+    idempotencyKey: 'issue-after-expiry-purge',
+    now: purgedAt,
+    expiresAt: new Date('2026-07-25T14:00:00.000Z'),
+  }));
+
+  const state = database.state();
+  const expired = state.claims.find((claim) => claim.id === submitted.id);
+  assert.equal(expired.status, 'EXPIRED');
+  assert.equal(expired.openClaimKey, null);
+  assertClaimSensitiveDataPurged(expired, purgedAt);
+  assert.equal(expired.claimTokenHash, before.claimTokenHash);
+  assert.equal(expired.operationKey, before.operationKey);
+  assert.equal(expired.requestFingerprint, before.requestFingerprint);
+  assert.equal(expired.privacyNoticeVersion, before.privacyNoticeVersion);
+  assert.equal(expired.privacyNoticeContentSha256, before.privacyNoticeContentSha256);
+  assert.equal(
+    new Date(expired.privacyAcceptedAt).getTime(),
+    new Date(before.privacyAcceptedAt).getTime(),
+  );
+
+  const expiryAudit = state.audits.find((audit) => (
+    audit.action === 'worker.onboarding.expired' && audit.entityId === submitted.id
+  ));
+  assert.deepEqual(Object.keys(expiryAudit.metadata).sort(), [
+    'projectId',
+    'retentionState',
+    'revision',
+    'status',
+  ]);
+  assert.equal(expiryAudit.metadata.retentionState, 'PURGED');
+  const serializedAudit = JSON.stringify(expiryAudit);
+  for (const sensitiveValue of [PHONE, PROVIDER_SUBJECT, CUIL, token(), before.senderEncryptedPayload]) {
+    assert.equal(serializedAudit.includes(sensitiveValue), false);
+  }
+
+  const expiredList = await listWorkerOnboardingClaims(database.prisma, {
+    scope: SCOPE,
+    requestedByMembershipId: 'membership-manager',
+    status: 'EXPIRED',
+    now: purgedAt,
+    dependencies,
+  });
+  const listed = expiredList.items.find((claim) => claim.id === submitted.id);
+  assert.equal(listed.sender, null);
+  assert.equal(listed.identity, null);
+  assert.deepEqual(listed.retention, {
+    state: 'PURGED',
+    purgedAt: purgedAt.toISOString(),
+  });
+});
+
+test('opportunistic expiry fails closed and rolls back issuance when its purge CAS loses', async () => {
+  const database = createFakePrisma();
+  const dependencies = createDependencies();
+  await issuedAndSubmitted(database, dependencies);
+  const before = database.state();
+  database.controls.failExpiredClaimCas = true;
+
+  await assert.rejects(
+    issueWorkerOnboardingClaim(database.prisma, issueArgs(dependencies, {
+      claimToken: token(8),
+      idempotencyKey: 'issue-expiry-purge-cas-lost',
+      now: new Date(EXPIRES_AT.getTime() + 1),
+      expiresAt: new Date('2026-07-25T14:00:00.000Z'),
+    })),
+    (error) => error instanceof WorkerOnboardingError
+      && error.code === 'WORKER_ONBOARDING_CONCURRENT_MODIFICATION',
+  );
+
+  assert.deepEqual(database.state(), before);
+});
+
 test('submission requires the same scoped sender and is idempotent only for the exact identity', async () => {
   const database = createFakePrisma();
   const dependencies = createDependencies();
@@ -625,6 +879,10 @@ test('submission requires the same scoped sender and is idempotent only for the 
   assert.equal(first.status, 'SUBMITTED');
   assert.equal(replay.replayed, true);
   assert.equal(database.state().claims[0].revision, 1);
+  assert.equal(
+    database.state().claims[0].privacyNoticeContentSha256,
+    CURRENT_NOTICE.contentSha256,
+  );
 
   await assert.rejects(
     submitWorkerOnboardingClaim(database.prisma, {
@@ -665,6 +923,218 @@ test('submission requires the same scoped sender and is idempotent only for the 
   );
 });
 
+test('a trusted pre-worker Flow session submits by exact claim scope without exposing its bearer token', async () => {
+  const database = createFakePrisma();
+  const dependencies = createDependencies();
+  const issued = await issueWorkerOnboardingClaim(database.prisma, issueArgs(dependencies));
+  const input = {
+    scope: SCOPE,
+    connectionId: 'connection-a',
+    claimId: issued.id,
+    identity: identity(),
+    now: new Date(NOW.getTime() + 60_000),
+    dependencies,
+  };
+
+  const submitted = await submitAuthenticatedWorkerOnboardingClaim(database.prisma, input);
+  const replay = await submitAuthenticatedWorkerOnboardingClaim(database.prisma, {
+    ...input,
+    now: new Date(NOW.getTime() + 120_000),
+  });
+
+  assert.equal(submitted.status, 'SUBMITTED');
+  assert.equal(replay.replayed, true);
+  assert.equal(database.state().claims[0].revision, 1);
+  assert.equal(JSON.stringify({ submitted, replay }).includes(PHONE), false);
+  assert.equal(JSON.stringify({ submitted, replay }).includes(CUIL), false);
+  assert.equal(JSON.stringify({ submitted, replay }).includes(token()), false);
+
+  await assert.rejects(
+    submitAuthenticatedWorkerOnboardingClaim(database.prisma, {
+      ...input,
+      scope: { ...SCOPE, organizationId: 'organization-b' },
+    }),
+    (error) => error?.code === 'PROJECT_WRITE_SCOPE_INVALID',
+  );
+  await assert.rejects(
+    submitAuthenticatedWorkerOnboardingClaim(database.prisma, {
+      ...input,
+      connectionId: 'connection-b',
+    }),
+    (error) => error instanceof WorkerOnboardingError
+      && error.code === 'WORKER_ONBOARDING_NOT_FOUND',
+  );
+  await assert.rejects(
+    submitAuthenticatedWorkerOnboardingClaim(database.prisma, {
+      ...input,
+      identity: identity({ familyName: 'Pereyra' }),
+    }),
+    (error) => error instanceof WorkerOnboardingError
+      && error.code === 'WORKER_ONBOARDING_IDEMPOTENCY_CONFLICT',
+  );
+});
+
+test('authenticated Flow submission commits claim and session together and replays exactly', async () => {
+  const database = createFakePrisma();
+  const dependencies = createDependencies();
+  const issued = await issueWorkerOnboardingClaim(database.prisma, issueArgs(dependencies));
+  const session = seedPendingFlowSession(database, issued.id);
+  const input = {
+    scope: SCOPE,
+    connectionId: session.connectionId,
+    phoneNumberId: session.phoneNumberId,
+    claimId: issued.id,
+    sessionId: session.id,
+    flowId: session.flowId,
+    tokenSha256: session.tokenSha256,
+    identity: identity(),
+    now: new Date(NOW.getTime() + 60_000),
+    dependencies,
+  };
+
+  const submitted = await submitAuthenticatedWorkerOnboardingFlow(database.prisma, input);
+  assert.equal(submitted.status, 'SUBMITTED');
+  assert.equal(database.state().claims[0].status, 'SUBMITTED');
+  assert.equal(database.state().claims[0].privacyNoticeVersion, CURRENT_NOTICE.version);
+  assert.equal(
+    database.state().claims[0].privacyNoticeContentSha256,
+    CURRENT_NOTICE.contentSha256,
+  );
+  assert.equal(
+    new Date(database.state().flowSessions[0].submittedAt).getTime(),
+    input.now.getTime(),
+  );
+
+  const replay = await submitAuthenticatedWorkerOnboardingFlow(database.prisma, input);
+  assert.equal(replay.status, 'SUBMITTED');
+  assert.equal(replay.replayed, true);
+  assert.equal(
+    database.state().audits.filter((audit) => audit.action === 'worker.onboarding.claim_submitted').length,
+    1,
+  );
+});
+
+test('authenticated Flow submission requires INIT and persists the session-pinned notice after rotation', async () => {
+  const legacyNotice = getWorkerOnboardingPrivacyNotice('worker-privacy-v1');
+  assert.notEqual(legacyNotice.version, CURRENT_NOTICE.version);
+
+  const withoutInit = createFakePrisma();
+  const withoutInitDependencies = createDependencies();
+  const withoutInitClaim = await issueWorkerOnboardingClaim(
+    withoutInit.prisma,
+    issueArgs(withoutInitDependencies),
+  );
+  const unpresented = seedPendingFlowSession(withoutInit, withoutInitClaim.id, {
+    privacyPresentedAt: null,
+  });
+  await assert.rejects(
+    submitAuthenticatedWorkerOnboardingFlow(withoutInit.prisma, {
+      scope: SCOPE,
+      connectionId: unpresented.connectionId,
+      phoneNumberId: unpresented.phoneNumberId,
+      claimId: withoutInitClaim.id,
+      sessionId: unpresented.id,
+      flowId: unpresented.flowId,
+      tokenSha256: unpresented.tokenSha256,
+      identity: identity(),
+      now: new Date(NOW.getTime() + 60_000),
+      dependencies: withoutInitDependencies,
+    }),
+    (error) => error instanceof WorkerOnboardingError
+      && error.code === 'WORKER_ONBOARDING_FLOW_SESSION_INVALID',
+  );
+  assert.equal(withoutInit.state().claims[0].status, 'PENDING');
+
+  const rotated = createFakePrisma();
+  const rotatedDependencies = createDependencies();
+  const rotatedClaim = await issueWorkerOnboardingClaim(
+    rotated.prisma,
+    issueArgs(rotatedDependencies),
+  );
+  const pinned = seedPendingFlowSession(rotated, rotatedClaim.id, {
+    noticeVersion: legacyNotice.version,
+    noticeContentSha256: legacyNotice.contentSha256,
+  });
+  const submitted = await submitAuthenticatedWorkerOnboardingFlow(rotated.prisma, {
+    scope: SCOPE,
+    connectionId: pinned.connectionId,
+    phoneNumberId: pinned.phoneNumberId,
+    claimId: rotatedClaim.id,
+    sessionId: pinned.id,
+    flowId: pinned.flowId,
+    tokenSha256: pinned.tokenSha256,
+    // Deliberately different: this value is never trusted by the atomic boundary.
+    identity: identity({ privacyNoticeVersion: CURRENT_NOTICE.version }),
+    now: new Date(NOW.getTime() + 60_000),
+    dependencies: rotatedDependencies,
+  });
+  assert.equal(submitted.identity.privacyNoticeVersion, legacyNotice.version);
+  assert.equal(rotated.state().claims[0].privacyNoticeVersion, legacyNotice.version);
+  assert.equal(
+    rotated.state().claims[0].privacyNoticeContentSha256,
+    legacyNotice.contentSha256,
+  );
+});
+
+test('authenticated Flow submission rolls back the claim when the session CAS loses', async () => {
+  const database = createFakePrisma();
+  const dependencies = createDependencies();
+  const issued = await issueWorkerOnboardingClaim(database.prisma, issueArgs(dependencies));
+  const session = seedPendingFlowSession(database, issued.id);
+  database.controls.failFlowSessionSubmit = true;
+
+  await assert.rejects(
+    submitAuthenticatedWorkerOnboardingFlow(database.prisma, {
+      scope: SCOPE,
+      connectionId: session.connectionId,
+      phoneNumberId: session.phoneNumberId,
+      claimId: issued.id,
+      sessionId: session.id,
+      flowId: session.flowId,
+      tokenSha256: session.tokenSha256,
+      identity: identity(),
+      now: new Date(NOW.getTime() + 60_000),
+      dependencies,
+    }),
+    (error) => error instanceof WorkerOnboardingError
+      && error.code === 'WORKER_ONBOARDING_FLOW_SESSION_INVALID',
+  );
+  assert.equal(database.state().claims[0].status, 'PENDING');
+  assert.equal(database.state().flowSessions[0].submittedAt, null);
+  assert.equal(
+    database.state().audits.some((audit) => audit.action === 'worker.onboarding.claim_submitted'),
+    false,
+  );
+});
+
+test('authenticated Flow submission rejects a concurrently rejected delivery before claim mutation', async () => {
+  const database = createFakePrisma();
+  const dependencies = createDependencies();
+  const issued = await issueWorkerOnboardingClaim(database.prisma, issueArgs(dependencies));
+  const session = seedPendingFlowSession(database, issued.id, {
+    deliveryRejectedAt: new Date(NOW.getTime() + 45_000),
+  });
+
+  await assert.rejects(
+    submitAuthenticatedWorkerOnboardingFlow(database.prisma, {
+      scope: SCOPE,
+      connectionId: session.connectionId,
+      phoneNumberId: session.phoneNumberId,
+      claimId: issued.id,
+      sessionId: session.id,
+      flowId: session.flowId,
+      tokenSha256: session.tokenSha256,
+      identity: identity(),
+      now: new Date(NOW.getTime() + 60_000),
+      dependencies,
+    }),
+    (error) => error instanceof WorkerOnboardingError
+      && error.code === 'WORKER_ONBOARDING_FLOW_SESSION_INVALID',
+  );
+  assert.equal(database.state().claims[0].status, 'PENDING');
+  assert.equal(database.state().audits.length, 1);
+});
+
 test('cross-tenant and inactive membership attempts fail closed', async () => {
   const database = createFakePrisma();
   const dependencies = createDependencies();
@@ -692,11 +1162,81 @@ test('cross-tenant and inactive membership attempts fail closed', async () => {
   assert.equal(database.state().claims.length, 0);
 });
 
+test('approval requires the exact terminal WhatsApp receipt while rejection remains available', async () => {
+  const database = createFakePrisma();
+  const dependencies = createDependencies();
+  const { submitted } = await issuedAndSubmitted(database, dependencies, {
+    flowSession: { consumedAt: null, consumedExternalId: null },
+  });
+  const decisionInput = {
+    scope: SCOPE,
+    claimId: submitted.id,
+    decidedByMembershipId: 'membership-director',
+    decision: 'APPROVE',
+    expectedRevision: submitted.revision,
+    evidenceHash: EVIDENCE_HASH,
+    policyVersion: 'onboarding-policy-v1',
+    idempotencyKey: 'decision-receipt-required',
+    now: new Date(NOW.getTime() + 180_000),
+    dependencies,
+  };
+
+  await assert.rejects(
+    decideWorkerOnboardingClaim(database.prisma, decisionInput),
+    (error) => error instanceof WorkerOnboardingError
+      && error.code === 'WORKER_ONBOARDING_TERMINAL_RECEIPT_REQUIRED',
+  );
+  assert.equal(database.state().claims[0].status, 'SUBMITTED');
+  assert.equal(database.state().people.length, 0);
+
+  database.mutate((state) => {
+    state.flowSessions[0].consumedAt = new Date(NOW.getTime() + 120_000);
+    state.flowSessions[0].consumedExternalId = 'wamid.receipt-confirmed';
+  });
+  const approved = await decideWorkerOnboardingClaim(database.prisma, decisionInput);
+  assert.equal(approved.status, 'APPROVED');
+
+  const rejectedDatabase = createFakePrisma();
+  const rejectedDependencies = createDependencies();
+  const rejectedSubmission = await issuedAndSubmitted(
+    rejectedDatabase,
+    rejectedDependencies,
+    { flowSession: { consumedAt: null, consumedExternalId: null } },
+  );
+  const rejectedBeforeDecision = rejectedDatabase.state().claims[0];
+  const rejected = await decideWorkerOnboardingClaim(rejectedDatabase.prisma, {
+    ...decisionInput,
+    claimId: rejectedSubmission.submitted.id,
+    decision: 'REJECT',
+    rejectionReason: 'No se completo la verificacion terminal.',
+    idempotencyKey: 'decision-receipt-reject-cleanup',
+    dependencies: rejectedDependencies,
+  });
+  assert.equal(rejected.status, 'REJECTED');
+  assert.equal(rejected.sender, null);
+  assert.equal(rejected.identity, null);
+  assert.deepEqual(rejected.retention, {
+    state: 'PURGED',
+    purgedAt: decisionInput.now.toISOString(),
+  });
+  const rejectedClaim = rejectedDatabase.state().claims[0];
+  assertClaimSensitiveDataPurged(rejectedClaim, decisionInput.now);
+  assert.equal(rejectedClaim.claimTokenHash, rejectedBeforeDecision.claimTokenHash);
+  assert.equal(rejectedClaim.privacyNoticeVersion, rejectedBeforeDecision.privacyNoticeVersion);
+  assert.equal(
+    rejectedClaim.privacyNoticeContentSha256,
+    rejectedBeforeDecision.privacyNoticeContentSha256,
+  );
+  assert.equal(rejectedClaim.rejectionReason, 'No se completo la verificacion terminal.');
+});
+
 test('approval atomically creates a pending civil identity, verified channel, null-phone bridge, decision and safe audit', async () => {
   const database = createFakePrisma();
   const dependencies = createDependencies();
   const { submitted } = await issuedAndSubmitted(database, dependencies);
-  const claimCiphertext = database.state().claims[0].claimedIdentityEncryptedPayload;
+  const claimBeforeDecision = database.state().claims[0];
+  const claimCiphertext = claimBeforeDecision.claimedIdentityEncryptedPayload;
+  const decisionAt = new Date(NOW.getTime() + 180_000);
 
   const approved = await decideWorkerOnboardingClaim(database.prisma, {
     scope: SCOPE,
@@ -707,11 +1247,31 @@ test('approval atomically creates a pending civil identity, verified channel, nu
     evidenceHash: EVIDENCE_HASH,
     policyVersion: 'onboarding-policy-v1',
     idempotencyKey: 'decision-request-001',
-    now: new Date(NOW.getTime() + 180_000),
+    now: decisionAt,
     dependencies,
   });
   const state = database.state();
+  const purgedClaim = state.claims[0];
   assert.equal(approved.status, 'APPROVED');
+  assert.equal(approved.sender, null);
+  assert.equal(approved.identity, null);
+  assert.deepEqual(approved.retention, {
+    state: 'PURGED',
+    purgedAt: decisionAt.toISOString(),
+  });
+  assertClaimSensitiveDataPurged(purgedClaim, decisionAt);
+  assert.equal(purgedClaim.claimTokenHash, claimBeforeDecision.claimTokenHash);
+  assert.equal(purgedClaim.operationKey, claimBeforeDecision.operationKey);
+  assert.equal(purgedClaim.requestFingerprint, claimBeforeDecision.requestFingerprint);
+  assert.equal(purgedClaim.privacyNoticeVersion, claimBeforeDecision.privacyNoticeVersion);
+  assert.equal(
+    purgedClaim.privacyNoticeContentSha256,
+    claimBeforeDecision.privacyNoticeContentSha256,
+  );
+  assert.equal(
+    new Date(purgedClaim.privacyAcceptedAt).getTime(),
+    new Date(claimBeforeDecision.privacyAcceptedAt).getTime(),
+  );
   assert.equal(state.people.length, 1);
   assert.equal(state.people[0].identityStatus, 'PENDING_REVIEW');
   assert.notEqual(state.people[0].encryptedIdentityPayload, claimCiphertext);
@@ -735,6 +1295,36 @@ test('approval atomically creates a pending civil identity, verified channel, nu
   }
   assert.equal(exposed.includes('Carlos Alberto'), false);
 
+  for (const retiredOperation of [
+    () => issueWorkerOnboardingClaim(database.prisma, issueArgs(dependencies)),
+    () => submitWorkerOnboardingClaim(database.prisma, {
+      scope: SCOPE,
+      connectionId: 'connection-a',
+      sender: SENDER,
+      claimToken: token(),
+      identity: identity(),
+      now: new Date(NOW.getTime() + 200_000),
+      dependencies,
+    }),
+    () => submitAuthenticatedWorkerOnboardingClaim(database.prisma, {
+      scope: SCOPE,
+      connectionId: 'connection-a',
+      claimId: submitted.id,
+      identity: identity(),
+      now: new Date(NOW.getTime() + 200_000),
+      dependencies,
+    }),
+  ]) {
+    await assert.rejects(
+      retiredOperation(),
+      (error) => error instanceof WorkerOnboardingError
+        && error.code === 'WORKER_ONBOARDING_RETIRED'
+        && error.status === 410,
+    );
+  }
+
+  dependencies.kekRegistry.keys.clear();
+  dependencies.fingerprintRegistry.keys.clear();
   const replay = await decideWorkerOnboardingClaim(database.prisma, {
     scope: SCOPE,
     claimId: submitted.id,
@@ -748,6 +1338,9 @@ test('approval atomically creates a pending civil identity, verified channel, nu
     dependencies,
   });
   assert.equal(replay.replayed, true);
+  assert.equal(replay.sender, null);
+  assert.equal(replay.identity, null);
+  assert.deepEqual(replay.retention, approved.retention);
   assert.equal(database.state().sensitiveDecisions.length, 1);
 
   await assert.rejects(
@@ -1037,6 +1630,130 @@ test('approval rejects a WhatsApp channel already bound to another person and ro
   assert.equal(state.sensitiveDecisions.length, 0);
 });
 
+test('list projects fail-closed WhatsApp readiness and only the worker resolution anchor', async () => {
+  const preparedDatabase = createFakePrisma();
+  const preparedDependencies = createDependencies();
+  const prepared = await issueWorkerOnboardingClaim(
+    preparedDatabase.prisma,
+    issueArgs(preparedDependencies),
+  );
+  let preparedList = await listWorkerOnboardingClaims(preparedDatabase.prisma, {
+    scope: SCOPE,
+    requestedByMembershipId: 'membership-manager',
+    status: 'PENDING',
+    now: new Date(NOW.getTime() + 120_000),
+    dependencies: preparedDependencies,
+  });
+  assert.equal(preparedList.items[0].verification.state, 'PREPARED');
+  assert.equal(preparedList.items[0].reviewReady, false);
+
+  seedPendingFlowSession(preparedDatabase, prepared.id);
+  preparedList = await listWorkerOnboardingClaims(preparedDatabase.prisma, {
+    scope: SCOPE,
+    requestedByMembershipId: 'membership-manager',
+    status: 'PENDING',
+    now: new Date(NOW.getTime() + 120_000),
+    dependencies: preparedDependencies,
+  });
+  assert.equal(preparedList.items[0].verification.state, 'AWAITING_SUBMISSION');
+  preparedDatabase.mutate((state) => {
+    state.flowSessions[0].deliveryRejectedAt = new Date(NOW.getTime() + 50_000);
+  });
+  preparedList = await listWorkerOnboardingClaims(preparedDatabase.prisma, {
+    scope: SCOPE,
+    requestedByMembershipId: 'membership-manager',
+    status: 'PENDING',
+    now: new Date(NOW.getTime() + 120_000),
+    dependencies: preparedDependencies,
+  });
+  assert.equal(preparedList.items[0].verification.state, 'REJECTED');
+  assert.equal(preparedList.items[0].reviewReady, false);
+
+  const database = createFakePrisma();
+  const dependencies = createDependencies();
+  const { submitted } = await issuedAndSubmitted(database, dependencies, {
+    flowSession: { consumedAt: null, consumedExternalId: null },
+  });
+  let list = await listWorkerOnboardingClaims(database.prisma, {
+    scope: SCOPE,
+    requestedByMembershipId: 'membership-manager',
+    status: 'SUBMITTED',
+    now: new Date(NOW.getTime() + 120_000),
+    dependencies,
+  });
+  assert.equal(list.items[0].verification.state, 'AWAITING_RECEIPT');
+  assert.equal(list.items[0].verification.verifiedAt, null);
+  assert.equal(list.items[0].reviewReady, false);
+
+  database.mutate((state) => {
+    state.flowSessions[0].consumedAt = new Date(NOW.getTime() + 120_000);
+    state.flowSessions[0].consumedExternalId = 'wamid.receipt-confirmed';
+    state.flowSessions[0].noticeContentSha256 = 'f'.repeat(64);
+  });
+  list = await listWorkerOnboardingClaims(database.prisma, {
+    scope: SCOPE,
+    requestedByMembershipId: 'membership-manager',
+    status: 'SUBMITTED',
+    now: new Date(NOW.getTime() + 120_000),
+    dependencies,
+  });
+  assert.equal(list.items[0].verification.state, 'AWAITING_RECEIPT');
+  assert.equal(list.items[0].verification.verifiedAt, null);
+  assert.equal(list.items[0].reviewReady, false);
+
+  database.mutate((state) => {
+    state.flowSessions[0].noticeContentSha256 = CURRENT_NOTICE.contentSha256;
+  });
+  list = await listWorkerOnboardingClaims(database.prisma, {
+    scope: SCOPE,
+    requestedByMembershipId: 'membership-manager',
+    status: 'SUBMITTED',
+    now: new Date(NOW.getTime() + 120_000),
+    dependencies,
+  });
+  const readyItem = list.items[0];
+  assert.equal(readyItem.verification.state, 'VERIFIED');
+  assert.equal(readyItem.verification.verifiedAt, new Date(NOW.getTime() + 120_000).toISOString());
+  assert.equal(readyItem.reviewReady, true);
+  for (const field of ['organizationId', 'projectId', 'connectionId', 'personId', 'channelIdentityId']) {
+    assert.equal(Object.hasOwn(readyItem, field), false);
+  }
+  const serializedReadyItem = JSON.stringify(readyItem);
+  for (const internalValue of [
+    `flow-session-${submitted.id}`,
+    '123456789012345',
+    '887654321012345',
+    'wamid.receipt-confirmed',
+  ]) {
+    assert.equal(serializedReadyItem.includes(internalValue), false);
+  }
+
+  await decideWorkerOnboardingClaim(database.prisma, {
+    scope: SCOPE,
+    claimId: submitted.id,
+    decidedByMembershipId: 'membership-director',
+    decision: 'APPROVE',
+    expectedRevision: submitted.revision,
+    evidenceHash: EVIDENCE_HASH,
+    policyVersion: 'onboarding-policy-v1',
+    idempotencyKey: 'decision-list-minimal-resolution',
+    now: new Date(NOW.getTime() + 180_000),
+    dependencies,
+  });
+  const approvedList = await listWorkerOnboardingClaims(database.prisma, {
+    scope: SCOPE,
+    requestedByMembershipId: 'membership-manager',
+    status: 'APPROVED',
+    now: new Date(NOW.getTime() + 240_000),
+    dependencies,
+  });
+  assert.equal(approvedList.items[0].reviewReady, false);
+  assert.deepEqual(
+    approvedList.items[0].resolution,
+    { workerId: database.state().workers[0].id },
+  );
+});
+
 test('list is cursor bounded, resolves effective expiry and exposes legal name only to an authorized reviewer', async () => {
   const database = createFakePrisma();
   const dependencies = createDependencies();
@@ -1050,6 +1767,8 @@ test('list is cursor bounded, resolves effective expiry and exposes legal name o
   assert.equal(claims.items.length, 1);
   assert.equal(claims.items[0].status, 'SUBMITTED');
   assert.equal(claims.items[0].identity.legalName, 'Carlos Alberto Perez');
+  assert.equal(claims.items[0].verification.state, 'VERIFIED');
+  assert.equal(claims.items[0].reviewReady, true);
   assert.equal(claims.nextCursor, null);
   const serialized = JSON.stringify(claims);
   assert.equal(serialized.includes(PHONE), false);
@@ -1095,4 +1814,10 @@ test('list is cursor bounded, resolves effective expiry and exposes legal name o
   });
   assert.equal(expired.items.length, 2);
   assert.ok(expired.items.every((claim) => claim.status === 'EXPIRED'));
+  assert.ok(expired.items.every((claim) => claim.sender === null));
+  assert.ok(expired.items.every((claim) => claim.identity === null));
+  assert.ok(expired.items.every((claim) => (
+    claim.retention.state === 'PENDING_PURGE'
+    && claim.retention.purgedAt === null
+  )));
 });

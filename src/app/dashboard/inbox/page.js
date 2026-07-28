@@ -62,6 +62,7 @@ export default async function InboxPage() {
         key={`${access.organization.id}:${access.project.id}`}
         canLinkProgressEvidence={canLinkProgressEvidence}
         canManageIntegrations={hasTenantPermission(access, 'org:integrations:manage')}
+        canManageOnboarding={hasTenantPermission(access, 'org:workers:onboarding:manage')}
         canViewSourceEvidence={canViewSourceEvidence}
         organizationName={access.organization.name}
         projectId={access.project.id}

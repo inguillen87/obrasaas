@@ -3,6 +3,7 @@ import { runAttendanceAutomationBatch } from "@/lib/attendance-control";
 import { expireStalePendingAttendanceBatch } from "@/lib/attendance-expiry";
 import { listDueWebhookProjectIds } from "@/lib/db";
 import { getPrisma } from "@/lib/prisma";
+import { expireAndPurgeWorkerOnboardingClaimsBatch } from "@/lib/worker-onboarding-retention";
 import { garbageCollectWhatsAppFlowEndpointRequestBacklog } from "@/lib/whatsapp/flow-endpoint-requests";
 import { drainProjectWebhookEvents } from "@/lib/whatsapp/webhook-worker";
 
@@ -13,6 +14,7 @@ export const maxDuration = 60;
 const MAX_PROJECTS_PER_RUN = 4;
 const MAX_EVENTS_PER_PROJECT = 5;
 const MAX_ATTENDANCE_EXPIRIES_PER_RUN = 100;
+const MAX_WORKER_ONBOARDING_RETENTION_PER_RUN = 100;
 
 function json(body, status = 200) {
   return Response.json(body, {
@@ -21,12 +23,41 @@ function json(body, status = 200) {
   });
 }
 
+function safeNonnegativeInteger(value) {
+  const number = Number(value);
+  return Number.isSafeInteger(number) && number >= 0 ? number : 0;
+}
+
+function safeFailureCode(value, fallback) {
+  const code = String(value || fallback || "WORKER_ONBOARDING_RETENTION_FAILED")
+    .trim()
+    .slice(0, 100);
+  return /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$/.test(code)
+    ? code
+    : "WORKER_ONBOARDING_RETENTION_FAILED";
+}
+
+function safeWorkerOnboardingRetentionMetrics(value = {}) {
+  return {
+    scanned: safeNonnegativeInteger(value.scanned),
+    expired: safeNonnegativeInteger(value.expired),
+    purged: safeNonnegativeInteger(value.purged),
+    auditRows: safeNonnegativeInteger(value.auditRows),
+    hasMore: value.hasMore === true,
+    failedBatches: safeNonnegativeInteger(value.failedBatches),
+    failureCodes: Array.isArray(value.failureCodes)
+      ? value.failureCodes.slice(0, 10).map((code) => safeFailureCode(code))
+      : [],
+  };
+}
+
 function webhookRecoveryHealth({
   failed,
   blocked,
   flowRequestGc,
   attendanceExpiry,
   attendanceAutomation,
+  workerOnboardingRetention,
 }) {
   const reasons = [];
   if (failed > 0) reasons.push("WEBHOOK_EVENTS_FAILED");
@@ -46,6 +77,12 @@ function webhookRecoveryHealth({
   if (Number(attendanceAutomation?.failedProjects || 0) > 0) {
     reasons.push("ATTENDANCE_AUTOMATION_FAILED");
   }
+  if (Number(workerOnboardingRetention?.failedBatches || 0) > 0) {
+    reasons.push("WORKER_ONBOARDING_RETENTION_FAILED");
+  }
+  if (workerOnboardingRetention?.hasMore === true) {
+    reasons.push("WORKER_ONBOARDING_RETENTION_BACKLOG");
+  }
   return {
     workHealthy: reasons.length === 0,
     status: reasons.length === 0 ? "healthy" : "degraded",
@@ -58,6 +95,26 @@ export async function GET(request) {
   if (!secret) return json({ error: "Webhook recovery cron is not configured" }, 503);
   if (!isAuthorizedCronRequest(request.headers.get("authorization"), secret)) {
     return json({ error: "Unauthorized" }, 401);
+  }
+
+  let workerOnboardingRetention = safeWorkerOnboardingRetentionMetrics();
+  try {
+    workerOnboardingRetention = safeWorkerOnboardingRetentionMetrics(
+      await expireAndPurgeWorkerOnboardingClaimsBatch(getPrisma(), {
+        batchSize: MAX_WORKER_ONBOARDING_RETENTION_PER_RUN,
+      }),
+    );
+  } catch (error) {
+    workerOnboardingRetention = safeWorkerOnboardingRetentionMetrics({
+      hasMore: true,
+      failedBatches: 1,
+      failureCodes: [safeFailureCode(error?.code || error?.name)],
+    });
+    console.error("Worker-onboarding retention batch failed:", {
+      code: error?.code,
+      name: error?.name,
+      status: error?.status,
+    });
   }
 
   let attendanceExpiry = {
@@ -162,6 +219,7 @@ export async function GET(request) {
     flowRequestGc,
     attendanceExpiry,
     attendanceAutomation,
+    workerOnboardingRetention,
   });
   return json({
     ok: true,
@@ -173,5 +231,6 @@ export async function GET(request) {
     flowRequestGc,
     attendanceExpiry,
     attendanceAutomation,
+    workerOnboardingRetention,
   });
 }

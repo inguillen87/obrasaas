@@ -11,6 +11,7 @@ export const WHATSAPP_FLOW_DATA_API_VERSION = '4.0';
 export const WHATSAPP_FLOW_SESSION_TTL_MS = Object.freeze({
   'incident-report': 4 * 60 * 60 * 1_000,
   'shift-check-in': 30 * 60 * 1_000,
+  'worker-onboarding': 60 * 60 * 1_000,
 });
 
 const FLOW_GRAPH_FIELDS = Object.freeze([
@@ -228,6 +229,106 @@ const BLUEPRINTS = [
       ],
     },
   },
+  {
+    key: 'worker-onboarding',
+    sessionTtlMs: WHATSAPP_FLOW_SESSION_TTL_MS['worker-onboarding'],
+    name: 'ObraSaaS | Alta segura de operario',
+    title: 'Alta de operario',
+    description: 'Declara la identidad laboral del contacto para que un responsable de la obra pueda revisarla.',
+    screenId: 'WORKER_ONBOARDING',
+    flowType: 'worker_onboarding',
+    categories: ['SIGN_UP'],
+    capabilities: ['Identidad declarada', 'Privacidad versionada', 'Revisión administrativa'],
+    message: {
+      header: 'Alta segura',
+      body: 'Completá tus datos laborales. No podrás fichar ni registrar avances hasta que un responsable los revise.',
+      footer: 'ObraSaaS protege tus datos personales.',
+      cta: 'Completar alta',
+    },
+    definition: {
+      version: WHATSAPP_FLOW_JSON_VERSION,
+      data_api_version: WHATSAPP_FLOW_DATA_API_VERSION,
+      routing_model: { WORKER_ONBOARDING: [] },
+      screens: [
+        {
+          id: 'WORKER_ONBOARDING',
+          title: 'Tus datos laborales',
+          terminal: true,
+          success: true,
+          data: {
+            project_name: {
+              type: 'string',
+              __example__: 'Torre del Parque',
+            },
+            privacy_notice_version: {
+              type: 'string',
+              __example__: 'worker-privacy-v2',
+            },
+            privacy_notice_text: {
+              type: 'string',
+              __example__: 'Usaremos estos datos para validar tu identidad y operar en esta obra.',
+            },
+            expires_label: {
+              type: 'string',
+              __example__: 'Esta invitación vence hoy a las 18:30.',
+            },
+          },
+          layout: {
+            type: 'SingleColumnLayout',
+            children: [
+              {
+                type: 'Form',
+                name: 'worker_onboarding_form',
+                children: [
+                  { type: 'TextHeading', text: 'Registrate para ${data.project_name}' },
+                  { type: 'TextBody', text: '${data.privacy_notice_text}' },
+                  { type: 'TextCaption', text: '${data.expires_label}' },
+                  {
+                    type: 'TextInput',
+                    name: 'given_names',
+                    label: 'Nombres',
+                    required: true,
+                  },
+                  {
+                    type: 'TextInput',
+                    name: 'family_name',
+                    label: 'Apellido',
+                    required: true,
+                  },
+                  {
+                    type: 'TextInput',
+                    name: 'cuil',
+                    label: 'CUIL',
+                    'helper-text': 'Ingresá 11 dígitos. Se guarda cifrado.',
+                    required: true,
+                  },
+                  {
+                    type: 'OptIn',
+                    name: 'privacy_accepted',
+                    label: 'Acepto el aviso de privacidad indicado para esta alta.',
+                    required: true,
+                  },
+                  {
+                    type: 'Footer',
+                    label: 'Enviar para revisión',
+                    'on-click-action': {
+                      name: 'data_exchange',
+                      payload: {
+                        given_names: '${form.given_names}',
+                        family_name: '${form.family_name}',
+                        cuil: '${form.cuil}',
+                        privacy_accepted: '${form.privacy_accepted}',
+                      },
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      ],
+    },
+  },
 ];
 
 // Contracts stay separate from the public blueprint DTO so the two existing
@@ -319,6 +420,38 @@ const FLOW_DEFINITION_CONTRACTS = Object.freeze({
       }),
     }),
   }),
+  'worker-onboarding': Object.freeze({
+    screens: Object.freeze({
+      WORKER_ONBOARDING: Object.freeze({
+        serverOwnedFields: Object.freeze({
+          project_name: Object.freeze({ type: 'string' }),
+          privacy_notice_version: Object.freeze({ type: 'string' }),
+          privacy_notice_text: Object.freeze({ type: 'string' }),
+          expires_label: Object.freeze({ type: 'string' }),
+        }),
+        formFields: Object.freeze({
+          given_names: Object.freeze({ componentTypes: Object.freeze(['TextInput']) }),
+          family_name: Object.freeze({ componentTypes: Object.freeze(['TextInput']) }),
+          cuil: Object.freeze({ componentTypes: Object.freeze(['TextInput']) }),
+          privacy_accepted: Object.freeze({ componentTypes: Object.freeze(['OptIn']) }),
+        }),
+        terminalReceiptFields: Object.freeze({
+          flow_type: Object.freeze({ type: 'string' }),
+          claim_ref: Object.freeze({ type: 'string' }),
+          submission_status: Object.freeze({ type: 'string' }),
+        }),
+        persistenceProjection: Object.freeze({
+          given_names: Object.freeze({ strategy: 'drop-sensitive' }),
+          family_name: Object.freeze({ strategy: 'drop-sensitive' }),
+          cuil: Object.freeze({ strategy: 'drop-sensitive' }),
+          privacy_accepted: Object.freeze({ strategy: 'drop-sensitive' }),
+          flow_type: Object.freeze({ strategy: 'constant', value: 'worker_onboarding' }),
+          claim_ref: Object.freeze({ strategy: 'opaque-reference' }),
+          submission_status: Object.freeze({ strategy: 'constant', value: 'submitted' }),
+        }),
+      }),
+    }),
+  }),
 });
 
 function clone(value) {
@@ -369,6 +502,9 @@ function validPersistenceProjection(projection, formFields, terminalReceiptField
           && policy.values.every((value) => (
             typeof value === 'string' && value.length > 0 && value.length <= 100
           ));
+      }
+      if (policy.strategy === 'drop-sensitive') {
+        return hasOnlyKeys(policy, ['strategy']);
       }
       return new Set(['server-option-title', 'redacted-text']).has(policy.strategy)
         && hasOnlyKeys(policy, ['strategy']);
@@ -751,6 +887,31 @@ export function validateWhatsAppFlowReply(blueprintKey, response) {
     };
   }
 
+  if (blueprintKey === 'worker-onboarding') {
+    assertReplyShape(response, new Set([
+      'flow_type',
+      'claim_ref',
+      'submission_status',
+    ]));
+    if (
+      response.flow_type !== blueprint.flowType
+      || response.submission_status !== 'submitted'
+    ) {
+      throw new WhatsAppFlowReplyError(
+        'WhatsApp Flow onboarding receipt does not match its issued session.',
+      );
+    }
+    return {
+      flow_type: blueprint.flowType,
+      claim_ref: replyText(response.claim_ref, {
+        field: 'claim_ref',
+        minLength: 1,
+        maxLength: 190,
+      }),
+      submission_status: 'submitted',
+    };
+  }
+
   throw new WhatsAppFlowReplyError('WhatsApp Flow reply is not supported by this runtime.');
 }
 
@@ -781,6 +942,7 @@ export function projectWhatsAppFlowReplyForPersistence(response) {
   const persisted = {};
   for (const [field, policy] of Object.entries(projection)) {
     if (!Object.hasOwn(validated, field)) continue;
+    if (policy.strategy === 'drop-sensitive') continue;
     if (policy.strategy === 'redacted-text') {
       persisted[field] = '[contenido restringido]';
       continue;

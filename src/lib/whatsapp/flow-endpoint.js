@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 
 import { subscriptionAllowsWrites } from "../plans.js";
+import { WorkerFinancialDataError } from "../worker-financial-data.js";
 import {
   PROJECT_TASK_PROJECTION_SOURCE,
   snapshotTaskIdFromProjectionExternalId,
@@ -14,6 +15,19 @@ import {
   authenticateWhatsAppFlowDataSession,
   WhatsAppFlowSessionError,
 } from "./flow-sessions.js";
+import {
+  submitAuthenticatedWorkerOnboardingFlow,
+  WorkerOnboardingError,
+} from "../worker-onboarding.js";
+import {
+  assertWorkerOnboardingPrivacyNoticeEvidence,
+  WorkerOnboardingPrivacyNoticeError,
+} from "../worker-onboarding-privacy-notices.js";
+import {
+  authenticateWorkerOnboardingFlowDataSession,
+  markWorkerOnboardingFlowPrivacyPresented,
+  WorkerOnboardingFlowSessionError,
+} from "./worker-onboarding-flow-sessions.js";
 
 const ENDPOINT_PROTOCOL_VERSION = "3.0";
 const SCREEN_PATTERN = /^[A-Z][A-Z0-9_]{0,29}$/;
@@ -26,6 +40,15 @@ const ALLOWED_PAYLOAD_FIELDS = new Set([
   "flow_token_signature",
   "screen",
   "data",
+]);
+const WORKER_ONBOARDING_TOKEN_PREFIX = "wofs1.";
+const WORKER_ONBOARDING_BLUEPRINT_KEY = "worker-onboarding";
+const WORKER_ONBOARDING_SCREEN_ID = "WORKER_ONBOARDING";
+const WORKER_ONBOARDING_FORM_FIELDS = new Set([
+  "given_names",
+  "family_name",
+  "cuil",
+  "privacy_accepted",
 ]);
 
 const ERROR_STATUS = Object.freeze({
@@ -406,6 +429,291 @@ function assertDynamicPublishedSession(scope, session) {
   return published;
 }
 
+function assertWorkerOnboardingPublishedSession(scope, session) {
+  const published = getPublishedWhatsAppFlowReference(
+    scope.metadata,
+    WORKER_ONBOARDING_BLUEPRINT_KEY,
+  );
+  if (
+    !published
+    || published.flowAction !== "data_exchange"
+    || session.blueprintKey !== WORKER_ONBOARDING_BLUEPRINT_KEY
+    || session.flowId !== published.id
+    || session.screenId !== published.screenId
+    || session.flowType !== published.flowType
+  ) {
+    throw endpointError(
+      "WhatsApp Flow session is no longer available.",
+      "WHATSAPP_FLOW_ENDPOINT_CONTEXT_UNAVAILABLE",
+    );
+  }
+  return published;
+}
+
+function workerOnboardingExpiryLabel(expiresAt, timeZone) {
+  const expiry = new Date(expiresAt);
+  if (Number.isNaN(expiry.getTime())) {
+    throw endpointError(
+      "WhatsApp Flow session is invalid.",
+      "WHATSAPP_FLOW_ENDPOINT_SESSION_INVALID",
+    );
+  }
+  let formatted;
+  try {
+    formatted = new Intl.DateTimeFormat("es-AR", {
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      timeZone: String(timeZone || "America/Argentina/Buenos_Aires"),
+    }).format(expiry);
+  } catch {
+    formatted = expiry.toISOString().slice(0, 16).replace("T", " ");
+  }
+  return `Esta invitación vence el ${formatted}.`;
+}
+
+async function loadWorkerOnboardingFlowTrustedContext(prisma, authentication) {
+  if (typeof prisma?.project?.findFirst !== "function") {
+    throw endpointError(
+      "WhatsApp Flow endpoint persistence is unavailable.",
+      "WHATSAPP_FLOW_ENDPOINT_CONFIGURATION_INVALID",
+    );
+  }
+  const session = authentication?.session;
+  const claim = authentication?.claim;
+  const project = await prisma.project.findFirst({
+    where: {
+      id: session?.projectId,
+      organizationId: session?.organizationId,
+      status: { in: ["PLANNING", "ACTIVE", "PAUSED"] },
+    },
+    select: {
+      id: true,
+      name: true,
+      organization: {
+        select: {
+          subscriptionPlan: true,
+          subscriptionStatus: true,
+          trialEndsAt: true,
+          timezone: true,
+        },
+      },
+    },
+  });
+  if (
+    !project
+    || !subscriptionAllowsWrites(project.organization)
+    || !claim
+    || claim.id !== session.claimId
+    || !["PENDING", "SUBMITTED"].includes(String(claim.status || ""))
+  ) {
+    throw endpointError(
+      "WhatsApp Flow session is no longer available.",
+      "WHATSAPP_FLOW_ENDPOINT_CONTEXT_UNAVAILABLE",
+    );
+  }
+  return { project, session, claim };
+}
+
+function workerOnboardingScreenData(context) {
+  const notice = assertWorkerOnboardingPrivacyNoticeEvidence(
+    context.session.noticeVersion,
+    context.session.noticeContentSha256,
+  );
+  return {
+    project_name: safeDisplayText(context.project.name, 80) || "Obra",
+    privacy_notice_version: notice.version,
+    privacy_notice_text: notice.content,
+    expires_label: workerOnboardingExpiryLabel(
+      context.session.expiresAt,
+      context.project.organization.timezone,
+    ),
+  };
+}
+
+function workerOnboardingIdentity(data) {
+  if (
+    !isPlainObject(data)
+    || Object.keys(data).length !== WORKER_ONBOARDING_FORM_FIELDS.size
+    || Object.keys(data).some((field) => !WORKER_ONBOARDING_FORM_FIELDS.has(field))
+    || data.privacy_accepted !== true
+  ) {
+    throw endpointError(
+      "WhatsApp Flow form data is invalid.",
+      "WHATSAPP_FLOW_ENDPOINT_REQUEST_INVALID",
+    );
+  }
+  return {
+    givenNames: data.given_names,
+    familyName: data.family_name,
+    cuil: data.cuil,
+    privacyAccepted: true,
+  };
+}
+
+async function dispatchWorkerOnboardingFlowDataRequest({
+  request,
+  scope,
+  prisma,
+  now,
+  tokenSignature,
+}, {
+  authenticateOnboardingSession,
+  presentOnboardingPrivacy,
+  submitOnboardingFlow,
+}) {
+  let authentication;
+  try {
+    authentication = await authenticateOnboardingSession(prisma, {
+      token: request.flow_token,
+      organizationId: scope.organizationId,
+      projectId: scope.projectId,
+      connectionId: scope.connectionId,
+      phoneNumberId: scope.phoneNumberId,
+    }, { now });
+  } catch (error) {
+    if (!(error instanceof WorkerOnboardingFlowSessionError)) throw error;
+    throw endpointError(
+      "WhatsApp Flow session is invalid.",
+      "WHATSAPP_FLOW_ENDPOINT_SESSION_INVALID",
+      { cause: error },
+    );
+  }
+  const session = authentication?.session;
+  if (!session) {
+    throw endpointError(
+      "WhatsApp Flow session is invalid.",
+      "WHATSAPP_FLOW_ENDPOINT_SESSION_INVALID",
+    );
+  }
+  assertWorkerOnboardingPublishedSession(scope, session);
+  let authenticatedSession = session;
+
+  if (request.action === "INIT") {
+    let presentation;
+    try {
+      presentation = await presentOnboardingPrivacy(prisma, {
+        tokenEvidence: authentication.tokenEvidence,
+        organizationId: scope.organizationId,
+        projectId: scope.projectId,
+        connectionId: scope.connectionId,
+        phoneNumberId: scope.phoneNumberId,
+      }, { now });
+    } catch (error) {
+      if (!(error instanceof WorkerOnboardingFlowSessionError)) throw error;
+      throw endpointError(
+        "WhatsApp Flow session is invalid.",
+        "WHATSAPP_FLOW_ENDPOINT_SESSION_INVALID",
+        { cause: error },
+      );
+    }
+    if (!presentation?.session) {
+      throw endpointError(
+        "WhatsApp Flow privacy presentation could not be recorded.",
+        "WHATSAPP_FLOW_ENDPOINT_CONFIGURATION_INVALID",
+      );
+    }
+    authenticatedSession = presentation.session;
+  }
+
+  if (request.action === "data_exchange" && !authenticatedSession.privacyPresentedAt) {
+    throw endpointError(
+      "WhatsApp Flow privacy notice was not presented by INIT.",
+      "WHATSAPP_FLOW_ENDPOINT_SESSION_INVALID",
+    );
+  }
+
+  const context = await loadWorkerOnboardingFlowTrustedContext(prisma, {
+    ...authentication,
+    session: authenticatedSession,
+  });
+
+  if (request.action === "INIT" || request.action === "BACK") {
+    let data;
+    try {
+      data = workerOnboardingScreenData(context);
+    } catch (error) {
+      if (!(error instanceof WorkerOnboardingPrivacyNoticeError)) throw error;
+      throw endpointError(
+        "WhatsApp Flow privacy notice configuration is invalid.",
+        "WHATSAPP_FLOW_ENDPOINT_CONFIGURATION_INVALID",
+        { cause: error },
+      );
+    }
+    return {
+      response: {
+        screen: WORKER_ONBOARDING_SCREEN_ID,
+        data,
+      },
+      session: { ...authenticatedSession, kind: "worker_onboarding" },
+      signaturePresent: tokenSignature.present,
+    };
+  }
+  if (request.screen !== WORKER_ONBOARDING_SCREEN_ID) {
+    throw endpointError(
+      "WhatsApp Flow screen transition is invalid.",
+      "WHATSAPP_FLOW_ENDPOINT_REQUEST_INVALID",
+    );
+  }
+  let submitted;
+  try {
+    submitted = await submitOnboardingFlow(prisma, {
+      scope: {
+        organizationId: scope.organizationId,
+        projectId: scope.projectId,
+      },
+      connectionId: scope.connectionId,
+      phoneNumberId: scope.phoneNumberId,
+      claimId: authenticatedSession.claimId,
+      sessionId: authenticatedSession.id,
+      flowId: authenticatedSession.flowId,
+      tokenSha256: authentication.tokenEvidence?.tokenSha256,
+      identity: workerOnboardingIdentity(request.data),
+      now,
+    });
+  } catch (error) {
+    if (!(error instanceof WorkerOnboardingError) && !(error instanceof WorkerFinancialDataError)) {
+      throw error;
+    }
+    const expired = error?.code === "WORKER_ONBOARDING_EXPIRED";
+    const sessionChanged = error?.code === "WORKER_ONBOARDING_FLOW_SESSION_INVALID"
+      || error?.code === "WORKER_ONBOARDING_STATE_CORRUPT";
+    throw endpointError(
+      expired
+        ? "WhatsApp Flow session is no longer available."
+        : sessionChanged
+          ? "WhatsApp Flow session could not be finalized."
+          : "WhatsApp Flow form data is invalid.",
+      expired
+        ? "WHATSAPP_FLOW_ENDPOINT_SESSION_INVALID"
+        : sessionChanged
+          ? "WHATSAPP_FLOW_ENDPOINT_CONFIGURATION_INVALID"
+          : "WHATSAPP_FLOW_ENDPOINT_REQUEST_INVALID",
+      { cause: error },
+    );
+  }
+
+  return {
+    response: {
+      screen: "SUCCESS",
+      data: {
+        extension_message_response: {
+          params: {
+            flow_token: request.flow_token,
+            flow_type: "worker_onboarding",
+            claim_ref: submitted.id,
+            submission_status: "submitted",
+          },
+        },
+      },
+    },
+    session: { ...authenticatedSession, kind: "worker_onboarding" },
+    signaturePresent: tokenSignature.present,
+  };
+}
+
 export async function dispatchWhatsAppFlowDataRequest({
   payload,
   endpoint,
@@ -415,6 +723,9 @@ export async function dispatchWhatsAppFlowDataRequest({
 }, {
   authenticateSession = authenticateWhatsAppFlowDataSession,
   loadTrustedContext = loadWhatsAppFlowTrustedContext,
+  authenticateOnboardingSession = authenticateWorkerOnboardingFlowDataSession,
+  presentOnboardingPrivacy = markWorkerOnboardingFlowPrivacyPresented,
+  submitOnboardingFlow = submitAuthenticatedWorkerOnboardingFlow,
 } = {}) {
   const request = validatePayloadEnvelope(payload);
   const scope = normalizedEndpointScope(endpoint);
@@ -443,6 +754,20 @@ export async function dispatchWhatsAppFlowDataRequest({
     flowToken: request.flow_token,
     appSecret,
   });
+
+  if (request.flow_token.startsWith(WORKER_ONBOARDING_TOKEN_PREFIX)) {
+    return dispatchWorkerOnboardingFlowDataRequest({
+      request,
+      scope,
+      prisma,
+      now,
+      tokenSignature,
+    }, {
+      authenticateOnboardingSession,
+      presentOnboardingPrivacy,
+      submitOnboardingFlow,
+    });
+  }
 
   let authentication;
   try {

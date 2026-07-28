@@ -153,6 +153,11 @@ test("terminal ciphertext replays exactly and active concurrent leases have one 
   assert.equal(recovered.state, "claimed");
   assert.equal(expiredNegativeCacheDatabase.record.status, "PROCESSING");
   assert.equal(expiredNegativeCacheDatabase.record.responseCiphertext, null);
+  assert.equal(expiredNegativeCacheDatabase.record.flowSessionId, null);
+  assert.equal(
+    expiredNegativeCacheDatabase.record.workerOnboardingFlowSessionId,
+    null,
+  );
 
   const inFlightDatabase = store({
     initial: {
@@ -230,5 +235,55 @@ test("only the lease owner can commit terminal ciphertext", async () => {
     }),
     (error) => error instanceof WhatsAppFlowEndpointRequestError
       && error.code === "WHATSAPP_FLOW_ENDPOINT_REQUEST_CONFLICT",
+  );
+});
+
+test("completion journals exactly one Flow session domain", async () => {
+  const database = store({
+    initial: {
+      id: REQUEST_ID,
+      status: "PROCESSING",
+      leaseToken: LEASE_ID,
+      attempts: 1,
+    },
+  });
+  const onboardingSessionId = "423e4567-e89b-42d3-a456-426614174000";
+  await completeWhatsAppFlowEndpointRequest(database.prisma, {
+    requestId: REQUEST_ID,
+    leaseToken: LEASE_ID,
+    status: "SUCCEEDED",
+    responseStatus: 200,
+    responseCiphertext: "encrypted-onboarding-response",
+    action: "data_exchange",
+    screen: "WORKER_ONBOARDING",
+    keyVersion: 1,
+    workerOnboardingFlowSessionId: onboardingSessionId,
+    completedAt: NOW,
+  });
+  assert.equal(database.record.flowSessionId, null);
+  assert.equal(database.record.workerOnboardingFlowSessionId, onboardingSessionId);
+
+  const conflictingDatabase = store({
+    initial: {
+      id: REQUEST_ID,
+      status: "PROCESSING",
+      leaseToken: LEASE_ID,
+      attempts: 1,
+    },
+  });
+  await assert.rejects(
+    completeWhatsAppFlowEndpointRequest(conflictingDatabase.prisma, {
+      requestId: REQUEST_ID,
+      leaseToken: LEASE_ID,
+      status: "SUCCEEDED",
+      responseStatus: 200,
+      responseCiphertext: "encrypted-response",
+      action: "data_exchange",
+      flowSessionId: "323e4567-e89b-42d3-a456-426614174000",
+      workerOnboardingFlowSessionId: onboardingSessionId,
+      completedAt: NOW,
+    }),
+    (error) => error instanceof WhatsAppFlowEndpointRequestError
+      && error.code === "WHATSAPP_FLOW_ENDPOINT_REQUEST_INVALID",
   );
 });

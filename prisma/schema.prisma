@@ -528,6 +528,7 @@ model Organization {
   notificationDeliveries    NotificationDelivery[]
   crmAccount                CrmAccount?
   whatsappFlowSessions      WhatsAppFlowSession[]
+  workerOnboardingFlowSessions WorkerOnboardingFlowSession[]
   suppliers                 Supplier[]
   supplierInvoices          SupplierInvoice[]
   purchaseOrders            PurchaseOrder[]
@@ -829,6 +830,7 @@ model Project {
   conversations                 Conversation[]
   webhookEvents                 WebhookEvent[]
   flowSessions                  WhatsAppFlowSession[]
+  workerOnboardingFlowSessions  WorkerOnboardingFlowSession[]
   proposals                     OperationalProposal[]
   whatsapp                      WhatsAppConnection?
   projectMemberships            ProjectMembership[]
@@ -936,6 +938,7 @@ model WhatsAppConnection {
   flowEndpoint                    WhatsAppFlowEndpoint?
   flowTemplates                   WhatsAppFlowTemplate[]
   workerOnboardingClaims          WorkerOnboardingClaim[]
+  workerOnboardingFlowSessions    WorkerOnboardingFlowSession[]
   createdAt                       DateTime                 @default(now())
   updatedAt                       DateTime                 @updatedAt
 
@@ -1015,6 +1018,8 @@ model WhatsAppFlowEndpointRequest {
   endpoint           WhatsAppFlowEndpoint              @relation(fields: [endpointId], references: [id], onDelete: Cascade)
   flowSessionId      String?                           @db.Uuid
   flowSession        WhatsAppFlowSession?              @relation(fields: [flowSessionId], references: [id], onDelete: SetNull)
+  workerOnboardingFlowSessionId String?                 @db.Uuid
+  workerOnboardingFlowSession   WorkerOnboardingFlowSession? @relation(fields: [workerOnboardingFlowSessionId], references: [id], onDelete: SetNull, map: "WAFlowEndpointRequest_onboarding_session_fkey")
   requestSha256      String                            @db.Char(64)
   action             String                            @db.VarChar(32)
   screen             String?                           @db.VarChar(30)
@@ -1036,6 +1041,7 @@ model WhatsAppFlowEndpointRequest {
   @@index([endpointId, status, createdAt])
   @@index([status, leaseExpiresAt, createdAt])
   @@index([flowSessionId, createdAt])
+  @@index([workerOnboardingFlowSessionId, createdAt], map: "WAFlowEndpointRequest_onboarding_session_created_idx")
   @@index([expiresAt, status])
 }
 
@@ -1187,12 +1193,13 @@ model WorkerOnboardingClaim {
   project                         Project                     @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Cascade)
   connectionId                    String
   connection                      WhatsAppConnection          @relation(fields: [projectId, connectionId], references: [projectId, id], onDelete: Cascade)
-  senderEncryptedPayload          String                      @db.Text
-  senderFingerprint               String                      @db.Char(64)
-  senderFingerprintKeyId          String                      @db.VarChar(100)
-  senderLastFour                  String                      @db.VarChar(4)
-  senderWrappingKeyId             String                      @db.VarChar(100)
-  senderRecordVersion             Int                         @default(1)
+  senderEncryptedPayload          String?                     @db.Text
+  senderFingerprint               String?                     @db.Char(64)
+  senderFingerprintKeyId          String?                     @db.VarChar(100)
+  senderLastFour                  String?                     @db.VarChar(4)
+  senderWrappingKeyId             String?                     @db.VarChar(100)
+  senderRecordVersion             Int?                        @default(1)
+  /// One-way 256-bit commitment retained after cryptoshredding for exact replay and audit binding; never the raw bearer token.
   claimTokenHash                  String                      @unique @db.Char(64)
   openClaimKey                    String?                     @unique @db.Char(64)
   claimedIdentityEncryptedPayload String?                     @db.Text
@@ -1202,7 +1209,9 @@ model WorkerOnboardingClaim {
   claimedIdentityWrappingKeyId    String?                     @db.VarChar(100)
   claimedIdentityRecordVersion    Int?
   privacyNoticeVersion            String?                     @db.VarChar(64)
+  privacyNoticeContentSha256      String?                     @db.Char(64)
   privacyAcceptedAt               DateTime?
+  sensitiveDataPurgedAt           DateTime?
   status                          WorkerOnboardingClaimStatus @default(PENDING)
   expiresAt                       DateTime
   submittedAt                     DateTime?
@@ -1224,10 +1233,12 @@ model WorkerOnboardingClaim {
   requestFingerprint              String                      @db.Char(64)
   revision                        Int                         @default(0)
   sensitiveDecisions              WorkerSensitiveDecision[]   @relation("WorkerSensitiveDecisionOnboardingClaim")
+  flowSession                     WorkerOnboardingFlowSession? @relation("WorkerOnboardingClaimFlowSession")
   createdAt                       DateTime                    @default(now())
   updatedAt                       DateTime                    @updatedAt
 
   @@unique([organizationId, id])
+  @@unique([organizationId, projectId, connectionId, id], map: "WorkerClaim_flow_session_scope_key")
   @@unique([connectionId, operationKey])
   @@index([organizationId, senderFingerprintKeyId, senderFingerprint, status], map: "WorkerClaim_org_sender_status_idx")
   @@index([projectId, status, expiresAt])
@@ -2567,4 +2578,47 @@ model WhatsAppFlowSession {
   @@index([projectId, workerId, expiresAt])
   @@index([expiresAt, consumedAt])
   @@index([phoneNumberId, recipientPhone])
+}
+
+model WorkerOnboardingFlowSession {
+  id                  String                        @id @db.Uuid
+  claimId             String                        @unique
+  organizationId      String
+  organization        Organization                  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  projectId           String
+  project             Project                       @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Cascade, map: "WorkerOnboardingFlowSession_project_scope_fkey")
+  connectionId        String
+  connection          WhatsAppConnection            @relation(fields: [projectId, connectionId], references: [projectId, id], onDelete: Cascade, map: "WorkerOnboardingFlowSession_connection_scope_fkey")
+  claim               WorkerOnboardingClaim          @relation("WorkerOnboardingClaimFlowSession", fields: [organizationId, projectId, connectionId, claimId], references: [organizationId, projectId, connectionId, id], onDelete: Cascade, map: "WorkerOnboardingFlowSession_claim_scope_fkey")
+  phoneNumberId       String                         @db.VarChar(40)
+  blueprintKey        String                         @db.VarChar(100)
+  flowId              String                         @db.VarChar(40)
+  screenId            String                         @db.VarChar(30)
+  flowType            String                         @db.VarChar(64)
+  sourceExternalId    String                         @db.VarChar(512)
+  noticeVersion       String                         @db.VarChar(64)
+  noticeContentSha256 String                         @db.Char(64)
+  tokenSha256         String                         @unique @db.Char(64)
+  expiresAt           DateTime
+  deliveryAttemptedAt DateTime?
+  deliveryRejectedAt  DateTime?
+  sentAt              DateTime?
+  providerMessageId   String?                        @unique @db.VarChar(500)
+  /// Server-side evidence that INIT served the pinned notice; not proof that a person read it.
+  privacyPresentedAt  DateTime?
+  submittedAt         DateTime?
+  consumedAt          DateTime?
+  consumedExternalId  String?                        @db.VarChar(512)
+  endpointRequests    WhatsAppFlowEndpointRequest[]
+  createdAt           DateTime                       @default(now())
+  updatedAt           DateTime                       @updatedAt
+
+  @@unique([organizationId, projectId, connectionId, claimId], map: "WorkerOnboardingFlowSession_claim_scope_key")
+  @@unique([projectId, sourceExternalId, blueprintKey], map: "WorkerOnboardingFlowSession_source_key")
+  @@unique([projectId, consumedExternalId], map: "WorkerOnboardingFlowSession_consumed_event_key")
+  @@index([organizationId, expiresAt])
+  @@index([projectId, claimId, expiresAt])
+  @@index([connectionId, expiresAt])
+  @@index([expiresAt, consumedAt])
+  @@index([phoneNumberId, expiresAt])
 }

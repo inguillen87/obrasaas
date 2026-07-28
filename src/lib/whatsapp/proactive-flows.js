@@ -36,6 +36,10 @@ import {
 const META_CONVERSATION_PREFIX = 'meta:';
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/;
 const BLUEPRINT_KEY_PATTERN = /^[a-z0-9][a-z0-9-]{0,99}$/;
+const OPERATIONAL_PROACTIVE_BLUEPRINTS = new Set([
+  'incident-report',
+  'shift-check-in',
+]);
 const PROVIDER_MESSAGE_ID_PATTERN = /^[^\u0000-\u001f\u007f]{1,500}$/;
 const SEND_REQUEST_ACTION = 'whatsapp.inbox.flow_template_send_requested';
 const UNCERTAINTY_RESOLUTION_ACTION = 'whatsapp.inbox.flow_template_uncertainty_resolved';
@@ -396,7 +400,9 @@ async function buildCatalog(
   connection,
   { baseAllowed = false, conversationId = null } = {},
 ) {
-  const blueprints = getWhatsAppFlowCatalog();
+  const blueprints = getWhatsAppFlowCatalog().filter((item) => (
+    OPERATIONAL_PROACTIVE_BLUEPRINTS.has(item.key)
+  ));
   const [records, ...unresolved] = await Promise.all([
     connection?.id && prisma.whatsAppFlowTemplate?.findMany
       ? prisma.whatsAppFlowTemplate.findMany({
@@ -731,7 +737,9 @@ function selectedBlueprint(value) {
       status: 400,
     });
   }
-  const blueprint = getWhatsAppFlowCatalog().find((item) => item.key === key);
+  const blueprint = OPERATIONAL_PROACTIVE_BLUEPRINTS.has(key)
+    ? getWhatsAppFlowCatalog().find((item) => item.key === key)
+    : null;
   if (!blueprint) {
     throw new WhatsAppProactiveFlowError('El formulario solicitado no existe.', {
       code: 'WHATSAPP_FLOW_BLUEPRINT_NOT_FOUND',

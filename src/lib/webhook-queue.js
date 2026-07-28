@@ -194,7 +194,11 @@ function persistedFlowTokenEvidence(value) {
   const sessionId = String(value?.sessionId || '').trim().toLowerCase();
   const tokenSha256 = String(value?.tokenSha256 || '').trim().toLowerCase();
   if (!FLOW_SESSION_ID_PATTERN.test(sessionId) || !SHA256_PATTERN.test(tokenSha256)) return null;
-  return { sessionId, tokenSha256 };
+  return {
+    ...(value?.kind === 'worker_onboarding' ? { kind: 'worker_onboarding' } : {}),
+    sessionId,
+    tokenSha256,
+  };
 }
 
 function persistedMetaFlowRaw(event, response) {

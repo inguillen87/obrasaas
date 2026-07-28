@@ -9,11 +9,19 @@ import {
   WhatsAppFlowDataEndpointError,
 } from "../src/lib/whatsapp/flow-endpoint.js";
 import { getWhatsAppFlowScopedName } from "../src/lib/whatsapp/flows.js";
+import {
+  getCurrentWorkerOnboardingPrivacyNotice,
+  getWorkerOnboardingPrivacyNotice,
+} from "../src/lib/worker-onboarding-privacy-notices.js";
 
 const APP_SECRET = "meta-app-secret-for-endpoint-tests";
 const FLOW_TOKEN = "ofs1.123e4567-e89b-42d3-a456-426614174000.signature";
 const ENDPOINT_ID = "987e4567-e89b-42d3-a456-426614174000";
 const DYNAMIC_FLOW_NAME = getWhatsAppFlowScopedName("shift-check-in", ENDPOINT_ID);
+const ONBOARDING_FLOW_TOKEN = `wofs1.223e4567-e89b-42d3-a456-426614174000.${"A".repeat(43)}`;
+const ONBOARDING_FLOW_ID = "887654321012345";
+const ONBOARDING_FLOW_NAME = getWhatsAppFlowScopedName("worker-onboarding", ENDPOINT_ID);
+const CURRENT_ONBOARDING_NOTICE = getCurrentWorkerOnboardingPrivacyNotice();
 const SESSION = Object.freeze({
   id: "123e4567-e89b-42d3-a456-426614174000",
   organizationId: "organization-a",
@@ -53,6 +61,42 @@ const CONTEXT = Object.freeze({
     { id: "task_area_a", title: "Estructura nivel 2", taskRef: "task-a" },
     { id: "task_area_b", title: "Núcleo de servicios", taskRef: "task-b" },
   ],
+});
+const ONBOARDING_SESSION = Object.freeze({
+  id: "223e4567-e89b-42d3-a456-426614174000",
+  claimId: "claim-a",
+  organizationId: SESSION.organizationId,
+  projectId: SESSION.projectId,
+  connectionId: ENDPOINT.connectionId,
+  phoneNumberId: SESSION.phoneNumberId,
+  blueprintKey: "worker-onboarding",
+  flowId: ONBOARDING_FLOW_ID,
+  screenId: "WORKER_ONBOARDING",
+  flowType: "worker_onboarding",
+  noticeVersion: CURRENT_ONBOARDING_NOTICE.version,
+  noticeContentSha256: CURRENT_ONBOARDING_NOTICE.contentSha256,
+  tokenSha256: crypto.createHash("sha256").update(ONBOARDING_FLOW_TOKEN).digest("hex"),
+  expiresAt: new Date("2026-07-28T18:30:00.000Z"),
+  privacyPresentedAt: null,
+});
+const ONBOARDING_CLAIM = Object.freeze({
+  id: ONBOARDING_SESSION.claimId,
+  status: "PENDING",
+});
+const ONBOARDING_ENDPOINT = Object.freeze({
+  ...ENDPOINT,
+  metadata: {
+    whatsappFlows: {
+      ...ENDPOINT.metadata.whatsappFlows,
+      "worker-onboarding": {
+        id: ONBOARDING_FLOW_ID,
+        name: ONBOARDING_FLOW_NAME,
+        status: "PUBLISHED",
+        dataExchange: true,
+        flowScope: ENDPOINT_ID,
+      },
+    },
+  },
 });
 
 function jwt(claims, secret = APP_SECRET, header = { alg: "HS256", typ: "JWT" }) {
@@ -214,6 +258,251 @@ test("data_exchange maps a trusted option and emits the legacy-compatible termin
       },
     },
   });
+});
+
+test("pre-worker onboarding INIT is isolated from Worker data and returns only trusted privacy context", async () => {
+  let operationalAuthentications = 0;
+  const result = await dispatchWhatsAppFlowDataRequest({
+    payload: payload({
+      flow_token: ONBOARDING_FLOW_TOKEN,
+      flow_token_signature: jwt({ flow_token: ONBOARDING_FLOW_TOKEN }),
+      data: { project_name: "attacker", privacy_notice_version: "attacker" },
+    }),
+    endpoint: ONBOARDING_ENDPOINT,
+    prisma: {
+      project: {
+        findFirst: async () => ({
+          id: SESSION.projectId,
+          name: "Torre Norte",
+          organization: {
+            subscriptionPlan: "PRO",
+            subscriptionStatus: "ACTIVE",
+            trialEndsAt: null,
+            timezone: "America/Argentina/Buenos_Aires",
+          },
+        }),
+      },
+    },
+    appSecret: APP_SECRET,
+    now: new Date("2026-07-28T17:00:00.000Z"),
+  }, {
+    authenticateSession: async () => {
+      operationalAuthentications += 1;
+      throw new Error("operational authentication must stay isolated");
+    },
+    authenticateOnboardingSession: async () => ({
+      session: ONBOARDING_SESSION,
+      claim: ONBOARDING_CLAIM,
+      tokenEvidence: { tokenSha256: ONBOARDING_SESSION.tokenSha256 },
+    }),
+    presentOnboardingPrivacy: async (_prisma, _input, { now }) => ({
+      session: { ...ONBOARDING_SESSION, privacyPresentedAt: now },
+      alreadyPresented: false,
+    }),
+  });
+
+  assert.equal(operationalAuthentications, 0);
+  assert.equal(result.session.kind, "worker_onboarding");
+  assert.equal(result.response.screen, "WORKER_ONBOARDING");
+  assert.equal(result.response.data.project_name, "Torre Norte");
+  assert.equal(result.response.data.privacy_notice_version, CURRENT_ONBOARDING_NOTICE.version);
+  assert.equal(result.response.data.privacy_notice_text, CURRENT_ONBOARDING_NOTICE.content);
+  assert.match(result.response.data.expires_label, /vence/i);
+  assert.equal(JSON.stringify(result.response).includes("worker-a"), false);
+});
+
+test("pre-worker onboarding submission persists encrypted-domain input and emits a receipt without identity values", async () => {
+  const calls = [];
+  const identity = {
+    given_names: "Carlos Alberto",
+    family_name: "Pérez",
+    cuil: "20-12345678-6",
+    privacy_accepted: true,
+  };
+  const result = await dispatchWhatsAppFlowDataRequest({
+    payload: payload({
+      flow_token: ONBOARDING_FLOW_TOKEN,
+      action: "data_exchange",
+      screen: "WORKER_ONBOARDING",
+      data: identity,
+    }),
+    endpoint: ONBOARDING_ENDPOINT,
+    prisma: {
+      project: {
+        findFirst: async () => ({
+          id: SESSION.projectId,
+          name: "Torre Norte",
+          organization: {
+            subscriptionPlan: "PRO",
+            subscriptionStatus: "ACTIVE",
+            trialEndsAt: null,
+            timezone: "America/Argentina/Buenos_Aires",
+          },
+        }),
+      },
+    },
+    appSecret: APP_SECRET,
+    now: new Date("2026-07-28T17:00:00.000Z"),
+  }, {
+    authenticateOnboardingSession: async () => ({
+      session: {
+        ...ONBOARDING_SESSION,
+        privacyPresentedAt: new Date("2026-07-28T16:59:00.000Z"),
+      },
+      claim: ONBOARDING_CLAIM,
+      tokenEvidence: { tokenSha256: ONBOARDING_SESSION.tokenSha256 },
+    }),
+    submitOnboardingFlow: async (_prisma, input) => {
+      calls.push(["submit", structuredClone(input)]);
+      return { id: "claim-a", status: "SUBMITTED" };
+    },
+  });
+
+  assert.deepEqual(calls[0][1].scope, {
+    organizationId: SESSION.organizationId,
+    projectId: SESSION.projectId,
+  });
+  assert.deepEqual(calls[0][1].identity, {
+    givenNames: identity.given_names,
+    familyName: identity.family_name,
+    cuil: identity.cuil,
+    privacyAccepted: true,
+  });
+  assert.equal(calls[0][1].sessionId, ONBOARDING_SESSION.id);
+  assert.equal(calls[0][1].phoneNumberId, ONBOARDING_SESSION.phoneNumberId);
+  assert.equal(calls[0][1].flowId, ONBOARDING_SESSION.flowId);
+  assert.equal(calls[0][1].tokenSha256, ONBOARDING_SESSION.tokenSha256);
+  const params = result.response.data.extension_message_response.params;
+  assert.deepEqual(params, {
+    flow_token: ONBOARDING_FLOW_TOKEN,
+    flow_type: "worker_onboarding",
+    claim_ref: "claim-a",
+    submission_status: "submitted",
+  });
+  const receiptWithoutProtocolToken = JSON.stringify({ ...params, flow_token: null });
+  assert.equal(receiptWithoutProtocolToken.includes(identity.given_names), false);
+  assert.equal(receiptWithoutProtocolToken.includes(identity.family_name), false);
+  assert.equal(receiptWithoutProtocolToken.includes(identity.cuil), false);
+
+  for (const invalidData of [
+    { ...identity, privacy_accepted: false },
+    { ...identity, privacy_notice_version: "client-owned" },
+    { ...identity, cuil: "invalid", flow_type: "worker_onboarding" },
+  ]) {
+    await assert.rejects(
+      dispatchWhatsAppFlowDataRequest({
+        payload: payload({
+          flow_token: ONBOARDING_FLOW_TOKEN,
+          action: "data_exchange",
+          screen: "WORKER_ONBOARDING",
+          data: invalidData,
+        }),
+        endpoint: ONBOARDING_ENDPOINT,
+        prisma: {
+          project: {
+            findFirst: async () => ({
+              id: SESSION.projectId,
+              name: "Torre Norte",
+              organization: {
+                subscriptionPlan: "PRO",
+                subscriptionStatus: "ACTIVE",
+                timezone: "America/Argentina/Buenos_Aires",
+              },
+            }),
+          },
+        },
+        appSecret: APP_SECRET,
+      }, {
+        authenticateOnboardingSession: async () => ({
+          session: {
+            ...ONBOARDING_SESSION,
+            privacyPresentedAt: new Date("2026-07-28T16:59:00.000Z"),
+          },
+          claim: ONBOARDING_CLAIM,
+          tokenEvidence: { tokenSha256: ONBOARDING_SESSION.tokenSha256 },
+        }),
+        submitOnboardingFlow: async () => {
+          throw new Error("invalid form must not reach persistence");
+        },
+      }),
+      assertEndpointError("WHATSAPP_FLOW_ENDPOINT_REQUEST_INVALID", 400),
+    );
+  }
+});
+
+test("a notice rotation after issuance cannot change the exact text presented by INIT", async () => {
+  const legacyNotice = getWorkerOnboardingPrivacyNotice("worker-privacy-v1");
+  assert.notEqual(legacyNotice.version, CURRENT_ONBOARDING_NOTICE.version);
+  const legacySession = {
+    ...ONBOARDING_SESSION,
+    noticeVersion: legacyNotice.version,
+    noticeContentSha256: legacyNotice.contentSha256,
+  };
+  const result = await dispatchWhatsAppFlowDataRequest({
+    payload: payload({ flow_token: ONBOARDING_FLOW_TOKEN }),
+    endpoint: ONBOARDING_ENDPOINT,
+    prisma: {
+      project: {
+        findFirst: async () => ({
+          id: SESSION.projectId,
+          name: "Torre Norte",
+          organization: {
+            subscriptionPlan: "PRO",
+            subscriptionStatus: "ACTIVE",
+            timezone: "America/Argentina/Buenos_Aires",
+          },
+        }),
+      },
+    },
+    appSecret: APP_SECRET,
+    now: new Date("2026-07-28T17:00:00.000Z"),
+  }, {
+    authenticateOnboardingSession: async () => ({
+      session: legacySession,
+      claim: ONBOARDING_CLAIM,
+      tokenEvidence: { tokenSha256: legacySession.tokenSha256 },
+    }),
+    presentOnboardingPrivacy: async (_prisma, _input, { now }) => ({
+      session: { ...legacySession, privacyPresentedAt: now },
+      alreadyPresented: false,
+    }),
+  });
+  assert.equal(result.response.data.privacy_notice_version, legacyNotice.version);
+  assert.equal(result.response.data.privacy_notice_text, legacyNotice.content);
+  assert.notEqual(result.response.data.privacy_notice_text, CURRENT_ONBOARDING_NOTICE.content);
+});
+
+test("data_exchange without a prior INIT privacy presentation fails before persistence", async () => {
+  let submissions = 0;
+  await assert.rejects(
+    dispatchWhatsAppFlowDataRequest({
+      payload: payload({
+        flow_token: ONBOARDING_FLOW_TOKEN,
+        action: "data_exchange",
+        screen: "WORKER_ONBOARDING",
+        data: {
+          given_names: "Carlos",
+          family_name: "Perez",
+          cuil: "20-12345678-6",
+          privacy_accepted: true,
+        },
+      }),
+      endpoint: ONBOARDING_ENDPOINT,
+      prisma: {},
+      appSecret: APP_SECRET,
+    }, {
+      authenticateOnboardingSession: async () => ({
+        session: ONBOARDING_SESSION,
+        claim: ONBOARDING_CLAIM,
+        tokenEvidence: { tokenSha256: ONBOARDING_SESSION.tokenSha256 },
+      }),
+      submitOnboardingFlow: async () => {
+        submissions += 1;
+      },
+    }),
+    assertEndpointError("WHATSAPP_FLOW_ENDPOINT_SESSION_INVALID", 427),
+  );
+  assert.equal(submissions, 0);
 });
 
 test("projected task identities survive duplicate names and reordering, then fail closed after deletion", async () => {

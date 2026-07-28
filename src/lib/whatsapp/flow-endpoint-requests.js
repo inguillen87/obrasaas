@@ -425,6 +425,8 @@ export async function reserveWhatsAppFlowEndpointRequest(
           responseStatus: null,
           responseCiphertext: null,
           failureCode: null,
+          flowSessionId: null,
+          workerOnboardingFlowSessionId: null,
           leaseToken,
           leaseExpiresAt,
           completedAt: null,
@@ -490,6 +492,12 @@ function normalizedCompletion(input) {
   const flowSessionId = input.flowSessionId
     ? normalizedUuid(input.flowSessionId, "Flow session identity")
     : null;
+  const workerOnboardingFlowSessionId = input.workerOnboardingFlowSessionId
+    ? normalizedUuid(
+      input.workerOnboardingFlowSessionId,
+      "worker onboarding Flow session identity",
+    )
+    : null;
   const keyVersion = input.keyVersion === undefined || input.keyVersion === null
     ? null
     : Number(input.keyVersion);
@@ -500,6 +508,7 @@ function normalizedCompletion(input) {
     || (failureCode && !FAILURE_PATTERN.test(failureCode))
     || (responseCiphertext && Buffer.byteLength(responseCiphertext, "utf8") > 262_144)
     || (keyVersion !== null && (!Number.isSafeInteger(keyVersion) || keyVersion < 1))
+    || (flowSessionId && workerOnboardingFlowSessionId)
     || (status === "SUCCEEDED" && (!responseCiphertext || failureCode || responseStatus < 200 || responseStatus > 299))
     || (status !== "SUCCEEDED" && !failureCode)
   ) {
@@ -519,6 +528,7 @@ function normalizedCompletion(input) {
     failureCode,
     responseCiphertext,
     flowSessionId,
+    workerOnboardingFlowSessionId,
     keyVersion,
     completedAt: validDate(input.completedAt ?? new Date(), "completion clock"),
   };
@@ -542,6 +552,7 @@ export async function completeWhatsAppFlowEndpointRequest(prisma, input) {
       screen: completion.screen,
       keyVersion: completion.keyVersion,
       flowSessionId: completion.flowSessionId,
+      workerOnboardingFlowSessionId: completion.workerOnboardingFlowSessionId,
       completedAt: completion.completedAt,
       leaseToken: null,
       leaseExpiresAt: null,

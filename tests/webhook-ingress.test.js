@@ -214,6 +214,50 @@ test('WebhookEvent persistence excludes raw Flow tokens and sensitive response v
   });
 });
 
+test('WebhookEvent persistence preserves the pre-worker token domain without the bearer token', async () => {
+  const rawFlowToken = `wofs1.2f967f35-9f99-4db0-bd42-2d88f734cc72.${'C'.repeat(43)}`;
+  const events = normalizeMetaWebhook({
+    object: 'whatsapp_business_account',
+    entry: [{
+      id: '102290129340398',
+      changes: [{
+        field: 'messages',
+        value: {
+          metadata: { phone_number_id: '106540352242922' },
+          messages: [{
+            from: '16505550001',
+            id: 'wamid.worker-onboarding-receipt',
+            timestamp: '1784030400',
+            type: 'interactive',
+            interactive: {
+              type: 'nfm_reply',
+              nfm_reply: {
+                response_json: JSON.stringify({
+                  flow_token: rawFlowToken,
+                  flow_type: 'worker_onboarding',
+                  claim_ref: 'claim-opaque-reference',
+                  submission_status: 'submitted',
+                }),
+              },
+            },
+          }],
+        },
+      }],
+    }],
+  });
+  const prisma = fakeDurablePrisma();
+
+  await persistDurableMetaWebhookBatch(prisma, events);
+
+  const stored = prisma.insertCalls[0].data[0].payload.event;
+  assert.deepEqual(stored.interactive.flowToken, {
+    kind: 'worker_onboarding',
+    sessionId: '2f967f35-9f99-4db0-bd42-2d88f734cc72',
+    tokenSha256: crypto.createHash('sha256').update(rawFlowToken).digest('hex'),
+  });
+  assert.equal(JSON.stringify(stored).includes(rawFlowToken), false);
+});
+
 test('Meta batch limit counts official changes updates and rejects update 1,001', () => {
   assert.equal(assertMetaWebhookBatchLimit(syntheticPayload(1_000)), 1_000);
   assert.throws(

@@ -35,11 +35,16 @@ import { subscriptionAllowsWrites } from "@/lib/plans";
 import {
   getPublishedWhatsAppFlowReference,
   getWhatsAppFlowSessionTtlMs,
+  validateWhatsAppFlowReply,
 } from "@/lib/whatsapp/flows";
 import {
   consumeWhatsAppFlowSession,
   issueWhatsAppFlowSession,
 } from "@/lib/whatsapp/flow-sessions";
+import {
+  consumeWorkerOnboardingFlowSession,
+  WorkerOnboardingFlowSessionError,
+} from "@/lib/whatsapp/worker-onboarding-flow-sessions";
 import { whatsAppConversationIdentity } from "@/lib/whatsapp/inbox";
 import { resolveWhatsAppConnectionScopes } from "@/lib/whatsapp/webhook-scope";
 import { persistDurableMetaWebhookBatch } from "@/lib/whatsapp/webhook-ingress";
@@ -1507,7 +1512,72 @@ function fieldWorkerResolutionError(status) {
   );
 }
 
-function quarantinedWebhookMessage(event) {
+function workerOnboardingReceipt(event) {
+  const response = event?.interactive?.response;
+  const tokenEvidence = event?.interactive?.flowToken;
+  const candidate = event?.provider === "meta"
+    && event?.interactive?.type === "flow"
+    && (
+      response?.flow_type === "worker_onboarding"
+      || tokenEvidence?.kind === "worker_onboarding"
+    );
+  if (!candidate) return { candidate: false, receipt: null, tokenEvidence: null };
+  if (tokenEvidence?.kind !== "worker_onboarding") {
+    return { candidate: true, receipt: null, tokenEvidence: null };
+  }
+  try {
+    return {
+      candidate: true,
+      receipt: validateWhatsAppFlowReply("worker-onboarding", response),
+      tokenEvidence,
+    };
+  } catch {
+    return { candidate: true, receipt: null, tokenEvidence: null };
+  }
+}
+
+const REJECTED_WORKER_ONBOARDING_RECEIPT_CODES = new Set([
+  "WORKER_ONBOARDING_FLOW_SESSION_CLAIM_UNAVAILABLE",
+  "WORKER_ONBOARDING_FLOW_SESSION_CONFLICT",
+  "WORKER_ONBOARDING_FLOW_SESSION_EXPIRED",
+  "WORKER_ONBOARDING_FLOW_SESSION_INVALID",
+  "WORKER_ONBOARDING_FLOW_SESSION_RETIRED",
+  "WORKER_ONBOARDING_FLOW_SESSION_USED",
+]);
+
+async function closeWorkerOnboardingReceipt(
+  transaction,
+  { event, normalized, project, receipt },
+) {
+  if (!receipt.receipt || !receipt.tokenEvidence) return false;
+  if (!project.whatsapp?.id) {
+    throw webhookProcessingError(
+      "The worker-onboarding receipt has no exact WhatsApp connection scope.",
+      "WEBHOOK_MESSAGE_SCOPE_MISMATCH",
+    );
+  }
+  try {
+    await consumeWorkerOnboardingFlowSession(transaction, {
+      tokenEvidence: receipt.tokenEvidence,
+      claimRef: receipt.receipt.claim_ref,
+      senderAddress: event.from,
+      consumedExternalId: event.externalId,
+      organizationId: normalized.organizationId,
+      projectId: normalized.projectId,
+      connectionId: project.whatsapp.id,
+      phoneNumberId: normalized.phoneNumberId,
+    }, { recoverExpired: true });
+    return true;
+  } catch (error) {
+    if (
+      error instanceof WorkerOnboardingFlowSessionError
+      && REJECTED_WORKER_ONBOARDING_RECEIPT_CODES.has(error.code)
+    ) return false;
+    throw error;
+  }
+}
+
+function quarantinedWebhookMessage(event, { onboardingReceipt = null } = {}) {
   const kind = String(event.kind || "text").trim().toLowerCase() || "text";
   const transcriptionText = typeof event.transcription?.text === "string"
     ? event.transcription.text.trim()
@@ -1522,6 +1592,7 @@ function quarantinedWebhookMessage(event) {
     || event.transcription
     || kind !== "text",
   );
+  const isolatesWorkerOnboardingReceipt = onboardingReceipt?.candidate === true;
 
   return {
     externalId: event.externalId || null,
@@ -1534,15 +1605,20 @@ function quarantinedWebhookMessage(event) {
     transcription: event.transcription || null,
     metadata: {
       provider: "meta",
-      from: event.from || null,
-      providerDisplayName: typeof event.displayName === "string"
-        ? event.displayName.trim().slice(0, 255) || null
-        : null,
+      ...(!isolatesWorkerOnboardingReceipt ? {
+        from: event.from || null,
+        providerDisplayName: typeof event.displayName === "string"
+          ? event.displayName.trim().slice(0, 255) || null
+          : null,
+      } : {}),
       phoneNumberId: event.phoneNumberId || null,
       contactStatus: "UNASSIGNED",
       workerResolution: FIELD_WORKER_RESOLUTION.UNKNOWN,
       quarantined: true,
       automationSuppressed: true,
+      ...(isolatesWorkerOnboardingReceipt
+        ? { workerOnboardingReceipt: onboardingReceipt.verified ? "VERIFIED" : "UNVERIFIED" }
+        : {}),
       ...(sourceContentRestricted ? { sourceContentRestricted: true } : {}),
       ...(medical
         ? { sensitivity: "medical" }
@@ -1673,7 +1749,7 @@ export async function applyWebhookMessageAtomically({
         },
         snapshot: { select: { state: true, version: true } },
         whatsapp: {
-          select: { phoneNumberId: true, enabled: true, metadata: true },
+          select: { id: true, phoneNumberId: true, enabled: true, metadata: true },
         },
       },
     });
@@ -1714,11 +1790,24 @@ export async function applyWebhookMessageAtomically({
       )
       && event.provider === "meta"
     ) {
+      const onboardingReceipt = workerOnboardingReceipt(event);
+      const verifiedOnboardingReceipt = onboardingReceipt.candidate
+        ? await closeWorkerOnboardingReceipt(transaction, {
+            event,
+            normalized,
+            project,
+            receipt: onboardingReceipt,
+          })
+        : false;
       const identity = whatsAppConversationIdentity(event);
       const outcome = quarantinedWebhookOutcome();
       await appendDurableMessages(
         { prisma: transaction, project },
-        [quarantinedWebhookMessage(event)],
+        [quarantinedWebhookMessage(event, {
+          onboardingReceipt: onboardingReceipt.candidate
+            ? { candidate: true, verified: verifiedOnboardingReceipt }
+            : null,
+        })],
         {
           conversationIdentity: {
             ...identity,

@@ -82,6 +82,8 @@ const EXPECTED_MIGRATIONS = Object.freeze([
   '20260724330800_worker_payment_canonical_identity',
   '20260724330850_worker_payment_canonical_identity_finalize',
   '20260724330860_worker_payment_canonical_identity_index',
+  '20260728052000_worker_onboarding_flow_sessions',
+  '20260728063000_worker_onboarding_claim_retention',
 ]);
 
 const EXPECTED_ENUMS = Object.freeze({
@@ -125,6 +127,7 @@ const EXPECTED_TABLES = Object.freeze([
   'WorkerPerson',
   'WorkerChannelIdentity',
   'WorkerOnboardingClaim',
+  'WorkerOnboardingFlowSession',
   'WorkerPaymentDestination',
   'WorkerSensitiveDecision',
 ]);
@@ -149,10 +152,26 @@ const EXPECTED_VALIDATED_CONSTRAINTS = Object.freeze({
   WorkerOnboardingClaim: [
     'WorkerOnboardingClaim_sender_check',
     'WorkerOnboardingClaim_identity_bundle_check',
+    'WorkerClaim_privacy_notice_evidence_check',
+    'WorkerClaim_sensitive_retention_check',
+    'WorkerOnboardingClaim_state_check',
     'WorkerClaim_review_actor_check',
     'WorkerClaim_reviewer_membership_fkey',
     'WorkerClaim_resolved_channel_scope_fkey',
     'WorkerClaim_resolved_worker_scope_fkey',
+  ],
+  WorkerOnboardingFlowSession: [
+    'WOFlowSession_contract_check',
+    'WOFlowSession_delivery_shape_check',
+    'WorkerOnboardingFlowSession_organizationId_fkey',
+    'WorkerOnboardingFlowSession_project_scope_fkey',
+    'WorkerOnboardingFlowSession_connection_scope_fkey',
+    'WorkerOnboardingFlowSession_claim_scope_fkey',
+  ],
+  WhatsAppFlowEndpointRequest: [
+    'WhatsAppFlowEndpointRequest_flowSessionId_fkey',
+    'WAFlowEndpointRequest_onboarding_session_fkey',
+    'WAFlowEndpointRequest_session_at_most_one_check',
   ],
   WorkerPaymentDestination: [
     'WorkerPaymentDestination_encrypted_payload_check',
@@ -199,6 +218,41 @@ const EXPECTED_INDEXES = Object.freeze({
     columns: ['projectId', 'senderFingerprintKeyId', 'senderFingerprint'],
     requiresUnique: true,
     predicateFragments: ['PENDING', 'SUBMITTED'],
+  },
+  WorkerClaim_sensitive_retention_due_idx: {
+    table: 'WorkerOnboardingClaim',
+    columns: ['expiresAt', 'id'],
+    predicateFragments: ['PENDING', 'SUBMITTED', 'sensitiveDataPurgedAt IS NULL'],
+  },
+  WorkerClaim_flow_session_scope_key: {
+    table: 'WorkerOnboardingClaim',
+    columns: ['organizationId', 'projectId', 'connectionId', 'id'],
+    requiresUnique: true,
+    requiresUnconditional: true,
+  },
+  WorkerOnboardingFlowSession_claimId_key: {
+    table: 'WorkerOnboardingFlowSession',
+    columns: ['claimId'],
+    requiresUnique: true,
+    requiresUnconditional: true,
+  },
+  WorkerOnboardingFlowSession_tokenSha256_key: {
+    table: 'WorkerOnboardingFlowSession',
+    columns: ['tokenSha256'],
+    requiresUnique: true,
+    requiresUnconditional: true,
+  },
+  WorkerOnboardingFlowSession_source_key: {
+    table: 'WorkerOnboardingFlowSession',
+    columns: ['projectId', 'sourceExternalId', 'blueprintKey'],
+    requiresUnique: true,
+    requiresUnconditional: true,
+  },
+  WorkerOnboardingFlowSession_consumed_event_key: {
+    table: 'WorkerOnboardingFlowSession',
+    columns: ['projectId', 'consumedExternalId'],
+    requiresUnique: true,
+    requiresUnconditional: true,
   },
   WorkerPayment_one_active_per_purpose_idx: {
     table: 'WorkerPaymentDestination',
@@ -513,6 +567,311 @@ async function assertIndexes(client) {
   }
 }
 
+async function assertWorkerOnboardingFlowSessionContract(client) {
+  const columns = await client.query(
+    `SELECT column_name
+       FROM information_schema.columns
+      WHERE table_schema = current_schema()
+        AND table_name = 'WorkerOnboardingFlowSession'`,
+  );
+  const columnNames = new Set(columns.rows.map((row) => row.column_name));
+  for (const required of [
+    'id',
+    'claimId',
+    'organizationId',
+    'projectId',
+    'connectionId',
+    'phoneNumberId',
+    'noticeVersion',
+    'noticeContentSha256',
+    'tokenSha256',
+    'deliveryAttemptedAt',
+    'deliveryRejectedAt',
+    'privacyPresentedAt',
+    'submittedAt',
+    'consumedAt',
+  ]) {
+    assert(columnNames.has(required), `WorkerOnboardingFlowSession is missing ${required}.`);
+  }
+  for (const forbidden of [
+    'recipientPhone',
+    'providerSubject',
+    'givenNames',
+    'familyName',
+    'legalName',
+    'cuil',
+    'claimToken',
+    'noticeText',
+    'privacyNoticeText',
+  ]) {
+    assert(
+      !columnNames.has(forbidden),
+      `WorkerOnboardingFlowSession must not persist sensitive field ${forbidden}.`,
+    );
+  }
+
+  const constraints = await client.query(
+    `SELECT constraint_record.conname,
+            constraint_record.confdeltype,
+            pg_get_constraintdef(constraint_record.oid, true) AS definition
+       FROM pg_constraint AS constraint_record
+      WHERE (
+              constraint_record.conrelid = to_regclass(
+                format('%I.%I', current_schema(), 'WorkerOnboardingFlowSession')
+              )
+              AND constraint_record.conname = ANY($1::text[])
+            )
+         OR (
+              constraint_record.conrelid = to_regclass(
+                format('%I.%I', current_schema(), 'WhatsAppFlowEndpointRequest')
+              )
+              AND constraint_record.conname = ANY($2::text[])
+            )`,
+    [
+      [
+        'WOFlowSession_contract_check',
+        'WOFlowSession_delivery_shape_check',
+        'WorkerOnboardingFlowSession_organizationId_fkey',
+        'WorkerOnboardingFlowSession_project_scope_fkey',
+        'WorkerOnboardingFlowSession_connection_scope_fkey',
+        'WorkerOnboardingFlowSession_claim_scope_fkey',
+      ],
+      [
+        'WhatsAppFlowEndpointRequest_flowSessionId_fkey',
+        'WAFlowEndpointRequest_onboarding_session_fkey',
+        'WAFlowEndpointRequest_session_at_most_one_check',
+      ],
+    ],
+  );
+  const byName = new Map(constraints.rows.map((row) => [row.conname, row]));
+  const fixedContract = normalizeConstraintDefinition(
+    byName.get('WOFlowSession_contract_check')?.definition,
+  );
+  for (const fragment of [
+    "blueprintKey = 'worker-onboarding'",
+    "screenId = 'WORKER_ONBOARDING'",
+    "flowType = 'worker_onboarding'",
+    "noticeVersion ~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$'",
+    "noticeContentSha256 ~ '^[0-9a-f]{64}$'",
+    "tokenSha256 ~ '^[0-9a-f]{64}$'",
+    'expiresAt > createdAt',
+  ]) {
+    assert(
+      fixedContract.includes(fragment),
+      `Worker-onboarding Flow fixed contract is missing ${fragment}.`,
+    );
+  }
+  const deliveryContract = normalizeConstraintDefinition(
+    byName.get('WOFlowSession_delivery_shape_check')?.definition,
+  );
+  for (const fragment of [
+    'deliveryAttemptedAt',
+    'deliveryRejectedAt',
+    'providerMessageId',
+    'privacyPresentedAt',
+    'submittedAt',
+    'consumedExternalId',
+  ]) {
+    assert(
+      deliveryContract.includes(fragment),
+      `Worker-onboarding Flow delivery contract is missing ${fragment}.`,
+    );
+  }
+  const requestFence = normalizeConstraintDefinition(
+    byName.get('WAFlowEndpointRequest_session_at_most_one_check')?.definition,
+  );
+  assert(
+    [
+      'num_nonnulls',
+      'flowSessionId',
+      'workerOnboardingFlowSessionId',
+      '<= 1',
+    ].every((fragment) => requestFence.includes(fragment)),
+    'WhatsApp Flow endpoint requests do not enforce mutually exclusive session domains.',
+  );
+  for (const name of [
+    'WhatsAppFlowEndpointRequest_flowSessionId_fkey',
+    'WAFlowEndpointRequest_onboarding_session_fkey',
+  ]) {
+    assert(
+      byName.get(name)?.confdeltype === 'n',
+      `${name} must preserve endpoint request tombstones with ON DELETE SET NULL.`,
+    );
+  }
+  for (const name of [
+    'WorkerOnboardingFlowSession_organizationId_fkey',
+    'WorkerOnboardingFlowSession_project_scope_fkey',
+    'WorkerOnboardingFlowSession_connection_scope_fkey',
+    'WorkerOnboardingFlowSession_claim_scope_fkey',
+  ]) {
+    assert(byName.get(name)?.confdeltype === 'c', `${name} must be ON DELETE CASCADE.`);
+  }
+
+  const claimEvidence = await client.query(
+    `SELECT column_record.column_name,
+            constraint_record.convalidated,
+            pg_get_constraintdef(constraint_record.oid, true) AS definition
+       FROM information_schema.columns AS column_record
+       LEFT JOIN pg_constraint AS constraint_record
+         ON constraint_record.conrelid = to_regclass(
+              format('%I.%I', current_schema(), 'WorkerOnboardingClaim')
+            )
+        AND constraint_record.conname = 'WorkerClaim_privacy_notice_evidence_check'
+      WHERE column_record.table_schema = current_schema()
+        AND column_record.table_name = 'WorkerOnboardingClaim'
+        AND column_record.column_name = 'privacyNoticeContentSha256'`,
+  );
+  assert(
+    claimEvidence.rows.length === 1,
+    'WorkerOnboardingClaim is missing privacyNoticeContentSha256.',
+  );
+  const evidenceDefinition = normalizeConstraintDefinition(claimEvidence.rows[0].definition);
+  assert(
+    claimEvidence.rows[0].convalidated === true
+      && [
+        'num_nonnulls',
+        'privacyNoticeContentSha256',
+        "~ '^[0-9a-f]{64}$'",
+        'privacyNoticeVersion',
+        'privacyAcceptedAt',
+        '= 0',
+        '= 3',
+      ].every((fragment) => evidenceDefinition.includes(fragment)),
+    'Worker-onboarding claim privacy evidence is not structurally governed.',
+  );
+  assert(
+    !evidenceDefinition.includes('claimedIdentity'),
+    'Worker-onboarding privacy evidence must remain independent from the purgeable identity bundle.',
+  );
+}
+
+async function assertWorkerOnboardingClaimRetentionContract(client) {
+  const columns = await client.query(
+    `SELECT column_name, is_nullable
+       FROM information_schema.columns
+      WHERE table_schema = current_schema()
+        AND table_name = 'WorkerOnboardingClaim'
+        AND column_name = ANY($1::text[])`,
+    [[
+      'senderEncryptedPayload',
+      'senderFingerprint',
+      'senderFingerprintKeyId',
+      'senderLastFour',
+      'senderWrappingKeyId',
+      'senderRecordVersion',
+      'claimTokenHash',
+      'sensitiveDataPurgedAt',
+    ]],
+  );
+  const byColumn = new Map(columns.rows.map((row) => [row.column_name, row]));
+  for (const name of [
+    'senderEncryptedPayload',
+    'senderFingerprint',
+    'senderFingerprintKeyId',
+    'senderLastFour',
+    'senderWrappingKeyId',
+    'senderRecordVersion',
+    'sensitiveDataPurgedAt',
+  ]) {
+    assert(byColumn.get(name)?.is_nullable === 'YES', `${name} must support retention tombstones.`);
+  }
+  assert(
+    byColumn.get('claimTokenHash')?.is_nullable === 'NO',
+    'claimTokenHash must remain a retained, non-null one-way replay commitment.',
+  );
+
+  const constraints = await client.query(
+    `SELECT constraint_record.conname,
+            constraint_record.convalidated,
+            pg_get_constraintdef(constraint_record.oid, true) AS definition
+       FROM pg_constraint AS constraint_record
+      WHERE constraint_record.conrelid = to_regclass(
+              format('%I.%I', current_schema(), 'WorkerOnboardingClaim')
+            )
+        AND constraint_record.conname = ANY($1::text[])`,
+    [[
+      'WorkerOnboardingClaim_sender_check',
+      'WorkerOnboardingClaim_identity_bundle_check',
+      'WorkerClaim_sensitive_retention_check',
+      'WorkerOnboardingClaim_state_check',
+    ]],
+  );
+  const byName = new Map(constraints.rows.map((row) => [row.conname, row]));
+  const sender = normalizeConstraintDefinition(
+    byName.get('WorkerOnboardingClaim_sender_check')?.definition,
+  );
+  for (const fragment of [
+    'num_nonnulls',
+    'senderEncryptedPayload',
+    'senderFingerprint',
+    'senderFingerprintKeyId',
+    'senderLastFour',
+    'senderWrappingKeyId',
+    'senderRecordVersion',
+    '= 0',
+    '= 6',
+    '^v[23]',
+  ]) {
+    assert(sender.includes(fragment), `Sender retention bundle is missing ${fragment}.`);
+  }
+
+  const identity = normalizeConstraintDefinition(
+    byName.get('WorkerOnboardingClaim_identity_bundle_check')?.definition,
+  );
+  for (const fragment of [
+    'num_nonnulls',
+    'claimedIdentityEncryptedPayload',
+    'claimedCuilFingerprint',
+    'claimedCuilFingerprintKeyId',
+    'claimedCuilLastFour',
+    'claimedIdentityWrappingKeyId',
+    'claimedIdentityRecordVersion',
+    '= 0',
+    '= 6',
+    '^v[23]',
+  ]) {
+    assert(identity.includes(fragment), `Identity retention bundle is missing ${fragment}.`);
+  }
+  assert(
+    !identity.includes('privacyNotice'),
+    'Purgeable identity and retained privacy evidence are still coupled.',
+  );
+
+  const retention = normalizeConstraintDefinition(
+    byName.get('WorkerClaim_sensitive_retention_check')?.definition,
+  );
+  for (const fragment of [
+    'PENDING',
+    'SUBMITTED',
+    'APPROVED',
+    'REJECTED',
+    'EXPIRED',
+    'CANCELLED',
+    'sensitiveDataPurgedAt IS NULL',
+    'sensitiveDataPurgedAt IS NOT NULL',
+    'senderEncryptedPayload',
+    'claimedIdentityEncryptedPayload',
+  ]) {
+    assert(retention.includes(fragment), `Sensitive retention lifecycle is missing ${fragment}.`);
+  }
+
+  const lifecycle = normalizeConstraintDefinition(
+    byName.get('WorkerOnboardingClaim_state_check')?.definition,
+  );
+  for (const fragment of [
+    'PENDING',
+    'SUBMITTED',
+    'APPROVED',
+    'REJECTED',
+    'EXPIRED',
+    'CANCELLED',
+    'privacyNoticeVersion IS NULL',
+    'privacyNoticeVersion IS NOT NULL',
+  ]) {
+    assert(lifecycle.includes(fragment), `Onboarding lifecycle is missing ${fragment}.`);
+  }
+}
+
 async function assertAppendOnlyLedger(client) {
   const result = await client.query(
     `SELECT trigger_record.tgname,
@@ -631,10 +990,12 @@ try {
   await assertEnums(client);
   await assertValidatedConstraints(client);
   await assertIndexes(client);
+  await assertWorkerOnboardingFlowSessionContract(client);
+  await assertWorkerOnboardingClaimRetentionContract(client);
   await assertAppendOnlyLedger(client);
   await assertCanonicalPaymentIdentity(client);
   console.log(
-    'Verified worker identity migrations: tenant scope, crypto rollout, onboarding, payment controls, partial uniqueness and append-only decisions.',
+    'Verified worker identity migrations: tenant scope, crypto rollout, onboarding retention, payment controls, partial uniqueness and append-only decisions.',
   );
   await client.query('ROLLBACK');
   transactionOpen = false;

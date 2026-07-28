@@ -232,6 +232,30 @@ test('worker identity requires explicit versioned privacy acceptance and starts 
     }),
     (error) => error.code === 'WORKER_FINANCIAL_PRIVACY_REQUIRED',
   );
+  assert.equal(normalizeWorkerIdentityInput({
+    givenNames: 'María-José',
+    familyName: "D'Ángelo",
+    cuil: CUIL,
+    privacyNoticeVersion: 'worker-onboarding-ar-v1',
+    privacyAccepted: true,
+  }, { now }).legalName, "María-José D'Ángelo");
+  for (const spoofedName of [
+    'Carlos\u202EAdmin',
+    'Car\u200Blos',
+    'Carlos123',
+    'Carlos🙂',
+  ]) {
+    assert.throws(
+      () => normalizeWorkerIdentityInput({
+        givenNames: spoofedName,
+        familyName: 'Perez',
+        cuil: CUIL,
+        privacyNoticeVersion: 'worker-onboarding-ar-v1',
+        privacyAccepted: true,
+      }, { now }),
+      (error) => error.code === 'WORKER_FINANCIAL_INPUT_INVALID',
+    );
+  }
 });
 
 test('identity and payment inputs reject unknown or non-object payloads', () => {

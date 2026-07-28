@@ -100,6 +100,12 @@ async function finishRequest({
   completeRequest,
 }) {
   if (!reservation?.record?.id || !reservation.record.leaseToken) return;
+  const workerOnboardingFlowSessionId = session?.kind === "worker_onboarding"
+    ? session.id
+    : null;
+  const flowSessionId = session?.kind === "worker_onboarding"
+    ? null
+    : session?.id || null;
   await completeRequest(prisma, {
     requestId: reservation.record.id,
     leaseToken: reservation.record.leaseToken,
@@ -110,7 +116,8 @@ async function finishRequest({
     action: requestAction(payload),
     screen: requestScreen(payload),
     keyVersion: Number.isSafeInteger(key?.version) ? key.version : null,
-    flowSessionId: session?.id || null,
+    flowSessionId,
+    workerOnboardingFlowSessionId,
     completedAt: now,
   });
 }
