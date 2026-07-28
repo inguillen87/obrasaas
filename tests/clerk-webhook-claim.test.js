@@ -81,14 +81,49 @@ test('concurrent Clerk webhook delivery has exactly one processing winner', asyn
 
 test('completed Clerk webhook is replayed as processed without another claim', async () => {
   const database = databaseDouble();
-  const first = await claim(database);
+  const originalPayload = {
+    type: 'user.updated',
+    data: {
+      id: 'user_a',
+      email_addresses: [{ email_address: 'persona@example.com' }],
+      first_name: 'Persona',
+    },
+  };
+  const first = await claim(database, { payload: originalPayload });
+  assert.deepEqual(database.record.payload, originalPayload);
   assert.equal(await completeClerkWebhookEvent(database, {
     eventId: 'svix-event-a',
     leaseToken: first.leaseToken,
   }), true);
+  assert.deepEqual(database.record.payload, { version: 1, redacted: true });
+  assert.equal(database.record.provider, 'clerk');
+  assert.equal(database.record.externalId, 'svix-event-a');
+  assert.equal(database.record.eventType, 'user.updated');
+  assert.equal(database.record.status, 'PROCESSED');
+  assert.equal(database.record.attempts, 1);
   const replay = await claim(database, { leaseToken: 'lease-b' });
   assert.equal(replay.state, 'processed');
+  assert.deepEqual(replay.event.payload, { version: 1, redacted: true });
   assert.equal(database.record.attempts, 1);
+});
+
+test('a lost completion lease cannot redact payload needed by the active processor', async () => {
+  const database = databaseDouble();
+  const originalPayload = {
+    type: 'organizationMembership.updated',
+    data: { id: 'membership_a', public_user_data: { user_id: 'user_a' } },
+  };
+  await claim(database, {
+    eventType: 'organizationMembership.updated',
+    payload: originalPayload,
+  });
+
+  assert.equal(await completeClerkWebhookEvent(database, {
+    eventId: 'svix-event-a',
+    leaseToken: 'lease-lost',
+  }), false);
+  assert.equal(database.record.status, 'PROCESSING');
+  assert.deepEqual(database.record.payload, originalPayload);
 });
 
 test('failed and expired Clerk webhook claims can be recovered safely', async () => {
@@ -99,6 +134,10 @@ test('failed and expired Clerk webhook claims can be recovered safely', async ()
     leaseToken: first.leaseToken,
     error: new Error('temporary failure'),
   }), true);
+  assert.deepEqual(database.record.payload, {
+    type: 'user.updated',
+    data: { id: 'user_a' },
+  });
   const retry = await claim(database, {
     leaseToken: 'lease-b',
     now: new Date('2026-07-17T23:01:00.000Z'),

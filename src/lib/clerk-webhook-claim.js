@@ -2,6 +2,10 @@ import { randomUUID } from 'node:crypto';
 
 const DEFAULT_CLERK_WEBHOOK_LEASE_MS = 120_000;
 
+function redactedClerkWebhookPayload() {
+  return { version: 1, redacted: true };
+}
+
 export function clerkWebhookRetryResponse(message, { retryAfter = 5 } = {}) {
   return new Response(message, {
     status: 503,
@@ -70,6 +74,7 @@ export async function completeClerkWebhookEvent(database, { eventId, leaseToken,
     },
     data: {
       status: 'PROCESSED',
+      payload: redactedClerkWebhookPayload(),
       processedAt: now,
       leaseToken: null,
       leaseExpiresAt: null,

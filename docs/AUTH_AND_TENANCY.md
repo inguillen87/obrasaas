@@ -10,6 +10,7 @@
 - Cada usuario nuevo puede crear como máximo **una** organización. Puede ser invitado a otras, pero no multiplicar trials propios.
 - El backend crea bajo demanda el tenant y la membresía. Sólo los roles con alcance de portfolio pueden crear la obra inicial automáticamente.
 - El webhook Clerk de producción pública verifica la firma, acepta únicamente eventos de identidad/organización/membresía y conserva un registro idempotente de procesamiento.
+- El payload firmado se conserva sólo mientras el evento necesita procesamiento o reintento. Al completarlo se redacta y quedan únicamente la identidad técnica del evento, su tipo, estado, intentos y timestamps, sin duplicar PII de Clerk.
 
 ## Superadmin y tenants
 
