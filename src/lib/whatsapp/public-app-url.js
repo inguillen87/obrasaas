@@ -1,4 +1,11 @@
 const LOCAL_APP_URL = 'http://localhost:3000';
+const CANONICAL_PRODUCTION_ORIGINS = Object.freeze([
+  'https://obrasaas.vercel.app',
+  'https://obrasaas-saas.vercel.app',
+]);
+const CANONICAL_PREVIEW_ORIGINS = Object.freeze([
+  'https://obrasaas-preview.vercel.app',
+]);
 
 function deployedEnvironment(environment) {
   const vercelEnvironment = String(environment?.VERCEL_ENV || '').trim().toLowerCase();
@@ -18,6 +25,32 @@ function publicAppUrlError(message, code) {
   return error;
 }
 
+function strictHttpsOrigins(value, defaults = []) {
+  const candidates = [
+    ...defaults,
+    ...String(value || '').split(','),
+  ];
+  const origins = new Set();
+  for (const candidate of candidates) {
+    const configured = String(candidate || '').trim();
+    if (!configured) continue;
+    try {
+      const parsed = new URL(configured);
+      if (
+        parsed.protocol === 'https:'
+        && !parsed.username
+        && !parsed.password
+        && parsed.pathname === '/'
+        && !parsed.search
+        && !parsed.hash
+      ) origins.add(parsed.origin.toLowerCase());
+    } catch {
+      // Invalid registry entries never widen the allowlist or denylist.
+    }
+  }
+  return origins;
+}
+
 function normalizedConfiguredUrl(environment) {
   const configured = String(environment?.NEXT_PUBLIC_APP_URL || '').trim();
   if (!configured) return null;
@@ -35,34 +68,45 @@ function normalizedConfiguredUrl(environment) {
     !['http:', 'https:'].includes(parsed.protocol)
     || parsed.username
     || parsed.password
+    || parsed.pathname !== '/'
     || parsed.search
     || parsed.hash
     || (deployedEnvironment(environment) && parsed.protocol !== 'https:')
   ) {
     throw publicAppUrlError(
-      'NEXT_PUBLIC_APP_URL must be a stable HTTPS URL without credentials, query parameters or fragments.',
+      'NEXT_PUBLIC_APP_URL must be a stable HTTPS origin without credentials, path, query parameters or fragments.',
       'WHATSAPP_PUBLIC_APP_URL_INVALID',
     );
   }
 
-  const productionProjectUrl = String(
-    environment?.VERCEL_PROJECT_PRODUCTION_URL || '',
-  ).trim();
-  if (previewEnvironment(environment) && productionProjectUrl) {
-    let productionHost = null;
-    try {
-      productionHost = new URL(
-        productionProjectUrl.includes('://')
-          ? productionProjectUrl
-          : `https://${productionProjectUrl}`,
-      ).host.toLowerCase();
-    } catch {
-      productionHost = null;
+  if (previewEnvironment(environment)) {
+    const productionProjectUrl = String(
+      environment?.VERCEL_PROJECT_PRODUCTION_URL || '',
+    ).trim();
+    const productionOrigins = strictHttpsOrigins(
+      environment?.WHATSAPP_PRODUCTION_PUBLIC_ORIGINS,
+      CANONICAL_PRODUCTION_ORIGINS,
+    );
+    if (productionProjectUrl) {
+      const projectOrigins = productionProjectUrl.includes('://')
+        ? strictHttpsOrigins(productionProjectUrl)
+        : strictHttpsOrigins(`https://${productionProjectUrl}`);
+      for (const origin of projectOrigins) productionOrigins.add(origin);
     }
-    if (productionHost && parsed.host.toLowerCase() === productionHost) {
+    if (productionOrigins.has(parsed.origin.toLowerCase())) {
       throw publicAppUrlError(
         'A Preview deployment cannot issue WhatsApp webviews on the Production project URL.',
         'WHATSAPP_PUBLIC_APP_URL_PRODUCTION_LEAK',
+      );
+    }
+    const allowedPreviewOrigins = strictHttpsOrigins(
+      environment?.WHATSAPP_PREVIEW_ALLOWED_PUBLIC_ORIGINS,
+      CANONICAL_PREVIEW_ORIGINS,
+    );
+    if (!allowedPreviewOrigins.has(parsed.origin.toLowerCase())) {
+      throw publicAppUrlError(
+        'NEXT_PUBLIC_APP_URL is not an explicitly allowed Preview origin.',
+        'WHATSAPP_PUBLIC_APP_URL_PREVIEW_NOT_ALLOWED',
       );
     }
   }

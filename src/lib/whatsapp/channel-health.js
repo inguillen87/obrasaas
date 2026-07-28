@@ -7,6 +7,12 @@ const BAD_TEMPLATE_SIGNALS = new Set(['DISABLED', 'PAUSED', 'REJECTED']);
 const GOOD_TEMPLATE_SIGNALS = new Set(['APPROVED', 'ACTIVE']);
 const REGISTERED_PHONE_SIGNALS = new Set(['CONNECTED', 'REGISTERED', 'VERIFIED']);
 const UNREGISTERED_PHONE_SIGNALS = new Set(['DISCONNECTED', 'UNREGISTERED']);
+const REMOTE_HEALTH_FUTURE_CLOCK_SKEW_MS = 5 * 60 * 1_000;
+
+// Proactive sends require a recent Graph API verification. This intentionally
+// stays shorter than the 24-hour customer-service window: after fifteen minutes
+// an administrator must explicitly revalidate the channel from Integrations.
+export const WHATSAPP_REMOTE_HEALTH_SNAPSHOT_TTL_MS = 15 * 60 * 1_000;
 
 function record(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
@@ -20,6 +26,28 @@ function isoTimestamp(value) {
   if (!value) return null;
   const date = value instanceof Date ? value : new Date(value);
   return Number.isFinite(date.getTime()) ? date.toISOString() : null;
+}
+
+export function inspectStoredWhatsAppRemoteHealthEvidence(connection, {
+  now = new Date(),
+  maxAgeMs = WHATSAPP_REMOTE_HEALTH_SNAPSHOT_TTL_MS,
+} = {}) {
+  const observedAt = now instanceof Date ? new Date(now.getTime()) : new Date(now);
+  const checkedAt = isoTimestamp(connection?.metadata?.channelHealth?.checkedAt);
+  const ttlMs = Number.isFinite(maxAgeMs) && maxAgeMs >= 0
+    ? maxAgeMs
+    : WHATSAPP_REMOTE_HEALTH_SNAPSHOT_TTL_MS;
+  if (!Number.isFinite(observedAt.getTime()) || !checkedAt) {
+    return { status: 'MISSING', fresh: false, checkedAt: null, maxAgeMs: ttlMs };
+  }
+  const ageMs = observedAt.getTime() - new Date(checkedAt).getTime();
+  if (ageMs < -REMOTE_HEALTH_FUTURE_CLOCK_SKEW_MS) {
+    return { status: 'FUTURE', fresh: false, checkedAt, maxAgeMs: ttlMs };
+  }
+  if (ageMs > ttlMs) {
+    return { status: 'STALE', fresh: false, checkedAt, maxAgeMs: ttlMs };
+  }
+  return { status: 'FRESH', fresh: true, checkedAt, maxAgeMs: ttlMs };
 }
 
 function safeScopes(value) {

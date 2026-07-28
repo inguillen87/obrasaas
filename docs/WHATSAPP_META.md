@@ -10,6 +10,7 @@ La integración primaria es **Meta WhatsApp Cloud API directa**. Twilio Sandbox 
 - `NEXT_PUBLIC_META_EMBEDDED_SIGNUP_CONFIG_ID` identifica su configuración de Embedded Signup.
 - Cada tenant conecta su propio WABA, número y token mediante Embedded Signup.
 - Las credenciales de Cloud API se cifran con la clave dedicada `WHATSAPP_CREDENTIALS_ENCRYPTION_KEY` y siempre se resuelven dentro de la organización autorizada.
+- En Vercel Preview, `NEXT_PUBLIC_APP_URL` debe coincidir con el alias canónico de piloto o con un origen HTTPS exacto registrado en `WHATSAPP_PREVIEW_ALLOWED_PUBLIC_ORIGINS`; los aliases conocidos de Production y `VERCEL_PROJECT_PRODUCTION_URL` se rechazan antes de leer el body o tocar Meta.
 - El webhook general está implementado en `/api/webhooks/whatsapp`.
 - Cada conexión recibe un Data Endpoint opaco independiente en `/api/webhooks/whatsapp/flows/{opaqueEndpointId}`.
 
@@ -33,6 +34,8 @@ Los estados públicos son `UNCONFIGURED`, `READY_TO_CONNECT`, `ACCOUNT_LINKED`, 
 - `POST /api/integrations/whatsapp/health` revalida token, permisos, pertenencia del teléfono y suscripción directamente contra Graph API, persiste un snapshot sanitario seguro y audita el resultado.
 - Embedded Signup rechaza tokens que no tengan ambos permisos operativos, confirma la suscripción con una lectura posterior y vuelve a consultar el teléfono después de registrarlo.
 - Los errores de token, suscripción, calidad, plantillas o endpoint producen acciones concretas y nunca se maquillan como `Conectado`.
+
+Las invitaciones proactivas de alta H3.1 exigen que ese snapshot remoto exitoso tenga como máximo 15 minutos de antigüedad. Si falta, está vencido o registra degradación, el envío falla antes de reservar o contactar a Meta y pide una revalidación explícita desde Integraciones. El fence final liga por CAS el snapshot, la identidad de conexión y `deliveryAttemptedAt`, retiene un lease acotado durante la llamada externa y lo libera en `finally`; los webhooks que cambian el estado de la conexión respetan ese lease y se reprograman. No se llama a Graph dentro de una transacción ni se reintenta automáticamente una entrega ambigua.
 
 ## Contrato de WhatsApp Flows
 
@@ -115,7 +118,7 @@ Cada invitación de alta fija en su sesión la versión y el SHA-256 de un aviso
 
 El texto actual es copy de producto con revisión legal pendiente. No se presenta como asesoramiento legal ni como texto jurídicamente validado.
 
-H3.1 está implementado sólo en código y pruebas locales: invitación desde Inbox, sesión y Flow pre-operario separados, submit autenticado, acuse terminal `nfm_reply`, readiness fail-closed, cola CRM para revisión y decisión administrativa. Una aprobación exige el acuse terminal exacto de esa sesión; un rechazo sigue disponible para cerrar el caso sin crear una identidad activa.
+H3.1 está implementado en código y pruebas locales: invitación desde Inbox, sesión y Flow pre-operario separados, submit autenticado, acuse terminal `nfm_reply`, readiness fail-closed, cola CRM para revisión y decisión administrativa. Una aprobación exige el acuse terminal exacto de esa sesión; un rechazo sigue disponible para cerrar el caso sin crear una identidad activa. El commit `d6b29b9` también llegó a Vercel Preview con build remoto `Ready` y conserva [evidencia sanitizada reproducible](./evidence/2026-07-28-preview-d6b29b9.md); eso no sustituye el smoke UI/runtime ni el recorrido con Meta.
 
 El cron expira claims transitorios vencidos y purga atómicamente sus bundles cifrados, huellas y últimos dígitos, dejando estado, revisión y auditoría sin PII. Esa limpieza no es un DSAR ni un borrado integral de la persona: `WorkerPerson`, `WorkerChannelIdentity`, `Worker`, conversaciones, mensajes y backups requieren una política y un sprint separados. Además, `Conversation.externalId` todavía conserva internamente el teléfono raw necesario para correlación del canal; eliminar o tokenizar esa dependencia es deuda explícita de privacidad.
 
@@ -167,15 +170,15 @@ Implementado:
 - media Meta privada con hash canónico y vínculo idempotente de foto → tarea → `ProgressEvidence`;
 - ausencia deliberada de publicación automática.
 
-Esta lista describe el código y sus pruebas de contrato. Como evidencia externa separada, Meta ya asignó el número de prueba, verificó un destinatario propio y aceptó históricamente una solicitud outbound de plantilla con un token temporal. Eso no afirma entrega ni que un WABA/tenant real haya completado el circuito. El Preview aislado verificó las migraciones anteriores de esta rama; la migración H3.1, su despliegue y su verificador siguen pendientes allí. También faltan un App Secret y un token nuevo limitados a la rama antes de recorrer Meta end-to-end.
+Esta lista describe el código y sus pruebas de contrato. Como evidencia externa separada, Meta ya asignó el número de prueba, verificó un destinatario propio y aceptó históricamente una solicitud outbound de plantilla con un token temporal. Eso no afirma entrega ni que un WABA/tenant real haya completado el circuito. Para el commit `d6b29b9`, Vercel Preview detectó 97 migraciones, aplicó las dos nuevas en la rama Neon aislada, ejecutó satisfactoriamente todos los verificadores de migración y terminó con build remoto `Ready`. Production no fue modificada. Todavía faltan el smoke UI/runtime, observar el cron H3.1 y recorrer Meta end-to-end con secretos limitados al piloto.
 
 ## Pendiente para validar con un WABA real
 
 Antes de afirmar que WhatsApp Flows está operativo end-to-end para un cliente hay que completar, en este orden:
 
 1. para el piloto, generar un token temporal nuevo, guardarlo sólo como secreto de la rama y registrar su vencimiento; para release, sustituirlo por credenciales permanentes de System User con el alcance mínimo necesario;
-2. completar en Vercel los secretos faltantes —en particular `META_APP_SECRET`— y verificar `META_VERIFY_TOKEN`, `NEXT_PUBLIC_META_APP_ID`, `NEXT_PUBLIC_META_EMBEDDED_SIGNUP_CONFIG_ID`, `WHATSAPP_CREDENTIALS_ENCRYPTION_KEY`, `WHATSAPP_FLOW_TOKEN_SECRET`, `WORKER_ONBOARDING_FLOW_TOKEN_SECRET` y el registro KEK, sin exponer sus valores; el token de cada tenant debe persistirse sólo cifrado mediante el flujo previsto;
-3. ejecutar `migrate deploy` y el verificador H3.1 en la rama Neon aislada, redesplegar con `NEXT_PUBLIC_APP_URL` estable y comprobar el dominio de Preview. Las migraciones anteriores del keyring y Data Endpoint sí fueron verificadas; H3.1 todavía no;
+2. completar en Vercel los secretos faltantes —en particular `META_APP_SECRET`— y verificar `META_VERIFY_TOKEN`, `NEXT_PUBLIC_META_APP_ID`, `NEXT_PUBLIC_META_EMBEDDED_SIGNUP_CONFIG_ID`, `WHATSAPP_CREDENTIALS_ENCRYPTION_KEY`, `WHATSAPP_FLOW_TOKEN_SECRET`, `WORKER_ONBOARDING_FLOW_TOKEN_SECRET`, `WHATSAPP_PREVIEW_ALLOWED_PUBLIC_ORIGINS` y el registro KEK, sin exponer sus valores; el token de cada tenant debe persistirse sólo cifrado mediante el flujo previsto;
+3. ejecutar el smoke UI/runtime del commit `d6b29b9` en el dominio estable de Preview e invocar manualmente el cron autenticado hasta observar métricas y backlog de H3.1; el build `Ready` no acredita esos recorridos;
 4. verificar el callback del webhook general y sus seis campos suscritos con solicitudes reales firmadas por Meta; persistir al menos un inbound y los eventos de estado correlacionados con un outbound aceptado;
 5. completar Embedded Signup con el WABA y número del tenant real del piloto; el número de prueba asignado por Meta no cierra este gate;
 6. ejecutar el provisionamiento desde Integraciones y comprobar en Meta la clave pública `VALID`, `endpoint_uri`, `application_id`, Flow JSON `7.3`, Data API `4.0` y el estado de salud del endpoint;

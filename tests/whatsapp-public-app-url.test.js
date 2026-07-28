@@ -86,6 +86,39 @@ test('Preview rejects an explicit URL that points at the Production project host
   });
 });
 
+test('Preview rejects the canonical Production alias even when Vercel reports another project host', () => {
+  const environment = {
+    VERCEL: '1',
+    VERCEL_ENV: 'preview',
+    NEXT_PUBLIC_APP_URL: 'https://obrasaas.vercel.app',
+    VERCEL_PROJECT_PRODUCTION_URL: 'obrasaas-saas.vercel.app',
+  };
+
+  assert.throws(
+    () => resolveWhatsAppPublicAppUrl(environment),
+    (error) => error.code === 'WHATSAPP_PUBLIC_APP_URL_PRODUCTION_LEAK',
+  );
+});
+
+test('Preview accepts only its canonical or explicitly registered origin', () => {
+  const unregistered = {
+    VERCEL: '1',
+    VERCEL_ENV: 'preview',
+    NEXT_PUBLIC_APP_URL: 'https://candidate-preview.obrasaas.test',
+  };
+  assert.throws(
+    () => resolveWhatsAppPublicAppUrl(unregistered),
+    (error) => error.code === 'WHATSAPP_PUBLIC_APP_URL_PREVIEW_NOT_ALLOWED',
+  );
+  assert.equal(inspectWhatsAppPublicAppUrl(unregistered).status, 'INVALID');
+
+  assert.equal(resolveWhatsAppPublicAppUrl({
+    ...unregistered,
+    WHATSAPP_PREVIEW_ALLOWED_PUBLIC_ORIGINS:
+      'https://candidate-preview.obrasaas.test,https://another-preview.obrasaas.test',
+  }), 'https://candidate-preview.obrasaas.test');
+});
+
 test('Preview can answer messages that do not emit a webview without a public URL', async () => {
   const result = await processIncomingObraMessage(
     {
@@ -178,9 +211,10 @@ test('deployed webview URLs must be HTTPS while local development keeps localhos
   }), 'http://localhost:3000');
 });
 
-test('configured URLs reject credentials, queries and fragments', () => {
+test('configured URLs reject credentials, paths, queries and fragments', () => {
   for (const configured of [
     'https://user:secret@preview.obrasaas.test',
+    'https://preview.obrasaas.test/unexpected-path',
     'https://preview.obrasaas.test?tenant=one',
     'https://preview.obrasaas.test#unsafe',
   ]) {

@@ -85,6 +85,83 @@ test('status webhook retries its CAS and preserves concurrently published Flow m
   assert.equal(writes[1].data.lastError, null);
   assert.equal(writes[1].data.lastVerifiedAt, VERIFIED_AT);
   assert.equal(Object.hasOwn(writes[1].data, 'flowProvisioningLeaseId'), false);
+  assert.deepEqual(writes[1].where.OR, [
+    { flowProvisioningLeaseId: null },
+    { flowProvisioningLeaseExpiresAt: { lte: VERIFIED_AT } },
+  ]);
+});
+
+test('status webhook defers while an active connection lease protects a provider send', async () => {
+  let writes = 0;
+  const leaseExpiresAt = new Date(VERIFIED_AT.getTime() + 45_000);
+  const prisma = {
+    whatsAppConnection: {
+      async findUnique() {
+        return {
+          id: 'connection-1',
+          metadata: { channelHealth: { providerStatus: 'HEALTHY' } },
+          updatedAt: new Date('2026-07-17T12:00:00.000Z'),
+          flowProvisioningLeaseId: '11111111-1111-4111-8111-111111111111',
+          flowProvisioningLeaseExpiresAt: leaseExpiresAt,
+        };
+      },
+      async updateMany() {
+        writes += 1;
+        return { count: 1 };
+      },
+    },
+  };
+
+  await assert.rejects(
+    synchronizeWhatsAppConnectionStatus(
+      accountEvent({ event: 'DISABLED_UPDATE' }),
+      { phoneNumberId: 'phone-1' },
+      { prisma, now: VERIFIED_AT },
+    ),
+    (error) => (
+      error.code === 'WHATSAPP_CONNECTION_LEASE_ACTIVE'
+      && error.retryAfterSeconds === 45
+    ),
+  );
+  assert.equal(writes, 0);
+});
+
+test('status webhook observes a lease won after its first read and never overwrites it', async () => {
+  let reads = 0;
+  let writes = 0;
+  const prisma = {
+    whatsAppConnection: {
+      async findUnique() {
+        reads += 1;
+        return {
+          id: 'connection-1',
+          metadata: { revision: reads },
+          updatedAt: new Date(`2026-07-17T12:00:0${reads}.000Z`),
+          flowProvisioningLeaseId: reads === 1
+            ? null
+            : '11111111-1111-4111-8111-111111111111',
+          flowProvisioningLeaseExpiresAt: reads === 1
+            ? null
+            : new Date(VERIFIED_AT.getTime() + 30_000),
+        };
+      },
+      async updateMany() {
+        writes += 1;
+        return { count: 0 };
+      },
+    },
+  };
+
+  await assert.rejects(
+    synchronizeWhatsAppConnectionStatus(
+      accountEvent({ event: 'DISABLED_UPDATE' }),
+      { phoneNumberId: 'phone-1' },
+      { prisma, now: VERIFIED_AT },
+    ),
+    (error) => error.code === 'WHATSAPP_CONNECTION_LEASE_ACTIVE',
+  );
+  assert.equal(reads, 2);
+  assert.equal(writes, 1);
 });
 
 test('status webhook yields a retryable conflict instead of overwriting a newer connection', async () => {

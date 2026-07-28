@@ -283,12 +283,40 @@ export async function synchronizeWhatsAppConnectionStatus(
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const connection = await prisma.whatsAppConnection.findUnique({
       where: { phoneNumberId: scope.phoneNumberId },
-      select: { id: true, metadata: true, updatedAt: true },
+      select: {
+        id: true,
+        metadata: true,
+        updatedAt: true,
+        flowProvisioningLeaseId: true,
+        flowProvisioningLeaseExpiresAt: true,
+      },
     });
     if (!connection) return { updated: false, reason: "not_found" };
+    if (connection.flowProvisioningLeaseId) {
+      const leaseExpiresAt = connection.flowProvisioningLeaseExpiresAt
+        ? new Date(connection.flowProvisioningLeaseExpiresAt)
+        : null;
+      if (!leaseExpiresAt || Number.isNaN(leaseExpiresAt.getTime()) || leaseExpiresAt > now) {
+        const error = new Error(
+          "A WhatsApp connection operation is still using the current health snapshot.",
+        );
+        error.code = "WHATSAPP_CONNECTION_LEASE_ACTIVE";
+        error.retryAfterSeconds = leaseExpiresAt && !Number.isNaN(leaseExpiresAt.getTime())
+          ? Math.max(1, Math.ceil((leaseExpiresAt.getTime() - now.getTime()) / 1_000))
+          : null;
+        throw error;
+      }
+    }
 
     const result = await prisma.whatsAppConnection.updateMany({
-      where: { id: connection.id, updatedAt: connection.updatedAt },
+      where: {
+        id: connection.id,
+        updatedAt: connection.updatedAt,
+        OR: [
+          { flowProvisioningLeaseId: null },
+          { flowProvisioningLeaseExpiresAt: { lte: now } },
+        ],
+      },
       data: connectionStatusData(connection.metadata, event, now),
     });
     if (result.count === 1) return { updated: true };

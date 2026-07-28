@@ -17,6 +17,7 @@ import { getCurrentWorkerOnboardingPrivacyNotice } from '@/lib/worker-onboarding
 import { workerOnboardingSensitivePurgeData } from '@/lib/worker-onboarding-retention';
 import {
   deriveStoredWhatsAppChannelReadiness,
+  inspectStoredWhatsAppRemoteHealthEvidence,
   whatsAppPlatformConfiguration,
 } from '@/lib/whatsapp/channel-health';
 import {
@@ -24,6 +25,10 @@ import {
   getWhatsAppFlowBlueprint,
   getWhatsAppFlowSessionTtlMs,
 } from '@/lib/whatsapp/flows';
+import {
+  acquireWhatsAppConnectionLease,
+  releaseWhatsAppConnectionLease,
+} from '@/lib/whatsapp/flow-provisioning-lease';
 import { sendWhatsAppFlow } from '@/lib/whatsapp/meta';
 import {
   WorkerOnboardingFlowSessionError,
@@ -172,26 +177,33 @@ function platformConfigured(env) {
 }
 
 function channelOperational(connection, env, now, deriveReadiness) {
-  if (
-    !connection?.enabled
-    || connection.connectionStatus !== 'CONNECTED'
-    || !connection.encryptedAccessToken
-    || !connection.phoneNumberId
-    || !connection.whatsappBusinessId
-  ) return { operational: false, readiness: null };
+  const locallyConnected = Boolean(
+    connection?.enabled
+    && connection.connectionStatus === 'CONNECTED'
+    && connection.encryptedAccessToken
+    && connection.phoneNumberId
+    && connection.whatsappBusinessId
+  );
+  const remoteHealth = inspectStoredWhatsAppRemoteHealthEvidence(connection, { now });
+  if (!locallyConnected) {
+    return { locallyConnected, operational: false, readiness: null, remoteHealth };
+  }
   const readiness = deriveReadiness({ connection, env, now });
   const account = readiness?.checks?.account || {};
   return {
+    locallyConnected,
+    remoteHealth,
     readiness,
     operational: Boolean(
-      readiness?.checks?.platform?.configured
+      remoteHealth.fresh
+      && readiness?.checks?.platform?.configured
       && account.linked
       && account.enabled
       && account.tokenStatus === 'VALID'
       && account.scopesVerified
       && account.phoneStatus === 'REGISTERED'
       && account.qualityStatus !== 'DEGRADED'
-      && account.providerStatus !== 'DEGRADED'
+      && account.providerStatus === 'HEALTHY'
       && readiness?.checks?.webhook?.subscriptionStatus === 'SUBSCRIBED'
     ),
   };
@@ -396,6 +408,7 @@ async function readState(prisma, scope, conversationId, {
         encryptedAccessToken: true,
         lastError: true,
         metadata: true,
+        updatedAt: true,
         flowEndpoint: {
           select: {
             id: true,
@@ -539,6 +552,27 @@ function capabilityError(state, {
       'La firma segura del alta todavia no esta configurada.',
       error?.code || 'WORKER_ONBOARDING_FLOW_TOKEN_SECRET_REQUIRED',
       error?.status || 503,
+    );
+  }
+  if (!state.channel.locallyConnected) {
+    return invitationError(
+      'WhatsApp no esta operativo para esta obra.',
+      'WHATSAPP_CONNECTION_NOT_OPERATIONAL',
+      409,
+    );
+  }
+  if (state.channel.remoteHealth.status === 'MISSING') {
+    return invitationError(
+      'Falta una verificacion remota reciente del canal. Verifica la cuenta con Meta desde Integraciones.',
+      'WHATSAPP_REMOTE_HEALTH_EVIDENCE_REQUIRED',
+      409,
+    );
+  }
+  if (!state.channel.remoteHealth.fresh) {
+    return invitationError(
+      'La verificacion remota del canal vencio. Volve a verificar la cuenta con Meta desde Integraciones.',
+      'WHATSAPP_REMOTE_HEALTH_EVIDENCE_STALE',
+      409,
     );
   }
   if (!state.channel.operational) {
@@ -1284,6 +1318,8 @@ export async function sendWorkerOnboardingInvitation({
   markDeliveryAttempted = markWorkerOnboardingFlowSessionDeliveryAttempted,
   markDeliveryRejected = markWorkerOnboardingFlowSessionDeliveryRejected,
   markSessionSent = markWorkerOnboardingFlowSessionSent,
+  acquireConnectionLease = acquireWhatsAppConnectionLease,
+  releaseConnectionLease = releaseWhatsAppConnectionLease,
   resolveWorker = resolveActiveFieldWorkerByPhone,
   deriveReadiness = deriveStoredWhatsAppChannelReadiness,
   resolvePublishedFlow = getPublishedWhatsAppFlowReference,
@@ -1343,13 +1379,8 @@ export async function sendWorkerOnboardingInvitation({
     initial.conversation.id,
     now,
   );
-  const resolvedSecret = assertWorkerOnboardingFlowTokenSecret(flowSessionSecret, {
-    allowDevelopmentFallback: true,
-  });
-  const ttlMs = getWhatsAppFlowSessionTtlMs(BLUEPRINT_KEY);
-  const blueprint = getWhatsAppFlowBlueprint(BLUEPRINT_KEY);
-  const currentPrivacyNotice = getCurrentWorkerOnboardingPrivacyNotice();
   let reservation;
+  let resolvedSecret;
 
   if (existing) {
     const recovery = idempotentRecoveryState(existing, now);
@@ -1370,6 +1401,9 @@ export async function sendWorkerOnboardingInvitation({
       }
     }
     if (!recovery.recoverable) return existing.response;
+    resolvedSecret = assertWorkerOnboardingFlowTokenSecret(flowSessionSecret, {
+      allowDevelopmentFallback: true,
+    });
     assertCapability(initial, {
       canManage: true,
       env,
@@ -1388,6 +1422,9 @@ export async function sendWorkerOnboardingInvitation({
       recovered: true,
     };
   } else {
+    resolvedSecret = assertWorkerOnboardingFlowTokenSecret(flowSessionSecret, {
+      allowDevelopmentFallback: true,
+    });
     assertCapability(initial, {
       canManage: true,
       env,
@@ -1395,6 +1432,9 @@ export async function sendWorkerOnboardingInvitation({
       flowSessionSecret: resolvedSecret,
     });
   }
+  const ttlMs = getWhatsAppFlowSessionTtlMs(BLUEPRINT_KEY);
+  const blueprint = getWhatsAppFlowBlueprint(BLUEPRINT_KEY);
+  const currentPrivacyNotice = getCurrentWorkerOnboardingPrivacyNotice();
 
   if (!reservation) try {
     const expiresAt = new Date(now.getTime() + ttlMs);
@@ -1613,6 +1653,31 @@ export async function sendWorkerOnboardingInvitation({
         },
         { secret: resolvedSecret, now: dispatchTime },
       );
+      const acquiredConnectionLease = await acquireConnectionLease(transaction, {
+        connectionId: fresh.connection.id,
+        operationKey: 'worker-onboarding-delivery',
+        expectedUpdatedAt: fresh.connection.updatedAt,
+        expectedConnectionIdentity: {
+          phoneNumberId: fresh.connection.phoneNumberId,
+          whatsappBusinessId: fresh.connection.whatsappBusinessId,
+          encryptedAccessToken: fresh.connection.encryptedAccessToken,
+        },
+        requireActive: true,
+        now: dispatchTime,
+      });
+      const leasedRemoteHealth = inspectStoredWhatsAppRemoteHealthEvidence({
+        metadata: acquiredConnectionLease.metadata,
+      }, { now: dispatchTime });
+      if (
+        !leasedRemoteHealth.fresh
+        || leasedRemoteHealth.checkedAt !== fresh.channel.remoteHealth.checkedAt
+      ) {
+        throw invitationError(
+          'La verificacion remota del canal cambio antes del envio.',
+          'WHATSAPP_REMOTE_HEALTH_EVIDENCE_CHANGED',
+          409,
+        );
+      }
       const attempt = await markDeliveryAttempted(
         transaction,
         { sessionId: reservation.session.id },
@@ -1628,6 +1693,10 @@ export async function sendWorkerOnboardingInvitation({
       return {
         sender: fresh.sender,
         connection: fresh.connection,
+        connectionLease: {
+          connectionId: fresh.connection.id,
+          leaseId: acquiredConnectionLease.lease.id,
+        },
         flow: fresh.publishedFlow,
         token: sessionDelivery.token,
       };
@@ -1680,19 +1749,33 @@ export async function sendWorkerOnboardingInvitation({
 
   let providerResult;
   try {
-    providerResult = await sendFlow({
-      to: delivery.sender.address,
-      phoneNumberId: delivery.connection.phoneNumberId,
-      scope,
-      flowId: delivery.flow.id,
-      flowToken: delivery.token,
-      screenId: delivery.flow.screenId,
-      flowAction: 'data_exchange',
-      header: blueprint.message.header,
-      body: blueprint.message.body,
-      footer: blueprint.message.footer,
-      cta: blueprint.message.cta,
-    });
+    try {
+      providerResult = await sendFlow({
+        to: delivery.sender.address,
+        phoneNumberId: delivery.connection.phoneNumberId,
+        scope,
+        flowId: delivery.flow.id,
+        flowToken: delivery.token,
+        screenId: delivery.flow.screenId,
+        flowAction: 'data_exchange',
+        header: blueprint.message.header,
+        body: blueprint.message.body,
+        footer: blueprint.message.footer,
+        cta: blueprint.message.cta,
+      });
+    } finally {
+      try {
+        const released = await releaseConnectionLease(prisma, delivery.connectionLease);
+        if (!released) {
+          console.error('Worker-onboarding delivery connection lease ownership was lost.');
+        }
+      } catch (releaseError) {
+        console.error('Worker-onboarding delivery connection lease release failed:', {
+          name: releaseError?.name,
+          code: releaseError?.code,
+        });
+      }
+    }
   } catch (error) {
     return persistProviderFailure({
       prisma,

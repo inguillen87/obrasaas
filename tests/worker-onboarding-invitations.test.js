@@ -53,10 +53,12 @@ const [
   },
   { createWorkerOnboardingInvitationHandlers },
   { getCurrentWorkerOnboardingPrivacyNotice },
+  { WHATSAPP_REMOTE_HEALTH_SNAPSHOT_TTL_MS },
 ] = await Promise.all([
   import('../src/lib/whatsapp/worker-onboarding-invitations.js'),
   import('../src/app/api/whatsapp/inbox/[conversationId]/worker-onboarding/route.js'),
   import('../src/lib/worker-onboarding-privacy-notices.js'),
+  import('../src/lib/whatsapp/channel-health.js'),
 ]);
 
 const NOW = new Date('2026-07-28T12:00:00.000Z');
@@ -102,7 +104,7 @@ function access(overrides = {}) {
   };
 }
 
-function readiness() {
+function readiness({ account = {} } = {}) {
   return {
     checks: {
       platform: { configured: true },
@@ -114,6 +116,7 @@ function readiness() {
         phoneStatus: 'REGISTERED',
         qualityStatus: 'HEALTHY',
         providerStatus: 'HEALTHY',
+        ...account,
       },
       webhook: { subscriptionStatus: 'SUBSCRIBED' },
       flows: {
@@ -140,6 +143,7 @@ function databaseDouble({
   inboundAt = new Date(NOW.getTime() - 30 * 60 * 1_000),
   inboundMetadata = {},
   resolvedStatus = 'UNKNOWN',
+  healthCheckedAt = NOW,
 } = {}) {
   const store = {
     project: {
@@ -162,7 +166,18 @@ function databaseDouble({
       enabled: true,
       connectionStatus: 'CONNECTED',
       encryptedAccessToken: 'ciphertext',
-      metadata: { whatsappFlows: {} },
+      updatedAt: NOW,
+      metadata: {
+        whatsappFlows: {},
+        ...(healthCheckedAt
+          ? {
+              channelHealth: {
+                version: 1,
+                checkedAt: new Date(healthCheckedAt).toISOString(),
+              },
+            }
+          : {}),
+      },
       flowEndpoint: { id: 'endpoint-a', enabled: true, keys: [] },
     },
     conversation: {
@@ -195,6 +210,9 @@ function databaseDouble({
     audits: [],
     locks: [],
     providerCalls: [],
+    connectionLeaseAcquisitions: 0,
+    connectionLeaseReleases: 0,
+    connectionLeaseHeld: false,
     claimIssuerCalls: 0,
     sessionCounter: 0,
     messageCounter: 0,
@@ -415,6 +433,39 @@ function databaseDouble({
       session.providerMessageId = input.providerMessageId;
       return { session: structuredClone(session), alreadySent: false };
     },
+    async acquireConnectionLease(_database, input) {
+      assert.equal(input.connectionId, store.connection.id);
+      assert.equal(input.operationKey, 'worker-onboarding-delivery');
+      if (input.expectedUpdatedAt.getTime() !== store.connection.updatedAt.getTime()) {
+        throw Object.assign(new Error('The connection changed before lease acquisition.'), {
+          code: 'WHATSAPP_FLOW_PROVISIONING_CONNECTION_CHANGED',
+          status: 409,
+        });
+      }
+      assert.deepEqual(input.expectedConnectionIdentity, {
+        phoneNumberId: store.connection.phoneNumberId,
+        whatsappBusinessId: store.connection.whatsappBusinessId,
+        encryptedAccessToken: store.connection.encryptedAccessToken,
+      });
+      assert.equal(input.requireActive, true);
+      assert.equal(store.connectionLeaseHeld, false);
+      store.connectionLeaseAcquisitions += 1;
+      store.connectionLeaseHeld = true;
+      return {
+        lease: { id: '11111111-1111-4111-8111-111111111111' },
+        metadata: structuredClone(store.connection.metadata),
+      };
+    },
+    async releaseConnectionLease(_database, input) {
+      assert.deepEqual(input, {
+        connectionId: store.connection.id,
+        leaseId: '11111111-1111-4111-8111-111111111111',
+      });
+      assert.equal(store.connectionLeaseHeld, true);
+      store.connectionLeaseReleases += 1;
+      store.connectionLeaseHeld = false;
+      return true;
+    },
   };
 
   return { prisma, store, dependencies };
@@ -429,6 +480,7 @@ test('reserves claim, pre-worker session, message and audit before one direct da
     idempotencyKey: 'onboarding-stable-a',
     ...dependencies,
     async sendFlow(input) {
+      assert.equal(store.connectionLeaseHeld, true);
       store.providerCalls.push(structuredClone(input));
       assert.equal(store.outbound[0].status, 'sending');
       assert.ok(store.sessions.get(store.outbound[0].metadata.workerOnboardingFlowSessionId)
@@ -440,6 +492,9 @@ test('reserves claim, pre-worker session, message and audit before one direct da
   assert.equal(result.idempotent, false);
   assert.equal(result.invitation.status, 'accepted');
   assert.equal(store.providerCalls.length, 1);
+  assert.equal(store.connectionLeaseAcquisitions, 1);
+  assert.equal(store.connectionLeaseReleases, 1);
+  assert.equal(store.connectionLeaseHeld, false);
   assert.equal(store.providerCalls[0].flowAction, 'data_exchange');
   assert.equal(store.providerCalls[0].to, '+5491155551212');
   assert.equal(store.providerCalls[0].scope.organizationId, 'organization-a');
@@ -458,6 +513,7 @@ test('reserves claim, pre-worker session, message and audit before one direct da
     conversationId: 'conversation-a',
     idempotencyKey: 'onboarding-stable-a',
     ...dependencies,
+    flowSessionSecret: '',
     async sendFlow(input) {
       store.providerCalls.push(input);
       throw new Error('An idempotent replay must not call Meta.');
@@ -467,6 +523,146 @@ test('reserves claim, pre-worker session, message and audit before one direct da
   assert.equal(replay.invitation.status, 'accepted');
   assert.equal(store.providerCalls.length, 1);
   assert.equal(store.claimIssuerCalls, 1);
+});
+
+test('remote health preflight fails closed before reserving or sending', async (t) => {
+  await t.test('missing remote evidence', async () => {
+    const { prisma, store, dependencies } = databaseDouble({ healthCheckedAt: null });
+    const state = await getWorkerOnboardingInvitationState({
+      prisma,
+      access: access(),
+      conversationId: 'conversation-a',
+      canManage: true,
+      ...dependencies,
+    });
+    assert.equal(state.capability.code, 'WHATSAPP_REMOTE_HEALTH_EVIDENCE_REQUIRED');
+
+    await assert.rejects(
+      sendWorkerOnboardingInvitation({
+        prisma,
+        access: access(),
+        conversationId: 'conversation-a',
+        idempotencyKey: 'onboarding-no-health-a',
+        ...dependencies,
+        sendFlow: async () => assert.fail('Missing evidence must not call Meta.'),
+      }),
+      (error) => (
+        error.code === 'WHATSAPP_REMOTE_HEALTH_EVIDENCE_REQUIRED'
+        && error.status === 409
+      ),
+    );
+    assert.equal(store.claimIssuerCalls, 0);
+    assert.equal(store.claims.size, 0);
+    assert.equal(store.sessions.size, 0);
+    assert.equal(store.outbound.length, 0);
+    assert.equal(store.audits.length, 0);
+  });
+
+  await t.test('stale remote evidence', async () => {
+    const { prisma, store, dependencies } = databaseDouble({
+      healthCheckedAt: new Date(NOW.getTime() - WHATSAPP_REMOTE_HEALTH_SNAPSHOT_TTL_MS - 1),
+    });
+    const state = await getWorkerOnboardingInvitationState({
+      prisma,
+      access: access(),
+      conversationId: 'conversation-a',
+      canManage: true,
+      ...dependencies,
+    });
+    assert.equal(state.capability.code, 'WHATSAPP_REMOTE_HEALTH_EVIDENCE_STALE');
+    assert.match(state.capability.reason, /Meta desde Integraciones/);
+
+    await assert.rejects(
+      sendWorkerOnboardingInvitation({
+        prisma,
+        access: access(),
+        conversationId: 'conversation-a',
+        idempotencyKey: 'onboarding-stale-health-a',
+        ...dependencies,
+        sendFlow: async () => assert.fail('Stale evidence must not call Meta.'),
+      }),
+      (error) => (
+        error.code === 'WHATSAPP_REMOTE_HEALTH_EVIDENCE_STALE'
+        && error.status === 409
+      ),
+    );
+    assert.equal(store.claimIssuerCalls, 0);
+    assert.equal(store.claims.size, 0);
+    assert.equal(store.sessions.size, 0);
+    assert.equal(store.outbound.length, 0);
+    assert.equal(store.audits.length, 0);
+  });
+
+  await t.test('fresh but degraded provider evidence', async () => {
+    const { prisma, store, dependencies } = databaseDouble();
+    const degradedDependencies = {
+      ...dependencies,
+      deriveReadiness: () => readiness({ account: { providerStatus: 'DEGRADED' } }),
+    };
+    const state = await getWorkerOnboardingInvitationState({
+      prisma,
+      access: access(),
+      conversationId: 'conversation-a',
+      canManage: true,
+      ...degradedDependencies,
+    });
+    assert.equal(state.capability.code, 'WHATSAPP_CONNECTION_NOT_OPERATIONAL');
+
+    await assert.rejects(
+      sendWorkerOnboardingInvitation({
+        prisma,
+        access: access(),
+        conversationId: 'conversation-a',
+        idempotencyKey: 'onboarding-degraded-health-a',
+        ...degradedDependencies,
+        sendFlow: async () => assert.fail('Degraded evidence must not call Meta.'),
+      }),
+      (error) => (
+        error.code === 'WHATSAPP_CONNECTION_NOT_OPERATIONAL'
+        && error.status === 409
+      ),
+    );
+    assert.equal(store.claimIssuerCalls, 0);
+    assert.equal(store.claims.size, 0);
+    assert.equal(store.sessions.size, 0);
+    assert.equal(store.outbound.length, 0);
+    assert.equal(store.audits.length, 0);
+  });
+});
+
+test('a concurrent local health degradation loses the lease CAS before the delivery attempt', async () => {
+  const { prisma, store, dependencies } = databaseDouble();
+  let providerCalls = 0;
+
+  await assert.rejects(
+    sendWorkerOnboardingInvitation({
+      prisma,
+      access: access(),
+      conversationId: 'conversation-a',
+      idempotencyKey: 'onboarding-health-race-a',
+      ...dependencies,
+      async acquireConnectionLease(...args) {
+        store.connection.metadata.channelHealth.providerStatus = 'DEGRADED';
+        store.connection.updatedAt = new Date(store.connection.updatedAt.getTime() + 1);
+        return dependencies.acquireConnectionLease(...args);
+      },
+      async sendFlow() {
+        providerCalls += 1;
+        return { messages: [{ id: 'must-not-send-after-health-race' }] };
+      },
+    }),
+    (error) => (
+      error.code === 'WORKER_ONBOARDING_INVITATION_PREPARATION_FAILED'
+      && error.status === 409
+    ),
+  );
+
+  assert.equal(providerCalls, 0);
+  assert.equal(store.connectionLeaseAcquisitions, 0);
+  assert.equal(store.connectionLeaseHeld, false);
+  assert.equal([...store.sessions.values()][0].deliveryAttemptedAt, null);
+  assert.equal(store.connection.metadata.channelHealth.providerStatus, 'DEGRADED');
+  assert.equal(store.outbound[0].status, 'failed');
 });
 
 test('missing WAMID is unknown, preserves the open claim, and is never auto-retried', async () => {
@@ -493,11 +689,15 @@ test('missing WAMID is unknown, preserves the open claim, and is never auto-retr
   assert.equal([...store.claims.values()][0].status, 'PENDING');
   assert.equal(providerCalls, 1);
 
+  store.connection.metadata.channelHealth.checkedAt = new Date(
+    NOW.getTime() - WHATSAPP_REMOTE_HEALTH_SNAPSHOT_TTL_MS - 1,
+  ).toISOString();
   const replay = await send();
   assert.equal(replay.idempotent, true);
   assert.equal(replay.invitation.status, 'unknown');
   assert.equal(providerCalls, 1);
 
+  store.connection.metadata.channelHealth.checkedAt = NOW.toISOString();
   await assert.rejects(
     sendWorkerOnboardingInvitation({
       prisma,
@@ -555,6 +755,28 @@ test('same key recovers a stale untouched reservation but never before the stale
   assert.equal(recoveryProviderCalls, 0);
 
   current = new Date(NOW.getTime() + 3 * 60_000);
+  store.connection.metadata.channelHealth.checkedAt = new Date(
+    current.getTime() - WHATSAPP_REMOTE_HEALTH_SNAPSHOT_TTL_MS - 1,
+  ).toISOString();
+  await assert.rejects(
+    sendWorkerOnboardingInvitation({
+      prisma,
+      access: access(),
+      conversationId: 'conversation-a',
+      idempotencyKey: 'onboarding-crash-recovery-a',
+      ...dependencies,
+      clock: () => new Date(current),
+      sendFlow: async () => {
+        recoveryProviderCalls += 1;
+        return { messages: [{ id: 'must-not-send-with-stale-health' }] };
+      },
+    }),
+    (error) => error.code === 'WHATSAPP_REMOTE_HEALTH_EVIDENCE_STALE',
+  );
+  assert.equal(recoveryProviderCalls, 0);
+  assert.equal(session.deliveryAttemptedAt, null);
+
+  store.connection.metadata.channelHealth.checkedAt = current.toISOString();
   const recovered = await sendWorkerOnboardingInvitation({
     prisma,
     access: access(),
@@ -598,6 +820,7 @@ test('an untouched expired reservation is reconciled and requires a new operatio
   claim.status = 'PENDING';
   let providerCalls = 0;
   const afterExpiry = new Date(NOW.getTime() + 61 * 60_000);
+  store.connection.metadata.channelHealth.checkedAt = afterExpiry.toISOString();
 
   const expiredState = await getWorkerOnboardingInvitationState({
     prisma,
@@ -679,6 +902,9 @@ test('definitive Meta rejection fences the session and cancels the claim so GET 
 
   const claim = [...store.claims.values()][0];
   const session = [...store.sessions.values()][0];
+  assert.equal(store.connectionLeaseAcquisitions, 1);
+  assert.equal(store.connectionLeaseReleases, 1);
+  assert.equal(store.connectionLeaseHeld, false);
   assert.equal(store.outbound[0].status, 'failed');
   assert.equal(claim.status, 'CANCELLED');
   assert.equal(claim.openClaimKey, null);

@@ -34,6 +34,7 @@ import {
   releaseWhatsAppFlowProvisioningLease,
   WhatsAppFlowProvisioningLeaseError,
 } from '@/lib/whatsapp/flow-provisioning-lease';
+import { resolveWhatsAppPublicAppUrl } from '@/lib/whatsapp/public-app-url';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -64,6 +65,12 @@ const FLOW_PROVISIONING_PUBLIC_MESSAGES = Object.freeze({
   WHATSAPP_FLOW_PROVISIONING_LEASE_INVALID: 'La preparación segura del WhatsApp Flow no está disponible.',
   WHATSAPP_FLOW_PROVISIONING_CONNECTION_CHANGED: 'La conexi\u00f3n de WhatsApp cambi\u00f3 durante la operaci\u00f3n. Volv\u00e9 a intentar.',
 });
+const FLOW_PUBLIC_APP_URL_MESSAGES = Object.freeze({
+  WHATSAPP_PUBLIC_APP_URL_REQUIRED: 'Configur\u00e1 la URL HTTPS p\u00fablica de este ambiente antes de preparar WhatsApp Flows.',
+  WHATSAPP_PUBLIC_APP_URL_INVALID: 'La URL p\u00fablica configurada para este ambiente no es segura.',
+  WHATSAPP_PUBLIC_APP_URL_PRODUCTION_LEAK: 'Un ambiente Preview no puede preparar WhatsApp Flows sobre el origen de Production.',
+  WHATSAPP_PUBLIC_APP_URL_PREVIEW_NOT_ALLOWED: 'El origen p\u00fablico de Preview no est\u00e1 autorizado para WhatsApp Flows.',
+});
 
 function auditIp(request) {
   return request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
@@ -87,6 +94,22 @@ async function requireActiveConnection(access) {
     });
   }
   return connection;
+}
+
+function requireFlowProvisioningAppUrl(environment = process.env) {
+  try {
+    return resolveWhatsAppPublicAppUrl(environment);
+  } catch (error) {
+    const code = typeof error?.code === 'string' ? error.code : '';
+    const message = Object.hasOwn(FLOW_PUBLIC_APP_URL_MESSAGES, code)
+      ? FLOW_PUBLIC_APP_URL_MESSAGES[code]
+      : null;
+    if (!message) throw error;
+    throw new MetaIntegrationError(message, {
+      code,
+      status: 503,
+    });
+  }
 }
 
 function flowErrorResponse(error, fallback) {
@@ -140,7 +163,7 @@ function expectedEndpointContract(endpointId) {
   try {
     return {
       endpointUri: buildWhatsAppFlowEndpointUri(
-        process.env.NEXT_PUBLIC_APP_URL,
+        resolveWhatsAppPublicAppUrl(),
         endpointId,
       ),
       applicationId,
@@ -282,6 +305,7 @@ export async function POST(request) {
   try {
     const access = await getPlatformAccess();
     requireTenantPermission(access, 'org:integrations:manage');
+    const appUrl = requireFlowProvisioningAppUrl();
     const body = await readJsonRequest(request, { maxBytes: MAX_FLOW_JSON_BYTES });
     const connection = await requireActiveConnection(access);
     const blueprintKey = typeof body.blueprintKey === 'string' ? body.blueprintKey.trim() : '';
@@ -311,7 +335,7 @@ export async function POST(request) {
         connection: { ...connection, metadata: acquired.metadata },
         blueprintKey,
         accessToken,
-        appUrl: process.env.NEXT_PUBLIC_APP_URL,
+        appUrl,
         applicationId: process.env.NEXT_PUBLIC_META_APP_ID,
       });
       const result = provisioned.result;

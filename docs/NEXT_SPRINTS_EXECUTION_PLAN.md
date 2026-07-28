@@ -6,8 +6,9 @@ Este plan mantiene la secuencia del PDF y separa capacidades operativas de capac
 
 El estado se expresa por nivel de evidencia: código y pruebas locales, migración en Preview aislado, journey UI en Preview y E2E externo. No se usa “desplegado” como sinónimo de “operativo con un proveedor real”.
 
-- `npm test`: 1369/1369 verde; lint y build de Next 16.2.11 verdes en el worktree;
+- `npm test`: 1383/1383 verde; lint y build de Next 16.2.11 verdes en el worktree;
 - las migraciones y verificadores de baseline/forecast fueron aprobados en el Preview aislado de la rama `codex/platform-ux-foundation`; Production permanece fuera del alcance;
+- el commit `d6b29b9` quedó `Ready` en Vercel Preview: se detectaron 97 migraciones, las dos nuevas H3.1 se aplicaron en Neon aislado y todos los verificadores de migración pasaron; el corte conserva [deployment IDs, timestamps y smokes sanitizados](./evidence/2026-07-28-preview-d6b29b9.md), pero no acredita aún el smoke UI/runtime ni la ejecución observada del cron;
 - falta cerrar el smoke UI de publicación de baseline y forecast en el tenant de prueba, porque el acceso local directo a la conexión Preview está deliberadamente protegido y no se sustituye con una conexión de Production;
 - Meta, media entrante, identidad/cobro y Vision siguen siendo gates externos o de credencial explícita.
 
@@ -39,10 +40,10 @@ El estado se expresa por nivel de evidencia: código y pruebas locales, migraci�
 
 ## H3.1/H4 — alta de operario y cobro seguro
 
-- H3.1 está implementado sólo en código y pruebas locales: invitación desde Inbox, sesión/Flow pre-operario, aviso fijado en `INIT`, submit autenticado, acuse terminal, readiness fail-closed, cola CRM, decisión administrativa y purga periódica del claim transitorio;
+- H3.1 está implementado en código y pruebas locales: invitación desde Inbox, sesión/Flow pre-operario, aviso fijado en `INIT`, submit autenticado, acuse terminal, readiness fail-closed, cola CRM, decisión administrativa y purga periódica del claim transitorio; sus dos migraciones nuevas ya fueron aplicadas y verificadas en Neon Preview con build remoto `Ready`;
 - `privacyPresentedAt` acredita que el Data Endpoint sirvió el aviso, no lectura ni comprensión; el copy y el circuito laboral deben pasar revisión legal antes de trabajadores reales;
 - la purga H3.1 no es un DSAR integral: `WorkerPerson`, `WorkerChannelIdentity`, `Worker`, conversaciones, mensajes y backups requieren otro sprint. El teléfono raw interno de `Conversation.externalId` también es deuda pendiente;
-- cierre H3.1: ejecutar migración/verificador y deploy en Preview, observar cron/readiness y completar Meta E2E. Ninguna de esas evidencias externas existe todavía;
+- cierre H3.1: completar smoke UI/runtime, observar cron/readiness, terminar revisión legal y completar Meta E2E. Esas evidencias funcionales y externas siguen pendientes;
 - H4 mantiene CUIL/CBU/CVU/alias en un dominio cifrado, enmascarado y auditado, nunca en Inbox o snapshots compartidos; faltan Flow/UI de cobro, proveedor confiable de titularidad y comprobante privado. Nunca se ejecuta un pago automático.
 
 ## S20 — campo offline confiable

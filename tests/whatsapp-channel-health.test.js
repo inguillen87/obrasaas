@@ -5,7 +5,9 @@ import {
   buildWhatsAppChannelHealthFailureMetadata,
   buildWhatsAppChannelHealthMetadata,
   deriveStoredWhatsAppChannelReadiness,
+  inspectStoredWhatsAppRemoteHealthEvidence,
   loadWhatsAppChannelHealth,
+  WHATSAPP_REMOTE_HEALTH_SNAPSHOT_TTL_MS,
   whatsAppPlatformConfiguration,
 } from '../src/lib/whatsapp/channel-health.js';
 
@@ -99,6 +101,28 @@ test('successful remote verification persists only a safe health snapshot', () =
     failureCode: null,
   });
   assert.equal(JSON.stringify(metadata).includes('app-secret'), false);
+});
+
+test('remote health evidence has an explicit inclusive fifteen-minute freshness boundary', () => {
+  const verifiedConnection = connection();
+  const boundary = new Date(NOW.getTime() + WHATSAPP_REMOTE_HEALTH_SNAPSHOT_TTL_MS);
+  const fresh = inspectStoredWhatsAppRemoteHealthEvidence(verifiedConnection, { now: boundary });
+  assert.deepEqual(fresh, {
+    status: 'FRESH',
+    fresh: true,
+    checkedAt: NOW.toISOString(),
+    maxAgeMs: 15 * 60 * 1_000,
+  });
+
+  const stale = inspectStoredWhatsAppRemoteHealthEvidence(verifiedConnection, {
+    now: new Date(boundary.getTime() + 1),
+  });
+  assert.equal(stale.status, 'STALE');
+  assert.equal(stale.fresh, false);
+
+  const missing = connection();
+  delete missing.metadata.channelHealth.checkedAt;
+  assert.equal(inspectStoredWhatsAppRemoteHealthEvidence(missing, { now: NOW }).status, 'MISSING');
 });
 
 test('safe snapshots preserve explicit expiry and disconnected phone evidence', () => {
