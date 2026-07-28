@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { PDFDocument } from "pdf-lib";
 
 import {
   MODEL_ROLLOUT_ROLES,
@@ -20,9 +21,12 @@ const DEFAULT_TIMEOUT_MS = 55_000;
 const ZAI_VISION_MAX_BYTES = 5 * 1024 * 1024;
 const ZAI_OCR_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
 const ZAI_OCR_PDF_MAX_BYTES = 50 * 1024 * 1024;
-// ObraSaaS intentionally chunks OCR at 30 pages to bound cost and output.
-// This is an internal policy, not the provider's documented maximum.
-const OBRASAAS_OCR_CHUNK_MAX_PAGES = 30;
+// Z.AI's endpoint reference currently caps each PDF request at 30 pages while
+// its GLM-OCR guide advertises documents up to 100 pages. ObraSaaS resolves
+// that provider-contract ambiguity by splitting a validated source document
+// into fresh PDFs of at most 30 pages without source document metadata.
+const ZAI_OCR_REQUEST_MAX_PAGES = 30;
+const OBRASAAS_OCR_PDF_MAX_PAGES = 100;
 const MAX_OCR_LAYOUT_ITEMS = 10_000;
 const MAX_OCR_LAYOUT_CHARACTERS = 2_000_000;
 const MAX_OCR_ITEM_CHARACTERS = 20_000;
@@ -334,40 +338,236 @@ function ocrInput({ fileBuffer, mimeType }) {
   return { buffer: image.safeBuffer, mimeType: image.mimeType };
 }
 
-function normalizeOcrLayout(value) {
-  if (!Array.isArray(value)) return [];
+function normalizeOcrLayout(value, { maxPages = OBRASAAS_OCR_PDF_MAX_PAGES } = {}) {
+  const sourcePages = Array.isArray(value) ? value : [];
   const pages = [];
   let remainingItems = MAX_OCR_LAYOUT_ITEMS;
   let remainingCharacters = MAX_OCR_LAYOUT_CHARACTERS;
-  for (const sourcePage of value.slice(0, OBRASAAS_OCR_CHUNK_MAX_PAGES)) {
-    if (remainingItems === 0 || remainingCharacters === 0) break;
+  let returnedItems = 0;
+  let returnedCharacters = 0;
+  let droppedItems = 0;
+  let degradedItems = 0;
+  let layoutTruncated = sourcePages.length > maxPages;
+  let truncatedFromPageId = sourcePages.length > maxPages ? maxPages + 1 : null;
+  const noteTruncation = (pageId) => {
+    layoutTruncated = true;
+    truncatedFromPageId = truncatedFromPageId == null
+      ? pageId
+      : Math.min(truncatedFromPageId, pageId);
+  };
+
+  for (let pageIndex = 0; pageIndex < Math.min(sourcePages.length, maxPages); pageIndex += 1) {
+    const sourcePage = Array.isArray(sourcePages[pageIndex]) ? sourcePages[pageIndex] : [];
     const page = [];
-    for (const item of Array.isArray(sourcePage) ? sourcePage : []) {
-      if (remainingItems === 0 || remainingCharacters === 0) break;
+    if ((remainingItems === 0 || remainingCharacters === 0) && sourcePage.length > 0) {
+      noteTruncation(pageIndex + 1);
+      pages.push(page);
+      continue;
+    }
+    for (let itemIndex = 0; itemIndex < sourcePage.length; itemIndex += 1) {
+      const item = sourcePage[itemIndex];
+      if (remainingItems === 0 || remainingCharacters === 0) {
+        noteTruncation(pageIndex + 1);
+        break;
+      }
+      if (!item || typeof item !== "object" || Array.isArray(item)) {
+        droppedItems += 1;
+        continue;
+      }
       const sourceContent = typeof item?.content === "string" ? item.content : "";
       const content = sourceContent.slice(
         0,
         Math.min(MAX_OCR_ITEM_CHARACTERS, remainingCharacters),
       );
+      if (content.length < sourceContent.length) noteTruncation(pageIndex + 1);
       const bbox = Array.isArray(item?.bbox_2d)
         && item.bbox_2d.length === 4
         && item.bbox_2d.every((coordinate) => Number.isFinite(coordinate) && coordinate >= 0 && coordinate <= 1)
         ? [...item.bbox_2d]
         : [];
+      const index = Number.isInteger(item.index) && item.index >= 0 ? item.index : null;
+      const label = ["image", "text", "formula", "table"].includes(item.label) ? item.label : null;
+      const width = Number.isInteger(item.width) && item.width > 0 ? item.width : null;
+      const height = Number.isInteger(item.height) && item.height > 0 ? item.height : null;
+      if (
+        typeof item.content !== "string"
+        || index == null
+        || label == null
+        || bbox.length !== 4
+        || (item.width != null && width == null)
+        || (item.height != null && height == null)
+      ) degradedItems += 1;
       page.push({
-        index: Number.isInteger(item?.index) && item.index >= 0 ? item.index : null,
-        label: ["image", "text", "formula", "table"].includes(item?.label) ? item.label : null,
+        index,
+        label,
         bbox,
         content,
-        width: Number.isInteger(item?.width) && item.width > 0 ? item.width : null,
-        height: Number.isInteger(item?.height) && item.height > 0 ? item.height : null,
+        width,
+        height,
       });
       remainingItems -= 1;
       remainingCharacters -= content.length;
+      returnedItems += 1;
+      returnedCharacters += content.length;
     }
     pages.push(page);
   }
-  return pages;
+  return {
+    pages,
+    summary: {
+      layoutTruncated,
+      truncatedFromPageId,
+      droppedItems,
+      degradedItems,
+      returnedPages: pages.length,
+      returnedItems,
+      returnedCharacters,
+      limits: {
+        pages: maxPages,
+        items: MAX_OCR_LAYOUT_ITEMS,
+        characters: MAX_OCR_LAYOUT_CHARACTERS,
+        itemCharacters: MAX_OCR_ITEM_CHARACTERS,
+      },
+    },
+  };
+}
+
+function assertOcrProviderResult(result, { requestId, expectedModel }) {
+  if (
+    typeof result?.id !== "string"
+    || !result.id.trim()
+    || typeof result?.model !== "string"
+    || result.model.trim().toLowerCase() !== expectedModel.toLowerCase()
+  ) {
+    fail("PROVIDER_RESPONSE_INVALID", "Z.ai OCR returned an invalid result.", { requestId });
+  }
+}
+
+function assertExpectedOcrPageCount(result, { expectedPages, requestId }) {
+  const pages = result?.data_info?.num_pages;
+  if (!Number.isSafeInteger(pages) || pages < 1) {
+    fail("OCR_PAGE_COUNT_INVALID", "Z.ai OCR returned an invalid page count.", { requestId });
+  }
+  if (pages !== expectedPages) {
+    fail(
+      "OCR_PAGE_COUNT_MISMATCH",
+      "Z.ai OCR returned a page count that does not match the submitted PDF chunk.",
+      { requestId, expectedPages, observedPages: pages },
+    );
+  }
+}
+
+function assertCompleteOcrWindow(result, { startPageId, endPageId, requestId }) {
+  const expectedPages = endPageId - startPageId + 1;
+  if (
+    !Array.isArray(result?.layout_details)
+    || result.layout_details.length !== expectedPages
+    || result.layout_details.some((page) => !Array.isArray(page))
+  ) {
+    fail(
+      "OCR_PAGE_WINDOW_INCOMPLETE",
+      "Z.ai OCR returned an incomplete PDF page window.",
+      {
+        requestId,
+        startPageId,
+        endPageId,
+        expectedPages,
+        returnedPages: Array.isArray(result?.layout_details) ? result.layout_details.length : null,
+      },
+    );
+  }
+}
+
+function aggregateOcrUsage(chunks) {
+  const normalized = chunks.map(({ result }) => normalizeUsage(result?.usage));
+  const sumWhenComplete = (field) => (
+    normalized.every((usage) => Number.isSafeInteger(usage[field]))
+      ? normalized.reduce((total, usage) => total + usage[field], 0)
+      : null
+  );
+  return {
+    inputTokens: sumWhenComplete("inputTokens"),
+    outputTokens: sumWhenComplete("outputTokens"),
+    totalTokens: sumWhenComplete("totalTokens"),
+  };
+}
+
+function normalizeOcrMarkdown(chunks) {
+  let markdown = "";
+  let markdownTruncated = false;
+  for (const { result } of chunks) {
+    const content = typeof result?.md_results === "string" ? result.md_results : "";
+    if (!content) continue;
+    const addition = `${markdown ? "\n\n" : ""}${content}`;
+    const remaining = MAX_OCR_MARKDOWN_CHARACTERS - markdown.length;
+    if (remaining <= 0) {
+      markdownTruncated = true;
+      break;
+    }
+    markdown += addition.slice(0, remaining);
+    if (addition.length > remaining) {
+      markdownTruncated = true;
+      break;
+    }
+  }
+  return { markdown, markdownTruncated };
+}
+
+async function loadPdfForOcr(buffer) {
+  let document;
+  try {
+    document = await PDFDocument.load(buffer, {
+      ignoreEncryption: false,
+      throwOnInvalidObject: true,
+      updateMetadata: false,
+      capNumbers: true,
+    });
+  } catch {
+    fail("OCR_PDF_INVALID", "PDF could not be parsed safely for OCR.");
+  }
+  const pages = document.getPageCount();
+  if (!Number.isSafeInteger(pages) || pages < 1) {
+    fail("OCR_PAGE_COUNT_INVALID", "PDF must contain at least one page.");
+  }
+  if (pages > OBRASAAS_OCR_PDF_MAX_PAGES) {
+    fail(
+      "OCR_PAGE_LIMIT_EXCEEDED",
+      `PDF exceeds the ObraSaaS OCR limit of ${OBRASAAS_OCR_PDF_MAX_PAGES} pages.`,
+    );
+  }
+  return { document, pages };
+}
+
+async function createStandalonePdfChunk(source, startIndex, endIndex) {
+  try {
+    const chunk = await PDFDocument.create({ updateMetadata: false });
+    const indices = Array.from({ length: endIndex - startIndex }, (_, index) => startIndex + index);
+    const copiedPages = await chunk.copyPages(source, indices);
+    for (const page of copiedPages) chunk.addPage(page);
+    return Buffer.from(await chunk.save({ addDefaultPage: false, useObjectStreams: true }));
+  } catch {
+    fail("OCR_PDF_NORMALIZATION_FAILED", "PDF pages could not be normalized safely for OCR.");
+  }
+}
+
+async function* boundedPdfChunks(source, startIndex, endIndex) {
+  let buffer = await createStandalonePdfChunk(source, startIndex, endIndex);
+  if (buffer.length <= ZAI_OCR_PDF_MAX_BYTES) {
+    yield {
+      buffer,
+      startPageId: startIndex + 1,
+      endPageId: endIndex,
+      pageCount: endIndex - startIndex,
+    };
+    return;
+  }
+  buffer = null;
+  if (endIndex - startIndex === 1) {
+    fail("OCR_FILE_TOO_LARGE", "A normalized PDF page exceeds the Z.ai OCR size limit.");
+  }
+  const midpoint = startIndex + Math.floor((endIndex - startIndex) / 2);
+  yield* boundedPdfChunks(source, startIndex, midpoint);
+  yield* boundedPdfChunks(source, midpoint, endIndex);
 }
 
 export async function extractDocumentWithGlmOcr({
@@ -389,46 +589,144 @@ export async function extractDocumentWithGlmOcr({
   if (model !== selected.model) fail("PROVIDER_MODEL_INVALID", "Z.ai OCR model is not registered.");
   const input = ocrInput({ fileBuffer, mimeType });
   const inputSha256 = createHash("sha256").update(input.buffer).digest("hex");
-  const body = {
-    model,
-    file: `data:${input.mimeType};base64,${input.buffer.toString("base64")}`,
-    return_crop_images: false,
-    need_layout_visualization: false,
-    user_id: pseudonymousUserId(organizationId, "zai-ocr"),
-    ...(input.mimeType === "application/pdf"
-      ? { start_page_id: 0, end_page_id: OBRASAAS_OCR_CHUNK_MAX_PAGES - 1 }
-      : {}),
+  const deadlineAt = Date.now() + Math.max(1, timeoutMs);
+  const requestChunk = async ({ buffer, submittedMimeType, startPageId, endPageId, pageCount }) => {
+    const remainingMs = deadlineAt - Date.now();
+    if (remainingMs <= 0) fail("PROVIDER_TIMEOUT", "Z.ai OCR timed out before all chunks were processed.");
+    const body = {
+      model,
+      file: `data:${submittedMimeType};base64,${buffer.toString("base64")}`,
+      return_crop_images: false,
+      need_layout_visualization: false,
+      user_id: pseudonymousUserId(organizationId, "zai-ocr"),
+    };
+    const response = await fetchProviderJson({
+      url: ZAI_OCR_URL,
+      apiKey,
+      body,
+      fetchImpl,
+      timeoutMs: remainingMs,
+      providerName: "Z.ai OCR",
+    });
+    assertOcrProviderResult(response.result, { requestId: response.requestId, expectedModel: model });
+    assertCompleteOcrWindow(response.result, {
+      startPageId: startPageId || 1,
+      endPageId: endPageId || pageCount,
+      requestId: response.requestId,
+    });
+    return {
+      ...response,
+      startPageId,
+      endPageId,
+      pageCount,
+      submittedBytes: buffer.length,
+      submittedSha256: createHash("sha256").update(buffer).digest("hex"),
+    };
   };
-  const { result, requestId } = await fetchProviderJson({
-    url: ZAI_OCR_URL,
-    apiKey,
-    body,
-    fetchImpl,
-    timeoutMs,
-    providerName: "Z.ai OCR",
-  });
-  if (typeof result?.id !== "string" || typeof result?.model !== "string") {
-    fail("PROVIDER_RESPONSE_INVALID", "Z.ai OCR returned an invalid result.", { requestId });
+
+  const chunks = [];
+  let pages = null;
+  if (input.mimeType !== "application/pdf") {
+    chunks.push(await requestChunk({
+      buffer: input.buffer,
+      submittedMimeType: input.mimeType,
+      startPageId: null,
+      endPageId: null,
+      pageCount: 1,
+    }));
+    assertExpectedOcrPageCount(chunks[0].result, {
+      expectedPages: 1,
+      requestId: chunks[0].requestId,
+    });
+    pages = 1;
+  } else {
+    const parsed = await loadPdfForOcr(input.buffer);
+    pages = parsed.pages;
+    for (let startIndex = 0; startIndex < pages; startIndex += ZAI_OCR_REQUEST_MAX_PAGES) {
+      const endIndex = Math.min(startIndex + ZAI_OCR_REQUEST_MAX_PAGES, pages);
+      for await (const generated of boundedPdfChunks(parsed.document, startIndex, endIndex)) {
+        const chunk = await requestChunk({
+          ...generated,
+          submittedMimeType: "application/pdf",
+        });
+        assertExpectedOcrPageCount(chunk.result, {
+          expectedPages: generated.pageCount,
+          requestId: chunk.requestId,
+        });
+        chunks.push(chunk);
+      }
+    }
   }
+
+  const first = chunks[0];
+  const { markdown, markdownTruncated } = normalizeOcrMarkdown(chunks);
+  const rawLayout = chunks.flatMap(({ result }) => (
+    Array.isArray(result.layout_details) ? result.layout_details : []
+  ));
+  const normalizedLayout = normalizeOcrLayout(rawLayout, {
+    maxPages: input.mimeType === "application/pdf" ? pages : 1,
+  });
+  const pageWindows = input.mimeType === "application/pdf"
+    ? chunks.map(({ startPageId, endPageId }) => ({ startPageId, endPageId }))
+    : [];
+  const normalization = {
+    ...normalizedLayout.summary,
+    providerCoverageComplete: input.mimeType !== "application/pdf"
+      ? normalizedLayout.pages.length === 1
+      : normalizedLayout.pages.length === pages,
+    markdownTruncated,
+  };
+  normalization.automationEligible = normalization.providerCoverageComplete
+    && !normalization.layoutTruncated
+    && normalization.droppedItems === 0
+    && normalization.degradedItems === 0
+    && !normalization.markdownTruncated;
+
   return {
     provider: "z-ai",
     model,
-    responseId: result.id,
-    requestId: requestId || (typeof result.request_id === "string" ? result.request_id : null),
-    markdown: typeof result.md_results === "string"
-      ? result.md_results.slice(0, MAX_OCR_MARKDOWN_CHARACTERS)
-      : "",
-    layout: normalizeOcrLayout(result.layout_details),
-    pages: Number.isInteger(result?.data_info?.num_pages) ? result.data_info.num_pages : null,
-    usage: normalizeUsage(result.usage),
-    input: { mimeType: input.mimeType, bytes: input.buffer.length, inputSha256 },
+    responseId: first.result.id,
+    responseIds: chunks.map(({ result }) => result.id),
+    requestId: first.requestId || (typeof first.result.request_id === "string" ? first.result.request_id : null),
+    requestIds: chunks.map(({ result, requestId }) => (
+      requestId || (typeof result.request_id === "string" ? result.request_id : null)
+    )),
+    markdown,
+    layout: normalizedLayout.pages,
+    normalization,
+    pages,
+    usage: aggregateOcrUsage(chunks),
+    input: {
+      mimeType: input.mimeType,
+      bytes: input.buffer.length,
+      inputSha256,
+      submittedBytes: chunks.reduce((total, chunk) => total + chunk.submittedBytes, 0),
+    },
     pageWindow: input.mimeType === "application/pdf"
       ? {
-        startPageId: 0,
-        endPageId: OBRASAAS_OCR_CHUNK_MAX_PAGES - 1,
-        chunkingRequiredAbove: OBRASAAS_OCR_CHUNK_MAX_PAGES,
+        startPageId: 1,
+        endPageId: pages,
+        chunkSize: ZAI_OCR_REQUEST_MAX_PAGES,
+        chunkCount: chunks.length,
+        chunkingRequiredAbove: ZAI_OCR_REQUEST_MAX_PAGES,
       }
       : null,
+    pageWindows,
+    providerChunks: chunks.map((chunk, index) => ({
+      ordinal: index + 1,
+      sourceStartPage: chunk.startPageId,
+      sourceEndPage: chunk.endPageId,
+      sourcePageCount: chunk.pageCount,
+      submittedBytes: chunk.submittedBytes,
+      submittedSha256: chunk.submittedSha256,
+      responseId: chunk.result.id,
+      requestId: chunk.requestId || (typeof chunk.result.request_id === "string" ? chunk.result.request_id : null),
+      observedModel: chunk.result.model,
+      providerReportedPages: Number.isSafeInteger(chunk.result?.data_info?.num_pages)
+        ? chunk.result.data_info.num_pages
+        : null,
+      layoutPages: chunk.result.layout_details.length,
+    })),
   };
 }
 

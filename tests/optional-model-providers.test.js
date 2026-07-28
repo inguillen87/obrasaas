@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { PDFDocument } from "pdf-lib";
 
 import {
   analyzeVisualProgressWithHuggingFace,
@@ -30,6 +31,33 @@ function pngFixture() {
     pngChunk("IDAT", Buffer.from([1, 2, 3])),
     pngChunk("IEND"),
   ]);
+}
+
+async function pdfFixture(pageCount, { title = null } = {}) {
+  const document = await PDFDocument.create();
+  if (title) document.setTitle(title);
+  for (let index = 0; index < pageCount; index += 1) {
+    document.addPage([300 + (index % 3), 500 + (index % 5)]);
+  }
+  return Buffer.from(await document.save({ addDefaultPage: false, useObjectStreams: true }));
+}
+
+async function submittedPdfPageCount(dataUrl) {
+  const encoded = String(dataUrl || "").split(",", 2)[1];
+  const document = await PDFDocument.load(Buffer.from(encoded, "base64"), {
+    ignoreEncryption: false,
+    updateMetadata: false,
+  });
+  return document.getPageCount();
+}
+
+async function submittedPdfTitle(dataUrl) {
+  const encoded = String(dataUrl || "").split(",", 2)[1];
+  const document = await PDFDocument.load(Buffer.from(encoded, "base64"), {
+    ignoreEncryption: false,
+    updateMetadata: false,
+  });
+  return document.getTitle();
 }
 
 function assessment(overrides = {}) {
@@ -206,30 +234,342 @@ test("GLM-OCR stays on layout parsing workload and returns a bounded normalized 
   assert.equal(result.pages, 1);
 });
 
+test("GLM-OCR requires the provider to report exactly one page for an image", async () => {
+  await assert.rejects(
+    extractDocumentWithGlmOcr({
+      fileBuffer: pngFixture(),
+      mimeType: "image/png",
+      organizationId: "org_ocr",
+      apiKey: "zai_ocr_private",
+      fetchImpl: async () => responseJson({
+        id: "ocr_image_without_page_count",
+        model: "GLM-OCR",
+        layout_details: [[]],
+      }),
+    }),
+    (error) => error.code === "OCR_PAGE_COUNT_INVALID",
+  );
+});
+
 test("GLM-OCR PDF requests follow the internal 30-page chunk policy", async () => {
+  const requests = [];
+  const result = await extractDocumentWithGlmOcr({
+    fileBuffer: await pdfFixture(30),
+    mimeType: "application/pdf",
+    organizationId: "org_ocr",
+    apiKey: "zai_ocr_private",
+    fetchImpl: async (_url, init) => {
+      const request = JSON.parse(init.body);
+      requests.push({ request, submittedPages: await submittedPdfPageCount(request.file) });
+      return responseJson({
+        id: "ocr_pdf",
+        model: "GLM-OCR",
+        md_results: "",
+        layout_details: Array.from({ length: 30 }, () => []),
+        data_info: { num_pages: 30 },
+      });
+    },
+  });
+  assert.equal(requests.length, 1);
+  assert.equal(Object.hasOwn(requests[0].request, "start_page_id"), false);
+  assert.equal(Object.hasOwn(requests[0].request, "end_page_id"), false);
+  assert.equal(requests[0].submittedPages, 30);
+  assert.deepEqual(result.pageWindow, {
+    startPageId: 1,
+    endPageId: 30,
+    chunkSize: 30,
+    chunkCount: 1,
+    chunkingRequiredAbove: 30,
+  });
+  assert.deepEqual(result.pageWindows, [{ startPageId: 1, endPageId: 30 }]);
+  assert.equal(result.layout.length, 30);
+});
+
+test("GLM-OCR submits a short PDF as one standalone metadata-free chunk", async () => {
   let request;
   const result = await extractDocumentWithGlmOcr({
-    fileBuffer: Buffer.from("%PDF-1.7\nminimal test fixture"),
+    fileBuffer: await pdfFixture(5, { title: "GPS=private-source-metadata" }),
     mimeType: "application/pdf",
     organizationId: "org_ocr",
     apiKey: "zai_ocr_private",
     fetchImpl: async (_url, init) => {
       request = JSON.parse(init.body);
       return responseJson({
-        id: "ocr_pdf",
+        id: "ocr_pdf_short",
         model: "GLM-OCR",
         md_results: "",
-        layout_details: [],
-        data_info: { num_pages: 30 },
+        layout_details: Array.from({ length: 5 }, () => []),
+        data_info: { num_pages: 5 },
       });
     },
   });
-  assert.equal(request.start_page_id, 0);
-  assert.equal(request.end_page_id, 29);
+
+  assert.equal(Object.hasOwn(request, "start_page_id"), false);
+  assert.equal(Object.hasOwn(request, "end_page_id"), false);
+  assert.equal(await submittedPdfPageCount(request.file), 5);
+  assert.equal(await submittedPdfTitle(request.file), undefined);
+  assert.equal(result.pages, 5);
+  assert.deepEqual(result.pageWindows, [{ startPageId: 1, endPageId: 5 }]);
+  assert.equal(result.layout.length, 5);
+});
+
+test("GLM-OCR generates deterministic standalone chunk identities", async () => {
+  const source = await pdfFixture(5, { title: "private-source-title" });
+  const submittedFiles = [];
+  const run = () => extractDocumentWithGlmOcr({
+    fileBuffer: source,
+    mimeType: "application/pdf",
+    organizationId: "org_ocr",
+    apiKey: "zai_ocr_private",
+    fetchImpl: async (_url, init) => {
+      const request = JSON.parse(init.body);
+      submittedFiles.push(request.file);
+      return responseJson({
+        id: "ocr_pdf_deterministic",
+        model: "GLM-OCR",
+        layout_details: Array.from({ length: 5 }, () => []),
+        data_info: { num_pages: 5 },
+      });
+    },
+  });
+
+  const first = await run();
+  const second = await run();
+  assert.equal(submittedFiles[0], submittedFiles[1]);
+  assert.equal(first.providerChunks[0].submittedSha256, second.providerChunks[0].submittedSha256);
+  assert.equal(first.input.inputSha256, second.input.inputSha256);
+});
+
+test("GLM-OCR exhaustively parses a 65-page PDF through standalone 30-page chunks", async () => {
+  const requests = [];
+  const totalPages = 65;
+  const result = await extractDocumentWithGlmOcr({
+    fileBuffer: await pdfFixture(totalPages),
+    mimeType: "application/pdf",
+    organizationId: "org_ocr",
+    apiKey: "zai_ocr_private",
+    fetchImpl: async (_url, init) => {
+      const request = JSON.parse(init.body);
+      const returnedPages = await submittedPdfPageCount(request.file);
+      const returnedStart = requests.reduce((sum, entry) => sum + entry.submittedPages, 0) + 1;
+      const returnedEnd = returnedStart + returnedPages - 1;
+      requests.push({ request, submittedPages: returnedPages });
+      return responseJson({
+        id: `ocr_pdf_${returnedStart}_${returnedEnd}`,
+        model: "GLM-OCR",
+        md_results: `# pages ${returnedStart}-${returnedEnd}`,
+        layout_details: Array.from({ length: returnedPages }, (_, index) => [{
+          index: 1,
+          label: "text",
+          bbox_2d: [0, 0, 1, 1],
+          content: `page ${returnedStart + index}`,
+          width: 640,
+          height: 480,
+        }]),
+        data_info: { num_pages: returnedPages },
+        usage: { prompt_tokens: 10, completion_tokens: 2, total_tokens: 12 },
+      }, { requestId: `req_${returnedStart}` });
+    },
+  });
+
+  assert.deepEqual(
+    requests.map(({ request, submittedPages }) => [
+      Object.hasOwn(request, "start_page_id"),
+      Object.hasOwn(request, "end_page_id"),
+      submittedPages,
+    ]),
+    [[false, false, 30], [false, false, 30], [false, false, 5]],
+  );
+  assert.deepEqual(result.pageWindows, [
+    { startPageId: 1, endPageId: 30 },
+    { startPageId: 31, endPageId: 60 },
+    { startPageId: 61, endPageId: 65 },
+  ]);
   assert.deepEqual(result.pageWindow, {
-    startPageId: 0,
-    endPageId: 29,
+    startPageId: 1,
+    endPageId: 65,
+    chunkSize: 30,
+    chunkCount: 3,
     chunkingRequiredAbove: 30,
+  });
+  assert.equal(result.layout.length, 65);
+  assert.deepEqual(
+    result.layout.map((page) => page[0].content),
+    Array.from({ length: 65 }, (_, index) => `page ${index + 1}`),
+  );
+  assert.equal(result.markdown, "# pages 1-30\n\n# pages 31-60\n\n# pages 61-65");
+  assert.deepEqual(result.responseIds, ["ocr_pdf_1_30", "ocr_pdf_31_60", "ocr_pdf_61_65"]);
+  assert.deepEqual(result.requestIds, ["req_1", "req_31", "req_61"]);
+  assert.deepEqual(result.usage, { inputTokens: 30, outputTokens: 6, totalTokens: 36 });
+  assert.equal(result.normalization.providerCoverageComplete, true);
+  assert.equal(result.normalization.layoutTruncated, false);
+  assert.equal(result.normalization.automationEligible, true);
+  assert.deepEqual(
+    result.providerChunks.map((chunk) => [chunk.sourceStartPage, chunk.sourceEndPage, chunk.providerReportedPages]),
+    [[1, 30, 30], [31, 60, 30], [61, 65, 5]],
+  );
+});
+
+test("GLM-OCR handles the exact 100-page ObraSaaS limit as 30/30/30/10", async () => {
+  const submittedPageCounts = [];
+  const result = await extractDocumentWithGlmOcr({
+    fileBuffer: await pdfFixture(100),
+    mimeType: "application/pdf",
+    organizationId: "org_ocr",
+    apiKey: "zai_ocr_private",
+    fetchImpl: async (_url, init) => {
+      const request = JSON.parse(init.body);
+      const submittedPages = await submittedPdfPageCount(request.file);
+      submittedPageCounts.push(submittedPages);
+      return responseJson({
+        id: `ocr_pdf_100_${submittedPageCounts.length}`,
+        model: "GLM-OCR",
+        layout_details: Array.from({ length: submittedPages }, () => []),
+        data_info: { num_pages: submittedPages },
+      });
+    },
+  });
+
+  assert.deepEqual(submittedPageCounts, [30, 30, 30, 10]);
+  assert.equal(result.pages, 100);
+  assert.equal(result.layout.length, 100);
+  assert.deepEqual(result.pageWindows, [
+    { startPageId: 1, endPageId: 30 },
+    { startPageId: 31, endPageId: 60 },
+    { startPageId: 61, endPageId: 90 },
+    { startPageId: 91, endPageId: 100 },
+  ]);
+});
+
+test("GLM-OCR rejects source PDFs above the ObraSaaS 100-page limit before fetch", async () => {
+  let calls = 0;
+  await assert.rejects(
+    extractDocumentWithGlmOcr({
+      fileBuffer: await pdfFixture(101),
+      mimeType: "application/pdf",
+      organizationId: "org_ocr",
+      apiKey: "zai_ocr_private",
+      fetchImpl: async () => {
+        calls += 1;
+        return responseJson({
+          id: "ocr_pdf_too_long",
+          model: "GLM-OCR",
+          layout_details: [],
+          data_info: { num_pages: 101 },
+        });
+      },
+    }),
+    (error) => error.code === "OCR_PAGE_LIMIT_EXCEEDED",
+  );
+  assert.equal(calls, 0);
+});
+
+test("GLM-OCR fails closed when a provider window omits a PDF page", async () => {
+  let calls = 0;
+  await assert.rejects(
+    extractDocumentWithGlmOcr({
+      fileBuffer: await pdfFixture(40),
+      mimeType: "application/pdf",
+      organizationId: "org_ocr",
+      apiKey: "zai_ocr_private",
+      fetchImpl: async () => {
+        calls += 1;
+        return responseJson({
+          id: "ocr_pdf_incomplete",
+          model: "GLM-OCR",
+          layout_details: Array.from({ length: 29 }, () => []),
+          data_info: { num_pages: 40 },
+        });
+      },
+    }),
+    (error) => error.code === "OCR_PAGE_WINDOW_INCOMPLETE",
+  );
+  assert.equal(calls, 1);
+});
+
+test("GLM-OCR fails closed when a provider reports the wrong standalone chunk page count", async () => {
+  let calls = 0;
+  await assert.rejects(
+    extractDocumentWithGlmOcr({
+      fileBuffer: await pdfFixture(60),
+      mimeType: "application/pdf",
+      organizationId: "org_ocr",
+      apiKey: "zai_ocr_private",
+      fetchImpl: async (_url, init) => {
+        calls += 1;
+        const request = JSON.parse(init.body);
+        const submittedPages = await submittedPdfPageCount(request.file);
+        return responseJson({
+          id: `ocr_pdf_changed_${calls}`,
+          model: "GLM-OCR",
+          layout_details: Array.from({ length: submittedPages }, () => []),
+          data_info: { num_pages: calls === 1 ? submittedPages : submittedPages - 1 },
+        });
+      },
+    }),
+    (error) => error.code === "OCR_PAGE_COUNT_MISMATCH",
+  );
+  assert.equal(calls, 2);
+});
+
+test("GLM-OCR rejects a model identity change between standalone PDF chunks", async () => {
+  let calls = 0;
+  await assert.rejects(
+    extractDocumentWithGlmOcr({
+      fileBuffer: await pdfFixture(31),
+      mimeType: "application/pdf",
+      organizationId: "org_ocr",
+      apiKey: "zai_ocr_private",
+      fetchImpl: async (_url, init) => {
+        calls += 1;
+        const request = JSON.parse(init.body);
+        const submittedPages = await submittedPdfPageCount(request.file);
+        return responseJson({
+          id: `ocr_pdf_model_${calls}`,
+          model: calls === 1 ? "GLM-OCR" : "another-model",
+          layout_details: Array.from({ length: submittedPages }, () => []),
+          data_info: { num_pages: submittedPages },
+        });
+      },
+    }),
+    (error) => error.code === "PROVIDER_RESPONSE_INVALID",
+  );
+  assert.equal(calls, 2);
+});
+
+test("GLM-OCR marks structurally degraded provider items as ineligible for automation", async () => {
+  const result = await extractDocumentWithGlmOcr({
+    fileBuffer: pngFixture(),
+    mimeType: "image/png",
+    organizationId: "org_ocr",
+    apiKey: "zai_ocr_private",
+    fetchImpl: async () => responseJson({
+      id: "ocr_degraded_item",
+      model: "GLM-OCR",
+      md_results: "visible text",
+      layout_details: [[{
+        index: -1,
+        label: "unexpected",
+        bbox_2d: [-1, 0, 2, 1],
+        content: "visible text",
+        width: -10,
+        height: 0,
+      }]],
+      data_info: { num_pages: 1 },
+    }),
+  });
+
+  assert.equal(result.normalization.layoutTruncated, false);
+  assert.equal(result.normalization.droppedItems, 0);
+  assert.equal(result.normalization.degradedItems, 1);
+  assert.equal(result.normalization.automationEligible, false);
+  assert.deepEqual(result.layout[0][0], {
+    index: null,
+    label: null,
+    bbox: [],
+    content: "visible text",
+    width: null,
+    height: null,
   });
 });
 
@@ -242,9 +582,7 @@ test("GLM-OCR normalization enforces global page, item, character, and bbox budg
     width: 640,
     height: 480,
   };
-  const layoutDetails = Array.from({ length: 101 }, () =>
-    Array.from({ length: 101 }, () => ({ ...item })),
-  );
+  const layoutDetails = [Array.from({ length: 10_001 }, () => ({ ...item }))];
   const result = await extractDocumentWithGlmOcr({
     fileBuffer: pngFixture(),
     mimeType: "image/png",
@@ -255,14 +593,19 @@ test("GLM-OCR normalization enforces global page, item, character, and bbox budg
       model: "GLM-OCR",
       md_results: "m".repeat(2_000_050),
       layout_details: layoutDetails,
+      data_info: { num_pages: 1 },
     }),
   });
   const returnedItems = result.layout.flat();
-  assert.ok(result.layout.length <= 30);
+  assert.ok(result.layout.length <= 1);
   assert.ok(returnedItems.length <= 10_000);
   assert.ok(returnedItems.reduce((sum, entry) => sum + entry.content.length, 0) <= 2_000_000);
   assert.equal(result.markdown.length, 2_000_000);
   assert.deepEqual(returnedItems[0].bbox, []);
+  assert.equal(result.normalization.layoutTruncated, true);
+  assert.equal(result.normalization.truncatedFromPageId, 1);
+  assert.equal(result.normalization.markdownTruncated, true);
+  assert.equal(result.normalization.automationEligible, false);
 });
 
 test("GLM-5.2 adapter is text/JSON-only and never accepts an image modality", async () => {
