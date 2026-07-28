@@ -572,6 +572,7 @@
 }
 
 .deliveryState[data-status='unknown'],
+.deliveryState[data-status='prepared'],
 .deliveryState[data-status='sending'] {
   color: #efaa78;
 }
@@ -2060,6 +2061,7 @@
 }
 
 :global(body.light-theme) .deliveryState[data-status='unknown'],
+:global(body.light-theme) .deliveryState[data-status='prepared'],
 :global(body.light-theme) .deliveryState[data-status='sending'] {
   color: #8f3600;
 }

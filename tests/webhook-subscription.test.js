@@ -16,12 +16,51 @@ registerHooks({
 const {
   assertWebhookMessageSubscription,
   deliverWhatsAppMessageOutcome,
+  processMessageEvent,
   trySendPublishedFlow,
 } = await import(
   '../src/lib/whatsapp/webhook-worker.js'
 );
 
 const NOW = new Date('2026-07-16T12:00:00.000Z');
+
+function automaticDeliveryJournal(calls, {
+  dispatch = true,
+  state = dispatch ? 'sending' : 'accepted',
+  providerMessageId = null,
+  settleState = null,
+} = {}) {
+  return {
+    async claimDelivery(input) {
+      calls.push('claim-delivery');
+      assert.equal(input.inboundExternalId.startsWith('wamid'), true);
+      return dispatch
+        ? {
+            dispatch: true,
+            state: 'sending',
+            claim: {
+              version: 1,
+              eventId: input.eventId,
+              leaseToken: input.leaseToken,
+              projectId: input.scope.projectId,
+              organizationId: input.scope.organizationId,
+              phoneNumberId: input.scope.phoneNumberId,
+              messageId: 'automatic-message-a',
+              outboundExternalId: `obrasaas-reply:${input.inboundExternalId}`,
+            },
+          }
+        : { dispatch: false, state, providerMessageId };
+    },
+    async settleDelivery(input) {
+      calls.push(`settle-delivery:${input.state}`);
+      return {
+        settled: true,
+        state: settleState || input.state,
+        providerMessageId: input.providerMessageId || providerMessageId,
+      };
+    },
+  };
+}
 
 function organization(subscriptionStatus, trialEndsAt = null) {
   return {
@@ -752,6 +791,7 @@ test('Meta delivery revalidates immediately before every provider send', async (
   let flowCalls = 0;
   let flowRequest = null;
   let textCalls = 0;
+  const journal = automaticDeliveryJournal([], {});
   const blocked = Object.assign(new Error('blocked before fallback'), {
     code: 'WEBHOOK_SUBSCRIPTION_BLOCKED',
   });
@@ -770,6 +810,7 @@ test('Meta delivery revalidates immediately before every provider send', async (
       },
       scope: { organizationId: 'organization-1', projectId: 'project-1' },
     }, {
+      ...journal,
       assertSubscription: async () => {
         subscriptionChecks += 1;
         if (subscriptionChecks === 2) throw blocked;
@@ -783,9 +824,11 @@ test('Meta delivery revalidates immediately before every provider send', async (
         textCalls += 1;
         return { messages: [{ id: 'must-not-send' }] };
       },
-      linkMessage: async () => assert.fail('an unsent message must not be linked'),
     }),
-    (error) => error === blocked,
+    (error) => (
+      error.code === 'WHATSAPP_AUTOMATIC_DELIVERY_REJECTED'
+      && error.cause === blocked
+    ),
   );
 
   assert.equal(subscriptionChecks, 2);
@@ -796,6 +839,7 @@ test('Meta delivery revalidates immediately before every provider send', async (
 
 test('legacy Flow outcomes without a durable session use the safe text fallback', async () => {
   const calls = [];
+  const journal = automaticDeliveryJournal(calls);
   const result = await deliverWhatsAppMessageOutcome({
     outcome: { reply: 'Usá el enlace seguro.', flowPrompt: 'incident-report' },
     event: {
@@ -809,19 +853,21 @@ test('legacy Flow outcomes without a durable session use the safe text fallback'
       phoneNumberId: '1234567890',
     },
   }, {
+    ...journal,
     assertSubscription: async () => calls.push('subscription-fence'),
     sendFlow: async () => assert.fail('a Flow without a trusted session must not be sent'),
     sendText: async () => {
       calls.push('send-text');
       return { messages: [{ id: 'wamid-fallback' }] };
     },
-    linkMessage: async () => {
-      calls.push('link-message');
-      return true;
-    },
   });
 
-  assert.deepEqual(calls, ['subscription-fence', 'send-text', 'link-message']);
+  assert.deepEqual(calls, [
+    'claim-delivery',
+    'subscription-fence',
+    'send-text',
+    'settle-delivery:accepted',
+  ]);
   assert.deepEqual(result, {
     flowSent: false,
     providerMessageId: 'wamid-fallback',
@@ -830,38 +876,43 @@ test('legacy Flow outcomes without a durable session use the safe text fallback'
 
 test('a Meta-accepted Flow never triggers duplicate text when no provider ID is returned', async () => {
   let textCalls = 0;
-  const result = await deliverWhatsAppMessageOutcome({
-    outcome: {
-      reply: 'Respuesta de respaldo',
-      flowPrompt: 'incident-report',
-      flowSessionId: '1f967f35-9f99-4db0-bd42-2d88f734cc72',
-    },
-    event: {
-      externalId: 'wamid-flow-accepted-without-id',
-      from: '5491112345678',
-      phoneNumberId: '1234567890',
-    },
-    scope: {
-      organizationId: 'organization-1',
-      projectId: 'project-1',
-      phoneNumberId: '1234567890',
-    },
-  }, {
-    assertSubscription: async () => {},
-    sendFlow: async () => ({ sent: true, providerMessageId: null }),
-    sendText: async () => {
-      textCalls += 1;
-      return { messages: [{ id: 'must-not-send' }] };
-    },
-    linkMessage: async () => assert.fail('there is no provider ID to correlate'),
-  });
+  const journalCalls = [];
+  await assert.rejects(
+    deliverWhatsAppMessageOutcome({
+      outcome: {
+        reply: 'Respuesta de respaldo',
+        flowPrompt: 'incident-report',
+        flowSessionId: '1f967f35-9f99-4db0-bd42-2d88f734cc72',
+      },
+      event: {
+        externalId: 'wamid-flow-accepted-without-id',
+        from: '5491112345678',
+        phoneNumberId: '1234567890',
+      },
+      scope: {
+        organizationId: 'organization-1',
+        projectId: 'project-1',
+        phoneNumberId: '1234567890',
+      },
+    }, {
+      ...automaticDeliveryJournal(journalCalls),
+      assertSubscription: async () => {},
+      sendFlow: async () => ({ sent: true, providerMessageId: null }),
+      sendText: async () => {
+        textCalls += 1;
+        return { messages: [{ id: 'must-not-send' }] };
+      },
+    }),
+    (error) => error.code === 'WHATSAPP_AUTOMATIC_DELIVERY_UNKNOWN',
+  );
 
   assert.equal(textCalls, 0);
-  assert.deepEqual(result, { flowSent: true, providerMessageId: null });
+  assert.deepEqual(journalCalls, ['claim-delivery', 'settle-delivery:unknown']);
 });
 
 test('Meta text delivery remains operational when the last-moment fence is writable', async () => {
   const calls = [];
+  const journal = automaticDeliveryJournal(calls);
   const result = await deliverWhatsAppMessageOutcome({
     outcome: { reply: 'Respuesta permitida', flowPrompt: null },
     event: {
@@ -871,26 +922,470 @@ test('Meta text delivery remains operational when the last-moment fence is writa
     },
     scope: { organizationId: 'organization-1', projectId: 'project-1' },
   }, {
+    ...journal,
     assertSubscription: async () => calls.push('subscription-fence'),
     sendText: async (request) => {
       assert.deepEqual(request.scope, {
         organizationId: 'organization-1',
         projectId: 'project-1',
+        phoneNumberId: 'phone-1',
       });
       calls.push('send-text');
       return { messages: [{ id: 'wamid-outbound-allowed' }] };
     },
-    linkMessage: async () => {
-      calls.push('link-message');
-      return true;
-    },
   });
 
-  assert.deepEqual(calls, ['subscription-fence', 'send-text', 'link-message']);
+  assert.deepEqual(calls, [
+    'claim-delivery',
+    'subscription-fence',
+    'send-text',
+    'settle-delivery:accepted',
+  ]);
   assert.deepEqual(result, {
     flowSent: false,
     providerMessageId: 'wamid-outbound-allowed',
   });
+});
+
+test('a confirmed automatic journal replay skips every provider request', async () => {
+  let providerCalls = 0;
+  const result = await deliverWhatsAppMessageOutcome({
+    outcome: { reply: 'Ya enviada', flowPrompt: null },
+    event: {
+      externalId: 'wamid-automatic-replay',
+      from: '5491112345678',
+      phoneNumberId: 'phone-1',
+    },
+    scope: { organizationId: 'organization-1', projectId: 'project-1' },
+  }, {
+    ...automaticDeliveryJournal([], {
+      dispatch: false,
+      state: 'accepted',
+      providerMessageId: 'wamid-already-accepted',
+    }),
+    assertSubscription: async () => assert.fail('replay must skip the delivery fence'),
+    sendFlow: async () => { providerCalls += 1; },
+    sendText: async () => { providerCalls += 1; },
+  });
+
+  assert.equal(providerCalls, 0);
+  assert.deepEqual(result, {
+    flowSent: false,
+    providerMessageId: 'wamid-already-accepted',
+    deliveryReplayed: true,
+  });
+});
+
+test('a transient accepted-settlement failure retries only the local CAS', async () => {
+  const journalCalls = [];
+  let providerCalls = 0;
+  let acceptedSettlementAttempts = 0;
+  const journal = automaticDeliveryJournal(journalCalls);
+
+  const result = await deliverWhatsAppMessageOutcome({
+    outcome: { reply: 'Respuesta con correlaciÃ³n recuperable.', flowPrompt: null },
+    event: {
+      externalId: 'wamid-automatic-local-retry',
+      from: '5491112345678',
+      phoneNumberId: 'phone-1',
+    },
+    scope: {
+      organizationId: 'organization-1',
+      projectId: 'project-1',
+      phoneNumberId: 'phone-1',
+    },
+    eventId: 'event-automatic-local-retry',
+    leaseToken: 'lease-automatic-local-retry',
+  }, {
+    ...journal,
+    settleDelivery: async (input) => {
+      journalCalls.push(`settle-delivery:${input.state}`);
+      acceptedSettlementAttempts += 1;
+      if (acceptedSettlementAttempts === 1) throw new Error('transient database response loss');
+      return { settled: true, state: input.state };
+    },
+    assertSubscription: async () => {},
+    sendText: async () => {
+      providerCalls += 1;
+      return { messages: [{ id: 'wamid-provider-local-retry' }] };
+    },
+  });
+
+  assert.equal(providerCalls, 1);
+  assert.equal(result.providerMessageId, 'wamid-provider-local-retry');
+  assert.deepEqual(journalCalls, [
+    'claim-delivery',
+    'settle-delivery:accepted',
+    'settle-delivery:accepted',
+  ]);
+});
+
+test('an unrecoverable local correlation settles unknown and a replay never posts again', async () => {
+  let journalState = 'prepared';
+  let providerCalls = 0;
+  const settlementInputs = [];
+  const dependencies = {
+    claimDelivery: async (input) => {
+      if (journalState !== 'prepared') return { dispatch: false, state: journalState };
+      journalState = 'sending';
+      return {
+        dispatch: true,
+        state: 'sending',
+        claim: {
+          version: 1,
+          eventId: input.eventId,
+          leaseToken: input.leaseToken,
+          projectId: input.scope.projectId,
+          organizationId: input.scope.organizationId,
+          phoneNumberId: input.scope.phoneNumberId,
+          messageId: 'automatic-local-unknown-a',
+          outboundExternalId: `obrasaas-reply:${input.inboundExternalId}`,
+        },
+      };
+    },
+    settleDelivery: async (input) => {
+      settlementInputs.push(input);
+      if (input.state === 'accepted') throw new Error('persistent local correlation failure');
+      journalState = input.state;
+      return { settled: true, state: input.state };
+    },
+    assertSubscription: async () => {},
+    sendText: async () => {
+      providerCalls += 1;
+      return { messages: [{ id: 'wamid-provider-local-unknown' }] };
+    },
+  };
+  const input = {
+    outcome: { reply: 'Respuesta aceptada sin correlaciÃ³n durable.', flowPrompt: null },
+    event: {
+      externalId: 'wamid-automatic-local-unknown',
+      from: '5491112345678',
+      phoneNumberId: 'phone-1',
+    },
+    scope: {
+      organizationId: 'organization-1',
+      projectId: 'project-1',
+      phoneNumberId: 'phone-1',
+    },
+    eventId: 'event-automatic-local-unknown',
+  };
+
+  for (const leaseToken of ['lease-local-unknown-a', 'lease-local-unknown-b']) {
+    await assert.rejects(
+      deliverWhatsAppMessageOutcome({ ...input, leaseToken }, dependencies),
+      (error) => error.code === 'WHATSAPP_AUTOMATIC_DELIVERY_UNKNOWN',
+    );
+  }
+
+  assert.equal(providerCalls, 1);
+  assert.deepEqual(settlementInputs.map(({ state }) => state), [
+    'accepted',
+    'accepted',
+    'unknown',
+  ]);
+  assert.equal(settlementInputs[2].failureCode, 'LOCAL_CORRELATION_FAILED');
+});
+
+test('an ambiguous automatic attempt is terminal and a replay never sends twice', async () => {
+  let journalState = 'prepared';
+  let providerCalls = 0;
+  const claimedLeaseTokens = [];
+  const settlements = [];
+  const dependencies = {
+    claimDelivery: async (input) => {
+      claimedLeaseTokens.push(input.leaseToken);
+      if (journalState === 'prepared') {
+        journalState = 'sending';
+        return {
+          dispatch: true,
+          state: 'sending',
+          claim: {
+            version: 1,
+            eventId: input.eventId,
+            leaseToken: input.leaseToken,
+            projectId: input.scope.projectId,
+            organizationId: input.scope.organizationId,
+            phoneNumberId: input.scope.phoneNumberId,
+            messageId: 'automatic-timeout-a',
+            outboundExternalId: `obrasaas-reply:${input.inboundExternalId}`,
+          },
+        };
+      }
+      if (journalState === 'sending') journalState = 'unknown';
+      return { dispatch: false, state: journalState };
+    },
+    settleDelivery: async (input) => {
+      const { state } = input;
+      settlements.push(input);
+      journalState = state;
+      return { settled: true, state };
+    },
+    assertSubscription: async () => {},
+    sendText: async () => {
+      providerCalls += 1;
+      throw new TypeError('simulated transport timeout after request start');
+    },
+  };
+  const input = {
+    outcome: { reply: 'Respuesta automática', flowPrompt: null },
+    event: {
+      externalId: 'wamid-automatic-timeout',
+      from: '5491112345678',
+      phoneNumberId: 'phone-1',
+    },
+    scope: {
+      organizationId: 'organization-1',
+      projectId: 'project-1',
+      phoneNumberId: 'phone-1',
+    },
+    eventId: 'event-automatic-timeout',
+  };
+
+  for (const leaseToken of [
+    'lease-automatic-timeout-a',
+    'lease-automatic-timeout-b',
+  ]) {
+    await assert.rejects(
+      deliverWhatsAppMessageOutcome({ ...input, leaseToken }, dependencies),
+      (error) => error.code === 'WHATSAPP_AUTOMATIC_DELIVERY_UNKNOWN',
+    );
+  }
+  assert.equal(providerCalls, 1);
+  assert.equal(journalState, 'unknown');
+  assert.deepEqual(claimedLeaseTokens, [
+    'lease-automatic-timeout-a',
+    'lease-automatic-timeout-b',
+  ]);
+  assert.equal(settlements[0].failureCode, 'META_TRANSPORT_AMBIGUOUS');
+  assert.equal('providerStatus' in settlements[0], false);
+});
+
+test('a stale automatic sending claim becomes unknown without another provider request', async () => {
+  const calls = [];
+  let providerCalls = 0;
+
+  await assert.rejects(
+    deliverWhatsAppMessageOutcome({
+      outcome: { reply: 'Respuesta automática pendiente', flowPrompt: null },
+      event: {
+        externalId: 'wamid-automatic-stale',
+        from: '5491112345678',
+        phoneNumberId: 'phone-1',
+      },
+      scope: {
+        organizationId: 'organization-1',
+        projectId: 'project-1',
+        phoneNumberId: 'phone-1',
+      },
+      eventId: 'event-automatic-stale',
+      leaseToken: 'lease-automatic-stale-b',
+    }, {
+      claimDelivery: async ({ leaseToken }) => {
+        calls.push(['claim-delivery', leaseToken]);
+        return {
+          dispatch: false,
+          state: 'unknown',
+          reason: 'STALE_DISPATCH_CLAIM',
+        };
+      },
+      settleDelivery: async () => assert.fail('a stale claim is already settled by the journal'),
+      assertSubscription: async () => assert.fail('a stale claim must skip the delivery fence'),
+      sendFlow: async () => {
+        providerCalls += 1;
+      },
+      sendText: async () => {
+        providerCalls += 1;
+      },
+    }),
+    (error) => error.code === 'WHATSAPP_AUTOMATIC_DELIVERY_UNKNOWN',
+  );
+
+  assert.equal(providerCalls, 0);
+  assert.deepEqual(calls, [['claim-delivery', 'lease-automatic-stale-b']]);
+});
+
+test('a text 2xx without WAMID becomes unknown and a replay never sends twice', async () => {
+  let journalState = 'prepared';
+  let providerCalls = 0;
+  const settlements = [];
+  const dependencies = {
+    claimDelivery: async (input) => {
+      if (journalState !== 'prepared') {
+        return { dispatch: false, state: journalState };
+      }
+      journalState = 'sending';
+      return {
+        dispatch: true,
+        state: 'sending',
+        claim: {
+          version: 1,
+          eventId: input.eventId,
+          leaseToken: input.leaseToken,
+          projectId: input.scope.projectId,
+          organizationId: input.scope.organizationId,
+          phoneNumberId: input.scope.phoneNumberId,
+          messageId: 'automatic-no-wamid-a',
+          outboundExternalId: `obrasaas-reply:${input.inboundExternalId}`,
+        },
+      };
+    },
+    settleDelivery: async (input) => {
+      const { state } = input;
+      settlements.push(input);
+      journalState = state;
+      return { settled: true, state };
+    },
+    assertSubscription: async () => {},
+    sendText: async () => {
+      providerCalls += 1;
+      return { messages: [] };
+    },
+  };
+  const input = {
+    outcome: { reply: 'Meta respondió sin WAMID', flowPrompt: null },
+    event: {
+      externalId: 'wamid-automatic-no-wamid',
+      from: '5491112345678',
+      phoneNumberId: 'phone-1',
+    },
+    scope: {
+      organizationId: 'organization-1',
+      projectId: 'project-1',
+      phoneNumberId: 'phone-1',
+    },
+    eventId: 'event-automatic-no-wamid',
+  };
+
+  for (const leaseToken of [
+    'lease-automatic-no-wamid-a',
+    'lease-automatic-no-wamid-b',
+  ]) {
+    await assert.rejects(
+      deliverWhatsAppMessageOutcome({ ...input, leaseToken }, dependencies),
+      (error) => error.code === 'WHATSAPP_AUTOMATIC_DELIVERY_UNKNOWN',
+    );
+  }
+
+  assert.equal(providerCalls, 1);
+  assert.equal(journalState, 'unknown');
+  assert.equal(settlements.length, 1);
+  assert.equal(settlements[0].state, 'unknown');
+  assert.equal(settlements[0].failureCode, 'META_PROVIDER_MESSAGE_ID_MISSING');
+});
+
+test('a deterministic text 4xx becomes failed and a replay never sends twice', async () => {
+  let journalState = 'prepared';
+  let providerCalls = 0;
+  const settlements = [];
+  const dependencies = {
+    claimDelivery: async (input) => {
+      if (journalState !== 'prepared') {
+        return { dispatch: false, state: journalState };
+      }
+      journalState = 'sending';
+      return {
+        dispatch: true,
+        state: 'sending',
+        claim: {
+          version: 1,
+          eventId: input.eventId,
+          leaseToken: input.leaseToken,
+          projectId: input.scope.projectId,
+          organizationId: input.scope.organizationId,
+          phoneNumberId: input.scope.phoneNumberId,
+          messageId: 'automatic-rejected-a',
+          outboundExternalId: `obrasaas-reply:${input.inboundExternalId}`,
+        },
+      };
+    },
+    settleDelivery: async (input) => {
+      const { state } = input;
+      settlements.push(input);
+      journalState = state;
+      return { settled: true, state };
+    },
+    assertSubscription: async () => {},
+    sendText: async () => {
+      providerCalls += 1;
+      throw Object.assign(new Error('Meta rejected the automatic response.'), {
+        code: 'META_131047',
+        status: 400,
+        ambiguous: false,
+      });
+    },
+  };
+  const input = {
+    outcome: { reply: 'Respuesta rechazada', flowPrompt: null },
+    event: {
+      externalId: 'wamid-automatic-rejected',
+      from: '5491112345678',
+      phoneNumberId: 'phone-1',
+    },
+    scope: {
+      organizationId: 'organization-1',
+      projectId: 'project-1',
+      phoneNumberId: 'phone-1',
+    },
+    eventId: 'event-automatic-rejected',
+  };
+
+  for (const leaseToken of [
+    'lease-automatic-rejected-a',
+    'lease-automatic-rejected-b',
+  ]) {
+    await assert.rejects(
+      deliverWhatsAppMessageOutcome({ ...input, leaseToken }, dependencies),
+      (error) => error.code === 'WHATSAPP_AUTOMATIC_DELIVERY_REJECTED',
+    );
+  }
+
+  assert.equal(providerCalls, 1);
+  assert.equal(journalState, 'failed');
+  assert.equal(settlements.length, 1);
+  assert.equal(settlements[0].state, 'failed');
+  assert.equal(settlements[0].failureCode, 'META_HTTP_REJECTED');
+  assert.equal(settlements[0].providerStatus, 400);
+});
+
+test('an ambiguous Flow never falls back to a duplicate text response', async () => {
+  let textCalls = 0;
+  const journalCalls = [];
+  await assert.rejects(
+    deliverWhatsAppMessageOutcome({
+      outcome: {
+        reply: 'No duplicar',
+        flowPrompt: 'incident-report',
+        flowSessionId: '1f967f35-9f99-4db0-bd42-2d88f734cc72',
+      },
+      event: {
+        externalId: 'wamid-flow-ambiguous',
+        from: '5491112345678',
+        phoneNumberId: 'phone-1',
+      },
+      scope: {
+        organizationId: 'organization-1',
+        projectId: 'project-1',
+        phoneNumberId: 'phone-1',
+      },
+    }, {
+      ...automaticDeliveryJournal(journalCalls),
+      assertSubscription: async () => {},
+      sendFlow: async () => {
+        throw Object.assign(new Error('ambiguous Flow'), {
+          code: 'META_FLOW_DELIVERY_RETRYABLE',
+          status: 503,
+        });
+      },
+      sendText: async () => {
+        textCalls += 1;
+        return { messages: [{ id: 'must-not-send' }] };
+      },
+    }),
+    (error) => error.code === 'WHATSAPP_AUTOMATIC_DELIVERY_UNKNOWN',
+  );
+
+  assert.equal(textCalls, 0);
+  assert.deepEqual(journalCalls, ['claim-delivery', 'settle-delivery:unknown']);
 });
 
 test('quarantined inbound contacts never trigger a provider delivery', async () => {
@@ -908,10 +1403,15 @@ test('quarantined inbound contacts never trigger a provider delivery', async () 
     },
     scope: { organizationId: 'organization-1', projectId: 'project-1' },
   }, {
+    ...automaticDeliveryJournal([], {
+      dispatch: false,
+      state: 'accepted',
+    }),
+    claimDelivery: async () => assert.fail('quarantine must not claim an outbound delivery'),
+    settleDelivery: async () => assert.fail('quarantine must not settle an outbound delivery'),
     assertSubscription: async () => assert.fail('quarantine must not reach the delivery fence'),
     sendFlow: async () => assert.fail('quarantine must not send a Flow'),
     sendText: async () => assert.fail('quarantine must not send text'),
-    linkMessage: async () => assert.fail('quarantine has no outbound message to correlate'),
   });
 
   assert.deepEqual(result, {
@@ -919,4 +1419,59 @@ test('quarantined inbound contacts never trigger a provider delivery', async () 
     providerMessageId: null,
     deliverySuppressed: true,
   });
+});
+
+test('message processing forwards the current webhook lease into automatic delivery', async () => {
+  const outcome = {
+    version: 1,
+    type: 'message',
+    reply: 'Respuesta durable.',
+    flowPrompt: null,
+  };
+  const leasedEvent = {
+    id: 'webhook-event-current-lease',
+    leaseToken: 'lease-current-a',
+    appliedAt: NOW,
+    outcome,
+  };
+  const event = {
+    provider: 'meta',
+    eventType: 'message',
+    externalId: 'wamid-current-lease',
+    from: '5491112345678',
+    phoneNumberId: 'phone-1',
+    kind: 'text',
+    media: null,
+  };
+  const scope = {
+    organizationId: 'organization-1',
+    projectId: 'project-1',
+    phoneNumberId: 'phone-1',
+  };
+  const calls = [];
+
+  await processMessageEvent(leasedEvent, event, scope, {
+    assertSubscription: async (receivedScope) => {
+      assert.equal(receivedScope, scope);
+      calls.push('subscription');
+    },
+    applyMessage: async (input) => {
+      assert.equal(input.eventId, leasedEvent.id);
+      assert.equal(input.leaseToken, leasedEvent.leaseToken);
+      assert.equal(input.event, event);
+      assert.equal(input.scope, scope);
+      calls.push('apply');
+      return { alreadyApplied: true, outcome };
+    },
+    deliverOutcome: async (input) => {
+      assert.equal(input.eventId, leasedEvent.id);
+      assert.equal(input.leaseToken, leasedEvent.leaseToken);
+      assert.equal(input.outcome, outcome);
+      assert.equal(input.event, event);
+      assert.equal(input.scope, scope);
+      calls.push('deliver');
+    },
+  });
+
+  assert.deepEqual(calls, ['subscription', 'apply', 'deliver']);
 });

@@ -1,10 +1,11 @@
 import {
   acquireWebhookEvent,
   applyWebhookMessageAtomically,
+  claimAutomaticWhatsAppDelivery,
   completeWebhookEvent,
-  linkOutboundWhatsAppMessage,
   persistEnrichedWebhookEvent,
   rescheduleWebhookEvent,
+  settleAutomaticWhatsAppDelivery,
   updateWhatsAppMessageStatus,
 } from "@/lib/db";
 import {
@@ -304,11 +305,14 @@ export async function deliverWhatsAppMessageOutcome({
   outcome,
   event,
   scope,
+  eventId = null,
+  leaseToken = null,
 }, {
   assertSubscription = assertWebhookMessageSubscription,
+  claimDelivery = claimAutomaticWhatsAppDelivery,
+  settleDelivery = settleAutomaticWhatsAppDelivery,
   sendFlow = trySendPublishedFlow,
   sendText = sendWhatsAppText,
-  linkMessage = linkOutboundWhatsAppMessage,
 } = {}) {
   if (outcome?.quarantined === true) {
     return {
@@ -318,39 +322,137 @@ export async function deliverWhatsAppMessageOutcome({
     };
   }
 
-  let flowDelivery = { sent: false, providerMessageId: null };
-  if (outcome.flowPrompt && outcome.flowSessionId) {
-    await assertSubscription(scope);
-    flowDelivery = await sendFlow({
-      blueprintKey: outcome.flowPrompt,
-      flowSessionId: outcome.flowSessionId,
-      event,
-      scope,
+  const deliveryScope = {
+    ...scope,
+    phoneNumberId: scope?.phoneNumberId || event?.phoneNumberId,
+  };
+  const reservation = await claimDelivery({
+    eventId,
+    leaseToken,
+    inboundExternalId: event?.externalId,
+    scope: deliveryScope,
+  });
+  const reservedState = String(reservation?.state || "").trim().toLowerCase();
+  if (reservation?.dispatch !== true) {
+    if (CONFIRMED_AUTOMATIC_DELIVERY_STATES.has(reservedState)) {
+      return {
+        flowSent: false,
+        providerMessageId: reservation.providerMessageId || null,
+        deliveryReplayed: true,
+      };
+    }
+    if (reservedState === "failed" || reservedState === "unknown") {
+      throw automaticDeliveryError(reservedState);
+    }
+    throw settlementPendingError();
+  }
+
+  const claim = reservation.claim;
+  async function settle(state, providerMessageId = null, failureEvidence = null) {
+    return settleDelivery({
+      claim,
+      state,
+      ...(providerMessageId ? { providerMessageId } : {}),
+      ...(failureEvidence || {}),
     });
   }
 
-  let providerMessageId = flowDelivery.providerMessageId;
-  if (!flowDelivery.sent) {
-    await assertSubscription(scope);
-    const delivery = await sendText({
-      to: event.from,
-      text: outcome.reply,
-      replyToMessageId: event.externalId,
-      phoneNumberId: event.phoneNumberId,
-      scope,
-    });
-    providerMessageId = providerMessageIdFromMetaResult(delivery);
-  }
-  if (providerMessageId) {
-    const linked = await linkMessage({
-      inboundExternalId: event.externalId,
-      providerMessageId,
-      scope,
-      status: "accepted",
-    });
-    if (!linked) {
-      console.warn(`Meta accepted outbound message ${providerMessageId}, but its local correlation row was missing.`);
+  async function settleProviderFailure(state, error, { providerDispatchStarted }) {
+    let settlement;
+    try {
+      settlement = await settle(
+        state,
+        null,
+        automaticProviderFailureEvidence(error, { providerDispatchStarted, state }),
+      );
+    } catch (settlementError) {
+      throw settlementPendingError(settlementError);
     }
+    const settledState = String(settlement?.state || state).trim().toLowerCase();
+    if (CONFIRMED_AUTOMATIC_DELIVERY_STATES.has(settledState)) {
+      return {
+        flowSent: false,
+        providerMessageId: settlement.providerMessageId || null,
+        deliveryReplayed: true,
+      };
+    }
+    throw automaticDeliveryError(settledState === "failed" ? "failed" : "unknown", error);
+  }
+
+  let flowDelivery = { sent: false, providerMessageId: null };
+  let providerMessageId = null;
+  let providerDispatchStarted = false;
+  try {
+    if (outcome.flowPrompt && outcome.flowSessionId) {
+      await assertSubscription(deliveryScope);
+      providerDispatchStarted = true;
+      flowDelivery = await sendFlow({
+        blueprintKey: outcome.flowPrompt,
+        flowSessionId: outcome.flowSessionId,
+        event,
+        scope: deliveryScope,
+      });
+    }
+
+    providerMessageId = flowDelivery.providerMessageId;
+    if (!flowDelivery.sent) {
+      await assertSubscription(deliveryScope);
+      providerDispatchStarted = true;
+      const delivery = await sendText({
+        to: event.from,
+        text: outcome.reply,
+        replyToMessageId: event.externalId,
+        phoneNumberId: deliveryScope.phoneNumberId,
+        scope: deliveryScope,
+      });
+      providerMessageId = providerMessageIdFromMetaResult(delivery);
+    }
+  } catch (error) {
+    const state = automaticProviderFailureState(error, { providerDispatchStarted });
+    return settleProviderFailure(state, error, { providerDispatchStarted });
+  }
+
+  if (!providerMessageId) {
+    return settleProviderFailure(
+      "unknown",
+      Object.assign(new Error("Meta accepted the automatic response without a message ID."), {
+        code: "META_PROVIDER_MESSAGE_ID_MISSING",
+      }),
+      { providerDispatchStarted: true },
+    );
+  }
+
+  let settlement;
+  let acceptanceError = null;
+  for (let attempt = 0; attempt < 2 && !settlement; attempt += 1) {
+    try {
+      // Retrying this local CAS is safe: it never repeats the provider request,
+      // and it can recover either a transient database failure or a lost reply
+      // after the first settlement already committed.
+      settlement = await settle("accepted", providerMessageId);
+    } catch (error) {
+      acceptanceError ||= error;
+    }
+  }
+  if (!settlement) {
+    try {
+      settlement = await settle("unknown", null, {
+        failureCode: "LOCAL_CORRELATION_FAILED",
+      });
+    } catch (recoveryError) {
+      throw settlementPendingError(recoveryError);
+    }
+    const recoveredState = String(settlement?.state || "unknown").trim().toLowerCase();
+    if (!CONFIRMED_AUTOMATIC_DELIVERY_STATES.has(recoveredState)) {
+      throw automaticDeliveryError("unknown", acceptanceError);
+    }
+  }
+  const settledState = String(settlement?.state || "").trim().toLowerCase();
+  if (!CONFIRMED_AUTOMATIC_DELIVERY_STATES.has(settledState)) {
+    if (settledState === "failed" || settledState === "unknown") {
+      throw automaticDeliveryError(settledState);
+    }
+    throw settlementPendingError();
   }
   return {
     flowSent: flowDelivery.sent,
@@ -358,8 +460,12 @@ export async function deliverWhatsAppMessageOutcome({
   };
 }
 
-async function processMessageEvent(leasedEvent, event, scope) {
-  await assertWebhookMessageSubscription(scope);
+export async function processMessageEvent(leasedEvent, event, scope, {
+  assertSubscription = assertWebhookMessageSubscription,
+  applyMessage = applyWebhookMessageAtomically,
+  deliverOutcome = deliverWhatsAppMessageOutcome,
+} = {}) {
+  await assertSubscription(scope);
   const storedOutcome = readAppliedMessageWebhookOutcome(leasedEvent);
   let mediaWorkerResolution = null;
   if (!storedOutcome && event.media) {
@@ -413,7 +519,7 @@ async function processMessageEvent(leasedEvent, event, scope) {
           [QUARANTINE_UNASSIGNED_MEDIA]: true,
         }
       : event;
-  const application = await applyWebhookMessageAtomically({
+  const application = await applyMessage({
     eventId: leasedEvent.id,
     leaseToken: leasedEvent.leaseToken,
     event: enrichedEvent,
@@ -443,10 +549,16 @@ async function processMessageEvent(leasedEvent, event, scope) {
   });
   const outcome = application.outcome;
 
-  // Internal writes are exactly-once under the project lock and lease CAS. Meta
-  // delivery is necessarily at-least-once: a crash after Meta accepts but before
-  // local correlation/completion can cause the stored outcome to be sent again.
-  await deliverWhatsAppMessageOutcome({ outcome, event, scope });
+  // Internal writes are exactly-once under the project lock and lease CAS. The
+  // durable outbound claim prevents a retry after an ambiguous provider attempt:
+  // availability is sacrificed rather than risking a duplicate worker reply.
+  await deliverOutcome({
+    outcome,
+    event,
+    scope,
+    eventId: leasedEvent.id,
+    leaseToken: leasedEvent.leaseToken,
+  });
 }
 
 export async function applyWhatsAppStatusEvent(
@@ -467,6 +579,102 @@ export async function applyWhatsAppStatusEvent(
     throw error;
   }
   return true;
+}
+
+const CONFIRMED_AUTOMATIC_DELIVERY_STATES = new Set([
+  "accepted",
+  "sent",
+  "delivered",
+  "read",
+]);
+const AMBIGUOUS_PROVIDER_STATUSES = new Set([408, 425, 429]);
+const SAFE_AUTOMATIC_PROVIDER_FAILURE_CODES = new Set([
+  "META_FLOW_DELIVERY_UNKNOWN",
+  "META_FLOW_DELIVERY_RETRYABLE",
+  "WHATSAPP_FLOW_DELIVERY_UNRESOLVED",
+  "META_PROVIDER_MESSAGE_ID_MISSING",
+]);
+
+export class AutomaticWhatsAppDeliveryError extends Error {
+  constructor(message, code, { cause = null } = {}) {
+    super(message, cause ? { cause } : undefined);
+    this.name = "AutomaticWhatsAppDeliveryError";
+    this.code = code;
+  }
+}
+
+function automaticDeliveryError(state, cause = null) {
+  const rejected = state === "failed";
+  return new AutomaticWhatsAppDeliveryError(
+    rejected
+      ? "Meta rechazó la respuesta automática y no se volverá a enviar."
+      : "Meta no confirmó la respuesta automática y no se volverá a enviar para evitar duplicados.",
+    rejected
+      ? "WHATSAPP_AUTOMATIC_DELIVERY_REJECTED"
+      : "WHATSAPP_AUTOMATIC_DELIVERY_UNKNOWN",
+    { cause },
+  );
+}
+
+function automaticProviderFailureState(error, { providerDispatchStarted }) {
+  if (!providerDispatchStarted) return "failed";
+  const status = Number(error?.status);
+  if (
+    error?.ambiguous === true
+    || AMBIGUOUS_PROVIDER_STATUSES.has(status)
+    || status >= 500
+    || error?.name === "AbortError"
+    || error?.name === "TimeoutError"
+    || error instanceof TypeError
+    || [
+      "META_FLOW_DELIVERY_UNKNOWN",
+      "META_FLOW_DELIVERY_RETRYABLE",
+      "WHATSAPP_FLOW_DELIVERY_UNRESOLVED",
+      "LOCAL_CORRELATION_FAILED",
+    ].includes(error?.code)
+  ) {
+    return "unknown";
+  }
+  return "failed";
+}
+
+function automaticProviderFailureEvidence(error, {
+  providerDispatchStarted,
+  state,
+}) {
+  if (!providerDispatchStarted) {
+    return { failureCode: "PRE_PROVIDER_DELIVERY_BLOCKED" };
+  }
+  const status = Number(error?.status);
+  const providerStatus = Number.isInteger(status) && status >= 100 && status <= 599
+    ? status
+    : null;
+  const controlledCode = SAFE_AUTOMATIC_PROVIDER_FAILURE_CODES.has(error?.code)
+    ? error.code
+    : null;
+  let failureCode = controlledCode;
+  if (!failureCode && (error?.name === "AbortError" || error?.name === "TimeoutError" || error instanceof TypeError)) {
+    failureCode = "META_TRANSPORT_AMBIGUOUS";
+  }
+  if (!failureCode && providerStatus) {
+    failureCode = state === "unknown" ? "META_HTTP_AMBIGUOUS" : "META_HTTP_REJECTED";
+  }
+  if (!failureCode) {
+    failureCode = state === "unknown" ? "META_DELIVERY_AMBIGUOUS" : "META_DELIVERY_REJECTED";
+  }
+  return {
+    failureCode,
+    ...(providerStatus ? { providerStatus } : {}),
+  };
+}
+
+function settlementPendingError(cause) {
+  const error = new Error(
+    "The automatic WhatsApp delivery claim could not be settled durably.",
+    cause ? { cause } : undefined,
+  );
+  error.code = "WHATSAPP_AUTOMATIC_DELIVERY_SETTLEMENT_PENDING";
+  return error;
 }
 
 export async function applyWhatsAppTemplateStatusEvent(

@@ -6,7 +6,7 @@ Este plan mantiene la secuencia del PDF y separa capacidades operativas de capac
 
 El estado se expresa por nivel de evidencia: código y pruebas locales, migración en Preview aislado, journey UI en Preview y E2E externo. No se usa “desplegado” como sinónimo de “operativo con un proveedor real”.
 
-- `npm test`: 1223/1223 verde; lint y build de Next 16.2.11 verdes en el worktree;
+- `npm test`: 1292/1292 verde; lint y build de Next 16.2.11 verdes en el worktree;
 - las migraciones y verificadores de baseline/forecast fueron aprobados en el Preview aislado de la rama `codex/platform-ux-foundation`; Production permanece fuera del alcance;
 - falta cerrar el smoke UI de publicación de baseline y forecast en el tenant de prueba, porque el acceso local directo a la conexión Preview está deliberadamente protegido y no se sustituye con una conexión de Production;
 - Meta, media entrante, identidad/cobro y Vision siguen siendo gates externos o de credencial explícita.
@@ -22,6 +22,7 @@ El estado se expresa por nivel de evidencia: código y pruebas locales, migraci�
 ## Prioridad inmediata: H1/H2 — Meta, asistencia y evidencia real
 
 - H1: webhook firmado, inbound/outbound correlacionado, estados, retry auditado y asistencia GPS real en un tenant piloto aislado;
+- las respuestas automáticas ya usan un journal durable `prepared → sending → accepted|failed|unknown`: un timeout, `408/425/429/5xx`, 2xx sin WAMID o correlación local irresuelta nunca repite el POST a Meta; el E2E externo sigue pendiente;
 - H2: foto Meta + comentario → storage privado → `ProgressEvidence` → revisión humana, sin inferir identidad ni GPS desde la imagen;
 - antes de enviar o aceptar datos reales: callback HTTPS, secretos exclusivos de Preview, allowlist de tenant/operario, retención y runbook de incidentes;
 - Twilio Sandbox queda sólo como contingencia de transporte: no valida WhatsApp Flows, Data Endpoint ni Embedded Signup de Meta.

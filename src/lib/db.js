@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import {
   WEBHOOK_LEASE_MS,
   createMessageWebhookOutcome,
+  deserializeWebhookPayload,
   isWebhookEventEligible,
   readAppliedMessageWebhookOutcome,
   scopedWebhookExternalId,
@@ -1151,6 +1152,298 @@ function webhookProcessingError(message, code) {
   return error;
 }
 
+const AUTOMATIC_WHATSAPP_DELIVERY_VERSION = 1;
+const AUTOMATIC_WHATSAPP_DELIVERY_SOURCE = "automatic-webhook";
+const AUTOMATIC_WHATSAPP_DELIVERY_FINAL_STATES = new Set([
+  "accepted",
+  "sent",
+  "delivered",
+  "read",
+  "failed",
+  "unknown",
+]);
+const AUTOMATIC_WHATSAPP_DELIVERY_SETTLEMENT_STATES = new Set([
+  "accepted",
+  "failed",
+  "unknown",
+]);
+const AUTOMATIC_WHATSAPP_FAILURE_CODE_PATTERN = /^[A-Z][A-Z0-9_.:-]{0,79}$/;
+
+function jsonRecord(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function automaticWhatsAppDeliveryTimestamp(value) {
+  const timestamp = value ? new Date(value) : null;
+  return timestamp && !Number.isNaN(timestamp.getTime()) ? timestamp.toISOString() : null;
+}
+
+function automaticWhatsAppDeliveryMetadata(
+  metadata,
+  webhookEventId,
+  dispatchState,
+  now = new Date(),
+  failureEvidence = null,
+) {
+  const priorJournal = jsonRecord(jsonRecord(metadata).automaticDelivery);
+  const timestamp = automaticWhatsAppDeliveryTimestamp(now) || new Date().toISOString();
+  const preparedAt = automaticWhatsAppDeliveryTimestamp(priorJournal.preparedAt);
+  const dispatchStartedAt = automaticWhatsAppDeliveryTimestamp(priorJournal.dispatchStartedAt);
+  return {
+    ...jsonRecord(metadata),
+    automaticDelivery: {
+      version: AUTOMATIC_WHATSAPP_DELIVERY_VERSION,
+      source: AUTOMATIC_WHATSAPP_DELIVERY_SOURCE,
+      webhookEventId,
+      dispatchState,
+      ...((preparedAt || dispatchState === "prepared" || dispatchState === "sending")
+        ? { preparedAt: preparedAt || timestamp }
+        : {}),
+      ...((dispatchStartedAt || dispatchState === "sending")
+        ? { dispatchStartedAt: dispatchStartedAt || timestamp }
+        : {}),
+      ...(AUTOMATIC_WHATSAPP_DELIVERY_SETTLEMENT_STATES.has(dispatchState)
+        ? { settledAt: timestamp }
+        : {}),
+      ...(["failed", "unknown"].includes(dispatchState) && failureEvidence?.failureCode
+        ? { failureCode: failureEvidence.failureCode }
+        : {}),
+      ...(["failed", "unknown"].includes(dispatchState) && failureEvidence?.providerStatus
+        ? { providerStatus: failureEvidence.providerStatus }
+        : {}),
+    },
+  };
+}
+
+function automaticWhatsAppFailureEvidence({ failureCode, providerStatus, state }) {
+  const failureCodeSupplied = failureCode !== undefined && failureCode !== null;
+  const providerStatusSupplied = providerStatus !== undefined && providerStatus !== null;
+  const normalizedFailureCode = typeof failureCode === "string"
+    ? failureCode.trim().toUpperCase()
+    : "";
+  const normalizedProviderStatus = typeof providerStatus === "number" ? providerStatus : null;
+  if (
+    (state === "accepted" && (failureCodeSupplied || providerStatusSupplied))
+    || (
+      failureCodeSupplied
+      && !AUTOMATIC_WHATSAPP_FAILURE_CODE_PATTERN.test(normalizedFailureCode)
+    )
+    || (
+      providerStatusSupplied
+      && (
+        !Number.isInteger(normalizedProviderStatus)
+        || normalizedProviderStatus < 100
+        || normalizedProviderStatus > 599
+      )
+    )
+  ) {
+    throw webhookProcessingError(
+      "Automatic WhatsApp failure evidence must be a bounded machine code and HTTP status.",
+      "WEBHOOK_PAYLOAD_INVALID",
+    );
+  }
+  return {
+    ...(normalizedFailureCode ? { failureCode: normalizedFailureCode } : {}),
+    ...(normalizedProviderStatus ? { providerStatus: normalizedProviderStatus } : {}),
+  };
+}
+
+function prepareAutomaticWebhookMessages(messages, { eventId, inboundExternalId, now = new Date() }) {
+  const outboundExternalId = `obrasaas-reply:${inboundExternalId}`;
+  return messages.map((message) => {
+    if (message?.sender !== "bot" || message.externalId !== outboundExternalId) {
+      return message;
+    }
+    return {
+      ...message,
+      status: "prepared",
+      metadata: automaticWhatsAppDeliveryMetadata(
+        message.metadata,
+        eventId,
+        "prepared",
+        now,
+      ),
+    };
+  });
+}
+
+function automaticWhatsAppDeliveryInput({
+  eventId,
+  leaseToken,
+  inboundExternalId,
+  scope,
+}) {
+  const normalized = {
+    eventId: typeof eventId === "string" ? eventId.trim() : "",
+    leaseToken: typeof leaseToken === "string" ? leaseToken.trim() : "",
+    inboundExternalId: typeof inboundExternalId === "string" ? inboundExternalId.trim() : "",
+    projectId: typeof scope?.projectId === "string" ? scope.projectId.trim() : "",
+    organizationId: typeof scope?.organizationId === "string" ? scope.organizationId.trim() : "",
+    phoneNumberId: typeof scope?.phoneNumberId === "string" ? scope.phoneNumberId.trim() : "",
+  };
+  if (
+    !normalized.eventId
+    || !normalized.leaseToken
+    || !normalized.inboundExternalId
+    || !normalized.projectId
+    || !normalized.organizationId
+    || !normalized.phoneNumberId
+  ) {
+    throw webhookProcessingError(
+      "An applied webhook lease, inbound message and trusted tenant scope are required for automatic delivery.",
+      "WEBHOOK_PAYLOAD_INVALID",
+    );
+  }
+  return {
+    ...normalized,
+    outboundExternalId: `obrasaas-reply:${normalized.inboundExternalId}`,
+  };
+}
+
+function automaticWhatsAppDeliveryClaim(value) {
+  const claim = {
+    version: Number(value?.version),
+    eventId: typeof value?.eventId === "string" ? value.eventId.trim() : "",
+    leaseToken: typeof value?.leaseToken === "string" ? value.leaseToken.trim() : "",
+    projectId: typeof value?.projectId === "string" ? value.projectId.trim() : "",
+    organizationId: typeof value?.organizationId === "string" ? value.organizationId.trim() : "",
+    phoneNumberId: typeof value?.phoneNumberId === "string" ? value.phoneNumberId.trim() : "",
+    messageId: typeof value?.messageId === "string" ? value.messageId.trim() : "",
+    outboundExternalId: typeof value?.outboundExternalId === "string"
+      ? value.outboundExternalId.trim()
+      : "",
+  };
+  if (
+    claim.version !== AUTOMATIC_WHATSAPP_DELIVERY_VERSION
+    || !claim.eventId
+    || !claim.leaseToken
+    || !claim.projectId
+    || !claim.organizationId
+    || !claim.phoneNumberId
+    || !claim.messageId
+    || !claim.outboundExternalId.startsWith("obrasaas-reply:")
+    || claim.outboundExternalId.length === "obrasaas-reply:".length
+  ) {
+    throw webhookProcessingError(
+      "The automatic WhatsApp delivery claim is invalid.",
+      "WEBHOOK_PAYLOAD_INVALID",
+    );
+  }
+  return claim;
+}
+
+async function requireAutomaticWhatsAppDeliveryProject(transaction, normalized) {
+  const project = await transaction.project.findFirst({
+    where: {
+      id: normalized.projectId,
+      organizationId: normalized.organizationId,
+    },
+    select: {
+      id: true,
+      organizationId: true,
+      whatsapp: {
+        select: {
+          phoneNumberId: true,
+          enabled: true,
+        },
+      },
+    },
+  });
+  if (
+    !project
+    || !project.whatsapp?.enabled
+    || project.whatsapp.phoneNumberId !== normalized.phoneNumberId
+  ) {
+    throw webhookProcessingError(
+      "The automatic WhatsApp delivery crossed its trusted tenant connection boundary.",
+      "WEBHOOK_MESSAGE_SCOPE_MISMATCH",
+    );
+  }
+  return project;
+}
+
+async function requireAutomaticWhatsAppDeliveryEvent(transaction, normalized) {
+  const inboundExternalId = normalized.inboundExternalId
+    || normalized.outboundExternalId.slice("obrasaas-reply:".length);
+  const event = await transaction.webhookEvent.findFirst({
+    where: {
+      id: normalized.eventId,
+      projectId: normalized.projectId,
+      provider: "meta",
+      externalId: scopedWebhookExternalId(normalized.projectId, inboundExternalId),
+      eventType: "message",
+      status: "PROCESSING",
+      leaseToken: normalized.leaseToken,
+      appliedAt: { not: null },
+    },
+    select: {
+      id: true,
+      appliedAt: true,
+      outcome: true,
+      payload: true,
+    },
+  });
+  if (!event) {
+    throw webhookProcessingError(
+      "The webhook lease changed before automatic WhatsApp delivery could be recorded.",
+      "WEBHOOK_LEASE_LOST",
+    );
+  }
+  readAppliedMessageWebhookOutcome(event);
+  let stored;
+  let conversationExternalId;
+  try {
+    stored = deserializeWebhookPayload(event.payload);
+    conversationExternalId = whatsAppConversationIdentity(stored.event).externalId;
+  } catch {
+    throw webhookProcessingError(
+      "The applied webhook payload cannot prove its automatic delivery contact.",
+      "WEBHOOK_PAYLOAD_INVALID",
+    );
+  }
+  if (
+    stored.event.provider !== "meta"
+    || stored.event.eventType !== "message"
+    || stored.event.externalId !== inboundExternalId
+    || stored.event.phoneNumberId !== normalized.phoneNumberId
+    || stored.scope.projectId !== normalized.projectId
+    || stored.scope.organizationId !== normalized.organizationId
+    || stored.scope.phoneNumberId !== normalized.phoneNumberId
+  ) {
+    throw webhookProcessingError(
+      "The applied webhook payload crossed its trusted automatic delivery scope.",
+      "WEBHOOK_MESSAGE_SCOPE_MISMATCH",
+    );
+  }
+  return { ...event, conversationExternalId };
+}
+
+function automaticWhatsAppMessageInScope(message, normalized) {
+  return Boolean(
+    message
+    && message.id === (normalized.messageId || message.id)
+    && message.externalId === normalized.outboundExternalId
+    && message.direction === "OUTBOUND"
+    && message.conversationId
+    && message.conversation?.projectId === normalized.projectId
+    && message.conversation?.channel === "whatsapp"
+    && message.conversation?.externalId === normalized.conversationExternalId
+  );
+}
+
+function automaticWhatsAppJournalMatches(metadata, eventId, dispatchState) {
+  const journal = jsonRecord(metadata).automaticDelivery;
+  return Boolean(
+    journal
+    && typeof journal === "object"
+    && !Array.isArray(journal)
+    && journal.version === AUTOMATIC_WHATSAPP_DELIVERY_VERSION
+    && journal.source === AUTOMATIC_WHATSAPP_DELIVERY_SOURCE
+    && journal.webhookEventId === eventId
+    && journal.dispatchState === dispatchState
+  );
+}
+
 export function assertExpiredWhatsAppFlowRecoveryResult(
   expiredFlowSession,
   result,
@@ -1563,9 +1856,13 @@ export async function applyWebhookMessageAtomically({
         create: { projectId: project.id, state },
       });
     }
+    const automaticMessages = prepareAutomaticWebhookMessages(result.newMessages, {
+      eventId: normalized.eventId,
+      inboundExternalId: event.externalId,
+    });
     await appendDurableMessages(
       { prisma: transaction, project },
-      result.newMessages,
+      automaticMessages,
       {
         conversationIdentity: whatsAppConversationIdentity({
           ...event,
@@ -1598,6 +1895,334 @@ export async function applyWebhookMessageAtomically({
     }
     return { alreadyApplied: false, outcome };
   }, { maxWait: 5_000, timeout: 20_000 });
+}
+
+export async function claimAutomaticWhatsAppDelivery({
+  eventId,
+  leaseToken,
+  inboundExternalId,
+  scope,
+  now = new Date(),
+}) {
+  const claimedAt = new Date(now);
+  if (Number.isNaN(claimedAt.getTime())) {
+    throw webhookProcessingError(
+      "A valid claim time is required for automatic WhatsApp delivery.",
+      "WEBHOOK_PAYLOAD_INVALID",
+    );
+  }
+  const normalized = automaticWhatsAppDeliveryInput({
+    eventId,
+    leaseToken,
+    inboundExternalId,
+    scope,
+  });
+  if (!hasDurableDatabase()) {
+    throw webhookProcessingError(
+      "Automatic WhatsApp delivery requires durable storage.",
+      "WEBHOOK_DURABLE_STORAGE_REQUIRED",
+    );
+  }
+
+  const { getPrisma } = await import("@/lib/prisma");
+  return getPrisma().$transaction(async (transaction) => {
+    await lockProjectTransaction(transaction, normalized.projectId);
+    await requireAutomaticWhatsAppDeliveryProject(transaction, normalized);
+    const leasedEvent = await requireAutomaticWhatsAppDeliveryEvent(transaction, normalized);
+    const deliveryScope = {
+      ...normalized,
+      conversationExternalId: leasedEvent.conversationExternalId,
+    };
+
+    const message = await transaction.message.findUnique({
+      where: { externalId: normalized.outboundExternalId },
+      select: {
+        id: true,
+        conversationId: true,
+        externalId: true,
+        providerMessageId: true,
+        direction: true,
+        status: true,
+        metadata: true,
+        conversation: {
+          select: {
+            projectId: true,
+            channel: true,
+            externalId: true,
+          },
+        },
+      },
+    });
+    if (!message) {
+      return {
+        dispatch: false,
+        state: "unknown",
+        reason: "message_missing",
+      };
+    }
+    if (!automaticWhatsAppMessageInScope(message, deliveryScope)) {
+      throw webhookProcessingError(
+        "The automatic outbound message crossed its tenant conversation boundary.",
+        "WEBHOOK_MESSAGE_SCOPE_MISMATCH",
+      );
+    }
+
+    const status = typeof message.status === "string"
+      ? message.status.trim().toLowerCase()
+      : null;
+    if (AUTOMATIC_WHATSAPP_DELIVERY_FINAL_STATES.has(status)) {
+      return {
+        dispatch: false,
+        state: status,
+        reason: ["failed", "unknown"].includes(status) ? "terminal" : "already_dispatched",
+        ...(["accepted", "sent", "delivered", "read"].includes(status)
+          ? { providerMessageId: message.providerMessageId || null }
+          : {}),
+      };
+    }
+
+    const prepared = message.status === "prepared"
+      && message.providerMessageId == null
+      && automaticWhatsAppJournalMatches(
+        message.metadata,
+        normalized.eventId,
+        "prepared",
+      );
+    if (prepared) {
+      const claimed = await transaction.message.updateMany({
+        where: {
+          id: message.id,
+          conversationId: message.conversationId,
+          status: "prepared",
+          providerMessageId: null,
+        },
+        data: {
+          status: "sending",
+          metadata: automaticWhatsAppDeliveryMetadata(
+            message.metadata,
+            normalized.eventId,
+            "sending",
+            claimedAt,
+          ),
+        },
+      });
+      if (claimed.count === 1) {
+        return {
+          dispatch: true,
+          state: "sending",
+          claim: {
+            version: AUTOMATIC_WHATSAPP_DELIVERY_VERSION,
+            eventId: normalized.eventId,
+            leaseToken: normalized.leaseToken,
+            projectId: normalized.projectId,
+            organizationId: normalized.organizationId,
+            phoneNumberId: normalized.phoneNumberId,
+            messageId: message.id,
+            outboundExternalId: normalized.outboundExternalId,
+          },
+        };
+      }
+      return {
+        dispatch: false,
+        state: "unknown",
+        reason: "CLAIM_CONFLICT",
+      };
+    }
+
+    // A prior sender can have reached Meta even when no provider response was
+    // durably recorded. Re-encountered sending, legacy null and malformed
+    // prepared rows are therefore retired as unknown instead of being retried.
+    const retired = await transaction.message.updateMany({
+      where: {
+        id: message.id,
+        conversationId: message.conversationId,
+        status: message.status,
+      },
+      data: {
+        status: "unknown",
+        metadata: automaticWhatsAppDeliveryMetadata(
+          message.metadata,
+          normalized.eventId,
+          "unknown",
+          claimedAt,
+          { failureCode: "STALE_DISPATCH_CLAIM" },
+        ),
+      },
+    });
+    return {
+      dispatch: false,
+      state: "unknown",
+      reason: retired.count === 1 ? "STALE_DISPATCH_CLAIM" : "CLAIM_CONFLICT",
+    };
+  }, { maxWait: 5_000, timeout: 10_000 });
+}
+
+export async function settleAutomaticWhatsAppDelivery({
+  claim: suppliedClaim,
+  state,
+  providerMessageId,
+  failureCode,
+  providerStatus,
+  now = new Date(),
+}) {
+  const settledAt = new Date(now);
+  if (Number.isNaN(settledAt.getTime())) {
+    throw webhookProcessingError(
+      "A valid settlement time is required for automatic WhatsApp delivery.",
+      "WEBHOOK_PAYLOAD_INVALID",
+    );
+  }
+  const claim = automaticWhatsAppDeliveryClaim(suppliedClaim);
+  const normalizedState = typeof state === "string" ? state.trim().toLowerCase() : "";
+  const providerIdSupplied = providerMessageId !== undefined && providerMessageId !== null;
+  const normalizedProviderMessageId = typeof providerMessageId === "string"
+    ? providerMessageId.trim()
+    : "";
+  if (
+    !AUTOMATIC_WHATSAPP_DELIVERY_SETTLEMENT_STATES.has(normalizedState)
+    || (
+      normalizedState === "accepted"
+        ? !normalizedProviderMessageId || normalizedProviderMessageId.length > 500
+        : providerIdSupplied
+    )
+  ) {
+    throw webhookProcessingError(
+      "The automatic WhatsApp delivery settlement is invalid.",
+      "WEBHOOK_PAYLOAD_INVALID",
+    );
+  }
+  const failureEvidence = automaticWhatsAppFailureEvidence({
+    failureCode,
+    providerStatus,
+    state: normalizedState,
+  });
+  if (!hasDurableDatabase()) {
+    throw webhookProcessingError(
+      "Automatic WhatsApp delivery settlement requires durable storage.",
+      "WEBHOOK_DURABLE_STORAGE_REQUIRED",
+    );
+  }
+
+  const normalized = {
+    ...claim,
+    inboundExternalId: claim.outboundExternalId.slice("obrasaas-reply:".length),
+  };
+  const { getPrisma } = await import("@/lib/prisma");
+  return getPrisma().$transaction(async (transaction) => {
+    await lockProjectTransaction(transaction, claim.projectId);
+    await requireAutomaticWhatsAppDeliveryProject(transaction, normalized);
+    const leasedEvent = await requireAutomaticWhatsAppDeliveryEvent(transaction, normalized);
+    const deliveryScope = {
+      ...normalized,
+      conversationExternalId: leasedEvent.conversationExternalId,
+    };
+
+    const message = await transaction.message.findUnique({
+      where: { id: claim.messageId },
+      select: {
+        id: true,
+        conversationId: true,
+        externalId: true,
+        providerMessageId: true,
+        direction: true,
+        status: true,
+        metadata: true,
+        conversation: {
+          select: {
+            projectId: true,
+            channel: true,
+            externalId: true,
+          },
+        },
+      },
+    });
+    if (!automaticWhatsAppMessageInScope(message, deliveryScope)) {
+      throw webhookProcessingError(
+        "The claimed automatic outbound message crossed its tenant conversation boundary.",
+        "WEBHOOK_MESSAGE_SCOPE_MISMATCH",
+      );
+    }
+
+    const currentState = typeof message.status === "string"
+      ? message.status.trim().toLowerCase()
+      : "unknown";
+    if (currentState !== "sending") {
+      if (
+        normalizedState === "accepted"
+        && currentState === "accepted"
+        && message.providerMessageId
+        && message.providerMessageId !== normalizedProviderMessageId
+      ) {
+        throw webhookProcessingError(
+          "The automatic outbound message is already bound to a different Meta message.",
+          "WEBHOOK_MESSAGE_SCOPE_MISMATCH",
+        );
+      }
+      return {
+        settled: false,
+        state: currentState,
+        reason: "already_settled",
+        ...(["accepted", "sent", "delivered", "read"].includes(currentState)
+          ? { providerMessageId: message.providerMessageId || null }
+          : {}),
+      };
+    }
+    if (
+      message.providerMessageId != null
+      || !automaticWhatsAppJournalMatches(message.metadata, claim.eventId, "sending")
+    ) {
+      throw webhookProcessingError(
+        "The automatic WhatsApp delivery journal no longer matches its claim.",
+        "WEBHOOK_MESSAGE_SCOPE_MISMATCH",
+      );
+    }
+
+    if (normalizedState === "accepted") {
+      const conflict = await transaction.message.findUnique({
+        where: { providerMessageId: normalizedProviderMessageId },
+        select: { id: true },
+      });
+      if (conflict && conflict.id !== message.id) {
+        throw webhookProcessingError(
+          "The Meta message ID belongs to another outbound message.",
+          "WEBHOOK_MESSAGE_SCOPE_MISMATCH",
+        );
+      }
+    }
+
+    const settled = await transaction.message.updateMany({
+      where: {
+        id: message.id,
+        conversationId: message.conversationId,
+        status: "sending",
+        providerMessageId: null,
+      },
+      data: {
+        status: normalizedState,
+        metadata: automaticWhatsAppDeliveryMetadata(
+          message.metadata,
+          claim.eventId,
+          normalizedState,
+          settledAt,
+          failureEvidence,
+        ),
+        ...(normalizedState === "accepted"
+          ? { providerMessageId: normalizedProviderMessageId }
+          : {}),
+      },
+    });
+    if (settled.count !== 1) {
+      return {
+        settled: false,
+        state: "unknown",
+        reason: "settlement_conflict",
+      };
+    }
+    return {
+      settled: true,
+      state: normalizedState,
+    };
+  }, { maxWait: 5_000, timeout: 10_000 });
 }
 
 export async function persistEnrichedWebhookEvent({

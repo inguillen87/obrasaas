@@ -15,6 +15,7 @@ import ProactiveFlowLauncher from './proactive-flow-launcher';
 
 const DEFAULT_TIME_ZONE = 'America/Argentina/Buenos_Aires';
 const DELIVERY_STATES = new Set([
+  'PREPARED',
   'SENDING',
   'ACCEPTED',
   'SENT',
@@ -414,6 +415,7 @@ function connectionPresentation(connection) {
 function deliveryPresentation(status) {
   const normalized = deliveryStatus(status);
   return {
+    PREPARED: { icon: 'fa-regular fa-clock', label: 'En cola' },
     SENDING: { icon: 'fa-regular fa-clock', label: 'Enviando' },
     ACCEPTED: { icon: 'fa-solid fa-check', label: 'Aceptado por Meta' },
     SENT: { icon: 'fa-solid fa-check', label: 'Enviado' },

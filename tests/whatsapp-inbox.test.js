@@ -1011,6 +1011,37 @@ test('interactive Flow template messages remain visible without exposing binary 
   assert.equal(payload.messages[0].media, null);
 });
 
+test('automatic replies prepared for durable delivery remain visible as queued', async () => {
+  const { prisma } = routePrisma({
+    messages: [
+      message({
+        direction: 'OUTBOUND',
+        externalId: 'obrasaas-reply:wamid.inbound-a',
+        providerMessageId: null,
+        body: 'Respuesta operativa en cola.',
+        status: 'prepared',
+      }),
+    ],
+  });
+  const handlers = createWhatsAppConversationMessageHandlers({
+    resolveAccess: async () => access({ tenantRole: 'SITE_MANAGER' }),
+    authorize: () => undefined,
+    prismaFactory: () => prisma,
+    clock: () => NOW,
+  });
+
+  const response = await handlers.GET(messagesRequest(), routeContext());
+  const payload = await response.json();
+  const clientSource = await readFile(
+    new URL('../src/app/dashboard/inbox/inbox-client.js', import.meta.url),
+    'utf8',
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.messages[0].status, 'prepared');
+  assert.match(clientSource, /PREPARED: \{[^}]*label: 'En cola'/);
+});
+
 test('read and manual-send handlers enforce distinct RBAC permissions before database access', async () => {
   const forbidden = () => {
     throw new AccessError('Permission required.', {

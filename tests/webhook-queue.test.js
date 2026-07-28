@@ -88,8 +88,11 @@ test("unusable or corrupt WhatsApp identities are terminal before media processi
   assert.equal(isTerminalWebhookFailure({ code: "WHATSAPP_FLOW_SESSION_INPUT_INVALID" }), true);
   assert.equal(isTerminalWebhookFailure({ code: "WHATSAPP_FLOW_SESSION_INVALID" }), true);
   assert.equal(isTerminalWebhookFailure({ code: "WHATSAPP_FLOW_SESSION_USED" }), true);
+  assert.equal(isTerminalWebhookFailure({ code: "WHATSAPP_AUTOMATIC_DELIVERY_REJECTED" }), true);
+  assert.equal(isTerminalWebhookFailure({ code: "WHATSAPP_AUTOMATIC_DELIVERY_UNKNOWN" }), true);
   assert.equal(isTerminalWebhookFailure({ code: "WHATSAPP_FLOW_TOKEN_SECRET_INVALID" }), false);
   assert.equal(isTerminalWebhookFailure({ code: "WHATSAPP_FLOW_DELIVERY_UNRESOLVED" }), false);
+  assert.equal(isTerminalWebhookFailure({ code: "WHATSAPP_AUTOMATIC_DELIVERY_SETTLEMENT_PENDING" }), false);
   assert.equal(isTerminalWebhookFailure({ code: "FIELD_WORKER_CANONICAL_IDENTITY_CONFIGURATION_INVALID" }), false);
   assert.equal(isTerminalWebhookFailure({ code: "META_TEMPORARY_FAILURE" }), false);
 });
