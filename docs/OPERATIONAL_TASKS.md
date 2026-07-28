@@ -65,14 +65,16 @@ El cutover no se infiere por deploy. Requiere:
 
 La migración `20260724110000_canonical_tasks_wbs` crea el contrato relacional y su verificador; no fabrica una baseline aprobada ni autoriza por sí sola el cutover de Production.
 
-## Gap abierto: baseline y forecast
+## Baseline y forecast: alcance entregado y límites vigentes
 
-`Task.startsAt/endsAt` representan el plan canónico actual, pero todavía no existe una baseline inmutable/versionada con revisiones aprobadas, calendario y fechas forecast/real separadas. Por eso:
+`Task.startsAt/endsAt` representan el plan canónico vigente. Sobre la WBS canónica ya existen baseline inmutable/versionada, snapshots auditados, CAS/idempotencia y forecast determinista con dependencias FS/SS/FF/SF, lag y fechas civiles reproducibles. Una tarea creada antes de que la obra tenga fecha de inicio persiste `metadata.schedule` (`PROJECT_START`, `startDay`, duración); cuando se define o cambia el calendario, se rehidrata atómicamente sin perder su intención relativa.
 
-- el endpoint de comparación de replan devuelve honestamente `baselineTasks` como **plan canónico actual** y no inventa `baselineVersion`;
-- `VisualProgressAssessment.baselineHash` detecta que el plan cambió, pero no sustituye una baseline contractual;
-- revisar una foto no crea fechas ni modifica el Gantt;
-- el motor ideal-vs-real debe llegar como vertical propia antes de afirmar cálculo contractual de plazo.
+Esto no habilita por sí solo cambios contractuales:
+
+- la publicación de baseline y los cortes de forecast requieren sus operaciones auditadas; el smoke UI final en Preview sigue pendiente;
+- `VisualProgressAssessment.baselineHash` detecta cambios del plan, pero la revisión visual no publica baseline ni crea forecast automáticamente;
+- revisar una foto no modifica el Gantt, certifica avance ni habilita pagos;
+- el cutover legacy, equipos/responsables por ID, blockers y change control aprobado siguen siendo verticales separados.
 
 Presupuesto, medición, certificación y pago deben referenciar la misma WBS, pero conservan estados y aprobaciones separados.
 

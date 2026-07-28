@@ -2,23 +2,45 @@
 
 Este plan mantiene la secuencia del PDF y separa capacidades operativas de capacidades financieras. Cada sprint debe cerrar con migración verificable, pruebas de concurrencia, permisos y evidencia de uso; un endpoint compilado no cuenta como salida.
 
-## Corte activo: S5.1 + S17-A — foto canónica y visión gobernada
+## Corte de evidencia: 28 de julio de 2026
+
+El estado se expresa por nivel de evidencia: código y pruebas locales, migración en Preview aislado, journey UI en Preview y E2E externo. No se usa “desplegado” como sinónimo de “operativo con un proveedor real”.
+
+- `npm test`: 1223/1223 verde; lint y build de Next 16.2.11 verdes en el worktree;
+- las migraciones y verificadores de baseline/forecast fueron aprobados en el Preview aislado de la rama `codex/platform-ux-foundation`; Production permanece fuera del alcance;
+- falta cerrar el smoke UI de publicación de baseline y forecast en el tenant de prueba, porque el acceso local directo a la conexión Preview está deliberadamente protegido y no se sustituye con una conexión de Production;
+- Meta, media entrante, identidad/cobro y Vision siguen siendo gates externos o de credencial explícita.
+
+## Entregado, con smoke UI Preview pendiente: S3.1/S6.1 — baseline y forecast controlado
+
+- baseline inmutable y versionada sobre WBS canónica, con snapshots, hashes, auditoría, idempotencia y CAS;
+- forecast determinista con dependencias FS/SS/FF/SF, lag, observaciones explícitas y fechas civiles reproducibles;
+- una tarea creada antes de definir el calendario conserva `startDay` y duración relativos; al fijar el inicio de obra se rehidrata de forma atómica, sin perder la planificación;
+- escenario derivado de una revisión humana, nunca del output bruto del modelo; ninguna foto crea forecast, certifica o aplica cambios;
+- compatibilidad legacy por obra hasta cutover demostrable con cero drift; siguen pendientes responsables/equipos por ID, blockers y change control contractual.
+
+## Prioridad inmediata: H1/H2 — Meta, asistencia y evidencia real
+
+- H1: webhook firmado, inbound/outbound correlacionado, estados, retry auditado y asistencia GPS real en un tenant piloto aislado;
+- H2: foto Meta + comentario → storage privado → `ProgressEvidence` → revisión humana, sin inferir identidad ni GPS desde la imagen;
+- antes de enviar o aceptar datos reales: callback HTTPS, secretos exclusivos de Preview, allowlist de tenant/operario, retención y runbook de incidentes;
+- Twilio Sandbox queda sólo como contingencia de transporte: no valida WhatsApp Flows, Data Endpoint ni Embedded Signup de Meta.
+
+## Siguiente vertical interno: S5.1 + S17-A — foto canónica y visión gobernada
 
 - foto Meta autorizada → selector WBS en Inbox → `ProgressEvidence` idempotente;
 - integridad SHA-256, storage privado y revisión de evidencia;
 - `VisualProgressAssessment` con provider registry, rango/abstención, lease persistente recuperable y revisión CAS;
-- OpenAI visual primario; Qwen3-VL/GLM-5V como challengers visuales y GLM-OCR/GLM-5.2 como especialistas OCR/texto explícitos; ninguno se invoca por fan-out;
-- despliegue Neon Preview, smoke Meta real, controles de datos/DPA/retención y observabilidad de costo/latencia todavía pendientes;
-- cargas web privadas limitadas a 4 MiB; carga directa autorizada, checksum y finalización server-side quedan como cierre para videos/documentos mayores;
-- ninguna foto muta Gantt, certifica, paga o valida asistencia.
+- OpenAI es el candidato primario de Vision; Qwen3-VL/GLM-5V son challengers visuales y GLM-OCR/GLM-5.2 especialistas OCR/texto evaluables. No hay fan-out sobre evidencia real;
+- la activación de cualquier llamada OpenAI está bloqueada hasta elegir explícitamente reutilizar la clave existente de Vercel o crear una clave dedicada de piloto;
+- faltan foto Meta real, dataset consentido, ground truth, benchmark, DPA/retención y observabilidad de costo/latencia;
+- las cargas web privadas siguen limitadas a 4 MiB; carga directa autorizada, checksum y finalización server-side quedan como cierre para videos/documentos mayores.
 
-## Siguiente vertical: S3.1/S6.1 — baseline y forecast controlado
+## H3/H4 — alta de operario y cobro seguro
 
-- baseline inmutable/versionada sobre WBS canónica;
-- fechas plan/forecast/real separadas y motor determinista de dependencias;
-- escenario derivado de una revisión humana, nunca del output bruto del modelo;
-- comparación reproducible, impacto/camino afectado y aprobación antes de aplicar;
-- conservar compatibilidad legacy por obra hasta cutover con cero drift.
+- alta conversacional con nombre y apellido declarados, enlace a una identidad de canal preautorizada y revisión administrativa; el número de WhatsApp no prueba identidad civil ni titularidad;
+- CUIL/CBU/CVU/alias y comprobante se manejan en un dominio cifrado, enmascarado y auditado, nunca en Inbox o snapshots compartidos;
+- falta Flow/UI productivo, proveedor confiable de titularidad, consentimiento y comprobante privado. Nunca se ejecuta un pago automático.
 
 ## S20 — campo offline confiable
 

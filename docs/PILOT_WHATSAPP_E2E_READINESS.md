@@ -1,6 +1,6 @@
 # Piloto WhatsApp E2E - readiness y gates
 
-Fecha de corte: 2026-07-26
+Fecha de corte: 2026-07-28
 
 ## Estado operativo del corte
 
@@ -8,7 +8,7 @@ Fecha de corte: 2026-07-26
 - El importador Meta está apagado para Preview global y habilitado sólo en esta rama. Su allowlist, token de verificación del webhook y secretos de IA están limitados a la misma rama.
 - Falta ingresar `META_APP_SECRET`, generar un token temporal nuevo en Meta, redesplegar y mover el dominio estable de Preview al despliegue actual. El panel de Meta mantiene una reautenticación humana pendiente; ninguna contraseña se captura ni automatiza.
 - Después de ese redespliegue todavía hay que crear o seleccionar un tenant externo con obra, administrador no-superadmin y operario preautorizado. Un contacto desconocido continúa en cuarentena y no se auto-habilita por declarar un nombre.
-- El primer smoke real habilitable es H1: plantilla outbound, respuesta inbound, estados, webhook firmado y asistencia con ubicación. H2 agrega foto privada y comentario. H5 no se considera cerrado hasta persistir una baseline inmutable, generar el forecast y mostrar deltas Gantt revisados; el motor determinista puro es sólo una parte de ese hito.
+- El primer smoke real habilitable es H1: plantilla outbound, respuesta inbound, estados, webhook firmado y asistencia con ubicación. H2 agrega foto privada y comentario. H5 no se considera cerrado hasta recorrer en UI una baseline ya inmutable, generar un forecast revisado y mostrar sus deltas Gantt; el motor determinista ya está entregado, pero no se acopla automáticamente a una foto.
 
 ## Decisión de canal
 
@@ -31,9 +31,9 @@ Las operaciones dependientes de Meta no pueden recorrerse end-to-end hasta compl
 - Recepción de texto, audio, imagen, video y documentos; media privada con SHA-256.
 - Propuestas de avance por texto/audio que requieren aprobación y no reescriben el Gantt directamente.
 - Vinculación desde Inbox de una foto Meta autorizada a una tarea canónica como `ProgressEvidence`, con permisos, idempotencia y revisión.
-- Evaluación visual opt-in con OpenAI, rango o abstención, derivado sin metadatos y revisión humana CAS. Un smoke API controlado ya confirmó abstención ante un render BIM que no era evidencia física. Las ejecuciones `RUNNING` tienen lease persistente: un crash se recupera una sola vez a `FAILED`, queda auditado y una respuesta tardía no puede pisarlo; el reintento es explícito con otra clave.
+- Evaluación visual opt-in con un adapter de Vision, rango o abstención, derivado sin metadatos y revisión humana CAS. OpenAI es el candidato primario y una ejecución histórica controlada confirmó abstención ante un render BIM que no era evidencia física; no se reactiva ninguna llamada hasta elegir una clave de piloto. Las ejecuciones `RUNNING` tienen lease persistente: un crash se recupera una sola vez a `FAILED`, queda auditado y una respuesta tardía no puede pisarlo; el reintento es explícito con otra clave.
 
-No debe presentarse todavía como completo: la nueva cadena foto → evidencia → evaluación visual está implementada, probada y sus migraciones se verificaron en la rama Neon aislada del Preview, pero todavía no fue recorrida con una foto entrante real de Meta. La ubicación sigue siendo un evento separado y no está correlacionada automáticamente con la foto; tampoco existe aún una baseline inmutable ni un forecast persistido derivado de la revisión. El onboarding y los destinos de cobro ya tienen servicios y API autenticada tenant-scoped, cifrado AAD, DTO enmascarado, idempotencia, CAS, permisos y decisiones maker-checker-activator auditadas. Sus migraciones también fueron verificadas en esa rama aislada; faltan el Flow especializado, la pantalla productiva y un proveedor confiable de titularidad bancaria.
+No debe presentarse todavía como completo: la nueva cadena foto → evidencia → evaluación visual está implementada, probada y sus migraciones se verificaron en la rama Neon aislada del Preview, pero todavía no fue recorrida con una foto entrante real de Meta. La ubicación sigue siendo un evento separado y no está correlacionada automáticamente con la foto; baseline inmutable y forecast determinista existen, pero una revisión visual no los muta ni los invoca automáticamente. El onboarding y los destinos de cobro ya tienen servicios y API autenticada tenant-scoped, cifrado AAD, DTO enmascarado, idempotencia, CAS, permisos y decisiones maker-checker-activator auditadas. Sus migraciones también fueron verificadas en esa rama aislada; faltan el Flow especializado, la pantalla productiva y un proveedor confiable de titularidad bancaria.
 
 ## Hitos de prueba
 
@@ -111,9 +111,9 @@ Estimación: 1 a 2 sprints, condicionada a revisión laboral, privacidad, retenc
 
 La IA describe el elemento (por ejemplo, mampostería parcial), propone un rango de avance, confianza, evidencia y abstención. Nunca certifica ni cambia el cronograma por sí sola. El Director aprueba/corrige y recién entonces se genera un escenario de forecast; la baseline permanece inmutable.
 
-Base local completada: modelo Prisma/migración gobernados, provider registry, adaptador OpenAI Responses, sanitización binaria/EXIF, tenant opt-in con CAS entre administradores, recheck de suscripción/autorización en la última frontera, rutas idempotentes, un solo análisis abierto por evidencia, estados de fallo seguros y revisión humana CAS. Una lectura obsoleta puede rechazarse con trazabilidad para liberar un intento nuevo. El smoke API controlado con `gpt-5.6-sol` se abstuvo correctamente frente a un render BIM y no inventó avance. Qwen3-VL y GLM-5V son challengers visuales; GLM-OCR y GLM-5.2 son especialistas OCR/texto, y GLM-5.2 nunca recibe fotos. HF/Z.ai sólo tienen pruebas de contrato.
+Base local completada: modelo Prisma/migración gobernados, provider registry, adaptador OpenAI Responses, sanitización binaria/EXIF, tenant opt-in con CAS entre administradores, recheck de suscripción/autorización en la última frontera, rutas idempotentes, un solo análisis abierto por evidencia, estados de fallo seguros y revisión humana CAS. Una lectura obsoleta puede rechazarse con trazabilidad para liberar un intento nuevo. Una ejecución histórica controlada con `gpt-5.6-sol` se abstuvo correctamente frente a un render BIM y no inventó avance; las llamadas siguen deshabilitadas hasta que se decida la credencial de piloto. Qwen3-VL y GLM-5V son challengers visuales; GLM-OCR y GLM-5.2 son especialistas OCR/texto, y GLM-5.2 nunca recibe fotos. HF/Z.ai sólo tienen pruebas de contrato.
 
-Gate pendiente: redespliegue del Preview, foto Meta real, UI/journey E2E, dataset y benchmark calibrado, observabilidad de costo/latencia, controles de datos/DPA/retención del proveedor y motor de escenario sobre baseline inmutable. El esquema y las migraciones visuales ya fueron verificados en Neon aislado. `store:false` no equivale a ZDR y `detail:original` requiere opt-in justificado. La revisión visual actual no muta `Task` ni crea todavía el forecast, deliberadamente.
+Gate pendiente: cerrar smoke UI de baseline/forecast en Preview, elegir credencial de Vision, foto Meta real, UI/journey E2E, dataset y benchmark calibrado, observabilidad de costo/latencia y controles de datos/DPA/retención del proveedor. El esquema y las migraciones visuales ya fueron verificados en Neon aislado. `store:false` no equivale a ZDR y `detail:original` requiere opt-in justificado. La revisión visual actual no muta `Task` ni crea todavía el forecast, deliberadamente.
 
 Contrato técnico y benchmark: [AI_VISUAL_EVALUATION.md](./AI_VISUAL_EVALUATION.md).
 

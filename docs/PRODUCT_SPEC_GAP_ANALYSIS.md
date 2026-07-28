@@ -6,19 +6,19 @@ Se contrastó el documento `Documento_Especificaciones_App_Obra.pdf` (versión 1
 
 ## Lo que ya está cubierto
 
-“Cubierto” describe el repositorio local; no equivale a despliegue, migración Preview ni E2E externo.
+“Cubierto” describe el repositorio local; no equivale a despliegue, migración Preview ni E2E externo. El corte de esta revisión es 28 de julio de 2026: se distingue código/pruebas locales, migración aislada en Preview, journey UI y proveedor externo real.
 
 | Área del PDF | Estado actual | Evidencia del producto |
 | --- | --- | --- |
 | Asistencia con GPS, hora de servidor, estados pendientes y recuperación | Implementado | Ledger de asistencia, geocerca, frescura, idempotencia y cron de expiración |
-| Tareas, dependencias y avance real | Implementado en gran parte | Tareas operativas, grafo DAG, evidencias y revisión |
+| Tareas, dependencias y avance real | Implementado y verificado en Preview aislado; journey UI pendiente | WBS canónica, grafo DAG, baseline inmutable/versionada, forecast determinista FS/SS/FF/SF, snapshots auditados e idempotencia. Una tarea sin calendario conserva planificación relativa y se rehidrata al definir el inicio de obra |
 | Caja chica y aprobaciones | Parcial, base local no desplegada | `CashFund`/`CashMovement`, custodio validado por membresía, moneda, idempotencia, deduplicación acotada, comprobante privado y saldo derivado existen. Desde `100000` hay dos aprobaciones distintas con CAS; faltan política de umbral configurable por tenant, separación maker-checker respecto del creador, Preview y E2E |
 | Materiales, proveedores, órdenes y recepción | Base local implementada en gran parte | Proveedores, órdenes, recepciones parciales, remitos privados y estado automático; faltan BOM/requisición, rechazo/daño y validación externa |
 | Facturas y control de tres vías | Base local implementada en gran parte | Facturas, vencimientos, evidencia privada y match pedido-recepción-factura; faltan excepciones operativas, Preview y E2E |
 | Dashboard operativo y financiero | Implementado | Dashboard de compras, cuentas a pagar y caja chica |
 | WhatsApp como canal operativo | Implementado por contrato; E2E externo pendiente | Meta Cloud API directa como vía primaria; test number asignado, celular propio verificado y solicitud outbound de plantilla aceptada con token temporal. Esto no prueba entrega ni bidireccionalidad; faltan credenciales permanentes en Vercel, webhook firmado, inbound, estados, Flows y tenant real |
-| Foto de avance y lectura visual | Piloto local no desplegado | Foto Meta autorizada → `ProgressEvidence` por tarea; `VisualProgressAssessment` con integridad, opt-in, lease recuperable, OpenAI primario, Qwen3-VL/GLM-5V como challengers visuales y GLM-OCR/GLM-5.2 como especialistas OCR/texto. Falta Preview/Neon, foto Meta real, benchmark y baseline/forecast; nunca certifica, paga ni reprograma por sí sola |
-| Identidad laboral y destino de cobro | Fundación local no desplegada | CUIL/CBU/CVU/alias validados, consentimiento versionado, cifrado AAD/keyring, fingerprint HMAC, DTO enmascarado, servicios y APIs tenant-scoped; esquema Prisma y migraciones locales todavía no desplegados ni verificados en Neon. Faltan Flow/UI productivos, revisión E2E y verificación bancaria confiable |
+| Foto de avance y lectura visual | Contrato y migraciones verificados en Preview aislado; E2E externo pendiente | Foto Meta autorizada → `ProgressEvidence` por tarea; `VisualProgressAssessment` con integridad, opt-in, lease recuperable, rango/abstención y revisión humana. OpenAI es candidato primario, Qwen3-VL/GLM-5V challengers visuales y GLM-OCR/GLM-5.2 especialistas OCR/texto. La activación API espera una decisión explícita de credencial; faltan foto Meta real, benchmark consentido, DPA/retención y observabilidad. Nunca certifica, paga ni reprograma por sí sola |
+| Identidad laboral y destino de cobro | Fundación verificada en Preview aislado; flujo productivo pendiente | CUIL/CBU/CVU/alias validados, consentimiento versionado, cifrado AAD/keyring, fingerprint HMAC, DTO enmascarado, servicios y APIs tenant-scoped; migraciones verificadas en Neon aislado. Faltan Flow/UI productivos, revisión E2E y verificación bancaria confiable |
 | Auditoría, correlación y observabilidad | Parcial | Helper central y `x-request-id`; falta persistir correlación en todas las mutaciones heredadas |
 
 ## Gaps críticos del documento
@@ -70,7 +70,7 @@ El PDF exige PDF/DWG, versiones y alertas. No se debe mezclar documentación té
 
 ### 5. Tareas no contempladas y vicios ocultos
 
-Ya existe una base local explícita con `ExtraWorkRequest`, `ExtraWorkSession` y `ReplanScenario`, con decisión y auditoría; todavía faltan UI/WhatsApp, tipificación contractual de vicio oculto, baseline/forecast determinista y change control antes de aplicar impacto al plan.
+Ya existe una base local explícita con `ExtraWorkRequest`, `ExtraWorkSession` y `ReplanScenario`, con decisión y auditoría. Baseline/forecast determinista ya existen en Preview aislado; todavía faltan UI/WhatsApp, tipificación contractual de vicio oculto, integración del impacto aprobado y change control antes de aplicar impacto al plan.
 
 **Sprint D5 - extras e incidencias**
 
@@ -88,7 +88,7 @@ Ya existe una base local explícita con `ExtraWorkRequest`, `ExtraWorkSession` y
 5. **D4 - planos versionados y notificaciones (2 semanas).**
 6. **D5 - extras, vicios e impacto en cronograma (2 semanas).**
 7. **D6 - outbox de notificaciones (2 semanas):** WhatsApp, email y push con reintentos, deduplicación, preferencias, ventanas horarias y DLQ.
-8. **D7 - IA gobernada (2 semanas):** desplegar la vertical visual ya implementada localmente, verificar controles de datos/DPA/retención por proveedor, ejecutar benchmark visual OpenAI/Qwen3-VL/GLM-5V y evaluaciones separadas de GLM-OCR y GLM-5.2 para OCR/texto sobre gold sets consentidos, calibrar abstención/costo/latencia y conectar sólo resultados revisados a escenarios; nunca habilitar pagos, certificación o mutación de baseline automáticamente.
+8. **D7 - IA gobernada (2 semanas):** elegir y aislar la credencial de piloto, activar la vertical visual ya verificada por contrato, validar controles de datos/DPA/retención por proveedor, ejecutar benchmark visual OpenAI/Qwen3-VL/GLM-5V y evaluaciones separadas de GLM-OCR y GLM-5.2 para OCR/texto sobre gold sets consentidos, calibrar abstención/costo/latencia y conectar sólo resultados revisados a escenarios; nunca habilitar pagos, certificación o mutación de baseline automáticamente.
 9. **D8 - hardening enterprise (2 semanas):** multiobra, exportación/portabilidad, auditoría completa con correlación, observabilidad, pruebas de carga, RPO/RTO y controles de privacidad.
 
 ## Criterios de aceptación transversales
