@@ -6,7 +6,7 @@ Se contrastó el documento `Documento_Especificaciones_App_Obra.pdf` (versión 1
 
 ## Lo que ya está cubierto
 
-“Cubierto” describe el repositorio local; no equivale a despliegue, migración Preview ni E2E externo. El corte de esta revisión es 28 de julio de 2026: se distingue código/pruebas locales, migración aislada en Preview, journey UI y proveedor externo real.
+“Cubierto” describe la evidencia indicada, no equivale automáticamente a journey UI ni E2E externo. El corte de esta revisión es 29 de julio de 2026: se distingue código/pruebas locales, migración aislada en Preview, journey UI y proveedor externo real.
 
 | Área del PDF | Estado actual | Evidencia del producto |
 | --- | --- | --- |
@@ -17,8 +17,8 @@ Se contrastó el documento `Documento_Especificaciones_App_Obra.pdf` (versión 1
 | Facturas y control de tres vías | Base local implementada en gran parte | Facturas, vencimientos, evidencia privada y match pedido-recepción-factura; faltan excepciones operativas, Preview y E2E |
 | Dashboard operativo y financiero | Implementado | Dashboard de compras, cuentas a pagar y caja chica |
 | WhatsApp como canal operativo | Implementado por contrato; E2E externo pendiente | Meta Cloud API directa como vía primaria; test number asignado, celular propio verificado, outbound histórico aceptado y test oficial firmado `messages v25.0` recibido con HTTP 200 en Preview. Esto no prueba entrega ni bidireccionalidad. La app sigue sin publicar y el negocio no verificado; faltan tenant conectado, inbound/estados reales y Flows publicados |
-| Foto de avance y lectura visual | Contrato visual previo verificado en Preview; dispatch/ledger/recibo durable nuevos aún locales | Foto Meta autorizada → `ProgressEvidence` por tarea; `VisualProgressAssessment` con integridad, opt-in, revisión humana y `AI Dispatch Plan` de una sola ruta con reserva/liquidación diaria por tenant. La respuesta se guarda como recibo inmutable antes de proyección/costo y puede reanudarse sin redispatch. La credencial OpenAI dedicada ya fue elegida. Sol es primario y Terra shadow explícito; Qwen3-VL/GLM-5V quedan fuera de datos reales hasta su gate contractual. Faltan desplegar el nuevo ledger, verificar conciliación con comprobante recuperable, foto Meta real, benchmark consentido y DPA/retención. Nunca certifica, paga ni reprograma por sí sola |
-| Identidad laboral y destino de cobro | H3.1 local; Preview/Meta pendientes | El alta ya incluye Flow pre-operario, aviso fijado, acuse terminal, CRM y purga transitoria; CUIL/CBU/CVU/alias conservan cifrado AAD/keyring, DTO enmascarado y APIs tenant-scoped. Falta migrar/desplegar H3.1 en Preview, revisión legal y Meta E2E; cobro todavía necesita Flow/UI, comprobante privado y verificación bancaria confiable |
+| Foto de avance y lectura visual | Infraestructura gobernada verificada en Preview; foto/E2E pendientes | Foto Meta autorizada → `ProgressEvidence` por tarea; `VisualProgressAssessment` con integridad, opt-in, revisión humana y `AI Dispatch Plan` de una sola ruta con reserva/liquidación diaria por tenant. La respuesta se guarda como recibo inmutable antes de proyección/costo y puede reanudarse sin redispatch. La credencial OpenAI dedicada, el presupuesto y el ledger/recibo ya pasaron Neon Preview. Sol es primario y Terra shadow explícito; Qwen3-VL/GLM-5V quedan fuera de datos reales hasta su gate contractual. Faltan conciliación autenticada con comprobante recuperable, foto Meta real, benchmark consentido y DPA/retención. Nunca certifica, paga ni reprograma por sí sola |
+| Identidad laboral y destino de cobro | H3.1 verificado en Preview; runtime/Meta pendientes | El alta ya incluye Flow pre-operario, aviso fijado, acuse terminal, CRM y purga transitoria; sus migraciones pasaron Neon Preview. CUIL/CBU/CVU/alias conservan cifrado AAD/keyring, DTO enmascarado y APIs tenant-scoped. Faltan smoke UI/runtime, revisión legal y Meta E2E; cobro todavía necesita Flow/UI, comprobante privado y verificación bancaria confiable |
 | Auditoría, correlación y observabilidad | Parcial | Helper central y `x-request-id`; falta persistir correlación en todas las mutaciones heredadas |
 
 ## Gaps críticos del documento
@@ -88,7 +88,7 @@ Ya existe una base local explícita con `ExtraWorkRequest`, `ExtraWorkSession` y
 5. **D4 - planos versionados y notificaciones (2 semanas).**
 6. **D5 - extras, vicios e impacto en cronograma (2 semanas).**
 7. **D6 - outbox de notificaciones (2 semanas):** WhatsApp, email y push con reintentos, deduplicación, preferencias, ventanas horarias y DLQ.
-8. **D7 - IA gobernada (2 semanas):** desplegar y operar el ledger de despacho/costo con la credencial OpenAI ya aislada, validar controles de datos/DPA/retención por proveedor, ejecutar benchmark visual OpenAI/Qwen3-VL/GLM-5V y evaluaciones separadas de GLM-OCR y GLM-5.2 para OCR/texto sobre gold sets consentidos, calibrar abstención/costo/latencia y conectar sólo resultados revisados a escenarios; nunca habilitar pagos, certificación o mutación de baseline automáticamente.
+8. **D7 - IA gobernada (2 semanas):** operar el ledger de despacho/costo ya verificado en Preview, recorrer replay/conciliación autenticados, validar controles de datos/DPA/retención por proveedor, ejecutar benchmark visual OpenAI/Qwen3-VL/GLM-5V y evaluaciones separadas de GLM-OCR y GLM-5.2 para OCR/texto sobre gold sets consentidos, calibrar abstención/costo/latencia y conectar sólo resultados revisados a escenarios; nunca habilitar pagos, certificación o mutación de baseline automáticamente.
 9. **D8 - hardening enterprise (2 semanas):** multiobra, exportación/portabilidad, auditoría completa con correlación, observabilidad, pruebas de carga, RPO/RTO y controles de privacidad.
 
 ## Criterios de aceptación transversales

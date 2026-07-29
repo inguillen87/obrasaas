@@ -2,15 +2,15 @@
 
 Este plan mantiene la secuencia del PDF y separa capacidades operativas de capacidades financieras. Cada sprint debe cerrar con migración verificable, pruebas de concurrencia, permisos y evidencia de uso; un endpoint compilado no cuenta como salida.
 
-## Corte de evidencia: 28 de julio de 2026
+## Corte de evidencia: 29 de julio de 2026
 
 El estado se expresa por nivel de evidencia: código y pruebas locales, migración en Preview aislado, journey UI en Preview y E2E externo. No se usa “desplegado” como sinónimo de “operativo con un proveedor real”.
 
-- `npm test`: 1383/1383 verde; lint y build de Next 16.2.11 verdes en el worktree;
+- `npm test`: 1.538/1.538 verde; lint y build de Next 16.2.11 verdes en el worktree;
 - las migraciones y verificadores de baseline/forecast fueron aprobados en el Preview aislado de la rama `codex/platform-ux-foundation`; Production permanece fuera del alcance;
-- el commit `d6b29b9` quedó `Ready` en Vercel Preview: se detectaron 97 migraciones, las dos nuevas H3.1 se aplicaron en Neon aislado y todos los verificadores de migración pasaron; el corte conserva [deployment IDs, timestamps y smokes sanitizados](./evidence/2026-07-28-preview-d6b29b9.md), pero no acredita aún el smoke UI/runtime ni la ejecución observada del cron;
+- el commit `0a00f37` quedó `Ready` en Vercel Preview: se detectaron 100 migraciones sin pendientes y pasaron los verificadores de H3.1, media y dispatch/costo de IA; el corte conserva [deployment IDs, timestamps y smokes sanitizados](./evidence/2026-07-29-preview-0a00f37.md), pero no acredita aún los journeys UI autenticados ni la ejecución observada del cron;
 - falta cerrar el smoke UI de publicación de baseline y forecast en el tenant de prueba, porque el acceso local directo a la conexión Preview está deliberadamente protegido y no se sustituye con una conexión de Production;
-- Meta, media entrante e identidad/cobro siguen siendo gates externos. La credencial dedicada de Vision ya fue elegida; faltan deploy del ledger gobernado, gate de datos y foto real.
+- Meta, media entrante e identidad/cobro siguen siendo gates externos. La credencial dedicada de Vision, el presupuesto y el ledger gobernado ya están aislados/verificados en Preview; faltan gate de datos, foto real y journey autenticado.
 
 ## Entregado, con smoke UI Preview pendiente: S3.1/S6.1 — baseline y forecast controlado
 
@@ -28,13 +28,13 @@ El estado se expresa por nivel de evidencia: código y pruebas locales, migraci�
 - antes de enviar o aceptar datos reales: callback HTTPS, secretos exclusivos de Preview, allowlist de tenant/operario, retención y runbook de incidentes;
 - Twilio Sandbox queda sólo como contingencia de transporte: no valida WhatsApp Flows, Data Endpoint ni Embedded Signup de Meta.
 
-## Siguiente vertical interno: S5.1 + S17-A — foto canónica y visión gobernada
+## Vertical interna en consolidación: S5.1 + S17-A — foto canónica y visión gobernada
 
 - foto Meta autorizada → selector WBS en Inbox → `ProgressEvidence` idempotente;
 - integridad SHA-256, storage privado y revisión de evidencia;
 - `VisualProgressAssessment` con provider registry, rango/abstención, lease persistente recuperable y revisión CAS;
 - OpenAI es el candidato primario de Vision; Qwen3-VL/GLM-5V son challengers visuales y GLM-OCR/GLM-5.2 especialistas OCR/texto evaluables. No hay fan-out sobre evidencia real;
-- la clave OpenAI dedicada ya está aislada; antes de reactivar llamadas deben desplegarse presupuesto, recibo inmutable, replay/worker y conciliación interna con comprobante recuperable, cerrar DPA/retención y mantener `detail:high` con prompt cache implícito deshabilitado. `RECONCILED_USAGE` permanece cerrado hasta derivar costo desde usage y pricing persistidos;
+- la clave OpenAI dedicada, el presupuesto y el recibo inmutable ya están aislados/verificados en Preview; antes de usar datos reales deben recorrerse replay/worker y conciliación interna autenticados con comprobante recuperable, cerrar DPA/retención y mantener `detail:high` con prompt cache implícito deshabilitado. `RECONCILED_USAGE` permanece cerrado hasta derivar costo desde usage y pricing persistidos;
 - faltan foto Meta real, dataset consentido, ground truth, benchmark, DPA/retención y observabilidad de costo/latencia;
 - las cargas web privadas siguen limitadas a 4 MiB; carga directa autorizada, checksum y finalización server-side quedan como cierre para videos/documentos mayores.
 

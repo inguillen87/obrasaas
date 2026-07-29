@@ -1,6 +1,6 @@
 # Roadmap de producto y profesionalización
 
-**Corte de evidencia:** 28 de julio de 2026
+**Corte de evidencia:** 29 de julio de 2026
 
 **Rama de trabajo:** `codex/platform-ux-foundation`
 
@@ -22,7 +22,7 @@ La especificación recibida el 23 de julio de 2026 fue revisada página por pág
 | Capa | Estado comprobado |
 | --- | --- |
 | WIP local | 100 migraciones; 1.538/1.538 pruebas, Prisma, lint, build, auditoría de dependencias de producción y PostgreSQL 17.5 efímero verdes |
-| Último Preview reproducible | 97 migraciones y commit `d57e429` `Ready`, con alias y smokes documentados ([evidencia](./evidence/2026-07-28-preview-d57e429.md)) |
+| Último Preview reproducible | 100 migraciones y commit `0a00f37` `Ready`, con alias, verificadores y smokes documentados ([evidencia](./evidence/2026-07-29-preview-0a00f37.md)) |
 | E2E externo | WhatsApp bidireccional sobre tenant conectado, media real, foto de obra y journey visual siguen pendientes |
 | Production | Sin deployment ni migración de estos cambios; se conserva aparte el incidente Clerk de posible sincronización de membresía ([evidencia](./evidence/2026-07-28-preview-c91cee0.md)) |
 
@@ -55,7 +55,7 @@ Eso todavía no demuestra una operación Enterprise con clientes reales. Los pri
 | Portfolio y onboarding | Confirmado | Alta/configuración/archivo de obras, límites por plan y puesta en marcha | Medir tiempo hasta primera obra operativa |
 | Gantt y tareas | Implementado en Preview aislado; journey UI pendiente | WBS `Task`/`TaskDependency`, CAS, baseline inmutable/versionada, forecast determinista y Gantt canónico; una planificación relativa sobrevive aunque la obra aún no tenga calendario | Cerrar smoke UI, ejecutar cutover legacy con cero drift y completar responsables/equipos/blockers antes de conectar costos contractuales |
 | WhatsApp e Inbox | Confirmado por contrato; externo pendiente | Meta Cloud API directa como camino primario; app/caso de uso presentes; test number asignado, un celular propio verificado, outbound histórico aceptado y test oficial firmado `messages v25.0` recibido por Preview con HTTP 200. Firma, idempotencia, leases, Inbox, Flows operativos, Flow pre-operario H3.1, media privada y vínculo foto→`ProgressEvidence` están cubiertos localmente | El test del panel no prueba entrega ni E2E. Faltan challenge y tráfico inbound/estados reales, credencial del tenant importada cifrada, todos los Flows, storage y conexión real; Twilio no sustituye esos gates |
-| IA visual y OCR | Base visual y credencial en Preview; ledger/recibos nuevos sólo locales | `VisualProgressAssessment`, opt-in tenant, lease recuperable, sanitización, rango/abstención y revisión CAS; OpenAI `gpt-5.6-sol` es la ruta primaria gobernada, Terra es shadow explícito y HF/Z.ai permanecen como challengers por contrato. La credencial dedicada está aislada en Preview; presupuesto, recibo durable y conciliación pasaron localmente y en PostgreSQL 17.5 efímero | Desplegar/verificar las migraciones nuevas en Neon Preview, probar una foto Meta real y un benchmark consentido antes de cualquier claim productivo; cerrar DPA/ZDR o retención aceptada y nunca certificar/pagar/reprogramar desde una foto |
+| IA visual y OCR | Infraestructura Preview gobernada; foto/E2E pendientes | `VisualProgressAssessment`, opt-in tenant, lease recuperable, sanitización, rango/abstención y revisión CAS; OpenAI `gpt-5.6-sol` es la ruta primaria gobernada, Terra es shadow explícito y HF/Z.ai permanecen como challengers por contrato. La credencial dedicada, presupuesto diario, esquema/recibo durable y verificadores de concurrencia/rollback están desplegados y verdes en Neon Preview; un smoke no personal confirmó visión y usage/cache completo | Probar una foto Meta real y un benchmark consentido antes de cualquier claim productivo; cerrar DPA/ZDR o retención aceptada, replay/conciliación autenticados y nunca certificar/pagar/reprogramar desde una foto |
 | Propuestas y aprobación humana | Confirmado | Avance, demora e incidente crítico con decisión auditada | Extender el patrón a diarios, calidad, costos y cambios |
 | Asistencia y salud | Parcial | Ledger canónico con ingreso, pausas, salida, GPS conservador, idempotencia, jornada y reporte; evidencia médica aislada | Completar S2 (turnos, tolerancia, excepciones y corrección aprobada) y el gate legal; no venderlo como nómina |
 | Identidad laboral y destino de cobro | Parcial; migraciones H3.1 verificadas en Preview, runtime/Meta pendientes | H3.1 incluye Flow pre-operario, aviso fijado, acuse terminal, CRM/readiness y purga transitoria; `d6b29b9` aplicó sus dos migraciones nuevas en Neon aislado, pasó todos los verificadores y obtuvo build remoto `Ready` ([evidencia](./evidence/2026-07-28-preview-d6b29b9.md)) | Completar smoke UI/runtime, observar cron, revisar legalmente el aviso y probar Meta E2E; completar Flow/UI de cobro, titularidad y comprobante. La purga no es DSAR y el teléfono raw en `Conversation.externalId` sigue como deuda |
@@ -63,7 +63,7 @@ Eso todavía no demuestra una operación Enterprise con clientes reales. Los pri
 | Acopios | Parcial | Catálogo y niveles básicos | Migrar a ledger inmutable de recepción, consumo, ajuste y ubicación |
 | Costos y rol Finance | Parcial, base local no desplegada | `BudgetVersion`, `BudgetLine` y `BudgetEntry` separan presupuesto, comprometido, real y forecast; hay dashboards de presupuesto, compras, cuentas a pagar y caja | Completar cambios aprobados, reconciliación, KPIs/drill-down, cutover sobre la misma WBS y validar Preview/E2E |
 | Caja chica y comprobantes | Parcial, base local no desplegada | `CashFund`/`CashMovement`, saldo derivado, categoría, idempotencia y comprobante privado server-owned | Implementar umbral y segundo aprobador distinto, reposición/cierre/conciliación, Preview y E2E |
-| Evidencia y adjuntos privados | Parcial; storage base en Preview y lifecycle media nuevo local | `ProtectedUpload` de un solo uso y Blob privado ya tienen evidencia en Preview; progreso web, caja, recepción y factura cuentan con intent durable, scope, expiración, CAS, cuotas, hash y entrega server-side. El lifecycle durable de media WhatsApp `070000` todavía no fue desplegado | Desplegar/verificar `070000`, observar cron y descarga con media real, completar alertas, retención/purga, restore, carga directa para más de 4 MiB y degradación de ambos adapters |
+| Evidencia y adjuntos privados | Parcial; storage y lifecycle media verificados en Preview | `ProtectedUpload` de un solo uso, Blob privado y lifecycle durable de media WhatsApp `070000` ya pasaron el gate Neon/Vercel; progreso web, caja, recepción y factura cuentan con intent durable, scope, expiración, CAS, cuotas, hash y entrega server-side | Observar cron y descarga con media Meta real, completar alertas, retención/purga, restore, carga directa para más de 4 MiB y degradación de ambos adapters |
 | Reporte semanal | Parcial | PDF real con hash y auditoría, generado al vuelo | Persistir artefacto y snapshot reproducible con historial y retención |
 | Bitácora | Parcial | Agrega fuentes reales, pero recorta a eventos recientes | Cursor estable, filtros server-side y exportación completa con hash |
 | Documentos, planos y versiones | No implementado | No hay modelo canónico | Construir control documental antes de RFI/submittal avanzados |
@@ -119,7 +119,7 @@ La cadencia candidata es de diez días hábiles por sprint. Sin capacidad de equ
 **Objetivo:** impedir releases engañosas o silenciosamente rotas con controles que sí dependen del equipo.
 
 - CI: Node 24, instalación exacta, lint, suite completa, auditoría, build, E2E público y artefactos de diagnóstico;
-- Postgres 17 efímero: `validate`, las 100 migraciones locales actuales desde cero, `status` y diff sin drift; el último Preview `Ready` evidenciado tenía 97, por lo que `070000`, `080000` y el hotfix `090000` aún deben atravesar su gate remoto;
+- Postgres 17 efímero y Neon Preview: `validate`, las 100 migraciones actuales, estado sin pendientes, verificadores semánticos y smoke rollback-only verdes; `070000`, `080000` y el hotfix `090000` atravesaron el gate remoto en `0a00f37`;
 - checkout cerrado por defecto y request estricto; no habilitarlo sin intención durable, idempotencia, consentimiento verificable y reconciliación;
 - E2E autenticado de los journeys críticos y denegaciones por tenant/obra/rol;
 - observabilidad mínima, correlation ID y runbooks de migración/incidente/rollback.
@@ -129,9 +129,9 @@ La cadencia candidata es de diez días hábiles por sprint. Sin capacidad de equ
 Estado de esta iteración:
 
 - implementados localmente: CI base, E2E público sin secretos Clerk, artefactos Playwright, health de recuperación WhatsApp, gate de checkout, gate de migraciones, corrección de drift UUID y trazabilidad del PDF;
-- verificados en este WIP local: 1.538/1.538 tests, Prisma válido/generado, lint, build, auditoría de dependencias de producción sin vulnerabilidades y migración/verificador desde cero en PostgreSQL 17.5; CI remota, Neon Preview y E2E deben volver a ejecutarse después de integrar el sprint;
+- verificados en este WIP local: 1.538/1.538 tests, Prisma válido/generado, lint, build, auditoría de dependencias de producción sin vulnerabilidades y migración/verificador desde cero en PostgreSQL 17.5; el gate Git/Vercel/Neon de `0a00f37` también quedó verde, mientras CI requerida y E2E autenticado/externo siguen abiertos;
 - seguridad de tooling: `@prisma/dev` queda temporalmente fijado a Valibot 1.4.2 mediante override acotado por el advisory vigente; retirarlo cuando Prisma publique el pin corregido y mantener auditadas por separado las dependencias exclusivas de desarrollo;
-- pendientes internos de S0: primera ejecución remota, E2E autenticado/core, observabilidad integral y runbooks completos.
+- pendientes internos de S0: volver obligatoria la CI remota del repositorio, E2E autenticado/core, observabilidad integral y runbooks completos.
 
 ### Release Gate R0 — Dependencias externas, sin duración ficticia
 
@@ -202,7 +202,7 @@ Quedan fuera: nómina, impuestos, contabilidad general, cuentas por pagar autom�
 | S15 | Outbox y notificaciones | evento, destinatario, preferencia, canal, entrega/lectura, retry, dead letter y escalamiento | alerta durable, deduplicada y observable aunque no haya pestaña abierta |
 | S16 | Portal de Cliente | `ExternalPrincipal`/`ProjectAccessGrant`, publicación aprobada, enlaces expirables y revocación | no consume/infiere `TenantMembership`; sólo ve artefactos publicados de su obra |
 
-Estado de identidad laboral/cobro al corte: H3.1 ya incluye invitación, Flow/sesión pre-operario, aviso fijado, acuse terminal, CRM/readiness, decisión y purga transitoria, además del dominio criptográfico y APIs tenant-scoped. El commit `d6b29b9` fue desplegado en Vercel Preview: se detectaron 97 migraciones, las dos nuevas se aplicaron en Neon aislado, todos los verificadores de migración pasaron y el build remoto quedó `Ready`. Eso no acredita todavía smoke UI/runtime, cron observado ni E2E Meta, y no implica despliegue en Production. `privacyPresentedAt` prueba que `INIT` sirvió el aviso, no lectura humana; el copy requiere revisión legal antes de trabajadores reales. La purga H3.1 no es DSAR integral y quedan fuera `WorkerPerson`, `WorkerChannelIdentity`, `Worker`, mensajes y backups; también sigue pendiente retirar el teléfono raw interno de `Conversation.externalId`.
+Estado de identidad laboral/cobro al corte: H3.1 ya incluye invitación, Flow/sesión pre-operario, aviso fijado, acuse terminal, CRM/readiness, decisión y purga transitoria, además del dominio criptográfico y APIs tenant-scoped. El commit `d6b29b9` aplicó originalmente sus dos migraciones en Neon aislado; el gate posterior de `0a00f37` volvió a verificar el esquema completo de 100 migraciones y quedó `Ready`. Eso no acredita todavía smoke UI/runtime, cron observado ni E2E Meta, y no implica despliegue en Production. `privacyPresentedAt` prueba que `INIT` sirvió el aviso, no lectura humana; el copy requiere revisión legal antes de trabajadores reales. La purga H3.1 no es DSAR integral y quedan fuera `WorkerPerson`, `WorkerChannelIdentity`, `Worker`, mensajes y backups; también sigue pendiente retirar el teléfono raw interno de `Conversation.externalId`.
 
 H4 conserva sus validaciones, cifrado y decisiones auditadas, pero aún necesita Flow/UI de cobro, journey E2E, comprobante privado y proveedor confiable de verificación bancaria. Por lo tanto, H3 y H4 de [readiness del piloto WhatsApp](./PILOT_WHATSAPP_E2E_READINESS.md) siguen **en progreso** y no deben presentarse como funcionalidad disponible.
 

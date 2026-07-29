@@ -4,7 +4,7 @@ Fecha de corte: 2026-07-28
 
 ## Estado verificable
 
-ObraSaaS tiene una primera vertical local de lectura visual gobernada. Incluye:
+ObraSaaS tiene una primera vertical de lectura visual gobernada y verificada en Preview. Incluye:
 
 - `VisualProgressAssessment` tenant/project/task/evidence scoped, con idempotencia, huellas SHA-256, baseline hash, estados de proveedor y revisión humana CAS;
 - imagen privada leída servidor a servidor, límite de bytes y píxeles, MIME contrastado con magic bytes y rechazo de WebP animado;
@@ -20,7 +20,7 @@ ObraSaaS tiene una primera vertical local de lectura visual gobernada. Incluye:
 - rango de avance entero, hechos visibles, calidad, limitaciones y abstención; no se conserva prompt, respuesta cruda, URL firmada ni secreto;
 - revisión `APPROVED/CORRECTED/REJECTED` que conserva el resultado original y no modifica `Task`, baseline, Gantt, certificado, asistencia ni pago.
 
-Las migraciones visuales anteriores ya fueron verificadas en una rama Neon aislada de Preview. El nuevo ledger de despacho/costo de este corte está validado localmente, incluida una migración limpia en PostgreSQL 17.5 efímero, y todavía debe atravesar migración/redeploy y smoke concurrente en Neon Preview. La credencial dedicada de OpenAI ya fue elegida y aislada para ObraSaaS, pero aún no se probó una foto real recibida por Meta dentro del tenant piloto ni se cerró el gate contractual de datos. Por lo tanto, esta capacidad sigue siendo **piloto local en preparación**, no una función productiva anunciable.
+Las 100 migraciones, incluido el nuevo ledger de despacho/costo y su hotfix de cascada, ya pasaron PostgreSQL 17.5 efímero y Neon Preview con verifier concurrente/rollback-only; el build `0a00f37` quedó `Ready` ([evidencia](./evidence/2026-07-29-preview-0a00f37.md)). La credencial dedicada de OpenAI ya fue elegida y aislada para ObraSaaS, y un smoke no personal confirmó visión, abstención y telemetría cache completa. Aún no se probó una foto real recibida por Meta dentro del tenant piloto ni se cerró el gate contractual de datos. Por lo tanto, esta capacidad es **infraestructura de piloto Preview**, no una función productiva anunciable.
 
 El 26 de julio de 2026 se ejecutó un smoke API real y acotado contra OpenAI usando un render BIM no personal del propio repositorio; no fue una foto real de obra. El primer intento fue bloqueado localmente porque el archivo tenía bytes JPEG aunque su extensión era `.png`. Con el MIME binario correcto, `gpt-5.6-sol` se abstuvo como `not_construction_progress`, dejó el rango en `null` y explicó que un modelo digital no demuestra ejecución física. No se guardaron IDs, tokens ni respuesta cruda en el repositorio.
 
@@ -118,8 +118,9 @@ la evidencia queda bloqueada hasta una conciliación explícita. Si la respuesta
 ya volvió y el recibo alcanzó la base, el aplicador/replay bajo demanda completa la proyección y
 liquidación sin llamar otra vez al proveedor. Ningún adapter puede prometer
 `exactly once` frente a un proveedor externo. La recuperación es tenant/project
-scoped, usa revisión CAS y emite una sola auditoría aun bajo carreras locales;
-la concurrencia real contra Neon todavía pertenece al gate de Preview.
+scoped, usa revisión CAS y emite una sola auditoría aun bajo carreras locales.
+La reserva concurrente y el rollback-only ya pasaron contra Neon Preview; resta
+recorrer el replay y la conciliación desde una sesión superadmin autenticada.
 
 Si el proveedor respondió pero no informó usage completo, el resultado humano
 puede quedar aplicado con `costPending`, mientras la reserva y el bloqueo de la
@@ -165,7 +166,7 @@ En este corte, sólo OpenAI tuvo un smoke API real controlado, sobre un render B
 
 Antes de probar “pared a medio terminar” desde WhatsApp deben estar verdes:
 
-- migración desplegada en Neon Preview aislado y verificada;
+- migración desplegada en Neon Preview aislado y verificada (`0a00f37`, verde);
 - `META_APP_SECRET`, webhook firmado y conexión del tenant piloto activos;
 - storage privado y ruta Meta -> Inbox -> `ProgressEvidence` probados con un archivo real;
 - opt-in visual activado por el administrador en ese tenant;

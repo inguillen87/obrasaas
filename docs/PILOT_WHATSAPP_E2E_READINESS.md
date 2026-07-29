@@ -1,10 +1,10 @@
 # Piloto WhatsApp E2E - readiness y gates
 
-Fecha de corte: 2026-07-28
+Fecha de corte: 2026-07-29
 
 ## Estado operativo del corte
 
-- La rama `codex/platform-ux-foundation` usa una rama Neon aislada. El último Preview ya desplegado quedó `Ready` y el alias estable responde. No hubo deployment ni migración de aplicación en Production durante este corte; subsiste el incidente de posible sincronización de membresía por el webhook compartido de Clerk development ([evidencia](./evidence/2026-07-28-preview-c91cee0.md)). La evidencia histórica de migración H3.1 sigue disponible en el [corte reproducible](./evidence/2026-07-28-preview-d6b29b9.md); las migraciones `070000`, `080000` y el hotfix `090000` todavía deben atravesar su propio deploy/migration gate.
+- La rama `codex/platform-ux-foundation` usa una rama Neon aislada. El Preview nativo de Git para `0a00f37` quedó `Ready`, detectó 100 migraciones sin pendientes, aprobó los verificadores de media/IA y recibió el alias estable ([evidencia](./evidence/2026-07-29-preview-0a00f37.md)). No hubo deployment ni migración de aplicación en Production durante este corte; subsiste el incidente de posible sincronización de membresía por el webhook compartido de Clerk development ([evidencia](./evidence/2026-07-28-preview-c91cee0.md)).
 - El importador Meta está apagado para Preview global y habilitado sólo en esta rama. Su allowlist, token de verificación del webhook y secretos de IA están limitados a la misma rama.
 - El alias estable `https://obrasaas-preview.vercel.app` apunta a un redeploy `Ready`; `/privacy`, home y los rechazos fail-closed del webhook/cron respondieron correctamente. `META_APP_SECRET` ya está configurado como secreto exclusivo de la rama. El test oficial `messages v25.0` de Meta produjo un `POST /api/webhooks/whatsapp` 200; el payload de ejemplo fue rechazado internamente como conexión desconocida, que es el aislamiento esperado y evita contaminar un tenant.
 - La app Meta continúa **sin publicar** y el negocio figura **no verificado**; el botón de publicación está deshabilitado. Esa verificación empresarial, la revisión/acceso que Meta aplique y la publicación son hoy el bloqueo externo exacto para inbound real. La documentación societaria debe ingresarla el titular autorizado, no el agente.
@@ -33,10 +33,10 @@ Las operaciones dependientes de Meta no pueden recorrerse end-to-end hasta compl
 - Propuestas de avance por texto/audio que requieren aprobación y no reescriben el Gantt directamente.
 - Respuestas automáticas con claim y settlement durables, correlación exacta por tenant/obra/conexión/remitente y política anti-duplicado: un intento ambiguo queda `unknown` y requiere revisión humana, nunca auto-reenvío.
 - Vinculación desde Inbox de una foto Meta autorizada a una tarea canónica como `ProgressEvidence`, con permisos, idempotencia y revisión.
-- Evaluación visual opt-in con un adapter de Vision, rango o abstención, derivado sin metadatos y revisión humana CAS. La clave dedicada de OpenAI ya fue elegida y aislada. El `AI Dispatch Plan` selecciona una sola ruta, reserva presupuesto diario antes de leer bytes y registra ruta/tokens/costo. La respuesta se conserva primero como recibo canónico inmutable: un crash posterior se reanuda sin reenviar la foto. Una falla pre-request libera la reserva; usage ausente o una salida post-request incierta conservan el bloqueo hasta conciliación para evitar cobro duplicado. El nuevo esquema sigue pendiente de Preview y no habilita todavía fotos reales.
+- Evaluación visual opt-in con un adapter de Vision, rango o abstención, derivado sin metadatos y revisión humana CAS. La clave dedicada de OpenAI ya fue elegida y aislada. El `AI Dispatch Plan` selecciona una sola ruta, reserva presupuesto diario antes de leer bytes y registra ruta/tokens/costo. La respuesta se conserva primero como recibo canónico inmutable: un crash posterior se reanuda sin reenviar la foto. Una falla pre-request libera la reserva; usage ausente o una salida post-request incierta conservan el bloqueo hasta conciliación para evitar cobro duplicado. El esquema y presupuesto piloto ya están en Preview, pero eso no habilita todavía fotos reales.
 - H3.1: invitación desde Inbox, Flow y sesión pre-operario, aviso fijado en `INIT`, submit autenticado, acuse terminal, readiness fail-closed, cola CRM, decisión administrativa y purga del claim transitorio, con código/pruebas locales y migraciones verificadas en Neon Preview.
 
-No debe presentarse todavía como completo: la nueva cadena foto → evidencia → evaluación visual está implementada y probada localmente, pero las migraciones `070000` de lifecycle media, `080000` de despacho/recibos de IA y su hotfix `090000` aún no tienen un Preview `Ready` y tampoco se recorrió una foto entrante real de Meta. La ubicación sigue siendo un evento separado y no está correlacionada automáticamente con la foto; baseline inmutable y forecast determinista existen, pero una revisión visual no los muta ni los invoca automáticamente. H3.1 ya incluye el Flow especializado y la pantalla CRM, y sus dos migraciones históricas sí fueron aplicadas y verificadas en Neon Preview; siguen pendientes el smoke UI/runtime, observar el cron y el E2E de Meta. Los destinos de cobro conservan su base cifrada y auditada, pero aún requieren su Flow/UI, comprobante privado y un proveedor confiable de titularidad bancaria.
+No debe presentarse todavía como completo: la nueva cadena foto → evidencia → evaluación visual está implementada, probada y sus migraciones `070000`, `080000` y `090000` quedaron verificadas en un Preview `Ready`, pero todavía no se recorrió una foto entrante real de Meta ni el journey autenticado de replay/conciliación. La ubicación sigue siendo un evento separado y no está correlacionada automáticamente con la foto; baseline inmutable y forecast determinista existen, pero una revisión visual no los muta ni los invoca automáticamente. H3.1 ya incluye el Flow especializado y la pantalla CRM; siguen pendientes el smoke UI/runtime, observar el cron y el E2E de Meta. Los destinos de cobro conservan su base cifrada y auditada, pero aún requieren su Flow/UI, comprobante privado y un proveedor confiable de titularidad bancaria.
 
 ## Hitos de prueba
 
@@ -60,7 +60,6 @@ Gate de salida aún pendiente:
 - completar la verificación empresarial y los requisitos de acceso/revisión de Meta hasta poder publicar la app;
 - importar el token temporal desde Integraciones dentro de la conexión cifrada del tenant piloto; para Production, reemplazarlo por una credencial permanente de System User;
 - validar challenge y recibir una solicitud **real** firmada por Meta más eventos de estado correlacionados; el test oficial de panel ya pasó, pero no reemplaza tráfico real;
-- redesplegar el Preview final con la migración de IA y `AI_VISUAL_DAILY_BUDGET_MICROS`, sin mover Production;
 - usar el tenant y la obra piloto ya creados; cargar administrador no-superadmin y trabajador de prueba, importar la conexión Meta y probar aislamiento cross-tenant con el teléfono normalizado;
 - storage privado recorrido con media entrante real en el ambiente del piloto;
 - inbound, outbound correlacionado, estados, retry y ambos Flows probados end-to-end;
@@ -81,7 +80,7 @@ Base local completada:
 
 Gate de salida aún pendiente:
 
-- redesplegar el Preview final, verificar `070000` en Neon aislado y recorrer storage con una imagen Meta real; la base histórica está verificada, pero este lifecycle nuevo todavía no;
+- recorrer el lifecycle `070000`, ya verificado en Neon aislado, con una imagen Meta real y observar la descarga privada;
 - ejecutar el recorrido con inbound Meta real y observarlo en Inbox/Progreso;
 - ligar una ubicación fresca al mismo contexto operacional sin inferir GPS desde metadatos de la imagen;
 - definir si la selección de tarea final será Inbox, Flow o ambas, y probar reintento/offline;
@@ -122,7 +121,7 @@ La IA describe el elemento (por ejemplo, mampostería parcial), propone un rango
 
 Base local completada: modelo Prisma/migración gobernados, provider registry, adaptador OpenAI Responses, sanitización binaria/EXIF, tenant opt-in con CAS entre administradores, recheck de suscripción/autorización en la última frontera, idempotencia y revisión humana CAS. La credencial dedicada ya fue elegida. El despacho Sol primario y Terra shadow explícito conserva plan/precio/presupuesto, correlativos, tokens y costo real; no hay fan-out ni fallback silencioso. Una ejecución histórica controlada con `gpt-5.6-sol` se abstuvo correctamente frente a un render BIM y no inventó avance. Qwen3-VL y GLM-5V son challengers visuales; GLM-OCR y GLM-5.2 son especialistas OCR/texto, y GLM-5.2 nunca recibe fotos. HF/Z.ai sólo tienen pruebas de contrato y permanecen fuera de evidencia real hasta revisar subprocesadores, DPA y retención.
 
-Gate pendiente: migrar y desplegar el nuevo ledger AI Dispatch y sus recibos en Preview, fijar el presupuesto piloto, verificar el worker/replay y una conciliación interna con prueba recuperable, cerrar controles de datos/DPA/retención de OpenAI, recibir una foto Meta real, recorrer UI/journey y benchmark calibrado, y cerrar el smoke de baseline/forecast. `store:false` no equivale a ZDR; el piloto rechaza `original/auto/low`, usa `high` y desactiva las escrituras implícitas de prompt cache. La revisión visual actual no muta `Task` ni crea todavía el forecast, deliberadamente.
+Gate pendiente: verificar en journey autenticado el aplicador/replay y una conciliación interna con prueba recuperable, cerrar controles de datos/DPA/retención de OpenAI, recibir una foto Meta real, recorrer UI y benchmark calibrado, y cerrar el smoke de baseline/forecast. El ledger, sus recibos, el presupuesto piloto y la telemetría cache ya están verificados en Preview. `store:false` no equivale a ZDR; el piloto rechaza `original/auto/low`, usa `high` y desactiva las escrituras implícitas de prompt cache. La revisión visual actual no muta `Task` ni crea todavía el forecast, deliberadamente.
 
 Contrato técnico y benchmark: [AI_VISUAL_EVALUATION.md](./AI_VISUAL_EVALUATION.md).
 
