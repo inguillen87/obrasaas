@@ -108,6 +108,7 @@ const verifierConnectionString = hardenedVerifierConnectionString(connectionStri
 const EXPECTED_MIGRATIONS = Object.freeze([
   '20260726143000_visual_progress_assessments',
   '20260728080000_ai_dispatch_plan_persistence',
+  '20260728090000_ai_budget_ledger_fk_deferred',
 ]);
 
 const EXPECTED_ENUMS = Object.freeze({
@@ -784,6 +785,8 @@ const EXPECTED_RESERVATION_FOREIGN_KEYS = Object.freeze({
     columns: ['organizationId', 'civilDayUtc', 'workload'],
     targetColumns: ['organizationId', 'civilDayUtc', 'workload'],
     deleteAction: 'a',
+    deferrable: true,
+    initiallyDeferred: true,
   },
   AiDispatchBudgetReservation_settledById_fkey: {
     target: 'PlatformUser',
@@ -1641,7 +1644,13 @@ async function assertReservationForeignKeys(client) {
     invariant(foreignKey.table_name === 'AiDispatchBudgetReservation', `${name} is attached to the wrong table.`);
     invariant(foreignKey.target_table === expected.target, `${name} references the wrong table.`);
     invariant(foreignKey.contype === 'f' && foreignKey.convalidated, `${name} is not validated.`);
-    invariant(!foreignKey.condeferrable && !foreignKey.condeferred, `${name} must remain immediate.`);
+    const expectedDeferrable = expected.deferrable === true;
+    const expectedInitiallyDeferred = expected.initiallyDeferred === true;
+    invariant(
+      foreignKey.condeferrable === expectedDeferrable
+        && foreignKey.condeferred === expectedInitiallyDeferred,
+      `${name} has unexpected deferrability.`,
+    );
     invariant(foreignKey.confdeltype === expected.deleteAction, `${name} has an unsafe delete policy.`);
     invariant(foreignKey.confupdtype === 'c', `${name} must remain ON UPDATE CASCADE.`);
     invariant(foreignKey.confmatchtype === 's', `${name} must remain MATCH SIMPLE.`);
@@ -2813,13 +2822,13 @@ async function assertTransactionalSmoke(client) {
     'AiDailyBudgetLedger_transition_guard',
     'AI daily budget direct update guard',
   );
-  await expectSqlFailure(
+  await expectDeferredConstraintFailure(
     client,
+    'AiDispatchBudgetReservation_daily_ledger_fkey',
     `DELETE FROM "AiDailyBudgetLedger"
       WHERE "organizationId" = $1 AND "civilDayUtc" = $2::date
         AND "workload" = 'visual-progress'`,
     [fixtures.organizationId, civilDayUtc],
-    '23503',
     'AiDispatchBudgetReservation_daily_ledger_fkey',
     'AI reservation ledger retention policy',
   );

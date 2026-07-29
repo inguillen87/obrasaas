@@ -23,6 +23,13 @@ const dispatchMigration = await readFile(
   ),
   'utf8',
 );
+const ledgerForeignKeyMigration = await readFile(
+  new URL(
+    'prisma/migrations/20260728090000_ai_budget_ledger_fk_deferred/migration.sql',
+    root,
+  ),
+  'utf8',
+);
 const build = await readFile(new URL('scripts/vercel-build.mjs', root), 'utf8');
 const packageJson = JSON.parse(await readFile(new URL('package.json', root), 'utf8'));
 
@@ -65,6 +72,7 @@ test('visual progress verifier uses an isolated schema-bound TLS connection', ()
 test('visual progress verifier catalogs the applied migration, exact enums and critical columns', () => {
   assert.match(verifier, /20260726143000_visual_progress_assessments/);
   assert.match(verifier, /20260728080000_ai_dispatch_plan_persistence/);
+  assert.match(verifier, /20260728090000_ai_budget_ledger_fk_deferred/);
   assert.match(verifier, /FROM "_prisma_migrations"/);
   assert.match(verifier, /JOIN pg_enum/);
   assert.match(verifier, /FROM information_schema\.columns/);
@@ -355,9 +363,23 @@ test('visual progress verifier governs durable reservation identity and exact he
   }
   assert.match(verifier, /AiDispatchBudgetReservation_project_scope_fkey:[\s\S]*deleteAction: 'c'/);
   assert.match(verifier, /AiDispatchBudgetReservation_assessment_scope_fkey:[\s\S]*deleteAction: 'c'/);
-  assert.match(verifier, /AiDispatchBudgetReservation_daily_ledger_fkey:[\s\S]*deleteAction: 'a'/);
+  assert.match(
+    verifier,
+    /AiDispatchBudgetReservation_daily_ledger_fkey:[\s\S]*deleteAction: 'a',[\s\S]*deferrable: true,[\s\S]*initiallyDeferred: true/,
+  );
   assert.match(verifier, /AiDispatchBudgetReservation_settledById_fkey:[\s\S]*deleteAction: 'r'/);
   assert.match(dispatchMigration, /AiDispatchBudgetReservation_daily_ledger_fkey[\s\S]*ON DELETE NO ACTION/);
+  assert.match(
+    ledgerForeignKeyMigration,
+    /ALTER CONSTRAINT "AiDispatchBudgetReservation_daily_ledger_fkey"\s+DEFERRABLE INITIALLY DEFERRED/,
+  );
+  assert.doesNotMatch(ledgerForeignKeyMigration, /DROP CONSTRAINT|ON DELETE CASCADE/i);
+  assert.match(verifier, /foreignKey\.condeferrable === expectedDeferrable/);
+  assert.match(verifier, /foreignKey\.condeferred === expectedInitiallyDeferred/);
+  assert.match(
+    verifier,
+    /expectDeferredConstraintFailure\(\s*client,\s*'AiDispatchBudgetReservation_daily_ledger_fkey'/,
+  );
   assert.match(verifier, /identityArguments\.includes\('p_assessment_id text'\)/);
   assert.match(verifier, /identityArguments\.includes\('p_actual_micros bigint'\)/);
   assert.match(verifier, /identityArguments\.includes\('p_settlement_basis'\)/);

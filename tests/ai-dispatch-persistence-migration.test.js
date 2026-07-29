@@ -11,6 +11,13 @@ const migration = await readFile(
   ),
   'utf8',
 );
+const ledgerForeignKeyMigration = await readFile(
+  new URL(
+    'prisma/migrations/20260728090000_ai_budget_ledger_fk_deferred/migration.sql',
+    root,
+  ),
+  'utf8',
+);
 
 function modelBlock(name) {
   const match = schema.match(new RegExp(`model ${name} \\{([\\s\\S]*?)\\n\\}`));
@@ -155,6 +162,11 @@ test('durable reservation binds admission and settlement to one assessment', () 
     migration,
     /CONSTRAINT "AiDispatchBudgetReservation_daily_ledger_fkey"[\s\S]*?ON DELETE NO ACTION ON UPDATE CASCADE/,
   );
+  assert.match(
+    ledgerForeignKeyMigration,
+    /ALTER TABLE "AiDispatchBudgetReservation"\s+ALTER CONSTRAINT "AiDispatchBudgetReservation_daily_ledger_fkey"\s+DEFERRABLE INITIALLY DEFERRED;/,
+  );
+  assert.doesNotMatch(ledgerForeignKeyMigration, /DROP CONSTRAINT|ON DELETE CASCADE/i);
   assert.match(
     migration,
     /CONSTRAINT "AiDispatchBudgetReservation_assessment_scope_fkey"[\s\S]*?ON DELETE CASCADE ON UPDATE CASCADE/,

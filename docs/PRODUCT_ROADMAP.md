@@ -21,7 +21,7 @@ La especificación recibida el 23 de julio de 2026 fue revisada página por pág
 
 | Capa | Estado comprobado |
 | --- | --- |
-| WIP local | 99 migraciones; 1.538/1.538 pruebas, Prisma, lint, build, auditoría de dependencias de producción y PostgreSQL 17.5 efímero verdes |
+| WIP local | 100 migraciones; 1.538/1.538 pruebas, Prisma, lint, build, auditoría de dependencias de producción y PostgreSQL 17.5 efímero verdes |
 | Último Preview reproducible | 97 migraciones y commit `d57e429` `Ready`, con alias y smokes documentados ([evidencia](./evidence/2026-07-28-preview-d57e429.md)) |
 | E2E externo | WhatsApp bidireccional sobre tenant conectado, media real, foto de obra y journey visual siguen pendientes |
 | Production | Sin deployment ni migración de estos cambios; se conserva aparte el incidente Clerk de posible sincronización de membresía ([evidencia](./evidence/2026-07-28-preview-c91cee0.md)) |
@@ -119,7 +119,7 @@ La cadencia candidata es de diez días hábiles por sprint. Sin capacidad de equ
 **Objetivo:** impedir releases engañosas o silenciosamente rotas con controles que sí dependen del equipo.
 
 - CI: Node 24, instalación exacta, lint, suite completa, auditoría, build, E2E público y artefactos de diagnóstico;
-- Postgres 17 efímero: `validate`, las 99 migraciones locales actuales desde cero, `status` y diff sin drift; el último Preview evidenciado tenía 97, por lo que `070000` y `080000` aún deben atravesar su gate remoto;
+- Postgres 17 efímero: `validate`, las 100 migraciones locales actuales desde cero, `status` y diff sin drift; el último Preview `Ready` evidenciado tenía 97, por lo que `070000`, `080000` y el hotfix `090000` aún deben atravesar su gate remoto;
 - checkout cerrado por defecto y request estricto; no habilitarlo sin intención durable, idempotencia, consentimiento verificable y reconciliación;
 - E2E autenticado de los journeys críticos y denegaciones por tenant/obra/rol;
 - observabilidad mínima, correlation ID y runbooks de migración/incidente/rollback.
