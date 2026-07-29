@@ -89,7 +89,10 @@ function sha256Hex(value) {
 
 const databaseSchema = resolveDatabaseSchema(connectionString);
 const verifierConnectionString = hardenedVerifierConnectionString(connectionString);
-const REQUIRED_MIGRATIONS = ['20260729100000_progress_evidence_location_capture'];
+const REQUIRED_MIGRATIONS = [
+  '20260729100000_progress_evidence_location_capture',
+  '20260729110000_progress_evidence_location_rate_limit',
+];
 
 const EXPECTED_ENUMS = Object.freeze({
   ProgressEvidenceCaptureStatus: [
@@ -105,11 +108,19 @@ const EXPECTED_ENUMS = Object.freeze({
     'REVIEW_REQUIRED',
     'DECLARED_ONLY',
   ],
+  ProgressEvidenceLocationRateScope: [
+    'ACTIVE_SESSION',
+    'ACTIVE_ORGANIZATION',
+    'INACTIVE_SESSION',
+    'INACTIVE_ORGANIZATION',
+  ],
 });
 
 const TEXT = Object.freeze({ nullable: 'NO', dataType: 'text', udtName: 'text' });
 const NULLABLE_TEXT = Object.freeze({ ...TEXT, nullable: 'YES' });
 const INTEGER = Object.freeze({ nullable: 'NO', dataType: 'integer', udtName: 'int4' });
+const BIGINT = Object.freeze({ nullable: 'NO', dataType: 'bigint', udtName: 'int8' });
+const JSONB = Object.freeze({ nullable: 'NO', dataType: 'jsonb', udtName: 'jsonb' });
 const TIMESTAMP = Object.freeze({
   nullable: 'NO',
   dataType: 'timestamp without time zone',
@@ -196,6 +207,19 @@ const EXPECTED_EVIDENCE_COLUMNS = Object.freeze({
   locationVerification: enumeration('ProgressEvidenceLocationVerification', true),
 });
 
+const EXPECTED_RATE_BUCKET_COLUMNS = Object.freeze({
+  id: TEXT,
+  organizationId: TEXT,
+  scope: enumeration('ProgressEvidenceLocationRateScope'),
+  scopeKeyHash: char(64),
+  windowBuckets: JSONB,
+  blockedCount: { ...BIGINT, defaultPattern: /^(?:0|'0'::bigint)$/i },
+  lastBlockedAt: NULLABLE_TIMESTAMP,
+  expiresAt: TIMESTAMP,
+  createdAt: CREATED_AT,
+  updatedAt: TIMESTAMP,
+});
+
 const EXPECTED_CHECKS = Object.freeze({
   ProgressEvidenceCaptureSession_hashes_check: {
     table: 'ProgressEvidenceCaptureSession',
@@ -211,7 +235,7 @@ const EXPECTED_CHECKS = Object.freeze({
     table: 'ProgressEvidenceCaptureSession',
     validated: true,
     fragments: [
-      'webview_gps',
+      'webview_geolocation',
       'whatsapp_declared',
       'declared_only',
       'distancemeters',
@@ -240,11 +264,39 @@ const EXPECTED_CHECKS = Object.freeze({
   ProgressEvidence_location_capture_bundle_check: {
     table: 'ProgressEvidence',
     validated: false,
-    fragments: ['locationcapturesessionid is null', 'webview_gps', 'whatsapp_declared', 'declared_only'],
+    fragments: ['locationcapturesessionid is null', 'webview_geolocation', 'whatsapp_declared', 'declared_only'],
+  },
+  PELRateBucket_hash_check: {
+    table: 'ProgressEvidenceLocationRateBucket',
+    validated: true,
+    fragments: ['scopekeyhash ~'],
+  },
+  PELRateBucket_state_check: {
+    table: 'ProgressEvidenceLocationRateBucket',
+    validated: true,
+    fragments: [
+      "jsonb_typeofwindowbuckets = 'array'",
+      'jsonb_array_lengthwindowbuckets <= 60',
+      'blockedcount >= 0',
+      'expiresat >= updatedat',
+      'lastblockedat is null',
+    ],
   },
 });
 
 const EXPECTED_INDEXES = Object.freeze({
+  ProgressEvidenceLocationRateBucket_pkey: {
+    table: 'ProgressEvidenceLocationRateBucket', columns: ['id'], unique: true, primary: true,
+  },
+  PELRateBucket_scope_key: {
+    table: 'ProgressEvidenceLocationRateBucket', columns: ['organizationId', 'scope', 'scopeKeyHash'], unique: true,
+  },
+  PELRateBucket_org_expiry_idx: {
+    table: 'ProgressEvidenceLocationRateBucket', columns: ['organizationId', 'expiresAt', 'id'], unique: false,
+  },
+  PELRateBucket_expiry_idx: {
+    table: 'ProgressEvidenceLocationRateBucket', columns: ['expiresAt', 'id'], unique: false,
+  },
   ProgressEvidenceCaptureSession_pkey: {
     table: 'ProgressEvidenceCaptureSession', columns: ['id'], unique: true, primary: true,
   },
@@ -278,6 +330,10 @@ const EXPECTED_INDEXES = Object.freeze({
 });
 
 const EXPECTED_FOREIGN_KEYS = Object.freeze({
+  PELRateBucket_organization_fkey: {
+    table: 'ProgressEvidenceLocationRateBucket', target: 'Organization',
+    columns: ['organizationId'], targetColumns: ['id'], deleteType: 'c',
+  },
   ProgressEvidenceCaptureSession_organizationId_fkey: {
     table: 'ProgressEvidenceCaptureSession', target: 'Organization',
     columns: ['organizationId'], targetColumns: ['id'],
@@ -421,7 +477,11 @@ async function assertIndexes(client) {
        JOIN pg_index AS index_state ON index_state.indexrelid = index_class.oid
       WHERE indexes.schemaname = current_schema()
         AND index_state.indrelid = to_regclass(format('%I.%I', indexes.schemaname, indexes.tablename))
-        AND indexes.tablename IN ('ProgressEvidenceCaptureSession', 'ProgressEvidence')`,
+        AND indexes.tablename IN (
+          'ProgressEvidenceLocationRateBucket',
+          'ProgressEvidenceCaptureSession',
+          'ProgressEvidence'
+        )`,
   );
   const actual = new Map(result.rows.map((row) => [row.indexname, row]));
   for (const [name, expected] of Object.entries(EXPECTED_INDEXES)) {
@@ -492,7 +552,11 @@ async function assertForeignKeys(client) {
     invariant(foreignKey?.contype === 'f' && foreignKey.convalidated, `Missing validated FK ${name}.`);
     invariant(foreignKey.table_name === expected.table && foreignKey.target_table === expected.target, `${name} has the wrong relation.`);
     invariant(!foreignKey.condeferrable && !foreignKey.condeferred, `${name} must be immediate.`);
-    invariant(foreignKey.confdeltype === 'r', `${name} must remain ON DELETE RESTRICT.`);
+    const expectedDeleteType = expected.deleteType || 'r';
+    invariant(
+      foreignKey.confdeltype === expectedDeleteType,
+      `${name} has an unexpected ON DELETE action.`,
+    );
     invariant(foreignKey.confupdtype === 'c', `${name} must remain ON UPDATE CASCADE.`);
     invariant(sameValues(foreignKey.source_columns, expected.columns), `${name} has wrong source columns.`);
     invariant(sameValues(foreignKey.target_columns, expected.targetColumns), `${name} has wrong target columns.`);
@@ -1078,6 +1142,11 @@ try {
   await client.query("SET LOCAL idle_in_transaction_session_timeout = '30s'");
   await assertMigration(client);
   await assertEnums(client);
+  await assertColumnSet(
+    client,
+    'ProgressEvidenceLocationRateBucket',
+    EXPECTED_RATE_BUCKET_COLUMNS,
+  );
   await assertColumnSet(client, 'ProgressEvidenceCaptureSession', EXPECTED_SESSION_COLUMNS);
   await assertColumnSet(client, 'ProgressEvidence', EXPECTED_EVIDENCE_COLUMNS);
   await assertChecks(client);

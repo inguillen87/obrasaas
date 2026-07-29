@@ -3,6 +3,10 @@ import { randomUUID } from "node:crypto";
 import { getPrisma } from "@/lib/prisma";
 import * as progressEvidenceCaptureSessions from "@/lib/progress-evidence-capture-sessions";
 import {
+  isProgressEvidenceLocationRateLimitError,
+  reserveProgressEvidenceLocationRequest,
+} from "@/lib/progress-evidence-location-rate-limit";
+import {
   RequestBodyError,
   readJsonRequest,
 } from "@/lib/request-body";
@@ -60,9 +64,15 @@ class ProgressEvidenceLocationRouteError extends Error {
   }
 }
 
-function locationResponse(payload, { status = 200, correlationId = null } = {}) {
+function locationResponse(
+  payload,
+  { status = 200, correlationId = null, retryAfterSeconds = null } = {},
+) {
   const headers = {
     ...RESPONSE_HEADERS,
+    ...(Number.isSafeInteger(retryAfterSeconds) && retryAfterSeconds > 0
+      ? { "Retry-After": String(retryAfterSeconds) }
+      : {}),
     ...(CORRELATION_ID_PATTERN.test(correlationId || "")
       ? { "X-Correlation-Id": correlationId }
       : {}),
@@ -210,6 +220,30 @@ export function progressEvidenceLocationErrorResponse(error, { correlationId = n
     );
   }
 
+  if (isProgressEvidenceLocationRateLimitError(error)) {
+    const status = Number(error.status);
+    const code = typeof error.code === "string" && SAFE_ERROR_CODE_PATTERN.test(error.code)
+      ? error.code
+      : null;
+    if (code && SAFE_ERROR_STATUSES.has(status)) {
+      const retryAfterSeconds = (status === 429 || status === 503)
+        && Number.isSafeInteger(Number(error.retryAfterSeconds))
+        && Number(error.retryAfterSeconds) > 0
+        ? Number(error.retryAfterSeconds)
+        : status === 429
+          ? 60
+          : null;
+      return locationResponse(
+        { error: typedErrorMessage(status), code },
+        {
+          status,
+          correlationId,
+          retryAfterSeconds,
+        },
+      );
+    }
+  }
+
   const isCaptureSessionError = typeof progressEvidenceCaptureSessions
     .isProgressEvidenceCaptureSessionError === "function"
     && progressEvidenceCaptureSessions.isProgressEvidenceCaptureSessionError(error);
@@ -347,9 +381,17 @@ export async function POST(request) {
       sessionId: input.session,
       token: input.token,
     });
+    const prisma = getPrisma();
+    await reserveProgressEvidenceLocationRequest(prisma, {
+      action: input.action,
+      workerId: input.worker,
+      sessionId: input.session,
+      token: input.token,
+      correlationId,
+    });
     if (input.action === "INIT") {
       const context = await progressEvidenceCaptureSessions.getProgressEvidenceCaptureContext(
-        getPrisma(),
+        prisma,
         {
           workerId: input.worker,
           sessionId: input.session,
@@ -371,11 +413,11 @@ export async function POST(request) {
     };
     const result = input.action === "CANCEL"
       ? await progressEvidenceCaptureSessions.cancelProgressEvidenceLocation(
-          getPrisma(),
+          prisma,
           common,
         )
       : await progressEvidenceCaptureSessions.captureProgressEvidenceLocation(
-          getPrisma(),
+          prisma,
           {
             ...common,
             idempotencyKey: input.idempotencyKey,

@@ -11,6 +11,13 @@ const migration = await readFile(
   ),
   'utf8',
 );
+const rateLimitMigration = await readFile(
+  new URL(
+    'prisma/migrations/20260729110000_progress_evidence_location_rate_limit/migration.sql',
+    root,
+  ),
+  'utf8',
+);
 const verifier = await readFile(
   new URL('scripts/verify-progress-evidence-location-capture-migration.mjs', root),
   'utf8',
@@ -54,6 +61,33 @@ test('Prisma models photo-bound, tenant-scoped location capture sessions', () =>
   assert.match(session, /@@unique\(\[projectId, mediaAssetId\], map: "ProgressEvidenceCaptureSession_project_media_asset_key"\)/);
   assert.match(session, /@@unique\(\[projectId, operationKeyHash\], map: "ProgressEvidenceCaptureSession_project_operation_key"\)/);
   assert.doesNotMatch(session, /one_active_worker_connection/);
+});
+
+test('rate-limit buckets are tenant-scoped, bounded and expirable without per-request audit rows', () => {
+  assert.match(
+    schema,
+    /enum ProgressEvidenceLocationRateScope\s*\{\s*ACTIVE_SESSION\s*ACTIVE_ORGANIZATION\s*INACTIVE_SESSION\s*INACTIVE_ORGANIZATION\s*\}/,
+  );
+  const bucket = model('ProgressEvidenceLocationRateBucket');
+  assert.match(bucket, /organization\s+Organization\s+@relation\(fields: \[organizationId\], references: \[id\], onDelete: Cascade\)/);
+  assert.match(bucket, /scopeKeyHash\s+String\s+@db\.Char\(64\)/);
+  assert.match(bucket, /windowBuckets\s+Json/);
+  assert.match(bucket, /blockedCount\s+BigInt\s+@default\(0\)/);
+  assert.match(bucket, /@@unique\(\[organizationId, scope, scopeKeyHash\], map: "PELRateBucket_scope_key"\)/);
+  assert.match(bucket, /@@index\(\[organizationId, expiresAt, id\], map: "PELRateBucket_org_expiry_idx"\)/);
+  assert.match(bucket, /@@index\(\[expiresAt, id\], map: "PELRateBucket_expiry_idx"\)/);
+  assert.match(model('Organization'), /progressEvidenceLocationRateBuckets\s+ProgressEvidenceLocationRateBucket\[\]/);
+
+  assert.match(rateLimitMigration, /CREATE TYPE "ProgressEvidenceLocationRateScope"[\s\S]*?'ACTIVE_SESSION'[\s\S]*?'ACTIVE_ORGANIZATION'[\s\S]*?'INACTIVE_SESSION'[\s\S]*?'INACTIVE_ORGANIZATION'/);
+  assert.match(rateLimitMigration, /CREATE TABLE "ProgressEvidenceLocationRateBucket"/);
+  assert.match(rateLimitMigration, /jsonb_typeof\("windowBuckets"\) = 'array'/);
+  assert.match(rateLimitMigration, /jsonb_array_length\("windowBuckets"\) <= 60/);
+  assert.match(rateLimitMigration, /CREATE UNIQUE INDEX "PELRateBucket_scope_key"[\s\S]*?\("organizationId", "scope", "scopeKeyHash"\)/);
+  assert.match(rateLimitMigration, /CREATE INDEX "PELRateBucket_org_expiry_idx"[\s\S]*?\("organizationId", "expiresAt", "id"\)/);
+  assert.match(rateLimitMigration, /CONSTRAINT "PELRateBucket_organization_fkey"[\s\S]*?ON DELETE CASCADE ON UPDATE CASCADE/);
+  assert.match(verifier, /EXPECTED_RATE_BUCKET_COLUMNS/);
+  assert.match(verifier, /ProgressEvidenceLocationRateBucket/);
+  assert.match(verifier, /PELRateBucket_scope_key/);
 });
 
 test('canonical evidence keeps a unique scoped capture link and copied provenance', () => {
@@ -181,6 +215,7 @@ test('semantic verifier is schema-bound, TLS-hardened and rollback-only', () => 
   assert.match(verifier, /sslmode', 'verify-full'/);
   assert.match(verifier, /SET LOCAL search_path/);
   assert.match(verifier, /20260729100000_progress_evidence_location_capture/);
+  assert.match(verifier, /20260729110000_progress_evidence_location_rate_limit/);
   assert.match(verifier, /FROM "_prisma_migrations"/);
   assert.match(verifier, /JOIN pg_enum/);
   assert.match(verifier, /FROM information_schema\.columns/);

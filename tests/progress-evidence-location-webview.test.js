@@ -33,9 +33,10 @@ const [pageSource, clientSource, routeSource] = await Promise.all([
   ),
 ]);
 
-const [route, captureSessions] = await Promise.all([
+const [route, captureSessions, locationRateLimit] = await Promise.all([
   import("../src/app/api/webviews/progress-evidence-location/route.js"),
   import("../src/lib/progress-evidence-capture-sessions.js"),
+  import("../src/lib/progress-evidence-location-rate-limit.js"),
 ]);
 
 after(() => {
@@ -146,15 +147,25 @@ test("route is dynamic, Node-only, bounded, no-store and does not depend on Cler
   assert.match(routeSource, /correlationId = randomUUID\(\)/);
   assert.match(routeSource, /correlationId,[\s\S]*idempotencyKey: input\.idempotencyKey/);
   assert.match(routeSource, /"X-Correlation-Id": correlationId/);
+  assert.match(routeSource, /reserveProgressEvidenceLocationRequest\(prisma/);
   assert.match(routeSource, /isProgressEvidenceCaptureSessionError\(error\)/);
+  assert.match(routeSource, /isProgressEvidenceLocationRateLimitError\(error\)/);
+  const signatureIndex = routeSource.indexOf("assertProgressEvidenceCaptureTokenSignature");
+  const prismaIndex = routeSource.indexOf("const prisma = getPrisma()", signatureIndex);
+  const reservationIndex = routeSource.indexOf("await reserveProgressEvidenceLocationRequest", prismaIndex);
+  const serviceIndex = routeSource.indexOf("getProgressEvidenceCaptureContext", reservationIndex);
+  assert.ok(signatureIndex >= 0 && signatureIndex < prismaIndex);
+  assert.ok(prismaIndex < reservationIndex && reservationIndex < serviceIndex);
   assert.doesNotMatch(routeSource, /@clerk|console\./);
 });
 
-test("request parser accepts only the exact discriminated CAPTURE or CANCEL contract", () => {
+test("request parser accepts only the exact discriminated INIT, CAPTURE or CANCEL contract", () => {
   const input = validBody();
   assert.deepEqual(route.parseProgressEvidenceLocationInput(input), input);
   const cancel = validCancelBody();
   assert.deepEqual(route.parseProgressEvidenceLocationInput(cancel), cancel);
+  const init = validInitBody();
+  assert.deepEqual(route.parseProgressEvidenceLocationInput(init), init);
 
   for (const invalid of [
     { ...validBody(), extra: "forbidden" },
@@ -176,12 +187,30 @@ test("request parser accepts only the exact discriminated CAPTURE or CANCEL cont
     validBody({ correlationId: "client-controlled" }),
     validCancelBody({ latitude: -32.8895 }),
     validCancelBody({ privacyAccepted: false }),
+    validInitBody({ retryAfterSeconds: 1 }),
   ]) {
     assert.throws(
       () => route.parseProgressEvidenceLocationInput(invalid),
       (error) => error?.status === 400 && typeof error?.code === "string",
     );
   }
+});
+
+test("an unsigned bearer fails CPU preflight before Prisma is created", async () => {
+  delete globalThis.__obraSaasPrisma;
+  const response = await route.POST(new Request(
+    "http://localhost/api/webviews/progress-evidence-location",
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(validInitBody({ token: "unsigned-random-token" })),
+    },
+  ));
+  assert.equal(response.status, 401);
+  assert.equal(globalThis.__obraSaasPrisma, undefined);
+  const payload = await response.json();
+  assert.equal(payload.code, "PROGRESS_EVIDENCE_CAPTURE_TOKEN_INVALID");
+  assert.equal(JSON.stringify(payload).includes("unsigned-random-token"), false);
 });
 
 test("route rejects URL coordinates, unknown fields and oversized bodies before capture", async () => {
@@ -269,6 +298,57 @@ test("error responses fail closed without reflecting messages or coordinates", a
   const spoofedBody = await spoofedTypedError.json();
   assert.equal(spoofedBody.code, "PROGRESS_EVIDENCE_LOCATION_CAPTURE_FAILED");
   assert.equal(JSON.stringify(spoofedBody).includes("-32.8895"), false);
+
+  const limited = route.progressEvidenceLocationErrorResponse(
+    new locationRateLimit.ProgressEvidenceLocationRateLimitError(
+      "secret-token latitude=-32.8895",
+      {
+        code: "PROGRESS_EVIDENCE_LOCATION_SESSION_RATE_LIMIT",
+        status: 429,
+        retryAfterSeconds: 17,
+      },
+    ),
+    { correlationId },
+  );
+  assert.equal(limited.status, 429);
+  assert.equal(limited.headers.get("retry-after"), "17");
+  assert.equal(limited.headers.get("x-correlation-id"), correlationId);
+  assert.match(limited.headers.get("cache-control"), /no-store/);
+  const limitedBody = await limited.json();
+  assert.equal(limitedBody.code, "PROGRESS_EVIDENCE_LOCATION_SESSION_RATE_LIMIT");
+  assert.equal(JSON.stringify(limitedBody).includes("secret-token"), false);
+  assert.equal(JSON.stringify(limitedBody).includes("-32.8895"), false);
+
+  const unavailable = route.progressEvidenceLocationErrorResponse(
+    new locationRateLimit.ProgressEvidenceLocationRateLimitError(
+      "database detail must not escape",
+      {
+        code: "PROGRESS_EVIDENCE_LOCATION_RATE_LIMIT_UNAVAILABLE",
+        status: 503,
+        retryAfterSeconds: 2,
+      },
+    ),
+    { correlationId },
+  );
+  assert.equal(unavailable.status, 503);
+  assert.equal(unavailable.headers.get("retry-after"), "2");
+  assert.equal(
+    JSON.stringify(await unavailable.json()).includes("database detail"),
+    false,
+  );
+
+  const spoofedLimit = route.progressEvidenceLocationErrorResponse({
+    name: "ProgressEvidenceLocationRateLimitError",
+    status: 429,
+    code: "PROGRESS_EVIDENCE_LOCATION_SESSION_RATE_LIMIT",
+    retryAfterSeconds: 1,
+  }, { correlationId });
+  assert.equal(spoofedLimit.status, 500);
+  assert.equal(spoofedLimit.headers.get("retry-after"), null);
+  assert.equal(
+    (await spoofedLimit.json()).code,
+    "PROGRESS_EVIDENCE_LOCATION_CAPTURE_FAILED",
+  );
 });
 
 test("safe CAPTURE and CANCEL responses carry only their server correlation contract", async () => {

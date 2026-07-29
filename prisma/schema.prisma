@@ -98,6 +98,13 @@ enum ProgressEvidenceLocationVerification {
   DECLARED_ONLY
 }
 
+enum ProgressEvidenceLocationRateScope {
+  ACTIVE_SESSION
+  ACTIVE_ORGANIZATION
+  INACTIVE_SESSION
+  INACTIVE_ORGANIZATION
+}
+
 enum VisualProgressAssessmentStatus {
   PENDING
   RUNNING
@@ -552,39 +559,40 @@ enum OperationalProposalStatus {
 }
 
 model Organization {
-  id                              String                           @id @default(cuid())
-  clerkOrganizationId             String?                          @unique
-  name                            String
-  slug                            String                           @unique
-  country                         String                           @default("AR")
-  timezone                        String                           @default("America/Argentina/Buenos_Aires")
-  subscriptionPlan                SubscriptionPlan                 @default(TRIAL)
-  subscriptionStatus              SubscriptionStatus               @default(TRIALING)
-  trialEndsAt                     DateTime?
-  stripeCustomerId                String?                          @unique
-  stripeSubscriptionId            String?                          @unique
-  metadata                        Json?
-  projects                        Project[]
-  memberships                     TenantMembership[]
-  auditLogs                       AuditLog[]
-  notificationDeliveries          NotificationDelivery[]
-  crmAccount                      CrmAccount?
-  whatsappFlowSessions            WhatsAppFlowSession[]
-  workerOnboardingFlowSessions    WorkerOnboardingFlowSession[]
-  progressEvidenceCaptureSessions ProgressEvidenceCaptureSession[]
-  suppliers                       Supplier[]
-  supplierInvoices                SupplierInvoice[]
-  purchaseOrders                  PurchaseOrder[]
-  goodsReceipts                   GoodsReceipt[]
-  workerPersons                   WorkerPerson[]
-  workerChannelIdentities         WorkerChannelIdentity[]
-  workerOnboardingClaims          WorkerOnboardingClaim[]
-  workerPaymentDestinations       WorkerPaymentDestination[]
-  workerSensitiveDecisions        WorkerSensitiveDecision[]
-  aiDailyBudgetLedgers            AiDailyBudgetLedger[]
-  createdAt                       DateTime                         @default(now())
-  updatedAt                       DateTime                         @updatedAt
-  workers                         Worker[]
+  id                                  String                               @id @default(cuid())
+  clerkOrganizationId                 String?                              @unique
+  name                                String
+  slug                                String                               @unique
+  country                             String                               @default("AR")
+  timezone                            String                               @default("America/Argentina/Buenos_Aires")
+  subscriptionPlan                    SubscriptionPlan                     @default(TRIAL)
+  subscriptionStatus                  SubscriptionStatus                   @default(TRIALING)
+  trialEndsAt                         DateTime?
+  stripeCustomerId                    String?                              @unique
+  stripeSubscriptionId                String?                              @unique
+  metadata                            Json?
+  projects                            Project[]
+  memberships                         TenantMembership[]
+  auditLogs                           AuditLog[]
+  notificationDeliveries              NotificationDelivery[]
+  crmAccount                          CrmAccount?
+  whatsappFlowSessions                WhatsAppFlowSession[]
+  workerOnboardingFlowSessions        WorkerOnboardingFlowSession[]
+  progressEvidenceCaptureSessions     ProgressEvidenceCaptureSession[]
+  progressEvidenceLocationRateBuckets ProgressEvidenceLocationRateBucket[]
+  suppliers                           Supplier[]
+  supplierInvoices                    SupplierInvoice[]
+  purchaseOrders                      PurchaseOrder[]
+  goodsReceipts                       GoodsReceipt[]
+  workerPersons                       WorkerPerson[]
+  workerChannelIdentities             WorkerChannelIdentity[]
+  workerOnboardingClaims              WorkerOnboardingClaim[]
+  workerPaymentDestinations           WorkerPaymentDestination[]
+  workerSensitiveDecisions            WorkerSensitiveDecision[]
+  aiDailyBudgetLedgers                AiDailyBudgetLedger[]
+  createdAt                           DateTime                             @default(now())
+  updatedAt                           DateTime                             @updatedAt
+  workers                             Worker[]
 }
 
 model Supplier {
@@ -2206,6 +2214,24 @@ model ProgressEvidenceCaptureSession {
   @@index([projectId, workerId, status, expiresAt, id], map: "ProgressEvidenceCaptureSession_worker_active_idx")
   @@index([projectId, connectionId, status, expiresAt, id], map: "ProgressEvidenceCaptureSession_connection_active_idx")
   @@index([status, expiresAt, id], map: "ProgressEvidenceCaptureSession_expiry_idx")
+}
+
+model ProgressEvidenceLocationRateBucket {
+  id             String                            @id @default(cuid())
+  organizationId String
+  organization   Organization                      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  scope          ProgressEvidenceLocationRateScope
+  scopeKeyHash   String                            @db.Char(64)
+  windowBuckets  Json
+  blockedCount   BigInt                            @default(0)
+  lastBlockedAt  DateTime?
+  expiresAt      DateTime
+  createdAt      DateTime                          @default(now())
+  updatedAt      DateTime                          @updatedAt
+
+  @@unique([organizationId, scope, scopeKeyHash], map: "PELRateBucket_scope_key")
+  @@index([organizationId, expiresAt, id], map: "PELRateBucket_org_expiry_idx")
+  @@index([expiresAt, id], map: "PELRateBucket_expiry_idx")
 }
 
 model VisualProgressAssessment {
