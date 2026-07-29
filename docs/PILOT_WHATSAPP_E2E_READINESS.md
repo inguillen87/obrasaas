@@ -9,7 +9,7 @@ Fecha de corte: 2026-07-29
 - El alias estable `https://obrasaas-preview.vercel.app` apunta a un redeploy `Ready`; `/privacy`, home y los rechazos fail-closed del webhook/cron respondieron correctamente. `META_APP_SECRET` ya está configurado como secreto exclusivo de la rama. El test oficial `messages v25.0` de Meta produjo un `POST /api/webhooks/whatsapp` 200; el payload de ejemplo fue rechazado internamente como conexión desconocida, que es el aislamiento esperado y evita contaminar un tenant.
 - La app Meta continúa **sin publicar** y el negocio figura **no verificado**; el botón de publicación está deshabilitado. Esa verificación empresarial, la revisión/acceso que Meta aplique y la publicación son hoy el bloqueo externo exacto para inbound real. La documentación societaria debe ingresarla el titular autorizado, no el agente.
 - El tenant externo y la obra piloto ya existen en Preview. Todavía hay que cargar un administrador no-superadmin, un operario preautorizado, importar la conexión Meta y completar el aislamiento cross-tenant. Un contacto desconocido continúa en cuarentena y no se auto-habilita por declarar un nombre.
-- El primer smoke real habilitable es H1: plantilla outbound, respuesta inbound, estados, webhook firmado y asistencia con ubicación. H2 agrega foto privada y comentario. H5 no se considera cerrado hasta recorrer en UI una baseline ya inmutable, generar un forecast revisado y mostrar sus deltas Gantt; el motor determinista ya está entregado, pero no se acopla automáticamente a una foto.
+- El primer smoke real habilitable es H1: plantilla outbound, respuesta inbound, estados, webhook firmado y asistencia con ubicación reportada por el dispositivo. H2 se activa únicamente para una imagen Meta cuyo comentario no vacío comienza con `AVANCE:` o `PROGRESO:`; liga el asset exacto del webhook a una opción de geolocalización puntual o a un opt-out explícito. Esa lectura no garantiza GPS, identidad ni presencia física. H4 (datos de cobro y comprobante) y H5 (revisión visual → escenario Gantt) siguen pendientes como journeys E2E.
 
 ## Decisión de canal
 
@@ -27,16 +27,20 @@ Las operaciones dependientes de Meta no pueden recorrerse end-to-end hasta compl
 
 - Dashboard interno: tenant, obra, cuadrilla, tareas, Gantt, Inbox, asistencia y aprobaciones.
 - Operario previamente creado y ligado a su teléfono dentro de una obra.
-- Entrada, pausa, regreso y salida con hora de servidor, GPS fresco, accuracy, geocerca e idempotencia.
-- El pin de ubicación enviado como mensaje de WhatsApp no incluye una precisión confiable y no se acepta como presencia verificada. El ingreso/salida usa un enlace seguro ligado a la operación para obtener una lectura puntual con `accuracy` y `capturedAt`; la geocerca aporta evidencia de plausibilidad, no triangulación criptográfica ni prueba de quién sostiene el dispositivo.
+- Entrada, pausa, regreso y salida con hora de servidor, lectura puntual de geolocalización reportada por el dispositivo, `accuracy`, geocerca e idempotencia.
+- El pin de ubicación enviado como mensaje de WhatsApp no incluye una precisión confiable y no se acepta como presencia verificada. El ingreso/salida usa un enlace seguro ligado a la operación para obtener una lectura puntual con `accuracy` y `capturedAt`; la API del navegador no garantiza que el sensor utilizado sea GPS y la geocerca aporta evidencia de plausibilidad, no triangulación criptográfica ni prueba de quién sostiene el dispositivo.
 - Recepción de texto, audio, imagen, video y documentos; media privada con SHA-256.
 - Propuestas de avance por texto/audio que requieren aprobación y no reescriben el Gantt directamente.
 - Respuestas automáticas con claim y settlement durables, correlación exacta por tenant/obra/conexión/remitente y política anti-duplicado: un intento ambiguo queda `unknown` y requiere revisión humana, nunca auto-reenvío.
-- Vinculación desde Inbox de una foto Meta autorizada a una tarea canónica como `ProgressEvidence`, con permisos, idempotencia y revisión.
+- Sólo una imagen Meta de un remitente ya autorizado, no clasificada como médica y con comentario explícito `AVANCE: ...` o `PROGRESO: ...` crea la sesión H2. La sesión queda vinculada en la misma transacción al `WhatsAppMediaAsset` exacto del webhook; no se correlaciona por tiempo, texto similar, URL, EXIF ni un asset indicado por el cliente.
+- La respuesta durable conserva únicamente un descriptor `{ version, sessionId }`, nunca el bearer ni el enlace. Después de ganar el claim de envío, el worker revalida tenant/obra/conexión/operario/asset y reconstruye el enlace sólo en memoria. Si la sesión venció o no conserva vigencia suficiente, envía un fallback sin token ni URL y deja la foto disponible sin ubicación.
+- El bearer viaja en el fragmento `#token=...`, que el navegador elimina con `history.replaceState` antes del `INIT`; no llega al request target, Server Component, referrer ni logs del servidor. La webview no usa `sessionStorage`: conserva el intento exacto sólo en memoria de la pestaña, lo purga al vencer y vuelve a conciliar el estado con `INIT` después de una recarga.
+- La webview ofrece consentimiento específico o `Continuar sin ubicación`. La cancelación usa CAS `AWAITING_LOCATION → CANCELLED`, no persiste coordenadas y no descarta la foto. Una captura aceptada conserva `accuracy` y `capturedAt`; una lectura fuera de radio o sin geocerca exige revisión. El dashboard no expone coordenadas por defecto y ninguna lectura se presenta como GPS garantizado, identidad o asistencia.
+- Vinculación desde Inbox de la foto Meta autorizada a una tarea canónica como `ProgressEvidence`, con permisos, idempotencia, consumo atómico de la captura opcional y revisión.
 - Evaluación visual opt-in con un adapter de Vision, rango o abstención, derivado sin metadatos y revisión humana CAS. La clave dedicada de OpenAI ya fue elegida y aislada. El `AI Dispatch Plan` selecciona una sola ruta, reserva presupuesto diario antes de leer bytes y registra ruta/tokens/costo. La respuesta se conserva primero como recibo canónico inmutable: un crash posterior se reanuda sin reenviar la foto. Una falla pre-request libera la reserva; usage ausente o una salida post-request incierta conservan el bloqueo hasta conciliación para evitar cobro duplicado. El esquema y presupuesto piloto ya están en Preview, pero eso no habilita todavía fotos reales.
 - H3.1: invitación desde Inbox, Flow y sesión pre-operario, aviso fijado en `INIT`, submit autenticado, acuse terminal, readiness fail-closed, cola CRM, decisión administrativa y purga del claim transitorio, con código/pruebas locales y migraciones verificadas en Neon Preview.
 
-No debe presentarse todavía como completo: la nueva cadena foto → evidencia → evaluación visual está implementada, probada y sus migraciones `070000`, `080000` y `090000` quedaron verificadas en un Preview `Ready`, pero todavía no se recorrió una foto entrante real de Meta ni el journey autenticado de replay/conciliación. La ubicación sigue siendo un evento separado y no está correlacionada automáticamente con la foto; baseline inmutable y forecast determinista existen, pero una revisión visual no los muta ni los invoca automáticamente. H3.1 ya incluye el Flow especializado y la pantalla CRM; siguen pendientes el smoke UI/runtime, observar el cron y el E2E de Meta. Los destinos de cobro conservan su base cifrada y auditada, pero aún requieren su Flow/UI, comprobante privado y un proveedor confiable de titularidad bancaria.
+No debe presentarse todavía como completo: la cadena H2 local foto → opción de geolocalización u opt-out → evidencia está implementada por contrato y pruebas, pero la migración `20260729100000_progress_evidence_location_capture` aún no fue aplicada en Neon Preview y no se recorrió una foto entrante real de Meta ni mensajería bidireccional E2E sobre el tenant. La geolocalización corrobora contexto; puede falsificarse y no prueba identidad ni presencia física. Baseline inmutable y forecast determinista existen, pero una revisión visual no los muta ni los invoca automáticamente: el cierre Gantt de H5 sigue pendiente. H3.1 ya incluye el Flow especializado y la pantalla CRM; siguen pendientes el smoke UI/runtime, observar el cron y el E2E de Meta. H4 tampoco está terminado: los destinos de cobro conservan su base cifrada y auditada, pero aún requieren consentimiento específico por destino/canal, Flow/UI, comprobante privado y un proveedor confiable de titularidad bancaria.
 
 ## Hitos de prueba
 
@@ -67,27 +71,38 @@ Gate de salida aún pendiente:
 
 Esfuerzo residual controlable estimado: 2 a 4 días hábiles una vez aprobados por Meta la verificación/revisión/publicación aplicables y disponibles la conexión, Vercel y el tenant piloto. Los tiempos externos de Meta no tienen una fecha controlable. Esta prueba no incluye foto de asistencia, autoalta, cobro ni IA visual.
 
-### H2 - Foto + comentario + GPS como evidencia canónica
+### H2 - Foto + comentario + geolocalización opcional como evidencia canónica
 
 Base local completada:
 
-- imagen de WhatsApp almacenada de forma privada;
+- imagen Meta almacenada de forma privada sólo después de validar y ligar el asset exacto del webhook;
+- trigger explícito: remitente autorizado, contenido no médico y comentario no vacío que comienza con `AVANCE:` o `PROGRESO:`; una foto genérica, un prefijo vacío o un medio no Meta no abre H2;
 - caption/comentario conservado con la evidencia;
 - selector de tarea canónica en Inbox con permisos mínimos;
 - creación idempotente de `ProgressEvidence`, integridad SHA-256 y pruebas de replay/cross-tenant;
-- revisión humana en Progreso y entrega privada server-side de la fuente Meta.
+- sesión de captura ligada desde su emisión al `mediaAssetId` exacto, con token firmado de corta duración almacenado sólo como hash;
+- descriptor durable mínimo `{ version, sessionId }`, sin token ni enlace; el bearer y el enlace se reconstruyen sólo en memoria después de revalidar el contexto y ganar el claim de entrega;
+- bearer en el fragmento `#token=...`, scrub síncrono antes de `INIT` y cero `sessionStorage`; la pestaña conserva sólo en memoria un reintento ambiguo y lo descarta al vencer o recargar;
+- webview puntual con consentimiento específico y opt-out `Continuar sin ubicación`; la cancelación es CAS/idempotente, no escribe coordenadas y conserva la foto;
+- lectura de geolocalización reportada por el dispositivo con `accuracy` y timestamp; no se promete GPS, presencia física, identidad ni sensor infalible;
+- fallback stale sin bearer ni URL cuando la sesión venció o no tiene vigencia segura para enviarse;
+- evidencia que copia procedencia y verificación de ubicación de forma inmutable; fuera de geocerca o sin geocerca queda `REVIEW_REQUIRED`, nunca “presencia verificada”;
+- revisión humana en Progreso y entrega privada server-side de la fuente Meta;
 - las subidas desde dashboard usan una reserva server-owned de un solo uso y sólo exponen `uploadId`; la evidencia Meta permanece anclada al mensaje y a la conexión autorizados.
 
 Gate de salida aún pendiente:
 
+- aplicar y verificar `20260729100000_progress_evidence_location_capture` en la rama Neon aislada, sin tocar Production;
 - recorrer el lifecycle `070000`, ya verificado en Neon aislado, con una imagen Meta real y observar la descarga privada;
-- ejecutar el recorrido con inbound Meta real y observarlo en Inbox/Progreso;
-- ligar una ubicación fresca al mismo contexto operacional sin inferir GPS desde metadatos de la imagen;
-- definir si la selección de tarea final será Inbox, Flow o ambas, y probar reintento/offline;
-- desplegar e invocar el cron autenticado de limpieza ya configurado, observar sus métricas/backlog, completar retención/purga y ejecutar smoke de descarga privada para ambos adapters de storage. Vercel sólo lo agenda automáticamente en Production; Preview requiere llamada manual;
+- ejecutar el recorrido con inbound Meta real y observarlo en Inbox/Progreso; hoy no existe esa evidencia E2E;
+- validar en un celular real `AVANCE:`/`PROGRESO:` + foto → enlace puntual → `INIT` → consentimiento o opt-out → selección de tarea en Inbox, incluidos refresh, enlace vencido, rechazo de permiso, stale fallback y conectividad intermitente;
+- decidir con evidencia de piloto si la selección de tarea final seguirá en Inbox o también requerirá un Flow; ningún retry puede correlacionar por cercanía temporal ni duplicar la operación;
+- antes de incorporar datos de trabajadores reales, aprobar y probar la matriz de retención, DSAR integral, borrado verificable, cobertura de backups/restores y purga observada de media, sesiones, mensajes y datos derivados;
+- colocar rate limiting distribuido y reglas WAF en las fronteras públicas —webhook, `INIT`, captura/cancelación y descarga— y probar abuso, ráfagas y degradación multi-instancia; un contador en memoria no cumple este gate;
+- invocar el cron autenticado de limpieza en el ambiente aislado, observar sus métricas/backlog y ejecutar smoke de descarga privada para ambos adapters de storage. La mera configuración del cron no demuestra ejecución ni purga;
 - respetar el máximo actual de 4 MiB en rutas serverless; un piloto con archivos mayores necesita carga directa autorizada al storage, no un aumento nominal del formulario.
 
-Esfuerzo residual controlable estimado: 2 a 4 días hábiles desde H1 y con Preview, secretos y storage listos; no es una fecha calendario ni incluye demoras externas.
+Esfuerzo residual controlable estimado: 1 a 3 días hábiles desde H1 y con Preview, secretos y storage listos; no es una fecha calendario ni incluye demoras externas.
 
 ### H3 - Onboarding simple y seguro del operario
 
@@ -131,6 +146,8 @@ Esfuerzo de ingeniería estimado: prototipo controlado en un sprint después de 
 
 Operario real + administrativo + Director + cliente externo con permisos mínimos, reporte semanal reproducible, asistencia, evidencia, forecast, comprobantes, alertas, degradación de proveedor, restore y pruebas cross-tenant.
 
+No se inicia con datos de trabajadores reales hasta contar con retención/DSAR/backups/purga verificables y rate limiting distribuido/WAF probado en las fronteras públicas. Estos controles son gates de entrada al piloto, no deuda diferible a Production.
+
 Esfuerzo de ingeniería orientativo: 6 a 10 semanas de trabajo focalizado desde H1 una vez resueltos Meta, credenciales, revisión legal y proveedores. No es una promesa calendario y no se anuncia como listo antes de completar H5.
 
 ## Escenario de aceptación del piloto
@@ -140,8 +157,8 @@ Este es el recorrido objetivo de aceptación H6; los pasos de forecast y comprob
 1. El administrativo crea la empresa, obra, geocerca, horario y tareas.
 2. Invita a Carlitos y aprueba su identidad de canal.
 3. Carlitos escribe desde su WhatsApp y el sistema lo reconoce sólo dentro de esa obra.
-4. Registra entrada con GPS fresco; fuera de geocerca queda en revisión, no como presencia verificada.
-5. Envía una foto y comentario; la evidencia queda privada y ligada a una tarea.
+4. Registra entrada con una lectura puntual de geolocalización reportada por su dispositivo; fuera de geocerca queda en revisión, no como presencia verificada.
+5. Envía una foto con `AVANCE:` o `PROGRESO:` y comentario; puede adjuntar ubicación o continuar sin ella, y la evidencia queda privada y ligada a una tarea.
 6. IA propone descripción/rango con posibilidad de abstenerse.
 7. Director aprueba/corrige; se crea un escenario, no se reescribe la baseline.
 8. Dashboard e Inbox reflejan cada estado y su auditoría.

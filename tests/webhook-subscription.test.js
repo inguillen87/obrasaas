@@ -947,6 +947,170 @@ test('Meta text delivery remains operational when the last-moment fence is writa
   });
 });
 
+test('H2 materializes its bearer after the delivery claim and never mutates the durable outcome', async () => {
+  const calls = [];
+  const journal = automaticDeliveryJournal(calls);
+  const durableOutcome = {
+    reply: 'Foto de avance recibida; credencial restringida.',
+    flowPrompt: null,
+    progressEvidenceLocationDelivery: {
+      version: 1,
+      sessionId: '123e4567-e89b-42d3-a456-426614174321',
+    },
+  };
+  const result = await deliverWhatsAppMessageOutcome({
+    outcome: durableOutcome,
+    event: {
+      externalId: 'wamid-progress-location-ready',
+      from: '15551234567',
+      phoneNumberId: 'phone-h2',
+    },
+    scope: { organizationId: 'organization-1', projectId: 'project-1' },
+    eventId: 'event-progress-location-ready',
+    leaseToken: 'lease-progress-location-ready',
+  }, {
+    ...journal,
+    prisma: { marker: 'delivery-prisma' },
+    materializeLocationDelivery: async (prisma, input) => {
+      calls.push('materialize-location-link');
+      assert.equal(prisma.marker, 'delivery-prisma');
+      assert.deepEqual(input.descriptor, durableOutcome.progressEvidenceLocationDelivery);
+      assert.equal(input.recipientPhone, '15551234567');
+      assert.equal(input.scope.phoneNumberId, 'phone-h2');
+      return {
+        mode: 'LINK',
+        text: 'Enlace efímero https://obrasaas.example/capture?token=ephemeral',
+      };
+    },
+    assertSubscription: async () => calls.push('subscription-fence'),
+    sendText: async (request) => {
+      calls.push('send-text');
+      assert.equal(
+        request.text,
+        'Enlace efímero https://obrasaas.example/capture?token=ephemeral',
+      );
+      return { messages: [{ id: 'wamid-progress-location-ready-outbound' }] };
+    },
+  });
+
+  assert.deepEqual(calls, [
+    'claim-delivery',
+    'materialize-location-link',
+    'subscription-fence',
+    'send-text',
+    'settle-delivery:accepted',
+  ]);
+  assert.deepEqual(durableOutcome, {
+    reply: 'Foto de avance recibida; credencial restringida.',
+    flowPrompt: null,
+    progressEvidenceLocationDelivery: {
+      version: 1,
+      sessionId: '123e4567-e89b-42d3-a456-426614174321',
+    },
+  });
+  assert.deepEqual(result, {
+    flowSent: false,
+    providerMessageId: 'wamid-progress-location-ready-outbound',
+  });
+});
+
+test('H2 stale preparation sends one safe fallback without exposing or retrying a link', async () => {
+  const calls = [];
+  const journal = automaticDeliveryJournal(calls);
+  let providerCalls = 0;
+  const result = await deliverWhatsAppMessageOutcome({
+    outcome: {
+      reply: 'Foto de avance recibida; credencial restringida.',
+      flowPrompt: null,
+      progressEvidenceLocationDelivery: {
+        version: 1,
+        sessionId: '123e4567-e89b-42d3-a456-426614174322',
+      },
+    },
+    event: {
+      externalId: 'wamid-progress-location-stale',
+      from: '15551234567',
+      phoneNumberId: 'phone-h2',
+    },
+    scope: { organizationId: 'organization-1', projectId: 'project-1' },
+  }, {
+    ...journal,
+    prisma: {},
+    materializeLocationDelivery: async () => {
+      calls.push('materialize-stale-fallback');
+      return {
+        mode: 'FALLBACK',
+        text: 'La foto se conserva y puede vincularse sin ubicación.',
+      };
+    },
+    assertSubscription: async () => calls.push('subscription-fence'),
+    sendText: async ({ text }) => {
+      providerCalls += 1;
+      calls.push('send-text');
+      assert.equal(text, 'La foto se conserva y puede vincularse sin ubicación.');
+      assert.doesNotMatch(text, /token=|https?:\/\//i);
+      return { messages: [{ id: 'wamid-progress-location-stale-outbound' }] };
+    },
+  });
+
+  assert.equal(providerCalls, 1);
+  assert.deepEqual(calls, [
+    'claim-delivery',
+    'materialize-stale-fallback',
+    'subscription-fence',
+    'send-text',
+    'settle-delivery:accepted',
+  ]);
+  assert.equal(result.providerMessageId, 'wamid-progress-location-stale-outbound');
+});
+
+test('H2 strips a provider-reflected bearer from the terminal queue error chain', async () => {
+  const calls = [];
+  const reflectedBearer = 'token=ephemeral-must-not-reach-logs';
+  await assert.rejects(
+    deliverWhatsAppMessageOutcome({
+      outcome: {
+        reply: 'Foto de avance recibida; credencial restringida.',
+        flowPrompt: null,
+        progressEvidenceLocationDelivery: {
+          version: 1,
+          sessionId: '123e4567-e89b-42d3-a456-426614174323',
+        },
+      },
+      event: {
+        externalId: 'wamid-progress-location-reflected-error',
+        from: '15551234567',
+        phoneNumberId: 'phone-h2',
+      },
+      scope: { organizationId: 'organization-1', projectId: 'project-1' },
+    }, {
+      ...automaticDeliveryJournal(calls),
+      prisma: {},
+      materializeLocationDelivery: async () => ({
+        mode: 'LINK',
+        text: `Enlace efímero https://obrasaas.example/capture#${reflectedBearer}`,
+      }),
+      assertSubscription: async () => calls.push('subscription-fence'),
+      sendText: async () => {
+        const error = new Error(`provider reflected ${reflectedBearer}`);
+        error.status = 400;
+        throw error;
+      },
+    }),
+    (error) => {
+      assert.equal(error.code, 'WHATSAPP_AUTOMATIC_DELIVERY_REJECTED');
+      assert.equal(error.cause, undefined);
+      assert.equal(String(error.stack).includes(reflectedBearer), false);
+      return true;
+    },
+  );
+  assert.deepEqual(calls, [
+    'claim-delivery',
+    'subscription-fence',
+    'settle-delivery:failed',
+  ]);
+});
+
 test('a confirmed automatic journal replay skips every provider request', async () => {
   let providerCalls = 0;
   const result = await deliverWhatsAppMessageOutcome({

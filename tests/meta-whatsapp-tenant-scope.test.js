@@ -253,3 +253,56 @@ test("global Meta credentials remain available only when no phone ID is requeste
   assert.equal(request.options.headers.Authorization, "Bearer legacy-global-token-must-not-be-used");
   assert.equal(request.url.pathname, "/v25.0/123456789012345/messages");
 });
+
+test("Meta text failures never retain provider-reflected content or transport causes", async () => {
+  const requestedPhoneNumberId = "123456789012345";
+  const scope = { organizationId: "organization-a", projectId: "project-a" };
+  globalThis.__obraSaasPrisma = prismaForConnections([{
+    phoneNumberId: requestedPhoneNumberId,
+    projectId: scope.projectId,
+    project: { organizationId: scope.organizationId },
+    enabled: true,
+    connectionStatus: "CONNECTED",
+    encryptedAccessToken: encryptCredential("tenant-access-token"),
+  }]);
+  const sensitiveEcho = "token=one-time-link-must-not-reach-errors";
+
+  await assert.rejects(
+    sendWhatsAppText({
+      to: "15551234567",
+      text: `private ${sensitiveEcho}`,
+      phoneNumberId: requestedPhoneNumberId,
+      scope,
+      fetchImpl: async () => Response.json(
+        { error: { code: 131000, message: `reflected ${sensitiveEcho}` } },
+        { status: 400 },
+      ),
+    }),
+    (error) => {
+      assert.equal(error.status, 400);
+      assert.equal(error.providerCode, 131000);
+      assert.equal(error.cause, undefined);
+      assert.equal(error.message, "Meta send failed (400).");
+      assert.equal(String(error.stack).includes(sensitiveEcho), false);
+      return true;
+    },
+  );
+
+  await assert.rejects(
+    sendWhatsAppText({
+      to: "15551234567",
+      text: `private ${sensitiveEcho}`,
+      phoneNumberId: requestedPhoneNumberId,
+      scope,
+      fetchImpl: async () => {
+        throw new Error(`transport reflected ${sensitiveEcho}`);
+      },
+    }),
+    (error) => {
+      assert.equal(error.ambiguous, true);
+      assert.equal(error.cause, undefined);
+      assert.equal(String(error.stack).includes(sensitiveEcho), false);
+      return true;
+    },
+  );
+});

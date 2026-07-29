@@ -79,6 +79,25 @@ enum ProgressEvidenceStatus {
   REJECTED
 }
 
+enum ProgressEvidenceCaptureStatus {
+  AWAITING_LOCATION
+  LOCATION_CAPTURED
+  CONSUMED
+  EXPIRED
+  CANCELLED
+}
+
+enum ProgressEvidenceLocationSource {
+  WEBVIEW_GEOLOCATION
+  WHATSAPP_DECLARED
+}
+
+enum ProgressEvidenceLocationVerification {
+  IN_GEOFENCE
+  REVIEW_REQUIRED
+  DECLARED_ONLY
+}
+
 enum VisualProgressAssessmentStatus {
   PENDING
   RUNNING
@@ -533,38 +552,39 @@ enum OperationalProposalStatus {
 }
 
 model Organization {
-  id                        String                     @id @default(cuid())
-  clerkOrganizationId       String?                    @unique
-  name                      String
-  slug                      String                     @unique
-  country                   String                     @default("AR")
-  timezone                  String                     @default("America/Argentina/Buenos_Aires")
-  subscriptionPlan          SubscriptionPlan           @default(TRIAL)
-  subscriptionStatus        SubscriptionStatus         @default(TRIALING)
-  trialEndsAt               DateTime?
-  stripeCustomerId          String?                    @unique
-  stripeSubscriptionId      String?                    @unique
-  metadata                  Json?
-  projects                  Project[]
-  memberships               TenantMembership[]
-  auditLogs                 AuditLog[]
-  notificationDeliveries    NotificationDelivery[]
-  crmAccount                CrmAccount?
-  whatsappFlowSessions      WhatsAppFlowSession[]
-  workerOnboardingFlowSessions WorkerOnboardingFlowSession[]
-  suppliers                 Supplier[]
-  supplierInvoices          SupplierInvoice[]
-  purchaseOrders            PurchaseOrder[]
-  goodsReceipts             GoodsReceipt[]
-  workerPersons             WorkerPerson[]
-  workerChannelIdentities   WorkerChannelIdentity[]
-  workerOnboardingClaims    WorkerOnboardingClaim[]
-  workerPaymentDestinations WorkerPaymentDestination[]
-  workerSensitiveDecisions  WorkerSensitiveDecision[]
-  aiDailyBudgetLedgers      AiDailyBudgetLedger[]
-  createdAt                 DateTime                   @default(now())
-  updatedAt                 DateTime                   @updatedAt
-  workers                   Worker[]
+  id                              String                           @id @default(cuid())
+  clerkOrganizationId             String?                          @unique
+  name                            String
+  slug                            String                           @unique
+  country                         String                           @default("AR")
+  timezone                        String                           @default("America/Argentina/Buenos_Aires")
+  subscriptionPlan                SubscriptionPlan                 @default(TRIAL)
+  subscriptionStatus              SubscriptionStatus               @default(TRIALING)
+  trialEndsAt                     DateTime?
+  stripeCustomerId                String?                          @unique
+  stripeSubscriptionId            String?                          @unique
+  metadata                        Json?
+  projects                        Project[]
+  memberships                     TenantMembership[]
+  auditLogs                       AuditLog[]
+  notificationDeliveries          NotificationDelivery[]
+  crmAccount                      CrmAccount?
+  whatsappFlowSessions            WhatsAppFlowSession[]
+  workerOnboardingFlowSessions    WorkerOnboardingFlowSession[]
+  progressEvidenceCaptureSessions ProgressEvidenceCaptureSession[]
+  suppliers                       Supplier[]
+  supplierInvoices                SupplierInvoice[]
+  purchaseOrders                  PurchaseOrder[]
+  goodsReceipts                   GoodsReceipt[]
+  workerPersons                   WorkerPerson[]
+  workerChannelIdentities         WorkerChannelIdentity[]
+  workerOnboardingClaims          WorkerOnboardingClaim[]
+  workerPaymentDestinations       WorkerPaymentDestination[]
+  workerSensitiveDecisions        WorkerSensitiveDecision[]
+  aiDailyBudgetLedgers            AiDailyBudgetLedger[]
+  createdAt                       DateTime                         @default(now())
+  updatedAt                       DateTime                         @updatedAt
+  workers                         Worker[]
 }
 
 model Supplier {
@@ -810,67 +830,68 @@ model AuditLog {
 }
 
 model Project {
-  id                            String                         @id @default(cuid())
-  organizationId                String
-  organization                  Organization                   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  name                          String
-  slug                          String
-  status                        ProjectStatus                  @default(ACTIVE)
-  address                       String?
-  latitude                      Decimal?                       @db.Decimal(10, 7)
-  longitude                     Decimal?                       @db.Decimal(10, 7)
-  geofenceMeters                Int                            @default(100)
-  startsAt                      DateTime?
-  endsAt                        DateTime?
-  metadata                      Json?
-  snapshot                      ProjectSnapshot?
-  workers                       Worker[]
-  tenantScopedWorkers           Worker[]                       @relation("WorkerTenantProject")
-  tasks                         Task[]
-  taskDependencies              TaskDependency[]
-  workTeams                     WorkTeam[]
-  taskAssignments               TaskAssignment[]
-  projectBlockers               ProjectBlocker[]
-  dailyLogs                     DailyLog[]
-  progressEvidence              ProgressEvidence[]
-  visualProgressAssessments     VisualProgressAssessment[]
+  id                                   String                                @id @default(cuid())
+  organizationId                       String
+  organization                         Organization                          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name                                 String
+  slug                                 String
+  status                               ProjectStatus                         @default(ACTIVE)
+  address                              String?
+  latitude                             Decimal?                              @db.Decimal(10, 7)
+  longitude                            Decimal?                              @db.Decimal(10, 7)
+  geofenceMeters                       Int                                   @default(100)
+  startsAt                             DateTime?
+  endsAt                               DateTime?
+  metadata                             Json?
+  snapshot                             ProjectSnapshot?
+  workers                              Worker[]
+  tenantScopedWorkers                  Worker[]                              @relation("WorkerTenantProject")
+  tasks                                Task[]
+  taskDependencies                     TaskDependency[]
+  workTeams                            WorkTeam[]
+  taskAssignments                      TaskAssignment[]
+  projectBlockers                      ProjectBlocker[]
+  dailyLogs                            DailyLog[]
+  progressEvidence                     ProgressEvidence[]
+  progressEvidenceCaptureSessions      ProgressEvidenceCaptureSession[]
+  visualProgressAssessments            VisualProgressAssessment[]
   visualProgressProviderResultReceipts VisualProgressProviderResultReceipt[]
-  aiDispatchBudgetReservations AiDispatchBudgetReservation[]
-  notificationDeliveries        NotificationDelivery[]
-  extraWorkRequests             ExtraWorkRequest[]
-  replanScenarios               ReplanScenario[]
-  scheduleBaselines             ScheduleBaseline[]
-  scheduleForecastRuns          ScheduleForecastRun[]
-  extraWorkSessions             ExtraWorkSession[]
-  budgetVersions                BudgetVersion[]
-  cashFunds                     CashFund[]
-  incidents                     Incident[]
-  attendances                   AttendanceEntry[]
-  attendanceShifts              AttendanceShift[]
-  attendanceSchedules           AttendanceSchedule[]
-  attendanceScheduleVersions    AttendanceScheduleVersion[]
-  attendanceScheduleAssignments AttendanceScheduleAssignment[]
-  attendanceExpectations        AttendanceExpectation[]
-  attendanceExceptions          AttendanceException[]
-  attendanceCorrectionRequests  AttendanceCorrectionRequest[]
-  attendanceAlertEvents         AttendanceAlertEvent[]
-  conversations                 Conversation[]
-  webhookEvents                 WebhookEvent[]
-  flowSessions                  WhatsAppFlowSession[]
-  workerOnboardingFlowSessions  WorkerOnboardingFlowSession[]
-  proposals                     OperationalProposal[]
-  whatsapp                      WhatsAppConnection?
-  projectMemberships            ProjectMembership[]
-  createdAt                     DateTime                       @default(now())
-  updatedAt                     DateTime                       @updatedAt
-  purchaseOrders                PurchaseOrder[]
-  goodsReceipts                 GoodsReceipt[]
-  supplierInvoices              SupplierInvoice[]
-  workerDocuments               WorkerDocument[]
-  startActs                     ProjectStartAct[]
-  workerOnboardingClaims        WorkerOnboardingClaim[]
-  protectedUploads              ProtectedUpload[]
-  whatsappMediaAssets           WhatsAppMediaAsset[]
+  aiDispatchBudgetReservations         AiDispatchBudgetReservation[]
+  notificationDeliveries               NotificationDelivery[]
+  extraWorkRequests                    ExtraWorkRequest[]
+  replanScenarios                      ReplanScenario[]
+  scheduleBaselines                    ScheduleBaseline[]
+  scheduleForecastRuns                 ScheduleForecastRun[]
+  extraWorkSessions                    ExtraWorkSession[]
+  budgetVersions                       BudgetVersion[]
+  cashFunds                            CashFund[]
+  incidents                            Incident[]
+  attendances                          AttendanceEntry[]
+  attendanceShifts                     AttendanceShift[]
+  attendanceSchedules                  AttendanceSchedule[]
+  attendanceScheduleVersions           AttendanceScheduleVersion[]
+  attendanceScheduleAssignments        AttendanceScheduleAssignment[]
+  attendanceExpectations               AttendanceExpectation[]
+  attendanceExceptions                 AttendanceException[]
+  attendanceCorrectionRequests         AttendanceCorrectionRequest[]
+  attendanceAlertEvents                AttendanceAlertEvent[]
+  conversations                        Conversation[]
+  webhookEvents                        WebhookEvent[]
+  flowSessions                         WhatsAppFlowSession[]
+  workerOnboardingFlowSessions         WorkerOnboardingFlowSession[]
+  proposals                            OperationalProposal[]
+  whatsapp                             WhatsAppConnection?
+  projectMemberships                   ProjectMembership[]
+  createdAt                            DateTime                              @default(now())
+  updatedAt                            DateTime                              @updatedAt
+  purchaseOrders                       PurchaseOrder[]
+  goodsReceipts                        GoodsReceipt[]
+  supplierInvoices                     SupplierInvoice[]
+  workerDocuments                      WorkerDocument[]
+  startActs                            ProjectStartAct[]
+  workerOnboardingClaims               WorkerOnboardingClaim[]
+  protectedUploads                     ProtectedUpload[]
+  whatsappMediaAssets                  WhatsAppMediaAsset[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, slug])
@@ -927,49 +948,50 @@ model ProtectedUpload {
 }
 
 model WhatsAppMediaAsset {
-  id                       String                      @id @default(cuid())
-  organizationId           String
-  projectId                String
-  project                  Project                     @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "WhatsAppMediaAsset_project_scope_fkey")
-  webhookEventId           String
-  webhookEvent             WebhookEvent                @relation(fields: [projectId, webhookEventId], references: [projectId, id], onDelete: Restrict, map: "WhatsAppMediaAsset_webhook_event_scope_fkey")
-  providerMediaIdHash      String                      @db.Char(64)
-  providerMessageIdHash    String                      @db.Char(64)
-  mediaKind                MessageKind
-  declaredMimeType         String                      @db.VarChar(120)
-  status                   WhatsAppMediaAssetStatus    @default(UPLOADING)
-  operationKeyHash         String                      @db.Char(64)
-  requestFingerprint       String                      @db.Char(64)
-  storageProvider          String?                     @db.VarChar(32)
-  storage                  Json?
-  fileName                 String?                     @db.VarChar(255)
-  mimeType                 String?                     @db.VarChar(120)
-  contentSha256            String?                     @db.Char(64)
-  sizeBytes                Int?
-  storageLocatorHash       String?                     @db.Char(64)
-  uploadAttemptCount       Int                         @default(1)
-  uploadLeaseToken         String?                     @db.Uuid
-  uploadLeaseExpiresAt     DateTime?
-  nextUploadAttemptAt      DateTime?
-  purgeEligibleAt          DateTime?
-  messageConversationId    String?
-  messageConversation      Conversation?               @relation("WhatsAppMediaAssetConversation", fields: [projectId, messageConversationId], references: [projectId, id], onDelete: Restrict, map: "WhatsAppMediaAsset_conversation_scope_fkey")
-  messageId                String?
-  message                  Message?                    @relation("WhatsAppMediaAssetMessage", fields: [messageConversationId, messageId], references: [conversationId, id], onDelete: Restrict, map: "WhatsAppMediaAsset_message_scope_fkey")
-  claimedAt                DateTime?
-  claimFingerprint         String?                     @db.Char(64)
-  deleteOperationKeyHash   String?                     @db.Char(64)
-  deleteRequestFingerprint String?                     @db.Char(64)
-  deleteRequestedAt        DateTime?
-  deleteAttemptCount       Int                         @default(0)
-  deleteLeaseToken         String?                     @db.Uuid
-  deleteLeaseExpiresAt     DateTime?
-  nextDeleteAttemptAt      DateTime?
-  deletedAt                DateTime?
-  tombstoneSha256          String?                     @db.Char(64)
-  lastErrorCode            String?                     @db.VarChar(64)
-  createdAt                DateTime                    @default(now())
-  updatedAt                DateTime                    @updatedAt
+  id                             String                          @id @default(cuid())
+  organizationId                 String
+  projectId                      String
+  project                        Project                         @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "WhatsAppMediaAsset_project_scope_fkey")
+  webhookEventId                 String
+  webhookEvent                   WebhookEvent                    @relation(fields: [projectId, webhookEventId], references: [projectId, id], onDelete: Restrict, map: "WhatsAppMediaAsset_webhook_event_scope_fkey")
+  providerMediaIdHash            String                          @db.Char(64)
+  providerMessageIdHash          String                          @db.Char(64)
+  mediaKind                      MessageKind
+  declaredMimeType               String                          @db.VarChar(120)
+  status                         WhatsAppMediaAssetStatus        @default(UPLOADING)
+  operationKeyHash               String                          @db.Char(64)
+  requestFingerprint             String                          @db.Char(64)
+  storageProvider                String?                         @db.VarChar(32)
+  storage                        Json?
+  fileName                       String?                         @db.VarChar(255)
+  mimeType                       String?                         @db.VarChar(120)
+  contentSha256                  String?                         @db.Char(64)
+  sizeBytes                      Int?
+  storageLocatorHash             String?                         @db.Char(64)
+  uploadAttemptCount             Int                             @default(1)
+  uploadLeaseToken               String?                         @db.Uuid
+  uploadLeaseExpiresAt           DateTime?
+  nextUploadAttemptAt            DateTime?
+  purgeEligibleAt                DateTime?
+  messageConversationId          String?
+  messageConversation            Conversation?                   @relation("WhatsAppMediaAssetConversation", fields: [projectId, messageConversationId], references: [projectId, id], onDelete: Restrict, map: "WhatsAppMediaAsset_conversation_scope_fkey")
+  messageId                      String?
+  message                        Message?                        @relation("WhatsAppMediaAssetMessage", fields: [messageConversationId, messageId], references: [conversationId, id], onDelete: Restrict, map: "WhatsAppMediaAsset_message_scope_fkey")
+  claimedAt                      DateTime?
+  claimFingerprint               String?                         @db.Char(64)
+  deleteOperationKeyHash         String?                         @db.Char(64)
+  deleteRequestFingerprint       String?                         @db.Char(64)
+  deleteRequestedAt              DateTime?
+  deleteAttemptCount             Int                             @default(0)
+  deleteLeaseToken               String?                         @db.Uuid
+  deleteLeaseExpiresAt           DateTime?
+  nextDeleteAttemptAt            DateTime?
+  deletedAt                      DateTime?
+  tombstoneSha256                String?                         @db.Char(64)
+  lastErrorCode                  String?                         @db.VarChar(64)
+  createdAt                      DateTime                        @default(now())
+  updatedAt                      DateTime                        @updatedAt
+  progressEvidenceCaptureSession ProgressEvidenceCaptureSession?
 
   @@unique([projectId, id], map: "WhatsAppMediaAsset_projectId_id_key")
   @@unique([projectId, operationKeyHash], map: "WhatsAppMediaAsset_project_operation_key")
@@ -999,33 +1021,34 @@ model ProjectMembership {
 }
 
 model WhatsAppConnection {
-  id                              String                   @id @default(cuid())
-  projectId                       String                   @unique
-  project                         Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  phoneNumberId                   String                   @unique
+  id                              String                           @id @default(cuid())
+  projectId                       String                           @unique
+  project                         Project                          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  phoneNumberId                   String                           @unique
   whatsappBusinessId              String?
   displayPhoneNumber              String?
   verifiedBusinessName            String?
-  enabled                         Boolean                  @default(true)
-  connectionStatus                WhatsAppConnectionStatus @default(PENDING)
-  encryptedAccessToken            String?                  @db.Text
-  encryptedPin                    String?                  @db.Text
+  enabled                         Boolean                          @default(true)
+  connectionStatus                WhatsAppConnectionStatus         @default(PENDING)
+  encryptedAccessToken            String?                          @db.Text
+  encryptedPin                    String?                          @db.Text
   tokenLastFour                   String?
-  embeddedSignupVersion           String                   @default("v4")
+  embeddedSignupVersion           String                           @default("v4")
   connectedAt                     DateTime?
   lastVerifiedAt                  DateTime?
-  lastError                       String?                  @db.Text
+  lastError                       String?                          @db.Text
   metadata                        Json?
-  flowProvisioningLeaseId         String?                  @db.Uuid
-  flowProvisioningBlueprintKey    String?                  @db.VarChar(64)
+  flowProvisioningLeaseId         String?                          @db.Uuid
+  flowProvisioningBlueprintKey    String?                          @db.VarChar(64)
   flowProvisioningLeaseAcquiredAt DateTime?
   flowProvisioningLeaseExpiresAt  DateTime?
   flowEndpoint                    WhatsAppFlowEndpoint?
   flowTemplates                   WhatsAppFlowTemplate[]
   workerOnboardingClaims          WorkerOnboardingClaim[]
   workerOnboardingFlowSessions    WorkerOnboardingFlowSession[]
-  createdAt                       DateTime                 @default(now())
-  updatedAt                       DateTime                 @updatedAt
+  progressEvidenceCaptureSessions ProgressEvidenceCaptureSession[]
+  createdAt                       DateTime                         @default(now())
+  updatedAt                       DateTime                         @updatedAt
 
   @@unique([projectId, id])
   @@index([whatsappBusinessId])
@@ -1098,28 +1121,28 @@ model WhatsAppFlowEndpointKey {
 }
 
 model WhatsAppFlowEndpointRequest {
-  id                 String                            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  endpointId         String                            @db.Uuid
-  endpoint           WhatsAppFlowEndpoint              @relation(fields: [endpointId], references: [id], onDelete: Cascade)
-  flowSessionId      String?                           @db.Uuid
-  flowSession        WhatsAppFlowSession?              @relation(fields: [flowSessionId], references: [id], onDelete: SetNull)
-  workerOnboardingFlowSessionId String?                 @db.Uuid
-  workerOnboardingFlowSession   WorkerOnboardingFlowSession? @relation(fields: [workerOnboardingFlowSessionId], references: [id], onDelete: SetNull, map: "WAFlowEndpointRequest_onboarding_session_fkey")
-  requestSha256      String                            @db.Char(64)
-  action             String                            @db.VarChar(32)
-  screen             String?                           @db.VarChar(30)
-  keyVersion         Int?
-  status             WhatsAppFlowEndpointRequestStatus @default(PROCESSING)
-  responseStatus     Int?
-  responseCiphertext String?                           @db.Text
-  failureCode        String?                           @db.VarChar(64)
-  attempts           Int                               @default(1)
-  leaseToken         String?                           @db.Uuid
-  leaseExpiresAt     DateTime?
-  completedAt        DateTime?
-  expiresAt          DateTime
-  createdAt          DateTime                          @default(now())
-  updatedAt          DateTime                          @updatedAt
+  id                            String                            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  endpointId                    String                            @db.Uuid
+  endpoint                      WhatsAppFlowEndpoint              @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+  flowSessionId                 String?                           @db.Uuid
+  flowSession                   WhatsAppFlowSession?              @relation(fields: [flowSessionId], references: [id], onDelete: SetNull)
+  workerOnboardingFlowSessionId String?                           @db.Uuid
+  workerOnboardingFlowSession   WorkerOnboardingFlowSession?      @relation(fields: [workerOnboardingFlowSessionId], references: [id], onDelete: SetNull, map: "WAFlowEndpointRequest_onboarding_session_fkey")
+  requestSha256                 String                            @db.Char(64)
+  action                        String                            @db.VarChar(32)
+  screen                        String?                           @db.VarChar(30)
+  keyVersion                    Int?
+  status                        WhatsAppFlowEndpointRequestStatus @default(PROCESSING)
+  responseStatus                Int?
+  responseCiphertext            String?                           @db.Text
+  failureCode                   String?                           @db.VarChar(64)
+  attempts                      Int                               @default(1)
+  leaseToken                    String?                           @db.Uuid
+  leaseExpiresAt                DateTime?
+  completedAt                   DateTime?
+  expiresAt                     DateTime
+  createdAt                     DateTime                          @default(now())
+  updatedAt                     DateTime                          @updatedAt
 
   @@unique([endpointId, requestSha256])
   @@index([endpointId, createdAt])
@@ -1141,44 +1164,45 @@ model ProjectSnapshot {
 }
 
 model Worker {
-  id                             String                         @id @default(cuid())
-  projectId                      String
-  project                        Project                        @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  organizationId                 String?
-  organization                   Organization?                  @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-  tenantScopedProject            Project?                       @relation("WorkerTenantProject", fields: [organizationId, projectId], references: [organizationId, id], onDelete: NoAction)
-  personId                       String?
-  person                         WorkerPerson?                  @relation(fields: [organizationId, personId], references: [organizationId, id], onDelete: Restrict)
-  externalId                     String?
+  id                              String                           @id @default(cuid())
+  projectId                       String
+  project                         Project                          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  organizationId                  String?
+  organization                    Organization?                    @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  tenantScopedProject             Project?                         @relation("WorkerTenantProject", fields: [organizationId, projectId], references: [organizationId, id], onDelete: NoAction)
+  personId                        String?
+  person                          WorkerPerson?                    @relation(fields: [organizationId, personId], references: [organizationId, id], onDelete: Restrict)
+  externalId                      String?
   /// Legacy transitional channel authority. New identities live in
   /// WorkerChannelIdentity; null is valid after the dual-read/backfill cutover.
-  phone                          String?
-  name                           String
-  role                           String?
-  active                         Boolean                        @default(true)
-  metadata                       Json?
-  attendances                    AttendanceEntry[]
-  attendanceShifts               AttendanceShift[]
-  attendanceScheduleAssignments  AttendanceScheduleAssignment[]
-  attendanceExpectations         AttendanceExpectation[]
-  attendanceExceptions           AttendanceException[]
-  attendanceCorrectionRequests   AttendanceCorrectionRequest[]  @relation("AttendanceCorrectionSubject")
-  requestedAttendanceCorrections AttendanceCorrectionRequest[]  @relation("AttendanceCorrectionWorkerRequester")
-  attendanceAlertEvents          AttendanceAlertEvent[]
-  proposedOperationalItems       OperationalProposal[]          @relation("OperationalProposalProposer")
-  resolvedOperationalItems       OperationalProposal[]          @relation("OperationalProposalResolver")
-  teamMemberships                WorkTeamMember[]
-  taskAssignments                TaskAssignment[]
-  ownedProjectBlockers           ProjectBlocker[]
-  dailyLogs                      DailyLog[]
-  progressEvidence               ProgressEvidence[]
-  requestedExtraWork             ExtraWorkRequest[]             @relation("ExtraWorkRequester")
-  extraWorkSessions              ExtraWorkSession[]
-  whatsappFlowSessions           WhatsAppFlowSession[]
-  documents                      WorkerDocument[]
-  onboardingClaims               WorkerOnboardingClaim[]        @relation("WorkerOnboardingResultWorker")
-  createdAt                      DateTime                       @default(now())
-  updatedAt                      DateTime                       @updatedAt
+  phone                           String?
+  name                            String
+  role                            String?
+  active                          Boolean                          @default(true)
+  metadata                        Json?
+  attendances                     AttendanceEntry[]
+  attendanceShifts                AttendanceShift[]
+  attendanceScheduleAssignments   AttendanceScheduleAssignment[]
+  attendanceExpectations          AttendanceExpectation[]
+  attendanceExceptions            AttendanceException[]
+  attendanceCorrectionRequests    AttendanceCorrectionRequest[]    @relation("AttendanceCorrectionSubject")
+  requestedAttendanceCorrections  AttendanceCorrectionRequest[]    @relation("AttendanceCorrectionWorkerRequester")
+  attendanceAlertEvents           AttendanceAlertEvent[]
+  proposedOperationalItems        OperationalProposal[]            @relation("OperationalProposalProposer")
+  resolvedOperationalItems        OperationalProposal[]            @relation("OperationalProposalResolver")
+  teamMemberships                 WorkTeamMember[]
+  taskAssignments                 TaskAssignment[]
+  ownedProjectBlockers            ProjectBlocker[]
+  dailyLogs                       DailyLog[]
+  progressEvidence                ProgressEvidence[]
+  progressEvidenceCaptureSessions ProgressEvidenceCaptureSession[]
+  requestedExtraWork              ExtraWorkRequest[]               @relation("ExtraWorkRequester")
+  extraWorkSessions               ExtraWorkSession[]
+  whatsappFlowSessions            WhatsAppFlowSession[]
+  documents                       WorkerDocument[]
+  onboardingClaims                WorkerOnboardingClaim[]          @relation("WorkerOnboardingResultWorker")
+  createdAt                       DateTime                         @default(now())
+  updatedAt                       DateTime                         @updatedAt
 
   @@unique([projectId, phone])
   @@unique([projectId, id], map: "Worker_projectId_id_key")
@@ -1271,56 +1295,56 @@ model WorkerChannelIdentity {
 }
 
 model WorkerOnboardingClaim {
-  id                              String                      @id @default(cuid())
+  id                              String                       @id @default(cuid())
   organizationId                  String
-  organization                    Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization                    Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   projectId                       String
-  project                         Project                     @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Cascade)
+  project                         Project                      @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Cascade)
   connectionId                    String
-  connection                      WhatsAppConnection          @relation(fields: [projectId, connectionId], references: [projectId, id], onDelete: Cascade)
-  senderEncryptedPayload          String?                     @db.Text
-  senderFingerprint               String?                     @db.Char(64)
-  senderFingerprintKeyId          String?                     @db.VarChar(100)
-  senderLastFour                  String?                     @db.VarChar(4)
-  senderWrappingKeyId             String?                     @db.VarChar(100)
-  senderRecordVersion             Int?                        @default(1)
+  connection                      WhatsAppConnection           @relation(fields: [projectId, connectionId], references: [projectId, id], onDelete: Cascade)
+  senderEncryptedPayload          String?                      @db.Text
+  senderFingerprint               String?                      @db.Char(64)
+  senderFingerprintKeyId          String?                      @db.VarChar(100)
+  senderLastFour                  String?                      @db.VarChar(4)
+  senderWrappingKeyId             String?                      @db.VarChar(100)
+  senderRecordVersion             Int?                         @default(1)
   /// One-way 256-bit commitment retained after cryptoshredding for exact replay and audit binding; never the raw bearer token.
-  claimTokenHash                  String                      @unique @db.Char(64)
-  openClaimKey                    String?                     @unique @db.Char(64)
-  claimedIdentityEncryptedPayload String?                     @db.Text
-  claimedCuilFingerprint          String?                     @db.Char(64)
-  claimedCuilFingerprintKeyId     String?                     @db.VarChar(100)
-  claimedCuilLastFour             String?                     @db.VarChar(4)
-  claimedIdentityWrappingKeyId    String?                     @db.VarChar(100)
+  claimTokenHash                  String                       @unique @db.Char(64)
+  openClaimKey                    String?                      @unique @db.Char(64)
+  claimedIdentityEncryptedPayload String?                      @db.Text
+  claimedCuilFingerprint          String?                      @db.Char(64)
+  claimedCuilFingerprintKeyId     String?                      @db.VarChar(100)
+  claimedCuilLastFour             String?                      @db.VarChar(4)
+  claimedIdentityWrappingKeyId    String?                      @db.VarChar(100)
   claimedIdentityRecordVersion    Int?
-  privacyNoticeVersion            String?                     @db.VarChar(64)
-  privacyNoticeContentSha256      String?                     @db.Char(64)
+  privacyNoticeVersion            String?                      @db.VarChar(64)
+  privacyNoticeContentSha256      String?                      @db.Char(64)
   privacyAcceptedAt               DateTime?
   sensitiveDataPurgedAt           DateTime?
-  status                          WorkerOnboardingClaimStatus @default(PENDING)
+  status                          WorkerOnboardingClaimStatus  @default(PENDING)
   expiresAt                       DateTime
   submittedAt                     DateTime?
   reviewedAt                      DateTime?
   /// Legacy transitional platform-user actor; retained for expand/contract.
   reviewedById                    String?
-  reviewedBy                      PlatformUser?               @relation("WorkerOnboardingReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedBy                      PlatformUser?                @relation("WorkerOnboardingReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
   reviewedByMembershipId          String?
-  reviewedByMembership            TenantMembership?           @relation("WorkerOnboardingReviewerMembership", fields: [organizationId, reviewedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "WorkerClaim_reviewer_membership_fkey")
-  reviewEvidenceHash              String?                     @db.Char(64)
-  rejectionReason                 String?                     @db.VarChar(500)
+  reviewedByMembership            TenantMembership?            @relation("WorkerOnboardingReviewerMembership", fields: [organizationId, reviewedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "WorkerClaim_reviewer_membership_fkey")
+  reviewEvidenceHash              String?                      @db.Char(64)
+  rejectionReason                 String?                      @db.VarChar(500)
   resolvedPersonId                String?
-  resolvedPerson                  WorkerPerson?               @relation("WorkerOnboardingResultPerson", fields: [organizationId, resolvedPersonId], references: [organizationId, id], onDelete: Restrict)
+  resolvedPerson                  WorkerPerson?                @relation("WorkerOnboardingResultPerson", fields: [organizationId, resolvedPersonId], references: [organizationId, id], onDelete: Restrict)
   resolvedChannelIdentityId       String?
-  resolvedChannelIdentity         WorkerChannelIdentity?      @relation("WorkerOnboardingResultChannel", fields: [organizationId, resolvedPersonId, resolvedChannelIdentityId], references: [organizationId, personId, id], onDelete: Restrict, map: "WorkerClaim_resolved_channel_scope_fkey")
+  resolvedChannelIdentity         WorkerChannelIdentity?       @relation("WorkerOnboardingResultChannel", fields: [organizationId, resolvedPersonId, resolvedChannelIdentityId], references: [organizationId, personId, id], onDelete: Restrict, map: "WorkerClaim_resolved_channel_scope_fkey")
   resolvedWorkerId                String?
-  resolvedWorker                  Worker?                     @relation("WorkerOnboardingResultWorker", fields: [organizationId, resolvedPersonId, projectId, resolvedWorkerId], references: [organizationId, personId, projectId, id], onDelete: Restrict, map: "WorkerClaim_resolved_worker_scope_fkey")
-  operationKey                    String                      @db.VarChar(190)
-  requestFingerprint              String                      @db.Char(64)
-  revision                        Int                         @default(0)
-  sensitiveDecisions              WorkerSensitiveDecision[]   @relation("WorkerSensitiveDecisionOnboardingClaim")
+  resolvedWorker                  Worker?                      @relation("WorkerOnboardingResultWorker", fields: [organizationId, resolvedPersonId, projectId, resolvedWorkerId], references: [organizationId, personId, projectId, id], onDelete: Restrict, map: "WorkerClaim_resolved_worker_scope_fkey")
+  operationKey                    String                       @db.VarChar(190)
+  requestFingerprint              String                       @db.Char(64)
+  revision                        Int                          @default(0)
+  sensitiveDecisions              WorkerSensitiveDecision[]    @relation("WorkerSensitiveDecisionOnboardingClaim")
   flowSession                     WorkerOnboardingFlowSession? @relation("WorkerOnboardingClaimFlowSession")
-  createdAt                       DateTime                    @default(now())
-  updatedAt                       DateTime                    @updatedAt
+  createdAt                       DateTime                     @default(now())
+  updatedAt                       DateTime                     @updatedAt
 
   @@unique([organizationId, id])
   @@unique([organizationId, projectId, connectionId, id], map: "WorkerClaim_flow_session_scope_key")
@@ -2094,41 +2118,94 @@ model DailyLog {
 }
 
 model ProgressEvidence {
-  id                        String                     @id @default(cuid())
+  id                        String                                @id @default(cuid())
   projectId                 String
-  project                   Project                    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project                   Project                               @relation(fields: [projectId], references: [id], onDelete: Cascade)
   taskId                    String
-  task                      Task                       @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict)
+  task                      Task                                  @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict)
   authorWorkerId            String?
-  authorWorker              Worker?                    @relation(fields: [projectId, authorWorkerId], references: [projectId, id], onDelete: Restrict)
+  authorWorker              Worker?                               @relation(fields: [projectId, authorWorkerId], references: [projectId, id], onDelete: Restrict)
   sourceConversationId      String?
-  sourceConversation        Conversation?              @relation("ProgressEvidenceSourceConversation", fields: [projectId, sourceConversationId], references: [projectId, id], onDelete: NoAction, map: "ProgressEvidence_source_conversation_scope_fkey")
-  sourceMessageId           String?                    @unique(map: "ProgressEvidence_sourceMessageId_key")
-  sourceMessage             Message?                   @relation("ProgressEvidenceSourceMessage", fields: [sourceConversationId, sourceMessageId], references: [conversationId, id], onDelete: NoAction, map: "ProgressEvidence_source_message_scope_fkey")
-  sourceOperationKeyHash    String?                    @db.Char(64)
-  sourceRequestFingerprint  String?                    @db.Char(64)
+  sourceConversation        Conversation?                         @relation("ProgressEvidenceSourceConversation", fields: [projectId, sourceConversationId], references: [projectId, id], onDelete: NoAction, map: "ProgressEvidence_source_conversation_scope_fkey")
+  sourceMessageId           String?                               @unique(map: "ProgressEvidence_sourceMessageId_key")
+  sourceMessage             Message?                              @relation("ProgressEvidenceSourceMessage", fields: [sourceConversationId, sourceMessageId], references: [conversationId, id], onDelete: NoAction, map: "ProgressEvidence_source_message_scope_fkey")
+  sourceOperationKeyHash    String?                               @db.Char(64)
+  sourceRequestFingerprint  String?                               @db.Char(64)
   protectedUploadId         String?
-  protectedUpload           ProtectedUpload?           @relation("ProgressEvidenceProtectedUpload", fields: [projectId, protectedUploadId], references: [projectId, id], onDelete: Restrict, map: "ProgressEvidence_protected_upload_fkey")
+  protectedUpload           ProtectedUpload?                      @relation("ProgressEvidenceProtectedUpload", fields: [projectId, protectedUploadId], references: [projectId, id], onDelete: Restrict, map: "ProgressEvidence_protected_upload_fkey")
   capturedAt                DateTime
-  caption                   String?                    @db.Text
+  caption                   String?                               @db.Text
   media                     Json
-  latitude                  Decimal?                   @db.Decimal(10, 7)
-  longitude                 Decimal?                   @db.Decimal(10, 7)
-  accuracyMeters            Decimal?                   @db.Decimal(9, 2)
-  status                    ProgressEvidenceStatus     @default(PENDING)
-  reviewNote                String?                    @db.Text
-  revision                  Int                        @default(0)
+  latitude                  Decimal?                              @db.Decimal(10, 7)
+  longitude                 Decimal?                              @db.Decimal(10, 7)
+  accuracyMeters            Decimal?                              @db.Decimal(9, 2)
+  locationCaptureSessionId  String?
+  locationCaptureSession    ProgressEvidenceCaptureSession?       @relation("ProgressEvidenceLocationCapture", fields: [projectId, locationCaptureSessionId], references: [projectId, id], onDelete: Restrict, map: "ProgressEvidence_location_capture_scope_fkey")
+  locationCapturedAt        DateTime?
+  locationSource            ProgressEvidenceLocationSource?
+  locationVerification      ProgressEvidenceLocationVerification?
+  status                    ProgressEvidenceStatus                @default(PENDING)
+  reviewNote                String?                               @db.Text
+  revision                  Int                                   @default(0)
   reviewedAt                DateTime?
-  createdAt                 DateTime                   @default(now())
-  updatedAt                 DateTime                   @updatedAt
+  createdAt                 DateTime                              @default(now())
+  updatedAt                 DateTime                              @updatedAt
   visualProgressAssessments VisualProgressAssessment[]
 
   @@unique([projectId, id])
   @@unique([projectId, sourceOperationKeyHash], map: "ProgressEvidence_project_operation_key")
   @@unique([projectId, protectedUploadId], map: "ProgressEvidence_project_protected_upload_key")
+  @@unique([projectId, locationCaptureSessionId], map: "ProgressEvidence_project_location_capture_session_key")
   @@unique([sourceConversationId, sourceMessageId], map: "ProgressEvidence_source_conversation_message_key")
   @@index([projectId, taskId, capturedAt])
   @@index([projectId, status, capturedAt])
+}
+
+model ProgressEvidenceCaptureSession {
+  id                         String                                @id @default(cuid())
+  organizationId             String
+  organization               Organization                          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  projectId                  String
+  project                    Project                               @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "ProgressEvidenceCaptureSession_project_scope_fkey")
+  workerId                   String
+  worker                     Worker                                @relation(fields: [projectId, workerId], references: [projectId, id], onDelete: Restrict, map: "ProgressEvidenceCaptureSession_worker_scope_fkey")
+  connectionId               String
+  connection                 WhatsAppConnection                    @relation(fields: [projectId, connectionId], references: [projectId, id], onDelete: Restrict, map: "ProgressEvidenceCaptureSession_connection_scope_fkey")
+  mediaAssetId               String
+  mediaAsset                 WhatsAppMediaAsset                    @relation(fields: [projectId, mediaAssetId], references: [projectId, id], onDelete: Restrict, map: "ProgressEvidenceCaptureSession_media_asset_scope_fkey")
+  status                     ProgressEvidenceCaptureStatus         @default(AWAITING_LOCATION)
+  revision                   Int                                   @default(0)
+  tokenHash                  String                                @unique(map: "ProgressEvidenceCaptureSession_token_hash_key") @db.Char(64)
+  privacyNoticeVersion       String                                @db.VarChar(64)
+  privacyNoticeContentSha256 String                                @db.Char(64)
+  privacyAcceptedAt          DateTime?
+  issuedAt                   DateTime                              @default(now())
+  expiresAt                  DateTime
+  locationCapturedAt         DateTime?
+  locationReceivedAt         DateTime?
+  latitude                   Decimal?                              @db.Decimal(10, 7)
+  longitude                  Decimal?                              @db.Decimal(10, 7)
+  accuracyMeters             Decimal?                              @db.Decimal(9, 2)
+  locationSource             ProgressEvidenceLocationSource?
+  locationVerification       ProgressEvidenceLocationVerification?
+  distanceMeters             Decimal?                              @db.Decimal(10, 2)
+  geofenceRadiusMeters       Decimal?                              @db.Decimal(10, 2)
+  operationKeyHash           String?                               @db.Char(64)
+  requestFingerprint         String?                               @db.Char(64)
+  consumedAt                 DateTime?
+  expiredAt                  DateTime?
+  cancelledAt                DateTime?
+  createdAt                  DateTime                              @default(now())
+  updatedAt                  DateTime                              @updatedAt
+  progressEvidence           ProgressEvidence?                     @relation("ProgressEvidenceLocationCapture")
+
+  @@unique([projectId, id], map: "ProgressEvidenceCaptureSession_project_id_key")
+  @@unique([projectId, mediaAssetId], map: "ProgressEvidenceCaptureSession_project_media_asset_key")
+  @@unique([projectId, operationKeyHash], map: "ProgressEvidenceCaptureSession_project_operation_key")
+  @@index([organizationId, createdAt, id], map: "ProgressEvidenceCaptureSession_org_created_idx")
+  @@index([projectId, workerId, status, expiresAt, id], map: "ProgressEvidenceCaptureSession_worker_active_idx")
+  @@index([projectId, connectionId, status, expiresAt, id], map: "ProgressEvidenceCaptureSession_connection_active_idx")
+  @@index([status, expiresAt, id], map: "ProgressEvidenceCaptureSession_expiry_idx")
 }
 
 model VisualProgressAssessment {
@@ -2149,9 +2226,9 @@ model VisualProgressAssessment {
   routeReasonCode           String?                               @db.VarChar(64)
   pricingVersion            String?                               @db.VarChar(64)
   budgetCivilDayUtc         DateTime?                             @db.Date
-  budgetWorkload           String?                               @db.VarChar(64)
+  budgetWorkload            String?                               @db.VarChar(64)
   quotaPolicyVersion        String?                               @db.VarChar(64)
-  budgetLimitMicros        BigInt?
+  budgetLimitMicros         BigInt?
   budgetReservationMicros   BigInt?
   estimateBasis             String?                               @db.VarChar(64)
   providerDispatchStartedAt DateTime?
@@ -2212,37 +2289,37 @@ model VisualProgressAssessment {
 /// the assessment. A pending receipt is the recovery boundary for a provider
 /// response that arrived but was not yet atomically applied and settled.
 model VisualProgressProviderResultReceipt {
-  assessmentId       String   @id
+  assessmentId       String                   @id
   organizationId     String
   projectId          String
-  project             Project                  @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Cascade, map: "VPRR_project_scope_fkey")
-  assessment          VisualProgressAssessment @relation(fields: [projectId, assessmentId], references: [projectId, id], onDelete: Cascade, map: "VPRR_assessment_scope_fkey")
-  schemaVersion       Int
-  receiptSha256       String   @db.Char(64)
-  providerRequestId   String?  @db.VarChar(190)
-  providerResponseId  String?  @db.VarChar(190)
-  inputSha256         String   @db.Char(64)
-  submittedSha256     String   @db.Char(64)
-  width               Int
-  height              Int
-  abstained           Boolean
-  abstentionReason    String?  @db.VarChar(64)
-  summary             String   @db.Text
-  elementType         String?  @db.VarChar(120)
-  progressMin         Int?
-  progressMax         Int?
-  confidence          Decimal  @db.Decimal(5, 4)
-  quality             Json
-  observations        Json
-  limitations         Json
-  inputTokens         Int?
-  outputTokens        Int?
-  totalTokens         Int?
-  cachedInputTokens   Int?
-  cacheWriteTokens    Int?
-  receivedAt          DateTime @default(now())
-  appliedAt           DateTime?
-  revision            Int      @default(0)
+  project            Project                  @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Cascade, map: "VPRR_project_scope_fkey")
+  assessment         VisualProgressAssessment @relation(fields: [projectId, assessmentId], references: [projectId, id], onDelete: Cascade, map: "VPRR_assessment_scope_fkey")
+  schemaVersion      Int
+  receiptSha256      String                   @db.Char(64)
+  providerRequestId  String?                  @db.VarChar(190)
+  providerResponseId String?                  @db.VarChar(190)
+  inputSha256        String                   @db.Char(64)
+  submittedSha256    String                   @db.Char(64)
+  width              Int
+  height             Int
+  abstained          Boolean
+  abstentionReason   String?                  @db.VarChar(64)
+  summary            String                   @db.Text
+  elementType        String?                  @db.VarChar(120)
+  progressMin        Int?
+  progressMax        Int?
+  confidence         Decimal                  @db.Decimal(5, 4)
+  quality            Json
+  observations       Json
+  limitations        Json
+  inputTokens        Int?
+  outputTokens       Int?
+  totalTokens        Int?
+  cachedInputTokens  Int?
+  cacheWriteTokens   Int?
+  receivedAt         DateTime                 @default(now())
+  appliedAt          DateTime?
+  revision           Int                      @default(0)
 
   @@unique([projectId, assessmentId], map: "VPRR_project_assessment_key")
   @@unique([organizationId, receiptSha256], map: "VPRR_org_receipt_sha_key")
@@ -2255,17 +2332,17 @@ model VisualProgressProviderResultReceipt {
 /// point value is admitted into the governed budget path.
 model AiDailyBudgetLedger {
   organizationId     String
-  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  civilDayUtc        DateTime     @db.Date
-  workload           String       @db.VarChar(64)
-  quotaPolicyVersion String       @db.VarChar(64)
+  organization       Organization                  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  civilDayUtc        DateTime                      @db.Date
+  workload           String                        @db.VarChar(64)
+  quotaPolicyVersion String                        @db.VarChar(64)
   budgetLimitMicros  BigInt
-  reservedMicros     BigInt       @default(0)
-  settledMicros      BigInt       @default(0)
-  requestCount       BigInt       @default(0)
-  revision           Int          @default(0)
-  createdAt          DateTime     @default(now())
-  updatedAt          DateTime     @updatedAt
+  reservedMicros     BigInt                        @default(0)
+  settledMicros      BigInt                        @default(0)
+  requestCount       BigInt                        @default(0)
+  revision           Int                           @default(0)
+  createdAt          DateTime                      @default(now())
+  updatedAt          DateTime                      @updatedAt
   reservations       AiDispatchBudgetReservation[]
 
   @@id([organizationId, civilDayUtc, workload], map: "AiDailyBudgetLedger_pkey")
@@ -2277,29 +2354,29 @@ model AiDailyBudgetLedger {
 /// The aggregate ledger is never decremented from caller-provided reservation
 /// amounts; settlement consumes only this durable row's own reservation.
 model AiDispatchBudgetReservation {
-  assessmentId       String                            @id
-  organizationId     String
-  projectId          String
-  project            Project                           @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Cascade, map: "AiDispatchBudgetReservation_project_scope_fkey")
-  assessment         VisualProgressAssessment          @relation(fields: [projectId, assessmentId], references: [projectId, id], onDelete: Cascade, map: "AiDispatchBudgetReservation_assessment_scope_fkey")
-  civilDayUtc        DateTime                          @db.Date
-  workload           String                            @db.VarChar(64)
-  quotaPolicyVersion String                            @db.VarChar(64)
-  budgetLimitMicros  BigInt
-  reservedMicros     BigInt
-  actualMicros       BigInt?
-  status             AiDispatchBudgetReservationStatus @default(RESERVED)
-  settlementBasis    AiDispatchSettlementBasis?
-  settlementOperationKeyHash String?                   @db.Char(64)
-  settlementEvidenceSha256   String?                   @db.Char(64)
-  settledById        String?
-  settledBy          PlatformUser?                     @relation("AiDispatchBudgetSettlementActor", fields: [settledById], references: [id], onDelete: Restrict)
-  reservedAt         DateTime                          @default(now())
-  settledAt          DateTime?
-  revision           Int                               @default(0)
-  createdAt          DateTime                          @default(now())
-  updatedAt          DateTime                          @updatedAt
-  dailyLedger        AiDailyBudgetLedger               @relation(fields: [organizationId, civilDayUtc, workload], references: [organizationId, civilDayUtc, workload], onDelete: NoAction, map: "AiDispatchBudgetReservation_daily_ledger_fkey")
+  assessmentId               String                            @id
+  organizationId             String
+  projectId                  String
+  project                    Project                           @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Cascade, map: "AiDispatchBudgetReservation_project_scope_fkey")
+  assessment                 VisualProgressAssessment          @relation(fields: [projectId, assessmentId], references: [projectId, id], onDelete: Cascade, map: "AiDispatchBudgetReservation_assessment_scope_fkey")
+  civilDayUtc                DateTime                          @db.Date
+  workload                   String                            @db.VarChar(64)
+  quotaPolicyVersion         String                            @db.VarChar(64)
+  budgetLimitMicros          BigInt
+  reservedMicros             BigInt
+  actualMicros               BigInt?
+  status                     AiDispatchBudgetReservationStatus @default(RESERVED)
+  settlementBasis            AiDispatchSettlementBasis?
+  settlementOperationKeyHash String?                           @db.Char(64)
+  settlementEvidenceSha256   String?                           @db.Char(64)
+  settledById                String?
+  settledBy                  PlatformUser?                     @relation("AiDispatchBudgetSettlementActor", fields: [settledById], references: [id], onDelete: Restrict)
+  reservedAt                 DateTime                          @default(now())
+  settledAt                  DateTime?
+  revision                   Int                               @default(0)
+  createdAt                  DateTime                          @default(now())
+  updatedAt                  DateTime                          @updatedAt
+  dailyLedger                AiDailyBudgetLedger               @relation(fields: [organizationId, civilDayUtc, workload], references: [organizationId, civilDayUtc, workload], onDelete: NoAction, map: "AiDispatchBudgetReservation_daily_ledger_fkey")
 
   @@unique([projectId, assessmentId], map: "AiDispatchBudgetReservation_project_assessment_key")
   @@unique([organizationId, settlementOperationKeyHash], map: "AiDispatchBudgetReservation_org_settlement_operation_key")
@@ -2678,7 +2755,7 @@ model Conversation {
   displayName             String?
   metadata                Json?
   messages                Message[]
-  whatsappMediaAssets     WhatsAppMediaAsset[]     @relation("WhatsAppMediaAssetConversation")
+  whatsappMediaAssets     WhatsAppMediaAsset[]    @relation("WhatsAppMediaAssetConversation")
   progressEvidenceSources ProgressEvidence[]      @relation("ProgressEvidenceSourceConversation")
   readStates              ConversationReadState[]
   unreadTrackingStartedAt DateTime?
@@ -2705,21 +2782,21 @@ model ConversationReadState {
 }
 
 model Message {
-  id                     String            @id @default(cuid())
+  id                     String              @id @default(cuid())
   conversationId         String
-  conversation           Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  externalId             String?           @unique
-  providerMessageId      String?           @unique
+  conversation           Conversation        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  externalId             String?             @unique
+  providerMessageId      String?             @unique
   direction              MessageDirection
-  kind                   MessageKind       @default(TEXT)
+  kind                   MessageKind         @default(TEXT)
   body                   String?
   mediaUrl               String?
   status                 String?
   metadata               Json?
-  progressEvidenceSource ProgressEvidence? @relation("ProgressEvidenceSourceMessage")
+  progressEvidenceSource ProgressEvidence?   @relation("ProgressEvidenceSourceMessage")
   whatsappMediaAsset     WhatsAppMediaAsset? @relation("WhatsAppMediaAssetMessage")
-  sentAt                 DateTime          @default(now())
-  createdAt              DateTime          @default(now())
+  sentAt                 DateTime            @default(now())
+  createdAt              DateTime            @default(now())
 
   @@unique([conversationId, id], map: "Message_conversationId_id_key")
   @@index([conversationId, sentAt])
@@ -2728,24 +2805,24 @@ model Message {
 }
 
 model WebhookEvent {
-  id             String        @id @default(cuid())
+  id             String               @id @default(cuid())
   projectId      String?
-  project        Project?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  project        Project?             @relation(fields: [projectId], references: [id], onDelete: SetNull)
   provider       String
   externalId     String
   eventType      String
-  status         WebhookStatus @default(PENDING)
-  attempts       Int           @default(0)
+  status         WebhookStatus        @default(PENDING)
+  attempts       Int                  @default(0)
   payload        Json
   lastError      String?
-  nextAttemptAt  DateTime?     @default(now())
+  nextAttemptAt  DateTime?            @default(now())
   leaseToken     String?
   leaseExpiresAt DateTime?
   appliedAt      DateTime?
   outcome        Json?
   processedAt    DateTime?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
   mediaAssets    WhatsAppMediaAsset[]
 
   @@unique([provider, externalId])
@@ -2800,29 +2877,29 @@ model WorkerOnboardingFlowSession {
   project             Project                       @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Cascade, map: "WorkerOnboardingFlowSession_project_scope_fkey")
   connectionId        String
   connection          WhatsAppConnection            @relation(fields: [projectId, connectionId], references: [projectId, id], onDelete: Cascade, map: "WorkerOnboardingFlowSession_connection_scope_fkey")
-  claim               WorkerOnboardingClaim          @relation("WorkerOnboardingClaimFlowSession", fields: [organizationId, projectId, connectionId, claimId], references: [organizationId, projectId, connectionId, id], onDelete: Cascade, map: "WorkerOnboardingFlowSession_claim_scope_fkey")
-  phoneNumberId       String                         @db.VarChar(40)
-  blueprintKey        String                         @db.VarChar(100)
-  flowId              String                         @db.VarChar(40)
-  screenId            String                         @db.VarChar(30)
-  flowType            String                         @db.VarChar(64)
-  sourceExternalId    String                         @db.VarChar(512)
-  noticeVersion       String                         @db.VarChar(64)
-  noticeContentSha256 String                         @db.Char(64)
-  tokenSha256         String                         @unique @db.Char(64)
+  claim               WorkerOnboardingClaim         @relation("WorkerOnboardingClaimFlowSession", fields: [organizationId, projectId, connectionId, claimId], references: [organizationId, projectId, connectionId, id], onDelete: Cascade, map: "WorkerOnboardingFlowSession_claim_scope_fkey")
+  phoneNumberId       String                        @db.VarChar(40)
+  blueprintKey        String                        @db.VarChar(100)
+  flowId              String                        @db.VarChar(40)
+  screenId            String                        @db.VarChar(30)
+  flowType            String                        @db.VarChar(64)
+  sourceExternalId    String                        @db.VarChar(512)
+  noticeVersion       String                        @db.VarChar(64)
+  noticeContentSha256 String                        @db.Char(64)
+  tokenSha256         String                        @unique @db.Char(64)
   expiresAt           DateTime
   deliveryAttemptedAt DateTime?
   deliveryRejectedAt  DateTime?
   sentAt              DateTime?
-  providerMessageId   String?                        @unique @db.VarChar(500)
+  providerMessageId   String?                       @unique @db.VarChar(500)
   /// Server-side evidence that INIT served the pinned notice; not proof that a person read it.
   privacyPresentedAt  DateTime?
   submittedAt         DateTime?
   consumedAt          DateTime?
-  consumedExternalId  String?                        @db.VarChar(512)
+  consumedExternalId  String?                       @db.VarChar(512)
   endpointRequests    WhatsAppFlowEndpointRequest[]
-  createdAt           DateTime                       @default(now())
-  updatedAt           DateTime                       @updatedAt
+  createdAt           DateTime                      @default(now())
+  updatedAt           DateTime                      @updatedAt
 
   @@unique([organizationId, projectId, connectionId, claimId], map: "WorkerOnboardingFlowSession_claim_scope_key")
   @@unique([projectId, sourceExternalId, blueprintKey], map: "WorkerOnboardingFlowSession_source_key")

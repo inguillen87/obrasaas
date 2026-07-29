@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 
 const DEFAULT_TOKEN_TTL_SECONDS = 2 * 60 * 60;
 const LOCAL_DEVELOPMENT_SECRET = "obrasaas-local-only-webview-secret";
+const MIN_WEBVIEW_SECRET_BYTES = 32;
 
 export const ATTENDANCE_ACTIONS = Object.freeze({
   CHECK_IN: "CHECK_IN",
@@ -100,10 +101,16 @@ function isHostedRuntime() {
 }
 
 function resolveWebviewSecret(explicitSecret) {
-  const secret = explicitSecret || process.env.WEBVIEW_TOKEN_SECRET || process.env.JWT_SECRET;
-  if (secret) return secret;
-  if (!isHostedRuntime()) return LOCAL_DEVELOPMENT_SECRET;
-  throw new Error("WEBVIEW_TOKEN_SECRET is required in production.");
+  const hosted = isHostedRuntime();
+  const secret = explicitSecret
+    || process.env.WEBVIEW_TOKEN_SECRET
+    || (!hosted ? process.env.JWT_SECRET : null)
+    || (!hosted ? LOCAL_DEVELOPMENT_SECRET : null);
+  if (!secret) throw new Error("WEBVIEW_TOKEN_SECRET is required in production.");
+  if (Buffer.byteLength(String(secret), "utf8") < MIN_WEBVIEW_SECRET_BYTES) {
+    throw new Error(`WEBVIEW_TOKEN_SECRET must contain at least ${MIN_WEBVIEW_SECRET_BYTES} bytes.`);
+  }
+  return secret;
 }
 
 function sign(payload, secret) {

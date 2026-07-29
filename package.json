@@ -19,6 +19,7 @@
     "verify:canonical-tasks-migration": "node scripts/verify-canonical-tasks-migration.mjs",
     "verify:project-execution-migration": "node scripts/verify-project-execution-migration.mjs",
     "verify:progress-journal-migration": "node scripts/verify-progress-journal-migration.mjs",
+    "verify:progress-evidence-location-capture-migration": "node scripts/verify-progress-evidence-location-capture-migration.mjs",
     "verify:protected-upload-migration": "node scripts/verify-protected-upload-migration.mjs",
     "verify:whatsapp-media-asset-migration": "node scripts/verify-whatsapp-media-asset-migration.mjs",
     "verify:visual-progress-migration": "node scripts/verify-visual-progress-migration.mjs",

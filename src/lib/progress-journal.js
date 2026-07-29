@@ -77,6 +77,13 @@ function safeAttachment(item, includeSourceEvidence) {
 }
 export function serializeProgressEvidence(item, { includeSourceEvidence = false } = {}) {
   const sourcedFromWhatsApp = Boolean(item.sourceMessageId);
+  const location = item.locationVerification
+    ? {
+        capturedAt: item.locationCapturedAt?.toISOString?.() || null,
+        source: item.locationSource || null,
+        verification: item.locationVerification,
+      }
+    : null;
   return {
     id: item.id,
     projectId: item.projectId,
@@ -84,9 +91,14 @@ export function serializeProgressEvidence(item, { includeSourceEvidence = false 
     authorWorkerId: item.authorWorkerId || null,
     capturedAt: item.capturedAt?.toISOString?.() || null,
     caption: item.caption || null,
-    latitude: item.latitude?.toString?.() || null,
-    longitude: item.longitude?.toString?.() || null,
-    accuracyMeters: item.accuracyMeters?.toString?.() || null,
+    location,
+    ...(includeSourceEvidence
+      ? {
+          latitude: item.latitude?.toString?.() || null,
+          longitude: item.longitude?.toString?.() || null,
+          accuracyMeters: item.accuracyMeters?.toString?.() || null,
+        }
+      : {}),
     status: item.status,
     reviewNote: item.reviewNote || null,
     revision: item.revision,

@@ -181,6 +181,7 @@ export async function POST(request) {
       await requireFieldWorkerCapacity(tx, access);
       const created = await tx.worker.create({
         data: {
+          organizationId: scope.organizationId,
           projectId: scope.projectId,
           name: input.name,
           phone: input.phone,

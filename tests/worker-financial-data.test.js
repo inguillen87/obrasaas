@@ -365,7 +365,7 @@ test('ciphertext tampering and every AAD scope change fail authentication', () =
 test('ciphertexts cannot be swapped between sensitive fields in the same record', () => {
   const keyRegistry = registry();
   const encrypted = encryptWorkerFinancialPayload(
-    { address: '+5492615550123' },
+    { address: '+15551230002' },
     channelBinding(),
     { registry: keyRegistry },
   );

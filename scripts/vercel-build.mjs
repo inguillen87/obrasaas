@@ -21,6 +21,9 @@ const WORKER_IDENTITY_VERIFIER_PATH = fileURLToPath(
 const PROGRESS_JOURNAL_VERIFIER_PATH = fileURLToPath(
   new URL("./verify-progress-journal-migration.mjs", import.meta.url),
 );
+const PROGRESS_EVIDENCE_LOCATION_CAPTURE_VERIFIER_PATH = fileURLToPath(
+  new URL("./verify-progress-evidence-location-capture-migration.mjs", import.meta.url),
+);
 const PROTECTED_UPLOAD_VERIFIER_PATH = fileURLToPath(
   new URL("./verify-protected-upload-migration.mjs", import.meta.url),
 );
@@ -312,6 +315,7 @@ export async function runVercelBuild({
     next: require.resolve("next/dist/bin/next"),
     workerIdentityVerifier: WORKER_IDENTITY_VERIFIER_PATH,
     progressJournalVerifier: PROGRESS_JOURNAL_VERIFIER_PATH,
+    progressEvidenceLocationCaptureVerifier: PROGRESS_EVIDENCE_LOCATION_CAPTURE_VERIFIER_PATH,
     protectedUploadVerifier: PROTECTED_UPLOAD_VERIFIER_PATH,
     whatsappMediaAssetVerifier: WHATSAPP_MEDIA_ASSET_VERIFIER_PATH,
     visualProgressVerifier: VISUAL_PROGRESS_VERIFIER_PATH,
@@ -343,6 +347,9 @@ export async function runVercelBuild({
       PROGRESS_JOURNAL_MIGRATION_DATABASE_URL:
         environment[plan.migrationDatabaseEnvironment],
       PROGRESS_JOURNAL_MIGRATION_SCHEMA: "public",
+      PROGRESS_EVIDENCE_LOCATION_CAPTURE_MIGRATION_DATABASE_URL:
+        environment[plan.migrationDatabaseEnvironment],
+      PROGRESS_EVIDENCE_LOCATION_CAPTURE_MIGRATION_SCHEMA: "public",
       PROTECTED_UPLOAD_MIGRATION_DATABASE_URL:
         environment[plan.migrationDatabaseEnvironment],
       PROTECTED_UPLOAD_MIGRATION_SCHEMA: "public",
@@ -376,6 +383,15 @@ export async function runVercelBuild({
       [cliPaths.whatsappMediaAssetVerifier],
       { ...sharedOptions, env: verificationEnvironment },
     );
+    // Preserve the injectable CLI contract used by older local harnesses while
+    // the default production path always includes the new verifier.
+    if (cliPaths.progressEvidenceLocationCaptureVerifier) {
+      await runner(
+        process.execPath,
+        [cliPaths.progressEvidenceLocationCaptureVerifier],
+        { ...sharedOptions, env: verificationEnvironment },
+      );
+    }
     await runner(
       process.execPath,
       [cliPaths.visualProgressVerifier],

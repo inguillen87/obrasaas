@@ -193,6 +193,7 @@ function fakePrisma({
   tasks = [{ id: 'task-a', progress: 37 }, { id: 'task-b', progress: 12 }],
   auditFailure = null,
   p2002Once = false,
+  captureSession = null,
 } = {}) {
   const calls = [];
   const evidence = [];
@@ -272,6 +273,37 @@ function fakePrisma({
           : null;
       },
     },
+    progressEvidenceCaptureSession: {
+      async findFirst(args) {
+        calls.push(['location-capture-read', args]);
+        if (!captureSession) return null;
+        const where = args.where;
+        return captureSession.organizationId === where.organizationId
+          && captureSession.projectId === where.projectId
+          && captureSession.workerId === where.workerId
+          && captureSession.mediaAssetId === where.mediaAssetId
+          ? { ...captureSession }
+          : null;
+      },
+      async updateMany(args) {
+        calls.push(['location-capture-update', args]);
+        if (
+          !captureSession
+          || captureSession.id !== args.where.id
+          || captureSession.projectId !== args.where.projectId
+          || captureSession.status !== args.where.status
+          || captureSession.revision !== args.where.revision
+        ) return { count: 0 };
+        captureSession = {
+          ...captureSession,
+          ...args.data,
+          revision: args.data.revision?.increment === 1
+            ? captureSession.revision + 1
+            : args.data.revision ?? captureSession.revision,
+        };
+        return { count: 1 };
+      },
+    },
     progressEvidence: {
       async findFirst(args) {
         calls.push(['evidence-read-operation', args]);
@@ -327,11 +359,13 @@ function fakePrisma({
       calls.push(['transaction']);
       const evidenceBefore = evidence.slice();
       const auditsBefore = audits.slice();
+      const captureBefore = captureSession ? { ...captureSession } : null;
       try {
         return await callback(transaction);
       } catch (error) {
         evidence.splice(0, evidence.length, ...evidenceBefore);
         audits.splice(0, audits.length, ...auditsBefore);
+        if (captureBefore) captureSession = { ...captureBefore };
         if (error?.code === 'P2002' && competingRow) {
           evidence.push(competingRow);
           competingRow = null;
@@ -340,7 +374,14 @@ function fakePrisma({
       }
     },
   };
-  return { prisma, calls, evidence, audits, tasks };
+  return {
+    prisma,
+    calls,
+    evidence,
+    audits,
+    tasks,
+    captureSession: () => captureSession,
+  };
 }
 
 function linkInput(overrides = {}) {
@@ -353,6 +394,40 @@ function linkInput(overrides = {}) {
     idempotencyKey: 'progress-link-key-a',
     correlationId: 'request-a',
     clock: () => NOW,
+    ...overrides,
+  };
+}
+
+function evidenceLocationCapture(overrides = {}) {
+  return {
+    id: 'location-capture-a',
+    organizationId: 'organization-a',
+    projectId: 'project-a',
+    workerId: 'worker-a',
+    connectionId: 'connection-a',
+    mediaAssetId: 'media-asset-a',
+    status: 'LOCATION_CAPTURED',
+    revision: 1,
+    tokenHash: 'd'.repeat(64),
+    privacyNoticeVersion: '2026-07-29',
+    privacyNoticeContentSha256: 'e'.repeat(64),
+    privacyAcceptedAt: new Date('2026-07-26T17:46:00.000Z'),
+    issuedAt: new Date('2026-07-26T17:45:30.000Z'),
+    expiresAt: new Date('2026-07-26T18:05:30.000Z'),
+    locationCapturedAt: new Date('2026-07-26T17:46:00.000Z'),
+    locationReceivedAt: new Date('2026-07-26T17:46:01.000Z'),
+    latitude: -34.6037,
+    longitude: -58.3816,
+    accuracyMeters: 8.5,
+    locationSource: 'WEBVIEW_GEOLOCATION',
+    locationVerification: 'IN_GEOFENCE',
+    distanceMeters: 12.4,
+    geofenceRadiusMeters: 100,
+    operationKeyHash: 'f'.repeat(64),
+    requestFingerprint: '1'.repeat(64),
+    consumedAt: null,
+    expiredAt: null,
+    cancelledAt: null,
     ...overrides,
   };
 }
@@ -429,6 +504,137 @@ test('uses a CLAIMED WhatsAppMediaAsset as exclusive v2 authority and ignores le
   assert.equal(database.calls.some(([name]) => name === 'connection-find'), false);
   assert.equal(database.audits[0].metadata.mediaAssetId, 'media-asset-a');
   assert.doesNotMatch(JSON.stringify(result), /legacy\.invalid|forged\.pdf|"assetId"/);
+});
+
+test('copies one purpose-bound device-geolocation capture into the exact Meta photo and consumes it atomically', async () => {
+  const message = sourceMessage({ whatsappMediaAsset: managedMediaAsset() });
+  const database = fakePrisma({
+    message,
+    captureSession: evidenceLocationCapture(),
+  });
+
+  const result = await linkWhatsAppMessageToProgressEvidence(database.prisma, linkInput());
+
+  assert.equal(result.replayed, false);
+  assert.equal(database.evidence[0].locationCaptureSessionId, 'location-capture-a');
+  assert.equal(database.evidence[0].locationSource, 'WEBVIEW_GEOLOCATION');
+  assert.equal(database.evidence[0].locationVerification, 'IN_GEOFENCE');
+  assert.equal(database.evidence[0].latitude, -34.6037);
+  assert.equal(database.evidence[0].longitude, -58.3816);
+  assert.equal(database.evidence[0].accuracyMeters, 8.5);
+  assert.equal(database.captureSession().status, 'CONSUMED');
+  assert.equal(database.captureSession().revision, 2);
+  assert.equal(result.evidence.location.verification, 'IN_GEOFENCE');
+  assert.equal(result.evidence.latitude, '-34.6037');
+  assert.equal(result.evidence.longitude, '-58.3816');
+  assert.equal(database.audits[0].metadata.locationAccuracyBand, 'LE_15M');
+  assert.doesNotMatch(
+    JSON.stringify(database.audits[0]),
+    /-34\.6037|-58\.3816|"latitude"|"longitude"/,
+  );
+  assert.equal(database.tasks[0].progress, 37);
+});
+
+test('replays the exact photo link after its geolocation capture becomes consumed', async () => {
+  const message = sourceMessage({ whatsappMediaAsset: managedMediaAsset() });
+  const database = fakePrisma({
+    message,
+    captureSession: evidenceLocationCapture(),
+  });
+
+  const first = await linkWhatsAppMessageToProgressEvidence(database.prisma, linkInput());
+  const replay = await linkWhatsAppMessageToProgressEvidence(database.prisma, linkInput());
+
+  assert.equal(first.replayed, false);
+  assert.equal(replay.replayed, true);
+  assert.equal(replay.evidence.id, first.evidence.id);
+  assert.equal(database.evidence.length, 1);
+  assert.equal(database.audits.length, 1);
+  assert.equal(database.captureSession().status, 'CONSUMED');
+  assert.equal(database.captureSession().revision, 2);
+});
+
+test('accepts a stored capture within the same bounded future-skew contract used at capture time', async () => {
+  const message = sourceMessage({ whatsappMediaAsset: managedMediaAsset() });
+  const database = fakePrisma({
+    message,
+    captureSession: evidenceLocationCapture({
+      locationCapturedAt: new Date('2026-07-26T17:46:30.000Z'),
+      locationReceivedAt: new Date('2026-07-26T17:46:00.000Z'),
+    }),
+  });
+
+  const result = await linkWhatsAppMessageToProgressEvidence(database.prisma, linkInput());
+
+  assert.equal(result.replayed, false);
+  assert.equal(database.evidence[0].locationCapturedAt.toISOString(), '2026-07-26T17:46:30.000Z');
+  assert.equal(database.captureSession().status, 'CONSUMED');
+});
+
+test('does not let an administrator link a photo while its geolocation capture is still pending', async () => {
+  const message = sourceMessage({ whatsappMediaAsset: managedMediaAsset() });
+  const database = fakePrisma({
+    message,
+    captureSession: evidenceLocationCapture({
+      status: 'AWAITING_LOCATION',
+      revision: 0,
+      locationCapturedAt: null,
+      locationReceivedAt: null,
+      latitude: null,
+      longitude: null,
+      accuracyMeters: null,
+      locationSource: null,
+      locationVerification: null,
+      distanceMeters: null,
+      operationKeyHash: null,
+      requestFingerprint: null,
+      privacyAcceptedAt: null,
+    }),
+  });
+
+  await assert.rejects(
+    linkWhatsAppMessageToProgressEvidence(database.prisma, linkInput()),
+    (error) => (
+      error instanceof WhatsAppProgressEvidenceError
+      && error.code === 'WHATSAPP_PROGRESS_EVIDENCE_LOCATION_PENDING'
+      && error.status === 409
+    ),
+  );
+  assert.equal(database.evidence.length, 0);
+  assert.equal(database.captureSession().status, 'AWAITING_LOCATION');
+});
+
+test('links an expired opt-in as unlocated evidence and preserves the reason in the audit', async () => {
+  const message = sourceMessage({ whatsappMediaAsset: managedMediaAsset() });
+  const database = fakePrisma({
+    message,
+    captureSession: evidenceLocationCapture({
+      status: 'AWAITING_LOCATION',
+      revision: 0,
+      expiresAt: new Date('2026-07-26T17:59:00.000Z'),
+      locationCapturedAt: null,
+      locationReceivedAt: null,
+      latitude: null,
+      longitude: null,
+      accuracyMeters: null,
+      locationSource: null,
+      locationVerification: null,
+      distanceMeters: null,
+      operationKeyHash: null,
+      requestFingerprint: null,
+      privacyAcceptedAt: null,
+    }),
+  });
+
+  const result = await linkWhatsAppMessageToProgressEvidence(database.prisma, linkInput());
+
+  assert.equal(result.replayed, false);
+  assert.equal(database.captureSession().status, 'EXPIRED');
+  assert.equal(database.evidence[0].locationCaptureSessionId, undefined);
+  assert.equal(database.evidence[0].latitude, null);
+  assert.equal(database.audits[0].metadata.locationCaptureSessionId, 'location-capture-a');
+  assert.equal(database.audits[0].metadata.locationCaptureStatus, 'EXPIRED');
+  assert.equal(Object.hasOwn(database.audits[0].metadata, 'locationCapturedAt'), false);
 });
 
 test('v2 request fingerprint binds the durable asset id', async () => {
@@ -611,9 +817,12 @@ test('progress evidence serialization never exposes storage identities, URLs or 
       url: 'https://must-not-leak.test',
       storage: { publicId: 'secret-public-id', assetId: 'secret-asset-id' },
     },
-    latitude: null,
-    longitude: null,
-    accuracyMeters: null,
+    locationCapturedAt: new Date('2026-07-26T17:46:00.000Z'),
+    locationSource: 'WEBVIEW_GEOLOCATION',
+    locationVerification: 'REVIEW_REQUIRED',
+    latitude: -34.6037,
+    longitude: -58.3816,
+    accuracyMeters: 42,
     status: 'PENDING',
     reviewNote: null,
     revision: 0,
@@ -627,6 +836,16 @@ test('progress evidence serialization never exposes storage identities, URLs or 
 
   assert.deepEqual(restricted.attachment, { available: true, restricted: true });
   assert.deepEqual(restricted.source, { channel: 'whatsapp' });
+  assert.deepEqual(restricted.location, {
+    capturedAt: '2026-07-26T17:46:00.000Z',
+    source: 'WEBVIEW_GEOLOCATION',
+    verification: 'REVIEW_REQUIRED',
+  });
+  assert.equal(Object.hasOwn(restricted, 'latitude'), false);
+  assert.equal(Object.hasOwn(restricted, 'longitude'), false);
+  assert.equal(authorized.latitude, '-34.6037');
+  assert.equal(authorized.longitude, '-58.3816');
+  assert.equal(authorized.accuracyMeters, '42');
   assert.equal(authorized.attachment.href, '/api/evidence/message-a');
   assert.equal(authorized.attachment.filename, 'avance.jpg');
   for (const dto of [restricted, authorized]) {

@@ -686,17 +686,19 @@ export async function sendWhatsAppText({
       }),
       signal: AbortSignal.timeout(20_000),
     });
-  } catch (error) {
+  } catch {
     throw new WhatsAppMetaSendError(
       'Meta did not confirm whether the text message was accepted.',
-      { ambiguous: true, cause: error },
+      { ambiguous: true },
     );
   }
 
   const result = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const message = String(result?.error?.message || "Meta rejected the text message.").slice(0, 500);
-    throw new WhatsAppMetaSendError(`Meta send failed (${response.status}): ${message}`, {
+    // Provider text is intentionally excluded: a proxy may reflect the sent
+    // body, including one-time links, into an error message that later reaches
+    // durable failure handling or logs.
+    throw new WhatsAppMetaSendError(`Meta send failed (${response.status}).`, {
       status: response.status,
       providerCode: result?.error?.code || null,
       ambiguous: response.status >= 500,

@@ -6,7 +6,7 @@ Este plan mantiene la secuencia del PDF y separa capacidades operativas de capac
 
 El estado se expresa por nivel de evidencia: código y pruebas locales, migración en Preview aislado, journey UI en Preview y E2E externo. No se usa “desplegado” como sinónimo de “operativo con un proveedor real”.
 
-- `npm test`: 1.538/1.538 verde; lint y build de Next 16.2.11 verdes en el worktree;
+- las validaciones locales relevantes, lint y build de Next 16.2.11 están verdes en el worktree; este dato no acredita despliegue, migración remota ni E2E de proveedor;
 - las migraciones y verificadores de baseline/forecast fueron aprobados en el Preview aislado de la rama `codex/platform-ux-foundation`; Production permanece fuera del alcance;
 - el commit `0a00f37` quedó `Ready` en Vercel Preview: se detectaron 100 migraciones sin pendientes y pasaron los verificadores de H3.1, media y dispatch/costo de IA; el corte conserva [deployment IDs, timestamps y smokes sanitizados](./evidence/2026-07-29-preview-0a00f37.md), pero no acredita aún los journeys UI autenticados ni la ejecución observada del cron;
 - falta cerrar el smoke UI de publicación de baseline y forecast en el tenant de prueba, porque el acceso local directo a la conexión Preview está deliberadamente protegido y no se sustituye con una conexión de Production;
@@ -22,10 +22,13 @@ El estado se expresa por nivel de evidencia: código y pruebas locales, migraci�
 
 ## Prioridad inmediata: H1/H2 — Meta, asistencia y evidencia real
 
-- H1: webhook firmado, inbound/outbound correlacionado, estados, retry auditado y asistencia GPS real en un tenant piloto aislado;
+- H1: webhook firmado, inbound/outbound correlacionado, estados, retry auditado y asistencia con geolocalización puntual reportada por el dispositivo en un tenant piloto aislado; la API del navegador no garantiza GPS, identidad ni presencia física;
 - las respuestas automáticas ya usan un journal durable `prepared → sending → accepted|failed|unknown`: un timeout, `408/425/429/5xx`, 2xx sin WAMID o correlación local irresuelta nunca repite el POST a Meta; el E2E externo sigue pendiente;
-- H2: foto Meta + comentario → storage privado → `ProgressEvidence` → revisión humana, sin inferir identidad ni GPS desde la imagen;
-- antes de enviar o aceptar datos reales: callback HTTPS, secretos exclusivos de Preview, allowlist de tenant/operario, retención y runbook de incidentes;
+- H2 local sólo se dispara para una imagen Meta de un remitente autorizado, no clasificada como médica y con comentario no vacío que comienza con `AVANCE:` o `PROGRESO:`. La misma transacción liga la sesión al `WhatsAppMediaAsset` exacto del webhook; no hay correlación por tiempo, EXIF, URL ni descriptor del cliente;
+- el journal durable conserva únicamente `{ version, sessionId }`, sin bearer ni enlace. Después de ganar el claim de envío, el worker revalida tenant/obra/conexión/operario/asset y materializa el enlace sólo en memoria; una sesión vencida o con vigencia insuficiente produce un stale fallback sin secreto y conserva la foto sin ubicación;
+- el bearer viaja en `#token=...` y se elimina del navegador antes del `INIT`. La webview no usa `sessionStorage`: conserva la operación ambigua sólo en memoria, la purga por deadline y, tras recargar, consulta al servidor. El operario puede consentir una lectura puntual o elegir `Continuar sin ubicación`; el opt-out CAS no escribe coordenadas ni afecta asistencia;
+- cierre H2 externo: aplicar y verificar `20260729100000_progress_evidence_location_capture` en Neon Preview —todavía no está aplicada— y recorrer una foto Meta real → enlace → `INIT` → captura u opt-out → Inbox/Progreso en un celular. No existe aún evidencia Meta E2E real para este journey;
+- antes de enviar o aceptar datos reales: callback HTTPS, secretos exclusivos del ambiente, allowlist de tenant/operario, matriz de retención, DSAR integral, backups/restores, purga verificable, rate limiting distribuido, WAF y runbook de incidentes;
 - Twilio Sandbox queda sólo como contingencia de transporte: no valida WhatsApp Flows, Data Endpoint ni Embedded Signup de Meta.
 
 ## Vertical interna en consolidación: S5.1 + S17-A — foto canónica y visión gobernada
@@ -36,6 +39,7 @@ El estado se expresa por nivel de evidencia: código y pruebas locales, migraci�
 - OpenAI es el candidato primario de Vision; Qwen3-VL/GLM-5V son challengers visuales y GLM-OCR/GLM-5.2 especialistas OCR/texto evaluables. No hay fan-out sobre evidencia real;
 - la clave OpenAI dedicada, el presupuesto y el recibo inmutable ya están aislados/verificados en Preview; antes de usar datos reales deben recorrerse replay/worker y conciliación interna autenticados con comprobante recuperable, cerrar DPA/retención y mantener `detail:high` con prompt cache implícito deshabilitado. `RECONCILED_USAGE` permanece cerrado hasta derivar costo desde usage y pricing persistidos;
 - faltan foto Meta real, dataset consentido, ground truth, benchmark, DPA/retención y observabilidad de costo/latencia;
+- H5 sigue abierto: la revisión humana visual todavía no crea ni aplica un escenario de forecast, y falta recorrer baseline inmutable → escenario revisado → deltas Gantt en UI;
 - las cargas web privadas siguen limitadas a 4 MiB; carga directa autorizada, checksum y finalización server-side quedan como cierre para videos/documentos mayores.
 
 ## H3.1/H4 — alta de operario y cobro seguro
@@ -44,7 +48,7 @@ El estado se expresa por nivel de evidencia: código y pruebas locales, migraci�
 - `privacyPresentedAt` acredita que el Data Endpoint sirvió el aviso, no lectura ni comprensión; el copy y el circuito laboral deben pasar revisión legal antes de trabajadores reales;
 - la purga H3.1 no es un DSAR integral: `WorkerPerson`, `WorkerChannelIdentity`, `Worker`, conversaciones, mensajes y backups requieren otro sprint. El teléfono raw interno de `Conversation.externalId` también es deuda pendiente;
 - cierre H3.1: completar smoke UI/runtime, observar cron/readiness, terminar revisión legal y completar Meta E2E. Esas evidencias funcionales y externas siguen pendientes;
-- H4 mantiene CUIL/CBU/CVU/alias en un dominio cifrado, enmascarado y auditado, nunca en Inbox o snapshots compartidos; faltan Flow/UI de cobro, proveedor confiable de titularidad y comprobante privado. Nunca se ejecuta un pago automático.
+- H4 sigue pendiente como journey de pago: mantiene CUIL/CBU/CVU/alias en un dominio cifrado, enmascarado y auditado, nunca en Inbox o snapshots compartidos, pero faltan consentimiento específico por destino/canal, Flow/UI de cobro, proveedor confiable de titularidad y comprobante privado. Nunca se verifica, activa ni ejecuta un pago automáticamente desde IA o WhatsApp.
 
 ## S20 — campo offline confiable
 
@@ -96,7 +100,7 @@ Métricas/SLO, outbox, sincronización, errores por tenant, auditoría, runbooks
 
 ## Release Gate R0 + H0-H6 — piloto y cutover
 
-El piloto no se numera como S23: avanza en paralelo como dependencia externa. Requiere tenant piloto, datos reales minimizados, checklist legal, retención, soporte, rollback, métricas de adopción y decisión de salida. No se habilita producción general por pasar solamente lint/build.
+El piloto no se numera como S23: avanza en paralelo como dependencia externa. Requiere tenant piloto, datos reales minimizados, checklist legal, retención/DSAR, backups/restores, purga demostrable, rate limiting distribuido/WAF, soporte, rollback, métricas de adopción y decisión de salida. No se habilita un piloto con trabajadores reales ni producción general por pasar solamente lint/build.
 
 ## Gates comunes de salida
 
@@ -106,3 +110,5 @@ El piloto no se numera como S23: avanza en paralelo como dependencia externa. Re
 4. Auditoría de cada mutación y evidencia reproducible.
 5. Lint, build, suite completa y prueba contra PostgreSQL real.
 6. Runbook operativo, rollback y criterio explícito de no-go.
+7. Retención, DSAR, backups/restores y purga verificados con datos sintéticos antes de incorporar datos laborales reales.
+8. Rate limiting distribuido y WAF probados bajo múltiples instancias; límites sólo en memoria no satisfacen el gate.

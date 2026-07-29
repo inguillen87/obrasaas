@@ -4,6 +4,10 @@ import { isWhatsAppProgressMediaForProject } from '../private-receipts.js';
 import { subscriptionAllowsWrites } from '../plans.js';
 import { runOperationalProjectMutation } from '../project-write-policy.js';
 import { serializeProgressEvidence } from '../progress-journal.js';
+import {
+  PROGRESS_EVIDENCE_LOCATION_FUTURE_SKEW_MS,
+  PROGRESS_EVIDENCE_LOCATION_MAX_AGE_MS,
+} from '../progress-evidence-capture-sessions.js';
 import { isEnrichedInboundWhatsAppMediaEvent } from './media.js';
 import {
   resolveClaimedWhatsAppMessageMedia,
@@ -85,7 +89,16 @@ function sourceOperationKeyHash(scope, idempotencyKey) {
   ]);
 }
 
-function sourceRequestFingerprint({ scope, conversationId, message, taskId, workerId, media, caption }) {
+function sourceRequestFingerprint({
+  scope,
+  conversationId,
+  message,
+  taskId,
+  workerId,
+  media,
+  caption,
+  locationCaptureContext,
+}) {
   const payload = {
     organizationId: scope.organizationId,
     projectId: scope.projectId,
@@ -102,10 +115,206 @@ function sourceRequestFingerprint({ scope, conversationId, message, taskId, work
     payload.mediaAssetId = media.assetId;
     payload.mediaSchemaVersion = media.schemaVersion;
   }
+  if (locationCaptureContext) {
+    const { session, location } = locationCaptureContext;
+    payload.locationCapture = location
+      ? {
+          sessionId: session.id,
+          requestFingerprint: location.requestFingerprint,
+          capturedAt: location.locationCapturedAt.toISOString(),
+          source: location.locationSource,
+          verification: location.locationVerification,
+          latitude: decimalText(location.latitude),
+          longitude: decimalText(location.longitude),
+          accuracyMeters: decimalText(location.accuracyMeters),
+        }
+      : {
+          sessionId: session.id,
+          status: session.status,
+        };
+  }
   return sha256(
-    `${media.assetId ? MANAGED_SOURCE_CONTRACT_VERSION : SOURCE_CONTRACT_VERSION}:request`,
+    `${media.assetId ? MANAGED_SOURCE_CONTRACT_VERSION : SOURCE_CONTRACT_VERSION}:request${
+      locationCaptureContext ? ':location-v1' : ''
+    }`,
     payload,
   );
+}
+
+function decimalText(value) {
+  if (value === null || value === undefined) return null;
+  const normalized = value?.toString?.() ?? String(value);
+  return normalized === '' ? null : normalized;
+}
+
+function validDate(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function completeLocationCapture(session, expected) {
+  if (!session) return null;
+  if (
+    session.organizationId !== expected.scope.organizationId
+    || session.projectId !== expected.scope.projectId
+    || session.workerId !== expected.workerId
+    || session.mediaAssetId !== expected.mediaAssetId
+  ) {
+    throw invalidSource('La captura de ubicación no pertenece a la foto o al operario de origen.');
+  }
+
+  if (session.status === 'AWAITING_LOCATION') {
+    const expiresAt = validDate(session.expiresAt);
+    if (!expiresAt) {
+      throw invalidSource('La captura de ubicación pendiente no tiene un vencimiento confiable.');
+    }
+    if (expiresAt && expiresAt.getTime() > expected.now.getTime()) {
+      throw new WhatsAppProgressEvidenceError(
+        'La foto espera que el operario confirme una lectura puntual de ubicación.',
+        {
+          code: 'WHATSAPP_PROGRESS_EVIDENCE_LOCATION_PENDING',
+          status: 409,
+        },
+      );
+    }
+    return null;
+  }
+  if (['EXPIRED', 'CANCELLED'].includes(session.status)) return null;
+  if (!['LOCATION_CAPTURED', 'CONSUMED'].includes(session.status)) {
+    throw invalidSource('La captura de ubicación tiene un estado incompatible.');
+  }
+
+  const locationCapturedAt = validDate(session.locationCapturedAt);
+  const locationReceivedAt = validDate(session.locationReceivedAt);
+  const privacyAcceptedAt = validDate(session.privacyAcceptedAt);
+  const issuedAt = validDate(session.issuedAt);
+  const expiresAt = validDate(session.expiresAt);
+  const latitude = Number(session.latitude);
+  const longitude = Number(session.longitude);
+  const accuracyMeters = Number(session.accuracyMeters);
+  if (
+    !locationCapturedAt
+    || !locationReceivedAt
+    || !privacyAcceptedAt
+    || !issuedAt
+    || !expiresAt
+    || locationReceivedAt.getTime() - locationCapturedAt.getTime()
+      > PROGRESS_EVIDENCE_LOCATION_MAX_AGE_MS
+    || locationCapturedAt.getTime() - locationReceivedAt.getTime()
+      > PROGRESS_EVIDENCE_LOCATION_FUTURE_SKEW_MS
+    || locationReceivedAt.getTime() < issuedAt.getTime()
+    || privacyAcceptedAt.getTime() > locationReceivedAt.getTime()
+    || locationReceivedAt.getTime() > expiresAt.getTime()
+    || typeof session.privacyNoticeVersion !== 'string'
+    || !session.privacyNoticeVersion.trim()
+    || !SHA256_PATTERN.test(String(session.privacyNoticeContentSha256 || '').toLowerCase())
+    || session.latitude === null
+    || session.latitude === undefined
+    || !Number.isFinite(latitude)
+    || latitude < -90
+    || latitude > 90
+    || session.longitude === null
+    || session.longitude === undefined
+    || !Number.isFinite(longitude)
+    || longitude < -180
+    || longitude > 180
+    || session.accuracyMeters === null
+    || session.accuracyMeters === undefined
+    || !Number.isFinite(accuracyMeters)
+    || accuracyMeters <= 0
+    || session.locationSource !== 'WEBVIEW_GEOLOCATION'
+    || !['IN_GEOFENCE', 'REVIEW_REQUIRED'].includes(session.locationVerification)
+    || !SHA256_PATTERN.test(String(session.requestFingerprint || '').toLowerCase())
+  ) {
+    throw invalidSource('La captura de ubicación está incompleta o no es verificable.');
+  }
+  return {
+    ...session,
+    locationCapturedAt,
+    locationReceivedAt,
+    privacyAcceptedAt,
+    latitude,
+    longitude,
+    accuracyMeters,
+  };
+}
+
+async function locationCaptureForSource(transaction, {
+  scope,
+  workerId,
+  mediaAssetId,
+  now,
+}) {
+  if (!mediaAssetId || !transaction.progressEvidenceCaptureSession?.findFirst) return null;
+  const session = await transaction.progressEvidenceCaptureSession.findFirst({
+    where: {
+      organizationId: scope.organizationId,
+      projectId: scope.projectId,
+      workerId,
+      mediaAssetId,
+    },
+  });
+  if (!session) return null;
+  if (session.status === 'AWAITING_LOCATION') {
+    const expiresAt = validDate(session.expiresAt);
+    if (expiresAt && expiresAt.getTime() <= now.getTime()) {
+      const expired = await transaction.progressEvidenceCaptureSession.updateMany({
+        where: {
+          id: session.id,
+          projectId: scope.projectId,
+          status: 'AWAITING_LOCATION',
+          revision: session.revision,
+        },
+        data: {
+          status: 'EXPIRED',
+          expiredAt: now,
+          revision: { increment: 1 },
+        },
+      });
+      if (expired.count === 1) {
+        const expiredSession = {
+          ...session,
+          status: 'EXPIRED',
+          expiredAt: now,
+          revision: session.revision + 1,
+        };
+        return { session: expiredSession, location: null };
+      }
+      const current = await transaction.progressEvidenceCaptureSession.findFirst({
+        where: {
+          id: session.id,
+          organizationId: scope.organizationId,
+          projectId: scope.projectId,
+          workerId,
+          mediaAssetId,
+        },
+      });
+      if (!current) throw invalidSource('La captura de ubicación dejó de estar disponible.');
+      const location = completeLocationCapture(current, {
+        scope,
+        workerId,
+        mediaAssetId,
+        now,
+      });
+      return { session: current, location };
+    }
+  }
+  const location = completeLocationCapture(session, {
+    scope,
+    workerId,
+    mediaAssetId,
+    now,
+  });
+  return { session, location };
+}
+
+function accuracyBand(accuracyMeters) {
+  if (!Number.isFinite(accuracyMeters)) return null;
+  if (accuracyMeters <= 15) return 'LE_15M';
+  if (accuracyMeters <= 50) return 'LE_50M';
+  if (accuracyMeters <= 100) return 'LE_100M';
+  return 'GT_100M';
 }
 
 function sourceNotFound() {
@@ -351,6 +560,14 @@ async function executeLink(prisma, context) {
     });
     if (!worker) throw invalidSource('El autor original ya no pertenece a esta obra.');
 
+    const locationCaptureContext = await locationCaptureForSource(transaction, {
+      scope: context.scope,
+      workerId: worker.id,
+      mediaAssetId: source.media.assetId || null,
+      now: context.now,
+    });
+    const locationCapture = locationCaptureContext?.location || null;
+
     const fingerprint = sourceRequestFingerprint({
       scope: context.scope,
       conversationId: context.conversationId,
@@ -359,6 +576,7 @@ async function executeLink(prisma, context) {
       workerId: worker.id,
       media: source.media,
       caption: source.caption,
+      locationCaptureContext,
     });
     const replayIdentity = {
       projectId: context.scope.projectId,
@@ -374,6 +592,9 @@ async function executeLink(prisma, context) {
       sourceMessageId: message.id,
     });
     if (existing) return replayOrThrow(existing, replayIdentity);
+    if (locationCapture?.status === 'CONSUMED') {
+      throw invalidSource('La captura de ubicación ya fue consumida por otra operación.');
+    }
 
     const evidence = await transaction.progressEvidence.create({
       data: {
@@ -387,9 +608,44 @@ async function executeLink(prisma, context) {
         capturedAt: source.sentAt,
         caption: source.caption,
         media: source.media,
+        ...(locationCapture
+          ? {
+              locationCaptureSessionId: locationCapture.id,
+              locationCapturedAt: locationCapture.locationCapturedAt,
+              locationSource: locationCapture.locationSource,
+              locationVerification: locationCapture.locationVerification,
+              latitude: locationCapture.latitude,
+              longitude: locationCapture.longitude,
+              accuracyMeters: locationCapture.accuracyMeters,
+            }
+          : {}),
         status: 'PENDING',
       },
     });
+    if (locationCapture) {
+      const consumed = await transaction.progressEvidenceCaptureSession.updateMany({
+        where: {
+          id: locationCapture.id,
+          projectId: context.scope.projectId,
+          status: 'LOCATION_CAPTURED',
+          revision: locationCapture.revision,
+        },
+        data: {
+          status: 'CONSUMED',
+          consumedAt: context.now,
+          revision: { increment: 1 },
+        },
+      });
+      if (consumed.count !== 1) {
+        throw new WhatsAppProgressEvidenceError(
+          'La ubicación cambió mientras se vinculaba la foto. Reintentá la operación.',
+          {
+            code: 'WHATSAPP_PROGRESS_EVIDENCE_LOCATION_CONFLICT',
+            status: 409,
+          },
+        );
+      }
+    }
     await transaction.auditLog.create({
       data: {
         organizationId: context.scope.organizationId,
@@ -407,6 +663,20 @@ async function executeLink(prisma, context) {
           sourceRequestFingerprint: fingerprint,
           mediaSha256: source.media.sha256,
           ...(source.media.assetId ? { mediaAssetId: source.media.assetId } : {}),
+          ...(locationCaptureContext
+            ? {
+                locationCaptureSessionId: locationCaptureContext.session.id,
+                locationCaptureStatus: locationCaptureContext.session.status,
+                ...(locationCapture
+                  ? {
+                      locationSource: locationCapture.locationSource,
+                      locationVerification: locationCapture.locationVerification,
+                      locationAccuracyBand: accuracyBand(locationCapture.accuracyMeters),
+                      locationCapturedAt: locationCapture.locationCapturedAt.toISOString(),
+                    }
+                  : {}),
+              }
+            : {}),
           ...(context.correlationId ? { correlationId: context.correlationId } : {}),
         },
       },

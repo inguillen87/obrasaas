@@ -50,6 +50,7 @@ const MESSAGE_OUTCOME_VERSION = 1;
 const MAX_WHATSAPP_TEXT_LENGTH = 4_096;
 const FLOW_PROMPT_PATTERN = /^[a-z0-9][a-z0-9-]{0,99}$/;
 const FLOW_SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const PROGRESS_EVIDENCE_LOCATION_DELIVERY_VERSION = 1;
 const SHA256_PATTERN = /^[a-f0-9]{64}$/;
 
 function invalidWebhookOutcome() {
@@ -62,6 +63,7 @@ export function createMessageWebhookOutcome({
   reply,
   flowPrompt = null,
   flowSessionId = null,
+  progressEvidenceLocationDelivery = null,
 } = {}) {
   if (typeof reply !== "string" || !reply.trim()) throw invalidWebhookOutcome();
   const normalizedFlowPrompt = flowPrompt === null || flowPrompt === undefined || flowPrompt === ""
@@ -84,12 +86,45 @@ export function createMessageWebhookOutcome({
   ) {
     throw invalidWebhookOutcome();
   }
+  const normalizedProgressEvidenceLocationDelivery = normalizeProgressEvidenceLocationDelivery(
+    progressEvidenceLocationDelivery,
+  );
+  if (normalizedProgressEvidenceLocationDelivery && normalizedFlowPrompt) {
+    throw invalidWebhookOutcome();
+  }
   return {
     version: MESSAGE_OUTCOME_VERSION,
     type: "message",
     reply: reply.slice(0, MAX_WHATSAPP_TEXT_LENGTH),
     flowPrompt: normalizedFlowPrompt,
     ...(normalizedFlowSessionId ? { flowSessionId: normalizedFlowSessionId } : {}),
+    ...(normalizedProgressEvidenceLocationDelivery
+      ? { progressEvidenceLocationDelivery: normalizedProgressEvidenceLocationDelivery }
+      : {}),
+  };
+}
+
+function normalizeProgressEvidenceLocationDelivery(value) {
+  if (value === null || value === undefined) return null;
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw invalidWebhookOutcome();
+  }
+  const keys = Object.keys(value).sort();
+  if (
+    keys.length !== 2
+    || keys[0] !== "sessionId"
+    || keys[1] !== "version"
+    || value.version !== PROGRESS_EVIDENCE_LOCATION_DELIVERY_VERSION
+  ) {
+    throw invalidWebhookOutcome();
+  }
+  const sessionId = typeof value.sessionId === "string"
+    ? value.sessionId.trim().toLowerCase()
+    : "";
+  if (!FLOW_SESSION_ID_PATTERN.test(sessionId)) throw invalidWebhookOutcome();
+  return {
+    version: PROGRESS_EVIDENCE_LOCATION_DELIVERY_VERSION,
+    sessionId,
   };
 }
 
@@ -123,12 +158,19 @@ export function readAppliedMessageWebhookOutcome(webhookEvent) {
   ) {
     throw invalidWebhookOutcome();
   }
+  const progressEvidenceLocationDelivery = normalizeProgressEvidenceLocationDelivery(
+    outcome.progressEvidenceLocationDelivery,
+  );
+  if (progressEvidenceLocationDelivery && outcome.flowPrompt) {
+    throw invalidWebhookOutcome();
+  }
   return {
     version: MESSAGE_OUTCOME_VERSION,
     type: "message",
     reply: outcome.reply,
     flowPrompt: outcome.flowPrompt || null,
     ...(outcome.flowSessionId ? { flowSessionId: outcome.flowSessionId } : {}),
+    ...(progressEvidenceLocationDelivery ? { progressEvidenceLocationDelivery } : {}),
   };
 }
 

@@ -32,6 +32,9 @@ import {
 import { ingestAndPersistInboundWhatsAppMedia } from "@/lib/whatsapp/media";
 import { sendWhatsAppFlow, sendWhatsAppText } from "@/lib/whatsapp/meta";
 import { processIncomingObraMessage } from "@/lib/whatsapp/obra-engine";
+import {
+  materializeProgressEvidenceLocationDelivery,
+} from "@/lib/whatsapp/progress-evidence-location-delivery";
 import { synchronizeWhatsAppTemplateStatus } from "@/lib/whatsapp/templates";
 import { validateStoredWebhookScope } from "@/lib/whatsapp/webhook-scope";
 
@@ -341,6 +344,8 @@ export async function deliverWhatsAppMessageOutcome({
   settleDelivery = settleAutomaticWhatsAppDelivery,
   sendFlow = trySendPublishedFlow,
   sendText = sendWhatsAppText,
+  materializeLocationDelivery = materializeProgressEvidenceLocationDelivery,
+  prisma = null,
 } = {}) {
   if (outcome?.quarantined === true) {
     return {
@@ -385,7 +390,10 @@ export async function deliverWhatsAppMessageOutcome({
     });
   }
 
-  async function settleProviderFailure(state, error, { providerDispatchStarted }) {
+  async function settleProviderFailure(state, error, {
+    providerDispatchStarted,
+    redactCause = false,
+  }) {
     let settlement;
     try {
       settlement = await settle(
@@ -404,7 +412,10 @@ export async function deliverWhatsAppMessageOutcome({
         deliveryReplayed: true,
       };
     }
-    throw automaticDeliveryError(settledState === "failed" ? "failed" : "unknown", error);
+    throw automaticDeliveryError(
+      settledState === "failed" ? "failed" : "unknown",
+      redactCause ? null : error,
+    );
   }
 
   let flowDelivery = { sent: false, providerMessageId: null };
@@ -424,11 +435,24 @@ export async function deliverWhatsAppMessageOutcome({
 
     providerMessageId = flowDelivery.providerMessageId;
     if (!flowDelivery.sent) {
+      let deliveryText = outcome.reply;
+      if (outcome.progressEvidenceLocationDelivery) {
+        const prepared = await materializeLocationDelivery(
+          prisma || getPrisma(),
+          {
+            descriptor: outcome.progressEvidenceLocationDelivery,
+            scope: deliveryScope,
+            recipientPhone: event.from,
+            eventId,
+          },
+        );
+        deliveryText = prepared.text;
+      }
       await assertSubscription(deliveryScope);
       providerDispatchStarted = true;
       const delivery = await sendText({
         to: event.from,
-        text: outcome.reply,
+        text: deliveryText,
         replyToMessageId: event.externalId,
         phoneNumberId: deliveryScope.phoneNumberId,
         scope: deliveryScope,
@@ -437,7 +461,13 @@ export async function deliverWhatsAppMessageOutcome({
     }
   } catch (error) {
     const state = automaticProviderFailureState(error, { providerDispatchStarted });
-    return settleProviderFailure(state, error, { providerDispatchStarted });
+    return settleProviderFailure(state, error, {
+      providerDispatchStarted,
+      // H2 text contains a one-time bearer only in memory. Even a malformed
+      // provider/proxy error must not carry reflected request content into the
+      // queue error chain or logs.
+      redactCause: Boolean(outcome.progressEvidenceLocationDelivery),
+    });
   }
 
   if (!providerMessageId) {

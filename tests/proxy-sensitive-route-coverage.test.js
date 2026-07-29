@@ -86,6 +86,7 @@ const PUBLIC_SELF_AUTHENTICATED_API_PATHS = [
   '/api/webhooks/whatsapp/flows/example',
   '/api/webviews/attendance',
   '/api/webviews/medical',
+  '/api/webviews/progress-evidence-location',
 ];
 
 test('Clerk proxy matches and protects every worker-sensitive API path', () => {

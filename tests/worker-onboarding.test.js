@@ -24,8 +24,8 @@ const SCOPE = Object.freeze({
   organizationId: 'organization-a',
   projectId: 'project-a',
 });
-const PHONE = '+5492615550123';
-const PROVIDER_SUBJECT = '5492615550123';
+const PHONE = '+15551230002';
+const PROVIDER_SUBJECT = '15551230002';
 const SENDER = Object.freeze({
   address: PHONE,
   providerSubject: PROVIDER_SUBJECT,
@@ -691,7 +691,7 @@ test('issue is an exact replay, rejects changed payload, and never returns the b
     issueWorkerOnboardingClaim(database.prisma, issueArgs(dependencies, {
       sender: {
         address: PHONE,
-        providerSubject: '5492615550999',
+        providerSubject: '15551230004',
       },
     })),
     (error) => error instanceof WorkerOnboardingError
@@ -906,7 +906,7 @@ test('submission requires the same scoped sender and is idempotent only for the 
       ...input,
       sender: {
         address: PHONE,
-        providerSubject: '5492615550999',
+        providerSubject: '15551230004',
       },
     }),
     (error) => error instanceof WorkerOnboardingError
@@ -1779,8 +1779,8 @@ test('list is cursor bounded, resolves effective expiry and exposes legal name o
 
   await issueWorkerOnboardingClaim(database.prisma, issueArgs(dependencies, {
     sender: {
-      address: '+5492615550777',
-      providerSubject: '5492615550777',
+      address: '+15551230003',
+      providerSubject: '15551230003',
     },
     claimToken: token(8),
     idempotencyKey: 'issue-request-002',

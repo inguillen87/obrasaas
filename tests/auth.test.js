@@ -67,6 +67,33 @@ test("webview tokens cannot cross purposes", () => {
   assert.equal(verifyWebviewToken("worker-123", token, { secret, now: issuedAt, purpose: "attendance" }), false);
 });
 
+test("webview signing rejects weak secrets and hosted JWT fallback", () => {
+  assert.throws(
+    () => generateWebviewToken("worker-123", { secret: "too-short" }),
+    /at least 32 bytes/i,
+  );
+
+  const previousNodeEnv = process.env.NODE_ENV;
+  const previousWebviewSecret = process.env.WEBVIEW_TOKEN_SECRET;
+  const previousJwtSecret = process.env.JWT_SECRET;
+  try {
+    process.env.NODE_ENV = "production";
+    delete process.env.WEBVIEW_TOKEN_SECRET;
+    process.env.JWT_SECRET = "jwt-secret-must-not-sign-hosted-webviews";
+    assert.throws(
+      () => generateWebviewToken("worker-123"),
+      /WEBVIEW_TOKEN_SECRET is required in production/i,
+    );
+  } finally {
+    if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previousNodeEnv;
+    if (previousWebviewSecret === undefined) delete process.env.WEBVIEW_TOKEN_SECRET;
+    else process.env.WEBVIEW_TOKEN_SECRET = previousWebviewSecret;
+    if (previousJwtSecret === undefined) delete process.env.JWT_SECRET;
+    else process.env.JWT_SECRET = previousJwtSecret;
+  }
+});
+
 test("new attendance tokens sign a versioned action and default to check-in", () => {
   const token = generateWebviewToken("worker-123", {
     secret,

@@ -18,7 +18,10 @@ registerHooks({
 const originalDatabaseUrl = process.env.DATABASE_URL;
 process.env.DATABASE_URL = 'postgresql://unit-test.invalid/obrasaas';
 
-const { applyWebhookMessageAtomically } = await import('../src/lib/db.js');
+const {
+  applyWebhookMessageAtomically,
+  progressEvidenceLocationCaptureEligible,
+} = await import('../src/lib/db.js');
 const { whatsAppMediaAssetHash } = await import('../src/lib/whatsapp/media-assets.js');
 
 after(() => {
@@ -27,7 +30,7 @@ after(() => {
   delete globalThis.__obraSaasPrisma;
 });
 
-test('Message, media claim and webhook appliedAt commit in one transaction', async () => {
+test('H2 atomically commits media/session/outcome while Inbox body remains bearer-free', async () => {
   const scope = {
     organizationId: 'organization-media-atomic',
     projectId: 'project-media-atomic',
@@ -40,6 +43,7 @@ test('Message, media claim and webhook appliedAt commit in one transaction', asy
     phoneNumberId: scope.phoneNumberId,
     from: '5491112345678',
     kind: 'image',
+    text: 'AVANCE: pared norte a medio terminar',
     media: {
       id: 'meta-media-atomic',
       assetId: 'asset-media-atomic',
@@ -49,6 +53,7 @@ test('Message, media claim and webhook appliedAt commit in one transaction', asy
   const worker = {
     id: 'worker-media-atomic',
     projectId: scope.projectId,
+    organizationId: null,
     phone: `+${event.from}`,
     name: 'Operario verificado',
     role: 'Albañil',
@@ -92,7 +97,7 @@ test('Message, media claim and webhook appliedAt commit in one transaction', asy
     contentSha256: 'a'.repeat(64),
     sizeBytes: 5,
     uploadAttemptCount: 1,
-    purgeEligibleAt: new Date('2026-07-29T12:00:00.000Z'),
+    purgeEligibleAt: new Date('2030-07-29T12:00:00.000Z'),
     messageConversationId: null,
     messageId: null,
     claimedAt: null,
@@ -100,6 +105,7 @@ test('Message, media claim and webhook appliedAt commit in one transaction', asy
   };
   const calls = [];
   const messages = [];
+  const captureSessions = [];
   const conversation = { id: 'conversation-media-atomic' };
   const transaction = {
     async $executeRawUnsafe() {
@@ -140,9 +146,47 @@ test('Message, media claim and webhook appliedAt commit in one transaction', asy
         };
       },
     },
+    organization: {
+      async findUnique({ where }) {
+        return where.id === scope.organizationId
+          ? {
+              id: scope.organizationId,
+              subscriptionPlan: 'PRO',
+              subscriptionStatus: 'ACTIVE',
+              trialEndsAt: null,
+            }
+          : null;
+      },
+    },
     worker: {
       async findMany() {
         return [worker];
+      },
+      async findFirst({ where }) {
+        const organizationMatches = where.organizationId === undefined
+          ? where.OR?.some((candidate) => (
+              Object.hasOwn(candidate, 'organizationId')
+              && candidate.organizationId === worker.organizationId
+            ))
+          : where.organizationId === worker.organizationId;
+        return where.id === worker.id
+          && where.projectId === scope.projectId
+          && organizationMatches
+          ? worker
+          : null;
+      },
+    },
+    whatsAppConnection: {
+      async findFirst({ where }) {
+        return where.id === 'connection-media-atomic'
+          && where.projectId === scope.projectId
+          ? {
+              id: 'connection-media-atomic',
+              projectId: scope.projectId,
+              enabled: true,
+              connectionStatus: 'CONNECTED',
+            }
+          : null;
       },
     },
     conversation: {
@@ -187,6 +231,23 @@ test('Message, media claim and webhook appliedAt commit in one transaction', asy
         return { count: 1 };
       },
     },
+    progressEvidenceCaptureSession: {
+      async findFirst({ where }) {
+        return captureSessions.find((session) => (
+          (where.mediaAssetId === undefined || session.mediaAssetId === where.mediaAssetId)
+          && (where.id === undefined || session.id === where.id)
+        )) || null;
+      },
+      async create({ data }) {
+        const session = { ...data };
+        captureSessions.push(session);
+        calls.push('capture-session-created');
+        return session;
+      },
+      async updateMany() {
+        throw new Error('Unexpected location capture update during issuance.');
+      },
+    },
   };
   globalThis.__obraSaasPrisma = {
     async $transaction(callback) {
@@ -210,6 +271,10 @@ test('Message, media claim and webhook appliedAt commit in one transaction', asy
           kind: 'image',
           text: 'Pared norte a medio terminar',
           media: event.media,
+          metadata: {
+            authorized: true,
+            sensitivity: 'restricted',
+          },
         },
         {
           externalId: `obrasaas-reply:${event.externalId}`,
@@ -223,7 +288,66 @@ test('Message, media claim and webhook appliedAt commit in one transaction', asy
 
   assert.equal(result.alreadyApplied, false);
   assert.equal(asset.status, 'CLAIMED');
+  assert.equal(captureSessions.length, 1);
+  assert.equal(captureSessions[0].mediaAssetId, asset.id);
+  assert.equal(captureSessions[0].status, 'AWAITING_LOCATION');
+  assert.equal(Object.hasOwn(captureSessions[0], 'token'), false);
+  assert.deepEqual(result.outcome.progressEvidenceLocationDelivery, {
+    version: 1,
+    sessionId: captureSessions[0].id,
+  });
+  assert.doesNotMatch(JSON.stringify(result.outcome), /token=|"token"/i);
+  const outbound = messages.find((message) => message.direction === 'OUTBOUND');
+  assert.doesNotMatch(outbound.body, /webview\/progress-evidence-location\?|token=/);
+  assert.match(outbound.body, /credencial no se muestra en el panel/i);
+  assert.equal(
+    outbound.metadata.progressEvidenceLocationCapture.sessionId,
+    captureSessions[0].id,
+  );
+  assert.equal(
+    outbound.metadata.progressEvidenceLocationCapture.deliveryContentRestricted,
+    true,
+  );
   assert.equal(asset.messageId, messages.find((message) => message.direction === 'INBOUND').id);
+  assert.ok(calls.indexOf('capture-session-created') < calls.indexOf('message:INBOUND'));
   assert.ok(calls.indexOf('message:INBOUND') < calls.indexOf('asset-claimed'));
   assert.ok(calls.indexOf('asset-claimed') < calls.indexOf('webhook-applied'));
+});
+
+test('H2 location capture is gated by an explicit progress caption', () => {
+  const externalId = 'wamid.progress-caption-gate';
+  const result = {
+    flowPrompt: null,
+    newMessages: [{
+      externalId,
+      sender: 'user',
+      metadata: { authorized: true, sensitivity: 'restricted' },
+    }],
+  };
+  const baseEvent = {
+    provider: 'meta',
+    kind: 'image',
+    externalId,
+  };
+
+  assert.equal(progressEvidenceLocationCaptureEligible(
+    { ...baseEvent, text: '  PROGRESO: muro oeste al 40%  ' },
+    result,
+    'asset-progress-caption',
+  ), true);
+  assert.equal(progressEvidenceLocationCaptureEligible(
+    { ...baseEvent, text: 'Foto del muro oeste' },
+    result,
+    'asset-progress-caption',
+  ), false);
+  assert.equal(progressEvidenceLocationCaptureEligible(
+    { ...baseEvent, text: 'AVANCE:' },
+    result,
+    'asset-progress-caption',
+  ), false);
+  assert.equal(progressEvidenceLocationCaptureEligible(
+    { ...baseEvent, text: 'AVANCE: muro oeste', provider: 'twilio' },
+    result,
+    'asset-progress-caption',
+  ), false);
 });

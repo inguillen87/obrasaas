@@ -970,6 +970,13 @@ export default function ProgressClient({
                 && item.status !== "REJECTED"
                 && !running
                 && !awaitingVisualReview;
+              const locationLabel = item.location?.verification === "IN_GEOFENCE"
+                ? "Geolocalización compatible con geocerca"
+                : item.location?.verification === "REVIEW_REQUIRED"
+                  ? "Geolocalización pendiente de revisión"
+                  : item.location?.verification === "DECLARED_ONLY"
+                    ? "Ubicación declarada"
+                    : null;
 
               return (
                 <li className={styles.evidenceItem} key={item.id}>
@@ -980,6 +987,14 @@ export default function ProgressClient({
                         {item.capturedAt} · {item.status}
                         {item.source?.channel === "whatsapp" ? " · WhatsApp" : ""}
                       </span>
+                      {locationLabel && (
+                        <span
+                          className={styles.evidenceLocation}
+                          data-verification={item.location.verification.toLowerCase()}
+                        >
+                          {locationLabel}
+                        </span>
+                      )}
                       {item.attachment?.href && (
                         <a
                           className={styles.protectedLink}

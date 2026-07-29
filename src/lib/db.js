@@ -33,6 +33,9 @@ import {
 } from "@/lib/medical-privacy";
 import { subscriptionAllowsWrites } from "@/lib/plans";
 import {
+  issueProgressEvidenceCaptureSession,
+} from "@/lib/progress-evidence-capture-sessions";
+import {
   getPublishedWhatsAppFlowReference,
   getWhatsAppFlowSessionTtlMs,
   validateWhatsAppFlowReply,
@@ -53,6 +56,9 @@ import {
   whatsAppMediaAssetDescriptor,
   whatsAppMediaAssetHash,
 } from "@/lib/whatsapp/media-assets";
+import {
+  PROGRESS_EVIDENCE_LOCATION_DURABLE_REPLY,
+} from "@/lib/whatsapp/progress-evidence-location-delivery";
 import { resolveWhatsAppConnectionScopes } from "@/lib/whatsapp/webhook-scope";
 import { persistDurableMetaWebhookBatch } from "@/lib/whatsapp/webhook-ingress";
 
@@ -235,6 +241,54 @@ function managedWhatsAppMediaAssetId(event) {
     );
   }
   return mediaAssetId;
+}
+
+export function progressEvidenceLocationCaptureEligible(event, result, mediaAssetId) {
+  const caption = typeof event?.text === "string"
+    ? event.text.normalize("NFKC").trim()
+    : "";
+  if (
+    !mediaAssetId
+    || event?.provider !== "meta"
+    || String(event?.kind || "").toLowerCase() !== "image"
+    || Boolean(result?.flowPrompt)
+    || !/^(?:AVANCE|PROGRESO)\s*:\s*\S/iu.test(caption)
+  ) return false;
+  const inbound = result?.newMessages?.find((message) => (
+    message?.sender === "user" && message.externalId === event.externalId
+  ));
+  return inbound?.metadata?.authorized === true
+    && inbound.metadata.sensitivity !== "medical";
+}
+
+function attachProgressEvidenceLocationPrompt(result, { session }) {
+  const outboundExternalId = result.newMessages.find((message) => message?.sender === "bot")?.externalId;
+  return {
+    ...result,
+    reply: PROGRESS_EVIDENCE_LOCATION_DURABLE_REPLY,
+    progressEvidenceCaptureSessionId: session.id,
+    progressEvidenceLocationDelivery: {
+      version: 1,
+      sessionId: session.id,
+    },
+    newMessages: result.newMessages.map((message) => (
+      message?.sender === "bot" && message.externalId === outboundExternalId
+        ? {
+            ...message,
+            text: PROGRESS_EVIDENCE_LOCATION_DURABLE_REPLY,
+            metadata: {
+              ...(message.metadata || {}),
+              progressEvidenceLocationCapture: {
+                sessionId: session.id,
+                status: session.status,
+                expiresAt: session.expiresAt?.toISOString?.() || String(session.expiresAt),
+                deliveryContentRestricted: true,
+              },
+            },
+          }
+        : message
+    )),
+  };
 }
 
 function assertManagedWhatsAppMediaEvent(event, row, descriptor) {
@@ -1978,7 +2032,7 @@ export async function applyWebhookMessageAtomically({
       geofenceMeters: project.geofenceMeters,
       timezone: project.organization?.timezone || "America/Argentina/Buenos_Aires",
     };
-    const result = await apply({
+    let result = await apply({
       prisma: transaction,
       state,
       projectSettings,
@@ -2019,6 +2073,21 @@ export async function applyWebhookMessageAtomically({
         ).session;
       }
     }
+    const mediaAssetId = managedWhatsAppMediaAssetId(event);
+    if (progressEvidenceLocationCaptureEligible(event, result, mediaAssetId)) {
+      const capture = await issueProgressEvidenceCaptureSession(transaction, {
+        scope: {
+          organizationId: normalized.organizationId,
+          projectId: normalized.projectId,
+        },
+        workerId: resolution.worker.id,
+        connectionId: project.whatsapp.id,
+        mediaAssetId,
+      });
+      result = attachProgressEvidenceLocationPrompt(result, {
+        session: capture.session,
+      });
+    }
     const outcome = createMessageWebhookOutcome({
       ...result,
       flowSessionId: issuedFlowSession?.id || null,
@@ -2052,7 +2121,6 @@ export async function applyWebhookMessageAtomically({
         }),
       },
     );
-    const mediaAssetId = managedWhatsAppMediaAssetId(event);
     if (mediaAssetId) {
       const inboundMessages = persistedMessages.filter((message) => (
         message?.direction === "INBOUND"

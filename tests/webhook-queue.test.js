@@ -121,6 +121,55 @@ test("unusable or corrupt WhatsApp identities are terminal before media processi
   assert.equal(isTerminalWebhookFailure({ code: "META_TEMPORARY_FAILURE" }), false);
 });
 
+test("a progress-evidence location outcome persists only its non-secret descriptor", () => {
+  const sessionId = "123e4567-e89b-42d3-a456-426614174001";
+  const outcome = createMessageWebhookOutcome({
+    reply: "Foto de avance recibida.",
+    progressEvidenceLocationDelivery: {
+      version: 1,
+      sessionId,
+    },
+    token: "must-not-be-persisted",
+    link: "https://example.test/webview?token=must-not-be-persisted",
+  });
+
+  assert.deepEqual(outcome, {
+    version: 1,
+    type: "message",
+    reply: "Foto de avance recibida.",
+    flowPrompt: null,
+    progressEvidenceLocationDelivery: {
+      version: 1,
+      sessionId,
+    },
+  });
+  assert.equal(JSON.stringify(outcome).includes("must-not-be-persisted"), false);
+  assert.deepEqual(readAppliedMessageWebhookOutcome({
+    appliedAt: new Date("2026-07-29T12:00:00.000Z"),
+    outcome,
+  }), outcome);
+
+  assert.throws(
+    () => createMessageWebhookOutcome({
+      reply: "Inválido",
+      progressEvidenceLocationDelivery: {
+        version: 1,
+        sessionId,
+        token: "secret",
+      },
+    }),
+    (error) => error.code === "WEBHOOK_OUTCOME_INVALID",
+  );
+  assert.throws(
+    () => createMessageWebhookOutcome({
+      reply: "Inválido",
+      flowPrompt: "incident-report",
+      progressEvidenceLocationDelivery: { version: 1, sessionId },
+    }),
+    (error) => error.code === "WEBHOOK_OUTCOME_INVALID",
+  );
+});
+
 test("webhook retry backoff is deterministic, jittered and capped", () => {
   const first = webhookRetryDelayMs({ attempts: 1, externalId: "wamid.1" });
   assert.equal(first, webhookRetryDelayMs({ attempts: 1, externalId: "wamid.1" }));
