@@ -4,7 +4,7 @@
 
 **Rama de trabajo:** `codex/platform-ux-foundation`
 
-**Estado:** especificación funcional v1.0 de la clienta integrada y contrastada contra el repositorio. La evidencia se separa entre código/pruebas locales, migración en Preview aislado, journey UI y E2E externo; Production no fue modificada.
+**Estado:** especificación funcional v1.0 de la clienta integrada y contrastada contra el repositorio. La evidencia se separa entre código/pruebas locales, migración en Preview aislado, journey UI y E2E externo. No hubo deployment ni migración de aplicación en Production durante este corte; subsiste el incidente documentado de una posible sincronización de membresía causada por el webhook compartido de Clerk development ([evidencia](./evidence/2026-07-28-preview-c91cee0.md)).
 
 ## Propósito
 
@@ -16,6 +16,15 @@ Este documento convierte el estado real de ObraSaaS en un plan ejecutable. Disti
 - **No implementado:** es una capacidad de roadmap y no se debe presentar como disponible.
 
 La especificación recibida el 23 de julio de 2026 fue revisada página por página y normalizada en [CLIENT_SPEC_TRACEABILITY.md](./CLIENT_SPEC_TRACEABILITY.md). Ese documento conserva el requisito original, el estado comprobado, la decisión de producto y el sprint objetivo. Este roadmap define la secuencia ejecutable; no interpreta como obligación literal formulaciones riesgosas como “100% WhatsApp”, certificación automática desde una foto o pago automático.
+
+## Mapa de evidencia de este corte
+
+| Capa | Estado comprobado |
+| --- | --- |
+| WIP local | 99 migraciones; 1.538/1.538 pruebas, Prisma, lint, build, auditoría de dependencias de producción y PostgreSQL 17.5 efímero verdes |
+| Último Preview reproducible | 97 migraciones y commit `d57e429` `Ready`, con alias y smokes documentados ([evidencia](./evidence/2026-07-28-preview-d57e429.md)) |
+| E2E externo | WhatsApp bidireccional sobre tenant conectado, media real, foto de obra y journey visual siguen pendientes |
+| Production | Sin deployment ni migración de estos cambios; se conserva aparte el incidente Clerk de posible sincronización de membresía ([evidencia](./evidence/2026-07-28-preview-c91cee0.md)) |
 
 ## Posicionamiento recomendado
 
@@ -34,7 +43,7 @@ Política de automatización objetivo:
 
 ## Línea base comprobada
 
-ObraSaaS ya es una base SaaS real; no es sólo una maqueta. Tiene tenancy B2B, roles operativos, alcance por obra, auditoría, proyectos, Gantt, WhatsApp persistente, Flows gobernados, aprobaciones humanas, evidencia privada, asistencia y reportes PDF. La suite local alcanza 1.369 pruebas unitarias y de integración liviana en este corte; lint y build también están verdes. Baseline/forecast y su migración fueron verificados en Preview aislado, aunque aún falta completar el journey UI final de esa operación.
+ObraSaaS ya es una base SaaS real; no es sólo una maqueta. Tiene tenancy B2B, roles operativos, alcance por obra, auditoría, proyectos, Gantt, WhatsApp persistente, Flows gobernados, aprobaciones humanas, evidencia privada, asistencia y reportes PDF. La suite local alcanza 1.538 pruebas unitarias y de integración liviana en este corte; Prisma, lint, build y la auditoría de dependencias de producción también están verdes. Baseline/forecast y su migración fueron verificados en Preview aislado, aunque aún falta completar el journey UI final de esa operación.
 
 Eso todavía no demuestra una operación Enterprise con clientes reales. Los principales límites actuales son la falta de validación externa con un WABA real, Clerk sobre instancia development, journeys E2E operativos insuficientes, convivencia temporal entre WBS canónica y snapshot legacy, equipos/blockers/costos/certificación incompletos y dominios profesionales pendientes en documentos, calidad, contratos, stock y colaboración externa.
 
@@ -45,8 +54,8 @@ Eso todavía no demuestra una operación Enterprise con clientes reales. Los pri
 | Tenancy, roles y alcance por obra | Confirmado | Clerk Organizations, permisos en servidor, `ProjectMembership` y pruebas negativas | Conservar; preparar gobierno de Platform Admin y futura defensa en profundidad |
 | Portfolio y onboarding | Confirmado | Alta/configuración/archivo de obras, límites por plan y puesta en marcha | Medir tiempo hasta primera obra operativa |
 | Gantt y tareas | Implementado en Preview aislado; journey UI pendiente | WBS `Task`/`TaskDependency`, CAS, baseline inmutable/versionada, forecast determinista y Gantt canónico; una planificación relativa sobrevive aunque la obra aún no tenga calendario | Cerrar smoke UI, ejecutar cutover legacy con cero drift y completar responsables/equipos/blockers antes de conectar costos contractuales |
-| WhatsApp e Inbox | Confirmado por contrato; externo pendiente | Meta Cloud API directa como camino primario; app/caso de uso presentes; test number asignado, un celular propio verificado y solicitud outbound de plantilla aceptada con token temporal. Firma, idempotencia, leases, Inbox, Flows operativos, Flow pre-operario H3.1, media privada y vínculo foto→`ProgressEvidence` están cubiertos localmente | La aceptación outbound no prueba entrega ni E2E. Rotar el token temporal, instalar credenciales permanentes en Vercel y completar webhook firmado, inbound, estados, todos los Flows, storage y tenant real; Twilio no sustituye esos gates |
-| IA visual y OCR | Contrato y migraciones en Preview aislado; activación API bloqueada | `VisualProgressAssessment`, opt-in tenant, lease recuperable, sanitización, rango/abstención y revisión CAS; OpenAI `gpt-5.6-sol` es candidato primario y HF/Z.ai challengers por contrato | Elegir una clave de piloto, probar foto Meta real y benchmark consentido antes de cualquier claim productivo; verificar DPA/ZDR o retención aceptada por proveedor y nunca certificar/pagar/reprogramar desde una foto |
+| WhatsApp e Inbox | Confirmado por contrato; externo pendiente | Meta Cloud API directa como camino primario; app/caso de uso presentes; test number asignado, un celular propio verificado, outbound histórico aceptado y test oficial firmado `messages v25.0` recibido por Preview con HTTP 200. Firma, idempotencia, leases, Inbox, Flows operativos, Flow pre-operario H3.1, media privada y vínculo foto→`ProgressEvidence` están cubiertos localmente | El test del panel no prueba entrega ni E2E. Faltan challenge y tráfico inbound/estados reales, credencial del tenant importada cifrada, todos los Flows, storage y conexión real; Twilio no sustituye esos gates |
+| IA visual y OCR | Base visual y credencial en Preview; ledger/recibos nuevos sólo locales | `VisualProgressAssessment`, opt-in tenant, lease recuperable, sanitización, rango/abstención y revisión CAS; OpenAI `gpt-5.6-sol` es la ruta primaria gobernada, Terra es shadow explícito y HF/Z.ai permanecen como challengers por contrato. La credencial dedicada está aislada en Preview; presupuesto, recibo durable y conciliación pasaron localmente y en PostgreSQL 17.5 efímero | Desplegar/verificar las migraciones nuevas en Neon Preview, probar una foto Meta real y un benchmark consentido antes de cualquier claim productivo; cerrar DPA/ZDR o retención aceptada y nunca certificar/pagar/reprogramar desde una foto |
 | Propuestas y aprobación humana | Confirmado | Avance, demora e incidente crítico con decisión auditada | Extender el patrón a diarios, calidad, costos y cambios |
 | Asistencia y salud | Parcial | Ledger canónico con ingreso, pausas, salida, GPS conservador, idempotencia, jornada y reporte; evidencia médica aislada | Completar S2 (turnos, tolerancia, excepciones y corrección aprobada) y el gate legal; no venderlo como nómina |
 | Identidad laboral y destino de cobro | Parcial; migraciones H3.1 verificadas en Preview, runtime/Meta pendientes | H3.1 incluye Flow pre-operario, aviso fijado, acuse terminal, CRM/readiness y purga transitoria; `d6b29b9` aplicó sus dos migraciones nuevas en Neon aislado, pasó todos los verificadores y obtuvo build remoto `Ready` ([evidencia](./evidence/2026-07-28-preview-d6b29b9.md)) | Completar smoke UI/runtime, observar cron, revisar legalmente el aviso y probar Meta E2E; completar Flow/UI de cobro, titularidad y comprobante. La purga no es DSAR y el teléfono raw en `Conversation.externalId` sigue como deuda |
@@ -54,7 +63,7 @@ Eso todavía no demuestra una operación Enterprise con clientes reales. Los pri
 | Acopios | Parcial | Catálogo y niveles básicos | Migrar a ledger inmutable de recepción, consumo, ajuste y ubicación |
 | Costos y rol Finance | Parcial, base local no desplegada | `BudgetVersion`, `BudgetLine` y `BudgetEntry` separan presupuesto, comprometido, real y forecast; hay dashboards de presupuesto, compras, cuentas a pagar y caja | Completar cambios aprobados, reconciliación, KPIs/drill-down, cutover sobre la misma WBS y validar Preview/E2E |
 | Caja chica y comprobantes | Parcial, base local no desplegada | `CashFund`/`CashMovement`, saldo derivado, categoría, idempotencia y comprobante privado server-owned | Implementar umbral y segundo aprobador distinto, reposición/cierre/conciliación, Preview y E2E |
-| Evidencia y adjuntos privados | Parcial, base local no desplegada | `ProtectedUpload` de un solo uso para progreso web, caja, recepción y factura; intent durable, scope, expiración, CAS, cuotas, hash, entrega server-side y cron diario autenticado configurado | Validar migración y ejecución del cron en Preview/Production, alertas, retención/purga, restore, carga directa para más de 4 MiB y degradación de ambos adapters |
+| Evidencia y adjuntos privados | Parcial; storage base en Preview y lifecycle media nuevo local | `ProtectedUpload` de un solo uso y Blob privado ya tienen evidencia en Preview; progreso web, caja, recepción y factura cuentan con intent durable, scope, expiración, CAS, cuotas, hash y entrega server-side. El lifecycle durable de media WhatsApp `070000` todavía no fue desplegado | Desplegar/verificar `070000`, observar cron y descarga con media real, completar alertas, retención/purga, restore, carga directa para más de 4 MiB y degradación de ambos adapters |
 | Reporte semanal | Parcial | PDF real con hash y auditoría, generado al vuelo | Persistir artefacto y snapshot reproducible con historial y retención |
 | Bitácora | Parcial | Agrega fuentes reales, pero recorta a eventos recientes | Cursor estable, filtros server-side y exportación completa con hash |
 | Documentos, planos y versiones | No implementado | No hay modelo canónico | Construir control documental antes de RFI/submittal avanzados |
@@ -66,7 +75,7 @@ Eso todavía no demuestra una operación Enterprise con clientes reales. Los pri
 | API pública e integraciones | No implementado | Integraciones internas con proveedores; sin API pública versionada | API, scopes, rate limit, webhooks tenant y conectores antes de prometer ERP/BI |
 | Billing | Parcial y cerrado por defecto | Backend Stripe/webhook; checkout exige flag exacto, entrada estricta y versiones vigentes, pero no hay intención/consentimiento durable ni control de concurrencia | Mantener deshabilitado hasta cerrar intención idempotente, UI, evidencia contractual, reconciliación y E2E |
 | Observabilidad y operaciones | No suficiente | Analytics web anonimizado; sin APM, SLO, alertas ni DR probado | Es gate de producción, no mejora opcional |
-| CI y E2E | En implementación | 1.369 tests locales, lint y build verdes; E2E público separado y workflow CI agregados | Requiere ejecución remota verde y expansión a journeys autenticados/Meta/storage/visión |
+| CI y E2E | En implementación | 1.538 tests locales, Prisma, lint, build y auditoría de producción verdes; E2E público separado y workflow CI agregados | Requiere ejecución remota verde y expansión a journeys autenticados/Meta/storage/visión |
 | Internacionalización | No implementado | UI y formatos mayormente `es-AR` | Agregar español regional, portugués, zona horaria y multimoneda sin mezclar fiscalidad |
 
 Fuentes internas principales: [autenticación y tenancy](./AUTH_AND_TENANCY.md), [ledger de asistencia](./ATTENDANCE_LEDGER.md), [contrato transitorio de tareas](./OPERATIONAL_TASKS.md) y [estado verificable de Meta](./WHATSAPP_META.md).
@@ -78,9 +87,9 @@ Estos gates pueden avanzar en paralelo, pero ninguno se reemplaza con una captur
 | Gate | Evidencia de salida | Estado al 28/07/2026 |
 | --- | --- | --- |
 | Especificación de la clienta trazada | Requisito, decisión, secuencia y criterio de aceptación por cada ítem | 92 IDs únicos integrados (80 SPEC + 12 PRO); validación con la socia y casos de prueba detallados pendientes por vertical |
-| Calidad automatizada | CI remota verde con instalación exacta, lint, suite completa, auditoría, build y smoke público | 1.369/1.369, Prisma, lint, build y auditoría de dependencias de producción verdes localmente; ejecución GitHub y E2E remoto pendientes |
+| Calidad automatizada | CI remota verde con instalación exacta, lint, suite completa, auditoría, build y smoke público | 1.538/1.538, Prisma, lint, build, auditoría de dependencias de producción y migración/verificador PostgreSQL 17.5 verdes localmente; ejecución GitHub y E2E remoto pendientes |
 | Journey operativo E2E | Admin crea obra/trabajador/tarea, aprueba propuesta y descarga reporte; roles restringidos fallan correctamente | Pendiente |
-| WhatsApp real | Embedded Signup, inbound/outbound, estados, Flows operativos y pre-operario, reintento, expiración y fallback en teléfono real | Test number asignado, celular propio verificado y outbound de plantilla aceptado por Meta con token temporal. No es bidireccional/E2E: faltan credenciales permanentes en Vercel, webhook firmado, inbound, estados, Flows, App Review y tenant real |
+| WhatsApp real | Embedded Signup, inbound/outbound, estados, Flows operativos y pre-operario, reintento, expiración y fallback en teléfono real | Test number asignado, celular propio verificado, outbound histórico aceptado y test oficial firmado del panel recibido con HTTP 200. No es bidireccional/E2E: faltan publicación/revisión aplicable, credencial cifrada del tenant, challenge y tráfico inbound/estados reales, Flows y conexión real |
 | Identidad productiva | Dominio propio, Clerk Production, cutover y rollback ensayados, alta/invitación/baja verificadas | Pendiente externo |
 | Billing coherente | Checkout explícitamente deshabilitado o intención idempotente, UI, consentimiento, términos, precios y webhooks reconciliados | Cerrado por defecto; versiones exactas requeridas; intención durable, concurrencia, UI y webhook pendientes |
 | Salud operacional | Errores, backlog, latencia y proveedores con señal, correlación, redacción y alerta accionable | Parcial; primer control de cron en esta rama |
@@ -110,7 +119,7 @@ La cadencia candidata es de diez días hábiles por sprint. Sin capacidad de equ
 **Objetivo:** impedir releases engañosas o silenciosamente rotas con controles que sí dependen del equipo.
 
 - CI: Node 24, instalación exacta, lint, suite completa, auditoría, build, E2E público y artefactos de diagnóstico;
-- Postgres 17 efímero: `validate`, las 93 migraciones locales actuales desde cero, `status` y diff sin drift;
+- Postgres 17 efímero: `validate`, las 99 migraciones locales actuales desde cero, `status` y diff sin drift; el último Preview evidenciado tenía 97, por lo que `070000` y `080000` aún deben atravesar su gate remoto;
 - checkout cerrado por defecto y request estricto; no habilitarlo sin intención durable, idempotencia, consentimiento verificable y reconciliación;
 - E2E autenticado de los journeys críticos y denegaciones por tenant/obra/rol;
 - observabilidad mínima, correlation ID y runbooks de migración/incidente/rollback.
@@ -120,7 +129,7 @@ La cadencia candidata es de diez días hábiles por sprint. Sin capacidad de equ
 Estado de esta iteración:
 
 - implementados localmente: CI base, E2E público sin secretos Clerk, artefactos Playwright, health de recuperación WhatsApp, gate de checkout, gate de migraciones, corrección de drift UUID y trazabilidad del PDF;
-- verificados en este WIP local: 1.369/1.369 tests, Prisma válido/generado, lint, build y auditoría de dependencias de producción sin vulnerabilidades; CI remota, migración desde cero en Postgres y E2E deben volver a ejecutarse después de integrar el sprint;
+- verificados en este WIP local: 1.538/1.538 tests, Prisma válido/generado, lint, build, auditoría de dependencias de producción sin vulnerabilidades y migración/verificador desde cero en PostgreSQL 17.5; CI remota, Neon Preview y E2E deben volver a ejecutarse después de integrar el sprint;
 - seguridad de tooling: `@prisma/dev` queda temporalmente fijado a Valibot 1.4.2 mediante override acotado por el advisory vigente; retirarlo cuando Prisma publique el pin corregido y mantener auditadas por separado las dependencias exclusivas de desarrollo;
 - pendientes internos de S0: primera ejecución remota, E2E autenticado/core, observabilidad integral y runbooks completos.
 
@@ -131,7 +140,7 @@ R0 avanza en paralelo y no se declara cerrado por pasar un sprint:
 | Gate | Evidencia necesaria |
 | --- | --- |
 | Identidad | dominio, Clerk Production, invitación/baja/cutover/rollback ensayados |
-| WhatsApp | Conservar la evidencia parcial del test number y outbound aceptado; revocar/rotar el token temporal, instalar credenciales permanentes en Vercel y completar webhook firmado, WABA/número del tenant real, App Review, inbound/outbound correlacionado, estados, Flows y reintentos. Meta directo es primario; Twilio sólo fallback |
+| WhatsApp | Conservar la evidencia parcial del test number, outbound histórico y test oficial firmado del panel; revocar/rotar el token temporal, importar cifrada la conexión del tenant y completar challenge más tráfico real firmado, WABA/número del tenant, revisión/publicación aplicable, inbound/outbound correlacionado, estados, Flows y reintentos. Meta directo es primario; Twilio sólo fallback |
 | Datos | storage privado productivo; cron de limpieza de reservas desplegado y observado; backup, restore, retención y borrado verificados |
 | Billing | `BillingCheckoutIntent` durable, lock/CAS, idempotencia Stripe, UI/versión aceptada y webhook reconciliado |
 | Gobierno | owners, required checks, secretos rotables, incident response y aprobaciones legales aplicables |

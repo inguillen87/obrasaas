@@ -3,6 +3,8 @@ import test from "node:test";
 
 import {
   MODEL_REGISTRY,
+  MODEL_CAPABILITIES,
+  MODEL_PRICING_VERSION,
   MODEL_ROLLOUT_ROLES,
   MODEL_WORKLOADS,
   listRegisteredModels,
@@ -16,6 +18,7 @@ test("the visual registry has one primary and does not make shadow/challenger el
     models.map(({ id, rolloutRole }) => ({ id, rolloutRole })),
     [
       { id: "openai:gpt-5.6-sol", rolloutRole: "primary" },
+      { id: "openai:gpt-5.6-terra", rolloutRole: "shadow" },
       { id: "huggingface:qwen3-vl", rolloutRole: "shadow" },
       { id: "z-ai:glm-5v-turbo", rolloutRole: "challenger" },
     ],
@@ -27,6 +30,31 @@ test("the visual registry has one primary and does not make shadow/challenger el
         workload: MODEL_WORKLOADS.VISUAL_PROGRESS,
         modelId: "huggingface:qwen3-vl",
       }),
+    /explicit enablement/,
+  );
+});
+
+test("Terra is a priced shadow route while Sol remains the only visual primary", () => {
+  const sol = MODEL_REGISTRY["openai:gpt-5.6-sol"];
+  const terra = MODEL_REGISTRY["openai:gpt-5.6-terra"];
+  assert.equal(sol.rolloutRole, MODEL_ROLLOUT_ROLES.PRIMARY);
+  assert.equal(terra.rolloutRole, MODEL_ROLLOUT_ROLES.SHADOW);
+  assert.equal(terra.optInRequired, true);
+  assert.equal(terra.adapterId, "openai-responses-visual");
+  assert.equal(terra.pricing.version, MODEL_PRICING_VERSION);
+  assert.deepEqual(terra.pricing, {
+    version: "2026-07-28",
+    inputMicrosPerMillionTokens: 2_500_000,
+    cachedInputMicrosPerMillionTokens: 250_000,
+    outputMicrosPerMillionTokens: 15_000_000,
+    preDispatchReservationMicros: 125_000,
+  });
+  assert.ok(terra.capabilities.includes(MODEL_CAPABILITIES.VISION_INPUT));
+  assert.throws(
+    () => resolveRegisteredModel({
+      workload: MODEL_WORKLOADS.VISUAL_PROGRESS,
+      modelId: terra.id,
+    }),
     /explicit enablement/,
   );
 });

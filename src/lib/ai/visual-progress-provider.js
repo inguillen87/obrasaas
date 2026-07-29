@@ -2,9 +2,14 @@ import { createHash, createHmac } from "node:crypto";
 
 import {
   MODEL_WORKLOADS,
+  listRegisteredModels,
   resolvePrimaryVisualProgressModel,
   resolveRegisteredModel,
 } from "./model-registry.js";
+import {
+  normalizeProviderReportedCostUsd,
+  normalizeResponsesUsage,
+} from "./provider-telemetry.js";
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 const DEFAULT_TIMEOUT_MS = 55_000;
@@ -562,10 +567,17 @@ export async function analyzeVisualProgressWithOpenAI({
   imageDetail = process.env.OPENAI_VISION_DETAIL?.trim() || "high",
   fetchImpl = globalThis.fetch,
   timeoutMs = DEFAULT_TIMEOUT_MS,
+  onBeforeProviderRequest = null,
 }) {
-  const registeredModel = resolvePrimaryVisualProgressModel();
+  const registeredModel = listRegisteredModels({
+    workload: MODEL_WORKLOADS.VISUAL_PROGRESS,
+  }).find((entry) => (
+    entry.provider === "openai"
+    && entry.adapterId === "openai-responses-visual"
+    && entry.model === model
+  ));
   if (!apiKey) fail("PROVIDER_NOT_CONFIGURED", "OpenAI visual analysis is not configured.");
-  if (model !== registeredModel.model) {
+  if (!registeredModel) {
     fail("PROVIDER_MODEL_INVALID", "OpenAI visual model is not registered for this workload.");
   }
   const normalizedSafetyIdentifierSecret = typeof safetyIdentifierSecret === "string"
@@ -578,10 +590,13 @@ export async function analyzeVisualProgressWithOpenAI({
     );
   }
   if (!boundedText(organizationId, 300)) fail("ORGANIZATION_REQUIRED", "Organization context is required.");
-  if (!["high", "original"].includes(imageDetail)) {
-    fail("PROVIDER_INPUT_INVALID", "OpenAI image detail must be high or original.");
+  if (imageDetail !== "high") {
+    fail("PROVIDER_INPUT_INVALID", "OpenAI image detail must be high for this visual pilot.");
   }
   if (typeof fetchImpl !== "function") fail("PROVIDER_NOT_CONFIGURED", "A fetch implementation is required.");
+  if (onBeforeProviderRequest != null && typeof onBeforeProviderRequest !== "function") {
+    fail("PROVIDER_INPUT_INVALID", "Provider dispatch boundary callback must be a function.");
+  }
 
   const image = validateAndSanitizeVisualImage({ buffer: imageBuffer, mimeType });
   const safetySubject = boundedText(safetySubjectId, 300) || "tenant-operator";
@@ -595,6 +610,7 @@ export async function analyzeVisualProgressWithOpenAI({
   const body = {
     model,
     store: false,
+    prompt_cache_options: { mode: "explicit" },
     reasoning: { effort: "medium" },
     safety_identifier: safetyIdentifier,
     max_output_tokens: 1_800,
@@ -624,6 +640,16 @@ export async function analyzeVisualProgressWithOpenAI({
       },
     },
   };
+
+  // The caller persists the irreversible dispatch boundary here, after every
+  // local validation but immediately before bytes may leave ObraSaaS.
+  if (onBeforeProviderRequest) {
+    await onBeforeProviderRequest({
+      provider: registeredModel.provider,
+      model: registeredModel.model,
+      registryModelId: registeredModel.id,
+    });
+  }
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), Math.max(1, timeoutMs));
@@ -673,12 +699,15 @@ export async function analyzeVisualProgressWithOpenAI({
     fail("PROVIDER_SCHEMA_INVALID", "Visual analysis response failed schema validation.", { requestId });
   }
   const assessment = validateVisualProgressAssessment(parsed);
+  const providerReportedCostUsd = normalizeProviderReportedCostUsd(result);
   return {
     provider: "openai",
     model,
     responseId: typeof result?.id === "string" ? result.id : null,
     requestId,
     assessment,
+    usage: normalizeResponsesUsage(result?.usage),
+    ...(providerReportedCostUsd == null ? {} : { providerReportedCostUsd }),
     input: {
       mimeType: image.mimeType,
       width: image.width,

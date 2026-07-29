@@ -226,7 +226,16 @@ function providerResult(overrides = {}) {
   return {
     provider: 'openai',
     model: 'gpt-5.6-sol',
+    registryModelId: 'openai:gpt-5.6-sol',
     responseId: 'resp-safe-1',
+    requestId: 'req-safe-1',
+    usage: {
+      inputTokens: 120,
+      outputTokens: 30,
+      totalTokens: 150,
+      cachedInputTokens: 40,
+      cacheWriteTokens: 0,
+    },
     input: {
       inputSha256: imageSha256,
       submittedSha256: imageSha256,
@@ -238,10 +247,32 @@ function providerResult(overrides = {}) {
   };
 }
 
+function providerRoute() {
+  return {
+    provider: 'openai',
+    model: 'gpt-5.6-sol',
+    registryModelId: 'openai:gpt-5.6-sol',
+  };
+}
+
+async function dispatchedProviderResult(input, overrides = {}) {
+  await input.onBeforeProviderRequest(providerRoute());
+  return providerResult(overrides);
+}
+
+function safeJson(value) {
+  return JSON.stringify(value, (_key, item) => (
+    typeof item === 'bigint' ? item.toString() : item
+  ));
+}
+
 function matches(row, where = {}) {
   return Object.entries(where).every(([key, expected]) => {
     if (key === 'AND' && Array.isArray(expected)) {
       return expected.every((condition) => matches(row, condition));
+    }
+    if (key === 'OR' && Array.isArray(expected)) {
+      return expected.some((condition) => matches(row, condition));
     }
     if (expected instanceof Date) {
       const actual = row[key] instanceof Date ? row[key] : new Date(row[key]);
@@ -249,6 +280,7 @@ function matches(row, where = {}) {
     }
     if (expected && typeof expected === 'object') {
       if (Object.hasOwn(expected, 'in') && !expected.in.includes(row[key])) return false;
+      if (Object.hasOwn(expected, 'not') && row[key] === expected.not) return false;
       if (Object.hasOwn(expected, 'equals')) {
         const actual = row[key] instanceof Date ? row[key].getTime() : row[key];
         const wanted = expected.equals instanceof Date ? expected.equals.getTime() : expected.equals;
@@ -382,6 +414,9 @@ function databaseFixture({
       enabled: true,
     },
     assessments: [],
+    resultReceipts: [],
+    budgetLedger: null,
+    budgetReservations: new Map(),
     audits: [],
   };
 
@@ -393,6 +428,66 @@ function databaseFixture({
   const transaction = {
     async $executeRawUnsafe(query, projectId) {
       calls.push(['project-lock', query, projectId]);
+    },
+    async $queryRaw(strings, ...values) {
+      const sql = strings.join('?');
+      calls.push(['budget-query', sql, values]);
+      if (sql.includes('obrasaas_ai_daily_budget_reserve')) {
+        const [assessmentId, civilDayUtc, workload, quotaPolicyVersion, limit, reserved] = values;
+        const assessment = state.assessments.find((row) => row.id === assessmentId);
+        if (!assessment) throw new Error('missing assessment');
+        const existing = state.budgetReservations.get(assessmentId);
+        if (existing) return [{ ...existing }];
+        const row = {
+          assessmentId,
+          organizationId: scope.organizationId,
+          projectId: scope.projectId,
+          civilDayUtc,
+          workload,
+          quotaPolicyVersion,
+          budgetLimitMicros: limit,
+          reservedMicros: reserved,
+          actualMicros: null,
+          status: 'RESERVED',
+          settlementBasis: null,
+          settlementOperationKeyHash: null,
+          settlementEvidenceSha256: null,
+          settledById: null,
+        };
+        state.budgetReservations.set(assessmentId, row);
+        state.budgetLedger = {
+          quotaPolicyVersion,
+          budgetLimitMicros: limit,
+          reservedMicros: (state.budgetLedger?.reservedMicros || 0n) + reserved,
+          settledMicros: state.budgetLedger?.settledMicros || 0n,
+        };
+        return [{ ...row }];
+      }
+      if (sql.includes('obrasaas_ai_daily_budget_settle')) {
+        const [
+          assessmentId,
+          actualMicros,
+          settlementBasis,
+          settlementOperationKeyHash,
+          settlementEvidenceSha256,
+          settledById,
+        ] = values;
+        const reservation = state.budgetReservations.get(assessmentId);
+        const assessment = state.assessments.find((row) => row.id === assessmentId);
+        if (!reservation || !assessment) throw new Error('missing reservation');
+        if (reservation.status !== 'RESERVED') return [{ ...reservation }];
+        state.budgetLedger.reservedMicros -= reservation.reservedMicros;
+        state.budgetLedger.settledMicros += actualMicros;
+        reservation.actualMicros = actualMicros;
+        reservation.status = settlementBasis === 'PRE_DISPATCH_RELEASE' ? 'RELEASED' : 'SETTLED';
+        reservation.settlementBasis = settlementBasis;
+        reservation.settlementOperationKeyHash = settlementOperationKeyHash;
+        reservation.settlementEvidenceSha256 = settlementEvidenceSha256;
+        reservation.settledById = settledById;
+        assessment.actualCostMicros = actualMicros;
+        return [{ ...reservation }];
+      }
+      throw new Error('unexpected budget query');
     },
     project: {
       async findFirst({ where }) {
@@ -407,6 +502,12 @@ function databaseFixture({
       async findUnique({ where }) {
         calls.push(['organization-find', where]);
         return where.id === state.organization.id ? structuredClone(state.organization) : null;
+      },
+    },
+    aiDailyBudgetLedger: {
+      async findUnique() {
+        calls.push(['budget-ledger-find']);
+        return state.budgetLedger ? { ...state.budgetLedger } : null;
       },
     },
     platformUser: {
@@ -452,6 +553,7 @@ function databaseFixture({
         if (where.id && (where.evidenceId == null || where.evidenceId === row.evidenceId)) {
           return {
             ...row,
+            project: { organizationId: state.project.organizationId },
             evidence: { status: state.evidence.status, media: structuredClone(state.evidence.media) },
             task: { revision: state.task.revision },
           };
@@ -474,6 +576,16 @@ function databaseFixture({
           conflict.code = 'P2002';
           throw conflict;
         }
+        if (data.registryModelId && state.assessments.some((row) => (
+          row.projectId === data.projectId
+          && row.evidenceId === data.evidenceId
+          && row.registryModelId != null
+          && row.actualCostMicros == null
+        ))) {
+          const conflict = new Error('unsettled dispatch conflict');
+          conflict.code = 'P2002';
+          throw conflict;
+        }
         const row = {
           id: `assessment-${state.assessments.length + 1}`,
           ...data,
@@ -487,6 +599,13 @@ function databaseFixture({
           limitations: [],
           failureCode: null,
           providerResponseId: null,
+          providerRequestId: null,
+          providerDispatchStartedAt: null,
+          inputTokens: null,
+          outputTokens: null,
+          totalTokens: null,
+          cachedInputTokens: null,
+          actualCostMicros: null,
           reviewStatus: null,
           reviewNote: null,
           correctedProgressMin: null,
@@ -507,6 +626,44 @@ function databaseFixture({
           await beforeAssessmentUpdate({ where, data, state });
         }
         const rows = state.assessments.filter((candidate) => matches(candidate, where));
+        for (const row of rows) applyData(row, data);
+        return { count: rows.length };
+      },
+    },
+    visualProgressProviderResultReceipt: {
+      async findUnique({ where }) {
+        calls.push(['result-receipt-find', where]);
+        const row = state.resultReceipts.find((candidate) => (
+          candidate.assessmentId === where.assessmentId
+        ));
+        return row ? structuredClone(row) : null;
+      },
+      async findMany({ where, orderBy, take }) {
+        calls.push(['result-receipt-find-many', where]);
+        const rows = orderedRows(
+          state.resultReceipts.filter((candidate) => matches(candidate, where)),
+          orderBy,
+        );
+        return rows.slice(0, take ?? rows.length).map((row) => structuredClone(row));
+      },
+      async create({ data }) {
+        calls.push(['result-receipt-create', data]);
+        if (state.resultReceipts.some((row) => row.assessmentId === data.assessmentId)) {
+          const conflict = new Error('receipt unique conflict');
+          conflict.code = 'P2002';
+          throw conflict;
+        }
+        const row = {
+          ...structuredClone(data),
+          appliedAt: null,
+          revision: 0,
+        };
+        state.resultReceipts.push(row);
+        return structuredClone(row);
+      },
+      async updateMany({ where, data }) {
+        calls.push(['result-receipt-update', where, data]);
+        const rows = state.resultReceipts.filter((candidate) => matches(candidate, where));
         for (const row of rows) applyData(row, data);
         return { count: rows.length };
       },
@@ -539,12 +696,13 @@ function requestInput(overrides = {}) {
     idempotencyKey: 'visual-request-0001',
     now: requestNow,
     readFile: async () => ({ stream: image, size: image.length }),
-    analyze: async () => providerResult(),
+    analyze: async (input) => dispatchedProviderResult(input),
     provider: {
       id: 'openai:gpt-5.6-sol',
       provider: 'openai',
       model: 'gpt-5.6-sol',
     },
+    budgetLimitMicros: 1_000_000,
     clock: () => new Date(requestNow.getTime() + 30_000),
     ...overrides,
   };
@@ -620,6 +778,31 @@ test('subscription and tenant opt-in are rechecked immediately before provider d
   }
 });
 
+test('exhausted AI budget rejects before private bytes, assessment creation, or provider access', async () => {
+  const database = databaseFixture();
+  database.state.budgetLedger = {
+    quotaPolicyVersion: 'ai-visual-daily-budget-v1',
+    budgetLimitMicros: 1_000_000n,
+    reservedMicros: 800_000n,
+    settledMicros: 0n,
+  };
+  let readCalls = 0;
+  let providerCalls = 0;
+
+  await assert.rejects(
+    requestVisualProgressAssessment(database.prisma, requestInput({
+      readFile: async () => { readCalls += 1; },
+      analyze: async () => { providerCalls += 1; },
+    })),
+    assertAssessmentError('AI_DISPATCH_BUDGET_EXCEEDED', 429),
+  );
+
+  assert.equal(readCalls, 0);
+  assert.equal(providerCalls, 0);
+  assert.equal(database.state.assessments.length, 0);
+  assert.equal(database.state.budgetReservations.size, 0);
+});
+
 test('actor evidence access is rechecked immediately before provider dispatch', async () => {
   const database = databaseFixture();
   let providerCalls = 0;
@@ -658,6 +841,8 @@ test('private evidence enforces declared size and SHA before exactly one provide
       assertAssessmentError('VISUAL_PROGRESS_EVIDENCE_INTEGRITY_FAILED', 422),
     );
     assert.equal(providerCalls, 0);
+    assert.equal(database.state.budgetReservations.get('assessment-1').status, 'RELEASED');
+    assert.equal(database.state.assessments[0].actualCostMicros, 0n);
   });
 
   await t.test('binary hash mismatch', async () => {
@@ -672,25 +857,62 @@ test('private evidence enforces declared size and SHA before exactly one provide
       assertAssessmentError('VISUAL_PROGRESS_EVIDENCE_INTEGRITY_FAILED', 422),
     );
     assert.equal(providerCalls, 0);
+    assert.equal(database.state.budgetReservations.get('assessment-1').status, 'RELEASED');
+    assert.equal(database.state.assessments[0].actualCostMicros, 0n);
   });
 
   await t.test('valid image reaches one selected provider once', async () => {
     const database = databaseFixture();
     let providerCalls = 0;
     const result = await requestVisualProgressAssessment(database.prisma, requestInput({
+      readFile: async () => {
+        database.calls.push(['private-read']);
+        return { stream: image, size: image.length };
+      },
       analyze: async (input) => {
         providerCalls += 1;
+        database.calls.push(['provider-adapter']);
         assert.equal(input.imageBuffer.equals(image), true);
         assert.equal(input.modelId, 'openai:gpt-5.6-sol');
-        return providerResult();
+        return dispatchedProviderResult(input);
       },
     }));
     assert.equal(providerCalls, 1);
     assert.equal(result.assessment.status, 'COMPLETED');
     assert.equal(result.assessment.reviewStatus, 'PENDING');
+    assert.equal(result.assessment.actualCostMicros, '1320');
+    assert.equal(result.assessment.providerResponseId, 'resp-safe-1');
+    assert.equal(result.assessment.providerRequestId, 'req-safe-1');
     assert.equal(database.state.assessments[0].attemptCount, 1);
     assert.equal(database.state.assessments[0].leaseExpiresAt, null);
+    assert.equal(database.state.assessments[0].actualCostMicros, 1320n);
+    assert.equal(database.state.budgetReservations.get('assessment-1').status, 'SETTLED');
+    assert.equal(database.state.budgetReservations.get('assessment-1').actualMicros, 1320n);
+    assert.equal(database.state.budgetLedger.reservedMicros, 0n);
+    assert.equal(database.state.budgetLedger.settledMicros, 1320n);
+    assert.equal(
+      database.calls.filter(([kind, sql]) => (
+        kind === 'budget-query' && sql.includes('obrasaas_ai_daily_budget_settle')
+      )).length,
+      1,
+    );
     assert.equal(database.state.audits.at(-1).action, 'progress.visual_assessment.completed');
+    assert.equal(database.state.audits.at(-1).metadata.providerResponseId, 'resp-safe-1');
+    assert.equal(database.state.audits.at(-1).metadata.providerRequestId, 'req-safe-1');
+    const budgetRead = database.calls.findIndex(([kind]) => kind === 'budget-ledger-find');
+    const assessmentCreate = database.calls.findIndex(([kind]) => kind === 'assessment-create');
+    const budgetReserve = database.calls.findIndex(([kind, sql]) => (
+      kind === 'budget-query' && sql.includes('obrasaas_ai_daily_budget_reserve')
+    ));
+    const privateRead = database.calls.findIndex(([kind]) => kind === 'private-read');
+    const providerAdapter = database.calls.findIndex(([kind]) => kind === 'provider-adapter');
+    assert.equal(
+      budgetRead < assessmentCreate
+        && assessmentCreate < budgetReserve
+        && budgetReserve < privateRead
+        && privateRead < providerAdapter,
+      true,
+    );
   });
 });
 
@@ -703,9 +925,9 @@ test('claimed WhatsAppMediaAsset v2 is the exclusive visual source and binds the
       selectedStorage = structuredClone(storage);
       return { stream: image, size: image.length };
     },
-    analyze: async () => {
+    analyze: async (input) => {
       providerCalls += 1;
-      return providerResult();
+      return dispatchedProviderResult(input);
     },
   }));
 
@@ -894,9 +1116,9 @@ test('legacy WhatsApp evidence remains readable only when the selected asset rel
       selectedStorage = structuredClone(storage);
       return { stream: image, size: image.length };
     },
-    analyze: async () => {
+    analyze: async (input) => {
       providerCalls += 1;
-      return providerResult();
+      return dispatchedProviderResult(input);
     },
   }));
   assert.equal(result.assessment.status, 'COMPLETED');
@@ -908,7 +1130,7 @@ test('legacy WhatsApp evidence remains readable only when the selected asset rel
   );
 });
 
-test('expired RUNNING lease recovers once, survives a late provider, and allows an explicit new attempt', async () => {
+test('a durable late provider result supersedes lease recovery without a second dispatch', async () => {
   const database = databaseFixture();
   let providerCalls = 0;
   let releaseProvider;
@@ -916,8 +1138,9 @@ test('expired RUNNING lease recovers once, survives a late provider, and allows 
   const release = new Promise((resolve) => { releaseProvider = resolve; });
   const entered = new Promise((resolve) => { enteredProvider = resolve; });
   const firstInput = requestInput({
-    analyze: async () => {
+    analyze: async (input) => {
       providerCalls += 1;
+      await input.onBeforeProviderRequest(providerRoute());
       enteredProvider();
       await release;
       return providerResult();
@@ -957,6 +1180,8 @@ test('expired RUNNING lease recovers once, survives a late provider, and allows 
   );
   assert.equal(database.state.assessments[0].leaseExpiresAt, null);
   assert.equal(database.state.assessments[0].revision, 2);
+  assert.equal(database.state.assessments[0].actualCostMicros, null);
+  assert.equal(database.state.budgetReservations.get('assessment-1').status, 'RESERVED');
   assert.equal(
     database.state.audits.filter(
       (entry) => entry.action === 'progress.visual_assessment.lease_expired',
@@ -965,17 +1190,17 @@ test('expired RUNNING lease recovers once, survives a late provider, and allows 
   );
 
   releaseProvider();
-  await assert.rejects(
-    inFlight,
-    assertAssessmentError('VISUAL_PROGRESS_ASSESSMENT_CONFLICT', 409),
-  );
-  assert.equal(database.state.assessments[0].status, 'FAILED');
-  assert.equal(database.state.assessments[0].failureCode, VISUAL_PROGRESS_LEASE_EXPIRED_CODE);
+  const lateResult = await inFlight;
+  assert.equal(lateResult.pending, false);
+  assert.equal(lateResult.assessment.status, 'COMPLETED');
+  assert.equal(database.state.assessments[0].status, 'COMPLETED');
+  assert.equal(database.state.assessments[0].failureCode, null);
+  assert.equal(database.state.resultReceipts[0].appliedAt instanceof Date, true);
   assert.equal(
     database.state.audits.some(
       (entry) => entry.action === 'progress.visual_assessment.completed',
     ),
-    false,
+    true,
   );
 
   const replay = await requestVisualProgressAssessment(database.prisma, {
@@ -985,18 +1210,20 @@ test('expired RUNNING lease recovers once, survives a late provider, and allows 
   });
   assert.equal(replay.replayed, true);
   assert.equal(replay.pending, false);
-  assert.equal(replay.assessment.status, 'FAILED');
+  assert.equal(replay.assessment.status, 'COMPLETED');
   assert.equal(providerCalls, 1);
 
-  const retry = await requestVisualProgressAssessment(database.prisma, {
-    ...firstInput,
-    idempotencyKey: 'visual-request-0002',
-    now: recoveryNow,
-    analyze: async () => { providerCalls += 1; return providerResult(); },
-  });
-  assert.equal(retry.assessment.status, 'COMPLETED');
-  assert.equal(database.state.assessments.length, 2);
-  assert.equal(providerCalls, 2);
+  await assert.rejects(
+    requestVisualProgressAssessment(database.prisma, {
+      ...firstInput,
+      idempotencyKey: 'visual-request-0002',
+      now: recoveryNow,
+      analyze: async () => { providerCalls += 1; return providerResult(); },
+    }),
+    assertAssessmentError('VISUAL_PROGRESS_EVIDENCE_BUSY', 409),
+  );
+  assert.equal(database.state.assessments.length, 1);
+  assert.equal(providerCalls, 1);
 });
 
 test('recovery during a blocked private read fences the old worker before provider dispatch', async () => {
@@ -1014,7 +1241,8 @@ test('recovery during a blocked private read fences the old worker before provid
       await readReleased;
       return { stream: image, size: image.length };
     },
-    analyze: async () => {
+    analyze: async (providerInput) => {
+      await providerInput.onBeforeProviderRequest(providerRoute());
       providerCalls += 1;
       return providerResult();
     },
@@ -1046,7 +1274,7 @@ test('recovery during a blocked private read fences the old worker before provid
   );
 });
 
-test('provider result after the renewed lease expires cannot finalize the assessment', async () => {
+test('provider result received after lease expiry is staged and applied without redispatch', async () => {
   const database = databaseFixture();
   let releaseProvider;
   let enteredProvider;
@@ -1055,7 +1283,8 @@ test('provider result after the renewed lease expires cannot finalize the assess
   const providerEntered = new Promise((resolve) => { enteredProvider = resolve; });
   const input = requestInput({
     clock: () => new Date(clockNow),
-    analyze: async () => {
+    analyze: async (providerInput) => {
+      await providerInput.onBeforeProviderRequest(providerRoute());
       enteredProvider();
       await providerReleased;
       return providerResult();
@@ -1068,16 +1297,15 @@ test('provider result after the renewed lease expires cannot finalize the assess
   clockNow = new Date(renewedLease.getTime() + 1);
   releaseProvider();
 
-  await assert.rejects(
-    inFlight,
-    assertAssessmentError('VISUAL_PROGRESS_ASSESSMENT_CONFLICT', 409),
-  );
-  assert.equal(database.state.assessments[0].status, 'RUNNING');
+  const lateResult = await inFlight;
+  assert.equal(lateResult.pending, false);
+  assert.equal(lateResult.assessment.status, 'COMPLETED');
+  assert.equal(database.state.assessments[0].status, 'COMPLETED');
   assert.equal(
     database.state.audits.some(
       (entry) => entry.action === 'progress.visual_assessment.completed',
     ),
-    false,
+    true,
   );
 
   const recovered = await listVisualProgressAssessments(database.prisma, {
@@ -1085,8 +1313,8 @@ test('provider result after the renewed lease expires cannot finalize the assess
     evidenceId: 'evidence-a',
     now: clockNow,
   });
-  assert.equal(recovered.assessments[0].status, 'FAILED');
-  assert.equal(recovered.assessments[0].failureCode, VISUAL_PROGRESS_LEASE_EXPIRED_CODE);
+  assert.equal(recovered.assessments[0].status, 'COMPLETED');
+  assert.equal(recovered.assessments[0].failureCode, null);
 });
 
 test('lease renewal fences a recovery that selected the previous lease concurrently', async () => {
@@ -1117,7 +1345,8 @@ test('lease renewal fences a recovery that selected the previous lease concurren
       await readReleased;
       return { stream: image, size: image.length };
     },
-    analyze: async () => {
+    analyze: async (providerInput) => {
+      await providerInput.onBeforeProviderRequest(providerRoute());
       enteredProvider();
       await providerReleased;
       return providerResult();
@@ -1155,6 +1384,8 @@ test('lease renewal fences a recovery that selected the previous lease concurren
   releaseProvider();
   const completed = await inFlight;
   assert.equal(completed.assessment.status, 'COMPLETED');
+  assert.equal(completed.pending, false);
+  assert.equal(completed.costPending, false);
 });
 
 test('list recovery targets the newest returned page instead of an older expired backlog', async () => {
@@ -1225,8 +1456,9 @@ test('idempotent replay and concurrent retry never duplicate provider dispatch',
   let enteredProvider;
   const entered = new Promise((resolve) => { enteredProvider = resolve; });
   const input = requestInput({
-    analyze: async () => {
+    analyze: async (providerInput) => {
       providerCalls += 1;
+      await providerInput.onBeforeProviderRequest(providerRoute());
       enteredProvider();
       await providerStarted;
       return providerResult();
@@ -1265,8 +1497,9 @@ test('different idempotency keys cannot dispatch two open analyses for one evide
   const release = new Promise((resolve) => { releaseProvider = resolve; });
   const entered = new Promise((resolve) => { enteredProvider = resolve; });
   const firstPromise = requestVisualProgressAssessment(database.prisma, requestInput({
-    analyze: async () => {
+    analyze: async (providerInput) => {
       providerCalls += 1;
+      await providerInput.onBeforeProviderRequest(providerRoute());
       enteredProvider();
       await release;
       return providerResult();
@@ -1307,7 +1540,7 @@ test('completed and abstained outputs remain pending human governance', async ()
 
   const abstainedDb = databaseFixture();
   const abstained = await requestVisualProgressAssessment(abstainedDb.prisma, requestInput({
-    analyze: async () => providerResult({
+    analyze: async (input) => dispatchedProviderResult(input, {
       assessment: providerAssessment({
         abstained: true,
         abstentionReason: 'insufficient_context',
@@ -1323,11 +1556,135 @@ test('completed and abstained outputs remain pending human governance', async ()
   assert.equal(abstainedDb.state.audits.at(-1).action, 'progress.visual_assessment.abstained');
 });
 
-test('provider failure persists only a safe code and never a private message', async () => {
+test('idempotent replay does not require budget configuration or reserve again', async () => {
+  const database = databaseFixture();
+  const input = requestInput();
+  await requestVisualProgressAssessment(database.prisma, input);
+  const budgetQueries = database.calls.filter(([kind]) => kind === 'budget-query').length;
+
+  const replay = await requestVisualProgressAssessment(database.prisma, {
+    ...input,
+    budgetLimitMicros: undefined,
+    readBudgetSnapshot: async () => {
+      throw new Error('replay must not read budget');
+    },
+    planDispatch: () => {
+      throw new Error('replay must not plan dispatch');
+    },
+    reserveBudget: async () => {
+      throw new Error('replay must not reserve budget');
+    },
+  });
+
+  assert.equal(replay.replayed, true);
+  assert.equal(replay.assessment.status, 'COMPLETED');
+  assert.equal(database.calls.filter(([kind]) => kind === 'budget-query').length, budgetQueries);
+});
+
+test('valid result without usage retains its reservation and blocks a new dispatch', async () => {
+  const database = databaseFixture();
+  const completed = await requestVisualProgressAssessment(database.prisma, requestInput({
+    analyze: async (input) => dispatchedProviderResult(input, { usage: null }),
+  }));
+
+  assert.equal(completed.assessment.status, 'COMPLETED');
+  assert.equal(completed.pending, false);
+  assert.equal(completed.costPending, true);
+  assert.equal(completed.assessment.actualCostMicros, null);
+  assert.equal(completed.assessment.providerResponseId, 'resp-safe-1');
+  assert.equal(database.state.budgetReservations.get('assessment-1').status, 'RESERVED');
+  assert.equal(database.state.budgetLedger.reservedMicros, 250_000n);
+  assert.equal(database.state.budgetLedger.settledMicros, 0n);
+  assert.equal(database.state.audits.at(-1).metadata.budgetDisposition, 'retained_usage_missing');
+
+  await assert.rejects(
+    requestVisualProgressAssessment(database.prisma, requestInput({
+      idempotencyKey: 'visual-request-usage-missing',
+    })),
+    assertAssessmentError('VISUAL_PROGRESS_EVIDENCE_UNCERTAIN', 409),
+  );
+  assert.equal(database.state.assessments.length, 1);
+});
+
+test('pre-dispatch adapter failure releases budget and discards an impossible request id', async () => {
   const database = databaseFixture();
   await assert.rejects(
     requestVisualProgressAssessment(database.prisma, requestInput({
       analyze: async () => {
+        throw new VisualProgressProviderError(
+          'PROVIDER_NOT_CONFIGURED',
+          'adapter failed before durable dispatch',
+          { requestId: 'req-must-not-persist' },
+        );
+      },
+    })),
+    assertAssessmentError('PROVIDER_NOT_CONFIGURED', 503),
+  );
+
+  const failed = database.state.assessments[0];
+  assert.equal(failed.providerDispatchStartedAt, null);
+  assert.equal(failed.providerRequestId, null);
+  assert.equal(failed.actualCostMicros, 0n);
+  assert.equal(database.state.budgetReservations.get(failed.id).status, 'RELEASED');
+  assert.equal(safeJson(database.state.audits).includes('req-must-not-persist'), false);
+});
+
+test('dispatch boundary rejects a mismatched route before provider contact and releases budget', async () => {
+  const database = databaseFixture();
+  await assert.rejects(
+    requestVisualProgressAssessment(database.prisma, requestInput({
+      analyze: async (input) => input.onBeforeProviderRequest({
+        provider: 'openai',
+        model: 'gpt-5.6-terra',
+        registryModelId: 'openai:gpt-5.6-terra',
+      }),
+    })),
+    assertAssessmentError('VISUAL_PROGRESS_PROVIDER_ROUTE_MISMATCH', 409),
+  );
+
+  const failed = database.state.assessments[0];
+  assert.equal(failed.providerDispatchStartedAt, null);
+  assert.equal(failed.actualCostMicros, 0n);
+  assert.equal(database.state.budgetReservations.get(failed.id).status, 'RELEASED');
+  assert.equal(
+    database.state.audits.filter(
+      (entry) => entry.action === 'progress.visual_assessment.provider_dispatch_started',
+    ).length,
+    0,
+  );
+});
+
+test('dispatch boundary is exactly once and a duplicate call retains uncertain budget', async () => {
+  const database = databaseFixture();
+  await assert.rejects(
+    requestVisualProgressAssessment(database.prisma, requestInput({
+      analyze: async (input) => {
+        await input.onBeforeProviderRequest(providerRoute());
+        await input.onBeforeProviderRequest(providerRoute());
+        return providerResult();
+      },
+    })),
+    assertAssessmentError('VISUAL_PROGRESS_PROVIDER_ROUTE_MISMATCH', 409),
+  );
+
+  const failed = database.state.assessments[0];
+  assert.notEqual(failed.providerDispatchStartedAt, null);
+  assert.equal(failed.actualCostMicros, null);
+  assert.equal(database.state.budgetReservations.get(failed.id).status, 'RESERVED');
+  assert.equal(
+    database.state.audits.filter(
+      (entry) => entry.action === 'progress.visual_assessment.provider_dispatch_started',
+    ).length,
+    1,
+  );
+});
+
+test('post-dispatch provider failure retains safe correlation without private payloads', async () => {
+  const database = databaseFixture();
+  await assert.rejects(
+    requestVisualProgressAssessment(database.prisma, requestInput({
+      analyze: async (input) => {
+        await input.onBeforeProviderRequest(providerRoute());
         throw new VisualProgressProviderError(
           'PROVIDER_HTTP_ERROR',
           'secret provider payload and private image detail',
@@ -1340,9 +1697,11 @@ test('provider failure persists only a safe code and never a private message', a
   const failed = database.state.assessments[0];
   assert.equal(failed.status, 'FAILED');
   assert.equal(failed.failureCode, 'PROVIDER_HTTP_ERROR');
-  assert.equal(JSON.stringify(failed).includes('secret provider payload'), false);
-  assert.equal(JSON.stringify(database.state.audits).includes('secret provider payload'), false);
-  assert.equal(JSON.stringify(database.state.audits).includes('req-private'), false);
+  assert.equal(failed.providerRequestId, 'req-private');
+  assert.equal(database.state.budgetReservations.get(failed.id).status, 'RESERVED');
+  assert.equal(safeJson(failed).includes('secret provider payload'), false);
+  assert.equal(safeJson(database.state.audits).includes('secret provider payload'), false);
+  assert.equal(safeJson(database.state.audits).includes('req-private'), true);
 });
 
 test('human review uses CAS, rejects stale baselines, and never mutates Task or Gantt state', async () => {

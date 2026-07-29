@@ -94,6 +94,20 @@ enum VisualProgressAssessmentReviewStatus {
   REJECTED
 }
 
+enum AiDispatchBudgetReservationStatus {
+  RESERVED
+  SETTLED
+  RELEASED
+}
+
+enum AiDispatchSettlementBasis {
+  PRE_DISPATCH_RELEASE
+  RESPONSE_USAGE
+  RECONCILED_USAGE
+  PROVIDER_BILLING
+  CONFIRMED_NO_CHARGE
+}
+
 enum NotificationChannel {
   IN_APP
   EMAIL
@@ -547,6 +561,7 @@ model Organization {
   workerOnboardingClaims    WorkerOnboardingClaim[]
   workerPaymentDestinations WorkerPaymentDestination[]
   workerSensitiveDecisions  WorkerSensitiveDecision[]
+  aiDailyBudgetLedgers      AiDailyBudgetLedger[]
   createdAt                 DateTime                   @default(now())
   updatedAt                 DateTime                   @updatedAt
   workers                   Worker[]
@@ -742,6 +757,7 @@ model PlatformUser {
   verifiedWorkerPaymentDestinations  WorkerPaymentDestination[]     @relation("WorkerPaymentDestinationVerifier")
   requestedVisualAssessments         VisualProgressAssessment[]     @relation("VisualProgressAssessmentRequester")
   reviewedVisualAssessments          VisualProgressAssessment[]     @relation("VisualProgressAssessmentReviewer")
+  aiDispatchBudgetSettlements        AiDispatchBudgetReservation[]  @relation("AiDispatchBudgetSettlementActor")
   protectedUploads                   ProtectedUpload[]              @relation("ProtectedUploadActor")
 
   @@index([systemRole, createdAt])
@@ -818,6 +834,8 @@ model Project {
   dailyLogs                     DailyLog[]
   progressEvidence              ProgressEvidence[]
   visualProgressAssessments     VisualProgressAssessment[]
+  visualProgressProviderResultReceipts VisualProgressProviderResultReceipt[]
+  aiDispatchBudgetReservations AiDispatchBudgetReservation[]
   notificationDeliveries        NotificationDelivery[]
   extraWorkRequests             ExtraWorkRequest[]
   replanScenarios               ReplanScenario[]
@@ -2125,6 +2143,18 @@ model VisualProgressAssessment {
   requestFingerprint        String                                @db.Char(64)
   provider                  String                                @db.VarChar(64)
   providerModel             String                                @db.VarChar(120)
+  registryModelId           String?                               @db.VarChar(190)
+  providerRoute             String?                               @db.VarChar(120)
+  routePolicyVersion        String?                               @db.VarChar(64)
+  routeReasonCode           String?                               @db.VarChar(64)
+  pricingVersion            String?                               @db.VarChar(64)
+  budgetCivilDayUtc         DateTime?                             @db.Date
+  budgetWorkload           String?                               @db.VarChar(64)
+  quotaPolicyVersion        String?                               @db.VarChar(64)
+  budgetLimitMicros        BigInt?
+  budgetReservationMicros   BigInt?
+  estimateBasis             String?                               @db.VarChar(64)
+  providerDispatchStartedAt DateTime?
   analyzerVersion           String                                @db.VarChar(64)
   inputSha256               String                                @db.Char(64)
   baselineHash              String                                @db.Char(64)
@@ -2142,6 +2172,15 @@ model VisualProgressAssessment {
   observations              Json?
   limitations               Json?
   providerResponseId        String?                               @db.VarChar(190)
+  providerRequestId         String?                               @db.VarChar(190)
+  inputTokens               Int?
+  outputTokens              Int?
+  totalTokens               Int?
+  cachedInputTokens         Int?
+  estimatedCostMicros       BigInt?
+  actualCostMicros          BigInt?
+  budgetReservation         AiDispatchBudgetReservation?
+  providerResultReceipt     VisualProgressProviderResultReceipt?
   failureCode               String?                               @db.VarChar(64)
   completedAt               DateTime?
   requestedById             String?
@@ -2160,12 +2199,113 @@ model VisualProgressAssessment {
   @@unique([projectId, id])
   @@unique([projectId, operationKeyHash], map: "VisualProgressAssessment_project_operation_key")
   @@index([projectId, requestFingerprint], map: "VisualProgressAssessment_project_fingerprint_idx")
+  @@index([projectId, registryModelId, createdAt], map: "VPA_project_registry_created_idx")
   @@index([projectId, status, leaseExpiresAt], map: "VPA_project_status_lease_idx")
   @@index([projectId, taskId, status, createdAt], map: "VPA_project_task_status_created_idx")
   @@index([projectId, evidenceId, createdAt], map: "VPA_project_evidence_created_idx")
   @@index([projectId, reviewStatus, createdAt], map: "VPA_project_review_created_idx")
   @@index([requestedById, createdAt], map: "VPA_requester_created_idx")
   @@index([reviewedById, reviewedAt], map: "VPA_reviewer_reviewed_idx")
+}
+
+/// Immutable normalized provider response retained before it is projected onto
+/// the assessment. A pending receipt is the recovery boundary for a provider
+/// response that arrived but was not yet atomically applied and settled.
+model VisualProgressProviderResultReceipt {
+  assessmentId       String   @id
+  organizationId     String
+  projectId          String
+  project             Project                  @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Cascade, map: "VPRR_project_scope_fkey")
+  assessment          VisualProgressAssessment @relation(fields: [projectId, assessmentId], references: [projectId, id], onDelete: Cascade, map: "VPRR_assessment_scope_fkey")
+  schemaVersion       Int
+  receiptSha256       String   @db.Char(64)
+  providerRequestId   String?  @db.VarChar(190)
+  providerResponseId  String?  @db.VarChar(190)
+  inputSha256         String   @db.Char(64)
+  submittedSha256     String   @db.Char(64)
+  width               Int
+  height              Int
+  abstained           Boolean
+  abstentionReason    String?  @db.VarChar(64)
+  summary             String   @db.Text
+  elementType         String?  @db.VarChar(120)
+  progressMin         Int?
+  progressMax         Int?
+  confidence          Decimal  @db.Decimal(5, 4)
+  quality             Json
+  observations        Json
+  limitations         Json
+  inputTokens         Int?
+  outputTokens        Int?
+  totalTokens         Int?
+  cachedInputTokens   Int?
+  cacheWriteTokens    Int?
+  receivedAt          DateTime @default(now())
+  appliedAt           DateTime?
+  revision            Int      @default(0)
+
+  @@unique([projectId, assessmentId], map: "VPRR_project_assessment_key")
+  @@unique([organizationId, receiptSha256], map: "VPRR_org_receipt_sha_key")
+  @@index([organizationId, receivedAt], map: "VPRR_org_received_idx")
+  @@index([projectId, receivedAt], map: "VPRR_project_received_idx")
+}
+
+/// Tenant/day aggregate used to reserve AI spend without summing request rows
+/// under contention. Monetary values are integer micro-USD units; no floating
+/// point value is admitted into the governed budget path.
+model AiDailyBudgetLedger {
+  organizationId     String
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  civilDayUtc        DateTime     @db.Date
+  workload           String       @db.VarChar(64)
+  quotaPolicyVersion String       @db.VarChar(64)
+  budgetLimitMicros  BigInt
+  reservedMicros     BigInt       @default(0)
+  settledMicros      BigInt       @default(0)
+  requestCount       BigInt       @default(0)
+  revision           Int          @default(0)
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  reservations       AiDispatchBudgetReservation[]
+
+  @@id([organizationId, civilDayUtc, workload], map: "AiDailyBudgetLedger_pkey")
+  @@index([civilDayUtc, workload], map: "AiDailyBudgetLedger_day_workload_idx")
+  @@index([organizationId, updatedAt], map: "AiDailyBudgetLedger_org_updated_idx")
+}
+
+/// Idempotency and settlement identity for exactly one governed AI assessment.
+/// The aggregate ledger is never decremented from caller-provided reservation
+/// amounts; settlement consumes only this durable row's own reservation.
+model AiDispatchBudgetReservation {
+  assessmentId       String                            @id
+  organizationId     String
+  projectId          String
+  project            Project                           @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Cascade, map: "AiDispatchBudgetReservation_project_scope_fkey")
+  assessment         VisualProgressAssessment          @relation(fields: [projectId, assessmentId], references: [projectId, id], onDelete: Cascade, map: "AiDispatchBudgetReservation_assessment_scope_fkey")
+  civilDayUtc        DateTime                          @db.Date
+  workload           String                            @db.VarChar(64)
+  quotaPolicyVersion String                            @db.VarChar(64)
+  budgetLimitMicros  BigInt
+  reservedMicros     BigInt
+  actualMicros       BigInt?
+  status             AiDispatchBudgetReservationStatus @default(RESERVED)
+  settlementBasis    AiDispatchSettlementBasis?
+  settlementOperationKeyHash String?                   @db.Char(64)
+  settlementEvidenceSha256   String?                   @db.Char(64)
+  settledById        String?
+  settledBy          PlatformUser?                     @relation("AiDispatchBudgetSettlementActor", fields: [settledById], references: [id], onDelete: Restrict)
+  reservedAt         DateTime                          @default(now())
+  settledAt          DateTime?
+  revision           Int                               @default(0)
+  createdAt          DateTime                          @default(now())
+  updatedAt          DateTime                          @updatedAt
+  dailyLedger        AiDailyBudgetLedger               @relation(fields: [organizationId, civilDayUtc, workload], references: [organizationId, civilDayUtc, workload], onDelete: NoAction, map: "AiDispatchBudgetReservation_daily_ledger_fkey")
+
+  @@unique([projectId, assessmentId], map: "AiDispatchBudgetReservation_project_assessment_key")
+  @@unique([organizationId, settlementOperationKeyHash], map: "AiDispatchBudgetReservation_org_settlement_operation_key")
+  @@index([organizationId, civilDayUtc, workload, status], map: "AiDispatchBudgetReservation_ledger_status_idx")
+  @@index([organizationId, status, updatedAt], map: "AiDispatchBudgetReservation_org_status_updated_idx")
+  @@index([settledById, settledAt], map: "AiDispatchBudgetReservation_settled_by_idx")
 }
 
 model Incident {

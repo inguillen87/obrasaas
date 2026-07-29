@@ -5,11 +5,30 @@ import {
   VISUAL_PROGRESS_SCHEMA_VERSION,
   analyzeVisualProgress,
 } from './ai/visual-progress-provider.js';
+import { AiDispatchPolicyError } from './ai/dispatch-policy.js';
+import {
+  AI_SETTLEMENT_BASES,
+  AiBudgetLedgerError,
+  reserveAiVisualBudget,
+  settleAiVisualBudget,
+} from './ai/daily-budget-ledger.js';
 import { tenantAiSettingsFromMetadata } from './ai/tenant-settings.js';
 import {
   MODEL_ROLLOUT_ROLES,
-  resolvePrimaryVisualProgressModel,
 } from './ai/model-registry.js';
+import {
+  AI_VISUAL_QUOTA_POLICY_VERSION,
+  AiVisualDispatchConfigurationError,
+  planVisualProgressDispatch,
+  readVisualProgressBudgetSnapshot,
+  resolveVisualProgressDailyBudgetMicros,
+  utcCivilDay,
+} from './ai/visual-progress-dispatch.js';
+import {
+  applyVisualProgressProviderResultReceipt,
+  stageVisualProgressProviderResultReceipt,
+  VisualResultReceiptError,
+} from './ai/visual-result-receipts.js';
 import { SOURCE_EVIDENCE_PERMISSION } from './medical-privacy.js';
 import { subscriptionAllowsWrites } from './plans.js';
 import { tenantRoleHasPortfolioAccess } from './project-access.js';
@@ -97,6 +116,20 @@ function hash(domain, value) {
     .digest('hex');
 }
 
+function preDispatchSettlement({ assessmentId, requestFingerprint }) {
+  return {
+    assessmentId,
+    actualCostMicros: 0,
+    settlementBasis: AI_SETTLEMENT_BASES.PRE_DISPATCH_RELEASE,
+    settlementOperationKeyHash: hash('settlement:pre-dispatch-release', {
+      assessmentId,
+      requestFingerprint,
+    }),
+    settlementEvidenceSha256: requestFingerprint,
+    settledById: null,
+  };
+}
+
 function iso(value) {
   if (!value) return null;
   const parsed = value instanceof Date ? value : new Date(value);
@@ -107,6 +140,67 @@ function decimalNumber(value) {
   if (value == null) return null;
   const number = Number(value?.toString?.() ?? value);
   return Number.isFinite(number) ? number : null;
+}
+
+function integerString(value) {
+  if (value == null) return null;
+  if (typeof value === 'bigint') return value >= 0n ? value.toString() : null;
+  if (typeof value === 'number') {
+    return Number.isSafeInteger(value) && value >= 0 ? String(value) : null;
+  }
+  if (typeof value === 'string' && /^(0|[1-9][0-9]*)$/.test(value)) return value;
+  return null;
+}
+
+function providerCorrelationId(value) {
+  const normalized = typeof value === 'string' ? value.trim() : '';
+  return normalized && normalized.length <= 190 ? normalized : null;
+}
+
+function visualDispatchError(errorValue, assessmentId = null) {
+  if (errorValue instanceof VisualProgressAssessmentError) return errorValue;
+  if (errorValue instanceof VisualResultReceiptError) {
+    return error(
+      errorValue.status >= 500
+        ? 'El resultado visual no pudo quedar persistido de forma segura.'
+        : 'El resultado visual entró en conflicto con su registro durable.',
+      errorValue.code,
+      errorValue.status,
+      assessmentId,
+    );
+  }
+  if (errorValue instanceof AiBudgetLedgerError) {
+    return error(
+      errorValue.code === 'AI_DAILY_BUDGET_EXCEEDED'
+        ? 'El presupuesto diario de IA no permite otra evaluación visual.'
+        : 'El control de costo de IA no está disponible en este momento.',
+      errorValue.code,
+      errorValue.status,
+      assessmentId,
+    );
+  }
+  if (errorValue instanceof AiVisualDispatchConfigurationError) {
+    return error(
+      'La política de costo de IA no está configurada correctamente.',
+      errorValue.code,
+      503,
+      assessmentId,
+    );
+  }
+  if (errorValue instanceof AiDispatchPolicyError) {
+    const budgetFailure = ['budget_exceeded', 'tenant_cost_limit_exceeded'].includes(
+      errorValue.code,
+    );
+    return error(
+      budgetFailure
+        ? 'El presupuesto diario de IA no permite otra evaluación visual.'
+        : 'La ruta de IA solicitada no está habilitada.',
+      `AI_DISPATCH_${String(errorValue.code || 'policy_error').toUpperCase()}`,
+      budgetFailure ? 429 : 409,
+      assessmentId,
+    );
+  }
+  return null;
 }
 
 function notBefore(value, floor) {
@@ -144,28 +238,67 @@ function activeLeaseWhere(context, now) {
   };
 }
 
-async function renewVisualProgressLease(prisma, context, now) {
-  const renewedAt = validDate(now);
-  const nextLeaseExpiresAt = leaseDeadline(renewedAt);
-  const renewed = await prisma.visualProgressAssessment.updateMany({
-    where: activeLeaseWhere(context, renewedAt),
-    data: {
-      leaseExpiresAt: nextLeaseExpiresAt,
-      revision: { increment: 1 },
-    },
-  });
-  if (renewed.count !== 1) {
+function providerRouteMatchesPlan(route, plan) {
+  return route?.registryModelId === plan?.selected?.registryModelId
+    && route?.provider === plan?.selected?.provider
+    && route?.model === plan?.selected?.model;
+}
+
+async function markVisualProgressProviderDispatchStarted(prisma, context, now, route) {
+  if (context.providerDispatchStartedAt || !providerRouteMatchesPlan(route, context.dispatchPlan)) {
     throw error(
-      'La evaluación perdió su lease antes de contactar al proveedor.',
-      'VISUAL_PROGRESS_LEASE_LOST',
+      'La frontera de despacho del proveedor no coincide con la ruta autorizada.',
+      'VISUAL_PROGRESS_PROVIDER_ROUTE_MISMATCH',
       409,
       context.assessmentId,
     );
   }
+  const startedAt = notBefore(validDate(now), context.createdAt);
+  const nextLeaseExpiresAt = leaseDeadline(startedAt);
+  await prisma.$transaction(async (transaction) => {
+    const started = await transaction.visualProgressAssessment.updateMany({
+      where: {
+        ...activeLeaseWhere(context, startedAt),
+        providerDispatchStartedAt: null,
+        actualCostMicros: null,
+      },
+      data: {
+        providerDispatchStartedAt: startedAt,
+        leaseExpiresAt: nextLeaseExpiresAt,
+        revision: { increment: 1 },
+      },
+    });
+    if (started.count !== 1) {
+      throw error(
+        'La evaluación perdió su lease antes de contactar al proveedor.',
+        'VISUAL_PROGRESS_LEASE_LOST',
+        409,
+        context.assessmentId,
+      );
+    }
+    await transaction.auditLog.create({
+      data: {
+        organizationId: context.scope.organizationId,
+        actorId: context.actorId,
+        action: 'progress.visual_assessment.provider_dispatch_started',
+        entityType: 'VisualProgressAssessment',
+        entityId: context.assessmentId,
+        metadata: {
+          projectId: context.scope.projectId,
+          evidenceId: context.evidenceId,
+          registryModelId: context.dispatchPlan.selected.registryModelId,
+          providerRoute: context.dispatchPlan.selected.adapterId,
+          routePolicyVersion: context.dispatchPlan.routePolicyVersion,
+          pricingVersion: context.dispatchPlan.pricingVersion,
+        },
+      },
+    });
+  });
   return {
     ...context,
     revision: context.revision + 1,
     leaseExpiresAt: nextLeaseExpiresAt,
+    providerDispatchStartedAt: startedAt,
   };
 }
 
@@ -177,6 +310,18 @@ export function serializeVisualProgressAssessment(row) {
     evidenceId: row.evidenceId,
     provider: row.provider,
     model: row.providerModel,
+    registryModelId: row.registryModelId || null,
+    providerRoute: row.providerRoute || null,
+    routePolicyVersion: row.routePolicyVersion || null,
+    routeReasonCode: row.routeReasonCode || null,
+    pricingVersion: row.pricingVersion || null,
+    budgetCivilDayUtc: iso(row.budgetCivilDayUtc),
+    budgetWorkload: row.budgetWorkload || null,
+    quotaPolicyVersion: row.quotaPolicyVersion || null,
+    budgetLimitMicros: integerString(row.budgetLimitMicros),
+    budgetReservationMicros: integerString(row.budgetReservationMicros),
+    estimateBasis: row.estimateBasis || null,
+    providerDispatchStartedAt: iso(row.providerDispatchStartedAt),
     analyzerVersion: row.analyzerVersion,
     baselineHash: row.baselineHash,
     taskRevisionAtRequest: row.taskRevisionAtRequest,
@@ -190,6 +335,14 @@ export function serializeVisualProgressAssessment(row) {
     quality: record(row.quality),
     observations: Array.isArray(row.observations) ? row.observations : [],
     limitations: Array.isArray(row.limitations) ? row.limitations : [],
+    providerResponseId: row.providerResponseId || null,
+    providerRequestId: row.providerRequestId || null,
+    inputTokens: row.inputTokens ?? null,
+    outputTokens: row.outputTokens ?? null,
+    totalTokens: row.totalTokens ?? null,
+    cachedInputTokens: row.cachedInputTokens ?? null,
+    estimatedCostMicros: integerString(row.estimatedCostMicros),
+    actualCostMicros: integerString(row.actualCostMicros),
     failureCode: row.failureCode || null,
     reviewStatus: row.reviewStatus || null,
     reviewNote: row.reviewNote || null,
@@ -236,7 +389,13 @@ async function findOpenVisualAssessment(prisma, { projectId, evidenceId }) {
     where: {
       projectId,
       evidenceId,
-      status: { in: ['PENDING', 'RUNNING'] },
+      OR: [
+        { status: { in: ['PENDING', 'RUNNING'] } },
+        {
+          registryModelId: { not: null },
+          actualCostMicros: null,
+        },
+      ],
     },
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
   });
@@ -529,6 +688,7 @@ export async function recoverExpiredVisualProgressAssessments(prisma, {
   assessmentIds: rawAssessmentIds = null,
   now = new Date(),
   limit = MAX_RECOVERY_BATCH,
+  settleBudget = settleAiVisualBudget,
 } = {}) {
   const projectId = requiredText(rawProjectId, 'projectId');
   const organizationId = rawOrganizationId
@@ -589,6 +749,18 @@ export async function recoverExpiredVisualProgressAssessments(prisma, {
         },
       });
       if (updated.count !== 1) return false;
+      let budgetDisposition = 'legacy';
+      if (candidate.registryModelId && candidate.actualCostMicros == null) {
+        if (candidate.providerDispatchStartedAt) {
+          budgetDisposition = 'retained_uncertain';
+        } else {
+          await settleBudget(transaction, preDispatchSettlement({
+            assessmentId: candidate.id,
+            requestFingerprint: candidate.requestFingerprint,
+          }));
+          budgetDisposition = 'released_pre_dispatch';
+        }
+      }
       await transaction.auditLog.create({
         data: {
           organizationId: project.organizationId,
@@ -605,6 +777,8 @@ export async function recoverExpiredVisualProgressAssessments(prisma, {
             failureCode: VISUAL_PROGRESS_LEASE_EXPIRED_CODE,
             attemptCount: candidate.attemptCount,
             recoveredRevision: candidate.revision + 1,
+            registryModelId: candidate.registryModelId || null,
+            budgetDisposition,
           },
         },
       });
@@ -615,7 +789,7 @@ export async function recoverExpiredVisualProgressAssessments(prisma, {
   return { recoveredIds };
 }
 
-async function recoverReplayIfExpired(prisma, row, { scope, now }) {
+async function recoverReplayIfExpired(prisma, row, { scope, now, settleBudget }) {
   if (
     row.status !== 'RUNNING'
     || !row.leaseExpiresAt
@@ -630,6 +804,7 @@ async function recoverReplayIfExpired(prisma, row, { scope, now }) {
     assessmentId: row.id,
     now,
     limit: 1,
+    settleBudget,
   });
   const refreshed = await prisma.visualProgressAssessment.findFirst({
     where: { id: row.id, projectId: scope.projectId },
@@ -639,18 +814,33 @@ async function recoverReplayIfExpired(prisma, row, { scope, now }) {
 
 async function markFailed(prisma, context, errorValue, now) {
   const code = failureCode(errorValue);
+  const providerRequestId = context.providerDispatchStartedAt
+    ? providerCorrelationId(errorValue?.requestId || context.providerRequestId)
+    : null;
   return prisma.$transaction(async (transaction) => {
     const result = await transaction.visualProgressAssessment.updateMany({
-      where: activeLeaseWhere(context, now),
+      where: {
+        ...activeLeaseWhere(context, now),
+        actualCostMicros: null,
+      },
       data: {
         status: 'FAILED',
         failureCode: code,
+        providerRequestId,
         completedAt: now,
         leaseExpiresAt: null,
         revision: { increment: 1 },
       },
     });
     if (result.count === 1) {
+      let budgetDisposition = 'retained_uncertain';
+      if (!context.providerDispatchStartedAt) {
+        await context.settleBudget(transaction, preDispatchSettlement({
+          assessmentId: context.assessmentId,
+          requestFingerprint: context.requestFingerprint,
+        }));
+        budgetDisposition = 'released_pre_dispatch';
+      }
       await transaction.auditLog.create({
         data: {
           organizationId: context.scope.organizationId,
@@ -663,80 +853,14 @@ async function markFailed(prisma, context, errorValue, now) {
             evidenceId: context.evidenceId,
             provider: context.provider.provider,
             model: context.provider.model,
+            registryModelId: context.dispatchPlan.selected.registryModelId,
             failureCode: code,
+            providerRequestId,
+            budgetDisposition,
           },
         },
       });
     }
-    return transaction.visualProgressAssessment.findFirst({
-      where: { id: context.assessmentId, projectId: context.scope.projectId },
-    });
-  });
-}
-
-async function finalizeAssessment(prisma, context, result, now) {
-  if (result.input.inputSha256 !== context.inputSha256) {
-    throw error(
-      'La huella procesada no coincide con la evidencia registrada.',
-      'VISUAL_PROGRESS_EVIDENCE_INTEGRITY_FAILED',
-      422,
-      context.assessmentId,
-    );
-  }
-  const assessment = result.assessment;
-  const status = assessment.abstained ? 'ABSTAINED' : 'COMPLETED';
-  return prisma.$transaction(async (transaction) => {
-    const updated = await transaction.visualProgressAssessment.updateMany({
-      where: activeLeaseWhere(context, now),
-      data: {
-        status,
-        summary: assessment.summary.trim(),
-        elementType: assessment.elementType?.trim() || null,
-        progressMin: assessment.abstained ? null : assessment.progressMin,
-        progressMax: assessment.abstained ? null : assessment.progressMax,
-        confidence: assessment.confidence,
-        quality: assessment.quality,
-        observations: assessment.facts,
-        limitations: assessment.limitations,
-        providerResponseId: result.responseId || null,
-        completedAt: now,
-        leaseExpiresAt: null,
-        reviewStatus: 'PENDING',
-        revision: { increment: 1 },
-      },
-    });
-    if (updated.count !== 1) {
-      throw error(
-        'La evaluación cambió mientras se procesaba.',
-        'VISUAL_PROGRESS_ASSESSMENT_CONFLICT',
-        409,
-        context.assessmentId,
-      );
-    }
-    await transaction.auditLog.create({
-      data: {
-        organizationId: context.scope.organizationId,
-        actorId: context.actorId,
-        action: assessment.abstained
-          ? 'progress.visual_assessment.abstained'
-          : 'progress.visual_assessment.completed',
-        entityType: 'VisualProgressAssessment',
-        entityId: context.assessmentId,
-        metadata: {
-          projectId: context.scope.projectId,
-          evidenceId: context.evidenceId,
-          taskId: context.taskId,
-          provider: result.provider,
-          model: result.model,
-          schemaVersion: VISUAL_PROGRESS_SCHEMA_VERSION,
-          inputSha256: context.inputSha256,
-          submittedSha256: result.input.submittedSha256,
-          width: result.input.width,
-          height: result.input.height,
-          abstained: assessment.abstained,
-        },
-      },
-    });
     return transaction.visualProgressAssessment.findFirst({
       where: { id: context.assessmentId, projectId: context.scope.projectId },
     });
@@ -868,6 +992,11 @@ async function prepareAssessment(prisma, {
   evidenceId,
   operationKeyHash,
   provider,
+  allowedRolloutRoles,
+  budgetLimitMicros,
+  readBudgetSnapshot,
+  planDispatch,
+  reserveBudget,
   now,
 }) {
   return runOperationalProjectMutation(prisma, scope, async (transaction) => {
@@ -895,6 +1024,38 @@ async function prepareAssessment(prisma, {
         409,
       );
     }
+
+    const budgetCivilDayUtc = utcCivilDay(now);
+    const budgetSnapshot = await readBudgetSnapshot(transaction, {
+      organizationId: scope.organizationId,
+      civilDayUtc: budgetCivilDayUtc,
+      budgetLimitMicros,
+      quotaPolicyVersion: AI_VISUAL_QUOTA_POLICY_VERSION,
+    });
+    const dispatchPlan = planDispatch({
+      requestedModelId: provider?.id || null,
+      allowedRolloutRoles,
+      budgetRemainingMicros: budgetSnapshot.budgetRemainingMicros,
+      maxRequestCostMicros: budgetLimitMicros,
+    });
+    if (provider && (
+      provider.id !== dispatchPlan.selected.registryModelId
+      || provider.provider !== dispatchPlan.selected.provider
+      || provider.model !== dispatchPlan.selected.model
+    )) {
+      throw error(
+        'El proveedor solicitado no coincide con la ruta gobernada.',
+        'VISUAL_PROGRESS_PROVIDER_ROUTE_MISMATCH',
+        409,
+      );
+    }
+    const selectedProvider = {
+      id: dispatchPlan.selected.registryModelId,
+      provider: dispatchPlan.selected.provider,
+      model: dispatchPlan.selected.model,
+      adapterId: dispatchPlan.selected.adapterId,
+      rolloutRole: dispatchPlan.selected.rolloutRole,
+    };
 
     const evidence = await transaction.progressEvidence.findFirst({
       where: {
@@ -950,11 +1111,18 @@ async function prepareAssessment(prisma, {
       evidenceId: evidence.id,
     });
     if (openAssessment) {
+      const uncertainProviderOutcome = openAssessment.registryModelId
+        && openAssessment.actualCostMicros == null
+        && !['PENDING', 'RUNNING'].includes(openAssessment.status);
       throw error(
-        openAssessment.reviewStatus === 'PENDING'
-          ? 'Esta evidencia ya tiene una lectura pendiente de revisión humana.'
-          : 'Esta evidencia ya tiene una lectura visual en curso.',
-        'VISUAL_PROGRESS_EVIDENCE_BUSY',
+        uncertainProviderOutcome
+          ? 'Esta evidencia tiene un despacho de proveedor pendiente de conciliación.'
+          : openAssessment.reviewStatus === 'PENDING'
+            ? 'Esta evidencia ya tiene una lectura pendiente de revisión humana.'
+            : 'Esta evidencia ya tiene una lectura visual en curso.',
+        uncertainProviderOutcome
+          ? 'VISUAL_PROGRESS_EVIDENCE_UNCERTAIN'
+          : 'VISUAL_PROGRESS_EVIDENCE_BUSY',
         409,
         openAssessment.id,
       );
@@ -982,8 +1150,14 @@ async function prepareAssessment(prisma, {
       taskId: evidence.taskId,
       taskRevision: evidence.task.revision,
       baselineHash,
-      provider: provider.provider,
-      model: provider.model,
+      registryModelId: dispatchPlan.selected.registryModelId,
+      provider: dispatchPlan.selected.provider,
+      model: dispatchPlan.selected.model,
+      providerRoute: dispatchPlan.selected.adapterId,
+      routePolicyVersion: dispatchPlan.routePolicyVersion,
+      pricingVersion: dispatchPlan.pricingVersion,
+      budgetReservationMicros: dispatchPlan.budgetReservationMicros,
+      quotaPolicyVersion: AI_VISUAL_QUOTA_POLICY_VERSION,
       analyzerVersion: ANALYZER_VERSION,
     });
     const row = await transaction.visualProgressAssessment.create({
@@ -993,8 +1167,20 @@ async function prepareAssessment(prisma, {
         evidenceId: evidence.id,
         operationKeyHash,
         requestFingerprint,
-        provider: provider.provider,
-        providerModel: provider.model,
+        provider: selectedProvider.provider,
+        providerModel: selectedProvider.model,
+        registryModelId: dispatchPlan.selected.registryModelId,
+        providerRoute: dispatchPlan.selected.adapterId,
+        routePolicyVersion: dispatchPlan.routePolicyVersion,
+        routeReasonCode: dispatchPlan.routeReasonCode,
+        pricingVersion: dispatchPlan.pricingVersion,
+        budgetCivilDayUtc,
+        budgetWorkload: dispatchPlan.workload,
+        quotaPolicyVersion: AI_VISUAL_QUOTA_POLICY_VERSION,
+        budgetLimitMicros: BigInt(budgetLimitMicros),
+        budgetReservationMicros: BigInt(dispatchPlan.budgetReservationMicros),
+        estimateBasis: dispatchPlan.estimateBasis,
+        estimatedCostMicros: BigInt(dispatchPlan.estimatedCostMicros),
         analyzerVersion: ANALYZER_VERSION,
         inputSha256: source.expectedSha256,
         baselineHash,
@@ -1005,6 +1191,13 @@ async function prepareAssessment(prisma, {
         attemptCount: 1,
         requestedById: actorId,
       },
+    });
+    await reserveBudget(transaction, {
+      assessmentId: row.id,
+      civilDayUtc: budgetCivilDayUtc,
+      budgetLimitMicros,
+      reservationMicros: dispatchPlan.budgetReservationMicros,
+      quotaPolicyVersion: AI_VISUAL_QUOTA_POLICY_VERSION,
     });
     await transaction.auditLog.create({
       data: {
@@ -1017,8 +1210,18 @@ async function prepareAssessment(prisma, {
           projectId: scope.projectId,
           taskId: evidence.taskId,
           evidenceId: evidence.id,
-          provider: provider.provider,
-          model: provider.model,
+          provider: selectedProvider.provider,
+          model: selectedProvider.model,
+          registryModelId: dispatchPlan.selected.registryModelId,
+          providerRoute: dispatchPlan.selected.adapterId,
+          routePolicyVersion: dispatchPlan.routePolicyVersion,
+          routeReasonCode: dispatchPlan.routeReasonCode,
+          pricingVersion: dispatchPlan.pricingVersion,
+          budgetCivilDayUtc: budgetCivilDayUtc.toISOString().slice(0, 10),
+          quotaPolicyVersion: AI_VISUAL_QUOTA_POLICY_VERSION,
+          budgetLimitMicros: String(budgetLimitMicros),
+          budgetReservationMicros: String(dispatchPlan.budgetReservationMicros),
+          estimateBasis: dispatchPlan.estimateBasis,
           analyzerVersion: ANALYZER_VERSION,
           baselineHash,
         },
@@ -1029,6 +1232,8 @@ async function prepareAssessment(prisma, {
       source,
       caption: evidence.caption || '',
       taskContext: taskProviderContext(evidence.task, baselineHash),
+      provider: selectedProvider,
+      dispatchPlan,
     };
   });
 }
@@ -1038,7 +1243,50 @@ function replayResult(row) {
     assessment: serializeVisualProgressAssessment(row),
     replayed: true,
     pending: row.status === 'RUNNING' || row.status === 'PENDING',
+    costPending: Boolean(
+      row.registryModelId
+      && ['COMPLETED', 'ABSTAINED'].includes(row.status)
+      && row.actualCostMicros == null
+    ),
   };
+}
+
+async function replayStagedVisualResult(prisma, row, { scope, now, settleBudget }) {
+  const receipt = await prisma.visualProgressProviderResultReceipt.findUnique({
+    where: { assessmentId: row.id },
+  });
+  if (!receipt) return null;
+  if (!receipt.appliedAt) {
+    try {
+      const applied = await applyVisualProgressProviderResultReceipt(prisma, {
+        organizationId: scope.organizationId,
+        projectId: scope.projectId,
+        assessmentId: row.id,
+        now,
+        settleBudget,
+      });
+      return {
+        assessment: serializeVisualProgressAssessment(applied.assessment),
+        replayed: true,
+        pending: false,
+        costPending: applied.costPending,
+      };
+    } catch {
+      const pending = await prisma.visualProgressAssessment.findFirst({
+        where: { id: row.id, projectId: scope.projectId },
+      });
+      return {
+        assessment: serializeVisualProgressAssessment(pending || row),
+        replayed: true,
+        pending: true,
+        costPending: true,
+      };
+    }
+  }
+  const completed = await prisma.visualProgressAssessment.findFirst({
+    where: { id: row.id, projectId: scope.projectId },
+  });
+  return replayResult(completed || row);
 }
 
 export async function requestVisualProgressAssessment(prisma, {
@@ -1049,7 +1297,13 @@ export async function requestVisualProgressAssessment(prisma, {
   now = new Date(),
   analyze = analyzeVisualProgress,
   readFile = readProtectedFile,
-  provider = resolvePrimaryVisualProgressModel(),
+  provider = null,
+  allowedRolloutRoles = [MODEL_ROLLOUT_ROLES.PRIMARY],
+  budgetLimitMicros = undefined,
+  readBudgetSnapshot = readVisualProgressBudgetSnapshot,
+  planDispatch = planVisualProgressDispatch,
+  reserveBudget = reserveAiVisualBudget,
+  settleBudget = settleAiVisualBudget,
   clock = () => new Date(),
 } = {}) {
   const scope = trustedScope(rawScope);
@@ -1073,7 +1327,17 @@ export async function requestVisualProgressAssessment(prisma, {
         existing.id,
       );
     }
-    existing = await recoverReplayIfExpired(prisma, existing, { scope, now });
+    const stagedReplay = await replayStagedVisualResult(prisma, existing, {
+      scope,
+      now,
+      settleBudget,
+    });
+    if (stagedReplay) return stagedReplay;
+    existing = await recoverReplayIfExpired(prisma, existing, {
+      scope,
+      now,
+      settleBudget,
+    });
     return replayResult(existing);
   }
 
@@ -1084,7 +1348,15 @@ export async function requestVisualProgressAssessment(prisma, {
     projectId: scope.projectId,
     evidenceId,
     now,
+    settleBudget,
   });
+
+  let resolvedBudgetLimitMicros;
+  try {
+    resolvedBudgetLimitMicros = resolveVisualProgressDailyBudgetMicros(budgetLimitMicros);
+  } catch (cause) {
+    throw visualDispatchError(cause) || cause;
+  }
 
   let prepared;
   try {
@@ -1094,6 +1366,11 @@ export async function requestVisualProgressAssessment(prisma, {
       evidenceId,
       operationKeyHash,
       provider,
+      allowedRolloutRoles,
+      budgetLimitMicros: resolvedBudgetLimitMicros,
+      readBudgetSnapshot,
+      planDispatch,
+      reserveBudget,
       now,
     });
   } catch (cause) {
@@ -1102,7 +1379,17 @@ export async function requestVisualProgressAssessment(prisma, {
         where: { projectId: scope.projectId, operationKeyHash },
       });
       if (replay && replay.evidenceId === evidenceId) {
-        replay = await recoverReplayIfExpired(prisma, replay, { scope, now });
+        const stagedReplay = await replayStagedVisualResult(prisma, replay, {
+          scope,
+          now,
+          settleBudget,
+        });
+        if (stagedReplay) return stagedReplay;
+        replay = await recoverReplayIfExpired(prisma, replay, {
+          scope,
+          now,
+          settleBudget,
+        });
         return replayResult(replay);
       }
       const openAssessment = await findOpenVisualAssessment(prisma, {
@@ -1110,21 +1397,29 @@ export async function requestVisualProgressAssessment(prisma, {
         evidenceId,
       });
       if (openAssessment) {
+        const uncertainProviderOutcome = openAssessment.registryModelId
+          && openAssessment.actualCostMicros == null
+          && !['PENDING', 'RUNNING'].includes(openAssessment.status);
         throw error(
-          'Esta evidencia ya tiene una lectura visual activa o pendiente de revisión.',
-          'VISUAL_PROGRESS_EVIDENCE_BUSY',
+          uncertainProviderOutcome
+            ? 'Esta evidencia tiene un despacho de proveedor pendiente de conciliación.'
+            : 'Esta evidencia ya tiene una lectura visual activa o pendiente de revisión.',
+          uncertainProviderOutcome
+            ? 'VISUAL_PROGRESS_EVIDENCE_UNCERTAIN'
+            : 'VISUAL_PROGRESS_EVIDENCE_BUSY',
           409,
           openAssessment.id,
         );
       }
     }
-    throw cause;
+    throw visualDispatchError(cause) || cause;
   }
 
   let context = {
     scope,
     actorId,
     assessmentId: prepared.row.id,
+    requestFingerprint: prepared.row.requestFingerprint,
     revision: prepared.row.revision,
     attemptCount: prepared.row.attemptCount,
     leaseExpiresAt: prepared.row.leaseExpiresAt,
@@ -1136,7 +1431,10 @@ export async function requestVisualProgressAssessment(prisma, {
     sourceMimeType: prepared.source.mimeType,
     sourceSize: prepared.source.size,
     createdAt: prepared.row.createdAt,
-    provider,
+    provider: prepared.provider,
+    dispatchPlan: prepared.dispatchPlan,
+    providerDispatchStartedAt: prepared.row.providerDispatchStartedAt || null,
+    settleBudget,
   };
   try {
     await freshProviderGate(prisma, context, now);
@@ -1173,27 +1471,82 @@ export async function requestVisualProgressAssessment(prisma, {
     // Recheck at the last possible boundary before any image leaves ObraSaaS.
     const dispatchAt = validDate(clock(), 'clock');
     await freshProviderGate(prisma, context, dispatchAt);
-    context = await renewVisualProgressLease(prisma, context, dispatchAt);
     const providerResult = await analyze({
-      modelId: provider.id,
-      allowedRolloutRoles: [MODEL_ROLLOUT_ROLES.PRIMARY],
+      modelId: context.dispatchPlan.selected.registryModelId,
+      allowedRolloutRoles: [context.dispatchPlan.selected.rolloutRole],
+      enabledAdapterIds: [context.dispatchPlan.selected.adapterId],
       imageBuffer,
       mimeType: prepared.source.mimeType,
       organizationId: scope.organizationId,
       safetySubjectId: actorId,
       taskContext: prepared.taskContext,
       caption: prepared.caption,
+      onBeforeProviderRequest: async (route) => {
+        const providerDispatchAt = validDate(clock(), 'clock');
+        context = await markVisualProgressProviderDispatchStarted(
+          prisma,
+          context,
+          providerDispatchAt,
+          route,
+        );
+      },
     });
-    const completedAt = notBefore(validDate(clock(), 'clock'), context.createdAt);
-    const completed = await finalizeAssessment(prisma, context, providerResult, completedAt);
-    return {
-      assessment: serializeVisualProgressAssessment(completed),
-      replayed: false,
-      pending: false,
+    if (!context.providerDispatchStartedAt) {
+      throw error(
+        'El adaptador no confirmó la frontera durable de despacho.',
+        'VISUAL_PROGRESS_PROVIDER_DISPATCH_UNCONFIRMED',
+        502,
+        context.assessmentId,
+      );
+    }
+    context = {
+      ...context,
+      providerRequestId: providerCorrelationId(providerResult.requestId),
     };
+    const completedAt = notBefore(
+      validDate(clock(), 'clock'),
+      context.providerDispatchStartedAt || context.createdAt,
+    );
+    await stageVisualProgressProviderResultReceipt(prisma, {
+      organizationId: scope.organizationId,
+      projectId: scope.projectId,
+      assessmentId: context.assessmentId,
+      providerResult,
+      receivedAt: completedAt,
+    });
+    try {
+      const completed = await applyVisualProgressProviderResultReceipt(prisma, {
+        organizationId: scope.organizationId,
+        projectId: scope.projectId,
+        assessmentId: context.assessmentId,
+        now: completedAt,
+        settleBudget,
+      });
+      return {
+        assessment: serializeVisualProgressAssessment(completed.assessment),
+        replayed: false,
+        pending: false,
+        costPending: completed.costPending,
+      };
+    } catch {
+      // The provider has already returned and the normalized receipt is
+      // durable. Never mark it failed or dispatch the provider again: a replay
+      // or the receipt worker can finish the projection and settlement.
+      const pending = await prisma.visualProgressAssessment.findFirst({
+        where: { id: context.assessmentId, projectId: scope.projectId },
+      });
+      return {
+        assessment: serializeVisualProgressAssessment(pending || prepared.row),
+        replayed: false,
+        pending: true,
+        costPending: true,
+      };
+    }
   } catch (cause) {
     const failedAt = notBefore(validDate(clock(), 'clock'), context.createdAt);
-    await markFailed(prisma, context, cause, failedAt).catch(() => null);
+    const dispatchFailure = visualDispatchError(cause, context.assessmentId);
+    await markFailed(prisma, context, dispatchFailure || cause, failedAt).catch(() => null);
+    if (dispatchFailure) throw dispatchFailure;
     if (cause instanceof VisualProgressAssessmentError) throw cause;
     throw error(
       cause instanceof VisualProgressProviderError && cause.code === 'PROVIDER_NOT_CONFIGURED'

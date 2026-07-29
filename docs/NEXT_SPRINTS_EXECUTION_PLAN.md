@@ -10,7 +10,7 @@ El estado se expresa por nivel de evidencia: código y pruebas locales, migraci�
 - las migraciones y verificadores de baseline/forecast fueron aprobados en el Preview aislado de la rama `codex/platform-ux-foundation`; Production permanece fuera del alcance;
 - el commit `d6b29b9` quedó `Ready` en Vercel Preview: se detectaron 97 migraciones, las dos nuevas H3.1 se aplicaron en Neon aislado y todos los verificadores de migración pasaron; el corte conserva [deployment IDs, timestamps y smokes sanitizados](./evidence/2026-07-28-preview-d6b29b9.md), pero no acredita aún el smoke UI/runtime ni la ejecución observada del cron;
 - falta cerrar el smoke UI de publicación de baseline y forecast en el tenant de prueba, porque el acceso local directo a la conexión Preview está deliberadamente protegido y no se sustituye con una conexión de Production;
-- Meta, media entrante, identidad/cobro y Vision siguen siendo gates externos o de credencial explícita.
+- Meta, media entrante e identidad/cobro siguen siendo gates externos. La credencial dedicada de Vision ya fue elegida; faltan deploy del ledger gobernado, gate de datos y foto real.
 
 ## Entregado, con smoke UI Preview pendiente: S3.1/S6.1 — baseline y forecast controlado
 
@@ -34,7 +34,7 @@ El estado se expresa por nivel de evidencia: código y pruebas locales, migraci�
 - integridad SHA-256, storage privado y revisión de evidencia;
 - `VisualProgressAssessment` con provider registry, rango/abstención, lease persistente recuperable y revisión CAS;
 - OpenAI es el candidato primario de Vision; Qwen3-VL/GLM-5V son challengers visuales y GLM-OCR/GLM-5.2 especialistas OCR/texto evaluables. No hay fan-out sobre evidencia real;
-- la activación de cualquier llamada OpenAI está bloqueada hasta elegir explícitamente reutilizar la clave existente de Vercel o crear una clave dedicada de piloto;
+- la clave OpenAI dedicada ya está aislada; antes de reactivar llamadas deben desplegarse presupuesto, recibo inmutable, replay/worker y conciliación interna con comprobante recuperable, cerrar DPA/retención y mantener `detail:high` con prompt cache implícito deshabilitado. `RECONCILED_USAGE` permanece cerrado hasta derivar costo desde usage y pricing persistidos;
 - faltan foto Meta real, dataset consentido, ground truth, benchmark, DPA/retención y observabilidad de costo/latencia;
 - las cargas web privadas siguen limitadas a 4 MiB; carga directa autorizada, checksum y finalización server-side quedan como cierre para videos/documentos mayores.
 

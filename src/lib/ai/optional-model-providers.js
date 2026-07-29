@@ -13,6 +13,10 @@ import {
   validateAndSanitizeVisualImage,
   validateVisualProgressAssessment,
 } from "./visual-progress-provider.js";
+import {
+  normalizeChatCompletionsUsage,
+  normalizeProviderReportedCostUsd,
+} from "./provider-telemetry.js";
 
 const HF_CHAT_URL = "https://router.huggingface.co/v1/chat/completions";
 const ZAI_CHAT_URL = "https://api.z.ai/api/paas/v4/chat/completions";
@@ -122,15 +126,6 @@ function optionalHuggingFaceBillingAccount(value) {
   return account;
 }
 
-function normalizeUsage(usage) {
-  const integer = (value) => (Number.isSafeInteger(value) && value >= 0 ? value : null);
-  return {
-    inputTokens: integer(usage?.prompt_tokens),
-    outputTokens: integer(usage?.completion_tokens),
-    totalTokens: integer(usage?.total_tokens),
-  };
-}
-
 function chatContent(result, providerName) {
   const choice = Array.isArray(result?.choices) ? result.choices[0] : null;
   const finishReason = choice?.finish_reason || null;
@@ -158,6 +153,7 @@ function parseVisualAssessment(content, providerName) {
 }
 
 function visualResult({ provider, model, route, result, requestId, assessment, image }) {
+  const providerReportedCostUsd = normalizeProviderReportedCostUsd(result);
   return {
     provider,
     model,
@@ -165,7 +161,8 @@ function visualResult({ provider, model, route, result, requestId, assessment, i
     responseId: typeof result?.id === "string" ? result.id : null,
     requestId: requestId || (typeof result?.request_id === "string" ? result.request_id : null),
     assessment,
-    usage: normalizeUsage(result?.usage),
+    usage: normalizeChatCompletionsUsage(result?.usage),
+    ...(providerReportedCostUsd == null ? {} : { providerReportedCostUsd }),
     input: {
       mimeType: image.mimeType,
       width: image.width,
@@ -479,17 +476,32 @@ function assertCompleteOcrWindow(result, { startPageId, endPageId, requestId }) 
 }
 
 function aggregateOcrUsage(chunks) {
-  const normalized = chunks.map(({ result }) => normalizeUsage(result?.usage));
-  const sumWhenComplete = (field) => (
-    normalized.every((usage) => Number.isSafeInteger(usage[field]))
-      ? normalized.reduce((total, usage) => total + usage[field], 0)
-      : null
-  );
-  return {
+  const normalized = chunks.map(({ result }) => normalizeChatCompletionsUsage(result?.usage));
+  if (normalized.some((usage) => usage == null)) return null;
+  const sumWhenComplete = (field) => {
+    let total = 0;
+    for (const usage of normalized) {
+      const value = usage[field];
+      if (!Number.isSafeInteger(value) || value < 0 || total > Number.MAX_SAFE_INTEGER - value) return null;
+      total += value;
+    }
+    return total;
+  };
+  const usage = {
     inputTokens: sumWhenComplete("inputTokens"),
     outputTokens: sumWhenComplete("outputTokens"),
     totalTokens: sumWhenComplete("totalTokens"),
+    cachedInputTokens: sumWhenComplete("cachedInputTokens"),
   };
+  if (usage.inputTokens == null || usage.outputTokens == null || usage.totalTokens == null) return null;
+  return usage;
+}
+
+function aggregateProviderReportedCostUsd(chunks) {
+  const costs = chunks.map(({ result }) => normalizeProviderReportedCostUsd(result));
+  if (costs.some((cost) => cost == null)) return null;
+  const total = costs.reduce((sum, cost) => sum + cost, 0);
+  return Number.isFinite(total) && total >= 0 && total <= Number.MAX_SAFE_INTEGER ? total : null;
 }
 
 function normalizeOcrMarkdown(chunks) {
@@ -681,6 +693,7 @@ export async function extractDocumentWithGlmOcr({
     && normalization.droppedItems === 0
     && normalization.degradedItems === 0
     && !normalization.markdownTruncated;
+  const providerReportedCostUsd = aggregateProviderReportedCostUsd(chunks);
 
   return {
     provider: "z-ai",
@@ -696,6 +709,7 @@ export async function extractDocumentWithGlmOcr({
     normalization,
     pages,
     usage: aggregateOcrUsage(chunks),
+    ...(providerReportedCostUsd == null ? {} : { providerReportedCostUsd }),
     input: {
       mimeType: input.mimeType,
       bytes: input.buffer.length,
@@ -798,12 +812,14 @@ export async function generateJsonWithGlm52(options = {}) {
   if (!applicationOutputValid) {
     fail("PROVIDER_SCHEMA_INVALID", "Z.ai GLM-5.2 output failed application validation.", { requestId });
   }
+  const providerReportedCostUsd = normalizeProviderReportedCostUsd(result);
   return {
     provider: "z-ai",
     model,
     responseId: typeof result.id === "string" ? result.id : null,
     requestId: requestId || (typeof result.request_id === "string" ? result.request_id : null),
     output,
-    usage: normalizeUsage(result.usage),
+    usage: normalizeChatCompletionsUsage(result.usage),
+    ...(providerReportedCostUsd == null ? {} : { providerReportedCostUsd }),
   };
 }

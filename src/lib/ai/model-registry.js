@@ -11,6 +11,35 @@ const ROLLOUT_ROLES = Object.freeze({
   SPECIALIST: "specialist",
 });
 
+const CAPABILITIES = Object.freeze({
+  VISION_INPUT: "vision-input",
+  STRUCTURED_OUTPUT: "structured-output",
+  REASONING: "reasoning",
+  OCR: "ocr",
+  LAYOUT_EXTRACTION: "layout-extraction",
+  TEXT_GENERATION: "text-generation",
+});
+
+const DATA_CLASSES = Object.freeze({
+  PUBLIC: "public",
+  INTERNAL: "internal",
+  CONFIDENTIAL: "confidential",
+  RESTRICTED: "restricted",
+});
+
+export const MODEL_PRICING_VERSION = "2026-07-28";
+
+const OPENAI_DATA_CLASSES = Object.freeze([
+  DATA_CLASSES.PUBLIC,
+  DATA_CLASSES.INTERNAL,
+  DATA_CLASSES.CONFIDENTIAL,
+]);
+
+const COMMUNITY_DATA_CLASSES = Object.freeze([
+  DATA_CLASSES.PUBLIC,
+  DATA_CLASSES.INTERNAL,
+]);
+
 const entries = [
   {
     id: "openai:gpt-5.6-sol",
@@ -20,6 +49,41 @@ const entries = [
     rolloutRole: ROLLOUT_ROLES.PRIMARY,
     optInRequired: false,
     workloads: [WORKLOADS.VISUAL_PROGRESS],
+    capabilities: [
+      CAPABILITIES.VISION_INPUT,
+      CAPABILITIES.STRUCTURED_OUTPUT,
+      CAPABILITIES.REASONING,
+    ],
+    dataClasses: OPENAI_DATA_CLASSES,
+    pricing: {
+      version: MODEL_PRICING_VERSION,
+      inputMicrosPerMillionTokens: 5_000_000,
+      cachedInputMicrosPerMillionTokens: 500_000,
+      outputMicrosPerMillionTokens: 30_000_000,
+      preDispatchReservationMicros: 250_000,
+    },
+  },
+  {
+    id: "openai:gpt-5.6-terra",
+    provider: "openai",
+    adapterId: "openai-responses-visual",
+    model: "gpt-5.6-terra",
+    rolloutRole: ROLLOUT_ROLES.SHADOW,
+    optInRequired: true,
+    workloads: [WORKLOADS.VISUAL_PROGRESS],
+    capabilities: [
+      CAPABILITIES.VISION_INPUT,
+      CAPABILITIES.STRUCTURED_OUTPUT,
+      CAPABILITIES.REASONING,
+    ],
+    dataClasses: OPENAI_DATA_CLASSES,
+    pricing: {
+      version: MODEL_PRICING_VERSION,
+      inputMicrosPerMillionTokens: 2_500_000,
+      cachedInputMicrosPerMillionTokens: 250_000,
+      outputMicrosPerMillionTokens: 15_000_000,
+      preDispatchReservationMicros: 125_000,
+    },
   },
   {
     id: "huggingface:qwen3-vl",
@@ -29,6 +93,8 @@ const entries = [
     rolloutRole: ROLLOUT_ROLES.SHADOW,
     optInRequired: true,
     workloads: [WORKLOADS.VISUAL_PROGRESS],
+    capabilities: [CAPABILITIES.VISION_INPUT, CAPABILITIES.STRUCTURED_OUTPUT],
+    dataClasses: COMMUNITY_DATA_CLASSES,
   },
   {
     id: "z-ai:glm-5v-turbo",
@@ -38,6 +104,8 @@ const entries = [
     rolloutRole: ROLLOUT_ROLES.CHALLENGER,
     optInRequired: true,
     workloads: [WORKLOADS.VISUAL_PROGRESS],
+    capabilities: [CAPABILITIES.VISION_INPUT, CAPABILITIES.STRUCTURED_OUTPUT],
+    dataClasses: COMMUNITY_DATA_CLASSES,
   },
   {
     id: "z-ai:glm-ocr",
@@ -47,6 +115,8 @@ const entries = [
     rolloutRole: ROLLOUT_ROLES.SPECIALIST,
     optInRequired: true,
     workloads: [WORKLOADS.OCR],
+    capabilities: [CAPABILITIES.OCR, CAPABILITIES.LAYOUT_EXTRACTION],
+    dataClasses: COMMUNITY_DATA_CLASSES,
   },
   {
     id: "z-ai:glm-5.2",
@@ -56,17 +126,31 @@ const entries = [
     rolloutRole: ROLLOUT_ROLES.SPECIALIST,
     optInRequired: true,
     workloads: [WORKLOADS.TEXT],
+    capabilities: [CAPABILITIES.TEXT_GENERATION, CAPABILITIES.STRUCTURED_OUTPUT],
+    dataClasses: COMMUNITY_DATA_CLASSES,
   },
 ];
 
 export const MODEL_WORKLOADS = WORKLOADS;
 export const MODEL_ROLLOUT_ROLES = ROLLOUT_ROLES;
+export const MODEL_CAPABILITIES = CAPABILITIES;
+export const MODEL_DATA_CLASSES = DATA_CLASSES;
+
+function freezeRegistryEntry(entry) {
+  return Object.freeze({
+    ...entry,
+    workloads: Object.freeze([...entry.workloads]),
+    capabilities: Object.freeze([...entry.capabilities]),
+    dataClasses: Object.freeze([...entry.dataClasses]),
+    ...(entry.pricing ? { pricing: Object.freeze({ ...entry.pricing }) } : {}),
+  });
+}
 
 export const MODEL_REGISTRY = Object.freeze(
   Object.fromEntries(
     entries.map((entry) => [
       entry.id,
-      Object.freeze({ ...entry, workloads: Object.freeze([...entry.workloads]) }),
+      freezeRegistryEntry(entry),
     ]),
   ),
 );

@@ -284,6 +284,14 @@ test("OpenAI adapter disables response storage, uses strict output, and returns 
         id: "resp_123",
         status: "completed",
         output: [{ type: "message", content: [{ type: "output_text", text: JSON.stringify(assessment()) }] }],
+        usage: {
+          input_tokens: 120,
+          output_tokens: 30,
+          total_tokens: 150,
+          input_tokens_details: { cached_tokens: 40, cache_write_tokens: 0 },
+          cost_usd: 0.0042,
+        },
+        raw_private_payload: "must-not-leak",
       });
     },
   });
@@ -291,6 +299,8 @@ test("OpenAI adapter disables response storage, uses strict output, and returns 
   assert.equal(captured.url, "https://api.openai.com/v1/responses");
   assert.equal(captured.body.model, "gpt-5.6-sol");
   assert.equal(captured.body.store, false);
+  assert.deepEqual(captured.body.prompt_cache_options, { mode: "explicit" });
+  assert.equal(Object.hasOwn(captured.body.prompt_cache_options, "breakpoints"), false);
   assert.deepEqual(captured.body.reasoning, { effort: "medium" });
   assert.equal(captured.body.text.format.type, "json_schema");
   assert.equal(captured.body.text.format.strict, true);
@@ -308,7 +318,75 @@ test("OpenAI adapter disables response storage, uses strict output, and returns 
   assert.deepEqual(result.assessment, assessment());
   assert.equal(result.responseId, "resp_123");
   assert.equal(result.requestId, "req_safe");
+  assert.deepEqual(result.usage, {
+    inputTokens: 120,
+    outputTokens: 30,
+    totalTokens: 150,
+    cachedInputTokens: 40,
+    cacheWriteTokens: 0,
+  });
+  assert.equal(result.providerReportedCostUsd, 0.0042);
   assert.equal(Object.hasOwn(result, "raw"), false);
+  assert.equal(JSON.stringify(result).includes("must-not-leak"), false);
+});
+
+test("OpenAI telemetry fails closed on missing, unsafe, negative, or contradictory usage", async () => {
+  const invalidUsages = [
+    undefined,
+    { input_tokens: -1, output_tokens: 2, total_tokens: 1 },
+    { input_tokens: Number.MAX_SAFE_INTEGER + 1, output_tokens: 0, total_tokens: 0 },
+    { input_tokens: 10, output_tokens: 2, total_tokens: 11 },
+    {
+      input_tokens: 10,
+      output_tokens: 2,
+      total_tokens: 12,
+      input_tokens_details: { cached_tokens: 11, cache_write_tokens: 0 },
+    },
+    {
+      input_tokens: 10,
+      output_tokens: 2,
+      total_tokens: 12,
+      input_tokens_details: { cached_tokens: 1, cache_write_tokens: 1 },
+    },
+  ];
+
+  for (const usage of invalidUsages) {
+    const result = await analyzeVisualProgressWithOpenAI({
+      imageBuffer: pngFixture(),
+      mimeType: "image/png",
+      organizationId: "org_usage_validation",
+      apiKey: "sk-test-secret",
+      safetyIdentifierSecret: TEST_SAFETY_IDENTIFIER_SECRET,
+      fetchImpl: async () => responseJson({
+        id: "resp_invalid_usage",
+        status: "completed",
+        output: [{ type: "message", content: [{ type: "output_text", text: JSON.stringify(assessment()) }] }],
+        ...(usage === undefined ? {} : { usage }),
+        cost_usd: "0.01",
+      }),
+    });
+    assert.equal(result.usage, null);
+    assert.equal(Object.hasOwn(result, "providerReportedCostUsd"), false);
+  }
+});
+
+test("OpenAI telemetry fails closed when explicit-cache counters are unreported", async () => {
+  const result = await analyzeVisualProgressWithOpenAI({
+    imageBuffer: pngFixture(),
+    mimeType: "image/png",
+    organizationId: "org_usage_without_cache_details",
+    apiKey: "sk-test-secret",
+    safetyIdentifierSecret: TEST_SAFETY_IDENTIFIER_SECRET,
+    fetchImpl: async () => responseJson({
+      id: "resp_usage_without_cache_details",
+      status: "completed",
+      output: [{ type: "message", content: [{ type: "output_text", text: JSON.stringify(assessment()) }] }],
+      usage: { input_tokens: 10, output_tokens: 2, total_tokens: 12 },
+    }),
+  });
+
+  assert.equal(result.usage, null);
+  assert.equal(Object.hasOwn(result, "providerReportedCostUsd"), false);
 });
 
 test("OpenAI safety identifier is stable across API key rotation and changes with its dedicated secret", async () => {
@@ -392,11 +470,85 @@ test("OpenAI adapter fails closed on unregistered models or image detail policie
     analyzeVisualProgressWithOpenAI({ ...base, model: "unregistered-model" }),
     (error) => error.code === "PROVIDER_MODEL_INVALID",
   );
-  await assert.rejects(
-    analyzeVisualProgressWithOpenAI({ ...base, imageDetail: "auto" }),
-    (error) => error.code === "PROVIDER_INPUT_INVALID",
-  );
+  for (const imageDetail of ["auto", "low", "original"]) {
+    await assert.rejects(
+      analyzeVisualProgressWithOpenAI({ ...base, imageDetail }),
+      (error) => error.code === "PROVIDER_INPUT_INVALID",
+    );
+  }
   assert.equal(calls, 0);
+});
+
+test("OpenAI adapter accepts the explicitly routed registered Terra shadow model", async () => {
+  let capturedModel = null;
+  const result = await analyzeVisualProgressWithOpenAI({
+    imageBuffer: pngFixture(),
+    mimeType: "image/png",
+    organizationId: "org_terra_shadow",
+    apiKey: "sk-test-secret",
+    safetyIdentifierSecret: TEST_SAFETY_IDENTIFIER_SECRET,
+    model: "gpt-5.6-terra",
+    fetchImpl: async (_url, init) => {
+      capturedModel = JSON.parse(init.body).model;
+      return responseJson({
+        id: "resp_terra_shadow",
+        status: "completed",
+        output: [{
+          type: "message",
+          content: [{ type: "output_text", text: JSON.stringify(assessment()) }],
+        }],
+        usage: {
+          input_tokens: 20,
+          output_tokens: 5,
+          total_tokens: 25,
+          input_tokens_details: { cached_tokens: 0, cache_write_tokens: 0 },
+        },
+      });
+    },
+  });
+
+  assert.equal(capturedModel, "gpt-5.6-terra");
+  assert.equal(result.model, "gpt-5.6-terra");
+  assert.equal(result.responseId, "resp_terra_shadow");
+});
+
+test("OpenAI adapter persists the dispatch boundary after local validation and before fetch", async () => {
+  const events = [];
+  await analyzeVisualProgressWithOpenAI({
+    imageBuffer: pngFixture(),
+    mimeType: "image/png",
+    organizationId: "org_dispatch_boundary",
+    apiKey: "sk-test-secret",
+    safetyIdentifierSecret: TEST_SAFETY_IDENTIFIER_SECRET,
+    onBeforeProviderRequest: async (route) => {
+      events.push(["boundary", route]);
+    },
+    fetchImpl: async () => {
+      events.push(["fetch"]);
+      return responseJson({
+        id: "resp_dispatch_boundary",
+        status: "completed",
+        output: [{
+          type: "message",
+          content: [{ type: "output_text", text: JSON.stringify(assessment()) }],
+        }],
+        usage: {
+          input_tokens: 12,
+          output_tokens: 3,
+          total_tokens: 15,
+          input_tokens_details: { cached_tokens: 0, cache_write_tokens: 0 },
+        },
+      });
+    },
+  });
+
+  assert.equal(events.length, 2);
+  assert.deepEqual(events[0], ["boundary", {
+    provider: "openai",
+    model: "gpt-5.6-sol",
+    registryModelId: "openai:gpt-5.6-sol",
+  }]);
+  assert.deepEqual(events[1], ["fetch"]);
 });
 
 test("provider-neutral entry point performs exactly one explicitly selected dispatch", async () => {

@@ -102,7 +102,13 @@ test("Hugging Face adapter pins one explicit provider and normalizes a strict vi
       return responseJson({
         id: "hf_response",
         choices: [{ finish_reason: "stop", message: { content: JSON.stringify(assessment()) } }],
-        usage: { prompt_tokens: 100, completion_tokens: 50, total_tokens: 150 },
+        usage: {
+          prompt_tokens: 100,
+          completion_tokens: 50,
+          total_tokens: 150,
+          prompt_tokens_details: { cached_tokens: 25 },
+          cost_usd: 0.002,
+        },
       });
     },
   });
@@ -119,7 +125,13 @@ test("Hugging Face adapter pins one explicit provider and normalizes a strict vi
   assert.equal(Buffer.from(imageUrl.split(",")[1], "base64").includes(Buffer.from("GPS=private")), false);
   assert.equal(result.providerRoute, "featherless-ai");
   assert.deepEqual(result.assessment, assessment());
-  assert.deepEqual(result.usage, { inputTokens: 100, outputTokens: 50, totalTokens: 150 });
+  assert.deepEqual(result.usage, {
+    inputTokens: 100,
+    outputTokens: 50,
+    totalTokens: 150,
+    cachedInputTokens: 25,
+  });
+  assert.equal(result.providerReportedCostUsd, 0.002);
 });
 
 test("Hugging Face adapter rejects automatic routing policies before fetch", async () => {
@@ -367,7 +379,13 @@ test("GLM-OCR exhaustively parses a 65-page PDF through standalone 30-page chunk
           height: 480,
         }]),
         data_info: { num_pages: returnedPages },
-        usage: { prompt_tokens: 10, completion_tokens: 2, total_tokens: 12 },
+        usage: {
+          prompt_tokens: 10,
+          completion_tokens: 2,
+          total_tokens: 12,
+          prompt_tokens_details: { cached_tokens: 4 },
+          cost_usd: 0.001,
+        },
       }, { requestId: `req_${returnedStart}` });
     },
   });
@@ -400,7 +418,13 @@ test("GLM-OCR exhaustively parses a 65-page PDF through standalone 30-page chunk
   assert.equal(result.markdown, "# pages 1-30\n\n# pages 31-60\n\n# pages 61-65");
   assert.deepEqual(result.responseIds, ["ocr_pdf_1_30", "ocr_pdf_31_60", "ocr_pdf_61_65"]);
   assert.deepEqual(result.requestIds, ["req_1", "req_31", "req_61"]);
-  assert.deepEqual(result.usage, { inputTokens: 30, outputTokens: 6, totalTokens: 36 });
+  assert.deepEqual(result.usage, {
+    inputTokens: 30,
+    outputTokens: 6,
+    totalTokens: 36,
+    cachedInputTokens: 12,
+  });
+  assert.equal(result.providerReportedCostUsd, 0.003);
   assert.equal(result.normalization.providerCoverageComplete, true);
   assert.equal(result.normalization.layoutTruncated, false);
   assert.equal(result.normalization.automationEligible, true);
@@ -648,6 +672,8 @@ test("GLM-5.2 adapter is text/JSON-only and never accepts an image modality", as
   assert.equal(JSON.stringify(request.body).includes("image_url"), false);
   assert.equal(Object.hasOwn(request.body, "store"), false);
   assert.deepEqual(result.output, { kind: "invoice" });
+  assert.equal(result.usage, null);
+  assert.equal(Object.hasOwn(result, "providerReportedCostUsd"), false);
 
   await assert.rejects(
     generateJsonWithGlm52({

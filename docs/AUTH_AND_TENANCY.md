@@ -15,7 +15,7 @@
 
 ## Superadmin y tenants
 
-- `guillen.marce@gmail.com` es la única identidad de superadmin de plataforma; no se configura por entorno ni se puede reemplazar en un deploy.
+- La identidad canónica registrada de plataforma es la única autorizada como superadmin; su dirección no se publica en esta documentación, no se configura por entorno y no puede reemplazarse en un deploy.
 - `OBRASAAS_INTERNAL_CLERK_ORG_ID` identifica explícitamente el workspace interno y evita contarlo como cliente.
 - El script `npm run clerk:internal-org` nunca elige la primera membresía de Clerk: exige ese ID explícito o exactamente una organización ya marcada con `public_metadata.internal=true`.
 - Si el ID no pertenece al superadmin, falta una organización interna inequívoca o hay más de una marcada, el script aborta sin modificar ninguna organización tenant.
