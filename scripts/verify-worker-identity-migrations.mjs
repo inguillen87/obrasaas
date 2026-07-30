@@ -88,6 +88,7 @@ const EXPECTED_MIGRATIONS = Object.freeze([
   '20260729131000_worker_payment_privacy_choices_validate',
   '20260729132000_worker_payment_flow_sessions',
   '20260729133000_worker_payment_flow_reconciliation',
+  '20260729134000_worker_payment_private_receipts',
 ]);
 
 const EXPECTED_ENUMS = Object.freeze({
@@ -144,6 +145,7 @@ const EXPECTED_TABLES = Object.freeze([
   'WorkerPrivacyChoiceEvent',
   'WorkerPaymentDestination',
   'WorkerPaymentFlowSession',
+  'WorkerPaymentPrivateReceipt',
   'WorkerSensitiveDecision',
 ]);
 
@@ -230,6 +232,19 @@ const EXPECTED_VALIDATED_CONSTRAINTS = Object.freeze({
     'WorkerPaymentFlowSession_channel_scope_fkey',
     'WorkerPaymentFlowSession_privacy_choice_scope_fkey',
     'WorkerPaymentFlowSession_destination_scope_fkey',
+  ],
+  WorkerPaymentPrivateReceipt: [
+    'WorkerPaymentPrivateReceipt_pkey',
+    'WorkerPaymentPrivateReceipt_contract_check',
+    'WorkerPaymentPrivateReceipt_organizationId_fkey',
+    'WorkerPaymentPrivateReceipt_project_scope_fkey',
+    'WorkerPaymentPrivateReceipt_connection_scope_fkey',
+    'WorkerPaymentPrivateReceipt_flow_session_fkey',
+    'WorkerPaymentPrivateReceipt_worker_scope_fkey',
+    'WorkerPaymentPrivateReceipt_person_scope_fkey',
+    'WorkerPaymentPrivateReceipt_channel_scope_fkey',
+    'WorkerPaymentPrivateReceipt_destination_scope_fkey',
+    'WorkerPaymentPrivateReceipt_webhook_scope_fkey',
   ],
   WorkerSensitiveDecision: [
     'WSD_hash_and_key_check',
@@ -430,6 +445,39 @@ const EXPECTED_INDEXES = Object.freeze({
   WorkerPaymentFlowSession_hmac_key_status_expiry_idx: {
     table: 'WorkerPaymentFlowSession',
     columns: ['submissionFingerprintKeyId', 'submissionStatus', 'expiresAt'],
+    requiresUnconditional: true,
+  },
+  WorkerPaymentPrivateReceipt_flowSessionId_key: {
+    table: 'WorkerPaymentPrivateReceipt',
+    columns: ['flowSessionId'],
+    requiresUnique: true,
+    requiresUnconditional: true,
+  },
+  WorkerPaymentPrivateReceipt_tokenHash_key: {
+    table: 'WorkerPaymentPrivateReceipt',
+    columns: ['tokenHash'],
+    requiresUnique: true,
+    requiresUnconditional: true,
+  },
+  WorkerPaymentPrivateReceipt_org_id_key: {
+    table: 'WorkerPaymentPrivateReceipt',
+    columns: ['organizationId', 'id'],
+    requiresUnique: true,
+    requiresUnconditional: true,
+  },
+  WorkerPaymentPrivateReceipt_org_person_issued_idx: {
+    table: 'WorkerPaymentPrivateReceipt',
+    columns: ['organizationId', 'personId', 'issuedAt'],
+    requiresUnconditional: true,
+  },
+  WorkerPaymentPrivateReceipt_expiry_revocation_idx: {
+    table: 'WorkerPaymentPrivateReceipt',
+    columns: ['expiresAt', 'revokedAt'],
+    requiresUnconditional: true,
+  },
+  WorkerPaymentPrivateReceipt_webhook_idx: {
+    table: 'WorkerPaymentPrivateReceipt',
+    columns: ['projectId', 'sourceWebhookEventId'],
     requiresUnconditional: true,
   },
 });
@@ -1410,6 +1458,11 @@ async function assertWorkerPaymentFlowSessionContract(client) {
       nullable: true,
       udtName: 'WorkerPaymentFlowReconciliationMethod',
     },
+    receiptDeliveryRequested: {
+      nullable: false,
+      dataType: 'boolean',
+      defaultFragment: 'false',
+    },
     revision: { nullable: false, dataType: 'integer', defaultFragment: '0' },
     createdAt: { nullable: false, dataType: 'timestamp without time zone' },
     updatedAt: { nullable: false, dataType: 'timestamp without time zone' },
@@ -1580,12 +1633,13 @@ async function assertWorkerPaymentFlowSessionContract(client) {
     'WorkerPaymentFlowSession_00_reconciliation_clock',
     'WorkerPaymentFlowSession_scope_guard',
     'WorkerPaymentFlowSession_transition_guard',
+    'WorkerPaymentFlowSession_receipt_request_guard',
     'WorkerPaymentFlowSession_no_delete',
     'WorkerPaymentFlowSession_no_truncate',
   ]);
   assert(
-    sessionTriggers.size === 5,
-    'Worker payment Flow reconciliation, scope, transition, DELETE, or TRUNCATE guard is missing.',
+    sessionTriggers.size === 6,
+    'Worker payment Flow reconciliation, scope, transition, receipt-choice, DELETE, or TRUNCATE guard is missing.',
   );
   for (const trigger of sessionTriggers.values()) {
     assert(
@@ -1623,7 +1677,7 @@ async function assertWorkerPaymentFlowSessionContract(client) {
     'observed_at := statement_timestamp',
     'observed_at < base_session.deliveryAttemptedAt',
     'observed_at >= base_session.expiresAt',
-    "observed_at + '00:01:00' >= base_session.expiresAt",
+    "observed_at + INTERVAL '1 minute' >= base_session.expiresAt",
     'NEW.privacyPresentedAt := observed_at',
     "OLD.submissionStatus = 'OPEN'",
     "NEW.submissionStatus = 'PROCESSING'",
@@ -1773,6 +1827,32 @@ async function assertWorkerPaymentFlowSessionContract(client) {
     'Worker payment Flow success must not reject a DB-authoritative reservation because completion crossed expiry.',
   );
 
+  const receiptRequestGuard = sessionTriggers.get(
+    'WorkerPaymentFlowSession_receipt_request_guard',
+  );
+  assert(
+    /BEFORE INSERT OR UPDATE/.test(receiptRequestGuard?.definition || '')
+      && receiptRequestGuard?.function_name === 'enforce_worker_payment_receipt_request',
+    'Worker payment Flow receipt-choice trigger is missing or misbound.',
+  );
+  const receiptRequestBody = normalizeConstraintDefinition(
+    receiptRequestGuard?.function_definition,
+  );
+  for (const fragment of [
+    "TG_OP = 'INSERT'",
+    'NEW.receiptDeliveryRequested IS DISTINCT FROM false',
+    "TG_OP = 'UPDATE'",
+    'OLD.receiptDeliveryRequested IS DISTINCT FROM NEW.receiptDeliveryRequested',
+    'NOT OLD.submissionStatus = \'OPEN\' AND NEW.submissionStatus = \'PROCESSING\'',
+    'worker payment receipt delivery choice is immutable after reservation',
+    "ERRCODE = '55000'",
+  ]) {
+    assert(
+      receiptRequestBody.includes(fragment),
+      `Worker payment Flow receipt-choice guard is missing ${fragment}.`,
+    );
+  }
+
   const deleteGuard = sessionTriggers.get('WorkerPaymentFlowSession_no_delete');
   const truncateGuard = sessionTriggers.get('WorkerPaymentFlowSession_no_truncate');
   assert(
@@ -1827,6 +1907,293 @@ async function assertWorkerPaymentFlowSessionContract(client) {
     "ERRCODE = '55000'",
   ]) {
     assert(baseGuardBody.includes(fragment), `Worker payment Flow base guard is missing ${fragment}.`);
+  }
+}
+
+async function assertWorkerPaymentPrivateReceiptContract(client) {
+  const columns = await loadTableColumns(client, 'WorkerPaymentPrivateReceipt');
+  const columnContract = {
+    id: { nullable: false, dataType: 'uuid' },
+    contentVersion: {
+      nullable: false,
+      dataType: 'character varying',
+      maxLength: 64,
+      defaultFragment: 'worker-payment-private-receipt-v1',
+    },
+    organizationId: { nullable: false, dataType: 'text' },
+    projectId: { nullable: false, dataType: 'text' },
+    connectionId: { nullable: false, dataType: 'text' },
+    flowSessionId: { nullable: false, dataType: 'uuid' },
+    workerId: { nullable: false, dataType: 'text' },
+    personId: { nullable: false, dataType: 'text' },
+    channelIdentityId: { nullable: false, dataType: 'text' },
+    paymentPurpose: { nullable: false, udtName: 'WorkerPaymentPurpose' },
+    destinationId: { nullable: false, dataType: 'text' },
+    sourceWebhookEventId: { nullable: false, dataType: 'text' },
+    destinationType: { nullable: false, udtName: 'WorkerPaymentDestinationType' },
+    destinationLastFour: {
+      nullable: false,
+      dataType: 'character varying',
+      maxLength: 4,
+    },
+    receivedAt: { nullable: false, dataType: 'timestamp without time zone' },
+    contentSha256: { nullable: false, dataType: 'character', maxLength: 64 },
+    tokenHash: { nullable: false, dataType: 'character', maxLength: 64 },
+    issuedAt: { nullable: false, dataType: 'timestamp without time zone' },
+    expiresAt: { nullable: false, dataType: 'timestamp without time zone' },
+    accessCount: {
+      nullable: false,
+      dataType: 'integer',
+      defaultFragment: '0',
+    },
+    firstAccessedAt: { nullable: true, dataType: 'timestamp without time zone' },
+    lastAccessedAt: { nullable: true, dataType: 'timestamp without time zone' },
+    revokedAt: { nullable: true, dataType: 'timestamp without time zone' },
+  };
+  for (const [name, contract] of Object.entries(columnContract)) {
+    assertColumnContract(columns, 'WorkerPaymentPrivateReceipt', name, contract);
+  }
+  assert(
+    columns.size === Object.keys(columnContract).length,
+    'WorkerPaymentPrivateReceipt persists fields outside the privacy-minimal allowlist.',
+  );
+
+  const constraintResult = await client.query(
+    `SELECT constraint_record.conname,
+            constraint_record.confdeltype,
+            constraint_record.confupdtype,
+            pg_get_constraintdef(constraint_record.oid, true) AS definition
+       FROM pg_constraint AS constraint_record
+      WHERE constraint_record.conrelid = to_regclass(
+              format('%I.%I', current_schema(), 'WorkerPaymentPrivateReceipt')
+            )
+        AND constraint_record.conname = ANY($1::text[])`,
+    [[
+      'WorkerPaymentPrivateReceipt_contract_check',
+      'WorkerPaymentPrivateReceipt_organizationId_fkey',
+      'WorkerPaymentPrivateReceipt_project_scope_fkey',
+      'WorkerPaymentPrivateReceipt_connection_scope_fkey',
+      'WorkerPaymentPrivateReceipt_flow_session_fkey',
+      'WorkerPaymentPrivateReceipt_worker_scope_fkey',
+      'WorkerPaymentPrivateReceipt_person_scope_fkey',
+      'WorkerPaymentPrivateReceipt_channel_scope_fkey',
+      'WorkerPaymentPrivateReceipt_destination_scope_fkey',
+      'WorkerPaymentPrivateReceipt_webhook_scope_fkey',
+    ]],
+  );
+  const constraints = new Map(constraintResult.rows.map((row) => [row.conname, row]));
+  const fixedContract = normalizeConstraintDefinition(
+    constraints.get('WorkerPaymentPrivateReceipt_contract_check')?.definition,
+  );
+  for (const fragment of [
+    "contentVersion = 'worker-payment-private-receipt-v1'",
+    "destinationLastFour ~ '^[0-9]{4}$'",
+    "destinationLastFour ~ '^[a-z0-9.-]{4}$'",
+    "'CBU'",
+    "'CVU'",
+    "'ALIAS'",
+    "contentSha256 ~ '^[0-9a-f]{64}$'",
+    "tokenHash ~ '^[0-9a-f]{64}$'",
+    'expiresAt = issuedAt +',
+    "'00:15:00'",
+    'accessCount >= 0',
+    'accessCount <= 5',
+    'accessCount = 0',
+    'firstAccessedAt IS NULL',
+    'lastAccessedAt IS NULL',
+    'accessCount > 0',
+    'firstAccessedAt >= issuedAt',
+    'lastAccessedAt >= firstAccessedAt',
+    'lastAccessedAt < expiresAt',
+    'revokedAt >= issuedAt',
+  ]) {
+    assert(
+      fixedContract.includes(fragment),
+      `Worker payment private receipt contract is missing ${fragment}.`,
+    );
+  }
+
+  const foreignKeyContract = {
+    WorkerPaymentPrivateReceipt_organizationId_fkey: [
+      'FOREIGN KEY organizationId REFERENCES Organizationid',
+      'r',
+    ],
+    WorkerPaymentPrivateReceipt_project_scope_fkey: [
+      'FOREIGN KEY organizationId, projectId REFERENCES ProjectorganizationId, id',
+      'r',
+    ],
+    WorkerPaymentPrivateReceipt_connection_scope_fkey: [
+      'FOREIGN KEY projectId, connectionId REFERENCES WhatsAppConnectionprojectId, id',
+      'r',
+    ],
+    WorkerPaymentPrivateReceipt_flow_session_fkey: [
+      'FOREIGN KEY flowSessionId REFERENCES WorkerPaymentFlowSessionflowSessionId',
+      'r',
+    ],
+    WorkerPaymentPrivateReceipt_worker_scope_fkey: [
+      'FOREIGN KEY organizationId, personId, projectId, workerId REFERENCES WorkerorganizationId, personId, projectId, id',
+      'r',
+    ],
+    WorkerPaymentPrivateReceipt_person_scope_fkey: [
+      'FOREIGN KEY organizationId, personId REFERENCES WorkerPersonorganizationId, id',
+      'r',
+    ],
+    WorkerPaymentPrivateReceipt_channel_scope_fkey: [
+      'FOREIGN KEY organizationId, personId, channelIdentityId REFERENCES WorkerChannelIdentityorganizationId, personId, id',
+      'r',
+    ],
+    WorkerPaymentPrivateReceipt_destination_scope_fkey: [
+      'FOREIGN KEY organizationId, personId, paymentPurpose, destinationId REFERENCES WorkerPaymentDestinationorganizationId, personId, purpose, id',
+      'r',
+    ],
+    WorkerPaymentPrivateReceipt_webhook_scope_fkey: [
+      'FOREIGN KEY projectId, sourceWebhookEventId REFERENCES WebhookEventprojectId, id',
+      'r',
+    ],
+  };
+  for (const [name, [definitionFragment, deleteAction]] of Object.entries(foreignKeyContract)) {
+    const foreignKey = constraints.get(name);
+    assert(foreignKey, `Missing worker payment private receipt foreign key ${name}.`);
+    assert(
+      foreignKey.confdeltype === deleteAction,
+      `${name} has the wrong ON DELETE behavior.`,
+    );
+    assert(foreignKey.confupdtype === 'c', `${name} must be ON UPDATE CASCADE.`);
+    assert(
+      normalizeConstraintDefinition(foreignKey.definition).includes(definitionFragment),
+      `${name} does not preserve its governed tenant/subject scope.`,
+    );
+  }
+
+  const receiptTriggers = await loadUserTriggers(client, 'WorkerPaymentPrivateReceipt', [
+    'WorkerPaymentPrivateReceipt_insert_guard',
+    'WorkerPaymentPrivateReceipt_lifecycle_guard',
+    'WorkerPaymentPrivateReceipt_no_delete',
+    'WorkerPaymentPrivateReceipt_no_truncate',
+  ]);
+  assert(
+    receiptTriggers.size === 4,
+    'Worker payment private receipt insert, lifecycle, DELETE, or TRUNCATE guard is missing.',
+  );
+  for (const trigger of receiptTriggers.values()) {
+    assert(
+      trigger.tgenabled === 'A',
+      `Worker payment private receipt trigger ${trigger.tgname} is not ENABLE ALWAYS.`,
+    );
+    assert(
+      trigger.security_definer === false,
+      `Worker payment private receipt trigger ${trigger.tgname} must not be SECURITY DEFINER.`,
+    );
+    assert(
+      /SET search_path TO 'pg_catalog'/i.test(trigger.function_definition),
+      `Worker payment private receipt trigger ${trigger.tgname} does not pin a safe search_path.`,
+    );
+  }
+
+  const insertGuard = receiptTriggers.get('WorkerPaymentPrivateReceipt_insert_guard');
+  assert(
+    /BEFORE INSERT/.test(insertGuard?.definition || '')
+      && insertGuard?.function_name === 'enforce_worker_payment_private_receipt_insert',
+    'Worker payment private receipt insert trigger is missing or misbound.',
+  );
+  const insertBody = normalizeConstraintDefinition(insertGuard?.function_definition);
+  for (const fragment of [
+    "contentVersion IS DISTINCT FROM 'worker-payment-private-receipt-v1'",
+    'accessCount <> 0',
+    'firstAccessedAt IS NOT NULL',
+    'lastAccessedAt IS NOT NULL',
+    'revokedAt IS NOT NULL',
+    'WorkerPaymentFlowSession',
+    'WhatsAppFlowSession',
+    'WorkerPaymentDestination',
+    'WebhookEvent',
+    'FOR KEY SHARE OF payment_session, base_session, destination, webhook_event',
+    "provenance.submission_status IS DISTINCT FROM 'SUCCEEDED'",
+    'provenance.receipt_delivery_requested IS DISTINCT FROM true',
+    'provenance.organization_id IS DISTINCT FROM NEW.organizationId',
+    'provenance.project_id IS DISTINCT FROM NEW.projectId',
+    'provenance.connection_id IS DISTINCT FROM NEW.connectionId',
+    'provenance.worker_id IS DISTINCT FROM NEW.workerId',
+    'provenance.person_id IS DISTINCT FROM NEW.personId',
+    'provenance.channel_identity_id IS DISTINCT FROM NEW.channelIdentityId',
+    'provenance.payment_purpose IS DISTINCT FROM NEW.paymentPurpose',
+    'provenance.destination_id IS DISTINCT FROM NEW.destinationId',
+    'provenance.submitted_at IS DISTINCT FROM NEW.receivedAt',
+    "provenance.base_blueprint_key IS DISTINCT FROM 'worker-payment-destination'",
+    "provenance.base_screen_id IS DISTINCT FROM 'WORKER_PAYMENT_DESTINATION'",
+    "provenance.base_flow_type IS DISTINCT FROM 'worker_payment_destination'",
+    'provenance.base_consumed_at IS NULL',
+    'provenance.destination_type IS DISTINCT FROM NEW.destinationType',
+    'provenance.destination_last_four IS DISTINCT FROM NEW.destinationLastFour',
+    'provenance.webhook_event_id IS DISTINCT FROM NEW.sourceWebhookEventId',
+    "provenance.webhook_provider IS DISTINCT FROM 'meta'",
+    "provenance.webhook_event_type IS DISTINCT FROM 'message'",
+    "provenance.webhook_status IS DISTINCT FROM 'PROCESSING'",
+    "provenance.webhook_external_id IS DISTINCT FROM 'project:' || NEW.projectId || ':' || provenance.base_consumed_external_id",
+    'provenance.webhook_applied_at IS NOT NULL',
+    'obrasaas:worker-payment-private-receipt-content:v1',
+    "sha256convert_tocontent_commitment, 'UTF8'",
+    'NEW.contentSha256 IS DISTINCT FROM expected_content_sha256',
+    'worker payment private receipt content hash is invalid',
+    'observed_at := statement_timestamp',
+    "NEW.expiresAt IS DISTINCT FROM NEW.issuedAt + INTERVAL '15 minutes'",
+    "NEW.issuedAt < observed_at - INTERVAL '1 minute'",
+    "NEW.issuedAt > observed_at + INTERVAL '5 seconds'",
+    "ERRCODE = '55000'",
+  ]) {
+    assert(insertBody.includes(fragment), `Private receipt insert guard is missing ${fragment}.`);
+  }
+
+  const lifecycleGuard = receiptTriggers.get('WorkerPaymentPrivateReceipt_lifecycle_guard');
+  assert(
+    /BEFORE UPDATE/.test(lifecycleGuard?.definition || '')
+      && lifecycleGuard?.function_name === 'enforce_worker_payment_private_receipt_lifecycle',
+    'Worker payment private receipt lifecycle trigger is missing or misbound.',
+  );
+  const lifecycleBody = normalizeConstraintDefinition(lifecycleGuard?.function_definition);
+  for (const fragment of [
+    'OLD.flowSessionId IS DISTINCT FROM NEW.flowSessionId',
+    'OLD.destinationId IS DISTINCT FROM NEW.destinationId',
+    'OLD.sourceWebhookEventId IS DISTINCT FROM NEW.sourceWebhookEventId',
+    'OLD.receivedAt IS DISTINCT FROM NEW.receivedAt',
+    'OLD.contentSha256 IS DISTINCT FROM NEW.contentSha256',
+    'OLD.tokenHash IS DISTINCT FROM NEW.tokenHash',
+    'OLD.expiresAt IS DISTINCT FROM NEW.expiresAt',
+    'NEW.accessCount = OLD.accessCount + 1',
+    'OLD.revokedAt IS NOT NULL',
+    'OLD.accessCount >= 5',
+    'observed_at >= OLD.expiresAt',
+    'NEW.firstAccessedAt := COALESCEOLD.firstAccessedAt, observed_at',
+    'NEW.lastAccessedAt := observed_at',
+    'OLD.revokedAt IS NULL',
+    'NEW.revokedAt IS NOT NULL',
+    'NEW.revokedAt := observed_at',
+    'worker payment private receipt lifecycle transition is not allowed',
+    "ERRCODE = '55000'",
+  ]) {
+    assert(
+      lifecycleBody.includes(fragment),
+      `Private receipt lifecycle guard is missing ${fragment}.`,
+    );
+  }
+
+  const deleteGuard = receiptTriggers.get('WorkerPaymentPrivateReceipt_no_delete');
+  const truncateGuard = receiptTriggers.get('WorkerPaymentPrivateReceipt_no_truncate');
+  assert(
+    /BEFORE DELETE/.test(deleteGuard?.definition || ''),
+    'Worker payment private receipt DELETE guard is missing.',
+  );
+  assert(
+    /BEFORE TRUNCATE/.test(truncateGuard?.definition || ''),
+    'Worker payment private receipt TRUNCATE guard is missing.',
+  );
+  for (const trigger of [deleteGuard, truncateGuard]) {
+    assert(
+      trigger?.function_name === 'prevent_worker_payment_private_receipt_removal'
+        && /ERRCODE\s*=\s*'55000'/i.test(trigger.function_definition)
+        && /cannot be deleted or truncated/i.test(trigger.function_definition),
+      'Worker payment private receipt removal guard does not fail closed with SQLSTATE 55000.',
+    );
   }
 }
 
@@ -2078,11 +2445,12 @@ try {
   await assertWorkerPaymentPrivacyContract(client);
   await assertWorkerOnboardingFlowSessionContract(client);
   await assertWorkerPaymentFlowSessionContract(client);
+  await assertWorkerPaymentPrivateReceiptContract(client);
   await assertWorkerOnboardingClaimRetentionContract(client);
   await assertAppendOnlyLedger(client);
   await assertCanonicalPaymentIdentity(client);
   console.log(
-    'Verified worker identity migrations: tenant scope, crypto rollout, onboarding retention, payment privacy provenance, terminal Flow replay fencing, partial uniqueness and append-only decisions.',
+    'Verified worker identity migrations: tenant scope, crypto rollout, onboarding retention, payment privacy provenance, terminal Flow replay fencing, private receipt TTL/access governance, partial uniqueness and append-only decisions.',
   );
   await client.query('ROLLBACK');
   transactionOpen = false;

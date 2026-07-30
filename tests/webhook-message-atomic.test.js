@@ -20,6 +20,7 @@ const originalFinancialKekId = process.env.WORKER_FINANCIAL_KEK_ID;
 const originalFinancialKekRegistry = process.env.WORKER_FINANCIAL_KEK_REGISTRY_JSON;
 const originalFingerprintKeyId = process.env.WORKER_FINANCIAL_FINGERPRINT_KEY_ID;
 const originalFingerprintKeyRegistry = process.env.WORKER_FINANCIAL_FINGERPRINT_KEY_REGISTRY_JSON;
+const originalWebviewTokenSecret = process.env.WEBVIEW_TOKEN_SECRET;
 process.env.DATABASE_URL = 'postgresql://unit-test.invalid/obrasaas';
 process.env.WHATSAPP_FLOW_TOKEN_SECRET = 'unit-test-whatsapp-flow-session-secret';
 process.env.WORKER_ONBOARDING_FLOW_TOKEN_SECRET = 'unit-test-worker-onboarding-flow-secret';
@@ -31,6 +32,7 @@ process.env.WORKER_FINANCIAL_FINGERPRINT_KEY_ID = 'webhook-receipt-fingerprint-v
 process.env.WORKER_FINANCIAL_FINGERPRINT_KEY_REGISTRY_JSON = JSON.stringify({
   'webhook-receipt-fingerprint-v1': Buffer.alloc(32, 47).toString('base64'),
 });
+process.env.WEBVIEW_TOKEN_SECRET = 'unit-test-private-receipt-webview-secret-v1';
 
 const {
   applyWebhookMessageAtomically,
@@ -62,6 +64,9 @@ const {
 const {
   getWhatsAppFlowScopedName,
 } = await import('../src/lib/whatsapp/flows.js');
+const {
+  materializeWorkerPaymentPrivateReceiptDelivery,
+} = await import('../src/lib/whatsapp/worker-payment-receipt-delivery.js');
 
 after(() => {
   if (originalDatabaseUrl === undefined) delete process.env.DATABASE_URL;
@@ -87,6 +92,8 @@ after(() => {
   } else {
     process.env.WORKER_FINANCIAL_FINGERPRINT_KEY_REGISTRY_JSON = originalFingerprintKeyRegistry;
   }
+  if (originalWebviewTokenSecret === undefined) delete process.env.WEBVIEW_TOKEN_SECRET;
+  else process.env.WEBVIEW_TOKEN_SECRET = originalWebviewTokenSecret;
   delete globalThis.__obraSaasPrisma;
 });
 
@@ -121,6 +128,16 @@ function inMemoryFlowSessions(calls) {
       };
       records.push(record);
       return record;
+    },
+    async findFirst({ where }) {
+      calls.push(['flow-read-scoped', where]);
+      return records.find((record) => Object.entries(where).every(([field, expected]) => {
+        const actual = record[field];
+        if (expected && typeof expected === 'object' && !Array.isArray(expected)) {
+          if (Object.hasOwn(expected, 'not')) return actual !== expected.not;
+        }
+        return actual === expected;
+      })) || null;
     },
     async updateMany({ where, data }) {
       calls.push(['flow-consume', { where, data }]);
@@ -1450,7 +1467,7 @@ test('legacy or PENDING_REVIEW payment text requests stay fail-closed without a 
   }
 });
 
-test('an expired payment nfm_reply consumes only the exact SUCCEEDED companion receipt', async () => {
+test('an opted-in expired payment receipt reaches the durable outcome and materializes only after its exact terminal nfm_reply', async () => {
   const scope = {
     projectId: 'project-payment-flow-inbound',
     organizationId: 'organization-payment-flow-inbound',
@@ -1515,16 +1532,65 @@ test('an expired payment nfm_reply consumes only the exact SUCCEEDED companion r
     destinationId: 'destination-payment-a',
     submittedAt: new Date(),
     submissionUncertainAt: null,
+    receiptDeliveryRequested: true,
     revision: 3,
+  };
+  const destination = {
+    id: companion.destinationId,
+    organizationId: scope.organizationId,
+    personId: companion.personId,
+    purpose: companion.paymentPurpose,
+    type: 'CBU',
+    lastFour: '9012',
+    flowSubmissionReservationId: companion.submissionReservationId,
+  };
+  const privateReceipts = [];
+  const privateReceiptDelegate = {
+    async findUnique({ where }) {
+      return privateReceipts.find((receipt) => (
+        (where.flowSessionId && receipt.flowSessionId === where.flowSessionId)
+        || (where.id && receipt.id === where.id)
+      )) || null;
+    },
+    async findFirst({ where }) {
+      return privateReceipts.find((receipt) => Object.entries(where).every(
+        ([field, expected]) => receipt[field] === expected,
+      )) || null;
+    },
+    async create({ data }) {
+      const record = {
+        ...data,
+        revokedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      privateReceipts.push(record);
+      calls.push(['private-receipt-create', record]);
+      return record;
+    },
+    async updateMany() {
+      throw new Error('private receipt access is not expected during link materialization');
+    },
   };
   let engineCalls = 0;
   const transaction = {
     async $executeRawUnsafe() {},
     webhookEvent: {
-      async findFirst() {
-        return { id: 'event-payment-flow', appliedAt: null, outcome: null };
+      async findFirst({ where }) {
+        calls.push(['event-read', where]);
+        return {
+          id: where.id,
+          projectId: scope.projectId,
+          eventType: 'message',
+          status: 'PROCESSING',
+          appliedAt: null,
+          outcome: null,
+        };
       },
-      async updateMany() { return { count: 1 }; },
+      async updateMany(args) {
+        calls.push(['event-apply', args]);
+        return { count: 1 };
+      },
     },
     project: {
       async findFirst() {
@@ -1551,7 +1617,53 @@ test('an expired payment nfm_reply consumes only the exact SUCCEEDED companion r
         };
       },
     },
-    worker: { async findMany() { return [worker]; } },
+    whatsAppConnection: {
+      async findFirst() {
+        return {
+          id: companion.connectionId,
+          projectId: scope.projectId,
+          phoneNumberId: scope.phoneNumberId,
+          enabled: true,
+          connectionStatus: 'CONNECTED',
+        };
+      },
+    },
+    worker: {
+      async findMany() { return [worker]; },
+      async findFirst() {
+        return {
+          ...worker,
+          organizationId: scope.organizationId,
+          personId: companion.personId,
+        };
+      },
+    },
+    workerPerson: {
+      async findFirst() {
+        return {
+          id: companion.personId,
+          organizationId: scope.organizationId,
+          status: 'ACTIVE',
+          identityStatus: 'VERIFIED',
+        };
+      },
+    },
+    workerChannelIdentity: {
+      async findFirst() {
+        return {
+          id: companion.channelIdentityId,
+          organizationId: scope.organizationId,
+          personId: companion.personId,
+          provider: 'WHATSAPP',
+          status: 'VERIFIED',
+          revokedAt: null,
+        };
+      },
+    },
+    workerPaymentDestination: {
+      async findFirst() { return structuredClone(destination); },
+    },
+    workerPaymentPrivateReceipt: privateReceiptDelegate,
     conversation: { async upsert() { return { id: 'conversation-payment-flow' }; } },
     whatsAppFlowSession: flowStore.delegate,
     workerPaymentFlowSession: {
@@ -1604,7 +1716,7 @@ test('an expired payment nfm_reply consumes only the exact SUCCEEDED companion r
   assert.equal(flowStore.record.consumedAt, null);
   assert.equal(engineCalls, 0);
 
-  await applyWebhookMessageAtomically({
+  const exactResult = await applyWebhookMessageAtomically({
     eventId: 'event-payment-flow-exact',
     leaseToken: 'lease-payment-flow-exact',
     event: event(companion.destinationId, 'wamid.payment-flow-exact'),
@@ -1613,6 +1725,57 @@ test('an expired payment nfm_reply consumes only the exact SUCCEEDED companion r
   });
   assert.equal(flowStore.record.consumedExternalId, 'wamid.payment-flow-exact');
   assert.equal(engineCalls, 1);
+  assert.equal(privateReceipts.length, 1);
+  const descriptor = exactResult.outcome.workerPaymentPrivateReceiptDelivery;
+  assert.deepEqual(descriptor, {
+    version: 1,
+    receiptId: privateReceipts[0].id,
+  });
+  const persistedOutcome = calls
+    .filter(([name]) => name === 'event-apply')
+    .at(-1)?.[1]?.data?.outcome;
+  assert.deepEqual(persistedOutcome, exactResult.outcome);
+  const serializedOutcome = JSON.stringify(persistedOutcome);
+  assert.equal(serializedOutcome.includes(privateReceipts[0].tokenHash), false);
+  assert.equal(serializedOutcome.includes(destination.lastFour), false);
+  assert.equal(serializedOutcome.includes(destination.id), false);
+  assert.equal(Object.hasOwn(privateReceipts[0], 'token'), false);
+
+  let ephemeralToken = null;
+  const materialized = await materializeWorkerPaymentPrivateReceiptDelivery(
+    transaction,
+    {
+      descriptor,
+      scope,
+      recipientPhone: worker.phone,
+      eventId: 'event-payment-flow-exact',
+    },
+    {
+      now: new Date(privateReceipts[0].issuedAt.getTime() + 1_000),
+      assertSubscription: async () => undefined,
+      resolveWorker: async () => ({
+        status: 'RESOLVED',
+        source: 'CANONICAL',
+        worker: {
+          id: worker.id,
+          personId: companion.personId,
+          person: { identityStatus: 'VERIFIED' },
+        },
+        channelIdentityId: companion.channelIdentityId,
+      }),
+      createAuditLog: async (_prisma, entry) => calls.push(['receipt-audit', entry]),
+      buildLink: ({ token }) => {
+        ephemeralToken = token;
+        return `https://app.obrasaas.test/webview/worker-payment-receipt#${encodeURIComponent(token)}`;
+      },
+    },
+  );
+  assert.equal(materialized.mode, 'LINK');
+  assert.equal(materialized.receiptId, descriptor.receiptId);
+  assert.ok(ephemeralToken);
+  assert.match(materialized.text, /https:\/\/app\.obrasaas\.test\/webview\/worker-payment-receipt#/);
+  assert.equal(JSON.stringify(persistedOutcome).includes(ephemeralToken), false);
+  assert.equal(Object.hasOwn(privateReceipts[0], 'token'), false);
 });
 
 test('an expired authenticated Flow reply is atomically consumed and replaced without applying its payload', async () => {

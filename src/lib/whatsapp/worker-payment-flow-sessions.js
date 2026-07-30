@@ -72,6 +72,7 @@ const FORM_FIELDS = new Set([
   'destination_value',
   'holder_declaration',
   'capture_notice_acknowledged',
+  'receipt_delivery_requested',
 ]);
 const PAYMENT_PURPOSES = new Map([
   ['salary', 'SALARY'],
@@ -305,6 +306,15 @@ function normalizedForm(rawForm) {
       'WORKER_PAYMENT_FLOW_SESSION_INPUT_INVALID',
     );
   }
+  if (
+    form.receipt_delivery_requested !== undefined
+    && typeof form.receipt_delivery_requested !== 'boolean'
+  ) {
+    throw sessionError(
+      'La preferencia de entrega de constancia es invalida.',
+      'WORKER_PAYMENT_FLOW_SESSION_INPUT_INVALID',
+    );
+  }
   const purpose = typeof form.purpose === 'string' ? form.purpose.trim().toLowerCase() : '';
   const destinationType = typeof form.destination_type === 'string'
     ? form.destination_type.trim().toLowerCase()
@@ -334,6 +344,9 @@ function normalizedForm(rawForm) {
     destinationValue,
     holderDeclaration: true,
     noticeAcknowledged: true,
+    ...(form.receipt_delivery_requested === true
+      ? { receiptDeliveryRequested: true }
+      : {}),
   };
 }
 
@@ -470,6 +483,9 @@ function submissionFingerprint(flowSessionId, form, secret) {
       destinationValue: form.destinationValue,
       holderDeclaration: form.holderDeclaration,
       noticeAcknowledged: form.noticeAcknowledged,
+      ...(form.receiptDeliveryRequested === true
+        ? { receiptDeliveryRequested: true }
+        : {}),
     }), 'utf8')
     .digest('hex');
 }
@@ -1461,7 +1477,7 @@ function assertSameFingerprint(companion, fingerprints) {
   return companion.submissionFingerprintHmac;
 }
 
-function existingSubmissionResult(companion, fingerprints) {
+function existingSubmissionResult(companion, fingerprints, form) {
   assertSameFingerprint(companion, fingerprints);
   if (companion.submissionStatus === 'SUCCEEDED') {
     return { state: 'replay', receipt: safeReceipt(companion), replayed: true };
@@ -1476,7 +1492,7 @@ function existingSubmissionResult(companion, fingerprints) {
         reservationId,
       ),
       replayed: true,
-    }, companion);
+    }, companion, form);
   }
   if (companion.submissionStatus === 'UNCERTAIN') {
     return { state: 'uncertain', replayed: true };
@@ -1487,7 +1503,7 @@ function existingSubmissionResult(companion, fingerprints) {
   );
 }
 
-function withFlowSubmissionEvidence(result, companion) {
+function withFlowSubmissionEvidence(result, companion, form) {
   const reservationId = uuid(
     companion?.submissionReservationId,
     'submissionReservationId',
@@ -1504,7 +1520,14 @@ function withFlowSubmissionEvidence(result, companion) {
   );
   const output = { ...result };
   Object.defineProperty(output, 'flowSubmission', {
-    value: Object.freeze({ reservationId, fingerprintKeyId, fingerprintHmac }),
+    value: Object.freeze({
+      reservationId,
+      fingerprintKeyId,
+      fingerprintHmac,
+      ...(form?.receiptDeliveryRequested === true
+        ? { receiptDeliveryRequested: true }
+        : {}),
+    }),
     enumerable: false,
     writable: false,
     configurable: false,
@@ -1550,7 +1573,7 @@ export async function reserveWorkerPaymentFlowSubmission(
       const { base, companion: before } = await loadBoundSession(transaction, scope);
       assertBaseNotFinalized(base, reservedAt);
       if (before.submissionStatus !== 'OPEN') {
-        return existingSubmissionResult(before, fingerprints.candidates);
+        return existingSubmissionResult(before, fingerprints.candidates, form);
       }
       // Fast application guard. The trigger repeats this check against the
       // PostgreSQL statement clock, which is the authoritative linearization
@@ -1611,6 +1634,7 @@ export async function reserveWorkerPaymentFlowSubmission(
           expectedDestinationFingerprint: expectedDestination.fingerprint,
           expectedPrivacyOperationKey: expectedOperationKeys.privacy,
           expectedDestinationOperationKey: expectedOperationKeys.destination,
+          receiptDeliveryRequested: form.receiptDeliveryRequested === true,
           revision: { increment: 1 },
         },
       });
@@ -1618,7 +1642,7 @@ export async function reserveWorkerPaymentFlowSubmission(
         where: { flowSessionId: scope.flowSessionId },
       });
       if (marked.count !== 1) {
-        return existingSubmissionResult(companion, fingerprints.candidates);
+        return existingSubmissionResult(companion, fingerprints.candidates, form);
       }
       return withFlowSubmissionEvidence({
         state: 'reserved',
@@ -1626,7 +1650,7 @@ export async function reserveWorkerPaymentFlowSubmission(
         operationKey,
         paymentPurpose: form.paymentPurpose,
         replayed: false,
-      }, companion);
+      }, companion, form);
     }, attempts);
   } catch (error) {
     if (isReservationWindowPersistenceRejection(error)) {

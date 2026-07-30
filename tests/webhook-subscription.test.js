@@ -59,6 +59,11 @@ function automaticDeliveryJournal(calls, {
         providerMessageId: input.providerMessageId || providerMessageId,
       };
     },
+    async releaseDelivery(input) {
+      calls.push('release-delivery');
+      assert.equal(input.claim.messageId, 'automatic-message-a');
+      return { released: true, state: 'prepared' };
+    },
   };
 }
 
@@ -1089,6 +1094,169 @@ test('H2 strips a provider-reflected bearer from the terminal queue error chain'
       materializeLocationDelivery: async () => ({
         mode: 'LINK',
         text: `Enlace efímero https://obrasaas.example/capture#${reflectedBearer}`,
+      }),
+      assertSubscription: async () => calls.push('subscription-fence'),
+      sendText: async () => {
+        const error = new Error(`provider reflected ${reflectedBearer}`);
+        error.status = 400;
+        throw error;
+      },
+    }),
+    (error) => {
+      assert.equal(error.code, 'WHATSAPP_AUTOMATIC_DELIVERY_REJECTED');
+      assert.equal(error.cause, undefined);
+      assert.equal(String(error.stack).includes(reflectedBearer), false);
+      return true;
+    },
+  );
+  assert.deepEqual(calls, [
+    'claim-delivery',
+    'subscription-fence',
+    'settle-delivery:failed',
+  ]);
+});
+
+test('H4 materializes the private receipt bearer only after winning the delivery claim', async () => {
+  const calls = [];
+  const journal = automaticDeliveryJournal(calls);
+  const durableOutcome = {
+    reply: 'Destino recibido; constancia restringida.',
+    flowPrompt: null,
+    workerPaymentPrivateReceiptDelivery: {
+      version: 1,
+      receiptId: '123e4567-e89b-42d3-a456-426614174324',
+    },
+  };
+  const result = await deliverWhatsAppMessageOutcome({
+    outcome: durableOutcome,
+    event: {
+      externalId: 'wamid-payment-receipt-ready',
+      from: '15551234567',
+      phoneNumberId: 'phone-h4',
+    },
+    scope: { organizationId: 'organization-1', projectId: 'project-1' },
+    eventId: 'event-payment-receipt-ready',
+    leaseToken: 'lease-payment-receipt-ready',
+  }, {
+    ...journal,
+    prisma: { marker: 'delivery-prisma' },
+    materializePaymentReceiptDelivery: async (prisma, input) => {
+      calls.push('materialize-payment-receipt-link');
+      assert.equal(prisma.marker, 'delivery-prisma');
+      assert.deepEqual(
+        input.descriptor,
+        durableOutcome.workerPaymentPrivateReceiptDelivery,
+      );
+      assert.equal(input.recipientPhone, '15551234567');
+      assert.equal(input.scope.phoneNumberId, 'phone-h4');
+      assert.equal(input.eventId, 'event-payment-receipt-ready');
+      return {
+        mode: 'LINK',
+        text: 'Constancia privada https://obrasaas.example/receipt#token=ephemeral',
+      };
+    },
+    assertSubscription: async () => calls.push('subscription-fence'),
+    sendText: async ({ text }) => {
+      calls.push('send-text');
+      assert.equal(
+        text,
+        'Constancia privada https://obrasaas.example/receipt#token=ephemeral',
+      );
+      return { messages: [{ id: 'wamid-payment-receipt-ready-outbound' }] };
+    },
+  });
+
+  assert.deepEqual(calls, [
+    'claim-delivery',
+    'materialize-payment-receipt-link',
+    'subscription-fence',
+    'send-text',
+    'settle-delivery:accepted',
+  ]);
+  assert.deepEqual(result, {
+    flowSent: false,
+    providerMessageId: 'wamid-payment-receipt-ready-outbound',
+  });
+  assert.deepEqual(durableOutcome, {
+    reply: 'Destino recibido; constancia restringida.',
+    flowPrompt: null,
+    workerPaymentPrivateReceiptDelivery: {
+      version: 1,
+      receiptId: '123e4567-e89b-42d3-a456-426614174324',
+    },
+  });
+});
+
+test('H4 safely releases a transient pre-provider materialization failure for retry', async () => {
+  const calls = [];
+  const secretMarker = 'token=must-not-enter-the-retry-error';
+  await assert.rejects(
+    deliverWhatsAppMessageOutcome({
+      outcome: {
+        reply: 'Destino recibido; constancia restringida.',
+        flowPrompt: null,
+        workerPaymentPrivateReceiptDelivery: {
+          version: 1,
+          receiptId: '123e4567-e89b-42d3-a456-426614174326',
+        },
+      },
+      event: {
+        externalId: 'wamid-payment-receipt-transient-prepare',
+        from: '15551234567',
+        phoneNumberId: 'phone-h4',
+      },
+      scope: { organizationId: 'organization-1', projectId: 'project-1' },
+    }, {
+      ...automaticDeliveryJournal(calls),
+      prisma: {},
+      materializePaymentReceiptDelivery: async () => {
+        calls.push('materialize-payment-receipt-transient');
+        const error = new Error(`temporary database outage ${secretMarker}`);
+        error.code = 'P1001';
+        throw error;
+      },
+      assertSubscription: async () => assert.fail('provider fence must not run'),
+      sendText: async () => assert.fail('Meta must not be contacted'),
+    }),
+    (error) => {
+      assert.equal(error.code, 'WHATSAPP_AUTOMATIC_DELIVERY_PRE_PROVIDER_RETRY');
+      assert.equal(error.cause, undefined);
+      assert.equal(String(error.stack).includes(secretMarker), false);
+      return true;
+    },
+  );
+  assert.deepEqual(calls, [
+    'claim-delivery',
+    'materialize-payment-receipt-transient',
+    'release-delivery',
+  ]);
+});
+
+test('H4 strips a provider-reflected private receipt bearer from the queue error chain', async () => {
+  const calls = [];
+  const reflectedBearer = 'token=payment-receipt-ephemeral';
+  await assert.rejects(
+    deliverWhatsAppMessageOutcome({
+      outcome: {
+        reply: 'Destino recibido; constancia restringida.',
+        flowPrompt: null,
+        workerPaymentPrivateReceiptDelivery: {
+          version: 1,
+          receiptId: '123e4567-e89b-42d3-a456-426614174325',
+        },
+      },
+      event: {
+        externalId: 'wamid-payment-receipt-reflected-error',
+        from: '15551234567',
+        phoneNumberId: 'phone-h4',
+      },
+      scope: { organizationId: 'organization-1', projectId: 'project-1' },
+    }, {
+      ...automaticDeliveryJournal(calls),
+      prisma: {},
+      materializePaymentReceiptDelivery: async () => ({
+        mode: 'LINK',
+        text: `Constancia https://obrasaas.example/receipt#${reflectedBearer}`,
       }),
       assertSubscription: async () => calls.push('subscription-fence'),
       sendText: async () => {

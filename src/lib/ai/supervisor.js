@@ -22,7 +22,7 @@ export const SUPERVISOR_RATE_LIMITS = Object.freeze({
 });
 
 const ACTION_TYPE_SET = new Set(SUPERVISOR_ACTION_TYPES);
-const SECURE_WEBVIEW_URL_PATTERN = /(?:https?:\/\/[^\s<>"']+)?\/webview\/(?:attendance|medical)(?:\?[^\s<>"']*)?/giu;
+const SECURE_WEBVIEW_URL_PATTERN = /(?:https?:\/\/[^\s/?#<>"']+)?\/webview\/(?:attendance|medical|progress-evidence-location|worker-payment-receipt)(?:[/?#][^\s<>"']*)?/giu;
 const SENSITIVE_QUERY_PARAMETER_PATTERN = /([?&](?:token|code|sig|signature|key|api[_-]?key|authorization)=)[^&#\s<>"']+/giu;
 const ENCODED_SENSITIVE_QUERY_PARAMETER_PATTERN = /(?:%3f|%26)(?:token|code|sig|signature|key|api[_-]?key|authorization)%3d[^%\s<>"']+/giu;
 const AUTHORIZATION_SECRET_PATTERN = /((?:["']?)\b(?:authorization|x-api-key)\b(?:["']?)\s*[:=]\s*)["']?(?:bearer\s+)?[A-Za-z0-9._~+/=-]{8,}["']?/giu;

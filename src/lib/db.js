@@ -52,6 +52,9 @@ import {
 } from "@/lib/whatsapp/worker-payment-flow-sessions";
 import { getCurrentWorkerPaymentPrivacyNotice } from "@/lib/worker-payment-privacy-notices";
 import {
+  issueWorkerPaymentPrivateReceiptInTransaction,
+} from "@/lib/worker-payment-private-receipts";
+import {
   consumeWorkerOnboardingFlowSession,
   WorkerOnboardingFlowSessionError,
 } from "@/lib/whatsapp/worker-onboarding-flow-sessions";
@@ -66,6 +69,9 @@ import {
 import {
   PROGRESS_EVIDENCE_LOCATION_DURABLE_REPLY,
 } from "@/lib/whatsapp/progress-evidence-location-delivery";
+import {
+  WORKER_PAYMENT_PRIVATE_RECEIPT_DURABLE_REPLY,
+} from "@/lib/whatsapp/worker-payment-receipt-delivery";
 import { resolveWhatsAppConnectionScopes } from "@/lib/whatsapp/webhook-scope";
 import { persistDurableMetaWebhookBatch } from "@/lib/whatsapp/webhook-ingress";
 
@@ -314,6 +320,32 @@ function suppressWorkerPaymentFlowPrompt(result, reply, reason) {
             metadata: {
               ...(message.metadata || {}),
               workerPaymentFlow: { status: "UNAVAILABLE", reason },
+            },
+          }
+        : message
+    )),
+  };
+}
+
+function attachWorkerPaymentPrivateReceiptDelivery(result, descriptor) {
+  const outboundExternalId = result.newMessages.find(
+    (message) => message?.sender === "bot",
+  )?.externalId;
+  return {
+    ...result,
+    reply: WORKER_PAYMENT_PRIVATE_RECEIPT_DURABLE_REPLY,
+    workerPaymentPrivateReceiptDelivery: descriptor,
+    newMessages: result.newMessages.map((message) => (
+      message?.sender === "bot" && message.externalId === outboundExternalId
+        ? {
+            ...message,
+            text: WORKER_PAYMENT_PRIVATE_RECEIPT_DURABLE_REPLY,
+            metadata: {
+              ...(message.metadata || {}),
+              workerPaymentPrivateReceipt: {
+                status: "ISSUED",
+                deliveryContentRestricted: true,
+              },
             },
           }
         : message
@@ -1371,6 +1403,13 @@ function automaticWhatsAppDeliveryMetadata(
   const timestamp = automaticWhatsAppDeliveryTimestamp(now) || new Date().toISOString();
   const preparedAt = automaticWhatsAppDeliveryTimestamp(priorJournal.preparedAt);
   const dispatchStartedAt = automaticWhatsAppDeliveryTimestamp(priorJournal.dispatchStartedAt);
+  const preProviderReleaseCount = Number.isSafeInteger(priorJournal.preProviderReleaseCount)
+    && priorJournal.preProviderReleaseCount > 0
+    ? Math.min(priorJournal.preProviderReleaseCount, 255)
+    : 0;
+  const lastPreProviderReleasedAt = automaticWhatsAppDeliveryTimestamp(
+    priorJournal.lastPreProviderReleasedAt,
+  );
   return {
     ...jsonRecord(metadata),
     automaticDelivery: {
@@ -1384,6 +1423,8 @@ function automaticWhatsAppDeliveryMetadata(
       ...((dispatchStartedAt || dispatchState === "sending")
         ? { dispatchStartedAt: dispatchStartedAt || timestamp }
         : {}),
+      ...(preProviderReleaseCount ? { preProviderReleaseCount } : {}),
+      ...(lastPreProviderReleasedAt ? { lastPreProviderReleasedAt } : {}),
       ...(AUTOMATIC_WHATSAPP_DELIVERY_SETTLEMENT_STATES.has(dispatchState)
         ? { settledAt: timestamp }
         : {}),
@@ -1393,6 +1434,32 @@ function automaticWhatsAppDeliveryMetadata(
       ...(["failed", "unknown"].includes(dispatchState) && failureEvidence?.providerStatus
         ? { providerStatus: failureEvidence.providerStatus }
         : {}),
+    },
+  };
+}
+
+function automaticWhatsAppPreProviderReleaseMetadata(
+  metadata,
+  webhookEventId,
+  now = new Date(),
+) {
+  const priorJournal = jsonRecord(jsonRecord(metadata).automaticDelivery);
+  const timestamp = automaticWhatsAppDeliveryTimestamp(now) || new Date().toISOString();
+  const preparedAt = automaticWhatsAppDeliveryTimestamp(priorJournal.preparedAt) || timestamp;
+  const priorReleaseCount = Number.isSafeInteger(priorJournal.preProviderReleaseCount)
+    && priorJournal.preProviderReleaseCount >= 0
+    ? priorJournal.preProviderReleaseCount
+    : 0;
+  return {
+    ...jsonRecord(metadata),
+    automaticDelivery: {
+      version: AUTOMATIC_WHATSAPP_DELIVERY_VERSION,
+      source: AUTOMATIC_WHATSAPP_DELIVERY_SOURCE,
+      webhookEventId,
+      dispatchState: "prepared",
+      preparedAt,
+      preProviderReleaseCount: Math.min(priorReleaseCount + 1, 255),
+      lastPreProviderReleasedAt: timestamp,
     },
   };
 }
@@ -2084,6 +2151,25 @@ export async function applyWebhookMessageAtomically({
         )
       : null;
     const terminalPaymentFlow = Boolean(workerPaymentTerminalReceipt);
+    let workerPaymentPrivateReceiptDelivery = null;
+    if (terminalPaymentFlow) {
+      const paymentSession = workerPaymentTerminalReceipt.paymentSession;
+      const issuedReceipt = await issueWorkerPaymentPrivateReceiptInTransaction(
+        transaction,
+        {
+          organizationId: normalized.organizationId,
+          projectId: normalized.projectId,
+          connectionId: project.whatsapp.id,
+          flowSessionId: paymentSession.flowSessionId,
+          workerId: resolution.worker.id,
+          personId: paymentSession.personId,
+          channelIdentityId: paymentSession.channelIdentityId,
+          sourceWebhookEventId: normalized.eventId,
+          consumedExternalId: event.externalId,
+        },
+      );
+      workerPaymentPrivateReceiptDelivery = issuedReceipt?.descriptor || null;
+    }
     const flowSession = flowConsumption?.expired && !terminalPaymentFlow
       ? null
       : flowConsumption?.session || null;
@@ -2123,6 +2209,12 @@ export async function applyWebhookMessageAtomically({
       throw webhookProcessingError(
         "The WhatsApp engine did not return persistable message effects.",
         "WEBHOOK_OUTCOME_INVALID",
+      );
+    }
+    if (workerPaymentPrivateReceiptDelivery) {
+      result = attachWorkerPaymentPrivateReceiptDelivery(
+        result,
+        workerPaymentPrivateReceiptDelivery,
       );
     }
     assertExpiredWhatsAppFlowRecoveryResult(expiredFlowSession, result);
@@ -2604,6 +2696,112 @@ export async function settleAutomaticWhatsAppDelivery({
       settled: true,
       state: normalizedState,
     };
+  }, { maxWait: 5_000, timeout: 10_000 });
+}
+
+/**
+ * Releases a won delivery claim only while the caller can still prove that no
+ * provider request started. Ambiguous/post-dispatch paths must use terminal
+ * settlement instead and are never eligible for this CAS.
+ */
+export async function releaseAutomaticWhatsAppDelivery({
+  claim: suppliedClaim,
+  now = new Date(),
+}) {
+  const releasedAt = new Date(now);
+  if (Number.isNaN(releasedAt.getTime())) {
+    throw webhookProcessingError(
+      "A valid release time is required for automatic WhatsApp delivery.",
+      "WEBHOOK_PAYLOAD_INVALID",
+    );
+  }
+  const claim = automaticWhatsAppDeliveryClaim(suppliedClaim);
+  if (!hasDurableDatabase()) {
+    throw webhookProcessingError(
+      "Automatic WhatsApp delivery release requires durable storage.",
+      "WEBHOOK_DURABLE_STORAGE_REQUIRED",
+    );
+  }
+
+  const normalized = {
+    ...claim,
+    inboundExternalId: claim.outboundExternalId.slice("obrasaas-reply:".length),
+  };
+  const { getPrisma } = await import("@/lib/prisma");
+  return getPrisma().$transaction(async (transaction) => {
+    await lockProjectTransaction(transaction, claim.projectId);
+    await requireAutomaticWhatsAppDeliveryProject(transaction, normalized);
+    const leasedEvent = await requireAutomaticWhatsAppDeliveryEvent(transaction, normalized);
+    const deliveryScope = {
+      ...normalized,
+      conversationExternalId: leasedEvent.conversationExternalId,
+    };
+    const message = await transaction.message.findUnique({
+      where: { id: claim.messageId },
+      select: {
+        id: true,
+        conversationId: true,
+        externalId: true,
+        providerMessageId: true,
+        direction: true,
+        status: true,
+        metadata: true,
+        conversation: {
+          select: {
+            projectId: true,
+            channel: true,
+            externalId: true,
+          },
+        },
+      },
+    });
+    if (!automaticWhatsAppMessageInScope(message, deliveryScope)) {
+      throw webhookProcessingError(
+        "The releasable automatic outbound message crossed its tenant conversation boundary.",
+        "WEBHOOK_MESSAGE_SCOPE_MISMATCH",
+      );
+    }
+    const currentState = typeof message.status === "string"
+      ? message.status.trim().toLowerCase()
+      : "unknown";
+    if (
+      currentState === "prepared"
+      && message.providerMessageId == null
+      && automaticWhatsAppJournalMatches(message.metadata, claim.eventId, "prepared")
+    ) {
+      return { released: false, state: "prepared", reason: "already_released" };
+    }
+    if (currentState !== "sending") {
+      return { released: false, state: currentState, reason: "already_settled" };
+    }
+    if (
+      message.providerMessageId != null
+      || !automaticWhatsAppJournalMatches(message.metadata, claim.eventId, "sending")
+    ) {
+      throw webhookProcessingError(
+        "The automatic WhatsApp delivery journal no longer matches its pre-provider claim.",
+        "WEBHOOK_MESSAGE_SCOPE_MISMATCH",
+      );
+    }
+    const released = await transaction.message.updateMany({
+      where: {
+        id: message.id,
+        conversationId: message.conversationId,
+        status: "sending",
+        providerMessageId: null,
+      },
+      data: {
+        status: "prepared",
+        metadata: automaticWhatsAppPreProviderReleaseMetadata(
+          message.metadata,
+          claim.eventId,
+          releasedAt,
+        ),
+      },
+    });
+    return released.count === 1
+      ? { released: true, state: "prepared" }
+      : { released: false, state: "unknown", reason: "release_conflict" };
   }, { maxWait: 5_000, timeout: 10_000 });
 }
 

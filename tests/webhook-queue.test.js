@@ -117,6 +117,7 @@ test("unusable or corrupt WhatsApp identities are terminal before media processi
   assert.equal(isTerminalWebhookFailure({ code: "WHATSAPP_FLOW_TOKEN_SECRET_INVALID" }), false);
   assert.equal(isTerminalWebhookFailure({ code: "WHATSAPP_FLOW_DELIVERY_UNRESOLVED" }), false);
   assert.equal(isTerminalWebhookFailure({ code: "WHATSAPP_AUTOMATIC_DELIVERY_SETTLEMENT_PENDING" }), false);
+  assert.equal(isTerminalWebhookFailure({ code: "WHATSAPP_AUTOMATIC_DELIVERY_PRE_PROVIDER_RETRY" }), false);
   assert.equal(isTerminalWebhookFailure({ code: "FIELD_WORKER_CANONICAL_IDENTITY_CONFIGURATION_INVALID" }), false);
   assert.equal(isTerminalWebhookFailure({ code: "META_TEMPORARY_FAILURE" }), false);
 });
@@ -165,6 +166,54 @@ test("a progress-evidence location outcome persists only its non-secret descript
       reply: "Inválido",
       flowPrompt: "incident-report",
       progressEvidenceLocationDelivery: { version: 1, sessionId },
+    }),
+    (error) => error.code === "WEBHOOK_OUTCOME_INVALID",
+  );
+});
+
+test("a worker-payment private receipt outcome persists only its opaque descriptor", () => {
+  const receiptId = "123e4567-e89b-42d3-a456-426614174009";
+  const outcome = createMessageWebhookOutcome({
+    reply: "Destino recibido; constancia restringida.",
+    workerPaymentPrivateReceiptDelivery: { version: 1, receiptId },
+    token: "must-not-be-persisted",
+    destinationValue: "0000000000000000000000",
+  });
+
+  assert.deepEqual(outcome, {
+    version: 1,
+    type: "message",
+    reply: "Destino recibido; constancia restringida.",
+    flowPrompt: null,
+    workerPaymentPrivateReceiptDelivery: { version: 1, receiptId },
+  });
+  assert.equal(JSON.stringify(outcome).includes("must-not-be-persisted"), false);
+  assert.equal(JSON.stringify(outcome).includes("0000000000000000000000"), false);
+  assert.deepEqual(readAppliedMessageWebhookOutcome({
+    appliedAt: new Date("2026-07-29T12:00:00.000Z"),
+    outcome,
+  }), outcome);
+
+  assert.throws(
+    () => createMessageWebhookOutcome({
+      reply: "Inválido",
+      workerPaymentPrivateReceiptDelivery: { version: 1, receiptId, token: "secret" },
+    }),
+    (error) => error.code === "WEBHOOK_OUTCOME_INVALID",
+  );
+  assert.throws(
+    () => createMessageWebhookOutcome({
+      reply: "Inválido",
+      flowPrompt: "worker-payment-destination",
+      workerPaymentPrivateReceiptDelivery: { version: 1, receiptId },
+    }),
+    (error) => error.code === "WEBHOOK_OUTCOME_INVALID",
+  );
+  assert.throws(
+    () => createMessageWebhookOutcome({
+      reply: "Inválido",
+      progressEvidenceLocationDelivery: { version: 1, sessionId: receiptId },
+      workerPaymentPrivateReceiptDelivery: { version: 1, receiptId },
     }),
     (error) => error.code === "WEBHOOK_OUTCOME_INVALID",
   );

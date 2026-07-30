@@ -59,6 +59,23 @@ const DESTINATION_FINGERPRINT = workerFinancialFingerprint(DESTINATION_VALUE, {
   valueType: 'CBU',
 }, { registry: FINGERPRINT_REGISTRY });
 
+function expectedSubmissionHmac(flowSessionId, { receiptDeliveryRequested = false } = {}) {
+  return crypto
+    .createHmac('sha256', PAYMENT_SECRET)
+    .update(JSON.stringify({
+      domain: 'obrasaas:worker-payment-flow-submission',
+      version: 'v1',
+      flowSessionId,
+      purpose: 'salary',
+      destinationType: 'cbu',
+      destinationValue: DESTINATION_VALUE,
+      holderDeclaration: true,
+      noticeAcknowledged: true,
+      ...(receiptDeliveryRequested ? { receiptDeliveryRequested: true } : {}),
+    }), 'utf8')
+    .digest('hex');
+}
+
 function issueInput(overrides = {}) {
   return {
     organizationId: ORGANIZATION_ID,
@@ -194,6 +211,7 @@ function createStore({
         submissionReservationId: null,
         submissionReservedAt: null,
         paymentPurpose: null,
+        receiptDeliveryRequested: false,
         privacyChoiceEventId: null,
         destinationId: null,
         submittedAt: null,
@@ -675,6 +693,10 @@ test('reserve stores only a keyed HMAC and exposes explicit idempotent reconcili
   assert.equal(reconcile.reservationId, first.reservationId);
   const stored = store.companionRecords[0];
   assert.match(stored.submissionFingerprintHmac, /^[a-f0-9]{64}$/);
+  assert.equal(stored.submissionFingerprintHmac, expectedSubmissionHmac(scope.flowSessionId));
+  assert.equal(stored.receiptDeliveryRequested, false);
+  assert.equal(Object.hasOwn(first.flowSubmission, 'receiptDeliveryRequested'), false);
+  assert.equal(Object.hasOwn(reconcile.flowSubmission, 'receiptDeliveryRequested'), false);
   assert.equal(stored.expectedDestinationType, 'CBU');
   assert.equal(
     stored.expectedDestinationFingerprintKeyId,
@@ -698,6 +720,90 @@ test('reserve stores only a keyed HMAC and exposes explicit idempotent reconcili
       fingerprintRegistry: FINGERPRINT_REGISTRY,
     }),
     assertSessionError('WORKER_PAYMENT_FLOW_SESSION_CONFLICT'),
+  );
+});
+
+test('receipt delivery opt-in is HMAC-bound while false and absent keep the legacy canonical form', async () => {
+  const falseStore = createStore();
+  const { scope: falseScope } = await prepare(falseStore);
+  const declined = await reserveWorkerPaymentFlowSubmission(falseStore.prisma, falseScope, {
+    ...FORM,
+    receipt_delivery_requested: false,
+  }, {
+    secret: PAYMENT_SECRET,
+    now: new Date(NOW.getTime() + 4_000),
+    fingerprintRegistry: FINGERPRINT_REGISTRY,
+    idFactory: () => RESERVATION_ID,
+  });
+  assert.equal(
+    falseStore.companionRecords[0].submissionFingerprintHmac,
+    expectedSubmissionHmac(falseScope.flowSessionId),
+  );
+  assert.equal(falseStore.companionRecords[0].receiptDeliveryRequested, false);
+  assert.equal(Object.hasOwn(declined.flowSubmission, 'receiptDeliveryRequested'), false);
+
+  const optedInStore = createStore();
+  const { scope: optedInScope } = await prepare(optedInStore);
+  const optedInForm = { ...FORM, receipt_delivery_requested: true };
+  const optedIn = await reserveWorkerPaymentFlowSubmission(
+    optedInStore.prisma,
+    optedInScope,
+    optedInForm,
+    {
+      secret: PAYMENT_SECRET,
+      now: new Date(NOW.getTime() + 4_000),
+      fingerprintRegistry: FINGERPRINT_REGISTRY,
+      idFactory: () => RESERVATION_ID,
+    },
+  );
+  const optedInHmac = optedInStore.companionRecords[0].submissionFingerprintHmac;
+  assert.equal(
+    optedInHmac,
+    expectedSubmissionHmac(optedInScope.flowSessionId, { receiptDeliveryRequested: true }),
+  );
+  assert.notEqual(optedInHmac, expectedSubmissionHmac(optedInScope.flowSessionId));
+  assert.equal(optedInStore.companionRecords[0].receiptDeliveryRequested, true);
+  assert.equal(optedIn.flowSubmission.receiptDeliveryRequested, true);
+
+  const reconcile = await reserveWorkerPaymentFlowSubmission(
+    optedInStore.prisma,
+    optedInScope,
+    optedInForm,
+    {
+      secret: PAYMENT_SECRET,
+      now: new Date(NOW.getTime() + 5_000),
+      fingerprintRegistry: FINGERPRINT_REGISTRY,
+    },
+  );
+  assert.equal(reconcile.state, 'reconcile');
+  assert.equal(optedInStore.companionRecords[0].receiptDeliveryRequested, true);
+  assert.equal(reconcile.flowSubmission.receiptDeliveryRequested, true);
+
+  await assert.rejects(
+    reserveWorkerPaymentFlowSubmission(optedInStore.prisma, optedInScope, {
+      ...FORM,
+      receipt_delivery_requested: false,
+    }, {
+      secret: PAYMENT_SECRET,
+      now: new Date(NOW.getTime() + 6_000),
+      fingerprintRegistry: FINGERPRINT_REGISTRY,
+    }),
+    assertSessionError('WORKER_PAYMENT_FLOW_SESSION_CONFLICT'),
+  );
+  assert.equal(optedInStore.companionRecords[0].receiptDeliveryRequested, true);
+  assert.equal(optedInStore.companionRecords[0].submissionFingerprintHmac, optedInHmac);
+
+  const invalidStore = createStore();
+  const { scope: invalidScope } = await prepare(invalidStore);
+  await assert.rejects(
+    reserveWorkerPaymentFlowSubmission(invalidStore.prisma, invalidScope, {
+      ...FORM,
+      receipt_delivery_requested: 'true',
+    }, {
+      secret: PAYMENT_SECRET,
+      fingerprintRegistry: FINGERPRINT_REGISTRY,
+    }),
+    assertSessionError('WORKER_PAYMENT_FLOW_SESSION_INPUT_INVALID'),
   );
 });
 

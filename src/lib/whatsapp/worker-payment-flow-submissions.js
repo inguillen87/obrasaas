@@ -41,12 +41,14 @@ const FORM_FIELDS = new Set([
   'destination_value',
   'holder_declaration',
   'capture_notice_acknowledged',
+  'receipt_delivery_requested',
 ]);
 const NOTICE_FIELDS = new Set(['version', 'contentSha256', 'presentedAt']);
 const FLOW_SUBMISSION_FIELDS = new Set([
   'reservationId',
   'fingerprintKeyId',
   'fingerprintHmac',
+  'receiptDeliveryRequested',
 ]);
 const DEPENDENCY_FIELDS = new Set([
   'readKeyConfiguration',
@@ -153,6 +155,15 @@ function normalizedForm(rawForm) {
       'WORKER_PAYMENT_FLOW_CONSENT_REQUIRED',
     );
   }
+  if (
+    form.receipt_delivery_requested !== undefined
+    && typeof form.receipt_delivery_requested !== 'boolean'
+  ) {
+    throw flowError(
+      'La preferencia de entrega de constancia es invalida.',
+      'WORKER_PAYMENT_FLOW_INPUT_INVALID',
+    );
+  }
   const purposeKey = typeof form.purpose === 'string'
     ? form.purpose.trim().toLowerCase()
     : '';
@@ -170,7 +181,14 @@ function normalizedForm(rawForm) {
       'WORKER_PAYMENT_FLOW_INPUT_INVALID',
     );
   }
-  return { purpose, type, value };
+  return {
+    purpose,
+    type,
+    value,
+    ...(form.receipt_delivery_requested === true
+      ? { receiptDeliveryRequested: true }
+      : {}),
+  };
 }
 
 function normalizedDate(value, field) {
@@ -215,6 +233,15 @@ function normalizedOperationKey(value) {
 function normalizedFlowSubmission(value, operationKey) {
   const evidence = objectInput(value, 'flowSubmission');
   rejectUnknownFields(evidence, FLOW_SUBMISSION_FIELDS);
+  if (
+    evidence.receiptDeliveryRequested !== undefined
+    && typeof evidence.receiptDeliveryRequested !== 'boolean'
+  ) {
+    throw flowError(
+      'La evidencia de reserva del destino de cobro es invalida.',
+      'WORKER_PAYMENT_FLOW_INPUT_INVALID',
+    );
+  }
   const reservationId = identifier(evidence.reservationId, 'flowSubmission.reservationId')
     .toLowerCase();
   const fingerprintKeyId = identifier(
@@ -237,7 +264,14 @@ function normalizedFlowSubmission(value, operationKey) {
       'WORKER_PAYMENT_FLOW_INPUT_INVALID',
     );
   }
-  return { reservationId, fingerprintKeyId, fingerprintHmac };
+  return {
+    reservationId,
+    fingerprintKeyId,
+    fingerprintHmac,
+    ...(evidence.receiptDeliveryRequested === true
+      ? { receiptDeliveryRequested: true }
+      : {}),
+  };
 }
 
 function normalizedOptions(value) {
@@ -255,12 +289,23 @@ function normalizedOptions(value) {
     ? null
     : identifier(options.correlationId, 'correlationId');
   const operationKey = normalizedOperationKey(options.operationKey);
+  const form = normalizedForm(options.form);
+  const flowSubmission = normalizedFlowSubmission(options.flowSubmission, operationKey);
+  if (
+    (form.receiptDeliveryRequested === true)
+    !== (flowSubmission.receiptDeliveryRequested === true)
+  ) {
+    throw flowError(
+      'La preferencia de constancia no coincide con la reserva.',
+      'WORKER_PAYMENT_FLOW_INPUT_INVALID',
+    );
+  }
   return {
     scope: normalizedScope(options.scope),
-    form: normalizedForm(options.form),
+    form,
     notice,
     operationKey,
-    flowSubmission: normalizedFlowSubmission(options.flowSubmission, operationKey),
+    flowSubmission,
     now,
     correlationId,
   };
@@ -631,6 +676,14 @@ export async function submitWorkerPaymentDestinationFromWhatsAppFlow(
     holderCuil: validatedPaymentInput.holderCuil,
     operationKey: validatedPaymentInput.operationKey,
   };
+  // Receipt delivery is a channel preference bound to the reservation HMAC,
+  // not financial-domain input. Keep the strict domain evidence projection
+  // backward compatible with destinations created before this optional opt-in.
+  const financialFlowSubmission = {
+    reservationId: options.flowSubmission.reservationId,
+    fingerprintKeyId: options.flowSubmission.fingerprintKeyId,
+    fingerprintHmac: options.flowSubmission.fingerprintHmac,
+  };
 
   const privacyResult = await dependencies.recordPrivacyChoice(prisma, {
     ...common,
@@ -666,7 +719,7 @@ export async function submitWorkerPaymentDestinationFromWhatsAppFlow(
       workerId: options.scope.workerId,
     },
     privacyChoice: { eventId: privacyChoiceEventId },
-    flowSubmission: options.flowSubmission,
+    flowSubmission: financialFlowSubmission,
     input: paymentInput,
     keyConfiguration,
   });

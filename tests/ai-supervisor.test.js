@@ -92,6 +92,10 @@ test('supervisor removes active webview bearers before context or provider trans
   const bearer = 'signed-worker-token-that-must-never-reach-openai';
   const labeledKey = 'plain-or-json-key-that-must-never-reach-openai';
   const webviewUrl = `https://obrasaas.vercel.app/webview/medical?worker=worker-a&token=${bearer}`;
+  const receiptBearer = 'signed-receipt-token-that-must-never-reach-openai';
+  const progressBearer = 'signed-progress-token-that-must-never-reach-openai';
+  const receiptUrl = `https://obrasaas.vercel.app/webview/worker-payment-receipt/#token=${receiptBearer}`;
+  const progressUrl = `/webview/progress-evidence-location?capture=capture-a#token=${progressBearer}`;
   const context = buildSupervisorContext({
     access: {
       organization: { name: 'Constructora Norte' },
@@ -108,6 +112,10 @@ test('supervisor removes active webview bearers before context or provider trans
   const contextJson = JSON.stringify(context);
   assert.equal(contextJson.includes(bearer), false);
   assert.equal(contextJson.includes('/webview/medical'), false);
+  assert.equal(scrubSupervisorSecrets(receiptUrl).includes(receiptBearer), false);
+  assert.equal(scrubSupervisorSecrets(receiptUrl).includes('/webview/worker-payment-receipt'), false);
+  assert.equal(scrubSupervisorSecrets(progressUrl).includes(progressBearer), false);
+  assert.equal(scrubSupervisorSecrets(progressUrl).includes('/webview/progress-evidence-location'), false);
   assert.match(context.recentOperationalMessages[0].text, /enlace seguro omitido/i);
   assert.equal(
     scrubSupervisorSecrets(`Authorization: Bearer ${bearer}`).includes(bearer),
@@ -136,6 +144,8 @@ test('supervisor removes active webview bearers before context or provider trans
     context: {
       ...context,
       nestedLegacyUrl: webviewUrl,
+      nestedReceiptUrl: receiptUrl,
+      nestedProgressUrl: progressUrl,
       nestedCredentials: {
         token: bearer,
         key: labeledKey,
@@ -158,8 +168,12 @@ test('supervisor removes active webview bearers before context or provider trans
   });
 
   assert.equal(providerBody.includes(bearer), false);
+  assert.equal(providerBody.includes(receiptBearer), false);
+  assert.equal(providerBody.includes(progressBearer), false);
   assert.equal(providerBody.includes(labeledKey), false);
   assert.equal(providerBody.includes('/webview/medical'), false);
+  assert.equal(providerBody.includes('/webview/worker-payment-receipt'), false);
+  assert.equal(providerBody.includes('/webview/progress-evidence-location'), false);
   assert.match(providerBody, /secreto omitido|enlace seguro omitido/i);
 });
 

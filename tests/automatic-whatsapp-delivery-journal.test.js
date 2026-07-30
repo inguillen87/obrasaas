@@ -21,6 +21,7 @@ process.env.DATABASE_URL = 'postgresql://unit-test.invalid/obrasaas';
 const {
   applyWebhookMessageAtomically,
   claimAutomaticWhatsAppDelivery,
+  releaseAutomaticWhatsAppDelivery,
   settleAutomaticWhatsAppDelivery,
 } = await import('../src/lib/db.js');
 
@@ -48,6 +49,8 @@ function deliveryJournal(dispatchState, {
   settled = null,
   failureCode = null,
   providerStatus = null,
+  releaseCount = null,
+  releasedAt = null,
 } = {}) {
   return {
     version: 1,
@@ -59,6 +62,8 @@ function deliveryJournal(dispatchState, {
     ...(settled ? { settledAt: settled } : {}),
     ...(failureCode ? { failureCode } : {}),
     ...(providerStatus ? { providerStatus } : {}),
+    ...(releaseCount ? { preProviderReleaseCount: releaseCount } : {}),
+    ...(releasedAt ? { lastPreProviderReleasedAt: releasedAt } : {}),
   };
 }
 
@@ -360,6 +365,37 @@ test('claim and accepted settlement form two short CAS transactions and preserve
     reason: 'already_dispatched',
     providerMessageId: 'wamid.provider-automatic-a',
   });
+});
+
+test('a pre-provider failure releases only its exact sending claim back to prepared', async () => {
+  const store = deliveryStore();
+  const claimed = await claimAutomaticWhatsAppDelivery(claimInput({ now: claimedAt }));
+
+  const released = await releaseAutomaticWhatsAppDelivery({
+    claim: claimed.claim,
+    now: settledAt,
+  });
+
+  assert.deepEqual(released, { released: true, state: 'prepared' });
+  assert.equal(store.message.status, 'prepared');
+  assert.equal(store.message.providerMessageId, null);
+  assert.deepEqual(store.message.metadata.automaticDelivery, deliveryJournal('prepared', {
+    prepared: preparedAt,
+    releaseCount: 1,
+    releasedAt: settledAt,
+  }));
+  assert.equal('dispatchStartedAt' in store.message.metadata.automaticDelivery, false);
+
+  const reclaimedAt = '2026-07-28T12:00:04.000Z';
+  const reclaimed = await claimAutomaticWhatsAppDelivery(claimInput({ now: reclaimedAt }));
+  assert.equal(reclaimed.dispatch, true);
+  assert.equal(store.message.status, 'sending');
+  assert.deepEqual(store.message.metadata.automaticDelivery, deliveryJournal('sending', {
+    prepared: preparedAt,
+    claimed: reclaimedAt,
+    releaseCount: 1,
+    releasedAt: settledAt,
+  }));
 });
 
 for (const legacyStatus of ['sending', null]) {

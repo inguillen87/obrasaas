@@ -4,6 +4,7 @@ import {
   claimAutomaticWhatsAppDelivery,
   completeWebhookEvent,
   persistEnrichedWebhookEvent,
+  releaseAutomaticWhatsAppDelivery,
   rescheduleWebhookEvent,
   settleAutomaticWhatsAppDelivery,
   updateWhatsAppMessageStatus,
@@ -35,6 +36,9 @@ import { processIncomingObraMessage } from "@/lib/whatsapp/obra-engine";
 import {
   materializeProgressEvidenceLocationDelivery,
 } from "@/lib/whatsapp/progress-evidence-location-delivery";
+import {
+  materializeWorkerPaymentPrivateReceiptDelivery,
+} from "@/lib/whatsapp/worker-payment-receipt-delivery";
 import { synchronizeWhatsAppTemplateStatus } from "@/lib/whatsapp/templates";
 import { validateStoredWebhookScope } from "@/lib/whatsapp/webhook-scope";
 
@@ -341,10 +345,12 @@ export async function deliverWhatsAppMessageOutcome({
 }, {
   assertSubscription = assertWebhookMessageSubscription,
   claimDelivery = claimAutomaticWhatsAppDelivery,
+  releaseDelivery = releaseAutomaticWhatsAppDelivery,
   settleDelivery = settleAutomaticWhatsAppDelivery,
   sendFlow = trySendPublishedFlow,
   sendText = sendWhatsAppText,
   materializeLocationDelivery = materializeProgressEvidenceLocationDelivery,
+  materializePaymentReceiptDelivery = materializeWorkerPaymentPrivateReceiptDelivery,
   prisma = null,
 } = {}) {
   if (outcome?.quarantined === true) {
@@ -447,6 +453,17 @@ export async function deliverWhatsAppMessageOutcome({
           },
         );
         deliveryText = prepared.text;
+      } else if (outcome.workerPaymentPrivateReceiptDelivery) {
+        const prepared = await materializePaymentReceiptDelivery(
+          prisma || getPrisma(),
+          {
+            descriptor: outcome.workerPaymentPrivateReceiptDelivery,
+            scope: deliveryScope,
+            recipientPhone: event.from,
+            eventId,
+          },
+        );
+        deliveryText = prepared.text;
       }
       await assertSubscription(deliveryScope);
       providerDispatchStarted = true;
@@ -460,13 +477,30 @@ export async function deliverWhatsAppMessageOutcome({
       providerMessageId = providerMessageIdFromMetaResult(delivery);
     }
   } catch (error) {
+    if (!providerDispatchStarted && retryablePreProviderDeliveryFailure(error)) {
+      let released = null;
+      for (let attempt = 0; attempt < 2 && released?.state !== "prepared"; attempt += 1) {
+        try {
+          released = await releaseDelivery({ claim });
+        } catch {
+          released = null;
+        }
+      }
+      if (released?.state !== "prepared") {
+        throw settlementPendingError();
+      }
+      throw preProviderDeliveryRetryError();
+    }
     const state = automaticProviderFailureState(error, { providerDispatchStarted });
     return settleProviderFailure(state, error, {
       providerDispatchStarted,
-      // H2 text contains a one-time bearer only in memory. Even a malformed
-      // provider/proxy error must not carry reflected request content into the
-      // queue error chain or logs.
-      redactCause: Boolean(outcome.progressEvidenceLocationDelivery),
+      // Protected one-time delivery text can contain a bearer only in memory.
+      // Even a malformed provider/proxy error must not carry reflected request
+      // content into the queue error chain or logs.
+      redactCause: Boolean(
+        outcome.progressEvidenceLocationDelivery
+        || outcome.workerPaymentPrivateReceiptDelivery
+      ),
     });
   }
 
@@ -654,6 +688,20 @@ const SAFE_AUTOMATIC_PROVIDER_FAILURE_CODES = new Set([
   "WHATSAPP_FLOW_DELIVERY_UNRESOLVED",
   "META_PROVIDER_MESSAGE_ID_MISSING",
 ]);
+const RETRYABLE_PRE_PROVIDER_DELIVERY_CODES = new Set([
+  "P1001",
+  "P1002",
+  "P2024",
+  "P2028",
+  "P2034",
+  "40001",
+  "40P01",
+  "57P01",
+  "08000",
+  "08001",
+  "08003",
+  "08006",
+]);
 
 export class AutomaticWhatsAppDeliveryError extends Error {
   constructor(message, code, { cause = null } = {}) {
@@ -696,6 +744,22 @@ function automaticProviderFailureState(error, { providerDispatchStarted }) {
     return "unknown";
   }
   return "failed";
+}
+
+function retryablePreProviderDeliveryFailure(error) {
+  const code = typeof error?.code === "string" ? error.code.trim().toUpperCase() : "";
+  const causeCode = typeof error?.cause?.code === "string"
+    ? error.cause.code.trim().toUpperCase()
+    : "";
+  return RETRYABLE_PRE_PROVIDER_DELIVERY_CODES.has(code)
+    || RETRYABLE_PRE_PROVIDER_DELIVERY_CODES.has(causeCode);
+}
+
+function preProviderDeliveryRetryError() {
+  return new AutomaticWhatsAppDeliveryError(
+    "La preparación local de la respuesta automática falló antes de contactar a Meta y se reintentará de forma segura.",
+    "WHATSAPP_AUTOMATIC_DELIVERY_PRE_PROVIDER_RETRY",
+  );
 }
 
 function automaticProviderFailureEvidence(error, {

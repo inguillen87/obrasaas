@@ -51,6 +51,7 @@ const MAX_WHATSAPP_TEXT_LENGTH = 4_096;
 const FLOW_PROMPT_PATTERN = /^[a-z0-9][a-z0-9-]{0,99}$/;
 const FLOW_SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const PROGRESS_EVIDENCE_LOCATION_DELIVERY_VERSION = 1;
+const WORKER_PAYMENT_PRIVATE_RECEIPT_DELIVERY_VERSION = 1;
 const SHA256_PATTERN = /^[a-f0-9]{64}$/;
 const PAYMENT_DESTINATION_TEXT_MARKER = '[destino de cobro restringido]';
 const PAYMENT_ALIAS_DISCLOSURE_PATTERN = /\bmi\s+alias(?:\s+(?:bancario|de\s+cobro))?\s*(?:es|:)\s*[a-z0-9][a-z0-9.-]{0,63}(?![a-z0-9.-])/iu;
@@ -67,6 +68,7 @@ export function createMessageWebhookOutcome({
   flowPrompt = null,
   flowSessionId = null,
   progressEvidenceLocationDelivery = null,
+  workerPaymentPrivateReceiptDelivery = null,
 } = {}) {
   if (typeof reply !== "string" || !reply.trim()) throw invalidWebhookOutcome();
   const normalizedFlowPrompt = flowPrompt === null || flowPrompt === undefined || flowPrompt === ""
@@ -92,7 +94,17 @@ export function createMessageWebhookOutcome({
   const normalizedProgressEvidenceLocationDelivery = normalizeProgressEvidenceLocationDelivery(
     progressEvidenceLocationDelivery,
   );
-  if (normalizedProgressEvidenceLocationDelivery && normalizedFlowPrompt) {
+  const normalizedWorkerPaymentPrivateReceiptDelivery = normalizeWorkerPaymentPrivateReceiptDelivery(
+    workerPaymentPrivateReceiptDelivery,
+  );
+  if (
+    (normalizedProgressEvidenceLocationDelivery && normalizedFlowPrompt)
+    || (normalizedWorkerPaymentPrivateReceiptDelivery && normalizedFlowPrompt)
+    || (
+      normalizedProgressEvidenceLocationDelivery
+      && normalizedWorkerPaymentPrivateReceiptDelivery
+    )
+  ) {
     throw invalidWebhookOutcome();
   }
   return {
@@ -103,6 +115,9 @@ export function createMessageWebhookOutcome({
     ...(normalizedFlowSessionId ? { flowSessionId: normalizedFlowSessionId } : {}),
     ...(normalizedProgressEvidenceLocationDelivery
       ? { progressEvidenceLocationDelivery: normalizedProgressEvidenceLocationDelivery }
+      : {}),
+    ...(normalizedWorkerPaymentPrivateReceiptDelivery
+      ? { workerPaymentPrivateReceiptDelivery: normalizedWorkerPaymentPrivateReceiptDelivery }
       : {}),
   };
 }
@@ -128,6 +143,30 @@ function normalizeProgressEvidenceLocationDelivery(value) {
   return {
     version: PROGRESS_EVIDENCE_LOCATION_DELIVERY_VERSION,
     sessionId,
+  };
+}
+
+function normalizeWorkerPaymentPrivateReceiptDelivery(value) {
+  if (value === null || value === undefined) return null;
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw invalidWebhookOutcome();
+  }
+  const keys = Object.keys(value).sort();
+  if (
+    keys.length !== 2
+    || keys[0] !== "receiptId"
+    || keys[1] !== "version"
+    || value.version !== WORKER_PAYMENT_PRIVATE_RECEIPT_DELIVERY_VERSION
+  ) {
+    throw invalidWebhookOutcome();
+  }
+  const receiptId = typeof value.receiptId === "string"
+    ? value.receiptId.trim().toLowerCase()
+    : "";
+  if (!FLOW_SESSION_ID_PATTERN.test(receiptId)) throw invalidWebhookOutcome();
+  return {
+    version: WORKER_PAYMENT_PRIVATE_RECEIPT_DELIVERY_VERSION,
+    receiptId,
   };
 }
 
@@ -164,7 +203,14 @@ export function readAppliedMessageWebhookOutcome(webhookEvent) {
   const progressEvidenceLocationDelivery = normalizeProgressEvidenceLocationDelivery(
     outcome.progressEvidenceLocationDelivery,
   );
-  if (progressEvidenceLocationDelivery && outcome.flowPrompt) {
+  const workerPaymentPrivateReceiptDelivery = normalizeWorkerPaymentPrivateReceiptDelivery(
+    outcome.workerPaymentPrivateReceiptDelivery,
+  );
+  if (
+    (progressEvidenceLocationDelivery && outcome.flowPrompt)
+    || (workerPaymentPrivateReceiptDelivery && outcome.flowPrompt)
+    || (progressEvidenceLocationDelivery && workerPaymentPrivateReceiptDelivery)
+  ) {
     throw invalidWebhookOutcome();
   }
   return {
@@ -174,6 +220,9 @@ export function readAppliedMessageWebhookOutcome(webhookEvent) {
     flowPrompt: outcome.flowPrompt || null,
     ...(outcome.flowSessionId ? { flowSessionId: outcome.flowSessionId } : {}),
     ...(progressEvidenceLocationDelivery ? { progressEvidenceLocationDelivery } : {}),
+    ...(workerPaymentPrivateReceiptDelivery
+      ? { workerPaymentPrivateReceiptDelivery }
+      : {}),
   };
 }
 

@@ -431,6 +431,12 @@ const BLUEPRINTS = [
                     required: true,
                   },
                   {
+                    type: 'OptIn',
+                    name: 'receipt_delivery_requested',
+                    label: 'Quiero recibir por WhatsApp una constancia privada, sin mostrar mis datos completos.',
+                    required: false,
+                  },
+                  {
                     type: 'Footer',
                     label: 'Registrar o confirmar',
                     'on-click-action': {
@@ -441,6 +447,7 @@ const BLUEPRINTS = [
                         destination_value: '${form.destination_value}',
                         holder_declaration: '${form.holder_declaration}',
                         capture_notice_acknowledged: '${form.capture_notice_acknowledged}',
+                        receipt_delivery_requested: '${form.receipt_delivery_requested}',
                       },
                     },
                   },
@@ -591,6 +598,7 @@ const FLOW_DEFINITION_CONTRACTS = Object.freeze({
           destination_value: Object.freeze({ componentTypes: Object.freeze(['TextInput']) }),
           holder_declaration: Object.freeze({ componentTypes: Object.freeze(['OptIn']) }),
           capture_notice_acknowledged: Object.freeze({ componentTypes: Object.freeze(['OptIn']) }),
+          receipt_delivery_requested: Object.freeze({ componentTypes: Object.freeze(['OptIn']) }),
         }),
         terminalReceiptFields: Object.freeze({
           flow_type: Object.freeze({ type: 'string' }),
@@ -603,6 +611,7 @@ const FLOW_DEFINITION_CONTRACTS = Object.freeze({
           destination_value: Object.freeze({ strategy: 'drop-sensitive' }),
           holder_declaration: Object.freeze({ strategy: 'drop-sensitive' }),
           capture_notice_acknowledged: Object.freeze({ strategy: 'drop-sensitive' }),
+          receipt_delivery_requested: Object.freeze({ strategy: 'drop-sensitive' }),
           flow_type: Object.freeze({ strategy: 'constant', value: 'worker_payment_destination' }),
           destination_ref: Object.freeze({ strategy: 'opaque-reference' }),
           submission_status: Object.freeze({ strategy: 'constant', value: 'received' }),

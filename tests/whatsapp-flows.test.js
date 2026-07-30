@@ -221,11 +221,22 @@ test('ObraSaaS blueprints use Flow JSON 7.3 and the dynamic Data API 4.0 contrac
           'destination_value',
           'holder_declaration',
           'capture_notice_acknowledged',
+          'receipt_delivery_requested',
         ],
       );
       assert.equal(
         form.children.find((component) => component.name === 'capture_notice_acknowledged').type,
         'OptIn',
+      );
+      const receiptDeliveryOptIn = form.children.find(
+        (component) => component.name === 'receipt_delivery_requested',
+      );
+      assert.equal(receiptDeliveryOptIn.type, 'OptIn');
+      assert.equal(receiptDeliveryOptIn.required, false);
+      assert.match(receiptDeliveryOptIn.label, /WhatsApp.*constancia privada.*datos completos/i);
+      assert.equal(
+        footer['on-click-action'].payload.receipt_delivery_requested,
+        '${form.receipt_delivery_requested}',
       );
       assert.equal(screen.data.capture_notice_version.__example__, paymentNotice.version);
       assert.equal(screen.data.capture_notice_text.__example__, paymentNotice.content);
@@ -298,10 +309,16 @@ test('Flow definition contracts separate server context, client fields, and term
       'destination_value',
       'holder_declaration',
       'purpose',
+      'receipt_delivery_requested',
     ],
   );
   assert.equal(
     payment.screens.WORKER_PAYMENT_DESTINATION.persistenceProjection.destination_value.strategy,
+    'drop-sensitive',
+  );
+  assert.equal(
+    payment.screens.WORKER_PAYMENT_DESTINATION
+      .persistenceProjection.receipt_delivery_requested.strategy,
     'drop-sensitive',
   );
   assert.deepEqual(

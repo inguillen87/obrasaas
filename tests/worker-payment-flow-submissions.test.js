@@ -163,7 +163,9 @@ test('maps the exact Flow form, derives holder identity server-side, and returns
         ...FORM,
         purpose: ' Salary ',
         destination_type: 'CBU',
+        receipt_delivery_requested: true,
       },
+      flowSubmission: { ...FLOW_SUBMISSION, receiptDeliveryRequested: true },
     }),
     dependencies({
       order,
@@ -217,6 +219,11 @@ test('maps the exact Flow form, derives holder identity server-side, and returns
     projectId: SCOPE.projectId,
     workerId: SCOPE.workerId,
   });
+  assert.deepEqual(submitOptions.flowSubmission, FLOW_SUBMISSION);
+  assert.equal(
+    Object.hasOwn(submitOptions.flowSubmission, 'receiptDeliveryRequested'),
+    false,
+  );
   assert.equal(submitOptions.input.purpose, 'SALARY');
   assert.equal(submitOptions.input.type, 'CBU');
   assert.equal(submitOptions.input.value, DESTINATION_VALUE);
@@ -230,6 +237,7 @@ test('maps the exact Flow form, derives holder identity server-side, and returns
     'type',
     'value',
   ]);
+  assert.equal(Object.hasOwn(submitOptions.input, 'receiptDeliveryRequested'), false);
   assert.equal(result.destinationRef, 'destination-a');
   assert.equal(result.status, 'PENDING_VERIFICATION');
   assert.equal(result.paymentDestination.maskedValue, 'CBU .... 0000');
@@ -242,6 +250,43 @@ test('maps the exact Flow form, derives holder identity server-side, and returns
   assert.equal(Object.hasOwn(result.paymentDestination, 'value'), false);
   assert.equal(Object.hasOwn(result.paymentDestination, 'holderName'), false);
   assert.equal(Object.hasOwn(result.paymentDestination, 'holderCuil'), false);
+});
+
+test('canonically omits declined receipt delivery and rejects evidence that disagrees with the form', async () => {
+  const declined = await submitWorkerPaymentDestinationFromWhatsAppFlow(
+    prismaFixture(),
+    input({
+      form: { ...FORM, receipt_delivery_requested: false },
+      flowSubmission: { ...FLOW_SUBMISSION, receiptDeliveryRequested: false },
+    }),
+    dependencies(),
+  );
+  assert.equal(declined.destinationRef, 'destination-a');
+
+  await assert.rejects(
+    submitWorkerPaymentDestinationFromWhatsAppFlow(
+      prismaFixture(),
+      input({ form: { ...FORM, receipt_delivery_requested: true } }),
+      dependencies(),
+    ),
+    expectCode('WORKER_PAYMENT_FLOW_INPUT_INVALID'),
+  );
+  await assert.rejects(
+    submitWorkerPaymentDestinationFromWhatsAppFlow(
+      prismaFixture(),
+      input({ flowSubmission: { ...FLOW_SUBMISSION, receiptDeliveryRequested: true } }),
+      dependencies(),
+    ),
+    expectCode('WORKER_PAYMENT_FLOW_INPUT_INVALID'),
+  );
+  await assert.rejects(
+    submitWorkerPaymentDestinationFromWhatsAppFlow(
+      prismaFixture(),
+      input({ form: { ...FORM, receipt_delivery_requested: 'true' } }),
+      dependencies(),
+    ),
+    expectCode('WORKER_PAYMENT_FLOW_INPUT_INVALID'),
+  );
 });
 
 test('rejects unknown identity fields and non-affirmative declarations without reflecting values', async () => {

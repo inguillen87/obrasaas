@@ -33,6 +33,41 @@ const securityHeaders = [
   },
 ];
 
+const privateReceiptWebviewHeaders = [
+  {
+    key: 'Cache-Control',
+    value: 'private, no-store, max-age=0',
+  },
+  {
+    key: 'Content-Security-Policy',
+    value: "frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+  },
+  {
+    key: 'Cross-Origin-Opener-Policy',
+    value: 'same-origin',
+  },
+  {
+    key: 'Cross-Origin-Resource-Policy',
+    value: 'same-origin',
+  },
+  {
+    key: 'Permissions-Policy',
+    value: 'camera=(), microphone=(), geolocation=(), payment=(), browsing-topics=()',
+  },
+  {
+    key: 'Referrer-Policy',
+    value: 'no-referrer',
+  },
+  {
+    key: 'X-DNS-Prefetch-Control',
+    value: 'off',
+  },
+  {
+    key: 'X-Frame-Options',
+    value: 'DENY',
+  },
+];
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   distDir: process.env.NEXT_DIST_DIR || '.next',
@@ -41,6 +76,13 @@ const nextConfig = {
       {
         source: '/:path*',
         headers: securityHeaders,
+      },
+      {
+        // This route receives its bearer in the URL fragment and scrubs it
+        // before the first request. Override the global navigation policy so
+        // neither the opaque binding nor this private surface can be framed.
+        source: '/webview/worker-payment-receipt',
+        headers: privateReceiptWebviewHeaders,
       },
     ];
   },
