@@ -1,0 +1,12 @@
+flowchart LR
+  S["Verified requester"] --> APP["ObraSaaS intake"]
+  APP --> Q["Authenticated case command"]
+  Q --> ORCH["Isolated privacy orchestrator"]
+  ORCH --> DB["Least-privilege DB adapters"]
+  ORCH --> ST["Storage adapter"]
+  ORCH --> PR["Provider adapters"]
+  DB --> M["Service-owned manifest"]
+  ST --> M
+  PR --> M
+  M --> O["Durable per-domain outcomes"]
+  O --> APP

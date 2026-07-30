@@ -1,0 +1,14 @@
+flowchart LR
+  S["Verified requester"] --> C["Tenant privacy case"]
+  C --> D["Read-only discovery catalog"]
+  D --> DB["PostgreSQL domain adapters"]
+  D --> ST["Storage inventory adapter"]
+  D --> PR["Provider and backup inventory"]
+  DB --> M["Canonical manifest + hash"]
+  ST --> M
+  PR --> M
+  M --> B{"Complete and classified?"}
+  B -- "No" --> X["Blocked with explicit gaps"]
+  B -- "Yes" --> H["Holds + human decision"]
+  H --> E["Idempotent domain execution"]
+  E --> V["Per-domain verified outcomes"]

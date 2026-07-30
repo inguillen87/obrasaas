@@ -1,0 +1,207 @@
+{
+  "documentType": "codex-security.hardening-analysis",
+  "schemaVersion": "1.0",
+  "analysisId": "hardening_20260729_pro_05",
+  "sourceEvidence": {
+    "kind": "document_collection",
+    "label": "ObraSaaS PRO-05 product, source and privacy evidence",
+    "collectionSha256": "e8e594e8b1af31232ce23e080516922e91d8c6fe86d2307dc4737018320c44f8",
+    "artifactCount": 7,
+    "targetRevision": "3f9fe4ec72216d7a659d68714989e17f3044c0c4",
+    "sourceDrift": "none"
+  },
+  "assessment": {
+    "outcome": "opportunities_identified",
+    "summary": "The reviewed source supports one cross-cutting opportunity: centralize tenant-scoped privacy discovery, retention decisions and verified execution before accepting real labour data."
+  },
+  "constraints": {
+    "profile": "balanced",
+    "changeHorizons": ["incremental", "medium_term", "foundational"],
+    "nonNegotiables": [
+      "No generic or automatic destructive deletion is introduced before each data domain is classified and tested.",
+      "Existing append-only labour, payment and security evidence remains fail-closed.",
+      "Every request and discovered resource remains bound to one organization and one canonical subject.",
+      "Primary-database completion never implies provider or backup completion."
+    ],
+    "assumptions": [
+      "PostgreSQL and the existing Vercel cron remain the operational platform for the first phase.",
+      "No measured throughput, latency or memory budget was supplied.",
+      "Jurisdiction-specific retention periods require legal approval before destructive execution."
+    ]
+  },
+  "opportunities": [
+    {
+      "opportunityId": "centralize-privacy-lifecycle-control",
+      "title": "Centralize privacy lifecycle control",
+      "summary": "Create one tenant-scoped control plane that discovers subject data, records retention decisions, blocks on unknown scope and verifies domain and provider outcomes.",
+      "diagnosis": "Privacy obligations currently span relational records, untyped JSON, storage, WhatsApp, AI providers and backups, while only isolated lifecycle jobs own bounded subsets. Public language therefore outruns machine-verifiable behavior.",
+      "evidence": [
+        {
+          "claimType": "observed",
+          "sourceKind": "source",
+          "evidenceId": "E-SCHEMA",
+          "path": "prisma/schema.prisma",
+          "claim": "The worker and platform-user graphs mix Cascade, Restrict and NoAction relations and include encrypted identity, financial, geolocation, message, media and derived AI data."
+        },
+        {
+          "claimType": "observed",
+          "sourceKind": "source",
+          "evidenceId": "E-PUBLIC",
+          "path": "src/app/data-deletion/page.js",
+          "claim": "The public page states 30-day operational deletion and normally 90-day backup purge, but no repository-wide workflow enforces or proves those statements."
+        },
+        {
+          "claimType": "observed",
+          "sourceKind": "source",
+          "evidenceId": "E-LOCAL-PURGE",
+          "path": "src/lib/worker-onboarding-retention.js",
+          "claim": "One transient onboarding domain already uses bounded SKIP LOCKED selection, atomic cryptographic erasure and PII-free audit records."
+        },
+        {
+          "claimType": "observed",
+          "sourceKind": "document",
+          "evidenceId": "E-TRACE",
+          "path": "docs/CLIENT_SPEC_TRACEABILITY.md",
+          "claim": "The product traceability matrix marks PRO-05 absent and a gate before real labour data."
+        },
+        {
+          "claimType": "inferred",
+          "sourceKind": "source",
+          "evidenceId": "E-WA",
+          "path": "docs/WHATSAPP_META.md",
+          "claim": "Because subject identity can occur in typed relations, raw channel identifiers and JSON/provider payloads, a generic ORM cascade cannot provide complete or safe erasure."
+        }
+      ],
+      "desiredInvariants": [
+        "Every privacy case is bound to exactly one organization and canonical subject type; an authenticated tenant administrator may start non-destructive inventory, while verified requester identity or representation is mandatory before decision or action.",
+        "Discovery is read-only, repeatable and emits a hash-bound manifest containing no raw sensitive values, ciphertext, bearer tokens or provider credentials.",
+        "Unknown JSON, storage, provider or backup scope makes the case incomplete rather than silently successful.",
+        "Every resource ends in an explicit action class: export, erase, cryptographic erase, pseudonymize, restrict, keep with basis, legal hold or external-provider deletion.",
+        "No mutation runs until an authorized human approves a versioned manifest and all applicable holds and retention bases have been evaluated.",
+        "A case reaches verified completion only when every required domain and external processor has a terminal, evidence-backed outcome."
+      ],
+      "proposalPath": "proposals/centralize-privacy-lifecycle-control.md",
+      "options": [
+        {
+          "optionId": "truthful-manual-runbook",
+          "title": "Truthful manual intake and domain runbooks",
+          "kind": "baseline",
+          "summary": "Correct unsupported public promises and operate existing bounded purge routines through a reviewed manual checklist.",
+          "diagramPaths": {
+            "before": "diagrams/centralize-privacy-lifecycle-control-before.mmd",
+            "after": "diagrams/centralize-privacy-lifecycle-control-truthful-manual-runbook-after.mmd"
+          },
+          "evidenceCoverage": [
+            {
+              "evidenceId": "E-PUBLIC",
+              "effect": "addresses",
+              "tacticalFixRequired": true,
+              "rationale": "The public wording can immediately be made truthful."
+            },
+            {
+              "evidenceId": "E-SCHEMA",
+              "effect": "mitigates",
+              "tacticalFixRequired": true,
+              "rationale": "A runbook reduces accidental deletion but cannot prove complete graph coverage."
+            },
+            {
+              "evidenceId": "E-TRACE",
+              "effect": "unaffected",
+              "tacticalFixRequired": true,
+              "rationale": "Manual handling does not close the machine-verifiable PRO-05 gate."
+            }
+          ],
+          "tradeoffs": [
+            {"dimension":"security","direction":"improves","confidence":"medium","basis":"source-derived","assessment":"Removing unsupported promises and requiring review reduces unsafe ad hoc deletion, but coverage still depends on operator memory.","validationPlan":"Exercise the runbook against synthetic worker and platform-user cases and record missed domains."},
+            {"dimension":"performance","direction":"neutral","confidence":"high","basis":"source-derived","assessment":"No new runtime query path is introduced.","validationPlan":"Confirm that only static content and documentation changed."},
+            {"dimension":"memory","direction":"neutral","confidence":"high","basis":"source-derived","assessment":"No additional in-process state is retained.","validationPlan":"No memory benchmark is required beyond normal build validation."},
+            {"dimension":"reliability","direction":"improves","confidence":"low","basis":"hypothetical","assessment":"A checklist can reduce operator error, but manual handoffs remain non-atomic and difficult to replay.","validationPlan":"Run a tabletop case twice and compare outcomes and evidence."},
+            {"dimension":"operability","direction":"regresses","confidence":"high","basis":"source-derived","assessment":"Each case consumes expert time and has no automated deadline, backlog or provider reconciliation.","validationPlan":"Measure handling time and unresolved steps during synthetic cases."},
+            {"dimension":"migration","direction":"improves","confidence":"high","basis":"source-derived","assessment":"It is immediately reversible and prepares the classification vocabulary for later automation.","validationPlan":"Review the runbook vocabulary against the future manifest schema."}
+          ],
+          "residualRisks": ["Incomplete discovery", "Missed deadlines", "Unverifiable provider and backup outcomes", "Operator-dependent tenant isolation"],
+          "implementationReadiness": {
+            "affectedComponents": ["src/app/data-deletion/page.js", "docs"],
+            "workPackages": ["Correct unsupported promises.", "Create a reviewed manual classification and evidence checklist."],
+            "acceptanceCriteria": ["The public page makes no unimplemented technical deadline claim.", "A synthetic case has an explicit unresolved status for every unknown domain."],
+            "migrationNotes": ["No database migration."],
+            "rollback": "Revert the static wording and runbook changes."
+          }
+        },
+        {
+          "optionId": "tenant-privacy-control-plane",
+          "title": "Incremental tenant privacy control plane",
+          "kind": "incremental",
+          "summary": "Add PostgreSQL-backed cases, immutable discovery manifests, legal holds and domain-owned idempotent adapters while retaining one deployable application.",
+          "diagramPaths": {
+            "before": "diagrams/centralize-privacy-lifecycle-control-before.mmd",
+            "after": "diagrams/centralize-privacy-lifecycle-control-tenant-privacy-control-plane-after.mmd"
+          },
+          "evidenceCoverage": [
+            {"evidenceId":"E-PUBLIC","effect":"addresses","tacticalFixRequired":true,"rationale":"Truthful public intake can point to a durable, traceable case without overstating completion."},
+            {"evidenceId":"E-SCHEMA","effect":"addresses","tacticalFixRequired":true,"rationale":"A catalog and domain adapters make mixed relational and non-relational coverage explicit."},
+            {"evidenceId":"E-LOCAL-PURGE","effect":"addresses","tacticalFixRequired":false,"rationale":"The existing bounded transaction pattern can be retained as one adapter rather than replaced."},
+            {"evidenceId":"E-TRACE","effect":"mitigates","tacticalFixRequired":true,"rationale":"It supplies the control plane, but PRO-05 remains open until destructive adapters, providers and restore drills are proven."},
+            {"evidenceId":"E-WA","effect":"mitigates","tacticalFixRequired":true,"rationale":"WhatsApp raw identifiers and provider deletion still require dedicated adapters and migration."}
+          ],
+          "tradeoffs": [
+            {"dimension":"security","direction":"improves","confidence":"high","basis":"source-derived","assessment":"One tenant-scoped state machine owns discovery completeness, approvals, holds and terminal evidence while domain adapters preserve local invariants.","validationPlan":"Prove cross-tenant denial, manifest integrity, zero-mutation discovery and fail-closed unknown domains in tests."},
+            {"dimension":"performance","direction":"regresses","confidence":"medium","basis":"source-derived","assessment":"Discovery adds bounded count and identifier queries, but it stays off interactive WhatsApp and dashboard hot paths.","validationPlan":"Benchmark synthetic tenants at expected and upper-bound row counts; paginate every adapter."},
+            {"dimension":"memory","direction":"regresses","confidence":"medium","basis":"source-derived","assessment":"Manifest creation allocates bounded pages and canonical summaries; persistent items grow with discovered domains and resources.","validationPlan":"Measure peak RSS and manifest row growth with large synthetic subjects; enforce page and payload limits."},
+            {"dimension":"reliability","direction":"improves","confidence":"high","basis":"source-derived","assessment":"Durable per-domain states make retries idempotent and partial provider failure visible instead of collapsing into a false global success.","validationPlan":"Inject transaction, storage and provider failures and verify replay without duplicate actions."},
+            {"dimension":"operability","direction":"improves","confidence":"medium","basis":"source-derived","assessment":"The existing application and cron can expose backlog, deadlines and blockers without introducing a new service, although the domain catalog becomes an owned operational asset.","validationPlan":"Add backlog, overdue, blocked-domain and provider-pending metrics and run an operator tabletop."},
+            {"dimension":"migration","direction":"regresses","confidence":"medium","basis":"source-derived","assessment":"Schema, catalog and adapters must roll out additively; destructive execution remains disabled until each domain and legal policy is approved.","validationPlan":"Apply migrations from zero and upgrade fixtures, then canary read-only discovery before enabling any action adapter."}
+          ],
+          "residualRisks": ["Unclassified JSON until each catalog entry is reviewed", "Provider deletion semantics and receipts vary", "Backup restoration can resurrect data without tombstone replay", "Legal retention decisions require local counsel"],
+          "implementationReadiness": {
+            "affectedComponents": ["prisma/schema.prisma", "prisma/migrations", "src/lib/privacy", "src/app/api/privacy", "tests", "docs"],
+            "workPackages": ["Add cases and immutable read-only discovery manifests.", "Add verified identity and decision workflow.", "Implement domain-owned action adapters behind feature gates.", "Add provider propagation and backup tombstone reconciliation."],
+            "acceptanceCriteria": ["Discovery is tenant-isolated, idempotent and mutation-free.", "Unknown scope blocks completion.", "No action can run without a verified requester, approved manifest and evaluated holds.", "Primary, provider and backup outcomes remain separately visible."],
+            "migrationNotes": ["Additive tables and enums first; no existing row rewrite.", "Keep destructive execution disabled through the discovery-only phase."],
+            "rollback": "Disable privacy execution and discovery feature gates; preserve additive case evidence for review, then revert application callers before removing schema."
+          }
+        },
+        {
+          "optionId": "dedicated-privacy-orchestrator",
+          "title": "Dedicated privacy orchestration service",
+          "kind": "isolation",
+          "summary": "Move case state, provider credentials and deletion orchestration into a separately deployed least-privilege service.",
+          "diagramPaths": {
+            "before": "diagrams/centralize-privacy-lifecycle-control-before.mmd",
+            "after": "diagrams/centralize-privacy-lifecycle-control-dedicated-privacy-orchestrator-after.mmd"
+          },
+          "evidenceCoverage": [
+            {"evidenceId":"E-PUBLIC","effect":"addresses","tacticalFixRequired":true,"rationale":"A durable service can back truthful intake, but the current page still requires an immediate wording fix."},
+            {"evidenceId":"E-SCHEMA","effect":"addresses","tacticalFixRequired":true,"rationale":"Isolation centralizes orchestration, while each domain still needs a safe local adapter."},
+            {"evidenceId":"E-LOCAL-PURGE","effect":"mitigates","tacticalFixRequired":false,"rationale":"The existing local job can be invoked through a constrained adapter."},
+            {"evidenceId":"E-TRACE","effect":"mitigates","tacticalFixRequired":true,"rationale":"Service isolation alone does not prove retention rules, providers or restore behavior."}
+          ],
+          "tradeoffs": [
+            {"dimension":"security","direction":"improves","confidence":"medium","basis":"hypothetical","assessment":"Separate credentials and network policy can reduce blast radius, but cross-service authority and message authentication become new privileged boundaries.","validationPlan":"Threat-model service identity, adapter authorization, replay and credential scopes before implementation."},
+            {"dimension":"performance","direction":"regresses","confidence":"medium","basis":"analogous","assessment":"Network hops and queueing add latency to discovery and execution, although these are asynchronous paths.","validationPlan":"Measure end-to-end case latency and queue depth under synthetic load."},
+            {"dimension":"memory","direction":"regresses","confidence":"medium","basis":"analogous","assessment":"A separate runtime duplicates framework, connection-pool and queue-worker overhead.","validationPlan":"Measure idle and peak memory of both deployments."},
+            {"dimension":"reliability","direction":"unknown","confidence":"medium","basis":"hypothetical","assessment":"Failure isolation improves, but distributed transactions, queues and credential rotation introduce more partial-failure modes.","validationPlan":"Run provider outage, duplicate delivery and database partition fault tests."},
+            {"dimension":"operability","direction":"regresses","confidence":"high","basis":"source-derived","assessment":"A second deployment needs independent observability, on-call ownership, secrets, queues and release coordination.","validationPlan":"Estimate operational ownership and complete a deployment/rollback drill."},
+            {"dimension":"migration","direction":"regresses","confidence":"high","basis":"source-derived","assessment":"Existing local domain logic needs authenticated adapters and dual-run reconciliation before authority can move safely.","validationPlan":"Shadow read-only discovery and compare manifests before any cutover."}
+          ],
+          "residualRisks": ["Distributed authorization drift", "Queue replay errors", "Provider and backup uncertainty", "Higher operational complexity before product scale justifies it"],
+          "implementationReadiness": {
+            "affectedComponents": ["new privacy service", "application adapters", "deployment and secrets", "provider integrations", "observability"],
+            "workPackages": ["Define service identity and capability contract.", "Build shadow discovery and manifest comparison.", "Migrate action authority after parity and fault testing."],
+            "acceptanceCriteria": ["The service has no broad application-database credential.", "Every command is tenant-, case-, manifest- and action-bound.", "Duplicate or reordered messages cannot repeat a destructive action."],
+            "migrationNotes": ["Requires shadow mode and dual-read reconciliation."],
+            "rollback": "Route new cases back to the in-application control plane while draining authenticated commands and preserving case evidence."
+          }
+        }
+      ],
+      "recommendedOptionId": "tenant-privacy-control-plane",
+      "recommendation": "Use the incremental control plane now: it materially improves completeness and evidence without paying the distributed-systems cost of a separate orchestrator. Revisit service isolation when deletion volume, team ownership or credential-separation requirements justify it."
+    }
+  ],
+  "openQuestions": [
+    "Which entity is controller and processor for each treatment and tenant contract?",
+    "Which labour, tax, accounting and litigation retention periods apply in each launch jurisdiction?",
+    "Which storage, messaging, AI, logging and backup subprocessors will be active in the pilot?",
+    "What verified privacy contact and operational owner should replace the personal inbox before production?"
+  ]
+}

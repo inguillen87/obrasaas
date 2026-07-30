@@ -330,7 +330,7 @@ export async function resolveLockedPlatformIdentity({
   );
 }
 
-const resolvePlatformAccess = cache(async () => {
+const resolvePlatformAccess = cache(async (resolveProject = true) => {
   const session = await auth();
   if (!session.userId) {
     throw new AccessError('Authentication required.', {
@@ -372,7 +372,7 @@ const resolvePlatformAccess = cache(async () => {
   let project = null;
 
   const tenantRole = isSuperadmin ? 'SUPERADMIN' : membership?.tenantRole || null;
-  if (organization) {
+  if (organization && resolveProject) {
     project = await resolveActiveProject(prisma, {
       isSuperadmin,
       tenantRole,
@@ -415,8 +415,12 @@ const resolvePlatformAccess = cache(async () => {
 export async function getPlatformAccess({
   requireOrganization = true,
   requireProject = requireOrganization,
+  resolveProject = true,
 } = {}) {
-  const access = await resolvePlatformAccess();
+  if (requireProject && !resolveProject) {
+    throw new TypeError('A required project cannot be skipped during access resolution.');
+  }
+  const access = await resolvePlatformAccess(resolveProject);
   if (requireOrganization && !access.organization) {
     throw new AccessError('An active organization is required.', {
       code: 'ORGANIZATION_REQUIRED',

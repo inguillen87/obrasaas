@@ -48,8 +48,13 @@ export function isProtectedPathname(pathname) {
 export default clerkMiddleware(
   async (auth, request) => {
     if (isProtectedPathname(request.nextUrl.pathname)) await auth.protect();
-    const response = NextResponse.next();
-    response.headers.set('x-request-id', resolveRequestCorrelationId(request));
+    const correlationId = resolveRequestCorrelationId(request);
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.set('x-request-id', correlationId);
+    const response = NextResponse.next({
+      request: { headers: requestHeaders },
+    });
+    response.headers.set('x-request-id', correlationId);
     return response;
   },
   {

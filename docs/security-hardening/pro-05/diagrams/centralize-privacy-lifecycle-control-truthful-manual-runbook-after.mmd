@@ -1,0 +1,10 @@
+flowchart LR
+  S["Data subject"] --> P["Truthful public instructions"]
+  P --> O["Verified operator"]
+  O --> R["Reviewed runbook"]
+  R --> DB["PostgreSQL domains"]
+  R --> ST["Object storage"]
+  R --> PR["Providers and backups"]
+  DB --> LP["Existing lifecycle jobs"]
+  LP --> A["Domain-local audit"]
+  R --> U["Unknown remains unresolved"]

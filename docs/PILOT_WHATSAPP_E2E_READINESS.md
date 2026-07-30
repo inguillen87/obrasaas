@@ -137,7 +137,9 @@ El objetivo del hito es completar esos componentes y mantener los valores comple
 
 La entrega inicial por enlace privado de corta duración está implementada sólo localmente y aún no tiene smoke externo. Si el acceso está vencido, revocado, agotado o con menos de dos minutos restantes, el worker responde sin URL ni token. La regeneración/reexpedición solicitada por el operario y la plantilla `UTILITY` necesaria fuera de la ventana de Meta siguen pendientes. `DELIVERED` sólo significa entrega del mensaje: no equivale a firma, conformidad, titularidad, validación bancaria, transferencia ni pago.
 
-El TTL de 15 minutos limita el acceso pero no elimina el registro mínimo ni resuelve retención, backups o derechos del titular. Por eso H4 continúa cerrado para el piloto y PRO-05 permanece **Ausente**.
+El TTL de 15 minutos limita el acceso pero no elimina el registro mínimo ni resuelve retención, backups o derechos del titular. PRO-05 ya no está ausente: [PRO-05A](./DATA_SUBJECT_RIGHTS_FOUNDATION.md) agrega localmente casos tenant-scoped, atestación administrativa explícitamente distinta de verificar al solicitante, discovery de sólo lectura, manifiesto inmutable, replay exacto, límites durables y blockers obligatorios. El catálogo v1 sólo puede terminar `DISCOVERY_BLOCKED`; no ejecuta acceso, corrección, restricción, exportación ni borrado. La migración `140000` aplica desde cero en PGlite junto con las 108 anteriores y su verificador conductual queda verde; todavía no está verificada en PostgreSQL real/Neon ni desplegada en Vercel.
+
+H4 continúa cerrado para el piloto. Antes de incorporar una persona real deben completarse PRO-05B/C/D: identidad o representación del solicitante, matriz legal de retención y decisiones, adapters por dominio, propagación a proveedores, backup/tombstone/restore y evidencia externa. También faltan entidad legal responsable, domicilio y mapa responsable/encargado aprobados; esos datos no pueden inferirse del código.
 
 Esfuerzo de ingeniería estimado: 1 a 2 sprints después de cerrar revisión laboral, privacidad, retención y proveedor de firma; las aprobaciones externas no tienen plazo comprometible.
 

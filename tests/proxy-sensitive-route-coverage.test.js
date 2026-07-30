@@ -67,6 +67,7 @@ function examplePathname(routeFile) {
 
 const SENSITIVE_API_PATHS = [
   '/api/superadmin/ai-cost-reconciliations',
+  '/api/tenant/privacy/requests',
   '/api/worker-onboarding/claims',
   '/api/worker-onboarding/claims/claim-a/decision',
   '/api/whatsapp/inbox/conversation-a/worker-onboarding',
@@ -136,7 +137,7 @@ test('every API Route Handler is exhaustively classified behind Clerk or its own
     );
   }
 
-  assert.equal(protectedRouteCount, 83, 'the complete current Clerk surface must remain classified');
+  assert.equal(protectedRouteCount, 84, 'the complete current Clerk surface must remain classified');
   assert.deepEqual(discoveredPublicRoutes.sort(), PUBLIC_SELF_AUTHENTICATED_API_PATHS.toSorted());
 });
 
@@ -154,4 +155,14 @@ test('proxy invokes Clerk protection only for classified private paths', async (
     );
     assert.equal(protectCalls, expectedCalls, `${pathname} has an unexpected Clerk protection boundary`);
   }
+});
+
+test('proxy propagates one correlation id upstream and back to the client', async () => {
+  const response = await clerkProxy(
+    { protect: async () => {} },
+    new NextRequest('https://app.obrasaas.test/api/tenant/privacy/requests'),
+  );
+  const responseId = response.headers.get('x-request-id');
+  assert.match(responseId, /^[0-9a-f-]{36}$/);
+  assert.equal(response.headers.get('x-middleware-request-x-request-id'), responseId);
 });

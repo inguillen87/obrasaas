@@ -2,11 +2,11 @@ import LegalPage, { LegalCallout, LegalSection } from '@/app/legal/legal-page';
 
 export const metadata = {
   title: 'Eliminación de datos',
-  description: 'Instrucciones para solicitar la eliminación de datos personales y de WhatsApp en ObraSaaS.',
+  description: 'Instrucciones para ejercer derechos sobre datos personales y de WhatsApp en ObraSaaS.',
   alternates: { canonical: '/data-deletion' },
   openGraph: {
     title: 'Eliminación de datos | ObraSaaS',
-    description: 'Instrucciones para solicitar la eliminación de datos personales y de WhatsApp en ObraSaaS.',
+    description: 'Instrucciones para ejercer derechos sobre datos personales y de WhatsApp en ObraSaaS.',
     type: 'website',
     locale: 'es_AR',
     siteName: 'ObraSaaS',
@@ -17,46 +17,58 @@ export const metadata = {
 export default function DataDeletionPage() {
   return (
     <LegalPage
-      eyebrow="Control del usuario"
-      title="Solicitar eliminación de datos"
-      lead="Podés pedir la eliminación de tu cuenta personal o de los datos de una organización. Verificamos identidad y autoridad para evitar borrados fraudulentos."
+      eyebrow="Control de tus datos"
+      title="Solicitudes de privacidad y eliminación"
+      lead="Podés pedir acceso, corrección, restricción o, cuando corresponda, eliminación de tus datos. Verificamos identidad, autoridad y alcance para protegerte de solicitudes fraudulentas o dirigidas al tenant equivocado."
+      updatedAt="29 de julio de 2026"
     >
       <LegalCallout>
-        Enviá la solicitud a <a href="mailto:guillen.marce@gmail.com?subject=Solicitud%20de%20eliminación%20de%20datos%20-%20ObraSaaS">guillen.marce@gmail.com</a> con
-        el asunto “Solicitud de eliminación de datos - ObraSaaS”.
+        Enviá la solicitud a <a href="mailto:guillen.marce@gmail.com?subject=Solicitud%20de%20privacidad%20-%20ObraSaaS">guillen.marce@gmail.com</a> con
+        el asunto “Solicitud de privacidad - ObraSaaS”. Si tu cuenta sigue activa, usá el mismo correo con el que ingresás.
       </LegalCallout>
 
       <LegalSection title="Qué incluir">
         <ol>
-          <li>Correo usado para iniciar sesión en ObraSaaS.</li>
+          <li>El derecho que querés ejercer: acceso, corrección, restricción, oposición, portabilidad o eliminación.</li>
+          <li>Correo usado para iniciar sesión o número de WhatsApp vinculado, sin enviar contraseñas, códigos ni datos bancarios.</li>
           <li>Nombre de la organización y, si corresponde, de la obra.</li>
-          <li>Si pedís eliminar tu cuenta personal o todos los datos del tenant.</li>
-          <li>Un medio de contacto para completar la verificación.</li>
+          <li>Un medio de contacto para completar una verificación proporcional.</li>
         </ol>
       </LegalSection>
 
       <LegalSection title="Cómo procesamos la solicitud">
         <ol>
-          <li>Confirmamos recepción y verificamos identidad y permisos.</li>
-          <li>Si sos miembro de un tenant, avisamos al administrador cuando sea necesario.</li>
-          <li>Desactivamos accesos y credenciales vinculadas.</li>
-          <li>Programamos el borrado de datos operativos dentro de 30 días.</li>
-          <li>Las copias de respaldo se purgan en sus ciclos técnicos, normalmente dentro de 90 días.</li>
+          <li>Registramos la recepción y verificamos identidad, autoridad y organización.</li>
+          <li>Identificamos las categorías y sistemas alcanzados, incluidos proveedores cuando corresponda.</li>
+          <li>Evaluamos por categoría si corresponde acceder, corregir, restringir, eliminar, anonimizar o conservar un registro mínimo con una base aplicable.</li>
+          <li>Informamos la decisión y cualquier paso pendiente o excepción fundada dentro del plazo legal aplicable.</li>
+          <li>No declaramos la solicitud completada mientras exista un sistema, proveedor o copia alcanzada sin resultado verificable.</li>
         </ol>
       </LegalSection>
 
       <LegalSection title="Qué puede conservarse">
         <p>
-          Podemos retener registros mínimos cuando una ley, obligación fiscal, investigación de seguridad o conflicto
-          vigente lo exija. Esos datos quedan restringidos y no se usan para otros fines.
+          La eliminación no siempre implica borrar todo registro. Podemos restringir y conservar evidencia mínima cuando
+          una obligación laboral, fiscal, contable o de seguridad, los derechos de terceros o una controversia vigente
+          lo requieran. La decisión debe tener una base concreta y el alcance mínimo necesario.
+        </p>
+      </LegalSection>
+
+      <LegalSection title="Copias de respaldo y proveedores">
+        <p>
+          Cuando corresponda eliminar, primero actuamos sobre los sistemas activos. Las copias de respaldo y los
+          servicios de terceros deben evaluarse según sus ciclos técnicos, contratos y alcance real. Una restauración
+          debe volver a aplicar las solicitudes vigentes antes de habilitar el uso ordinario de los datos. Mientras ese
+          circuito no esté verificado, informaremos los pasos pendientes en lugar de presentar la eliminación de la base
+          principal como un borrado global.
         </p>
       </LegalSection>
 
       <LegalSection title="Facebook y WhatsApp">
         <p>
-          Desactivar una conexión en ObraSaaS elimina las credenciales almacenadas localmente, pero no borra el WABA
-          ni el número propiedad del cliente. Para borrar activos de Meta también debés administrarlos desde Meta
-          Business Manager o solicitarlo directamente a Meta.
+          Desactivar una conexión en ObraSaaS no borra automáticamente la cuenta de WhatsApp Business, el WABA ni el
+          número propiedad del cliente. Evaluamos los datos tratados por ObraSaaS y, cuando corresponda, propagamos o
+          indicamos la acción que debe completarse en Meta Business Manager o directamente ante Meta.
         </p>
       </LegalSection>
     </LegalPage>

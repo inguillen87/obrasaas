@@ -588,6 +588,60 @@ enum OperationalProposalStatus {
   INVALIDATED
 }
 
+enum DataSubjectKind {
+  TENANT_MEMBER
+  WORKER_PERSON
+}
+
+enum DataSubjectRequestType {
+  ACCESS
+  CORRECTION
+  ERASURE
+  RESTRICTION
+  PORTABILITY
+  OBJECTION
+}
+
+enum DataSubjectRequestStatus {
+  RECEIVED
+  AUTHORITY_ATTESTED
+  DISCOVERING
+  DISCOVERED
+  DISCOVERY_BLOCKED
+  DISCOVERY_FAILED
+  REJECTED
+  CANCELLED
+}
+
+enum DataSubjectManifestOutcome {
+  COMPLETE
+  BLOCKED
+}
+
+enum DataSubjectDiscoveryItemKind {
+  RECORD
+  COVERAGE_BLOCKER
+}
+
+enum DataSubjectDataCategory {
+  PERSONAL
+  LABOR
+  FINANCIAL
+  CONVERSATION
+  MEDIA
+  AI_DERIVED
+  AUDIT
+}
+
+enum DataSubjectDisposition {
+  REVIEW_REQUIRED
+  ERASE_CANDIDATE
+  CRYPTO_ERASE_CANDIDATE
+  PSEUDONYMIZE_CANDIDATE
+  KEEP_MINIMAL
+  EXTERNAL_DELETE_CANDIDATE
+}
+
 model Organization {
   id                                  String                               @id @default(cuid())
   clerkOrganizationId                 String?                              @unique
@@ -623,6 +677,9 @@ model Organization {
   workerPrivacyChoiceEvents           WorkerPrivacyChoiceEvent[]
   workerSensitiveDecisions            WorkerSensitiveDecision[]
   aiDailyBudgetLedgers                AiDailyBudgetLedger[]
+  dataSubjectRequests                 DataSubjectRequest[]
+  dataSubjectDiscoveryManifests       DataSubjectDiscoveryManifest[]
+  dataSubjectDiscoveryItems           DataSubjectDiscoveryItem[]
   createdAt                           DateTime                             @default(now())
   updatedAt                           DateTime                             @updatedAt
   workers                             Worker[]
@@ -846,6 +903,11 @@ model TenantMembership {
   revokedWorkerPaymentDestinations   WorkerPaymentDestination[] @relation("WorkerPaymentRevokerMembership")
   workerPrivacyChoiceEvents          WorkerPrivacyChoiceEvent[] @relation("WorkerPrivacyChoiceMembershipActor")
   workerSensitiveDecisions           WorkerSensitiveDecision[]  @relation("WorkerSensitiveDecisionActor")
+  dataSubjectRequestsAsSubject       DataSubjectRequest[] @relation("DataSubjectRequestSubjectMembership")
+  receivedDataSubjectRequests        DataSubjectRequest[] @relation("DataSubjectRequestReceivedBy")
+  attestedDataSubjectRequests        DataSubjectRequest[] @relation("DataSubjectRequestAttestedBy")
+  completedDataSubjectRequests       DataSubjectRequest[] @relation("DataSubjectRequestCompletedBy")
+  sealedDataSubjectManifests         DataSubjectDiscoveryManifest[] @relation("DataSubjectManifestSealedBy")
   createdAt                          DateTime                   @default(now())
   updatedAt                          DateTime                   @updatedAt
 
@@ -1302,6 +1364,7 @@ model WorkerPerson {
   paymentFlowSessions            WorkerPaymentFlowSession[]
   paymentPrivateReceipts         WorkerPaymentPrivateReceipt[]
   sensitiveDecisions             WorkerSensitiveDecision[]     @relation("WorkerSensitiveDecisionPerson")
+  dataSubjectRequests            DataSubjectRequest[]          @relation("DataSubjectRequestWorkerPerson")
   createdAt                      DateTime                      @default(now())
   updatedAt                      DateTime                      @updatedAt
 
@@ -3187,4 +3250,110 @@ model WorkerOnboardingFlowSession {
   @@index([connectionId, expiresAt])
   @@index([expiresAt, consumedAt])
   @@index([phoneNumberId, expiresAt])
+}
+
+/// Tenant-scoped intake record for one privacy-rights request. PRO-05A only
+/// permits authority-attested discovery; it deliberately has no destructive state.
+model DataSubjectRequest {
+  id                         String                        @id @default(cuid())
+  organizationId             String
+  organization               Organization                  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  type                       DataSubjectRequestType
+  subjectKind                DataSubjectKind
+  subjectMembershipId        String?
+  subjectMembership          TenantMembership?             @relation("DataSubjectRequestSubjectMembership", fields: [organizationId, subjectMembershipId], references: [organizationId, id], onDelete: Restrict, map: "DataSubjectRequest_subject_membership_fkey")
+  workerPersonId             String?
+  workerPerson               WorkerPerson?                 @relation("DataSubjectRequestWorkerPerson", fields: [organizationId, workerPersonId], references: [organizationId, id], onDelete: Restrict, map: "DataSubjectRequest_worker_person_fkey")
+  status                     DataSubjectRequestStatus      @default(RECEIVED)
+  schemaVersion              Int                           @default(1)
+  operationKeyHash           String                        @db.Char(64)
+  requestFingerprint         String                        @db.Char(64)
+  receivedByMembershipId     String
+  receivedByMembership       TenantMembership              @relation("DataSubjectRequestReceivedBy", fields: [organizationId, receivedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "DataSubjectRequest_received_by_fkey")
+  attestedByMembershipId     String?
+  attestedByMembership       TenantMembership?             @relation("DataSubjectRequestAttestedBy", fields: [organizationId, attestedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "DataSubjectRequest_attested_by_fkey")
+  completedByMembershipId    String?
+  completedByMembership      TenantMembership?             @relation("DataSubjectRequestCompletedBy", fields: [organizationId, completedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "DataSubjectRequest_completed_by_fkey")
+  attestationPolicyVersion   String?                       @db.VarChar(64)
+  attestationMethod          String?                       @db.VarChar(64)
+  attestationEvidenceSha256  String?                       @db.Char(64)
+  discoveryCatalogVersion    String?                       @db.VarChar(64)
+  discoveryCatalogSha256     String?                       @db.Char(64)
+  receivedAt                 DateTime                      @default(now()) @db.Timestamptz(3)
+  attestedAt                 DateTime?                     @db.Timestamptz(3)
+  discoveryStartedAt         DateTime?                     @db.Timestamptz(3)
+  terminalAt                 DateTime?                     @db.Timestamptz(3)
+  terminalReasonCode         String?                       @db.VarChar(64)
+  revision                   Int                           @default(0)
+  manifest                   DataSubjectDiscoveryManifest?
+  createdAt                  DateTime                      @default(now()) @db.Timestamptz(3)
+  updatedAt                  DateTime                      @updatedAt @db.Timestamptz(3)
+
+  @@unique([organizationId, id], map: "DataSubjectRequest_org_id_key")
+  @@unique([organizationId, operationKeyHash], map: "DataSubjectRequest_org_operation_key")
+  @@index([organizationId, receivedAt], map: "DataSubjectRequest_org_received_idx")
+  @@index([organizationId, status, receivedAt], map: "DataSubjectRequest_org_status_received_idx")
+  @@index([organizationId, receivedByMembershipId, receivedAt], map: "DataSubjectRequest_org_actor_received_idx")
+  @@index([organizationId, subjectMembershipId, receivedAt], map: "DataSubjectRequest_org_member_received_idx")
+  @@index([organizationId, workerPersonId, receivedAt], map: "DataSubjectRequest_org_worker_received_idx")
+}
+
+/// Immutable, hash-bound result of one read-only subject discovery pass.
+model DataSubjectDiscoveryManifest {
+  id                   String                     @id @default(cuid())
+  organizationId       String
+  organization         Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  requestId            String
+  request              DataSubjectRequest         @relation(fields: [organizationId, requestId], references: [organizationId, id], onDelete: Restrict, map: "DataSubjectDiscoveryManifest_request_fkey")
+  outcome              DataSubjectManifestOutcome
+  schemaVersion        Int                        @default(1)
+  catalogVersion       String                     @db.VarChar(64)
+  catalogSha256        String                     @db.Char(64)
+  sourceSnapshotAt     DateTime                     @db.Timestamptz(3)
+  itemCount            Int
+  blockerCount         Int
+  manifestSha256       String                     @db.Char(64)
+  operationKeyHash     String                     @db.Char(64)
+  requestFingerprint   String                     @db.Char(64)
+  sealedByMembershipId String
+  sealedByMembership   TenantMembership           @relation("DataSubjectManifestSealedBy", fields: [organizationId, sealedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "DataSubjectDiscoveryManifest_sealed_by_fkey")
+  sealedAt             DateTime                   @default(now()) @db.Timestamptz(3)
+  items                DataSubjectDiscoveryItem[]
+
+  @@unique([organizationId, id], map: "DataSubjectDiscoveryManifest_org_id_key")
+  @@unique([organizationId, requestId], map: "DataSubjectDiscoveryManifest_org_request_key")
+  @@unique([organizationId, requestId, id], map: "DataSubjectDiscoveryManifest_scope_key")
+  @@unique([organizationId, operationKeyHash], map: "DataSubjectDiscoveryManifest_org_operation_key")
+  @@index([organizationId, outcome, sealedAt], map: "DataSubjectDiscoveryManifest_org_outcome_sealed_idx")
+}
+
+/// Privacy-minimal manifest item. It stores only keyed commitments and policy
+/// codes, never source content, locators, ciphertexts or identifiers.
+model DataSubjectDiscoveryItem {
+  id                     String                       @id @default(cuid())
+  organizationId         String
+  organization           Organization                 @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  requestId              String
+  manifestId             String
+  manifest               DataSubjectDiscoveryManifest @relation(fields: [organizationId, requestId, manifestId], references: [organizationId, requestId, id], onDelete: Restrict, map: "DataSubjectDiscoveryItem_manifest_fkey")
+  ordinal                Int
+  kind                   DataSubjectDiscoveryItemKind
+  category               DataSubjectDataCategory
+  sourceSystem           String                       @db.VarChar(64)
+  resourceType           String                       @db.VarChar(120)
+  fieldSetCode           String                       @db.VarChar(64)
+  fingerprintKeyId       String?                      @db.VarChar(100)
+  locatorFingerprintHmac String?                      @db.Char(64)
+  recordFingerprintHmac  String?                      @db.Char(64)
+  disposition            DataSubjectDisposition       @default(REVIEW_REQUIRED)
+  retentionPolicyVersion String?                      @db.VarChar(64)
+  retentionBasisCode     String?                      @db.VarChar(64)
+  retentionUntil         DateTime?                    @db.Timestamptz(3)
+  blockerCode            String?                      @db.VarChar(64)
+  observedAt             DateTime                     @db.Timestamptz(3)
+  createdAt              DateTime                     @default(now()) @db.Timestamptz(3)
+
+  @@unique([organizationId, manifestId, ordinal], map: "DataSubjectDiscoveryItem_org_manifest_ordinal_key")
+  @@index([organizationId, requestId, category], map: "DataSubjectDiscoveryItem_org_request_category_idx")
+  @@index([organizationId, disposition, blockerCode], map: "DataSubjectDiscoveryItem_org_disposition_blocker_idx")
 }

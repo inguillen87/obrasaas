@@ -1,0 +1,10 @@
+flowchart LR
+  S["Data subject"] --> P["Public email instructions"]
+  P --> O["Manual operator"]
+  O --> DB["PostgreSQL mixed data graph"]
+  O --> ST["Object storage"]
+  O --> WA["Meta / WhatsApp"]
+  O --> AI["AI providers"]
+  O --> BK["Backups"]
+  DB --> LP["Isolated lifecycle jobs"]
+  LP --> A["Domain-local audit"]

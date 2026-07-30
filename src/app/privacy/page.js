@@ -20,7 +20,7 @@ export default function PrivacyPage() {
       eyebrow="Gobierno de datos"
       title="Política de privacidad"
       lead="Esta política explica qué datos trata ObraSaaS, con qué finalidad y qué controles tienen las organizaciones y las personas que usan la plataforma."
-      updatedAt="26 de julio de 2026"
+      updatedAt="29 de julio de 2026"
     >
       <LegalCallout>
         Contacto de privacidad: <a href="mailto:guillen.marce@gmail.com">guillen.marce@gmail.com</a>.
@@ -103,10 +103,14 @@ export default function PrivacyPage() {
 
       <LegalSection title="6. Conservación y eliminación">
         <p>
-          Conservamos datos mientras la cuenta esté activa y durante el período necesario para seguridad,
-          facturación o cumplimiento. Ante una solicitud verificada de cierre, programamos la eliminación de datos
-          operativos dentro de 30 días; las copias de respaldo se purgan en sus ciclos técnicos, normalmente dentro
-          de 90 días, salvo obligación legal o controversia pendiente.
+          Conservamos cada categoría durante el período necesario para la finalidad informada, la seguridad,
+          facturación o una obligación aplicable. Una atestación administrativa puede habilitar un inventario interno no
+          destructivo; antes de decidir o ejecutar una acción verificamos la identidad o representación de quien solicita
+          y determinamos por categoría si corresponde eliminar, anonimizar, restringir o conservar evidencia mínima con
+          una base concreta. Los proveedores y respaldos se gestionan por separado y no declaramos un borrado global
+          mientras exista una acción alcanzada sin resultado verificable. Respondemos dentro del plazo legal aplicable;
+          los ciclos técnicos específicos se publicarán cuando la matriz de retención y su ejecución estén aprobadas y
+          verificadas.
         </p>
       </LegalSection>
 
@@ -120,14 +124,15 @@ export default function PrivacyPage() {
 
       <LegalSection title="8. Transferencias internacionales">
         <p>
-          Algunos proveedores procesan datos fuera del país de origen. Usamos mecanismos contractuales y medidas
-          razonables para proteger esas transferencias conforme la Ley argentina 25.326 y, cuando corresponda, el RGPD.
+          Algunos proveedores pueden procesar datos fuera del país de origen. El mecanismo contractual, la jurisdicción
+          y las medidas exigibles deben verificarse para cada proveedor y finalidad antes de habilitar datos reales; esta
+          política no presenta una transferencia como aprobada sólo porque exista una integración técnica.
         </p>
       </LegalSection>
 
       <LegalSection title="9. Derechos y consultas">
         <p>
-          Podés solicitar acceso, corrección, oposición, portabilidad o eliminación. Primero contactá al administrador
+          Podés solicitar acceso, corrección, restricción, oposición, portabilidad o eliminación. Primero contactá al administrador
           de tu organización; también podés escribir a <a href="mailto:guillen.marce@gmail.com">guillen.marce@gmail.com</a>.
           Podemos pedir información razonable para verificar identidad y autoridad antes de actuar.
         </p>
