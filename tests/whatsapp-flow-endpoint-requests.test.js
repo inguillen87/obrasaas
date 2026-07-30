@@ -14,8 +14,24 @@ const REQUEST_ID = "123e4567-e89b-42d3-a456-426614174000";
 const LEASE_ID = "223e4567-e89b-42d3-a456-426614174000";
 const NOW = new Date("2026-07-16T12:00:00.000Z");
 
+function whereMatches(record, where) {
+  if (!where) return true;
+  if (Array.isArray(where.AND) && !where.AND.every((entry) => whereMatches(record, entry))) {
+    return false;
+  }
+  if (Array.isArray(where.OR) && !where.OR.some((entry) => whereMatches(record, entry))) {
+    return false;
+  }
+  return Object.entries(where).every(([field, expected]) => {
+    if (field === "AND" || field === "OR") return true;
+    return record[field] === expected;
+  });
+}
+
 function store({ recentCount = 0, initial = null } = {}) {
-  let record = initial ? { ...initial } : null;
+  let record = initial
+    ? { flowSessionId: null, workerOnboardingFlowSessionId: null, ...initial }
+    : null;
   const rawCalls = [];
   const delegate = {
     async findUnique() {
@@ -25,13 +41,17 @@ function store({ recentCount = 0, initial = null } = {}) {
       return recentCount;
     },
     async create({ data }) {
-      record = { id: REQUEST_ID, attempts: 1, ...data };
+      record = {
+        id: REQUEST_ID,
+        attempts: 1,
+        flowSessionId: null,
+        workerOnboardingFlowSessionId: null,
+        ...data,
+      };
       return { ...record };
     },
     async updateMany({ where, data }) {
-      if (!record || (where.id && record.id !== where.id)) return { count: 0 };
-      if (where.status && record.status !== where.status) return { count: 0 };
-      if (where.leaseToken && record.leaseToken !== where.leaseToken) return { count: 0 };
+      if (!record || !whereMatches(record, where)) return { count: 0 };
       const next = { ...data };
       if (next.attempts && typeof next.attempts === "object") {
         next.attempts = Number(record.attempts || 0) + Number(next.attempts.increment || 0);
@@ -129,7 +149,7 @@ test("terminal ciphertext replays exactly and active concurrent leases have one 
   );
   assert.equal(expiredReplayDatabase.record.status, "SUCCEEDED");
 
-  const expiredNegativeCacheDatabase = store({
+  const unobservedFailureDatabase = store({
     initial: {
       id: REQUEST_ID,
       endpointId: ENDPOINT_ID,
@@ -138,12 +158,12 @@ test("terminal ciphertext replays exactly and active concurrent leases have one 
       responseStatus: 421,
       responseCiphertext: null,
       failureCode: "WHATSAPP_FLOW_CRYPTO_RSA_KEY_MISMATCH",
-      expiresAt: new Date(NOW.getTime() - 1),
+      expiresAt: new Date(NOW.getTime() + 60_000),
       attempts: 1,
     },
   });
   const recovered = await reserveWhatsAppFlowEndpointRequest(
-    expiredNegativeCacheDatabase.prisma,
+    unobservedFailureDatabase.prisma,
     {
       endpointId: ENDPOINT_ID,
       requestSha256: "f".repeat(64),
@@ -151,11 +171,11 @@ test("terminal ciphertext replays exactly and active concurrent leases have one 
     },
   );
   assert.equal(recovered.state, "claimed");
-  assert.equal(expiredNegativeCacheDatabase.record.status, "PROCESSING");
-  assert.equal(expiredNegativeCacheDatabase.record.responseCiphertext, null);
-  assert.equal(expiredNegativeCacheDatabase.record.flowSessionId, null);
+  assert.equal(unobservedFailureDatabase.record.status, "PROCESSING");
+  assert.equal(unobservedFailureDatabase.record.responseCiphertext, null);
+  assert.equal(unobservedFailureDatabase.record.flowSessionId, null);
   assert.equal(
-    expiredNegativeCacheDatabase.record.workerOnboardingFlowSessionId,
+    unobservedFailureDatabase.record.workerOnboardingFlowSessionId,
     null,
   );
 
@@ -178,6 +198,71 @@ test("terminal ciphertext replays exactly and active concurrent leases have one 
   });
   assert.equal(inFlight.state, "in_flight");
   assert.equal(inFlight.record.leaseToken, LEASE_ID);
+});
+
+test("unobserved retries preserve the first authenticated session and reject cross-linking", async () => {
+  const authenticatedSessionId = "323e4567-e89b-42d3-a456-426614174000";
+  const database = store({
+    initial: {
+      id: REQUEST_ID,
+      endpointId: ENDPOINT_ID,
+      requestSha256: "9".repeat(64),
+      status: "FAILED",
+      responseStatus: 500,
+      responseCiphertext: null,
+      failureCode: "WHATSAPP_FLOW_ENDPOINT_INTERNAL_ERROR",
+      flowSessionId: authenticatedSessionId,
+      workerOnboardingFlowSessionId: null,
+      expiresAt: new Date(NOW.getTime() + 60_000),
+      attempts: 1,
+    },
+  });
+
+  const retry = await reserveWhatsAppFlowEndpointRequest(database.prisma, {
+    endpointId: ENDPOINT_ID,
+    requestSha256: "9".repeat(64),
+    now: NOW,
+  });
+  assert.equal(retry.state, "claimed");
+  assert.equal(database.record.flowSessionId, authenticatedSessionId);
+
+  await completeWhatsAppFlowEndpointRequest(database.prisma, {
+    requestId: REQUEST_ID,
+    leaseToken: retry.record.leaseToken,
+    status: "FAILED",
+    responseStatus: 427,
+    responseCiphertext: null,
+    failureCode: "WHATSAPP_FLOW_ENDPOINT_SESSION_INVALID",
+    action: "data_exchange",
+    screen: "WORKER_PAYMENT_DESTINATION",
+    completedAt: NOW,
+  });
+  assert.equal(database.record.flowSessionId, authenticatedSessionId);
+  assert.equal(database.record.workerOnboardingFlowSessionId, null);
+
+  const nextRetry = await reserveWhatsAppFlowEndpointRequest(database.prisma, {
+    endpointId: ENDPOINT_ID,
+    requestSha256: "9".repeat(64),
+    now: new Date(NOW.getTime() + 1_000),
+  });
+  await assert.rejects(
+    completeWhatsAppFlowEndpointRequest(database.prisma, {
+      requestId: REQUEST_ID,
+      leaseToken: nextRetry.record.leaseToken,
+      status: "FAILED",
+      responseStatus: 427,
+      responseCiphertext: null,
+      failureCode: "WHATSAPP_FLOW_ENDPOINT_SESSION_INVALID",
+      action: "data_exchange",
+      screen: "WORKER_ONBOARDING",
+      workerOnboardingFlowSessionId: "523e4567-e89b-42d3-a456-426614174000",
+      completedAt: NOW,
+    }),
+    (error) => error instanceof WhatsAppFlowEndpointRequestError
+      && error.code === "WHATSAPP_FLOW_ENDPOINT_REQUEST_CONFLICT",
+  );
+  assert.equal(database.record.flowSessionId, authenticatedSessionId);
+  assert.equal(database.record.workerOnboardingFlowSessionId, null);
 });
 
 test("per-connection rate limiting happens before creating a new RSA workload", async () => {

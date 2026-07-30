@@ -425,6 +425,10 @@ async function processFlowReply({
   const isMedical = flowName.includes("medical") || flowName.includes("licencia");
   const isIncident = flowName.includes("incident");
   const isAttendance = flowName.includes("attendance") || flowName.includes("fichaje");
+  const isPaymentDestination = flowName === "worker_payment_destination";
+  if (isPaymentDestination) {
+    return "Destino de cobro recibido de forma segura. La empresa verá únicamente datos enmascarados; este acuse no confirma un pago.";
+  }
   const medicalRecord = isMedical
     ? medicalFlowRecord({
         days: response.days,
@@ -698,7 +702,7 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
       evidence,
       timeZone,
     });
-    stateChanged = true;
+    stateChanged = intent !== FIELD_WORKER_INTENTS.PAYMENT_DESTINATION;
   } else if (event.attendanceAction || event.location) {
     const action = event.attendanceAction || "CHECK_IN";
     const needsLocation = action === "CHECK_IN" || action === "CHECK_OUT";

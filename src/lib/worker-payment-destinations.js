@@ -15,6 +15,11 @@ import {
   workerFinancialFingerprintCandidates,
   workerFinancialLastFour,
 } from './worker-financial-data.js';
+import {
+  WORKER_PAYMENT_ATTESTED_CONTRACT_VERSION,
+  WORKER_PAYMENT_CAPTURE_PRIVACY_PURPOSE,
+} from './worker-privacy-choices.js';
+import { assertWorkerPaymentPrivacyNoticeEvidence } from './worker-payment-privacy-notices.js';
 
 const PAYMENT_PURPOSES = new Set(['SALARY', 'REIMBURSEMENT']);
 const SUBMITTER_TYPES = new Set(['TENANT_MEMBERSHIP', 'WORKER_CHANNEL']);
@@ -22,17 +27,26 @@ const READ_ROLES = new Set(['ADMIN', 'DIRECTOR', 'FINANCE']);
 const MANAGE_ROLES = new Set(['ADMIN', 'FINANCE']);
 const ACTIVATE_ROLES = new Set(['ADMIN', 'DIRECTOR']);
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const HMAC_KEY_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/;
+const SHA256_PATTERN = /^[a-f0-9]{64}$/;
 const POLICY_VERSION_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/;
 const PROVIDER_PATTERN = /^[A-Z0-9][A-Z0-9._:-]{0,63}$/;
 const MAX_EVIDENCE_BYTES = 16 * 1024;
 const DEFAULT_TRANSACTION_ATTEMPTS = 3;
 const MAX_PRISMA_INT = 2_147_483_647;
+const PAYMENT_PRIVACY_STATUS_ATTESTED = 'ATTESTED';
+const PAYMENT_PRIVACY_STATUS_REATTESTATION_REQUIRED = 'REATTESTATION_REQUIRED';
+const LEGACY_PAYMENT_SUBMISSION_CONTRACT_VERSION = 'LEGACY_REATTESTATION_REQUIRED';
+const REATTESTABLE_LEGACY_STATUSES = new Set(['PENDING_VERIFICATION', 'VERIFIED', 'ACTIVE']);
 
 const LIST_OPTIONS = new Set(['scope', 'personId', 'actorMembershipId', 'purpose']);
 const SUBMIT_OPTIONS = new Set([
   'scope',
   'personId',
   'submittedBy',
+  'privacyChoice',
+  'flowSubmission',
   'input',
   'now',
   'keyConfiguration',
@@ -65,6 +79,12 @@ const SUBMIT_INPUT_FIELDS = new Set([
   'operationKey',
 ]);
 const SUBMITTER_FIELDS = new Set(['type', 'membershipId', 'channelIdentityId']);
+const PRIVACY_CHOICE_FIELDS = new Set(['eventId']);
+const FLOW_SUBMISSION_FIELDS = new Set([
+  'reservationId',
+  'fingerprintKeyId',
+  'fingerprintHmac',
+]);
 const VERIFY_INPUT_FIELDS = new Set([
   'expectedRevision',
   'operationKey',
@@ -103,6 +123,10 @@ const ERROR_STATUS = Object.freeze({
   WORKER_PAYMENT_SEPARATION_REQUIRED: 409,
   WORKER_PAYMENT_ALIAS_RESOLUTION_REQUIRED: 422,
   WORKER_PAYMENT_HOLDER_MISMATCH: 422,
+  WORKER_PAYMENT_PRIVACY_CHOICE_REQUIRED: 422,
+  WORKER_PAYMENT_PRIVACY_CHOICE_INVALID: 422,
+  WORKER_PAYMENT_PRIVACY_CHOICE_ALREADY_USED: 409,
+  WORKER_PAYMENT_REATTESTATION_REQUIRED: 422,
   WORKER_PAYMENT_IDENTITY_UNVERIFIED: 422,
   WORKER_PAYMENT_PERSISTENCE_CONFLICT: 409,
   WORKER_PAYMENT_CONFIGURATION_INVALID: 500,
@@ -162,6 +186,16 @@ function normalizedScope(value) {
   const scope = objectInput(value, 'scope');
   rejectUnknownFields(scope, new Set(['organizationId']));
   return { organizationId: identifier(scope.organizationId, 'organizationId') };
+}
+
+function normalizedSubmissionScope(value) {
+  const scope = objectInput(value, 'scope');
+  rejectUnknownFields(scope, new Set(['organizationId', 'projectId', 'workerId']));
+  return {
+    organizationId: identifier(scope.organizationId, 'organizationId'),
+    projectId: identifier(scope.projectId, 'projectId'),
+    workerId: identifier(scope.workerId, 'workerId'),
+  };
 }
 
 function normalizedPurpose(value) {
@@ -304,6 +338,24 @@ function scopedOperationKey(action, context, rawOperationKey) {
   })}`;
 }
 
+export function workerPaymentDestinationSubmissionOperationKey(
+  { organizationId, personId, channelIdentityId },
+  rawOperationKey,
+) {
+  const scope = normalizedScope({ organizationId });
+  const normalizedPersonId = identifier(personId, 'personId');
+  const submitter = normalizedSubmitter({
+    type: 'WORKER_CHANNEL',
+    channelIdentityId,
+  });
+  return scopedOperationKey('submit', {
+    organizationId: scope.organizationId,
+    personId: normalizedPersonId,
+    submitterType: submitter.type,
+    submitterId: submitter.id,
+  }, normalizedOperationKey(rawOperationKey));
+}
+
 function requestFingerprint(action, value) {
   return sha256(`obrasaas:worker-payment:${action}:request:v1`, value);
 }
@@ -362,11 +414,33 @@ function paymentDto(record) {
       'WORKER_PAYMENT_CONFIGURATION_INVALID',
     );
   }
+  const serialized = serializeWorkerPaymentDestination(record);
+  const privacyStatus = destinationPrivacyStatus(record);
   return {
-    ...serializeWorkerPaymentDestination(record),
+    ...serialized,
     purpose: normalizedPurpose(record?.purpose),
     currency: 'ARS',
+    privacyStatus,
+    paymentUsable: serialized.status === 'ACTIVE'
+      && privacyStatus === PAYMENT_PRIVACY_STATUS_ATTESTED,
   };
+}
+
+function destinationPrivacyStatus(record) {
+  return record?.submissionContractVersion === WORKER_PAYMENT_ATTESTED_CONTRACT_VERSION
+    && typeof record?.privacyChoiceEventId === 'string'
+    && record.privacyChoiceEventId.length > 0
+    ? PAYMENT_PRIVACY_STATUS_ATTESTED
+    : PAYMENT_PRIVACY_STATUS_REATTESTATION_REQUIRED;
+}
+
+function assertDestinationPrivacyAttested(record) {
+  if (destinationPrivacyStatus(record) !== PAYMENT_PRIVACY_STATUS_ATTESTED) {
+    throw paymentError(
+      'El destino requiere una nueva atestacion de privacidad antes de poder utilizarse.',
+      'WORKER_PAYMENT_REATTESTATION_REQUIRED',
+    );
+  }
 }
 
 function normalizedSubmitter(value) {
@@ -388,6 +462,53 @@ function normalizedSubmitter(value) {
   return { type, id: identifier(submittedBy.channelIdentityId, 'channelIdentityId') };
 }
 
+function normalizedPrivacyChoice(value) {
+  if (value === undefined || value === null) {
+    throw paymentError(
+      'La evidencia especifica de privacidad es obligatoria para registrar el destino.',
+      'WORKER_PAYMENT_PRIVACY_CHOICE_REQUIRED',
+    );
+  }
+  const privacyChoice = objectInput(value, 'privacyChoice');
+  rejectUnknownFields(privacyChoice, PRIVACY_CHOICE_FIELDS);
+  return { eventId: identifier(privacyChoice.eventId, 'privacyChoice.eventId') };
+}
+
+function normalizedFlowSubmission(value, submitter) {
+  if (value === undefined || value === null) return null;
+  if (submitter.type !== 'WORKER_CHANNEL') {
+    throw paymentError(
+      'La procedencia de Flow solo admite un canal de trabajador verificado.',
+      'WORKER_PAYMENT_INPUT_INVALID',
+    );
+  }
+  const evidence = objectInput(value, 'flowSubmission');
+  rejectUnknownFields(evidence, FLOW_SUBMISSION_FIELDS);
+  const reservationId = identifier(evidence.reservationId, 'flowSubmission.reservationId', 36)
+    .toLowerCase();
+  const fingerprintKeyId = identifier(
+    evidence.fingerprintKeyId,
+    'flowSubmission.fingerprintKeyId',
+    64,
+  );
+  const fingerprintHmac = identifier(
+    evidence.fingerprintHmac,
+    'flowSubmission.fingerprintHmac',
+    64,
+  ).toLowerCase();
+  if (
+    !UUID_PATTERN.test(reservationId)
+    || !HMAC_KEY_ID_PATTERN.test(fingerprintKeyId)
+    || !SHA256_PATTERN.test(fingerprintHmac)
+  ) {
+    throw paymentError(
+      'La procedencia de Flow es invalida.',
+      'WORKER_PAYMENT_INPUT_INVALID',
+    );
+  }
+  return { reservationId, fingerprintKeyId, fingerprintHmac };
+}
+
 function normalizedSubmitInput(value) {
   const input = objectInput(value, 'input');
   rejectUnknownFields(input, SUBMIT_INPUT_FIELDS);
@@ -403,6 +524,16 @@ function normalizedSubmitInput(value) {
     purpose,
     operationKey: normalizedOperationKey(input.operationKey),
   };
+}
+
+/**
+ * Pure validation used by channel orchestrators before they append privacy
+ * evidence. It performs the same canonical CBU/CVU/alias, holder and
+ * idempotency validation as the transactional submission, without persisting
+ * or returning any derived fingerprint.
+ */
+export function validateWorkerPaymentDestinationSubmissionInput(value) {
+  return normalizedSubmitInput(value);
 }
 
 function normalizedDecisionBase(value, allowedFields, action, trustedEvidence) {
@@ -505,7 +636,12 @@ async function requireMembership(transaction, scope, membershipId, allowedRoles)
   return membership;
 }
 
-async function requirePerson(transaction, scope, personId, { active = false } = {}) {
+async function requirePerson(
+  transaction,
+  scope,
+  personId,
+  { active = false, identityVerified = false } = {},
+) {
   const person = await transaction.workerPerson.findFirst({
     where: {
       id: personId,
@@ -527,7 +663,49 @@ async function requirePerson(transaction, scope, personId, { active = false } = 
       'WORKER_PAYMENT_SCOPE_FORBIDDEN',
     );
   }
+  if (identityVerified && person.identityStatus !== 'VERIFIED') {
+    throw paymentError(
+      'La identidad de la persona debe estar verificada para registrar un destino de cobro.',
+      'WORKER_PAYMENT_IDENTITY_UNVERIFIED',
+    );
+  }
   return person;
+}
+
+async function requireActiveSubmissionWorker(transaction, scope, personId) {
+  if (typeof transaction?.worker?.findFirst !== 'function') {
+    throw paymentError(
+      'La persistencia del alcance laboral no esta disponible.',
+      'WORKER_PAYMENT_CONFIGURATION_INVALID',
+    );
+  }
+  const worker = await transaction.worker.findFirst({
+    where: {
+      id: scope.workerId,
+      organizationId: scope.organizationId,
+      projectId: scope.projectId,
+      personId,
+      active: true,
+      project: {
+        organizationId: scope.organizationId,
+        status: 'ACTIVE',
+      },
+    },
+    select: {
+      id: true,
+      organizationId: true,
+      projectId: true,
+      personId: true,
+      active: true,
+    },
+  });
+  if (!worker) {
+    throw paymentError(
+      'El vinculo laboral ya no esta activo en esta obra.',
+      'WORKER_PAYMENT_SCOPE_FORBIDDEN',
+    );
+  }
+  return worker;
 }
 
 async function requireSubmitter(transaction, scope, personId, submitter) {
@@ -540,9 +718,18 @@ async function requireSubmitter(transaction, scope, personId, submitter) {
       id: submitter.id,
       organizationId: scope.organizationId,
       personId,
+      provider: 'WHATSAPP',
       status: 'VERIFIED',
+      revokedAt: null,
     },
-    select: { id: true, organizationId: true, personId: true, status: true },
+    select: {
+      id: true,
+      organizationId: true,
+      personId: true,
+      provider: true,
+      status: true,
+      revokedAt: true,
+    },
   });
   if (!channel) {
     throw paymentError(
@@ -551,6 +738,93 @@ async function requireSubmitter(transaction, scope, personId, submitter) {
     );
   }
   return { ...submitter, channel, actorId: null };
+}
+
+async function requirePaymentCapturePrivacyChoice(
+  transaction,
+  scope,
+  personId,
+  paymentPurpose,
+  submitter,
+  privacyChoice,
+  now,
+  { allowConsumedDestinationId = null } = {},
+) {
+  const event = await transaction.workerPrivacyChoiceEvent.findFirst({
+    where: {
+      id: privacyChoice.eventId,
+      organizationId: scope.organizationId,
+      personId,
+      purpose: WORKER_PAYMENT_CAPTURE_PRIVACY_PURPOSE,
+      paymentPurpose,
+    },
+    select: {
+      id: true,
+      organizationId: true,
+      personId: true,
+      purpose: true,
+      paymentPurpose: true,
+      channel: true,
+      action: true,
+      actorMembershipId: true,
+      channelIdentityId: true,
+      noticeVersion: true,
+      noticeContentSha256: true,
+      presentedAt: true,
+      decidedAt: true,
+    },
+  });
+  const expectedMembershipId = submitter.type === 'TENANT_MEMBERSHIP' ? submitter.id : null;
+  const expectedChannelIdentityId = submitter.type === 'WORKER_CHANNEL' ? submitter.id : null;
+  const exactActor = submitter.type === 'TENANT_MEMBERSHIP'
+    ? event?.channel === 'TENANT_DASHBOARD'
+      && event?.action === 'ADMIN_ATTESTED'
+      && event?.actorMembershipId === expectedMembershipId
+      && event?.channelIdentityId == null
+    : event?.channel === 'WHATSAPP_FLOW'
+      && event?.action === 'WORKER_ACKNOWLEDGED'
+      && event?.actorMembershipId == null
+      && event?.channelIdentityId === expectedChannelIdentityId;
+  const presentedAt = event?.presentedAt instanceof Date
+    ? event.presentedAt
+    : new Date(event?.presentedAt);
+  const decidedAt = event?.decidedAt instanceof Date ? event.decidedAt : new Date(event?.decidedAt);
+  let registeredNotice = false;
+  try {
+    registeredNotice = Boolean(assertWorkerPaymentPrivacyNoticeEvidence(
+      event?.noticeVersion,
+      event?.noticeContentSha256,
+    ));
+  } catch {
+    registeredNotice = false;
+  }
+  if (
+    !event
+    || !exactActor
+    || !registeredNotice
+    || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/.test(event.noticeVersion || '')
+    || !/^[a-f0-9]{64}$/.test(event.noticeContentSha256 || '')
+    || Number.isNaN(presentedAt.getTime())
+    || Number.isNaN(decidedAt.getTime())
+    || presentedAt.getTime() > decidedAt.getTime()
+    || decidedAt.getTime() > now.getTime()
+  ) {
+    throw paymentError(
+      'La evidencia de privacidad no corresponde a esta persona, actor, canal y proposito.',
+      'WORKER_PAYMENT_PRIVACY_CHOICE_INVALID',
+    );
+  }
+  const consumed = await transaction.workerPaymentDestination.findFirst({
+    where: { privacyChoiceEventId: event.id },
+    select: { id: true },
+  });
+  if (consumed && consumed.id !== allowConsumedDestinationId) {
+    throw paymentError(
+      'La evidencia de privacidad ya fue utilizada por otro destino.',
+      'WORKER_PAYMENT_PRIVACY_CHOICE_ALREADY_USED',
+    );
+  }
+  return event;
 }
 
 function candidateWhere(candidates, fields = {}) {
@@ -600,6 +874,26 @@ function assertHolderBelongsToPerson(person, holderCandidates) {
   }
 }
 
+function assertHolderMatchesPersistedDestination(destination, holderCandidates) {
+  const matches = holderCandidates.some((candidate) => (
+    candidate.fingerprint === destination.holderCuilFingerprint
+    && candidate.fingerprintKeyId === destination.holderCuilFingerprintKeyId
+  ));
+  if (!matches) {
+    throw paymentError(
+      'El CUIL presentado no coincide con el titular del destino legado.',
+      'WORKER_PAYMENT_HOLDER_MISMATCH',
+    );
+  }
+}
+
+function matchesPresentedDestination(destination, type, destinationCandidates) {
+  return destination?.type === type && destinationCandidates.some((candidate) => (
+    candidate.fingerprint === destination.fingerprint
+    && candidate.fingerprintKeyId === destination.fingerprintKeyId
+  ));
+}
+
 function assertVerifiedHolderMatchesDestination(person, destination, verifiedHolderCandidates) {
   assertHolderBelongsToPerson(person, verifiedHolderCandidates);
   const matchesSubmittedHolder = verifiedHolderCandidates.some((candidate) => (
@@ -623,7 +917,12 @@ function assertReplay(row, expected) {
     && expected.requestFingerprints.has(row.requestFingerprint)
     && row.submissionSource === expected.submissionSource
     && (row.submittedByMembershipId ?? null) === expected.submittedByMembershipId
-    && (row.submittedByChannelIdentityId ?? null) === expected.submittedByChannelIdentityId;
+    && (row.submittedByChannelIdentityId ?? null) === expected.submittedByChannelIdentityId
+    && row.submissionContractVersion === WORKER_PAYMENT_ATTESTED_CONTRACT_VERSION
+    && row.privacyChoiceEventId === expected.privacyChoiceEventId
+    && (row.flowSubmissionReservationId ?? null) === expected.flowSubmissionReservationId
+    && (row.flowSubmissionFingerprintKeyId ?? null) === expected.flowSubmissionFingerprintKeyId
+    && (row.flowSubmissionFingerprintHmac ?? null) === expected.flowSubmissionFingerprintHmac;
   if (!exact) {
     throw paymentError(
       'La clave de idempotencia ya fue utilizada con otra solicitud.',
@@ -732,6 +1031,8 @@ export async function listWorkerPaymentDestinations(prisma, rawOptions) {
         revision: true,
         availableFrom: true,
         verifiedAt: true,
+        submissionContractVersion: true,
+        privacyChoiceEventId: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -743,9 +1044,11 @@ export async function listWorkerPaymentDestinations(prisma, rawOptions) {
 export async function submitWorkerPaymentDestination(prisma, rawOptions) {
   const options = objectInput(rawOptions, 'options');
   rejectUnknownFields(options, SUBMIT_OPTIONS);
-  const scope = normalizedScope(options.scope);
+  const scope = normalizedSubmissionScope(options.scope);
   const personId = identifier(options.personId, 'personId');
   const submitter = normalizedSubmitter(options.submittedBy);
+  const flowSubmission = normalizedFlowSubmission(options.flowSubmission, submitter);
+  const privacyChoice = normalizedPrivacyChoice(options.privacyChoice);
   const input = normalizedSubmitInput(options.input);
   const now = normalizedDate(options.now);
   const keyConfiguration = resolveKeyConfiguration(options.keyConfiguration);
@@ -770,6 +1073,10 @@ export async function submitWorkerPaymentDestination(prisma, rawOptions) {
     holderName: input.holderName,
     holderCuil: input.holderCuil,
     currency: input.currency,
+    privacyChoiceEventId: privacyChoice.eventId,
+    flowSubmissionReservationId: flowSubmission?.reservationId ?? null,
+    flowSubmissionFingerprintKeyId: flowSubmission?.fingerprintKeyId ?? null,
+    flowSubmissionFingerprintHmac: flowSubmission?.fingerprintHmac ?? null,
   }, keyConfiguration.fingerprintRegistry);
   const replayIdentity = {
     organizationId: scope.organizationId,
@@ -780,6 +1087,10 @@ export async function submitWorkerPaymentDestination(prisma, rawOptions) {
     submissionSource: submitter.type,
     submittedByMembershipId: submitter.type === 'TENANT_MEMBERSHIP' ? submitter.id : null,
     submittedByChannelIdentityId: submitter.type === 'WORKER_CHANNEL' ? submitter.id : null,
+    privacyChoiceEventId: privacyChoice.eventId,
+    flowSubmissionReservationId: flowSubmission?.reservationId ?? null,
+    flowSubmissionFingerprintKeyId: flowSubmission?.fingerprintKeyId ?? null,
+    flowSubmissionFingerprintHmac: flowSubmission?.fingerprintHmac ?? null,
   };
   const destinationCandidates = workerFinancialFingerprintCandidates(input.value, {
     organizationId: scope.organizationId,
@@ -820,7 +1131,11 @@ export async function submitWorkerPaymentDestination(prisma, rawOptions) {
       await lockPaymentScope(transaction, scope, personId, input.purpose);
       const actor = await requireSubmitter(transaction, scope, personId, submitter);
       await requireWritableSubscription(transaction, scope, now);
-      const person = await requirePerson(transaction, scope, personId, { active: true });
+      await requireActiveSubmissionWorker(transaction, scope, personId);
+      const person = await requirePerson(transaction, scope, personId, {
+        active: true,
+        identityVerified: true,
+      });
       const replay = assertReplay(
         await transaction.workerPaymentDestination.findFirst({
           where: { organizationId: scope.organizationId, personId, operationKey },
@@ -830,7 +1145,7 @@ export async function submitWorkerPaymentDestination(prisma, rawOptions) {
       if (replay) return { paymentDestination: paymentDto(replay), replayed: true };
       assertHolderBelongsToPerson(person, holderCandidates);
 
-      const duplicate = await transaction.workerPaymentDestination.findFirst({
+      const duplicates = await transaction.workerPaymentDestination.findMany({
         where: {
           organizationId: scope.organizationId,
           personId,
@@ -839,9 +1154,141 @@ export async function submitWorkerPaymentDestination(prisma, rawOptions) {
             ? candidateWhere(destinationCandidates, { type: 'ALIAS' })
             : canonicalIdentityDuplicateClauses(destinationCandidates, input.type),
         },
-        select: { id: true },
+        take: 2,
       });
+      if (duplicates.length > 1) {
+        throw paymentError(
+          'La identidad canonica del destino de cobro es ambigua.',
+          'WORKER_PAYMENT_CONFIGURATION_INVALID',
+        );
+      }
+      const duplicate = duplicates[0] ?? null;
+      await requirePaymentCapturePrivacyChoice(
+        transaction,
+        scope,
+        personId,
+        input.purpose,
+        submitter,
+        privacyChoice,
+        now,
+        {
+          allowConsumedDestinationId: duplicate?.privacyChoiceEventId === privacyChoice.eventId
+            ? duplicate.id
+            : null,
+        },
+      );
       if (duplicate) {
+        const exactPresentedDestination = matchesPresentedDestination(
+          duplicate,
+          input.type,
+          destinationCandidates,
+        );
+        if (
+          duplicate.submissionContractVersion === WORKER_PAYMENT_ATTESTED_CONTRACT_VERSION
+          && duplicate.privacyChoiceEventId === privacyChoice.eventId
+        ) {
+          if (!exactPresentedDestination) {
+            throw paymentError(
+              'Ese destino de cobro ya esta representado por otro identificador.',
+              'WORKER_PAYMENT_DUPLICATE',
+            );
+          }
+          assertHolderMatchesPersistedDestination(duplicate, holderCandidates);
+          return { paymentDestination: paymentDto(duplicate), replayed: true, reattested: false };
+        }
+        if (
+          duplicate.submissionContractVersion === LEGACY_PAYMENT_SUBMISSION_CONTRACT_VERSION
+          && duplicate.privacyChoiceEventId == null
+          && REATTESTABLE_LEGACY_STATUSES.has(duplicate.status)
+          && (duplicate.status !== 'ACTIVE' || submitter.type === 'WORKER_CHANNEL')
+        ) {
+          if (!exactPresentedDestination) {
+            throw paymentError(
+              'Ese destino de cobro ya esta representado por otro identificador.',
+              'WORKER_PAYMENT_DUPLICATE',
+            );
+          }
+          assertHolderMatchesPersistedDestination(duplicate, holderCandidates);
+          const revision = persistedRevision(duplicate.revision);
+          if (revision >= MAX_PRISMA_INT) {
+            throw paymentError(
+              'La revision persistida alcanzo su limite.',
+              'WORKER_PAYMENT_CONFIGURATION_INVALID',
+            );
+          }
+          const updated = await transaction.workerPaymentDestination.updateMany({
+            where: {
+              id: duplicate.id,
+              organizationId: scope.organizationId,
+              personId,
+              purpose: input.purpose,
+              status: duplicate.status,
+              revision,
+              submissionContractVersion: LEGACY_PAYMENT_SUBMISSION_CONTRACT_VERSION,
+              privacyChoiceEventId: null,
+            },
+            data: {
+              submissionContractVersion: WORKER_PAYMENT_ATTESTED_CONTRACT_VERSION,
+              privacyChoiceEventId: privacyChoice.eventId,
+              ...(flowSubmission ? {
+                operationKey,
+                requestFingerprint: requestFingerprints.current,
+                submissionSource: submitter.type,
+                submittedAt: now,
+                submittedByMembershipId: submitter.type === 'TENANT_MEMBERSHIP'
+                  ? submitter.id
+                  : null,
+                submittedByChannelIdentityId: submitter.type === 'WORKER_CHANNEL'
+                  ? submitter.id
+                  : null,
+              } : {}),
+              flowSubmissionReservationId: flowSubmission?.reservationId ?? null,
+              flowSubmissionFingerprintKeyId: flowSubmission?.fingerprintKeyId ?? null,
+              flowSubmissionFingerprintHmac: flowSubmission?.fingerprintHmac ?? null,
+              revision: { increment: 1 },
+              updatedAt: now,
+            },
+          });
+          if (updated.count !== 1) {
+            throw paymentError(
+              'El destino cambio antes de completar la reatestacion.',
+              'WORKER_PAYMENT_TRANSITION_CONFLICT',
+            );
+          }
+          const reattested = await transaction.workerPaymentDestination.findFirst({
+            where: {
+              id: duplicate.id,
+              organizationId: scope.organizationId,
+              personId,
+              purpose: input.purpose,
+            },
+          });
+          if (!reattested) {
+            throw paymentError(
+              'El destino reatestado no pudo recuperarse.',
+              'WORKER_PAYMENT_CONFIGURATION_INVALID',
+            );
+          }
+          await createPaymentAudit(transaction, {
+            scope,
+            actorId: actor.actorId,
+            action: 'worker.payment_destination.privacy_reattested',
+            destination: reattested,
+            correlationId: options.correlationId,
+          });
+          return { paymentDestination: paymentDto(reattested), replayed: false, reattested: true };
+        }
+        if (
+          duplicate.submissionContractVersion === LEGACY_PAYMENT_SUBMISSION_CONTRACT_VERSION
+          && duplicate.privacyChoiceEventId == null
+        ) {
+          throw paymentError(
+            duplicate.status === 'ACTIVE'
+              ? 'Un destino legado activo debe ser reatestado por el trabajador desde su canal verificado.'
+              : 'El destino legado ya no admite reatestacion y debe reemplazarse de forma controlada.',
+            'WORKER_PAYMENT_REATTESTATION_REQUIRED',
+          );
+        }
         throw paymentError(
           'Ese destino de cobro ya fue presentado para la persona.',
           'WORKER_PAYMENT_DUPLICATE',
@@ -901,6 +1348,11 @@ export async function submitWorkerPaymentDestination(prisma, rawOptions) {
           submittedAt: now,
           submittedByMembershipId: submitter.type === 'TENANT_MEMBERSHIP' ? submitter.id : null,
           submittedByChannelIdentityId: submitter.type === 'WORKER_CHANNEL' ? submitter.id : null,
+          submissionContractVersion: WORKER_PAYMENT_ATTESTED_CONTRACT_VERSION,
+          privacyChoiceEventId: privacyChoice.eventId,
+          flowSubmissionReservationId: flowSubmission?.reservationId ?? null,
+          flowSubmissionFingerprintKeyId: flowSubmission?.fingerprintKeyId ?? null,
+          flowSubmissionFingerprintHmac: flowSubmission?.fingerprintHmac ?? null,
         },
       });
       await createPaymentAudit(transaction, {
@@ -1173,6 +1625,7 @@ export async function verifyWorkerPaymentDestination(prisma, rawOptions) {
     if (!current) {
       throw paymentError('El destino de cobro no existe.', 'WORKER_PAYMENT_NOT_FOUND');
     }
+    assertDestinationPrivacyAttested(current);
     assertVerifiedHolderMatchesDestination(person, current, verifiedHolderCandidates);
     const currentRevision = persistedRevision(current.revision);
     if (currentRevision !== context.expectedRevision) {
@@ -1462,6 +1915,7 @@ export async function activateWorkerPaymentDestination(prisma, rawOptions) {
         context.destinationId,
       );
       if (!current) throw paymentError('El destino de cobro no existe.', 'WORKER_PAYMENT_NOT_FOUND');
+      assertDestinationPrivacyAttested(current);
       const currentRevision = persistedRevision(current.revision);
       if (currentRevision !== context.expectedRevision) {
         throw paymentError(

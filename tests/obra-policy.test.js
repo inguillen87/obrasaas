@@ -84,6 +84,10 @@ test('Meta Flow intent comes from the trusted session, never client flow_type', 
     FIELD_WORKER_INTENTS.ATTENDANCE_START,
   );
   assert.equal(
+    classifyObraIntent(event, { trustedFlowType: 'worker_payment_destination' }),
+    FIELD_WORKER_INTENTS.PAYMENT_DESTINATION,
+  );
+  assert.equal(
     classifyObraIntent({
       ...event,
       provider: 'webview',

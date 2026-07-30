@@ -136,6 +136,12 @@ export async function garbageCollectWhatsAppFlowEndpointRequests(
         WHERE request."endpointId" = $1::uuid
           AND request."createdAt" <= $2
           AND request."expiresAt" <= $3
+          AND NOT EXISTS (
+            SELECT 1
+            FROM "WorkerPaymentFlowSession" AS payment_session
+            WHERE payment_session."flowSessionId" = request."flowSessionId"
+              AND payment_session."submissionStatus" IN ('PROCESSING', 'UNCERTAIN')
+          )
           AND (
             (
               request."responseCiphertext" IS NULL
@@ -233,6 +239,12 @@ export async function garbageCollectWhatsAppFlowEndpointRequestBacklog(
     FROM "WhatsAppFlowEndpointRequest" AS request
     WHERE request."createdAt" <= $1
       AND request."expiresAt" <= $2
+      AND NOT EXISTS (
+        SELECT 1
+        FROM "WorkerPaymentFlowSession" AS payment_session
+        WHERE payment_session."flowSessionId" = request."flowSessionId"
+          AND payment_session."submissionStatus" IN ('PROCESSING', 'UNCERTAIN')
+      )
       AND (
         (
           request."responseCiphertext" IS NULL
@@ -313,11 +325,12 @@ function terminalReplay(record, now) {
   if (!record || record.status === "PROCESSING") return false;
   // Once ciphertext has been exposed, the digest is a cryptographic tombstone:
   // Meta may replay the envelope while its RSA key is accepted, and recomputing
-  // could reuse the protocol-mandated AES-GCM response nonce. Failures without
-  // ciphertext are only a bounded negative cache and remain recoverable.
-  return record.responseCiphertext !== null && record.responseCiphertext !== undefined
-    ? true
-    : validDate(record.expiresAt, "expiry") > now;
+  // could reuse the protocol-mandated AES-GCM response nonce. A terminal row
+  // without ciphertext was never observable and must be immediately
+  // reclaimable: dispatch may already have committed an idempotent domain
+  // mutation before response encryption failed.
+  void now;
+  return record.responseCiphertext !== null && record.responseCiphertext !== undefined;
 }
 
 function activeLease(record, now) {
@@ -425,8 +438,6 @@ export async function reserveWhatsAppFlowEndpointRequest(
           responseStatus: null,
           responseCiphertext: null,
           failureCode: null,
-          flowSessionId: null,
-          workerOnboardingFlowSessionId: null,
           leaseToken,
           leaseExpiresAt,
           completedAt: null,
@@ -537,11 +548,29 @@ function normalizedCompletion(input) {
 export async function completeWhatsAppFlowEndpointRequest(prisma, input) {
   const delegate = requestDelegate(prisma);
   const completion = normalizedCompletion(input);
+  const sessionGuard = completion.flowSessionId
+    ? {
+        workerOnboardingFlowSessionId: null,
+        OR: [
+          { flowSessionId: null },
+          { flowSessionId: completion.flowSessionId },
+        ],
+      }
+    : completion.workerOnboardingFlowSessionId
+      ? {
+          flowSessionId: null,
+          OR: [
+            { workerOnboardingFlowSessionId: null },
+            { workerOnboardingFlowSessionId: completion.workerOnboardingFlowSessionId },
+          ],
+        }
+      : {};
   const result = await delegate.updateMany({
     where: {
       id: completion.requestId,
       status: "PROCESSING",
       leaseToken: completion.leaseToken,
+      ...sessionGuard,
     },
     data: {
       status: completion.status,
@@ -551,8 +580,13 @@ export async function completeWhatsAppFlowEndpointRequest(prisma, input) {
       action: completion.action,
       screen: completion.screen,
       keyVersion: completion.keyVersion,
-      flowSessionId: completion.flowSessionId,
-      workerOnboardingFlowSessionId: completion.workerOnboardingFlowSessionId,
+      // A retry before authentication must not erase a session identity proven
+      // by an earlier attempt. When this attempt does authenticate, the atomic
+      // where guard above permits only the same identity and session domain.
+      ...(completion.flowSessionId ? { flowSessionId: completion.flowSessionId } : {}),
+      ...(completion.workerOnboardingFlowSessionId
+        ? { workerOnboardingFlowSessionId: completion.workerOnboardingFlowSessionId }
+        : {}),
       completedAt: completion.completedAt,
       leaseToken: null,
       leaseExpiresAt: null,

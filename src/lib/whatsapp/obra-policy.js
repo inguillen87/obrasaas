@@ -59,6 +59,9 @@ export function classifyObraIntent(event, { trustedFlowType = null } = {}) {
     if (kind.includes('attendance') || kind.includes('fichaje')) {
       return FIELD_WORKER_INTENTS.ATTENDANCE_START;
     }
+    if (kind === 'worker_payment_destination') {
+      return FIELD_WORKER_INTENTS.PAYMENT_DESTINATION;
+    }
     if (kind.includes('incident')) return FIELD_WORKER_INTENTS.INCIDENT;
     return FIELD_WORKER_INTENTS.EVIDENCE;
   }

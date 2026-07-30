@@ -5,6 +5,7 @@ import {
   isValidMetaResourceId,
   MetaIntegrationError,
 } from './embedded-signup.js';
+import { getCurrentWorkerPaymentPrivacyNotice } from '../worker-payment-privacy-notices.js';
 
 export const WHATSAPP_FLOW_JSON_VERSION = '7.3';
 export const WHATSAPP_FLOW_DATA_API_VERSION = '4.0';
@@ -12,6 +13,7 @@ export const WHATSAPP_FLOW_SESSION_TTL_MS = Object.freeze({
   'incident-report': 4 * 60 * 60 * 1_000,
   'shift-check-in': 30 * 60 * 1_000,
   'worker-onboarding': 60 * 60 * 1_000,
+  'worker-payment-destination': 30 * 60 * 1_000,
 });
 
 const FLOW_GRAPH_FIELDS = Object.freeze([
@@ -34,6 +36,7 @@ const FLOW_PAGING_CURSOR_MAX_BYTES = 4_096;
 const SCREEN_ID_PATTERN = /^[A-Z][A-Z0-9_]{0,29}$/;
 const FLOW_SCOPE_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const PEM_PUBLIC_KEY_PATTERN = /^-----BEGIN PUBLIC KEY-----[\s\S]+-----END PUBLIC KEY-----$/;
+const WORKER_PAYMENT_PRIVACY_NOTICE = getCurrentWorkerPaymentPrivacyNotice();
 
 function buildOperationalContextData() {
   return {
@@ -329,10 +332,130 @@ const BLUEPRINTS = [
       ],
     },
   },
+  {
+    key: 'worker-payment-destination',
+    sessionTtlMs: WHATSAPP_FLOW_SESSION_TTL_MS['worker-payment-destination'],
+    name: 'ObraSaaS | Destino de cobro',
+    title: 'Destino de cobro',
+    description: 'Registra o confirma de forma protegida cómo quiere cobrar el operario; el estado vigente se conserva o pasa a revisión según corresponda.',
+    screenId: 'WORKER_PAYMENT_DESTINATION',
+    flowType: 'worker_payment_destination',
+    categories: ['OTHER'],
+    capabilities: ['CBU, CVU o alias cifrado', 'Aviso versionado', 'Revisión administrativa'],
+    message: {
+      header: 'Destino de cobro',
+      body: 'Cargá o confirmá tu CBU, CVU o alias en el formulario protegido. El estado vigente se conserva o pasa a revisión según corresponda.',
+      footer: 'Nunca envíes datos bancarios en el chat.',
+      cta: 'Configurar cobro',
+    },
+    definition: {
+      version: WHATSAPP_FLOW_JSON_VERSION,
+      data_api_version: WHATSAPP_FLOW_DATA_API_VERSION,
+      routing_model: { WORKER_PAYMENT_DESTINATION: [] },
+      screens: [
+        {
+          id: 'WORKER_PAYMENT_DESTINATION',
+          title: 'Tus datos de cobro',
+          terminal: true,
+          success: true,
+          data: {
+            project_name: {
+              type: 'string',
+              __example__: 'Torre del Parque',
+            },
+            worker_name: {
+              type: 'string',
+              __example__: 'Carlos Pérez',
+            },
+            capture_notice_version: {
+              type: 'string',
+              __example__: WORKER_PAYMENT_PRIVACY_NOTICE.version,
+            },
+            capture_notice_text: {
+              type: 'string',
+              __example__: WORKER_PAYMENT_PRIVACY_NOTICE.content,
+            },
+            expires_label: {
+              type: 'string',
+              __example__: 'Este formulario vence hoy a las 18:30.',
+            },
+          },
+          layout: {
+            type: 'SingleColumnLayout',
+            children: [
+              {
+                type: 'Form',
+                name: 'worker_payment_destination_form',
+                children: [
+                  { type: 'TextHeading', text: 'Configurar cobro en ${data.project_name}' },
+                  { type: 'TextBody', text: '${data.worker_name} · ${data.capture_notice_text}' },
+                  { type: 'TextCaption', text: '${data.expires_label}' },
+                  {
+                    type: 'RadioButtonsGroup',
+                    name: 'purpose',
+                    label: 'Uso del destino',
+                    required: true,
+                    'data-source': [
+                      { id: 'salary', title: 'Haberes' },
+                      { id: 'reimbursement', title: 'Reintegros' },
+                    ],
+                  },
+                  {
+                    type: 'RadioButtonsGroup',
+                    name: 'destination_type',
+                    label: 'Tipo de cuenta',
+                    required: true,
+                    'data-source': [
+                      { id: 'cbu', title: 'CBU' },
+                      { id: 'cvu', title: 'CVU' },
+                      { id: 'alias', title: 'Alias' },
+                    ],
+                  },
+                  {
+                    type: 'TextInput',
+                    name: 'destination_value',
+                    label: 'CBU, CVU o alias',
+                    'helper-text': 'Se cifra antes de guardarse y nunca se copia al chat.',
+                    required: true,
+                  },
+                  {
+                    type: 'OptIn',
+                    name: 'holder_declaration',
+                    label: 'Declaro que el destino indicado está a mi nombre.',
+                    required: true,
+                  },
+                  {
+                    type: 'OptIn',
+                    name: 'capture_notice_acknowledged',
+                    label: 'Leí el aviso indicado y entiendo para qué se usará este dato.',
+                    required: true,
+                  },
+                  {
+                    type: 'Footer',
+                    label: 'Registrar o confirmar',
+                    'on-click-action': {
+                      name: 'data_exchange',
+                      payload: {
+                        purpose: '${form.purpose}',
+                        destination_type: '${form.destination_type}',
+                        destination_value: '${form.destination_value}',
+                        holder_declaration: '${form.holder_declaration}',
+                        capture_notice_acknowledged: '${form.capture_notice_acknowledged}',
+                      },
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      ],
+    },
+  },
 ];
 
-// Contracts stay separate from the public blueprint DTO so the two existing
-// blueprints keep exactly the same outward shape. Each screen declares the
+// Contracts stay separate from the public blueprint DTO so every blueprint
+// keeps the same outward shape. Each screen declares the
 // values owned by the server, the fields the client may submit, and the fields
 // that only the server may add to the terminal receipt.
 const FLOW_DEFINITION_CONTRACTS = Object.freeze({
@@ -448,6 +571,41 @@ const FLOW_DEFINITION_CONTRACTS = Object.freeze({
           flow_type: Object.freeze({ strategy: 'constant', value: 'worker_onboarding' }),
           claim_ref: Object.freeze({ strategy: 'opaque-reference' }),
           submission_status: Object.freeze({ strategy: 'constant', value: 'submitted' }),
+        }),
+      }),
+    }),
+  }),
+  'worker-payment-destination': Object.freeze({
+    screens: Object.freeze({
+      WORKER_PAYMENT_DESTINATION: Object.freeze({
+        serverOwnedFields: Object.freeze({
+          project_name: Object.freeze({ type: 'string' }),
+          worker_name: Object.freeze({ type: 'string' }),
+          capture_notice_version: Object.freeze({ type: 'string' }),
+          capture_notice_text: Object.freeze({ type: 'string' }),
+          expires_label: Object.freeze({ type: 'string' }),
+        }),
+        formFields: Object.freeze({
+          purpose: Object.freeze({ componentTypes: Object.freeze(['RadioButtonsGroup']) }),
+          destination_type: Object.freeze({ componentTypes: Object.freeze(['RadioButtonsGroup']) }),
+          destination_value: Object.freeze({ componentTypes: Object.freeze(['TextInput']) }),
+          holder_declaration: Object.freeze({ componentTypes: Object.freeze(['OptIn']) }),
+          capture_notice_acknowledged: Object.freeze({ componentTypes: Object.freeze(['OptIn']) }),
+        }),
+        terminalReceiptFields: Object.freeze({
+          flow_type: Object.freeze({ type: 'string' }),
+          destination_ref: Object.freeze({ type: 'string' }),
+          submission_status: Object.freeze({ type: 'string' }),
+        }),
+        persistenceProjection: Object.freeze({
+          purpose: Object.freeze({ strategy: 'drop-sensitive' }),
+          destination_type: Object.freeze({ strategy: 'drop-sensitive' }),
+          destination_value: Object.freeze({ strategy: 'drop-sensitive' }),
+          holder_declaration: Object.freeze({ strategy: 'drop-sensitive' }),
+          capture_notice_acknowledged: Object.freeze({ strategy: 'drop-sensitive' }),
+          flow_type: Object.freeze({ strategy: 'constant', value: 'worker_payment_destination' }),
+          destination_ref: Object.freeze({ strategy: 'opaque-reference' }),
+          submission_status: Object.freeze({ strategy: 'constant', value: 'received' }),
         }),
       }),
     }),
@@ -909,6 +1067,31 @@ export function validateWhatsAppFlowReply(blueprintKey, response) {
         maxLength: 190,
       }),
       submission_status: 'submitted',
+    };
+  }
+
+  if (blueprintKey === 'worker-payment-destination') {
+    assertReplyShape(response, new Set([
+      'flow_type',
+      'destination_ref',
+      'submission_status',
+    ]));
+    if (
+      response.flow_type !== blueprint.flowType
+      || response.submission_status !== 'received'
+    ) {
+      throw new WhatsAppFlowReplyError(
+        'WhatsApp Flow payment-destination receipt does not match its issued session.',
+      );
+    }
+    return {
+      flow_type: blueprint.flowType,
+      destination_ref: replyText(response.destination_ref, {
+        field: 'destination_ref',
+        minLength: 1,
+        maxLength: 190,
+      }),
+      submission_status: 'received',
     };
   }
 

@@ -580,7 +580,12 @@ function normalizeTokenEvidence(input = {}) {
 export async function issueWhatsAppFlowSession(
   prisma,
   input,
-  { secret, now = new Date(), ttlMs = DEFAULT_WHATSAPP_FLOW_SESSION_TTL_MS } = {},
+  {
+    secret,
+    now = new Date(),
+    ttlMs = DEFAULT_WHATSAPP_FLOW_SESSION_TTL_MS,
+    propagateUniqueConstraint = false,
+  } = {},
 ) {
   const delegate = sessionDelegate(prisma);
   const binding = normalizeImmutableInput(input);
@@ -610,6 +615,10 @@ export async function issueWhatsAppFlowSession(
     return { session, token };
   } catch (error) {
     if (!isUniqueConstraintError(error)) throw error;
+    // A PostgreSQL unique violation aborts an interactive transaction. Let a
+    // transaction-owning orchestrator retry the whole unit instead of querying
+    // again through an already-aborted transaction client.
+    if (propagateUniqueConstraint) throw error;
     const raced = await readSessionByBinding(delegate, binding);
     if (raced) return idempotentIssuedSession(raced, binding, signingSecret);
     throw flowSessionError(
@@ -669,20 +678,27 @@ export async function getWhatsAppFlowSessionSentFence(prisma, input) {
 
 /**
  * Authenticate a raw Flow token for the encrypted Data Endpoint without
- * consuming the session. INIT/data_exchange are read-only; the terminal
- * nfm_reply webhook remains the only path allowed to claim the session and
- * apply business effects.
+ * consuming the generic session. Generic operational INIT/data_exchange calls
+ * are read-only. The payment-destination companion may persist its governed
+ * submission during data_exchange, but the terminal nfm_reply remains the only
+ * path allowed to claim the generic session and apply downstream effects.
  */
 export async function authenticateWhatsAppFlowDataSession(
   prisma,
   input,
-  { secret, now = new Date() } = {},
+  { secret, now = new Date(), allowExpired = false } = {},
 ) {
   const delegate = sessionDelegate(prisma);
   const authentication = normalizeDataEndpointAuthenticationInput(input);
   const authenticatedAt = normalizeNow(now);
   const signingSecret = flowTokenSecret(secret);
   const evidence = authentication.tokenEvidence;
+  if (typeof allowExpired !== "boolean") {
+    throw flowSessionError(
+      "Invalid WhatsApp Flow expiry authentication policy.",
+      "WHATSAPP_FLOW_SESSION_INPUT_INVALID",
+    );
+  }
   const session = await delegate.findUnique({ where: { id: evidence.sessionId } });
 
   if (!session) {
@@ -722,14 +738,22 @@ export async function authenticateWhatsAppFlowDataSession(
     );
   }
   assertSessionNotConsumed(session);
-  assertSessionNotExpired(session, authenticatedAt);
+  // Expiry bypass is an explicit low-level capability used only by the
+  // payment terminal-receipt recovery path. Callers must still prove the
+  // specialized session is SUCCEEDED and inside its bounded replay grace.
+  if (!allowExpired) assertSessionNotExpired(session, authenticatedAt);
   return { session };
 }
 
 export async function consumeWhatsAppFlowSession(
   prisma,
   input,
-  { secret, now = new Date(), recoverExpired = false } = {},
+  {
+    secret,
+    now = new Date(),
+    recoverExpired = false,
+    beforeConsume,
+  } = {},
 ) {
   const delegate = sessionDelegate(prisma);
   const consumption = normalizeConsumptionInput(input);
@@ -775,6 +799,15 @@ export async function consumeWhatsAppFlowSession(
       "The WhatsApp Flow session expired.",
       "WHATSAPP_FLOW_SESSION_EXPIRED",
     );
+  }
+  if (beforeConsume !== undefined) {
+    if (typeof beforeConsume !== "function") {
+      throw flowSessionError(
+        "WhatsApp Flow pre-consumption validation is invalid.",
+        "WHATSAPP_FLOW_SESSION_CONFIGURATION_INVALID",
+      );
+    }
+    await beforeConsume(prisma, { session, expired });
   }
 
   let claimed;

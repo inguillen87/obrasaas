@@ -27,6 +27,7 @@ import {
   WHATSAPP_FLOW_JSON_VERSION,
   WHATSAPP_FLOW_SESSION_TTL_MS,
 } from '../src/lib/whatsapp/flows.js';
+import { getCurrentWorkerPaymentPrivacyNotice } from '../src/lib/worker-payment-privacy-notices.js';
 
 const WABA_ID = '123456789012345';
 const PHONE_NUMBER_ID = '223456789012345';
@@ -163,6 +164,7 @@ test('ObraSaaS blueprints use Flow JSON 7.3 and the dynamic Data API 4.0 contrac
     'incident-report',
     'shift-check-in',
     'worker-onboarding',
+    'worker-payment-destination',
   ]);
 
   for (const item of catalog) {
@@ -202,6 +204,34 @@ test('ObraSaaS blueprints use Flow JSON 7.3 and the dynamic Data API 4.0 contrac
         form.children.find((component) => component.name === 'privacy_accepted').type,
         'OptIn',
       );
+    } else if (item.key === 'worker-payment-destination') {
+      const paymentNotice = getCurrentWorkerPaymentPrivacyNotice();
+      assert.deepEqual(Object.keys(screen.data).sort(), [
+        'capture_notice_text',
+        'capture_notice_version',
+        'expires_label',
+        'project_name',
+        'worker_name',
+      ]);
+      assert.deepEqual(
+        form.children.filter((component) => component.name).map((component) => component.name),
+        [
+          'purpose',
+          'destination_type',
+          'destination_value',
+          'holder_declaration',
+          'capture_notice_acknowledged',
+        ],
+      );
+      assert.equal(
+        form.children.find((component) => component.name === 'capture_notice_acknowledged').type,
+        'OptIn',
+      );
+      assert.equal(screen.data.capture_notice_version.__example__, paymentNotice.version);
+      assert.equal(screen.data.capture_notice_text.__example__, paymentNotice.content);
+      assert.doesNotMatch(blueprint.description, /pendiente de verificaci[oó]n/i);
+      assert.doesNotMatch(blueprint.message.body, /pendiente de verificaci[oó]n/i);
+      assert.equal(footer.label, 'Registrar o confirmar');
     } else {
       const areaField = item.key === 'incident-report' ? 'area' : 'work_area';
       const area = form.children.find((component) => component.name === areaField);
@@ -224,6 +254,7 @@ test('Flow definition contracts separate server context, client fields, and term
   const incident = getWhatsAppFlowDefinitionContract('incident-report');
   const shift = getWhatsAppFlowDefinitionContract('shift-check-in');
   const onboarding = getWhatsAppFlowDefinitionContract('worker-onboarding');
+  const payment = getWhatsAppFlowDefinitionContract('worker-payment-destination');
 
   assert.deepEqual(Object.keys(incident.screens.INCIDENT_REPORT.serverOwnedFields).sort(), [
     'project_name',
@@ -258,6 +289,24 @@ test('Flow definition contracts separate server context, client fields, and term
   assert.equal(
     onboarding.screens.WORKER_ONBOARDING.persistenceProjection.cuil.strategy,
     'drop-sensitive',
+  );
+  assert.deepEqual(
+    Object.keys(payment.screens.WORKER_PAYMENT_DESTINATION.formFields).sort(),
+    [
+      'capture_notice_acknowledged',
+      'destination_type',
+      'destination_value',
+      'holder_declaration',
+      'purpose',
+    ],
+  );
+  assert.equal(
+    payment.screens.WORKER_PAYMENT_DESTINATION.persistenceProjection.destination_value.strategy,
+    'drop-sensitive',
+  );
+  assert.deepEqual(
+    Object.keys(payment.screens.WORKER_PAYMENT_DESTINATION.terminalReceiptFields).sort(),
+    ['destination_ref', 'flow_type', 'submission_status'],
   );
   assert.equal(getWhatsAppFlowDefinitionContract('unknown-flow'), null);
 });
@@ -296,6 +345,21 @@ test('Flow persistence projection keeps operational receipts but redacts free te
     claim_ref: 'claim_opaque_reference',
     submission_status: 'submitted',
   });
+  assert.deepEqual(projectWhatsAppFlowReplyForPersistence({
+    flow_type: 'worker_payment_destination',
+    destination_ref: 'payment_destination_opaque_reference',
+    submission_status: 'received',
+  }), {
+    flow_type: 'worker_payment_destination',
+    destination_ref: 'payment_destination_opaque_reference',
+    submission_status: 'received',
+  });
+  assert.deepEqual(projectWhatsAppFlowReplyForPersistence({
+    flow_type: 'worker_payment_destination',
+    destination_ref: 'payment_destination_opaque_reference',
+    submission_status: 'received',
+    destination_value: '0000000000000000000000',
+  }), {});
 });
 
 test('Flow persistence projection fails closed for unknown sensitive fields or blueprints', () => {
@@ -369,6 +433,7 @@ test('Flow session lifetime follows each blueprint operational risk', () => {
   assert.equal(getWhatsAppFlowSessionTtlMs('shift-check-in'), 30 * 60 * 1_000);
   assert.equal(getWhatsAppFlowSessionTtlMs('incident-report'), 4 * 60 * 60 * 1_000);
   assert.equal(getWhatsAppFlowSessionTtlMs('worker-onboarding'), 60 * 60 * 1_000);
+  assert.equal(getWhatsAppFlowSessionTtlMs('worker-payment-destination'), 30 * 60 * 1_000);
   assert.equal(
     getWhatsAppFlowBlueprint('incident-report').sessionTtlMs,
     WHATSAPP_FLOW_SESSION_TTL_MS['incident-report'],
@@ -660,6 +725,24 @@ test('Flow replies accept only the server-owned blueprint contract', () => {
     observations: '',
     task_ref: 'task-north-front',
   });
+  assert.deepEqual(validateWhatsAppFlowReply('worker-payment-destination', {
+    flow_type: 'worker_payment_destination',
+    destination_ref: ' payment-destination-opaque-ref ',
+    submission_status: 'received',
+  }), {
+    flow_type: 'worker_payment_destination',
+    destination_ref: 'payment-destination-opaque-ref',
+    submission_status: 'received',
+  });
+  assert.throws(
+    () => validateWhatsAppFlowReply('worker-payment-destination', {
+      flow_type: 'worker_payment_destination',
+      destination_ref: 'payment-destination-opaque-ref',
+      submission_status: 'received',
+      destination_value: '0000000000000000000000',
+    }),
+    (error) => error.code === 'WHATSAPP_FLOW_REPLY_INVALID',
+  );
 
   const validIncident = {
     flow_type: 'incident',

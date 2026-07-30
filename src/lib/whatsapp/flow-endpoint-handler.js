@@ -10,6 +10,7 @@ import {
 } from "./flow-endpoint-crypto.js";
 import {
   dispatchWhatsAppFlowDataRequest,
+  WHATSAPP_FLOW_JOURNAL_REPLAY_POLICY_RECOMPUTE,
   WhatsAppFlowDataEndpointError,
 } from "./flow-endpoint.js";
 import {
@@ -236,6 +237,32 @@ export async function handleWhatsAppFlowDataEndpointRequest(
   } catch (error) {
     const knownEndpointError = error instanceof WhatsAppFlowDataEndpointError;
     const responseStatus = knownEndpointError ? error.status : 500;
+    const journalSession = knownEndpointError ? error.journalSession : null;
+    if (
+      knownEndpointError
+      && error.journalReplayPolicy === WHATSAPP_FLOW_JOURNAL_REPLAY_POLICY_RECOMPUTE
+    ) {
+      try {
+        await finishRequest({
+          prisma,
+          reservation,
+          status: "FAILED",
+          responseStatus: 503,
+          failureCode: safeCompletionCode(error),
+          payload: decrypted.payload,
+          key: decrypted.key,
+          session: journalSession,
+          now,
+          completeRequest,
+        });
+      } catch {
+        return emptyResponse(503, { "Retry-After": "1" });
+      }
+      // No AES-GCM ciphertext may be exposed here. The exact envelope must be
+      // reclaimable after a fresh DB reconciliation query, and encrypting both
+      // a provisional error and a later success would reuse Meta's nonce.
+      return emptyResponse(503, { "Retry-After": "1" });
+    }
     let responseCiphertext;
     try {
       responseCiphertext = encryptResponse({
@@ -255,6 +282,7 @@ export async function handleWhatsAppFlowDataEndpointRequest(
         failureCode: safeCompletionCode(encryptionError),
         payload: decrypted.payload,
         key: decrypted.key,
+        session: journalSession,
         now,
         completeRequest,
       }).catch(() => {});
@@ -270,6 +298,7 @@ export async function handleWhatsAppFlowDataEndpointRequest(
         failureCode: safeCompletionCode(error),
         payload: decrypted.payload,
         key: decrypted.key,
+        session: journalSession,
         now,
         completeRequest,
       });

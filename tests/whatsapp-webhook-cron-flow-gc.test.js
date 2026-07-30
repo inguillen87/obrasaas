@@ -46,6 +46,25 @@ globalThis[TEST_STATE] = {
     failureCodes: [],
   },
   retentionError: null,
+  paymentFlowRecoveryCalls: [],
+  paymentFlowRecoveryResult: {
+    scanned: 0,
+    recovered: 0,
+    auditRows: 0,
+    hasMore: false,
+  },
+  paymentFlowRecoveryError: null,
+  paymentFlowReconciliationCalls: [],
+  paymentFlowReconciliationResult: {
+    scanned: 0,
+    reconciled: 0,
+    awaitingOutcome: 0,
+    provenanceMismatches: 0,
+    reconcilableRemaining: 0,
+    auditRows: 0,
+    hasMore: false,
+  },
+  paymentFlowReconciliationError: null,
   gcCalls: [],
   projectIds: ["project-1"],
   drainResult: { completed: 2, failed: 0, blocked: false },
@@ -66,6 +85,8 @@ const mockModules = new Map([
   ["@/lib/prisma", "mock:prisma"],
   ["@/lib/worker-onboarding-retention", "mock:worker-onboarding-retention"],
   ["@/lib/whatsapp/flow-endpoint-requests", "mock:flow-endpoint-requests"],
+  ["@/lib/whatsapp/worker-payment-flow-reconciliation", "mock:worker-payment-flow-reconciliation"],
+  ["@/lib/whatsapp/worker-payment-flow-recovery", "mock:worker-payment-flow-recovery"],
   ["@/lib/whatsapp/webhook-worker", "mock:webhook-worker"],
 ]);
 
@@ -170,6 +191,36 @@ registerHooks({
         `,
       };
     }
+    if (url === "mock:worker-payment-flow-recovery") {
+      return {
+        format: "module",
+        shortCircuit: true,
+        source: `
+          const state = globalThis[Symbol.for("obrasaas.whatsapp-webhook-cron-flow-gc-test")];
+          export async function recoverExpiredWorkerPaymentFlowSubmissions(...args) {
+            state.callOrder.push("worker-payment-flow-recovery");
+            state.paymentFlowRecoveryCalls.push(args);
+            if (state.paymentFlowRecoveryError) throw state.paymentFlowRecoveryError;
+            return state.paymentFlowRecoveryResult;
+          }
+        `,
+      };
+    }
+    if (url === "mock:worker-payment-flow-reconciliation") {
+      return {
+        format: "module",
+        shortCircuit: true,
+        source: `
+          const state = globalThis[Symbol.for("obrasaas.whatsapp-webhook-cron-flow-gc-test")];
+          export async function reconcileUncertainWorkerPaymentFlowSubmissions(...args) {
+            state.callOrder.push("worker-payment-flow-reconciliation");
+            state.paymentFlowReconciliationCalls.push(args);
+            if (state.paymentFlowReconciliationError) throw state.paymentFlowReconciliationError;
+            return state.paymentFlowReconciliationResult;
+          }
+        `,
+      };
+    }
     if (url === "mock:webhook-worker") {
       return {
         format: "module",
@@ -258,6 +309,27 @@ test("webhook recovery cron distinguishes accepted runs from healthy work", asyn
       failedBatches: 0,
       failureCodes: [],
     };
+    state.paymentFlowRecoveryCalls = [];
+    state.paymentFlowRecoveryError = null;
+    state.paymentFlowRecoveryResult = {
+      scanned: 0,
+      recovered: 0,
+      auditRows: 0,
+      hasMore: false,
+      leakedCbu: "2850590940090418135201",
+    };
+    state.paymentFlowReconciliationCalls = [];
+    state.paymentFlowReconciliationError = null;
+    state.paymentFlowReconciliationResult = {
+      scanned: 0,
+      reconciled: 0,
+      awaitingOutcome: 0,
+      provenanceMismatches: 0,
+      reconcilableRemaining: 0,
+      auditRows: 0,
+      hasMore: false,
+      leakedAlias: "reconciliation.secret.alias",
+    };
     state.attendanceExpiryResult = {
       scannedEntries: 0,
       processedProjects: 0,
@@ -287,15 +359,44 @@ test("webhook recovery cron distinguishes accepted runs from healthy work", asyn
     assert.equal(state.attendanceExpiryCalls.length, 1, scenario.name);
     assert.equal(state.attendanceAutomationCalls.length, 1, scenario.name);
     assert.equal(state.retentionCalls.length, 1, scenario.name);
+    assert.equal(state.paymentFlowRecoveryCalls.length, 1, scenario.name);
+    assert.equal(state.paymentFlowReconciliationCalls.length, 1, scenario.name);
     assert.deepEqual(state.retentionCalls[0][0], { source: "cron-test" });
     assert.deepEqual(state.retentionCalls[0][1], { batchSize: 100 });
+    assert.deepEqual(state.paymentFlowRecoveryCalls[0][0], { source: "cron-test" });
+    assert.deepEqual(state.paymentFlowRecoveryCalls[0][1], { batchSize: 50 });
+    assert.deepEqual(state.paymentFlowReconciliationCalls[0][0], { source: "cron-test" });
+    assert.deepEqual(state.paymentFlowReconciliationCalls[0][1], { batchSize: 50 });
     assert.deepEqual(state.attendanceExpiryCalls[0][0], { source: "cron-test" });
     assert.deepEqual(state.attendanceExpiryCalls[0][1], { maxEntries: 100 });
     assert.deepEqual(state.attendanceAutomationCalls[0][0], { source: "cron-test" });
     assert.deepEqual(state.attendanceAutomationCalls[0][1], { maxProjects: 4 });
     assert.equal(state.callOrder[0], "onboarding-retention", scenario.name);
-    assert.equal(state.callOrder[1], "attendance-expiry", scenario.name);
-    assert.equal(state.callOrder[2], "attendance-automation", scenario.name);
+    assert.equal(state.callOrder[1], "worker-payment-flow-recovery", scenario.name);
+    assert.equal(state.callOrder[2], "worker-payment-flow-reconciliation", scenario.name);
+    assert.equal(state.callOrder[3], "attendance-expiry", scenario.name);
+    assert.equal(state.callOrder[4], "attendance-automation", scenario.name);
+    assert.deepEqual(body.workerPaymentFlowRecovery, {
+      scanned: 0,
+      recovered: 0,
+      auditRows: 0,
+      hasMore: false,
+      failedBatches: 0,
+      failureCodes: [],
+    });
+    assert.deepEqual(body.workerPaymentFlowReconciliation, {
+      scanned: 0,
+      reconciled: 0,
+      awaitingOutcome: 0,
+      provenanceMismatches: 0,
+      reconcilableRemaining: 0,
+      auditRows: 0,
+      hasMore: false,
+      failedBatches: 0,
+      failureCodes: [],
+    });
+    assert.equal(JSON.stringify(body).includes("2850590940090418135201"), false);
+    assert.equal(JSON.stringify(body).includes("reconciliation.secret.alias"), false);
   }
 
   state.callOrder = [];
@@ -370,7 +471,9 @@ test("webhook recovery cron distinguishes accepted runs from healthy work", asyn
   assert.equal(expiryFailureBody.attendanceExpiry.backlogCheckFailed, true);
   assert.deepEqual(expiryFailureBody.attendanceExpiry.failureCodes, ["P1001"]);
   assert.equal(state.callOrder[0], "onboarding-retention");
-  assert.equal(state.callOrder[1], "attendance-expiry");
+  assert.equal(state.callOrder[1], "worker-payment-flow-recovery");
+  assert.equal(state.callOrder[2], "worker-payment-flow-reconciliation");
+  assert.equal(state.callOrder[3], "attendance-expiry");
   assert.equal(errorLog.mock.callCount(), 2);
 
   state.callOrder = [];
@@ -417,4 +520,117 @@ test("webhook recovery cron distinguishes accepted runs from healthy work", asyn
   ]);
   assert.equal(JSON.stringify(retentionFailureBody).includes(retentionSecret), false);
   assert.equal(JSON.stringify(errorLog.mock.calls.at(-1)?.arguments || []).includes(retentionSecret), false);
+
+  state.callOrder = [];
+  state.retentionError = null;
+  state.retentionResult = {
+    scanned: 0,
+    expired: 0,
+    purged: 0,
+    auditRows: 0,
+    hasMore: false,
+    failedBatches: 0,
+    failureCodes: [],
+  };
+  state.paymentFlowRecoveryError = null;
+  state.paymentFlowRecoveryResult = {
+    scanned: 50,
+    recovered: 49,
+    auditRows: 49,
+    hasMore: true,
+    leakedAlias: "mi.alias.secreto",
+  };
+  const paymentRecoveryBacklogResponse = await GET(request.clone());
+  const paymentRecoveryBacklogBody = await paymentRecoveryBacklogResponse.json();
+  assert.deepEqual(paymentRecoveryBacklogBody.reasons, [
+    "WORKER_PAYMENT_FLOW_RECOVERY_BACKLOG",
+  ]);
+  assert.deepEqual(paymentRecoveryBacklogBody.workerPaymentFlowRecovery, {
+    scanned: 50,
+    recovered: 49,
+    auditRows: 49,
+    hasMore: true,
+    failedBatches: 0,
+    failureCodes: [],
+  });
+  assert.equal(JSON.stringify(paymentRecoveryBacklogBody).includes("mi.alias.secreto"), false);
+
+  const paymentRecoverySecret = "20-87654321-9";
+  state.paymentFlowRecoveryError = Object.assign(new Error(paymentRecoverySecret), {
+    code: "WORKER_PAYMENT_FLOW_RECOVERY_UNAVAILABLE",
+    status: 503,
+  });
+  const paymentRecoveryFailureResponse = await GET(request.clone());
+  const paymentRecoveryFailureBody = await paymentRecoveryFailureResponse.json();
+  assert.equal(paymentRecoveryFailureResponse.status, 200);
+  assert.deepEqual(paymentRecoveryFailureBody.reasons, [
+    "WORKER_PAYMENT_FLOW_RECOVERY_FAILED",
+    "WORKER_PAYMENT_FLOW_RECOVERY_BACKLOG",
+  ]);
+  assert.deepEqual(paymentRecoveryFailureBody.workerPaymentFlowRecovery.failureCodes, [
+    "WORKER_PAYMENT_FLOW_RECOVERY_UNAVAILABLE",
+  ]);
+  assert.equal(JSON.stringify(paymentRecoveryFailureBody).includes(paymentRecoverySecret), false);
+  assert.equal(
+    JSON.stringify(errorLog.mock.calls.at(-1)?.arguments || []).includes(paymentRecoverySecret),
+    false,
+  );
+
+  state.paymentFlowRecoveryError = null;
+  state.paymentFlowRecoveryResult = {
+    scanned: 0,
+    recovered: 0,
+    auditRows: 0,
+    hasMore: false,
+  };
+  state.paymentFlowReconciliationError = null;
+  state.paymentFlowReconciliationResult = {
+    scanned: 4,
+    reconciled: 3,
+    awaitingOutcome: 1,
+    provenanceMismatches: 2,
+    reconcilableRemaining: 1,
+    auditRows: 3,
+    hasMore: true,
+    leakedAlias: "blocked.secret.alias",
+  };
+  const reconciliationBacklogResponse = await GET(request.clone());
+  const reconciliationBacklogBody = await reconciliationBacklogResponse.json();
+  assert.deepEqual(reconciliationBacklogBody.reasons, [
+    "WORKER_PAYMENT_FLOW_RECONCILIATION_AWAITING_OUTCOME",
+    "WORKER_PAYMENT_FLOW_RECONCILIATION_PROVENANCE_MISMATCH",
+    "WORKER_PAYMENT_FLOW_RECONCILIATION_BACKLOG",
+  ]);
+  assert.deepEqual(reconciliationBacklogBody.workerPaymentFlowReconciliation, {
+    scanned: 4,
+    reconciled: 3,
+    awaitingOutcome: 1,
+    provenanceMismatches: 2,
+    reconcilableRemaining: 1,
+    auditRows: 3,
+    hasMore: true,
+    failedBatches: 0,
+    failureCodes: [],
+  });
+  assert.equal(JSON.stringify(reconciliationBacklogBody).includes("blocked.secret.alias"), false);
+
+  const reconciliationSecret = "20-11223344-5";
+  state.paymentFlowReconciliationError = Object.assign(new Error(reconciliationSecret), {
+    code: "WORKER_PAYMENT_FLOW_RECONCILIATION_UNAVAILABLE",
+    status: 503,
+  });
+  const reconciliationFailureResponse = await GET(request.clone());
+  const reconciliationFailureBody = await reconciliationFailureResponse.json();
+  assert.deepEqual(reconciliationFailureBody.reasons, [
+    "WORKER_PAYMENT_FLOW_RECONCILIATION_FAILED",
+    "WORKER_PAYMENT_FLOW_RECONCILIATION_BACKLOG",
+  ]);
+  assert.deepEqual(reconciliationFailureBody.workerPaymentFlowReconciliation.failureCodes, [
+    "WORKER_PAYMENT_FLOW_RECONCILIATION_UNAVAILABLE",
+  ]);
+  assert.equal(JSON.stringify(reconciliationFailureBody).includes(reconciliationSecret), false);
+  assert.equal(
+    JSON.stringify(errorLog.mock.calls.at(-1)?.arguments || []).includes(reconciliationSecret),
+    false,
+  );
 });

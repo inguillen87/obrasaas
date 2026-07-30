@@ -434,6 +434,50 @@ test("an authenticated expired reply is consumed once for safe reissuance withou
   );
 });
 
+test("pre-consumption validation runs after authentication and before the single-use CAS", async () => {
+  const store = flowSessionStore();
+  const issued = await issueWhatsAppFlowSession(store.prisma, BASE_INPUT, {
+    secret: SECRET,
+    now: NOW,
+  });
+  await fenceDeliveryAttempt(store, issued.session.id, NOW);
+  const tokenEvidence = whatsAppFlowTokenEvidence(issued.token);
+  let validations = 0;
+  await assert.rejects(
+    consumeWhatsAppFlowSession(
+      store.prisma,
+      consumptionInput(tokenEvidence),
+      {
+        secret: SECRET,
+        now: new Date(NOW.getTime() + 1_000),
+        beforeConsume: async (_prisma, context) => {
+          validations += 1;
+          assert.equal(context.session.id, issued.session.id);
+          assert.equal(context.expired, false);
+          throw Object.assign(new Error('terminal receipt mismatch'), {
+            code: 'WHATSAPP_FLOW_SESSION_INVALID',
+          });
+        },
+      },
+    ),
+    (error) => error.code === 'WHATSAPP_FLOW_SESSION_INVALID',
+  );
+  assert.equal(validations, 1);
+  assert.equal(store.records[0].consumedAt, null);
+
+  const consumed = await consumeWhatsAppFlowSession(
+    store.prisma,
+    consumptionInput(tokenEvidence),
+    {
+      secret: SECRET,
+      now: new Date(NOW.getTime() + 2_000),
+      beforeConsume: async () => { validations += 1; },
+    },
+  );
+  assert.equal(consumed.session.consumedExternalId, 'wamid.flow-reply-a');
+  assert.equal(validations, 2);
+});
+
 test("an already-sent session remains an idempotent delivery fence after expiry", async () => {
   const store = flowSessionStore();
   const issued = await issueWhatsAppFlowSession(store.prisma, BASE_INPUT, {
@@ -851,6 +895,41 @@ test("the encrypted Data Endpoint rejects tampering, cross-tenant scope, expiry,
     assertFlowError("WHATSAPP_FLOW_SESSION_EXPIRED"),
   );
 
+  const expiredRecoveryAuthentication = await authenticateWhatsAppFlowDataSession(
+    store.prisma,
+    input,
+    {
+      secret: SECRET,
+      now: new Date(NOW.getTime() + 2_000),
+      allowExpired: true,
+    },
+  );
+  assert.equal(expiredRecoveryAuthentication.session.id, issued.session.id);
+  assert.equal(expiredRecoveryAuthentication.session.consumedAt, null);
+  assert.equal(store.records[0].consumedAt, null);
+  await assert.rejects(
+    authenticateWhatsAppFlowDataSession(store.prisma, {
+      ...input,
+      projectId: "project-b",
+    }, {
+      secret: SECRET,
+      now: new Date(NOW.getTime() + 2_000),
+      allowExpired: true,
+    }),
+    assertFlowError("WHATSAPP_FLOW_SESSION_INVALID"),
+  );
+  await assert.rejects(
+    authenticateWhatsAppFlowDataSession(store.prisma, {
+      ...input,
+      token: `${issued.token.slice(0, -1)}${issued.token.endsWith("A") ? "B" : "A"}`,
+    }, {
+      secret: SECRET,
+      now: new Date(NOW.getTime() + 2_000),
+      allowExpired: true,
+    }),
+    assertFlowError("WHATSAPP_FLOW_SESSION_INVALID"),
+  );
+
   await consumeWhatsAppFlowSession(
     store.prisma,
     consumptionInput(whatsAppFlowTokenEvidence(issued.token)),
@@ -860,6 +939,62 @@ test("the encrypted Data Endpoint rejects tampering, cross-tenant scope, expiry,
     authenticateWhatsAppFlowDataSession(store.prisma, input, {
       secret: SECRET,
       now: new Date(NOW.getTime() + 1_500),
+    }),
+    assertFlowError("WHATSAPP_FLOW_SESSION_USED"),
+  );
+});
+
+test("expired Data Endpoint authentication remains fenced by delivery rejection and consumption", async () => {
+  const rejectedStore = flowSessionStore();
+  const rejected = await issueWhatsAppFlowSession(rejectedStore.prisma, BASE_INPUT, {
+    secret: SECRET,
+    now: NOW,
+    ttlMs: 2_000,
+  });
+  await fenceDeliveryAttempt(rejectedStore, rejected.session.id);
+  rejectedStore.records[0].deliveryRejectedAt = new Date(NOW.getTime() + 1_000);
+  const rejectedInput = {
+    token: rejected.token,
+    organizationId: BASE_INPUT.organizationId,
+    projectId: BASE_INPUT.projectId,
+    phoneNumberId: BASE_INPUT.phoneNumberId,
+  };
+  await assert.rejects(
+    authenticateWhatsAppFlowDataSession(rejectedStore.prisma, rejectedInput, {
+      secret: SECRET,
+      now: new Date(NOW.getTime() + 2_000),
+      allowExpired: true,
+    }),
+    assertFlowError("WHATSAPP_FLOW_SESSION_INVALID"),
+  );
+
+  const consumedStore = flowSessionStore();
+  const consumed = await issueWhatsAppFlowSession(consumedStore.prisma, {
+    ...BASE_INPUT,
+    sourceExternalId: "wamid.inbound-consumed-expired",
+  }, {
+    secret: SECRET,
+    now: NOW,
+    ttlMs: 2_000,
+  });
+  await fenceDeliveryAttempt(consumedStore, consumed.session.id);
+  await consumeWhatsAppFlowSession(
+    consumedStore.prisma,
+    consumptionInput(whatsAppFlowTokenEvidence(consumed.token), {
+      consumedExternalId: "wamid.flow-reply-consumed-expired",
+    }),
+    { secret: SECRET, now: new Date(NOW.getTime() + 1_000) },
+  );
+  await assert.rejects(
+    authenticateWhatsAppFlowDataSession(consumedStore.prisma, {
+      token: consumed.token,
+      organizationId: BASE_INPUT.organizationId,
+      projectId: BASE_INPUT.projectId,
+      phoneNumberId: BASE_INPUT.phoneNumberId,
+    }, {
+      secret: SECRET,
+      now: new Date(NOW.getTime() + 2_000),
+      allowExpired: true,
     }),
     assertFlowError("WHATSAPP_FLOW_SESSION_USED"),
   );

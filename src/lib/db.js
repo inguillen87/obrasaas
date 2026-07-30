@@ -45,6 +45,11 @@ import {
   issueWhatsAppFlowSession,
 } from "@/lib/whatsapp/flow-sessions";
 import {
+  assertWorkerPaymentFlowTerminalReceipt,
+  WorkerPaymentFlowSessionError,
+  WORKER_PAYMENT_FLOW_BLUEPRINT_KEY,
+} from "@/lib/whatsapp/worker-payment-flow-sessions";
+import {
   consumeWorkerOnboardingFlowSession,
   WorkerOnboardingFlowSessionError,
 } from "@/lib/whatsapp/worker-onboarding-flow-sessions";
@@ -1998,6 +2003,7 @@ export async function applyWebhookMessageAtomically({
       );
     }
     const isMetaFlowReply = isFlowReply && event.provider === "meta";
+    let workerPaymentTerminalReceipt = null;
     const flowConsumption = isMetaFlowReply
       ? (
           await consumeWhatsAppFlowSession(transaction, {
@@ -2008,11 +2014,42 @@ export async function applyWebhookMessageAtomically({
             workerId: resolution.worker.id,
             phoneNumberId: normalized.phoneNumberId,
             recipientPhone: resolution.normalizedPhone,
-          }, { recoverExpired: true })
+          }, {
+            recoverExpired: true,
+            beforeConsume: async (_prisma, { session }) => {
+              if (session.blueprintKey !== WORKER_PAYMENT_FLOW_BLUEPRINT_KEY) return;
+              try {
+                workerPaymentTerminalReceipt = await assertWorkerPaymentFlowTerminalReceipt(
+                  transaction,
+                  {
+                    session,
+                    connectionId: project.whatsapp.id,
+                    response: event.interactive?.response || {},
+                  },
+                );
+              } catch (error) {
+                if (
+                  error instanceof WorkerPaymentFlowSessionError
+                  && error.status < 500
+                ) {
+                  throw webhookProcessingError(
+                    "The payment Flow receipt does not match its terminal session.",
+                    "WHATSAPP_FLOW_SESSION_INVALID",
+                  );
+                }
+                throw error;
+              }
+            },
+          })
         )
       : null;
-    const flowSession = flowConsumption?.expired ? null : flowConsumption?.session || null;
-    const expiredFlowSession = flowConsumption?.expired ? flowConsumption.session : null;
+    const terminalPaymentFlow = Boolean(workerPaymentTerminalReceipt);
+    const flowSession = flowConsumption?.expired && !terminalPaymentFlow
+      ? null
+      : flowConsumption?.session || null;
+    const expiredFlowSession = flowConsumption?.expired && !terminalPaymentFlow
+      ? flowConsumption.session
+      : null;
     const expiredFlowCanReissue = Boolean(
       expiredFlowSession
       && getPublishedWhatsAppFlowReference(

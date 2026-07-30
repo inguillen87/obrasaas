@@ -5,6 +5,8 @@ import { listDueWebhookProjectIds } from "@/lib/db";
 import { getPrisma } from "@/lib/prisma";
 import { expireAndPurgeWorkerOnboardingClaimsBatch } from "@/lib/worker-onboarding-retention";
 import { garbageCollectWhatsAppFlowEndpointRequestBacklog } from "@/lib/whatsapp/flow-endpoint-requests";
+import { reconcileUncertainWorkerPaymentFlowSubmissions } from "@/lib/whatsapp/worker-payment-flow-reconciliation";
+import { recoverExpiredWorkerPaymentFlowSubmissions } from "@/lib/whatsapp/worker-payment-flow-recovery";
 import { drainProjectWebhookEvents } from "@/lib/whatsapp/webhook-worker";
 
 export const runtime = "nodejs";
@@ -15,6 +17,8 @@ const MAX_PROJECTS_PER_RUN = 4;
 const MAX_EVENTS_PER_PROJECT = 5;
 const MAX_ATTENDANCE_EXPIRIES_PER_RUN = 100;
 const MAX_WORKER_ONBOARDING_RETENTION_PER_RUN = 100;
+const MAX_WORKER_PAYMENT_FLOW_RECOVERIES_PER_RUN = 50;
+const MAX_WORKER_PAYMENT_FLOW_RECONCILIATIONS_PER_RUN = 50;
 
 function json(body, status = 200) {
   return Response.json(body, {
@@ -51,6 +55,41 @@ function safeWorkerOnboardingRetentionMetrics(value = {}) {
   };
 }
 
+function safeWorkerPaymentFlowRecoveryMetrics(value = {}) {
+  return {
+    scanned: safeNonnegativeInteger(value.scanned),
+    recovered: safeNonnegativeInteger(value.recovered),
+    auditRows: safeNonnegativeInteger(value.auditRows),
+    hasMore: value.hasMore === true,
+    failedBatches: safeNonnegativeInteger(value.failedBatches),
+    failureCodes: Array.isArray(value.failureCodes)
+      ? value.failureCodes.slice(0, 10).map((code) => safeFailureCode(
+        code,
+        "WORKER_PAYMENT_FLOW_RECOVERY_FAILED",
+      ))
+      : [],
+  };
+}
+
+function safeWorkerPaymentFlowReconciliationMetrics(value = {}) {
+  return {
+    scanned: safeNonnegativeInteger(value.scanned),
+    reconciled: safeNonnegativeInteger(value.reconciled),
+    awaitingOutcome: safeNonnegativeInteger(value.awaitingOutcome),
+    provenanceMismatches: safeNonnegativeInteger(value.provenanceMismatches),
+    reconcilableRemaining: safeNonnegativeInteger(value.reconcilableRemaining),
+    auditRows: safeNonnegativeInteger(value.auditRows),
+    hasMore: value.hasMore === true,
+    failedBatches: safeNonnegativeInteger(value.failedBatches),
+    failureCodes: Array.isArray(value.failureCodes)
+      ? value.failureCodes.slice(0, 10).map((code) => safeFailureCode(
+        code,
+        "WORKER_PAYMENT_FLOW_RECONCILIATION_FAILED",
+      ))
+      : [],
+  };
+}
+
 function webhookRecoveryHealth({
   failed,
   blocked,
@@ -58,6 +97,8 @@ function webhookRecoveryHealth({
   attendanceExpiry,
   attendanceAutomation,
   workerOnboardingRetention,
+  workerPaymentFlowRecovery,
+  workerPaymentFlowReconciliation,
 }) {
   const reasons = [];
   if (failed > 0) reasons.push("WEBHOOK_EVENTS_FAILED");
@@ -82,6 +123,24 @@ function webhookRecoveryHealth({
   }
   if (workerOnboardingRetention?.hasMore === true) {
     reasons.push("WORKER_ONBOARDING_RETENTION_BACKLOG");
+  }
+  if (Number(workerPaymentFlowRecovery?.failedBatches || 0) > 0) {
+    reasons.push("WORKER_PAYMENT_FLOW_RECOVERY_FAILED");
+  }
+  if (workerPaymentFlowRecovery?.hasMore === true) {
+    reasons.push("WORKER_PAYMENT_FLOW_RECOVERY_BACKLOG");
+  }
+  if (Number(workerPaymentFlowReconciliation?.failedBatches || 0) > 0) {
+    reasons.push("WORKER_PAYMENT_FLOW_RECONCILIATION_FAILED");
+  }
+  if (Number(workerPaymentFlowReconciliation?.awaitingOutcome || 0) > 0) {
+    reasons.push("WORKER_PAYMENT_FLOW_RECONCILIATION_AWAITING_OUTCOME");
+  }
+  if (Number(workerPaymentFlowReconciliation?.provenanceMismatches || 0) > 0) {
+    reasons.push("WORKER_PAYMENT_FLOW_RECONCILIATION_PROVENANCE_MISMATCH");
+  }
+  if (workerPaymentFlowReconciliation?.hasMore === true) {
+    reasons.push("WORKER_PAYMENT_FLOW_RECONCILIATION_BACKLOG");
   }
   return {
     workHealthy: reasons.length === 0,
@@ -111,6 +170,58 @@ export async function GET(request) {
       failureCodes: [safeFailureCode(error?.code || error?.name)],
     });
     console.error("Worker-onboarding retention batch failed:", {
+      code: error?.code,
+      name: error?.name,
+      status: error?.status,
+    });
+  }
+
+  let workerPaymentFlowRecovery = safeWorkerPaymentFlowRecoveryMetrics();
+  try {
+    // A crashed process must never leave a payment submission indefinitely in
+    // PROCESSING. The recovery is conservative: it only fences expired,
+    // DB-clock-qualified reservations as UNCERTAIN and never retries a send.
+    workerPaymentFlowRecovery = safeWorkerPaymentFlowRecoveryMetrics(
+      await recoverExpiredWorkerPaymentFlowSubmissions(getPrisma(), {
+        batchSize: MAX_WORKER_PAYMENT_FLOW_RECOVERIES_PER_RUN,
+      }),
+    );
+  } catch (error) {
+    workerPaymentFlowRecovery = safeWorkerPaymentFlowRecoveryMetrics({
+      hasMore: true,
+      failedBatches: 1,
+      failureCodes: [safeFailureCode(
+        error?.code || error?.name,
+        "WORKER_PAYMENT_FLOW_RECOVERY_FAILED",
+      )],
+    });
+    console.error("Worker-payment Flow recovery batch failed:", {
+      code: error?.code,
+      name: error?.name,
+      status: error?.status,
+    });
+  }
+
+  let workerPaymentFlowReconciliation = safeWorkerPaymentFlowReconciliationMetrics();
+  try {
+    // Run after stale PROCESSING fencing so this invocation can close only an
+    // already-committed, reservation-bound destination. No bridge/provider or
+    // WhatsApp delivery is retried by this recovery edge.
+    workerPaymentFlowReconciliation = safeWorkerPaymentFlowReconciliationMetrics(
+      await reconcileUncertainWorkerPaymentFlowSubmissions(getPrisma(), {
+        batchSize: MAX_WORKER_PAYMENT_FLOW_RECONCILIATIONS_PER_RUN,
+      }),
+    );
+  } catch (error) {
+    workerPaymentFlowReconciliation = safeWorkerPaymentFlowReconciliationMetrics({
+      hasMore: true,
+      failedBatches: 1,
+      failureCodes: [safeFailureCode(
+        error?.code || error?.name,
+        "WORKER_PAYMENT_FLOW_RECONCILIATION_FAILED",
+      )],
+    });
+    console.error("Worker-payment Flow reconciliation batch failed:", {
       code: error?.code,
       name: error?.name,
       status: error?.status,
@@ -220,6 +331,8 @@ export async function GET(request) {
     attendanceExpiry,
     attendanceAutomation,
     workerOnboardingRetention,
+    workerPaymentFlowRecovery,
+    workerPaymentFlowReconciliation,
   });
   return json({
     ok: true,
@@ -232,5 +345,7 @@ export async function GET(request) {
     attendanceExpiry,
     attendanceAutomation,
     workerOnboardingRetention,
+    workerPaymentFlowRecovery,
+    workerPaymentFlowReconciliation,
   });
 }

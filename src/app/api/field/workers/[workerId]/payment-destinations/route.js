@@ -18,13 +18,28 @@ import {
   WorkerPaymentDestinationError,
   listWorkerPaymentDestinations,
   submitWorkerPaymentDestination,
+  validateWorkerPaymentDestinationSubmissionInput,
 } from '@/lib/worker-payment-destinations';
+import { WorkerFinancialDataError } from '@/lib/worker-financial-data';
+import { getCurrentWorkerPaymentPrivacyNotice } from '@/lib/worker-payment-privacy-notices';
+import {
+  WorkerPrivacyChoiceError,
+  recordWorkerPaymentCapturePrivacyChoice,
+} from '@/lib/worker-privacy-choices';
 
 export const runtime = 'nodejs';
 
 const MAX_SUBMISSION_BODY_BYTES = 8 * 1024;
 const LIST_QUERY_FIELDS = new Set(['purpose']);
-const SUBMISSION_FIELDS = new Set(['purpose', 'type', 'value', 'holderName', 'holderCuil']);
+const SUBMISSION_FIELDS = new Set([
+  'purpose',
+  'type',
+  'value',
+  'holderName',
+  'holderCuil',
+  'privacyNoticeVersion',
+  'adminAttestsNoticePresented',
+]);
 const SAFE_IDENTIFIER = /^[^\u0000-\u001f\u007f]{1,190}$/;
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/;
 const MAX_PRISMA_INT = 2_147_483_647;
@@ -226,6 +241,14 @@ export function workerPaymentErrorResponse(error) {
   }
   if (error instanceof AccessError) return accessErrorResponse(error);
   if (error instanceof RequestBodyError) return requestBodyErrorResponse(error);
+  if (error instanceof WorkerFinancialDataError) {
+    const errorMessage = error.status >= 500
+      ? 'No se pudo validar el destino de cobro.'
+      : error.message;
+    return workerPaymentJson({ error: errorMessage, code: error.code }, {
+      status: error.status,
+    });
+  }
   if (error instanceof WorkerPaymentDestinationError) {
     const errorMessage = error.status >= 500
       ? 'No se pudo procesar el destino de cobro.'
@@ -234,7 +257,29 @@ export function workerPaymentErrorResponse(error) {
       status: error.status,
     });
   }
+  if (error instanceof WorkerPrivacyChoiceError) {
+    const errorMessage = error.status >= 500
+      ? 'No se pudo registrar la evidencia de privacidad.'
+      : error.message;
+    return workerPaymentJson({ error: errorMessage, code: error.code }, {
+      status: error.status,
+    });
+  }
   return null;
+}
+
+function requireAdministrativePrivacyAttestation(input) {
+  const notice = getCurrentWorkerPaymentPrivacyNotice();
+  if (
+    input.adminAttestsNoticePresented !== true
+    || input.privacyNoticeVersion !== notice.version
+  ) {
+    throw new WorkerPaymentApiError(
+      'La carga administrativa exige atestiguar el aviso de privacidad vigente. Priorizá el Flow seguro del operario.',
+      { code: 'WORKER_PAYMENT_PRIVACY_ATTESTATION_REQUIRED', status: 422 },
+    );
+  }
+  return notice;
 }
 
 function queryValue(searchParams, key) {
@@ -248,6 +293,7 @@ export function createWorkerPaymentDestinationHandlers({
   prismaFactory = getPrisma,
   resolveWorkerBridge = resolveScopedWorkerPaymentBridge,
   listPaymentDestinations = listWorkerPaymentDestinations,
+  recordPrivacyChoice = recordWorkerPaymentCapturePrivacyChoice,
   submitPaymentDestination = submitWorkerPaymentDestination,
   parseBody = (request) => readJsonRequest(request, {
     maxBytes: MAX_SUBMISSION_BODY_BYTES,
@@ -303,20 +349,74 @@ export function createWorkerPaymentDestinationHandlers({
       const workerId = requireWorkerPaymentRouteId(params?.workerId, 'workerId');
       const input = assertWorkerPaymentObject(await parseBody(request), SUBMISSION_FIELDS);
       const operationKey = requireWorkerPaymentIdempotencyKey(request);
+      const notice = requireAdministrativePrivacyAttestation(input);
+      const validatedPaymentInput = validateWorkerPaymentDestinationSubmissionInput({
+        purpose: input.purpose,
+        type: input.type,
+        value: input.value,
+        holderName: input.holderName,
+        holderCuil: input.holderCuil,
+        operationKey,
+      });
+      const paymentInput = {
+        purpose: validatedPaymentInput.purpose,
+        type: validatedPaymentInput.type,
+        value: validatedPaymentInput.value,
+        holderName: validatedPaymentInput.holderName,
+        holderCuil: validatedPaymentInput.holderCuil,
+        operationKey: validatedPaymentInput.operationKey,
+      };
       const prisma = prismaFactory();
       const worker = await resolveWorkerBridge(prisma, access, workerId, {
         requireActive: true,
       });
-      const result = await submitPaymentDestination(prisma, {
+      const now = clock();
+      const privacyResult = await recordPrivacyChoice(prisma, {
         scope: workerPaymentScope(access),
         personId: worker.personId,
+        paymentPurpose: paymentInput.purpose,
         submittedBy: { type: 'TENANT_MEMBERSHIP', membershipId: actorMembershipId },
-        input: { ...input, operationKey },
-        now: clock(),
+        notice: {
+          version: notice.version,
+          contentSha256: notice.contentSha256,
+          presentedAt: now,
+        },
+        operationKey,
+        now,
+        correlationId,
+      });
+      const privacyChoiceEvent = privacyResult?.privacyChoiceEvent;
+      const privacyChoiceEventId = privacyChoiceEvent?.id;
+      const rawPrivacyDecidedAt = privacyChoiceEvent?.decidedAt;
+      const privacyDecidedAt = rawPrivacyDecidedAt instanceof Date
+        || typeof rawPrivacyDecidedAt === 'string'
+        ? new Date(rawPrivacyDecidedAt)
+        : new Date(Number.NaN);
+      if (
+        typeof privacyChoiceEventId !== 'string'
+        || !privacyChoiceEventId.trim()
+        || Number.isNaN(privacyDecidedAt.getTime())
+      ) {
+        throw new WorkerPaymentApiError(
+          'La atestación no produjo una evidencia de privacidad válida.',
+          { code: 'WORKER_PAYMENT_PRIVACY_ATTESTATION_FAILED', status: 500 },
+        );
+      }
+      const result = await submitPaymentDestination(prisma, {
+        scope: {
+          organizationId: access.organization.id,
+          projectId: access.project.id,
+          workerId,
+        },
+        personId: worker.personId,
+        submittedBy: { type: 'TENANT_MEMBERSHIP', membershipId: actorMembershipId },
+        privacyChoice: { eventId: privacyChoiceEventId },
+        input: paymentInput,
+        now: privacyDecidedAt,
         correlationId,
       });
       return finalizeWorkerPaymentResponse(workerPaymentJson(result, {
-        status: result?.replayed ? 200 : 201,
+        status: result?.replayed || result?.reattested ? 200 : 201,
       }), correlationId);
     } catch (error) {
       const known = workerPaymentErrorResponse(error);

@@ -130,6 +130,10 @@ test("backlog selection and each endpoint deletion stay explicitly bounded", asy
   });
   assert.equal(selectionCalls.length, 1);
   assert.match(selectionCalls[0][0], /ORDER BY MIN\(request\."createdAt"\) ASC/);
+  assert.match(
+    selectionCalls[0][0],
+    /NOT EXISTS \([\s\S]*"WorkerPaymentFlowSession" AS payment_session[\s\S]*payment_session\."submissionStatus" IN \('PROCESSING', 'UNCERTAIN'\)/,
+  );
   assert.match(selectionCalls[0][0], /LIMIT \$4::int/);
   assert.equal(selectionCalls[0][4], 2);
   assert.equal(deletionCalls.length, 2);
@@ -180,6 +184,10 @@ test("ciphertext tombstones are deleted only after their key is retired or revok
   assert.match(
     sql,
     /endpoint_key\."status" = 'RETIRING'[\s\S]*endpoint_key\."retireAfter" <= \$4/,
+  );
+  assert.match(
+    sql,
+    /NOT EXISTS \([\s\S]*"WorkerPaymentFlowSession" AS payment_session[\s\S]*payment_session\."submissionStatus" IN \('PROCESSING', 'UNCERTAIN'\)/,
   );
   assert.doesNotMatch(sql, /endpoint_key\."status" = '(?:ACTIVE|STAGED)'/);
 });

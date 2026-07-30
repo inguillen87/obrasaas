@@ -120,8 +120,11 @@ function createDatabase(initialState, { failDecision = false, failAudit = false 
     organizations: [],
     organizationReads: [],
     people: [],
+    projects: [],
+    workers: [],
     memberships: [],
     channels: [],
+    privacyChoices: [],
     destinations: [],
     decisions: [],
     audits: [],
@@ -150,8 +153,48 @@ function createDatabase(initialState, { failDecision = false, failAudit = false 
       workerPerson: {
         findFirst: async ({ where }) => snapshot.people.find((row) => matchesWhere(row, where)) ?? null,
       },
+      worker: {
+        findFirst: async ({ where }) => snapshot.workers.find((row) => (
+          matchesWhere(row, {
+            id: where.id,
+            organizationId: where.organizationId,
+            projectId: where.projectId,
+            personId: where.personId,
+            active: where.active,
+          })
+          && snapshot.projects.some((project) => (
+            project.id === row.projectId
+            && matchesWhere(project, where.project || {})
+          ))
+        )) ?? null,
+      },
       workerChannelIdentity: {
         findFirst: async ({ where }) => snapshot.channels.find((row) => matchesWhere(row, where)) ?? null,
+      },
+      workerPrivacyChoiceEvent: {
+        findFirst: async ({ where }) => {
+          const persisted = snapshot.privacyChoices.find((row) => matchesWhere(row, where));
+          if (persisted) return persisted;
+          const eventId = typeof where.id === 'string' ? where.id : '';
+          const match = eventId.match(/^privacy:(membership|channel):([^:]+):/);
+          if (!match) return null;
+          const channelSubmission = match[1] === 'channel';
+          return {
+            id: eventId,
+            organizationId: where.organizationId,
+            personId: where.personId,
+            purpose: 'PAYMENT_DESTINATION_CAPTURE',
+            paymentPurpose: where.paymentPurpose,
+            channel: channelSubmission ? 'WHATSAPP_FLOW' : 'TENANT_DASHBOARD',
+            action: channelSubmission ? 'WORKER_ACKNOWLEDGED' : 'ADMIN_ATTESTED',
+            actorMembershipId: channelSubmission ? null : match[2],
+            channelIdentityId: channelSubmission ? match[2] : null,
+            noticeVersion: 'worker-payment-capture-v1',
+            noticeContentSha256: '76a909dfb5f5e0ffc6c3f80335ed5097d552647c9be805ebf6ba61afdbd2752b',
+            presentedAt: new Date(NOW.getTime() - 1_000),
+            decidedAt: new Date(NOW),
+          };
+        },
       },
       workerPaymentDestination: {
         findFirst: async ({ where, orderBy }) => ordered(
@@ -172,6 +215,8 @@ function createDatabase(initialState, { failDecision = false, failAudit = false 
               && row.purpose === data.purpose
               && row.version === data.version)
             || (data.activeSlot && row.activeSlot === data.activeSlot)
+            || (data.privacyChoiceEventId
+              && row.privacyChoiceEventId === data.privacyChoiceEventId)
           ));
           if (duplicate) throw Object.assign(new Error('unique destination'), { code: 'P2002' });
           const row = {
@@ -244,8 +289,11 @@ function createDatabase(initialState, { failDecision = false, failAudit = false 
           'organizations',
           'organizationReads',
           'people',
+          'projects',
+          'workers',
           'memberships',
           'channels',
+          'privacyChoices',
           'destinations',
           'decisions',
           'audits',
@@ -300,6 +348,26 @@ function fixture({ configuration = keyConfiguration(), identityStatus = 'VERIFIE
         identityStatus: 'VERIFIED',
       },
     ],
+    projects: [
+      { id: 'project-a', organizationId: 'org-a', status: 'ACTIVE' },
+      { id: 'project-b', organizationId: 'org-b', status: 'ACTIVE' },
+    ],
+    workers: [
+      {
+        id: 'worker-a',
+        organizationId: 'org-a',
+        projectId: 'project-a',
+        personId: 'person-a',
+        active: true,
+      },
+      {
+        id: 'worker-b',
+        organizationId: 'org-b',
+        projectId: 'project-b',
+        personId: 'person-b',
+        active: true,
+      },
+    ],
     memberships: [
       { id: 'maker', organizationId: 'org-a', userId: 'user-maker', tenantRole: 'ADMIN', status: 'ACTIVE' },
       { id: 'verifier', organizationId: 'org-a', userId: 'user-verifier', tenantRole: 'ADMIN', status: 'ACTIVE' },
@@ -310,8 +378,22 @@ function fixture({ configuration = keyConfiguration(), identityStatus = 'VERIFIE
       { id: 'disabled', organizationId: 'org-a', userId: 'user-disabled', tenantRole: 'ADMIN', status: 'DISABLED' },
     ],
     channels: [
-      { id: 'channel-a', organizationId: 'org-a', personId: 'person-a', status: 'VERIFIED' },
-      { id: 'channel-b', organizationId: 'org-b', personId: 'person-b', status: 'VERIFIED' },
+      {
+        id: 'channel-a',
+        organizationId: 'org-a',
+        personId: 'person-a',
+        provider: 'WHATSAPP',
+        status: 'VERIFIED',
+        revokedAt: null,
+      },
+      {
+        id: 'channel-b',
+        organizationId: 'org-b',
+        personId: 'person-b',
+        provider: 'WHATSAPP',
+        status: 'VERIFIED',
+        revokedAt: null,
+      },
     ],
   }, { failDecision, failAudit });
   return { prisma, configuration };
@@ -326,10 +408,15 @@ function submitOptions(configuration, {
   submitter = { type: 'TENANT_MEMBERSHIP', membershipId: 'maker' },
   overrides = {},
 } = {}) {
+  const submitterType = submitter.type === 'WORKER_CHANNEL' ? 'channel' : 'membership';
+  const submitterId = submitter.channelIdentityId || submitter.membershipId;
   return {
-    scope: { organizationId: 'org-a' },
+    scope: { organizationId: 'org-a', projectId: 'project-a', workerId: 'worker-a' },
     personId: 'person-a',
     submittedBy: submitter,
+    privacyChoice: {
+      eventId: `privacy:${submitterType}:${submitterId}:${operationKey}`,
+    },
     input: {
       purpose: 'SALARY',
       type,
@@ -415,6 +502,328 @@ function expectCode(code) {
   return (error) => error instanceof WorkerPaymentDestinationError && error.code === code;
 }
 
+test('new destinations require one exact registered privacy choice and persist the attested contract', async () => {
+  const { prisma, configuration } = fixture();
+  const missing = submitOptions(configuration, { operationKey: 'privacy-required-submit' });
+  delete missing.privacyChoice;
+  await assert.rejects(
+    submitWorkerPaymentDestination(prisma, missing),
+    expectCode('WORKER_PAYMENT_PRIVACY_CHOICE_REQUIRED'),
+  );
+
+  const wrongActor = submitOptions(configuration, { operationKey: 'privacy-wrong-actor-submit' });
+  wrongActor.privacyChoice = {
+    eventId: 'privacy:membership:verifier:privacy-wrong-actor-submit',
+  };
+  await assert.rejects(
+    submitWorkerPaymentDestination(prisma, wrongActor),
+    expectCode('WORKER_PAYMENT_PRIVACY_CHOICE_INVALID'),
+  );
+
+  const validOptions = submitOptions(configuration, { operationKey: 'privacy-valid-submit' });
+  const created = await submitWorkerPaymentDestination(prisma, validOptions);
+  const stored = prisma.state.destinations.find((row) => row.id === created.paymentDestination.id);
+  assert.equal(stored.submissionContractVersion, 'ATTESTED_V1');
+  assert.equal(stored.privacyChoiceEventId, validOptions.privacyChoice.eventId);
+  assert.equal('privacyChoiceEventId' in created.paymentDestination, false);
+});
+
+test('a payment-capture privacy choice is single-use across destination operation keys', async () => {
+  const { prisma, configuration } = fixture();
+  const firstOptions = submitOptions(configuration, { operationKey: 'privacy-one-time-first' });
+  await submitWorkerPaymentDestination(prisma, firstOptions);
+  const secondOptions = submitOptions(configuration, {
+    operationKey: 'privacy-one-time-second',
+    value: OTHER_CBU,
+    overrides: { privacyChoice: firstOptions.privacyChoice },
+  });
+  await assert.rejects(
+    submitWorkerPaymentDestination(prisma, secondOptions),
+    expectCode('WORKER_PAYMENT_PRIVACY_CHOICE_ALREADY_USED'),
+  );
+});
+
+test('legacy destinations require re-attestation, stay unusable, and cannot advance', async () => {
+  const { prisma, configuration } = fixture();
+  const submitted = await submitWorkerPaymentDestination(
+    prisma,
+    submitOptions(configuration, { operationKey: 'legacy-privacy-guard-submit' }),
+  );
+  const stored = prisma.state.destinations.find(
+    (row) => row.id === submitted.paymentDestination.id,
+  );
+  stored.submissionContractVersion = 'LEGACY_REATTESTATION_REQUIRED';
+  stored.privacyChoiceEventId = null;
+
+  const listedPending = await listWorkerPaymentDestinations(prisma, {
+    scope: { organizationId: 'org-a' },
+    personId: 'person-a',
+    actorMembershipId: 'admin',
+  });
+  assert.equal(listedPending.paymentDestinations[0].privacyStatus, 'REATTESTATION_REQUIRED');
+  assert.equal(listedPending.paymentDestinations[0].paymentUsable, false);
+
+  await assert.rejects(
+    verifyWorkerPaymentDestination(
+      prisma,
+      verificationOptions(configuration, submitted.paymentDestination, {
+        operationKey: 'legacy-privacy-guard-verify',
+      }),
+    ),
+    expectCode('WORKER_PAYMENT_REATTESTATION_REQUIRED'),
+  );
+
+  const legacyForActivation = prisma.state.destinations.find(
+    (row) => row.id === submitted.paymentDestination.id,
+  );
+  legacyForActivation.status = 'VERIFIED';
+  legacyForActivation.verifiedByMembershipId = 'verifier';
+  await assert.rejects(
+    activateWorkerPaymentDestination(
+      prisma,
+      activationOptions(submitted.paymentDestination, {
+        operationKey: 'legacy-privacy-guard-activate',
+      }),
+    ),
+    expectCode('WORKER_PAYMENT_REATTESTATION_REQUIRED'),
+  );
+
+  const legacyForListing = prisma.state.destinations.find(
+    (row) => row.id === submitted.paymentDestination.id,
+  );
+  legacyForListing.status = 'ACTIVE';
+  legacyForListing.availableFrom = NOW;
+  const listedActive = await listWorkerPaymentDestinations(prisma, {
+    scope: { organizationId: 'org-a' },
+    personId: 'person-a',
+    actorMembershipId: 'admin',
+  });
+  assert.equal(listedActive.paymentDestinations[0].status, 'ACTIVE');
+  assert.equal(listedActive.paymentDestinations[0].privacyStatus, 'REATTESTATION_REQUIRED');
+  assert.equal(listedActive.paymentDestinations[0].paymentUsable, false);
+
+  const revoked = await revokeWorkerPaymentDestination(prisma, {
+    scope: { organizationId: 'org-a' },
+    personId: 'person-a',
+    purpose: 'SALARY',
+    destinationId: submitted.paymentDestination.id,
+    actorMembershipId: 'verifier',
+    input: {
+      expectedRevision: 0,
+      operationKey: 'legacy-privacy-guard-revoke',
+      policyVersion: 'payment-policy-v1',
+      reason: 'Destino heredado retirado antes de una eventual reatestacion.',
+    },
+    trustedEvidence: { control: 'legacy-privacy-quarantine-v1' },
+    now: NOW,
+  });
+  assert.equal(revoked.paymentDestination.status, 'REVOKED');
+  assert.equal(revoked.paymentDestination.privacyStatus, 'REATTESTATION_REQUIRED');
+  assert.equal(revoked.paymentDestination.paymentUsable, false);
+});
+
+test('an exact pending legacy destination is re-attested in place and replays without another audit', async () => {
+  const { prisma, configuration } = fixture();
+  const submitted = await submitWorkerPaymentDestination(
+    prisma,
+    submitOptions(configuration, { operationKey: 'legacy-in-place-original' }),
+  );
+  const stored = prisma.state.destinations.find(
+    (row) => row.id === submitted.paymentDestination.id,
+  );
+  stored.submissionContractVersion = 'LEGACY_REATTESTATION_REQUIRED';
+  stored.privacyChoiceEventId = null;
+  const originalAuditCount = prisma.state.audits.length;
+  const reattestation = submitOptions(configuration, {
+    operationKey: 'legacy-in-place-reattest',
+  });
+
+  const result = await submitWorkerPaymentDestination(prisma, reattestation);
+
+  assert.equal(result.paymentDestination.id, submitted.paymentDestination.id);
+  assert.equal(result.paymentDestination.revision, 1);
+  assert.equal(result.paymentDestination.privacyStatus, 'ATTESTED');
+  assert.equal(result.paymentDestination.paymentUsable, false);
+  assert.equal(result.replayed, false);
+  assert.equal(result.reattested, true);
+  assert.equal(prisma.state.destinations.length, 1);
+  const reattestedStored = prisma.state.destinations.find(
+    (row) => row.id === submitted.paymentDestination.id,
+  );
+  assert.equal(reattestedStored.submissionContractVersion, 'ATTESTED_V1');
+  assert.equal(reattestedStored.privacyChoiceEventId, reattestation.privacyChoice.eventId);
+  assert.equal(prisma.state.audits.length, originalAuditCount + 1);
+  assert.equal(
+    prisma.state.audits.at(-1).action,
+    'worker.payment_destination.privacy_reattested',
+  );
+
+  const replay = await submitWorkerPaymentDestination(prisma, reattestation);
+  assert.equal(replay.paymentDestination.id, submitted.paymentDestination.id);
+  assert.equal(replay.replayed, true);
+  assert.equal(replay.reattested, false);
+  assert.equal(prisma.state.destinations.length, 1);
+  assert.equal(prisma.state.audits.length, originalAuditCount + 1);
+});
+
+test('a Flow re-attestation atomically replaces legacy submission provenance with the reserved worker channel', async () => {
+  const { prisma, configuration } = fixture();
+  const original = await submitWorkerPaymentDestination(
+    prisma,
+    submitOptions(configuration, { operationKey: 'legacy-flow-original' }),
+  );
+  const stored = prisma.state.destinations.find(
+    (row) => row.id === original.paymentDestination.id,
+  );
+  const originalOperationKey = stored.operationKey;
+  const originalRequestFingerprint = stored.requestFingerprint;
+  stored.submissionContractVersion = 'LEGACY_REATTESTATION_REQUIRED';
+  stored.privacyChoiceEventId = null;
+
+  const reservationId = '423e4567-e89b-42d3-a456-426614174000';
+  const result = await submitWorkerPaymentDestination(prisma, submitOptions(configuration, {
+    operationKey: 'legacy-flow-reattest',
+    submitter: { type: 'WORKER_CHANNEL', channelIdentityId: 'channel-a' },
+    overrides: {
+      flowSubmission: {
+        reservationId,
+        fingerprintKeyId: 'payment-flow-v1',
+        fingerprintHmac: 'a'.repeat(64),
+      },
+    },
+  }));
+
+  const reattestedStored = prisma.state.destinations.find(
+    (row) => row.id === original.paymentDestination.id,
+  );
+  assert.equal(result.reattested, true);
+  assert.equal(reattestedStored.submissionContractVersion, 'ATTESTED_V1');
+  assert.equal(reattestedStored.submissionSource, 'WORKER_CHANNEL');
+  assert.equal(reattestedStored.submittedByMembershipId, null);
+  assert.equal(reattestedStored.submittedByChannelIdentityId, 'channel-a');
+  assert.deepEqual(reattestedStored.submittedAt, NOW);
+  assert.notEqual(reattestedStored.operationKey, originalOperationKey);
+  assert.match(reattestedStored.operationKey, /^wp:submit:[0-9a-f]{64}$/);
+  assert.notEqual(reattestedStored.requestFingerprint, originalRequestFingerprint);
+  assert.equal(reattestedStored.flowSubmissionReservationId, reservationId);
+  assert.equal(reattestedStored.flowSubmissionFingerprintKeyId, 'payment-flow-v1');
+  assert.equal(reattestedStored.flowSubmissionFingerprintHmac, 'a'.repeat(64));
+});
+
+test('an active legacy destination requires acknowledgement from the verified worker channel', async () => {
+  const { prisma, configuration } = fixture();
+  const submitted = await submitWorkerPaymentDestination(
+    prisma,
+    submitOptions(configuration, { operationKey: 'legacy-active-original' }),
+  );
+  const stored = prisma.state.destinations.find(
+    (row) => row.id === submitted.paymentDestination.id,
+  );
+  stored.submissionContractVersion = 'LEGACY_REATTESTATION_REQUIRED';
+  stored.privacyChoiceEventId = null;
+  stored.status = 'ACTIVE';
+  stored.availableFrom = NOW;
+
+  await assert.rejects(
+    submitWorkerPaymentDestination(prisma, submitOptions(configuration, {
+      operationKey: 'legacy-active-admin-reattest',
+    })),
+    expectCode('WORKER_PAYMENT_REATTESTATION_REQUIRED'),
+  );
+
+  const workerReattestation = submitOptions(configuration, {
+    operationKey: 'legacy-active-worker-reattest',
+    submitter: { type: 'WORKER_CHANNEL', channelIdentityId: 'channel-a' },
+  });
+  const result = await submitWorkerPaymentDestination(prisma, workerReattestation);
+
+  assert.equal(result.paymentDestination.id, submitted.paymentDestination.id);
+  assert.equal(result.paymentDestination.status, 'ACTIVE');
+  assert.equal(result.paymentDestination.privacyStatus, 'ATTESTED');
+  assert.equal(result.paymentDestination.paymentUsable, true);
+  assert.equal(result.reattested, true);
+  assert.equal(stored.submissionSource, 'TENANT_MEMBERSHIP');
+  assert.equal(stored.submittedByMembershipId, 'maker');
+  assert.equal(prisma.state.audits.at(-1).actorId, null);
+});
+
+test('terminal legacy destinations cannot be reopened through privacy re-attestation', async () => {
+  for (const status of ['REJECTED', 'REVOKED', 'SUPERSEDED']) {
+    const { prisma, configuration } = fixture();
+    const submitted = await submitWorkerPaymentDestination(
+      prisma,
+      submitOptions(configuration, { operationKey: `legacy-terminal-original-${status}` }),
+    );
+    const stored = prisma.state.destinations.find(
+      (row) => row.id === submitted.paymentDestination.id,
+    );
+    stored.submissionContractVersion = 'LEGACY_REATTESTATION_REQUIRED';
+    stored.privacyChoiceEventId = null;
+    stored.status = status;
+
+    await assert.rejects(
+      submitWorkerPaymentDestination(prisma, submitOptions(configuration, {
+        operationKey: `legacy-terminal-reattest-${status}`,
+        submitter: { type: 'WORKER_CHANNEL', channelIdentityId: 'channel-a' },
+      })),
+      expectCode('WORKER_PAYMENT_REATTESTATION_REQUIRED'),
+    );
+    assert.equal(stored.submissionContractVersion, 'LEGACY_REATTESTATION_REQUIRED');
+    assert.equal(stored.privacyChoiceEventId, null);
+  }
+});
+
+test('legacy re-attestation requires the exact presented identifier and persisted holder', async () => {
+  const { prisma, configuration } = fixture();
+  const aliasSubmitted = await submitWorkerPaymentDestination(
+    prisma,
+    submitOptions(configuration, {
+      type: 'ALIAS',
+      value: 'legacy.exact.alias',
+      operationKey: 'legacy-exact-alias-submit',
+    }),
+  );
+  const aliasVerified = await verifyWorkerPaymentDestination(
+    prisma,
+    verificationOptions(configuration, aliasSubmitted.paymentDestination, {
+      operationKey: 'legacy-exact-alias-verify',
+      serverResolution: { type: 'CVU', value: CVU },
+    }),
+  );
+  let stored = prisma.state.destinations.find(
+    (row) => row.id === aliasVerified.paymentDestination.id,
+  );
+  stored.submissionContractVersion = 'LEGACY_REATTESTATION_REQUIRED';
+  stored.privacyChoiceEventId = null;
+
+  await assert.rejects(
+    submitWorkerPaymentDestination(prisma, submitOptions(configuration, {
+      type: 'CVU',
+      value: CVU,
+      operationKey: 'legacy-canonical-is-not-exact',
+    })),
+    expectCode('WORKER_PAYMENT_DUPLICATE'),
+  );
+  stored = prisma.state.destinations.find((row) => row.id === aliasVerified.paymentDestination.id);
+  assert.equal(stored.submissionContractVersion, 'LEGACY_REATTESTATION_REQUIRED');
+  assert.equal(stored.privacyChoiceEventId, null);
+
+  stored.holderCuilFingerprint = workerFinancialFingerprint(OTHER_CUIL, {
+    organizationId: 'org-a',
+    valueType: 'CUIL',
+  }, { registry: configuration.fingerprintRegistry }).fingerprint;
+  await assert.rejects(
+    submitWorkerPaymentDestination(prisma, submitOptions(configuration, {
+      type: 'ALIAS',
+      value: 'legacy.exact.alias',
+      operationKey: 'legacy-holder-does-not-match',
+    })),
+    expectCode('WORKER_PAYMENT_HOLDER_MISMATCH'),
+  );
+  assert.equal(stored.submissionContractVersion, 'LEGACY_REATTESTATION_REQUIRED');
+  assert.equal(stored.privacyChoiceEventId, null);
+});
+
 test('tenant/person scoping and active actor checks fail closed', async () => {
   const { prisma, configuration } = fixture();
 
@@ -457,6 +866,50 @@ test('tenant/person scoping and active actor checks fail closed', async () => {
       actorMembershipId: 'disabled',
     }),
     expectCode('WORKER_PAYMENT_ACTOR_FORBIDDEN'),
+  );
+
+  const unverified = fixture({ identityStatus: 'PENDING_REVIEW' });
+  await assert.rejects(
+    submitWorkerPaymentDestination(
+      unverified.prisma,
+      submitOptions(unverified.configuration, { operationKey: 'identity-no-longer-verified' }),
+    ),
+    expectCode('WORKER_PAYMENT_IDENTITY_UNVERIFIED'),
+  );
+
+  const revokedChannel = fixture();
+  revokedChannel.prisma.state.channels[0].revokedAt = NOW;
+  await assert.rejects(
+    submitWorkerPaymentDestination(
+      revokedChannel.prisma,
+      submitOptions(revokedChannel.configuration, {
+        operationKey: 'revoked-whatsapp-channel-submit',
+        submitter: { type: 'WORKER_CHANNEL', channelIdentityId: 'channel-a' },
+      }),
+    ),
+    expectCode('WORKER_PAYMENT_ACTOR_FORBIDDEN'),
+  );
+});
+
+test('submission revalidates the exact active project-worker bridge inside the transaction', async () => {
+  const inactiveWorker = fixture();
+  inactiveWorker.prisma.state.workers[0].active = false;
+  await assert.rejects(
+    submitWorkerPaymentDestination(
+      inactiveWorker.prisma,
+      submitOptions(inactiveWorker.configuration, { operationKey: 'inactive-worker-submit' }),
+    ),
+    expectCode('WORKER_PAYMENT_SCOPE_FORBIDDEN'),
+  );
+
+  const inactiveProject = fixture();
+  inactiveProject.prisma.state.projects[0].status = 'ARCHIVED';
+  await assert.rejects(
+    submitWorkerPaymentDestination(
+      inactiveProject.prisma,
+      submitOptions(inactiveProject.configuration, { operationKey: 'inactive-project-submit' }),
+    ),
+    expectCode('WORKER_PAYMENT_SCOPE_FORBIDDEN'),
   );
 });
 

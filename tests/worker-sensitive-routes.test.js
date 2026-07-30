@@ -54,6 +54,7 @@ const [
   { createWorkerPaymentVerificationHandlers },
   { createWorkerPaymentActivationHandlers },
   { createWorkerPaymentRevocationHandlers },
+  { getCurrentWorkerPaymentPrivacyNotice },
 ] = await Promise.all([
   import('../src/app/api/worker-onboarding/claims/route.js'),
   import('../src/app/api/worker-onboarding/claims/[claimId]/decision/route.js'),
@@ -61,9 +62,11 @@ const [
   import('../src/app/api/field/workers/[workerId]/payment-destinations/[destinationId]/verification/route.js'),
   import('../src/app/api/field/workers/[workerId]/payment-destinations/[destinationId]/activation/route.js'),
   import('../src/app/api/field/workers/[workerId]/payment-destinations/[destinationId]/revocation/route.js'),
+  import('../src/lib/worker-payment-privacy-notices.js'),
 ]);
 
 const NOW = new Date('2026-07-25T18:00:00.000Z');
+const DATABASE_DECIDED_AT = new Date(NOW.getTime() + 25);
 
 test('sensitive route revisions stay within the PostgreSQL Int range', () => {
   assert.equal(requireWorkerSensitiveRevision(2_147_483_647), 2_147_483_647);
@@ -348,14 +351,26 @@ test('payment list rejects unsupported and duplicated filters before resolving a
   assert.equal(serviceCalls, 0);
 });
 
-test('payment submission accepts only business fields and injects trusted actor, scope, and header key', async () => {
+test('payment submission pins an administrative privacy attestation before the encrypted domain', async () => {
   const authorizations = [];
+  const privacyChoices = [];
   const submissions = [];
+  const notice = getCurrentWorkerPaymentPrivacyNotice();
   const handlers = createWorkerPaymentDestinationHandlers({
     resolveAccess: async () => access(),
     authorize: (...args) => authorizations.push(args),
     prismaFactory: () => ({ kind: 'prisma' }),
     resolveWorkerBridge: async () => workerBridge(),
+    recordPrivacyChoice: async (...args) => {
+      privacyChoices.push(args);
+      return {
+        privacyChoiceEvent: {
+          id: 'privacy-choice-a',
+          decidedAt: DATABASE_DECIDED_AT.toISOString(),
+        },
+        replayed: false,
+      };
+    },
     submitPaymentDestination: async (...args) => {
       submissions.push(args);
       return {
@@ -376,6 +391,8 @@ test('payment submission accepts only business fields and injects trusted actor,
         value: 'carlos.obra',
         holderName: 'Carlos Albañil',
         holderCuil: '20-12345678-6',
+        privacyNoticeVersion: notice.version,
+        adminAttestsNoticePresented: true,
       },
     },
   ), routeContext());
@@ -383,21 +400,128 @@ test('payment submission accepts only business fields and injects trusted actor,
   assert.deepEqual(authorizations.map(([, permission, options]) => [permission, options]), [
     ['org:payroll:destinations:manage', { subscriptionMode: 'write' }],
   ]);
-  assert.deepEqual(submissions[0][1], {
+  assert.deepEqual(privacyChoices[0][1], {
     scope: { organizationId: 'organization-a' },
     personId: 'person-a',
+    paymentPurpose: 'SALARY',
     submittedBy: { type: 'TENANT_MEMBERSHIP', membershipId: 'membership-a' },
+    notice: {
+      version: notice.version,
+      contentSha256: notice.contentSha256,
+      presentedAt: NOW,
+    },
+    operationKey: 'payment-submit-a',
+    now: NOW,
+    correlationId: 'request-route-test',
+  });
+  assert.deepEqual(submissions[0][1], {
+    scope: {
+      organizationId: 'organization-a',
+      projectId: 'project-a',
+      workerId: 'worker-a',
+    },
+    personId: 'person-a',
+    submittedBy: { type: 'TENANT_MEMBERSHIP', membershipId: 'membership-a' },
+    privacyChoice: { eventId: 'privacy-choice-a' },
     input: {
       purpose: 'SALARY',
       type: 'ALIAS',
       value: 'carlos.obra',
       holderName: 'Carlos Albañil',
-      holderCuil: '20-12345678-6',
+      holderCuil: '20123456786',
       operationKey: 'payment-submit-a',
     },
-    now: NOW,
+    now: DATABASE_DECIDED_AT,
     correlationId: 'request-route-test',
   });
+});
+
+test('payment submission validates financial input before appending privacy evidence', async () => {
+  let prismaCalls = 0;
+  let workerCalls = 0;
+  let privacyCalls = 0;
+  let submissionCalls = 0;
+  const notice = getCurrentWorkerPaymentPrivacyNotice();
+  const handlers = createWorkerPaymentDestinationHandlers({
+    resolveAccess: async () => access(),
+    authorize: () => undefined,
+    prismaFactory: () => {
+      prismaCalls += 1;
+      return { kind: 'prisma' };
+    },
+    resolveWorkerBridge: async () => {
+      workerCalls += 1;
+      return workerBridge();
+    },
+    recordPrivacyChoice: async () => {
+      privacyCalls += 1;
+    },
+    submitPaymentDestination: async () => {
+      submissionCalls += 1;
+    },
+  });
+  const response = await handlers.POST(request(
+    '/api/field/workers/worker-a/payment-destinations',
+    {
+      method: 'POST',
+      idempotencyKey: 'payment-invalid-before-ledger',
+      body: {
+        purpose: 'SALARY',
+        type: 'CBU',
+        value: '123',
+        holderName: 'Carlos Albañil',
+        holderCuil: '20-12345678-6',
+        privacyNoticeVersion: notice.version,
+        adminAttestsNoticePresented: true,
+      },
+    },
+  ), routeContext());
+  assertSecure(response, 400);
+  assert.equal((await response.json()).code, 'WORKER_FINANCIAL_DESTINATION_INVALID');
+  assert.equal(prismaCalls, 0);
+  assert.equal(workerCalls, 0);
+  assert.equal(privacyCalls, 0);
+  assert.equal(submissionCalls, 0);
+});
+
+test('payment submission stops when the privacy ledger omits its authoritative decision time', async () => {
+  const notice = getCurrentWorkerPaymentPrivacyNotice();
+  for (const decidedAt of [undefined, null, 'invalid']) {
+    let submissionCalls = 0;
+    const handlers = createWorkerPaymentDestinationHandlers({
+      resolveAccess: async () => access(),
+      authorize: () => undefined,
+      prismaFactory: () => ({ kind: 'prisma' }),
+      resolveWorkerBridge: async () => workerBridge(),
+      recordPrivacyChoice: async () => ({
+        privacyChoiceEvent: { id: 'privacy-choice-invalid-time', decidedAt },
+        replayed: false,
+      }),
+      submitPaymentDestination: async () => {
+        submissionCalls += 1;
+      },
+      clock: () => NOW,
+    });
+    const response = await handlers.POST(request(
+      '/api/field/workers/worker-a/payment-destinations',
+      {
+        method: 'POST',
+        idempotencyKey: `payment-invalid-privacy-time-${String(decidedAt)}`,
+        body: {
+          purpose: 'SALARY',
+          type: 'ALIAS',
+          value: 'carlos.obra',
+          holderName: 'Carlos Albañil',
+          holderCuil: '20-12345678-6',
+          privacyNoticeVersion: notice.version,
+          adminAttestsNoticePresented: true,
+        },
+      },
+    ), routeContext());
+    assertSecure(response, 500);
+    assert.equal((await response.json()).code, 'WORKER_PAYMENT_PRIVACY_ATTESTATION_FAILED');
+    assert.equal(submissionCalls, 0);
+  }
 });
 
 test('payment submission rejects body operation keys and oversized JSON before the service', async () => {
@@ -442,6 +566,46 @@ test('payment submission rejects body operation keys and oversized JSON before t
   assertSecure(missingHeader, 400);
   assert.equal((await missingHeader.json()).code, 'IDEMPOTENCY_KEY_INVALID');
   assert.equal(serviceCalls, 0);
+});
+
+test('payment submission rejects missing, stale, or client-shaped privacy evidence before Prisma', async () => {
+  let bridgeCalls = 0;
+  let privacyCalls = 0;
+  const handlers = createWorkerPaymentDestinationHandlers({
+    resolveAccess: async () => access(),
+    authorize: () => undefined,
+    resolveWorkerBridge: async () => { bridgeCalls += 1; return workerBridge(); },
+    recordPrivacyChoice: async () => { privacyCalls += 1; },
+  });
+  const baseBody = {
+    purpose: 'SALARY',
+    type: 'ALIAS',
+    value: 'carlos.obra',
+    holderName: 'Carlos Albañil',
+    holderCuil: '20-12345678-6',
+  };
+  for (const body of [
+    baseBody,
+    {
+      ...baseBody,
+      privacyNoticeVersion: 'worker-payment-capture-stale',
+      adminAttestsNoticePresented: true,
+    },
+    {
+      ...baseBody,
+      privacyNoticeVersion: getCurrentWorkerPaymentPrivacyNotice().version,
+      adminAttestsNoticePresented: true,
+      privacyNoticeContentSha256: '0'.repeat(64),
+    },
+  ]) {
+    const response = await handlers.POST(request(
+      '/api/field/workers/worker-a/payment-destinations',
+      { method: 'POST', idempotencyKey: 'payment-privacy-a', body },
+    ), routeContext());
+    assertSecure(response, body.privacyNoticeContentSha256 ? 400 : 422);
+  }
+  assert.equal(bridgeCalls, 0);
+  assert.equal(privacyCalls, 0);
 });
 
 test('payment submission fails closed before Prisma for superadmin without tenant membership', async () => {

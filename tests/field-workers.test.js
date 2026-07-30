@@ -303,6 +303,7 @@ test('intent matrix lets workers report progress but keeps approval authority wi
   for (const role of ['WORKER', 'FOREMAN', 'SITE_MANAGER', 'SAFETY']) {
     assert.equal(canFieldWorkerHandleIntent(role, FIELD_WORKER_INTENTS.INCIDENT), true);
     assert.equal(canFieldWorkerHandleIntent(role, FIELD_WORKER_INTENTS.ATTENDANCE_START), true);
+    assert.equal(canFieldWorkerHandleIntent(role, FIELD_WORKER_INTENTS.PAYMENT_DESTINATION), true);
   }
   assert.equal(canFieldWorkerHandleIntent('WORKER', FIELD_WORKER_INTENTS.TASK_PROGRESS), true);
   assert.equal(canFieldWorkerHandleIntent('SAFETY', FIELD_WORKER_INTENTS.TASK_PROGRESS), false);

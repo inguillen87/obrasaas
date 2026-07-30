@@ -486,6 +486,25 @@ enum WorkerPaymentSubmissionSource {
   WORKER_CHANNEL
 }
 
+enum WorkerPrivacyChoicePurpose {
+  PAYMENT_DESTINATION_CAPTURE
+}
+
+enum WorkerPrivacyChoiceChannel {
+  TENANT_DASHBOARD
+  WHATSAPP_FLOW
+}
+
+enum WorkerPrivacyChoiceAction {
+  ADMIN_ATTESTED
+  WORKER_ACKNOWLEDGED
+}
+
+enum WorkerPaymentSubmissionContractVersion {
+  LEGACY_REATTESTATION_REQUIRED
+  ATTESTED_V1
+}
+
 enum WorkerSensitiveDecisionAction {
   IDENTITY_VERIFIED
   IDENTITY_REJECTED
@@ -533,6 +552,17 @@ enum WhatsAppFlowEndpointRequestStatus {
   FAILED
 }
 
+enum WorkerPaymentFlowSubmissionStatus {
+  OPEN
+  PROCESSING
+  SUCCEEDED
+  UNCERTAIN
+}
+
+enum WorkerPaymentFlowReconciliationMethod {
+  OPERATION_PROVENANCE_V1
+}
+
 enum CrmStage {
   NEW
   CONTACTED
@@ -577,6 +607,7 @@ model Organization {
   notificationDeliveries              NotificationDelivery[]
   crmAccount                          CrmAccount?
   whatsappFlowSessions                WhatsAppFlowSession[]
+  workerPaymentFlowSessions           WorkerPaymentFlowSession[]
   workerOnboardingFlowSessions        WorkerOnboardingFlowSession[]
   progressEvidenceCaptureSessions     ProgressEvidenceCaptureSession[]
   progressEvidenceLocationRateBuckets ProgressEvidenceLocationRateBucket[]
@@ -588,6 +619,7 @@ model Organization {
   workerChannelIdentities             WorkerChannelIdentity[]
   workerOnboardingClaims              WorkerOnboardingClaim[]
   workerPaymentDestinations           WorkerPaymentDestination[]
+  workerPrivacyChoiceEvents           WorkerPrivacyChoiceEvent[]
   workerSensitiveDecisions            WorkerSensitiveDecision[]
   aiDailyBudgetLedgers                AiDailyBudgetLedger[]
   createdAt                           DateTime                             @default(now())
@@ -811,6 +843,7 @@ model TenantMembership {
   activatedWorkerPaymentDestinations WorkerPaymentDestination[] @relation("WorkerPaymentActivatorMembership")
   rejectedWorkerPaymentDestinations  WorkerPaymentDestination[] @relation("WorkerPaymentRejecterMembership")
   revokedWorkerPaymentDestinations   WorkerPaymentDestination[] @relation("WorkerPaymentRevokerMembership")
+  workerPrivacyChoiceEvents          WorkerPrivacyChoiceEvent[] @relation("WorkerPrivacyChoiceMembershipActor")
   workerSensitiveDecisions           WorkerSensitiveDecision[]  @relation("WorkerSensitiveDecisionActor")
   createdAt                          DateTime                   @default(now())
   updatedAt                          DateTime                   @updatedAt
@@ -889,6 +922,7 @@ model Project {
   conversations                        Conversation[]
   webhookEvents                        WebhookEvent[]
   flowSessions                         WhatsAppFlowSession[]
+  workerPaymentFlowSessions            WorkerPaymentFlowSession[]
   workerOnboardingFlowSessions         WorkerOnboardingFlowSession[]
   proposals                            OperationalProposal[]
   whatsapp                             WhatsAppConnection?
@@ -1057,6 +1091,7 @@ model WhatsAppConnection {
   flowTemplates                   WhatsAppFlowTemplate[]
   workerOnboardingClaims          WorkerOnboardingClaim[]
   workerOnboardingFlowSessions    WorkerOnboardingFlowSession[]
+  workerPaymentFlowSessions       WorkerPaymentFlowSession[]
   progressEvidenceCaptureSessions ProgressEvidenceCaptureSession[]
   createdAt                       DateTime                         @default(now())
   updatedAt                       DateTime                         @updatedAt
@@ -1210,6 +1245,7 @@ model Worker {
   requestedExtraWork              ExtraWorkRequest[]               @relation("ExtraWorkRequester")
   extraWorkSessions               ExtraWorkSession[]
   whatsappFlowSessions            WhatsAppFlowSession[]
+  workerPaymentFlowSessions       WorkerPaymentFlowSession[]       @relation("WorkerPaymentFlowWorker")
   documents                       WorkerDocument[]
   onboardingClaims                WorkerOnboardingClaim[]          @relation("WorkerOnboardingResultWorker")
   createdAt                       DateTime                         @default(now())
@@ -1258,6 +1294,8 @@ model WorkerPerson {
   channelIdentities              WorkerChannelIdentity[]
   onboardingClaims               WorkerOnboardingClaim[]    @relation("WorkerOnboardingResultPerson")
   paymentDestinations            WorkerPaymentDestination[]
+  privacyChoiceEvents            WorkerPrivacyChoiceEvent[]
+  paymentFlowSessions            WorkerPaymentFlowSession[]
   sensitiveDecisions             WorkerSensitiveDecision[]  @relation("WorkerSensitiveDecisionPerson")
   createdAt                      DateTime                   @default(now())
   updatedAt                      DateTime                   @updatedAt
@@ -1295,6 +1333,8 @@ model WorkerChannelIdentity {
   revision                        Int                         @default(0)
   onboardingClaims                WorkerOnboardingClaim[]     @relation("WorkerOnboardingResultChannel")
   submittedPaymentDestinations    WorkerPaymentDestination[]  @relation("WorkerPaymentSubmitterChannel")
+  privacyChoiceEvents             WorkerPrivacyChoiceEvent[]  @relation("WorkerPrivacyChoiceChannelActor")
+  paymentFlowSessions             WorkerPaymentFlowSession[]   @relation("WorkerPaymentFlowChannel")
   createdAt                       DateTime                    @default(now())
   updatedAt                       DateTime                    @updatedAt
 
@@ -1366,44 +1406,88 @@ model WorkerOnboardingClaim {
   @@index([reviewedByMembershipId, reviewedAt], map: "WorkerClaim_reviewer_membership_idx")
 }
 
+/// Immutable evidence that a payment-destination notice was presented and
+/// attested through one exact tenant actor or verified worker channel. It never
+/// stores CUIL, CBU, CVU, aliases, account-holder names, or encrypted copies.
+model WorkerPrivacyChoiceEvent {
+  id                  String                     @id @default(cuid())
+  organizationId      String
+  organization        Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  personId            String
+  person              WorkerPerson               @relation(fields: [organizationId, personId], references: [organizationId, id], onDelete: Restrict, map: "WorkerPrivacyChoice_person_scope_fkey")
+  purpose             WorkerPrivacyChoicePurpose @default(PAYMENT_DESTINATION_CAPTURE)
+  paymentPurpose      WorkerPaymentPurpose
+  channel             WorkerPrivacyChoiceChannel
+  action              WorkerPrivacyChoiceAction
+  actorMembershipId   String?
+  actorMembership     TenantMembership?          @relation("WorkerPrivacyChoiceMembershipActor", fields: [organizationId, actorMembershipId], references: [organizationId, id], onDelete: Restrict, map: "WorkerPrivacyChoice_membership_actor_fkey")
+  channelIdentityId   String?
+  channelIdentity     WorkerChannelIdentity?     @relation("WorkerPrivacyChoiceChannelActor", fields: [organizationId, personId, channelIdentityId], references: [organizationId, personId, id], onDelete: Restrict, map: "WorkerPrivacyChoice_channel_actor_fkey")
+  noticeVersion       String                     @db.VarChar(64)
+  noticeContentSha256 String                     @db.Char(64)
+  presentedAt         DateTime
+  decidedAt           DateTime
+  operationKey        String                     @db.VarChar(190)
+  requestFingerprint  String                     @db.Char(64)
+  paymentDestination  WorkerPaymentDestination?  @relation("WorkerPaymentCapturePrivacyChoice")
+  paymentFlowSession  WorkerPaymentFlowSession?   @relation("WorkerPaymentFlowPrivacyChoice")
+  createdAt           DateTime                   @default(now())
+
+  @@unique([organizationId, id], map: "WorkerPrivacyChoice_org_id_key")
+  @@unique([organizationId, operationKey], map: "WorkerPrivacyChoice_org_operation_key")
+  @@unique([organizationId, personId, paymentPurpose, id], map: "WorkerPrivacyChoice_payment_scope_key")
+  @@index([organizationId, personId, purpose, decidedAt], map: "WorkerPrivacyChoice_org_person_purpose_decided_idx")
+  @@index([actorMembershipId, decidedAt], map: "WorkerPrivacyChoice_membership_decided_idx")
+  @@index([channelIdentityId, decidedAt], map: "WorkerPrivacyChoice_channel_decided_idx")
+}
+
 model WorkerPaymentDestination {
-  id                           String                         @id @default(cuid())
+  id                           String                                 @id @default(cuid())
   organizationId               String
-  organization                 Organization                   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization                 Organization                           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   personId                     String
-  person                       WorkerPerson                   @relation(fields: [organizationId, personId], references: [organizationId, id], onDelete: Restrict)
+  person                       WorkerPerson                           @relation(fields: [organizationId, personId], references: [organizationId, id], onDelete: Restrict)
   purpose                      WorkerPaymentPurpose
   type                         WorkerPaymentDestinationType
   rail                         WorkerPaymentRail?
-  currency                     String                         @default("ARS") @db.Char(3)
-  encryptedPayload             String                         @db.Text
-  fingerprint                  String                         @db.Char(64)
-  fingerprintKeyId             String                         @db.VarChar(100)
-  lastFour                     String                         @db.VarChar(4)
-  wrappingKeyId                String                         @db.VarChar(100)
-  recordVersion                Int                            @default(1)
-  holderCuilFingerprint        String                         @db.Char(64)
-  holderCuilFingerprintKeyId   String                         @db.VarChar(100)
-  status                       WorkerPaymentDestinationStatus @default(PENDING_VERIFICATION)
-  version                      Int                            @default(1)
-  revision                     Int                            @default(0)
-  activeSlot                   String?                        @unique @db.Char(64)
+  currency                     String                                 @default("ARS") @db.Char(3)
+  encryptedPayload             String                                 @db.Text
+  fingerprint                  String                                 @db.Char(64)
+  fingerprintKeyId             String                                 @db.VarChar(100)
+  lastFour                     String                                 @db.VarChar(4)
+  wrappingKeyId                String                                 @db.VarChar(100)
+  recordVersion                Int                                    @default(1)
+  holderCuilFingerprint        String                                 @db.Char(64)
+  holderCuilFingerprintKeyId   String                                 @db.VarChar(100)
+  status                       WorkerPaymentDestinationStatus         @default(PENDING_VERIFICATION)
+  version                      Int                                    @default(1)
+  revision                     Int                                    @default(0)
+  activeSlot                   String?                                @unique @db.Char(64)
   previousDestinationId        String?
-  previousDestination          WorkerPaymentDestination?      @relation("WorkerPaymentDestinationVersions", fields: [organizationId, personId, purpose, previousDestinationId], references: [organizationId, personId, purpose, id], onDelete: Restrict, map: "WorkerPayment_previous_scope_fkey")
-  supersedingDestinations      WorkerPaymentDestination[]     @relation("WorkerPaymentDestinationVersions")
-  operationKey                 String                         @db.VarChar(190)
-  requestFingerprint           String                         @db.Char(64)
+  previousDestination          WorkerPaymentDestination?              @relation("WorkerPaymentDestinationVersions", fields: [organizationId, personId, purpose, previousDestinationId], references: [organizationId, personId, purpose, id], onDelete: Restrict, map: "WorkerPayment_previous_scope_fkey")
+  supersedingDestinations      WorkerPaymentDestination[]             @relation("WorkerPaymentDestinationVersions")
+  operationKey                 String                                 @db.VarChar(190)
+  requestFingerprint           String                                 @db.Char(64)
   submissionSource             WorkerPaymentSubmissionSource?
   submittedAt                  DateTime?
   submittedByMembershipId      String?
-  submittedByMembership        TenantMembership?              @relation("WorkerPaymentSubmitterMembership", fields: [organizationId, submittedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "WorkerPayment_submitter_membership_fkey")
+  submittedByMembership        TenantMembership?                      @relation("WorkerPaymentSubmitterMembership", fields: [organizationId, submittedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "WorkerPayment_submitter_membership_fkey")
   submittedByChannelIdentityId String?
-  submittedByChannelIdentity   WorkerChannelIdentity?         @relation("WorkerPaymentSubmitterChannel", fields: [organizationId, personId, submittedByChannelIdentityId], references: [organizationId, personId, id], onDelete: Restrict, map: "WorkerPayment_submitter_channel_fkey")
+  submittedByChannelIdentity   WorkerChannelIdentity?                 @relation("WorkerPaymentSubmitterChannel", fields: [organizationId, personId, submittedByChannelIdentityId], references: [organizationId, personId, id], onDelete: Restrict, map: "WorkerPayment_submitter_channel_fkey")
+  submissionContractVersion    WorkerPaymentSubmissionContractVersion @default(LEGACY_REATTESTATION_REQUIRED)
+  privacyChoiceEventId         String?                                @unique
+  privacyChoiceEvent           WorkerPrivacyChoiceEvent?              @relation("WorkerPaymentCapturePrivacyChoice", fields: [organizationId, personId, purpose, privacyChoiceEventId], references: [organizationId, personId, paymentPurpose, id], onDelete: Restrict, map: "WorkerPayment_privacy_choice_scope_fkey")
+  /// Purpose-bound proof copied from the authoritative Flow reservation. The
+  /// HMAC is never a raw financial value and can be compared after key retirement.
+  flowSubmissionReservationId  String?                                @unique @db.Uuid
+  flowSubmissionFingerprintKeyId String?                              @db.VarChar(64)
+  flowSubmissionFingerprintHmac String?                               @db.Char(64)
+  flowSubmissionSession        WorkerPaymentFlowSession?              @relation("WorkerPaymentFlowReservation", fields: [flowSubmissionReservationId], references: [submissionReservationId], onDelete: Restrict, onUpdate: Cascade, map: "WorkerPayment_flow_reservation_fkey")
   resolvedType                 WorkerPaymentDestinationType?
-  resolvedEncryptedPayload     String?                        @db.Text
-  resolvedFingerprint          String?                        @db.Char(64)
-  resolvedFingerprintKeyId     String?                        @db.VarChar(100)
-  resolvedWrappingKeyId        String?                        @db.VarChar(100)
+  resolvedEncryptedPayload     String?                                @db.Text
+  resolvedFingerprint          String?                                @db.Char(64)
+  resolvedFingerprintKeyId     String?                                @db.VarChar(100)
+  resolvedWrappingKeyId        String?                                @db.VarChar(100)
   resolvedRecordVersion        Int?
   /// Canonical account identity is database-derived: direct CBU/CVU records use
   /// their submitted fingerprint; resolved aliases use the resolved fingerprint.
@@ -1411,32 +1495,33 @@ model WorkerPaymentDestination {
   /// within one fingerprint-key epoch; the service deduplicates across accepted
   /// key epochs under a tenant/person/purpose advisory lock.
   canonicalType                WorkerPaymentDestinationType?
-  canonicalFingerprint         String?                        @db.Char(64)
-  canonicalFingerprintKeyId    String?                        @db.VarChar(100)
-  verificationProvider         String?                        @db.VarChar(64)
-  providerReferenceHash        String?                        @db.Char(64)
-  verificationEvidenceHash     String?                        @db.Char(64)
+  canonicalFingerprint         String?                                @db.Char(64)
+  canonicalFingerprintKeyId    String?                                @db.VarChar(100)
+  verificationProvider         String?                                @db.VarChar(64)
+  providerReferenceHash        String?                                @db.Char(64)
+  verificationEvidenceHash     String?                                @db.Char(64)
   verifiedAt                   DateTime?
   /// Legacy transitional platform-user actor; retained for expand/contract.
   verifiedById                 String?
-  verifiedBy                   PlatformUser?                  @relation("WorkerPaymentDestinationVerifier", fields: [verifiedById], references: [id], onDelete: SetNull)
+  verifiedBy                   PlatformUser?                          @relation("WorkerPaymentDestinationVerifier", fields: [verifiedById], references: [id], onDelete: SetNull)
   verifiedByMembershipId       String?
-  verifiedByMembership         TenantMembership?              @relation("WorkerPaymentVerifierMembership", fields: [organizationId, verifiedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "WorkerPayment_verifier_membership_fkey")
+  verifiedByMembership         TenantMembership?                      @relation("WorkerPaymentVerifierMembership", fields: [organizationId, verifiedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "WorkerPayment_verifier_membership_fkey")
   activatedAt                  DateTime?
   activatedByMembershipId      String?
-  activatedByMembership        TenantMembership?              @relation("WorkerPaymentActivatorMembership", fields: [organizationId, activatedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "WorkerPayment_activator_membership_fkey")
+  activatedByMembership        TenantMembership?                      @relation("WorkerPaymentActivatorMembership", fields: [organizationId, activatedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "WorkerPayment_activator_membership_fkey")
   availableFrom                DateTime?
   rejectedAt                   DateTime?
   rejectedByMembershipId       String?
-  rejectedByMembership         TenantMembership?              @relation("WorkerPaymentRejecterMembership", fields: [organizationId, rejectedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "WorkerPayment_rejecter_membership_fkey")
-  rejectionReason              String?                        @db.VarChar(500)
+  rejectedByMembership         TenantMembership?                      @relation("WorkerPaymentRejecterMembership", fields: [organizationId, rejectedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "WorkerPayment_rejecter_membership_fkey")
+  rejectionReason              String?                                @db.VarChar(500)
   revokedAt                    DateTime?
   revokedByMembershipId        String?
-  revokedByMembership          TenantMembership?              @relation("WorkerPaymentRevokerMembership", fields: [organizationId, revokedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "WorkerPayment_revoker_membership_fkey")
-  revocationReason             String?                        @db.VarChar(500)
-  sensitiveDecisions           WorkerSensitiveDecision[]      @relation("WorkerSensitiveDecisionPaymentDestination")
-  createdAt                    DateTime                       @default(now())
-  updatedAt                    DateTime                       @updatedAt
+  revokedByMembership          TenantMembership?                      @relation("WorkerPaymentRevokerMembership", fields: [organizationId, revokedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "WorkerPayment_revoker_membership_fkey")
+  revocationReason             String?                                @db.VarChar(500)
+  sensitiveDecisions           WorkerSensitiveDecision[]              @relation("WorkerSensitiveDecisionPaymentDestination")
+  paymentFlowSession           WorkerPaymentFlowSession?               @relation("WorkerPaymentFlowDestination")
+  createdAt                    DateTime                               @default(now())
+  updatedAt                    DateTime                               @updatedAt
 
   @@unique([organizationId, id])
   @@unique([organizationId, personId, purpose, id], map: "WorkerPayment_org_person_purpose_id_key")
@@ -1444,6 +1529,7 @@ model WorkerPaymentDestination {
   @@unique([organizationId, personId, purpose, type, fingerprintKeyId, fingerprint], map: "WorkerPayment_org_person_purpose_type_fp_key")
   @@unique([organizationId, personId, purpose, canonicalType, canonicalFingerprintKeyId, canonicalFingerprint], map: "WorkerPayment_canonical_identity_key")
   @@unique([organizationId, personId, operationKey], map: "WorkerPayment_org_person_operation_key")
+  @@unique([organizationId, personId, purpose, privacyChoiceEventId], map: "WorkerPayment_privacy_choice_relation_key")
   @@index([organizationId, personId, purpose, status], map: "WorkerPayment_org_person_purpose_status_idx")
   @@index([status, availableFrom])
   @@index([verifiedById, verifiedAt])
@@ -2938,6 +3024,7 @@ model WhatsAppFlowSession {
   consumedAt          DateTime?
   consumedExternalId  String?                       @db.VarChar(512)
   endpointRequests    WhatsAppFlowEndpointRequest[]
+  workerPaymentSession WorkerPaymentFlowSession?
   createdAt           DateTime                      @default(now())
   updatedAt           DateTime                      @updatedAt
 
@@ -2947,6 +3034,64 @@ model WhatsAppFlowSession {
   @@index([projectId, workerId, expiresAt])
   @@index([expiresAt, consumedAt])
   @@index([phoneNumberId, recipientPhone])
+}
+
+/// Purpose-bound companion for the generic cryptographic WhatsApp Flow
+/// session. Financial input never lands here: only a keyed HMAC commitment and
+/// tenant-scoped outcome references are retained for exact replay fencing.
+model WorkerPaymentFlowSession {
+  flowSessionId             String                            @id @db.Uuid
+  flowSession               WhatsAppFlowSession               @relation(fields: [flowSessionId], references: [id], onDelete: Restrict, map: "WorkerPaymentFlowSession_flow_session_fkey")
+  organizationId            String
+  organization              Organization                      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  projectId                 String
+  project                   Project                           @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "WorkerPaymentFlowSession_project_scope_fkey")
+  connectionId              String
+  connection                WhatsAppConnection                @relation(fields: [projectId, connectionId], references: [projectId, id], onDelete: Restrict, map: "WorkerPaymentFlowSession_connection_scope_fkey")
+  workerId                  String
+  worker                    Worker                            @relation("WorkerPaymentFlowWorker", fields: [organizationId, personId, projectId, workerId], references: [organizationId, personId, projectId, id], onDelete: Restrict, map: "WorkerPaymentFlowSession_worker_scope_fkey")
+  personId                  String
+  person                    WorkerPerson                      @relation(fields: [organizationId, personId], references: [organizationId, id], onDelete: Restrict, map: "WorkerPaymentFlowSession_person_scope_fkey")
+  channelIdentityId         String
+  channelIdentity           WorkerChannelIdentity             @relation("WorkerPaymentFlowChannel", fields: [organizationId, personId, channelIdentityId], references: [organizationId, personId, id], onDelete: Restrict, map: "WorkerPaymentFlowSession_channel_scope_fkey")
+  noticeVersion             String                            @db.VarChar(64)
+  noticeContentSha256       String                            @db.Char(64)
+  expiresAt                 DateTime
+  /// Server-side evidence that INIT served the pinned notice; it is not proof
+  /// that the person read or understood it.
+  privacyPresentedAt        DateTime?
+  submissionStatus          WorkerPaymentFlowSubmissionStatus @default(OPEN)
+  submissionFingerprintKeyId String?                           @db.VarChar(64)
+  submissionFingerprintHmac String?                           @db.Char(64)
+  submissionReservationId   String?                           @unique @db.Uuid
+  submissionReservedAt      DateTime?
+  paymentPurpose            WorkerPaymentPurpose?
+  expectedDestinationType   WorkerPaymentDestinationType?
+  expectedDestinationFingerprintKeyId String?                 @db.VarChar(100)
+  expectedDestinationFingerprint String?                      @db.Char(64)
+  expectedPrivacyOperationKey String?                         @db.VarChar(190)
+  expectedDestinationOperationKey String?                     @db.VarChar(190)
+  privacyChoiceEventId      String?                           @unique
+  privacyChoiceEvent        WorkerPrivacyChoiceEvent?         @relation("WorkerPaymentFlowPrivacyChoice", fields: [organizationId, personId, paymentPurpose, privacyChoiceEventId], references: [organizationId, personId, paymentPurpose, id], onDelete: Restrict, map: "WorkerPaymentFlowSession_privacy_choice_scope_fkey")
+  destinationId             String?                           @unique
+  destination               WorkerPaymentDestination?        @relation("WorkerPaymentFlowDestination", fields: [organizationId, personId, paymentPurpose, destinationId], references: [organizationId, personId, purpose, id], onDelete: Restrict, map: "WorkerPaymentFlowSession_destination_scope_fkey")
+  reservationDestination    WorkerPaymentDestination?        @relation("WorkerPaymentFlowReservation")
+  submittedAt               DateTime?
+  submissionUncertainAt     DateTime?
+  submissionReconciledAt    DateTime?
+  reconciliationMethod      WorkerPaymentFlowReconciliationMethod?
+  revision                  Int                               @default(0)
+  createdAt                 DateTime                          @default(now())
+  updatedAt                 DateTime                          @updatedAt
+
+  @@unique([organizationId, personId, paymentPurpose, privacyChoiceEventId], map: "WorkerPaymentFlowSession_privacy_choice_relation_key")
+  @@unique([organizationId, personId, paymentPurpose, destinationId], map: "WorkerPaymentFlowSession_destination_relation_key")
+  @@index([organizationId, expiresAt], map: "WorkerPaymentFlowSession_org_expires_idx")
+  @@index([projectId, workerId, expiresAt], map: "WorkerPaymentFlowSession_project_worker_expires_idx")
+  @@index([channelIdentityId, expiresAt], map: "WorkerPaymentFlowSession_channel_expires_idx")
+  @@index([submissionStatus, submissionReservedAt], map: "WorkerPaymentFlowSession_submission_status_idx")
+  @@index([submissionStatus, submissionUncertainAt, flowSessionId], map: "WorkerPaymentFlowSession_uncertain_reconcile_idx")
+  @@index([submissionFingerprintKeyId, submissionStatus, expiresAt], map: "WorkerPaymentFlowSession_hmac_key_status_expiry_idx")
 }
 
 model WorkerOnboardingFlowSession {

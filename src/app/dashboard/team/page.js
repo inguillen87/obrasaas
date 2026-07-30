@@ -3,6 +3,7 @@ import { clerkClient } from '@clerk/nextjs/server';
 import TeamClient from './team-client';
 import FieldWorkersClient from './field-workers-client';
 import WorkerOnboardingClient from './worker-onboarding-client';
+import WorkerPaymentDestinationsClient from './worker-payment-destinations-client';
 import styles from './team.module.css';
 import {
   getPlatformAccess,
@@ -28,6 +29,18 @@ export default async function TeamPage() {
   const canManageField = hasTenantPermission(access, 'org:field:manage');
   const canReadOnboarding = hasTenantPermission(access, 'org:workers:onboarding:read');
   const canManageOnboarding = hasTenantPermission(access, 'org:workers:onboarding:manage');
+  const canReadPaymentDestinations = hasTenantPermission(
+    access,
+    'org:payroll:destinations:read',
+  );
+  const canManagePaymentDestinations = hasTenantPermission(
+    access,
+    'org:payroll:destinations:manage',
+  );
+  const canActivatePaymentDestinations = hasTenantPermission(
+    access,
+    'org:payroll:destinations:activate',
+  );
   const prisma = getPrisma();
   const [memberships, invitationResult, workers, projects] = await Promise.all([
     prisma.tenantMembership.findMany({
@@ -170,6 +183,21 @@ export default async function TeamPage() {
         projectName={access.project.name}
         initialWorkers={workers.map(serializeFieldWorker)}
       />
+
+      {canReadPaymentDestinations && (
+        <WorkerPaymentDestinationsClient
+          canActivate={canActivatePaymentDestinations}
+          canManage={canManagePaymentDestinations}
+          workers={workers
+            .filter((worker) => Boolean(worker.personId))
+            .map((worker) => ({
+              id: worker.id,
+              name: worker.name,
+              role: worker.role,
+              active: worker.active,
+            }))}
+        />
+      )}
     </div>
   );
 }

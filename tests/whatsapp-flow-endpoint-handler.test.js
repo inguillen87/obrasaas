@@ -5,7 +5,10 @@ import test from "node:test";
 import { WhatsAppFlowEndpointCryptoError } from "../src/lib/whatsapp/flow-endpoint-crypto.js";
 import { handleWhatsAppFlowDataEndpointRequest } from "../src/lib/whatsapp/flow-endpoint-handler.js";
 import { WhatsAppFlowEndpointKeyError } from "../src/lib/whatsapp/flow-endpoint-keys.js";
-import { WhatsAppFlowDataEndpointError } from "../src/lib/whatsapp/flow-endpoint.js";
+import {
+  WHATSAPP_FLOW_JOURNAL_REPLAY_POLICY_RECOMPUTE,
+  WhatsAppFlowDataEndpointError,
+} from "../src/lib/whatsapp/flow-endpoint.js";
 
 const APP_SECRET = "meta-app-secret-for-handler-tests";
 const ENDPOINT_ID = "987e4567-e89b-42d3-a456-426614174000";
@@ -177,6 +180,108 @@ test("pre-worker success is journaled against the isolated onboarding session", 
     completions[0].workerOnboardingFlowSessionId,
     onboardingSessionId,
   );
+});
+
+test("worker-payment success keeps the generic Flow session journal identity", async () => {
+  const { dependencies, completions } = successfulDependencies({
+    dispatchRequest: async () => ({
+      response: { data: { extension_message_response: { params: {} } } },
+      session: { id: SESSION_ID, kind: "worker_payment" },
+    }),
+  });
+  const response = await handleWhatsAppFlowDataEndpointRequest(
+    signedRequest(),
+    { endpointId: ENDPOINT_ID, prisma: {}, appSecret: APP_SECRET },
+    dependencies,
+  );
+  assert.equal(response.status, 200);
+  assert.equal(completions[0].flowSessionId, SESSION_ID);
+  assert.equal(completions[0].workerOnboardingFlowSessionId, null);
+});
+
+test("worker-payment endpoint errors keep only the authenticated Flow UUID in the request journal", async () => {
+  const { dependencies, completions } = successfulDependencies({
+    dispatchRequest: async () => {
+      throw new WhatsAppFlowDataEndpointError(
+        "payment outcome is uncertain",
+        "WHATSAPP_FLOW_ENDPOINT_SUBMISSION_CONFLICT",
+        { journalSession: { id: SESSION_ID, kind: "worker_payment" } },
+      );
+    },
+  });
+  const response = await handleWhatsAppFlowDataEndpointRequest(
+    signedRequest(),
+    { endpointId: ENDPOINT_ID, prisma: {}, appSecret: APP_SECRET },
+    dependencies,
+  );
+  assert.equal(response.status, 409);
+  assert.equal(completions[0].status, "REJECTED");
+  assert.equal(completions[0].flowSessionId, SESSION_ID);
+  assert.equal(completions[0].workerOnboardingFlowSessionId, null);
+});
+
+test("worker-payment journal identity survives an error-response encryption failure", async () => {
+  const { dependencies, completions } = successfulDependencies({
+    dispatchRequest: async () => {
+      throw new WhatsAppFlowDataEndpointError(
+        "payment outcome is uncertain",
+        "WHATSAPP_FLOW_ENDPOINT_SUBMISSION_CONFLICT",
+        { journalSession: { id: SESSION_ID, kind: "worker_payment" } },
+      );
+    },
+    encryptResponse: () => {
+      throw new Error("cipher unavailable");
+    },
+  });
+  const response = await handleWhatsAppFlowDataEndpointRequest(
+    signedRequest(),
+    { endpointId: ENDPOINT_ID, prisma: {}, appSecret: APP_SECRET },
+    dependencies,
+  );
+  assert.equal(response.status, 500);
+  assert.equal(completions[0].status, "FAILED");
+  assert.equal(completions[0].responseCiphertext, null);
+  assert.equal(completions[0].flowSessionId, SESSION_ID);
+  assert.equal(completions[0].workerOnboardingFlowSessionId, null);
+});
+
+test("reconciliation-pending requests expose no ciphertext and remain safely reclaimable", async () => {
+  let encryptions = 0;
+  const { dependencies, completions } = successfulDependencies({
+    dispatchRequest: async () => {
+      throw new WhatsAppFlowDataEndpointError(
+        "payment reconciliation is temporarily unavailable",
+        "WHATSAPP_FLOW_ENDPOINT_RECONCILIATION_PENDING",
+        {
+          journalSession: { id: SESSION_ID, kind: "worker_payment" },
+          journalReplayPolicy: WHATSAPP_FLOW_JOURNAL_REPLAY_POLICY_RECOMPUTE,
+        },
+      );
+    },
+    encryptResponse: () => {
+      encryptions += 1;
+      return "must-not-be-exposed";
+    },
+  });
+  const response = await handleWhatsAppFlowDataEndpointRequest(
+    signedRequest(),
+    { endpointId: ENDPOINT_ID, prisma: {}, appSecret: APP_SECRET },
+    dependencies,
+  );
+
+  assert.equal(response.status, 503);
+  assert.equal(response.headers.get("retry-after"), "1");
+  assert.equal(await response.text(), "");
+  assert.equal(encryptions, 0);
+  assert.equal(completions.length, 1);
+  assert.equal(completions[0].status, "FAILED");
+  assert.equal(completions[0].responseStatus, 503);
+  assert.equal(completions[0].responseCiphertext, null);
+  assert.equal(
+    completions[0].failureCode,
+    "WHATSAPP_FLOW_ENDPOINT_RECONCILIATION_PENDING",
+  );
+  assert.equal(completions[0].flowSessionId, SESSION_ID);
 });
 
 test("421 is reserved exclusively for RSA key mismatch and is durably classified", async () => {

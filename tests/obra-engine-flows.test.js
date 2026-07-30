@@ -101,6 +101,38 @@ function attendanceSession(overrides = {}) {
   };
 }
 
+function paymentEvent(response = {}) {
+  return {
+    externalId: 'wamid.meta-flow-payment',
+    provider: 'meta',
+    phoneNumberId,
+    from: worker.phone,
+    kind: 'interactive',
+    interactive: {
+      type: 'flow',
+      response: {
+        flow_type: 'worker_payment_destination',
+        destination_ref: 'destination-opaque-a',
+        submission_status: 'received',
+        ...response,
+      },
+    },
+    timestamp: new Date('2026-07-16T12:00:00.000Z'),
+  };
+}
+
+function paymentSession(overrides = {}) {
+  return {
+    id: '2f967f35-9f99-4db0-bd42-2d88f734cc72',
+    projectId,
+    workerId: worker.id,
+    phoneNumberId,
+    blueprintKey: 'worker-payment-destination',
+    flowType: 'worker_payment_destination',
+    ...overrides,
+  };
+}
+
 function engineOptions(state, flowSession, overrides = {}) {
   return {
     state,
@@ -163,6 +195,33 @@ test('a valid Meta Flow uses the trusted session and persists only non-secret re
   assert.equal(JSON.stringify({ result, state }).includes(sensitiveDescription), false);
   assert.equal(JSON.stringify(result.newMessages).includes('20-12345678-9'), false);
   assert.equal(JSON.stringify(result.newMessages).includes('0000000000000000000000'), false);
+});
+
+test('a payment receipt is acknowledged without creating incidents or mutating obra state', async () => {
+  const state = emptyState();
+  const before = structuredClone(state);
+  const persistedEvent = deserializeWebhookPayload(serializeWebhookPayload(
+    paymentEvent(),
+    {
+      projectId,
+      organizationId: 'organization-meta-flow',
+      phoneNumberId,
+    },
+  )).event;
+  const result = await processIncomingObraMessage(
+    persistedEvent,
+    { projectId, organizationId: 'organization-meta-flow', phoneNumberId },
+    engineOptions(state, paymentSession()),
+  );
+
+  assert.equal(result.intent, 'PAYMENT_DESTINATION');
+  assert.equal(result.stateChanged, false);
+  assert.deepEqual(state, before);
+  assert.match(result.reply, /Destino de cobro recibido/u);
+  assert.equal(result.newMessages.length, 2);
+  assert.equal(result.newMessages[0].metadata.whatsappFlowSessionId, paymentSession().id);
+  assert.equal(JSON.stringify(result.newMessages).includes('destination-opaque-a'), false);
+  assert.equal(JSON.stringify(result.newMessages).includes('destination_ref'), false);
 });
 
 test('attendance Flow persists its server-owned task and work-area references', async () => {

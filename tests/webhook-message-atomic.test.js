@@ -1090,6 +1090,171 @@ test('a Meta Flow reply is consumed before engine effects and reaches the engine
   );
 });
 
+test('an expired payment nfm_reply consumes only the exact SUCCEEDED companion receipt', async () => {
+  const scope = {
+    projectId: 'project-payment-flow-inbound',
+    organizationId: 'organization-payment-flow-inbound',
+    phoneNumberId: '123456789012345',
+  };
+  const worker = {
+    id: 'worker-payment-flow-inbound',
+    projectId: scope.projectId,
+    phone: '+5491112345678',
+    name: 'Operario Cobro',
+    role: 'Albañil',
+    active: true,
+    metadata: { whatsappRole: 'WORKER' },
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    project: { organizationId: scope.organizationId },
+  };
+  const calls = [];
+  const flowStore = inMemoryFlowSessions(calls);
+  const historicalNow = new Date('2026-01-01T00:00:00.000Z');
+  const issued = await issueWhatsAppFlowSession({
+    whatsAppFlowSession: flowStore.delegate,
+  }, {
+    organizationId: scope.organizationId,
+    projectId: scope.projectId,
+    workerId: worker.id,
+    phoneNumberId: scope.phoneNumberId,
+    recipientPhone: worker.phone,
+    blueprintKey: 'worker-payment-destination',
+    flowId: '987654321012399',
+    screenId: 'WORKER_PAYMENT_DESTINATION',
+    flowType: 'worker_payment_destination',
+    sourceExternalId: 'wamid.payment-flow-prompt',
+  }, {
+    now: historicalNow,
+    ttlMs: 60_000,
+  });
+  await markWhatsAppFlowSessionDeliveryAttempted(
+    { whatsAppFlowSession: flowStore.delegate },
+    { sessionId: issued.session.id },
+    { now: new Date(historicalNow.getTime() + 1_000) },
+  );
+  assert.ok(issued.session.expiresAt.getTime() < Date.now());
+  const companion = {
+    flowSessionId: issued.session.id,
+    organizationId: scope.organizationId,
+    projectId: scope.projectId,
+    connectionId: 'connection-payment-a',
+    workerId: worker.id,
+    personId: 'person-payment-a',
+    channelIdentityId: 'channel-payment-a',
+    noticeVersion: 'worker-payment-capture-v1',
+    noticeContentSha256: 'a'.repeat(64),
+    expiresAt: issued.session.expiresAt,
+    privacyPresentedAt: new Date(),
+    submissionStatus: 'SUCCEEDED',
+    submissionFingerprintHmac: 'b'.repeat(64),
+    submissionReservationId: '11111111-1111-4111-8111-111111111111',
+    submissionReservedAt: new Date(),
+    paymentPurpose: 'SALARY',
+    privacyChoiceEventId: 'privacy-payment-a',
+    destinationId: 'destination-payment-a',
+    submittedAt: new Date(),
+    submissionUncertainAt: null,
+    revision: 3,
+  };
+  let engineCalls = 0;
+  const transaction = {
+    async $executeRawUnsafe() {},
+    webhookEvent: {
+      async findFirst() {
+        return { id: 'event-payment-flow', appliedAt: null, outcome: null };
+      },
+      async updateMany() { return { count: 1 }; },
+    },
+    project: {
+      async findFirst() {
+        return {
+          id: scope.projectId,
+          organizationId: scope.organizationId,
+          status: 'ACTIVE',
+          latitude: -34.6037,
+          longitude: -58.3816,
+          geofenceMeters: 100,
+          organization: {
+            timezone: 'America/Argentina/Buenos_Aires',
+            subscriptionPlan: 'PRO',
+            subscriptionStatus: 'ACTIVE',
+            trialEndsAt: null,
+          },
+          snapshot: { state: { incidents: [], attendance: {}, tasks: {} } },
+          whatsapp: {
+            id: companion.connectionId,
+            phoneNumberId: scope.phoneNumberId,
+            enabled: true,
+            metadata: {},
+          },
+        };
+      },
+    },
+    worker: { async findMany() { return [worker]; } },
+    conversation: { async upsert() { return { id: 'conversation-payment-flow' }; } },
+    whatsAppFlowSession: flowStore.delegate,
+    workerPaymentFlowSession: {
+      async findUnique() { return structuredClone(companion); },
+      async create() { throw new Error('not used'); },
+      async updateMany() { throw new Error('not used'); },
+    },
+  };
+  globalThis.__obraSaasPrisma = {
+    async $transaction(callback) { return callback(transaction); },
+  };
+  const event = (destinationRef, externalId) => ({
+    provider: 'meta',
+    eventType: 'message',
+    externalId,
+    phoneNumberId: scope.phoneNumberId,
+    from: worker.phone,
+    kind: 'interactive',
+    interactive: {
+      type: 'flow',
+      flowToken: whatsAppFlowTokenEvidence(issued.token),
+      response: {
+        flow_type: 'worker_payment_destination',
+        destination_ref: destinationRef,
+        submission_status: 'received',
+      },
+    },
+  });
+  const apply = async ({ flowSession }) => {
+    engineCalls += 1;
+    assert.equal(flowSession.id, issued.session.id);
+    return {
+      reply: 'Destino recibido.',
+      flowPrompt: null,
+      stateChanged: false,
+      newMessages: [],
+    };
+  };
+
+  await assert.rejects(
+    applyWebhookMessageAtomically({
+      eventId: 'event-payment-flow-mismatch',
+      leaseToken: 'lease-payment-flow-mismatch',
+      event: event('destination-payment-forged', 'wamid.payment-flow-mismatch'),
+      scope,
+      apply,
+    }),
+    (error) => error.code === 'WHATSAPP_FLOW_SESSION_INVALID',
+  );
+  assert.equal(flowStore.record.consumedAt, null);
+  assert.equal(engineCalls, 0);
+
+  await applyWebhookMessageAtomically({
+    eventId: 'event-payment-flow-exact',
+    leaseToken: 'lease-payment-flow-exact',
+    event: event(companion.destinationId, 'wamid.payment-flow-exact'),
+    scope,
+    apply,
+  });
+  assert.equal(flowStore.record.consumedExternalId, 'wamid.payment-flow-exact');
+  assert.equal(engineCalls, 1);
+});
+
 test('an expired authenticated Flow reply is atomically consumed and replaced without applying its payload', async () => {
   const scope = {
     projectId: 'project-flow-expired',
