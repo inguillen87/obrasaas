@@ -9,6 +9,7 @@ import {
   prependUniqueEventIncident,
   replaceWorkerAttendance,
   requestedAttendanceAction,
+  requestedWorkerPaymentDestination,
   setWorkerAttendance,
 } from '../src/lib/whatsapp/obra-policy.js';
 
@@ -50,6 +51,38 @@ test('attendance, incident and medical inputs classify before mutation', () => {
   assert.equal(classifyObraIntent({ kind: 'text', text: 'quiero fichar' }), FIELD_WORKER_INTENTS.ATTENDANCE_START);
   assert.equal(classifyObraIntent({ kind: 'text', text: 'accidente urgente' }), FIELD_WORKER_INTENTS.INCIDENT);
   assert.equal(classifyObraIntent({ kind: 'text', text: 'certificado médico' }), FIELD_WORKER_INTENTS.MEDICAL);
+});
+
+test('payment destination intent is deterministic and rejects mixed commands', () => {
+  for (const text of [
+    'quiero configurar como cobro',
+    'cambiar mi CBU',
+    'datos de cobro',
+    'donde me pagan el sueldo',
+    'Solicitud de destino de cobro protegida',
+  ]) {
+    assert.equal(requestedWorkerPaymentDestination(text), true);
+    assert.equal(
+      classifyObraIntent({ kind: 'text', text }),
+      FIELD_WORKER_INTENTS.PAYMENT_DESTINATION,
+    );
+  }
+  assert.equal(requestedWorkerPaymentDestination('el alias de la tarea es muro norte'), false);
+  assert.equal(requestedWorkerPaymentDestination('¿Cómo configuro mi alias?'), true);
+  assert.equal(requestedWorkerPaymentDestination('¿Cómo configuro mi CBU?'), true);
+  assert.equal(requestedWorkerPaymentDestination('quiero cobrar y fichar'), true);
+  assert.equal(
+    classifyObraIntent({ kind: 'text', text: 'quiero cobrar y fichar' }),
+    FIELD_WORKER_INTENTS.EVIDENCE,
+  );
+  assert.equal(
+    classifyObraIntent({
+      kind: 'text',
+      text: 'contenido protegido',
+      sensitiveContentKind: 'worker_payment_destination',
+    }),
+    FIELD_WORKER_INTENTS.PAYMENT_DESTINATION,
+  );
 });
 
 test('attendance action commands distinguish journey transitions without using audio', () => {

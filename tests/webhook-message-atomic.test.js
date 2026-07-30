@@ -16,11 +16,17 @@ registerHooks({
 const originalDatabaseUrl = process.env.DATABASE_URL;
 const originalFlowTokenSecret = process.env.WHATSAPP_FLOW_TOKEN_SECRET;
 const originalOnboardingFlowTokenSecret = process.env.WORKER_ONBOARDING_FLOW_TOKEN_SECRET;
+const originalFinancialKekId = process.env.WORKER_FINANCIAL_KEK_ID;
+const originalFinancialKekRegistry = process.env.WORKER_FINANCIAL_KEK_REGISTRY_JSON;
 const originalFingerprintKeyId = process.env.WORKER_FINANCIAL_FINGERPRINT_KEY_ID;
 const originalFingerprintKeyRegistry = process.env.WORKER_FINANCIAL_FINGERPRINT_KEY_REGISTRY_JSON;
 process.env.DATABASE_URL = 'postgresql://unit-test.invalid/obrasaas';
 process.env.WHATSAPP_FLOW_TOKEN_SECRET = 'unit-test-whatsapp-flow-session-secret';
 process.env.WORKER_ONBOARDING_FLOW_TOKEN_SECRET = 'unit-test-worker-onboarding-flow-secret';
+process.env.WORKER_FINANCIAL_KEK_ID = 'webhook-channel-kek-v1';
+process.env.WORKER_FINANCIAL_KEK_REGISTRY_JSON = JSON.stringify({
+  'webhook-channel-kek-v1': Buffer.alloc(32, 46).toString('base64'),
+});
 process.env.WORKER_FINANCIAL_FINGERPRINT_KEY_ID = 'webhook-receipt-fingerprint-v1';
 process.env.WORKER_FINANCIAL_FINGERPRINT_KEY_REGISTRY_JSON = JSON.stringify({
   'webhook-receipt-fingerprint-v1': Buffer.alloc(32, 47).toString('base64'),
@@ -46,9 +52,16 @@ const {
   getCurrentWorkerOnboardingPrivacyNotice,
 } = await import('../src/lib/worker-onboarding-privacy-notices.js');
 const {
+  encryptWorkerFinancialPayload,
+  readWorkerFinancialKeyConfiguration,
   readWorkerFinancialFingerprintKeyRegistry,
+  workerChannelAddressBinding,
+  workerChannelProviderSubjectBinding,
   workerFinancialFingerprint,
 } = await import('../src/lib/worker-financial-data.js');
+const {
+  getWhatsAppFlowScopedName,
+} = await import('../src/lib/whatsapp/flows.js');
 
 after(() => {
   if (originalDatabaseUrl === undefined) delete process.env.DATABASE_URL;
@@ -59,6 +72,13 @@ after(() => {
     delete process.env.WORKER_ONBOARDING_FLOW_TOKEN_SECRET;
   } else {
     process.env.WORKER_ONBOARDING_FLOW_TOKEN_SECRET = originalOnboardingFlowTokenSecret;
+  }
+  if (originalFinancialKekId === undefined) delete process.env.WORKER_FINANCIAL_KEK_ID;
+  else process.env.WORKER_FINANCIAL_KEK_ID = originalFinancialKekId;
+  if (originalFinancialKekRegistry === undefined) {
+    delete process.env.WORKER_FINANCIAL_KEK_REGISTRY_JSON;
+  } else {
+    process.env.WORKER_FINANCIAL_KEK_REGISTRY_JSON = originalFinancialKekRegistry;
   }
   if (originalFingerprintKeyId === undefined) delete process.env.WORKER_FINANCIAL_FINGERPRINT_KEY_ID;
   else process.env.WORKER_FINANCIAL_FINGERPRINT_KEY_ID = originalFingerprintKeyId;
@@ -125,6 +145,264 @@ function inMemoryFlowSessions(calls) {
     get record() {
       return records.at(-1) || null;
     },
+  };
+}
+
+function inMemoryWorkerPaymentFlowSessions(calls) {
+  const records = [];
+  const delegate = {
+    async findUnique({ where }) {
+      calls.push(['payment-flow-read', where]);
+      return records.find((record) => record.flowSessionId === where.flowSessionId) || null;
+    },
+    async create({ data }) {
+      calls.push(['payment-flow-create', data]);
+      const record = {
+        ...data,
+        privacyPresentedAt: null,
+        submissionStatus: 'OPEN',
+        revision: 1,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      records.push(record);
+      return record;
+    },
+    async updateMany() {
+      throw new Error('payment companion updates are not expected while issuing a prompt');
+    },
+  };
+  return { delegate, records };
+}
+
+function canonicalPaymentIdentity({ scope, worker, identityStatus }) {
+  const person = {
+    id: `person-${identityStatus.toLowerCase()}`,
+    organizationId: scope.organizationId,
+    status: 'ACTIVE',
+    identityStatus,
+  };
+  const verifiedAt = new Date('2026-07-30T12:00:00.000Z');
+  const channel = {
+    id: `channel-${identityStatus.toLowerCase()}`,
+    organizationId: scope.organizationId,
+    personId: person.id,
+    provider: 'WHATSAPP',
+    status: 'VERIFIED',
+    recordVersion: 1,
+    verifiedAt,
+    revokedAt: null,
+    person,
+  };
+  const keyConfiguration = readWorkerFinancialKeyConfiguration();
+  const address = worker.phone;
+  const providerSubject = address.slice(1);
+  const addressFingerprint = workerFinancialFingerprint(address, {
+    organizationId: scope.organizationId,
+    valueType: 'WHATSAPP_E164',
+  }, { registry: keyConfiguration.fingerprintRegistry });
+  const providerSubjectFingerprint = workerFinancialFingerprint(providerSubject, {
+    organizationId: scope.organizationId,
+    valueType: 'WHATSAPP_PROVIDER_SUBJECT',
+  }, { registry: keyConfiguration.fingerprintRegistry });
+  const encryptedAddress = encryptWorkerFinancialPayload(
+    { address },
+    workerChannelAddressBinding(channel),
+    { registry: keyConfiguration.kekRegistry },
+  );
+  const encryptedProviderSubject = encryptWorkerFinancialPayload(
+    { providerSubject },
+    workerChannelProviderSubjectBinding(channel),
+    { registry: keyConfiguration.kekRegistry },
+  );
+  const canonicalChannel = {
+    ...channel,
+    encryptedAddressPayload: encryptedAddress.encryptedPayload,
+    addressFingerprint: addressFingerprint.fingerprint,
+    addressFingerprintKeyId: addressFingerprint.fingerprintKeyId,
+    addressLastFour: address.slice(-4),
+    wrappingKeyId: encryptedAddress.wrappingKeyId,
+    encryptedProviderSubjectPayload: encryptedProviderSubject.encryptedPayload,
+    providerSubjectFingerprint: providerSubjectFingerprint.fingerprint,
+    providerSubjectFingerprintKeyId: providerSubjectFingerprint.fingerprintKeyId,
+  };
+  return {
+    person,
+    channel: canonicalChannel,
+    worker: {
+      ...worker,
+      personId: person.id,
+      phone: null,
+      person: {
+        status: person.status,
+        identityStatus: person.identityStatus,
+        channelIdentities: [{
+          id: canonicalChannel.id,
+          status: canonicalChannel.status,
+          verifiedAt,
+          revokedAt: null,
+        }],
+      },
+    },
+  };
+}
+
+function workerPaymentPromptHarness(identityMode) {
+  const scope = {
+    projectId: `project-payment-text-${identityMode.toLowerCase()}`,
+    organizationId: `organization-payment-text-${identityMode.toLowerCase()}`,
+    phoneNumberId: '123456789012345',
+  };
+  const connectionId = '987e4567-e89b-42d3-a456-426614174000';
+  const inboundPhone = '+5491112345678';
+  const baseWorker = {
+    id: `worker-payment-text-${identityMode.toLowerCase()}`,
+    organizationId: scope.organizationId,
+    projectId: scope.projectId,
+    personId: null,
+    externalId: null,
+    phone: inboundPhone,
+    name: 'Operario de prueba',
+    role: 'AlbaÃ±il',
+    active: true,
+    metadata: { whatsappRole: 'WORKER' },
+    createdAt: new Date('2026-07-30T12:00:00.000Z'),
+    updatedAt: new Date('2026-07-30T12:00:00.000Z'),
+    project: { organizationId: scope.organizationId },
+    person: null,
+  };
+  const canonical = identityMode === 'LEGACY'
+    ? null
+    : canonicalPaymentIdentity({ scope, worker: baseWorker, identityStatus: identityMode });
+  const worker = canonical?.worker || baseWorker;
+  const calls = [];
+  const flowStore = inMemoryFlowSessions(calls);
+  const paymentStore = inMemoryWorkerPaymentFlowSessions(calls);
+  const project = {
+    id: scope.projectId,
+    organizationId: scope.organizationId,
+    status: 'ACTIVE',
+    latitude: -34.6037,
+    longitude: -58.3816,
+    geofenceMeters: 100,
+    startsAt: new Date('2026-07-01T00:00:00.000Z'),
+    organization: {
+      timezone: 'America/Argentina/Buenos_Aires',
+      subscriptionPlan: 'PRO',
+      subscriptionStatus: 'ACTIVE',
+      trialEndsAt: null,
+    },
+    snapshot: { state: { incidents: [], attendance: {}, tasks: {} }, version: 1 },
+    whatsapp: {
+      id: connectionId,
+      phoneNumberId: scope.phoneNumberId,
+      enabled: true,
+      metadata: {
+        whatsappFlows: {
+          'worker-payment-destination': {
+            id: '987654321012399',
+            name: getWhatsAppFlowScopedName('worker-payment-destination', connectionId),
+            status: 'PUBLISHED',
+            dataExchange: true,
+            flowScope: connectionId,
+          },
+        },
+      },
+    },
+  };
+  const transaction = {
+    async $executeRawUnsafe() { calls.push(['lock']); },
+    webhookEvent: {
+      async findFirst() {
+        calls.push(['event-read']);
+        return { id: `event-${identityMode}`, appliedAt: null, outcome: null };
+      },
+      async updateMany(args) {
+        calls.push(['event-apply', args]);
+        return { count: 1 };
+      },
+    },
+    project: {
+      async findFirst(args) {
+        calls.push(['project-read', args]);
+        return project;
+      },
+    },
+    whatsAppConnection: {
+      async findFirst(args) {
+        calls.push(['connection-read', args]);
+        return {
+          id: connectionId,
+          projectId: scope.projectId,
+          phoneNumberId: scope.phoneNumberId,
+          enabled: true,
+          connectionStatus: 'CONNECTED',
+        };
+      },
+    },
+    worker: {
+      async findMany(args) {
+        calls.push(['worker-resolve', args]);
+        return [worker];
+      },
+      async findFirst(args) {
+        calls.push(['worker-authorize', args]);
+        return worker;
+      },
+    },
+    workerPerson: {
+      async findFirst(args) {
+        calls.push(['person-authorize', args]);
+        return canonical?.person || null;
+      },
+    },
+    workerChannelIdentity: {
+      async findMany(args) {
+        calls.push(['channel-resolve', args]);
+        const checksRetainedFingerprintCoverage = args.where?.OR?.some(
+          (candidate) => candidate.addressFingerprintKeyId?.notIn,
+        );
+        if (checksRetainedFingerprintCoverage || !canonical) return [];
+        return [canonical.channel];
+      },
+      async findFirst(args) {
+        calls.push(['channel-authorize', args]);
+        return canonical?.channel || null;
+      },
+    },
+    conversation: {
+      async upsert(args) {
+        calls.push(['conversation', args]);
+        return { id: `conversation-${identityMode.toLowerCase()}` };
+      },
+    },
+    whatsAppFlowSession: flowStore.delegate,
+    workerPaymentFlowSession: paymentStore.delegate,
+  };
+  let transactionCount = 0;
+  globalThis.__obraSaasPrisma = {
+    async $transaction(callback, options) {
+      transactionCount += 1;
+      calls.push(['transaction', options]);
+      return callback(transaction);
+    },
+  };
+  return {
+    calls,
+    event: {
+      provider: 'meta',
+      eventType: 'message',
+      externalId: `wamid.payment-text-${identityMode.toLowerCase()}`,
+      phoneNumberId: scope.phoneNumberId,
+      from: inboundPhone,
+      kind: 'text',
+      text: 'Quiero configurar cÃ³mo cobrar',
+    },
+    flowStore,
+    paymentStore,
+    scope,
+    worker,
+    get transactionCount() { return transactionCount; },
   };
 }
 
@@ -1088,6 +1366,88 @@ test('a Meta Flow reply is consumed before engine effects and reaches the engine
     calls.findIndex(([name]) => name === 'engine')
       < calls.findIndex(([name]) => name === 'event-apply'),
   );
+});
+
+test('a canonical VERIFIED worker requesting a payment destination gets one atomic specialized Flow session', async () => {
+  const harness = workerPaymentPromptHarness('VERIFIED');
+  let engineEligibility = null;
+
+  const result = await applyWebhookMessageAtomically({
+    eventId: 'event-payment-text-verified',
+    leaseToken: 'lease-payment-text-verified',
+    event: harness.event,
+    scope: harness.scope,
+    apply: async ({ worker, workerPaymentFlowEligible }) => {
+      engineEligibility = workerPaymentFlowEligible;
+      assert.equal(worker.id, harness.worker.id);
+      return {
+        reply: 'AbrÃ­ el formulario protegido para configurar tu cobro.',
+        flowPrompt: 'worker-payment-destination',
+        stateChanged: false,
+        newMessages: [],
+      };
+    },
+  });
+
+  assert.equal(engineEligibility, true);
+  assert.equal(harness.transactionCount, 1);
+  assert.equal(harness.flowStore.records.length, 1);
+  assert.equal(harness.paymentStore.records.length, 1);
+  const base = harness.flowStore.records[0];
+  const companion = harness.paymentStore.records[0];
+  assert.equal(base.blueprintKey, 'worker-payment-destination');
+  assert.equal(base.sourceExternalId, harness.event.externalId);
+  assert.equal(companion.flowSessionId, base.id);
+  assert.equal(companion.workerId, harness.worker.id);
+  assert.equal(companion.personId, harness.worker.personId);
+  assert.equal(companion.channelIdentityId, 'channel-verified');
+  assert.equal(result.outcome.flowPrompt, 'worker-payment-destination');
+  assert.equal(result.outcome.flowSessionId, base.id);
+  assert.ok(
+    harness.calls.findIndex(([name]) => name === 'flow-create')
+      < harness.calls.findIndex(([name]) => name === 'payment-flow-create'),
+  );
+  assert.ok(
+    harness.calls.findIndex(([name]) => name === 'payment-flow-create')
+      < harness.calls.findIndex(([name]) => name === 'event-apply'),
+  );
+});
+
+test('legacy or PENDING_REVIEW payment text requests stay fail-closed without a companion session', async (t) => {
+  for (const identityMode of ['LEGACY', 'PENDING_REVIEW']) {
+    await t.test(identityMode, async () => {
+      const harness = workerPaymentPromptHarness(identityMode);
+      let engineEligibility = null;
+
+      const result = await applyWebhookMessageAtomically({
+        eventId: `event-payment-text-${identityMode.toLowerCase()}`,
+        leaseToken: `lease-payment-text-${identityMode.toLowerCase()}`,
+        event: harness.event,
+        scope: harness.scope,
+        apply: async ({ workerPaymentFlowEligible }) => {
+          engineEligibility = workerPaymentFlowEligible;
+          return {
+            reply: 'Intento de abrir el formulario.',
+            flowPrompt: 'worker-payment-destination',
+            stateChanged: false,
+            newMessages: [],
+          };
+        },
+      });
+
+      assert.equal(engineEligibility, false);
+      assert.equal(harness.transactionCount, 1);
+      assert.equal(harness.flowStore.records.length, 0);
+      assert.equal(harness.paymentStore.records.length, 0);
+      assert.equal(result.outcome.flowPrompt, null);
+      assert.equal(Object.hasOwn(result.outcome, 'flowSessionId'), false);
+      assert.match(result.outcome.reply, /verificar tu identidad laboral/i);
+      assert.equal(
+        harness.calls.some(([name]) => name === 'payment-flow-create'),
+        false,
+      );
+    });
+  }
 });
 
 test('an expired payment nfm_reply consumes only the exact SUCCEEDED companion receipt', async () => {

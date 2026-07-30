@@ -15,6 +15,7 @@ import {
   completeWorkerPaymentFlowSubmission,
   getWorkerPaymentFlowHmacKeyRetirementStatus,
   issueWorkerPaymentFlowSession,
+  issueWorkerPaymentFlowSessionInTransaction,
   loadWorkerPaymentFlowDataSession,
   markWorkerPaymentFlowPrivacyPresented,
   markWorkerPaymentFlowSubmissionUncertain,
@@ -434,6 +435,27 @@ test('issuance atomically reuses the generic token and pins one exact verified c
     revision: 0,
   });
   assert.equal(JSON.stringify(store.companionRecords).includes(first.token), false);
+});
+
+test('the transaction-bound issuer creates base and companion without nesting a transaction', async () => {
+  const store = createStore();
+  const transaction = { ...store.prisma };
+  delete transaction.$transaction;
+  const result = await issueWorkerPaymentFlowSessionInTransaction(
+    transaction,
+    issueInput({ sourceExternalId: 'wamid.worker-payment-transaction-bound' }),
+    {
+      flowTokenSecret: FLOW_SECRET,
+      now: NOW,
+      fingerprintRegistry: FINGERPRINT_REGISTRY,
+    },
+  );
+
+  assert.equal(result.replayed, false);
+  assert.equal(store.baseRecords.length, 1);
+  assert.equal(store.companionRecords.length, 1);
+  assert.equal(store.companionRecords[0].flowSessionId, store.baseRecords[0].id);
+  assert.equal(result.session.id, store.baseRecords[0].id);
 });
 
 test('issuance retries the whole serializable unit after a companion uniqueness race', async () => {

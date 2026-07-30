@@ -224,6 +224,54 @@ test('a payment receipt is acknowledged without creating incidents or mutating o
   assert.equal(JSON.stringify(result.newMessages).includes('destination_ref'), false);
 });
 
+test('a verified worker can request the protected payment Flow from natural text', async () => {
+  const state = emptyState();
+  const before = structuredClone(state);
+  const result = await processIncomingObraMessage({
+    externalId: 'wamid.payment-request',
+    provider: 'meta',
+    phoneNumberId,
+    from: worker.phone,
+    kind: 'text',
+    text: 'Quiero configurar como cobro el sueldo',
+    timestamp: new Date('2026-07-16T12:00:00.000Z'),
+  }, {
+    projectId,
+    organizationId: 'organization-meta-flow',
+    phoneNumberId,
+  }, engineOptions(state, null, { workerPaymentFlowEligible: true }));
+
+  assert.equal(result.intent, 'PAYMENT_DESTINATION');
+  assert.equal(result.flowPrompt, 'worker-payment-destination');
+  assert.equal(result.stateChanged, false);
+  assert.deepEqual(state, before);
+  assert.match(result.reply, /formulario protegido/u);
+  assert.match(result.reply, /No envíes datos bancarios/u);
+});
+
+test('payment self-service fails closed until identity and channel are verified', async () => {
+  const state = emptyState();
+  const result = await processIncomingObraMessage({
+    externalId: 'wamid.payment-request-unverified',
+    provider: 'meta',
+    phoneNumberId,
+    from: worker.phone,
+    kind: 'text',
+    text: 'datos de cobro',
+    timestamp: new Date('2026-07-16T12:00:00.000Z'),
+  }, {
+    projectId,
+    organizationId: 'organization-meta-flow',
+    phoneNumberId,
+  }, engineOptions(state, null, { workerPaymentFlowEligible: false }));
+
+  assert.equal(result.intent, 'PAYMENT_DESTINATION');
+  assert.equal(result.flowPrompt, null);
+  assert.equal(result.stateChanged, false);
+  assert.match(result.reply, /verificar tu identidad laboral/u);
+  assert.match(result.reply, /no envíes CBU, CVU ni alias/u);
+});
+
 test('attendance Flow persists its server-owned task and work-area references', async () => {
   const state = emptyState();
   state.attendance[worker.id] = {

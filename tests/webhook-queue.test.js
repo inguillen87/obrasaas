@@ -234,6 +234,110 @@ test("stored webhook payload preserves normalized event and trusted tenant scope
   assert.equal(restored.scope.phoneNumberId, "phone-1");
 });
 
+test("Meta text payment destinations are fully redacted before queue persistence", () => {
+  const cases = [
+    {
+      externalId: "wamid.payment-cbu",
+      text: "Mi CBU es 1234-5678 9012-3456 7890-12; depositame el viernes.",
+      secret: "1234567890123456789012",
+      suffix: "9012",
+    },
+    {
+      externalId: "wamid.payment-alias",
+      text: "Hola, mi alias es sueldo.carlos y prefiero cobrar por transferencia.",
+      secret: "sueldo.carlos",
+      suffix: "carlos",
+    },
+    {
+      externalId: "wamid.payment-cvu-typo",
+      text: "Mi CVU: 1234.5678.9012.3456.7890.1; lo reviso después.",
+      secret: "1234.5678.9012.3456.7890.1",
+      suffix: "7890",
+    },
+  ];
+
+  for (const scenario of cases) {
+    const payload = serializeWebhookPayload({
+      provider: "meta",
+      eventType: "message",
+      externalId: scenario.externalId,
+      phoneNumberId: "phone-1",
+      businessDisplayPhone: "5491100000000",
+      from: "5491112345678",
+      displayName: "Operario",
+      timestamp: new Date("2026-07-30T12:00:00.000Z"),
+      kind: "text",
+      text: scenario.text,
+      location: null,
+      media: null,
+      interactive: null,
+      context: { id: "must-be-dropped" },
+      futureBankAccount: scenario.secret,
+      raw: {
+        id: scenario.externalId,
+        from: "5491112345678",
+        timestamp: "1785412800",
+        type: "text",
+        text: { body: scenario.text },
+        lastFour: scenario.suffix,
+        unexpectedSensitiveEnvelope: scenario.secret,
+      },
+    }, {
+      projectId: "project-1",
+      organizationId: "organization-1",
+      phoneNumberId: "phone-1",
+      whatsappBusinessId: "waba-1",
+    });
+
+    const serialized = JSON.stringify(payload);
+    assert.equal(payload.event.text, "[destino de cobro restringido]");
+    assert.deepEqual(payload.event.raw, {
+      id: scenario.externalId,
+      from: "5491112345678",
+      timestamp: "1785412800",
+      type: "text",
+      text: { body: "[destino de cobro restringido]" },
+    });
+    assert.equal(payload.event.context, null);
+    assert.equal(payload.event.futureBankAccount, undefined);
+    assert.equal(serialized.includes(scenario.secret), false);
+    assert.equal(serialized.includes(scenario.suffix), false);
+  }
+});
+
+test("innocuous Meta questions about configuring payment data remain intact", () => {
+  for (const text of [
+    "¿Cómo configuro mi alias?",
+    "¿Cómo configuro mi CBU?",
+    "¿Cómo configuro mi alias/CBU desde WhatsApp?",
+  ]) {
+    const payload = serializeWebhookPayload({
+      provider: "meta",
+      eventType: "message",
+      externalId: `wamid.question-${text.length}`,
+      phoneNumberId: "phone-1",
+      from: "5491112345678",
+      timestamp: new Date("2026-07-30T12:00:00.000Z"),
+      kind: "text",
+      text,
+      raw: {
+        id: `wamid.question-${text.length}`,
+        from: "5491112345678",
+        timestamp: "1785412800",
+        type: "text",
+        text: { body: text },
+      },
+    }, {
+      projectId: "project-1",
+      organizationId: "organization-1",
+      phoneNumberId: "phone-1",
+    });
+
+    assert.equal(payload.event.text, text);
+    assert.equal(payload.event.raw.text.body, text);
+  }
+});
+
 test("durable Flow payload keeps only token evidence and its schema projection", () => {
   const rawFlowToken = "ofs1.raw-token-that-must-never-persist";
   const sensitiveDescription = "CUIT 20-12345678-9, CBU 0000000000000000000000";

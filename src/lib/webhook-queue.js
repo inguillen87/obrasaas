@@ -52,6 +52,9 @@ const FLOW_PROMPT_PATTERN = /^[a-z0-9][a-z0-9-]{0,99}$/;
 const FLOW_SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const PROGRESS_EVIDENCE_LOCATION_DELIVERY_VERSION = 1;
 const SHA256_PATTERN = /^[a-f0-9]{64}$/;
+const PAYMENT_DESTINATION_TEXT_MARKER = '[destino de cobro restringido]';
+const PAYMENT_ALIAS_DISCLOSURE_PATTERN = /\bmi\s+alias(?:\s+(?:bancario|de\s+cobro))?\s*(?:es|:)\s*[a-z0-9][a-z0-9.-]{0,63}(?![a-z0-9.-])/iu;
+const PAYMENT_ACCOUNT_DISCLOSURE_PATTERN = /\b(?:mi\s+)?(?:cbu|cvu)(?:\s+(?:bancario|de\s+cobro))?\s*(?:es|:)\s*[0-9][0-9\s.-]{5,63}/iu;
 
 function invalidWebhookOutcome() {
   const error = new Error("Stored webhook outcome is not a supported delivery envelope.");
@@ -253,6 +256,70 @@ function boundedPersistenceText(value, maxLength) {
   return normalized ? normalized.slice(0, maxLength) : null;
 }
 
+function normalizedPaymentDisclosureText(value) {
+  if (typeof value !== 'string') return '';
+  return value
+    .normalize('NFKC')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+function containsTwentyTwoDigitPaymentDestination(value) {
+  const text = normalizedPaymentDisclosureText(value);
+  for (const match of text.matchAll(/\d(?:[\s.-]*\d)*/gu)) {
+    if (match[0].replace(/\D/gu, '').length === 22) return true;
+  }
+  return false;
+}
+
+function containsExplicitPaymentDestination(value) {
+  const text = normalizedPaymentDisclosureText(value);
+  return PAYMENT_ALIAS_DISCLOSURE_PATTERN.test(text)
+    || PAYMENT_ACCOUNT_DISCLOSURE_PATTERN.test(text);
+}
+
+function shouldRedactMetaPaymentText(event) {
+  if (
+    event?.provider !== 'meta'
+    || event?.eventType !== 'message'
+    || String(event?.kind || '').trim().toLowerCase() !== 'text'
+  ) return false;
+
+  const bodies = [event.text, event.raw?.text?.body];
+  return bodies.some((body) => (
+    containsTwentyTwoDigitPaymentDestination(body)
+    || containsExplicitPaymentDestination(body)
+  ));
+}
+
+function persistedMetaPaymentText(event) {
+  const raw = event?.raw;
+  return {
+    provider: 'meta',
+    eventType: 'message',
+    externalId: event.externalId,
+    phoneNumberId: event.phoneNumberId || null,
+    businessDisplayPhone: event.businessDisplayPhone || null,
+    from: event.from || '',
+    displayName: event.displayName || null,
+    timestamp: event.timestamp,
+    kind: 'text',
+    text: PAYMENT_DESTINATION_TEXT_MARKER,
+    location: null,
+    media: null,
+    interactive: null,
+    context: null,
+    raw: {
+      id: boundedPersistenceText(raw?.id || event.externalId, 500),
+      from: boundedPersistenceText(raw?.from || event.from, 80),
+      timestamp: boundedPersistenceText(raw?.timestamp, 32),
+      type: 'text',
+      text: { body: PAYMENT_DESTINATION_TEXT_MARKER },
+    },
+  };
+}
+
 function persistedFlowTokenEvidence(value) {
   const sessionId = String(value?.sessionId || '').trim().toLowerCase();
   const tokenSha256 = String(value?.tokenSha256 || '').trim().toLowerCase();
@@ -285,6 +352,7 @@ function persistedMetaFlowRaw(event, response) {
 }
 
 function persistedWebhookEvent(event) {
+  if (shouldRedactMetaPaymentText(event)) return persistedMetaPaymentText(event);
   if (event?.provider !== 'meta' || event?.interactive?.type !== 'flow') return event;
 
   const response = projectWhatsAppFlowReplyForPersistence(event.interactive.response);

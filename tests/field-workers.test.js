@@ -389,25 +389,32 @@ test('phone resolver requires one active match inside both project and tenant sc
   assert.equal(query.where.active, true);
   assert.equal(result.status, FIELD_WORKER_RESOLUTION.RESOLVED);
   assert.equal(result.worker.id, 'worker-a');
+  assert.equal(result.source, 'LEGACY');
+  assert.equal(result.channelIdentityId, null);
 });
 
-test('phone resolver rejects invalid, unknown and ambiguous identities', async () => {
+test('phone resolver rejects invalid, unknown and ambiguous identities without channel authority', async () => {
   const unknownPrisma = { worker: { findMany: async () => [] } };
-  assert.equal(
-    (await resolveActiveFieldWorkerByPhone(unknownPrisma, scope, 'not-a-phone')).status,
-    FIELD_WORKER_RESOLUTION.INVALID_PHONE,
+  const invalid = await resolveActiveFieldWorkerByPhone(unknownPrisma, scope, 'not-a-phone');
+  const unknown = await resolveActiveFieldWorkerByPhone(
+    unknownPrisma,
+    scope,
+    '5491112345678',
   );
-  assert.equal(
-    (await resolveActiveFieldWorkerByPhone(unknownPrisma, scope, '5491112345678')).status,
-    FIELD_WORKER_RESOLUTION.UNKNOWN,
-  );
+  assert.equal(invalid.status, FIELD_WORKER_RESOLUTION.INVALID_PHONE);
+  assert.equal(unknown.status, FIELD_WORKER_RESOLUTION.UNKNOWN);
+  assert.equal(Object.hasOwn(invalid, 'channelIdentityId'), false);
+  assert.equal(Object.hasOwn(unknown, 'channelIdentityId'), false);
   const ambiguousPrisma = {
     worker: { findMany: async () => [worker(), worker({ id: 'worker-b', phone: '54 9 11 1234 5678' })] },
   };
-  assert.equal(
-    (await resolveActiveFieldWorkerByPhone(ambiguousPrisma, scope, '5491112345678')).status,
-    FIELD_WORKER_RESOLUTION.AMBIGUOUS,
+  const ambiguous = await resolveActiveFieldWorkerByPhone(
+    ambiguousPrisma,
+    scope,
+    '5491112345678',
   );
+  assert.equal(ambiguous.status, FIELD_WORKER_RESOLUTION.AMBIGUOUS);
+  assert.equal(Object.hasOwn(ambiguous, 'channelIdentityId'), false);
 });
 
 test('canonical resolver recognizes a VERIFIED channel whose project bridge has phone null', async () => {
@@ -416,9 +423,10 @@ test('canonical resolver recognizes a VERIFIED channel whose project bridge has 
     phone: null,
     personId: 'person-a',
   });
+  const matchedChannel = canonicalChannel({ keyConfiguration, id: 'channel-cryptographic-match' });
   const prisma = canonicalPrisma({
     workers: [canonicalWorker],
-    channels: [canonicalChannel({ keyConfiguration })],
+    channels: [matchedChannel],
   });
 
   const result = await resolveActiveFieldWorkerByPhone(
@@ -435,6 +443,17 @@ test('canonical resolver recognizes a VERIFIED channel whose project bridge has 
   assert.equal(result.worker.phone, '+5491112345678');
   assert.equal(result.normalizedPhone, '+5491112345678');
   assert.equal(result.source, 'CANONICAL');
+  assert.equal(result.channelIdentityId, 'channel-cryptographic-match');
+  assert.equal(Object.hasOwn(result, 'channelIdentity'), false);
+  const publicResolution = JSON.stringify(result);
+  for (const sensitive of [
+    matchedChannel.addressFingerprint,
+    matchedChannel.providerSubjectFingerprint,
+    matchedChannel.encryptedAddressPayload,
+    matchedChannel.encryptedProviderSubjectPayload,
+  ]) {
+    assert.equal(publicResolution.includes(sensitive), false);
+  }
 });
 
 test('canonical resolver preserves tenant, project, and active-person boundaries', async (t) => {
@@ -493,6 +512,7 @@ test('canonical resolver preserves tenant, project, and active-person boundaries
       );
       assert.equal(result.status, candidate.expectedStatus);
       assert.equal(result.worker, null);
+      assert.equal(Object.hasOwn(result, 'channelIdentityId'), false);
     });
   }
 });
@@ -519,6 +539,7 @@ test('canonical channel revocation states block legacy phone downgrade', async (
       );
       assert.equal(result.status, expectedStatus);
       assert.equal(result.worker, null);
+      assert.equal(Object.hasOwn(result, 'channelIdentityId'), false);
     });
   }
 });
@@ -541,6 +562,7 @@ test('canonical and legacy records for the same worker deduplicate during cutove
   assert.equal(result.status, FIELD_WORKER_RESOLUTION.RESOLVED);
   assert.equal(result.worker.id, dualReadWorker.id);
   assert.equal(result.source, 'CANONICAL');
+  assert.equal(result.channelIdentityId, 'channel-a');
 });
 
 test('canonical and legacy identities that point to different workers fail as AMBIGUOUS', async () => {
@@ -568,6 +590,7 @@ test('canonical and legacy identities that point to different workers fail as AM
 
   assert.equal(result.status, FIELD_WORKER_RESOLUTION.AMBIGUOUS);
   assert.equal(result.worker, null);
+  assert.equal(Object.hasOwn(result, 'channelIdentityId'), false);
 });
 
 test('duplicate canonical identities across retained fingerprint epochs fail as AMBIGUOUS', async () => {
@@ -601,6 +624,7 @@ test('duplicate canonical identities across retained fingerprint epochs fail as 
 
   assert.equal(result.status, FIELD_WORKER_RESOLUTION.AMBIGUOUS);
   assert.equal(result.worker, null);
+  assert.equal(Object.hasOwn(result, 'channelIdentityId'), false);
 });
 
 test('a same-person canonical authority with invisible fingerprints blocks legacy fallback', async () => {
@@ -625,6 +649,7 @@ test('a same-person canonical authority with invisible fingerprints blocks legac
 
   assert.equal(result.status, FIELD_WORKER_RESOLUTION.CANONICAL_BLOCKED);
   assert.equal(result.worker, null);
+  assert.equal(Object.hasOwn(result, 'channelIdentityId'), false);
 });
 
 test('an unretained canonical fingerprint epoch blocks every legacy downgrade', async () => {

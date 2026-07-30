@@ -729,6 +729,7 @@ export async function resolveActiveFieldWorkerByPhone(prisma, scope, phone, depe
       worker: { ...canonicalWorker, phone: normalizedPhone },
       normalizedPhone,
       source: 'CANONICAL',
+      channelIdentityId: canonicalChannel.id,
     };
   }
 
@@ -750,6 +751,7 @@ export async function resolveActiveFieldWorkerByPhone(prisma, scope, phone, depe
     worker: legacyMatches[0],
     normalizedPhone,
     source: 'LEGACY',
+    channelIdentityId: null,
   };
 }
 

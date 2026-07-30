@@ -46,9 +46,11 @@ import {
 } from "@/lib/whatsapp/flow-sessions";
 import {
   assertWorkerPaymentFlowTerminalReceipt,
+  issueWorkerPaymentFlowSessionInTransaction,
   WorkerPaymentFlowSessionError,
   WORKER_PAYMENT_FLOW_BLUEPRINT_KEY,
 } from "@/lib/whatsapp/worker-payment-flow-sessions";
+import { getCurrentWorkerPaymentPrivacyNotice } from "@/lib/worker-payment-privacy-notices";
 import {
   consumeWorkerOnboardingFlowSession,
   WorkerOnboardingFlowSessionError,
@@ -289,6 +291,29 @@ function attachProgressEvidenceLocationPrompt(result, { session }) {
                 expiresAt: session.expiresAt?.toISOString?.() || String(session.expiresAt),
                 deliveryContentRestricted: true,
               },
+            },
+          }
+        : message
+    )),
+  };
+}
+
+function suppressWorkerPaymentFlowPrompt(result, reply, reason) {
+  const outboundExternalId = result.newMessages.find(
+    (message) => message?.sender === "bot",
+  )?.externalId;
+  return {
+    ...result,
+    reply,
+    flowPrompt: null,
+    newMessages: result.newMessages.map((message) => (
+      message?.sender === "bot" && message.externalId === outboundExternalId
+        ? {
+            ...message,
+            text: reply,
+            metadata: {
+              ...(message.metadata || {}),
+              workerPaymentFlow: { status: "UNAVAILABLE", reason },
             },
           }
         : message
@@ -1887,6 +1912,7 @@ export async function applyWebhookMessageAtomically({
       select: {
         id: true,
         organizationId: true,
+        status: true,
         latitude: true,
         longitude: true,
         geofenceMeters: true,
@@ -1994,6 +2020,20 @@ export async function applyWebhookMessageAtomically({
     if (resolution.status !== FIELD_WORKER_RESOLUTION.RESOLVED) {
       throw fieldWorkerResolutionError(resolution.status);
     }
+    const workerPaymentFlowBinding = (
+      project.status === "ACTIVE"
+      && resolution.source === "CANONICAL"
+      && typeof resolution.worker?.personId === "string"
+      && resolution.worker.personId
+      && resolution.worker?.person?.identityStatus === "VERIFIED"
+      && typeof resolution.channelIdentityId === "string"
+      && resolution.channelIdentityId
+    )
+      ? {
+          personId: resolution.worker.personId,
+          channelIdentityId: resolution.channelIdentityId,
+        }
+      : null;
 
     const isFlowReply = event.interactive?.type === "flow";
     if (isFlowReply && event.provider !== "meta") {
@@ -2074,6 +2114,7 @@ export async function applyWebhookMessageAtomically({
       state,
       projectSettings,
       worker: resolution.worker,
+      workerPaymentFlowEligible: Boolean(workerPaymentFlowBinding),
       flowSession,
       expiredFlowSession,
       expiredFlowCanReissue,
@@ -2085,6 +2126,14 @@ export async function applyWebhookMessageAtomically({
       );
     }
     assertExpiredWhatsAppFlowRecoveryResult(expiredFlowSession, result);
+    const paymentFlowRequested = result.flowPrompt === WORKER_PAYMENT_FLOW_BLUEPRINT_KEY;
+    if (paymentFlowRequested && !workerPaymentFlowBinding) {
+      result = suppressWorkerPaymentFlowPrompt(
+        result,
+        "Para proteger tus datos de cobro, la empresa debe verificar tu identidad laboral y vincular este WhatsApp antes de habilitar el formulario. No envíes CBU, CVU ni alias por el chat.",
+        "IDENTITY_OR_CHANNEL_NOT_VERIFIED",
+      );
+    }
     let issuedFlowSession = null;
     if (result.flowPrompt) {
       const publishedFlow = getPublishedWhatsAppFlowReference(
@@ -2092,22 +2141,47 @@ export async function applyWebhookMessageAtomically({
         result.flowPrompt,
       );
       if (publishedFlow) {
-        issuedFlowSession = (
-          await issueWhatsAppFlowSession(transaction, {
-            organizationId: normalized.organizationId,
-            projectId: normalized.projectId,
-            workerId: resolution.worker.id,
-            phoneNumberId: normalized.phoneNumberId,
-            recipientPhone: resolution.normalizedPhone,
-            blueprintKey: publishedFlow.blueprintKey,
-            flowId: publishedFlow.id,
-            screenId: publishedFlow.screenId,
-            flowType: publishedFlow.flowType,
-            sourceExternalId: event.externalId,
-          }, {
-            ttlMs: getWhatsAppFlowSessionTtlMs(publishedFlow.blueprintKey),
-          })
-        ).session;
+        const baseInput = {
+          organizationId: normalized.organizationId,
+          projectId: normalized.projectId,
+          workerId: resolution.worker.id,
+          phoneNumberId: normalized.phoneNumberId,
+          recipientPhone: resolution.normalizedPhone,
+          blueprintKey: publishedFlow.blueprintKey,
+          flowId: publishedFlow.id,
+          screenId: publishedFlow.screenId,
+          flowType: publishedFlow.flowType,
+          sourceExternalId: event.externalId,
+        };
+        if (result.flowPrompt === WORKER_PAYMENT_FLOW_BLUEPRINT_KEY) {
+          const notice = getCurrentWorkerPaymentPrivacyNotice();
+          issuedFlowSession = (
+            await issueWorkerPaymentFlowSessionInTransaction(transaction, {
+              ...baseInput,
+              connectionId: project.whatsapp.id,
+              personId: workerPaymentFlowBinding.personId,
+              channelIdentityId: workerPaymentFlowBinding.channelIdentityId,
+              notice: {
+                version: notice.version,
+                contentSha256: notice.contentSha256,
+              },
+            }, {
+              ttlMs: getWhatsAppFlowSessionTtlMs(publishedFlow.blueprintKey),
+            })
+          ).session;
+        } else {
+          issuedFlowSession = (
+            await issueWhatsAppFlowSession(transaction, baseInput, {
+              ttlMs: getWhatsAppFlowSessionTtlMs(publishedFlow.blueprintKey),
+            })
+          ).session;
+        }
+      } else if (result.flowPrompt === WORKER_PAYMENT_FLOW_BLUEPRINT_KEY) {
+        result = suppressWorkerPaymentFlowPrompt(
+          result,
+          "Tu identidad y este WhatsApp están verificados, pero el formulario protegido de cobro todavía no está habilitado por la empresa. No envíes CBU, CVU ni alias por el chat.",
+          "FLOW_NOT_PUBLISHED",
+        );
       }
     }
     const mediaAssetId = managedWhatsAppMediaAssetId(event);

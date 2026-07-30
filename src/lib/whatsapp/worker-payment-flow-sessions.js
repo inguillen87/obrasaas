@@ -1049,6 +1049,107 @@ function trustedBindingFromStored(base, companion) {
   };
 }
 
+async function issueWorkerPaymentFlowSessionUnit(
+  transaction,
+  input,
+  { flowTokenSecret, issuedAt, paymentTtlMs, fingerprintRegistry },
+) {
+  await loadTrustedScope(transaction, input, fingerprintRegistry, issuedAt);
+  const issued = await issueWhatsAppFlowSession(
+    transaction,
+    baseBindingFromIssue(input),
+    {
+      secret: flowTokenSecret,
+      now: issuedAt,
+      ttlMs: paymentTtlMs,
+      propagateUniqueConstraint: true,
+    },
+  );
+  if (!exactBaseBinding(issued.session, input)) {
+    throw sessionError(
+      'La sesion criptografica no coincide con el alcance de cobro.',
+      'WORKER_PAYMENT_FLOW_SESSION_CONFLICT',
+    );
+  }
+  if (
+    issued.session.consumedAt
+    || issued.session.deliveryRejectedAt
+    || normalizedDate(issued.session.expiresAt, 'expiresAt').getTime() <= issuedAt.getTime()
+  ) {
+    throw sessionError(
+      'La sesion criptografica ya no puede especializarse para cobro.',
+      'WORKER_PAYMENT_FLOW_SESSION_CONFLICT',
+    );
+  }
+
+  const delegate = paymentSessionDelegate(transaction);
+  let companion = await delegate.findUnique({ where: { flowSessionId: issued.session.id } });
+  if (companion) {
+    if (!exactCompanionBinding(companion, issued.session, input)) {
+      throw sessionError(
+        'La sesion ya esta vinculada a otro alcance de cobro.',
+        'WORKER_PAYMENT_FLOW_SESSION_CONFLICT',
+      );
+    }
+    return {
+      session: specializedBaseSession(issued.session),
+      paymentSession: publicPaymentSession(companion),
+      token: issued.token,
+      replayed: true,
+    };
+  }
+
+  companion = await delegate.create({
+    data: {
+      flowSessionId: issued.session.id,
+      organizationId: input.organizationId,
+      projectId: input.projectId,
+      connectionId: input.connectionId,
+      workerId: input.workerId,
+      personId: input.personId,
+      channelIdentityId: input.channelIdentityId,
+      noticeVersion: input.notice.version,
+      noticeContentSha256: input.notice.contentSha256,
+      expiresAt: issued.session.expiresAt,
+    },
+  });
+  return {
+    session: specializedBaseSession(issued.session),
+    paymentSession: publicPaymentSession(companion),
+    token: issued.token,
+    replayed: false,
+  };
+}
+
+function normalizedIssueContext(rawInput, {
+  flowTokenSecret,
+  now = new Date(),
+  ttlMs = DEFAULT_WHATSAPP_FLOW_SESSION_TTL_MS,
+  fingerprintRegistry,
+} = {}) {
+  return {
+    input: normalizedIssueInput(rawInput),
+    flowTokenSecret,
+    issuedAt: normalizedNow(now),
+    paymentTtlMs: normalizedWorkerPaymentFlowTtl(ttlMs),
+    fingerprintRegistry: resolvedFingerprintRegistry(fingerprintRegistry),
+  };
+}
+
+/**
+ * Transaction-bound primitive for an orchestrator that already owns the
+ * atomic unit (for example, one inbound webhook). A unique race aborts that
+ * outer transaction so its existing retry lane can replay the complete unit.
+ */
+export async function issueWorkerPaymentFlowSessionInTransaction(
+  transaction,
+  rawInput,
+  options = {},
+) {
+  const context = normalizedIssueContext(rawInput, options);
+  return issueWorkerPaymentFlowSessionUnit(transaction, context.input, context);
+}
+
 /**
  * Issues/reuses the generic signed Flow session and attaches exactly one
  * purpose-bound payment companion in the same serializable transaction.
@@ -1064,79 +1165,23 @@ export async function issueWorkerPaymentFlowSession(
     transactionAttempts = DEFAULT_TRANSACTION_ATTEMPTS,
   } = {},
 ) {
-  const input = normalizedIssueInput(rawInput);
-  const issuedAt = normalizedNow(now);
-  const paymentTtlMs = normalizedWorkerPaymentFlowTtl(ttlMs);
+  const context = normalizedIssueContext(rawInput, {
+    flowTokenSecret,
+    now,
+    ttlMs,
+    fingerprintRegistry,
+  });
   const attempts = normalizedAttempts(transactionAttempts);
-  const registry = resolvedFingerprintRegistry(fingerprintRegistry);
-
-  return runSerializable(prisma, async (transaction) => {
-    await loadTrustedScope(transaction, input, registry, issuedAt);
-    const issued = await issueWhatsAppFlowSession(
+  return runSerializable(
+    prisma,
+    (transaction) => issueWorkerPaymentFlowSessionUnit(
       transaction,
-      baseBindingFromIssue(input),
-      {
-        secret: flowTokenSecret,
-        now: issuedAt,
-        ttlMs: paymentTtlMs,
-        propagateUniqueConstraint: true,
-      },
-    );
-    if (!exactBaseBinding(issued.session, input)) {
-      throw sessionError(
-        'La sesion criptografica no coincide con el alcance de cobro.',
-        'WORKER_PAYMENT_FLOW_SESSION_CONFLICT',
-      );
-    }
-    if (
-      issued.session.consumedAt
-      || issued.session.deliveryRejectedAt
-      || normalizedDate(issued.session.expiresAt, 'expiresAt').getTime() <= issuedAt.getTime()
-    ) {
-      throw sessionError(
-        'La sesion criptografica ya no puede especializarse para cobro.',
-        'WORKER_PAYMENT_FLOW_SESSION_CONFLICT',
-      );
-    }
-
-    const delegate = paymentSessionDelegate(transaction);
-    let companion = await delegate.findUnique({ where: { flowSessionId: issued.session.id } });
-    if (companion) {
-      if (!exactCompanionBinding(companion, issued.session, input)) {
-        throw sessionError(
-          'La sesion ya esta vinculada a otro alcance de cobro.',
-          'WORKER_PAYMENT_FLOW_SESSION_CONFLICT',
-        );
-      }
-      return {
-        session: specializedBaseSession(issued.session),
-        paymentSession: publicPaymentSession(companion),
-        token: issued.token,
-        replayed: true,
-      };
-    }
-
-    companion = await delegate.create({
-      data: {
-        flowSessionId: issued.session.id,
-        organizationId: input.organizationId,
-        projectId: input.projectId,
-        connectionId: input.connectionId,
-        workerId: input.workerId,
-        personId: input.personId,
-        channelIdentityId: input.channelIdentityId,
-        noticeVersion: input.notice.version,
-        noticeContentSha256: input.notice.contentSha256,
-        expiresAt: issued.session.expiresAt,
-      },
-    });
-    return {
-      session: specializedBaseSession(issued.session),
-      paymentSession: publicPaymentSession(companion),
-      token: issued.token,
-      replayed: false,
-    };
-  }, attempts, { retryUnique: true });
+      context.input,
+      context,
+    ),
+    attempts,
+    { retryUnique: true },
+  );
 }
 
 /**

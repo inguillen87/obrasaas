@@ -898,6 +898,13 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
         },
       );
     }
+  } else if (intent === FIELD_WORKER_INTENTS.PAYMENT_DESTINATION) {
+    if (options.workerPaymentFlowEligible === true) {
+      flowPrompt = "worker-payment-destination";
+      reply = "Abrí el formulario protegido para configurar tu CBU, CVU o alias. No envíes datos bancarios por el chat: ObraSaaS los recibe cifrados y el panel sólo muestra una referencia enmascarada.";
+    } else {
+      reply = "Para proteger tus datos de cobro, primero la empresa debe verificar tu identidad laboral y vincular este WhatsApp. Pedile al administrador que complete esa validación; no envíes CBU, CVU ni alias por el chat.";
+    }
   } else if (lowerBody.includes("licencia") || lowerBody.includes("certificado")) {
     reply = `Cargá el certificado desde este enlace seguro, válido por dos horas:\n${links.medical}`;
   } else if (requestedAction === "CHECK_IN") {
@@ -1065,9 +1072,9 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
     if (stateChanged) state.alertsCount += 1;
     reply = "Demora registrada. Quedó pendiente de impacto y reprogramación por el responsable de planificación.";
   } else if (lowerBody.includes("ayuda") || lowerBody.includes("menu") || lowerBody.includes("menú")) {
-    reply = "Puedo ayudarte a: registrar ingreso (“fichar”), iniciar pausa (“almuerzo”), volver (“volví”), registrar salida (“chau”), informar avances, reportar incidencias, adjuntar evidencia o cargar un certificado médico.";
+    reply = "Puedo ayudarte a: registrar ingreso (“fichar”), iniciar pausa (“almuerzo”), volver (“volví”), registrar salida (“chau”), configurar cómo cobrar, informar avances, reportar incidencias, adjuntar evidencia o cargar un certificado médico.";
   } else {
-    reply = "Guardé el reporte en la bitácora. Para convertirlo en una acción, indicá “fichar”, “almuerzo”, “volví”, “chau”, “avance 60% tarea 3”, “incidencia urgente” o “licencia”.";
+    reply = "Guardé el reporte en la bitácora. Para convertirlo en una acción, indicá “fichar”, “almuerzo”, “volví”, “chau”, “datos de cobro”, “avance 60% tarea 3”, “incidencia urgente” o “licencia”.";
   }
 
   const newMessages = [{

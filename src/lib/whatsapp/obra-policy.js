@@ -41,6 +41,36 @@ export function requestedAttendanceAction(value) {
   return null;
 }
 
+export function requestedWorkerPaymentDestination(value) {
+  const text = normalizePolicyText(value).trim().replace(/\s+/g, ' ');
+  if (!text) return false;
+
+  if ([
+    'cobro',
+    'datos de cobro',
+    'destino de cobro',
+    'medio de cobro',
+    'forma de cobro',
+    'configurar cobro',
+    'solicitud de destino de cobro protegida',
+    '[destino de cobro restringido]',
+  ].includes(text)) return true;
+
+  if (/\b(?:quiero|necesito|como|donde)\s+(?:puedo\s+|quiero\s+)?cobrar\b/u.test(text)) {
+    return true;
+  }
+  if (/\b(?:configurar|configuro|cambiar|cambio|actualizar|actualizo)\s+(?:como|donde)\s+(?:me\s+)?(?:cobro|pagan)\b/u.test(text)) {
+    return true;
+  }
+  if (/\b(?:donde|como)\s+(?:me\s+)?pagan\b/u.test(text)) return true;
+  if (/\b(?:datos|cuenta|cbu|cvu|alias)\b/u.test(text)) {
+    return /\b(?:cobro|cobrar|sueldo|reintegro|pagar|paguen|depositar|depositen)\b/u.test(text)
+      || /\b(?:configurar|configuro|cargar|cargo|cambiar|cambio|actualizar|actualizo|confirmar|confirmo)\s+(?:mi\s+)?(?:cuenta|cbu|cvu|alias)\b/u.test(text)
+      || /\bmi\s+(?:cbu|cvu|alias)\s+(?:es\b|:)/u.test(text);
+  }
+  return false;
+}
+
 export function classifyObraIntent(event, { trustedFlowType = null } = {}) {
   const body = String(event.text || event.transcription?.text || '').trim();
   const lowerBody = normalizePolicyText(body);
@@ -68,7 +98,13 @@ export function classifyObraIntent(event, { trustedFlowType = null } = {}) {
   if (lowerBody.includes('licencia') || lowerBody.includes('certificado')) {
     return FIELD_WORKER_INTENTS.MEDICAL;
   }
-  if (requestedAttendanceAction(lowerBody)) {
+  const attendanceAction = requestedAttendanceAction(lowerBody);
+  const paymentDestinationRequested = requestedWorkerPaymentDestination(lowerBody)
+    || event.sensitiveContentKind === 'worker_payment_destination';
+  if (paymentDestinationRequested && !attendanceAction) {
+    return FIELD_WORKER_INTENTS.PAYMENT_DESTINATION;
+  }
+  if (attendanceAction && !paymentDestinationRequested) {
     return FIELD_WORKER_INTENTS.ATTENDANCE_START;
   }
   if (/\b([0-9]{1,3})\s*%/.test(lowerBody)) return FIELD_WORKER_INTENTS.TASK_PROGRESS;
