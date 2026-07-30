@@ -10,6 +10,8 @@ import styles from './schedule-snapshots-panel.module.css';
 
 const DEFAULT_TIME_ZONE = 'America/Argentina/Buenos_Aires';
 const REQUIREMENTS_PAGE_SIZE = 25;
+const FORECAST_COMPARISON_LIMIT = 50;
+const MAX_RATIONALE_LENGTH = 1_000;
 
 function civilToday(timeZone = DEFAULT_TIME_ZONE) {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -63,18 +65,131 @@ function taskDatesComplete(task) {
   return Boolean(task?.startsAt && task?.endsAt);
 }
 
+function reviewedAssessmentForForecast(payload, selection) {
+  const assessments = Array.isArray(payload?.assessments) ? payload.assessments : [];
+  const assessment = assessments.find((candidate) => candidate?.id === selection.assessmentId);
+  if (!assessment || assessment.evidenceId !== selection.evidenceId) {
+    throw new Error('La evaluación seleccionada no está disponible para esta evidencia.');
+  }
+  if (
+    assessment.status !== 'COMPLETED'
+    || !['APPROVED', 'CORRECTED'].includes(assessment.reviewStatus)
+  ) {
+    throw new Error('La evaluación debe estar completada y revisada por una persona antes de usarla.');
+  }
+  const taskId = typeof assessment.taskId === 'string' ? assessment.taskId.trim() : '';
+  const revision = Number(assessment.revision);
+  const corrected = assessment.reviewStatus === 'CORRECTED';
+  const rangeMin = Number(corrected ? assessment.correctedProgressMin : assessment.progressMin);
+  const rangeMax = Number(corrected ? assessment.correctedProgressMax : assessment.progressMax);
+  if (
+    !taskId
+    || taskId.length > 190
+    || !Number.isSafeInteger(revision)
+    || revision < 0
+    || !Number.isSafeInteger(rangeMin)
+    || !Number.isSafeInteger(rangeMax)
+    || rangeMin < 0
+    || rangeMax > 100
+    || rangeMin > rangeMax
+  ) {
+    throw new Error('La evaluación revisada no contiene un rango utilizable y verificable.');
+  }
+  return {
+    assessmentId: assessment.id,
+    evidenceId: assessment.evidenceId,
+    expectedAssessmentRevision: revision,
+    rangeMin,
+    rangeMax,
+    reviewStatus: assessment.reviewStatus,
+    taskId,
+  };
+}
+
+function civilDayOrdinal(value) {
+  const dateKey = typeof value === 'string' ? value.slice(0, 10) : '';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return null;
+  const parsed = new Date(`${dateKey}T00:00:00.000Z`);
+  return Number.isNaN(parsed.getTime()) ? null : Math.floor(parsed.getTime() / 86_400_000);
+}
+
+function comparisonBar(start, finish, minimum, span) {
+  const startDay = civilDayOrdinal(start);
+  const finishDay = civilDayOrdinal(finish);
+  if (startDay == null || finishDay == null || finishDay < startDay) return null;
+  return {
+    left: `${Math.max(0, ((startDay - minimum) / span) * 100)}%`,
+    width: `${Math.max(1.25, ((finishDay - startDay + 1) / span) * 100)}%`,
+  };
+}
+
+function forecastComparison(detail) {
+  const source = Array.isArray(detail?.tasks) ? detail.tasks : [];
+  const valid = source.filter((task) => (
+    task
+    && typeof task.sourceTaskId === 'string'
+    && civilDayOrdinal(task.baselineStart) != null
+    && civilDayOrdinal(task.baselineFinish) != null
+    && civilDayOrdinal(task.forecastStart) != null
+    && civilDayOrdinal(task.forecastFinish) != null
+  ));
+  if (valid.length === 0) return { rows: [], total: 0 };
+  const ordered = [...valid].sort((left, right) => (
+    Math.abs(Number(right.finishDeltaDays) || 0) - Math.abs(Number(left.finishDeltaDays) || 0)
+    || String(left.code || left.title || left.sourceTaskId)
+      .localeCompare(String(right.code || right.title || right.sourceTaskId), 'es')
+  ));
+  const rows = ordered.slice(0, FORECAST_COMPARISON_LIMIT);
+  const ordinals = rows.flatMap((task) => [
+    civilDayOrdinal(task.baselineStart),
+    civilDayOrdinal(task.baselineFinish),
+    civilDayOrdinal(task.forecastStart),
+    civilDayOrdinal(task.forecastFinish),
+  ]).filter(Number.isFinite);
+  const minimum = Math.min(...ordinals);
+  const maximum = Math.max(...ordinals);
+  const span = Math.max(1, maximum - minimum + 1);
+  return {
+    total: valid.length,
+    rows: rows.map((task) => ({
+      ...task,
+      baselineBar: comparisonBar(task.baselineStart, task.baselineFinish, minimum, span),
+      forecastBar: comparisonBar(task.forecastStart, task.forecastFinish, minimum, span),
+    })),
+  };
+}
+
+function progressSourceLabel(value) {
+  if (value === 'REVIEWED_EVIDENCE') return 'Evidencia revisada';
+  if (value === 'MANUAL_OVERRIDE') return 'Observación manual';
+  return 'Avance canónico';
+}
+
+function forecastDriverLabel(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return 'Cálculo determinista';
+  if (value.kind === 'DEPENDENCY') return 'Condicionado por dependencia';
+  if (value.kind === 'ACTUAL_FINISH') return 'Fin real confirmado';
+  if (value.kind === 'ACTUAL_START') return 'Inicio real confirmado';
+  if (value.kind === 'AS_OF_DATE') return 'Fecha de corte';
+  return 'Cálculo determinista';
+}
+
 export default function ScheduleSnapshotsPanel({
   canManage,
+  canUseReviewedEvidence = false,
   getProjectStateVersion,
   initialTasks,
   onToast,
   project,
+  reviewedEvidenceSelection = null,
   tasksTruncated = false,
 }) {
   const today = useMemo(() => civilToday(), []);
   const [loadedTasks, setLoadedTasks] = useState(null);
   const [baselines, setBaselines] = useState([]);
   const [forecasts, setForecasts] = useState([]);
+  const [forecastDetail, setForecastDetail] = useState(null);
+  const [forecastDetailError, setForecastDetailError] = useState('');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(null);
   const [error, setError] = useState('');
@@ -84,6 +199,10 @@ export default function ScheduleSnapshotsPanel({
   const [replaceActiveBaseline, setReplaceActiveBaseline] = useState(false);
   const [asOfDate, setAsOfDate] = useState(today);
   const [observationEntries, setObservationEntries] = useState({});
+  const [reviewedAssessmentResult, setReviewedAssessmentResult] = useState(null);
+  const [reviewedAssessmentFailure, setReviewedAssessmentFailure] = useState(null);
+  const [reviewedProgressInput, setReviewedProgressInput] = useState(null);
+  const [reviewedRationaleInput, setReviewedRationaleInput] = useState(null);
   const [requirementsPage, setRequirementsPage] = useState(0);
   const operationKeys = useRef(new Map());
 
@@ -106,9 +225,31 @@ export default function ScheduleSnapshotsPanel({
       responsePayload(forecastResponse),
       fullTasksResponse ? responsePayload(fullTasksResponse) : Promise.resolve(null),
     ]);
+    const forecastRows = Array.isArray(forecastPayload.forecasts) ? forecastPayload.forecasts : [];
+    let latestForecastDetail = null;
+    let latestForecastDetailError = '';
+    const latestForecastId = typeof forecastRows[0]?.id === 'string' ? forecastRows[0].id : null;
+    if (latestForecastId) {
+      try {
+        const detailPayload = await responsePayload(await fetch(
+          `/api/schedule/forecasts/${encodeURIComponent(latestForecastId)}`,
+          { cache: 'no-store', signal },
+        ));
+        if (detailPayload?.forecast?.id !== latestForecastId) {
+          throw new Error('El detalle recibido no corresponde al último forecast.');
+        }
+        latestForecastDetail = detailPayload.forecast;
+      } catch (detailError) {
+        if (detailError?.name === 'AbortError') throw detailError;
+        latestForecastDetailError = detailError?.message
+          || 'No se pudo cargar el detalle comparativo del último forecast.';
+      }
+    }
     return {
       baselines: Array.isArray(baselinePayload.baselines) ? baselinePayload.baselines : [],
-      forecasts: Array.isArray(forecastPayload.forecasts) ? forecastPayload.forecasts : [],
+      forecastDetail: latestForecastDetail,
+      forecastDetailError: latestForecastDetailError,
+      forecasts: forecastRows,
       fullTasks: fullTasksPayload
         ? (Array.isArray(fullTasksPayload.tasks) ? fullTasksPayload.tasks : [])
         : null,
@@ -118,6 +259,8 @@ export default function ScheduleSnapshotsPanel({
   const applyData = useCallback((data) => {
     setBaselines(data.baselines);
     setForecasts(data.forecasts);
+    setForecastDetail(data.forecastDetail || null);
+    setForecastDetailError(data.forecastDetailError || '');
     if (data.fullTasks) setLoadedTasks(data.fullTasks);
   }, []);
 
@@ -142,18 +285,107 @@ export default function ScheduleSnapshotsPanel({
     };
   }, [applyData, project.id, requestData]);
 
+  useEffect(() => {
+    const evidenceId = reviewedEvidenceSelection?.evidenceId;
+    const assessmentId = reviewedEvidenceSelection?.assessmentId;
+    if (!canUseReviewedEvidence || !evidenceId || !assessmentId) return undefined;
+    const selection = { evidenceId, assessmentId };
+    const selectionKey = `${evidenceId}:${assessmentId}`;
+
+    const controller = new AbortController();
+    let active = true;
+    fetch(
+      `/api/progress/${encodeURIComponent(evidenceId)}/visual-assessments`,
+      { cache: 'no-store', signal: controller.signal },
+    )
+      .then(responsePayload)
+      .then((payload) => reviewedAssessmentForForecast(payload, selection))
+      .then((assessment) => {
+        if (active) {
+          setReviewedAssessmentResult({ assessment, selectionKey });
+          setReviewedAssessmentFailure(null);
+        }
+      })
+      .catch((assessmentError) => {
+        if (active && assessmentError?.name !== 'AbortError') {
+          setReviewedAssessmentFailure({
+            message: assessmentError?.message || 'No se pudo validar la evaluación revisada.',
+            selectionKey,
+          });
+        }
+      });
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [
+    canUseReviewedEvidence,
+    reviewedEvidenceSelection?.assessmentId,
+    reviewedEvidenceSelection?.evidenceId,
+  ]);
+
   const activeBaseline = baselines.find((baseline) => baseline.status === 'ACTIVE') || null;
   const latestForecast = forecasts[0] || null;
+  const reviewedJourneyRequested = Boolean(
+    canUseReviewedEvidence && reviewedEvidenceSelection,
+  );
+  const reviewedSelectionKey = reviewedJourneyRequested
+    ? `${reviewedEvidenceSelection.evidenceId}:${reviewedEvidenceSelection.assessmentId}`
+    : null;
+  const reviewedAssessment = reviewedAssessmentResult?.selectionKey === reviewedSelectionKey
+    ? reviewedAssessmentResult.assessment
+    : null;
+  const reviewedAssessmentError = reviewedAssessmentFailure?.selectionKey === reviewedSelectionKey
+    ? reviewedAssessmentFailure.message
+    : '';
+  const reviewedAssessmentLoading = Boolean(
+    reviewedJourneyRequested && !reviewedAssessment && !reviewedAssessmentError,
+  );
+  const reviewedProgressPercent = reviewedProgressInput?.selectionKey === reviewedSelectionKey
+    ? reviewedProgressInput.value
+    : '';
+  const reviewedRationale = reviewedRationaleInput?.selectionKey === reviewedSelectionKey
+    ? reviewedRationaleInput.value
+    : '';
+  const reviewedTask = reviewedAssessment
+    ? tasks.find((task) => task.id === reviewedAssessment.taskId) || null
+    : null;
+  const reviewedPoint = /^\d+$/.test(reviewedProgressPercent.trim())
+    ? Number(reviewedProgressPercent.trim())
+    : null;
+  const reviewedPointValid = Boolean(
+    reviewedAssessment
+    && Number.isSafeInteger(reviewedPoint)
+    && reviewedPoint >= reviewedAssessment.rangeMin
+    && reviewedPoint <= reviewedAssessment.rangeMax
+  );
+  const reviewedRationaleValid = (
+    reviewedRationale.trim().length > 0
+    && reviewedRationale.trim().length <= MAX_RATIONALE_LENGTH
+  );
+  const reviewedEvidenceForRequirements = useMemo(() => (
+    reviewedPointValid && reviewedAssessment
+      ? {
+          taskId: reviewedAssessment.taskId,
+          assessmentId: reviewedAssessment.assessmentId,
+          expectedAssessmentRevision: reviewedAssessment.expectedAssessmentRevision,
+          progressPercent: reviewedPoint,
+          rationale: '',
+        }
+      : null
+  ), [reviewedAssessment, reviewedPoint, reviewedPointValid]);
   const missingDateTasks = useMemo(() => tasks.filter((task) => !taskDatesComplete(task)), [tasks]);
   const projectStartMissing = !project?.startsAt;
   const requirements = useMemo(() => {
     if (tasks.length === 0) return [];
     try {
-      return scheduleObservationRequirements(tasks);
+      return scheduleObservationRequirements(tasks, {
+        reviewedEvidence: reviewedEvidenceForRequirements,
+      });
     } catch {
       return [];
     }
-  }, [tasks]);
+  }, [reviewedEvidenceForRequirements, tasks]);
   const requirementPages = Math.max(1, Math.ceil(requirements.length / REQUIREMENTS_PAGE_SIZE));
   const visibleRequirementsPage = Math.min(requirementsPage, requirementPages - 1);
   const visibleRequirements = requirements.slice(
@@ -161,6 +393,7 @@ export default function ScheduleSnapshotsPanel({
     (visibleRequirementsPage + 1) * REQUIREMENTS_PAGE_SIZE,
   );
   const baselineMatchesVisiblePlan = !activeBaseline || activeBaseline.taskCount === tasks.length;
+  const comparison = useMemo(() => forecastComparison(forecastDetail), [forecastDetail]);
 
   function keyFor(kind, payload) {
     const identity = operationIdentity(kind, payload);
@@ -237,7 +470,37 @@ export default function ScheduleSnapshotsPanel({
       if (!baselineMatchesVisiblePlan) {
         throw new Error('El conjunto de tareas cambió desde la línea base. Rebaselinizá antes de calcular.');
       }
-      const observations = buildScheduleObservations(tasks, observationEntries, { asOfDate });
+      let reviewedEvidence = null;
+      if (reviewedJourneyRequested) {
+        if (reviewedAssessmentLoading) {
+          throw new Error('Esperá a que termine la validación de la evaluación revisada.');
+        }
+        if (reviewedAssessmentError || !reviewedAssessment || !reviewedTask) {
+          throw new Error(
+            reviewedAssessmentError
+            || 'La evaluación revisada no corresponde a una tarea visible de esta obra.',
+          );
+        }
+        if (!reviewedPointValid) {
+          throw new Error(
+            `Elegí un porcentaje entero entre ${reviewedAssessment.rangeMin}% y ${reviewedAssessment.rangeMax}%.`,
+          );
+        }
+        const rationale = reviewedRationale.trim();
+        if (!rationale || rationale.length > MAX_RATIONALE_LENGTH) {
+          throw new Error(`Ingresá un fundamento humano de hasta ${MAX_RATIONALE_LENGTH} caracteres.`);
+        }
+        reviewedEvidence = {
+          taskId: reviewedAssessment.taskId,
+          assessmentId: reviewedAssessment.assessmentId,
+          expectedAssessmentRevision: reviewedAssessment.expectedAssessmentRevision,
+          progressPercent: reviewedPoint,
+          rationale,
+        };
+      }
+      const observations = reviewedEvidence
+        ? buildScheduleObservations(tasks, observationEntries, { asOfDate, reviewedEvidence })
+        : buildScheduleObservations(tasks, observationEntries, { asOfDate });
       const input = {
         asOfDate,
         baselineId: activeBaseline.id,
@@ -345,7 +608,6 @@ export default function ScheduleSnapshotsPanel({
             <p className={styles.readinessWarning} role="status">
               {projectStartMissing ? (
                 <>
-                  El cronograma sigue relativo porque la obra no tiene fecha de inicio.{' '}
                   <a href="/dashboard/projects">Completá el inicio de la obra</a> para convertir las tareas a fechas calendario.
                 </>
               ) : (
@@ -365,6 +627,99 @@ export default function ScheduleSnapshotsPanel({
           </div>
           <label>Fecha de corte<input max={today} onChange={(event) => setAsOfDate(event.target.value)} required type="date" value={asOfDate} /></label>
           <p className={styles.truthNote}><i className="fa-solid fa-shield-halved" aria-hidden="true" /> Las fechas reales no se autocompletan con el plan: deben reflejar hechos confirmados.</p>
+          {reviewedJourneyRequested && (
+            <section className={styles.reviewedEvidenceCard} aria-labelledby="reviewed-evidence-title">
+              <div className={styles.reviewedEvidenceHeading}>
+                <div>
+                  <span>Fuente propuesta</span>
+                  <strong id="reviewed-evidence-title">Evidencia visual revisada</strong>
+                </div>
+                <span className={styles.reviewedEvidenceState}>
+                  {reviewedAssessmentLoading
+                    ? 'Validando…'
+                    : reviewedAssessment
+                      ? 'Revisión humana confirmada'
+                      : 'No disponible'}
+                </span>
+              </div>
+
+              {reviewedAssessmentLoading && (
+                <p className={styles.reviewedEvidenceMessage} role="status">
+                  Validando la evaluación exacta y su tarea dentro de esta obra…
+                </p>
+              )}
+              {reviewedAssessmentError && (
+                <p className={styles.reviewedEvidenceError} role="alert">
+                  {reviewedAssessmentError}
+                </p>
+              )}
+              {reviewedAssessment && !reviewedTask && (
+                <p className={styles.reviewedEvidenceError} role="alert">
+                  La tarea vinculada no está disponible en el cronograma actual. Recargá antes de continuar.
+                </p>
+              )}
+              {reviewedAssessment && reviewedTask && (
+                <>
+                  <div className={styles.reviewedEvidenceFacts}>
+                    <div>
+                      <span>Tarea</span>
+                      <strong>{reviewedTask.code ? `${reviewedTask.code} · ` : ''}{reviewedTask.title}</strong>
+                    </div>
+                    <div>
+                      <span>Rango efectivo revisado</span>
+                      <strong>{reviewedAssessment.rangeMin}%–{reviewedAssessment.rangeMax}%</strong>
+                    </div>
+                    <div>
+                      <span>Decisión humana</span>
+                      <strong>{reviewedAssessment.reviewStatus === 'CORRECTED' ? 'Rango corregido' : 'Lectura aprobada'}</strong>
+                    </div>
+                  </div>
+                  <label>
+                    Porcentaje puntual decidido por el Director
+                    <input
+                      aria-describedby="reviewed-progress-help"
+                      max={reviewedAssessment.rangeMax}
+                      min={reviewedAssessment.rangeMin}
+                      onChange={(event) => {
+                        setReviewedProgressInput({
+                          selectionKey: reviewedSelectionKey,
+                          value: event.target.value,
+                        });
+                        setError('');
+                      }}
+                      placeholder={`${reviewedAssessment.rangeMin}–${reviewedAssessment.rangeMax}`}
+                      required
+                      step="1"
+                      type="number"
+                      value={reviewedProgressPercent}
+                    />
+                  </label>
+                  <small id="reviewed-progress-help" className={styles.reviewedEvidenceHelp}>
+                    No elegimos promedio ni completamos este valor automáticamente. Debe ser un entero dentro del rango revisado.
+                  </small>
+                  <label>
+                    Fundamento humano
+                    <textarea
+                      maxLength={MAX_RATIONALE_LENGTH}
+                      onChange={(event) => {
+                        setReviewedRationaleInput({
+                          selectionKey: reviewedSelectionKey,
+                          value: event.target.value,
+                        });
+                        setError('');
+                      }}
+                      placeholder="Explicá por qué este punto del rango representa el avance observado"
+                      required
+                      value={reviewedRationale}
+                    />
+                  </label>
+                  <p className={styles.reviewedEvidenceGuardrail}>
+                    Esta selección alimenta una observación y un forecast auditables. No certifica obra, no autoriza pagos y no modifica la tarea ni la baseline.
+                  </p>
+                </>
+              )}
+            </section>
+          )}
           {requirements.length === 0 ? (
             <div className={styles.emptyRequirements}>Las tareas pendientes usan su duración contractual. No hacen falta datos reales adicionales.</div>
           ) : (
@@ -390,11 +745,109 @@ export default function ScheduleSnapshotsPanel({
             </div>
           )}
           {!baselineMatchesVisiblePlan && <p className={styles.rebaselineWarning}>La baseline contiene {activeBaseline.taskCount} tareas y el plan vigente {tasks.length}. Rebaselinizá antes del próximo corte.</p>}
-          <button disabled={!canManage || loading || Boolean(busy) || !activeBaseline || !baselineMatchesVisiblePlan} type="submit">
+          <button
+            disabled={
+              !canManage
+              || loading
+              || Boolean(busy)
+              || !activeBaseline
+              || !baselineMatchesVisiblePlan
+              || (
+                reviewedJourneyRequested
+                && (
+                  reviewedAssessmentLoading
+                  || Boolean(reviewedAssessmentError)
+                  || !reviewedAssessment
+                  || !reviewedTask
+                  || !reviewedPointValid
+                  || !reviewedRationaleValid
+                )
+              )
+            }
+            type="submit"
+          >
             {busy === 'forecast' ? 'Calculando…' : 'Guardar nuevo corte'}
           </button>
         </form>
       </div>
+
+      {forecastDetailError && latestForecast && (
+        <div className={styles.comparisonUnavailable} role="status">
+          <i className="fa-solid fa-chart-gantt" aria-hidden="true" />
+          <span>{forecastDetailError} El resumen contractual sigue disponible.</span>
+        </div>
+      )}
+
+      {comparison.rows.length > 0 && (
+        <section className={styles.forecastComparison} aria-labelledby="forecast-comparison-title">
+          <div className={styles.comparisonHeading}>
+            <div>
+              <span className={styles.eyebrow}>Último corte guardado</span>
+              <h3 id="forecast-comparison-title">Baseline vs. forecast por tarea</h3>
+              <p>
+                Comparación de sólo lectura. Las barras proyectadas no reescriben el plan vigente ni constituyen certificación.
+              </p>
+            </div>
+            <div className={styles.comparisonLegend} aria-label="Leyenda de la comparación">
+              <span><i data-kind="baseline" aria-hidden="true" />Baseline</span>
+              <span><i data-kind="forecast" aria-hidden="true" />Forecast</span>
+            </div>
+          </div>
+
+          <div className={styles.comparisonRows}>
+            {comparison.rows.map((task) => {
+              const title = `${task.code ? `${task.code} · ` : ''}${task.title || task.sourceTaskId}`;
+              return (
+                <article className={styles.comparisonRow} key={task.sourceTaskId}>
+                  <div className={styles.comparisonTask}>
+                    <strong>{title}</strong>
+                    <div>
+                      <span>{progressSourceLabel(task.progressSource)}</span>
+                      <span>{Number(task.progressPercent) || 0}% observado</span>
+                      <span className={Number(task.finishDeltaDays) > 0 ? styles.comparisonLate : styles.comparisonOnTime}>
+                        {deltaLabel(task.finishDeltaDays)}
+                      </span>
+                    </div>
+                    <small>{forecastDriverLabel(task.driver)}</small>
+                  </div>
+                  <div className={styles.comparisonTimeline}>
+                    <div
+                      aria-label={`${title}: baseline del ${formatDate(task.baselineStart)} al ${formatDate(task.baselineFinish)}`}
+                      className={styles.comparisonTrack}
+                      role="img"
+                    >
+                      <i
+                        className={styles.baselineBar}
+                        style={{ left: task.baselineBar.left, width: task.baselineBar.width }}
+                      />
+                    </div>
+                    <div
+                      aria-label={`${title}: forecast del ${formatDate(task.forecastStart)} al ${formatDate(task.forecastFinish)}`}
+                      className={styles.comparisonTrack}
+                      role="img"
+                    >
+                      <i
+                        className={styles.forecastBar}
+                        style={{ left: task.forecastBar.left, width: task.forecastBar.width }}
+                      />
+                    </div>
+                    <div className={styles.comparisonDates}>
+                      <span>Base {formatDate(task.baselineStart)} → {formatDate(task.baselineFinish)}</span>
+                      <span>Previsto {formatDate(task.forecastStart)} → {formatDate(task.forecastFinish)}</span>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+
+          {comparison.total > comparison.rows.length && (
+            <p className={styles.comparisonLimit}>
+              Se muestran las {comparison.rows.length} tareas con mayor desvío absoluto de {comparison.total}. El cálculo guardado conserva el conjunto completo.
+            </p>
+          )}
+        </section>
+      )}
 
       {forecasts.length > 0 && (
         <div className={styles.history}>

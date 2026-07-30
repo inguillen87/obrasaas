@@ -785,6 +785,8 @@ model PlatformUser {
   verifiedWorkerPaymentDestinations  WorkerPaymentDestination[]     @relation("WorkerPaymentDestinationVerifier")
   requestedVisualAssessments         VisualProgressAssessment[]     @relation("VisualProgressAssessmentRequester")
   reviewedVisualAssessments          VisualProgressAssessment[]     @relation("VisualProgressAssessmentReviewer")
+  reviewedScheduleObservations       ScheduleProgressObservation[]  @relation("ScheduleProgressObservationReviewer")
+  createdScheduleObservations        ScheduleProgressObservation[]  @relation("ScheduleProgressObservationCreator")
   aiDispatchBudgetSettlements        AiDispatchBudgetReservation[]  @relation("AiDispatchBudgetSettlementActor")
   protectedUploads                   ProtectedUpload[]              @relation("ProtectedUploadActor")
 
@@ -870,6 +872,7 @@ model Project {
   replanScenarios                      ReplanScenario[]
   scheduleBaselines                    ScheduleBaseline[]
   scheduleForecastRuns                 ScheduleForecastRun[]
+  scheduleProgressObservations         ScheduleProgressObservation[]
   extraWorkSessions                    ExtraWorkSession[]
   budgetVersions                       BudgetVersion[]
   cashFunds                            CashFund[]
@@ -1576,35 +1579,36 @@ model OperationalProposal {
 }
 
 model Task {
-  id                        String                     @id @default(cuid())
+  id                        String                        @id @default(cuid())
   projectId                 String
-  project                   Project                    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project                   Project                       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   externalId                String?
-  code                      String?                    @db.VarChar(64)
+  code                      String?                       @db.VarChar(64)
   title                     String
   description               String?
-  type                      TaskType                   @default(TASK)
-  status                    TaskStatus                 @default(BACKLOG)
-  progress                  Int                        @default(0)
+  type                      TaskType                      @default(TASK)
+  status                    TaskStatus                    @default(BACKLOG)
+  progress                  Int                           @default(0)
   startsAt                  DateTime?
   endsAt                    DateTime?
   assignee                  String?
-  revision                  Int                        @default(0)
+  revision                  Int                           @default(0)
   parentId                  String?
-  parent                    Task?                      @relation("TaskHierarchy", fields: [projectId, parentId], references: [projectId, id], onDelete: Restrict)
-  children                  Task[]                     @relation("TaskHierarchy")
-  predecessors              TaskDependency[]           @relation("TaskDependencySuccessor")
-  successors                TaskDependency[]           @relation("TaskDependencyPredecessor")
+  parent                    Task?                         @relation("TaskHierarchy", fields: [projectId, parentId], references: [projectId, id], onDelete: Restrict)
+  children                  Task[]                        @relation("TaskHierarchy")
+  predecessors              TaskDependency[]              @relation("TaskDependencySuccessor")
+  successors                TaskDependency[]              @relation("TaskDependencyPredecessor")
   assignments               TaskAssignment[]
   blockers                  ProjectBlocker[]
   dailyLogs                 DailyLog[]
   progressEvidence          ProgressEvidence[]
   visualProgressAssessments VisualProgressAssessment[]
+  progressObservations      ScheduleProgressObservation[]
   extraWorkRequests         ExtraWorkRequest[]
   budgetLines               BudgetLine[]
   metadata                  Json?
-  createdAt                 DateTime                   @default(now())
-  updatedAt                 DateTime                   @updatedAt
+  createdAt                 DateTime                      @default(now())
+  updatedAt                 DateTime                      @updatedAt
 
   @@unique([projectId, externalId])
   @@unique([projectId, id])
@@ -1856,25 +1860,25 @@ model ScheduleForecastRun {
 }
 
 model ScheduleForecastTask {
-  id                      String                 @id @default(cuid())
+  id                      String                       @id @default(cuid())
   organizationId          String
   projectId               String
   forecastRunId           String
   baselineId              String
-  forecastRun             ScheduleForecastRun    @relation(fields: [organizationId, projectId, forecastRunId, baselineId], references: [organizationId, projectId, id, baselineId], onDelete: Restrict, onUpdate: Cascade, map: "ScheduleForecastTask_run_baseline_scope_fkey")
-  sourceTaskId            String                 @db.VarChar(190)
-  baselineTask            ScheduleBaselineTask   @relation("ScheduleForecastTaskBaseline", fields: [organizationId, projectId, baselineId, sourceTaskId], references: [organizationId, projectId, baselineId, sourceTaskId], onDelete: Restrict, onUpdate: Cascade, map: "ScheduleForecastTask_baseline_task_scope_fkey")
+  forecastRun             ScheduleForecastRun          @relation(fields: [organizationId, projectId, forecastRunId, baselineId], references: [organizationId, projectId, id, baselineId], onDelete: Restrict, onUpdate: Cascade, map: "ScheduleForecastTask_run_baseline_scope_fkey")
+  sourceTaskId            String                       @db.VarChar(190)
+  baselineTask            ScheduleBaselineTask         @relation("ScheduleForecastTaskBaseline", fields: [organizationId, projectId, baselineId, sourceTaskId], references: [organizationId, projectId, baselineId, sourceTaskId], onDelete: Restrict, onUpdate: Cascade, map: "ScheduleForecastTask_baseline_task_scope_fkey")
   observedTaskRevision    Int
   progressSource          ScheduleProgressSource
   progressPercent         Int
-  observedOn              DateTime               @db.Date
-  actualStart             DateTime?              @db.Date
-  actualFinish            DateTime?              @db.Date
+  observedOn              DateTime                     @db.Date
+  actualStart             DateTime?                    @db.Date
+  actualFinish            DateTime?                    @db.Date
   remainingDurationDays   Int?
-  baselineStart           DateTime               @db.Date
-  baselineFinish          DateTime               @db.Date
-  forecastStart           DateTime               @db.Date
-  forecastFinish          DateTime               @db.Date
+  baselineStart           DateTime                     @db.Date
+  baselineFinish          DateTime                     @db.Date
+  forecastStart           DateTime                     @db.Date
+  forecastFinish          DateTime                     @db.Date
   forecastDurationDays    Int
   forecastRemainingDays   Int
   startDeltaDays          Int
@@ -1882,10 +1886,59 @@ model ScheduleForecastTask {
   durationDeltaDays       Int
   driver                  Json
   relationshipConstraints Json
-  createdAt               DateTime               @default(now())
+  createdAt               DateTime                     @default(now())
+  progressObservationId   String?
+  progressObservation     ScheduleProgressObservation? @relation(fields: [organizationId, projectId, progressObservationId], references: [organizationId, projectId, id], onDelete: Restrict, onUpdate: Cascade, map: "ScheduleForecastTask_progress_observation_scope_fkey")
 
   @@unique([organizationId, projectId, forecastRunId, sourceTaskId], map: "ScheduleForecastTask_scope_source_key")
   @@index([organizationId, projectId, forecastRunId, finishDeltaDays], map: "ScheduleForecastTask_scope_finish_delta_idx")
+  @@index([organizationId, projectId, progressObservationId], map: "ScheduleForecastTask_scope_progress_observation_idx")
+}
+
+model ScheduleProgressObservation {
+  id                    String                               @id @default(cuid())
+  organizationId        String
+  projectId             String
+  project               Project                              @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, onUpdate: Cascade, map: "ScheduleProgressObservation_project_scope_fkey")
+  taskId                String
+  task                  Task                                 @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict, onUpdate: Cascade, map: "ScheduleProgressObservation_task_scope_fkey")
+  evidenceId            String
+  evidence              ProgressEvidence                     @relation(fields: [projectId, evidenceId], references: [projectId, id], onDelete: Restrict, onUpdate: Cascade, map: "ScheduleProgressObservation_evidence_scope_fkey")
+  assessmentId          String
+  assessment            VisualProgressAssessment             @relation(fields: [projectId, assessmentId], references: [projectId, id], onDelete: Restrict, onUpdate: Cascade, map: "ScheduleProgressObservation_assessment_scope_fkey")
+  source                ScheduleProgressSource               @default(REVIEWED_EVIDENCE)
+  assessmentRevision    Int
+  evidenceRevision      Int
+  taskRevision          Int
+  evidenceSha256        String                               @db.Char(64)
+  evidenceCapturedAt    DateTime
+  planHash              String                               @db.Char(64)
+  reviewStatus          VisualProgressAssessmentReviewStatus
+  reviewedById          String
+  reviewedBy            PlatformUser                         @relation("ScheduleProgressObservationReviewer", fields: [reviewedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  reviewedAt            DateTime
+  progressMin           Int
+  progressMax           Int
+  progressPercent       Int
+  decisionPolicyVersion String                               @default("human-point-within-reviewed-range-v1") @db.VarChar(64)
+  observedOn            DateTime                             @db.Date
+  actualStart           DateTime?                            @db.Date
+  actualFinish          DateTime?                            @db.Date
+  remainingDurationDays Int?
+  rationale             String                               @db.VarChar(1000)
+  operationKeyHash      String                               @db.Char(64)
+  requestFingerprint    String                               @db.Char(64)
+  createdById           String
+  createdBy             PlatformUser                         @relation("ScheduleProgressObservationCreator", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  createdAt             DateTime                             @default(now())
+  forecastTasks         ScheduleForecastTask[]
+
+  @@unique([organizationId, projectId, id], map: "ScheduleProgressObservation_scope_id_key")
+  @@unique([organizationId, projectId, assessmentId, assessmentRevision], map: "ScheduleProgressObservation_scope_assessment_revision_key")
+  @@unique([organizationId, projectId, operationKeyHash], map: "ScheduleProgressObservation_scope_operation_key")
+  @@index([organizationId, projectId, taskId, observedOn], map: "ScheduleProgressObservation_scope_task_observed_idx")
+  @@index([organizationId, projectId, evidenceId, createdAt], map: "ScheduleProgressObservation_scope_evidence_created_idx")
+  @@index([reviewedById, reviewedAt], map: "ScheduleProgressObservation_reviewer_reviewed_idx")
 }
 
 model ExtraWorkRequest {
@@ -2159,6 +2212,7 @@ model ProgressEvidence {
   createdAt                 DateTime                              @default(now())
   updatedAt                 DateTime                              @updatedAt
   visualProgressAssessments VisualProgressAssessment[]
+  scheduleObservations      ScheduleProgressObservation[]
 
   @@unique([projectId, id])
   @@unique([projectId, sourceOperationKeyHash], map: "ProgressEvidence_project_operation_key")
@@ -2298,6 +2352,7 @@ model VisualProgressAssessment {
   revision                  Int                                   @default(0)
   createdAt                 DateTime                              @default(now())
   updatedAt                 DateTime                              @updatedAt
+  scheduleObservations      ScheduleProgressObservation[]
 
   @@unique([projectId, id])
   @@unique([projectId, operationKeyHash], map: "VisualProgressAssessment_project_operation_key")

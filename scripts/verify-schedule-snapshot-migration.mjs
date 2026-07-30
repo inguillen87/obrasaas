@@ -103,6 +103,7 @@ const verifierConnectionString = hardenedVerifierConnectionString(connectionStri
 const EXPECTED_MIGRATIONS = Object.freeze([
   '20260726190000_schedule_baseline_forecast_snapshots',
   '20260728040000_schedule_snapshot_request_fingerprints',
+  '20260729120000_reviewed_progress_forecast_provenance',
 ]);
 
 const EXPECTED_ENUMS = Object.freeze({
@@ -113,6 +114,12 @@ const EXPECTED_ENUMS = Object.freeze({
     'MANUAL_OVERRIDE',
     'REVIEWED_EVIDENCE',
   ],
+  VisualProgressAssessmentReviewStatus: [
+    'PENDING',
+    'APPROVED',
+    'CORRECTED',
+    'REJECTED',
+  ],
 });
 
 const TABLES = Object.freeze([
@@ -121,12 +128,17 @@ const TABLES = Object.freeze([
   'ScheduleBaselineDependency',
   'ScheduleForecastRun',
   'ScheduleForecastTask',
+  'ScheduleProgressObservation',
 ]);
 
 const REQUIRED_TABLES = Object.freeze([
   ...TABLES,
   'Organization',
   'Project',
+  'PlatformUser',
+  'Task',
+  'ProgressEvidence',
+  'VisualProgressAssessment',
   'ReplanScenario',
 ]);
 
@@ -272,6 +284,41 @@ const EXPECTED_COLUMNS = Object.freeze({
     ['durationDeltaDays', INTEGER],
     ['driver', JSONB],
     ['relationshipConstraints', JSONB],
+    ['createdAt', CREATED_AT],
+    ['progressObservationId', NULLABLE_TEXT],
+  ],
+  ScheduleProgressObservation: [
+    ['id', TEXT],
+    ['organizationId', TEXT],
+    ['projectId', TEXT],
+    ['taskId', TEXT],
+    ['evidenceId', TEXT],
+    ['assessmentId', TEXT],
+    ['source', enumeration('ScheduleProgressSource', 'REVIEWED_EVIDENCE')],
+    ['assessmentRevision', INTEGER],
+    ['evidenceRevision', INTEGER],
+    ['taskRevision', INTEGER],
+    ['evidenceSha256', char(64)],
+    ['evidenceCapturedAt', TIMESTAMP],
+    ['planHash', char(64)],
+    ['reviewStatus', enumeration('VisualProgressAssessmentReviewStatus')],
+    ['reviewedById', TEXT],
+    ['reviewedAt', TIMESTAMP],
+    ['progressMin', INTEGER],
+    ['progressMax', INTEGER],
+    ['progressPercent', INTEGER],
+    ['decisionPolicyVersion', {
+      ...varchar(64),
+      defaultPattern: /'human-point-within-reviewed-range-v1'/,
+    }],
+    ['observedOn', DATE],
+    ['actualStart', NULLABLE_DATE],
+    ['actualFinish', NULLABLE_DATE],
+    ['remainingDurationDays', { ...INTEGER, nullable: 'YES' }],
+    ['rationale', varchar(1000)],
+    ['operationKeyHash', char(64)],
+    ['requestFingerprint', char(64)],
+    ['createdById', TEXT],
     ['createdAt', CREATED_AT],
   ],
 });
@@ -420,6 +467,93 @@ const EXPECTED_CHECKS = Object.freeze({
       '131072',
     ],
   },
+  ScheduleForecastTask_progress_observation_check: {
+    table: 'ScheduleForecastTask',
+    fragments: [
+      "progressSource = 'CANONICAL_TASK'",
+      'progressObservationId IS NULL',
+      "progressSource = 'REVIEWED_EVIDENCE'",
+      'progressObservationId IS NOT NULL',
+    ],
+    forbiddenFragments: ["progressSource = 'MANUAL_OVERRIDE'"],
+  },
+  ScheduleProgressObservation_identity_check: {
+    table: 'ScheduleProgressObservation',
+    fragments: [
+      'assessmentRevision >= 0',
+      'evidenceRevision >= 0',
+      'taskRevision >= 0',
+      'taskId',
+      'evidenceId',
+      'assessmentId',
+      'reviewedById',
+      'createdById',
+    ],
+  },
+  ScheduleProgressObservation_provenance_check: {
+    table: 'ScheduleProgressObservation',
+    fragments: [
+      "source = 'REVIEWED_EVIDENCE'",
+      'reviewStatus',
+      'APPROVED',
+      'CORRECTED',
+    ],
+  },
+  ScheduleProgressObservation_hashes_check: {
+    table: 'ScheduleProgressObservation',
+    fragments: [
+      'evidenceSha256',
+      'planHash',
+      'operationKeyHash',
+      'requestFingerprint',
+      '^[0-9a-f]{64}$',
+    ],
+  },
+  ScheduleProgressObservation_reviewed_range_check: {
+    table: 'ScheduleProgressObservation',
+    fragments: [
+      'progressMin >= 0',
+      'progressMin <= 100',
+      'progressMax >= 0',
+      'progressMax <= 100',
+      'progressPercent >= 0',
+      'progressPercent <= 100',
+      'progressMin <= progressPercent',
+      'progressPercent <= progressMax',
+    ],
+  },
+  ScheduleProgressObservation_decision_policy_check: {
+    table: 'ScheduleProgressObservation',
+    fragments: ["decisionPolicyVersion = 'human-point-within-reviewed-range-v1'"],
+  },
+  ScheduleProgressObservation_progress_state_check: {
+    table: 'ScheduleProgressObservation',
+    fragments: [
+      'progressPercent = 0',
+      'actualStart IS NULL',
+      'actualFinish IS NULL',
+      'remainingDurationDays IS NULL',
+      'progressPercent >= 1',
+      'progressPercent <= 99',
+      'actualStart <= observedOn',
+      'remainingDurationDays >= 1',
+      'remainingDurationDays <= 3650',
+      'progressPercent = 100',
+      'actualFinish >= actualStart',
+      'actualFinish <= observedOn',
+    ],
+  },
+  ScheduleProgressObservation_timestamps_check: {
+    table: 'ScheduleProgressObservation',
+    fragments: [
+      'evidenceCapturedAt <= reviewedAt',
+      'reviewedAt <= createdAt',
+    ],
+  },
+  ScheduleProgressObservation_rationale_check: {
+    table: 'ScheduleProgressObservation',
+    fragments: ['rationale', '1000', '[[:cntrl:]]'],
+  },
 });
 
 const ACTIVE_BASELINE_PREDICATE = normalizePredicate("status = 'ACTIVE'");
@@ -525,6 +659,44 @@ const EXPECTED_INDEXES = Object.freeze({
     columns: ['organizationId', 'projectId', 'forecastRunId', 'finishDeltaDays'],
     unique: false,
   },
+  ScheduleForecastTask_scope_progress_observation_idx: {
+    table: 'ScheduleForecastTask',
+    columns: ['organizationId', 'projectId', 'progressObservationId'],
+    unique: false,
+  },
+  ScheduleProgressObservation_pkey: {
+    table: 'ScheduleProgressObservation', columns: ['id'], unique: true, primary: true,
+  },
+  ScheduleProgressObservation_scope_id_key: {
+    table: 'ScheduleProgressObservation',
+    columns: ['organizationId', 'projectId', 'id'],
+    unique: true,
+  },
+  ScheduleProgressObservation_scope_assessment_revision_key: {
+    table: 'ScheduleProgressObservation',
+    columns: ['organizationId', 'projectId', 'assessmentId', 'assessmentRevision'],
+    unique: true,
+  },
+  ScheduleProgressObservation_scope_operation_key: {
+    table: 'ScheduleProgressObservation',
+    columns: ['organizationId', 'projectId', 'operationKeyHash'],
+    unique: true,
+  },
+  ScheduleProgressObservation_scope_task_observed_idx: {
+    table: 'ScheduleProgressObservation',
+    columns: ['organizationId', 'projectId', 'taskId', 'observedOn'],
+    unique: false,
+  },
+  ScheduleProgressObservation_scope_evidence_created_idx: {
+    table: 'ScheduleProgressObservation',
+    columns: ['organizationId', 'projectId', 'evidenceId', 'createdAt'],
+    unique: false,
+  },
+  ScheduleProgressObservation_reviewer_reviewed_idx: {
+    table: 'ScheduleProgressObservation',
+    columns: ['reviewedById', 'reviewedAt'],
+    unique: false,
+  },
 });
 
 const EXPECTED_FOREIGN_KEYS = Object.freeze({
@@ -612,6 +784,55 @@ const EXPECTED_FOREIGN_KEYS = Object.freeze({
     targetColumns: ['organizationId', 'projectId', 'baselineId', 'sourceTaskId'],
     deferred: false,
   },
+  ScheduleForecastTask_progress_observation_scope_fkey: {
+    table: 'ScheduleForecastTask',
+    target: 'ScheduleProgressObservation',
+    columns: ['organizationId', 'projectId', 'progressObservationId'],
+    targetColumns: ['organizationId', 'projectId', 'id'],
+    deferred: false,
+  },
+  ScheduleProgressObservation_project_scope_fkey: {
+    table: 'ScheduleProgressObservation',
+    target: 'Project',
+    columns: ['organizationId', 'projectId'],
+    targetColumns: ['organizationId', 'id'],
+    deferred: false,
+  },
+  ScheduleProgressObservation_task_scope_fkey: {
+    table: 'ScheduleProgressObservation',
+    target: 'Task',
+    columns: ['projectId', 'taskId'],
+    targetColumns: ['projectId', 'id'],
+    deferred: false,
+  },
+  ScheduleProgressObservation_evidence_scope_fkey: {
+    table: 'ScheduleProgressObservation',
+    target: 'ProgressEvidence',
+    columns: ['projectId', 'evidenceId'],
+    targetColumns: ['projectId', 'id'],
+    deferred: false,
+  },
+  ScheduleProgressObservation_assessment_scope_fkey: {
+    table: 'ScheduleProgressObservation',
+    target: 'VisualProgressAssessment',
+    columns: ['projectId', 'assessmentId'],
+    targetColumns: ['projectId', 'id'],
+    deferred: false,
+  },
+  ScheduleProgressObservation_reviewedById_fkey: {
+    table: 'ScheduleProgressObservation',
+    target: 'PlatformUser',
+    columns: ['reviewedById'],
+    targetColumns: ['id'],
+    deferred: false,
+  },
+  ScheduleProgressObservation_createdById_fkey: {
+    table: 'ScheduleProgressObservation',
+    target: 'PlatformUser',
+    columns: ['createdById'],
+    targetColumns: ['id'],
+    deferred: false,
+  },
 });
 
 const EXPECTED_TRIGGERS = Object.freeze({
@@ -629,6 +850,16 @@ const EXPECTED_TRIGGERS = Object.freeze({
   },
   ScheduleForecastRun_seal: {
     table: 'ScheduleForecastRun', type: 7, functionName: 'obrasaas_schedule_forecast_seal',
+  },
+  ScheduleProgressObservation_provenance_validate: {
+    table: 'ScheduleProgressObservation',
+    type: 7,
+    functionName: 'obrasaas_schedule_progress_observation_validate',
+  },
+  ScheduleForecastTask_progress_observation_validate: {
+    table: 'ScheduleForecastTask',
+    type: 7,
+    functionName: 'obrasaas_schedule_forecast_progress_observation_validate',
   },
   ...Object.fromEntries(TABLES.flatMap((table) => [
     [`${table}_append_only`, {
@@ -769,6 +1000,12 @@ async function assertChecks(client) {
       invariant(
         definition.includes(normalizeDefinition(fragment)),
         `${name} is missing a governed invariant: ${fragment}.`,
+      );
+    }
+    for (const fragment of expected.forbiddenFragments || []) {
+      invariant(
+        !definition.includes(normalizeDefinition(fragment)),
+        `${name} contains a forbidden invariant: ${fragment}.`,
       );
     }
   }
@@ -964,6 +1201,32 @@ async function assertTriggerFunctions(client) {
       'newer active baseline',
       '55000',
     ],
+    obrasaas_schedule_progress_observation_validate: [
+      'TG_TABLE_SCHEMA',
+      'ProgressEvidence',
+      'VisualProgressAssessment',
+      'COMPLETED',
+      'APPROVED',
+      'CORRECTED',
+      'inputSha256',
+      'baselineHash',
+      'capturedAt',
+      'evidenceCapturedAt',
+      'human-point-within-reviewed-range-v1',
+      'FOR SHARE',
+      '55000',
+    ],
+    obrasaas_schedule_forecast_progress_observation_validate: [
+      'TG_TABLE_SCHEMA',
+      'ScheduleProgressObservation',
+      'CANONICAL_TASK',
+      'MANUAL_OVERRIDE',
+      'REVIEWED_EVIDENCE',
+      'progressObservationId',
+      'IS DISTINCT FROM',
+      'human-point-within-reviewed-range-v1',
+      '55000',
+    ],
     obrasaas_schedule_snapshot_append_only: ['append-only', '55000'],
   };
   const result = await client.query(
@@ -1022,6 +1285,143 @@ async function expectSqlFailure(
 
 function sha256Fixture(seed) {
   return seed.toString(16).padStart(64, '0');
+}
+
+async function insertReviewedProgressSourceFixtures(client, fixtures) {
+  const capturedAt = '2026-01-02 12:00:00';
+  const completedAt = '2026-01-02 13:00:00';
+  const reviewedAt = '2026-01-02 14:00:00';
+
+  for (const [id, emailSuffix] of [
+    [fixtures.reviewerId, 'reviewer'],
+    [fixtures.creatorId, 'creator'],
+  ]) {
+    await client.query(
+      `INSERT INTO "PlatformUser" (
+         "id", "clerkUserId", "primaryEmail", "fullName", "updatedAt"
+       ) VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)`,
+      [
+        id,
+        `clerk_${emailSuffix}_${fixtures.suffix}`,
+        `${emailSuffix}-${fixtures.suffix}@schedule-verifier.invalid`,
+        `Schedule verifier ${emailSuffix}`,
+      ],
+    );
+  }
+
+  for (const [id, title, revision] of [
+    [fixtures.firstSourceTaskId, 'Reviewed progress task', 2],
+    [fixtures.secondSourceTaskId, 'Canonical progress task', 1],
+  ]) {
+    await client.query(
+      `INSERT INTO "Task" (
+         "id", "projectId", "title", "revision", "createdAt", "updatedAt"
+       ) VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+      [id, fixtures.projectId, title, revision],
+    );
+  }
+
+  await client.query(
+    `INSERT INTO "ProgressEvidence" (
+       "id", "projectId", "taskId", "capturedAt", "media", "status",
+       "revision", "reviewedAt", "createdAt", "updatedAt"
+     ) VALUES (
+       $1, $2, $3, $4, $5::jsonb, 'APPROVED', 1, $6, $4, $6
+     )`,
+    [
+      fixtures.evidenceId,
+      fixtures.projectId,
+      fixtures.firstSourceTaskId,
+      capturedAt,
+      JSON.stringify({ sha256: fixtures.evidenceSha256, mimeType: 'image/jpeg' }),
+      completedAt,
+    ],
+  );
+
+  await client.query(
+    `INSERT INTO "VisualProgressAssessment" (
+       "id", "projectId", "taskId", "evidenceId", "operationKeyHash",
+       "requestFingerprint", "provider", "providerModel", "analyzerVersion",
+       "inputSha256", "baselineHash", "taskRevisionAtRequest",
+       "evidenceRevisionAtRequest", "status", "leaseExpiresAt", "attemptCount",
+       "summary", "elementType", "progressMin", "progressMax", "confidence",
+       "quality", "observations", "limitations", "providerResponseId",
+       "failureCode", "completedAt", "requestedById", "reviewStatus",
+       "reviewedById", "reviewedAt", "reviewNote", "correctedProgressMin",
+       "correctedProgressMax", "revision", "createdAt", "updatedAt"
+     ) VALUES (
+       $1, $2, $3, $4, $5, $6, 'openai', 'verification-fixture',
+       'visual-progress-v1', $7, $8, 2, 1, 'COMPLETED', NULL, 1,
+       'Reviewed construction progress fixture', 'wall', 40, 60, 0.8,
+       $9::jsonb, $10::jsonb, $11::jsonb, 'fixture-response', NULL, $12,
+       $13, 'APPROVED', $14, $15, NULL, NULL, NULL, 2, $16, $15
+     )`,
+    [
+      fixtures.assessmentId,
+      fixtures.projectId,
+      fixtures.firstSourceTaskId,
+      fixtures.evidenceId,
+      sha256Fixture(701),
+      sha256Fixture(702),
+      fixtures.evidenceSha256,
+      fixtures.planHash,
+      JSON.stringify({ overall: 'good' }),
+      JSON.stringify(['Visible wall progress']),
+      JSON.stringify([]),
+      completedAt,
+      fixtures.creatorId,
+      fixtures.reviewerId,
+      reviewedAt,
+      capturedAt,
+    ],
+  );
+}
+
+async function insertScheduleProgressObservation(client, fixtures, overrides = {}) {
+  await client.query(
+    `INSERT INTO "ScheduleProgressObservation" (
+       "id", "organizationId", "projectId", "taskId", "evidenceId",
+       "assessmentId", "source", "assessmentRevision", "evidenceRevision",
+       "taskRevision", "evidenceSha256", "evidenceCapturedAt", "planHash",
+       "reviewStatus", "reviewedById", "reviewedAt", "progressMin",
+       "progressMax", "progressPercent", "decisionPolicyVersion", "observedOn",
+       "actualStart", "actualFinish", "remainingDurationDays", "rationale",
+       "operationKeyHash", "requestFingerprint", "createdById"
+     ) VALUES (
+       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+       $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28
+     )`,
+    [
+      overrides.id || `schedule_observation_${randomUUID()}`,
+      overrides.organizationId || fixtures.organizationId,
+      overrides.projectId || fixtures.projectId,
+      overrides.taskId || fixtures.firstSourceTaskId,
+      overrides.evidenceId || fixtures.evidenceId,
+      overrides.assessmentId || fixtures.assessmentId,
+      overrides.source || 'REVIEWED_EVIDENCE',
+      overrides.assessmentRevision ?? 2,
+      overrides.evidenceRevision ?? 1,
+      overrides.taskRevision ?? 2,
+      overrides.evidenceSha256 || fixtures.evidenceSha256,
+      overrides.evidenceCapturedAt || '2026-01-02 12:00:00',
+      overrides.planHash || fixtures.planHash,
+      overrides.reviewStatus || 'APPROVED',
+      overrides.reviewedById || fixtures.reviewerId,
+      overrides.reviewedAt || '2026-01-02 14:00:00',
+      overrides.progressMin ?? 40,
+      overrides.progressMax ?? 60,
+      overrides.progressPercent ?? 50,
+      overrides.decisionPolicyVersion || 'human-point-within-reviewed-range-v1',
+      overrides.observedOn || '2026-01-02',
+      overrides.actualStart === undefined ? '2026-01-01' : overrides.actualStart,
+      overrides.actualFinish ?? null,
+      overrides.remainingDurationDays === undefined ? 2 : overrides.remainingDurationDays,
+      overrides.rationale || 'Human-selected point inside the approved review range.',
+      overrides.operationKeyHash || sha256Fixture(overrides.hashSeed || 710),
+      overrides.requestFingerprint || sha256Fixture((overrides.hashSeed || 710) + 1),
+      overrides.createdById || fixtures.creatorId,
+    ],
+  );
 }
 
 async function insertBaselineTask(client, fixtures, overrides = {}) {
@@ -1204,10 +1604,12 @@ async function insertForecastTask(client, fixtures, rawOverrides) {
        "remainingDurationDays", "baselineStart", "baselineFinish",
        "forecastStart", "forecastFinish", "forecastDurationDays",
        "forecastRemainingDays", "startDeltaDays", "finishDeltaDays",
-       "durationDeltaDays", "driver", "relationshipConstraints"
+       "durationDeltaDays", "driver", "relationshipConstraints",
+       "progressObservationId"
      ) VALUES (
        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-       $14, $15, $16, $17, $18, $19, $20, $21, $22, $23::jsonb, $24::jsonb
+       $14, $15, $16, $17, $18, $19, $20, $21, $22, $23::jsonb, $24::jsonb,
+       $25
      )`,
     [
       overrides.id || `forecast_task_${randomUUID()}`,
@@ -1234,6 +1636,7 @@ async function insertForecastTask(client, fixtures, rawOverrides) {
       overrides.durationDeltaDays,
       JSON.stringify(overrides.driver),
       JSON.stringify(overrides.relationshipConstraints),
+      overrides.progressObservationId ?? null,
     ],
   );
 }
@@ -1299,11 +1702,19 @@ async function assertTransactionalSmoke(client) {
   const suffix = randomUUID().replaceAll('-', '');
   const now = new Date();
   const fixtures = {
+    suffix,
     organizationId: `schedule_verify_org_${suffix}`,
     projectId: `schedule_verify_project_${suffix}`,
     otherProjectId: `schedule_verify_other_project_${suffix}`,
     firstSourceTaskId: `schedule_verify_task_a_${suffix}`,
     secondSourceTaskId: `schedule_verify_task_b_${suffix}`,
+    reviewerId: `schedule_verify_reviewer_${suffix}`,
+    creatorId: `schedule_verify_creator_${suffix}`,
+    evidenceId: `schedule_verify_evidence_${suffix}`,
+    assessmentId: `schedule_verify_assessment_${suffix}`,
+    observationId: `schedule_verify_observation_${suffix}`,
+    evidenceSha256: sha256Fixture(703),
+    planHash: sha256Fixture(704),
     baselineV1Id: `schedule_verify_baseline_v1_${suffix}`,
     baselineV2Id: `schedule_verify_baseline_v2_${suffix}`,
     forecastRunId: `schedule_verify_forecast_${suffix}`,
@@ -1330,6 +1741,83 @@ async function assertTransactionalSmoke(client) {
       [id, fixtures.organizationId, 'Schedule verifier project', slug, now],
     );
   }
+
+  await insertReviewedProgressSourceFixtures(client, fixtures);
+  await insertScheduleProgressObservation(client, fixtures, {
+    id: fixtures.observationId,
+    hashSeed: 710,
+  });
+
+  await expectSqlFailure(
+    client,
+    () => insertScheduleProgressObservation(client, fixtures, {
+      evidenceCapturedAt: '2026-01-02 12:00:01',
+      hashSeed: 720,
+    }),
+    '55000',
+    null,
+    'ScheduleProgressObservation captured-at provenance guard',
+  );
+  await expectSqlFailure(
+    client,
+    () => insertScheduleProgressObservation(client, fixtures, {
+      taskRevision: 1,
+      hashSeed: 722,
+    }),
+    '55000',
+    null,
+    'ScheduleProgressObservation revision-only stale task guard',
+  );
+  await expectSqlFailure(
+    client,
+    () => insertScheduleProgressObservation(client, fixtures, {
+      evidenceRevision: 0,
+      hashSeed: 724,
+    }),
+    '55000',
+    null,
+    'ScheduleProgressObservation revision-only stale evidence guard',
+  );
+  await expectSqlFailure(
+    client,
+    () => insertScheduleProgressObservation(client, fixtures, {
+      planHash: sha256Fixture(999),
+      hashSeed: 726,
+    }),
+    '55000',
+    null,
+    'ScheduleProgressObservation assessment plan-hash guard',
+  );
+  await expectSqlFailure(
+    client,
+    () => insertScheduleProgressObservation(client, fixtures, {
+      decisionPolicyVersion: 'midpoint-v0',
+      hashSeed: 728,
+    }),
+    '55000',
+    null,
+    'ScheduleProgressObservation human decision policy guard',
+  );
+  await expectSqlFailure(
+    client,
+    () => insertScheduleProgressObservation(client, fixtures, {
+      progressPercent: 61,
+      hashSeed: 730,
+    }),
+    '23514',
+    'ScheduleProgressObservation_reviewed_range_check',
+    'ScheduleProgressObservation reviewed range guard',
+  );
+  await expectSqlFailure(
+    client,
+    () => insertScheduleProgressObservation(client, fixtures, {
+      rationale: 'Unsafe\ncontrol',
+      hashSeed: 732,
+    }),
+    '23514',
+    'ScheduleProgressObservation_rationale_check',
+    'ScheduleProgressObservation rationale control-character guard',
+  );
 
   await insertTwoTaskBaselineChildren(client, fixtures, fixtures.baselineV1Id);
   await insertBaselineRoot(client, fixtures, {
@@ -1613,6 +2101,10 @@ async function assertTransactionalSmoke(client) {
   await insertTwoForecastTasks(client, fixtures, {
     runId: fixtures.forecastRunId,
     baselineId: fixtures.baselineV2Id,
+    first: {
+      progressSource: 'REVIEWED_EVIDENCE',
+      progressObservationId: fixtures.observationId,
+    },
   });
   await insertForecastRun(client, fixtures, {
     id: fixtures.forecastRunId,
@@ -1621,6 +2113,57 @@ async function assertTransactionalSmoke(client) {
   });
   await client.query('SET CONSTRAINTS ALL IMMEDIATE');
   await client.query('SET CONSTRAINTS ALL DEFERRED');
+
+  await expectSqlFailure(
+    client,
+    () => insertForecastTask(client, fixtures, {
+      forecastRunId: `schedule_verify_manual_closed_${suffix}`,
+      baselineId: fixtures.baselineV2Id,
+      sourceTaskId: fixtures.firstSourceTaskId,
+      progressSource: 'MANUAL_OVERRIDE',
+    }),
+    '55000',
+    null,
+    'ScheduleForecastTask manual override closure',
+  );
+  await expectSqlFailure(
+    client,
+    () => insertForecastTask(client, fixtures, {
+      forecastRunId: `schedule_verify_reviewed_missing_${suffix}`,
+      baselineId: fixtures.baselineV2Id,
+      sourceTaskId: fixtures.firstSourceTaskId,
+      progressSource: 'REVIEWED_EVIDENCE',
+    }),
+    '55000',
+    null,
+    'ScheduleForecastTask reviewed observation required guard',
+  );
+  await expectSqlFailure(
+    client,
+    () => insertForecastTask(client, fixtures, {
+      forecastRunId: `schedule_verify_canonical_link_${suffix}`,
+      baselineId: fixtures.baselineV2Id,
+      sourceTaskId: fixtures.firstSourceTaskId,
+      progressObservationId: fixtures.observationId,
+    }),
+    '55000',
+    null,
+    'ScheduleForecastTask canonical observation exclusion guard',
+  );
+  await expectSqlFailure(
+    client,
+    () => insertForecastTask(client, fixtures, {
+      forecastRunId: `schedule_verify_reviewed_mismatch_${suffix}`,
+      baselineId: fixtures.baselineV2Id,
+      sourceTaskId: fixtures.firstSourceTaskId,
+      progressSource: 'REVIEWED_EVIDENCE',
+      progressObservationId: fixtures.observationId,
+      progressPercent: 51,
+    }),
+    '55000',
+    null,
+    'ScheduleForecastTask exact observation projection guard',
+  );
 
   await expectSqlFailure(
     client,
@@ -1810,6 +2353,11 @@ async function assertTransactionalSmoke(client) {
       predicate: '"forecastRunId" = $1 AND "sourceTaskId" = $2',
       parameters: [fixtures.forecastRunId, fixtures.firstSourceTaskId],
     },
+    {
+      table: 'ScheduleProgressObservation',
+      predicate: '"id" = $1',
+      parameters: [fixtures.observationId],
+    },
   ];
   for (const target of immutableTargets) {
     await expectSqlFailure(
@@ -1890,7 +2438,7 @@ try {
   await assertTriggerFunctions(client);
   await assertTransactionalSmoke(client);
   console.log(
-    'Verified immutable schedule baseline/forecast snapshots, atomic rebaseline, scoped relations and rollback-only smoke.',
+    'Verified immutable schedule baseline/forecast snapshots, reviewed progress provenance, atomic rebaseline, scoped relations and rollback-only smoke.',
   );
   await client.query('ROLLBACK');
   transactionOpen = false;

@@ -8,6 +8,7 @@ import {
   listScheduleForecastRuns,
   publishScheduleBaseline,
 } from '../src/lib/schedule-snapshots.js';
+import { canonicalPlanHash } from '../src/lib/visual-progress-assessments.js';
 
 const SCOPE = Object.freeze({ organizationId: 'organization-a', projectId: 'project-a' });
 const ACTOR_ID = 'user-a';
@@ -359,6 +360,199 @@ function forecastInput() {
   };
 }
 
+const REVIEWED_MEDIA_SHA256 = 'b'.repeat(64);
+
+function reviewedLiveTask(overrides = {}) {
+  return {
+    id: 'task-reviewed',
+    externalId: null,
+    code: '2.1',
+    title: 'Mampostería revisada',
+    type: 'TASK',
+    status: 'IN_PROGRESS',
+    progress: 20,
+    startsAt: new Date('2026-07-20T00:00:00.000Z'),
+    endsAt: new Date('2026-07-30T00:00:00.000Z'),
+    parentId: null,
+    revision: 6,
+    predecessors: [],
+    ...overrides,
+  };
+}
+
+function reviewedBaselineTask(task = reviewedLiveTask(), overrides = {}) {
+  return {
+    baselineId: 'baseline-reviewed',
+    sourceTaskId: task.id,
+    sourceTaskRevision: 2,
+    code: task.code,
+    title: task.title,
+    type: task.type,
+    plannedStart: new Date('2026-07-20T00:00:00.000Z'),
+    plannedFinish: new Date('2026-07-30T00:00:00.000Z'),
+    plannedDurationDays: 11,
+    ...overrides,
+  };
+}
+
+function reviewedAssessmentFixture(liveTasks, overrides = {}) {
+  const base = {
+    id: 'assessment-reviewed',
+    projectId: SCOPE.projectId,
+    taskId: liveTasks[0].id,
+    evidenceId: 'evidence-reviewed',
+    revision: 4,
+    status: 'COMPLETED',
+    reviewStatus: 'APPROVED',
+    reviewedById: 'reviewer-a',
+    reviewedAt: new Date('2026-07-29T12:00:00.000Z'),
+    progressMin: 35,
+    progressMax: 55,
+    correctedProgressMin: null,
+    correctedProgressMax: null,
+    inputSha256: REVIEWED_MEDIA_SHA256,
+    taskRevisionAtRequest: liveTasks[0].revision,
+    evidenceRevisionAtRequest: 3,
+    baselineHash: canonicalPlanHash(liveTasks),
+    evidence: {
+      id: 'evidence-reviewed',
+      taskId: liveTasks[0].id,
+      status: 'APPROVED',
+      revision: 3,
+      media: { sha256: REVIEWED_MEDIA_SHA256, storageKey: 'private/source.jpg' },
+      capturedAt: new Date('2026-07-28T16:00:00.000Z'),
+    },
+  };
+  return {
+    ...base,
+    ...overrides,
+    evidence: { ...base.evidence, ...(overrides.evidence || {}) },
+  };
+}
+
+function reviewedForecastInput({
+  task = reviewedLiveTask(),
+  assessment = null,
+  progressPercent = 45,
+  rationale = 'Punto confirmado por el director de obra.',
+  observations = null,
+} = {}) {
+  const currentAssessment = assessment || reviewedAssessmentFixture([task]);
+  return {
+    asOfDate: '2026-07-29',
+    baselineId: 'baseline-reviewed',
+    expectedProjectStateVersion: 7,
+    observations: observations || [{
+      sourceTaskId: task.id,
+      expectedTaskRevision: task.revision,
+      progressPercent,
+      progressSource: 'REVIEWED_EVIDENCE',
+      reviewedEvidence: {
+        assessmentId: currentAssessment.id,
+        expectedAssessmentRevision: currentAssessment.revision,
+        rationale,
+      },
+      actualStartDate: '2026-07-20',
+      actualFinishDate: progressPercent === 100 ? '2026-07-29' : null,
+      remainingDurationDays: progressPercent === 100 ? 0 : 4,
+    }],
+  };
+}
+
+function reviewedForecastHarness({
+  liveTasks = [reviewedLiveTask()],
+  baselineTasks = null,
+  assessments = null,
+  existingObservation = null,
+  baseline = {},
+} = {}) {
+  const scopedBaselineTasks = baselineTasks || liveTasks.map((task) => reviewedBaselineTask(task));
+  const assessmentRows = assessments || [reviewedAssessmentFixture(liveTasks)];
+  const captured = {
+    assessmentQueries: [],
+    audits: [],
+    forecastTasks: [],
+    forecastRuns: [],
+    observationCreates: [],
+    observationQueries: [],
+    taskUpdates: 0,
+    baselineUpdates: 0,
+  };
+  const transaction = {
+    async $executeRawUnsafe() { return 1; },
+    project: {
+      findFirst: async () => ({ id: SCOPE.projectId, organizationId: SCOPE.organizationId, status: 'ACTIVE' }),
+    },
+    projectSnapshot: { findUnique: async () => ({ version: 7 }) },
+    scheduleForecastRun: {
+      findFirst: async () => null,
+      async create(args) {
+        captured.forecastRuns.push(args.data);
+        return { ...args.data, createdAt: new Date('2026-07-29T18:00:00.000Z') };
+      },
+    },
+    scheduleBaseline: {
+      findFirst: async () => ({
+        id: 'baseline-reviewed',
+        organizationId: SCOPE.organizationId,
+        projectId: SCOPE.projectId,
+        status: 'ACTIVE',
+        timeZone: 'America/Argentina/Buenos_Aires',
+        taskCount: scopedBaselineTasks.length,
+        dependencyCount: 0,
+        contentHash: 'a'.repeat(64),
+        ...baseline,
+      }),
+      async update() { captured.baselineUpdates += 1; },
+      async updateMany() { captured.baselineUpdates += 1; },
+    },
+    scheduleBaselineTask: { findMany: async () => scopedBaselineTasks },
+    scheduleBaselineDependency: { findMany: async () => [] },
+    task: {
+      findMany: async () => liveTasks,
+      async update() { captured.taskUpdates += 1; },
+      async updateMany() { captured.taskUpdates += 1; },
+    },
+    visualProgressAssessment: {
+      async findMany(args) {
+        captured.assessmentQueries.push(args);
+        const ids = new Set(args.where.id.in);
+        return assessmentRows.filter((row) => ids.has(row.id));
+      },
+    },
+    scheduleProgressObservation: {
+      async findFirst(args) {
+        captured.observationQueries.push(args);
+        if (!existingObservation) return null;
+        return existingObservation.assessmentId === args.where.assessmentId
+          && existingObservation.assessmentRevision === args.where.assessmentRevision
+          ? existingObservation
+          : null;
+      },
+      async create(args) {
+        captured.observationCreates.push(args.data);
+        return args.data;
+      },
+    },
+    scheduleForecastTask: {
+      async createMany(args) {
+        captured.forecastTasks.push(...args.data);
+        return { count: args.data.length };
+      },
+    },
+    auditLog: {
+      async create(args) {
+        captured.audits.push(args.data);
+        return args.data;
+      },
+    },
+  };
+  return {
+    captured,
+    prisma: { $transaction: async (operation) => operation(transaction) },
+  };
+}
+
 test('forecast calculation persists a reproducible complete run child-first', async () => {
   const harness = forecastHarness();
   const result = await calculateScheduleForecast(harness.prisma, {
@@ -385,6 +579,235 @@ test('forecast calculation persists a reproducible complete run child-first', as
   assert.equal(harness.captured.audit[0].action, 'schedule.forecast.calculated');
 });
 
+test('reviewed evidence materializes one immutable observation and links it without mutating task or baseline', async () => {
+  const task = reviewedLiveTask();
+  const assessment = reviewedAssessmentFixture([task]);
+  const harness = reviewedForecastHarness({ liveTasks: [task], assessments: [assessment] });
+  const rationale = 'AUDIT-PRIVATE-RATIONALE: contraste humano del paño ejecutado.';
+  const result = await calculateScheduleForecast(harness.prisma, {
+    scope: SCOPE,
+    actorId: ACTOR_ID,
+    idempotencyKey: 'forecast-reviewed-success-0001',
+    input: reviewedForecastInput({ task, assessment, progressPercent: 45, rationale }),
+  });
+
+  assert.equal(result.replayed, false);
+  assert.equal(harness.captured.observationCreates.length, 1);
+  const observation = harness.captured.observationCreates[0];
+  assert.equal(observation.source, 'REVIEWED_EVIDENCE');
+  assert.equal(observation.assessmentId, assessment.id);
+  assert.equal(observation.assessmentRevision, assessment.revision);
+  assert.equal(observation.progressMin, 35);
+  assert.equal(observation.progressMax, 55);
+  assert.equal(observation.progressPercent, 45);
+  assert.equal(observation.rationale, rationale);
+  assert.match(observation.requestFingerprint, /^[0-9a-f]{64}$/);
+  assert.equal(harness.captured.forecastTasks[0].progressObservationId, observation.id);
+  assert.equal(harness.captured.forecastTasks[0].progressSource, 'REVIEWED_EVIDENCE');
+  assert.equal(harness.captured.taskUpdates, 0);
+  assert.equal(harness.captured.baselineUpdates, 0);
+  assert.deepEqual(harness.captured.assessmentQueries[0].where, {
+    projectId: SCOPE.projectId,
+    id: { in: [assessment.id] },
+  });
+
+  const observationAudit = harness.captured.audits.find((row) => (
+    row.action === 'schedule.progress_observation.created'
+  ));
+  assert.ok(observationAudit);
+  assert.deepEqual(Object.keys(observationAudit.metadata).sort(), [
+    'asOfDate',
+    'assessmentId',
+    'assessmentRevision',
+    'baselineId',
+    'decisionPolicyVersion',
+    'evidenceCapturedOn',
+    'evidenceId',
+    'evidenceRevision',
+    'progressPercent',
+    'projectId',
+    'reviewStatus',
+    'taskId',
+  ]);
+  const auditJson = JSON.stringify(observationAudit);
+  for (const secret of [rationale, REVIEWED_MEDIA_SHA256, 'storageKey', 'latitude', 'longitude', 'accuracyMeters']) {
+    assert.equal(auditJson.includes(secret), false, `audit leaked ${secret}`);
+  }
+});
+
+test('corrected visual review uses its corrected range and rejects a human point outside it', async () => {
+  const task = reviewedLiveTask();
+  const corrected = reviewedAssessmentFixture([task], {
+    reviewStatus: 'CORRECTED',
+    progressMin: 10,
+    progressMax: 20,
+    correctedProgressMin: 62,
+    correctedProgressMax: 70,
+  });
+  const accepted = reviewedForecastHarness({ liveTasks: [task], assessments: [corrected] });
+  await calculateScheduleForecast(accepted.prisma, {
+    scope: SCOPE,
+    actorId: ACTOR_ID,
+    idempotencyKey: 'forecast-reviewed-corrected-0001',
+    input: reviewedForecastInput({ task, assessment: corrected, progressPercent: 66 }),
+  });
+  assert.equal(accepted.captured.observationCreates[0].reviewStatus, 'CORRECTED');
+  assert.equal(accepted.captured.observationCreates[0].progressMin, 62);
+  assert.equal(accepted.captured.observationCreates[0].progressMax, 70);
+  assert.equal(accepted.captured.observationCreates[0].progressPercent, 66);
+
+  const rejected = reviewedForecastHarness({ liveTasks: [task], assessments: [corrected] });
+  await assert.rejects(
+    calculateScheduleForecast(rejected.prisma, {
+      scope: SCOPE,
+      actorId: ACTOR_ID,
+      idempotencyKey: 'forecast-reviewed-corrected-0002',
+      input: reviewedForecastInput({ task, assessment: corrected, progressPercent: 71 }),
+    }),
+    (error) => error instanceof ScheduleSnapshotError
+      && error.code === 'SCHEDULE_FORECAST_REVIEWED_EVIDENCE_POINT_OUT_OF_RANGE'
+      && error.details?.minimum === 62
+      && error.details?.maximum === 70,
+  );
+  assert.equal(rejected.captured.observationCreates.length, 0);
+  assert.equal(rejected.captured.forecastTasks.length, 0);
+});
+
+test('reviewed evidence rejects cross-task, stale source, and stale plan provenance', async () => {
+  const task = reviewedLiveTask();
+  const cases = [
+    {
+      code: 'SCHEDULE_FORECAST_REVIEWED_EVIDENCE_SCOPE',
+      assessment: reviewedAssessmentFixture([task], {
+        taskId: 'foreign-task',
+        evidence: { taskId: 'foreign-task' },
+      }),
+    },
+    {
+      code: 'SCHEDULE_FORECAST_REVIEWED_EVIDENCE_SOURCE_STALE',
+      assessment: reviewedAssessmentFixture([task], {
+        evidence: { status: 'PENDING' },
+      }),
+    },
+    {
+      code: 'SCHEDULE_FORECAST_REVIEWED_EVIDENCE_SOURCE_STALE',
+      assessment: reviewedAssessmentFixture([task], {
+        evidence: { revision: 4 },
+      }),
+    },
+    {
+      code: 'SCHEDULE_FORECAST_REVIEWED_EVIDENCE_PLAN_STALE',
+      assessment: reviewedAssessmentFixture([task], {
+        baselineHash: 'f'.repeat(64),
+      }),
+    },
+  ];
+  for (const [index, candidate] of cases.entries()) {
+    const harness = reviewedForecastHarness({ liveTasks: [task], assessments: [candidate.assessment] });
+    await assert.rejects(
+      calculateScheduleForecast(harness.prisma, {
+        scope: SCOPE,
+        actorId: ACTOR_ID,
+        idempotencyKey: `forecast-reviewed-stale-000${index + 1}`,
+        input: reviewedForecastInput({ task, assessment: candidate.assessment }),
+      }),
+      (error) => error instanceof ScheduleSnapshotError && error.code === candidate.code,
+    );
+    assert.equal(harness.captured.observationCreates.length, 0);
+    assert.equal(harness.captured.forecastTasks.length, 0);
+  }
+});
+
+test('one visual assessment cannot feed two tasks in the same forecast', async () => {
+  const first = reviewedLiveTask();
+  const second = reviewedLiveTask({
+    id: 'task-reviewed-b',
+    code: '2.2',
+    title: 'Mampostería sur',
+    progress: 0,
+    revision: 2,
+  });
+  const assessment = reviewedAssessmentFixture([first, second]);
+  const observations = [first, second].map((task) => ({
+    sourceTaskId: task.id,
+    expectedTaskRevision: task.revision,
+    progressPercent: 40,
+    progressSource: 'REVIEWED_EVIDENCE',
+    reviewedEvidence: {
+      assessmentId: assessment.id,
+      expectedAssessmentRevision: assessment.revision,
+      rationale: `Punto revisado para ${task.id}.`,
+    },
+    actualStartDate: '2026-07-20',
+    actualFinishDate: null,
+    remainingDurationDays: 4,
+  }));
+  const harness = reviewedForecastHarness({
+    liveTasks: [first, second],
+    baselineTasks: [reviewedBaselineTask(first), reviewedBaselineTask(second)],
+    assessments: [assessment],
+  });
+  await assert.rejects(
+    calculateScheduleForecast(harness.prisma, {
+      scope: SCOPE,
+      actorId: ACTOR_ID,
+      idempotencyKey: 'forecast-reviewed-duplicate-0001',
+      input: reviewedForecastInput({ task: first, assessment, observations }),
+    }),
+    (error) => error instanceof ScheduleSnapshotError
+      && error.code === 'SCHEDULE_FORECAST_REVIEWED_EVIDENCE_DUPLICATE',
+  );
+  assert.equal(harness.captured.assessmentQueries.length, 0);
+  assert.equal(harness.captured.observationCreates.length, 0);
+});
+
+test('immutable reviewed observation is reused only for the identical normalized payload', async () => {
+  const task = reviewedLiveTask();
+  const assessment = reviewedAssessmentFixture([task]);
+  const input = reviewedForecastInput({ task, assessment });
+  const first = reviewedForecastHarness({ liveTasks: [task], assessments: [assessment] });
+  await calculateScheduleForecast(first.prisma, {
+    scope: SCOPE,
+    actorId: ACTOR_ID,
+    idempotencyKey: 'forecast-reviewed-reuse-0001',
+    input,
+  });
+  const persisted = first.captured.observationCreates[0];
+
+  const replay = reviewedForecastHarness({
+    liveTasks: [task], assessments: [assessment], existingObservation: persisted,
+  });
+  await calculateScheduleForecast(replay.prisma, {
+    scope: SCOPE,
+    actorId: ACTOR_ID,
+    idempotencyKey: 'forecast-reviewed-reuse-0002',
+    input,
+  });
+  assert.equal(replay.captured.observationCreates.length, 0);
+  assert.equal(replay.captured.forecastTasks[0].progressObservationId, persisted.id);
+  assert.equal(replay.captured.audits.some((row) => row.action === 'schedule.progress_observation.created'), false);
+
+  const mismatch = reviewedForecastHarness({
+    liveTasks: [task], assessments: [assessment], existingObservation: persisted,
+  });
+  await assert.rejects(
+    calculateScheduleForecast(mismatch.prisma, {
+      scope: SCOPE,
+      actorId: ACTOR_ID,
+      idempotencyKey: 'forecast-reviewed-reuse-0003',
+      input: reviewedForecastInput({
+        task,
+        assessment,
+        rationale: 'Un fundamento humano diferente no puede reescribir la observación.',
+      }),
+    }),
+    (error) => error instanceof ScheduleSnapshotError
+      && error.code === 'SCHEDULE_FORECAST_REVIEWED_EVIDENCE_ALREADY_USED',
+  );
+  assert.equal(mismatch.captured.observationCreates.length, 0);
+  assert.equal(mismatch.captured.forecastTasks.length, 0);
+});
+
 test('forecast fails closed for reviewed evidence without durable provenance before opening a transaction', async () => {
   let transactions = 0;
   const input = forecastInput();
@@ -404,8 +827,29 @@ test('forecast fails closed for reviewed evidence without durable provenance bef
     }),
     (error) => error instanceof ScheduleSnapshotError
       && error.status === 409
-      && error.code === 'SCHEDULE_FORECAST_REVIEWED_EVIDENCE_PROVENANCE_REQUIRED'
-      && error.details?.index === 0,
+      && error.code === 'SCHEDULE_FORECAST_REVIEWED_EVIDENCE_PROVENANCE_REQUIRED',
+  );
+  assert.equal(transactions, 0);
+});
+
+test('forecast fails closed for a free manual override before opening a transaction', async () => {
+  let transactions = 0;
+  const input = forecastInput();
+  input.observations[0].progressSource = 'MANUAL_OVERRIDE';
+  await assert.rejects(
+    calculateScheduleForecast({
+      async $transaction() {
+        transactions += 1;
+      },
+    }, {
+      scope: SCOPE,
+      actorId: ACTOR_ID,
+      idempotencyKey: 'forecast-manual-override-0001',
+      input,
+    }),
+    (error) => error instanceof ScheduleSnapshotError
+      && error.status === 409
+      && error.code === 'SCHEDULE_FORECAST_MANUAL_OVERRIDE_PROVENANCE_REQUIRED',
   );
   assert.equal(transactions, 0);
 });

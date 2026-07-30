@@ -7,12 +7,19 @@ import {
   FORECAST_ENGINE_VERSION,
 } from './deterministic-forecast.js';
 import { runOperationalProjectMutation } from './project-write-policy.js';
+import {
+  canonicalPlanHash,
+  VISUAL_PROGRESS_PLAN_SELECT,
+} from './visual-progress-assessments.js';
+import { localDateKey } from './zoned-time.js';
 
 const MAX_TASKS = 5_000;
 const MAX_DEPENDENCIES = 100_000;
 const MAX_PAGE_SIZE = 100;
 const MAX_DURATION_DAYS = 3_650;
 const MAX_CURSOR_LENGTH = 512;
+const MAX_RATIONALE_LENGTH = 1_000;
+const REVIEWED_EVIDENCE_DECISION_POLICY = 'human-point-within-reviewed-range-v1';
 const SAFE_TEXT = /[\u0000-\u001f\u007f]/;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const BASE64URL = /^[A-Za-z0-9_-]+$/;
@@ -41,7 +48,13 @@ const OBSERVATION_FIELDS = new Set([
   'progressPercent',
   'progressSource',
   'remainingDurationDays',
+  'reviewedEvidence',
   'sourceTaskId',
+]);
+const REVIEWED_EVIDENCE_FIELDS = new Set([
+  'assessmentId',
+  'expectedAssessmentRevision',
+  'rationale',
 ]);
 
 export class ScheduleSnapshotError extends Error {
@@ -339,6 +352,36 @@ function serializeForecast(row) {
   };
 }
 
+function serializeForecastTask(row) {
+  return {
+    sourceTaskId: row.sourceTaskId,
+    code: row.baselineTask?.code || null,
+    title: row.baselineTask?.title || row.sourceTaskId,
+    type: row.baselineTask?.type || null,
+    progressSource: row.progressSource,
+    progressPercent: row.progressPercent,
+    observedOn: dateKey(row.observedOn, 'observedOn'),
+    actualStart: row.actualStart ? dateKey(row.actualStart, 'actualStart') : null,
+    actualFinish: row.actualFinish ? dateKey(row.actualFinish, 'actualFinish') : null,
+    remainingDurationDays: row.remainingDurationDays,
+    baselineStart: dateKey(row.baselineStart, 'baselineStart'),
+    baselineFinish: dateKey(row.baselineFinish, 'baselineFinish'),
+    forecastStart: dateKey(row.forecastStart, 'forecastStart'),
+    forecastFinish: dateKey(row.forecastFinish, 'forecastFinish'),
+    forecastDurationDays: row.forecastDurationDays,
+    forecastRemainingDays: row.forecastRemainingDays,
+    startDeltaDays: row.startDeltaDays,
+    finishDeltaDays: row.finishDeltaDays,
+    durationDeltaDays: row.durationDeltaDays,
+    driver: row.driver && typeof row.driver === 'object' && !Array.isArray(row.driver)
+      ? row.driver
+      : {},
+    relationshipConstraints: Array.isArray(row.relationshipConstraints)
+      ? row.relationshipConstraints
+      : [],
+  };
+}
+
 function assertProjectSnapshotVersion(snapshot, expected) {
   const actual = Number(snapshot?.version ?? 0);
   if (actual !== expected) {
@@ -539,21 +582,69 @@ function normalizedObservation(value, index) {
   const progressPercent = safeInteger(value.progressPercent, `observations[${index}].progressPercent`, 0, 100);
   const progressSource = String(value.progressSource || 'CANONICAL_TASK');
   if (!PROGRESS_SOURCES.has(progressSource)) fail('progressSource no es válido.', 'SCHEDULE_FORECAST_INPUT_INVALID', 400, { index });
-  // REVIEWED_EVIDENCE must never be treated as a client assertion. Enable it
-  // only after an observation carries durable assessment/review identifiers
-  // that the forecast transaction can validate against the scoped database.
-  if (progressSource === 'REVIEWED_EVIDENCE') {
+  if (progressSource === 'MANUAL_OVERRIDE') {
     fail(
-      'El avance por evidencia revisada exige una evaluación y revisión persistidas y validadas.',
-      'SCHEDULE_FORECAST_REVIEWED_EVIDENCE_PROVENANCE_REQUIRED',
+      'El avance manual exige una observación persistida y revisable; el override libre está deshabilitado.',
+      'SCHEDULE_FORECAST_MANUAL_OVERRIDE_PROVENANCE_REQUIRED',
       409,
+      { index },
+    );
+  }
+  let reviewedEvidence = null;
+  if (progressSource === 'REVIEWED_EVIDENCE') {
+    if (!value.reviewedEvidence || typeof value.reviewedEvidence !== 'object' || Array.isArray(value.reviewedEvidence)) {
+      fail(
+        'El avance por evidencia revisada exige una evaluación y revisión persistidas.',
+        'SCHEDULE_FORECAST_REVIEWED_EVIDENCE_PROVENANCE_REQUIRED',
+        409,
+        { index },
+      );
+    }
+    const provenance = exactObject(
+      value.reviewedEvidence,
+      `observations[${index}].reviewedEvidence`,
+      REVIEWED_EVIDENCE_FIELDS,
+      'SCHEDULE_FORECAST_INPUT_INVALID',
+    );
+    reviewedEvidence = {
+      assessmentId: text(
+        provenance.assessmentId,
+        `observations[${index}].reviewedEvidence.assessmentId`,
+        190,
+      ),
+      expectedAssessmentRevision: safeInteger(
+        provenance.expectedAssessmentRevision,
+        `observations[${index}].reviewedEvidence.expectedAssessmentRevision`,
+        0,
+        2_147_483_647,
+      ),
+      rationale: text(
+        provenance.rationale,
+        `observations[${index}].reviewedEvidence.rationale`,
+        MAX_RATIONALE_LENGTH,
+      ),
+    };
+  } else if (Object.hasOwn(value, 'reviewedEvidence')) {
+    fail(
+      'La procedencia visual sólo puede acompañar avance por evidencia revisada.',
+      'SCHEDULE_FORECAST_INPUT_INVALID',
+      400,
       { index },
     );
   }
   const actualStartDate = value.actualStartDate == null ? null : dateKey(value.actualStartDate, `observations[${index}].actualStartDate`);
   const actualFinishDate = value.actualFinishDate == null ? null : dateKey(value.actualFinishDate, `observations[${index}].actualFinishDate`);
   const remainingDurationDays = value.remainingDurationDays == null ? null : safeInteger(value.remainingDurationDays, `observations[${index}].remainingDurationDays`, 0, MAX_DURATION_DAYS);
-  return { sourceTaskId, expectedTaskRevision, progressPercent, progressSource, actualStartDate, actualFinishDate, remainingDurationDays };
+  return {
+    sourceTaskId,
+    expectedTaskRevision,
+    progressPercent,
+    progressSource,
+    actualStartDate,
+    actualFinishDate,
+    remainingDurationDays,
+    ...(reviewedEvidence ? { reviewedEvidence } : {}),
+  };
 }
 
 function observationsByTask(observations, baselineTasks, liveTasks) {
@@ -580,6 +671,288 @@ function observationsByTask(observations, baselineTasks, liveTasks) {
     }
   }
   return byId;
+}
+
+function mediaSha256(value) {
+  const candidate = value && typeof value === 'object' && !Array.isArray(value)
+    ? String(value.sha256 || '').toLowerCase()
+    : '';
+  return /^[0-9a-f]{64}$/.test(candidate) ? candidate : null;
+}
+
+function reviewedRange(assessment) {
+  const corrected = assessment.reviewStatus === 'CORRECTED';
+  const minimum = corrected ? assessment.correctedProgressMin : assessment.progressMin;
+  const maximum = corrected ? assessment.correctedProgressMax : assessment.progressMax;
+  if (
+    !Number.isSafeInteger(minimum)
+    || !Number.isSafeInteger(maximum)
+    || minimum < 0
+    || maximum > 100
+    || minimum > maximum
+  ) {
+    fail(
+      'La revisión visual no conserva un rango de avance utilizable.',
+      'SCHEDULE_FORECAST_REVIEWED_EVIDENCE_RANGE_INVALID',
+      409,
+      { assessmentId: assessment.id },
+    );
+  }
+  return { minimum, maximum };
+}
+
+function reviewedObservationFingerprint({ scope, assessment, evidence, observation, range, evidenceSha, planHash }) {
+  return hash({
+    contract: 'schedule-progress-observation:v1',
+    scope,
+    assessmentId: assessment.id,
+    assessmentRevision: assessment.revision,
+    evidenceId: evidence.id,
+    evidenceRevision: evidence.revision,
+    evidenceSha256: evidenceSha,
+    evidenceCapturedAt: evidence.capturedAt,
+    taskId: assessment.taskId,
+    taskRevision: observation.expectedTaskRevision,
+    planHash,
+    reviewStatus: assessment.reviewStatus,
+    reviewedById: assessment.reviewedById,
+    reviewedAt: assessment.reviewedAt,
+    progressMin: range.minimum,
+    progressMax: range.maximum,
+    progressPercent: observation.progressPercent,
+    decisionPolicyVersion: REVIEWED_EVIDENCE_DECISION_POLICY,
+    observedOn: observation.observedOn,
+    actualStartDate: observation.actualStartDate,
+    actualFinishDate: observation.actualFinishDate,
+    remainingDurationDays: observation.remainingDurationDays,
+    rationale: observation.reviewedEvidence.rationale,
+  });
+}
+
+async function materializeReviewedProgressObservations(transaction, {
+  scope,
+  actorId,
+  baseline,
+  asOfDate,
+  observations,
+  liveTasks,
+}) {
+  const reviewed = observations.filter((observation) => observation.progressSource === 'REVIEWED_EVIDENCE');
+  if (reviewed.length === 0) return new Map();
+  if (baseline.status !== 'ACTIVE') {
+    fail(
+      'La evidencia revisada sólo puede proyectarse sobre la línea base activa.',
+      'SCHEDULE_FORECAST_REVIEWED_EVIDENCE_BASELINE_STALE',
+      409,
+    );
+  }
+
+  const assessmentIds = [...new Set(reviewed.map((observation) => observation.reviewedEvidence.assessmentId))];
+  if (assessmentIds.length !== reviewed.length) {
+    fail(
+      'Una evaluación visual no puede alimentar más de una observación del mismo corte.',
+      'SCHEDULE_FORECAST_REVIEWED_EVIDENCE_DUPLICATE',
+      409,
+    );
+  }
+  const assessments = await transaction.visualProgressAssessment.findMany({
+    where: { projectId: scope.projectId, id: { in: assessmentIds } },
+    include: {
+      evidence: {
+        select: {
+          id: true,
+          taskId: true,
+          status: true,
+          revision: true,
+          media: true,
+          capturedAt: true,
+        },
+      },
+    },
+  });
+  const planHash = canonicalPlanHash(liveTasks);
+  const assessmentById = new Map(assessments.map((assessment) => [assessment.id, assessment]));
+  const liveById = new Map(liveTasks.map((task) => [task.id, task]));
+  const persistedByTask = new Map();
+
+  for (const observation of reviewed) {
+    const reference = observation.reviewedEvidence;
+    const assessment = assessmentById.get(reference.assessmentId);
+    const liveTask = liveById.get(observation.sourceTaskId);
+    if (!assessment || assessment.taskId !== observation.sourceTaskId || !liveTask) {
+      fail(
+        'La evaluación visual no pertenece a la tarea y obra seleccionadas.',
+        'SCHEDULE_FORECAST_REVIEWED_EVIDENCE_SCOPE',
+        409,
+        { sourceTaskId: observation.sourceTaskId },
+      );
+    }
+    if (
+      assessment.revision !== reference.expectedAssessmentRevision
+      || assessment.status !== 'COMPLETED'
+      || !['APPROVED', 'CORRECTED'].includes(assessment.reviewStatus)
+      || !assessment.reviewedById
+      || !assessment.reviewedAt
+    ) {
+      fail(
+        'La evaluación visual cambió o todavía no tiene una revisión humana utilizable.',
+        'SCHEDULE_FORECAST_REVIEWED_EVIDENCE_STALE',
+        409,
+        { assessmentId: assessment.id },
+      );
+    }
+    const evidence = assessment.evidence;
+    const evidenceSha = mediaSha256(evidence?.media);
+    if (
+      !evidence
+      || evidence.taskId !== observation.sourceTaskId
+      || evidence.status !== 'APPROVED'
+      || !evidenceSha
+      || evidenceSha !== assessment.inputSha256
+      || evidence.revision !== assessment.evidenceRevisionAtRequest
+    ) {
+      fail(
+        'La evidencia fuente cambió, no está aprobada o perdió su integridad.',
+        'SCHEDULE_FORECAST_REVIEWED_EVIDENCE_SOURCE_STALE',
+        409,
+        { assessmentId: assessment.id },
+      );
+    }
+    if (
+      Number(liveTask.revision) !== observation.expectedTaskRevision
+      || Number(liveTask.revision) !== assessment.taskRevisionAtRequest
+      || planHash !== assessment.baselineHash
+    ) {
+      fail(
+        'El plan o la tarea cambiaron desde la lectura visual; generá una evaluación nueva.',
+        'SCHEDULE_FORECAST_REVIEWED_EVIDENCE_PLAN_STALE',
+        409,
+        { assessmentId: assessment.id },
+      );
+    }
+    let capturedOn;
+    try {
+      capturedOn = localDateKey(evidence.capturedAt, baseline.timeZone);
+    } catch {
+      fail(
+        'La fecha de captura de la evidencia no puede verificarse en la zona horaria de la línea base.',
+        'SCHEDULE_FORECAST_REVIEWED_EVIDENCE_DATE_INVALID',
+        409,
+        { assessmentId: assessment.id },
+      );
+    }
+    if (capturedOn > asOfDate) {
+      fail(
+        'La evidencia fue capturada después de la fecha de corte.',
+        'SCHEDULE_FORECAST_REVIEWED_EVIDENCE_AFTER_CUTOFF',
+        409,
+        { assessmentId: assessment.id },
+      );
+    }
+    const range = reviewedRange(assessment);
+    if (observation.progressPercent < range.minimum || observation.progressPercent > range.maximum) {
+      fail(
+        'El avance puntual elegido debe permanecer dentro del rango revisado por la persona responsable.',
+        'SCHEDULE_FORECAST_REVIEWED_EVIDENCE_POINT_OUT_OF_RANGE',
+        409,
+        { assessmentId: assessment.id, minimum: range.minimum, maximum: range.maximum },
+      );
+    }
+    const observationForFingerprint = { ...observation, observedOn: asOfDate };
+    const fingerprint = reviewedObservationFingerprint({
+      scope,
+      assessment,
+      evidence,
+      observation: observationForFingerprint,
+      range,
+      evidenceSha,
+      planHash,
+    });
+    const operationKeyHash = hash({
+      contract: 'schedule-progress-observation-operation:v1',
+      scope,
+      assessmentId: assessment.id,
+      assessmentRevision: assessment.revision,
+    });
+    let persisted = await transaction.scheduleProgressObservation.findFirst({
+      where: {
+        ...scope,
+        assessmentId: assessment.id,
+        assessmentRevision: assessment.revision,
+      },
+    });
+    if (persisted) {
+      if (persisted.requestFingerprint !== fingerprint) {
+        fail(
+          'Esta revisión visual ya originó otra observación inmutable.',
+          'SCHEDULE_FORECAST_REVIEWED_EVIDENCE_ALREADY_USED',
+          409,
+          { assessmentId: assessment.id },
+        );
+      }
+    } else {
+      persisted = await transaction.scheduleProgressObservation.create({
+        data: {
+          id: randomUUID(),
+          ...scope,
+          taskId: assessment.taskId,
+          evidenceId: evidence.id,
+          assessmentId: assessment.id,
+          source: 'REVIEWED_EVIDENCE',
+          assessmentRevision: assessment.revision,
+          evidenceRevision: evidence.revision,
+          taskRevision: observation.expectedTaskRevision,
+          evidenceSha256: evidenceSha,
+          evidenceCapturedAt: evidence.capturedAt,
+          planHash,
+          reviewStatus: assessment.reviewStatus,
+          reviewedById: assessment.reviewedById,
+          reviewedAt: assessment.reviewedAt,
+          progressMin: range.minimum,
+          progressMax: range.maximum,
+          progressPercent: observation.progressPercent,
+          decisionPolicyVersion: REVIEWED_EVIDENCE_DECISION_POLICY,
+          observedOn: databaseDate(asOfDate, 'asOfDate'),
+          actualStart: observation.actualStartDate
+            ? databaseDate(observation.actualStartDate, 'actualStartDate')
+            : null,
+          actualFinish: observation.actualFinishDate
+            ? databaseDate(observation.actualFinishDate, 'actualFinishDate')
+            : null,
+          remainingDurationDays: observation.remainingDurationDays,
+          rationale: reference.rationale,
+          operationKeyHash,
+          requestFingerprint: fingerprint,
+          createdById: actorId,
+        },
+      });
+      await transaction.auditLog.create({
+        data: {
+          organizationId: scope.organizationId,
+          actorId,
+          action: 'schedule.progress_observation.created',
+          entityType: 'ScheduleProgressObservation',
+          entityId: persisted.id,
+          metadata: {
+            projectId: scope.projectId,
+            taskId: assessment.taskId,
+            evidenceId: evidence.id,
+            assessmentId: assessment.id,
+            assessmentRevision: assessment.revision,
+            evidenceRevision: evidence.revision,
+            evidenceCapturedOn: capturedOn,
+            reviewStatus: assessment.reviewStatus,
+            progressPercent: observation.progressPercent,
+            decisionPolicyVersion: REVIEWED_EVIDENCE_DECISION_POLICY,
+            asOfDate,
+            baselineId: baseline.id,
+          },
+        },
+      });
+    }
+    persistedByTask.set(observation.sourceTaskId, persisted);
+  }
+  return persistedByTask;
 }
 
 function forecastInput(baselineTasks, dependencies, observations, asOfDate) {
@@ -649,8 +1022,9 @@ export async function calculateScheduleForecast(prisma, {
           transaction.scheduleBaselineTask.findMany({ where: { ...scope, baselineId: baseline.id }, orderBy: { sourceTaskId: 'asc' } }),
           transaction.scheduleBaselineDependency.findMany({ where: { ...scope, baselineId: baseline.id }, orderBy: [{ predecessorSourceTaskId: 'asc' }, { successorSourceTaskId: 'asc' }] }),
           transaction.task.findMany({
-            where: { projectId: scope.projectId, metadata: { path: ['source'], equals: 'canonical-task-v1' } },
-            select: { id: true, revision: true, progress: true },
+            where: { projectId: scope.projectId },
+            select: VISUAL_PROGRESS_PLAN_SELECT,
+            orderBy: { id: 'asc' },
           }),
         ]);
         if (baselineTasks.length !== baseline.taskCount || dependencies.length !== baseline.dependencyCount) {
@@ -666,6 +1040,14 @@ export async function calculateScheduleForecast(prisma, {
           }
           throw error;
         }
+        const progressObservations = await materializeReviewedProgressObservations(transaction, {
+          scope,
+          actorId: actor,
+          baseline,
+          asOfDate,
+          observations: normalizedObservations,
+          liveTasks,
+        });
         const immutableInputHash = hash({ baselineContentHash: baseline.contentHash, engineInputHash: calculated.inputHash, observations: [...observations.values()] });
         const id = randomUUID();
         await transaction.scheduleForecastTask.createMany({
@@ -674,6 +1056,7 @@ export async function calculateScheduleForecast(prisma, {
             return {
               id: randomUUID(), ...scope, forecastRunId: id, baselineId: baseline.id, sourceTaskId: task.id,
               observedTaskRevision: observation.expectedTaskRevision, progressSource: observation.progressSource,
+              progressObservationId: progressObservations.get(task.id)?.id || null,
               progressPercent: task.progress, observedOn: databaseDate(asOfDate, 'asOfDate'),
               actualStart: observation.actualStartDate ? databaseDate(observation.actualStartDate, 'actualStartDate') : null,
               actualFinish: observation.actualFinishDate ? databaseDate(observation.actualFinishDate, 'actualFinishDate') : null,
@@ -701,7 +1084,13 @@ export async function calculateScheduleForecast(prisma, {
           data: {
             organizationId: scope.organizationId, actorId: actor, action: 'schedule.forecast.calculated',
             entityType: 'ScheduleForecastRun', entityId: forecast.id,
-            metadata: { projectId: scope.projectId, baselineId: baseline.id, taskCount: forecast.taskCount, asOfDate },
+            metadata: {
+              projectId: scope.projectId,
+              baselineId: baseline.id,
+              taskCount: forecast.taskCount,
+              reviewedEvidenceTaskCount: progressObservations.size,
+              asOfDate,
+            },
           },
         });
         return { forecast: serializeForecast(forecast), replayed: false };
@@ -746,6 +1135,54 @@ export async function listScheduleForecastRuns(prisma, { scope: rawScope, baseli
       ? encodeCursor('forecast', filterFingerprint, { createdAt: lastCreatedAt, id: last.id })
       : null,
     hasMore,
+  };
+}
+
+export async function getScheduleForecastRun(prisma, {
+  scope: rawScope,
+  forecastId: rawForecastId,
+} = {}) {
+  const scope = scopeOf(rawScope);
+  const forecastId = text(rawForecastId, 'forecastId', 190);
+  const row = await prisma.scheduleForecastRun.findFirst({
+    where: { ...scope, id: forecastId },
+    include: {
+      tasks: {
+        include: {
+          baselineTask: {
+            select: { code: true, title: true, type: true },
+          },
+        },
+      },
+    },
+  });
+  if (!row) {
+    fail(
+      'El pronóstico no existe dentro de esta obra.',
+      'SCHEDULE_FORECAST_NOT_FOUND',
+      404,
+    );
+  }
+  const tasksById = new Map(row.tasks.map((task) => [task.sourceTaskId, task]));
+  const topologicalOrder = Array.isArray(row.topologicalOrder)
+    ? row.topologicalOrder.filter((taskId) => typeof taskId === 'string')
+    : [];
+  const ordered = [];
+  for (const taskId of topologicalOrder) {
+    const task = tasksById.get(taskId);
+    if (task) {
+      ordered.push(task);
+      tasksById.delete(taskId);
+    }
+  }
+  ordered.push(...[...tasksById.values()].sort((left, right) => (
+    left.sourceTaskId.localeCompare(right.sourceTaskId)
+  )));
+  return {
+    forecast: {
+      ...serializeForecast(row),
+      tasks: ordered.map(serializeForecastTask),
+    },
   };
 }
 

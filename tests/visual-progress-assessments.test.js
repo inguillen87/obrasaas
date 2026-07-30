@@ -1791,10 +1791,10 @@ test('public visual DTO omits provider, hashes and internal failure details', as
   const publicDto = serializePublicVisualProgressAssessment(result.assessment);
   assert.equal(publicDto.id, result.assessment.id);
   assert.equal(publicDto.evidenceId, result.assessment.evidenceId);
+  assert.equal(publicDto.taskId, result.assessment.taskId);
   assert.equal(publicDto.summary, result.assessment.summary);
   for (const privateField of [
     'projectId',
-    'taskId',
     'provider',
     'model',
     'analyzerVersion',

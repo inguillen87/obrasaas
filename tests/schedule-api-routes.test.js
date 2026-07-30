@@ -288,6 +288,57 @@ test('forecast calculate uses task-manage permission, bounded JSON, and trusted 
   assert.equal(calls.length, 1);
 });
 
+test('forecast with reviewed evidence additionally requires execution management and source-evidence access', async () => {
+  const authorizations = [];
+  const calls = [];
+  const handlers = createScheduleForecastHandlers({
+    resolveAccess: async () => access(),
+    authorize: (...args) => authorizations.push(args),
+    prismaFactory: () => ({ kind: 'prisma-reviewed' }),
+    calculateForecast: async (...args) => {
+      calls.push(args);
+      return { forecast: { id: 'forecast-reviewed', baselineId: 'baseline-a' }, replayed: false };
+    },
+  });
+  const body = {
+    asOfDate: '2026-07-28',
+    baselineId: 'baseline-a',
+    expectedProjectStateVersion: 5,
+    observations: [{
+      sourceTaskId: 'task-a',
+      expectedTaskRevision: 4,
+      progressPercent: 45,
+      progressSource: 'REVIEWED_EVIDENCE',
+      reviewedEvidence: {
+        assessmentId: 'assessment-a',
+        expectedAssessmentRevision: 3,
+        rationale: 'Punto confirmado por el director de obra.',
+      },
+      actualStartDate: '2026-07-20',
+      actualFinishDate: null,
+      remainingDurationDays: 4,
+    }],
+  };
+  const response = await handlers.POST(request('/api/schedule/forecasts', {
+    method: 'POST',
+    idempotencyKey: 'forecast-reviewed-route-0001',
+    body,
+  }));
+  assertSecure(response, 201);
+  assert.deepEqual(authorizations.map(([, permission, options]) => [permission, options]), [
+    ['org:tasks:manage', { subscriptionMode: 'write' }],
+    ['org:execution:manage', { subscriptionMode: 'write' }],
+    ['org:field:evidence:read', { subscriptionMode: 'write' }],
+  ]);
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0][1], {
+    scope: { organizationId: 'organization-a', projectId: 'project-a' },
+    actorId: 'user-a',
+    idempotencyKey: 'forecast-reviewed-route-0001',
+    input: body,
+  });
+});
+
 test('unexpected schedule failures are logged by correlation id and returned without internals', async () => {
   const logs = [];
   const handlers = createScheduleBaselineHandlers({

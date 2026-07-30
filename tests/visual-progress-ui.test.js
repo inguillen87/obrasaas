@@ -39,11 +39,48 @@ test('visual assessment DTOs expose UI facts but omit provider internals and has
   const serverProjection = functionSource(pageSource, 'visualAssessmentForClient', 'ProgressPage');
   const clientProjection = functionSource(clientSource, 'visualAssessmentForUi', 'VisualAssessmentCard');
   for (const projection of [serverProjection, clientProjection]) {
+    assert.match(projection, /taskId/);
     assert.match(projection, /observations/);
     assert.match(projection, /limitations/);
     assert.match(projection, /reviewStatus/);
     assert.doesNotMatch(projection, /baselineHash|provider|model|failureCode|organizationId/);
   }
+});
+
+test('reviewed evidence handoff is task-bound and appears only after evidence and human approval', () => {
+  const gateStart = clientSource.indexOf('const canPrepareForecast = Boolean(');
+  const gateEnd = clientSource.indexOf('const locationLabel =', gateStart);
+  assert.ok(gateStart >= 0 && gateEnd > gateStart, 'forecast handoff gate should exist');
+  const gate = clientSource.slice(gateStart, gateEnd);
+
+  assert.match(gate, /permissions\.canUseReviewedEvidence/);
+  assert.match(gate, /item\.status === "APPROVED"/);
+  assert.match(gate, /assessment\?\.status === "COMPLETED"/);
+  assert.match(
+    gate,
+    /assessment\.reviewStatus === "APPROVED" \|\| assessment\.reviewStatus === "CORRECTED"/,
+  );
+  assert.match(gate, /assessment\.taskId === item\.taskId/);
+  assert.match(gate, /&& reviewedRange/);
+  assert.match(
+    gate,
+    /const forecastHref = canPrepareForecast\s*\? reviewedEvidenceForecastHref\(item\.id, assessment\.id\)\s*: null/,
+  );
+
+  const hrefBuilder = functionSource(
+    clientSource,
+    'reviewedEvidenceForecastHref',
+    'VisualAssessmentCard',
+  );
+  assert.match(hrefBuilder, /new URLSearchParams\(\{[\s\S]*tab: "sec-gantt"/);
+  assert.match(hrefBuilder, /evidenceId,[\s\S]*assessmentId,/);
+  assert.doesNotMatch(hrefBuilder, /taskId/);
+
+  const card = functionSource(clientSource, 'VisualAssessmentCard', 'ProgressClient');
+  assert.match(card, /\{forecastHref && \(/);
+  assert.match(card, /<Link href=\{forecastHref\}>/);
+  assert.match(card, /Revisar impacto en Cronograma/);
+  assert.match(card, /no modifica el plan ni la línea base/);
 });
 
 test('analysis uses one stable idempotency key per attempt and polls without resending the image', () => {

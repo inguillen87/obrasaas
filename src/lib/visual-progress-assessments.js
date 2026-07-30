@@ -363,6 +363,7 @@ export function serializePublicVisualProgressAssessment(row) {
   return {
     id: assessment.id,
     evidenceId: assessment.evidenceId,
+    taskId: assessment.taskId,
     status: assessment.status,
     summary: assessment.summary,
     elementType: assessment.elementType,
@@ -445,7 +446,7 @@ export function canonicalPlanHash(tasks) {
   return hash('canonical-plan', canonical);
 }
 
-const PLAN_SELECT = {
+export const VISUAL_PROGRESS_PLAN_SELECT = {
   id: true,
   externalId: true,
   code: true,
@@ -1136,7 +1137,7 @@ async function prepareAssessment(prisma, {
     const source = mediaSource(evidence, connection, scope);
     const planTasks = await transaction.task.findMany({
       where: { projectId: scope.projectId },
-      select: PLAN_SELECT,
+      select: VISUAL_PROGRESS_PLAN_SELECT,
       orderBy: { id: 'asc' },
     });
     const baselineHash = canonicalPlanHash(planTasks);
@@ -1724,7 +1725,7 @@ export async function reviewVisualProgressAssessment(prisma, {
     const currentMediaSha = String(record(current.evidence.media).sha256 || '').toLowerCase();
     const planTasks = await transaction.task.findMany({
       where: { projectId: scope.projectId },
-      select: PLAN_SELECT,
+      select: VISUAL_PROGRESS_PLAN_SELECT,
       orderBy: { id: 'asc' },
     });
     const stale = (

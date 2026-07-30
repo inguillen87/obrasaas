@@ -18,6 +18,13 @@ const requestFingerprintMigration = await readFile(
   ),
   'utf8',
 );
+const reviewedProgressMigration = await readFile(
+  new URL(
+    'prisma/migrations/20260729120000_reviewed_progress_forecast_provenance/migration.sql',
+    root,
+  ),
+  'utf8',
+);
 const verifier = await readFile(
   new URL('scripts/verify-schedule-snapshot-migration.mjs', root),
   'utf8',
@@ -77,6 +84,42 @@ test('Prisma models immutable baseline, dependency and reproducible forecast sna
   assert.match(forecastTask, /remainingDurationDays\s+Int\?/);
   assert.match(forecastTask, /driver\s+Json/);
   assert.match(forecastTask, /relationshipConstraints\s+Json/);
+  assert.match(forecastTask, /progressObservationId\s+String\?/);
+  assert.match(forecastTask, /progressObservation\s+ScheduleProgressObservation\?/);
+});
+
+test('Prisma captures reviewed progress as immutable typed forecast provenance', () => {
+  const observation = model('ScheduleProgressObservation');
+  for (const relation of [
+    'ScheduleProgressObservation_project_scope_fkey',
+    'ScheduleProgressObservation_task_scope_fkey',
+    'ScheduleProgressObservation_evidence_scope_fkey',
+    'ScheduleProgressObservation_assessment_scope_fkey',
+  ]) {
+    assert.match(observation, new RegExp(`map: "${relation}"`));
+  }
+  assert.match(observation, /source\s+ScheduleProgressSource\s+@default\(REVIEWED_EVIDENCE\)/);
+  assert.match(observation, /assessmentRevision\s+Int/);
+  assert.match(observation, /evidenceRevision\s+Int/);
+  assert.match(observation, /taskRevision\s+Int/);
+  assert.match(observation, /evidenceSha256\s+String\s+@db\.Char\(64\)/);
+  assert.match(observation, /evidenceCapturedAt\s+DateTime/);
+  assert.match(observation, /planHash\s+String\s+@db\.Char\(64\)/);
+  assert.match(observation, /reviewStatus\s+VisualProgressAssessmentReviewStatus/);
+  assert.match(observation, /reviewedBy\s+PlatformUser\s+@relation\("ScheduleProgressObservationReviewer"/);
+  assert.match(observation, /createdBy\s+PlatformUser\s+@relation\("ScheduleProgressObservationCreator"/);
+  assert.match(observation, /decisionPolicyVersion\s+String\s+@default\("human-point-within-reviewed-range-v1"\)\s+@db\.VarChar\(64\)/);
+  assert.match(observation, /observedOn\s+DateTime\s+@db\.Date/);
+  assert.match(observation, /rationale\s+String\s+@db\.VarChar\(1000\)/);
+  assert.match(observation, /operationKeyHash\s+String\s+@db\.Char\(64\)/);
+  assert.match(observation, /requestFingerprint\s+String\s+@db\.Char\(64\)/);
+  assert.match(observation, /@@unique\(\[organizationId, projectId, assessmentId, assessmentRevision\]/);
+  assert.match(observation, /@@unique\(\[organizationId, projectId, operationKeyHash\]/);
+
+  assert.match(model('Project'), /scheduleProgressObservations\s+ScheduleProgressObservation\[\]/);
+  assert.match(model('Task'), /progressObservations\s+ScheduleProgressObservation\[\]/);
+  assert.match(model('ProgressEvidence'), /scheduleObservations\s+ScheduleProgressObservation\[\]/);
+  assert.match(model('VisualProgressAssessment'), /scheduleObservations\s+ScheduleProgressObservation\[\]/);
 });
 
 test('legacy ReplanScenario remains unaltered while forecast reruns retain scenario revisions', () => {
@@ -168,6 +211,78 @@ test('all snapshot rows reject delete, truncate and content updates', () => {
   assert.match(migration, /ScheduleBaseline content is append-only/);
 });
 
+test('reviewed progress provenance is scoped, human-decided and append-only', () => {
+  assert.match(reviewedProgressMigration, /CREATE TABLE "ScheduleProgressObservation"/);
+  assert.match(reviewedProgressMigration, /"evidenceCapturedAt" TIMESTAMP\(3\) NOT NULL/);
+  assert.match(reviewedProgressMigration, /"decisionPolicyVersion" VARCHAR\(64\) NOT NULL[\s\S]*DEFAULT 'human-point-within-reviewed-range-v1'/);
+  assert.match(reviewedProgressMigration, /ScheduleProgressObservation_provenance_check[\s\S]*"source" = 'REVIEWED_EVIDENCE'[\s\S]*'APPROVED', 'CORRECTED'/);
+  assert.match(reviewedProgressMigration, /ScheduleProgressObservation_reviewed_range_check[\s\S]*"progressMin" <= "progressPercent"[\s\S]*"progressPercent" <= "progressMax"/);
+  assert.match(reviewedProgressMigration, /ScheduleProgressObservation_decision_policy_check[\s\S]*human-point-within-reviewed-range-v1/);
+  assert.match(reviewedProgressMigration, /ScheduleProgressObservation_rationale_check[\s\S]*char_length\(btrim\("rationale"\)\) BETWEEN 1 AND 1000/);
+  assert.ok(reviewedProgressMigration.includes("'[[:cntrl:]]'"));
+  assert.match(reviewedProgressMigration, /ScheduleProgressObservation_scope_assessment_revision_key/);
+  assert.match(reviewedProgressMigration, /ScheduleProgressObservation_scope_operation_key/);
+  for (const constraint of [
+    'ScheduleProgressObservation_project_scope_fkey',
+    'ScheduleProgressObservation_task_scope_fkey',
+    'ScheduleProgressObservation_evidence_scope_fkey',
+    'ScheduleProgressObservation_assessment_scope_fkey',
+    'ScheduleProgressObservation_reviewedById_fkey',
+    'ScheduleProgressObservation_createdById_fkey',
+    'ScheduleForecastTask_progress_observation_scope_fkey',
+  ]) {
+    assert.match(reviewedProgressMigration, new RegExp(`"${constraint}"`));
+  }
+  assert.match(reviewedProgressMigration, /CREATE TRIGGER "ScheduleProgressObservation_append_only"[\s\S]*BEFORE UPDATE OR DELETE/);
+  assert.match(reviewedProgressMigration, /CREATE TRIGGER "ScheduleProgressObservation_no_truncate"[\s\S]*BEFORE TRUNCATE/);
+  assert.match(reviewedProgressMigration, /EXECUTE FUNCTION "obrasaas_schedule_snapshot_append_only"\(\)/);
+});
+
+test('database triggers bind exact reviewed source revisions and forecast projection', () => {
+  for (const functionName of [
+    'obrasaas_schedule_progress_observation_validate',
+    'obrasaas_schedule_forecast_progress_observation_validate',
+  ]) {
+    assert.match(
+      reviewedProgressMigration,
+      new RegExp(`CREATE FUNCTION "${functionName}"\\(\\)[\\s\\S]*?SET search_path = pg_catalog`),
+    );
+  }
+  assert.match(reviewedProgressMigration, /format\([\s\S]*%1\$I\."ProgressEvidence"[\s\S]*TG_TABLE_SCHEMA/);
+  assert.match(reviewedProgressMigration, /%1\$I\."VisualProgressAssessment"/);
+  assert.match(reviewedProgressMigration, /assessment_status <> 'COMPLETED'/);
+  assert.match(reviewedProgressMigration, /evidence_status <> 'APPROVED'/);
+  assert.match(reviewedProgressMigration, /current_assessment_revision <> NEW\."assessmentRevision"/);
+  assert.match(reviewedProgressMigration, /current_evidence_revision <> NEW\."evidenceRevision"/);
+  assert.match(reviewedProgressMigration, /current_task_revision <> NEW\."taskRevision"/);
+  assert.match(reviewedProgressMigration, /current_evidence_captured_at IS DISTINCT FROM NEW\."evidenceCapturedAt"/);
+  assert.match(reviewedProgressMigration, /assessment_input_sha256[\s\S]*NEW\."evidenceSha256"/);
+  assert.match(reviewedProgressMigration, /assessment_plan_hash[\s\S]*NEW\."planHash"/);
+  assert.match(reviewedProgressMigration, /assessment_reviewed_by_id IS DISTINCT FROM NEW\."reviewedById"/);
+  assert.match(reviewedProgressMigration, /reviewed_progress_min IS DISTINCT FROM NEW\."progressMin"/);
+  assert.match(reviewedProgressMigration, /reviewed_progress_max IS DISTINCT FROM NEW\."progressMax"/);
+  assert.match(reviewedProgressMigration, /FOR SHARE OF p, t, e, a/);
+
+  const forecastSourceCheck = /ScheduleForecastTask_progress_observation_check" CHECK \(([\s\S]*?)\n  \) NOT VALID/.exec(reviewedProgressMigration)?.[1];
+  assert.ok(forecastSourceCheck);
+  assert.match(forecastSourceCheck, /"progressSource" = 'CANONICAL_TASK'[\s\S]*"progressObservationId" IS NULL/);
+  assert.match(forecastSourceCheck, /"progressSource" = 'REVIEWED_EVIDENCE'[\s\S]*"progressObservationId" IS NOT NULL/);
+  assert.doesNotMatch(forecastSourceCheck, /MANUAL_OVERRIDE/);
+  assert.match(reviewedProgressMigration, /VALIDATE CONSTRAINT "ScheduleForecastTask_progress_observation_check"/);
+  assert.match(reviewedProgressMigration, /NEW\."progressSource" = 'MANUAL_OVERRIDE'[\s\S]*ERRCODE = '55000'/);
+  for (const field of [
+    'sourceTaskId',
+    'observedTaskRevision',
+    'progressPercent',
+    'observedOn',
+    'actualStart',
+    'actualFinish',
+    'remainingDurationDays',
+  ]) {
+    assert.match(reviewedProgressMigration, new RegExp(`NEW\\."${field}"`));
+  }
+});
+
 test('semantic verifier is dedicated, schema-bound, TLS-hardened and rollback-only', () => {
   assert.doesNotMatch(verifier, /\bconst\s+JSON\s*=/);
   assert.match(verifier, /const JSONB = Object\.freeze/);
@@ -175,6 +290,7 @@ test('semantic verifier is dedicated, schema-bound, TLS-hardened and rollback-on
   assert.match(verifier, /SCHEDULE_SNAPSHOT_MIGRATION_DATABASE_URL/);
   assert.match(verifier, /SCHEDULE_SNAPSHOT_MIGRATION_SCHEMA/);
   assert.match(verifier, /20260728040000_schedule_snapshot_request_fingerprints/);
+  assert.match(verifier, /20260729120000_reviewed_progress_forecast_provenance/);
   assert.match(verifier, /DATABASE_URL is intentionally ignored/);
   assert.match(verifier, /conflicting schema parameters/);
   assert.match(verifier, /sslmode', 'verify-full'/);
@@ -198,6 +314,13 @@ test('semantic verifier is dedicated, schema-bound, TLS-hardened and rollback-on
     'cross-baseline scope guard',
     'dependency order guard',
     'exact dependency explanation guard',
+    'captured-at provenance guard',
+    'revision-only stale task guard',
+    'revision-only stale evidence guard',
+    'human decision policy guard',
+    'rationale control-character guard',
+    'manual override closure',
+    'exact observation projection guard',
     'UPDATE immutability',
     'DELETE immutability',
     'TRUNCATE immutability',
@@ -208,6 +331,7 @@ test('semantic verifier is dedicated, schema-bound, TLS-hardened and rollback-on
   assert.match(verifier, /'23505'/);
   assert.match(verifier, /'23514'/);
   assert.match(verifier, /'55000'/);
+  assert.match(verifier, /table: 'ScheduleProgressObservation'[\s\S]*UPDATE immutability/);
 });
 
 test('additive request fingerprints preserve applied migration history and fail closed for new writes', () => {

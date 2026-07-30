@@ -15,6 +15,7 @@ function visualAssessmentForClient(assessment) {
   return {
     id: assessment.id,
     evidenceId: assessment.evidenceId,
+    taskId: assessment.taskId,
     status: assessment.status,
     summary: assessment.summary,
     elementType: assessment.elementType,
@@ -51,6 +52,10 @@ export default async function ProgressPage() {
     && canReadSourceEvidence
     && aiSettings.visualProgressEnabled
   );
+  const canUseReviewedEvidence = (
+    canUseVisualProgress
+    && hasTenantPermission(access, 'org:tasks:manage')
+  );
   const journal = await listProgressJournal(prisma, {
     projectId: access.project.id,
     includeSourceEvidence: canReadSourceEvidence,
@@ -77,6 +82,7 @@ export default async function ProgressPage() {
       permissions={{
         canManage,
         canReadSourceEvidence,
+        canUseReviewedEvidence,
         canUseVisualProgress,
         visualProgressEnabled: aiSettings.visualProgressEnabled,
       }}

@@ -2,6 +2,8 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_TASKS = 5_000;
 const MAX_DURATION_DAYS = 3_650;
 const MAX_REVISION = 2_147_483_647;
+const MAX_RATIONALE_LENGTH = 1_000;
+const SAFE_TEXT = /[\u0000-\u001f\u007f]/;
 
 export class ScheduleObservationError extends Error {
   constructor(message, code = 'SCHEDULE_OBSERVATION_INVALID', details = null) {
@@ -78,8 +80,74 @@ function normalizedTasks(tasks) {
   return rows;
 }
 
-export function scheduleObservationRequirements(tasks) {
-  return normalizedTasks(tasks)
+function reviewedEvidenceSelection(value, tasksById, { requireRationale = true } = {}) {
+  if (value == null) return null;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    fail('La evidencia revisada seleccionada no es válida.');
+  }
+  const allowed = new Set([
+    'assessmentId',
+    'expectedAssessmentRevision',
+    'progressPercent',
+    'rationale',
+    'taskId',
+  ]);
+  if (Object.keys(value).some((key) => !allowed.has(key))) {
+    fail('La evidencia revisada contiene campos no permitidos.');
+  }
+  const taskId = typeof value.taskId === 'string' ? value.taskId.trim() : '';
+  if (!tasksById.has(taskId)) {
+    fail('La evidencia revisada no corresponde a una tarea visible.', 'SCHEDULE_OBSERVATION_TASK_INVALID');
+  }
+  const assessmentId = typeof value.assessmentId === 'string' ? value.assessmentId.trim() : '';
+  if (!assessmentId || assessmentId.length > 190 || SAFE_TEXT.test(assessmentId)) {
+    fail('La evaluación visual seleccionada no es válida.');
+  }
+  const rationale = typeof value.rationale === 'string' ? value.rationale.trim() : '';
+  if (
+    (requireRationale && !rationale)
+    || rationale.length > MAX_RATIONALE_LENGTH
+    || SAFE_TEXT.test(rationale)
+  ) {
+    fail(`El fundamento humano es obligatorio y admite hasta ${MAX_RATIONALE_LENGTH} caracteres.`);
+  }
+  return {
+    taskId,
+    assessmentId,
+    expectedAssessmentRevision: integer(
+      value.expectedAssessmentRevision,
+      'revisión de la evaluación visual',
+      0,
+      MAX_REVISION,
+    ),
+    progressPercent: integer(value.progressPercent, 'avance revisado', 0, 100),
+    rationale,
+  };
+}
+
+function normalizedTasksAndSelection(tasks, reviewedEvidence, options) {
+  const normalized = normalizedTasks(tasks);
+  return {
+    tasks: normalized,
+    reviewed: reviewedEvidenceSelection(
+      reviewedEvidence,
+      new Map(normalized.map((task) => [task.sourceTaskId, task])),
+      options,
+    ),
+  };
+}
+
+export function scheduleObservationRequirements(tasks, { reviewedEvidence = null } = {}) {
+  const normalized = normalizedTasksAndSelection(tasks, reviewedEvidence, {
+    requireRationale: false,
+  });
+  return normalized.tasks
+    .map((task) => ({
+      ...task,
+      progressPercent: normalized.reviewed?.taskId === task.sourceTaskId
+        ? normalized.reviewed.progressPercent
+        : task.progressPercent,
+    }))
     .filter((task) => task.progressPercent > 0)
     .map((task) => ({
       sourceTaskId: task.sourceTaskId,
@@ -92,20 +160,38 @@ export function scheduleObservationRequirements(tasks) {
     }));
 }
 
-export function buildScheduleObservations(tasks, entries = {}, { asOfDate } = {}) {
+export function buildScheduleObservations(tasks, entries = {}, {
+  asOfDate,
+  reviewedEvidence = null,
+} = {}) {
   const dataDate = dateKey(asOfDate, 'asOfDate', { required: true });
   const normalizedEntries = entries && typeof entries === 'object' && !Array.isArray(entries)
     ? entries
     : {};
-  return normalizedTasks(tasks).map((task) => {
+  const normalized = normalizedTasksAndSelection(tasks, reviewedEvidence);
+  return normalized.tasks.map((task) => {
     const entry = normalizedEntries[task.sourceTaskId];
     const values = entry && typeof entry === 'object' && !Array.isArray(entry) ? entry : {};
-    if (task.progressPercent === 0) {
+    const reviewed = normalized.reviewed?.taskId === task.sourceTaskId
+      ? normalized.reviewed
+      : null;
+    const progressPercent = reviewed?.progressPercent ?? task.progressPercent;
+    const provenance = reviewed
+      ? {
+          progressSource: 'REVIEWED_EVIDENCE',
+          reviewedEvidence: {
+            assessmentId: reviewed.assessmentId,
+            expectedAssessmentRevision: reviewed.expectedAssessmentRevision,
+            rationale: reviewed.rationale,
+          },
+        }
+      : { progressSource: 'CANONICAL_TASK' };
+    if (progressPercent === 0) {
       return {
         sourceTaskId: task.sourceTaskId,
         expectedTaskRevision: task.expectedTaskRevision,
         progressPercent: 0,
-        progressSource: 'CANONICAL_TASK',
+        ...provenance,
         actualStartDate: null,
         actualFinishDate: null,
         remainingDurationDays: null,
@@ -121,7 +207,7 @@ export function buildScheduleObservations(tasks, entries = {}, { asOfDate } = {}
       });
     }
 
-    if (task.progressPercent === 100) {
+    if (progressPercent === 100) {
       const actualFinishDate = dateKey(values.actualFinishDate, `${task.title}: fin real`, {
         required: true,
       });
@@ -139,7 +225,7 @@ export function buildScheduleObservations(tasks, entries = {}, { asOfDate } = {}
         sourceTaskId: task.sourceTaskId,
         expectedTaskRevision: task.expectedTaskRevision,
         progressPercent: 100,
-        progressSource: 'CANONICAL_TASK',
+        ...provenance,
         actualStartDate,
         actualFinishDate,
         remainingDurationDays: 0,
@@ -160,8 +246,8 @@ export function buildScheduleObservations(tasks, entries = {}, { asOfDate } = {}
     return {
       sourceTaskId: task.sourceTaskId,
       expectedTaskRevision: task.expectedTaskRevision,
-      progressPercent: task.progressPercent,
-      progressSource: 'CANONICAL_TASK',
+      progressPercent,
+      ...provenance,
       actualStartDate,
       actualFinishDate: null,
       remainingDurationDays,

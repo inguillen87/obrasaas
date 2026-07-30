@@ -1,4 +1,5 @@
 import { getPlatformAccess, requireTenantPermission } from '@/lib/access';
+import { SOURCE_EVIDENCE_PERMISSION } from '@/lib/medical-privacy';
 import { getPrisma } from '@/lib/prisma';
 import { readJsonRequest } from '@/lib/request-body';
 import { resolveRequestCorrelationId } from '@/lib/request-correlation';
@@ -76,6 +77,14 @@ export function createScheduleForecastHandlers({
       assertScheduleSearchParams(searchParams, new Set());
       const idempotencyKey = requireScheduleIdempotencyKey(request);
       const input = assertScheduleObject(await parseBody(request), CALCULATE_FIELDS);
+      const usesReviewedEvidence = Array.isArray(input.observations)
+        && input.observations.some((observation) => (
+          observation?.progressSource === 'REVIEWED_EVIDENCE'
+        ));
+      if (usesReviewedEvidence) {
+        authorize(access, 'org:execution:manage', { subscriptionMode: 'write' });
+        authorize(access, SOURCE_EVIDENCE_PERMISSION, { subscriptionMode: 'write' });
+      }
       const result = await calculateForecast(prismaFactory(), {
         scope: scheduleScope(access),
         actorId: access.databaseUserId,

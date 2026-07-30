@@ -239,6 +239,15 @@ function validProjectStateVersion(value) {
     : null;
 }
 
+function safeReviewedEvidenceResourceId(value) {
+  const normalized = typeof value === 'string' ? value.trim() : '';
+  return normalized
+    && normalized.length <= 190
+    && !/[\u0000-\u001f\u007f]/.test(normalized)
+    ? normalized
+    : null;
+}
+
 function projectStateEtag(version) {
   return `"project-state-${validProjectStateVersion(version) ?? 0}"`;
 }
@@ -270,6 +279,15 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
     onboarding: searchParams.get('onboarding'),
   });
   const approvalOnboardingRequested = searchParams.get('onboarding') === 'approval';
+  const reviewedEvidenceSelection = useMemo(() => {
+    if (!setup.canUseReviewedEvidence) return null;
+    const evidenceIds = searchParams.getAll('evidenceId');
+    const assessmentIds = searchParams.getAll('assessmentId');
+    if (evidenceIds.length !== 1 || assessmentIds.length !== 1) return null;
+    const evidenceId = safeReviewedEvidenceResourceId(evidenceIds[0]);
+    const assessmentId = safeReviewedEvidenceResourceId(assessmentIds[0]);
+    return evidenceId && assessmentId ? { evidenceId, assessmentId } : null;
+  }, [searchParams, setup.canUseReviewedEvidence]);
   // Application State
   const [state, setState] = useState(() => normalizeAppState(initialState));
   const [canonicalTasks, setCanonicalTasks] = useState(
@@ -2311,11 +2329,13 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
             {activeTab === 'sec-gantt' && setup.canReadCanonicalTasks && (
               <ScheduleSnapshotsPanel
                 canManage={setup.canManageCanonicalTasks}
+                canUseReviewedEvidence={setup.canUseReviewedEvidence}
                 getProjectStateVersion={getProjectStateVersion}
                 initialTasks={canonicalTasks}
                 key={platformAccess.project.id}
                 onToast={addToast}
                 project={platformAccess.project}
+                reviewedEvidenceSelection={reviewedEvidenceSelection}
                 tasksTruncated={setup.canonicalTasksHasMore}
               />
             )}

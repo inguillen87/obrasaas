@@ -71,6 +71,69 @@ test('forecast observations are complete, stable, and preserve canonical task re
   assert.equal(observations[2].remainingDurationDays, null);
 });
 
+test('reviewed evidence keeps the human-selected point and explicit provenance without inventing a midpoint', () => {
+  const reviewedEvidence = {
+    taskId: 'in-progress',
+    assessmentId: 'assessment-reviewed-a',
+    expectedAssessmentRevision: 7,
+    progressPercent: 43,
+    rationale: 'Medición visual contrastada con el paño ejecutado en obra.',
+  };
+  const requirements = scheduleObservationRequirements(tasks, { reviewedEvidence });
+  const reviewedRequirement = requirements.find((row) => row.sourceTaskId === 'in-progress');
+  assert.equal(reviewedRequirement.progressPercent, 43);
+
+  const observations = buildScheduleObservations(tasks, {
+    'in-progress': { actualStartDate: '2026-07-25', remainingDurationDays: '6' },
+    complete: { actualStartDate: '2026-07-20', actualFinishDate: '2026-07-20' },
+  }, {
+    asOfDate: '2026-07-28',
+    reviewedEvidence,
+  });
+  const reviewed = observations.find((row) => row.sourceTaskId === 'in-progress');
+  assert.deepEqual(reviewed, {
+    sourceTaskId: 'in-progress',
+    expectedTaskRevision: 3,
+    progressPercent: 43,
+    progressSource: 'REVIEWED_EVIDENCE',
+    reviewedEvidence: {
+      assessmentId: 'assessment-reviewed-a',
+      expectedAssessmentRevision: 7,
+      rationale: 'Medición visual contrastada con el paño ejecutado en obra.',
+    },
+    actualStartDate: '2026-07-25',
+    actualFinishDate: null,
+    remainingDurationDays: 6,
+  });
+  assert.notEqual(reviewed.progressPercent, 50, 'the helper must not substitute a midpoint or canonical value');
+});
+
+test('reviewed evidence selection rejects missing human point, rationale, foreign tasks, and unknown fields', () => {
+  const base = {
+    taskId: 'in-progress',
+    assessmentId: 'assessment-reviewed-a',
+    expectedAssessmentRevision: 7,
+    progressPercent: 43,
+    rationale: 'Punto elegido por el director de obra.',
+  };
+  const invalid = [
+    { value: { ...base, progressPercent: undefined }, message: /avance revisado/ },
+    { value: { ...base, rationale: '   ' }, message: /fundamento humano/ },
+    { value: { ...base, taskId: 'foreign-task' }, message: /tarea visible/ },
+    { value: { ...base, progressMin: 40 }, message: /campos no permitidos/ },
+  ];
+  for (const candidate of invalid) {
+    assert.throws(
+      () => buildScheduleObservations(tasks, {}, {
+        asOfDate: '2026-07-28',
+        reviewedEvidence: candidate.value,
+      }),
+      (error) => error instanceof ScheduleObservationError
+        && candidate.message.test(error.message),
+    );
+  }
+});
+
 test('observation builder rejects future actuals, inconsistent finishes, partial milestones and stale shapes', () => {
   const cases = [
     {

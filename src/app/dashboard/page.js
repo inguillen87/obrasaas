@@ -37,6 +37,12 @@ export default async function DashboardPage() {
     'org:operational-proposals:read',
   );
   const canReadCanonicalTasks = hasTenantPermission(access, 'org:tasks:read');
+  const canManageCanonicalTasks = hasTenantPermission(access, 'org:tasks:manage');
+  const canUseReviewedEvidence = (
+    canManageCanonicalTasks
+    && canReadSourceEvidence
+    && hasTenantPermission(access, 'org:execution:manage')
+  );
   const aiSettings = publicTenantAiSettings(access.organization.metadata);
   const [
     initialSnapshot,
@@ -102,6 +108,7 @@ export default async function DashboardPage() {
         canReadOperationalProposals,
         canReadCanonicalTasks,
         canManageCanonicalTasks: hasTenantPermission(access, 'org:tasks:manage'),
+        canUseReviewedEvidence,
         canonicalTasks: canonicalTasks.tasks,
         canonicalTasksHasMore: canonicalTasks.hasMore,
         canManageOperationalProposals: hasTenantPermission(

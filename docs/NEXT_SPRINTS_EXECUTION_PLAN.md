@@ -17,7 +17,7 @@ El estado se expresa por nivel de evidencia: código y pruebas locales, migraci�
 - baseline inmutable y versionada sobre WBS canónica, con snapshots, hashes, auditoría, idempotencia y CAS;
 - forecast determinista con dependencias FS/SS/FF/SF, lag, observaciones explícitas y fechas civiles reproducibles;
 - una tarea creada antes de definir el calendario conserva `startDay` y duración relativos; al fijar el inicio de obra se rehidrata de forma atómica, sin perder la planificación;
-- escenario derivado de una revisión humana, nunca del output bruto del modelo; ninguna foto crea forecast, certifica o aplica cambios;
+- observación de avance inmutable derivada de una decisión humana, nunca del output bruto del modelo; puede alimentar un corte de forecast reproducible sin modificar la tarea, la baseline, una certificación ni un pago;
 - compatibilidad legacy por obra hasta cutover demostrable con cero drift; siguen pendientes responsables/equipos por ID, blockers y change control contractual.
 
 ## Prioridad inmediata: H1/H2 — Meta, asistencia y evidencia real
@@ -40,7 +40,7 @@ El estado se expresa por nivel de evidencia: código y pruebas locales, migraci�
 - OpenAI es el candidato primario de Vision; Qwen3-VL/GLM-5V son challengers visuales y GLM-OCR/GLM-5.2 especialistas OCR/texto evaluables. No hay fan-out sobre evidencia real;
 - la clave OpenAI dedicada, el presupuesto y el recibo inmutable ya están aislados/verificados en Preview; antes de usar datos reales deben recorrerse replay/worker y conciliación interna autenticados con comprobante recuperable, cerrar DPA/retención y mantener `detail:high` con prompt cache implícito deshabilitado. `RECONCILED_USAGE` permanece cerrado hasta derivar costo desde usage y pricing persistidos;
 - faltan foto Meta real, dataset consentido, ground truth, benchmark, DPA/retención y observabilidad de costo/latencia;
-- H5 sigue abierto: la revisión humana visual todavía no crea ni aplica un escenario de forecast, y falta recorrer baseline inmutable → escenario revisado → deltas Gantt en UI;
+- H5 está cerrado en código y pruebas locales: una revisión visual aprobada/corregida exige un punto humano y fundamento, materializa una observación append-only y genera un corte determinista con comparación baseline/forecast por tarea. La migración nueva, el journey autenticado en Preview y la foto Meta real siguen pendientes; no se mutan tareas, baseline, certificaciones ni pagos;
 - las cargas web privadas siguen limitadas a 4 MiB; carga directa autorizada, checksum y finalización server-side quedan como cierre para videos/documentos mayores.
 
 ## H3.1/H4 — alta de operario y cobro seguro

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
 import {
   discardProtectedUploadAttempt,
@@ -107,6 +108,7 @@ function visualAssessmentForUi(value) {
   return {
     id: source.id,
     evidenceId: source.evidenceId,
+    taskId: source.taskId,
     status: source.status,
     summary: source.summary || null,
     elementType: source.elementType || null,
@@ -132,7 +134,37 @@ function visualAssessmentForUi(value) {
   };
 }
 
-function VisualAssessmentCard({ assessment, busy, canReview, onReview }) {
+function effectiveReviewedRange(assessment) {
+  const corrected = assessment?.reviewStatus === "CORRECTED";
+  const minimum = Number(corrected ? assessment.correctedProgressMin : assessment?.progressMin);
+  const maximum = Number(corrected ? assessment.correctedProgressMax : assessment?.progressMax);
+  if (
+    !Number.isSafeInteger(minimum)
+    || !Number.isSafeInteger(maximum)
+    || minimum < 0
+    || maximum > 100
+    || minimum > maximum
+  ) return null;
+  return { minimum, maximum };
+}
+
+function reviewedEvidenceForecastHref(evidenceId, assessmentId) {
+  const query = new URLSearchParams({
+    tab: "sec-gantt",
+    evidenceId,
+    assessmentId,
+  });
+  return `/dashboard?${query.toString()}`;
+}
+
+function VisualAssessmentCard({
+  assessment,
+  busy,
+  canReview,
+  forecastHref = null,
+  onReview,
+  taskLabel,
+}) {
   const [decision, setDecision] = useState("APPROVED");
   const [reviewNote, setReviewNote] = useState("");
   const [correctedMin, setCorrectedMin] = useState("");
@@ -206,6 +238,11 @@ function VisualAssessmentCard({ assessment, busy, canReview, onReview }) {
         )}
       </header>
 
+      <div className={styles.visualTaskContext}>
+        <span>Tarea vinculada</span>
+        <strong>{taskLabel || "Tarea canónica"}</strong>
+      </div>
+
       {(assessment.status === "RUNNING" || assessment.status === "PENDING") && (
         <p className={styles.visualRunning} role="status">
           La imagen se procesa de forma privada. No cierres esta evidencia si querés ver el resultado aquí.
@@ -273,6 +310,22 @@ function VisualAssessmentCard({ assessment, busy, canReview, onReview }) {
             </span>
           )}
           {assessment.reviewNote && <p>{assessment.reviewNote}</p>}
+        </div>
+      )}
+
+      {forecastHref && (
+        <div className={styles.forecastHandoff}>
+          <div>
+            <strong>Preparar una observación para el forecast</strong>
+            <p>
+              En Cronograma vas a elegir un porcentaje puntual dentro del rango y completar
+              los hechos reales. Esta acción no modifica el plan ni la línea base.
+            </p>
+          </div>
+          <Link href={forecastHref}>
+            Revisar impacto en Cronograma
+            <i className="fa-solid fa-arrow-right" aria-hidden="true" />
+          </Link>
         </div>
       )}
 
@@ -386,6 +439,9 @@ export default function ProgressClient({
     }
     return latest;
   }, [visualAssessments]);
+  const taskById = useMemo(() => new Map(
+    (Array.isArray(tasks) ? tasks : []).map((task) => [task.id, task]),
+  ), [tasks]);
 
   function setVisualBusy(evidenceId, active) {
     setVisualBusyIds((current) => {
@@ -957,6 +1013,7 @@ export default function ProgressClient({
           <ul className={styles.evidenceList}>
             {data.evidence.map((item) => {
               const assessment = latestVisualByEvidence.get(item.id) || null;
+              const task = taskById.get(item.taskId) || null;
               const imageEvidence = item.attachment?.kind === "image";
               const visualBusy = visualBusyIds.has(item.id);
               const feedback = visualFeedbackByEvidence.get(item.id);
@@ -970,6 +1027,18 @@ export default function ProgressClient({
                 && item.status !== "REJECTED"
                 && !running
                 && !awaitingVisualReview;
+              const reviewedRange = effectiveReviewedRange(assessment);
+              const canPrepareForecast = Boolean(
+                permissions.canUseReviewedEvidence
+                && item.status === "APPROVED"
+                && assessment?.status === "COMPLETED"
+                && (assessment.reviewStatus === "APPROVED" || assessment.reviewStatus === "CORRECTED")
+                && assessment.taskId === item.taskId
+                && reviewedRange
+              );
+              const forecastHref = canPrepareForecast
+                ? reviewedEvidenceForecastHref(item.id, assessment.id)
+                : null;
               const locationLabel = item.location?.verification === "IN_GEOFENCE"
                 ? "Geolocalización compatible con geocerca"
                 : item.location?.verification === "REVIEW_REQUIRED"
@@ -983,6 +1052,9 @@ export default function ProgressClient({
                   <div className={styles.evidenceHeader}>
                     <div>
                       <strong>{item.caption || "Evidencia sin descripción"}</strong>
+                      <span className={styles.evidenceTask}>
+                        Tarea: {task?.code ? `${task.code} · ` : ""}{task?.title || item.taskId}
+                      </span>
                       <span>
                         {item.capturedAt} · {item.status}
                         {item.source?.channel === "whatsapp" ? " · WhatsApp" : ""}
@@ -1090,9 +1162,13 @@ export default function ProgressClient({
                           assessment={assessment}
                           busy={visualBusy}
                           canReview={permissions.canUseVisualProgress}
+                          forecastHref={forecastHref}
                           onReview={(currentAssessment, input) => (
                             reviewVisualAssessment(item, currentAssessment, input)
                           )}
+                          taskLabel={task
+                            ? `${task.code ? `${task.code} · ` : ""}${task.title}`
+                            : item.taskId}
                         />
                       )}
                     </div>
