@@ -13,7 +13,7 @@ Este incremento cubre las ideas acordadas con la socia para:
 - avisar por email al proveedor, por defecto siete días antes, cuando Administración haya confirmado el destino;
 - mostrar el impacto operativo derivado sin modificar silenciosamente el estado de una tarea.
 
-No cubre todavía una suscripción de calendario sincronizada, confirmación del email por el propio proveedor, inspección/aceptación de calidad, stock/reservas, alertas internas a Compras/Director, ni certificación contractual de avance. La asignación cuantitativa explícita entre compromiso y recepción ya existe en Preview, pero no equivale a aceptación física.
+No cubre todavía una suscripción de calendario sincronizada, confirmación del email por el propio proveedor, stock/reservas/BOM, alertas internas a Compras/Director, firma jurídica/evidencia fotográfica tipada de recepción ni certificación contractual de avance. La asignación cuantitativa, la inspección de calidad y el cierre de faltantes ya existen en Preview, pero una cantidad aceptada todavía no equivale a stock disponible.
 
 ## Autoridades de datos
 
@@ -26,6 +26,8 @@ La funcionalidad evita crear una segunda verdad del plan o de la recepción:
 | Compra aprobada | `PurchaseOrder` y `PurchaseOrderLine` | Un compromiso puede vincularse sólo con una OC aprobada o parcialmente recibida del mismo tenant, obra y proveedor. |
 | Recepción real | `GoodsReceipt` y `GoodsReceiptLine` | Sigue siendo el registro de lo recibido. No se infiere desde un email ni desde el estado de un compromiso. |
 | Conciliación documental | `GoodsReceiptCommitmentAllocation` | Ledger append-only de cantidades explícitamente asignadas, sin FIFO ni backfill; no afirma calidad ni disponibilidad. |
+| Inspección física vigente | `GoodsReceiptInspection` y `GoodsReceiptDisposition` | Partición exacta aceptado/dañado/rechazado/cuarentena, versionada mediante corrección o reversión y con snapshot de ubicación. |
+| Cierre final de entrega | `SupplierCommitmentLineClosure` | Deriva aceptado y faltante desde evidencia vigente; corregir una inspección exige revertir primero el cierre. |
 | Comunicación externa | `SupplierReminderDelivery` | Outbox durable y versionado; no es la autoridad de la fecha. |
 | Historia del compromiso | `SupplierCommitmentEvent` | Evento inmutable por creación y transición. |
 | Vista quincenal/exportación | `loadScheduleCalendar` | Read model derivado de WBS y compromisos; no persiste copias del plan. |
@@ -68,9 +70,9 @@ Cada mutación exige:
 
 Las transiciones terminales, las revisiones y el evento correspondiente también están protegidos por constraints y triggers `ENABLE ALWAYS` en la migración.
 
-### Conciliación material y límite de aceptación
+### Conciliación, inspección y límite de disponibilidad
 
-Hoy `FULFILL` para `MATERIAL_DELIVERY` sigue siendo una decisión administrativa con motivo obligatorio y la serialización la identifica como `ADMIN_ATTESTED`. Separadamente, la conciliación explícita permite elegir una línea de remito `POSTED`, una línea comprometida compatible y una cantidad exacta. El servidor devuelve balances de recepción y compromiso incluso con asignación cero.
+Hoy `FULFILL` para `MATERIAL_DELIVERY` sigue siendo una decisión administrativa con motivo obligatorio y la serialización la identifica como `ADMIN_ATTESTED`. Separadamente, la conciliación explícita permite elegir una línea de remito `POSTED`, una línea comprometida compatible y una cantidad exacta. Una inspección vigente divide cada línea exactamente entre aceptado, dañado, rechazado y cuarentena, con actor, ubicación y correcciones/reversiones históricas. El cierre final deriva el faltante desde esas cantidades; no acepta cifras libres del navegador.
 
 Esto significa:
 
@@ -78,8 +80,9 @@ Esto significa:
 - no se asigna por cercanía de fecha, FIFO ni inferencia histórica;
 - un remito `VOIDED` deja de consumir cobertura y no puede volver silenciosamente a `POSTED`;
 - `UNALLOCATED/PARTIALLY_ALLOCATED/FULLY_ALLOCATED` describen la línea recibida; `NOT_RECEIVED/PARTIALLY_RECEIVED/FULLY_RECEIVED` describen cobertura documental del compromiso;
-- no corresponde describir esa cobertura como aceptada, disponible, OCR aprobado ni prueba jurídica;
-- `AVAILABLE` permanece cerrado hasta inspección, stock, reserva y BOM por tarea.
+- una inspección activa congela el remito, sus líneas y asignaciones; cualquier corrección conserva historia y exige reversión explícita del cierre final activo;
+- `ACCEPTED` describe aceptación física auditada, pero no stock libre, OCR aprobado ni prueba jurídica;
+- `AVAILABLE` permanece cerrado hasta ledger de stock, reserva y BOM por tarea.
 
 ## Calendario por quincenas
 
@@ -321,6 +324,8 @@ No habilitar Production hasta conservar evidencia de:
 - smoke sin sesión del nuevo artefacto: portada `200`, Compras/API privadas ocultas por Clerk, cron de notificaciones sin bearer `401` y ninguna respuesta `5xx` observada.
 - commit `3181807` desplegado como `dpl_GdrLvspbHK7ttZEA7EW88WGzX4Me`, estado `Ready`; aplicó/verificó las migraciones 112/113 de conciliación, incluido scope cross-tenant, exceso de `0.001`, append-only, remito `VOIDED` terminal y lock con dos conexiones;
 - evidencia reproducible y límites del corte: [2026-08-02-preview-3181807.md](./evidence/2026-08-02-preview-3181807.md).
+- commit `b0ba0f8` desplegado como `dpl_ATmLy3oypBeNvSi7dXbMRM5zpQaY`, estado `Ready`; aplicó/verificó la migración 114 de inspecciones, disposiciones, ubicaciones y cierres/reversiones de faltantes, y compiló las rutas paginadas de remitos;
+- evidencia reproducible y límites del corte: [2026-08-02-preview-b0ba0f8.md](./evidence/2026-08-02-preview-b0ba0f8.md).
 
 Esta evidencia certifica el artefacto y la migración de **Preview**. No certifica el envío de correo, el journey autenticado ni Production.
 
@@ -334,9 +339,9 @@ Esta evidencia certifica el artefacto y la migración de **Preview**. No certifi
 - E2E de permisos y concurrencia contra infraestructura real;
 - feed de calendario sincronizado/revocable;
 - confirmación del email por el proveedor;
-- inspección/aceptación, excepciones y cierre final de faltantes;
 - ledger de stock, reservas y BOM por tarea antes de `AVAILABLE`;
-- paginación de la vista de más de 500 compromisos;
+- evidencia fotográfica tipada/firma jurídica de recepción y su política de retención;
+- recorrido autenticado de inspección, corrección, reversión y paginación de más de 500 remitos;
 - alertas internas a Compras/Director y su escalamiento.
 
 Hasta completar esos gates, la redacción correcta es **“funcionalidad desplegada y verificada en Preview, con correo externo deshabilitado”**, no “en producción” ni “proveedores notificados”.

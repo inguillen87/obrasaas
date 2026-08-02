@@ -86,21 +86,21 @@ Unidad, cantidad base, ejecutada, método, período, evidencia, revisión y apro
 
 Certificado versionado, retenciones, ajustes, PDF/hash reproducible y estado de pago separado. Certificar nunca ejecuta un pago automáticamente.
 
-### S11/S12 — compras y recepción (conciliación exacta en Preview; inspección/stock en curso)
+### S11/S12 — compras y recepción (inspección y faltantes en Preview; stock en curso)
 
-Proveedor, OC aprobada, fecha/ventana prometida, vista quincenal, recepción parcial, remito privado y factura/match existen. OC, compromiso, recepción y conciliación usan cantidades exactas. La asignación explícita append-only `GoodsReceiptLine → SupplierCommitmentLine` ya está en Preview, muestra saldos incluso en cero, no usa FIFO ni backfill y mantiene `VOIDED` terminal. El deployment `dpl_GdrLvspbHK7ttZEA7EW88WGzX4Me` quedó `Ready` con 113 migraciones y verificador PostgreSQL real; no acredita UI autenticada, aceptación física, stock, Resend ni Production.
+Proveedor, OC aprobada, fecha/ventana prometida, vista quincenal, recepción parcial, remito privado y factura/match existen. OC, compromiso, recepción y conciliación usan cantidades exactas. La asignación explícita append-only `GoodsReceiptLine → SupplierCommitmentLine` no usa FIFO ni backfill. La inspección vigente particiona exactamente cada línea entre aceptado, dañado, rechazado y cuarentena; correcciones/reversiones conservan historia, ubicación y actor. El cierre final deriva faltante y cantidad aceptada sólo de evidencia vigente. El deployment `dpl_ATmLy3oypBeNvSi7dXbMRM5zpQaY` quedó `Ready` con 114 migraciones y verificador PostgreSQL real; no acredita UI autenticada, stock, Resend ni Production.
 
 Orden ejecutable del siguiente bloque:
 
 1. **completo en Preview:** asignación explícita, append-only y tenant-scoped `GoodsReceiptLine → SupplierCommitmentLine`, sin FIFO ni backfill inferido;
 2. **completo en Preview:** estados derivados separados para recepción (`UNALLOCATED/PARTIALLY_ALLOCATED/FULLY_ALLOCATED`) y compromiso (`NOT_RECEIVED/PARTIALLY_RECEIVED/FULLY_RECEIVED`), sin mutar `Task.status`;
-3. **en curso:** faltante final, sobrante, daño, rechazo, cuarentena y aceptación con receptor/lugar; evidencia tipada se integra después, no como JSON libre;
-4. ledger de stock, ubicación, reserva, consumo, transferencia y ajuste; sólo esa evidencia puede derivar `AVAILABLE`;
+3. **completo en Preview:** aceptación, daño, rechazo y cuarentena exactos; inspección versionada con actor/ubicación; cierre/reversión explícitos del faltante final y paginación por cursor de más de 500 remitos;
+4. **siguiente gate P0:** ledger de stock por ubicación, reserva, consumo, transferencia y ajuste; sólo esa evidencia puede derivar `AVAILABLE`;
 5. BOM/requerimiento exacto por tarea antes de afirmar que todos sus materiales están disponibles;
 6. alerta interna durable a Compras/Director cuando fecha y cantidad aceptada incumplen la promesa;
-7. smoke autenticado, carrera concurrente PostgreSQL real con inserts, Resend real y E2E por rol antes de Production.
+7. smoke autenticado, Resend real y E2E por rol antes de Production. La migración y sus carreras adversariales ya pasaron el verificador dedicado en Neon Preview.
 
-Siguen faltando requisición/BOM por WBS, cotización/selección y UI multi-partida. El snapshot `.ics` y el email una semana antes ya están en Preview como base, pero Calendar sincronizado/revocable y entrega Resend observada permanecen abiertos.
+Siguen faltando requisición/BOM por WBS, cotización/selección, evidencia fotográfica tipada/firma de recepción y UI multi-partida. El snapshot `.ics` y el email una semana antes ya están en Preview como base, pero Calendar sincronizado/revocable y entrega Resend observada permanecen abiertos. Evidencia del corte: [Preview `b0ba0f8`](./evidence/2026-08-02-preview-b0ba0f8.md).
 
 ## Ola contractual y control
 

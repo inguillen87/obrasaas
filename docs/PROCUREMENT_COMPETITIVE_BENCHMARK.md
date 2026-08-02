@@ -15,7 +15,7 @@ OC → compromiso → envío → recepción física por partida
    → disponibilidad verificada → tarea ejecutable → factura
 ```
 
-Estado del P0 al 2 de agosto de 2026: OC, compromisos, recepciones y su asignación explícita ya usan cantidades decimales exactas; el total de OC se calcula en enteros escalados y los saldos se derivan en servidor. El ledger append-only `GoodsReceiptLine → SupplierCommitmentLine`, sin FIFO ni backfill, quedó verificado en Neon/Vercel Preview. El P0 **no está cerrado**: falta inspección/aceptación, excepciones de calidad, cierre de faltantes y un ledger de disponibilidad/reserva.
+Estado del P0 al 2 de agosto de 2026: OC, compromisos, recepciones y su asignación explícita usan cantidades decimales exactas; el total de OC se calcula en enteros escalados y los saldos se derivan en servidor. Neon/Vercel Preview ya verificó el ledger `GoodsReceiptLine → SupplierCommitmentLine`, la inspección exacta aceptado/dañado/rechazado/cuarentena y el cierre/reversión append-only de faltantes. El P0 **no está cerrado**: falta el ledger de existencias, reservas y BOM que convierta aceptación física en disponibilidad operativa.
 
 ## Comparación
 
@@ -32,10 +32,10 @@ Estado del P0 al 2 de agosto de 2026: OC, compromisos, recepciones y su asignaci
 
 - cantidades decimales exactas por unidad de medida — implementado y verificado en Preview para OC, compromiso y recepción;
 - entregas parciales y asignación explícita a compromisos, nunca FIFO implícito — implementado y verificado en Preview;
-- faltante, sobrante, dañado, rechazado y aceptado;
-- foto/remito privado, lugar, receptor y revisión;
-- finalización inmutable con corrección/reversión append-only;
-- `AVAILABLE` sólo cuando todas las partidas requeridas están conciliadas.
+- faltante final, dañado, rechazado, cuarentena y aceptado — implementado y verificado en Preview;
+- remito privado, lugar, receptor y revisión versionada — implementado; falta evidencia fotográfica tipada/firma y E2E autenticado;
+- finalización inmutable con corrección/reversión append-only — implementado y verificado en Preview;
+- `AVAILABLE` sólo cuando todas las partidas requeridas están conciliadas, aceptadas, existentes y reservadas — ledger/reserva/BOM pendiente.
 
 ### P1 — Procurement gobernado por el cronograma
 

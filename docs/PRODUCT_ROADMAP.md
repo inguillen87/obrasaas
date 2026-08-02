@@ -194,7 +194,7 @@ Estado local de S1 en esta iteración:
 
 Quedan fuera: nómina, impuestos, contabilidad general, cuentas por pagar automáticas y ERP fiscal propio.
 
-Estado S11/S12 al 2 de agosto de 2026: la fundación de proveedor, OC, compromiso con fecha, calendario quincenal, cantidades exactas y recepción parcial está verificada en Preview. El próximo gate P0 es una asignación inmutable y explícita entre cada `GoodsReceiptLine` y `SupplierCommitmentLine`; ningún orden temporal, proximidad de fechas o “único compromiso aparente” puede conciliar datos históricos automáticamente. `AVAILABLE` queda reservado para recepción conciliada más stock/reserva verificables, no para `FULFILL`, foto, OCR ni email.
+Estado S11/S12 al 2 de agosto de 2026: proveedor, OC, compromiso con fecha, calendario quincenal, cantidades exactas, recepción parcial y asignación explícita están verificadas en Preview. También quedaron verificadas la inspección versionada aceptado/dañado/rechazado/cuarentena, las ubicaciones tenant-scoped y el cierre/reversión append-only de faltantes. El próximo gate P0 es el ledger de existencias, reservas, consumo, transferencia y ajuste, seguido por BOM versionado por tarea. `AVAILABLE` queda reservado para cantidad conciliada, aceptada, existente y reservada; nunca deriva de `FULFILL`, foto, OCR ni email.
 
 ### Ola 3 — Documentos y colaboración externa
 
