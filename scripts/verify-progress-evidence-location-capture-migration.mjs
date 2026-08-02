@@ -508,7 +508,7 @@ async function assertIndexes(client) {
   );
 
   const forbidden = await client.query(
-    `SELECT to_regclass(format('%I.%I', current_schema(), $1)) IS NOT NULL AS exists`,
+    `SELECT to_regclass(format('%I.%I', current_schema(), $1::text)) IS NOT NULL AS exists`,
     ['ProgressEvidenceCaptureSession_one_active_worker_connection_key'],
   );
   invariant(!forbidden.rows[0]?.exists, 'Photo-bound sessions must not impose a worker-wide active-session lock.');

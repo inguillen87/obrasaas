@@ -220,6 +220,11 @@ test('semantic verifier is schema-bound, TLS-hardened and rollback-only', () => 
   assert.match(verifier, /JOIN pg_enum/);
   assert.match(verifier, /FROM information_schema\.columns/);
   assert.match(verifier, /JOIN pg_index/);
+  assert.match(
+    verifier,
+    /to_regclass\(format\('%I\.%I', current_schema\(\), \$1::text\)\)/,
+    'parameterized catalog probes must bind an explicit PostgreSQL type',
+  );
   assert.match(verifier, /FROM pg_constraint/);
   assert.match(verifier, /FROM pg_trigger/);
   assert.match(verifier, /Progress evidence location exact photo binding/);
