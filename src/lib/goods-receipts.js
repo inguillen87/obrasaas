@@ -382,6 +382,7 @@ export async function createGoodsReceipt(
         projectId: current.projectId,
         purchaseOrderId: order.id,
         operationKey,
+        receivedById: actor,
         notes,
         receipt: storedReceipt,
         protectedUploadId,

@@ -53,8 +53,17 @@ export default async function PurchasesPage() {
         projectId: access.project.id,
         status: "POSTED",
       },
-      include: { lines: true },
-      orderBy: { receivedAt: "desc" },
+      include: {
+        purchaseOrder: { select: { id: true, number: true } },
+        lines: {
+          include: {
+            purchaseOrderLine: {
+              select: { id: true, description: true, unit: true },
+            },
+          },
+        },
+      },
+      orderBy: [{ receivedAt: "desc" }, { id: "desc" }],
       take: 501,
     }),
     listGoodsReceiptLineBalances(prisma, {

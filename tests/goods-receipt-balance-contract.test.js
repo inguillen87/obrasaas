@@ -33,12 +33,17 @@ test('purchases page declares receipt truncation while balances cover the full p
 test('receipt refresh is tenant scoped and returns authoritative balances with truncation metadata', () => {
   assert.match(route, /organizationId: access\.organization\.id/);
   assert.match(route, /projectId: access\.project\.id/);
-  assert.match(route, /take: 501/);
+  assert.match(route, /parseGoodsReceiptListQuery/);
+  assert.match(route, /goodsReceiptListWhere\(query\)/);
+  assert.match(route, /purchaseOrder: \{ select: \{ id: true, number: true \} \}/);
+  assert.match(route, /select: \{ id: true, description: true, unit: true \}/);
+  assert.match(route, /take: query\.limit \+ 1/);
+  assert.match(route, /orderBy: \[\{ receivedAt: 'desc' \}, \{ id: 'desc' \}\]/);
   assert.match(route, /purchaseOrderIds: balanceOrderIds/);
   assert.match(route, /select: \{ id: true \}/);
   assert.match(route, /take: 500/);
-  assert.match(route, /receipts: rows\.slice\(0, 500\)\.map\(serializeGoodsReceipt\)/);
-  assert.match(route, /hasMore: rows\.length > 500/);
+  assert.match(route, /receipts: page\.map\(serializeGoodsReceipt\)/);
+  assert.match(route, /encodeGoodsReceiptListCursor/);
   assert.match(route, /lineBalances/);
   assert.match(route, /Cache-Control': 'private, no-store'/);
 });

@@ -33,10 +33,31 @@ test('reconciliation remains separate from stock availability and never infers F
   assert.doesNotMatch(reconciliationClient, /AVAILABLE/);
   assert.match(reconciliationClient, /FULLY_ALLOCATED/);
   assert.match(reconciliationClient, /FULLY_RECEIVED/);
+  assert.match(reconciliationClient, /documentado \{balance\.allocatedQuantity\}/);
+  assert.doesNotMatch(reconciliationClient, /recibido \{balance\.allocatedQuantity\}/);
 });
 
 test('receipt creation refreshes the server-owned reconciliation inventory', () => {
   assert.match(receiptClient, /setReconciliationVersion\(\(current\) => current \+ 1\)/);
   assert.match(receiptClient, /<ReceiptReconciliationClient/);
   assert.match(receiptClient, /refreshVersion=\{reconciliationVersion\}/);
+});
+
+test('reconciliation loads complete inspection heads and excludes frozen receipts', () => {
+  assert.match(reconciliationClient, /latestReceiptInspection/);
+  assert.match(reconciliationClient, /INSPECTION_PAGE_SIZE = 50/);
+  assert.match(reconciliationClient, /INSPECTION_HARD_CAP = 500/);
+  assert.match(
+    reconciliationClient,
+    /\/api\/goods-receipt-inspections\?\$\{query\.toString\(\)\}/,
+  );
+  assert.match(reconciliationClient, /while \(true\)/);
+  assert.match(reconciliationClient, /inspections\.length >= INSPECTION_HARD_CAP/);
+  assert.match(
+    reconciliationClient,
+    /inspectionHeads\.get\(balance\.goodsReceiptId\)\.kind === "REVERSAL"/,
+  );
+  assert.match(reconciliationClient, /Inspección v\$\{head\.version\} finalizada/);
+  assert.match(reconciliationClient, /Revisión reabierta/);
+  assert.match(reconciliationClient, /Registrá primero una REVERSAL/);
 });

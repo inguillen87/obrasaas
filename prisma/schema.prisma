@@ -283,6 +283,24 @@ enum GoodsReceiptStatus {
   VOIDED
 }
 
+enum GoodsReceiptInspectionKind {
+  FINALIZATION
+  CORRECTION
+  REVERSAL
+}
+
+enum GoodsReceiptDispositionQuality {
+  ACCEPTED
+  DAMAGED
+  REJECTED
+  QUARANTINED
+}
+
+enum SupplierCommitmentLineClosureKind {
+  FINAL_DELIVERY
+  REVERSAL
+}
+
 enum SupplierInvoiceStatus {
   RECEIVED
   APPROVED
@@ -724,6 +742,9 @@ model Organization {
   supplierInvoices                    SupplierInvoice[]
   purchaseOrders                      PurchaseOrder[]
   goodsReceipts                       GoodsReceipt[]
+  inventoryLocations                  InventoryLocation[]
+  goodsReceiptInspections             GoodsReceiptInspection[]
+  supplierCommitmentLineClosures      SupplierCommitmentLineClosure[]
   workerPersons                       WorkerPerson[]
   workerChannelIdentities             WorkerChannelIdentity[]
   workerOnboardingClaims              WorkerOnboardingClaim[]
@@ -874,6 +895,7 @@ model SupplierCommitment {
   taskLinks                  SupplierCommitmentTaskLink[]
   lines                      SupplierCommitmentLine[]
   goodsReceiptAllocations    GoodsReceiptCommitmentAllocation[]
+  lineClosures               SupplierCommitmentLineClosure[]
   reminderDeliveries         SupplierReminderDelivery[]
   events                     SupplierCommitmentEvent[]
   createdAt                  DateTime                           @default(now())
@@ -898,6 +920,7 @@ model SupplierCommitmentLine {
   commitment              SupplierCommitment                 @relation(fields: [projectId, purchaseOrderId, commitmentId], references: [projectId, purchaseOrderId, id], onDelete: Cascade)
   purchaseOrderLine       PurchaseOrderLine                  @relation(fields: [projectId, purchaseOrderId, purchaseOrderLineId], references: [projectId, purchaseOrderId, id], onDelete: Restrict)
   goodsReceiptAllocations GoodsReceiptCommitmentAllocation[]
+  closures                SupplierCommitmentLineClosure[]
   createdAt               DateTime                           @default(now())
 
   @@id([commitmentId, purchaseOrderLineId])
@@ -1014,6 +1037,8 @@ model GoodsReceipt {
   protectedUploadId     String?
   protectedUpload       ProtectedUpload?                   @relation("GoodsReceiptProtectedUpload", fields: [projectId, protectedUploadId], references: [projectId, id], onDelete: Restrict, map: "GoodsReceipt_protected_upload_fkey")
   requestFingerprint    String?                            @db.Char(64)
+  receivedById          String?
+  receivedBy            PlatformUser?                      @relation("GoodsReceiptReceiver", fields: [receivedById], references: [id], onDelete: Restrict, onUpdate: Restrict)
   receivedAt            DateTime                           @default(now())
   revision              Int                                @default(0)
   organization          Organization                       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -1021,6 +1046,7 @@ model GoodsReceipt {
   purchaseOrder         PurchaseOrder                      @relation(fields: [organizationId, projectId, purchaseOrderId], references: [organizationId, projectId, id], onDelete: Restrict)
   lines                 GoodsReceiptLine[]
   commitmentAllocations GoodsReceiptCommitmentAllocation[]
+  inspections           GoodsReceiptInspection[]
   createdAt             DateTime                           @default(now())
   updatedAt             DateTime                           @updatedAt
 
@@ -1029,19 +1055,21 @@ model GoodsReceipt {
   @@unique([organizationId, projectId, purchaseOrderId, id], map: "GoodsReceipt_org_project_order_id_key")
   @@unique([projectId, operationKey])
   @@unique([projectId, protectedUploadId], map: "GoodsReceipt_project_protected_upload_key")
+  @@index([receivedById, receivedAt], map: "GoodsReceipt_receivedById_receivedAt_idx")
   @@index([projectId, purchaseOrderId, receivedAt])
 }
 
 model GoodsReceiptLine {
-  id                    String                             @id @default(cuid())
-  projectId             String
-  purchaseOrderId       String
-  goodsReceiptId        String
-  purchaseOrderLineId   String
-  quantity              Decimal                            @db.Decimal(14, 3)
-  goodsReceipt          GoodsReceipt                       @relation(fields: [projectId, purchaseOrderId, goodsReceiptId], references: [projectId, purchaseOrderId, id], onDelete: Cascade)
-  purchaseOrderLine     PurchaseOrderLine                  @relation(fields: [projectId, purchaseOrderId, purchaseOrderLineId], references: [projectId, purchaseOrderId, id], onDelete: Restrict)
-  commitmentAllocations GoodsReceiptCommitmentAllocation[]
+  id                     String                              @id @default(cuid())
+  projectId              String
+  purchaseOrderId        String
+  goodsReceiptId         String
+  purchaseOrderLineId    String
+  quantity               Decimal                             @db.Decimal(14, 3)
+  goodsReceipt           GoodsReceipt                        @relation(fields: [projectId, purchaseOrderId, goodsReceiptId], references: [projectId, purchaseOrderId, id], onDelete: Cascade)
+  purchaseOrderLine      PurchaseOrderLine                   @relation(fields: [projectId, purchaseOrderId, purchaseOrderLineId], references: [projectId, purchaseOrderId, id], onDelete: Restrict)
+  commitmentAllocations  GoodsReceiptCommitmentAllocation[]
+  inspectionDispositions GoodsReceiptInspectionDisposition[]
 
   @@unique([goodsReceiptId, purchaseOrderLineId])
   @@unique([projectId, purchaseOrderId, goodsReceiptId, purchaseOrderLineId, id], map: "GoodsReceiptLine_scope_key")
@@ -1050,28 +1078,137 @@ model GoodsReceiptLine {
 }
 
 model GoodsReceiptCommitmentAllocation {
-  id                   String                 @id @default(cuid())
+  id                     String                              @id @default(cuid())
+  organizationId         String
+  projectId              String
+  purchaseOrderId        String
+  purchaseOrderLineId    String
+  goodsReceiptId         String
+  goodsReceiptLineId     String
+  supplierCommitmentId   String
+  quantity               Decimal                             @db.Decimal(14, 3)
+  operationKey           String                              @db.VarChar(190)
+  requestFingerprint     String                              @db.Char(64)
+  createdById            String                              @db.VarChar(190)
+  createdAt              DateTime                            @default(now())
+  goodsReceipt           GoodsReceipt                        @relation(fields: [organizationId, projectId, purchaseOrderId, goodsReceiptId], references: [organizationId, projectId, purchaseOrderId, id], onDelete: Restrict, onUpdate: Restrict, map: "GRCAllocation_receipt_fkey")
+  goodsReceiptLine       GoodsReceiptLine                    @relation(fields: [projectId, purchaseOrderId, goodsReceiptId, purchaseOrderLineId, goodsReceiptLineId], references: [projectId, purchaseOrderId, goodsReceiptId, purchaseOrderLineId, id], onDelete: Restrict, onUpdate: Restrict, map: "GRCAllocation_receipt_line_fkey")
+  supplierCommitment     SupplierCommitment                  @relation(fields: [organizationId, projectId, purchaseOrderId, supplierCommitmentId], references: [organizationId, projectId, purchaseOrderId, id], onDelete: Restrict, onUpdate: Restrict, map: "GRCAllocation_supplier_commitment_fkey")
+  commitmentLine         SupplierCommitmentLine              @relation(fields: [projectId, purchaseOrderId, supplierCommitmentId, purchaseOrderLineId], references: [projectId, purchaseOrderId, commitmentId, purchaseOrderLineId], onDelete: Restrict, onUpdate: Restrict, map: "GRCAllocation_supplier_commitment_line_fkey")
+  inspectionDispositions GoodsReceiptInspectionDisposition[]
+
+  @@unique([projectId, id], map: "GRCAllocation_project_id_key")
+  @@unique([organizationId, projectId, purchaseOrderId, purchaseOrderLineId, goodsReceiptId, goodsReceiptLineId, id], map: "GRCAllocation_inspection_scope_key")
+  @@unique([projectId, operationKey], map: "GRCAllocation_project_operation_key")
+  @@index([projectId, goodsReceiptLineId], map: "GRCAllocation_receipt_line_idx")
+  @@index([projectId, supplierCommitmentId, purchaseOrderLineId], map: "GRCAllocation_supplier_commitment_line_idx")
+}
+
+model InventoryLocation {
+  id                      String                   @id @default(cuid())
+  organizationId          String
+  projectId               String
+  code                    String                   @db.VarChar(32)
+  name                    String                   @db.VarChar(160)
+  active                  Boolean                  @default(true)
+  revision                Int                      @default(0)
+  organization            Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  project                 Project                  @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Cascade, onUpdate: Restrict, map: "InventoryLocation_project_fkey")
+  goodsReceiptInspections GoodsReceiptInspection[]
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+
+  @@unique([organizationId, projectId, id], map: "InventoryLocation_scope_id_key")
+  @@unique([projectId, code], map: "InventoryLocation_project_code_key")
+  @@index([projectId, active, name], map: "InventoryLocation_project_active_name_idx")
+}
+
+model GoodsReceiptInspection {
+  id                   String                              @id @default(cuid())
+  organizationId       String
+  projectId            String
+  purchaseOrderId      String
+  goodsReceiptId       String
+  kind                 GoodsReceiptInspectionKind
+  version              Int
+  predecessorId        String?
+  operationKey         String                              @db.VarChar(190)
+  requestFingerprint   String                              @db.Char(64)
+  inspectedById        String
+  locationId           String
+  locationCodeSnapshot String                              @db.VarChar(32)
+  locationNameSnapshot String                              @db.VarChar(160)
+  reason               String?                             @db.VarChar(500)
+  inspectedAt          DateTime                            @default(now())
+  createdAt            DateTime                            @default(now())
+  organization         Organization                        @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  project              Project                             @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "GoodsReceiptInspection_project_fkey")
+  goodsReceipt         GoodsReceipt                        @relation(fields: [organizationId, projectId, purchaseOrderId, goodsReceiptId], references: [organizationId, projectId, purchaseOrderId, id], onDelete: Restrict, onUpdate: Restrict, map: "GoodsReceiptInspection_receipt_fkey")
+  location             InventoryLocation                   @relation(fields: [organizationId, projectId, locationId], references: [organizationId, projectId, id], onDelete: Restrict, onUpdate: Restrict, map: "GoodsReceiptInspection_location_fkey")
+  inspectedBy          PlatformUser                        @relation("GoodsReceiptInspector", fields: [inspectedById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  predecessor          GoodsReceiptInspection?             @relation("GoodsReceiptInspectionChain", fields: [organizationId, projectId, purchaseOrderId, goodsReceiptId, predecessorId], references: [organizationId, projectId, purchaseOrderId, goodsReceiptId, id], onDelete: Restrict, onUpdate: Restrict, map: "GoodsReceiptInspection_predecessor_fkey")
+  successor            GoodsReceiptInspection?             @relation("GoodsReceiptInspectionChain")
+  dispositions         GoodsReceiptInspectionDisposition[]
+
+  @@unique([organizationId, projectId, purchaseOrderId, goodsReceiptId, id], map: "GoodsReceiptInspection_scope_id_key")
+  @@unique([projectId, goodsReceiptId, version], map: "GoodsReceiptInspection_receipt_version_key")
+  @@unique([organizationId, projectId, purchaseOrderId, goodsReceiptId, predecessorId], map: "GoodsReceiptInspection_predecessor_key")
+  @@unique([projectId, operationKey], map: "GoodsReceiptInspection_operation_key")
+  @@index([projectId, goodsReceiptId, createdAt], map: "GoodsReceiptInspection_receipt_created_idx")
+}
+
+model GoodsReceiptInspectionDisposition {
+  id                  String                            @id @default(cuid())
+  organizationId      String
+  projectId           String
+  purchaseOrderId     String
+  purchaseOrderLineId String
+  goodsReceiptId      String
+  goodsReceiptLineId  String
+  inspectionId        String
+  allocationId        String?
+  quality             GoodsReceiptDispositionQuality
+  quantity            Decimal                           @db.Decimal(14, 3)
+  createdAt           DateTime                          @default(now())
+  inspection          GoodsReceiptInspection            @relation(fields: [organizationId, projectId, purchaseOrderId, goodsReceiptId, inspectionId], references: [organizationId, projectId, purchaseOrderId, goodsReceiptId, id], onDelete: Restrict, onUpdate: Restrict, map: "GRInspectionDisposition_inspection_fkey")
+  goodsReceiptLine    GoodsReceiptLine                  @relation(fields: [projectId, purchaseOrderId, goodsReceiptId, purchaseOrderLineId, goodsReceiptLineId], references: [projectId, purchaseOrderId, goodsReceiptId, purchaseOrderLineId, id], onDelete: Restrict, onUpdate: Restrict, map: "GRInspectionDisposition_receipt_line_fkey")
+  allocation          GoodsReceiptCommitmentAllocation? @relation(fields: [organizationId, projectId, purchaseOrderId, purchaseOrderLineId, goodsReceiptId, goodsReceiptLineId, allocationId], references: [organizationId, projectId, purchaseOrderId, purchaseOrderLineId, goodsReceiptId, goodsReceiptLineId, id], onDelete: Restrict, onUpdate: Restrict, map: "GRInspectionDisposition_allocation_fkey")
+
+  @@unique([projectId, id], map: "GRInspectionDisposition_project_id_key")
+  @@index([projectId, inspectionId, goodsReceiptLineId], map: "GRInspectionDisposition_inspection_line_idx")
+  @@index([projectId, allocationId], map: "GRInspectionDisposition_allocation_idx")
+}
+
+model SupplierCommitmentLineClosure {
+  id                   String                            @id @default(cuid())
   organizationId       String
   projectId            String
   purchaseOrderId      String
   purchaseOrderLineId  String
-  goodsReceiptId       String
-  goodsReceiptLineId   String
   supplierCommitmentId String
-  quantity             Decimal                @db.Decimal(14, 3)
-  operationKey         String                 @db.VarChar(190)
-  requestFingerprint   String                 @db.Char(64)
-  createdById          String                 @db.VarChar(190)
-  createdAt            DateTime               @default(now())
-  goodsReceipt         GoodsReceipt           @relation(fields: [organizationId, projectId, purchaseOrderId, goodsReceiptId], references: [organizationId, projectId, purchaseOrderId, id], onDelete: Restrict, onUpdate: Restrict, map: "GRCAllocation_receipt_fkey")
-  goodsReceiptLine     GoodsReceiptLine       @relation(fields: [projectId, purchaseOrderId, goodsReceiptId, purchaseOrderLineId, goodsReceiptLineId], references: [projectId, purchaseOrderId, goodsReceiptId, purchaseOrderLineId, id], onDelete: Restrict, onUpdate: Restrict, map: "GRCAllocation_receipt_line_fkey")
-  supplierCommitment   SupplierCommitment     @relation(fields: [organizationId, projectId, purchaseOrderId, supplierCommitmentId], references: [organizationId, projectId, purchaseOrderId, id], onDelete: Restrict, onUpdate: Restrict, map: "GRCAllocation_supplier_commitment_fkey")
-  commitmentLine       SupplierCommitmentLine @relation(fields: [projectId, purchaseOrderId, supplierCommitmentId, purchaseOrderLineId], references: [projectId, purchaseOrderId, commitmentId, purchaseOrderLineId], onDelete: Restrict, onUpdate: Restrict, map: "GRCAllocation_supplier_commitment_line_fkey")
+  kind                 SupplierCommitmentLineClosureKind
+  version              Int
+  predecessorId        String?
+  operationKey         String                            @db.VarChar(190)
+  requestFingerprint   String                            @db.Char(64)
+  closedById           String
+  acceptedQuantity     Decimal?                          @db.Decimal(14, 3)
+  shortageQuantity     Decimal?                          @db.Decimal(14, 3)
+  reason               String?                           @db.VarChar(500)
+  createdAt            DateTime                          @default(now())
+  organization         Organization                      @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  project              Project                           @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "SupplierCommitmentLineClosure_project_fkey")
+  supplierCommitment   SupplierCommitment                @relation(fields: [organizationId, projectId, purchaseOrderId, supplierCommitmentId], references: [organizationId, projectId, purchaseOrderId, id], onDelete: Restrict, onUpdate: Restrict, map: "SupplierCommitmentLineClosure_commitment_fkey")
+  commitmentLine       SupplierCommitmentLine            @relation(fields: [projectId, purchaseOrderId, supplierCommitmentId, purchaseOrderLineId], references: [projectId, purchaseOrderId, commitmentId, purchaseOrderLineId], onDelete: Restrict, onUpdate: Restrict, map: "SupplierCommitmentLineClosure_line_fkey")
+  closedBy             PlatformUser                      @relation("SupplierCommitmentLineClosureActor", fields: [closedById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  predecessor          SupplierCommitmentLineClosure?    @relation("SupplierCommitmentLineClosureChain", fields: [organizationId, projectId, purchaseOrderId, supplierCommitmentId, purchaseOrderLineId, predecessorId], references: [organizationId, projectId, purchaseOrderId, supplierCommitmentId, purchaseOrderLineId, id], onDelete: Restrict, onUpdate: Restrict, map: "SupplierCommitmentLineClosure_predecessor_fkey")
+  successor            SupplierCommitmentLineClosure?    @relation("SupplierCommitmentLineClosureChain")
 
-  @@unique([projectId, id], map: "GRCAllocation_project_id_key")
-  @@unique([projectId, operationKey], map: "GRCAllocation_project_operation_key")
-  @@index([projectId, goodsReceiptLineId], map: "GRCAllocation_receipt_line_idx")
-  @@index([projectId, supplierCommitmentId, purchaseOrderLineId], map: "GRCAllocation_supplier_commitment_line_idx")
+  @@unique([organizationId, projectId, purchaseOrderId, supplierCommitmentId, purchaseOrderLineId, id], map: "SupplierCommitmentLineClosure_scope_id_key")
+  @@unique([projectId, supplierCommitmentId, purchaseOrderLineId, version], map: "SupplierCommitmentLineClosure_version_key")
+  @@unique([organizationId, projectId, purchaseOrderId, supplierCommitmentId, purchaseOrderLineId, predecessorId], map: "SupplierCommitmentLineClosure_predecessor_key")
+  @@unique([projectId, operationKey], map: "SupplierCommitmentLineClosure_operation_key")
+  @@index([projectId, supplierCommitmentId, purchaseOrderLineId, createdAt], map: "SupplierCommitmentLineClosure_line_created_idx")
 }
 
 model CrmAccount {
@@ -1097,40 +1234,43 @@ model CrmAccount {
 }
 
 model PlatformUser {
-  id                                 String                         @id @default(cuid())
-  clerkUserId                        String                         @unique
-  primaryEmail                       String                         @unique
+  id                                 String                          @id @default(cuid())
+  clerkUserId                        String                          @unique
+  primaryEmail                       String                          @unique
   fullName                           String?
   avatarUrl                          String?
-  systemRole                         SystemRole                     @default(TENANT_USER)
+  systemRole                         SystemRole                      @default(TENANT_USER)
   memberships                        TenantMembership[]
   auditLogs                          AuditLog[]
   conversationReadStates             ConversationReadState[]
-  attendanceScheduleVersions         AttendanceScheduleVersion[]    @relation("AttendanceScheduleVersionCreator")
-  attendanceScheduleAssignments      AttendanceScheduleAssignment[] @relation("AttendanceScheduleAssignmentCreator")
-  endedAttendanceScheduleAssignments AttendanceScheduleAssignment[] @relation("AttendanceScheduleAssignmentEnder")
-  attendanceExceptionRevisions       AttendanceExceptionRevision[]  @relation("AttendanceExceptionRevisionCreator")
-  attendanceCorrectionRequests       AttendanceCorrectionRequest[]  @relation("AttendanceCorrectionPlatformRequester")
-  attendanceCorrectionDecisions      AttendanceCorrectionDecision[] @relation("AttendanceCorrectionDecider")
-  attendanceAlertEvents              AttendanceAlertEvent[]         @relation("AttendanceAlertActor")
-  lastSeenAt                         DateTime                       @default(now())
-  createdAt                          DateTime                       @default(now())
-  updatedAt                          DateTime                       @updatedAt
+  attendanceScheduleVersions         AttendanceScheduleVersion[]     @relation("AttendanceScheduleVersionCreator")
+  attendanceScheduleAssignments      AttendanceScheduleAssignment[]  @relation("AttendanceScheduleAssignmentCreator")
+  endedAttendanceScheduleAssignments AttendanceScheduleAssignment[]  @relation("AttendanceScheduleAssignmentEnder")
+  attendanceExceptionRevisions       AttendanceExceptionRevision[]   @relation("AttendanceExceptionRevisionCreator")
+  attendanceCorrectionRequests       AttendanceCorrectionRequest[]   @relation("AttendanceCorrectionPlatformRequester")
+  attendanceCorrectionDecisions      AttendanceCorrectionDecision[]  @relation("AttendanceCorrectionDecider")
+  attendanceAlertEvents              AttendanceAlertEvent[]          @relation("AttendanceAlertActor")
+  lastSeenAt                         DateTime                        @default(now())
+  createdAt                          DateTime                        @default(now())
+  updatedAt                          DateTime                        @updatedAt
   notificationDeliveries             NotificationDelivery[]
-  cashMovementsFirstApproved         CashMovement[]                 @relation("CashMovementFirstApprover")
-  cashMovementsSecondApproved        CashMovement[]                 @relation("CashMovementSecondApprover")
+  cashMovementsFirstApproved         CashMovement[]                  @relation("CashMovementFirstApprover")
+  cashMovementsSecondApproved        CashMovement[]                  @relation("CashMovementSecondApprover")
   notificationPreferences            NotificationPreference[]
   cashFunds                          CashFund[]
-  verifiedWorkerIdentities           WorkerPerson[]                 @relation("WorkerIdentityVerifier")
-  rejectedWorkerIdentities           WorkerPerson[]                 @relation("WorkerIdentityRejecter")
-  reviewedWorkerOnboardingClaims     WorkerOnboardingClaim[]        @relation("WorkerOnboardingReviewer")
-  verifiedWorkerPaymentDestinations  WorkerPaymentDestination[]     @relation("WorkerPaymentDestinationVerifier")
-  requestedVisualAssessments         VisualProgressAssessment[]     @relation("VisualProgressAssessmentRequester")
-  reviewedVisualAssessments          VisualProgressAssessment[]     @relation("VisualProgressAssessmentReviewer")
-  reviewedScheduleObservations       ScheduleProgressObservation[]  @relation("ScheduleProgressObservationReviewer")
-  createdScheduleObservations        ScheduleProgressObservation[]  @relation("ScheduleProgressObservationCreator")
-  aiDispatchBudgetSettlements        AiDispatchBudgetReservation[]  @relation("AiDispatchBudgetSettlementActor")
-  protectedUploads                   ProtectedUpload[]              @relation("ProtectedUploadActor")
+  verifiedWorkerIdentities           WorkerPerson[]                  @relation("WorkerIdentityVerifier")
+  rejectedWorkerIdentities           WorkerPerson[]                  @relation("WorkerIdentityRejecter")
+  reviewedWorkerOnboardingClaims     WorkerOnboardingClaim[]         @relation("WorkerOnboardingReviewer")
+  verifiedWorkerPaymentDestinations  WorkerPaymentDestination[]      @relation("WorkerPaymentDestinationVerifier")
+  requestedVisualAssessments         VisualProgressAssessment[]      @relation("VisualProgressAssessmentRequester")
+  reviewedVisualAssessments          VisualProgressAssessment[]      @relation("VisualProgressAssessmentReviewer")
+  reviewedScheduleObservations       ScheduleProgressObservation[]   @relation("ScheduleProgressObservationReviewer")
+  createdScheduleObservations        ScheduleProgressObservation[]   @relation("ScheduleProgressObservationCreator")
+  aiDispatchBudgetSettlements        AiDispatchBudgetReservation[]   @relation("AiDispatchBudgetSettlementActor")
+  protectedUploads                   ProtectedUpload[]               @relation("ProtectedUploadActor")
+  receivedGoodsReceipts              GoodsReceipt[]                  @relation("GoodsReceiptReceiver")
+  goodsReceiptInspections            GoodsReceiptInspection[]        @relation("GoodsReceiptInspector")
+  supplierCommitmentLineClosures     SupplierCommitmentLineClosure[] @relation("SupplierCommitmentLineClosureActor")
 
   @@index([systemRole, createdAt])
 }
@@ -1247,6 +1387,9 @@ model Project {
   updatedAt                            DateTime                              @updatedAt
   purchaseOrders                       PurchaseOrder[]
   goodsReceipts                        GoodsReceipt[]
+  inventoryLocations                   InventoryLocation[]
+  goodsReceiptInspections              GoodsReceiptInspection[]
+  supplierCommitmentLineClosures       SupplierCommitmentLineClosure[]
   supplierInvoices                     SupplierInvoice[]
   supplierCommitments                  SupplierCommitment[]
   supplierReminderDeliveries           SupplierReminderDelivery[]

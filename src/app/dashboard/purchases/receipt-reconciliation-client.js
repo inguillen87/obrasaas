@@ -9,6 +9,10 @@ import {
 } from "@/lib/procurement-quantity";
 
 import styles from "../extra-work/extra-work.module.css";
+import { latestReceiptInspection } from "./receipt-inspection-model";
+
+const INSPECTION_PAGE_SIZE = 50;
+const INSPECTION_HARD_CAP = 500;
 
 const RECEIPT_STATUS_LABELS = {
   UNALLOCATED: "Sin conciliar",
@@ -17,9 +21,9 @@ const RECEIPT_STATUS_LABELS = {
 };
 
 const COMMITMENT_STATUS_LABELS = {
-  NOT_RECEIVED: "Sin recepción conciliada",
-  PARTIALLY_RECEIVED: "Recepción parcial",
-  FULLY_RECEIVED: "Recepción completa",
+  NOT_RECEIVED: "Sin entrega documentada",
+  PARTIALLY_RECEIVED: "Documentación parcial",
+  FULLY_RECEIVED: "Entrega documentada completa",
 };
 
 async function requestJson(path, options = {}) {
@@ -40,6 +44,83 @@ async function requestJson(path, options = {}) {
     throw error;
   }
   return body;
+}
+
+async function loadOrderInspections(purchaseOrderId, signal) {
+  const inspections = [];
+  const ids = new Set();
+  const cursors = new Set();
+  let cursor = null;
+
+  while (true) {
+    const query = new URLSearchParams({
+      purchaseOrderId,
+      limit: String(INSPECTION_PAGE_SIZE),
+      ...(cursor ? { cursor } : {}),
+    });
+    const result = await requestJson(
+      `/api/goods-receipt-inspections?${query.toString()}`,
+      { signal },
+    );
+    const page = result.inspections;
+    if (
+      !Array.isArray(page)
+      || page.length > INSPECTION_PAGE_SIZE
+      || typeof result.hasMore !== "boolean"
+    ) {
+      throw new Error("El servidor devolvió una página de inspecciones inválida.");
+    }
+    if (inspections.length + page.length > INSPECTION_HARD_CAP) {
+      throw new Error(
+        `La orden supera el límite seguro de ${INSPECTION_HARD_CAP} inspecciones. Acotá el historial antes de conciliar.`,
+      );
+    }
+    for (const inspection of page) {
+      if (
+        !inspection?.id
+        || !inspection.goodsReceiptId
+        || inspection.purchaseOrderId !== purchaseOrderId
+        || ids.has(inspection.id)
+      ) {
+        throw new Error("El historial de inspecciones contiene registros fuera de alcance o repetidos.");
+      }
+      ids.add(inspection.id);
+      inspections.push(inspection);
+    }
+    if (!result.hasMore) break;
+    if (
+      page.length === 0
+      || inspections.length >= INSPECTION_HARD_CAP
+      || typeof result.nextCursor !== "string"
+      || !result.nextCursor
+      || cursors.has(result.nextCursor)
+    ) {
+      throw new Error("La paginación de inspecciones no puede completarse de forma segura.");
+    }
+    cursors.add(result.nextCursor);
+    cursor = result.nextCursor;
+  }
+
+  return inspections;
+}
+
+function inspectionHeadsByReceipt(inspections) {
+  const grouped = new Map();
+  for (const inspection of inspections) {
+    const rows = grouped.get(inspection.goodsReceiptId) || [];
+    rows.push(inspection);
+    grouped.set(inspection.goodsReceiptId, rows);
+  }
+  return new Map([...grouped].map(([goodsReceiptId, rows]) => [
+    goodsReceiptId,
+    latestReceiptInspection(rows),
+  ]));
+}
+
+function inspectionStatusLabel(head) {
+  if (!head) return "Sin inspección finalizada";
+  if (head.kind === "REVERSAL") return `Revisión reabierta · v${head.version}`;
+  return `Inspección v${head.version} finalizada`;
 }
 
 function remainingScaled(balance) {
@@ -86,11 +167,18 @@ export default function ReceiptReconciliationClient({
   const fetchSnapshot = useCallback(async (purchaseOrderId, signal) => {
     if (!purchaseOrderId) return null;
     const query = new URLSearchParams({ purchaseOrderId, limit: "100" });
-    const result = await requestJson(
-      `/api/goods-receipt-commitment-allocations?${query.toString()}`,
-      { signal },
-    );
-    return { ...result, purchaseOrderId };
+    const [result, inspections] = await Promise.all([
+      requestJson(
+        `/api/goods-receipt-commitment-allocations?${query.toString()}`,
+        { signal },
+      ),
+      loadOrderInspections(purchaseOrderId, signal),
+    ]);
+    return {
+      ...result,
+      purchaseOrderId,
+      inspectionHeads: inspectionHeadsByReceipt(inspections),
+    };
   }, []);
 
   useEffect(() => {
@@ -112,8 +200,20 @@ export default function ReceiptReconciliationClient({
   const currentSnapshot = snapshot?.purchaseOrderId === orderId ? snapshot : null;
   const receiptBalances = currentSnapshot?.receiptLineBalances || [];
   const commitmentBalances = currentSnapshot?.commitmentLineBalances || [];
+  const inspectionHeads = currentSnapshot?.inspectionHeads || new Map();
+  const pendingReceiptLines = receiptBalances.filter((balance) => (
+    compareProcurementQuantities(remainingScaled(balance), 0n) > 0
+  ));
   const openReceiptLines = receiptBalances.filter((balance) => (
     compareProcurementQuantities(remainingScaled(balance), 0n) > 0
+    && (
+      !inspectionHeads.get(balance.goodsReceiptId)
+      || inspectionHeads.get(balance.goodsReceiptId).kind === "REVERSAL"
+    )
+  ));
+  const frozenPendingReceiptLines = pendingReceiptLines.filter((balance) => (
+    inspectionHeads.get(balance.goodsReceiptId)
+    && inspectionHeads.get(balance.goodsReceiptId).kind !== "REVERSAL"
   ));
   const receiptLineId = openReceiptLines.some((balance) => (
     balance.goodsReceiptLineId === selectedReceiptLineId
@@ -249,18 +349,22 @@ export default function ReceiptReconciliationClient({
           <ul>
             {receiptBalances.length === 0 ? (
               <li>No hay líneas de remito contabilizadas para esta orden.</li>
-            ) : receiptBalances.map((balance) => (
-              <li key={balance.goodsReceiptLineId}>
-                <div>
-                  <strong>{lineLabel(orders, orderId, balance.purchaseOrderLineId)}</strong>
-                  <span>{dateLabel(balance.receivedAt)} · {RECEIPT_STATUS_LABELS[balance.status] || balance.status}</span>
-                  <p>
-                    Recibido {balance.receivedQuantity} · asignado {balance.allocatedQuantity}
-                    {" · "}sin asignar {balance.remainingQuantity}
-                  </p>
-                </div>
-              </li>
-            ))}
+            ) : receiptBalances.map((balance) => {
+              const inspectionHead = inspectionHeads.get(balance.goodsReceiptId);
+              return (
+                <li key={balance.goodsReceiptLineId}>
+                  <div>
+                    <strong>{lineLabel(orders, orderId, balance.purchaseOrderLineId)}</strong>
+                    <span>{dateLabel(balance.receivedAt)} · {RECEIPT_STATUS_LABELS[balance.status] || balance.status}</span>
+                    <span>{inspectionStatusLabel(inspectionHead)}</span>
+                    <p>
+                      Recibido {balance.receivedQuantity} · asignado {balance.allocatedQuantity}
+                      {" · "}sin asignar {balance.remainingQuantity}
+                    </p>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
 
           <h3>Compromisos de material</h3>
@@ -275,7 +379,7 @@ export default function ReceiptReconciliationClient({
                   <p>
                     {COMMITMENT_STATUS_LABELS[balance.status] || balance.status}
                     {" · "}comprometido {balance.committedQuantity}
-                    {" · "}recibido {balance.allocatedQuantity}
+                    {" · "}documentado {balance.allocatedQuantity}
                     {" · "}pendiente {balance.remainingQuantity}
                   </p>
                 </div>
@@ -287,7 +391,15 @@ export default function ReceiptReconciliationClient({
 
       {canManage && currentSnapshot && !currentSnapshot.loadError && (
         openReceiptLines.length === 0 ? (
-          <p>Todas las recepciones visibles de esta orden ya están conciliadas.</p>
+          frozenPendingReceiptLines.length > 0 ? (
+            <p className={styles.notice} role="status">
+              Queda saldo sin conciliar, pero todas las recepciones pendientes tienen una
+              inspección finalizada. Registrá primero una REVERSAL desde Inspección de
+              materiales para reabrir la conciliación.
+            </p>
+          ) : (
+            <p>Todas las recepciones visibles de esta orden ya están conciliadas.</p>
+          )
         ) : (
           <form onSubmit={submit}>
             <label>

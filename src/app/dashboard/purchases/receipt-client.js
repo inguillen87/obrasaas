@@ -18,6 +18,7 @@ import {
   parseProcurementQuantity,
 } from "@/lib/procurement-quantity";
 import styles from "../extra-work/extra-work.module.css";
+import ReceiptInspectionClient from "./receipt-inspection-client";
 import ReceiptReconciliationClient from "./receipt-reconciliation-client";
 
 function indexLineBalances(balances) {
@@ -349,6 +350,16 @@ export default function ReceiptClient({
         orders={orders}
         canManage={canManage}
         refreshVersion={reconciliationVersion}
+      />
+      <ReceiptInspectionClient
+        receipts={receipts}
+        receiptsTruncated={receiptsTruncated}
+        orders={orders}
+        canManage={canManage}
+        refreshVersion={reconciliationVersion}
+        onInspectionCommitted={() => {
+          setReconciliationVersion((current) => current + 1);
+        }}
       />
     </>
   );

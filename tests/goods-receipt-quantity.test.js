@@ -124,6 +124,7 @@ test('goods receipt accepts the exact remaining boundary and persists a canonica
 
   assert.equal(current.state.transactionCalls, 1);
   assert.equal(current.state.createCalls, 1);
+  assert.equal(current.state.createdData.receivedById, 'user-a');
   assert.equal(current.state.createdData.lines.create[0].quantity, '0.200');
   assert.equal(result.receipt.lines[0].quantity, '0.200');
   assert.deepEqual(result.lineBalances, [{

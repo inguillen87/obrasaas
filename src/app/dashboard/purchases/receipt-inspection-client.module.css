@@ -1,0 +1,288 @@
+.panel {
+  overflow: hidden;
+}
+
+.heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.heading h2 {
+  margin: 5px 0 0;
+}
+
+.eyebrow {
+  color: #27796c;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.frozenBadge,
+.openBadge {
+  border-radius: 999px;
+  flex: 0 0 auto;
+  font-size: 0.76rem;
+  font-weight: 800;
+  padding: 7px 10px;
+}
+
+.frozenBadge {
+  background: #fff0d9;
+  color: #814c00;
+}
+
+.openBadge {
+  background: #e6f5ed;
+  color: #1a654f;
+}
+
+.intro {
+  color: #51625e;
+  line-height: 1.55;
+  max-width: 820px;
+}
+
+.receiptSelector {
+  display: grid;
+  gap: 6px;
+  margin-top: 18px;
+  max-width: 620px;
+}
+
+.error,
+.warning,
+.freezeNotice {
+  border-radius: 11px;
+  line-height: 1.45;
+  margin: 14px 0;
+  padding: 12px 14px;
+}
+
+.error {
+  background: #ffe8e8;
+  color: #852a2a;
+}
+
+.warning {
+  background: #fff4df;
+  color: #744b09;
+}
+
+.freezeNotice {
+  background: #edf2ff;
+  color: #304d84;
+}
+
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 18px 0;
+}
+
+.summaryGrid div {
+  background: #f7faf8;
+  border: 1px solid #e2ebe5;
+  border-radius: 12px;
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+}
+
+.summaryGrid span {
+  color: #71807c;
+  font-size: 0.75rem;
+}
+
+.summaryGrid strong {
+  color: #1d3c35;
+  overflow-wrap: anywhere;
+}
+
+.inspectionForm {
+  border-top: 1px solid #e6eee8;
+  margin-top: 20px;
+  padding-top: 20px;
+}
+
+.locationHeader {
+  align-items: end;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.locationHeader label,
+.qualityGrid label,
+.inspectionForm > label,
+.locationCreator label,
+.reversalForm label {
+  display: grid;
+  gap: 6px;
+}
+
+.acceptAll {
+  background: #edf5ef !important;
+  color: #286e5d !important;
+}
+
+.partitionList {
+  display: grid;
+  gap: 12px;
+  margin: 18px 0;
+}
+
+.partition {
+  border: 1px solid #dce7df;
+  border-radius: 14px;
+  margin: 0;
+  min-width: 0;
+  padding: 15px;
+}
+
+.partition legend {
+  color: #173e35;
+  font-weight: 800;
+  max-width: 100%;
+  padding: 0 5px;
+}
+
+.partitionMeta {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.partitionMeta span {
+  color: #687772;
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+
+.partitionMeta strong {
+  flex: 0 0 auto;
+}
+
+.qualityGrid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.qualityGrid label {
+  color: #40524d;
+  font-size: 0.8rem;
+  min-width: 0;
+}
+
+.partitionRule {
+  color: #6a7774;
+  font-size: 0.78rem;
+  margin: 10px 0 0;
+}
+
+.reversalForm {
+  background: #fff8f1;
+  border: 1px solid #f0d8bd;
+  border-radius: 14px;
+  margin-top: 22px;
+  padding: 15px;
+}
+
+.reversalForm h3,
+.reversalForm p {
+  margin: 0 0 7px;
+}
+
+.reversalForm button {
+  background: #8b3f24 !important;
+  justify-self: start;
+}
+
+.history {
+  border-top: 1px solid #e6eee8;
+  margin-top: 24px;
+  padding-top: 18px;
+}
+
+.history h3 {
+  margin-top: 0;
+}
+
+.history ol {
+  list-style: decimal;
+  margin: 0;
+  padding-left: 25px;
+}
+
+.history li {
+  display: list-item;
+  padding: 10px 6px;
+}
+
+.history li span {
+  margin-top: 3px;
+}
+
+.history li p {
+  margin: 6px 0 0;
+}
+
+.locationCreator {
+  border-top: 1px solid #e6eee8;
+  margin-top: 22px;
+  padding-top: 16px;
+}
+
+.locationCreator summary {
+  color: #286e5d;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.locationCreator form {
+  background: #f7faf8;
+  border-radius: 12px;
+  grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr) auto;
+  margin-top: 12px;
+  padding: 13px;
+}
+
+.locationCreator button {
+  align-self: end;
+}
+
+@media (max-width: 760px) {
+  .heading,
+  .partitionMeta {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .frozenBadge,
+  .openBadge {
+    align-self: flex-start;
+  }
+
+  .summaryGrid,
+  .locationHeader,
+  .locationCreator form {
+    grid-template-columns: 1fr;
+  }
+
+  .qualityGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 430px) {
+  .qualityGrid {
+    grid-template-columns: 1fr;
+  }
+}

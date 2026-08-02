@@ -26,6 +26,7 @@
     "verify:schedule-snapshot-migration": "node scripts/verify-schedule-snapshot-migration.mjs",
     "verify:supplier-commitment-migration": "node scripts/verify-supplier-commitment-migration.mjs",
     "verify:goods-receipt-commitment-allocation-migration": "node scripts/verify-goods-receipt-commitment-allocation-migration.mjs",
+    "verify:goods-receipt-inspection-migration": "node scripts/verify-goods-receipt-inspection-migration.mjs",
     "verify:data-subject-discovery-migration": "node scripts/verify-data-subject-discovery-migration.mjs",
     "verify:notification-outbox-migration": "node scripts/verify-notification-outbox-migration.mjs",
     "verify:notification-preferences-migration": "node scripts/verify-notification-preferences-migration.mjs",
