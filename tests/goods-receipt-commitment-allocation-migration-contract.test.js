@@ -8,13 +8,18 @@ const migrationUrl = new URL(
   '../prisma/migrations/20260802150000_goods_receipt_commitment_allocation/migration.sql',
   import.meta.url,
 );
+const guardFixMigrationUrl = new URL(
+  '../prisma/migrations/20260802151000_goods_receipt_commitment_allocation_guard_fix/migration.sql',
+  import.meta.url,
+);
 const verifierUrl = new URL(
   '../scripts/verify-goods-receipt-commitment-allocation-migration.mjs',
   import.meta.url,
 );
-const [schema, migration, verifier, vercelBuild] = await Promise.all([
+const [schema, migration, guardFixMigration, verifier, vercelBuild] = await Promise.all([
   readFile(new URL('../prisma/schema.prisma', import.meta.url), 'utf8'),
   readFile(migrationUrl, 'utf8'),
+  readFile(guardFixMigrationUrl, 'utf8'),
   readFile(verifierUrl, 'utf8'),
   readFile(new URL('../scripts/vercel-build.mjs', import.meta.url), 'utf8'),
 ]);
@@ -51,6 +56,22 @@ test('Prisma exposes an explicit exact allocation ledger with tenant-scoped comp
     /goodsReceiptLine\s+GoodsReceiptLine\s+@relation\(fields: \[projectId, purchaseOrderId, goodsReceiptId, purchaseOrderLineId, goodsReceiptLineId\]/,
   );
   assert.doesNotMatch(allocationModel, /organization\s+Organization\s+@relation/);
+});
+
+test('additive guard fix detects empty dynamic scoped lookups without relying on FOUND', () => {
+  assert.match(
+    guardFixMigration,
+    /receipt_status IS NULL OR receipt_line_quantity IS NULL/,
+  );
+  assert.match(
+    guardFixMigration,
+    /commitment_kind IS NULL[\s\S]*?commitment_status IS NULL[\s\S]*?commitment_line_quantity IS NULL/,
+  );
+  assert.doesNotMatch(guardFixMigration, /IF NOT FOUND/);
+  assert.match(
+    verifier,
+    /20260802151000_goods_receipt_commitment_allocation_guard_fix/,
+  );
 });
 
 test('migration is append-only, exact, idempotent and contains no inferred historical backfill', () => {

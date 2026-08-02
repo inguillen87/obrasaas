@@ -5,7 +5,10 @@ import pg from 'pg';
 
 const CONNECTION_ENV = 'GOODS_RECEIPT_COMMITMENT_ALLOCATION_MIGRATION_DATABASE_URL';
 const SCHEMA_ENV = 'GOODS_RECEIPT_COMMITMENT_ALLOCATION_MIGRATION_SCHEMA';
-const MIGRATION = '20260802150000_goods_receipt_commitment_allocation';
+const MIGRATIONS = Object.freeze([
+  '20260802150000_goods_receipt_commitment_allocation',
+  '20260802151000_goods_receipt_commitment_allocation_guard_fix',
+]);
 const SCHEMA_IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_$]{0,62}$/;
 const connectionString = process.env[CONNECTION_ENV];
 
@@ -77,11 +80,13 @@ function normalizeDefinition(value) {
 
 const databaseSchema = resolveDatabaseSchema(connectionString);
 const verifierConnectionString = hardenedVerifierConnectionString(connectionString);
-const migrationSql = await readFile(new URL(
-  `../prisma/migrations/${MIGRATION}/migration.sql`,
-  import.meta.url,
-));
-const expectedMigrationChecksum = createHash('sha256').update(migrationSql).digest('hex');
+const expectedMigrationChecksums = new Map(await Promise.all(MIGRATIONS.map(async (name) => {
+  const sql = await readFile(new URL(
+    `../prisma/migrations/${name}/migration.sql`,
+    import.meta.url,
+  ));
+  return [name, createHash('sha256').update(sql).digest('hex')];
+})));
 
 async function assertMigration(client) {
   const table = await client.query(
@@ -89,18 +94,21 @@ async function assertMigration(client) {
   );
   invariant(table.rows[0]?.name, 'The configured schema has no _prisma_migrations table.');
   const result = await client.query(
-    `SELECT "checksum"
+    `SELECT "migration_name", "checksum"
        FROM "_prisma_migrations"
-      WHERE "migration_name" = $1
+      WHERE "migration_name" = ANY($1::text[])
         AND "finished_at" IS NOT NULL
         AND "rolled_back_at" IS NULL`,
-    [MIGRATION],
+    [MIGRATIONS],
   );
-  invariant(result.rowCount === 1, `Migration ${MIGRATION} is not applied exactly once.`);
-  invariant(
-    result.rows[0].checksum === expectedMigrationChecksum,
-    `Applied migration ${MIGRATION} does not match the repository checksum.`,
-  );
+  invariant(result.rowCount === MIGRATIONS.length, 'Allocation migrations are not applied exactly once.');
+  const applied = new Map(result.rows.map((row) => [row.migration_name, row.checksum]));
+  for (const name of MIGRATIONS) {
+    invariant(
+      applied.get(name) === expectedMigrationChecksums.get(name),
+      `Applied migration ${name} does not match the repository checksum.`,
+    );
+  }
 }
 
 async function assertColumns(client) {
@@ -342,7 +350,12 @@ async function assertTriggerFunctions(client) {
     'pg_advisory_xact_lock',
     'hashtextextended(new.projectid, 0)',
     "receipt_status <> 'posted'",
+    'receipt_status is null',
+    'receipt_line_quantity is null',
     "commitment_kind <> 'material_delivery'",
+    'commitment_kind is null',
+    'commitment_status is null',
+    'commitment_line_quantity is null',
     "commitment_status = 'cancelled'",
     'sum(allocation.quantity)',
     "receipt.status = ''posted''",
@@ -740,7 +753,7 @@ try {
   transactionOpen = false;
   await assertTwoConnectionAdvisorySerialization();
   console.log(
-    `Verified ${MIGRATION}: exact checksum/catalog, scoped reconciliation, 0.001 over-allocation rejection, append-only guards and two-connection advisory serialization.`,
+    `Verified ${MIGRATIONS.join(', ')}: exact checksums/catalog, scoped reconciliation, 0.001 over-allocation rejection, append-only guards and two-connection advisory serialization.`,
   );
 } finally {
   if (transactionOpen) await client.query('ROLLBACK').catch(() => undefined);
