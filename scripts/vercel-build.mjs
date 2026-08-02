@@ -42,6 +42,9 @@ const SUPPLIER_COMMITMENT_VERIFIER_PATH = fileURLToPath(
 const NOTIFICATION_OUTBOX_VERIFIER_PATH = fileURLToPath(
   new URL("./verify-notification-outbox-migration.mjs", import.meta.url),
 );
+const NOTIFICATION_OUTBOX_SCOPE_PREFLIGHT_PATH = fileURLToPath(
+  new URL("./preflight-notification-outbox-project-scope.mjs", import.meta.url),
+);
 
 export const PRODUCTION_DATABASE_IDENTITY_ENV =
   "OBRASAAS_PRODUCTION_DATABASE_IDENTITY_SHA256";
@@ -328,6 +331,7 @@ export async function runVercelBuild({
     scheduleSnapshotVerifier: SCHEDULE_SNAPSHOT_VERIFIER_PATH,
     supplierCommitmentVerifier: SUPPLIER_COMMITMENT_VERIFIER_PATH,
     notificationOutboxVerifier: NOTIFICATION_OUTBOX_VERIFIER_PATH,
+    notificationOutboxScopePreflight: NOTIFICATION_OUTBOX_SCOPE_PREFLIGHT_PATH,
   },
 } = {}) {
   const plan = evaluateMigrationGate(environment);
@@ -341,6 +345,21 @@ export async function runVercelBuild({
 
   if (plan.migrate) {
     console.log(`Migration gate approved for Vercel ${plan.environment}.`);
+    if (cliPaths.notificationOutboxScopePreflight) {
+      await runner(
+        process.execPath,
+        [cliPaths.notificationOutboxScopePreflight],
+        {
+          ...sharedOptions,
+          env: {
+            ...environment,
+            NOTIFICATION_OUTBOX_PREFLIGHT_DATABASE_URL:
+              environment[plan.migrationDatabaseEnvironment],
+            NOTIFICATION_OUTBOX_PREFLIGHT_SCHEMA: "public",
+          },
+        },
+      );
+    }
     await runner(
       process.execPath,
       [cliPaths.prisma, "migrate", "deploy"],

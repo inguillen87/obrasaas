@@ -508,3 +508,57 @@ test("development runner skips migration and performs the normal build", async (
     ["next-cli", "build"],
   ]);
 });
+
+test("notification project-scope preflight runs before migration with the gated database", async () => {
+  const calls = [];
+  await runVercelBuild({
+    environment: environment(),
+    cwd: "C:/safe-worktree",
+    runner: async (_file, args, options) => calls.push({ args, options }),
+    cliPaths: {
+      prisma: "prisma-cli",
+      next: "next-cli",
+      workerIdentityVerifier: "worker-verifier",
+      progressJournalVerifier: "progress-verifier",
+      protectedUploadVerifier: "protected-upload-verifier",
+      whatsappMediaAssetVerifier: "whatsapp-media-asset-verifier",
+      visualProgressVerifier: "visual-progress-verifier",
+      scheduleSnapshotVerifier: "schedule-snapshot-verifier",
+      notificationOutboxScopePreflight: "notification-scope-preflight",
+    },
+  });
+
+  assert.deepEqual(calls[0].args, ["notification-scope-preflight"]);
+  assert.deepEqual(calls[1].args, ["prisma-cli", "migrate", "deploy"]);
+  assert.equal(
+    calls[0].options.env.NOTIFICATION_OUTBOX_PREFLIGHT_DATABASE_URL,
+    PREVIEW_URL,
+  );
+  assert.equal(
+    calls[0].options.env.NOTIFICATION_OUTBOX_PREFLIGHT_SCHEMA,
+    "public",
+  );
+  assert.equal(calls[0].options.shell, false);
+});
+
+test("a failing notification scope preflight stops before migration DDL", async () => {
+  const calls = [];
+  await assert.rejects(
+    runVercelBuild({
+      environment: environment(),
+      runner: async (_file, args) => {
+        calls.push(args);
+        if (args[0] === "notification-scope-preflight") {
+          throw new Error("incompatible notification scope");
+        }
+      },
+      cliPaths: {
+        prisma: "prisma-cli",
+        next: "next-cli",
+        notificationOutboxScopePreflight: "notification-scope-preflight",
+      },
+    }),
+    /incompatible notification scope/,
+  );
+  assert.deepEqual(calls, [["notification-scope-preflight"]]);
+});
