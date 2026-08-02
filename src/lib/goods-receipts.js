@@ -173,10 +173,16 @@ export async function createGoodsReceipt(
           409,
         );
       }
-      return { purchaseOrderLineId: line.id, quantity: entry.quantity };
+      return {
+        projectId: current.projectId,
+        purchaseOrderId: order.id,
+        purchaseOrderLineId: line.id,
+        quantity: entry.quantity,
+      };
     });
     const createRow = (storedReceipt, protectedUploadId = null) => transaction.goodsReceipt.create({
       data: {
+        organizationId: current.organizationId,
         projectId: current.projectId,
         purchaseOrderId: order.id,
         operationKey,

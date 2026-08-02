@@ -226,6 +226,58 @@ enum PurchaseOrderStatus {
   CANCELLED
 }
 
+enum SupplierCommitmentKind {
+  MATERIAL_DELIVERY
+  SERVICE_EXECUTION
+}
+
+enum SupplierCommitmentStatus {
+  TENTATIVE
+  CONFIRMED
+  AT_RISK
+  FULFILLED
+  CANCELLED
+}
+
+enum SupplierCommitmentTaskRelation {
+  REQUIRED_BEFORE_START
+  EXECUTES_TASK
+}
+
+enum SupplierCommitmentEventType {
+  CREATED
+  CONFIRMED
+  RESCHEDULED
+  MARKED_AT_RISK
+  FULFILLED
+  CANCELLED
+}
+
+enum SupplierReminderDeliveryStatus {
+  PENDING
+  CLAIMED
+  DISPATCHING
+  PROVIDER_ACCEPTED
+  DELIVERY_DELAYED
+  DELIVERED
+  FAILED
+  DEAD_LETTER
+  CANCELLED
+  UNCERTAIN
+  CONFLICT
+  BOUNCED
+  COMPLAINED
+  DELIVERY_FAILED
+  SUPPRESSED
+}
+
+enum SupplierReminderKind {
+  UPCOMING
+  LATE_SCHEDULED
+  RESCHEDULED
+  CANCELLED
+}
+
 enum GoodsReceiptStatus {
   POSTED
   VOIDED
@@ -667,6 +719,8 @@ model Organization {
   progressEvidenceCaptureSessions     ProgressEvidenceCaptureSession[]
   progressEvidenceLocationRateBuckets ProgressEvidenceLocationRateBucket[]
   suppliers                           Supplier[]
+  supplierCommitments                 SupplierCommitment[]
+  supplierReminderDeliveries          SupplierReminderDelivery[]
   supplierInvoices                    SupplierInvoice[]
   purchaseOrders                      PurchaseOrder[]
   goodsReceipts                       GoodsReceipt[]
@@ -686,21 +740,22 @@ model Organization {
 }
 
 model Supplier {
-  id             String            @id @default(cuid())
+  id             String               @id @default(cuid())
   organizationId String
-  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  legalName      String            @db.VarChar(220)
-  taxId          String?           @db.VarChar(64)
-  email          String?           @db.VarChar(190)
-  phone          String?           @db.VarChar(64)
-  currency       String            @default("ARS") @db.Char(3)
-  paymentTerms   String?           @db.VarChar(160)
-  active         Boolean           @default(true)
-  revision       Int               @default(0)
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  legalName      String               @db.VarChar(220)
+  taxId          String?              @db.VarChar(64)
+  email          String?              @db.VarChar(254)
+  phone          String?              @db.VarChar(64)
+  currency       String               @default("ARS") @db.Char(3)
+  paymentTerms   String?              @db.VarChar(160)
+  active         Boolean              @default(true)
+  revision       Int                  @default(0)
   purchaseOrders PurchaseOrder[]
+  commitments    SupplierCommitment[]
   invoices       SupplierInvoice[]
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
 
   @@unique([organizationId, id])
   @@unique([organizationId, taxId])
@@ -725,9 +780,9 @@ model SupplierInvoice {
   requestFingerprint String?               @db.Char(64)
   revision           Int                   @default(0)
   organization       Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  project            Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project            Project               @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Cascade)
   supplier           Supplier              @relation(fields: [organizationId, supplierId], references: [organizationId, id], onDelete: Restrict)
-  purchaseOrder      PurchaseOrder?        @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
+  purchaseOrder      PurchaseOrder?        @relation(fields: [organizationId, projectId, supplierId, purchaseOrderId], references: [organizationId, projectId, supplierId, id], onDelete: Restrict)
   createdAt          DateTime              @default(now())
   updatedAt          DateTime              @updatedAt
 
@@ -739,52 +794,213 @@ model SupplierInvoice {
 }
 
 model PurchaseOrder {
-  id             String              @id @default(cuid())
+  id             String               @id @default(cuid())
   organizationId String
   projectId      String
   supplierId     String
-  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  project        Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  supplier       Supplier            @relation(fields: [organizationId, supplierId], references: [organizationId, id], onDelete: Restrict)
-  operationKey   String              @db.VarChar(190)
-  number         String              @db.VarChar(64)
-  currency       String              @db.Char(3)
-  status         PurchaseOrderStatus @default(DRAFT)
-  total          Decimal             @db.Decimal(14, 2)
-  revision       Int                 @default(0)
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project        Project              @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Cascade)
+  supplier       Supplier             @relation(fields: [organizationId, supplierId], references: [organizationId, id], onDelete: Restrict)
+  operationKey   String               @db.VarChar(190)
+  number         String               @db.VarChar(64)
+  currency       String               @db.Char(3)
+  status         PurchaseOrderStatus  @default(DRAFT)
+  total          Decimal              @db.Decimal(14, 2)
+  revision       Int                  @default(0)
   lines          PurchaseOrderLine[]
   receipts       GoodsReceipt[]
   invoices       SupplierInvoice[]
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
+  commitments    SupplierCommitment[]
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
 
   @@unique([projectId, id])
+  @@unique([organizationId, projectId, id])
+  @@unique([organizationId, projectId, supplierId, id])
   @@unique([projectId, operationKey])
   @@unique([projectId, number])
   @@index([projectId, status, createdAt])
 }
 
 model PurchaseOrderLine {
-  id              String             @id @default(cuid())
+  id              String                   @id @default(cuid())
   purchaseOrderId String
   projectId       String
   budgetLineId    String?
-  purchaseOrder   PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
-  budgetLine      BudgetLine?        @relation(fields: [projectId, budgetLineId], references: [projectId, id], onDelete: Restrict)
+  purchaseOrder   PurchaseOrder            @relation(fields: [projectId, purchaseOrderId], references: [projectId, id], onDelete: Cascade)
+  budgetLine      BudgetLine?              @relation(fields: [projectId, budgetLineId], references: [projectId, id], onDelete: Restrict)
   receiptLines    GoodsReceiptLine[]
-  description     String             @db.VarChar(220)
-  unit            String             @db.VarChar(32)
-  quantity        Decimal            @db.Decimal(14, 3)
-  unitPrice       Decimal            @db.Decimal(14, 2)
-  costCode        String?            @db.VarChar(96)
-  createdAt       DateTime           @default(now())
+  commitmentLines SupplierCommitmentLine[]
+  description     String                   @db.VarChar(220)
+  unit            String                   @db.VarChar(32)
+  quantity        Decimal                  @db.Decimal(14, 3)
+  unitPrice       Decimal                  @db.Decimal(14, 2)
+  costCode        String?                  @db.VarChar(96)
+  createdAt       DateTime                 @default(now())
 
+  @@unique([projectId, id])
+  @@unique([projectId, purchaseOrderId, id])
   @@index([purchaseOrderId])
   @@index([projectId, budgetLineId])
 }
 
+model SupplierCommitment {
+  id                         String                       @id @default(cuid())
+  organizationId             String
+  projectId                  String
+  supplierId                 String
+  purchaseOrderId            String?
+  operationKey               String                       @db.VarChar(190)
+  requestFingerprint         String                       @db.Char(64)
+  kind                       SupplierCommitmentKind
+  status                     SupplierCommitmentStatus     @default(CONFIRMED)
+  title                      String                       @db.VarChar(220)
+  notes                      String?                      @db.Text
+  startsOn                   DateTime                     @db.Date
+  endsOn                     DateTime                     @db.Date
+  timezone                   String                       @db.VarChar(64)
+  reminderEnabled            Boolean                      @default(false)
+  reminderDaysBefore         Int                          @default(7)
+  reminderEmail              String?                      @db.VarChar(254)
+  reminderEmailConfirmedAt   DateTime?
+  reminderEmailConfirmedById String?                      @db.VarChar(190)
+  scheduleRevision           Int                          @default(0)
+  revision                   Int                          @default(0)
+  fulfilledAt                DateTime?
+  organization               Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project                    Project                      @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Cascade)
+  supplier                   Supplier                     @relation(fields: [organizationId, supplierId], references: [organizationId, id], onDelete: Restrict)
+  purchaseOrder              PurchaseOrder?               @relation(fields: [organizationId, projectId, supplierId, purchaseOrderId], references: [organizationId, projectId, supplierId, id], onDelete: Restrict)
+  taskLinks                  SupplierCommitmentTaskLink[]
+  lines                      SupplierCommitmentLine[]
+  reminderDeliveries         SupplierReminderDelivery[]
+  events                     SupplierCommitmentEvent[]
+  createdAt                  DateTime                     @default(now())
+  updatedAt                  DateTime                     @updatedAt
+
+  @@unique([projectId, id])
+  @@unique([organizationId, projectId, id])
+  @@unique([projectId, purchaseOrderId, id])
+  @@unique([projectId, operationKey])
+  @@index([projectId, startsOn, status])
+  @@index([organizationId, supplierId, startsOn])
+  @@index([projectId, purchaseOrderId])
+}
+
+model SupplierCommitmentLine {
+  commitmentId        String
+  projectId           String
+  purchaseOrderId     String
+  purchaseOrderLineId String
+  quantity            Decimal            @db.Decimal(14, 3)
+  commitment          SupplierCommitment @relation(fields: [projectId, purchaseOrderId, commitmentId], references: [projectId, purchaseOrderId, id], onDelete: Cascade)
+  purchaseOrderLine   PurchaseOrderLine  @relation(fields: [projectId, purchaseOrderId, purchaseOrderLineId], references: [projectId, purchaseOrderId, id], onDelete: Restrict)
+  createdAt           DateTime           @default(now())
+
+  @@id([commitmentId, purchaseOrderLineId])
+  @@index([projectId, purchaseOrderLineId])
+}
+
+model SupplierCommitmentTaskLink {
+  commitmentId String
+  projectId    String
+  taskId       String
+  relation     SupplierCommitmentTaskRelation
+  commitment   SupplierCommitment             @relation(fields: [projectId, commitmentId], references: [projectId, id], onDelete: Cascade)
+  task         Task                           @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict)
+  createdAt    DateTime                       @default(now())
+
+  @@id([commitmentId, taskId])
+  @@index([projectId, taskId])
+}
+
+model SupplierCommitmentEvent {
+  id                 String                      @id @default(cuid())
+  organizationId     String
+  projectId          String
+  commitmentId       String
+  sequence           Int
+  operationKey       String                      @db.VarChar(190)
+  requestFingerprint String                      @db.Char(64)
+  type               SupplierCommitmentEventType
+  actorId            String                      @db.VarChar(190)
+  reason             String?                     @db.VarChar(500)
+  previousState      Json?
+  nextState          Json
+  commitment         SupplierCommitment          @relation(fields: [organizationId, projectId, commitmentId], references: [organizationId, projectId, id], onDelete: Cascade)
+  createdAt          DateTime                    @default(now())
+
+  @@unique([projectId, commitmentId, sequence])
+  @@unique([projectId, operationKey])
+  @@index([organizationId, createdAt])
+}
+
+model SupplierReminderDelivery {
+  id                     String                               @id @default(cuid())
+  organizationId         String
+  projectId              String
+  commitmentId           String
+  scheduleRevision       Int
+  eventKey               String                               @db.VarChar(190)
+  providerIdempotencyKey String                               @db.VarChar(256)
+  kind                   SupplierReminderKind
+  status                 SupplierReminderDeliveryStatus       @default(PENDING)
+  recipientEmail         String                               @db.VarChar(254)
+  subject                String                               @db.VarChar(220)
+  textBody               String                               @db.Text
+  scheduledFor           DateTime
+  nextAttemptAt          DateTime
+  attempts               Int                                  @default(0)
+  leasedAt               DateTime?
+  sentAt                 DateTime?
+  provider               String?                              @db.VarChar(32)
+  providerMessageId      String?                              @db.VarChar(190)
+  providerStatusAt       DateTime?
+  lastError              String?                              @db.Text
+  organization           Organization                         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project                Project                              @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Cascade)
+  commitment             SupplierCommitment                   @relation(fields: [organizationId, projectId, commitmentId], references: [organizationId, projectId, id], onDelete: Cascade)
+  webhookApplications    SupplierReminderWebhookApplication[]
+  createdAt              DateTime                             @default(now())
+  updatedAt              DateTime                             @updatedAt
+
+  @@unique([organizationId, eventKey])
+  @@unique([providerIdempotencyKey])
+  @@unique([organizationId, projectId, id])
+  @@unique([provider, providerMessageId])
+  @@index([status, nextAttemptAt, createdAt])
+  @@index([projectId, commitmentId, scheduleRevision])
+}
+
+model SupplierReminderWebhookEvent {
+  id                String                              @id @db.VarChar(190)
+  providerMessageId String                              @db.VarChar(190)
+  type              String                              @db.VarChar(64)
+  occurredAt        DateTime
+  payloadHash       String                              @db.Char(64)
+  application       SupplierReminderWebhookApplication?
+  createdAt         DateTime                            @default(now())
+
+  @@index([providerMessageId, occurredAt])
+}
+
+model SupplierReminderWebhookApplication {
+  eventId        String                          @id @db.VarChar(190)
+  organizationId String
+  projectId      String
+  deliveryId     String
+  appliedStatus  SupplierReminderDeliveryStatus?
+  appliedAt      DateTime                        @default(now())
+  event          SupplierReminderWebhookEvent    @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  delivery       SupplierReminderDelivery        @relation(fields: [organizationId, projectId, deliveryId], references: [organizationId, projectId, id], onDelete: Cascade)
+
+  @@index([organizationId, appliedAt])
+  @@index([projectId, deliveryId, appliedAt])
+}
+
 model GoodsReceipt {
   id                 String             @id @default(cuid())
+  organizationId     String
   projectId          String
   purchaseOrderId    String
   operationKey       String             @db.VarChar(190)
@@ -796,15 +1012,15 @@ model GoodsReceipt {
   requestFingerprint String?            @db.Char(64)
   receivedAt         DateTime           @default(now())
   revision           Int                @default(0)
-  project            Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  purchaseOrder      PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
+  organization       Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project            Project            @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Cascade)
+  purchaseOrder      PurchaseOrder      @relation(fields: [organizationId, projectId, purchaseOrderId], references: [organizationId, projectId, id], onDelete: Restrict)
   lines              GoodsReceiptLine[]
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
-  organization       Organization?      @relation(fields: [organizationId], references: [id])
-  organizationId     String?
 
   @@unique([projectId, id])
+  @@unique([projectId, purchaseOrderId, id])
   @@unique([projectId, operationKey])
   @@unique([projectId, protectedUploadId], map: "GoodsReceipt_project_protected_upload_key")
   @@index([projectId, purchaseOrderId, receivedAt])
@@ -812,13 +1028,16 @@ model GoodsReceipt {
 
 model GoodsReceiptLine {
   id                  String            @id @default(cuid())
+  projectId           String
+  purchaseOrderId     String
   goodsReceiptId      String
   purchaseOrderLineId String
   quantity            Decimal           @db.Decimal(14, 3)
-  goodsReceipt        GoodsReceipt      @relation(fields: [goodsReceiptId], references: [id], onDelete: Cascade)
-  purchaseOrderLine   PurchaseOrderLine @relation(fields: [purchaseOrderLineId], references: [id], onDelete: Restrict)
+  goodsReceipt        GoodsReceipt      @relation(fields: [projectId, purchaseOrderId, goodsReceiptId], references: [projectId, purchaseOrderId, id], onDelete: Cascade)
+  purchaseOrderLine   PurchaseOrderLine @relation(fields: [projectId, purchaseOrderId, purchaseOrderLineId], references: [projectId, purchaseOrderId, id], onDelete: Restrict)
 
   @@unique([goodsReceiptId, purchaseOrderLineId])
+  @@index([projectId, purchaseOrderId])
   @@index([purchaseOrderLineId])
 }
 
@@ -884,32 +1103,32 @@ model PlatformUser {
 }
 
 model TenantMembership {
-  id                                 String                     @id @default(cuid())
+  id                                 String                         @id @default(cuid())
   organizationId                     String
-  organization                       Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization                       Organization                   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   userId                             String
-  user                               PlatformUser               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  clerkRole                          String                     @default("org:member")
-  tenantRole                         TenantRole                 @default(AUDITOR)
-  status                             MembershipStatus           @default(ACTIVE)
+  user                               PlatformUser                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clerkRole                          String                         @default("org:member")
+  tenantRole                         TenantRole                     @default(AUDITOR)
+  status                             MembershipStatus               @default(ACTIVE)
   projectMemberships                 ProjectMembership[]
-  verifiedWorkerIdentities           WorkerPerson[]             @relation("WorkerIdentityVerifierMembership")
-  rejectedWorkerIdentities           WorkerPerson[]             @relation("WorkerIdentityRejecterMembership")
-  reviewedWorkerOnboardingClaims     WorkerOnboardingClaim[]    @relation("WorkerOnboardingReviewerMembership")
-  submittedWorkerPaymentDestinations WorkerPaymentDestination[] @relation("WorkerPaymentSubmitterMembership")
-  verifiedWorkerPaymentDestinations  WorkerPaymentDestination[] @relation("WorkerPaymentVerifierMembership")
-  activatedWorkerPaymentDestinations WorkerPaymentDestination[] @relation("WorkerPaymentActivatorMembership")
-  rejectedWorkerPaymentDestinations  WorkerPaymentDestination[] @relation("WorkerPaymentRejecterMembership")
-  revokedWorkerPaymentDestinations   WorkerPaymentDestination[] @relation("WorkerPaymentRevokerMembership")
-  workerPrivacyChoiceEvents          WorkerPrivacyChoiceEvent[] @relation("WorkerPrivacyChoiceMembershipActor")
-  workerSensitiveDecisions           WorkerSensitiveDecision[]  @relation("WorkerSensitiveDecisionActor")
-  dataSubjectRequestsAsSubject       DataSubjectRequest[] @relation("DataSubjectRequestSubjectMembership")
-  receivedDataSubjectRequests        DataSubjectRequest[] @relation("DataSubjectRequestReceivedBy")
-  attestedDataSubjectRequests        DataSubjectRequest[] @relation("DataSubjectRequestAttestedBy")
-  completedDataSubjectRequests       DataSubjectRequest[] @relation("DataSubjectRequestCompletedBy")
+  verifiedWorkerIdentities           WorkerPerson[]                 @relation("WorkerIdentityVerifierMembership")
+  rejectedWorkerIdentities           WorkerPerson[]                 @relation("WorkerIdentityRejecterMembership")
+  reviewedWorkerOnboardingClaims     WorkerOnboardingClaim[]        @relation("WorkerOnboardingReviewerMembership")
+  submittedWorkerPaymentDestinations WorkerPaymentDestination[]     @relation("WorkerPaymentSubmitterMembership")
+  verifiedWorkerPaymentDestinations  WorkerPaymentDestination[]     @relation("WorkerPaymentVerifierMembership")
+  activatedWorkerPaymentDestinations WorkerPaymentDestination[]     @relation("WorkerPaymentActivatorMembership")
+  rejectedWorkerPaymentDestinations  WorkerPaymentDestination[]     @relation("WorkerPaymentRejecterMembership")
+  revokedWorkerPaymentDestinations   WorkerPaymentDestination[]     @relation("WorkerPaymentRevokerMembership")
+  workerPrivacyChoiceEvents          WorkerPrivacyChoiceEvent[]     @relation("WorkerPrivacyChoiceMembershipActor")
+  workerSensitiveDecisions           WorkerSensitiveDecision[]      @relation("WorkerSensitiveDecisionActor")
+  dataSubjectRequestsAsSubject       DataSubjectRequest[]           @relation("DataSubjectRequestSubjectMembership")
+  receivedDataSubjectRequests        DataSubjectRequest[]           @relation("DataSubjectRequestReceivedBy")
+  attestedDataSubjectRequests        DataSubjectRequest[]           @relation("DataSubjectRequestAttestedBy")
+  completedDataSubjectRequests       DataSubjectRequest[]           @relation("DataSubjectRequestCompletedBy")
   sealedDataSubjectManifests         DataSubjectDiscoveryManifest[] @relation("DataSubjectManifestSealedBy")
-  createdAt                          DateTime                   @default(now())
-  updatedAt                          DateTime                   @updatedAt
+  createdAt                          DateTime                       @default(now())
+  updatedAt                          DateTime                       @updatedAt
 
   @@unique([organizationId, userId])
   @@unique([organizationId, id], map: "TenantMembership_organizationId_id_key")
@@ -996,6 +1215,8 @@ model Project {
   purchaseOrders                       PurchaseOrder[]
   goodsReceipts                        GoodsReceipt[]
   supplierInvoices                     SupplierInvoice[]
+  supplierCommitments                  SupplierCommitment[]
+  supplierReminderDeliveries           SupplierReminderDelivery[]
   workerDocuments                      WorkerDocument[]
   startActs                            ProjectStartAct[]
   workerOnboardingClaims               WorkerOnboardingClaim[]
@@ -1762,6 +1983,7 @@ model Task {
   progressObservations      ScheduleProgressObservation[]
   extraWorkRequests         ExtraWorkRequest[]
   budgetLines               BudgetLine[]
+  supplierCommitmentLinks   SupplierCommitmentTaskLink[]
   metadata                  Json?
   createdAt                 DateTime                      @default(now())
   updatedAt                 DateTime                      @updatedAt
@@ -3042,25 +3264,25 @@ model Message {
 }
 
 model WebhookEvent {
-  id             String               @id @default(cuid())
-  projectId      String?
-  project        Project?             @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  provider       String
-  externalId     String
-  eventType      String
-  status         WebhookStatus        @default(PENDING)
-  attempts       Int                  @default(0)
-  payload        Json
-  lastError      String?
-  nextAttemptAt  DateTime?            @default(now())
-  leaseToken     String?
-  leaseExpiresAt DateTime?
-  appliedAt      DateTime?
-  outcome        Json?
-  processedAt    DateTime?
-  createdAt      DateTime             @default(now())
-  updatedAt      DateTime             @updatedAt
-  mediaAssets    WhatsAppMediaAsset[]
+  id                           String                        @id @default(cuid())
+  projectId                    String?
+  project                      Project?                      @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  provider                     String
+  externalId                   String
+  eventType                    String
+  status                       WebhookStatus                 @default(PENDING)
+  attempts                     Int                           @default(0)
+  payload                      Json
+  lastError                    String?
+  nextAttemptAt                DateTime?                     @default(now())
+  leaseToken                   String?
+  leaseExpiresAt               DateTime?
+  appliedAt                    DateTime?
+  outcome                      Json?
+  processedAt                  DateTime?
+  createdAt                    DateTime                      @default(now())
+  updatedAt                    DateTime                      @updatedAt
+  mediaAssets                  WhatsAppMediaAsset[]
   workerPaymentPrivateReceipts WorkerPaymentPrivateReceipt[]
 
   @@unique([provider, externalId])
@@ -3072,32 +3294,32 @@ model WebhookEvent {
 }
 
 model WhatsAppFlowSession {
-  id                  String                        @id @db.Uuid
-  organizationId      String
-  organization        Organization                  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  projectId           String
-  project             Project                       @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  workerId            String
-  worker              Worker                        @relation(fields: [workerId], references: [id], onDelete: Cascade)
-  phoneNumberId       String                        @db.VarChar(40)
-  recipientPhone      String                        @db.VarChar(20)
-  blueprintKey        String                        @db.VarChar(100)
-  flowId              String                        @db.VarChar(40)
-  screenId            String                        @db.VarChar(30)
-  flowType            String                        @db.VarChar(64)
-  sourceExternalId    String                        @db.VarChar(512)
-  tokenSha256         String                        @unique @db.Char(64)
-  expiresAt           DateTime
-  deliveryAttemptedAt DateTime?
-  deliveryRejectedAt  DateTime?
-  sentAt              DateTime?
-  providerMessageId   String?                       @unique @db.VarChar(500)
-  consumedAt          DateTime?
-  consumedExternalId  String?                       @db.VarChar(512)
-  endpointRequests    WhatsAppFlowEndpointRequest[]
+  id                   String                        @id @db.Uuid
+  organizationId       String
+  organization         Organization                  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  projectId            String
+  project              Project                       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workerId             String
+  worker               Worker                        @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  phoneNumberId        String                        @db.VarChar(40)
+  recipientPhone       String                        @db.VarChar(20)
+  blueprintKey         String                        @db.VarChar(100)
+  flowId               String                        @db.VarChar(40)
+  screenId             String                        @db.VarChar(30)
+  flowType             String                        @db.VarChar(64)
+  sourceExternalId     String                        @db.VarChar(512)
+  tokenSha256          String                        @unique @db.Char(64)
+  expiresAt            DateTime
+  deliveryAttemptedAt  DateTime?
+  deliveryRejectedAt   DateTime?
+  sentAt               DateTime?
+  providerMessageId    String?                       @unique @db.VarChar(500)
+  consumedAt           DateTime?
+  consumedExternalId   String?                       @db.VarChar(512)
+  endpointRequests     WhatsAppFlowEndpointRequest[]
   workerPaymentSession WorkerPaymentFlowSession?
-  createdAt           DateTime                      @default(now())
-  updatedAt           DateTime                      @updatedAt
+  createdAt            DateTime                      @default(now())
+  updatedAt            DateTime                      @updatedAt
 
   @@unique([projectId, sourceExternalId, blueprintKey])
   @@unique([projectId, consumedExternalId])
@@ -3111,51 +3333,51 @@ model WhatsAppFlowSession {
 /// session. Financial input never lands here: only a keyed HMAC commitment and
 /// tenant-scoped outcome references are retained for exact replay fencing.
 model WorkerPaymentFlowSession {
-  flowSessionId             String                            @id @db.Uuid
-  flowSession               WhatsAppFlowSession               @relation(fields: [flowSessionId], references: [id], onDelete: Restrict, map: "WorkerPaymentFlowSession_flow_session_fkey")
-  organizationId            String
-  organization              Organization                      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  projectId                 String
-  project                   Project                           @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "WorkerPaymentFlowSession_project_scope_fkey")
-  connectionId              String
-  connection                WhatsAppConnection                @relation(fields: [projectId, connectionId], references: [projectId, id], onDelete: Restrict, map: "WorkerPaymentFlowSession_connection_scope_fkey")
-  workerId                  String
-  worker                    Worker                            @relation("WorkerPaymentFlowWorker", fields: [organizationId, personId, projectId, workerId], references: [organizationId, personId, projectId, id], onDelete: Restrict, map: "WorkerPaymentFlowSession_worker_scope_fkey")
-  personId                  String
-  person                    WorkerPerson                      @relation(fields: [organizationId, personId], references: [organizationId, id], onDelete: Restrict, map: "WorkerPaymentFlowSession_person_scope_fkey")
-  channelIdentityId         String
-  channelIdentity           WorkerChannelIdentity             @relation("WorkerPaymentFlowChannel", fields: [organizationId, personId, channelIdentityId], references: [organizationId, personId, id], onDelete: Restrict, map: "WorkerPaymentFlowSession_channel_scope_fkey")
-  noticeVersion             String                            @db.VarChar(64)
-  noticeContentSha256       String                            @db.Char(64)
-  expiresAt                 DateTime
+  flowSessionId                       String                                 @id @db.Uuid
+  flowSession                         WhatsAppFlowSession                    @relation(fields: [flowSessionId], references: [id], onDelete: Restrict, map: "WorkerPaymentFlowSession_flow_session_fkey")
+  organizationId                      String
+  organization                        Organization                           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  projectId                           String
+  project                             Project                                @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "WorkerPaymentFlowSession_project_scope_fkey")
+  connectionId                        String
+  connection                          WhatsAppConnection                     @relation(fields: [projectId, connectionId], references: [projectId, id], onDelete: Restrict, map: "WorkerPaymentFlowSession_connection_scope_fkey")
+  workerId                            String
+  worker                              Worker                                 @relation("WorkerPaymentFlowWorker", fields: [organizationId, personId, projectId, workerId], references: [organizationId, personId, projectId, id], onDelete: Restrict, map: "WorkerPaymentFlowSession_worker_scope_fkey")
+  personId                            String
+  person                              WorkerPerson                           @relation(fields: [organizationId, personId], references: [organizationId, id], onDelete: Restrict, map: "WorkerPaymentFlowSession_person_scope_fkey")
+  channelIdentityId                   String
+  channelIdentity                     WorkerChannelIdentity                  @relation("WorkerPaymentFlowChannel", fields: [organizationId, personId, channelIdentityId], references: [organizationId, personId, id], onDelete: Restrict, map: "WorkerPaymentFlowSession_channel_scope_fkey")
+  noticeVersion                       String                                 @db.VarChar(64)
+  noticeContentSha256                 String                                 @db.Char(64)
+  expiresAt                           DateTime
   /// Server-side evidence that INIT served the pinned notice; it is not proof
   /// that the person read or understood it.
-  privacyPresentedAt        DateTime?
-  submissionStatus          WorkerPaymentFlowSubmissionStatus @default(OPEN)
-  submissionFingerprintKeyId String?                           @db.VarChar(64)
-  submissionFingerprintHmac String?                           @db.Char(64)
-  submissionReservationId   String?                           @unique @db.Uuid
-  submissionReservedAt      DateTime?
-  paymentPurpose            WorkerPaymentPurpose?
-  expectedDestinationType   WorkerPaymentDestinationType?
-  expectedDestinationFingerprintKeyId String?                 @db.VarChar(100)
-  expectedDestinationFingerprint String?                      @db.Char(64)
-  expectedPrivacyOperationKey String?                         @db.VarChar(190)
-  expectedDestinationOperationKey String?                     @db.VarChar(190)
-  privacyChoiceEventId      String?                           @unique
-  privacyChoiceEvent        WorkerPrivacyChoiceEvent?         @relation("WorkerPaymentFlowPrivacyChoice", fields: [organizationId, personId, paymentPurpose, privacyChoiceEventId], references: [organizationId, personId, paymentPurpose, id], onDelete: Restrict, map: "WorkerPaymentFlowSession_privacy_choice_scope_fkey")
-  destinationId             String?                           @unique
-  destination               WorkerPaymentDestination?        @relation("WorkerPaymentFlowDestination", fields: [organizationId, personId, paymentPurpose, destinationId], references: [organizationId, personId, purpose, id], onDelete: Restrict, map: "WorkerPaymentFlowSession_destination_scope_fkey")
-  reservationDestination    WorkerPaymentDestination?        @relation("WorkerPaymentFlowReservation")
-  submittedAt               DateTime?
-  submissionUncertainAt     DateTime?
-  submissionReconciledAt    DateTime?
-  reconciliationMethod      WorkerPaymentFlowReconciliationMethod?
-  receiptDeliveryRequested  Boolean                           @default(false)
-  privateReceipt            WorkerPaymentPrivateReceipt?
-  revision                  Int                               @default(0)
-  createdAt                 DateTime                          @default(now())
-  updatedAt                 DateTime                          @updatedAt
+  privacyPresentedAt                  DateTime?
+  submissionStatus                    WorkerPaymentFlowSubmissionStatus      @default(OPEN)
+  submissionFingerprintKeyId          String?                                @db.VarChar(64)
+  submissionFingerprintHmac           String?                                @db.Char(64)
+  submissionReservationId             String?                                @unique @db.Uuid
+  submissionReservedAt                DateTime?
+  paymentPurpose                      WorkerPaymentPurpose?
+  expectedDestinationType             WorkerPaymentDestinationType?
+  expectedDestinationFingerprintKeyId String?                                @db.VarChar(100)
+  expectedDestinationFingerprint      String?                                @db.Char(64)
+  expectedPrivacyOperationKey         String?                                @db.VarChar(190)
+  expectedDestinationOperationKey     String?                                @db.VarChar(190)
+  privacyChoiceEventId                String?                                @unique
+  privacyChoiceEvent                  WorkerPrivacyChoiceEvent?              @relation("WorkerPaymentFlowPrivacyChoice", fields: [organizationId, personId, paymentPurpose, privacyChoiceEventId], references: [organizationId, personId, paymentPurpose, id], onDelete: Restrict, map: "WorkerPaymentFlowSession_privacy_choice_scope_fkey")
+  destinationId                       String?                                @unique
+  destination                         WorkerPaymentDestination?              @relation("WorkerPaymentFlowDestination", fields: [organizationId, personId, paymentPurpose, destinationId], references: [organizationId, personId, purpose, id], onDelete: Restrict, map: "WorkerPaymentFlowSession_destination_scope_fkey")
+  reservationDestination              WorkerPaymentDestination?              @relation("WorkerPaymentFlowReservation")
+  submittedAt                         DateTime?
+  submissionUncertainAt               DateTime?
+  submissionReconciledAt              DateTime?
+  reconciliationMethod                WorkerPaymentFlowReconciliationMethod?
+  receiptDeliveryRequested            Boolean                                @default(false)
+  privateReceipt                      WorkerPaymentPrivateReceipt?
+  revision                            Int                                    @default(0)
+  createdAt                           DateTime                               @default(now())
+  updatedAt                           DateTime                               @updatedAt
 
   @@unique([organizationId, personId, paymentPurpose, privacyChoiceEventId], map: "WorkerPaymentFlowSession_privacy_choice_relation_key")
   @@unique([organizationId, personId, paymentPurpose, destinationId], map: "WorkerPaymentFlowSession_destination_relation_key")
@@ -3170,38 +3392,38 @@ model WorkerPaymentFlowSession {
 /// Short-lived, privacy-minimal proof that one worker payment destination was
 /// received. The bearer token and financial destination are never persisted.
 model WorkerPaymentPrivateReceipt {
-  id                     String                       @id @db.Uuid
-  contentVersion         String                       @default("worker-payment-private-receipt-v1") @db.VarChar(64)
-  organizationId         String
-  organization           Organization                 @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  projectId              String
-  project                 Project                      @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "WorkerPaymentPrivateReceipt_project_scope_fkey")
-  connectionId           String
-  connection              WhatsAppConnection           @relation(fields: [projectId, connectionId], references: [projectId, id], onDelete: Restrict, map: "WorkerPaymentPrivateReceipt_connection_scope_fkey")
-  flowSessionId           String                       @unique @db.Uuid
-  flowSession             WorkerPaymentFlowSession     @relation(fields: [flowSessionId], references: [flowSessionId], onDelete: Restrict, map: "WorkerPaymentPrivateReceipt_flow_session_fkey")
-  workerId                String
-  worker                  Worker                       @relation("WorkerPaymentPrivateReceiptWorker", fields: [organizationId, personId, projectId, workerId], references: [organizationId, personId, projectId, id], onDelete: Restrict, map: "WorkerPaymentPrivateReceipt_worker_scope_fkey")
-  personId                String
-  person                  WorkerPerson                 @relation(fields: [organizationId, personId], references: [organizationId, id], onDelete: Restrict, map: "WorkerPaymentPrivateReceipt_person_scope_fkey")
-  channelIdentityId       String
-  channelIdentity         WorkerChannelIdentity        @relation(fields: [organizationId, personId, channelIdentityId], references: [organizationId, personId, id], onDelete: Restrict, map: "WorkerPaymentPrivateReceipt_channel_scope_fkey")
-  paymentPurpose          WorkerPaymentPurpose
-  destinationId          String
-  destination            WorkerPaymentDestination      @relation(fields: [organizationId, personId, paymentPurpose, destinationId], references: [organizationId, personId, purpose, id], onDelete: Restrict, map: "WorkerPaymentPrivateReceipt_destination_scope_fkey")
-  sourceWebhookEventId   String
-  sourceWebhookEvent     WebhookEvent                  @relation(fields: [projectId, sourceWebhookEventId], references: [projectId, id], onDelete: Restrict, map: "WorkerPaymentPrivateReceipt_webhook_scope_fkey")
-  destinationType        WorkerPaymentDestinationType
-  destinationLastFour    String                        @db.VarChar(4)
-  receivedAt             DateTime
-  contentSha256          String                        @db.Char(64)
-  tokenHash              String                        @unique @db.Char(64)
-  issuedAt               DateTime                      @default(now())
-  expiresAt              DateTime                      @default(dbgenerated("(statement_timestamp() + '00:15:00'::interval)"))
-  accessCount            Int                           @default(0)
-  firstAccessedAt        DateTime?
-  lastAccessedAt         DateTime?
-  revokedAt              DateTime?
+  id                   String                       @id @db.Uuid
+  contentVersion       String                       @default("worker-payment-private-receipt-v1") @db.VarChar(64)
+  organizationId       String
+  organization         Organization                 @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  projectId            String
+  project              Project                      @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "WorkerPaymentPrivateReceipt_project_scope_fkey")
+  connectionId         String
+  connection           WhatsAppConnection           @relation(fields: [projectId, connectionId], references: [projectId, id], onDelete: Restrict, map: "WorkerPaymentPrivateReceipt_connection_scope_fkey")
+  flowSessionId        String                       @unique @db.Uuid
+  flowSession          WorkerPaymentFlowSession     @relation(fields: [flowSessionId], references: [flowSessionId], onDelete: Restrict, map: "WorkerPaymentPrivateReceipt_flow_session_fkey")
+  workerId             String
+  worker               Worker                       @relation("WorkerPaymentPrivateReceiptWorker", fields: [organizationId, personId, projectId, workerId], references: [organizationId, personId, projectId, id], onDelete: Restrict, map: "WorkerPaymentPrivateReceipt_worker_scope_fkey")
+  personId             String
+  person               WorkerPerson                 @relation(fields: [organizationId, personId], references: [organizationId, id], onDelete: Restrict, map: "WorkerPaymentPrivateReceipt_person_scope_fkey")
+  channelIdentityId    String
+  channelIdentity      WorkerChannelIdentity        @relation(fields: [organizationId, personId, channelIdentityId], references: [organizationId, personId, id], onDelete: Restrict, map: "WorkerPaymentPrivateReceipt_channel_scope_fkey")
+  paymentPurpose       WorkerPaymentPurpose
+  destinationId        String
+  destination          WorkerPaymentDestination     @relation(fields: [organizationId, personId, paymentPurpose, destinationId], references: [organizationId, personId, purpose, id], onDelete: Restrict, map: "WorkerPaymentPrivateReceipt_destination_scope_fkey")
+  sourceWebhookEventId String
+  sourceWebhookEvent   WebhookEvent                 @relation(fields: [projectId, sourceWebhookEventId], references: [projectId, id], onDelete: Restrict, map: "WorkerPaymentPrivateReceipt_webhook_scope_fkey")
+  destinationType      WorkerPaymentDestinationType
+  destinationLastFour  String                       @db.VarChar(4)
+  receivedAt           DateTime
+  contentSha256        String                       @db.Char(64)
+  tokenHash            String                       @unique @db.Char(64)
+  issuedAt             DateTime                     @default(now())
+  expiresAt            DateTime                     @default(dbgenerated("(statement_timestamp() + '00:15:00'::interval)"))
+  accessCount          Int                          @default(0)
+  firstAccessedAt      DateTime?
+  lastAccessedAt       DateTime?
+  revokedAt            DateTime?
 
   @@unique([organizationId, id], map: "WorkerPaymentPrivateReceipt_org_id_key")
   @@index([organizationId, personId, issuedAt], map: "WorkerPaymentPrivateReceipt_org_person_issued_idx")
@@ -3255,39 +3477,39 @@ model WorkerOnboardingFlowSession {
 /// Tenant-scoped intake record for one privacy-rights request. PRO-05A only
 /// permits authority-attested discovery; it deliberately has no destructive state.
 model DataSubjectRequest {
-  id                         String                        @id @default(cuid())
-  organizationId             String
-  organization               Organization                  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  type                       DataSubjectRequestType
-  subjectKind                DataSubjectKind
-  subjectMembershipId        String?
-  subjectMembership          TenantMembership?             @relation("DataSubjectRequestSubjectMembership", fields: [organizationId, subjectMembershipId], references: [organizationId, id], onDelete: Restrict, map: "DataSubjectRequest_subject_membership_fkey")
-  workerPersonId             String?
-  workerPerson               WorkerPerson?                 @relation("DataSubjectRequestWorkerPerson", fields: [organizationId, workerPersonId], references: [organizationId, id], onDelete: Restrict, map: "DataSubjectRequest_worker_person_fkey")
-  status                     DataSubjectRequestStatus      @default(RECEIVED)
-  schemaVersion              Int                           @default(1)
-  operationKeyHash           String                        @db.Char(64)
-  requestFingerprint         String                        @db.Char(64)
-  receivedByMembershipId     String
-  receivedByMembership       TenantMembership              @relation("DataSubjectRequestReceivedBy", fields: [organizationId, receivedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "DataSubjectRequest_received_by_fkey")
-  attestedByMembershipId     String?
-  attestedByMembership       TenantMembership?             @relation("DataSubjectRequestAttestedBy", fields: [organizationId, attestedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "DataSubjectRequest_attested_by_fkey")
-  completedByMembershipId    String?
-  completedByMembership      TenantMembership?             @relation("DataSubjectRequestCompletedBy", fields: [organizationId, completedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "DataSubjectRequest_completed_by_fkey")
-  attestationPolicyVersion   String?                       @db.VarChar(64)
-  attestationMethod          String?                       @db.VarChar(64)
-  attestationEvidenceSha256  String?                       @db.Char(64)
-  discoveryCatalogVersion    String?                       @db.VarChar(64)
-  discoveryCatalogSha256     String?                       @db.Char(64)
-  receivedAt                 DateTime                      @default(now()) @db.Timestamptz(3)
-  attestedAt                 DateTime?                     @db.Timestamptz(3)
-  discoveryStartedAt         DateTime?                     @db.Timestamptz(3)
-  terminalAt                 DateTime?                     @db.Timestamptz(3)
-  terminalReasonCode         String?                       @db.VarChar(64)
-  revision                   Int                           @default(0)
-  manifest                   DataSubjectDiscoveryManifest?
-  createdAt                  DateTime                      @default(now()) @db.Timestamptz(3)
-  updatedAt                  DateTime                      @updatedAt @db.Timestamptz(3)
+  id                        String                        @id @default(cuid())
+  organizationId            String
+  organization              Organization                  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  type                      DataSubjectRequestType
+  subjectKind               DataSubjectKind
+  subjectMembershipId       String?
+  subjectMembership         TenantMembership?             @relation("DataSubjectRequestSubjectMembership", fields: [organizationId, subjectMembershipId], references: [organizationId, id], onDelete: Restrict, map: "DataSubjectRequest_subject_membership_fkey")
+  workerPersonId            String?
+  workerPerson              WorkerPerson?                 @relation("DataSubjectRequestWorkerPerson", fields: [organizationId, workerPersonId], references: [organizationId, id], onDelete: Restrict, map: "DataSubjectRequest_worker_person_fkey")
+  status                    DataSubjectRequestStatus      @default(RECEIVED)
+  schemaVersion             Int                           @default(1)
+  operationKeyHash          String                        @db.Char(64)
+  requestFingerprint        String                        @db.Char(64)
+  receivedByMembershipId    String
+  receivedByMembership      TenantMembership              @relation("DataSubjectRequestReceivedBy", fields: [organizationId, receivedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "DataSubjectRequest_received_by_fkey")
+  attestedByMembershipId    String?
+  attestedByMembership      TenantMembership?             @relation("DataSubjectRequestAttestedBy", fields: [organizationId, attestedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "DataSubjectRequest_attested_by_fkey")
+  completedByMembershipId   String?
+  completedByMembership     TenantMembership?             @relation("DataSubjectRequestCompletedBy", fields: [organizationId, completedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "DataSubjectRequest_completed_by_fkey")
+  attestationPolicyVersion  String?                       @db.VarChar(64)
+  attestationMethod         String?                       @db.VarChar(64)
+  attestationEvidenceSha256 String?                       @db.Char(64)
+  discoveryCatalogVersion   String?                       @db.VarChar(64)
+  discoveryCatalogSha256    String?                       @db.Char(64)
+  receivedAt                DateTime                      @default(now()) @db.Timestamptz(3)
+  attestedAt                DateTime?                     @db.Timestamptz(3)
+  discoveryStartedAt        DateTime?                     @db.Timestamptz(3)
+  terminalAt                DateTime?                     @db.Timestamptz(3)
+  terminalReasonCode        String?                       @db.VarChar(64)
+  revision                  Int                           @default(0)
+  manifest                  DataSubjectDiscoveryManifest?
+  createdAt                 DateTime                      @default(now()) @db.Timestamptz(3)
+  updatedAt                 DateTime                      @updatedAt @db.Timestamptz(3)
 
   @@unique([organizationId, id], map: "DataSubjectRequest_org_id_key")
   @@unique([organizationId, operationKeyHash], map: "DataSubjectRequest_org_operation_key")
@@ -3309,7 +3531,7 @@ model DataSubjectDiscoveryManifest {
   schemaVersion        Int                        @default(1)
   catalogVersion       String                     @db.VarChar(64)
   catalogSha256        String                     @db.Char(64)
-  sourceSnapshotAt     DateTime                     @db.Timestamptz(3)
+  sourceSnapshotAt     DateTime                   @db.Timestamptz(3)
   itemCount            Int
   blockerCount         Int
   manifestSha256       String                     @db.Char(64)

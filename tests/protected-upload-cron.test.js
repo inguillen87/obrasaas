@@ -403,6 +403,10 @@ test("vercel config reuses one frequent protected-media cron for both cleanup la
     path: "/api/cron/protected-uploads",
     schedule: "*/15 * * * *",
   }]);
-  assert.equal(config.crons.length, 2);
+  assert.deepEqual(
+    config.crons.filter((cron) => cron.path === "/api/cron/supplier-reminders"),
+    [{ path: "/api/cron/supplier-reminders", schedule: "*/15 * * * *" }],
+  );
+  assert.equal(config.crons.length, 3);
   assert.equal(protectedUploadCrons[0].schedule.trim().split(/\s+/).length, 5);
 });

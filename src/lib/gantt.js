@@ -59,11 +59,110 @@ export function ganttTaskDependencies(task, { knownIds = null, taskId = null } =
       : [];
   const allowed = knownIds ? new Set([...knownIds].map(String)) : null;
   return [...new Set(raw.map((dependency) => (
-    typeof dependency === 'string' ? dependency : dependency?.taskId
+    typeof dependency === 'string'
+      ? dependency
+      : dependency?.predecessorId || dependency?.taskId
   )).filter(Boolean).map(String))]
     .filter((dependencyId) => dependencyId !== String(taskId || ''))
     .filter((dependencyId) => !allowed || allowed.has(dependencyId))
     .slice(0, MAX_TASK_DEPENDENCIES);
+}
+
+export function ganttTaskStatusForProgress(progress, priorStatus = null) {
+  const normalized = integer(progress, 0, 0, 100);
+  if (normalized >= 100) return 'DONE';
+  if (normalized > 0) return 'IN_PROGRESS';
+  return ['BLOCKED', 'BACKLOG'].includes(priorStatus) ? priorStatus : 'READY';
+}
+
+function ganttDependencySpecs(task, { knownIds = null, taskId = null } = {}) {
+  const candidate = record(task);
+  const source = Array.isArray(candidate.dependencySpecs) && candidate.dependencySpecs.length > 0
+    ? candidate.dependencySpecs
+    : ganttTaskDependencies(candidate, { knownIds, taskId }).map((predecessorId) => ({
+      predecessorId,
+      type: 'FINISH_TO_START',
+      lagDays: 0,
+    }));
+  const allowed = knownIds ? new Set([...knownIds].map(String)) : null;
+  const seen = new Set();
+  return source.flatMap((raw) => {
+    const predecessorId = String(typeof raw === 'string' ? raw : raw?.predecessorId || raw?.taskId || '');
+    if (!predecessorId || predecessorId === String(taskId || '') || seen.has(predecessorId)) return [];
+    if (allowed && !allowed.has(predecessorId)) return [];
+    seen.add(predecessorId);
+    const type = ['FINISH_TO_START', 'START_TO_START', 'FINISH_TO_FINISH', 'START_TO_FINISH'].includes(raw?.type)
+      ? raw.type
+      : 'FINISH_TO_START';
+    const lagDays = Math.min(MAX_GANTT_DAYS, Math.max(-MAX_GANTT_DAYS, Math.trunc(Number(raw?.lagDays) || 0)));
+    return [{ predecessorId, type, lagDays }];
+  }).slice(0, MAX_TASK_DEPENDENCIES);
+}
+
+function dependencyRequiredStartDay(predecessor, specification, successorDuration) {
+  const predecessorStart = ganttTaskStartDay(predecessor);
+  const predecessorDuration = integer(predecessor.duration, 1, 1);
+  const lag = specification.lagDays;
+  if (specification.type === 'START_TO_START') return predecessorStart + lag;
+  if (specification.type === 'FINISH_TO_FINISH') {
+    return predecessorStart + predecessorDuration + lag - successorDuration;
+  }
+  if (specification.type === 'START_TO_FINISH') {
+    return predecessorStart + lag - successorDuration + 1;
+  }
+  return predecessorStart + predecessorDuration + lag;
+}
+
+export function canonicalTasksToGanttCatalog(tasks, projectStartsAt) {
+  if (!Array.isArray(tasks)) return null;
+  const projectStart = projectStartsAt ? new Date(projectStartsAt).getTime() : NaN;
+  const catalog = {};
+  for (const task of tasks) {
+    const start = task.startsAt ? new Date(task.startsAt).getTime() : NaN;
+    const end = task.endsAt ? new Date(task.endsAt).getTime() : NaN;
+    const scheduledStartDay = Number(task?.schedule?.startDay);
+    const scheduledDurationDays = Number(task?.schedule?.durationDays);
+    const hasRelativeSchedule = (
+      Number.isInteger(scheduledStartDay)
+      && scheduledStartDay >= 1
+      && scheduledStartDay <= MAX_GANTT_DAYS
+      && Number.isInteger(scheduledDurationDays)
+      && scheduledDurationDays >= 1
+      && scheduledDurationDays <= MAX_GANTT_DAYS
+    );
+    const startOffset = Number.isFinite(start) && Number.isFinite(projectStart)
+      ? Math.max(0, Math.round((start - projectStart) / DAY_MILLISECONDS))
+      : hasRelativeSchedule ? scheduledStartDay - 1 : 0;
+    const duration = Number.isFinite(start) && Number.isFinite(end)
+      ? Math.max(1, Math.round((end - start) / DAY_MILLISECONDS) + 1)
+      : hasRelativeSchedule ? scheduledDurationDays : 1;
+    const dependencySpecs = (task.dependencies || [])
+      .filter((dependency) => dependency.successorId === task.id)
+      .map((dependency) => ({
+        predecessorId: dependency.predecessorId,
+        type: dependency.type,
+        lagDays: dependency.lagDays,
+      }));
+    catalog[task.id] = {
+      name: task.title,
+      title: task.title,
+      description: task.description || '',
+      assignee: task.assignee || '',
+      progress: task.progress,
+      duration,
+      startOffset,
+      startDay: startOffset + 1,
+      dependencies: dependencySpecs.map((dependency) => dependency.predecessorId),
+      dependencySpecs,
+      status: task.status,
+      type: task.type,
+      startsAt: task.startsAt,
+      endsAt: task.endsAt,
+      canonicalTaskId: task.id,
+      revision: task.revision,
+    };
+  }
+  return catalog;
 }
 
 export function dependencyCycle(tasks) {
@@ -96,15 +195,19 @@ export function dependencyCycle(tasks) {
   return null;
 }
 
-export function earliestGanttStartDay(tasks, dependencyIds, fallback = 1) {
+export function earliestGanttStartDay(tasks, dependencies, fallback = 1, successorDuration = 1) {
   const catalog = record(tasks);
-  return [...new Set((Array.isArray(dependencyIds) ? dependencyIds : []).map(String))]
-    .reduce((earliest, dependencyId) => {
-      const dependency = record(catalog[dependencyId]);
+  const specs = ganttDependencySpecs({ dependencySpecs: dependencies }, { knownIds: Object.keys(catalog) });
+  return specs.reduce((earliest, specification) => {
+      const dependency = record(catalog[specification.predecessorId]);
       if (!dependency.name) return earliest;
       return Math.max(
         earliest,
-        ganttTaskStartDay(dependency) + integer(dependency.duration, 1, 1),
+        dependencyRequiredStartDay(
+          dependency,
+          specification,
+          integer(successorDuration, 1, 1),
+        ),
       );
     }, integer(fallback, 1, 1));
 }
@@ -166,13 +269,19 @@ export function buildGanttModel(tasks, {
       endDay: Math.min(MAX_GANTT_DAYS, startDay + duration - 1),
       progress,
       dependencies: ganttTaskDependencies(task, { knownIds, taskId: id }),
+      dependencySpecs: ganttDependencySpecs(task, { knownIds, taskId: id }),
     };
   });
   const taskById = new Map(normalized.map((task) => [task.id, task]));
   const tasksWithRisk = normalized.map((task) => {
-    const dependencyTasks = task.dependencies.map((id) => taskById.get(id)).filter(Boolean);
-    const earliestStartDay = dependencyTasks.reduce(
-      (earliest, dependency) => Math.max(earliest, dependency.endDay + 1),
+    const dependencyTasks = task.dependencySpecs.map((specification) => taskById.get(specification.predecessorId)).filter(Boolean);
+    const earliestStartDay = task.dependencySpecs.reduce(
+      (earliest, specification) => {
+        const predecessor = taskById.get(specification.predecessorId);
+        return predecessor
+          ? Math.max(earliest, dependencyRequiredStartDay(predecessor, specification, task.duration))
+          : earliest;
+      },
       1,
     );
     const dependencyConflict = dependencyTasks.length > 0 && task.startDay < earliestStartDay;
@@ -205,7 +314,7 @@ export function buildGanttModel(tasks, {
   const plannedDays = projectDurationDays(projectStartsAt, projectEndsAt);
   const requestedDays = Math.max(integer(minimumDays, LEGACY_TIMELINE_DAYS, 1), plannedDays, latestTaskDay);
   const totalDays = Math.min(MAX_GANTT_DAYS, Math.max(7, Math.ceil(requestedDays / 7) * 7));
-  const resolvedUnitDays = [1, 7, 30].includes(Number(unitDays))
+  const resolvedUnitDays = [1, 7, 14, 30].includes(Number(unitDays))
     ? Number(unitDays)
     : automaticUnitDays(totalDays);
   const columns = Array.from({ length: Math.ceil(totalDays / resolvedUnitDays) }, (_, index) => {
@@ -228,7 +337,12 @@ export function buildGanttModel(tasks, {
     }))
     .sort((left, right) => left.startDay - right.startDay || left.order - right.order);
   const dependencyEdges = taskModels.flatMap((task) => (
-    task.dependencies.map((fromId) => ({ fromId, toId: task.id }))
+    task.dependencySpecs.map((specification) => ({
+      fromId: specification.predecessorId,
+      toId: task.id,
+      type: specification.type,
+      lagDays: specification.lagDays,
+    }))
   ));
 
   return {

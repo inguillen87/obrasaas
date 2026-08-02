@@ -10,6 +10,7 @@ import {
   ganttDayForDate,
   ganttTaskDependencies,
   ganttTaskStartDay,
+  ganttTaskStatusForProgress,
 } from '@/lib/gantt';
 import styles from './gantt-planner.module.css';
 import { useModalFocus } from './use-modal-focus';
@@ -17,6 +18,7 @@ import { useModalFocus } from './use-modal-focus';
 const SCALE_OPTIONS = [
   { days: 1, label: 'Días' },
   { days: 7, label: 'Semanas' },
+  { days: 14, label: 'Cada 14 días' },
   { days: 30, label: 'Meses' },
 ];
 
@@ -63,6 +65,7 @@ function emptyEditor(startDay = 1) {
     duration: 5,
     progress: 0,
     dependencies: [],
+    dependenciesDirty: false,
   };
 }
 
@@ -80,6 +83,7 @@ export default function GanttPlanner({
   onToast,
   project,
   tasks,
+  tasksTruncated = false,
 }) {
   const [unitDays, setUnitDays] = useState(null);
   const [editor, setEditor] = useState(null);
@@ -90,6 +94,7 @@ export default function GanttPlanner({
   const barRefs = useRef(new Map());
   const projectStartsAt = project?.startsAt || null;
   const projectEndsAt = project?.endsAt || null;
+  const managementEnabled = canManage && !tasksTruncated;
 
   const automaticModel = useMemo(() => buildGanttModel(tasks, {
     projectStartsAt,
@@ -201,6 +206,7 @@ export default function GanttPlanner({
       duration: integer(task.duration, 1, 1, 3_650),
       progress: integer(task.progress, 0, 0, 100),
       dependencies: ganttTaskDependencies(task, { knownIds: Object.keys(tasks), taskId: id }),
+      dependenciesDirty: false,
     });
   }
 
@@ -214,6 +220,7 @@ export default function GanttPlanner({
       const exists = current.dependencies.includes(id);
       return {
         ...current,
+        dependenciesDirty: true,
         dependencies: exists
           ? current.dependencies.filter((dependencyId) => dependencyId !== id)
           : [...current.dependencies, id],
@@ -240,7 +247,7 @@ export default function GanttPlanner({
 
   async function saveTask(event) {
     event.preventDefault();
-    if (!canManage) return;
+    if (!managementEnabled) return;
     const name = editor.name.trim();
     if (name.length < 3) {
       setError('El nombre debe tener al menos 3 caracteres.');
@@ -248,18 +255,24 @@ export default function GanttPlanner({
     }
     const id = editor.id || taskId();
     const worker = fieldWorkers.find((candidate) => candidate.id === editor.assigneeId);
-    const requestedStartDay = integer(editor.startDay, 1, 1, 3_650);
-    const alignedStartDay = earliestGanttStartDay(tasks, editor.dependencies, requestedStartDay);
     const duration = integer(editor.duration, 1, 1, 3_650);
+    const previous = tasks[editor.id || ''] || {};
+    const previousSpecs = Array.isArray(previous.dependencySpecs) ? previous.dependencySpecs : [];
+    const dependencySpecs = editor.dependencies.map((predecessorId) => (
+      previousSpecs.find((specification) => specification.predecessorId === predecessorId)
+      || { predecessorId, type: 'FINISH_TO_START', lagDays: 0 }
+    ));
+    const requestedStartDay = integer(editor.startDay, 1, 1, 3_650);
+    const alignedStartDay = earliestGanttStartDay(tasks, dependencySpecs, requestedStartDay, duration);
     if (alignedStartDay + duration - 1 > 3_650) {
       setError('La duración supera el horizonte máximo de 3.650 días para esta fecha de inicio.');
       return;
     }
-    const previous = tasks[id] || {};
+    const priorTask = tasks[id] || {};
     const nextTasks = {
       ...tasks,
       [id]: {
-        ...previous,
+        ...priorTask,
         name,
         assignee: worker?.name || 'Sin asignar',
         progress: integer(editor.progress, 0, 0, 100),
@@ -267,6 +280,7 @@ export default function GanttPlanner({
         startDay: alignedStartDay,
         startOffset: legacyOffset(alignedStartDay),
         dependencies: editor.dependencies,
+        dependencySpecs,
       },
     };
     const cycle = dependencyCycle(nextTasks);
@@ -289,15 +303,15 @@ export default function GanttPlanner({
           title: name,
           assignee: worker?.name || null,
           progress,
-          status: progress >= 100 ? 'DONE' : progress > 0 ? 'IN_PROGRESS' : 'READY',
+          status: ganttTaskStatusForProgress(progress, editor.id ? priorTask.status : null),
           startsAt,
           endsAt,
           schedule: {
             startDay: alignedStartDay,
             durationDays: duration,
           },
-          dependencies: editor.dependencies,
-          ...(editor.id ? { expectedRevision: Number(previous.revision) || 0 } : {}),
+          ...(editor.dependenciesDirty ? { dependencies: editor.dependencies } : {}),
+          ...(editor.id ? { expectedRevision: Number(priorTask.revision) || 0 } : {}),
         };
         const response = await fetch(
           editor.id ? `/api/tasks/${encodeURIComponent(editor.id)}` : '/api/tasks',
@@ -377,8 +391,14 @@ export default function GanttPlanner({
     await persist({}, 'Cronograma vaciado. Los demás registros de la obra no se modificaron.');
   }
 
+  const selectedDependencySpecs = editor
+    ? editor.dependencies.map((predecessorId) => (
+      tasks[editor.id]?.dependencySpecs?.find((specification) => specification.predecessorId === predecessorId)
+      || { predecessorId, type: 'FINISH_TO_START', lagDays: 0 }
+    ))
+    : [];
   const selectedEarliestStart = editor
-    ? earliestGanttStartDay(tasks, editor.dependencies, editor.startDay)
+    ? earliestGanttStartDay(tasks, selectedDependencySpecs, editor.startDay, editor.duration)
     : 1;
   const projectStartDate = projectStartsAt ? ganttDateForDay(projectStartsAt, 1) : null;
   const projectEndDate = projectEndsAt ? new Date(projectEndsAt) : null;
@@ -398,9 +418,15 @@ export default function GanttPlanner({
         </div>
         <div className={styles.primaryActions}>
           <Link className={styles.reportButton} href="/dashboard/report">Reporte semanal</Link>
-          <button type="button" className={styles.addButton} disabled={!canManage || busy} onClick={openCreate}>+ Nueva tarea</button>
+          <button type="button" className={styles.addButton} disabled={!managementEnabled || busy} onClick={openCreate}>+ Nueva tarea</button>
         </div>
       </div>
+
+      {tasksTruncated && (
+        <div className={styles.formError} role="alert">
+          El catálogo supera 5.000 tareas. La edición queda bloqueada para evitar borrar dependencias que no están visibles.
+        </div>
+      )}
 
       <div className={styles.metrics} aria-label="Indicadores del cronograma">
         <article><span>Avance ponderado simple</span><strong>{progressAverage(tasks)}%</strong><small>{model.completeTasks} de {model.tasks.length} finalizadas</small></article>
@@ -428,7 +454,7 @@ export default function GanttPlanner({
             <span><i className={styles.legendDone} /> Finalizada</span>
             <span><i className={styles.legendRisk} /> Conflicto</span>
           </div>
-          {canManage && !canonicalMode && model.tasks.length > 0 && (
+          {managementEnabled && !canonicalMode && model.tasks.length > 0 && (
             <button type="button" className={styles.clearButton} disabled={busy} onClick={clearSchedule}>Vaciar sólo cronograma</button>
           )}
         </div>
@@ -438,7 +464,7 @@ export default function GanttPlanner({
             <span aria-hidden="true">⌁</span>
             <h2>Construí la línea base de esta obra</h2>
             <p>Agregá tareas, responsables y predecesoras. El cronograma dejará de asumir relaciones que nadie configuró.</p>
-            {canManage && <button type="button" onClick={openCreate}>Crear primera tarea</button>}
+            {managementEnabled && <button type="button" onClick={openCreate}>Crear primera tarea</button>}
           </div>
         ) : (
           <div className={styles.scroller}>
@@ -489,18 +515,18 @@ export default function GanttPlanner({
         }}>
           <form ref={dialogRef} tabIndex={-1} className={styles.modal} role="dialog" aria-modal="true" aria-labelledby="gantt-editor-title" onSubmit={saveTask}>
             <header>
-              <div><span>{!canManage ? 'Detalle de actividad' : editor.id ? 'Editar actividad' : 'Nueva actividad'}</span><h2 id="gantt-editor-title">{!canManage ? 'Planificación registrada' : editor.id ? 'Actualizar planificación' : 'Incorporar al plan maestro'}</h2></div>
+              <div><span>{!managementEnabled ? 'Detalle de actividad' : editor.id ? 'Editar actividad' : 'Nueva actividad'}</span><h2 id="gantt-editor-title">{!managementEnabled ? 'Planificación registrada' : editor.id ? 'Actualizar planificación' : 'Incorporar al plan maestro'}</h2></div>
               <button type="button" aria-label="Cerrar" disabled={busy} onClick={closeEditor}>×</button>
             </header>
 
             <div className={styles.formGrid}>
               <label className={styles.fullField}>
                 <span>Nombre de la tarea</span>
-                <input data-autofocus value={editor.name} onChange={(event) => updateEditor('name', event.target.value)} minLength={3} maxLength={160} required disabled={!canManage || busy} placeholder="Ej. Hormigonado de losa nivel 2" />
+                <input data-autofocus value={editor.name} onChange={(event) => updateEditor('name', event.target.value)} minLength={3} maxLength={160} required disabled={!managementEnabled || busy} placeholder="Ej. Hormigonado de losa nivel 2" />
               </label>
               <label>
                 <span>Responsable</span>
-                <select value={editor.assigneeId} onChange={(event) => updateEditor('assigneeId', event.target.value)} disabled={!canManage || busy}>
+                <select value={editor.assigneeId} onChange={(event) => updateEditor('assigneeId', event.target.value)} disabled={!managementEnabled || busy}>
                   <option value="">Sin asignar</option>
                   {fieldWorkers.map((worker) => <option key={worker.id} value={worker.id}>{worker.name} · {worker.role || 'Cuadrilla'}</option>)}
                 </select>
@@ -514,32 +540,32 @@ export default function GanttPlanner({
                     min={dateKey(projectStartDate)}
                     max={dateKey(projectEndDate)}
                     onChange={(event) => updateEditor('startDay', ganttDayForDate(projectStartsAt, event.target.value) || 1)}
-                    disabled={!canManage || busy}
+                    disabled={!managementEnabled || busy}
                     required
                   />
                 ) : (
-                  <input type="number" value={editor.startDay} min="1" max="3650" onChange={(event) => updateEditor('startDay', event.target.value)} disabled={!canManage || busy} required />
+                  <input type="number" value={editor.startDay} min="1" max="3650" onChange={(event) => updateEditor('startDay', event.target.value)} disabled={!managementEnabled || busy} required />
                 )}
               </label>
               <label>
                 <span>Duración · días</span>
-                <input type="number" value={editor.duration} min="1" max="3650" onChange={(event) => updateEditor('duration', event.target.value)} disabled={!canManage || busy} required />
+                <input type="number" value={editor.duration} min="1" max="3650" onChange={(event) => updateEditor('duration', event.target.value)} disabled={!managementEnabled || busy} required />
               </label>
               <label>
                 <span>Avance · {editor.progress}%</span>
-                <input type="range" value={editor.progress} min="0" max="100" step="5" onChange={(event) => updateEditor('progress', event.target.value)} disabled={!canManage || busy} />
+                <input type="range" value={editor.progress} min="0" max="100" step="5" onChange={(event) => updateEditor('progress', event.target.value)} disabled={!managementEnabled || busy} />
               </label>
             </div>
 
             <fieldset className={styles.dependenciesField}>
-              <legend>Predecesoras · relación fin → inicio</legend>
+              <legend>Predecesoras · se preservan tipo y desfase; las nuevas usan fin → inicio</legend>
               {model.tasks.filter((task) => task.id !== editor.id).length === 0 ? (
                 <p>La obra todavía no tiene otra tarea que pueda actuar como predecesora.</p>
               ) : (
                 <div className={styles.dependencyOptions}>
                   {model.tasks.filter((task) => task.id !== editor.id).map((task) => (
                     <label key={task.id}>
-                      <input type="checkbox" checked={editor.dependencies.includes(task.id)} onChange={() => toggleDependency(task.id)} disabled={!canManage || busy} />
+                      <input type="checkbox" checked={editor.dependencies.includes(task.id)} onChange={() => toggleDependency(task.id)} disabled={!managementEnabled || busy} />
                       <span><strong>{task.name}</strong><small>Día {task.startDay}–{task.endDay} · {task.progress}%</small></span>
                     </label>
                   ))}
@@ -553,8 +579,8 @@ export default function GanttPlanner({
             {error && <div className={styles.formError} role="alert">{error}</div>}
 
             <footer>
-              <div>{canManage && editor.id && <button type="button" className={styles.deleteButton} disabled={busy} onClick={deleteTask}>Eliminar tarea</button>}</div>
-              <div><button type="button" className={styles.cancelButton} disabled={busy} onClick={closeEditor}>{canManage ? 'Cancelar' : 'Cerrar'}</button>{canManage && <button type="submit" className={styles.saveButton} disabled={busy}>{busy ? 'Guardando…' : 'Guardar planificación'}</button>}</div>
+              <div>{managementEnabled && editor.id && <button type="button" className={styles.deleteButton} disabled={busy} onClick={deleteTask}>Eliminar tarea</button>}</div>
+              <div><button type="button" className={styles.cancelButton} disabled={busy} onClick={closeEditor}>{managementEnabled ? 'Cancelar' : 'Cerrar'}</button>{managementEnabled && <button type="submit" className={styles.saveButton} disabled={busy}>{busy ? 'Guardando…' : 'Guardar planificación'}</button>}</div>
             </footer>
           </form>
         </div>

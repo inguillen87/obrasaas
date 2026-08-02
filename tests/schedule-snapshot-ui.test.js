@@ -3,12 +3,13 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const root = new URL('../', import.meta.url);
-const [page, dashboard, panel, css, planner] = await Promise.all([
+const [page, dashboard, panel, css, planner, gantt] = await Promise.all([
   readFile(new URL('src/app/dashboard/page.js', root), 'utf8'),
   readFile(new URL('src/app/dashboard/dashboard-client.js', root), 'utf8'),
   readFile(new URL('src/app/dashboard/schedule-snapshots-panel.js', root), 'utf8'),
   readFile(new URL('src/app/dashboard/schedule-snapshots-panel.module.css', root), 'utf8'),
   readFile(new URL('src/app/dashboard/gantt-planner.js', root), 'utf8'),
+  readFile(new URL('src/lib/gantt.js', root), 'utf8'),
 ]);
 
 test('dashboard uses canonical task capability from the first task and exact manage permission', () => {
@@ -122,8 +123,10 @@ test('latest forecast detail renders a capped accessible baseline-versus-forecas
 });
 
 test('canonical Gantt keeps its relative anchor when a project calendar is not yet set', () => {
-  assert.match(dashboard, /const scheduledStartDay = Number\(task\?\.schedule\?\.startDay\)/);
-  assert.match(dashboard, /hasRelativeSchedule \? scheduledStartDay - 1 : 0/);
-  assert.match(dashboard, /hasRelativeSchedule \? scheduledDurationDays : 1/);
+  assert.match(dashboard, /import \{ canonicalTasksToGanttCatalog \} from '@\/lib\/gantt'/);
+  assert.match(dashboard, /canonicalTasksToGanttCatalog\(canonicalTasks, platformAccess\.project\.startsAt\)/);
+  assert.match(gantt, /const scheduledStartDay = Number\(task\?\.schedule\?\.startDay\)/);
+  assert.match(gantt, /hasRelativeSchedule \? scheduledStartDay - 1 : 0/);
+  assert.match(gantt, /hasRelativeSchedule \? scheduledDurationDays : 1/);
   assert.match(planner, /schedule: \{\s*startDay: alignedStartDay,\s*durationDays:/);
 });

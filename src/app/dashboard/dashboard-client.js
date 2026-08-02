@@ -10,6 +10,7 @@ import {
   nextPendingOperationalProposalCount,
   pendingOperationalProposalCountFromPayload,
 } from '@/lib/first-value-onboarding';
+import { canonicalTasksToGanttCatalog } from '@/lib/gantt';
 import GanttPlanner from './gantt-planner';
 import OperationalPulse from './operational-pulse';
 import PlatformReadiness from './platform-readiness';
@@ -144,52 +145,6 @@ function normalizeAppState(candidate) {
     hrAttendance,
     hrBonuses,
   };
-}
-
-function canonicalTasksToGanttCatalog(tasks, projectStartsAt) {
-  if (!Array.isArray(tasks)) return null;
-  const projectStart = projectStartsAt ? new Date(projectStartsAt).getTime() : NaN;
-  const catalog = {};
-  for (const task of tasks) {
-    const start = task.startsAt ? new Date(task.startsAt).getTime() : NaN;
-    const end = task.endsAt ? new Date(task.endsAt).getTime() : NaN;
-    const scheduledStartDay = Number(task?.schedule?.startDay);
-    const scheduledDurationDays = Number(task?.schedule?.durationDays);
-    const hasRelativeSchedule = (
-      Number.isInteger(scheduledStartDay)
-      && scheduledStartDay >= 1
-      && scheduledStartDay <= 3_650
-      && Number.isInteger(scheduledDurationDays)
-      && scheduledDurationDays >= 1
-      && scheduledDurationDays <= 3_650
-    );
-    const startOffset = Number.isFinite(start) && Number.isFinite(projectStart)
-      ? Math.max(0, Math.round((start - projectStart) / 86_400_000))
-      : hasRelativeSchedule ? scheduledStartDay - 1 : 0;
-    const duration = Number.isFinite(start) && Number.isFinite(end)
-      ? Math.max(1, Math.round((end - start) / 86_400_000) + 1)
-      : hasRelativeSchedule ? scheduledDurationDays : 1;
-    catalog[task.id] = {
-      name: task.title,
-      title: task.title,
-      description: task.description || '',
-      assignee: task.assignee || '',
-      progress: task.progress,
-      duration,
-      startOffset,
-      startDay: startOffset + 1,
-      dependencies: (task.dependencies || [])
-        .filter((dependency) => dependency.successorId === task.id)
-        .map((dependency) => dependency.predecessorId),
-      status: task.status,
-      type: task.type,
-      startsAt: task.startsAt,
-      endsAt: task.endsAt,
-      canonicalTaskId: task.id,
-      revision: task.revision,
-    };
-  }
-  return catalog;
 }
 
 const initialChatMessages = [
@@ -2349,6 +2304,7 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
               onToast={addToast}
               project={platformAccess.project}
               tasks={setup.canReadCanonicalTasks ? (canonicalTaskCatalog || {}) : state.tasks}
+              tasksTruncated={setup.canReadCanonicalTasks && setup.canonicalTasksHasMore}
             />
           </section>
 

@@ -127,7 +127,18 @@ function safeDate(value, field) {
   if (value === null || value === undefined || value === '') return null;
   const result = new Date(value);
   if (Number.isNaN(result.getTime())) throw new CanonicalTaskError(`${field} no es una fecha válida.`);
-  return result;
+  if (
+    result.getUTCHours() !== 0
+    || result.getUTCMinutes() !== 0
+    || result.getUTCSeconds() !== 0
+    || result.getUTCMilliseconds() !== 0
+  ) {
+    throw new CanonicalTaskError(
+      `${field} debe ser una fecha civil sin horario.`,
+      'CANONICAL_TASK_CIVIL_DATE_REQUIRED',
+    );
+  }
+  return new Date(`${result.toISOString().slice(0, 10)}T00:00:00.000Z`);
 }
 
 function safeProgress(value) {
@@ -237,7 +248,7 @@ function serializeTask(task) {
     assignee: task.assignee || null,
     revision: task.revision,
     parentId: task.parentId || null,
-    dependencies: (task.successors || []).map((dependency) => ({
+    dependencies: (task.predecessors || []).map((dependency) => ({
       id: dependency.id,
       predecessorId: dependency.predecessorId,
       successorId: dependency.successorId,
@@ -250,7 +261,7 @@ function serializeTask(task) {
 }
 
 function taskInclude() {
-  return { successors: true };
+  return { predecessors: true };
 }
 
 export async function listCanonicalTasks(prisma, { projectId, cursor = null, limit = 100 } = {}) {
@@ -360,6 +371,7 @@ export async function updateCanonicalTask(prisma, {
       const parent = await transaction.task.findFirst({ where: { id: normalized.parentId, projectId }, select: { id: true } });
       if (!parent) throw new CanonicalTaskError('La tarea padre no pertenece a esta obra.', 'CANONICAL_TASK_PARENT_SCOPE', 409);
     }
+    let currentIncoming = [];
     if (requestedDependencies) {
       const dependencyTasks = await transaction.task.findMany({
         where: {
@@ -372,6 +384,10 @@ export async function updateCanonicalTask(prisma, {
       if (dependencyTasks.length !== requestedDependencies.length || requestedDependencies.includes(id)) {
         throw new CanonicalTaskError('Las predecesoras deben pertenecer a la obra y no pueden incluir la tarea actual.', 'CANONICAL_TASK_SCOPE', 409);
       }
+      currentIncoming = await transaction.taskDependency.findMany({
+        where: { projectId, successorId: id },
+        select: { predecessorId: true, type: true, lagDays: true },
+      });
       const otherEdges = await transaction.taskDependency.findMany({
         where: { projectId, successorId: { not: id } },
         select: { predecessorId: true, successorId: true },
@@ -397,8 +413,17 @@ export async function updateCanonicalTask(prisma, {
     if (requestedDependencies) {
       await transaction.taskDependency.deleteMany({ where: { projectId, successorId: id } });
       if (requestedDependencies.length > 0) {
+        const priorByPredecessor = new Map(
+          currentIncoming.map((dependency) => [dependency.predecessorId, dependency]),
+        );
         await transaction.taskDependency.createMany({
-          data: requestedDependencies.map((predecessorId) => ({ projectId, predecessorId, successorId: id })),
+          data: requestedDependencies.map((predecessorId) => ({
+            projectId,
+            predecessorId,
+            successorId: id,
+            type: priorByPredecessor.get(predecessorId)?.type || 'FINISH_TO_START',
+            lagDays: priorByPredecessor.get(predecessorId)?.lagDays ?? 0,
+          })),
         });
       }
     }

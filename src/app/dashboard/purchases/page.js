@@ -7,6 +7,7 @@ import { serializeGoodsReceipt } from "@/lib/goods-receipts";
 import { getPrisma } from "@/lib/prisma";
 import { listPurchaseOrders } from "@/lib/purchase-orders";
 import { listSuppliers } from "@/lib/suppliers";
+import { addCivilDays, listSupplierCommitments, todayInTimezone } from "@/lib/supplier-commitments";
 
 import PurchasesClient from "./purchases-client";
 
@@ -20,7 +21,11 @@ export default async function PurchasesPage() {
   const access = await getPlatformAccess();
   requireTenantPermission(access, "org:execution:read", { subscriptionMode: "read" });
   const prisma = getPrisma();
-  const [data, supplierData, budgetLines, receipts] = await Promise.all([
+  const tenantToday = todayInTimezone(access.organization.timezone);
+  const taskHorizonEnd = addCivilDays(tenantToday, 89);
+  const taskRangeStart = new Date(`${tenantToday}T00:00:00.000Z`);
+  const taskRangeEnd = new Date(`${taskHorizonEnd}T23:59:59.999Z`);
+  const [data, supplierData, budgetLines, receipts, commitmentData, tasks] = await Promise.all([
     listPurchaseOrders(prisma, {
       organizationId: access.organization.id,
       projectId: access.project.id,
@@ -38,15 +43,41 @@ export default async function PurchasesPage() {
       orderBy: { receivedAt: "desc" },
       take: 500,
     }),
+    listSupplierCommitments(prisma, {
+      organizationId: access.organization.id,
+      projectId: access.project.id,
+    }),
+    prisma.task.findMany({
+      where: {
+        projectId: access.project.id,
+        metadata: { path: ["source"], equals: "canonical-task-v1" },
+        startsAt: { lte: taskRangeEnd },
+        OR: [
+          { endsAt: { gte: taskRangeStart } },
+          { endsAt: null, startsAt: { gte: taskRangeStart } },
+        ],
+      },
+      select: { id: true, code: true, title: true, status: true, startsAt: true, endsAt: true },
+      orderBy: [{ startsAt: "asc" }, { id: "asc" }],
+      take: 5_001,
+    }),
   ]);
 
   return (
     <PurchasesClient
       initialOrders={data.purchaseOrders}
       initialReceipts={receipts.map(serializeGoodsReceipt)}
+      initialCommitments={commitmentData.commitments}
       suppliers={supplierData.suppliers}
       budgetLines={budgetLines}
+      tasks={tasks.slice(0, 5_000).map((task) => ({
+        ...task,
+        startsAt: task.startsAt?.toISOString() || null,
+        endsAt: task.endsAt?.toISOString() || null,
+      }))}
+      tasksTruncated={tasks.length > 5_000}
       projectName={access.project.name}
+      tenantToday={tenantToday}
       canManage={hasTenantPermission(access, "org:execution:manage")}
     />
   );

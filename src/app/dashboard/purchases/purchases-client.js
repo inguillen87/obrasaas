@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 
 import styles from "../extra-work/extra-work.module.css";
 import ReceiptClient from "./receipt-client";
+import SupplierCommitmentsClient from "./supplier-commitments-client";
 
 async function api(path, options = {}) {
   const response = await fetch(path, {
@@ -23,9 +24,13 @@ async function api(path, options = {}) {
 export default function PurchasesClient({
   initialOrders,
   initialReceipts,
+  initialCommitments,
   suppliers,
   budgetLines,
+  tasks,
+  tasksTruncated,
   projectName,
+  tenantToday,
   canManage,
 }) {
   const [orders, setOrders] = useState(initialOrders);
@@ -240,6 +245,17 @@ export default function PurchasesClient({
           </ul>
         </section>
       </main>
+
+      <SupplierCommitmentsClient
+        initialCommitments={initialCommitments}
+        suppliers={suppliers}
+        tasks={tasks}
+        tasksTruncated={tasksTruncated}
+        orders={orders}
+        canManage={canManage}
+        projectName={projectName}
+        tenantToday={tenantToday}
+      />
 
       <ReceiptClient
         orders={orders}

@@ -79,10 +79,12 @@ const PUBLIC_SELF_AUTHENTICATED_API_PATHS = [
   '/api/auth/verify',
   '/api/cron/notifications',
   '/api/cron/protected-uploads',
+  '/api/cron/supplier-reminders',
   '/api/cron/webhooks',
   '/api/leads',
   '/api/webhooks/clerk',
   '/api/webhooks/stripe',
+  '/api/webhooks/resend',
   '/api/webhooks/whatsapp',
   '/api/webhooks/whatsapp/flows/example',
   '/api/webviews/attendance',
@@ -137,7 +139,7 @@ test('every API Route Handler is exhaustively classified behind Clerk or its own
     );
   }
 
-  assert.equal(protectedRouteCount, 84, 'the complete current Clerk surface must remain classified');
+  assert.equal(protectedRouteCount, 87, 'the complete current Clerk surface must remain classified');
   assert.deepEqual(discoveredPublicRoutes.sort(), PUBLIC_SELF_AUTHENTICATED_API_PATHS.toSorted());
 });
 

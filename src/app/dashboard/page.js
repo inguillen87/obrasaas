@@ -82,7 +82,7 @@ export default async function DashboardPage() {
         })
       : Promise.resolve(0),
     canReadCanonicalTasks
-      ? listCanonicalTasks(prisma, { projectId: access.project.id, limit: 500 })
+      ? listCanonicalTasks(prisma, { projectId: access.project.id, limit: 5_000 })
       : Promise.resolve({ tasks: [], hasMore: false }),
   ]);
   return (
