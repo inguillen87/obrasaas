@@ -276,17 +276,20 @@ export async function listUserNotifications(prisma, {
 export async function markNotificationRead(prisma, {
   organizationId: rawOrganizationId,
   recipientId: rawRecipientId,
+  projectId: rawProjectId,
   id: rawId,
   now: rawNow = new Date(),
 } = {}) {
   const organizationId = text(rawOrganizationId, 'organizationId', 190);
   const recipientId = text(rawRecipientId, 'recipientId', 190);
+  const projectId = text(rawProjectId, 'projectId', 190);
   const id = text(rawId, 'id', 190);
   const now = trustedDate(rawNow);
   const scope = {
     id,
     organizationId,
     recipientId,
+    projectId,
     channel: 'IN_APP',
     status: 'SENT',
   };

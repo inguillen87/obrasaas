@@ -29,12 +29,11 @@ export async function GET(request) {
   try {
     const access = await getPlatformAccess();
     requireTenantPermission(access, 'org:execution:read', { subscriptionMode: 'read' });
-    const url = new URL(request.url);
     const rows = await listUserNotifications(getPrisma(), {
       organizationId: access.organization.id,
       recipientId: access.databaseUserId,
-      projectId: url.searchParams.get('projectId') || access.project.id,
-      limit: url.searchParams.get('limit') || 50,
+      projectId: access.project.id,
+      limit: new URL(request.url).searchParams.get('limit') || 50,
     });
     return Response.json({
       notifications: rows.map((row) => ({
@@ -74,6 +73,7 @@ export async function PATCH(request) {
     const result = await markNotificationRead(getPrisma(), {
       organizationId: access.organization.id,
       recipientId: access.databaseUserId,
+      projectId: access.project.id,
       id: body.id,
     });
     return Response.json({

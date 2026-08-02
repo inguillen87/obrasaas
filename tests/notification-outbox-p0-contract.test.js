@@ -69,6 +69,15 @@ test('new reads use readAt and never mutate delivery status to READ', () => {
   assert.match(notificationsRoute, /MAX_NOTIFICATION_READ_BODY_BYTES = 4_000/);
   assert.match(notificationsRoute, /NOTIFICATION_READ_FIELDS = new Set\(\['id'\]\)/);
   assert.match(notificationsRoute, /readAt: result\.readAt\.toISOString\(\)/);
+  assert.doesNotMatch(notificationsRoute, /searchParams\.get\(['"]projectId['"]\)/);
+  assert.equal(
+    [...notificationsRoute.matchAll(/projectId: access\.project\.id/g)].length,
+    2,
+  );
+  assert.match(
+    outbox,
+    /const scope = \{[\s\S]*organizationId,[\s\S]*recipientId,[\s\S]*projectId,[\s\S]*channel: 'IN_APP'/,
+  );
 });
 
 test('Vercel invokes the fail-closed notification reconciler every fifteen minutes', () => {

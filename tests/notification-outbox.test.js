@@ -140,6 +140,7 @@ test('reading an inbox item sets readAt without changing its delivery status', a
   const result = await markNotificationRead(prisma, {
     organizationId: 'organization-a',
     recipientId: 'user-a',
+    projectId: 'project-a',
     id: 'delivery-a',
     now: NOW,
   });
@@ -149,6 +150,7 @@ test('reading an inbox item sets readAt without changing its delivery status', a
     id: 'delivery-a',
     organizationId: 'organization-a',
     recipientId: 'user-a',
+    projectId: 'project-a',
     channel: 'IN_APP',
     status: 'SENT',
     readAt: null,
@@ -166,6 +168,7 @@ test('reading an inbox item is an exact replay with the persisted server timesta
           id: 'delivery-a',
           organizationId: 'organization-a',
           recipientId: 'user-a',
+          projectId: 'project-a',
           channel: 'IN_APP',
           status: 'SENT',
         });
@@ -181,6 +184,7 @@ test('reading an inbox item is an exact replay with the persisted server timesta
   const result = await markNotificationRead(prisma, {
     organizationId: 'organization-a',
     recipientId: 'user-a',
+    projectId: 'project-a',
     id: 'delivery-a',
     now: NOW,
   });
@@ -193,10 +197,18 @@ test('reading an inbox item is an exact replay with the persisted server timesta
   assert.equal(mutations, 0);
 });
 
-test('reading never acknowledges an inbox item outside the exact tenant and recipient scope', async () => {
+test('reading never acknowledges an inbox item outside the exact tenant, recipient and project scope', async () => {
   const prisma = {
     notificationDelivery: {
-      async findFirst() {
+      async findFirst(args) {
+        assert.deepEqual(args.where, {
+          id: 'delivery-a',
+          organizationId: 'organization-a',
+          recipientId: 'user-a',
+          projectId: 'project-b',
+          channel: 'IN_APP',
+          status: 'SENT',
+        });
         return null;
       },
       async updateMany() {
@@ -207,8 +219,9 @@ test('reading never acknowledges an inbox item outside the exact tenant and reci
 
   await assert.rejects(
     markNotificationRead(prisma, {
-      organizationId: 'organization-b',
-      recipientId: 'user-b',
+      organizationId: 'organization-a',
+      recipientId: 'user-a',
+      projectId: 'project-b',
       id: 'delivery-a',
       now: NOW,
     }),
@@ -233,6 +246,7 @@ test('a concurrent read winner remains authoritative and the loser reports repla
   const result = await markNotificationRead(prisma, {
     organizationId: 'organization-a',
     recipientId: 'user-a',
+    projectId: 'project-a',
     id: 'delivery-a',
     now: NOW,
   });
