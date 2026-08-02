@@ -1,5 +1,10 @@
 import { AccessError, accessErrorResponse, getPlatformAccess, requireTenantPermission } from '@/lib/access';
-import { createGoodsReceipt, goodsReceiptErrorResponse, serializeGoodsReceipt } from '@/lib/goods-receipts';
+import {
+  createGoodsReceipt,
+  goodsReceiptErrorResponse,
+  listGoodsReceiptLineBalances,
+  serializeGoodsReceipt,
+} from '@/lib/goods-receipts';
 import { getPrisma } from '@/lib/prisma';
 import { projectWritePolicyErrorResponse } from '@/lib/project-write-policy';
 import { protectedUploadErrorResponse } from '@/lib/protected-uploads';
@@ -41,14 +46,41 @@ export async function GET(request) {
     const access = await getPlatformAccess();
     requireTenantPermission(access, 'org:execution:read', { subscriptionMode: 'read' });
     const purchaseOrderId = new URL(request.url).searchParams.get('purchaseOrderId') || undefined;
-    const rows = await getPrisma().goodsReceipt.findMany({
-      where: { projectId: access.project.id, ...(purchaseOrderId ? { purchaseOrderId } : {}) },
-      include: { lines: true },
-      orderBy: { receivedAt: 'desc' },
-      take: 500,
-    });
+    const prisma = getPrisma();
+    const balanceOrderIds = purchaseOrderId
+      ? [purchaseOrderId]
+      : (await prisma.purchaseOrder.findMany({
+          where: {
+            organizationId: access.organization.id,
+            projectId: access.project.id,
+          },
+          select: { id: true },
+          orderBy: { createdAt: 'desc' },
+          take: 500,
+        })).map((order) => order.id);
+    const [rows, lineBalances] = await Promise.all([
+      prisma.goodsReceipt.findMany({
+        where: {
+          organizationId: access.organization.id,
+          projectId: access.project.id,
+          ...(purchaseOrderId ? { purchaseOrderId } : {}),
+        },
+        include: { lines: true },
+        orderBy: { receivedAt: 'desc' },
+        take: 501,
+      }),
+      listGoodsReceiptLineBalances(prisma, {
+        organizationId: access.organization.id,
+        projectId: access.project.id,
+        purchaseOrderIds: balanceOrderIds,
+      }),
+    ]);
     return respond(request, Response.json(
-      { receipts: rows.map(serializeGoodsReceipt) },
+      {
+        receipts: rows.slice(0, 500).map(serializeGoodsReceipt),
+        hasMore: rows.length > 500,
+        lineBalances,
+      },
       { headers: { 'Cache-Control': 'private, no-store' } },
     ));
   } catch (error) {

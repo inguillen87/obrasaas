@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   createGoodsReceipt,
+  listGoodsReceiptLineBalances,
   serializeGoodsReceipt,
 } from '../src/lib/goods-receipts.js';
 
@@ -23,6 +24,7 @@ function receiptStore({
   ordered = '0.300',
   received = [],
   status = 'APPROVED',
+  replay = null,
 } = {}) {
   const state = {
     transactionCalls: 0,
@@ -58,7 +60,7 @@ function receiptStore({
     },
     goodsReceipt: {
       async findFirst() {
-        return null;
+        return replay;
       },
       async create({ data }) {
         state.createCalls += 1;
@@ -124,6 +126,13 @@ test('goods receipt accepts the exact remaining boundary and persists a canonica
   assert.equal(current.state.createCalls, 1);
   assert.equal(current.state.createdData.lines.create[0].quantity, '0.200');
   assert.equal(result.receipt.lines[0].quantity, '0.200');
+  assert.deepEqual(result.lineBalances, [{
+    purchaseOrderId: 'order-a',
+    purchaseOrderLineId: 'line-a',
+    ordered: '0.300',
+    receivedPosted: '0.300',
+    remainingToReceive: '0.000',
+  }]);
   assert.equal(current.state.orderUpdate.status, 'RECEIVED');
 });
 
@@ -239,4 +248,126 @@ test('invalid persisted Decimal values fail closed before receipt creation', asy
     (error) => error.code === 'GOODS_RECEIPT_QUANTITY_CORRUPT',
   );
   assert.equal(current.state.createCalls, 0);
+});
+
+test('server-owned line balances include every posted receipt without a client history cap', async () => {
+  let lineQuery;
+  let aggregateQuery;
+  const prisma = {
+    purchaseOrderLine: {
+      async findMany(args) {
+        lineQuery = args;
+        return [{
+          id: 'line-a',
+          purchaseOrderId: 'order-a',
+          quantity: decimal('1.000'),
+        }];
+      },
+    },
+    goodsReceiptLine: {
+      async groupBy(args) {
+        aggregateQuery = args;
+        return [{
+          purchaseOrderLineId: 'line-a',
+          _sum: { quantity: decimal('0.501') },
+        }];
+      },
+    },
+  };
+
+  const balances = await listGoodsReceiptLineBalances(prisma, {
+    ...scope,
+    purchaseOrderIds: ['order-a'],
+  });
+
+  assert.deepEqual(lineQuery.where, {
+    projectId: scope.projectId,
+    purchaseOrderId: { in: ['order-a'] },
+    purchaseOrder: {
+      organizationId: scope.organizationId,
+      status: { in: ['APPROVED', 'PARTIALLY_RECEIVED', 'RECEIVED'] },
+    },
+  });
+  assert.deepEqual(aggregateQuery.where, {
+    projectId: scope.projectId,
+    purchaseOrderId: { in: ['order-a'] },
+    goodsReceipt: {
+      organizationId: scope.organizationId,
+      status: 'POSTED',
+    },
+  });
+  assert.deepEqual(balances, [{
+    purchaseOrderId: 'order-a',
+    purchaseOrderLineId: 'line-a',
+    ordered: '1.000',
+    receivedPosted: '0.501',
+    remainingToReceive: '0.499',
+  }]);
+});
+
+test('server-owned line balances reject an unbounded purchase-order scope', async () => {
+  const prisma = {
+    purchaseOrderLine: {
+      async findMany() {
+        assert.fail('invalid balance scope must fail before Prisma');
+      },
+    },
+  };
+
+  await assert.rejects(
+    listGoodsReceiptLineBalances(prisma, {
+      ...scope,
+      purchaseOrderIds: Array.from({ length: 501 }, (_, index) => `order-${index}`),
+    }),
+    (error) => (
+      error.code === 'GOODS_RECEIPT_BALANCE_SCOPE_INVALID'
+      && error.status === 400
+    ),
+  );
+});
+
+test('idempotent replay returns authoritative balances instead of reapplying a client delta', async () => {
+  const replay = {
+    id: 'goods-receipt-a',
+    organizationId: scope.organizationId,
+    projectId: scope.projectId,
+    purchaseOrderId: 'order-a',
+    operationKey: 'receipt-operation-a',
+    requestFingerprint: null,
+    protectedUploadId: null,
+    receipt: null,
+    lines: [{
+      id: 'created-line-a',
+      projectId: scope.projectId,
+      purchaseOrderId: 'order-a',
+      purchaseOrderLineId: 'line-a',
+      quantity: decimal('0.200'),
+    }],
+    receivedAt: new Date('2026-08-02T12:00:00.000Z'),
+    createdAt: new Date('2026-08-02T12:00:00.000Z'),
+    updatedAt: new Date('2026-08-02T12:00:00.000Z'),
+  };
+  const current = receiptStore({
+    ordered: '1.000',
+    received: ['0.200'],
+    status: 'PARTIALLY_RECEIVED',
+    replay,
+  });
+
+  const result = await createGoodsReceipt(current.prisma, {
+    scope,
+    actorId: 'user-a',
+    input: input('0.200'),
+  });
+
+  assert.equal(result.replayed, true);
+  assert.equal(current.state.createCalls, 0);
+  assert.equal(current.state.orderUpdate, null);
+  assert.deepEqual(result.lineBalances, [{
+    purchaseOrderId: 'order-a',
+    purchaseOrderLineId: 'line-a',
+    ordered: '1.000',
+    receivedPosted: '0.200',
+    remainingToReceive: '0.800',
+  }]);
 });

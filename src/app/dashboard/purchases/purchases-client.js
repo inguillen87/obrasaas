@@ -24,6 +24,8 @@ async function api(path, options = {}) {
 export default function PurchasesClient({
   initialOrders,
   initialReceipts,
+  initialReceiptsTruncated,
+  initialLineBalances,
   initialCommitments,
   suppliers,
   budgetLines,
@@ -75,8 +77,8 @@ export default function PurchasesClient({
         budgetLineId: form.budgetLineId,
         description: form.description,
         unit: form.unit,
-        quantity: Number(form.quantity),
-        unitPrice: Number(form.unitPrice),
+        quantity: form.quantity,
+        unitPrice: form.unitPrice,
       }],
     };
     const payloadKey = JSON.stringify(input);
@@ -260,6 +262,8 @@ export default function PurchasesClient({
       <ReceiptClient
         orders={orders}
         initialReceipts={initialReceipts}
+        initialReceiptsTruncated={initialReceiptsTruncated}
+        initialLineBalances={initialLineBalances}
         canManage={canManage}
         onReceiptCommitted={refreshOrders}
       />

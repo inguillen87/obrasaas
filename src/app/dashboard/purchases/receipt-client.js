@@ -16,49 +16,43 @@ import {
   compareProcurementQuantities,
   formatProcurementQuantity,
   parseProcurementQuantity,
-  subtractProcurementQuantities,
-  sumProcurementQuantities,
 } from "@/lib/procurement-quantity";
 import styles from "../extra-work/extra-work.module.css";
 
-function receivedByLine(receipts) {
-  const totals = new Map();
-  for (const receipt of receipts) {
-    for (const line of receipt.lines || []) {
-      const received = parseProcurementQuantity(line.quantity);
-      totals.set(
-        line.purchaseOrderLineId,
-        sumProcurementQuantities([
-          totals.get(line.purchaseOrderLineId) || 0n,
-          received,
-        ]),
-      );
-    }
-  }
-  return totals;
+function indexLineBalances(balances) {
+  return new Map((balances || []).map((balance) => [
+    balance.purchaseOrderLineId,
+    balance,
+  ]));
 }
 
-function remainingForLine(line, receivedTotals) {
-  return subtractProcurementQuantities(
-    parseProcurementQuantity(line.quantity),
-    receivedTotals.get(line.id) || 0n,
+function remainingForLine(line, balances) {
+  const balance = balances.get(line.id);
+  return parseProcurementQuantity(
+    balance?.remainingToReceive || line.quantity,
+    { allowZero: true },
   );
 }
 
 export default function ReceiptClient({
   orders,
   initialReceipts,
+  initialReceiptsTruncated = false,
+  initialLineBalances,
   canManage,
   onReceiptCommitted,
 }) {
   const [receipts, setReceipts] = useState(initialReceipts);
+  const [receiptsTruncated, setReceiptsTruncated] = useState(initialReceiptsTruncated);
+  const [lineBalances, setLineBalances] = useState(() => (
+    indexLineBalances(initialLineBalances)
+  ));
   const approved = useMemo(
     () => orders.filter((order) => (
       ["APPROVED", "PARTIALLY_RECEIVED"].includes(order.status)
     )),
     [orders],
   );
-  const receivedTotals = useMemo(() => receivedByLine(receipts), [receipts]);
   const [selectedOrderId, setSelectedOrderId] = useState(approved[0]?.id || "");
   const order = approved.find((row) => row.id === selectedOrderId)
     || approved[0]
@@ -66,17 +60,17 @@ export default function ReceiptClient({
   const orderId = order?.id || "";
   const openLines = useMemo(() => (order?.lines || []).filter((line) => (
     compareProcurementQuantities(
-      remainingForLine(line, receivedTotals),
+      remainingForLine(line, lineBalances),
       0n,
     ) > 0
-  )), [order, receivedTotals]);
+  )), [order, lineBalances]);
   const [selectedLineId, setSelectedLineId] = useState(openLines[0]?.id || "");
   const selectedLine = openLines.find((line) => line.id === selectedLineId)
     || openLines[0]
     || null;
   const lineId = selectedLine?.id || "";
   const remainingScaled = selectedLine
-    ? remainingForLine(selectedLine, receivedTotals)
+    ? remainingForLine(selectedLine, lineBalances)
     : 0n;
   const remaining = formatProcurementQuantity(remainingScaled);
   const [quantity, setQuantity] = useState("");
@@ -86,6 +80,20 @@ export default function ReceiptClient({
   const uploadAttempt = useRef(null);
   const submittingRef = useRef(false);
   const fileInputRef = useRef(null);
+
+  async function refreshReceiptState() {
+    const response = await fetch("/api/goods-receipts", {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !Array.isArray(result.receipts) || !Array.isArray(result.lineBalances)) {
+      throw new Error(result.error || "No se pudo refrescar el saldo recibido.");
+    }
+    setReceipts(result.receipts);
+    setReceiptsTruncated(result.hasMore === true);
+    setLineBalances(indexLineBalances(result.lineBalances));
+  }
 
   async function submit(event) {
     event.preventDefault();
@@ -171,7 +179,16 @@ export default function ReceiptClient({
       setReceipts((current) => [
         result.receipt,
         ...current.filter((receipt) => receipt.id !== result.receipt.id),
-      ]);
+      ].slice(0, 500));
+      if (Array.isArray(result.lineBalances)) {
+        setLineBalances((current) => {
+          const next = new Map(current);
+          for (const balance of result.lineBalances) {
+            next.set(balance.purchaseOrderLineId, balance);
+          }
+          return next;
+        });
+      }
       setQuantity("");
       setFile(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -189,6 +206,9 @@ export default function ReceiptClient({
           setNotice(`${error.message} ${cleanupError.message}`);
           return;
         }
+      }
+      if (["GOODS_RECEIPT_OVER_RECEIVE", "GOODS_RECEIPT_ORDER_CONFLICT"].includes(error.code)) {
+        await refreshReceiptState().catch(() => {});
       }
       setNotice(error.message);
     } finally {
@@ -241,7 +261,7 @@ export default function ReceiptClient({
                 {openLines.map((line) => (
                   <option key={line.id} value={line.id}>
                     {line.description} · quedan {(
-                      formatProcurementQuantity(remainingForLine(line, receivedTotals))
+                      formatProcurementQuantity(remainingForLine(line, lineBalances))
                     )} {line.unit}
                   </option>
                 ))}
@@ -278,6 +298,12 @@ export default function ReceiptClient({
       {notice && (
         <p className={styles.notice} role="status" aria-live="polite">
           {notice}
+        </p>
+      )}
+
+      {receiptsTruncated && (
+        <p className={styles.notice}>
+          Se muestran las 500 recepciones más recientes; los saldos incluyen todo el historial registrado.
         </p>
       )}
 

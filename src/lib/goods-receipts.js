@@ -15,6 +15,8 @@ import {
   sumProcurementQuantities,
 } from './procurement-quantity.js';
 
+const MAX_BALANCE_PURCHASE_ORDERS = 500;
+
 export class GoodsReceiptError extends Error {
   constructor(message, code = 'GOODS_RECEIPT_INVALID', status = 400) {
     super(message);
@@ -48,12 +50,12 @@ function quantity(value) {
   }
 }
 
-function storedQuantity(value) {
+function storedQuantity(value, { allowZero = false } = {}) {
   const candidate = typeof value === 'string'
     ? value
     : value?.toString?.();
   try {
-    return parseProcurementQuantity(candidate);
+    return parseProcurementQuantity(candidate, { allowZero });
   } catch (error) {
     if (!(error instanceof ProcurementQuantityError)) throw error;
     throw new GoodsReceiptError(
@@ -62,6 +64,49 @@ function storedQuantity(value) {
       409,
     );
   }
+}
+
+function lineBalance(line, added = 0n) {
+  const ordered = storedQuantity(line.quantity);
+  let receivedPosted;
+  try {
+    receivedPosted = sumProcurementQuantities([
+      receivedQuantity(line.receiptLines || []),
+      added,
+    ]);
+  } catch (error) {
+    if (error instanceof GoodsReceiptError) throw error;
+    if (!(error instanceof ProcurementQuantityError)) throw error;
+    throw new GoodsReceiptError(
+      'La cantidad recibida acumulada supera los límites permitidos.',
+      'GOODS_RECEIPT_QUANTITY_CORRUPT',
+      409,
+    );
+  }
+
+  let remainingToReceive;
+  try {
+    remainingToReceive = subtractProcurementQuantities(ordered, receivedPosted);
+  } catch (error) {
+    if (!(error instanceof ProcurementQuantityError)) throw error;
+    throw new GoodsReceiptError(
+      'Las recepciones persistidas ya superan la cantidad ordenada.',
+      'GOODS_RECEIPT_QUANTITY_CORRUPT',
+      409,
+    );
+  }
+
+  return {
+    purchaseOrderId: line.purchaseOrderId,
+    purchaseOrderLineId: line.id,
+    ordered: formatProcurementQuantity(ordered),
+    receivedPosted: formatProcurementQuantity(receivedPosted),
+    remainingToReceive: formatProcurementQuantity(remainingToReceive),
+  };
+}
+
+function orderLineBalances(lines, additions = new Map()) {
+  return lines.map((line) => lineBalance(line, additions.get(line.id) || 0n));
 }
 
 function receivedQuantity(receiptLines) {
@@ -107,6 +152,67 @@ export function serializeGoodsReceipt(row) {
         }))
       : undefined,
   };
+}
+
+export async function listGoodsReceiptLineBalances(
+  prisma,
+  { organizationId, projectId, purchaseOrderIds },
+) {
+  const current = scope({ organizationId, projectId });
+  if (
+    !Array.isArray(purchaseOrderIds)
+    || purchaseOrderIds.length > MAX_BALANCE_PURCHASE_ORDERS
+    || purchaseOrderIds.some((id) => typeof id !== 'string' || !id)
+  ) {
+    throw new GoodsReceiptError(
+      `Los saldos requieren hasta ${MAX_BALANCE_PURCHASE_ORDERS} órdenes explícitas.`,
+      'GOODS_RECEIPT_BALANCE_SCOPE_INVALID',
+      400,
+    );
+  }
+  const orderIds = [...new Set(purchaseOrderIds)];
+  if (orderIds.length === 0) return [];
+
+  const lines = await prisma.purchaseOrderLine.findMany({
+    where: {
+      projectId: current.projectId,
+      purchaseOrderId: { in: orderIds },
+      purchaseOrder: {
+        organizationId: current.organizationId,
+        status: { in: ['APPROVED', 'PARTIALLY_RECEIVED', 'RECEIVED'] },
+      },
+    },
+    select: {
+      id: true,
+      purchaseOrderId: true,
+      quantity: true,
+    },
+    orderBy: { id: 'asc' },
+  });
+  if (lines.length === 0) return [];
+
+  const aggregates = await prisma.goodsReceiptLine.groupBy({
+    by: ['purchaseOrderLineId'],
+    where: {
+      projectId: current.projectId,
+      purchaseOrderId: { in: orderIds },
+      goodsReceipt: {
+        organizationId: current.organizationId,
+        status: 'POSTED',
+      },
+    },
+    _sum: { quantity: true },
+  });
+  const receivedByLine = new Map(aggregates.map((aggregate) => [
+    aggregate.purchaseOrderLineId,
+    aggregate._sum.quantity,
+  ]));
+  return lines.map((line) => lineBalance({
+    ...line,
+    receiptLines: receivedByLine.has(line.id)
+      ? [{ quantity: receivedByLine.get(line.id) }]
+      : [],
+  }));
 }
 
 export async function createGoodsReceipt(
@@ -183,7 +289,32 @@ export async function createGoodsReceipt(
           entityHasAttachment: Boolean(replay.receipt),
         });
       }
-      return { receipt: serializeGoodsReceipt(replay), replayed: true };
+      const replayOrder = await transaction.purchaseOrder.findFirst({
+        where: {
+          id: replay.purchaseOrderId,
+          organizationId: current.organizationId,
+          projectId: current.projectId,
+        },
+        include: {
+          lines: {
+            include: {
+              receiptLines: { where: { goodsReceipt: { status: 'POSTED' } } },
+            },
+          },
+        },
+      });
+      if (!replayOrder) {
+        throw new GoodsReceiptError(
+          'La orden de la recepción reintentada ya no está disponible.',
+          'GOODS_RECEIPT_ORDER_SCOPE',
+          409,
+        );
+      }
+      return {
+        receipt: serializeGoodsReceipt(replay),
+        replayed: true,
+        lineBalances: orderLineBalances(replayOrder.lines),
+      };
     }
 
     const order = await transaction.purchaseOrder.findFirst({
@@ -273,23 +404,10 @@ export async function createGoodsReceipt(
     const addedByLine = new Map(
       normalizedLines.map((line) => [line.purchaseOrderLineId, line.quantityScaled]),
     );
-    const totals = order.lines.map((line) => {
-      const receivedBefore = receivedQuantity(line.receiptLines);
-      const ordered = storedQuantity(line.quantity);
-      let remaining;
-      try {
-        remaining = subtractProcurementQuantities(ordered, receivedBefore);
-      } catch (error) {
-        if (!(error instanceof ProcurementQuantityError)) throw error;
-        throw new GoodsReceiptError(
-          'Las recepciones persistidas ya superan la cantidad ordenada.',
-          'GOODS_RECEIPT_QUANTITY_CORRUPT',
-          409,
-        );
-      }
-      const added = addedByLine.get(line.id) || 0n;
-      return compareProcurementQuantities(added, remaining) >= 0;
-    });
+    const lineBalances = orderLineBalances(order.lines, addedByLine);
+    const totals = lineBalances.map((balance) => (
+      storedQuantity(balance.remainingToReceive, { allowZero: true }) === 0n
+    ));
     const nextOrderStatus = totals.every(Boolean) ? 'RECEIVED' : 'PARTIALLY_RECEIVED';
     const orderUpdated = await transaction.purchaseOrder.updateMany({
       where: {
@@ -324,7 +442,11 @@ export async function createGoodsReceipt(
         },
       },
     });
-    return { receipt: serializeGoodsReceipt(row), replayed: false };
+    return {
+      receipt: serializeGoodsReceipt(row),
+      replayed: false,
+      lineBalances,
+    };
   });
 }
 

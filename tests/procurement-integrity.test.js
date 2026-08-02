@@ -51,8 +51,8 @@ const replay = {
     costCode: null,
     description: 'Cemento',
     unit: 'bolsa',
-    quantity: 10,
-    unitPrice: 100,
+    quantity: '10',
+    unitPrice: '100',
   }],
 };
 
@@ -65,8 +65,8 @@ const purchaseInput = {
     budgetLineId: 'budget-line-a',
     description: 'Cemento',
     unit: 'bolsa',
-    quantity: 10,
-    unitPrice: 100,
+    quantity: '10.000',
+    unitPrice: '100.00',
   }],
 };
 
@@ -130,7 +130,7 @@ for (const [field, mutation] of [
   ['lines', {
     lines: [{
       ...purchaseInput.lines[0],
-      quantity: 11,
+      quantity: '11.000',
     }],
   }],
 ]) {

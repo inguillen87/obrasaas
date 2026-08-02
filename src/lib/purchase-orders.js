@@ -1,5 +1,16 @@
 import { createHash } from 'node:crypto';
 
+import {
+  calculateProcurementOrderTotal,
+  formatProcurementMoney,
+  parseProcurementMoney,
+  ProcurementMoneyError,
+} from './procurement-money.js';
+import {
+  formatProcurementQuantity,
+  parseProcurementQuantity,
+  ProcurementQuantityError,
+} from './procurement-quantity.js';
 import { runOperationalProjectMutation } from './project-write-policy.js';
 
 export class PurchaseOrderError extends Error {
@@ -18,18 +29,74 @@ function text(value, field, max) {
   return value.trim();
 }
 
-function decimal(value, field, min, scale) {
-  const normalized = Number(value);
-  const factor = 10 ** scale;
-  if (
-    !Number.isFinite(normalized)
-    || normalized < min
-    || normalized > 999999999999
-    || Math.abs(normalized * factor - Math.round(normalized * factor)) > 1e-6
-  ) {
-    throw new PurchaseOrderError(`${field} inválido.`);
+function quantity(value) {
+  try {
+    const scaled = parseProcurementQuantity(value);
+    return { scaled, canonical: formatProcurementQuantity(scaled) };
+  } catch (error) {
+    if (!(error instanceof ProcurementQuantityError)) throw error;
+    throw new PurchaseOrderError(
+      'quantity inválida: debe enviarse como texto positivo con hasta tres decimales.',
+      'PURCHASE_ORDER_QUANTITY_INVALID',
+    );
   }
-  return normalized;
+}
+
+function unitPrice(value) {
+  try {
+    const scaled = parseProcurementMoney(value, { allowZero: true });
+    return { scaled, canonical: formatProcurementMoney(scaled) };
+  } catch (error) {
+    if (!(error instanceof ProcurementMoneyError)) throw error;
+    throw new PurchaseOrderError(
+      'unitPrice inválido: debe enviarse como texto no negativo con hasta dos decimales.',
+      'PURCHASE_ORDER_UNIT_PRICE_INVALID',
+    );
+  }
+}
+
+function storedDecimalText(value, field) {
+  const candidate = typeof value === 'string' ? value : value?.toString?.();
+  if (typeof candidate !== 'string') {
+    throw new PurchaseOrderError(
+      `${field} persistido inválido.`,
+      'PURCHASE_ORDER_DECIMAL_CORRUPT',
+      409,
+    );
+  }
+  return candidate;
+}
+
+function storedQuantity(value) {
+  try {
+    return formatProcurementQuantity(
+      parseProcurementQuantity(storedDecimalText(value, 'quantity')),
+    );
+  } catch (error) {
+    if (error instanceof PurchaseOrderError) throw error;
+    if (!(error instanceof ProcurementQuantityError)) throw error;
+    throw new PurchaseOrderError(
+      'quantity persistido inválido.',
+      'PURCHASE_ORDER_DECIMAL_CORRUPT',
+      409,
+    );
+  }
+}
+
+function storedMoney(value, field) {
+  try {
+    return formatProcurementMoney(
+      parseProcurementMoney(storedDecimalText(value, field), { allowZero: true }),
+    );
+  } catch (error) {
+    if (error instanceof PurchaseOrderError) throw error;
+    if (!(error instanceof ProcurementMoneyError)) throw error;
+    throw new PurchaseOrderError(
+      `${field} persistido inválido.`,
+      'PURCHASE_ORDER_DECIMAL_CORRUPT',
+      409,
+    );
+  }
 }
 
 function currency(value) {
@@ -50,11 +117,11 @@ function scope(value) {
 function serialize(row) {
   return {
     ...row,
-    total: row.total?.toString?.() ?? null,
+    total: storedMoney(row.total, 'total'),
     lines: row.lines?.map((line) => ({
       ...line,
-      quantity: line.quantity.toString(),
-      unitPrice: line.unitPrice.toString(),
+      quantity: storedQuantity(line.quantity),
+      unitPrice: storedMoney(line.unitPrice, 'unitPrice'),
     })),
   };
 }
@@ -64,9 +131,9 @@ function canonicalLine(line) {
     budgetLineId: line.budgetLineId || null,
     costCode: line.costCode || null,
     description: line.description,
-    quantity: Number(line.quantity).toFixed(3),
+    quantity: storedQuantity(line.quantity),
     unit: line.unit,
-    unitPrice: Number(line.unitPrice).toFixed(2),
+    unitPrice: storedMoney(line.unitPrice, 'unitPrice'),
   };
 }
 
@@ -112,20 +179,37 @@ export async function createPurchaseOrder(
   if (!lines.length) {
     throw new PurchaseOrderError('La orden requiere al menos una línea.');
   }
-  const normalized = lines.map((line) => ({
-    description: text(line.description, 'description', 220),
-    unit: text(line.unit, 'unit', 32),
-    quantity: decimal(line.quantity, 'quantity', 0.001, 3),
-    unitPrice: decimal(line.unitPrice, 'unitPrice', 0, 2),
-    costCode: line.costCode ? text(line.costCode, 'costCode', 96) : null,
-    budgetLineId: line.budgetLineId
-      ? text(line.budgetLineId, 'budgetLineId', 190)
-      : null,
-  }));
-  const total = normalized.reduce(
-    (sum, line) => sum + line.quantity * line.unitPrice,
-    0,
-  );
+  const calculationLines = lines.map((line) => {
+    const normalizedQuantity = quantity(line.quantity);
+    const normalizedUnitPrice = unitPrice(line.unitPrice);
+    return {
+      description: text(line.description, 'description', 220),
+      unit: text(line.unit, 'unit', 32),
+      quantity: normalizedQuantity.canonical,
+      quantityScaled: normalizedQuantity.scaled,
+      unitPrice: normalizedUnitPrice.canonical,
+      unitPriceScaled: normalizedUnitPrice.scaled,
+      costCode: line.costCode ? text(line.costCode, 'costCode', 96) : null,
+      budgetLineId: line.budgetLineId
+        ? text(line.budgetLineId, 'budgetLineId', 190)
+        : null,
+    };
+  });
+  let total;
+  try {
+    total = formatProcurementMoney(calculateProcurementOrderTotal(calculationLines));
+  } catch (error) {
+    if (!(error instanceof ProcurementMoneyError)) throw error;
+    throw new PurchaseOrderError(
+      'El total de la orden supera el máximo permitido para Decimal(14,2).',
+      'PURCHASE_ORDER_TOTAL_OVERFLOW',
+    );
+  }
+  const normalized = calculationLines.map(({
+    quantityScaled: _quantityScaled,
+    unitPriceScaled: _unitPriceScaled,
+    ...line
+  }) => line);
 
   return runOperationalProjectMutation(prisma, current, async (transaction) => {
     const replay = await transaction.purchaseOrder.findFirst({
