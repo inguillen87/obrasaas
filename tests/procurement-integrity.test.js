@@ -87,8 +87,8 @@ test('goods receipts reject duplicate order lines before opening a database tran
         operationKey: 'receipt-attempt-a',
         purchaseOrderId: replay.id,
         lines: [
-          { purchaseOrderLineId: replay.lines[0].id, quantity: 1 },
-          { purchaseOrderLineId: replay.lines[0].id, quantity: 2 },
+          { purchaseOrderLineId: replay.lines[0].id, quantity: '1.000' },
+          { purchaseOrderLineId: replay.lines[0].id, quantity: '2.000' },
         ],
       },
     }),
@@ -186,6 +186,9 @@ test('procurement upload controls clear native file inputs and invoice currency 
     assert.match(source, /ref=\{fileInputRef\}/);
   }
   assert.doesNotMatch(receiptClient, /useEffect/);
+  assert.doesNotMatch(receiptClient, /Number\(quantity\)/);
+  assert.match(receiptClient, /quantity: canonicalQuantity/);
+  assert.match(receiptClient, /parseProcurementQuantity\(quantity\)/);
   assert.match(payablesClient, /currency: order\?\.currency/);
   assert.match(payablesClient, /Derivada de la orden de compra vinculada/);
   assert.match(payablesClient, /disabled=\{Boolean\(form\.purchaseOrderId\)\}/);

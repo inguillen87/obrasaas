@@ -6,6 +6,14 @@ import {
   protectedUploadClaimFingerprint,
   publicProtectedAttachment,
 } from './protected-uploads.js';
+import {
+  ProcurementQuantityError,
+  compareProcurementQuantities,
+  formatProcurementQuantity,
+  parseProcurementQuantity,
+  subtractProcurementQuantities,
+  sumProcurementQuantities,
+} from './procurement-quantity.js';
 
 export class GoodsReceiptError extends Error {
   constructor(message, code = 'GOODS_RECEIPT_INVALID', status = 400) {
@@ -24,11 +32,52 @@ function text(value, field, max) {
 }
 
 function quantity(value) {
-  const number = Number(value);
-  if (!Number.isFinite(number) || number <= 0 || number > 999999999) {
-    throw new GoodsReceiptError('quantity inválida.');
+  try {
+    const scaled = parseProcurementQuantity(value);
+    return {
+      scaled,
+      canonical: formatProcurementQuantity(scaled),
+    };
+  } catch (error) {
+    if (!(error instanceof ProcurementQuantityError)) throw error;
+    throw new GoodsReceiptError(
+      'quantity inválida: debe ser positiva y tener hasta tres decimales.',
+      'GOODS_RECEIPT_QUANTITY_INVALID',
+      400,
+    );
   }
-  return number;
+}
+
+function storedQuantity(value) {
+  const candidate = typeof value === 'string'
+    ? value
+    : value?.toString?.();
+  try {
+    return parseProcurementQuantity(candidate);
+  } catch (error) {
+    if (!(error instanceof ProcurementQuantityError)) throw error;
+    throw new GoodsReceiptError(
+      'Las cantidades persistidas de la orden o sus recepciones son inválidas.',
+      'GOODS_RECEIPT_QUANTITY_CORRUPT',
+      409,
+    );
+  }
+}
+
+function receivedQuantity(receiptLines) {
+  try {
+    return sumProcurementQuantities(
+      receiptLines.map((line) => storedQuantity(line.quantity)),
+    );
+  } catch (error) {
+    if (error instanceof GoodsReceiptError) throw error;
+    if (!(error instanceof ProcurementQuantityError)) throw error;
+    throw new GoodsReceiptError(
+      'La cantidad recibida acumulada supera los límites permitidos.',
+      'GOODS_RECEIPT_QUANTITY_CORRUPT',
+      409,
+    );
+  }
 }
 
 function scope(value) {
@@ -54,7 +103,7 @@ export function serializeGoodsReceipt(row) {
     lines: Array.isArray(row.lines)
       ? row.lines.map((line) => ({
           ...line,
-          quantity: line.quantity?.toString?.() ?? null,
+          quantity: formatProcurementQuantity(storedQuantity(line.quantity)),
         }))
       : undefined,
   };
@@ -75,10 +124,14 @@ export async function createGoodsReceipt(
   }
   const requested = Array.isArray(input.lines) ? input.lines : [];
   if (!requested.length) throw new GoodsReceiptError('La recepción requiere líneas.');
-  const normalizedLines = requested.map((entry) => ({
-    purchaseOrderLineId: text(entry.purchaseOrderLineId, 'purchaseOrderLineId', 190),
-    quantity: quantity(entry.quantity),
-  }));
+  const normalizedLines = requested.map((entry) => {
+    const normalizedQuantity = quantity(entry.quantity);
+    return {
+      purchaseOrderLineId: text(entry.purchaseOrderLineId, 'purchaseOrderLineId', 190),
+      quantity: normalizedQuantity.canonical,
+      quantityScaled: normalizedQuantity.scaled,
+    };
+  });
   if (new Set(normalizedLines.map((line) => line.purchaseOrderLineId)).size !== normalizedLines.length) {
     throw new GoodsReceiptError(
       'Una línea de la orden no puede repetirse en la misma recepción.',
@@ -91,7 +144,10 @@ export async function createGoodsReceipt(
   const requestFingerprint = protectedUploadClaimFingerprint({
     purchaseOrderId: input.purchaseOrderId,
     notes,
-    lines: normalizedLines,
+    lines: normalizedLines.map(({ purchaseOrderLineId, quantity: canonicalQuantity }) => ({
+      purchaseOrderLineId,
+      quantity: canonicalQuantity,
+    })),
     uploadId,
   });
 
@@ -162,11 +218,20 @@ export async function createGoodsReceipt(
           409,
         );
       }
-      const already = line.receiptLines.reduce(
-        (sum, receiptLine) => sum + Number(receiptLine.quantity),
-        0,
-      );
-      if (already + entry.quantity > Number(line.quantity)) {
+      const already = receivedQuantity(line.receiptLines);
+      const ordered = storedQuantity(line.quantity);
+      let remaining;
+      try {
+        remaining = subtractProcurementQuantities(ordered, already);
+      } catch (error) {
+        if (!(error instanceof ProcurementQuantityError)) throw error;
+        throw new GoodsReceiptError(
+          'Las recepciones persistidas ya superan la cantidad ordenada.',
+          'GOODS_RECEIPT_QUANTITY_CORRUPT',
+          409,
+        );
+      }
+      if (compareProcurementQuantities(entry.quantityScaled, remaining) > 0) {
         throw new GoodsReceiptError(
           'La recepción supera la cantidad ordenada.',
           'GOODS_RECEIPT_OVER_RECEIVE',
@@ -205,15 +270,25 @@ export async function createGoodsReceipt(
         })
       : await createRow(undefined);
 
+    const addedByLine = new Map(
+      normalizedLines.map((line) => [line.purchaseOrderLineId, line.quantityScaled]),
+    );
     const totals = order.lines.map((line) => {
-      const receivedBefore = line.receiptLines.reduce(
-        (sum, item) => sum + Number(item.quantity),
-        0,
-      );
-      const added = lines.find(
-        (item) => item.purchaseOrderLineId === line.id,
-      )?.quantity || 0;
-      return receivedBefore + added >= Number(line.quantity);
+      const receivedBefore = receivedQuantity(line.receiptLines);
+      const ordered = storedQuantity(line.quantity);
+      let remaining;
+      try {
+        remaining = subtractProcurementQuantities(ordered, receivedBefore);
+      } catch (error) {
+        if (!(error instanceof ProcurementQuantityError)) throw error;
+        throw new GoodsReceiptError(
+          'Las recepciones persistidas ya superan la cantidad ordenada.',
+          'GOODS_RECEIPT_QUANTITY_CORRUPT',
+          409,
+        );
+      }
+      const added = addedByLine.get(line.id) || 0n;
+      return compareProcurementQuantities(added, remaining) >= 0;
     });
     const nextOrderStatus = totals.every(Boolean) ? 'RECEIVED' : 'PARTIALLY_RECEIVED';
     const orderUpdated = await transaction.purchaseOrder.updateMany({

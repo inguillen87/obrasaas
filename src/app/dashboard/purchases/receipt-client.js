@@ -12,19 +12,37 @@ import {
   protectedUploadPayloadKey,
   rememberProtectedUploadId,
 } from "@/lib/protected-upload-policy";
+import {
+  compareProcurementQuantities,
+  formatProcurementQuantity,
+  parseProcurementQuantity,
+  subtractProcurementQuantities,
+  sumProcurementQuantities,
+} from "@/lib/procurement-quantity";
 import styles from "../extra-work/extra-work.module.css";
 
 function receivedByLine(receipts) {
   const totals = new Map();
   for (const receipt of receipts) {
     for (const line of receipt.lines || []) {
+      const received = parseProcurementQuantity(line.quantity);
       totals.set(
         line.purchaseOrderLineId,
-        (totals.get(line.purchaseOrderLineId) || 0) + Number(line.quantity || 0),
+        sumProcurementQuantities([
+          totals.get(line.purchaseOrderLineId) || 0n,
+          received,
+        ]),
       );
     }
   }
   return totals;
+}
+
+function remainingForLine(line, receivedTotals) {
+  return subtractProcurementQuantities(
+    parseProcurementQuantity(line.quantity),
+    receivedTotals.get(line.id) || 0n,
+  );
 }
 
 export default function ReceiptClient({
@@ -47,16 +65,20 @@ export default function ReceiptClient({
     || null;
   const orderId = order?.id || "";
   const openLines = useMemo(() => (order?.lines || []).filter((line) => (
-    Number(line.quantity) - Number(receivedTotals.get(line.id) || 0) > 0
+    compareProcurementQuantities(
+      remainingForLine(line, receivedTotals),
+      0n,
+    ) > 0
   )), [order, receivedTotals]);
   const [selectedLineId, setSelectedLineId] = useState(openLines[0]?.id || "");
   const selectedLine = openLines.find((line) => line.id === selectedLineId)
     || openLines[0]
     || null;
   const lineId = selectedLine?.id || "";
-  const remaining = selectedLine
-    ? Number(selectedLine.quantity) - Number(receivedTotals.get(selectedLine.id) || 0)
-    : 0;
+  const remainingScaled = selectedLine
+    ? remainingForLine(selectedLine, receivedTotals)
+    : 0n;
+  const remaining = formatProcurementQuantity(remainingScaled);
   const [quantity, setQuantity] = useState("");
   const [file, setFile] = useState(null);
   const [notice, setNotice] = useState(null);
@@ -76,16 +98,21 @@ export default function ReceiptClient({
       setNotice(protectedUploadFileSizeMessage("El remito"));
       return;
     }
-    const numericQuantity = Number(quantity);
+    let quantityScaled;
+    try {
+      quantityScaled = parseProcurementQuantity(quantity);
+    } catch {
+      setNotice("La cantidad debe ser un decimal positivo con hasta tres decimales.");
+      return;
+    }
     if (
       !selectedLine
-      || !Number.isFinite(numericQuantity)
-      || numericQuantity <= 0
-      || numericQuantity > remaining
+      || compareProcurementQuantities(quantityScaled, remainingScaled) > 0
     ) {
       setNotice(`La cantidad debe ser mayor que cero y no superar ${remaining}.`);
       return;
     }
+    const canonicalQuantity = formatProcurementQuantity(quantityScaled);
     submittingRef.current = true;
     setBusy(true);
     let attempt;
@@ -93,7 +120,7 @@ export default function ReceiptClient({
       const payloadKey = protectedUploadPayloadKey({
         orderId,
         lineId,
-        quantity: numericQuantity,
+        quantity: canonicalQuantity,
         file: protectedUploadFileIdentity(file),
       });
       attempt = await protectedUploadAttemptForPayload(
@@ -128,7 +155,7 @@ export default function ReceiptClient({
           operationKey: attempt.operationKey,
           purchaseOrderId: orderId,
           uploadId: attempt.uploadId,
-          lines: [{ purchaseOrderLineId: lineId, quantity: numericQuantity }],
+          lines: [{ purchaseOrderLineId: lineId, quantity: canonicalQuantity }],
         }),
       });
       const result = await response.json().catch(() => ({}));
@@ -214,9 +241,8 @@ export default function ReceiptClient({
                 {openLines.map((line) => (
                   <option key={line.id} value={line.id}>
                     {line.description} · quedan {(
-                      Number(line.quantity)
-                      - Number(receivedTotals.get(line.id) || 0)
-                    ).toFixed(3)} {line.unit}
+                      formatProcurementQuantity(remainingForLine(line, receivedTotals))
+                    )} {line.unit}
                   </option>
                 ))}
               </select>
