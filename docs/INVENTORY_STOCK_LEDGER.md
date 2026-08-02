@@ -121,8 +121,20 @@ La migración `20260802170000_inventory_stock_ledger` agrega:
 - ausencia deliberada de backfill inferido.
 
 El verificador dedicado comprueba checksum aplicado, catálogo PostgreSQL,
-constraints, índices, funciones/triggers y smokes rollback-only. Las pruebas
-locales no reemplazan su ejecución contra PostgreSQL real del Preview.
+constraints, índices, funciones/triggers y smokes rollback-only.
+
+## Evidencia de validación de S12.2A
+
+El commit `4760a50` pasó `2003/2003` pruebas, lint, build, validación Prisma y
+audit local. El deployment `dpl_8rwZw537MiYbRsPNuvYniTg4NQcP` llegó a `Ready`,
+detectó 115 migraciones, aplicó `20260802170000_inventory_stock_ledger` y ejecutó
+el verificador dedicado sobre la base Preview. Los smokes sin sesión sobre la URL
+inmutable y el alias no mostraron respuestas `5xx`.
+
+El corte reproducible está en [evidencia Preview `4760a50`](./evidence/2026-08-02-preview-4760a50.md).
+La validación remota no sustituye el recorrido UI autenticado por rol, que sigue
+pendiente, ni acredita Resend, Meta, BOM/reservas o Production. Production no fue
+modificada.
 
 ## Próximos cortes
 

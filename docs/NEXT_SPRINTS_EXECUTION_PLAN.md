@@ -2,13 +2,14 @@
 
 Este plan mantiene la secuencia del PDF y separa capacidades operativas de capacidades financieras. Cada sprint debe cerrar con migración verificable, pruebas de concurrencia, permisos y evidencia de uso; un endpoint compilado no cuenta como salida.
 
-## Corte de evidencia: 29 de julio de 2026
+## Corte de evidencia: 2 de agosto de 2026
 
 El estado se expresa por nivel de evidencia: código y pruebas locales, migración en Preview aislado, journey UI en Preview y E2E externo. No se usa “desplegado” como sinónimo de “operativo con un proveedor real”.
 
 - las validaciones locales relevantes, lint y build de Next 16.2.11 están verdes en el worktree; este dato no acredita despliegue, migración remota ni E2E de proveedor;
 - las migraciones y verificadores de baseline/forecast fueron aprobados en el Preview aislado de la rama `codex/platform-ux-foundation`; Production permanece fuera del alcance;
 - el commit `0a00f37` quedó `Ready` en Vercel Preview: se detectaron 100 migraciones sin pendientes y pasaron los verificadores de H3.1, media y dispatch/costo de IA; el corte conserva [deployment IDs, timestamps y smokes sanitizados](./evidence/2026-07-29-preview-0a00f37.md), pero no acredita aún los journeys UI autenticados ni la ejecución observada del cron;
+- el commit `4760a50` quedó `Ready` en Vercel Preview: el release detectó 115 migraciones, aplicó y verificó `20260802170000_inventory_stock_ledger`, y el mismo corte local pasó `2003/2003` pruebas, lint, build, Prisma y audit. La [evidencia S12.2A](./evidence/2026-08-02-preview-4760a50.md) acredita migración, invariantes, build y smokes sin sesión; no acredita UI autenticada, Resend, Meta ni Production;
 - falta cerrar el smoke UI de publicación de baseline y forecast en el tenant de prueba, porque el acceso local directo a la conexión Preview está deliberadamente protegido y no se sustituye con una conexión de Production;
 - Meta, media entrante e identidad/cobro siguen siendo gates externos. La credencial dedicada de Vision, el presupuesto y el ledger gobernado ya están aislados/verificados en Preview; faltan gate de datos, foto real y journey autenticado.
 
@@ -86,22 +87,22 @@ Unidad, cantidad base, ejecutada, método, período, evidencia, revisión y apro
 
 Certificado versionado, retenciones, ajustes, PDF/hash reproducible y estado de pago separado. Certificar nunca ejecuta un pago automáticamente.
 
-### S11/S12 — compras y recepción (inspección/faltantes en Preview; ledger on-hand local)
+### S11/S12 — compras y recepción (inspección, faltantes y ledger on-hand en Preview; UI autenticada pendiente)
 
-Proveedor, OC aprobada, fecha/ventana prometida, vista quincenal, recepción parcial, remito privado y factura/match existen. OC, compromiso, recepción y conciliación usan cantidades exactas. La asignación explícita append-only `GoodsReceiptLine → SupplierCommitmentLine` no usa FIFO ni backfill. La inspección vigente particiona exactamente cada línea entre aceptado, dañado, rechazado y cuarentena; correcciones/reversiones conservan historia, ubicación y actor. El cierre final deriva faltante y cantidad aceptada sólo de evidencia vigente. El deployment `dpl_ATmLy3oypBeNvSi7dXbMRM5zpQaY` quedó `Ready` con 114 migraciones y verificador PostgreSQL real. S12.2A agrega localmente catálogo canónico, vínculo inmutable de línea, putaway atómico, reversión exacta y saldo on-hand DB-owned; todavía no acredita migración remota, UI autenticada, reserva/BOM, Resend ni Production.
+Proveedor, OC aprobada, fecha/ventana prometida, vista quincenal, recepción parcial, remito privado y factura/match existen. OC, compromiso, recepción y conciliación usan cantidades exactas. La asignación explícita append-only `GoodsReceiptLine → SupplierCommitmentLine` no usa FIFO ni backfill. La inspección vigente particiona exactamente cada línea entre aceptado, dañado, rechazado y cuarentena; correcciones/reversiones conservan historia, ubicación y actor. El cierre final deriva faltante y cantidad aceptada sólo de evidencia vigente. El deployment `dpl_ATmLy3oypBeNvSi7dXbMRM5zpQaY` quedó `Ready` con 114 migraciones y el verificador de inspección sobre PostgreSQL real. S12.2A agrega catálogo canónico, vínculo inmutable de línea, putaway atómico, reversión exacta y saldo on-hand DB-owned; el deployment `dpl_8rwZw537MiYbRsPNuvYniTg4NQcP` quedó `Ready` tras aplicar la migración 115 y pasar su verificador dedicado en Preview. Todavía no acredita UI autenticada, reserva/BOM, Resend ni Production.
 
 Orden ejecutable del siguiente bloque:
 
 1. **completo en Preview:** asignación explícita, append-only y tenant-scoped `GoodsReceiptLine → SupplierCommitmentLine`, sin FIFO ni backfill inferido;
 2. **completo en Preview:** estados derivados separados para recepción (`UNALLOCATED/PARTIALLY_ALLOCATED/FULLY_ALLOCATED`) y compromiso (`NOT_RECEIVED/PARTIALLY_RECEIVED/FULLY_RECEIVED`), sin mutar `Task.status`;
 3. **completo en Preview:** aceptación, daño, rechazo y cuarentena exactos; inspección versionada con actor/ubicación; cierre/reversión explícitos del faltante final y paginación por cursor de más de 500 remitos;
-4. **implementado local; gate Preview pendiente:** material canónico por obra, vínculo append-only de la línea de OC, putaway de todas y sólo las disposiciones `ACCEPTED`, reversión espejo y balance on-hand derivado del ledger. La cantidad/ubicación son server-owned, no hay backfill ni conversión de unidad;
+4. **código y migración verificados en Preview; UI autenticada pendiente:** material canónico por obra, vínculo append-only de la línea de OC, putaway de todas y sólo las disposiciones `ACCEPTED`, reversión espejo y balance on-hand derivado del ledger. La cantidad/ubicación son server-owned, no hay backfill ni conversión de unidad;
 5. **siguiente gate P0:** BOM/requerimiento versionado por tarea y reserva/liberación exacta. Sólo cantidad aceptada, on-hand y reservada suficiente puede derivar `AVAILABLE`;
 6. consumo, devolución, transferencia y ajuste aprobable antes de retirar el snapshot legacy de acopio;
 7. alerta interna durable a Compras/Director cuando fecha y cantidad aceptada incumplen la promesa;
-8. smoke autenticado, Resend real y E2E por rol antes de Production. S12.1 ya pasó su verificador en Neon Preview; S12.2A debe demostrarlo por separado.
+8. smoke autenticado, Resend real y E2E por rol antes de Production. S12.1 y S12.2A ya pasaron sus verificadores separados en Preview; esos gates no sustituyen el recorrido autenticado.
 
-Siguen faltando requisición/BOM por WBS, reserva/consumo/transferencia/ajuste, cotización/selección, evidencia fotográfica tipada/firma de recepción y UI multi-partida. El snapshot `.ics` y el email una semana antes ya están en Preview como base, pero Calendar sincronizado/revocable y entrega Resend observada permanecen abiertos. Contrato S12.2A: [ledger de existencias](./INVENTORY_STOCK_LEDGER.md). Evidencia del último corte remoto: [Preview `b0ba0f8`](./evidence/2026-08-02-preview-b0ba0f8.md).
+Siguen faltando requisición/BOM por WBS, reserva/consumo/transferencia/ajuste, cotización/selección, evidencia fotográfica tipada/firma de recepción y UI multi-partida. El snapshot `.ics` y el email una semana antes ya están en Preview como base, pero Calendar sincronizado/revocable y entrega Resend observada permanecen abiertos. Contrato S12.2A: [ledger de existencias](./INVENTORY_STOCK_LEDGER.md). Evidencias remotas: [inspección/faltantes `b0ba0f8`](./evidence/2026-08-02-preview-b0ba0f8.md) y [ledger on-hand `4760a50`](./evidence/2026-08-02-preview-4760a50.md).
 
 ## Ola contractual y control
 
