@@ -2509,7 +2509,7 @@ model NotificationDelivery {
   organizationId String
   organization   Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   projectId      String?
-  project        Project?                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project        Project?                   @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Cascade)
   recipientId    String
   recipient      PlatformUser               @relation(fields: [recipientId], references: [id], onDelete: Cascade)
   eventKey       String                     @db.VarChar(190)
@@ -2527,7 +2527,7 @@ model NotificationDelivery {
   createdAt      DateTime                   @default(now())
   updatedAt      DateTime                   @updatedAt
 
-  @@unique([recipientId, channel, eventKey])
+  @@unique([organizationId, recipientId, channel, eventKey])
   @@index([organizationId, status, nextAttemptAt])
   @@index([projectId, recipientId, status, createdAt])
 }

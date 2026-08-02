@@ -255,6 +255,7 @@ test("preview runner migrates before generating and building without a shell", a
       whatsappMediaAssetVerifier: "whatsapp-media-asset-verifier",
       visualProgressVerifier: "visual-progress-verifier",
       scheduleSnapshotVerifier: "schedule-snapshot-verifier",
+      notificationOutboxVerifier: "notification-outbox-verifier",
     },
   });
 
@@ -268,6 +269,7 @@ test("preview runner migrates before generating and building without a shell", a
       ["whatsapp-media-asset-verifier"],
       ["visual-progress-verifier"],
       ["schedule-snapshot-verifier"],
+      ["notification-outbox-verifier"],
       ["prisma-cli", "generate"],
       ["next-cli", "build"],
     ],
@@ -349,6 +351,19 @@ test("preview runner migrates before generating and building without a shell", a
     scheduleSnapshotVerificationCall.options.env.SCHEDULE_SNAPSHOT_MIGRATION_SCHEMA,
     "public",
   );
+  const notificationOutboxVerificationCall = calls[7];
+  assert.equal(
+    notificationOutboxVerificationCall.args[0],
+    "notification-outbox-verifier",
+  );
+  assert.equal(
+    notificationOutboxVerificationCall.options.env.NOTIFICATION_OUTBOX_MIGRATION_DATABASE_URL,
+    PREVIEW_URL,
+  );
+  assert.equal(
+    notificationOutboxVerificationCall.options.env.NOTIFICATION_OUTBOX_MIGRATION_SCHEMA,
+    "public",
+  );
 });
 
 test("authorized production runs migration verification before the build", async () => {
@@ -374,6 +389,7 @@ test("authorized production runs migration verification before the build", async
       whatsappMediaAssetVerifier: "whatsapp-media-asset-verifier",
       visualProgressVerifier: "visual-progress-verifier",
       scheduleSnapshotVerifier: "schedule-snapshot-verifier",
+      notificationOutboxVerifier: "notification-outbox-verifier",
     },
   });
 
@@ -387,6 +403,7 @@ test("authorized production runs migration verification before the build", async
       ["whatsapp-media-asset-verifier"],
       ["visual-progress-verifier"],
       ["schedule-snapshot-verifier"],
+      ["notification-outbox-verifier"],
       ["prisma-cli", "generate"],
       ["next-cli", "build"],
     ],
@@ -437,6 +454,14 @@ test("authorized production runs migration verification before the build", async
   );
   assert.equal(
     calls[6].options.env.SCHEDULE_SNAPSHOT_MIGRATION_SCHEMA,
+    "public",
+  );
+  assert.equal(
+    calls[7].options.env.NOTIFICATION_OUTBOX_MIGRATION_DATABASE_URL,
+    PRODUCTION_URL,
+  );
+  assert.equal(
+    calls[7].options.env.NOTIFICATION_OUTBOX_MIGRATION_SCHEMA,
     "public",
   );
 });
