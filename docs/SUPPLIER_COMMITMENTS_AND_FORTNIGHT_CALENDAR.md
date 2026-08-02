@@ -40,9 +40,9 @@ El readiness mostrado junto a una tarea (`AVAILABLE`, `EXPECTED_IN_TIME`, `ALIGN
 - `REQUIRED_BEFORE_START`: el compromiso debe cumplirse antes de iniciar la tarea.
 - `EXECUTES_TASK`: el proveedor ejecuta la tarea dentro de la ventana indicada.
 
-La API admite hasta 50 vínculos de tareas y 200 partidas de OC por compromiso. La interfaz actual de Compras permite seleccionar una sola tarea opcional y no expone todavía la distribución cuantitativa por partida; envía `lines: []`. Por lo tanto, esa capacidad de API no debe presentarse todavía como un flujo completo de usuario.
+La API admite hasta 50 vínculos de tareas y 200 partidas de OC por compromiso. La interfaz actual de Compras permite seleccionar una tarea opcional y una partida de la OC con cantidad exacta; todavía no permite cargar varias partidas en el mismo compromiso. Por lo tanto, la capacidad multi-partida de la API no debe presentarse aún como flujo completo de usuario.
 
-Cuando sí se usan partidas mediante API, se valida que pertenezcan a la OC y que la suma de recepciones `POSTED` más compromisos activos no supere la cantidad ordenada.
+Cuando se usan partidas desde UI o API, se valida que pertenezcan a la OC y que la suma de recepciones `POSTED` más compromisos activos no supere exactamente la cantidad ordenada. Las cantidades se conservan como texto decimal fijo; no atraviesan aritmética binaria `Number`.
 
 ### Máquina de estados
 
@@ -69,7 +69,7 @@ Las transiciones terminales, las revisiones y el evento correspondiente también
 
 ### Límite explícito de recepción material
 
-Hoy `FULFILL` para `MATERIAL_DELIVERY` es una decisión administrativa con motivo obligatorio. La serialización la identifica como `ADMIN_ATTESTED`.
+Hoy `FULFILL` para `MATERIAL_DELIVERY` es una decisión administrativa con motivo obligatorio. La serialización la identifica como `ADMIN_ATTESTED`. La OC, el compromiso y la recepción ya capturan cantidades exactas, y el servidor deriva saldos recibidos desde todo el historial `POSTED` de las órdenes visibles; eso todavía no prueba qué recepción satisface qué compromiso.
 
 Esto significa:
 
@@ -295,6 +295,7 @@ No habilitar Production hasta conservar evidencia de:
 - esquema Prisma y migración `20260801090000_supplier_commitments_and_calendar`;
 - verificador de migración conectado al build gobernado;
 - dominio, API, UI de Compras, calendario JSON/`.ics`, worker y webhook;
+- aritmética exacta en OC, compromisos y recepciones, con saldos históricos server-owned y consultas acotadas a las 500 órdenes visibles;
 - feature gate fail-closed, idempotencia, CAS, locks, fence de agenda y eventos auditados;
 - pruebas unitarias/de contrato específicas para compromisos, Gantt, email, cron, webhook y migración.
 
@@ -307,6 +308,8 @@ No habilitar Production hasta conservar evidencia de:
 - build remoto completo: 82 páginas generadas y las rutas de calendario, compromisos, cron y webhook incluidas;
 - smoke sin sesión: portada `200`, superficies privadas ocultas por Clerk, cron sin bearer `401` y webhook sin secreto `503`;
 - consulta de logs posterior al despliegue sin errores de runtime.
+- commit `d9bc2b5` desplegado como `dpl_BgdEVh9n3wJunmvrMSXw9GCBCaSK`, estado `Ready`; el preflight read-only del outbox pasó con 0 filas incompatibles antes de `prisma migrate deploy`, no hubo migraciones pendientes y los verificadores post-migración pasaron;
+- smoke sin sesión del nuevo artefacto: portada `200`, Compras/API privadas ocultas por Clerk, cron de notificaciones sin bearer `401` y ninguna respuesta `5xx` observada.
 
 Esta evidencia certifica el artefacto y la migración de **Preview**. No certifica el envío de correo, el journey autenticado ni Production.
 

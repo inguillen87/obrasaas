@@ -15,6 +15,8 @@ OC → compromiso → envío → recepción física por partida
    → disponibilidad verificada → tarea ejecutable → factura
 ```
 
+Estado del P0 al 2 de agosto de 2026: OC, compromisos y recepciones ya usan cantidades decimales exactas; el total de OC se calcula en enteros escalados y los saldos recibidos se derivan en servidor desde el historial `POSTED` completo de las órdenes visibles. El P0 **no está cerrado**: falta asignación explícita e inmutable entre recepción y compromiso, excepciones de calidad y un ledger de disponibilidad/reserva.
+
 ## Comparación
 
 | Plataforma | Capacidad oficial relevante | Aprendizaje para ObraSaaS |
@@ -28,7 +30,7 @@ OC → compromiso → envío → recepción física por partida
 
 ### P0 — Recepción cuantitativa por línea de OC
 
-- cantidades decimales exactas por unidad de medida;
+- cantidades decimales exactas por unidad de medida — implementado y verificado en Preview para OC, compromiso y recepción;
 - entregas parciales y asignación explícita a compromisos, nunca FIFO implícito;
 - faltante, sobrante, dañado, rechazado y aceptado;
 - foto/remito privado, lugar, receptor y revisión;

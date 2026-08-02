@@ -86,9 +86,20 @@ Unidad, cantidad base, ejecutada, método, período, evidencia, revisión y apro
 
 Certificado versionado, retenciones, ajustes, PDF/hash reproducible y estado de pago separado. Certificar nunca ejecuta un pago automáticamente.
 
-### S11/S12 — compras y recepción (base local; hardening pendiente)
+### S11/S12 — compras y recepción (fundación exacta en Preview; conciliación P0 pendiente)
 
-Proveedor, orden aprobada, recepción parcial, protección contra sobre-recepción, remito privado y factura/match existen localmente. Faltan requisición/BOM por WBS, cotización/selección, rechazo/daño/exceso, consumo/transferencia/readiness, Preview y E2E.
+Proveedor, OC aprobada, fecha/ventana prometida, vista quincenal, recepción parcial, remito privado y factura/match existen. OC, compromiso y recepción ya usan cantidades exactas; la UI captura una partida comprometida y el servidor deriva saldos desde el historial `POSTED` completo de las órdenes visibles. El deployment Preview `dpl_BgdEVh9n3wJunmvrMSXw9GCBCaSK` quedó `Ready`; no acredita E2E autenticado ni Production.
+
+Orden ejecutable del siguiente bloque:
+
+1. asignación explícita, append-only y tenant-scoped `GoodsReceiptLine → SupplierCommitmentLine`, sin FIFO ni backfill inferido;
+2. estados derivados `NOT_RECEIVED/PARTIALLY_RECEIVED/FULLY_RECEIVED`, sin mutar `Task.status`;
+3. faltante, exceso, daño, rechazo y aceptación con receptor/lugar/evidencia;
+4. ledger de stock, ubicación, reserva, consumo, transferencia y ajuste; sólo esa evidencia puede derivar `AVAILABLE`;
+5. alerta interna durable a Compras/Director cuando fecha y cantidad reconciliada incumplen la promesa;
+6. smoke autenticado, carrera concurrente PostgreSQL real, Resend real y E2E por rol antes de Production.
+
+Siguen faltando requisición/BOM por WBS, cotización/selección y UI multi-partida. El snapshot `.ics` y el email una semana antes ya están en Preview como base, pero Calendar sincronizado/revocable y entrega Resend observada permanecen abiertos.
 
 ## Ola contractual y control
 
