@@ -13,7 +13,7 @@ Este incremento cubre las ideas acordadas con la socia para:
 - avisar por email al proveedor, por defecto siete días antes, cuando Administración haya confirmado el destino;
 - mostrar el impacto operativo derivado sin modificar silenciosamente el estado de una tarea.
 
-No cubre todavía una suscripción de calendario sincronizada, confirmación del email por el propio proveedor, asignación cuantitativa entre cada compromiso y cada recepción, alertas internas a Compras/Director, ni certificación contractual de avance.
+No cubre todavía una suscripción de calendario sincronizada, confirmación del email por el propio proveedor, inspección/aceptación de calidad, stock/reservas, alertas internas a Compras/Director, ni certificación contractual de avance. La asignación cuantitativa explícita entre compromiso y recepción ya existe en Preview, pero no equivale a aceptación física.
 
 ## Autoridades de datos
 
@@ -25,6 +25,7 @@ La funcionalidad evita crear una segunda verdad del plan o de la recepción:
 | Promesa externa de fecha | `SupplierCommitment` | Conserva proveedor, tipo, ventana civil, estado y revisión. |
 | Compra aprobada | `PurchaseOrder` y `PurchaseOrderLine` | Un compromiso puede vincularse sólo con una OC aprobada o parcialmente recibida del mismo tenant, obra y proveedor. |
 | Recepción real | `GoodsReceipt` y `GoodsReceiptLine` | Sigue siendo el registro de lo recibido. No se infiere desde un email ni desde el estado de un compromiso. |
+| Conciliación documental | `GoodsReceiptCommitmentAllocation` | Ledger append-only de cantidades explícitamente asignadas, sin FIFO ni backfill; no afirma calidad ni disponibilidad. |
 | Comunicación externa | `SupplierReminderDelivery` | Outbox durable y versionado; no es la autoridad de la fecha. |
 | Historia del compromiso | `SupplierCommitmentEvent` | Evento inmutable por creación y transición. |
 | Vista quincenal/exportación | `loadScheduleCalendar` | Read model derivado de WBS y compromisos; no persiste copias del plan. |
@@ -67,17 +68,18 @@ Cada mutación exige:
 
 Las transiciones terminales, las revisiones y el evento correspondiente también están protegidos por constraints y triggers `ENABLE ALWAYS` en la migración.
 
-### Límite explícito de recepción material
+### Conciliación material y límite de aceptación
 
-Hoy `FULFILL` para `MATERIAL_DELIVERY` es una decisión administrativa con motivo obligatorio. La serialización la identifica como `ADMIN_ATTESTED`. La OC, el compromiso y la recepción ya capturan cantidades exactas, y el servidor deriva saldos recibidos desde todo el historial `POSTED` de las órdenes visibles; eso todavía no prueba qué recepción satisface qué compromiso.
+Hoy `FULFILL` para `MATERIAL_DELIVERY` sigue siendo una decisión administrativa con motivo obligatorio y la serialización la identifica como `ADMIN_ATTESTED`. Separadamente, la conciliación explícita permite elegir una línea de remito `POSTED`, una línea comprometida compatible y una cantidad exacta. El servidor devuelve balances de recepción y compromiso incluso con asignación cero.
 
 Esto significa:
 
-- sí hay actor, revisión, fecha, motivo, evento y auditoría;
-- no existe aún una asignación cuantitativa `GoodsReceiptLine → SupplierCommitmentLine` que pruebe cuánto de esa promesa fue recibido;
-- no corresponde describir `ADMIN_ATTESTED` como recepción conciliada, remito validado, OCR aprobado ni prueba jurídica;
-- tampoco habilita la etiqueta `AVAILABLE` sobre la tarea hasta que exista una conciliación cuantitativa real;
-- una integración futura deberá derivar cumplimiento parcial/completo desde cantidades recibidas y conservar las excepciones manuales separadas.
+- cada asignación conserva actor, fecha, cantidad, idempotencia, auditoría y scope compuesto;
+- no se asigna por cercanía de fecha, FIFO ni inferencia histórica;
+- un remito `VOIDED` deja de consumir cobertura y no puede volver silenciosamente a `POSTED`;
+- `UNALLOCATED/PARTIALLY_ALLOCATED/FULLY_ALLOCATED` describen la línea recibida; `NOT_RECEIVED/PARTIALLY_RECEIVED/FULLY_RECEIVED` describen cobertura documental del compromiso;
+- no corresponde describir esa cobertura como aceptada, disponible, OCR aprobado ni prueba jurídica;
+- `AVAILABLE` permanece cerrado hasta inspección, stock, reserva y BOM por tarea.
 
 ## Calendario por quincenas
 
@@ -118,6 +120,8 @@ La UI actual del Gantt sólo permite marcar predecesores. Una relación nueva cr
 | `GET /api/supplier-commitments` | Clerk + `org:execution:read` | Lista filtrable por `from`, `to`, `status` y `taskId`. |
 | `POST /api/supplier-commitments` | Clerk + `org:execution:manage` | Crea un compromiso; body máximo 64 KiB e `Idempotency-Key` obligatorio. |
 | `PATCH /api/supplier-commitments/:id` | Clerk + `org:execution:manage` | `CONFIRM`, `RESCHEDULE`, `MARK_AT_RISK`, `FULFILL` o `CANCEL`; body máximo 16 KiB, CAS e idempotencia. |
+| `GET /api/goods-receipt-commitment-allocations` | Clerk + `org:execution:read` | Historial paginado y saldos completos acotados a una OC. |
+| `POST /api/goods-receipt-commitment-allocations` | Clerk + `org:execution:manage` | Asignación exacta explícita; body máximo 16 KiB e `Idempotency-Key` obligatorio. |
 | `GET /api/schedule/calendar` | Clerk + `org:execution:read` | JSON o `.ics`; rango y formato validados. |
 | `GET /api/cron/supplier-reminders` | `Authorization: Bearer <CRON_SECRET>` | Worker acotado; no usa sesión Clerk. |
 | `POST /api/webhooks/resend` | Firma Svix/Resend sobre body crudo | Inbox de eventos de entrega; máximo 256 KiB. |
@@ -226,8 +230,13 @@ El verificador de migración no es estático: necesita PostgreSQL y la migració
 $env:SUPPLIER_COMMITMENT_MIGRATION_DATABASE_URL = $env:DIRECT_URL
 $env:SUPPLIER_COMMITMENT_MIGRATION_SCHEMA = "public"
 npm.cmd run verify:supplier-commitment-migration
+$env:GOODS_RECEIPT_COMMITMENT_ALLOCATION_MIGRATION_DATABASE_URL = $env:DIRECT_URL
+$env:GOODS_RECEIPT_COMMITMENT_ALLOCATION_MIGRATION_SCHEMA = "public"
+npm.cmd run verify:goods-receipt-commitment-allocation-migration
 Remove-Item Env:SUPPLIER_COMMITMENT_MIGRATION_DATABASE_URL
 Remove-Item Env:SUPPLIER_COMMITMENT_MIGRATION_SCHEMA
+Remove-Item Env:GOODS_RECEIPT_COMMITMENT_ALLOCATION_MIGRATION_DATABASE_URL
+Remove-Item Env:GOODS_RECEIPT_COMMITMENT_ALLOCATION_MIGRATION_SCHEMA
 ```
 
 Los tests y verificadores estáticos no sustituyen la ejecución de la migración contra PostgreSQL/Neon.
@@ -310,6 +319,8 @@ No habilitar Production hasta conservar evidencia de:
 - consulta de logs posterior al despliegue sin errores de runtime.
 - commit `d9bc2b5` desplegado como `dpl_BgdEVh9n3wJunmvrMSXw9GCBCaSK`, estado `Ready`; el preflight read-only del outbox pasó con 0 filas incompatibles antes de `prisma migrate deploy`, no hubo migraciones pendientes y los verificadores post-migración pasaron;
 - smoke sin sesión del nuevo artefacto: portada `200`, Compras/API privadas ocultas por Clerk, cron de notificaciones sin bearer `401` y ninguna respuesta `5xx` observada.
+- commit `3181807` desplegado como `dpl_GdrLvspbHK7ttZEA7EW88WGzX4Me`, estado `Ready`; aplicó/verificó las migraciones 112/113 de conciliación, incluido scope cross-tenant, exceso de `0.001`, append-only, remito `VOIDED` terminal y lock con dos conexiones;
+- evidencia reproducible y límites del corte: [2026-08-02-preview-3181807.md](./evidence/2026-08-02-preview-3181807.md).
 
 Esta evidencia certifica el artefacto y la migración de **Preview**. No certifica el envío de correo, el journey autenticado ni Production.
 
@@ -323,7 +334,8 @@ Esta evidencia certifica el artefacto y la migración de **Preview**. No certifi
 - E2E de permisos y concurrencia contra infraestructura real;
 - feed de calendario sincronizado/revocable;
 - confirmación del email por el proveedor;
-- conciliación cuantitativa entre compromisos y `GoodsReceiptLine`;
+- inspección/aceptación, excepciones y cierre final de faltantes;
+- ledger de stock, reservas y BOM por tarea antes de `AVAILABLE`;
 - paginación de la vista de más de 500 compromisos;
 - alertas internas a Compras/Director y su escalamiento.
 
