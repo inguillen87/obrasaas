@@ -32,3 +32,12 @@ test('material attestation and external email incidents remain explicit in the U
   assert.match(client, /un envío quedó incierto y no se reintentará solo/);
   assert.match(client, /Confirmo que este email es operativo y autorizo avisar siete días antes/);
 });
+
+test('material commitments select an order line and send an exact decimal string', () => {
+  assert.match(client, /parseProcurementQuantity\(form\.lineQuantity\)/);
+  assert.match(client, /quantity: canonicalQuantity/);
+  assert.match(client, /Partida de la orden/);
+  assert.match(client, /El saldo real se valida al guardar/);
+  assert.match(client, /commitment\.lines\.map/);
+  assert.doesNotMatch(client, /Number\(form\.lineQuantity\)/);
+});

@@ -1,5 +1,13 @@
 import { createHash } from 'node:crypto';
 
+import {
+  ProcurementQuantityError,
+  compareProcurementQuantities,
+  formatProcurementQuantity,
+  parseProcurementQuantity,
+  subtractProcurementQuantities,
+  sumProcurementQuantities,
+} from './procurement-quantity.js';
 import { runOperationalProjectMutation } from './project-write-policy.js';
 
 const COMMITMENT_KINDS = new Set(['MATERIAL_DELIVERY', 'SERVICE_EXECUTION']);
@@ -12,7 +20,6 @@ const MAX_TASK_LINKS = 50;
 const MAX_LINE_LINKS = 200;
 const DAY_MILLISECONDS = 86_400_000;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const MAX_DECIMAL_14_3 = 99_999_999_999.999;
 
 export class SupplierCommitmentError extends Error {
   constructor(message, code = 'SUPPLIER_COMMITMENT_INVALID', status = 400) {
@@ -190,13 +197,11 @@ function normalizeLineLinks(value) {
   const lines = value.map((raw) => {
     const item = record(raw);
     const purchaseOrderLineId = text(item.purchaseOrderLineId, 'purchaseOrderLineId', 190);
-    const quantity = Number(item.quantity);
-    if (
-      !Number.isFinite(quantity)
-      || quantity <= 0
-      || quantity > MAX_DECIMAL_14_3
-      || Math.abs(quantity * 1000 - Math.round(quantity * 1000)) > 1e-6
-    ) {
+    let quantity;
+    try {
+      quantity = formatProcurementQuantity(parseProcurementQuantity(item.quantity));
+    } catch (error) {
+      if (!(error instanceof ProcurementQuantityError)) throw error;
       throw new SupplierCommitmentError('La cantidad comprometida debe ser positiva y tener hasta tres decimales.');
     }
     return { purchaseOrderLineId, quantity };
@@ -248,10 +253,37 @@ function fingerprint(value) {
 }
 
 function commitmentFingerprint(input) {
-  return fingerprint({
-    ...input,
-    lines: input.lines.map((line) => ({ ...line, quantity: line.quantity.toFixed(3) })),
-  });
+  return fingerprint(input);
+}
+
+function storedLineQuantity(value) {
+  const candidate = typeof value === 'string' ? value : value?.toString?.();
+  try {
+    return parseProcurementQuantity(candidate);
+  } catch (error) {
+    if (!(error instanceof ProcurementQuantityError)) throw error;
+    throw new SupplierCommitmentError(
+      'Las cantidades persistidas de la orden, compromisos o recepciones son invalidas.',
+      'SUPPLIER_COMMITMENT_QUANTITY_CORRUPT',
+      409,
+    );
+  }
+}
+
+function sumStoredLineQuantities(rows) {
+  try {
+    return sumProcurementQuantities(
+      rows.map((row) => storedLineQuantity(row.quantity)),
+    );
+  } catch (error) {
+    if (error instanceof SupplierCommitmentError) throw error;
+    if (!(error instanceof ProcurementQuantityError)) throw error;
+    throw new SupplierCommitmentError(
+      'La suma persistida de compromisos o recepciones supera los limites permitidos.',
+      'SUPPLIER_COMMITMENT_QUANTITY_CORRUPT',
+      409,
+    );
+  }
 }
 
 function stateSnapshot(value) {
@@ -472,7 +504,7 @@ export function serializeSupplierCommitment(row, { now = new Date() } = {}) {
     taskLinks: links,
     lines: (row.lines || []).map((line) => ({
       purchaseOrderLineId: line.purchaseOrderLineId,
-      quantity: line.quantity?.toString?.() ?? String(line.quantity),
+      quantity: formatProcurementQuantity(storedLineQuantity(line.quantity)),
       description: line.purchaseOrderLine?.description || null,
       unit: line.purchaseOrderLine?.unit || null,
     })),
@@ -586,9 +618,31 @@ async function validateCommitmentLines(transaction, { projectId, purchaseOrder, 
         select: { quantity: true },
       }),
     ]);
-    const committed = existing.reduce((sum, item) => sum + Number(item.quantity), 0);
-    const received = receipts.reduce((sum, item) => sum + Number(item.quantity), 0);
-    if (received + committed + line.quantity > Number(ordered.quantity) + 1e-9) {
+    const committed = sumStoredLineQuantities(existing);
+    const received = sumStoredLineQuantities(receipts);
+    let allocated;
+    let remaining;
+    try {
+      allocated = sumProcurementQuantities([committed, received]);
+      remaining = subtractProcurementQuantities(
+        storedLineQuantity(ordered.quantity),
+        allocated,
+      );
+    } catch (error) {
+      if (error instanceof SupplierCommitmentError) throw error;
+      if (!(error instanceof ProcurementQuantityError)) throw error;
+      throw new SupplierCommitmentError(
+        'Las cantidades persistidas ya superan la cantidad ordenada.',
+        'SUPPLIER_COMMITMENT_QUANTITY_CORRUPT',
+        409,
+      );
+    }
+    if (
+      compareProcurementQuantities(
+        storedLineQuantity(line.quantity),
+        remaining,
+      ) > 0
+    ) {
       throw new SupplierCommitmentError(
         'La suma de entregas comprometidas supera la cantidad ordenada.',
         'SUPPLIER_COMMITMENT_OVER_ALLOCATED',

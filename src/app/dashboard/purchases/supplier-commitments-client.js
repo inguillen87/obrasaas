@@ -2,6 +2,11 @@
 
 import { useMemo, useRef, useState } from "react";
 
+import {
+  formatProcurementQuantity,
+  parseProcurementQuantity,
+} from "@/lib/procurement-quantity";
+
 import styles from "./supplier-commitments.module.css";
 
 const READY_LABELS = {
@@ -144,6 +149,8 @@ export default function SupplierCommitmentsClient({
     kind: "MATERIAL_DELIVERY",
     supplierId: firstSupplier?.id || "",
     purchaseOrderId: "",
+    purchaseOrderLineId: "",
+    lineQuantity: "",
     title: "",
     startsOn: today,
     endsOn: today,
@@ -156,6 +163,9 @@ export default function SupplierCommitmentsClient({
     order.supplierId === form.supplierId
     && ["APPROVED", "PARTIALLY_RECEIVED"].includes(order.status)
   )), [form.supplierId, orders]);
+  const selectedOrder = eligibleOrders.find((order) => order.id === form.purchaseOrderId) || null;
+  const selectedOrderLines = selectedOrder?.lines || [];
+  const selectedOrderLine = selectedOrderLines.find((line) => line.id === form.purchaseOrderLineId) || null;
   const selectedSupplier = suppliers.find((supplier) => supplier.id === form.supplierId) || null;
   const groups = useMemo(() => {
     const catalog = new Map();
@@ -187,6 +197,26 @@ export default function SupplierCommitmentsClient({
   async function createCommitment(event) {
     event.preventDefault();
     if (busyRef.current) return;
+    let lines = [];
+    if (form.kind === "MATERIAL_DELIVERY" && form.purchaseOrderId) {
+      if (!form.purchaseOrderLineId) {
+        setNotice("Seleccioná una partida de la orden para comprometer la entrega.");
+        return;
+      }
+      let canonicalQuantity;
+      try {
+        canonicalQuantity = formatProcurementQuantity(
+          parseProcurementQuantity(form.lineQuantity),
+        );
+      } catch {
+        setNotice("La cantidad comprometida debe ser positiva y tener hasta tres decimales.");
+        return;
+      }
+      lines = [{
+        purchaseOrderLineId: form.purchaseOrderLineId,
+        quantity: canonicalQuantity,
+      }];
+    }
     const input = {
       kind: form.kind,
       status: "CONFIRMED",
@@ -199,7 +229,7 @@ export default function SupplierCommitmentsClient({
       reminderEmailConfirmed: form.reminderEnabled,
       reminderDaysBefore: 7,
       taskLinks: form.taskId ? [{ taskId: form.taskId, relation: form.relation }] : [],
-      lines: [],
+      lines,
     };
     const payloadKey = JSON.stringify(input);
     if (createAttemptRef.current?.payloadKey !== payloadKey) {
@@ -218,7 +248,13 @@ export default function SupplierCommitmentsClient({
         ...current.filter((row) => row.id !== result.commitment.id),
       ].sort((left, right) => left.startsOn.localeCompare(right.startsOn)));
       createAttemptRef.current = null;
-      setForm((current) => ({ ...current, title: "", purchaseOrderId: "" }));
+      setForm((current) => ({
+        ...current,
+        title: "",
+        purchaseOrderId: "",
+        purchaseOrderLineId: "",
+        lineQuantity: "",
+      }));
       setNotice(result.commitment.latestReminder?.kind === "LATE_SCHEDULED"
         ? "Compromiso guardado. Como faltan menos de siete días, quedó un aviso inmediato claramente identificado."
         : "Compromiso guardado y visible para el equipo de obra.");
@@ -297,6 +333,8 @@ export default function SupplierCommitmentsClient({
                 ...form,
                 kind,
                 relation: kind === "MATERIAL_DELIVERY" ? "REQUIRED_BEFORE_START" : "EXECUTES_TASK",
+                purchaseOrderLineId: "",
+                lineQuantity: "",
               });
             }}>
               <option value="MATERIAL_DELIVERY">Entrega de material</option>
@@ -305,17 +343,64 @@ export default function SupplierCommitmentsClient({
           </label>
           <label>
             Proveedor
-            <select required value={form.supplierId} onChange={(event) => setForm({ ...form, supplierId: event.target.value, purchaseOrderId: "" })}>
+            <select required value={form.supplierId} onChange={(event) => setForm({
+              ...form,
+              supplierId: event.target.value,
+              purchaseOrderId: "",
+              purchaseOrderLineId: "",
+              lineQuantity: "",
+            })}>
               {suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.legalName}</option>)}
             </select>
           </label>
           <label>
             Orden aprobada · opcional
-            <select value={form.purchaseOrderId} onChange={(event) => setForm({ ...form, purchaseOrderId: event.target.value })}>
+            <select value={form.purchaseOrderId} onChange={(event) => setForm({
+              ...form,
+              purchaseOrderId: event.target.value,
+              purchaseOrderLineId: "",
+              lineQuantity: "",
+            })}>
               <option value="">Sin orden vinculada</option>
               {eligibleOrders.map((order) => <option key={order.id} value={order.id}>{order.number}</option>)}
             </select>
           </label>
+          {form.kind === "MATERIAL_DELIVERY" && form.purchaseOrderId && (
+            <>
+              <label>
+                Partida de la orden
+                <select required value={form.purchaseOrderLineId} onChange={(event) => setForm({
+                  ...form,
+                  purchaseOrderLineId: event.target.value,
+                  lineQuantity: "",
+                })}>
+                  <option value="">Seleccioná una partida</option>
+                  {selectedOrderLines.map((line) => (
+                    <option key={line.id} value={line.id}>
+                      {line.description} · {line.quantity} {line.unit}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Cantidad comprometida
+                <input
+                  required
+                  type="number"
+                  inputMode="decimal"
+                  min="0.001"
+                  step="0.001"
+                  value={form.lineQuantity}
+                  onChange={(event) => setForm({ ...form, lineQuantity: event.target.value })}
+                />
+                <small>
+                  {selectedOrderLine
+                    ? `Ordenado: ${selectedOrderLine.quantity} ${selectedOrderLine.unit}. El saldo real se valida al guardar.`
+                    : "Elegí una partida para registrar su cantidad."}
+                </small>
+              </label>
+            </>
+          )}
           <label className={styles.wide}>
             Material, entrega o servicio
             <input required minLength="3" maxLength="220" value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="Ej. Entrega de aberturas planta alta" />
@@ -391,6 +476,15 @@ export default function SupplierCommitmentsClient({
                     <span className={`${styles.status} ${styles[commitment.status.toLowerCase()] || ""}`}>{STATUS_LABELS[commitment.status] || commitment.status}</span>
                   </div>
                   {commitment.purchaseOrder && <p className={styles.meta}>Orden {commitment.purchaseOrder.number} · {commitment.purchaseOrder.status}</p>}
+                  {commitment.lines?.length > 0 && (
+                    <div className={styles.taskLinks} aria-label="Partidas comprometidas">
+                      {commitment.lines.map((line) => (
+                        <span key={line.purchaseOrderLineId}>
+                          {line.description || "Partida de la orden"} · {line.quantity} {line.unit || ""}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   {commitment.taskLinks.length > 0 && (
                     <div className={styles.taskLinks}>
                       {commitment.taskLinks.map((link) => (
