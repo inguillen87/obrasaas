@@ -538,14 +538,14 @@ async function assertTriggers(client) {
        FROM pg_trigger AS trigger_record
        JOIN pg_class AS relation_record ON relation_record.oid = trigger_record.tgrelid
        JOIN pg_namespace AS namespace_record ON namespace_record.oid = relation_record.relnamespace
-       JOIN pg_proc AS procedure_record ON procedure_record.oid = trigger_record.tgfoid
-       LEFT JOIN pg_constraint AS constraint_record ON constraint_record.oid = trigger_record.tgconstraint
+      JOIN pg_proc AS procedure_record ON procedure_record.oid = trigger_record.tgfoid
+      LEFT JOIN pg_constraint AS constraint_record ON constraint_record.oid = trigger_record.tgconstraint
       WHERE namespace_record.nspname = current_schema()
-        AND relation_record.relname = ANY($1::text[])
+        AND trigger_record.tgname = ANY($1::text[])
         AND NOT trigger_record.tgisinternal`,
-    [TABLES],
+    [names],
   );
-  invariant(result.rowCount === names.length, 'Supplier commitment trigger catalog has missing or unexpected entries.');
+  invariant(result.rowCount === names.length, 'Supplier commitment trigger catalog is incomplete or ambiguous.');
   const triggers = new Map(result.rows.map((row) => [row.tgname, row]));
   invariant(triggers.size === names.length, 'Supplier commitment trigger names are ambiguous.');
   for (const [name, expected] of Object.entries(EXPECTED_TRIGGERS)) {

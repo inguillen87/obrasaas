@@ -158,3 +158,12 @@ test('migration verifier governs the exact applied contract and rollback-only ap
   assert.match(verifier, /TRUNCATE TABLE \"SupplierReminderWebhookEvent\" CASCADE/);
   assert.match(verifier, /await client\.query\('ROLLBACK'\)/);
 });
+
+test('supplier verifier remains composable with additive triggers from later migrations', () => {
+  assert.match(verifier, /trigger_record\.tgname = ANY\(\$1::text\[\]\)/);
+  assert.match(verifier, /\[names\]/);
+  assert.doesNotMatch(
+    verifier,
+    /relation_record\.relname = ANY\(\$1::text\[\]\)[\s\S]*?\[TABLES\]/,
+  );
+});
