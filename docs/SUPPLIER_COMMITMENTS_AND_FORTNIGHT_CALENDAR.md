@@ -2,7 +2,7 @@
 
 ## Estado y alcance
 
-Estado al 1 de agosto de 2026: **implementado localmente; pendiente de aplicar y verificar en Neon Preview, Vercel Preview/Production y Resend real**.
+Estado al 2 de agosto de 2026: **implementado y verificado en Neon/Vercel Preview; pendiente de E2E autenticado, Resend real y Production**.
 
 Este incremento cubre las ideas acordadas con la socia para:
 
@@ -298,9 +298,21 @@ No habilitar Production hasta conservar evidencia de:
 - feature gate fail-closed, idempotencia, CAS, locks, fence de agenda y eventos auditados;
 - pruebas unitarias/de contrato específicas para compromisos, Gantt, email, cron, webhook y migración.
 
+### Evidencia de Preview al 2 de agosto de 2026
+
+- rama `codex/platform-ux-foundation`, commit de despliegue `514c37d`;
+- deployment Vercel Preview `dpl_FvYbKsfQYjhFY16VmPnZG5jPV7rX`, estado `Ready`;
+- migración `20260801090000_supplier_commitments_and_calendar` aplicada sobre la rama Neon de Preview protegida por identidad;
+- verificador semántico ejecutado contra PostgreSQL real: checksum/catálogo, relaciones de procurement, guards `ENABLE ALWAYS` y smoke rollback-only;
+- build remoto completo: 82 páginas generadas y las rutas de calendario, compromisos, cron y webhook incluidas;
+- smoke sin sesión: portada `200`, superficies privadas ocultas por Clerk, cron sin bearer `401` y webhook sin secreto `503`;
+- consulta de logs posterior al despliegue sin errores de runtime.
+
+Esta evidencia certifica el artefacto y la migración de **Preview**. No certifica el envío de correo, el journey autenticado ni Production.
+
 ### No está certificado todavía
 
-- migración aplicada y verificada en Neon Preview/Production;
+- migración aplicada y verificada en Neon Production;
 - dominio real y remitente verificados en Resend;
 - secreto/webhook real y ciclo accepted → delivered;
 - ejecución real del cron de Vercel;
@@ -312,4 +324,4 @@ No habilitar Production hasta conservar evidencia de:
 - paginación de la vista de más de 500 compromisos;
 - alertas internas a Compras/Director y su escalamiento.
 
-Hasta completar esos gates, la redacción correcta es **“funcionalidad implementada y validable localmente”**, no “desplegada”, “en producción” ni “proveedores notificados”.
+Hasta completar esos gates, la redacción correcta es **“funcionalidad desplegada y verificada en Preview, con correo externo deshabilitado”**, no “en producción” ni “proveedores notificados”.
