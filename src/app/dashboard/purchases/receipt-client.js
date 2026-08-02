@@ -42,6 +42,8 @@ export default function ReceiptClient({
   initialReceiptsTruncated = false,
   initialLineBalances,
   canManage,
+  canReadInventory = false,
+  canManageInventory = false,
   onReceiptCommitted,
 }) {
   const [receipts, setReceipts] = useState(initialReceipts);
@@ -356,6 +358,8 @@ export default function ReceiptClient({
         receiptsTruncated={receiptsTruncated}
         orders={orders}
         canManage={canManage}
+        canReadInventory={canReadInventory}
+        canManageInventory={canManageInventory}
         refreshVersion={reconciliationVersion}
         onInspectionCommitted={() => {
           setReconciliationVersion((current) => current + 1);

@@ -86,21 +86,22 @@ Unidad, cantidad base, ejecutada, método, período, evidencia, revisión y apro
 
 Certificado versionado, retenciones, ajustes, PDF/hash reproducible y estado de pago separado. Certificar nunca ejecuta un pago automáticamente.
 
-### S11/S12 — compras y recepción (inspección y faltantes en Preview; stock en curso)
+### S11/S12 — compras y recepción (inspección/faltantes en Preview; ledger on-hand local)
 
-Proveedor, OC aprobada, fecha/ventana prometida, vista quincenal, recepción parcial, remito privado y factura/match existen. OC, compromiso, recepción y conciliación usan cantidades exactas. La asignación explícita append-only `GoodsReceiptLine → SupplierCommitmentLine` no usa FIFO ni backfill. La inspección vigente particiona exactamente cada línea entre aceptado, dañado, rechazado y cuarentena; correcciones/reversiones conservan historia, ubicación y actor. El cierre final deriva faltante y cantidad aceptada sólo de evidencia vigente. El deployment `dpl_ATmLy3oypBeNvSi7dXbMRM5zpQaY` quedó `Ready` con 114 migraciones y verificador PostgreSQL real; no acredita UI autenticada, stock, Resend ni Production.
+Proveedor, OC aprobada, fecha/ventana prometida, vista quincenal, recepción parcial, remito privado y factura/match existen. OC, compromiso, recepción y conciliación usan cantidades exactas. La asignación explícita append-only `GoodsReceiptLine → SupplierCommitmentLine` no usa FIFO ni backfill. La inspección vigente particiona exactamente cada línea entre aceptado, dañado, rechazado y cuarentena; correcciones/reversiones conservan historia, ubicación y actor. El cierre final deriva faltante y cantidad aceptada sólo de evidencia vigente. El deployment `dpl_ATmLy3oypBeNvSi7dXbMRM5zpQaY` quedó `Ready` con 114 migraciones y verificador PostgreSQL real. S12.2A agrega localmente catálogo canónico, vínculo inmutable de línea, putaway atómico, reversión exacta y saldo on-hand DB-owned; todavía no acredita migración remota, UI autenticada, reserva/BOM, Resend ni Production.
 
 Orden ejecutable del siguiente bloque:
 
 1. **completo en Preview:** asignación explícita, append-only y tenant-scoped `GoodsReceiptLine → SupplierCommitmentLine`, sin FIFO ni backfill inferido;
 2. **completo en Preview:** estados derivados separados para recepción (`UNALLOCATED/PARTIALLY_ALLOCATED/FULLY_ALLOCATED`) y compromiso (`NOT_RECEIVED/PARTIALLY_RECEIVED/FULLY_RECEIVED`), sin mutar `Task.status`;
 3. **completo en Preview:** aceptación, daño, rechazo y cuarentena exactos; inspección versionada con actor/ubicación; cierre/reversión explícitos del faltante final y paginación por cursor de más de 500 remitos;
-4. **siguiente gate P0:** ledger de stock por ubicación, reserva, consumo, transferencia y ajuste; sólo esa evidencia puede derivar `AVAILABLE`;
-5. BOM/requerimiento exacto por tarea antes de afirmar que todos sus materiales están disponibles;
-6. alerta interna durable a Compras/Director cuando fecha y cantidad aceptada incumplen la promesa;
-7. smoke autenticado, Resend real y E2E por rol antes de Production. La migración y sus carreras adversariales ya pasaron el verificador dedicado en Neon Preview.
+4. **implementado local; gate Preview pendiente:** material canónico por obra, vínculo append-only de la línea de OC, putaway de todas y sólo las disposiciones `ACCEPTED`, reversión espejo y balance on-hand derivado del ledger. La cantidad/ubicación son server-owned, no hay backfill ni conversión de unidad;
+5. **siguiente gate P0:** BOM/requerimiento versionado por tarea y reserva/liberación exacta. Sólo cantidad aceptada, on-hand y reservada suficiente puede derivar `AVAILABLE`;
+6. consumo, devolución, transferencia y ajuste aprobable antes de retirar el snapshot legacy de acopio;
+7. alerta interna durable a Compras/Director cuando fecha y cantidad aceptada incumplen la promesa;
+8. smoke autenticado, Resend real y E2E por rol antes de Production. S12.1 ya pasó su verificador en Neon Preview; S12.2A debe demostrarlo por separado.
 
-Siguen faltando requisición/BOM por WBS, cotización/selección, evidencia fotográfica tipada/firma de recepción y UI multi-partida. El snapshot `.ics` y el email una semana antes ya están en Preview como base, pero Calendar sincronizado/revocable y entrega Resend observada permanecen abiertos. Evidencia del corte: [Preview `b0ba0f8`](./evidence/2026-08-02-preview-b0ba0f8.md).
+Siguen faltando requisición/BOM por WBS, reserva/consumo/transferencia/ajuste, cotización/selección, evidencia fotográfica tipada/firma de recepción y UI multi-partida. El snapshot `.ics` y el email una semana antes ya están en Preview como base, pero Calendar sincronizado/revocable y entrega Resend observada permanecen abiertos. Contrato S12.2A: [ledger de existencias](./INVENTORY_STOCK_LEDGER.md). Evidencia del último corte remoto: [Preview `b0ba0f8`](./evidence/2026-08-02-preview-b0ba0f8.md).
 
 ## Ola contractual y control
 

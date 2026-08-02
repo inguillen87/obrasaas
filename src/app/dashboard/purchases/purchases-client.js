@@ -34,6 +34,8 @@ export default function PurchasesClient({
   projectName,
   tenantToday,
   canManage,
+  canReadInventory,
+  canManageInventory,
 }) {
   const [orders, setOrders] = useState(initialOrders);
   const [notice, setNotice] = useState(null);
@@ -265,6 +267,8 @@ export default function PurchasesClient({
         initialReceiptsTruncated={initialReceiptsTruncated}
         initialLineBalances={initialLineBalances}
         canManage={canManage}
+        canReadInventory={canReadInventory}
+        canManageInventory={canManageInventory}
         onReceiptCommitted={refreshOrders}
       />
     </>

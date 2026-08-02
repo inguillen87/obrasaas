@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import baseStyles from "../extra-work/extra-work.module.css";
 import styles from "./receipt-inspection-client.module.css";
+import ReceiptInventoryClient from "./receipt-inventory-client";
 import {
   RECEIPT_INSPECTION_QUALITIES,
   RECEIPT_INSPECTION_PAGE_SIZE,
@@ -193,6 +194,8 @@ export default function ReceiptInspectionClient({
   receiptsTruncated = false,
   orders,
   canManage,
+  canReadInventory = false,
+  canManageInventory = false,
   refreshVersion = 0,
   onInspectionCommitted,
 }) {
@@ -218,6 +221,10 @@ export default function ReceiptInspectionClient({
   const [locationsError, setLocationsError] = useState(null);
   const [busy, setBusy] = useState(false);
   const [locationBusy, setLocationBusy] = useState(false);
+  const [inventoryPutawayState, setInventoryPutawayState] = useState({
+    inspectionId: null,
+    active: null,
+  });
   const [receiptPageLoading, setReceiptPageLoading] = useState(false);
   const [receiptPageError, setReceiptPageError] = useState(null);
   const [receiptCursorHistory, setReceiptCursorHistory] = useState([]);
@@ -345,6 +352,18 @@ export default function ReceiptInspectionClient({
   const inspectionKind = head && head.kind !== "REVERSAL" ? "CORRECTION" : "FINALIZATION";
   const reconciliationFrozen = Boolean(head && head.kind !== "REVERSAL");
   const activeLocation = locations.find((location) => location.id === locationId) || null;
+  const currentInventoryPutawayState = canReadInventory && head && head.kind !== "REVERSAL"
+    && inventoryPutawayState.inspectionId === head.id
+    ? inventoryPutawayState.active
+    : canReadInventory && head && head.kind !== "REVERSAL"
+      ? null
+      : false;
+  const inventoryPutawayActive = currentInventoryPutawayState === true;
+  const inventoryPutawayPending = currentInventoryPutawayState === null;
+  const inventoryPutawayBlocked = inventoryPutawayActive || inventoryPutawayPending;
+  const updateInventoryPutawayState = useCallback((active, inspectionId) => {
+    setInventoryPutawayState({ inspectionId, active });
+  }, []);
 
   async function showNextReceiptPage() {
     const current = receiptPageRef.current;
@@ -393,6 +412,10 @@ export default function ReceiptInspectionClient({
 
   async function submitInspection(event) {
     event.preventDefault();
+    if (inventoryPutawayBlocked) {
+      setNotice("Revertí primero el ingreso de inventario antes de cambiar la inspección.");
+      return;
+    }
     if (submittingRef.current || !receipt || !currentSnapshot || currentSnapshot.loadError) return;
     let payload;
     try {
@@ -450,6 +473,10 @@ export default function ReceiptInspectionClient({
 
   async function submitReversal(event) {
     event.preventDefault();
+    if (inventoryPutawayBlocked) {
+      setNotice("Revertí primero el ingreso de inventario antes de revertir la inspección.");
+      return;
+    }
     if (submittingRef.current || !receipt) return;
     let payload;
     try {
@@ -668,6 +695,29 @@ export default function ReceiptInspectionClient({
             </div>
           </div>
 
+          {canReadInventory && head && head.kind !== "REVERSAL" && (
+            <ReceiptInventoryClient
+              key={head.id}
+              inspection={head}
+              canManage={canManageInventory}
+              onActiveStateChange={updateInventoryPutawayState}
+            />
+          )}
+
+          {inventoryPutawayPending && (
+            <div className={styles.freezeNotice} role="status">
+              Validando el ledger de inventario antes de habilitar cambios de inspección…
+            </div>
+          )}
+
+          {inventoryPutawayActive && (
+            <div className={styles.warning} role="status">
+              Esta inspección ya produjo una existencia física on-hand. Revertí primero el ingreso de
+              inventario; la base de datos bloquea correcciones o reversiones de inspección
+              mientras ese movimiento siga activo.
+            </div>
+          )}
+
           {canManage && (
             <form className={styles.inspectionForm} onSubmit={submitInspection}>
               <div className={styles.locationHeader}>
@@ -765,7 +815,14 @@ export default function ReceiptInspectionClient({
               </label>
               <button
                 type="submit"
-                disabled={busy || locationBusy || loadingLocations || !activeLocation || Boolean(locationsError)}
+                disabled={
+                  busy
+                  || locationBusy
+                  || loadingLocations
+                  || inventoryPutawayBlocked
+                  || !activeLocation
+                  || Boolean(locationsError)
+                }
               >
                 {busy ? "Guardando…" : `${KIND_LABELS[inspectionKind]} inspección`}
               </button>
@@ -790,7 +847,15 @@ export default function ReceiptInspectionClient({
                   onChange={(event) => setReversalReason(event.target.value)}
                 />
               </label>
-              <button type="submit" disabled={busy || locationBusy || !reversalReason.trim()}>
+              <button
+                type="submit"
+                disabled={
+                  busy
+                  || locationBusy
+                  || inventoryPutawayBlocked
+                  || !reversalReason.trim()
+                }
+              >
                 Registrar REVERSAL
               </button>
             </form>

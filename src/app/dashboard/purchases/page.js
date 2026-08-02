@@ -109,6 +109,8 @@ export default async function PurchasesPage() {
       projectName={access.project.name}
       tenantToday={tenantToday}
       canManage={hasTenantPermission(access, "org:execution:manage")}
+      canReadInventory={hasTenantPermission(access, "org:inventory:read")}
+      canManageInventory={hasTenantPermission(access, "org:inventory:manage")}
     />
   );
 }

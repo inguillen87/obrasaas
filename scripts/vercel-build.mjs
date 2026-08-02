@@ -45,6 +45,9 @@ const GOODS_RECEIPT_COMMITMENT_ALLOCATION_VERIFIER_PATH = fileURLToPath(
 const GOODS_RECEIPT_INSPECTION_VERIFIER_PATH = fileURLToPath(
   new URL("./verify-goods-receipt-inspection-migration.mjs", import.meta.url),
 );
+const INVENTORY_STOCK_LEDGER_VERIFIER_PATH = fileURLToPath(
+  new URL("./verify-inventory-stock-ledger-migration.mjs", import.meta.url),
+);
 const NOTIFICATION_OUTBOX_VERIFIER_PATH = fileURLToPath(
   new URL("./verify-notification-outbox-migration.mjs", import.meta.url),
 );
@@ -339,6 +342,7 @@ export async function runVercelBuild({
     goodsReceiptCommitmentAllocationVerifier:
       GOODS_RECEIPT_COMMITMENT_ALLOCATION_VERIFIER_PATH,
     goodsReceiptInspectionVerifier: GOODS_RECEIPT_INSPECTION_VERIFIER_PATH,
+    inventoryStockLedgerVerifier: INVENTORY_STOCK_LEDGER_VERIFIER_PATH,
     notificationOutboxVerifier: NOTIFICATION_OUTBOX_VERIFIER_PATH,
     notificationOutboxScopePreflight: NOTIFICATION_OUTBOX_SCOPE_PREFLIGHT_PATH,
   },
@@ -407,6 +411,9 @@ export async function runVercelBuild({
       GOODS_RECEIPT_INSPECTION_MIGRATION_DATABASE_URL:
         environment[plan.migrationDatabaseEnvironment],
       GOODS_RECEIPT_INSPECTION_MIGRATION_SCHEMA: "public",
+      INVENTORY_STOCK_LEDGER_MIGRATION_DATABASE_URL:
+        environment[plan.migrationDatabaseEnvironment],
+      INVENTORY_STOCK_LEDGER_MIGRATION_SCHEMA: "public",
       NOTIFICATION_OUTBOX_MIGRATION_DATABASE_URL:
         environment[plan.migrationDatabaseEnvironment],
       NOTIFICATION_OUTBOX_MIGRATION_SCHEMA: "public",
@@ -468,6 +475,13 @@ export async function runVercelBuild({
       await runner(
         process.execPath,
         [cliPaths.goodsReceiptInspectionVerifier],
+        { ...sharedOptions, env: verificationEnvironment },
+      );
+    }
+    if (cliPaths.inventoryStockLedgerVerifier) {
+      await runner(
+        process.execPath,
+        [cliPaths.inventoryStockLedgerVerifier],
         { ...sharedOptions, env: verificationEnvironment },
       );
     }

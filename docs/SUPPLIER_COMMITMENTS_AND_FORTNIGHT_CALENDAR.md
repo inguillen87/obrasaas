@@ -81,8 +81,9 @@ Esto significa:
 - un remito `VOIDED` deja de consumir cobertura y no puede volver silenciosamente a `POSTED`;
 - `UNALLOCATED/PARTIALLY_ALLOCATED/FULLY_ALLOCATED` describen la línea recibida; `NOT_RECEIVED/PARTIALLY_RECEIVED/FULLY_RECEIVED` describen cobertura documental del compromiso;
 - una inspección activa congela el remito, sus líneas y asignaciones; cualquier corrección conserva historia y exige reversión explícita del cierre final activo;
-- `ACCEPTED` describe aceptación física auditada, pero no stock libre, OCR aprobado ni prueba jurídica;
-- `AVAILABLE` permanece cerrado hasta ledger de stock, reserva y BOM por tarea.
+- `ACCEPTED` describe aceptación física auditada, pero no existencia, stock libre, OCR aprobado ni prueba jurídica;
+- S12.2A agrega localmente un putaway explícito hacia ledger on-hand; no infiere ni backfillea existencias y todavía requiere evidencia Preview;
+- `AVAILABLE` permanece cerrado hasta BOM versionada y reserva suficiente por tarea.
 
 ## Calendario por quincenas
 

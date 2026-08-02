@@ -1,0 +1,250 @@
+.panel {
+  background: #f8fbf9;
+  border: 1px solid #d9e7df;
+  border-radius: 16px;
+  margin: 20px 0;
+  padding: 18px;
+}
+
+.heading,
+.postedHeader,
+.putawayAction {
+  align-items: flex-start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.heading h3 {
+  margin: 4px 0 0;
+}
+
+.eyebrow {
+  color: #287365;
+  font-size: 0.7rem;
+  font-weight: 850;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.activeBadge,
+.pendingBadge {
+  border-radius: 999px;
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  font-weight: 850;
+  padding: 7px 10px;
+}
+
+.activeBadge {
+  background: #dff5e9;
+  color: #176348;
+}
+
+.pendingBadge {
+  background: #fff0d9;
+  color: #814c00;
+}
+
+.intro {
+  color: #52635e;
+  line-height: 1.55;
+  max-width: 880px;
+}
+
+.notice,
+.warning {
+  border-radius: 11px;
+  line-height: 1.45;
+  margin: 14px 0;
+  padding: 12px 14px;
+}
+
+.notice {
+  background: #e9f2ff;
+  color: #294f82;
+}
+
+.warning {
+  background: #fff4df;
+  color: #744b09;
+}
+
+.summaryGrid,
+.balanceGrid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 16px 0;
+}
+
+.summaryGrid div,
+.balanceGrid div {
+  background: #fff;
+  border: 1px solid #e0eae4;
+  border-radius: 12px;
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+}
+
+.summaryGrid span,
+.balanceGrid span,
+.lineCard span,
+.postedHeader span {
+  color: #6b7b76;
+  font-size: 0.78rem;
+}
+
+.lineList {
+  display: grid;
+  gap: 10px;
+}
+
+.lineCard {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #dce7df;
+  border-radius: 13px;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  padding: 14px;
+}
+
+.lineCard > div,
+.lineCard label,
+.boundItem,
+.postedHeader > div {
+  display: grid;
+  gap: 5px;
+}
+
+.lineCard label {
+  color: #3f514c;
+  font-size: 0.8rem;
+}
+
+.lineCard small,
+.boundItem small {
+  color: #8a4c26;
+}
+
+.boundItem {
+  background: #f2f7f4;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.itemCreator {
+  border-top: 1px solid #dce7df;
+  margin-top: 18px;
+  padding-top: 16px;
+}
+
+.itemCreator summary {
+  color: #286e5d;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.itemCreator form {
+  align-items: end;
+  background: #fff;
+  border-radius: 12px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 12px;
+  padding: 13px;
+}
+
+.itemCreator label,
+.reversalForm label {
+  display: grid;
+  gap: 6px;
+}
+
+.putawayAction {
+  background: #e8f4ee;
+  border: 1px solid #c7e0d3;
+  border-radius: 14px;
+  margin-top: 18px;
+  padding: 15px;
+}
+
+.putawayAction p,
+.reversalForm p {
+  color: #52635e;
+  line-height: 1.45;
+  margin: 5px 0 0;
+  max-width: 650px;
+}
+
+.putawayAction button {
+  flex: 0 0 auto;
+}
+
+.posted {
+  background: #fff;
+  border: 1px solid #cde2d5;
+  border-radius: 14px;
+  margin-top: 18px;
+  padding: 15px;
+}
+
+.posted ul {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 16px 0;
+  padding: 0;
+}
+
+.posted li {
+  align-items: center;
+  border-bottom: 1px solid #edf2ef;
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 2px;
+}
+
+.reversalForm {
+  background: #fff8f1;
+  border: 1px solid #f0d8bd;
+  border-radius: 12px;
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 14px;
+}
+
+.reversalForm button {
+  background: #8b3f24 !important;
+  justify-self: start;
+}
+
+@media (max-width: 760px) {
+  .heading,
+  .postedHeader,
+  .putawayAction {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .activeBadge,
+  .pendingBadge {
+    align-self: flex-start;
+  }
+
+  .summaryGrid,
+  .balanceGrid,
+  .lineCard,
+  .itemCreator form {
+    grid-template-columns: 1fr;
+  }
+
+  .putawayAction button {
+    width: 100%;
+  }
+}
