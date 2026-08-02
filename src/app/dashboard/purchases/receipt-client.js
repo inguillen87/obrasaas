@@ -18,6 +18,7 @@ import {
   parseProcurementQuantity,
 } from "@/lib/procurement-quantity";
 import styles from "../extra-work/extra-work.module.css";
+import ReceiptReconciliationClient from "./receipt-reconciliation-client";
 
 function indexLineBalances(balances) {
   return new Map((balances || []).map((balance) => [
@@ -77,6 +78,7 @@ export default function ReceiptClient({
   const [file, setFile] = useState(null);
   const [notice, setNotice] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [reconciliationVersion, setReconciliationVersion] = useState(0);
   const uploadAttempt = useRef(null);
   const submittingRef = useRef(false);
   const fileInputRef = useRef(null);
@@ -193,6 +195,7 @@ export default function ReceiptClient({
       setFile(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
       setNotice("Recepción registrada con remito privado.");
+      setReconciliationVersion((current) => current + 1);
       await onReceiptCommitted?.(result.receipt);
     } catch (error) {
       if (attempt?.uploadId && isTerminalProtectedUploadClientError(error)) {
@@ -226,7 +229,8 @@ export default function ReceiptClient({
   }
 
   return (
-    <section className={styles.panel} aria-labelledby="goods-receipt-title">
+    <>
+      <section className={styles.panel} aria-labelledby="goods-receipt-title">
       <h2 id="goods-receipt-title">Recepciones y remitos</h2>
       {canManage && (
         approved.length === 0 ? (
@@ -340,6 +344,12 @@ export default function ReceiptClient({
           );
         })}
       </ul>
-    </section>
+      </section>
+      <ReceiptReconciliationClient
+        orders={orders}
+        canManage={canManage}
+        refreshVersion={reconciliationVersion}
+      />
+    </>
   );
 }

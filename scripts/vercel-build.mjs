@@ -39,6 +39,9 @@ const SCHEDULE_SNAPSHOT_VERIFIER_PATH = fileURLToPath(
 const SUPPLIER_COMMITMENT_VERIFIER_PATH = fileURLToPath(
   new URL("./verify-supplier-commitment-migration.mjs", import.meta.url),
 );
+const GOODS_RECEIPT_COMMITMENT_ALLOCATION_VERIFIER_PATH = fileURLToPath(
+  new URL("./verify-goods-receipt-commitment-allocation-migration.mjs", import.meta.url),
+);
 const NOTIFICATION_OUTBOX_VERIFIER_PATH = fileURLToPath(
   new URL("./verify-notification-outbox-migration.mjs", import.meta.url),
 );
@@ -330,6 +333,8 @@ export async function runVercelBuild({
     visualProgressVerifier: VISUAL_PROGRESS_VERIFIER_PATH,
     scheduleSnapshotVerifier: SCHEDULE_SNAPSHOT_VERIFIER_PATH,
     supplierCommitmentVerifier: SUPPLIER_COMMITMENT_VERIFIER_PATH,
+    goodsReceiptCommitmentAllocationVerifier:
+      GOODS_RECEIPT_COMMITMENT_ALLOCATION_VERIFIER_PATH,
     notificationOutboxVerifier: NOTIFICATION_OUTBOX_VERIFIER_PATH,
     notificationOutboxScopePreflight: NOTIFICATION_OUTBOX_SCOPE_PREFLIGHT_PATH,
   },
@@ -392,6 +397,9 @@ export async function runVercelBuild({
       SUPPLIER_COMMITMENT_MIGRATION_DATABASE_URL:
         environment[plan.migrationDatabaseEnvironment],
       SUPPLIER_COMMITMENT_MIGRATION_SCHEMA: "public",
+      GOODS_RECEIPT_COMMITMENT_ALLOCATION_MIGRATION_DATABASE_URL:
+        environment[plan.migrationDatabaseEnvironment],
+      GOODS_RECEIPT_COMMITMENT_ALLOCATION_MIGRATION_SCHEMA: "public",
       NOTIFICATION_OUTBOX_MIGRATION_DATABASE_URL:
         environment[plan.migrationDatabaseEnvironment],
       NOTIFICATION_OUTBOX_MIGRATION_SCHEMA: "public",
@@ -439,6 +447,13 @@ export async function runVercelBuild({
       await runner(
         process.execPath,
         [cliPaths.supplierCommitmentVerifier],
+        { ...sharedOptions, env: verificationEnvironment },
+      );
+    }
+    if (cliPaths.goodsReceiptCommitmentAllocationVerifier) {
+      await runner(
+        process.execPath,
+        [cliPaths.goodsReceiptCommitmentAllocationVerifier],
         { ...sharedOptions, env: verificationEnvironment },
       );
     }

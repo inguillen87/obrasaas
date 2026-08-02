@@ -845,41 +845,43 @@ model PurchaseOrderLine {
 }
 
 model SupplierCommitment {
-  id                         String                       @id @default(cuid())
+  id                         String                             @id @default(cuid())
   organizationId             String
   projectId                  String
   supplierId                 String
   purchaseOrderId            String?
-  operationKey               String                       @db.VarChar(190)
-  requestFingerprint         String                       @db.Char(64)
+  operationKey               String                             @db.VarChar(190)
+  requestFingerprint         String                             @db.Char(64)
   kind                       SupplierCommitmentKind
-  status                     SupplierCommitmentStatus     @default(CONFIRMED)
-  title                      String                       @db.VarChar(220)
-  notes                      String?                      @db.Text
-  startsOn                   DateTime                     @db.Date
-  endsOn                     DateTime                     @db.Date
-  timezone                   String                       @db.VarChar(64)
-  reminderEnabled            Boolean                      @default(false)
-  reminderDaysBefore         Int                          @default(7)
-  reminderEmail              String?                      @db.VarChar(254)
+  status                     SupplierCommitmentStatus           @default(CONFIRMED)
+  title                      String                             @db.VarChar(220)
+  notes                      String?                            @db.Text
+  startsOn                   DateTime                           @db.Date
+  endsOn                     DateTime                           @db.Date
+  timezone                   String                             @db.VarChar(64)
+  reminderEnabled            Boolean                            @default(false)
+  reminderDaysBefore         Int                                @default(7)
+  reminderEmail              String?                            @db.VarChar(254)
   reminderEmailConfirmedAt   DateTime?
-  reminderEmailConfirmedById String?                      @db.VarChar(190)
-  scheduleRevision           Int                          @default(0)
-  revision                   Int                          @default(0)
+  reminderEmailConfirmedById String?                            @db.VarChar(190)
+  scheduleRevision           Int                                @default(0)
+  revision                   Int                                @default(0)
   fulfilledAt                DateTime?
-  organization               Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  project                    Project                      @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Cascade)
-  supplier                   Supplier                     @relation(fields: [organizationId, supplierId], references: [organizationId, id], onDelete: Restrict)
-  purchaseOrder              PurchaseOrder?               @relation(fields: [organizationId, projectId, supplierId, purchaseOrderId], references: [organizationId, projectId, supplierId, id], onDelete: Restrict)
+  organization               Organization                       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project                    Project                            @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Cascade)
+  supplier                   Supplier                           @relation(fields: [organizationId, supplierId], references: [organizationId, id], onDelete: Restrict)
+  purchaseOrder              PurchaseOrder?                     @relation(fields: [organizationId, projectId, supplierId, purchaseOrderId], references: [organizationId, projectId, supplierId, id], onDelete: Restrict)
   taskLinks                  SupplierCommitmentTaskLink[]
   lines                      SupplierCommitmentLine[]
+  goodsReceiptAllocations    GoodsReceiptCommitmentAllocation[]
   reminderDeliveries         SupplierReminderDelivery[]
   events                     SupplierCommitmentEvent[]
-  createdAt                  DateTime                     @default(now())
-  updatedAt                  DateTime                     @updatedAt
+  createdAt                  DateTime                           @default(now())
+  updatedAt                  DateTime                           @updatedAt
 
   @@unique([projectId, id])
   @@unique([organizationId, projectId, id])
+  @@unique([organizationId, projectId, purchaseOrderId, id], map: "SupplierCommitment_org_project_order_id_key")
   @@unique([projectId, purchaseOrderId, id])
   @@unique([projectId, operationKey])
   @@index([projectId, startsOn, status])
@@ -888,16 +890,18 @@ model SupplierCommitment {
 }
 
 model SupplierCommitmentLine {
-  commitmentId        String
-  projectId           String
-  purchaseOrderId     String
-  purchaseOrderLineId String
-  quantity            Decimal            @db.Decimal(14, 3)
-  commitment          SupplierCommitment @relation(fields: [projectId, purchaseOrderId, commitmentId], references: [projectId, purchaseOrderId, id], onDelete: Cascade)
-  purchaseOrderLine   PurchaseOrderLine  @relation(fields: [projectId, purchaseOrderId, purchaseOrderLineId], references: [projectId, purchaseOrderId, id], onDelete: Restrict)
-  createdAt           DateTime           @default(now())
+  commitmentId            String
+  projectId               String
+  purchaseOrderId         String
+  purchaseOrderLineId     String
+  quantity                Decimal                            @db.Decimal(14, 3)
+  commitment              SupplierCommitment                 @relation(fields: [projectId, purchaseOrderId, commitmentId], references: [projectId, purchaseOrderId, id], onDelete: Cascade)
+  purchaseOrderLine       PurchaseOrderLine                  @relation(fields: [projectId, purchaseOrderId, purchaseOrderLineId], references: [projectId, purchaseOrderId, id], onDelete: Restrict)
+  goodsReceiptAllocations GoodsReceiptCommitmentAllocation[]
+  createdAt               DateTime                           @default(now())
 
   @@id([commitmentId, purchaseOrderLineId])
+  @@unique([projectId, purchaseOrderId, commitmentId, purchaseOrderLineId], map: "SupplierCommitmentLine_scope_key")
   @@index([projectId, purchaseOrderLineId])
 }
 
@@ -999,46 +1003,75 @@ model SupplierReminderWebhookApplication {
 }
 
 model GoodsReceipt {
-  id                 String             @id @default(cuid())
-  organizationId     String
-  projectId          String
-  purchaseOrderId    String
-  operationKey       String             @db.VarChar(190)
-  status             GoodsReceiptStatus @default(POSTED)
-  notes              String?            @db.VarChar(500)
-  receipt            Json?
-  protectedUploadId  String?
-  protectedUpload    ProtectedUpload?   @relation("GoodsReceiptProtectedUpload", fields: [projectId, protectedUploadId], references: [projectId, id], onDelete: Restrict, map: "GoodsReceipt_protected_upload_fkey")
-  requestFingerprint String?            @db.Char(64)
-  receivedAt         DateTime           @default(now())
-  revision           Int                @default(0)
-  organization       Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  project            Project            @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Cascade)
-  purchaseOrder      PurchaseOrder      @relation(fields: [organizationId, projectId, purchaseOrderId], references: [organizationId, projectId, id], onDelete: Restrict)
-  lines              GoodsReceiptLine[]
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
+  id                    String                             @id @default(cuid())
+  organizationId        String
+  projectId             String
+  purchaseOrderId       String
+  operationKey          String                             @db.VarChar(190)
+  status                GoodsReceiptStatus                 @default(POSTED)
+  notes                 String?                            @db.VarChar(500)
+  receipt               Json?
+  protectedUploadId     String?
+  protectedUpload       ProtectedUpload?                   @relation("GoodsReceiptProtectedUpload", fields: [projectId, protectedUploadId], references: [projectId, id], onDelete: Restrict, map: "GoodsReceipt_protected_upload_fkey")
+  requestFingerprint    String?                            @db.Char(64)
+  receivedAt            DateTime                           @default(now())
+  revision              Int                                @default(0)
+  organization          Organization                       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project               Project                            @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Cascade)
+  purchaseOrder         PurchaseOrder                      @relation(fields: [organizationId, projectId, purchaseOrderId], references: [organizationId, projectId, id], onDelete: Restrict)
+  lines                 GoodsReceiptLine[]
+  commitmentAllocations GoodsReceiptCommitmentAllocation[]
+  createdAt             DateTime                           @default(now())
+  updatedAt             DateTime                           @updatedAt
 
   @@unique([projectId, id])
   @@unique([projectId, purchaseOrderId, id])
+  @@unique([organizationId, projectId, purchaseOrderId, id], map: "GoodsReceipt_org_project_order_id_key")
   @@unique([projectId, operationKey])
   @@unique([projectId, protectedUploadId], map: "GoodsReceipt_project_protected_upload_key")
   @@index([projectId, purchaseOrderId, receivedAt])
 }
 
 model GoodsReceiptLine {
-  id                  String            @id @default(cuid())
-  projectId           String
-  purchaseOrderId     String
-  goodsReceiptId      String
-  purchaseOrderLineId String
-  quantity            Decimal           @db.Decimal(14, 3)
-  goodsReceipt        GoodsReceipt      @relation(fields: [projectId, purchaseOrderId, goodsReceiptId], references: [projectId, purchaseOrderId, id], onDelete: Cascade)
-  purchaseOrderLine   PurchaseOrderLine @relation(fields: [projectId, purchaseOrderId, purchaseOrderLineId], references: [projectId, purchaseOrderId, id], onDelete: Restrict)
+  id                    String                             @id @default(cuid())
+  projectId             String
+  purchaseOrderId       String
+  goodsReceiptId        String
+  purchaseOrderLineId   String
+  quantity              Decimal                            @db.Decimal(14, 3)
+  goodsReceipt          GoodsReceipt                       @relation(fields: [projectId, purchaseOrderId, goodsReceiptId], references: [projectId, purchaseOrderId, id], onDelete: Cascade)
+  purchaseOrderLine     PurchaseOrderLine                  @relation(fields: [projectId, purchaseOrderId, purchaseOrderLineId], references: [projectId, purchaseOrderId, id], onDelete: Restrict)
+  commitmentAllocations GoodsReceiptCommitmentAllocation[]
 
   @@unique([goodsReceiptId, purchaseOrderLineId])
+  @@unique([projectId, purchaseOrderId, goodsReceiptId, purchaseOrderLineId, id], map: "GoodsReceiptLine_scope_key")
   @@index([projectId, purchaseOrderId])
   @@index([purchaseOrderLineId])
+}
+
+model GoodsReceiptCommitmentAllocation {
+  id                   String                 @id @default(cuid())
+  organizationId       String
+  projectId            String
+  purchaseOrderId      String
+  purchaseOrderLineId  String
+  goodsReceiptId       String
+  goodsReceiptLineId   String
+  supplierCommitmentId String
+  quantity             Decimal                @db.Decimal(14, 3)
+  operationKey         String                 @db.VarChar(190)
+  requestFingerprint   String                 @db.Char(64)
+  createdById          String                 @db.VarChar(190)
+  createdAt            DateTime               @default(now())
+  goodsReceipt         GoodsReceipt           @relation(fields: [organizationId, projectId, purchaseOrderId, goodsReceiptId], references: [organizationId, projectId, purchaseOrderId, id], onDelete: Restrict, onUpdate: Restrict, map: "GRCAllocation_receipt_fkey")
+  goodsReceiptLine     GoodsReceiptLine       @relation(fields: [projectId, purchaseOrderId, goodsReceiptId, purchaseOrderLineId, goodsReceiptLineId], references: [projectId, purchaseOrderId, goodsReceiptId, purchaseOrderLineId, id], onDelete: Restrict, onUpdate: Restrict, map: "GRCAllocation_receipt_line_fkey")
+  supplierCommitment   SupplierCommitment     @relation(fields: [organizationId, projectId, purchaseOrderId, supplierCommitmentId], references: [organizationId, projectId, purchaseOrderId, id], onDelete: Restrict, onUpdate: Restrict, map: "GRCAllocation_supplier_commitment_fkey")
+  commitmentLine       SupplierCommitmentLine @relation(fields: [projectId, purchaseOrderId, supplierCommitmentId, purchaseOrderLineId], references: [projectId, purchaseOrderId, commitmentId, purchaseOrderLineId], onDelete: Restrict, onUpdate: Restrict, map: "GRCAllocation_supplier_commitment_line_fkey")
+
+  @@unique([projectId, id], map: "GRCAllocation_project_id_key")
+  @@unique([projectId, operationKey], map: "GRCAllocation_project_operation_key")
+  @@index([projectId, goodsReceiptLineId], map: "GRCAllocation_receipt_line_idx")
+  @@index([projectId, supplierCommitmentId, purchaseOrderLineId], map: "GRCAllocation_supplier_commitment_line_idx")
 }
 
 model CrmAccount {
