@@ -306,6 +306,11 @@ enum InventoryTransactionKind {
   REVERSAL
 }
 
+enum TaskMaterialRequirementKind {
+  MATERIALS_REQUIRED
+  NO_MATERIALS_REQUIRED
+}
+
 enum SupplierInvoiceStatus {
   RECEIVED
   APPROVED
@@ -755,6 +760,7 @@ model Organization {
   inventoryTransactions               InventoryTransaction[]
   inventoryLedgerEntries              InventoryLedgerEntry[]
   inventoryBalances                   InventoryBalance[]
+  taskMaterialRequirementRevisions    TaskMaterialRequirementRevision[]
   workerPersons                       WorkerPerson[]
   workerChannelIdentities             WorkerChannelIdentity[]
   workerOnboardingClaims              WorkerOnboardingClaim[]
@@ -1228,21 +1234,22 @@ model SupplierCommitmentLineClosure {
 }
 
 model InventoryItem {
-  id                        String                              @id @default(cuid())
-  organizationId            String
-  projectId                 String
-  code                      String                              @db.VarChar(32)
-  name                      String                              @db.VarChar(160)
-  baseUnit                  String                              @db.VarChar(32)
-  active                    Boolean                             @default(true)
-  revision                  Int                                 @default(0)
-  organization              Organization                        @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  project                   Project                             @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "InventoryItem_project_fkey")
-  purchaseOrderLineBindings PurchaseOrderLineInventoryBinding[]
-  ledgerEntries             InventoryLedgerEntry[]
-  balances                  InventoryBalance[]
-  createdAt                 DateTime                            @default(now())
-  updatedAt                 DateTime                            @updatedAt
+  id                           String                              @id @default(cuid())
+  organizationId               String
+  projectId                    String
+  code                         String                              @db.VarChar(32)
+  name                         String                              @db.VarChar(160)
+  baseUnit                     String                              @db.VarChar(32)
+  active                       Boolean                             @default(true)
+  revision                     Int                                 @default(0)
+  organization                 Organization                        @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  project                      Project                             @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "InventoryItem_project_fkey")
+  purchaseOrderLineBindings    PurchaseOrderLineInventoryBinding[]
+  ledgerEntries                InventoryLedgerEntry[]
+  balances                     InventoryBalance[]
+  taskMaterialRequirementLines TaskMaterialRequirementLine[]
+  createdAt                    DateTime                            @default(now())
+  updatedAt                    DateTime                            @updatedAt
 
   @@unique([organizationId, projectId, id], map: "InventoryItem_scope_id_key")
   @@unique([organizationId, projectId, id, baseUnit], map: "InventoryItem_scope_unit_key")
@@ -1358,6 +1365,62 @@ model InventoryBalance {
   @@index([projectId, locationId, onHand], map: "InventoryBalance_location_on_hand_idx")
 }
 
+model TaskMaterialRequirementRevision {
+  id                   String                           @id @default(cuid())
+  organizationId       String
+  projectId            String
+  taskId               String
+  taskIdentitySnapshot Boolean                          @default(true)
+  kind                 TaskMaterialRequirementKind
+  version              Int
+  lineCount            Int
+  taskRevisionSnapshot Int
+  taskCodeSnapshot     String?                          @db.VarChar(64)
+  taskTitleSnapshot    String                           @db.VarChar(160)
+  taskStartsAtSnapshot DateTime?
+  taskEndsAtSnapshot   DateTime?
+  predecessorId        String?
+  operationKey         String                           @db.VarChar(190)
+  requestFingerprint   String                           @db.Char(64)
+  reason               String                           @db.VarChar(500)
+  authoredById         String
+  createdAt            DateTime                         @default(now())
+  organization         Organization                     @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  project              Project                          @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialRequirementRevision_project_fkey")
+  task                 Task                             @relation(fields: [projectId, taskId, taskIdentitySnapshot], references: [projectId, id, materialRequirementEligible], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialRequirementRevision_task_fkey")
+  authoredBy           PlatformUser                     @relation("TaskMaterialRequirementAuthor", fields: [authoredById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  predecessor          TaskMaterialRequirementRevision? @relation("TaskMaterialRequirementChain", fields: [organizationId, projectId, taskId, predecessorId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialRequirementRevision_predecessor_fkey")
+  successor            TaskMaterialRequirementRevision? @relation("TaskMaterialRequirementChain")
+  lines                TaskMaterialRequirementLine[]
+
+  @@unique([organizationId, projectId, taskId, id], map: "TaskMaterialRequirementRevision_scope_id_key")
+  @@unique([projectId, taskId, version], map: "TaskMaterialRequirementRevision_task_version_key")
+  @@unique([organizationId, projectId, taskId, predecessorId], map: "TaskMaterialRequirementRevision_predecessor_key")
+  @@unique([projectId, operationKey], map: "TaskMaterialRequirementRevision_operation_key")
+  @@index([projectId, taskId, createdAt], map: "TaskMaterialRequirementRevision_task_created_idx")
+}
+
+model TaskMaterialRequirementLine {
+  id               String                          @id @default(cuid())
+  organizationId   String
+  projectId        String
+  taskId           String
+  revisionId       String
+  inventoryItemId  String
+  requiredQuantity Decimal                         @db.Decimal(14, 3)
+  itemCodeSnapshot String                          @db.VarChar(32)
+  itemNameSnapshot String                          @db.VarChar(160)
+  unitSnapshot     String                          @db.VarChar(32)
+  notes            String?                         @db.VarChar(500)
+  createdAt        DateTime                        @default(now())
+  revision         TaskMaterialRequirementRevision @relation(fields: [organizationId, projectId, taskId, revisionId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialRequirementLine_revision_fkey")
+  inventoryItem    InventoryItem                   @relation(fields: [organizationId, projectId, inventoryItemId, unitSnapshot], references: [organizationId, projectId, id, baseUnit], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialRequirementLine_item_fkey")
+
+  @@unique([organizationId, projectId, taskId, revisionId, id], map: "TaskMaterialRequirementLine_scope_id_key")
+  @@unique([projectId, revisionId, inventoryItemId], map: "TaskMaterialRequirementLine_revision_item_key")
+  @@index([projectId, taskId, inventoryItemId], map: "TaskMaterialRequirementLine_task_item_idx")
+}
+
 model CrmAccount {
   id                    String        @id @default(cuid())
   organizationId        String?       @unique
@@ -1420,6 +1483,7 @@ model PlatformUser {
   supplierCommitmentLineClosures     SupplierCommitmentLineClosure[]     @relation("SupplierCommitmentLineClosureActor")
   inventoryPurchaseLineBindings      PurchaseOrderLineInventoryBinding[] @relation("InventoryPurchaseLineBinder")
   inventoryTransactions              InventoryTransaction[]              @relation("InventoryTransactionActor")
+  taskMaterialRequirementRevisions   TaskMaterialRequirementRevision[]   @relation("TaskMaterialRequirementAuthor")
 
   @@index([systemRole, createdAt])
 }
@@ -1544,6 +1608,7 @@ model Project {
   inventoryTransactions                InventoryTransaction[]
   inventoryLedgerEntries               InventoryLedgerEntry[]
   inventoryBalances                    InventoryBalance[]
+  taskMaterialRequirementRevisions     TaskMaterialRequirementRevision[]
   supplierInvoices                     SupplierInvoice[]
   supplierCommitments                  SupplierCommitment[]
   supplierReminderDeliveries           SupplierReminderDelivery[]
@@ -2286,40 +2351,43 @@ model OperationalProposal {
 }
 
 model Task {
-  id                        String                        @id @default(cuid())
-  projectId                 String
-  project                   Project                       @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  externalId                String?
-  code                      String?                       @db.VarChar(64)
-  title                     String
-  description               String?
-  type                      TaskType                      @default(TASK)
-  status                    TaskStatus                    @default(BACKLOG)
-  progress                  Int                           @default(0)
-  startsAt                  DateTime?
-  endsAt                    DateTime?
-  assignee                  String?
-  revision                  Int                           @default(0)
-  parentId                  String?
-  parent                    Task?                         @relation("TaskHierarchy", fields: [projectId, parentId], references: [projectId, id], onDelete: Restrict)
-  children                  Task[]                        @relation("TaskHierarchy")
-  predecessors              TaskDependency[]              @relation("TaskDependencySuccessor")
-  successors                TaskDependency[]              @relation("TaskDependencyPredecessor")
-  assignments               TaskAssignment[]
-  blockers                  ProjectBlocker[]
-  dailyLogs                 DailyLog[]
-  progressEvidence          ProgressEvidence[]
-  visualProgressAssessments VisualProgressAssessment[]
-  progressObservations      ScheduleProgressObservation[]
-  extraWorkRequests         ExtraWorkRequest[]
-  budgetLines               BudgetLine[]
-  supplierCommitmentLinks   SupplierCommitmentTaskLink[]
-  metadata                  Json?
-  createdAt                 DateTime                      @default(now())
-  updatedAt                 DateTime                      @updatedAt
+  id                           String                            @id @default(cuid())
+  projectId                    String
+  project                      Project                           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  externalId                   String?
+  code                         String?                           @db.VarChar(64)
+  title                        String
+  description                  String?
+  type                         TaskType                          @default(TASK)
+  status                       TaskStatus                        @default(BACKLOG)
+  progress                     Int                               @default(0)
+  startsAt                     DateTime?
+  endsAt                       DateTime?
+  assignee                     String?
+  revision                     Int                               @default(0)
+  materialRequirementEligible Boolean                           @default(dbgenerated())
+  parentId                     String?
+  parent                       Task?                             @relation("TaskHierarchy", fields: [projectId, parentId], references: [projectId, id], onDelete: Restrict)
+  children                     Task[]                            @relation("TaskHierarchy")
+  predecessors                 TaskDependency[]                  @relation("TaskDependencySuccessor")
+  successors                   TaskDependency[]                  @relation("TaskDependencyPredecessor")
+  assignments                  TaskAssignment[]
+  blockers                     ProjectBlocker[]
+  dailyLogs                    DailyLog[]
+  progressEvidence             ProgressEvidence[]
+  visualProgressAssessments    VisualProgressAssessment[]
+  progressObservations         ScheduleProgressObservation[]
+  extraWorkRequests            ExtraWorkRequest[]
+  budgetLines                  BudgetLine[]
+  supplierCommitmentLinks      SupplierCommitmentTaskLink[]
+  materialRequirementRevisions TaskMaterialRequirementRevision[]
+  metadata                     Json?
+  createdAt                    DateTime                          @default(now())
+  updatedAt                    DateTime                          @updatedAt
 
   @@unique([projectId, externalId])
   @@unique([projectId, id])
+  @@unique([projectId, id, materialRequirementEligible], map: "Task_material_requirement_identity_key")
   @@unique([projectId, code])
   @@index([projectId, status])
   @@index([projectId, parentId])

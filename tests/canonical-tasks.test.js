@@ -5,6 +5,7 @@ import {
   CanonicalTaskError,
   assertDependencyAcyclic,
   canonicalTaskScheduleFromMetadata,
+  deleteCanonicalTask,
   normalizeCanonicalTaskInput,
   normalizeCanonicalTaskSchedule,
 } from '../src/lib/canonical-tasks.js';
@@ -89,4 +90,66 @@ test('dependency graph rejects self links and malformed progress', () => {
     () => normalizeCanonicalTaskInput({ title: 'T', progress: 101 }),
     CanonicalTaskError,
   );
+});
+
+function canonicalDeletePrisma({ materialRevisionCount = 0 } = {}) {
+  const state = { deleted: 0, audits: 0 };
+  const transaction = {
+    $executeRawUnsafe: async () => 1,
+    project: {
+      findFirst: async () => ({
+        id: 'project-a',
+        organizationId: 'organization-a',
+        status: 'ACTIVE',
+      }),
+    },
+    task: {
+      findFirst: async () => ({ id: 'task-a', title: 'Fundaciones', revision: 2 }),
+      count: async () => 0,
+      delete: async () => { state.deleted += 1; },
+    },
+    taskMaterialRequirementRevision: {
+      count: async ({ where }) => {
+        assert.deepEqual(where, {
+          organizationId: 'organization-a',
+          projectId: 'project-a',
+          taskId: 'task-a',
+        });
+        return materialRevisionCount;
+      },
+    },
+    auditLog: {
+      create: async () => { state.audits += 1; },
+    },
+  };
+  return {
+    state,
+    prisma: {
+      $transaction: async (operation) => operation(transaction),
+    },
+  };
+}
+
+test('canonical task deletion preserves published material history', async () => {
+  const protectedStore = canonicalDeletePrisma({ materialRevisionCount: 1 });
+  await assert.rejects(
+    deleteCanonicalTask(protectedStore.prisma, {
+      scope: { organizationId: 'organization-a', projectId: 'project-a' },
+      actorId: 'user-a',
+      taskId: 'task-a',
+    }),
+    (error) => error instanceof CanonicalTaskError
+      && error.code === 'CANONICAL_TASK_HAS_MATERIAL_REQUIREMENTS'
+      && error.status === 409,
+  );
+  assert.deepEqual(protectedStore.state, { deleted: 0, audits: 0 });
+
+  const emptyStore = canonicalDeletePrisma();
+  const result = await deleteCanonicalTask(emptyStore.prisma, {
+    scope: { organizationId: 'organization-a', projectId: 'project-a' },
+    actorId: 'user-a',
+    taskId: 'task-a',
+  });
+  assert.deepEqual(result, { id: 'task-a', deleted: true });
+  assert.deepEqual(emptyStore.state, { deleted: 1, audits: 1 });
 });

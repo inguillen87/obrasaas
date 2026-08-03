@@ -28,6 +28,11 @@ export default async function PurchasesPage() {
   const taskHorizonEnd = addCivilDays(tenantToday, 89);
   const taskRangeStart = new Date(`${tenantToday}T00:00:00.000Z`);
   const taskRangeEnd = new Date(`${taskHorizonEnd}T23:59:59.999Z`);
+  const canReadTaskMaterials = hasTenantPermission(access, "org:tasks:read")
+    && hasTenantPermission(access, "org:inventory:read");
+  const canManageTaskMaterials = canReadTaskMaterials
+    && hasTenantPermission(access, "org:tasks:manage")
+    && hasTenantPermission(access, "org:inventory:manage");
   const data = await listPurchaseOrders(prisma, {
     organizationId: access.organization.id,
     projectId: access.project.id,
@@ -39,6 +44,7 @@ export default async function PurchasesPage() {
     lineBalances,
     commitmentData,
     tasks,
+    materialTasks,
   ] = await Promise.all([
     listSuppliers(prisma, { organizationId: access.organization.id, active: true }),
     prisma.budgetLine.findMany({
@@ -89,6 +95,26 @@ export default async function PurchasesPage() {
       orderBy: [{ startsAt: "asc" }, { id: "asc" }],
       take: 5_001,
     }),
+    canReadTaskMaterials
+      ? prisma.task.findMany({
+        where: {
+          projectId: access.project.id,
+          metadata: { path: ["source"], equals: "canonical-task-v1" },
+        },
+        select: {
+          id: true,
+          code: true,
+          title: true,
+          type: true,
+          status: true,
+          revision: true,
+          startsAt: true,
+          endsAt: true,
+        },
+        orderBy: { id: "asc" },
+        take: 5_001,
+      })
+      : Promise.resolve([]),
   ]);
 
   return (
@@ -106,11 +132,24 @@ export default async function PurchasesPage() {
         endsAt: task.endsAt?.toISOString() || null,
       }))}
       tasksTruncated={tasks.length > 5_000}
+      materialTasks={materialTasks.slice(0, 5_000).map((task) => ({
+        id: task.id,
+        code: task.code,
+        title: task.title,
+        type: task.type,
+        status: task.status,
+        revision: task.revision,
+        startsAt: task.startsAt?.toISOString() || null,
+        endsAt: task.endsAt?.toISOString() || null,
+      }))}
+      materialTasksTruncated={materialTasks.length > 5_000}
       projectName={access.project.name}
       tenantToday={tenantToday}
       canManage={hasTenantPermission(access, "org:execution:manage")}
       canReadInventory={hasTenantPermission(access, "org:inventory:read")}
       canManageInventory={hasTenantPermission(access, "org:inventory:manage")}
+      canReadTaskMaterials={canReadTaskMaterials}
+      canManageTaskMaterials={canManageTaskMaterials}
     />
   );
 }

@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 import styles from "../extra-work/extra-work.module.css";
 import ReceiptClient from "./receipt-client";
 import SupplierCommitmentsClient from "./supplier-commitments-client";
+import TaskMaterialRequirementsClient from "./task-material-requirements-client";
 
 async function api(path, options = {}) {
   const response = await fetch(path, {
@@ -31,11 +32,15 @@ export default function PurchasesClient({
   budgetLines,
   tasks,
   tasksTruncated,
+  materialTasks,
+  materialTasksTruncated,
   projectName,
   tenantToday,
   canManage,
   canReadInventory,
   canManageInventory,
+  canReadTaskMaterials,
+  canManageTaskMaterials,
 }) {
   const [orders, setOrders] = useState(initialOrders);
   const [notice, setNotice] = useState(null);
@@ -249,6 +254,15 @@ export default function PurchasesClient({
           </ul>
         </section>
       </main>
+
+      {canReadTaskMaterials && (
+        <TaskMaterialRequirementsClient
+          tasks={materialTasks}
+          tasksTruncated={materialTasksTruncated}
+          canManage={canManageTaskMaterials}
+          projectName={projectName}
+        />
+      )}
 
       <SupplierCommitmentsClient
         initialCommitments={initialCommitments}

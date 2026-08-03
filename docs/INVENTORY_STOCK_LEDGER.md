@@ -11,10 +11,15 @@ estos estados:
 | Recibido | Hay remito POSTED y cantidad registrada contra una OC | `GoodsReceipt` |
 | Aceptado | La inspección física/documental clasificó una cantidad como `ACCEPTED` en una ubicación | `GoodsReceiptInspection` vigente |
 | En existencia | Un putaway explícito creó asientos positivos en el ledger | `InventoryLedgerEntry` |
-| Reservado/disponible para una tarea | Una BOM vigente tiene cantidad suficiente reservada | Fuera de S12.2A; S12.2B/C |
+| Requerido por una tarea | Una revisión S12.2B declara material y cantidad | `TaskMaterialRequirementRevision`; sólo local, no cambia el ledger |
+| Reservado/disponible para una tarea | Una BOM vigente tiene cantidad suficiente reservada | Fuera de S12.2A y S12.2B; pendiente S12.2C |
 
 Una foto, un email, un compromiso `FULFILL`, una descripción parecida o una
 fecha cercana nunca crean stock ni identidad de material.
+
+Un `SupplierCommitment` es **PROMESA, NO RESERVA**. Su fecha o cantidad no
+reduce `InventoryBalance`, no asigna existencia a una tarea y no demuestra que
+una BOM esté cubierta.
 
 ## Autoridades canónicas
 
@@ -133,13 +138,28 @@ inmutable y el alias no mostraron respuestas `5xx`.
 
 El corte reproducible está en [evidencia Preview `4760a50`](./evidence/2026-08-02-preview-4760a50.md).
 La validación remota no sustituye el recorrido UI autenticado por rol, que sigue
-pendiente, ni acredita Resend, Meta, BOM/reservas o Production. Production no fue
-modificada.
+pendiente, ni acredita Resend, Meta, S12.2B en Preview, reservas o Production.
+Production no fue modificada.
+
+## Relación con S12.2B
+
+La [BOM versionada por tarea](./TASK_MATERIAL_REQUIREMENTS.md) ya existe en el
+worktree local mediante `TaskMaterialRequirementRevision` y
+`TaskMaterialRequirementLine`. Publica snapshots inmutables del material, unidad
+y cantidad requerida, o declara explícitamente `NO_MATERIALS_REQUIRED`.
+
+S12.2B no escribe `InventoryLedgerEntry` ni `InventoryBalance`, no consume
+existencia y no crea reservas. Sus estados `NOT_DEFINED`, `NOT_REQUIRED`,
+`REVIEW_REQUIRED` y `DEFINED_UNRESERVED` conservan siempre `available: false`.
+La migración `20260802180000_task_material_requirements`, su API/UI y el
+verificador todavía no tienen evidencia Neon/Vercel Preview.
 
 ## Próximos cortes
 
-- **S12.2B:** BOM/requerimiento versionado por tarea y unidad.
-- **S12.2C:** reserva/liberación exacta contra una revisión de BOM.
+- **S12.2B - gate remoto pendiente:** aplicar/verificar la BOM local en Neon y
+  Vercel Preview y recorrer el journey autenticado por rol.
+- **S12.2C:** reserva/liberación exacta contra una revisión inmutable de BOM;
+  recién este corte puede habilitar un cálculo de `AVAILABLE`.
 - **S12.2D:** consumo, devolución, transferencia y ajuste aprobable; readiness
   derivado sin mutar automáticamente `Task.status`.
 - **Hardening de volumen:** antes de habilitar consumos masivos, agrupar la

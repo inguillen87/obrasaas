@@ -536,6 +536,16 @@ export async function deleteCanonicalTask(prisma, {
     if (!task) throw new CanonicalTaskError('La tarea canónica no existe en esta obra.', 'CANONICAL_TASK_NOT_FOUND', 404);
     const children = await transaction.task.count({ where: { projectId, parentId: id } });
     if (children > 0) throw new CanonicalTaskError('No se puede eliminar una tarea con subtareas.', 'CANONICAL_TASK_HAS_CHILDREN', 409);
+    const materialRequirementRevisions = await transaction.taskMaterialRequirementRevision.count({
+      where: { organizationId, projectId, taskId: id },
+    });
+    if (materialRequirementRevisions > 0) {
+      throw new CanonicalTaskError(
+        'La tarea tiene historial de materiales y no puede eliminarse; conservá la trazabilidad y cerrala por estado.',
+        'CANONICAL_TASK_HAS_MATERIAL_REQUIREMENTS',
+        409,
+      );
+    }
     await transaction.task.delete({ where: { id } });
     await transaction.auditLog.create({ data: { organizationId, actorId: actor, action: 'task.deleted', entityType: 'Task', entityId: id, metadata: { projectId, title: task.title, revision: task.revision } } });
     return { id, deleted: true };

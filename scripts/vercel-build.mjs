@@ -48,6 +48,9 @@ const GOODS_RECEIPT_INSPECTION_VERIFIER_PATH = fileURLToPath(
 const INVENTORY_STOCK_LEDGER_VERIFIER_PATH = fileURLToPath(
   new URL("./verify-inventory-stock-ledger-migration.mjs", import.meta.url),
 );
+const TASK_MATERIAL_REQUIREMENTS_VERIFIER_PATH = fileURLToPath(
+  new URL("./verify-task-material-requirements-migration.mjs", import.meta.url),
+);
 const NOTIFICATION_OUTBOX_VERIFIER_PATH = fileURLToPath(
   new URL("./verify-notification-outbox-migration.mjs", import.meta.url),
 );
@@ -343,6 +346,7 @@ export async function runVercelBuild({
       GOODS_RECEIPT_COMMITMENT_ALLOCATION_VERIFIER_PATH,
     goodsReceiptInspectionVerifier: GOODS_RECEIPT_INSPECTION_VERIFIER_PATH,
     inventoryStockLedgerVerifier: INVENTORY_STOCK_LEDGER_VERIFIER_PATH,
+    taskMaterialRequirementsVerifier: TASK_MATERIAL_REQUIREMENTS_VERIFIER_PATH,
     notificationOutboxVerifier: NOTIFICATION_OUTBOX_VERIFIER_PATH,
     notificationOutboxScopePreflight: NOTIFICATION_OUTBOX_SCOPE_PREFLIGHT_PATH,
   },
@@ -414,6 +418,9 @@ export async function runVercelBuild({
       INVENTORY_STOCK_LEDGER_MIGRATION_DATABASE_URL:
         environment[plan.migrationDatabaseEnvironment],
       INVENTORY_STOCK_LEDGER_MIGRATION_SCHEMA: "public",
+      TASK_MATERIAL_REQUIREMENTS_MIGRATION_DATABASE_URL:
+        environment[plan.migrationDatabaseEnvironment],
+      TASK_MATERIAL_REQUIREMENTS_MIGRATION_SCHEMA: "public",
       NOTIFICATION_OUTBOX_MIGRATION_DATABASE_URL:
         environment[plan.migrationDatabaseEnvironment],
       NOTIFICATION_OUTBOX_MIGRATION_SCHEMA: "public",
@@ -482,6 +489,13 @@ export async function runVercelBuild({
       await runner(
         process.execPath,
         [cliPaths.inventoryStockLedgerVerifier],
+        { ...sharedOptions, env: verificationEnvironment },
+      );
+    }
+    if (cliPaths.taskMaterialRequirementsVerifier) {
+      await runner(
+        process.execPath,
+        [cliPaths.taskMaterialRequirementsVerifier],
         { ...sharedOptions, env: verificationEnvironment },
       );
     }
