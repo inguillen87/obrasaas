@@ -6,11 +6,59 @@ import { config } from 'dotenv';
 config({ path: '.env.local', quiet: true });
 config({ quiet: true });
 
-const connectionString = process.env.PROJECT_EXECUTION_MIGRATION_DATABASE_URL
-  || process.env.DATABASE_URL_UNPOOLED
-  || process.env.DATABASE_URL;
+const CONNECTION_ENV = 'PROJECT_EXECUTION_MIGRATION_DATABASE_URL';
+const SCHEMA_ENV = 'PROJECT_EXECUTION_MIGRATION_SCHEMA';
+const SCHEMA_IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_$]{0,62}$/;
+const connectionString = process.env[CONNECTION_ENV];
 if (!connectionString) {
-  throw new Error('PROJECT_EXECUTION_MIGRATION_DATABASE_URL or DATABASE_URL is required.');
+  throw new Error(`${CONNECTION_ENV} is required; generic database URLs are intentionally ignored.`);
+}
+
+function parsePostgresUrl(value) {
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error(`${CONNECTION_ENV} must be a valid PostgreSQL URL.`);
+  }
+  if (!['postgres:', 'postgresql:'].includes(parsed.protocol)) {
+    throw new Error(`${CONNECTION_ENV} must use PostgreSQL.`);
+  }
+  return parsed;
+}
+
+function resolveDatabaseSchema(value) {
+  const parsed = parsePostgresUrl(value);
+  const dsnSchemas = parsed.searchParams.getAll('schema');
+  if (dsnSchemas.length > 1 && new Set(dsnSchemas).size > 1) {
+    throw new Error(`${CONNECTION_ENV} contains conflicting schema parameters.`);
+  }
+  const dsnSchema = dsnSchemas[0] || null;
+  const explicitSchema = process.env[SCHEMA_ENV] || null;
+  if (explicitSchema && dsnSchema && explicitSchema !== dsnSchema) {
+    throw new Error(`${SCHEMA_ENV} does not match the schema declared in the database URL.`);
+  }
+  const schema = explicitSchema || dsnSchema;
+  if (!schema || !SCHEMA_IDENTIFIER_PATTERN.test(schema)) {
+    throw new Error(`Declare a safe PostgreSQL schema through ${SCHEMA_ENV} or the database URL.`);
+  }
+  return schema;
+}
+
+function hardenedVerifierConnectionString(value) {
+  const parsed = parsePostgresUrl(value);
+  const hostname = parsed.hostname.toLowerCase().replace(/\.$/, '');
+  const isLocal = ['localhost', '127.0.0.1', '[::1]', '::1'].includes(hostname);
+  if (hostname.endsWith('.neon.tech')) {
+    parsed.searchParams.set('sslmode', 'verify-full');
+  } else if (!isLocal && parsed.searchParams.get('sslmode') !== 'verify-full') {
+    throw new Error(`${CONNECTION_ENV} must use sslmode=verify-full for a remote PostgreSQL host.`);
+  }
+  return parsed.toString();
+}
+
+function quoteIdentifier(identifier) {
+  return `"${identifier.replaceAll('"', '""')}"`;
 }
 
 const expectedMigrations = [
@@ -18,13 +66,26 @@ const expectedMigrations = [
   '20260809093000_purchase_order_line_scoped_identity',
   '20260809093100_task_assignment_project_ownership',
 ];
+const databaseSchema = resolveDatabaseSchema(connectionString);
+const verifierConnectionString = hardenedVerifierConnectionString(connectionString);
 const pool = new pg.Pool({
-  connectionString,
+  connectionString: verifierConnectionString,
   application_name: 'obrasaas-project-execution-verifier',
+  statement_timeout: 35_000,
+  query_timeout: 40_000,
 });
 const client = await pool.connect();
 
 try {
+  const schemaExists = await client.query(
+    'SELECT to_regnamespace($1) IS NOT NULL AS exists',
+    [databaseSchema],
+  );
+  assert.equal(schemaExists.rows[0]?.exists, true, 'Configured project execution schema does not exist.');
+  await client.query(`SET search_path TO ${quoteIdentifier(databaseSchema)}, pg_catalog`);
+  const activeSchema = await client.query('SELECT current_schema() AS name');
+  assert.equal(activeSchema.rows[0]?.name, databaseSchema, 'PostgreSQL did not activate the configured project execution schema.');
+
   const migrations = await client.query(
     `SELECT "migration_name"
        FROM "_prisma_migrations"

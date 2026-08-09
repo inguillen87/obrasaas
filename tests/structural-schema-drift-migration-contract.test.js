@@ -87,3 +87,12 @@ test('runtime verifier normalizes PostgreSQL catalog name arrays to text arrays'
   assert.match(verifier, /assert\.deepEqual\(projectForeignKey\.childColumns, \['projectId'\]\)/);
   assert.match(verifier, /assert\.deepEqual\(projectForeignKey\.parentColumns, \['id'\]\)/);
 });
+
+test('runtime verifier requires a dedicated schema and full TLS verification remotely', () => {
+  assert.match(verifier, /const CONNECTION_ENV = 'PROJECT_EXECUTION_MIGRATION_DATABASE_URL'/);
+  assert.match(verifier, /const SCHEMA_ENV = 'PROJECT_EXECUTION_MIGRATION_SCHEMA'/);
+  assert.match(verifier, /generic database URLs are intentionally ignored/);
+  assert.match(verifier, /hostname\.endsWith\('\.neon\.tech'\)[\s\S]*?set\('sslmode', 'verify-full'\)/);
+  assert.match(verifier, /SET search_path TO \$\{quoteIdentifier\(databaseSchema\)\}, pg_catalog/);
+  assert.match(verifier, /statement_timeout: 35_000/);
+});
