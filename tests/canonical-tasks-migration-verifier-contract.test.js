@@ -29,3 +29,30 @@ test('canonical task verifier checks table-qualified columns without rejecting l
   assert.match(verifier, /Missing canonical task columns/);
   assert.doesNotMatch(verifier, /assert\.equal\(catalog\.rowCount/);
 });
+
+test('canonical task verifier returns enum labels as text arrays and scopes catalogs', () => {
+  assert.match(
+    verifier,
+    /array_agg\(e\.enumlabel::text ORDER BY e\.enumsortorder\)/,
+  );
+  assert.match(
+    verifier,
+    /type_namespace\.nspname = current_schema\(\)/,
+  );
+  assert.match(
+    verifier,
+    /constraint_namespace\.nspname = current_schema\(\)/,
+  );
+  assert.match(
+    verifier,
+    /constrained_relation\.relname IN \('Task', 'TaskDependency'\)/,
+  );
+  assert.match(
+    verifier,
+    /index_catalog\.schemaname = current_schema\(\)/,
+  );
+  assert.match(
+    verifier,
+    /index_catalog\.tablename IN \('Task', 'TaskDependency'\)/,
+  );
+});
