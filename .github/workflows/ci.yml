@@ -63,7 +63,6 @@ jobs:
           mkdir -p "$RUNNER_TEMP/attendance-migrations"
           for migration in \
             prisma/migrations/2026072315* \
-            prisma/migrations/20260724*_attendance_s2_* \
             prisma/migrations/20260724*; do
             mv "$migration" "$RUNNER_TEMP/attendance-migrations/"
           done
@@ -79,7 +78,6 @@ jobs:
         run: |
           for migration in \
             "$RUNNER_TEMP"/attendance-migrations/2026072315* \
-            "$RUNNER_TEMP"/attendance-migrations/20260724*_attendance_s2_* \
             "$RUNNER_TEMP"/attendance-migrations/20260724*; do
             mv "$migration" prisma/migrations/
           done
