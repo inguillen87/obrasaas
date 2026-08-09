@@ -30,3 +30,16 @@ test('CI isolates the complete migration suffix from the attendance cutover', ()
   );
   assert.doesNotMatch(continuousIntegration, /202607(?:2315|24)[^\n]*\*/);
 });
+
+test('CI wires fail-closed migration verifiers to the PostgreSQL 17 service', () => {
+  assert.ok(continuousIntegration.includes(`      - name: Verify progress journal migration
+        env:
+          PROGRESS_JOURNAL_MIGRATION_DATABASE_URL: postgresql://obrasaas_ci:obrasaas_ci@127.0.0.1:5432/obrasaas_ci?schema=public
+          PROGRESS_JOURNAL_MIGRATION_SCHEMA: public
+        run: npm run verify:progress-journal-migration`));
+  assert.ok(continuousIntegration.includes(`      - name: Verify notification outbox migration
+        env:
+          NOTIFICATION_OUTBOX_MIGRATION_DATABASE_URL: postgresql://obrasaas_ci:obrasaas_ci@127.0.0.1:5432/obrasaas_ci?schema=public
+          NOTIFICATION_OUTBOX_MIGRATION_SCHEMA: public
+        run: npm run verify:notification-outbox-migration`));
+});

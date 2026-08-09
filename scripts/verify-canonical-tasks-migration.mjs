@@ -7,6 +7,18 @@ config({ quiet: true });
 
 const { Pool } = pg;
 const MIGRATION = '20260724110000_canonical_tasks_wbs';
+const EXPECTED_COLUMNS = [
+  ['Task', 'projectId'],
+  ['Task', 'code'],
+  ['Task', 'type'],
+  ['Task', 'revision'],
+  ['Task', 'parentId'],
+  ['TaskDependency', 'projectId'],
+  ['TaskDependency', 'predecessorId'],
+  ['TaskDependency', 'successorId'],
+  ['TaskDependency', 'type'],
+  ['TaskDependency', 'lagDays'],
+];
 const connectionString = process.env.CANONICAL_TASKS_MIGRATION_DATABASE_URL
   || process.env.DATABASE_URL_UNPOOLED
   || process.env.DATABASE_URL;
@@ -19,13 +31,27 @@ try {
   assert.equal(migration.rowCount, 1, 'S3 migration must be applied successfully.');
 
   const catalog = await client.query(`
-    SELECT c.relname AS "tableName", a.attname AS "columnName"
-    FROM pg_class c
-    JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped
-    WHERE c.relname IN ('Task', 'TaskDependency')
-      AND a.attname = ANY($1::text[])
-  `, [['code', 'type', 'revision', 'parentId', 'projectId', 'predecessorId', 'successorId', 'lagDays']]);
-  assert.equal(catalog.rowCount, 9, 'All canonical task columns must exist.');
+    SELECT actual.table_name AS "tableName", actual.column_name AS "columnName"
+    FROM information_schema.columns actual
+    JOIN unnest($1::text[], $2::text[]) expected("tableName", "columnName")
+      ON expected."tableName" = actual.table_name
+     AND expected."columnName" = actual.column_name
+    WHERE actual.table_schema = current_schema()
+  `, [
+    EXPECTED_COLUMNS.map(([tableName]) => tableName),
+    EXPECTED_COLUMNS.map(([, columnName]) => columnName),
+  ]);
+  const existingColumns = new Set(
+    catalog.rows.map(({ tableName, columnName }) => `${tableName}.${columnName}`),
+  );
+  const missingColumns = EXPECTED_COLUMNS
+    .map(([tableName, columnName]) => `${tableName}.${columnName}`)
+    .filter((column) => !existingColumns.has(column));
+  assert.deepEqual(
+    missingColumns,
+    [],
+    `Missing canonical task columns: ${missingColumns.join(', ')}`,
+  );
 
   const types = await client.query(`
     SELECT t.typname, array_agg(e.enumlabel ORDER BY e.enumsortorder) AS labels
