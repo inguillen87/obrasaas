@@ -156,5 +156,6 @@ test('hotfix validates generated task eligibility before making it physically no
       && drop > setNotNull
       && resetLockTimeout > drop,
   );
+  assert.doesNotMatch(nullabilityHotfix, /^\s*(?:BEGIN|COMMIT)\s*;/im);
   assert.doesNotMatch(nullabilityHotfix, /UPDATE\s+"Task"/i);
 });

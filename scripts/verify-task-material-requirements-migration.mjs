@@ -644,6 +644,7 @@ async function flushDeferredConstraints(client) {
 
 async function createFixture(client) {
   const suffix = randomUUID();
+  const catalogCodeSuffix = suffix.slice(0, 8).toUpperCase();
   const fixture = {
     suffix,
     organizationId: `requirement_verify_org_${suffix}`,
@@ -652,9 +653,9 @@ async function createFixture(client) {
     membershipId: `requirement_verify_membership_${suffix}`,
     taskId: `requirement_verify_task_${suffix}`,
     inventoryItemId: `requirement_verify_item_${suffix}`,
-    taskCode: `REQ-${suffix.slice(0, 8)}`,
+    taskCode: `REQ-${catalogCodeSuffix}`,
     taskTitle: 'Tarea canónica para verificar materiales',
-    itemCode: `MAT-${suffix.slice(0, 8)}`,
+    itemCode: `MAT-${catalogCodeSuffix}`,
     itemName: 'Material verificador',
     unit: 'bolsas',
     taskRevision: 7,

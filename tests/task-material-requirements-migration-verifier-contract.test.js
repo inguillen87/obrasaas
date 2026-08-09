@@ -63,6 +63,8 @@ test('task material requirement verifier covers schema and behavioral guardrails
     /foreign key \(projectid, taskid, taskidentitysnapshot\)[\s\S]*references task\(projectid, id, materialrequirementeligible\)/,
   );
   assert.match(verifier, /Canonical task did not generate materialRequirementEligible = true/);
+  assert.match(verifier, /catalogCodeSuffix = suffix\.slice\(0, 8\)\.toUpperCase\(\)/);
+  assert.match(verifier, /itemCode: `MAT-\$\{catalogCodeSuffix\}`/);
   assert.match(verifier, /false canonical task identity snapshot/);
   assert.match(verifier, /old\.type is not distinct from new\.type/);
   assert.match(verifier, /NO_MATERIALS_REQUIRED/);
