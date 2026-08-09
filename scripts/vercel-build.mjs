@@ -54,6 +54,9 @@ const TASK_MATERIAL_REQUIREMENTS_VERIFIER_PATH = fileURLToPath(
 const NOTIFICATION_OUTBOX_VERIFIER_PATH = fileURLToPath(
   new URL("./verify-notification-outbox-migration.mjs", import.meta.url),
 );
+const PROJECT_EXECUTION_VERIFIER_PATH = fileURLToPath(
+  new URL("./verify-project-execution-migration.mjs", import.meta.url),
+);
 const NOTIFICATION_OUTBOX_SCOPE_PREFLIGHT_PATH = fileURLToPath(
   new URL("./preflight-notification-outbox-project-scope.mjs", import.meta.url),
 );
@@ -348,6 +351,7 @@ export async function runVercelBuild({
     inventoryStockLedgerVerifier: INVENTORY_STOCK_LEDGER_VERIFIER_PATH,
     taskMaterialRequirementsVerifier: TASK_MATERIAL_REQUIREMENTS_VERIFIER_PATH,
     notificationOutboxVerifier: NOTIFICATION_OUTBOX_VERIFIER_PATH,
+    projectExecutionVerifier: PROJECT_EXECUTION_VERIFIER_PATH,
     notificationOutboxScopePreflight: NOTIFICATION_OUTBOX_SCOPE_PREFLIGHT_PATH,
   },
 } = {}) {
@@ -424,6 +428,9 @@ export async function runVercelBuild({
       NOTIFICATION_OUTBOX_MIGRATION_DATABASE_URL:
         environment[plan.migrationDatabaseEnvironment],
       NOTIFICATION_OUTBOX_MIGRATION_SCHEMA: "public",
+      PROJECT_EXECUTION_MIGRATION_DATABASE_URL:
+        environment[plan.migrationDatabaseEnvironment],
+      PROJECT_EXECUTION_MIGRATION_SCHEMA: "public",
     };
     await runner(
       process.execPath,
@@ -503,6 +510,13 @@ export async function runVercelBuild({
       await runner(
         process.execPath,
         [cliPaths.notificationOutboxVerifier],
+        { ...sharedOptions, env: verificationEnvironment },
+      );
+    }
+    if (cliPaths.projectExecutionVerifier) {
+      await runner(
+        process.execPath,
+        [cliPaths.projectExecutionVerifier],
         { ...sharedOptions, env: verificationEnvironment },
       );
     }
