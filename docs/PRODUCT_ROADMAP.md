@@ -240,6 +240,13 @@ SSO/SCIM, más verticales QA/RFI/submittal, transmittals y conectores adicionale
 
 ## Definition of Done transversal
 
+La estrategia de integraciones abiertas se documenta en
+[OPEN_CAPABILITY_GATEWAY.md](./OPEN_CAPABILITY_GATEWAY.md). El catálogo de una
+comunidad es una fuente de descubrimiento, no una aprobación productiva. El
+primer slice previsto es clima consultivo, sin mutar tareas, asistencia,
+baseline, pagos ni certificaciones, y no desplaza los gates Meta/privacidad del
+piloto.
+
 Un ítem no está terminado sólo porque existe una pantalla. Debe incluir:
 
 - requisito y criterio de aceptación trazables;
