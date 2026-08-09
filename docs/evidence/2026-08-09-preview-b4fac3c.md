@@ -1,8 +1,11 @@
 # Evidencia Preview `b4fac3c` — reconciliación Prisma/PostgreSQL
 
-**Fecha:** 9 de agosto de 2026  
-**Rama:** `codex/platform-ux-foundation`  
-**Commit verificado:** `b4fac3c3094d408de3269a7cd136ee6ab9274614`  
+**Fecha:** 9 de agosto de 2026
+
+**Rama:** `codex/platform-ux-foundation`
+
+**Commit verificado:** `b4fac3c3094d408de3269a7cd136ee6ab9274614`
+
 **Production:** no tocado
 
 ## Artefactos inmutables
