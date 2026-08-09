@@ -2,15 +2,16 @@
 
 ## Estado de evidencia de S12.2B
 
-Estado al 2 de agosto de 2026: **implementado y validado con pruebas focalizadas
-en el worktree local; todavía no aplicado ni verificado en Neon/Vercel Preview**.
-No hubo deployment ni migración en Production por este corte.
+Estado al 9 de agosto de 2026: **contrato PostgreSQL, migraciones 116+117,
+verificador dedicado y build verificados en Neon/Vercel Preview**. El deployment
+`054a82c` quedó `Ready` después de detectar 117 migraciones sin pendientes y
+verificar conjuntamente `20260802180000_task_material_requirements` y
+`20260809090000_task_material_requirement_eligibility_not_null`.
 
-La implementación local incluye la migración
-`20260802180000_task_material_requirements`, dominio, API, panel de Compras,
-verificador dedicado y 27 pruebas focalizadas verdes. Ese resultado acredita el
-contrato local; no acredita migración PostgreSQL remota, journey autenticado,
-reserva de stock, email real ni operación productiva.
+La [evidencia reproducible](./evidence/2026-08-09-preview-054a82c.md) acredita la
+capa DB/build de S12.2B. No acredita journey UI/API autenticado por rol, reserva
+de stock, email Resend real, Meta E2E ni operación productiva. No hubo deployment
+ni migración en Production por este corte.
 
 ## Alcance y límite de autoridad
 
@@ -191,17 +192,21 @@ La suite focal ejecutada en este corte cubre 27 casos en:
 - `tests/task-material-requirements-migration-verifier-contract.test.js`;
 - `tests/task-material-requirements-ui.test.js`.
 
-Antes de cambiar el estado a Preview deben cumplirse, en orden:
+Estado de los gates:
 
-1. aplicar las 116 migraciones, incluida
-   `20260802180000_task_material_requirements`, sobre Neon Preview aislado;
-2. ejecutar el verificador dedicado contra ese mismo esquema;
-3. obtener build `Ready` en Vercel Preview y smokes sobre URL inmutable/alias;
-4. recorrer el panel autenticado con roles de lectura y gestión, publicación,
-   replay, conflicto, material inactivo, `NO_MATERIALS_REQUIRED` e historial;
-5. conservar `available: false` hasta implementar y verificar S12.2C;
-6. no presentar S12.2B como Production sin promoción, rollback y evidencia
-   específica de ese ambiente.
+1. **completo en Preview:** las 117 migraciones fueron detectadas sin pendientes
+   en la base aislada;
+2. **completo en Preview:** el verificador dedicado aprobó conjuntamente
+   `20260802180000_task_material_requirements` y
+   `20260809090000_task_material_requirement_eligibility_not_null`;
+3. **completo en Preview:** el build del commit `054a82c` llegó a `Ready`;
+4. **pendiente:** recorrer el panel y las APIs con roles de lectura y gestión,
+   publicación, replay, conflicto, material inactivo,
+   `NO_MATERIALS_REQUIRED` e historial;
+5. **pendiente S12.2C:** conservar `available: false` hasta implementar y
+   verificar reserva/liberación exacta;
+6. **pendiente antes de Production:** promoción, rollback y evidencia específica
+   de ese ambiente. Production no fue modificada por este corte.
 
 ## Siguiente corte: S12.2C
 
