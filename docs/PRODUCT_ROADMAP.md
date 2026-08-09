@@ -1,6 +1,6 @@
 # Roadmap de producto y profesionalización
 
-**Corte de evidencia:** 2 de agosto de 2026
+**Corte de evidencia:** 9 de agosto de 2026
 
 **Rama de trabajo:** `codex/platform-ux-foundation`
 
@@ -21,8 +21,8 @@ La especificación recibida el 23 de julio de 2026 fue revisada página por pág
 
 | Capa | Estado comprobado |
 | --- | --- |
-| WIP local | El worktree contiene 119 migraciones. Las migraciones 118-119 y los 77 mapeos de nombres físicos cierran localmente el drift Prisma sin renombrar objetos históricos; el replay 119/119, el verificador de catálogo/cascada y `migrate diff` pasan en PGlite descartable. Falta PostgreSQL 17/Preview, según el [runbook de reconciliación](./SCHEMA_DRIFT_RECONCILIATION.md). Se conserva la evidencia local de H4 `13000-13400` y PRO-05A ya documentada. S12.2B dejó de ser sólo local en su capa DB/build, pero todavía no tiene journey autenticado; S12.2C continúa sin implementar |
-| Último Preview reproducible | 117 migraciones y commit `054a82c` `Ready`; el corte acredita el contrato PostgreSQL, los verificadores 116+117 y el build de S12.2B. No acredita UI/API autenticada, reservas ni Production ([evidencia](./evidence/2026-08-09-preview-054a82c.md)) |
+| WIP local | El worktree contiene 119 migraciones. Las migraciones 118-119 y los 77 mapeos de nombres físicos cierran el drift Prisma sin renombrar objetos históricos; replay 119/119, catálogo/cascada y `migrate diff` pasan localmente y en PostgreSQL 17. El [runbook](./SCHEMA_DRIFT_RECONCILIATION.md) y la [evidencia Preview](./evidence/2026-08-09-preview-b4fac3c.md) conservan recuperación y resultados. H4 `13000-13400` y PRO-05A mantienen su evidencia previa. S12.2B todavía no tiene journey autenticado y S12.2C continúa sin implementar |
+| Último Preview reproducible | 119 migraciones y commit `b4fac3c` `Ready`; Neon quedó sin pendientes y el build gobernado verificó catálogo/cascada con conexión dedicada y TLS `verify-full`. CI PostgreSQL 17 cerró sin drift y los smokes públicos/fail-closed pasaron. No acredita UI/API autenticada, reservas, Meta E2E ni Production ([evidencia](./evidence/2026-08-09-preview-b4fac3c.md)) |
 | E2E externo | WhatsApp bidireccional sobre tenant conectado, media real, foto de obra y journey visual siguen pendientes |
 | Production | Sin deployment ni migración de estos cambios; se conserva aparte el incidente Clerk de posible sincronización de membresía ([evidencia](./evidence/2026-07-28-preview-c91cee0.md)) |
 

@@ -1,7 +1,9 @@
 # Reconciliación de drift Prisma/PostgreSQL
 
-**Estado al 9 de agosto de 2026:** validado localmente; pendiente PostgreSQL 17,
-Neon Preview y deployment Vercel del mismo commit. Production no fue tocado.
+**Estado al 9 de agosto de 2026:** aprobado localmente, en PostgreSQL 17 y en
+Neon/Vercel Preview para el commit `b4fac3c`. Production no fue tocado. La
+[evidencia reproducible](./evidence/2026-08-09-preview-b4fac3c.md) separa este
+gate de los journeys autenticados y proveedores externos todavía pendientes.
 
 ## Alcance
 
@@ -62,5 +64,9 @@ El corte sólo queda aprobado cuando el mismo commit demuestra:
 6. borrado de un fixture de proyecto que elimina tarea, equipo y asignación;
 7. Vercel Preview `Ready` y smokes HTTP sin 5xx.
 
-PGlite ya acredita localmente 119/119, catálogo/cascada y drift cero. Esa
-evidencia acelera el feedback pero no sustituye PostgreSQL 17 ni Neon Preview.
+El gate quedó aprobado: PGlite acreditó 119/119, catálogo/cascada y drift cero;
+CI repitió el historial y `migrate diff` en PostgreSQL 17; Neon encontró 119
+migraciones sin pendientes y repitió el verificador conductual con conexión
+dedicada y TLS `verify-full`; el deployment quedó `Ready` y los bordes HTTP
+respondieron sin 5xx. Esto no acredita Production, autenticación por roles ni
+Meta E2E.
