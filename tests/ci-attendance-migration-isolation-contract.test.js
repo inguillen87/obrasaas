@@ -7,14 +7,26 @@ const continuousIntegration = await readFile(
   'utf8',
 );
 
-test('CI isolates attendance migrations with disjoint source globs', () => {
-  assert.doesNotMatch(continuousIntegration, /20260724\*_attendance_s2_\*/);
-  assert.equal(
-    continuousIntegration.match(/prisma\/migrations\/20260724\*/g)?.length,
-    1,
+test('CI isolates the complete migration suffix from the attendance cutover', () => {
+  assert.match(
+    continuousIntegration,
+    /attendance_cutover="20260723150000_attendance_status_expired_enum"/,
   );
-  assert.equal(
-    continuousIntegration.match(/attendance-migrations\/20260724\*/g)?.length,
-    1,
+  assert.match(
+    continuousIntegration,
+    /for migration in prisma\/migrations\/\*\/; do/,
   );
+  assert.match(
+    continuousIntegration,
+    /\[\[ "\$migration_name" < "\$attendance_cutover" \]\] && continue/,
+  );
+  assert.match(
+    continuousIntegration,
+    /attendance_migrations=\("\$RUNNER_TEMP"\/attendance-migrations\/\*\/\)/,
+  );
+  assert.match(
+    continuousIntegration,
+    /mv "\$\{attendance_migrations\[@\]\}" prisma\/migrations\//,
+  );
+  assert.doesNotMatch(continuousIntegration, /202607(?:2315|24)[^\n]*\*/);
 });
