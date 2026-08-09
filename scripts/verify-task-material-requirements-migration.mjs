@@ -5,7 +5,10 @@ import pg from 'pg';
 
 const CONNECTION_ENV = 'TASK_MATERIAL_REQUIREMENTS_MIGRATION_DATABASE_URL';
 const SCHEMA_ENV = 'TASK_MATERIAL_REQUIREMENTS_MIGRATION_SCHEMA';
-const MIGRATION = '20260802180000_task_material_requirements';
+const MIGRATIONS = Object.freeze([
+  '20260802180000_task_material_requirements',
+  '20260809090000_task_material_requirement_eligibility_not_null',
+]);
 const SCHEMA_IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_$]{0,62}$/;
 const connectionString = process.env[CONNECTION_ENV];
 
@@ -73,11 +76,13 @@ function normalizeDefinition(value) {
 
 const databaseSchema = resolveDatabaseSchema(connectionString);
 const verifierConnectionString = hardenedVerifierConnectionString(connectionString);
-const migrationSql = await readFile(new URL(
-  `../prisma/migrations/${MIGRATION}/migration.sql`,
-  import.meta.url,
-));
-const expectedMigrationChecksum = createHash('sha256').update(migrationSql).digest('hex');
+const expectedMigrationChecksums = new Map(await Promise.all(MIGRATIONS.map(async (migration) => {
+  const migrationSql = await readFile(new URL(
+    `../prisma/migrations/${migration}/migration.sql`,
+    import.meta.url,
+  ));
+  return [migration, createHash('sha256').update(migrationSql).digest('hex')];
+})));
 
 async function assertMigration(client) {
   const table = await client.query(
@@ -85,17 +90,39 @@ async function assertMigration(client) {
   );
   invariant(table.rows[0]?.name, 'The configured schema has no _prisma_migrations table.');
   const result = await client.query(
-    `SELECT "checksum" FROM "_prisma_migrations"
-      WHERE "migration_name" = $1
+    `SELECT "migration_name", "checksum" FROM "_prisma_migrations"
+      WHERE "migration_name" = ANY($1::text[])
         AND "finished_at" IS NOT NULL
-        AND "rolled_back_at" IS NULL`,
-    [MIGRATION],
+        AND "rolled_back_at" IS NULL
+      ORDER BY "migration_name"`,
+    [MIGRATIONS],
   );
-  invariant(result.rowCount === 1, 'Task material requirements migration is not applied exactly once.');
   invariant(
-    result.rows[0]?.checksum === expectedMigrationChecksum,
-    'Applied task material requirements migration does not match the repository checksum.',
+    result.rowCount === MIGRATIONS.length,
+    'Task material requirements migrations are not applied exactly once.',
   );
+  const appliedMigrations = new Map();
+  for (const row of result.rows) {
+    invariant(
+      expectedMigrationChecksums.has(row.migration_name),
+      `Unexpected task material requirements migration ${row.migration_name} was returned.`,
+    );
+    invariant(
+      !appliedMigrations.has(row.migration_name),
+      `Task material requirements migration ${row.migration_name} is applied more than once.`,
+    );
+    appliedMigrations.set(row.migration_name, row.checksum);
+    invariant(
+      row.checksum === expectedMigrationChecksums.get(row.migration_name),
+      `Applied task material requirements migration ${row.migration_name} does not match the repository checksum.`,
+    );
+  }
+  for (const migration of MIGRATIONS) {
+    invariant(
+      appliedMigrations.has(migration),
+      `Task material requirements migration ${migration} is not applied.`,
+    );
+  }
 }
 
 async function assertEnum(client) {
@@ -951,7 +978,7 @@ try {
   await client.query('ROLLBACK');
   transactionOpen = false;
   console.log(
-    `Verified ${MIGRATION}: immutable exact task material bundles, linear revisions, explicit no-material mode and no inferred backfill.`,
+    `Verified ${MIGRATIONS.join(', ')}: immutable exact task material bundles, linear revisions, explicit no-material mode and no inferred backfill.`,
   );
 } finally {
   if (transactionOpen) await client.query('ROLLBACK').catch(() => undefined);

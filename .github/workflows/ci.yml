@@ -120,6 +120,12 @@ jobs:
           WORKER_IDENTITY_MIGRATION_DATABASE_URL: postgresql://obrasaas_ci:obrasaas_ci@127.0.0.1:5432/obrasaas_ci?schema=public
         run: npm run verify:worker-identity-migrations
 
+      - name: Verify task material requirements on PostgreSQL 17
+        env:
+          TASK_MATERIAL_REQUIREMENTS_MIGRATION_DATABASE_URL: postgresql://obrasaas_ci:obrasaas_ci@127.0.0.1:5432/obrasaas_ci?schema=public
+          TASK_MATERIAL_REQUIREMENTS_MIGRATION_SCHEMA: public
+        run: npm run verify:task-material-requirements-migration
+
       - name: Verify migration history status
         run: npx prisma migrate status
 

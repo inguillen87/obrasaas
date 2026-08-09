@@ -2,13 +2,14 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-const [verifier, packageJson, vercelBuild] = await Promise.all([
+const [verifier, packageJson, vercelBuild, continuousIntegration] = await Promise.all([
   readFile(
     new URL('../scripts/verify-task-material-requirements-migration.mjs', import.meta.url),
     'utf8',
   ),
   readFile(new URL('../package.json', import.meta.url), 'utf8'),
   readFile(new URL('../scripts/vercel-build.mjs', import.meta.url), 'utf8'),
+  readFile(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8'),
 ]);
 
 test('task material requirement verifier is dedicated, checksum-bound and rollback-only', () => {
@@ -16,6 +17,12 @@ test('task material requirement verifier is dedicated, checksum-bound and rollba
   assert.match(verifier, /TASK_MATERIAL_REQUIREMENTS_MIGRATION_SCHEMA/);
   assert.match(verifier, /DATABASE_URL is intentionally ignored/);
   assert.match(verifier, /20260802180000_task_material_requirements/);
+  assert.match(verifier, /20260809090000_task_material_requirement_eligibility_not_null/);
+  assert.match(verifier, /migration_name" = ANY\(\$1::text\[\]\)/);
+  assert.match(verifier, /MIGRATIONS\.join\(', '\)/);
+  assert.doesNotMatch(verifier, /\bMIGRATION\b/);
+  assert.match(verifier, /applied more than once/);
+  assert.match(verifier, /is not applied/);
   assert.match(verifier, /createHash\('sha256'\)/);
   assert.match(verifier, /await client\.query\('BEGIN'\)/);
   assert.match(verifier, /await assertRollbackOnlySmoke\(client\)/);
@@ -81,4 +88,8 @@ test('package and Vercel build wire the dedicated verifier after migration deplo
   const verify = vercelBuild.indexOf('[cliPaths.taskMaterialRequirementsVerifier]');
   const generate = vercelBuild.indexOf('[cliPaths.prisma, "generate"]');
   assert.ok(deploy >= 0 && verify > deploy && generate > verify);
+  assert.match(
+    continuousIntegration,
+    /TASK_MATERIAL_REQUIREMENTS_MIGRATION_DATABASE_URL:[\s\S]*TASK_MATERIAL_REQUIREMENTS_MIGRATION_SCHEMA: public[\s\S]*npm run verify:task-material-requirements-migration/,
+  );
 });

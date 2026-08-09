@@ -6,10 +6,15 @@ const migrationPath = new URL(
   '../prisma/migrations/20260802180000_task_material_requirements/migration.sql',
   import.meta.url,
 );
+const nullabilityHotfixPath = new URL(
+  '../prisma/migrations/20260809090000_task_material_requirement_eligibility_not_null/migration.sql',
+  import.meta.url,
+);
 const schemaPath = new URL('../prisma/schema.prisma', import.meta.url);
 
-const [migration, schema] = await Promise.all([
+const [migration, nullabilityHotfix, schema] = await Promise.all([
   readFile(migrationPath, 'utf8'),
+  readFile(nullabilityHotfixPath, 'utf8'),
   readFile(schemaPath, 'utf8'),
 ]);
 
@@ -115,4 +120,41 @@ test('historical tables and task identity guards are always enabled', () => {
     migration,
     /TaskMaterialRequirementLine_snapshot_guard"[\s\S]*DEFERRABLE INITIALLY DEFERRED/,
   );
+});
+
+test('hotfix validates generated task eligibility before making it physically non-null', () => {
+  assert.match(nullabilityHotfix, /SET lock_timeout = '5s'/);
+  assert.match(
+    nullabilityHotfix,
+    /ADD CONSTRAINT "Task_material_requirement_eligibility_not_null_check"[\s\S]*CHECK \("materialRequirementEligible" IS NOT NULL\)[\s\S]*NOT VALID/,
+  );
+  assert.match(
+    nullabilityHotfix,
+    /VALIDATE CONSTRAINT "Task_material_requirement_eligibility_not_null_check"/,
+  );
+  assert.match(
+    nullabilityHotfix,
+    /ALTER COLUMN "materialRequirementEligible" SET NOT NULL/,
+  );
+  assert.match(
+    nullabilityHotfix,
+    /DROP CONSTRAINT IF EXISTS "Task_material_requirement_eligibility_not_null_check"/,
+  );
+  const cleanup = nullabilityHotfix.indexOf('DROP CONSTRAINT IF EXISTS');
+  const add = nullabilityHotfix.indexOf('ADD CONSTRAINT');
+  const validate = nullabilityHotfix.indexOf('VALIDATE CONSTRAINT');
+  const setNotNull = nullabilityHotfix.indexOf(
+    'ALTER COLUMN "materialRequirementEligible" SET NOT NULL',
+  );
+  const drop = nullabilityHotfix.lastIndexOf('DROP CONSTRAINT IF EXISTS');
+  const resetLockTimeout = nullabilityHotfix.indexOf('RESET lock_timeout');
+  assert.ok(
+    cleanup >= 0
+      && add > cleanup
+      && validate > add
+      && setNotNull > validate
+      && drop > setNotNull
+      && resetLockTimeout > drop,
+  );
+  assert.doesNotMatch(nullabilityHotfix, /UPDATE\s+"Task"/i);
 });
