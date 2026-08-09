@@ -37,7 +37,7 @@ test('notification delivery scope is tenant-aware in Prisma and PostgreSQL', () 
   );
   assert.match(
     schema,
-    /@@unique\(\[organizationId, recipientId, channel, eventKey\]\)/,
+    /@@unique\(\[organizationId, recipientId, channel, eventKey\], map: "NotificationDelivery_organizationId_recipientId_channel_eventKe"\)/,
   );
   assert.match(
     migration,

@@ -69,7 +69,10 @@ test('rate-limit buckets are tenant-scoped, bounded and expirable without per-re
     /enum ProgressEvidenceLocationRateScope\s*\{\s*ACTIVE_SESSION\s*ACTIVE_ORGANIZATION\s*INACTIVE_SESSION\s*INACTIVE_ORGANIZATION\s*\}/,
   );
   const bucket = model('ProgressEvidenceLocationRateBucket');
-  assert.match(bucket, /organization\s+Organization\s+@relation\(fields: \[organizationId\], references: \[id\], onDelete: Cascade\)/);
+  assert.match(
+    bucket,
+    /organization\s+Organization\s+@relation\(fields: \[organizationId\], references: \[id\], onDelete: Cascade, map: "PELRateBucket_organization_fkey"\)/,
+  );
   assert.match(bucket, /scopeKeyHash\s+String\s+@db\.Char\(64\)/);
   assert.match(bucket, /windowBuckets\s+Json/);
   assert.match(bucket, /blockedCount\s+BigInt\s+@default\(0\)/);

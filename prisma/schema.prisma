@@ -779,7 +779,7 @@ model Organization {
 model Supplier {
   id             String               @id @default(cuid())
   organizationId String
-  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade, map: "Supplier_organization_fkey")
   legalName      String               @db.VarChar(220)
   taxId          String?              @db.VarChar(64)
   email          String?              @db.VarChar(254)
@@ -816,10 +816,10 @@ model SupplierInvoice {
   protectedUpload    ProtectedUpload?      @relation("SupplierInvoiceProtectedUpload", fields: [projectId, protectedUploadId], references: [projectId, id], onDelete: Restrict, map: "SupplierInvoice_protected_upload_fkey")
   requestFingerprint String?               @db.Char(64)
   revision           Int                   @default(0)
-  organization       Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  project            Project               @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Cascade)
-  supplier           Supplier              @relation(fields: [organizationId, supplierId], references: [organizationId, id], onDelete: Restrict)
-  purchaseOrder      PurchaseOrder?        @relation(fields: [organizationId, projectId, supplierId, purchaseOrderId], references: [organizationId, projectId, supplierId, id], onDelete: Restrict)
+  organization       Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade, map: "SupplierInvoice_org_fkey")
+  project            Project               @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Cascade, map: "SupplierInvoice_project_fkey")
+  supplier           Supplier              @relation(fields: [organizationId, supplierId], references: [organizationId, id], onDelete: Restrict, map: "SupplierInvoice_supplier_fkey")
+  purchaseOrder      PurchaseOrder?        @relation(fields: [organizationId, projectId, supplierId, purchaseOrderId], references: [organizationId, projectId, supplierId, id], onDelete: Restrict, map: "SupplierInvoice_order_fkey")
   createdAt          DateTime              @default(now())
   updatedAt          DateTime              @updatedAt
 
@@ -835,9 +835,9 @@ model PurchaseOrder {
   organizationId String
   projectId      String
   supplierId     String
-  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  project        Project              @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Cascade)
-  supplier       Supplier             @relation(fields: [organizationId, supplierId], references: [organizationId, id], onDelete: Restrict)
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade, map: "PurchaseOrder_org_fkey")
+  project        Project              @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Cascade, map: "PurchaseOrder_project_fkey")
+  supplier       Supplier             @relation(fields: [organizationId, supplierId], references: [organizationId, id], onDelete: Restrict, map: "PurchaseOrder_supplier_fkey")
   operationKey   String               @db.VarChar(190)
   number         String               @db.VarChar(64)
   currency       String               @db.Char(3)
@@ -864,8 +864,8 @@ model PurchaseOrderLine {
   purchaseOrderId  String
   projectId        String
   budgetLineId     String?
-  purchaseOrder    PurchaseOrder                      @relation(fields: [projectId, purchaseOrderId], references: [projectId, id], onDelete: Cascade)
-  budgetLine       BudgetLine?                        @relation(fields: [projectId, budgetLineId], references: [projectId, id], onDelete: Restrict)
+  purchaseOrder    PurchaseOrder                      @relation(fields: [projectId, purchaseOrderId], references: [projectId, id], onDelete: Cascade, map: "PurchaseOrderLine_order_fkey")
+  budgetLine       BudgetLine?                        @relation(fields: [projectId, budgetLineId], references: [projectId, id], onDelete: Restrict, map: "PurchaseOrderLine_budgetLine_fkey")
   receiptLines     GoodsReceiptLine[]
   commitmentLines  SupplierCommitmentLine[]
   inventoryBinding PurchaseOrderLineInventoryBinding?
@@ -906,10 +906,10 @@ model SupplierCommitment {
   scheduleRevision           Int                                @default(0)
   revision                   Int                                @default(0)
   fulfilledAt                DateTime?
-  organization               Organization                       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  project                    Project                            @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Cascade)
-  supplier                   Supplier                           @relation(fields: [organizationId, supplierId], references: [organizationId, id], onDelete: Restrict)
-  purchaseOrder              PurchaseOrder?                     @relation(fields: [organizationId, projectId, supplierId, purchaseOrderId], references: [organizationId, projectId, supplierId, id], onDelete: Restrict)
+  organization               Organization                       @relation(fields: [organizationId], references: [id], onDelete: Cascade, map: "SupplierCommitment_organization_fkey")
+  project                    Project                            @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Cascade, map: "SupplierCommitment_project_fkey")
+  supplier                   Supplier                           @relation(fields: [organizationId, supplierId], references: [organizationId, id], onDelete: Restrict, map: "SupplierCommitment_supplier_fkey")
+  purchaseOrder              PurchaseOrder?                     @relation(fields: [organizationId, projectId, supplierId, purchaseOrderId], references: [organizationId, projectId, supplierId, id], onDelete: Restrict, map: "SupplierCommitment_purchaseOrder_fkey")
   taskLinks                  SupplierCommitmentTaskLink[]
   lines                      SupplierCommitmentLine[]
   goodsReceiptAllocations    GoodsReceiptCommitmentAllocation[]
@@ -935,8 +935,8 @@ model SupplierCommitmentLine {
   purchaseOrderId         String
   purchaseOrderLineId     String
   quantity                Decimal                            @db.Decimal(14, 3)
-  commitment              SupplierCommitment                 @relation(fields: [projectId, purchaseOrderId, commitmentId], references: [projectId, purchaseOrderId, id], onDelete: Cascade)
-  purchaseOrderLine       PurchaseOrderLine                  @relation(fields: [projectId, purchaseOrderId, purchaseOrderLineId], references: [projectId, purchaseOrderId, id], onDelete: Restrict)
+  commitment              SupplierCommitment                 @relation(fields: [projectId, purchaseOrderId, commitmentId], references: [projectId, purchaseOrderId, id], onDelete: Cascade, map: "SupplierCommitmentLine_commitment_fkey")
+  purchaseOrderLine       PurchaseOrderLine                  @relation(fields: [projectId, purchaseOrderId, purchaseOrderLineId], references: [projectId, purchaseOrderId, id], onDelete: Restrict, map: "SupplierCommitmentLine_purchaseOrderLine_fkey")
   goodsReceiptAllocations GoodsReceiptCommitmentAllocation[]
   closures                SupplierCommitmentLineClosure[]
   createdAt               DateTime                           @default(now())
@@ -951,8 +951,8 @@ model SupplierCommitmentTaskLink {
   projectId    String
   taskId       String
   relation     SupplierCommitmentTaskRelation
-  commitment   SupplierCommitment             @relation(fields: [projectId, commitmentId], references: [projectId, id], onDelete: Cascade)
-  task         Task                           @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict)
+  commitment   SupplierCommitment             @relation(fields: [projectId, commitmentId], references: [projectId, id], onDelete: Cascade, map: "SupplierCommitmentTaskLink_commitment_fkey")
+  task         Task                           @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict, map: "SupplierCommitmentTaskLink_task_fkey")
   createdAt    DateTime                       @default(now())
 
   @@id([commitmentId, taskId])
@@ -972,7 +972,7 @@ model SupplierCommitmentEvent {
   reason             String?                     @db.VarChar(500)
   previousState      Json?
   nextState          Json
-  commitment         SupplierCommitment          @relation(fields: [organizationId, projectId, commitmentId], references: [organizationId, projectId, id], onDelete: Cascade)
+  commitment         SupplierCommitment          @relation(fields: [organizationId, projectId, commitmentId], references: [organizationId, projectId, id], onDelete: Cascade, map: "SupplierCommitmentEvent_commitment_fkey")
   createdAt          DateTime                    @default(now())
 
   @@unique([projectId, commitmentId, sequence])
@@ -1002,9 +1002,9 @@ model SupplierReminderDelivery {
   providerMessageId      String?                              @db.VarChar(190)
   providerStatusAt       DateTime?
   lastError              String?                              @db.Text
-  organization           Organization                         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  project                Project                              @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Cascade)
-  commitment             SupplierCommitment                   @relation(fields: [organizationId, projectId, commitmentId], references: [organizationId, projectId, id], onDelete: Cascade)
+  organization           Organization                         @relation(fields: [organizationId], references: [id], onDelete: Cascade, map: "SupplierReminderDelivery_organization_fkey")
+  project                Project                              @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Cascade, map: "SupplierReminderDelivery_project_fkey")
+  commitment             SupplierCommitment                   @relation(fields: [organizationId, projectId, commitmentId], references: [organizationId, projectId, id], onDelete: Cascade, map: "SupplierReminderDelivery_commitment_fkey")
   webhookApplications    SupplierReminderWebhookApplication[]
   createdAt              DateTime                             @default(now())
   updatedAt              DateTime                             @updatedAt
@@ -1014,7 +1014,7 @@ model SupplierReminderDelivery {
   @@unique([organizationId, projectId, id])
   @@unique([provider, providerMessageId])
   @@index([status, nextAttemptAt, createdAt])
-  @@index([projectId, commitmentId, scheduleRevision])
+  @@index([projectId, commitmentId, scheduleRevision], map: "SupplierReminderDelivery_projectId_commitmentId_scheduleRevisio")
 }
 
 model SupplierReminderWebhookEvent {
@@ -1036,11 +1036,11 @@ model SupplierReminderWebhookApplication {
   deliveryId     String
   appliedStatus  SupplierReminderDeliveryStatus?
   appliedAt      DateTime                        @default(now())
-  event          SupplierReminderWebhookEvent    @relation(fields: [eventId], references: [id], onDelete: Restrict)
-  delivery       SupplierReminderDelivery        @relation(fields: [organizationId, projectId, deliveryId], references: [organizationId, projectId, id], onDelete: Cascade)
+  event          SupplierReminderWebhookEvent    @relation(fields: [eventId], references: [id], onDelete: Restrict, map: "SupplierReminderWebhookApplication_event_fkey")
+  delivery       SupplierReminderDelivery        @relation(fields: [organizationId, projectId, deliveryId], references: [organizationId, projectId, id], onDelete: Cascade, map: "SupplierReminderWebhookApplication_delivery_fkey")
 
   @@index([organizationId, appliedAt])
-  @@index([projectId, deliveryId, appliedAt])
+  @@index([projectId, deliveryId, appliedAt], map: "SupplierReminderWebhookApplication_projectId_deliveryId_applied")
 }
 
 model GoodsReceipt {
@@ -1059,9 +1059,9 @@ model GoodsReceipt {
   receivedBy            PlatformUser?                      @relation("GoodsReceiptReceiver", fields: [receivedById], references: [id], onDelete: Restrict, onUpdate: Restrict)
   receivedAt            DateTime                           @default(now())
   revision              Int                                @default(0)
-  organization          Organization                       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  project               Project                            @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Cascade)
-  purchaseOrder         PurchaseOrder                      @relation(fields: [organizationId, projectId, purchaseOrderId], references: [organizationId, projectId, id], onDelete: Restrict)
+  organization          Organization                       @relation(fields: [organizationId], references: [id], onDelete: Cascade, map: "GoodsReceipt_organization_fkey")
+  project               Project                            @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Cascade, map: "GoodsReceipt_project_fkey")
+  purchaseOrder         PurchaseOrder                      @relation(fields: [organizationId, projectId, purchaseOrderId], references: [organizationId, projectId, id], onDelete: Restrict, map: "GoodsReceipt_order_fkey")
   lines                 GoodsReceiptLine[]
   commitmentAllocations GoodsReceiptCommitmentAllocation[]
   inspections           GoodsReceiptInspection[]
@@ -1084,8 +1084,8 @@ model GoodsReceiptLine {
   goodsReceiptId         String
   purchaseOrderLineId    String
   quantity               Decimal                             @db.Decimal(14, 3)
-  goodsReceipt           GoodsReceipt                        @relation(fields: [projectId, purchaseOrderId, goodsReceiptId], references: [projectId, purchaseOrderId, id], onDelete: Cascade)
-  purchaseOrderLine      PurchaseOrderLine                   @relation(fields: [projectId, purchaseOrderId, purchaseOrderLineId], references: [projectId, purchaseOrderId, id], onDelete: Restrict)
+  goodsReceipt           GoodsReceipt                        @relation(fields: [projectId, purchaseOrderId, goodsReceiptId], references: [projectId, purchaseOrderId, id], onDelete: Cascade, map: "GoodsReceiptLine_receipt_fkey")
+  purchaseOrderLine      PurchaseOrderLine                   @relation(fields: [projectId, purchaseOrderId, purchaseOrderLineId], references: [projectId, purchaseOrderId, id], onDelete: Restrict, map: "GoodsReceiptLine_orderLine_fkey")
   commitmentAllocations  GoodsReceiptCommitmentAllocation[]
   inspectionDispositions GoodsReceiptInspectionDisposition[]
 
@@ -1268,11 +1268,11 @@ model PurchaseOrderLineInventoryBinding {
   operationKey        String                 @db.VarChar(190)
   requestFingerprint  String                 @db.Char(64)
   boundById           String
-  organization        Organization           @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  organization        Organization           @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "POLInventoryBinding_organizationId_fkey")
   project             Project                @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "POLInventoryBinding_project_fkey")
   purchaseOrderLine   PurchaseOrderLine      @relation(fields: [projectId, purchaseOrderId, purchaseOrderLineId, unitSnapshot], references: [projectId, purchaseOrderId, id, unit], onDelete: Restrict, onUpdate: Restrict, map: "POLInventoryBinding_purchase_line_fkey")
   inventoryItem       InventoryItem          @relation(fields: [organizationId, projectId, inventoryItemId, unitSnapshot], references: [organizationId, projectId, id, baseUnit], onDelete: Restrict, onUpdate: Restrict, map: "POLInventoryBinding_item_fkey")
-  boundBy             PlatformUser           @relation("InventoryPurchaseLineBinder", fields: [boundById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  boundBy             PlatformUser           @relation("InventoryPurchaseLineBinder", fields: [boundById], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "POLInventoryBinding_boundById_fkey")
   ledgerEntries       InventoryLedgerEntry[]
   createdAt           DateTime               @default(now())
 
@@ -2097,7 +2097,7 @@ model WorkerOnboardingClaim {
 model WorkerPrivacyChoiceEvent {
   id                  String                     @id @default(cuid())
   organizationId      String
-  organization        Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  organization        Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "WorkerPrivacyChoice_organization_fkey")
   personId            String
   person              WorkerPerson               @relation(fields: [organizationId, personId], references: [organizationId, id], onDelete: Restrict, map: "WorkerPrivacyChoice_person_scope_fkey")
   purpose             WorkerPrivacyChoicePurpose @default(PAYMENT_DESTINATION_CAPTURE)
@@ -2367,7 +2367,7 @@ model Task {
   revision                     Int                               @default(0)
   materialRequirementEligible Boolean                           @default(dbgenerated())
   parentId                     String?
-  parent                       Task?                             @relation("TaskHierarchy", fields: [projectId, parentId], references: [projectId, id], onDelete: Restrict)
+  parent                       Task?                             @relation("TaskHierarchy", fields: [projectId, parentId], references: [projectId, id], onDelete: Restrict, map: "Task_parent_scope_fkey")
   children                     Task[]                            @relation("TaskHierarchy")
   predecessors                 TaskDependency[]                  @relation("TaskDependencySuccessor")
   successors                   TaskDependency[]                  @relation("TaskDependencyPredecessor")
@@ -2396,23 +2396,23 @@ model Task {
 model TaskDependency {
   id            String             @id @default(cuid())
   projectId     String
-  project       Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project       Project            @relation(fields: [projectId], references: [id], onDelete: Cascade, map: "TaskDependency_project_fkey")
   predecessorId String
-  predecessor   Task               @relation("TaskDependencyPredecessor", fields: [projectId, predecessorId], references: [projectId, id], onDelete: Cascade)
+  predecessor   Task               @relation("TaskDependencyPredecessor", fields: [projectId, predecessorId], references: [projectId, id], onDelete: Cascade, map: "TaskDependency_predecessor_scope_fkey")
   successorId   String
-  successor     Task               @relation("TaskDependencySuccessor", fields: [projectId, successorId], references: [projectId, id], onDelete: Cascade)
+  successor     Task               @relation("TaskDependencySuccessor", fields: [projectId, successorId], references: [projectId, id], onDelete: Cascade, map: "TaskDependency_successor_scope_fkey")
   type          TaskDependencyType @default(FINISH_TO_START)
   lagDays       Int                @default(0)
   createdAt     DateTime           @default(now())
 
   @@unique([projectId, predecessorId, successorId], map: "TaskDependency_project_predecessor_successor_key")
-  @@index([projectId, successorId])
+  @@index([projectId, successorId], map: "TaskDependency_project_successor_idx")
 }
 
 model WorkTeam {
   id          String           @id @default(cuid())
   projectId   String
-  project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade, map: "WorkTeam_project_fkey")
   code        String?          @db.VarChar(64)
   name        String           @db.VarChar(160)
   status      WorkTeamStatus   @default(ACTIVE)
@@ -2425,16 +2425,16 @@ model WorkTeam {
 
   @@unique([projectId, id])
   @@unique([projectId, code])
-  @@index([projectId, status, name])
+  @@index([projectId, status, name], map: "WorkTeam_project_status_name_idx")
 }
 
 model WorkTeamMember {
   id        String             @id @default(cuid())
   projectId String
   teamId    String
-  team      WorkTeam           @relation(fields: [projectId, teamId], references: [projectId, id], onDelete: Cascade)
+  team      WorkTeam           @relation(fields: [projectId, teamId], references: [projectId, id], onDelete: Cascade, map: "WorkTeamMember_team_scope_fkey")
   workerId  String
-  worker    Worker             @relation(fields: [projectId, workerId], references: [projectId, id], onDelete: Cascade)
+  worker    Worker             @relation(fields: [projectId, workerId], references: [projectId, id], onDelete: Cascade, map: "WorkTeamMember_worker_scope_fkey")
   role      WorkTeamMemberRole @default(MEMBER)
   startsAt  DateTime           @default(now())
   endsAt    DateTime?
@@ -2442,44 +2442,44 @@ model WorkTeamMember {
   createdAt DateTime           @default(now())
   updatedAt DateTime           @updatedAt
 
-  @@unique([projectId, teamId, workerId, startsAt])
-  @@index([projectId, workerId, endsAt])
-  @@index([projectId, teamId, endsAt])
+  @@unique([projectId, teamId, workerId, startsAt], map: "WorkTeamMember_project_team_worker_start_key")
+  @@index([projectId, workerId, endsAt], map: "WorkTeamMember_project_worker_end_idx")
+  @@index([projectId, teamId, endsAt], map: "WorkTeamMember_project_team_end_idx")
 }
 
 model TaskAssignment {
   id        String               @id @default(cuid())
   projectId String
   taskId    String
-  task      Task                 @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Cascade)
+  task      Task                 @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Cascade, map: "TaskAssignment_task_scope_fkey")
   workerId  String?
-  worker    Worker?              @relation(fields: [projectId, workerId], references: [projectId, id], onDelete: Cascade)
+  worker    Worker?              @relation(fields: [projectId, workerId], references: [projectId, id], onDelete: Cascade, map: "TaskAssignment_worker_scope_fkey")
   teamId    String?
-  team      WorkTeam?            @relation(fields: [projectId, teamId], references: [projectId, id], onDelete: Cascade)
+  team      WorkTeam?            @relation(fields: [projectId, teamId], references: [projectId, id], onDelete: Cascade, map: "TaskAssignment_team_scope_fkey")
   status    TaskAssignmentStatus @default(PLANNED)
   startsAt  DateTime?
   endsAt    DateTime?
   revision  Int                  @default(0)
   createdAt DateTime             @default(now())
   updatedAt DateTime             @updatedAt
-  project   Project              @relation(fields: [projectId], references: [id])
+  project   Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, id])
-  @@index([projectId, taskId, status])
-  @@index([projectId, workerId, status])
-  @@index([projectId, teamId, status])
+  @@index([projectId, taskId, status], map: "TaskAssignment_project_task_status_idx")
+  @@index([projectId, workerId, status], map: "TaskAssignment_project_worker_status_idx")
+  @@index([projectId, teamId, status], map: "TaskAssignment_project_team_status_idx")
 }
 
 model ProjectBlocker {
   id            String                 @id @default(cuid())
   projectId     String
-  project       Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project       Project                @relation(fields: [projectId], references: [id], onDelete: Cascade, map: "ProjectBlocker_project_fkey")
   taskId        String?
-  task          Task?                  @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict)
+  task          Task?                  @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict, map: "ProjectBlocker_task_scope_fkey")
   ownerWorkerId String?
-  ownerWorker   Worker?                @relation(fields: [projectId, ownerWorkerId], references: [projectId, id], onDelete: Restrict)
+  ownerWorker   Worker?                @relation(fields: [projectId, ownerWorkerId], references: [projectId, id], onDelete: Restrict, map: "ProjectBlocker_worker_scope_fkey")
   ownerTeamId   String?
-  ownerTeam     WorkTeam?              @relation(fields: [projectId, ownerTeamId], references: [projectId, id], onDelete: Restrict)
+  ownerTeam     WorkTeam?              @relation(fields: [projectId, ownerTeamId], references: [projectId, id], onDelete: Restrict, map: "ProjectBlocker_team_scope_fkey")
   title         String                 @db.VarChar(220)
   description   String?                @db.Text
   severity      ProjectBlockerSeverity @default(MEDIUM)
@@ -2492,8 +2492,8 @@ model ProjectBlocker {
   updatedAt     DateTime               @updatedAt
 
   @@unique([projectId, id])
-  @@index([projectId, status, severity, dueAt])
-  @@index([projectId, taskId, status])
+  @@index([projectId, status, severity, dueAt], map: "ProjectBlocker_project_status_severity_due_idx")
+  @@index([projectId, taskId, status], map: "ProjectBlocker_project_task_status_idx")
 }
 
 model ReplanScenario {
@@ -2722,9 +2722,9 @@ model ExtraWorkRequest {
   projectId           String
   project             Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
   taskId              String?
-  task                Task?              @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict)
+  task                Task?              @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict, map: "ExtraWorkRequest_project_task_fkey")
   requestedByWorkerId String?
-  requestedByWorker   Worker?            @relation("ExtraWorkRequester", fields: [projectId, requestedByWorkerId], references: [projectId, id], onDelete: Restrict)
+  requestedByWorker   Worker?            @relation("ExtraWorkRequester", fields: [projectId, requestedByWorkerId], references: [projectId, id], onDelete: Restrict, map: "ExtraWorkRequest_project_worker_fkey")
   title               String             @db.VarChar(220)
   reason              String             @db.Text
   description         String?            @db.Text
@@ -2752,9 +2752,9 @@ model ExtraWorkSession {
   projectId       String
   project         Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
   extraWorkId     String
-  extraWork       ExtraWorkRequest       @relation(fields: [projectId, extraWorkId], references: [projectId, id], onDelete: Cascade)
+  extraWork       ExtraWorkRequest       @relation(fields: [projectId, extraWorkId], references: [projectId, id], onDelete: Cascade, map: "ExtraWorkSession_extraWork_project_fkey")
   workerId        String
-  worker          Worker                 @relation(fields: [projectId, workerId], references: [projectId, id], onDelete: Restrict)
+  worker          Worker                 @relation(fields: [projectId, workerId], references: [projectId, id], onDelete: Restrict, map: "ExtraWorkSession_worker_project_fkey")
   status          ExtraWorkSessionStatus @default(OPEN)
   startedAt       DateTime               @default(now())
   finishedAt      DateTime?
@@ -2778,7 +2778,7 @@ model ExtraWorkSession {
 model BudgetVersion {
   id          String              @id @default(cuid())
   projectId   String
-  project     Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project     Project             @relation(fields: [projectId], references: [id], onDelete: Cascade, map: "BudgetVersion_project_fkey")
   version     Int                 @default(1)
   status      BudgetVersionStatus @default(DRAFT)
   currency    String              @db.Char(3)
@@ -2798,9 +2798,9 @@ model BudgetLine {
   id                 String              @id @default(cuid())
   projectId          String
   budgetVersionId    String
-  budgetVersion      BudgetVersion       @relation(fields: [projectId, budgetVersionId], references: [projectId, id], onDelete: Cascade)
+  budgetVersion      BudgetVersion       @relation(fields: [projectId, budgetVersionId], references: [projectId, id], onDelete: Cascade, map: "BudgetLine_version_fkey")
   taskId             String?
-  task               Task?               @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict)
+  task               Task?               @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict, map: "BudgetLine_task_fkey")
   costCode           String              @db.VarChar(64)
   description        String              @db.VarChar(220)
   quantity           Decimal?            @db.Decimal(14, 4)
@@ -2822,7 +2822,7 @@ model BudgetEntry {
   idempotencyKey String          @db.VarChar(190)
   projectId      String
   budgetLineId   String
-  budgetLine     BudgetLine      @relation(fields: [projectId, budgetLineId], references: [projectId, id], onDelete: Cascade)
+  budgetLine     BudgetLine      @relation(fields: [projectId, budgetLineId], references: [projectId, id], onDelete: Cascade, map: "BudgetEntry_line_fkey")
   kind           BudgetEntryKind
   amount         Decimal         @db.Decimal(14, 2)
   externalRef    String?         @db.VarChar(190)
@@ -2841,11 +2841,11 @@ model BudgetEntry {
 model CashFund {
   id          String         @id @default(cuid())
   projectId   String
-  project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade, map: "CashFund_project_fkey")
   name        String         @db.VarChar(160)
   currency    String         @db.Char(3)
   custodianId String
-  custodian   PlatformUser   @relation(fields: [custodianId], references: [id], onDelete: Restrict)
+  custodian   PlatformUser   @relation(fields: [custodianId], references: [id], onDelete: Restrict, map: "CashFund_custodian_fkey")
   status      CashFundStatus @default(ACTIVE)
   revision    Int            @default(0)
   createdAt   DateTime       @default(now())
@@ -2861,7 +2861,7 @@ model CashMovement {
   id                 String             @id @default(cuid())
   projectId          String
   fundId             String
-  fund               CashFund           @relation(fields: [projectId, fundId], references: [projectId, id], onDelete: Cascade)
+  fund               CashFund           @relation(fields: [projectId, fundId], references: [projectId, id], onDelete: Cascade, map: "CashMovement_fund_fkey")
   kind               CashMovementKind
   status             CashMovementStatus @default(DRAFT)
   amount             Decimal            @db.Decimal(14, 2)
@@ -2875,9 +2875,9 @@ model CashMovement {
   revision           Int                @default(0)
   approvedAt         DateTime?
   firstApproverId    String?
-  firstApprover      PlatformUser?      @relation("CashMovementFirstApprover", fields: [firstApproverId], references: [id], onDelete: SetNull)
+  firstApprover      PlatformUser?      @relation("CashMovementFirstApprover", fields: [firstApproverId], references: [id], onDelete: SetNull, map: "CashMovement_firstApprover_fkey")
   secondApproverId   String?
-  secondApprover     PlatformUser?      @relation("CashMovementSecondApprover", fields: [secondApproverId], references: [id], onDelete: SetNull)
+  secondApprover     PlatformUser?      @relation("CashMovementSecondApprover", fields: [secondApproverId], references: [id], onDelete: SetNull, map: "CashMovement_secondApprover_fkey")
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
@@ -2925,7 +2925,7 @@ model NotificationDelivery {
   createdAt      DateTime                   @default(now())
   updatedAt      DateTime                   @updatedAt
 
-  @@unique([organizationId, recipientId, channel, eventKey])
+  @@unique([organizationId, recipientId, channel, eventKey], map: "NotificationDelivery_organizationId_recipientId_channel_eventKe")
   @@index([organizationId, status, nextAttemptAt])
   @@index([projectId, recipientId, status, createdAt])
 }
@@ -2935,9 +2935,9 @@ model DailyLog {
   projectId       String
   project         Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   taskId          String?
-  task            Task?          @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict)
+  task            Task?          @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict, map: "DailyLog_project_task_fkey")
   authorWorkerId  String?
-  authorWorker    Worker?        @relation(fields: [projectId, authorWorkerId], references: [projectId, id], onDelete: Restrict)
+  authorWorker    Worker?        @relation(fields: [projectId, authorWorkerId], references: [projectId, id], onDelete: Restrict, map: "DailyLog_project_worker_fkey")
   workDate        DateTime       @db.Date
   title           String         @db.VarChar(220)
   summary         String         @db.Text
@@ -2959,9 +2959,9 @@ model ProgressEvidence {
   projectId                 String
   project                   Project                               @relation(fields: [projectId], references: [id], onDelete: Cascade)
   taskId                    String
-  task                      Task                                  @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict)
+  task                      Task                                  @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict, map: "ProgressEvidence_project_task_fkey")
   authorWorkerId            String?
-  authorWorker              Worker?                               @relation(fields: [projectId, authorWorkerId], references: [projectId, id], onDelete: Restrict)
+  authorWorker              Worker?                               @relation(fields: [projectId, authorWorkerId], references: [projectId, id], onDelete: Restrict, map: "ProgressEvidence_project_worker_fkey")
   sourceConversationId      String?
   sourceConversation        Conversation?                         @relation("ProgressEvidenceSourceConversation", fields: [projectId, sourceConversationId], references: [projectId, id], onDelete: NoAction, map: "ProgressEvidence_source_conversation_scope_fkey")
   sourceMessageId           String?                               @unique(map: "ProgressEvidence_sourceMessageId_key")
@@ -3049,7 +3049,7 @@ model ProgressEvidenceCaptureSession {
 model ProgressEvidenceLocationRateBucket {
   id             String                            @id @default(cuid())
   organizationId String
-  organization   Organization                      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization   Organization                      @relation(fields: [organizationId], references: [id], onDelete: Cascade, map: "PELRateBucket_organization_fkey")
   scope          ProgressEvidenceLocationRateScope
   scopeKeyHash   String                            @db.Char(64)
   windowBuckets  Json
