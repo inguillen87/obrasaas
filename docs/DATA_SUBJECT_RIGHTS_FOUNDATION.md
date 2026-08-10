@@ -2,20 +2,25 @@
 
 ## Estado
 
-PRO-05A es una base **local, no destructiva y bloqueada por diseño**. Permite
+PRO-05A es una base con gate técnico verificado en Preview, **no destructiva y
+bloqueada por diseño**. Permite
 registrar una solicitud de privacidad para una persona trabajadora, acreditar
 qué administrador del tenant inició el inventario, descubrir una parte acotada
 del grafo de datos y sellar un manifiesto inmutable. No verifica la identidad
-del solicitante, no decide la base legal de cada dato, no exporta información y
-no elimina, anonimiza ni restringe registros.
+del solicitante, no decide la base legal de cada dato, no exporta información,
+no corrige ni ofrece portabilidad, y no elimina, anonimiza ni restringe
+registros.
 
 La migración aditiva es
-`20260729140000_data_subject_discovery_foundation`. Su contrato ya aplica junto
-con las 108 migraciones anteriores desde una base PGlite descartable. El
-verificador conductual prueba discovery read-only, tenant scope, hash UTC,
-blockers, consistencia terminal y evidencia append-only sobre ese esquema. Eso
-es evidencia local de compatibilidad SQL; no acredita todavía PostgreSQL
-real/Neon, Vercel Preview ni Production.
+`20260729140000_data_subject_discovery_foundation`. Su contrato aplica junto con
+las 108 migraciones anteriores desde una base PGlite descartable. El verificador
+conductual prueba discovery read-only, tenant scope, hash UTC, blockers,
+consistencia terminal y evidencia append-only. En el corte
+[`edeea82`](./evidence/2026-08-10-preview-edeea82.md) también quedó verde en CI
+PostgreSQL 17 y en Vercel/Neon Preview sobre el esquema completo de 119
+migraciones. Eso acredita el gate técnico de discovery; no acredita identidad
+del solicitante, decisión legal, ejecución de derechos, piloto real ni
+Production.
 
 ## Frontera de la API
 
@@ -138,9 +143,10 @@ PRO-05 permanece abierto hasta completar:
 4. Identificar y publicar la entidad legal responsable, domicilio, rol
    responsable/encargado por flujo y un contacto de privacidad operativo
    verificado; la implementación no inventa esos datos.
-5. Aplicar y verificar la migración en PostgreSQL real/Neon Preview, validar el
-   deployment Vercel autenticado y ejecutar pruebas E2E con datos sintéticos
-   antes de usar información laboral real.
+5. Recorrer el endpoint PRO-05A con un ADMIN sintético autorizado, incluyendo
+   negativos por rol y cross-tenant. La migración y su verificador ya pasaron en
+   PostgreSQL 17 y Neon Preview, pero ese gate no sustituye el E2E funcional ni
+   autoriza información laboral real.
 
 La arquitectura y alternativas evaluadas están en
 [la propuesta de hardening](./security-hardening/pro-05/hardening.md). Ningún
