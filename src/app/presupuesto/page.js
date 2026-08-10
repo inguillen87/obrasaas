@@ -1,5 +1,6 @@
 import PresupuestoClient from './presupuesto-client';
 import { requireSuperadmin } from '@/lib/access';
+import { resolvePageAccess } from '@/lib/page-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,6 +10,6 @@ export const metadata = {
 };
 
 export default async function PresupuestoPage() {
-  await requireSuperadmin();
+  await resolvePageAccess(() => requireSuperadmin());
   return <PresupuestoClient />;
 }

@@ -5,6 +5,7 @@ import {
 } from '@/lib/access';
 import { listCanonicalTasks } from '@/lib/canonical-tasks';
 import { SOURCE_EVIDENCE_PERMISSION } from '@/lib/medical-privacy';
+import { resolvePageAccess } from '@/lib/page-access';
 import { getPrisma } from '@/lib/prisma';
 
 import InboxClient from './inbox-client';
@@ -19,8 +20,11 @@ export const metadata = {
 };
 
 export default async function InboxPage() {
-  const access = await getPlatformAccess();
-  requireTenantPermission(access, 'org:conversations:read');
+  const access = await resolvePageAccess(async () => {
+    const candidate = await getPlatformAccess();
+    requireTenantPermission(candidate, 'org:conversations:read');
+    return candidate;
+  });
   const canViewSourceEvidence = hasTenantPermission(access, SOURCE_EVIDENCE_PERMISSION);
   const canLinkProgressEvidence = (
     hasTenantPermission(access, 'org:execution:manage')

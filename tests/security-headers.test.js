@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 import nextConfig from '../next.config.mjs';
+
+test('pins the Turbopack root to this repository', () => {
+  const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
+  assert.equal(path.resolve(nextConfig.turbopack.root), path.resolve(repositoryRoot));
+});
 
 test('applies the security baseline to every application route', async () => {
   const rules = await nextConfig.headers();

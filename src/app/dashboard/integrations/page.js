@@ -12,6 +12,7 @@ import {
   requireTenantPermission,
 } from "@/lib/access";
 import { publicTenantAiSettings } from "@/lib/ai/tenant-settings";
+import { resolvePageAccess } from "@/lib/page-access";
 import { getPrisma } from "@/lib/prisma";
 import { loadWhatsAppChannelHealth } from "@/lib/whatsapp/channel-health";
 import { getWhatsAppFlowCatalog } from "@/lib/whatsapp/flows";
@@ -33,8 +34,11 @@ function serializeConnection(connection) {
 }
 
 export default async function IntegrationsPage() {
-  const access = await getPlatformAccess();
-  requireTenantPermission(access, "org:integrations:manage");
+  const access = await resolvePageAccess(async () => {
+    const candidate = await getPlatformAccess();
+    requireTenantPermission(candidate, "org:integrations:manage");
+    return candidate;
+  });
   const prisma = getPrisma();
   const pilotPanelEnabled = whatsappPilotImportPanelEnabled(
     process.env,

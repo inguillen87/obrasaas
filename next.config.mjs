@@ -1,3 +1,7 @@
+import { fileURLToPath } from 'node:url';
+
+const projectRoot = fileURLToPath(new URL('.', import.meta.url));
+
 const securityHeaders = [
   {
     key: 'Cross-Origin-Opener-Policy',
@@ -71,6 +75,12 @@ const privateReceiptWebviewHeaders = [
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   distDir: process.env.NEXT_DIST_DIR || '.next',
+  experimental: {
+    authInterrupts: true,
+  },
+  turbopack: {
+    root: projectRoot,
+  },
   async headers() {
     return [
       {

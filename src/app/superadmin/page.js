@@ -5,6 +5,7 @@ import SuperadminConsole from './superadmin-console';
 import styles from './superadmin.module.css';
 import { requireSuperadmin } from '@/lib/access';
 import { PLAN_CATALOG } from '@/lib/plans';
+import { resolvePageAccess } from '@/lib/page-access';
 import { getPrisma } from '@/lib/prisma';
 import { serializeCrmAccount } from '@/lib/superadmin-crm';
 import { getSuperadminTenantPresentation } from '@/lib/superadmin-tenant-presentation';
@@ -96,7 +97,7 @@ function serializeTenant(organization, now) {
 }
 
 export default async function SuperadminPage() {
-  const access = await requireSuperadmin();
+  const access = await resolvePageAccess(() => requireSuperadmin());
   const prisma = getPrisma();
   const now = new Date();
   const [organizations, crmAccounts] = await Promise.all([

@@ -10,6 +10,7 @@ import {
   hasTenantPermission,
   requireTenantPermission,
 } from '@/lib/access';
+import { resolvePageAccess } from '@/lib/page-access';
 import { getPrisma } from '@/lib/prisma';
 import { serializeFieldWorker } from '@/lib/field-workers';
 import { PLAN_CATALOG } from '@/lib/plans';
@@ -23,8 +24,11 @@ import { serializeInvitation } from '@/lib/invitations';
 export const dynamic = 'force-dynamic';
 
 export default async function TeamPage() {
-  const access = await getPlatformAccess();
-  requireTenantPermission(access, 'tenant:members:read');
+  const access = await resolvePageAccess(async () => {
+    const candidate = await getPlatformAccess();
+    requireTenantPermission(candidate, 'tenant:members:read');
+    return candidate;
+  });
   const canManage = hasTenantPermission(access, 'tenant:members:manage');
   const canManageField = hasTenantPermission(access, 'org:field:manage');
   const canReadOnboarding = hasTenantPermission(access, 'org:workers:onboarding:read');
