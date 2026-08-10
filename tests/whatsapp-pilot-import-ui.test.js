@@ -22,8 +22,13 @@ const {
   pilotTargetIdSuffix,
   validatePilotImportDraft,
 } = await import("../src/app/dashboard/integrations/pilot-import-helpers.js");
-const { listWhatsAppPilotImportTargets, whatsappPilotImportPanelEnabled } =
-  await import("../src/app/dashboard/integrations/pilot-import-targets.js");
+const {
+  listWhatsAppPilotImportTargets,
+  loadWhatsAppPilotImportTargetCatalog,
+  whatsappPilotImportPanelEnabled,
+} = await import(
+  "../src/app/dashboard/integrations/pilot-import-targets.js"
+);
 
 const NOW = new Date("2026-07-26T12:00:00.000Z");
 const VALID_DRAFT = Object.freeze({
@@ -220,6 +225,60 @@ test("pilot target catalog fails closed before querying for a non-superadmin", a
   );
 });
 
+test("pilot target catalog returns a safe, actionable server reason when no target qualifies", async () => {
+  async function catalogFor(rows) {
+    return loadWhatsAppPilotImportTargetCatalog(
+      {
+        tenantMembership: {
+          async findMany() {
+            return rows;
+          },
+        },
+      },
+      {
+        isSuperadmin: true,
+        databaseUserId: "user-superadmin",
+      },
+      { now: NOW },
+    );
+  }
+
+  const expired = await catalogFor([
+    membership({
+      organization: organization({
+        subscriptionPlan: "TRIAL",
+        subscriptionStatus: "TRIALING",
+        trialEndsAt: new Date("2026-07-25T23:59:59.999Z"),
+      }),
+    }),
+  ]);
+  assert.deepEqual(expired.targets, []);
+  assert.equal(expired.emptyState.code, "TRIAL_EXPIRED");
+  assert.match(expired.emptyState.title, /venció/);
+  assert.match(expired.emptyState.description, /Extendé|activá/);
+  assert.doesNotMatch(JSON.stringify(expired.emptyState), /organization-a/);
+
+  const suspended = await catalogFor([
+    membership({
+      organization: organization({ subscriptionStatus: "SUSPENDED" }),
+    }),
+  ]);
+  assert.equal(suspended.emptyState.code, "SUBSCRIPTION_BLOCKED");
+
+  const withoutProject = await catalogFor([
+    membership({ organization: organization({ projects: [] }) }),
+  ]);
+  assert.equal(withoutProject.emptyState.code, "NO_ACTIVE_PROJECT");
+
+  const withoutPermission = await catalogFor([
+    membership({ tenantRole: "AUDITOR" }),
+  ]);
+  assert.equal(withoutPermission.emptyState.code, "PERMISSION_REQUIRED");
+
+  const withoutMembership = await catalogFor([]);
+  assert.equal(withoutMembership.emptyState.code, "NO_ACTIVE_MEMBERSHIP");
+});
+
 test("idempotency keys use cryptographic randomness and the request body has the exact API envelope", () => {
   const key = createPilotImportIdempotencyKey({
     randomUUID: () => "00112233-4455-6677-8899-aabbccddeeff",
@@ -350,6 +409,8 @@ test("pilot error presentation is allowlisted and the client has no persistence 
   assert.match(clientSource, /!selectedProject\s*\|\|\s*!selectedAsset/);
   assert.match(clientSource, /Seleccioná un activo emitido por Meta/);
   assert.match(clientSource, /assets\.map\(\(asset\)/);
+  assert.match(clientSource, /targetEmptyState\?\.title/);
+  assert.match(clientSource, /targetEmptyState\?\.description/);
   assert.match(
     clientSource,
     /function updateDraft[\s\S]*?setConfirmed\(false\)/,

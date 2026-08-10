@@ -8,6 +8,7 @@ import {
   attendanceRows,
   attendanceSummary,
   buildSchedulePublishPayload,
+  createAttendanceUiIdempotencyKey,
   createScheduleDraft,
   openAttendanceAlerts,
 } from '@/lib/attendance-dashboard';
@@ -41,12 +42,6 @@ async function requestJson(url, options = {}) {
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body.error || 'No se pudo completar la operación.');
   return body;
-}
-
-function randomOperationKey(kind) {
-  const entropy = globalThis.crypto?.randomUUID?.()
-    || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  return `attendance-ui:${kind}:${entropy}`.slice(0, 128);
 }
 
 function Metric({ label, value, tone = '' }) {
@@ -272,7 +267,7 @@ export default function AttendanceClient({
     const fingerprint = JSON.stringify(payload);
     const existing = attemptsRef.current.get(scope);
     if (existing?.fingerprint === fingerprint) return existing.key;
-    const attempt = { fingerprint, key: randomOperationKey(scope) };
+    const attempt = { fingerprint, key: createAttendanceUiIdempotencyKey() };
     attemptsRef.current.set(scope, attempt);
     return attempt.key;
   }

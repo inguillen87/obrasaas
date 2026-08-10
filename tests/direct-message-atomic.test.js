@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { registerHooks } from 'node:module';
 import { after, test } from 'node:test';
 
@@ -18,9 +19,11 @@ process.env.DATABASE_URL = 'postgresql://unit-test.invalid/obrasaas';
 
 const [
   { applyDirectObraMessageAtomically },
+  { ATTENDANCE_ACTIONS, generateWebviewToken },
   { sanitizeObraEngineResultForMedicalPrivacy },
 ] = await Promise.all([
   import('../src/lib/db.js'),
+  import('../src/lib/auth.js'),
   import('../src/lib/medical-privacy.js'),
 ]);
 
@@ -232,6 +235,130 @@ test('direct application couples claim, engine, snapshot, messages and idempoten
     'VP-ABCDEF123456',
   );
   assert.equal(JSON.stringify(operationArgs).includes('+000000000'), false);
+});
+
+test('new direct-message persistence strips signed webview bearers from messages and audit outcomes', async () => {
+  const { calls, prisma } = transactionDouble();
+  globalThis.__obraSaasPrisma = prisma;
+  const bearer = generateWebviewToken(worker.id, {
+    action: ATTENDANCE_ACTIONS.CHECK_IN,
+    pendingEntryId: 'pending-direct-secure-a',
+    purpose: 'attendance',
+    scope: project.id,
+  });
+  const reply = `Registré tu ingreso. Abrí https://obra.test/webview/attendance?worker=${worker.id}&token=${bearer}`;
+
+  const applied = await applyDirectObraMessageAtomically({
+    event: {
+      externalId: 'direct-secure-link-a',
+      provider: 'internal',
+      kind: 'text',
+      text: 'fichar',
+      timestamp: new Date('2026-08-10T12:00:00.000Z'),
+    },
+    scope: { projectId: project.id, organizationId: project.organizationId },
+    workerId: worker.id,
+    operation: {
+      id: 'dashboard-field-simulation:secure-link-a',
+      action: 'dashboard.field_simulation.applied',
+      actorId: 'platform-user-a',
+    },
+    allowEphemeralSecureReply: true,
+    apply: async ({ worker: scopedWorker, state }) => ({
+      reply,
+      flowPrompt: null,
+      intent: 'ATTENDANCE_CHECK_IN',
+      stateChanged: false,
+      state,
+      worker: scopedWorker,
+      operationalProposal: null,
+      newMessages: [{
+        externalId: 'obrasaas-reply:direct-secure-link-a',
+        sender: 'bot',
+        kind: 'text',
+        text: reply,
+      }],
+    }),
+  });
+
+  const persistedMessage = calls.find(([name]) => name === 'message-create')[1].data;
+  const persistedOperation = calls.find(([name]) => name === 'operation-create')[1].data;
+  for (const value of [persistedMessage, persistedOperation]) {
+    const serialized = JSON.stringify(value);
+    assert.equal(serialized.includes(bearer), false);
+    assert.doesNotMatch(serialized, /token=|\/webview\/attendance/i);
+    assert.match(serialized, /enlace seguro omitido/i);
+  }
+  assert.match(applied.result.reply, /^Registré tu ingreso\./);
+  assert.match(applied.result.reply, /\/webview\/attendance\?/i);
+  assert.equal(applied.result.reply.includes(bearer), true);
+  assert.equal(applied.result.newMessages[0].text.includes(bearer), true);
+
+  const retryTransaction = transactionDouble({ priorOperation: persistedOperation });
+  globalThis.__obraSaasPrisma = retryTransaction.prisma;
+  const retried = await applyDirectObraMessageAtomically({
+    event: {
+      externalId: 'direct-secure-link-a',
+      provider: 'internal',
+      kind: 'text',
+      text: 'fichar',
+    },
+    scope: { projectId: project.id, organizationId: project.organizationId },
+    workerId: worker.id,
+    operation: {
+      id: 'dashboard-field-simulation:secure-link-a',
+      action: 'dashboard.field_simulation.applied',
+      actorId: 'platform-user-a',
+    },
+    allowEphemeralSecureReply: true,
+    apply: async () => {
+      throw new Error('The idempotent retry must not recreate the secure link.');
+    },
+  });
+  assert.equal(retried.alreadyApplied, true);
+  assert.doesNotMatch(JSON.stringify(retried), /token=|\/webview\/attendance/i);
+  assert.equal(JSON.stringify(retried).includes(bearer), false);
+  assert.match(retried.result.reply, /enlace seguro omitido/i);
+});
+
+test('ephemeral secure replies fail closed outside an authenticated internal simulator operation', async () => {
+  globalThis.__obraSaasPrisma = transactionDouble().prisma;
+
+  await assert.rejects(
+    applyDirectObraMessageAtomically({
+      event: { externalId: 'direct-webview-a', provider: 'webview', kind: 'text' },
+      scope: { projectId: project.id, organizationId: project.organizationId },
+      workerId: worker.id,
+      operation: {
+        id: 'direct-webview-operation-a',
+        action: 'webview.attendance.location_applied',
+        actorId: 'platform-user-a',
+      },
+      allowEphemeralSecureReply: true,
+      apply: async () => null,
+    }),
+    (error) => error.code === 'DIRECT_EPHEMERAL_REPLY_UNAUTHORIZED'
+      && error.status === 403,
+  );
+});
+
+test('the WhatsApp simulator opts in only after tenant field-management authorization', async () => {
+  const [simulatorRoute, attendanceRoute, medicalRoute] = await Promise.all([
+    readFile(new URL('../src/app/api/whatsapp/route.js', import.meta.url), 'utf8'),
+    readFile(new URL('../src/app/api/webviews/attendance/route.js', import.meta.url), 'utf8'),
+    readFile(new URL('../src/app/api/webviews/medical/route.js', import.meta.url), 'utf8'),
+  ]);
+  const permissionIndex = simulatorRoute.indexOf(
+    'requireTenantPermission(scope, "org:field:manage")',
+  );
+  const optInIndex = simulatorRoute.indexOf(
+    'allowEphemeralSecureReply: hasTenantPermission(scope, "org:field:manage")',
+  );
+
+  assert.ok(permissionIndex >= 0);
+  assert.ok(optInIndex > permissionIndex);
+  assert.equal(attendanceRoute.includes('allowEphemeralSecureReply'), false);
+  assert.equal(medicalRoute.includes('allowEphemeralSecureReply'), false);
 });
 
 test('direct field effects fail closed inside the project lock when the subscription is read-only', async () => {

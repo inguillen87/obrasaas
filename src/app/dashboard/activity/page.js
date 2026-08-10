@@ -1,6 +1,7 @@
 import ActivityClient from './activity-client';
 import styles from './activity.module.css';
 import { getPlatformAccess, requireTenantPermission } from '@/lib/access';
+import { sanitizeActivityEntry } from '@/lib/activity-export';
 import {
   isRestrictedEvidenceRecord,
   isRestrictedOperationalIncident,
@@ -254,7 +255,8 @@ async function loadActivity(access) {
     ...attendances.map(attendanceEntry),
   ]
     .sort((left, right) => new Date(right.occurredAt) - new Date(left.occurredAt))
-    .slice(0, 250);
+    .slice(0, 250)
+    .map(sanitizeActivityEntry);
 
   const lastDay = Date.now() - 24 * 60 * 60 * 1_000;
   return {

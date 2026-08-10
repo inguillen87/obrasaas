@@ -1,4 +1,9 @@
 import { PLAN_CATALOG } from './plans.js';
+import {
+  CANONICAL_OPERATIONAL_TASK_SOURCE,
+  LEGACY_OPERATIONAL_TASK_SOURCE,
+  canonicalFirstTaskCount,
+} from './operational-task-authority.js';
 import { projectAccessWhere } from './project-access.js';
 
 export const ACTIVE_PROJECT_COOKIE = 'obrasaas_active_project';
@@ -327,8 +332,14 @@ const PROJECT_OPERATIONAL_COUNTS_SQL = `
       SELECT count(*)
       FROM "Task" AS task
       WHERE task."projectId" = project."id"
-        AND task."metadata"->>'source' = 'project-snapshot-v1'
-    )::integer AS "tasks",
+        AND task."metadata"->>'source' = '${CANONICAL_OPERATIONAL_TASK_SOURCE}'
+    )::integer AS "canonicalTasks",
+    (
+      SELECT count(*)
+      FROM "Task" AS task
+      WHERE task."projectId" = project."id"
+        AND task."metadata"->>'source' = '${LEGACY_OPERATIONAL_TASK_SOURCE}'
+    )::integer AS "legacyTasks",
     CASE
       WHEN jsonb_typeof(snapshot."state"->'incidents') = 'array'
         THEN jsonb_array_length(snapshot."state"->'incidents')
@@ -354,13 +365,19 @@ export async function attachProjectOperationalCounts(
     onlyProjectId,
   );
   const countsByProject = new Map(
-    rows.map((row) => [
-      row.projectId,
-      {
-        tasks: Number(row.tasks) || 0,
-        incidents: Number(row.incidents) || 0,
-      },
-    ]),
+    rows.map((row) => {
+      const taskAuthority = canonicalFirstTaskCount({
+        canonicalCount: row.canonicalTasks,
+        legacyCount: row.legacyTasks,
+      });
+      return [
+        row.projectId,
+        {
+          tasks: taskAuthority.count,
+          incidents: Number(row.incidents) || 0,
+        },
+      ];
+    }),
   );
   return projects.map((project) => ({
     ...project,

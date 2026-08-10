@@ -21,6 +21,8 @@ const {
 } = await import(
   '../src/lib/whatsapp/webhook-worker.js'
 );
+const { ATTENDANCE_ACTIONS, generateWebviewToken } = await import('../src/lib/auth.js');
+const { readAppliedMessageWebhookOutcome } = await import('../src/lib/webhook-queue.js');
 
 const NOW = new Date('2026-07-16T12:00:00.000Z');
 
@@ -1016,6 +1018,81 @@ test('H2 materializes its bearer after the delivery claim and never mutates the 
   assert.deepEqual(result, {
     flowSent: false,
     providerMessageId: 'wamid-progress-location-ready-outbound',
+  });
+});
+
+test('a bridged legacy attendance outcome materializes its bearer only after the delivery claim', async () => {
+  const calls = [];
+  const journal = automaticDeliveryJournal(calls);
+  const appliedAt = new Date('2026-08-10T12:00:00.000Z');
+  const webviewSecret = 'rolling-delivery-webview-secret-at-least-32-bytes';
+  const bearer = generateWebviewToken('worker-1', {
+    action: ATTENDANCE_ACTIONS.CHECK_IN,
+    pendingEntryId: 'pending-entry-1',
+    purpose: 'attendance',
+    scope: 'project-1',
+    now: appliedAt.getTime() - 30_000,
+    ttlSeconds: 7_200,
+    secret: webviewSecret,
+  });
+  const durableOutcome = readAppliedMessageWebhookOutcome({
+    id: 'event-attendance-link-ready',
+    projectId: 'project-1',
+    appliedAt,
+    outcome: {
+      version: 1,
+      type: 'message',
+      reply: `Registré tu ingreso. https://obrasaas.example/webview/attendance?worker=worker-1&token=${bearer}`,
+      flowPrompt: null,
+    },
+  }, { webviewSecret });
+  assert.doesNotMatch(JSON.stringify(durableOutcome), /token=|\/webview\/attendance/i);
+  assert.equal(JSON.stringify(durableOutcome).includes(bearer), false);
+  const result = await deliverWhatsAppMessageOutcome({
+    outcome: durableOutcome,
+    event: {
+      externalId: 'wamid-attendance-link-ready',
+      from: '15551234567',
+      phoneNumberId: 'phone-attendance',
+    },
+    scope: { organizationId: 'organization-1', projectId: 'project-1' },
+    eventId: 'event-attendance-link-ready',
+    leaseToken: 'lease-attendance-link-ready',
+  }, {
+    ...journal,
+    prisma: { marker: 'delivery-prisma' },
+    materializeWebviewDelivery: async (prisma, input) => {
+      calls.push('materialize-attendance-link');
+      assert.equal(prisma.marker, 'delivery-prisma');
+      assert.deepEqual(input.descriptor, durableOutcome.secureWebviewDelivery);
+      assert.equal(input.reply, durableOutcome.reply);
+      assert.equal(input.recipientPhone, '15551234567');
+      assert.equal(input.scope.phoneNumberId, 'phone-attendance');
+      assert.equal(input.eventId, 'event-attendance-link-ready');
+      return {
+        mode: 'LINK',
+        text: 'Registré tu ingreso. https://obrasaas.example/webview/attendance?token=ephemeral',
+      };
+    },
+    assertSubscription: async () => calls.push('subscription-fence'),
+    sendText: async ({ text }) => {
+      calls.push('send-text');
+      assert.match(text, /token=ephemeral/);
+      return { messages: [{ id: 'wamid-attendance-link-ready-outbound' }] };
+    },
+  });
+
+  assert.deepEqual(calls, [
+    'claim-delivery',
+    'materialize-attendance-link',
+    'subscription-fence',
+    'send-text',
+    'settle-delivery:accepted',
+  ]);
+  assert.doesNotMatch(JSON.stringify(durableOutcome), /token=ephemeral/);
+  assert.deepEqual(result, {
+    flowSent: false,
+    providerMessageId: 'wamid-attendance-link-ready-outbound',
   });
 });
 

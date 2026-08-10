@@ -6,6 +6,7 @@ import {
   attendanceRows,
   attendanceSummary,
   buildSchedulePublishPayload,
+  createAttendanceUiIdempotencyKey,
   createScheduleDraft,
   openAttendanceAlerts,
 } from '../src/lib/attendance-dashboard.js';
@@ -126,6 +127,14 @@ test('schedule publisher emits the exact seven-day API contract', () => {
   });
 });
 
+test('attendance UI idempotency keys satisfy the strict API header contract', () => {
+  const key = createAttendanceUiIdempotencyKey();
+
+  assert.match(key, /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/);
+  assert.equal(key.startsWith('attendance-ui:'), true);
+  assert.equal(key.length <= 128, true);
+});
+
 test('editing never schedules a new revision before an already-published future version', () => {
   const draft = createScheduleDraft({
     workDate: '2026-07-28',
@@ -171,6 +180,9 @@ test('attendance console keeps every write on the authenticated idempotent API c
     client,
     /requestJson\('\/api\/attendance\/schedules',[\s\S]{0,180}'Idempotency-Key': replaySafeKey\(scope, payload\)/,
   );
+  assert.match(client, /key: createAttendanceUiIdempotencyKey\(\)/);
+  assert.doesNotMatch(client, /createAttendanceUiIdempotencyKey\(scope\)/);
+  assert.doesNotMatch(client, /attendance-ui:\$\{kind\}/);
   assert.match(
     client,
     /requestJson\('\/api\/attendance\/exceptions',[\s\S]{0,180}'Idempotency-Key': replaySafeKey\(scope, payload\)/,

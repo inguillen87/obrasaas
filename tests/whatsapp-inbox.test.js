@@ -567,6 +567,30 @@ test('GET messages returns only the scoped conversation and its chronological me
   assert.doesNotMatch(queryEvidence, /conversation-foreign|project-foreign/);
 });
 
+test('GET messages redacts signed webview links already stored in historical rows', async () => {
+  const bearer = 'eyJ2IjoyLCJzdWIiOiJ3b3JrZXItYSJ9.historical-inbox-secret';
+  const { prisma } = routePrisma({
+    messages: [message({
+      id: 'message-historical-link',
+      direction: 'OUTBOUND',
+      body: `Registré tu ingreso. Abrí https://obra.test/webview/attendance?worker=worker-a&token=${bearer}`,
+    })],
+  });
+  const response = await createWhatsAppConversationMessageHandlers({
+    resolveAccess: async () => access(),
+    authorize: () => undefined,
+    prismaFactory: () => prisma,
+    clock: () => NOW,
+    env: CONFIGURED_META_ENV,
+  }).GET(messagesRequest(), routeContext());
+  const payload = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.match(payload.messages[0].body, /^Registré tu ingreso\./);
+  assert.match(payload.messages[0].body, /enlace seguro omitido/i);
+  assert.doesNotMatch(JSON.stringify(payload), /historical-inbox-secret|token=|\/webview\/attendance/i);
+});
+
 test('GET messages projects server-owned onboarding state for an authorized manager', async () => {
   const { prisma } = routePrisma();
   let onboardingInput = null;

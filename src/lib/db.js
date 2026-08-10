@@ -32,6 +32,7 @@ import {
   sanitizeMessagesForMedicalPrivacy,
 } from "@/lib/medical-privacy";
 import { subscriptionAllowsWrites } from "@/lib/plans";
+import { redactSensitiveText } from "@/lib/sensitive-text";
 import {
   issueProgressEvidenceCaptureSession,
 } from "@/lib/progress-evidence-capture-sessions";
@@ -72,6 +73,9 @@ import {
 import {
   WORKER_PAYMENT_PRIVATE_RECEIPT_DURABLE_REPLY,
 } from "@/lib/whatsapp/worker-payment-receipt-delivery";
+import {
+  extractSecureWebviewDelivery,
+} from "@/lib/whatsapp/secure-webview-delivery";
 import { resolveWhatsAppConnectionScopes } from "@/lib/whatsapp/webhook-scope";
 import { persistDurableMetaWebhookBatch } from "@/lib/whatsapp/webhook-ingress";
 
@@ -229,11 +233,18 @@ function durableMessageData(message, conversationId, fallbackDate) {
     externalId: message.externalId || null,
     direction: message.sender === "bot" ? "OUTBOUND" : "INBOUND",
     kind: normalizeMessageKind(message.kind, message.sender),
-    body: message.text || "",
+    body: redactSensitiveText(message.text || ""),
     mediaUrl: message.mediaUrl || message.media?.url || null,
     status: message.status || null,
     metadata: storedMessageMetadata(message),
     sentAt: storedMessageDate(message.sentAt, fallbackDate),
+  };
+}
+
+function redactedStoredMessage(message) {
+  return {
+    ...message,
+    text: redactSensitiveText(message?.text || ""),
   };
 }
 
@@ -765,7 +776,7 @@ function serializeDurableMessages(messages, {
       externalId: message.externalId,
       sender: message.direction === "OUTBOUND" ? "bot" : "user",
       kind: message.kind.toLowerCase(),
-      text: message.body || "",
+      text: redactSensitiveText(message.body || ""),
       mediaUrl: managedDescriptor?.url || message.mediaUrl,
       media,
       transcription: metadata.transcription || null,
@@ -936,9 +947,9 @@ async function replaceDurableMessages(context, messages) {
 export async function saveMessages(messages, scope) {
   if (!hasDurableDatabase()) {
     const db = readLocalDb();
-    db.messages = messages;
+    db.messages = messages.map(redactedStoredMessage);
     writeLocalDb(db);
-    return messages;
+    return db.messages;
   }
 
   const context = await durableContext(scope);
@@ -1004,7 +1015,8 @@ export async function appendMessages(messages, scope) {
   if (!hasDurableDatabase()) {
     const db = readLocalDb();
     const current = Array.isArray(db.messages) ? db.messages : [];
-    for (const message of messages) {
+    const safeMessages = messages.map(redactedStoredMessage);
+    for (const message of safeMessages) {
       const existingIndex = message.externalId
         ? current.findIndex((item) => item.externalId === message.externalId)
         : -1;
@@ -1013,7 +1025,7 @@ export async function appendMessages(messages, scope) {
     }
     db.messages = current.slice(-200);
     writeLocalDb(db);
-    return messages;
+    return safeMessages;
   }
 
   const context = await durableContext(scope);
@@ -1032,11 +1044,23 @@ export class DirectObraMessageError extends Error {
   }
 }
 
-function directObraMessageInput({ event, scope, workerId, apply, beforeApply, operation }) {
+const DASHBOARD_SIMULATOR_OPERATION_ACTION = "dashboard.field_simulation.applied";
+const DIRECT_EPHEMERAL_SECURE_LINK_PATTERN = /https?:\/\/[^\s<>"']+\/webview\/(?:attendance|medical)\?[^\s<>"']+/giu;
+
+function directObraMessageInput({
+  event,
+  scope,
+  workerId,
+  apply,
+  beforeApply,
+  operation,
+  allowEphemeralSecureReply,
+}) {
   const normalized = {
     projectId: String(scope?.project?.id || scope?.projectId || "").trim(),
     organizationId: String(scope?.organization?.id || scope?.organizationId || "").trim() || null,
     workerId: String(workerId || "").trim(),
+    allowEphemeralSecureReply: allowEphemeralSecureReply === true,
   };
   if (
     !normalized.projectId
@@ -1046,6 +1070,10 @@ function directObraMessageInput({ event, scope, workerId, apply, beforeApply, op
     || Array.isArray(event)
     || typeof apply !== "function"
     || (beforeApply != null && typeof beforeApply !== "function")
+    || (
+      allowEphemeralSecureReply !== undefined
+      && typeof allowEphemeralSecureReply !== "boolean"
+    )
   ) {
     throw new DirectObraMessageError(
       "A trusted project, active worker, event and application callback are required.",
@@ -1054,7 +1082,16 @@ function directObraMessageInput({ event, scope, workerId, apply, beforeApply, op
     );
   }
 
-  if (operation == null) return { ...normalized, operation: null };
+  if (operation == null) {
+    if (normalized.allowEphemeralSecureReply) {
+      throw new DirectObraMessageError(
+        "Ephemeral secure replies require an authenticated simulator operation.",
+        "DIRECT_EPHEMERAL_REPLY_UNAUTHORIZED",
+        403,
+      );
+    }
+    return { ...normalized, operation: null };
+  }
   const operationId = String(operation.id || "").trim();
   const operationAction = String(operation.action || "").trim();
   const operationActorId = String(operation.actorId || "").trim() || null;
@@ -1069,6 +1106,20 @@ function directObraMessageInput({ event, scope, workerId, apply, beforeApply, op
       "The direct-message idempotency operation is invalid.",
       "DIRECT_OPERATION_INVALID",
       400,
+    );
+  }
+  if (
+    normalized.allowEphemeralSecureReply
+    && (
+      String(event.provider || "").trim() !== "internal"
+      || operationAction !== DASHBOARD_SIMULATOR_OPERATION_ACTION
+      || !operationActorId
+    )
+  ) {
+    throw new DirectObraMessageError(
+      "Ephemeral secure replies are restricted to authenticated dashboard simulations.",
+      "DIRECT_EPHEMERAL_REPLY_UNAUTHORIZED",
+      403,
     );
   }
   return {
@@ -1161,7 +1212,7 @@ function readDirectOperationOutcome(record, { operation, project, worker }) {
     );
   }
   return attachDirectReplySensitivity({
-    reply: outcome.reply,
+    reply: redactSensitiveText(outcome.reply),
     flowPrompt: typeof outcome.flowPrompt === "string" ? outcome.flowPrompt : null,
     intent: typeof outcome.intent === "string" ? outcome.intent : null,
     operationalProposal,
@@ -1173,7 +1224,7 @@ function readDirectOperationOutcome(record, { operation, project, worker }) {
 
 function storedDirectOperationOutcome(result) {
   return {
-    reply: String(result.reply || "").slice(0, 4_000),
+    reply: redactSensitiveText(result.reply).slice(0, 4_000),
     replySensitivity: directReplySensitivity(result),
     flowPrompt: typeof result.flowPrompt === "string" ? result.flowPrompt.slice(0, 160) : null,
     intent: typeof result.intent === "string" ? result.intent.slice(0, 160) : null,
@@ -1188,6 +1239,7 @@ export async function applyDirectObraMessageAtomically({
   apply,
   beforeApply = null,
   operation = null,
+  allowEphemeralSecureReply = false,
 }) {
   const normalized = directObraMessageInput({
     event,
@@ -1196,6 +1248,7 @@ export async function applyDirectObraMessageAtomically({
     apply,
     beforeApply,
     operation,
+    allowEphemeralSecureReply,
   });
   if (!hasDurableDatabase()) {
     throw new DirectObraMessageError(
@@ -1356,7 +1409,12 @@ export async function applyDirectObraMessageAtomically({
         },
       });
     }
-    return { alreadyApplied: false, result };
+    return {
+      alreadyApplied: false,
+      result: normalized.allowEphemeralSecureReply
+        ? ephemeralSimulatorOperationResult(result, normalized.projectId)
+        : publicDirectOperationResult(result),
+    };
   }, { maxWait: 5_000, timeout: 20_000 });
 }
 
@@ -1436,6 +1494,53 @@ function automaticWhatsAppDeliveryMetadata(
         : {}),
     },
   };
+}
+
+function publicDirectOperationResult(result) {
+  const safeResult = {
+    ...result,
+    reply: redactSensitiveText(result.reply),
+    newMessages: Array.isArray(result.newMessages)
+      ? result.newMessages.map(redactedStoredMessage)
+      : [],
+  };
+  return attachDirectReplySensitivity(safeResult, directReplySensitivity(result));
+}
+
+function ephemeralSimulatorText(value, projectId) {
+  const text = String(value || "");
+  const matches = [...text.matchAll(DIRECT_EPHEMERAL_SECURE_LINK_PATTERN)];
+  if (matches.length !== 1) return redactSensitiveText(text);
+  try {
+    if (!extractSecureWebviewDelivery(text, { projectId })) {
+      return redactSensitiveText(text);
+    }
+  } catch {
+    return redactSensitiveText(text);
+  }
+  const [{ 0: link, index }] = matches;
+  return [
+    redactSensitiveText(text.slice(0, index)),
+    link,
+    redactSensitiveText(text.slice(index + link.length)),
+  ].join("");
+}
+
+function ephemeralSimulatorOperationResult(result, projectId) {
+  const safeResult = publicDirectOperationResult(result);
+  const originalMessages = Array.isArray(result.newMessages) ? result.newMessages : [];
+  const ephemeralResult = {
+    ...safeResult,
+    reply: ephemeralSimulatorText(result.reply, projectId),
+    newMessages: safeResult.newMessages.map((message, index) => ({
+      ...message,
+      text: ephemeralSimulatorText(originalMessages[index]?.text, projectId),
+    })),
+  };
+  return attachDirectReplySensitivity(
+    ephemeralResult,
+    directReplySensitivity(result),
+  );
 }
 
 function automaticWhatsAppPreProviderReleaseMetadata(
@@ -1928,6 +2033,7 @@ export async function applyWebhookMessageAtomically({
       },
       select: {
         id: true,
+        projectId: true,
         appliedAt: true,
         outcome: true,
       },
@@ -2291,9 +2397,21 @@ export async function applyWebhookMessageAtomically({
         session: capture.session,
       });
     }
+    let secureWebviewDelivery = null;
+    try {
+      secureWebviewDelivery = extractSecureWebviewDelivery(result.reply, {
+        projectId: normalized.projectId,
+      });
+    } catch {
+      throw webhookProcessingError(
+        "The secure webview could not be converted into a non-secret delivery descriptor.",
+        "WEBHOOK_OUTCOME_INVALID",
+      );
+    }
     const outcome = createMessageWebhookOutcome({
       ...result,
       flowSessionId: issuedFlowSession?.id || null,
+      secureWebviewDelivery,
     });
 
     if (result.stateChanged) {

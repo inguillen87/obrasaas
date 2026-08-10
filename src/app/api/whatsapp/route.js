@@ -187,6 +187,9 @@ export async function POST(request) {
         action: "dashboard.field_simulation.applied",
         actorId: scope.databaseUserId,
       },
+      // This response stays in the authenticated simulator request only. The
+      // database layer still redacts Message, AuditLog and idempotent replays.
+      allowEphemeralSecureReply: hasTenantPermission(scope, "org:field:manage"),
     });
     const result = sanitizeObraEngineResultForMedicalPrivacy(applied.result, {
       includeMedicalEvidence: hasTenantPermission(

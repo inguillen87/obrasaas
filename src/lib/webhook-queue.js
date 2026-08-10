@@ -1,4 +1,10 @@
 import { projectWhatsAppFlowReplyForPersistence } from './whatsapp/flows.js';
+import {
+  SECURE_WEBVIEW_DELIVERY_MARKER,
+  extractSecureWebviewDelivery,
+  normalizeSecureWebviewDeliveryDescriptor as normalizeSecureWebviewDescriptor,
+  secureWebviewDurableReply,
+} from './whatsapp/secure-webview-delivery.js';
 
 export const WEBHOOK_MAX_ATTEMPTS = 8;
 export const WEBHOOK_LEASE_MS = 120_000;
@@ -63,12 +69,47 @@ function invalidWebhookOutcome() {
   return error;
 }
 
+function normalizeSecureWebviewDelivery(value) {
+  if (value === null || value === undefined) return null;
+  try {
+    return normalizeSecureWebviewDescriptor(value);
+  } catch {
+    throw invalidWebhookOutcome();
+  }
+}
+
+function bridgeLegacySecureWebviewDelivery(webhookEvent, outcome, options = {}) {
+  if (outcome.secureWebviewDelivery !== null && outcome.secureWebviewDelivery !== undefined) {
+    return normalizeSecureWebviewDelivery(outcome.secureWebviewDelivery);
+  }
+  const appliedAt = validDate(webhookEvent?.appliedAt);
+  const projectId = typeof webhookEvent?.projectId === 'string'
+    ? webhookEvent.projectId
+    : '';
+  if (!appliedAt || !projectId) return null;
+
+  try {
+    return extractSecureWebviewDelivery(outcome.reply, {
+      projectId,
+      now: appliedAt.getTime(),
+      ...(options?.webviewSecret ? { secret: options.webviewSecret } : {}),
+    });
+  } catch {
+    // Rolling deployments may encounter a legacy applied outcome containing a
+    // signed URL but no descriptor. Only a bearer that validates against this
+    // event's project at its applied timestamp may be upgraded in memory. Every
+    // ambiguous or unverifiable legacy value remains redacted and fail-closed.
+    return null;
+  }
+}
+
 export function createMessageWebhookOutcome({
   reply,
   flowPrompt = null,
   flowSessionId = null,
   progressEvidenceLocationDelivery = null,
   workerPaymentPrivateReceiptDelivery = null,
+  secureWebviewDelivery = null,
 } = {}) {
   if (typeof reply !== "string" || !reply.trim()) throw invalidWebhookOutcome();
   const normalizedFlowPrompt = flowPrompt === null || flowPrompt === undefined || flowPrompt === ""
@@ -97,6 +138,9 @@ export function createMessageWebhookOutcome({
   const normalizedWorkerPaymentPrivateReceiptDelivery = normalizeWorkerPaymentPrivateReceiptDelivery(
     workerPaymentPrivateReceiptDelivery,
   );
+  const normalizedSecureWebviewDelivery = normalizeSecureWebviewDelivery(
+    secureWebviewDelivery,
+  );
   if (
     (normalizedProgressEvidenceLocationDelivery && normalizedFlowPrompt)
     || (normalizedWorkerPaymentPrivateReceiptDelivery && normalizedFlowPrompt)
@@ -104,13 +148,27 @@ export function createMessageWebhookOutcome({
       normalizedProgressEvidenceLocationDelivery
       && normalizedWorkerPaymentPrivateReceiptDelivery
     )
+    || (
+      normalizedSecureWebviewDelivery
+      && (
+        normalizedProgressEvidenceLocationDelivery
+        || normalizedWorkerPaymentPrivateReceiptDelivery
+      )
+    )
+  ) {
+    throw invalidWebhookOutcome();
+  }
+  const durableReply = secureWebviewDurableReply(reply, normalizedSecureWebviewDelivery);
+  if (
+    normalizedSecureWebviewDelivery
+    && durableReply.split(SECURE_WEBVIEW_DELIVERY_MARKER).length !== 2
   ) {
     throw invalidWebhookOutcome();
   }
   return {
     version: MESSAGE_OUTCOME_VERSION,
     type: "message",
-    reply: reply.slice(0, MAX_WHATSAPP_TEXT_LENGTH),
+    reply: durableReply.slice(0, MAX_WHATSAPP_TEXT_LENGTH),
     flowPrompt: normalizedFlowPrompt,
     ...(normalizedFlowSessionId ? { flowSessionId: normalizedFlowSessionId } : {}),
     ...(normalizedProgressEvidenceLocationDelivery
@@ -118,6 +176,9 @@ export function createMessageWebhookOutcome({
       : {}),
     ...(normalizedWorkerPaymentPrivateReceiptDelivery
       ? { workerPaymentPrivateReceiptDelivery: normalizedWorkerPaymentPrivateReceiptDelivery }
+      : {}),
+    ...(normalizedSecureWebviewDelivery
+      ? { secureWebviewDelivery: normalizedSecureWebviewDelivery }
       : {}),
   };
 }
@@ -170,7 +231,7 @@ function normalizeWorkerPaymentPrivateReceiptDelivery(value) {
   };
 }
 
-export function readAppliedMessageWebhookOutcome(webhookEvent) {
+export function readAppliedMessageWebhookOutcome(webhookEvent, options = {}) {
   if (!webhookEvent?.appliedAt) return null;
   const outcome = webhookEvent.outcome;
   if (
@@ -206,23 +267,40 @@ export function readAppliedMessageWebhookOutcome(webhookEvent) {
   const workerPaymentPrivateReceiptDelivery = normalizeWorkerPaymentPrivateReceiptDelivery(
     outcome.workerPaymentPrivateReceiptDelivery,
   );
+  const secureWebviewDelivery = bridgeLegacySecureWebviewDelivery(
+    webhookEvent,
+    outcome,
+    options,
+  );
   if (
     (progressEvidenceLocationDelivery && outcome.flowPrompt)
     || (workerPaymentPrivateReceiptDelivery && outcome.flowPrompt)
     || (progressEvidenceLocationDelivery && workerPaymentPrivateReceiptDelivery)
+    || (
+      secureWebviewDelivery
+      && (progressEvidenceLocationDelivery || workerPaymentPrivateReceiptDelivery)
+    )
+  ) {
+    throw invalidWebhookOutcome();
+  }
+  const durableReply = secureWebviewDurableReply(outcome.reply, secureWebviewDelivery);
+  if (
+    secureWebviewDelivery
+    && durableReply.split(SECURE_WEBVIEW_DELIVERY_MARKER).length !== 2
   ) {
     throw invalidWebhookOutcome();
   }
   return {
     version: MESSAGE_OUTCOME_VERSION,
     type: "message",
-    reply: outcome.reply,
+    reply: durableReply,
     flowPrompt: outcome.flowPrompt || null,
     ...(outcome.flowSessionId ? { flowSessionId: outcome.flowSessionId } : {}),
     ...(progressEvidenceLocationDelivery ? { progressEvidenceLocationDelivery } : {}),
     ...(workerPaymentPrivateReceiptDelivery
       ? { workerPaymentPrivateReceiptDelivery }
       : {}),
+    ...(secureWebviewDelivery ? { secureWebviewDelivery } : {}),
   };
 }
 

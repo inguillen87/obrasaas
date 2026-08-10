@@ -2,7 +2,7 @@ import IntegrationsClient from "./integrations-client";
 import AiProcessingControls from "./ai-processing-controls";
 import WhatsAppPilotImportPanel from "./pilot-import-panel";
 import {
-  listWhatsAppPilotImportTargets,
+  loadWhatsAppPilotImportTargetCatalog,
   whatsappPilotImportPanelEnabled,
 } from "./pilot-import-targets";
 import styles from "./integrations.module.css";
@@ -55,13 +55,13 @@ export default async function IntegrationsPage() {
       // rejects every request until the exact Preview allowlist is valid.
     }
   }
-  const [channelHealth, pilotImportTargets] = await Promise.all([
+  const [channelHealth, pilotImportCatalog] = await Promise.all([
     loadWhatsAppChannelHealth(prisma, {
       projectId: access.project.id,
     }),
     pilotPanelEnabled
-      ? listWhatsAppPilotImportTargets(prisma, access)
-      : Promise.resolve([]),
+      ? loadWhatsAppPilotImportTargetCatalog(prisma, access)
+      : Promise.resolve({ targets: [], emptyState: null }),
   ]);
   const metaPlatformReady = Boolean(
     process.env.META_APP_SECRET &&
@@ -97,7 +97,8 @@ export default async function IntegrationsPage() {
       />
       {pilotPanelEnabled && (
         <WhatsAppPilotImportPanel
-          targets={pilotImportTargets}
+          targets={pilotImportCatalog.targets}
+          targetEmptyState={pilotImportCatalog.emptyState}
           assets={pilotImportAssets}
         />
       )}

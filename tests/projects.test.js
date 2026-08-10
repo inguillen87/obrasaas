@@ -164,7 +164,7 @@ test('project selection always carries the active tenant boundary', () => {
   assert.throws(() => tenantProjectWhere('', 'project-id'), ProjectInputError);
 });
 
-test('portfolio counts use the canonical task projection and operational incident snapshot', () => {
+test('portfolio counts use the selected task authority and operational incident snapshot', () => {
   const serialized = serializeProject({
     id: 'project-a',
     name: 'Hospital Regional',
@@ -221,7 +221,12 @@ test('portfolio count projection never hydrates the complete snapshot JSON', asy
     },
     async $queryRawUnsafe(query, organizationId, projectId) {
       calls.push(['counts', query, organizationId, projectId]);
-      return [{ projectId: 'project-a', tasks: 2, incidents: 1 }];
+      return [{
+        projectId: 'project-a',
+        canonicalTasks: 2,
+        legacyTasks: 9,
+        incidents: 1,
+      }];
     },
   };
 
@@ -249,6 +254,7 @@ test('portfolio count projection never hydrates the complete snapshot JSON', asy
   assert.deepEqual(calls[0][1].select.snapshot.select, { updatedAt: true });
   assert.match(calls[1][1], /FROM "Task" AS task/);
   assert.match(calls[1][1], /task\."projectId" = project\."id"/);
+  assert.match(calls[1][1], /task\."metadata"->>'source' = 'canonical-task-v1'/);
   assert.match(calls[1][1], /task\."metadata"->>'source' = 'project-snapshot-v1'/);
   assert.doesNotMatch(calls[1][1], /jsonb_object_keys/);
   assert.match(calls[1][1], /project\."organizationId" = \$1/);
@@ -262,7 +268,12 @@ test('single-project count projection stays tenant and project scoped', async ()
   const prisma = {
     async $queryRawUnsafe(query, organizationId, projectId) {
       calls.push([query, organizationId, projectId]);
-      return [{ projectId, tasks: 7, incidents: 3 }];
+      return [{
+        projectId,
+        canonicalTasks: 0,
+        legacyTasks: 7,
+        incidents: 3,
+      }];
     },
   };
   const [project] = await attachProjectOperationalCounts(

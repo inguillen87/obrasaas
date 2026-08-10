@@ -1,6 +1,12 @@
 const DATE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_PATTERN = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
 
+export function createAttendanceUiIdempotencyKey() {
+  const entropy = globalThis.crypto?.randomUUID?.()
+    || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `attendance-ui:${entropy}`.slice(0, 128);
+}
+
 export const ATTENDANCE_CLASSIFICATION_LABELS = Object.freeze({
   UNSCHEDULED: 'Sin horario',
   EXPECTED: 'Esperado',

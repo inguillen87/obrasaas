@@ -7,6 +7,7 @@ import { requireSuperadmin } from '@/lib/access';
 import { PLAN_CATALOG } from '@/lib/plans';
 import { getPrisma } from '@/lib/prisma';
 import { serializeCrmAccount } from '@/lib/superadmin-crm';
+import { getSuperadminTenantPresentation } from '@/lib/superadmin-tenant-presentation';
 import { isExternalTenant } from '@/lib/superadmin-tenants';
 
 export const dynamic = 'force-dynamic';
@@ -24,21 +25,7 @@ function daysUntil(value, now = Date.now()) {
   return Math.ceil((new Date(value).getTime() - now) / (24 * 60 * 60 * 1_000));
 }
 
-function tenantHealth(organization, failedWebhooks, whatsappConnected) {
-  if (['SUSPENDED', 'CANCELED'].includes(organization.subscriptionStatus)) return 'BLOCKED';
-  if (organization.subscriptionStatus === 'PAST_DUE' || failedWebhooks > 0) return 'RISK';
-  const remainingTrialDays = daysUntil(organization.trialEndsAt);
-  if (
-    organization.subscriptionStatus === 'TRIALING'
-    && remainingTrialDays !== null
-    && remainingTrialDays <= 3
-  ) {
-    return 'ATTENTION';
-  }
-  return whatsappConnected ? 'HEALTHY' : 'ONBOARDING';
-}
-
-function serializeTenant(organization) {
+function serializeTenant(organization, now) {
   const activeMemberships = organization.memberships.filter((item) => item.status === 'ACTIVE');
   const primaryContact = activeMemberships.find((item) => item.tenantRole === 'ADMIN')
     || activeMemberships[0]
@@ -51,6 +38,11 @@ function serializeTenant(organization) {
     (sum, project) => sum + project._count.webhookEvents,
     0,
   );
+  const presentation = getSuperadminTenantPresentation(organization, {
+    failedWebhooks,
+    whatsappConnected: connectedChannels > 0,
+    now,
+  });
   const lastActivityAt = latestDate([
     organization.updatedAt,
     organization.auditLogs[0]?.createdAt,
@@ -66,6 +58,9 @@ function serializeTenant(organization) {
     timezone: organization.timezone,
     subscriptionPlan: organization.subscriptionPlan,
     subscriptionStatus: organization.subscriptionStatus,
+    subscriptionAccessStatus: presentation.subscriptionAccessStatus,
+    subscriptionCanWrite: presentation.subscriptionCanWrite,
+    isOperational: presentation.isOperational,
     trialEndsAt: organization.trialEndsAt?.toISOString() || null,
     createdAt: organization.createdAt.toISOString(),
     updatedAt: organization.updatedAt.toISOString(),
@@ -76,7 +71,7 @@ function serializeTenant(organization) {
     activeProjects,
     connectedChannels,
     failedWebhooks,
-    health: tenantHealth(organization, failedWebhooks, connectedChannels > 0),
+    health: presentation.health,
     primaryContact: primaryContact ? {
       name: primaryContact.user.fullName,
       email: primaryContact.user.primaryEmail,
@@ -88,6 +83,7 @@ function serializeTenant(organization) {
 export default async function SuperadminPage() {
   const access = await requireSuperadmin();
   const prisma = getPrisma();
+  const now = new Date();
   const [organizations, crmAccounts] = await Promise.all([
     prisma.organization.findMany({
     include: {
@@ -139,17 +135,24 @@ export default async function SuperadminPage() {
       take: 500,
     }),
   ]);
-  const tenants = organizations.filter(isExternalTenant).map(serializeTenant);
+  const tenants = organizations
+    .filter(isExternalTenant)
+    .map((organization) => serializeTenant(organization, now));
   const opportunities = crmAccounts.map(serializeCrmAccount);
-  const activeTenants = tenants.filter((item) => ['TRIALING', 'ACTIVE'].includes(item.subscriptionStatus));
-  const payingTenants = tenants.filter((item) => item.subscriptionStatus === 'ACTIVE');
+  const activeTenants = tenants.filter((item) => item.isOperational);
+  const payingTenants = tenants.filter(
+    (item) => item.subscriptionStatus === 'ACTIVE' && item.subscriptionCanWrite,
+  );
   const estimatedMrr = payingTenants.reduce(
     (sum, item) => sum + (PLAN_CATALOG[item.subscriptionPlan]?.priceAnnualMonthly || 0),
     0,
   );
   const expiringTrials = tenants.filter((item) => {
-    const remaining = daysUntil(item.trialEndsAt);
-    return item.subscriptionStatus === 'TRIALING' && remaining !== null && remaining >= 0 && remaining <= 7;
+    const remaining = daysUntil(item.trialEndsAt, now.getTime());
+    return item.subscriptionAccessStatus === 'TRIALING'
+      && remaining !== null
+      && remaining >= 0
+      && remaining <= 7;
   }).length;
   const atRisk = tenants.filter((item) => ['RISK', 'BLOCKED', 'ATTENTION'].includes(item.health)).length;
 
@@ -180,7 +183,7 @@ export default async function SuperadminPage() {
         <article>
           <span>Clientes pagos</span>
           <strong>{payingTenants.length}</strong>
-          <small>{tenants.filter((item) => item.subscriptionStatus === 'TRIALING').length} en prueba</small>
+          <small>{tenants.filter((item) => item.subscriptionAccessStatus === 'TRIALING').length} en prueba</small>
         </article>
         <article>
           <span>Trials por vencer</span>

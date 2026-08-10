@@ -38,6 +38,7 @@ const {
   applyWebhookMessageAtomically,
   assertExpiredWhatsAppFlowRecoveryResult,
 } = await import('../src/lib/db.js');
+const { ATTENDANCE_ACTIONS, generateWebviewToken } = await import('../src/lib/auth.js');
 const {
   issueWhatsAppFlowSession,
   markWhatsAppFlowSessionDeliveryAttempted,
@@ -1100,6 +1101,80 @@ test('a quarantined Meta contact remains quarantined when its applied outcome is
   assert.equal(result.quarantined, true);
   assert.equal(result.outcome.quarantined, true);
   assert.equal(result.outcome.deliverySuppressed, true);
+});
+
+test('an atomic retry bridges a legacy signed webview using its selected project scope', async () => {
+  const scope = {
+    projectId: 'project-webview-rolling-retry',
+    organizationId: 'organization-webview-rolling-retry',
+    phoneNumberId: 'phone-webview-rolling-retry',
+  };
+  const workerId = 'worker-webview-rolling-retry';
+  const pendingEntryId = 'pending-webview-rolling-retry';
+  const appliedAt = new Date('2026-08-10T12:00:00.000Z');
+  const bearer = generateWebviewToken(workerId, {
+    action: ATTENDANCE_ACTIONS.CHECK_IN,
+    pendingEntryId,
+    purpose: 'attendance',
+    scope: scope.projectId,
+    now: appliedAt.getTime() - 30_000,
+    ttlSeconds: 7_200,
+  });
+  const storedOutcome = {
+    version: 1,
+    type: 'message',
+    reply: `Registré tu ingreso. https://obra.test/webview/attendance?worker=${workerId}&token=${bearer}`,
+    flowPrompt: null,
+  };
+  let selectedProjectId = false;
+  const transaction = {
+    $executeRawUnsafe: async () => undefined,
+    webhookEvent: {
+      findFirst: async ({ select }) => {
+        selectedProjectId = select.projectId === true;
+        return {
+          id: 'event-webview-rolling-retry',
+          projectId: scope.projectId,
+          appliedAt,
+          outcome: storedOutcome,
+        };
+      },
+      updateMany: async () => ({ count: 1 }),
+    },
+  };
+  globalThis.__obraSaasPrisma = {
+    $transaction: async (callback) => callback(transaction),
+  };
+
+  const result = await applyWebhookMessageAtomically({
+    eventId: 'event-webview-rolling-retry',
+    leaseToken: 'lease-webview-rolling-retry',
+    event: {
+      provider: 'meta',
+      eventType: 'message',
+      externalId: 'wamid.webview-rolling-retry',
+      phoneNumberId: scope.phoneNumberId,
+      from: '+5491155551414',
+    },
+    scope,
+    apply: async () => assert.fail('an applied outcome must not run the engine'),
+  });
+
+  assert.equal(selectedProjectId, true);
+  assert.equal(result.alreadyApplied, true);
+  assert.deepEqual(result.outcome.secureWebviewDelivery, {
+    version: 1,
+    kind: 'ATTENDANCE_CHECK_IN',
+    projectId: scope.projectId,
+    workerId,
+    resourceId: pendingEntryId,
+    resourceRevision: null,
+    issuedAt: Math.floor((appliedAt.getTime() - 30_000) / 1_000),
+    expiresAt: Math.floor((appliedAt.getTime() - 30_000) / 1_000) + 7_200,
+  });
+  assert.match(result.outcome.reply, /enlace seguro disponible sólo en WhatsApp/i);
+  assert.doesNotMatch(JSON.stringify(result), /token=|\/webview\/attendance/i);
+  assert.equal(JSON.stringify(result).includes(bearer), false);
 });
 
 test('a published Flow session is issued in the same transaction and only its UUID enters the outcome', async () => {

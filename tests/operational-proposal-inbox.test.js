@@ -42,6 +42,21 @@ function taskState(progress = 20) {
   };
 }
 
+function canonicalTask(overrides = {}) {
+  return {
+    id: 'canonical-task-a',
+    organizationId: scope.organizationId,
+    projectId: scope.projectId,
+    title: 'Mamposteria planta baja',
+    description: null,
+    status: 'READY',
+    progress: 20,
+    revision: 3,
+    metadata: { source: 'canonical-task-v1' },
+    ...overrides,
+  };
+}
+
 function proposal(overrides = {}) {
   return {
     id: 'proposal-a',
@@ -93,10 +108,16 @@ function prismaStore({
   state = taskState(),
   version = 4,
   projectStatus = 'ACTIVE',
+  canonicalTasks = [],
+  canonicalUpdateConflict = false,
+  proposalApplyConflict = false,
 } = {}) {
   const records = proposals.map((record) => structuredClone(record));
   const audits = [];
   const projectedTasks = new Map();
+  const canonicalTaskRecords = new Map(
+    canonicalTasks.map((task) => [task.id, structuredClone(task)]),
+  );
   const calls = [];
   let snapshot = {
     state: structuredClone(state),
@@ -176,6 +197,9 @@ function prismaStore({
       },
       async updateMany({ where, data }) {
         calls.push(['proposal-update', { where, data }]);
+        if (proposalApplyConflict && data.status === OPERATIONAL_PROPOSAL_STATUSES.APPLIED) {
+          return { count: 0 };
+        }
         const record = records.find((candidate) => (
           candidate.id === where.id
           && candidate.projectId === where.projectId
@@ -205,12 +229,47 @@ function prismaStore({
     task: {
       async findMany(args) {
         calls.push(['task-find', args]);
-        return [...projectedTasks.values()]
+        const source = args.where.metadata.equals;
+        const sourceRows = source === 'canonical-task-v1'
+          ? [...canonicalTaskRecords.values()]
+          : [...projectedTasks.values()];
+        return sourceRows
           .filter((task) => task.projectId === args.where.projectId)
           .filter((task) => (
-            task.metadata?.source === args.where.metadata.equals
+            !args.where.project?.organizationId
+            || task.organizationId === args.where.project.organizationId
           ))
+          .filter((task) => (
+            task.metadata?.source === source
+          ))
+          .slice(0, args.take || sourceRows.length)
           .map((task) => structuredClone(task));
+      },
+      async findFirst(args) {
+        calls.push(['task-find-exact', args]);
+        const task = canonicalTaskRecords.get(args.where.id);
+        if (
+          !task
+          || task.projectId !== args.where.projectId
+          || task.organizationId !== args.where.project?.organizationId
+          || task.metadata?.source !== args.where.metadata.equals
+        ) return null;
+        return structuredClone(task);
+      },
+      async updateMany(args) {
+        calls.push(['task-update', args]);
+        if (canonicalUpdateConflict) return { count: 0 };
+        const task = canonicalTaskRecords.get(args.where.id);
+        if (
+          !task
+          || task.projectId !== args.where.projectId
+          || task.metadata?.source !== args.where.metadata.equals
+          || task.revision !== args.where.revision
+          || task.progress !== args.where.progress
+        ) return { count: 0 };
+        task.progress = args.data.progress;
+        task.revision += Number(args.data.revision?.increment) || 0;
+        return { count: 1 };
       },
       async upsert(args) {
         calls.push(['task-upsert', args]);
@@ -257,10 +316,29 @@ function prismaStore({
   const prisma = {
     async $transaction(callback, options) {
       calls.push(['transaction', options]);
-      return callback(transaction);
+      const before = {
+        records: structuredClone(records),
+        audits: structuredClone(audits),
+        projectedTasks: structuredClone([...projectedTasks.entries()]),
+        canonicalTasks: structuredClone([...canonicalTaskRecords.entries()]),
+        snapshot: structuredClone(snapshot),
+      };
+      try {
+        return await callback(transaction);
+      } catch (error) {
+        records.splice(0, records.length, ...before.records);
+        audits.splice(0, audits.length, ...before.audits);
+        projectedTasks.clear();
+        for (const [key, value] of before.projectedTasks) projectedTasks.set(key, value);
+        canonicalTaskRecords.clear();
+        for (const [key, value] of before.canonicalTasks) canonicalTaskRecords.set(key, value);
+        snapshot = before.snapshot;
+        throw error;
+      }
     },
     operationalProposal: transaction.operationalProposal,
     projectSnapshot: transaction.projectSnapshot,
+    task: transaction.task,
   };
   return {
     prisma,
@@ -268,6 +346,7 @@ function prismaStore({
     records,
     audits,
     projectedTasks,
+    canonicalTasks: canonicalTaskRecords,
     calls,
     get snapshot() {
       return snapshot;
@@ -498,6 +577,46 @@ test('list results stay tenant-project scoped and expose current task progress s
   });
 });
 
+test('inbox uses canonical task IDs and revisions without mixing legacy snapshot tasks', async () => {
+  const store = prismaStore({ canonicalTasks: [canonicalTask()] });
+  const inbox = await listOperationalProposalInbox(store.prisma, scope, {
+    filters: { view: 'all', type: null, limit: 50, offset: 0 },
+    now,
+  });
+
+  assert.equal(inbox.taskAuthority, 'CANONICAL');
+  assert.deepEqual(inbox.tasks, [{
+    id: 'canonical-task-a',
+    name: 'Mamposteria planta baja',
+    progress: 20,
+    revision: 3,
+  }]);
+  assert.equal(inbox.tasks.some((task) => task.id === 'task-a'), false);
+  const canonicalRead = store.calls.find(([name]) => name === 'task-find')[1];
+  assert.deepEqual(canonicalRead.where, {
+    projectId: scope.projectId,
+    project: { organizationId: scope.organizationId },
+    metadata: { path: ['source'], equals: 'canonical-task-v1' },
+  });
+});
+
+test('a redacted canonical catalog never falls back to legacy task identities', async () => {
+  const store = prismaStore({
+    canonicalTasks: [canonicalTask({
+      title: 'Tratamiento VIH de Juan',
+      description: 'Seguimiento de salud restringido',
+    })],
+  });
+  const inbox = await listOperationalProposalInbox(store.prisma, scope, {
+    filters: { view: 'all', type: null, limit: 50, offset: 0 },
+    includeSensitiveDetails: false,
+    now,
+  });
+
+  assert.equal(inbox.taskAuthority, 'CANONICAL');
+  assert.deepEqual(inbox.tasks, []);
+});
+
 test('lightweight pending counts retain tenant, project and expiry boundaries', async () => {
   const store = prismaStore({
     proposals: [
@@ -594,11 +713,29 @@ test('decision input requires the selected task precondition supplied by the cli
     decision: 'APPROVE',
     taskId: 'task-a',
     taskExpectedProgress: 20,
+    taskExpectedRevision: 3,
   }), {
     decision: 'APPROVE',
     taskId: 'task-a',
     taskExpectedProgress: 20,
+    taskExpectedRevision: 3,
   });
+  assert.throws(
+    () => parseOperationalProposalDecisionInput({
+      decision: 'APPROVE',
+      taskId: 'task-a',
+      taskExpectedProgress: 20,
+      taskExpectedRevision: -1,
+    }),
+    (error) => error.code === 'INVALID_TASK_SELECTION',
+  );
+  assert.throws(
+    () => parseOperationalProposalDecisionInput({
+      decision: 'APPROVE',
+      taskExpectedRevision: 3,
+    }),
+    (error) => error.code === 'INVALID_TASK_SELECTION',
+  );
 });
 
 test('task IDs remain exact and unsafe long prefixes cannot collide in the DTO', async () => {
@@ -681,7 +818,17 @@ test('approval atomically applies state, increments the snapshot and audits the 
     store.calls.slice(0, 5).map(([name]) => name),
     ['transaction', 'lock', 'project', 'audit-find', 'proposal-find-first'],
   );
-  const taskProjectionRead = store.calls.find(([name]) => name === 'task-find')[1];
+  const canonicalRead = store.calls.find(([name, args]) => (
+    name === 'task-find' && args.where.metadata.equals === 'canonical-task-v1'
+  ))[1];
+  assert.deepEqual(canonicalRead.where, {
+    projectId: scope.projectId,
+    project: { organizationId: scope.organizationId },
+    metadata: { path: ['source'], equals: 'canonical-task-v1' },
+  });
+  const taskProjectionRead = store.calls.find(([name, args]) => (
+    name === 'task-find' && args.where.metadata.equals === 'project-snapshot-v1'
+  ))[1];
   assert.deepEqual(taskProjectionRead.where, {
     projectId: scope.projectId,
     metadata: { path: ['source'], equals: 'project-snapshot-v1' },
@@ -696,6 +843,526 @@ test('approval atomically applies state, increments the snapshot and audits the 
   assert.equal(taskProjectionWrite.create.metadata.projectStateVersion, 5);
   assert.equal(taskProjectionWrite.create.metadata.snapshotTaskId, 'task-a');
   assert.equal(store.projectedTasks.get('snapshot:task-a').progress, 75);
+});
+
+test('canonical approval CAS-updates only Task, audits it and replays idempotently', async () => {
+  const store = prismaStore({
+    canonicalTasks: [canonicalTask()],
+    proposals: [proposal({
+      action: {
+        version: 1,
+        percentage: 75,
+        taskKey: null,
+        taskName: null,
+        taskReference: 'mamposteria',
+      },
+      precondition: null,
+    })],
+  });
+  const options = {
+    scope,
+    proposalId: 'proposal-a',
+    actorId: 'platform-user-a',
+    actorName: 'director@example.com',
+    idempotencyKey: 'canonical-approval-123',
+    input: {
+      decision: 'APPROVE',
+      taskId: 'canonical-task-a',
+      taskExpectedProgress: 20,
+      taskExpectedRevision: 3,
+    },
+    now,
+  };
+
+  const result = await resolveDashboardOperationalProposal(store.prisma, options);
+
+  assert.equal(result.outcome, 'APPLIED');
+  assert.equal(result.stateVersion, 0);
+  assert.equal(store.canonicalTasks.get('canonical-task-a').progress, 75);
+  assert.equal(store.canonicalTasks.get('canonical-task-a').revision, 4);
+  assert.equal(store.snapshot.state.tasks['task-a'].progress, 20);
+  assert.equal(store.calls.some(([name]) => name === 'snapshot-read'), false);
+  assert.equal(store.calls.some(([name]) => name === 'snapshot-write'), false);
+  assert.equal(store.calls.some(([name]) => name === 'task-upsert'), false);
+  const taskUpdate = store.calls.find(([name]) => name === 'task-update')[1];
+  assert.deepEqual(taskUpdate.where, {
+    id: 'canonical-task-a',
+    projectId: scope.projectId,
+    revision: 3,
+    progress: 20,
+    metadata: { path: ['source'], equals: 'canonical-task-v1' },
+  });
+  assert.deepEqual(taskUpdate.data, {
+    progress: 75,
+    revision: { increment: 1 },
+  });
+  const taskAudit = store.audits.find((audit) => audit.action === 'task.progress.approved');
+  assert.equal(taskAudit.entityId, 'canonical-task-a');
+  assert.equal(taskAudit.metadata.proposalId, 'proposal-a');
+  assert.equal(taskAudit.metadata.previousRevision, 3);
+  assert.equal(taskAudit.metadata.nextRevision, 4);
+  assert.equal(store.records[0].result.taskAuthority, 'CANONICAL');
+
+  const writesBeforeRetry = store.calls.filter(([name]) => name === 'task-update').length;
+  const retry = await resolveDashboardOperationalProposal(store.prisma, options);
+  assert.equal(retry.alreadyApplied, true);
+  assert.equal(retry.outcome, 'APPLIED');
+  assert.equal(
+    store.calls.filter(([name]) => name === 'task-update').length,
+    writesBeforeRetry,
+  );
+});
+
+test('canonical bound approval uses its stored revision precondition without client reselection', async () => {
+  const store = prismaStore({
+    canonicalTasks: [canonicalTask()],
+    proposals: [proposal({
+      action: {
+        version: 1,
+        percentage: 75,
+        taskKey: 'canonical-task-a',
+        taskName: 'Mamposteria planta baja',
+        taskReference: 'mamposteria',
+      },
+      precondition: {
+        version: 1,
+        taskKey: 'canonical-task-a',
+        taskName: 'Mamposteria planta baja',
+        taskProgress: 20,
+        taskRevision: 3,
+      },
+    })],
+  });
+
+  const result = await resolveDashboardOperationalProposal(store.prisma, {
+    scope,
+    proposalId: 'proposal-a',
+    actorId: 'platform-user-a',
+    actorName: 'director@example.com',
+    idempotencyKey: 'canonical-bound-approval-123',
+    input: { decision: 'APPROVE' },
+    now,
+  });
+
+  assert.equal(result.outcome, 'APPLIED');
+  assert.equal(result.stateVersion, 0);
+  assert.equal(store.canonicalTasks.get('canonical-task-a').progress, 75);
+  assert.equal(store.canonicalTasks.get('canonical-task-a').revision, 4);
+  assert.equal(store.snapshot.state.tasks['task-a'].progress, 20);
+  assert.equal(store.calls.some(([name]) => name === 'snapshot-read'), false);
+  assert.equal(store.calls.some(([name]) => name === 'snapshot-write'), false);
+  assert.equal(store.calls.some(([name]) => name === 'task-upsert'), false);
+  assert.equal(store.records[0].result.taskRevision, 4);
+  assert.equal(store.records[0].result.taskAuthority, 'CANONICAL');
+});
+
+test('canonical bound approval resolves an exact task outside the 500-row presentation catalog', async () => {
+  const catalogTasks = Array.from({ length: 500 }, (_, index) => canonicalTask({
+    id: `canonical-catalog-${String(index).padStart(3, '0')}`,
+    title: `Catalogo ${String(index).padStart(3, '0')}`,
+  }));
+  const exactTask = canonicalTask({
+    id: 'canonical-outside-catalog',
+    title: 'Z tarea fuera del catalogo',
+    progress: 20,
+    revision: 9,
+  });
+  const store = prismaStore({
+    canonicalTasks: [...catalogTasks, exactTask],
+    proposals: [proposal({
+      action: {
+        version: 1,
+        percentage: 75,
+        taskKey: exactTask.id,
+        taskName: exactTask.title,
+        taskReference: 'fuera del catalogo',
+      },
+      precondition: {
+        version: 1,
+        taskKey: exactTask.id,
+        taskName: exactTask.title,
+        taskProgress: 20,
+        taskRevision: 9,
+      },
+    })],
+  });
+
+  const result = await resolveDashboardOperationalProposal(store.prisma, {
+    scope,
+    proposalId: 'proposal-a',
+    actorId: 'platform-user-a',
+    actorName: 'director@example.com',
+    idempotencyKey: 'canonical-outside-catalog-123',
+    input: { decision: 'APPROVE' },
+    now,
+  });
+
+  assert.equal(result.outcome, 'APPLIED');
+  assert.equal(store.canonicalTasks.get(exactTask.id).progress, 75);
+  assert.equal(store.canonicalTasks.get(exactTask.id).revision, 10);
+  const catalogRead = store.calls.find(([name]) => name === 'task-find')[1];
+  assert.equal(catalogRead.take, 500);
+  const exactRead = store.calls.find(([name]) => name === 'task-find-exact')[1];
+  assert.deepEqual(exactRead.where, {
+    id: exactTask.id,
+    projectId: scope.projectId,
+    project: { organizationId: scope.organizationId },
+    metadata: { path: ['source'], equals: 'canonical-task-v1' },
+  });
+});
+
+test('a privacy-hidden canonical task stays pending instead of being invalidated', async () => {
+  const hiddenTask = canonicalTask({
+    id: 'canonical-private-task',
+    title: 'Tratamiento VIH de Juan',
+    description: 'Seguimiento medico restringido',
+  });
+  const store = prismaStore({
+    canonicalTasks: [hiddenTask],
+    proposals: [proposal({
+      action: {
+        version: 1,
+        percentage: 75,
+        taskKey: hiddenTask.id,
+        taskName: hiddenTask.title,
+        taskReference: 'restringida',
+      },
+      precondition: {
+        version: 1,
+        taskKey: hiddenTask.id,
+        taskName: hiddenTask.title,
+        taskProgress: 20,
+        taskRevision: 3,
+      },
+    })],
+  });
+
+  await assert.rejects(
+    () => resolveDashboardOperationalProposal(store.prisma, {
+      scope,
+      proposalId: 'proposal-a',
+      actorId: 'platform-user-a',
+      actorName: 'site-manager@example.com',
+      idempotencyKey: 'canonical-private-task-123',
+      input: { decision: 'APPROVE' },
+      includeSensitiveDetails: false,
+      now,
+    }),
+    (error) => (
+      error.code === 'TASK_REQUIRED'
+      && error.status === 422
+      && !/Juan|VIH|tratamiento/i.test(error.message)
+    ),
+  );
+
+  assert.equal(store.records[0].status, OPERATIONAL_PROPOSAL_STATUSES.PENDING);
+  assert.equal(store.canonicalTasks.get(hiddenTask.id).progress, 20);
+  assert.equal(store.calls.some(([name]) => name === 'task-update'), false);
+  assert.equal(
+    store.audits.some((audit) => audit.action === 'voice.proposal.invalidated'),
+    false,
+  );
+});
+
+test('an exact bound task from another project is invalidated without cross-project writes', async () => {
+  const foreignTask = canonicalTask({
+    id: 'canonical-project-b',
+    projectId: 'project-b',
+    title: 'Tarea privada proyecto B',
+  });
+  const store = prismaStore({
+    canonicalTasks: [canonicalTask(), foreignTask],
+    proposals: [proposal({
+      action: {
+        version: 1,
+        percentage: 75,
+        taskKey: foreignTask.id,
+        taskName: foreignTask.title,
+      },
+      precondition: {
+        version: 1,
+        taskKey: foreignTask.id,
+        taskName: foreignTask.title,
+        taskProgress: 20,
+        taskRevision: 3,
+      },
+    })],
+  });
+
+  await assert.rejects(
+    () => resolveDashboardOperationalProposal(store.prisma, {
+      scope,
+      proposalId: 'proposal-a',
+      actorId: 'platform-user-a',
+      actorName: 'director@example.com',
+      idempotencyKey: 'canonical-cross-project-123',
+      input: { decision: 'APPROVE' },
+      now,
+    }),
+    (error) => error.code === 'PROPOSAL_INVALIDATED' && !/proyecto B/i.test(error.message),
+  );
+
+  assert.equal(store.records[0].status, OPERATIONAL_PROPOSAL_STATUSES.INVALIDATED);
+  assert.equal(store.canonicalTasks.get(foreignTask.id).progress, 20);
+  assert.equal(store.calls.some(([name]) => name === 'task-update'), false);
+  const exactRead = store.calls.find(([name]) => name === 'task-find-exact')[1];
+  assert.deepEqual(exactRead.where, {
+    id: foreignTask.id,
+    projectId: scope.projectId,
+    project: { organizationId: scope.organizationId },
+    metadata: { path: ['source'], equals: 'canonical-task-v1' },
+  });
+});
+
+test('an exact bound task from another tenant is invalidated without cross-tenant writes', async () => {
+  const foreignTask = canonicalTask({
+    id: 'canonical-tenant-b',
+    organizationId: 'organization-b',
+    title: 'Tarea privada tenant B',
+  });
+  const store = prismaStore({
+    canonicalTasks: [canonicalTask(), foreignTask],
+    proposals: [proposal({
+      action: {
+        version: 1,
+        percentage: 75,
+        taskKey: foreignTask.id,
+        taskName: foreignTask.title,
+      },
+      precondition: {
+        version: 1,
+        taskKey: foreignTask.id,
+        taskName: foreignTask.title,
+        taskProgress: 20,
+        taskRevision: 3,
+      },
+    })],
+  });
+
+  await assert.rejects(
+    () => resolveDashboardOperationalProposal(store.prisma, {
+      scope,
+      proposalId: 'proposal-a',
+      actorId: 'platform-user-a',
+      actorName: 'director@example.com',
+      idempotencyKey: 'canonical-cross-tenant-123',
+      input: { decision: 'APPROVE' },
+      now,
+    }),
+    (error) => error.code === 'PROPOSAL_INVALIDATED' && !/tenant B/i.test(error.message),
+  );
+
+  assert.equal(store.records[0].status, OPERATIONAL_PROPOSAL_STATUSES.INVALIDATED);
+  assert.equal(store.canonicalTasks.get(foreignTask.id).progress, 20);
+  assert.equal(store.calls.some(([name]) => name === 'task-update'), false);
+  const exactRead = store.calls.find(([name]) => name === 'task-find-exact')[1];
+  assert.deepEqual(exactRead.where, {
+    id: foreignTask.id,
+    projectId: scope.projectId,
+    project: { organizationId: scope.organizationId },
+    metadata: { path: ['source'], equals: 'canonical-task-v1' },
+  });
+});
+
+test('canonical bound approval detects ABA through its stored revision even when progress matches', async () => {
+  const store = prismaStore({
+    canonicalTasks: [canonicalTask({ revision: 5, progress: 20 })],
+    proposals: [proposal({
+      action: {
+        version: 1,
+        percentage: 75,
+        taskKey: 'canonical-task-a',
+        taskName: 'Mamposteria planta baja',
+        taskReference: 'mamposteria',
+      },
+      precondition: {
+        version: 1,
+        taskKey: 'canonical-task-a',
+        taskName: 'Mamposteria planta baja',
+        taskProgress: 20,
+        taskRevision: 3,
+      },
+    })],
+  });
+
+  await assert.rejects(
+    () => resolveDashboardOperationalProposal(store.prisma, {
+      scope,
+      proposalId: 'proposal-a',
+      actorId: 'platform-user-a',
+      actorName: 'director@example.com',
+      idempotencyKey: 'canonical-bound-aba-123',
+      input: { decision: 'APPROVE' },
+      now,
+    }),
+    (error) => error.code === 'PROPOSAL_INVALIDATED' && error.status === 409,
+  );
+
+  assert.equal(store.canonicalTasks.get('canonical-task-a').progress, 20);
+  assert.equal(store.canonicalTasks.get('canonical-task-a').revision, 5);
+  assert.equal(store.records[0].status, OPERATIONAL_PROPOSAL_STATUSES.INVALIDATED);
+  assert.equal(store.calls.some(([name]) => name === 'task-update'), false);
+  assert.equal(store.calls.some(([name]) => name === 'snapshot-read'), false);
+  assert.equal(store.calls.some(([name]) => name === 'snapshot-write'), false);
+});
+
+test('canonical approval rejects a stale client revision without touching task or proposal', async () => {
+  const store = prismaStore({
+    canonicalTasks: [canonicalTask()],
+    proposals: [proposal({
+      action: { version: 1, percentage: 75, taskKey: null, taskName: null },
+      precondition: null,
+    })],
+  });
+
+  await assert.rejects(
+    () => resolveDashboardOperationalProposal(store.prisma, {
+      scope,
+      proposalId: 'proposal-a',
+      actorId: 'platform-user-a',
+      actorName: 'director@example.com',
+      idempotencyKey: 'canonical-stale-123',
+      input: {
+        decision: 'APPROVE',
+        taskId: 'canonical-task-a',
+        taskExpectedProgress: 20,
+        taskExpectedRevision: 2,
+      },
+      now,
+    }),
+    (error) => error.code === 'TASK_PRECONDITION_STALE' && error.status === 409,
+  );
+
+  assert.equal(store.canonicalTasks.get('canonical-task-a').progress, 20);
+  assert.equal(store.canonicalTasks.get('canonical-task-a').revision, 3);
+  assert.equal(store.records[0].status, OPERATIONAL_PROPOSAL_STATUSES.PENDING);
+  assert.equal(store.calls.some(([name]) => name === 'task-update'), false);
+  assert.equal(store.calls.some(([name]) => name === 'snapshot-write'), false);
+});
+
+test('canonical approval fails closed when the CAS loses after the protected read', async () => {
+  const store = prismaStore({
+    canonicalTasks: [canonicalTask()],
+    canonicalUpdateConflict: true,
+    proposals: [proposal({
+      action: { version: 1, percentage: 75, taskKey: null, taskName: null },
+      precondition: null,
+    })],
+  });
+
+  await assert.rejects(
+    () => resolveDashboardOperationalProposal(store.prisma, {
+      scope,
+      proposalId: 'proposal-a',
+      actorId: 'platform-user-a',
+      actorName: 'director@example.com',
+      idempotencyKey: 'canonical-race-123',
+      input: {
+        decision: 'APPROVE',
+        taskId: 'canonical-task-a',
+        taskExpectedProgress: 20,
+        taskExpectedRevision: 3,
+      },
+      now,
+    }),
+    (error) => error.code === 'TASK_PRECONDITION_STALE' && error.status === 409,
+  );
+
+  assert.equal(store.calls.filter(([name]) => name === 'task-update').length, 1);
+  assert.equal(store.records[0].status, OPERATIONAL_PROPOSAL_STATUSES.PENDING);
+  assert.equal(store.audits.some((audit) => audit.action === 'task.progress.approved'), false);
+  assert.equal(store.calls.some(([name]) => name === 'snapshot-write'), false);
+});
+
+test('canonical approval rolls back the task when proposal finalization loses a race', async () => {
+  const store = prismaStore({
+    canonicalTasks: [canonicalTask()],
+    proposalApplyConflict: true,
+    proposals: [proposal({
+      action: { version: 1, percentage: 75, taskKey: null, taskName: null },
+      precondition: null,
+    })],
+  });
+
+  await assert.rejects(
+    () => resolveDashboardOperationalProposal(store.prisma, {
+      scope,
+      proposalId: 'proposal-a',
+      actorId: 'platform-user-a',
+      actorName: 'director@example.com',
+      idempotencyKey: 'canonical-finalize-race-123',
+      input: {
+        decision: 'APPROVE',
+        taskId: 'canonical-task-a',
+        taskExpectedProgress: 20,
+        taskExpectedRevision: 3,
+      },
+      now,
+    }),
+    (error) => error.code === 'PROPOSAL_RACE_LOST' && error.status === 409,
+  );
+
+  assert.equal(store.calls.filter(([name]) => name === 'task-update').length, 1);
+  assert.equal(store.canonicalTasks.get('canonical-task-a').progress, 20);
+  assert.equal(store.canonicalTasks.get('canonical-task-a').revision, 3);
+  assert.equal(store.records[0].status, OPERATIONAL_PROPOSAL_STATUSES.PENDING);
+  assert.equal(store.audits.some((audit) => audit.action === 'task.progress.approved'), false);
+});
+
+test('canonical approval denies an exact foreign task ID without leaking or writing', async () => {
+  const store = prismaStore({
+    canonicalTasks: [
+      canonicalTask(),
+      canonicalTask({ id: 'foreign-task', projectId: 'project-b', title: 'Obra ajena' }),
+    ],
+    proposals: [proposal({
+      action: { version: 1, percentage: 75, taskKey: null, taskName: null },
+      precondition: null,
+    })],
+  });
+
+  await assert.rejects(
+    () => resolveDashboardOperationalProposal(store.prisma, {
+      scope,
+      proposalId: 'proposal-a',
+      actorId: 'platform-user-a',
+      actorName: 'director@example.com',
+      idempotencyKey: 'canonical-foreign-123',
+      input: {
+        decision: 'APPROVE',
+        taskId: 'foreign-task',
+        taskExpectedProgress: 20,
+        taskExpectedRevision: 3,
+      },
+      now,
+    }),
+    (error) => error.code === 'TASK_REQUIRED' && !/obra ajena/i.test(error.message),
+  );
+
+  assert.equal(store.calls.some(([name]) => name === 'task-update'), false);
+  assert.equal(store.records[0].status, OPERATIONAL_PROPOSAL_STATUSES.PENDING);
+});
+
+test('a legacy-bound proposal is invalidated instead of crossing into canonical authority', async () => {
+  const store = prismaStore({ canonicalTasks: [canonicalTask()] });
+
+  await assert.rejects(
+    () => resolveDashboardOperationalProposal(store.prisma, {
+      scope,
+      proposalId: 'proposal-a',
+      actorId: 'platform-user-a',
+      actorName: 'director@example.com',
+      idempotencyKey: 'canonical-legacy-bound-123',
+      input: { decision: 'APPROVE' },
+      now,
+    }),
+    (error) => error.code === 'PROPOSAL_INVALIDATED',
+  );
+
+  assert.equal(store.records[0].status, OPERATIONAL_PROPOSAL_STATUSES.INVALIDATED);
+  assert.equal(store.canonicalTasks.get('canonical-task-a').progress, 20);
+  assert.equal(store.calls.some(([name]) => name === 'task-update'), false);
+  assert.equal(store.calls.some(([name]) => name === 'snapshot-write'), false);
 });
 
 test('an exact idempotent retry returns the stored outcome without repeating effects', async () => {

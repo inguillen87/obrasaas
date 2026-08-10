@@ -94,6 +94,7 @@ const baseInput = {
     taskKey: '3',
     taskName: 'Estructura',
     taskProgress: 20,
+    taskRevision: 4,
   },
   now: new Date('2026-07-16T12:00:00.000Z'),
 };
@@ -167,11 +168,27 @@ test('proposal creation is durable, bounded and idempotent by tenant project and
   assert.match(records[0].transcriptSha256, /^[a-f0-9]{64}$/);
   assert.equal(records[0].action.percentage, 75);
   assert.equal(records[0].precondition.taskProgress, 20);
+  assert.equal(records[0].precondition.taskRevision, 4);
 
   await assert.rejects(
     createOperationalProposal(prisma, { ...baseInput, summary: 'Contenido cambiado.' }),
     (error) => error.code === 'OPERATIONAL_PROPOSAL_SOURCE_CONFLICT',
   );
+});
+
+test('proposal creation rejects an invalid task revision precondition as untrusted', async () => {
+  const { prisma, records } = proposalStore();
+  await createOperationalProposal(prisma, {
+    ...baseInput,
+    sourceExternalId: 'wamid.audio-invalid-revision',
+    precondition: {
+      ...baseInput.precondition,
+      taskRevision: -1,
+    },
+  });
+
+  assert.equal(records.length, 1);
+  assert.equal(records[0].precondition ?? null, null);
 });
 
 test('role checks apply to the stored proposal intent, not to the confirmation command', () => {

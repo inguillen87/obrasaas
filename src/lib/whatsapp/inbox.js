@@ -9,6 +9,7 @@ import {
   ProjectWritePolicyError,
   requireOperationalProjectWrite,
 } from '@/lib/project-write-policy';
+import { redactSensitiveText } from '@/lib/sensitive-text';
 import {
   deriveStoredWhatsAppChannelReadiness,
   whatsAppPlatformConfiguration,
@@ -310,7 +311,7 @@ function publicMessage(message, {
     kind: kind.toLowerCase(),
     body: sourceRestricted
       ? 'Evidencia adjunta recibida. El archivo y su contenido están restringidos para este rol.'
-      : safeMessage.body || '',
+      : redactSensitiveText(safeMessage.body || ''),
     status,
     sourceEvidenceViewable,
     progressEvidenceEligible,
@@ -1439,7 +1440,7 @@ export async function sendManualWhatsAppMessage({
           externalId: identity.externalId,
           direction: 'OUTBOUND',
           kind: 'TEXT',
-          body: text,
+          body: redactSensitiveText(text),
           status: 'sending',
           sentAt: observedAt,
           metadata: manualMessageMetadata({ access, identity, payloadDigest }),

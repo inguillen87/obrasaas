@@ -23,7 +23,11 @@ function assetKey(asset) {
   return `${asset.whatsappBusinessId}:${asset.phoneNumberId}`;
 }
 
-export default function WhatsAppPilotImportPanel({ targets, assets }) {
+export default function WhatsAppPilotImportPanel({
+  targets,
+  targetEmptyState,
+  assets,
+}) {
   const [organizationId, setOrganizationId] = useState("");
   const [draft, setDraft] = useState({ ...EMPTY_DRAFT });
   const [confirmed, setConfirmed] = useState(false);
@@ -197,12 +201,13 @@ export default function WhatsAppPilotImportPanel({ targets, assets }) {
           <div>
             <strong>
               {targets.length === 0
-                ? "No hay un destino piloto habilitado"
+                ? targetEmptyState?.title || "No hay un destino piloto habilitado"
                 : "No hay activos de prueba habilitados"}
             </strong>
             <p>
               {targets.length === 0
-                ? "Hace falta una membresía activa del superadmin en un tenant externo, con permiso de integraciones, suscripción habilitada y al menos una obra activa."
+                ? targetEmptyState?.description ||
+                  "Revisá la asignación, los permisos, la suscripción y las obras activas del tenant piloto."
                 : "Configurá en este Preview la lista exacta de pares WABA y Phone Number ID emitidos por Meta para pruebas."}
             </p>
           </div>

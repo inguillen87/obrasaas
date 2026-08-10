@@ -7,11 +7,16 @@ import styles from './superadmin.module.css';
 
 const STATUS_LABELS = {
   TRIALING: 'En prueba',
+  TRIAL_EXPIRED: 'Prueba vencida',
   ACTIVE: 'Activo',
   PAST_DUE: 'Pago pendiente',
   CANCELED: 'Cancelado',
   SUSPENDED: 'Suspendido',
 };
+
+const EDITABLE_STATUS_LABELS = Object.fromEntries(
+  Object.entries(STATUS_LABELS).filter(([status]) => status !== 'TRIAL_EXPIRED'),
+);
 
 const HEALTH_LABELS = {
   HEALTHY: 'Saludable',
@@ -100,6 +105,10 @@ function searchableText(tenant) {
     .toLocaleLowerCase('es');
 }
 
+function tenantAccessStatus(tenant) {
+  return tenant.subscriptionAccessStatus || tenant.subscriptionStatus;
+}
+
 export default function SuperadminConsole({ initialTenants, initialAccounts }) {
   const router = useRouter();
   const accountNameRef = useRef(null);
@@ -128,7 +137,7 @@ export default function SuperadminConsole({ initialTenants, initialAccounts }) {
     const normalizedQuery = query.trim().toLocaleLowerCase('es');
     return tenants.filter((tenant) => (
       (!normalizedQuery || searchableText(tenant).includes(normalizedQuery))
-      && (statusFilter === 'ALL' || tenant.subscriptionStatus === statusFilter)
+      && (statusFilter === 'ALL' || tenantAccessStatus(tenant) === statusFilter)
       && (planFilter === 'ALL' || tenant.subscriptionPlan === planFilter)
     ));
   }, [planFilter, query, statusFilter, tenants]);
@@ -460,7 +469,7 @@ export default function SuperadminConsole({ initialTenants, initialAccounts }) {
                     <small>{tenant.primaryContact?.email || tenant.slug}</small>
                   </td>
                   <td><span className={`${styles.health} ${styles[tenant.health.toLowerCase()]}`}><i />{HEALTH_LABELS[tenant.health]}</span>{tenant.failedWebhooks > 0 && <small>{tenant.failedWebhooks} webhook{tenant.failedWebhooks === 1 ? '' : 's'} fallido{tenant.failedWebhooks === 1 ? '' : 's'}</small>}</td>
-                  <td><strong>{tenant.subscriptionPlan}</strong><span className={`${styles.status} ${styles[tenant.subscriptionStatus.toLowerCase()]}`}>{STATUS_LABELS[tenant.subscriptionStatus]}</span></td>
+                  <td><strong>{tenant.subscriptionPlan}</strong><span className={`${styles.status} ${styles[tenantAccessStatus(tenant).toLowerCase()]}`}>{STATUS_LABELS[tenantAccessStatus(tenant)]}</span></td>
                   <td><strong>{tenant.activeMembers}/{tenant.members} usuarios</strong><small>{tenant.activeProjects}/{tenant.projects} obras activas</small></td>
                   <td><strong>{tenant.connectedChannels > 0 ? `${tenant.connectedChannels} conectado${tenant.connectedChannels === 1 ? '' : 's'}` : 'Sin conectar'}</strong><small>Cloud API por tenant</small></td>
                   <td><strong>{formatDate(tenant.lastActivityAt, true)}</strong><small>Alta {formatDate(tenant.createdAt)}</small></td>
@@ -489,7 +498,7 @@ export default function SuperadminConsole({ initialTenants, initialAccounts }) {
 
             <form onSubmit={saveTenant} className={styles.tenantForm}>
               <label><span>Plan comercial</span><select value={draft.subscriptionPlan} onChange={(event) => setPlan(event.target.value)} disabled={pending}><option value="TRIAL">Trial · USD 0</option><option value="PRO">Pro · USD 199/mes</option><option value="ENTERPRISE">Enterprise · desde USD 699/mes</option></select></label>
-              <label><span>Estado de la cuenta</span><select value={draft.subscriptionStatus} onChange={(event) => setStatus(event.target.value)} disabled={pending}>{Object.entries(STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+              <label><span>Estado de la cuenta</span><select value={draft.subscriptionStatus} onChange={(event) => setStatus(event.target.value)} disabled={pending}>{Object.entries(EDITABLE_STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
               <label><span>Fin de prueba</span><input type="date" value={draft.trialEndsAt} onChange={(event) => setDraft((current) => ({ ...current, trialEndsAt: event.target.value }))} disabled={pending || draft.subscriptionStatus !== 'TRIALING'} /></label>
 
               <button type="button" className={styles.trialButton} onClick={extendTrial} disabled={pending}><i className="fa-regular fa-calendar-plus" aria-hidden="true" /> Extender prueba 14 días</button>

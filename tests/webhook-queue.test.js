@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { ATTENDANCE_ACTIONS, generateWebviewToken } from "../src/lib/auth.js";
 import {
   WEBHOOK_MAX_ATTEMPTS,
   WEBHOOK_RETRY_CAP_MS,
@@ -120,6 +121,139 @@ test("unusable or corrupt WhatsApp identities are terminal before media processi
   assert.equal(isTerminalWebhookFailure({ code: "WHATSAPP_AUTOMATIC_DELIVERY_PRE_PROVIDER_RETRY" }), false);
   assert.equal(isTerminalWebhookFailure({ code: "FIELD_WORKER_CANONICAL_IDENTITY_CONFIGURATION_INVALID" }), false);
   assert.equal(isTerminalWebhookFailure({ code: "META_TEMPORARY_FAILURE" }), false);
+});
+
+test("a secure-webview outcome persists a non-secret descriptor and redacts its durable reply", () => {
+  const descriptor = {
+    version: 1,
+    kind: "ATTENDANCE_CHECK_IN",
+    projectId: "project-a",
+    workerId: "worker-a",
+    resourceId: "pending-entry-a",
+    resourceRevision: null,
+    issuedAt: 1_786_342_200,
+    expiresAt: 1_786_349_400,
+  };
+  const bearer = "eyJ2IjoyLCJzdWIiOiJ3b3JrZXItYSJ9.must-not-be-persisted";
+  const rawReply = `Registré tu ingreso. Abrí https://obra.test/webview/attendance?worker=worker-a&token=${bearer}`;
+  const outcome = createMessageWebhookOutcome({
+    reply: rawReply,
+    secureWebviewDelivery: descriptor,
+  });
+
+  assert.deepEqual(outcome, {
+    version: 1,
+    type: "message",
+    reply: "Registré tu ingreso. Abrí [enlace seguro disponible sólo en WhatsApp]",
+    flowPrompt: null,
+    secureWebviewDelivery: descriptor,
+  });
+  assert.doesNotMatch(JSON.stringify(outcome), /must-not-be-persisted|token=|\/webview\/attendance/i);
+  assert.deepEqual(readAppliedMessageWebhookOutcome({
+    appliedAt: new Date("2026-08-10T12:00:00.000Z"),
+    outcome,
+  }), outcome);
+
+  assert.throws(
+    () => createMessageWebhookOutcome({
+      reply: rawReply,
+      secureWebviewDelivery: { ...descriptor, token: bearer },
+    }),
+    (error) => error.code === "WEBHOOK_OUTCOME_INVALID",
+  );
+});
+
+test("a rolling deployment bridges a valid legacy signed webview without returning its bearer", () => {
+  const projectId = "project-rolling-a";
+  const workerId = "worker-rolling-a";
+  const pendingEntryId = "pending-entry-rolling-a";
+  const appliedAt = new Date("2026-08-10T12:00:00.000Z");
+  const issuedAt = appliedAt.getTime() - 30_000;
+  const secret = "rolling-deploy-webview-secret-at-least-32-bytes";
+  const bearer = generateWebviewToken(workerId, {
+    action: ATTENDANCE_ACTIONS.CHECK_IN,
+    pendingEntryId,
+    purpose: "attendance",
+    scope: projectId,
+    now: issuedAt,
+    ttlSeconds: 7_200,
+    secret,
+  });
+  const legacyOutcome = {
+    version: 1,
+    type: "message",
+    reply: `Registré tu ingreso. Abrí https://obra.test/webview/attendance?worker=${workerId}&token=${bearer}`,
+    flowPrompt: null,
+  };
+
+  const bridged = readAppliedMessageWebhookOutcome({
+    projectId,
+    appliedAt,
+    outcome: legacyOutcome,
+  }, { webviewSecret: secret });
+
+  assert.deepEqual(bridged.secureWebviewDelivery, {
+    version: 1,
+    kind: "ATTENDANCE_CHECK_IN",
+    projectId,
+    workerId,
+    resourceId: pendingEntryId,
+    resourceRevision: null,
+    issuedAt: Math.floor(issuedAt / 1_000),
+    expiresAt: Math.floor(issuedAt / 1_000) + 7_200,
+  });
+  assert.match(bridged.reply, /enlace seguro disponible sólo en WhatsApp/i);
+  assert.doesNotMatch(JSON.stringify(bridged), /token=|\/webview\/attendance/i);
+  assert.equal(JSON.stringify(bridged).includes(bearer), false);
+
+  const medicalBearer = generateWebviewToken(workerId, {
+    purpose: "medical",
+    scope: projectId,
+    now: issuedAt,
+    ttlSeconds: 7_200,
+    secret,
+  });
+  const medical = readAppliedMessageWebhookOutcome({
+    projectId,
+    appliedAt,
+    outcome: {
+      version: 1,
+      type: "message",
+      reply: `Adjuntá el certificado en https://obra.test/webview/medical?worker=${workerId}&token=${medicalBearer}`,
+      flowPrompt: null,
+    },
+  }, { webviewSecret: secret });
+  assert.deepEqual(medical.secureWebviewDelivery, {
+    version: 1,
+    kind: "MEDICAL",
+    projectId,
+    workerId,
+    resourceId: null,
+    resourceRevision: null,
+    issuedAt: Math.floor(issuedAt / 1_000),
+    expiresAt: Math.floor(issuedAt / 1_000) + 7_200,
+  });
+  assert.doesNotMatch(JSON.stringify(medical), /token=|\/webview\/medical/i);
+  assert.equal(JSON.stringify(medical).includes(medicalBearer), false);
+
+  for (const [label, webhookEvent] of [
+    ["invalid bearer", {
+      projectId,
+      appliedAt,
+      outcome: {
+        ...legacyOutcome,
+        reply: legacyOutcome.reply.replace(bearer, `${bearer}tampered`),
+      },
+    }],
+    ["wrong project scope", { projectId: "project-rolling-b", appliedAt, outcome: legacyOutcome }],
+    ["missing project scope", { appliedAt, outcome: legacyOutcome }],
+  ]) {
+    const rejected = readAppliedMessageWebhookOutcome(webhookEvent, { webviewSecret: secret });
+    assert.equal(rejected.secureWebviewDelivery, undefined, label);
+    assert.match(rejected.reply, /enlace seguro omitido/i, label);
+    assert.doesNotMatch(JSON.stringify(rejected), /token=|\/webview\/attendance/i, label);
+    assert.equal(JSON.stringify(rejected).includes(bearer), false, label);
+  }
 });
 
 test("a progress-evidence location outcome persists only its non-secret descriptor", () => {

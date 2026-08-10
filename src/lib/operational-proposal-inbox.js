@@ -12,6 +12,13 @@ import {
   runOperationalProjectMutation,
 } from './project-write-policy.js';
 import {
+  CANONICAL_OPERATIONAL_TASK_SOURCE,
+  OPERATIONAL_TASK_AUTHORITIES,
+  canonicalFirstTaskRows,
+  findCanonicalOperationalTaskRow,
+  listCanonicalOperationalTaskRows,
+} from './operational-task-authority.js';
+import {
   validateProjectStateInput,
 } from './project-state.js';
 import { synchronizeProjectTaskProjection } from './project-tasks.js';
@@ -19,6 +26,8 @@ import {
   OPERATIONAL_PROPOSAL_DECISIONS,
   OPERATIONAL_PROPOSAL_STATUSES,
   OPERATIONAL_PROPOSAL_TYPES,
+  finalizeOperationalProposal,
+  invalidateOperationalProposal,
   markOperationalProposalExpired,
 } from './whatsapp/operational-proposals.js';
 
@@ -346,6 +355,42 @@ export function serializeOperationalTasks(state, {
     ));
 }
 
+export function serializeCanonicalOperationalTasks(rows, {
+  includeSensitiveDetails = false,
+} = {}) {
+  return (Array.isArray(rows) ? rows : [])
+    .slice(0, 500)
+    .map((task) => {
+      const id = exactTaskId(task?.id);
+      if (!id) return null;
+      const name = cleanText(task?.title, 160) || `Tarea ${cleanText(id, 40)}`;
+      if (
+        !includeSensitiveDetails
+        && containsSensitiveMedicalContent({
+          id,
+          name,
+          description: task?.description,
+          metadata: task?.metadata,
+        })
+      ) {
+        return null;
+      }
+      return {
+        id,
+        name,
+        progress: boundedProgress(task?.progress),
+        revision: Number.isSafeInteger(task?.revision) && task.revision >= 0
+          ? task.revision
+          : null,
+      };
+    })
+    .filter(Boolean)
+    .sort((left, right) => (
+      left.name.localeCompare(right.name, 'es')
+      || left.id.localeCompare(right.id, 'es')
+    ));
+}
+
 function proposalWithCurrentTaskProgress(proposal, tasks) {
   if (!proposal?.change?.taskId) return proposal;
   const currentTask = tasks.find((task) => task.id === proposal.change.taskId);
@@ -512,6 +557,7 @@ export async function listOperationalProposalInbox(prisma, scope, {
     proposals,
     total,
     snapshot,
+    canonicalTaskRows,
     ...statusCounts
   ] = await Promise.all([
     prisma.operationalProposal.findMany({
@@ -528,6 +574,7 @@ export async function listOperationalProposalInbox(prisma, scope, {
       where: { projectId: scope.projectId },
       select: { state: true, version: true, updatedAt: true },
     }),
+    listCanonicalOperationalTaskRows(prisma, scope),
     ...statuses.map((status) => prisma.operationalProposal.count({
       where: statusCountWhere(scope, status, now),
     })),
@@ -536,9 +583,19 @@ export async function listOperationalProposalInbox(prisma, scope, {
   const metrics = Object.fromEntries(
     statuses.map((status, index) => [status.toLowerCase(), statusCounts[index]]),
   );
-  const tasks = serializeOperationalTasks(snapshot?.state, {
+  const legacyTasks = serializeOperationalTasks(snapshot?.state, {
     includeSensitiveDetails,
   });
+  const canonicalTasks = serializeCanonicalOperationalTasks(canonicalTaskRows, {
+    includeSensitiveDetails,
+  });
+  const taskAuthority = canonicalFirstTaskRows({
+    canonicalRows: canonicalTaskRows,
+    legacyRows: legacyTasks,
+  }).authority;
+  const tasks = taskAuthority === OPERATIONAL_TASK_AUTHORITIES.CANONICAL
+    ? canonicalTasks
+    : legacyTasks;
   return {
     proposals: proposals.map((proposal) => proposalWithCurrentTaskProgress(
       serializeOperationalProposal(proposal, {
@@ -548,6 +605,7 @@ export async function listOperationalProposalInbox(prisma, scope, {
       tasks,
     )),
     tasks,
+    taskAuthority,
     metrics,
     pagination: {
       limit: resolvedFilters.limit,
@@ -566,7 +624,12 @@ export function parseOperationalProposalDecisionInput(value) {
       { code: 'INVALID_DECISION' },
     );
   }
-  const allowedFields = new Set(['decision', 'taskId', 'taskExpectedProgress']);
+  const allowedFields = new Set([
+    'decision',
+    'taskId',
+    'taskExpectedProgress',
+    'taskExpectedRevision',
+  ]);
   if (Object.keys(value).some((field) => !allowedFields.has(field))) {
     throw new OperationalProposalInboxError(
       'La decisión contiene campos no permitidos.',
@@ -620,7 +683,29 @@ export function parseOperationalProposalDecisionInput(value) {
       { code: 'INVALID_TASK_SELECTION' },
     );
   }
-  return { decision, taskId, taskExpectedProgress };
+  let taskExpectedRevision = null;
+  if (value.taskExpectedRevision != null) {
+    const parsedRevision = Number(value.taskExpectedRevision);
+    if (!Number.isSafeInteger(parsedRevision) || parsedRevision < 0) {
+      throw new OperationalProposalInboxError(
+        'La revision esperada de la tarea no es valida.',
+        { code: 'INVALID_TASK_SELECTION' },
+      );
+    }
+    taskExpectedRevision = parsedRevision;
+  }
+  if (!taskId && taskExpectedRevision != null) {
+    throw new OperationalProposalInboxError(
+      'La revision esperada requiere una tarea seleccionada.',
+      { code: 'INVALID_TASK_SELECTION' },
+    );
+  }
+  return {
+    decision,
+    taskId,
+    taskExpectedProgress,
+    taskExpectedRevision,
+  };
 }
 
 export function normalizeOperationalProposalId(value) {
@@ -673,6 +758,7 @@ function normalizedDecisionRequest(proposalId, input) {
     decision: input.decision,
     taskId: input.taskId || null,
     taskExpectedProgress: input.taskExpectedProgress ?? null,
+    taskExpectedRevision: input.taskExpectedRevision ?? null,
   };
 }
 
@@ -680,7 +766,8 @@ function sameDecisionRequest(left, right) {
   return left?.proposalId === right.proposalId
     && left?.decision === right.decision
     && (left?.taskId || null) === (right.taskId || null)
-    && (left?.taskExpectedProgress ?? null) === (right.taskExpectedProgress ?? null);
+    && (left?.taskExpectedProgress ?? null) === (right.taskExpectedProgress ?? null)
+    && (left?.taskExpectedRevision ?? null) === (right.taskExpectedRevision ?? null);
 }
 
 function storedDecisionOutcome(operation, expected) {
@@ -829,6 +916,272 @@ function taskSelectionDescriptor(message, code = 'TASK_NOT_FOUND', status = 422)
   };
 }
 
+function canonicalTaskResolutionFailure(reply, outcome = 'TASK_REQUIRED') {
+  return {
+    reply,
+    stateChanged: false,
+    authorized: true,
+    proposal: null,
+    outcome,
+  };
+}
+
+function canonicalTaskTransitionContext({
+  proposal,
+  scope,
+  actorId,
+  resolverExternalId,
+  now,
+}) {
+  return {
+    proposal,
+    projectId: scope.projectId,
+    organizationId: scope.organizationId,
+    resolverWorkerId: null,
+    resolverProvider: 'dashboard',
+    resolverExternalId,
+    auditActorId: actorId,
+    auditSource: DASHBOARD_AUDIT_SOURCE,
+    now,
+  };
+}
+
+async function invalidateCanonicalTaskProposal(transaction, {
+  proposal,
+  scope,
+  actorId,
+  resolverExternalId,
+  now,
+  reason,
+  taskId = null,
+}) {
+  const invalidated = await invalidateOperationalProposal(transaction, {
+    ...canonicalTaskTransitionContext({
+      proposal,
+      scope,
+      actorId,
+      resolverExternalId,
+      now,
+    }),
+    result: {
+      reason,
+      ...(taskId ? { taskId } : {}),
+      taskAuthority: OPERATIONAL_TASK_AUTHORITIES.CANONICAL,
+    },
+  });
+  return {
+    reply: invalidated
+      ? `La tarea canonica vinculada a ${proposal.confirmationCode} ya no coincide con la propuesta. La invalide sin modificar el Gantt.`
+      : `La propuesta ${proposal.confirmationCode} cambio de estado. No modifique el Gantt.`,
+    stateChanged: false,
+    authorized: true,
+    proposal: invalidated
+      ? { ...proposal, status: OPERATIONAL_PROPOSAL_STATUSES.INVALIDATED }
+      : proposal,
+    outcome: invalidated ? 'INVALIDATED' : 'RACE_LOST',
+  };
+}
+
+async function resolveCanonicalTaskProgressProposal(transaction, {
+  proposal,
+  trustedInput,
+  scope,
+  actorId,
+  resolverExternalId,
+  includeSensitiveDetails = false,
+  now,
+}) {
+  const action = jsonObject(proposal.action);
+  const precondition = jsonObject(proposal.precondition);
+  const rawBoundTaskId = action.taskKey == null ? null : String(action.taskKey);
+  const boundTaskId = rawBoundTaskId ? exactTaskId(rawBoundTaskId) : null;
+  if (rawBoundTaskId && !boundTaskId) {
+    return invalidateCanonicalTaskProposal(transaction, {
+      proposal,
+      scope,
+      actorId,
+      resolverExternalId,
+      now,
+      reason: 'canonical_task_identity_invalid',
+    });
+  }
+
+  const taskId = boundTaskId || trustedInput.taskId;
+  if (!taskId) {
+    return canonicalTaskResolutionFailure(
+      `La propuesta ${proposal.confirmationCode} sigue pendiente: elegi la tarea canonica exacta antes de aprobarla.`,
+    );
+  }
+  const task = await findCanonicalOperationalTaskRow(transaction, scope, taskId);
+  if (!task) {
+    if (boundTaskId) {
+      return invalidateCanonicalTaskProposal(transaction, {
+        proposal,
+        scope,
+        actorId,
+        resolverExternalId,
+        now,
+        reason: 'canonical_task_missing_after_proposal',
+        taskId,
+      });
+    }
+    return canonicalTaskResolutionFailure(
+      'La tarea seleccionada ya no existe o no esta disponible para este rol.',
+    );
+  }
+  const visibleTask = serializeCanonicalOperationalTasks([task], {
+    includeSensitiveDetails,
+  })[0] || null;
+  if (!visibleTask) {
+    return canonicalTaskResolutionFailure(
+      'La tarea vinculada no esta disponible para este rol. La propuesta sigue pendiente para que la revise una persona autorizada.',
+    );
+  }
+
+  const currentProgress = boundedProgress(task.progress);
+  const currentRevision = Number.isSafeInteger(task.revision) && task.revision >= 0
+    ? task.revision
+    : null;
+  if (boundTaskId) {
+    const preconditionRevision = Number(precondition.taskRevision);
+    const boundPreconditionIsStale = (
+      Object.keys(precondition).length === 0
+      || Number(precondition.taskProgress) !== currentProgress
+      || !Number.isSafeInteger(preconditionRevision)
+      || preconditionRevision < 0
+      || preconditionRevision !== currentRevision
+      || (
+        precondition.taskName
+        && String(precondition.taskName) !== String(task.title || '')
+      )
+    );
+    if (boundPreconditionIsStale || currentRevision == null) {
+      return invalidateCanonicalTaskProposal(transaction, {
+        proposal,
+        scope,
+        actorId,
+        resolverExternalId,
+        now,
+        reason: 'canonical_task_changed_after_proposal',
+        taskId,
+      });
+    }
+  } else if (trustedInput.taskExpectedRevision == null) {
+    return canonicalTaskResolutionFailure(
+      'Confirma tambien la revision actual de la tarea canonica.',
+      'TASK_CONFIRMATION_REQUIRED',
+    );
+  } else if (
+    trustedInput.taskExpectedProgress !== currentProgress
+    || trustedInput.taskExpectedRevision !== currentRevision
+  ) {
+    return canonicalTaskResolutionFailure(
+      'La tarea canonica cambio desde que abriste la confirmacion. Recarga la bandeja.',
+      'TASK_PRECONDITION_STALE',
+    );
+  }
+
+  const percentage = Number(action.percentage);
+  if (!Number.isFinite(percentage) || percentage < 0 || percentage > 100) {
+    return invalidateCanonicalTaskProposal(transaction, {
+      proposal,
+      scope,
+      actorId,
+      resolverExternalId,
+      now,
+      reason: 'invalid_stored_percentage',
+      taskId,
+    });
+  }
+
+  let nextRevision = currentRevision;
+  if (percentage !== currentProgress) {
+    const updated = await transaction.task.updateMany({
+      where: {
+        id: taskId,
+        projectId: scope.projectId,
+        revision: currentRevision,
+        progress: currentProgress,
+        metadata: {
+          path: ['source'],
+          equals: CANONICAL_OPERATIONAL_TASK_SOURCE,
+        },
+      },
+      data: {
+        progress: percentage,
+        revision: { increment: 1 },
+      },
+    });
+    if (updated.count !== 1) {
+      return canonicalTaskResolutionFailure(
+        'La tarea canonica cambio antes de aplicar la decision. Recarga la bandeja.',
+        'TASK_PRECONDITION_STALE',
+      );
+    }
+    nextRevision += 1;
+    await transaction.auditLog.create({
+      data: {
+        organizationId: scope.organizationId,
+        actorId,
+        action: 'task.progress.approved',
+        entityType: 'Task',
+        entityId: taskId,
+        metadata: {
+          projectId: scope.projectId,
+          proposalId: proposal.id,
+          auditSource: DASHBOARD_AUDIT_SOURCE,
+          previousProgress: currentProgress,
+          nextProgress: percentage,
+          previousRevision: currentRevision,
+          nextRevision,
+          taskAuthority: OPERATIONAL_TASK_AUTHORITIES.CANONICAL,
+        },
+      },
+    });
+  }
+
+  const result = {
+    taskKey: taskId,
+    taskName: String(task.title || ''),
+    previousProgress: currentProgress,
+    nextProgress: percentage,
+    taskRevision: nextRevision,
+    taskAuthority: OPERATIONAL_TASK_AUTHORITIES.CANONICAL,
+  };
+  const applied = await finalizeOperationalProposal(transaction, {
+    ...canonicalTaskTransitionContext({
+      proposal,
+      scope,
+      actorId,
+      resolverExternalId,
+      now,
+    }),
+    decision: OPERATIONAL_PROPOSAL_DECISIONS.APPROVE,
+    result,
+  });
+  if (!applied) {
+    throw new OperationalProposalInboxError(
+      `La propuesta ${proposal.confirmationCode} cambio de estado antes de aplicarse. No repeti ningun cambio.`,
+      {
+        code: 'PROPOSAL_RACE_LOST',
+        status: 409,
+        details: { outcome: 'RACE_LOST' },
+      },
+    );
+  }
+  return {
+    reply: `Aplique la propuesta ${proposal.confirmationCode}: "${task.title}" paso de ${currentProgress}% a ${percentage}%.`,
+    stateChanged: percentage !== currentProgress,
+    authorized: true,
+    proposal: {
+      ...proposal,
+      status: OPERATIONAL_PROPOSAL_STATUSES.APPLIED,
+      result,
+    },
+    outcome: 'APPLIED',
+  };
+}
+
 async function storeDashboardDecisionOperation(transaction, {
   identity,
   scope,
@@ -932,20 +1285,47 @@ export async function resolveDashboardOperationalProposal(prisma, {
         };
       }
 
-      const snapshot = await transaction.projectSnapshot.findUnique({
-        where: { projectId: scope.projectId },
-        select: { state: true, version: true },
+      const canonicalTaskRows = await listCanonicalOperationalTaskRows(transaction, scope);
+      const canonicalTasks = serializeCanonicalOperationalTasks(canonicalTaskRows, {
+        includeSensitiveDetails,
       });
-      const previousState = snapshot?.state
-        ? structuredClone(snapshot.state)
-        : {};
-      const state = ensureOperationalStateCollections(structuredClone(previousState));
-      let stateVersion = snapshot?.version ?? 0;
       const action = jsonObject(proposal.action);
       const pendingAndFresh = (
         proposal.status === OPERATIONAL_PROPOSAL_STATUSES.PENDING
         && safeDate(proposal.expiresAt)?.getTime() > now.getTime()
       );
+      const canonicalTaskApproval = (
+        canonicalTaskRows.length > 0
+        && pendingAndFresh
+        && proposal.type === OPERATIONAL_PROPOSAL_TYPES.TASK_PROGRESS
+        && trustedInput.decision === OPERATIONAL_PROPOSAL_DECISIONS.APPROVE
+      );
+
+      let previousState = null;
+      let state = null;
+      let stateVersion = 0;
+      let legacyTasks = [];
+      if (!canonicalTaskApproval) {
+        const snapshot = await transaction.projectSnapshot.findUnique({
+          where: { projectId: scope.projectId },
+          select: { state: true, version: true },
+        });
+        previousState = snapshot?.state
+          ? structuredClone(snapshot.state)
+          : {};
+        state = ensureOperationalStateCollections(structuredClone(previousState));
+        stateVersion = snapshot?.version ?? 0;
+        legacyTasks = serializeOperationalTasks(state, {
+          includeSensitiveDetails,
+        });
+      }
+      const taskAuthority = canonicalFirstTaskRows({
+        canonicalRows: canonicalTaskRows,
+        legacyRows: legacyTasks,
+      }).authority;
+      const operationalTasks = taskAuthority === OPERATIONAL_TASK_AUTHORITIES.CANONICAL
+        ? canonicalTasks
+        : legacyTasks;
 
       if (
         pendingAndFresh
@@ -989,11 +1369,17 @@ export async function resolveDashboardOperationalProposal(prisma, {
         };
       }
 
-      const selectedTask = trustedInput.taskId
+      const selectedLegacyTask = taskAuthority === OPERATIONAL_TASK_AUTHORITIES.LEGACY
+        && trustedInput.taskId
         && Object.hasOwn(state.tasks, trustedInput.taskId)
         ? state.tasks[trustedInput.taskId]
         : null;
-      if (pendingAndFresh && trustedInput.taskId && !selectedTask) {
+      if (
+        taskAuthority === OPERATIONAL_TASK_AUTHORITIES.LEGACY
+        && pendingAndFresh
+        && trustedInput.taskId
+        && !selectedLegacyTask
+      ) {
         return {
           ...taskSelectionDescriptor('La tarea seleccionada ya no existe.'),
           alreadyApplied: false,
@@ -1002,16 +1388,16 @@ export async function resolveDashboardOperationalProposal(prisma, {
             now,
           }),
           stateVersion,
-          tasks: serializeOperationalTasks(state, {
-            includeSensitiveDetails,
-          }),
+          tasks: operationalTasks,
         };
       }
       if (
+        taskAuthority === OPERATIONAL_TASK_AUTHORITIES.LEGACY
+        &&
         pendingAndFresh
         &&
-        selectedTask
-        && boundedProgress(selectedTask.progress) !== trustedInput.taskExpectedProgress
+        selectedLegacyTask
+        && boundedProgress(selectedLegacyTask.progress) !== trustedInput.taskExpectedProgress
       ) {
         return {
           ...taskSelectionDescriptor(
@@ -1025,49 +1411,55 @@ export async function resolveDashboardOperationalProposal(prisma, {
               includeSensitiveDetails,
               now,
             }),
-            serializeOperationalTasks(state, {
-              includeSensitiveDetails,
-            }),
+            operationalTasks,
           ),
           stateVersion,
-          tasks: serializeOperationalTasks(state, {
-            includeSensitiveDetails,
-          }),
+          tasks: operationalTasks,
         };
       }
 
-      const resolution = await resolveOperationalProposalDecision({
-        state,
-        resolver: {
-          id: null,
-          name: cleanText(actorName, 160) || 'Usuario de plataforma',
-          whatsappRole: 'SITE_MANAGER',
-        },
-        event: {
-          provider: 'dashboard',
-          externalId: identity.resolverExternalId,
-        },
-        now,
-        projectSettings: {
-          id: scope.projectId,
-          organizationId: scope.organizationId,
-          timezone,
-        },
-        prisma: transaction,
-        decision: {
-          decision: trustedInput.decision,
-          confirmationCode: proposal.confirmationCode,
-          taskReference: trustedInput.taskId
-            ? `TAREA ${trustedInput.taskId}`
-            : null,
-          taskExpectedProgress: trustedInput.taskExpectedProgress,
-          channel: 'dashboard',
-        },
-        auditActorId: actorId,
-        auditSource: DASHBOARD_AUDIT_SOURCE,
-      });
+      const resolution = canonicalTaskApproval
+        ? await resolveCanonicalTaskProgressProposal(transaction, {
+            proposal,
+            trustedInput,
+            scope,
+            actorId,
+            resolverExternalId: identity.resolverExternalId,
+            includeSensitiveDetails,
+            now,
+          })
+        : await resolveOperationalProposalDecision({
+            state,
+            resolver: {
+              id: null,
+              name: cleanText(actorName, 160) || 'Usuario de plataforma',
+              whatsappRole: 'SITE_MANAGER',
+            },
+            event: {
+              provider: 'dashboard',
+              externalId: identity.resolverExternalId,
+            },
+            now,
+            projectSettings: {
+              id: scope.projectId,
+              organizationId: scope.organizationId,
+              timezone,
+            },
+            prisma: transaction,
+            decision: {
+              decision: trustedInput.decision,
+              confirmationCode: proposal.confirmationCode,
+              taskReference: trustedInput.taskId
+                ? `TAREA ${trustedInput.taskId}`
+                : null,
+              taskExpectedProgress: trustedInput.taskExpectedProgress,
+              channel: 'dashboard',
+            },
+            auditActorId: actorId,
+            auditSource: DASHBOARD_AUDIT_SOURCE,
+          });
 
-      if (resolution.stateChanged) {
+      if (!canonicalTaskApproval && resolution.stateChanged) {
         const validatedState = validateProjectStateInput(state, {
           previousState,
         });
@@ -1114,9 +1506,7 @@ export async function resolveDashboardOperationalProposal(prisma, {
         proposal: serializedProposal,
         ...(descriptor.code === 'TASK_REQUIRED'
           ? {
-              tasks: serializeOperationalTasks(state, {
-                includeSensitiveDetails,
-              }),
+              tasks: operationalTasks,
             }
           : {}),
       };

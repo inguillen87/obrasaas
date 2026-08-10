@@ -103,6 +103,7 @@
 .status { display: inline-flex; margin-top: 6px; padding: 5px 8px; border-radius: 999px; background: rgba(255,255,255,0.05); font-size: 0.62rem; font-weight: 800; }
 .active { color: #7de3ae; background: rgba(85, 197, 139, 0.12); }
 .trialing { color: #f2b17f; background: rgba(233, 135, 69, 0.12); }
+.trial_expired,
 .past_due,
 .suspended { color: #ff9d91; background: rgba(255, 96, 80, 0.12); }
 .canceled { color: #a9b5b1; background: rgba(169, 181, 177, 0.1); }

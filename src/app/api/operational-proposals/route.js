@@ -92,6 +92,7 @@ export async function GET(request) {
       counts: inbox.metrics,
       proposals: inbox.proposals,
       tasks: inbox.tasks,
+      taskAuthority: inbox.taskAuthority,
       pagination: inbox.pagination,
       stateVersion: inbox.stateVersion,
     }, {

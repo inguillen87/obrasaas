@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 
+import { buildActivityCsv, formatActivityDate } from '@/lib/activity-export';
 import styles from './activity.module.css';
 
 const FILTERS = [
@@ -31,22 +32,6 @@ const CATEGORY_LABELS = {
   WEBHOOK: 'Webhook',
 };
 
-function csvCell(value) {
-  return `"${String(value ?? '').replaceAll('"', '""')}"`;
-}
-
-function eventDate(value, timezone, options = {}) {
-  return new Intl.DateTimeFormat('es-AR', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: timezone,
-    ...options,
-  }).format(new Date(value));
-}
-
 export default function ActivityClient({ entries, metrics, organizationName, projectName, timezone }) {
   const [filter, setFilter] = useState('ALL');
   const [query, setQuery] = useState('');
@@ -62,19 +47,11 @@ export default function ActivityClient({ entries, metrics, organizationName, pro
   }, [entries, filter, query]);
 
   function exportCsv() {
-    const header = ['Fecha', 'Grupo', 'Categoría', 'Severidad', 'Título', 'Detalle', 'Actor', 'Fuente', 'Referencia'];
-    const rows = filtered.map((entry) => [
-      eventDate(entry.occurredAt, timezone),
-      GROUP_LABELS[entry.group] || entry.group,
-      CATEGORY_LABELS[entry.category] || entry.category,
-      entry.severity,
-      entry.title,
-      entry.description,
-      entry.actor,
-      entry.source,
-      entry.reference,
-    ]);
-    const csv = [header, ...rows].map((row) => row.map(csvCell).join(',')).join('\r\n');
+    const csv = buildActivityCsv(filtered, {
+      timezone,
+      groupLabels: GROUP_LABELS,
+      categoryLabels: CATEGORY_LABELS,
+    });
     const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
@@ -164,7 +141,7 @@ export default function ActivityClient({ entries, metrics, organizationName, pro
                       <span>{GROUP_LABELS[entry.group] || entry.group}</span>
                       <b>{CATEGORY_LABELS[entry.category] || entry.category}</b>
                     </div>
-                    <time dateTime={entry.occurredAt}>{eventDate(entry.occurredAt, timezone)}</time>
+                    <time dateTime={entry.occurredAt}>{formatActivityDate(entry.occurredAt, timezone)}</time>
                   </div>
                   <h3>{entry.title}</h3>
                   <p>{entry.description}</p>

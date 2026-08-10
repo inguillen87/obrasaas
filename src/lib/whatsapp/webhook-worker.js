@@ -39,6 +39,9 @@ import {
 import {
   materializeWorkerPaymentPrivateReceiptDelivery,
 } from "@/lib/whatsapp/worker-payment-receipt-delivery";
+import {
+  materializeSecureWebviewDelivery,
+} from "@/lib/whatsapp/secure-webview-delivery";
 import { synchronizeWhatsAppTemplateStatus } from "@/lib/whatsapp/templates";
 import { validateStoredWebhookScope } from "@/lib/whatsapp/webhook-scope";
 
@@ -351,6 +354,7 @@ export async function deliverWhatsAppMessageOutcome({
   sendText = sendWhatsAppText,
   materializeLocationDelivery = materializeProgressEvidenceLocationDelivery,
   materializePaymentReceiptDelivery = materializeWorkerPaymentPrivateReceiptDelivery,
+  materializeWebviewDelivery = materializeSecureWebviewDelivery,
   prisma = null,
 } = {}) {
   if (outcome?.quarantined === true) {
@@ -464,6 +468,18 @@ export async function deliverWhatsAppMessageOutcome({
           },
         );
         deliveryText = prepared.text;
+      } else if (outcome.secureWebviewDelivery) {
+        const prepared = await materializeWebviewDelivery(
+          prisma || getPrisma(),
+          {
+            descriptor: outcome.secureWebviewDelivery,
+            scope: deliveryScope,
+            recipientPhone: event.from,
+            eventId,
+            reply: outcome.reply,
+          },
+        );
+        deliveryText = prepared.text;
       }
       await assertSubscription(deliveryScope);
       providerDispatchStarted = true;
@@ -500,6 +516,7 @@ export async function deliverWhatsAppMessageOutcome({
       redactCause: Boolean(
         outcome.progressEvidenceLocationDelivery
         || outcome.workerPaymentPrivateReceiptDelivery
+        || outcome.secureWebviewDelivery
       ),
     });
   }

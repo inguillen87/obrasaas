@@ -157,11 +157,16 @@ function normalizePrecondition(type, precondition) {
   if (type !== OPERATIONAL_PROPOSAL_TYPES.TASK_PROGRESS || !precondition) return null;
   const taskProgress = Number(precondition.taskProgress);
   if (!Number.isFinite(taskProgress) || taskProgress < 0 || taskProgress > 100) return null;
+  const hasTaskRevision = precondition.taskRevision !== null
+    && precondition.taskRevision !== undefined;
+  const taskRevision = hasTaskRevision ? Number(precondition.taskRevision) : null;
+  if (hasTaskRevision && (!Number.isSafeInteger(taskRevision) || taskRevision < 0)) return null;
   return {
     version: 1,
     taskKey: cleanText(precondition.taskKey, MAX_TASK_REFERENCE_LENGTH) || null,
     taskName: cleanText(precondition.taskName, MAX_TASK_REFERENCE_LENGTH) || null,
     taskProgress,
+    ...(taskRevision == null ? {} : { taskRevision }),
   };
 }
 

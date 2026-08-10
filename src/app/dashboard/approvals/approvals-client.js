@@ -70,6 +70,9 @@ function normalizeTask(task, fallbackKey = '') {
     id,
     name: String(source.name || source.title || source.taskName || `Tarea ${id}`).trim(),
     progress: finiteNumber(source.progress ?? source.currentProgress),
+    revision: Number.isSafeInteger(source.revision) && source.revision >= 0
+      ? source.revision
+      : null,
     status: String(source.status || '').toUpperCase(),
   };
 }
@@ -732,6 +735,7 @@ export default function ApprovalsClient({ canCreateFieldSimulation = false }) {
       ? selectedTaskId
       : null;
     const taskExpectedProgress = taskId ? selectedTask?.progress : null;
+    const taskExpectedRevision = taskId ? selectedTask?.revision : null;
     if (taskId && taskExpectedProgress == null) {
       setDialogError('No pudimos verificar el avance actual de esa tarea. Actualizá la bandeja antes de aprobar.');
       return;
@@ -751,6 +755,7 @@ export default function ApprovalsClient({ canCreateFieldSimulation = false }) {
           decision: dialog.decision,
           ...(taskId ? { taskId } : {}),
           ...(taskExpectedProgress != null ? { taskExpectedProgress } : {}),
+          ...(taskExpectedRevision != null ? { taskExpectedRevision } : {}),
         }),
       });
       const payload = await readResponse(response);
