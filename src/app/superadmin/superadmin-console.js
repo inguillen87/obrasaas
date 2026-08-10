@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import styles from './superadmin.module.css';
+import { whatsappTenantSummary } from './whatsapp-tenant-summary';
 
 const STATUS_LABELS = {
   TRIALING: 'En prueba',
@@ -471,7 +472,7 @@ export default function SuperadminConsole({ initialTenants, initialAccounts }) {
                   <td><span className={`${styles.health} ${styles[tenant.health.toLowerCase()]}`}><i />{HEALTH_LABELS[tenant.health]}</span>{tenant.failedWebhooks > 0 && <small>{tenant.failedWebhooks} webhook{tenant.failedWebhooks === 1 ? '' : 's'} fallido{tenant.failedWebhooks === 1 ? '' : 's'}</small>}</td>
                   <td><strong>{tenant.subscriptionPlan}</strong><span className={`${styles.status} ${styles[tenantAccessStatus(tenant).toLowerCase()]}`}>{STATUS_LABELS[tenantAccessStatus(tenant)]}</span></td>
                   <td><strong>{tenant.activeMembers}/{tenant.members} usuarios</strong><small>{tenant.activeProjects}/{tenant.projects} obras activas</small></td>
-                  <td><strong>{tenant.connectedChannels > 0 ? `${tenant.connectedChannels} conectado${tenant.connectedChannels === 1 ? '' : 's'}` : 'Sin conectar'}</strong><small>Cloud API por tenant</small></td>
+                  <td><strong>{whatsappTenantSummary(tenant)}</strong><small>Cuenta y webhook por obra</small></td>
                   <td><strong>{formatDate(tenant.lastActivityAt, true)}</strong><small>Alta {formatDate(tenant.createdAt)}</small></td>
                   <td><button type="button" className={styles.manageButton} onClick={() => openTenant(tenant)}>Gestionar</button></td>
                 </tr>
@@ -493,7 +494,7 @@ export default function SuperadminConsole({ initialTenants, initialAccounts }) {
               <div><span>Salud</span><strong>{HEALTH_LABELS[selected.health]}</strong></div>
               <div><span>Equipo</span><strong>{selected.activeMembers} activos</strong></div>
               <div><span>Obras</span><strong>{selected.activeProjects} activas</strong></div>
-              <div><span>WhatsApp</span><strong>{selected.connectedChannels > 0 ? 'Conectado' : 'Pendiente'}</strong></div>
+              <div><span>WhatsApp</span><strong>{whatsappTenantSummary(selected)}</strong></div>
             </div>
 
             <form onSubmit={saveTenant} className={styles.tenantForm}>

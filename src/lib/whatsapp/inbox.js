@@ -1079,7 +1079,7 @@ function assertManualSendState({ project, connection, inbound, observedAt, env }
   const { operational } = textChannelReadiness(connection, env, observedAt);
   if (!operational) {
     throw new WhatsAppInboxError(
-      'La cuenta de WhatsApp todavía no superó la verificación operativa.',
+      'La cuenta de WhatsApp todavía no cumple las verificaciones de mensajería.',
       { code: 'WHATSAPP_CHANNEL_NOT_READY', status: 409 },
     );
   }

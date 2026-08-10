@@ -10,6 +10,7 @@ import { PLAN_CATALOG } from '@/lib/plans';
 import { getPrisma } from '@/lib/prisma';
 import { projectAccessWhere } from '@/lib/project-access';
 import { TENANT_ROLES } from '@/lib/tenant-roles';
+import { deriveWhatsAppChannelPresentation } from '@/lib/whatsapp/channel-presentation';
 
 const PROJECT_SWITCHER_LIMIT = 50;
 
@@ -55,7 +56,12 @@ export const getDashboardShellModel = cache(async () => {
       : Promise.resolve(0),
     prisma.whatsAppConnection.findUnique({
       where: { projectId: access.project.id },
-      select: { enabled: true, connectionStatus: true },
+      select: {
+        enabled: true,
+        connectionStatus: true,
+        lastError: true,
+        metadata: true,
+      },
     }),
     canReadExecution ? prisma.notificationDelivery.count({ where: { organizationId: access.organization.id, projectId: access.project.id, recipientId: access.databaseUserId, status: { in: ['SENT', 'FAILED'] } } }) : Promise.resolve(0),
   ]);
@@ -68,6 +74,7 @@ export const getDashboardShellModel = cache(async () => {
       status: access.project.status,
     });
   }
+  const whatsappChannel = deriveWhatsAppChannelPresentation(whatsapp);
 
   return {
     identity: {
@@ -96,9 +103,8 @@ export const getDashboardShellModel = cache(async () => {
     hasMoreProjects: projectRows.length > PROJECT_SWITCHER_LIMIT,
     pendingApprovalCount,
     unreadNotificationCount,
-    whatsappConnected: Boolean(
-      whatsapp?.enabled && whatsapp.connectionStatus === 'CONNECTED',
-    ),
+    whatsappChannel,
+    whatsappConnected: whatsappChannel.connected,
     permissions: {
       canReadApprovals,
       canReadInbox: hasTenantPermission(access, 'org:conversations:read'),

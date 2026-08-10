@@ -66,6 +66,7 @@
 .integrationState > span { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
 .connected { background: #60d394; box-shadow: 0 0 0 5px rgba(96,211,148,.08); }
 .pending { background: #747976; }
+.attention { background: var(--danger); box-shadow: 0 0 0 5px rgba(239,68,68,.08); }
 .integrationState div { display: grid; gap: 3px; }
 .integrationState strong { font-size: .75rem; }
 .integrationState small { color: #949b96; font-size: .7rem; line-height: 1.4; }

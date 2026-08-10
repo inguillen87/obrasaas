@@ -22,17 +22,13 @@ export const dynamic = "force-dynamic";
 function serializeConnection(connection) {
   if (!connection) return null;
   return {
-    phoneNumberId: connection.phoneNumberId,
+    linked: Boolean(connection.phoneNumberId && connection.whatsappBusinessId),
     whatsappBusinessId: connection.whatsappBusinessId,
     displayPhoneNumber: connection.displayPhoneNumber,
     verifiedBusinessName: connection.verifiedBusinessName,
     enabled: connection.enabled,
     connectionStatus: connection.connectionStatus,
-    tokenLastFour: connection.tokenLastFour,
-    embeddedSignupVersion: connection.embeddedSignupVersion,
-    connectedAt: connection.connectedAt?.toISOString() || null,
     lastVerifiedAt: connection.lastVerifiedAt?.toISOString() || null,
-    lastError: connection.lastError,
   };
 }
 
@@ -73,7 +69,7 @@ export default async function IntegrationsPage() {
     <div className={styles.shell}>
       <header className={styles.header}>
         <div>
-          <p className={styles.eyebrow}>Canales operativos</p>
+          <p className={styles.eyebrow}>Canales de obra</p>
           <h1>Integraciones</h1>
           <p>
             Conectá los activos propios de {access.organization.name}. ObraSaaS
@@ -87,9 +83,11 @@ export default async function IntegrationsPage() {
       </header>
 
       <IntegrationsClient
+        key={channelHealth.connection?.updatedAt?.toISOString() || "unlinked"}
         appId={process.env.NEXT_PUBLIC_META_APP_ID || ""}
         configId={process.env.NEXT_PUBLIC_META_EMBEDDED_SIGNUP_CONFIG_ID || ""}
         platformReady={metaPlatformReady}
+        pilotImportEnabled={pilotPanelEnabled}
         initialConnection={serializeConnection(channelHealth.connection)}
         initialHealth={channelHealth.readiness}
         initialHealthDiagnostics={channelHealth.diagnostics}
@@ -97,6 +95,7 @@ export default async function IntegrationsPage() {
       />
       {pilotPanelEnabled && (
         <WhatsAppPilotImportPanel
+          currentProjectId={access.project.id}
           targets={pilotImportCatalog.targets}
           targetEmptyState={pilotImportCatalog.emptyState}
           assets={pilotImportAssets}

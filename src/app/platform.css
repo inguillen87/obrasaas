@@ -436,6 +436,11 @@ body {
     box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.1);
 }
 
+.dashboard-project-status.is-attention i {
+    background: var(--danger);
+    box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.12);
+}
+
 .dashboard-project-status.is-switching i {
     background: var(--primary);
     box-shadow: 0 0 0 4px rgba(242, 138, 66, 0.12);

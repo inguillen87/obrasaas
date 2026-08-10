@@ -16,6 +16,7 @@ import {
 } from '@/lib/medical-privacy';
 import { redirect } from 'next/navigation';
 import ProjectAccessRequired from './project-access-required';
+import { deriveWhatsAppChannelPresentation } from '@/lib/whatsapp/channel-presentation';
 
 export const dynamic = 'force-dynamic';
 
@@ -68,7 +69,13 @@ export default async function DashboardPage() {
     }),
     prisma.whatsAppConnection.findUnique({
       where: { projectId: access.project.id },
-      select: { enabled: true, connectionStatus: true, lastVerifiedAt: true },
+      select: {
+        enabled: true,
+        connectionStatus: true,
+        lastError: true,
+        lastVerifiedAt: true,
+        metadata: true,
+      },
     }),
     prisma.tenantMembership.count({
       where: { organizationId: access.organization.id, status: 'ACTIVE' },
@@ -93,6 +100,7 @@ export default async function DashboardPage() {
       ? listCanonicalTasks(prisma, { projectId: access.project.id, limit: 5_000 })
       : Promise.resolve({ tasks: [], hasMore: false }),
   ]);
+  const whatsappChannel = deriveWhatsAppChannelPresentation(whatsapp);
   return (
     <DashboardClient
       initialState={sanitizeProjectStateMedicalData(initialSnapshot.state, {
@@ -103,10 +111,9 @@ export default async function DashboardPage() {
         initialLoadedAt: new Date().toISOString(),
         initialStateVersion: initialSnapshot.version,
         membershipCount,
-        whatsappConnected: Boolean(
-          whatsapp?.enabled && whatsapp.connectionStatus === 'CONNECTED',
-        ),
-        whatsappStatus: whatsapp?.connectionStatus || 'PENDING',
+        whatsappChannel,
+        whatsappConnected: whatsappChannel.connected,
+        whatsappStatus: whatsappChannel.state,
         whatsappLastVerifiedAt: whatsapp?.lastVerifiedAt?.toISOString() || null,
         isEmptyState: !initialSnapshot.exists,
         lastDataAt: initialSnapshot.updatedAt?.toISOString() || null,

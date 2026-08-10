@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import { getSuperadminTenantPresentation } from '../src/lib/superadmin-tenant-presentation.js';
+import { whatsappTenantSummary } from '../src/app/superadmin/whatsapp-tenant-summary.js';
 
 const NOW = new Date('2026-08-10T12:00:00.000Z');
 
@@ -54,6 +55,27 @@ test('writable subscriptions retain their operational health classification', ()
   );
   assert.equal(expiringTrial.isOperational, true);
   assert.equal(expiringTrial.health, 'ATTENTION');
+});
+
+test('a writable tenant with an unhealthy linked channel requires attention', () => {
+  const presentation = getSuperadminTenantPresentation(
+    organization(),
+    { whatsappRequiresAttention: true, now: NOW },
+  );
+  assert.equal(presentation.isOperational, true);
+  assert.equal(presentation.health, 'ATTENTION');
+});
+
+test('WhatsApp tenant summaries preserve pending, disabled and mixed channel states', () => {
+  assert.equal(whatsappTenantSummary({}), 'Sin conectar');
+  assert.equal(whatsappTenantSummary({ pendingChannels: 1 }), '1 pendiente');
+  assert.equal(whatsappTenantSummary({ disabledChannels: 2 }), '2 desactivados');
+  assert.equal(whatsappTenantSummary({
+    connectedChannels: 1,
+    attentionChannels: 2,
+    pendingChannels: 1,
+    disabledChannels: 1,
+  }), '1 verificado · 2 en atención · 1 pendiente · 1 desactivado');
 });
 
 test('superadmin UI consumes the derived status for metrics, filtering, and display', () => {

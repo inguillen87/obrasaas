@@ -148,7 +148,12 @@ function ProjectCard({
   timezone,
 }) {
   const selectable = project.status !== 'ARCHIVED';
-  const whatsappReady = project.whatsapp?.status === 'CONNECTED';
+  const whatsappChannel = project.whatsapp?.channel || {
+    connected: false,
+    label: 'WhatsApp por verificar',
+    summary: 'Actualizá la obra para confirmar el estado de la cuenta.',
+    tone: 'pending',
+  };
   const geofenceReady = project.latitude != null && project.longitude != null;
   return (
     <article className={`${styles.projectCard} ${active ? styles.currentProject : ''}`}>
@@ -172,13 +177,13 @@ function ProjectCard({
       </dl>
       <div className={styles.signalGrid}>
         <div className={styles.integrationState}>
-          <span className={whatsappReady ? styles.connected : styles.pending} aria-hidden="true" />
+          <span className={styles[whatsappChannel.tone] || styles.pending} aria-hidden="true" />
           <div>
-            <strong>{whatsappReady ? 'WhatsApp conectado' : 'WhatsApp pendiente'}</strong>
+            <strong>{whatsappChannel.label}</strong>
             <small>
-              {whatsappReady
-                ? project.whatsapp.verifiedBusinessName || project.whatsapp.displayPhoneNumber || 'Cloud API activa'
-                : 'Configuración independiente para esta obra'}
+              {whatsappChannel.connected
+                ? project.whatsapp?.verifiedBusinessName || project.whatsapp?.displayPhoneNumber || whatsappChannel.summary
+                : whatsappChannel.summary}
             </small>
           </div>
         </div>
@@ -406,7 +411,7 @@ export default function ProjectsClient({
   const summary = useMemo(() => ({
     active: projects.filter((project) => project.status === 'ACTIVE').length,
     connected: projects.filter((project) => (
-      project.status === 'ACTIVE' && project.whatsapp?.status === 'CONNECTED'
+      project.status === 'ACTIVE' && project.whatsapp?.channel?.connected === true
     )).length,
     total: projects.length,
   }), [projects]);
@@ -751,7 +756,7 @@ export default function ProjectsClient({
       <section className={styles.summaryGrid} aria-label="Resumen del portfolio">
         <article><span>Portfolio</span><strong>{summary.total}</strong><small>obras registradas</small></article>
         <article><span>En ejecución</span><strong>{summary.active}</strong><small>obras activas</small></article>
-        <article><span>Canal de campo</span><strong>{summary.connected}</strong><small>WhatsApp operativos</small></article>
+        <article><span>Canal de campo</span><strong>{summary.connected}</strong><small>cuentas y webhooks verificados</small></article>
         <article className={styles.capacityCard}>
           <div><span>Capacidad {planName}</span><strong>{capacity.limit == null ? 'Sin límite' : `${capacity.used} / ${capacity.limit}`}</strong></div>
           {usage != null && <i aria-hidden="true"><b style={{ width: `${usage}%` }} /></i>}

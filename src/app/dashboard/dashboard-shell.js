@@ -136,9 +136,13 @@ export default function DashboardShell({ children, model }) {
     || model.identity.email;
   const userInitial = String(userLabel || 'O').trim().charAt(0).toUpperCase();
   const routeContent = pathname !== '/dashboard';
+  const whatsappChannel = model.whatsappChannel || {
+    label: 'Canal por verificar',
+    tone: 'pending',
+  };
   const projectStatusTone = projectSwitchState === 'switching'
     ? 'switching'
-    : model.whatsappConnected ? 'connected' : 'pending';
+    : whatsappChannel.tone;
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -332,7 +336,7 @@ export default function DashboardShell({ children, model }) {
             <i aria-hidden="true" />
             {projectSwitchState === 'switching'
               ? 'Cambiando contexto…'
-              : model.whatsappConnected ? 'WhatsApp conectado' : 'Canal pendiente'}
+              : whatsappChannel.label}
           </p>
           {model.hasMoreProjects && (
             <Link href="/dashboard/projects" onClick={() => setMobileOpen(false)}>

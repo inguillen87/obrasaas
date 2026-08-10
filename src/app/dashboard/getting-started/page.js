@@ -17,6 +17,7 @@ import {
 import { getAppStateSnapshot } from '@/lib/db';
 import { getPrisma } from '@/lib/prisma';
 import { isUnconfiguredTenantBootstrapProject } from '@/lib/projects';
+import { deriveWhatsAppChannelPresentation } from '@/lib/whatsapp/channel-presentation';
 
 export const dynamic = 'force-dynamic';
 
@@ -137,6 +138,8 @@ export default async function GettingStartedPage() {
         enabled: true,
         connectionStatus: true,
         displayPhoneNumber: true,
+        lastError: true,
+        metadata: true,
         verifiedBusinessName: true,
         lastVerifiedAt: true,
       },
@@ -192,9 +195,8 @@ export default async function GettingStartedPage() {
     : null;
 
   const projectConfigured = !isUnconfiguredTenantBootstrapProject(access.project);
-  const whatsappConnected = Boolean(
-    whatsapp?.enabled && whatsapp.connectionStatus === 'CONNECTED',
-  );
+  const whatsappChannel = deriveWhatsAppChannelPresentation(whatsapp);
+  const whatsappConnected = whatsappChannel.connected;
   const readiness = deriveFirstValueReadiness({
     activeFieldWorkerCount,
     activeMembershipCount,
@@ -271,14 +273,16 @@ export default async function GettingStartedPage() {
       key: 'fieldFlow',
       eyebrow: 'Canal de campo',
       title: 'Probá el flujo o conectá Meta',
-      description: 'Una prueba local sirve para validar la experiencia. WhatsApp sólo figura conectado cuando Cloud API confirma el activo del tenant.',
+      description: 'Una prueba local sirve para validar la experiencia. WhatsApp sólo figura verificado cuando Cloud API confirma la cuenta y el webhook del tenant.',
       complete: readiness.completion.fieldFlow,
       blocked: false,
       signal: whatsappConnected
-        ? `Meta conectado · ${connectionIdentity}`
+        ? `Meta verificado · ${connectionIdentity}`
+        : whatsappChannel.requiresAttention
+          ? `${whatsappChannel.label} · ${readiness.counts.inboundMessages} entrada${readiness.counts.inboundMessages === 1 ? '' : 's'} registrada${readiness.counts.inboundMessages === 1 ? '' : 's'}`
         : readiness.counts.inboundMessages > 0
-          ? `${readiness.counts.inboundMessages} entrada${readiness.counts.inboundMessages === 1 ? '' : 's'} local${readiness.counts.inboundMessages === 1 ? '' : 'es'} registrada${readiness.counts.inboundMessages === 1 ? '' : 's'} · Meta sin conectar`
-          : 'Sin entradas registradas · Meta sin conectar',
+          ? `${readiness.counts.inboundMessages} entrada${readiness.counts.inboundMessages === 1 ? '' : 's'} registrada${readiness.counts.inboundMessages === 1 ? '' : 's'} · ${whatsappChannel.label}`
+          : `Sin entradas registradas · ${whatsappChannel.label}`,
       actions: [
         {
           href: '/dashboard?tab=sec-whatsapp',
@@ -286,7 +290,10 @@ export default async function GettingStartedPage() {
           primary: !readiness.completion.fieldFlow,
         },
         ...(!whatsappConnected && canManageIntegrations
-          ? [{ href: '/dashboard/integrations', label: 'Conectar Meta' }]
+          ? [{
+              href: '/dashboard/integrations',
+              label: whatsappChannel.linked ? 'Revisar Meta' : 'Conectar Meta',
+            }]
           : []),
       ],
     },
@@ -408,7 +415,7 @@ export default async function GettingStartedPage() {
             <div><span>Obra</span><strong>{projectConfigured ? 'Configurada' : 'Bootstrap'}</strong></div>
             <div><span>Personas</span><strong>{readiness.counts.activeMemberships + readiness.counts.activeFieldWorkers}</strong></div>
             <div><span>Tareas</span><strong>{readiness.counts.tasks}</strong></div>
-            <div><span>Canal</span><strong>{whatsappConnected ? 'Meta' : readiness.counts.inboundMessages ? 'Prueba local' : 'Pendiente'}</strong></div>
+            <div><span>Canal</span><strong>{whatsappConnected ? 'Meta' : whatsappChannel.requiresAttention ? 'Atención' : readiness.counts.inboundMessages ? 'Prueba local' : 'Pendiente'}</strong></div>
             <div><span>Decisión</span><strong>{readiness.completion.approval ? 'Resuelta' : approvalStep.hasPending ? 'Pendiente' : 'Sin propuesta'}</strong></div>
             <div><span>Control</span><strong>{readiness.completion.report ? 'Emitido' : 'Pendiente'}</strong></div>
           </section>

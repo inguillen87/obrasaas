@@ -28,6 +28,7 @@ import {
   releaseWhatsAppConnectionLease,
   WhatsAppFlowProvisioningLeaseError,
 } from '@/lib/whatsapp/flow-provisioning-lease';
+import { publicMetaIntegrationFailure } from '@/lib/whatsapp/public-error';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -44,18 +45,13 @@ const CONNECTION_LEASE_PUBLIC_MESSAGES = Object.freeze({
 function safeConnection(connection) {
   if (!connection) return null;
   return {
-    id: connection.id,
-    phoneNumberId: connection.phoneNumberId,
+    linked: Boolean(connection.phoneNumberId && connection.whatsappBusinessId),
     whatsappBusinessId: connection.whatsappBusinessId,
     displayPhoneNumber: connection.displayPhoneNumber,
     verifiedBusinessName: connection.verifiedBusinessName,
     enabled: connection.enabled,
     connectionStatus: connection.connectionStatus,
-    tokenLastFour: connection.tokenLastFour,
-    embeddedSignupVersion: connection.embeddedSignupVersion,
-    connectedAt: connection.connectedAt?.toISOString() || null,
     lastVerifiedAt: connection.lastVerifiedAt?.toISOString() || null,
-    lastError: connection.lastError,
   };
 }
 
@@ -267,7 +263,12 @@ export async function POST(request) {
       return connectionLeaseErrorResponse(error);
     }
     if (error instanceof MetaIntegrationError) {
-      return Response.json({ error: error.message, code: error.code }, { status: error.status });
+      const failure = publicMetaIntegrationFailure(error, {
+        fallback: 'No se pudo conectar WhatsApp con Meta.',
+      });
+      return Response.json({ error: failure.message, code: failure.code }, {
+        status: failure.status,
+      });
     }
     if (error?.code === 'P2002') {
       return Response.json({

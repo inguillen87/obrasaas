@@ -325,6 +325,18 @@
   color: #77857f;
   line-height: 1.45;
 }
+.connectFlow > small {
+  grid-column: 1 / -1;
+  margin-top: -4px;
+  padding: 11px 13px;
+  border: 1px solid rgba(255, 91, 70, 0.16);
+  border-radius: 11px;
+  background: rgba(255, 91, 70, 0.045);
+}
+.connectFlow > small a {
+  color: #8fe8ba;
+  font-weight: 800;
+}
 
 .primaryButton,
 .secondaryButton {

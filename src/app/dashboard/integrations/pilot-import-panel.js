@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import {
   createPilotImportIdempotencyKey,
@@ -24,10 +25,12 @@ function assetKey(asset) {
 }
 
 export default function WhatsAppPilotImportPanel({
+  currentProjectId,
   targets,
   targetEmptyState,
   assets,
 }) {
+  const router = useRouter();
   const [organizationId, setOrganizationId] = useState("");
   const [draft, setDraft] = useState({ ...EMPTY_DRAFT });
   const [confirmed, setConfirmed] = useState(false);
@@ -173,6 +176,7 @@ export default function WhatsAppPilotImportPanel({
         type: "success",
         text: "Conexión piloto validada y guardada cifrada en este Preview.",
       });
+      if (payload.connection.projectId === currentProjectId) router.refresh();
     } catch {
       setNotice({
         type: "error",

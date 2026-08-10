@@ -3,6 +3,7 @@ import { getSubscriptionEntitlements } from './plans.js';
 export function getSuperadminTenantPresentation(organization, {
   failedWebhooks = 0,
   whatsappConnected = false,
+  whatsappRequiresAttention = false,
   now = new Date(),
 } = {}) {
   const subscription = getSubscriptionEntitlements(organization, now);
@@ -20,6 +21,8 @@ export function getSuperadminTenantPresentation(organization, {
     && subscription.trialDaysRemaining !== null
     && subscription.trialDaysRemaining <= 3
   ) {
+    health = 'ATTENTION';
+  } else if (whatsappRequiresAttention) {
     health = 'ATTENTION';
   } else {
     health = whatsappConnected ? 'HEALTHY' : 'ONBOARDING';

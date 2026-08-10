@@ -21,6 +21,11 @@ import {
   provisionOwnedWhatsAppFlowTemplate,
   synchronizeOwnedWhatsAppFlowTemplates,
 } from '@/lib/whatsapp/templates';
+import { publicMetaIntegrationFailure } from '@/lib/whatsapp/public-error';
+import {
+  requireGraphReadyWhatsAppConnection,
+  WhatsAppGraphAccessError,
+} from '@/lib/whatsapp/graph-access';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -43,27 +48,12 @@ function auditIp(request) {
     || null;
 }
 
-async function requireActiveConnection(prisma, access) {
-  const connection = await prisma.whatsAppConnection.findUnique({
-    where: { projectId: access.project.id },
-  });
-  if (
-    !connection?.enabled
-    || connection.connectionStatus !== 'CONNECTED'
-    || !connection.whatsappBusinessId
-    || !connection.encryptedAccessToken
-  ) {
-    throw new MetaIntegrationError(
-      'Conect\u00e1 una cuenta de WhatsApp antes de administrar plantillas.',
-      { code: 'WHATSAPP_NOT_CONNECTED', status: 409 },
-    );
-  }
-  return connection;
-}
-
 function errorResponse(error, fallback) {
   if (error instanceof AccessError) return accessErrorResponse(error);
   if (error instanceof RequestBodyError) return requestBodyErrorResponse(error);
+  if (error instanceof WhatsAppGraphAccessError) {
+    return json({ error: error.message, code: error.code }, { status: error.status });
+  }
   if (error instanceof WhatsAppFlowProvisioningLeaseError) {
     return json({
       error: 'Hay otra operaci\u00f3n segura de WhatsApp en curso. Volv\u00e9 a intentar.',
@@ -77,7 +67,12 @@ function errorResponse(error, fallback) {
   }
   if (error instanceof MetaIntegrationError) {
     if (error.status >= 500) console.error(fallback, { code: error.code, status: error.status });
-    return json({ error: error.message, code: error.code }, { status: error.status });
+    const failure = publicMetaIntegrationFailure(error, {
+      fallback: 'No se pudieron administrar las plantillas de WhatsApp.',
+    });
+    return json({ error: failure.message, code: failure.code }, {
+      status: failure.status,
+    });
   }
   console.error(fallback, error);
   return json({ error: 'No se pudieron administrar las plantillas de WhatsApp.' }, { status: 500 });
@@ -88,7 +83,7 @@ export async function GET() {
     const access = await getPlatformAccess();
     requireTenantPermission(access, 'org:integrations:manage');
     const prisma = getPrisma();
-    const connection = await requireActiveConnection(prisma, access);
+    const connection = await requireGraphReadyWhatsAppConnection(prisma, access.project.id);
     const templates = await synchronizeOwnedWhatsAppFlowTemplates({
       prisma,
       connection,
@@ -116,7 +111,7 @@ export async function POST(request) {
     }
 
     prisma = getPrisma();
-    const connection = await requireActiveConnection(prisma, access);
+    const connection = await requireGraphReadyWhatsAppConnection(prisma, access.project.id);
     const expectedConnectionIdentity = {
       phoneNumberId: connection.phoneNumberId,
       whatsappBusinessId: connection.whatsappBusinessId,

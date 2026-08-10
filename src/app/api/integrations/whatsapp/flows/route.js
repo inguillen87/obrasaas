@@ -35,6 +35,11 @@ import {
   WhatsAppFlowProvisioningLeaseError,
 } from '@/lib/whatsapp/flow-provisioning-lease';
 import { resolveWhatsAppPublicAppUrl } from '@/lib/whatsapp/public-app-url';
+import { publicMetaIntegrationFailure } from '@/lib/whatsapp/public-error';
+import {
+  requireGraphReadyWhatsAppConnection,
+  WhatsAppGraphAccessError,
+} from '@/lib/whatsapp/graph-access';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -78,24 +83,6 @@ function auditIp(request) {
     || null;
 }
 
-async function requireActiveConnection(access) {
-  const connection = await getPrisma().whatsAppConnection.findUnique({
-    where: { projectId: access.project.id },
-  });
-  if (
-    !connection?.enabled
-    || connection.connectionStatus !== 'CONNECTED'
-    || !connection.whatsappBusinessId
-    || !connection.encryptedAccessToken
-  ) {
-    throw new MetaIntegrationError('Conectá una cuenta de WhatsApp antes de administrar Flows.', {
-      code: 'WHATSAPP_NOT_CONNECTED',
-      status: 409,
-    });
-  }
-  return connection;
-}
-
 function requireFlowProvisioningAppUrl(environment = process.env) {
   try {
     return resolveWhatsAppPublicAppUrl(environment);
@@ -115,8 +102,16 @@ function requireFlowProvisioningAppUrl(environment = process.env) {
 function flowErrorResponse(error, fallback) {
   if (error instanceof AccessError) return accessErrorResponse(error);
   if (error instanceof RequestBodyError) return requestBodyErrorResponse(error);
-  if (error instanceof MetaIntegrationError) {
+  if (error instanceof WhatsAppGraphAccessError) {
     return Response.json({ error: error.message, code: error.code }, { status: error.status });
+  }
+  if (error instanceof MetaIntegrationError) {
+    const failure = publicMetaIntegrationFailure(error, {
+      fallback: 'No se pudieron administrar los WhatsApp Flows.',
+    });
+    return Response.json({ error: failure.message, code: failure.code }, {
+      status: failure.status,
+    });
   }
   if (error instanceof WhatsAppFlowEndpointKeyError) {
     if (error.status >= 500) {
@@ -270,8 +265,8 @@ export async function GET() {
   try {
     const access = await getPlatformAccess();
     requireTenantPermission(access, 'org:integrations:manage');
-    const connection = await requireActiveConnection(access);
     const prisma = getPrisma();
+    const connection = await requireGraphReadyWhatsAppConnection(prisma, access.project.id);
     const [remoteFlows, endpointState] = await Promise.all([
       listWhatsAppFlows({
         whatsappBusinessId: connection.whatsappBusinessId,
@@ -307,7 +302,8 @@ export async function POST(request) {
     requireTenantPermission(access, 'org:integrations:manage');
     const appUrl = requireFlowProvisioningAppUrl();
     const body = await readJsonRequest(request, { maxBytes: MAX_FLOW_JSON_BYTES });
-    const connection = await requireActiveConnection(access);
+    const prisma = getPrisma();
+    const connection = await requireGraphReadyWhatsAppConnection(prisma, access.project.id);
     const blueprintKey = typeof body.blueprintKey === 'string' ? body.blueprintKey.trim() : '';
     if (!getWhatsAppFlowBlueprint(blueprintKey)) {
       throw new MetaIntegrationError('El blueprint de WhatsApp Flow no existe.', {
@@ -315,7 +311,6 @@ export async function POST(request) {
         status: 400,
       });
     }
-    const prisma = getPrisma();
     const acquired = await acquireWhatsAppFlowProvisioningLease(prisma, {
       connectionId: connection.id,
       blueprintKey,

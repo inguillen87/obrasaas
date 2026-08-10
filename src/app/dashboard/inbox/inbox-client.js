@@ -163,9 +163,7 @@ function normalizeConversation(raw) {
 function normalizeConnection(raw) {
   const source = objectValue(raw);
   const status = textValue(source.status, source.connectionStatus).toUpperCase() || 'NOT_CONNECTED';
-  const operational = source.operational === true
-    || source.connected === true
-    || (source.enabled === true && status === 'CONNECTED');
+  const operational = source.operational === true;
 
   return {
     operational,
@@ -418,7 +416,7 @@ function windowPresentation(windowState, now) {
 function connectionPresentation(connection) {
   if (connection.operational) {
     return {
-      label: 'Canal operativo',
+      label: 'Mensajería habilitada',
       detail: connection.verifiedBusinessName
         || connection.displayPhoneNumber
         || 'Conexión verificada para esta obra',
@@ -1574,7 +1572,7 @@ export default function InboxClient({
 
   function composerBlockReason() {
     if (!online) return 'Sin conexión a internet. El borrador queda en esta pantalla hasta que vuelvas a estar en línea.';
-    if (!connection.operational) return 'El canal de WhatsApp de esta obra no está operativo.';
+    if (!connection.operational) return 'La mensajería de WhatsApp no está habilitada para esta obra.';
     if (messageLoading || loadedConversationId !== selectedId) {
       return 'Verificando la conversación y su ventana de respuesta…';
     }
@@ -1705,7 +1703,7 @@ export default function InboxClient({
                 <p>
                   {connection.operational
                     ? 'Las conversaciones recientes aparecerán cuando llegue el primer mensaje a esta obra.'
-                    : 'Esta obra necesita un canal operativo antes de poder recibir y atender mensajes.'}
+                    : 'Esta obra necesita mensajería habilitada antes de poder recibir y atender mensajes.'}
                 </p>
               </div>
             ) : filteredConversations.length === 0 ? (
@@ -1785,7 +1783,7 @@ export default function InboxClient({
             <div className={styles.connectionPrompt}>
               <i className="fa-solid fa-plug-circle-xmark" aria-hidden="true" />
               <div>
-                <strong>Canal sin conexión operativa</strong>
+                <strong>Mensajería no disponible</strong>
                 <span>Revisá el activo dedicado de esta obra antes de atender mensajes.</span>
               </div>
               {canManageIntegrations ? (

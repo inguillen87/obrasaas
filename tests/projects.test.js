@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { buildWhatsAppChannelHealthMetadata } from '../src/lib/whatsapp/channel-health.js';
 
 import {
   ProjectInputError,
@@ -191,6 +192,59 @@ test('portfolio counts use the selected task authority and operational incident 
   });
   assert.equal(serialized.lastActivityAt, '2026-07-16T12:00:00.000Z');
   assert.equal(Object.hasOwn(serialized, 'snapshot'), false);
+});
+
+test('portfolio never promotes an expired raw CONNECTED row to a verified channel', () => {
+  const now = new Date('2026-08-10T20:00:00.000Z');
+  const metadata = buildWhatsAppChannelHealthMetadata({}, {
+    expiresAt: Math.floor(new Date('2026-08-10T19:59:59.000Z').getTime() / 1_000),
+    scopes: ['whatsapp_business_management', 'whatsapp_business_messaging'],
+    subscribed: true,
+    phoneStatus: 'CONNECTED',
+    verificationStatus: 'VERIFIED',
+    qualityRating: 'GREEN',
+  }, { now });
+  const serialized = serializeProject({
+    id: 'project-expired',
+    name: 'Obra vencida',
+    slug: 'obra-vencida',
+    status: 'ACTIVE',
+    address: null,
+    latitude: null,
+    longitude: null,
+    geofenceMeters: 100,
+    startsAt: null,
+    endsAt: null,
+    createdAt: now,
+    updatedAt: now,
+    snapshot: null,
+    whatsapp: {
+      enabled: true,
+      connectionStatus: 'CONNECTED',
+      displayPhoneNumber: null,
+      lastError: 'provider detail must stay server-side',
+      metadata,
+      verifiedBusinessName: 'Constructora segura',
+    },
+    _count: { workers: 0 },
+  }, {
+    env: {
+      NEXT_PUBLIC_APP_URL: 'https://preview.obrasaas.test',
+      NEXT_PUBLIC_META_APP_ID: 'public-app-id',
+      META_APP_SECRET: 'meta-secret',
+      NEXT_PUBLIC_META_EMBEDDED_SIGNUP_CONFIG_ID: 'signup-config',
+      META_VERIFY_TOKEN: 'verify-secret',
+      WHATSAPP_CREDENTIALS_ENCRYPTION_KEY: 'encryption-secret',
+    },
+    now,
+  });
+
+  assert.equal(serialized.whatsapp.status, 'CONNECTED');
+  assert.equal(serialized.whatsapp.channel.state, 'ATTENTION');
+  assert.equal(serialized.whatsapp.channel.connected, false);
+  assert.equal(JSON.stringify(serialized).includes('provider detail'), false);
+  assert.equal(Object.hasOwn(serialized.whatsapp, 'metadata'), false);
+  assert.equal(Object.hasOwn(serialized.whatsapp, 'lastError'), false);
 });
 
 test('portfolio count projection never hydrates the complete snapshot JSON', async () => {

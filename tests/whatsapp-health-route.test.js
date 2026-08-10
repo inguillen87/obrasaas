@@ -218,7 +218,39 @@ test('POST persists an unsubscribed provider state and returns the refreshed deg
   assert.equal(payload.health.state, 'DEGRADED');
   assert.equal(commits[0].metadata.channelHealth.subscriptionStatus, 'UNSUBSCRIBED');
   assert.equal(commits[0].metadata.channelHealth.providerStatus, 'DEGRADED');
+  assert.equal(commits[0].lastError, 'META_APP_NOT_SUBSCRIBED');
   assert.equal(audits[0].action, 'integration.whatsapp.verification_failed');
+});
+
+test('POST redacts raw Meta credential failures in persistence and response', async () => {
+  const rawProviderMessage = 'token secret-value belongs to +5492610000000';
+  const { audits, commits, dependencies } = handlerDeps({
+    verifyRemote: async () => {
+      throw new MetaIntegrationError(rawProviderMessage, {
+        code: 'META_190',
+        status: 401,
+      });
+    },
+    loadHealth: async () => ({
+      readiness: { state: 'DEGRADED' },
+      diagnostics: PUBLIC_HEALTH.diagnostics,
+    }),
+  });
+  const response = await createWhatsAppHealthHandlers(dependencies).POST(new Request(
+    'http://localhost/api/integrations/whatsapp/health',
+    { method: 'POST' },
+  ));
+  const payload = await response.json();
+  const serialized = JSON.stringify({ payload, commits, audits });
+
+  assert.equal(response.status, 401);
+  assert.equal(payload.code, 'META_190');
+  assert.match(payload.error, /credencial de Meta venció/i);
+  assert.equal(commits[0].lastError, 'META_190');
+  assert.equal(commits[0].connectionStatus, 'ERROR');
+  assert.equal(audits[0].metadata.code, 'META_190');
+  assert.equal(serialized.includes('secret-value'), false);
+  assert.equal(serialized.includes('+5492610000000'), false);
 });
 
 test('POST rejects missing or cross-tenant connection state before decrypting credentials', async () => {

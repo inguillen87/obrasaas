@@ -9,6 +9,17 @@ const SYNC_LABELS = {
 
 export default function PlatformReadiness({ platformAccess, setup, syncState, lastSyncedAt }) {
   const teamReady = setup.membershipCount > 1;
+  const whatsappChannel = setup.whatsappChannel || {
+    connected: false,
+    label: 'WhatsApp por verificar',
+    requiresAttention: false,
+  };
+  const whatsappClass = whatsappChannel.connected
+    ? styles.ready
+    : whatsappChannel.requiresAttention ? styles.attention : styles.action;
+  const whatsappIcon = whatsappChannel.connected
+    ? 'fa-solid fa-check'
+    : whatsappChannel.requiresAttention ? 'fa-solid fa-triangle-exclamation' : 'fa-solid fa-arrow-right';
   const trialEndLabel = platformAccess.organization.trialEndsAt
     ? new Intl.DateTimeFormat('es-AR', {
       day: '2-digit',
@@ -61,16 +72,16 @@ export default function PlatformReadiness({ platformAccess, setup, syncState, la
           </article>
         )}
         {setup.canManageIntegrations ? (
-          <Link href="/dashboard/integrations" className={setup.whatsappConnected ? styles.ready : styles.action}>
+          <Link href="/dashboard/integrations" className={whatsappClass}>
             <span>03</span>
-            <div><strong>WhatsApp</strong><small>{setup.whatsappConnected ? 'Canal conectado' : 'Conexión pendiente'}</small></div>
-            <i className={setup.whatsappConnected ? 'fa-solid fa-check' : 'fa-solid fa-arrow-right'} aria-hidden="true" />
+            <div><strong>WhatsApp</strong><small>{whatsappChannel.label}</small></div>
+            <i className={whatsappIcon} aria-hidden="true" />
           </Link>
         ) : (
-          <article className={setup.whatsappConnected ? styles.ready : styles.recommended}>
+          <article className={whatsappChannel.connected ? styles.ready : whatsappChannel.requiresAttention ? styles.attention : styles.recommended}>
             <span>03</span>
-            <div><strong>WhatsApp</strong><small>{setup.whatsappConnected ? 'Canal conectado' : 'Pendiente del administrador'}</small></div>
-            <i className={setup.whatsappConnected ? 'fa-solid fa-check' : 'fa-solid fa-lock'} aria-hidden="true" />
+            <div><strong>WhatsApp</strong><small>{whatsappChannel.requiresAttention ? whatsappChannel.label : whatsappChannel.connected ? whatsappChannel.label : 'Pendiente del administrador'}</small></div>
+            <i className={whatsappChannel.connected ? 'fa-solid fa-check' : whatsappChannel.requiresAttention ? 'fa-solid fa-triangle-exclamation' : 'fa-solid fa-lock'} aria-hidden="true" />
           </article>
         )}
         <article className={setup.isEmptyState ? styles.recommended : styles.ready}>

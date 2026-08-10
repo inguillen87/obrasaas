@@ -4,6 +4,9 @@ import test from 'node:test';
 
 registerHooks({
   resolve(specifier, context, nextResolve) {
+    if (specifier === 'server-only') {
+      return { url: 'mock:server-only', shortCircuit: true };
+    }
     const mocks = {
       '@/lib/access': 'mock:whatsapp-flow-access',
       '@/lib/credentials': 'mock:whatsapp-flow-credentials',
@@ -24,6 +27,9 @@ registerHooks({
     return nextResolve(specifier, context);
   },
   load(url, context, nextLoad) {
+    if (url === 'mock:server-only') {
+      return { format: 'module', shortCircuit: true, source: 'export {};' };
+    }
     if (url === 'mock:whatsapp-flow-access') {
       return {
         format: 'module',

@@ -5,6 +5,7 @@ import {
   canonicalFirstTaskCount,
 } from './operational-task-authority.js';
 import { projectAccessWhere } from './project-access.js';
+import { deriveWhatsAppChannelPresentation } from './whatsapp/channel-presentation.js';
 
 export const ACTIVE_PROJECT_COOKIE = 'obrasaas_active_project';
 
@@ -294,8 +295,12 @@ export function tenantProjectWhere(organizationId, projectId) {
   return { id: String(projectId), organizationId: String(organizationId) };
 }
 
-export function serializeProject(project) {
+export function serializeProject(project, {
+  env = process.env,
+  now = new Date(),
+} = {}) {
   const operationalCounts = project.operationalCounts;
+  const whatsappChannel = deriveWhatsAppChannelPresentation(project.whatsapp, { env, now });
   return {
     id: project.id,
     name: project.name,
@@ -315,6 +320,7 @@ export function serializeProject(project) {
           status: project.whatsapp.connectionStatus,
           displayPhoneNumber: project.whatsapp.displayPhoneNumber,
           verifiedBusinessName: project.whatsapp.verifiedBusinessName,
+          channel: whatsappChannel,
         }
       : null,
     counts: {
@@ -405,8 +411,11 @@ export async function listOrganizationProjects(prisma, access) {
       snapshot: { select: { updatedAt: true } },
       whatsapp: {
         select: {
+          enabled: true,
           connectionStatus: true,
           displayPhoneNumber: true,
+          lastError: true,
+          metadata: true,
           verifiedBusinessName: true,
         },
       },

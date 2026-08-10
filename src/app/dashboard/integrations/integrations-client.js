@@ -1,12 +1,21 @@
 'use client';
 
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
+import {
+  whatsappConnectionActive,
+  whatsappConnectionIdentity,
+  whatsappConnectionLinked,
+  whatsappGraphAccessReady,
+  whatsappGraphAccessRejected,
+  whatsappReconnectRequired,
+} from './channel-client-state';
 import styles from './integrations.module.css';
 
 const META_ORIGINS = new Set([
   'https://www.facebook.com',
   'https://web.facebook.com',
 ]);
+const EMPTY_CATALOG = Object.freeze([]);
 
 function formatDate(value) {
   if (!value) return 'Pendiente';
@@ -24,14 +33,16 @@ function parseEmbeddedSignupEvent(raw) {
   }
 }
 
-function flowStatusLabel(status) {
+function flowStatusLabel(status, verificationUnavailable = false) {
+  if (verificationUnavailable) return 'Estado Meta no verificado';
   if (status === 'PUBLISHED') return 'Publicado';
   if (status === 'DRAFT') return 'Borrador validado';
   if (status === 'NOT_CREATED') return 'Sin crear';
   return status === 'UNKNOWN' ? 'Revisar' : status;
 }
 
-function flowStatusClass(status) {
+function flowStatusClass(status, verificationUnavailable = false) {
+  if (verificationUnavailable) return 'flowBlocked';
   if (status === 'PUBLISHED') return 'flowPublished';
   if (status === 'DRAFT') return 'flowDraft';
   if (status === 'NOT_CREATED') return 'flowMissing';
@@ -66,8 +77,21 @@ function normalizeTemplateCatalogPayload(payload) {
   return payload.templates;
 }
 
-function flowEndpointPresentation(endpoint, connected, verificationFailed) {
-  if (!connected) return { label: 'Conectá WhatsApp para activarlo', tone: 'idle' };
+function integrationResponseError(payload, fallback) {
+  const error = new Error(
+    typeof payload?.error === 'string' && payload.error.trim()
+      ? payload.error.trim().slice(0, 300)
+      : fallback,
+  );
+  error.code = typeof payload?.code === 'string'
+    ? payload.code.trim().toUpperCase().slice(0, 96)
+    : null;
+  return error;
+}
+
+function flowEndpointPresentation(endpoint, { graphReady, linked, verificationFailed }) {
+  if (!linked) return { label: 'Conectá WhatsApp para activarlo', tone: 'idle' };
+  if (!graphReady) return { label: 'Cuenta requiere atención', tone: 'blocked' };
   if (verificationFailed) return { label: 'No se pudo verificar', tone: 'blocked' };
   if (endpoint === undefined) return { label: 'Verificando cifrado…', tone: 'pending' };
   if (endpoint?.ready) return { label: 'Cifrado verificado', tone: 'ready' };
@@ -75,7 +99,10 @@ function flowEndpointPresentation(endpoint, connected, verificationFailed) {
   return { label: 'Pendiente del primer borrador', tone: 'pending' };
 }
 
-function flowRuntimePresentation(flow) {
+function flowRuntimePresentation(flow, verificationUnavailable = false) {
+  if (verificationUnavailable) {
+    return { label: 'Cuenta requiere verificación', tone: 'blocked' };
+  }
   if (flow.runtimeActive) return { label: 'Canal dinámico operativo', tone: 'ready' };
   if (flow.remote.healthStatus?.blocked) {
     return { label: 'Canal bloqueado por Meta', tone: 'blocked' };
@@ -102,7 +129,9 @@ function flowActionLabel({
   publishedHealthBlocked,
   remoteStatus,
   runtimeActive,
+  verificationUnavailable,
 }) {
+  if (verificationUnavailable) return 'Verificar cuenta';
   if (isPending) return 'Validando…';
   if (isPublished && runtimeActive) return 'Listo para enviar';
   if (publishedHealthBlocked) return 'Revisar en Meta';
@@ -111,7 +140,10 @@ function flowActionLabel({
   return remoteStatus === 'DRAFT' ? 'Actualizar borrador' : 'Crear borrador';
 }
 
-function templatePresentation(template) {
+function templatePresentation(template, verificationUnavailable = false) {
+  if (verificationUnavailable) {
+    return { label: 'Estado Meta no verificado', tone: 'blocked' };
+  }
   if (!template) return { label: 'Sin plantilla aprobada', tone: 'idle' };
   if (template.status === 'APPROVED') return { label: 'Plantilla aprobada', tone: 'ready' };
   if (template.status === 'PENDING' || template.status === 'IN_APPEAL') {
@@ -124,7 +156,8 @@ function templatePresentation(template) {
   return { label: 'Estado de plantilla pendiente', tone: 'pending' };
 }
 
-function templateActionLabel(template, pending) {
+function templateActionLabel(template, pending, verificationUnavailable = false) {
+  if (verificationUnavailable) return 'Verificar cuenta';
   if (pending) return 'Preparando\u2026';
   if (!template) return 'Crear plantilla';
   if (template.status === 'APPROVED') return 'Plantilla aprobada';
@@ -139,7 +172,9 @@ async function readFlowCatalog({ signal } = {}) {
     signal,
   });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.error || 'No se pudieron consultar los Flows.');
+  if (!response.ok) {
+    throw integrationResponseError(payload, 'No se pudieron consultar los Flows.');
+  }
   return normalizeFlowCatalogPayload(payload);
 }
 
@@ -149,7 +184,9 @@ async function readTemplateCatalog({ signal } = {}) {
     signal,
   });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.error || 'No se pudieron consultar las plantillas.');
+  if (!response.ok) {
+    throw integrationResponseError(payload, 'No se pudieron consultar las plantillas.');
+  }
   return normalizeTemplateCatalogPayload(payload);
 }
 
@@ -157,6 +194,7 @@ export default function IntegrationsClient({
   appId,
   configId,
   platformReady,
+  pilotImportEnabled,
   initialConnection,
   initialHealth,
   initialHealthDiagnostics,
@@ -179,35 +217,58 @@ export default function IntegrationsClient({
   const [templatePendingKey, setTemplatePendingKey] = useState(null);
   const [templateNotice, setTemplateNotice] = useState(null);
   const [flowEndpoint, setFlowEndpoint] = useState(
-    initialConnection?.enabled && initialConnection.connectionStatus === 'CONNECTED'
-      ? undefined
-      : null,
+    whatsappGraphAccessReady(initialConnection, initialHealth) ? undefined : null,
   );
   const signupRef = useRef({ code: null, whatsappBusinessId: null, phoneNumberId: null });
   const pinRef = useRef('');
   const submittedRef = useRef(false);
-  const connected = connection?.enabled && connection.connectionStatus === 'CONNECTED';
+  const graphAccessFailureSyncRef = useRef(false);
+  const healthRequestSequenceRef = useRef(0);
+  const remoteChannelEpochRef = useRef(0);
+  const linked = whatsappConnectionLinked(connection);
+  const connectionIdentity = whatsappConnectionIdentity(connection);
+  const connectionActive = whatsappConnectionActive(connection);
+  const graphReady = whatsappGraphAccessReady(connection, channelHealth);
+  const remoteVerificationUnavailable = linked && !graphReady;
+  const reconnectRequired = whatsappReconnectRequired(connection, channelHealth);
+  const safeInitialFlowCatalog = Array.isArray(initialFlowCatalog)
+    ? initialFlowCatalog
+    : EMPTY_CATALOG;
+  const presentedFlowCatalog = graphReady
+    ? flowCatalog
+    : safeInitialFlowCatalog;
+  const presentedTemplateCatalog = graphReady ? templateCatalog : EMPTY_CATALOG;
+  const presentedFlowEndpoint = graphReady ? flowEndpoint : null;
+  const presentedFlowNotice = graphReady ? flowNotice : null;
+  const presentedTemplateNotice = graphReady ? templateNotice : null;
   const configured = Boolean(appId && configId && platformReady);
   const healthStateClass = channelHealth?.degraded
     ? styles.degradedState
     : channelHealth?.operational
       ? styles.connected
       : styles.pendingState;
-  const endpointPresentation = flowEndpointPresentation(
-    flowEndpoint,
-    connected,
-    flowEndpoint === undefined && flowNotice?.type === 'error',
-  );
-  const endpointFingerprint = typeof flowEndpoint?.keyFingerprint === 'string'
-    ? flowEndpoint.keyFingerprint
+  const endpointPresentation = flowEndpointPresentation(presentedFlowEndpoint, {
+    graphReady,
+    linked,
+    verificationFailed: presentedFlowEndpoint === undefined && presentedFlowNotice?.type === 'error',
+  });
+  const endpointFingerprint = typeof presentedFlowEndpoint?.keyFingerprint === 'string'
+    ? presentedFlowEndpoint.keyFingerprint
     : null;
 
   async function synchronizeChannelHealth({ method = 'GET' } = {}) {
+    const remoteChannelEpoch = remoteChannelEpochRef.current;
+    const requestSequence = healthRequestSequenceRef.current + 1;
+    healthRequestSequenceRef.current = requestSequence;
     const response = await fetch('/api/integrations/whatsapp/health', {
       method,
       cache: 'no-store',
     });
     const payload = await response.json().catch(() => ({}));
+    if (
+      remoteChannelEpoch !== remoteChannelEpochRef.current
+      || requestSequence !== healthRequestSequenceRef.current
+    ) return null;
     if (isPlainRecord(payload.health)) setChannelHealth(payload.health);
     if (isPlainRecord(payload.diagnostics)) setHealthDiagnostics(payload.diagnostics);
     if (!response.ok) {
@@ -217,6 +278,54 @@ export default function IntegrationsClient({
     }
     return payload;
   }
+
+  function invalidateRemoteChannelState() {
+    remoteChannelEpochRef.current += 1;
+    healthRequestSequenceRef.current += 1;
+    setChannelHealth(null);
+    setHealthDiagnostics(null);
+    setFlowCatalog(Array.isArray(initialFlowCatalog) ? initialFlowCatalog : []);
+    setFlowEndpoint(null);
+    setFlowNotice(null);
+    setFlowPendingKey(null);
+    setTemplateCatalog([]);
+    setTemplateNotice(null);
+    setTemplatePendingKey(null);
+  }
+
+  function handleGraphAccessFailure(error) {
+    if (!whatsappGraphAccessRejected(error?.code)) return false;
+    if (graphAccessFailureSyncRef.current) return true;
+
+    graphAccessFailureSyncRef.current = true;
+    invalidateRemoteChannelState();
+    setConnection((current) => current ? {
+      ...current,
+      connectionStatus: 'ERROR',
+    } : null);
+    setStatus({ type: 'error', text: error.message });
+    void synchronizeChannelHealth({ method: 'POST' })
+      .then((refreshed) => {
+        if (!refreshed) return;
+        setConnection((current) => current ? {
+          ...current,
+          connectionStatus: 'CONNECTED',
+        } : null);
+        setStatus({
+          type: 'success',
+          text: 'La credencial volvió a verificarse con Meta. Actualizamos el estado del canal.',
+        });
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        graphAccessFailureSyncRef.current = false;
+      });
+    return true;
+  }
+
+  const handleGraphAccessFailureEvent = useEffectEvent((error) => (
+    handleGraphAccessFailure(error)
+  ));
 
   async function submitConnection() {
     const signup = signupRef.current;
@@ -243,13 +352,14 @@ export default function IntegrationsClient({
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || 'No se pudo conectar WhatsApp.');
+      invalidateRemoteChannelState();
       setFlowEndpoint(undefined);
-      setFlowNotice(null);
       setConnection(payload.connection);
       setRegistrationPin('');
       let healthRefreshFailed = false;
       try {
-        await synchronizeChannelHealth();
+        const refreshed = await synchronizeChannelHealth();
+        if (!refreshed) healthRefreshFailed = true;
       } catch {
         healthRefreshFailed = true;
       }
@@ -311,7 +421,7 @@ export default function IntegrationsClient({
         setStatus({ type: 'info', text: 'El registro fue cancelado antes de compartir los activos.' });
       } else if (payload.event === 'ERROR') {
         setPending(false);
-        setStatus({ type: 'error', text: payload.data?.error_message || 'Meta informó un error durante el registro.' });
+        setStatus({ type: 'error', text: 'Meta informó un error durante el registro.' });
       }
     }
 
@@ -320,33 +430,44 @@ export default function IntegrationsClient({
   }, [appId]);
 
   useEffect(() => {
-    if (!connected) return undefined;
+    if (!graphReady) return undefined;
     let active = true;
+    const remoteChannelEpoch = remoteChannelEpochRef.current;
     const controller = new AbortController();
     readFlowCatalog({ signal: controller.signal })
       .then((payload) => {
-        if (!active) return;
+        if (!active || remoteChannelEpoch !== remoteChannelEpochRef.current) return;
         setFlowCatalog(payload.catalog);
         setFlowEndpoint(payload.endpoint);
       })
       .catch((error) => {
-        if (!active || error.name === 'AbortError') return;
+        if (
+          !active
+          || remoteChannelEpoch !== remoteChannelEpochRef.current
+          || error.name === 'AbortError'
+        ) return;
+        if (handleGraphAccessFailureEvent(error)) return;
         setFlowNotice({ type: 'error', text: error.message });
       });
     readTemplateCatalog({ signal: controller.signal })
       .then((templates) => {
-        if (!active) return;
+        if (!active || remoteChannelEpoch !== remoteChannelEpochRef.current) return;
         setTemplateCatalog(templates);
       })
       .catch((error) => {
-        if (!active || error.name === 'AbortError') return;
+        if (
+          !active
+          || remoteChannelEpoch !== remoteChannelEpochRef.current
+          || error.name === 'AbortError'
+        ) return;
+        if (handleGraphAccessFailureEvent(error)) return;
         setTemplateNotice({ type: 'error', text: error.message });
       });
     return () => {
       active = false;
       controller.abort();
     };
-  }, [connected]);
+  }, [connectionIdentity, graphReady]);
 
   function startSignup() {
     if (!/^\d{6}$/.test(registrationPin)) {
@@ -391,20 +512,16 @@ export default function IntegrationsClient({
         const payload = await response.json().catch(() => ({}));
         throw new Error(payload.error || 'No se pudo desactivar la conexión.');
       }
+      invalidateRemoteChannelState();
       setConnection((current) => current ? {
         ...current,
         enabled: false,
         connectionStatus: 'DISABLED',
-        tokenLastFour: null,
       } : null);
-      setFlowCatalog(Array.isArray(initialFlowCatalog) ? initialFlowCatalog : []);
-      setFlowEndpoint(null);
-      setFlowNotice(null);
-      setTemplateCatalog([]);
-      setTemplateNotice(null);
       let healthRefreshFailed = false;
       try {
-        await synchronizeChannelHealth();
+        const refreshed = await synchronizeChannelHealth();
+        if (!refreshed) healthRefreshFailed = true;
       } catch {
         healthRefreshFailed = true;
       }
@@ -425,7 +542,8 @@ export default function IntegrationsClient({
     setHealthPending(true);
     setStatus({ type: 'progress', text: 'Verificando token, permisos, teléfono y suscripción en Meta…' });
     try {
-      await synchronizeChannelHealth({ method: 'POST' });
+      const refreshed = await synchronizeChannelHealth({ method: 'POST' });
+      if (!refreshed) return;
       setStatus({
         type: 'success',
         text: 'Cuenta y webhook revalidados. El estado operativo depende de evidencia real en ambos sentidos.',
@@ -438,6 +556,7 @@ export default function IntegrationsClient({
   }
 
   async function refreshFlows() {
+    const remoteChannelEpoch = remoteChannelEpochRef.current;
     setFlowPendingKey('refresh');
     setFlowNotice({ type: 'progress', text: 'Consultando el estado real en Meta…' });
     try {
@@ -445,6 +564,7 @@ export default function IntegrationsClient({
         readFlowCatalog(),
         readTemplateCatalog(),
       ]);
+      if (remoteChannelEpoch !== remoteChannelEpochRef.current) return;
       setFlowCatalog(payload.catalog);
       setFlowEndpoint(payload.endpoint || null);
       setTemplateCatalog(templates);
@@ -454,13 +574,17 @@ export default function IntegrationsClient({
         text: 'Flows, Data Endpoint y plantillas sincronizados con la cuenta de WhatsApp.',
       });
     } catch (error) {
-      setFlowNotice({ type: 'error', text: error.message });
+      if (handleGraphAccessFailure(error)) return;
+      if (remoteChannelEpoch === remoteChannelEpochRef.current) {
+        setFlowNotice({ type: 'error', text: error.message });
+      }
     } finally {
-      setFlowPendingKey(null);
+      if (remoteChannelEpoch === remoteChannelEpochRef.current) setFlowPendingKey(null);
     }
   }
 
   async function provisionFlowDraft(blueprintKey) {
+    const remoteChannelEpoch = remoteChannelEpochRef.current;
     setFlowPendingKey(blueprintKey);
     setFlowNotice({ type: 'progress', text: 'Validando y sincronizando el borrador con Meta…' });
     try {
@@ -470,7 +594,10 @@ export default function IntegrationsClient({
         body: JSON.stringify({ blueprintKey }),
       });
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.error || 'No se pudo preparar el Flow.');
+      if (!response.ok) {
+        throw integrationResponseError(payload, 'No se pudo preparar el Flow.');
+      }
+      if (remoteChannelEpoch !== remoteChannelEpochRef.current) return;
       if (!isPlainRecord(payload.catalogItem)) {
         throw new Error('Meta respondió sin el estado reconciliado del Flow.');
       }
@@ -487,13 +614,17 @@ export default function IntegrationsClient({
           : 'Borrador validado y guardado en la cuenta de WhatsApp. Publicarlo seguirá requiriendo una decisión explícita.',
       });
     } catch (error) {
-      setFlowNotice({ type: 'error', text: error.message });
+      if (handleGraphAccessFailure(error)) return;
+      if (remoteChannelEpoch === remoteChannelEpochRef.current) {
+        setFlowNotice({ type: 'error', text: error.message });
+      }
     } finally {
-      setFlowPendingKey(null);
+      if (remoteChannelEpoch === remoteChannelEpochRef.current) setFlowPendingKey(null);
     }
   }
 
   async function provisionTemplate(blueprintKey) {
+    const remoteChannelEpoch = remoteChannelEpochRef.current;
     setTemplatePendingKey(blueprintKey);
     setTemplateNotice({
       type: 'progress',
@@ -506,7 +637,10 @@ export default function IntegrationsClient({
         body: JSON.stringify({ blueprintKey }),
       });
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.error || 'No se pudo preparar la plantilla.');
+      if (!response.ok) {
+        throw integrationResponseError(payload, 'No se pudo preparar la plantilla.');
+      }
+      if (remoteChannelEpoch !== remoteChannelEpochRef.current) return;
       if (!isPlainRecord(payload.result) || !isPlainRecord(payload.result.template)) {
         throw new Error('Meta respondi\u00f3 sin el estado reconciliado de la plantilla.');
       }
@@ -529,9 +663,12 @@ export default function IntegrationsClient({
           : 'Plantilla enviada a Meta. ObraSaaS la habilitar\u00e1 s\u00f3lo cuando el estado sea APPROVED.',
       });
     } catch (error) {
-      setTemplateNotice({ type: 'error', text: error.message });
+      if (handleGraphAccessFailure(error)) return;
+      if (remoteChannelEpoch === remoteChannelEpochRef.current) {
+        setTemplateNotice({ type: 'error', text: error.message });
+      }
     } finally {
-      setTemplatePendingKey(null);
+      if (remoteChannelEpoch === remoteChannelEpochRef.current) setTemplatePendingKey(null);
     }
   }
 
@@ -600,7 +737,7 @@ export default function IntegrationsClient({
           </section>
         )}
 
-        {connected ? (
+        {linked && (
           <div className={styles.connectionPanel}>
             <div>
               <span>Número</span>
@@ -619,7 +756,9 @@ export default function IntegrationsClient({
               <strong>{formatDate(connection.lastVerifiedAt)}</strong>
             </div>
           </div>
-        ) : (
+        )}
+
+        {(!linked || reconnectRequired) && (
           <div className={styles.connectFlow}>
             <label htmlFor="whatsapp-pin">
               <span>PIN de registro del número</span>
@@ -643,11 +782,27 @@ export default function IntegrationsClient({
               type="button"
               className={styles.primaryButton}
               onClick={startSignup}
-              disabled={!configured || !sdkReady || pending}
+              disabled={
+                !configured
+                || !sdkReady
+                || pending
+                || healthPending
+                || Boolean(flowPendingKey)
+                || Boolean(templatePendingKey)
+              }
             >
               <i className="fa-brands fa-meta" aria-hidden="true" />
-              {pending ? 'Conectando…' : 'Conectar con Meta'}
+              {pending ? 'Conectando…' : linked ? 'Reconectar con Meta' : 'Conectar con Meta'}
             </button>
+            {reconnectRequired && (
+              <small>
+                La identidad del WABA se conserva. Meta debe emitir una credencial nueva antes de
+                volver a habilitar operaciones autenticadas.
+                {pilotImportEnabled && (
+                  <> En este Preview también podés usar la <a href="#pilot-import-title">importación piloto cifrada</a>.</>
+                )}
+              </small>
+            )}
           </div>
         )}
 
@@ -662,27 +817,36 @@ export default function IntegrationsClient({
             de Meta esté completa; no necesitás compartir credenciales con ObraSaaS.
           </div>
         )}
-        {connection?.lastError && !connected && (
-          <div className={`${styles.notice} ${styles.error}`} role="alert">
-            Último intento: {connection.lastError}
-          </div>
-        )}
-
         <div className={styles.actions}>
           <div className={styles.channelActionButtons}>
-            {connected && (
+            {linked && connectionActive && (
               <button
                 type="button"
                 className={styles.secondaryButton}
                 onClick={verifyChannel}
-                disabled={pending || healthPending}
+                disabled={
+                  pending
+                  || healthPending
+                  || Boolean(flowPendingKey)
+                  || Boolean(templatePendingKey)
+                }
               >
                 <i className="fa-solid fa-shield-halved" aria-hidden="true" />
                 {healthPending ? 'Verificando…' : 'Verificar con Meta'}
               </button>
             )}
-            {connected && (
-              <button type="button" className={styles.secondaryButton} onClick={disconnect} disabled={pending || healthPending}>
+            {linked && connectionActive && (
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                onClick={disconnect}
+                disabled={
+                  pending
+                  || healthPending
+                  || Boolean(flowPendingKey)
+                  || Boolean(templatePendingKey)
+                }
+              >
                 Desactivar en esta obra
               </button>
             )}
@@ -713,7 +877,7 @@ export default function IntegrationsClient({
         <header className={styles.flowsHeader}>
           <div>
             <p className={styles.eyebrow}>Experiencias nativas · sin salir de WhatsApp</p>
-            <h2 id="whatsapp-flows-title">WhatsApp Flows operativos</h2>
+            <h2 id="whatsapp-flows-title">WhatsApp Flows por obra</h2>
             <p>
               Blueprints propios para obra, aislados por WABA, con Flow JSON 7.3 y Data API 4.0.
               El contexto sale de la obra autorizada; nunca se publica sin una decisión explícita.
@@ -725,7 +889,13 @@ export default function IntegrationsClient({
               type="button"
               className={styles.secondaryButton}
               onClick={refreshFlows}
-              disabled={!connected || Boolean(flowPendingKey) || Boolean(templatePendingKey)}
+              disabled={
+                !graphReady
+                || pending
+                || healthPending
+                || Boolean(flowPendingKey)
+                || Boolean(templatePendingKey)
+              }
             >
               <i className="fa-solid fa-arrows-rotate" aria-hidden="true" />
               Sincronizar
@@ -752,7 +922,7 @@ export default function IntegrationsClient({
                 : 'RSA-2048 dedicada'}
             </strong>
           </div>
-          <div data-state={connected ? 'ready' : 'idle'}>
+          <div data-state={graphReady ? 'ready' : linked ? 'blocked' : 'idle'}>
             <i className="fa-solid fa-building-shield" aria-hidden="true" />
             <span>Límite tenant</span>
             <strong>{connection?.verifiedBusinessName || 'WABA propio de la empresa'}</strong>
@@ -760,20 +930,26 @@ export default function IntegrationsClient({
         </div>
 
         <div className={styles.flowGrid}>
-          {flowCatalog.map((flow) => {
+          {presentedFlowCatalog.map((flow) => {
             const remoteStatus = flow.remote.status;
             const isPublished = remoteStatus === 'PUBLISHED';
             const runtimeActive = Boolean(flow.runtimeActive);
-            const runtimePresentation = flowRuntimePresentation(flow);
+            const runtimePresentation = flowRuntimePresentation(
+              flow,
+              remoteVerificationUnavailable,
+            );
             const publishedHealthBlocked = isPublished
               && flow.remote.healthStatus?.blocked === true;
             const publishedCanReconcile = isPublished
               && flow.remoteDataEndpointReady === true
               && !publishedHealthBlocked;
             const isPending = flowPendingKey === flow.key;
-            const templateEntry = templateCatalog.find((item) => item.blueprintKey === flow.key);
+            const templateEntry = presentedTemplateCatalog.find((item) => item.blueprintKey === flow.key);
             const template = templateEntry?.template || null;
-            const templateState = templatePresentation(template);
+            const templateState = templatePresentation(
+              template,
+              remoteVerificationUnavailable,
+            );
             const templatePending = templatePendingKey === flow.key;
             const templateCanProvision = runtimeActive
               && (!template || template.status === 'MISSING');
@@ -784,6 +960,7 @@ export default function IntegrationsClient({
               publishedHealthBlocked,
               remoteStatus,
               runtimeActive,
+              verificationUnavailable: remoteVerificationUnavailable,
             });
             return (
               <article className={styles.flowCard} key={flow.key}>
@@ -793,8 +970,8 @@ export default function IntegrationsClient({
                       ? 'fa-solid fa-triangle-exclamation'
                       : 'fa-solid fa-helmet-safety'} />
                   </div>
-                  <span className={`${styles.flowState} ${styles[flowStatusClass(remoteStatus)]}`}>
-                    {flowStatusLabel(remoteStatus)}
+                  <span className={`${styles.flowState} ${styles[flowStatusClass(remoteStatus, remoteVerificationUnavailable)]}`}>
+                    {flowStatusLabel(remoteStatus, remoteVerificationUnavailable)}
                   </span>
                 </div>
                 <p className={styles.flowScreen}>{flow.screenId}</p>
@@ -829,7 +1006,12 @@ export default function IntegrationsClient({
                 <div className={styles.flowCardFooter}>
                   <div>
                     <span>Activo Meta</span>
-                    <strong>{flow.remote.id || 'Se crea al conectar un WABA'}</strong>
+                    <strong>
+                      {flow.remote.id
+                        || (remoteVerificationUnavailable
+                          ? 'Estado no verificado'
+                          : 'Se crea al conectar un WABA')}
+                    </strong>
                   </div>
                   <div className={styles.flowActions}>
                     <button
@@ -837,8 +1019,10 @@ export default function IntegrationsClient({
                       className={styles.flowButton}
                       onClick={() => provisionFlowDraft(flow.key)}
                       disabled={
-                        !connected
+                        !graphReady
                         || !platformReady
+                        || pending
+                        || healthPending
                         || Boolean(flowPendingKey)
                         || runtimeActive
                         || (isPublished && !publishedCanReconcile)
@@ -851,13 +1035,19 @@ export default function IntegrationsClient({
                       className={styles.templateButton}
                       onClick={() => provisionTemplate(flow.key)}
                       disabled={
-                        !connected
+                        !graphReady
                         || !platformReady
+                        || pending
+                        || healthPending
                         || Boolean(templatePendingKey)
                         || !templateCanProvision
                       }
                     >
-                      {templateActionLabel(template, templatePending)}
+                      {templateActionLabel(
+                        template,
+                        templatePending,
+                        remoteVerificationUnavailable,
+                      )}
                     </button>
                   </div>
                 </div>
@@ -866,15 +1056,15 @@ export default function IntegrationsClient({
           })}
         </div>
 
-        {flowNotice && (
-          <div className={`${styles.notice} ${styles[flowNotice.type]}`} role="status">
-            {flowNotice.text}
+        {presentedFlowNotice && (
+          <div className={`${styles.notice} ${styles[presentedFlowNotice.type]}`} role="status">
+            {presentedFlowNotice.text}
           </div>
         )}
 
-        {templateNotice && (
-          <div className={`${styles.notice} ${styles[templateNotice.type]}`} role="status">
-            {templateNotice.text}
+        {presentedTemplateNotice && (
+          <div className={`${styles.notice} ${styles[presentedTemplateNotice.type]}`} role="status">
+            {presentedTemplateNotice.text}
           </div>
         )}
 

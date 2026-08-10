@@ -95,3 +95,16 @@ test('operational pulse exposes sync failures and only offers permitted setup ac
   assert.equal(model.actions[1].label, 'Ver cronograma');
   assert.equal(model.actions.at(-1).label, 'Conectar WhatsApp');
 });
+
+test('operational pulse directs a linked unhealthy channel to review instead of reconnect copy', () => {
+  const model = buildOperationalPulseModel({
+    state: {},
+    setup: {
+      canManageIntegrations: true,
+      whatsappConnected: false,
+      whatsappChannel: { linked: true, requiresAttention: true },
+    },
+  });
+
+  assert.equal(model.actions.at(-1).label, 'Revisar WhatsApp');
+});

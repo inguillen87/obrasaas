@@ -188,7 +188,9 @@ export function buildOperationalPulseModel({
   if (capabilities.canManageIntegrations && !capabilities.whatsappConnected) {
     actions.push({
       href: '/dashboard/integrations',
-      label: 'Conectar WhatsApp',
+      label: capabilities.whatsappChannel?.requiresAttention
+        ? 'Revisar WhatsApp'
+        : 'Conectar WhatsApp',
       icon: 'fa-brands fa-whatsapp',
     });
   }

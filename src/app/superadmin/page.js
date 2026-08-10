@@ -9,6 +9,7 @@ import { getPrisma } from '@/lib/prisma';
 import { serializeCrmAccount } from '@/lib/superadmin-crm';
 import { getSuperadminTenantPresentation } from '@/lib/superadmin-tenant-presentation';
 import { isExternalTenant } from '@/lib/superadmin-tenants';
+import { deriveWhatsAppChannelPresentation } from '@/lib/whatsapp/channel-presentation';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,8 +32,18 @@ function serializeTenant(organization, now) {
     || activeMemberships[0]
     || null;
   const activeProjects = organization.projects.filter((project) => project.status === 'ACTIVE').length;
-  const connectedChannels = organization.projects.filter(
-    (project) => project.whatsapp?.enabled && project.whatsapp.connectionStatus === 'CONNECTED',
+  const whatsappChannels = organization.projects.map((project) => (
+    deriveWhatsAppChannelPresentation(project.whatsapp, { now })
+  ));
+  const connectedChannels = whatsappChannels.filter((channel) => channel.connected).length;
+  const attentionChannels = whatsappChannels.filter(
+    (channel) => channel.requiresAttention,
+  ).length;
+  const pendingChannels = whatsappChannels.filter(
+    (channel) => channel.state === 'PENDING',
+  ).length;
+  const disabledChannels = whatsappChannels.filter(
+    (channel) => channel.state === 'DISABLED',
   ).length;
   const failedWebhooks = organization.projects.reduce(
     (sum, project) => sum + project._count.webhookEvents,
@@ -41,6 +52,7 @@ function serializeTenant(organization, now) {
   const presentation = getSuperadminTenantPresentation(organization, {
     failedWebhooks,
     whatsappConnected: connectedChannels > 0,
+    whatsappRequiresAttention: attentionChannels > 0,
     now,
   });
   const lastActivityAt = latestDate([
@@ -70,6 +82,9 @@ function serializeTenant(organization, now) {
     projects: organization._count.projects,
     activeProjects,
     connectedChannels,
+    attentionChannels,
+    pendingChannels,
+    disabledChannels,
     failedWebhooks,
     health: presentation.health,
     primaryContact: primaryContact ? {
@@ -109,6 +124,8 @@ export default async function SuperadminPage() {
             select: {
               enabled: true,
               connectionStatus: true,
+              lastError: true,
+              metadata: true,
             },
           },
           _count: {

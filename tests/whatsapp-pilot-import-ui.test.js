@@ -399,6 +399,13 @@ test("pilot error presentation is allowlisted and the client has no persistence 
     ),
     "utf8",
   );
+  const pageSource = readFileSync(
+    new URL(
+      "../src/app/dashboard/integrations/page.js",
+      import.meta.url,
+    ),
+    "utf8",
+  );
   assert.match(clientSource, /type="password"/);
   assert.match(clientSource, /autoComplete="off"/);
   assert.match(clientSource, /useState\(["']{2}\)/);
@@ -430,6 +437,16 @@ test("pilot error presentation is allowlisted and the client has no persistence 
   );
   assert.match(clientSource, /["']Idempotency-Key["']: idempotencyKey/);
   assert.match(clientSource, /cache: ["']no-store["']/);
+  assert.match(clientSource, /const router = useRouter\(\)/);
+  assert.match(
+    clientSource,
+    /payload\.connection\.projectId === currentProjectId\) router\.refresh\(\)/,
+  );
+  assert.match(
+    pageSource,
+    /key=\{channelHealth\.connection\?\.updatedAt\?\.toISOString\(\) \|\| "unlinked"\}/,
+  );
+  assert.match(pageSource, /currentProjectId=\{access\.project\.id\}/);
   assert.doesNotMatch(
     clientSource,
     /localStorage|sessionStorage|console\.|URLSearchParams/,

@@ -21,6 +21,7 @@ import {
   releaseWhatsAppConnectionLease,
   WhatsAppFlowProvisioningLeaseError,
 } from '@/lib/whatsapp/flow-provisioning-lease';
+import { publicMetaIntegrationFailure } from '@/lib/whatsapp/public-error';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -163,6 +164,9 @@ export function createWhatsAppHealthHandlers({
         });
       } catch (error) {
         if (!(error instanceof MetaIntegrationError)) throw error;
+        const publicFailure = publicMetaIntegrationFailure(error, {
+          fallback: 'No se pudo verificar el canal con Meta.',
+        });
         const failedAt = clock();
         await commitLease(prisma, {
           ...lease,
@@ -170,11 +174,11 @@ export function createWhatsAppHealthHandlers({
           buildConnectionData: (observed) => ({
             metadata: buildWhatsAppChannelHealthFailureMetadata(
               observed.metadata,
-              error,
+              { code: publicFailure.code },
               { now: failedAt },
             ),
-            lastError: error.message.slice(0, 2_000),
-            ...(TOKEN_FAILURE_CODES.has(error.code) ? { connectionStatus: 'ERROR' } : {}),
+            lastError: publicFailure.code,
+            ...(TOKEN_FAILURE_CODES.has(publicFailure.code) ? { connectionStatus: 'ERROR' } : {}),
           }),
           createAuditLog: (transaction) => transaction.auditLog.create({
             data: {
@@ -184,7 +188,7 @@ export function createWhatsAppHealthHandlers({
               entityType: 'WhatsAppConnection',
               entityId: connection.id,
               ipAddress: auditIp(request),
-              metadata: { projectId: access.project.id, code: error.code },
+              metadata: { projectId: access.project.id, code: publicFailure.code },
             },
           }),
         });
@@ -194,10 +198,10 @@ export function createWhatsAppHealthHandlers({
           now: failedAt,
         });
         return json({
-          error: error.message,
-          code: error.code,
+          error: publicFailure.message,
+          code: publicFailure.code,
           ...publicHealth(result),
-        }, { status: error.status });
+        }, { status: publicFailure.status });
       }
 
       const verifiedAt = clock();
@@ -250,7 +254,12 @@ export function createWhatsAppHealthHandlers({
       if (error instanceof AccessError) return accessErrorResponse(error);
       if (error instanceof WhatsAppFlowProvisioningLeaseError) return leaseErrorResponse(error);
       if (error instanceof MetaIntegrationError) {
-        return json({ error: error.message, code: error.code }, { status: error.status });
+        const failure = publicMetaIntegrationFailure(error, {
+          fallback: 'No se pudo verificar el canal con Meta.',
+        });
+        return json({ error: failure.message, code: failure.code }, {
+          status: failure.status,
+        });
       }
       console.error('WhatsApp health verification failed:', error);
       return json({ error: 'No se pudo verificar el canal con Meta.' }, { status: 500 });

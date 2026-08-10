@@ -13,8 +13,11 @@ export const PROJECT_DETAILS_INCLUDE = {
   snapshot: { select: { updatedAt: true } },
   whatsapp: {
     select: {
+      enabled: true,
       connectionStatus: true,
       displayPhoneNumber: true,
+      lastError: true,
+      metadata: true,
       verifiedBusinessName: true,
     },
   },

@@ -51,6 +51,8 @@
 .ready > i { color: var(--success); }
 .recommended > i, .action > i { color: var(--primary); }
 .action { background: rgba(255, 159, 28, 0.055); }
+.attention { background: rgba(239, 68, 68, 0.06); }
+.attention > i { color: var(--danger); }
 
 .guide {
   display: flex;
