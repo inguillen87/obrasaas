@@ -13,6 +13,9 @@ const migration = await readFile(new URL(
   'prisma/migrations/20260729140000_data_subject_discovery_foundation/migration.sql',
   root,
 ), 'utf8');
+const packageJson = await readFile(new URL('package.json', root), 'utf8');
+const ciWorkflow = await readFile(new URL('.github/workflows/ci.yml', root), 'utf8');
+const vercelBuild = await readFile(new URL('scripts/vercel-build.mjs', root), 'utf8');
 
 function model(name) {
   const match = new RegExp(`model ${name} \\{([\\s\\S]*?)\\n\\}`, 'm').exec(schema);
@@ -136,4 +139,44 @@ test('public privacy copy no longer promises unimplemented universal 30/90-day d
   assert.match(privacyPage, /updatedAt="29 de julio de 2026"/);
   assert.doesNotMatch(deletionPage, /ciclos contractuales aprobados/i);
   assert.doesNotMatch(privacyPage, /mecanismos contractuales aprobados/i);
+});
+
+test('PRO-05A verifier is a fail-closed PostgreSQL 17 release gate', () => {
+  assert.match(
+    packageJson,
+    /"verify:data-subject-discovery-migration":\s*"node scripts\/verify-data-subject-discovery-migration\.mjs"/,
+  );
+  assert.match(
+    vercelBuild,
+    /DATA_SUBJECT_DISCOVERY_VERIFIER_PATH[\s\S]{0,200}verify-data-subject-discovery-migration\.mjs/,
+  );
+  assert.match(
+    vercelBuild,
+    /dataSubjectDiscoveryVerifier:\s*DATA_SUBJECT_DISCOVERY_VERIFIER_PATH/,
+  );
+
+  const taskMaterialStep = ciWorkflow.indexOf(
+    '- name: Verify task material requirements on PostgreSQL 17',
+  );
+  const discoveryStep = ciWorkflow.indexOf(
+    '- name: Verify data subject discovery on PostgreSQL 17',
+  );
+  const migrationStatusStep = ciWorkflow.indexOf(
+    '- name: Verify migration history status',
+  );
+  assert.ok(taskMaterialStep >= 0);
+  assert.ok(discoveryStep > taskMaterialStep);
+  assert.ok(migrationStatusStep > discoveryStep);
+  assert.match(
+    ciWorkflow.slice(discoveryStep, migrationStatusStep),
+    /DATA_SUBJECT_DISCOVERY_MIGRATION_DATABASE_URL:\s*postgresql:\/\/obrasaas_ci:[^\s]+@127\.0\.0\.1:5432\/obrasaas_ci\?schema=public/,
+  );
+  assert.match(
+    ciWorkflow.slice(discoveryStep, migrationStatusStep),
+    /DATA_SUBJECT_DISCOVERY_MIGRATION_SCHEMA:\s*public/,
+  );
+  assert.match(
+    ciWorkflow.slice(discoveryStep, migrationStatusStep),
+    /run:\s*npm run verify:data-subject-discovery-migration/,
+  );
 });

@@ -257,6 +257,7 @@ test("preview runner migrates before generating and building without a shell", a
       scheduleSnapshotVerifier: "schedule-snapshot-verifier",
       notificationOutboxVerifier: "notification-outbox-verifier",
       projectExecutionVerifier: "project-execution-verifier",
+      dataSubjectDiscoveryVerifier: "data-subject-verifier",
     },
   });
 
@@ -272,6 +273,7 @@ test("preview runner migrates before generating and building without a shell", a
       ["schedule-snapshot-verifier"],
       ["notification-outbox-verifier"],
       ["project-execution-verifier"],
+      ["data-subject-verifier"],
       ["prisma-cli", "generate"],
       ["next-cli", "build"],
     ],
@@ -379,6 +381,18 @@ test("preview runner migrates before generating and building without a shell", a
     projectExecutionVerificationCall.options.env.PROJECT_EXECUTION_MIGRATION_SCHEMA,
     "public",
   );
+  const dataSubjectVerificationCall = calls.find(
+    ({ args }) => args[0] === "data-subject-verifier",
+  );
+  assert.ok(dataSubjectVerificationCall);
+  assert.equal(
+    dataSubjectVerificationCall.options.env.DATA_SUBJECT_DISCOVERY_MIGRATION_DATABASE_URL,
+    PREVIEW_URL,
+  );
+  assert.equal(
+    dataSubjectVerificationCall.options.env.DATA_SUBJECT_DISCOVERY_MIGRATION_SCHEMA,
+    "public",
+  );
 });
 
 test("authorized production runs migration verification before the build", async () => {
@@ -406,6 +420,7 @@ test("authorized production runs migration verification before the build", async
       scheduleSnapshotVerifier: "schedule-snapshot-verifier",
       notificationOutboxVerifier: "notification-outbox-verifier",
       projectExecutionVerifier: "project-execution-verifier",
+      dataSubjectDiscoveryVerifier: "data-subject-verifier",
     },
   });
 
@@ -421,6 +436,7 @@ test("authorized production runs migration verification before the build", async
       ["schedule-snapshot-verifier"],
       ["notification-outbox-verifier"],
       ["project-execution-verifier"],
+      ["data-subject-verifier"],
       ["prisma-cli", "generate"],
       ["next-cli", "build"],
     ],
@@ -487,6 +503,94 @@ test("authorized production runs migration verification before the build", async
   );
   assert.equal(
     calls[8].options.env.PROJECT_EXECUTION_MIGRATION_SCHEMA,
+    "public",
+  );
+  const dataSubjectVerificationCall = calls.find(
+    ({ args }) => args[0] === "data-subject-verifier",
+  );
+  assert.ok(dataSubjectVerificationCall);
+  assert.equal(
+    dataSubjectVerificationCall.options.env.DATA_SUBJECT_DISCOVERY_MIGRATION_DATABASE_URL,
+    PRODUCTION_URL,
+  );
+  assert.equal(
+    dataSubjectVerificationCall.options.env.DATA_SUBJECT_DISCOVERY_MIGRATION_SCHEMA,
+    "public",
+  );
+});
+
+test("data subject discovery verification fails the release before generate or build", async () => {
+  const calls = [];
+
+  await assert.rejects(
+    runVercelBuild({
+      environment: environment(),
+      runner: async (_file, args) => {
+        calls.push(args);
+        if (args[0] === "data-subject-verifier") {
+          throw new Error("privacy discovery verification failed");
+        }
+      },
+      cliPaths: {
+        prisma: "prisma-cli",
+        next: "next-cli",
+        workerIdentityVerifier: "worker-verifier",
+        progressJournalVerifier: "progress-verifier",
+        protectedUploadVerifier: "protected-upload-verifier",
+        whatsappMediaAssetVerifier: "whatsapp-media-asset-verifier",
+        visualProgressVerifier: "visual-progress-verifier",
+        scheduleSnapshotVerifier: "schedule-snapshot-verifier",
+        dataSubjectDiscoveryVerifier: "data-subject-verifier",
+      },
+    }),
+    /privacy discovery verification failed/,
+  );
+
+  assert.equal(
+    calls.some((args) => args[0] === "data-subject-verifier"),
+    true,
+  );
+  assert.equal(
+    calls.some(
+      (args) =>
+        args[0] === "prisma-cli" && args[1] === "generate",
+    ),
+    false,
+  );
+  assert.equal(calls.some((args) => args[0] === "next-cli"), false);
+});
+
+test("default Preview wiring executes the real data subject verifier before generate and build", async () => {
+  const calls = [];
+
+  await runVercelBuild({
+    environment: environment(),
+    runner: async (_file, args, options) => calls.push({ args, options }),
+  });
+
+  const migrateIndex = calls.findIndex(
+    ({ args }) => args.at(-2) === "migrate" && args.at(-1) === "deploy",
+  );
+  const discoveryIndex = calls.findIndex(({ args }) =>
+    args[0]?.endsWith("verify-data-subject-discovery-migration.mjs"),
+  );
+  const generateIndex = calls.findIndex(
+    ({ args }) => args.at(-1) === "generate",
+  );
+  const buildIndex = calls.findIndex(
+    ({ args }) => args.at(-1) === "build",
+  );
+
+  assert.ok(migrateIndex >= 0);
+  assert.ok(discoveryIndex > migrateIndex);
+  assert.ok(generateIndex > discoveryIndex);
+  assert.ok(buildIndex > generateIndex);
+  assert.equal(
+    calls[discoveryIndex].options.env.DATA_SUBJECT_DISCOVERY_MIGRATION_DATABASE_URL,
+    PREVIEW_URL,
+  );
+  assert.equal(
+    calls[discoveryIndex].options.env.DATA_SUBJECT_DISCOVERY_MIGRATION_SCHEMA,
     "public",
   );
 });
