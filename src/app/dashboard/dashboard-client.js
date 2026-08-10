@@ -11,6 +11,11 @@ import {
   pendingOperationalProposalCountFromPayload,
 } from '@/lib/first-value-onboarding';
 import { canonicalTasksToGanttCatalog } from '@/lib/gantt';
+import {
+  conversationScopeKey,
+  scopedConversationState,
+  visibleConversationMessages,
+} from '@/lib/conversation-access';
 import GanttPlanner from './gantt-planner';
 import OperationalPulse from './operational-pulse';
 import PlatformReadiness from './platform-readiness';
@@ -154,7 +159,6 @@ const initialChatMessages = [
       time: "08:00 AM"
   }
 ];
-
 function createClientEntityId(prefix) {
   if (globalThis.crypto?.randomUUID) return `${prefix}-${globalThis.crypto.randomUUID()}`;
   const bytes = new Uint32Array(4);
@@ -267,7 +271,22 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
   const stateWriteGenerationRef = useRef(0);
   const latestStateWriteSequenceRef = useRef(0);
   const pendingStateWritesRef = useRef(0);
-  const [chatMessages, setChatMessages] = useState(Array.isArray(initialMessages) ? initialMessages : initialChatMessages);
+  const chatRefreshSequenceRef = useRef(0);
+  const currentConversationScopeKey = conversationScopeKey({
+    allowed: setup.canReadConversations,
+    organizationId: platformAccess.organization.id,
+    projectId: platformAccess.project.id,
+  });
+  const [chatState, setChatState] = useState(() => scopedConversationState(
+    currentConversationScopeKey,
+    Array.isArray(initialMessages) ? initialMessages : initialChatMessages,
+  ));
+  const chatMessages = visibleConversationMessages(chatState, currentConversationScopeKey);
+  const commitChatMessages = useCallback((messages, { sequence = null } = {}) => {
+    if (sequence !== null && sequence !== chatRefreshSequenceRef.current) return false;
+    setChatState(scopedConversationState(currentConversationScopeKey, messages));
+    return true;
+  }, [currentConversationScopeKey]);
   const [syncState, setSyncState] = useState('live');
   const [lastSyncedAt, setLastSyncedAt] = useState(setup.initialLoadedAt);
   const [approvalOnboardingMode, setApprovalOnboardingMode] = useState(false);
@@ -277,6 +296,13 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
   const [latestOperationalProposal, setLatestOperationalProposal] = useState(null);
   const [isLightTheme, setIsLightTheme] = useState(false);
   const [mapMode, setMapMode] = useState('sat');
+
+  useEffect(() => {
+    chatRefreshSequenceRef.current += 1;
+    commitChatMessages(
+      Array.isArray(initialMessages) ? initialMessages : initialChatMessages,
+    );
+  }, [commitChatMessages, initialMessages]);
 
   // Personal HR forms
   const [hrBonusAssignee, setHrBonusAssignee] = useState('');
@@ -366,14 +392,21 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
       refreshing = true;
       setSyncState('syncing');
       try {
+        const messageRequestSequence = setup.canReadConversations
+          ? ++chatRefreshSequenceRef.current
+          : null;
         const [stateRes, messagesRes] = await Promise.all([
           fetch('/api/state', { cache: 'no-store' }),
-          fetch('/api/whatsapp', { cache: 'no-store' }),
+          setup.canReadConversations
+            ? fetch('/api/whatsapp', { cache: 'no-store' })
+            : Promise.resolve(null),
         ]);
-        if (!stateRes.ok || !messagesRes.ok) throw new Error('Operational refresh failed.');
+        if (!stateRes.ok || (messagesRes && !messagesRes.ok)) {
+          throw new Error('Operational refresh failed.');
+        }
         const [stateData, messagesData] = await Promise.all([
           stateRes.json(),
-          messagesRes.json(),
+          messagesRes ? messagesRes.json() : Promise.resolve(null),
         ]);
         if (!active) return;
         const snapshot = decodeProjectStateResponse(
@@ -388,7 +421,12 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
           stateVersionRef.current = snapshot.version;
           setState(normalizeAppState(snapshot.state));
         }
-        setChatMessages(Array.isArray(messagesData) ? messagesData : []);
+        if (messagesRes) {
+          commitChatMessages(
+            Array.isArray(messagesData) ? messagesData : [],
+            { sequence: messageRequestSequence },
+          );
+        }
         setLastSyncedAt(new Date().toISOString());
         setSyncState('live');
       } catch (err) {
@@ -411,7 +449,7 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
       document.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('obrasaas:theme-change', handleThemeChange);
     };
-  }, [setup.pendingOperationalProposalCount]);
+  }, [commitChatMessages, setup.canReadConversations, setup.pendingOperationalProposalCount]);
 
   useEffect(() => {
     if (!approvalOnboardingRequested) {
@@ -716,12 +754,16 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
   const refreshFieldSimulationViews = async () => {
     const [stateRefresh, messageRefresh] = await Promise.allSettled([
       reloadLatestProjectState(),
-      (async () => {
+      setup.canReadConversations ? (async () => {
+        const messageRequestSequence = ++chatRefreshSequenceRef.current;
         const response = await fetch('/api/whatsapp', { cache: 'no-store' });
         if (!response.ok) throw new Error('No se pudo recargar la conversación.');
         const messages = await response.json();
-        setChatMessages(Array.isArray(messages) ? messages : []);
-      })(),
+        commitChatMessages(
+          Array.isArray(messages) ? messages : [],
+          { sequence: messageRequestSequence },
+        );
+      })() : Promise.resolve(),
     ]);
     const failures = [stateRefresh, messageRefresh].filter(
       (result) => result.status === 'rejected',

@@ -32,6 +32,7 @@ import {
 } from "@/lib/whatsapp/flow-sessions";
 import { ingestAndPersistInboundWhatsAppMedia } from "@/lib/whatsapp/media";
 import { sendWhatsAppFlow, sendWhatsAppText } from "@/lib/whatsapp/meta";
+import { metaProviderCodeFromError } from "@/lib/whatsapp/provider-failure";
 import { processIncomingObraMessage } from "@/lib/whatsapp/obra-engine";
 import {
   materializeProgressEvidenceLocationDelivery,
@@ -790,6 +791,7 @@ function automaticProviderFailureEvidence(error, {
   const providerStatus = Number.isInteger(status) && status >= 100 && status <= 599
     ? status
     : null;
+  const providerCode = metaProviderCodeFromError(error);
   const controlledCode = SAFE_AUTOMATIC_PROVIDER_FAILURE_CODES.has(error?.code)
     ? error.code
     : null;
@@ -806,6 +808,7 @@ function automaticProviderFailureEvidence(error, {
   return {
     failureCode,
     ...(providerStatus ? { providerStatus } : {}),
+    ...(providerCode ? { providerCode } : {}),
   };
 }
 

@@ -41,6 +41,7 @@ import {
   getWhatsAppFlowSessionTtlMs,
   validateWhatsAppFlowReply,
 } from "@/lib/whatsapp/flows";
+import { normalizeMetaProviderCode } from "@/lib/whatsapp/provider-failure";
 import {
   consumeWhatsAppFlowSession,
   issueWhatsAppFlowSession,
@@ -1492,6 +1493,9 @@ function automaticWhatsAppDeliveryMetadata(
       ...(["failed", "unknown"].includes(dispatchState) && failureEvidence?.providerStatus
         ? { providerStatus: failureEvidence.providerStatus }
         : {}),
+      ...(["failed", "unknown"].includes(dispatchState) && failureEvidence?.providerCode
+        ? { providerCode: failureEvidence.providerCode }
+        : {}),
     },
   };
 }
@@ -1569,15 +1573,25 @@ function automaticWhatsAppPreProviderReleaseMetadata(
   };
 }
 
-function automaticWhatsAppFailureEvidence({ failureCode, providerStatus, state }) {
+function automaticWhatsAppFailureEvidence({
+  failureCode,
+  providerStatus,
+  providerCode,
+  state,
+}) {
   const failureCodeSupplied = failureCode !== undefined && failureCode !== null;
   const providerStatusSupplied = providerStatus !== undefined && providerStatus !== null;
+  const providerCodeSupplied = providerCode !== undefined && providerCode !== null;
   const normalizedFailureCode = typeof failureCode === "string"
     ? failureCode.trim().toUpperCase()
     : "";
   const normalizedProviderStatus = typeof providerStatus === "number" ? providerStatus : null;
+  const normalizedProviderCode = normalizeMetaProviderCode(providerCode);
   if (
-    (state === "accepted" && (failureCodeSupplied || providerStatusSupplied))
+    (
+      state === "accepted"
+      && (failureCodeSupplied || providerStatusSupplied || providerCodeSupplied)
+    )
     || (
       failureCodeSupplied
       && !AUTOMATIC_WHATSAPP_FAILURE_CODE_PATTERN.test(normalizedFailureCode)
@@ -1590,15 +1604,18 @@ function automaticWhatsAppFailureEvidence({ failureCode, providerStatus, state }
         || normalizedProviderStatus > 599
       )
     )
+    || (providerCodeSupplied && typeof providerCode !== "number")
+    || (providerCodeSupplied && !normalizedProviderCode)
   ) {
     throw webhookProcessingError(
-      "Automatic WhatsApp failure evidence must be a bounded machine code and HTTP status.",
+      "Automatic WhatsApp failure evidence must use bounded machine, HTTP and provider codes.",
       "WEBHOOK_PAYLOAD_INVALID",
     );
   }
   return {
     ...(normalizedFailureCode ? { failureCode: normalizedFailureCode } : {}),
     ...(normalizedProviderStatus ? { providerStatus: normalizedProviderStatus } : {}),
+    ...(normalizedProviderCode ? { providerCode: normalizedProviderCode } : {}),
   };
 }
 
@@ -2655,6 +2672,7 @@ export async function settleAutomaticWhatsAppDelivery({
   providerMessageId,
   failureCode,
   providerStatus,
+  providerCode,
   now = new Date(),
 }) {
   const settledAt = new Date(now);
@@ -2686,6 +2704,7 @@ export async function settleAutomaticWhatsAppDelivery({
   const failureEvidence = automaticWhatsAppFailureEvidence({
     failureCode,
     providerStatus,
+    providerCode,
     state: normalizedState,
   });
   if (!hasDurableDatabase()) {

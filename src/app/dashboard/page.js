@@ -6,6 +6,10 @@ import { listCanonicalTasks } from '@/lib/canonical-tasks';
 import { fieldWorkerWhatsAppRole } from '@/lib/field-workers';
 import { publicTenantAiSettings } from '@/lib/ai/tenant-settings';
 import {
+  CONVERSATION_READ_PERMISSION,
+  loadDashboardConversationMessages,
+} from '@/lib/conversation-access';
+import {
   MEDICAL_EVIDENCE_PERMISSION,
   SOURCE_EVIDENCE_PERMISSION,
   sanitizeProjectStateMedicalData,
@@ -30,6 +34,7 @@ export default async function DashboardPage() {
 
   const prisma = getPrisma();
   const canManageField = hasTenantPermission(access, 'org:field:manage');
+  const canReadConversations = hasTenantPermission(access, CONVERSATION_READ_PERMISSION);
   const canReadMedicalEvidence = hasTenantPermission(access, MEDICAL_EVIDENCE_PERMISSION);
   const canReadSourceEvidence = hasTenantPermission(access, SOURCE_EVIDENCE_PERMISSION);
   const canReadOperationalProposals = hasTenantPermission(
@@ -54,7 +59,10 @@ export default async function DashboardPage() {
     canonicalTasks,
   ] = await Promise.all([
     getAppStateSnapshot(access),
-    getMessages(access, {
+    loadDashboardConversationMessages({
+      access,
+      allowed: canReadConversations,
+      loadMessages: getMessages,
       includeMedicalEvidence: canReadMedicalEvidence,
       includeSourceEvidence: canReadSourceEvidence,
     }),
@@ -118,6 +126,7 @@ export default async function DashboardPage() {
         pendingOperationalProposalCount,
         aiSupervisorEnabled: aiSettings.supervisorEnabled,
         aiAudioTranscriptionEnabled: aiSettings.audioTranscriptionEnabled,
+        canReadConversations,
         canManageField,
         fieldWorkers: fieldWorkers.map((worker) => ({
           id: worker.id,
@@ -133,6 +142,7 @@ export default async function DashboardPage() {
         orgRole: access.orgRole,
         tenantRole: access.tenantRole,
         organization: {
+          id: access.organization.id,
           name: access.organization.name,
           plan: access.organization.subscriptionPlan,
           subscriptionStatus: access.organization.subscriptionStatus,

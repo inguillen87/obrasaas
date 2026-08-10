@@ -29,6 +29,7 @@ import {
   requestBodyErrorResponse,
 } from "@/lib/request-body";
 import { processIncomingObraMessage } from "@/lib/whatsapp/obra-engine";
+import { CONVERSATION_READ_PERMISSION } from "@/lib/conversation-access";
 
 export const runtime = "nodejs";
 const MAX_SIMULATOR_BODY_BYTES = 100_000;
@@ -62,11 +63,16 @@ function simulatorIdentity(scope, idempotencyKey) {
 export async function GET() {
   try {
     const access = await getPlatformAccess();
-    requireTenantPermission(access, "org:projects:read");
-    return Response.json(await getMessages(access, {
-      includeMedicalEvidence: hasTenantPermission(access, MEDICAL_EVIDENCE_PERMISSION),
-      includeSourceEvidence: hasTenantPermission(access, SOURCE_EVIDENCE_PERMISSION),
-    }));
+    requireTenantPermission(access, CONVERSATION_READ_PERMISSION, {
+      subscriptionMode: "read",
+    });
+    return Response.json(
+      await getMessages(access, {
+        includeMedicalEvidence: hasTenantPermission(access, MEDICAL_EVIDENCE_PERMISSION),
+        includeSourceEvidence: hasTenantPermission(access, SOURCE_EVIDENCE_PERMISSION),
+      }),
+      { headers: { "Cache-Control": "private, no-store" } },
+    );
   } catch (error) {
     if (error instanceof AccessError) return accessErrorResponse(error);
     console.error("Failed to load WhatsApp messages:", error);

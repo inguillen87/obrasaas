@@ -6,12 +6,19 @@ import {
   buildScheduleObservations,
   scheduleObservationRequirements,
 } from '@/lib/schedule-observations';
+import {
+  mergeConfirmedBaselineRows,
+  mergeConfirmedForecastRows,
+  startFailSoftScheduleRefreshes,
+  uniqueScheduleRows,
+} from '@/lib/schedule-snapshot-client';
 import styles from './schedule-snapshots-panel.module.css';
 
 const DEFAULT_TIME_ZONE = 'America/Argentina/Buenos_Aires';
 const REQUIREMENTS_PAGE_SIZE = 25;
 const FORECAST_COMPARISON_LIMIT = 50;
 const MAX_RATIONALE_LENGTH = 1_000;
+const SCHEDULE_REFRESH_TIMEOUT_MS = 10_000;
 
 function civilToday(timeZone = DEFAULT_TIME_ZONE) {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -59,6 +66,25 @@ async function responsePayload(response) {
     throw error;
   }
   return payload;
+}
+
+function scheduleRefreshSignal(signal) {
+  const timeoutSignal = AbortSignal.timeout(SCHEDULE_REFRESH_TIMEOUT_MS);
+  return signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
+}
+
+function refreshResourceLabel(resource) {
+  if (resource === 'baselines') return 'líneas base';
+  if (resource === 'forecasts') return 'pronósticos';
+  if (resource === 'tasks') return 'tareas';
+  return 'datos del cronograma';
+}
+
+function nonAbortRefreshFailures(results) {
+  return results.filter((result) => (
+    result.status === 'rejected'
+    && result.reason?.name !== 'AbortError'
+  ));
 }
 
 function taskDatesComplete(task) {
@@ -194,6 +220,7 @@ export default function ScheduleSnapshotsPanel({
   const [busy, setBusy] = useState(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [refreshWarning, setRefreshWarning] = useState('');
   const [baselineName, setBaselineName] = useState(`Línea base contractual · ${today}`);
   const [timeZone, setTimeZone] = useState(DEFAULT_TIME_ZONE);
   const [replaceActiveBaseline, setReplaceActiveBaseline] = useState(false);
@@ -205,6 +232,8 @@ export default function ScheduleSnapshotsPanel({
   const [reviewedRationaleInput, setReviewedRationaleInput] = useState(null);
   const [requirementsPage, setRequirementsPage] = useState(0);
   const operationKeys = useRef(new Map());
+  const backgroundRefresh = useRef(null);
+  const mounted = useRef(true);
 
   const tasks = useMemo(() => (
     tasksTruncated && Array.isArray(loadedTasks)
@@ -212,64 +241,103 @@ export default function ScheduleSnapshotsPanel({
       : Array.isArray(initialTasks) ? initialTasks : []
   ), [initialTasks, loadedTasks, tasksTruncated]);
 
-  const requestData = useCallback(async ({ signal } = {}) => {
-    const [baselineResponse, forecastResponse, fullTasksResponse] = await Promise.all([
-      fetch('/api/schedule/baselines?limit=25', { cache: 'no-store', signal }),
-      fetch('/api/schedule/forecasts?limit=25', { cache: 'no-store', signal }),
-      tasksTruncated
-        ? fetch('/api/tasks?limit=5000', { cache: 'no-store', signal })
-        : Promise.resolve(null),
-    ]);
-    const [baselinePayload, forecastPayload, fullTasksPayload] = await Promise.all([
-      responsePayload(baselineResponse),
-      responsePayload(forecastResponse),
-      fullTasksResponse ? responsePayload(fullTasksResponse) : Promise.resolve(null),
-    ]);
-    const forecastRows = Array.isArray(forecastPayload.forecasts) ? forecastPayload.forecasts : [];
+  const requestBaselines = useCallback(async ({ signal } = {}) => {
+    const payload = await responsePayload(await fetch(
+      '/api/schedule/baselines?limit=25',
+      { cache: 'no-store', signal: scheduleRefreshSignal(signal) },
+    ));
+    return uniqueScheduleRows(payload.baselines);
+  }, []);
+
+  const requestForecastData = useCallback(async ({ signal, confirmedForecast = null } = {}) => {
+    const forecastPayload = await responsePayload(await fetch(
+      '/api/schedule/forecasts?limit=25',
+      { cache: 'no-store', signal: scheduleRefreshSignal(signal) },
+    ));
+    const fetchedForecastRows = uniqueScheduleRows(forecastPayload.forecasts);
+    const forecastRows = confirmedForecast
+      ? mergeConfirmedForecastRows(fetchedForecastRows, confirmedForecast)
+      : fetchedForecastRows;
     let latestForecastDetail = null;
     let latestForecastDetailError = '';
-    const latestForecastId = typeof forecastRows[0]?.id === 'string' ? forecastRows[0].id : null;
+    const latestForecastId = typeof forecastRows[0]?.id === 'string'
+      ? forecastRows[0].id
+      : null;
     if (latestForecastId) {
       try {
         const detailPayload = await responsePayload(await fetch(
           `/api/schedule/forecasts/${encodeURIComponent(latestForecastId)}`,
-          { cache: 'no-store', signal },
+          { cache: 'no-store', signal: scheduleRefreshSignal(signal) },
         ));
         if (detailPayload?.forecast?.id !== latestForecastId) {
           throw new Error('El detalle recibido no corresponde al último forecast.');
         }
         latestForecastDetail = detailPayload.forecast;
       } catch (detailError) {
-        if (detailError?.name === 'AbortError') throw detailError;
-        latestForecastDetailError = detailError?.message
-          || 'No se pudo cargar el detalle comparativo del último forecast.';
+        if (signal?.aborted) throw detailError;
+        latestForecastDetailError = detailError?.name === 'TimeoutError'
+          ? 'El detalle comparativo tardó demasiado en responder.'
+          : detailError?.message || 'No se pudo cargar el detalle comparativo del último forecast.';
       }
     }
     return {
-      baselines: Array.isArray(baselinePayload.baselines) ? baselinePayload.baselines : [],
       forecastDetail: latestForecastDetail,
       forecastDetailError: latestForecastDetailError,
       forecasts: forecastRows,
-      fullTasks: fullTasksPayload
-        ? (Array.isArray(fullTasksPayload.tasks) ? fullTasksPayload.tasks : [])
-        : null,
     };
+  }, []);
+
+  const requestFullTasks = useCallback(async ({ signal } = {}) => {
+    if (!tasksTruncated) return null;
+    const payload = await responsePayload(await fetch(
+      '/api/tasks?limit=5000',
+      { cache: 'no-store', signal: scheduleRefreshSignal(signal) },
+    ));
+    return Array.isArray(payload.tasks) ? payload.tasks : [];
   }, [tasksTruncated]);
 
-  const applyData = useCallback((data) => {
-    setBaselines(data.baselines);
-    setForecasts(data.forecasts);
-    setForecastDetail(data.forecastDetail || null);
-    setForecastDetailError(data.forecastDetailError || '');
-    if (data.fullTasks) setLoadedTasks(data.fullTasks);
-  }, []);
+  const refreshResources = useCallback(({
+    confirmedBaseline = null,
+    confirmedForecast = null,
+    signal,
+  } = {}) => startFailSoftScheduleRefreshes({
+    baselines: () => requestBaselines({ signal }),
+    forecasts: () => requestForecastData({
+      signal,
+      confirmedForecast,
+    }),
+    ...(tasksTruncated ? { tasks: () => requestFullTasks({ signal }) } : {}),
+  }, {
+    onFulfilled(resource, data) {
+      if (signal?.aborted) return;
+      if (resource === 'baselines') {
+        setBaselines(confirmedBaseline
+          ? mergeConfirmedBaselineRows(data, confirmedBaseline)
+          : data);
+      }
+      if (resource === 'forecasts') {
+        setForecasts(data.forecasts);
+        setForecastDetail(data.forecastDetail || null);
+        setForecastDetailError(data.forecastDetailError || '');
+      }
+      if (resource === 'tasks' && data) setLoadedTasks(data);
+    },
+  }), [requestBaselines, requestForecastData, requestFullTasks, tasksTruncated]);
 
   useEffect(() => {
     const controller = new AbortController();
     let active = true;
-    requestData({ signal: controller.signal })
-      .then((data) => {
-        if (active) applyData(data);
+    refreshResources({ signal: controller.signal })
+      .then((results) => {
+        if (!active) return;
+        const failures = nonAbortRefreshFailures(results);
+        if (failures.length === results.length && results.length > 0) {
+          setError('No se pudo cargar el control contractual del cronograma.');
+        } else if (failures.length > 0) {
+          setRefreshWarning(
+            `No se pudieron actualizar ${failures.map(({ resource }) => refreshResourceLabel(resource)).join(', ')}.`,
+          );
+        }
       })
       .catch((loadError) => {
         if (active && loadError.name !== 'AbortError') {
@@ -283,7 +351,44 @@ export default function ScheduleSnapshotsPanel({
       active = false;
       controller.abort();
     };
-  }, [applyData, project.id, requestData]);
+  }, [project.id, refreshResources]);
+
+  const refreshAfterCommit = useCallback(({ confirmedBaseline, confirmedForecast } = {}) => {
+    if (!mounted.current) return;
+    backgroundRefresh.current?.abort();
+    const controller = new AbortController();
+    backgroundRefresh.current = controller;
+    setRefreshWarning('');
+
+    void refreshResources({
+      confirmedBaseline,
+      confirmedForecast,
+      signal: controller.signal,
+    }).then((results) => {
+      if (!mounted.current || controller.signal.aborted) return;
+      const failures = nonAbortRefreshFailures(results);
+      if (failures.length === 0) return;
+      const labels = [...new Set(failures.map(({ resource }) => refreshResourceLabel(resource)))];
+      setRefreshWarning(
+        `La operación quedó guardada, pero no se pudieron refrescar ${labels.join(', ')}. Recargá el panel sin reenviar la acción.`,
+      );
+      console.warn(
+        'Schedule mutation committed, but its follow-up refresh was incomplete:',
+        failures.map(({ resource, reason }) => ({ resource, reason })),
+      );
+    }).finally(() => {
+      if (backgroundRefresh.current === controller) backgroundRefresh.current = null;
+    });
+  }, [refreshResources]);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      backgroundRefresh.current?.abort();
+      backgroundRefresh.current = null;
+    };
+  }, [project.id]);
 
   useEffect(() => {
     const evidenceId = reviewedEvidenceSelection?.evidenceId;
@@ -446,17 +551,20 @@ export default function ScheduleSnapshotsPanel({
         },
         body: JSON.stringify(input),
       }));
+      mergeConfirmedBaselineRows([], payload.baseline);
+      if (!mounted.current) return;
       operationKeys.current.delete(operation.identity);
+      setBaselines((current) => mergeConfirmedBaselineRows(current, payload.baseline));
       setReplaceActiveBaseline(false);
       setNotice(payload.replayed
         ? `La línea base v${payload.baseline.version} ya estaba publicada; no se duplicó.`
         : `Línea base v${payload.baseline.version} publicada y sellada.`);
       onToast?.('Cronograma contractual actualizado.', 'success');
-      applyData(await requestData());
+      refreshAfterCommit({ confirmedBaseline: payload.baseline });
     } catch (publishError) {
-      setError(publishError.message);
+      if (mounted.current) setError(publishError.message);
     } finally {
-      setBusy(null);
+      if (mounted.current) setBusy(null);
     }
   }
 
@@ -517,16 +625,21 @@ export default function ScheduleSnapshotsPanel({
         },
         body: JSON.stringify(input),
       }));
+      mergeConfirmedForecastRows([], payload.forecast);
+      if (!mounted.current) return;
       operationKeys.current.delete(operation.identity);
+      setForecasts((current) => mergeConfirmedForecastRows(current, payload.forecast));
+      setForecastDetail(null);
+      setForecastDetailError('');
       setNotice(payload.replayed
         ? 'Este corte ya estaba calculado; se recuperó el mismo resultado.'
         : `Forecast calculado: ${deltaLabel(payload.forecast.finishDeltaDays)} respecto de la línea base.`);
       onToast?.('Pronóstico determinista guardado.', 'success');
-      applyData(await requestData());
+      refreshAfterCommit({ confirmedForecast: payload.forecast });
     } catch (forecastError) {
-      setError(forecastError.message);
+      if (mounted.current) setError(forecastError.message);
     } finally {
-      setBusy(null);
+      if (mounted.current) setBusy(null);
     }
   }
 
@@ -554,6 +667,7 @@ export default function ScheduleSnapshotsPanel({
 
       {error && <div className={styles.error} role="alert"><i className="fa-solid fa-triangle-exclamation" aria-hidden="true" />{error}</div>}
       {notice && <div className={styles.notice} role="status"><i className="fa-solid fa-circle-check" aria-hidden="true" />{notice}</div>}
+      {refreshWarning && <div className={styles.refreshWarning} role="status"><i className="fa-solid fa-rotate" aria-hidden="true" />{refreshWarning}</div>}
 
       <div className={styles.metrics} aria-label="Estado contractual del cronograma">
         <article>

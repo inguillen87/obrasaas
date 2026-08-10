@@ -83,6 +83,27 @@ function deliveryStatus(value) {
   return DELIVERY_STATES.has(normalized) ? normalized : 'UNKNOWN';
 }
 
+function normalizeDeliveryFailure(value) {
+  const source = objectValue(value);
+  const providerCode = typeof source.providerCode === 'number'
+    ? source.providerCode
+    : null;
+  const title = textValue(source.title).slice(0, 120);
+  const detail = textValue(source.detail).slice(0, 360);
+  if (
+    !Number.isSafeInteger(providerCode)
+    || providerCode < 1
+    || providerCode > 999_999
+    || !title
+    || !detail
+  ) return null;
+  return {
+    providerCode,
+    title,
+    detail,
+  };
+}
+
 function directionValue(value) {
   return textValue(value).toUpperCase() === 'OUTBOUND' ? 'OUTBOUND' : 'INBOUND';
 }
@@ -112,6 +133,7 @@ function normalizeMessage(raw) {
     sentAt: source.sentAt || source.createdAt || source.timestamp || null,
     recordedAt: source.recordedAt || source.createdAt || source.sentAt || null,
     status: deliveryStatus(source.status || source.deliveryStatus),
+    deliveryFailure: normalizeDeliveryFailure(source.deliveryFailure),
     sourceEvidenceViewable: source.sourceEvidenceViewable === true,
     progressEvidenceEligible: source.progressEvidenceEligible === true,
     progressEvidenceLinked: source.progressEvidenceLinked === true,
@@ -491,6 +513,20 @@ function AttachmentCard({ canOpenSourceEvidence = false, message }) {
         <i className={`fa-solid fa-shield-halved ${styles.attachmentShield}`} aria-hidden="true" />
       )}
     </div>
+  );
+}
+
+function DeliveryFailure({ failure }) {
+  if (!failure) return null;
+  return (
+    <aside className={styles.deliveryFailure} aria-label="Detalle del rechazo de Meta">
+      <span aria-hidden="true"><i className="fa-solid fa-triangle-exclamation" /></span>
+      <div>
+        <strong>{failure.title}</strong>
+        <small>{failure.detail}</small>
+      </div>
+      <code>Meta {failure.providerCode}</code>
+    </aside>
   );
 }
 
@@ -1896,6 +1932,7 @@ export default function InboxClient({
                             aria-label={outbound ? 'Mensaje enviado' : 'Mensaje recibido'}
                           >
                             {message.body && <p>{message.body}</p>}
+                            <DeliveryFailure failure={message.deliveryFailure} />
                             <AttachmentCard
                               canOpenSourceEvidence={canViewSourceEvidence}
                               message={message}

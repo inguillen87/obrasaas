@@ -49,6 +49,7 @@ function deliveryJournal(dispatchState, {
   settled = null,
   failureCode = null,
   providerStatus = null,
+  providerCode = null,
   releaseCount = null,
   releasedAt = null,
 } = {}) {
@@ -62,6 +63,7 @@ function deliveryJournal(dispatchState, {
     ...(settled ? { settledAt: settled } : {}),
     ...(failureCode ? { failureCode } : {}),
     ...(providerStatus ? { providerStatus } : {}),
+    ...(providerCode ? { providerCode } : {}),
     ...(releaseCount ? { preProviderReleaseCount: releaseCount } : {}),
     ...(releasedAt ? { lastPreProviderReleasedAt: releasedAt } : {}),
   };
@@ -520,7 +522,7 @@ for (const terminalState of ['failed', 'unknown']) {
     const store = deliveryStore();
     const claimed = await claimAutomaticWhatsAppDelivery(claimInput({ now: claimedAt }));
     const failureEvidence = terminalState === 'failed'
-      ? { failureCode: 'META_HTTP_REJECTED', providerStatus: 400 }
+      ? { failureCode: 'META_HTTP_REJECTED', providerStatus: 400, providerCode: 131030 }
       : { failureCode: 'META_TRANSPORT_AMBIGUOUS' };
 
     await assert.rejects(
@@ -539,6 +541,16 @@ for (const terminalState of ['failed', 'unknown']) {
         claim: claimed.claim,
         state: terminalState,
         failureCode: 'Meta rechazó el teléfono +5491112345678',
+      }),
+      (error) => error.code === 'WEBHOOK_PAYLOAD_INVALID',
+    );
+    assert.equal(store.message.status, 'sending');
+
+    await assert.rejects(
+      settleAutomaticWhatsAppDelivery({
+        claim: claimed.claim,
+        state: terminalState,
+        providerCode: '131030',
       }),
       (error) => error.code === 'WEBHOOK_PAYLOAD_INVALID',
     );

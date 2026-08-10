@@ -52,9 +52,9 @@ test('dashboard accepts one safe reviewed-evidence pair and rejects duplicate or
 });
 
 test('contractual schedule panel is API-backed, replay-safe and never claims planned dates as actuals', () => {
-  assert.match(panel, /fetch\('\/api\/schedule\/baselines\?limit=25'/);
-  assert.match(panel, /fetch\('\/api\/schedule\/forecasts\?limit=25'/);
-  assert.match(panel, /fetch\('\/api\/tasks\?limit=5000'/);
+  assert.match(panel, /fetch\(\s*'\/api\/schedule\/baselines\?limit=25'/);
+  assert.match(panel, /fetch\(\s*'\/api\/schedule\/forecasts\?limit=25'/);
+  assert.match(panel, /fetch\(\s*'\/api\/tasks\?limit=5000'/);
   assert.match(panel, /'idempotency-key': operation\.key/);
   assert.match(panel, /buildScheduleObservations\(tasks, observationEntries, \{ asOfDate \}\)/);
   assert.match(panel, /Las fechas reales no se autocompletan con el plan/);
@@ -63,7 +63,32 @@ test('contractual schedule panel is API-backed, replay-safe and never claims pla
   assert.match(panel, /projectStartMissing = !project\?\.startsAt/);
   assert.match(panel, /href="\/dashboard\/projects">Completá el inicio de la obra/);
   assert.match(panel, /tasks\.length === 0 \|\| missingDateTasks\.length > 0/);
+  assert.match(panel, /const SCHEDULE_REFRESH_TIMEOUT_MS = 10_000/);
+  assert.match(panel, /startFailSoftScheduleRefreshes/);
+  assert.match(panel, /setBaselines\(\(current\) => mergeConfirmedBaselineRows\(current, payload\.baseline\)\)/);
+  assert.match(panel, /setForecasts\(\(current\) => mergeConfirmedForecastRows\(current, payload\.forecast\)\)/);
+  assert.match(panel, /refreshAfterCommit\(\{ confirmedBaseline: payload\.baseline \}\)/);
+  assert.match(panel, /refreshAfterCommit\(\{ confirmedForecast: payload\.forecast \}\)/);
+  assert.doesNotMatch(panel, /await refreshAfterCommit/);
+  assert.doesNotMatch(panel, /applyData\(await requestData\(\)\)/);
+  assert.match(panel, /const mounted = useRef\(true\)/);
+  assert.ok((panel.match(/if \(!mounted\.current\) return;/g) || []).length >= 3);
+  assert.match(panel, /if \(!mounted\.current \|\| controller\.signal\.aborted\) return/);
+  assert.match(
+    panel,
+    /useEffect\(\(\) => \{\s*mounted\.current = true;\s*return \(\) => \{\s*mounted\.current = false;\s*backgroundRefresh\.current\?\.abort\(\)/,
+  );
+  assert.equal(
+    (panel.match(/if \(mounted\.current\) setError\(/g) || []).length,
+    2,
+  );
+  assert.equal(
+    (panel.match(/if \(mounted\.current\) setBusy\(null\)/g) || []).length,
+    2,
+  );
+  assert.match(panel, /La operación quedó guardada, pero no se pudieron refrescar/);
   assert.match(css, /\.readinessWarning/);
+  assert.match(css, /\.refreshWarning/);
   assert.match(css, /@media\(max-width:640px\)/);
 });
 
@@ -102,6 +127,7 @@ test('reviewed evidence requires an exact review plus a human integer and ration
 
 test('latest forecast detail renders a capped accessible baseline-versus-forecast overlay', () => {
   assert.match(panel, /const FORECAST_COMPARISON_LIMIT = 50/);
+  assert.match(panel, /const forecastRows = confirmedForecast/);
   assert.match(panel, /const latestForecastId = typeof forecastRows\[0\]\?\.id === 'string'/);
   assert.match(
     panel,

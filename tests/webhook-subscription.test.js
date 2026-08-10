@@ -1716,10 +1716,12 @@ test('a deterministic text 4xx becomes failed and a replay never sends twice', a
     assertSubscription: async () => {},
     sendText: async () => {
       providerCalls += 1;
-      throw Object.assign(new Error('Meta rejected the automatic response.'), {
-        code: 'META_131047',
+      throw Object.assign(new Error('Provider detail must not be persisted.'), {
+        code: 'META_131030',
+        providerCode: 131030,
         status: 400,
         ambiguous: false,
+        error_data: { recipient: '+5491112345678' },
       });
     },
   };
@@ -1754,6 +1756,11 @@ test('a deterministic text 4xx becomes failed and a replay never sends twice', a
   assert.equal(settlements[0].state, 'failed');
   assert.equal(settlements[0].failureCode, 'META_HTTP_REJECTED');
   assert.equal(settlements[0].providerStatus, 400);
+  assert.equal(settlements[0].providerCode, 131030);
+  assert.doesNotMatch(
+    JSON.stringify(settlements[0]),
+    /provider detail|error_data|5491112345678/i,
+  );
 });
 
 test('an ambiguous Flow never falls back to a duplicate text response', async () => {

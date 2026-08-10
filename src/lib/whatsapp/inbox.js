@@ -19,6 +19,10 @@ import {
   resolveClaimedWhatsAppMessageMedia,
 } from '@/lib/whatsapp/media-assets';
 import { sendWhatsAppText } from '@/lib/whatsapp/meta';
+import {
+  metaProviderCodeFromError,
+  metaProviderFailurePresentation,
+} from '@/lib/whatsapp/provider-failure';
 
 const CUSTOMER_CARE_WINDOW_MS = 24 * 60 * 60 * 1_000;
 const DEFAULT_INBOX_CONVERSATION_PAGE_SIZE = 30;
@@ -29,6 +33,7 @@ const MAX_INBOX_CURSOR_LENGTH = 768;
 const MAX_MANUAL_TEXT_LENGTH = 4_096;
 const STALE_MANUAL_SEND_MS = 2 * 60 * 1_000;
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/;
+const MANUAL_FAILURE_CODE_PATTERN = /^[A-Z][A-Z0-9_.:-]{0,79}$/;
 const META_CONVERSATION_PREFIX = 'meta:';
 const MANUAL_SEND_REQUEST_ACTION = 'whatsapp.inbox.send_requested';
 const PUBLIC_DELIVERY_STATUSES = new Set([
@@ -242,6 +247,7 @@ function jsonMetadata(value) {
 function publicMessage(message, {
   includeMedicalEvidence = false,
   includeSourceEvidence = false,
+  env = process.env,
 } = {}) {
   const messageHasSourceMedia = SOURCE_EVIDENCE_KINDS.has(
     String(message?.kind || '').toUpperCase(),
@@ -282,6 +288,14 @@ function publicMessage(message, {
   const status = String(safeMessage.direction || '').toUpperCase() === 'OUTBOUND'
     ? (PUBLIC_DELIVERY_STATUSES.has(rawStatus) ? rawStatus : 'unknown')
     : null;
+  const automaticDelivery = jsonMetadata(rawMetadata.automaticDelivery);
+  const deliveryFailure = ['failed', 'unknown'].includes(status)
+    ? metaProviderFailurePresentation({
+        providerCode: rawMetadata.providerCode ?? automaticDelivery.providerCode,
+        deliveryStatus: status,
+        env,
+      })
+    : null;
   const progressEvidenceLinked = Boolean(
     includeSourceEvidence
     && safeMessage.progressEvidenceSource?.id
@@ -313,6 +327,7 @@ function publicMessage(message, {
       ? 'Evidencia adjunta recibida. El archivo y su contenido están restringidos para este rol.'
       : redactSensitiveText(safeMessage.body || ''),
     status,
+    ...(deliveryFailure ? { deliveryFailure } : {}),
     sourceEvidenceViewable,
     progressEvidenceEligible,
     progressEvidenceLinked,
@@ -667,6 +682,7 @@ export async function listWhatsAppInbox({
       {
         includeMedicalEvidence,
         includeSourceEvidence,
+        env,
         unreadCount: unreadCounts.get(conversation.id) || 0,
       },
     )),
@@ -832,12 +848,13 @@ export async function getWhatsAppConversationMessages({
       {
         includeMedicalEvidence,
         includeSourceEvidence,
+        env,
         unreadCount: unreadCounts.get(conversation.id) || 0,
       },
     ),
     messages: orderedMessages.map((message) => publicMessage(
       message,
-      { includeMedicalEvidence, includeSourceEvidence },
+      { includeMedicalEvidence, includeSourceEvidence, env },
     )),
     window,
     composerCapability: manualComposerCapability({
@@ -1229,6 +1246,13 @@ function manualMessageMetadata({ access, identity, payloadDigest, extra = {} }) 
   };
 }
 
+function manualProviderFailureCode(error, providerCode, ambiguous) {
+  if (providerCode) return `META_${providerCode}`;
+  const candidate = String(error?.code || error?.name || '').trim().toUpperCase();
+  if (MANUAL_FAILURE_CODE_PATTERN.test(candidate)) return candidate;
+  return ambiguous ? 'META_DELIVERY_AMBIGUOUS' : 'META_DELIVERY_REJECTED';
+}
+
 function assertManualSendReplay(existing, { conversationId, payloadDigest }) {
   if (
     existing.conversationId !== conversationId
@@ -1376,7 +1400,7 @@ export async function sendManualWhatsAppMessage({
       }, { isolationLevel: 'ReadCommitted' });
     }
     return {
-      message: manualPublicMessage(reconciled, { includeMedicalEvidence }),
+      message: manualPublicMessage(reconciled, { includeMedicalEvidence, env }),
       window: whatsAppCustomerCareWindow(inbound?.sentAt, observedAt),
       idempotent: true,
     };
@@ -1464,7 +1488,7 @@ export async function sendManualWhatsAppMessage({
     }, { isolationLevel: 'ReadCommitted' });
     if (reservation.idempotent) {
       return {
-        message: manualPublicMessage(reservation.message, { includeMedicalEvidence }),
+        message: manualPublicMessage(reservation.message, { includeMedicalEvidence, env }),
         window: reservation.window,
         idempotent: true,
       };
@@ -1483,7 +1507,7 @@ export async function sendManualWhatsAppMessage({
       );
     }
     return {
-      message: manualPublicMessage(existing, { includeMedicalEvidence }),
+      message: manualPublicMessage(existing, { includeMedicalEvidence, env }),
       window,
       idempotent: true,
     };
@@ -1508,6 +1532,13 @@ export async function sendManualWhatsAppMessage({
   } = {}) {
     const ambiguous = forceAmbiguous || ambiguousSendFailure(error);
     const status = ambiguous ? 'unknown' : 'failed';
+    const providerCode = metaProviderCodeFromError(error);
+    const failureCode = manualProviderFailureCode(error, providerCode, ambiguous);
+    const deliveryFailure = metaProviderFailurePresentation({
+      providerCode,
+      deliveryStatus: status,
+      env,
+    });
     const failureData = {
       status,
       metadata: manualMessageMetadata({
@@ -1515,7 +1546,8 @@ export async function sendManualWhatsAppMessage({
         identity,
         payloadDigest,
         extra: {
-          failureCode: boundedText(error?.code || error?.name || 'META_SEND_ERROR', 80),
+          failureCode,
+          ...(providerCode ? { providerCode } : {}),
           failedAt: nowDate(clock).toISOString(),
         },
       }),
@@ -1556,6 +1588,7 @@ export async function sendManualWhatsAppMessage({
             conversationId: conversation.id,
             providerStatus: status,
             failureCode: failureData.metadata.failureCode,
+            ...(providerCode ? { providerCode } : {}),
           },
         },
       }),
@@ -1573,7 +1606,9 @@ export async function sendManualWhatsAppMessage({
     const responseError = new WhatsAppInboxError(
       ambiguous
         ? 'Meta no confirmó la entrega. No se reenviará automáticamente para evitar duplicados.'
-        : 'Meta rechazó el mensaje.',
+        : deliveryFailure
+          ? `${deliveryFailure.title}. ${deliveryFailure.detail}`
+          : 'Meta rechazó el mensaje.',
       {
         code: ambiguous ? 'WHATSAPP_DELIVERY_UNKNOWN' : 'WHATSAPP_SEND_REJECTED',
         status: 502,
@@ -1706,7 +1741,7 @@ export async function sendManualWhatsAppMessage({
 
   if (outcome.responseError) throw outcome.responseError;
   return {
-    message: manualPublicMessage(outcome.message, { includeMedicalEvidence }),
+    message: manualPublicMessage(outcome.message, { includeMedicalEvidence, env }),
     window: outcome.window,
     idempotent: false,
   };

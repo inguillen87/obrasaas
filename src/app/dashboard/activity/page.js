@@ -1,13 +1,19 @@
 import ActivityClient from './activity-client';
 import styles from './activity.module.css';
-import { getPlatformAccess, requireTenantPermission } from '@/lib/access';
+import {
+  getPlatformAccess,
+  hasTenantPermission,
+  requireTenantPermission,
+} from '@/lib/access';
 import { sanitizeActivityEntry } from '@/lib/activity-export';
+import { CONVERSATION_READ_PERMISSION } from '@/lib/conversation-access';
 import {
   isRestrictedEvidenceRecord,
   isRestrictedOperationalIncident,
   restrictedOperationalDescription,
 } from '@/lib/medical-privacy';
 import { getPrisma } from '@/lib/prisma';
+import { metaProviderFailurePresentation } from '@/lib/whatsapp/provider-failure';
 
 export const dynamic = 'force-dynamic';
 
@@ -109,27 +115,41 @@ function messageEntry(message) {
   const sender = metadata.displayName || message.conversation.displayName || 'Canal de obra';
   const kind = message.kind === 'TEXT' ? 'mensaje' : message.kind.toLowerCase();
   const restricted = isRestrictedEvidenceRecord(message);
+  const deliveryStatus = String(message.status || '').trim().toLowerCase();
+  const automaticDelivery = jsonObject(metadata.automaticDelivery);
+  const deliveryFailure = !inbound && ['failed', 'unknown'].includes(deliveryStatus)
+    ? metaProviderFailurePresentation({
+        providerCode: metadata.providerCode ?? automaticDelivery.providerCode,
+        deliveryStatus,
+      })
+    : null;
   return {
     id: `message-${message.id}`,
     occurredAt: message.sentAt.toISOString(),
     group: 'FIELD',
     category: 'MESSAGE',
-    severity: 'INFO',
+    severity: deliveryFailure ? 'WARNING' : 'INFO',
     source: message.conversation.channel || 'whatsapp',
     title: restricted
       ? 'Reporte de campo restringido'
       : inbound
         ? `Reporte recibido · ${sender}`
-        : 'Respuesta de ObraSaaS',
+        : deliveryFailure
+          ? `${deliveryFailure.title} · Meta ${deliveryFailure.providerCode}`
+          : 'Respuesta de ObraSaaS',
     description: restricted
       ? restrictedOperationalDescription()
-      : truncate(message.body || `${kind} sin texto`, 560),
+      : deliveryFailure
+        ? deliveryFailure.detail
+        : truncate(message.body || `${kind} sin texto`, 560),
     actor: restricted
       ? 'Canal protegido'
       : inbound
         ? sender
         : 'Asistente de obra',
-    reference: `${inbound ? 'entrada' : 'salida'} · ${kind}`,
+    reference: `${inbound ? 'entrada' : 'salida'} · ${kind}${deliveryFailure
+      ? ` · Meta ${deliveryFailure.providerCode}`
+      : ''}`,
   };
 }
 
@@ -210,7 +230,7 @@ function attendanceEntry(entry) {
   };
 }
 
-async function loadActivity(access) {
+async function loadActivity(access, { canReadConversations = false } = {}) {
   const prisma = getPrisma();
   const projectId = access.project.id;
   const organizationId = access.organization.id;
@@ -229,12 +249,19 @@ async function loadActivity(access) {
       orderBy: { createdAt: 'desc' },
       take: 120,
     }),
-    prisma.message.findMany({
-      where: { conversation: { projectId } },
-      include: { conversation: { select: { displayName: true, channel: true } } },
-      orderBy: { sentAt: 'desc' },
-      take: 120,
-    }),
+    canReadConversations
+      ? prisma.message.findMany({
+          where: {
+            conversation: {
+              projectId,
+              project: { organizationId },
+            },
+          },
+          include: { conversation: { select: { displayName: true, channel: true } } },
+          orderBy: { sentAt: 'desc' },
+          take: 120,
+        })
+      : Promise.resolve([]),
     prisma.webhookEvent.findMany({
       where: { projectId },
       orderBy: { createdAt: 'desc' },
@@ -272,8 +299,10 @@ async function loadActivity(access) {
 
 export default async function ActivityPage() {
   const access = await getPlatformAccess();
-  requireTenantPermission(access, 'org:projects:read');
-  const activity = await loadActivity(access);
+  requireTenantPermission(access, 'org:projects:read', { subscriptionMode: 'read' });
+  const activity = await loadActivity(access, {
+    canReadConversations: hasTenantPermission(access, CONVERSATION_READ_PERMISSION),
+  });
 
   return (
     <div className={styles.shell}>

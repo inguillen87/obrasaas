@@ -1135,6 +1135,54 @@ test('automatic replies prepared for durable delivery remain visible as queued',
   assert.match(clientSource, /PREPARED: \{[^}]*label: 'En cola'/);
 });
 
+test('automatic Meta 131030 rejection is projected without provider payload or recipient data', async () => {
+  const { prisma } = routePrisma({
+    messages: [
+      message({
+        direction: 'OUTBOUND',
+        externalId: 'obrasaas-reply:wamid.inbound-a',
+        providerMessageId: null,
+        body: 'Respuesta operativa rechazada.',
+        status: 'failed',
+        metadata: {
+          automaticDelivery: {
+            version: 1,
+            source: 'automatic-webhook',
+            dispatchState: 'failed',
+            failureCode: 'META_HTTP_REJECTED',
+            providerStatus: 400,
+            providerCode: 131030,
+          },
+          providerMessage: 'must-not-leave-storage',
+          error_data: { recipient: '+5491112345678' },
+        },
+      }),
+    ],
+  });
+  const handlers = createWhatsAppConversationMessageHandlers({
+    resolveAccess: async () => access({ tenantRole: 'SITE_MANAGER' }),
+    authorize: () => undefined,
+    prismaFactory: () => prisma,
+    clock: () => NOW,
+    env: { ...CONFIGURED_META_ENV, NODE_ENV: 'test' },
+  });
+
+  const response = await handlers.GET(messagesRequest(), routeContext());
+  const payload = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(payload.messages[0].deliveryFailure, {
+    providerCode: 131030,
+    code: 'META_TEST_RECIPIENT_NOT_ENABLED',
+    title: 'Destinatario de prueba no habilitado',
+    detail: 'Agregá el número a los destinatarios de prueba de Meta y repetí la prueba como un envío nuevo.',
+  });
+  assert.doesNotMatch(
+    JSON.stringify(payload),
+    /must-not-leave-storage|error_data|5491112345678/i,
+  );
+});
+
 test('read and manual-send handlers enforce distinct RBAC permissions before database access', async () => {
   const forbidden = () => {
     throw new AccessError('Permission required.', {
@@ -1771,7 +1819,7 @@ test('manual text is blocked outside the 24-hour window before calling Meta', as
 });
 
 test('an explicit Meta rejection is durable and an idempotent retry never sends twice', async () => {
-  const { prisma, records } = manualSendPrisma();
+  const { calls, prisma, records } = manualSendPrisma();
   let providerCalls = 0;
   const input = {
     prisma,
@@ -1781,27 +1829,51 @@ test('an explicit Meta rejection is durable and an idempotent retry never sends 
     idempotencyKey: 'manual-message-rejected-a',
     sendText: async () => {
       providerCalls += 1;
-      throw Object.assign(new Error('Meta rejected the request.'), {
-        code: 'META_131047',
+      throw Object.assign(new Error('Provider text with reflected recipient +5491112345678'), {
+        code: 'META_131030',
+        providerCode: 131030,
         status: 400,
         ambiguous: false,
+        error_data: { recipient: '+5491112345678' },
       });
     },
     clock: () => NOW,
-    env: CONFIGURED_META_ENV,
+    env: { ...CONFIGURED_META_ENV, NODE_ENV: 'test' },
   };
 
+  let rejection;
   await assert.rejects(
     sendManualWhatsAppMessage(input),
-    (error) => error?.code === 'WHATSAPP_SEND_REJECTED',
+    (error) => {
+      rejection = error;
+      return error?.code === 'WHATSAPP_SEND_REJECTED';
+    },
   );
   const retry = await sendManualWhatsAppMessage(input);
+  const stored = [...records.values()][0];
 
   assert.equal(providerCalls, 1);
   assert.equal(records.size, 1);
-  assert.equal([...records.values()][0].status, 'failed');
+  assert.equal(stored.status, 'failed');
+  assert.equal(stored.metadata.providerCode, 131030);
+  assert.equal(stored.metadata.failureCode, 'META_131030');
+  assert.doesNotMatch(
+    JSON.stringify(stored.metadata),
+    /reflected recipient|error_data|5491112345678/i,
+  );
+  assert.match(rejection.message, /Destinatario de prueba no habilitado/i);
   assert.equal(retry.idempotent, true);
   assert.equal(retry.message.status, 'failed');
+  assert.deepEqual(retry.message.deliveryFailure, {
+    providerCode: 131030,
+    code: 'META_TEST_RECIPIENT_NOT_ENABLED',
+    title: 'Destinatario de prueba no habilitado',
+    detail: 'Agregá el número a los destinatarios de prueba de Meta y repetí la prueba como un envío nuevo.',
+  });
+  const rejectedAudit = calls.find(([, args]) => (
+    args?.data?.action === 'whatsapp.inbox.message_rejected'
+  ));
+  assert.equal(rejectedAudit?.[1]?.data?.metadata?.providerCode, 131030);
 });
 
 test('an ambiguous Meta transport failure remains unknown and is never auto-retried', async () => {

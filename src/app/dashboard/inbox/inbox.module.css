@@ -1086,6 +1086,51 @@
   white-space: pre-wrap;
 }
 
+.deliveryFailure {
+  display: grid;
+  min-width: min(260px, 64vw);
+  margin-top: 8px;
+  padding: 9px 10px;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 8px;
+  border: 1px solid rgba(255, 130, 117, 0.24);
+  border-radius: 10px;
+  color: #ffc0b8;
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.deliveryFailure > span {
+  grid-row: 1 / span 2;
+  padding-top: 1px;
+}
+
+.deliveryFailure strong,
+.deliveryFailure small {
+  display: block;
+}
+
+.deliveryFailure strong {
+  color: var(--text-primary);
+  font-size: 0.72rem;
+}
+
+.deliveryFailure small {
+  margin-top: 2px;
+  color: var(--text-secondary);
+  font-size: 0.66rem;
+  line-height: 1.42;
+}
+
+.deliveryFailure code {
+  grid-column: 2;
+  width: fit-content;
+  padding: 2px 5px;
+  border-radius: 5px;
+  color: #ffc0b8;
+  background: rgba(239, 68, 68, 0.12);
+  font-size: 0.62rem;
+}
+
 .attachmentCard {
   display: grid;
   min-width: min(230px, 64vw);
@@ -2123,6 +2168,17 @@
 
 :global(body.light-theme) .outboundMessage {
   background: #dcf8e9;
+}
+
+:global(body.light-theme) .deliveryFailure {
+  border-color: rgba(165, 35, 24, 0.2);
+  color: #a52318;
+  background: rgba(239, 68, 68, 0.06);
+}
+
+:global(body.light-theme) .deliveryFailure code {
+  color: #a52318;
+  background: rgba(165, 35, 24, 0.08);
 }
 
 :global(body.light-theme) .composer,
