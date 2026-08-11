@@ -27,7 +27,18 @@ registerHooks({
         format: 'module',
         shortCircuit: true,
         source: `
-          export function clerkMiddleware(handler) { return handler; }
+          export function clerkMiddleware(handler) {
+            return async (auth, request) => {
+              const response = await handler(auth, request);
+              if (auth.__requestState?.reason) {
+                response.headers.append('x-clerk-auth-reason', auth.__requestState.reason);
+              }
+              if (auth.__requestState?.status) {
+                response.headers.append('x-clerk-auth-status', auth.__requestState.status);
+              }
+              return response;
+            };
+          }
         `,
       };
     }
@@ -105,6 +116,26 @@ const PUBLIC_SELF_AUTHENTICATED_API_PATHS = [
   '/api/webviews/worker-payment-receipt',
 ];
 
+function clerkAuth({
+  onAuth = () => {},
+  onProtect = () => {},
+  requestReason = null,
+  userId = 'user_test',
+} = {}) {
+  const auth = async () => {
+    onAuth();
+    return { userId };
+  };
+  auth.protect = async () => {
+    onProtect();
+  };
+  auth.__requestState = {
+    reason: requestReason,
+    status: userId ? 'signed-in' : 'signed-out',
+  };
+  return auth;
+}
+
 test('Clerk proxy matches and protects every worker-sensitive API path', () => {
   for (const pathname of SENSITIVE_API_PATHS) {
     assert.equal(isProtectedPathname(pathname), true, `${pathname} must require Clerk protection`);
@@ -157,24 +188,110 @@ test('every API Route Handler is exhaustively classified behind Clerk or its own
 });
 
 test('proxy invokes Clerk protection only for classified private paths', async () => {
-  for (const [pathname, expectedCalls] of [
-    ['/api/progress', 1],
-    ['/api/tasks/example', 1],
-    ['/api/cron/protected-uploads', 0],
-    ['/api/webhooks/whatsapp', 0],
+  for (const [pathname, expectedAuthCalls, expectedProtectCalls] of [
+    ['/api/progress', 1, 1],
+    ['/api/tasks/example', 1, 1],
+    ['/api/cron/protected-uploads', 0, 0],
+    ['/api/webhooks/whatsapp', 0, 0],
   ]) {
+    let authCalls = 0;
     let protectCalls = 0;
     await clerkProxy(
-      { protect: async () => { protectCalls += 1; } },
+      clerkAuth({
+        onAuth: () => { authCalls += 1; },
+        onProtect: () => { protectCalls += 1; },
+      }),
       new NextRequest(`https://app.obrasaas.test${pathname}`),
     );
-    assert.equal(protectCalls, expectedCalls, `${pathname} has an unexpected Clerk protection boundary`);
+    assert.equal(authCalls, expectedAuthCalls, `${pathname} has an unexpected Clerk auth read`);
+    assert.equal(
+      protectCalls,
+      expectedProtectCalls,
+      `${pathname} has an unexpected Clerk protection boundary`,
+    );
   }
+});
+
+// A document-shaped navigation can be resolved by Clerk before this handler.
+// This contract covers JSON API requests that reach the protected API branch.
+test('signed-out JSON API requests reaching Proxy return an opaque 404 without downstream routing', async () => {
+  let authCalls = 0;
+  let protectCalls = 0;
+  const response = await clerkProxy(
+    clerkAuth({
+      onAuth: () => { authCalls += 1; },
+      onProtect: () => { protectCalls += 1; },
+      requestReason: 'client-uat-but-no-session-token',
+      userId: null,
+    }),
+    new NextRequest('https://app.obrasaas.test/api/progress-measurement-cuts', {
+      headers: {
+        Accept: 'application/json',
+        'x-request-id': 's92-anonymous-boundary',
+      },
+    }),
+  );
+
+  assert.equal(authCalls, 1);
+  assert.equal(protectCalls, 0);
+  assert.equal(response.status, 404);
+  assert.equal(await response.text(), '');
+  assert.equal(response.headers.get('Cache-Control'), 'private, no-store, max-age=0');
+  assert.equal(response.headers.get('x-request-id'), 's92-anonymous-boundary');
+  assert.equal(response.headers.get('x-clerk-auth-status'), 'signed-out');
+  assert.deepEqual(
+    response.headers.get('x-clerk-auth-reason').split(',').map((reason) => reason.trim()),
+    ['protect-rewrite', 'client-uat-but-no-session-token'],
+  );
+  assert.equal(response.headers.get('Location'), null);
+  assert.equal(response.headers.get('x-clerk-redirect-to'), null);
+  assert.equal(response.headers.get('x-middleware-rewrite'), null);
+  assert.equal(response.headers.get('x-middleware-next'), null);
+});
+
+test('signed-in protected APIs still run protect and continue with correlated request state', async () => {
+  let authCalls = 0;
+  let protectCalls = 0;
+  const response = await clerkProxy(
+    clerkAuth({
+      onAuth: () => { authCalls += 1; },
+      onProtect: () => { protectCalls += 1; },
+    }),
+    new NextRequest('https://app.obrasaas.test/api/progress-measurement-cuts'),
+  );
+
+  assert.equal(authCalls, 1);
+  assert.equal(protectCalls, 1);
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('x-middleware-next'), '1');
+  assert.equal(response.headers.get('x-middleware-rewrite'), null);
+  assert.equal(response.headers.get('Location'), null);
+  assert.equal(
+    response.headers.get('x-middleware-request-x-request-id'),
+    response.headers.get('x-request-id'),
+  );
+});
+
+test('protected pages retain Clerk protect without the API auth preflight', async () => {
+  let authCalls = 0;
+  let protectCalls = 0;
+  const response = await clerkProxy(
+    clerkAuth({
+      onAuth: () => { authCalls += 1; },
+      onProtect: () => { protectCalls += 1; },
+      userId: null,
+    }),
+    new NextRequest('https://app.obrasaas.test/dashboard'),
+  );
+
+  assert.equal(authCalls, 0);
+  assert.equal(protectCalls, 1);
+  assert.equal(response.headers.get('x-middleware-next'), '1');
 });
 
 test('proxy propagates one correlation id upstream and back to the client', async () => {
   const response = await clerkProxy(
-    { protect: async () => {} },
+    clerkAuth(),
     new NextRequest('https://app.obrasaas.test/api/tenant/privacy/requests'),
   );
   const responseId = response.headers.get('x-request-id');
@@ -184,7 +301,7 @@ test('proxy propagates one correlation id upstream and back to the client', asyn
 
 test('proxy owns the upstream privacy surface marker and rejects client spoofing', async () => {
   const response = await clerkProxy(
-    { protect: async () => {} },
+    clerkAuth(),
     new NextRequest('https://app.obrasaas.test/dashboard/privacy', {
       headers: { [TENANT_PRIVACY_SURFACE_HEADER]: 'client-controlled-value' },
     }),
@@ -200,7 +317,7 @@ test('proxy owns the upstream privacy surface marker and rejects client spoofing
 test('proxy strips the privacy marker from every non-exact dashboard path', async () => {
   for (const pathname of ['/dashboard', '/dashboard/privacy/extra']) {
     const response = await clerkProxy(
-      { protect: async () => {} },
+      clerkAuth(),
       new NextRequest(`https://app.obrasaas.test${pathname}`, {
         headers: { [TENANT_PRIVACY_SURFACE_HEADER]: TENANT_PRIVACY_SURFACE_VALUE },
       }),

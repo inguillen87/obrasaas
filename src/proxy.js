@@ -57,15 +57,33 @@ export function isProtectedPathname(pathname) {
   return PROTECTED_ROUTE_ROOTS.some((root) => pathname === root || pathname.startsWith(`${root}/`));
 }
 
+function protectedApiSignedOutResponse(correlationId) {
+  const response = new NextResponse(null, { status: 404 });
+  response.headers.set('Cache-Control', 'private, no-store, max-age=0');
+  // clerkMiddleware appends x-clerk-auth-status from its signed-out request
+  // state after this handler returns. Set only our boundary reason here so the
+  // final response has one status value and an auditable reason chain.
+  response.headers.set('x-clerk-auth-reason', 'protect-rewrite');
+  response.headers.set('x-request-id', correlationId);
+  return response;
+}
+
 export default clerkMiddleware(
   async (auth, request) => {
-    if (isProtectedPathname(request.nextUrl.pathname)) await auth.protect();
     const correlationId = resolveRequestCorrelationId(request);
+    const pathname = request.nextUrl.pathname;
+    if (isProtectedPathname(pathname)) {
+      if (pathname.startsWith('/api/')) {
+        const authState = await auth();
+        if (!authState.userId) return protectedApiSignedOutResponse(correlationId);
+      }
+      await auth.protect();
+    }
     const requestHeaders = new Headers(request.headers);
     // This marker is an upstream-only routing hint, never a trust signal. Drop
     // any client-supplied value before adding the one value owned by Proxy.
     requestHeaders.delete(TENANT_PRIVACY_SURFACE_HEADER);
-    if (request.nextUrl.pathname === '/dashboard/privacy') {
+    if (pathname === '/dashboard/privacy') {
       requestHeaders.set(
         TENANT_PRIVACY_SURFACE_HEADER,
         TENANT_PRIVACY_SURFACE_VALUE,

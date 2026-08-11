@@ -360,12 +360,11 @@ function exactRequestInit(init) {
     throw new Error('S9.2 API exige un body serializado como string.');
   }
 
-  let headers;
+  const headers = {};
   if (init.headers !== undefined) {
     if (!init.headers || typeof init.headers !== 'object' || Array.isArray(init.headers)) {
       throw new Error('S9.2 API exige headers como objeto de strings.');
     }
-    headers = {};
     for (const [name, value] of Object.entries(init.headers)) {
       if (
         !name
@@ -379,13 +378,16 @@ function exactRequestInit(init) {
       headers[name] = value;
     }
   }
+  if (!Object.keys(headers).some((name) => name.toLowerCase() === 'accept')) {
+    headers.Accept = 'application/json';
+  }
 
   const request = {
     failOnStatusCode: false,
     maxRedirects: 0,
     method,
   };
-  if (headers !== undefined) request.headers = headers;
+  request.headers = headers;
   if (init.body !== undefined) request.data = init.body;
   return request;
 }
@@ -393,7 +395,7 @@ function exactRequestInit(init) {
 function publicResponseHeaders(headers) {
   return Object.fromEntries(
     Object.entries(headers).filter(([name]) => (
-      !/(?:authorization|cookie|secret|token|session)/i.test(name)
+      !/(?:authorization|cookie|location|secret|token|session)/i.test(name)
     )),
   );
 }
@@ -415,8 +417,9 @@ function redactDiagnosticText(value) {
     .slice(0, 240);
 }
 
-function responseDiagnostic(status, responseText, payload) {
+function responseDiagnostic(status, responseText, payload, responseHeaders) {
   const diagnostic = {
+    hasLocation: Object.keys(responseHeaders).some((name) => name.toLowerCase() === 'location'),
     status,
     textLength: responseText.length,
   };
@@ -467,7 +470,7 @@ export async function sameOriginJson(page, pathname, init = {}) {
     payload = null;
   }
   return {
-    diagnostic: responseDiagnostic(status, responseText, payload),
+    diagnostic: responseDiagnostic(status, responseText, payload, responseHeaders),
     headers: publicResponseHeaders(responseHeaders),
     payload,
     status,

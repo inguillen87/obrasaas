@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { clerk, setupClerkTestingToken } from '@clerk/testing/playwright';
 
 import {
   loadS92FixtureDescriptor,
@@ -156,14 +157,40 @@ test.describe('S9.2 authenticated acceptance', () => {
 
     const sessions = {};
     try {
-      const anonymousContext = await browser.newContext({ baseURL });
+      const anonymousContext = await browser.newContext({
+        baseURL,
+        storageState: { cookies: [], origins: [] },
+      });
       const anonymousPage = await anonymousContext.newPage();
       sessions.anonymous = { context: anonymousContext, page: anonymousPage };
-      await anonymousPage.goto('/');
+      await setupClerkTestingToken({ context: anonymousContext });
+      await anonymousPage.goto('/sign-in');
+      await clerk.loaded({ page: anonymousPage });
+      await anonymousPage.waitForFunction(() => (
+        window.Clerk?.loaded === true
+        && window.Clerk.session === null
+        && window.Clerk.user === null
+      ));
       const anonymousRead = await readCut(anonymousPage, fixture);
-      expect(anonymousRead.status).toBe(404);
-      expect(anonymousRead.headers['x-clerk-auth-status']).toBe('signed-out');
-      expect(anonymousRead.headers['x-clerk-auth-reason']).toBe('protect-rewrite');
+      const anonymousAuthReasons = (anonymousRead.headers['x-clerk-auth-reason'] || '')
+        .split(',')
+        .map((reason) => reason.trim())
+        .filter(Boolean);
+      expect({
+        authStatus: anonymousRead.headers['x-clerk-auth-status'] ?? null,
+        hasLocation: anonymousRead.diagnostic.hasLocation,
+        hasProtectRewrite: anonymousAuthReasons.includes('protect-rewrite'),
+        location: anonymousRead.headers.location ?? null,
+        redirectTo: anonymousRead.headers['x-clerk-redirect-to'] ?? null,
+        status: anonymousRead.status,
+      }).toEqual({
+        authStatus: 'signed-out',
+        hasLocation: false,
+        hasProtectRewrite: true,
+        location: null,
+        redirectTo: null,
+        status: 404,
+      });
 
       for (const [key, actor] of Object.entries(fixture.primary.actors)) {
         sessions[key] = await openS92ActorSession(browser, {

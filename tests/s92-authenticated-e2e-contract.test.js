@@ -48,7 +48,7 @@ test('S9.2 descriptor and mutation helpers fail closed', () => {
   assert.doesNotMatch(helper, /while\s*\([^)]*AMBIGUOUS|for\s*\([^)]*AMBIGUOUS/);
 });
 
-test('same-origin transport shares the BrowserContext request and preserves serialized input', async () => {
+test('same-origin JSON transport preserves input and adds an API-shaped Accept by default', async () => {
   const calls = [];
   const response = {
     headers: () => ({
@@ -86,21 +86,57 @@ test('same-origin transport shares the BrowserContext request and preserves seri
     options: {
       data: body,
       failOnStatusCode: false,
-      headers,
+      headers: {
+        ...headers,
+        Accept: 'application/json',
+      },
       maxRedirects: 0,
       method: 'POST',
     },
     url: 'http://localhost:3100/api/progress-measurement-cuts?probe=1',
   }]);
+  assert.equal(headers.Accept, undefined, 'default Accept must not mutate caller-owned headers');
   assert.equal(result.status, 409);
   assert.deepEqual(result.payload, { code: 'IDEMPOTENCY_CONFLICT' });
   assert.equal(result.headers['idempotency-replayed'], 'true');
   assert.equal(result.headers['set-cookie'], undefined);
   assert.deepEqual(result.diagnostic, {
+    hasLocation: false,
     status: 409,
     textLength: 31,
     textPreview: '{"code":"IDEMPOTENCY_CONFLICT"}',
   });
+});
+
+test('same-origin JSON transport preserves an explicit Accept with case-insensitive detection', async () => {
+  const calls = [];
+  const page = {
+    context: () => ({
+      request: {
+        fetch: async (url, options) => {
+          calls.push({ options, url });
+          return {
+            headers: () => ({ 'content-type': 'application/json' }),
+            status: () => 200,
+            text: async () => '{}',
+          };
+        },
+      },
+    }),
+    url: () => 'http://localhost:3100/',
+  };
+
+  await sameOriginJson(page, '/api/probe', {
+    headers: { aCcEpT: 'application/vnd.obrasaas+json' },
+  });
+
+  assert.deepEqual(calls[0].options.headers, {
+    aCcEpT: 'application/vnd.obrasaas+json',
+  });
+  assert.equal(
+    Object.keys(calls[0].options.headers).filter((name) => name.toLowerCase() === 'accept').length,
+    1,
+  );
 });
 
 test('same-origin transport rejects cross-origin URLs before sharing cookies', async () => {
@@ -142,6 +178,7 @@ test('same-origin response diagnostics redact credentials and sensitive headers'
         fetch: async () => ({
           headers: () => ({
             'content-type': 'text/plain',
+            Location: 'https://clerk.example.test/handshake?__clerk_db_jwt=hidden-location-token',
             'x-session-token': 'hidden-response-token',
           }),
           status: () => 502,
@@ -164,8 +201,11 @@ test('same-origin response diagnostics redact credentials and sensitive headers'
     assert.doesNotMatch(serialized, new RegExp(secret));
   }
   assert.match(result.diagnostic.textPreview, /REDACTED/);
+  assert.equal(result.diagnostic.hasLocation, true);
   assert.equal(result.diagnostic.status, 502);
+  assert.equal(result.headers.location, undefined);
   assert.equal(result.headers['x-session-token'], undefined);
+  assert.doesNotMatch(JSON.stringify(result), /hidden-location-token/);
 });
 
 test('same-origin transport errors never echo Playwright request logs', async () => {
@@ -202,9 +242,11 @@ test('S9.2 journey covers role, replay, stale correction, tenancy and read-only 
     'mutatedReplay',
     'sessions.outsider.page',
     'requireS92DisposableTarget(baseURL)',
-    "anonymousRead.status).toBe(404)",
-    "anonymousRead.headers['x-clerk-auth-status']).toBe('signed-out')",
-    "anonymousRead.headers['x-clerk-auth-reason']).toBe('protect-rewrite')",
+    "authStatus: anonymousRead.headers['x-clerk-auth-status'] ?? null",
+    "anonymousAuthReasons.includes('protect-rewrite')",
+    'hasLocation: anonymousRead.diagnostic.hasLocation',
+    "redirectTo: anonymousRead.headers['x-clerk-redirect-to'] ?? null",
+    'status: anonymousRead.status',
     "locator('#measurement-cut-period').fill(fixture.period.date)",
     'Lectura autorizada · sellado restringido',
   ]) {
@@ -214,6 +256,36 @@ test('S9.2 journey covers role, replay, stale correction, tenancy and read-only 
   assert.match(spec, /validCutV1Body/);
   assert.match(spec, /payload: \{ code: 'PERMISSION_REQUIRED' \}/);
   assert.match(spec, /status: 403/);
+});
+
+test('anonymous JSON boundary establishes an explicit Clerk signed-out client before API access', () => {
+  const anonymousStart = spec.indexOf('const anonymousContext = await browser.newContext');
+  const actorStart = spec.indexOf('for (const [key, actor]');
+  const anonymousBlock = spec.slice(anonymousStart, actorStart);
+
+  assert.ok(anonymousStart >= 0 && actorStart > anonymousStart);
+  assert.match(anonymousBlock, /storageState: \{ cookies: \[\], origins: \[\] \}/);
+  assert.match(anonymousBlock, /setupClerkTestingToken\(\{ context: anonymousContext \}\)/);
+  assert.match(anonymousBlock, /anonymousPage\.goto\('\/sign-in'\)/);
+  assert.match(anonymousBlock, /clerk\.loaded\(\{ page: anonymousPage \}\)/);
+  assert.match(anonymousBlock, /window\.Clerk\.session === null/);
+  assert.match(anonymousBlock, /window\.Clerk\.user === null/);
+  assert.ok(
+    anonymousBlock.indexOf('setupClerkTestingToken') < anonymousBlock.indexOf("goto('/sign-in')"),
+    'testing token interception must exist before the first Clerk navigation',
+  );
+  assert.ok(
+    anonymousBlock.indexOf('window.Clerk.session === null') < anonymousBlock.indexOf('readCut('),
+    'the anonymous Clerk client must be settled signed-out before protected API access',
+  );
+  assert.match(anonymousBlock, /\.split\(','\)/);
+  assert.match(anonymousBlock, /anonymousAuthReasons\.includes\('protect-rewrite'\)/);
+  assert.match(anonymousBlock, /authStatus: 'signed-out'/);
+  assert.match(anonymousBlock, /hasLocation: false/);
+  assert.match(anonymousBlock, /location: null/);
+  assert.match(anonymousBlock, /redirectTo: null/);
+  assert.match(anonymousBlock, /status: 404/);
+  assert.doesNotMatch(anonymousBlock, /status:\s*307|\[404,\s*307\]/);
 });
 
 test('package exposes only the dedicated authenticated S9.2 project', () => {
