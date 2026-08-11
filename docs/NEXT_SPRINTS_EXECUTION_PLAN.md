@@ -92,9 +92,13 @@ Ya existen `BudgetVersion`, `BudgetLine` y `BudgetEntry` con clases `COMMITMENT/
 
 Fondo, custodio validado por membresía, movimientos, comprobantes privados, idempotencia, deduplicación acotada, saldo derivado y dos aprobadores distintos desde `100000` ya existen localmente. Faltan umbral configurable por tenant, separación maker-checker respecto del creador, reposición/cierre/conciliación, Preview y E2E.
 
-### S9 — medición de avance
+### S9.1 — medición de avance (gate técnico completo; journey autenticado pendiente)
 
-Unidad, cantidad base, ejecutada, método, período, evidencia, revisión y aprobación. Un porcentaje sin unidad ni período no es medición válida.
+Unidad, cantidad base, ejecutada, método, período, evidencia, revisión y aprobación ya están implementados en un ledger separado de `Task.progress`. El [corte `46c744c`](./evidence/2026-08-11-preview-46c744c.md) pasó PostgreSQL 17 con carreras y cleanup, 122 migraciones sin drift, 2294 pruebas y Preview rollback-only `READY`. Falta recorrer preparación y aprobación con actores autenticados por rol; un porcentaje sin unidad ni período no es medición válida.
+
+### S9.2-MED — corte técnico quincenal reproducible (siguiente)
+
+Sellar por obra y quincena un snapshot inmutable de las mediciones aprobadas, derivado en servidor y reproducible por hash. Una corrección posterior no modifica el corte anterior: exige una revisión nueva. Este artefacto sigue siendo técnico e interno; no contiene precios, retenciones, impuestos, PDF contractual ni estado de pago.
 
 ### S10 — certificación y reportes
 

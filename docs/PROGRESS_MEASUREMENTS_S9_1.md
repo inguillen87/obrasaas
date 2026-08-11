@@ -99,6 +99,25 @@ de media privada. La pérdida de una respuesta POST entra en estado incierto y
 se concilia mediante GET con la misma clave; nunca se reintenta automáticamente
 una mutación ambigua.
 
+## Estado verificado al 11 de agosto de 2026
+
+El commit `46c744c79566fe3e97abf7e2df279d086643c9df` pasó CI 3/3. PostgreSQL 17
+aplicó 122 migraciones, recorrió el journey gobernado y las carreras disposable
+con cleanup exacto, y cerró `migrate status` y drift en verde. La suite aprobó
+2294/2294 pruebas, lint, auditoría de producción sin vulnerabilidades y build
+Next.js 16.2.11 de 89/89 páginas.
+
+El deployment Preview inmutable `dpl_7GtJuVDAZiYd1R95eybxnGSfpFie` quedó
+`READY` con el verificador S9.1 rollback-only y sin carreras disposable, como
+corresponde sobre Neon. Los smokes públicos mínimos fueron `200` y no se
+observaron errores/fatal/5xx en los logs exactos. La [evidencia](./evidence/2026-08-11-preview-46c744c.md)
+no acredita un journey autenticado de preparación/aprobación, un alias estable
+ni Production.
+
+El siguiente corte es **S9.2-MED**: un snapshot técnico inmutable y reproducible
+de todas las mediciones aprobadas de una obra y quincena. Sigue sin ser un
+certificado contractual ni una instrucción de pago.
+
 ## Criterio de salida
 
 El corte sólo puede marcarse implementado cuando pasan:
@@ -113,4 +132,3 @@ El corte sólo puede marcarse implementado cuando pasan:
   certificado o pago;
 - suite, lint, Prisma, build y PostgreSQL 17 sin drift;
 - Preview exact-SHA antes de cualquier afirmación remota.
-
