@@ -147,28 +147,33 @@ export function authorizeS92DisposableDatabase(environment = process.env) {
   if (databaseName !== 'obrasaas_e2e') {
     throw new Error('S9.2 E2E seed requires the exact database name obrasaas_e2e.');
   }
-  return { databaseUrl, databaseName, hostname: parsed.hostname.toLowerCase() };
+  const port = parsed.port ? Number(parsed.port) : 5432;
+  if (!Number.isInteger(port) || port < 1 || port > 65_535) {
+    throw new Error('S9.2 E2E DATABASE_URL has an invalid TCP port.');
+  }
+  return { databaseUrl, databaseName, hostname: parsed.hostname.toLowerCase(), port };
 }
 
-export function assertS92RuntimeDatabaseIdentity(row) {
-  if (row?.database_name !== 'obrasaas_e2e') {
-    throw new Error('Connected database is not the exact disposable obrasaas_e2e database.');
-  }
-  const address = String(row?.server_address || '').toLowerCase();
+export function assertS92ClientSocketIdentity(stream, expectedPort) {
+  const address = String(stream?.remoteAddress || '').toLowerCase();
   const mappedAddress = address.startsWith('::ffff:') ? address.slice(7) : address;
   const octets = mappedAddress.split('.').map(Number);
   const validIpv4 = octets.length === 4 && octets.every((octet) => (
     Number.isInteger(octet) && octet >= 0 && octet <= 255
   ));
-  const privateIpv4 = validIpv4 && (
-    octets[0] === 10
-    || (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31)
-    || (octets[0] === 192 && octets[1] === 168)
-  );
   const loopback = address === '::1' || (validIpv4 && octets[0] === 127);
-  const uniqueLocalIpv6 = /^f[cd][0-9a-f]{2}:/i.test(address);
-  if (!address || (!loopback && !privateIpv4 && !uniqueLocalIpv6)) {
-    throw new Error('Connected PostgreSQL server is not loopback or private-network local.');
+  if (!loopback) {
+    throw new Error('S9.2 E2E PostgreSQL client socket is not connected to loopback.');
+  }
+  if (Number(stream?.remotePort) !== expectedPort) {
+    throw new Error('S9.2 E2E PostgreSQL client socket port differs from DATABASE_URL.');
+  }
+  return true;
+}
+
+export function assertS92RuntimeDatabaseIdentity(row) {
+  if (row?.database_name !== 'obrasaas_e2e') {
+    throw new Error('Connected database is not the exact disposable obrasaas_e2e database.');
   }
   if (Number(row?.server_port) !== 5432) {
     throw new Error('Connected PostgreSQL server does not expose the expected internal port 5432.');
@@ -559,11 +564,13 @@ export async function seedS92E2EDatabase({
   const authorization = authorizeS92DisposableDatabase(environment);
   const ownsDatabase = !database;
   const client = database || new Client({ connectionString: authorization.databaseUrl });
-  if (ownsDatabase) await client.connect();
   try {
+    if (ownsDatabase) {
+      await client.connect();
+      assertS92ClientSocketIdentity(client.connection?.stream, authorization.port);
+    }
     const identity = await client.query(`
       SELECT current_database() AS database_name,
-             inet_server_addr()::text AS server_address,
              inet_server_port() AS server_port
     `);
     assertS92RuntimeDatabaseIdentity(identity.rows[0]);

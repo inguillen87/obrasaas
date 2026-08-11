@@ -4,6 +4,7 @@ import test from 'node:test';
 
 import {
   assertS92DescriptorHasNoSecrets,
+  assertS92ClientSocketIdentity,
   assertS92RuntimeDatabaseIdentity,
   authorizeS92DisposableDatabase,
   buildS92E2EDescriptor,
@@ -74,6 +75,7 @@ test('database authorization requires explicit disposable opt-in, loopback and e
     databaseUrl: valid.DATABASE_URL,
     databaseName: 'obrasaas_e2e',
     hostname: '127.0.0.1',
+    port: 5432,
   });
   assert.throws(() => authorizeS92DisposableDatabase({
     ...valid,
@@ -105,35 +107,44 @@ test('database authorization requires explicit disposable opt-in, loopback and e
   }).databaseName, 'obrasaas_e2e');
 });
 
-test('runtime database identity independently verifies database and loopback address', () => {
+test('client socket identity verifies the real loopback peer and URL port', () => {
+  assert.equal(assertS92ClientSocketIdentity({
+    remoteAddress: '127.0.0.1',
+    remotePort: 5432,
+  }, 5432), true);
+  assert.equal(assertS92ClientSocketIdentity({
+    remoteAddress: '::1',
+    remotePort: 5432,
+  }, 5432), true);
+  assert.equal(assertS92ClientSocketIdentity({
+    remoteAddress: '::ffff:127.0.0.1',
+    remotePort: 6543,
+  }, 6543), true);
+  assert.throws(() => assertS92ClientSocketIdentity({
+    remoteAddress: '8.8.8.8',
+    remotePort: 5432,
+  }, 5432), /not connected to loopback/);
+  assert.throws(() => assertS92ClientSocketIdentity({
+    remoteAddress: null,
+    remotePort: 5432,
+  }, 5432), /not connected to loopback/);
+  assert.throws(() => assertS92ClientSocketIdentity({
+    remoteAddress: '127.0.0.1',
+    remotePort: 6543,
+  }, 5432), /port differs/);
+});
+
+test('runtime database identity independently verifies database and internal port', () => {
   assert.equal(assertS92RuntimeDatabaseIdentity({
     database_name: 'obrasaas_e2e',
-    server_address: '127.0.0.1',
-    server_port: 5432,
-  }), true);
-  assert.equal(assertS92RuntimeDatabaseIdentity({
-    database_name: 'obrasaas_e2e',
-    server_address: '172.17.0.2',
     server_port: 5432,
   }), true);
   assert.throws(() => assertS92RuntimeDatabaseIdentity({
     database_name: 'obrasaas',
-    server_address: '127.0.0.1',
     server_port: 5432,
   }), /not the exact/);
   assert.throws(() => assertS92RuntimeDatabaseIdentity({
     database_name: 'obrasaas_e2e',
-    server_address: '8.8.8.8',
-    server_port: 5432,
-  }), /not loopback or private/);
-  assert.throws(() => assertS92RuntimeDatabaseIdentity({
-    database_name: 'obrasaas_e2e',
-    server_address: null,
-    server_port: 5432,
-  }), /not loopback or private/);
-  assert.throws(() => assertS92RuntimeDatabaseIdentity({
-    database_name: 'obrasaas_e2e',
-    server_address: '172.17.0.2',
     server_port: 6543,
   }), /internal port 5432/);
 });
