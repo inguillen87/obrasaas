@@ -25,6 +25,8 @@ test('S9.2 authenticated E2E is a trusted-branch disposable PostgreSQL gate', ()
   assert.match(job, /POSTGRES_DB: obrasaas_e2e/);
   assert.match(job, /127\.0\.0\.1:5432\/obrasaas_e2e\?schema=public/);
   assert.match(job, /S92_E2E_DISPOSABLE: '1'/);
+  assert.doesNotMatch(job.slice(0, job.indexOf('\n    steps:')), /runner\.temp/);
+  assert.equal((job.match(/S92_E2E_FIXTURE_FILE: \$\{\{ runner\.temp \}\}/g) || []).length, 2);
   assert.match(job, /scripts\/provision-s92-e2e-clerk-fixtures\.mjs --verify/);
   assert.match(job, /scripts\/seed-s92-e2e-db\.mjs --descriptor/);
   assert.match(job, /npm run test:e2e:authenticated:s92/);
