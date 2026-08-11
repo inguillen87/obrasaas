@@ -133,8 +133,14 @@ async function assertColumns(client, schema) {
   const available = byKey.get('InventoryAvailability.available');
   invariant(available.is_nullable === 'NO', 'InventoryAvailability.available must be NOT NULL.');
   invariant(available.is_generated === 'ALWAYS', 'InventoryAvailability.available must be generated ALWAYS.');
+  const availableExpression = String(available.generation_expression)
+    .replaceAll('"', '')
+    .replace(/\s+/g, '')
+    .toLowerCase()
+    .replaceAll('operator(pg_catalog.-)', '-');
   invariant(
-    String(available.generation_expression).replaceAll('"', '').replace(/\s+/g, '').includes('onhand-reserved'),
+    availableExpression === 'onhand-reserved'
+      || availableExpression === '(onhand-reserved)',
     'InventoryAvailability.available generation expression drifted.',
   );
   const projectEligible = byKey.get('Project.materialReservationEligible');

@@ -62,6 +62,12 @@ test('behavioral smoke covers exact commands, tenancy, replay and lifecycle race
 });
 
 test('projection, readiness and reconciliation assertions fail closed', () => {
+  assert.match(
+    verifier,
+    /available\.generation_expression[\s\S]*\.replaceAll\('\"', ''\)[\s\S]*\.replace\(\/\\s\+\/g, ''\)[\s\S]*\.toLowerCase\(\)[\s\S]*\.replaceAll\('operator\(pg_catalog\.-\)', '-'\)/,
+  );
+  assert.match(verifier, /availableExpression === 'onhand-reserved'/);
+  assert.match(verifier, /availableExpression === '\(onhand-reserved\)'/);
   assert.match(verifier, /assertProjectionReconciliation/);
   assert.match(verifier, /reservation_net/);
   assert.match(verifier, /inventory_net/);
