@@ -78,6 +78,27 @@ test('PRO-05B.1 stores six tenant-scoped privacy-minimal control-plane entities'
   ]) assert.match(model(name), /fingerprintKeyId\s+String\s+@db\.VarChar\(100\)/);
 });
 
+test('Prisma request relations preserve the migration RESTRICT update contract', () => {
+  const requestForeignKeys = new Map([
+    ['DataSubjectRequesterVerificationEvent', 'DataSubjectVerificationEvent_request_fkey'],
+    ['DataSubjectLegalAssessmentRevision', 'DataSubjectLegalAssessment_request_fkey'],
+    ['DataSubjectLegalHold', 'DataSubjectLegalHold_request_fkey'],
+    ['DataSubjectLegalHoldEvent', 'DataSubjectLegalHoldEvent_request_fkey'],
+    ['DataSubjectDecisionSet', 'DataSubjectDecisionSet_request_fkey'],
+    ['DataSubjectDecisionItem', 'DataSubjectDecisionItem_request_fkey'],
+  ]);
+
+  for (const [modelName, constraintName] of requestForeignKeys) {
+    const source = model(modelName);
+    assert.ok(
+      source.includes(
+        `onDelete: Restrict, onUpdate: Restrict, map: "${constraintName}"`,
+      ),
+      `${modelName}.request must match the migration's ON UPDATE/DELETE RESTRICT actions.`,
+    );
+  }
+});
+
 test('frozen enums expose review candidates but no executable disposition', () => {
   for (const value of [
     'PENDING_APPROVAL', 'SEALED_BLOCKED', 'REJECTED', 'DISCLOSE_CANDIDATE',

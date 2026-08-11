@@ -4221,7 +4221,7 @@ model DataSubjectRequesterVerificationEvent {
   organizationId                  String
   organization                    Organization                     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   requestId                       String
-  request                         DataSubjectRequest                @relation(fields: [organizationId, requestId], references: [organizationId, id], onDelete: Restrict, map: "DataSubjectVerificationEvent_request_fkey")
+  request                         DataSubjectRequest                @relation(fields: [organizationId, requestId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectVerificationEvent_request_fkey")
   sequence                        Int
   predecessorEventId              String?
   predecessorEvent                DataSubjectRequesterVerificationEvent? @relation("DataSubjectVerificationEventChain", fields: [organizationId, requestId, predecessorEventId], references: [organizationId, requestId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectVerificationEvent_predecessor_fkey")
@@ -4261,7 +4261,7 @@ model DataSubjectLegalAssessmentRevision {
   organizationId            String
   organization              Organization                   @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   requestId                 String
-  request                   DataSubjectRequest              @relation(fields: [organizationId, requestId], references: [organizationId, id], onDelete: Restrict, map: "DataSubjectLegalAssessment_request_fkey")
+  request                   DataSubjectRequest              @relation(fields: [organizationId, requestId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectLegalAssessment_request_fkey")
   manifestId                String
   manifest                  DataSubjectDiscoveryManifest    @relation(fields: [organizationId, requestId, manifestId], references: [organizationId, requestId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectLegalAssessment_manifest_fkey")
   sequence                  Int
@@ -4297,7 +4297,7 @@ model DataSubjectLegalHold {
   organizationId          String
   organization            Organization                @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   requestId               String
-  request                 DataSubjectRequest           @relation(fields: [organizationId, requestId], references: [organizationId, id], onDelete: Restrict, map: "DataSubjectLegalHold_request_fkey")
+  request                 DataSubjectRequest           @relation(fields: [organizationId, requestId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectLegalHold_request_fkey")
   manifestId              String
   manifest                DataSubjectDiscoveryManifest @relation(fields: [organizationId, requestId, manifestId], references: [organizationId, requestId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectLegalHold_manifest_fkey")
   scopeKind               DataSubjectHoldScopeKind
@@ -4324,7 +4324,7 @@ model DataSubjectLegalHoldEvent {
   organizationId         String
   organization           Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   requestId              String
-  request                DataSubjectRequest         @relation(fields: [organizationId, requestId], references: [organizationId, id], onDelete: Restrict, map: "DataSubjectLegalHoldEvent_request_fkey")
+  request                DataSubjectRequest         @relation(fields: [organizationId, requestId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectLegalHoldEvent_request_fkey")
   holdId                 String
   hold                   DataSubjectLegalHold       @relation(fields: [organizationId, requestId, holdId], references: [organizationId, requestId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectLegalHoldEvent_hold_fkey")
   sequence               Int
@@ -4360,7 +4360,7 @@ model DataSubjectDecisionSet {
   organizationId                String
   organization                  Organization                   @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   requestId                     String
-  request                       DataSubjectRequest              @relation(fields: [organizationId, requestId], references: [organizationId, id], onDelete: Restrict, map: "DataSubjectDecisionSet_request_fkey")
+  request                       DataSubjectRequest              @relation(fields: [organizationId, requestId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectDecisionSet_request_fkey")
   manifestId                    String
   manifest                      DataSubjectDiscoveryManifest    @relation(fields: [organizationId, requestId, manifestId], references: [organizationId, requestId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectDecisionSet_manifest_fkey")
   revision                      Int
@@ -4412,7 +4412,7 @@ model DataSubjectDecisionItem {
   organizationId         String
   organization           Organization                 @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   requestId              String
-  request                DataSubjectRequest            @relation(fields: [organizationId, requestId], references: [organizationId, id], onDelete: Restrict, map: "DataSubjectDecisionItem_request_fkey")
+  request                DataSubjectRequest            @relation(fields: [organizationId, requestId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectDecisionItem_request_fkey")
   manifestId             String
   manifest               DataSubjectDiscoveryManifest  @relation(fields: [organizationId, requestId, manifestId], references: [organizationId, requestId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectDecisionItem_manifest_fkey")
   decisionSetId          String
