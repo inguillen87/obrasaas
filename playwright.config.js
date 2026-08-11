@@ -60,5 +60,18 @@ export default defineConfig({
       testMatch: /auth\.spec\.js/,
       use: browserUse,
     },
+    {
+      name: 'authenticated-s92',
+      dependencies: ['setup'],
+      retries: 0,
+      workers: 1,
+      testMatch: /s92-authenticated\.spec\.js/,
+      use: {
+        ...browserUse,
+        screenshot: 'off',
+        trace: 'off',
+        video: 'off',
+      },
+    },
   ],
 });

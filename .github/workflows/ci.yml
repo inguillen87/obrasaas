@@ -240,3 +240,79 @@ jobs:
             test-results/
           if-no-files-found: ignore
           retention-days: 7
+
+  authenticated-s92-e2e:
+    name: S9.2 authenticated disposable journey
+    if: >-
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      && (github.ref == 'refs/heads/master'
+      || github.ref == 'refs/heads/codex/platform-ux-foundation')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: clerk-development-e2e
+    services:
+      postgres:
+        image: postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+        env:
+          POSTGRES_USER: obrasaas_e2e
+          POSTGRES_PASSWORD: obrasaas_e2e
+          POSTGRES_DB: obrasaas_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U obrasaas_e2e -d obrasaas_e2e"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      DATABASE_URL: postgresql://obrasaas_e2e:obrasaas_e2e@127.0.0.1:5432/obrasaas_e2e?schema=public
+      DATABASE_URL_UNPOOLED: postgresql://obrasaas_e2e:obrasaas_e2e@127.0.0.1:5432/obrasaas_e2e?schema=public
+      DIRECT_URL: postgresql://obrasaas_e2e:obrasaas_e2e@127.0.0.1:5432/obrasaas_e2e?schema=public
+      NEXT_PUBLIC_APP_URL: http://localhost:3100
+      CLERK_AUTHORIZED_PARTIES: http://localhost:3100
+      E2E_BASE_URL: http://localhost:3100
+      S92_E2E_DISPOSABLE: '1'
+      S92_E2E_FIXTURE_FILE: ${{ runner.temp }}/s92-e2e-fixture.json
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Require Clerk development credentials
+        env:
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_E2E_PUBLISHABLE_KEY }}
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_E2E_SECRET_KEY }}
+        run: >-
+          node -e "if (!/^pk_test_/.test(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || '')
+          || !/^sk_test_/.test(process.env.CLERK_SECRET_KEY || ''))
+          throw new Error('S9.2 authenticated E2E requires Clerk Development credentials')"
+
+      - name: Deploy all migrations to disposable PostgreSQL 17
+        run: npm run db:migrate:deploy
+
+      - name: Verify deterministic Clerk actors
+        env:
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_E2E_SECRET_KEY }}
+        run: node scripts/provision-s92-e2e-clerk-fixtures.mjs --verify
+
+      - name: Seed disposable S9.2 tenant fixtures
+        env:
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_E2E_SECRET_KEY }}
+        run: node scripts/seed-s92-e2e-db.mjs --descriptor "$S92_E2E_FIXTURE_FILE"
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run authenticated S9.2 journey
+        env:
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_E2E_PUBLISHABLE_KEY }}
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_E2E_SECRET_KEY }}
+        run: npm run test:e2e:authenticated:s92
