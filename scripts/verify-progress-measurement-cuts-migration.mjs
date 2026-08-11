@@ -585,7 +585,7 @@ async function assertRollbackOnlyJourney(client) {
   await expectDatabaseError(client, "PROGRESS_MEASUREMENT_CUT_ACTOR_FORBIDDEN", () =>
     client.query(READ_SQL, [otherOrganizationId, item.projectId, item.periodStart, item.periodEnd, otherMembershipId]),
   );
-  await client.query(`UPDATE "TenantMembership" SET "status"='SUSPENDED' WHERE "id"=$1`, [item.auditorMembershipId]);
+  await client.query(`UPDATE "TenantMembership" SET "status"='DISABLED' WHERE "id"=$1`, [item.auditorMembershipId]);
   await expectDatabaseError(client, "PROGRESS_MEASUREMENT_CUT_ACTOR_FORBIDDEN", () =>
     client.query(READ_SQL, readArgs(item, item.auditorMembershipId)),
   );
@@ -604,7 +604,7 @@ async function assertRollbackOnlyJourney(client) {
   await expectDatabaseError(client, "PROGRESS_MEASUREMENT_CUT_ACTOR_FORBIDDEN", () =>
     client.query(SEAL_SQL, firstArgs),
   );
-  await client.query(`UPDATE "TenantMembership" SET "tenantRole"='DIRECTOR',"status"='SUSPENDED' WHERE "id"=$1`, [item.directorMembershipId]);
+  await client.query(`UPDATE "TenantMembership" SET "tenantRole"='DIRECTOR',"status"='DISABLED' WHERE "id"=$1`, [item.directorMembershipId]);
   await expectDatabaseError(client, "PROGRESS_MEASUREMENT_CUT_ACTOR_FORBIDDEN", () =>
     client.query(SEAL_SQL, firstArgs),
   );

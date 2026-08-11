@@ -44,6 +44,8 @@ test('S9.2 verifier checks the deployed ledger, structures, functions and ALWAYS
   assert.match(verifier, /decisionScope\.local_columns/);
   assert.match(verifier, /decisionScope\.referenced_columns/);
   assert.doesNotMatch(verifier, /\.definition\.includes\('\"decision\"'\)/);
+  assert.equal((verifier.match(/"status"='DISABLED'/g) ?? []).length, 2);
+  assert.doesNotMatch(verifier, /"status"='SUSPENDED'/);
 });
 
 test('S9.2 verifier exercises immutable receipts, missing lines and anti-forgery inside rollback', () => {
