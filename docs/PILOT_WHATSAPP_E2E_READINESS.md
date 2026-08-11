@@ -1,14 +1,39 @@
 # Piloto WhatsApp E2E - readiness y gates
 
-Fecha de corte: 2026-07-30 para el delta local H4; la última evidencia externa continúa siendo la del 2026-07-29.
+Corte base Meta/H4: 2026-07-30. Adenda técnica S12.2C/PRO-05A: 2026-08-11.
+Esta adenda no revalidó el estado externo de Meta ni habilita personas reales.
 
 ## Estado operativo del corte
 
-- La rama `codex/platform-ux-foundation` usa una rama Neon aislada. El Preview nativo de Git para `0a00f37` quedó `Ready`, detectó 100 migraciones sin pendientes, aprobó los verificadores de media/IA y recibió el alias estable ([evidencia](./evidence/2026-07-29-preview-0a00f37.md)). No hubo deployment ni migración de aplicación en Production durante este corte; subsiste el incidente de posible sincronización de membresía por el webhook compartido de Clerk development ([evidencia](./evidence/2026-07-28-preview-c91cee0.md)).
+- La rama `codex/platform-ux-foundation` usa una rama Neon aislada. El commit
+  `fc71fbe` quedó `Ready` en una URL Preview inmutable con 120 migraciones,
+  S12.2C rollback-only y PRO-05A verdes
+  ([evidencia](./evidence/2026-08-11-preview-fc71fbe.md)). No se movió ni se
+  certifica un alias estable. Sobre esa URL sí se completó un smoke sintético
+  acotado `AUDITOR → DIRECTOR → SITE_MANAGER → AUDITOR`; Production quedó fuera
+  del alcance.
+- En el corte histórico `0a00f37`, su Preview nativo quedó `Ready`, detectó 100
+  migraciones sin pendientes, aprobó media/IA y recibió entonces el alias
+  estable ([evidencia histórica](./evidence/2026-07-29-preview-0a00f37.md)). Ese
+  hecho no describe el destino actual del alias. Subsiste además el incidente
+  histórico de posible sincronización de membresía por el webhook compartido de
+  Clerk development ([evidencia](./evidence/2026-07-28-preview-c91cee0.md)).
 - El importador Meta está apagado para Preview global y habilitado sólo en esta rama. Su allowlist, token de verificación del webhook y secretos de IA están limitados a la misma rama.
-- El alias estable `https://obrasaas-preview.vercel.app` apunta a un redeploy `Ready`; `/privacy`, home y los rechazos fail-closed del webhook/cron respondieron correctamente. `META_APP_SECRET` ya está configurado como secreto exclusivo de la rama. El test oficial `messages v25.0` de Meta produjo un `POST /api/webhooks/whatsapp` 200; el payload de ejemplo fue rechazado internamente como conexión desconocida, que es el aislamiento esperado y evita contaminar un tenant.
-- La app Meta continúa **sin publicar** y el negocio figura **no verificado**; el botón de publicación está deshabilitado. Esa verificación empresarial, la revisión/acceso que Meta aplique y la publicación son hoy el bloqueo externo exacto para inbound real. La documentación societaria debe ingresarla el titular autorizado, no el agente.
-- El tenant externo y la obra piloto ya existen en Preview. Todavía hay que cargar un administrador no-superadmin, un operario preautorizado, importar la conexión Meta y completar el aislamiento cross-tenant. Un contacto desconocido continúa en cuarentena y no se auto-habilita por declarar un nombre.
+- En el smoke histórico documentado, `/privacy`, home y los rechazos fail-closed
+  del webhook/cron respondieron correctamente. `META_APP_SECRET` estaba
+  configurado como secreto exclusivo de la rama y el test oficial
+  `messages v25.0` produjo un `POST /api/webhooks/whatsapp` 200; el payload de
+  ejemplo fue rechazado como conexión desconocida. No se repitió ese recorrido
+  sobre `fc71fbe` y no se infiere el estado actual de un alias.
+- En el corte Meta documentado, la app estaba **sin publicar**, el negocio
+  figuraba **no verificado** y el botón de publicación estaba deshabilitado. La
+  adenda S12.2C no revalidó ni cambia ese estado; cualquier actualización exige
+  evidencia nueva del titular autorizado.
+- En ese mismo corte histórico, el tenant externo y la obra piloto existían en
+  Preview. El smoke actual ya comprobó un administrador no-superadmin, una única
+  identidad sintética y el alcance de proyecto para tres roles; siguen faltando
+  operario preautorizado, importación vigente de la conexión Meta y negativos
+  cross-tenant. No se presenta esa preparación como un piloto habilitado.
 - El primer smoke real habilitable es H1: plantilla outbound, respuesta inbound, estados, webhook firmado y asistencia con ubicación reportada por el dispositivo. H2 se activa únicamente para una imagen Meta cuyo comentario no vacío comienza con `AVANCE:` o `PROGRESO:`; liga el asset exacto del webhook a una opción de geolocalización puntual o a un opt-out explícito. Esa lectura no garantiza GPS, identidad ni presencia física. H4 y H5 siguen pendientes como journeys E2E. H4 ya tiene localmente opt-in y [constancia privada](./WORKER_PAYMENT_PRIVATE_RECEIPT.md) de acceso breve; H5 cuenta con cierre local por contrato y pruebas. Ninguno está certificado en Meta/Neon/Vercel por este delta.
 
 ## Decisión de canal
@@ -137,7 +162,13 @@ El objetivo del hito es completar esos componentes y mantener los valores comple
 
 La entrega inicial por enlace privado de corta duración está implementada sólo localmente y aún no tiene smoke externo. Si el acceso está vencido, revocado, agotado o con menos de dos minutos restantes, el worker responde sin URL ni token. La regeneración/reexpedición solicitada por el operario y la plantilla `UTILITY` necesaria fuera de la ventana de Meta siguen pendientes. `DELIVERED` sólo significa entrega del mensaje: no equivale a firma, conformidad, titularidad, validación bancaria, transferencia ni pago.
 
-El TTL de 15 minutos limita el acceso pero no elimina el registro mínimo ni resuelve retención, backups o derechos del titular. PRO-05 ya no está ausente: [PRO-05A](./DATA_SUBJECT_RIGHTS_FOUNDATION.md) agrega casos tenant-scoped, atestación administrativa explícitamente distinta de verificar al solicitante, discovery de sólo lectura, manifiesto inmutable, replay exacto, límites durables y blockers obligatorios. El catálogo v1 sólo puede terminar `DISCOVERY_BLOCKED`; no exporta ni ejecuta corrección, restricción, portabilidad, anonimización o borrado. La migración `140000` aplica desde cero en PGlite junto con las 108 anteriores y su verificador conductual quedó verde también en CI PostgreSQL 17 y Vercel/Neon Preview sobre el esquema completo de 119 migraciones. Falta el E2E del endpoint con ADMIN sintético y negativos cross-tenant; no hay evidencia de Production ni autorización para personas reales.
+El TTL de 15 minutos limita el acceso pero no elimina el registro mínimo ni resuelve retención, backups o derechos del titular. PRO-05 ya no está ausente: [PRO-05A](./DATA_SUBJECT_RIGHTS_FOUNDATION.md) agrega casos tenant-scoped, atestación administrativa explícitamente distinta de verificar al solicitante, discovery de sólo lectura, manifiesto inmutable, replay exacto, límites durables y blockers obligatorios. El catálogo v1 sólo puede terminar `DISCOVERY_BLOCKED`; no exporta ni ejecuta corrección, restricción, portabilidad, anonimización o borrado. La migración `140000` aplica desde cero en PGlite junto con las 108 anteriores y su verificador conductual volvió a quedar verde en CI PostgreSQL 17 y Vercel/Neon Preview sobre el esquema completo de 120 migraciones del [corte `fc71fbe`](./evidence/2026-08-11-preview-fc71fbe.md). Falta el E2E del endpoint con ADMIN sintético y negativos cross-tenant; no hay evidencia de Production ni autorización para personas reales.
+
+S12.2C también quedó técnicamente verificado en ese corte, pero no cambia el
+gate del piloto: `AVAILABLE` sólo afirma que la BOM vigente tiene material
+completamente reservado. No prueba presencia, ejecutabilidad, avance,
+certificación o pago. Sin PRO-05B/C/D, revisión legal y Meta E2E, trabajadores
+reales continúan en **NO-GO**.
 
 H4 continúa cerrado para el piloto. Antes de incorporar una persona real deben completarse PRO-05B/C/D: identidad o representación del solicitante, matriz legal de retención y decisiones, adapters por dominio, propagación a proveedores, backup/tombstone/restore y evidencia externa. También faltan entidad legal responsable, domicilio y mapa responsable/encargado aprobados; esos datos no pueden inferirse del código.
 

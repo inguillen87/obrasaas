@@ -12,7 +12,7 @@ estos estados:
 | Aceptado | La inspección física/documental clasificó una cantidad como `ACCEPTED` en una ubicación | `GoodsReceiptInspection` vigente |
 | En existencia | Un putaway explícito creó asientos positivos en el ledger | `InventoryLedgerEntry` |
 | Requerido por una tarea | Una revisión S12.2B declara material y cantidad | `TaskMaterialRequirementRevision`; DB/build verificado en Preview, no cambia el ledger |
-| Reservado/disponible para una tarea | Una BOM vigente tiene cantidad suficiente reservada | Fuera de S12.2A y S12.2B; pendiente S12.2C |
+| Reservado/disponible para una tarea | Toda la BOM vigente tiene una reserva exacta sobre stock coherente | [Ledger S12.2C](./TASK_MATERIAL_RESERVATIONS.md); gate técnico y boundary multirrol verificados en Preview, journey exitoso pendiente |
 
 Una foto, un email, un compromiso `FULFILL`, una descripción parecida o una
 fecha cercana nunca crean stock ni identidad de material.
@@ -142,7 +142,7 @@ autenticado por rol, que sigue pendiente, ni acredita Resend, Meta, S12.2B,
 reservas o Production. La evidencia separada de S12.2B se registra más abajo.
 Production no fue modificada.
 
-## Relación con S12.2B
+## Relación con S12.2B y S12.2C
 
 La [BOM versionada por tarea](./TASK_MATERIAL_REQUIREMENTS.md) existe mediante
 `TaskMaterialRequirementRevision` y `TaskMaterialRequirementLine`. Publica
@@ -150,20 +150,25 @@ snapshots inmutables del material, unidad y cantidad requerida, o declara
 explícitamente `NO_MATERIALS_REQUIRED`.
 
 S12.2B no escribe `InventoryLedgerEntry` ni `InventoryBalance`, no consume
-existencia y no crea reservas. Sus estados `NOT_DEFINED`, `NOT_REQUIRED`,
-`REVIEW_REQUIRED` y `DEFINED_UNRESERVED` conservan siempre `available: false`.
-Las migraciones `20260802180000_task_material_requirements` y
-`20260809090000_task_material_requirement_eligibility_not_null`, el verificador
-PostgreSQL y el build tienen [evidencia Neon/Vercel
-Preview](./evidence/2026-08-09-preview-054a82c.md). El journey UI/API autenticado
-por rol todavía está pendiente.
+existencia y no crea reservas. Sus migraciones, verificador y build tienen
+[evidencia Neon/Vercel Preview](./evidence/2026-08-09-preview-054a82c.md).
+
+[S12.2C](./TASK_MATERIAL_RESERVATIONS.md) agrega una autoridad separada de
+reserva: `InventoryAvailability` proyecta `onHand`, `reserved` y `available`, y
+un ledger append-only reserva o libera toda la revisión de BOM. No modifica el
+`onHand`; además, la reversión del ledger físico falla si intentara dejarlo por
+debajo de lo reservado. La migración 120, sus carreras PostgreSQL y el gate
+rollback-only de Neon tienen [evidencia del commit
+`fc71fbe`](./evidence/2026-08-11-preview-fc71fbe.md). El mismo corte comprobó
+boundaries de tres roles y rechazo seguro; todavía falta materializar una
+reserva/liberación válida y probar negativos cross-tenant.
 
 ## Próximos cortes
 
-- **S12.2B - DB/build completos en Preview:** recorrer el journey UI/API
-  autenticado por rol; el corte remoto no acredita comportamiento con sesión.
-- **S12.2C:** reserva/liberación exacta contra una revisión inmutable de BOM;
-  recién este corte puede habilitar un cálculo de `AVAILABLE`.
+- **S12.2B/S12.2C - gates técnicos y boundary multirrol en Preview:** recorrer
+  publicación de BOM y reserva/liberación válida, completar el rol restante y
+  negativos cross-tenant; el smoke actual acredita sesión y permisos, no éxito
+  funcional del flujo de materiales.
 - **S12.2D:** consumo, devolución, transferencia y ajuste aprobable; readiness
   derivado sin mutar automáticamente `Task.status`.
 - **Hardening de volumen:** antes de habilitar consumos masivos, agrupar la
@@ -178,5 +183,7 @@ por rol todavía está pendiente.
 - **Cutover legacy:** convertir el panel `stockpiles` en sólo lectura y finalmente
   retirarlo cuando el ledger cubra paridad, migración explícita y rollback.
 
-Hasta cerrar esos cortes, `onHand` significa existencia física. No se presenta
-como `AVAILABLE` para una tarea ni como promesa de abastecimiento.
+`onHand` continúa significando sólo existencia física. `AVAILABLE` puede
+derivarse ahora únicamente cuando la BOM vigente queda completamente reservada;
+no es promesa de abastecimiento, ejecutabilidad de la tarea, consumo,
+certificación ni pago. No existen todavía sustitución, reserva parcial o FIFO.

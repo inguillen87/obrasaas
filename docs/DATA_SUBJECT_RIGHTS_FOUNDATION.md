@@ -18,7 +18,9 @@ conductual prueba discovery read-only, tenant scope, hash UTC, blockers,
 consistencia terminal y evidencia append-only. En el corte
 [`edeea82`](./evidence/2026-08-10-preview-edeea82.md) también quedó verde en CI
 PostgreSQL 17 y en Vercel/Neon Preview sobre el esquema completo de 119
-migraciones. Eso acredita el gate técnico de discovery; no acredita identidad
+migraciones. El [corte posterior `fc71fbe`](./evidence/2026-08-11-preview-fc71fbe.md)
+volvió a aprobarlo dentro del historial completo de 120 migraciones. Eso
+acredita el gate técnico de discovery; no acredita identidad
 del solicitante, decisión legal, ejecución de derechos, piloto real ni
 Production.
 

@@ -2,7 +2,9 @@
 
 ## Estado y alcance
 
-Estado al 2 de agosto de 2026: **implementado y verificado en Neon/Vercel Preview; pendiente de E2E autenticado, Resend real y Production**.
+Estado funcional al 2 de agosto de 2026, con integración de materiales
+actualizada al 11 de agosto: **implementado y verificado en Neon/Vercel Preview;
+pendiente de E2E autenticado, Resend real y Production**.
 
 Este incremento cubre las ideas acordadas con la socia para:
 
@@ -13,7 +15,12 @@ Este incremento cubre las ideas acordadas con la socia para:
 - avisar por email al proveedor, por defecto siete días antes, cuando Administración haya confirmado el destino;
 - mostrar el impacto operativo derivado sin modificar silenciosamente el estado de una tarea.
 
-No cubre todavía una suscripción de calendario sincronizada, confirmación del email por el propio proveedor, stock/reservas/BOM, alertas internas a Compras/Director, firma jurídica/evidencia fotográfica tipada de recepción ni certificación contractual de avance. La asignación cuantitativa, la inspección de calidad y el cierre de faltantes ya existen en Preview, pero una cantidad aceptada todavía no equivale a stock disponible.
+No cubre todavía una suscripción de calendario sincronizada, confirmación del
+email por el propio proveedor, alertas internas a Compras/Director, firma
+jurídica/evidencia fotográfica tipada de recepción ni certificación contractual
+de avance. Stock, BOM y reserva ya existen como contratos separados S12.2A/B/C;
+este módulo de compromisos no es autoridad de ninguno de ellos. Una cantidad
+aceptada o una promesa cumplida no equivalen por sí solas a material reservado.
 
 ## Autoridades de datos
 
@@ -28,11 +35,13 @@ La funcionalidad evita crear una segunda verdad del plan o de la recepción:
 | Conciliación documental | `GoodsReceiptCommitmentAllocation` | Ledger append-only de cantidades explícitamente asignadas, sin FIFO ni backfill; no afirma calidad ni disponibilidad. |
 | Inspección física vigente | `GoodsReceiptInspection` y `GoodsReceiptDisposition` | Partición exacta aceptado/dañado/rechazado/cuarentena, versionada mediante corrección o reversión y con snapshot de ubicación. |
 | Cierre final de entrega | `SupplierCommitmentLineClosure` | Deriva aceptado y faltante desde evidencia vigente; corregir una inspección exige revertir primero el cierre. |
+| Existencia física | `InventoryLedgerEntry` e `InventoryBalance` | Sólo un putaway explícito de `ACCEPTED` crea `onHand`; la promesa no lo modifica. |
+| BOM y reserva | `TaskMaterialRequirementRevision` y ledger S12.2C | `AVAILABLE` material exige la BOM vigente completamente reservada; no se deriva del compromiso. |
 | Comunicación externa | `SupplierReminderDelivery` | Outbox durable y versionado; no es la autoridad de la fecha. |
 | Historia del compromiso | `SupplierCommitmentEvent` | Evento inmutable por creación y transición. |
 | Vista quincenal/exportación | `loadScheduleCalendar` | Read model derivado de WBS y compromisos; no persiste copias del plan. |
 
-El readiness mostrado junto a una tarea (`AVAILABLE`, `EXPECTED_IN_TIME`, `ALIGNED`, `AT_RISK`, `BLOCKED`, `REVIEW_REQUIRED` o `ADMIN_ATTESTED`) es una **derivación informativa**. Nunca cambia `Task.status`, el progreso, una baseline ni un forecast. Una entrega material cerrada sólo por declaración administrativa usa `ADMIN_ATTESTED`, no `AVAILABLE`.
+El readiness mostrado junto a una tarea (`AVAILABLE`, `EXPECTED_IN_TIME`, `ALIGNED`, `AT_RISK`, `BLOCKED`, `REVIEW_REQUIRED` o `ADMIN_ATTESTED`) es una **derivación informativa**. Nunca cambia `Task.status`, el progreso, una baseline ni un forecast. Para una entrega material, una declaración administrativa usa `ADMIN_ATTESTED`; el `AVAILABLE` de materiales pertenece exclusivamente al read model S12.2C de la BOM vigente.
 
 ## Modelo funcional
 
@@ -82,8 +91,13 @@ Esto significa:
 - `UNALLOCATED/PARTIALLY_ALLOCATED/FULLY_ALLOCATED` describen la línea recibida; `NOT_RECEIVED/PARTIALLY_RECEIVED/FULLY_RECEIVED` describen cobertura documental del compromiso;
 - una inspección activa congela el remito, sus líneas y asignaciones; cualquier corrección conserva historia y exige reversión explícita del cierre final activo;
 - `ACCEPTED` describe aceptación física auditada, pero no existencia, stock libre, OCR aprobado ni prueba jurídica;
-- S12.2A agrega localmente un putaway explícito hacia ledger on-hand; no infiere ni backfillea existencias y todavía requiere evidencia Preview;
-- `AVAILABLE` permanece cerrado hasta BOM versionada y reserva suficiente por tarea.
+- S12.2A agrega un putaway explícito hacia ledger on-hand, sin inferir ni
+  backfillear existencias; su gate técnico está verificado en Preview;
+- S12.2B publica la BOM versionada y S12.2C puede derivar `AVAILABLE` sólo si
+  todas sus líneas están exactamente reservadas sobre stock coherente. La
+  [evidencia S12.2C](./evidence/2026-08-11-preview-fc71fbe.md) acredita un boundary
+  sintético de tres roles, no el recorrido funcional de calendario, compromiso
+  o reserva/liberación exitosa.
 
 ## Calendario por quincenas
 

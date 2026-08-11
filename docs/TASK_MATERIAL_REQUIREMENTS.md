@@ -13,6 +13,14 @@ capa DB/build de S12.2B. No acredita journey UI/API autenticado por rol, reserva
 de stock, email Resend real, Meta E2E ni operación productiva. No hubo deployment
 ni migración en Production por este corte.
 
+El corte posterior S12.2C ya agrega la
+[reserva/liberación exacta](./TASK_MATERIAL_RESERVATIONS.md) de la BOM completa.
+Su migración 120, carreras PostgreSQL y gate Vercel/Neon rollback-only quedaron
+[verificados para `fc71fbe`](./evidence/2026-08-11-preview-fc71fbe.md). Esa
+evidencia no retroactiva el alcance del corte S12.2B ni acredita todavía el
+journey exitoso de reserva/liberación; sí incorpora un boundary sintético
+acotado de `AUDITOR`, `DIRECTOR` y `SITE_MANAGER`.
+
 ## Alcance y límite de autoridad
 
 S12.2B permite que una persona autorizada publique una definición explícita,
@@ -36,11 +44,13 @@ Gantt, una baseline, un forecast, una certificación, un costo o un pago.
 | Requerimiento de la tarea | `TaskMaterialRequirementRevision` y `TaskMaterialRequirementLine` | Qué material y cantidad exige una revisión de la tarea | Stock, compra, entrega o reserva |
 | Promesa de proveedor | `SupplierCommitment` | Una fecha o ventana prometida para material o servicio | Asignación de stock o cobertura de la BOM; es **PROMESA, NO RESERVA** |
 | Existencia física | `InventoryLedgerEntry` e `InventoryBalance` | Cantidad `on-hand` ingresada mediante putaway explícito | Disponibilidad para una tarea |
-| Reserva y disponibilidad | S12.2C, todavía no implementado | Cantidad exacta reservada contra una revisión de BOM | No puede inferirse en S12.2B |
+| Reserva y disponibilidad | `TaskMaterialReservationTransaction`, sus asientos y proyecciones S12.2C | Cantidad exacta de toda la BOM vigente reservada sobre stock coherente | No prueba ejecutabilidad, consumo, certificación ni pago |
 
-El read model de S12.2B sólo expone `NOT_DEFINED`, `NOT_REQUIRED`,
-`REVIEW_REQUIRED` o `DEFINED_UNRESERVED`. Todos devuelven `available: false`.
-`AVAILABLE` permanece cerrado hasta S12.2C.
+El read model propio de S12.2B sólo expone `NOT_DEFINED`, `NOT_REQUIRED`,
+`REVIEW_REQUIRED` o `DEFINED_UNRESERVED`, todos con `available: false`. El read
+model posterior de S12.2C puede derivar `AVAILABLE` únicamente para la revisión
+vigente completamente reservada; ante drift, material o ubicación inactivos
+falla a `REVIEW_REQUIRED`.
 
 ## Modelo canónico e inmutabilidad
 
@@ -166,7 +176,8 @@ La migración local agrega:
 El script `scripts/verify-task-material-requirements-migration.mjs` está ligado al
 checksum de la migración, ejecuta verificaciones de catálogo y comportamiento
 rollback-only, y está incorporado al preflight de `scripts/vercel-build.mjs`.
-Su presencia local no demuestra que ya haya corrido sobre Neon Preview.
+Su ejecución remota propia está registrada en el corte S12.2B; el corte S12.2C
+volvió a exigirla dentro del historial completo de 120 migraciones.
 
 ## Relación con la ampliación solicitada por la socia
 
@@ -200,18 +211,25 @@ Estado de los gates:
    `20260802180000_task_material_requirements` y
    `20260809090000_task_material_requirement_eligibility_not_null`;
 3. **completo en Preview:** el build del commit `054a82c` llegó a `Ready`;
-4. **pendiente:** recorrer el panel y las APIs con roles de lectura y gestión,
-   publicación, replay, conflicto, material inactivo,
-   `NO_MATERIALS_REQUIRED` e historial;
-5. **pendiente S12.2C:** conservar `available: false` hasta implementar y
-   verificar reserva/liberación exacta;
-6. **pendiente antes de Production:** promoción, rollback y evidencia específica
+4. **completo en gate técnico Preview posterior:** S12.2C reserva/libera la BOM
+   completa y deriva `AVAILABLE` bajo las invariantes descritas en su
+   [contrato](./TASK_MATERIAL_RESERVATIONS.md);
+5. **pendiente:** recorrer publicación, reserva, liberación, replay, conflictos,
+   material/ubicación inactivos, `NO_MATERIALS_REQUIRED` e historial con roles
+   sintéticos de lectura y gestión, incluidos negativos cross-tenant;
+6. **pendiente antes de Production:** consumo, devolución, transferencia,
+   ajuste, promoción, rollback y evidencia específica
    de ese ambiente. Production no fue modificada por este corte.
 
-## Siguiente corte: S12.2C
+## Corte posterior: S12.2C y siguiente paso
 
-S12.2C debe agregar reserva/liberación exacta contra una revisión inmutable de
-BOM, con cantidad reservada derivada del ledger, idempotencia, CAS, locks,
-auditoría, concurrencia PostgreSQL real y regla explícita para sustituciones.
-Sólo después podrá calcularse `AVAILABLE`; la reserva no debe mutar
-automáticamente `Task.status`.
+S12.2C ya agrega reserva/liberación exacta de la revisión inmutable vigente,
+cantidad reservada derivada del ledger, idempotencia, CAS, locks, auditoría y
+concurrencia PostgreSQL real. No implementa reglas de sustitución: toda reserva
+usa exactamente los materiales de la BOM y cubre el bundle completo; tampoco
+hay reserva parcial ni FIFO.
+
+`AVAILABLE` significa sólo material de esa BOM actual completamente reservado.
+La reserva no muta `Task.status`, no decide si la tarea es ejecutable y no crea
+consumo, certificación o pago. El siguiente corte debe modelar consumo,
+devolución, transferencia y ajuste aprobable como operaciones distintas.

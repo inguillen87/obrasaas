@@ -1,6 +1,7 @@
 # Benchmark competitivo de procurement y planificación
 
-Fecha de revisión: 2 de agosto de 2026.
+Fecha de revisión competitiva: 2 de agosto de 2026. Estado interno actualizado
+al 11 de agosto de 2026.
 
 Este documento usa únicamente documentación oficial de producto. “No evidenciado” significa que la capacidad no apareció en los recorridos oficiales revisados; no prueba que sea inexistente en todos los planes, regiones o configuraciones.
 
@@ -15,7 +16,7 @@ OC → compromiso → envío → recepción física por partida
    → disponibilidad verificada → tarea ejecutable → factura
 ```
 
-Estado del P0 al 2 de agosto de 2026: OC, compromisos, recepciones y su asignación explícita usan cantidades decimales exactas; el total de OC se calcula en enteros escalados y los saldos se derivan en servidor. Neon/Vercel Preview ya verificó el ledger `GoodsReceiptLine → SupplierCommitmentLine`, la inspección exacta aceptado/dañado/rechazado/cuarentena y el cierre/reversión append-only de faltantes. El P0 **no está cerrado**: falta el ledger de existencias, reservas y BOM que convierta aceptación física en disponibilidad operativa.
+Estado interno al 11 de agosto de 2026: OC, compromisos, recepciones y su asignación explícita usan cantidades decimales exactas; el total de OC se calcula en enteros escalados y los saldos se derivan en servidor. Neon/Vercel Preview verificó el ledger `GoodsReceiptLine → SupplierCommitmentLine`, la inspección exacta aceptado/dañado/rechazado/cuarentena, el cierre/reversión de faltantes, el ledger on-hand S12.2A, la BOM S12.2B y la reserva completa S12.2C. El [corte `fc71fbe`](./evidence/2026-08-11-preview-fc71fbe.md) acredita migración, concurrencia PostgreSQL, build y boundaries sintéticos de tres roles, pero no una reserva/liberación exitosa ni cross-tenant. El P0 **no está cerrado**: faltan requisición/cotización, consumo/devolución/transferencia/ajuste, sustitución, reserva parcial, UI multi-partida y E2E. S12.2C tampoco implementa FIFO: ubicación y cantidad se asignan explícitamente.
 
 ## Comparación
 
@@ -35,7 +36,7 @@ Estado del P0 al 2 de agosto de 2026: OC, compromisos, recepciones y su asignaci
 - faltante final, dañado, rechazado, cuarentena y aceptado — implementado y verificado en Preview;
 - remito privado, lugar, receptor y revisión versionada — implementado; falta evidencia fotográfica tipada/firma y E2E autenticado;
 - finalización inmutable con corrección/reversión append-only — implementado y verificado en Preview;
-- `AVAILABLE` sólo cuando todas las partidas requeridas están conciliadas, aceptadas, existentes y reservadas — ledger/reserva/BOM pendiente.
+- `AVAILABLE` sólo cuando todas las líneas de la BOM vigente están exactamente reservadas sobre stock coherente — implementado por S12.2C con gate técnico y boundary multirrol Preview; journey exitoso de reserva/liberación y cross-tenant pendientes. No significa tarea ejecutable, certificación ni pago.
 
 ### P1 — Procurement gobernado por el cronograma
 

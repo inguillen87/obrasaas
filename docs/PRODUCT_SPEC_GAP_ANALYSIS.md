@@ -13,13 +13,13 @@ Se contrastó el documento `Documento_Especificaciones_App_Obra.pdf` (versión 1
 | Asistencia con GPS, hora de servidor, estados pendientes y recuperación | Implementado | Ledger de asistencia, geocerca, frescura, idempotencia y cron de expiración |
 | Tareas, dependencias y avance real | Motor verificado en Preview; puente visual/Gantt local | WBS canónica, grafo DAG, baseline inmutable/versionada, forecast determinista FS/SS/FF/SF, snapshots auditados e idempotencia. Una revisión visual aprobada/corregida puede originar una observación append-only y un forecast comparado por tarea sin mutar el plan. La migración y journey H5 todavía requieren Preview |
 | Caja chica y aprobaciones | Parcial, base local no desplegada | `CashFund`/`CashMovement`, custodio validado por membresía, moneda, idempotencia, deduplicación acotada, comprobante privado y saldo derivado existen. Desde `100000` hay dos aprobaciones distintas con CAS; faltan política de umbral configurable por tenant, separación maker-checker respecto del creador, Preview y E2E |
-| Materiales, proveedores, órdenes y recepción | Base local implementada en gran parte | Proveedores, órdenes, recepciones parciales, remitos privados y estado automático; faltan BOM/requisición, rechazo/daño y validación externa |
+| Materiales, proveedores, órdenes y recepción | S12.2A/B/C con gate técnico y boundary multirrol Preview; workflow integral parcial | Proveedores, OC, compromisos, recepciones parciales, inspección exacta, remitos privados, on-hand, BOM versionada y reserva/liberación completa ya tienen contratos y gates remotos. [S12.2C](./TASK_MATERIAL_RESERVATIONS.md) deriva `AVAILABLE` sólo para la BOM vigente completamente reservada. El smoke de tres roles probó límites y rechazo seguro; faltan reserva/liberación exitosa, rol restante, cross-tenant, requisición/cotización, consumo/devolución/transferencia/ajuste, sustitución, reserva parcial, UI multi-partida y validación externa |
 | Facturas y control de tres vías | Base local implementada en gran parte | Facturas, vencimientos, evidencia privada y match pedido-recepción-factura; faltan excepciones operativas, Preview y E2E |
 | Dashboard operativo y financiero | Implementado | Dashboard de compras, cuentas a pagar y caja chica |
 | WhatsApp como canal operativo | Implementado por contrato; E2E externo pendiente | Meta Cloud API directa como vía primaria; test number asignado, celular propio verificado, outbound histórico aceptado y test oficial firmado `messages v25.0` recibido con HTTP 200 en Preview. Esto no prueba entrega ni bidireccionalidad. La app sigue sin publicar y el negocio no verificado; faltan tenant conectado, inbound/estados reales y Flows publicados |
 | Foto de avance y lectura visual | Infraestructura gobernada en Preview; puente H5 local; foto/E2E pendientes | Foto Meta autorizada → `ProgressEvidence` por tarea; `VisualProgressAssessment` con integridad, opt-in, revisión humana y `AI Dispatch Plan` de una sola ruta con reserva/liquidación diaria por tenant. La respuesta se guarda como recibo inmutable antes de proyección/costo y puede reanudarse sin redispatch. Tras la revisión, una decisión humana separada puede crear una observación append-only y un forecast determinista; nunca muta plan, certificación o pago. La credencial OpenAI dedicada, el presupuesto y el ledger/recibo ya pasaron Neon Preview, pero la migración H5 no. Sol es primario y Terra shadow explícito; Qwen3-VL/GLM-5V quedan fuera de datos reales hasta su gate contractual. Faltan conciliación autenticada, foto Meta real, benchmark consentido y DPA/retención |
 | Identidad laboral y destino de cobro | H3.1 verificado en Preview; H4 local con emisión inbound y constancia privada, Meta pendiente | El alta ya incluye Flow pre-operario, aviso fijado, acuse terminal, CRM y purga transitoria; sus migraciones pasaron Neon Preview. H4 agrega consentimiento específico append-only, re-atestación legacy, panel CRM enmascarado, Flow companion de un solo uso, Data Endpoint terminal y reconciliación DB-only `UNCERTAIN → SUCCEEDED` sólo con procedencia exacta ya persistida; no reintenta efectos. El caller inbound local sólo emite para identidad `CANONICAL`, persona/canal verificados, obra activa y Flow publicado; crea sesión base y companion en la transacción del webhook y el envío Meta posterior conserva su journal anti-duplicado. El opt-in terminal exacto crea un descriptor durable no secreto y, sólo después del claim de envío, materializa un enlace de 15 minutos a una webview/PDF enmascarados; no muestra el dato completo ni acredita titularidad o pago. Sus cinco migraciones `13000-13400` sólo pasaron PGlite local. Faltan Neon y Vercel Preview para H4, publicación/Meta E2E, reexpedición fuera de ventana, retención/DSAR y verificación bancaria confiable; no hay evidencia de Production |
-| Derechos, retención y borrado verificable | Gate técnico PRO-05A en Preview; decisión y ejecución ausentes | Actualización 10 de agosto: [caso y discovery tenant-scoped](./DATA_SUBJECT_RIGHTS_FOUNDATION.md), atestación ADMIN distinta de verificar al solicitante, catálogo/hash inmutables, queries de sólo lectura, blockers obligatorios, replay y rate limit durable. La migración `140000` y su verificador quedaron verdes en PGlite, CI PostgreSQL 17 y Vercel/Neon Preview, pero v1 siempre termina `DISCOVERY_BLOCKED` y no ejecuta acciones. Faltan E2E sintético del endpoint, identidad/representación, matriz legal, holds, adapters por dominio, proveedores/backups/tombstones y entidad responsable antes de datos reales; Production permanece intacta |
+| Derechos, retención y borrado verificable | Gate técnico PRO-05A en Preview; decisión y ejecución ausentes | [Caso y discovery tenant-scoped](./DATA_SUBJECT_RIGHTS_FOUNDATION.md), atestación ADMIN distinta de verificar al solicitante, catálogo/hash inmutables, queries de sólo lectura, blockers obligatorios, replay y rate limit durable. La migración `140000` y su verificador volvieron a quedar verdes dentro de las 120 migraciones del [corte `fc71fbe`](./evidence/2026-08-11-preview-fc71fbe.md), pero v1 siempre termina `DISCOVERY_BLOCKED` y no ejecuta acciones. Faltan E2E sintético del endpoint, identidad/representación, matriz legal, holds, adapters por dominio, proveedores/backups/tombstones y entidad responsable antes de datos reales; no hay evidencia de Production |
 | Auditoría, correlación y observabilidad | Parcial | Helper central y `x-request-id`; falta persistir correlación en todas las mutaciones heredadas |
 
 ## Gaps críticos del documento
@@ -49,14 +49,27 @@ La especificación conecta avance validado con pago quincenal. Las tareas y evid
 
 ### 3. Inventario y consumo de materiales
 
-La base local de compras y recepción cubre OC, líneas y recepciones parciales; el roadmap la ubica en S11/S12. El PDF también requiere stock disponible y vinculación con tareas. Falta el ledger de inventario; no se debe calcular stock sumando documentos de forma ad hoc.
+Compras y recepción cubren OC, líneas y recepciones parciales. S12.2A ya agrega
+el ledger on-hand, S12.2B la BOM versionada y S12.2C la reserva/liberación exacta
+del bundle completo. La [evidencia Preview `fc71fbe`](./evidence/2026-08-11-preview-fc71fbe.md)
+acredita migración, carreras PostgreSQL, build y boundaries sintéticos de tres
+roles, no una reserva/liberación exitosa ni cross-tenant. El
+gap vigente es mover materiales después de reservarlos sin sumar documentos de
+forma ad hoc ni confundir liberación con consumo.
 
-**Sprint D3 - inventario trazable**
+**Sprint D3 - movimientos posteriores a la reserva**
 
-- Crear movimientos de inventario inmutables: recepción, consumo, devolución, ajuste y merma.
-- Mantener saldo por obra, depósito, material y unidad, con control de concurrencia.
-- Vincular consumo a tarea y responsable; requerir motivo y evidencia para ajustes.
-- Mostrar disponibilidad al asignar tareas y bloquear consumos imposibles.
+- Conservar recepción/putaway, BOM y reserva como autoridades separadas ya
+  implementadas; completar el journey exitoso, el rol restante y negativos
+  cross-tenant.
+- Crear operaciones inmutables de consumo, devolución, transferencia, ajuste y
+  merma con aprobación, motivo, actor y evidencia.
+- Vincular consumo a tarea y responsable sin usar `RELEASE` como atajo; mantener
+  saldos exactos por obra, ubicación, material y unidad bajo concurrencia.
+- Definir sustituciones explícitas y, sólo si el producto lo aprueba, reserva
+  parcial. Hoy no existen sustitución, reserva parcial ni FIFO.
+- Mantener el significado estricto: `AVAILABLE` sólo afirma material de la BOM
+  vigente completamente reservado; no habilita ejecución, certificación o pago.
 
 ### 4. Planos, versiones y cambios
 
