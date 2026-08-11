@@ -24,6 +24,7 @@ const WORKSPACE_DESTINATIONS = Object.freeze([
   { key: 'attendance', href: '/dashboard/attendance', exact: true, label: 'Asistencia y turnos', icon: 'fa-solid fa-user-clock', permission: 'canReadAttendance' },
   { key: 'execution', href: '/dashboard/execution', exact: true, label: 'Cuadrillas y blockers', icon: 'fa-solid fa-people-group', permission: 'canReadExecution' },
   { key: 'progress', href: '/dashboard/progress', exact: true, label: 'Bitácora de avance', icon: 'fa-solid fa-camera-retro', permission: 'canReadExecution' },
+  { key: 'measurements', href: '/dashboard/measurements', exact: true, label: 'Mediciones de avance', icon: 'fa-solid fa-ruler-combined', permission: 'canReadMeasurements' },
   { key: 'notifications', href: '/dashboard/notifications', exact: true, label: 'Notificaciones', icon: 'fa-solid fa-bell', permission: 'canReadExecution' },
   { key: 'extra-work', href: '/dashboard/extra-work', exact: true, label: 'Trabajo extra', icon: 'fa-solid fa-person-digging', permission: 'canReadExecution' },
   { key: 'replan', href: '/dashboard/replan', exact: true, label: 'Escenarios de plan', icon: 'fa-solid fa-code-branch', permission: 'canReadExecution' },

@@ -1,0 +1,835 @@
+.page {
+  --measurement-green: #34d399;
+  --measurement-blue: #38bdf8;
+  --measurement-red: #fb7185;
+  display: grid;
+  gap: 1.25rem;
+  margin: 0 auto;
+  max-width: 1540px;
+  padding: clamp(1rem, 2.4vw, 2.5rem);
+  width: 100%;
+}
+
+.hero,
+.taskSelector,
+.summaryPanel,
+.preparePanel,
+.historyPanel,
+.uncertainPanel,
+.emptyState {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 22px;
+}
+
+.hero {
+  align-items: flex-end;
+  background:
+    radial-gradient(circle at 90% 10%, rgba(56, 189, 248, 0.13), transparent 35%),
+    var(--bg-surface);
+  display: flex;
+  gap: 2rem;
+  justify-content: space-between;
+  overflow: hidden;
+  padding: clamp(1.35rem, 3vw, 2.5rem);
+}
+
+.hero h1 {
+  color: var(--text-primary);
+  font-size: clamp(2rem, 4.5vw, 4.2rem);
+  letter-spacing: -0.055em;
+  line-height: 0.98;
+  margin: 0.45rem 0 0.7rem;
+}
+
+.hero p,
+.taskSelector p,
+.sectionHeading p,
+.uncertainPanel p,
+.emptyState p {
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.eyebrow {
+  color: var(--measurement-blue);
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.scopeNotice {
+  align-items: center;
+  background: rgba(56, 189, 248, 0.08);
+  border: 1px solid rgba(56, 189, 248, 0.22);
+  border-radius: 14px;
+  color: var(--text-secondary);
+  display: flex;
+  flex: 0 1 390px;
+  font-size: 0.85rem;
+  gap: 0.75rem;
+  line-height: 1.45;
+  padding: 0.9rem 1rem;
+}
+
+.scopeNotice i {
+  color: var(--measurement-blue);
+}
+
+.failClosed,
+.liveRegion p {
+  border-radius: 14px;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin: 0;
+  padding: 0.9rem 1rem;
+}
+
+.failClosed,
+.liveRegion p[data-tone='warning'] {
+  background: rgba(251, 191, 36, 0.09);
+  border: 1px solid rgba(251, 191, 36, 0.28);
+  color: #fbbf24;
+}
+
+.liveRegion {
+  min-height: 0;
+}
+
+.liveRegion:empty {
+  display: none;
+}
+
+.liveRegion p[data-tone='success'] {
+  background: rgba(52, 211, 153, 0.09);
+  border: 1px solid rgba(52, 211, 153, 0.28);
+  color: var(--measurement-green);
+}
+
+.liveRegion p[data-tone='error'] {
+  background: rgba(251, 113, 133, 0.09);
+  border: 1px solid rgba(251, 113, 133, 0.28);
+  color: var(--measurement-red);
+}
+
+.liveRegion p[data-tone='neutral'] {
+  background: rgba(56, 189, 248, 0.08);
+  border: 1px solid rgba(56, 189, 248, 0.22);
+  color: var(--measurement-blue);
+}
+
+.taskSelector {
+  align-items: center;
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: minmax(0, 1fr) minmax(270px, 0.7fr);
+  padding: 1.15rem 1.25rem;
+}
+
+.taskSelector > div,
+.sectionHeading {
+  align-items: flex-start;
+  display: flex;
+  gap: 0.85rem;
+}
+
+.taskSelector h2,
+.sectionHeading h2,
+.emptyState h2 {
+  color: var(--text-primary);
+  font-size: 1.08rem;
+  letter-spacing: -0.02em;
+  margin: 0 0 0.25rem;
+}
+
+.sectionIndex {
+  align-items: center;
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  border-radius: 9px;
+  color: var(--measurement-blue);
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 0.7rem;
+  font-weight: 900;
+  height: 2rem;
+  justify-content: center;
+  letter-spacing: 0.08em;
+  width: 2rem;
+}
+
+.taskSelector label,
+.measurementForm label,
+.reviewForm label {
+  color: var(--text-secondary);
+  display: grid;
+  font-size: 0.78rem;
+  font-weight: 700;
+  gap: 0.4rem;
+}
+
+.taskSelector select,
+.measurementForm input,
+.measurementForm select,
+.measurementForm textarea,
+.reviewForm select,
+.reviewForm textarea {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 11px;
+  color: var(--text-primary);
+  font: inherit;
+  min-height: 44px;
+  padding: 0.72rem 0.8rem;
+  width: 100%;
+}
+
+.measurementForm textarea,
+.reviewForm textarea {
+  min-height: 105px;
+  resize: vertical;
+}
+
+.taskSelector select:focus-visible,
+.measurementForm input:focus-visible,
+.measurementForm select:focus-visible,
+.measurementForm textarea:focus-visible,
+.reviewForm select:focus-visible,
+.reviewForm textarea:focus-visible,
+.page button:focus-visible {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-glow);
+  outline: none;
+}
+
+.workspace {
+  align-items: start;
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: minmax(310px, 0.75fr) minmax(440px, 1.25fr);
+}
+
+.summaryPanel,
+.preparePanel,
+.historyPanel {
+  min-width: 0;
+  padding: 1.25rem;
+}
+
+.summaryPanel {
+  position: sticky;
+  top: 1rem;
+}
+
+.preparePanel,
+.historyPanel {
+  grid-column: 2;
+}
+
+.metrics {
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 1.2rem;
+}
+
+.metrics > div,
+.fixedBasis {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.9rem;
+}
+
+.metrics small,
+.fixedBasis span,
+.fixedBasis small {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+}
+
+.metrics strong,
+.fixedBasis strong {
+  color: var(--text-primary);
+  font-size: clamp(1rem, 2vw, 1.35rem);
+  overflow-wrap: anywhere;
+}
+
+.progressTrack {
+  background: var(--bg-card);
+  border-radius: 999px;
+  height: 7px;
+  margin-top: 1rem;
+  overflow: hidden;
+}
+
+.progressTrack span {
+  background: linear-gradient(90deg, var(--measurement-blue), var(--measurement-green));
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+  max-width: 100%;
+  width: var(--measurement-progress, 0%);
+}
+
+.notDefined,
+.loading,
+.noEvidence,
+.checkerNotice,
+.emptyHistory {
+  background: var(--bg-card);
+  border: 1px dashed var(--border-color);
+  border-radius: 14px;
+  color: var(--text-secondary);
+  margin: 1.1rem 0 0;
+  padding: 1rem;
+}
+
+.notDefined strong {
+  color: var(--text-primary);
+}
+
+.notDefined p {
+  margin: 0.3rem 0 0;
+}
+
+.measurementForm {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.2rem;
+}
+
+.measurementForm fieldset {
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  display: grid;
+  gap: 0.85rem;
+  margin: 0;
+  min-width: 0;
+  padding: 1rem;
+}
+
+.measurementForm legend {
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  font-weight: 800;
+  padding: 0 0.35rem;
+}
+
+.measurementForm label small,
+.measurementForm fieldset > small,
+.reviewForm small {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+.formGrid {
+  display: grid;
+  gap: 0.85rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.fixedBasis {
+  align-content: center;
+}
+
+.evidencePicker {
+  display: grid;
+  gap: 0.55rem;
+  max-height: 300px;
+  overflow: auto;
+  padding-right: 0.2rem;
+}
+
+.evidencePicker label {
+  align-items: center;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  cursor: pointer;
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.75rem;
+}
+
+.evidencePicker label:has(input:checked) {
+  background: rgba(56, 189, 248, 0.08);
+  border-color: rgba(56, 189, 248, 0.35);
+}
+
+.evidencePicker input {
+  accent-color: var(--primary);
+  min-height: auto;
+  width: 1rem;
+}
+
+.evidencePicker span {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.evidencePicker strong {
+  color: var(--text-primary);
+  font-size: 0.78rem;
+}
+
+.formError {
+  color: var(--measurement-red);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.primaryAction,
+.reviewForm button,
+.uncertainActions button,
+.loadMore,
+.summaryPanel > button {
+  background: var(--primary);
+  border: 0;
+  border-radius: 11px;
+  color: white;
+  cursor: pointer;
+  font-weight: 800;
+  min-height: 44px;
+  padding: 0.75rem 1rem;
+}
+
+.primaryAction:disabled,
+.reviewForm button:disabled,
+.uncertainActions button:disabled,
+.loadMore:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.mutationDisclaimer {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.pendingBlock {
+  background: rgba(251, 191, 36, 0.08);
+  border: 1px solid rgba(251, 191, 36, 0.25);
+  border-radius: 14px;
+  color: var(--text-secondary);
+  padding: 0.9rem;
+}
+
+.pendingBlock strong {
+  color: #fbbf24;
+  font-size: 0.82rem;
+}
+
+.pendingBlock p {
+  font-size: 0.76rem;
+  line-height: 1.5;
+  margin: 0.3rem 0 0;
+}
+
+.pendingBlock button {
+  background: transparent;
+  border: 1px solid rgba(251, 191, 36, 0.32);
+  border-radius: 9px;
+  color: #fbbf24;
+  cursor: pointer;
+  margin-top: 0.7rem;
+  min-height: 40px;
+  padding: 0.55rem 0.75rem;
+}
+
+.historyPanel {
+  grid-row: span 2;
+}
+
+.historyList {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.2rem;
+}
+
+.measurementCard {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-left: 3px solid var(--text-muted);
+  border-radius: 16px;
+  overflow: hidden;
+  padding: 1rem;
+}
+
+.measurementCard[data-status='approved'] {
+  border-left-color: var(--measurement-green);
+}
+
+.measurementCard[data-status='pending'] {
+  border-left-color: #fbbf24;
+}
+
+.measurementCard[data-status='rejected'] {
+  border-left-color: var(--measurement-red);
+}
+
+.cardHeader {
+  align-items: flex-start;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.cardHeader > div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.cardHeader small,
+.measurementFacts dt,
+.decisionTimeline small {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+}
+
+.cardHeader strong {
+  color: var(--text-primary);
+  font-size: 1.25rem;
+}
+
+.statusBadge {
+  background: rgba(148, 163, 184, 0.1);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 0.35rem 0.55rem;
+  white-space: nowrap;
+}
+
+.statusBadge[data-status='approved'] {
+  background: rgba(52, 211, 153, 0.1);
+  border-color: rgba(52, 211, 153, 0.22);
+  color: var(--measurement-green);
+}
+
+.statusBadge[data-status='pending'] {
+  background: rgba(251, 191, 36, 0.1);
+  border-color: rgba(251, 191, 36, 0.22);
+  color: #fbbf24;
+}
+
+.statusBadge[data-status='rejected'] {
+  background: rgba(251, 113, 133, 0.1);
+  border-color: rgba(251, 113, 133, 0.22);
+  color: var(--measurement-red);
+}
+
+.measurementFacts {
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 1rem 0;
+}
+
+.measurementFacts > div {
+  border-left: 1px solid var(--border-color);
+  display: grid;
+  gap: 0.2rem;
+  padding-left: 0.65rem;
+}
+
+.measurementFacts dd {
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  font-weight: 700;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.rationale,
+.evidenceReferences {
+  border-top: 1px solid var(--border-color);
+  padding: 0.85rem 0;
+}
+
+.rationale strong,
+.evidenceReferences strong {
+  color: var(--text-primary);
+  font-size: 0.76rem;
+}
+
+.rationale p {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.55;
+  margin: 0.4rem 0 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.evidenceReferences ul {
+  display: grid;
+  gap: 0.35rem;
+  list-style: none;
+  margin: 0.55rem 0 0;
+  padding: 0;
+}
+
+.evidenceReferences li {
+  color: var(--text-secondary);
+  display: flex;
+  font-size: 0.72rem;
+  gap: 0.65rem;
+  justify-content: space-between;
+}
+
+.decisionTimeline {
+  display: grid;
+  gap: 0;
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem 0 0;
+}
+
+.decisionTimeline li {
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: 1.8rem minmax(0, 1fr);
+  min-height: 3.2rem;
+  position: relative;
+}
+
+.decisionTimeline li:not(:last-child)::after {
+  background: var(--border-color);
+  content: '';
+  height: calc(100% - 1.6rem);
+  left: 0.88rem;
+  position: absolute;
+  top: 1.55rem;
+  width: 1px;
+}
+
+.decisionTimeline li > span {
+  align-items: center;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  color: var(--measurement-blue);
+  display: flex;
+  height: 1.8rem;
+  justify-content: center;
+  width: 1.8rem;
+}
+
+.decisionTimeline li[data-complete='true'] > span {
+  color: var(--measurement-green);
+}
+
+.decisionTimeline li > div {
+  display: grid;
+  gap: 0.15rem;
+  padding-bottom: 0.7rem;
+}
+
+.decisionTimeline strong {
+  color: var(--text-primary);
+  font-size: 0.78rem;
+}
+
+.decisionTimeline p {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  margin: 0.3rem 0 0;
+  overflow-wrap: anywhere;
+}
+
+.reviewForm {
+  background: rgba(56, 189, 248, 0.05);
+  border: 1px solid rgba(56, 189, 248, 0.16);
+  border-radius: 14px;
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+  padding: 0.85rem;
+}
+
+.reviewHeading {
+  align-items: start;
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: minmax(0, 1fr) 145px;
+}
+
+.reviewHeading > div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.reviewHeading strong {
+  color: var(--text-primary);
+  font-size: 0.8rem;
+}
+
+.checkerNotice {
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.checkerNotice p {
+  margin: 0 0 0.65rem;
+}
+
+.checkerNotice button {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 9px;
+  color: var(--text-primary);
+  cursor: pointer;
+  min-height: 38px;
+  padding: 0.55rem 0.75rem;
+}
+
+.readinessBadge {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 800;
+  margin: 0.8rem 0 0;
+  text-transform: uppercase;
+}
+
+.readinessBadge[data-state='review_pending'] {
+  color: #fbbf24;
+}
+
+.readinessBadge[data-state='ready'] {
+  color: var(--measurement-green);
+}
+
+.uncertainPanel {
+  align-items: center;
+  border-color: rgba(251, 191, 36, 0.28);
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  padding: 1rem 1.15rem;
+}
+
+.uncertainPanel strong {
+  color: #fbbf24;
+}
+
+.uncertainPanel p {
+  font-size: 0.78rem;
+  margin-top: 0.2rem;
+}
+
+.uncertainActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.uncertainActions button {
+  min-height: 40px;
+}
+
+.emptyState {
+  color: var(--text-secondary);
+  padding: 4rem 1.5rem;
+  text-align: center;
+}
+
+.emptyState i {
+  color: var(--measurement-blue);
+  font-size: 2rem;
+  margin-bottom: 1rem;
+}
+
+.emptyHistory {
+  text-align: center;
+}
+
+.loadMore {
+  margin-top: 1rem;
+  width: 100%;
+}
+
+@media (max-width: 1060px) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .summaryPanel,
+  .preparePanel,
+  .historyPanel {
+    grid-column: 1;
+  }
+
+  .summaryPanel {
+    position: static;
+  }
+}
+
+@media (max-width: 760px) {
+  .page {
+    padding: 0.8rem;
+  }
+
+  .hero,
+  .uncertainPanel {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .scopeNotice {
+    flex-basis: auto;
+  }
+
+  .taskSelector,
+  .formGrid,
+  .reviewHeading {
+    grid-template-columns: 1fr;
+  }
+
+  .metrics {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .measurementFacts {
+    grid-template-columns: 1fr;
+  }
+
+  .measurementFacts > div {
+    border-left: 0;
+    border-top: 1px solid var(--border-color);
+    padding: 0.55rem 0 0;
+  }
+
+  .cardHeader,
+  .evidenceReferences li {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .statusBadge {
+    white-space: normal;
+  }
+
+  .uncertainActions,
+  .uncertainActions button,
+  .primaryAction {
+    justify-content: stretch;
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progressTrack span {
+    transition: none;
+  }
+}
