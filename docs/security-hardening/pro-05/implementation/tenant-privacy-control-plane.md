@@ -54,9 +54,26 @@ Rollback:
 
 ## Phase PRO-05B: decisions, holds and clocks
 
-Add proportional requester verification, jurisdiction-specific due dates,
-reviewed per-item action/basis, narrowly scoped legal holds and deadline
-observability. No destructive adapter becomes available in this phase.
+### PRO-05B.1 verified slice
+
+The non-executable control plane is implemented at commit
+`871cf2fa940084ad791b7febce494cf57be2e2d6`. It adds proportional requester or
+representative verification events, explicit jurisdiction/due-date reviews,
+per-item action/basis, narrowly scoped legal holds, maker-checker decisions and
+deadline observability. Its canonical product contract is
+[`DATA_SUBJECT_DECISION_CONTROL_PLANE.md`](../../../DATA_SUBJECT_DECISION_CONTROL_PLANE.md)
+and its immutable Preview record is
+[`2026-08-11-preview-871cf2f.md`](../../../evidence/2026-08-11-preview-871cf2f.md).
+
+PostgreSQL 17 CI ran disposable races; Vercel/Neon Preview ran rollback-only
+with the disposable flag forced to `0`. The authenticated Preview smoke proved
+read-only `ADMIN` access, the `AUDITOR` boundary and signed-out fail-closed
+behavior. The queue was empty and no POST or domain mutation was executed.
+
+Every contract remains `executionAllowed: false`. No destructive adapter becomes
+available in this phase. Legal entity/matrix approval, a populated synthetic
+maker-checker journey, cross-tenant negatives and the whole of PRO-05C/D remain
+open; real workers and Production remain NO-GO.
 
 ## Phase PRO-05C: domain execution
 

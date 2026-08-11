@@ -20,9 +20,26 @@ consistencia terminal y evidencia append-only. En el corte
 PostgreSQL 17 y en Vercel/Neon Preview sobre el esquema completo de 119
 migraciones. El [corte posterior `fc71fbe`](./evidence/2026-08-11-preview-fc71fbe.md)
 volvió a aprobarlo dentro del historial completo de 120 migraciones. Eso
-acredita el gate técnico de discovery; no acredita identidad
-del solicitante, decisión legal, ejecución de derechos, piloto real ni
-Production.
+acredita el gate técnico histórico de discovery. El
+[corte PRO-05B.1 `871cf2f`](./evidence/2026-08-11-preview-871cf2f.md) volvió a
+ejecutar PRO-05A dentro de 121 migraciones y agregó el plano de control de
+revisión descrito abajo. Ninguno de esos cortes acredita ejecución de derechos,
+piloto real ni Production.
+
+## Adenda PRO-05B.1 — revisión sin ejecución
+
+El [plano de control PRO-05B.1](./DATA_SUBJECT_DECISION_CONTROL_PLANE.md) agrega
+eventos versionados de identidad/representación, revisiones de
+jurisdicción y plazo, holds acotados, decisiones por ítem, CAS, replay exacto y
+maker-checker. La consola exige una membresía tenant `ADMIN` activa incluso para
+un superadministrador de plataforma, funciona sin contexto de obra y muestra de
+forma permanente `Sin ejecución`.
+
+El contrato mantiene `executionAllowed: false`. No exporta, corrige, restringe,
+ofrece portabilidad, anonimiza ni elimina datos. El smoke Preview fue sólo
+lectura: el `ADMIN` vio la consola y una cola vacía; el `AUDITOR` recibió el
+boundary restringido y no vio el enlace; no se ejecutó ningún POST. El detalle
+reproducible está en la [evidencia `871cf2f`](./evidence/2026-08-11-preview-871cf2f.md).
 
 ## Frontera de la API
 
@@ -133,9 +150,10 @@ cambia la identidad durable de una operación idempotente.
 
 PRO-05 permanece abierto hasta completar:
 
-1. **PRO-05B — decisión:** verificación proporcional de identidad o
-   representación, jurisdicción, plazo aplicable, matriz de retención, base por
-   ítem, holds acotados y revisión humana.
+1. **Cierre operativo de PRO-05B:** aprobar entidad/matriz legal y políticas de
+   retención, y recorrer con datos sintéticos el POST maker-checker completo,
+   revocación, holds y conflictos cross-tenant. PRO-05B.1 implementa el plano de
+   control, pero no inventa ni aprueba esos hechos humanos.
 2. **PRO-05C — ejecución:** adapters idempotentes por dominio para acceso,
    corrección, restricción, portabilidad, anonimización o eliminación, sin
    eludir los ledgers protegidos.
@@ -145,10 +163,10 @@ PRO-05 permanece abierto hasta completar:
 4. Identificar y publicar la entidad legal responsable, domicilio, rol
    responsable/encargado por flujo y un contacto de privacidad operativo
    verificado; la implementación no inventa esos datos.
-5. Recorrer el endpoint PRO-05A con un ADMIN sintético autorizado, incluyendo
-   negativos por rol y cross-tenant. La migración y su verificador ya pasaron en
-   PostgreSQL 17 y Neon Preview, pero ese gate no sustituye el E2E funcional ni
-   autoriza información laboral real.
+5. Ampliar el smoke read-only `ADMIN`/`AUDITOR` ya completado a una matriz de
+   roles, negativos cross-tenant y un expediente sintético completo. La
+   migración y sus verificadores pasaron PostgreSQL 17 y Neon Preview, pero ese
+   gate no sustituye el E2E funcional ni autoriza información laboral real.
 
 La arquitectura y alternativas evaluadas están en
 [la propuesta de hardening](./security-hardening/pro-05/hardening.md). Ningún

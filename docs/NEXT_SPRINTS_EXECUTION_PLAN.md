@@ -2,7 +2,7 @@
 
 Este plan mantiene la secuencia del PDF y separa capacidades operativas de capacidades financieras. Cada sprint debe cerrar con migración verificable, pruebas de concurrencia, permisos y evidencia de uso; un endpoint compilado no cuenta como salida.
 
-## Corte base: 2 de agosto de 2026 · actualización S12.2C: 11 de agosto de 2026
+## Corte base: 2 de agosto de 2026 · actualización S12.2C/PRO-05B.1: 11 de agosto de 2026
 
 El estado se expresa por nivel de evidencia: código y pruebas locales, migración en Preview aislado, journey UI en Preview y E2E externo. No se usa “desplegado” como sinónimo de “operativo con un proveedor real”.
 
@@ -21,6 +21,7 @@ El estado se expresa por nivel de evidencia: código y pruebas locales, migraci�
   acredita ese gate y un smoke AUDITOR acotado; no acredita DSAR ejecutable,
   matriz completa de roles, cross-tenant, Meta real, S12.2C ni Production;
 - el commit `fc71fbe` quedó `Ready` en un deployment Preview inmutable, sin mover ni certificar un alias estable. El release detectó 120 migraciones sin pendientes, aprobó S12.2C en modo rollback-only, volvió a ejecutar PRO-05A y completó el build 88/88. CI PostgreSQL 17 cerró sus tres jobs y ejecutó cuatro carreras disposable con cleanup exacto, `2172/2172` pruebas y drift cero. La [evidencia S12.2C](./evidence/2026-08-11-preview-fc71fbe.md) agrega un smoke sintético acotado `AUDITOR → DIRECTOR → SITE_MANAGER → AUDITOR`, con rol/grant restaurados y cero `error`/`fatal` o `5xx` en la ventana observada. No acredita una reserva/liberación exitosa, matriz completa, cross-tenant, Meta, trabajadores reales ni Production;
+- el commit `871cf2f` agregó PRO-05B.1 y quedó `Ready` en el deployment Preview inmutable `dpl_Fj7zRe66SrNtaeLXQSXhESjygPSs`, sin mover ni certificar un alias. El release detectó 121 migraciones sin pendientes, volvió a ejecutar PRO-05A, aprobó PRO-05B.1 en rollback-only con carreras disposable desactivadas y completó 88/88. CI `31511714114` terminó 3/3 con `2230/2230`, PostgreSQL 17 disposable, status y drift cero. El [smoke PRO-05B.1](./evidence/2026-08-11-preview-871cf2f.md) comprobó acceso `ADMIN`, rechazo `AUDITOR`, signed-out 404 y cero `error`/`fatal`/`5xx`, todo read-only y sin POST. No acredita DSAR ejecutable, cross-tenant, trabajadores reales, alias ni Production;
 - falta cerrar el smoke UI de publicación de baseline y forecast en el tenant de prueba, porque el acceso local directo a la conexión Preview está deliberadamente protegido y no se sustituye con una conexión de Production;
 - Meta, media entrante e identidad/cobro siguen siendo gates externos. La credencial dedicada de Vision, el presupuesto y el ledger gobernado ya están aislados/verificados en Preview; faltan gate de datos, foto real y journey autenticado.
 
@@ -68,8 +69,9 @@ El estado se expresa por nivel de evidencia: código y pruebas locales, migraci�
 
 - PRO-05A está implementado y su gate técnico fue verificado en Preview como una base deliberadamente no destructiva: caso por tenant, sujeto `WORKER_PERSON`, atestación de autoridad ADMIN que no se presenta como identidad verificada, discovery `REPEATABLE READ READ ONLY`, catálogo v1 fijado, manifiesto/ítems append-only, HMAC sin IDs fuente, replay exacto y límites de 20 casos por actor/100 por organización por hora;
 - el catálogo v1 sólo admite `DISCOVERY_BLOCKED` y exige blockers para grafo laboral, conversaciones, media, derivados/proveedores de IA, JSON/auditoría y backup/restore. Ningún endpoint exporta, corrige, restringe, anonimiza ni elimina;
-- la migración aditiva `20260729140000_data_subject_discovery_foundation` aplica desde cero junto con las 108 anteriores en PGlite. Su verificador conductual prueba tenant scope, transacción read-only, hash UTC, cobertura fail-closed, consistencia terminal y append-only; volvió a quedar verde en CI PostgreSQL 17 y Vercel/Neon Preview sobre el esquema completo de 120 migraciones del [corte `fc71fbe`](./evidence/2026-08-11-preview-fc71fbe.md). Falta recorrer el endpoint PRO-05A con ADMIN sintético autorizado y completar la matriz de roles/cross-tenant; no hay evidencia de Production;
-- PRO-05B debe incorporar identidad o representación proporcional, jurisdicción, plazo, matriz de retención, decisión por ítem y holds acotados. PRO-05C agrega adapters idempotentes por dominio y PRO-05D propagación a storage/Meta/IA, backups, tombstones y restore drill;
+- el [plano PRO-05B.1](./DATA_SUBJECT_DECISION_CONTROL_PLANE.md) ya incorpora eventos de identidad o representación proporcional, revisión de jurisdicción/plazo, holds acotados, decisión por ítem, CAS, replay y maker-checker en un ledger no-store. Su migración `20260811160000_data_subject_decision_control_plane`, PRO-05A y el historial completo de 121 migraciones quedaron verdes en PostgreSQL 17 y Vercel/Neon Preview en el [corte `871cf2f`](./evidence/2026-08-11-preview-871cf2f.md);
+- el smoke autenticado fue deliberadamente read-only: `ADMIN` abrió la consola no ejecutable y vio cola vacía; `AUDITOR` recibió el boundary restringido y no vio navegación; sin sesión el path devolvió 404. No hubo POST, expediente maker-checker completo ni prueba cross-tenant. `executionAllowed` continúa `false`;
+- PRO-05C debe agregar adapters idempotentes por dominio y PRO-05D propagación a storage/Meta/IA, backups, tombstones y restore drill. PRO-05B.1 prepara decisiones; no exporta, corrige, restringe, porta, anonimiza ni elimina;
 - antes de datos reales también deben aprobarse entidad legal responsable, domicilio, mapa responsable/encargado, contacto operativo y retención del propio ledger. El detalle y las invariantes están en [PRO-05A](./DATA_SUBJECT_RIGHTS_FOUNDATION.md).
 
 ## S20 — campo offline confiable
