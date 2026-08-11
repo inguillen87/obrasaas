@@ -728,6 +728,10 @@ async function assertRollbackOnlyBehavior(client) {
       '55000',
       'direct terminal evidence update',
     );
+    // Flush successful deferred lifecycle events so the next probe reaches the
+    // governed TRUNCATE trigger instead of PostgreSQL's pending-trigger fence.
+    await client.query('SET CONSTRAINTS ALL IMMEDIATE');
+    await client.query('SET CONSTRAINTS ALL DEFERRED');
     await expectFailure(
       client,
       () => client.query('TRUNCATE "DataSubjectRequesterVerificationEvent" CASCADE'),

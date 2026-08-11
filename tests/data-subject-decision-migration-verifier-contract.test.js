@@ -61,6 +61,22 @@ test('catalog accepts PostgreSQL deparsing BETWEEN without weakening the ordinal
   );
 });
 
+test('TRUNCATE behavior flushes deferred events before testing the governed trigger', () => {
+  const truncateProbe = verifier.indexOf(
+    `client.query('TRUNCATE "DataSubjectRequesterVerificationEvent" CASCADE')`,
+  );
+  const constraintFlush = verifier.lastIndexOf(
+    `await client.query('SET CONSTRAINTS ALL IMMEDIATE')`,
+    truncateProbe,
+  );
+  assert.ok(truncateProbe > 0);
+  assert.ok(constraintFlush > 0 && constraintFlush < truncateProbe);
+  assert.match(
+    verifier.slice(constraintFlush, truncateProbe + 100),
+    /SET CONSTRAINTS ALL DEFERRED/,
+  );
+});
+
 test('disposable mode is local-only and proves approval waits for hold, revocation and actor disable', () => {
   assert.match(verifier, /DATA_SUBJECT_DECISION_DISPOSABLE_CONCURRENCY/);
   assert.match(verifier, /local && databaseName === 'obrasaas_ci' && schema === 'public'/);
