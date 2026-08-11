@@ -315,26 +315,163 @@ export function requireS92DisposableTarget(baseURL, environment = process.env) {
   return target.origin;
 }
 
-export async function sameOriginJson(page, pathname, init = {}) {
-  return page.evaluate(async ({ requestInit, requestPath }) => {
-    const response = await fetch(requestPath, {
-      ...requestInit,
-      cache: 'no-store',
-      credentials: 'same-origin',
-    });
-    const responseText = await response.text();
-    let payload = null;
-    try {
-      payload = responseText ? JSON.parse(responseText) : null;
-    } catch {
-      payload = null;
+function sameOriginTarget(page, pathname) {
+  if (typeof pathname !== 'string' || !pathname.startsWith('/') || pathname.startsWith('//')) {
+    throw new Error('S9.2 API exige una ruta relativa al mismo origen.');
+  }
+  let current;
+  let target;
+  try {
+    current = new URL(page.url());
+    target = new URL(pathname, current);
+  } catch {
+    throw new Error('S9.2 API no pudo resolver el origen de la pagina.');
+  }
+  if (
+    !['http:', 'https:'].includes(current.protocol)
+    || current.username
+    || current.password
+    || target.origin !== current.origin
+    || target.username
+    || target.password
+    || target.hash
+  ) {
+    throw new Error('S9.2 API rechazo un destino fuera del mismo origen.');
+  }
+  return target;
+}
+
+function exactRequestInit(init) {
+  if (!init || typeof init !== 'object' || Array.isArray(init)) {
+    throw new Error('S9.2 API exige opciones de request validas.');
+  }
+  const unsupported = Object.keys(init).filter(
+    (key) => !['body', 'headers', 'method'].includes(key),
+  );
+  if (unsupported.length) {
+    throw new Error('S9.2 API recibio opciones de request no soportadas.');
+  }
+
+  const method = init.method ?? 'GET';
+  if (typeof method !== 'string' || !/^[A-Z]+$/.test(method)) {
+    throw new Error('S9.2 API exige un metodo HTTP normalizado.');
+  }
+  if (init.body !== undefined && typeof init.body !== 'string') {
+    throw new Error('S9.2 API exige un body serializado como string.');
+  }
+
+  let headers;
+  if (init.headers !== undefined) {
+    if (!init.headers || typeof init.headers !== 'object' || Array.isArray(init.headers)) {
+      throw new Error('S9.2 API exige headers como objeto de strings.');
     }
-    return {
-      headers: Object.fromEntries(response.headers.entries()),
-      payload,
-      status: response.status,
-    };
-  }, { requestInit: init, requestPath: pathname });
+    headers = {};
+    for (const [name, value] of Object.entries(init.headers)) {
+      if (
+        !name
+        || name !== name.trim()
+        || /[\r\n]/.test(name)
+        || typeof value !== 'string'
+        || /[\r\n]/.test(value)
+      ) {
+        throw new Error('S9.2 API exige headers normalizados y sin saltos de linea.');
+      }
+      headers[name] = value;
+    }
+  }
+
+  const request = {
+    failOnStatusCode: false,
+    maxRedirects: 0,
+    method,
+  };
+  if (headers !== undefined) request.headers = headers;
+  if (init.body !== undefined) request.data = init.body;
+  return request;
+}
+
+function publicResponseHeaders(headers) {
+  return Object.fromEntries(
+    Object.entries(headers).filter(([name]) => (
+      !/(?:authorization|cookie|secret|token|session)/i.test(name)
+    )),
+  );
+}
+
+function redactDiagnosticText(value) {
+  return value
+    .replace(/^(?:authorization|cookie|set-cookie|proxy-authorization)\s*:.*$/gim, '[REDACTED_HEADER]')
+    .replace(/\bBearer\s+[^\s,;]+/gi, 'Bearer [REDACTED]')
+    .replace(/\b(?:sk|pk)_(?:test|live)_[A-Za-z0-9_-]+\b/g, '[REDACTED_KEY]')
+    .replace(/\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?):\/\/[^\s"'<>]+/gi, '[REDACTED_DATABASE_URL]')
+    .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, '[REDACTED_JWT]')
+    .replace(
+      /((?:"?(?:password|secret|token|cookie|authorization|session)"?)\s*[:=]\s*"?)[^",}\s&]+/gi,
+      '$1[REDACTED]',
+    )
+    .replace(/\b[A-Za-z0-9_-]{32,}\b/g, '[REDACTED_OPAQUE]')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 240);
+}
+
+function responseDiagnostic(status, responseText, payload) {
+  const diagnostic = {
+    status,
+    textLength: responseText.length,
+  };
+  if (responseText && (status >= 400 || payload === null)) {
+    diagnostic.textPreview = redactDiagnosticText(responseText);
+  }
+  return diagnostic;
+}
+
+function transportFailure(method, target, error, phase) {
+  const errorName = error instanceof Error && /^(?:Error|[A-Za-z]+Error)$/.test(error.name)
+    ? error.name
+    : 'TransportError';
+  return new Error(
+    `S9.2 API fallo ${phase} (${method} ${target.pathname}; ${errorName}).`,
+  );
+}
+
+export async function sameOriginJson(page, pathname, init = {}) {
+  const target = sameOriginTarget(page, pathname);
+  const requestInit = exactRequestInit(init);
+  const request = page.context()?.request;
+  if (!request || typeof request.fetch !== 'function') {
+    throw new Error('S9.2 API requiere BrowserContext.request de Playwright.');
+  }
+
+  let response;
+  try {
+    response = await request.fetch(target.href, requestInit);
+  } catch (error) {
+    throw transportFailure(requestInit.method, target, error, 'antes de recibir status');
+  }
+
+  let status;
+  let responseText;
+  let responseHeaders;
+  try {
+    status = response.status();
+    responseHeaders = response.headers();
+    responseText = await response.text();
+  } catch (error) {
+    throw transportFailure(requestInit.method, target, error, 'al leer la respuesta');
+  }
+  let payload = null;
+  try {
+    payload = responseText ? JSON.parse(responseText) : null;
+  } catch {
+    payload = null;
+  }
+  return {
+    diagnostic: responseDiagnostic(status, responseText, payload),
+    headers: publicResponseHeaders(responseHeaders),
+    payload,
+    status,
+  };
 }
 
 export async function openS92ActorSession(browser, {

@@ -313,6 +313,7 @@ jobs:
 
       - name: Run authenticated S9.2 journey
         env:
+          DEBUG: pw:webserver
           NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_E2E_PUBLISHABLE_KEY }}
           CLERK_SECRET_KEY: ${{ secrets.CLERK_E2E_SECRET_KEY }}
           S92_E2E_FIXTURE_FILE: ${{ runner.temp }}/s92-e2e-fixture.json

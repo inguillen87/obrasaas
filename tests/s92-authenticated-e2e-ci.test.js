@@ -32,12 +32,19 @@ test('S9.2 authenticated E2E is a trusted-branch disposable PostgreSQL gate', ()
   assert.match(job, /npm run test:e2e:authenticated:s92/);
 });
 
-test('authenticated diagnostics and secret values are not published by CI', () => {
+test('authenticated web-server diagnostics are scoped without publishing artifacts or secrets', () => {
   const job = jobSource('authenticated-s92-e2e');
   const preSteps = job.slice(0, job.indexOf('\n    steps:'));
+  const runStepStart = job.indexOf('- name: Run authenticated S9.2 journey');
+  assert.notEqual(runStepStart, -1);
+  const beforeRunStep = job.slice(0, runStepStart);
+  const runStep = job.slice(runStepStart);
 
   assert.match(job, /secrets\.CLERK_E2E_PUBLISHABLE_KEY/);
   assert.match(job, /secrets\.CLERK_E2E_SECRET_KEY/);
+  assert.doesNotMatch(beforeRunStep, /DEBUG:\s*pw:webserver/);
+  assert.match(runStep, /DEBUG:\s*pw:webserver/);
+  assert.equal((job.match(/DEBUG:\s*pw:webserver/g) || []).length, 1);
   assert.doesNotMatch(preSteps, /CLERK_E2E_(?:PUBLISHABLE|SECRET)_KEY/);
   assert.doesNotMatch(
     job.slice(job.indexOf('- name: Install exact dependencies'), job.indexOf('- name: Require Clerk development credentials')),
