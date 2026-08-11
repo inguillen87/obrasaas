@@ -104,6 +104,11 @@ enum ProgressMeasurementDecisionType {
   REJECTED
 }
 
+enum ProgressMeasurementCutLineState {
+  MEASURED
+  MISSING
+}
+
 enum ProgressEvidenceCaptureStatus {
   AWAITING_LOCATION
   LOCATION_CAPTURED
@@ -850,6 +855,9 @@ model Organization {
   taskProgressMeasurementEvidence     TaskProgressMeasurementEvidence[]
   taskProgressMeasurementDecisions    TaskProgressMeasurementDecision[]
   taskProgressMeasurementBalances     TaskProgressMeasurementBalance[]
+  projectProgressMeasurementCutHeads  ProjectProgressMeasurementCutHead[]
+  projectProgressMeasurementCuts      ProjectProgressMeasurementCut[]
+  projectProgressMeasurementCutLines  ProjectProgressMeasurementCutLine[]
   workerPersons                       WorkerPerson[]
   workerChannelIdentities             WorkerChannelIdentity[]
   workerOnboardingClaims              WorkerOnboardingClaim[]
@@ -1725,41 +1733,42 @@ model PlatformUser {
 }
 
 model TenantMembership {
-  id                                 String                                  @id @default(cuid())
-  organizationId                     String
-  organization                       Organization                            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  userId                             String
-  user                               PlatformUser                            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  clerkRole                          String                                  @default("org:member")
-  tenantRole                         TenantRole                              @default(AUDITOR)
-  status                             MembershipStatus                        @default(ACTIVE)
-  projectMemberships                 ProjectMembership[]
-  verifiedWorkerIdentities           WorkerPerson[]                          @relation("WorkerIdentityVerifierMembership")
-  rejectedWorkerIdentities           WorkerPerson[]                          @relation("WorkerIdentityRejecterMembership")
-  reviewedWorkerOnboardingClaims     WorkerOnboardingClaim[]                 @relation("WorkerOnboardingReviewerMembership")
-  submittedWorkerPaymentDestinations WorkerPaymentDestination[]              @relation("WorkerPaymentSubmitterMembership")
-  verifiedWorkerPaymentDestinations  WorkerPaymentDestination[]              @relation("WorkerPaymentVerifierMembership")
-  activatedWorkerPaymentDestinations WorkerPaymentDestination[]              @relation("WorkerPaymentActivatorMembership")
-  rejectedWorkerPaymentDestinations  WorkerPaymentDestination[]              @relation("WorkerPaymentRejecterMembership")
-  revokedWorkerPaymentDestinations   WorkerPaymentDestination[]              @relation("WorkerPaymentRevokerMembership")
-  workerPrivacyChoiceEvents          WorkerPrivacyChoiceEvent[]              @relation("WorkerPrivacyChoiceMembershipActor")
-  workerSensitiveDecisions           WorkerSensitiveDecision[]               @relation("WorkerSensitiveDecisionActor")
-  dataSubjectRequestsAsSubject       DataSubjectRequest[]                    @relation("DataSubjectRequestSubjectMembership")
-  receivedDataSubjectRequests        DataSubjectRequest[]                    @relation("DataSubjectRequestReceivedBy")
-  attestedDataSubjectRequests        DataSubjectRequest[]                    @relation("DataSubjectRequestAttestedBy")
-  completedDataSubjectRequests       DataSubjectRequest[]                    @relation("DataSubjectRequestCompletedBy")
-  sealedDataSubjectManifests         DataSubjectDiscoveryManifest[]          @relation("DataSubjectManifestSealedBy")
-  dataSubjectVerificationEvents      DataSubjectRequesterVerificationEvent[] @relation("DataSubjectVerificationActor")
-  dataSubjectLegalAssessments        DataSubjectLegalAssessmentRevision[]    @relation("DataSubjectLegalAssessmentActor")
-  createdDataSubjectLegalHolds       DataSubjectLegalHold[]                  @relation("DataSubjectLegalHoldCreator")
-  ownedDataSubjectLegalHoldEvents    DataSubjectLegalHoldEvent[]             @relation("DataSubjectLegalHoldOwner")
-  actedDataSubjectLegalHoldEvents    DataSubjectLegalHoldEvent[]             @relation("DataSubjectLegalHoldEventActor")
-  preparedDataSubjectDecisionSets    DataSubjectDecisionSet[]                @relation("DataSubjectDecisionPreparer")
-  decidedDataSubjectDecisionSets     DataSubjectDecisionSet[]                @relation("DataSubjectDecisionChecker")
-  preparedTaskProgressMeasurements   TaskProgressMeasurement[]               @relation("TaskProgressMeasurementPreparer")
-  taskProgressMeasurementDecisions   TaskProgressMeasurementDecision[]       @relation("TaskProgressMeasurementDecider")
-  createdAt                          DateTime                                @default(now())
-  updatedAt                          DateTime                                @updatedAt
+  id                                   String                                  @id @default(cuid())
+  organizationId                       String
+  organization                         Organization                            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId                               String
+  user                                 PlatformUser                            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clerkRole                            String                                  @default("org:member")
+  tenantRole                           TenantRole                              @default(AUDITOR)
+  status                               MembershipStatus                        @default(ACTIVE)
+  projectMemberships                   ProjectMembership[]
+  verifiedWorkerIdentities             WorkerPerson[]                          @relation("WorkerIdentityVerifierMembership")
+  rejectedWorkerIdentities             WorkerPerson[]                          @relation("WorkerIdentityRejecterMembership")
+  reviewedWorkerOnboardingClaims       WorkerOnboardingClaim[]                 @relation("WorkerOnboardingReviewerMembership")
+  submittedWorkerPaymentDestinations   WorkerPaymentDestination[]              @relation("WorkerPaymentSubmitterMembership")
+  verifiedWorkerPaymentDestinations    WorkerPaymentDestination[]              @relation("WorkerPaymentVerifierMembership")
+  activatedWorkerPaymentDestinations   WorkerPaymentDestination[]              @relation("WorkerPaymentActivatorMembership")
+  rejectedWorkerPaymentDestinations    WorkerPaymentDestination[]              @relation("WorkerPaymentRejecterMembership")
+  revokedWorkerPaymentDestinations     WorkerPaymentDestination[]              @relation("WorkerPaymentRevokerMembership")
+  workerPrivacyChoiceEvents            WorkerPrivacyChoiceEvent[]              @relation("WorkerPrivacyChoiceMembershipActor")
+  workerSensitiveDecisions             WorkerSensitiveDecision[]               @relation("WorkerSensitiveDecisionActor")
+  dataSubjectRequestsAsSubject         DataSubjectRequest[]                    @relation("DataSubjectRequestSubjectMembership")
+  receivedDataSubjectRequests          DataSubjectRequest[]                    @relation("DataSubjectRequestReceivedBy")
+  attestedDataSubjectRequests          DataSubjectRequest[]                    @relation("DataSubjectRequestAttestedBy")
+  completedDataSubjectRequests         DataSubjectRequest[]                    @relation("DataSubjectRequestCompletedBy")
+  sealedDataSubjectManifests           DataSubjectDiscoveryManifest[]          @relation("DataSubjectManifestSealedBy")
+  dataSubjectVerificationEvents        DataSubjectRequesterVerificationEvent[] @relation("DataSubjectVerificationActor")
+  dataSubjectLegalAssessments          DataSubjectLegalAssessmentRevision[]    @relation("DataSubjectLegalAssessmentActor")
+  createdDataSubjectLegalHolds         DataSubjectLegalHold[]                  @relation("DataSubjectLegalHoldCreator")
+  ownedDataSubjectLegalHoldEvents      DataSubjectLegalHoldEvent[]             @relation("DataSubjectLegalHoldOwner")
+  actedDataSubjectLegalHoldEvents      DataSubjectLegalHoldEvent[]             @relation("DataSubjectLegalHoldEventActor")
+  preparedDataSubjectDecisionSets      DataSubjectDecisionSet[]                @relation("DataSubjectDecisionPreparer")
+  decidedDataSubjectDecisionSets       DataSubjectDecisionSet[]                @relation("DataSubjectDecisionChecker")
+  preparedTaskProgressMeasurements     TaskProgressMeasurement[]               @relation("TaskProgressMeasurementPreparer")
+  taskProgressMeasurementDecisions     TaskProgressMeasurementDecision[]       @relation("TaskProgressMeasurementDecider")
+  sealedProjectProgressMeasurementCuts ProjectProgressMeasurementCut[]         @relation("ProjectProgressMeasurementCutSealer")
+  createdAt                            DateTime                                @default(now())
+  updatedAt                            DateTime                                @updatedAt
 
   @@unique([organizationId, userId])
   @@unique([organizationId, id], map: "TenantMembership_organizationId_id_key")
@@ -1866,6 +1875,9 @@ model Project {
   taskProgressMeasurementEvidence      TaskProgressMeasurementEvidence[]
   taskProgressMeasurementDecisions     TaskProgressMeasurementDecision[]
   taskProgressMeasurementBalances      TaskProgressMeasurementBalance[]
+  progressMeasurementCutHeads          ProjectProgressMeasurementCutHead[]
+  progressMeasurementCuts              ProjectProgressMeasurementCut[]
+  progressMeasurementCutLines          ProjectProgressMeasurementCutLine[]
   supplierInvoices                     SupplierInvoice[]
   supplierCommitments                  SupplierCommitment[]
   supplierReminderDeliveries           SupplierReminderDelivery[]
@@ -2648,6 +2660,7 @@ model Task {
   progressMeasurementEvidence     TaskProgressMeasurementEvidence[]
   progressMeasurementDecisions    TaskProgressMeasurementDecision[]
   progressMeasurementBalance      TaskProgressMeasurementBalance?
+  progressMeasurementCutLines     ProjectProgressMeasurementCutLine[]
   metadata                        Json?
   createdAt                       DateTime                             @default(now())
   updatedAt                       DateTime                             @updatedAt
@@ -3270,32 +3283,34 @@ model ProgressEvidence {
 /// Mutable task-period projection. Only the governed PostgreSQL functions may
 /// create or advance it; proposals and decisions remain immutable ledgers.
 model TaskProgressMeasurementHead {
-  id                                         String                          @id @default(cuid())
+  id                                         String                              @id @default(cuid())
   organizationId                             String
-  organization                               Organization                    @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "TPMHead_organization_fkey")
+  organization                               Organization                        @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "TPMHead_organization_fkey")
   projectId                                  String
-  project                                    Project                         @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "TPMHead_project_scope_fkey")
-  projectProgressMeasurementEligibleSnapshot Boolean?                        @default(dbgenerated())
-  eligibleProject                            Project?                        @relation("TaskProgressMeasurementProjectEligibility", fields: [organizationId, projectId, projectProgressMeasurementEligibleSnapshot], references: [organizationId, id, progressMeasurementEligible], onDelete: Restrict, onUpdate: Restrict, map: "TPMHead_project_eligibility_fkey")
+  project                                    Project                             @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "TPMHead_project_scope_fkey")
+  projectProgressMeasurementEligibleSnapshot Boolean?                            @default(dbgenerated())
+  eligibleProject                            Project?                            @relation("TaskProgressMeasurementProjectEligibility", fields: [organizationId, projectId, projectProgressMeasurementEligibleSnapshot], references: [organizationId, id, progressMeasurementEligible], onDelete: Restrict, onUpdate: Restrict, map: "TPMHead_project_eligibility_fkey")
   taskId                                     String
-  taskIdentitySnapshot                       Boolean                         @default(true)
-  task                                       Task                            @relation(fields: [projectId, taskId, taskIdentitySnapshot], references: [projectId, id, materialRequirementEligible], onDelete: Restrict, onUpdate: Restrict, map: "TPMHead_task_identity_fkey")
-  periodStart                                DateTime                        @db.Date
-  periodEnd                                  DateTime                        @db.Date
-  headMeasurementId                          String?                         @unique(map: "TPMHead_head_measurement_key")
-  headMeasurement                            TaskProgressMeasurement?        @relation("TaskProgressMeasurementCurrentHead", fields: [organizationId, projectId, taskId, headMeasurementId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, map: "TPMHead_head_measurement_scope_fkey")
-  pendingMeasurementId                       String?                         @unique(map: "TPMHead_pending_measurement_key")
-  pendingMeasurement                         TaskProgressMeasurement?        @relation("TaskProgressMeasurementPendingHead", fields: [organizationId, projectId, taskId, pendingMeasurementId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, map: "TPMHead_pending_measurement_scope_fkey")
-  approvedMeasurementId                      String?                         @unique(map: "TPMHead_approved_measurement_key")
-  approvedMeasurement                        TaskProgressMeasurement?        @relation("TaskProgressMeasurementApprovedHead", fields: [organizationId, projectId, taskId, approvedMeasurementId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, map: "TPMHead_approved_measurement_scope_fkey")
-  revision                                   Int                             @default(0)
-  measurements                               TaskProgressMeasurement[]       @relation("TaskProgressMeasurementHeadLedger")
-  lastApprovedBalance                        TaskProgressMeasurementBalance? @relation("TaskProgressMeasurementBalanceLastHead")
-  createdAt                                  DateTime                        @default(now())
-  updatedAt                                  DateTime                        @updatedAt
+  taskIdentitySnapshot                       Boolean                             @default(true)
+  task                                       Task                                @relation(fields: [projectId, taskId, taskIdentitySnapshot], references: [projectId, id, materialRequirementEligible], onDelete: Restrict, onUpdate: Restrict, map: "TPMHead_task_identity_fkey")
+  periodStart                                DateTime                            @db.Date
+  periodEnd                                  DateTime                            @db.Date
+  headMeasurementId                          String?                             @unique(map: "TPMHead_head_measurement_key")
+  headMeasurement                            TaskProgressMeasurement?            @relation("TaskProgressMeasurementCurrentHead", fields: [organizationId, projectId, taskId, headMeasurementId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, map: "TPMHead_head_measurement_scope_fkey")
+  pendingMeasurementId                       String?                             @unique(map: "TPMHead_pending_measurement_key")
+  pendingMeasurement                         TaskProgressMeasurement?            @relation("TaskProgressMeasurementPendingHead", fields: [organizationId, projectId, taskId, pendingMeasurementId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, map: "TPMHead_pending_measurement_scope_fkey")
+  approvedMeasurementId                      String?                             @unique(map: "TPMHead_approved_measurement_key")
+  approvedMeasurement                        TaskProgressMeasurement?            @relation("TaskProgressMeasurementApprovedHead", fields: [organizationId, projectId, taskId, approvedMeasurementId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, map: "TPMHead_approved_measurement_scope_fkey")
+  revision                                   Int                                 @default(0)
+  measurements                               TaskProgressMeasurement[]           @relation("TaskProgressMeasurementHeadLedger")
+  lastApprovedBalance                        TaskProgressMeasurementBalance?     @relation("TaskProgressMeasurementBalanceLastHead")
+  progressMeasurementCutLines                ProjectProgressMeasurementCutLine[] @relation("ProgressMeasurementCutLineMeasurementHead")
+  createdAt                                  DateTime                            @default(now())
+  updatedAt                                  DateTime                            @updatedAt
 
   @@unique([organizationId, projectId, taskId, periodStart], map: "TPMHead_scope_period_key")
   @@unique([organizationId, projectId, taskId, id], map: "TPMHead_scope_id_key")
+  @@unique([organizationId, projectId, taskId, periodStart, periodEnd, id], map: "TPMHead_cut_period_scope_key")
   @@unique([organizationId, projectId, taskId, headMeasurementId], map: "TPMHead_scope_head_measurement_key")
   @@unique([organizationId, projectId, taskId, pendingMeasurementId], map: "TPMHead_scope_pending_measurement_key")
   @@unique([organizationId, projectId, taskId, approvedMeasurementId], map: "TPMHead_scope_approved_measurement_key")
@@ -3305,42 +3320,43 @@ model TaskProgressMeasurementHead {
 /// Immutable quantitative proposal/revision. Its effective status is derived
 /// from the optional append-only decision and the governed head projection.
 model TaskProgressMeasurement {
-  id                                 String                            @id @default(cuid())
+  id                                 String                              @id @default(cuid())
   organizationId                     String
-  organization                       Organization                      @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "TPM_organization_fkey")
+  organization                       Organization                        @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "TPM_organization_fkey")
   projectId                          String
-  project                            Project                           @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "TPM_project_scope_fkey")
+  project                            Project                             @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "TPM_project_scope_fkey")
   taskId                             String
-  task                               Task                              @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict, map: "TPM_task_scope_fkey")
+  task                               Task                                @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict, map: "TPM_task_scope_fkey")
   headId                             String
-  head                               TaskProgressMeasurementHead       @relation("TaskProgressMeasurementHeadLedger", fields: [organizationId, projectId, taskId, headId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, map: "TPM_head_scope_fkey")
+  head                               TaskProgressMeasurementHead         @relation("TaskProgressMeasurementHeadLedger", fields: [organizationId, projectId, taskId, headId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, map: "TPM_head_scope_fkey")
   revision                           Int
-  predecessorId                      String?                           @unique(map: "TPM_predecessor_key")
-  predecessor                        TaskProgressMeasurement?          @relation("TaskProgressMeasurementRevisionChain", fields: [organizationId, projectId, taskId, predecessorId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, map: "TPM_predecessor_scope_fkey")
-  successor                          TaskProgressMeasurement?          @relation("TaskProgressMeasurementRevisionChain")
+  predecessorId                      String?                             @unique(map: "TPM_predecessor_key")
+  predecessor                        TaskProgressMeasurement?            @relation("TaskProgressMeasurementRevisionChain", fields: [organizationId, projectId, taskId, predecessorId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, map: "TPM_predecessor_scope_fkey")
+  successor                          TaskProgressMeasurement?            @relation("TaskProgressMeasurementRevisionChain")
   unitCode                           ProgressMeasurementUnitCode
-  baseQuantity                       Decimal                           @db.Decimal(18, 4)
-  periodQuantity                     Decimal                           @db.Decimal(18, 4)
-  cumulativeQuantity                 Decimal                           @db.Decimal(18, 4)
+  baseQuantity                       Decimal                             @db.Decimal(18, 4)
+  periodQuantity                     Decimal                             @db.Decimal(18, 4)
+  cumulativeQuantity                 Decimal                             @db.Decimal(18, 4)
   headRevisionAtSubmit               Int
-  approvedCumulativeQuantityAtSubmit Decimal                           @db.Decimal(18, 4)
+  approvedCumulativeQuantityAtSubmit Decimal                             @db.Decimal(18, 4)
   balanceRevisionAtSubmit            Int
   method                             ProgressMeasurementMethod
-  rationale                          String                            @db.VarChar(1000)
+  rationale                          String                              @db.VarChar(1000)
   taskRevision                       Int
   evidenceCount                      Int
-  evidenceSetHash                    String                            @db.Char(64)
+  evidenceSetHash                    String                              @db.Char(64)
   preparedByMembershipId             String
-  preparedByMembership               TenantMembership                  @relation("TaskProgressMeasurementPreparer", fields: [organizationId, preparedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "TPM_preparer_membership_fkey")
-  operationKeyHash                   String                            @db.Char(64)
-  requestFingerprint                 String                            @db.Char(64)
+  preparedByMembership               TenantMembership                    @relation("TaskProgressMeasurementPreparer", fields: [organizationId, preparedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "TPM_preparer_membership_fkey")
+  operationKeyHash                   String                              @db.Char(64)
+  requestFingerprint                 String                              @db.Char(64)
   evidenceLinks                      TaskProgressMeasurementEvidence[]
   decision                           TaskProgressMeasurementDecision?
-  currentForHead                     TaskProgressMeasurementHead?      @relation("TaskProgressMeasurementCurrentHead")
-  pendingForHead                     TaskProgressMeasurementHead?      @relation("TaskProgressMeasurementPendingHead")
-  approvedForHead                    TaskProgressMeasurementHead?      @relation("TaskProgressMeasurementApprovedHead")
-  approvedBalance                    TaskProgressMeasurementBalance?   @relation("TaskProgressMeasurementBalanceLastMeasurement")
-  createdAt                          DateTime                          @default(now())
+  currentForHead                     TaskProgressMeasurementHead?        @relation("TaskProgressMeasurementCurrentHead")
+  pendingForHead                     TaskProgressMeasurementHead?        @relation("TaskProgressMeasurementPendingHead")
+  approvedForHead                    TaskProgressMeasurementHead?        @relation("TaskProgressMeasurementApprovedHead")
+  approvedBalance                    TaskProgressMeasurementBalance?     @relation("TaskProgressMeasurementBalanceLastMeasurement")
+  progressMeasurementCutLines        ProjectProgressMeasurementCutLine[] @relation("ProgressMeasurementCutLineApprovedMeasurement")
+  createdAt                          DateTime                            @default(now())
 
   @@unique([organizationId, operationKeyHash], map: "TPM_org_operation_hash_key")
   @@unique([headId, revision], map: "TPM_head_revision_key")
@@ -3377,30 +3393,32 @@ model TaskProgressMeasurementEvidence {
 /// Append-only maker/checker decision. Rejection never mutates the approved
 /// balance; approval advances the head and balance projections atomically.
 model TaskProgressMeasurementDecision {
-  id                                      String                          @id @default(cuid())
+  id                                      String                              @id @default(cuid())
   organizationId                          String
-  organization                            Organization                    @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "TPMDecision_organization_fkey")
+  organization                            Organization                        @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "TPMDecision_organization_fkey")
   projectId                               String
-  project                                 Project                         @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "TPMDecision_project_scope_fkey")
+  project                                 Project                             @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "TPMDecision_project_scope_fkey")
   taskId                                  String
-  task                                    Task                            @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict, map: "TPMDecision_task_scope_fkey")
-  measurementId                           String                          @unique(map: "TPMDecision_measurement_key")
-  measurement                             TaskProgressMeasurement         @relation(fields: [organizationId, projectId, taskId, measurementId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, map: "TPMDecision_measurement_scope_fkey")
+  task                                    Task                                @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict, map: "TPMDecision_task_scope_fkey")
+  measurementId                           String                              @unique(map: "TPMDecision_measurement_key")
+  measurement                             TaskProgressMeasurement             @relation(fields: [organizationId, projectId, taskId, measurementId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, map: "TPMDecision_measurement_scope_fkey")
   decision                                ProgressMeasurementDecisionType
-  reason                                  String                          @db.VarChar(1000)
+  reason                                  String                              @db.VarChar(1000)
   expectedHeadRevision                    Int
   headRevisionAfterDecision               Int
-  approvedCumulativeQuantityAfterDecision Decimal                         @db.Decimal(18, 4)
+  approvedCumulativeQuantityAfterDecision Decimal                             @db.Decimal(18, 4)
   balanceRevisionAfterDecision            Int
   decidedByMembershipId                   String
-  decidedByMembership                     TenantMembership                @relation("TaskProgressMeasurementDecider", fields: [organizationId, decidedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "TPMDecision_decider_membership_fkey")
-  operationKeyHash                        String                          @db.Char(64)
-  requestFingerprint                      String                          @db.Char(64)
-  createdAt                               DateTime                        @default(now())
+  decidedByMembership                     TenantMembership                    @relation("TaskProgressMeasurementDecider", fields: [organizationId, decidedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "TPMDecision_decider_membership_fkey")
+  operationKeyHash                        String                              @db.Char(64)
+  requestFingerprint                      String                              @db.Char(64)
+  progressMeasurementCutLines             ProjectProgressMeasurementCutLine[] @relation("ProgressMeasurementCutLineApprovedDecision")
+  createdAt                               DateTime                            @default(now())
 
   @@unique([organizationId, operationKeyHash], map: "TPMDecision_org_operation_hash_key")
   @@unique([organizationId, projectId, taskId, id], map: "TPMDecision_scope_id_key")
   @@unique([organizationId, projectId, taskId, measurementId], map: "TPMDecision_measurement_scope_key")
+  @@unique([organizationId, projectId, taskId, measurementId, id, decision], map: "TPMDecision_approved_cut_scope_key")
   @@index([organizationId, projectId, taskId, createdAt], map: "TPMDecision_task_created_idx")
 }
 
@@ -3431,6 +3449,116 @@ model TaskProgressMeasurementBalance {
   @@unique([organizationId, projectId, taskId, lastApprovedHeadId], map: "TPMBalance_scope_last_head_key")
   @@unique([organizationId, projectId, taskId, lastApprovedMeasurementId], map: "TPMBalance_scope_last_measurement_key")
   @@index([organizationId, projectId, lastApprovedPeriodStart], map: "TPMBalance_project_period_idx")
+}
+
+/// Mutable project-period pointer owned exclusively by the governed seal
+/// command. Every cut and line remains immutable.
+model ProjectProgressMeasurementCutHead {
+  id             String                              @id @default(cuid())
+  organizationId String
+  organization   Organization                        @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "PPMCutHead_organization_fkey")
+  projectId      String
+  project        Project                             @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "PPMCutHead_project_scope_fkey")
+  periodStart    DateTime                            @db.Date
+  periodEnd      DateTime                            @db.Date
+  currentCutId   String?                             @unique(map: "PPMCutHead_current_cut_key")
+  currentCut     ProjectProgressMeasurementCut?      @relation("ProjectProgressMeasurementCutCurrent", fields: [organizationId, projectId, id, currentCutId], references: [organizationId, projectId, headId, id], onDelete: Restrict, map: "PPMCutHead_current_cut_scope_fkey")
+  revision       Int                                 @default(0)
+  cuts           ProjectProgressMeasurementCut[]     @relation("ProjectProgressMeasurementCutHeadLedger")
+  cutLines       ProjectProgressMeasurementCutLine[] @relation("ProjectProgressMeasurementCutLineCutHead")
+  createdAt      DateTime                            @default(now())
+  updatedAt      DateTime                            @updatedAt
+
+  @@unique([organizationId, projectId, periodStart], map: "PPMCutHead_scope_period_key")
+  @@unique([organizationId, projectId, id], map: "PPMCutHead_scope_id_key")
+  @@unique([organizationId, projectId, id, periodStart, periodEnd], map: "PPMCutHead_scope_period_id_key")
+  @@unique([organizationId, projectId, currentCutId], map: "PPMCutHead_scope_current_cut_key")
+  @@unique([organizationId, projectId, id, currentCutId], map: "PPMCutHead_exact_current_cut_key")
+  @@index([organizationId, projectId, periodStart], map: "PPMCutHead_project_period_idx")
+}
+
+/// Immutable, server-derived technical snapshot for one project and civil
+/// fortnight. It contains no price, certificate, payment or financial state.
+model ProjectProgressMeasurementCut {
+  id                   String                              @id @default(cuid())
+  organizationId       String
+  organization         Organization                        @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "PPMCut_organization_fkey")
+  projectId            String
+  project              Project                             @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "PPMCut_project_scope_fkey")
+  headId               String
+  head                 ProjectProgressMeasurementCutHead   @relation("ProjectProgressMeasurementCutHeadLedger", fields: [organizationId, projectId, headId], references: [organizationId, projectId, id], onDelete: Restrict, map: "PPMCut_head_scope_fkey")
+  version              Int
+  predecessorId        String?                             @unique(map: "PPMCut_predecessor_key")
+  predecessor          ProjectProgressMeasurementCut?      @relation("ProjectProgressMeasurementCutRevisionChain", fields: [organizationId, projectId, headId, predecessorId], references: [organizationId, projectId, headId, id], onDelete: Restrict, map: "PPMCut_predecessor_scope_fkey")
+  successor            ProjectProgressMeasurementCut?      @relation("ProjectProgressMeasurementCutRevisionChain")
+  taskCount            Int
+  measuredLineCount    Int
+  missingLineCount     Int
+  candidateSha256      String                              @db.Char(64)
+  cutSha256            String                              @db.Char(64)
+  headRevisionAtSeal   Int
+  sealedByMembershipId String
+  sealedByMembership   TenantMembership                    @relation("ProjectProgressMeasurementCutSealer", fields: [organizationId, sealedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "PPMCut_sealer_membership_fkey")
+  operationKeyHash     String                              @db.Char(64)
+  requestFingerprint   String                              @db.Char(64)
+  lines                ProjectProgressMeasurementCutLine[]
+  currentForHead       ProjectProgressMeasurementCutHead?  @relation("ProjectProgressMeasurementCutCurrent")
+  createdAt            DateTime                            @default(now())
+
+  @@unique([organizationId, operationKeyHash], map: "PPMCut_org_operation_hash_key")
+  @@unique([headId, version], map: "PPMCut_head_version_key")
+  @@unique([organizationId, projectId, id], map: "PPMCut_scope_id_key")
+  @@unique([organizationId, projectId, headId, id], map: "PPMCut_scope_head_id_key")
+  @@unique([organizationId, projectId, predecessorId], map: "PPMCut_scope_predecessor_key")
+  @@unique([organizationId, projectId, headId, predecessorId], map: "PPMCut_exact_predecessor_key")
+  @@index([organizationId, projectId, createdAt], map: "PPMCut_project_created_idx")
+}
+
+/// Immutable task snapshot. A MISSING line records absence explicitly and
+/// never converts it to zero progress.
+model ProjectProgressMeasurementCutLine {
+  id                           String                            @id @default(cuid())
+  organizationId               String
+  organization                 Organization                      @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "PPMCutLine_organization_fkey")
+  projectId                    String
+  project                      Project                           @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "PPMCutLine_project_scope_fkey")
+  cutHeadId                    String
+  cutHead                      ProjectProgressMeasurementCutHead @relation("ProjectProgressMeasurementCutLineCutHead", fields: [organizationId, projectId, cutHeadId, periodStart, periodEnd], references: [organizationId, projectId, id, periodStart, periodEnd], onDelete: Restrict, map: "PPMCutLine_cut_head_period_fkey")
+  cutId                        String
+  cut                          ProjectProgressMeasurementCut     @relation(fields: [organizationId, projectId, cutHeadId, cutId], references: [organizationId, projectId, headId, id], onDelete: Restrict, map: "PPMCutLine_cut_scope_fkey")
+  ordinal                      Int
+  state                        ProgressMeasurementCutLineState
+  periodStart                  DateTime                          @db.Date
+  periodEnd                    DateTime                          @db.Date
+  taskId                       String
+  task                         Task                              @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict, map: "PPMCutLine_task_scope_fkey")
+  taskCode                     String?                           @db.VarChar(64)
+  taskTitle                    String                            @db.Text
+  taskRevision                 Int
+  measurementHeadId            String?
+  measurementHead              TaskProgressMeasurementHead?      @relation("ProgressMeasurementCutLineMeasurementHead", fields: [organizationId, projectId, taskId, periodStart, periodEnd, measurementHeadId], references: [organizationId, projectId, taskId, periodStart, periodEnd, id], onDelete: Restrict, map: "PPMCutLine_measurement_head_scope_fkey")
+  approvedMeasurementId        String?
+  approvedMeasurement          TaskProgressMeasurement?          @relation("ProgressMeasurementCutLineApprovedMeasurement", fields: [organizationId, projectId, taskId, approvedMeasurementId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, map: "PPMCutLine_measurement_scope_fkey")
+  approvedDecisionId           String?
+  approvedDecisionSnapshot     ProgressMeasurementDecisionType?
+  approvedDecision             TaskProgressMeasurementDecision?  @relation("ProgressMeasurementCutLineApprovedDecision", fields: [organizationId, projectId, taskId, approvedMeasurementId, approvedDecisionId, approvedDecisionSnapshot], references: [organizationId, projectId, taskId, measurementId, id, decision], onDelete: Restrict, map: "PPMCutLine_decision_scope_fkey")
+  unitCode                     ProgressMeasurementUnitCode?
+  baseQuantity                 Decimal?                          @db.Decimal(18, 4)
+  periodQuantity               Decimal?                          @db.Decimal(18, 4)
+  cumulativeQuantity           Decimal?                          @db.Decimal(18, 4)
+  method                       ProgressMeasurementMethod?
+  measurementRationale         String?                           @db.VarChar(1000)
+  measurementRevision          Int?
+  evidenceCount                Int?
+  evidenceSetHash              String?                           @db.Char(64)
+  measurementDecisionCreatedAt DateTime?
+  lineSnapshotSha256           String                            @db.Char(64)
+  createdAt                    DateTime                          @default(now())
+
+  @@unique([cutId, ordinal], map: "PPMCutLine_cut_ordinal_key")
+  @@unique([cutId, taskId], map: "PPMCutLine_cut_task_key")
+  @@unique([organizationId, projectId, cutId, id], map: "PPMCutLine_scope_id_key")
+  @@index([organizationId, projectId, taskId, createdAt], map: "PPMCutLine_task_created_idx")
 }
 
 model ProgressEvidenceCaptureSession {

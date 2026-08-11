@@ -152,6 +152,13 @@ jobs:
           PROGRESS_MEASUREMENTS_DISPOSABLE_CONCURRENCY: "1"
         run: npm run verify:progress-measurements-migration
 
+      - name: Verify fortnight progress measurement cuts on PostgreSQL 17
+        env:
+          PROGRESS_MEASUREMENT_CUTS_MIGRATION_DATABASE_URL: postgresql://obrasaas_ci:obrasaas_ci@127.0.0.1:5432/obrasaas_ci?schema=public
+          PROGRESS_MEASUREMENT_CUTS_MIGRATION_SCHEMA: public
+          PROGRESS_MEASUREMENT_CUTS_DISPOSABLE_CONCURRENCY: "1"
+        run: npm run verify:progress-measurement-cuts-migration
+
       - name: Verify data subject discovery on PostgreSQL 17
         env:
           DATA_SUBJECT_DISCOVERY_MIGRATION_DATABASE_URL: postgresql://obrasaas_ci:obrasaas_ci@127.0.0.1:5432/obrasaas_ci?schema=public

@@ -686,6 +686,71 @@ test("default Preview wiring executes the real data subject verifier before gene
   );
 });
 
+test("Preview runs the S9.2 cut verifier rollback-only after migrate and before generate", async () => {
+  const calls = [];
+
+  await runVercelBuild({
+    environment: environment(),
+    cwd: "C:/safe-worktree",
+    runner: async (_file, args, options) => calls.push({ args, options }),
+    cliPaths: {
+      prisma: "prisma-cli",
+      next: "next-cli",
+      progressMeasurementCutsVerifier: "progress-measurement-cuts-verifier",
+    },
+  });
+
+  const migrateIndex = calls.findIndex(
+    ({ args }) => args[0] === "prisma-cli" && args[1] === "migrate" && args[2] === "deploy",
+  );
+  const verificationIndex = calls.findIndex(
+    ({ args }) => args[0] === "progress-measurement-cuts-verifier",
+  );
+  const generateIndex = calls.findIndex(
+    ({ args }) => args[0] === "prisma-cli" && args[1] === "generate",
+  );
+  const buildIndex = calls.findIndex(({ args }) => args[0] === "next-cli" && args[1] === "build");
+  assert.ok(migrateIndex >= 0);
+  assert.ok(verificationIndex > migrateIndex);
+  assert.ok(generateIndex > verificationIndex);
+  assert.ok(buildIndex > generateIndex);
+  const verification = calls[verificationIndex];
+  assert.equal(
+    verification.options.env.PROGRESS_MEASUREMENT_CUTS_MIGRATION_DATABASE_URL,
+    PREVIEW_URL,
+  );
+  assert.equal(verification.options.env.PROGRESS_MEASUREMENT_CUTS_MIGRATION_SCHEMA, "public");
+  assert.equal(
+    verification.options.env.PROGRESS_MEASUREMENT_CUTS_DISPOSABLE_CONCURRENCY,
+    "0",
+  );
+});
+
+test("an S9.2 cut verifier failure prevents Prisma generate and Next build", async () => {
+  const calls = [];
+
+  await assert.rejects(
+    runVercelBuild({
+      environment: environment(),
+      runner: async (_file, args) => {
+        calls.push(args);
+        if (args[0] === "progress-measurement-cuts-verifier") {
+          throw new Error("S9.2 verifier rejected the database");
+        }
+      },
+      cliPaths: {
+        prisma: "prisma-cli",
+        next: "next-cli",
+        progressMeasurementCutsVerifier: "progress-measurement-cuts-verifier",
+      },
+    }),
+    /S9\.2 verifier rejected the database/,
+  );
+
+  assert.equal(calls.some((args) => args[0] === "prisma-cli" && args[1] === "generate"), false);
+  assert.equal(calls.some((args) => args[0] === "next-cli"), false);
+});
+
 test("a rejected gate invokes no subprocess", async () => {
   let calls = 0;
 
