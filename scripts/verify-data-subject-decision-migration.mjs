@@ -326,7 +326,16 @@ async function assertInstalledObjects(client, schema) {
     'DataSubjectLegalHoldEvent_sequence_check',
     'DataSubjectDecisionSet_revision_check',
   ]) invariant(checkMap.get(name)?.includes('>= 1'), `${name} must start at one.`);
-  invariant(checkMap.get('DataSubjectDecisionItem_ordinal_check')?.includes('between 0 and 1023'), 'Decision item bound drifted.');
+  const ordinalCheck = checkMap
+    .get('DataSubjectDecisionItem_ordinal_check')
+    ?.replace(/[()]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  invariant(
+    ordinalCheck?.includes('ordinal between 0 and 1023')
+      || ordinalCheck?.includes('ordinal >= 0 and ordinal <= 1023'),
+    'Decision item bound drifted.',
+  );
 
   const riskyColumns = await client.query(
     `SELECT table_name, column_name, data_type

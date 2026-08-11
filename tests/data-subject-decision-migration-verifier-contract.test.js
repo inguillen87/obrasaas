@@ -52,6 +52,15 @@ test('catalog and smoke cover no-store, RBAC, replay, chain one and immutable co
   assert.match(verifier, /Every PRO-05B foreign key must use ON DELETE RESTRICT/);
 });
 
+test('catalog accepts PostgreSQL deparsing BETWEEN without weakening the ordinal bound', () => {
+  assert.match(verifier, /ordinal between 0 and 1023/);
+  assert.match(verifier, /ordinal >= 0 and ordinal <= 1023/);
+  assert.doesNotMatch(
+    verifier,
+    /checkMap\.get\('DataSubjectDecisionItem_ordinal_check'\)\?\.includes\('between 0 and 1023'\)/,
+  );
+});
+
 test('disposable mode is local-only and proves approval waits for hold, revocation and actor disable', () => {
   assert.match(verifier, /DATA_SUBJECT_DECISION_DISPOSABLE_CONCURRENCY/);
   assert.match(verifier, /local && databaseName === 'obrasaas_ci' && schema === 'public'/);
