@@ -1,0 +1,213 @@
+.panel {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid color-mix(in srgb, var(--border) 78%, #2563eb);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--surface) 95%, #eff6ff);
+}
+
+.heading,
+.summary,
+.materialHeading,
+.allocationRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.heading h4,
+.editor h5,
+.release h5 {
+  margin: 0.15rem 0 0.35rem;
+}
+
+.heading p,
+.editor p,
+.release p,
+.materialHeading span,
+.context,
+.feedback p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.eyebrow {
+  color: #1d4ed8;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.status {
+  flex: 0 0 auto;
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.idle {
+  color: var(--muted);
+  background: color-mix(in srgb, var(--border) 55%, transparent);
+}
+
+.pending {
+  color: #92400e;
+  background: #fef3c7;
+}
+
+.ready {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.attention,
+.alert {
+  color: #991b1b;
+  background: #fee2e2;
+}
+
+.feedback {
+  min-height: 1.4rem;
+}
+
+.alert,
+.context,
+.success {
+  margin: 0;
+  padding: 0.75rem;
+  border-radius: 0.75rem;
+}
+
+.success {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.summary {
+  align-items: center;
+  padding: 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 0.8rem;
+  background: var(--surface);
+}
+
+.summary div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.summary span {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.coverageList,
+.editor,
+.release {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.coverageCard,
+.allocationEditor {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 0.85rem;
+  background: var(--surface);
+}
+
+.materialHeading div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.materialHeading > span {
+  font-size: 0.78rem;
+}
+
+.stockList,
+.allocationSummary {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stockList li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.2rem 1rem;
+  padding: 0.55rem;
+  border-radius: 0.6rem;
+  background: color-mix(in srgb, var(--surface) 84%, var(--border));
+}
+
+.stockList small {
+  grid-column: 1 / -1;
+  color: var(--muted);
+}
+
+.allocationSummary li {
+  color: #166534;
+  font-weight: 700;
+}
+
+.editor,
+.release {
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.allocationEditor legend {
+  padding: 0 0.35rem;
+  font-weight: 800;
+}
+
+.allocationRow {
+  display: grid;
+  grid-template-columns: minmax(12rem, 2fr) minmax(8rem, 1fr) auto;
+  align-items: end;
+}
+
+.allocationRow label,
+.reason {
+  display: grid;
+  gap: 0.35rem;
+  font-weight: 700;
+}
+
+.allocationRow select,
+.allocationRow input,
+.reason textarea {
+  width: 100%;
+}
+
+@media (max-width: 760px) {
+  .heading,
+  .summary,
+  .materialHeading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .allocationRow {
+    grid-template-columns: 1fr;
+  }
+
+  .stockList li {
+    grid-template-columns: 1fr;
+  }
+
+  .stockList small {
+    grid-column: auto;
+  }
+}

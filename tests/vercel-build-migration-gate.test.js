@@ -255,6 +255,7 @@ test("preview runner migrates before generating and building without a shell", a
       whatsappMediaAssetVerifier: "whatsapp-media-asset-verifier",
       visualProgressVerifier: "visual-progress-verifier",
       scheduleSnapshotVerifier: "schedule-snapshot-verifier",
+      taskMaterialReservationsVerifier: "task-material-reservations-verifier",
       notificationOutboxVerifier: "notification-outbox-verifier",
       projectExecutionVerifier: "project-execution-verifier",
       dataSubjectDiscoveryVerifier: "data-subject-verifier",
@@ -271,6 +272,7 @@ test("preview runner migrates before generating and building without a shell", a
       ["whatsapp-media-asset-verifier"],
       ["visual-progress-verifier"],
       ["schedule-snapshot-verifier"],
+      ["task-material-reservations-verifier"],
       ["notification-outbox-verifier"],
       ["project-execution-verifier"],
       ["data-subject-verifier"],
@@ -355,7 +357,23 @@ test("preview runner migrates before generating and building without a shell", a
     scheduleSnapshotVerificationCall.options.env.SCHEDULE_SNAPSHOT_MIGRATION_SCHEMA,
     "public",
   );
-  const notificationOutboxVerificationCall = calls[7];
+  const reservationVerificationCall = calls.find(
+    ({ args }) => args[0] === "task-material-reservations-verifier",
+  );
+  assert.ok(reservationVerificationCall);
+  assert.equal(
+    reservationVerificationCall.options.env.TASK_MATERIAL_RESERVATIONS_MIGRATION_DATABASE_URL,
+    PREVIEW_URL,
+  );
+  assert.equal(
+    reservationVerificationCall.options.env.TASK_MATERIAL_RESERVATIONS_MIGRATION_SCHEMA,
+    "public",
+  );
+  assert.equal(
+    reservationVerificationCall.options.env.TASK_MATERIAL_RESERVATIONS_DISPOSABLE_CONCURRENCY,
+    "0",
+  );
+  const notificationOutboxVerificationCall = calls[8];
   assert.equal(
     notificationOutboxVerificationCall.args[0],
     "notification-outbox-verifier",
@@ -368,7 +386,7 @@ test("preview runner migrates before generating and building without a shell", a
     notificationOutboxVerificationCall.options.env.NOTIFICATION_OUTBOX_MIGRATION_SCHEMA,
     "public",
   );
-  const projectExecutionVerificationCall = calls[8];
+  const projectExecutionVerificationCall = calls[9];
   assert.equal(
     projectExecutionVerificationCall.args[0],
     "project-execution-verifier",
@@ -418,6 +436,7 @@ test("authorized production runs migration verification before the build", async
       whatsappMediaAssetVerifier: "whatsapp-media-asset-verifier",
       visualProgressVerifier: "visual-progress-verifier",
       scheduleSnapshotVerifier: "schedule-snapshot-verifier",
+      taskMaterialReservationsVerifier: "task-material-reservations-verifier",
       notificationOutboxVerifier: "notification-outbox-verifier",
       projectExecutionVerifier: "project-execution-verifier",
       dataSubjectDiscoveryVerifier: "data-subject-verifier",
@@ -434,6 +453,7 @@ test("authorized production runs migration verification before the build", async
       ["whatsapp-media-asset-verifier"],
       ["visual-progress-verifier"],
       ["schedule-snapshot-verifier"],
+      ["task-material-reservations-verifier"],
       ["notification-outbox-verifier"],
       ["project-execution-verifier"],
       ["data-subject-verifier"],
@@ -489,20 +509,36 @@ test("authorized production runs migration verification before the build", async
     calls[6].options.env.SCHEDULE_SNAPSHOT_MIGRATION_SCHEMA,
     "public",
   );
+  const reservationVerificationCall = calls.find(
+    ({ args }) => args[0] === "task-material-reservations-verifier",
+  );
+  assert.ok(reservationVerificationCall);
   assert.equal(
-    calls[7].options.env.NOTIFICATION_OUTBOX_MIGRATION_DATABASE_URL,
+    reservationVerificationCall.options.env.TASK_MATERIAL_RESERVATIONS_MIGRATION_DATABASE_URL,
     PRODUCTION_URL,
   );
   assert.equal(
-    calls[7].options.env.NOTIFICATION_OUTBOX_MIGRATION_SCHEMA,
+    reservationVerificationCall.options.env.TASK_MATERIAL_RESERVATIONS_MIGRATION_SCHEMA,
     "public",
   );
   assert.equal(
-    calls[8].options.env.PROJECT_EXECUTION_MIGRATION_DATABASE_URL,
+    reservationVerificationCall.options.env.TASK_MATERIAL_RESERVATIONS_DISPOSABLE_CONCURRENCY,
+    "0",
+  );
+  assert.equal(
+    calls[8].options.env.NOTIFICATION_OUTBOX_MIGRATION_DATABASE_URL,
     PRODUCTION_URL,
   );
   assert.equal(
-    calls[8].options.env.PROJECT_EXECUTION_MIGRATION_SCHEMA,
+    calls[8].options.env.NOTIFICATION_OUTBOX_MIGRATION_SCHEMA,
+    "public",
+  );
+  assert.equal(
+    calls[9].options.env.PROJECT_EXECUTION_MIGRATION_DATABASE_URL,
+    PRODUCTION_URL,
+  );
+  assert.equal(
+    calls[9].options.env.PROJECT_EXECUTION_MIGRATION_SCHEMA,
     "public",
   );
   const dataSubjectVerificationCall = calls.find(
@@ -560,6 +596,44 @@ test("data subject discovery verification fails the release before generate or b
   assert.equal(calls.some((args) => args[0] === "next-cli"), false);
 });
 
+test("task material reservation verification fails the release before generate or build", async () => {
+  const calls = [];
+
+  await assert.rejects(
+    runVercelBuild({
+      environment: environment(),
+      runner: async (_file, args) => {
+        calls.push(args);
+        if (args[0] === "task-material-reservations-verifier") {
+          throw new Error("reservation verification failed");
+        }
+      },
+      cliPaths: {
+        prisma: "prisma-cli",
+        next: "next-cli",
+        workerIdentityVerifier: "worker-verifier",
+        progressJournalVerifier: "progress-verifier",
+        protectedUploadVerifier: "protected-upload-verifier",
+        whatsappMediaAssetVerifier: "whatsapp-media-asset-verifier",
+        visualProgressVerifier: "visual-progress-verifier",
+        scheduleSnapshotVerifier: "schedule-snapshot-verifier",
+        taskMaterialReservationsVerifier: "task-material-reservations-verifier",
+      },
+    }),
+    /reservation verification failed/,
+  );
+
+  assert.equal(
+    calls.some((args) => args[0] === "task-material-reservations-verifier"),
+    true,
+  );
+  assert.equal(
+    calls.some((args) => args[0] === "prisma-cli" && args[1] === "generate"),
+    false,
+  );
+  assert.equal(calls.some((args) => args[0] === "next-cli"), false);
+});
+
 test("default Preview wiring executes the real data subject verifier before generate and build", async () => {
   const calls = [];
 
@@ -574,6 +648,9 @@ test("default Preview wiring executes the real data subject verifier before gene
   const discoveryIndex = calls.findIndex(({ args }) =>
     args[0]?.endsWith("verify-data-subject-discovery-migration.mjs"),
   );
+  const reservationIndex = calls.findIndex(({ args }) =>
+    args[0]?.endsWith("verify-task-material-reservations-migration.mjs"),
+  );
   const generateIndex = calls.findIndex(
     ({ args }) => args.at(-1) === "generate",
   );
@@ -582,9 +659,23 @@ test("default Preview wiring executes the real data subject verifier before gene
   );
 
   assert.ok(migrateIndex >= 0);
+  assert.ok(reservationIndex > migrateIndex);
   assert.ok(discoveryIndex > migrateIndex);
   assert.ok(generateIndex > discoveryIndex);
+  assert.ok(generateIndex > reservationIndex);
   assert.ok(buildIndex > generateIndex);
+  assert.equal(
+    calls[reservationIndex].options.env.TASK_MATERIAL_RESERVATIONS_MIGRATION_DATABASE_URL,
+    PREVIEW_URL,
+  );
+  assert.equal(
+    calls[reservationIndex].options.env.TASK_MATERIAL_RESERVATIONS_MIGRATION_SCHEMA,
+    "public",
+  );
+  assert.equal(
+    calls[reservationIndex].options.env.TASK_MATERIAL_RESERVATIONS_DISPOSABLE_CONCURRENCY,
+    "0",
+  );
   assert.equal(
     calls[discoveryIndex].options.env.DATA_SUBJECT_DISCOVERY_MIGRATION_DATABASE_URL,
     PREVIEW_URL,

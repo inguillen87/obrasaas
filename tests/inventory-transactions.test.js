@@ -36,6 +36,7 @@ function transactionStore({ wrongUnit = false } = {}) {
     bindings: [],
     transactions: [],
     lockCalls: 0,
+    nextCreateError: null,
   };
   const items = [
     {
@@ -219,6 +220,11 @@ function transactionStore({ wrongUnit = false } = {}) {
         return materialize(row);
       },
       async create({ data }) {
+        if (state.nextCreateError) {
+          const error = state.nextCreateError;
+          state.nextCreateError = null;
+          throw error;
+        }
         const transactionId = `transaction-${state.transactions.length + 1}`;
         const entries = data.entries.create.map((entry, index) => ({
           id: `${transactionId}-entry-${index + 1}`,
@@ -414,6 +420,43 @@ test('reversal posts exact negative counterparts once and status requires a new 
     }),
     (error) => error.code === 'INVENTORY_PUTAWAY_ALREADY_REVERSED' && error.status === 409,
   );
+});
+
+test('reversal reports reserved stock explicitly without exposing the database error', async () => {
+  const store = transactionStore();
+  const putaway = await createInventoryTransaction(store.prisma, {
+    scope: SCOPE,
+    actorId: 'user-a',
+    operationKey: 'inventory-putaway-reserved-stock',
+    input: putawayInput(),
+    now: NOW,
+  });
+  store.state.nextCreateError = Object.assign(new Error('database constraint failed'), {
+    code: 'P2004',
+    meta: {
+      database_error: 'TASK_MATERIAL_RESERVATION_INSUFFICIENT_STOCK InventoryLedgerEntry_reserved_floor_conflict',
+    },
+  });
+
+  await assert.rejects(
+    createInventoryTransaction(store.prisma, {
+      scope: SCOPE,
+      actorId: 'user-a',
+      operationKey: 'inventory-reversal-reserved-stock',
+      input: {
+        kind: 'REVERSAL',
+        reversesTransactionId: putaway.transaction.id,
+        reason: 'Corregir ingreso reservado',
+      },
+      now: NOW,
+    }),
+    (error) => (
+      error.code === 'INVENTORY_REVERSAL_STOCK_RESERVED'
+      && error.status === 409
+      && !error.message.includes('InventoryLedgerEntry_reserved_floor_conflict')
+    ),
+  );
+  assert.equal(store.state.transactions.length, 1);
 });
 
 test('server rejects incomplete mappings, unit conversion and tenant-shaped body fields before stock', async () => {

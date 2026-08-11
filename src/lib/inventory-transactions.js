@@ -525,7 +525,18 @@ async function transactionRowsForInspection(prisma, current, sourceInspectionId)
 
 function databaseConflict(error) {
   if (!DATABASE_CONFLICT_CODES.has(error?.code)) return null;
-  const rawMessage = String(error?.message || '');
+  const rawMessage = [
+    error?.message,
+    error?.meta?.message,
+    error?.meta?.database_error,
+  ].filter((value) => typeof value === 'string').join(' ');
+  if (rawMessage.includes('TASK_MATERIAL_RESERVATION_INSUFFICIENT_STOCK')) {
+    return new InventoryTransactionError(
+      'Parte de este ingreso está reservada para tareas. Liberá primero esas reservas antes de revertir el stock.',
+      'INVENTORY_REVERSAL_STOCK_RESERVED',
+      409,
+    );
+  }
   if (/negative|stock negative/i.test(rawMessage)) {
     return new InventoryTransactionError(
       'El material ya fue utilizado o movido y el ingreso no puede revertirse sin dejar stock negativo.',

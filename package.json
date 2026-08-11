@@ -29,6 +29,7 @@
     "verify:goods-receipt-inspection-migration": "node scripts/verify-goods-receipt-inspection-migration.mjs",
     "verify:inventory-stock-ledger-migration": "node scripts/verify-inventory-stock-ledger-migration.mjs",
     "verify:task-material-requirements-migration": "node scripts/verify-task-material-requirements-migration.mjs",
+    "verify:task-material-reservations-migration": "node scripts/verify-task-material-reservations-migration.mjs",
     "verify:data-subject-discovery-migration": "node scripts/verify-data-subject-discovery-migration.mjs",
     "verify:notification-outbox-migration": "node scripts/verify-notification-outbox-migration.mjs",
     "verify:notification-preferences-migration": "node scripts/verify-notification-preferences-migration.mjs",

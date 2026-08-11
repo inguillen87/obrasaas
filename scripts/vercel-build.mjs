@@ -51,6 +51,9 @@ const INVENTORY_STOCK_LEDGER_VERIFIER_PATH = fileURLToPath(
 const TASK_MATERIAL_REQUIREMENTS_VERIFIER_PATH = fileURLToPath(
   new URL("./verify-task-material-requirements-migration.mjs", import.meta.url),
 );
+const TASK_MATERIAL_RESERVATIONS_VERIFIER_PATH = fileURLToPath(
+  new URL("./verify-task-material-reservations-migration.mjs", import.meta.url),
+);
 const DATA_SUBJECT_DISCOVERY_VERIFIER_PATH = fileURLToPath(
   new URL("./verify-data-subject-discovery-migration.mjs", import.meta.url),
 );
@@ -353,6 +356,7 @@ export async function runVercelBuild({
     goodsReceiptInspectionVerifier: GOODS_RECEIPT_INSPECTION_VERIFIER_PATH,
     inventoryStockLedgerVerifier: INVENTORY_STOCK_LEDGER_VERIFIER_PATH,
     taskMaterialRequirementsVerifier: TASK_MATERIAL_REQUIREMENTS_VERIFIER_PATH,
+    taskMaterialReservationsVerifier: TASK_MATERIAL_RESERVATIONS_VERIFIER_PATH,
     dataSubjectDiscoveryVerifier: DATA_SUBJECT_DISCOVERY_VERIFIER_PATH,
     notificationOutboxVerifier: NOTIFICATION_OUTBOX_VERIFIER_PATH,
     projectExecutionVerifier: PROJECT_EXECUTION_VERIFIER_PATH,
@@ -429,6 +433,10 @@ export async function runVercelBuild({
       TASK_MATERIAL_REQUIREMENTS_MIGRATION_DATABASE_URL:
         environment[plan.migrationDatabaseEnvironment],
       TASK_MATERIAL_REQUIREMENTS_MIGRATION_SCHEMA: "public",
+      TASK_MATERIAL_RESERVATIONS_MIGRATION_DATABASE_URL:
+        environment[plan.migrationDatabaseEnvironment],
+      TASK_MATERIAL_RESERVATIONS_MIGRATION_SCHEMA: "public",
+      TASK_MATERIAL_RESERVATIONS_DISPOSABLE_CONCURRENCY: "0",
       DATA_SUBJECT_DISCOVERY_MIGRATION_DATABASE_URL:
         environment[plan.migrationDatabaseEnvironment],
       DATA_SUBJECT_DISCOVERY_MIGRATION_SCHEMA: "public",
@@ -510,6 +518,13 @@ export async function runVercelBuild({
       await runner(
         process.execPath,
         [cliPaths.taskMaterialRequirementsVerifier],
+        { ...sharedOptions, env: verificationEnvironment },
+      );
+    }
+    if (cliPaths.taskMaterialReservationsVerifier) {
+      await runner(
+        process.execPath,
+        [cliPaths.taskMaterialReservationsVerifier],
         { ...sharedOptions, env: verificationEnvironment },
       );
     }

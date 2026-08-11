@@ -73,6 +73,7 @@ const SENSITIVE_API_PATHS = [
   '/api/whatsapp/inbox/conversation-a/worker-onboarding',
   '/api/field/workers/worker-a/payment-destinations',
   '/api/field/workers/worker-a/payment-destinations/destination-a/verification',
+  '/api/tasks/task-a/material-reservations',
 ];
 
 const PUBLIC_SELF_AUTHENTICATED_API_PATHS = [
@@ -139,7 +140,7 @@ test('every API Route Handler is exhaustively classified behind Clerk or its own
     );
   }
 
-  assert.equal(protectedRouteCount, 94, 'the complete current Clerk surface must remain classified');
+  assert.equal(protectedRouteCount, 95, 'the complete current Clerk surface must remain classified');
   assert.deepEqual(discoveredPublicRoutes.sort(), PUBLIC_SELF_AUTHENTICATED_API_PATHS.toSorted());
 });
 

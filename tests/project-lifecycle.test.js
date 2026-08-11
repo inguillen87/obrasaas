@@ -63,6 +63,7 @@ function prismaDouble({
   snapshotVersion = 0,
   projectedTasks = [],
   canonicalTasks = [],
+  activeMaterialReservation = null,
 } = {}) {
   const calls = [];
   let currentIndex = 0;
@@ -140,6 +141,12 @@ function prismaDouble({
       async updateMany(args) {
         calls.push(['project-access-reset', args]);
         return { count: 2 };
+      },
+    },
+    taskMaterialActiveReservation: {
+      async findFirst(args) {
+        calls.push(['active-material-reservation', args]);
+        return activeMaterialReservation ? structuredClone(activeMaterialReservation) : null;
       },
     },
     auditLog: {
@@ -420,6 +427,55 @@ test('archiving the selected project prefers the latest active tenant fallback',
     callsNamed(calls, 'audit')[0][1].data.metadata.resetProjectAccessCount,
     2,
   );
+});
+
+test('finalizing or archiving is refused while any task has an active material reservation', async () => {
+  for (const status of ['COMPLETED', 'ARCHIVED']) {
+    const { calls, prisma } = prismaDouble({
+      activeMaterialReservation: { taskId: 'task-with-reservation' },
+    });
+    await assert.rejects(
+      updateTenantProject(prisma, access(), patch({ status })),
+      (error) => (
+        error instanceof ProjectLifecycleError
+        && error.code === 'PROJECT_ACTIVE_MATERIAL_RESERVATIONS'
+        && error.status === 409
+      ),
+    );
+    assert.deepEqual(callsNamed(calls, 'active-material-reservation')[0][1], {
+      where: {
+        organizationId: 'organization-a',
+        projectId: 'project-a',
+      },
+      select: { taskId: true },
+    });
+    assert.equal(callsNamed(calls, 'update').length, 0);
+    assert.equal(callsNamed(calls, 'audit').length, 0);
+  }
+});
+
+test('the structural project-close guard is surfaced as a safe 409 conflict', async () => {
+  const databaseError = Object.assign(new Error('constraint failed'), {
+    code: 'P2004',
+    meta: {
+      database_error: 'TASK_MATERIAL_RESERVATION_PROJECT_READ_ONLY active reservation exists',
+    },
+  });
+  const { calls, prisma } = prismaDouble({
+    fallbackProjects: [{ id: 'project-active-fallback' }],
+    updateErrors: [databaseError],
+  });
+
+  await assert.rejects(
+    updateTenantProject(prisma, access(), patch({ status: 'ARCHIVED' })),
+    (error) => (
+      error instanceof ProjectLifecycleError
+      && error.code === 'PROJECT_ACTIVE_MATERIAL_RESERVATIONS'
+      && error.status === 409
+      && !error.message.includes('active reservation exists')
+    ),
+  );
+  assert.equal(callsNamed(calls, 'audit').length, 0);
 });
 
 test('archive fallback uses the latest non-archived tenant context when none is active', async () => {

@@ -82,6 +82,25 @@ function projectLifecycleAuditAction(currentStatus, nextStatus) {
   return 'project.updated';
 }
 
+function closesProject(status) {
+  return status === 'COMPLETED' || status === 'ARCHIVED';
+}
+
+function activeMaterialReservationError() {
+  return new ProjectLifecycleError(
+    'La obra tiene materiales reservados. Liberá todas las reservas activas antes de finalizarla o archivarla.',
+    { code: 'PROJECT_ACTIVE_MATERIAL_RESERVATIONS', status: 409 },
+  );
+}
+
+function databaseErrorText(error) {
+  return [
+    error?.message,
+    error?.meta?.message,
+    error?.meta?.database_error,
+  ].filter((value) => typeof value === 'string').join(' ');
+}
+
 export async function updateTenantProject(prisma, access, input) {
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     try {
@@ -126,6 +145,16 @@ export async function updateTenantProject(prisma, access, input) {
         }
 
         const nextStatus = updateData.status || current.status;
+        if (!closesProject(current.status) && closesProject(nextStatus)) {
+          const activeReservation = await transaction.taskMaterialActiveReservation.findFirst({
+            where: {
+              organizationId: access.organization.id,
+              projectId: current.id,
+            },
+            select: { taskId: true },
+          });
+          if (activeReservation) throw activeMaterialReservationError();
+        }
         if (
           projectConsumesActiveCapacity(nextStatus)
           && !projectConsumesActiveCapacity(current.status)
@@ -238,6 +267,9 @@ export async function updateTenantProject(prisma, access, input) {
         || error instanceof ProjectInputError
       ) {
         throw error;
+      }
+      if (databaseErrorText(error).includes('TASK_MATERIAL_RESERVATION_PROJECT_READ_ONLY')) {
+        throw activeMaterialReservationError();
       }
       if (error?.code !== 'P2034' || attempt === 3) throw error;
     }

@@ -14,6 +14,7 @@ import {
   validateTaskMaterialCatalogResponse,
 } from "@/lib/task-material-requirements-ui-contract";
 
+import TaskMaterialReservationsPanel from "./task-material-reservations-panel";
 import styles from "./task-material-requirements-client.module.css";
 
 const TASK_PAGE_SIZE = 100;
@@ -258,7 +259,14 @@ export default function TaskMaterialRequirementsClient({
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [historyBusy, setHistoryBusy] = useState(false);
   const [publishBusy, setPublishBusy] = useState(false);
+  const [reservationBusy, setReservationBusy] = useState(false);
   const [notice, setNotice] = useState(null);
+  const [reservationState, setReservationState] = useState({
+    taskId: null,
+    known: false,
+    blocksRevision: true,
+    readiness: null,
+  });
   const [draft, setDraft] = useState({
     kind: "MATERIALS_REQUIRED",
     reason: "",
@@ -266,6 +274,7 @@ export default function TaskMaterialRequirementsClient({
   });
   const lineCounterRef = useRef(0);
   const publishBusyRef = useRef(false);
+  const reservationBusyRef = useRef(false);
   const publishAttemptRef = useRef(null);
   const historyRequestRef = useRef(null);
 
@@ -293,6 +302,17 @@ export default function TaskMaterialRequirementsClient({
     () => new Map(catalog.map((item) => [item.id, item])),
     [catalog],
   );
+
+  const handleReservationStateChange = useCallback((nextState) => {
+    if (nextState?.taskId !== selectedTaskId) return;
+    setReservationState(nextState);
+  }, [selectedTaskId]);
+
+  const handleReservationBusyChange = useCallback((taskId, nextBusy) => {
+    if (taskId !== selectedTaskId) return;
+    reservationBusyRef.current = nextBusy === true;
+    setReservationBusy(reservationBusyRef.current);
+  }, [selectedTaskId]);
 
   const nextDraftLine = useCallback((values = {}) => {
     lineCounterRef.current += 1;
@@ -330,6 +350,8 @@ export default function TaskMaterialRequirementsClient({
     historyRequestRef.current?.controller.abort();
     historyRequestRef.current = null;
     setHistoryBusy(false);
+    reservationBusyRef.current = false;
+    setReservationBusy(false);
     setLoadState("loading");
     setSnapshot(null);
     setCatalog([]);
@@ -338,11 +360,21 @@ export default function TaskMaterialRequirementsClient({
     setSnapshotError(null);
     setCatalogError(null);
     setCommitmentsError(null);
+    setReservationState({
+      taskId: null,
+      known: false,
+      blocksRevision: true,
+      readiness: null,
+    });
     if (!preserveNotice) setNotice(null);
   }
 
   function reloadTask({ preserveNotice = false, afterConflict = false } = {}) {
-    if (!selectedTaskId || (publishBusyRef.current && !afterConflict)) return;
+    if (
+      !selectedTaskId
+      || reservationBusyRef.current
+      || (publishBusyRef.current && !afterConflict)
+    ) return;
     prepareTaskLoad({ preserveNotice });
     setLoadAttempt((current) => current + 1);
   }
@@ -408,7 +440,12 @@ export default function TaskMaterialRequirementsClient({
   }, [loadAttempt, resetDraftFromHead, selectedTaskId, tasksTruncated]);
 
   function selectTask(taskId) {
-    if (tasksTruncated || publishBusyRef.current || taskId === selectedTaskId) return;
+    if (
+      tasksTruncated
+      || publishBusyRef.current
+      || reservationBusyRef.current
+      || taskId === selectedTaskId
+    ) return;
     publishAttemptRef.current = null;
     prepareTaskLoad();
     setSelectedTaskId(taskId);
@@ -510,6 +547,9 @@ export default function TaskMaterialRequirementsClient({
       || !snapshot
       || catalogError
       || tasksTruncated
+      || reservationState.taskId !== selectedTaskId
+      || !reservationState.known
+      || reservationState.blocksRevision
       || authoritativeTask?.type !== "TASK"
       || authoritativeTask?.status === "DONE"
     ) return;
@@ -619,7 +659,10 @@ export default function TaskMaterialRequirementsClient({
     && snapshot
     && loadState === "ready"
     && !snapshotError
-    && !catalogError;
+    && !catalogError
+    && reservationState.taskId === selectedTaskId
+    && reservationState.known
+    && !reservationState.blocksRevision;
 
   return (
     <section className={styles.shell} aria-labelledby="task-materials-title">
@@ -632,12 +675,12 @@ export default function TaskMaterialRequirementsClient({
             Definir materiales no los reserva ni cambia el estado de la tarea.
           </p>
         </div>
-        <span className={styles.closedBadge}>NO DISPONIBLE</span>
+        <span className={styles.promiseBadge}>RESERVA CONTROLADA</span>
       </header>
 
       <p className={styles.availabilityWarning}>
-        La disponibilidad seguirá cerrada hasta que una reserva de inventario posterior la demuestre.
-        Una promesa de proveedor tampoco vuelve disponible el material.
+        Sólo una reserva completa contra stock físico vuelve disponible la BOM.
+        Una promesa de proveedor, una foto o una inferencia de IA nunca asignan existencias.
       </p>
 
       {tasksTruncated && (
@@ -674,7 +717,7 @@ export default function TaskMaterialRequirementsClient({
                   type="button"
                   className={task.id === selectedTaskId ? styles.selectedTask : styles.taskButton}
                   aria-pressed={task.id === selectedTaskId}
-                  disabled={publishBusy}
+                  disabled={publishBusy || reservationBusy}
                   onClick={() => selectTask(task.id)}
                 >
                   <strong>{taskName(task)}</strong>
@@ -717,7 +760,7 @@ export default function TaskMaterialRequirementsClient({
                   </div>
                   <button
                     type="button"
-                    disabled={loadState === "loading" || publishBusy}
+                    disabled={loadState === "loading" || publishBusy || reservationBusy}
                     onClick={() => reloadTask()}
                   >
                     Recargar datos
@@ -732,14 +775,22 @@ export default function TaskMaterialRequirementsClient({
                   {commitmentsError && <p className={styles.contextWarning} role="alert">{commitmentsError}</p>}
                 </div>
 
-                {snapshot && (
-                  <div className={styles.readinessCard}>
-                    <div>
-                      <span>Estado derivado de la revisión activa</span>
-                      <strong>{snapshot.readiness.label}</strong>
-                    </div>
-                    <span className={styles.closedBadge}>NO DISPONIBLE</span>
-                  </div>
+                {authoritativeTask?.type === "TASK" && (
+                  <TaskMaterialReservationsPanel
+                    key={selectedTaskId}
+                    taskId={selectedTaskId}
+                    canReserve={canManage && taskCanPublish}
+                    canRelease={canManage}
+                    requirementRevisionId={snapshot?.head?.id || null}
+                    onBusyChange={handleReservationBusyChange}
+                    onReservationStateChange={handleReservationStateChange}
+                  />
+                )}
+
+                {snapshot && reservationState.known && reservationState.blocksRevision && (
+                  <p className={styles.contextWarning} role="status">
+                    Liberá la reserva vigente antes de publicar otra revisión de la BOM.
+                  </p>
                 )}
 
                 {snapshot && !taskCanPublish && (

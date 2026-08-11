@@ -311,6 +311,11 @@ enum TaskMaterialRequirementKind {
   NO_MATERIALS_REQUIRED
 }
 
+enum TaskMaterialReservationTransactionType {
+  RESERVE
+  RELEASE
+}
+
 enum SupplierInvoiceStatus {
   RECEIVED
   APPROVED
@@ -760,7 +765,11 @@ model Organization {
   inventoryTransactions               InventoryTransaction[]
   inventoryLedgerEntries              InventoryLedgerEntry[]
   inventoryBalances                   InventoryBalance[]
+  inventoryAvailabilities             InventoryAvailability[]
   taskMaterialRequirementRevisions    TaskMaterialRequirementRevision[]
+  taskMaterialReservationTransactions TaskMaterialReservationTransaction[]
+  taskMaterialReservationBalances     TaskMaterialReservationBalance[]
+  taskMaterialActiveReservations      TaskMaterialActiveReservation[]
   workerPersons                       WorkerPerson[]
   workerChannelIdentities             WorkerChannelIdentity[]
   workerOnboardingClaims              WorkerOnboardingClaim[]
@@ -1135,6 +1144,8 @@ model InventoryLocation {
   goodsReceiptInspections GoodsReceiptInspection[]
   inventoryLedgerEntries  InventoryLedgerEntry[]
   inventoryBalances       InventoryBalance[]
+  inventoryAvailabilities InventoryAvailability[]
+  reservationEntries      TaskMaterialReservationEntry[]
   createdAt               DateTime                 @default(now())
   updatedAt               DateTime                 @updatedAt
 
@@ -1247,7 +1258,10 @@ model InventoryItem {
   purchaseOrderLineBindings    PurchaseOrderLineInventoryBinding[]
   ledgerEntries                InventoryLedgerEntry[]
   balances                     InventoryBalance[]
+  availabilities               InventoryAvailability[]
   taskMaterialRequirementLines TaskMaterialRequirementLine[]
+  reservationEntries           TaskMaterialReservationEntry[]
+  reservationBalances          TaskMaterialReservationBalance[]
   createdAt                    DateTime                            @default(now())
   updatedAt                    DateTime                            @updatedAt
 
@@ -1359,6 +1373,7 @@ model InventoryBalance {
   project         Project           @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "InventoryBalance_project_fkey")
   inventoryItem   InventoryItem     @relation(fields: [organizationId, projectId, inventoryItemId], references: [organizationId, projectId, id], onDelete: Restrict, onUpdate: Restrict, map: "InventoryBalance_item_fkey")
   location        InventoryLocation @relation(fields: [organizationId, projectId, locationId], references: [organizationId, projectId, id], onDelete: Restrict, onUpdate: Restrict, map: "InventoryBalance_location_fkey")
+  availability    InventoryAvailability?
 
   @@id([organizationId, projectId, inventoryItemId, locationId], map: "InventoryBalance_pkey")
   @@index([projectId, inventoryItemId, onHand], map: "InventoryBalance_item_on_hand_idx")
@@ -1392,6 +1407,9 @@ model TaskMaterialRequirementRevision {
   predecessor          TaskMaterialRequirementRevision? @relation("TaskMaterialRequirementChain", fields: [organizationId, projectId, taskId, predecessorId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialRequirementRevision_predecessor_fkey")
   successor            TaskMaterialRequirementRevision? @relation("TaskMaterialRequirementChain")
   lines                TaskMaterialRequirementLine[]
+  reservationTransactions TaskMaterialReservationTransaction[]
+  reservationBalances     TaskMaterialReservationBalance[]
+  activeReservations      TaskMaterialActiveReservation[]
 
   @@unique([organizationId, projectId, taskId, id], map: "TaskMaterialRequirementRevision_scope_id_key")
   @@unique([projectId, taskId, version], map: "TaskMaterialRequirementRevision_task_version_key")
@@ -1415,10 +1433,141 @@ model TaskMaterialRequirementLine {
   createdAt        DateTime                        @default(now())
   revision         TaskMaterialRequirementRevision @relation(fields: [organizationId, projectId, taskId, revisionId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialRequirementLine_revision_fkey")
   inventoryItem    InventoryItem                   @relation(fields: [organizationId, projectId, inventoryItemId, unitSnapshot], references: [organizationId, projectId, id, baseUnit], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialRequirementLine_item_fkey")
+  reservationEntries TaskMaterialReservationEntry[]
+  reservationBalance TaskMaterialReservationBalance?
 
   @@unique([organizationId, projectId, taskId, revisionId, id], map: "TaskMaterialRequirementLine_scope_id_key")
   @@unique([projectId, revisionId, inventoryItemId], map: "TaskMaterialRequirementLine_revision_item_key")
   @@index([projectId, taskId, inventoryItemId], map: "TaskMaterialRequirementLine_task_item_idx")
+}
+
+model InventoryAvailability {
+  organizationId      String
+  projectId           String
+  inventoryItemId     String
+  locationId          String
+  onHand              Decimal                        @default(0) @db.Decimal(14, 3)
+  reserved            Decimal                        @default(0) @db.Decimal(14, 3)
+  available           Decimal                        @default(dbgenerated()) @db.Decimal(14, 3)
+  onHandRevision      Int                            @default(0)
+  reservationRevision Int                            @default(0)
+  updatedAt           DateTime                       @updatedAt
+  organization        Organization                   @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  project             Project                        @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "InventoryAvailability_project_fkey")
+  inventoryItem       InventoryItem                  @relation(fields: [organizationId, projectId, inventoryItemId], references: [organizationId, projectId, id], onDelete: Restrict, onUpdate: Restrict, map: "InventoryAvailability_item_fkey")
+  location            InventoryLocation              @relation(fields: [organizationId, projectId, locationId], references: [organizationId, projectId, id], onDelete: Restrict, onUpdate: Restrict, map: "InventoryAvailability_location_fkey")
+  inventoryBalance    InventoryBalance                @relation(fields: [organizationId, projectId, inventoryItemId, locationId], references: [organizationId, projectId, inventoryItemId, locationId], onDelete: Restrict, onUpdate: Restrict, map: "InventoryAvailability_balance_fkey")
+  reservationEntries  TaskMaterialReservationEntry[]
+
+  @@id([organizationId, projectId, inventoryItemId, locationId], map: "InventoryAvailability_pkey")
+  @@index([projectId, inventoryItemId, available], map: "InventoryAvailability_item_available_idx")
+  @@index([projectId, locationId, available], map: "InventoryAvailability_location_available_idx")
+}
+
+model TaskMaterialReservationTransaction {
+  id                    String                                 @id @default(cuid())
+  organizationId        String
+  projectId             String
+  taskId                String
+  requirementRevisionId String
+  transactionType       TaskMaterialReservationTransactionType
+  version               Int
+  predecessorId         String?
+  operationKey          String                                 @db.VarChar(190)
+  requestFingerprint    String                                 @db.Char(64)
+  actorId               String
+  reason                String                                 @db.VarChar(500)
+  occurredAt            DateTime                               @default(now())
+  createdAt             DateTime                               @default(now())
+  organization          Organization                           @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  project               Project                                @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialReservationTransaction_project_fkey")
+  task                  Task                                   @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialReservationTransaction_task_fkey")
+  requirementRevision   TaskMaterialRequirementRevision        @relation(fields: [organizationId, projectId, taskId, requirementRevisionId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialReservationTransaction_revision_fkey")
+  actor                 PlatformUser                           @relation("TaskMaterialReservationActor", fields: [actorId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialReservationTransaction_actor_fkey")
+  predecessor           TaskMaterialReservationTransaction?    @relation("TaskMaterialReservationChain", fields: [organizationId, projectId, taskId, predecessorId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialReservationTransaction_predecessor_fkey")
+  successor             TaskMaterialReservationTransaction?    @relation("TaskMaterialReservationChain")
+  entries               TaskMaterialReservationEntry[]
+  activeReservation     TaskMaterialActiveReservation?
+
+  @@unique([organizationId, projectId, taskId, id], map: "TaskMaterialReservationTransaction_scope_id_key")
+  @@unique([projectId, taskId, version], map: "TaskMaterialReservationTransaction_task_version_key")
+  @@unique([organizationId, projectId, taskId, predecessorId], map: "TaskMaterialReservationTransaction_predecessor_key")
+  @@unique([projectId, operationKey], map: "TaskMaterialReservationTransaction_operation_key")
+  @@index([projectId, taskId, requirementRevisionId, occurredAt], map: "TaskMaterialReservationTransaction_revision_idx")
+}
+
+model TaskMaterialActiveReservation {
+  organizationId                    String
+  projectId                         String
+  taskId                            String
+  reservationTransactionId         String
+  requirementRevisionId            String
+  projectReservationEligibleSnapshot Boolean                  @default(true)
+  createdAt                         DateTime                    @default(now())
+  organization                      Organization                @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  project                           Project                     @relation(fields: [organizationId, projectId, projectReservationEligibleSnapshot], references: [organizationId, id, materialReservationEligible], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialActiveReservation_project_fkey")
+  task                              Task                        @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialActiveReservation_task_fkey")
+  reservationTransaction            TaskMaterialReservationTransaction @relation(fields: [organizationId, projectId, taskId, reservationTransactionId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialActiveReservation_transaction_fkey")
+  requirementRevision               TaskMaterialRequirementRevision @relation(fields: [organizationId, projectId, taskId, requirementRevisionId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialActiveReservation_revision_fkey")
+
+  @@id([organizationId, projectId, taskId], map: "TaskMaterialActiveReservation_pkey")
+  @@unique([projectId, taskId], map: "TaskMaterialActiveReservation_task_key")
+  @@unique([organizationId, projectId, taskId, reservationTransactionId], map: "TaskMaterialActiveReservation_transaction_key")
+  @@index([projectId, requirementRevisionId], map: "TaskMaterialActiveReservation_revision_idx")
+}
+
+model TaskMaterialReservationBalance {
+  organizationId        String
+  projectId             String
+  taskId                String
+  requirementRevisionId String
+  requirementLineId     String
+  inventoryItemId       String
+  requiredQuantity      Decimal                          @db.Decimal(14, 3)
+  reservedQuantity      Decimal                          @default(0) @db.Decimal(14, 3)
+  revision              Int                              @default(0)
+  updatedAt             DateTime                         @updatedAt
+  organization          Organization                     @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  project               Project                          @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialReservationBalance_project_fkey")
+  task                  Task                             @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialReservationBalance_task_fkey")
+  requirementRevision   TaskMaterialRequirementRevision  @relation(fields: [organizationId, projectId, taskId, requirementRevisionId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialReservationBalance_revision_fkey")
+  requirementLine       TaskMaterialRequirementLine      @relation(fields: [organizationId, projectId, taskId, requirementRevisionId, requirementLineId], references: [organizationId, projectId, taskId, revisionId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialReservationBalance_line_fkey")
+  inventoryItem         InventoryItem                    @relation(fields: [organizationId, projectId, inventoryItemId], references: [organizationId, projectId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialReservationBalance_item_fkey")
+  entries               TaskMaterialReservationEntry[]
+
+  @@id([organizationId, projectId, taskId, requirementRevisionId, requirementLineId], map: "TaskMaterialReservationBalance_pkey")
+  @@unique([organizationId, projectId, taskId, requirementRevisionId, requirementLineId, inventoryItemId], map: "TaskMaterialReservationBalance_line_item_key")
+  @@index([projectId, taskId, requirementRevisionId, reservedQuantity], map: "TaskMaterialReservationBalance_revision_reserved_idx")
+}
+
+model TaskMaterialReservationEntry {
+  id                    String                              @id @default(cuid())
+  organizationId        String
+  projectId             String
+  taskId                String
+  requirementRevisionId String
+  transactionId         String
+  requirementLineId     String
+  inventoryItemId       String
+  locationId            String
+  unitSnapshot          String                              @db.VarChar(32)
+  quantityDelta         Decimal                             @db.Decimal(14, 3)
+  reversesEntryId       String?
+  createdAt             DateTime                            @default(now())
+  transaction           TaskMaterialReservationTransaction @relation(fields: [organizationId, projectId, taskId, transactionId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialReservationEntry_transaction_fkey")
+  requirementLine       TaskMaterialRequirementLine         @relation(fields: [organizationId, projectId, taskId, requirementRevisionId, requirementLineId], references: [organizationId, projectId, taskId, revisionId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialReservationEntry_line_fkey")
+  lineBalance           TaskMaterialReservationBalance      @relation(fields: [organizationId, projectId, taskId, requirementRevisionId, requirementLineId, inventoryItemId], references: [organizationId, projectId, taskId, requirementRevisionId, requirementLineId, inventoryItemId], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialReservationEntry_line_balance_fkey")
+  inventoryItem         InventoryItem                       @relation(fields: [organizationId, projectId, inventoryItemId], references: [organizationId, projectId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialReservationEntry_item_fkey")
+  location              InventoryLocation                   @relation(fields: [organizationId, projectId, locationId], references: [organizationId, projectId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialReservationEntry_location_fkey")
+  inventoryAvailability InventoryAvailability               @relation(fields: [organizationId, projectId, inventoryItemId, locationId], references: [organizationId, projectId, inventoryItemId, locationId], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialReservationEntry_availability_fkey")
+  reversesEntry         TaskMaterialReservationEntry?        @relation("TaskMaterialReservationEntryReversal", fields: [organizationId, projectId, taskId, reversesEntryId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialReservationEntry_reverses_fkey")
+  reversedBy            TaskMaterialReservationEntry?        @relation("TaskMaterialReservationEntryReversal")
+
+  @@unique([organizationId, projectId, taskId, id], map: "TaskMaterialReservationEntry_scope_id_key")
+  @@unique([projectId, transactionId, requirementLineId, locationId], map: "TaskMaterialReservationEntry_allocation_key")
+  @@unique([organizationId, projectId, taskId, reversesEntryId], map: "TaskMaterialReservationEntry_reversal_key")
+  @@index([projectId, requirementRevisionId, requirementLineId], map: "TaskMaterialReservationEntry_line_idx")
+  @@index([projectId, inventoryItemId, locationId, createdAt], map: "TaskMaterialReservationEntry_availability_idx")
 }
 
 model CrmAccount {
@@ -1484,6 +1633,7 @@ model PlatformUser {
   inventoryPurchaseLineBindings      PurchaseOrderLineInventoryBinding[] @relation("InventoryPurchaseLineBinder")
   inventoryTransactions              InventoryTransaction[]              @relation("InventoryTransactionActor")
   taskMaterialRequirementRevisions   TaskMaterialRequirementRevision[]   @relation("TaskMaterialRequirementAuthor")
+  taskMaterialReservationTransactions TaskMaterialReservationTransaction[] @relation("TaskMaterialReservationActor")
 
   @@index([systemRole, createdAt])
 }
@@ -1547,6 +1697,7 @@ model Project {
   name                                 String
   slug                                 String
   status                               ProjectStatus                         @default(ACTIVE)
+  materialReservationEligible          Boolean                               @default(dbgenerated())
   address                              String?
   latitude                             Decimal?                              @db.Decimal(10, 7)
   longitude                            Decimal?                              @db.Decimal(10, 7)
@@ -1608,7 +1759,11 @@ model Project {
   inventoryTransactions                InventoryTransaction[]
   inventoryLedgerEntries               InventoryLedgerEntry[]
   inventoryBalances                    InventoryBalance[]
+  inventoryAvailabilities              InventoryAvailability[]
   taskMaterialRequirementRevisions     TaskMaterialRequirementRevision[]
+  taskMaterialReservationTransactions  TaskMaterialReservationTransaction[]
+  taskMaterialReservationBalances      TaskMaterialReservationBalance[]
+  taskMaterialActiveReservations       TaskMaterialActiveReservation[]
   supplierInvoices                     SupplierInvoice[]
   supplierCommitments                  SupplierCommitment[]
   supplierReminderDeliveries           SupplierReminderDelivery[]
@@ -1619,6 +1774,7 @@ model Project {
   whatsappMediaAssets                  WhatsAppMediaAsset[]
 
   @@unique([organizationId, id])
+  @@unique([organizationId, id, materialReservationEligible], map: "Project_material_reservation_identity_key")
   @@unique([organizationId, slug])
   @@index([organizationId, status])
 }
@@ -2381,6 +2537,9 @@ model Task {
   budgetLines                  BudgetLine[]
   supplierCommitmentLinks      SupplierCommitmentTaskLink[]
   materialRequirementRevisions TaskMaterialRequirementRevision[]
+  materialReservationTransactions TaskMaterialReservationTransaction[]
+  materialReservationBalances     TaskMaterialReservationBalance[]
+  activeMaterialReservation       TaskMaterialActiveReservation?
   metadata                     Json?
   createdAt                    DateTime                          @default(now())
   updatedAt                    DateTime                          @updatedAt

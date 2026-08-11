@@ -8,11 +8,12 @@ import {
 } from "../src/lib/task-material-requirements-ui-contract.js";
 
 const root = new URL("../", import.meta.url);
-const [page, purchasesClient, client, css] = await Promise.all([
+const [page, purchasesClient, client, css, reservationPanel] = await Promise.all([
   readFile(new URL("src/app/dashboard/purchases/page.js", root), "utf8"),
   readFile(new URL("src/app/dashboard/purchases/purchases-client.js", root), "utf8"),
   readFile(new URL("src/app/dashboard/purchases/task-material-requirements-client.js", root), "utf8"),
   readFile(new URL("src/app/dashboard/purchases/task-material-requirements-client.module.css", root), "utf8"),
+  readFile(new URL("src/app/dashboard/purchases/task-material-reservations-panel.js", root), "utf8"),
 ]);
 
 test("server catalog requires task and inventory permissions and fails closed at its cap", () => {
@@ -141,8 +142,33 @@ test("no-materials declaration, immutable history, and pagination are explicit",
 test("supplier links never claim reservation or material availability", () => {
   assert.match(client, /PROMESA, NO RESERVA/);
   assert.match(client, /no asignan stock ni cubren líneas de la BOM/);
-  assert.match(client, /Una promesa de proveedor tampoco vuelve disponible el material/);
-  assert.match(client, /NO DISPONIBLE/);
+  assert.match(client, /Una promesa de proveedor, una foto o una inferencia de IA nunca asignan existencias/);
+  assert.match(client, /RESERVA CONTROLADA/);
+  assert.match(client, /reserva completa contra stock/);
+});
+
+test("reservation UI separates publish eligibility from compensating release authority", () => {
+  assert.match(client, /canReserve=\{canManage && taskCanPublish\}/);
+  assert.match(client, /canRelease=\{canManage\}/);
+  assert.match(reservationPanel, /snapshot\.readiness\.state === "DEFINED_UNRESERVED" && canReserve/);
+  assert.match(
+    reservationPanel,
+    /snapshot\.reservationHead\?\.kind === "RESERVE"[\s\S]*&& canRelease/,
+  );
+  assert.match(reservationPanel, /snapshot\.readiness\.state !== "AVAILABLE"/);
+  assert.match(reservationPanel, /liberarla completa para recuperar el stock/);
+});
+
+test("reservation mutations fail closed across reloads, task switches, replays, and unmounts", () => {
+  assert.match(client, /const reservationBusyRef = useRef\(false\)/);
+  assert.match(client, /\|\| reservationBusyRef\.current[\s\S]*\|\| taskId === selectedTaskId/);
+  assert.match(client, /disabled=\{loadState === "loading" \|\| publishBusy \|\| reservationBusy\}/);
+  assert.match(client, /\{authoritativeTask\?\.type === "TASK" && \([\s\S]*<TaskMaterialReservationsPanel/);
+  assert.match(reservationPanel, /publishState\(null, false\);[\s\S]*onBusyChange\?\.\(taskId, true\)/);
+  assert.match(reservationPanel, /if \(result\.readiness\.authoritative\)[\s\S]*else \{[\s\S]*publishState\(null, false\)/);
+  assert.match(reservationPanel, /mountedRef\.current = true;[\s\S]*mountedRef\.current = false/);
+  assert.match(reservationPanel, /if \(!mountedRef\.current\) return;/);
+  assert.doesNotMatch(reservationPanel, /controller\.abort\(\)[\s\S]{0,300}method: "POST"/);
 });
 
 test("the task catalog paginates all received tasks and collapses safely on mobile", () => {
