@@ -50,6 +50,10 @@ test('progress measurement verifier exercises governed lifecycle inside rollback
     'PROGRESS_MEASUREMENT_FUTURE_PERIOD',
     'PROGRESS_MEASUREMENT_TASK_TYPE_INVALID',
   ]) assert.match(verifier, new RegExp(marker));
+  assert.match(
+    verifier,
+    /expectDatabaseError\(client, 'TaskProgressMeasurement is append-only',[\s\S]{0,160}UPDATE "TaskProgressMeasurement"/,
+  );
   assert.match(verifier, /Rejection mutated approved balance/);
   assert.match(verifier, /Correction must replace the latest contribution/);
   assert.match(verifier, /Late submit replay leaked the live decision\/head\/balance projection/);

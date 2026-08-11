@@ -470,7 +470,7 @@ async function assertRollbackOnlyJourney(client) {
   await expectDatabaseError(client, 'PROGRESS_MEASUREMENT_TASK_IDENTITY_IMMUTABLE', () =>
     client.query(`UPDATE "Task" SET "type" = 'MILESTONE' WHERE "id" = $1`, [item.taskId]),
   );
-  await expectDatabaseError(client, 'direct progress measurement ledger writes are forbidden', () =>
+  await expectDatabaseError(client, 'TaskProgressMeasurement is append-only', () =>
     client.query(`UPDATE "TaskProgressMeasurement" SET "rationale" = 'tampered' WHERE "id" = $1`, [measurementId]),
   );
   await expectDatabaseError(client, 'direct progress measurement projection writes are forbidden', () =>
