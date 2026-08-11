@@ -9,9 +9,14 @@ import {
   normalizeProgressMeasurementListQuery,
   readTaskProgressMeasurementSnapshot,
 } from '@/lib/progress-measurements';
+import {
+  normalizeProgressMeasurementCutQuery,
+  readProgressMeasurementCutSnapshot,
+} from '@/lib/progress-measurement-cuts';
 import { localDateKey } from '@/lib/zoned-time';
 
 import MeasurementsClient from './measurements-client';
+import { latestClosedFortnightDate } from './progress-measurement-cuts-state';
 
 export const dynamic = 'force-dynamic';
 export const metadata = {
@@ -28,9 +33,18 @@ function requestedTaskId(searchParams) {
   return SAFE_IDENTIFIER.test(value) ? value : null;
 }
 
+function requestedView(searchParams) {
+  return searchParams?.view === 'cut' ? 'cut' : 'tasks';
+}
+
 export default async function MeasurementsPage({ searchParams }) {
   const access = await getPlatformAccess();
+  const params = await searchParams;
+  const initialView = requestedView(params);
   requireTenantPermission(access, 'org:measurements:read', { subscriptionMode: 'read' });
+  if (initialView === 'cut') {
+    requireTenantPermission(access, 'org:measurement-cuts:read', { subscriptionMode: 'read' });
+  }
   if (!access.tenantMembershipId) {
     throw new AccessError('Una membresía activa en la organización es obligatoria.', {
       code: 'TENANT_MEMBERSHIP_REQUIRED',
@@ -39,8 +53,8 @@ export default async function MeasurementsPage({ searchParams }) {
   }
 
   const prisma = getPrisma();
-  const params = await searchParams;
   const tenantToday = localDateKey(new Date(), access.organization.timezone);
+  const initialCutDate = latestClosedFortnightDate(tenantToday);
   const requestedId = requestedTaskId(params);
   const taskWhere = {
     projectId: access.project.id,
@@ -64,13 +78,20 @@ export default async function MeasurementsPage({ searchParams }) {
         limit: '25',
       }))
     : null;
+  const initialCutQuery = initialView === 'cut'
+    ? normalizeProgressMeasurementCutQuery(new URLSearchParams({ periodDate: initialCutDate }))
+    : null;
   const actorMembershipId = access.tenantMembershipId;
   const canPrepare = Boolean(actorMembershipId)
     && hasTenantPermission(access, 'org:measurements:prepare');
   const canApprove = Boolean(actorMembershipId)
     && hasTenantPermission(access, 'org:measurements:approve');
+  const canSeal = Boolean(actorMembershipId)
+    && hasTenantPermission(access, 'org:measurement-cuts:seal');
+  const canReadCuts = Boolean(actorMembershipId)
+    && hasTenantPermission(access, 'org:measurement-cuts:read');
 
-  const [taskRows, evidenceRows, initialSnapshot] = await Promise.all([
+  const [taskRows, evidenceRows, initialSnapshot, initialCutSnapshot] = await Promise.all([
     prisma.task.findMany({
       where: taskWhere,
       orderBy: [{ code: 'asc' }, { title: 'asc' }, { id: 'asc' }],
@@ -95,6 +116,16 @@ export default async function MeasurementsPage({ searchParams }) {
           actorMembershipId,
         })
       : Promise.resolve(null),
+    initialView === 'cut'
+      ? readProgressMeasurementCutSnapshot(prisma, {
+          scope: {
+            organizationId: access.organization.id,
+            projectId: access.project.id,
+          },
+          query: initialCutQuery,
+          actorMembershipId,
+        })
+      : Promise.resolve(null),
   ]);
   const visibleTaskRows = taskRows.slice(0, CATALOG_LIMIT);
   if (initialTask && !visibleTaskRows.some((task) => task.id === initialTask.id)) {
@@ -110,10 +141,12 @@ export default async function MeasurementsPage({ searchParams }) {
         capturedAt: evidence.capturedAt.toISOString(),
       }))}
       approvedEvidenceTruncated={evidenceRows.length > CATALOG_LIMIT}
+      initialCutSnapshot={initialCutSnapshot}
       initialSnapshot={initialSnapshot}
       initialTaskId={initialTaskId}
+      initialView={initialView}
       organizationTimeZone={access.organization.timezone}
-      permissions={{ canPrepare, canApprove }}
+      permissions={{ canPrepare, canApprove, canReadCuts, canSeal }}
       projectName={access.project.name}
       tasks={visibleTaskRows}
       tasksTruncated={taskRows.length > CATALOG_LIMIT}

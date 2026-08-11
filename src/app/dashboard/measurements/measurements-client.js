@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import FortnightCutPanel from './fortnight-cut-panel';
 import styles from './measurements.module.css';
 import {
   apiErrorMessage,
@@ -284,8 +285,10 @@ function MeasurementCard({
 export default function MeasurementsClient({
   approvedEvidence,
   approvedEvidenceTruncated,
+  initialCutSnapshot,
   initialSnapshot,
   initialTaskId,
+  initialView,
   organizationTimeZone,
   permissions,
   projectName,
@@ -294,6 +297,7 @@ export default function MeasurementsClient({
   tenantToday,
 }) {
   const initialPeriodStart = initialFortnightDate(tenantToday);
+  const [activeView, setActiveView] = useState(initialView === 'cut' ? 'cut' : 'tasks');
   const [selectedTaskId, setSelectedTaskId] = useState(initialTaskId || '');
   const [snapshot, setSnapshot] = useState(initialSnapshot);
   const [loadState, setLoadState] = useState(initialSnapshot ? 'ready' : 'idle');
@@ -907,11 +911,27 @@ export default function MeasurementsClient({
         });
   }
 
+  function navigateTabs(event) {
+    const keys = ['ArrowLeft', 'ArrowRight', 'Home', 'End'];
+    if (!keys.includes(event.key)) return;
+    const tabs = [...event.currentTarget.querySelectorAll('[role="tab"]')];
+    if (tabs.length === 0) return;
+    const currentIndex = tabs.indexOf(document.activeElement);
+    let nextIndex = currentIndex < 0 ? 0 : currentIndex;
+    if (event.key === 'ArrowLeft') nextIndex = (nextIndex - 1 + tabs.length) % tabs.length;
+    if (event.key === 'ArrowRight') nextIndex = (nextIndex + 1) % tabs.length;
+    if (event.key === 'Home') nextIndex = 0;
+    if (event.key === 'End') nextIndex = tabs.length - 1;
+    event.preventDefault();
+    tabs[nextIndex].focus();
+    tabs[nextIndex].click();
+  }
+
   return (
     <div className={styles.page}>
       <header className={styles.hero}>
         <div>
-          <span className={styles.eyebrow}>S9.1 · Control técnico</span>
+          <span className={styles.eyebrow}>S9.1 + S9.2-MED · Control técnico</span>
           <h1>Mediciones de avance</h1>
           <p>{projectName} · cantidades exactas por tarea y quincena civil.</p>
         </div>
@@ -921,6 +941,44 @@ export default function MeasurementsClient({
         </div>
       </header>
 
+      <nav aria-label="Vistas de medición técnica" className={styles.measurementTabs}>
+        <div aria-label="Mediciones de avance" onKeyDown={navigateTabs} role="tablist">
+          <button
+            aria-controls="task-measurements-panel"
+            aria-selected={activeView === 'tasks'}
+            id="task-measurements-tab"
+            onClick={() => setActiveView('tasks')}
+            role="tab"
+            tabIndex={activeView === 'tasks' ? 0 : -1}
+            type="button"
+          >
+            <i aria-hidden="true" className="fa-solid fa-ruler-combined" />
+            Medición por tarea
+          </button>
+          {permissions.canReadCuts && (
+            <button
+              aria-controls="fortnight-cut-panel"
+              aria-selected={activeView === 'cut'}
+              id="fortnight-cut-tab"
+              onClick={() => setActiveView('cut')}
+              role="tab"
+              tabIndex={activeView === 'cut' ? 0 : -1}
+              type="button"
+            >
+              <i aria-hidden="true" className="fa-solid fa-layer-group" />
+              Corte quincenal
+            </button>
+          )}
+        </div>
+      </nav>
+
+      <div
+        aria-labelledby="task-measurements-tab"
+        className={styles.measurementTabPanel}
+        hidden={activeView !== 'tasks'}
+        id="task-measurements-panel"
+        role="tabpanel"
+      >
       {(tasksTruncated || approvedEvidenceTruncated) && (
         <div className={styles.failClosed} role="alert">
           El catálogo supera el límite seguro. La lectura sigue disponible, pero preparar nuevas mediciones quedó bloqueado para no operar sobre datos parciales.
@@ -1233,6 +1291,24 @@ export default function MeasurementsClient({
               </button>
             )}
           </section>
+        </div>
+      )}
+      </div>
+      {permissions.canReadCuts && (
+        <div
+          aria-labelledby="fortnight-cut-tab"
+          className={styles.measurementTabPanel}
+          hidden={activeView !== 'cut'}
+          id="fortnight-cut-panel"
+          role="tabpanel"
+        >
+          <FortnightCutPanel
+            active={activeView === 'cut'}
+            canSeal={permissions.canSeal}
+            initialSnapshot={initialCutSnapshot}
+            organizationTimeZone={organizationTimeZone}
+            tenantToday={tenantToday}
+          />
         </div>
       )}
     </div>

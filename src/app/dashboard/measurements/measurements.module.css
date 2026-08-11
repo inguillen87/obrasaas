@@ -11,6 +11,7 @@
 }
 
 .hero,
+.measurementTabs,
 .taskSelector,
 .summaryPanel,
 .preparePanel,
@@ -20,6 +21,389 @@
   background: var(--bg-surface);
   border: 1px solid var(--border-color);
   border-radius: 22px;
+}
+
+.measurementTabs {
+  padding: 0.45rem;
+}
+
+.measurementTabs > div {
+  display: grid;
+  gap: 0.45rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+}
+
+.measurementTabs button {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 800;
+  gap: 0.6rem;
+  justify-content: center;
+  min-height: 46px;
+  padding: 0.7rem 1rem;
+}
+
+.measurementTabs button[aria-selected='true'] {
+  background: rgba(56, 189, 248, 0.09);
+  border-color: rgba(56, 189, 248, 0.25);
+  color: var(--measurement-blue);
+}
+
+.measurementTabPanel,
+.cutWorkspace {
+  display: grid;
+  gap: 1.25rem;
+  min-width: 0;
+}
+
+.measurementTabPanel[hidden] {
+  display: none;
+}
+
+.cutIntro,
+.cutSnapshotCard,
+.cutComparison,
+.cutSealPanel,
+.cutLoading {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 22px;
+}
+
+.cutIntro {
+  align-items: end;
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: minmax(0, 1fr) minmax(270px, 0.55fr);
+  padding: 1.3rem 1.4rem;
+}
+
+.cutIntro h2,
+.cutComparison h3,
+.cutSealPanel h3 {
+  color: var(--text-primary);
+  letter-spacing: -0.025em;
+  margin: 0.25rem 0 0.35rem;
+}
+
+.cutIntro h2 {
+  font-size: clamp(1.55rem, 3vw, 2.35rem);
+}
+
+.cutIntro p,
+.cutComparisonHeading p,
+.cutSealPanel p,
+.cutEmpty p,
+.cutLoading p {
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.cutPeriodControl {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.cutPeriodControl label {
+  color: var(--text-secondary);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.cutPeriodControl input {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 11px;
+  color: var(--text-primary);
+  font: inherit;
+  min-height: 44px;
+  padding: 0.72rem 0.8rem;
+  width: 100%;
+}
+
+.cutPeriodControl small {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+}
+
+.cutPeriodControl input:focus-visible {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-glow);
+  outline: none;
+}
+
+.cutLoading {
+  color: var(--text-secondary);
+  padding: 2rem;
+  text-align: center;
+}
+
+.cutLoading button,
+.cutComparisonHeading button,
+.cutSealPanel button {
+  background: var(--primary);
+  border: 0;
+  border-radius: 11px;
+  color: white;
+  cursor: pointer;
+  font-weight: 800;
+  min-height: 44px;
+  padding: 0.72rem 1rem;
+}
+
+.cutLoading button {
+  margin-top: 0.8rem;
+}
+
+.cutLoading button:disabled,
+.cutComparisonHeading button:disabled,
+.cutSealPanel button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.cutSummaryGrid {
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.cutSnapshotCard {
+  min-width: 0;
+  padding: 1.2rem;
+}
+
+.cutSnapshotCard header {
+  align-items: flex-start;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.cutSnapshotCard header > div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.cutSnapshotCard header small,
+.cutSnapshotCard dt,
+.cutLineValue small,
+.cutTable th small {
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+}
+
+.cutSnapshotCard header strong {
+  color: var(--text-primary);
+  font-size: 1rem;
+}
+
+.cutSnapshotCard header > span,
+.cutChangeBadge,
+.cutReadOnly {
+  background: rgba(148, 163, 184, 0.1);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-size: 0.66rem;
+  font-weight: 800;
+  line-height: 1.35;
+  padding: 0.35rem 0.55rem;
+  text-align: center;
+}
+
+.cutSnapshotCard header > span[data-state='ready'],
+.cutSnapshotCard header > span[data-state='stale'],
+.cutChangeBadge[data-change='changed'],
+.cutChangeBadge[data-change='added'],
+.cutChangeBadge[data-change='review_required'] {
+  background: rgba(251, 191, 36, 0.1);
+  border-color: rgba(251, 191, 36, 0.22);
+  color: #fbbf24;
+}
+
+.cutSnapshotCard header > span[data-state='up_to_date'] {
+  background: rgba(52, 211, 153, 0.1);
+  border-color: rgba(52, 211, 153, 0.22);
+  color: var(--measurement-green);
+}
+
+.cutSnapshotCard header > span[data-state='review_pending'],
+.cutSnapshotCard header > span[data-state='empty'],
+.cutChangeBadge[data-change='removed'] {
+  background: rgba(251, 113, 133, 0.08);
+  border-color: rgba(251, 113, 133, 0.2);
+  color: var(--measurement-red);
+}
+
+.cutSnapshotCard dl {
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 1rem 0;
+}
+
+.cutSnapshotCard dl > div {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+  padding: 0.75rem;
+}
+
+.cutSnapshotCard dd {
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  font-weight: 800;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.cutAbsenceNote,
+.cutMetadata,
+.cutBlocker {
+  background: var(--bg-card);
+  border: 1px dashed var(--border-color);
+  border-radius: 12px;
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+  line-height: 1.5;
+  margin: 0;
+  padding: 0.75rem;
+}
+
+.cutBlocker {
+  background: rgba(251, 191, 36, 0.08);
+  border-color: rgba(251, 191, 36, 0.24);
+  color: #fbbf24;
+  margin-top: 0.65rem;
+}
+
+.cutMetadata {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.cutMetadata code {
+  color: var(--measurement-blue);
+  font-size: 0.7rem;
+  overflow-wrap: anywhere;
+}
+
+.cutComparison {
+  min-width: 0;
+  padding: 1.25rem;
+}
+
+.cutComparisonHeading,
+.cutSealPanel {
+  align-items: center;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.cutComparisonHeading h3,
+.cutSealPanel h3 {
+  font-size: 1.05rem;
+}
+
+.cutTableScroller {
+  border: 1px solid var(--border-color);
+  border-radius: 15px;
+  margin-top: 1rem;
+  overflow-x: auto;
+}
+
+.cutTable {
+  border-collapse: collapse;
+  min-width: 880px;
+  width: 100%;
+}
+
+.cutTable caption {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  padding: 0.75rem 0.9rem;
+  text-align: left;
+}
+
+.cutTable th,
+.cutTable td {
+  border-top: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  padding: 0.8rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.cutTable thead th {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-size: 0.68rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.cutTable tbody th {
+  min-width: 180px;
+}
+
+.cutTable tbody th strong,
+.cutTable tbody th small,
+.cutLineValue strong,
+.cutLineValue small {
+  display: block;
+}
+
+.cutTable tbody th strong,
+.cutLineValue strong {
+  color: var(--text-primary);
+  font-size: 0.76rem;
+}
+
+.cutTable tbody th small,
+.cutLineValue small {
+  line-height: 1.45;
+  margin-top: 0.2rem;
+}
+
+.cutLineValue[data-absent='true'] strong {
+  color: var(--measurement-red);
+}
+
+.cutEmpty {
+  color: var(--text-secondary);
+  padding: 2.5rem 1rem 1.5rem;
+  text-align: center;
+}
+
+.cutEmpty strong {
+  color: var(--text-primary);
+}
+
+.cutSealPanel {
+  flex-wrap: wrap;
+  padding: 1.2rem 1.25rem;
+}
+
+.cutSealPanel > div {
+  flex: 1 1 430px;
+}
+
+.cutSealPanel > .mutationDisclaimer {
+  flex-basis: 100%;
 }
 
 .hero {
@@ -773,6 +1157,10 @@
   .summaryPanel {
     position: static;
   }
+
+  .cutSummaryGrid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 760px) {
@@ -791,6 +1179,7 @@
   }
 
   .taskSelector,
+  .cutIntro,
   .formGrid,
   .reviewHeading {
     grid-template-columns: 1fr;
@@ -798,6 +1187,26 @@
 
   .metrics {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .cutSnapshotCard dl {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .cutComparisonHeading,
+  .cutSealPanel {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .cutComparisonHeading button,
+  .cutSealPanel button,
+  .cutReadOnly {
+    width: 100%;
+  }
+
+  .cutSealPanel > div {
+    flex-basis: auto;
   }
 
   .measurementFacts {
@@ -825,6 +1234,13 @@
   .primaryAction {
     justify-content: stretch;
     width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .measurementTabs > div,
+  .cutSnapshotCard dl {
+    grid-template-columns: 1fr;
   }
 }
 
