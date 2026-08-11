@@ -206,6 +206,8 @@ test('request receipt, authority attestation, discovery and blocked seal remain 
   assert.equal(result.discovery.completed, true);
   assert.equal(result.discovery.coverageComplete, false);
   assert.equal(result.discovery.executionAllowed, false);
+  assert.equal(result.discovery.evidenceCommitted, true);
+  assert.equal(Object.hasOwn(result.discovery, 'manifestSha256'), false);
   assert.ok(result.discovery.blockerCount > 0);
   assert.equal(stored.state.requests.length, 1);
   assert.equal(stored.state.manifests.length, 1);
@@ -220,6 +222,7 @@ test('request receipt, authority attestation, discovery and blocked seal remain 
   const serialized = JSON.stringify(result);
   assert.equal(serialized.includes('person-a'), false);
   assert.equal(serialized.includes(KEY.toString('base64url')), false);
+  assert.equal(serialized.includes(stored.state.manifests[0].manifestSha256), false);
 });
 
 test('an exact idempotent replay returns the frozen manifest without rediscovery', async () => {

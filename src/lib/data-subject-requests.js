@@ -522,7 +522,6 @@ async function loadPublicResult(prisma, organizationId, requestId, replayed) {
           sourceSnapshotAt: true,
           itemCount: true,
           blockerCount: true,
-          manifestSha256: true,
           sealedAt: true,
           items: {
             select: {
@@ -581,7 +580,7 @@ async function loadPublicResult(prisma, organizationId, requestId, replayed) {
       sealedAt: manifest.sealedAt?.toISOString?.() || manifest.sealedAt,
       itemCount: manifest.itemCount,
       blockerCount: manifest.blockerCount,
-      manifestSha256: manifest.manifestSha256,
+      evidenceCommitted: true,
       categoryCounts,
       blockers,
     } : {

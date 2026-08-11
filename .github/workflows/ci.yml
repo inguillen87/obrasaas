@@ -151,6 +151,13 @@ jobs:
           DATA_SUBJECT_DISCOVERY_MIGRATION_SCHEMA: public
         run: npm run verify:data-subject-discovery-migration
 
+      - name: Verify data subject decision control plane on PostgreSQL 17
+        env:
+          DATA_SUBJECT_DECISION_MIGRATION_DATABASE_URL: postgresql://obrasaas_ci:obrasaas_ci@127.0.0.1:5432/obrasaas_ci?schema=public
+          DATA_SUBJECT_DECISION_MIGRATION_SCHEMA: public
+          DATA_SUBJECT_DECISION_DISPOSABLE_CONCURRENCY: "1"
+        run: npm run verify:data-subject-decision-migration
+
       - name: Verify migration history status
         run: npx prisma migrate status
 

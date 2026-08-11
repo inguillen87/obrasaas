@@ -10,6 +10,17 @@ import {
   dataSubjectRequestErrorResponse,
   requireDataSubjectIdempotencyKey,
 } from '@/lib/data-subject-requests';
+import {
+  dataSubjectReviewErrorResponse,
+  listDataSubjectRequestsForReview,
+  normalizeDataSubjectReviewListQuery,
+  resolveDataSubjectReviewKeyConfig,
+} from '@/lib/data-subject-review';
+import {
+  authorizeDataSubjectReviewAccess,
+  dataSubjectReviewScope,
+  dataSubjectReviewUnexpectedErrorMetadata,
+} from '@/lib/data-subject-review-routes';
 import { getPrisma } from '@/lib/prisma';
 import {
   PrivacyDiscoveryError,
@@ -39,6 +50,10 @@ function authorizePrivacyAccess(access) {
 function finalized(response, correlationId, replayed = null) {
   const headers = new Headers(response.headers);
   headers.set('Cache-Control', 'private, no-store, max-age=0');
+  headers.set('Vary', 'Cookie, Authorization');
+  headers.set('Referrer-Policy', 'no-referrer');
+  headers.set('X-Content-Type-Options', 'nosniff');
+  headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
   headers.set('x-request-id', correlationId);
   if (replayed !== null) headers.set('Idempotency-Replayed', String(replayed));
   return new Response(response.body, {
@@ -64,10 +79,49 @@ export function createDataSubjectRequestHandlers({
     maxBytes: DATA_SUBJECT_REQUEST_MAX_BODY_BYTES,
   }),
   resolveKeyConfig = resolvePrivacyDiscoveryKeyConfig,
+  resolveReviewKeyConfig = resolveDataSubjectReviewKeyConfig,
   createRequest = createAndDiscoverWorkerPersonRequest,
+  listRequests = listDataSubjectRequestsForReview,
+  normalizeListQuery = normalizeDataSubjectReviewListQuery,
+  authorizeReview = authorizeDataSubjectReviewAccess,
   resolveCorrelationId = resolveRequestCorrelationId,
   logError = console.error,
 } = {}) {
+  async function GET(request) {
+    const correlationId = resolveCorrelationId(request);
+    try {
+      const access = await resolveAccess({
+        requireProject: false,
+        resolveProject: false,
+      });
+      authorizeReview(access);
+      const { key } = resolveReviewKeyConfig();
+      const query = normalizeListQuery(request, {
+        organizationId: access.organization.id,
+        fingerprintKey: key,
+      });
+      const result = await listRequests(prismaFactory(), {
+        scope: dataSubjectReviewScope(access),
+        query,
+        fingerprintKey: key,
+      });
+      return finalized(Response.json(result), correlationId);
+    } catch (error) {
+      let known = null;
+      if (error instanceof AccessError) known = accessErrorResponse(error);
+      else known = dataSubjectReviewErrorResponse(error);
+      if (known) return finalized(known, correlationId);
+      logError('Privacy review list failed', {
+        correlationId,
+        ...dataSubjectReviewUnexpectedErrorMetadata(error),
+      });
+      return finalized(Response.json({
+        error: 'No se pudo cargar la cola de privacidad.',
+        code: 'PRIVACY_REVIEW_FAILED',
+      }, { status: 500 }), correlationId);
+    }
+  }
+
   async function POST(request) {
     const correlationId = resolveCorrelationId(request);
     try {
@@ -118,7 +172,7 @@ export function createDataSubjectRequestHandlers({
     }
   }
 
-  return { POST };
+  return { GET, POST };
 }
 
-export const { POST } = createDataSubjectRequestHandlers();
+export const { GET, POST } = createDataSubjectRequestHandlers();

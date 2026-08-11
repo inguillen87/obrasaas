@@ -38,7 +38,13 @@ registerHooks({
 const [
   { unstable_doesMiddlewareMatch },
   { NextRequest },
-  { default: clerkProxy, config, isProtectedPathname },
+  {
+    default: clerkProxy,
+    config,
+    isProtectedPathname,
+    TENANT_PRIVACY_SURFACE_HEADER,
+    TENANT_PRIVACY_SURFACE_VALUE,
+  },
 ] = await Promise.all([
   import('next/experimental/testing/server.js'),
   import('next/server.js'),
@@ -68,6 +74,8 @@ function examplePathname(routeFile) {
 const SENSITIVE_API_PATHS = [
   '/api/superadmin/ai-cost-reconciliations',
   '/api/tenant/privacy/requests',
+  '/api/tenant/privacy/requests/request-a/review',
+  '/api/tenant/privacy/requests/request-a/decisions/decision-a/approval',
   '/api/worker-onboarding/claims',
   '/api/worker-onboarding/claims/claim-a/decision',
   '/api/whatsapp/inbox/conversation-a/worker-onboarding',
@@ -112,7 +120,8 @@ test('every API Route Handler is exhaustively classified behind Clerk or its own
   for (const routeFile of await routeFiles(apiRoot)) {
     const source = await readFile(routeFile, 'utf8');
     const pathname = examplePathname(routeFile);
-    const usesPlatformAccess = /\b(?:getPlatformAccess|requireSuperadmin)\b/.test(source);
+    const usesPlatformAccess = /\b(?:getPlatformAccess|requireSuperadmin|createDataSubjectReviewMutationHandler)\b/
+      .test(source);
 
     if (publicRoutes.has(pathname)) {
       discoveredPublicRoutes.push(pathname);
@@ -140,7 +149,7 @@ test('every API Route Handler is exhaustively classified behind Clerk or its own
     );
   }
 
-  assert.equal(protectedRouteCount, 95, 'the complete current Clerk surface must remain classified');
+  assert.equal(protectedRouteCount, 102, 'the complete current Clerk surface must remain classified');
   assert.deepEqual(discoveredPublicRoutes.sort(), PUBLIC_SELF_AUTHENTICATED_API_PATHS.toSorted());
 });
 
@@ -168,4 +177,36 @@ test('proxy propagates one correlation id upstream and back to the client', asyn
   const responseId = response.headers.get('x-request-id');
   assert.match(responseId, /^[0-9a-f-]{36}$/);
   assert.equal(response.headers.get('x-middleware-request-x-request-id'), responseId);
+});
+
+test('proxy owns the upstream privacy surface marker and rejects client spoofing', async () => {
+  const response = await clerkProxy(
+    { protect: async () => {} },
+    new NextRequest('https://app.obrasaas.test/dashboard/privacy', {
+      headers: { [TENANT_PRIVACY_SURFACE_HEADER]: 'client-controlled-value' },
+    }),
+  );
+
+  assert.equal(
+    response.headers.get(`x-middleware-request-${TENANT_PRIVACY_SURFACE_HEADER}`),
+    TENANT_PRIVACY_SURFACE_VALUE,
+  );
+  assert.equal(response.headers.get(TENANT_PRIVACY_SURFACE_HEADER), null);
+});
+
+test('proxy strips the privacy marker from every non-exact dashboard path', async () => {
+  for (const pathname of ['/dashboard', '/dashboard/privacy/extra']) {
+    const response = await clerkProxy(
+      { protect: async () => {} },
+      new NextRequest(`https://app.obrasaas.test${pathname}`, {
+        headers: { [TENANT_PRIVACY_SURFACE_HEADER]: TENANT_PRIVACY_SURFACE_VALUE },
+      }),
+    );
+    assert.equal(
+      response.headers.get(`x-middleware-request-${TENANT_PRIVACY_SURFACE_HEADER}`),
+      null,
+      `${pathname} must not reach the privacy shell`,
+    );
+    assert.equal(response.headers.get(TENANT_PRIVACY_SURFACE_HEADER), null);
+  }
 });

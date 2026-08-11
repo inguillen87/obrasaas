@@ -42,6 +42,7 @@ registerHooks({
 const [
   { AccessError },
   {
+    canAccessTenantPrivacyControl,
     dashboardProjectAccessRequiredModel,
     requireDashboardShellReadAccess,
     resolveDashboardShellAccessState,
@@ -84,6 +85,7 @@ test('dashboard deep links render the pending-access state before project pages 
   const pending = dashboardProjectAccessRequiredModel({
     email: 'jefe@obra.com',
     tenantRole: 'SITE_MANAGER',
+    tenantMembershipId: 'membership-site-manager',
     organization: { id: 'organization-a', name: 'Constructora Norte' },
     project: null,
   });
@@ -92,12 +94,55 @@ test('dashboard deep links render the pending-access state before project pages 
     email: 'jefe@obra.com',
     tenantRole: 'SITE_MANAGER',
     organization: { name: 'Constructora Norte' },
+    canManagePrivacy: false,
   });
   assert.equal(dashboardProjectAccessRequiredModel({
     organization: { name: 'Constructora Norte' },
     project: { id: 'project-a' },
   }), null);
   assert.equal(dashboardProjectAccessRequiredModel({ organization: null }), null);
+});
+
+test('only an active tenant ADMIN membership discovers the isolated privacy control', () => {
+  const base = {
+    organization: { id: 'organization-a', name: 'Constructora Norte' },
+    orgId: 'org_tenant',
+    tenantMembershipId: 'membership-admin',
+    tenantRole: 'ADMIN',
+    databaseTenantRole: 'ADMIN',
+    isSuperadmin: false,
+  };
+  assert.equal(canAccessTenantPrivacyControl(base), true);
+  assert.equal(canAccessTenantPrivacyControl({ ...base, tenantRole: 'DIRECTOR' }), false);
+  assert.equal(canAccessTenantPrivacyControl({ ...base, tenantMembershipId: null }), false);
+  assert.equal(canAccessTenantPrivacyControl({
+    ...base,
+    isSuperadmin: true,
+    tenantRole: 'SUPERADMIN',
+  }), true);
+  assert.equal(canAccessTenantPrivacyControl({
+    ...base,
+    isSuperadmin: true,
+    tenantRole: 'SUPERADMIN',
+    databaseTenantRole: 'SITE_MANAGER',
+  }), false);
+  assert.equal(canAccessTenantPrivacyControl({
+    ...base,
+    isSuperadmin: true,
+    tenantRole: 'SUPERADMIN',
+    tenantMembershipId: null,
+  }), false);
+
+  assert.deepEqual(dashboardProjectAccessRequiredModel({
+    ...base,
+    email: 'admin@obra.com',
+    project: null,
+  }), {
+    email: 'admin@obra.com',
+    tenantRole: 'ADMIN',
+    organization: { name: 'Constructora Norte' },
+    canManagePrivacy: true,
+  });
 });
 
 test('subscription suspension is enforced before the no-project deep-link state', () => {

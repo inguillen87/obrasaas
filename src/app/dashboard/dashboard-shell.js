@@ -41,6 +41,15 @@ const CONTROL_DESTINATIONS = Object.freeze([
   { key: 'activation', href: '/dashboard/getting-started', exact: true, label: 'Puesta en marcha', icon: 'fa-solid fa-route' },
   { key: 'team', href: '/dashboard/team', exact: true, label: 'Equipo y roles', icon: 'fa-solid fa-user-shield', permission: 'canReadTeam' },
   { key: 'integrations', href: '/dashboard/integrations', exact: true, label: 'Integraciones', icon: 'fa-solid fa-plug-circle-bolt', permission: 'canManageIntegrations' },
+  {
+    key: 'privacy',
+    href: '/dashboard/privacy',
+    exact: true,
+    hardNavigation: true,
+    label: 'Control de privacidad',
+    icon: 'fa-solid fa-user-shield',
+    permission: 'canManagePrivacy',
+  },
 ]);
 
 const EXPLORE_DESTINATIONS = Object.freeze([
@@ -70,23 +79,35 @@ function NavigationGroup({
           const count = destination.key === 'approvals' ? pendingApprovalCount : destination.key === 'notifications' ? unreadNotificationCount : 0;
           return (
             <li className={`nav-item ${active ? 'active' : ''}`} key={destination.key}>
-              <Link
-                aria-current={active ? 'page' : undefined}
-                className="nav-button-link"
-                href={destination.href}
-                onClick={onNavigate}
-              >
-                <i className={destination.icon} aria-hidden="true" />
-                <span>{destination.label}</span>
-                {count > 0 && (
-                  <span
-                    aria-label={`${count} aprobaciones pendientes`}
-                    className="nav-count-badge"
-                  >
-                    {count > 99 ? '99+' : count}
-                  </span>
-                )}
-              </Link>
+              {destination.hardNavigation ? (
+                <a
+                  aria-current={active ? 'page' : undefined}
+                  className="nav-button-link"
+                  href={destination.href}
+                  onClick={onNavigate}
+                >
+                  <i className={destination.icon} aria-hidden="true" />
+                  <span>{destination.label}</span>
+                </a>
+              ) : (
+                <Link
+                  aria-current={active ? 'page' : undefined}
+                  className="nav-button-link"
+                  href={destination.href}
+                  onClick={onNavigate}
+                >
+                  <i className={destination.icon} aria-hidden="true" />
+                  <span>{destination.label}</span>
+                  {count > 0 && (
+                    <span
+                      aria-label={`${count} aprobaciones pendientes`}
+                      className="nav-count-badge"
+                    >
+                      {count > 99 ? '99+' : count}
+                    </span>
+                  )}
+                </Link>
+              )}
             </li>
           );
         })}

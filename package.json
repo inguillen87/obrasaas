@@ -31,6 +31,7 @@
     "verify:task-material-requirements-migration": "node scripts/verify-task-material-requirements-migration.mjs",
     "verify:task-material-reservations-migration": "node scripts/verify-task-material-reservations-migration.mjs",
     "verify:data-subject-discovery-migration": "node scripts/verify-data-subject-discovery-migration.mjs",
+    "verify:data-subject-decision-migration": "node scripts/verify-data-subject-decision-migration.mjs",
     "verify:notification-outbox-migration": "node scripts/verify-notification-outbox-migration.mjs",
     "verify:notification-preferences-migration": "node scripts/verify-notification-preferences-migration.mjs",
     "verify:s6-migrations": "node scripts/verify-s6-migrations.mjs",

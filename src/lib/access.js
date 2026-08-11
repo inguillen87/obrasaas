@@ -395,7 +395,7 @@ const resolvePlatformAccess = cache(async (resolveProject = true) => {
     ? internalClerkContext.orgSlug
     : session.orgSlug || null;
 
-  return {
+  const access = {
     userId: session.userId,
     databaseUserId: user.id,
     email,
@@ -410,6 +410,11 @@ const resolvePlatformAccess = cache(async (resolveProject = true) => {
     project,
     subscription,
   };
+  Object.defineProperty(access, 'databaseTenantRole', {
+    value: membership?.tenantRole || null,
+    enumerable: false,
+  });
+  return access;
 });
 
 export async function getPlatformAccess({

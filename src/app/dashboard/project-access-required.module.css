@@ -108,7 +108,8 @@
 }
 
 .primaryAction,
-.secondaryAction {
+.secondaryAction,
+.privacyAction {
   min-height: 46px;
   display: inline-flex;
   align-items: center;
@@ -122,8 +123,10 @@
 
 .primaryAction { color: #17100b; background: #ff9f43; }
 .secondaryAction { color: #d7d7d1; border: 1px solid rgba(255, 255, 255, 0.11); }
+.privacyAction { color: #071512; background: #84e8c5; }
 .primaryAction:focus-visible,
-.secondaryAction:focus-visible { outline: 3px solid rgba(255, 183, 112, 0.45); outline-offset: 3px; }
+.secondaryAction:focus-visible,
+.privacyAction:focus-visible { outline: 3px solid rgba(255, 183, 112, 0.45); outline-offset: 3px; }
 
 .identity {
   margin: 25px 0 0;

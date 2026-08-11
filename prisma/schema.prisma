@@ -727,6 +727,56 @@ enum DataSubjectDisposition {
   EXTERNAL_DELETE_CANDIDATE
 }
 
+enum DataSubjectRequesterKind {
+  SELF
+  REPRESENTATIVE
+}
+
+enum DataSubjectVerificationEventKind {
+  VERIFIED
+  REVOKED
+}
+
+enum DataSubjectAssuranceLevel {
+  SUBSTANTIAL
+}
+
+enum DataSubjectLegalDeadlineMethod {
+  REVIEWED_EXPLICIT_DATE
+}
+
+enum DataSubjectHoldScopeKind {
+  ITEM
+  CATEGORY
+}
+
+enum DataSubjectHoldEventKind {
+  CREATED
+  REVIEWED
+  RELEASED
+}
+
+enum DataSubjectDecisionStatus {
+  DRAFTING
+  PENDING_APPROVAL
+  SEALED_BLOCKED
+  REJECTED
+}
+
+enum DataSubjectDecisionAction {
+  DISCLOSE_CANDIDATE
+  CORRECT_CANDIDATE
+  RESTRICT_CANDIDATE
+  PORTABILITY_CANDIDATE
+  ERASE_CANDIDATE
+  CRYPTO_ERASE_CANDIDATE
+  PSEUDONYMIZE_CANDIDATE
+  KEEP_WITH_BASIS
+  WITHHOLD_WITH_BASIS
+  NO_CHANGE_WITH_BASIS
+  UNRESOLVED
+}
+
 model Organization {
   id                                  String                               @id @default(cuid())
   clerkOrganizationId                 String?                              @unique
@@ -780,6 +830,12 @@ model Organization {
   dataSubjectRequests                 DataSubjectRequest[]
   dataSubjectDiscoveryManifests       DataSubjectDiscoveryManifest[]
   dataSubjectDiscoveryItems           DataSubjectDiscoveryItem[]
+  dataSubjectVerificationEvents       DataSubjectRequesterVerificationEvent[]
+  dataSubjectLegalAssessments         DataSubjectLegalAssessmentRevision[]
+  dataSubjectLegalHolds               DataSubjectLegalHold[]
+  dataSubjectLegalHoldEvents           DataSubjectLegalHoldEvent[]
+  dataSubjectDecisionSets             DataSubjectDecisionSet[]
+  dataSubjectDecisionItems            DataSubjectDecisionItem[]
   createdAt                           DateTime                             @default(now())
   updatedAt                           DateTime                             @updatedAt
   workers                             Worker[]
@@ -1663,6 +1719,13 @@ model TenantMembership {
   attestedDataSubjectRequests        DataSubjectRequest[]           @relation("DataSubjectRequestAttestedBy")
   completedDataSubjectRequests       DataSubjectRequest[]           @relation("DataSubjectRequestCompletedBy")
   sealedDataSubjectManifests         DataSubjectDiscoveryManifest[] @relation("DataSubjectManifestSealedBy")
+  dataSubjectVerificationEvents      DataSubjectRequesterVerificationEvent[] @relation("DataSubjectVerificationActor")
+  dataSubjectLegalAssessments        DataSubjectLegalAssessmentRevision[]    @relation("DataSubjectLegalAssessmentActor")
+  createdDataSubjectLegalHolds       DataSubjectLegalHold[]                  @relation("DataSubjectLegalHoldCreator")
+  ownedDataSubjectLegalHoldEvents    DataSubjectLegalHoldEvent[]             @relation("DataSubjectLegalHoldOwner")
+  actedDataSubjectLegalHoldEvents    DataSubjectLegalHoldEvent[]             @relation("DataSubjectLegalHoldEventActor")
+  preparedDataSubjectDecisionSets    DataSubjectDecisionSet[]                @relation("DataSubjectDecisionPreparer")
+  decidedDataSubjectDecisionSets     DataSubjectDecisionSet[]                @relation("DataSubjectDecisionChecker")
   createdAt                          DateTime                       @default(now())
   updatedAt                          DateTime                       @updatedAt
 
@@ -4065,6 +4128,12 @@ model DataSubjectRequest {
   terminalReasonCode        String?                       @db.VarChar(64)
   revision                  Int                           @default(0)
   manifest                  DataSubjectDiscoveryManifest?
+  requesterVerificationEvents DataSubjectRequesterVerificationEvent[]
+  legalAssessmentRevisions    DataSubjectLegalAssessmentRevision[]
+  legalHolds                  DataSubjectLegalHold[]
+  legalHoldEvents             DataSubjectLegalHoldEvent[]
+  decisionSets                DataSubjectDecisionSet[]
+  decisionItems               DataSubjectDecisionItem[]
   createdAt                 DateTime                      @default(now()) @db.Timestamptz(3)
   updatedAt                 DateTime                      @updatedAt @db.Timestamptz(3)
 
@@ -4098,6 +4167,10 @@ model DataSubjectDiscoveryManifest {
   sealedByMembership   TenantMembership           @relation("DataSubjectManifestSealedBy", fields: [organizationId, sealedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "DataSubjectDiscoveryManifest_sealed_by_fkey")
   sealedAt             DateTime                   @default(now()) @db.Timestamptz(3)
   items                DataSubjectDiscoveryItem[]
+  legalAssessmentRevisions DataSubjectLegalAssessmentRevision[]
+  legalHolds               DataSubjectLegalHold[]
+  decisionSets             DataSubjectDecisionSet[]
+  decisionItems            DataSubjectDecisionItem[]
 
   @@unique([organizationId, id], map: "DataSubjectDiscoveryManifest_org_id_key")
   @@unique([organizationId, requestId], map: "DataSubjectDiscoveryManifest_org_request_key")
@@ -4131,8 +4204,230 @@ model DataSubjectDiscoveryItem {
   blockerCode            String?                      @db.VarChar(64)
   observedAt             DateTime                     @db.Timestamptz(3)
   createdAt              DateTime                     @default(now()) @db.Timestamptz(3)
+  legalHolds             DataSubjectLegalHold[]
+  decisionItems          DataSubjectDecisionItem[]
 
+  @@unique([organizationId, requestId, manifestId, id], map: "DataSubjectDiscoveryItem_scope_id_key")
   @@unique([organizationId, manifestId, ordinal], map: "DataSubjectDiscoveryItem_org_manifest_ordinal_key")
   @@index([organizationId, requestId, category], map: "DataSubjectDiscoveryItem_org_request_category_idx")
   @@index([organizationId, disposition, blockerCode], map: "DataSubjectDiscoveryItem_org_disposition_blocker_idx")
+}
+
+/// Append-only, privacy-minimal evidence that an administrator recorded or
+/// revoked proportional requester verification. It never stores identity
+/// documents, channel addresses or representative identifiers.
+model DataSubjectRequesterVerificationEvent {
+  id                              String                           @id @default(cuid())
+  organizationId                  String
+  organization                    Organization                     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  requestId                       String
+  request                         DataSubjectRequest                @relation(fields: [organizationId, requestId], references: [organizationId, id], onDelete: Restrict, map: "DataSubjectVerificationEvent_request_fkey")
+  sequence                        Int
+  predecessorEventId              String?
+  predecessorEvent                DataSubjectRequesterVerificationEvent? @relation("DataSubjectVerificationEventChain", fields: [organizationId, requestId, predecessorEventId], references: [organizationId, requestId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectVerificationEvent_predecessor_fkey")
+  successorEvents                 DataSubjectRequesterVerificationEvent[] @relation("DataSubjectVerificationEventChain")
+  kind                            DataSubjectVerificationEventKind
+  requesterKind                   DataSubjectRequesterKind?
+  assuranceLevel                  DataSubjectAssuranceLevel?
+  verificationMethodCode          String?                          @db.VarChar(64)
+  verificationPolicyVersion       String?                          @db.VarChar(64)
+  fingerprintKeyId                String                           @db.VarChar(100)
+  requesterFingerprintHmac        String?                          @db.Char(64)
+  identityEvidenceSha256          String?                          @db.Char(64)
+  challengeEvidenceSha256         String?                          @db.Char(64)
+  subjectIdentityRecordVersion    Int?
+  representationMethodCode        String?                          @db.VarChar(64)
+  representationEvidenceSha256    String?                          @db.Char(64)
+  validUntil                      DateTime?                        @db.Timestamptz(3)
+  representationValidUntil       DateTime?                        @db.Timestamptz(3)
+  revocationReasonCode            String?                          @db.VarChar(64)
+  actorMembershipId               String
+  actorMembership                 TenantMembership                 @relation("DataSubjectVerificationActor", fields: [organizationId, actorMembershipId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectVerificationEvent_actor_fkey")
+  operationKeyHash                String                           @db.Char(64)
+  requestFingerprint              String                           @db.Char(64)
+  occurredAt                      DateTime                         @default(now()) @db.Timestamptz(3)
+  decisionSets                    DataSubjectDecisionSet[]
+
+  @@unique([organizationId, requestId, id], map: "DataSubjectVerificationEvent_scope_id_key")
+  @@unique([organizationId, requestId, sequence], map: "DataSubjectVerificationEvent_scope_sequence_key")
+  @@unique([organizationId, operationKeyHash], map: "DataSubjectVerificationEvent_org_operation_key")
+  @@index([organizationId, requestId, occurredAt], map: "DataSubjectVerificationEvent_request_occurred_idx")
+}
+
+/// Append-only human-reviewed jurisdiction, deadline and retention-policy
+/// snapshot. The reviewed date is evidence, not an automated legal opinion.
+model DataSubjectLegalAssessmentRevision {
+  id                        String                         @id @default(cuid())
+  organizationId            String
+  organization              Organization                   @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  requestId                 String
+  request                   DataSubjectRequest              @relation(fields: [organizationId, requestId], references: [organizationId, id], onDelete: Restrict, map: "DataSubjectLegalAssessment_request_fkey")
+  manifestId                String
+  manifest                  DataSubjectDiscoveryManifest    @relation(fields: [organizationId, requestId, manifestId], references: [organizationId, requestId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectLegalAssessment_manifest_fkey")
+  sequence                  Int
+  predecessorAssessmentId   String?
+  predecessorAssessment     DataSubjectLegalAssessmentRevision? @relation("DataSubjectLegalAssessmentChain", fields: [organizationId, requestId, predecessorAssessmentId], references: [organizationId, requestId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectLegalAssessment_predecessor_fkey")
+  successorAssessments      DataSubjectLegalAssessmentRevision[] @relation("DataSubjectLegalAssessmentChain")
+  jurisdictionCode          String                         @db.VarChar(16)
+  deadlineMethod            DataSubjectLegalDeadlineMethod
+  dueAt                     DateTime                       @db.Timestamptz(3)
+  deadlinePolicyVersion     String                         @db.VarChar(64)
+  deadlinePolicySha256      String                         @db.Char(64)
+  retentionMatrixVersion    String                         @db.VarChar(64)
+  retentionMatrixSha256     String                         @db.Char(64)
+  legalReviewEvidenceSha256 String                         @db.Char(64)
+  actorMembershipId         String
+  actorMembership           TenantMembership               @relation("DataSubjectLegalAssessmentActor", fields: [organizationId, actorMembershipId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectLegalAssessment_actor_fkey")
+  operationKeyHash          String                         @db.Char(64)
+  requestFingerprint        String                         @db.Char(64)
+  fingerprintKeyId          String                         @db.VarChar(100)
+  assessedAt                DateTime                       @default(now()) @db.Timestamptz(3)
+  decisionSets              DataSubjectDecisionSet[]
+
+  @@unique([organizationId, requestId, id], map: "DataSubjectLegalAssessment_scope_id_key")
+  @@unique([organizationId, requestId, sequence], map: "DataSubjectLegalAssessment_scope_sequence_key")
+  @@unique([organizationId, operationKeyHash], map: "DataSubjectLegalAssessment_org_operation_key")
+  @@index([organizationId, requestId, dueAt], map: "DataSubjectLegalAssessment_request_due_idx")
+}
+
+/// Immutable legal-hold scope. Current status and review evidence are derived
+/// exclusively from its append-only event chain.
+model DataSubjectLegalHold {
+  id                      String                      @id @default(cuid())
+  organizationId          String
+  organization            Organization                @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  requestId               String
+  request                 DataSubjectRequest           @relation(fields: [organizationId, requestId], references: [organizationId, id], onDelete: Restrict, map: "DataSubjectLegalHold_request_fkey")
+  manifestId              String
+  manifest                DataSubjectDiscoveryManifest @relation(fields: [organizationId, requestId, manifestId], references: [organizationId, requestId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectLegalHold_manifest_fkey")
+  scopeKind               DataSubjectHoldScopeKind
+  discoveryItemId         String?
+  discoveryItem           DataSubjectDiscoveryItem?    @relation(fields: [organizationId, requestId, manifestId, discoveryItemId], references: [organizationId, requestId, manifestId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectLegalHold_item_fkey")
+  category                DataSubjectDataCategory?
+  createdByMembershipId   String
+  createdByMembership     TenantMembership              @relation("DataSubjectLegalHoldCreator", fields: [organizationId, createdByMembershipId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectLegalHold_creator_fkey")
+  operationKeyHash        String                        @db.Char(64)
+  requestFingerprint      String                        @db.Char(64)
+  fingerprintKeyId        String                        @db.VarChar(100)
+  createdAt               DateTime                      @default(now()) @db.Timestamptz(3)
+  events                  DataSubjectLegalHoldEvent[]
+
+  @@unique([organizationId, requestId, id], map: "DataSubjectLegalHold_scope_id_key")
+  @@unique([organizationId, requestId, manifestId, id], map: "DataSubjectLegalHold_manifest_scope_id_key")
+  @@unique([organizationId, operationKeyHash], map: "DataSubjectLegalHold_org_operation_key")
+  @@index([organizationId, requestId, manifestId, scopeKind], map: "DataSubjectLegalHold_request_scope_idx")
+}
+
+/// Append-only create, review and release evidence for one bounded legal hold.
+model DataSubjectLegalHoldEvent {
+  id                     String                    @id @default(cuid())
+  organizationId         String
+  organization           Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  requestId              String
+  request                DataSubjectRequest         @relation(fields: [organizationId, requestId], references: [organizationId, id], onDelete: Restrict, map: "DataSubjectLegalHoldEvent_request_fkey")
+  holdId                 String
+  hold                   DataSubjectLegalHold       @relation(fields: [organizationId, requestId, holdId], references: [organizationId, requestId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectLegalHoldEvent_hold_fkey")
+  sequence               Int
+  predecessorEventId     String?
+  predecessorEvent       DataSubjectLegalHoldEvent? @relation("DataSubjectLegalHoldEventChain", fields: [organizationId, requestId, holdId, predecessorEventId], references: [organizationId, requestId, holdId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectLegalHoldEvent_predecessor_fkey")
+  successorEvents        DataSubjectLegalHoldEvent[] @relation("DataSubjectLegalHoldEventChain")
+  kind                   DataSubjectHoldEventKind
+  basisCode              String?                   @db.VarChar(64)
+  policyVersion          String?                   @db.VarChar(64)
+  evidenceSha256         String?                   @db.Char(64)
+  ownerMembershipId      String?
+  ownerMembership        TenantMembership?         @relation("DataSubjectLegalHoldOwner", fields: [organizationId, ownerMembershipId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectLegalHoldEvent_owner_fkey")
+  reviewDueAt            DateTime?                 @db.Timestamptz(3)
+  releaseReasonCode      String?                   @db.VarChar(64)
+  releaseEvidenceSha256  String?                   @db.Char(64)
+  actorMembershipId      String
+  actorMembership        TenantMembership           @relation("DataSubjectLegalHoldEventActor", fields: [organizationId, actorMembershipId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectLegalHoldEvent_actor_fkey")
+  operationKeyHash       String                     @db.Char(64)
+  requestFingerprint     String                     @db.Char(64)
+  fingerprintKeyId       String                     @db.VarChar(100)
+  occurredAt             DateTime                   @default(now()) @db.Timestamptz(3)
+
+  @@unique([organizationId, requestId, holdId, id], map: "DataSubjectLegalHoldEvent_scope_id_key")
+  @@unique([organizationId, requestId, holdId, sequence], map: "DataSubjectLegalHoldEvent_scope_sequence_key")
+  @@unique([organizationId, operationKeyHash], map: "DataSubjectLegalHoldEvent_org_operation_key")
+  @@index([organizationId, requestId, holdId, occurredAt], map: "DataSubjectLegalHoldEvent_hold_occurred_idx")
+}
+
+/// Versioned, maker-checker decision envelope. PRO-05B.1 can only seal a
+/// blocked, non-executable review result.
+model DataSubjectDecisionSet {
+  id                            String                         @id @default(cuid())
+  organizationId                String
+  organization                  Organization                   @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  requestId                     String
+  request                       DataSubjectRequest              @relation(fields: [organizationId, requestId], references: [organizationId, id], onDelete: Restrict, map: "DataSubjectDecisionSet_request_fkey")
+  manifestId                    String
+  manifest                      DataSubjectDiscoveryManifest    @relation(fields: [organizationId, requestId, manifestId], references: [organizationId, requestId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectDecisionSet_manifest_fkey")
+  revision                      Int
+  predecessorDecisionId         String?
+  predecessorDecision           DataSubjectDecisionSet?         @relation("DataSubjectDecisionChain", fields: [organizationId, requestId, predecessorDecisionId], references: [organizationId, requestId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectDecisionSet_predecessor_fkey")
+  successorDecisions            DataSubjectDecisionSet[]         @relation("DataSubjectDecisionChain")
+  status                        DataSubjectDecisionStatus        @default(DRAFTING)
+  schemaVersion                 Int                              @default(1)
+  verificationEventId           String
+  verificationEvent             DataSubjectRequesterVerificationEvent @relation(fields: [organizationId, requestId, verificationEventId], references: [organizationId, requestId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectDecisionSet_verification_fkey")
+  legalAssessmentId             String
+  legalAssessment               DataSubjectLegalAssessmentRevision @relation(fields: [organizationId, requestId, legalAssessmentId], references: [organizationId, requestId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectDecisionSet_assessment_fkey")
+  manifestSha256                String?                          @db.Char(64)
+  holdSetSha256                 String?                          @db.Char(64)
+  itemCount                     Int?
+  unresolvedCount               Int?
+  activeHoldCount               Int?
+  decisionSha256                String?                          @db.Char(64)
+  preparedByMembershipId        String
+  preparedByMembership          TenantMembership                 @relation("DataSubjectDecisionPreparer", fields: [organizationId, preparedByMembershipId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectDecisionSet_preparer_fkey")
+  decidedByMembershipId         String?
+  decidedByMembership           TenantMembership?                @relation("DataSubjectDecisionChecker", fields: [organizationId, decidedByMembershipId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectDecisionSet_checker_fkey")
+  operationKeyHash              String                           @db.Char(64)
+  requestFingerprint            String                           @db.Char(64)
+  fingerprintKeyId              String                           @db.VarChar(100)
+  decisionOperationKeyHash      String?                          @db.Char(64)
+  decisionRequestFingerprint    String?                          @db.Char(64)
+  decisionFingerprintKeyId      String?                          @db.VarChar(100)
+  decisionReasonCode            String?                          @db.VarChar(64)
+  preparedAt                    DateTime                         @default(now()) @db.Timestamptz(3)
+  pendingAt                     DateTime?                        @db.Timestamptz(3)
+  decidedAt                     DateTime?                        @db.Timestamptz(3)
+  createdAt                     DateTime                         @default(now()) @db.Timestamptz(3)
+  updatedAt                     DateTime                         @updatedAt @db.Timestamptz(3)
+  items                         DataSubjectDecisionItem[]
+
+  @@unique([organizationId, requestId, id], map: "DataSubjectDecisionSet_scope_id_key")
+  @@unique([organizationId, requestId, manifestId, id], map: "DataSubjectDecisionSet_manifest_scope_id_key")
+  @@unique([organizationId, requestId, revision], map: "DataSubjectDecisionSet_scope_revision_key")
+  @@unique([organizationId, operationKeyHash], map: "DataSubjectDecisionSet_org_operation_key")
+  @@unique([organizationId, decisionOperationKeyHash], map: "DataSubjectDecisionSet_org_decision_operation_key")
+  @@index([organizationId, requestId, status, revision], map: "DataSubjectDecisionSet_request_status_revision_idx")
+}
+
+/// Exact per-manifest-item legal classification for one decision revision.
+/// It is proposal evidence only and has no execution or dispatch capability.
+model DataSubjectDecisionItem {
+  id                     String                       @id @default(cuid())
+  organizationId         String
+  organization           Organization                 @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  requestId              String
+  request                DataSubjectRequest            @relation(fields: [organizationId, requestId], references: [organizationId, id], onDelete: Restrict, map: "DataSubjectDecisionItem_request_fkey")
+  manifestId             String
+  manifest               DataSubjectDiscoveryManifest  @relation(fields: [organizationId, requestId, manifestId], references: [organizationId, requestId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectDecisionItem_manifest_fkey")
+  decisionSetId          String
+  decisionSet            DataSubjectDecisionSet         @relation(fields: [organizationId, requestId, manifestId, decisionSetId], references: [organizationId, requestId, manifestId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectDecisionItem_decision_fkey")
+  discoveryItemId        String
+  discoveryItem          DataSubjectDiscoveryItem       @relation(fields: [organizationId, requestId, manifestId, discoveryItemId], references: [organizationId, requestId, manifestId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectDecisionItem_discovery_item_fkey")
+  ordinal                Int
+  action                 DataSubjectDecisionAction
+  legalBasisCode         String?                       @db.VarChar(64)
+  retentionPolicyVersion String?                       @db.VarChar(64)
+  retentionRuleCode      String?                       @db.VarChar(64)
+  retentionUntil         DateTime?                     @db.Timestamptz(3)
+  createdAt              DateTime                      @default(now()) @db.Timestamptz(3)
+
+  @@unique([organizationId, decisionSetId, discoveryItemId], map: "DataSubjectDecisionItem_decision_item_key")
+  @@unique([organizationId, decisionSetId, ordinal], map: "DataSubjectDecisionItem_decision_ordinal_key")
+  @@index([organizationId, requestId, manifestId, action], map: "DataSubjectDecisionItem_request_action_idx")
 }

@@ -4,6 +4,7 @@ import { cache } from 'react';
 
 import { getPlatformAccess, hasTenantPermission } from '@/lib/access';
 import {
+  canAccessTenantPrivacyControl,
   resolveDashboardShellAccessState,
 } from '@/lib/dashboard-shell-access';
 import { PLAN_CATALOG } from '@/lib/plans';
@@ -114,6 +115,7 @@ export const getDashboardShellModel = cache(async () => {
       canReadTeam: hasTenantPermission(access, 'tenant:members:read'),
       canManageIntegrations: hasTenantPermission(access, 'org:integrations:manage'),
       canManageProjects: hasTenantPermission(access, 'org:projects:manage'),
+      canManagePrivacy: canAccessTenantPrivacyControl(access),
     },
   };
 });

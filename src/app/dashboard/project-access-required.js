@@ -40,6 +40,11 @@ export default function ProjectAccessRequired({ access }) {
         </div>
 
         <div className={styles.actions}>
+          {access.canManagePrivacy ? (
+            <a className={styles.privacyAction} href="/dashboard/privacy">
+              Abrir control de privacidad
+            </a>
+          ) : null}
           <Link className={styles.primaryAction} href="/dashboard">
             Comprobar acceso
           </Link>

@@ -48,6 +48,9 @@ const PROTECTED_ROUTE_ROOTS = [
   '/api/worker-onboarding',
 ];
 
+export const TENANT_PRIVACY_SURFACE_HEADER = 'x-obrasaas-dashboard-surface';
+export const TENANT_PRIVACY_SURFACE_VALUE = 'tenant-privacy-v1';
+
 export function isProtectedPathname(pathname) {
   return PROTECTED_ROUTE_ROOTS.some((root) => pathname === root || pathname.startsWith(`${root}/`));
 }
@@ -57,6 +60,15 @@ export default clerkMiddleware(
     if (isProtectedPathname(request.nextUrl.pathname)) await auth.protect();
     const correlationId = resolveRequestCorrelationId(request);
     const requestHeaders = new Headers(request.headers);
+    // This marker is an upstream-only routing hint, never a trust signal. Drop
+    // any client-supplied value before adding the one value owned by Proxy.
+    requestHeaders.delete(TENANT_PRIVACY_SURFACE_HEADER);
+    if (request.nextUrl.pathname === '/dashboard/privacy') {
+      requestHeaders.set(
+        TENANT_PRIVACY_SURFACE_HEADER,
+        TENANT_PRIVACY_SURFACE_VALUE,
+      );
+    }
     requestHeaders.set('x-request-id', correlationId);
     const response = NextResponse.next({
       request: { headers: requestHeaders },

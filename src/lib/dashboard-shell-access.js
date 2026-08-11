@@ -1,6 +1,16 @@
-import { requireTenantPermission } from './access.js';
+import { hasTenantPermission, requireTenantPermission } from './access.js';
 
 export const DASHBOARD_SHELL_READ_PERMISSION = 'org:projects:read';
+export const TENANT_PRIVACY_CONTROL_PERMISSION = 'org:privacy:requests:manage';
+
+export function canAccessTenantPrivacyControl(access) {
+  return Boolean(
+    access?.organization?.id
+    && access?.tenantMembershipId
+    && access?.databaseTenantRole === 'ADMIN'
+    && hasTenantPermission(access, TENANT_PRIVACY_CONTROL_PERMISSION),
+  );
+}
 
 export function requireDashboardShellReadAccess(access) {
   return requireTenantPermission(access, DASHBOARD_SHELL_READ_PERMISSION);
@@ -12,6 +22,7 @@ export function dashboardProjectAccessRequiredModel(access) {
     email: access.email,
     tenantRole: access.tenantRole,
     organization: { name: access.organization.name },
+    canManagePrivacy: canAccessTenantPrivacyControl(access),
   };
 }
 

@@ -1,11 +1,19 @@
 'use client';
 
 import { Analytics } from '@vercel/analytics/next';
+import { usePathname } from 'next/navigation';
 
-function sanitizeAnalyticsEvent(event) {
+export function observabilityPathIsExcluded(pathname) {
+  return pathname === '/dashboard/privacy';
+}
+
+export function sanitizeAnalyticsEvent(event) {
   try {
     const url = new URL(event.url);
-    if (url.pathname.startsWith('/webview/')) return null;
+    if (
+      url.pathname.startsWith('/webview/')
+      || observabilityPathIsExcluded(url.pathname)
+    ) return null;
     url.search = '';
     url.hash = '';
     return { ...event, url: url.toString() };
@@ -15,7 +23,8 @@ function sanitizeAnalyticsEvent(event) {
 }
 
 export default function Observability({ enabled = false }) {
-  if (!enabled) return null;
+  const pathname = usePathname();
+  if (!enabled || observabilityPathIsExcluded(pathname)) return null;
   return (
     <Analytics beforeSend={sanitizeAnalyticsEvent} />
   );

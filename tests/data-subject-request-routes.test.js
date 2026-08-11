@@ -128,6 +128,10 @@ test('privacy request route is organization-scoped, project-independent and no-s
   });
   assert.equal(calls.input.idempotencyKey, 'privacy-request-0001');
   assert.equal(response.headers.get('cache-control'), 'private, no-store, max-age=0');
+  assert.equal(response.headers.get('vary'), 'Cookie, Authorization');
+  assert.equal(response.headers.get('referrer-policy'), 'no-referrer');
+  assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+  assert.equal(response.headers.get('x-robots-tag'), 'noindex, nofollow, noarchive');
   assert.equal(response.headers.get('x-request-id'), 'correlation-a');
   assert.equal(response.headers.get('idempotency-replayed'), 'false');
   const payload = await response.json();

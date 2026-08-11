@@ -57,6 +57,9 @@ const TASK_MATERIAL_RESERVATIONS_VERIFIER_PATH = fileURLToPath(
 const DATA_SUBJECT_DISCOVERY_VERIFIER_PATH = fileURLToPath(
   new URL("./verify-data-subject-discovery-migration.mjs", import.meta.url),
 );
+const DATA_SUBJECT_DECISION_VERIFIER_PATH = fileURLToPath(
+  new URL("./verify-data-subject-decision-migration.mjs", import.meta.url),
+);
 const NOTIFICATION_OUTBOX_VERIFIER_PATH = fileURLToPath(
   new URL("./verify-notification-outbox-migration.mjs", import.meta.url),
 );
@@ -358,6 +361,7 @@ export async function runVercelBuild({
     taskMaterialRequirementsVerifier: TASK_MATERIAL_REQUIREMENTS_VERIFIER_PATH,
     taskMaterialReservationsVerifier: TASK_MATERIAL_RESERVATIONS_VERIFIER_PATH,
     dataSubjectDiscoveryVerifier: DATA_SUBJECT_DISCOVERY_VERIFIER_PATH,
+    dataSubjectDecisionVerifier: DATA_SUBJECT_DECISION_VERIFIER_PATH,
     notificationOutboxVerifier: NOTIFICATION_OUTBOX_VERIFIER_PATH,
     projectExecutionVerifier: PROJECT_EXECUTION_VERIFIER_PATH,
     notificationOutboxScopePreflight: NOTIFICATION_OUTBOX_SCOPE_PREFLIGHT_PATH,
@@ -440,6 +444,10 @@ export async function runVercelBuild({
       DATA_SUBJECT_DISCOVERY_MIGRATION_DATABASE_URL:
         environment[plan.migrationDatabaseEnvironment],
       DATA_SUBJECT_DISCOVERY_MIGRATION_SCHEMA: "public",
+      DATA_SUBJECT_DECISION_MIGRATION_DATABASE_URL:
+        environment[plan.migrationDatabaseEnvironment],
+      DATA_SUBJECT_DECISION_MIGRATION_SCHEMA: "public",
+      DATA_SUBJECT_DECISION_DISPOSABLE_CONCURRENCY: "0",
       NOTIFICATION_OUTBOX_MIGRATION_DATABASE_URL:
         environment[plan.migrationDatabaseEnvironment],
       NOTIFICATION_OUTBOX_MIGRATION_SCHEMA: "public",
@@ -546,6 +554,13 @@ export async function runVercelBuild({
       await runner(
         process.execPath,
         [cliPaths.dataSubjectDiscoveryVerifier],
+        { ...sharedOptions, env: verificationEnvironment },
+      );
+    }
+    if (cliPaths.dataSubjectDecisionVerifier) {
+      await runner(
+        process.execPath,
+        [cliPaths.dataSubjectDecisionVerifier],
         { ...sharedOptions, env: verificationEnvironment },
       );
     }
