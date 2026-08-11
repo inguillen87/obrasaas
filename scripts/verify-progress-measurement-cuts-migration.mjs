@@ -147,10 +147,28 @@ async function assertStructure(client, schema) {
   invariant(forbidden.length === 0, "Technical cut tables contain forbidden financial/certificate columns.");
 
   const constraints = await client.query(
-    `SELECT conname, pg_get_constraintdef(oid) AS definition
-       FROM pg_constraint
-      WHERE connamespace = $1::regnamespace
-        AND conname = ANY($2::text[])`,
+    `SELECT con.conname, con.contype, source.relname AS source_table,
+            referenced.relname AS referenced_table,
+            pg_get_constraintdef(con.oid) AS definition,
+            ARRAY(
+              SELECT attribute.attname
+                FROM unnest(con.conkey) WITH ORDINALITY AS key(attnum, ordinal)
+                JOIN pg_attribute attribute
+                  ON attribute.attrelid = con.conrelid AND attribute.attnum = key.attnum
+               ORDER BY key.ordinal
+            )::TEXT[] AS local_columns,
+            ARRAY(
+              SELECT attribute.attname
+                FROM unnest(con.confkey) WITH ORDINALITY AS key(attnum, ordinal)
+                JOIN pg_attribute attribute
+                  ON attribute.attrelid = con.confrelid AND attribute.attnum = key.attnum
+               ORDER BY key.ordinal
+            )::TEXT[] AS referenced_columns
+       FROM pg_constraint con
+       JOIN pg_class source ON source.oid = con.conrelid
+       LEFT JOIN pg_class referenced ON referenced.oid = con.confrelid
+      WHERE con.connamespace = $1::regnamespace
+        AND con.conname = ANY($2::text[])`,
     [schema, [
       "PPMCut_counts_check",
       "PPMCutLine_source_shape_check",
@@ -162,12 +180,43 @@ async function assertStructure(client, schema) {
     ]],
   );
   invariant(constraints.rows.length === 7, "S9.2 structural constraints are incomplete.");
+  const currentCutScope = constraints.rows.find((row) => row.conname === "PPMCutHead_current_cut_scope_fkey");
   invariant(
-    constraints.rows.find((row) => row.conname === "PPMCutHead_current_cut_scope_fkey")?.definition.includes('"headId"'),
+    currentCutScope?.contype === "f"
+      && currentCutScope.source_table === "ProjectProgressMeasurementCutHead"
+      && currentCutScope.referenced_table === "ProjectProgressMeasurementCut"
+      && JSON.stringify(currentCutScope.local_columns) === JSON.stringify([
+        "organizationId", "projectId", "id", "currentCutId",
+      ])
+      && JSON.stringify(currentCutScope.referenced_columns) === JSON.stringify([
+        "organizationId", "projectId", "headId", "id",
+      ]),
     "Current cut FK is not bound to its own fortnight head.",
   );
+  const decisionScope = constraints.rows.find((row) => row.conname === "PPMCutLine_decision_scope_fkey");
+  const sourceShape = constraints.rows.find((row) => row.conname === "PPMCutLine_source_shape_check");
   invariant(
-    constraints.rows.find((row) => row.conname === "PPMCutLine_decision_scope_fkey")?.definition.includes('"decision"'),
+    decisionScope?.contype === "f"
+      && decisionScope.source_table === "ProjectProgressMeasurementCutLine"
+      && decisionScope.referenced_table === "TaskProgressMeasurementDecision"
+      && sourceShape?.contype === "c"
+      && sourceShape.definition.includes("'APPROVED'")
+      && JSON.stringify(decisionScope.local_columns) === JSON.stringify([
+        "organizationId",
+        "projectId",
+        "taskId",
+        "approvedMeasurementId",
+        "approvedDecisionId",
+        "approvedDecisionSnapshot",
+      ])
+      && JSON.stringify(decisionScope.referenced_columns) === JSON.stringify([
+        "organizationId",
+        "projectId",
+        "taskId",
+        "measurementId",
+        "id",
+        "decision",
+      ]),
     "Measured cut line is not structurally bound to an APPROVED decision snapshot.",
   );
 

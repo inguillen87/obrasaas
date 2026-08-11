@@ -38,6 +38,12 @@ test('S9.2 verifier checks the deployed ledger, structures, functions and ALWAYS
   assert.match(verifier, /commandTrigger\.rows\[0\]\.relkind === "v"/);
   assert.match(verifier, /commandTrigger\.rows\[0\]\.tgenabled === "O"/);
   assert.match(verifier, /p_expected_candidate_sha256 text/);
+  assert.match(verifier, /unnest\(con\.conkey\) WITH ORDINALITY/);
+  assert.match(verifier, /unnest\(con\.confkey\) WITH ORDINALITY/);
+  assert.equal((verifier.match(/\)::TEXT\[\] AS (?:local|referenced)_columns/g) ?? []).length, 2);
+  assert.match(verifier, /decisionScope\.local_columns/);
+  assert.match(verifier, /decisionScope\.referenced_columns/);
+  assert.doesNotMatch(verifier, /\.definition\.includes\('\"decision\"'\)/);
 });
 
 test('S9.2 verifier exercises immutable receipts, missing lines and anti-forgery inside rollback', () => {
