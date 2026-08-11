@@ -336,44 +336,71 @@ async function assertFunctions(client, schema) {
 }
 
 async function assertTriggers(client, schema) {
-  const expected = [
-    'InventoryAvailability_projection_guard',
-    'InventoryLedgerEntry_05_reserved_floor_guard',
-    'InventoryLedgerEntry_zz_availability_project',
-    'TaskMaterialRequirementRevision_reservation_fence',
-    'TaskMaterialRequirementLine_reservation_balance_initialize',
-    'Project_reservation_close_guard',
-    'TaskMaterialReservationBalance_projection_guard',
-    'TaskMaterialReservationBalance_no_truncate',
-    'InventoryAvailability_no_truncate',
-    'TaskMaterialReservationTransaction_insert_guard',
-    'TaskMaterialReservationTransaction_active_project',
-    'TaskMaterialReservationTransaction_append_only',
-    'TaskMaterialReservationTransaction_no_truncate',
-    'TaskMaterialReservationTransaction_bundle_guard',
-    'TaskMaterialActiveReservation_projection_guard',
-    'TaskMaterialActiveReservation_no_truncate',
-    'TaskMaterialReservationEntry_insert_guard',
-    'TaskMaterialReservationEntry_append_only',
-    'TaskMaterialReservationEntry_no_truncate',
-  ];
+  const expected = new Map([
+    ['InventoryAvailability_projection_guard', ['InventoryAvailability', 'obrasaas_inventory_availability_guard']],
+    ['InventoryLedgerEntry_05_reserved_floor_guard', ['InventoryLedgerEntry', 'obrasaas_inventory_ledger_reserved_floor_guard']],
+    ['InventoryLedgerEntry_zz_availability_project', ['InventoryLedgerEntry', 'obrasaas_inventory_availability_project_on_hand']],
+    ['TaskMaterialRequirementRevision_reservation_fence', ['TaskMaterialRequirementRevision', 'obrasaas_task_material_requirement_reservation_fence']],
+    ['TaskMaterialRequirementLine_reservation_balance_initialize', ['TaskMaterialRequirementLine', 'obrasaas_task_material_reservation_line_initialize']],
+    ['Project_reservation_close_guard', ['Project', 'obrasaas_project_reservation_close_guard']],
+    ['TaskMaterialReservationBalance_projection_guard', ['TaskMaterialReservationBalance', 'obrasaas_task_material_reservation_balance_guard']],
+    ['TaskMaterialReservationBalance_no_truncate', ['TaskMaterialReservationBalance', 'obrasaas_task_material_reservation_no_truncate']],
+    ['InventoryAvailability_no_truncate', ['InventoryAvailability', 'obrasaas_task_material_reservation_no_truncate']],
+    ['TaskMaterialReservationTransaction_insert_guard', ['TaskMaterialReservationTransaction', 'obrasaas_task_material_reservation_transaction_insert_guard']],
+    ['TaskMaterialReservationTransaction_active_project', ['TaskMaterialReservationTransaction', 'obrasaas_task_material_active_reservation_project']],
+    ['TaskMaterialReservationTransaction_append_only', ['TaskMaterialReservationTransaction', 'obrasaas_task_material_reservation_append_only']],
+    ['TaskMaterialReservationTransaction_no_truncate', ['TaskMaterialReservationTransaction', 'obrasaas_task_material_reservation_no_truncate']],
+    ['TaskMaterialReservationTransaction_bundle_guard', ['TaskMaterialReservationTransaction', 'obrasaas_task_material_reservation_bundle_guard']],
+    ['TaskMaterialActiveReservation_projection_guard', ['TaskMaterialActiveReservation', 'obrasaas_task_material_active_reservation_guard']],
+    ['TaskMaterialActiveReservation_no_truncate', ['TaskMaterialActiveReservation', 'obrasaas_task_material_reservation_no_truncate']],
+    ['TaskMaterialReservationEntry_insert_guard', ['TaskMaterialReservationEntry', 'obrasaas_task_material_reservation_entry_insert_guard']],
+    ['TaskMaterialReservationEntry_append_only', ['TaskMaterialReservationEntry', 'obrasaas_task_material_reservation_append_only']],
+    ['TaskMaterialReservationEntry_no_truncate', ['TaskMaterialReservationEntry', 'obrasaas_task_material_reservation_no_truncate']],
+  ]);
   const result = await client.query(
-    `SELECT trigger_name, action_condition
-       FROM information_schema.triggers
-      WHERE trigger_schema = $1
-        AND trigger_name = ANY($2::text[])`,
-    [schema, expected],
+    `SELECT trigger.tgname AS trigger_name,
+            trigger.tgenabled,
+            trigger.tgisinternal,
+            trigger.tgconstraint,
+            trigger.tgdeferrable,
+            trigger.tginitdeferred,
+            relation.relname AS table_name,
+            procedure.proname AS function_name,
+            function_namespace.nspname AS function_schema,
+            pg_get_triggerdef(trigger.oid, true) AS definition
+       FROM pg_trigger AS trigger
+       JOIN pg_class AS relation ON relation.oid = trigger.tgrelid
+       JOIN pg_namespace AS namespace ON namespace.oid = relation.relnamespace
+       JOIN pg_proc AS procedure ON procedure.oid = trigger.tgfoid
+       JOIN pg_namespace AS function_namespace ON function_namespace.oid = procedure.pronamespace
+      WHERE namespace.nspname = $1
+        AND trigger.tgname = ANY($2::text[])`,
+    [schema, [...expected.keys()]],
   );
-  invariant(new Set(result.rows.map((row) => row.trigger_name)).size === expected.length, 'Reservation triggers are incomplete.');
-  const enabled = await client.query(
-    `SELECT tgname, tgenabled
-       FROM pg_trigger
-      WHERE tgrelid IN (
-        SELECT oid FROM pg_class WHERE relnamespace = $1::regnamespace
-      ) AND tgname = ANY($2::text[])`,
-    [schema, expected],
+  invariant(result.rows.length === expected.size, 'Reservation triggers are incomplete or duplicated.');
+  const byName = new Map(result.rows.map((row) => [row.trigger_name, row]));
+  invariant(byName.size === expected.size, 'Reservation triggers are incomplete or duplicated.');
+  for (const [triggerName, [tableName, functionName]] of expected) {
+    const row = byName.get(triggerName);
+    invariant(
+      row?.table_name === tableName
+        && row?.function_name === functionName
+        && row?.function_schema === schema,
+      `${triggerName} is attached to the wrong table or function.`,
+    );
+    invariant(row.tgisinternal === false, `${triggerName} must be a user-owned trigger.`);
+    invariant(row.tgenabled === 'A', `${triggerName} must be ENABLE ALWAYS.`);
+    if (triggerName.endsWith('_no_truncate')) {
+      invariant(String(row.definition).includes('TRUNCATE'), `${triggerName} must guard TRUNCATE.`);
+    }
+  }
+  const bundleGuard = byName.get('TaskMaterialReservationTransaction_bundle_guard');
+  invariant(
+    Number(bundleGuard.tgconstraint) > 0
+      && bundleGuard.tgdeferrable === true
+      && bundleGuard.tginitdeferred === true,
+    'Reservation bundle guard must remain a deferred constraint trigger.',
   );
-  invariant(enabled.rows.every((row) => row.tgenabled === 'A'), 'Every reservation trigger must be ENABLE ALWAYS.');
 }
 
 async function expectSqlFailure(client, callback, { code, message }, label) {

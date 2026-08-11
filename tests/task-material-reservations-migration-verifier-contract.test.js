@@ -87,6 +87,28 @@ test('projection, readiness and reconciliation assertions fail closed', () => {
   assert.match(verifier, /SAVEPOINT task_material_reservation_verifier_case/);
 });
 
+test('trigger verification uses the PostgreSQL catalog for TRUNCATE and constraint triggers', () => {
+  const triggerVerifier = verifier.slice(
+    verifier.indexOf('async function assertTriggers'),
+    verifier.indexOf('async function expectSqlFailure'),
+  );
+  assert.match(triggerVerifier, /FROM pg_trigger AS trigger/);
+  assert.match(triggerVerifier, /JOIN pg_class AS relation/);
+  assert.match(triggerVerifier, /JOIN pg_namespace AS namespace/);
+  assert.match(triggerVerifier, /JOIN pg_proc AS procedure/);
+  assert.match(triggerVerifier, /JOIN pg_namespace AS function_namespace/);
+  assert.match(triggerVerifier, /row\?\.function_schema === schema/);
+  assert.match(triggerVerifier, /pg_get_triggerdef\(trigger\.oid, true\)/);
+  assert.doesNotMatch(triggerVerifier, /information_schema\.triggers/);
+  assert.match(triggerVerifier, /row\.tgisinternal === false/);
+  assert.match(triggerVerifier, /row\.tgenabled === 'A'/);
+  assert.match(triggerVerifier, /triggerName\.endsWith\('_no_truncate'\)/);
+  assert.match(triggerVerifier, /String\(row\.definition\)\.includes\('TRUNCATE'\)/);
+  assert.match(triggerVerifier, /Number\(bundleGuard\.tgconstraint\) > 0/);
+  assert.match(triggerVerifier, /bundleGuard\.tgdeferrable === true/);
+  assert.match(triggerVerifier, /bundleGuard\.tginitdeferred === true/);
+});
+
 test('two PostgreSQL connections exercise the exact shared lock namespaces', () => {
   assert.match(verifier, /assertTwoConnectionSerialization/);
   assert.match(verifier, /obrasaas-task-material-lock-verifier-a/);
