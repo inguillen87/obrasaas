@@ -6,15 +6,19 @@ import {
   useEffect,
   useReducer,
   useRef,
+  useState,
 } from 'react';
 
 import styles from './privacy-review.module.css';
 import {
   assertPrivacySuccessfulResponseDtoSafe,
   INITIAL_PRIVACY_REVIEW_STATE,
+  PRIVACY_APPROVAL_POLL_INTERVAL_MS,
   PrivacyCommittedResponseError,
+  privacyApprovalPollRequestId,
   privacyReviewInteractionIsLocked,
   privacyReviewReducer,
+  privacyReviewSilentFailureAllowed,
 } from './privacy-review-state';
 
 const REQUESTS_ENDPOINT = '/api/tenant/privacy/requests';
@@ -1048,27 +1052,45 @@ export default function PrivacyReviewConsole() {
     privacyReviewReducer,
     INITIAL_PRIVACY_REVIEW_STATE,
   );
+  const [visibilityState, setVisibilityState] = useState('hidden');
   const queueSequence = useRef(0);
   const reviewSequence = useRef(0);
   const queueController = useRef(null);
   const reviewController = useRef(null);
   const mutationController = useRef(null);
+  const reviewInFlight = useRef(false);
   const mutationInFlight = useRef(false);
+  const approvalPollInFlight = useRef(false);
   const mounted = useRef(true);
+  const interactionLocked = privacyReviewInteractionIsLocked(state.mutation);
+  const selectedRequestId = state.selectedRequestId;
+  const reviewRequestId = state.review.data?.request?.id ?? null;
+  const reviewState = state.review.data?.reviewState ?? null;
+  const reviewStatus = state.review.status;
 
   const loadReview = useCallback(async (
     requestId,
-    { preserveCurrent = false, preserveForms = false } = {},
+    {
+      preserveCurrent = false,
+      preserveForms = false,
+      onlyIfIdle = false,
+      silent = false,
+    } = {},
   ) => {
+    if (onlyIfIdle && (reviewInFlight.current || mutationInFlight.current)) {
+      return false;
+    }
     reviewController.current?.abort();
     const controller = new AbortController();
     reviewController.current = controller;
+    reviewInFlight.current = true;
     const sequence = ++reviewSequence.current;
     dispatch({
       type: 'REVIEW_LOADING',
       requestId,
       sequence,
       preserveCurrent,
+      silent,
     });
     try {
       const payload = await requestJson(
@@ -1091,8 +1113,13 @@ export default function PrivacyReviewConsole() {
         requestId,
         sequence,
         error: errorMessage(error),
+        silent: silent && privacyReviewSilentFailureAllowed(error),
       });
       return false;
+    } finally {
+      if (reviewController.current === controller) {
+        reviewInFlight.current = false;
+      }
     }
   }, []);
 
@@ -1134,11 +1161,89 @@ export default function PrivacyReviewConsole() {
     void loadQueue({ selectFirst: true });
     return () => {
       mounted.current = false;
+      approvalPollInFlight.current = false;
       queueController.current?.abort();
       reviewController.current?.abort();
       mutationController.current?.abort();
     };
   }, [loadQueue]);
+
+  useEffect(() => {
+    const updateVisibility = () => setVisibilityState(document.visibilityState);
+    document.addEventListener('visibilitychange', updateVisibility);
+    updateVisibility();
+    return () => {
+      document.removeEventListener('visibilitychange', updateVisibility);
+    };
+  }, []);
+
+  const approvalPollRequestId = privacyApprovalPollRequestId({
+    mounted: true,
+    visibilityState,
+    reviewStatus,
+    selectedRequestId,
+    reviewRequestId,
+    reviewState,
+    interactionLocked,
+    reviewInFlight: false,
+    mutationInFlight: false,
+    pollInFlight: false,
+  });
+
+  useEffect(() => {
+    if (!approvalPollRequestId) return undefined;
+    let stopped = false;
+    let timeoutId = null;
+
+    const schedule = () => {
+      if (stopped) return;
+      timeoutId = setTimeout(async () => {
+        if (stopped) return;
+        const requestId = privacyApprovalPollRequestId({
+          mounted: mounted.current,
+          visibilityState: document.visibilityState,
+          reviewStatus,
+          selectedRequestId,
+          reviewRequestId,
+          reviewState,
+          interactionLocked,
+          reviewInFlight: reviewInFlight.current,
+          mutationInFlight: mutationInFlight.current,
+          pollInFlight: approvalPollInFlight.current,
+        });
+        if (!requestId) {
+          schedule();
+          return;
+        }
+        approvalPollInFlight.current = true;
+        try {
+          await loadReview(requestId, {
+            preserveCurrent: true,
+            preserveForms: true,
+            onlyIfIdle: true,
+            silent: true,
+          });
+        } finally {
+          approvalPollInFlight.current = false;
+          schedule();
+        }
+      }, PRIVACY_APPROVAL_POLL_INTERVAL_MS);
+    };
+
+    schedule();
+    return () => {
+      stopped = true;
+      if (timeoutId !== null) clearTimeout(timeoutId);
+    };
+  }, [
+    approvalPollRequestId,
+    interactionLocked,
+    loadReview,
+    reviewRequestId,
+    reviewState,
+    reviewStatus,
+    selectedRequestId,
+  ]);
 
   const sendOperation = useCallback(async (operation) => {
     if (mutationInFlight.current) return;
@@ -1481,7 +1586,6 @@ export default function PrivacyReviewConsole() {
 
   const review = state.review.data;
   const forms = state.forms;
-  const interactionLocked = privacyReviewInteractionIsLocked(state.mutation);
   const operationDisabled = interactionLocked
     || state.review.status !== 'ready';
 

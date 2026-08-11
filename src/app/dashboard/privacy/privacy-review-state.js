@@ -127,6 +127,44 @@ export function privacyReviewInteractionIsLocked(mutation) {
     || mutation?.status === 'reconciliation_required';
 }
 
+export function privacyReviewSilentFailureAllowed(error) {
+  if (error instanceof TypeError) return true;
+  const status = error?.status;
+  return Number.isSafeInteger(status) && (status === 429 || status >= 500);
+}
+
+export const PRIVACY_APPROVAL_POLL_INTERVAL_MS = 4_000;
+
+export function privacyApprovalPollRequestId({
+  mounted,
+  visibilityState,
+  reviewStatus,
+  selectedRequestId,
+  reviewRequestId,
+  reviewState,
+  interactionLocked,
+  reviewInFlight,
+  mutationInFlight,
+  pollInFlight,
+}) {
+  if (
+    mounted !== true
+    || visibilityState !== 'visible'
+    || reviewStatus !== 'ready'
+    || typeof selectedRequestId !== 'string'
+    || selectedRequestId.length === 0
+    || reviewRequestId !== selectedRequestId
+    || reviewState !== 'APPROVAL_PENDING'
+    || interactionLocked !== false
+    || reviewInFlight !== false
+    || mutationInFlight !== false
+    || pollInFlight !== false
+  ) {
+    return null;
+  }
+  return selectedRequestId;
+}
+
 function decisionItemDraft(item) {
   const blocker = item.kind === 'COVERAGE_BLOCKER';
   return {
@@ -246,16 +284,22 @@ export function privacyReviewReducer(state, action) {
         },
       };
     case 'REVIEW_LOADING':
+      {
+        const silent = action.silent === true
+          && action.requestId === state.selectedRequestId
+          && state.review.status === 'ready'
+          && state.review.data?.request?.id === action.requestId;
       return {
         ...state,
         selectedRequestId: action.requestId,
         review: {
-          status: 'loading',
+          status: silent ? 'ready' : 'loading',
           sequence: action.sequence,
           data: action.preserveCurrent ? state.review.data : null,
           error: null,
         },
       };
+      }
     case 'REVIEW_SUCCESS':
       if (
         action.sequence !== state.review.sequence
@@ -278,6 +322,16 @@ export function privacyReviewReducer(state, action) {
         action.sequence !== state.review.sequence
         || action.requestId !== state.selectedRequestId
       ) return state;
+      if (action.silent === true && state.review.data?.request?.id === action.requestId) {
+        return {
+          ...state,
+          review: {
+            ...state.review,
+            status: 'ready',
+            error: null,
+          },
+        };
+      }
       return {
         ...state,
         review: {

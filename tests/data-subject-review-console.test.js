@@ -7,9 +7,12 @@ import {
   assertPrivacySuccessfulResponseDtoSafe,
   formsFromReview,
   INITIAL_PRIVACY_REVIEW_STATE,
+  PRIVACY_APPROVAL_POLL_INTERVAL_MS,
   PrivacyCommittedResponseError,
+  privacyApprovalPollRequestId,
   privacyReviewInteractionIsLocked,
   privacyReviewReducer,
+  privacyReviewSilentFailureAllowed,
 } from '../src/app/dashboard/privacy/privacy-review-state.js';
 
 const privacyShellPath = new URL(
@@ -276,6 +279,149 @@ test('central reducer ignores stale reads and keeps the exact uncertain operatio
   assert.equal(confirmedAndRead.mutation.notice, 'Registro confirmado.');
 });
 
+test('silent approval refresh preserves ready controls and form state across a transient failure', () => {
+  const fixture = reviewFixture();
+  fixture.reviewState = 'APPROVAL_PENDING';
+  const selected = privacyReviewReducer({
+    ...INITIAL_PRIVACY_REVIEW_STATE,
+    selectedRequestId: 'request-a',
+    review: {
+      status: 'ready',
+      sequence: 3,
+      data: fixture,
+      error: null,
+    },
+    forms: formsFromReview(fixture),
+  }, {
+    type: 'FORM_PATCH',
+    form: 'approval',
+    patch: { decision: 'REJECT', reasonCode: 'SYNTHETIC_REVIEW' },
+  });
+  const refreshing = privacyReviewReducer(selected, {
+    type: 'REVIEW_LOADING',
+    requestId: 'request-a',
+    sequence: 4,
+    preserveCurrent: true,
+    silent: true,
+  });
+  assert.equal(refreshing.review.status, 'ready');
+  assert.equal(refreshing.review.data, fixture);
+  assert.equal(refreshing.forms.approval.reasonCode, 'SYNTHETIC_REVIEW');
+
+  const failed = privacyReviewReducer(refreshing, {
+    type: 'REVIEW_FAILURE',
+    requestId: 'request-a',
+    sequence: 4,
+    error: 'Red transitoria',
+    silent: true,
+  });
+  assert.equal(failed.review.status, 'ready');
+  assert.equal(failed.review.error, null);
+  assert.equal(failed.forms.approval.reasonCode, 'SYNTHETIC_REVIEW');
+
+  const explicitReload = privacyReviewReducer(failed, {
+    type: 'REVIEW_LOADING',
+    requestId: 'request-a',
+    sequence: 5,
+    preserveCurrent: true,
+    silent: false,
+  });
+  assert.equal(explicitReload.review.status, 'loading');
+});
+
+test('silent refresh fails closed for auth, absence and malformed contracts', () => {
+  assert.equal(privacyReviewSilentFailureAllowed(new TypeError('network')), true);
+  assert.equal(privacyReviewSilentFailureAllowed({ status: 429 }), true);
+  assert.equal(privacyReviewSilentFailureAllowed({ status: 500 }), true);
+  assert.equal(privacyReviewSilentFailureAllowed({ status: 503 }), true);
+  for (const error of [
+    { status: 400 },
+    { status: 401 },
+    { status: 403 },
+    { status: 404 },
+    new Error('DTO invalid'),
+    null,
+  ]) {
+    assert.equal(privacyReviewSilentFailureAllowed(error), false);
+  }
+
+  const fixture = reviewFixture();
+  fixture.reviewState = 'APPROVAL_PENDING';
+  const state = {
+    ...INITIAL_PRIVACY_REVIEW_STATE,
+    selectedRequestId: 'request-a',
+    review: {
+      status: 'ready',
+      sequence: 7,
+      data: fixture,
+      error: null,
+    },
+    forms: formsFromReview(fixture),
+  };
+  const denied = privacyReviewReducer(state, {
+    type: 'REVIEW_FAILURE',
+    requestId: 'request-a',
+    sequence: 7,
+    error: 'La sesión ya no es válida. (401)',
+    silent: false,
+  });
+  assert.equal(denied.review.status, 'error');
+  assert.match(denied.review.error, /401/);
+});
+
+test('approval polling is bounded and fails closed for every stale or busy condition', () => {
+  assert.ok(PRIVACY_APPROVAL_POLL_INTERVAL_MS > 0);
+  assert.ok(PRIVACY_APPROVAL_POLL_INTERVAL_MS <= 5_000);
+
+  const eligible = {
+    mounted: true,
+    visibilityState: 'visible',
+    reviewStatus: 'ready',
+    selectedRequestId: 'request-a',
+    reviewRequestId: 'request-a',
+    reviewState: 'APPROVAL_PENDING',
+    interactionLocked: false,
+    reviewInFlight: false,
+    mutationInFlight: false,
+    pollInFlight: false,
+  };
+  assert.equal(privacyApprovalPollRequestId(eligible), 'request-a');
+
+  const rejectedCases = [
+    { mounted: false },
+    { visibilityState: 'hidden' },
+    { visibilityState: 'prerender' },
+    { reviewStatus: 'loading' },
+    { reviewStatus: 'error' },
+    { selectedRequestId: '' },
+    { selectedRequestId: 'request-b' },
+    { reviewRequestId: null },
+    { reviewState: 'REVIEW_BLOCKED' },
+    { reviewState: 'STALE' },
+    { interactionLocked: true },
+    { reviewInFlight: true },
+    { mutationInFlight: true },
+    { pollInFlight: true },
+  ];
+  rejectedCases.forEach((patch) => {
+    assert.equal(
+      privacyApprovalPollRequestId({ ...eligible, ...patch }),
+      null,
+      JSON.stringify(patch),
+    );
+  });
+  for (const requiredFlag of [
+    'interactionLocked',
+    'reviewInFlight',
+    'mutationInFlight',
+    'pollInFlight',
+  ]) {
+    const incomplete = { ...eligible };
+    delete incomplete[requiredFlag];
+    assert.equal(privacyApprovalPollRequestId(incomplete), null, requiredFlag);
+  }
+});
+
 test('privacy surface uses hard navigation and contains no browser persistence or measurement hooks', async () => {
   const [shell, consoleSource, dashboardShell, projectAccessRequired] = await Promise.all([
     readFile(privacyShellPath, 'utf8'),
@@ -299,6 +445,20 @@ test('privacy surface uses hard navigation and contains no browser persistence o
   assert.match(consoleSource, /disabled=\{interactionLocked\}/);
   assert.match(consoleSource, /if \(!interactionLocked\) void loadReview\(requestId\)/);
   assert.match(consoleSource, /reviewReconciled && queueReconciled/);
+  assert.match(consoleSource, /document\.addEventListener\('visibilitychange'/);
+  assert.match(consoleSource, /const \[visibilityState, setVisibilityState\] = useState\('hidden'\)/);
+  assert.match(consoleSource, /document\.addEventListener\('visibilitychange'[\s\S]*?updateVisibility\(\)/);
+  assert.match(consoleSource, /document\.removeEventListener\('visibilitychange'/);
+  assert.match(consoleSource, /setTimeout\(async \(\) =>/);
+  assert.match(consoleSource, /clearTimeout\(timeoutId\)/);
+  assert.match(consoleSource, /PRIVACY_APPROVAL_POLL_INTERVAL_MS/);
+  assert.match(consoleSource, /preserveCurrent: true,[\s\S]*?preserveForms: true,[\s\S]*?onlyIfIdle: true/);
+  assert.match(consoleSource, /onlyIfIdle: true,[\s\S]*?silent: true/);
+  assert.match(consoleSource, /silent: silent && privacyReviewSilentFailureAllowed\(error\)/);
+  assert.match(consoleSource, /reviewInFlight\.current/);
+  assert.match(consoleSource, /approvalPollInFlight\.current/);
+  assert.match(consoleSource, /if \(!requestId\) \{\s*schedule\(\);\s*return;/);
+  assert.doesNotMatch(consoleSource, /setInterval\(/);
   assert.doesNotMatch(consoleSource, /Cerrar sin reenviar/);
   assert.match(dashboardShell, /hardNavigation:\s*true/);
   assert.match(dashboardShell, /permission:\s*'canManagePrivacy'/);
