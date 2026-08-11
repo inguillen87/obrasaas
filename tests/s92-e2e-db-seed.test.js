@@ -11,6 +11,7 @@ import {
   parseS92DatabaseSeedArgs,
   S92_DB_FIXTURE,
   S92_E2E_PERIOD,
+  S92_E2E_TASK_WINDOW,
   seedS92E2EDatabase,
 } from '../scripts/seed-s92-e2e-db.mjs';
 import { parseS92FixtureDescriptor } from '../e2e/s92-fixture.js';
@@ -192,6 +193,21 @@ test('fixture definition has two target projects plus a distinct primary anchor'
   assert.equal(S92_DB_FIXTURE.evidence.taskKey, 'measured');
 });
 
+test('canonical task window uses exact civil-day boundaries', () => {
+  assert.deepEqual(S92_E2E_TASK_WINDOW, {
+    startsAt: '2020-01-01T00:00:00.000Z',
+    endsAt: '2020-01-15T00:00:00.000Z',
+  });
+  for (const timestamp of Object.values(S92_E2E_TASK_WINDOW)) {
+    const date = new Date(timestamp);
+    assert.equal(date.toISOString(), timestamp);
+    assert.equal(date.getUTCHours(), 0);
+    assert.equal(date.getUTCMinutes(), 0);
+    assert.equal(date.getUTCSeconds(), 0);
+    assert.equal(date.getUTCMilliseconds(), 0);
+  }
+});
+
 test('seed authorization fails before any database or Clerk operation', async () => {
   const calls = [];
   const database = {
@@ -227,4 +243,5 @@ test('seed source never writes measurements or cuts', async () => {
   assert.match(source, /obrasaas_e2e/);
   assert.match(source, /"subscriptionPlan"/);
   assert.match(source, /'PRO', 'ACTIVE', NULL/);
+  assert.doesNotMatch(source, /2020-01-15T23:59:59/);
 });

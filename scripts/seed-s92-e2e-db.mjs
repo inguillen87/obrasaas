@@ -20,6 +20,10 @@ export const S92_E2E_PERIOD = Object.freeze({
   start: '2020-01-01',
   end: '2020-01-15',
 });
+export const S92_E2E_TASK_WINDOW = Object.freeze({
+  startsAt: '2020-01-01T00:00:00.000Z',
+  endsAt: '2020-01-15T00:00:00.000Z',
+});
 
 export const S92_DB_FIXTURE = Object.freeze({
   organizations: Object.freeze({
@@ -305,8 +309,8 @@ async function insertS92BaseRows(database, clerkFixture) {
       task.status,
       task.progress,
       JSON.stringify({ source: 'canonical-task-v1', fixture: S92_FIXTURE_ID, synthetic: true }),
-      '2020-01-01T00:00:00.000Z',
-      '2020-01-15T23:59:59.000Z',
+      S92_E2E_TASK_WINDOW.startsAt,
+      S92_E2E_TASK_WINDOW.endsAt,
     ]);
   }
 
