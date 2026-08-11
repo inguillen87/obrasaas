@@ -114,9 +114,12 @@ observaron errores/fatal/5xx en los logs exactos. La [evidencia](./evidence/2026
 no acredita un journey autenticado de preparación/aprobación, un alias estable
 ni Production.
 
-El siguiente corte es **S9.2-MED**: un snapshot técnico inmutable y reproducible
-de todas las mediciones aprobadas de una obra y quincena. Sigue sin ser un
-certificado contractual ni una instrucción de pago.
+El corte posterior, [**S9.2-MED**](./PROGRESS_MEASUREMENT_CUTS_S9_2.md), ya fue
+verificado por separado en el [artefacto `cc5aa21`](./evidence/2026-08-11-preview-cc5aa21.md).
+Sella un snapshot técnico inmutable y reproducible de todas las tareas
+canónicas de una obra y quincena, incluyendo ausencias explícitas. No cambia
+el alcance ni la evidencia histórica de S9.1, y sigue sin ser un certificado
+contractual ni una instrucción de pago.
 
 ## Criterio de salida
 

@@ -2,7 +2,7 @@
 
 Este plan mantiene la secuencia del PDF y separa capacidades operativas de capacidades financieras. Cada sprint debe cerrar con migración verificable, pruebas de concurrencia, permisos y evidencia de uso; un endpoint compilado no cuenta como salida.
 
-## Corte base: 2 de agosto de 2026 · actualización S12.2C/PRO-05B.1: 11 de agosto de 2026
+## Corte base: 2 de agosto de 2026 · actualización S9.2-MED: 11 de agosto de 2026
 
 El estado se expresa por nivel de evidencia: código y pruebas locales, migración en Preview aislado, journey UI en Preview y E2E externo. No se usa “desplegado” como sinónimo de “operativo con un proveedor real”.
 
@@ -22,6 +22,7 @@ El estado se expresa por nivel de evidencia: código y pruebas locales, migraci�
   matriz completa de roles, cross-tenant, Meta real, S12.2C ni Production;
 - el commit `fc71fbe` quedó `Ready` en un deployment Preview inmutable, sin mover ni certificar un alias estable. El release detectó 120 migraciones sin pendientes, aprobó S12.2C en modo rollback-only, volvió a ejecutar PRO-05A y completó el build 88/88. CI PostgreSQL 17 cerró sus tres jobs y ejecutó cuatro carreras disposable con cleanup exacto, `2172/2172` pruebas y drift cero. La [evidencia S12.2C](./evidence/2026-08-11-preview-fc71fbe.md) agrega un smoke sintético acotado `AUDITOR → DIRECTOR → SITE_MANAGER → AUDITOR`, con rol/grant restaurados y cero `error`/`fatal` o `5xx` en la ventana observada. No acredita una reserva/liberación exitosa, matriz completa, cross-tenant, Meta, trabajadores reales ni Production;
 - el commit `871cf2f` agregó PRO-05B.1 y quedó `Ready` en el deployment Preview inmutable `dpl_Fj7zRe66SrNtaeLXQSXhESjygPSs`, sin mover ni certificar un alias. El release detectó 121 migraciones sin pendientes, volvió a ejecutar PRO-05A, aprobó PRO-05B.1 en rollback-only con carreras disposable desactivadas y completó 88/88. CI `31511714114` terminó 3/3 con `2230/2230`, PostgreSQL 17 disposable, status y drift cero. El [smoke PRO-05B.1](./evidence/2026-08-11-preview-871cf2f.md) comprobó acceso `ADMIN`, rechazo `AUDITOR`, signed-out 404 y cero `error`/`fatal`/`5xx`, todo read-only y sin POST. No acredita DSAR ejecutable, cross-tenant, trabajadores reales, alias ni Production;
+- el commit `cc5aa21` cerró el gate técnico S9.2-MED. CI `31539591755` terminó 3/3 con 123 migraciones, carreras PostgreSQL de replay exacto/mutado, dos selladores, corrección y archivado, cleanup exacto, `2347/2347`, lint, audit cero, build 90/90 y Browser 2/2. El deployment Preview inmutable `dpl_4p2bcbwyznb4afZ8XetL2GrZWF51` quedó `READY`, sin mover alias: detectó 123 migraciones sin pendientes, aprobó S9.2 rollback-only con carreras disposable desactivadas y completó 90/90. Los [smokes y límites](./evidence/2026-08-11-preview-cc5aa21.md) son públicos/read-only; no hubo sesión autenticada, POST S9.2, mutación manual ni Production;
 - falta cerrar el smoke UI de publicación de baseline y forecast en el tenant de prueba, porque el acceso local directo a la conexión Preview está deliberadamente protegido y no se sustituye con una conexión de Production;
 - Meta, media entrante e identidad/cobro siguen siendo gates externos. La credencial dedicada de Vision, el presupuesto y el ledger gobernado ya están aislados/verificados en Preview; faltan gate de datos, foto real y journey autenticado.
 
@@ -96,11 +97,11 @@ Fondo, custodio validado por membresía, movimientos, comprobantes privados, ide
 
 Unidad, cantidad base, ejecutada, método, período, evidencia, revisión y aprobación ya están implementados en un ledger separado de `Task.progress`. El [corte `46c744c`](./evidence/2026-08-11-preview-46c744c.md) pasó PostgreSQL 17 con carreras y cleanup, 122 migraciones sin drift, 2294 pruebas y Preview rollback-only `READY`. Falta recorrer preparación y aprobación con actores autenticados por rol; un porcentaje sin unidad ni período no es medición válida.
 
-### S9.2-MED — corte técnico quincenal reproducible (siguiente)
+### S9.2-MED — corte técnico quincenal reproducible (gate técnico completo; journey autenticado pendiente)
 
-Sellar por obra y quincena un snapshot inmutable de las mediciones aprobadas, derivado en servidor y reproducible por hash. Una corrección posterior no modifica el corte anterior: exige una revisión nueva. Este artefacto sigue siendo técnico e interno; no contiene precios, retenciones, impuestos, PDF contractual ni estado de pago.
+El [corte técnico S9.2-MED](./PROGRESS_MEASUREMENT_CUTS_S9_2.md) ya sella por obra y quincena cerrada un snapshot inmutable de todas las tareas canónicas, derivado en servidor y reproducible por hash. Cada línea queda como `MEASURED` o `MISSING`; ausencia nunca significa cantidad cero. Versiona correcciones sin reescribir historia, exige replay idempotente y doble CAS del head/candidato, y restringe el sellado a `ADMIN`/`DIRECTOR` activos. El [corte `cc5aa21`](./evidence/2026-08-11-preview-cc5aa21.md) verificó DB, carreras, cleanup, CI y Preview rollback-only. Falta el journey UI/API autenticado. Este artefacto sigue siendo técnico e interno; no contiene precios, retenciones, impuestos, PDF contractual, conformidad financiera ni estado de pago.
 
-### S10 — certificación y reportes
+### S10 — certificación y reportes (siguiente; autoridad separada)
 
 Certificado versionado, retenciones, ajustes, PDF/hash reproducible y estado de pago separado. Certificar nunca ejecuta un pago automáticamente.
 
