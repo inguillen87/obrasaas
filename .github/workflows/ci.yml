@@ -145,6 +145,13 @@ jobs:
           TASK_MATERIAL_RESERVATIONS_DISPOSABLE_CONCURRENCY: "1"
         run: npm run verify:task-material-reservations-migration
 
+      - name: Verify quantitative progress measurements on PostgreSQL 17
+        env:
+          PROGRESS_MEASUREMENTS_MIGRATION_DATABASE_URL: postgresql://obrasaas_ci:obrasaas_ci@127.0.0.1:5432/obrasaas_ci?schema=public
+          PROGRESS_MEASUREMENTS_MIGRATION_SCHEMA: public
+          PROGRESS_MEASUREMENTS_DISPOSABLE_CONCURRENCY: "1"
+        run: npm run verify:progress-measurements-migration
+
       - name: Verify data subject discovery on PostgreSQL 17
         env:
           DATA_SUBJECT_DISCOVERY_MIGRATION_DATABASE_URL: postgresql://obrasaas_ci:obrasaas_ci@127.0.0.1:5432/obrasaas_ci?schema=public

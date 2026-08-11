@@ -79,6 +79,31 @@ enum ProgressEvidenceStatus {
   REJECTED
 }
 
+enum ProgressMeasurementUnitCode {
+  M
+  M2
+  M3
+  KG
+  T
+  L
+  UNIT
+  HOUR
+  DAY
+  LOT
+}
+
+enum ProgressMeasurementMethod {
+  DIRECT_COUNT
+  DIMENSIONAL_CALCULATION
+  INSTRUMENT_READING
+  OTHER_REVIEWED
+}
+
+enum ProgressMeasurementDecisionType {
+  APPROVED
+  REJECTED
+}
+
 enum ProgressEvidenceCaptureStatus {
   AWAITING_LOCATION
   LOCATION_CAPTURED
@@ -778,17 +803,17 @@ enum DataSubjectDecisionAction {
 }
 
 model Organization {
-  id                                  String                               @id @default(cuid())
-  clerkOrganizationId                 String?                              @unique
+  id                                  String                                  @id @default(cuid())
+  clerkOrganizationId                 String?                                 @unique
   name                                String
-  slug                                String                               @unique
-  country                             String                               @default("AR")
-  timezone                            String                               @default("America/Argentina/Buenos_Aires")
-  subscriptionPlan                    SubscriptionPlan                     @default(TRIAL)
-  subscriptionStatus                  SubscriptionStatus                   @default(TRIALING)
+  slug                                String                                  @unique
+  country                             String                                  @default("AR")
+  timezone                            String                                  @default("America/Argentina/Buenos_Aires")
+  subscriptionPlan                    SubscriptionPlan                        @default(TRIAL)
+  subscriptionStatus                  SubscriptionStatus                      @default(TRIALING)
   trialEndsAt                         DateTime?
-  stripeCustomerId                    String?                              @unique
-  stripeSubscriptionId                String?                              @unique
+  stripeCustomerId                    String?                                 @unique
+  stripeSubscriptionId                String?                                 @unique
   metadata                            Json?
   projects                            Project[]
   memberships                         TenantMembership[]
@@ -820,6 +845,11 @@ model Organization {
   taskMaterialReservationTransactions TaskMaterialReservationTransaction[]
   taskMaterialReservationBalances     TaskMaterialReservationBalance[]
   taskMaterialActiveReservations      TaskMaterialActiveReservation[]
+  taskProgressMeasurementHeads        TaskProgressMeasurementHead[]
+  taskProgressMeasurements            TaskProgressMeasurement[]
+  taskProgressMeasurementEvidence     TaskProgressMeasurementEvidence[]
+  taskProgressMeasurementDecisions    TaskProgressMeasurementDecision[]
+  taskProgressMeasurementBalances     TaskProgressMeasurementBalance[]
   workerPersons                       WorkerPerson[]
   workerChannelIdentities             WorkerChannelIdentity[]
   workerOnboardingClaims              WorkerOnboardingClaim[]
@@ -833,11 +863,11 @@ model Organization {
   dataSubjectVerificationEvents       DataSubjectRequesterVerificationEvent[]
   dataSubjectLegalAssessments         DataSubjectLegalAssessmentRevision[]
   dataSubjectLegalHolds               DataSubjectLegalHold[]
-  dataSubjectLegalHoldEvents           DataSubjectLegalHoldEvent[]
+  dataSubjectLegalHoldEvents          DataSubjectLegalHoldEvent[]
   dataSubjectDecisionSets             DataSubjectDecisionSet[]
   dataSubjectDecisionItems            DataSubjectDecisionItem[]
-  createdAt                           DateTime                             @default(now())
-  updatedAt                           DateTime                             @updatedAt
+  createdAt                           DateTime                                @default(now())
+  updatedAt                           DateTime                                @updatedAt
   workers                             Worker[]
 }
 
@@ -1188,22 +1218,22 @@ model GoodsReceiptCommitmentAllocation {
 }
 
 model InventoryLocation {
-  id                      String                   @id @default(cuid())
+  id                      String                         @id @default(cuid())
   organizationId          String
   projectId               String
-  code                    String                   @db.VarChar(32)
-  name                    String                   @db.VarChar(160)
-  active                  Boolean                  @default(true)
-  revision                Int                      @default(0)
-  organization            Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: Restrict)
-  project                 Project                  @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Cascade, onUpdate: Restrict, map: "InventoryLocation_project_fkey")
+  code                    String                         @db.VarChar(32)
+  name                    String                         @db.VarChar(160)
+  active                  Boolean                        @default(true)
+  revision                Int                            @default(0)
+  organization            Organization                   @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  project                 Project                        @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Cascade, onUpdate: Restrict, map: "InventoryLocation_project_fkey")
   goodsReceiptInspections GoodsReceiptInspection[]
   inventoryLedgerEntries  InventoryLedgerEntry[]
   inventoryBalances       InventoryBalance[]
   inventoryAvailabilities InventoryAvailability[]
   reservationEntries      TaskMaterialReservationEntry[]
-  createdAt               DateTime                 @default(now())
-  updatedAt               DateTime                 @updatedAt
+  createdAt               DateTime                       @default(now())
+  updatedAt               DateTime                       @updatedAt
 
   @@unique([organizationId, projectId, id], map: "InventoryLocation_scope_id_key")
   @@unique([projectId, code], map: "InventoryLocation_project_code_key")
@@ -1422,13 +1452,13 @@ model InventoryBalance {
   projectId       String
   inventoryItemId String
   locationId      String
-  onHand          Decimal           @default(0) @db.Decimal(14, 3)
-  revision        Int               @default(0)
-  updatedAt       DateTime          @updatedAt
-  organization    Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  project         Project           @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "InventoryBalance_project_fkey")
-  inventoryItem   InventoryItem     @relation(fields: [organizationId, projectId, inventoryItemId], references: [organizationId, projectId, id], onDelete: Restrict, onUpdate: Restrict, map: "InventoryBalance_item_fkey")
-  location        InventoryLocation @relation(fields: [organizationId, projectId, locationId], references: [organizationId, projectId, id], onDelete: Restrict, onUpdate: Restrict, map: "InventoryBalance_location_fkey")
+  onHand          Decimal                @default(0) @db.Decimal(14, 3)
+  revision        Int                    @default(0)
+  updatedAt       DateTime               @updatedAt
+  organization    Organization           @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  project         Project                @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "InventoryBalance_project_fkey")
+  inventoryItem   InventoryItem          @relation(fields: [organizationId, projectId, inventoryItemId], references: [organizationId, projectId, id], onDelete: Restrict, onUpdate: Restrict, map: "InventoryBalance_item_fkey")
+  location        InventoryLocation      @relation(fields: [organizationId, projectId, locationId], references: [organizationId, projectId, id], onDelete: Restrict, onUpdate: Restrict, map: "InventoryBalance_location_fkey")
   availability    InventoryAvailability?
 
   @@id([organizationId, projectId, inventoryItemId, locationId], map: "InventoryBalance_pkey")
@@ -1437,32 +1467,32 @@ model InventoryBalance {
 }
 
 model TaskMaterialRequirementRevision {
-  id                   String                           @id @default(cuid())
-  organizationId       String
-  projectId            String
-  taskId               String
-  taskIdentitySnapshot Boolean                          @default(true)
-  kind                 TaskMaterialRequirementKind
-  version              Int
-  lineCount            Int
-  taskRevisionSnapshot Int
-  taskCodeSnapshot     String?                          @db.VarChar(64)
-  taskTitleSnapshot    String                           @db.VarChar(160)
-  taskStartsAtSnapshot DateTime?
-  taskEndsAtSnapshot   DateTime?
-  predecessorId        String?
-  operationKey         String                           @db.VarChar(190)
-  requestFingerprint   String                           @db.Char(64)
-  reason               String                           @db.VarChar(500)
-  authoredById         String
-  createdAt            DateTime                         @default(now())
-  organization         Organization                     @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  project              Project                          @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialRequirementRevision_project_fkey")
-  task                 Task                             @relation(fields: [projectId, taskId, taskIdentitySnapshot], references: [projectId, id, materialRequirementEligible], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialRequirementRevision_task_fkey")
-  authoredBy           PlatformUser                     @relation("TaskMaterialRequirementAuthor", fields: [authoredById], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  predecessor          TaskMaterialRequirementRevision? @relation("TaskMaterialRequirementChain", fields: [organizationId, projectId, taskId, predecessorId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialRequirementRevision_predecessor_fkey")
-  successor            TaskMaterialRequirementRevision? @relation("TaskMaterialRequirementChain")
-  lines                TaskMaterialRequirementLine[]
+  id                      String                               @id @default(cuid())
+  organizationId          String
+  projectId               String
+  taskId                  String
+  taskIdentitySnapshot    Boolean                              @default(true)
+  kind                    TaskMaterialRequirementKind
+  version                 Int
+  lineCount               Int
+  taskRevisionSnapshot    Int
+  taskCodeSnapshot        String?                              @db.VarChar(64)
+  taskTitleSnapshot       String                               @db.VarChar(160)
+  taskStartsAtSnapshot    DateTime?
+  taskEndsAtSnapshot      DateTime?
+  predecessorId           String?
+  operationKey            String                               @db.VarChar(190)
+  requestFingerprint      String                               @db.Char(64)
+  reason                  String                               @db.VarChar(500)
+  authoredById            String
+  createdAt               DateTime                             @default(now())
+  organization            Organization                         @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  project                 Project                              @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialRequirementRevision_project_fkey")
+  task                    Task                                 @relation(fields: [projectId, taskId, taskIdentitySnapshot], references: [projectId, id, materialRequirementEligible], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialRequirementRevision_task_fkey")
+  authoredBy              PlatformUser                         @relation("TaskMaterialRequirementAuthor", fields: [authoredById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  predecessor             TaskMaterialRequirementRevision?     @relation("TaskMaterialRequirementChain", fields: [organizationId, projectId, taskId, predecessorId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialRequirementRevision_predecessor_fkey")
+  successor               TaskMaterialRequirementRevision?     @relation("TaskMaterialRequirementChain")
+  lines                   TaskMaterialRequirementLine[]
   reservationTransactions TaskMaterialReservationTransaction[]
   reservationBalances     TaskMaterialReservationBalance[]
   activeReservations      TaskMaterialActiveReservation[]
@@ -1475,20 +1505,20 @@ model TaskMaterialRequirementRevision {
 }
 
 model TaskMaterialRequirementLine {
-  id               String                          @id @default(cuid())
-  organizationId   String
-  projectId        String
-  taskId           String
-  revisionId       String
-  inventoryItemId  String
-  requiredQuantity Decimal                         @db.Decimal(14, 3)
-  itemCodeSnapshot String                          @db.VarChar(32)
-  itemNameSnapshot String                          @db.VarChar(160)
-  unitSnapshot     String                          @db.VarChar(32)
-  notes            String?                         @db.VarChar(500)
-  createdAt        DateTime                        @default(now())
-  revision         TaskMaterialRequirementRevision @relation(fields: [organizationId, projectId, taskId, revisionId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialRequirementLine_revision_fkey")
-  inventoryItem    InventoryItem                   @relation(fields: [organizationId, projectId, inventoryItemId, unitSnapshot], references: [organizationId, projectId, id, baseUnit], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialRequirementLine_item_fkey")
+  id                 String                          @id @default(cuid())
+  organizationId     String
+  projectId          String
+  taskId             String
+  revisionId         String
+  inventoryItemId    String
+  requiredQuantity   Decimal                         @db.Decimal(14, 3)
+  itemCodeSnapshot   String                          @db.VarChar(32)
+  itemNameSnapshot   String                          @db.VarChar(160)
+  unitSnapshot       String                          @db.VarChar(32)
+  notes              String?                         @db.VarChar(500)
+  createdAt          DateTime                        @default(now())
+  revision           TaskMaterialRequirementRevision @relation(fields: [organizationId, projectId, taskId, revisionId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialRequirementLine_revision_fkey")
+  inventoryItem      InventoryItem                   @relation(fields: [organizationId, projectId, inventoryItemId, unitSnapshot], references: [organizationId, projectId, id, baseUnit], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialRequirementLine_item_fkey")
   reservationEntries TaskMaterialReservationEntry[]
   reservationBalance TaskMaterialReservationBalance?
 
@@ -1512,7 +1542,7 @@ model InventoryAvailability {
   project             Project                        @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "InventoryAvailability_project_fkey")
   inventoryItem       InventoryItem                  @relation(fields: [organizationId, projectId, inventoryItemId], references: [organizationId, projectId, id], onDelete: Restrict, onUpdate: Restrict, map: "InventoryAvailability_item_fkey")
   location            InventoryLocation              @relation(fields: [organizationId, projectId, locationId], references: [organizationId, projectId, id], onDelete: Restrict, onUpdate: Restrict, map: "InventoryAvailability_location_fkey")
-  inventoryBalance    InventoryBalance                @relation(fields: [organizationId, projectId, inventoryItemId, locationId], references: [organizationId, projectId, inventoryItemId, locationId], onDelete: Restrict, onUpdate: Restrict, map: "InventoryAvailability_balance_fkey")
+  inventoryBalance    InventoryBalance               @relation(fields: [organizationId, projectId, inventoryItemId, locationId], references: [organizationId, projectId, inventoryItemId, locationId], onDelete: Restrict, onUpdate: Restrict, map: "InventoryAvailability_balance_fkey")
   reservationEntries  TaskMaterialReservationEntry[]
 
   @@id([organizationId, projectId, inventoryItemId, locationId], map: "InventoryAvailability_pkey")
@@ -1553,18 +1583,18 @@ model TaskMaterialReservationTransaction {
 }
 
 model TaskMaterialActiveReservation {
-  organizationId                    String
-  projectId                         String
-  taskId                            String
-  reservationTransactionId         String
-  requirementRevisionId            String
-  projectReservationEligibleSnapshot Boolean                  @default(true)
-  createdAt                         DateTime                    @default(now())
-  organization                      Organization                @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  project                           Project                     @relation(fields: [organizationId, projectId, projectReservationEligibleSnapshot], references: [organizationId, id, materialReservationEligible], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialActiveReservation_project_fkey")
-  task                              Task                        @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialActiveReservation_task_fkey")
-  reservationTransaction            TaskMaterialReservationTransaction @relation(fields: [organizationId, projectId, taskId, reservationTransactionId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialActiveReservation_transaction_fkey")
-  requirementRevision               TaskMaterialRequirementRevision @relation(fields: [organizationId, projectId, taskId, requirementRevisionId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialActiveReservation_revision_fkey")
+  organizationId                     String
+  projectId                          String
+  taskId                             String
+  reservationTransactionId           String
+  requirementRevisionId              String
+  projectReservationEligibleSnapshot Boolean                            @default(true)
+  createdAt                          DateTime                           @default(now())
+  organization                       Organization                       @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  project                            Project                            @relation(fields: [organizationId, projectId, projectReservationEligibleSnapshot], references: [organizationId, id, materialReservationEligible], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialActiveReservation_project_fkey")
+  task                               Task                               @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialActiveReservation_task_fkey")
+  reservationTransaction             TaskMaterialReservationTransaction @relation(fields: [organizationId, projectId, taskId, reservationTransactionId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialActiveReservation_transaction_fkey")
+  requirementRevision                TaskMaterialRequirementRevision    @relation(fields: [organizationId, projectId, taskId, requirementRevisionId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialActiveReservation_revision_fkey")
 
   @@id([organizationId, projectId, taskId], map: "TaskMaterialActiveReservation_pkey")
   @@unique([projectId, taskId], map: "TaskMaterialActiveReservation_task_key")
@@ -1579,16 +1609,16 @@ model TaskMaterialReservationBalance {
   requirementRevisionId String
   requirementLineId     String
   inventoryItemId       String
-  requiredQuantity      Decimal                          @db.Decimal(14, 3)
-  reservedQuantity      Decimal                          @default(0) @db.Decimal(14, 3)
-  revision              Int                              @default(0)
-  updatedAt             DateTime                         @updatedAt
-  organization          Organization                     @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  project               Project                          @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialReservationBalance_project_fkey")
-  task                  Task                             @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialReservationBalance_task_fkey")
-  requirementRevision   TaskMaterialRequirementRevision  @relation(fields: [organizationId, projectId, taskId, requirementRevisionId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialReservationBalance_revision_fkey")
-  requirementLine       TaskMaterialRequirementLine      @relation(fields: [organizationId, projectId, taskId, requirementRevisionId, requirementLineId], references: [organizationId, projectId, taskId, revisionId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialReservationBalance_line_fkey")
-  inventoryItem         InventoryItem                    @relation(fields: [organizationId, projectId, inventoryItemId], references: [organizationId, projectId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialReservationBalance_item_fkey")
+  requiredQuantity      Decimal                         @db.Decimal(14, 3)
+  reservedQuantity      Decimal                         @default(0) @db.Decimal(14, 3)
+  revision              Int                             @default(0)
+  updatedAt             DateTime                        @updatedAt
+  organization          Organization                    @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  project               Project                         @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialReservationBalance_project_fkey")
+  task                  Task                            @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialReservationBalance_task_fkey")
+  requirementRevision   TaskMaterialRequirementRevision @relation(fields: [organizationId, projectId, taskId, requirementRevisionId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialReservationBalance_revision_fkey")
+  requirementLine       TaskMaterialRequirementLine     @relation(fields: [organizationId, projectId, taskId, requirementRevisionId, requirementLineId], references: [organizationId, projectId, taskId, revisionId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialReservationBalance_line_fkey")
+  inventoryItem         InventoryItem                   @relation(fields: [organizationId, projectId, inventoryItemId], references: [organizationId, projectId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialReservationBalance_item_fkey")
   entries               TaskMaterialReservationEntry[]
 
   @@id([organizationId, projectId, taskId, requirementRevisionId, requirementLineId], map: "TaskMaterialReservationBalance_pkey")
@@ -1597,7 +1627,7 @@ model TaskMaterialReservationBalance {
 }
 
 model TaskMaterialReservationEntry {
-  id                    String                              @id @default(cuid())
+  id                    String                             @id @default(cuid())
   organizationId        String
   projectId             String
   taskId                String
@@ -1606,18 +1636,18 @@ model TaskMaterialReservationEntry {
   requirementLineId     String
   inventoryItemId       String
   locationId            String
-  unitSnapshot          String                              @db.VarChar(32)
-  quantityDelta         Decimal                             @db.Decimal(14, 3)
+  unitSnapshot          String                             @db.VarChar(32)
+  quantityDelta         Decimal                            @db.Decimal(14, 3)
   reversesEntryId       String?
-  createdAt             DateTime                            @default(now())
+  createdAt             DateTime                           @default(now())
   transaction           TaskMaterialReservationTransaction @relation(fields: [organizationId, projectId, taskId, transactionId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialReservationEntry_transaction_fkey")
-  requirementLine       TaskMaterialRequirementLine         @relation(fields: [organizationId, projectId, taskId, requirementRevisionId, requirementLineId], references: [organizationId, projectId, taskId, revisionId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialReservationEntry_line_fkey")
-  lineBalance           TaskMaterialReservationBalance      @relation(fields: [organizationId, projectId, taskId, requirementRevisionId, requirementLineId, inventoryItemId], references: [organizationId, projectId, taskId, requirementRevisionId, requirementLineId, inventoryItemId], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialReservationEntry_line_balance_fkey")
-  inventoryItem         InventoryItem                       @relation(fields: [organizationId, projectId, inventoryItemId], references: [organizationId, projectId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialReservationEntry_item_fkey")
-  location              InventoryLocation                   @relation(fields: [organizationId, projectId, locationId], references: [organizationId, projectId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialReservationEntry_location_fkey")
-  inventoryAvailability InventoryAvailability               @relation(fields: [organizationId, projectId, inventoryItemId, locationId], references: [organizationId, projectId, inventoryItemId, locationId], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialReservationEntry_availability_fkey")
-  reversesEntry         TaskMaterialReservationEntry?        @relation("TaskMaterialReservationEntryReversal", fields: [organizationId, projectId, taskId, reversesEntryId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialReservationEntry_reverses_fkey")
-  reversedBy            TaskMaterialReservationEntry?        @relation("TaskMaterialReservationEntryReversal")
+  requirementLine       TaskMaterialRequirementLine        @relation(fields: [organizationId, projectId, taskId, requirementRevisionId, requirementLineId], references: [organizationId, projectId, taskId, revisionId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialReservationEntry_line_fkey")
+  lineBalance           TaskMaterialReservationBalance     @relation(fields: [organizationId, projectId, taskId, requirementRevisionId, requirementLineId, inventoryItemId], references: [organizationId, projectId, taskId, requirementRevisionId, requirementLineId, inventoryItemId], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialReservationEntry_line_balance_fkey")
+  inventoryItem         InventoryItem                      @relation(fields: [organizationId, projectId, inventoryItemId], references: [organizationId, projectId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialReservationEntry_item_fkey")
+  location              InventoryLocation                  @relation(fields: [organizationId, projectId, locationId], references: [organizationId, projectId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialReservationEntry_location_fkey")
+  inventoryAvailability InventoryAvailability              @relation(fields: [organizationId, projectId, inventoryItemId, locationId], references: [organizationId, projectId, inventoryItemId, locationId], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialReservationEntry_availability_fkey")
+  reversesEntry         TaskMaterialReservationEntry?      @relation("TaskMaterialReservationEntryReversal", fields: [organizationId, projectId, taskId, reversesEntryId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, onUpdate: Restrict, map: "TaskMaterialReservationEntry_reverses_fkey")
+  reversedBy            TaskMaterialReservationEntry?      @relation("TaskMaterialReservationEntryReversal")
 
   @@unique([organizationId, projectId, taskId, id], map: "TaskMaterialReservationEntry_scope_id_key")
   @@unique([projectId, transactionId, requirementLineId, locationId], map: "TaskMaterialReservationEntry_allocation_key")
@@ -1649,76 +1679,76 @@ model CrmAccount {
 }
 
 model PlatformUser {
-  id                                 String                              @id @default(cuid())
-  clerkUserId                        String                              @unique
-  primaryEmail                       String                              @unique
-  fullName                           String?
-  avatarUrl                          String?
-  systemRole                         SystemRole                          @default(TENANT_USER)
-  memberships                        TenantMembership[]
-  auditLogs                          AuditLog[]
-  conversationReadStates             ConversationReadState[]
-  attendanceScheduleVersions         AttendanceScheduleVersion[]         @relation("AttendanceScheduleVersionCreator")
-  attendanceScheduleAssignments      AttendanceScheduleAssignment[]      @relation("AttendanceScheduleAssignmentCreator")
-  endedAttendanceScheduleAssignments AttendanceScheduleAssignment[]      @relation("AttendanceScheduleAssignmentEnder")
-  attendanceExceptionRevisions       AttendanceExceptionRevision[]       @relation("AttendanceExceptionRevisionCreator")
-  attendanceCorrectionRequests       AttendanceCorrectionRequest[]       @relation("AttendanceCorrectionPlatformRequester")
-  attendanceCorrectionDecisions      AttendanceCorrectionDecision[]      @relation("AttendanceCorrectionDecider")
-  attendanceAlertEvents              AttendanceAlertEvent[]              @relation("AttendanceAlertActor")
-  lastSeenAt                         DateTime                            @default(now())
-  createdAt                          DateTime                            @default(now())
-  updatedAt                          DateTime                            @updatedAt
-  notificationDeliveries             NotificationDelivery[]
-  cashMovementsFirstApproved         CashMovement[]                      @relation("CashMovementFirstApprover")
-  cashMovementsSecondApproved        CashMovement[]                      @relation("CashMovementSecondApprover")
-  notificationPreferences            NotificationPreference[]
-  cashFunds                          CashFund[]
-  verifiedWorkerIdentities           WorkerPerson[]                      @relation("WorkerIdentityVerifier")
-  rejectedWorkerIdentities           WorkerPerson[]                      @relation("WorkerIdentityRejecter")
-  reviewedWorkerOnboardingClaims     WorkerOnboardingClaim[]             @relation("WorkerOnboardingReviewer")
-  verifiedWorkerPaymentDestinations  WorkerPaymentDestination[]          @relation("WorkerPaymentDestinationVerifier")
-  requestedVisualAssessments         VisualProgressAssessment[]          @relation("VisualProgressAssessmentRequester")
-  reviewedVisualAssessments          VisualProgressAssessment[]          @relation("VisualProgressAssessmentReviewer")
-  reviewedScheduleObservations       ScheduleProgressObservation[]       @relation("ScheduleProgressObservationReviewer")
-  createdScheduleObservations        ScheduleProgressObservation[]       @relation("ScheduleProgressObservationCreator")
-  aiDispatchBudgetSettlements        AiDispatchBudgetReservation[]       @relation("AiDispatchBudgetSettlementActor")
-  protectedUploads                   ProtectedUpload[]                   @relation("ProtectedUploadActor")
-  receivedGoodsReceipts              GoodsReceipt[]                      @relation("GoodsReceiptReceiver")
-  goodsReceiptInspections            GoodsReceiptInspection[]            @relation("GoodsReceiptInspector")
-  supplierCommitmentLineClosures     SupplierCommitmentLineClosure[]     @relation("SupplierCommitmentLineClosureActor")
-  inventoryPurchaseLineBindings      PurchaseOrderLineInventoryBinding[] @relation("InventoryPurchaseLineBinder")
-  inventoryTransactions              InventoryTransaction[]              @relation("InventoryTransactionActor")
-  taskMaterialRequirementRevisions   TaskMaterialRequirementRevision[]   @relation("TaskMaterialRequirementAuthor")
+  id                                  String                               @id @default(cuid())
+  clerkUserId                         String                               @unique
+  primaryEmail                        String                               @unique
+  fullName                            String?
+  avatarUrl                           String?
+  systemRole                          SystemRole                           @default(TENANT_USER)
+  memberships                         TenantMembership[]
+  auditLogs                           AuditLog[]
+  conversationReadStates              ConversationReadState[]
+  attendanceScheduleVersions          AttendanceScheduleVersion[]          @relation("AttendanceScheduleVersionCreator")
+  attendanceScheduleAssignments       AttendanceScheduleAssignment[]       @relation("AttendanceScheduleAssignmentCreator")
+  endedAttendanceScheduleAssignments  AttendanceScheduleAssignment[]       @relation("AttendanceScheduleAssignmentEnder")
+  attendanceExceptionRevisions        AttendanceExceptionRevision[]        @relation("AttendanceExceptionRevisionCreator")
+  attendanceCorrectionRequests        AttendanceCorrectionRequest[]        @relation("AttendanceCorrectionPlatformRequester")
+  attendanceCorrectionDecisions       AttendanceCorrectionDecision[]       @relation("AttendanceCorrectionDecider")
+  attendanceAlertEvents               AttendanceAlertEvent[]               @relation("AttendanceAlertActor")
+  lastSeenAt                          DateTime                             @default(now())
+  createdAt                           DateTime                             @default(now())
+  updatedAt                           DateTime                             @updatedAt
+  notificationDeliveries              NotificationDelivery[]
+  cashMovementsFirstApproved          CashMovement[]                       @relation("CashMovementFirstApprover")
+  cashMovementsSecondApproved         CashMovement[]                       @relation("CashMovementSecondApprover")
+  notificationPreferences             NotificationPreference[]
+  cashFunds                           CashFund[]
+  verifiedWorkerIdentities            WorkerPerson[]                       @relation("WorkerIdentityVerifier")
+  rejectedWorkerIdentities            WorkerPerson[]                       @relation("WorkerIdentityRejecter")
+  reviewedWorkerOnboardingClaims      WorkerOnboardingClaim[]              @relation("WorkerOnboardingReviewer")
+  verifiedWorkerPaymentDestinations   WorkerPaymentDestination[]           @relation("WorkerPaymentDestinationVerifier")
+  requestedVisualAssessments          VisualProgressAssessment[]           @relation("VisualProgressAssessmentRequester")
+  reviewedVisualAssessments           VisualProgressAssessment[]           @relation("VisualProgressAssessmentReviewer")
+  reviewedScheduleObservations        ScheduleProgressObservation[]        @relation("ScheduleProgressObservationReviewer")
+  createdScheduleObservations         ScheduleProgressObservation[]        @relation("ScheduleProgressObservationCreator")
+  aiDispatchBudgetSettlements         AiDispatchBudgetReservation[]        @relation("AiDispatchBudgetSettlementActor")
+  protectedUploads                    ProtectedUpload[]                    @relation("ProtectedUploadActor")
+  receivedGoodsReceipts               GoodsReceipt[]                       @relation("GoodsReceiptReceiver")
+  goodsReceiptInspections             GoodsReceiptInspection[]             @relation("GoodsReceiptInspector")
+  supplierCommitmentLineClosures      SupplierCommitmentLineClosure[]      @relation("SupplierCommitmentLineClosureActor")
+  inventoryPurchaseLineBindings       PurchaseOrderLineInventoryBinding[]  @relation("InventoryPurchaseLineBinder")
+  inventoryTransactions               InventoryTransaction[]               @relation("InventoryTransactionActor")
+  taskMaterialRequirementRevisions    TaskMaterialRequirementRevision[]    @relation("TaskMaterialRequirementAuthor")
   taskMaterialReservationTransactions TaskMaterialReservationTransaction[] @relation("TaskMaterialReservationActor")
 
   @@index([systemRole, createdAt])
 }
 
 model TenantMembership {
-  id                                 String                         @id @default(cuid())
+  id                                 String                                  @id @default(cuid())
   organizationId                     String
-  organization                       Organization                   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization                       Organization                            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   userId                             String
-  user                               PlatformUser                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  clerkRole                          String                         @default("org:member")
-  tenantRole                         TenantRole                     @default(AUDITOR)
-  status                             MembershipStatus               @default(ACTIVE)
+  user                               PlatformUser                            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clerkRole                          String                                  @default("org:member")
+  tenantRole                         TenantRole                              @default(AUDITOR)
+  status                             MembershipStatus                        @default(ACTIVE)
   projectMemberships                 ProjectMembership[]
-  verifiedWorkerIdentities           WorkerPerson[]                 @relation("WorkerIdentityVerifierMembership")
-  rejectedWorkerIdentities           WorkerPerson[]                 @relation("WorkerIdentityRejecterMembership")
-  reviewedWorkerOnboardingClaims     WorkerOnboardingClaim[]        @relation("WorkerOnboardingReviewerMembership")
-  submittedWorkerPaymentDestinations WorkerPaymentDestination[]     @relation("WorkerPaymentSubmitterMembership")
-  verifiedWorkerPaymentDestinations  WorkerPaymentDestination[]     @relation("WorkerPaymentVerifierMembership")
-  activatedWorkerPaymentDestinations WorkerPaymentDestination[]     @relation("WorkerPaymentActivatorMembership")
-  rejectedWorkerPaymentDestinations  WorkerPaymentDestination[]     @relation("WorkerPaymentRejecterMembership")
-  revokedWorkerPaymentDestinations   WorkerPaymentDestination[]     @relation("WorkerPaymentRevokerMembership")
-  workerPrivacyChoiceEvents          WorkerPrivacyChoiceEvent[]     @relation("WorkerPrivacyChoiceMembershipActor")
-  workerSensitiveDecisions           WorkerSensitiveDecision[]      @relation("WorkerSensitiveDecisionActor")
-  dataSubjectRequestsAsSubject       DataSubjectRequest[]           @relation("DataSubjectRequestSubjectMembership")
-  receivedDataSubjectRequests        DataSubjectRequest[]           @relation("DataSubjectRequestReceivedBy")
-  attestedDataSubjectRequests        DataSubjectRequest[]           @relation("DataSubjectRequestAttestedBy")
-  completedDataSubjectRequests       DataSubjectRequest[]           @relation("DataSubjectRequestCompletedBy")
-  sealedDataSubjectManifests         DataSubjectDiscoveryManifest[] @relation("DataSubjectManifestSealedBy")
+  verifiedWorkerIdentities           WorkerPerson[]                          @relation("WorkerIdentityVerifierMembership")
+  rejectedWorkerIdentities           WorkerPerson[]                          @relation("WorkerIdentityRejecterMembership")
+  reviewedWorkerOnboardingClaims     WorkerOnboardingClaim[]                 @relation("WorkerOnboardingReviewerMembership")
+  submittedWorkerPaymentDestinations WorkerPaymentDestination[]              @relation("WorkerPaymentSubmitterMembership")
+  verifiedWorkerPaymentDestinations  WorkerPaymentDestination[]              @relation("WorkerPaymentVerifierMembership")
+  activatedWorkerPaymentDestinations WorkerPaymentDestination[]              @relation("WorkerPaymentActivatorMembership")
+  rejectedWorkerPaymentDestinations  WorkerPaymentDestination[]              @relation("WorkerPaymentRejecterMembership")
+  revokedWorkerPaymentDestinations   WorkerPaymentDestination[]              @relation("WorkerPaymentRevokerMembership")
+  workerPrivacyChoiceEvents          WorkerPrivacyChoiceEvent[]              @relation("WorkerPrivacyChoiceMembershipActor")
+  workerSensitiveDecisions           WorkerSensitiveDecision[]               @relation("WorkerSensitiveDecisionActor")
+  dataSubjectRequestsAsSubject       DataSubjectRequest[]                    @relation("DataSubjectRequestSubjectMembership")
+  receivedDataSubjectRequests        DataSubjectRequest[]                    @relation("DataSubjectRequestReceivedBy")
+  attestedDataSubjectRequests        DataSubjectRequest[]                    @relation("DataSubjectRequestAttestedBy")
+  completedDataSubjectRequests       DataSubjectRequest[]                    @relation("DataSubjectRequestCompletedBy")
+  sealedDataSubjectManifests         DataSubjectDiscoveryManifest[]          @relation("DataSubjectManifestSealedBy")
   dataSubjectVerificationEvents      DataSubjectRequesterVerificationEvent[] @relation("DataSubjectVerificationActor")
   dataSubjectLegalAssessments        DataSubjectLegalAssessmentRevision[]    @relation("DataSubjectLegalAssessmentActor")
   createdDataSubjectLegalHolds       DataSubjectLegalHold[]                  @relation("DataSubjectLegalHoldCreator")
@@ -1726,8 +1756,10 @@ model TenantMembership {
   actedDataSubjectLegalHoldEvents    DataSubjectLegalHoldEvent[]             @relation("DataSubjectLegalHoldEventActor")
   preparedDataSubjectDecisionSets    DataSubjectDecisionSet[]                @relation("DataSubjectDecisionPreparer")
   decidedDataSubjectDecisionSets     DataSubjectDecisionSet[]                @relation("DataSubjectDecisionChecker")
-  createdAt                          DateTime                       @default(now())
-  updatedAt                          DateTime                       @updatedAt
+  preparedTaskProgressMeasurements   TaskProgressMeasurement[]               @relation("TaskProgressMeasurementPreparer")
+  taskProgressMeasurementDecisions   TaskProgressMeasurementDecision[]       @relation("TaskProgressMeasurementDecider")
+  createdAt                          DateTime                                @default(now())
+  updatedAt                          DateTime                                @updatedAt
 
   @@unique([organizationId, userId])
   @@unique([organizationId, id], map: "TenantMembership_organizationId_id_key")
@@ -1761,6 +1793,7 @@ model Project {
   slug                                 String
   status                               ProjectStatus                         @default(ACTIVE)
   materialReservationEligible          Boolean                               @default(dbgenerated())
+  progressMeasurementEligible          Boolean                               @default(dbgenerated())
   address                              String?
   latitude                             Decimal?                              @db.Decimal(10, 7)
   longitude                            Decimal?                              @db.Decimal(10, 7)
@@ -1827,6 +1860,12 @@ model Project {
   taskMaterialReservationTransactions  TaskMaterialReservationTransaction[]
   taskMaterialReservationBalances      TaskMaterialReservationBalance[]
   taskMaterialActiveReservations       TaskMaterialActiveReservation[]
+  taskProgressMeasurementHeads         TaskProgressMeasurementHead[]
+  eligibleTaskProgressMeasurementHeads TaskProgressMeasurementHead[]         @relation("TaskProgressMeasurementProjectEligibility")
+  taskProgressMeasurements             TaskProgressMeasurement[]
+  taskProgressMeasurementEvidence      TaskProgressMeasurementEvidence[]
+  taskProgressMeasurementDecisions     TaskProgressMeasurementDecision[]
+  taskProgressMeasurementBalances      TaskProgressMeasurementBalance[]
   supplierInvoices                     SupplierInvoice[]
   supplierCommitments                  SupplierCommitment[]
   supplierReminderDeliveries           SupplierReminderDelivery[]
@@ -1837,6 +1876,7 @@ model Project {
   whatsappMediaAssets                  WhatsAppMediaAsset[]
 
   @@unique([organizationId, id])
+  @@unique([organizationId, id, progressMeasurementEligible], map: "Project_progress_measurement_eligibility_key")
   @@unique([organizationId, id, materialReservationEligible], map: "Project_material_reservation_identity_key")
   @@unique([organizationId, slug])
   @@index([organizationId, status])
@@ -2570,42 +2610,47 @@ model OperationalProposal {
 }
 
 model Task {
-  id                           String                            @id @default(cuid())
-  projectId                    String
-  project                      Project                           @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  externalId                   String?
-  code                         String?                           @db.VarChar(64)
-  title                        String
-  description                  String?
-  type                         TaskType                          @default(TASK)
-  status                       TaskStatus                        @default(BACKLOG)
-  progress                     Int                               @default(0)
-  startsAt                     DateTime?
-  endsAt                       DateTime?
-  assignee                     String?
-  revision                     Int                               @default(0)
-  materialRequirementEligible Boolean                           @default(dbgenerated())
-  parentId                     String?
-  parent                       Task?                             @relation("TaskHierarchy", fields: [projectId, parentId], references: [projectId, id], onDelete: Restrict, map: "Task_parent_scope_fkey")
-  children                     Task[]                            @relation("TaskHierarchy")
-  predecessors                 TaskDependency[]                  @relation("TaskDependencySuccessor")
-  successors                   TaskDependency[]                  @relation("TaskDependencyPredecessor")
-  assignments                  TaskAssignment[]
-  blockers                     ProjectBlocker[]
-  dailyLogs                    DailyLog[]
-  progressEvidence             ProgressEvidence[]
-  visualProgressAssessments    VisualProgressAssessment[]
-  progressObservations         ScheduleProgressObservation[]
-  extraWorkRequests            ExtraWorkRequest[]
-  budgetLines                  BudgetLine[]
-  supplierCommitmentLinks      SupplierCommitmentTaskLink[]
-  materialRequirementRevisions TaskMaterialRequirementRevision[]
+  id                              String                               @id @default(cuid())
+  projectId                       String
+  project                         Project                              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  externalId                      String?
+  code                            String?                              @db.VarChar(64)
+  title                           String
+  description                     String?
+  type                            TaskType                             @default(TASK)
+  status                          TaskStatus                           @default(BACKLOG)
+  progress                        Int                                  @default(0)
+  startsAt                        DateTime?
+  endsAt                          DateTime?
+  assignee                        String?
+  revision                        Int                                  @default(0)
+  materialRequirementEligible     Boolean                              @default(dbgenerated())
+  parentId                        String?
+  parent                          Task?                                @relation("TaskHierarchy", fields: [projectId, parentId], references: [projectId, id], onDelete: Restrict, map: "Task_parent_scope_fkey")
+  children                        Task[]                               @relation("TaskHierarchy")
+  predecessors                    TaskDependency[]                     @relation("TaskDependencySuccessor")
+  successors                      TaskDependency[]                     @relation("TaskDependencyPredecessor")
+  assignments                     TaskAssignment[]
+  blockers                        ProjectBlocker[]
+  dailyLogs                       DailyLog[]
+  progressEvidence                ProgressEvidence[]
+  visualProgressAssessments       VisualProgressAssessment[]
+  progressObservations            ScheduleProgressObservation[]
+  extraWorkRequests               ExtraWorkRequest[]
+  budgetLines                     BudgetLine[]
+  supplierCommitmentLinks         SupplierCommitmentTaskLink[]
+  materialRequirementRevisions    TaskMaterialRequirementRevision[]
   materialReservationTransactions TaskMaterialReservationTransaction[]
   materialReservationBalances     TaskMaterialReservationBalance[]
   activeMaterialReservation       TaskMaterialActiveReservation?
-  metadata                     Json?
-  createdAt                    DateTime                          @default(now())
-  updatedAt                    DateTime                          @updatedAt
+  progressMeasurementHeads        TaskProgressMeasurementHead[]
+  progressMeasurements            TaskProgressMeasurement[]
+  progressMeasurementEvidence     TaskProgressMeasurementEvidence[]
+  progressMeasurementDecisions    TaskProgressMeasurementDecision[]
+  progressMeasurementBalance      TaskProgressMeasurementBalance?
+  metadata                        Json?
+  createdAt                       DateTime                             @default(now())
+  updatedAt                       DateTime                             @updatedAt
 
   @@unique([projectId, externalId])
   @@unique([projectId, id])
@@ -3211,6 +3256,7 @@ model ProgressEvidence {
   updatedAt                 DateTime                              @updatedAt
   visualProgressAssessments VisualProgressAssessment[]
   scheduleObservations      ScheduleProgressObservation[]
+  progressMeasurementLinks  TaskProgressMeasurementEvidence[]
 
   @@unique([projectId, id])
   @@unique([projectId, sourceOperationKeyHash], map: "ProgressEvidence_project_operation_key")
@@ -3219,6 +3265,172 @@ model ProgressEvidence {
   @@unique([sourceConversationId, sourceMessageId], map: "ProgressEvidence_source_conversation_message_key")
   @@index([projectId, taskId, capturedAt])
   @@index([projectId, status, capturedAt])
+}
+
+/// Mutable task-period projection. Only the governed PostgreSQL functions may
+/// create or advance it; proposals and decisions remain immutable ledgers.
+model TaskProgressMeasurementHead {
+  id                                         String                          @id @default(cuid())
+  organizationId                             String
+  organization                               Organization                    @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "TPMHead_organization_fkey")
+  projectId                                  String
+  project                                    Project                         @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "TPMHead_project_scope_fkey")
+  projectProgressMeasurementEligibleSnapshot Boolean?                        @default(dbgenerated())
+  eligibleProject                            Project?                        @relation("TaskProgressMeasurementProjectEligibility", fields: [organizationId, projectId, projectProgressMeasurementEligibleSnapshot], references: [organizationId, id, progressMeasurementEligible], onDelete: Restrict, onUpdate: Restrict, map: "TPMHead_project_eligibility_fkey")
+  taskId                                     String
+  taskIdentitySnapshot                       Boolean                         @default(true)
+  task                                       Task                            @relation(fields: [projectId, taskId, taskIdentitySnapshot], references: [projectId, id, materialRequirementEligible], onDelete: Restrict, onUpdate: Restrict, map: "TPMHead_task_identity_fkey")
+  periodStart                                DateTime                        @db.Date
+  periodEnd                                  DateTime                        @db.Date
+  headMeasurementId                          String?                         @unique(map: "TPMHead_head_measurement_key")
+  headMeasurement                            TaskProgressMeasurement?        @relation("TaskProgressMeasurementCurrentHead", fields: [organizationId, projectId, taskId, headMeasurementId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, map: "TPMHead_head_measurement_scope_fkey")
+  pendingMeasurementId                       String?                         @unique(map: "TPMHead_pending_measurement_key")
+  pendingMeasurement                         TaskProgressMeasurement?        @relation("TaskProgressMeasurementPendingHead", fields: [organizationId, projectId, taskId, pendingMeasurementId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, map: "TPMHead_pending_measurement_scope_fkey")
+  approvedMeasurementId                      String?                         @unique(map: "TPMHead_approved_measurement_key")
+  approvedMeasurement                        TaskProgressMeasurement?        @relation("TaskProgressMeasurementApprovedHead", fields: [organizationId, projectId, taskId, approvedMeasurementId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, map: "TPMHead_approved_measurement_scope_fkey")
+  revision                                   Int                             @default(0)
+  measurements                               TaskProgressMeasurement[]       @relation("TaskProgressMeasurementHeadLedger")
+  lastApprovedBalance                        TaskProgressMeasurementBalance? @relation("TaskProgressMeasurementBalanceLastHead")
+  createdAt                                  DateTime                        @default(now())
+  updatedAt                                  DateTime                        @updatedAt
+
+  @@unique([organizationId, projectId, taskId, periodStart], map: "TPMHead_scope_period_key")
+  @@unique([organizationId, projectId, taskId, id], map: "TPMHead_scope_id_key")
+  @@unique([organizationId, projectId, taskId, headMeasurementId], map: "TPMHead_scope_head_measurement_key")
+  @@unique([organizationId, projectId, taskId, pendingMeasurementId], map: "TPMHead_scope_pending_measurement_key")
+  @@unique([organizationId, projectId, taskId, approvedMeasurementId], map: "TPMHead_scope_approved_measurement_key")
+  @@index([organizationId, projectId, taskId, periodStart], map: "TPMHead_task_period_idx")
+}
+
+/// Immutable quantitative proposal/revision. Its effective status is derived
+/// from the optional append-only decision and the governed head projection.
+model TaskProgressMeasurement {
+  id                                 String                            @id @default(cuid())
+  organizationId                     String
+  organization                       Organization                      @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "TPM_organization_fkey")
+  projectId                          String
+  project                            Project                           @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "TPM_project_scope_fkey")
+  taskId                             String
+  task                               Task                              @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict, map: "TPM_task_scope_fkey")
+  headId                             String
+  head                               TaskProgressMeasurementHead       @relation("TaskProgressMeasurementHeadLedger", fields: [organizationId, projectId, taskId, headId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, map: "TPM_head_scope_fkey")
+  revision                           Int
+  predecessorId                      String?                           @unique(map: "TPM_predecessor_key")
+  predecessor                        TaskProgressMeasurement?          @relation("TaskProgressMeasurementRevisionChain", fields: [organizationId, projectId, taskId, predecessorId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, map: "TPM_predecessor_scope_fkey")
+  successor                          TaskProgressMeasurement?          @relation("TaskProgressMeasurementRevisionChain")
+  unitCode                           ProgressMeasurementUnitCode
+  baseQuantity                       Decimal                           @db.Decimal(18, 4)
+  periodQuantity                     Decimal                           @db.Decimal(18, 4)
+  cumulativeQuantity                 Decimal                           @db.Decimal(18, 4)
+  headRevisionAtSubmit               Int
+  approvedCumulativeQuantityAtSubmit Decimal                           @db.Decimal(18, 4)
+  balanceRevisionAtSubmit            Int
+  method                             ProgressMeasurementMethod
+  rationale                          String                            @db.VarChar(1000)
+  taskRevision                       Int
+  evidenceCount                      Int
+  evidenceSetHash                    String                            @db.Char(64)
+  preparedByMembershipId             String
+  preparedByMembership               TenantMembership                  @relation("TaskProgressMeasurementPreparer", fields: [organizationId, preparedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "TPM_preparer_membership_fkey")
+  operationKeyHash                   String                            @db.Char(64)
+  requestFingerprint                 String                            @db.Char(64)
+  evidenceLinks                      TaskProgressMeasurementEvidence[]
+  decision                           TaskProgressMeasurementDecision?
+  currentForHead                     TaskProgressMeasurementHead?      @relation("TaskProgressMeasurementCurrentHead")
+  pendingForHead                     TaskProgressMeasurementHead?      @relation("TaskProgressMeasurementPendingHead")
+  approvedForHead                    TaskProgressMeasurementHead?      @relation("TaskProgressMeasurementApprovedHead")
+  approvedBalance                    TaskProgressMeasurementBalance?   @relation("TaskProgressMeasurementBalanceLastMeasurement")
+  createdAt                          DateTime                          @default(now())
+
+  @@unique([organizationId, operationKeyHash], map: "TPM_org_operation_hash_key")
+  @@unique([headId, revision], map: "TPM_head_revision_key")
+  @@unique([organizationId, projectId, taskId, id], map: "TPM_scope_id_key")
+  @@unique([organizationId, projectId, taskId, predecessorId], map: "TPM_scope_predecessor_key")
+  @@index([organizationId, projectId, taskId, createdAt], map: "TPM_task_created_idx")
+}
+
+/// Immutable, DB-owned snapshot of approved ProgressEvidence linked to one
+/// proposal. No storage URL or mutable media payload is copied into this row.
+model TaskProgressMeasurementEvidence {
+  id                   String                  @id @default(cuid())
+  organizationId       String
+  organization         Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "TPMEvidence_organization_fkey")
+  projectId            String
+  project              Project                 @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "TPMEvidence_project_scope_fkey")
+  taskId               String
+  task                 Task                    @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict, map: "TPMEvidence_task_scope_fkey")
+  measurementId        String
+  measurement          TaskProgressMeasurement @relation(fields: [organizationId, projectId, taskId, measurementId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, map: "TPMEvidence_measurement_scope_fkey")
+  progressEvidenceId   String
+  progressEvidence     ProgressEvidence        @relation(fields: [projectId, progressEvidenceId], references: [projectId, id], onDelete: Restrict, map: "TPMEvidence_progress_evidence_fkey")
+  ordinal              Int
+  evidenceRevision     Int
+  evidenceCapturedAt   DateTime
+  evidenceSnapshotHash String                  @db.Char(64)
+  createdAt            DateTime                @default(now())
+
+  @@unique([measurementId, ordinal], map: "TPMEvidence_measurement_ordinal_key")
+  @@unique([measurementId, progressEvidenceId], map: "TPMEvidence_measurement_evidence_key")
+  @@index([organizationId, projectId, taskId, createdAt], map: "TPMEvidence_task_created_idx")
+}
+
+/// Append-only maker/checker decision. Rejection never mutates the approved
+/// balance; approval advances the head and balance projections atomically.
+model TaskProgressMeasurementDecision {
+  id                                      String                          @id @default(cuid())
+  organizationId                          String
+  organization                            Organization                    @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "TPMDecision_organization_fkey")
+  projectId                               String
+  project                                 Project                         @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "TPMDecision_project_scope_fkey")
+  taskId                                  String
+  task                                    Task                            @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict, map: "TPMDecision_task_scope_fkey")
+  measurementId                           String                          @unique(map: "TPMDecision_measurement_key")
+  measurement                             TaskProgressMeasurement         @relation(fields: [organizationId, projectId, taskId, measurementId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, map: "TPMDecision_measurement_scope_fkey")
+  decision                                ProgressMeasurementDecisionType
+  reason                                  String                          @db.VarChar(1000)
+  expectedHeadRevision                    Int
+  headRevisionAfterDecision               Int
+  approvedCumulativeQuantityAfterDecision Decimal                         @db.Decimal(18, 4)
+  balanceRevisionAfterDecision            Int
+  decidedByMembershipId                   String
+  decidedByMembership                     TenantMembership                @relation("TaskProgressMeasurementDecider", fields: [organizationId, decidedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "TPMDecision_decider_membership_fkey")
+  operationKeyHash                        String                          @db.Char(64)
+  requestFingerprint                      String                          @db.Char(64)
+  createdAt                               DateTime                        @default(now())
+
+  @@unique([organizationId, operationKeyHash], map: "TPMDecision_org_operation_hash_key")
+  @@unique([organizationId, projectId, taskId, id], map: "TPMDecision_scope_id_key")
+  @@unique([organizationId, projectId, taskId, measurementId], map: "TPMDecision_measurement_scope_key")
+  @@index([organizationId, projectId, taskId, createdAt], map: "TPMDecision_task_created_idx")
+}
+
+/// DB-owned quantitative projection per task. It is intentionally separate
+/// from Task.progress, certificates, payment state and every AI-derived value.
+model TaskProgressMeasurementBalance {
+  id                         String                      @id @default(cuid())
+  organizationId             String
+  organization               Organization                @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "TPMBalance_organization_fkey")
+  projectId                  String
+  project                    Project                     @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "TPMBalance_project_scope_fkey")
+  taskId                     String                      @unique(map: "TPMBalance_task_key")
+  task                       Task                        @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict, map: "TPMBalance_task_scope_fkey")
+  unitCode                   ProgressMeasurementUnitCode
+  baseQuantity               Decimal                     @db.Decimal(18, 4)
+  approvedCumulativeQuantity Decimal                     @db.Decimal(18, 4)
+  lastApprovedHeadId         String                      @unique(map: "TPMBalance_last_head_key")
+  lastApprovedHead           TaskProgressMeasurementHead @relation("TaskProgressMeasurementBalanceLastHead", fields: [organizationId, projectId, taskId, lastApprovedHeadId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, map: "TPMBalance_last_head_scope_fkey")
+  lastApprovedMeasurementId  String                      @unique(map: "TPMBalance_last_measurement_key")
+  lastApprovedMeasurement    TaskProgressMeasurement     @relation("TaskProgressMeasurementBalanceLastMeasurement", fields: [organizationId, projectId, taskId, lastApprovedMeasurementId], references: [organizationId, projectId, taskId, id], onDelete: Restrict, map: "TPMBalance_last_measurement_scope_fkey")
+  lastApprovedPeriodStart    DateTime                    @db.Date
+  revision                   Int                         @default(1)
+  createdAt                  DateTime                    @default(now())
+  updatedAt                  DateTime                    @updatedAt
+
+  @@unique([organizationId, projectId, taskId], map: "TPMBalance_scope_task_key")
+  @@unique([projectId, taskId], map: "TPMBalance_project_task_key")
+  @@unique([organizationId, projectId, taskId, lastApprovedHeadId], map: "TPMBalance_scope_last_head_key")
+  @@unique([organizationId, projectId, taskId, lastApprovedMeasurementId], map: "TPMBalance_scope_last_measurement_key")
+  @@index([organizationId, projectId, lastApprovedPeriodStart], map: "TPMBalance_project_period_idx")
 }
 
 model ProgressEvidenceCaptureSession {
@@ -4097,45 +4309,45 @@ model WorkerOnboardingFlowSession {
 /// Tenant-scoped intake record for one privacy-rights request. PRO-05A only
 /// permits authority-attested discovery; it deliberately has no destructive state.
 model DataSubjectRequest {
-  id                        String                        @id @default(cuid())
-  organizationId            String
-  organization              Organization                  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  type                      DataSubjectRequestType
-  subjectKind               DataSubjectKind
-  subjectMembershipId       String?
-  subjectMembership         TenantMembership?             @relation("DataSubjectRequestSubjectMembership", fields: [organizationId, subjectMembershipId], references: [organizationId, id], onDelete: Restrict, map: "DataSubjectRequest_subject_membership_fkey")
-  workerPersonId            String?
-  workerPerson              WorkerPerson?                 @relation("DataSubjectRequestWorkerPerson", fields: [organizationId, workerPersonId], references: [organizationId, id], onDelete: Restrict, map: "DataSubjectRequest_worker_person_fkey")
-  status                    DataSubjectRequestStatus      @default(RECEIVED)
-  schemaVersion             Int                           @default(1)
-  operationKeyHash          String                        @db.Char(64)
-  requestFingerprint        String                        @db.Char(64)
-  receivedByMembershipId    String
-  receivedByMembership      TenantMembership              @relation("DataSubjectRequestReceivedBy", fields: [organizationId, receivedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "DataSubjectRequest_received_by_fkey")
-  attestedByMembershipId    String?
-  attestedByMembership      TenantMembership?             @relation("DataSubjectRequestAttestedBy", fields: [organizationId, attestedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "DataSubjectRequest_attested_by_fkey")
-  completedByMembershipId   String?
-  completedByMembership     TenantMembership?             @relation("DataSubjectRequestCompletedBy", fields: [organizationId, completedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "DataSubjectRequest_completed_by_fkey")
-  attestationPolicyVersion  String?                       @db.VarChar(64)
-  attestationMethod         String?                       @db.VarChar(64)
-  attestationEvidenceSha256 String?                       @db.Char(64)
-  discoveryCatalogVersion   String?                       @db.VarChar(64)
-  discoveryCatalogSha256    String?                       @db.Char(64)
-  receivedAt                DateTime                      @default(now()) @db.Timestamptz(3)
-  attestedAt                DateTime?                     @db.Timestamptz(3)
-  discoveryStartedAt        DateTime?                     @db.Timestamptz(3)
-  terminalAt                DateTime?                     @db.Timestamptz(3)
-  terminalReasonCode        String?                       @db.VarChar(64)
-  revision                  Int                           @default(0)
-  manifest                  DataSubjectDiscoveryManifest?
+  id                          String                                  @id @default(cuid())
+  organizationId              String
+  organization                Organization                            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  type                        DataSubjectRequestType
+  subjectKind                 DataSubjectKind
+  subjectMembershipId         String?
+  subjectMembership           TenantMembership?                       @relation("DataSubjectRequestSubjectMembership", fields: [organizationId, subjectMembershipId], references: [organizationId, id], onDelete: Restrict, map: "DataSubjectRequest_subject_membership_fkey")
+  workerPersonId              String?
+  workerPerson                WorkerPerson?                           @relation("DataSubjectRequestWorkerPerson", fields: [organizationId, workerPersonId], references: [organizationId, id], onDelete: Restrict, map: "DataSubjectRequest_worker_person_fkey")
+  status                      DataSubjectRequestStatus                @default(RECEIVED)
+  schemaVersion               Int                                     @default(1)
+  operationKeyHash            String                                  @db.Char(64)
+  requestFingerprint          String                                  @db.Char(64)
+  receivedByMembershipId      String
+  receivedByMembership        TenantMembership                        @relation("DataSubjectRequestReceivedBy", fields: [organizationId, receivedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "DataSubjectRequest_received_by_fkey")
+  attestedByMembershipId      String?
+  attestedByMembership        TenantMembership?                       @relation("DataSubjectRequestAttestedBy", fields: [organizationId, attestedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "DataSubjectRequest_attested_by_fkey")
+  completedByMembershipId     String?
+  completedByMembership       TenantMembership?                       @relation("DataSubjectRequestCompletedBy", fields: [organizationId, completedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "DataSubjectRequest_completed_by_fkey")
+  attestationPolicyVersion    String?                                 @db.VarChar(64)
+  attestationMethod           String?                                 @db.VarChar(64)
+  attestationEvidenceSha256   String?                                 @db.Char(64)
+  discoveryCatalogVersion     String?                                 @db.VarChar(64)
+  discoveryCatalogSha256      String?                                 @db.Char(64)
+  receivedAt                  DateTime                                @default(now()) @db.Timestamptz(3)
+  attestedAt                  DateTime?                               @db.Timestamptz(3)
+  discoveryStartedAt          DateTime?                               @db.Timestamptz(3)
+  terminalAt                  DateTime?                               @db.Timestamptz(3)
+  terminalReasonCode          String?                                 @db.VarChar(64)
+  revision                    Int                                     @default(0)
+  manifest                    DataSubjectDiscoveryManifest?
   requesterVerificationEvents DataSubjectRequesterVerificationEvent[]
   legalAssessmentRevisions    DataSubjectLegalAssessmentRevision[]
   legalHolds                  DataSubjectLegalHold[]
   legalHoldEvents             DataSubjectLegalHoldEvent[]
   decisionSets                DataSubjectDecisionSet[]
   decisionItems               DataSubjectDecisionItem[]
-  createdAt                 DateTime                      @default(now()) @db.Timestamptz(3)
-  updatedAt                 DateTime                      @updatedAt @db.Timestamptz(3)
+  createdAt                   DateTime                                @default(now()) @db.Timestamptz(3)
+  updatedAt                   DateTime                                @updatedAt @db.Timestamptz(3)
 
   @@unique([organizationId, id], map: "DataSubjectRequest_org_id_key")
   @@unique([organizationId, operationKeyHash], map: "DataSubjectRequest_org_operation_key")
@@ -4148,25 +4360,25 @@ model DataSubjectRequest {
 
 /// Immutable, hash-bound result of one read-only subject discovery pass.
 model DataSubjectDiscoveryManifest {
-  id                   String                     @id @default(cuid())
-  organizationId       String
-  organization         Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  requestId            String
-  request              DataSubjectRequest         @relation(fields: [organizationId, requestId], references: [organizationId, id], onDelete: Restrict, map: "DataSubjectDiscoveryManifest_request_fkey")
-  outcome              DataSubjectManifestOutcome
-  schemaVersion        Int                        @default(1)
-  catalogVersion       String                     @db.VarChar(64)
-  catalogSha256        String                     @db.Char(64)
-  sourceSnapshotAt     DateTime                   @db.Timestamptz(3)
-  itemCount            Int
-  blockerCount         Int
-  manifestSha256       String                     @db.Char(64)
-  operationKeyHash     String                     @db.Char(64)
-  requestFingerprint   String                     @db.Char(64)
-  sealedByMembershipId String
-  sealedByMembership   TenantMembership           @relation("DataSubjectManifestSealedBy", fields: [organizationId, sealedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "DataSubjectDiscoveryManifest_sealed_by_fkey")
-  sealedAt             DateTime                   @default(now()) @db.Timestamptz(3)
-  items                DataSubjectDiscoveryItem[]
+  id                       String                               @id @default(cuid())
+  organizationId           String
+  organization             Organization                         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  requestId                String
+  request                  DataSubjectRequest                   @relation(fields: [organizationId, requestId], references: [organizationId, id], onDelete: Restrict, map: "DataSubjectDiscoveryManifest_request_fkey")
+  outcome                  DataSubjectManifestOutcome
+  schemaVersion            Int                                  @default(1)
+  catalogVersion           String                               @db.VarChar(64)
+  catalogSha256            String                               @db.Char(64)
+  sourceSnapshotAt         DateTime                             @db.Timestamptz(3)
+  itemCount                Int
+  blockerCount             Int
+  manifestSha256           String                               @db.Char(64)
+  operationKeyHash         String                               @db.Char(64)
+  requestFingerprint       String                               @db.Char(64)
+  sealedByMembershipId     String
+  sealedByMembership       TenantMembership                     @relation("DataSubjectManifestSealedBy", fields: [organizationId, sealedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "DataSubjectDiscoveryManifest_sealed_by_fkey")
+  sealedAt                 DateTime                             @default(now()) @db.Timestamptz(3)
+  items                    DataSubjectDiscoveryItem[]
   legalAssessmentRevisions DataSubjectLegalAssessmentRevision[]
   legalHolds               DataSubjectLegalHold[]
   decisionSets             DataSubjectDecisionSet[]
@@ -4217,36 +4429,36 @@ model DataSubjectDiscoveryItem {
 /// revoked proportional requester verification. It never stores identity
 /// documents, channel addresses or representative identifiers.
 model DataSubjectRequesterVerificationEvent {
-  id                              String                           @id @default(cuid())
-  organizationId                  String
-  organization                    Organization                     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  requestId                       String
-  request                         DataSubjectRequest                @relation(fields: [organizationId, requestId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectVerificationEvent_request_fkey")
-  sequence                        Int
-  predecessorEventId              String?
-  predecessorEvent                DataSubjectRequesterVerificationEvent? @relation("DataSubjectVerificationEventChain", fields: [organizationId, requestId, predecessorEventId], references: [organizationId, requestId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectVerificationEvent_predecessor_fkey")
-  successorEvents                 DataSubjectRequesterVerificationEvent[] @relation("DataSubjectVerificationEventChain")
-  kind                            DataSubjectVerificationEventKind
-  requesterKind                   DataSubjectRequesterKind?
-  assuranceLevel                  DataSubjectAssuranceLevel?
-  verificationMethodCode          String?                          @db.VarChar(64)
-  verificationPolicyVersion       String?                          @db.VarChar(64)
-  fingerprintKeyId                String                           @db.VarChar(100)
-  requesterFingerprintHmac        String?                          @db.Char(64)
-  identityEvidenceSha256          String?                          @db.Char(64)
-  challengeEvidenceSha256         String?                          @db.Char(64)
-  subjectIdentityRecordVersion    Int?
-  representationMethodCode        String?                          @db.VarChar(64)
-  representationEvidenceSha256    String?                          @db.Char(64)
-  validUntil                      DateTime?                        @db.Timestamptz(3)
-  representationValidUntil       DateTime?                        @db.Timestamptz(3)
-  revocationReasonCode            String?                          @db.VarChar(64)
-  actorMembershipId               String
-  actorMembership                 TenantMembership                 @relation("DataSubjectVerificationActor", fields: [organizationId, actorMembershipId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectVerificationEvent_actor_fkey")
-  operationKeyHash                String                           @db.Char(64)
-  requestFingerprint              String                           @db.Char(64)
-  occurredAt                      DateTime                         @default(now()) @db.Timestamptz(3)
-  decisionSets                    DataSubjectDecisionSet[]
+  id                           String                                  @id @default(cuid())
+  organizationId               String
+  organization                 Organization                            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  requestId                    String
+  request                      DataSubjectRequest                      @relation(fields: [organizationId, requestId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectVerificationEvent_request_fkey")
+  sequence                     Int
+  predecessorEventId           String?
+  predecessorEvent             DataSubjectRequesterVerificationEvent?  @relation("DataSubjectVerificationEventChain", fields: [organizationId, requestId, predecessorEventId], references: [organizationId, requestId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectVerificationEvent_predecessor_fkey")
+  successorEvents              DataSubjectRequesterVerificationEvent[] @relation("DataSubjectVerificationEventChain")
+  kind                         DataSubjectVerificationEventKind
+  requesterKind                DataSubjectRequesterKind?
+  assuranceLevel               DataSubjectAssuranceLevel?
+  verificationMethodCode       String?                                 @db.VarChar(64)
+  verificationPolicyVersion    String?                                 @db.VarChar(64)
+  fingerprintKeyId             String                                  @db.VarChar(100)
+  requesterFingerprintHmac     String?                                 @db.Char(64)
+  identityEvidenceSha256       String?                                 @db.Char(64)
+  challengeEvidenceSha256      String?                                 @db.Char(64)
+  subjectIdentityRecordVersion Int?
+  representationMethodCode     String?                                 @db.VarChar(64)
+  representationEvidenceSha256 String?                                 @db.Char(64)
+  validUntil                   DateTime?                               @db.Timestamptz(3)
+  representationValidUntil     DateTime?                               @db.Timestamptz(3)
+  revocationReasonCode         String?                                 @db.VarChar(64)
+  actorMembershipId            String
+  actorMembership              TenantMembership                        @relation("DataSubjectVerificationActor", fields: [organizationId, actorMembershipId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectVerificationEvent_actor_fkey")
+  operationKeyHash             String                                  @db.Char(64)
+  requestFingerprint           String                                  @db.Char(64)
+  occurredAt                   DateTime                                @default(now()) @db.Timestamptz(3)
+  decisionSets                 DataSubjectDecisionSet[]
 
   @@unique([organizationId, requestId, id], map: "DataSubjectVerificationEvent_scope_id_key")
   @@unique([organizationId, requestId, sequence], map: "DataSubjectVerificationEvent_scope_sequence_key")
@@ -4257,31 +4469,31 @@ model DataSubjectRequesterVerificationEvent {
 /// Append-only human-reviewed jurisdiction, deadline and retention-policy
 /// snapshot. The reviewed date is evidence, not an automated legal opinion.
 model DataSubjectLegalAssessmentRevision {
-  id                        String                         @id @default(cuid())
+  id                        String                               @id @default(cuid())
   organizationId            String
-  organization              Organization                   @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  organization              Organization                         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   requestId                 String
-  request                   DataSubjectRequest              @relation(fields: [organizationId, requestId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectLegalAssessment_request_fkey")
+  request                   DataSubjectRequest                   @relation(fields: [organizationId, requestId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectLegalAssessment_request_fkey")
   manifestId                String
-  manifest                  DataSubjectDiscoveryManifest    @relation(fields: [organizationId, requestId, manifestId], references: [organizationId, requestId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectLegalAssessment_manifest_fkey")
+  manifest                  DataSubjectDiscoveryManifest         @relation(fields: [organizationId, requestId, manifestId], references: [organizationId, requestId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectLegalAssessment_manifest_fkey")
   sequence                  Int
   predecessorAssessmentId   String?
-  predecessorAssessment     DataSubjectLegalAssessmentRevision? @relation("DataSubjectLegalAssessmentChain", fields: [organizationId, requestId, predecessorAssessmentId], references: [organizationId, requestId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectLegalAssessment_predecessor_fkey")
+  predecessorAssessment     DataSubjectLegalAssessmentRevision?  @relation("DataSubjectLegalAssessmentChain", fields: [organizationId, requestId, predecessorAssessmentId], references: [organizationId, requestId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectLegalAssessment_predecessor_fkey")
   successorAssessments      DataSubjectLegalAssessmentRevision[] @relation("DataSubjectLegalAssessmentChain")
-  jurisdictionCode          String                         @db.VarChar(16)
+  jurisdictionCode          String                               @db.VarChar(16)
   deadlineMethod            DataSubjectLegalDeadlineMethod
-  dueAt                     DateTime                       @db.Timestamptz(3)
-  deadlinePolicyVersion     String                         @db.VarChar(64)
-  deadlinePolicySha256      String                         @db.Char(64)
-  retentionMatrixVersion    String                         @db.VarChar(64)
-  retentionMatrixSha256     String                         @db.Char(64)
-  legalReviewEvidenceSha256 String                         @db.Char(64)
+  dueAt                     DateTime                             @db.Timestamptz(3)
+  deadlinePolicyVersion     String                               @db.VarChar(64)
+  deadlinePolicySha256      String                               @db.Char(64)
+  retentionMatrixVersion    String                               @db.VarChar(64)
+  retentionMatrixSha256     String                               @db.Char(64)
+  legalReviewEvidenceSha256 String                               @db.Char(64)
   actorMembershipId         String
-  actorMembership           TenantMembership               @relation("DataSubjectLegalAssessmentActor", fields: [organizationId, actorMembershipId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectLegalAssessment_actor_fkey")
-  operationKeyHash          String                         @db.Char(64)
-  requestFingerprint        String                         @db.Char(64)
-  fingerprintKeyId          String                         @db.VarChar(100)
-  assessedAt                DateTime                       @default(now()) @db.Timestamptz(3)
+  actorMembership           TenantMembership                     @relation("DataSubjectLegalAssessmentActor", fields: [organizationId, actorMembershipId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectLegalAssessment_actor_fkey")
+  operationKeyHash          String                               @db.Char(64)
+  requestFingerprint        String                               @db.Char(64)
+  fingerprintKeyId          String                               @db.VarChar(100)
+  assessedAt                DateTime                             @default(now()) @db.Timestamptz(3)
   decisionSets              DataSubjectDecisionSet[]
 
   @@unique([organizationId, requestId, id], map: "DataSubjectLegalAssessment_scope_id_key")
@@ -4293,24 +4505,24 @@ model DataSubjectLegalAssessmentRevision {
 /// Immutable legal-hold scope. Current status and review evidence are derived
 /// exclusively from its append-only event chain.
 model DataSubjectLegalHold {
-  id                      String                      @id @default(cuid())
-  organizationId          String
-  organization            Organization                @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  requestId               String
-  request                 DataSubjectRequest           @relation(fields: [organizationId, requestId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectLegalHold_request_fkey")
-  manifestId              String
-  manifest                DataSubjectDiscoveryManifest @relation(fields: [organizationId, requestId, manifestId], references: [organizationId, requestId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectLegalHold_manifest_fkey")
-  scopeKind               DataSubjectHoldScopeKind
-  discoveryItemId         String?
-  discoveryItem           DataSubjectDiscoveryItem?    @relation(fields: [organizationId, requestId, manifestId, discoveryItemId], references: [organizationId, requestId, manifestId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectLegalHold_item_fkey")
-  category                DataSubjectDataCategory?
-  createdByMembershipId   String
-  createdByMembership     TenantMembership              @relation("DataSubjectLegalHoldCreator", fields: [organizationId, createdByMembershipId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectLegalHold_creator_fkey")
-  operationKeyHash        String                        @db.Char(64)
-  requestFingerprint      String                        @db.Char(64)
-  fingerprintKeyId        String                        @db.VarChar(100)
-  createdAt               DateTime                      @default(now()) @db.Timestamptz(3)
-  events                  DataSubjectLegalHoldEvent[]
+  id                    String                       @id @default(cuid())
+  organizationId        String
+  organization          Organization                 @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  requestId             String
+  request               DataSubjectRequest           @relation(fields: [organizationId, requestId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectLegalHold_request_fkey")
+  manifestId            String
+  manifest              DataSubjectDiscoveryManifest @relation(fields: [organizationId, requestId, manifestId], references: [organizationId, requestId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectLegalHold_manifest_fkey")
+  scopeKind             DataSubjectHoldScopeKind
+  discoveryItemId       String?
+  discoveryItem         DataSubjectDiscoveryItem?    @relation(fields: [organizationId, requestId, manifestId, discoveryItemId], references: [organizationId, requestId, manifestId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectLegalHold_item_fkey")
+  category              DataSubjectDataCategory?
+  createdByMembershipId String
+  createdByMembership   TenantMembership             @relation("DataSubjectLegalHoldCreator", fields: [organizationId, createdByMembershipId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectLegalHold_creator_fkey")
+  operationKeyHash      String                       @db.Char(64)
+  requestFingerprint    String                       @db.Char(64)
+  fingerprintKeyId      String                       @db.VarChar(100)
+  createdAt             DateTime                     @default(now()) @db.Timestamptz(3)
+  events                DataSubjectLegalHoldEvent[]
 
   @@unique([organizationId, requestId, id], map: "DataSubjectLegalHold_scope_id_key")
   @@unique([organizationId, requestId, manifestId, id], map: "DataSubjectLegalHold_manifest_scope_id_key")
@@ -4320,32 +4532,32 @@ model DataSubjectLegalHold {
 
 /// Append-only create, review and release evidence for one bounded legal hold.
 model DataSubjectLegalHoldEvent {
-  id                     String                    @id @default(cuid())
-  organizationId         String
-  organization           Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  requestId              String
-  request                DataSubjectRequest         @relation(fields: [organizationId, requestId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectLegalHoldEvent_request_fkey")
-  holdId                 String
-  hold                   DataSubjectLegalHold       @relation(fields: [organizationId, requestId, holdId], references: [organizationId, requestId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectLegalHoldEvent_hold_fkey")
-  sequence               Int
-  predecessorEventId     String?
-  predecessorEvent       DataSubjectLegalHoldEvent? @relation("DataSubjectLegalHoldEventChain", fields: [organizationId, requestId, holdId, predecessorEventId], references: [organizationId, requestId, holdId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectLegalHoldEvent_predecessor_fkey")
-  successorEvents        DataSubjectLegalHoldEvent[] @relation("DataSubjectLegalHoldEventChain")
-  kind                   DataSubjectHoldEventKind
-  basisCode              String?                   @db.VarChar(64)
-  policyVersion          String?                   @db.VarChar(64)
-  evidenceSha256         String?                   @db.Char(64)
-  ownerMembershipId      String?
-  ownerMembership        TenantMembership?         @relation("DataSubjectLegalHoldOwner", fields: [organizationId, ownerMembershipId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectLegalHoldEvent_owner_fkey")
-  reviewDueAt            DateTime?                 @db.Timestamptz(3)
-  releaseReasonCode      String?                   @db.VarChar(64)
-  releaseEvidenceSha256  String?                   @db.Char(64)
-  actorMembershipId      String
-  actorMembership        TenantMembership           @relation("DataSubjectLegalHoldEventActor", fields: [organizationId, actorMembershipId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectLegalHoldEvent_actor_fkey")
-  operationKeyHash       String                     @db.Char(64)
-  requestFingerprint     String                     @db.Char(64)
-  fingerprintKeyId       String                     @db.VarChar(100)
-  occurredAt             DateTime                   @default(now()) @db.Timestamptz(3)
+  id                    String                      @id @default(cuid())
+  organizationId        String
+  organization          Organization                @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  requestId             String
+  request               DataSubjectRequest          @relation(fields: [organizationId, requestId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectLegalHoldEvent_request_fkey")
+  holdId                String
+  hold                  DataSubjectLegalHold        @relation(fields: [organizationId, requestId, holdId], references: [organizationId, requestId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectLegalHoldEvent_hold_fkey")
+  sequence              Int
+  predecessorEventId    String?
+  predecessorEvent      DataSubjectLegalHoldEvent?  @relation("DataSubjectLegalHoldEventChain", fields: [organizationId, requestId, holdId, predecessorEventId], references: [organizationId, requestId, holdId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectLegalHoldEvent_predecessor_fkey")
+  successorEvents       DataSubjectLegalHoldEvent[] @relation("DataSubjectLegalHoldEventChain")
+  kind                  DataSubjectHoldEventKind
+  basisCode             String?                     @db.VarChar(64)
+  policyVersion         String?                     @db.VarChar(64)
+  evidenceSha256        String?                     @db.Char(64)
+  ownerMembershipId     String?
+  ownerMembership       TenantMembership?           @relation("DataSubjectLegalHoldOwner", fields: [organizationId, ownerMembershipId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectLegalHoldEvent_owner_fkey")
+  reviewDueAt           DateTime?                   @db.Timestamptz(3)
+  releaseReasonCode     String?                     @db.VarChar(64)
+  releaseEvidenceSha256 String?                     @db.Char(64)
+  actorMembershipId     String
+  actorMembership       TenantMembership            @relation("DataSubjectLegalHoldEventActor", fields: [organizationId, actorMembershipId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectLegalHoldEvent_actor_fkey")
+  operationKeyHash      String                      @db.Char(64)
+  requestFingerprint    String                      @db.Char(64)
+  fingerprintKeyId      String                      @db.VarChar(100)
+  occurredAt            DateTime                    @default(now()) @db.Timestamptz(3)
 
   @@unique([organizationId, requestId, holdId, id], map: "DataSubjectLegalHoldEvent_scope_id_key")
   @@unique([organizationId, requestId, holdId, sequence], map: "DataSubjectLegalHoldEvent_scope_sequence_key")
@@ -4356,46 +4568,46 @@ model DataSubjectLegalHoldEvent {
 /// Versioned, maker-checker decision envelope. PRO-05B.1 can only seal a
 /// blocked, non-executable review result.
 model DataSubjectDecisionSet {
-  id                            String                         @id @default(cuid())
-  organizationId                String
-  organization                  Organization                   @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  requestId                     String
-  request                       DataSubjectRequest              @relation(fields: [organizationId, requestId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectDecisionSet_request_fkey")
-  manifestId                    String
-  manifest                      DataSubjectDiscoveryManifest    @relation(fields: [organizationId, requestId, manifestId], references: [organizationId, requestId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectDecisionSet_manifest_fkey")
-  revision                      Int
-  predecessorDecisionId         String?
-  predecessorDecision           DataSubjectDecisionSet?         @relation("DataSubjectDecisionChain", fields: [organizationId, requestId, predecessorDecisionId], references: [organizationId, requestId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectDecisionSet_predecessor_fkey")
-  successorDecisions            DataSubjectDecisionSet[]         @relation("DataSubjectDecisionChain")
-  status                        DataSubjectDecisionStatus        @default(DRAFTING)
-  schemaVersion                 Int                              @default(1)
-  verificationEventId           String
-  verificationEvent             DataSubjectRequesterVerificationEvent @relation(fields: [organizationId, requestId, verificationEventId], references: [organizationId, requestId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectDecisionSet_verification_fkey")
-  legalAssessmentId             String
-  legalAssessment               DataSubjectLegalAssessmentRevision @relation(fields: [organizationId, requestId, legalAssessmentId], references: [organizationId, requestId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectDecisionSet_assessment_fkey")
-  manifestSha256                String?                          @db.Char(64)
-  holdSetSha256                 String?                          @db.Char(64)
-  itemCount                     Int?
-  unresolvedCount               Int?
-  activeHoldCount               Int?
-  decisionSha256                String?                          @db.Char(64)
-  preparedByMembershipId        String
-  preparedByMembership          TenantMembership                 @relation("DataSubjectDecisionPreparer", fields: [organizationId, preparedByMembershipId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectDecisionSet_preparer_fkey")
-  decidedByMembershipId         String?
-  decidedByMembership           TenantMembership?                @relation("DataSubjectDecisionChecker", fields: [organizationId, decidedByMembershipId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectDecisionSet_checker_fkey")
-  operationKeyHash              String                           @db.Char(64)
-  requestFingerprint            String                           @db.Char(64)
-  fingerprintKeyId              String                           @db.VarChar(100)
-  decisionOperationKeyHash      String?                          @db.Char(64)
-  decisionRequestFingerprint    String?                          @db.Char(64)
-  decisionFingerprintKeyId      String?                          @db.VarChar(100)
-  decisionReasonCode            String?                          @db.VarChar(64)
-  preparedAt                    DateTime                         @default(now()) @db.Timestamptz(3)
-  pendingAt                     DateTime?                        @db.Timestamptz(3)
-  decidedAt                     DateTime?                        @db.Timestamptz(3)
-  createdAt                     DateTime                         @default(now()) @db.Timestamptz(3)
-  updatedAt                     DateTime                         @updatedAt @db.Timestamptz(3)
-  items                         DataSubjectDecisionItem[]
+  id                         String                                @id @default(cuid())
+  organizationId             String
+  organization               Organization                          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  requestId                  String
+  request                    DataSubjectRequest                    @relation(fields: [organizationId, requestId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectDecisionSet_request_fkey")
+  manifestId                 String
+  manifest                   DataSubjectDiscoveryManifest          @relation(fields: [organizationId, requestId, manifestId], references: [organizationId, requestId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectDecisionSet_manifest_fkey")
+  revision                   Int
+  predecessorDecisionId      String?
+  predecessorDecision        DataSubjectDecisionSet?               @relation("DataSubjectDecisionChain", fields: [organizationId, requestId, predecessorDecisionId], references: [organizationId, requestId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectDecisionSet_predecessor_fkey")
+  successorDecisions         DataSubjectDecisionSet[]              @relation("DataSubjectDecisionChain")
+  status                     DataSubjectDecisionStatus             @default(DRAFTING)
+  schemaVersion              Int                                   @default(1)
+  verificationEventId        String
+  verificationEvent          DataSubjectRequesterVerificationEvent @relation(fields: [organizationId, requestId, verificationEventId], references: [organizationId, requestId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectDecisionSet_verification_fkey")
+  legalAssessmentId          String
+  legalAssessment            DataSubjectLegalAssessmentRevision    @relation(fields: [organizationId, requestId, legalAssessmentId], references: [organizationId, requestId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectDecisionSet_assessment_fkey")
+  manifestSha256             String?                               @db.Char(64)
+  holdSetSha256              String?                               @db.Char(64)
+  itemCount                  Int?
+  unresolvedCount            Int?
+  activeHoldCount            Int?
+  decisionSha256             String?                               @db.Char(64)
+  preparedByMembershipId     String
+  preparedByMembership       TenantMembership                      @relation("DataSubjectDecisionPreparer", fields: [organizationId, preparedByMembershipId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectDecisionSet_preparer_fkey")
+  decidedByMembershipId      String?
+  decidedByMembership        TenantMembership?                     @relation("DataSubjectDecisionChecker", fields: [organizationId, decidedByMembershipId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectDecisionSet_checker_fkey")
+  operationKeyHash           String                                @db.Char(64)
+  requestFingerprint         String                                @db.Char(64)
+  fingerprintKeyId           String                                @db.VarChar(100)
+  decisionOperationKeyHash   String?                               @db.Char(64)
+  decisionRequestFingerprint String?                               @db.Char(64)
+  decisionFingerprintKeyId   String?                               @db.VarChar(100)
+  decisionReasonCode         String?                               @db.VarChar(64)
+  preparedAt                 DateTime                              @default(now()) @db.Timestamptz(3)
+  pendingAt                  DateTime?                             @db.Timestamptz(3)
+  decidedAt                  DateTime?                             @db.Timestamptz(3)
+  createdAt                  DateTime                              @default(now()) @db.Timestamptz(3)
+  updatedAt                  DateTime                              @updatedAt @db.Timestamptz(3)
+  items                      DataSubjectDecisionItem[]
 
   @@unique([organizationId, requestId, id], map: "DataSubjectDecisionSet_scope_id_key")
   @@unique([organizationId, requestId, manifestId, id], map: "DataSubjectDecisionSet_manifest_scope_id_key")
@@ -4412,20 +4624,20 @@ model DataSubjectDecisionItem {
   organizationId         String
   organization           Organization                 @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   requestId              String
-  request                DataSubjectRequest            @relation(fields: [organizationId, requestId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectDecisionItem_request_fkey")
+  request                DataSubjectRequest           @relation(fields: [organizationId, requestId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectDecisionItem_request_fkey")
   manifestId             String
-  manifest               DataSubjectDiscoveryManifest  @relation(fields: [organizationId, requestId, manifestId], references: [organizationId, requestId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectDecisionItem_manifest_fkey")
+  manifest               DataSubjectDiscoveryManifest @relation(fields: [organizationId, requestId, manifestId], references: [organizationId, requestId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectDecisionItem_manifest_fkey")
   decisionSetId          String
-  decisionSet            DataSubjectDecisionSet         @relation(fields: [organizationId, requestId, manifestId, decisionSetId], references: [organizationId, requestId, manifestId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectDecisionItem_decision_fkey")
+  decisionSet            DataSubjectDecisionSet       @relation(fields: [organizationId, requestId, manifestId, decisionSetId], references: [organizationId, requestId, manifestId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectDecisionItem_decision_fkey")
   discoveryItemId        String
-  discoveryItem          DataSubjectDiscoveryItem       @relation(fields: [organizationId, requestId, manifestId, discoveryItemId], references: [organizationId, requestId, manifestId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectDecisionItem_discovery_item_fkey")
+  discoveryItem          DataSubjectDiscoveryItem     @relation(fields: [organizationId, requestId, manifestId, discoveryItemId], references: [organizationId, requestId, manifestId, id], onDelete: Restrict, onUpdate: Restrict, map: "DataSubjectDecisionItem_discovery_item_fkey")
   ordinal                Int
   action                 DataSubjectDecisionAction
-  legalBasisCode         String?                       @db.VarChar(64)
-  retentionPolicyVersion String?                       @db.VarChar(64)
-  retentionRuleCode      String?                       @db.VarChar(64)
-  retentionUntil         DateTime?                     @db.Timestamptz(3)
-  createdAt              DateTime                      @default(now()) @db.Timestamptz(3)
+  legalBasisCode         String?                      @db.VarChar(64)
+  retentionPolicyVersion String?                      @db.VarChar(64)
+  retentionRuleCode      String?                      @db.VarChar(64)
+  retentionUntil         DateTime?                    @db.Timestamptz(3)
+  createdAt              DateTime                     @default(now()) @db.Timestamptz(3)
 
   @@unique([organizationId, decisionSetId, discoveryItemId], map: "DataSubjectDecisionItem_decision_item_key")
   @@unique([organizationId, decisionSetId, ordinal], map: "DataSubjectDecisionItem_decision_ordinal_key")

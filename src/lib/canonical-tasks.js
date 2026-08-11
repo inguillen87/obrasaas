@@ -14,6 +14,14 @@ const DEPENDENCY_TYPES = new Set([
 const CANONICAL_TASK_SOURCE = 'canonical-task-v1';
 const SCHEDULE_ANCHOR = 'PROJECT_START';
 const SCHEDULE_SCHEMA_VERSION = 1;
+const PROGRESS_MEASUREMENT_FOREIGN_KEY_MARKERS = Object.freeze([
+  'TPMHEAD_TASK_IDENTITY_FKEY',
+  'TPM_TASK_SCOPE_FKEY',
+  'TPMEVIDENCE_TASK_SCOPE_FKEY',
+  'TPMDECISION_TASK_SCOPE_FKEY',
+  'TPMBALANCE_TASK_SCOPE_FKEY',
+  'TASKPROGRESSMEASUREMENT',
+]);
 
 function record(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
@@ -108,6 +116,50 @@ export class CanonicalTaskError extends Error {
     this.status = status;
     this.details = details;
   }
+}
+
+function databaseErrorText(error) {
+  return [
+    error?.message,
+    error?.meta?.message,
+    error?.meta?.database_error,
+    error?.meta?.field_name,
+    error?.meta?.constraint,
+    error?.meta?.cause,
+  ]
+    .flatMap((value) => (Array.isArray(value) ? value : [value]))
+    .filter((value) => typeof value === 'string')
+    .join(' ')
+    .toUpperCase();
+}
+
+function progressMeasurementHistoryError(operation) {
+  const action = operation === 'delete'
+    ? 'eliminarse'
+    : 'cambiar de tipo ni perder su origen canónico';
+  return new CanonicalTaskError(
+    `La tarea tiene historial de mediciones de avance y no puede ${action}; conservála para mantener la trazabilidad.`,
+    'CANONICAL_TASK_HAS_PROGRESS_MEASUREMENTS',
+    409,
+  );
+}
+
+function canonicalTaskPersistenceError(error, operation) {
+  const errorText = databaseErrorText(error);
+  if (
+    errorText.includes('PROGRESS_MEASUREMENT_TASK_IDENTITY_IMMUTABLE')
+    || PROGRESS_MEASUREMENT_FOREIGN_KEY_MARKERS.some((marker) => errorText.includes(marker))
+  ) {
+    return progressMeasurementHistoryError(operation);
+  }
+  if (operation === 'delete' && ['P2003', '23503'].includes(error?.code)) {
+    return new CanonicalTaskError(
+      'La tarea está vinculada a historial operativo y no puede eliminarse; conservála para mantener la trazabilidad.',
+      'CANONICAL_TASK_IN_USE',
+      409,
+    );
+  }
+  return null;
 }
 
 function text(value, field, max, { required = false } = {}) {
@@ -397,13 +449,25 @@ export async function updateCanonicalTask(prisma, {
       }
     }
     let metadata;
-    if (schedule !== undefined) {
+    if (schedule !== undefined || normalized.type !== undefined) {
       const current = await transaction.task.findFirst({
         where: { id, projectId, revision, metadata: { path: ['source'], equals: CANONICAL_TASK_SOURCE } },
-        select: { metadata: true },
+        select: { metadata: true, type: true },
       });
-      if (!current) throw new CanonicalTaskError('La tarea cambiÃ³; recargÃ¡ y reintentÃ¡.', 'CANONICAL_TASK_STALE', 409);
-      metadata = canonicalMetadata(current.metadata, schedule);
+      if (!current) throw new CanonicalTaskError('La tarea cambió; recargá y reintentá.', 'CANONICAL_TASK_STALE', 409);
+      metadata = schedule === undefined
+        ? undefined
+        : canonicalMetadata(current.metadata, schedule);
+      const nextSource = record(metadata ?? current.metadata).source;
+      const identityChanges = (normalized.type ?? current.type) !== current.type
+        || nextSource !== record(current.metadata).source;
+      if (identityChanges) {
+        const progressMeasurementHead = await transaction.taskProgressMeasurementHead.findFirst({
+          where: { organizationId, projectId, taskId: id },
+          select: { id: true },
+        });
+        if (progressMeasurementHead) throw progressMeasurementHistoryError('update');
+      }
     }
     const updated = await transaction.task.updateMany({
       where: { id, projectId, revision, metadata: { path: ['source'], equals: 'canonical-task-v1' } },
@@ -430,6 +494,8 @@ export async function updateCanonicalTask(prisma, {
     const result = await transaction.task.findFirst({ where: { id, projectId }, include: taskInclude() });
     await transaction.auditLog.create({ data: { organizationId, actorId: actor, action: 'task.updated', entityType: 'Task', entityId: id, metadata: { projectId, revision: revision + 1 } } });
     return serializeTask(result);
+  }).catch((error) => {
+    throw canonicalTaskPersistenceError(error, 'update') || error;
   });
 }
 
@@ -485,7 +551,7 @@ export async function reprojectCanonicalTaskSchedules(transaction, {
       },
     });
     if (updated.count !== 1) {
-      throw new CanonicalTaskError('La tarea cambiÃ³ durante la replanificaciÃ³n; recargÃ¡ y reintentÃ¡.', 'CANONICAL_TASK_STALE', 409);
+      throw new CanonicalTaskError('La tarea cambió durante la replanificación; recargá y reintentá.', 'CANONICAL_TASK_STALE', 409);
     }
     reprojected += 1;
   }
@@ -546,9 +612,16 @@ export async function deleteCanonicalTask(prisma, {
         409,
       );
     }
+    const progressMeasurementHead = await transaction.taskProgressMeasurementHead.findFirst({
+      where: { organizationId, projectId, taskId: id },
+      select: { id: true },
+    });
+    if (progressMeasurementHead) throw progressMeasurementHistoryError('delete');
     await transaction.task.delete({ where: { id } });
     await transaction.auditLog.create({ data: { organizationId, actorId: actor, action: 'task.deleted', entityType: 'Task', entityId: id, metadata: { projectId, title: task.title, revision: task.revision } } });
     return { id, deleted: true };
+  }).catch((error) => {
+    throw canonicalTaskPersistenceError(error, 'delete') || error;
   });
 }
 

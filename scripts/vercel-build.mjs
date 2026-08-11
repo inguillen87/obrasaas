@@ -54,6 +54,9 @@ const TASK_MATERIAL_REQUIREMENTS_VERIFIER_PATH = fileURLToPath(
 const TASK_MATERIAL_RESERVATIONS_VERIFIER_PATH = fileURLToPath(
   new URL("./verify-task-material-reservations-migration.mjs", import.meta.url),
 );
+const PROGRESS_MEASUREMENTS_VERIFIER_PATH = fileURLToPath(
+  new URL("./verify-progress-measurements-migration.mjs", import.meta.url),
+);
 const DATA_SUBJECT_DISCOVERY_VERIFIER_PATH = fileURLToPath(
   new URL("./verify-data-subject-discovery-migration.mjs", import.meta.url),
 );
@@ -360,6 +363,7 @@ export async function runVercelBuild({
     inventoryStockLedgerVerifier: INVENTORY_STOCK_LEDGER_VERIFIER_PATH,
     taskMaterialRequirementsVerifier: TASK_MATERIAL_REQUIREMENTS_VERIFIER_PATH,
     taskMaterialReservationsVerifier: TASK_MATERIAL_RESERVATIONS_VERIFIER_PATH,
+    progressMeasurementsVerifier: PROGRESS_MEASUREMENTS_VERIFIER_PATH,
     dataSubjectDiscoveryVerifier: DATA_SUBJECT_DISCOVERY_VERIFIER_PATH,
     dataSubjectDecisionVerifier: DATA_SUBJECT_DECISION_VERIFIER_PATH,
     notificationOutboxVerifier: NOTIFICATION_OUTBOX_VERIFIER_PATH,
@@ -441,6 +445,10 @@ export async function runVercelBuild({
         environment[plan.migrationDatabaseEnvironment],
       TASK_MATERIAL_RESERVATIONS_MIGRATION_SCHEMA: "public",
       TASK_MATERIAL_RESERVATIONS_DISPOSABLE_CONCURRENCY: "0",
+      PROGRESS_MEASUREMENTS_MIGRATION_DATABASE_URL:
+        environment[plan.migrationDatabaseEnvironment],
+      PROGRESS_MEASUREMENTS_MIGRATION_SCHEMA: "public",
+      PROGRESS_MEASUREMENTS_DISPOSABLE_CONCURRENCY: "0",
       DATA_SUBJECT_DISCOVERY_MIGRATION_DATABASE_URL:
         environment[plan.migrationDatabaseEnvironment],
       DATA_SUBJECT_DISCOVERY_MIGRATION_SCHEMA: "public",
@@ -533,6 +541,13 @@ export async function runVercelBuild({
       await runner(
         process.execPath,
         [cliPaths.taskMaterialReservationsVerifier],
+        { ...sharedOptions, env: verificationEnvironment },
+      );
+    }
+    if (cliPaths.progressMeasurementsVerifier) {
+      await runner(
+        process.execPath,
+        [cliPaths.progressMeasurementsVerifier],
         { ...sharedOptions, env: verificationEnvironment },
       );
     }

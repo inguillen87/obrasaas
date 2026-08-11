@@ -93,6 +93,13 @@ function activeMaterialReservationError() {
   );
 }
 
+function pendingProgressMeasurementError() {
+  return new ProjectLifecycleError(
+    'La obra tiene mediciones de avance pendientes de revisión. Aprobá o rechazá todas las mediciones antes de finalizarla o archivarla.',
+    { code: 'PROJECT_PENDING_PROGRESS_MEASUREMENTS', status: 409 },
+  );
+}
+
 function databaseErrorText(error) {
   return [
     error?.message,
@@ -146,6 +153,16 @@ export async function updateTenantProject(prisma, access, input) {
 
         const nextStatus = updateData.status || current.status;
         if (!closesProject(current.status) && closesProject(nextStatus)) {
+          const pendingProgressMeasurement = await transaction.taskProgressMeasurementHead.findFirst({
+            where: {
+              organizationId: access.organization.id,
+              projectId: current.id,
+              pendingMeasurementId: { not: null },
+            },
+            select: { taskId: true },
+          });
+          if (pendingProgressMeasurement) throw pendingProgressMeasurementError();
+
           const activeReservation = await transaction.taskMaterialActiveReservation.findFirst({
             where: {
               organizationId: access.organization.id,
@@ -270,6 +287,9 @@ export async function updateTenantProject(prisma, access, input) {
       }
       if (databaseErrorText(error).includes('TASK_MATERIAL_RESERVATION_PROJECT_READ_ONLY')) {
         throw activeMaterialReservationError();
+      }
+      if (databaseErrorText(error).includes('PROGRESS_MEASUREMENT_PROJECT_PENDING')) {
+        throw pendingProgressMeasurementError();
       }
       if (error?.code !== 'P2034' || attempt === 3) throw error;
     }

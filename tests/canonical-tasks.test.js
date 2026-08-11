@@ -8,6 +8,7 @@ import {
   deleteCanonicalTask,
   normalizeCanonicalTaskInput,
   normalizeCanonicalTaskSchedule,
+  updateCanonicalTask,
 } from '../src/lib/canonical-tasks.js';
 
 test('canonical task input is bounded and preserves the schedule fields', () => {
@@ -92,7 +93,11 @@ test('dependency graph rejects self links and malformed progress', () => {
   );
 });
 
-function canonicalDeletePrisma({ materialRevisionCount = 0 } = {}) {
+function canonicalDeletePrisma({
+  deleteError = null,
+  materialRevisionCount = 0,
+  progressMeasurementHead = null,
+} = {}) {
   const state = { deleted: 0, audits: 0 };
   const transaction = {
     $executeRawUnsafe: async () => 1,
@@ -106,7 +111,10 @@ function canonicalDeletePrisma({ materialRevisionCount = 0 } = {}) {
     task: {
       findFirst: async () => ({ id: 'task-a', title: 'Fundaciones', revision: 2 }),
       count: async () => 0,
-      delete: async () => { state.deleted += 1; },
+      delete: async () => {
+        if (deleteError) throw deleteError;
+        state.deleted += 1;
+      },
     },
     taskMaterialRequirementRevision: {
       count: async ({ where }) => {
@@ -116,6 +124,17 @@ function canonicalDeletePrisma({ materialRevisionCount = 0 } = {}) {
           taskId: 'task-a',
         });
         return materialRevisionCount;
+      },
+    },
+    taskProgressMeasurementHead: {
+      findFirst: async ({ where, select }) => {
+        assert.deepEqual(where, {
+          organizationId: 'organization-a',
+          projectId: 'project-a',
+          taskId: 'task-a',
+        });
+        assert.deepEqual(select, { id: true });
+        return progressMeasurementHead;
       },
     },
     auditLog: {
@@ -152,4 +171,135 @@ test('canonical task deletion preserves published material history', async () =>
   });
   assert.deepEqual(result, { id: 'task-a', deleted: true });
   assert.deepEqual(emptyStore.state, { deleted: 1, audits: 1 });
+});
+
+test('canonical task deletion preserves progress measurement history', async () => {
+  const protectedStore = canonicalDeletePrisma({
+    progressMeasurementHead: { id: 'measurement-head-a' },
+  });
+  await assert.rejects(
+    deleteCanonicalTask(protectedStore.prisma, {
+      scope: { organizationId: 'organization-a', projectId: 'project-a' },
+      actorId: 'user-a',
+      taskId: 'task-a',
+    }),
+    (error) => error instanceof CanonicalTaskError
+      && error.code === 'CANONICAL_TASK_HAS_PROGRESS_MEASUREMENTS'
+      && error.status === 409,
+  );
+  assert.deepEqual(protectedStore.state, { deleted: 0, audits: 0 });
+});
+
+test('a concurrent progress measurement FK blocks canonical task deletion with a safe 409', async () => {
+  const databaseError = Object.assign(new Error('Foreign key constraint failed'), {
+    code: 'P2003',
+    meta: { field_name: 'TPMHead_task_identity_fkey (index)' },
+  });
+  const store = canonicalDeletePrisma({ deleteError: databaseError });
+  await assert.rejects(
+    deleteCanonicalTask(store.prisma, {
+      scope: { organizationId: 'organization-a', projectId: 'project-a' },
+      actorId: 'user-a',
+      taskId: 'task-a',
+    }),
+    (error) => error instanceof CanonicalTaskError
+      && error.code === 'CANONICAL_TASK_HAS_PROGRESS_MEASUREMENTS'
+      && error.status === 409
+      && !error.message.includes('TPMHead'),
+  );
+  assert.deepEqual(store.state, { deleted: 0, audits: 0 });
+});
+
+function canonicalIdentityUpdatePrisma({
+  progressMeasurementHead = null,
+  updateError = null,
+} = {}) {
+  const state = { updates: 0, audits: 0, progressPrechecks: 0 };
+  const transaction = {
+    $executeRawUnsafe: async () => 1,
+    project: {
+      findFirst: async () => ({
+        id: 'project-a',
+        organizationId: 'organization-a',
+        status: 'ACTIVE',
+      }),
+    },
+    task: {
+      findFirst: async ({ select }) => {
+        if (select?.metadata && select?.type) {
+          return { metadata: { source: 'canonical-task-v1' }, type: 'TASK' };
+        }
+        return null;
+      },
+      updateMany: async () => {
+        if (updateError) throw updateError;
+        state.updates += 1;
+        return { count: 1 };
+      },
+    },
+    taskProgressMeasurementHead: {
+      findFirst: async ({ where, select }) => {
+        state.progressPrechecks += 1;
+        assert.deepEqual(where, {
+          organizationId: 'organization-a',
+          projectId: 'project-a',
+          taskId: 'task-a',
+        });
+        assert.deepEqual(select, { id: true });
+        return progressMeasurementHead;
+      },
+    },
+    auditLog: {
+      create: async () => { state.audits += 1; },
+    },
+  };
+  return {
+    state,
+    prisma: {
+      $transaction: async (operation) => operation(transaction),
+    },
+  };
+}
+
+test('measured canonical tasks cannot change executable identity', async () => {
+  const store = canonicalIdentityUpdatePrisma({
+    progressMeasurementHead: { id: 'measurement-head-a' },
+  });
+  await assert.rejects(
+    updateCanonicalTask(store.prisma, {
+      scope: { organizationId: 'organization-a', projectId: 'project-a' },
+      actorId: 'user-a',
+      taskId: 'task-a',
+      expectedRevision: 2,
+      input: { type: 'MILESTONE' },
+    }),
+    (error) => error instanceof CanonicalTaskError
+      && error.code === 'CANONICAL_TASK_HAS_PROGRESS_MEASUREMENTS'
+      && error.status === 409,
+  );
+  assert.deepEqual(store.state, { updates: 0, audits: 0, progressPrechecks: 1 });
+});
+
+test('the structural task identity guard is mapped race-safely to a canonical 409', async () => {
+  const databaseError = Object.assign(new Error('constraint failed'), {
+    code: 'P2004',
+    meta: {
+      database_error: 'PROGRESS_MEASUREMENT_TASK_IDENTITY_IMMUTABLE internal structural detail',
+    },
+  });
+  const store = canonicalIdentityUpdatePrisma({ updateError: databaseError });
+  await assert.rejects(
+    updateCanonicalTask(store.prisma, {
+      scope: { organizationId: 'organization-a', projectId: 'project-a' },
+      actorId: 'user-a',
+      taskId: 'task-a',
+      expectedRevision: 2,
+      input: { type: 'MILESTONE' },
+    }),
+    (error) => error instanceof CanonicalTaskError
+      && error.code === 'CANONICAL_TASK_HAS_PROGRESS_MEASUREMENTS'
+      && error.status === 409
+      && !error.message.includes('internal structural detail'),
+  );
+  assert.deepEqual(store.state, { updates: 0, audits: 0, progressPrechecks: 1 });
 });

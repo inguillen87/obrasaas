@@ -64,6 +64,7 @@ function prismaDouble({
   projectedTasks = [],
   canonicalTasks = [],
   activeMaterialReservation = null,
+  pendingProgressMeasurement = null,
 } = {}) {
   const calls = [];
   let currentIndex = 0;
@@ -147,6 +148,12 @@ function prismaDouble({
       async findFirst(args) {
         calls.push(['active-material-reservation', args]);
         return activeMaterialReservation ? structuredClone(activeMaterialReservation) : null;
+      },
+    },
+    taskProgressMeasurementHead: {
+      async findFirst(args) {
+        calls.push(['pending-progress-measurement', args]);
+        return pendingProgressMeasurement ? structuredClone(pendingProgressMeasurement) : null;
       },
     },
     auditLog: {
@@ -454,6 +461,33 @@ test('finalizing or archiving is refused while any task has an active material r
   }
 });
 
+test('finalizing or archiving is refused while a progress measurement awaits review', async () => {
+  for (const status of ['COMPLETED', 'ARCHIVED']) {
+    const { calls, prisma } = prismaDouble({
+      pendingProgressMeasurement: { taskId: 'task-with-pending-measurement' },
+    });
+    await assert.rejects(
+      updateTenantProject(prisma, access(), patch({ status })),
+      (error) => (
+        error instanceof ProjectLifecycleError
+        && error.code === 'PROJECT_PENDING_PROGRESS_MEASUREMENTS'
+        && error.status === 409
+      ),
+    );
+    assert.deepEqual(callsNamed(calls, 'pending-progress-measurement')[0][1], {
+      where: {
+        organizationId: 'organization-a',
+        projectId: 'project-a',
+        pendingMeasurementId: { not: null },
+      },
+      select: { taskId: true },
+    });
+    assert.equal(callsNamed(calls, 'active-material-reservation').length, 0);
+    assert.equal(callsNamed(calls, 'update').length, 0);
+    assert.equal(callsNamed(calls, 'audit').length, 0);
+  }
+});
+
 test('the structural project-close guard is surfaced as a safe 409 conflict', async () => {
   const databaseError = Object.assign(new Error('constraint failed'), {
     code: 'P2004',
@@ -473,6 +507,30 @@ test('the structural project-close guard is surfaced as a safe 409 conflict', as
       && error.code === 'PROJECT_ACTIVE_MATERIAL_RESERVATIONS'
       && error.status === 409
       && !error.message.includes('active reservation exists')
+    ),
+  );
+  assert.equal(callsNamed(calls, 'audit').length, 0);
+});
+
+test('the structural pending-measurement close guard is surfaced as an actionable 409 conflict', async () => {
+  const databaseError = Object.assign(new Error('constraint failed'), {
+    code: 'P2004',
+    meta: {
+      database_error: 'PROGRESS_MEASUREMENT_PROJECT_PENDING internal structural detail',
+    },
+  });
+  const { calls, prisma } = prismaDouble({
+    fallbackProjects: [{ id: 'project-active-fallback' }],
+    updateErrors: [databaseError],
+  });
+
+  await assert.rejects(
+    updateTenantProject(prisma, access(), patch({ status: 'ARCHIVED' })),
+    (error) => (
+      error instanceof ProjectLifecycleError
+      && error.code === 'PROJECT_PENDING_PROGRESS_MEASUREMENTS'
+      && error.status === 409
+      && !error.message.includes('internal structural detail')
     ),
   );
   assert.equal(callsNamed(calls, 'audit').length, 0);

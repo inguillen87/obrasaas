@@ -30,6 +30,7 @@
     "verify:inventory-stock-ledger-migration": "node scripts/verify-inventory-stock-ledger-migration.mjs",
     "verify:task-material-requirements-migration": "node scripts/verify-task-material-requirements-migration.mjs",
     "verify:task-material-reservations-migration": "node scripts/verify-task-material-reservations-migration.mjs",
+    "verify:progress-measurements-migration": "node scripts/verify-progress-measurements-migration.mjs",
     "verify:data-subject-discovery-migration": "node scripts/verify-data-subject-discovery-migration.mjs",
     "verify:data-subject-decision-migration": "node scripts/verify-data-subject-decision-migration.mjs",
     "verify:notification-outbox-migration": "node scripts/verify-notification-outbox-migration.mjs",
