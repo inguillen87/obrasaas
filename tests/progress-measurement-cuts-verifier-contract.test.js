@@ -64,6 +64,10 @@ test('S9.2 verifier exercises immutable receipts, missing lines and anti-forgery
   assert.match(verifier, /ObrasaasProgressMeasurementCutSealCommand/);
   assert.match(verifier, /session_replication_role = 'replica'/);
   assert.match(verifier, /Replica mode skipped the command trigger but still mutated Cut\/Line\/Head/);
+  assert.match(verifier, /replica-virtual-row-is-not-a-receipt/);
+  assert.match(verifier, /commandRows\.every\(\(row\) => row\.cutId === "replica-virtual-row-is-not-a-receipt"\)/);
+  assert.match(verifier, /wrapperRows\.every\(\(row\) => row\.cut_id === null\)/);
+  assert.doesNotMatch(verifier, /returnedRows === 0/);
   assert.match(verifier, /await client\.query\("ROLLBACK"\)/);
   assert.match(verifier, /await assertRolledBack/);
   assert.doesNotMatch(verifier, /DISABLE TRIGGER USER/);

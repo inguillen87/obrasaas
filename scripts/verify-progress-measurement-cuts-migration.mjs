@@ -1238,28 +1238,62 @@ async function assertDisposableReplicaFailClosed(connectionString, schema) {
          (SELECT count(*)::integer FROM "ProjectProgressMeasurementCutLine") AS lines`,
     );
     await client.query("SAVEPOINT progress_measurement_cut_replica_command");
-    let returnedRows = 0;
+    let commandRows = [];
     try {
       const attempted = await client.query(
-        `INSERT INTO "ObrasaasProgressMeasurementCutSealCommand" ("organizationId")
-         VALUES ('replica-command-must-not-run') RETURNING "cutId"`,
+        `INSERT INTO "ObrasaasProgressMeasurementCutSealCommand" ("organizationId", "cutId")
+         VALUES ('replica-command-must-not-run', 'replica-virtual-row-is-not-a-receipt')
+         RETURNING "cutId"`,
       );
-      returnedRows = attempted.rows.length;
+      commandRows = attempted.rows;
     } catch {
       await client.query("ROLLBACK TO SAVEPOINT progress_measurement_cut_replica_command");
     }
     await client.query("RELEASE SAVEPOINT progress_measurement_cut_replica_command");
+
+    await client.query("SAVEPOINT progress_measurement_cut_replica_wrapper");
+    let wrapperRows = [];
+    try {
+      const attempted = await client.query(
+        `SELECT * FROM obrasaas_progress_measurement_cut_seal(
+           $1,$2,$3::date,$4::date,$5,$6,$7,$8,$9
+         )`,
+        [
+          "replica-wrapper-must-not-run",
+          "replica-project-must-not-run",
+          "2024-01-01",
+          "2024-01-15",
+          null,
+          "0".repeat(64),
+          "replica-wrapper-operation",
+          "1".repeat(64),
+          "replica-actor-must-not-run",
+        ],
+      );
+      wrapperRows = attempted.rows;
+    } catch {
+      await client.query("ROLLBACK TO SAVEPOINT progress_measurement_cut_replica_wrapper");
+    }
+    await client.query("RELEASE SAVEPOINT progress_measurement_cut_replica_wrapper");
+
     const after = await client.query(
       `SELECT
          (SELECT count(*)::integer FROM "ProjectProgressMeasurementCutHead") AS heads,
          (SELECT count(*)::integer FROM "ProjectProgressMeasurementCut") AS cuts,
          (SELECT count(*)::integer FROM "ProjectProgressMeasurementCutLine") AS lines`,
     );
-    invariant(returnedRows === 0, "Replica mode unexpectedly returned a governed command receipt.");
     assert.deepEqual(
       after.rows[0],
       before.rows[0],
       "Replica mode skipped the command trigger but still mutated Cut/Line/Head.",
+    );
+    invariant(
+      commandRows.every((row) => row.cutId === "replica-virtual-row-is-not-a-receipt"),
+      "Replica-mode command view behavior drifted away from a storage-free virtual row.",
+    );
+    invariant(
+      wrapperRows.every((row) => row.cut_id === null),
+      "Replica mode unexpectedly returned a valid public seal receipt.",
     );
     await client.query("SET LOCAL session_replication_role = 'origin'");
     const restored = await client.query("SELECT current_setting('session_replication_role') AS role");
