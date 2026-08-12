@@ -417,10 +417,11 @@ test('snapshot reports a task-wide pending blocker while keeping the requested p
   });
 });
 
-test('default read adapter serializes repeatable-read queries and selects the requested civil-period head', async () => {
+test('default read adapter keeps relation hydration single-flight inside repeatable-read', async () => {
   const calls = [];
   let taskQuery = null;
   let headQuery = null;
+  let measurementQuery = null;
   let isolationLevel = null;
   let activeQueries = 0;
   const singleFlight = async (label, result) => {
@@ -434,14 +435,40 @@ test('default read adapter serializes repeatable-read queries and selects the re
       activeQueries -= 1;
     }
   };
+  const measurement = {
+    id: 'measurement-a',
+    organizationId: SCOPE.organizationId,
+    projectId: SCOPE.projectId,
+    taskId: 'task-a',
+    headId: 'head-a',
+    preparedByMembershipId: 'membership-preparer',
+  };
   const head = {
     id: 'head-a',
     periodStart: new Date('2026-08-16T00:00:00.000Z'),
     periodEnd: new Date('2026-08-31T00:00:00.000Z'),
+    headMeasurementId: measurement.id,
+  };
+  const decision = {
+    measurementId: measurement.id,
+    decision: 'APPROVED',
+    reason: 'Medición comprobada.',
+    decidedByMembershipId: 'membership-checker',
+    createdAt: new Date('2026-08-22T12:00:00.000Z'),
   };
   const database = {
     tenantMembership: {
       findFirst: () => singleFlight('membership', { id: ACTOR }),
+      findMany: () => singleFlight('related-memberships', [
+        { id: 'membership-preparer', userId: 'user-preparer' },
+        { id: 'membership-checker', userId: 'user-checker' },
+      ]),
+    },
+    platformUser: {
+      findMany: () => singleFlight('related-users', [
+        { id: 'user-preparer', fullName: 'Jefa de obra' },
+        { id: 'user-checker', fullName: 'Dirección técnica' },
+      ]),
     },
     task: {
       findFirst: (options) => singleFlight('task', () => {
@@ -450,17 +477,50 @@ test('default read adapter serializes repeatable-read queries and selects the re
       }),
     },
     taskProgressMeasurement: {
-      findMany: () => singleFlight('measurements', []),
-      findFirst: () => singleFlight('cursor', null),
+      findMany(options) {
+        measurementQuery = options;
+        if (options.include) {
+          return Promise.all([
+            singleFlight('measurements', [measurement]),
+            singleFlight('implicit-measurement-relations', []),
+          ]).then(([result]) => result);
+        }
+        return singleFlight('measurements', [measurement]);
+      },
+      findFirst: () => singleFlight('head-measurement', {
+        id: measurement.id,
+        unitCode: 'M2',
+        baseQuantity: '100.0000',
+      }),
     },
     taskProgressMeasurementHead: {
       findFirst(options) {
         const pending = Boolean(options.where.pendingMeasurementId);
         if (!pending) headQuery = options;
-        return singleFlight(pending ? 'pending-head' : 'period-head', () => (
-          pending ? null : head
-        ));
+        if (!pending && options.include) {
+          return Promise.all([
+            singleFlight('period-head', head),
+            singleFlight('implicit-head-measurement', measurement),
+          ]).then(([result]) => ({ ...result, headMeasurement: measurement }));
+        }
+        return singleFlight(pending ? 'pending-head' : 'period-head', pending ? null : head);
       },
+      findMany: () => singleFlight('measurement-heads', [{
+        id: head.id,
+        periodStart: head.periodStart,
+        periodEnd: head.periodEnd,
+      }]),
+    },
+    taskProgressMeasurementEvidence: {
+      findMany: () => singleFlight('measurement-evidence', [{
+        measurementId: measurement.id,
+        progressEvidenceId: 'evidence-a',
+        evidenceRevision: 3,
+        evidenceCapturedAt: new Date('2026-08-20T12:00:00.000Z'),
+      }]),
+    },
+    taskProgressMeasurementDecision: {
+      findMany: () => singleFlight('measurement-decisions', [decision]),
     },
     taskProgressMeasurementBalance: {
       findFirst: () => singleFlight('balance', null),
@@ -481,17 +541,31 @@ test('default read adapter serializes repeatable-read queries and selects the re
     limit: 25,
   });
   assert.equal(isolationLevel, 'RepeatableRead');
-  assert.equal(raw.head, head);
+  assert.equal(raw.head.id, head.id);
+  assert.equal(raw.head.headMeasurement.unitCode, 'M2');
+  assert.equal(raw.rows[0].head.id, head.id);
+  assert.deepEqual(raw.rows[0].evidenceLinks.map((link) => link.progressEvidenceId), ['evidence-a']);
+  assert.equal(raw.rows[0].preparedByMembership.user.fullName, 'Jefa de obra');
+  assert.equal(raw.rows[0].decision.decision, 'APPROVED');
+  assert.equal(raw.rows[0].decision.decidedByMembership.user.fullName, 'Dirección técnica');
   assert.equal(taskQuery.where.type, 'TASK');
   assert.deepEqual(taskQuery.where.metadata, {
     path: ['source'], equals: 'canonical-task-v1',
   });
+  assert.equal(Object.hasOwn(measurementQuery, 'include'), false);
   assert.equal(headQuery.where.periodStart.toISOString(), '2026-08-16T00:00:00.000Z');
+  assert.equal(Object.hasOwn(headQuery, 'include'), false);
   assert.deepEqual(calls, [
     'membership',
     'task',
     'measurements',
+    'measurement-heads',
+    'measurement-evidence',
+    'measurement-decisions',
+    'related-memberships',
+    'related-users',
     'period-head',
+    'head-measurement',
     'balance',
     'pending-head',
   ]);

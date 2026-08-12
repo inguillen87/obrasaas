@@ -660,30 +660,100 @@ export function createProgressMeasurementReadAdapter(prisma) {
           orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
           ...(command.cursor ? { cursor: { id: command.cursor }, skip: 1 } : {}),
           take: command.limit + 1,
-          include: {
-            head: { select: { periodStart: true, periodEnd: true } },
-            evidenceLinks: {
-              orderBy: { ordinal: 'asc' },
-              select: {
-                progressEvidenceId: true,
-                evidenceRevision: true,
-                evidenceCapturedAt: true,
-              },
-            },
-            preparedByMembership: { include: { user: { select: { fullName: true } } } },
-            decision: {
-              include: { decidedByMembership: { include: { user: { select: { fullName: true } } } } },
-            },
-          },
         });
+        const measurementIds = rows.map((row) => row.id);
+        let hydratedRows = rows;
+        if (measurementIds.length > 0) {
+          const rowHeads = await database.taskProgressMeasurementHead.findMany({
+            where: {
+              ...where,
+              id: { in: [...new Set(rows.map((row) => row.headId))] },
+            },
+            select: { id: true, periodStart: true, periodEnd: true },
+          });
+          const evidenceLinks = await database.taskProgressMeasurementEvidence.findMany({
+            where: { ...where, measurementId: { in: measurementIds } },
+            orderBy: [{ measurementId: 'asc' }, { ordinal: 'asc' }],
+            select: {
+              measurementId: true,
+              progressEvidenceId: true,
+              evidenceRevision: true,
+              evidenceCapturedAt: true,
+            },
+          });
+          const decisions = await database.taskProgressMeasurementDecision.findMany({
+            where: { ...where, measurementId: { in: measurementIds } },
+            select: {
+              measurementId: true,
+              decision: true,
+              reason: true,
+              decidedByMembershipId: true,
+              createdAt: true,
+            },
+          });
+          const membershipIds = [...new Set([
+            ...rows.map((row) => row.preparedByMembershipId),
+            ...decisions.map((decision) => decision.decidedByMembershipId),
+          ])];
+          const memberships = await database.tenantMembership.findMany({
+            where: {
+              organizationId: command.organizationId,
+              id: { in: membershipIds },
+            },
+            select: { id: true, userId: true },
+          });
+          const users = await database.platformUser.findMany({
+            where: { id: { in: [...new Set(memberships.map((membership) => membership.userId))] } },
+            select: { id: true, fullName: true },
+          });
+          const headById = new Map(rowHeads.map((rowHead) => [rowHead.id, rowHead]));
+          const evidenceByMeasurementId = new Map();
+          for (const link of evidenceLinks) {
+            const links = evidenceByMeasurementId.get(link.measurementId) || [];
+            links.push(link);
+            evidenceByMeasurementId.set(link.measurementId, links);
+          }
+          const decisionByMeasurementId = new Map(
+            decisions.map((decision) => [decision.measurementId, decision]),
+          );
+          const membershipById = new Map(
+            memberships.map((membership) => [membership.id, membership]),
+          );
+          const userById = new Map(users.map((user) => [user.id, user]));
+          const membershipWithUser = (membershipId) => {
+            const membership = membershipById.get(membershipId);
+            return membership
+              ? { ...membership, user: userById.get(membership.userId) || null }
+              : null;
+          };
+          hydratedRows = rows.map((row) => {
+            const decision = decisionByMeasurementId.get(row.id) || null;
+            return {
+              ...row,
+              head: headById.get(row.headId) || null,
+              evidenceLinks: evidenceByMeasurementId.get(row.id) || [],
+              preparedByMembership: membershipWithUser(row.preparedByMembershipId),
+              decision: decision ? {
+                ...decision,
+                decidedByMembership: membershipWithUser(decision.decidedByMembershipId),
+              } : null,
+            };
+          });
+        }
         const head = await database.taskProgressMeasurementHead.findFirst({
           where: {
             ...where,
             ...(command.period ? { periodStart: new Date(`${command.period.start}T00:00:00.000Z`) } : {}),
           },
           ...(!command.period ? { orderBy: [{ periodStart: 'desc' }, { id: 'desc' }] } : {}),
-          include: { headMeasurement: true },
         });
+        const headMeasurement = head?.headMeasurementId
+          ? await database.taskProgressMeasurement.findFirst({
+              where: { ...where, id: head.headMeasurementId },
+              select: { id: true, unitCode: true, baseQuantity: true },
+            })
+          : null;
+        const hydratedHead = head ? { ...head, headMeasurement } : null;
         const balance = await database.taskProgressMeasurementBalance.findFirst({ where });
         const pendingHead = await database.taskProgressMeasurementHead.findFirst({
           where: { ...where, pendingMeasurementId: { not: null } },
@@ -696,7 +766,7 @@ export function createProgressMeasurementReadAdapter(prisma) {
             revision: true,
           },
         });
-        return { task, rows, head, balance, pendingHead };
+        return { task, rows: hydratedRows, head: hydratedHead, balance, pendingHead };
       }, { isolationLevel: 'RepeatableRead' });
     },
   });
