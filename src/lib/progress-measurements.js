@@ -655,49 +655,47 @@ export function createProgressMeasurementReadAdapter(prisma) {
             throw new ProgressMeasurementError('El cursor no pertenece a la tarea activa.', 'PROGRESS_MEASUREMENT_CURSOR_INVALID');
           }
         }
-        const [rows, head, balance, pendingHead] = await Promise.all([
-          database.taskProgressMeasurement.findMany({
-            where: measurementWhere,
-            orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-            ...(command.cursor ? { cursor: { id: command.cursor }, skip: 1 } : {}),
-            take: command.limit + 1,
-            include: {
-              head: { select: { periodStart: true, periodEnd: true } },
-              evidenceLinks: {
-                orderBy: { ordinal: 'asc' },
-                select: {
-                  progressEvidenceId: true,
-                  evidenceRevision: true,
-                  evidenceCapturedAt: true,
-                },
-              },
-              preparedByMembership: { include: { user: { select: { fullName: true } } } },
-              decision: {
-                include: { decidedByMembership: { include: { user: { select: { fullName: true } } } } },
+        const rows = await database.taskProgressMeasurement.findMany({
+          where: measurementWhere,
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          ...(command.cursor ? { cursor: { id: command.cursor }, skip: 1 } : {}),
+          take: command.limit + 1,
+          include: {
+            head: { select: { periodStart: true, periodEnd: true } },
+            evidenceLinks: {
+              orderBy: { ordinal: 'asc' },
+              select: {
+                progressEvidenceId: true,
+                evidenceRevision: true,
+                evidenceCapturedAt: true,
               },
             },
-          }),
-          database.taskProgressMeasurementHead.findFirst({
-            where: {
-              ...where,
-              ...(command.period ? { periodStart: new Date(`${command.period.start}T00:00:00.000Z`) } : {}),
+            preparedByMembership: { include: { user: { select: { fullName: true } } } },
+            decision: {
+              include: { decidedByMembership: { include: { user: { select: { fullName: true } } } } },
             },
-            ...(!command.period ? { orderBy: [{ periodStart: 'desc' }, { id: 'desc' }] } : {}),
-            include: { headMeasurement: true },
-          }),
-          database.taskProgressMeasurementBalance.findFirst({ where }),
-          database.taskProgressMeasurementHead.findFirst({
-            where: { ...where, pendingMeasurementId: { not: null } },
-            orderBy: [{ periodStart: 'desc' }, { id: 'desc' }],
-            select: {
-              id: true,
-              periodStart: true,
-              periodEnd: true,
-              pendingMeasurementId: true,
-              revision: true,
-            },
-          }),
-        ]);
+          },
+        });
+        const head = await database.taskProgressMeasurementHead.findFirst({
+          where: {
+            ...where,
+            ...(command.period ? { periodStart: new Date(`${command.period.start}T00:00:00.000Z`) } : {}),
+          },
+          ...(!command.period ? { orderBy: [{ periodStart: 'desc' }, { id: 'desc' }] } : {}),
+          include: { headMeasurement: true },
+        });
+        const balance = await database.taskProgressMeasurementBalance.findFirst({ where });
+        const pendingHead = await database.taskProgressMeasurementHead.findFirst({
+          where: { ...where, pendingMeasurementId: { not: null } },
+          orderBy: [{ periodStart: 'desc' }, { id: 'desc' }],
+          select: {
+            id: true,
+            periodStart: true,
+            periodEnd: true,
+            pendingMeasurementId: true,
+            revision: true,
+          },
+        });
         return { task, rows, head, balance, pendingHead };
       }, { isolationLevel: 'RepeatableRead' });
     },

@@ -417,34 +417,54 @@ test('snapshot reports a task-wide pending blocker while keeping the requested p
   });
 });
 
-test('default read adapter uses repeatable-read and selects the requested civil-period head', async () => {
+test('default read adapter serializes repeatable-read queries and selects the requested civil-period head', async () => {
   const calls = [];
   let taskQuery = null;
+  let headQuery = null;
   let isolationLevel = null;
+  let activeQueries = 0;
+  const singleFlight = async (label, result) => {
+    assert.equal(activeQueries, 0, `${label} overlapped another interactive-transaction query`);
+    activeQueries += 1;
+    calls.push(label);
+    try {
+      await Promise.resolve();
+      return typeof result === 'function' ? result() : result;
+    } finally {
+      activeQueries -= 1;
+    }
+  };
   const head = {
     id: 'head-a',
     periodStart: new Date('2026-08-16T00:00:00.000Z'),
     periodEnd: new Date('2026-08-31T00:00:00.000Z'),
   };
   const database = {
-    tenantMembership: { findFirst: async () => ({ id: ACTOR }) },
+    tenantMembership: {
+      findFirst: () => singleFlight('membership', { id: ACTOR }),
+    },
     task: {
-      findFirst: async (options) => {
+      findFirst: (options) => singleFlight('task', () => {
         taskQuery = options;
         return { id: 'task-a' };
-      },
+      }),
     },
     taskProgressMeasurement: {
-      findMany: async () => [],
-      findFirst: async () => null,
+      findMany: () => singleFlight('measurements', []),
+      findFirst: () => singleFlight('cursor', null),
     },
     taskProgressMeasurementHead: {
-      async findFirst(options) {
-        calls.push(options);
-        return options.where.pendingMeasurementId ? null : head;
+      findFirst(options) {
+        const pending = Boolean(options.where.pendingMeasurementId);
+        if (!pending) headQuery = options;
+        return singleFlight(pending ? 'pending-head' : 'period-head', () => (
+          pending ? null : head
+        ));
       },
     },
-    taskProgressMeasurementBalance: { findFirst: async () => null },
+    taskProgressMeasurementBalance: {
+      findFirst: () => singleFlight('balance', null),
+    },
   };
   const adapter = createProgressMeasurementReadAdapter({
     async $transaction(callback, options) {
@@ -466,7 +486,15 @@ test('default read adapter uses repeatable-read and selects the requested civil-
   assert.deepEqual(taskQuery.where.metadata, {
     path: ['source'], equals: 'canonical-task-v1',
   });
-  assert.equal(calls[0].where.periodStart.toISOString(), '2026-08-16T00:00:00.000Z');
+  assert.equal(headQuery.where.periodStart.toISOString(), '2026-08-16T00:00:00.000Z');
+  assert.deepEqual(calls, [
+    'membership',
+    'task',
+    'measurements',
+    'period-head',
+    'balance',
+    'pending-head',
+  ]);
 });
 
 test('GET fails closed for legacy and milestone task ids even inside the active project', async () => {
