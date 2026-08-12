@@ -255,6 +255,9 @@ una instrucción, ejecución o prueba de pago.
 Una proyección mutable por organización y obra, gobernada sólo por funciones
 SQL. Mantiene:
 
+- `latestVersionSequence BIGINT`, contador DB-owned que prepare incrementa bajo
+  `FOR UPDATE`; asigna `projectSequence` sin huecos por rollback y replay o
+  decisiones no vuelven a incrementarlo;
 - el tuple conjunto `pinnedContractHeadId`, `pinnedContractVersionId` y
   `pinnedAuthorityVersionId` después del primer certificado aprobado;
 - `latestApprovedPeriodStart` y `latestApprovedCertificateVersionId`;
@@ -274,7 +277,8 @@ siempre es aprobada; una propuesta o rechazo no sustituye la vigente.
 
 Ledger append-only full-snapshot. Incluye, como mínimo:
 
-- secuencia global de obra y versión dentro del período;
+- `projectSequence BIGINT` global de obra y `periodVersion INT` dentro del
+  período;
 - `predecessorId`, siempre la última tentativa del mismo período, para una
   cadena lineal que incluye aprobaciones, rechazos y cancelaciones;
 - `supersedesApprovedVersionId`, la versión aprobada vigente del mismo período
@@ -326,10 +330,29 @@ predicado de orfandad. Sólo `APPROVE` rederiva cut/contrato/autoridad/maker,
 fórmulas y candidato completos. Así un reseal posterior a prepare no deja el
 pending global wedged.
 
+### `ProjectCertificateOperationReceipt`
+
+Ledger común append-only de idempotencia para todos los comandos S10-CERT:
+`PREPARE`, `APPROVE`, `REJECT` y `CANCEL`. Persiste organización, obra,
+operation kind, hash de key, request fingerprint, actorMembershipId,
+certificateVersionId, decisionId nullable, `bookRevisionAfter`,
+`periodHeadRevisionAfter` y timestamp server-owned. Impone
+`UNIQUE (organizationId, operationKeyHash)` **a través de todos los tipos de
+operación**; uniques separados en Version y Decision no alcanzan para impedir
+que una misma key se reuse entre prepare y decide.
+
+`decisionId` es `null` si y sólo si `operationKind = PREPARE`; las otras tres
+operaciones lo enlazan por FK composite a la decisión exacta. El lookup
+replay-first consulta este ledger y reconstruye el receipt desde los facts; no
+confía en una proyección cliente ni en buscar por separado dos tablas. Las
+revisiones post-operación permiten que un replay tardío devuelva el mismo
+recibo semántico aun cuando los heads ya hayan avanzado.
+
 Todo el ledger, book y period heads son no-delete/no-truncate; hechos y
 decisiones además son no-update. Triggers de write-scope `ENABLE ALWAYS`
 protegen también cada `INSERT` de Version, Line, Deduction y Decision y sólo lo
-aceptan dentro del worker gobernado con profundidad exacta; no alcanza con
+aceptan dentro del worker gobernado con profundidad exacta; el mismo contrato
+cubre `ProjectCertificateOperationReceipt`. No alcanza con
 prohibir UPDATE/DELETE. Los heads aceptan cambios únicamente desde esos
 comandos. DML directo, `session_replication_role=replica` y TRUNCATE fallan
 cerrados y no pueden fabricar ni extender un snapshot.
@@ -357,13 +380,20 @@ migración debe declarar tuples `UNIQUE` auxiliares y FKs composite exactas:
 - `ProjectCertificateDeduction` -> Version por organización/obra/version;
 - `ProjectCertificateDecision` -> Version y Book/PeriodHead exactos, y actor ->
   TenantMembership por organización/membership;
+- `ProjectCertificateOperationReceipt` -> Version y actor por scope exacto y,
+  para decisiones, -> Decision por organización/obra/version/decision;
 - Book y PeriodHead -> Organization/Project; todos sus current/latest/pending
   pointers vuelven al ledger con el mismo scope. El pin del Book usa una FK
   conjunta `(organizationId, projectId, pinnedContractHeadId,
   pinnedContractVersionId, pinnedAuthorityVersionId)` al mismo tuple S9.3.
 
-No existe FK sólo por ID para una relación gobernada. Las decisiones/guards SQL
-se suman a estas FKs; no las sustituyen.
+No existe FK sólo por ID para una relación gobernada, salvo la composición
+estructural explícita de Task: como `Task` no almacena `organizationId`, cada
+línea declara simultáneamente `(organizationId, projectId) -> Project` y
+`(projectId, taskId) -> Task`. Dado que `Project.id` es globalmente único,
+ambas FKs juntas prueban exactamente tenant/obra/task sin introducir una
+columna transversal redundante en Task. Las decisiones/guards SQL se suman a
+estas FKs; no las sustituyen.
 
 ## Orden, correcciones y pinning
 
@@ -398,6 +428,24 @@ propuesta S10 pendiente o una propuesta S9.3 de contrato/autoridad pendiente.
 El guard vive en PostgreSQL para cubrir API, scripts y DML lateral: no se puede
 desactivar primero todas las `ProjectMembership` y dejar el pending sin actor
 capaz de rechazar o cancelar.
+
+Cambios de TenantMembership/ProjectMembership que puedan revocar actores
+inspeccionan, mediante trigger con transition tables, **todos** los Book pending
+afectados en orden de `projectId`, bloquean sus rows y evalúan el estado
+post-cambio. Sólo rechazan la mutación si dejaría una propuesta sin ninguna
+salida válida: certifier capaz de REJECT, o registrar/fallback capaz de CANCEL.
+Esto evita write skew en updates bulk sin congelar una membresía que todavía
+deja un closer autorizado.
+
+El trigger `Task_project_contract_scope_guard` se reemplaza para observar
+`type`, `metadata.source`, `code`, `title` y `revision`. Ante esos cambios toma
+primero el advisory crudo `hashtextextended(projectId, 0)` y luego
+`project-contract:scope`; no toma el advisory S9.1 después del row lock. La
+entrada/salida del catálogo canónico sigue bloqueada por una SOV vigente; un
+cambio sólo de snapshot se serializa y vuelve stale el cut hasta reseal, sin
+congelar status, fechas, progreso, assignee, descripción ni metadata ajena a
+`source`. El guard previo que pudiera necesitar el lock de task usa
+`pg_try_advisory_xact_lock` y falla rápido, nunca espera con orden inverso.
 
 Una corrección técnica S9.1/S9.2 nunca se bloquea ni se reescribe por existir un
 certificado. Si cambia el cut de la última quincena certificada, el book deriva
@@ -458,10 +506,44 @@ GET devuelve `no-store`: book, head del período, current/pending, historial
 acotado, readiness, blockers, candidato server-owned y capabilities derivadas
 en DB.
 
-POST de propuesta admite únicamente CAS explícitos, período y deducciones. Usa
-`Idempotency-Key`; no admite líneas ni totales cliente. POST de decisión exige
-ID pending, expected revisions/hash, `APPROVE|REJECT|CANCEL`, razón e
-`Idempotency-Key`.
+GET admite una única query `periodDate=YYYY-MM-DD`; parámetros desconocidos,
+repetidos o fechas no canónicas fallan. POST de propuesta usa este body exacto:
+
+```json
+{
+  "periodDate": "YYYY-MM-DD",
+  "expectedBookRevision": 0,
+  "expectedPeriodHeadRevision": 0,
+  "expectedCurrentApprovedVersionId": null,
+  "deductions": [
+    { "code": "ANTICIPO", "reason": "Fundamento explícito", "amountMinor": "1" }
+  ]
+}
+```
+
+Las revisiones son integers PostgreSQL no negativos y el ID esperado es
+nullable. `deductions` conserva orden/ordinal y reordenarla cambia el
+fingerprint; admite máximo 50 códigos únicos con regex
+`^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$`, razón trimmeada sin controles de 1..1000
+caracteres y `amountMinor` string decimal canónico positivo dentro de signed
+`BIGINT`. Prepare usa `Idempotency-Key` y no acepta cut/contrato/autoridad,
+líneas, cantidades, hashes ni totales cliente.
+
+POST de decisión toma el target sólo desde el path y usa este body exacto:
+
+```json
+{
+  "expectedBookRevision": 1,
+  "expectedPeriodHeadRevision": 1,
+  "expectedCertificateDigest": "sha256-hex-exacto",
+  "decision": "APPROVE",
+  "reason": "Fundamento explícito"
+}
+```
+
+`decision` admite exactamente `APPROVE|REJECT|CANCEL` y persiste
+`APPROVED|REJECTED|CANCELLED`; razón sigue la misma regla textual 1..1000. Usa
+`Idempotency-Key`. Campos extra o ausentes fallan antes de mutar.
 
 La serialización usa allowlists exactas. IDs cross-tenant responden 404; permisos
 insuficientes, 403; replay mutado o CAS/candidato stale, 409; contratos de
@@ -469,18 +551,26 @@ persistencia inválidos fallan cerrados sin filtrar SQL, PII ni hashes internos.
 
 ## Replay, locks y carreras
 
+Cada lectura o mutación usa una única transacción secuencial
+`ReadCommitted`; no se ejecuta `Promise.all` sobre el mismo cliente
+transaccional. Ese aislamiento es deliberado: después de esperar advisory o
+row locks, la sentencia siguiente debe observar el estado recién committed y
+revalidarlo, sin conservar un snapshot anterior a la espera.
+
 Orden canónico de locks:
 
 1. advisory lock de operation key;
-2. `project-contract:scope:{org}:{project}`;
-3. row locks de TenantMembership y ProjectMembership de los actores relevantes,
+2. advisory crudo `hashtextextended(projectId, 0)`, idéntico a
+   `lockProjectTransaction`;
+3. `project-contract:scope:{org}:{project}`;
+4. row locks de TenantMembership y ProjectMembership de los actores relevantes,
    en orden determinista y con modo que conflicte con UPDATE/DELETE;
-4. locks S9.1 `{org}:{project}:{taskId}` de la unión de tareas canónicas del
+5. locks S9.1 `{org}:{project}:{taskId}` de la unión de tareas canónicas del
    target y de todos los certificados current aprobados, en orden;
-5. `progress-measurement-cut:scope:{org}:{project}:{periodStart}` de todos los
+6. `progress-measurement-cut:scope:{org}:{project}:{periodStart}` de todos los
    períodos current aprobados más target, ordenados;
-6. `project-certificate:scope:{org}:{project}`;
-7. filas book, period head y ledgers.
+7. `project-certificate:scope:{org}:{project}`;
+8. filas book, period head y ledgers.
 
 No es necesario ni correcto hacer que S9.1/S9.2 dependan del ledger financiero.
 S9.1 toma sólo sus task locks y S9.2 sólo su cut scope; ninguno espera luego un
@@ -521,6 +611,12 @@ Carreras mínimas del verificador disposable PostgreSQL 17:
 - cleanup exacto y restauración de todos los triggers.
 
 Vercel ejecuta sólo journey rollback-only con carreras disposable desactivadas.
+El verificador se llama exclusivamente
+`verify:project-certificates-migration` y usa
+`PROJECT_CERTIFICATES_MIGRATION_DATABASE_URL`,
+`PROJECT_CERTIFICATES_MIGRATION_SCHEMA` y
+`PROJECT_CERTIFICATES_DISPOSABLE_CONCURRENCY`; no reutiliza el verificador
+legacy `verify:s10-migrations` de SupplierInvoice.
 
 ## Gates de aceptación de Fase 1
 
