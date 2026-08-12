@@ -82,10 +82,12 @@ export async function syncPlatformUserFromClerk(
   }
   const email = requireVerifiedClerkUser(clerkUser);
   const profile = platformUserProfile(clerkUser, email, options);
-  const [existingByClerkId, existingByEmail] = await Promise.all([
-    prisma.platformUser.findUnique({ where: { clerkUserId: clerkUser.id } }),
-    prisma.platformUser.findUnique({ where: { primaryEmail: email } }),
-  ]);
+  const existingByClerkId = await prisma.platformUser.findUnique({
+    where: { clerkUserId: clerkUser.id },
+  });
+  const existingByEmail = await prisma.platformUser.findUnique({
+    where: { primaryEmail: email },
+  });
 
   if (existingByClerkId && existingByEmail && existingByClerkId.id !== existingByEmail.id) {
     throw new ClerkIdentityConflictError({ email, clerkUserId: clerkUser.id });
@@ -113,10 +115,12 @@ export async function syncPlatformUserFromClerk(
   } catch (error) {
     if (!isUniqueConstraintViolation(error)) throw error;
 
-    const [latestByClerkId, latestByEmail] = await Promise.all([
-      prisma.platformUser.findUnique({ where: { clerkUserId: clerkUser.id } }),
-      prisma.platformUser.findUnique({ where: { primaryEmail: email } }),
-    ]);
+    const latestByClerkId = await prisma.platformUser.findUnique({
+      where: { clerkUserId: clerkUser.id },
+    });
+    const latestByEmail = await prisma.platformUser.findUnique({
+      where: { primaryEmail: email },
+    });
     if (latestByClerkId && latestByEmail && latestByClerkId.id !== latestByEmail.id) {
       throw new ClerkIdentityConflictError({ email, clerkUserId: clerkUser.id });
     }
@@ -144,10 +148,12 @@ export async function rebindPlatformUserByVerifiedEmail(prisma, clerkUser, optio
     ...profileOptions
   } = options;
   const synchronize = async (transaction) => {
-    const [existingByClerkId, existingByEmail] = await Promise.all([
-      transaction.platformUser.findUnique({ where: { clerkUserId: clerkUser.id } }),
-      transaction.platformUser.findUnique({ where: { primaryEmail: email } }),
-    ]);
+    const existingByClerkId = await transaction.platformUser.findUnique({
+      where: { clerkUserId: clerkUser.id },
+    });
+    const existingByEmail = await transaction.platformUser.findUnique({
+      where: { primaryEmail: email },
+    });
 
     if (existingByClerkId && existingByEmail && existingByClerkId.id !== existingByEmail.id) {
       throw new ClerkIdentityConflictError({ email, clerkUserId: clerkUser.id });

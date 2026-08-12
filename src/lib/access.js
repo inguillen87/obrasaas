@@ -193,24 +193,22 @@ export async function resolveLockedPlatformIdentity({
           });
         }
 
-        const [boundOrganization, boundUser, currentMembership] = await Promise.all([
-          database.organization.findUnique({
-            where: { id: organization.id },
-            select: { clerkOrganizationId: true },
-          }),
-          database.platformUser.findUnique({
-            where: { id: user.id },
-            select: { clerkUserId: true },
-          }),
-          database.tenantMembership.findUnique({
-            where: {
-              organizationId_userId: {
-                organizationId: organization.id,
-                userId: user.id,
-              },
+        const boundOrganization = await database.organization.findUnique({
+          where: { id: organization.id },
+          select: { clerkOrganizationId: true },
+        });
+        const boundUser = await database.platformUser.findUnique({
+          where: { id: user.id },
+          select: { clerkUserId: true },
+        });
+        const currentMembership = await database.tenantMembership.findUnique({
+          where: {
+            organizationId_userId: {
+              organizationId: organization.id,
+              userId: user.id,
             },
-          }),
-        ]);
+          },
+        });
         if (
           boundOrganization?.clerkOrganizationId !== session.orgId
           || boundUser?.clerkUserId !== session.userId

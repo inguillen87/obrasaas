@@ -362,26 +362,24 @@ export async function buildClerkMembershipReconciliationPlan(
   if (!primaryEmail) fail('RECONCILIATION_VERIFIED_EMAIL_REQUIRED');
 
   const linkedDatabaseOrganizationId = clerkDatabaseOrganizationId(state.organization);
-  const [userByClerkId, userByEmail, organizationByClerkId, organizationByDatabaseId] = await Promise.all([
-    database.platformUser.findUnique({
-      where: { clerkUserId: state.user.id },
-      select: { id: true, clerkUserId: true, primaryEmail: true },
-    }),
-    database.platformUser.findUnique({
-      where: { primaryEmail },
-      select: { id: true, clerkUserId: true, primaryEmail: true },
-    }),
-    database.organization.findUnique({
-      where: { clerkOrganizationId: state.organization.id },
-      select: { id: true, clerkOrganizationId: true, metadata: true },
-    }),
-    linkedDatabaseOrganizationId
-      ? database.organization.findUnique({
-          where: { id: linkedDatabaseOrganizationId },
-          select: { id: true, clerkOrganizationId: true, metadata: true },
-        })
-      : Promise.resolve(null),
-  ]);
+  const userByClerkId = await database.platformUser.findUnique({
+    where: { clerkUserId: state.user.id },
+    select: { id: true, clerkUserId: true, primaryEmail: true },
+  });
+  const userByEmail = await database.platformUser.findUnique({
+    where: { primaryEmail },
+    select: { id: true, clerkUserId: true, primaryEmail: true },
+  });
+  const organizationByClerkId = await database.organization.findUnique({
+    where: { clerkOrganizationId: state.organization.id },
+    select: { id: true, clerkOrganizationId: true, metadata: true },
+  });
+  const organizationByDatabaseId = linkedDatabaseOrganizationId
+    ? await database.organization.findUnique({
+        where: { id: linkedDatabaseOrganizationId },
+        select: { id: true, clerkOrganizationId: true, metadata: true },
+      })
+    : null;
 
   if (userByClerkId && userByEmail && userByClerkId.id !== userByEmail.id) {
     fail('RECONCILIATION_IDENTITY_CONFLICT');

@@ -120,33 +120,31 @@ export async function patchTenantMemberRole(
           access.databaseUserId,
         );
 
-        const [boundOrganization, actorMembership, membership] = await Promise.all([
-          tx.organization.findUnique({
-            where: { id: access.organization.id },
-            select: {
-              clerkOrganizationId: true,
-              metadata: true,
-              subscriptionPlan: true,
-              subscriptionStatus: true,
-              trialEndsAt: true,
-            },
-          }),
-          tx.tenantMembership.findUnique({
-            where: {
-              organizationId_userId: {
-                organizationId: access.organization.id,
-                userId: access.databaseUserId,
-              },
-            },
-          }),
-          tx.tenantMembership.findFirst({
-            where: {
-              id: body.membershipId,
+        const boundOrganization = await tx.organization.findUnique({
+          where: { id: access.organization.id },
+          select: {
+            clerkOrganizationId: true,
+            metadata: true,
+            subscriptionPlan: true,
+            subscriptionStatus: true,
+            trialEndsAt: true,
+          },
+        });
+        const actorMembership = await tx.tenantMembership.findUnique({
+          where: {
+            organizationId_userId: {
               organizationId: access.organization.id,
+              userId: access.databaseUserId,
             },
-            include: { user: true },
-          }),
-        ]);
+          },
+        });
+        const membership = await tx.tenantMembership.findFirst({
+          where: {
+            id: body.membershipId,
+            organizationId: access.organization.id,
+          },
+          include: { user: true },
+        });
 
         if (boundOrganization?.clerkOrganizationId !== access.orgId) {
           throw new AccessError('Clerk organization identity changed before the role update.', {

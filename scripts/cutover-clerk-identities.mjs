@@ -137,46 +137,42 @@ export async function loadValidatedClerkCutoverTarget({
 }
 
 async function loadDatabaseIdentityState(database) {
-  const [databaseUsers, databaseOrganizations, databaseMemberships] = await Promise.all([
-    database.platformUser.findMany({
-      where: { clerkUserId: { startsWith: 'user_' } },
-      orderBy: { id: 'asc' },
-      select: {
-        id: true,
-        clerkUserId: true,
-        primaryEmail: true,
-        systemRole: true,
-      },
-    }),
-    database.organization.findMany({
-      where: { clerkOrganizationId: { startsWith: 'org_' } },
-      orderBy: { id: 'asc' },
-      select: {
-        id: true,
-        clerkOrganizationId: true,
-        metadata: true,
-      },
-    }),
-    database.tenantMembership.findMany({
-      orderBy: { id: 'asc' },
-      select: {
-        userId: true,
-        organizationId: true,
-        clerkRole: true,
-        status: true,
-      },
-    }),
-  ]);
+  const databaseUsers = await database.platformUser.findMany({
+    where: { clerkUserId: { startsWith: 'user_' } },
+    orderBy: { id: 'asc' },
+    select: {
+      id: true,
+      clerkUserId: true,
+      primaryEmail: true,
+      systemRole: true,
+    },
+  });
+  const databaseOrganizations = await database.organization.findMany({
+    where: { clerkOrganizationId: { startsWith: 'org_' } },
+    orderBy: { id: 'asc' },
+    select: {
+      id: true,
+      clerkOrganizationId: true,
+      metadata: true,
+    },
+  });
+  const databaseMemberships = await database.tenantMembership.findMany({
+    orderBy: { id: 'asc' },
+    select: {
+      userId: true,
+      organizationId: true,
+      clerkRole: true,
+      status: true,
+    },
+  });
   return { databaseUsers, databaseOrganizations, databaseMemberships };
 }
 
 async function identityCounts(database) {
-  const [users, organizations, memberships, projects] = await Promise.all([
-    database.platformUser.count(),
-    database.organization.count(),
-    database.tenantMembership.count(),
-    database.project.count(),
-  ]);
+  const users = await database.platformUser.count();
+  const organizations = await database.organization.count();
+  const memberships = await database.tenantMembership.count();
+  const projects = await database.project.count();
   return { users, organizations, memberships, projects };
 }
 
