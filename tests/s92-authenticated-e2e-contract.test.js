@@ -247,7 +247,11 @@ test('S9.2 journey covers role, replay, stale correction, tenancy and read-only 
     'hasLocation: anonymousRead.diagnostic.hasLocation',
     "redirectTo: anonymousRead.headers['x-clerk-redirect-to'] ?? null",
     'status: anonymousRead.status',
-    "locator('#measurement-cut-period').fill(fixture.period.date)",
+    "locator('#measurement-cut-period')",
+    'clerk.loaded({ page: sessions.auditor.page })',
+    "key.startsWith('__reactProps$') && typeof input[key]?.onChange === 'function'",
+    'fixturePeriodInput.inputValue() !== fixture.period.date',
+    'expect(fixturePeriodInput).toHaveValue(fixture.period.date)',
     'Lectura autorizada · sellado restringido',
   ]) {
     assert.ok(spec.includes(marker), `Missing S9.2 E2E marker: ${marker}`);
@@ -256,6 +260,42 @@ test('S9.2 journey covers role, replay, stale correction, tenancy and read-only 
   assert.match(spec, /validCutV1Body/);
   assert.match(spec, /payload: \{ code: 'PERMISSION_REQUIRED' \}/);
   assert.match(spec, /status: 403/);
+
+  const auditorUiStart = spec.indexOf("sessions.auditor.page.goto('/dashboard/measurements?view=cut')");
+  const journeyCleanup = spec.indexOf('} finally {', auditorUiStart);
+  const auditorUi = spec.slice(auditorUiStart, journeyCleanup);
+  assert.ok(auditorUiStart >= 0 && journeyCleanup > auditorUiStart);
+  assert.equal(
+    auditorUi.match(/waitForResponse/g)?.length,
+    1,
+    'only the post-hydration period change may wait for a cut response',
+  );
+  const clerkReady = auditorUi.indexOf('clerk.loaded({ page: sessions.auditor.page })');
+  const periodControlHydrated = auditorUi.indexOf("key.startsWith('__reactProps$')");
+  const periodMismatch = auditorUi.indexOf('fixturePeriodInput.inputValue() !== fixture.period.date');
+  const fixtureResponse = auditorUi.indexOf('waitForResponse', periodMismatch);
+  const periodFill = auditorUi.indexOf('fixturePeriodInput.fill(fixture.period.date)', fixtureResponse);
+  const responseAwait = auditorUi.indexOf('await fixtureCutResponse', periodFill);
+  const periodSettled = auditorUi.indexOf('toHaveValue(fixture.period.date)', responseAwait);
+  assert.ok(
+    clerkReady >= 0
+      && clerkReady < periodControlHydrated
+      && periodControlHydrated < periodMismatch
+      && periodMismatch < fixtureResponse
+      && fixtureResponse < periodFill
+      && periodFill < responseAwait
+      && responseAwait < periodSettled,
+    'Clerk hydration must settle before reading the input, and the exact response wait must exist before a period-changing fill',
+  );
+  assert.match(auditorUi, /request\(\)\.method\(\) === 'GET'/);
+  assert.match(auditorUi, /url\.pathname === '\/api\/progress-measurement-cuts'/);
+  assert.match(auditorUi, /url\.searchParams\.get\('periodDate'\) === fixture\.period\.date/);
+  assert.match(auditorUi, /response\.status\(\) === 200/);
+  assert.ok(
+    periodSettled
+      < auditorUi.indexOf("getByText('Corte vigente'"),
+    'the fixture period must be settled before asserting version 2 UI state',
+  );
 });
 
 test('anonymous JSON boundary establishes an explicit Clerk signed-out client before API access', () => {

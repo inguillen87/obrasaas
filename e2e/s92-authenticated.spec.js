@@ -532,17 +532,28 @@ test.describe('S9.2 authenticated acceptance', () => {
 
       await sessions.auditor.page.goto('/dashboard/measurements?view=cut');
       await expect(sessions.auditor.page.getByRole('heading', { name: 'Corte quincenal' })).toBeVisible();
-      const fixtureCutResponse = sessions.auditor.page.waitForResponse((response) => {
-        const url = new URL(response.url());
-        return (
-          response.request().method() === 'GET'
-          && url.pathname === '/api/progress-measurement-cuts'
-          && url.searchParams.get('periodDate') === fixture.period.date
-          && response.status() === 200
-        );
-      });
-      await sessions.auditor.page.locator('#measurement-cut-period').fill(fixture.period.date);
-      await fixtureCutResponse;
+      await clerk.loaded({ page: sessions.auditor.page });
+      const fixturePeriodInput = sessions.auditor.page.locator('#measurement-cut-period');
+      await expect.poll(
+        () => fixturePeriodInput.evaluate((input) => Object.keys(input).some((key) => (
+          key.startsWith('__reactProps$') && typeof input[key]?.onChange === 'function'
+        ))),
+        { message: 'El selector de quincena debe estar hidratado antes de cambiar el período.' },
+      ).toBe(true);
+      if (await fixturePeriodInput.inputValue() !== fixture.period.date) {
+        const fixtureCutResponse = sessions.auditor.page.waitForResponse((response) => {
+          const url = new URL(response.url());
+          return (
+            response.request().method() === 'GET'
+            && url.pathname === '/api/progress-measurement-cuts'
+            && url.searchParams.get('periodDate') === fixture.period.date
+            && response.status() === 200
+          );
+        });
+        await fixturePeriodInput.fill(fixture.period.date);
+        await fixtureCutResponse;
+      }
+      await expect(fixturePeriodInput).toHaveValue(fixture.period.date);
       await expect(sessions.auditor.page.getByText('Corte vigente', { exact: true })).toBeVisible();
       await expect(sessions.auditor.page.getByText(/Versión 2/)).toBeVisible();
       await expect(
