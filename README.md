@@ -54,7 +54,7 @@ npm run build
 npm audit --omit=dev
 ```
 
-GitHub Actions ejecuta estos gates sobre pull requests y pushes a `master` o `codex/**`. El journey E2E autenticado se mantiene separado porque requiere identidades de prueba Clerk dedicadas; todavía debe ampliarse y convertirse en gate antes de producción comercial.
+GitHub Actions ejecuta estos gates sobre pull requests y pushes a `master` o `codex/**`. S9.2 agrega un job E2E autenticado separado: exige identidades sintéticas dedicadas de Clerk Development, dos tenants y PostgreSQL 17 descartable, y cubre maker-checker, roles negativos, cross-tenant, seal/replay/stale y UI. Los journeys core y de proveedores todavía deben ampliarse antes de producción comercial; este gate no usa ni acredita Clerk Production.
 
 El alias estable configurado es `https://obrasaas.vercel.app`; `https://obrasaas-preview.vercel.app` queda reservado para validaciones de Preview. Su disponibilidad se verifica en cada release y no se infiere desde la configuración. Mientras no exista un dominio propio, ambos entornos usan la instancia dedicada de desarrollo de Clerk y no se contratan add-ons ni una instancia productiva.
 

@@ -155,22 +155,39 @@ El deployment Preview inmutable `dpl_4p2bcbwyznb4afZ8XetL2GrZWF51` quedó
 `READY` con 123 migraciones sin pendientes y el verificador S9.2 rollback-only
 con `PROGRESS_MEASUREMENT_CUTS_DISPOSABLE_CONCURRENCY=0`. El build cerró 90/90,
 los cuatro smokes públicos dieron `200` y en los ocho eventos runtime exactos
-observados no hubo `error`, `fatal` ni `5xx`. La [evidencia exacta](./evidence/2026-08-11-preview-cc5aa21.md)
-no acredita un journey autenticado, un POST S9.2 en Preview, un alias estable ni
-Production.
+observados no hubo `error`, `fatal` ni `5xx`. Ese [corte técnico histórico](./evidence/2026-08-11-preview-cc5aa21.md)
+no incluyó sesión autenticada ni POST S9.2.
+
+El commit `dcb44b95ee4331224fd07fa6fa4cf7c7d320bd78` agregó el gate funcional
+autenticado reproducible. CI `31549498945` terminó 4/4: 2388/2388 pruebas, lint,
+audit cero, build 90/90, PostgreSQL 17 con 123 migraciones y drift cero, Browser
+público 2/2 y Playwright autenticado 2/2. Con seis actores sintéticos de Clerk
+Development en dos tenants y PostgreSQL descartable, recorrió maker-checker
+S9.1, `MEASURED`/`MISSING`, seal v1, replay exacto/mutado, roles de sólo lectura,
+negativos cross-tenant, corrección, `STALE`, seal v2, replay tardío y lectura UI
+final de `AUDITOR` sin acción de sellado.
+
+El deployment Preview exacto `dpl_5PTCAS3wbhgniZe8Ss5oi41NbFgv` del mismo SHA
+quedó `READY`, con 123 migraciones sin pendientes, S9.2 rollback-only, carreras
+descartables no solicitadas, build 90/90 y cuatro smokes públicos `200`. La
+[evidencia S9.2-E2E](./evidence/2026-08-11-preview-dcb44b9.md) separa el journey
+mutante de CI Development del Preview read-only: no hubo auth, POST, alias ni
+Production en Vercel/Neon.
 
 ## Residual y siguiente fase
 
-- Pendiente: recorrer GET → seal → replay → corrección → nueva versión con
-  actores autenticados y datos sintéticos de Preview, incluyendo roles de
-  lectura y negativos cross-tenant.
+- El gate autenticado S9.2 quedó cerrado en CI Development descartable; no se
+  ejecutó una mutación equivalente sobre Preview y no se necesita convertir
+  Preview compartido en una base de prueba destructiva para sostener ese claim.
+- Pendiente S9.1: un journey UI dedicado de toda la medición; S9.2-E2E cubrió el
+  maker-checker API requerido para formar y corregir el candidato.
 - Pendiente S10: modelo contractual/económico, estados y aprobadores propios,
   retenciones/ajustes/impuestos, PDF/hash reproducible, publicación privada e
   historial; el pago continúa separado.
 - Fuera del corte: alias, Production, clientes/trabajadores reales, Meta E2E y
   cualquier afirmación legal, contable o fiscal.
 
-## Criterio de salida técnico
+## Criterio de salida técnico y funcional
 
 S9.2-MED queda cerrado como gate técnico porque pasaron:
 
@@ -181,8 +198,10 @@ S9.2-MED queda cerrado como gate técnico porque pasaron:
 - carreras de dos selladores, corrección y archivado con cleanup exacto;
 - prueba de no mutación de `Task.progress`, dinero, certificado o pago;
 - RBAC, contrato API/UI, estados inciertos, accesibilidad y mobile;
+- journey autenticado con seis actores, maker-checker, roles negativos,
+  aislamiento cross-tenant, seal/replay/stale y lectura UI;
 - suite, lint, audit, build, PostgreSQL 17 sin drift y Preview exact-SHA.
 
-El journey autenticado pendiente es un gate funcional posterior y debe seguir
-declarado como tal; no invalida el cierre técnico ni permite presentar S9.2 como
-certificación o Production.
+S9.2-MED y su gate funcional autenticado quedan cerrados en el alcance
+Development/CI documentado. Esto no permite presentar el corte como una
+certificación, una instrucción de pago, Clerk Production o Production.
