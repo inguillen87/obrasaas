@@ -158,7 +158,8 @@ La implementación separa los permisos por acción:
 
 - contratos: `org:contracts:read`, `org:contracts:prepare`,
   `org:contracts:authorities:manage` y `org:contracts:approve`;
-- S10: `org:certificates:read`, `org:certificates:certify`,
+- S10: `org:certificates:read`, `org:certificates:prepare`,
+  `org:certificates:certify`,
   `org:certificates:financial-conform` y
   `org:certificates:payment-reference`.
 
@@ -194,10 +195,11 @@ ProjectProgressMeasurementCut exacto (S9.2-MED)
 La obra, organización, tareas, período y unidades deben reconciliar. Una línea
 contractual `NO_CLAIM` se materializa así en el certificado, con cantidad e
 importe `null` y fundamento; nunca se omite ni se transforma en cero. Una línea
-S9.2 `MISSING` frente a una SOV `VALUED` bloquea el cálculo; S10 sólo puede
-continuar si materializa un `NO_CLAIM` explícito con cantidad/importe `null` y
-causa `TECHNICAL_MEASUREMENT_MISSING`. En ninguno de los casos la ausencia
-significa “avance cero”, “monto cero” o aceptación tácita.
+S9.2 `MISSING` frente a una SOV `VALUED` bloquea por completo la preparación y
+aprobación del certificado. S10 no puede reclasificarla como `NO_CLAIM`, avance
+cero ni monto cero: sólo puede continuar después de un nuevo corte técnico
+compatible o de un change control contractual futuro fuera de S10-CERT Fase 1.
+La ausencia nunca significa aceptación tácita.
 
 S10 queda dividido en tres autoridades y artefactos distintos:
 

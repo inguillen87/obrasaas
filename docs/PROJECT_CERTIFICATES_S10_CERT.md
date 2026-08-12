@@ -55,6 +55,15 @@ Al preparar y al **aprobar**, el servidor revalida bajo lock:
 6. digests de cut, contrato, autoridad y candidato;
 7. membresías tenant y project activas de los actores exactos.
 
+La revalidación de actores no es un `EXISTS` sin protección. Cada comando toma
+`FOR SHARE` o `FOR UPDATE` —nunca sólo `FOR KEY SHARE`— sobre las filas
+`TenantMembership` y `ProjectMembership` relevantes, ordenadas primero por
+membership ID y luego por project-membership ID, y conserva esos locks hasta
+commit. Prepare bloquea al maker; APPROVE bloquea maker y certifier; REJECT
+bloquea al certifier; CANCEL bloquea certifier, registrar y, si corresponde, al
+fallback. Así un cambio concurrente de rol/status o un DELETE de acceso no
+puede entrar después de la validación y antes de la decisión.
+
 Antes del primer certificado también se exige que
 `contract.authorityVersionId == contractHead.currentAuthorityVersionId`. Una
 autoridad ya reemplazada no puede certificar por el solo hecho de seguir
@@ -318,8 +327,12 @@ fórmulas y candidato completos. Así un reseal posterior a prepare no deja el
 pending global wedged.
 
 Todo el ledger, book y period heads son no-delete/no-truncate; hechos y
-decisiones además son no-update. Los triggers son `ENABLE ALWAYS` y los heads
-aceptan cambios sólo desde comandos gobernados.
+decisiones además son no-update. Triggers de write-scope `ENABLE ALWAYS`
+protegen también cada `INSERT` de Version, Line, Deduction y Decision y sólo lo
+aceptan dentro del worker gobernado con profundidad exacta; no alcanza con
+prohibir UPDATE/DELETE. Los heads aceptan cambios únicamente desde esos
+comandos. DML directo, `session_replication_role=replica` y TRUNCATE fallan
+cerrados y no pueden fabricar ni extender un snapshot.
 
 La integridad tenant/obra no depende sólo de revalidación procedural. La
 migración debe declarar tuples `UNIQUE` auxiliares y FKs composite exactas:
@@ -329,6 +342,8 @@ migración debe declarar tuples `UNIQUE` auxiliares y FKs composite exactas:
   `(organizationId, projectId, contractHeadId, contractVersionId,
   authorityVersionId)` hacia un tuple `UNIQUE` de S9.3; no se permiten dos FKs
   separadas que puedan mezclar contrato y autoridad válidos pero no enlazados;
+  `preparedByMembershipId` usa FK composite
+  `(organizationId, preparedByMembershipId)` -> `TenantMembership`;
   sus tres cadenas
   `predecessorId`, `supersedesApprovedVersionId` y
   `previousApprovedCertificateVersionId` quedan scoped al book/período que
@@ -376,6 +391,13 @@ se suman a estas FKs; no las sustituyen.
 - Mientras existe una propuesta S10 pendiente, un guard cross-domain que toma
   `project-contract:scope` bloquea cualquier propuesta o decisión S9.3 de SOV o
   autoridad. Reject/cancel/approve libera ese fence o lo transforma en pin.
+
+La transición de `Project` a `ARCHIVED` toma el mismo
+`project-contract:scope` y un trigger `ENABLE ALWAYS` la rechaza si existe una
+propuesta S10 pendiente o una propuesta S9.3 de contrato/autoridad pendiente.
+El guard vive en PostgreSQL para cubrir API, scripts y DML lateral: no se puede
+desactivar primero todas las `ProjectMembership` y dejar el pending sin actor
+capaz de rechazar o cancelar.
 
 Una corrección técnica S9.1/S9.2 nunca se bloquea ni se reescribe por existir un
 certificado. Si cambia el cut de la última quincena certificada, el book deriva
@@ -451,12 +473,14 @@ Orden canónico de locks:
 
 1. advisory lock de operation key;
 2. `project-contract:scope:{org}:{project}`;
-3. locks S9.1 `{org}:{project}:{taskId}` de la unión de tareas canónicas del
+3. row locks de TenantMembership y ProjectMembership de los actores relevantes,
+   en orden determinista y con modo que conflicte con UPDATE/DELETE;
+4. locks S9.1 `{org}:{project}:{taskId}` de la unión de tareas canónicas del
    target y de todos los certificados current aprobados, en orden;
-4. `progress-measurement-cut:scope:{org}:{project}:{periodStart}` de todos los
+5. `progress-measurement-cut:scope:{org}:{project}:{periodStart}` de todos los
    períodos current aprobados más target, ordenados;
-5. `project-certificate:scope:{org}:{project}`;
-6. filas book, period head y ledgers.
+6. `project-certificate:scope:{org}:{project}`;
+7. filas book, period head y ledgers.
 
 No es necesario ni correcto hacer que S9.1/S9.2 dependan del ledger financiero.
 S9.1 toma sólo sus task locks y S9.2 sólo su cut scope; ninguno espera luego un
@@ -468,6 +492,14 @@ inverso. S9.3 y los guards cross-domain comparten primero
 Después del operation lock y de verificar sesión, TenantMembership y
 ProjectMembership **activas** para el tenant/obra exactos, el replay se resuelve
 antes del rol mutable de la acción original, CAS, current pointers y candidato:
+
+Cada fingerprint incluye como mínimo `operationKind`, organización, obra,
+`actorMembershipId`, target/version ID, input normalizado y todos los CAS,
+hashes, deducciones, decisión y razón aplicables. El receipt persiste el actor y
+el replay exige `persistedActorMembershipId == callerMembershipId`; conocer una
+key y payload ajenos no permite a otro miembro activo recuperar ese recibo. Las
+keys de prepare, APPROVE, REJECT y CANCEL tampoco pueden colisionar entre tipos
+de operación.
 
 - misma key + mismo fingerprint devuelve el recibo histórico exacto, incluso
   después de aprobar, rechazar, rotar roles o avanzar el head;
@@ -484,6 +516,8 @@ Carreras mínimas del verificador disposable PostgreSQL 17:
 - aprobación contra intento de rotación SOV/authority;
 - corrección del último período contra propuesta del siguiente;
 - revocación de maker/checker contra aprobación;
+- archive de obra contra pending S10/S9.3;
+- DML directo/replica/TRUNCATE contra cada ledger y proyección;
 - cleanup exacto y restauración de todos los triggers.
 
 Vercel ejecuta sólo journey rollback-only con carreras disposable desactivadas.
