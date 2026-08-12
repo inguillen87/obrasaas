@@ -2,7 +2,7 @@
 
 Este plan mantiene la secuencia del PDF y separa capacidades operativas de capacidades financieras. Cada sprint debe cerrar con migración verificable, pruebas de concurrencia, permisos y evidencia de uso; un endpoint compilado no cuenta como salida.
 
-## Corte base: 2 de agosto de 2026 · actualización S9.2-E2E: 11 de agosto de 2026
+## Corte base: 2 de agosto de 2026 · actualización S9.3: 12 de agosto de 2026
 
 El estado se expresa por nivel de evidencia: código y pruebas locales, migración en Preview aislado, journey UI en Preview y E2E externo. No se usa “desplegado” como sinónimo de “operativo con un proveedor real”.
 
@@ -24,6 +24,16 @@ El estado se expresa por nivel de evidencia: código y pruebas locales, migraci�
 - el commit `871cf2f` agregó PRO-05B.1 y quedó `Ready` en el deployment Preview inmutable `dpl_Fj7zRe66SrNtaeLXQSXhESjygPSs`, sin mover ni certificar un alias. El release detectó 121 migraciones sin pendientes, volvió a ejecutar PRO-05A, aprobó PRO-05B.1 en rollback-only con carreras disposable desactivadas y completó 88/88. CI `31511714114` terminó 3/3 con `2230/2230`, PostgreSQL 17 disposable, status y drift cero. El [smoke PRO-05B.1](./evidence/2026-08-11-preview-871cf2f.md) comprobó acceso `ADMIN`, rechazo `AUDITOR`, signed-out 404 y cero `error`/`fatal`/`5xx`, todo read-only y sin POST. No acredita DSAR ejecutable, cross-tenant, trabajadores reales, alias ni Production;
 - el commit `cc5aa21` cerró el gate técnico S9.2-MED. CI `31539591755` terminó 3/3 con 123 migraciones, carreras PostgreSQL de replay exacto/mutado, dos selladores, corrección y archivado, cleanup exacto, `2347/2347`, lint, audit cero, build 90/90 y Browser 2/2. El deployment Preview inmutable `dpl_4p2bcbwyznb4afZ8XetL2GrZWF51` quedó `READY`, sin mover alias: detectó 123 migraciones sin pendientes, aprobó S9.2 rollback-only con carreras disposable desactivadas y completó 90/90. Los [smokes y límites](./evidence/2026-08-11-preview-cc5aa21.md) son públicos/read-only; no hubo sesión autenticada, POST S9.2, mutación manual ni Production;
 - el commit `dcb44b9` cerró el gate funcional autenticado S9.2-E2E. CI `31549498945` terminó 4/4: PostgreSQL 17 aplicó 123 migraciones y quedó sin drift; Quality aprobó `2388/2388`, lint, audit cero y build 90/90; Browser público cerró 2/2; y el job autenticado cerró 2/2 con seis actores sintéticos de Clerk Development en dos tenants y una base `obrasaas_e2e` descartable. El journey cubrió maker-checker S9.1, seal/replay/stale S9.2, roles negativos, cross-tenant y lectura UI final. El deployment Preview inmutable `dpl_5PTCAS3wbhgniZe8Ss5oi41NbFgv` quedó `READY`, con 123 migraciones sin pendientes, verificador rollback-only, carreras no solicitadas, build 90/90 y cuatro GET públicos `200`; no hubo auth, POST, alias, mutación manual ni Production. La [evidencia exacta](./evidence/2026-08-11-preview-dcb44b9.md) mantiene separados ambos ambientes;
+- el commit `21ce752` implementó S9.3-CONTRACT y quedó `READY` en el Preview
+  inmutable `dpl_2cmWjw8AtEqLquafAZBXWbHSeHRW`. El release detectó 124
+  migraciones sin pendientes, aprobó S9.3 rollback-only con flag descartable
+  final `0`, completó 93/93 y obtuvo cuatro GET públicos `200`, sin
+  `error`/`fatal` ni `5xx`. CI `31558109020` ya tiene verdes PostgreSQL 17,
+  Quality (`2446/2446`, lint, audit cero, build 93/93), Browser público y el
+  journey autenticado S9.2 + S9.3. El E2E verificó fixtures Clerk Development
+  sin drift y cerró S9.2 2/2 y S9.3 2/2 sobre PostgreSQL descartable. El [corte
+  exacto](./evidence/2026-08-12-preview-21ce752.md) cierra técnicamente S9.3. No
+  hubo auth/POST en Preview, alias ni Production;
 - falta cerrar el smoke UI de publicación de baseline y forecast en el tenant de prueba, porque el acceso local directo a la conexión Preview está deliberadamente protegido y no se sustituye con una conexión de Production;
 - Meta, media entrante e identidad/cobro siguen siendo gates externos. La credencial dedicada de Vision, el presupuesto y el ledger gobernado ya están aislados/verificados en Preview; faltan gate de datos, foto real y journey autenticado.
 
@@ -102,11 +112,31 @@ Unidad, cantidad base, ejecutada, método, período, evidencia, revisión y apro
 
 El [corte técnico S9.2-MED](./PROGRESS_MEASUREMENT_CUTS_S9_2.md) ya sella por obra y quincena cerrada un snapshot inmutable de todas las tareas canónicas, derivado en servidor y reproducible por hash. Cada línea queda como `MEASURED` o `MISSING`; ausencia nunca significa cantidad cero. Versiona correcciones sin reescribir historia, exige replay idempotente y doble CAS del head/candidato, y restringe el sellado a `ADMIN`/`DIRECTOR` activos. El [corte `cc5aa21`](./evidence/2026-08-11-preview-cc5aa21.md) verificó DB, carreras, cleanup, CI y Preview rollback-only; el [corte `dcb44b9`](./evidence/2026-08-11-preview-dcb44b9.md) agregó el journey API/UI autenticado sobre Clerk Development y PostgreSQL descartable: seis actores, maker-checker, roles negativos, cross-tenant, seal v1/v2, replay exacto/mutado/tardío y transición `STALE`. El Preview del mismo SHA permaneció read-only. Este artefacto sigue siendo técnico e interno; no contiene importes, retenciones, impuestos, PDF contractual, conformidad financiera ni estado de pago. S9.3-CONTRACT es el prerrequisito contractual separado de S10.
 
-### S9.3-CONTRACT — autoridad contractual y SOV (Fase 1 documental congelada; implementación pendiente)
+### S9.3-CONTRACT — autoridad contractual y SOV (cerrado técnicamente)
 
-El [contrato canónico S9.3](./PROJECT_CONTRACT_AUTHORITY_S9_3.md) fija una autoridad distinta de presupuesto, medición y AP: head/versión/líneas/decisiones propios; todas las tareas como `VALUED` o `NO_CLAIM`; moneda y escala persistidas; importe facial en minor units; `retentionBps`; `CERT_RETENTION_HALF_UP_V1`; vigencia y digest; y tres membresías activas distintas para certificar, conformar financieramente y registrar una referencia externa. La designación y el contrato tienen maker-checker. `BudgetVersion`/`BudgetLine`, `SupplierInvoice`, `Task.progress`, certificado, PDF, conformidad y pago quedan fuera.
+El [contrato canónico S9.3](./PROJECT_CONTRACT_AUTHORITY_S9_3.md) está
+implementado como una autoridad distinta de presupuesto, medición y AP:
+head/versión/líneas/decisiones propios; todas las tareas como `VALUED` o
+`NO_CLAIM`; moneda y escala persistidas; importe facial en minor units;
+`retentionBps`; `CERT_RETENTION_HALF_UP_V1`; vigencia y digest; y tres
+membresías activas distintas para certificar, conformar financieramente y
+registrar una referencia externa. La designación y el contrato tienen
+maker-checker, CAS, idempotencia, replay y conciliación de resultados ambiguos.
+La API/UI privada aplica alcance tenant/obra y least privilege. `BudgetVersion`/
+`BudgetLine`, `SupplierInvoice`, `Task.progress`, certificado, PDF, conformidad
+y pago quedan fuera.
 
-Este freeze no cierra S9.3. Las fases de implementación deben entregar, en orden: (1) esquema/migración/guards/verificador; (2) RBAC least-privilege, API/UI e idempotencia/CAS; (3) carreras PostgreSQL, E2E autenticado, CI y Preview exact-SHA. No se acredita Production.
+El commit `21ce752` cerró esquema/migración/guards/verificador, RBAC, API/UI,
+idempotencia/CAS, carreras PostgreSQL, E2E autenticado Development y Preview
+exact-SHA. CI terminó 4/4; S9.3 recorrió setup + journey 2/2 y gobernó autoridad
+y SOV completa a través de los roles exactos de la obra. No se acredita
+Production ni validez legal, contable o fiscal.
+
+Antes de ampliar a S10, un hardening P2 corto debe secuenciar las lecturas que
+hoy se lanzan en paralelo sobre un mismo cliente transaccional de identidad.
+`pg@8.22.0` todavía las serializa y los journeys cerraron verdes, pero el patrón
+está deprecado y debe eliminarse antes de adoptar `pg@9`; no reabre los
+invariantes ni el cierre funcional de S9.3.
 
 ### S10 — certificación, conformidad y referencia de pago (pendiente; tres autoridades separadas)
 

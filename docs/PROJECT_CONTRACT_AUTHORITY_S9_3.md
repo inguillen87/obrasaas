@@ -2,9 +2,13 @@
 
 ## Estado y límite
 
-Este documento congela el contrato de dominio que debe implementarse antes de
-S10. No afirma que existan todavía modelos, migración, permisos, API, UI,
-verificador, E2E, Preview o Production para S9.3.
+Este documento conserva el contrato normativo de dominio y describe su
+implementación técnicamente cerrada en el commit
+`21ce752a06cc6e4a66bcd07e67c230306c312eb2`. Ya existen modelos, migración 124,
+guards, permisos, API/UI privada, verificadores PostgreSQL y un Preview
+exact-SHA `READY`. El [corte de evidencia](./evidence/2026-08-12-preview-21ce752.md)
+registra CI 4/4 y E2E autenticado Development 2/2 sobre el mismo SHA. S9.3 está
+cerrado técnicamente; Production permanece fuera del alcance.
 
 S9.3 crea una base contractual o **Schedule of Values (SOV)** por organización
 y obra. Esa base fija qué tarea se valúa o queda explícitamente fuera de
@@ -30,9 +34,9 @@ Quedan fuera de S9.3 impuestos, factura fiscal, anticipo, actualización por
 índice, conversión de moneda, firma, PDF, contabilización, conciliación bancaria
 y ejecución o confirmación de pagos.
 
-## Autoridades de datos objetivo
+## Autoridades de datos implementadas
 
-La implementación debe usar autoridades propias, tenant-scoped y separadas:
+La implementación usa autoridades propias, tenant-scoped y separadas:
 
 - `ProjectContractHead`: una proyección CAS por organización y obra, con la
   versión vigente y, cuando corresponda, una candidata pendiente.
@@ -150,7 +154,7 @@ su conformador `FINANCE` designado puede aprobarla; preparador y aprobador son
 membership IDs distintos. El registrador `ADMIN` queda reservado para la futura
 referencia externa de pago y no prepara contratos.
 
-El permiso objetivo se separa por acción:
+La implementación separa los permisos por acción:
 
 - contratos: `org:contracts:read`, `org:contracts:prepare`,
   `org:contracts:authorities:manage` y `org:contracts:approve`;
@@ -161,8 +165,9 @@ El permiso objetivo se separa por acción:
 Cada decisión se toma con CAS sobre el head observado, idempotencia y
 revalidación de membresía/rol dentro de la misma transacción. Un replay exacto
 puede devolver el recibo original; la misma clave con otro comando falla. Una
-respuesta ambigua se concilia antes de intentar otra mutación. Los permisos son
-un contrato futuro de least privilege, no una afirmación de RBAC implementado.
+respuesta ambigua se concilia antes de intentar otra mutación. La API, la UI y
+la base aplican el contrato de least privilege; ningún permiso sustituye la
+membresía activa de la obra exacta.
 
 ## Vigencia, versión y digest
 
@@ -214,9 +219,9 @@ No se admite un estado `PAID` en esta cadena. Tampoco se deriva pago desde una
 referencia, una conformidad, una factura, un webhook ambiguo o la mera emisión
 del certificado.
 
-## Gates antes de cerrar S9.3
+## Gates de cierre S9.3
 
-S9.3 permanece abierto hasta que existan y pasen, sobre el mismo SHA:
+El commit exacto `21ce752a06cc6e4a66bcd07e67c230306c312eb2` ya acredita:
 
 - esquema, migración, backfill/rollback documentado y verificador PostgreSQL;
 - guards de inmutabilidad, tenant/obra, head CAS, vigencia y digest;
@@ -229,8 +234,14 @@ S9.3 permanece abierto hasta que existan y pasen, sobre el mismo SHA:
 - pruebas negativas contra `BudgetVersion`, `BudgetLine`, `SupplierInvoice`,
   `Task.progress`, certificado, PDF, conformidad y cualquier estado de pago;
 - API/UI privada, accesible y no cacheable, con conciliación de estado incierto;
-- suite, lint, audit, build, PostgreSQL sin drift, CI autenticado y Preview
-  exact-SHA. Production requiere un gate posterior y explícito.
+- CI autenticado Development sobre PostgreSQL descartable, con autoridades,
+  SOV completa, roles exactos, negativos tenant/obra y replay;
+- suite 2446/2446, lint, audit de producción sin vulnerabilidades, build 93/93,
+  PostgreSQL 17 con 124 migraciones sin pendientes/drift, Browser público y
+  Preview exact-SHA `READY`.
 
-Hasta entonces, este artefacto es el contrato de diseño de S9.3 y no una
-declaración de entrega funcional, legal, contable o fiscal.
+El journey autenticado S9.3 terminó 2/2 en CI Development descartable y verificó
+las autoridades y la SOV completa a través de los roles exactos de la obra. Con
+ese resultado, todos los gates enumerados están verdes sobre el mismo SHA y
+S9.3 queda técnicamente cerrado. Este cierre no constituye validación legal,
+contable o fiscal. Production requiere un gate posterior y explícito.

@@ -14,6 +14,12 @@ Plataforma multi-tenant para convertir reportes de campo enviados por WhatsApp e
 - Piloto local de lectura visual con OpenAI `gpt-5.6-sol`, rango/abstención y revisión humana. Qwen3-VL y GLM-5V son challengers visuales; GLM-OCR y GLM-5.2 son especialistas OCR/texto. Sólo OpenAI tuvo un smoke API controlado y nunca hay fan-out automático.
 - Dashboard operativo, Gantt, asistencia, acopios, incidencias y reporte semanal PDF A4 generado en servidor, versionado y auditable.
 - Proyección transaccional de tareas para que Gantt, aprobaciones, portfolio y WhatsApp compartan la misma identidad operativa; contrato en [docs/OPERATIONAL_TASKS.md](docs/OPERATIONAL_TASKS.md).
+- Autoridad contractual/SOV S9.3 tenant-scoped, versionada y append-only, con
+  cobertura completa `VALUED`/`NO_CLAIM`, dinero exacto en minor units,
+  retención, maker-checker y tres autoridades distintas. El [corte
+  `21ce752`](docs/evidence/2026-08-12-preview-21ce752.md) cerró PostgreSQL 17,
+  Quality, Browser público, E2E autenticado Development y Preview exact-SHA;
+  no acredita S10 ni Production.
 - Web Analytics anonimizado incluido en el plan de Vercel.
 - Consola global de tenants reservada a `guillen.marce@gmail.com`.
 
@@ -54,7 +60,14 @@ npm run build
 npm audit --omit=dev
 ```
 
-GitHub Actions ejecuta estos gates sobre pull requests y pushes a `master` o `codex/**`. S9.2 agrega un job E2E autenticado separado: exige identidades sintéticas dedicadas de Clerk Development, dos tenants y PostgreSQL 17 descartable, y cubre maker-checker, roles negativos, cross-tenant, seal/replay/stale y UI. Los journeys core y de proveedores todavía deben ampliarse antes de producción comercial; este gate no usa ni acredita Clerk Production.
+GitHub Actions ejecuta estos gates sobre pull requests y pushes a `master` o
+`codex/**`. S9.2 y S9.3 agregan un job E2E autenticado separado: exige
+identidades sintéticas dedicadas de Clerk Development, dos tenants y PostgreSQL
+17 descartable. S9.2 cubre maker-checker, roles negativos, cross-tenant,
+seal/replay/stale y UI; S9.3 agrega designación/decisión de autoridades,
+preparación/aprobación contractual, replay y límites por rol/tenant. Los
+journeys core y de proveedores todavía deben ampliarse antes de producción
+comercial; este gate no usa ni acredita Clerk Production.
 
 El alias estable configurado es `https://obrasaas.vercel.app`; `https://obrasaas-preview.vercel.app` queda reservado para validaciones de Preview. Su disponibilidad se verifica en cada release y no se infiere desde la configuración. Mientras no exista un dominio propio, ambos entornos usan la instancia dedicada de desarrollo de Clerk y no se contratan add-ons ni una instancia productiva.
 
@@ -62,6 +75,9 @@ El alias estable configurado es `https://obrasaas.vercel.app`; `https://obrasaas
 
 - `/`: landing comercial y planes.
 - `/dashboard`: vista Hoy tenant-aware con prioridades, avance, presencia y señales reales de la obra activa.
+- `/dashboard/contracts`: autoridad contractual/SOV S9.3 privada por obra, con
+  preparación, aprobación y lectura según permisos; no es certificación ni
+  pago.
 - `/dashboard/labs`: perímetro experimental separado para BIM, visión e IoT; explicita evidencia, límites y requisitos antes de una activación real.
 - `/dashboard/report`: vista ejecutiva tenant-aware con descarga de PDF A4 real, versión de snapshot, huella SHA-256 auditada y tipografía Source Sans 3 embebida para nombres internacionales.
 - `/dashboard/team`: equipo y matriz de roles.
