@@ -249,7 +249,7 @@ jobs:
           retention-days: 7
 
   authenticated-s92-e2e:
-    name: S9.2 authenticated disposable journey
+    name: S9.2 + S9.3 authenticated disposable journeys
     if: >-
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
       && (github.ref == 'refs/heads/master'
@@ -279,6 +279,7 @@ jobs:
       CLERK_AUTHORIZED_PARTIES: http://localhost:3100
       E2E_BASE_URL: http://localhost:3100
       S92_E2E_DISPOSABLE: '1'
+      S93_E2E_DISPOSABLE: '1'
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -325,3 +326,10 @@ jobs:
           CLERK_SECRET_KEY: ${{ secrets.CLERK_E2E_SECRET_KEY }}
           S92_E2E_FIXTURE_FILE: ${{ runner.temp }}/s92-e2e-fixture.json
         run: npm run test:e2e:authenticated:s92
+
+      - name: Run authenticated S9.3 journey
+        env:
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_E2E_PUBLISHABLE_KEY }}
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_E2E_SECRET_KEY }}
+          S92_E2E_FIXTURE_FILE: ${{ runner.temp }}/s92-e2e-fixture.json
+        run: npm run test:e2e:authenticated:s93
