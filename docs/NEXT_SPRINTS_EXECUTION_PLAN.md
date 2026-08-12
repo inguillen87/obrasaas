@@ -88,7 +88,7 @@ El estado se expresa por nivel de evidencia: código y pruebas locales, migraci�
 
 ### S7 — presupuesto y costos canónicos (base local; hardening pendiente)
 
-Ya existen `BudgetVersion`, `BudgetLine` y `BudgetEntry` con clases `COMMITMENT/ACTUAL/FORECAST`. Faltan cost codes gobernados, cambios aprobados, reconciliación/cutover, Preview y E2E; ningún escenario modifica costos por sí solo.
+Ya existen `BudgetVersion`, `BudgetLine` y `BudgetEntry` con clases `COMMITMENT/ACTUAL/FORECAST`. Faltan cost codes gobernados, cambios aprobados, reconciliación/cutover, Preview y E2E; ningún escenario modifica costos por sí solo. Este presupuesto es interno y no se reutiliza como contrato/SOV S9.3.
 
 ### S8 — caja chica (base local; hardening pendiente)
 
@@ -100,11 +100,23 @@ Unidad, cantidad base, ejecutada, método, período, evidencia, revisión y apro
 
 ### S9.2-MED — corte técnico quincenal reproducible (gate técnico y funcional autenticado completos)
 
-El [corte técnico S9.2-MED](./PROGRESS_MEASUREMENT_CUTS_S9_2.md) ya sella por obra y quincena cerrada un snapshot inmutable de todas las tareas canónicas, derivado en servidor y reproducible por hash. Cada línea queda como `MEASURED` o `MISSING`; ausencia nunca significa cantidad cero. Versiona correcciones sin reescribir historia, exige replay idempotente y doble CAS del head/candidato, y restringe el sellado a `ADMIN`/`DIRECTOR` activos. El [corte `cc5aa21`](./evidence/2026-08-11-preview-cc5aa21.md) verificó DB, carreras, cleanup, CI y Preview rollback-only; el [corte `dcb44b9`](./evidence/2026-08-11-preview-dcb44b9.md) agregó el journey API/UI autenticado sobre Clerk Development y PostgreSQL descartable: seis actores, maker-checker, roles negativos, cross-tenant, seal v1/v2, replay exacto/mutado/tardío y transición `STALE`. El Preview del mismo SHA permaneció read-only. Este artefacto sigue siendo técnico e interno; no contiene precios, retenciones, impuestos, PDF contractual, conformidad financiera ni estado de pago. S10 es la siguiente autoridad financiera separada.
+El [corte técnico S9.2-MED](./PROGRESS_MEASUREMENT_CUTS_S9_2.md) ya sella por obra y quincena cerrada un snapshot inmutable de todas las tareas canónicas, derivado en servidor y reproducible por hash. Cada línea queda como `MEASURED` o `MISSING`; ausencia nunca significa cantidad cero. Versiona correcciones sin reescribir historia, exige replay idempotente y doble CAS del head/candidato, y restringe el sellado a `ADMIN`/`DIRECTOR` activos. El [corte `cc5aa21`](./evidence/2026-08-11-preview-cc5aa21.md) verificó DB, carreras, cleanup, CI y Preview rollback-only; el [corte `dcb44b9`](./evidence/2026-08-11-preview-dcb44b9.md) agregó el journey API/UI autenticado sobre Clerk Development y PostgreSQL descartable: seis actores, maker-checker, roles negativos, cross-tenant, seal v1/v2, replay exacto/mutado/tardío y transición `STALE`. El Preview del mismo SHA permaneció read-only. Este artefacto sigue siendo técnico e interno; no contiene importes, retenciones, impuestos, PDF contractual, conformidad financiera ni estado de pago. S9.3-CONTRACT es el prerrequisito contractual separado de S10.
 
-### S10 — certificación y reportes (siguiente; autoridad separada)
+### S9.3-CONTRACT — autoridad contractual y SOV (Fase 1 documental congelada; implementación pendiente)
 
-Certificado versionado, retenciones, ajustes, PDF/hash reproducible y estado de pago separado. Certificar nunca ejecuta un pago automáticamente.
+El [contrato canónico S9.3](./PROJECT_CONTRACT_AUTHORITY_S9_3.md) fija una autoridad distinta de presupuesto, medición y AP: head/versión/líneas/decisiones propios; todas las tareas como `VALUED` o `NO_CLAIM`; moneda y escala persistidas; importe facial en minor units; `retentionBps`; `CERT_RETENTION_HALF_UP_V1`; vigencia y digest; y tres membresías activas distintas para certificar, conformar financieramente y registrar una referencia externa. La designación y el contrato tienen maker-checker. `BudgetVersion`/`BudgetLine`, `SupplierInvoice`, `Task.progress`, certificado, PDF, conformidad y pago quedan fuera.
+
+Este freeze no cierra S9.3. Las fases de implementación deben entregar, en orden: (1) esquema/migración/guards/verificador; (2) RBAC least-privilege, API/UI e idempotencia/CAS; (3) carreras PostgreSQL, E2E autenticado, CI y Preview exact-SHA. No se acredita Production.
+
+### S10 — certificación, conformidad y referencia de pago (pendiente; tres autoridades separadas)
+
+S10 empieza sólo después de que S9.3 tenga una versión aprobada verificable y se divide en tres incrementos sin compartir estados:
+
+1. **S10-CERT:** certificado versionado que consume un cut S9.2 y una versión S9.3 exactos. `MISSING` sobre una línea `VALUED` bloquea el cálculo hasta materializar `NO_CLAIM` explícito con causa `TECHNICAL_MEASUREMENT_MISSING`; cantidad/importe permanecen `null`. La primera política admite sólo deducciones explícitas de monto positivo y calcula retención con la regla versionada.
+2. **S10-FIN:** conformidad financiera append-only por la membresía `FINANCE` designada; no edita el certificado.
+3. **S10-PAYREF:** referencia externa append-only por la tercera autoridad; no ejecuta, concilia ni prueba pago y nunca crea `PAID`.
+
+El PDF contractual privado, determinista y hasheado es un artefacto posterior separado. El [runbook rotulado históricamente S10](./S10_PAYABLES_RUNBOOK.md) queda como legacy/AP de proveedores y no se reutiliza para ninguna de estas tres fases.
 
 ### S11/S12 — compras, stock, BOM y reserva (gate técnico y boundary multirrol; journey funcional pendiente)
 

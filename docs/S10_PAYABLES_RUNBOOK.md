@@ -1,5 +1,13 @@
 # S10 — Cuentas por pagar y three-way match
 
+> **Estado histórico: legacy/AP.** La etiqueta `S10` de este runbook precede al
+> roadmap contractual vigente. Esta superficie describe cuentas por pagar de
+> proveedores sobre `SupplierInvoice`; no es ni puede reutilizarse como modelo,
+> estado, permiso o evidencia de S9.3-CONTRACT o del nuevo S10 de certificación.
+> En particular, su estado `PAID` pertenece sólo a AP y no acredita un pago del
+> contrato. La autoridad vigente se define en
+> [S9.3-CONTRACT](./PROJECT_CONTRACT_AUTHORITY_S9_3.md).
+
 ## Objetivo
 
 Registrar facturas de proveedores con evidencia privada, vincularlas a órdenes de compra y evitar aprobar o pagar importes superiores al valor efectivamente recibido.
