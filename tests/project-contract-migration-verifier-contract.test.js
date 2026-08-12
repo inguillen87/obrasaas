@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 const verifierUrl = new URL('../scripts/verify-project-contract-migration.mjs', import.meta.url);
+const { configuration } = await import(verifierUrl);
 const [verifier, packageJson, workflow, vercelBuild, migration] = await Promise.all([
   readFile(verifierUrl, 'utf8'),
   readFile(new URL('../package.json', import.meta.url), 'utf8'),
@@ -25,9 +26,27 @@ test('S9.3 verifier requires a dedicated PostgreSQL target and local-only dispos
   assert.match(help.stdout, /PROJECT_CONTRACT_MIGRATION_DATABASE_URL/);
   assert.match(help.stdout, /DATABASE_URL is ignored/);
   assert.match(help.stdout, /local obrasaas_ci\/public/);
-  assert.match(verifier, /sslmode.*verify-full/);
+  assert.match(verifier, /hostname\.endsWith\('\.neon\.tech'\).*sslmode', 'verify-full'/);
+  assert.match(verifier, /else if \(!local\).*sslmode.*verify-full/);
   assert.match(verifier, /disposableValue === '0' \|\| disposableValue === '1'/);
   assert.match(verifier, /local && databaseName === 'obrasaas_ci' && schema === 'public'/);
+
+  const neon = configuration({
+    PROJECT_CONTRACT_MIGRATION_DATABASE_URL: 'postgresql://user:secret@ep-example.neon.tech/app?schema=public',
+    PROJECT_CONTRACT_MIGRATION_SCHEMA: 'public',
+    PROJECT_CONTRACT_DISPOSABLE_CONCURRENCY: '0',
+  });
+  const normalizedNeon = new URL(neon.connectionString);
+  assert.equal(normalizedNeon.searchParams.get('sslmode'), 'verify-full');
+  assert.equal(normalizedNeon.searchParams.has('schema'), false);
+  assert.throws(
+    () => configuration({
+      PROJECT_CONTRACT_MIGRATION_DATABASE_URL: 'postgresql://user:secret@database.example.com/app',
+      PROJECT_CONTRACT_MIGRATION_SCHEMA: 'public',
+      PROJECT_CONTRACT_DISPOSABLE_CONCURRENCY: '0',
+    }),
+    /Remote verification requires sslmode=verify-full/,
+  );
 });
 
 test('S9.3 verifier checks the deployed checksum, governed surface and exact money', () => {
@@ -50,6 +69,7 @@ test('S9.3 verifier checks the deployed checksum, governed surface and exact mon
   assert.match(verifier, /9223372036854770000/);
   assert.match(verifier, /workers\.every\(\(row\) => row\.public_execute === false\)/);
   assert.match(verifier, /row\.tgenabled === 'A'/);
+  assert.match(verifier, /invalidTriggers\.join\(', '\)/);
 });
 
 test('S9.3 verifier covers rollback, immutable replay, role denial and committed races', () => {

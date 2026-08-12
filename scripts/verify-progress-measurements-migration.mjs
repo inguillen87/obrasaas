@@ -602,10 +602,23 @@ async function cleanupDisposableFixture(connectionString, schema, item) {
     ['Task', ['Task_progress_measurement_identity_guard']],
     ['Project', ['Project_progress_measurement_closure_guard']],
   ]);
+  const triggerCatalogSql = `SELECT c.relname AS table_name, t.tgname, t.tgenabled
+       FROM pg_trigger t
+       JOIN pg_class c ON c.oid = t.tgrelid
+      WHERE c.relnamespace = $1::regnamespace
+        AND c.relname = ANY($2::text[])
+        AND NOT t.tgisinternal
+      ORDER BY c.relname, t.tgname`;
+  const triggerTables = [...triggerMap.keys()];
   try {
+    const triggerCatalogBefore = await client.query(triggerCatalogSql, [schema, triggerTables]);
     await client.query('BEGIN');
-    for (const table of triggerMap.keys()) {
-      await client.query(`ALTER TABLE ${quoteIdentifier(table)} DISABLE TRIGGER USER`);
+    for (const [table, triggerNames] of triggerMap) {
+      for (const triggerName of triggerNames) {
+        await client.query(
+          `ALTER TABLE ${quoteIdentifier(table)} DISABLE TRIGGER ${quoteIdentifier(triggerName)}`,
+        );
+      }
     }
     await client.query(`DELETE FROM "TaskProgressMeasurementDecision" WHERE "organizationId" = $1`, [item.organizationId]);
     await client.query(`DELETE FROM "TaskProgressMeasurementEvidence" WHERE "organizationId" = $1`, [item.organizationId]);
@@ -632,6 +645,12 @@ async function cleanupDisposableFixture(connectionString, schema, item) {
       }
     }
     await client.query('COMMIT');
+    const triggerCatalogAfter = await client.query(triggerCatalogSql, [schema, triggerTables]);
+    assert.deepEqual(
+      triggerCatalogAfter.rows,
+      triggerCatalogBefore.rows,
+      'Disposable progress-measurement cleanup changed another domain trigger or its enabled state.',
+    );
   } catch (error) {
     await client.query('ROLLBACK').catch(() => undefined);
     throw error;

@@ -70,8 +70,11 @@ test('committed concurrency is local-only and covers all structural races with e
   assert.match(verifier, /close-versus-submit/);
   assert.match(verifier, /task-identity-versus-submit/);
   assert.match(verifier, /structural FK fence/);
-  assert.match(verifier, /DISABLE TRIGGER USER/);
+  assert.doesNotMatch(verifier, /DISABLE TRIGGER USER/);
+  assert.match(verifier, /DISABLE TRIGGER \$\{quoteIdentifier\(triggerName\)\}/);
   assert.match(verifier, /ENABLE ALWAYS TRIGGER/);
+  assert.match(verifier, /triggerCatalogAfter\.rows,[\s\S]*triggerCatalogBefore\.rows/);
+  assert.match(verifier, /changed another domain trigger or its enabled state/);
   assert.match(verifier, /cleanupDisposableFixture/);
   assert.match(verifier, /await assertRolledBack\(raceProbe/);
 });

@@ -103,8 +103,11 @@ function configuration(environment = process.env) {
   const parsed = new URL(value);
   invariant(parsed.protocol === 'postgres:' || parsed.protocol === 'postgresql:', 'Verifier requires PostgreSQL.');
   invariant(!parsed.hash, 'PostgreSQL URL must not include a fragment.');
-  const local = ['127.0.0.1', 'localhost', '::1'].includes(parsed.hostname.toLowerCase());
-  if (!local) invariant(parsed.searchParams.get('sslmode') === 'verify-full', 'Remote verification requires sslmode=verify-full.');
+  parsed.searchParams.delete('schema');
+  const hostname = parsed.hostname.toLowerCase().replace(/\.$/, '');
+  const local = ['127.0.0.1', 'localhost', '[::1]', '::1'].includes(hostname);
+  if (!local && hostname.endsWith('.neon.tech')) parsed.searchParams.set('sslmode', 'verify-full');
+  else if (!local) invariant(parsed.searchParams.get('sslmode') === 'verify-full', 'Remote verification requires sslmode=verify-full.');
   const databaseName = decodeURIComponent(parsed.pathname.replace(/^\//, ''));
   const disposable = disposableValue === '1';
   if (disposable) invariant(local && databaseName === 'obrasaas_ci' && schema === 'public',
@@ -202,8 +205,15 @@ async function assertStructure(client, schema) {
       'Task_project_contract_scope_guard',
     ]],
   );
-  invariant(triggers.rows.length === 13 && triggers.rows.every((row) => row.tgenabled === 'A'),
-    'S9.3 fact/projection guards must be ENABLE ALWAYS.');
+  const expectedTriggers = [...TRIGGER_MAP.entries()].flatMap(([tableName, triggerNames]) => (
+    triggerNames.map((triggerName) => `${tableName}.${triggerName}`)
+  ));
+  const observedTriggers = new Map(
+    triggers.rows.map((row) => [`${row.relname}.${row.tgname}`, row.tgenabled]),
+  );
+  const invalidTriggers = expectedTriggers.filter((trigger) => observedTriggers.get(trigger) !== 'A');
+  invariant(invalidTriggers.length === 0 && triggers.rows.length === expectedTriggers.length,
+    `S9.3 fact/projection guards must be ENABLE ALWAYS; invalid: ${invalidTriggers.join(', ') || 'unexpected duplicate trigger rows'}.`);
 
   const commands = await client.query(
     `SELECT c.relname, c.relkind, t.tgenabled
