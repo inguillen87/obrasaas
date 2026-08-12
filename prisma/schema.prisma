@@ -109,6 +109,21 @@ enum ProgressMeasurementCutLineState {
   MISSING
 }
 
+enum ProjectContractLineState {
+  VALUED
+  NO_CLAIM
+}
+
+enum ProjectContractDecisionType {
+  APPROVED
+  REJECTED
+}
+
+enum ProjectContractTechnicalBasisSnapshot {
+  UNESTABLISHED
+  MATCHED
+}
+
 enum ProgressEvidenceCaptureStatus {
   AWAITING_LOCATION
   LOCATION_CAPTURED
@@ -858,6 +873,12 @@ model Organization {
   projectProgressMeasurementCutHeads  ProjectProgressMeasurementCutHead[]
   projectProgressMeasurementCuts      ProjectProgressMeasurementCut[]
   projectProgressMeasurementCutLines  ProjectProgressMeasurementCutLine[]
+  projectContractHeads                ProjectContractHead[]
+  projectContractAuthorityVersions    ProjectContractAuthorityVersion[]
+  projectContractAuthorityDecisions   ProjectContractAuthorityDecision[]
+  projectContractVersions             ProjectContractVersion[]
+  projectContractLines                ProjectContractLine[]
+  projectContractDecisions            ProjectContractDecision[]
   workerPersons                       WorkerPerson[]
   workerChannelIdentities             WorkerChannelIdentity[]
   workerOnboardingClaims              WorkerOnboardingClaim[]
@@ -1767,6 +1788,13 @@ model TenantMembership {
   preparedTaskProgressMeasurements     TaskProgressMeasurement[]               @relation("TaskProgressMeasurementPreparer")
   taskProgressMeasurementDecisions     TaskProgressMeasurementDecision[]       @relation("TaskProgressMeasurementDecider")
   sealedProjectProgressMeasurementCuts ProjectProgressMeasurementCut[]         @relation("ProjectProgressMeasurementCutSealer")
+  preparedProjectContractAuthorities   ProjectContractAuthorityVersion[]       @relation("ProjectContractAuthorityPreparer")
+  projectContractCertifierAuthorities  ProjectContractAuthorityVersion[]       @relation("ProjectContractCertifierAuthority")
+  projectContractFinanceAuthorities    ProjectContractAuthorityVersion[]       @relation("ProjectContractFinanceAuthority")
+  projectContractRegistrarAuthorities  ProjectContractAuthorityVersion[]       @relation("ProjectContractRegistrarAuthority")
+  projectContractAuthorityDecisions    ProjectContractAuthorityDecision[]      @relation("ProjectContractAuthorityChecker")
+  preparedProjectContractVersions      ProjectContractVersion[]                @relation("ProjectContractPreparer")
+  projectContractDecisions             ProjectContractDecision[]               @relation("ProjectContractChecker")
   createdAt                            DateTime                                @default(now())
   updatedAt                            DateTime                                @updatedAt
 
@@ -1878,6 +1906,12 @@ model Project {
   progressMeasurementCutHeads          ProjectProgressMeasurementCutHead[]
   progressMeasurementCuts              ProjectProgressMeasurementCut[]
   progressMeasurementCutLines          ProjectProgressMeasurementCutLine[]
+  projectContractHeads                 ProjectContractHead[]
+  projectContractAuthorityVersions     ProjectContractAuthorityVersion[]
+  projectContractAuthorityDecisions    ProjectContractAuthorityDecision[]
+  projectContractVersions              ProjectContractVersion[]
+  projectContractLines                 ProjectContractLine[]
+  projectContractDecisions             ProjectContractDecision[]
   supplierInvoices                     SupplierInvoice[]
   supplierCommitments                  SupplierCommitment[]
   supplierReminderDeliveries           SupplierReminderDelivery[]
@@ -2661,6 +2695,7 @@ model Task {
   progressMeasurementDecisions    TaskProgressMeasurementDecision[]
   progressMeasurementBalance      TaskProgressMeasurementBalance?
   progressMeasurementCutLines     ProjectProgressMeasurementCutLine[]
+  projectContractLines            ProjectContractLine[]
   metadata                        Json?
   createdAt                       DateTime                             @default(now())
   updatedAt                       DateTime                             @updatedAt
@@ -3559,6 +3594,230 @@ model ProjectProgressMeasurementCutLine {
   @@unique([cutId, taskId], map: "PPMCutLine_cut_task_key")
   @@unique([organizationId, projectId, cutId, id], map: "PPMCutLine_scope_id_key")
   @@index([organizationId, projectId, taskId, createdAt], map: "PPMCutLine_task_created_idx")
+}
+
+/// Mutable project pointer for the independently governed authority and
+/// contractual-SOV ledgers. Only PostgreSQL command functions may advance it.
+model ProjectContractHead {
+  id                          String                             @id @default(cuid())
+  organizationId              String
+  organization                Organization                       @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "ProjectContractHead_organization_fkey")
+  projectId                   String
+  project                      Project                            @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "ProjectContractHead_project_scope_fkey")
+  currentAuthorityVersionId   String?                            @unique(map: "ProjectContractHead_current_authority_key")
+  currentAuthorityVersion     ProjectContractAuthorityVersion?   @relation("ProjectContractCurrentAuthority", fields: [organizationId, projectId, currentAuthorityVersionId], references: [organizationId, projectId, id], onDelete: Restrict, map: "ProjectContractHead_current_authority_fkey")
+  latestAuthorityVersionId    String?                            @unique(map: "ProjectContractHead_latest_authority_key")
+  latestAuthorityVersion      ProjectContractAuthorityVersion?   @relation("ProjectContractLatestAuthority", fields: [organizationId, projectId, latestAuthorityVersionId], references: [organizationId, projectId, id], onDelete: Restrict, map: "ProjectContractHead_latest_authority_fkey")
+  pendingAuthorityVersionId   String?                            @unique(map: "ProjectContractHead_pending_authority_key")
+  pendingAuthorityVersion     ProjectContractAuthorityVersion?   @relation("ProjectContractPendingAuthority", fields: [organizationId, projectId, pendingAuthorityVersionId], references: [organizationId, projectId, id], onDelete: Restrict, map: "ProjectContractHead_pending_authority_fkey")
+  authorityRevision           Int                                @default(0)
+  currentVersionId            String?                            @unique(map: "ProjectContractHead_current_version_key")
+  currentVersion              ProjectContractVersion?            @relation("ProjectContractCurrentVersion", fields: [organizationId, projectId, currentVersionId], references: [organizationId, projectId, id], onDelete: Restrict, map: "ProjectContractHead_current_version_fkey")
+  latestVersionId             String?                            @unique(map: "ProjectContractHead_latest_version_key")
+  latestVersion               ProjectContractVersion?            @relation("ProjectContractLatestVersion", fields: [organizationId, projectId, latestVersionId], references: [organizationId, projectId, id], onDelete: Restrict, map: "ProjectContractHead_latest_version_fkey")
+  pendingVersionId            String?                            @unique(map: "ProjectContractHead_pending_version_key")
+  pendingVersion              ProjectContractVersion?            @relation("ProjectContractPendingVersion", fields: [organizationId, projectId, pendingVersionId], references: [organizationId, projectId, id], onDelete: Restrict, map: "ProjectContractHead_pending_version_fkey")
+  revision                    Int                                @default(0)
+  authorityVersions           ProjectContractAuthorityVersion[]  @relation("ProjectContractAuthorityLedger")
+  authorityDecisions          ProjectContractAuthorityDecision[] @relation("ProjectContractAuthorityDecisionHead")
+  versions                    ProjectContractVersion[]           @relation("ProjectContractVersionLedger")
+  decisions                   ProjectContractDecision[]          @relation("ProjectContractDecisionHead")
+  lines                       ProjectContractLine[]               @relation("ProjectContractLineHead")
+  createdAt                   DateTime                           @default(now())
+  updatedAt                   DateTime                           @updatedAt
+
+  @@unique([organizationId, projectId], map: "ProjectContractHead_scope_key")
+  @@unique([organizationId, projectId, id], map: "ProjectContractHead_scope_id_key")
+  @@unique([organizationId, projectId, currentAuthorityVersionId], map: "ProjectContractHead_scope_current_authority_key")
+  @@unique([organizationId, projectId, latestAuthorityVersionId], map: "ProjectContractHead_scope_latest_authority_key")
+  @@unique([organizationId, projectId, pendingAuthorityVersionId], map: "ProjectContractHead_scope_pending_authority_key")
+  @@unique([organizationId, projectId, currentVersionId], map: "ProjectContractHead_scope_current_version_key")
+  @@unique([organizationId, projectId, latestVersionId], map: "ProjectContractHead_scope_latest_version_key")
+  @@unique([organizationId, projectId, pendingVersionId], map: "ProjectContractHead_scope_pending_version_key")
+}
+
+/// Immutable proposal assigning the three independent contractual authorities.
+/// It becomes current only after a separate DIRECTOR decision.
+model ProjectContractAuthorityVersion {
+  id                      String                            @id @default(cuid())
+  organizationId          String
+  organization            Organization                      @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "ProjectContractAuthority_organization_fkey")
+  projectId               String
+  project                  Project                           @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "ProjectContractAuthority_project_scope_fkey")
+  headId                  String
+  head                    ProjectContractHead               @relation("ProjectContractAuthorityLedger", fields: [organizationId, projectId, headId], references: [organizationId, projectId, id], onDelete: Restrict, map: "ProjectContractAuthority_head_scope_fkey")
+  version                 Int
+  predecessorId           String?                           @unique(map: "ProjectContractAuthority_predecessor_key")
+  predecessor             ProjectContractAuthorityVersion?  @relation("ProjectContractAuthorityChain", fields: [organizationId, projectId, headId, predecessorId], references: [organizationId, projectId, headId, id], onDelete: Restrict, map: "ProjectContractAuthority_predecessor_fkey")
+  successor               ProjectContractAuthorityVersion?  @relation("ProjectContractAuthorityChain")
+  certifierMembershipId   String
+  certifierMembership     TenantMembership                  @relation("ProjectContractCertifierAuthority", fields: [organizationId, certifierMembershipId], references: [organizationId, id], onDelete: Restrict, map: "ProjectContractAuthority_certifier_fkey")
+  financeMembershipId     String
+  financeMembership       TenantMembership                  @relation("ProjectContractFinanceAuthority", fields: [organizationId, financeMembershipId], references: [organizationId, id], onDelete: Restrict, map: "ProjectContractAuthority_finance_fkey")
+  registrarMembershipId   String
+  registrarMembership     TenantMembership                  @relation("ProjectContractRegistrarAuthority", fields: [organizationId, registrarMembershipId], references: [organizationId, id], onDelete: Restrict, map: "ProjectContractAuthority_registrar_fkey")
+  headRevisionAtPrepare   Int
+  preparedByMembershipId  String
+  preparedByMembership    TenantMembership                  @relation("ProjectContractAuthorityPreparer", fields: [organizationId, preparedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "ProjectContractAuthority_preparer_fkey")
+  candidateSha256         String                            @db.Char(64)
+  authoritySha256         String                            @db.Char(64)
+  operationKeyHash        String                            @db.Char(64)
+  requestFingerprint      String                            @db.Char(64)
+  decision                ProjectContractAuthorityDecision?
+  currentForHead          ProjectContractHead?              @relation("ProjectContractCurrentAuthority")
+  latestForHead           ProjectContractHead?              @relation("ProjectContractLatestAuthority")
+  pendingForHead          ProjectContractHead?              @relation("ProjectContractPendingAuthority")
+  contractVersions        ProjectContractVersion[]
+  createdAt               DateTime                          @default(now())
+
+  @@unique([organizationId, operationKeyHash], map: "ProjectContractAuthority_org_operation_key")
+  @@unique([headId, version], map: "ProjectContractAuthority_head_version_key")
+  @@unique([organizationId, projectId, id], map: "ProjectContractAuthority_scope_id_key")
+  @@unique([organizationId, projectId, headId, id], map: "ProjectContractAuthority_scope_head_id_key")
+  @@unique([organizationId, projectId, headId, predecessorId], map: "ProjectContractAuthority_scope_predecessor_key")
+  @@index([organizationId, projectId, createdAt], map: "ProjectContractAuthority_project_created_idx")
+}
+
+/// Append-only maker/checker decision over one authority proposal.
+model ProjectContractAuthorityDecision {
+  id                      String                           @id @default(cuid())
+  organizationId          String
+  organization            Organization                     @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "ProjectContractAuthorityDecision_organization_fkey")
+  projectId               String
+  project                  Project                          @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "ProjectContractAuthorityDecision_project_scope_fkey")
+  headId                  String
+  head                    ProjectContractHead              @relation("ProjectContractAuthorityDecisionHead", fields: [organizationId, projectId, headId], references: [organizationId, projectId, id], onDelete: Restrict, map: "ProjectContractAuthorityDecision_head_scope_fkey")
+  authorityVersionId      String                           @unique(map: "ProjectContractAuthorityDecision_version_key")
+  authorityVersion        ProjectContractAuthorityVersion  @relation(fields: [organizationId, projectId, headId, authorityVersionId], references: [organizationId, projectId, headId, id], onDelete: Restrict, map: "ProjectContractAuthorityDecision_version_scope_fkey")
+  decision                ProjectContractDecisionType
+  reason                  String                           @db.VarChar(1000)
+  expectedHeadRevision    Int
+  headRevisionAfter       Int
+  authoritySha256Snapshot String                           @db.Char(64)
+  decidedByMembershipId   String
+  decidedByMembership     TenantMembership                 @relation("ProjectContractAuthorityChecker", fields: [organizationId, decidedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "ProjectContractAuthorityDecision_checker_fkey")
+  operationKeyHash        String                           @db.Char(64)
+  requestFingerprint      String                           @db.Char(64)
+  createdAt               DateTime                         @default(now())
+
+  @@unique([organizationId, operationKeyHash], map: "ProjectContractAuthorityDecision_org_operation_key")
+  @@unique([organizationId, projectId, headId, authorityVersionId], map: "ProjectContractAuthorityDecision_scope_version_key")
+  @@index([organizationId, projectId, createdAt], map: "ProjectContractAuthorityDecision_project_created_idx")
+}
+
+/// Immutable full Schedule of Values snapshot. Monetary authority is expressed
+/// only as exact minor-unit contract amounts; certification remains a later domain.
+model ProjectContractVersion {
+  id                         String                             @id @default(cuid())
+  organizationId             String
+  organization               Organization                       @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "ProjectContractVersion_organization_fkey")
+  projectId                  String
+  project                     Project                            @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "ProjectContractVersion_project_scope_fkey")
+  headId                     String
+  head                       ProjectContractHead                @relation("ProjectContractVersionLedger", fields: [organizationId, projectId, headId], references: [organizationId, projectId, id], onDelete: Restrict, map: "ProjectContractVersion_head_scope_fkey")
+  version                    Int
+  predecessorId              String?                            @unique(map: "ProjectContractVersion_predecessor_key")
+  predecessor                ProjectContractVersion?            @relation("ProjectContractVersionChain", fields: [organizationId, projectId, headId, predecessorId], references: [organizationId, projectId, headId, id], onDelete: Restrict, map: "ProjectContractVersion_predecessor_fkey")
+  successor                  ProjectContractVersion?            @relation("ProjectContractVersionChain")
+  authorityVersionId         String
+  authorityVersion           ProjectContractAuthorityVersion    @relation(fields: [organizationId, projectId, headId, authorityVersionId], references: [organizationId, projectId, headId, id], onDelete: Restrict, map: "ProjectContractVersion_authority_scope_fkey")
+  authorityRevisionAtPrepare Int
+  contractReference          String                             @db.VarChar(120)
+  title                      String                             @db.VarChar(240)
+  counterpartyLabel          String                             @db.VarChar(240)
+  effectiveFrom              DateTime                           @db.Date
+  currencyCode               String                             @db.Char(3)
+  currencyMinorUnits         Int                                @db.SmallInt
+  retentionBps               Int
+  roundingPolicyVersion      String                             @db.VarChar(64)
+  adjustmentPolicyVersion    String                             @db.VarChar(64)
+  lineCount                  Int
+  valuedLineCount            Int
+  noClaimLineCount           Int
+  totalContractAmountMinor   BigInt
+  candidateSha256            String                             @db.Char(64)
+  contractSha256             String                             @db.Char(64)
+  headRevisionAtPrepare      Int
+  preparedByMembershipId     String
+  preparedByMembership       TenantMembership                   @relation("ProjectContractPreparer", fields: [organizationId, preparedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "ProjectContractVersion_preparer_fkey")
+  operationKeyHash           String                             @db.Char(64)
+  requestFingerprint         String                             @db.Char(64)
+  lines                      ProjectContractLine[]
+  decision                   ProjectContractDecision?
+  currentForHead             ProjectContractHead?               @relation("ProjectContractCurrentVersion")
+  latestForHead              ProjectContractHead?               @relation("ProjectContractLatestVersion")
+  pendingForHead             ProjectContractHead?               @relation("ProjectContractPendingVersion")
+  createdAt                  DateTime                            @default(now())
+
+  @@unique([organizationId, operationKeyHash], map: "ProjectContractVersion_org_operation_key")
+  @@unique([headId, version], map: "ProjectContractVersion_head_version_key")
+  @@unique([organizationId, projectId, id], map: "ProjectContractVersion_scope_id_key")
+  @@unique([organizationId, projectId, headId, id], map: "ProjectContractVersion_scope_head_id_key")
+  @@unique([organizationId, projectId, headId, id, authorityVersionId], map: "ProjectContractVersion_scope_authority_key")
+  @@unique([organizationId, projectId, headId, predecessorId], map: "ProjectContractVersion_scope_predecessor_key")
+  @@index([organizationId, projectId, createdAt], map: "ProjectContractVersion_project_created_idx")
+}
+
+/// Immutable one-line-per-canonical-task SOV snapshot. NO_CLAIM is explicit
+/// absence of contractual value and never an inferred zero amount.
+model ProjectContractLine {
+  id                  String                   @id @default(cuid())
+  organizationId      String
+  organization        Organization             @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "ProjectContractLine_organization_fkey")
+  projectId           String
+  project              Project                  @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "ProjectContractLine_project_scope_fkey")
+  headId              String
+  head                ProjectContractHead      @relation("ProjectContractLineHead", fields: [organizationId, projectId, headId], references: [organizationId, projectId, id], onDelete: Restrict, map: "ProjectContractLine_head_scope_fkey")
+  contractVersionId   String
+  contractVersion     ProjectContractVersion   @relation(fields: [organizationId, projectId, headId, contractVersionId], references: [organizationId, projectId, headId, id], onDelete: Restrict, map: "ProjectContractLine_version_scope_fkey")
+  ordinal             Int
+  state               ProjectContractLineState
+  taskId              String
+  task                Task                     @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict, map: "ProjectContractLine_task_scope_fkey")
+  taskCode            String?                  @db.VarChar(64)
+  taskTitle           String                   @db.Text
+  taskRevision        Int
+  unitCode            ProgressMeasurementUnitCode?
+  baseQuantity        Decimal?                 @db.Decimal(18, 4)
+  contractAmountMinor BigInt?
+  noClaimReason       String?                  @db.VarChar(1000)
+  technicalBasisStatusAtPrepare ProjectContractTechnicalBasisSnapshot?
+  lineSha256          String                   @db.Char(64)
+  createdAt           DateTime                 @default(now())
+
+  @@unique([contractVersionId, ordinal], map: "ProjectContractLine_version_ordinal_key")
+  @@unique([contractVersionId, taskId], map: "ProjectContractLine_version_task_key")
+  @@unique([organizationId, projectId, contractVersionId, id], map: "ProjectContractLine_scope_id_key")
+  @@index([organizationId, projectId, taskId, createdAt], map: "ProjectContractLine_task_created_idx")
+}
+
+/// Append-only financial-authority decision over one complete SOV snapshot.
+model ProjectContractDecision {
+  id                     String                      @id @default(cuid())
+  organizationId         String
+  organization           Organization                @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "ProjectContractDecision_organization_fkey")
+  projectId              String
+  project                 Project                     @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "ProjectContractDecision_project_scope_fkey")
+  headId                 String
+  head                   ProjectContractHead         @relation("ProjectContractDecisionHead", fields: [organizationId, projectId, headId], references: [organizationId, projectId, id], onDelete: Restrict, map: "ProjectContractDecision_head_scope_fkey")
+  contractVersionId      String                      @unique(map: "ProjectContractDecision_version_key")
+  authorityVersionId     String
+  contractVersion        ProjectContractVersion      @relation(fields: [organizationId, projectId, headId, contractVersionId, authorityVersionId], references: [organizationId, projectId, headId, id, authorityVersionId], onDelete: Restrict, map: "ProjectContractDecision_version_scope_fkey")
+  decision               ProjectContractDecisionType
+  reason                 String                      @db.VarChar(1000)
+  expectedHeadRevision   Int
+  headRevisionAfter      Int
+  contractSha256Snapshot String                      @db.Char(64)
+  decidedByMembershipId  String
+  decidedByMembership    TenantMembership            @relation("ProjectContractChecker", fields: [organizationId, decidedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "ProjectContractDecision_checker_fkey")
+  operationKeyHash       String                      @db.Char(64)
+  requestFingerprint     String                      @db.Char(64)
+  createdAt              DateTime                    @default(now())
+
+  @@unique([organizationId, operationKeyHash], map: "ProjectContractDecision_org_operation_key")
+  @@unique([organizationId, projectId, headId, contractVersionId], map: "ProjectContractDecision_scope_version_key")
+  @@unique([organizationId, projectId, headId, contractVersionId, authorityVersionId], map: "ProjectContractDecision_scope_authority_key")
+  @@index([organizationId, projectId, createdAt], map: "ProjectContractDecision_project_created_idx")
 }
 
 model ProgressEvidenceCaptureSession {

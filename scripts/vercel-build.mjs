@@ -60,6 +60,9 @@ const PROGRESS_MEASUREMENTS_VERIFIER_PATH = fileURLToPath(
 const PROGRESS_MEASUREMENT_CUTS_VERIFIER_PATH = fileURLToPath(
   new URL("./verify-progress-measurement-cuts-migration.mjs", import.meta.url),
 );
+const PROJECT_CONTRACT_VERIFIER_PATH = fileURLToPath(
+  new URL("./verify-project-contract-migration.mjs", import.meta.url),
+);
 const DATA_SUBJECT_DISCOVERY_VERIFIER_PATH = fileURLToPath(
   new URL("./verify-data-subject-discovery-migration.mjs", import.meta.url),
 );
@@ -368,6 +371,7 @@ export async function runVercelBuild({
     taskMaterialReservationsVerifier: TASK_MATERIAL_RESERVATIONS_VERIFIER_PATH,
     progressMeasurementsVerifier: PROGRESS_MEASUREMENTS_VERIFIER_PATH,
     progressMeasurementCutsVerifier: PROGRESS_MEASUREMENT_CUTS_VERIFIER_PATH,
+    projectContractVerifier: PROJECT_CONTRACT_VERIFIER_PATH,
     dataSubjectDiscoveryVerifier: DATA_SUBJECT_DISCOVERY_VERIFIER_PATH,
     dataSubjectDecisionVerifier: DATA_SUBJECT_DECISION_VERIFIER_PATH,
     notificationOutboxVerifier: NOTIFICATION_OUTBOX_VERIFIER_PATH,
@@ -457,6 +461,10 @@ export async function runVercelBuild({
         environment[plan.migrationDatabaseEnvironment],
       PROGRESS_MEASUREMENT_CUTS_MIGRATION_SCHEMA: "public",
       PROGRESS_MEASUREMENT_CUTS_DISPOSABLE_CONCURRENCY: "0",
+      PROJECT_CONTRACT_MIGRATION_DATABASE_URL:
+        environment[plan.migrationDatabaseEnvironment],
+      PROJECT_CONTRACT_MIGRATION_SCHEMA: "public",
+      PROJECT_CONTRACT_DISPOSABLE_CONCURRENCY: "0",
       DATA_SUBJECT_DISCOVERY_MIGRATION_DATABASE_URL:
         environment[plan.migrationDatabaseEnvironment],
       DATA_SUBJECT_DISCOVERY_MIGRATION_SCHEMA: "public",
@@ -563,6 +571,13 @@ export async function runVercelBuild({
       await runner(
         process.execPath,
         [cliPaths.progressMeasurementCutsVerifier],
+        { ...sharedOptions, env: verificationEnvironment },
+      );
+    }
+    if (cliPaths.projectContractVerifier) {
+      await runner(
+        process.execPath,
+        [cliPaths.projectContractVerifier],
         { ...sharedOptions, env: verificationEnvironment },
       );
     }

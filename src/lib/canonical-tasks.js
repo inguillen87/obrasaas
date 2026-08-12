@@ -146,6 +146,13 @@ function progressMeasurementHistoryError(operation) {
 
 function canonicalTaskPersistenceError(error, operation) {
   const errorText = databaseErrorText(error);
+  if (errorText.includes('PROJECT_CONTRACT_TASK_SCOPE_CHANGE_REQUIRES_CHANGE_CONTROL')) {
+    return new CanonicalTaskError(
+      'La obra tiene un contrato vigente. Para ampliar el alcance de tareas primero iniciá el control de cambios contractual.',
+      'PROJECT_CONTRACT_CHANGE_CONTROL_REQUIRED',
+      409,
+    );
+  }
   if (
     errorText.includes('PROGRESS_MEASUREMENT_TASK_IDENTITY_IMMUTABLE')
     || PROGRESS_MEASUREMENT_FOREIGN_KEY_MARKERS.some((marker) => errorText.includes(marker))
@@ -399,6 +406,8 @@ export async function createCanonicalTask(prisma, {
       },
     });
     return serializeTask(persisted);
+  }).catch((error) => {
+    throw canonicalTaskPersistenceError(error, 'create') || error;
   });
 }
 

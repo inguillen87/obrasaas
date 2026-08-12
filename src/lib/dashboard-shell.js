@@ -113,6 +113,7 @@ export const getDashboardShellModel = cache(async () => {
       canReadAttendance: hasTenantPermission(access, 'org:attendance:read'),
       canReadExecution,
       canReadMeasurements: hasTenantPermission(access, 'org:measurements:read'),
+      canReadContracts: hasTenantPermission(access, 'org:contracts:read'),
       canReadTeam: hasTenantPermission(access, 'tenant:members:read'),
       canManageIntegrations: hasTenantPermission(access, 'org:integrations:manage'),
       canManageProjects: hasTenantPermission(access, 'org:projects:manage'),

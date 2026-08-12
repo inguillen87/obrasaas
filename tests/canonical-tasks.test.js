@@ -5,6 +5,7 @@ import {
   CanonicalTaskError,
   assertDependencyAcyclic,
   canonicalTaskScheduleFromMetadata,
+  createCanonicalTask,
   deleteCanonicalTask,
   normalizeCanonicalTaskInput,
   normalizeCanonicalTaskSchedule,
@@ -90,6 +91,36 @@ test('dependency graph rejects self links and malformed progress', () => {
   assert.throws(
     () => normalizeCanonicalTaskInput({ title: 'T', progress: 101 }),
     CanonicalTaskError,
+  );
+});
+
+test('approved contract task-scope fence is an actionable 409 on create', async () => {
+  const databaseError = Object.assign(new Error('constraint failed'), {
+    code: 'P2004',
+    meta: {
+      database_error: 'PROJECT_CONTRACT_TASK_SCOPE_CHANGE_REQUIRES_CHANGE_CONTROL internal detail',
+    },
+  });
+  await assert.rejects(
+    createCanonicalTask({
+      $transaction: async (operation) => operation({
+        $executeRawUnsafe: async () => 1,
+        project: {
+          findFirst: async () => ({
+            id: 'project-a', organizationId: 'organization-a', status: 'ACTIVE',
+          }),
+        },
+        task: { create: async () => { throw databaseError; } },
+      }),
+    }, {
+      scope: { organizationId: 'organization-a', projectId: 'project-a' },
+      actorId: 'user-a',
+      input: { title: 'Ampliación contractual' },
+    }),
+    (error) => error instanceof CanonicalTaskError
+      && error.code === 'PROJECT_CONTRACT_CHANGE_CONTROL_REQUIRED'
+      && error.status === 409
+      && !error.message.includes('internal detail'),
   );
 });
 
@@ -302,4 +333,27 @@ test('the structural task identity guard is mapped race-safely to a canonical 40
       && !error.message.includes('internal structural detail'),
   );
   assert.deepEqual(store.state, { updates: 0, audits: 0, progressPrechecks: 1 });
+});
+
+test('task-scope change-control marker is also mapped on update', async () => {
+  const databaseError = Object.assign(new Error('constraint failed'), {
+    code: 'P2004',
+    meta: {
+      database_error: 'PROJECT_CONTRACT_TASK_SCOPE_CHANGE_REQUIRES_CHANGE_CONTROL internal detail',
+    },
+  });
+  const store = canonicalIdentityUpdatePrisma({ updateError: databaseError });
+  await assert.rejects(
+    updateCanonicalTask(store.prisma, {
+      scope: { organizationId: 'organization-a', projectId: 'project-a' },
+      actorId: 'user-a',
+      taskId: 'task-a',
+      expectedRevision: 2,
+      input: { type: 'TASK' },
+    }),
+    (error) => error instanceof CanonicalTaskError
+      && error.code === 'PROJECT_CONTRACT_CHANGE_CONTROL_REQUIRED'
+      && error.status === 409
+      && !error.message.includes('internal detail'),
+  );
 });
