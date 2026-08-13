@@ -97,6 +97,7 @@ test('S10 disposable verifier cannot regress to placeholder races or partial gov
   for (const operation of ['INSERT INTO', 'UPDATE', 'DELETE FROM', 'TRUNCATE TABLE']) {
     assert.match(verifier, new RegExp(operation));
   }
+  assert.match(verifier, /TRUNCATE TABLE \$\{quotedTable\} CASCADE/);
   assert.match(verifier, /ObrasaasProjectCertificatePrepareCommand/);
   assert.match(verifier, /ObrasaasProjectCertificateDecideCommand/);
   assert.match(verifier, /session_replication_role='origin'/);

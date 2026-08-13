@@ -2078,7 +2078,7 @@ async function assertDisposableGovernance(connectionString, schema) {
         await expectTransactionFailure(client, `${label}_delete`, governanceMarker,
           `DELETE FROM ${quotedTable} WHERE "organizationId"=$1`, [item.organizationId]);
         await expectTransactionFailure(client, `${label}_truncate`, governanceMarker,
-          `TRUNCATE TABLE ${quotedTable}`);
+          `TRUNCATE TABLE ${quotedTable} CASCADE`);
       }
     }
 
