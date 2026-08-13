@@ -1,6 +1,7 @@
 # S10-CERT Fase 1 - certificado contractual gobernado
 
-Estado: **contrato de implementación congelado; backend pendiente**.
+Estado: **backend/API privada cerrados técnicamente en `8a3f446`; UI S10
+pendiente y fuera de Fase 1**.
 
 Este documento define la primera fase técnica de certificación de avance. Su
 objetivo es convertir un corte técnico S9.2-MED y una SOV contractual S9.3
@@ -626,7 +627,7 @@ legacy `verify:s10-migrations` de SupplierInvoice.
 
 ## Gates de aceptación de Fase 1
 
-La fase backend sólo podrá declararse cerrada cuando exista evidencia exact-SHA
+La fase backend se declaró cerrada sólo después de obtener evidencia exact-SHA
 de:
 
 1. migración Prisma/PostgreSQL 17, constraints/FKs/triggers y drift cero;
@@ -639,5 +640,12 @@ de:
 6. Preview rollback-only, build y smokes públicos sin mutaciones privadas;
 7. revisión final 0 P0/P1.
 
-Ese cierre seguirá sin acreditar UI final, PDF, S10-FIN, S10-PAYREF, legalidad
-del certificado, Production ni pago real.
+El [corte técnico `8a3f446`](./evidence/2026-08-12-preview-8a3f446.md) acredita
+los siete gates: CI 4/4, PostgreSQL 17 con 126 migraciones sin pendientes ni
+drift, manifest de 12 carreras committed, journey autenticado Development
+S9.2/S9.3/S10-CERT 6/6 y Preview exact-SHA `READY` con verificación S10
+rollback-only.
+
+Ese cierre no acredita UI S10, PDF, S10-FIN, S10-PAYREF, cuentas por pagar,
+legalidad o conformidad contable/fiscal del certificado, Production ni pago
+real.

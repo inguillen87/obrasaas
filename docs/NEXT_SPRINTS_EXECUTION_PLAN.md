@@ -138,15 +138,21 @@ hoy se lanzan en paralelo sobre un mismo cliente transaccional de identidad.
 está deprecado y debe eliminarse antes de adoptar `pg@9`; no reabre los
 invariantes ni el cierre funcional de S9.3.
 
-### S10 — certificación, conformidad y referencia de pago (contrato S10-CERT Fase 1 congelado; backend pendiente)
+### S10 — certificación, conformidad y referencia de pago (S10-CERT Fase 1 backend cerrado; fases posteriores pendientes)
 
-S10 empieza sólo después de que S9.3 tenga una versión aprobada verificable y se divide en tres incrementos sin compartir estados:
+S10-CERT Fase 1 consumió una versión S9.3 aprobada verificable y el programa
+conserva tres incrementos sin compartir estados:
 
-1. **S10-CERT:** el [contrato Fase 1](./PROJECT_CERTIFICATES_S10_CERT.md) está congelado y el backend sigue pendiente. El certificado versionado consume un cut S9.2 y una versión/autoridad S9.3 exactos. `MISSING` sobre una línea `VALUED` bloquea preparación y aprobación; jamás se convierte en `NO_CLAIM`, avance cero o monto cero. La primera política admite sólo deducciones explícitas de monto positivo y calcula importes/retención acumulados con reglas versionadas.
+1. **S10-CERT:** el [backend/API privada Fase 1](./PROJECT_CERTIFICATES_S10_CERT.md) está cerrado técnicamente en el [corte exacto `8a3f446`](./evidence/2026-08-12-preview-8a3f446.md); la UI S10 queda pendiente como incremento separado. El certificado versionado consume un cut S9.2 y una versión/autoridad S9.3 exactos. `MISSING` sobre una línea `VALUED` bloquea preparación y aprobación; jamás se convierte en `NO_CLAIM`, avance cero o monto cero. La primera política admite sólo deducciones explícitas de monto positivo y calcula importes/retención acumulados con reglas versionadas.
 2. **S10-FIN:** conformidad financiera append-only por la membresía `FINANCE` designada; no edita el certificado.
 3. **S10-PAYREF:** referencia externa append-only por la tercera autoridad; no ejecuta, concilia ni prueba pago y nunca crea `PAID`.
 
-El PDF contractual privado, determinista y hasheado es un artefacto posterior separado. El [runbook rotulado históricamente S10](./S10_PAYABLES_RUNBOOK.md) queda como legacy/AP de proveedores y no se reutiliza para ninguna de estas tres fases.
+El cierre S10-CERT aprobó CI 4/4, 126 migraciones sin pendientes/drift, carreras
+committed, E2E Development 2/2 y Preview rollback-only `READY`. No acredita una
+UI S10, Production ni conformidad legal, contable o fiscal. El PDF contractual
+privado, determinista y hasheado es un artefacto posterior separado. El
+[runbook rotulado históricamente S10](./S10_PAYABLES_RUNBOOK.md) queda como
+legacy/AP de proveedores y no se reutiliza para ninguna de estas tres fases.
 
 ### S11/S12 — compras, stock, BOM y reserva (gate técnico y boundary multirrol; journey funcional pendiente)
 

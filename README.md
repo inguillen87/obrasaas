@@ -20,6 +20,13 @@ Plataforma multi-tenant para convertir reportes de campo enviados por WhatsApp e
   `21ce752`](docs/evidence/2026-08-12-preview-21ce752.md) cerró PostgreSQL 17,
   Quality, Browser público, E2E autenticado Development y Preview exact-SHA;
   no acredita S10 ni Production.
+- S10-CERT Fase 1 cerrado técnicamente como backend/API privada tenant-scoped:
+  consume un cut S9.2 y una SOV S9.3 exactos, conserva versiones, decisiones e
+  importes inmutables y separa preparación de certificación. El [corte
+  `8a3f446`](docs/evidence/2026-08-12-preview-8a3f446.md) cerró CI 4/4 y Preview
+  exact-SHA. No existe todavía UI S10 y el corte no acredita S10-FIN,
+  S10-PAYREF, PDF, cuentas por pagar, Production ni validez legal, contable o
+  fiscal.
 - Web Analytics anonimizado incluido en el plan de Vercel.
 - Consola global de tenants reservada a `guillen.marce@gmail.com`.
 
@@ -61,13 +68,15 @@ npm audit --omit=dev
 ```
 
 GitHub Actions ejecuta estos gates sobre pull requests y pushes a `master` o
-`codex/**`. S9.2 y S9.3 agregan un job E2E autenticado separado: exige
+`codex/**`. S9.2, S9.3 y S10-CERT agregan un job E2E autenticado separado: exige
 identidades sintéticas dedicadas de Clerk Development, dos tenants y PostgreSQL
 17 descartable. S9.2 cubre maker-checker, roles negativos, cross-tenant,
 seal/replay/stale y UI; S9.3 agrega designación/decisión de autoridades,
-preparación/aprobación contractual, replay y límites por rol/tenant. Los
-journeys core y de proveedores todavía deben ampliarse antes de producción
-comercial; este gate no usa ni acredita Clerk Production.
+preparación/aprobación contractual, replay y límites por rol/tenant; S10-CERT
+recorre preparación, rechazo, nueva preparación, aprobación, replay y aislamiento
+sin presentar una UI S10 inexistente. Los journeys core y de proveedores
+todavía deben ampliarse antes de producción comercial; este gate no usa ni
+acredita Clerk Production.
 
 El alias estable configurado es `https://obrasaas.vercel.app`; `https://obrasaas-preview.vercel.app` queda reservado para validaciones de Preview. Su disponibilidad se verifica en cada release y no se infiere desde la configuración. Mientras no exista un dominio propio, ambos entornos usan la instancia dedicada de desarrollo de Clerk y no se contratan add-ons ni una instancia productiva.
 
