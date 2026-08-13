@@ -92,6 +92,30 @@ test('disposable mode is local-only and proves approval waits for hold, revocati
   assert.match(verifier, /Disposable concurrency fixture cleanup retained rows/);
 });
 
+test('disposable races roll back only explicit transactions that remain open', () => {
+  const helpers = [
+    ['assertApprovalWaitsForRevocation', 'assertApprovalWaitsForHoldRevision'],
+    ['assertApprovalWaitsForHoldRevision', 'assertDirectApprovalWaitsForActorDisable'],
+    ['assertDirectApprovalWaitsForActorDisable', 'assertDisposableConcurrencyRaces'],
+  ];
+  for (const [name, next] of helpers) {
+    const source = verifier.slice(
+      verifier.indexOf(`async function ${name}`),
+      verifier.indexOf(`async function ${next}`),
+    );
+    assert.ok(source.length > 0, `${name} source is required.`);
+    assert.match(source, /let setupTransactionOpen = false;/);
+    assert.match(source, /let firstTransactionOpen = false;/);
+    assert.match(source, /setup\.query\('BEGIN'\);\s+setupTransactionOpen = true;/);
+    assert.match(source, /setup\.query\('COMMIT'\);\s+setupTransactionOpen = false;/);
+    assert.match(source, /first\.query\('BEGIN'\);\s+firstTransactionOpen = true;/);
+    assert.match(source, /first\.query\('COMMIT'\);\s+firstTransactionOpen = false;/);
+    assert.match(source, /if \(firstTransactionOpen\) await first\.query\('ROLLBACK'\)/);
+    assert.match(source, /if \(setupTransactionOpen\) await setup\.query\('ROLLBACK'\)/);
+    assert.doesNotMatch(source, /second\.query\('ROLLBACK'\)/);
+  }
+});
+
 test('package, CI and Vercel wire the fail-closed gate with races disabled off CI', () => {
   assert.match(packageJson, /"verify:data-subject-decision-migration":\s*"node scripts\/verify-data-subject-decision-migration\.mjs"/);
   assert.match(

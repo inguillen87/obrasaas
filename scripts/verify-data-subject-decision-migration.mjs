@@ -822,13 +822,18 @@ async function assertApprovalWaitsForRevocation(connectionString) {
   await Promise.all([setup.connect(), first.connect(), second.connect()]);
   const suffix = randomUUID().replaceAll('-', '');
   let ids;
+  let setupTransactionOpen = false;
+  let firstTransactionOpen = false;
   try {
     await setup.query('BEGIN');
+    setupTransactionOpen = true;
     ids = await seedFixture(setup, suffix, 'race');
     const prepared = await prepareDecision(setup, ids, 'race');
     await setup.query('COMMIT');
+    setupTransactionOpen = false;
 
     await first.query('BEGIN');
+    firstTransactionOpen = true;
     await first.query(VERIFY_SQL, [
       ids.organization, ids.request, ids.adminB, hash(`race-revoke-op:${suffix}`),
       hash(`race-revoke-fp:${suffix}`), 'privacy-review-fingerprint-v1', 'REVOKED',
@@ -845,12 +850,12 @@ async function assertApprovalWaitsForRevocation(connectionString) {
     );
     await assertConnectionWaitsOnLock(setup, 'obrasaas-pro05b-race-approve', 'approval versus revocation');
     await first.query('COMMIT');
+    firstTransactionOpen = false;
     const approval = await approvalPromise;
     invariant(!approval.succeeded && approval.error?.code === 'P0509', 'approval versus revocation did not fail stale after waiting.');
   } finally {
-    await first.query('ROLLBACK').catch(() => undefined);
-    await second.query('ROLLBACK').catch(() => undefined);
-    await setup.query('ROLLBACK').catch(() => undefined);
+    if (firstTransactionOpen) await first.query('ROLLBACK').catch(() => undefined);
+    if (setupTransactionOpen) await setup.query('ROLLBACK').catch(() => undefined);
     if (ids) await cleanupDisposableFixture(setup, ids.organization, ids.crossOrganization);
     await Promise.all([setup.end(), first.end(), second.end()]);
   }
@@ -863,13 +868,18 @@ async function assertApprovalWaitsForHoldRevision(connectionString) {
   await Promise.all([setup.connect(), first.connect(), second.connect()]);
   const suffix = randomUUID().replaceAll('-', '');
   let ids;
+  let setupTransactionOpen = false;
+  let firstTransactionOpen = false;
   try {
     await setup.query('BEGIN');
+    setupTransactionOpen = true;
     ids = await seedFixture(setup, suffix, 'hold_race');
     const prepared = await prepareDecision(setup, ids, 'hold_race');
     await setup.query('COMMIT');
+    setupTransactionOpen = false;
 
     await first.query('BEGIN');
+    firstTransactionOpen = true;
     await first.query(HOLD_EVENT_SQL, [
       ids.organization, ids.request, prepared.hold.hold_id, ids.adminA,
       hash(`race-hold-review-op:${suffix}`), hash(`race-hold-review-fp:${suffix}`),
@@ -887,12 +897,12 @@ async function assertApprovalWaitsForHoldRevision(connectionString) {
     );
     await assertConnectionWaitsOnLock(setup, 'obrasaas-pro05b-hold-race-approve', 'approval versus hold review');
     await first.query('COMMIT');
+    firstTransactionOpen = false;
     const approval = await approvalPromise;
     invariant(!approval.succeeded && approval.error?.code === 'P0509', 'approval versus hold review did not fail stale after waiting.');
   } finally {
-    await first.query('ROLLBACK').catch(() => undefined);
-    await second.query('ROLLBACK').catch(() => undefined);
-    await setup.query('ROLLBACK').catch(() => undefined);
+    if (firstTransactionOpen) await first.query('ROLLBACK').catch(() => undefined);
+    if (setupTransactionOpen) await setup.query('ROLLBACK').catch(() => undefined);
     if (ids) await cleanupDisposableFixture(setup, ids.organization, ids.crossOrganization);
     await Promise.all([setup.end(), first.end(), second.end()]);
   }
@@ -914,13 +924,18 @@ async function assertDirectApprovalWaitsForActorDisable(connectionString) {
   await Promise.all([setup.connect(), first.connect(), second.connect()]);
   const suffix = randomUUID().replaceAll('-', '');
   let ids;
+  let setupTransactionOpen = false;
+  let firstTransactionOpen = false;
   try {
     await setup.query('BEGIN');
+    setupTransactionOpen = true;
     ids = await seedFixture(setup, suffix, 'direct_disable');
     const prepared = await prepareDecision(setup, ids, 'direct_disable');
     await setup.query('COMMIT');
+    setupTransactionOpen = false;
 
     await first.query('BEGIN');
+    firstTransactionOpen = true;
     await first.query(
       `UPDATE "TenantMembership"
           SET "status" = 'DISABLED'
@@ -955,6 +970,7 @@ async function assertDirectApprovalWaitsForActorDisable(connectionString) {
       'direct approval versus actor disable',
     );
     await first.query('COMMIT');
+    firstTransactionOpen = false;
     const directApproval = await directApprovalPromise;
     invariant(
       !directApproval.succeeded && directApproval.error?.code === 'P0509',
@@ -972,9 +988,8 @@ async function assertDirectApprovalWaitsForActorDisable(connectionString) {
       'failed direct approval changed the pending decision.',
     );
   } finally {
-    await first.query('ROLLBACK').catch(() => undefined);
-    await second.query('ROLLBACK').catch(() => undefined);
-    await setup.query('ROLLBACK').catch(() => undefined);
+    if (firstTransactionOpen) await first.query('ROLLBACK').catch(() => undefined);
+    if (setupTransactionOpen) await setup.query('ROLLBACK').catch(() => undefined);
     if (ids) await cleanupDisposableFixture(setup, ids.organization, ids.crossOrganization);
     await Promise.all([setup.end(), first.end(), second.end()]);
   }
