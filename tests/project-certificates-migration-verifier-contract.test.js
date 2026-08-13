@@ -131,6 +131,18 @@ test('S10 disposable verifier cannot regress to placeholder races or partial gov
   assert.match(closerRevocations, /state\.active_closers === 1/);
   assert.match(closerRevocations, /terminalPayload\.receipt\.operationKind === terminalDecision/);
 
+  const archiveVsPending = verifier.match(
+    /async function assertDisposableArchiveVsPending\([\s\S]*?(?=async function assertDisposableActorRevokeVsApprove)/,
+  )?.[0];
+  assert.ok(archiveVsPending, 'archive-vs-pending race helper is required');
+  assert.match(archiveVsPending, /fulfilled\(outcomes\)\.length === 1 && rejected\(outcomes\)\.length === 1/);
+  assert.match(archiveVsPending, /const prepareWon = outcomes\[0\]\.status === 'fulfilled'/);
+  assert.match(archiveVsPending, /PROJECT_ARCHIVE_BLOCKED_BY_PENDING_GOVERNANCE/);
+  assert.match(archiveVsPending, /loser\?\.code === '40001'[\s\S]*PROJECT_ARCHIVE_BUSY/);
+  assert.match(archiveVsPending, /code=\$\{loser\?\.code \|\| 'none'\} message=\$\{loserMessage\}/);
+  assert.match(archiveVsPending, /prepareWon[\s\S]*state\.status === 'ACTIVE'[\s\S]*state\.versions === 1[\s\S]*state\.pending/);
+  assert.match(archiveVsPending, /!prepareWon[\s\S]*state\.status === 'ARCHIVED'[\s\S]*state\.versions === 0[\s\S]*state\.pending === null/);
+
   assert.match(migration, /CREATE FUNCTION "obrasaas_project_certificate_approval_is_fresh"/);
   assert.match(migration, /v_approval_fresh := "obrasaas_project_certificate_approval_is_fresh"/);
   assert.match(migration, /p_decision = 'APPROVE' AND NOT "obrasaas_project_certificate_approval_is_fresh"/);

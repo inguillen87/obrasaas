@@ -1488,11 +1488,16 @@ async function assertDisposableArchiveVsPending(connectionString, schema) {
     ]);
     invariant(fulfilled(outcomes).length === 1 && rejected(outcomes).length === 1,
       'Archive-vs-pending must select exactly one winner.');
-    const loser = String(rejected(outcomes)[0]?.message);
-    invariant(outcomes[0].status === 'fulfilled'
-      ? loser.includes('PROJECT_ARCHIVE_BLOCKED_BY_PENDING_GOVERNANCE')
-      : loser.includes('PROJECT_CERTIFICATE_NOT_READY') || loser.includes('PROJECT_CERTIFICATE_PROJECT_ARCHIVED'),
-    'Archive-vs-pending loser was not controlled.');
+    const loser = rejected(outcomes)[0];
+    const loserMessage = String(loser?.message || loser);
+    const prepareWon = outcomes[0].status === 'fulfilled';
+    const controlledLoser = prepareWon
+      ? loserMessage.includes('PROJECT_ARCHIVE_BLOCKED_BY_PENDING_GOVERNANCE')
+        || (loser?.code === '40001' && loserMessage.includes('PROJECT_ARCHIVE_BUSY'))
+      : loserMessage.includes('PROJECT_CERTIFICATE_NOT_READY')
+        || loserMessage.includes('PROJECT_CERTIFICATE_PROJECT_ARCHIVED');
+    invariant(controlledLoser,
+      `Archive-vs-pending loser was not controlled: code=${loser?.code || 'none'} message=${loserMessage}`);
     const state = await runDisposableQuery(
       connectionString, schema, 'archive-probe',
       `SELECT p."status"::text,
@@ -1503,9 +1508,9 @@ async function assertDisposableArchiveVsPending(connectionString, schema) {
          FROM "Project" p WHERE p."organizationId"=$1 AND p."id"=$2`,
       [item.organizationId, item.projectId],
     );
-    invariant((outcomes[0].status === 'fulfilled'
+    invariant((prepareWon
       && state.status === 'ACTIVE' && state.versions === 1 && state.pending)
-      || (outcomes[0].status === 'rejected'
+      || (!prepareWon
         && state.status === 'ARCHIVED' && state.versions === 0 && state.pending === null),
     'Archive-vs-pending did not linearize around the raw-project lock.');
     return true;
