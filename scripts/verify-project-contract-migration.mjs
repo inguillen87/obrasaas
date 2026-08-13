@@ -951,11 +951,15 @@ async function assertDisposableTaskScopeActivationRace(connectionString, schema,
     ]);
     invariant(fulfilled(outcomes).length === 1 && rejected(outcomes).length === 1,
       `Contract activation versus canonical task ${mutationKind} did not select exactly one winner.`);
-    const loser = String(rejected(outcomes)[0]?.message);
+    const loserReason = rejected(outcomes)[0];
+    const loser = String(loserReason?.message);
+    const controlledBusy = loserReason?.code === '40001'
+      && loser.includes('PROJECT_CONTRACT_TASK_SCOPE_BUSY');
     invariant(
       loser.includes('PROJECT_CONTRACT_TASK_SCOPE_CHANGE_REQUIRES_CHANGE_CONTROL')
-        || loser.includes('PROJECT_CONTRACT_TASKS_STALE'),
-      `Contract activation versus task ${mutationKind} loser was not controlled.`,
+        || loser.includes('PROJECT_CONTRACT_TASKS_STALE')
+        || controlledBusy,
+      `Contract activation versus task ${mutationKind} loser was not controlled: ${loserReason?.code} ${loser}`,
     );
     const state = (await client.query(
       `SELECT h."currentVersionId",h."pendingVersionId",

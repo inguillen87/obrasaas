@@ -91,6 +91,8 @@ test('S9.3 verifier covers rollback, immutable replay, role denial and committed
   assert.match(verifier, /Concurrent exact SOV replay created divergent versions/);
   assert.match(verifier, /Concurrent finance decisions did not select exactly one winner/);
   assert.match(verifier, /PROJECT_CONTRACT_TASK_SCOPE_CHANGE_REQUIRES_CHANGE_CONTROL/);
+  assert.match(verifier, /PROJECT_CONTRACT_TASK_SCOPE_BUSY/);
+  assert.match(verifier, /loserReason\?\.code === '40001'/);
   assert.match(verifier, /canonical_task_demotion_after_approval/);
   assert.match(verifier, /Approved full-SOV canonical task scope changed despite its change-control fence/);
   assert.match(verifier, /assertDisposableTaskScopeActivationRace\(connectionString, schema, 'insert'\)/);
