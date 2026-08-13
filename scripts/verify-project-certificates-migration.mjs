@@ -1890,13 +1890,10 @@ async function assertDisposableCorrectionVsNext(connectionString, schema) {
   try {
     const source = (await setup.query(
       `SELECT
-        (SELECT "approvedMeasurementId" FROM "TaskProgressMeasurementHead"
-          WHERE "organizationId"=$1 AND "projectId"=$2 AND "taskId"=$3
-            AND "periodStart"=$4::date AND "periodEnd"=$5::date) measurement_id,
         (SELECT "currentCutId" FROM "ProjectProgressMeasurementCutHead"
           WHERE "organizationId"=$1 AND "projectId"=$2
-            AND "periodStart"=$4::date AND "periodEnd"=$5::date) cut_id`,
-      [item.organizationId, item.projectId, item.taskId, item.periodStart, item.periodEnd],
+            AND "periodStart"=$3::date AND "periodEnd"=$4::date) cut_id`,
+      [item.organizationId, item.projectId, item.periodStart, item.periodEnd],
     )).rows[0];
 
     // NEXT is genuinely READY before the correction transaction begins.
@@ -1918,11 +1915,17 @@ async function assertDisposableCorrectionVsNext(connectionString, schema) {
 
     await correction.query('BEGIN');
     correctionOpen = true;
-    await submitAndApproveMeasurement(correction, item, {
-      periodQuantity: '32.0000', evidenceId: item.evidenceId,
-      expectedHeadMeasurementId: source.measurement_id,
-      operationSuffix: 'correction-vs-next-correction',
-    });
+    const revisedTask = (await correction.query(
+      `UPDATE "Task"
+          SET "title"='Measured task revised during correction-vs-next race',
+              "revision"="revision"+1,
+              "updatedAt"=CURRENT_TIMESTAMP
+        WHERE "projectId"=$1 AND "id"=$2
+        RETURNING "revision"`,
+      [item.projectId, item.taskId],
+    )).rows[0];
+    invariant(revisedTask.revision === 2,
+      'Correction-vs-next did not advance the governed Task snapshot exactly once.');
     await sealCurrentCut(correction, item, {
       expectedHeadCutId: source.cut_id, suffix: 'correction-vs-next-correction',
     });

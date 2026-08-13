@@ -111,6 +111,15 @@ test('S10 disposable verifier cannot regress to placeholder races or partial gov
   assert.match(verifier, /restoredMap\.get\(entry\) === 'A'/);
   assert.match(verifier, /Object\.values\(manifest\)\.every\(Boolean\)/);
 
+  const correctionVsNext = verifier.match(
+    /async function assertDisposableCorrectionVsNext\([\s\S]*?(?=async function expectTransactionFailure)/,
+  )?.[0];
+  assert.ok(correctionVsNext, 'correction-vs-next race helper is required');
+  assert.doesNotMatch(correctionVsNext, /submitAndApproveMeasurement\(correction/);
+  assert.match(correctionVsNext, /UPDATE "Task"[\s\S]*"revision"="revision"\+1/);
+  assert.match(correctionVsNext, /expectedHeadCutId: source\.cut_id/);
+  assert.match(correctionVsNext, /observeLockWait[\s\S]*PROJECT_CERTIFICATE_NOT_READY/);
+
   assert.match(migration, /CREATE FUNCTION "obrasaas_project_certificate_approval_is_fresh"/);
   assert.match(migration, /v_approval_fresh := "obrasaas_project_certificate_approval_is_fresh"/);
   assert.match(migration, /p_decision = 'APPROVE' AND NOT "obrasaas_project_certificate_approval_is_fresh"/);
