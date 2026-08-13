@@ -1071,7 +1071,9 @@ async function cleanupDisposableFixture(connectionString, schema, item) {
     }
     await client.query(
       `UPDATE "ProjectCertificateBook"
-          SET "latestApprovedCertificateVersionId"=NULL,"pendingCertificateVersionId"=NULL
+          SET "latestApprovedPeriodStart"=NULL,
+              "latestApprovedCertificateVersionId"=NULL,
+              "pendingCertificateVersionId"=NULL
         WHERE "organizationId"=$1`,
       [item.organizationId],
     );

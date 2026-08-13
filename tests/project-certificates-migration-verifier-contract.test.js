@@ -103,6 +103,10 @@ test('S10 disposable verifier cannot regress to placeholder races or partial gov
   assert.match(verifier, /Replica command views\/wrappers mutated S10 facts or receipts/);
   assert.match(verifier, /terminalPayload\.receipt\.operationKind === terminalDecision/);
   assert.match(verifier, /ProjectCertificateDeduction[\s\S]*TaskProgressMeasurementBalance/);
+  assert.match(
+    verifier,
+    /UPDATE "ProjectCertificateBook"[\s\S]*SET "latestApprovedPeriodStart"=NULL,[\s\S]*"latestApprovedCertificateVersionId"=NULL,[\s\S]*"pendingCertificateVersionId"=NULL/,
+  );
   assert.match(verifier, /restoredMap\.get\(entry\) === 'A'/);
   assert.match(verifier, /Object\.values\(manifest\)\.every\(Boolean\)/);
 
