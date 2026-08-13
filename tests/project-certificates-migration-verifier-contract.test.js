@@ -120,6 +120,17 @@ test('S10 disposable verifier cannot regress to placeholder races or partial gov
   assert.match(correctionVsNext, /expectedHeadCutId: source\.cut_id/);
   assert.match(correctionVsNext, /observeLockWait[\s\S]*PROJECT_CERTIFICATE_NOT_READY/);
 
+  const closerRevocations = verifier.match(
+    /async function assertDisposableCloserRevocations\([\s\S]*?(?=async function observeLockWait)/,
+  )?.[0];
+  assert.ok(closerRevocations, 'closer-revocation race helper is required');
+  assert.match(closerRevocations, /winners\.length === 1 && losers\.length === 1/);
+  assert.match(closerRevocations, /PROJECT_CERTIFICATE_PENDING_CLOSER_REQUIRED/);
+  assert.match(closerRevocations, /loser\?\.code === '40001'[\s\S]*PROJECT_CERTIFICATE_MEMBERSHIP_RETRY/);
+  assert.match(closerRevocations, /code=\$\{loser\?\.code \|\| 'none'\} message=\$\{loserMessage\}/);
+  assert.match(closerRevocations, /state\.active_closers === 1/);
+  assert.match(closerRevocations, /terminalPayload\.receipt\.operationKind === terminalDecision/);
+
   assert.match(migration, /CREATE FUNCTION "obrasaas_project_certificate_approval_is_fresh"/);
   assert.match(migration, /v_approval_fresh := "obrasaas_project_certificate_approval_is_fresh"/);
   assert.match(migration, /p_decision = 'APPROVE' AND NOT "obrasaas_project_certificate_approval_is_fresh"/);

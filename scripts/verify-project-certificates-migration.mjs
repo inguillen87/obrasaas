@@ -1596,9 +1596,15 @@ async function assertDisposableCloserRevocations(connectionString, schema) {
       runDisposableQuery(connectionString, schema, 'revoke-registrar', revokeSql,
         [item.organizationId, item.memberships.admin]),
     ]);
-    invariant(fulfilled(outcomes).length === 1 && rejected(outcomes).length === 1
-      && String(rejected(outcomes)[0]?.message).includes('PROJECT_CERTIFICATE_PENDING_CLOSER_REQUIRED'),
-    'Concurrent certifier/registrar revocations orphaned a pending certificate.');
+    const winners = fulfilled(outcomes);
+    const losers = rejected(outcomes);
+    const loser = losers[0];
+    const loserMessage = String(loser?.message || loser);
+    const controlledLoser = loserMessage.includes('PROJECT_CERTIFICATE_PENDING_CLOSER_REQUIRED')
+      || (loser?.code === '40001'
+        && loserMessage.includes('PROJECT_CERTIFICATE_MEMBERSHIP_RETRY'));
+    invariant(winners.length === 1 && losers.length === 1 && controlledLoser,
+      `Concurrent certifier/registrar revocations had an uncontrolled outcome: code=${loser?.code || 'none'} message=${loserMessage}`);
     const state = await runDisposableQuery(connectionString, schema, 'closer-revoke-probe',
       `SELECT count(*) FILTER (WHERE "status"='ACTIVE')::int active_closers,
               bool_or("id"=$2 AND "status"='ACTIVE') certifier_active,
