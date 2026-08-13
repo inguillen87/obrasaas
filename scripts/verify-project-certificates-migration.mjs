@@ -15,13 +15,16 @@ import {
 } from '../src/lib/project-certificates.js';
 
 const { Client } = pg;
-const MIGRATION = '20260812120000_project_certificates_s10_cert';
+const BASE_MIGRATION = '20260812120000_project_certificates_s10_cert';
+const FOLLOW_UP_MIGRATION = '20260812230000_project_certificate_updated_at_no_default';
+const MIGRATIONS = Object.freeze([BASE_MIGRATION, FOLLOW_UP_MIGRATION]);
 const CONNECTION_ENV = 'PROJECT_CERTIFICATES_MIGRATION_DATABASE_URL';
 const SCHEMA_ENV = 'PROJECT_CERTIFICATES_MIGRATION_SCHEMA';
 const DISPOSABLE_ENV = 'PROJECT_CERTIFICATES_DISPOSABLE_CONCURRENCY';
-const migrationPath = fileURLToPath(
-  new URL(`../prisma/migrations/${MIGRATION}/migration.sql`, import.meta.url),
-);
+const migrationPaths = new Map(MIGRATIONS.map((migration) => [
+  migration,
+  fileURLToPath(new URL(`../prisma/migrations/${migration}/migration.sql`, import.meta.url)),
+]));
 const TABLES = Object.freeze([
   'ProjectCertificateBook',
   'ProjectCertificatePeriodHead',
@@ -145,15 +148,19 @@ async function assertMigration(client, schema, local) {
     return;
   }
   const result = await client.query(
-    `SELECT "checksum","finished_at","rolled_back_at"
+    `SELECT "migration_name","checksum","finished_at","rolled_back_at"
        FROM ${quoteIdentifier(schema)}."_prisma_migrations"
-      WHERE "migration_name"=$1`,
-    [MIGRATION],
+      WHERE "migration_name"=ANY($1::text[])`,
+    [MIGRATIONS],
   );
-  invariant(result.rows.length === 1, `${MIGRATION} is absent or applied more than once.`);
-  invariant(result.rows[0].finished_at && !result.rows[0].rolled_back_at, `${MIGRATION} is not successfully applied.`);
-  invariant(result.rows[0].checksum === sha256(await readFile(migrationPath, 'utf8')),
-    `${MIGRATION} checksum differs from the deployed ledger.`);
+  invariant(result.rows.length === MIGRATIONS.length, 'S10-CERT migrations are absent or applied more than once.');
+  const applied = new Map(result.rows.map((row) => [row.migration_name, row]));
+  for (const migration of MIGRATIONS) {
+    const row = applied.get(migration);
+    invariant(row?.finished_at && !row.rolled_back_at, `${migration} is not successfully applied.`);
+    invariant(row.checksum === sha256(await readFile(migrationPaths.get(migration), 'utf8')),
+      `${migration} checksum differs from the deployed ledger.`);
+  }
 }
 
 export async function assertStructure(client, schema) {
@@ -163,6 +170,20 @@ export async function assertStructure(client, schema) {
     [schema, TABLES],
   );
   invariant(tables.rows.length === TABLES.length, 'S10-CERT tables are incomplete.');
+
+  const updatedAtDefaults = await client.query(
+    `SELECT table_name,column_default
+       FROM information_schema.columns
+      WHERE table_schema=$1
+        AND table_name=ANY($2::text[])
+        AND column_name='updatedAt'`,
+    [schema, ['ProjectCertificateBook', 'ProjectCertificatePeriodHead']],
+  );
+  invariant(
+    updatedAtDefaults.rows.length === 2
+      && updatedAtDefaults.rows.every((row) => row.column_default === null),
+    'S10-CERT mutable projection updatedAt columns must not have database defaults.',
+  );
 
   const enums = await client.query(
     `SELECT t.typname,array_agg(e.enumlabel ORDER BY e.enumsortorder)::text[] labels

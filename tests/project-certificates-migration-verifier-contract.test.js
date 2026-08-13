@@ -6,13 +6,17 @@ import test from 'node:test';
 
 const verifierUrl = new URL('../scripts/verify-project-certificates-migration.mjs', import.meta.url);
 const { configuration } = await import(verifierUrl);
-const [verifier, packageJson, workflow, vercelBuild, migration] = await Promise.all([
+const [verifier, packageJson, workflow, vercelBuild, migration, followUpMigration] = await Promise.all([
   readFile(verifierUrl, 'utf8'),
   readFile(new URL('../package.json', import.meta.url), 'utf8'),
   readFile(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8'),
   readFile(new URL('../scripts/vercel-build.mjs', import.meta.url), 'utf8'),
   readFile(new URL(
     '../prisma/migrations/20260812120000_project_certificates_s10_cert/migration.sql',
+    import.meta.url,
+  ), 'utf8'),
+  readFile(new URL(
+    '../prisma/migrations/20260812230000_project_certificate_updated_at_no_default/migration.sql',
     import.meta.url,
   ), 'utf8'),
 ]);
@@ -69,6 +73,24 @@ test('S10 verifier checks exact structure, guards, private workers and rollback 
   assert.match(verifier, /await client\.query\('ROLLBACK'\)/);
   assert.match(migration, /CREATE FUNCTION "obrasaas_project_certificate_prepare"/);
   assert.match(migration, /CREATE FUNCTION "obrasaas_project_certificate_decide"/);
+});
+
+test('S10 follow-up migration removes Prisma-incompatible updatedAt defaults without rewriting history', () => {
+  assert.match(migration, /"ProjectCertificateBook"[\s\S]*"updatedAt" TIMESTAMP\(3\) NOT NULL DEFAULT CURRENT_TIMESTAMP/);
+  assert.match(migration, /"ProjectCertificatePeriodHead"[\s\S]*"updatedAt" TIMESTAMP\(3\) NOT NULL DEFAULT CURRENT_TIMESTAMP/);
+  assert.match(
+    followUpMigration,
+    /ALTER TABLE "ProjectCertificateBook"\s+ALTER COLUMN "updatedAt" DROP DEFAULT;/,
+  );
+  assert.match(
+    followUpMigration,
+    /ALTER TABLE "ProjectCertificatePeriodHead"\s+ALTER COLUMN "updatedAt" DROP DEFAULT;/,
+  );
+  assert.doesNotMatch(followUpMigration, /\b(?:UPDATE|DELETE|INSERT)\b|DROP\s+TABLE/i);
+  assert.match(verifier, /20260812120000_project_certificates_s10_cert/);
+  assert.match(verifier, /20260812230000_project_certificate_updated_at_no_default/);
+  assert.match(verifier, /"migration_name"=ANY\(\$1::text\[\]\)/);
+  assert.match(verifier, /row\.column_default === null/);
 });
 
 test('S10 disposable verifier cannot regress to placeholder races or partial governance', () => {
