@@ -506,6 +506,12 @@ GET devuelve `no-store`: book, head del período, current/pending, historial
 acotado, readiness, blockers, candidato server-owned y capabilities derivadas
 en DB.
 
+Un período ya aprobado cuyo cut y fuente técnica siguen idénticos devuelve
+`readiness.state = UP_TO_DATE`, sin mode, blockers ni candidato y con prepare
+denegado. No se presenta como `CORRECTION`: cambiar sólo deducciones no habilita
+una nueva versión. Un POST directo en ese estado falla con
+`PROJECT_CERTIFICATE_UNCHANGED` antes de escribir.
+
 GET admite una única query `periodDate=YYYY-MM-DD`; parámetros desconocidos,
 repetidos o fechas no canónicas fallan. POST de propuesta usa este body exacto:
 

@@ -44,6 +44,9 @@ test('tenant roles enforce least privilege', () => {
   assert.equal(roleHasPermission('DIRECTOR', 'org:measurements:approve'), true);
   assert.equal(roleHasPermission('DIRECTOR', 'org:measurement-cuts:read'), true);
   assert.equal(roleHasPermission('DIRECTOR', 'org:measurement-cuts:seal'), true);
+  assert.equal(roleHasPermission('DIRECTOR', 'org:certificates:read'), true);
+  assert.equal(roleHasPermission('DIRECTOR', 'org:certificates:certify'), true);
+  assert.equal(roleHasPermission('DIRECTOR', 'org:certificates:prepare'), false);
   assert.equal(roleHasPermission('DIRECTOR', 'org:contracts:read'), true);
   assert.equal(roleHasPermission('DIRECTOR', 'org:contracts:prepare'), true);
   assert.equal(roleHasPermission('DIRECTOR', 'org:contracts:authorities:manage'), true);
@@ -61,6 +64,9 @@ test('tenant roles enforce least privilege', () => {
   assert.equal(roleHasPermission('SITE_MANAGER', 'org:measurements:approve'), false);
   assert.equal(roleHasPermission('SITE_MANAGER', 'org:measurement-cuts:read'), true);
   assert.equal(roleHasPermission('SITE_MANAGER', 'org:measurement-cuts:seal'), false);
+  assert.equal(roleHasPermission('SITE_MANAGER', 'org:certificates:read'), true);
+  assert.equal(roleHasPermission('SITE_MANAGER', 'org:certificates:prepare'), true);
+  assert.equal(roleHasPermission('SITE_MANAGER', 'org:certificates:certify'), false);
   assert.equal(roleHasPermission('SITE_MANAGER', 'org:contracts:read'), false);
   assert.equal(roleHasPermission('SITE_MANAGER', 'org:contracts:prepare'), false);
   assert.equal(roleHasPermission('FINANCE', 'org:costs:manage'), true);
@@ -75,6 +81,9 @@ test('tenant roles enforce least privilege', () => {
   assert.equal(roleHasPermission('FINANCE', 'org:measurements:approve'), false);
   assert.equal(roleHasPermission('FINANCE', 'org:measurement-cuts:read'), true);
   assert.equal(roleHasPermission('FINANCE', 'org:measurement-cuts:seal'), false);
+  assert.equal(roleHasPermission('FINANCE', 'org:certificates:read'), true);
+  assert.equal(roleHasPermission('FINANCE', 'org:certificates:prepare'), false);
+  assert.equal(roleHasPermission('FINANCE', 'org:certificates:certify'), false);
   assert.equal(roleHasPermission('FINANCE', 'org:contracts:read'), true);
   assert.equal(roleHasPermission('FINANCE', 'org:contracts:approve'), true);
   assert.equal(roleHasPermission('FINANCE', 'org:contracts:prepare'), false);
@@ -90,7 +99,13 @@ test('tenant roles enforce least privilege', () => {
   assert.equal(roleHasPermission('AUDITOR', 'org:measurements:approve'), false);
   assert.equal(roleHasPermission('AUDITOR', 'org:measurement-cuts:read'), true);
   assert.equal(roleHasPermission('AUDITOR', 'org:measurement-cuts:seal'), false);
+  assert.equal(roleHasPermission('AUDITOR', 'org:certificates:read'), true);
+  assert.equal(roleHasPermission('AUDITOR', 'org:certificates:prepare'), false);
+  assert.equal(roleHasPermission('AUDITOR', 'org:certificates:certify'), false);
   assert.equal(roleHasPermission('AUDITOR', 'org:contracts:read'), true);
   assert.equal(roleHasPermission('AUDITOR', 'org:contracts:prepare'), false);
   assert.equal(roleHasPermission('AUDITOR', 'org:contracts:approve'), false);
+  assert.equal(roleHasPermission('ADMIN', 'org:certificates:read'), true);
+  assert.equal(roleHasPermission('ADMIN', 'org:certificates:prepare'), true);
+  assert.equal(roleHasPermission('ADMIN', 'org:certificates:certify'), true);
 });

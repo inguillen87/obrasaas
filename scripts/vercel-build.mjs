@@ -63,6 +63,9 @@ const PROGRESS_MEASUREMENT_CUTS_VERIFIER_PATH = fileURLToPath(
 const PROJECT_CONTRACT_VERIFIER_PATH = fileURLToPath(
   new URL("./verify-project-contract-migration.mjs", import.meta.url),
 );
+const PROJECT_CERTIFICATES_VERIFIER_PATH = fileURLToPath(
+  new URL("./verify-project-certificates-migration.mjs", import.meta.url),
+);
 const DATA_SUBJECT_DISCOVERY_VERIFIER_PATH = fileURLToPath(
   new URL("./verify-data-subject-discovery-migration.mjs", import.meta.url),
 );
@@ -372,6 +375,7 @@ export async function runVercelBuild({
     progressMeasurementsVerifier: PROGRESS_MEASUREMENTS_VERIFIER_PATH,
     progressMeasurementCutsVerifier: PROGRESS_MEASUREMENT_CUTS_VERIFIER_PATH,
     projectContractVerifier: PROJECT_CONTRACT_VERIFIER_PATH,
+    projectCertificatesVerifier: PROJECT_CERTIFICATES_VERIFIER_PATH,
     dataSubjectDiscoveryVerifier: DATA_SUBJECT_DISCOVERY_VERIFIER_PATH,
     dataSubjectDecisionVerifier: DATA_SUBJECT_DECISION_VERIFIER_PATH,
     notificationOutboxVerifier: NOTIFICATION_OUTBOX_VERIFIER_PATH,
@@ -465,6 +469,10 @@ export async function runVercelBuild({
         environment[plan.migrationDatabaseEnvironment],
       PROJECT_CONTRACT_MIGRATION_SCHEMA: "public",
       PROJECT_CONTRACT_DISPOSABLE_CONCURRENCY: "0",
+      PROJECT_CERTIFICATES_MIGRATION_DATABASE_URL:
+        environment[plan.migrationDatabaseEnvironment],
+      PROJECT_CERTIFICATES_MIGRATION_SCHEMA: "public",
+      PROJECT_CERTIFICATES_DISPOSABLE_CONCURRENCY: "0",
       DATA_SUBJECT_DISCOVERY_MIGRATION_DATABASE_URL:
         environment[plan.migrationDatabaseEnvironment],
       DATA_SUBJECT_DISCOVERY_MIGRATION_SCHEMA: "public",
@@ -578,6 +586,13 @@ export async function runVercelBuild({
       await runner(
         process.execPath,
         [cliPaths.projectContractVerifier],
+        { ...sharedOptions, env: verificationEnvironment },
+      );
+    }
+    if (cliPaths.projectCertificatesVerifier) {
+      await runner(
+        process.execPath,
+        [cliPaths.projectCertificatesVerifier],
         { ...sharedOptions, env: verificationEnvironment },
       );
     }

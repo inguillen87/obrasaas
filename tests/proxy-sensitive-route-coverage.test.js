@@ -96,6 +96,8 @@ const SENSITIVE_API_PATHS = [
   '/api/progress-measurements',
   '/api/progress-measurements/measurement-a/review',
   '/api/progress-measurement-cuts',
+  '/api/project-certificates',
+  '/api/project-certificates/certificate-a/decision',
   '/api/project-contract',
   '/api/project-contract/authorities',
   '/api/project-contract/authorities/authority-a/decision',
@@ -188,7 +190,7 @@ test('every API Route Handler is exhaustively classified behind Clerk or its own
     );
   }
 
-  assert.equal(protectedRouteCount, 110, 'the complete current Clerk surface must remain classified');
+  assert.equal(protectedRouteCount, 112, 'the complete current Clerk surface must remain classified');
   assert.deepEqual(discoveredPublicRoutes.sort(), PUBLIC_SELF_AUTHENTICATED_API_PATHS.toSorted());
 });
 

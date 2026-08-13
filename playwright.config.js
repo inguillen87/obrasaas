@@ -86,5 +86,18 @@ export default defineConfig({
         video: 'off',
       },
     },
+    {
+      name: 'authenticated-s10',
+      dependencies: ['setup'],
+      retries: 0,
+      workers: 1,
+      testMatch: /s10-authenticated\.spec\.js/,
+      use: {
+        ...browserUse,
+        screenshot: 'off',
+        trace: 'off',
+        video: 'off',
+      },
+    },
   ],
 });

@@ -166,6 +166,13 @@ jobs:
           PROJECT_CONTRACT_DISPOSABLE_CONCURRENCY: "1"
         run: npm run verify:project-contract-migration
 
+      - name: Verify project certificates on PostgreSQL 17
+        env:
+          PROJECT_CERTIFICATES_MIGRATION_DATABASE_URL: postgresql://obrasaas_ci:obrasaas_ci@127.0.0.1:5432/obrasaas_ci?schema=public
+          PROJECT_CERTIFICATES_MIGRATION_SCHEMA: public
+          PROJECT_CERTIFICATES_DISPOSABLE_CONCURRENCY: "1"
+        run: npm run verify:project-certificates-migration
+
       - name: Verify data subject discovery on PostgreSQL 17
         env:
           DATA_SUBJECT_DISCOVERY_MIGRATION_DATABASE_URL: postgresql://obrasaas_ci:obrasaas_ci@127.0.0.1:5432/obrasaas_ci?schema=public
@@ -249,7 +256,7 @@ jobs:
           retention-days: 7
 
   authenticated-s92-e2e:
-    name: S9.2 + S9.3 authenticated disposable journeys
+    name: S9.2 + S9.3 + S10-CERT authenticated disposable journeys
     if: >-
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
       && (github.ref == 'refs/heads/master'
@@ -280,6 +287,7 @@ jobs:
       E2E_BASE_URL: http://localhost:3100
       S92_E2E_DISPOSABLE: '1'
       S93_E2E_DISPOSABLE: '1'
+      S10_E2E_DISPOSABLE: '1'
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -333,3 +341,10 @@ jobs:
           CLERK_SECRET_KEY: ${{ secrets.CLERK_E2E_SECRET_KEY }}
           S92_E2E_FIXTURE_FILE: ${{ runner.temp }}/s92-e2e-fixture.json
         run: npm run test:e2e:authenticated:s93
+
+      - name: Run authenticated S10-CERT journey
+        env:
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_E2E_PUBLISHABLE_KEY }}
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_E2E_SECRET_KEY }}
+          S92_E2E_FIXTURE_FILE: ${{ runner.temp }}/s92-e2e-fixture.json
+        run: npm run test:e2e:authenticated:s10
