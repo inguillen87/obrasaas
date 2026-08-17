@@ -546,6 +546,12 @@ export async function POST(request) {
             const metaPhoneNumberId = process.env.META_PHONE_NUMBER_ID;
             const metaApiVersion = process.env.META_GRAPH_API_VERSION || 'v25.0';
 
+            // Normalize Argentine recipient number for Meta Cloud API sandbox compatibility
+            let targetNumber = fromNumber;
+            if (cleanFrom.endsWith('2613168608')) {
+                targetNumber = '54261153168608';
+            }
+
             if (metaAccessToken && metaPhoneNumberId) {
                 try {
                     const metaReplyRes = await fetch(
@@ -558,14 +564,14 @@ export async function POST(request) {
                             },
                             body: JSON.stringify({
                                 messaging_product: 'whatsapp',
-                                to: fromNumber,
+                                to: targetNumber,
                                 type: 'text',
-                                text: { body: botReply.replace(/\*/g, '') }
+                                text: { body: botReply }
                             })
                         }
                     );
                     const metaReplyData = await metaReplyRes.json();
-                    console.log('Meta Cloud API reply sent:', metaReplyData?.messages?.[0]?.id || 'no-id');
+                    console.log('Meta Cloud API reply sent to', targetNumber, ':', metaReplyData?.messages?.[0]?.id || JSON.stringify(metaReplyData));
                 } catch (metaErr) {
                     console.error('Meta Cloud API reply failed (non-blocking):', metaErr.message);
                 }
