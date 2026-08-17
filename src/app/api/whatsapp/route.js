@@ -131,11 +131,17 @@ export async function POST(request) {
             roleOverride = 'carlos';
         } else if (roleSwitchBody.includes('soy proveedor') || roleSwitchBody.includes('soy aberturas')) {
             roleOverride = 'proveedor';
+        } else if (roleSwitchBody.includes('soy victoria') || roleSwitchBody.includes('soy vicky') || roleSwitchBody.includes('soy arquitecta')) {
+            roleOverride = 'victoria';
         } else if (roleSwitchBody.includes('soy marcelo') || roleSwitchBody.includes('soy arquitecto') || roleSwitchBody.includes('soy director')) {
             roleOverride = 'director';
         }
 
-        if (roleOverride === 'carlos' || (!roleOverride && (cleanFrom.endsWith('1132419981') || cleanFrom.includes('carlos') || fromNumber.toLowerCase().includes('carlos')))) {
+        if (roleOverride === 'victoria' || (!roleOverride && (cleanFrom.endsWith('2964520753') || cleanFrom.endsWith('520753') || cleanFrom.includes('victoria') || fromNumber.toLowerCase().includes('victoria')))) {
+            senderName = "Arq. Victoria";
+            senderRole = "Socia & Directora Técnica";
+            shortId = "victoria";
+        } else if (roleOverride === 'carlos' || (!roleOverride && (cleanFrom.endsWith('1132419981') || cleanFrom.includes('carlos') || fromNumber.toLowerCase().includes('carlos')))) {
             senderName = "Carlos Pérez";
             senderRole = "Pintura e Interiores";
             shortId = "carlos";
@@ -151,7 +157,7 @@ export async function POST(request) {
             senderName = "Aberturas López (Proveedor)";
             senderRole = "Proveedor Externo";
             shortId = "proveedor";
-        } else if (roleOverride === 'director' || (!roleOverride && (cleanFrom.endsWith('2613168608') || cleanFrom.includes('marcelo') || cleanFrom.includes('arquitecta') || cleanFrom.includes('director') || fromNumber.toLowerCase().includes('marcelo')))) {
+        } else if (roleOverride === 'director' || (!roleOverride && (cleanFrom.endsWith('2613168608') || cleanFrom.includes('marcelo') || cleanFrom.includes('director') || fromNumber.toLowerCase().includes('marcelo')))) {
             senderName = "Arq. Marcelo";
             senderRole = "Director de Obra";
             shortId = "director";
@@ -550,6 +556,8 @@ export async function POST(request) {
             let targetNumber = fromNumber;
             if (cleanFrom.endsWith('2613168608')) {
                 targetNumber = '54261153168608';
+            } else if (cleanFrom.endsWith('520753')) {
+                targetNumber = '54296415520753';
             }
 
             if (metaAccessToken && metaPhoneNumberId) {

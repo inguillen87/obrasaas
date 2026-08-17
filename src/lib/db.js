@@ -89,7 +89,8 @@ export const defaultAppState = {
         { id: "w-2", name: "Luis Martínez", role: "Instalaciones y Sanitarios", trade: "Plomero / Gasista", phone: "+54 9 11 8899-7766", dni: "31.204.850", status: "Activo", assignedTasks: ["Cañería y Descargas"] },
         { id: "w-3", name: "Carlos Pérez", role: "Pintura e Interiores", trade: "Pintor / Revestimientos", phone: "+54 9 11 3241-9982", dni: "28.940.111", status: "Activo", assignedTasks: ["Revestimiento Cerámico", "Pintura"] },
         { id: "w-4", name: "Arq. Marcelo", role: "Director de Obra", trade: "Arquitectura & Dirección", phone: "+54 9 261 316-8608", dni: "25.109.800", status: "Director", assignedTasks: ["Certificaciones Quincenales"] },
-        { id: "w-5", name: "Aberturas López", role: "Proveedor Externo", trade: "Carpintería de Aluminio", phone: "+54 9 11 5544-3322", dni: "CUIT 30-71458920-4", status: "Proveedor", assignedTasks: ["Entrega Aberturas Q2"] }
+        { id: "w-5", name: "Aberturas López", role: "Proveedor Externo", trade: "Carpintería de Aluminio", phone: "+54 9 11 5544-3322", dni: "CUIT 30-71458920-4", status: "Proveedor", assignedTasks: ["Entrega Aberturas Q2"] },
+        { id: "w-6", name: "Arq. Victoria", role: "Socia & Directora Técnica", trade: "Arquitectura & Dirección Técnica", phone: "+54 9 2964 52-0753", dni: "33.450.912", status: "Socia Directora", assignedTasks: ["Supervisión Técnica", "Certificaciones"] }
     ],
     // Tasks with Quincenas and Material Blockers (v2.0)
     tasks: {
@@ -159,7 +160,8 @@ export const defaultAppState = {
     attendance: {
         "Juan Gómez": { role: "Albañilería Principal", checkin: "08:02 AM", status: "Presente", verifiedBy: "Voz & Biometría", distanceMeters: 12 },
         "Carlos Pérez": { role: "Pintura e Interiores", checkin: "--:--", status: "Ausente", verifiedBy: "Pendiente", distanceMeters: null },
-        "Luis Martínez": { role: "Instalaciones y Sanitarios", checkin: "--:--", status: "Ausente", verifiedBy: "Pendiente", distanceMeters: null }
+        "Luis Martínez": { role: "Instalaciones y Sanitarios", checkin: "--:--", status: "Ausente", verifiedBy: "Pendiente", distanceMeters: null },
+        "Arq. Victoria": { role: "Socia & Directora Técnica", checkin: "--:--", status: "Socia Directora", verifiedBy: "Acceso Remoto", distanceMeters: null }
     },
     // Stockpiles with Confirmed Delivery Dates (Módulo 4B)
     stockpiles: {
