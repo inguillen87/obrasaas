@@ -116,11 +116,12 @@ export async function POST(request) {
         const messages = await getMessages();
 
         // 1. Identify Sender
+        const cleanFrom = (fromNumber || '').replace(/\D/g, '');
         let senderName = "Operario Obra";
         let senderRole = "Cuadrilla";
         let shortId = "cuadrilla";
         // Dynamic role override: user can say "soy juan", "soy el proveedor", etc.
-        const roleSwitchBody = (body || '').toLowerCase();
+        const roleSwitchBody = (bodyText || '').toLowerCase();
         let roleOverride = null;
         if (roleSwitchBody.includes('soy juan') || roleSwitchBody.includes('soy albanil') || roleSwitchBody.includes('soy alba')) {
             roleOverride = 'juan';
