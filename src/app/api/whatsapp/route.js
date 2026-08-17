@@ -257,9 +257,11 @@ export async function POST(request) {
 
             // Local keyword NLP processor fallback (works with zero keys)
             const lowerBody = bodyText.toLowerCase();
+            // Normalize accented characters for robust Spanish NLP matching
+            const normalBody = lowerBody.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
             
-            // Fichaje / Asistencia
-            if ((nlpResult && nlpResult.intent === 'fichaje') || lowerBody.includes('fichar') || lowerBody.includes('entra') || lowerBody.includes('ingres') || lowerBody.includes('arranc')) {
+            // Fichaje / Asistencia (expanded for natural Argentine speech)
+            if ((nlpResult && nlpResult.intent === 'fichaje') || normalBody.includes('fichar') || normalBody.includes('entre') || normalBody.includes('ingres') || normalBody.includes('arranc') || normalBody.includes('llegue') || normalBody.includes('vine') || normalBody.includes('estoy en') || (normalBody.includes('buen') && (normalBody.includes('entre') || normalBody.includes('llegue') || normalBody.includes('estoy') || normalBody.includes('vine') || normalBody.includes('obra')))) {
                 if (state.attendance[senderName]) {
                     state.attendance[senderName] = { role: senderRole, checkin: timeStr, status: "Presente (Voz)" };
                 }
@@ -285,7 +287,7 @@ export async function POST(request) {
                 showInFeed = true;
             }
             // Confirmación de Proveedor (Módulo 2B / 4B)
-            else if (lowerBody.includes('confirm') || lowerBody.includes('entrega') || lowerBody.includes('despacho') || (nlpResult && nlpResult.intent === 'confirmacion_proveedor')) {
+            else if (normalBody.includes('confirm') || normalBody.includes('entrega') || normalBody.includes('despacho') || (nlpResult && nlpResult.intent === 'confirmacion_proveedor')) {
                 if (state.suppliers && state.suppliers[3]) {
                     state.suppliers[3].confirmationStatus = "Confirmado";
                     state.suppliers[3].status = "Confirmado";
@@ -314,11 +316,11 @@ export async function POST(request) {
                 showInFeed = true;
             }
             // Consulta de Quincena (Módulo 2B)
-            else if (lowerBody.includes('quincena') || lowerBody.includes('toca') || (lowerBody.includes('que') && lowerBody.includes('hago')) || (nlpResult && nlpResult.intent === 'consulta_quincena')) {
+            else if (normalBody.includes('quincena') || normalBody.includes('toca') || (normalBody.includes('que') && normalBody.includes('hago')) || (nlpResult && nlpResult.intent === 'consulta_quincena')) {
                 botReply = `📅 *Planificación de la Quincena Actual*\n\nHola ${senderName}, este es tu plan para la *Quincena 1*:\n• *Revoque Grueso*: 80% completado (Juan Gómez)\n• *Cañería y Descargas*: 20% (Luis Martínez)\n\n*Próxima Quincena (Q2)*:\n• *Revestimiento Cerámico*: Inicio 16/Ago (Carlos Pérez)\n• *Pintura y Terminación*: Inicio 21/Ago\n\nTodos los planos y remitos se sincronizan en tiempo real.`;
             }
             // Avance de Tarea (Gantt)
-            else if (lowerBody.includes('revoque') || lowerBody.includes('termin') || lowerBody.includes('living') || (nlpResult && nlpResult.intent === 'avance_tarea')) {
+            else if (normalBody.includes('revoque') || normalBody.includes('termin') || normalBody.includes('living') || normalBody.includes('complet') || normalBody.includes('avance') || normalBody.includes('listo') || (nlpResult && nlpResult.intent === 'avance_tarea')) {
                 if (state.tasks && state.tasks[1]) {
                     state.tasks[1].progress = 100;
                     state.avancePercentage = 55;
@@ -351,7 +353,7 @@ export async function POST(request) {
                 }
             }
             // Incidencia Crítica / Vicio Oculto
-            else if (lowerBody.includes('fuga') || lowerBody.includes('caño') || lowerBody.includes('agua') || lowerBody.includes('roto') || (nlpResult && nlpResult.intent === 'incidencia_critica')) {
+            else if (normalBody.includes('fuga') || normalBody.includes('cano') || normalBody.includes('agua') || normalBody.includes('roto') || normalBody.includes('fisura') || normalBody.includes('rotura') || (nlpResult && nlpResult.intent === 'incidencia_critica')) {
                 state.alertsCount += 1;
                 feedIncident = {
                     id: "inc-fuga-" + Date.now(),
@@ -381,7 +383,7 @@ export async function POST(request) {
                 showInFeed = true;
             }
             // Demora Logística / Replanificación Quincenal (Módulo 4B)
-            else if (lowerBody.includes('demora') || lowerBody.includes('retraso') || lowerBody.includes('cerámic') || lowerBody.includes('suministro') || (nlpResult && nlpResult.intent === 'demora_logistica')) {
+            else if (normalBody.includes('demora') || normalBody.includes('retraso') || normalBody.includes('ceramic') || normalBody.includes('suministro') || normalBody.includes('flete') || normalBody.includes('atraso') || (nlpResult && nlpResult.intent === 'demora_logistica')) {
                 state.alertsCount += 1;
                 state.diasEstimados = "Día 12/37 (+2 días)";
                 feedIncident = {
@@ -427,11 +429,11 @@ export async function POST(request) {
                 showInFeed = true;
             }
             // Licencias Médicas
-            else if (lowerBody.includes('certificado') || lowerBody.includes('médico') || lowerBody.includes('enfermo') || lowerBody.includes('licencia')) {
+            else if (normalBody.includes('certificado') || normalBody.includes('medico') || normalBody.includes('enfermo') || normalBody.includes('licencia')) {
                 botReply = `🩺 *Carga de Certificados Médicos ObraSaaS*\n\nPara justificar tu inasistencia y subir la foto del certificado médico correspondiente, ingresa a este enlace seguro:\n👉 ${medicalLink}`;
             }
-            // Ayuda / Menú
-            else if (lowerBody.includes('ayuda') || lowerBody.includes('hola') || lowerBody.includes('buen')) {
+            // Ayuda / Menú (catch-all greeting — only triggers if no specific intent matched above)
+            else if (normalBody.includes('ayuda') || normalBody.includes('menu') || (normalBody.includes('hola') && !normalBody.includes('obra')) || (normalBody.includes('buen') && normalBody.length < 20)) {
                 botReply = `👷 *Copiloto Inteligente de ObraSaaS* 👷\n\nHola ${senderName} (${senderRole}), puedes:\n1. Enviar tu *ubicación* para fichaje GPS.\n2. Mandar un *audio* con tu avance diario o incidencias.\n3. Escribir *'quincena'* para ver tus tareas asignadas.\n4. Escribir *'confirmar'* si eres proveedor.\n5. Subir certificado médico escribiendo *'licencia'*.`;
             }
             else {
