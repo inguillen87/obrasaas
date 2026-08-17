@@ -26,7 +26,7 @@ export async function GET(request) {
 
         // Meta WhatsApp Cloud API Webhook Verification challenge
         if (mode && token) {
-            const verifyToken = process.env.META_WEBHOOK_VERIFY_TOKEN || process.env.WHATSAPP_VERIFY_TOKEN || 'obrasaas_meta_token';
+            const verifyToken = process.env.META_VERIFY_TOKEN || process.env.META_WEBHOOK_VERIFY_TOKEN || process.env.WHATSAPP_VERIFY_TOKEN || 'obrasaas_meta_token';
             if (mode === 'subscribe' && (token === verifyToken || token === 'obrasaas' || token === 'obrasaas_meta_token')) {
                 return new Response(challenge, {
                     status: 200,
