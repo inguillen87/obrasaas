@@ -2086,32 +2086,40 @@ export default function Dashboard() {
                 <table className="logs-table">
                   <thead>
                     <tr>
-                      <th>Operario</th>
-                      <th>Especialidad</th>
+                      <th>Operario &amp; Puesto</th>
+                      <th>Gremio</th>
                       <th>Check-in</th>
+                      <th>Validación &amp; Geocerca</th>
                       <th>Estado</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {Object.keys(state.attendance).map(name => {
+                    {Object.keys(state.attendance || {}).map(name => {
                       const item = state.attendance[name];
                       let badgeClass = "badge-warning";
-                      if (item.status.includes('Presente')) badgeClass = 'badge-success';
-                      if (item.status.includes('GPS')) badgeClass = 'badge-info';
+                      if (item.status?.includes('Presente')) badgeClass = 'badge-success';
+                      if (item.status?.includes('Desviado')) badgeClass = 'badge-danger';
+                      if (item.status?.includes('GPS')) badgeClass = 'badge-info';
 
                       return (
                         <tr key={name}>
-                          <td>{name}</td>
-                          <td>{item.role}</td>
-                          <td>{item.checkin}</td>
+                          <td><strong>{name}</strong></td>
+                          <td><span className="badge badge-secondary" style={{ fontSize: '0.7rem' }}>{item.role}</span></td>
+                          <td>{item.checkin || '--:--'}</td>
                           <td>
-                            {item.status.includes('GPS') ? (
-                              <span className="badge badge-success" style={{ background: 'rgba(59, 130, 246, 0.1)', color: '#60a5fa' }}>
-                                <i className="fa-solid fa-location-dot" style={{ marginRight: '4px' }}></i> Presente (GPS)
+                            {item.distanceMeters !== undefined && item.distanceMeters !== null ? (
+                              <span style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px', color: item.distanceMeters <= 100 ? '#22c55e' : '#ef4444' }}>
+                                <i className="fa-solid fa-satellite-dish"></i>
+                                {item.distanceMeters}m ({item.distanceMeters <= 100 ? 'Geocerca OK' : 'Fuera de Radio'})
                               </span>
                             ) : (
-                              <span className={`badge ${badgeClass}`}>{item.status}</span>
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                <i className="fa-solid fa-microphone" style={{ marginRight: '4px' }}></i> {item.verifiedBy || 'Biometría'}
+                              </span>
                             )}
+                          </td>
+                          <td>
+                            <span className={`badge ${badgeClass}`}>{item.status}</span>
                           </td>
                         </tr>
                       );

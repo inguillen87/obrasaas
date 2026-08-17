@@ -289,8 +289,8 @@ export async function POST(request) {
             // Normalize accented characters for robust Spanish NLP matching
             const normalBody = lowerBody.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
             
-            // Fichaje / Asistencia (expanded for natural Argentine speech)
-            if ((nlpResult && nlpResult.intent === 'fichaje') || normalBody.includes('fichar') || normalBody.includes('entre') || normalBody.includes('ingres') || normalBody.includes('arranc') || normalBody.includes('llegue') || normalBody.includes('vine') || normalBody.includes('estoy en') || (normalBody.includes('buen') && (normalBody.includes('entre') || normalBody.includes('llegue') || normalBody.includes('estoy') || normalBody.includes('vine') || normalBody.includes('obra')))) {
+            // 1️⃣ Fichaje / Asistencia (Opción 1 o palabras clave)
+            if (normalBody === '1' || (nlpResult && nlpResult.intent === 'fichaje') || normalBody.includes('fichar') || normalBody.includes('entre') || normalBody.includes('ingres') || normalBody.includes('arranc') || normalBody.includes('llegue') || normalBody.includes('vine') || normalBody.includes('estoy en') || (normalBody.includes('buen') && (normalBody.includes('entre') || normalBody.includes('llegue') || normalBody.includes('estoy') || normalBody.includes('vine') || normalBody.includes('obra')))) {
                 if (!state.attendance[senderName]) {
                     state.attendance[senderName] = { role: senderRole, checkin: timeStr, status: "Presente (Voz)" };
                 }
@@ -320,50 +320,17 @@ export async function POST(request) {
                 };
                 showInFeed = true;
             }
-            // Confirmación de Proveedor (Módulo 2B / 4B)
-            else if (normalBody.includes('confirm') || normalBody.includes('entrega') || normalBody.includes('despacho') || (nlpResult && nlpResult.intent === 'confirmacion_proveedor')) {
-                if (state.suppliers && state.suppliers[3]) {
-                    state.suppliers[3].confirmationStatus = "Confirmado";
-                    state.suppliers[3].status = "Confirmado";
-                }
-                if (state.tasks && state.tasks[3]) {
-                    state.tasks[3].supplierStatus = "Confirmado";
-                    state.tasks[3].materialStatus = "En Camino";
-                    state.tasks[3].isBlocked = false;
-                }
-                if (state.stockpiles && state.stockpiles.ceramicas) {
-                    state.stockpiles.ceramicas.status = "En Camino";
-                    state.stockpiles.ceramicas.onTimeStatus = "Confirmado para 21/08";
-                }
-                botReply = `🤝 *Confirmación de Proveedor Registrada*\n\nSe ha recibido y confirmado el compromiso de entrega de *Aberturas López / Cerámicas* para la Quincena actual.\n• Tarea desbloqueada en Gantt: *Revestimiento Cerámico*.\n• Estado de proveedor: *Confirmado ✅*.`;
-                
-                feedIncident = {
-                    id: "inc-prov-" + Date.now(),
-                    title: "Proveedor Confirmó Asistencia",
-                    description: `Aberturas López confirmó entrega de materiales para la fecha programada. Tarea liberada en Gantt.`,
-                    type: "success",
-                    badge: "Proveedor OK",
-                    timestamp: `Hoy, ${timeStr}`,
-                    reporter: "Canal Proveedores",
-                    icon: "fa-solid fa-truck-ramp-box"
-                };
-                showInFeed = true;
-            }
-            // Consulta de Quincena (Módulo 2B)
-            else if (normalBody.includes('quincena') || normalBody.includes('toca') || (normalBody.includes('que') && normalBody.includes('hago')) || (nlpResult && nlpResult.intent === 'consulta_quincena')) {
-                botReply = `📅 *Planificación de la Quincena Actual*\n\nHola ${senderName}, este es tu plan para la *Quincena 1*:\n• *Revoque Grueso*: 80% completado (Juan Gómez)\n• *Cañería y Descargas*: 20% (Luis Martínez)\n\n*Próxima Quincena (Q2)*:\n• *Revestimiento Cerámico*: Inicio 16/Ago (Carlos Pérez)\n• *Pintura y Terminación*: Inicio 21/Ago\n\nTodos los planos y remitos se sincronizan en tiempo real.`;
-            }
-            // Avance de Tarea (Gantt)
-            else if (normalBody.includes('revoque') || normalBody.includes('termin') || normalBody.includes('living') || normalBody.includes('complet') || normalBody.includes('avance') || normalBody.includes('listo') || (nlpResult && nlpResult.intent === 'avance_tarea')) {
+            // 2️⃣ Avance de Tarea (Opción 2 o palabras clave de avance/revoque)
+            else if (normalBody === '2' || normalBody.includes('revoque') || normalBody.includes('termin') || normalBody.includes('living') || normalBody.includes('complet') || normalBody.includes('avance') || normalBody.includes('listo') || (nlpResult && nlpResult.intent === 'avance_tarea')) {
                 if (state.tasks && state.tasks[1]) {
                     state.tasks[1].progress = 100;
                     state.avancePercentage = 55;
-                    botReply = `🎙️ *Reporte de Avance Procesado*\n\nIA analizó el audio: *"Revoque grueso terminado al 100%"*.\n• Progreso de la tarea: 100% en Gantt.\n• Avance global de la obra: 55%.\n• Hito listo para certificación quincenal.`;
+                    botReply = `🎙️ *Reporte de Avance Procesado*\n\nIA analizó el reporte: *"Revoque grueso terminado al 100%"*.\n• Progreso de la tarea: 100% en Gantt.\n• Avance global de la obra: 55%.\n• Hito registrado por: *${senderName}*.\n• Listo para certificación quincenal.`;
                     
                     feedIncident = {
                         id: "inc-gantt-" + Date.now(),
                         title: "Tarea Finalizada en Gantt",
-                        description: `El operario ${senderName} completó la tarea: Revoque Grueso.`,
+                        description: `El operario ${senderName} completó la tarea: Revoque Grueso al 100%.`,
                         type: "success",
                         badge: "Gantt",
                         timestamp: `Hoy, ${timeStr}`,
@@ -386,8 +353,8 @@ export async function POST(request) {
                     showInFeed = true;
                 }
             }
-            // Incidencia Crítica / Vicio Oculto
-            else if (normalBody.includes('fuga') || normalBody.includes('cano') || normalBody.includes('agua') || normalBody.includes('roto') || normalBody.includes('fisura') || normalBody.includes('rotura') || (nlpResult && nlpResult.intent === 'incidencia_critica')) {
+            // 3️⃣ Incidencia Crítica / Vicio Oculto (Opción 3 o fuga/caño/rotura)
+            else if (normalBody === '3' || normalBody.includes('fuga') || normalBody.includes('cano') || normalBody.includes('agua') || normalBody.includes('roto') || normalBody.includes('fisura') || normalBody.includes('rotura') || (nlpResult && nlpResult.intent === 'incidencia_critica')) {
                 state.alertsCount += 1;
                 feedIncident = {
                     id: "inc-fuga-" + Date.now(),
@@ -413,11 +380,11 @@ export async function POST(request) {
                     isBlocked: false,
                     materialStatus: "Disponible"
                 };
-                botReply = `🚨 *Alerta Crítica de Obra*\n\nAlerta registrada: *Fuga de Agua en Baño Principal*.\n• Se añadió tarea de reparación correctiva urgente en el Gantt.\n• Notificado Director de Obra y Compras.`;
+                botReply = `🚨 *Alerta Crítica de Obra*\n\nAlerta registrada: *Fuga de Agua en Baño Principal*.\n• Se añadió tarea correctiva de emergencia en el Gantt (Tarea 99).\n• Notificado Director de Obra (*Arq. Marcelo*) y Compras.`;
                 showInFeed = true;
             }
-            // Demora Logística / Replanificación Quincenal (Módulo 4B)
-            else if (normalBody.includes('demora') || normalBody.includes('retraso') || normalBody.includes('ceramic') || normalBody.includes('suministro') || normalBody.includes('flete') || normalBody.includes('atraso') || (nlpResult && nlpResult.intent === 'demora_logistica')) {
+            // 4️⃣ Demora Logística / Replanificación Quincenal (Opción 4 o demora/flete)
+            else if (normalBody === '4' || normalBody.includes('demora') || normalBody.includes('retraso') || normalBody.includes('ceramic') || normalBody.includes('suministro') || normalBody.includes('flete') || normalBody.includes('atraso') || (nlpResult && nlpResult.intent === 'demora_logistica')) {
                 state.alertsCount += 1;
                 state.diasEstimados = "Día 12/37 (+2 días)";
                 feedIncident = {
@@ -462,16 +429,90 @@ export async function POST(request) {
                 botReply = `⚠️ *Reporte de Logística Procesado*\n\nAlerta: *Demora de suministros de revestimientos cerámicos*.\n• Tarea 3 bloqueada: 'Pendiente de Materiales'.\n• Propuesta de replanificación quincenal enviada al Director de Obra.`;
                 showInFeed = true;
             }
-            // Licencias Médicas
-            else if (normalBody.includes('certificado') || normalBody.includes('medico') || normalBody.includes('enfermo') || normalBody.includes('licencia')) {
+            // 5️⃣ Confirmación de Proveedor (Opción 5 o confirmar/entrega)
+            else if (normalBody === '5' || normalBody.includes('confirm') || normalBody.includes('entrega') || normalBody.includes('despacho') || (nlpResult && nlpResult.intent === 'confirmacion_proveedor')) {
+                if (state.suppliers && state.suppliers[3]) {
+                    state.suppliers[3].confirmationStatus = "Confirmado";
+                    state.suppliers[3].status = "Confirmado";
+                }
+                if (state.tasks && state.tasks[3]) {
+                    state.tasks[3].supplierStatus = "Confirmado";
+                    state.tasks[3].materialStatus = "En Camino";
+                    state.tasks[3].isBlocked = false;
+                }
+                if (state.stockpiles && state.stockpiles.ceramicas) {
+                    state.stockpiles.ceramicas.status = "En Camino";
+                    state.stockpiles.ceramicas.onTimeStatus = "Confirmado para 21/08";
+                }
+                botReply = `🤝 *Confirmación de Proveedor Registrada*\n\nSe ha recibido y confirmado el compromiso de entrega de *Aberturas López / Cerámicas* para la Quincena actual.\n• Tarea desbloqueada en Gantt: *Revestimiento Cerámico*.\n• Estado de proveedor: *Confirmado ✅*.`;
+                
+                feedIncident = {
+                    id: "inc-prov-" + Date.now(),
+                    title: "Proveedor Confirmó Asistencia",
+                    description: `Aberturas López confirmó entrega de materiales para la fecha programada. Tarea liberada en Gantt.`,
+                    type: "success",
+                    badge: "Proveedor OK",
+                    timestamp: `Hoy, ${timeStr}`,
+                    reporter: "Canal Proveedores",
+                    icon: "fa-solid fa-truck-ramp-box"
+                };
+                showInFeed = true;
+            }
+            // 6️⃣ Consulta de Quincena (Opción 6 o quincena/plan)
+            else if (normalBody === '6' || normalBody.includes('quincena') || normalBody.includes('toca') || (normalBody.includes('que') && normalBody.includes('hago')) || (nlpResult && nlpResult.intent === 'consulta_quincena')) {
+                botReply = `📅 *Planificación de la Quincena Actual*\n\nHola ${senderName}, este es tu plan para la *Quincena 1*:\n• *Revoque Grueso*: 80% completado (Juan Gómez)\n• *Cañería y Descargas*: 20% (Luis Martínez)\n\n*Próxima Quincena (Q2)*:\n• *Revestimiento Cerámico*: Inicio 16/Ago (Carlos Pérez)\n• *Pintura y Terminación*: Inicio 21/Ago\n\nTodos los planos y remitos se sincronizan en tiempo real.`;
+            }
+            // 7️⃣ Caja Chica / Rendición de Gastos de Ferretería (Opción 7 o gasto/ferreteria/ticket)
+            else if (normalBody === '7' || normalBody.includes('caja chica') || normalBody.includes('gasto') || normalBody.includes('ferreteria') || normalBody.includes('ticket') || normalBody.includes('remito') || normalBody.includes('compre') || normalBody.includes('clavos')) {
+                // Extract amount if present in text (e.g. 18500, 15000, 22000)
+                const numbers = bodyText.match(/\d+[\.,]?\d*/g);
+                let expenseAmount = 18500;
+                if (numbers && numbers.length > 0) {
+                    const parsedNum = parseInt(numbers[0].replace(/\D/g, ''), 10);
+                    if (parsedNum > 100 && parsedNum < 1000000) expenseAmount = parsedNum;
+                }
+
+                if (!state.cajaChica) {
+                    state.cajaChica = { saldoActual: 84500, movimientos: [] };
+                }
+                state.cajaChica.saldoActual = Math.max(0, state.cajaChica.saldoActual - expenseAmount);
+                const newMovement = {
+                    id: "cc-" + Date.now(),
+                    descripcion: `Compra ferretería / materiales menores: ${bodyText || 'Clavos y alambre'}`,
+                    monto: expenseAmount,
+                    tipo: "Egreso",
+                    solicitante: senderName,
+                    estado: "Aprobado",
+                    fecha: `Hoy, ${timeStr}`,
+                    ticketUrl: "/tickets/ticket-01.jpg"
+                };
+                state.cajaChica.movimientos = state.cajaChica.movimientos || [];
+                state.cajaChica.movimientos.unshift(newMovement);
+
+                botReply = `🧾 *Rendición de Caja Chica Registrada*\n\n• Monto: *$${expenseAmount.toLocaleString('es-AR')} ARS*\n• Concepto: Compra Ferretería / Materiales\n• Solicitante: *${senderName}*\n• Saldo Restante en Caja Chica: *$${state.cajaChica.saldoActual.toLocaleString('es-AR')} ARS*\n• Estado: Aprobado y sincronizado en Dashboard.`;
+
+                feedIncident = {
+                    id: "inc-cc-" + Date.now(),
+                    title: "Gasto de Caja Chica Rendido",
+                    description: `${senderName} rindió $${expenseAmount.toLocaleString('es-AR')} ARS en ferretería.`,
+                    type: "info",
+                    badge: "Caja Chica",
+                    timestamp: `Hoy, ${timeStr}`,
+                    reporter: senderName,
+                    icon: "fa-solid fa-receipt"
+                };
+                showInFeed = true;
+            }
+            // 8️⃣ Licencias Médicas (Opción 8 o licencia/certificado)
+            else if (normalBody === '8' || normalBody.includes('certificado') || normalBody.includes('medico') || normalBody.includes('enfermo') || normalBody.includes('licencia')) {
                 botReply = `🩺 *Carga de Certificados Médicos ObraSaaS*\n\nPara justificar tu inasistencia y subir la foto del certificado médico correspondiente, ingresa a este enlace seguro:\n👉 ${medicalLink}`;
             }
-            // Ayuda / Menú (catch-all greeting — only triggers if no specific intent matched above)
-            else if (normalBody.includes('ayuda') || normalBody.includes('menu') || (normalBody.includes('hola') && !normalBody.includes('obra')) || (normalBody.includes('buen') && normalBody.length < 20)) {
-                botReply = `👷 *Copiloto Inteligente de ObraSaaS* 👷\n\nHola ${senderName} (${senderRole}), puedes:\n1. Enviar tu *ubicación* para fichaje GPS.\n2. Mandar un *audio* con tu avance diario o incidencias.\n3. Escribir *'quincena'* para ver tus tareas asignadas.\n4. Escribir *'confirmar'* si eres proveedor.\n5. Subir certificado médico escribiendo *'licencia'*.`;
+            // 📋 Menú General e Interactivo (cuando escriben 'menu', 'opciones', 'hola', etc.)
+            else if (normalBody.includes('ayuda') || normalBody.includes('menu') || normalBody.includes('opcion') || (normalBody.includes('hola') && !normalBody.includes('obra')) || (normalBody.includes('buen') && normalBody.length < 20)) {
+                botReply = `👷‍♂️ *Copiloto Inteligente de ObraSaaS* 👷‍♂️\n\nHola *${senderName}* (*${senderRole}*).\nPodés responder con un número del *1 al 8* o escribir con tus palabras:\n\n1️⃣ *Fichar Entrada* (o enviá tu ubicación 📍)\n2️⃣ *Reportar Avance* (ej: "terminamos el revoque al 100%")\n3️⃣ *Reportar Incidencia* (ej: "fuga de agua en el caño")\n4️⃣ *Demora de Materiales* (ej: "cerámicas demoran 48hs")\n5️⃣ *Confirmar Entrega Proveedor*\n6️⃣ *Consultar Quincena*\n7️⃣ *Rendir Gasto / Caja Chica* (ej: "gasté $18.500 en ferretería")\n8️⃣ *Cargar Licencia Médica*\n\n🎙️ _También podés enviar audios y fotos de remitos en cualquier momento._`;
             }
             else {
-                botReply = `✅ *Mensaje Recibido, ${senderName}*.\n\nHe guardado tu reporte en la bitácora diaria de ObraSaaS. Puedes consultar tu estado de horas ingresando aquí:\n👉 ${attendanceLink}`;
+                botReply = `✅ *Mensaje Recibido, ${senderName}*.\n\nHe guardado tu reporte en la bitácora diaria de ObraSaaS. Escribe *'menu'* para ver todas las opciones disponibles.\n\n👉 Ficha de Horas: ${attendanceLink}`;
             }
 
             if (feedIncident) {
