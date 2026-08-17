@@ -119,25 +119,38 @@ export async function POST(request) {
         let senderName = "Operario Obra";
         let senderRole = "Cuadrilla";
         let shortId = "cuadrilla";
-        const cleanFrom = fromNumber.replace(/\D/g, ''); // Extract digits only
+        // Dynamic role override: user can say "soy juan", "soy el proveedor", etc.
+        const roleSwitchBody = (body || '').toLowerCase();
+        let roleOverride = null;
+        if (roleSwitchBody.includes('soy juan') || roleSwitchBody.includes('soy albanil') || roleSwitchBody.includes('soy alba')) {
+            roleOverride = 'juan';
+        } else if (roleSwitchBody.includes('soy luis') || roleSwitchBody.includes('soy sanitario') || roleSwitchBody.includes('soy plomero')) {
+            roleOverride = 'luis';
+        } else if (roleSwitchBody.includes('soy carlos') || roleSwitchBody.includes('soy pintor') || roleSwitchBody.includes('soy pintura')) {
+            roleOverride = 'carlos';
+        } else if (roleSwitchBody.includes('soy proveedor') || roleSwitchBody.includes('soy aberturas')) {
+            roleOverride = 'proveedor';
+        } else if (roleSwitchBody.includes('soy marcelo') || roleSwitchBody.includes('soy arquitecto') || roleSwitchBody.includes('soy director')) {
+            roleOverride = 'director';
+        }
 
-        if (cleanFrom.endsWith('1132419981') || cleanFrom.includes('carlos') || fromNumber.toLowerCase().includes('carlos')) {
+        if (roleOverride === 'carlos' || (!roleOverride && (cleanFrom.endsWith('1132419981') || cleanFrom.includes('carlos') || fromNumber.toLowerCase().includes('carlos')))) {
             senderName = "Carlos Pérez";
             senderRole = "Pintura e Interiores";
             shortId = "carlos";
-        } else if (cleanFrom.includes('juan') || fromNumber.toLowerCase().includes('juan')) {
+        } else if (roleOverride === 'juan' || (!roleOverride && (cleanFrom.includes('juan') || fromNumber.toLowerCase().includes('juan')))) {
             senderName = "Juan Gómez";
             senderRole = "Albañilería Principal";
             shortId = "juan";
-        } else if (cleanFrom.includes('luis') || fromNumber.toLowerCase().includes('luis')) {
+        } else if (roleOverride === 'luis' || (!roleOverride && (cleanFrom.includes('luis') || fromNumber.toLowerCase().includes('luis')))) {
             senderName = "Luis Martínez";
             senderRole = "Instalaciones y Sanitarios";
             shortId = "luis";
-        } else if (cleanFrom.includes('aberturas') || cleanFrom.includes('lopez') || cleanFrom.includes('proveedor') || cleanFrom.includes('sanlorenzo') || fromNumber.toLowerCase().includes('aberturas')) {
+        } else if (roleOverride === 'proveedor' || (!roleOverride && (cleanFrom.includes('aberturas') || cleanFrom.includes('lopez') || cleanFrom.includes('proveedor') || cleanFrom.includes('sanlorenzo') || fromNumber.toLowerCase().includes('aberturas')))) {
             senderName = "Aberturas López (Proveedor)";
             senderRole = "Proveedor Externo";
             shortId = "proveedor";
-        } else if (cleanFrom.includes('marcelo') || cleanFrom.includes('arquitecta') || cleanFrom.includes('director') || fromNumber.toLowerCase().includes('marcelo')) {
+        } else if (roleOverride === 'director' || (!roleOverride && (cleanFrom.endsWith('2613168608') || cleanFrom.includes('marcelo') || cleanFrom.includes('arquitecta') || cleanFrom.includes('director') || fromNumber.toLowerCase().includes('marcelo')))) {
             senderName = "Arq. Marcelo";
             senderRole = "Director de Obra";
             shortId = "director";
