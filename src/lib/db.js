@@ -269,11 +269,13 @@ async function readDb() {
         }
     }
 
-    initLocalDb();
-    const data = fs.readFileSync(LOCAL_DB_PATH, 'utf-8');
+    // Local file fallback (only works in local dev, not on Vercel)
     try {
+        initLocalDb();
+        const data = fs.readFileSync(LOCAL_DB_PATH, 'utf-8');
         return JSON.parse(data);
     } catch(e) {
+        console.warn("Local file read skipped (read-only or missing):", e.message);
         return {
             appState: defaultAppState,
             messages: defaultMessages
@@ -291,13 +293,19 @@ async function writeDb(data) {
                 'INSERT INTO obrasaas_app_state (id, state, messages, updated_at) VALUES ($1, $2, $3, NOW()) ON CONFLICT (id) DO UPDATE SET state = $2, messages = $3, updated_at = NOW()',
                 ['default', JSON.stringify(data.appState), JSON.stringify(data.messages)]
             );
+            return; // Successfully written to Postgres — no local fallback needed
         } catch (e) {
             console.error("Neon Postgres write error. Falling back to local file:", e.message);
         }
     }
 
-    initLocalDb();
-    fs.writeFileSync(LOCAL_DB_PATH, JSON.stringify(data, null, 2));
+    // Local file fallback (only works in local dev, not on Vercel)
+    try {
+        initLocalDb();
+        fs.writeFileSync(LOCAL_DB_PATH, JSON.stringify(data, null, 2));
+    } catch (e) {
+        console.warn("Local file write skipped (read-only filesystem):", e.message);
+    }
 }
 
 export async function getAppState() {
