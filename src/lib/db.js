@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { Pool } from 'pg';
+import { emitRealtimeUpdate } from './realtime';
 
 // Global connection pool cache for Neon PostgreSQL
 let pool = null;
@@ -317,6 +318,7 @@ export async function saveAppState(state) {
     const db = await readDb();
     db.appState = state;
     await writeDb(db);
+    emitRealtimeUpdate('STATE_UPDATE', state);
     return state;
 }
 
@@ -329,6 +331,7 @@ export async function saveMessages(messages) {
     const db = await readDb();
     db.messages = messages;
     await writeDb(db);
+    emitRealtimeUpdate('MESSAGE_RECEIVED', messages);
     return messages;
 }
 
@@ -338,6 +341,7 @@ export async function resetState() {
         messages: JSON.parse(JSON.stringify(defaultMessages))
     };
     await writeDb(freshDb);
+    emitRealtimeUpdate('STATE_RESET', freshDb);
     return freshDb;
 }
 

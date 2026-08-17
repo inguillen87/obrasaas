@@ -339,7 +339,10 @@ export default function Dashboard() {
   const waveformRef4 = useRef(null);
   const waveformRefs = { 1: waveformRef1, 2: waveformRef2, 3: waveformRef3, 4: waveformRef4 };
 
-  // Fetch initial state & setup polling
+  // Real-Time Socket/SSE Connection State (Zero DB Polling)
+  const [realtimeConnected, setRealtimeConnected] = useState(false);
+
+  // Fetch initial state & setup Real-Time SSE Stream (Zero DB Polling)
   useEffect(() => {
     // Check login state
     const logged = localStorage.getItem('obrasaas_logged_in') === 'true';
@@ -364,46 +367,83 @@ export default function Dashboard() {
       setActiveTab(tabParam);
     }
 
-    // Fetch initial DB state
-    const fetchState = async () => {
+    // Real-Time Server-Sent Events Stream (SSE / WebSockets mode)
+    let eventSource = null;
+    let reconnectTimer = null;
+
+    const connectRealtime = () => {
       try {
-        const stateRes = await fetch('/api/state');
-        if (stateRes.ok) {
-          const stateData = await stateRes.json();
-          setState(stateData);
+        if (eventSource) {
+          eventSource.close();
         }
 
-        const messagesRes = await fetch('/api/whatsapp');
-        if (messagesRes.ok) {
-          const messagesData = await messagesRes.json();
-          setChatMessages(messagesData);
-        }
+        eventSource = new EventSource('/api/realtime?tenant=default');
+
+        // Handshake and snapshot load
+        eventSource.addEventListener('init', (e) => {
+          try {
+            const payload = JSON.parse(e.data);
+            if (payload?.data?.state) {
+              setState(payload.data.state);
+            }
+            if (payload?.data?.messages) {
+              setChatMessages(payload.data.messages);
+            }
+            setRealtimeConnected(true);
+          } catch (err) {
+            console.warn("SSE init parse error:", err);
+          }
+        });
+
+        // Instant push on mutations (WhatsApp webhook, Gantt update, etc.)
+        eventSource.addEventListener('update', (e) => {
+          try {
+            const payload = JSON.parse(e.data);
+            if (payload?.type === 'STATE_UPDATE' || payload?.type === 'STATE_RESET') {
+              if (payload.data) {
+                setState(payload.data);
+              }
+            } else if (payload?.type === 'MESSAGE_RECEIVED') {
+              if (payload.data) {
+                setChatMessages(payload.data);
+              }
+            }
+            setRealtimeConnected(true);
+          } catch (err) {
+            console.warn("SSE update parse error:", err);
+          }
+        });
+
+        eventSource.onopen = () => {
+          setRealtimeConnected(true);
+        };
+
+        eventSource.onerror = () => {
+          setRealtimeConnected(false);
+          if (eventSource) {
+            eventSource.close();
+            eventSource = null;
+          }
+          // Reconnect with 4s backoff
+          clearTimeout(reconnectTimer);
+          reconnectTimer = setTimeout(connectRealtime, 4000);
+        };
       } catch (err) {
-        console.error("Error loading initial data:", err);
+        console.warn("Realtime connection error:", err);
+        setRealtimeConnected(false);
       }
     };
-    fetchState();
 
-    // Start Polling loop every 3 seconds to get DB updates from webhook
-    const interval = setInterval(async () => {
-      try {
-        const stateRes = await fetch('/api/state');
-        if (stateRes.ok) {
-          const stateData = await stateRes.json();
-          setState(stateData);
-        }
+    connectRealtime();
 
-        const messagesRes = await fetch('/api/whatsapp');
-        if (messagesRes.ok) {
-          const messagesData = await messagesRes.json();
-          setChatMessages(messagesData);
-        }
-      } catch (err) {
-        console.warn("Polling error:", err);
+    return () => {
+      if (eventSource) {
+        eventSource.close();
       }
-    }, 3000);
-
-    return () => clearInterval(interval);
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+      }
+    };
   }, []);
 
   // Sync scroll to bottoms on updates
@@ -1772,6 +1812,10 @@ export default function Dashboard() {
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span className={`badge ${realtimeConnected ? 'badge-success' : 'badge-warning'}`} style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '6px' }} title={realtimeConnected ? "Conexión Real-Time SSE/Sockets activa (0 consultas a base de datos en reposo)" : "Reconectando con el servidor..."}>
+                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: realtimeConnected ? '#22c55e' : '#eab308', display: 'inline-block', boxShadow: realtimeConnected ? '0 0 8px #22c55e' : 'none' }}></span>
+                {realtimeConnected ? 'Sockets En Vivo (SSE)' : 'Reconectando...'}
+              </span>
               <span className="badge badge-info" style={{ fontSize: '0.75rem' }}>
                 <i className="fa-solid fa-calendar-week" style={{ marginRight: '4px' }}></i> {state.currentQuincena || 'Quincena 1 (01/Ago - 15/Ago)'}
               </span>
