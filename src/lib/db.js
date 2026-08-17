@@ -270,8 +270,16 @@ async function readDb() {
             await ensurePostgresTable(p);
             const { rows } = await p.query('SELECT state, messages FROM obrasaas_app_state WHERE id = $1', ['default']);
             if (rows.length > 0 && rows[0].state) {
+                const storedState = rows[0].state;
+                const mergedState = {
+                    ...defaultAppState,
+                    ...storedState,
+                    projectConfig: storedState.projectConfig || defaultAppState.projectConfig,
+                    workerRegistry: storedState.workerRegistry || defaultAppState.workerRegistry,
+                    attendance: { ...defaultAppState.attendance, ...(storedState.attendance || {}) }
+                };
                 return {
-                    appState: rows[0].state,
+                    appState: mergedState,
                     messages: rows[0].messages || defaultMessages
                 };
             } else {

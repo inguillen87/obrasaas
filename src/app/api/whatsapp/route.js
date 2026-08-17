@@ -6,7 +6,7 @@ function getDistance(lat1, lon1, lat2, lon2) {
     const R = 6371e3; // Earth's radius in meters
     const phi1 = lat1 * Math.PI / 180;
     const phi2 = lat2 * Math.PI / 180;
-    const deltaPhi = (lat2 - phi1) * Math.PI / 180;
+    const deltaPhi = (lat2 - lat1) * Math.PI / 180;
     const deltaLambda = (lon2 - lon1) * Math.PI / 180;
 
     const a = Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
@@ -291,7 +291,7 @@ export async function POST(request) {
             const normalBody = lowerBody.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
             
             // 1️⃣ Fichaje / Asistencia (Opción 1 o palabras clave)
-            if (normalBody === '1' || (nlpResult && nlpResult.intent === 'fichaje') || normalBody.includes('fichar') || normalBody.includes('entre') || normalBody.includes('ingres') || normalBody.includes('arranc') || normalBody.includes('llegue') || normalBody.includes('vine') || normalBody.includes('estoy en') || (normalBody.includes('buen') && (normalBody.includes('entre') || normalBody.includes('llegue') || normalBody.includes('estoy') || normalBody.includes('vine') || normalBody.includes('obra')))) {
+            if (normalBody === '1' || (nlpResult && nlpResult.intent === 'fichaje') || normalBody.includes('fichar') || (normalBody.includes('entre') && !normalBody.includes('entrega')) || normalBody.includes('ingres') || normalBody.includes('arranc') || normalBody.includes('llegue') || normalBody.includes('vine') || normalBody.includes('estoy en') || (normalBody.includes('buen') && ((normalBody.includes('entre') && !normalBody.includes('entrega')) || normalBody.includes('llegue') || normalBody.includes('estoy') || normalBody.includes('vine') || normalBody.includes('obra')))) {
                 if (!state.attendance[senderName]) {
                     state.attendance[senderName] = { role: senderRole, checkin: timeStr, status: "Presente (Voz)" };
                 }
