@@ -169,47 +169,63 @@ export async function POST(request) {
         const medicalLink = `${appUrl}/webview/medical?worker=${shortId}&token=${webviewToken}`;
         const attendanceLink = `${appUrl}/webview/attendance?worker=${shortId}&token=${webviewToken}`;
 
-        // 2. Process Location Sharing (Check-in)
+        // 2. Process Location Sharing (Geofence Check-in)
         if (!isNaN(latitude) && !isNaN(longitude)) {
-            const palermoSite = { lat: -34.5886, lon: -58.4302 };
-            const distance = Math.round(getDistance(latitude, longitude, palermoSite.lat, palermoSite.lon));
+            const projectSite = {
+                lat: state.projectConfig?.latitude || -34.5886,
+                lon: state.projectConfig?.longitude || -58.4302,
+                name: state.projectConfig?.name || "Torre Palermo Soho",
+                radius: state.projectConfig?.geofenceRadiusMeters || 100
+            };
+            const distance = Math.round(getDistance(latitude, longitude, projectSite.lat, projectSite.lon));
             
-            // Register Check-in
-            if (state.attendance[senderName]) {
-                state.attendance[senderName].checkin = timeStr;
+            // Register or update Check-in
+            if (!state.attendance[senderName]) {
+                state.attendance[senderName] = { role: senderRole, checkin: timeStr, status: "Presente (GPS)" };
+            }
+            state.attendance[senderName].checkin = timeStr;
+            state.attendance[senderName].distanceMeters = distance;
+            state.attendance[senderName].lastCoordinates = { latitude, longitude };
+            
+            if (distance <= projectSite.radius) {
+                state.attendance[senderName].status = "Presente (GPS)";
+                state.attendance[senderName].verifiedBy = "GPS Satelital";
                 
-                if (distance <= 20) {
-                    state.attendance[senderName].status = "Presente (GPS)";
-                    botReply = `📍 *Ubicación Verificada* por Satélite GPS.\n\n¡Bienvenido *${senderName}* a la obra!\n• Rol: ${senderRole}\n• Ingreso: ${timeStr}\n• Geocerca: Verificada (Distancia: ${distance}m).\n\nConsulte sus horas aquí:\n👉 ${attendanceLink}`;
-                    
-                    feedIncident = {
-                        id: "inc-gps-" + Date.now(),
-                        title: "Fichaje Verificado GPS",
-                        description: `${senderName} ingresó al predio de la obra. Distancia satelital: ${distance}m.`,
-                        type: "success",
-                        badge: "Presente",
-                        timestamp: `Hoy, ${timeStr}`,
-                        reporter: "Geocerca Satelital",
-                        icon: "fa-solid fa-location-dot"
-                    };
-                } else {
-                    state.attendance[senderName].status = "Desviado (GPS)";
-                    state.alertsCount += 1;
-                    botReply = `⚠️ *Alerta de Geocerca*.\n\n*${senderName}*, has registrado ingreso a *${distance}m* de la obra (excede el límite permitido de 20m). Tu asistencia fue registrada con desvío.`;
-                    
-                    feedIncident = {
-                        id: "inc-gps-alert-" + Date.now(),
-                        title: "Alerta de Geocerca (Desvío GPS)",
-                        description: `El operario ${senderName} fichó a ${distance}m de la obra (límite: 20m).`,
-                        type: "critical",
-                        badge: "Desvío GPS",
-                        timestamp: `Hoy, ${timeStr}`,
-                        reporter: "Geocerca Satelital",
-                        icon: "fa-solid fa-location-crosshairs"
-                    };
-                }
+                let presentCount = 0;
+                Object.values(state.attendance || {}).forEach(val => {
+                    if (val.status && (val.status.includes("Presente") || val.status.includes("GPS") || val.status.includes("Voz"))) presentCount++;
+                });
+                state.operariosCount = Math.max(1, presentCount);
+
+                botReply = `📍 *Presentismo Satelital Validado* ✅\n\n¡Bienvenido *${senderName}* a *${projectSite.name}*!\n• 👷 Rol: *${senderRole}*\n• ⏰ Ingreso: *${timeStr}*\n• 🌐 Geocerca: *${distance}m* (Dentro del radio de ${projectSite.radius}m)\n• 📋 Tareas Asignadas: Revoque y Mampostería\n\n👉 Tarjeta Digital de Presentismo:\n${attendanceLink}`;
+                
+                feedIncident = {
+                    id: "inc-gps-" + Date.now(),
+                    title: "Fichaje Satelital Validado",
+                    description: `${senderName} ingresó al predio de la obra (${projectSite.name}). Distancia satelital: ${distance}m.`,
+                    type: "success",
+                    badge: "Presente (GPS)",
+                    timestamp: `Hoy, ${timeStr}`,
+                    reporter: "Geocerca Satelital",
+                    icon: "fa-solid fa-location-dot"
+                };
             } else {
-                botReply = `📍 Ubicación recibida de ${senderName} (Distancia: ${distance}m), registrada en la bitácora de obra.`;
+                state.attendance[senderName].status = "Desviado (GPS)";
+                state.attendance[senderName].verifiedBy = "GPS Fuera de Radio";
+                state.alertsCount += 1;
+
+                botReply = `⚠️ *Alerta de Geocerca (Fuera de Predio)*\n\n*${senderName}*, has enviado tu ubicación a *${distance}m* de *${projectSite.name}* (el radio autorizado de obra es de ${projectSite.radius}m).\n\n• Estado: *Fichaje Observado (Desvío)*\n• Supervisor Notificado: Sí\n• Si ya estás en obra, por favor reenvía tu ubicación en tiempo real 📍`;
+                
+                feedIncident = {
+                    id: "inc-gps-alert-" + Date.now(),
+                    title: "Alerta de Geocerca (Desvío GPS)",
+                    description: `El operario ${senderName} fichó a ${distance}m de la obra (radio permitido: ${projectSite.radius}m).`,
+                    type: "critical",
+                    badge: "Desvío GPS",
+                    timestamp: `Hoy, ${timeStr}`,
+                    reporter: "Geocerca Satelital",
+                    icon: "fa-solid fa-location-crosshairs"
+                };
             }
             showInFeed = true;
         }
@@ -275,22 +291,27 @@ export async function POST(request) {
             
             // Fichaje / Asistencia (expanded for natural Argentine speech)
             if ((nlpResult && nlpResult.intent === 'fichaje') || normalBody.includes('fichar') || normalBody.includes('entre') || normalBody.includes('ingres') || normalBody.includes('arranc') || normalBody.includes('llegue') || normalBody.includes('vine') || normalBody.includes('estoy en') || (normalBody.includes('buen') && (normalBody.includes('entre') || normalBody.includes('llegue') || normalBody.includes('estoy') || normalBody.includes('vine') || normalBody.includes('obra')))) {
-                if (state.attendance[senderName]) {
+                if (!state.attendance[senderName]) {
                     state.attendance[senderName] = { role: senderRole, checkin: timeStr, status: "Presente (Voz)" };
                 }
+                state.attendance[senderName].role = senderRole;
+                state.attendance[senderName].checkin = timeStr;
+                state.attendance[senderName].status = "Presente (Voz)";
+                state.attendance[senderName].verifiedBy = "Biometría de Voz";
                 
                 let presentCount = 0;
                 Object.values(state.attendance || {}).forEach(val => {
-                    if (val.status && (val.status.includes("Presente") || val.status.includes("Voz"))) presentCount++;
+                    if (val.status && (val.status.includes("Presente") || val.status.includes("GPS") || val.status.includes("Voz"))) presentCount++;
                 });
                 state.operariosCount = Math.max(1, presentCount);
 
-                botReply = `🎙️ *Fichaje por Voz Procesado*\n\n¡Bienvenido *${senderName}*!\n• Rol: ${senderRole}\n• Ingreso registrado a las ${timeStr} mediante biometría de voz.\n\nFichaje seguro GPS:\n👉 ${attendanceLink}`;
+                const projectName = state.projectConfig?.name || "Torre Palermo Soho";
+                botReply = `🎙️ *Fichaje Registrado por Voz*\n\n¡Bienvenido *${senderName}* a *${projectName}*!\n• 👷 Rol: *${senderRole}*\n• ⏰ Horario: *${timeStr}*\n• 🔒 Estado: *Presente (Voz validada)*\n\n📍 *Certificación Satelital*: Podés compartir tu ubicación en tiempo real desde el clip 📎 para validar tu presencia en la geocerca de obra.\n\n👉 Ficha de Horas: ${attendanceLink}`;
                 
                 feedIncident = {
                     id: "inc-gps-" + Date.now(),
                     title: "Presentismo Registrado",
-                    description: `${senderName} inició jornada. Biometría de voz validada con éxito.`,
+                    description: `${senderName} (${senderRole}) inició jornada. Biometría de voz validada con éxito.`,
                     type: "success",
                     badge: "Presente",
                     timestamp: `Hoy, ${timeStr}`,

@@ -71,6 +71,26 @@ export const defaultAppState = {
     alertsCount: 2,
     diasEstimados: "Día 12/35",
     currentQuincena: "Quincena 1 (01/Ago - 15/Ago)",
+    // Tenant Project Configuration & Geofence
+    projectConfig: {
+        id: "obra-palermo-01",
+        name: "Torre Palermo Soho",
+        address: "Honduras 4850, Palermo, CABA",
+        latitude: -34.5886,
+        longitude: -58.4302,
+        geofenceRadiusMeters: 100,
+        expectedWorkersCount: 5,
+        director: { name: "Arq. Marcelo", phone: "+54 9 261 316-8608" },
+        capataz: { name: "Luis Martínez", phone: "+54 9 11 8899-7766" }
+    },
+    // Worker Registry & Trade Directory
+    workerRegistry: [
+        { id: "w-1", name: "Juan Gómez", role: "Albañilería Principal", trade: "Albañil Principal", phone: "+54 9 11 3241-9981", dni: "34.589.120", status: "Activo", assignedTasks: ["Revoque Grueso"] },
+        { id: "w-2", name: "Luis Martínez", role: "Instalaciones y Sanitarios", trade: "Plomero / Gasista", phone: "+54 9 11 8899-7766", dni: "31.204.850", status: "Activo", assignedTasks: ["Cañería y Descargas"] },
+        { id: "w-3", name: "Carlos Pérez", role: "Pintura e Interiores", trade: "Pintor / Revestimientos", phone: "+54 9 11 3241-9982", dni: "28.940.111", status: "Activo", assignedTasks: ["Revestimiento Cerámico", "Pintura"] },
+        { id: "w-4", name: "Arq. Marcelo", role: "Director de Obra", trade: "Arquitectura & Dirección", phone: "+54 9 261 316-8608", dni: "25.109.800", status: "Director", assignedTasks: ["Certificaciones Quincenales"] },
+        { id: "w-5", name: "Aberturas López", role: "Proveedor Externo", trade: "Carpintería de Aluminio", phone: "+54 9 11 5544-3322", dni: "CUIT 30-71458920-4", status: "Proveedor", assignedTasks: ["Entrega Aberturas Q2"] }
+    ],
     // Tasks with Quincenas and Material Blockers (v2.0)
     tasks: {
         1: {
@@ -137,9 +157,9 @@ export const defaultAppState = {
     },
     incidents: initialIncidents,
     attendance: {
-        "Juan Gómez": { role: "Albañilería Principal", checkin: "08:02 AM", status: "Presente" },
-        "Carlos Pérez": { role: "Pintura e Interiores", checkin: "--:--", status: "Ausente" },
-        "Luis Martínez": { role: "Instalaciones y Sanitarios", checkin: "--:--", status: "Ausente" }
+        "Juan Gómez": { role: "Albañilería Principal", checkin: "08:02 AM", status: "Presente", verifiedBy: "Voz & Biometría", distanceMeters: 12 },
+        "Carlos Pérez": { role: "Pintura e Interiores", checkin: "--:--", status: "Ausente", verifiedBy: "Pendiente", distanceMeters: null },
+        "Luis Martínez": { role: "Instalaciones y Sanitarios", checkin: "--:--", status: "Ausente", verifiedBy: "Pendiente", distanceMeters: null }
     },
     // Stockpiles with Confirmed Delivery Dates (Módulo 4B)
     stockpiles: {
