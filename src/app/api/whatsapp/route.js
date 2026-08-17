@@ -464,7 +464,41 @@ export async function POST(request) {
         messages.push(botMsg);
         await saveMessages(messages);
 
-        // 6. Return response in Twilio XML format (TwiML) or JSON
+        // 6. Send reply back via Meta WhatsApp Cloud API (if message came from Meta)
+        if (payload.object === 'whatsapp_business_account' && fromNumber && botReply) {
+            const metaAccessToken = process.env.META_WHATSAPP_ACCESS_TOKEN;
+            const metaPhoneNumberId = process.env.META_PHONE_NUMBER_ID;
+            const metaApiVersion = process.env.META_GRAPH_API_VERSION || 'v25.0';
+
+            if (metaAccessToken && metaPhoneNumberId) {
+                try {
+                    const metaReplyRes = await fetch(
+                        `https://graph.facebook.com/${metaApiVersion}/${metaPhoneNumberId}/messages`,
+                        {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${metaAccessToken}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                messaging_product: 'whatsapp',
+                                to: fromNumber,
+                                type: 'text',
+                                text: { body: botReply.replace(/\*/g, '') }
+                            })
+                        }
+                    );
+                    const metaReplyData = await metaReplyRes.json();
+                    console.log('Meta Cloud API reply sent:', metaReplyData?.messages?.[0]?.id || 'no-id');
+                } catch (metaErr) {
+                    console.error('Meta Cloud API reply failed (non-blocking):', metaErr.message);
+                }
+            } else {
+                console.log('Meta reply skipped: META_WHATSAPP_ACCESS_TOKEN or META_PHONE_NUMBER_ID not set');
+            }
+        }
+
+        // 7. Return response in Twilio XML format (TwiML) or JSON
         if (contentType.includes('x-www-form-urlencoded')) {
             const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
