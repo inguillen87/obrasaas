@@ -8,11 +8,69 @@ const initialAppState = {
   avancePercentage: 42,
   alertsCount: 2,
   diasEstimados: "Día 12/35",
+  currentQuincena: "Quincena 1 (01/Ago - 15/Ago)",
   tasks: {
-      1: { name: "Revoque Grueso", progress: 80, duration: 5, startOffset: 0, assignee: "Juan Gómez" },
-      2: { name: "Cañería y Descargas", progress: 20, duration: 4, startOffset: 28.5, assignee: "Luis Martínez" },
-      3: { name: "Revestimiento Cerámico", progress: 0, duration: 4, startOffset: 57.1, assignee: "Carlos Pérez" },
-      4: { name: "Pintura y Terminación", progress: 0, duration: 2, startOffset: 85.7, assignee: "Carlos Pérez" }
+      1: {
+          name: "Revoque Grueso",
+          progress: 80,
+          duration: 5,
+          startOffset: 0,
+          assignee: "Juan Gómez",
+          quincena: "Q1",
+          startDate: "2026-08-01",
+          endDate: "2026-08-06",
+          requiredMaterials: ["Cemento Loma Negra", "Arena Fina"],
+          materialStatus: "Disponible",
+          isBlocked: false,
+          supplierStatus: "Confirmado",
+          supplierName: "Loma Negra S.A."
+      },
+      2: {
+          name: "Cañería y Descargas",
+          progress: 20,
+          duration: 4,
+          startOffset: 28.5,
+          assignee: "Luis Martínez",
+          quincena: "Q1",
+          startDate: "2026-08-07",
+          endDate: "2026-08-11",
+          requiredMaterials: ["Caño PVC 110", "Codos y Ramales"],
+          materialStatus: "Disponible",
+          isBlocked: false,
+          supplierStatus: "Confirmado",
+          supplierName: "Sanitarios Palermo"
+      },
+      3: {
+          name: "Revestimiento Cerámico",
+          progress: 0,
+          duration: 4,
+          startOffset: 57.1,
+          assignee: "Carlos Pérez",
+          quincena: "Q2",
+          startDate: "2026-08-16",
+          endDate: "2026-08-20",
+          requiredMaterials: ["Cerámicas San Lorenzo", "Pegamento Klaukol"],
+          materialStatus: "Pendiente de Materiales",
+          isBlocked: true,
+          supplierStatus: "En Riesgo (Demora 48hs)",
+          supplierName: "Cerámicas San Lorenzo",
+          isShifted: false
+      },
+      4: {
+          name: "Pintura y Terminación",
+          progress: 0,
+          duration: 2,
+          startOffset: 85.7,
+          assignee: "Carlos Pérez",
+          quincena: "Q2",
+          startDate: "2026-08-21",
+          endDate: "2026-08-23",
+          requiredMaterials: ["Látex Alba Interior", "Enduido Plástico"],
+          materialStatus: "Disponible",
+          isBlocked: false,
+          supplierStatus: "Confirmado",
+          supplierName: "Pinturerías Rex"
+      }
   },
   incidents: [
       {
@@ -62,10 +120,36 @@ const initialAppState = {
       "Luis Martínez": { role: "Instalaciones y Sanitarios", checkin: "--:--", status: "Ausente" }
   },
   stockpiles: {
-      cemento: { name: "Cemento Loma Negra", current: 35, min: 40, max: 150, unit: "Bolsas", supplier: "Loma Negra S.A.", status: "Crítico" },
-      hierro: { name: "Hierro A500 Acindar", current: 85, min: 30, max: 100, unit: "Barras", supplier: "Acindar Distribuidores", status: "Stock OK" },
-      ladrillo: { name: "Ladrillo Portante Alberdi", current: 1500, min: 800, max: 2500, unit: "Uds", supplier: "Ladrillos Alberdi", status: "Stock OK" },
-      arena: { name: "Arena Fina Cantera", current: 4, min: 8, max: 20, unit: "m³", supplier: "Cantera Palermo", status: "En Camino" }
+      cemento: { name: "Cemento Loma Negra", current: 35, min: 40, max: 150, unit: "Bolsas", supplier: "Loma Negra S.A.", status: "Crítico", confirmedDeliveryDate: "16/08/2026", onTimeStatus: "A tiempo" },
+      hierro: { name: "Hierro A500 Acindar", current: 85, min: 30, max: 100, unit: "Barras", supplier: "Acindar Distribuidores", status: "Stock OK", confirmedDeliveryDate: "18/08/2026", onTimeStatus: "A tiempo" },
+      ladrillo: { name: "Ladrillo Portante Alberdi", current: 1500, min: 800, max: 2500, unit: "Uds", supplier: "Ladrillos Alberdi", status: "Stock OK", confirmedDeliveryDate: "20/08/2026", onTimeStatus: "A tiempo" },
+      arena: { name: "Arena Fina Cantera", current: 4, min: 8, max: 20, unit: "m³", supplier: "Cantera Palermo", status: "En Camino", confirmedDeliveryDate: "17/08/2026", onTimeStatus: "A tiempo" },
+      ceramicas: { name: "Cerámica San Lorenzo 45x45", current: 0, min: 80, max: 150, unit: "m²", supplier: "Cerámicas San Lorenzo", status: "Demorado", confirmedDeliveryDate: "25/08/2026", onTimeStatus: "Retraso 48hs" }
+  },
+  suppliers: [
+      { id: "prov-1", name: "Loma Negra S.A.", category: "Cemento & Hormigón", email: "despacho@lomanegra.com", phone: "+54 9 11 4455-6677", status: "Confirmado", nextTaskDate: "15/08/2026", reminderDays: 7, confirmationStatus: "Confirmado" },
+      { id: "prov-2", name: "Acindar Distribuidores", category: "Hierro & Estructuras", email: "ventas@acindardist.com", phone: "+54 9 11 3322-1100", status: "En Camino", nextTaskDate: "18/08/2026", reminderDays: 7, confirmationStatus: "Confirmado" },
+      { id: "prov-3", name: "Ladrillos Alberdi", category: "Mampostería", email: "pedidos@alberdi.com.ar", phone: "+54 9 11 8899-0011", status: "Confirmado", nextTaskDate: "20/08/2026", reminderDays: 7, confirmationStatus: "Confirmado" },
+      { id: "prov-4", name: "Aberturas López & Hnos", category: "Carpintería de Aluminio", email: "ventas@aberturaslopez.com", phone: "+54 9 11 5544-3322", status: "Pendiente", nextTaskDate: "21/08/2026", reminderDays: 7, confirmationStatus: "Pendiente (2 días antes)" },
+      { id: "prov-5", name: "Cerámicas San Lorenzo", category: "Revestimientos", email: "logistica@sanlorenzo.com.ar", phone: "+54 9 11 7766-5544", status: "Demorado", nextTaskDate: "25/08/2026", reminderDays: 7, confirmationStatus: "En Riesgo - Demorado" }
+  ],
+  certifications: [
+      { id: "cert-q1", period: "Quincena 1 (01/Ago - 15/Ago)", physicalProgress: "38%", financialValue: "$2.850.000 ARS", approvedByDirector: true, directorName: "Arq. Marcelo", status: "Certificado & Facturado", date: "15/08/2026" },
+      { id: "cert-q2", period: "Quincena 2 (16/Ago - 31/Ago)", physicalProgress: "14% (en curso)", financialValue: "$1.950.000 ARS", approvedByDirector: false, directorName: "Arq. Marcelo", status: "En Medición de Campo", date: "En curso" }
+  ],
+  operationalProposals: [
+      { id: "prop-1", intent: "avance_tarea", summary: "Juan Gómez reportó Revoque Grueso al 100%", proposedBy: "Juan Gómez", role: "Albañilería Principal", status: "APROBADO", timestamp: "Hoy, 08:15 AM", taskImpact: "Tarea 1 -> 100%" },
+      { id: "prop-2", intent: "replanificacion_material", summary: "Demora en flete de cerámicas. Mover Revestimiento a Q2 (25/Ago)", proposedBy: "Carlos Pérez", role: "Pintura e Interiores", status: "PENDIENTE_APROBACION", timestamp: "Hoy, 09:30 AM", taskImpact: "Tarea 3 -> +48hs desplazar" }
+  ],
+  cajaChica: {
+      saldoActual: 84500,
+      fondoInicial: 150000,
+      moneda: "ARS",
+      umbralAlerta: 50000,
+      movimientos: [
+          { id: "cc-1", descripcion: "Compra rápida clavos y alambre en ferretería", monto: 18500, tipo: "Egreso", solicitante: "Juan Gómez", estado: "Aprobado", fecha: "Hoy, 10:15 AM", ticketUrl: "/tickets/ticket-01.jpg" },
+          { id: "cc-2", descripcion: "Viáticos flete de emergencia arena", monto: 47000, tipo: "Egreso", solicitante: "Luis Martínez", estado: "Aprobado", fecha: "Ayer, 03:40 PM", ticketUrl: "/tickets/ticket-02.jpg" }
+      ]
   },
   crmLeads: [
       { name: "Ing. R. Silva", company: "Silva Constructora", topic: "Cotización para 8 obras simultáneas", status: "Nuevo Lead" },
@@ -128,6 +212,22 @@ const audioData = {
       impactTag: "Gantt Reajustado",
       impactClass: "warning",
       time: "05:10 PM"
+  },
+  5: {
+      from: "aberturas",
+      text: "Hola Arq. Marcelo, confirmamos que el flete con las aberturas y materiales de revestimiento sale mañana temprano. Entrega confirmada en obra para las 09:00 AM.",
+      actionDesc: "Proveedor confirmó entrega de materiales. Tarea liberada en Gantt.",
+      impactTag: "Proveedor Confirmado",
+      impactClass: "success",
+      time: "09:00 AM"
+  },
+  6: {
+      from: "juan",
+      text: "Hola Arq. Marcelo, ¿qué tareas nos tocan a la cuadrilla de albañilería en esta quincena?",
+      actionDesc: "Consulta de quincena procesada por Copiloto IA.",
+      impactTag: "Quincena Consultada",
+      impactClass: "info",
+      time: "10:15 AM"
   }
 };
 
@@ -210,6 +310,10 @@ export default function Dashboard() {
 
   // Live Toast Notifications State
   const [toasts, setToasts] = useState([]);
+
+  // Multi-Role Persona Switcher State (v2.0)
+  const [selectedPersona, setSelectedPersona] = useState('directora'); // 'directora' | 'compras' | 'capataz' | 'cliente'
+  const [ganttQuincenaView, setGanttQuincenaView] = useState('todas'); // 'todas' | 'Q1' | 'Q2'
 
   const addToast = (message, type = 'info') => {
     const id = Date.now();
@@ -356,6 +460,79 @@ export default function Dashboard() {
     } catch (e) {
       console.error("Error saving state to DB:", e);
     }
+  };
+
+  // v2.0 Actions: Supplier Reminders (7d) & Confirmations (2d)
+  const handleNotifySupplier = async (supplierId) => {
+    const updatedSuppliers = (state.suppliers || []).map(s => {
+      if (s.id === supplierId) {
+        return { ...s, reminderSent: true, status: "Aviso 7d Enviado", confirmationStatus: "Aviso Enviado (Esperando confirmación 2d antes)" };
+      }
+      return s;
+    });
+    const updatedState = { ...state, suppliers: updatedSuppliers };
+    setState(updatedState);
+    await saveStateToApi(updatedState);
+    addToast("Email y WhatsApp de aviso automático (7 días antes) enviado al proveedor.", "info");
+  };
+
+  const handleConfirmSupplier = async (supplierId) => {
+    const updatedSuppliers = (state.suppliers || []).map(s => {
+      if (s.id === supplierId) {
+        return { ...s, confirmationStatus: "Confirmado", status: "Confirmado" };
+      }
+      return s;
+    });
+    // Unblock Task 3 if blocked by supplier
+    const updatedTasks = { ...state.tasks };
+    if (updatedTasks[3]) {
+      updatedTasks[3].isBlocked = false;
+      updatedTasks[3].materialStatus = "Disponible / En Camino";
+      updatedTasks[3].supplierStatus = "Confirmado";
+    }
+    const updatedStockpiles = { ...state.stockpiles };
+    if (updatedStockpiles.ceramicas) {
+      updatedStockpiles.ceramicas.status = "En Camino";
+      updatedStockpiles.ceramicas.onTimeStatus = "Confirmado para entrega";
+    }
+    const updatedState = { 
+      ...state, 
+      suppliers: updatedSuppliers, 
+      tasks: updatedTasks, 
+      stockpiles: updatedStockpiles,
+      alertsCount: Math.max(0, state.alertsCount - 1)
+    };
+    setState(updatedState);
+    await saveStateToApi(updatedState);
+    addToast("Proveedor confirmado (2 días antes). Tarea 'Revestimiento Cerámico' desbloqueada en el Gantt.", "success");
+  };
+
+  // v2.0 Actions: Operational Proposals Approval (Maker-Checker)
+  const handleApproveProposal = async (propId) => {
+    const updatedProposals = (state.operationalProposals || []).map(p => {
+      if (p.id === propId) {
+        return { ...p, status: "APROBADO" };
+      }
+      return p;
+    });
+    const updatedState = { ...state, operationalProposals: updatedProposals };
+    setState(updatedState);
+    await saveStateToApi(updatedState);
+    addToast("Propuesta de avance o replanificación aprobada por la Dirección de Obra.", "success");
+  };
+
+  // v2.0 Actions: Quincenal Certifications Approval
+  const handleCertifyQuincena = async (certId) => {
+    const updatedCerts = (state.certifications || []).map(c => {
+      if (c.id === certId) {
+        return { ...c, approvedByDirector: true, status: "Certificado & Facturado", date: new Date().toLocaleDateString('es-AR') };
+      }
+      return c;
+    });
+    const updatedState = { ...state, certifications: updatedCerts };
+    setState(updatedState);
+    await saveStateToApi(updatedState);
+    addToast("Acta de Certificación Quincenal firmada con éxito. Habilitada para facturación al cliente.", "success");
   };
 
   // Helper Beep Node generator (Web Audio API)
@@ -1555,13 +1732,68 @@ export default function Dashboard() {
 
         {/* Main Content Area */}
         <main className="main-content">
+
+          {/* Multi-Role Persona Switcher (v2.0) */}
+          <div className="persona-switcher-bar glass-panel-premium" style={{ marginBottom: '20px', padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px', borderLeft: '4px solid var(--primary)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 700 }}>
+                <i className="fa-solid fa-users-viewfinder" style={{ color: 'var(--primary)', marginRight: '6px' }}></i> Vista por Rol:
+              </span>
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                <button 
+                  onClick={() => { setSelectedPersona('directora'); addToast("Cambiado a vista: Directora de Obra / Arquitecta", "info"); }}
+                  className={`btn btn-sm ${selectedPersona === 'directora' ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ fontSize: '0.75rem', padding: '5px 12px', borderRadius: '6px' }}
+                >
+                  <i className="fa-solid fa-compass-drafting" style={{ marginRight: '4px' }}></i> Directora de Obra
+                </button>
+                <button 
+                  onClick={() => { setSelectedPersona('compras'); addToast("Cambiado a vista: Socio Compras & Abastecimiento", "info"); }}
+                  className={`btn btn-sm ${selectedPersona === 'compras' ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ fontSize: '0.75rem', padding: '5px 12px', borderRadius: '6px' }}
+                >
+                  <i className="fa-solid fa-cart-flatbed" style={{ marginRight: '4px' }}></i> Compras &amp; Corralón
+                </button>
+                <button 
+                  onClick={() => { setSelectedPersona('capataz'); addToast("Cambiado a vista: Capataz / Jefe de Campo", "info"); }}
+                  className={`btn btn-sm ${selectedPersona === 'capataz' ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ fontSize: '0.75rem', padding: '5px 12px', borderRadius: '6px' }}
+                >
+                  <i className="fa-solid fa-helmet-safety" style={{ marginRight: '4px' }}></i> Jefe de Obra / Capataz
+                </button>
+                <button 
+                  onClick={() => { setSelectedPersona('cliente'); addToast("Cambiado a vista: Cliente / Licitación Pública", "info"); }}
+                  className={`btn btn-sm ${selectedPersona === 'cliente' ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ fontSize: '0.75rem', padding: '5px 12px', borderRadius: '6px' }}
+                >
+                  <i className="fa-solid fa-landmark" style={{ marginRight: '4px' }}></i> Cliente / Municipio
+                </button>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span className="badge badge-info" style={{ fontSize: '0.75rem' }}>
+                <i className="fa-solid fa-calendar-week" style={{ marginRight: '4px' }}></i> {state.currentQuincena || 'Quincena 1 (01/Ago - 15/Ago)'}
+              </span>
+            </div>
+          </div>
           
           {/* SECTION 1: DASHBOARD */}
           <section id="sec-dashboard" className={`content-section animate-fade-in-up ${activeTab === 'sec-dashboard' ? 'active' : ''}`}>
             <div className="section-header">
               <div className="header-title">
-                <h1>Panel de Control de Obra</h1>
-                <p>Visualización en tiempo real y métricas analíticas de la obra activa: "Edificio Palermo Chico"</p>
+                <h1>
+                  {selectedPersona === 'directora' && 'Panel Directora de Obra (Socio Técnico)'}
+                  {selectedPersona === 'compras' && 'Panel Abastecimiento & Compras (Socio Logística)'}
+                  {selectedPersona === 'capataz' && 'Panel Jefe de Obra & Cuadrilla de Campo'}
+                  {selectedPersona === 'cliente' && 'Portal de Transparencia & Certificaciones'}
+                </h1>
+                <p>
+                  {selectedPersona === 'directora' && 'Control de hitos por quincenas, resolución de interferencias, aprobación de propuestas y certificaciones.'}
+                  {selectedPersona === 'compras' && 'Seguimiento de entregas comprometidas, avisos automáticos (7d / 2d), caja chica y control de corralón.'}
+                  {selectedPersona === 'capataz' && 'Presentismo biométrico satelital, asignación de tareas diarias y reporte de novedades por voz.'}
+                  {selectedPersona === 'cliente' && 'Curva de inversión acumulada, actas de medición quincenal aprobadas y avance fotográfico verificado.'}
+                </p>
               </div>
               <div className="header-actions" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                 <button className="btn btn-secondary btn-sm" onClick={() => setShowWeeklyReportModal(true)} style={{ padding: '8px 14px', fontSize: '0.8rem', fontWeight: 700, background: 'rgba(255,255,255,0.05)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}>
@@ -2182,7 +2414,7 @@ export default function Dashboard() {
                 {/* Audio 4 */}
                 <div className="glass-panel-premium dashboard-card-hover" style={{ background: 'rgba(255, 255, 255, 0.01)', padding: '14px', marginBottom: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                    <strong style={{ fontSize: '0.85rem' }}><i className="fa-solid fa-clock" style={{ color: 'var(--warning)' }}></i> Audio 4: Alerta de Retraso Crítico</strong>
+                    <strong style={{ fontSize: '0.85rem' }}><i className="fa-solid fa-clock" style={{ color: 'var(--warning)' }}></i> Audio 4: Demora en Suministros (Cerámicas)</strong>
                     <span className="badge badge-warning">Carlos Pérez</span>
                   </div>
                   <div className="audio-player-container">
@@ -2197,7 +2429,43 @@ export default function Dashboard() {
                   </p>
                 </div>
 
-                {/* Sim Check-in */}
+                {/* Audio 5: Proveedor Confirmando Entrega (Módulo 2B / 4B) */}
+                <div className="glass-panel-premium dashboard-card-hover" style={{ background: 'rgba(255, 255, 255, 0.01)', padding: '14px', marginBottom: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <strong style={{ fontSize: '0.85rem' }}><i className="fa-solid fa-truck-ramp-box" style={{ color: 'var(--success)' }}></i> Audio 5: Confirmación de Proveedor (2 días antes)</strong>
+                    <span className="badge badge-success">Aberturas López</span>
+                  </div>
+                  <div className="audio-player-container">
+                    <button className="play-btn" onClick={() => playAudioSim(5)} disabled={playingAudioIndex !== null}>
+                      <i className={playingAudioIndex === 5 ? "fa-solid fa-microphone-lines fa-fade" : "fa-solid fa-play"} id="play-icon-5"></i>
+                    </button>
+                    <canvas width="200" height="40" className="waveform-canvas" style={{ background: 'rgba(255,255,255,0.02)', borderRadius: '6px' }}></canvas>
+                    <span className="audio-duration">0:10</span>
+                  </div>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontStyle: 'italic', marginTop: '6px' }}>
+                    "Hola Arq. Marcelo, confirmamos que el flete sale mañana temprano. Entrega en obra a las 09:00 AM."
+                  </p>
+                </div>
+
+                {/* Audio 6: Consulta de Quincena (Módulo 2B) */}
+                <div className="glass-panel-premium dashboard-card-hover" style={{ background: 'rgba(255, 255, 255, 0.01)', padding: '14px', marginBottom: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <strong style={{ fontSize: '0.85rem' }}><i className="fa-solid fa-calendar-check" style={{ color: 'var(--info)' }}></i> Audio 6: Consulta de Quincena (Cuadrilla)</strong>
+                    <span className="badge badge-info">Juan Gómez</span>
+                  </div>
+                  <div className="audio-player-container">
+                    <button className="play-btn" onClick={() => playAudioSim(6)} disabled={playingAudioIndex !== null}>
+                      <i className={playingAudioIndex === 6 ? "fa-solid fa-microphone-lines fa-fade" : "fa-solid fa-play"} id="play-icon-6"></i>
+                    </button>
+                    <canvas width="200" height="40" className="waveform-canvas" style={{ background: 'rgba(255,255,255,0.02)', borderRadius: '6px' }}></canvas>
+                    <span className="audio-duration">0:07</span>
+                  </div>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontStyle: 'italic', marginTop: '6px' }}>
+                    "Hola Arq. Marcelo, ¿qué tareas nos tocan a la cuadrilla de albañilería en esta quincena?"
+                  </p>
+                </div>
+
+                {/* Sim Check-in & Fast Triggers */}
                 <div className="glass-panel-premium dashboard-card-hover" style={{ background: 'rgba(255, 255, 255, 0.01)', padding: '14px', marginBottom: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
                     <strong style={{ fontSize: '0.85rem' }}><i className="fa-solid fa-map-location-dot" style={{ color: '#60a5fa' }}></i> Simular Fichaje Completo por GPS</strong>
@@ -2214,16 +2482,62 @@ export default function Dashboard() {
             </div>
           </section>
 
-          {/* SECTION 3: GANTT CHART */}
+          {/* SECTION 3: GANTT CHART POR QUINCENAS (v2.0) */}
           <section id="sec-gantt" className={`content-section animate-fade-in-up ${activeTab === 'sec-gantt' ? 'active' : ''}`}>
             <div className="section-header">
               <div className="header-title">
-                <h1>Cronograma Dinámico de Obra (Gantt Interactivo)</h1>
-                <p>Editor de Tareas. Ajusta el progreso y las duraciones directamente para ver el impacto en tiempo real.</p>
+                <h1>Cronograma de Obra por Quincenas (Gantt Interactivo v2.0)</h1>
+                <p>Planificación sincronizada con entregas comprometidas de proveedores y bloqueos automáticos por falta de materiales.</p>
               </div>
-              <div className="header-actions">
-                <button className="btn btn-primary" onClick={() => setShowAddTaskModal(true)} style={{ marginRight: '8px' }}><i className="fa-solid fa-plus"></i> Agregar Tarea</button>
-                <button className="btn btn-secondary" onClick={handleResetState}><i className="fa-solid fa-arrow-rotate-left"></i> Restablecer Cronograma</button>
+              <div className="header-actions" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                {/* Quincena View Selector (Módulo 2B) */}
+                <div style={{ display: 'flex', background: 'rgba(255,255,255,0.05)', padding: '3px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                  <button 
+                    onClick={() => setGanttQuincenaView('todas')}
+                    className={`btn btn-sm ${ganttQuincenaView === 'todas' ? 'btn-primary' : 'btn-secondary'}`}
+                    style={{ fontSize: '0.75rem', padding: '4px 10px', borderRadius: '6px' }}
+                  >
+                    Todas
+                  </button>
+                  <button 
+                    onClick={() => setGanttQuincenaView('Q1')}
+                    className={`btn btn-sm ${ganttQuincenaView === 'Q1' ? 'btn-primary' : 'btn-secondary'}`}
+                    style={{ fontSize: '0.75rem', padding: '4px 10px', borderRadius: '6px' }}
+                  >
+                    Quincena 1 (Q1)
+                  </button>
+                  <button 
+                    onClick={() => setGanttQuincenaView('Q2')}
+                    className={`btn btn-sm ${ganttQuincenaView === 'Q2' ? 'btn-primary' : 'btn-secondary'}`}
+                    style={{ fontSize: '0.75rem', padding: '4px 10px', borderRadius: '6px' }}
+                  >
+                    Quincena 2 (Q2)
+                  </button>
+                </div>
+
+                <button className="btn btn-primary" onClick={() => setShowAddTaskModal(true)}><i className="fa-solid fa-plus"></i> Agregar Tarea</button>
+                <button className="btn btn-secondary" onClick={handleResetState}><i className="fa-solid fa-arrow-rotate-left"></i> Restablecer</button>
+              </div>
+            </div>
+
+            {/* Quincenas Summary Alert Bar */}
+            <div className="grid-3" style={{ marginBottom: '16px' }}>
+              <div className="glass-panel-premium dashboard-card-hover" style={{ padding: '12px 16px', marginBottom: 0, borderLeft: '4px solid var(--success)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Quincena 1 Activa</div>
+                <strong style={{ fontSize: '1rem', color: '#fff', display: 'block' }}>01/Ago al 15/Ago</strong>
+                <span style={{ fontSize: '0.75rem', color: 'var(--success)' }}>2 Tareas • 100% Materiales OK</span>
+              </div>
+              <div className="glass-panel-premium dashboard-card-hover" style={{ padding: '12px 16px', marginBottom: 0, borderLeft: state.tasks[3]?.isBlocked ? '4px solid var(--danger)' : '4px solid var(--info)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Próxima Quincena 2</div>
+                <strong style={{ fontSize: '1rem', color: '#fff', display: 'block' }}>16/Ago al 31/Ago</strong>
+                <span style={{ fontSize: '0.75rem', color: state.tasks[3]?.isBlocked ? 'var(--danger)' : 'var(--info)' }}>
+                  {state.tasks[3]?.isBlocked ? '⚠️ 1 Tarea Bloqueada por Proveedor' : '2 Tareas Programadas • Proveedores Confirmados'}
+                </span>
+              </div>
+              <div className="glass-panel-premium dashboard-card-hover" style={{ padding: '12px 16px', marginBottom: 0, borderLeft: '4px solid var(--primary)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Certificación Quincenal</div>
+                <strong style={{ fontSize: '1rem', color: 'var(--primary)', display: 'block' }}>Q1 Aprobada ($2.850.000)</strong>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Q2 en medición de campo</span>
               </div>
             </div>
 
@@ -2250,67 +2564,107 @@ export default function Dashboard() {
                 {/* Dependency lines SVG */}
                 <svg className="gantt-dependency-svg" id="gantt-dependency-lines" ref={svgLinesRef}></svg>
 
-                {/* Timeline Header */}
+                {/* Timeline Header with Quincena Banners */}
                 <div className="gantt-timeline-header">
-                  <div className="gantt-label-col-header" style={{ zIndex: 2 }}>Tarea / Asignado</div>
+                  <div className="gantt-label-col-header" style={{ zIndex: 2 }}>
+                    <span>Tarea / Asignado / Quincena</span>
+                  </div>
                   <div className="gantt-days-header" style={{ zIndex: 2 }}>
-                    <div className="gantt-day-header-item">L 20</div>
-                    <div className="gantt-day-header-item">M 21</div>
-                    <div className="gantt-day-header-item">X 22</div>
-                    <div className="gantt-day-header-item">J 23</div>
-                    <div className="gantt-day-header-item">V 24</div>
-                    <div className="gantt-day-header-item weekend">S 25</div>
-                    <div className="gantt-day-header-item weekend">D 26</div>
-                    <div className="gantt-day-header-item today">L 27</div>
-                    <div className="gantt-day-header-item">M 28</div>
-                    <div className="gantt-day-header-item">X 29</div>
-                    <div className="gantt-day-header-item">J 30</div>
-                    <div className="gantt-day-header-item">V 01</div>
-                    <div className="gantt-day-header-item weekend">S 02</div>
-                    <div className="gantt-day-header-item weekend">D 03</div>
+                    <div className="gantt-day-header-item">01 Ago (Q1)</div>
+                    <div className="gantt-day-header-item">03 Ago</div>
+                    <div className="gantt-day-header-item">06 Ago</div>
+                    <div className="gantt-day-header-item">08 Ago</div>
+                    <div className="gantt-day-header-item">11 Ago</div>
+                    <div className="gantt-day-header-item weekend">13 Ago</div>
+                    <div className="gantt-day-header-item weekend">15 Ago</div>
+                    <div className="gantt-day-header-item today">16 Ago (Q2)</div>
+                    <div className="gantt-day-header-item">18 Ago</div>
+                    <div className="gantt-day-header-item">21 Ago</div>
+                    <div className="gantt-day-header-item">23 Ago</div>
+                    <div className="gantt-day-header-item">26 Ago</div>
+                    <div className="gantt-day-header-item weekend">28 Ago</div>
+                    <div className="gantt-day-header-item weekend">31 Ago</div>
                   </div>
                 </div>
 
                 {/* Gantt Rows */}
                 <div className="gantt-rows" style={{ zIndex: 2, position: 'relative' }}>
-                  {Object.keys(state.tasks).map(id => {
-                    const task = state.tasks[id];
-                    let barClass = "gantt-bar";
-                    if (task.progress === 100) barClass += " completed";
-                    else if (task.isDelayed || id === "99") barClass += " delayed";
-                    else if (task.isShifted) barClass += " shifted";
+                  {Object.keys(state.tasks)
+                    .filter(id => {
+                      if (ganttQuincenaView === 'todas') return true;
+                      return state.tasks[id].quincena === ganttQuincenaView;
+                    })
+                    .map(id => {
+                      const task = state.tasks[id];
+                      let barClass = "gantt-bar";
+                      if (task.progress === 100) barClass += " completed";
+                      else if (task.isBlocked) barClass += " delayed";
+                      else if (task.isDelayed || id === "99") barClass += " delayed";
+                      else if (task.isShifted) barClass += " shifted";
 
-                    const leftVal = task.startOffset;
-                    const widthVal = task.duration * 7.14;
+                      const leftVal = task.startOffset;
+                      const widthVal = Math.max(10, task.duration * 7.14);
 
-                    return (
-                      <div key={id} className="gantt-row">
-                        <div className="gantt-task-info" onClick={() => handleEditTask(id)} style={{ cursor: 'pointer' }}>
-                          <span className="gantt-task-name">{task.name}</span>
-                          <span className="gantt-task-assignee"><i className="fa-solid fa-user" style={{ fontSize: '0.65rem', marginRight: '4px' }}></i>{task.assignee}</span>
-                        </div>
-                        <div className="gantt-task-bar-container">
-                          <div className={barClass} id={`gantt-bar-${id}`} style={{ left: `${leftVal}%`, width: `${widthVal}%` }} onClick={() => handleEditTask(id)}>
-                            <div className="gantt-bar-progress" id={`gantt-bar-progress-${id}`} style={{ width: `${task.progress}%` }}></div>
-                            <span className="gantt-bar-text" id={`gantt-bar-text-${id}`}>{task.name} ({task.progress}%)</span>
+                      return (
+                        <div key={id} className="gantt-row" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', padding: '8px 0' }}>
+                          <div className="gantt-task-info" onClick={() => handleEditTask(id)} style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span className="badge badge-info" style={{ fontSize: '0.65rem', padding: '1px 6px' }}>{task.quincena || 'Q1'}</span>
+                              <span className="gantt-task-name" style={{ fontWeight: 700 }}>{task.name}</span>
+                              {task.isBlocked && (
+                                <span className="badge badge-danger" style={{ fontSize: '0.65rem', animation: 'pulse 1.5s infinite' }}>
+                                  <i className="fa-solid fa-ban"></i> Pendiente Materiales
+                                </span>
+                              )}
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+                              <span><i className="fa-solid fa-user" style={{ fontSize: '0.6rem', marginRight: '3px' }}></i>{task.assignee}</span>
+                              {task.supplierName && (
+                                <span><i className="fa-solid fa-truck" style={{ fontSize: '0.6rem', marginRight: '3px' }}></i>{task.supplierName} ({task.supplierStatus || 'Confirmado'})</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="gantt-task-bar-container">
+                            <div className={barClass} id={`gantt-bar-${id}`} style={{ left: `${leftVal}%`, width: `${widthVal}%` }} onClick={() => handleEditTask(id)}>
+                              <div className="gantt-bar-progress" id={`gantt-bar-progress-${id}`} style={{ width: `${task.progress}%` }}></div>
+                              <span className="gantt-bar-text" id={`gantt-bar-text-${id}`}>
+                                {task.name} ({task.progress}%) {task.isBlocked ? '⛔ Bloqueada' : ''}
+                              </span>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
                 </div>
               </div>
 
-              {/* Editors Grid */}
-              <div className="gantt-editor-card" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '16px', marginTop: '24px' }}>
+              {/* Action Controls & Task Editor Cards */}
+              <div className="gantt-editor-card" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px', marginTop: '24px' }}>
                 {Object.keys(state.tasks).map(id => {
                   const task = state.tasks[id];
                   return (
-                    <div key={id} className="glass-panel-premium dashboard-card-hover" style={{ padding: '14px', marginBottom: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div key={id} className="glass-panel-premium dashboard-card-hover" style={{ padding: '14px', marginBottom: 0, display: 'flex', flexDirection: 'column', gap: '8px', borderLeft: task.isBlocked ? '3px solid var(--danger)' : '3px solid var(--border-color)' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <strong style={{ fontSize: '0.8rem', color: 'var(--primary)' }}>{task.name}</strong>
+                        <div>
+                          <span className="badge badge-info" style={{ fontSize: '0.65rem', marginRight: '6px' }}>{task.quincena || 'Q1'}</span>
+                          <strong style={{ fontSize: '0.85rem', color: task.isBlocked ? 'var(--danger)' : 'var(--primary)' }}>{task.name}</strong>
+                        </div>
                         <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', cursor: 'pointer' }} onClick={() => handleEditTask(id)}><i className="fa-solid fa-cog"></i> Configurar</span>
                       </div>
+
+                      {task.isBlocked && (
+                        <div style={{ background: 'rgba(239,68,68,0.1)', padding: '6px 8px', borderRadius: '6px', border: '1px solid rgba(239,68,68,0.2)', fontSize: '0.75rem', color: 'var(--danger)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span>⛔ Bloqueada por retraso de proveedor</span>
+                          <button 
+                            className="btn btn-sm btn-success" 
+                            onClick={() => handleConfirmSupplier("prov-4")}
+                            style={{ fontSize: '0.65rem', padding: '2px 6px' }}
+                          >
+                            Desbloquear
+                          </button>
+                        </div>
+                      )}
+
                       <div className="editor-control">
                         <label style={{ fontSize: '0.75rem', display: 'flex', justifyContent: 'space-between' }}>Progreso: <strong>{task.progress}%</strong></label>
                         <input type="range" min="0" max="100" value={task.progress} onChange={(e) => updateGanttTaskSlider(id, 'progress', e.target.value)} />
@@ -2566,48 +2920,258 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Suppliers Directory */}
+            {/* Operational Proposals Inbox (Maker-Checker Workflow) */}
+            <div className="glass-panel-premium dashboard-card-hover" style={{ marginTop: '24px', borderLeft: '4px solid var(--info)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                <div>
+                  <h3 style={{ fontFamily: 'var(--font-heading)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <i className="fa-solid fa-inbox" style={{ color: 'var(--info)' }}></i> Bandeja de Propuestas Operativas (Maker-Checker)
+                  </h3>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', margin: 0 }}>
+                    Reportes capturados por audio en WhatsApp que requieren validación y firma de la Directora de Obra para impactar el cronograma.
+                  </p>
+                </div>
+                <span className="badge badge-info">{state.operationalProposals?.length || 0} Propuestas</span>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {(state.operationalProposals || []).map((prop, idx) => (
+                  <div key={prop.id || idx} style={{ background: 'rgba(255,255,255,0.02)', padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                        <span className={`badge ${prop.status === 'APROBADO' ? 'badge-success' : 'badge-warning'}`}>{prop.status}</span>
+                        <strong style={{ fontSize: '0.85rem', color: '#fff' }}>{prop.summary}</strong>
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                        <span><i className="fa-solid fa-user" style={{ marginRight: '4px' }}></i>{prop.proposedBy} ({prop.role})</span> • 
+                        <span style={{ marginLeft: '6px' }}><i className="fa-solid fa-clock" style={{ marginRight: '4px' }}></i>{prop.timestamp}</span> • 
+                        <span style={{ marginLeft: '6px', color: 'var(--primary)' }}><i className="fa-solid fa-code-branch" style={{ marginRight: '4px' }}></i>Impacto: {prop.taskImpact}</span>
+                      </div>
+                    </div>
+
+                    {prop.status !== 'APROBADO' && (
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <button 
+                          className="btn btn-sm btn-success" 
+                          onClick={() => handleApproveProposal(prop.id)}
+                          style={{ fontSize: '0.75rem', padding: '6px 12px' }}
+                        >
+                          <i className="fa-solid fa-check" style={{ marginRight: '4px' }}></i> Aprobar
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Módulo 2B: Catálogo de Proveedores & Notificaciones (7d / 2d) */}
             <div className="glass-panel-premium dashboard-card-hover" style={{ marginTop: '24px' }}>
-              <h3 style={{ fontFamily: 'var(--font-heading)', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <i className="fa-solid fa-truck-field" style={{ color: 'var(--primary)' }}></i> Proveedores y Corralones Homologados
-              </h3>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '16px' }}>
-                Directorio B2B de corralones y distribuidores con enlace directo para verificación de stock y de cuenta corriente comercial.
-              </p>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                <div>
+                  <h3 style={{ fontFamily: 'var(--font-heading)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <i className="fa-solid fa-truck-field" style={{ color: 'var(--primary)' }}></i> Módulo 2B: Notificaciones &amp; Confirmaciones a Proveedores
+                  </h3>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', margin: 0 }}>
+                    Avisos automáticos 7 días antes de la tarea asignada y confirmación obligatoria 2 días antes para evitar bloqueos en el Gantt.
+                  </p>
+                </div>
+                <span className="badge badge-success"><i className="fa-solid fa-shield-check"></i> Sincronización Automática</span>
+              </div>
+
               <table className="billing-table">
                 <thead>
                   <tr>
                     <th>Proveedor / Corralón</th>
-                    <th>Suministro Principal</th>
-                    <th>Calificación / Demora</th>
-                    <th>Estado de Cuenta</th>
+                    <th>Categoría</th>
+                    <th>Próxima Tarea Programada</th>
+                    <th>Aviso Automático (7d antes)</th>
+                    <th>Confirmación (2d antes)</th>
+                    <th>Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
+                  {(state.suppliers || []).map(prov => (
+                    <tr key={prov.id}>
+                      <td>
+                        <strong>{prov.name}</strong><br/>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{prov.email}</span>
+                      </td>
+                      <td><span className="badge badge-info">{prov.category}</span></td>
+                      <td><strong style={{ color: 'var(--primary)' }}>{prov.nextTaskDate}</strong></td>
+                      <td>
+                        <span className="badge badge-success">
+                          <i className="fa-solid fa-paper-plane" style={{ marginRight: '4px' }}></i> {prov.status}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`badge ${prov.confirmationStatus?.includes('Confirmado') ? 'badge-success' : prov.confirmationStatus?.includes('Riesgo') ? 'badge-danger' : 'badge-warning'}`}>
+                          {prov.confirmationStatus}
+                        </span>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <button 
+                            className="btn btn-sm btn-secondary" 
+                            onClick={() => handleNotifySupplier(prov.id)}
+                            style={{ fontSize: '0.7rem', padding: '4px 8px' }}
+                            title="Enviar notificación por Email y WhatsApp 7 días antes"
+                          >
+                            <i className="fa-solid fa-envelope"></i> Aviso 7d
+                          </button>
+                          <button 
+                            className="btn btn-sm btn-success" 
+                            onClick={() => handleConfirmSupplier(prov.id)}
+                            style={{ fontSize: '0.7rem', padding: '4px 8px' }}
+                            title="Confirmar recepción y compromiso de entrega 2 días antes"
+                          >
+                            <i className="fa-solid fa-check-double"></i> Confirmar 2d
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Módulo 4B: Control de Acopios & Fechas Comprometidas de Entrega */}
+            <div className="glass-panel-premium dashboard-card-hover" style={{ marginTop: '24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                <div>
+                  <h3 style={{ fontFamily: 'var(--font-heading)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <i className="fa-solid fa-cubes-stacked" style={{ color: 'var(--warning)' }}></i> Módulo 4B: Acopios &amp; Fecha de Entrega Comprometida
+                  </h3>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', margin: 0 }}>
+                    Fechas comprometidas por el proveedor visibles para todo el equipo. Bloqueo automático de tareas dependientes en caso de rotura de stock.
+                  </p>
+                </div>
+                <button className="btn btn-sm btn-primary" onClick={() => setShowReceiveMaterialModal(true)}>
+                  <i className="fa-solid fa-dolly"></i> Recibir Material
+                </button>
+              </div>
+
+              <table className="billing-table">
+                <thead>
                   <tr>
-                    <td><strong>Loma Negra S.A.</strong></td>
-                    <td>Cemento y Hormigón Elaborado</td>
-                    <td>⭐⭐⭐⭐⭐ <span style={{ fontSize: '0.75rem', color: 'var(--success)' }}>Excelente (24hs)</span></td>
-                    <td><span className="badge badge-success">Cuenta Corriente Activa</span></td>
+                    <th>Material / Insumo</th>
+                    <th>Stock Actual / Mínimo</th>
+                    <th>Proveedor Responsable</th>
+                    <th>Fecha Comprometida</th>
+                    <th>Estado de Entrega</th>
                   </tr>
+                </thead>
+                <tbody>
+                  {Object.keys(state.stockpiles || {}).map(key => {
+                    const mat = state.stockpiles[key];
+                    const isLow = mat.current < mat.min;
+                    return (
+                      <tr key={key}>
+                        <td><strong>{mat.name}</strong></td>
+                        <td>
+                          <span style={{ fontWeight: 700, color: isLow ? 'var(--danger)' : '#fff' }}>
+                            {mat.current} {mat.unit}
+                          </span> / {mat.min} {mat.unit}
+                        </td>
+                        <td>{mat.supplier}</td>
+                        <td><strong style={{ color: 'var(--primary)' }}>{mat.confirmedDeliveryDate || '16/08/2026'}</strong></td>
+                        <td>
+                          <span className={`badge ${mat.status === 'Crítico' ? 'badge-danger' : mat.status === 'Demorado' ? 'badge-warning' : 'badge-success'}`}>
+                            {mat.onTimeStatus || mat.status}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Módulo 8 & 10: Certificaciones Quincenales de Obra */}
+            <div className="glass-panel-premium dashboard-card-hover" style={{ marginTop: '24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                <div>
+                  <h3 style={{ fontFamily: 'var(--font-heading)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <i className="fa-solid fa-file-signature" style={{ color: 'var(--primary)' }}></i> Módulos 8 &amp; 10: Certificaciones Quincenales de Avance
+                  </h3>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', margin: 0 }}>
+                    Actas de medición física y financiera quincenales para facturación transparente a propietarios o entes públicos.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid-2" style={{ gap: '16px' }}>
+                {(state.certifications || []).map(cert => (
+                  <div key={cert.id} style={{ background: 'rgba(255,255,255,0.02)', padding: '16px', borderRadius: '10px', border: cert.approvedByDirector ? '1px solid rgba(16,185,129,0.3)' : '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <strong style={{ fontSize: '0.95rem', color: '#fff' }}>{cert.period}</strong>
+                      <span className={`badge ${cert.approvedByDirector ? 'badge-success' : 'badge-warning'}`}>{cert.status}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>Avance Físico Medido:</span>
+                      <strong>{cert.physicalProgress}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>Valor Financiero:</span>
+                      <strong style={{ color: 'var(--primary)', fontSize: '1.05rem' }}>{cert.financialValue}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', color: 'var(--text-secondary)', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '8px' }}>
+                      <span>Firma Directora: <strong>{cert.directorName}</strong> {cert.approvedByDirector ? '✍️ (Firmado)' : '⏳ (Pendiente)'}</span>
+                      {!cert.approvedByDirector && (
+                        <button 
+                          className="btn btn-sm btn-primary" 
+                          onClick={() => handleCertifyQuincena(cert.id)}
+                          style={{ fontSize: '0.75rem', padding: '4px 10px' }}
+                        >
+                          <i className="fa-solid fa-pen-nib" style={{ marginRight: '4px' }}></i> Certificar Quincena
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Módulo 7: Caja Chica & OCR de Comprobantes */}
+            <div className="glass-panel-premium dashboard-card-hover" style={{ marginTop: '24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                <div>
+                  <h3 style={{ fontFamily: 'var(--font-heading)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <i className="fa-solid fa-receipt" style={{ color: 'var(--info)' }}></i> Módulo 7: Caja Chica &amp; Rendiciones con OCR
+                  </h3>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', margin: 0 }}>
+                    Control de fondos para compras de ferretería y fletes menores con lectura automática de tickets por visión artificial.
+                  </p>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span className="badge badge-info">Saldo Actual: ${(state.cajaChica?.saldoActual || 84500).toLocaleString('es-AR')} ARS</span>
+                </div>
+              </div>
+
+              <table className="billing-table">
+                <thead>
                   <tr>
-                    <td><strong>Acindar Distribuidores</strong></td>
-                    <td>Mallas y Hierro de Construcción</td>
-                    <td>⭐⭐⭐⭐ <span style={{ fontSize: '0.75rem', color: 'var(--success)' }}>Bueno (48hs)</span></td>
-                    <td><span className="badge badge-success">Cuenta Corriente Activa</span></td>
+                    <th>Descripción del Gasto</th>
+                    <th>Monto</th>
+                    <th>Solicitante</th>
+                    <th>Fecha</th>
+                    <th>Comprobante</th>
                   </tr>
-                  <tr>
-                    <td><strong>Ladrillos Alberdi</strong></td>
-                    <td>Ladrillos Portantes y Cerámicos</td>
-                    <td>⭐⭐⭐⭐⭐ <span style={{ fontSize: '0.75rem', color: 'var(--success)' }}>Excelente (24hs)</span></td>
-                    <td><span className="badge badge-warning">Límite de Crédito Próximo</span></td>
-                  </tr>
-                  <tr>
-                    <td><strong>Cantera Palermo</strong></td>
-                    <td>Arena y Áridos a Granel</td>
-                    <td>⭐⭐⭐ <span style={{ fontSize: '0.75rem', color: 'var(--warning)' }}>Regular (72hs)</span></td>
-                    <td><span className="badge badge-danger">Pago Contrafactura</span></td>
-                  </tr>
+                </thead>
+                <tbody>
+                  {(state.cajaChica?.movimientos || []).map(mov => (
+                    <tr key={mov.id}>
+                      <td><strong>{mov.descripcion}</strong></td>
+                      <td><strong style={{ color: 'var(--danger)' }}>-${mov.monto.toLocaleString('es-AR')} ARS</strong></td>
+                      <td>{mov.solicitante}</td>
+                      <td>{mov.fecha}</td>
+                      <td>
+                        <span className="badge badge-success" style={{ cursor: 'pointer' }}>
+                          <i className="fa-solid fa-file-image" style={{ marginRight: '4px' }}></i> Ticket OCR Validado
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>

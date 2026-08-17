@@ -817,26 +817,47 @@ export default function Home() {
             Por qué los arquitectos y constructoras en Argentina eligen el ecosistema modular de ObraSaaS.
           </p>
           
-          <div className="features-grid">
+          <div className="features-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
             <div className="feature-box">
-              <div className="feature-icon"><i class="fa-solid fa-volume-high"></i></div>
+              <div className="feature-icon"><i className="fa-solid fa-volume-high"></i></div>
               <h4>Comandos de Voz a Tareas</h4>
               <p>
-                Los operarios envían simples mensajes de voz en WhatsApp. Nuestro motor local de voz interpreta el audio, actualiza el progreso en el Gantt y registra desvíos automáticamente.
+                Los operarios envían simples mensajes de voz en WhatsApp. Nuestro motor de IA transcribe el audio, actualiza el progreso en el Gantt y registra desvíos automáticamente.
               </p>
             </div>
             <div className="feature-box">
-              <div className="feature-icon"><i class="fa-solid fa-map-location-dot"></i></div>
+              <div className="feature-icon"><i className="fa-solid fa-map-location-dot"></i></div>
               <h4>Geocercas Satelitales</h4>
               <p>
-                Validación biométrica e identidad por número de celular único. Marcación de asistencia satelital verificada contra los límites geográficos físicos de la obra en tiempo real.
+                Validación de identidad por número de celular único. Marcación de asistencia satelital verificada contra los límites geográficos físicos de la obra en tiempo real.
               </p>
             </div>
             <div className="feature-box">
-              <div className="feature-icon"><i class="fa-solid fa-building-columns"></i></div>
-              <h4>SuperAdmin CRM Console</h4>
+              <div className="feature-icon"><i className="fa-solid fa-calendar-week"></i></div>
+              <h4>Gantt por Quincenas (Módulo 2B)</h4>
               <p>
-                Monitoreo comercial y financiero de licencias activas en Argentina. Administración simplificada de tickets de soporte técnico, facturación y leads del sitio web.
+                Planificación dividida en períodos de 15 días con bloqueo visual automático si el proveedor no confirmó la entrega del material requerido.
+              </p>
+            </div>
+            <div className="feature-box">
+              <div className="feature-icon"><i className="fa-solid fa-truck-ramp-box"></i></div>
+              <h4>Avisos y Confirmación Proveedores</h4>
+              <p>
+                Notificación automática por email y WhatsApp 7 días antes de la tarea, y solicitud de confirmación obligatoria 2 días antes de la descarga en obra.
+              </p>
+            </div>
+            <div className="feature-box">
+              <div className="feature-icon"><i className="fa-solid fa-file-signature"></i></div>
+              <h4>Certificaciones Quincenales</h4>
+              <p>
+                Actas digitales de avance físico y financiero con firma de la Directora de Obra para facturación inmediata y transparente al cliente o municipio.
+              </p>
+            </div>
+            <div className="feature-box">
+              <div className="feature-icon"><i className="fa-solid fa-building-columns"></i></div>
+              <h4>Consola SuperAdmin &amp; CRM</h4>
+              <p>
+                Monitoreo comercial y financiero de licencias activas en Argentina. Administración simplificada de tickets de soporte técnico, facturación y caja chica con OCR.
               </p>
             </div>
           </div>

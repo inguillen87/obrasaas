@@ -12,9 +12,12 @@
 
 # testing
 /coverage
+/test-results/
 
 # next.js
 /.next/
+/.next-release-*/
+/.codex-worktrees/
 /out/
 
 # production

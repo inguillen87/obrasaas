@@ -82,6 +82,14 @@ export async function POST(request) {
             senderName = "Luis Martínez";
             senderRole = "Instalaciones y Sanitarios";
             shortId = "luis";
+        } else if (cleanFrom.includes('aberturas') || cleanFrom.includes('lopez') || cleanFrom.includes('proveedor') || cleanFrom.includes('sanlorenzo')) {
+            senderName = "Aberturas López (Proveedor)";
+            senderRole = "Proveedor Externo";
+            shortId = "proveedor";
+        } else if (cleanFrom.includes('marcelo') || cleanFrom.includes('arquitecta') || cleanFrom.includes('director')) {
+            senderName = "Arq. Marcelo";
+            senderRole = "Director de Obra";
+            shortId = "director";
         }
 
         const now = new Date();
@@ -93,7 +101,7 @@ export async function POST(request) {
 
         // Generate short-lived secure tokens for webviews
         const webviewToken = generateWebviewToken(shortId);
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://obrasaas-saas.vercel.app';
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://obrasaas.vercel.app';
         const medicalLink = `${appUrl}/webview/medical?worker=${shortId}&token=${webviewToken}`;
         const attendanceLink = `${appUrl}/webview/attendance?worker=${shortId}&token=${webviewToken}`;
 
@@ -110,11 +118,10 @@ export async function POST(request) {
                     state.attendance[senderName].status = "Presente (GPS)";
                     botReply = `📍 *Ubicación Verificada* por Satélite GPS.\n\n¡Bienvenido *${senderName}* a la obra!\n• Rol: ${senderRole}\n• Ingreso: ${timeStr}\n• Geocerca: Verificada (Distancia: ${distance}m).\n\nConsulte sus horas aquí:\n👉 ${attendanceLink}`;
                     
-                    // Add success log to incidents
                     feedIncident = {
                         id: "inc-gps-" + Date.now(),
-                        title: "Fichaje Verificado",
-                        description: `${senderName} ingresó al predio de la obra. Distancia GPS: ${distance}m.`,
+                        title: "Fichaje Verificado GPS",
+                        description: `${senderName} ingresó al predio de la obra. Distancia satelital: ${distance}m.`,
                         type: "success",
                         badge: "Presente",
                         timestamp: `Hoy, ${timeStr}`,
@@ -126,7 +133,6 @@ export async function POST(request) {
                     state.alertsCount += 1;
                     botReply = `⚠️ *Alerta de Geocerca*.\n\n*${senderName}*, has registrado ingreso a *${distance}m* de la obra (excede el límite permitido de 20m). Tu asistencia fue registrada con desvío.`;
                     
-                    // Add critical alert to incidents
                     feedIncident = {
                         id: "inc-gps-alert-" + Date.now(),
                         title: "Alerta de Geocerca (Desvío GPS)",
@@ -139,21 +145,17 @@ export async function POST(request) {
                     };
                 }
             } else {
-                botReply = `📍 Ubicación recibida de ${senderName} (Distancia: ${distance}m), pero no está registrado en la cuadrilla activa.`;
+                botReply = `📍 Ubicación recibida de ${senderName} (Distancia: ${distance}m), registrada en la bitácora de obra.`;
             }
             showInFeed = true;
         }
         // 3. Process Voice Notes (Audio Reports) or LLM Intent Processing
         else {
-            // Advanced Intent Parsing Engine (Check if real OpenAI key is present)
             let whisperTranscript = bodyText;
             let nlpResult = null;
 
             if (process.env.OPENAI_API_KEY && mediaUrl && mediaType.startsWith('audio/')) {
                 try {
-                    // 1. In production, download the audio and translate via Whisper
-                    // For the sake of structured SaaS we simulate calling the endpoint or do a real API call if keys are present
-                    // We run basic structured JSON parsing from GPT-4o-mini
                     const gptRes = await fetch("https://api.openai.com/v1/chat/completions", {
                         method: "POST",
                         headers: {
@@ -172,7 +174,7 @@ export async function POST(request) {
                                         properties: {
                                             intent: { 
                                                 type: "string", 
-                                                enum: ["fichaje", "avance_tarea", "incidencia_critica", "demora_logistica", "otros"] 
+                                                enum: ["fichaje", "avance_tarea", "incidencia_critica", "demora_logistica", "confirmacion_proveedor", "consulta_quincena", "otros"] 
                                             },
                                             task_id: { type: ["integer", "null"] },
                                             progress_update: { type: ["integer", "null"] },
@@ -189,7 +191,7 @@ export async function POST(request) {
                             messages: [
                                 {
                                     role: "system",
-                                    content: "Analiza el audio transcrito de la cuadrilla de obra en Argentina y clasifica su intención y parámetros correspondientes."
+                                    content: "Analiza el audio transcrito de la cuadrilla, director o proveedores de obra en Argentina y clasifica su intención."
                                 },
                                 { role: "user", content: bodyText }
                             ]
@@ -198,136 +200,193 @@ export async function POST(request) {
                     const gptData = await gptRes.json();
                     nlpResult = JSON.parse(gptData.choices[0].message.content);
                 } catch(e) {
-                    console.error("OpenAI real parsing failed, fallback to local NLP engine:", e);
+                    console.error("OpenAI intent parsing failed, using local NLP engine:", e);
                 }
             }
 
-            // Fallback to local Regex NLP engine
+            // Local keyword NLP processor fallback (works with zero keys)
             const lowerBody = bodyText.toLowerCase();
             
-            if (nlpResult) {
-                // Real OpenAI parser integration
-                if (nlpResult.intent === 'fichaje') {
-                    state.attendance[senderName] = { role: senderRole, checkin: timeStr, status: "Presente" };
-                    botReply = `🎙️ *Fichaje por Voz Procesado*\n\nSe ha registrado tu ingreso a las ${timeStr} mediante biometría de voz.`;
-                } else if (nlpResult.intent === 'avance_tarea' && nlpResult.task_id) {
-                    const tid = nlpResult.task_id;
-                    const prog = nlpResult.progress_update || 100;
-                    if (state.tasks[tid]) {
-                        state.tasks[tid].progress = prog;
-                        botReply = `🎙️ *Reporte de Avance Procesado*\n\nSe actualizó la tarea *"${state.tasks[tid].name}"* al *${prog}%* en el cronograma Gantt.`;
-                    }
-                } else if (nlpResult.intent === 'incidencia_critica') {
-                    state.alertsCount += 1;
-                    feedIncident = {
-                        id: "inc-ai-" + Date.now(),
-                        title: nlpResult.incidencia_titulo || "Incidencia de Obra",
-                        description: nlpResult.incidencia_descripcion || bodyText,
-                        type: nlpResult.incidencia_severidad || "critical",
-                        badge: "Reportado IA",
-                        timestamp: `Hoy, ${timeStr}`,
-                        reporter: senderName,
-                        icon: nlpResult.incidencia_icono || "fa-solid fa-triangle-exclamation"
-                    };
-                    botReply = `🎙️ *Alerta de Novedad IA*\n\nAlerta crítica registrada: *${nlpResult.incidencia_titulo}*. Se ha informado al director de obra.`;
-                    showInFeed = true;
-                }
-            } else {
-                // Local keyword processor fallback (runs without OpenAI keys)
-                if (lowerBody.includes('fichar') || lowerBody.includes('entra') || lowerBody.includes('ingres') || lowerBody.includes('arranc')) {
+            // Fichaje / Asistencia
+            if ((nlpResult && nlpResult.intent === 'fichaje') || lowerBody.includes('fichar') || lowerBody.includes('entra') || lowerBody.includes('ingres') || lowerBody.includes('arranc')) {
+                if (state.attendance[senderName]) {
                     state.attendance[senderName] = { role: senderRole, checkin: timeStr, status: "Presente (Voz)" };
-                    
-                    let presentCount = 0;
-                    Object.values(state.attendance).forEach(val => {
-                        if (val.status.includes("Presente") || val.status.includes("Voz")) presentCount++;
-                    });
-                    state.operariosCount = presentCount;
+                }
+                
+                let presentCount = 0;
+                Object.values(state.attendance || {}).forEach(val => {
+                    if (val.status && (val.status.includes("Presente") || val.status.includes("Voz"))) presentCount++;
+                });
+                state.operariosCount = Math.max(1, presentCount);
 
-                    botReply = `🎙️ *Fichaje por Voz Procesado*\n\n¡Bienvenido *${senderName}*!\n• Rol: ${senderRole}\n• Ingreso registrado a las ${timeStr} mediante biometría de voz.\n\nFichaje seguro GPS:\n👉 ${attendanceLink}`;
+                botReply = `🎙️ *Fichaje por Voz Procesado*\n\n¡Bienvenido *${senderName}*!\n• Rol: ${senderRole}\n• Ingreso registrado a las ${timeStr} mediante biometría de voz.\n\nFichaje seguro GPS:\n👉 ${attendanceLink}`;
+                
+                feedIncident = {
+                    id: "inc-gps-" + Date.now(),
+                    title: "Presentismo Registrado",
+                    description: `${senderName} inició jornada. Biometría de voz validada con éxito.`,
+                    type: "success",
+                    badge: "Presente",
+                    timestamp: `Hoy, ${timeStr}`,
+                    reporter: "Asistente de Voz IA",
+                    icon: "fa-solid fa-microphone"
+                };
+                showInFeed = true;
+            }
+            // Confirmación de Proveedor (Módulo 2B / 4B)
+            else if (lowerBody.includes('confirm') || lowerBody.includes('entrega') || lowerBody.includes('despacho') || (nlpResult && nlpResult.intent === 'confirmacion_proveedor')) {
+                if (state.suppliers && state.suppliers[3]) {
+                    state.suppliers[3].confirmationStatus = "Confirmado";
+                    state.suppliers[3].status = "Confirmado";
+                }
+                if (state.tasks && state.tasks[3]) {
+                    state.tasks[3].supplierStatus = "Confirmado";
+                    state.tasks[3].materialStatus = "En Camino";
+                    state.tasks[3].isBlocked = false;
+                }
+                if (state.stockpiles && state.stockpiles.ceramicas) {
+                    state.stockpiles.ceramicas.status = "En Camino";
+                    state.stockpiles.ceramicas.onTimeStatus = "Confirmado para 21/08";
+                }
+                botReply = `🤝 *Confirmación de Proveedor Registrada*\n\nSe ha recibido y confirmado el compromiso de entrega de *Aberturas López / Cerámicas* para la Quincena actual.\n• Tarea desbloqueada en Gantt: *Revestimiento Cerámico*.\n• Estado de proveedor: *Confirmado ✅*.`;
+                
+                feedIncident = {
+                    id: "inc-prov-" + Date.now(),
+                    title: "Proveedor Confirmó Asistencia",
+                    description: `Aberturas López confirmó entrega de materiales para la fecha programada. Tarea liberada en Gantt.`,
+                    type: "success",
+                    badge: "Proveedor OK",
+                    timestamp: `Hoy, ${timeStr}`,
+                    reporter: "Canal Proveedores",
+                    icon: "fa-solid fa-truck-ramp-box"
+                };
+                showInFeed = true;
+            }
+            // Consulta de Quincena (Módulo 2B)
+            else if (lowerBody.includes('quincena') || lowerBody.includes('toca') || (lowerBody.includes('que') && lowerBody.includes('hago')) || (nlpResult && nlpResult.intent === 'consulta_quincena')) {
+                botReply = `📅 *Planificación de la Quincena Actual*\n\nHola ${senderName}, este es tu plan para la *Quincena 1*:\n• *Revoque Grueso*: 80% completado (Juan Gómez)\n• *Cañería y Descargas*: 20% (Luis Martínez)\n\n*Próxima Quincena (Q2)*:\n• *Revestimiento Cerámico*: Inicio 16/Ago (Carlos Pérez)\n• *Pintura y Terminación*: Inicio 21/Ago\n\nTodos los planos y remitos se sincronizan en tiempo real.`;
+            }
+            // Avance de Tarea (Gantt)
+            else if (lowerBody.includes('revoque') || lowerBody.includes('termin') || lowerBody.includes('living') || (nlpResult && nlpResult.intent === 'avance_tarea')) {
+                if (state.tasks && state.tasks[1]) {
+                    state.tasks[1].progress = 100;
+                    state.avancePercentage = 55;
+                    botReply = `🎙️ *Reporte de Avance Procesado*\n\nIA analizó el audio: *"Revoque grueso terminado al 100%"*.\n• Progreso de la tarea: 100% en Gantt.\n• Avance global de la obra: 55%.\n• Hito listo para certificación quincenal.`;
                     
                     feedIncident = {
-                        id: "inc-gps-" + Date.now(),
-                        title: "Presentismo Registrado",
-                        description: `${senderName} inició jornada. Biometría de voz validada con éxito.`,
+                        id: "inc-gantt-" + Date.now(),
+                        title: "Tarea Finalizada en Gantt",
+                        description: `El operario ${senderName} completó la tarea: Revoque Grueso.`,
                         type: "success",
-                        badge: "Presente",
+                        badge: "Gantt",
                         timestamp: `Hoy, ${timeStr}`,
-                        reporter: "Asistente de Voz IA",
-                        icon: "fa-solid fa-microphone"
+                        reporter: "Supervisor IA",
+                        icon: "fa-solid fa-chart-gantt"
                     };
-                    showInFeed = true;
-                } 
-                else if (lowerBody.includes('revoque') || lowerBody.includes('termin') || lowerBody.includes('living')) {
-                    if (state.tasks && state.tasks[1]) {
-                        state.tasks[1].progress = 100;
-                        botReply = `🎙️ *Reporte de Avance Procesado*\n\nIA analizó el audio: *"Revoque grueso terminado"*. El progreso de la tarea ha sido actualizado al 100% en el Gantt.`;
-                        
-                        feedIncident = {
-                            id: "inc-gantt-" + Date.now(),
-                            title: "Tarea Finalizada en Gantt",
-                            description: `El operario ${senderName} completó la tarea: Revoque Grueso.`,
-                            type: "success",
-                            badge: "Gantt",
+
+                    if (state.operationalProposals) {
+                        state.operationalProposals.unshift({
+                            id: "prop-" + Date.now(),
+                            intent: "avance_tarea",
+                            summary: `${senderName} reportó finalización de Revoque Grueso al 100%`,
+                            proposedBy: senderName,
+                            role: senderRole,
+                            status: "APROBADO",
                             timestamp: `Hoy, ${timeStr}`,
-                            reporter: "Supervisor IA",
-                            icon: "fa-solid fa-chart-gantt"
-                        };
-                        showInFeed = true;
+                            taskImpact: "Tarea 1 -> 100%"
+                        });
                     }
-                }
-                else if (lowerBody.includes('fuga') || lowerBody.includes('caño') || lowerBody.includes('agua') || lowerBody.includes('roto')) {
-                    state.alertsCount += 1;
-                    feedIncident = {
-                        id: "inc-fuga-" + Date.now(),
-                        title: "Fuga de Agua - Baño Principal",
-                        description: "Fisura en descarga del baño principal. Reclama codo PVC de 110.",
-                        type: "critical",
-                        badge: "Urgente",
-                        timestamp: `Hoy, ${timeStr}`,
-                        reporter: "Luis Martínez",
-                        icon: "fa-solid fa-droplet"
-                    };
-                    // Agrega la tarea de reparación al Gantt
-                    state.tasks[99] = { name: "Reparación Urgente Cañería", progress: 0, duration: 2, startOffset: 42.8, assignee: "Luis Martínez", isDelayed: true };
-                    botReply = `🎙️ *Alerta de Novedad IA*\n\nAlerta crítica registrada: *Fuga de Agua en Baño Principal*. Se ha añadido una tarea de reparación correctiva urgente en el Gantt.`;
                     showInFeed = true;
-                }
-                else if (lowerBody.includes('demora') || lowerBody.includes('retraso') || lowerBody.includes('cerámic') || lowerBody.includes('suministro')) {
-                    state.alertsCount += 1;
-                    state.diasEstimados = "Día 12/37 (+2 días)";
-                    feedIncident = {
-                        id: "inc-demora-" + Date.now(),
-                        title: "Demora de Suministros",
-                        description: "Cerámicas demoradas. Revestimiento de paredes desplazado al 29/Jun.",
-                        type: "warning",
-                        badge: "Demora 48hs",
-                        timestamp: `Hoy, ${timeStr}`,
-                        reporter: "Carlos Pérez",
-                        icon: "fa-solid fa-truck-ramp-box"
-                    };
-                    if (state.tasks[3]) {
-                        state.tasks[3].startOffset = 71.4;
-                        state.tasks[3].isShifted = true;
-                    }
-                    if (state.tasks[4]) {
-                        state.tasks[4].startOffset = 100.0;
-                        state.tasks[4].isShifted = true;
-                    }
-                    botReply = `🎙️ *Reporte de Logística IA*\n\nAdvertencia registrada: *Demora de suministros de revestimientos cerámicos*. Hitos de finalización reprogramados +48hs.`;
-                    showInFeed = true;
-                }
-                else if (lowerBody.includes('certificado') || lowerBody.includes('médico') || lowerBody.includes('enfermo') || lowerBody.includes('licencia')) {
-                    botReply = `🩺 *Carga de Certificados Médicos ObraSaaS*\n\nPara justificar tu inasistencia y subir la foto del certificado médico correspondiente, ingresa a este enlace seguro:\n👉 ${medicalLink}`;
-                }
-                else if (lowerBody.includes('ayuda') || lowerBody.includes('hola') || lowerBody.includes('buen')) {
-                    botReply = `👷 *Copiloto de ObraSaaS* 👷\n\nHola ${senderName}, soy tu asistente virtual de obra. Puedes:\n1. Enviar tu *ubicación* para fichaje satelital.\n2. Mandar un *audio* con tu avance diario.\n3. Solicitar carga de certificado médico escribiendo *'licencia'*.`;
-                }
-                else {
-                    botReply = `✅ *Mensaje Recibido, ${senderName}*.\n\nHe guardado tu reporte en la bitácora diaria de ObraSaaS. Puedes consultar tu estado de horas ingresando aquí:\n👉 ${attendanceLink}`;
                 }
             }
+            // Incidencia Crítica / Vicio Oculto
+            else if (lowerBody.includes('fuga') || lowerBody.includes('caño') || lowerBody.includes('agua') || lowerBody.includes('roto') || (nlpResult && nlpResult.intent === 'incidencia_critica')) {
+                state.alertsCount += 1;
+                feedIncident = {
+                    id: "inc-fuga-" + Date.now(),
+                    title: "Fuga de Agua - Baño Principal",
+                    description: "Fisura en descarga del baño principal. Reclama codo PVC de 110 urgente.",
+                    type: "critical",
+                    badge: "Urgente",
+                    timestamp: `Hoy, ${timeStr}`,
+                    reporter: senderName,
+                    icon: "fa-solid fa-droplet"
+                };
+                // Agrega la tarea de reparación al Gantt
+                state.tasks[99] = { 
+                    name: "Reparación Urgente Cañería", 
+                    progress: 0, 
+                    duration: 2, 
+                    startOffset: 42.8, 
+                    assignee: senderName, 
+                    quincena: "Q1",
+                    startDate: "2026-08-12",
+                    endDate: "2026-08-14",
+                    isDelayed: true,
+                    isBlocked: false,
+                    materialStatus: "Disponible"
+                };
+                botReply = `🚨 *Alerta Crítica de Obra*\n\nAlerta registrada: *Fuga de Agua en Baño Principal*.\n• Se añadió tarea de reparación correctiva urgente en el Gantt.\n• Notificado Director de Obra y Compras.`;
+                showInFeed = true;
+            }
+            // Demora Logística / Replanificación Quincenal (Módulo 4B)
+            else if (lowerBody.includes('demora') || lowerBody.includes('retraso') || lowerBody.includes('cerámic') || lowerBody.includes('suministro') || (nlpResult && nlpResult.intent === 'demora_logistica')) {
+                state.alertsCount += 1;
+                state.diasEstimados = "Día 12/37 (+2 días)";
+                feedIncident = {
+                    id: "inc-demora-" + Date.now(),
+                    title: "Demora de Suministros (Cerámicas)",
+                    description: "Cerámicas demoradas. Revestimiento de paredes bloqueado y desplazado al 25/Ago.",
+                    type: "warning",
+                    badge: "Demora 48hs",
+                    timestamp: `Hoy, ${timeStr}`,
+                    reporter: senderName,
+                    icon: "fa-solid fa-truck-ramp-box"
+                };
+                if (state.tasks[3]) {
+                    state.tasks[3].startOffset = 71.4;
+                    state.tasks[3].isShifted = true;
+                    state.tasks[3].isBlocked = true;
+                    state.tasks[3].materialStatus = "Bloqueada por Proveedor";
+                    state.tasks[3].supplierStatus = "Demorado 48hs";
+                }
+                if (state.tasks[4]) {
+                    state.tasks[4].startOffset = 100.0;
+                    state.tasks[4].isShifted = true;
+                }
+                if (state.stockpiles && state.stockpiles.ceramicas) {
+                    state.stockpiles.ceramicas.status = "Demorado";
+                    state.stockpiles.ceramicas.onTimeStatus = "Retraso 48hs";
+                }
 
-            // Append to database logs
+                if (state.operationalProposals) {
+                    state.operationalProposals.unshift({
+                        id: "prop-demora-" + Date.now(),
+                        intent: "replanificacion_material",
+                        summary: "Demora de flete de cerámicas. Mover Revestimiento a Quincena 2 (25/Ago)",
+                        proposedBy: senderName,
+                        role: senderRole,
+                        status: "PENDIENTE_APROBACION",
+                        timestamp: `Hoy, ${timeStr}`,
+                        taskImpact: "Tarea 3 -> Desplazada +48hs"
+                    });
+                }
+
+                botReply = `⚠️ *Reporte de Logística Procesado*\n\nAlerta: *Demora de suministros de revestimientos cerámicos*.\n• Tarea 3 bloqueada: 'Pendiente de Materiales'.\n• Propuesta de replanificación quincenal enviada al Director de Obra.`;
+                showInFeed = true;
+            }
+            // Licencias Médicas
+            else if (lowerBody.includes('certificado') || lowerBody.includes('médico') || lowerBody.includes('enfermo') || lowerBody.includes('licencia')) {
+                botReply = `🩺 *Carga de Certificados Médicos ObraSaaS*\n\nPara justificar tu inasistencia y subir la foto del certificado médico correspondiente, ingresa a este enlace seguro:\n👉 ${medicalLink}`;
+            }
+            // Ayuda / Menú
+            else if (lowerBody.includes('ayuda') || lowerBody.includes('hola') || lowerBody.includes('buen')) {
+                botReply = `👷 *Copiloto Inteligente de ObraSaaS* 👷\n\nHola ${senderName} (${senderRole}), puedes:\n1. Enviar tu *ubicación* para fichaje GPS.\n2. Mandar un *audio* con tu avance diario o incidencias.\n3. Escribir *'quincena'* para ver tus tareas asignadas.\n4. Escribir *'confirmar'* si eres proveedor.\n5. Subir certificado médico escribiendo *'licencia'*.`;
+            }
+            else {
+                botReply = `✅ *Mensaje Recibido, ${senderName}*.\n\nHe guardado tu reporte en la bitácora diaria de ObraSaaS. Puedes consultar tu estado de horas ingresando aquí:\n👉 ${attendanceLink}`;
+            }
+
             if (feedIncident) {
                 state.incidents.unshift(feedIncident);
             }
