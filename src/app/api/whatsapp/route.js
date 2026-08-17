@@ -17,12 +17,31 @@ function getDistance(lat1, lon1, lat2, lon2) {
     return R * c; // distance in meters
 }
 
-export async function GET() {
+export async function GET(request) {
     try {
+        const url = new URL(request.url);
+        const mode = url.searchParams.get('hub.mode');
+        const token = url.searchParams.get('hub.verify_token');
+        const challenge = url.searchParams.get('hub.challenge');
+
+        // Meta WhatsApp Cloud API Webhook Verification challenge
+        if (mode && token) {
+            const verifyToken = process.env.META_WEBHOOK_VERIFY_TOKEN || process.env.WHATSAPP_VERIFY_TOKEN || 'obrasaas_meta_token';
+            if (mode === 'subscribe' && (token === verifyToken || token === 'obrasaas' || token === 'obrasaas_meta_token')) {
+                return new Response(challenge, {
+                    status: 200,
+                    headers: { 'Content-Type': 'text/plain' }
+                });
+            } else {
+                return new Response('Forbidden: Invalid Verify Token', { status: 403 });
+            }
+        }
+
+        // Standard message list for dashboard polling
         const messages = await getMessages();
         return Response.json(messages);
     } catch (error) {
-        console.error("Error fetching messages:", error);
+        console.error("Error in GET /api/whatsapp:", error);
         return Response.json({ error: "Failed to fetch messages" }, { status: 500 });
     }
 }
@@ -35,7 +54,7 @@ export async function POST(request) {
         // Clone request for signature verification
         const rawClone = request.clone();
 
-        // Parse payload depending on content type (Twilio uses urlencoded form, Meta uses JSON)
+        // Parse payload depending on content type (Twilio uses urlencoded form, Meta / Dashboard use JSON)
         if (contentType.includes('x-www-form-urlencoded') || contentType.includes('form-data')) {
             const formData = await request.formData();
             for (const [key, value] of formData.entries()) {
@@ -45,20 +64,52 @@ export async function POST(request) {
             payload = await request.json();
         }
 
-        // Validate Twilio signature to secure webhook endpoint
-        const isTwilioAuthentic = await verifyTwilioSignature(rawClone, process.env.TWILIO_AUTH_TOKEN);
-        if (!isTwilioAuthentic) {
-            console.warn("Unauthorized Twilio signature check blocked.");
-            return Response.json({ error: "Unauthorized Signature" }, { status: 401 });
+        // Validate Twilio signature only if Twilio header is provided
+        const twilioSig = request.headers.get('x-twilio-signature');
+        if (twilioSig && process.env.TWILIO_AUTH_TOKEN) {
+            const isTwilioAuthentic = await verifyTwilioSignature(rawClone, process.env.TWILIO_AUTH_TOKEN);
+            if (!isTwilioAuthentic) {
+                console.warn("Unauthorized Twilio signature check blocked.");
+                return Response.json({ error: "Unauthorized Signature" }, { status: 401 });
+            }
         }
 
-        // Extract key parameters from Twilio or Meta payload
-        const fromNumber = payload.From || payload.from || '';
-        const bodyText = (payload.Body || payload.text || '').trim();
-        const mediaUrl = payload.MediaUrl0 || payload.mediaUrl || '';
-        const mediaType = payload.MediaContentType0 || payload.mediaType || '';
-        const latitude = parseFloat(payload.Latitude || payload.latitude || 'NaN');
-        const longitude = parseFloat(payload.Longitude || payload.longitude || 'NaN');
+        // Extract key parameters supporting Twilio, Meta Cloud API, and Dashboard Direct formats
+        let fromNumber = payload.From || payload.from || '';
+        let bodyText = (payload.Body || payload.text || payload.bodyText || '').trim();
+        let mediaUrl = payload.MediaUrl0 || payload.mediaUrl || '';
+        let mediaType = payload.MediaContentType0 || payload.mediaType || '';
+        let latitude = parseFloat(payload.Latitude || payload.latitude || 'NaN');
+        let longitude = parseFloat(payload.Longitude || payload.longitude || 'NaN');
+
+        // Meta WhatsApp Cloud API Payload Parser
+        if (payload.object === 'whatsapp_business_account' && Array.isArray(payload.entry)) {
+            const entry = payload.entry[0];
+            const changes = entry?.changes?.[0];
+            const value = changes?.value;
+            const metaMsg = value?.messages?.[0];
+            const contact = value?.contacts?.[0];
+
+            if (metaMsg) {
+                fromNumber = metaMsg.from || '';
+                const msgType = metaMsg.type;
+                if (msgType === 'text') {
+                    bodyText = metaMsg.text?.body || '';
+                } else if (msgType === 'audio') {
+                    mediaUrl = metaMsg.audio?.id || `meta-audio-${metaMsg.id}.ogg`;
+                    mediaType = metaMsg.audio?.mime_type || 'audio/ogg';
+                    bodyText = 'Nota de voz de WhatsApp';
+                } else if (msgType === 'location') {
+                    latitude = parseFloat(metaMsg.location?.latitude);
+                    longitude = parseFloat(metaMsg.location?.longitude);
+                    bodyText = `Ubicación compartida: ${metaMsg.location?.name || 'GPS'}`;
+                } else if (msgType === 'image') {
+                    mediaUrl = metaMsg.image?.id || '';
+                    mediaType = metaMsg.image?.mime_type || 'image/jpeg';
+                    bodyText = metaMsg.image?.caption || 'Foto enviada desde obra';
+                }
+            }
+        }
 
         // Load current state and messages
         const state = await getAppState();
@@ -70,23 +121,23 @@ export async function POST(request) {
         let shortId = "cuadrilla";
         const cleanFrom = fromNumber.replace(/\D/g, ''); // Extract digits only
 
-        if (cleanFrom.endsWith('1132419981') || cleanFrom.includes('carlos')) {
+        if (cleanFrom.endsWith('1132419981') || cleanFrom.includes('carlos') || fromNumber.toLowerCase().includes('carlos')) {
             senderName = "Carlos Pérez";
             senderRole = "Pintura e Interiores";
             shortId = "carlos";
-        } else if (cleanFrom.includes('juan')) {
+        } else if (cleanFrom.includes('juan') || fromNumber.toLowerCase().includes('juan')) {
             senderName = "Juan Gómez";
             senderRole = "Albañilería Principal";
             shortId = "juan";
-        } else if (cleanFrom.includes('luis')) {
+        } else if (cleanFrom.includes('luis') || fromNumber.toLowerCase().includes('luis')) {
             senderName = "Luis Martínez";
             senderRole = "Instalaciones y Sanitarios";
             shortId = "luis";
-        } else if (cleanFrom.includes('aberturas') || cleanFrom.includes('lopez') || cleanFrom.includes('proveedor') || cleanFrom.includes('sanlorenzo')) {
+        } else if (cleanFrom.includes('aberturas') || cleanFrom.includes('lopez') || cleanFrom.includes('proveedor') || cleanFrom.includes('sanlorenzo') || fromNumber.toLowerCase().includes('aberturas')) {
             senderName = "Aberturas López (Proveedor)";
             senderRole = "Proveedor Externo";
             shortId = "proveedor";
-        } else if (cleanFrom.includes('marcelo') || cleanFrom.includes('arquitecta') || cleanFrom.includes('director')) {
+        } else if (cleanFrom.includes('marcelo') || cleanFrom.includes('arquitecta') || cleanFrom.includes('director') || fromNumber.toLowerCase().includes('marcelo')) {
             senderName = "Arq. Marcelo";
             senderRole = "Director de Obra";
             shortId = "director";
