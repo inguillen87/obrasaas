@@ -224,7 +224,7 @@ export default function Dashboard() {
       .catch(err => console.warn("Failed to load weather telemetry:", err));
   }, [state.activeProjectId, state.projectConfig?.city]);
 
-  // Fetch initial state & setup Real-Time SSE Stream (Zero DB Polling)
+  // Fetch initial state & setup Real-Time SSE Stream + Polling Fallback
   useEffect(() => {
     // Check login state
     const logged = localStorage.getItem('obrasaas_logged_in') === 'true';
@@ -248,83 +248,83 @@ export default function Dashboard() {
     if (tabParam) {
       setActiveTab(tabParam);
     }
-
-    // Real-Time Server-Sent Events Stream (SSE / WebSockets mode)
+    // Real-Time Server-Sent Events Stream (SSE) + Polling Fallback for Serverless
     let eventSource = null;
     let reconnectTimer = null;
+    let pollTimer = null;
+    let sseActive = false;
+
+    // Polling fallback: fetch state every 5s when SSE is disconnected
+    const startPollingFallback = () => {
+      if (pollTimer) return;
+      pollTimer = setInterval(async () => {
+        if (sseActive) {
+          clearInterval(pollTimer);
+          pollTimer = null;
+          return;
+        }
+        try {
+          const res = await fetch('/api/state');
+          if (res.ok) {
+            const data = await res.json();
+            if (data) setState(data);
+          }
+        } catch (err) { /* silent */ }
+      }, 5000);
+    };
 
     const connectRealtime = () => {
       try {
-        if (eventSource) {
-          eventSource.close();
-        }
+        if (eventSource) eventSource.close();
 
         eventSource = new EventSource('/api/realtime?tenant=default');
 
-        // Handshake and snapshot load
         eventSource.addEventListener('init', (e) => {
           try {
             const payload = JSON.parse(e.data);
-            if (payload?.data?.state) {
-              setState(payload.data.state);
-            }
-            if (payload?.data?.messages) {
-              setChatMessages(payload.data.messages);
-            }
+            if (payload?.data?.state) setState(payload.data.state);
+            if (payload?.data?.messages) setChatMessages(payload.data.messages);
             setRealtimeConnected(true);
-          } catch (err) {
-            console.warn("SSE init parse error:", err);
-          }
+            sseActive = true;
+            if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+          } catch (err) { console.warn("SSE init parse error:", err); }
         });
 
-        // Instant push on mutations (WhatsApp webhook, Gantt update, etc.)
         eventSource.addEventListener('update', (e) => {
           try {
             const payload = JSON.parse(e.data);
             if (payload?.type === 'STATE_UPDATE' || payload?.type === 'STATE_RESET') {
-              if (payload.data) {
-                setState(payload.data);
-              }
+              if (payload.data) setState(payload.data);
             } else if (payload?.type === 'MESSAGE_RECEIVED') {
-              if (payload.data) {
-                setChatMessages(payload.data);
-              }
+              if (payload.data) setChatMessages(payload.data);
             }
             setRealtimeConnected(true);
-          } catch (err) {
-            console.warn("SSE update parse error:", err);
-          }
+          } catch (err) { console.warn("SSE update parse error:", err); }
         });
 
-        eventSource.onopen = () => {
-          setRealtimeConnected(true);
-        };
+        eventSource.onopen = () => { setRealtimeConnected(true); sseActive = true; };
 
         eventSource.onerror = () => {
           setRealtimeConnected(false);
-          if (eventSource) {
-            eventSource.close();
-            eventSource = null;
-          }
-          // Reconnect with 4s backoff
+          sseActive = false;
+          if (eventSource) { eventSource.close(); eventSource = null; }
+          startPollingFallback();
           clearTimeout(reconnectTimer);
-          reconnectTimer = setTimeout(connectRealtime, 4000);
+          reconnectTimer = setTimeout(connectRealtime, 5000);
         };
       } catch (err) {
         console.warn("Realtime connection error:", err);
         setRealtimeConnected(false);
+        startPollingFallback();
       }
     };
 
     connectRealtime();
 
     return () => {
-      if (eventSource) {
-        eventSource.close();
-      }
-      if (reconnectTimer) {
-        clearTimeout(reconnectTimer);
-      }
+      if (eventSource) eventSource.close();
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (pollTimer) clearInterval(pollTimer);
     };
   }, []);
 
