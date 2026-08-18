@@ -139,12 +139,12 @@ export async function POST(request) {
         let workerRecord = null;
 
         // Strict Phone Verification
-        if (cleanFrom.endsWith('2613168608') || cleanFrom.includes('2613168608') || cleanFrom === '54261153168608' || fromNumber.toLowerCase().includes('marcelo') || fromNumber.toLowerCase().includes('director')) {
+        if (cleanFrom.includes('3168608') || cleanFrom.includes('2613168608') || cleanFrom.endsWith('2613168608') || cleanFrom === '54261153168608' || fromNumber.toLowerCase().includes('marcelo') || fromNumber.toLowerCase().includes('director')) {
             senderName = "Arq. Marcelo";
             senderRole = "Director de Obra";
             shortId = "director";
             isDirector = true;
-        } else if (cleanFrom.endsWith('2964520753') || cleanFrom.endsWith('520753') || cleanFrom === '54296415520753' || fromNumber.toLowerCase().includes('victoria') || fromNumber.toLowerCase().includes('vicky')) {
+        } else if (cleanFrom.includes('520753') || cleanFrom.includes('2964520753') || cleanFrom.endsWith('520753') || cleanFrom === '54296415520753' || fromNumber.toLowerCase().includes('victoria') || fromNumber.toLowerCase().includes('vicky')) {
             senderName = "Arq. Victoria";
             senderRole = "Socia & Directora Técnica";
             shortId = "victoria";
@@ -462,8 +462,23 @@ export async function POST(request) {
         }
         // 11. Process Text Directives & NLP Intent Engine
         else {
-            const lowerBody = (bodyText || '').toLowerCase();
-            const normalBody = lowerBody.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            const lowerBody = (bodyText || '').toLowerCase().trim();
+            let normalBody = lowerBody
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/1️⃣|1\ufe0f?\u20e3/g, '1')
+                .replace(/2️⃣|2\ufe0f?\u20e3/g, '2')
+                .replace(/3️⃣|3\ufe0f?\u20e3/g, '3')
+                .replace(/4️⃣|4\ufe0f?\u20e3/g, '4')
+                .replace(/5️⃣|5\ufe0f?\u20e3/g, '5')
+                .replace(/6️⃣|6\ufe0f?\u20e3/g, '6')
+                .replace(/7️⃣|7\ufe0f?\u20e3/g, '7')
+                .replace(/8️⃣|8\ufe0f?\u20e3/g, '8')
+                .replace(/^opcion\s*/i, '')
+                .replace(/^numero\s*/i, '')
+                .replace(/^nro\s*/i, '')
+                .replace(/[\.\,\:\-]$/, '')
+                .trim();
 
             // 👑 Arq. Marcelo (Director de Obra) Executive Handling
             if (isDirector) {
