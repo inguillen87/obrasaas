@@ -274,17 +274,18 @@ export default function Home() {
               display: 'inline-flex',
               alignItems: 'center',
               gap: '8px',
-              padding: '6px 14px',
+              padding: '6px 16px',
               borderRadius: '9999px',
-              background: 'rgba(245, 158, 11, 0.1)',
-              border: '1px solid rgba(245, 158, 11, 0.3)',
-              boxShadow: '0 0 20px rgba(245, 158, 11, 0.15)',
-              fontSize: '0.78rem',
+              background: 'rgba(255, 255, 255, 0.04)',
+              border: '1px solid rgba(255, 255, 255, 0.12)',
+              backdropFilter: 'blur(12px)',
+              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
+              fontSize: '0.8rem',
               fontWeight: 600,
-              color: '#fbbf24'
+              color: '#e2e8f0'
             }}>
               <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 8px #22c55e' }} />
-              <span>NUEVO: WhatsApp Meta Cloud API v2.4 + Copiloto IA con Reconocimiento de Voz</span>
+              <span>Plataforma Enterprise de Control de Obra & Certificaciones Digitales</span>
             </div>
           </motion.div>
         </div>
