@@ -156,9 +156,14 @@ export const defaultAppState = {
         geofenceRadiusMeters: 100,
         expectedWorkersCount: 5,
         climateZone: "Templado Húmedo (Pampeano)",
+        totalBudget: 4995000,
         director: { name: "Arq. Marcelo", phone: "+54 9 261 316-8608" },
-        capataz: { name: "Luis Martínez", phone: "+54 9 11 8899-7766" }
+        capataz: { name: "Luis Martínez", phone: "+54 9 11 8899-7766" },
+        directorPhone: "5492613168608",
+        techDirectorPhone: "5492964520753"
     },
+    // Pending self-registration flows (keyed by phone number)
+    pendingRegistrations: {},
     // Worker Registry & Trade Directory
     workerRegistry: [
         { id: "w-1", name: "Juan Gómez", role: "Albañilería Principal", trade: "Albañil Principal", phone: "+54 9 11 3241-9981", dni: "34.589.120", status: "Activo", assignedTasks: ["Revoque Grueso"] },
@@ -601,9 +606,20 @@ export async function getAppState() {
 
 export async function saveAppState(state) {
     const db = await readDb();
+    const previousState = db.appState || null;
     db.appState = state;
     await writeDb(db);
     emitRealtimeUpdate('STATE_UPDATE', state);
+    
+    // Proactive WhatsApp alerts (non-blocking)
+    if (previousState) {
+        import('./whatsappNotifications.js').then(({ checkAndSendAlerts }) => {
+            checkAndSendAlerts(state, previousState).catch(err => 
+                console.warn('Alert check failed (non-fatal):', err.message)
+            );
+        }).catch(() => {});
+    }
+    
     return state;
 }
 

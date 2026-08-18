@@ -237,8 +237,73 @@ export async function POST(request) {
             const isDniIntent = lowerCaption.includes('dni') || lowerCaption.includes('identidad') || lowerCaption.includes('kyc') || lowerCaption.includes('legajo');
             const isReceiptIntent = lowerCaption.includes('remito') || lowerCaption.includes('factura') || lowerCaption.includes('ticket') || lowerCaption.includes('gasto') || lowerCaption.includes('ferreteria') || lowerCaption.includes('compre') || lowerCaption.includes('compra');
 
-            if (isDniIntent && base64) {
+            // Check if this is a pending self-registration awaiting DNI photo
+            const pendingRegPhoto = (state.pendingRegistrations || {})[cleanFrom];
+            const isRegDniPhoto = pendingRegPhoto?.step === 'awaiting_dni_photo';
+
+            if ((isDniIntent || isRegDniPhoto) && base64) {
                 dniAnalysis = await analyzeDniWithAI({ base64, mimeType: mime });
+
+                // If this is a self-registration flow, auto-complete registration
+                if (isRegDniPhoto && dniAnalysis) {
+                    const regData = pendingRegPhoto;
+                    const newWorkerId = `w-${Date.now().toString().slice(-6)}`;
+                    const finalName = dniAnalysis.fullName || regData.name || `Operario (+${cleanFrom.slice(-4)})`;
+                    const finalDni = dniAnalysis.dni || '00.000.000';
+                    const finalTrade = regData.trade || 'Oficial Albañil';
+
+                    // Add to worker registry
+                    state.workerRegistry = state.workerRegistry || [];
+                    state.workerRegistry.push({
+                        id: newWorkerId,
+                        name: finalName,
+                        role: finalTrade,
+                        trade: finalTrade,
+                        phone: `+${cleanFrom}`,
+                        dni: finalDni,
+                        status: 'Activo (Auto-Registro WhatsApp)',
+                        assignedTasks: [],
+                        registeredAt: new Date().toISOString(),
+                        registeredVia: 'whatsapp-self-service'
+                    });
+
+                    // Update KYC record
+                    state.kycVerifications = state.kycVerifications || {};
+                    state.kycVerifications[newWorkerId] = {
+                        workerId: newWorkerId,
+                        workerName: finalName,
+                        dni: finalDni,
+                        phone: `+${cleanFrom}`,
+                        status: 'PRE-VERIFICADO',
+                        verifiedAt: new Date().toLocaleString('es-AR'),
+                        trade: finalTrade,
+                        registrationMethod: 'whatsapp-conversational'
+                    };
+
+                    // Clean up pending registration
+                    delete state.pendingRegistrations[cleanFrom];
+                    await saveAppState(state);
+
+                    // Send completion message and skip further processing
+                    botReply = `🎉 *¡Registro Completado!*\n\n✅ *${finalName}*\n📋 DNI: *${finalDni}*\n🔧 Oficio: *${finalTrade}*\n📱 Teléfono: *+${cleanFrom.slice(-10)}*\n\n🏗️ Tu legajo fue creado en *${state.projectConfig?.name || 'ObraSaaS'}*.\n\n_Ahora podés fichar asistencia enviando tu 📍 ubicación, o escribí "menú" para ver las opciones._`;
+
+                    // Notify director
+                    const directorPhone = state.projectConfig?.directorPhone;
+                    if (directorPhone) {
+                        try {
+                            await sendWhatsAppMessage(directorPhone, `🆕 *Nuevo operario auto-registrado:*\n• ${finalName} (${finalTrade})\n• DNI: ${finalDni}\n• Estado: PRE-VERIFICADO\n\n_Validá su legajo desde el Dashboard._`);
+                        } catch(e) { console.warn('Director notification failed:', e.message); }
+                    }
+
+                    // Skip to send reply
+                    const replyPayload = { messaging_product: 'whatsapp', to: cleanFrom, type: 'text', text: { body: botReply } };
+                    await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${process.env.WHATSAPP_TOKEN}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify(replyPayload)
+                    });
+                    return Response.json({ status: 'registration_completed' });
+                }
             } else if (isReceiptIntent && base64) {
                 ocrResult = await analyzeRemitoWithAI({ base64, mimeType: mime, rawText: bodyText });
             } else if (base64) {
@@ -478,9 +543,54 @@ export async function POST(request) {
 
             botReply = `📸 *Inspección Fotográfica Procesada por IA*\n\n• Fase: *${sitePhotoAnalysis.phase}*\n• Análisis: _"${sitePhotoAnalysis.aiAnalysis}"_\n• Estado: *Registrado en Bitácora de Obra*\n• Recomendación: ${sitePhotoAnalysis.actionRecommendation || 'Continuar según cronograma.'}`;
         }
-        // 10. Unregistered / Unauthenticated Worker Challenge
+        // 10. Unregistered / Unauthenticated Worker — Conversational Self-Registration
         else if (isUnregistered) {
-            botReply = `⚠️ *Verificación de Identidad Requerida (KYC ObraSaaS)*\n\n¡Hola! Tu número (*+${cleanFrom}*) no está vinculado a un legajo activo en *${state.projectConfig?.name || 'Torre Palermo Soho'}*.\n\nPara fichar asistencia y operar en obra, por favor completá tu verificación:\n\n1️⃣ Enviá una foto de tu *DNI / Credencial UOCRA* 🪪\n2️⃣ O completá el formulario biométrico seguro desde tu celular:\n👉 ${kycLink}\n\n_Al completar el KYC, tu legajo se activará automáticamente en el sistema._`;
+            // Check if this phone has a pending registration in progress
+            const pendingReg = (state.pendingRegistrations || {})[cleanFrom];
+            const lowerBody = (bodyText || '').toLowerCase().trim();
+
+            if (!pendingReg) {
+                // Step 1: Start registration — ask for full name
+                state.pendingRegistrations = state.pendingRegistrations || {};
+                state.pendingRegistrations[cleanFrom] = {
+                    step: 'awaiting_name',
+                    phone: cleanFrom,
+                    startedAt: new Date().toISOString()
+                };
+                await saveAppState(state);
+                botReply = `👷 *¡Bienvenido a ${state.projectConfig?.name || 'ObraSaaS'}!*\n\nTu número (*+${cleanFrom.slice(-10)}*) no está registrado todavía.\n\n📝 *Registro rápido por WhatsApp* (3 pasos):\n\n*Paso 1/3*: Escribí tu *nombre y apellido completo*.\n\n_Ejemplo: Juan Carlos Gómez_`;
+            } else if (pendingReg.step === 'awaiting_name' && bodyText && bodyText.length >= 3) {
+                // Step 2: Got name — ask for trade/role
+                state.pendingRegistrations[cleanFrom].name = bodyText.trim();
+                state.pendingRegistrations[cleanFrom].step = 'awaiting_trade';
+                await saveAppState(state);
+                botReply = `✅ Nombre registrado: *${bodyText.trim()}*\n\n*Paso 2/3*: ¿Cuál es tu *oficio/categoría*?\n\n1️⃣ Oficial Albañil\n2️⃣ Medio Oficial\n3️⃣ Ayudante\n4️⃣ Plomero\n5️⃣ Electricista\n6️⃣ Pintor\n7️⃣ Yesero\n8️⃣ Otro (escribí cuál)`;
+            } else if (pendingReg.step === 'awaiting_trade') {
+                // Step 3: Got trade — ask for DNI photo
+                const tradeMap = {
+                    '1': 'Oficial Albañil', '2': 'Medio Oficial', '3': 'Ayudante',
+                    '4': 'Plomero', '5': 'Electricista', '6': 'Pintor',
+                    '7': 'Yesero'
+                };
+                const normalBody = (bodyText || '').trim();
+                const selectedTrade = tradeMap[normalBody] || normalBody || 'Oficial Albañil';
+                state.pendingRegistrations[cleanFrom].trade = selectedTrade;
+                state.pendingRegistrations[cleanFrom].step = 'awaiting_dni_photo';
+                await saveAppState(state);
+                botReply = `✅ Oficio: *${selectedTrade}*\n\n*Paso 3/3*: Enviá una *foto de tu DNI* (frente) 🪪\n\nSacá la foto bien iluminada y que se lean los datos.\n\n_La IA verificará tus datos automáticamente._`;
+            } else if (pendingReg.step === 'awaiting_dni_photo') {
+                // They sent text instead of photo — remind them
+                botReply = `📸 Necesito una *foto de tu DNI* para completar el registro.\n\nPor favor, sacá una foto del frente de tu DNI y enviala por este chat. 🪪`;
+            } else {
+                // Unknown step — restart
+                state.pendingRegistrations[cleanFrom] = {
+                    step: 'awaiting_name',
+                    phone: cleanFrom,
+                    startedAt: new Date().toISOString()
+                };
+                await saveAppState(state);
+                botReply = `👷 *Registro en ObraSaaS*\n\nEscribí tu *nombre y apellido completo* para empezar.\n\n_Ejemplo: Juan Carlos Gómez_`;
+            }
         }
         // 11. Process Text Directives & NLP Intent Engine
         else {
