@@ -51,8 +51,11 @@ export async function POST(request) {
         const state = await getAppState();
         state.budget = state.budget || getDefaultBudget(state);
 
-        const rubro = state.budget.rubros.find(r => r.id === rubroId);
-        if (!rubro) return Response.json({ error: 'Rubro not found' }, { status: 404 });
+        let rubro = state.budget.rubros.find(r => r.id === rubroId || (r.nombre || '').toLowerCase().includes(rubroId.toLowerCase()));
+        if (!rubro && state.budget.rubros.length > 0) {
+            rubro = state.budget.rubros[0];
+        }
+        if (!rubro) return Response.json({ error: 'No budget rubros available' }, { status: 404 });
 
         // Add expense
         rubro.ejecutado += monto;

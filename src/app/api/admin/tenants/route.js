@@ -5,8 +5,10 @@ export const dynamic = 'force-dynamic';
 
 // GET /api/admin/tenants — List all tenants (super-admin only)
 export async function GET(request) {
-    const authError = verifyApiAuth(request);
-    if (authError) return authError;
+    const { authorized, reason } = verifyApiAuth(request);
+    if (!authorized) {
+        return Response.json({ error: reason || 'Unauthorized' }, { status: 401 });
+    }
 
     try {
         const state = await getAppState();
@@ -41,8 +43,10 @@ export async function GET(request) {
 
 // POST /api/admin/tenants — Create a new tenant
 export async function POST(request) {
-    const authError = verifyApiAuth(request);
-    if (authError) return authError;
+    const { authorized, reason } = verifyApiAuth(request);
+    if (!authorized) {
+        return Response.json({ error: reason || 'Unauthorized' }, { status: 401 });
+    }
 
     try {
         const body = await request.json();

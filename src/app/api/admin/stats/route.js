@@ -5,8 +5,10 @@ export const dynamic = 'force-dynamic';
 
 // GET /api/admin/stats — Platform-wide statistics for super-admin dashboard
 export async function GET(request) {
-    const authError = verifyApiAuth(request);
-    if (authError) return authError;
+    const { authorized, reason } = verifyApiAuth(request);
+    if (!authorized) {
+        return Response.json({ error: reason || 'Unauthorized' }, { status: 401 });
+    }
 
     try {
         const state = await getAppState();
