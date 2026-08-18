@@ -770,48 +770,118 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ⚔️ COMPETITIVE MATRIX */}
+      {/* 🏛️ ENTERPRISE ARCHITECTURE & CAPABILITIES */}
       <section style={{ maxWidth: '1360px', margin: '0 auto', padding: '96px 28px' }}>
         <div style={{ textAlign: 'center', marginBottom: '56px' }}>
-          <Badge color="#8b5cf6" variant="filled" size="md">BENCHMARK DE MERCADO</Badge>
+          <Badge color="#f59e0b" variant="filled" size="md">ARQUITECTURA ENTERPRISE</Badge>
           <h2 style={{ fontSize: 'clamp(1.8rem, 3.5vw, 2.6rem)', fontWeight: 900, margin: '14px 0 8px', fontFamily: tokens.font.heading }}>
-            ObraSaaS vs Competidores Tradicionales
+            Diseñado para la Escala de Grandes Constructoras
           </h2>
-          <p style={{ color: '#94a3b8', fontSize: '0.95rem' }}>
-            Por qué las empresas líderes eligen ObraSaaS frente a software extranjero costoso o soluciones incompletas.
+          <p style={{ color: '#94a3b8', fontSize: '0.95rem', maxWidth: '680px', margin: '0 auto' }}>
+            Una infraestructura sólida, segura y de alta disponibilidad que conecta el terreno, la oficina técnica y los comitentes en tiempo real.
           </p>
         </div>
 
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.12)' }}>
-                <th style={{ padding: '16px', color: '#94a3b8' }}>Característica Clave</th>
-                <th style={{ padding: '16px', color: '#f59e0b', fontWeight: 800, background: 'rgba(245, 158, 11, 0.08)', borderRadius: '8px 8px 0 0' }}>ObraSaaS Enterprise</th>
-                <th style={{ padding: '16px', color: '#64748b' }}>Procore</th>
-                <th style={{ padding: '16px', color: '#64748b' }}>Lebane</th>
-                <th style={{ padding: '16px', color: '#64748b' }}>Obak / Trowel</th>
-              </tr>
-            </thead>
-            <tbody>
-              {[
-                { feat: 'WhatsApp Nativo (Sin instalar app)', obra: '✅ Bot IA con voz y fotos', pro: '❌ No', leb: '❌ No', oth: '❌ No' },
-                { feat: 'KYC Biométrico DNI + Póliza ART', obra: '✅ Automático 10s', pro: '❌ No', leb: '❌ Parcial', oth: '❌ No' },
-                { feat: 'Libro de Obra Ley 22.250 SHA-256', obra: '✅ Firma Digital Inmutable', pro: '❌ No', leb: '❌ No', oth: '❌ No' },
-                { feat: 'Telemetría Clima CIRSOC / IRAM 1666', obra: '✅ Satelital en tiempo real', pro: '❌ No', leb: '❌ No', oth: '❌ No' },
-                { feat: 'Portal Público para Inversores', obra: '✅ Vecino Digital', pro: '❌ Requiere licencia', leb: '❌ No', oth: '❌ No' },
-                { feat: 'Precio Mensual Accesible', obra: '✅ Desde $29 USD/mes', pro: '❌ $500 - $5,000 USD', leb: '❌ $150+ USD', oth: '❌ $60 - $100 USD' }
-              ].map((row, i) => (
-                <tr key={i} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                  <td style={{ padding: '14px 16px', fontWeight: 600, color: '#f8fafc' }}>{row.feat}</td>
-                  <td style={{ padding: '14px 16px', fontWeight: 700, color: '#f59e0b', background: 'rgba(245, 158, 11, 0.04)' }}>{row.obra}</td>
-                  <td style={{ padding: '14px 16px', color: '#94a3b8' }}>{row.pro}</td>
-                  <td style={{ padding: '14px 16px', color: '#94a3b8' }}>{row.leb}</td>
-                  <td style={{ padding: '14px 16px', color: '#94a3b8' }}>{row.oth}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '24px' }}>
+          {[
+            {
+              icon: 'fa-brands fa-whatsapp',
+              color: '#22c55e',
+              tag: 'Cero Fricción en Terreno',
+              title: 'Canal Primario WhatsApp Meta WABA',
+              desc: 'El 100% de los operarios y contratistas interactúan enviando audios de voz, fotos de remitos y ubicaciones GPS satelitales sin instalar aplicaciones adicionales.'
+            },
+            {
+              icon: 'fa-solid fa-file-shield',
+              color: '#a855f7',
+              tag: 'Ley 22.250 & SRT 319/99',
+              title: 'Libro de Obra & Firma SHA-256',
+              desc: 'Cada parte diario, certificación de avance y orden de servicio se sella criptográficamente en un Merkle Tree inmutable con plena validez probatoria ante peritajes.'
+            },
+            {
+              icon: 'fa-solid fa-cube',
+              color: '#38bdf8',
+              tag: 'Autodesk & IFC Compatible',
+              title: 'Gemelo Digital 3D BIM & Simulación 4D',
+              desc: 'Visualización tridimensional federada piso por piso con control de interferencias (clash detection) y simulación temporal de la evolución del cronograma.'
+            },
+            {
+              icon: 'fa-solid fa-chart-line',
+              color: '#f59e0b',
+              tag: 'Finanzas & Curva S',
+              title: 'Tesorería Multimoneda & CAC Live',
+              desc: 'Control presupuestario por rubro en ARS, USD Blue y USD MEP con tracking automático del índice de la Cámara Argentina de la Construcción.'
+            },
+            {
+              icon: 'fa-solid fa-id-card-clip',
+              color: '#ec4899',
+              tag: 'UOCRA & ART en Tiempo Real',
+              title: 'KYC Biométrico & Geocercas GPS',
+              desc: 'Validación de DNI y biometría facial en 10 segundos con verificación de póliza activa de ART y bloqueo automático de ingreso ante incumplimientos.'
+            },
+            {
+              icon: 'fa-solid fa-code',
+              color: '#6366f1',
+              tag: 'REST API & Webhooks',
+              title: 'Ecosistema Abierto & ERP Sync',
+              desc: 'Integración bidireccional inmediata con sistemas administrativos y contables (Tango, Bejerman, Xubio, SAP) y webhooks de eventos en tiempo real.'
+            }
+          ].map((item, i) => (
+            <motion.div
+              key={i}
+              whileHover={{ y: -6, transition: { duration: 0.2 } }}
+              style={{
+                background: 'rgba(15, 23, 42, 0.6)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                borderRadius: '18px',
+                padding: '28px',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                backdropFilter: 'blur(16px)',
+                boxShadow: '0 10px 30px rgba(0, 0, 0, 0.4)',
+                position: 'relative',
+                overflow: 'hidden'
+              }}
+            >
+              <div style={{ position: 'absolute', top: 0, right: 0, width: '120px', height: '120px', background: `radial-gradient(circle, ${item.color}15 0%, transparent 70%)`, pointerEvents: 'none' }} />
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+                  <div style={{
+                    width: '46px',
+                    height: '46px',
+                    borderRadius: '12px',
+                    background: `${item.color}18`,
+                    border: `1px solid ${item.color}40`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '1.25rem',
+                    color: item.color
+                  }}>
+                    <i className={item.icon}></i>
+                  </div>
+                  <span style={{
+                    fontSize: '0.72rem',
+                    fontWeight: 700,
+                    padding: '4px 10px',
+                    borderRadius: '6px',
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    color: '#cbd5e1',
+                    border: '1px solid rgba(255, 255, 255, 0.1)'
+                  }}>
+                    {item.tag}
+                  </span>
+                </div>
+                <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#f8fafc', margin: '0 0 8px', fontFamily: tokens.font.heading }}>
+                  {item.title}
+                </h3>
+                <p style={{ fontSize: '0.86rem', color: '#94a3b8', lineHeight: 1.6, margin: 0 }}>
+                  {item.desc}
+                </p>
+              </div>
+            </motion.div>
+          ))}
         </div>
       </section>
 
