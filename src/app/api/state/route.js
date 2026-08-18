@@ -37,7 +37,7 @@ async function checkStockAndTriggerPurchases(state) {
             });
             messages.push({
                 sender: "bot",
-                text: `📞 Loma Negra S.A.: Hemos recibido su orden de compra automática #OC-2026-901. Despacho programado para mañana a las 08:30 AM en Palermo Site.`,
+                text: `📞 Loma Negra S.A.: Hemos recibido su orden de compra automática #OC-2026-901. Despacho programado para mañana a las 08:30 AM en ${state.projectConfig?.name || 'obra'}.`,
                 time: timeStr
             });
             await saveMessages(messages);

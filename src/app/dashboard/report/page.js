@@ -17,8 +17,8 @@ export default async function ReportPage() {
     totalDays = totalDays || 35;
     const timelinePercentage = Math.round((currentDay / totalDays) * 100);
 
-    // Calculate budget metrics
-    const totalBudget = 4995000;
+    // Calculate budget metrics (from state or presupuesto, not hardcoded)
+    const totalBudget = state.projectConfig?.totalBudget || 4995000;
     const progressVal = parseFloat(state.avancePercentage) || 0;
     const executedBudget = Math.round(totalBudget * (progressVal / 100));
     const remainingBudget = totalBudget - executedBudget;
@@ -32,10 +32,13 @@ export default async function ReportPage() {
     const attendance = Object.entries(state.attendance || {});
     const stockpiles = Object.values(state.stockpiles || {});
 
+    const projectName = state.projectConfig?.name || 'Obra';
+    const projectCity = state.projectConfig?.city || 'CABA';
+
     return (
         <html lang="es">
             <head>
-                <title>Reporte_Semanal_Palermo_Chico.pdf</title>
+                <title>Reporte_Semanal_{projectName.replace(/\s+/g, '_')}.pdf</title>
                 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@600;700;800&display=swap" />
                 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
                 <style>{`
@@ -171,7 +174,7 @@ export default async function ReportPage() {
                     </div>
                     <div className="meta-section">
                         <h3>Reporte Ejecutivo Semanal</h3>
-                        <strong>Proyecto:</strong> Palermo Chico Townhouse<br />
+                        <strong>Proyecto:</strong> {projectName}<br />
                         <strong>Fecha Emisión:</strong> {new Date().toLocaleDateString('es-AR')}<br />
                         <strong>Estado Obra:</strong> {state.avancePercentage}% Completado
                     </div>

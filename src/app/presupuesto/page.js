@@ -532,7 +532,7 @@ export default function Presupuesto() {
         {/* SLA and Terms */}
         <div className="doc-section-title">Condiciones de Servicio (SLA) &amp; Garantías</div>
         <p style={{ fontSize: '0.85rem', color: '#334155', marginBottom: '24px' }}>
-          - <strong>Disponibilidad del Sistema (SLA)</strong>: Compromiso de disponibilidad de la base de datos Supabase del 99.9% mensual.<br />
+          - <strong>Disponibilidad del Sistema (SLA)</strong>: Compromiso de disponibilidad de la base de datos Neon PostgreSQL del 99.9% mensual.<br />
           - <strong>Soporte Post-Entrega</strong>: Incluye 30 días de soporte técnico gratuito para corregir posibles bugs y dar capacitación a los operarios en obra.<br />
           - <strong>Propiedad Intelectual</strong>: El código fuente desarrollado del MVP será de propiedad exclusiva del cliente una vez saldada la totalidad de la propuesta.
         </p>
