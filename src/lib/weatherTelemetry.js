@@ -39,7 +39,7 @@ export async function getConstructionWeatherTelemetry(projectParams = {}) {
             lon = -58.4302;
             city = "Buenos Aires";
             province = "CABA";
-            siteName = siteName || "Torre Palermo Soho";
+            siteName = siteName || "Obra";
         }
     }
 

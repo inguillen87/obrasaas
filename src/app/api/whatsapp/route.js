@@ -323,7 +323,7 @@ export async function POST(request) {
         // 6. Process Location Sharing (GPS Geofence Satelital)
         if (!isNaN(latitude) && !isNaN(longitude)) {
             if (isArtExpired && !isDirector) {
-                botReply = `🚨 *ACCESO DENEGADO POR SEGURIDAD E HIGIENE (UOCRA / ART)*\n\n*${senderName}*, no podés ingresar al predio de obra.\n• Póliza de ART: *${workerArtPolicy.company}* (Póliza ${workerArtPolicy.policyNumber})\n• Estado: *VENCIDA (${workerArtPolicy.expirationDate})*\n• Normativa: Ley 22.250 y Res. SRT 299/11.\n\n_Tu capataz y el Director Arq. Marcelo han sido alertados._`;
+                botReply = `🚨 *ACCESO DENEGADO POR SEGURIDAD E HIGIENE (UOCRA / ART)*\n\n*${senderName}*, no podés ingresar al predio de obra.\n• Póliza de ART: *${workerArtPolicy.company}* (Póliza ${workerArtPolicy.policyNumber})\n• Estado: *VENCIDA (${workerArtPolicy.expirationDate})*\n• Normativa: Ley 22.250 y Res. SRT 299/11.\n\n_Tu capataz y el Director han sido alertados._`;
 
                 feedIncident = {
                     id: "inc-art-alert-" + Date.now(),
@@ -340,7 +340,7 @@ export async function POST(request) {
                 const projectSite = {
                     lat: state.projectConfig?.latitude || -34.5886,
                     lon: state.projectConfig?.longitude || -58.4302,
-                    name: state.projectConfig?.name || "Torre Palermo Soho",
+                    name: state.projectConfig?.name || "Obra",
                     radius: state.projectConfig?.geofenceRadiusMeters || 100
                 };
                 const distance = Math.round(getDistance(latitude, longitude, projectSite.lat, projectSite.lon));
@@ -424,7 +424,7 @@ export async function POST(request) {
                 details: { dni: kycRecord.dni, cuil: kycRecord.cuil, confidence: kycRecord.confidenceScore, obra: state.projectConfig?.name }
             });
 
-            botReply = `🪪 *Identidad Biométrica & DNI Validado* ✅\n\n• Operario: *${kycRecord.workerName}*\n• DNI: *${kycRecord.dni}*\n• CUIL: *${kycRecord.cuil || '20-' + kycRecord.dni + '-9'}*\n• Estado: *Legajo Activado en ${state.projectConfig?.name || 'Torre Palermo Soho'}*\n• Cobertura ART: *${kycRecord.artPolicy.company} (Vigente)*\n\n_Tu perfil ha sido incorporado a la nómina oficial con firma SHA-256._`;
+            botReply = `🪪 *Identidad Biométrica & DNI Validado* ✅\n\n• Operario: *${kycRecord.workerName}*\n• DNI: *${kycRecord.dni}*\n• CUIL: *${kycRecord.cuil || '20-' + kycRecord.dni + '-9'}*\n• Estado: *Legajo Activado en ${state.projectConfig?.name || 'Obra'}*\n• Cobertura ART: *${kycRecord.artPolicy.company} (Vigente)*\n\n_Tu perfil ha sido incorporado a la nómina oficial con firma SHA-256._`;
 
             feedIncident = {
                 id: "inc-kyc-" + Date.now(),
@@ -492,7 +492,7 @@ export async function POST(request) {
 
             const itemsFormatted = (ocrResult.items || []).map(it => `  • ${it.cantidad}x ${it.descripcion} ($${it.subtotal?.toLocaleString('es-AR')} ARS)`).join('\n');
 
-            botReply = `🧾 *Remito / Factura Auditada por AFIP & IA* ✅\n\n• Proveedor: *${remitoRecord.proveedor}*\n• CUIT: *${remitoRecord.cuit}* (${fiscalAudit.cuitValidation.type})\n• Comprobante: *${remitoRecord.tipoComprobante}*\n• CAE Electrónico: *${remitoRecord.caeNumber}*\n• Total: *$${expenseAmount.toLocaleString('es-AR')} ARS*\n• Rendido por: *${senderName}*\n\n📋 *Detalle de Ítems:*\n${itemsFormatted || '  • Insumos y materiales de obra'}\n\n💰 *Saldo Restante Caja Chica:* *$${state.cajaChica.saldoActual.toLocaleString('es-AR')} ARS*\nSincronizado en tiempo real en el Dashboard de ${state.projectConfig?.name || 'Torre Palermo Soho'}.`;
+            botReply = `🧾 *Remito / Factura Auditada por AFIP & IA* ✅\n\n• Proveedor: *${remitoRecord.proveedor}*\n• CUIT: *${remitoRecord.cuit}* (${fiscalAudit.cuitValidation.type})\n• Comprobante: *${remitoRecord.tipoComprobante}*\n• CAE Electrónico: *${remitoRecord.caeNumber}*\n• Total: *$${expenseAmount.toLocaleString('es-AR')} ARS*\n• Rendido por: *${senderName}*\n\n📋 *Detalle de Ítems:*\n${itemsFormatted || '  • Insumos y materiales de obra'}\n\n💰 *Saldo Restante Caja Chica:* *$${state.cajaChica.saldoActual.toLocaleString('es-AR')} ARS*\nSincronizado en tiempo real en el Dashboard de ${state.projectConfig?.name || 'Obra'}.`;
 
             feedIncident = {
                 id: "inc-ocr-" + Date.now(),
@@ -615,7 +615,7 @@ export async function POST(request) {
             // 👑 Arq. Marcelo (Director de Obra) Executive Handling
             if (isDirector) {
                 // 1️⃣ Supervisión de Cuadrilla & KYC
-                if (normalBody === '1' || normalBody.includes('cuadrilla') || normalBody.includes('supervision') || normalBody.includes('kyc') || normalBody.includes('personal') || normalBody.includes('operarios') || normalBody.includes('soy juan') || normalBody.includes('juan gomez') || normalBody.includes('fichar a juan')) {
+                if (normalBody === '1' || normalBody.includes('cuadrilla') || normalBody.includes('supervision') || normalBody.includes('kyc') || normalBody.includes('personal') || normalBody.includes('operarios')) {
                     const activeWorkers = Object.keys(state.attendance || {}).map(wName => {
                         const att = state.attendance[wName];
                         const kyc = Object.values(state.kycVerifications || {}).find(k => k.workerName === wName);
@@ -625,16 +625,17 @@ export async function POST(request) {
                         return `• *${wName}* (${att.role || 'Oficial'}):\n  ↳ Estado: *${att.status || 'Presente'}* (${att.checkin || '08:00 AM'})\n  ↳ ${kycStatus} • ${artStatus}`;
                     }).join('\n');
 
-                    botReply = `👷‍♂️ *Supervisión de Cuadrilla & KYC en Vivo (Dirección)*\n\n*Obra:* ${state.projectConfig?.name || 'Torre Palermo Soho'} (${state.projectConfig?.city || 'CABA'})\n*Operarios en Predio:* ${state.operariosCount || 1} activos.\n\n${activeWorkers || '• Juan Gómez: Presente (GPS 14m) • KYC OK\n• Luis Martínez: Presente (Voz) • KYC OK\n• Carlos Pérez: Ausente (ART Vencida)'}\n\n👉 *Validar Nuevo Operario (Portal KYC):*\n${kycLink}\n\n_Todos los legajos se encuentran sincronizados en el Dashboard._`;
+                    const workerCount = Object.keys(state.attendance || {}).length;
+                    botReply = `👷‍♂️ *Supervisión de Cuadrilla & KYC en Vivo (Dirección)*\n\n*Obra:* ${state.projectConfig?.name || 'Obra'} (${state.projectConfig?.city || 'CABA'})\n*Operarios en Predio:* ${workerCount} activos.\n\n${activeWorkers || '• Sin operarios fichados actualmente'}\n\n👉 *Validar Nuevo Operario (Portal KYC):*\n${kycLink}\n\n_Todos los legajos se encuentran sincronizados en el Dashboard._`;
                     
                     feedIncident = {
                         id: "inc-dir-" + Date.now(),
                         title: "Supervisión de Cuadrilla por Director",
-                        description: `Arq. Marcelo consultó la telemetría de presentismo y legajos KYC de la cuadrilla.`,
+                        description: `${senderName} consultó la telemetría de presentismo y legajos KYC de la cuadrilla.`,
                         type: "info",
                         badge: "Dirección",
                         timestamp: `Hoy, ${timeStr}`,
-                        reporter: "Arq. Marcelo (Director)",
+                        reporter: `${senderName} (${senderRole})`,
                         icon: "fa-solid fa-users-viewfinder"
                     };
                     showInFeed = true;
@@ -642,25 +643,29 @@ export async function POST(request) {
                 // 2️⃣ Certificar Avance (Gantt)
                 else if (normalBody === '2' || normalBody.includes('revoque') || normalBody.includes('termin') || normalBody.includes('avance') || normalBody.includes('100%') || normalBody.includes('certificar')) {
                     if (state.tasks && state.tasks[1]) {
+                        const taskName = state.tasks[1].name || 'Tarea certificada';
                         state.tasks[1].progress = 100;
-                        state.avancePercentage = 55;
+                        // Recalculate global progress
+                        const allTasks = Object.values(state.tasks);
+                        const avgProgress = allTasks.reduce((s, t) => s + (t.progress || 0), 0) / Math.max(allTasks.length, 1);
+                        state.avancePercentage = Math.round(avgProgress);
 
                         state.auditLedger = appendAuditTransaction(state.auditLedger, {
                             action: "CERTIFICACION_AVANCE_GANTT",
-                            actor: "Arq. Marcelo",
-                            details: { task: "Revoque Grueso", progress: 100, globalProgress: 55, obra: state.projectConfig?.name }
+                            actor: senderName,
+                            details: { task: taskName, progress: 100, globalProgress: state.avancePercentage, obra: state.projectConfig?.name }
                         });
 
-                        botReply = `🏗️ *Certificación de Avance de Obra (Dirección)*\n\nHola *Arq. Marcelo*.\n• Hito: *Revoque Grueso al 100%*\n• Avance Global de Obra: *55%*\n• Estado: *Listo para Certificación Quincenal Q1*\n• Trazabilidad: Certificado con firma digital SHA-256 en ${state.projectConfig?.name || 'Torre Palermo Soho'}.`;
+                        botReply = `🏗️ *Certificación de Avance de Obra (Dirección)*\n\nHola *${senderName}*.\n• Hito: *${taskName} al 100%*\n• Avance Global de Obra: *${state.avancePercentage}%*\n• Estado: *Listo para Certificación Quincenal ${state.currentQuincena || 'Q1'}*\n• Trazabilidad: Certificado con firma digital SHA-256 en ${state.projectConfig?.name || 'Obra'}.`;
 
                         feedIncident = {
                             id: "inc-gantt-" + Date.now(),
                             title: "Avance Certificado por Director",
-                            description: `Arq. Marcelo aprobó el 100% de Revoque Grueso. Avance global: 55%.`,
+                            description: `${senderName} aprobó el 100% de ${taskName}. Avance global: ${state.avancePercentage}%.`,
                             type: "success",
                             badge: "Gantt 100%",
                             timestamp: `Hoy, ${timeStr}`,
-                            reporter: "Arq. Marcelo",
+                            reporter: senderName,
                             icon: "fa-solid fa-chart-gantt"
                         };
                         showInFeed = true;
@@ -685,7 +690,7 @@ export async function POST(request) {
 
                     state.auditLedger = appendAuditTransaction(state.auditLedger, {
                         action: "ALERTA_INCIDENCIA_CRITICA",
-                        actor: "Arq. Marcelo",
+                        actor: senderName,
                         details: { incident: "Fuga de agua baño principal", emergencyTask: 99, obra: state.projectConfig?.name }
                     });
 
@@ -698,7 +703,7 @@ export async function POST(request) {
                         type: "critical",
                         badge: "Urgente",
                         timestamp: `Hoy, ${timeStr}`,
-                        reporter: "Arq. Marcelo",
+                        reporter: senderName,
                         icon: "fa-solid fa-droplet"
                     };
                     showInFeed = true;
@@ -713,7 +718,7 @@ export async function POST(request) {
                         state.tasks[3].isBlocked = true;
                         state.tasks[3].supplierStatus = "Demorado 48hs";
                     }
-                    botReply = `⚠️ *Replanificación por Demora de Proveedor*\n\nHola *Arq. Marcelo*.\n• Material: *Cerámicas San Lorenzo*\n• Impacto: Revestimiento desplazado +48hs (Quincena 2)\n• Tarea 3: Bloqueada 'Pendiente de Materiales'.`;
+                    botReply = `⚠️ *Replanificación por Demora de Proveedor*\n\nHola *${senderName}*.\n• Material: *Cerámicas San Lorenzo*\n• Impacto: Revestimiento desplazado +48hs (Quincena 2)\n• Tarea 3: Bloqueada 'Pendiente de Materiales'.`;
 
                     feedIncident = {
                         id: "inc-demora-" + Date.now(),
@@ -722,7 +727,7 @@ export async function POST(request) {
                         type: "warning",
                         badge: "Demora 48hs",
                         timestamp: `Hoy, ${timeStr}`,
-                        reporter: "Arq. Marcelo",
+                        reporter: senderName,
                         icon: "fa-solid fa-truck-ramp-box"
                     };
                     showInFeed = true;
@@ -737,7 +742,7 @@ export async function POST(request) {
                 }
                 // 6️⃣ Consultar Plan Quincenal (Q1/Q2)
                 else if (normalBody === '6' || normalBody.includes('quincena') || normalBody.includes('plan') || normalBody.includes('que nos toca') || normalBody.includes('cronograma')) {
-                    botReply = `📅 *Planificación de la Quincena Actual (Dirección de Obra)*\n\nHola *Arq. Marcelo*, este es el estado de *${state.projectConfig?.name || 'Torre Palermo Soho'}*:\n\n*Quincena 1 (Q1)*:\n• *Revoque Grueso*: 100% completado (Juan Gómez)\n• *Cañería y Descargas*: 20% (Luis Martínez)\n\n*Próxima Quincena (Q2)*:\n• *Revestimiento Cerámico*: Inicio 16/Ago (Carlos Pérez)\n• *Pintura y Terminación*: Inicio 21/Ago\n\n_Todos los planos, remitos y pólizas ART están sincronizados en tiempo real en el Dashboard._`;
+                    botReply = `📅 *Planificación de la Quincena Actual (Dirección de Obra)*\n\nHola *${senderName}*, este es el estado de *${state.projectConfig?.name || 'Obra'}*:\n\n*Quincena 1 (Q1)*:\n• *Revoque Grueso*: 100% completado (Juan Gómez)\n• *Cañería y Descargas*: 20% (Luis Martínez)\n\n*Próxima Quincena (Q2)*:\n• *Revestimiento Cerámico*: Inicio 16/Ago (Carlos Pérez)\n• *Pintura y Terminación*: Inicio 21/Ago\n\n_Todos los planos, remitos y pólizas ART están sincronizados en tiempo real en el Dashboard._`;
                 }
                 // 7️⃣ Rendir / Aprobar Gasto de Caja Chica
                 else if (normalBody === '7' || normalBody.includes('gasto') || normalBody.includes('ferreteria') || normalBody.includes('caja chica') || normalBody.includes('18.500') || normalBody.includes('18500') || normalBody.includes('rendir')) {
@@ -756,7 +761,7 @@ export async function POST(request) {
                         descripcion: `Compra ferretería / materiales: ${bodyText || 'Clavos y alambre'}`,
                         monto: expenseAmount,
                         tipo: "Egreso",
-                        solicitante: "Arq. Marcelo",
+                        solicitante: senderName,
                         estado: "Aprobado",
                         fecha: `Hoy, ${timeStr}`,
                         ticketUrl: "/tickets/ticket-01.jpg"
@@ -764,20 +769,20 @@ export async function POST(request) {
 
                     state.auditLedger = appendAuditTransaction(state.auditLedger, {
                         action: "RENDICION_CAJA_CHICA_DIRECTOR",
-                        actor: "Arq. Marcelo",
+                        actor: senderName,
                         details: { monto: expenseAmount, saldoRestante: state.cajaChica.saldoActual, obra: state.projectConfig?.name }
                     });
 
-                    botReply = `🧾 *Rendición de Caja Chica Aprobada (Dirección)*\n\n• Monto: *$${expenseAmount.toLocaleString('es-AR')} ARS*\n• Solicitante: *Arq. Marcelo*\n• Saldo Restante en Caja Chica: *$${state.cajaChica.saldoActual.toLocaleString('es-AR')} ARS*\n• Estado: Aprobado y sincronizado en Dashboard con firma SHA-256.`;
+                    botReply = `🧾 *Rendición de Caja Chica Aprobada (Dirección)*\n\n• Monto: *$${expenseAmount.toLocaleString('es-AR')} ARS*\n• Solicitante: *${senderName}*\n• Saldo Restante en Caja Chica: *$${state.cajaChica.saldoActual.toLocaleString('es-AR')} ARS*\n• Estado: Aprobado y sincronizado en Dashboard con firma SHA-256.`;
 
                     feedIncident = {
                         id: "inc-cc-" + Date.now(),
                         title: "Gasto de Caja Chica Rendido",
-                        description: `Arq. Marcelo rindió $${expenseAmount.toLocaleString('es-AR')} ARS en ferretería.`,
+                        description: `${senderName} rindió $${expenseAmount.toLocaleString('es-AR')} ARS en ferretería.`,
                         type: "info",
                         badge: "Caja Chica",
                         timestamp: `Hoy, ${timeStr}`,
-                        reporter: "Arq. Marcelo",
+                        reporter: senderName,
                         icon: "fa-solid fa-receipt"
                     };
                     showInFeed = true;
@@ -846,17 +851,51 @@ export async function POST(request) {
 
                     botReply = `📖 *Libro de Obra Digital — ${today}*\n🏗️ *${state.projectConfig?.name || 'Obra'}*\n\n👷 Operarios presentes: *${workersPresent}*\n\n📋 *Tareas en curso:*\n${taskList}\n\n🎯 *Completadas hoy:*\n${completedList}\n\n✍️ Firmado por: *${senderName}*\n🔐 Hash: \`${state.libroObra[state.libroObra.length - 1]?.hash?.slice(0, 16) || 'pending'}...\`\n📚 Entrada #${totalEntries} del libro\n\n_Registro conforme Ley 22.250 / Res. SRT 319/99_`;
                 }
+                // 🔟 Control de Costos / Presupuesto por Rubro
+                else if (normalBody === '10' || normalBody.includes('costo') || normalBody.includes('presupuesto') || normalBody.includes('plata') || normalBody.includes('cuanto gastamos') || normalBody.includes('rubro')) {
+                    const budget = state.budget || { rubros: [] };
+                    const totalPres = budget.rubros.reduce((s, r) => s + r.presupuesto, 0);
+                    const totalEjec = budget.rubros.reduce((s, r) => s + r.ejecutado, 0);
+                    const pctGlobal = totalPres > 0 ? ((totalEjec / totalPres) * 100).toFixed(1) : 0;
+                    const avanceFisico = parseFloat(state.avancePercentage) || 0;
+
+                    const rubrosText = budget.rubros.map(r => {
+                        const p = r.presupuesto > 0 ? ((r.ejecutado / r.presupuesto) * 100).toFixed(0) : 0;
+                        const icon = p >= 100 ? '🚨' : p >= 80 ? '⚠️' : '✅';
+                        return `${icon} *${r.nombre.split('(')[0].trim()}*: $${r.ejecutado.toLocaleString('es-AR')} / $${r.presupuesto.toLocaleString('es-AR')} (${p}%)`;
+                    }).join('\n');
+
+                    botReply = `💰 *Control de Costos — ${state.projectConfig?.name || 'Obra'}*\n\n📊 *Resumen Global:*\n• Presupuesto: *$${totalPres.toLocaleString('es-AR')} ARS*\n• Ejecutado: *$${totalEjec.toLocaleString('es-AR')} ARS* (${pctGlobal}%)\n• Restante: *$${(totalPres - totalEjec).toLocaleString('es-AR')} ARS*\n\n📉 *Curva S:*\n• Avance financiero: *${pctGlobal}%*\n• Avance físico: *${avanceFisico}%*\n• Diferencia: *${(pctGlobal - avanceFisico).toFixed(1)}%*\n\n📋 *Desglose por Rubro:*\n${rubrosText}\n\n🔗 _Ver detalle completo en /costos_`;
+                }
+                // 1️⃣1️⃣ Certificación de Avance
+                else if (normalBody === '11' || normalBody.includes('certificacion') || normalBody.includes('certificado') || normalBody.includes('certific')) {
+                    const tasks = Object.values(state.tasks || {});
+                    const completed = tasks.filter(t => t.progress === 100);
+                    const inProgress = tasks.filter(t => t.progress > 0 && t.progress < 100);
+                    const avance = parseFloat(state.avancePercentage) || 0;
+
+                    let hash = 'pending';
+                    try {
+                        const { createHash } = await import('crypto');
+                        const content = JSON.stringify({ date: new Date().toISOString(), avance, tasks: tasks.length, project: state.projectConfig?.name });
+                        hash = createHash('sha256').update(content).digest('hex');
+                    } catch(e) {}
+
+                    const progressList = inProgress.slice(0, 5).map(t => `  ↳ ${t.name}: *${t.progress}%*`).join('\n');
+
+                    botReply = `📄 *Certificación de Avance de Obra*\n🏗️ *${state.projectConfig?.name || 'Obra'}*\n📅 Fecha: ${new Date().toLocaleDateString('es-AR')}\n\n🎯 *Avance Global: ${avance}%*\n\n✅ *Completadas (${completed.length}):*\n${completed.slice(0, 5).map(t => `  ✅ ${t.name}`).join('\n') || '  Sin completadas'}\n\n🔄 *En curso (${inProgress.length}):*\n${progressList || '  Sin tareas en curso'}\n\n🔐 Hash SHA-256: \`${hash.slice(0, 24)}...\`\n✍️ Firmado por: *${senderName}*\n\n_Certificación digital conforme Ley 13.064. Para PDF completo visite /dashboard/report_`;
+                }
                 // Menú Director
                 else {
-                    botReply = `👑 *Centro de Mando — ${senderName} (${senderRole})* 🏗️\n\nHola ${senderName}. Podés enviar un número del 1 al 9 o escribir tus directivas:\n\n1️⃣ *Supervisión de Cuadrilla & KYC*\n2️⃣ *Certificar Avance (Gantt)*\n3️⃣ *Reportar / Asignar Incidencia Crítica*\n4️⃣ *Replanificación por Demora de Suministros*\n5️⃣ *Gestionar Proveedores*\n6️⃣ *Consultar Plan Quincenal (Q1/Q2)*\n7️⃣ *Rendir / Aprobar Gasto de Caja Chica*\n8️⃣ *Auditoría Satelital de Geocercas & ART*\n9️⃣ *Libro de Obra Digital (Ley 22.250)*\n\n📸 _Enviá fotos de remitos o facturas para validación fiscal AFIP con IA._`;
+                    botReply = `👑 *Centro de Mando — ${senderName} (${senderRole})* 🏗️\n\nHola ${senderName}. Podés enviar un número o escribir tus directivas:\n\n1️⃣ *Supervisión de Cuadrilla & KYC*\n2️⃣ *Certificar Avance (Gantt)*\n3️⃣ *Reportar / Asignar Incidencia Crítica*\n4️⃣ *Replanificación por Demora de Suministros*\n5️⃣ *Gestionar Proveedores*\n6️⃣ *Consultar Plan Quincenal (Q1/Q2)*\n7️⃣ *Rendir / Aprobar Gasto de Caja Chica*\n8️⃣ *Auditoría Satelital de Geocercas & ART*\n9️⃣ *Libro de Obra Digital (Ley 22.250)*\n🔟 *Control de Costos por Rubro*\n1️⃣1️⃣ *Certificación de Avance*\n\n📸 _Enviá fotos de remitos o facturas para validación fiscal AFIP con IA._`;
                 }
             }
             // 📐 Arq. Victoria (Socia & Directora Técnica) Handling
             else if (isTechnicalDirector) {
                 if (normalBody === '1' || normalBody.includes('cuadrilla') || normalBody.includes('kyc')) {
-                    botReply = `👷‍♀️ *Estado de Cuadrilla & KYC (Dirección Técnica)*\n\nHola *Victoria*. Personal registrado en *${state.projectConfig?.name || 'Torre Palermo Soho'}*:\n• *Juan Gómez*: Albañilería (KYC Verificado ✓ • ART Vigente)\n• *Luis Martínez*: Plomería (KYC Verificado ✓ • ART Vigente)\n• *Carlos Pérez*: Pintura (ART Vencida 🚨 - Acceso Bloqueado)\n\n👉 Enlace al Portal KYC: ${kycLink}`;
+                    botReply = `👷‍♀️ *Estado de Cuadrilla & KYC (Dirección Técnica)*\n\nHola *Victoria*. Personal registrado en *${state.projectConfig?.name || 'Obra'}*:\n• *Juan Gómez*: Albañilería (KYC Verificado ✓ • ART Vigente)\n• *Luis Martínez*: Plomería (KYC Verificado ✓ • ART Vigente)\n• *Carlos Pérez*: Pintura (ART Vencida 🚨 - Acceso Bloqueado)\n\n👉 Enlace al Portal KYC: ${kycLink}`;
                 } else if (normalBody === '2' || normalBody.includes('calidad') || normalBody.includes('clima') || normalBody.includes('hormigon')) {
-                    botReply = `🏗️ *Control Estructural & Climatológico (Dirección Técnica)*\n\n• *Obra:* ${state.projectConfig?.name || 'Torre Palermo Soho'} (${state.projectConfig?.city || 'CABA'})\n• *Hito Q1:* Revoque Grueso al 100%\n• *Telemetría Meteorológica:* Condiciones aptas para colado.\n• *CIRSOC 201:* Ensayos de compresión probetas de hormigón en regla.`;
+                    botReply = `🏗️ *Control Estructural & Climatológico (Dirección Técnica)*\n\n• *Obra:* ${state.projectConfig?.name || 'Obra'} (${state.projectConfig?.city || 'CABA'})\n• *Hito Q1:* Revoque Grueso al 100%\n• *Telemetría Meteorológica:* Condiciones aptas para colado.\n• *CIRSOC 201:* Ensayos de compresión probetas de hormigón en regla.`;
                 } else if (normalBody === '3' || normalBody.includes('incidencia') || normalBody.includes('vicios')) {
                     botReply = `🔍 *Inspección de Incidencias & Vicios Ocultos*\n\n• Incidencias Abiertas: ${state.alertsCount || 0}\n• Tarea de Emergencia: Cañería de baño en reparación.\n• Fotos de Inspección en Bitácora: ${state.sitePhotos?.length || 0} registradas.`;
                 } else if (normalBody === '4' || normalBody.includes('quincena') || normalBody.includes('certificacion')) {
@@ -870,7 +909,7 @@ export async function POST(request) {
             // 👷 Worker Handling
             else {
                 if (normalBody === '1' || normalBody.includes('fichar') || normalBody.includes('entre') || normalBody.includes('llegue')) {
-                    botReply = `📍 *Fichaje de Asistencia*\n\nPor favor enviá tu *Ubicación en Tiempo Real 📍* desde el clip de WhatsApp para certificar tu ingreso por geocerca satelital a *${state.projectConfig?.name || 'Torre Palermo Soho'}*.\n\n👉 Tarjeta de Presentismo: ${attendanceLink}`;
+                    botReply = `📍 *Fichaje de Asistencia*\n\nPor favor enviá tu *Ubicación en Tiempo Real 📍* desde el clip de WhatsApp para certificar tu ingreso por geocerca satelital a *${state.projectConfig?.name || 'Obra'}*.\n\n👉 Tarjeta de Presentismo: ${attendanceLink}`;
                 } else if (normalBody === '2' || normalBody.includes('avance')) {
                     botReply = `📋 *Reporte de Avance*\n\nPor favor escribí el avance realizado (ej: _"Soy Juan, terminamos el revoque al 100%"_) o enviá un audio/foto de la tarea completada.`;
                 } else if (normalBody === '3' || normalBody.includes('incidencia') || normalBody.includes('problema')) {

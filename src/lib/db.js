@@ -451,6 +451,46 @@ export const defaultAppState = {
             signatureStatus: "CERTIFICADO_SHA256"
         }
     ],
+    // Budget tracking by rubro
+    budget: {
+        rubros: [
+            { id: 'estructura', nombre: 'Estructura (Hormigón + Hierro)', presupuesto: 1498500, ejecutado: 1423575, movimientos: [] },
+            { id: 'mamposteria', nombre: 'Mampostería y Revoques', presupuesto: 749250, ejecutado: 449550, movimientos: [] },
+            { id: 'instalaciones', nombre: 'Instalaciones (Sanitaria + Gas + Eléctrica)', presupuesto: 899100, ejecutado: 269730, movimientos: [] },
+            { id: 'carpinteria', nombre: 'Carpintería y Aberturas', presupuesto: 499500, ejecutado: 0, movimientos: [] },
+            { id: 'pintura', nombre: 'Pintura y Revestimientos', presupuesto: 399600, ejecutado: 0, movimientos: [] },
+            { id: 'pisos', nombre: 'Pisos y Mesadas', presupuesto: 349650, ejecutado: 0, movimientos: [] },
+            { id: 'cubierta', nombre: 'Cubierta e Impermeabilización', presupuesto: 249750, ejecutado: 0, movimientos: [] },
+            { id: 'mano_obra', nombre: 'Mano de Obra (Jornales UOCRA)', presupuesto: 249750, ejecutado: 124875, movimientos: [] },
+            { id: 'imprevistos', nombre: 'Imprevistos (5%)', presupuesto: 99900, ejecutado: 0, movimientos: [] }
+        ],
+        lastUpdated: "2026-08-18T12:00:00.000Z"
+    },
+    // Libro de Obra Digital (Ley 22.250)
+    libroObra: [],
+    // Tenant registry (multi-tenant)
+    tenants: [
+        {
+            id: 'tenant-default',
+            name: 'ObraSaaS Demo',
+            slug: 'demo',
+            plan: 'professional',
+            ownerEmail: 'marcelo@obrasaas.app',
+            ownerPhone: '5492613168608',
+            createdAt: '2026-01-15T00:00:00.000Z',
+            projectCount: 4,
+            workerCount: 6,
+            status: 'active'
+        }
+    ],
+    // Project-level insurance policies
+    projectPolicies: [
+        { type: 'Todo Riesgo Construcción', company: 'San Cristóbal Seguros', status: 'VIGENTE', expirationDate: '2027-03-15', coverage: '$50.000.000 ARS' },
+        { type: 'Responsabilidad Civil', company: 'La Meridional', status: 'VIGENTE', expirationDate: '2027-01-20', coverage: '$20.000.000 ARS' },
+        { type: 'Caución por Anticipo', company: 'Fianzas y Crédito', status: 'VIGENTE', expirationDate: '2026-12-31', coverage: '$5.000.000 ARS' }
+    ],
+    // Registered webhooks
+    webhooks: [],
     subscription: {
         status: "active",
         plan: "Pro",
@@ -617,6 +657,32 @@ export async function saveAppState(state) {
             checkAndSendAlerts(state, previousState).catch(err => 
                 console.warn('Alert check failed (non-fatal):', err.message)
             );
+        }).catch(() => {});
+    }
+    
+    // Webhook event dispatching (non-blocking)
+    if (previousState && state.webhooks?.length > 0) {
+        import('./webhookDispatcher.js').then(({ dispatchWebhookEvent }) => {
+            // Detect task completions
+            const prevTasks = previousState.tasks || {};
+            const newTasks = state.tasks || {};
+            for (const [key, task] of Object.entries(newTasks)) {
+                if (task.progress === 100 && prevTasks[key]?.progress < 100) {
+                    dispatchWebhookEvent(state, 'task.completed', { taskId: key, name: task.name });
+                } else if (task.progress !== prevTasks[key]?.progress) {
+                    dispatchWebhookEvent(state, 'task.progress_updated', { taskId: key, name: task.name, progress: task.progress });
+                }
+            }
+            // Detect new incidents
+            if ((state.incidents?.length || 0) > (previousState.incidents?.length || 0)) {
+                const newInc = state.incidents[state.incidents.length - 1];
+                dispatchWebhookEvent(state, 'incident.created', newInc);
+            }
+            // Detect new worker registrations
+            if ((state.workerRegistry?.length || 0) > (previousState.workerRegistry?.length || 0)) {
+                const newWorker = state.workerRegistry[state.workerRegistry.length - 1];
+                dispatchWebhookEvent(state, 'worker.registered', { name: newWorker.name, trade: newWorker.trade });
+            }
         }).catch(() => {});
     }
     

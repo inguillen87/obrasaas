@@ -1390,13 +1390,39 @@ export default function Dashboard() {
                 <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-rocket"></i> Landing Comercial</button>
               </Link>
             </li>
+            <li style={{ padding: '8px 16px', fontSize: '0.65rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 700, marginTop: '8px' }}>Enterprise</li>
+            <li className="nav-item">
+              <Link href="/costos" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
+                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-coins"></i> Control de Costos</button>
+              </Link>
+            </li>
+            <li className="nav-item">
+              <Link href="/ejecutivo" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
+                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-briefcase"></i> Dashboard CEO</button>
+              </Link>
+            </li>
+            <li className="nav-item">
+              <Link href="/portal" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
+                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-building"></i> Portal Inversor</button>
+              </Link>
+            </li>
+            <li className="nav-item">
+              <Link href="/superadmin" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
+                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-shield-halved"></i> Super Admin</button>
+              </Link>
+            </li>
+            <li className="nav-item">
+              <Link href="/api-docs" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
+                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-code"></i> API Docs</button>
+              </Link>
+            </li>
           </nav>
           
           <div className="sidebar-footer">
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%' }}>
-              <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--primary)', color: 'var(--bg-main)', fontWeight: 800, display: 'flex', alignItems: 'center', fontSize: '0.85rem', flexShrink: 0, justifyContent: 'center' }}>M</div>
+              <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--primary)', color: 'var(--bg-main)', fontWeight: 800, display: 'flex', alignItems: 'center', fontSize: '0.85rem', flexShrink: 0, justifyContent: 'center' }}>{(state.projectConfig?.director?.name || 'M')[0]}</div>
               <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexGrow: 1 }}>
-                <span style={{ fontSize: '0.75rem', fontWeight: 700, display: 'block', color: '#fff' }}>Arq. Marcelo</span>
+                <span style={{ fontSize: '0.75rem', fontWeight: 700, display: 'block', color: '#fff' }}>{state.projectConfig?.director?.name || 'Director'}</span>
                 <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>Plan {state.subscription?.plan || 'Pro'}</span>
               </div>
               <button onClick={handleClerkLogout} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}>

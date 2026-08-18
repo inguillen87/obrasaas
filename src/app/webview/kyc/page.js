@@ -36,7 +36,7 @@ function KYCContent() {
     const [gpsDistance, setGpsDistance] = useState(null);
     const [gpsStatus, setGpsStatus] = useState('Obteniendo satélites...');
     const [isInsideGeofence, setIsInsideGeofence] = useState(false);
-    const [activeProjectName, setActiveProjectName] = useState('Torre Palermo Soho');
+    const [activeProjectName, setActiveProjectName] = useState('Obra');
     const [projectCoords, setProjectCoords] = useState({ lat: -34.5886, lon: -58.4302, radius: 100 });
 
     // Submission & Error State

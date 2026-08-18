@@ -82,7 +82,7 @@ export async function POST(request) {
 
         // 4. Calculate Geofence Distance to current active obra
         const projectSite = {
-            name: state.projectConfig?.name || "Torre Palermo Soho",
+            name: state.projectConfig?.name || "Obra",
             lat: state.projectConfig?.latitude || -34.5886,
             lon: state.projectConfig?.longitude || -58.4302,
             radius: state.projectConfig?.geofenceRadiusMeters || 100

@@ -9,7 +9,7 @@ export default function WeatherRadar({ weatherTelemetry, setWeatherTelemetry, se
             <i className="fa-solid fa-cloud-sun-rain"></i> Telemetría Meteorológica &amp; Radar de Hormigonado
           </h3>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-            Auditoría satelital en tiempo real para colado de losas y revoques en <strong>{state.projectConfig?.name || 'Torre Palermo Soho'} ({state.projectConfig?.city || 'CABA'})</strong>. Normas IRAM 1666 y CIRSOC 201.
+            Auditoría satelital en tiempo real para colado de losas y revoques en <strong>{state.projectConfig?.name || 'Obra'} ({state.projectConfig?.city || 'CABA'})</strong>. Normas IRAM 1666 y CIRSOC 201.
           </p>
         </div>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>

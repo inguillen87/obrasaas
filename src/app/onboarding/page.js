@@ -16,9 +16,29 @@ export default function OnboardingPage() {
 
     const handleSubmit = async () => {
         setIsSubmitting(true);
-        // In production this would create the tenant + project via API
-        await new Promise(r => setTimeout(r, 2000));
-        setCompleted(true);
+        try {
+            const slug = form.companyName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+            const res = await fetch('/api/admin/tenants', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-api-key': 'onboarding' },
+                body: JSON.stringify({
+                    name: form.companyName,
+                    slug,
+                    plan: form.plan,
+                    ownerEmail: form.email,
+                    ownerPhone: form.phone
+                })
+            });
+            if (res.ok) {
+                setCompleted(true);
+            } else {
+                const err = await res.json();
+                alert(err.error || 'Error al crear la cuenta');
+            }
+        } catch (err) {
+            console.error('Onboarding error:', err);
+            alert('Error de conexión. Intentá de nuevo.');
+        }
         setIsSubmitting(false);
     };
 
