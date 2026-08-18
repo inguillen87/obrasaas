@@ -169,6 +169,113 @@ const initialAppState = {
   hrBonuses: [
       { name: "Juan Gómez", type: "Bono Puntualidad", amount: "$25.000 ARS", date: "Hace 2 días" },
       { name: "Luis Martínez", type: "Bono Desempeño", amount: "$45.000 ARS", date: "Hace 1 semana" }
+  ],
+  kycVerifications: {
+      "w-1": {
+          workerId: "w-1",
+          workerName: "Juan Gómez",
+          dni: "34.589.120",
+          phone: "+54 9 11 3241-9981",
+          dniFrontUrl: "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&w=600&q=80",
+          dniBackUrl: "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&w=600&q=80",
+          selfieUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=600&q=80",
+          faceMatchScore: 98.4,
+          voiceSampleEnrolled: true,
+          geofenceRadiusValid: true,
+          status: "VERIFICADO",
+          verifiedAt: "10/08/2026 08:00 AM",
+          trade: "Albañil Principal",
+          uocraLevel: "Oficial Albañil"
+      },
+      "w-2": {
+          workerId: "w-2",
+          workerName: "Luis Martínez",
+          dni: "31.204.850",
+          phone: "+54 9 11 8899-7766",
+          dniFrontUrl: "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&w=600&q=80",
+          dniBackUrl: "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&w=600&q=80",
+          selfieUrl: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=600&q=80",
+          faceMatchScore: 96.8,
+          voiceSampleEnrolled: true,
+          geofenceRadiusValid: true,
+          status: "VERIFICADO",
+          verifiedAt: "11/08/2026 07:45 AM",
+          trade: "Plomero / Gasista",
+          uocraLevel: "Oficial Especializado"
+      },
+      "w-3": {
+          workerId: "w-3",
+          workerName: "Carlos Pérez",
+          dni: "28.940.111",
+          phone: "+54 9 11 3241-9982",
+          dniFrontUrl: null,
+          dniBackUrl: null,
+          selfieUrl: null,
+          faceMatchScore: 0,
+          voiceSampleEnrolled: false,
+          geofenceRadiusValid: false,
+          status: "PENDIENTE",
+          verifiedAt: null,
+          trade: "Pintor / Revestimientos",
+          uocraLevel: "Medio Oficial"
+      }
+  },
+  remitos: [
+      {
+          id: "rem-101",
+          proveedor: "Ferretería Palermo Soho",
+          cuit: "30-71829340-9",
+          comprobanteNro: "REM-0004-00019283",
+          fecha: "17/08/2026",
+          montoTotal: 18500,
+          moneda: "ARS",
+          items: [
+              { descripcion: "Clavos punta París 2 1/2 (kg)", cantidad: 2, precioUnitario: 3500, subtotal: 7000 },
+              { descripcion: "Alambre de fardo recocido #16 (kg)", cantidad: 2.5, precioUnitario: 4600, subtotal: 11500 }
+          ],
+          solicitante: "Arq. Marcelo",
+          estado: "Aprobado",
+          scannedPhotoUrl: "https://images.unsplash.com/photo-1554415707-9e49016a3e46?auto=format&fit=crop&w=600&q=80",
+          ocrConfidence: 99.2,
+          categoria: "Ferretería & Herramientas"
+      },
+      {
+          id: "rem-100",
+          proveedor: "Cantera & Corralón Central",
+          cuit: "33-65920194-9",
+          comprobanteNro: "FACT-A-0002-00448190",
+          fecha: "16/08/2026",
+          montoTotal: 47000,
+          moneda: "ARS",
+          items: [
+              { descripcion: "Flete de emergencia arena fina (m³)", cantidad: 2, precioUnitario: 23500, subtotal: 47000 }
+          ],
+          solicitante: "Luis Martínez",
+          estado: "Aprobado",
+          scannedPhotoUrl: "https://images.unsplash.com/photo-1607344645866-009c320b5ab8?auto=format&fit=crop&w=600&q=80",
+          ocrConfidence: 98.7,
+          categoria: "Áridos & Fletes"
+      }
+  ],
+  sitePhotos: [
+      {
+          id: "sp-1",
+          photoUrl: "https://images.unsplash.com/photo-1541888946425-d0fbb18086f6?auto=format&fit=crop&w=800&q=80",
+          caption: "Inspección de revoque grueso en frente de obra",
+          phase: "Mampostería & Revoques",
+          aiAnalysis: "Revoque grueso completado con nivel de plomada adecuado. Cobertura estimada: 100% de la sección frontal.",
+          timestamp: "Hoy, 11:48 AM",
+          reporter: "Juan Gómez (Albañilería)"
+      },
+      {
+          id: "sp-2",
+          photoUrl: "https://images.unsplash.com/photo-1581094794329-c8112a89af12?auto=format&fit=crop&w=800&q=80",
+          caption: "Instalación de cañerías cloacales y desagües secundarios",
+          phase: "Sanitarios & Descargas",
+          aiAnalysis: "Caños de PVC 110 fijados con abrazaderas metálicas. Pendiente verificada: 2.1%. Sin obstrucciones.",
+          timestamp: "Hoy, 10:20 AM",
+          reporter: "Luis Martínez (Plomero)"
+      }
   ]
 };
 
@@ -2234,6 +2341,103 @@ export default function Dashboard() {
               </div>
             </div>
 
+            {/* Remitos & Facturas Digitalizadas con IA (OCR en Vivo) */}
+            <div className="glass-panel-premium dashboard-card-hover" style={{ marginTop: '24px' }}>
+              <div className="section-header" style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                <div>
+                  <h3 style={{ fontFamily: 'var(--font-heading)', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', color: 'var(--success)' }}>
+                    <i className="fa-solid fa-receipt"></i> Remitos &amp; Facturas Digitalizadas por IA (OCR)
+                  </h3>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                    Extracción automática con GPT-4o Vision de proveedores, CUIT, ítems y montos desde fotos de WhatsApp. Sincronizado en vivo con Caja Chica.
+                  </p>
+                </div>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <span className="badge badge-success"><i className="fa-solid fa-bolt"></i> Auditoría OCR Activa</span>
+                </div>
+              </div>
+
+              <div className="grid-2" style={{ gap: '16px' }}>
+                {(state.remitos || []).map((rem, idx) => (
+                  <div key={rem.id || idx} style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                          <span style={{ fontWeight: 800, color: '#fff', fontSize: '0.95rem' }}>{rem.proveedor}</span>
+                          <span className="badge badge-secondary" style={{ fontSize: '0.65rem' }}>{rem.categoria}</span>
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                          CUIT: <strong>{rem.cuit}</strong> • Comp: <strong>{rem.comprobanteNro}</strong>
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <span style={{ fontSize: '1.1rem', fontWeight: 900, color: 'var(--success)', display: 'block' }}>
+                          ${rem.montoTotal?.toLocaleString('es-AR')} ARS
+                        </span>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{rem.fecha}</span>
+                      </div>
+                    </div>
+
+                    {/* Items table */}
+                    <div style={{ background: 'rgba(0,0,0,0.25)', borderRadius: '8px', padding: '8px 12px' }}>
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 700, display: 'block', marginBottom: '6px' }}>Ítems Auditados:</span>
+                      {(rem.items || []).map((it, itemIdx) => (
+                        <div key={itemIdx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-primary)', padding: '2px 0' }}>
+                          <span>• {it.cantidad}x {it.descripcion}</span>
+                          <strong style={{ color: '#fff' }}>${it.subtotal?.toLocaleString('es-AR')} ARS</strong>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.7rem', color: 'var(--text-secondary)', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '8px' }}>
+                      <span>Rendido por: <strong style={{ color: '#fff' }}>{rem.solicitante}</strong></span>
+                      <span style={{ color: '#38bdf8', fontWeight: 'bold' }}><i className="fa-solid fa-circle-check"></i> OCR Confianza: {rem.ocrConfidence || 99}%</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Inspección Visual & Fotos Técnicas en Vivo (AI Vision) */}
+            <div className="glass-panel-premium dashboard-card-hover" style={{ marginTop: '24px' }}>
+              <div className="section-header" style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                <div>
+                  <h3 style={{ fontFamily: 'var(--font-heading)', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', color: 'var(--info)' }}>
+                    <i className="fa-solid fa-camera"></i> Inspección Visual &amp; Fotos Técnicas en Vivo (AI Vision)
+                  </h3>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                    Diagnóstico de calidad, control de plomos, cañerías y detección de fisuras mediante análisis de imágenes en tiempo real.
+                  </p>
+                </div>
+                <span className="badge badge-info"><i className="fa-solid fa-eye"></i> Visión Computacional</span>
+              </div>
+
+              <div className="grid-2" style={{ gap: '16px' }}>
+                {(state.sitePhotos || []).map((photo, idx) => (
+                  <div key={photo.id || idx} style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-color)', borderRadius: '12px', overflow: 'hidden' }}>
+                    <div style={{ height: '180px', backgroundImage: `url(${photo.photoUrl})`, backgroundSize: 'cover', backgroundPosition: 'center', position: 'relative' }}>
+                      <div style={{ position: 'absolute', top: '10px', left: '10px', background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)', padding: '4px 10px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 700, color: 'var(--info)', border: '1px solid var(--info)' }}>
+                        {photo.phase}
+                      </div>
+                      <div style={{ position: 'absolute', bottom: '10px', right: '10px', background: 'rgba(0,0,0,0.75)', padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem', color: '#fff' }}>
+                        {photo.timestamp}
+                      </div>
+                    </div>
+                    <div style={{ padding: '14px' }}>
+                      <p style={{ fontSize: '0.8rem', color: '#fff', fontWeight: 600, marginBottom: '6px' }}>{photo.caption}</p>
+                      <div style={{ background: 'rgba(56, 189, 248, 0.08)', borderLeft: '3px solid var(--info)', padding: '8px 10px', borderRadius: '0 6px 6px 0', fontSize: '0.75rem', color: 'var(--text-primary)', marginBottom: '8px' }}>
+                        <i className="fa-solid fa-brain" style={{ color: 'var(--info)', marginRight: '6px' }}></i>
+                        {photo.aiAnalysis}
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textAlign: 'right' }}>
+                        Reportado por: <strong>{photo.reporter}</strong>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             {/* Future Pro Features Roadmap */}
             <div className="glass-panel-premium dashboard-card-hover" style={{ marginTop: '24px' }}>
               <h3 style={{ fontFamily: 'var(--font-heading)', marginBottom: '16px', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -3542,6 +3746,102 @@ export default function Dashboard() {
                     <i className="fa-solid fa-file-circle-check"></i> Cargar Licencia &amp; Justificar Faltas
                   </button>
                 </form>
+              </div>
+            </div>
+
+            {/* Centro de Verificación KYC & Identidad Biometría */}
+            <div className="glass-panel-premium dashboard-card-hover" style={{ marginTop: '24px' }}>
+              <div className="section-header" style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                <div>
+                  <h3 style={{ fontFamily: 'var(--font-heading)', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', color: 'var(--primary)' }}>
+                    <i className="fa-solid fa-id-card-clip"></i> Centro de Verificación KYC &amp; Identidad Biometría
+                  </h3>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                    Auditoría estricta de identidad: validación de DNI mediante OCR, biometría facial (liveness check), geocerca satelital y enrolamiento vocal.
+                  </p>
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <a href="/webview/kyc" target="_blank" className="btn btn-primary btn-sm" style={{ padding: '8px 14px', fontSize: '0.75rem', fontWeight: 700, borderRadius: '8px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                    <i className="fa-solid fa-user-plus"></i> Abrir Portal KYC Móvil
+                  </a>
+                </div>
+              </div>
+
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid var(--border-color)', color: 'var(--text-secondary)' }}>
+                      <th style={{ padding: '10px' }}>Operario / Legajo</th>
+                      <th style={{ padding: '10px' }}>DNI / CUIL</th>
+                      <th style={{ padding: '10px' }}>Documento DNI</th>
+                      <th style={{ padding: '10px', textAlign: 'center' }}>Facial Match</th>
+                      <th style={{ padding: '10px', textAlign: 'center' }}>Voz Enrolada</th>
+                      <th style={{ padding: '10px', textAlign: 'center' }}>Geocerca GPS</th>
+                      <th style={{ padding: '10px', textAlign: 'center' }}>Estado KYC</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.values(state.kycVerifications || {}).map((kyc, kIndex) => {
+                      const isVerified = kyc.status === 'VERIFICADO';
+                      return (
+                        <tr key={kyc.workerId || kIndex} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                          <td style={{ padding: '10px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                              <div style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundImage: `url(${kyc.selfieUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=100&q=80'})`, backgroundSize: 'cover', backgroundPosition: 'center', border: `2px solid ${isVerified ? 'var(--success)' : '#64748b'}` }}></div>
+                              <div>
+                                <strong style={{ display: 'block', color: '#fff' }}>{kyc.workerName}</strong>
+                                <span style={{ fontSize: '0.7rem', color: 'var(--primary)' }}>{kyc.trade}</span>
+                              </div>
+                            </div>
+                          </td>
+                          <td style={{ padding: '10px' }}>
+                            <span style={{ fontWeight: 700, color: '#fff', display: 'block' }}>{kyc.dni}</span>
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{kyc.phone || '+54 9 11 ...'}</span>
+                          </td>
+                          <td style={{ padding: '10px' }}>
+                            {kyc.dniFrontUrl ? (
+                              <span style={{ color: 'var(--success)', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                <i className="fa-solid fa-file-check"></i> OCR Validado
+                              </span>
+                            ) : (
+                              <span style={{ color: '#ef4444', fontSize: '0.8rem' }}>
+                                <i className="fa-solid fa-clock"></i> Pendiente
+                              </span>
+                            )}
+                          </td>
+                          <td style={{ padding: '10px', textAlign: 'center' }}>
+                            {kyc.faceMatchScore > 0 ? (
+                              <span style={{ color: 'var(--success)', fontWeight: 'bold' }}>
+                                {kyc.faceMatchScore}% ✓
+                              </span>
+                            ) : (
+                              <span style={{ color: 'var(--text-muted)' }}>--</span>
+                            )}
+                          </td>
+                          <td style={{ padding: '10px', textAlign: 'center' }}>
+                            {kyc.voiceSampleEnrolled ? (
+                              <span style={{ color: '#38bdf8' }}><i className="fa-solid fa-microphone-lines"></i> Sí</span>
+                            ) : (
+                              <span style={{ color: 'var(--text-muted)' }}>No</span>
+                            )}
+                          </td>
+                          <td style={{ padding: '10px', textAlign: 'center' }}>
+                            {kyc.geofenceRadiusValid ? (
+                              <span className="badge badge-success" style={{ fontSize: '0.7rem' }}>En Radio (0-100m)</span>
+                            ) : (
+                              <span className="badge badge-warning" style={{ fontSize: '0.7rem' }}>Sin GPS</span>
+                            )}
+                          </td>
+                          <td style={{ padding: '10px', textAlign: 'center' }}>
+                            <span className={`badge ${isVerified ? 'badge-success' : 'badge-warning'}`}>
+                              {kyc.status}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             </div>
 

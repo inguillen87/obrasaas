@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { Pool } from 'pg';
-import { emitRealtimeUpdate } from './realtime';
+import { emitRealtimeUpdate } from './realtime.js';
 
 // Global connection pool cache for Neon PostgreSQL
 let pool = null;
@@ -219,6 +219,116 @@ export const defaultAppState = {
         { name: "Juan Gómez", type: "Bono Puntualidad", amount: "$25.000 ARS", date: "Hace 2 días" },
         { name: "Luis Martínez", type: "Bono Desempeño", amount: "$45.000 ARS", date: "Hace 1 semana" }
     ],
+    // KYC Biometrics & Identity Verification Hub (Enterprise ConTech)
+    kycVerifications: {
+        "w-1": {
+            workerId: "w-1",
+            workerName: "Juan Gómez",
+            dni: "34.589.120",
+            phone: "+54 9 11 3241-9981",
+            dniFrontUrl: "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&w=600&q=80",
+            dniBackUrl: "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&w=600&q=80",
+            selfieUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=600&q=80",
+            faceMatchScore: 98.4,
+            voiceSampleEnrolled: true,
+            geofenceRadiusValid: true,
+            status: "VERIFICADO",
+            verifiedAt: "10/08/2026 08:00 AM",
+            trade: "Albañil Principal",
+            uocraLevel: "Oficial Albañil"
+        },
+        "w-2": {
+            workerId: "w-2",
+            workerName: "Luis Martínez",
+            dni: "31.204.850",
+            phone: "+54 9 11 8899-7766",
+            dniFrontUrl: "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&w=600&q=80",
+            dniBackUrl: "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&w=600&q=80",
+            selfieUrl: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=600&q=80",
+            faceMatchScore: 96.8,
+            voiceSampleEnrolled: true,
+            geofenceRadiusValid: true,
+            status: "VERIFICADO",
+            verifiedAt: "11/08/2026 07:45 AM",
+            trade: "Plomero / Gasista",
+            uocraLevel: "Oficial Especializado"
+        },
+        "w-3": {
+            workerId: "w-3",
+            workerName: "Carlos Pérez",
+            dni: "28.940.111",
+            phone: "+54 9 11 3241-9982",
+            dniFrontUrl: null,
+            dniBackUrl: null,
+            selfieUrl: null,
+            faceMatchScore: 0,
+            voiceSampleEnrolled: false,
+            geofenceRadiusValid: false,
+            status: "PENDIENTE",
+            verifiedAt: null,
+            trade: "Pintor / Revestimientos",
+            uocraLevel: "Medio Oficial"
+        }
+    },
+    // Real Scanned Remitos & Receipts OCR with Line Items & Image Provenance
+    remitos: [
+        {
+            id: "rem-101",
+            proveedor: "Ferretería Palermo Soho",
+            cuit: "30-71829340-9",
+            comprobanteNro: "REM-0004-00019283",
+            fecha: "17/08/2026",
+            montoTotal: 18500,
+            moneda: "ARS",
+            items: [
+                { descripcion: "Clavos punta París 2 1/2 (kg)", cantidad: 2, precioUnitario: 3500, subtotal: 7000 },
+                { descripcion: "Alambre de fardo recocido #16 (kg)", cantidad: 2.5, precioUnitario: 4600, subtotal: 11500 }
+            ],
+            solicitante: "Arq. Marcelo",
+            estado: "Aprobado",
+            scannedPhotoUrl: "https://images.unsplash.com/photo-1554415707-9e49016a3e46?auto=format&fit=crop&w=600&q=80",
+            ocrConfidence: 99.2,
+            categoria: "Ferretería & Herramientas"
+        },
+        {
+            id: "rem-100",
+            proveedor: "Cantera & Corralón Central",
+            cuit: "33-65920194-9",
+            comprobanteNro: "FACT-A-0002-00448190",
+            fecha: "16/08/2026",
+            montoTotal: 47000,
+            moneda: "ARS",
+            items: [
+                { descripcion: "Flete de emergencia arena fina (m³)", cantidad: 2, precioUnitario: 23500, subtotal: 47000 }
+            ],
+            solicitante: "Luis Martínez",
+            estado: "Aprobado",
+            scannedPhotoUrl: "https://images.unsplash.com/photo-1607344645866-009c320b5ab8?auto=format&fit=crop&w=600&q=80",
+            ocrConfidence: 98.7,
+            categoria: "Áridos & Fletes"
+        }
+    ],
+    // Live Technical Construction Photos Analyzed by Vision AI
+    sitePhotos: [
+        {
+            id: "sp-1",
+            photoUrl: "https://images.unsplash.com/photo-1541888946425-d0fbb18086f6?auto=format&fit=crop&w=800&q=80",
+            caption: "Inspección de revoque grueso en frente de obra",
+            phase: "Mampostería & Revoques",
+            aiAnalysis: "Revoque grueso completado con nivel de plomada adecuado. Cobertura estimada: 100% de la sección frontal.",
+            timestamp: "Hoy, 11:48 AM",
+            reporter: "Juan Gómez (Albañilería)"
+        },
+        {
+            id: "sp-2",
+            photoUrl: "https://images.unsplash.com/photo-1581094794329-c8112a89af12?auto=format&fit=crop&w=800&q=80",
+            caption: "Instalación de cañerías cloacales y desagües secundarios",
+            phase: "Sanitarios & Descargas",
+            aiAnalysis: "Caños de PVC 110 fijados con abrazaderas metálicas. Pendiente verificada: 2.1%. Sin obstrucciones.",
+            timestamp: "Hoy, 10:20 AM",
+            reporter: "Luis Martínez (Plomero)"
+        }
+    ],
     subscription: {
         status: "active",
         plan: "Pro",
@@ -278,7 +388,11 @@ async function readDb() {
                     ...storedState,
                     projectConfig: storedState.projectConfig || defaultAppState.projectConfig,
                     workerRegistry: storedState.workerRegistry || defaultAppState.workerRegistry,
-                    attendance: { ...defaultAppState.attendance, ...(storedState.attendance || {}) }
+                    attendance: { ...defaultAppState.attendance, ...(storedState.attendance || {}) },
+                    cajaChica: storedState.cajaChica || defaultAppState.cajaChica,
+                    kycVerifications: { ...defaultAppState.kycVerifications, ...(storedState.kycVerifications || {}) },
+                    remitos: storedState.remitos || defaultAppState.remitos,
+                    sitePhotos: storedState.sitePhotos || defaultAppState.sitePhotos
                 };
                 return {
                     appState: mergedState,

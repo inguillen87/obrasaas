@@ -1,0 +1,728 @@
+{
+  "appState": {
+    "operariosCount": 1,
+    "avancePercentage": 42,
+    "alertsCount": 2,
+    "diasEstimados": "Día 12/35",
+    "currentQuincena": "Quincena 1 (01/Ago - 15/Ago)",
+    "projectConfig": {
+      "id": "obra-palermo-01",
+      "name": "Torre Palermo Soho",
+      "address": "Honduras 4850, Palermo, CABA",
+      "latitude": -34.5886,
+      "longitude": -58.4302,
+      "geofenceRadiusMeters": 100,
+      "expectedWorkersCount": 5,
+      "director": {
+        "name": "Arq. Marcelo",
+        "phone": "+54 9 261 316-8608"
+      },
+      "capataz": {
+        "name": "Luis Martínez",
+        "phone": "+54 9 11 8899-7766"
+      }
+    },
+    "workerRegistry": [
+      {
+        "id": "w-1",
+        "name": "Juan Gómez",
+        "role": "Albañilería Principal",
+        "trade": "Albañil Principal",
+        "phone": "+54 9 11 3241-9981",
+        "dni": "34.589.120",
+        "status": "Activo",
+        "assignedTasks": [
+          "Revoque Grueso"
+        ]
+      },
+      {
+        "id": "w-2",
+        "name": "Luis Martínez",
+        "role": "Instalaciones y Sanitarios",
+        "trade": "Plomero / Gasista",
+        "phone": "+54 9 11 8899-7766",
+        "dni": "31.204.850",
+        "status": "Activo",
+        "assignedTasks": [
+          "Cañería y Descargas"
+        ]
+      },
+      {
+        "id": "w-3",
+        "name": "Carlos Pérez",
+        "role": "Pintura e Interiores",
+        "trade": "Pintor / Revestimientos",
+        "phone": "+54 9 11 3241-9982",
+        "dni": "28.940.111",
+        "status": "Activo",
+        "assignedTasks": [
+          "Revestimiento Cerámico",
+          "Pintura"
+        ]
+      },
+      {
+        "id": "w-4",
+        "name": "Arq. Marcelo",
+        "role": "Director de Obra",
+        "trade": "Arquitectura & Dirección",
+        "phone": "+54 9 261 316-8608",
+        "dni": "25.109.800",
+        "status": "Director",
+        "assignedTasks": [
+          "Certificaciones Quincenales"
+        ]
+      },
+      {
+        "id": "w-5",
+        "name": "Aberturas López",
+        "role": "Proveedor Externo",
+        "trade": "Carpintería de Aluminio",
+        "phone": "+54 9 11 5544-3322",
+        "dni": "CUIT 30-71458920-4",
+        "status": "Proveedor",
+        "assignedTasks": [
+          "Entrega Aberturas Q2"
+        ]
+      },
+      {
+        "id": "w-6",
+        "name": "Arq. Victoria",
+        "role": "Socia & Directora Técnica",
+        "trade": "Arquitectura & Dirección Técnica",
+        "phone": "+54 9 2964 52-0753",
+        "dni": "33.450.912",
+        "status": "Socia Directora",
+        "assignedTasks": [
+          "Supervisión Técnica",
+          "Certificaciones"
+        ]
+      },
+      {
+        "id": "w-miguel",
+        "name": "Miguel Ángel Benítez",
+        "role": "Oficial Armador / Encofrador",
+        "trade": "Oficial Armador / Encofrador",
+        "phone": "+54 9 11 9999-8888",
+        "dni": "36.812.440",
+        "status": "Activo (KYC OK)",
+        "assignedTasks": [
+          "Mampostería y Revoques"
+        ]
+      }
+    ],
+    "tasks": {
+      "1": {
+        "name": "Revoque Grueso",
+        "progress": 80,
+        "duration": 5,
+        "startOffset": 0,
+        "assignee": "Juan Gómez",
+        "quincena": "Q1",
+        "startDate": "2026-08-01",
+        "endDate": "2026-08-06",
+        "requiredMaterials": [
+          "Cemento Loma Negra",
+          "Arena Fina"
+        ],
+        "materialStatus": "Disponible",
+        "isBlocked": false,
+        "supplierStatus": "Confirmado",
+        "supplierName": "Loma Negra S.A."
+      },
+      "2": {
+        "name": "Cañería y Descargas",
+        "progress": 20,
+        "duration": 4,
+        "startOffset": 28.5,
+        "assignee": "Luis Martínez",
+        "quincena": "Q1",
+        "startDate": "2026-08-07",
+        "endDate": "2026-08-11",
+        "requiredMaterials": [
+          "Caño PVC 110",
+          "Codos y Ramales"
+        ],
+        "materialStatus": "Disponible",
+        "isBlocked": false,
+        "supplierStatus": "Confirmado",
+        "supplierName": "Sanitarios Palermo"
+      },
+      "3": {
+        "name": "Revestimiento Cerámico",
+        "progress": 0,
+        "duration": 4,
+        "startOffset": 57.1,
+        "assignee": "Carlos Pérez",
+        "quincena": "Q2",
+        "startDate": "2026-08-16",
+        "endDate": "2026-08-20",
+        "requiredMaterials": [
+          "Cerámicas San Lorenzo",
+          "Pegamento Klaukol"
+        ],
+        "materialStatus": "Pendiente de Materiales",
+        "isBlocked": true,
+        "supplierStatus": "En Riesgo (Demora 48hs)",
+        "supplierName": "Cerámicas San Lorenzo",
+        "isShifted": false
+      },
+      "4": {
+        "name": "Pintura y Terminación",
+        "progress": 0,
+        "duration": 2,
+        "startOffset": 85.7,
+        "assignee": "Carlos Pérez",
+        "quincena": "Q2",
+        "startDate": "2026-08-21",
+        "endDate": "2026-08-23",
+        "requiredMaterials": [
+          "Látex Alba Interior",
+          "Enduido Plástico"
+        ],
+        "materialStatus": "Disponible",
+        "isBlocked": false,
+        "supplierStatus": "Confirmado",
+        "supplierName": "Pinturerías Rex"
+      }
+    },
+    "incidents": [
+      {
+        "id": "inc-kyc-1787012670730",
+        "title": "Operario Verificado con KYC Biométrico",
+        "description": "Miguel Ángel Benítez (DNI 36.812.440) completó validación de DNI, selfie facial y geocerca satelital (0m).",
+        "type": "success",
+        "badge": "KYC Aprobado",
+        "timestamp": "Hoy, 09:24 p. m.",
+        "reporter": "Portal KYC Móvil",
+        "icon": "fa-solid fa-user-check"
+      },
+      {
+        "id": "inc-dir-1787012670693",
+        "title": "Presentismo Supervisado por Director",
+        "description": "Arq. Marcelo certificó el ingreso a obra de Juan Gómez.",
+        "type": "info",
+        "badge": "Dirección",
+        "timestamp": "Hoy, 09:24 p. m.",
+        "reporter": "Arq. Marcelo (Director)",
+        "icon": "fa-solid fa-user-check"
+      },
+      {
+        "id": "inc-1",
+        "title": "Quiebre de Stock Crítico",
+        "description": "Cemento Loma Negra por debajo del mínimo de seguridad (35 de 40 bolsas). Riesgo de detención de revoque grueso.",
+        "type": "warning",
+        "badge": "Stock Bajo",
+        "timestamp": "Hoy, 08:30 AM",
+        "reporter": "Control de Corralón",
+        "icon": "fa-solid fa-triangle-exclamation"
+      },
+      {
+        "id": "inc-2",
+        "title": "Alerta de Geocerca (Desvío GPS)",
+        "description": "El operario Carlos Pérez registró check-in satelital a 150m del radio de obra verificado (excede límite de 20m).",
+        "type": "critical",
+        "badge": "Desvío GPS",
+        "timestamp": "Hoy, 07:50 AM",
+        "reporter": "Geolocalización Satelital",
+        "icon": "fa-solid fa-location-crosshairs"
+      },
+      {
+        "id": "inc-3",
+        "title": "Asistencia Registrada por Voz",
+        "description": "Juan Gómez (Albañilería Principal) inició jornada. Biometría de voz validada con éxito.",
+        "type": "success",
+        "badge": "Presentismo",
+        "timestamp": "Hoy, 08:02 AM",
+        "reporter": "Asistente de Voz IA",
+        "icon": "fa-solid fa-microphone"
+      },
+      {
+        "id": "inc-4",
+        "title": "Planificación Gantt Sincronizada",
+        "description": "Línea base reajustada. Hito de finalización proyectado para el 15/Jul.",
+        "type": "info",
+        "badge": "Gantt",
+        "timestamp": "Ayer, 06:15 PM",
+        "reporter": "Supervisor IA",
+        "icon": "fa-solid fa-chart-gantt"
+      }
+    ],
+    "attendance": {
+      "Juan Gómez": {
+        "role": "Albañilería Principal",
+        "checkin": "09:24 p. m.",
+        "status": "Presente (Supervisado)",
+        "verifiedBy": "Director Arq. Marcelo",
+        "distanceMeters": 12
+      },
+      "Carlos Pérez": {
+        "role": "Pintura e Interiores",
+        "checkin": "--:--",
+        "status": "Ausente",
+        "verifiedBy": "Pendiente",
+        "distanceMeters": null
+      },
+      "Luis Martínez": {
+        "role": "Instalaciones y Sanitarios",
+        "checkin": "--:--",
+        "status": "Ausente",
+        "verifiedBy": "Pendiente",
+        "distanceMeters": null
+      },
+      "Arq. Victoria": {
+        "role": "Socia & Directora Técnica",
+        "checkin": "--:--",
+        "status": "Socia Directora",
+        "verifiedBy": "Acceso Remoto",
+        "distanceMeters": null
+      },
+      "Miguel Ángel Benítez": {
+        "role": "Oficial Armador / Encofrador",
+        "checkin": "09:24 p. m.",
+        "status": "Presente (KYC Satelital)",
+        "verifiedBy": "KYC Biométrico & DNI",
+        "distanceMeters": 0
+      }
+    },
+    "stockpiles": {
+      "cemento": {
+        "name": "Cemento Loma Negra",
+        "current": 35,
+        "min": 40,
+        "max": 150,
+        "unit": "Bolsas",
+        "supplier": "Loma Negra S.A.",
+        "status": "Crítico",
+        "confirmedDeliveryDate": "16/08/2026",
+        "onTimeStatus": "A tiempo"
+      },
+      "hierro": {
+        "name": "Hierro A500 Acindar",
+        "current": 85,
+        "min": 30,
+        "max": 100,
+        "unit": "Barras",
+        "supplier": "Acindar Distribuidores",
+        "status": "Stock OK",
+        "confirmedDeliveryDate": "18/08/2026",
+        "onTimeStatus": "A tiempo"
+      },
+      "ladrillo": {
+        "name": "Ladrillo Portante Alberdi",
+        "current": 1500,
+        "min": 800,
+        "max": 2500,
+        "unit": "Uds",
+        "supplier": "Ladrillos Alberdi",
+        "status": "Stock OK",
+        "confirmedDeliveryDate": "20/08/2026",
+        "onTimeStatus": "A tiempo"
+      },
+      "arena": {
+        "name": "Arena Fina Cantera",
+        "current": 4,
+        "min": 8,
+        "max": 20,
+        "unit": "m³",
+        "supplier": "Cantera Palermo",
+        "status": "En Camino",
+        "confirmedDeliveryDate": "17/08/2026",
+        "onTimeStatus": "A tiempo"
+      },
+      "ceramicas": {
+        "name": "Cerámica San Lorenzo 45x45",
+        "current": 0,
+        "min": 80,
+        "max": 150,
+        "unit": "m²",
+        "supplier": "Cerámicas San Lorenzo",
+        "status": "Demorado",
+        "confirmedDeliveryDate": "25/08/2026",
+        "onTimeStatus": "Retraso 48hs"
+      }
+    },
+    "suppliers": [
+      {
+        "id": "prov-1",
+        "name": "Loma Negra S.A.",
+        "category": "Cemento & Hormigón",
+        "email": "despacho@lomanegra.com",
+        "phone": "+54 9 11 4455-6677",
+        "status": "Confirmado",
+        "nextTaskDate": "15/08/2026",
+        "reminderDays": 7,
+        "confirmationStatus": "Confirmado"
+      },
+      {
+        "id": "prov-2",
+        "name": "Acindar Distribuidores",
+        "category": "Hierro & Estructuras",
+        "email": "ventas@acindardist.com",
+        "phone": "+54 9 11 3322-1100",
+        "status": "En Camino",
+        "nextTaskDate": "18/08/2026",
+        "reminderDays": 7,
+        "confirmationStatus": "Confirmado"
+      },
+      {
+        "id": "prov-3",
+        "name": "Ladrillos Alberdi",
+        "category": "Mampostería",
+        "email": "pedidos@alberdi.com.ar",
+        "phone": "+54 9 11 8899-0011",
+        "status": "Confirmado",
+        "nextTaskDate": "20/08/2026",
+        "reminderDays": 7,
+        "confirmationStatus": "Confirmado"
+      },
+      {
+        "id": "prov-4",
+        "name": "Aberturas López & Hnos",
+        "category": "Carpintería de Aluminio",
+        "email": "ventas@aberturaslopez.com",
+        "phone": "+54 9 11 5544-3322",
+        "status": "Pendiente",
+        "nextTaskDate": "21/08/2026",
+        "reminderDays": 7,
+        "confirmationStatus": "Pendiente (2 días antes)"
+      },
+      {
+        "id": "prov-5",
+        "name": "Cerámicas San Lorenzo",
+        "category": "Revestimientos",
+        "email": "logistica@sanlorenzo.com.ar",
+        "phone": "+54 9 11 7766-5544",
+        "status": "Demorado",
+        "nextTaskDate": "25/08/2026",
+        "reminderDays": 7,
+        "confirmationStatus": "En Riesgo - Demorado"
+      }
+    ],
+    "certifications": [
+      {
+        "id": "cert-q1",
+        "period": "Quincena 1 (01/Ago - 15/Ago)",
+        "physicalProgress": "38%",
+        "financialValue": "$2.850.000 ARS",
+        "approvedByDirector": true,
+        "directorName": "Arq. Marcelo",
+        "status": "Certificado & Facturado",
+        "date": "15/08/2026"
+      },
+      {
+        "id": "cert-q2",
+        "period": "Quincena 2 (16/Ago - 31/Ago)",
+        "physicalProgress": "14% (en curso)",
+        "financialValue": "$1.950.000 ARS",
+        "approvedByDirector": false,
+        "directorName": "Arq. Marcelo",
+        "status": "En Medición de Campo",
+        "date": "En curso"
+      }
+    ],
+    "operationalProposals": [
+      {
+        "id": "prop-1",
+        "intent": "avance_tarea",
+        "summary": "Juan Gómez reportó Revoque Grueso al 100%",
+        "proposedBy": "Juan Gómez",
+        "role": "Albañilería Principal",
+        "status": "APROBADO",
+        "timestamp": "Hoy, 08:15 AM",
+        "taskImpact": "Tarea 1 -> 100%"
+      },
+      {
+        "id": "prop-2",
+        "intent": "replanificacion_material",
+        "summary": "Demora en flete de cerámicas. Mover Revestimiento a Q2 (25/Ago)",
+        "proposedBy": "Carlos Pérez",
+        "role": "Pintura e Interiores",
+        "status": "PENDIENTE_APROBACION",
+        "timestamp": "Hoy, 09:30 AM",
+        "taskImpact": "Tarea 3 -> +48hs desplazar"
+      }
+    ],
+    "cajaChica": {
+      "saldoActual": 84500,
+      "fondoInicial": 150000,
+      "moneda": "ARS",
+      "umbralAlerta": 50000,
+      "movimientos": [
+        {
+          "id": "cc-1",
+          "descripcion": "Compra rápida clavos y alambre en ferretería",
+          "monto": 18500,
+          "tipo": "Egreso",
+          "solicitante": "Juan Gómez",
+          "estado": "Aprobado",
+          "fecha": "Hoy, 10:15 AM",
+          "ticketUrl": "/tickets/ticket-01.jpg"
+        },
+        {
+          "id": "cc-2",
+          "descripcion": "Viáticos flete de emergencia arena",
+          "monto": 47000,
+          "tipo": "Egreso",
+          "solicitante": "Luis Martínez",
+          "estado": "Aprobado",
+          "fecha": "Ayer, 03:40 PM",
+          "ticketUrl": "/tickets/ticket-02.jpg"
+        }
+      ]
+    },
+    "crmLeads": [
+      {
+        "name": "Ing. R. Silva",
+        "company": "Silva Constructora",
+        "topic": "Cotización para 8 obras simultáneas",
+        "status": "Nuevo Lead"
+      },
+      {
+        "name": "Arq. Sofía B.",
+        "company": "Estudio SB",
+        "topic": "Consulta por plan Pro de 3 usuarios",
+        "status": "En Contacto"
+      },
+      {
+        "name": "Arq. Carlos M.",
+        "company": "PfZ Planeamiento",
+        "topic": "Demo de Geofencing en Mendoza",
+        "status": "Nuevo Lead"
+      }
+    ],
+    "crmTickets": [
+      {
+        "client": "Estudio BMA",
+        "issue": "Error de sincronización en mapa de Palermo",
+        "severity": "Media"
+      },
+      {
+        "client": "MSGSSV",
+        "issue": "Falla al exportar reporte semanal en PDF",
+        "severity": "Alta"
+      },
+      {
+        "client": "Constructora Innovar",
+        "issue": "Agregar invitación para 2 operarios extra",
+        "severity": "Baja"
+      }
+    ],
+    "hrAttendance": {
+      "Juan Gómez": {
+        "role": "Albañilería Principal",
+        "presents": 21,
+        "excused": 1,
+        "unexcused": 0,
+        "status": "Presente"
+      },
+      "Carlos Pérez": {
+        "role": "Pintura e Interiores",
+        "presents": 15,
+        "excused": 2,
+        "unexcused": 5,
+        "status": "Ausente"
+      },
+      "Luis Martínez": {
+        "role": "Instalaciones y Sanitarios",
+        "presents": 18,
+        "excused": 3,
+        "unexcused": 1,
+        "status": "Ausente"
+      }
+    },
+    "hrBonuses": [
+      {
+        "name": "Juan Gómez",
+        "type": "Bono Puntualidad",
+        "amount": "$25.000 ARS",
+        "date": "Hace 2 días"
+      },
+      {
+        "name": "Luis Martínez",
+        "type": "Bono Desempeño",
+        "amount": "$45.000 ARS",
+        "date": "Hace 1 semana"
+      }
+    ],
+    "kycVerifications": {
+      "w-1": {
+        "workerId": "w-1",
+        "workerName": "Juan Gómez",
+        "dni": "34.589.120",
+        "phone": "+54 9 11 3241-9981",
+        "dniFrontUrl": "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&w=600&q=80",
+        "dniBackUrl": "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&w=600&q=80",
+        "selfieUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=600&q=80",
+        "faceMatchScore": 98.4,
+        "voiceSampleEnrolled": true,
+        "geofenceRadiusValid": true,
+        "status": "VERIFICADO",
+        "verifiedAt": "10/08/2026 08:00 AM",
+        "trade": "Albañil Principal",
+        "uocraLevel": "Oficial Albañil"
+      },
+      "w-2": {
+        "workerId": "w-2",
+        "workerName": "Luis Martínez",
+        "dni": "31.204.850",
+        "phone": "+54 9 11 8899-7766",
+        "dniFrontUrl": "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&w=600&q=80",
+        "dniBackUrl": "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&w=600&q=80",
+        "selfieUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=600&q=80",
+        "faceMatchScore": 96.8,
+        "voiceSampleEnrolled": true,
+        "geofenceRadiusValid": true,
+        "status": "VERIFICADO",
+        "verifiedAt": "11/08/2026 07:45 AM",
+        "trade": "Plomero / Gasista",
+        "uocraLevel": "Oficial Especializado"
+      },
+      "w-3": {
+        "workerId": "w-3",
+        "workerName": "Carlos Pérez",
+        "dni": "28.940.111",
+        "phone": "+54 9 11 3241-9982",
+        "dniFrontUrl": null,
+        "dniBackUrl": null,
+        "selfieUrl": null,
+        "faceMatchScore": 0,
+        "voiceSampleEnrolled": false,
+        "geofenceRadiusValid": false,
+        "status": "PENDIENTE",
+        "verifiedAt": null,
+        "trade": "Pintor / Revestimientos",
+        "uocraLevel": "Medio Oficial"
+      },
+      "w-miguel": {
+        "workerId": "w-miguel",
+        "workerName": "Miguel Ángel Benítez",
+        "dni": "36.812.440",
+        "phone": "+54 9 11 9999-8888",
+        "dniFrontUrl": "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&w=600&q=80",
+        "selfieUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=600&q=80",
+        "faceMatchScore": 98.6,
+        "voiceSampleEnrolled": true,
+        "geofenceRadiusValid": true,
+        "distanceMeters": 0,
+        "status": "VERIFICADO",
+        "verifiedAt": "17/8/2026, 09:24:30",
+        "trade": "Oficial Armador / Encofrador",
+        "uocraLevel": "Oficial Registrado"
+      }
+    },
+    "remitos": [
+      {
+        "id": "rem-101",
+        "proveedor": "Ferretería Palermo Soho",
+        "cuit": "30-71829340-9",
+        "comprobanteNro": "REM-0004-00019283",
+        "fecha": "17/08/2026",
+        "montoTotal": 18500,
+        "moneda": "ARS",
+        "items": [
+          {
+            "descripcion": "Clavos punta París 2 1/2 (kg)",
+            "cantidad": 2,
+            "precioUnitario": 3500,
+            "subtotal": 7000
+          },
+          {
+            "descripcion": "Alambre de fardo recocido #16 (kg)",
+            "cantidad": 2.5,
+            "precioUnitario": 4600,
+            "subtotal": 11500
+          }
+        ],
+        "solicitante": "Arq. Marcelo",
+        "estado": "Aprobado",
+        "scannedPhotoUrl": "https://images.unsplash.com/photo-1554415707-9e49016a3e46?auto=format&fit=crop&w=600&q=80",
+        "ocrConfidence": 99.2,
+        "categoria": "Ferretería & Herramientas"
+      },
+      {
+        "id": "rem-100",
+        "proveedor": "Cantera & Corralón Central",
+        "cuit": "33-65920194-9",
+        "comprobanteNro": "FACT-A-0002-00448190",
+        "fecha": "16/08/2026",
+        "montoTotal": 47000,
+        "moneda": "ARS",
+        "items": [
+          {
+            "descripcion": "Flete de emergencia arena fina (m³)",
+            "cantidad": 2,
+            "precioUnitario": 23500,
+            "subtotal": 47000
+          }
+        ],
+        "solicitante": "Luis Martínez",
+        "estado": "Aprobado",
+        "scannedPhotoUrl": "https://images.unsplash.com/photo-1607344645866-009c320b5ab8?auto=format&fit=crop&w=600&q=80",
+        "ocrConfidence": 98.7,
+        "categoria": "Áridos & Fletes"
+      }
+    ],
+    "sitePhotos": [
+      {
+        "id": "sp-1",
+        "photoUrl": "https://images.unsplash.com/photo-1541888946425-d0fbb18086f6?auto=format&fit=crop&w=800&q=80",
+        "caption": "Inspección de revoque grueso en frente de obra",
+        "phase": "Mampostería & Revoques",
+        "aiAnalysis": "Revoque grueso completado con nivel de plomada adecuado. Cobertura estimada: 100% de la sección frontal.",
+        "timestamp": "Hoy, 11:48 AM",
+        "reporter": "Juan Gómez (Albañilería)"
+      },
+      {
+        "id": "sp-2",
+        "photoUrl": "https://images.unsplash.com/photo-1581094794329-c8112a89af12?auto=format&fit=crop&w=800&q=80",
+        "caption": "Instalación de cañerías cloacales y desagües secundarios",
+        "phase": "Sanitarios & Descargas",
+        "aiAnalysis": "Caños de PVC 110 fijados con abrazaderas metálicas. Pendiente verificada: 2.1%. Sin obstrucciones.",
+        "timestamp": "Hoy, 10:20 AM",
+        "reporter": "Luis Martínez (Plomero)"
+      }
+    ],
+    "subscription": {
+      "status": "active",
+      "plan": "Pro",
+      "expiresAt": "2027-12-31"
+    }
+  },
+  "messages": [
+    {
+      "sender": "bot",
+      "text": "Hola Arq. Marcelo. Soy tu Copiloto Inteligente de ObraSaaS. Estoy procesando los reportes de la cuadrilla y telemetría de obra en tiempo real. Escribe una consulta o reproduce un audio.",
+      "time": "08:00 AM"
+    },
+    {
+      "sender": "user",
+      "text": "Soy Juan, ya entré a la obra",
+      "time": "09:24 p. m."
+    },
+    {
+      "sender": "bot",
+      "text": "👷‍♂️ Directiva Ejecutiva Registrada\n\nHola Arq. Marcelo (Director de Obra).\n• Operario: Juan Gómez (Albañilería)\n• Estado: Presente (Certificado por Dirección)\n• Horario: 09:24 p. m.\n\n_Tu supervisión ha sido impactada en tiempo real en el Dashboard._",
+      "time": "09:24 p. m."
+    },
+    {
+      "sender": "user",
+      "text": "¿Cómo viene el avance del revoque?",
+      "time": "09:24 p. m."
+    },
+    {
+      "sender": "bot",
+      "text": "📐 Panel Técnico — Arq. Victoria (Socia & Directora Técnica) 👷‍♀️\n\nHola Victoria. Tenés acceso a la supervisión técnica de Torre Palermo Soho:\n\n1️⃣ Estado de Cuadrilla & KYC Biométrico\n2️⃣ Control de Calidad y Avance Estructural\n3️⃣ Inspección de Incidencias y Vicios Ocultos\n4️⃣ Certificaciones Quincenales\n5️⃣ Balance de Caja Chica & Remitos\n\n📸 _Podés enviar fotos de inspección o notas de voz para procesar con IA._",
+      "time": "09:24 p. m."
+    },
+    {
+      "sender": "user",
+      "text": "Hola buen día quiero entrar a la obra",
+      "time": "09:24 p. m."
+    },
+    {
+      "sender": "bot",
+      "text": "⚠️ Verificación de Identidad Requerida (KYC ObraSaaS)\n\n¡Hola! Tu número (+5491199998888) no está vinculado a un legajo activo en Torre Palermo Soho.\n\nPara fichar asistencia y operar en obra, por favor completá tu verificación:\n\n1️⃣ Enviá una foto de tu DNI / Credencial UOCRA 🪪\n2️⃣ O completá el formulario biométrico seguro desde tu celular:\n👉 https://obrasaas.vercel.app/webview/kyc?worker=unknown-8888&phone=5491199998888&token=15bd8cf7fac1ae4b\n\n_Al completar el KYC, tu legajo se activará automáticamente en el sistema._",
+      "time": "09:24 p. m."
+    }
+  ]
+}
