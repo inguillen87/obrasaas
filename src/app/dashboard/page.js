@@ -1963,7 +1963,50 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              {/* Multi-Obra Dynamic Project Switcher */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: '8px', padding: '4px 10px' }}>
+                <span style={{ fontSize: '0.75rem', color: '#38bdf8', fontWeight: 700 }}>
+                  <i className="fa-solid fa-city"></i> Obra:
+                </span>
+                <select 
+                  value={state.activeProjectId || state.projectConfig?.id || "obra-palermo-01"}
+                  onChange={async (e) => {
+                    const selectedId = e.target.value;
+                    try {
+                      const res = await fetch('/api/project', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ projectId: selectedId })
+                      });
+                      const d = await res.json();
+                      if (d.success && d.activeProject) {
+                        addToast(`📍 Obra cambiada a: ${d.activeProject.name} (${d.activeProject.city})`, 'success');
+                        // Instantly refresh weather for new project coordinates
+                        const wRes = await fetch(`/api/weather?lat=${d.activeProject.latitude}&lon=${d.activeProject.longitude}&name=${encodeURIComponent(d.activeProject.name)}&city=${encodeURIComponent(d.activeProject.city)}`);
+                        const wData = await wRes.json();
+                        setWeatherTelemetry(wData);
+                      }
+                    } catch (err) {
+                      console.error("Change project error:", err);
+                    }
+                  }}
+                  style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: '0.8rem', fontWeight: 800, cursor: 'pointer', outline: 'none' }}
+                >
+                  {(state.projects || [
+                    { id: "obra-palermo-01", name: "Torre Palermo Soho", city: "CABA" },
+                    { id: "obra-mendoza-02", name: "Complejo Chacras de Coria", city: "Mendoza" },
+                    { id: "obra-ushuaia-03", name: "Edificio Fueguino Canal Beagle", city: "Ushuaia" },
+                    { id: "obra-cordoba-04", name: "Torre Nueva Córdoba", city: "Córdoba" },
+                    { id: "obra-rosario-05", name: "Puerto Norte Muelle", city: "Rosario" }
+                  ]).map(p => (
+                    <option key={p.id} value={p.id} style={{ background: '#0f172a', color: '#fff' }}>
+                      {p.city === 'Mendoza' ? '🏔️' : p.city === 'Ushuaia' ? '❄️' : p.city === 'Córdoba' ? '🏛️' : p.city === 'Rosario' ? '🚢' : '🏢'} {p.name} ({p.city})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <span className={`badge ${realtimeConnected ? 'badge-success' : 'badge-warning'}`} style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '6px' }} title={realtimeConnected ? "Conexión Real-Time SSE/Sockets activa (0 consultas a base de datos en reposo)" : "Reconectando con el servidor..."}>
                 <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: realtimeConnected ? '#22c55e' : '#eab308', display: 'inline-block', boxShadow: realtimeConnected ? '0 0 8px #22c55e' : 'none' }}></span>
                 {realtimeConnected ? 'Sockets En Vivo (SSE)' : 'Reconectando...'}
