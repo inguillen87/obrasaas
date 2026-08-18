@@ -99,10 +99,10 @@ El JSON debe tener exactamente esta estructura:
   "cuit": "XX-XXXXXXXX-X o 'No especificado'",
   "comprobanteNro": "Nro de Factura o Remito (ej: 0001-00048192)",
   "fecha": "DD/MM/YYYY",
-  "montoTotal": 18500,
+  "montoTotal": 0,
   "moneda": "ARS",
   "items": [
-    { "descripcion": "Nombre del producto/material", "cantidad": 2, "precioUnitario": 3500, "subtotal": 7000 }
+    { "descripcion": "Nombre del producto/material", "cantidad": 1, "precioUnitario": 0, "subtotal": 0 }
   ],
   "categoria": "Ferretería & Herramientas",
   "ocrConfidence": 98.5,
@@ -190,7 +190,7 @@ Responde SOLO JSON válido.`
                     {
                         role: "user",
                         content: [
-                            { type: "text", text: `Analiza esta fotografía tomada en la obra Torre Palermo Soho. Contexto: ${context}` },
+                            { type: "text", text: `Analiza esta fotografía tomada en la obra activa. Contexto: ${context}` },
                             imageContent
                         ]
                     }
@@ -235,9 +235,9 @@ export async function analyzeDniWithAI({ base64, mimeType = 'image/jpeg', imageU
         return {
             success: true,
             nombreCompleto: "Operario Verificado",
-            dni: "30.123.456",
-            cuil: "20-30123456-4",
-            fechaNacimiento: "15/05/1990",
+            dni: "00.000.000",
+            cuil: "00-00000000-0",
+            fechaNacimiento: "01/01/1970",
             status: "VERIFICADO_SIMULADO"
         };
     }
@@ -452,7 +452,7 @@ export async function transcribeAudioWithWhisper({ buffer, mimeType = 'audio/ogg
         formData.append('file', blob, `voice_note.${extension}`);
         formData.append('model', 'whisper-1');
         formData.append('language', 'es');
-        formData.append('prompt', 'Supervisión de cuadrilla, avance de revoque, fuga de caño, cerámicas, ferretería, Torre Palermo Soho, UOCRA, Juan Gómez, Luis Martínez, Carlos Pérez');
+        formData.append('prompt', 'Supervisión de cuadrilla, avance de revoque, fuga de caño, cerámicas, ferretería, obra en construcción, UOCRA, operarios, capataz, director de obra');
 
         const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
             method: 'POST',

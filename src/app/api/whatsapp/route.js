@@ -4,6 +4,7 @@ import { downloadMetaMedia, analyzeRemitoWithAI, analyzeObraPhotoWithAI, analyze
 import { validateInvoiceFiscalData, validateCuit } from '../../../lib/afipValidator.js';
 import { appendAuditTransaction } from '../../../lib/auditLedger.js';
 import { buildDirectorListMessage, buildVictoriaListMessage, buildWorkerListMessage, buildActionButtonsMessage } from '../../../lib/metaTemplates.js';
+import { generateWebviewToken, verifyMetaWebhookSignature, isMessageDuplicate } from '../../../lib/auth.js';
 
 // Geofencing Haversine Mathematical Formula
 function getDistance(lat1, lon1, lat2, lon2) {
@@ -21,12 +22,6 @@ function getDistance(lat1, lon1, lat2, lon2) {
     return R * c; // Distance in meters
 }
 
-function generateWebviewToken(workerId) {
-    const secret = process.env.WEBVIEW_TOKEN_SECRET || 'obrasaas_secret_key';
-    const timestamp = Date.now();
-    return crypto.createHmac('sha256', secret).update(`${workerId}-${timestamp}`).digest('hex').substring(0, 16);
-}
-
 // Meta WhatsApp Webhook Verification (GET request)
 export async function GET(request) {
     const { searchParams } = new URL(request.url);
@@ -35,8 +30,7 @@ export async function GET(request) {
     const challenge = searchParams.get('hub.challenge');
 
     const expectedTokens = [
-        'obrasaas_meta_token',
-        '82gFpecX2Ll0dhC-pwr8vYBb0gJPr0oD1ORNAlwLN3M',
+        process.env.META_VERIFY_TOKEN || 'obrasaas_meta_token',
         process.env.INTERNAL_API_SECRET
     ].filter(Boolean);
 
@@ -53,9 +47,13 @@ export async function POST(request) {
     try {
         const contentType = request.headers.get('content-type') || '';
         let payload = {};
+        
+        // Clone request to read raw body for signature verification
+        let rawBody = '';
 
         if (contentType.includes('application/json')) {
-            payload = await request.json();
+            rawBody = await request.clone().text();
+            payload = JSON.parse(rawBody);
         } else if (contentType.includes('x-www-form-urlencoded')) {
             const formData = await request.formData();
             formData.forEach((value, key) => {
@@ -109,6 +107,29 @@ export async function POST(request) {
             }
         }
 
+        // META WEBHOOK SIGNATURE VERIFICATION (Anti-Spoofing)
+        if (payload.object === 'whatsapp_business_account' && rawBody) {
+            if (!verifyMetaWebhookSignature(request, rawBody)) {
+                console.error('META WEBHOOK SIGNATURE VERIFICATION FAILED - Possible spoofing attempt');
+                return Response.json({ error: 'Invalid signature' }, { status: 403 });
+            }
+        }
+
+        // STATUS CALLBACK HANDLING (delivery receipts from Meta)
+        if (payload.object === 'whatsapp_business_account') {
+            const statusUpdate = payload.entry?.[0]?.changes?.[0]?.value?.statuses?.[0];
+            if (statusUpdate && !fromNumber) {
+                // This is a delivery status update (sent/delivered/read), not a user message
+                return Response.json({ success: true, type: 'status_callback', status: statusUpdate.status });
+            }
+        }
+
+        // MESSAGE DEDUPLICATION (prevent duplicate processing from Meta retries)
+        const messageId = payload.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.id;
+        if (messageId && isMessageDuplicate(messageId)) {
+            return Response.json({ success: true, type: 'duplicate', messageId });
+        }
+
         // Direct simulator format compatibility
         if (!fromNumber) {
             fromNumber = payload.from || payload.From || '';
@@ -138,13 +159,14 @@ export async function POST(request) {
         let isUnregistered = false;
         let workerRecord = null;
 
-        // Strict Phone Verification
-        if (cleanFrom.includes('3168608') || cleanFrom.includes('2613168608') || cleanFrom.endsWith('2613168608') || cleanFrom === '54261153168608' || fromNumber.toLowerCase().includes('marcelo') || fromNumber.toLowerCase().includes('director')) {
+        // Strict Phone Verification (suffix-based to prevent privilege escalation)
+        const phoneSuffix = cleanFrom.slice(-10); // Last 10 digits for reliable Argentine mobile matching
+        if (phoneSuffix.endsWith('2613168608') || cleanFrom === '54261153168608' || cleanFrom === '5492613168608') {
             senderName = "Arq. Marcelo";
             senderRole = "Director de Obra";
             shortId = "director";
             isDirector = true;
-        } else if (cleanFrom.includes('520753') || cleanFrom.includes('2964520753') || cleanFrom.endsWith('520753') || cleanFrom === '54296415520753' || fromNumber.toLowerCase().includes('victoria') || fromNumber.toLowerCase().includes('vicky')) {
+        } else if (phoneSuffix.endsWith('2964520753') || cleanFrom === '54296415520753' || cleanFrom === '5492964520753') {
             senderName = "Arq. Victoria";
             senderRole = "Socia & Directora Técnica";
             shortId = "victoria";

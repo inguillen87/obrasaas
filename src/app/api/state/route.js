@@ -1,4 +1,5 @@
 import { getAppState, saveAppState, resetState, getMessages, saveMessages } from '@/lib/db';
+import { verifyApiAuth } from '@/lib/auth';
 
 async function checkStockAndTriggerPurchases(state) {
     if (!state.stockpiles) return;
@@ -108,7 +109,12 @@ export async function POST(request) {
     }
 }
 
-export async function DELETE() {
+export async function DELETE(request) {
+    // Enterprise Security: Require API auth for destructive operations
+    const { authorized, reason } = verifyApiAuth(request);
+    if (!authorized) {
+        return Response.json({ error: 'Unauthorized', reason }, { status: 403 });
+    }
     try {
         const fresh = await resetState();
         return Response.json(fresh.appState);

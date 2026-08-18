@@ -1,4 +1,5 @@
 import { getAppState, saveAppState } from '../../../lib/db.js';
+import { verifyApiAuth } from '@/lib/auth';
 
 export async function GET(request) {
     try {
@@ -16,6 +17,11 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
+    // Enterprise Security: Require API auth for project changes
+    const { authorized, reason } = verifyApiAuth(request);
+    if (!authorized) {
+        return Response.json({ error: 'Unauthorized', reason }, { status: 403 });
+    }
     try {
         const { projectId } = await request.json();
         const state = await getAppState();

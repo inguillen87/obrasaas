@@ -4,7 +4,7 @@
  */
 
 export function buildDirectorListMessage(state, targetNumber) {
-    const projectName = state.projectConfig?.name || 'Torre Palermo Soho';
+    const projectName = state.projectConfig?.name || 'Obra Activa';
     const projectCity = state.projectConfig?.city || 'CABA';
 
     return {
@@ -47,17 +47,17 @@ export function buildDirectorListMessage(state, targetNumber) {
                             {
                                 id: "cmd_2",
                                 title: "2️⃣ Certificar Avance",
-                                description: "Aprobar 100% de Revoque Grueso (55% global) con sello SHA-256"
+                                description: `Certificar avance de tarea (${state.avancePercentage ?? '—'}% global) con sello SHA-256`
                             },
                             {
                                 id: "cmd_3",
                                 title: "3️⃣ Incidencia Crítica",
-                                description: "Reportar rotura/fuga y asignar Tarea de Emergencia 99"
+                                description: "Reportar rotura/fuga y asignar Tarea de Emergencia"
                             },
                             {
                                 id: "cmd_4",
                                 title: "4️⃣ Replanificar Demora",
-                                description: "Demora de cerámicas +48hs y bloqueo en cronograma Gantt"
+                                description: "Registrar demora de materiales y bloqueo en cronograma Gantt"
                             }
                         ]
                     },
@@ -67,7 +67,7 @@ export function buildDirectorListMessage(state, targetNumber) {
                             {
                                 id: "cmd_5",
                                 title: "5️⃣ Proveedores",
-                                description: "Confirmar entrega de aberturas y materiales para Q2"
+                                description: "Confirmar entrega de materiales y suministros pendientes"
                             },
                             {
                                 id: "cmd_6",
@@ -77,7 +77,7 @@ export function buildDirectorListMessage(state, targetNumber) {
                             {
                                 id: "cmd_7",
                                 title: "7️⃣ Rendir Caja Chica",
-                                description: "Rendición de $18.500 ARS en ferretería con firma contable"
+                                description: "Rendición de gastos en ferretería con firma contable"
                             }
                         ]
                     }
@@ -88,7 +88,7 @@ export function buildDirectorListMessage(state, targetNumber) {
 }
 
 export function buildVictoriaListMessage(state, targetNumber) {
-    const projectName = state.projectConfig?.name || 'Torre Palermo Soho';
+    const projectName = state.projectConfig?.name || 'Obra Activa';
 
     return {
         messaging_product: "whatsapp",
@@ -151,7 +151,7 @@ export function buildVictoriaListMessage(state, targetNumber) {
 }
 
 export function buildWorkerListMessage(state, senderName, senderRole, targetNumber) {
-    const projectName = state.projectConfig?.name || 'Torre Palermo Soho';
+    const projectName = state.projectConfig?.name || 'Obra Activa';
 
     return {
         messaging_product: "whatsapp",
