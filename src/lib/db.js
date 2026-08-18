@@ -558,7 +558,12 @@ async function readDb() {
                     remitos: storedState.remitos || defaultAppState.remitos,
                     sitePhotos: storedState.sitePhotos || defaultAppState.sitePhotos,
                     artPolicies: { ...defaultAppState.artPolicies, ...(storedState.artPolicies || {}) },
-                    auditLedger: storedState.auditLedger || defaultAppState.auditLedger
+                    auditLedger: storedState.auditLedger || defaultAppState.auditLedger,
+                    budget: storedState.budget || defaultAppState.budget,
+                    libroObra: storedState.libroObra || defaultAppState.libroObra,
+                    tenants: storedState.tenants || defaultAppState.tenants,
+                    projectPolicies: storedState.projectPolicies || defaultAppState.projectPolicies,
+                    webhooks: storedState.webhooks || defaultAppState.webhooks
                 };
                 return {
                     appState: mergedState,
@@ -599,7 +604,12 @@ async function readDb() {
             remitos: storedState.remitos || defaultAppState.remitos,
             sitePhotos: storedState.sitePhotos || defaultAppState.sitePhotos,
             artPolicies: { ...defaultAppState.artPolicies, ...(storedState.artPolicies || {}) },
-            auditLedger: storedState.auditLedger || defaultAppState.auditLedger
+            auditLedger: storedState.auditLedger || defaultAppState.auditLedger,
+            budget: storedState.budget || defaultAppState.budget,
+            libroObra: storedState.libroObra || defaultAppState.libroObra,
+            tenants: storedState.tenants || defaultAppState.tenants,
+            projectPolicies: storedState.projectPolicies || defaultAppState.projectPolicies,
+            webhooks: storedState.webhooks || defaultAppState.webhooks
         };
         return {
             appState: mergedState,

@@ -358,7 +358,10 @@ export default function Home() {
           <nav className="desktop-menu">
             <a href="#que-hacemos">¿Qué Hacemos?</a>
             <a href="#quienes-somos">¿Quiénes Somos?</a>
-            <a href="#faqs">Preguntas Frecuentes</a>
+            <Link href="/pricing" style={{ textDecoration: 'none', color: 'inherit' }}>Precios</Link>
+            <Link href="/portal" style={{ textDecoration: 'none', color: 'inherit' }}>Portal Inversor</Link>
+            <Link href="/api-docs" style={{ textDecoration: 'none', color: 'inherit' }}>API</Link>
+            <a href="#faqs">FAQ</a>
           </nav>
 
           <div className="nav-actions">
