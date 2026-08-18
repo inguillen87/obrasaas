@@ -1,142 +1,305 @@
 "use client";
+
+import { useState } from 'react';
 import Link from 'next/link';
+import { motion, AnimatePresence } from 'framer-motion';
+import { tokens, Badge, Button, GlassCard, PageHeader } from '@/lib/design-system';
 
 export default function PricingPage() {
+    const [billingCycle, setBillingCycle] = useState('annual'); // 'monthly' | 'annual'
+    const [activeFaq, setActiveFaq] = useState(null);
+
     const plans = [
         {
-            id: 'starter', name: 'Starter', price: 29, period: '/mes',
-            description: 'Para profesionales independientes y obras pequeñas',
-            features: ['1 obra activa', '5 usuarios', 'WhatsApp Bot IA', 'Gantt interactivo', 'KYC biométrico (DNI+Selfie)', 'Clima CIRSOC satelital', 'Geocerca GPS', 'Auditoría SHA-256'],
-            cta: 'Empezar Gratis', color: '#22c55e', popular: false
+            id: 'starter',
+            name: 'Starter',
+            badge: 'Profesionales y Obras Medianas',
+            monthlyPrice: 29,
+            annualPrice: 23,
+            description: 'Para directores de obra y estudios de arquitectura que buscan digitalizar su primera obra.',
+            features: [
+                '1 obra activa simultánea',
+                'Hasta 5 usuarios de panel',
+                'WhatsApp Bot IA ilimitado (voz + fotos)',
+                'Gantt interactivo con avance dinámico',
+                'KYC biométrico con DNI y validación facial',
+                'Telemetría meteorológica CIRSOC 201',
+                'Geocercas GPS para presentismo',
+                'Auditoría criptográfica SHA-256'
+            ],
+            color: '#10b981',
+            popular: false,
+            cta: 'Comenzar Prueba Gratis'
         },
         {
-            id: 'professional', name: 'Professional', price: 99, period: '/mes',
-            description: 'Para estudios de arquitectura y constructoras medianas',
-            features: ['5 obras activas', '20 usuarios', 'Todo de Starter +', 'Control de Costos por Rubro', 'IA Predictiva de retrasos', 'Certificaciones de avance PDF', 'API REST pública', 'Webhooks de eventos', 'Libro de Obra Digital (Ley 22.250)', 'UOCRA CCT compliance', 'Portal del Inversor'],
-            cta: 'Elegir Professional', color: '#3b82f6', popular: true
+            id: 'professional',
+            name: 'Professional',
+            badge: 'MÁS ELEGIDO',
+            monthlyPrice: 99,
+            annualPrice: 79,
+            description: 'Para empresas constructoras en crecimiento con múltiples proyectos en simultáneo.',
+            features: [
+                'Hasta 5 obras activas',
+                'Hasta 20 usuarios con roles y permisos',
+                'Todo lo incluido en Starter, más:',
+                'Control de Costos por Rubro & Curva S',
+                'IA Predictiva de retrasos y desvíos',
+                'Libro de Obra Digital oficial (Ley 22.250)',
+                'Compliance CCT UOCRA & Alertas de ART',
+                'Portal Vecino Digital para inversores',
+                'API REST v1 pública y Webhooks'
+            ],
+            color: '#f59e0b',
+            popular: true,
+            cta: 'Comenzar con Professional'
         },
         {
-            id: 'enterprise', name: 'Enterprise', price: 199, period: '/mes',
-            description: 'Para grandes constructoras, desarrolladoras y gobiernos',
-            features: ['Obras ilimitadas', 'Usuarios ilimitados', 'Todo de Professional +', 'Multi-tenant (sub-empresas)', 'SSO / SAML', 'SLA 99.9% garantizado', 'Soporte dedicado 24/7', 'Dashboard ejecutivo multi-obra', 'Integración AFIP/ARBA', 'Whitelabel (tu marca)', 'Onboarding personalizado'],
-            cta: 'Contactar Ventas', color: '#a855f7', popular: false
+            id: 'enterprise',
+            name: 'Enterprise',
+            badge: 'Corporativo & Gobiernos',
+            monthlyPrice: 199,
+            annualPrice: 159,
+            description: 'Para desarrolladoras inmobiliarias de gran escala, corporaciones y licitaciones públicas.',
+            features: [
+                'Obras y proyectos ilimitados',
+                'Usuarios y cuadrillas ilimitadas',
+                'Todo lo incluido en Professional, más:',
+                'Arquitectura Multi-tenant aislada',
+                'Dashboard Ejecutivo CEO con KPIs consolidados',
+                'SLA 99.9% de uptime garantizado',
+                'Soporte técnico 24/7 con Account Manager',
+                'Exportación fiscal AFIP / ARBA / IERIC',
+                'Whitelabel con logo y dominio propio'
+            ],
+            color: '#8b5cf6',
+            popular: false,
+            cta: 'Hablar con un Especialista'
         }
     ];
 
     const faqs = [
-        { q: '¿Hay un período de prueba gratis?', a: 'Sí, 14 días gratis en cualquier plan. Sin tarjeta de crédito.' },
-        { q: '¿Puedo cambiar de plan después?', a: 'Sí, podés upgradear o downgradear en cualquier momento. El cambio se prorratea.' },
-        { q: '¿Cómo funciona el WhatsApp Bot?', a: 'Conectás tu número de WhatsApp Business. Los operarios envían mensajes al bot para fichaje, reportes y consultas. El director gestiona todo desde WhatsApp.' },
-        { q: '¿Necesito instalar una app?', a: 'No. ObraSaaS es 100% web + WhatsApp. Funciona en cualquier celular sin descargar nada. También se instala como PWA.' },
-        { q: '¿Qué pasa con mis datos si cancelo?', a: 'Tenés 30 días para exportar tus datos. Después de ese período se eliminan permanentemente.' },
-        { q: '¿Aceptan Mercado Pago?', a: 'Sí, aceptamos Mercado Pago, tarjetas de crédito/débito y transferencia bancaria.' }
+        { q: '¿Hay un período de prueba gratis?', a: 'Sí, tenés 14 días de prueba completa con todas las funcionalidades activas en cualquier plan. No requerimos tarjeta de crédito para comenzar.' },
+        { q: '¿Cómo funciona la interacción por WhatsApp?', a: 'Conectás tu número a través de la Meta Cloud API oficial. Tus albañiles y directores interactúan por notas de voz y fotos directamente desde su chat habitual sin instalar nada.' },
+        { q: '¿Puedo cambiar de plan más adelante?', a: 'Por supuesto. Podés actualizar o cambiar de plan en cualquier momento desde tu panel de administración; el monto se ajustará automáticamente de manera proporcional.' },
+        { q: '¿Qué medios de pago aceptan?', a: 'Aceptamos Mercado Pago, tarjetas de crédito/débito nacionales e internacionales (Visa, Mastercard, Amex) y transferencia bancaria con factura A o B.' },
+        { q: '¿El Libro de Obra Digital es válido legalmente?', a: 'Sí. Cada registro diario incluye la nómina presente, órdenes de servicio, clima y avances firmados con algoritmo criptográfico SHA-256 inmutable conforme a la Ley 22.250 y Res. SRT 319/99.' }
     ];
 
     return (
-        <div style={{ minHeight: '100vh', background: '#0f172a', fontFamily: 'Inter, sans-serif', color: '#f8fafc' }}>
+        <div style={{ minHeight: '100vh', background: '#060913', color: '#f8fafc', fontFamily: tokens.font.sans }}>
+            
             {/* Header */}
-            <header style={{ padding: '20px 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '8px', textDecoration: 'none', color: '#f8fafc' }}>
-                    <span style={{ fontSize: '1.5rem' }}>🏗️</span>
-                    <span style={{ fontWeight: 800, fontSize: '1.1rem' }}>ObraSaaS</span>
-                </Link>
-                <div style={{ display: 'flex', gap: '12px' }}>
-                    <Link href="/onboarding" style={{ padding: '10px 20px', background: '#f59e0b', color: '#0f172a', borderRadius: '8px', textDecoration: 'none', fontWeight: 700, fontSize: '0.9rem' }}>Empezar Gratis</Link>
-                </div>
-            </header>
+            <PageHeader
+                icon="💲"
+                title="Planes y Precios Transparentes"
+                subtitle="Sin costos ocultos. Elegí el plan que mejor se adapte al tamaño de tu operación."
+                breadcrumbs={[{ label: 'Inicio', href: '/' }, { label: 'Precios' }]}
+                actions={
+                    <Link href="/onboarding">
+                        <Button variant="primary" size="sm" icon="🚀">
+                            Prueba Gratis 14 Días
+                        </Button>
+                    </Link>
+                }
+            />
 
-            <main style={{ maxWidth: '1100px', margin: '0 auto', padding: '40px 20px' }}>
-                {/* Hero */}
-                <div style={{ textAlign: 'center', marginBottom: '48px' }}>
-                    <h1 style={{ fontSize: '2.5rem', fontWeight: 800, marginBottom: '12px' }}>Planes para cada tipo de obra</h1>
-                    <p style={{ color: '#94a3b8', fontSize: '1.1rem', maxWidth: '600px', margin: '0 auto' }}>
-                        Desde el profesional independiente hasta la constructora con 50 obras. 14 días gratis.
+            <main style={{ maxWidth: '1280px', margin: '0 auto', padding: '48px 24px 80px' }}>
+                
+                {/* Billing Toggle Header */}
+                <div style={{ textAlign: 'center', marginBottom: '56px' }}>
+                    <h2 style={{ fontSize: 'clamp(2rem, 4vw, 2.8rem)', fontWeight: 900, margin: '0 0 12px', fontFamily: tokens.font.heading, letterSpacing: '-0.03em' }}>
+                        Invertí en previsibilidad, evitá sobrecostos
+                    </h2>
+                    <p style={{ color: '#94a3b8', fontSize: '1.05rem', maxWidth: '600px', margin: '0 auto 28px' }}>
+                        Todas las suscripciones incluyen actualizaciones automáticas, copias de seguridad continuas y soporte.
                     </p>
+
+                    {/* Toggle Button */}
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: 'rgba(15, 23, 42, 0.7)', padding: '6px', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.1)', backdropFilter: 'blur(10px)' }}>
+                        <button
+                            onClick={() => setBillingCycle('monthly')}
+                            style={{
+                                padding: '10px 24px',
+                                borderRadius: '12px',
+                                border: 'none',
+                                background: billingCycle === 'monthly' ? '#1e293b' : 'transparent',
+                                color: billingCycle === 'monthly' ? '#f8fafc' : '#94a3b8',
+                                fontSize: '0.88rem',
+                                fontWeight: billingCycle === 'monthly' ? 700 : 500,
+                                cursor: 'pointer',
+                                transition: 'all 0.2s'
+                            }}
+                        >
+                            Facturación Mensual
+                        </button>
+                        <button
+                            onClick={() => setBillingCycle('annual')}
+                            style={{
+                                padding: '10px 24px',
+                                borderRadius: '12px',
+                                border: 'none',
+                                background: billingCycle === 'annual' ? '#f59e0b' : 'transparent',
+                                color: billingCycle === 'annual' ? '#060913' : '#94a3b8',
+                                fontSize: '0.88rem',
+                                fontWeight: billingCycle === 'annual' ? 800 : 500,
+                                cursor: 'pointer',
+                                transition: 'all 0.2s',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '8px'
+                            }}
+                        >
+                            <span>Facturación Anual</span>
+                            <span style={{ fontSize: '0.7rem', padding: '2px 8px', background: 'rgba(0,0,0,0.25)', borderRadius: '999px', color: '#fff', fontWeight: 800 }}>
+                                20% OFF
+                            </span>
+                        </button>
+                    </div>
                 </div>
 
                 {/* Plans Grid */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px', marginBottom: '64px' }}>
-                    {plans.map((plan, i) => (
-                        <div key={i} style={{
-                            background: '#1e293b', borderRadius: '16px', padding: plan.popular ? '32px 28px' : '28px',
-                            border: plan.popular ? '2px solid #f59e0b' : '1px solid #334155', position: 'relative',
-                            transform: plan.popular ? 'scale(1.05)' : 'none'
-                        }}>
-                            {plan.popular && (
-                                <div style={{ position: 'absolute', top: '-12px', left: '50%', transform: 'translateX(-50%)', background: '#f59e0b', color: '#0f172a', padding: '4px 16px', borderRadius: '20px', fontSize: '0.7rem', fontWeight: 700 }}>
-                                    MÁS POPULAR
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '28px', marginBottom: '80px', alignItems: 'stretch' }}>
+                    {plans.map((plan) => {
+                        const price = billingCycle === 'annual' ? plan.annualPrice : plan.monthlyPrice;
+                        return (
+                            <GlassCard
+                                key={plan.id}
+                                style={{
+                                    padding: '36px 32px',
+                                    border: plan.popular ? '2px solid #f59e0b' : '1px solid rgba(255, 255, 255, 0.1)',
+                                    background: plan.popular ? 'rgba(245, 158, 11, 0.04)' : 'rgba(15, 23, 42, 0.65)',
+                                    position: 'relative',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    justifyContent: 'space-between'
+                                }}
+                                hover
+                                glow={plan.popular}
+                            >
+                                {plan.popular && (
+                                    <div style={{ position: 'absolute', top: '-14px', left: '50%', transform: 'translateX(-50%)' }}>
+                                        <Badge color="#f59e0b" variant="solid" size="md">
+                                            ★ {plan.badge}
+                                        </Badge>
+                                    </div>
+                                )}
+
+                                <div>
+                                    <div style={{ fontSize: '1.4rem', fontWeight: 800, color: plan.popular ? '#f59e0b' : '#f8fafc', marginBottom: '4px' }}>
+                                        {plan.name}
+                                    </div>
+                                    <p style={{ color: '#94a3b8', fontSize: '0.84rem', margin: '0 0 24px', lineHeight: 1.5, minHeight: '40px' }}>
+                                        {plan.description}
+                                    </p>
+
+                                    {/* Price section */}
+                                    <div style={{ marginBottom: '28px', paddingBottom: '24px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                                            <span style={{ fontSize: '3.2rem', fontWeight: 900, color: plan.popular ? '#f59e0b' : '#f8fafc', fontFamily: tokens.font.heading, letterSpacing: '-0.04em' }}>
+                                                ${price}
+                                            </span>
+                                            <span style={{ color: '#64748b', fontSize: '0.9rem', fontWeight: 600 }}>USD / mes</span>
+                                        </div>
+                                        <div style={{ fontSize: '0.78rem', color: '#10b981', marginTop: '6px', fontWeight: 600 }}>
+                                            {billingCycle === 'annual' ? `Facturado anualmente ($${price * 12} USD/año)` : 'Facturado mes a mes'}
+                                        </div>
+                                    </div>
+
+                                    {/* Features list */}
+                                    <div style={{ marginBottom: '32px' }}>
+                                        <div style={{ fontSize: '0.76rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '14px' }}>
+                                            Incluye:
+                                        </div>
+                                        <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                            {plan.features.map((feat, idx) => (
+                                                <li key={idx} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '0.86rem', color: feat.startsWith('Todo lo') ? '#f59e0b' : '#cbd5e1', lineHeight: 1.4 }}>
+                                                    <span style={{ color: '#22c55e', fontSize: '0.9rem', fontWeight: 800 }}>✓</span>
+                                                    <span>{feat}</span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
                                 </div>
-                            )}
-                            <h3 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '4px', color: plan.color }}>{plan.name}</h3>
-                            <p style={{ color: '#94a3b8', fontSize: '0.8rem', marginBottom: '16px' }}>{plan.description}</p>
-                            <div style={{ marginBottom: '20px' }}>
-                                <span style={{ fontSize: '3rem', fontWeight: 800 }}>${plan.price}</span>
-                                <span style={{ color: '#64748b', fontSize: '0.9rem' }}> USD{plan.period}</span>
-                            </div>
-                            <Link href="/onboarding" style={{
-                                display: 'block', textAlign: 'center', padding: '14px', borderRadius: '10px', textDecoration: 'none', fontWeight: 700, fontSize: '1rem', marginBottom: '20px',
-                                background: plan.popular ? '#f59e0b' : plan.color, color: plan.popular ? '#0f172a' : '#fff'
-                            }}>
-                                {plan.cta}
-                            </Link>
-                            <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                                {plan.features.map((f, j) => (
-                                    <li key={j} style={{ padding: '6px 0', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: f.startsWith('Todo de') ? '#f59e0b' : '#cbd5e1' }}>
-                                        <span style={{ color: '#22c55e', fontSize: '0.8rem' }}>✓</span> {f}
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
-                    ))}
+
+                                {/* Plan CTA button */}
+                                <Link href={`/onboarding?plan=${plan.id}`} style={{ width: '100%' }}>
+                                    <Button
+                                        variant={plan.popular ? 'primary' : 'secondary'}
+                                        size="lg"
+                                        style={{ width: '100%' }}
+                                    >
+                                        {plan.cta}
+                                    </Button>
+                                </Link>
+                            </GlassCard>
+                        );
+                    })}
                 </div>
 
-                {/* Comparison with Competitors */}
-                <div style={{ background: '#1e293b', borderRadius: '16px', padding: '32px', border: '1px solid #334155', marginBottom: '48px' }}>
-                    <h2 style={{ fontSize: '1.3rem', fontWeight: 700, marginBottom: '20px', textAlign: 'center' }}>🏆 ¿Por qué ObraSaaS?</h2>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
-                        {[
-                            { icon: '📱', title: 'WhatsApp First', desc: '96% de penetración en Argentina. No necesitás descargar nada.' },
-                            { icon: '🤖', title: 'IA que trabaja por vos', desc: 'GPT-4o analiza fotos, OCR de DNI, predice retrasos y avance.' },
-                            { icon: '🇦🇷', title: 'Hecho para Argentina', desc: 'UOCRA, ART, AFIP, CIRSOC nativos. No es un producto traducido.' },
-                            { icon: '💰', title: '10x más barato', desc: 'Procore cuesta $500+/mes. ObraSaaS desde $29/mes.' },
-                            { icon: '📖', title: 'Libro de Obra Legal', desc: 'Ley 22.250 con firma SHA-256. Válido para SRT e IERIC.' },
-                            { icon: '🔐', title: 'Auditoría inmutable', desc: 'Blockchain-like con SHA-256. Cada acción queda certificada.' }
-                        ].map((item, i) => (
-                            <div key={i} style={{ padding: '16px', background: '#0f172a', borderRadius: '10px' }}>
-                                <span style={{ fontSize: '1.5rem' }}>{item.icon}</span>
-                                <h4 style={{ fontSize: '0.95rem', fontWeight: 700, marginTop: '8px', marginBottom: '4px' }}>{item.title}</h4>
-                                <p style={{ color: '#94a3b8', fontSize: '0.8rem', margin: 0 }}>{item.desc}</p>
-                            </div>
-                        ))}
+                {/* FAQs Section */}
+                <div style={{ maxWidth: '860px', margin: '0 auto 80px' }}>
+                    <div style={{ textAlign: 'center', marginBottom: '40px' }}>
+                        <Badge color="#06b6d4" variant="filled">PREGUNTAS FRECUENTES SOBRE PLANES</Badge>
+                        <h3 style={{ fontSize: '1.8rem', fontWeight: 800, margin: '12px 0 0', fontFamily: tokens.font.heading }}>
+                            ¿Tenés dudas sobre la contratación?
+                        </h3>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        {faqs.map((faq, i) => {
+                            const isOpen = activeFaq === i;
+                            return (
+                                <GlassCard
+                                    key={i}
+                                    style={{ padding: '20px 24px', cursor: 'pointer' }}
+                                    onClick={() => setActiveFaq(isOpen ? null : i)}
+                                    hover={false}
+                                >
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
+                                        <span style={{ fontSize: '0.96rem', fontWeight: 700, color: isOpen ? '#f59e0b' : '#f8fafc' }}>
+                                            {faq.q}
+                                        </span>
+                                        <span style={{ color: '#64748b', fontSize: '1.1rem', transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
+                                            ↓
+                                        </span>
+                                    </div>
+                                    <AnimatePresence>
+                                        {isOpen && (
+                                            <motion.div
+                                                initial={{ height: 0, opacity: 0 }}
+                                                animate={{ height: 'auto', opacity: 1 }}
+                                                exit={{ height: 0, opacity: 0 }}
+                                                transition={{ duration: 0.25 }}
+                                                style={{ overflow: 'hidden' }}
+                                            >
+                                                <p style={{ color: '#94a3b8', fontSize: '0.88rem', lineHeight: 1.6, margin: '14px 0 0', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '14px' }}>
+                                                    {faq.a}
+                                                </p>
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
+                                </GlassCard>
+                            );
+                        })}
                     </div>
                 </div>
 
-                {/* FAQs */}
-                <div style={{ marginBottom: '48px' }}>
-                    <h2 style={{ fontSize: '1.3rem', fontWeight: 700, marginBottom: '20px', textAlign: 'center' }}>❓ Preguntas Frecuentes</h2>
-                    <div style={{ display: 'grid', gap: '12px' }}>
-                        {faqs.map((faq, i) => (
-                            <div key={i} style={{ background: '#1e293b', borderRadius: '10px', padding: '20px', border: '1px solid #334155' }}>
-                                <h4 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '6px' }}>{faq.q}</h4>
-                                <p style={{ color: '#94a3b8', fontSize: '0.85rem', margin: 0 }}>{faq.a}</p>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
-                {/* CTA */}
-                <div style={{ textAlign: 'center', padding: '48px', background: 'linear-gradient(135deg, #1e293b, #172032)', borderRadius: '16px', border: '1px solid #334155' }}>
-                    <h2 style={{ fontSize: '1.8rem', fontWeight: 800, marginBottom: '12px' }}>¿Listo para transformar tu obra?</h2>
-                    <p style={{ color: '#94a3b8', marginBottom: '24px' }}>Empezá gratis en 2 minutos. Sin tarjeta de crédito.</p>
-                    <Link href="/onboarding" style={{ padding: '16px 40px', background: '#f59e0b', color: '#0f172a', borderRadius: '12px', fontWeight: 800, fontSize: '1.1rem', textDecoration: 'none', display: 'inline-block' }}>
-                        🚀 Crear Cuenta Gratis
+                {/* Final Callout */}
+                <GlassCard style={{ padding: '48px', textAlign: 'center', border: '1px solid rgba(245, 158, 11, 0.3)', background: 'radial-gradient(circle at center, rgba(245, 158, 11, 0.12) 0%, rgba(15, 23, 42, 0.8) 100%)' }}>
+                    <h3 style={{ fontSize: '1.8rem', fontWeight: 900, margin: '0 0 12px', fontFamily: tokens.font.heading }}>
+                        ¿Tu constructora gestiona más de 10 obras o licitaciones públicas?
+                    </h3>
+                    <p style={{ color: '#94a3b8', fontSize: '0.95rem', maxWidth: '600px', margin: '0 auto 28px' }}>
+                        Ofrecemos planes personalizados para organismos de gobierno y cámaras de construcción con acuerdos SLA y capacitación en campo.
+                    </p>
+                    <Link href="/onboarding?plan=enterprise">
+                        <Button variant="primary" size="lg" icon="📞">
+                            Solicitar Asesoramiento Corporativo
+                        </Button>
                     </Link>
-                </div>
-            </main>
+                </GlassCard>
 
-            <footer style={{ textAlign: 'center', padding: '24px', color: '#475569', fontSize: '0.75rem' }}>
-                © {new Date().getFullYear()} ObraSaaS — La plataforma #1 de gestión de obra en LATAM
-            </footer>
+            </main>
         </div>
     );
 }

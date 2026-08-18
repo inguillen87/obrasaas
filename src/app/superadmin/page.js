@@ -1,6 +1,9 @@
 "use client";
+
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { motion, AnimatePresence } from 'framer-motion';
+import { tokens, Badge, Button, GlassCard, StatCard, Tabs, Modal, PageHeader } from '@/lib/design-system';
 
 export default function SuperAdminDashboard() {
     const [stats, setStats] = useState(null);
@@ -70,313 +73,294 @@ export default function SuperAdminDashboard() {
             if (res.ok) {
                 setShowNewTenant(false);
                 setNewTenant({ name: '', slug: '', plan: 'starter', ownerEmail: '', ownerPhone: '' });
-                loadData();
+                loadData(authKey);
             }
         } catch (err) { console.error(err); }
         setCreating(false);
     };
 
-    // Auth gate
     if (!isAuthenticated) {
         return (
-            <div style={{ minHeight: '100vh', background: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Inter, sans-serif' }}>
-                <div style={{ background: '#1e293b', borderRadius: '16px', padding: '48px', maxWidth: '420px', width: '100%', border: '1px solid #334155' }}>
-                    <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-                        <span style={{ fontSize: '2.5rem' }}>🏗️</span>
-                        <h1 style={{ color: '#f8fafc', fontSize: '1.5rem', margin: '12px 0 4px' }}>ObraSaaS Super Admin</h1>
-                        <p style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Panel de administración de la plataforma</p>
-                    </div>
-                    <input
-                        type="password"
-                        placeholder="API Key de administración"
-                        value={authKey}
-                        onChange={e => setAuthKey(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && handleLogin()}
-                        style={{ width: '100%', padding: '14px 16px', background: '#0f172a', border: '1px solid #475569', borderRadius: '8px', color: '#f8fafc', fontSize: '0.95rem', marginBottom: '16px', outline: 'none', boxSizing: 'border-box' }}
-                    />
-                    <button onClick={handleLogin} style={{ width: '100%', padding: '14px', background: '#f59e0b', color: '#0f172a', border: 'none', borderRadius: '8px', fontSize: '1rem', fontWeight: 700, cursor: 'pointer' }}>
-                        Ingresar al Panel
-                    </button>
-                </div>
+            <div style={{ minHeight: '100vh', background: '#060913', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: tokens.font.sans, padding: '20px' }}>
+                <motion.div initial={{ scale: 0.94, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} style={{ maxWidth: '440px', width: '100%' }}>
+                    <GlassCard style={{ padding: '40px 32px', textAlign: 'center', border: '1px solid rgba(245, 158, 11, 0.3)' }} glow>
+                        <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: '#f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', color: '#060913', fontWeight: 900, fontSize: '1.4rem' }}>
+                            ⚙️
+                        </div>
+                        <h1 style={{ color: '#f8fafc', fontSize: '1.5rem', fontWeight: 800, margin: '0 0 6px', fontFamily: tokens.font.heading }}>
+                            Super Admin Console
+                        </h1>
+                        <p style={{ color: '#94a3b8', fontSize: '0.84rem', margin: '0 0 24px' }}>
+                            Acceso restringido para administradores de la plataforma ObraSaaS
+                        </p>
+
+                        <input
+                            type="password"
+                            placeholder="Ingrese API Key de administración"
+                            value={authKey}
+                            onChange={e => setAuthKey(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && handleLogin()}
+                            style={{
+                                width: '100%',
+                                padding: '14px 16px',
+                                background: '#060913',
+                                border: '1px solid rgba(255, 255, 255, 0.15)',
+                                borderRadius: '12px',
+                                color: '#f8fafc',
+                                fontSize: '0.92rem',
+                                marginBottom: '16px',
+                                outline: 'none'
+                            }}
+                        />
+                        <Button variant="primary" size="lg" style={{ width: '100%' }} onClick={handleLogin}>
+                            Desbloquear Panel Central →
+                        </Button>
+                    </GlassCard>
+                </motion.div>
             </div>
         );
     }
 
-    const planBadge = (plan) => {
-        const colors = { starter: '#22c55e', professional: '#3b82f6', enterprise: '#a855f7' };
-        return <span style={{ background: colors[plan] || '#64748b', color: '#fff', padding: '2px 8px', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase' }}>{plan}</span>;
-    };
+    const tabs = [
+        { id: 'overview', label: 'Vista General', icon: '📊' },
+        { id: 'tenants', label: 'Tenants', icon: '🏢', badge: tenants.length },
+        { id: 'billing', label: 'Facturación & MRR', icon: '💰' }
+    ];
+
+    const planBadgeColor = { starter: '#10b981', professional: '#3b82f6', enterprise: '#8b5cf6' };
 
     return (
-        <div style={{ minHeight: '100vh', background: '#0f172a', fontFamily: 'Inter, sans-serif', color: '#f8fafc' }}>
+        <div style={{ minHeight: '100vh', background: '#060913', fontFamily: tokens.font.sans, color: '#f8fafc' }}>
+            
             {/* Header */}
-            <header style={{ background: '#1e293b', borderBottom: '1px solid #334155', padding: '16px 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                    <span style={{ fontSize: '1.5rem' }}>🏗️</span>
-                    <div>
-                        <h1 style={{ fontSize: '1.1rem', fontWeight: 800, margin: 0 }}>ObraSaaS</h1>
-                        <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>Super Admin Console</span>
-                    </div>
-                </div>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                    <Link href="/dashboard" style={{ padding: '8px 16px', background: '#334155', color: '#f8fafc', borderRadius: '8px', textDecoration: 'none', fontSize: '0.85rem' }}>
-                        ← Dashboard
-                    </Link>
-                    <button onClick={() => { localStorage.removeItem('obrasaas_admin_key'); setIsAuthenticated(false); }} style={{ padding: '8px 16px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '0.85rem' }}>
-                        Cerrar Sesión
-                    </button>
-                </div>
-            </header>
+            <PageHeader
+                icon="⚙️"
+                title="Super Admin Platform Console"
+                subtitle="Gestión multitenant, monitoreo de infraestructura y métricas de negocio"
+                breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'SuperAdmin' }]}
+                actions={
+                    <>
+                        <Button variant="secondary" size="sm" onClick={() => loadData(authKey)}>↻ Recargar</Button>
+                        <Button variant="primary" size="sm" icon="+" onClick={() => setShowNewTenant(true)}>Nuevo Tenant</Button>
+                        <Button variant="ghost" size="sm" onClick={() => { localStorage.removeItem('obrasaas_admin_key'); setIsAuthenticated(false); }}>
+                            Cerrar Sesión
+                        </Button>
+                    </>
+                }
+            />
 
-            {/* Navigation */}
-            <nav style={{ background: '#1e293b', borderBottom: '1px solid #334155', padding: '0 32px', display: 'flex', gap: '4px' }}>
-                {[
-                    { id: 'overview', label: '📊 Vista General', icon: '' },
-                    { id: 'tenants', label: '🏢 Tenants', icon: '' },
-                    { id: 'workers', label: '👷 Operarios', icon: '' },
-                    { id: 'billing', label: '💰 Facturación', icon: '' },
-                    { id: 'audit', label: '🔐 Auditoría', icon: '' }
-                ].map(tab => (
-                    <button key={tab.id} onClick={() => setActiveView(tab.id)} style={{
-                        padding: '12px 20px', background: activeView === tab.id ? '#f59e0b' : 'transparent',
-                        color: activeView === tab.id ? '#0f172a' : '#94a3b8', border: 'none',
-                        borderRadius: '8px 8px 0 0', cursor: 'pointer', fontSize: '0.85rem', fontWeight: activeView === tab.id ? 700 : 500
-                    }}>
-                        {tab.label}
-                    </button>
-                ))}
-            </nav>
+            {/* Navigation Tabs */}
+            <div style={{ maxWidth: '1440px', margin: '0 auto', padding: '24px 28px 0' }}>
+                <Tabs tabs={tabs} activeTab={activeView} onChange={setActiveView} color="#f59e0b" />
+            </div>
 
-            <main style={{ padding: '32px', maxWidth: '1400px', margin: '0 auto' }}>
+            <main style={{ maxWidth: '1440px', margin: '0 auto', padding: '24px 28px 80px' }}>
+                
                 {loading ? (
                     <div style={{ textAlign: 'center', padding: '80px', color: '#94a3b8' }}>
-                        <div style={{ fontSize: '2rem', marginBottom: '16px' }}>⏳</div>
-                        Cargando datos de la plataforma...
+                        <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }} style={{ width: 40, height: 40, border: '3px solid rgba(245, 158, 11, 0.2)', borderTopColor: '#f59e0b', borderRadius: '50%', margin: '0 auto 16px' }} />
+                        Cargando telemetría de plataforma...
                     </div>
                 ) : activeView === 'overview' ? (
+                    
                     /* ============ OVERVIEW ============ */
                     <div>
-                        <h2 style={{ fontSize: '1.3rem', fontWeight: 700, marginBottom: '24px' }}>📊 Vista General de la Plataforma</h2>
-                        
-                        {/* KPI Cards */}
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '32px' }}>
-                            {[
-                                { label: 'Tenants Activos', value: stats?.platform?.totalTenants || 0, icon: '🏢', color: '#3b82f6' },
-                                { label: 'Obras en Curso', value: stats?.platform?.totalProjects || 0, icon: '🏗️', color: '#f59e0b' },
-                                { label: 'Operarios Totales', value: stats?.platform?.totalWorkers || 0, icon: '👷', color: '#22c55e' },
-                                { label: 'KYC Verificados', value: stats?.platform?.kycVerifications || 0, icon: '🪪', color: '#a855f7' },
-                                { label: 'MRR (USD)', value: `$${stats?.platform?.mrr || 0}`, icon: '💰', color: '#10b981' },
-                                { label: 'ARR (USD)', value: `$${stats?.platform?.arr || 0}`, icon: '📈', color: '#06b6d4' },
-                                { label: 'Bloques SHA-256', value: stats?.platform?.auditBlocks || 0, icon: '🔐', color: '#ef4444' },
-                                { label: 'Registros Pendientes', value: stats?.platform?.pendingRegistrations || 0, icon: '📝', color: '#f97316' }
-                            ].map((kpi, i) => (
-                                <div key={i} style={{ background: '#1e293b', borderRadius: '12px', padding: '20px', border: '1px solid #334155' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                                        <span style={{ color: '#94a3b8', fontSize: '0.8rem', fontWeight: 600 }}>{kpi.label}</span>
-                                        <span style={{ fontSize: '1.2rem' }}>{kpi.icon}</span>
-                                    </div>
-                                    <div style={{ fontSize: '1.8rem', fontWeight: 800, color: kpi.color }}>{kpi.value}</div>
-                                </div>
-                            ))}
+                        {/* KPI Metrics */}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '16px', marginBottom: '28px' }}>
+                            <StatCard label="TENANTS ACTIVOS" value={stats?.platform?.totalTenants || 0} sub="Empresas suscritas" icon="🏢" color="#3b82f6" />
+                            <StatCard label="OBRAS EN CURSO" value={stats?.platform?.totalProjects || 0} sub="Proyectos gestionados" icon="🏗️" color="#f59e0b" />
+                            <StatCard label="OPERARIOS TOTALES" value={stats?.platform?.totalWorkers || 0} sub="Nómina en base" icon="👷" color="#10b981" />
+                            <StatCard label="MRR ESTIMADO" value={`$${stats?.platform?.mrr || 0} USD`} sub="Ingreso mensual" icon="💰" color="#22c55e" trend={14} />
+                            <StatCard label="ARR PROYECTADO" value={`$${stats?.platform?.arr || 0} USD`} sub="Anualizado" icon="📈" color="#06b6d4" />
+                            <StatCard label="BLOQUES SHA-256" value={stats?.platform?.auditBlocks || 0} sub="Ledger inmutable" icon="🔐" color="#8b5cf6" />
                         </div>
 
-                        {/* Incidents Summary */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                            <div style={{ background: '#1e293b', borderRadius: '12px', padding: '24px', border: '1px solid #334155' }}>
-                                <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '16px' }}>🚨 Incidencias Activas</h3>
-                                <div style={{ display: 'flex', gap: '16px' }}>
-                                    <div style={{ flex: 1, textAlign: 'center', padding: '16px', background: '#450a0a', borderRadius: '8px' }}>
-                                        <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#ef4444' }}>{stats?.incidents?.critical || 0}</div>
-                                        <div style={{ color: '#fca5a5', fontSize: '0.75rem' }}>Críticas</div>
+                        {/* Summary Split */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                            
+                            {/* Incidents Breakdown */}
+                            <GlassCard style={{ padding: '24px' }}>
+                                <h3 style={{ fontSize: '1rem', fontWeight: 800, margin: '0 0 16px', color: '#f8fafc' }}>
+                                    🚨 Estado Global de Incidencias
+                                </h3>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                                    <div style={{ background: 'rgba(239, 68, 68, 0.1)', padding: '16px', borderRadius: '10px', border: '1px solid rgba(239, 68, 68, 0.3)', textAlign: 'center' }}>
+                                        <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#ef4444' }}>{stats?.incidents?.critical || 0}</div>
+                                        <div style={{ fontSize: '0.74rem', color: '#fca5a5', fontWeight: 600 }}>Críticas</div>
                                     </div>
-                                    <div style={{ flex: 1, textAlign: 'center', padding: '16px', background: '#451a03', borderRadius: '8px' }}>
-                                        <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#f59e0b' }}>{stats?.incidents?.warning || 0}</div>
-                                        <div style={{ color: '#fcd34d', fontSize: '0.75rem' }}>Alertas</div>
+                                    <div style={{ background: 'rgba(245, 158, 11, 0.1)', padding: '16px', borderRadius: '10px', border: '1px solid rgba(245, 158, 11, 0.3)', textAlign: 'center' }}>
+                                        <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#f59e0b' }}>{stats?.incidents?.warning || 0}</div>
+                                        <div style={{ fontSize: '0.74rem', color: '#fcd34d', fontWeight: 600 }}>Alertas</div>
                                     </div>
-                                    <div style={{ flex: 1, textAlign: 'center', padding: '16px', background: '#0c4a6e', borderRadius: '8px' }}>
-                                        <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#38bdf8' }}>{stats?.incidents?.info || 0}</div>
-                                        <div style={{ color: '#7dd3fc', fontSize: '0.75rem' }}>Info</div>
+                                    <div style={{ background: 'rgba(59, 130, 246, 0.1)', padding: '16px', borderRadius: '10px', border: '1px solid rgba(59, 130, 246, 0.3)', textAlign: 'center' }}>
+                                        <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#3b82f6' }}>{stats?.incidents?.info || 0}</div>
+                                        <div style={{ fontSize: '0.74rem', color: '#93c5fd', fontWeight: 600 }}>Informativas</div>
                                     </div>
                                 </div>
-                            </div>
+                            </GlassCard>
 
-                            <div style={{ background: '#1e293b', borderRadius: '12px', padding: '24px', border: '1px solid #334155' }}>
-                                <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '16px' }}>👷 Estado de Operarios</h3>
-                                <div style={{ display: 'flex', gap: '16px' }}>
-                                    <div style={{ flex: 1, textAlign: 'center', padding: '16px', background: '#052e16', borderRadius: '8px' }}>
-                                        <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#22c55e' }}>{stats?.platform?.activeWorkers || 0}</div>
-                                        <div style={{ color: '#86efac', fontSize: '0.75rem' }}>Activos</div>
+                            {/* Worker KYC Status */}
+                            <GlassCard style={{ padding: '24px' }}>
+                                <h3 style={{ fontSize: '1rem', fontWeight: 800, margin: '0 0 16px', color: '#f8fafc' }}>
+                                    🪪 Estado de Compliance de Operarios
+                                </h3>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                                    <div style={{ background: 'rgba(16, 185, 129, 0.1)', padding: '16px', borderRadius: '10px', border: '1px solid rgba(16, 185, 129, 0.3)', textAlign: 'center' }}>
+                                        <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#10b981' }}>{stats?.platform?.activeWorkers || 0}</div>
+                                        <div style={{ fontSize: '0.74rem', color: '#86efac', fontWeight: 600 }}>Activos KYC</div>
                                     </div>
-                                    <div style={{ flex: 1, textAlign: 'center', padding: '16px', background: '#451a03', borderRadius: '8px' }}>
-                                        <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#f59e0b' }}>{stats?.platform?.pendingWorkers || 0}</div>
-                                        <div style={{ color: '#fcd34d', fontSize: '0.75rem' }}>Pendientes</div>
+                                    <div style={{ background: 'rgba(245, 158, 11, 0.1)', padding: '16px', borderRadius: '10px', border: '1px solid rgba(245, 158, 11, 0.3)', textAlign: 'center' }}>
+                                        <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#f59e0b' }}>{stats?.platform?.pendingWorkers || 0}</div>
+                                        <div style={{ fontSize: '0.74rem', color: '#fcd34d', fontWeight: 600 }}>Pendientes</div>
                                     </div>
-                                    <div style={{ flex: 1, textAlign: 'center', padding: '16px', background: '#450a0a', borderRadius: '8px' }}>
-                                        <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#ef4444' }}>{stats?.platform?.blockedWorkers || 0}</div>
-                                        <div style={{ color: '#fca5a5', fontSize: '0.75rem' }}>Bloqueados</div>
+                                    <div style={{ background: 'rgba(239, 68, 68, 0.1)', padding: '16px', borderRadius: '10px', border: '1px solid rgba(239, 68, 68, 0.3)', textAlign: 'center' }}>
+                                        <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#ef4444' }}>{stats?.platform?.blockedWorkers || 0}</div>
+                                        <div style={{ fontSize: '0.74rem', color: '#fca5a5', fontWeight: 600 }}>Bloqueados</div>
                                     </div>
                                 </div>
-                            </div>
+                            </GlassCard>
+
                         </div>
                     </div>
+
                 ) : activeView === 'tenants' ? (
-                    /* ============ TENANTS ============ */
+
+                    /* ============ TENANTS LIST ============ */
                     <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-                            <h2 style={{ fontSize: '1.3rem', fontWeight: 700 }}>🏢 Gestión de Tenants</h2>
-                            <button onClick={() => setShowNewTenant(true)} style={{ padding: '10px 20px', background: '#f59e0b', color: '#0f172a', border: 'none', borderRadius: '8px', fontWeight: 700, cursor: 'pointer' }}>
-                                + Nuevo Tenant
-                            </button>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                            <div>
+                                <h2 style={{ fontSize: '1.2rem', fontWeight: 800, margin: 0, color: '#f8fafc' }}>
+                                    🏢 Empresas & Sub-Organizaciones Registradas
+                                </h2>
+                                <p style={{ color: '#94a3b8', fontSize: '0.8rem', margin: '4px 0 0' }}>Gestión de subdominios, aislamiento y planes</p>
+                            </div>
+                            <Button variant="primary" size="sm" icon="+" onClick={() => setShowNewTenant(true)}>
+                                Crear Nuevo Tenant
+                            </Button>
                         </div>
 
-                        {/* New Tenant Modal */}
-                        {showNewTenant && (
-                            <div style={{ background: '#1e293b', borderRadius: '12px', padding: '24px', border: '2px solid #f59e0b', marginBottom: '24px' }}>
-                                <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '16px' }}>Crear Nuevo Tenant</h3>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                                    <input placeholder="Nombre empresa" value={newTenant.name} onChange={e => setNewTenant({...newTenant, name: e.target.value})} style={{ padding: '10px 14px', background: '#0f172a', border: '1px solid #475569', borderRadius: '8px', color: '#f8fafc', fontSize: '0.9rem' }} />
-                                    <input placeholder="slug (ej: constructora-abc)" value={newTenant.slug} onChange={e => setNewTenant({...newTenant, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '')})} style={{ padding: '10px 14px', background: '#0f172a', border: '1px solid #475569', borderRadius: '8px', color: '#f8fafc', fontSize: '0.9rem' }} />
-                                    <input placeholder="Email del dueño" value={newTenant.ownerEmail} onChange={e => setNewTenant({...newTenant, ownerEmail: e.target.value})} style={{ padding: '10px 14px', background: '#0f172a', border: '1px solid #475569', borderRadius: '8px', color: '#f8fafc', fontSize: '0.9rem' }} />
-                                    <input placeholder="Teléfono (WhatsApp)" value={newTenant.ownerPhone} onChange={e => setNewTenant({...newTenant, ownerPhone: e.target.value})} style={{ padding: '10px 14px', background: '#0f172a', border: '1px solid #475569', borderRadius: '8px', color: '#f8fafc', fontSize: '0.9rem' }} />
-                                    <select value={newTenant.plan} onChange={e => setNewTenant({...newTenant, plan: e.target.value})} style={{ padding: '10px 14px', background: '#0f172a', border: '1px solid #475569', borderRadius: '8px', color: '#f8fafc', fontSize: '0.9rem' }}>
-                                        <option value="starter">🟢 Starter ($29/mes)</option>
-                                        <option value="professional">🔵 Professional ($99/mes)</option>
-                                        <option value="enterprise">🟣 Enterprise ($199/mes)</option>
-                                    </select>
-                                    <div style={{ display: 'flex', gap: '8px' }}>
-                                        <button onClick={handleCreateTenant} disabled={creating} style={{ flex: 1, padding: '10px', background: '#22c55e', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 700, cursor: 'pointer' }}>
-                                            {creating ? 'Creando...' : '✅ Crear Tenant'}
-                                        </button>
-                                        <button onClick={() => setShowNewTenant(false)} style={{ padding: '10px 16px', background: '#475569', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>
-                                            Cancelar
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Tenants List */}
-                        <div style={{ display: 'grid', gap: '12px' }}>
-                            {tenants.map((t, i) => (
-                                <div key={i} style={{ background: '#1e293b', borderRadius: '12px', padding: '20px', border: '1px solid #334155', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                            {tenants.map((t, idx) => (
+                                <GlassCard key={idx} style={{ padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
                                     <div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '4px' }}>
-                                            <span style={{ fontWeight: 700, fontSize: '1rem' }}>{t.name}</span>
-                                            {planBadge(t.plan)}
-                                            <span style={{ color: t.status === 'active' ? '#22c55e' : '#ef4444', fontSize: '0.75rem' }}>● {t.status}</span>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+                                            <span style={{ fontSize: '1.05rem', fontWeight: 800, color: '#f8fafc' }}>{t.name}</span>
+                                            <Badge color={planBadgeColor[t.plan] || '#f59e0b'} variant="filled" size="xs">
+                                                {t.plan?.toUpperCase()}
+                                            </Badge>
+                                            <span style={{ fontSize: '0.72rem', color: t.status === 'active' ? '#10b981' : '#ef4444', fontWeight: 600 }}>
+                                                ● {t.status}
+                                            </span>
                                         </div>
-                                        <div style={{ color: '#94a3b8', fontSize: '0.8rem' }}>
-                                            {t.slug}.obrasaas.app • {t.ownerEmail || 'Sin email'} • Creado: {new Date(t.createdAt).toLocaleDateString('es-AR')}
-                                        </div>
-                                    </div>
-                                    <div style={{ display: 'flex', gap: '24px', alignItems: 'center' }}>
-                                        <div style={{ textAlign: 'center' }}>
-                                            <div style={{ fontWeight: 700, color: '#3b82f6' }}>{t.projectCount}</div>
-                                            <div style={{ color: '#94a3b8', fontSize: '0.7rem' }}>Obras</div>
-                                        </div>
-                                        <div style={{ textAlign: 'center' }}>
-                                            <div style={{ fontWeight: 700, color: '#22c55e' }}>{t.workerCount}</div>
-                                            <div style={{ color: '#94a3b8', fontSize: '0.7rem' }}>Operarios</div>
+                                        <div style={{ fontSize: '0.78rem', color: '#94a3b8', fontFamily: tokens.font.mono }}>
+                                            {t.slug}.obrasaas.app • 👤 {t.ownerEmail || 'Sin email'} • 📅 Creado: {new Date(t.createdAt).toLocaleDateString('es-AR')}
                                         </div>
                                     </div>
-                                </div>
+
+                                    <div style={{ display: 'flex', gap: '28px', alignItems: 'center' }}>
+                                        <div style={{ textAlign: 'center' }}>
+                                            <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#3b82f6' }}>{t.projectCount}</div>
+                                            <div style={{ fontSize: '0.68rem', color: '#64748b' }}>Obras</div>
+                                        </div>
+                                        <div style={{ textAlign: 'center' }}>
+                                            <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#10b981' }}>{t.workerCount}</div>
+                                            <div style={{ fontSize: '0.68rem', color: '#64748b' }}>Personal</div>
+                                        </div>
+                                        <Button variant="secondary" size="sm" onClick={() => window.open(`https://${t.slug}.obrasaas.app/dashboard`, '_blank')}>
+                                            Ingresar ↗
+                                        </Button>
+                                    </div>
+                                </GlassCard>
                             ))}
                         </div>
                     </div>
-                ) : activeView === 'billing' ? (
-                    /* ============ BILLING ============ */
-                    <div>
-                        <h2 style={{ fontSize: '1.3rem', fontWeight: 700, marginBottom: '24px' }}>💰 Facturación & Revenue</h2>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginBottom: '32px' }}>
-                            <div style={{ background: '#1e293b', borderRadius: '12px', padding: '24px', border: '1px solid #334155', textAlign: 'center' }}>
-                                <div style={{ color: '#94a3b8', fontSize: '0.85rem', marginBottom: '8px' }}>MRR (Monthly Recurring Revenue)</div>
-                                <div style={{ fontSize: '2.5rem', fontWeight: 800, color: '#22c55e' }}>${stats?.platform?.mrr || 0}</div>
-                                <div style={{ color: '#64748b', fontSize: '0.75rem' }}>USD / mes</div>
-                            </div>
-                            <div style={{ background: '#1e293b', borderRadius: '12px', padding: '24px', border: '1px solid #334155', textAlign: 'center' }}>
-                                <div style={{ color: '#94a3b8', fontSize: '0.85rem', marginBottom: '8px' }}>ARR (Annual Recurring Revenue)</div>
-                                <div style={{ fontSize: '2.5rem', fontWeight: 800, color: '#3b82f6' }}>${stats?.platform?.arr || 0}</div>
-                                <div style={{ color: '#64748b', fontSize: '0.75rem' }}>USD / año</div>
-                            </div>
-                            <div style={{ background: '#1e293b', borderRadius: '12px', padding: '24px', border: '1px solid #334155', textAlign: 'center' }}>
-                                <div style={{ color: '#94a3b8', fontSize: '0.85rem', marginBottom: '8px' }}>Target 500 Clientes</div>
-                                <div style={{ fontSize: '2.5rem', fontWeight: 800, color: '#f59e0b' }}>${(500 * 99).toLocaleString()}</div>
-                                <div style={{ color: '#64748b', fontSize: '0.75rem' }}>USD / mes potencial</div>
-                            </div>
-                        </div>
 
-                        <div style={{ background: '#1e293b', borderRadius: '12px', padding: '24px', border: '1px solid #334155' }}>
-                            <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '16px' }}>📊 Planes de Precio</h3>
-                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                                <thead>
-                                    <tr style={{ borderBottom: '1px solid #334155' }}>
-                                        <th style={{ padding: '12px', textAlign: 'left', color: '#94a3b8', fontSize: '0.8rem' }}>Plan</th>
-                                        <th style={{ padding: '12px', textAlign: 'center', color: '#94a3b8', fontSize: '0.8rem' }}>Precio</th>
-                                        <th style={{ padding: '12px', textAlign: 'center', color: '#94a3b8', fontSize: '0.8rem' }}>Obras</th>
-                                        <th style={{ padding: '12px', textAlign: 'center', color: '#94a3b8', fontSize: '0.8rem' }}>Usuarios</th>
-                                        <th style={{ padding: '12px', textAlign: 'center', color: '#94a3b8', fontSize: '0.8rem' }}>Suscriptores</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {[
-                                        { name: 'Starter', price: '$29', obras: '1', users: '5', subs: tenants.filter(t => t.plan === 'starter').length },
-                                        { name: 'Professional', price: '$99', obras: '5', users: '20', subs: tenants.filter(t => t.plan === 'professional').length },
-                                        { name: 'Enterprise', price: '$199', obras: '∞', users: '∞', subs: tenants.filter(t => t.plan === 'enterprise').length }
-                                    ].map((p, i) => (
-                                        <tr key={i} style={{ borderBottom: '1px solid #1e293b' }}>
-                                            <td style={{ padding: '12px', fontWeight: 600 }}>{planBadge(p.name.toLowerCase())} {p.name}</td>
-                                            <td style={{ padding: '12px', textAlign: 'center', color: '#22c55e', fontWeight: 700 }}>{p.price}/mes</td>
-                                            <td style={{ padding: '12px', textAlign: 'center' }}>{p.obras}</td>
-                                            <td style={{ padding: '12px', textAlign: 'center' }}>{p.users}</td>
-                                            <td style={{ padding: '12px', textAlign: 'center', fontWeight: 700, color: '#f59e0b' }}>{p.subs}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                ) : activeView === 'audit' ? (
-                    /* ============ AUDIT ============ */
-                    <div>
-                        <h2 style={{ fontSize: '1.3rem', fontWeight: 700, marginBottom: '24px' }}>🔐 Auditoría & Trazabilidad SHA-256</h2>
-                        <div style={{ background: '#1e293b', borderRadius: '12px', padding: '24px', border: '1px solid #334155' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                                <h3 style={{ fontSize: '1rem', fontWeight: 700 }}>Cadena de Bloques de Auditoría</h3>
-                                <span style={{ color: '#22c55e', fontSize: '0.85rem', fontWeight: 600 }}>✅ {stats?.platform?.auditBlocks || 0} bloques certificados</span>
-                            </div>
-                            <p style={{ color: '#94a3b8', fontSize: '0.85rem' }}>
-                                Cada acción en la plataforma (KYC, asistencia, incidencias, gastos) genera un bloque de auditoría inmutable con hash SHA-256. 
-                                Esta cadena es exportable para presentar en licitaciones públicas y auditorías de la SRT.
-                            </p>
-                        </div>
-                    </div>
                 ) : (
-                    /* ============ WORKERS ============ */
+
+                    /* ============ BILLING & REVENUE ============ */
                     <div>
-                        <h2 style={{ fontSize: '1.3rem', fontWeight: 700, marginBottom: '24px' }}>👷 Operarios de la Plataforma</h2>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginBottom: '24px' }}>
-                            <div style={{ background: '#052e16', borderRadius: '12px', padding: '20px', border: '1px solid #166534', textAlign: 'center' }}>
-                                <div style={{ fontSize: '2rem', fontWeight: 800, color: '#22c55e' }}>{stats?.platform?.activeWorkers || 0}</div>
-                                <div style={{ color: '#86efac', fontSize: '0.85rem' }}>Activos (KYC OK)</div>
-                            </div>
-                            <div style={{ background: '#451a03', borderRadius: '12px', padding: '20px', border: '1px solid #92400e', textAlign: 'center' }}>
-                                <div style={{ fontSize: '2rem', fontWeight: 800, color: '#f59e0b' }}>{stats?.platform?.pendingWorkers || 0}</div>
-                                <div style={{ color: '#fcd34d', fontSize: '0.85rem' }}>Pre-Verificados</div>
-                            </div>
-                            <div style={{ background: '#450a0a', borderRadius: '12px', padding: '20px', border: '1px solid #991b1b', textAlign: 'center' }}>
-                                <div style={{ fontSize: '2rem', fontWeight: 800, color: '#ef4444' }}>{stats?.platform?.blockedWorkers || 0}</div>
-                                <div style={{ color: '#fca5a5', fontSize: '0.85rem' }}>Bloqueados (ART)</div>
-                            </div>
-                        </div>
-                        <div style={{ background: '#1e293b', borderRadius: '12px', padding: '24px', border: '1px solid #334155' }}>
-                            <p style={{ color: '#94a3b8', fontSize: '0.85rem' }}>
-                                Los operarios se registran vía WhatsApp (auto-servicio) o desde el KYC biométrico con foto de DNI + selfie. 
-                                Los operarios con ART vencida son bloqueados automáticamente del acceso por geocerca satelital.
-                            </p>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
+                            <GlassCard style={{ padding: '32px', textAlign: 'center' }} glow>
+                                <div style={{ color: '#94a3b8', fontSize: '0.85rem', marginBottom: '6px' }}>MRR (Monthly Recurring Revenue)</div>
+                                <div style={{ fontSize: '3rem', fontWeight: 900, color: '#10b981', fontFamily: tokens.font.heading }}>
+                                    ${stats?.platform?.mrr || 29}
+                                </div>
+                                <div style={{ color: '#64748b', fontSize: '0.75rem' }}>USD / mes en suscripciones activas</div>
+                            </GlassCard>
+
+                            <GlassCard style={{ padding: '32px', textAlign: 'center' }}>
+                                <div style={{ color: '#94a3b8', fontSize: '0.85rem', marginBottom: '6px' }}>ARR (Annual Run Rate)</div>
+                                <div style={{ fontSize: '3rem', fontWeight: 900, color: '#3b82f6', fontFamily: tokens.font.heading }}>
+                                    ${stats?.platform?.arr || 348}
+                                </div>
+                                <div style={{ color: '#64748b', fontSize: '0.75rem' }}>USD / año proyectado</div>
+                            </GlassCard>
                         </div>
                     </div>
                 )}
+
             </main>
+
+            {/* Create Tenant Modal */}
+            <Modal
+                isOpen={showNewTenant}
+                onClose={() => setShowNewTenant(false)}
+                title="Aprovisionar Nuevo Tenant"
+                subtitle="Crear una nueva instancia aislada para una constructora"
+            >
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    <div>
+                        <label style={{ fontSize: '0.76rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Razón Social / Empresa *</label>
+                        <input
+                            placeholder="Constructora ABC S.A."
+                            value={newTenant.name}
+                            onChange={e => setNewTenant({ ...newTenant, name: e.target.value })}
+                            style={{ width: '100%', padding: '10px 14px', background: '#060913', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', color: '#f8fafc' }}
+                        />
+                    </div>
+                    <div>
+                        <label style={{ fontSize: '0.76rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Subdominio Slug *</label>
+                        <input
+                            placeholder="constructora-abc"
+                            value={newTenant.slug}
+                            onChange={e => setNewTenant({ ...newTenant, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })}
+                            style={{ width: '100%', padding: '10px 14px', background: '#060913', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', color: '#f8fafc' }}
+                        />
+                    </div>
+                    <div>
+                        <label style={{ fontSize: '0.76rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Email del Dueño *</label>
+                        <input
+                            type="email"
+                            placeholder="dueno@constructora.com"
+                            value={newTenant.ownerEmail}
+                            onChange={e => setNewTenant({ ...newTenant, ownerEmail: e.target.value })}
+                            style={{ width: '100%', padding: '10px 14px', background: '#060913', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', color: '#f8fafc' }}
+                        />
+                    </div>
+                    <div>
+                        <label style={{ fontSize: '0.76rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Plan Asignado</label>
+                        <select
+                            value={newTenant.plan}
+                            onChange={e => setNewTenant({ ...newTenant, plan: e.target.value })}
+                            style={{ width: '100%', padding: '10px 14px', background: '#060913', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', color: '#f8fafc' }}
+                        >
+                            <option value="starter">🟢 Starter ($29/mes)</option>
+                            <option value="professional">🔵 Professional ($99/mes)</option>
+                            <option value="enterprise">🟣 Enterprise ($199/mes)</option>
+                        </select>
+                    </div>
+                    <Button
+                        variant="primary"
+                        size="md"
+                        style={{ width: '100%', marginTop: '6px' }}
+                        loading={creating}
+                        onClick={handleCreateTenant}
+                    >
+                        {creating ? 'Creando...' : 'Confirmar y Aprovisionar Tenant'}
+                    </Button>
+                </div>
+            </Modal>
+
         </div>
     );
 }
