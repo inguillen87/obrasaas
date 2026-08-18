@@ -2,6 +2,7 @@ import { getAppState, saveAppState } from '../../../../lib/db.js';
 import { analyzeDniWithAI, verifyFacialMatchAndLiveness } from '../../../../lib/aiVision.js';
 import { appendAuditTransaction } from '../../../../lib/auditLedger.js';
 import { verifyWebviewToken } from '../../../../lib/auth.js';
+import { uploadKycImages } from '../../../../lib/blobStorage.js';
 
 export async function POST(request) {
     try {
@@ -126,7 +127,11 @@ export async function POST(request) {
             state.workerRegistry.push(newWorker);
         }
 
-        // 6. Update KYC Verification Record
+
+        // 6. Upload images to Vercel Blob Storage (prevents DB bloat)
+        const { dniFrontUrl, selfieUrl } = await uploadKycImages(key, cleanDniBase64, cleanSelfieBase64);
+
+        // 7. Update KYC Verification Record (stores URLs, NOT base64)
         state.kycVerifications = state.kycVerifications || {};
         state.kycVerifications[key] = {
             workerId: key,
@@ -134,8 +139,8 @@ export async function POST(request) {
             dni: finalDni,
             cuil: finalCuil,
             phone: phone,
-            dniFrontUrl: dniFrontBase64,
-            selfieUrl: selfieBase64,
+            dniFrontUrl: dniFrontUrl,
+            selfieUrl: selfieUrl,
             faceMatchScore: bioMatch.confidenceScore || 96.5,
             voiceSampleEnrolled: Boolean(voiceEnrolled),
             geofenceRadiusValid: isInsideGeofence,
