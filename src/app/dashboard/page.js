@@ -488,13 +488,17 @@ export default function Dashboard() {
   const [realtimeConnected, setRealtimeConnected] = useState(false);
   const [weatherTelemetry, setWeatherTelemetry] = useState(null);
 
-  // Fetch Weather Telemetry
+  // Fetch Weather Telemetry (reactive to active project)
   useEffect(() => {
-    fetch('/api/weather')
+    const lat = state.projectConfig?.latitude || -34.5886;
+    const lon = state.projectConfig?.longitude || -58.4302;
+    const city = state.projectConfig?.city || '';
+    const name = state.projectConfig?.name || '';
+    fetch(`/api/weather?lat=${lat}&lon=${lon}&city=${encodeURIComponent(city)}&name=${encodeURIComponent(name)}`)
       .then(res => res.json())
       .then(data => setWeatherTelemetry(data))
       .catch(err => console.warn("Failed to load weather telemetry:", err));
-  }, []);
+  }, [state.activeProjectId, state.projectConfig?.city]);
 
   // Fetch initial state & setup Real-Time SSE Stream (Zero DB Polling)
   useEffect(() => {
@@ -4362,11 +4366,11 @@ export default function Dashboard() {
                 {/* Details grid */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '15px', marginBottom: '25px', fontSize: '0.8rem', background: '#f8fafc', border: '1px solid #e2e8f0', padding: '12px 18px', borderRadius: '8px' }}>
                   <div>
-                    <span style={{ color: '#64748b', fontWeight: 600, display: 'inline-block', width: '90px' }}>PROYECTO:</span> <strong style={{ color: '#0f172a' }}>Edificio Palermo Chico</strong><br/>
-                    <span style={{ color: '#64748b', fontWeight: 600, display: 'inline-block', width: '90px' }}>UBICACIÓN:</span> <strong style={{ color: '#0f172a' }}>Palermo, CABA</strong>
+                    <span style={{ color: '#64748b', fontWeight: 600, display: 'inline-block', width: '90px' }}>PROYECTO:</span> <strong style={{ color: '#0f172a' }}>{state.projectConfig?.name || 'Torre Palermo Soho'}</strong><br/>
+                    <span style={{ color: '#64748b', fontWeight: 600, display: 'inline-block', width: '90px' }}>UBICACIÓN:</span> <strong style={{ color: '#0f172a' }}>{state.projectConfig?.city || 'CABA'}, {state.projectConfig?.province || 'Argentina'}</strong>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <span style={{ color: '#64748b', fontWeight: 600 }}>AUDITOR:</span> <strong style={{ color: '#0f172a' }}>Arq. Marcelo (Director)</strong><br/>
+                    <span style={{ color: '#64748b', fontWeight: 600 }}>AUDITOR:</span> <strong style={{ color: '#0f172a' }}>{state.projectConfig?.director?.name || 'Arq. Marcelo'} (Director)</strong><br/>
                     <span style={{ color: '#64748b', fontWeight: 600 }}>EMPRESA:</span> <strong style={{ color: '#0f172a' }}>Innovar Latam S.A.</strong>
                   </div>
                 </div>
