@@ -462,36 +462,33 @@ export async function POST(request) {
 
             // 👑 Arq. Marcelo (Director de Obra) Executive Handling
             if (isDirector) {
-                if (normalBody.includes('soy juan') || normalBody.includes('juan gomez') || normalBody.includes('fichar a juan')) {
-                    if (!state.attendance["Juan Gómez"]) {
-                        state.attendance["Juan Gómez"] = { role: "Albañilería Principal", checkin: timeStr, status: "Presente (Director)" };
-                    }
-                    state.attendance["Juan Gómez"].checkin = timeStr;
-                    state.attendance["Juan Gómez"].status = "Presente (Supervisado)";
-                    state.attendance["Juan Gómez"].verifiedBy = "Director Arq. Marcelo";
+                // 1️⃣ Supervisión de Cuadrilla & KYC
+                if (normalBody === '1' || normalBody.includes('cuadrilla') || normalBody.includes('supervision') || normalBody.includes('kyc') || normalBody.includes('personal') || normalBody.includes('operarios') || normalBody.includes('soy juan') || normalBody.includes('juan gomez') || normalBody.includes('fichar a juan')) {
+                    const activeWorkers = Object.keys(state.attendance || {}).map(wName => {
+                        const att = state.attendance[wName];
+                        const kyc = Object.values(state.kycVerifications || {}).find(k => k.workerName === wName);
+                        const art = state.artPolicies?.[wName];
+                        const artStatus = art?.status === 'VENCIDA' ? '🚨 ART Vencida' : '🛡️ ART OK';
+                        const kycStatus = kyc?.status === 'VERIFICADO' ? '🪪 KYC Verificado' : '⏳ KYC Pendiente';
+                        return `• *${wName}* (${att.role || 'Oficial'}):\n  ↳ Estado: *${att.status || 'Presente'}* (${att.checkin || '08:00 AM'})\n  ↳ ${kycStatus} • ${artStatus}`;
+                    }).join('\n');
 
-                    state.auditLedger = appendAuditTransaction(state.auditLedger, {
-                        action: "FICHAJE_SUPERVISADO_DIRECTOR",
-                        actor: "Arq. Marcelo",
-                        details: { worker: "Juan Gómez", role: "Albañilería Principal" }
-                    });
-
-                    botReply = `👷‍♂️ *Directiva Ejecutiva Registrada*\n\nHola *Arq. Marcelo* (Director de Obra).\n• Operario: *Juan Gómez (Albañilería)*\n• Estado: *Presente (Certificado por Dirección)*\n• Horario: *${timeStr}*\n\n_Tu supervisión ha sido impactada en tiempo real en el Dashboard y firmada con hash SHA-256._`;
+                    botReply = `👷‍♂️ *Supervisión de Cuadrilla & KYC en Vivo (Dirección)*\n\n*Obra:* ${state.projectConfig?.name || 'Torre Palermo Soho'} (${state.projectConfig?.city || 'CABA'})\n*Operarios en Predio:* ${state.operariosCount || 1} activos.\n\n${activeWorkers || '• Juan Gómez: Presente (GPS 14m) • KYC OK\n• Luis Martínez: Presente (Voz) • KYC OK\n• Carlos Pérez: Ausente (ART Vencida)'}\n\n👉 *Validar Nuevo Operario (Portal KYC):*\n${kycLink}\n\n_Todos los legajos se encuentran sincronizados en el Dashboard._`;
                     
                     feedIncident = {
                         id: "inc-dir-" + Date.now(),
-                        title: "Presentismo Supervisado por Director",
-                        description: `Arq. Marcelo certificó el ingreso a obra de Juan Gómez.`,
+                        title: "Supervisión de Cuadrilla por Director",
+                        description: `Arq. Marcelo consultó la telemetría de presentismo y legajos KYC de la cuadrilla.`,
                         type: "info",
                         badge: "Dirección",
                         timestamp: `Hoy, ${timeStr}`,
                         reporter: "Arq. Marcelo (Director)",
-                        icon: "fa-solid fa-user-check"
+                        icon: "fa-solid fa-users-viewfinder"
                     };
                     showInFeed = true;
                 }
-                // Avance de Obra
-                else if (normalBody === '2' || normalBody.includes('revoque') || normalBody.includes('termin') || normalBody.includes('avance') || normalBody.includes('100%')) {
+                // 2️⃣ Certificar Avance (Gantt)
+                else if (normalBody === '2' || normalBody.includes('revoque') || normalBody.includes('termin') || normalBody.includes('avance') || normalBody.includes('100%') || normalBody.includes('certificar')) {
                     if (state.tasks && state.tasks[1]) {
                         state.tasks[1].progress = 100;
                         state.avancePercentage = 55;
@@ -499,10 +496,10 @@ export async function POST(request) {
                         state.auditLedger = appendAuditTransaction(state.auditLedger, {
                             action: "CERTIFICACION_AVANCE_GANTT",
                             actor: "Arq. Marcelo",
-                            details: { task: "Revoque Grueso", progress: 100, globalProgress: 55 }
+                            details: { task: "Revoque Grueso", progress: 100, globalProgress: 55, obra: state.projectConfig?.name }
                         });
 
-                        botReply = `🏗️ *Certificación de Avance de Obra (Dirección)*\n\nHola *Arq. Marcelo*.\n• Hito: *Revoque Grueso al 100%*\n• Avance Global de Obra: *55%*\n• Estado: *Listo para Certificación Quincenal Q1*\n• Trazabilidad: Certificado con firma digital SHA-256.`;
+                        botReply = `🏗️ *Certificación de Avance de Obra (Dirección)*\n\nHola *Arq. Marcelo*.\n• Hito: *Revoque Grueso al 100%*\n• Avance Global de Obra: *55%*\n• Estado: *Listo para Certificación Quincenal Q1*\n• Trazabilidad: Certificado con firma digital SHA-256 en ${state.projectConfig?.name || 'Torre Palermo Soho'}.`;
 
                         feedIncident = {
                             id: "inc-gantt-" + Date.now(),
@@ -517,8 +514,8 @@ export async function POST(request) {
                         showInFeed = true;
                     }
                 }
-                // Incidencia Crítica
-                else if (normalBody === '3' || normalBody.includes('fuga') || normalBody.includes('cano') || normalBody.includes('rotura') || normalBody.includes('alerta')) {
+                // 3️⃣ Reportar / Asignar Incidencia Crítica
+                else if (normalBody === '3' || normalBody.includes('fuga') || normalBody.includes('cano') || normalBody.includes('rotura') || normalBody.includes('alerta') || normalBody.includes('incidencia') || normalBody.includes('urgente')) {
                     state.alertsCount += 1;
                     state.tasks[99] = { 
                         name: "Reparación Urgente Cañería", 
@@ -554,8 +551,8 @@ export async function POST(request) {
                     };
                     showInFeed = true;
                 }
-                // Demora / Logística
-                else if (normalBody === '4' || normalBody.includes('demora') || normalBody.includes('ceramic') || normalBody.includes('retraso') || normalBody.includes('flete')) {
+                // 4️⃣ Replanificación por Demora de Suministros
+                else if (normalBody === '4' || normalBody.includes('demora') || normalBody.includes('ceramic') || normalBody.includes('retraso') || normalBody.includes('flete') || normalBody.includes('replanific')) {
                     state.alertsCount += 1;
                     state.diasEstimados = "Día 12/37 (+2 días)";
                     if (state.tasks[3]) {
@@ -578,7 +575,7 @@ export async function POST(request) {
                     };
                     showInFeed = true;
                 }
-                // Proveedores
+                // 5️⃣ Gestionar Proveedores
                 else if (normalBody === '5' || normalBody.includes('proveedor') || normalBody.includes('abertura') || normalBody.includes('entrega') || normalBody.includes('confirm')) {
                     if (state.tasks && state.tasks[3]) {
                         state.tasks[3].supplierStatus = "Confirmado";
@@ -586,12 +583,12 @@ export async function POST(request) {
                     }
                     botReply = `🤝 *Proveedor Confirmado por Dirección*\n\n• Proveedor: *Aberturas López / Cerámicas*\n• Estado: *Entrega Confirmada para Q2 ✅*\n• Tarea Revestimiento: Desbloqueada en Gantt.`;
                 }
-                // Quincena
-                else if (normalBody === '6' || normalBody.includes('quincena') || normalBody.includes('plan')) {
-                    botReply = `📅 *Planificación de la Quincena Actual (Dirección de Obra)*\n\nHola *Arq. Marcelo*, este es el estado de *Torre Palermo Soho*:\n\n*Quincena 1 (Q1)*:\n• *Revoque Grueso*: 100% completado\n• *Cañería y Descargas*: 20% (Luis Martínez)\n\n*Próxima Quincena (Q2)*:\n• *Revestimiento Cerámico*: Inicio 16/Ago (Carlos Pérez)\n• *Pintura y Terminación*: Inicio 21/Ago\n\n_Todos los planos, remitos y pólizas ART están sincronizados en tiempo real en el Dashboard._`;
+                // 6️⃣ Consultar Plan Quincenal (Q1/Q2)
+                else if (normalBody === '6' || normalBody.includes('quincena') || normalBody.includes('plan') || normalBody.includes('que nos toca') || normalBody.includes('cronograma')) {
+                    botReply = `📅 *Planificación de la Quincena Actual (Dirección de Obra)*\n\nHola *Arq. Marcelo*, este es el estado de *${state.projectConfig?.name || 'Torre Palermo Soho'}*:\n\n*Quincena 1 (Q1)*:\n• *Revoque Grueso*: 100% completado (Juan Gómez)\n• *Cañería y Descargas*: 20% (Luis Martínez)\n\n*Próxima Quincena (Q2)*:\n• *Revestimiento Cerámico*: Inicio 16/Ago (Carlos Pérez)\n• *Pintura y Terminación*: Inicio 21/Ago\n\n_Todos los planos, remitos y pólizas ART están sincronizados en tiempo real en el Dashboard._`;
                 }
-                // Caja Chica
-                else if (normalBody === '7' || normalBody.includes('gasto') || normalBody.includes('ferreteria') || normalBody.includes('caja chica') || normalBody.includes('18.500') || normalBody.includes('18500')) {
+                // 7️⃣ Rendir / Aprobar Gasto de Caja Chica
+                else if (normalBody === '7' || normalBody.includes('gasto') || normalBody.includes('ferreteria') || normalBody.includes('caja chica') || normalBody.includes('18.500') || normalBody.includes('18500') || normalBody.includes('rendir')) {
                     const numbers = bodyText.match(/\d+[\.,]?\d*/g);
                     let expenseAmount = 18500;
                     if (numbers && numbers.length > 0) {
@@ -616,7 +613,7 @@ export async function POST(request) {
                     state.auditLedger = appendAuditTransaction(state.auditLedger, {
                         action: "RENDICION_CAJA_CHICA_DIRECTOR",
                         actor: "Arq. Marcelo",
-                        details: { monto: expenseAmount, saldoRestante: state.cajaChica.saldoActual }
+                        details: { monto: expenseAmount, saldoRestante: state.cajaChica.saldoActual, obra: state.projectConfig?.name }
                     });
 
                     botReply = `🧾 *Rendición de Caja Chica Aprobada (Dirección)*\n\n• Monto: *$${expenseAmount.toLocaleString('es-AR')} ARS*\n• Solicitante: *Arq. Marcelo*\n• Saldo Restante en Caja Chica: *$${state.cajaChica.saldoActual.toLocaleString('es-AR')} ARS*\n• Estado: Aprobado y sincronizado en Dashboard con firma SHA-256.`;
@@ -633,18 +630,54 @@ export async function POST(request) {
                     };
                     showInFeed = true;
                 }
+                // 8️⃣ Auditoría Satelital de Geocercas & ART
+                else if (normalBody === '8' || normalBody.includes('auditoria') || normalBody.includes('art') || normalBody.includes('geocerca') || normalBody.includes('seguridad') || normalBody.includes('radar') || normalBody.includes('clima')) {
+                    const artEntries = Object.keys(state.artPolicies || {}).map(wName => {
+                        const pol = state.artPolicies[wName];
+                        const isOk = pol.status === 'VIGENTE';
+                        return `• *${wName}*: ${pol.company} (${isOk ? '✅ Vigente ' + pol.expirationDate : '🚨 VENCIDA ' + pol.expirationDate})`;
+                    }).join('\n');
+
+                    botReply = `🛡️ *Auditoría de Seguridad e Higiene & Satelital (UOCRA / ART)*\n\n*Obra Activa:* ${state.projectConfig?.name || 'Torre Palermo Soho'} (${state.projectConfig?.city || 'CABA'})\n*Geocerca Satelital:* Radio ${state.projectConfig?.geofenceRadiusMeters || 100}m (GPS Activo)\n\n📋 *Cobertura de ART (Ley 22.250):*\n${artEntries || '• Juan Gómez: La Segunda ART (✅ Vigente)\n• Luis Martínez: Federación Patronal (✅ Vigente)\n• Carlos Pérez: Prevención ART (🚨 VENCIDA - Bloqueado)'}\n\n🔐 *Trazabilidad Criptográfica:* ${state.auditLedger?.length || 1} bloques SHA-256 certificados.\n_Acceso a obra restringido únicamente a personal con póliza vigente._`;
+                }
                 // Menú Director
                 else {
-                    botReply = `👑 *Centro de Mando — Arq. Marcelo (Director de Obra)* 🏗️\n\nHola Arq. Marcelo. Podés enviar un número o escribir tus directivas:\n\n1️⃣ *Supervisión de Cuadrilla & KYC*\n2️⃣ *Certificar Avance (Gantt)*\n3️⃣ *Reportar / Asignar Incidencia Crítica*\n4️⃣ *Replanificación por Demora de Suministros*\n5️⃣ *Gestionar Proveedores*\n6️⃣ *Consultar Plan Quincenal (Q1/Q2)*\n7️⃣ *Rendir / Aprobar Gasto de Caja Chica*\n8️⃣ *Auditoría Satelital de Geocercas & ART*\n\n📸 _Enviá fotos de remitos o facturas para validación fiscal AFIP con IA._`;
+                    botReply = `👑 *Centro de Mando — Arq. Marcelo (Director de Obra)* 🏗️\n\nHola Arq. Marcelo. Podés enviar un número del 1 al 8 o escribir tus directivas:\n\n1️⃣ *Supervisión de Cuadrilla & KYC*\n2️⃣ *Certificar Avance (Gantt)*\n3️⃣ *Reportar / Asignar Incidencia Crítica*\n4️⃣ *Replanificación por Demora de Suministros*\n5️⃣ *Gestionar Proveedores*\n6️⃣ *Consultar Plan Quincenal (Q1/Q2)*\n7️⃣ *Rendir / Aprobar Gasto de Caja Chica*\n8️⃣ *Auditoría Satelital de Geocercas & ART*\n\n📸 _Enviá fotos de remitos o facturas para validación fiscal AFIP con IA._`;
                 }
             }
             // 📐 Arq. Victoria (Socia & Directora Técnica) Handling
             else if (isTechnicalDirector) {
-                botReply = `📐 *Panel Técnico — Arq. Victoria (Socia & Directora Técnica)* 👷‍♀️\n\nHola Victoria. Tenés acceso a la supervisión técnica de *Torre Palermo Soho*:\n\n1️⃣ *Estado de Cuadrilla & KYC Biométrico*\n2️⃣ *Control de Calidad y Avance Estructural*\n3️⃣ *Inspección de Incidencias y Vicios Ocultos*\n4️⃣ *Certificaciones Quincenales*\n5️⃣ *Balance de Caja Chica & Remitos*\n\n📸 _Podés enviar fotos de inspección o notas de voz para procesar con IA._`;
+                if (normalBody === '1' || normalBody.includes('cuadrilla') || normalBody.includes('kyc')) {
+                    botReply = `👷‍♀️ *Estado de Cuadrilla & KYC (Dirección Técnica)*\n\nHola *Victoria*. Personal registrado en *${state.projectConfig?.name || 'Torre Palermo Soho'}*:\n• *Juan Gómez*: Albañilería (KYC Verificado ✓ • ART Vigente)\n• *Luis Martínez*: Plomería (KYC Verificado ✓ • ART Vigente)\n• *Carlos Pérez*: Pintura (ART Vencida 🚨 - Acceso Bloqueado)\n\n👉 Enlace al Portal KYC: ${kycLink}`;
+                } else if (normalBody === '2' || normalBody.includes('calidad') || normalBody.includes('clima') || normalBody.includes('hormigon')) {
+                    botReply = `🏗️ *Control Estructural & Climatológico (Dirección Técnica)*\n\n• *Obra:* ${state.projectConfig?.name || 'Torre Palermo Soho'} (${state.projectConfig?.city || 'CABA'})\n• *Hito Q1:* Revoque Grueso al 100%\n• *Telemetría Meteorológica:* Condiciones aptas para colado.\n• *CIRSOC 201:* Ensayos de compresión probetas de hormigón en regla.`;
+                } else if (normalBody === '3' || normalBody.includes('incidencia') || normalBody.includes('vicios')) {
+                    botReply = `🔍 *Inspección de Incidencias & Vicios Ocultos*\n\n• Incidencias Abiertas: ${state.alertsCount || 0}\n• Tarea de Emergencia: Cañería de baño en reparación.\n• Fotos de Inspección en Bitácora: ${state.sitePhotos?.length || 0} registradas.`;
+                } else if (normalBody === '4' || normalBody.includes('quincena') || normalBody.includes('certificacion')) {
+                    botReply = `📅 *Certificaciones Quincenales (Dirección Técnica)*\n\n• *Quincena 1 (Q1)*: 38% avance físico ($2.850.000 ARS) — *Certificado & Facturado*\n• *Quincena 2 (Q2)*: 14% en curso ($1.950.000 ARS) — *En Medición de Campo*`;
+                } else if (normalBody === '5' || normalBody.includes('caja') || normalBody.includes('remito') || normalBody.includes('afip')) {
+                    botReply = `💰 *Balance de Caja Chica & Auditoría Fiscal*\n\n• *Saldo Disponible:* $${state.cajaChica?.saldoActual?.toLocaleString('es-AR') || '84.500'} ARS\n• *Comprobantes AFIP Auditados:* ${state.remitos?.length || 0} remitos con CAE validado.`;
+                } else {
+                    botReply = `📐 *Panel Técnico — Arq. Victoria (Socia & Directora Técnica)* 👷‍♀️\n\nHola Victoria. Podés enviar un número del 1 al 5 o tus directivas técnicas:\n\n1️⃣ *Estado de Cuadrilla & KYC Biométrico*\n2️⃣ *Control de Calidad y Avance Estructural*\n3️⃣ *Inspección de Incidencias y Vicios Ocultos*\n4️⃣ *Certificaciones Quincenales*\n5️⃣ *Balance de Caja Chica & Remitos AFIP*\n\n📸 _Podés enviar fotos de inspección o notas de voz para procesar con IA._`;
+                }
             }
             // 👷 Worker Handling
             else {
-                botReply = `👷‍♂️ *Copiloto Inteligente de ObraSaaS*\n\nHola *${senderName}* (*${senderRole}*).\n\n1️⃣ *Fichar Entrada* (o enviá tu ubicación 📍)\n2️⃣ *Reportar Avance* (ej: "terminamos el revoque al 100%")\n3️⃣ *Reportar Incidencia* (ej: "fuga de agua en el caño")\n4️⃣ *Demora de Materiales*\n5️⃣ *Rendir Gasto / Remito* (enviá foto del ticket)\n6️⃣ *Cargar Licencia Médica*\n\n👉 Tarjeta de Presentismo: ${attendanceLink}`;
+                if (normalBody === '1' || normalBody.includes('fichar') || normalBody.includes('entre') || normalBody.includes('llegue')) {
+                    botReply = `📍 *Fichaje de Asistencia*\n\nPor favor enviá tu *Ubicación en Tiempo Real 📍* desde el clip de WhatsApp para certificar tu ingreso por geocerca satelital a *${state.projectConfig?.name || 'Torre Palermo Soho'}*.\n\n👉 Tarjeta de Presentismo: ${attendanceLink}`;
+                } else if (normalBody === '2' || normalBody.includes('avance')) {
+                    botReply = `📋 *Reporte de Avance*\n\nPor favor escribí el avance realizado (ej: _"Soy Juan, terminamos el revoque al 100%"_) o enviá un audio/foto de la tarea completada.`;
+                } else if (normalBody === '3' || normalBody.includes('incidencia') || normalBody.includes('problema')) {
+                    botReply = `🚨 *Reporte de Incidencia*\n\nDescribí el problema o enviá una foto técnica del vicio/rotura para alertar inmediatamente a la Dirección de Obra.`;
+                } else if (normalBody === '4' || normalBody.includes('demora') || normalBody.includes('material')) {
+                    botReply = `⚠️ *Demora de Materiales*\n\nIndicá qué material falta o está demorado y cuánto tiempo estima el proveedor para replanificar el cronograma Gantt.`;
+                } else if (normalBody === '5' || normalBody.includes('gasto') || normalBody.includes('remito') || normalBody.includes('ticket')) {
+                    botReply = `🧾 *Rendición de Gastos / Remitos*\n\nEnviá la fotografía nítida del ticket o remito para procesarlo con el lector OCR fiscal AFIP.`;
+                } else if (normalBody === '6' || normalBody.includes('licencia') || normalBody.includes('medica')) {
+                    botReply = `🏥 *Carga de Licencia Médica*\n\nCompletá el formulario y adjuntá el certificado médico desde tu celular:\n👉 ${medicalLink}`;
+                } else {
+                    botReply = `👷‍♂️ *Copiloto Inteligente de ObraSaaS*\n\nHola *${senderName}* (*${senderRole}*).\n\n1️⃣ *Fichar Entrada* (o enviá tu ubicación 📍)\n2️⃣ *Reportar Avance* (ej: "terminamos el revoque al 100%")\n3️⃣ *Reportar Incidencia* (ej: "fuga de agua en el caño")\n4️⃣ *Demora de Materiales*\n5️⃣ *Rendir Gasto / Remito* (enviá foto del ticket)\n6️⃣ *Cargar Licencia Médica*\n\n👉 Tarjeta de Presentismo: ${attendanceLink}`;
+                }
             }
 
             if (feedIncident) {
