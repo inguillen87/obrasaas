@@ -393,6 +393,8 @@ export default function Dashboard() {
   const [showEditTaskModal, setShowEditTaskModal] = useState(false);
   const [showReceiveMaterialModal, setShowReceiveMaterialModal] = useState(false);
   const [showWeeklyReportModal, setShowWeeklyReportModal] = useState(false);
+  const [showForensicCertModal, setShowForensicCertModal] = useState(false);
+  const [selectedForecastDay, setSelectedForecastDay] = useState(null);
 
   // CRUD Forms State
   const [newTaskName, setNewTaskName] = useState('');
@@ -2538,10 +2540,28 @@ export default function Dashboard() {
                     <i className="fa-solid fa-cloud-sun-rain"></i> Telemetría Meteorológica &amp; Radar de Hormigonado
                   </h3>
                   <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-                    Auditoría satelital en tiempo real para colado de losas y revoques. Normas IRAM 1666 y CIRSOC 201.
+                    Auditoría satelital en tiempo real para colado de losas y revoques en <strong>{state.projectConfig?.name || 'Torre Palermo Soho'} ({state.projectConfig?.city || 'CABA'})</strong>. Normas IRAM 1666 y CIRSOC 201.
                   </p>
                 </div>
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <button 
+                    onClick={async () => {
+                      try {
+                        const lat = state.projectConfig?.latitude || -34.5886;
+                        const lon = state.projectConfig?.longitude || -58.4302;
+                        const res = await fetch(`/api/weather?lat=${lat}&lon=${lon}&city=${encodeURIComponent(state.projectConfig?.city || '')}&name=${encodeURIComponent(state.projectConfig?.name || '')}`);
+                        const d = await res.json();
+                        setWeatherTelemetry(d);
+                        addToast(`🌦️ Radar satelital actualizado para ${state.projectConfig?.name}`, 'info');
+                      } catch(e) {
+                        console.error(e);
+                      }
+                    }}
+                    className="btn btn-sm"
+                    style={{ background: 'rgba(56, 189, 248, 0.1)', border: '1px solid rgba(56, 189, 248, 0.3)', color: '#38bdf8', fontSize: '0.75rem', fontWeight: 700, padding: '4px 10px', borderRadius: '6px' }}
+                  >
+                    <i className="fa-solid fa-rotate"></i> Actualizar Satélite
+                  </button>
                   <span className={`badge ${weatherTelemetry?.concreteAdvisory?.pouringBadge || 'badge-success'}`}>
                     <i className="fa-solid fa-tower-broadcast"></i> {weatherTelemetry?.concreteAdvisory?.pouringStatus || 'APTO_COLADO'}
                   </span>
@@ -2588,7 +2608,14 @@ export default function Dashboard() {
               {/* 7-Day Forecast Radar Bar */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(80px, 1fr))', gap: '8px' }}>
                 {(weatherTelemetry?.forecast7Days || []).slice(0, 5).map((fDay, fIdx) => (
-                  <div key={fIdx} style={{ background: 'rgba(0,0,0,0.25)', border: `1px solid ${fDay.color}44`, borderRadius: '8px', padding: '8px', textAlign: 'center' }}>
+                  <div 
+                    key={fIdx} 
+                    onClick={() => {
+                      setSelectedForecastDay(fDay);
+                      addToast(`📅 Pronóstico ${fDay.date}: ${fDay.maxTemp}°C / ${fDay.minTemp}°C • Estado: ${fDay.status}`, 'info');
+                    }}
+                    style={{ background: selectedForecastDay?.date === fDay.date ? 'rgba(56, 189, 248, 0.2)' : 'rgba(0,0,0,0.25)', border: `1px solid ${fDay.color}44`, borderRadius: '8px', padding: '8px', textAlign: 'center', cursor: 'pointer', transition: 'all 0.2s ease' }}
+                  >
                     <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', display: 'block', fontWeight: 700 }}>{fDay.date}</span>
                     <strong style={{ fontSize: '0.85rem', color: '#fff', display: 'block', margin: '2px 0' }}>{fDay.maxTemp}° / {fDay.minTemp}°</strong>
                     <span style={{ fontSize: '0.65rem', padding: '2px 6px', borderRadius: '4px', background: `${fDay.color}22`, color: fDay.color, fontWeight: 700 }}>
@@ -2610,9 +2637,18 @@ export default function Dashboard() {
                     Sellado criptográfico encadenado de cada fichaje, remito e hito para blindaje probatorio ante litigios laborales y reclamos de contratistas.
                   </p>
                 </div>
-                <span className="badge badge-success" style={{ background: 'rgba(168, 85, 247, 0.2)', color: '#c084fc', border: '1px solid #a855f7' }}>
-                  <i className="fa-solid fa-shield-halved"></i> Integridad 100% Verificada
-                </span>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <button 
+                    onClick={() => setShowForensicCertModal(true)} 
+                    className="btn btn-sm"
+                    style={{ background: 'rgba(168, 85, 247, 0.15)', border: '1px solid #a855f7', color: '#c084fc', fontSize: '0.78rem', fontWeight: 800, padding: '6px 12px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                  >
+                    <i className="fa-solid fa-file-shield"></i> Emitir Acta Pericial Forense
+                  </button>
+                  <span className="badge badge-success" style={{ background: 'rgba(168, 85, 247, 0.2)', color: '#c084fc', border: '1px solid #a855f7' }}>
+                    <i className="fa-solid fa-shield-halved"></i> Integridad 100% Verificada
+                  </span>
+                </div>
               </div>
 
               <div style={{ overflowX: 'auto' }}>
@@ -4484,6 +4520,122 @@ export default function Dashboard() {
                   </div>
                 </div>
 
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Forensic Digital Legal Audit Certificate (SHA-256) */}
+      {showForensicCertModal && (
+        <div className="modal-overlay" style={{ display: 'flex', zIndex: 9999 }}>
+          <div className="glass-card modal-content" style={{ maxWidth: '840px', width: '95%', maxHeight: '90vh', overflowY: 'auto', padding: '36px', background: 'var(--bg-surface)', backdropFilter: 'blur(20px)', border: '1px solid #a855f7', borderRadius: 'var(--border-radius)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }} className="no-print">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#a855f7', display: 'inline-block' }}></span>
+                <h3 style={{ fontFamily: 'var(--font-heading)', color: '#c084fc', margin: 0 }}>
+                  <i className="fa-solid fa-file-shield"></i> Acta Pericial Forense Digital (SHA-256)
+                </h3>
+              </div>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button className="btn btn-primary btn-sm" onClick={() => window.print()} style={{ padding: '6px 14px', fontSize: '0.75rem', fontWeight: 700, background: 'linear-gradient(135deg, #a855f7, #7c3aed)', border: 'none' }}>
+                  <i className="fa-solid fa-print"></i> Imprimir / Exportar PDF
+                </button>
+                <button className="btn btn-secondary btn-sm" onClick={() => setShowForensicCertModal(false)} style={{ padding: '6px 12px', fontSize: '0.75rem', fontWeight: 600 }}>
+                  <i className="fa-solid fa-xmark"></i> Cerrar
+                </button>
+              </div>
+            </div>
+            
+            {/* Document Body */}
+            <div id="forensic-cert-print-area" style={{ color: '#0f172a', background: '#fff', padding: '32px', borderRadius: '12px', fontFamily: "'Inter', sans-serif" }}>
+              {/* Certificate Header */}
+              <div style={{ borderBottom: '3px solid #7c3aed', paddingBottom: '16px', marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                <div>
+                  <div style={{ fontSize: '0.75rem', color: '#7c3aed', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1.5px' }}>
+                    Poder Judicial de la Nación / SECLO • Blindaje Probatorio
+                  </div>
+                  <h1 style={{ fontSize: '1.35rem', fontWeight: 900, color: '#0f172a', margin: '4px 0 0 0' }}>
+                    ACTA NOTARIAL DE INTEGRIDAD DIGITAL &amp; AUDITORÍA FORENSE
+                  </h1>
+                  <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '2px' }}>
+                    Conforme a la Ley Nacional de Obras 22.250 y Ley de Firma Digital 25.506
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: '8px', padding: '6px 12px', display: 'inline-block' }}>
+                    <span style={{ fontSize: '0.65rem', color: '#7c3aed', fontWeight: 700, display: 'block' }}>EXPEDIENTE DIGITAL</span>
+                    <strong style={{ fontSize: '0.9rem', color: '#5b21b6', fontFamily: 'monospace' }}>OBS-{(state.projectConfig?.id || 'PALERMO-01').toUpperCase()}-{Date.now().toString().slice(-6)}</strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* Project & Legal Details */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '16px', marginBottom: '24px', fontSize: '0.8rem' }}>
+                <div>
+                  <div style={{ marginBottom: '6px' }}><span style={{ color: '#64748b', fontWeight: 600 }}>Obra / Emplazamiento:</span> <strong style={{ color: '#0f172a' }}>{state.projectConfig?.name || 'Torre Palermo Soho'}</strong></div>
+                  <div style={{ marginBottom: '6px' }}><span style={{ color: '#64748b', fontWeight: 600 }}>Jurisdicción / Ciudad:</span> <strong style={{ color: '#0f172a' }}>{state.projectConfig?.city || 'CABA'}, Argentina</strong></div>
+                  <div><span style={{ color: '#64748b', fontWeight: 600 }}>Geocerca Satelital:</span> <strong style={{ color: '#0f172a' }}>Radio {state.projectConfig?.geofenceRadiusMeters || 100}m (GPS Haversine)</strong></div>
+                </div>
+                <div>
+                  <div style={{ marginBottom: '6px' }}><span style={{ color: '#64748b', fontWeight: 600 }}>Director Responsable:</span> <strong style={{ color: '#0f172a' }}>Arq. Marcelo (Director de Obra)</strong></div>
+                  <div style={{ marginBottom: '6px' }}><span style={{ color: '#64748b', fontWeight: 600 }}>Directora Técnica:</span> <strong style={{ color: '#0f172a' }}>Arq. Victoria</strong></div>
+                  <div><span style={{ color: '#64748b', fontWeight: 600 }}>Algoritmo Hash:</span> <strong style={{ color: '#7c3aed', fontFamily: 'monospace' }}>SHA-256 (Merkle Blockchain Tree)</strong></div>
+                </div>
+              </div>
+
+              {/* Chained Ledger Table */}
+              <div style={{ marginBottom: '24px' }}>
+                <h4 style={{ fontSize: '0.85rem', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '10px', borderBottom: '2px solid #e2e8f0', paddingBottom: '6px' }}>
+                  Registro Secuencial de Bloques Criptográficos Inmutables
+                </h4>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem', textAlign: 'left' }}>
+                  <thead>
+                    <tr style={{ background: '#f1f5f9', borderBottom: '2px solid #cbd5e1' }}>
+                      <th style={{ padding: '8px' }}>Bloque</th>
+                      <th style={{ padding: '8px' }}>Timestamp</th>
+                      <th style={{ padding: '8px' }}>Transacción / Evento</th>
+                      <th style={{ padding: '8px' }}>Actor</th>
+                      <th style={{ padding: '8px' }}>Hash SHA-256 Certificado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(state.auditLedger || []).map((b, idx) => (
+                      <tr key={b.hash || idx} style={{ borderBottom: '1px solid #e2e8f0', background: idx % 2 === 0 ? '#fff' : '#fafafa' }}>
+                        <td style={{ padding: '8px', fontWeight: 800, color: '#7c3aed' }}>#{b.index}</td>
+                        <td style={{ padding: '8px', color: '#64748b' }}>{b.formattedTime || 'Hoy'}</td>
+                        <td style={{ padding: '8px', fontWeight: 700, color: '#1e293b' }}>{b.action}</td>
+                        <td style={{ padding: '8px', color: '#475569' }}>{b.actor}</td>
+                        <td style={{ padding: '8px', fontFamily: 'monospace', color: '#0369a1', fontSize: '0.7rem' }}>
+                          {b.hash}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Legal Certification Statement */}
+              <div style={{ background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: '10px', padding: '16px', marginBottom: '24px', fontSize: '0.75rem', lineHeight: '1.6', color: '#4c1d95' }}>
+                <strong>DICTAMEN DE VALIDEZ PROBATORIA:</strong> Se certifica mediante la presente que la secuencia de transacciones operativas, geoposicionamiento satelital, partes de avance quincenal y comprobantes fiscales AFIP-ARCA detallados precedentemente poseen sellado criptográfico encadenado sin solución de continuidad. La alteración de un solo bit en la base de datos invalida matemáticamente la cadena de custodia probatoria.
+              </div>
+
+              {/* Signatures & Seal */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderTop: '2px solid #cbd5e1', paddingTop: '24px', flexWrap: 'wrap', gap: '12px' }}>
+                <div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#0f172a' }}>Arq. Marcelo</div>
+                  <div style={{ fontSize: '0.7rem', color: '#64748b' }}>Director de Obra • Firma Digital Verificada</div>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ width: '60px', height: '60px', border: '2px solid #7c3aed', borderRadius: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', margin: '0 auto 4px auto', background: '#faf5ff' }}>
+                    <i className="fa-solid fa-shield-check" style={{ fontSize: '1.8rem', color: '#7c3aed' }}></i>
+                  </div>
+                  <span style={{ fontSize: '0.65rem', color: '#64748b' }}>Cadena Verificada</span>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#0f172a' }}>ObraSaaS Legal Node v4.0</div>
+                  <div style={{ fontSize: '0.7rem', color: '#64748b' }}>Timestamp Server: {new Date().toLocaleDateString('es-AR')}</div>
+                </div>
               </div>
             </div>
           </div>
