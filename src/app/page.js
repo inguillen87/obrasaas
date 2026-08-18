@@ -232,39 +232,30 @@ export default function Home() {
 
           {/* Nav Actions */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            {isLoggedIn ? (
-              <Link href="/dashboard">
-                <Button variant="primary" size="sm" icon="📊">
-                  Ir al Dashboard
-                </Button>
-              </Link>
-            ) : (
-              <>
-                <button
-                  onClick={() => setAuthModal({ show: true, mode: 'login' })}
-                  style={{
-                    background: 'transparent',
-                    border: '1px solid rgba(255,255,255,0.12)',
-                    color: '#f8fafc',
-                    padding: '8px 16px',
-                    borderRadius: '8px',
-                    fontSize: '0.82rem',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    transition: 'all 0.2s'
-                  }}
-                  onMouseEnter={e => e.target.style.borderColor = 'rgba(255,255,255,0.3)'}
-                  onMouseLeave={e => e.target.style.borderColor = 'rgba(255,255,255,0.12)'}
-                >
-                  Iniciar Sesión
-                </button>
-                <Link href="/onboarding">
-                  <Button variant="primary" size="sm" icon="🚀">
-                    Prueba Gratis 14 Días
-                  </Button>
-                </Link>
-              </>
-            )}
+            <Link href="/sign-in" style={{ textDecoration: 'none' }}>
+              <button
+                style={{
+                  background: 'transparent',
+                  border: '1px solid rgba(255,255,255,0.15)',
+                  color: '#f8fafc',
+                  padding: '8px 16px',
+                  borderRadius: '10px',
+                  fontSize: '0.82rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={e => e.target.style.borderColor = '#f59e0b'}
+                onMouseLeave={e => e.target.style.borderColor = 'rgba(255,255,255,0.15)'}
+              >
+                Iniciar Sesión
+              </button>
+            </Link>
+            <Link href="/dashboard" style={{ textDecoration: 'none' }}>
+              <Button variant="primary" size="sm" icon="🚀">
+                Demo en Vivo
+              </Button>
+            </Link>
           </div>
         </div>
       </header>
@@ -349,10 +340,33 @@ export default function Home() {
             transition={{ duration: 0.6, delay: 0.3 }}
             style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}
           >
-            <Link href="/onboarding">
+            <Link href="/dashboard" style={{ textDecoration: 'none' }}>
               <Button variant="primary" size="lg" icon="🚀">
-                Comenzar Prueba Gratis (14 Días)
+                Probar Demo en Vivo (Sin Registro)
               </Button>
+            </Link>
+            <Link href="/sign-up" style={{ textDecoration: 'none' }}>
+              <button
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '14px 22px',
+                  borderRadius: '16px',
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  color: '#f8fafc',
+                  fontSize: '0.94rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  backdropFilter: 'blur(10px)',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={e => e.currentTarget.style.borderColor = '#f59e0b'}
+                onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)'}
+              >
+                <span>✨ Crear Cuenta Gratis (14 Días)</span>
+              </button>
             </Link>
             <button
               onClick={handleMateoAudio}
@@ -360,21 +374,21 @@ export default function Home() {
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '10px',
-                padding: '14px 24px',
+                padding: '14px 20px',
                 borderRadius: '16px',
-                background: 'rgba(30, 41, 59, 0.7)',
-                border: '1px solid rgba(255, 255, 255, 0.15)',
-                color: '#f8fafc',
-                fontSize: '0.96rem',
+                background: 'rgba(30, 41, 59, 0.6)',
+                border: '1px solid rgba(255, 255, 255, 0.12)',
+                color: '#94a3b8',
+                fontSize: '0.9rem',
                 fontWeight: 600,
                 cursor: 'pointer',
                 backdropFilter: 'blur(10px)',
                 transition: 'all 0.2s'
               }}
-              onMouseEnter={e => e.currentTarget.style.borderColor = '#f59e0b'}
-              onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)'}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = '#38bdf8'; e.currentTarget.style.color = '#fff'; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.12)'; e.currentTarget.style.color = '#94a3b8'; }}
             >
-              <span style={{ fontSize: '1.2rem' }}>{mateoSpeaking ? '🔊' : '🎙️'}</span>
+              <span style={{ fontSize: '1.1rem' }}>{mateoSpeaking ? '🔊' : '🎙️'}</span>
               <span>{mateoStatus}</span>
             </button>
           </motion.div>

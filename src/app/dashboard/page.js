@@ -256,6 +256,14 @@ export default function Dashboard() {
     let pollTimer = null;
     let sseActive = false;
 
+    // Immediate initial fetch for instant hydration (0ms perception)
+    fetch('/api/state')
+      .then(res => res.json())
+      .then(data => {
+        if (data) setState(data);
+      })
+      .catch(() => {});
+
     // Polling fallback: fetch state every 5s when SSE is disconnected
     const startPollingFallback = () => {
       if (pollTimer) return;

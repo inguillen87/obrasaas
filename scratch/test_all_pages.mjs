@@ -1,10 +1,12 @@
-// ObraSaaS Comprehensive Frontend & API Verification Suite v5.0
+// ObraSaaS Comprehensive Frontend & API Verification Suite v6.0
 
 const BASE_URL = 'http://localhost:3000';
 
 const pagesToTest = [
   { path: '/', name: 'Landing Page Enterprise' },
   { path: '/dashboard', name: 'Dashboard Principal de Obra' },
+  { path: '/sign-in', name: 'Página de Iniciar Sesión & Demo' },
+  { path: '/sign-up', name: 'Página de Registro de Constructora' },
   { path: '/bim', name: 'Visor 3D BIM & Gemelo Digital' },
   { path: '/poster', name: 'Cartel Oficial de Obra con QR' },
   { path: '/superadmin', name: 'SuperAdmin Console & CRM' },
@@ -35,13 +37,13 @@ const apiEndpointsToTest = [
 
 async function runFullVerification() {
   console.log('╔════════════════════════════════════════════════════════════════════╗');
-  console.log('║        🏗️  OBRASAAS ENTERPRISE v5.0 — FULL SYSTEM AUDIT           ║');
+  console.log('║        🏗️  OBRASAAS ENTERPRISE v6.0 — FULL SYSTEM AUDIT           ║');
   console.log('╚════════════════════════════════════════════════════════════════════╝\n');
 
   let passed = 0;
   let failed = 0;
 
-  console.log('🌐 1. VERIFICACIÓN DE RUTAS FRONTEND & WEBVIEWS:');
+  console.log('🌐 1. VERIFICACIÓN DE TODAS LAS PÁGINAS Y VISTAS:');
   for (const page of pagesToTest) {
     try {
       const res = await fetch(`${BASE_URL}${page.path}`);
@@ -60,7 +62,7 @@ async function runFullVerification() {
     }
   }
 
-  console.log('\n⚙️ 2. VERIFICACIÓN DE NUEVOS ENDPOINTS API:');
+  console.log('\n⚙️ 2. VERIFICACIÓN DE ENDPOINTS API:');
   for (const api of apiEndpointsToTest) {
     try {
       const res = await fetch(`${BASE_URL}${api.path}`, { headers: api.headers || {} });
