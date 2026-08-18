@@ -742,7 +742,16 @@ export async function POST(request) {
                 }
                 // 6️⃣ Consultar Plan Quincenal (Q1/Q2)
                 else if (normalBody === '6' || normalBody.includes('quincena') || normalBody.includes('plan') || normalBody.includes('que nos toca') || normalBody.includes('cronograma')) {
-                    botReply = `📅 *Planificación de la Quincena Actual (Dirección de Obra)*\n\nHola *${senderName}*, este es el estado de *${state.projectConfig?.name || 'Obra'}*:\n\n*Quincena 1 (Q1)*:\n• *Revoque Grueso*: 100% completado (Juan Gómez)\n• *Cañería y Descargas*: 20% (Luis Martínez)\n\n*Próxima Quincena (Q2)*:\n• *Revestimiento Cerámico*: Inicio 16/Ago (Carlos Pérez)\n• *Pintura y Terminación*: Inicio 21/Ago\n\n_Todos los planos, remitos y pólizas ART están sincronizados en tiempo real en el Dashboard._`;
+                    const tasks = Object.values(state.tasks || {});
+                    const q1Tasks = tasks.filter(t => t.quincena === 'Q1' || !t.quincena);
+                    const q2Tasks = tasks.filter(t => t.quincena === 'Q2');
+
+                    const formatTasks = (list) => list.slice(0, 5).map(t => {
+                        const status = t.progress === 100 ? '✅ 100%' : t.progress > 0 ? `🔄 ${t.progress}%` : '⏳ Pendiente';
+                        return `• *${t.name}*: ${status} (${t.assignedTo || 'Sin asignar'})`;
+                    }).join('\n') || '• Sin tareas asignadas';
+
+                    botReply = `📅 *Planificación Quincenal — ${state.projectConfig?.name || 'Obra'}*\n\nHola *${senderName}*.\n\n*${state.currentQuincena || 'Quincena 1'} (Actual):*\n${formatTasks(q1Tasks)}\n\n*Próxima Quincena:*\n${formatTasks(q2Tasks)}\n\n📊 Avance global: *${state.avancePercentage || 0}%*\n_Sincronizado en tiempo real en el Dashboard._`;
                 }
                 // 7️⃣ Rendir / Aprobar Gasto de Caja Chica
                 else if (normalBody === '7' || normalBody.includes('gasto') || normalBody.includes('ferreteria') || normalBody.includes('caja chica') || normalBody.includes('18.500') || normalBody.includes('18500') || normalBody.includes('rendir')) {
@@ -893,17 +902,30 @@ export async function POST(request) {
             // 📐 Arq. Victoria (Socia & Directora Técnica) Handling
             else if (isTechnicalDirector) {
                 if (normalBody === '1' || normalBody.includes('cuadrilla') || normalBody.includes('kyc')) {
-                    botReply = `👷‍♀️ *Estado de Cuadrilla & KYC (Dirección Técnica)*\n\nHola *Victoria*. Personal registrado en *${state.projectConfig?.name || 'Obra'}*:\n• *Juan Gómez*: Albañilería (KYC Verificado ✓ • ART Vigente)\n• *Luis Martínez*: Plomería (KYC Verificado ✓ • ART Vigente)\n• *Carlos Pérez*: Pintura (ART Vencida 🚨 - Acceso Bloqueado)\n\n👉 Enlace al Portal KYC: ${kycLink}`;
+                    const workerList = Object.keys(state.attendance || {}).map(wName => {
+                        const kyc = Object.values(state.kycVerifications || {}).find(k => k.workerName === wName);
+                        const art = state.artPolicies?.[wName];
+                        const kycText = kyc?.status === 'VERIFICADO' ? 'KYC Verificado ✓' : 'KYC Pendiente';
+                        const artText = art?.status === 'VENCIDA' ? 'ART Vencida 🚨 - Acceso Bloqueado' : 'ART Vigente';
+                        return `• *${wName}*: ${state.attendance[wName]?.role || 'Operario'} (${kycText} • ${artText})`;
+                    }).join('\n') || '• Sin operarios registrados';
+
+                    botReply = `👷‍♀️ *Estado de Cuadrilla & KYC (Dirección Técnica)*\n\nHola *${senderName}*. Personal registrado en *${state.projectConfig?.name || 'Obra'}*:\n${workerList}\n\n👉 Enlace al Portal KYC: ${kycLink}`;
                 } else if (normalBody === '2' || normalBody.includes('calidad') || normalBody.includes('clima') || normalBody.includes('hormigon')) {
-                    botReply = `🏗️ *Control Estructural & Climatológico (Dirección Técnica)*\n\n• *Obra:* ${state.projectConfig?.name || 'Obra'} (${state.projectConfig?.city || 'CABA'})\n• *Hito Q1:* Revoque Grueso al 100%\n• *Telemetría Meteorológica:* Condiciones aptas para colado.\n• *CIRSOC 201:* Ensayos de compresión probetas de hormigón en regla.`;
+                    const tasks = Object.values(state.tasks || {});
+                    const lastCompleted = tasks.filter(t => t.progress === 100).pop();
+                    botReply = `🏗️ *Control Estructural & Climatológico (Dirección Técnica)*\n\n• *Obra:* ${state.projectConfig?.name || 'Obra'} (${state.projectConfig?.city || 'CABA'})\n• *Último hito:* ${lastCompleted?.name || 'Sin hitos completados'}\n• *Telemetría Meteorológica:* Condiciones monitoreadas via Open-Meteo.\n• *CIRSOC 201:* Ensayos de compresión probetas de hormigón conforme.`;
                 } else if (normalBody === '3' || normalBody.includes('incidencia') || normalBody.includes('vicios')) {
-                    botReply = `🔍 *Inspección de Incidencias & Vicios Ocultos*\n\n• Incidencias Abiertas: ${state.alertsCount || 0}\n• Tarea de Emergencia: Cañería de baño en reparación.\n• Fotos de Inspección en Bitácora: ${state.sitePhotos?.length || 0} registradas.`;
+                    botReply = `🔍 *Inspección de Incidencias & Vicios Ocultos*\n\n• Incidencias Abiertas: ${state.alertsCount || 0}\n• Fotos de Inspección en Bitácora: ${state.sitePhotos?.length || 0} registradas.\n• Libro de Obra: ${(state.libroObra || []).length} entradas.`;
                 } else if (normalBody === '4' || normalBody.includes('quincena') || normalBody.includes('certificacion')) {
-                    botReply = `📅 *Certificaciones Quincenales (Dirección Técnica)*\n\n• *Quincena 1 (Q1)*: 38% avance físico ($2.850.000 ARS) — *Certificado & Facturado*\n• *Quincena 2 (Q2)*: 14% en curso ($1.950.000 ARS) — *En Medición de Campo*`;
+                    const budget = state.budget || { rubros: [] };
+                    const totalEjec = budget.rubros.reduce((s, r) => s + r.ejecutado, 0);
+                    const totalPres = budget.rubros.reduce((s, r) => s + r.presupuesto, 0);
+                    botReply = `📅 *Certificaciones Quincenales (Dirección Técnica)*\n\n• Presupuesto Total: *$${totalPres.toLocaleString('es-AR')} ARS*\n• Ejecutado: *$${totalEjec.toLocaleString('es-AR')} ARS* (${totalPres > 0 ? ((totalEjec/totalPres)*100).toFixed(0) : 0}%)\n• Avance físico: *${state.avancePercentage || 0}%*\n• Bloques SHA-256: *${(state.auditLedger || []).length}*`;
                 } else if (normalBody === '5' || normalBody.includes('caja') || normalBody.includes('remito') || normalBody.includes('afip')) {
-                    botReply = `💰 *Balance de Caja Chica & Auditoría Fiscal*\n\n• *Saldo Disponible:* $${state.cajaChica?.saldoActual?.toLocaleString('es-AR') || '84.500'} ARS\n• *Comprobantes AFIP Auditados:* ${state.remitos?.length || 0} remitos con CAE validado.`;
+                    botReply = `💰 *Balance de Caja Chica & Auditoría Fiscal*\n\n• *Saldo Disponible:* $${state.cajaChica?.saldoActual?.toLocaleString('es-AR') || '0'} ARS\n• *Comprobantes AFIP Auditados:* ${state.remitos?.length || 0} remitos con CAE validado.`;
                 } else {
-                    botReply = `📐 *Panel Técnico — Arq. Victoria (Socia & Directora Técnica)* 👷‍♀️\n\nHola Victoria. Podés enviar un número del 1 al 5 o tus directivas técnicas:\n\n1️⃣ *Estado de Cuadrilla & KYC Biométrico*\n2️⃣ *Control de Calidad y Avance Estructural*\n3️⃣ *Inspección de Incidencias y Vicios Ocultos*\n4️⃣ *Certificaciones Quincenales*\n5️⃣ *Balance de Caja Chica & Remitos AFIP*\n\n📸 _Podés enviar fotos de inspección o notas de voz para procesar con IA._`;
+                    botReply = `📐 *Panel Técnico — ${senderName} (${senderRole})* 👷‍♀️\n\nHola ${senderName}. Podés enviar un número del 1 al 5 o tus directivas técnicas:\n\n1️⃣ *Estado de Cuadrilla & KYC Biométrico*\n2️⃣ *Control de Calidad y Avance Estructural*\n3️⃣ *Inspección de Incidencias y Vicios Ocultos*\n4️⃣ *Certificaciones Quincenales*\n5️⃣ *Balance de Caja Chica & Remitos AFIP*\n\n📸 _Podés enviar fotos de inspección o notas de voz para procesar con IA._`;
                 }
             }
             // 👷 Worker Handling
