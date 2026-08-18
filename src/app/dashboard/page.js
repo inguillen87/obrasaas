@@ -1416,6 +1416,21 @@ export default function Dashboard() {
                 <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-code"></i> API Docs</button>
               </Link>
             </li>
+            <li className="nav-item">
+              <Link href="/marketplace" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
+                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-store"></i> Marketplace</button>
+              </Link>
+            </li>
+            <li className="nav-item">
+              <Link href="/compliance" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
+                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-scale-balanced"></i> Compliance</button>
+              </Link>
+            </li>
+            <li className="nav-item">
+              <Link href="/pricing" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
+                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-tag"></i> Precios</button>
+              </Link>
+            </li>
           </nav>
           
           <div className="sidebar-footer">
