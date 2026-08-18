@@ -329,6 +329,47 @@ export const defaultAppState = {
             reporter: "Luis Martínez (Plomero)"
         }
     ],
+    // Safety & Regulatory Compliance (UOCRA / ART Ley 22.250)
+    artPolicies: {
+        "Juan Gómez": {
+            company: "La Segunda ART",
+            policyNumber: "ART-882910-01",
+            expirationDate: "30/04/2027",
+            clausulaNoRepeticion: true,
+            status: "VIGENTE",
+            certificatePdfUrl: "/art/certificado-juan.pdf"
+        },
+        "Luis Martínez": {
+            company: "Federación Patronal ART",
+            policyNumber: "ART-449102-09",
+            expirationDate: "15/03/2027",
+            clausulaNoRepeticion: true,
+            status: "VIGENTE",
+            certificatePdfUrl: "/art/certificado-luis.pdf"
+        },
+        "Carlos Pérez": {
+            company: "Prevención ART",
+            policyNumber: "ART-109283-04",
+            expirationDate: "01/08/2026",
+            clausulaNoRepeticion: false,
+            status: "VENCIDA",
+            certificatePdfUrl: null
+        }
+    },
+    // Cryptographic Inmutable SHA-256 Audit Trail
+    auditLedger: [
+        {
+            index: 1,
+            timestamp: "2026-08-17T20:00:00.000Z",
+            formattedTime: "20:00:00",
+            action: "GENESIS_BLOQUE_AUDITORIA",
+            actor: "Sistema ObraSaaS Enterprise",
+            details: { obra: "Torre Palermo Soho", hashAlg: "SHA-256" },
+            previousHash: "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f",
+            hash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            signatureStatus: "CERTIFICADO_SHA256"
+        }
+    ],
     subscription: {
         status: "active",
         plan: "Pro",
@@ -392,7 +433,9 @@ async function readDb() {
                     cajaChica: storedState.cajaChica || defaultAppState.cajaChica,
                     kycVerifications: { ...defaultAppState.kycVerifications, ...(storedState.kycVerifications || {}) },
                     remitos: storedState.remitos || defaultAppState.remitos,
-                    sitePhotos: storedState.sitePhotos || defaultAppState.sitePhotos
+                    sitePhotos: storedState.sitePhotos || defaultAppState.sitePhotos,
+                    artPolicies: { ...defaultAppState.artPolicies, ...(storedState.artPolicies || {}) },
+                    auditLedger: storedState.auditLedger || defaultAppState.auditLedger
                 };
                 return {
                     appState: mergedState,
@@ -418,7 +461,25 @@ async function readDb() {
     try {
         initLocalDb();
         const data = fs.readFileSync(LOCAL_DB_PATH, 'utf-8');
-        return JSON.parse(data);
+        const parsed = JSON.parse(data);
+        const storedState = parsed.appState || {};
+        const mergedState = {
+            ...defaultAppState,
+            ...storedState,
+            projectConfig: storedState.projectConfig || defaultAppState.projectConfig,
+            workerRegistry: storedState.workerRegistry || defaultAppState.workerRegistry,
+            attendance: { ...defaultAppState.attendance, ...(storedState.attendance || {}) },
+            cajaChica: storedState.cajaChica || defaultAppState.cajaChica,
+            kycVerifications: { ...defaultAppState.kycVerifications, ...(storedState.kycVerifications || {}) },
+            remitos: storedState.remitos || defaultAppState.remitos,
+            sitePhotos: storedState.sitePhotos || defaultAppState.sitePhotos,
+            artPolicies: { ...defaultAppState.artPolicies, ...(storedState.artPolicies || {}) },
+            auditLedger: storedState.auditLedger || defaultAppState.auditLedger
+        };
+        return {
+            appState: mergedState,
+            messages: parsed.messages || defaultMessages
+        };
     } catch(e) {
         console.warn("Local file read skipped (read-only or missing):", e.message);
         return {

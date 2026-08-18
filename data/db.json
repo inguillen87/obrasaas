@@ -682,6 +682,48 @@
         "reporter": "Luis Martínez (Plomero)"
       }
     ],
+    "artPolicies": {
+      "Juan Gómez": {
+        "company": "La Segunda ART",
+        "policyNumber": "ART-882910-01",
+        "expirationDate": "30/04/2027",
+        "clausulaNoRepeticion": true,
+        "status": "VIGENTE",
+        "certificatePdfUrl": "/art/certificado-juan.pdf"
+      },
+      "Luis Martínez": {
+        "company": "Federación Patronal ART",
+        "policyNumber": "ART-449102-09",
+        "expirationDate": "15/03/2027",
+        "clausulaNoRepeticion": true,
+        "status": "VIGENTE",
+        "certificatePdfUrl": "/art/certificado-luis.pdf"
+      },
+      "Carlos Pérez": {
+        "company": "Prevención ART",
+        "policyNumber": "ART-109283-04",
+        "expirationDate": "01/08/2026",
+        "clausulaNoRepeticion": false,
+        "status": "VENCIDA",
+        "certificatePdfUrl": null
+      }
+    },
+    "auditLedger": [
+      {
+        "index": 1,
+        "timestamp": "2026-08-17T20:00:00.000Z",
+        "formattedTime": "20:00:00",
+        "action": "GENESIS_BLOQUE_AUDITORIA",
+        "actor": "Sistema ObraSaaS Enterprise",
+        "details": {
+          "obra": "Torre Palermo Soho",
+          "hashAlg": "SHA-256"
+        },
+        "previousHash": "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f",
+        "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "signatureStatus": "CERTIFICADO_SHA256"
+      }
+    ],
     "subscription": {
       "status": "active",
       "plan": "Pro",
@@ -723,6 +765,36 @@
       "sender": "bot",
       "text": "⚠️ Verificación de Identidad Requerida (KYC ObraSaaS)\n\n¡Hola! Tu número (+5491199998888) no está vinculado a un legajo activo en Torre Palermo Soho.\n\nPara fichar asistencia y operar en obra, por favor completá tu verificación:\n\n1️⃣ Enviá una foto de tu DNI / Credencial UOCRA 🪪\n2️⃣ O completá el formulario biométrico seguro desde tu celular:\n👉 https://obrasaas.vercel.app/webview/kyc?worker=unknown-8888&phone=5491199998888&token=15bd8cf7fac1ae4b\n\n_Al completar el KYC, tu legajo se activará automáticamente en el sistema._",
       "time": "09:24 p. m."
+    },
+    {
+      "sender": "user",
+      "text": "Fichaje GPS",
+      "time": "09:29 p. m."
+    },
+    {
+      "sender": "bot",
+      "text": "⚠️ Verificación de Identidad Requerida (KYC ObraSaaS)\n\n¡Hola! Tu número (+) no está vinculado a un legajo activo en Torre Palermo Soho.\n\nPara fichar asistencia y operar en obra, por favor completá tu verificación:\n\n1️⃣ Enviá una foto de tu DNI / Credencial UOCRA 🪪\n2️⃣ O completá el formulario biométrico seguro desde tu celular:\n👉 https://obrasaas.vercel.app/webview/kyc?worker=unknown-&phone=&token=b31c895433a46fef\n\n_Al completar el KYC, tu legajo se activará automáticamente en el sistema._",
+      "time": "09:29 p. m."
+    },
+    {
+      "sender": "user",
+      "text": "Fichaje GPS",
+      "time": "09:30 p. m."
+    },
+    {
+      "sender": "bot",
+      "text": "⚠️ Verificación de Identidad Requerida (KYC ObraSaaS)\n\n¡Hola! Tu número (+) no está vinculado a un legajo activo en Torre Palermo Soho.\n\nPara fichar asistencia y operar en obra, por favor completá tu verificación:\n\n1️⃣ Enviá una foto de tu DNI / Credencial UOCRA 🪪\n2️⃣ O completá el formulario biométrico seguro desde tu celular:\n👉 https://obrasaas.vercel.app/webview/kyc?worker=unknown-&phone=&token=b8e1bb24c0a57af5\n\n_Al completar el KYC, tu legajo se activará automáticamente en el sistema._",
+      "time": "09:30 p. m."
+    },
+    {
+      "sender": "user",
+      "text": "Fichaje GPS",
+      "time": "09:31 p. m."
+    },
+    {
+      "sender": "bot",
+      "text": "🚨 ACCESO DENEGADO POR SEGURIDAD E HIGIENE (UOCRA / ART)\n\nCarlos Pérez, no podés ingresar al predio de obra.\n• Póliza de ART: Prevención ART (Póliza ART-109283-04)\n• Estado: VENCIDA (01/08/2026)\n• Normativa: Ley 22.250 y Res. SRT 299/11.\n\n_Tu capataz y el Director Arq. Marcelo han sido alertados._",
+      "time": "09:31 p. m."
     }
   ]
 }
