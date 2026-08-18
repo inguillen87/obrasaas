@@ -1427,8 +1427,18 @@ export default function Dashboard() {
               </Link>
             </li>
             <li className="nav-item">
+              <Link href="/bim" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
+                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-cube"></i> Visor 3D BIM</button>
+              </Link>
+            </li>
+            <li className="nav-item">
               <Link href="/planos" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
-                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-compass-drafting"></i> Visor de Planos CAD</button>
+                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-compass-drafting"></i> Visor Planos 2D</button>
+              </Link>
+            </li>
+            <li className="nav-item">
+              <Link href="/poster" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
+                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-qrcode"></i> Cartel de Obra QR</button>
               </Link>
             </li>
             <li className="nav-item">

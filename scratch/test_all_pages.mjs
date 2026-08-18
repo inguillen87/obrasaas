@@ -1,12 +1,13 @@
-// ObraSaaS Comprehensive Frontend Page Audit
-// Validates that every frontend route and webview loads with HTTP 200 and renders properly
+// ObraSaaS Comprehensive Frontend & API Verification Suite v5.0
 
 const BASE_URL = 'http://localhost:3000';
 
 const pagesToTest = [
   { path: '/', name: 'Landing Page Enterprise' },
   { path: '/dashboard', name: 'Dashboard Principal de Obra' },
-  { path: '/superadmin', name: 'SuperAdmin Platform Console & CRM' },
+  { path: '/bim', name: 'Visor 3D BIM & Gemelo Digital' },
+  { path: '/poster', name: 'Cartel Oficial de Obra con QR' },
+  { path: '/superadmin', name: 'SuperAdmin Console & CRM' },
   { path: '/planos', name: 'Visor de Planos CAD / Floorplans' },
   { path: '/licitaciones', name: 'Licitómetro de Obra Pública' },
   { path: '/presupuesto', name: 'Control Presupuestario & Curva S' },
@@ -23,14 +24,24 @@ const pagesToTest = [
   { path: '/webview/medical?worker=juan&token=test', name: 'Webview Apto Médico' },
 ];
 
-async function runPageAudit() {
+const apiEndpointsToTest = [
+  { path: '/api/v1/dolar', name: 'API Dólar & CAC Live Engine' },
+  { path: '/api/cron/daily-summary', name: 'API Cron Resumen Diario WhatsApp' },
+  { path: '/api/v1/predictive', name: 'API IA Predictiva & CIRSOC 201' },
+  { path: '/api/admin/stats', name: 'API Admin Stats Platform-Wide', headers: { 'x-api-key': 'obrasaas_admin_key' } },
+  { path: '/api/v1/certificacion/pdf', name: 'API Certificado PDF Oficial' },
+  { path: '/api/admin/libro-obra/pdf', name: 'API Libro de Obra PDF (Ley 22.250)' },
+];
+
+async function runFullVerification() {
   console.log('╔════════════════════════════════════════════════════════════════════╗');
-  console.log('║        🌐 OBRASAAS FRONTEND & WEBVIEW ROUTE AUDIT                  ║');
+  console.log('║        🏗️  OBRASAAS ENTERPRISE v5.0 — FULL SYSTEM AUDIT           ║');
   console.log('╚════════════════════════════════════════════════════════════════════╝\n');
 
   let passed = 0;
   let failed = 0;
 
+  console.log('🌐 1. VERIFICACIÓN DE RUTAS FRONTEND & WEBVIEWS:');
   for (const page of pagesToTest) {
     try {
       const res = await fetch(`${BASE_URL}${page.path}`);
@@ -49,9 +60,26 @@ async function runPageAudit() {
     }
   }
 
+  console.log('\n⚙️ 2. VERIFICACIÓN DE NUEVOS ENDPOINTS API:');
+  for (const api of apiEndpointsToTest) {
+    try {
+      const res = await fetch(`${BASE_URL}${api.path}`, { headers: api.headers || {} });
+      if (res.status === 200) {
+        passed++;
+        console.log(`  ✅ [200 OK] ${api.name.padEnd(42)} (${api.path})`);
+      } else {
+        failed++;
+        console.log(`  ❌ [FAIL ${res.status}] ${api.name.padEnd(42)} (${api.path})`);
+      }
+    } catch (err) {
+      failed++;
+      console.log(`  ❌ [ERR] ${api.name.padEnd(42)} (${api.path}): ${err.message}`);
+    }
+  }
+
   console.log('\n════════════════════════════════════════════════════════════════════');
-  console.log(`📊 TOTAL PÁGINAS: ${passed} EXITOSAS / ${failed} FALLOS (${((passed / (passed + failed)) * 100).toFixed(1)}%)`);
+  console.log(`📊 TOTAL AUDITORÍA: ${passed} PRUEBAS EXITOSAS / ${failed} FALLOS (${((passed / (passed + failed)) * 100).toFixed(1)}%)`);
   console.log('════════════════════════════════════════════════════════════════════\n');
 }
 
-runPageAudit();
+runFullVerification();
