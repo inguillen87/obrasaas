@@ -32,6 +32,9 @@ self.addEventListener('activate', (event) => {
 
 // Fetch: Network-first for API, Cache-first for static pages
 self.addEventListener('fetch', (event) => {
+    // Only handle http and https requests (ignore chrome-extension, data, blob, etc.)
+    if (!event.request.url.startsWith('http://') && !event.request.url.startsWith('https://')) return;
+
     const url = new URL(event.request.url);
 
     // Skip non-GET requests
@@ -45,7 +48,9 @@ self.addEventListener('fetch', (event) => {
                     // Cache successful GET API responses for offline fallback
                     if (response.ok && url.pathname === '/api/state') {
                         const cloned = response.clone();
-                        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, cloned));
+                        caches.open(CACHE_NAME).then((cache) => {
+                            try { cache.put(event.request, cloned); } catch (_) {}
+                        });
                     }
                     return response;
                 })
@@ -64,9 +69,11 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
         caches.match(event.request).then((cached) => {
             const fetchPromise = fetch(event.request).then((response) => {
-                if (response.ok) {
+                if (response.ok && (event.request.url.startsWith('http://') || event.request.url.startsWith('https://'))) {
                     const cloned = response.clone();
-                    caches.open(CACHE_NAME).then((cache) => cache.put(event.request, cloned));
+                    caches.open(CACHE_NAME).then((cache) => {
+                        try { cache.put(event.request, cloned); } catch (_) {}
+                    });
                 }
                 return response;
             }).catch(() => cached);

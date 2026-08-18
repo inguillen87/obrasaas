@@ -194,13 +194,13 @@ export default function Dashboard() {
     }, 5000);
   };
 
-  // DOM Canvas and Map Container Refs
   const progressChartRef = useRef(null);
   const tasksChartRef = useRef(null);
   const mrrChartRef = useRef(null);
   const mapContainerRef = useRef(null);
   const svgLinesRef = useRef(null);
   
+  const chatMessagesEndRef = useRef(null);
   const copilotMessagesEndRef = useRef(null);
   const crmMessagesEndRef = useRef(null);
 
