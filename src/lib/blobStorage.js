@@ -29,12 +29,25 @@ export async function uploadImageToBlob(base64Data, filename, contentType = 'ima
         // Convert base64 to buffer
         const buffer = Buffer.from(base64Data, 'base64');
         
-        // Upload to Vercel Blob
-        const blob = await put(filename, buffer, {
-            access: 'public',
-            contentType,
-            addRandomSuffix: true, // Prevents filename collisions
-        });
+        // Upload to Vercel Blob (default to private as configured in Vercel Storage)
+        let blob;
+        try {
+            blob = await put(filename, buffer, {
+                access: 'private',
+                contentType,
+                addRandomSuffix: true,
+            });
+        } catch (privateErr) {
+            if (privateErr.message?.includes('public access')) {
+                blob = await put(filename, buffer, {
+                    access: 'public',
+                    contentType,
+                    addRandomSuffix: true,
+                });
+            } else {
+                throw privateErr;
+            }
+        }
 
         console.log(`✅ Image uploaded to Blob: ${blob.url} (${Math.round(buffer.length / 1024)}KB)`);
         return blob.url;

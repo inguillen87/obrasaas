@@ -77,7 +77,7 @@ model Tenant {
 
 model User {
   id            String    @id @default(cuid())
-  tenantId      String
+  tenantId      String    @default("tenant-default")
   email         String    @unique
   phone         String?
   name          String
@@ -99,10 +99,10 @@ model User {
 
 model Project {
   id                    String    @id @default(cuid())
-  tenantId              String
+  tenantId              String    @default("tenant-default")
   name                  String
   address               String?
-  city                  String
+  city                  String    @default("Buenos Aires")
   province              String    @default("Buenos Aires")
   country               String    @default("Argentina")
   latitude              Float?
@@ -137,7 +137,7 @@ model Project {
 
 model Worker {
   id              String        @id @default(cuid())
-  tenantId        String
+  tenantId        String        @default("tenant-default")
   name            String
   phone           String
   dni             String?
@@ -441,3 +441,17 @@ model BillingSubscription {
 
   @@index([tenantId])
 }
+
+// ═══════════════════════════════════════════════════════════════
+// RUNTIME JSONB STATE COMPATIBILITY (NEON POSTGRESQL)
+// ═══════════════════════════════════════════════════════════════
+
+model ObraSaasAppState {
+  id         String   @id @map("id")
+  state      Json     @map("state")
+  messages   Json     @map("messages")
+  updatedAt  DateTime @default(now()) @map("updated_at")
+
+  @@map("obrasaas_app_state")
+}
+
