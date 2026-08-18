@@ -437,3 +437,42 @@ Si la coincidencia es dudosa o inferior a 70%, define "isMatch": false. Responde
     }
 }
 
+/**
+ * Transcribes voice notes and audio messages from WhatsApp using OpenAI Whisper
+ */
+export async function transcribeAudioWithWhisper({ buffer, mimeType = 'audio/ogg' }) {
+    if (!OPENAI_API_KEY || !buffer) {
+        return null;
+    }
+
+    try {
+        const formData = new FormData();
+        const extension = mimeType.includes('ogg') ? 'ogg' : mimeType.includes('mp4') ? 'm4a' : 'mp3';
+        const blob = new Blob([buffer], { type: mimeType });
+        formData.append('file', blob, `voice_note.${extension}`);
+        formData.append('model', 'whisper-1');
+        formData.append('language', 'es');
+        formData.append('prompt', 'Supervisión de cuadrilla, avance de revoque, fuga de caño, cerámicas, ferretería, Torre Palermo Soho, UOCRA, Juan Gómez, Luis Martínez, Carlos Pérez');
+
+        const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${OPENAI_API_KEY}`
+            },
+            body: formData
+        });
+
+        if (!res.ok) {
+            console.error('Whisper transcription failed:', res.status);
+            return null;
+        }
+
+        const data = await res.json();
+        return data.text || null;
+    } catch (e) {
+        console.error('Error in Whisper transcription:', e.message);
+        return null;
+    }
+}
+
+

@@ -942,11 +942,15 @@ export default function Dashboard() {
 
       if (!mapContainerRef.current) return;
 
-      const palermoSite = [-34.5886, -58.4302];
+      const activeLat = state.projectConfig?.latitude || -34.5886;
+      const activeLon = state.projectConfig?.longitude || -58.4302;
+      const currentSite = [activeLat, activeLon];
+      const geofenceRadius = state.projectConfig?.geofenceRadiusMeters || 80;
+
       mapInstance = L.map(mapContainerRef.current, {
         zoomControl: false,
         attributionControl: false
-      }).setView(palermoSite, 17);
+      }).setView(currentSite, 17);
 
       const tileUrl = isLightTheme
         ? 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
@@ -957,18 +961,18 @@ export default function Dashboard() {
       }).addTo(mapInstance);
 
       // Virtual geofence (green boundary)
-      L.circle(palermoSite, {
+      L.circle(currentSite, {
         color: '#10b981',
         fillColor: '#10b981',
         fillOpacity: 0.12,
-        radius: 80
+        radius: geofenceRadius
       }).addTo(mapInstance);
 
-      // Coordinates for employees
+      // Coordinates for employees (anchored dynamically to active site)
       const workerCoords = {
-        "Juan Gómez": { lat: -34.5884, lng: -58.4304, role: "Albañilería Principal" },
-        "Carlos Pérez": { lat: -34.5886, lng: -58.4302, role: "Pintura e Interiores" },
-        "Luis Martínez": { lat: -34.5888, lng: -58.4300, role: "Instalaciones y Sanitarios" }
+        "Juan Gómez": { lat: activeLat + 0.0002, lng: activeLon - 0.0002, role: "Albañilería Principal" },
+        "Carlos Pérez": { lat: activeLat, lng: activeLon, role: "Pintura e Interiores" },
+        "Luis Martínez": { lat: activeLat - 0.0002, lng: activeLon + 0.0002, role: "Instalaciones y Sanitarios" }
       };
 
       if (mapMode === 'sat') {
@@ -1000,15 +1004,15 @@ export default function Dashboard() {
       } else {
         // Draw heat map circles
         const heatSpots = [
-          { lat: -34.5886, lng: -58.4302, radius: 60, opacity: 0.45 },
-          { lat: -34.5884, lng: -58.4304, radius: 35, opacity: 0.30 }
+          { lat: activeLat, lng: activeLon, radius: geofenceRadius * 0.75, opacity: 0.45 },
+          { lat: activeLat + 0.0002, lng: activeLon - 0.0002, radius: geofenceRadius * 0.45, opacity: 0.30 }
         ];
 
-        if (state.attendance["Luis Martínez"].status.includes("Presente")) {
-          heatSpots.push({ lat: -34.5888, lng: -58.4300, radius: 35, opacity: 0.30 });
+        if (state.attendance["Luis Martínez"]?.status?.includes("Presente")) {
+          heatSpots.push({ lat: activeLat - 0.0002, lng: activeLon + 0.0002, radius: geofenceRadius * 0.45, opacity: 0.30 });
         }
-        if (state.attendance["Carlos Pérez"].status.includes("Presente")) {
-          heatSpots.push({ lat: -34.5886, lng: -58.4302, radius: 45, opacity: 0.35 });
+        if (state.attendance["Carlos Pérez"]?.status?.includes("Presente")) {
+          heatSpots.push({ lat: activeLat, lng: activeLon, radius: geofenceRadius * 0.55, opacity: 0.35 });
         }
 
         heatSpots.forEach(spot => {
@@ -1033,7 +1037,7 @@ export default function Dashboard() {
         mapInstance.remove();
       }
     };
-  }, [activeTab, isLightTheme, mapMode, state.attendance]);
+  }, [activeTab, isLightTheme, mapMode, state.attendance, state.projectConfig, state.activeProjectId]);
 
   // Chart.js reactive loader
   useEffect(() => {

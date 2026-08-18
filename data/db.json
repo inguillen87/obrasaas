@@ -1,7 +1,7 @@
 {
   "appState": {
     "operariosCount": 1,
-    "avancePercentage": 42,
+    "avancePercentage": 55,
     "alertsCount": 2,
     "diasEstimados": "Día 12/35",
     "currentQuincena": "Quincena 1 (01/Ago - 15/Ago)",
@@ -219,7 +219,7 @@
     "tasks": {
       "1": {
         "name": "Revoque Grueso",
-        "progress": 80,
+        "progress": 100,
         "duration": 5,
         "startOffset": 0,
         "assignee": "Juan Gómez",
@@ -292,6 +292,26 @@
       }
     },
     "incidents": [
+      {
+        "id": "inc-gantt-1787017343533",
+        "title": "Avance Certificado por Director",
+        "description": "Arq. Marcelo aprobó el 100% de Revoque Grueso. Avance global: 55%.",
+        "type": "success",
+        "badge": "Gantt 100%",
+        "timestamp": "Hoy, 10:42 p. m.",
+        "reporter": "Arq. Marcelo",
+        "icon": "fa-solid fa-chart-gantt"
+      },
+      {
+        "id": "inc-dir-1787017343519",
+        "title": "Supervisión de Cuadrilla por Director",
+        "description": "Arq. Marcelo consultó la telemetría de presentismo y legajos KYC de la cuadrilla.",
+        "type": "info",
+        "badge": "Dirección",
+        "timestamp": "Hoy, 10:42 p. m.",
+        "reporter": "Arq. Marcelo (Director)",
+        "icon": "fa-solid fa-users-viewfinder"
+      },
       {
         "id": "inc-kyc-1787012670730",
         "title": "Operario Verificado con KYC Biométrico",
@@ -816,6 +836,22 @@
     },
     "auditLedger": [
       {
+        "index": 2,
+        "timestamp": "2026-08-18T01:42:23.533Z",
+        "formattedTime": "10:42:23 p. m.",
+        "action": "CERTIFICACION_AVANCE_GANTT",
+        "actor": "Arq. Marcelo",
+        "details": {
+          "task": "Revoque Grueso",
+          "progress": 100,
+          "globalProgress": 55,
+          "obra": "Complejo Chacras de Coria"
+        },
+        "previousHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "hash": "2ad9beb92187644f7d94e76214132b875fdd6d8d04e263c61ee43ab8905a64b5",
+        "signatureStatus": "CERTIFICADO_SHA256"
+      },
+      {
         "index": 1,
         "timestamp": "2026-08-17T20:00:00.000Z",
         "formattedTime": "20:00:00",
@@ -901,6 +937,26 @@
       "sender": "bot",
       "text": "🚨 ACCESO DENEGADO POR SEGURIDAD E HIGIENE (UOCRA / ART)\n\nCarlos Pérez, no podés ingresar al predio de obra.\n• Póliza de ART: Prevención ART (Póliza ART-109283-04)\n• Estado: VENCIDA (01/08/2026)\n• Normativa: Ley 22.250 y Res. SRT 299/11.\n\n_Tu capataz y el Director Arq. Marcelo han sido alertados._",
       "time": "09:31 p. m."
+    },
+    {
+      "sender": "user",
+      "text": "1",
+      "time": "10:42 p. m."
+    },
+    {
+      "sender": "bot",
+      "text": "👷‍♂️ Supervisión de Cuadrilla & KYC en Vivo (Dirección)\n\nObra: Complejo Chacras de Coria (Mendoza)\nOperarios en Predio: 1 activos.\n\n• Juan Gómez (Albañilería Principal):\n  ↳ Estado: Presente (Supervisado) (09:24 p. m.)\n  ↳ 🪪 KYC Verificado • 🛡️ ART OK\n• Carlos Pérez (Pintura e Interiores):\n  ↳ Estado: Ausente (--:--)\n  ↳ ⏳ KYC Pendiente • 🚨 ART Vencida\n• Luis Martínez (Instalaciones y Sanitarios):\n  ↳ Estado: Ausente (--:--)\n  ↳ 🪪 KYC Verificado • 🛡️ ART OK\n• Arq. Victoria (Socia & Directora Técnica):\n  ↳ Estado: Socia Directora (--:--)\n  ↳ ⏳ KYC Pendiente • 🛡️ ART OK\n• Miguel Ángel Benítez (Oficial Armador / Encofrador):\n  ↳ Estado: Presente (KYC Satelital) (09:24 p. m.)\n  ↳ 🪪 KYC Verificado • 🛡️ ART OK\n\n👉 Validar Nuevo Operario (Portal KYC):\nhttps://obrasaas.vercel.app/webview/kyc?worker=director&token=b0893a48a69b63eb\n\n_Todos los legajos se encuentran sincronizados en el Dashboard._",
+      "time": "10:42 p. m."
+    },
+    {
+      "sender": "user",
+      "text": "2",
+      "time": "10:42 p. m."
+    },
+    {
+      "sender": "bot",
+      "text": "🏗️ Certificación de Avance de Obra (Dirección)\n\nHola Arq. Marcelo.\n• Hito: Revoque Grueso al 100%\n• Avance Global de Obra: 55%\n• Estado: Listo para Certificación Quincenal Q1\n• Trazabilidad: Certificado con firma digital SHA-256 en Complejo Chacras de Coria.",
+      "time": "10:42 p. m."
     }
   ]
 }
