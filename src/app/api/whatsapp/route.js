@@ -790,11 +790,65 @@ export async function POST(request) {
                         return `• *${wName}*: ${pol.company} (${isOk ? '✅ Vigente ' + pol.expirationDate : '🚨 VENCIDA ' + pol.expirationDate})`;
                     }).join('\n');
 
-                    botReply = `🛡️ *Auditoría de Seguridad e Higiene & Satelital (UOCRA / ART)*\n\n*Obra Activa:* ${state.projectConfig?.name || 'Torre Palermo Soho'} (${state.projectConfig?.city || 'CABA'})\n*Geocerca Satelital:* Radio ${state.projectConfig?.geofenceRadiusMeters || 100}m (GPS Activo)\n\n📋 *Cobertura de ART (Ley 22.250):*\n${artEntries || '• Juan Gómez: La Segunda ART (✅ Vigente)\n• Luis Martínez: Federación Patronal (✅ Vigente)\n• Carlos Pérez: Prevención ART (🚨 VENCIDA - Bloqueado)'}\n\n🔐 *Trazabilidad Criptográfica:* ${state.auditLedger?.length || 1} bloques SHA-256 certificados.\n_Acceso a obra restringido únicamente a personal con póliza vigente._`;
+                    botReply = `🛡️ *Auditoría de Seguridad e Higiene & Satelital (UOCRA / ART)*\n\n*Obra Activa:* ${state.projectConfig?.name || 'Obra'} (${state.projectConfig?.city || 'CABA'})\n*Geocerca Satelital:* Radio ${state.projectConfig?.geofenceRadiusMeters || 100}m (GPS Activo)\n\n📋 *Cobertura de ART (Ley 22.250):*\n${artEntries || '• Sin pólizas cargadas'}\n\n🔐 *Trazabilidad Criptográfica:* ${state.auditLedger?.length || 0} bloques SHA-256 certificados.\n_Acceso a obra restringido únicamente a personal con póliza vigente._`;
+                }
+                // 9️⃣ Libro de Obra Digital (Ley 22.250)
+                else if (normalBody === '9' || normalBody.includes('libro') || normalBody.includes('bitacora') || normalBody.includes('diario') || normalBody.includes('registro diario')) {
+                    const today = new Date().toISOString().split('T')[0];
+                    const workersPresent = Object.keys(state.attendance || {}).filter(w => {
+                        const att = state.attendance[w];
+                        return att.status === 'Presente' || att.status === 'Fichado';
+                    }).length;
+
+                    const activeTasks = Object.values(state.tasks || {}).filter(t => t.progress > 0 && t.progress < 100).map(t => `${t.name} (${t.progress}%)`);
+                    const completedToday = Object.values(state.tasks || {}).filter(t => t.progress === 100).map(t => t.name);
+
+                    // Auto-generate libro de obra entry
+                    state.libroObra = state.libroObra || [];
+                    const existingEntry = state.libroObra.find(e => e.date === today);
+
+                    if (!existingEntry) {
+                        const entry = {
+                            id: `lo-${Date.now().toString(36)}`,
+                            date: today,
+                            weather: 'Registrado por Director',
+                            workersPresent,
+                            tasksPerformed: activeTasks,
+                            completedTasks: completedToday,
+                            observations: `Entrada generada via WhatsApp por ${senderName}`,
+                            signedBy: senderName,
+                            signedAt: new Date().toISOString(),
+                            projectId: state.projectConfig?.id,
+                            projectName: state.projectConfig?.name,
+                            createdAt: new Date().toISOString()
+                        };
+
+                        try {
+                            const { createHash } = await import('crypto');
+                            entry.hash = createHash('sha256').update(JSON.stringify(entry)).digest('hex');
+                        } catch(e) { entry.hash = 'pending'; }
+
+                        state.libroObra.push(entry);
+
+                        state.auditLedger = state.auditLedger || [];
+                        state.auditLedger.push({
+                            type: 'LIBRO_OBRA',
+                            date: today,
+                            signedBy: senderName,
+                            hash: entry.hash,
+                            timestamp: new Date().toISOString()
+                        });
+                    }
+
+                    const totalEntries = state.libroObra.length;
+                    const taskList = activeTasks.length > 0 ? activeTasks.map(t => `  ↳ ${t}`).join('\n') : '  ↳ Sin tareas en curso';
+                    const completedList = completedToday.length > 0 ? completedToday.map(t => `  ✅ ${t}`).join('\n') : '  Sin completadas hoy';
+
+                    botReply = `📖 *Libro de Obra Digital — ${today}*\n🏗️ *${state.projectConfig?.name || 'Obra'}*\n\n👷 Operarios presentes: *${workersPresent}*\n\n📋 *Tareas en curso:*\n${taskList}\n\n🎯 *Completadas hoy:*\n${completedList}\n\n✍️ Firmado por: *${senderName}*\n🔐 Hash: \`${state.libroObra[state.libroObra.length - 1]?.hash?.slice(0, 16) || 'pending'}...\`\n📚 Entrada #${totalEntries} del libro\n\n_Registro conforme Ley 22.250 / Res. SRT 319/99_`;
                 }
                 // Menú Director
                 else {
-                    botReply = `👑 *Centro de Mando — Arq. Marcelo (Director de Obra)* 🏗️\n\nHola Arq. Marcelo. Podés enviar un número del 1 al 8 o escribir tus directivas:\n\n1️⃣ *Supervisión de Cuadrilla & KYC*\n2️⃣ *Certificar Avance (Gantt)*\n3️⃣ *Reportar / Asignar Incidencia Crítica*\n4️⃣ *Replanificación por Demora de Suministros*\n5️⃣ *Gestionar Proveedores*\n6️⃣ *Consultar Plan Quincenal (Q1/Q2)*\n7️⃣ *Rendir / Aprobar Gasto de Caja Chica*\n8️⃣ *Auditoría Satelital de Geocercas & ART*\n\n📸 _Enviá fotos de remitos o facturas para validación fiscal AFIP con IA._`;
+                    botReply = `👑 *Centro de Mando — ${senderName} (${senderRole})* 🏗️\n\nHola ${senderName}. Podés enviar un número del 1 al 9 o escribir tus directivas:\n\n1️⃣ *Supervisión de Cuadrilla & KYC*\n2️⃣ *Certificar Avance (Gantt)*\n3️⃣ *Reportar / Asignar Incidencia Crítica*\n4️⃣ *Replanificación por Demora de Suministros*\n5️⃣ *Gestionar Proveedores*\n6️⃣ *Consultar Plan Quincenal (Q1/Q2)*\n7️⃣ *Rendir / Aprobar Gasto de Caja Chica*\n8️⃣ *Auditoría Satelital de Geocercas & ART*\n9️⃣ *Libro de Obra Digital (Ley 22.250)*\n\n📸 _Enviá fotos de remitos o facturas para validación fiscal AFIP con IA._`;
                 }
             }
             // 📐 Arq. Victoria (Socia & Directora Técnica) Handling
