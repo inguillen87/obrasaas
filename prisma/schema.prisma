@@ -1,0 +1,443 @@
+// ObraSaaS Enterprise — Prisma Relational Multi-Tenant Schema
+// Database: PostgreSQL (Neon / Supabase / AWS RDS)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MULTI-TENANCY & USERS
+// ═══════════════════════════════════════════════════════════════
+
+enum PlanType {
+  STARTER
+  PROFESSIONAL
+  ENTERPRISE
+  GOVERNMENT
+}
+
+enum UserRole {
+  SUPERADMIN
+  TENANT_OWNER
+  DIRECTOR_OBRA
+  DIRECTOR_TECNICO
+  SUPERVISOR
+  OPERARIO
+  INVERSOR
+}
+
+enum KycStatus {
+  PENDIENTE
+  EN_REVISION
+  VERIFICADO
+  RECHAZADO
+  BLOQUEADO
+}
+
+enum TaskStatus {
+  PENDIENTE
+  EN_PROCESO
+  COMPLETADA
+  DEMORADA
+  BLOQUEADA
+}
+
+enum IncidentSeverity {
+  INFO
+  WARNING
+  CRITICAL
+  EMERGENCY
+}
+
+model Tenant {
+  id            String    @id @default(cuid())
+  name          String
+  slug          String    @unique
+  plan          PlanType  @default(STARTER)
+  ownerEmail    String
+  ownerPhone    String?
+  status        String    @default("active") // active, suspended, trial
+  trialEndsAt   DateTime?
+  config        Json?     // Custom branding, CAC adjustments, geofence defaults
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  users         User[]
+  projects      Project[]
+  workers       Worker[]
+  webhooks      WebhookSubscription[]
+  subscriptions BillingSubscription[]
+
+  @@index([slug])
+}
+
+model User {
+  id            String    @id @default(cuid())
+  tenantId      String
+  email         String    @unique
+  phone         String?
+  name          String
+  role          UserRole  @default(SUPERVISOR)
+  passwordHash  String?
+  avatarUrl     String?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, role])
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PROJECTS & SITES
+// ═══════════════════════════════════════════════════════════════
+
+model Project {
+  id                    String    @id @default(cuid())
+  tenantId              String
+  name                  String
+  address               String?
+  city                  String
+  province              String    @default("Buenos Aires")
+  country               String    @default("Argentina")
+  latitude              Float?
+  longitude             Float?
+  geofenceRadiusMeters  Int       @default(100)
+  totalBudget           Float     @default(0)
+  currency              String    @default("ARS")
+  status                String    @default("en_ejecucion") // planificada, en_ejecucion, finalizada, pausada
+  startDate             DateTime?
+  expectedEndDate       DateTime?
+  
+  // Relations
+  tenant                Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tasks                 Task[]
+  budgetRubros          BudgetRubro[]
+  incidents             Incident[]
+  libroObraEntries      LibroObraEntry[]
+  sitePhotos            SitePhoto[]
+  projectPolicies       ProjectPolicy[]
+  certifications        DigitalCertification[]
+  blueprints            Blueprint[]
+
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([tenantId])
+}
+
+// ═══════════════════════════════════════════════════════════════
+// WORKERS, UOCRA & KYC
+// ═══════════════════════════════════════════════════════════════
+
+model Worker {
+  id              String        @id @default(cuid())
+  tenantId        String
+  name            String
+  phone           String
+  dni             String?
+  cuil            String?
+  trade           String        @default("Albañilería") // Oficial, Medio Oficial, Ayudante, Plomero, Electricista, Proveedor
+  uocraCategory   String?       @default("Oficial Albañil")
+  status          String        @default("Activo") // Activo, Suspendido, Proveedor, Baja
+  kycStatus       KycStatus     @default(PENDIENTE)
+  dniFrontUrl     String?
+  selfieUrl       String?
+  voiceEnrolled   Boolean       @default(false)
+  
+  tenant          Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  artPolicies     ARTPolicy[]
+  attendances     AttendanceRecord[]
+  assignedTasks   TaskWorkerAssignment[]
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([tenantId, phone])
+  @@index([dni])
+}
+
+model ARTPolicy {
+  id              String    @id @default(cuid())
+  workerId        String
+  company         String    // La Segunda, Provincia ART, Prevención ART, etc.
+  policyNumber    String
+  expirationDate  DateTime
+  documentUrl     String?
+  status          String    @default("VIGENTE") // VIGENTE, VENCIDA, PROXIMA_A_VENCER
+  
+  worker          Worker    @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([workerId])
+  @@index([expirationDate])
+}
+
+model AttendanceRecord {
+  id              String    @id @default(cuid())
+  workerId        String
+  projectId       String
+  timestamp       DateTime  @default(now())
+  type            String    @default("INGRESO") // INGRESO, EGRESO
+  latitude        Float?
+  longitude       Float?
+  distanceMeters  Float?
+  isInsideGeofence Boolean  @default(true)
+  verifiedMethod  String    @default("GPS_WHATSAPP") // GPS_WHATSAPP, WEBVIEW_KYC, MANUAL
+
+  worker          Worker    @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  createdAt       DateTime  @default(now())
+
+  @@index([workerId, timestamp])
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GANTT TASKS & PROGRESS
+// ═══════════════════════════════════════════════════════════════
+
+model Task {
+  id              String        @id @default(cuid())
+  projectId       String
+  name            String
+  description     String?
+  quincena        String?       @default("Q1")
+  startDay        Int           @default(1)
+  durationDays    Int           @default(7)
+  progress        Int           @default(0) // 0 to 100
+  status          TaskStatus    @default(PENDIENTE)
+  dependencies    String[]      @default([]) // Array of task IDs
+  weight          Float         @default(1.0)
+
+  project         Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignedWorkers TaskWorkerAssignment[]
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([projectId, quincena])
+}
+
+model TaskWorkerAssignment {
+  id        String   @id @default(cuid())
+  taskId    String
+  workerId  String
+
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  worker    Worker   @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, workerId])
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BUDGET & EXPENSES (CURVA S)
+// ═══════════════════════════════════════════════════════════════
+
+model BudgetRubro {
+  id              String        @id @default(cuid())
+  projectId       String
+  code            String        // R-01, R-02
+  name            String        // Estructura, Mampostería, etc.
+  presupuesto     Float         @default(0)
+  ejecutado       Float         @default(0)
+  cacIndexBase    Float?        // Base CAC index for price redetermination
+  
+  project         Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  expenses        Expense[]
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([projectId])
+}
+
+model Expense {
+  id              String        @id @default(cuid())
+  rubroId         String
+  concept         String
+  amount          Float
+  currency        String        @default("ARS")
+  invoiceNumber   String?       // Factura A/B
+  supplierCuit    String?
+  supplierName    String?
+  afipCae         String?       // Código de Autorización Electrónico
+  receiptPhotoUrl String?
+  registeredBy    String?
+  date            DateTime      @default(now())
+
+  rubro           BudgetRubro   @relation(fields: [rubroId], references: [id], onDelete: Cascade)
+
+  createdAt       DateTime      @default(now())
+
+  @@index([rubroId, date])
+}
+
+// ═══════════════════════════════════════════════════════════════
+// INCIDENTS, LIBRO DE OBRA & BLOCKCHAIN AUDIT
+// ═══════════════════════════════════════════════════════════════
+
+model Incident {
+  id              String            @id @default(cuid())
+  projectId       String
+  title           String
+  description     String?
+  type            String            @default("Alerta") // Crítico, Alerta, Info
+  severity        IncidentSeverity  @default(WARNING)
+  status          String            @default("ABIERTA") // ABIERTA, EN_PROCESO, RESUELTA
+  photoUrl        String?
+  reportedBy      String?
+  assignedTo      String?
+  resolvedAt      DateTime?
+
+  project         Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@index([projectId, severity])
+}
+
+model LibroObraEntry {
+  id              String    @id @default(cuid())
+  projectId       String
+  date            DateTime  @default(now())
+  weatherSummary  String?
+  temperatureMax  Float?
+  temperatureMin  Float?
+  precipitationMm Float?
+  workersPresent  Int       @default(0)
+  tasksPerformed  String
+  ordersDelivered String?
+  signedBy        String    // Director de Obra
+  sha256Hash      String    // Cryptographic seal
+  previousHash    String?   // Merkle blockchain chain link
+  pdfUrl          String?
+
+  project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  createdAt       DateTime  @default(now())
+
+  @@index([projectId, date])
+  @@index([sha256Hash])
+}
+
+model DigitalCertification {
+  id              String    @id @default(cuid())
+  projectId       String
+  certificationNo Int       @default(1)
+  periodName      String    // Quincena 1 - Agosto 2026
+  overallProgress Float
+  financialAmount Float
+  directorName    String
+  sha256Signature String
+  pdfUrl          String?
+  status          String    @default("CERTIFICADO")
+
+  project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  createdAt       DateTime  @default(now())
+
+  @@index([projectId])
+}
+
+model SitePhoto {
+  id              String    @id @default(cuid())
+  projectId       String
+  photoUrl        String
+  title           String?
+  rubroTag        String?   // Estructura, Albañilería, etc.
+  estimatedProgress Float?  // AI Computer Vision estimate
+  aiAnalysisJson  Json?     // Anomalies detected, PPE compliance
+  latitude        Float?
+  longitude       Float?
+  capturedBy      String?
+  timestamp       DateTime  @default(now())
+
+  project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, rubroTag])
+}
+
+model ProjectPolicy {
+  id              String    @id @default(cuid())
+  projectId       String
+  type            String    // Todo Riesgo Construcción, Responsabilidad Civil, Caución
+  company         String
+  policyNumber    String
+  coverageAmount  Float
+  expirationDate  DateTime
+  status          String    @default("VIGENTE")
+
+  project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  createdAt       DateTime  @default(now())
+
+  @@index([projectId])
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BLUEPRINTS (PLANOS CAD / SVG / PDF)
+// ═══════════════════════════════════════════════════════════════
+
+model Blueprint {
+  id              String    @id @default(cuid())
+  projectId       String
+  name            String    // Planta Baja - Arquitectura, Nivel 3 - Estructura
+  discipline      String    @default("Arquitectura") // Arquitectura, Estructura, Sanitarias, Eléctricas
+  revision        String    @default("Rev. 01")
+  fileUrl         String
+  scale           String?   @default("1:50")
+  pins            Json?     // Pins coordinates, incident annotations, task markers
+
+  project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([projectId, discipline])
+}
+
+// ═══════════════════════════════════════════════════════════════
+// INTEGRATIONS, WEBHOOKS & BILLING
+// ═══════════════════════════════════════════════════════════════
+
+model WebhookSubscription {
+  id              String    @id @default(cuid())
+  tenantId        String
+  url             String
+  secret          String
+  events          String[]  @default(["task.completed", "incident.created"])
+  isActive        Boolean   @default(true)
+  lastDeliveryAt  DateTime?
+
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  createdAt       DateTime  @default(now())
+
+  @@index([tenantId])
+}
+
+model BillingSubscription {
+  id                  String    @id @default(cuid())
+  tenantId            String
+  provider            String    @default("MERCADO_PAGO") // MERCADO_PAGO, STRIPE, WIRE_TRANSFER
+  providerSubId       String?
+  plan                PlanType  @default(STARTER)
+  status              String    @default("ACTIVE") // ACTIVE, TRIALING, PAST_DUE, CANCELLED
+  currentPeriodStart  DateTime  @default(now())
+  currentPeriodEnd    DateTime
+  amountUSD           Float
+  amountARS           Float?
+  
+  tenant              Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([tenantId])
+}

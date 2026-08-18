@@ -5,6 +5,7 @@ import { validateInvoiceFiscalData, validateCuit } from '../../../lib/afipValida
 import { appendAuditTransaction } from '../../../lib/auditLedger.js';
 import { buildDirectorListMessage, buildVictoriaListMessage, buildWorkerListMessage, buildActionButtonsMessage } from '../../../lib/metaTemplates.js';
 import { generateWebviewToken, verifyMetaWebhookSignature, isMessageDuplicate } from '../../../lib/auth.js';
+import { processCopilotMessage } from '../../../lib/llmCopilot.js';
 
 // Geofencing Haversine Mathematical Formula
 function getDistance(lat1, lon1, lat2, lon2) {
@@ -894,9 +895,14 @@ export async function POST(request) {
 
                     botReply = `📄 *Certificación de Avance de Obra*\n🏗️ *${state.projectConfig?.name || 'Obra'}*\n📅 Fecha: ${new Date().toLocaleDateString('es-AR')}\n\n🎯 *Avance Global: ${avance}%*\n\n✅ *Completadas (${completed.length}):*\n${completed.slice(0, 5).map(t => `  ✅ ${t.name}`).join('\n') || '  Sin completadas'}\n\n🔄 *En curso (${inProgress.length}):*\n${progressList || '  Sin tareas en curso'}\n\n🔐 Hash SHA-256: \`${hash.slice(0, 24)}...\`\n✍️ Firmado por: *${senderName}*\n\n_Certificación digital conforme Ley 13.064. Para PDF completo visite /dashboard/report_`;
                 }
-                // Menú Director
+                // Menú Director / Conversacional NLP Copilot
                 else {
-                    botReply = `👑 *Centro de Mando — ${senderName} (${senderRole})* 🏗️\n\nHola ${senderName}. Podés enviar un número o escribir tus directivas:\n\n1️⃣ *Supervisión de Cuadrilla & KYC*\n2️⃣ *Certificar Avance (Gantt)*\n3️⃣ *Reportar / Asignar Incidencia Crítica*\n4️⃣ *Replanificación por Demora de Suministros*\n5️⃣ *Gestionar Proveedores*\n6️⃣ *Consultar Plan Quincenal (Q1/Q2)*\n7️⃣ *Rendir / Aprobar Gasto de Caja Chica*\n8️⃣ *Auditoría Satelital de Geocercas & ART*\n9️⃣ *Libro de Obra Digital (Ley 22.250)*\n🔟 *Control de Costos por Rubro*\n1️⃣1️⃣ *Certificación de Avance*\n\n📸 _Enviá fotos de remitos o facturas para validación fiscal AFIP con IA._`;
+                    if (bodyText && bodyText.length > 5 && !['menu', 'ayuda', 'hola', 'opciones'].includes(normalBody)) {
+                        const copilotRes = await processCopilotMessage(bodyText, { state, senderName, senderRole, isDirector: true });
+                        botReply = copilotRes.reply;
+                    } else {
+                        botReply = `👑 *Centro de Mando — ${senderName} (${senderRole})* 🏗️\n\nHola ${senderName}. Podés enviar un número o escribir tus directivas:\n\n1️⃣ *Supervisión de Cuadrilla & KYC*\n2️⃣ *Certificar Avance (Gantt)*\n3️⃣ *Reportar / Asignar Incidencia Crítica*\n4️⃣ *Replanificación por Demora de Suministros*\n5️⃣ *Gestionar Proveedores*\n6️⃣ *Consultar Plan Quincenal (Q1/Q2)*\n7️⃣ *Rendir / Aprobar Gasto de Caja Chica*\n8️⃣ *Auditoría Satelital de Geocercas & ART*\n9️⃣ *Libro de Obra Digital (Ley 22.250)*\n🔟 *Control de Costos por Rubro*\n1️⃣1️⃣ *Certificación de Avance*\n\n📸 _Enviá fotos de remitos o facturas para validación fiscal AFIP con IA._`;
+                    }
                 }
             }
             // 📐 Arq. Victoria (Socia & Directora Técnica) Handling
@@ -925,7 +931,12 @@ export async function POST(request) {
                 } else if (normalBody === '5' || normalBody.includes('caja') || normalBody.includes('remito') || normalBody.includes('afip')) {
                     botReply = `💰 *Balance de Caja Chica & Auditoría Fiscal*\n\n• *Saldo Disponible:* $${state.cajaChica?.saldoActual?.toLocaleString('es-AR') || '0'} ARS\n• *Comprobantes AFIP Auditados:* ${state.remitos?.length || 0} remitos con CAE validado.`;
                 } else {
-                    botReply = `📐 *Panel Técnico — ${senderName} (${senderRole})* 👷‍♀️\n\nHola ${senderName}. Podés enviar un número del 1 al 5 o tus directivas técnicas:\n\n1️⃣ *Estado de Cuadrilla & KYC Biométrico*\n2️⃣ *Control de Calidad y Avance Estructural*\n3️⃣ *Inspección de Incidencias y Vicios Ocultos*\n4️⃣ *Certificaciones Quincenales*\n5️⃣ *Balance de Caja Chica & Remitos AFIP*\n\n📸 _Podés enviar fotos de inspección o notas de voz para procesar con IA._`;
+                    if (bodyText && bodyText.length > 5 && !['menu', 'ayuda', 'hola', 'opciones'].includes(normalBody)) {
+                        const copilotRes = await processCopilotMessage(bodyText, { state, senderName, senderRole, isTechnicalDirector: true });
+                        botReply = copilotRes.reply;
+                    } else {
+                        botReply = `📐 *Panel Técnico — ${senderName} (${senderRole})* 👷‍♀️\n\nHola ${senderName}. Podés enviar un número del 1 al 5 o tus directivas técnicas:\n\n1️⃣ *Estado de Cuadrilla & KYC Biométrico*\n2️⃣ *Control de Calidad y Avance Estructural*\n3️⃣ *Inspección de Incidencias y Vicios Ocultos*\n4️⃣ *Certificaciones Quincenales*\n5️⃣ *Balance de Caja Chica & Remitos AFIP*\n\n📸 _Podés enviar fotos de inspección o notas de voz para procesar con IA._`;
+                    }
                 }
             }
             // 👷 Worker Handling
@@ -943,7 +954,12 @@ export async function POST(request) {
                 } else if (normalBody === '6' || normalBody.includes('licencia') || normalBody.includes('medica')) {
                     botReply = `🏥 *Carga de Licencia Médica*\n\nCompletá el formulario y adjuntá el certificado médico desde tu celular:\n👉 ${medicalLink}`;
                 } else {
-                    botReply = `👷‍♂️ *Copiloto Inteligente de ObraSaaS*\n\nHola *${senderName}* (*${senderRole}*).\n\n1️⃣ *Fichar Entrada* (o enviá tu ubicación 📍)\n2️⃣ *Reportar Avance* (ej: "terminamos el revoque al 100%")\n3️⃣ *Reportar Incidencia* (ej: "fuga de agua en el caño")\n4️⃣ *Demora de Materiales*\n5️⃣ *Rendir Gasto / Remito* (enviá foto del ticket)\n6️⃣ *Cargar Licencia Médica*\n\n👉 Tarjeta de Presentismo: ${attendanceLink}`;
+                    if (bodyText && bodyText.length > 5 && !['menu', 'ayuda', 'hola', 'opciones'].includes(normalBody)) {
+                        const copilotRes = await processCopilotMessage(bodyText, { state, senderName, senderRole });
+                        botReply = copilotRes.reply;
+                    } else {
+                        botReply = `👷‍♂️ *Copiloto Inteligente de ObraSaaS*\n\nHola *${senderName}* (*${senderRole}*).\n\n1️⃣ *Fichar Entrada* (o enviá tu ubicación 📍)\n2️⃣ *Reportar Avance* (ej: "terminamos el revoque al 100%")\n3️⃣ *Reportar Incidencia* (ej: "fuga de agua en el caño")\n4️⃣ *Demora de Materiales*\n5️⃣ *Rendir Gasto / Remito* (enviá foto del ticket)\n6️⃣ *Cargar Licencia Médica*\n\n👉 Tarjeta de Presentismo: ${attendanceLink}`;
+                    }
                 }
             }
 

@@ -1427,6 +1427,16 @@ export default function Dashboard() {
               </Link>
             </li>
             <li className="nav-item">
+              <Link href="/planos" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
+                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-compass-drafting"></i> Visor de Planos CAD</button>
+              </Link>
+            </li>
+            <li className="nav-item">
+              <Link href="/licitaciones" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
+                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-landmark"></i> Licitómetro Público</button>
+              </Link>
+            </li>
+            <li className="nav-item">
               <Link href="/pricing" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
                 <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-tag"></i> Precios</button>
               </Link>
