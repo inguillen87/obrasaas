@@ -37,33 +37,49 @@ function KYCContent() {
     const [gpsStatus, setGpsStatus] = useState('Obteniendo satélites...');
     const [isInsideGeofence, setIsInsideGeofence] = useState(false);
     const [activeProjectName, setActiveProjectName] = useState('Torre Palermo Soho');
+    const [projectCoords, setProjectCoords] = useState({ lat: -34.5886, lon: -58.4302, radius: 100 });
 
     // Submission & Error State
     const [submitting, setSubmitting] = useState(false);
     const [verifiedResult, setVerifiedResult] = useState(null);
     const [errorMessage, setErrorMessage] = useState(null);
 
-    // Initial default mapping
+    // Fetch worker profile from state API (dynamic, no hardcoding)
     useEffect(() => {
-        if (workerParam === 'juan') {
-            setNombre('Juan Gómez');
-            setDni('34.589.120');
-            setCuil('20-34589120-3');
-            setTrade('Albañilería Principal');
-        } else if (workerParam === 'luis') {
-            setNombre('Luis Martínez');
-            setDni('31.204.850');
-            setCuil('20-31204850-8');
-            setTrade('Instalaciones y Sanitarios');
-        } else if (workerParam === 'carlos') {
-            setNombre('Carlos Pérez');
-            setDni('28.940.111');
-            setCuil('20-28940111-2');
-            setTrade('Pintura e Interiores');
+        if (workerParam) {
+            fetch(`/api/state`)
+                .then(res => res.json())
+                .then(state => {
+                    const registry = state.workerRegistry || [];
+                    const worker = registry.find(w => 
+                        w.id === workerParam || 
+                        (w.name || '').toLowerCase().includes(workerParam.toLowerCase())
+                    );
+                    if (worker) {
+                        setNombre(worker.name || '');
+                        setDni(worker.dni || '');
+                        setCuil('');
+                        setTrade(worker.trade || worker.role || 'Albañilería Principal');
+                        if (worker.phone) setPhone(worker.phone);
+                    }
+                    // Set active project name for GPS display
+                    if (state.projectConfig?.name) {
+                        setActiveProjectName(state.projectConfig.name);
+                    }
+                    // Store project coordinates for geofence calculation
+                    if (state.projectConfig) {
+                        setProjectCoords({
+                            lat: state.projectConfig.latitude || -34.5886,
+                            lon: state.projectConfig.longitude || -58.4302,
+                            radius: state.projectConfig.geofenceRadiusMeters || 100
+                        });
+                    }
+                })
+                .catch(err => console.warn('Could not load worker profile:', err));
         }
     }, [workerParam]);
 
-    // Live GPS fetch on load
+    // Live GPS fetch on load (uses dynamic project coordinates)
     useEffect(() => {
         if (typeof window !== 'undefined' && navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
@@ -72,10 +88,10 @@ function KYCContent() {
                     const lon = pos.coords.longitude;
                     setGpsLocation({ lat, lon });
 
-                    // Distance to project site (-34.5886, -58.4302)
+                    // Distance to active project site (dynamic)
                     const R = 6371e3;
-                    const pLat = -34.5886;
-                    const pLon = -58.4302;
+                    const pLat = projectCoords.lat;
+                    const pLon = projectCoords.lon;
                     const phi1 = lat * Math.PI / 180;
                     const phi2 = pLat * Math.PI / 180;
                     const dPhi = (pLat - lat) * Math.PI / 180;
@@ -84,20 +100,16 @@ function KYCContent() {
                     const dist = Math.round(R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))));
 
                     setGpsDistance(dist);
-                    setIsInsideGeofence(dist <= 150);
-                    setGpsStatus(dist <= 150 ? `✅ Dentro de obra (${dist}m de radio)` : `⚠️ Fuera de radio (${dist}m de obra)`);
+                    setIsInsideGeofence(dist <= projectCoords.radius);
+                    setGpsStatus(dist <= projectCoords.radius ? `✅ Dentro de obra (${dist}m de radio)` : `⚠️ Fuera de radio (${dist}m de obra)`);
                 },
-                () => {
-                    const dist = 12;
-                    setGpsLocation({ lat: -34.5886, lon: -58.4302 });
-                    setGpsDistance(dist);
-                    setIsInsideGeofence(true);
-                    setGpsStatus(`✅ GPS Satelital Validado (${dist}m de radio)`);
+                (err) => {
+                    setGpsStatus('⚠️ No se pudo obtener GPS. Verifique permisos de ubicación.');
                 },
                 { enableHighAccuracy: true, timeout: 8000 }
             );
         }
-    }, []);
+    }, [projectCoords]);
 
     // Stop current camera stream
     const stopCamera = () => {
@@ -200,12 +212,31 @@ function KYCContent() {
         }
     };
 
-    const handleRecordVoice = () => {
+    const handleRecordVoice = async () => {
         setRecordingVoice(true);
-        setTimeout(() => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const mediaRecorder = new MediaRecorder(stream);
+            const chunks = [];
+            mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
+            mediaRecorder.onstop = () => {
+                stream.getTracks().forEach(t => t.stop());
+                setRecordingVoice(false);
+                setVoiceEnrolled(true);
+            };
+            mediaRecorder.start();
+            // Record 3 seconds of voice sample
+            setTimeout(() => {
+                if (mediaRecorder.state === 'recording') {
+                    mediaRecorder.stop();
+                }
+            }, 3000);
+        } catch (err) {
+            console.warn('Voice recording not available:', err);
             setRecordingVoice(false);
-            setVoiceEnrolled(true);
-        }, 2500);
+            // Skip voice enrollment if mic not available
+            setVoiceEnrolled(false);
+        }
     };
 
     // Submit KYC to API
@@ -241,8 +272,8 @@ function KYCContent() {
                     trade: trade,
                     dniFrontBase64: dniFront,
                     selfieBase64: selfie,
-                    latitude: gpsLocation?.lat || -34.5886,
-                    longitude: gpsLocation?.lon || -58.4302,
+                    latitude: gpsLocation?.lat || null,
+                    longitude: gpsLocation?.lon || null,
                     voiceEnrolled: voiceEnrolled
                 })
             });

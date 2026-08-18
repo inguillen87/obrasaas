@@ -8,30 +8,89 @@ function AttendanceContent() {
     const workerParam = searchParams.get('worker') || '';
     const tokenParam = searchParams.get('token') || '';
 
-    const [name, setName] = useState('Juan Gómez');
-    const [role, setRole] = useState('Albañilería');
+    const [name, setName] = useState('');
+    const [role, setRole] = useState('');
     const [authorized, setAuthorized] = useState(null);
     const [fichajes, setFichajes] = useState([]);
     const [checkingIn, setCheckingIn] = useState(false);
     const [statusText, setStatusText] = useState('Listo para registrar ingreso satelital');
     const [statusType, setStatusType] = useState('info');
     const [gpsInfo, setGpsInfo] = useState(null);
-    const [activeProject, setActiveProject] = useState({ name: 'Torre Palermo Soho', city: 'CABA', radius: 100 });
+    const [activeProject, setActiveProject] = useState({ name: 'Cargando...', city: '', radius: 100 });
+    const [projectCoords, setProjectCoords] = useState({ lat: null, lon: null });
 
+    // Fetch worker profile and project config from state API (dynamic, no hardcoding)
     useEffect(() => {
-        if (workerParam === 'carlos') {
-            setName('Carlos Pérez');
-            setRole('Pintura & Revestimientos');
-        } else if (workerParam === 'juan') {
-            setName('Juan Gómez');
-            setRole('Albañilería Principal');
-        } else if (workerParam === 'luis') {
-            setName('Luis Martínez');
-            setRole('Instalaciones & Sanitarios');
+        if (workerParam) {
+            fetch('/api/state')
+                .then(res => res.json())
+                .then(state => {
+                    // Resolve worker from registry
+                    const registry = state.workerRegistry || [];
+                    const worker = registry.find(w =>
+                        w.id === workerParam ||
+                        (w.name || '').toLowerCase().includes(workerParam.toLowerCase())
+                    );
+                    if (worker) {
+                        setName(worker.name || workerParam);
+                        setRole(worker.role || worker.trade || '');
+                    } else {
+                        setName(workerParam);
+                        setRole('');
+                    }
+
+                    // Set active project from projectConfig
+                    if (state.projectConfig) {
+                        setActiveProject({
+                            name: state.projectConfig.name || 'Obra',
+                            city: state.projectConfig.city || state.projectConfig.province || '',
+                            radius: state.projectConfig.geofenceRadiusMeters || 100
+                        });
+                        setProjectCoords({
+                            lat: state.projectConfig.latitude,
+                            lon: state.projectConfig.longitude
+                        });
+                    }
+
+                    // Load real attendance history from state for this worker
+                    const resolvedName = worker?.name || workerParam;
+                    const hrData = state.hrAttendance?.[resolvedName];
+                    const todayAttendance = state.attendance?.[resolvedName];
+                    const history = [];
+
+                    // Add today's record if checked in
+                    if (todayAttendance && todayAttendance.checkin && todayAttendance.checkin !== '--:--') {
+                        const now = new Date();
+                        history.push({
+                            date: now.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' }),
+                            checkin: todayAttendance.checkin,
+                            status: todayAttendance.status || 'Presente (GPS Satelital)'
+                        });
+                    }
+
+                    // Build recent history from incidents that mention this worker's attendance
+                    const incidents = state.incidents || [];
+                    incidents
+                        .filter(inc =>
+                            (inc.title || '').includes(resolvedName) &&
+                            ((inc.badge || '').includes('Presentismo') || (inc.badge || '').includes('GPS') || (inc.description || '').includes('fichaje') || (inc.description || '').includes('Presente'))
+                        )
+                        .slice(0, 5)
+                        .forEach(inc => {
+                            history.push({
+                                date: inc.timestamp || '',
+                                checkin: inc.description?.match(/(\d{1,2}:\d{2}\s*(?:AM|PM)?)/i)?.[1] || '--:--',
+                                status: 'Presente (GPS Satelital)'
+                            });
+                        });
+
+                    setFichajes(history);
+                })
+                .catch(err => console.warn('Could not load worker profile from state:', err));
         }
     }, [workerParam]);
 
-    // Check token authenticity & fetch project
+    // Check token authenticity
     useEffect(() => {
         const verifyAccess = async () => {
             if (!workerParam || !tokenParam) {
@@ -42,12 +101,6 @@ function AttendanceContent() {
                 const res = await fetch(`/api/auth/verify?worker=${workerParam}&token=${tokenParam}`);
                 const data = await res.json();
                 setAuthorized(data.valid);
-
-                const stateRes = await fetch('/api/project');
-                const stateData = await stateRes.json();
-                if (stateData.activeProject) {
-                    setActiveProject(stateData.activeProject);
-                }
             } catch (e) {
                 setAuthorized(false);
             }
@@ -55,30 +108,20 @@ function AttendanceContent() {
         verifyAccess();
     }, [workerParam, tokenParam]);
 
-    useEffect(() => {
-        const now = new Date();
-        const dates = [];
-        for (let i = 1; i <= 5; i++) {
-            const date = new Date(now);
-            date.setDate(now.getDate() - i);
-            if (date.getDay() !== 0 && date.getDay() !== 6) {
-                dates.push({
-                    date: date.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' }),
-                    checkin: '08:02 AM',
-                    status: 'Presente (GPS Satelital)'
-                });
-            }
-        }
-        setFichajes(dates);
-    }, []);
-
     const handleGPSCheckin = () => {
         setCheckingIn(true);
         setStatusText('🛰️ Conectando con constelación GPS satelital...');
         setStatusType('info');
 
         if (!navigator.geolocation) {
-            fallbackCheckin(-34.5886, -58.4302);
+            // Use dynamic project coordinates as fallback, or skip if unavailable
+            if (projectCoords.lat != null && projectCoords.lon != null) {
+                fallbackCheckin(projectCoords.lat, projectCoords.lon);
+            } else {
+                setStatusText('Error: GPS no disponible y no se pudieron obtener coordenadas del proyecto.');
+                setStatusType('error');
+                setCheckingIn(false);
+            }
             return;
         }
 
@@ -92,7 +135,14 @@ function AttendanceContent() {
             },
             (err) => {
                 console.warn("Geolocation permission error or unavailable, using fallback:", err.message);
-                fallbackCheckin(-34.5886, -58.4302);
+                // Use dynamic project coordinates as fallback
+                if (projectCoords.lat != null && projectCoords.lon != null) {
+                    fallbackCheckin(projectCoords.lat, projectCoords.lon);
+                } else {
+                    setStatusText('Error: No se pudo obtener ubicación GPS.');
+                    setStatusType('error');
+                    setCheckingIn(false);
+                }
             },
             { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
         );
@@ -119,7 +169,7 @@ function AttendanceContent() {
 
             if (data.success) {
                 if (data.reply?.includes('Validado') || data.reply?.includes('Dentro del radio')) {
-                    setStatusText(`✓ Presentismo Validado a las ${timeStr}. Estás dentro de la geocerca de ${activeProject.name} (Precisión GPS: ±${accuracy}m).`);
+                    setStatusText(`✓ Presentismo Validado a las ${timeStr}. Estás dentro de la geocerca de ${activeProject.name} (Precisión GPS: ±${accuracy}m, Radio: ${activeProject.radius}m).`);
                     setStatusType('success');
                     setFichajes(prev => [
                         {
@@ -195,10 +245,10 @@ function AttendanceContent() {
             <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '16px', padding: '16px', marginBottom: '20px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
                     <div style={{ width: '52px', height: '52px', borderRadius: '14px', background: 'linear-gradient(135deg, #ff9f1c, #f59e0b)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem', color: '#000', fontWeight: 800 }}>
-                        {name.split(' ').map(n => n[0]).join('')}
+                        {name ? name.split(' ').map(n => n[0]).join('') : '??'}
                     </div>
                     <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#fff' }}>{name}</div>
+                        <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#fff' }}>{name || 'Cargando...'}</div>
                         <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{role}</div>
                         <div style={{ fontSize: '0.75rem', color: '#38bdf8', marginTop: '2px' }}>
                             <i className="fa-solid fa-city"></i> {activeProject.name} ({activeProject.city})
@@ -262,7 +312,11 @@ function AttendanceContent() {
                     <i className="fa-solid fa-clock-rotate-left"></i> Historial Reciente de Ingresos
                 </h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {fichajes.map((f, i) => (
+                    {fichajes.length === 0 ? (
+                        <div style={{ padding: '16px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '12px', textAlign: 'center', color: '#64748b', fontSize: '0.85rem' }}>
+                            No hay registros de ingresos recientes.
+                        </div>
+                    ) : fichajes.map((f, i) => (
                         <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '12px' }}>
                             <div>
                                 <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#fff' }}>{f.date}</div>

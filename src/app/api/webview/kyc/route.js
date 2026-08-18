@@ -1,10 +1,23 @@
 import { getAppState, saveAppState } from '../../../../lib/db.js';
 import { analyzeDniWithAI, verifyFacialMatchAndLiveness } from '../../../../lib/aiVision.js';
 import { appendAuditTransaction } from '../../../../lib/auditLedger.js';
+import { verifyWebviewToken } from '../../../../lib/auth.js';
 
 export async function POST(request) {
     try {
         const body = await request.json();
+
+        // Token Validation (ensures request comes from a legitimate WhatsApp link)
+        if (body.token && body.workerId) {
+            const isValid = verifyWebviewToken(body.workerId, body.token);
+            if (!isValid) {
+                return Response.json({
+                    success: false,
+                    error: "Token de sesión expirado o inválido. Solicite un nuevo enlace de verificación por WhatsApp."
+                }, { status: 403 });
+            }
+        }
+
         const { 
             workerId, 
             phone, 
@@ -27,6 +40,15 @@ export async function POST(request) {
             }, { status: 400 });
         }
 
+        // Image size validation (prevent oversized payloads)
+        const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
+        if (dniFrontBase64.length > MAX_IMAGE_SIZE || selfieBase64.length > MAX_IMAGE_SIZE) {
+            return Response.json({
+                success: false,
+                error: "Las imágenes son demasiado grandes. Por favor capture con menor resolución."
+            }, { status: 400 });
+        }
+
         // 2. Perform Real AI OCR on DNI Document
         const cleanDniBase64 = dniFrontBase64.replace(/^data:image\/\w+;base64,/, '');
         const cleanSelfieBase64 = selfieBase64.replace(/^data:image\/\w+;base64,/, '');
@@ -45,10 +67,13 @@ export async function POST(request) {
             dniBase64: cleanDniBase64
         });
 
-        if (bioMatch.success && (!bioMatch.isMatch || bioMatch.confidenceScore < 70)) {
+        if (bioMatch.success && (!bioMatch.isMatch || bioMatch.confidenceScore < 75 || bioMatch.livenessDetected === false)) {
+            const reason = bioMatch.livenessDetected === false 
+                ? 'Se detectó una imagen estática (foto de foto). Debe tomarse una selfie EN VIVO.' 
+                : `Los rasgos de la selfie no coinciden con el documento (${bioMatch.confidenceScore}% concordancia).`;
             return Response.json({
                 success: false,
-                error: `Verificación biométrica rechazada (${bioMatch.confidenceScore}% de concordancia). Los rasgos de la selfie no coinciden con la fotografía del documento de identidad presentado.`
+                error: `Verificación biométrica rechazada: ${reason}`
             }, { status: 400 });
         }
 
@@ -76,7 +101,7 @@ export async function POST(request) {
         }
 
         const finalName = dniOcr?.nombreCompleto || nombre || "Operario Verificado";
-        const finalDni = dniOcr?.dni || dni || "30.123.456";
+        const finalDni = dniOcr?.dni || dni || "00.000.000";
         const finalCuil = dniOcr?.cuil || cuil || `20-${finalDni.replace(/\D/g, '')}-3`;
         const finalTrade = trade || "Oficial Albañil";
         const key = workerId || `w-${Date.now().toString().slice(-4)}`;

@@ -8,7 +8,7 @@ function MedicalContent() {
     const workerParam = searchParams.get('worker') || '';
     const tokenParam = searchParams.get('token') || '';
 
-    const [name, setName] = useState('Juan Gómez');
+    const [name, setName] = useState('');
     const [authorized, setAuthorized] = useState(null); 
     const [diagnosis, setDiagnosis] = useState('Gripe / Cuadro Febril');
     const [days, setDays] = useState(2);
@@ -18,14 +18,24 @@ function MedicalContent() {
     const [loading, setLoading] = useState(false);
     const fileInputRef = useRef(null);
 
-    // Map worker id to full name
+    // Fetch worker profile from state API (dynamic, no hardcoding)
     useEffect(() => {
-        if (workerParam === 'carlos') {
-            setName('Carlos Pérez');
-        } else if (workerParam === 'juan') {
-            setName('Juan Gómez');
-        } else if (workerParam === 'luis') {
-            setName('Luis Martínez');
+        if (workerParam) {
+            fetch('/api/state')
+                .then(res => res.json())
+                .then(state => {
+                    const registry = state.workerRegistry || [];
+                    const worker = registry.find(w =>
+                        w.id === workerParam ||
+                        (w.name || '').toLowerCase().includes(workerParam.toLowerCase())
+                    );
+                    if (worker) {
+                        setName(worker.name || workerParam);
+                    } else {
+                        setName(workerParam);
+                    }
+                })
+                .catch(err => console.warn('Could not load worker profile from state:', err));
         }
     }, [workerParam]);
 
@@ -143,7 +153,7 @@ function MedicalContent() {
             <div style={{ textAlign: 'center', marginBottom: '28px' }}>
                 <span style={{ fontSize: '0.7rem', color: '#ff9f1c', fontWeight: 800, letterSpacing: '1px', textTransform: 'uppercase' }}>ObraSaaS Mobile</span>
                 <h1 style={{ fontSize: '1.35rem', fontWeight: 800, margin: '4px 0 0 0' }}>Carga de Licencia Médica</h1>
-                <p style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '4px' }}>Justificativo laboral para <strong>{name}</strong></p>
+                <p style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '4px' }}>Justificativo laboral para <strong>{name || 'Cargando...'}</strong></p>
             </div>
 
             {/* Form */}
