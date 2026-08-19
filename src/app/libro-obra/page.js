@@ -234,8 +234,8 @@ export default function LibroObraPage() {
                                 <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: tokens.colors.text.primary }}>
                                     Folio N° {entry.folio}
                                 </h3>
-                                <Badge variant="secondary">{entry.date}</Badge>
-                                {entry.rainInterruption && <Badge variant="danger">Lluvia (Paro)</Badge>}
+                                <Badge variant="subtle">{entry.date}</Badge>
+                                {entry.rainInterruption && <Badge color={tokens.colors.accent.danger} variant="filled">Lluvia (Paro)</Badge>}
                             </div>
                             <div style={{ display: 'flex', gap: '16px', color: tokens.colors.text.secondary, fontSize: '14px', flexWrap: 'wrap' }}>
                                 <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -247,7 +247,7 @@ export default function LibroObraPage() {
                             </div>
                         </div>
                         <Link href="/api/admin/libro-obra/pdf" target="_blank" rel="noopener noreferrer">
-                            <Button variant="outline" size="sm">Descargar PDF</Button>
+                            <Button variant="secondary" size="sm">Descargar PDF</Button>
                         </Link>
                     </div>
 
@@ -450,32 +450,32 @@ export default function LibroObraPage() {
         <motion.div variants={staggerContainer} initial="hidden" animate="visible" style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }}>
                 <StatCard 
-                    title="Total Asientos" 
+                    label="Total Asientos" 
                     value="42" 
-                    subtitle="Desde inicio de obra" 
+                    sub="Desde inicio de obra" 
                     icon="📖" 
-                    trend={{ value: 5, label: "este mes", positive: true }} 
+                    trend={5} 
                 />
                 <StatCard 
-                    title="Días con Lluvia" 
+                    label="Días con Lluvia" 
                     value="3" 
-                    subtitle="Que impidieron tareas" 
+                    sub="Que impidieron tareas" 
                     icon="🌧️" 
-                    trend={{ value: 2, label: "vs mes ant.", positive: false }} 
+                    trend={2} 
                 />
                 <StatCard 
-                    title="Promedio Personal" 
+                    label="Promedio Personal" 
                     value="15" 
-                    subtitle="Operarios por día" 
+                    sub="Operarios por día" 
                     icon="👷" 
-                    trend={{ value: 12, label: "vs mes ant.", positive: true }} 
+                    trend={12} 
                 />
                 <StatCard 
-                    title="Cumplimiento" 
+                    label="Cumplimiento" 
                     value="98%" 
-                    subtitle="Asientos vs Días hábiles" 
+                    sub="Asientos vs Días hábiles" 
                     icon="✅" 
-                    trend={{ value: 2, label: "vs mes ant.", positive: true }} 
+                    trend={2} 
                 />
             </div>
 
@@ -515,11 +515,12 @@ export default function LibroObraPage() {
                 <PageHeader 
                     title="Libro de Obra Digital" 
                     breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Libro de Obra' }]} 
-                >
-                    <Button variant="primary" onClick={() => setActiveTab('nuevo')}>
-                        ✍️ Nuevo Asiento
-                    </Button>
-                </PageHeader>
+                    actions={
+                        <Button variant="primary" onClick={() => setActiveTab('nuevo')}>
+                            ✍️ Nuevo Asiento
+                        </Button>
+                    }
+                />
 
                 <div style={{ marginBottom: '32px' }}>
                     <Tabs 

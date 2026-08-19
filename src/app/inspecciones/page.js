@@ -222,7 +222,7 @@ export default function InspeccionesPage() {
                                         <div style={{ fontSize: '48px', fontWeight: 700, color: tokens.colors.accent.primary }}>
                                             {calculateScore()}%
                                         </div>
-                                        <ProgressBar progress={calculateScore()} color={tokens.colors.accent.primary} height={8} />
+                                        <ProgressBar value={calculateScore()} color={tokens.colors.accent.primary} height={8} />
                                     </GlassCard>
                                 </div>
 
@@ -302,10 +302,10 @@ export default function InspeccionesPage() {
                     {activeTab === 'compliance' && (
                         <motion.div key="tab-compliance" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '24px', marginBottom: '32px' }}>
-                                <StatCard title="Total Inspecciones" value="128" trend="+12% este mes" variant="default" icon="📋" />
-                                <StatCard title="Tasa de Aprobación" value="84%" trend="Estable" variant="success" icon="✅" />
-                                <StatCard title="Inspecciones Atrasadas" value="3" trend="Requiere atención" variant="danger" icon="⚠️" />
-                                <StatCard title="Score Promedio" value="88/100" trend="+2 pts vs mes anterior" variant="warning" icon="📈" />
+                                <StatCard label="Total Inspecciones" value="128" sub="+12% este mes" icon="📋" />
+                                <StatCard label="Tasa de Aprobación" value="84%" sub="Estable" icon="✅" color={tokens.colors.accent.success} />
+                                <StatCard label="Inspecciones Atrasadas" value="3" sub="Requiere atención" icon="⚠️" color={tokens.colors.accent.danger} />
+                                <StatCard label="Score Promedio" value="88/100" sub="+2 pts vs anterior" icon="📈" color={tokens.colors.accent.warning} />
                             </div>
 
                             <GlassCard style={{ padding: '32px' }}>

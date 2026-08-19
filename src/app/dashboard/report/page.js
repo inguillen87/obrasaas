@@ -3,7 +3,13 @@ import { getAppState } from '@/lib/db';
 export const dynamic = 'force-dynamic';
 
 export default async function ReportPage() {
-    const state = await getAppState();
+    let state;
+    try {
+        state = await getAppState();
+    } catch (e) {
+        state = {};
+    }
+    if (!state || typeof state !== 'object') state = {};
 
     // Parse timeline dates safely
     const cleanDias = String(state.diasEstimados || "12/35").replace(/Día\s*|Da\s*|D.a\s*/gi, "");
@@ -36,133 +42,135 @@ export default async function ReportPage() {
     const projectCity = state.projectConfig?.city || 'CABA';
 
     return (
-        <html lang="es">
-            <head>
-                <title>Reporte_Semanal_{projectName.replace(/\s+/g, '_')}.pdf</title>
-                <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@600;700;800&display=swap" />
-                <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
-                <style>{`
-                    body {
-                        font-family: 'Inter', sans-serif;
-                        color: #1e293b;
-                        background: #fff;
-                        padding: 30px;
-                        margin: 0;
-                        line-height: 1.4;
+        <>
+            <style>{`
+                .report-page {
+                    font-family: 'Inter', sans-serif;
+                    color: #1e293b;
+                    background: #fff;
+                    padding: 30px;
+                    margin: 0;
+                    line-height: 1.4;
+                    min-height: 100vh;
+                }
+                .report-header {
+                    display: flex;
+                    justify-content: space-between;
+                    border-bottom: 2px solid #e2e8f0;
+                    padding-bottom: 20px;
+                    margin-bottom: 24px;
+                }
+                .logo-section h2 {
+                    font-family: 'Outfit', sans-serif;
+                    font-weight: 800;
+                    font-size: 1.4rem;
+                    color: #ff9f1c;
+                    margin: 0 0 4px 0;
+                }
+                .logo-section span {
+                    font-size: 0.75rem;
+                    color: #64748b;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                }
+                .meta-section {
+                    text-align: right;
+                    font-size: 0.8rem;
+                    color: #475569;
+                }
+                .section-title {
+                    font-size: 1rem;
+                    font-weight: 700;
+                    color: #0f172a;
+                    margin: 24px 0 12px;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }
+                .section-title i {
+                    color: #ff9f1c;
+                    font-size: 0.9rem;
+                }
+                .kpi-grid {
+                    display: grid;
+                    grid-template-columns: repeat(4, 1fr);
+                    gap: 12px;
+                    margin-bottom: 20px;
+                }
+                .kpi-card {
+                    background: #f8fafc;
+                    border: 1px solid #e2e8f0;
+                    border-radius: 8px;
+                    padding: 14px;
+                    text-align: center;
+                }
+                .kpi-value {
+                    font-size: 1.4rem;
+                    font-weight: 800;
+                    color: #0f172a;
+                    margin-bottom: 2px;
+                }
+                .kpi-label {
+                    font-size: 0.7rem;
+                    color: #64748b;
+                    text-transform: uppercase;
+                    letter-spacing: 0.3px;
+                }
+                table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    font-size: 0.75rem;
+                    margin-bottom: 20px;
+                }
+                th {
+                    background: #f1f5f9;
+                    color: #334155;
+                    padding: 8px 10px;
+                    text-align: left;
+                    font-weight: 700;
+                    border-bottom: 2px solid #cbd5e1;
+                }
+                td {
+                    padding: 8px 10px;
+                    border-bottom: 1px solid #e2e8f0;
+                }
+                .progress-bar-container {
+                    width: 100px;
+                    height: 8px;
+                    background: #e2e8f0;
+                    border-radius: 4px;
+                    overflow: hidden;
+                    display: inline-block;
+                    vertical-align: middle;
+                    margin-right: 8px;
+                }
+                .progress-bar-fill {
+                    height: 100%;
+                    border-radius: 4px;
+                }
+                .badge {
+                    font-size: 0.65rem;
+                    font-weight: 700;
+                    padding: 2px 8px;
+                    border-radius: 12px;
+                    display: inline-block;
+                }
+                @media print {
+                    .report-page {
+                        padding: 0;
                     }
-                    .report-header {
-                        display: flex;
-                        justify-content: space-between;
-                        border-bottom: 2px solid #e2e8f0;
-                        padding-bottom: 20px;
-                        margin-bottom: 24px;
+                    .no-print {
+                        display: none !important;
                     }
-                    .logo-section h2 {
-                        font-family: 'Outfit', sans-serif;
-                        font-weight: 800;
-                        font-size: 1.4rem;
-                        color: #ff9f1c;
-                        margin: 0 0 4px 0;
-                    }
-                    .logo-section span {
-                        font-size: 0.75rem;
-                        color: #64748b;
-                        text-transform: uppercase;
-                        letter-spacing: 0.5px;
-                    }
-                    .meta-section {
-                        text-align: right;
-                        font-size: 0.8rem;
-                        color: #64748b;
-                    }
-                    .meta-section h3 {
-                        font-family: 'Outfit', sans-serif;
-                        font-size: 1.2rem;
-                        color: #0f172a;
-                        margin: 0 0 6px 0;
-                        text-transform: uppercase;
-                    }
-                    .grid-2 {
-                        display: grid;
-                        grid-template-columns: 1fr 1fr;
-                        gap: 20px;
-                        margin-bottom: 24px;
-                    }
-                    .card {
-                        background: #f8fafc;
-                        border: 1px solid #e2e8f0;
-                        border-radius: 8px;
-                        padding: 16px;
-                    }
-                    .card h4 {
-                        font-family: 'Outfit', sans-serif;
-                        margin: 0 0 12px 0;
-                        font-size: 0.95rem;
-                        color: #0f172a;
-                        border-bottom: 1px solid #cbd5e1;
-                        padding-bottom: 6px;
-                        text-transform: uppercase;
-                    }
-                    table {
-                        width: 100%;
-                        border-collapse: collapse;
-                        font-size: 0.75rem;
-                        margin-bottom: 20px;
-                    }
-                    th {
-                        background: #f1f5f9;
-                        color: #334155;
-                        padding: 8px 10px;
-                        text-align: left;
-                        font-weight: 700;
-                        border-bottom: 2px solid #cbd5e1;
-                    }
-                    td {
-                        padding: 8px 10px;
-                        border-bottom: 1px solid #e2e8f0;
-                    }
-                    .progress-bar-container {
-                        width: 100px;
-                        height: 8px;
-                        background: #e2e8f0;
-                        border-radius: 4px;
-                        overflow: hidden;
-                        display: inline-block;
-                        vertical-align: middle;
-                        margin-right: 8px;
-                    }
-                    .progress-bar-fill {
-                        height: 100%;
-                        border-radius: 4px;
-                    }
-                    .badge {
-                        font-size: 0.65rem;
-                        font-weight: 700;
-                        padding: 2px 6px;
-                        border-radius: 4px;
-                    }
-                    .badge-success { background: #d1fae5; color: #065f46; }
-                    .badge-warning { background: #fef3c7; color: #92400e; }
-                    .badge-danger { background: #fee2e2; color: #991b1b; }
-                    .badge-info { background: #e0f2fe; color: #075985; }
-                    
-                    @media print {
-                        body {
-                            padding: 0;
-                        }
-                        .no-print {
-                            display: none !important;
-                        }
-                    }
-                `}</style>
-            </head>
-            <body>
+                }
+            `}</style>
+            <div className="report-page">
                 {/* Print Control bar for browser visualization */}
                 <div className="no-print" style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '8px', padding: '12px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', fontFamily: 'Inter, sans-serif' }}>
                     <div style={{ fontSize: '0.85rem', color: '#92400e' }}>
                         <i className="fa-solid fa-circle-info" style={{ marginRight: '6px' }}></i> Vista de impresión optimizada para PDF Vectorial.
                     </div>
-                    <button onClick={() => window.print()} style={{ background: '#ff9f1c', border: 'none', color: '#000', fontWeight: 700, padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem' }}>
+                    <button id="print-btn" style={{ background: '#ff9f1c', border: 'none', color: '#000', fontWeight: 700, padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem' }}>
                         <i className="fa-solid fa-print"></i> Abrir Impresora / Guardar PDF
                     </button>
                 </div>
@@ -355,13 +363,14 @@ export default async function ReportPage() {
                 {/* Autostart print on load for printing automation */}
                 <script dangerouslySetInnerHTML={{ __html: `
                     window.addEventListener('DOMContentLoaded', () => {
-                        // Si está abierto como diálogo de impresión directo
+                        var btn = document.getElementById('print-btn');
+                        if (btn) btn.addEventListener('click', () => window.print());
                         if (window.location.search.includes('print=true')) {
                             setTimeout(() => { window.print(); }, 500);
                         }
                     });
                 `}} />
-            </body>
-        </html>
+            </div>
+        </>
     );
 }
