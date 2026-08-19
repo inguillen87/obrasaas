@@ -112,6 +112,17 @@ export default function SignInPage() {
           initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.1 }}
           style={{ width: '100%', maxWidth: '400px' }}
         >
+          {/* Mobile-only logo */}
+          {isMobile && (
+            <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+              <Link href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', textDecoration: 'none' }}>
+                <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: 'linear-gradient(135deg, #f59e0b, #d97706)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: '0.9rem', color: '#050810' }}>OS</div>
+                <span style={{ fontSize: '1.3rem', fontWeight: 800, letterSpacing: '-0.03em', color: '#f1f5f9', fontFamily: tokens.font.heading }}>
+                  Obra<span style={{ color: '#f59e0b' }}>SaaS</span>
+                </span>
+              </Link>
+            </div>
+          )}
           {/* Quick access demo card */}
           <div style={{
             padding: '24px', borderRadius: '16px', marginBottom: '20px',

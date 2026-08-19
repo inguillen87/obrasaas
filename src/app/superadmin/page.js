@@ -150,11 +150,11 @@ export default function SuperAdminDashboard() {
             />
 
             {/* Navigation Tabs */}
-            <div style={{ maxWidth: '1440px', margin: '0 auto', padding: '24px 28px 0' }}>
+            <div style={{ maxWidth: '1440px', margin: '0 auto', padding: '20px clamp(14px, 4vw, 28px) 0' }}>
                 <Tabs tabs={tabs} activeTab={activeView} onChange={setActiveView} color="#f59e0b" />
             </div>
 
-            <main style={{ maxWidth: '1440px', margin: '0 auto', padding: '24px 28px 80px' }}>
+            <main style={{ maxWidth: '1440px', margin: '0 auto', padding: '20px clamp(14px, 4vw, 28px) 80px' }}>
                 
                 {loading ? (
                     <div style={{ textAlign: 'center', padding: '80px', color: '#94a3b8' }}>
@@ -176,23 +176,23 @@ export default function SuperAdminDashboard() {
                         </div>
 
                         {/* Summary Split */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', gap: '20px' }}>
                             
                             {/* Incidents Breakdown */}
                             <GlassCard style={{ padding: '24px' }}>
                                 <h3 style={{ fontSize: '1rem', fontWeight: 800, margin: '0 0 16px', color: '#f8fafc' }}>
                                     🚨 Estado Global de Incidencias
                                 </h3>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
-                                    <div style={{ background: 'rgba(239, 68, 68, 0.1)', padding: '16px', borderRadius: '10px', border: '1px solid rgba(239, 68, 68, 0.3)', textAlign: 'center' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(80px, 1fr))', gap: '12px' }}>
+                                    <div style={{ background: 'rgba(239, 68, 68, 0.1)', padding: '16px 8px', borderRadius: '10px', border: '1px solid rgba(239, 68, 68, 0.3)', textAlign: 'center' }}>
                                         <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#ef4444' }}>{stats?.incidents?.critical || 0}</div>
                                         <div style={{ fontSize: '0.74rem', color: '#fca5a5', fontWeight: 600 }}>Críticas</div>
                                     </div>
-                                    <div style={{ background: 'rgba(245, 158, 11, 0.1)', padding: '16px', borderRadius: '10px', border: '1px solid rgba(245, 158, 11, 0.3)', textAlign: 'center' }}>
+                                    <div style={{ background: 'rgba(245, 158, 11, 0.1)', padding: '16px 8px', borderRadius: '10px', border: '1px solid rgba(245, 158, 11, 0.3)', textAlign: 'center' }}>
                                         <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#f59e0b' }}>{stats?.incidents?.warning || 0}</div>
                                         <div style={{ fontSize: '0.74rem', color: '#fcd34d', fontWeight: 600 }}>Alertas</div>
                                     </div>
-                                    <div style={{ background: 'rgba(59, 130, 246, 0.1)', padding: '16px', borderRadius: '10px', border: '1px solid rgba(59, 130, 246, 0.3)', textAlign: 'center' }}>
+                                    <div style={{ background: 'rgba(59, 130, 246, 0.1)', padding: '16px 8px', borderRadius: '10px', border: '1px solid rgba(59, 130, 246, 0.3)', textAlign: 'center' }}>
                                         <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#3b82f6' }}>{stats?.incidents?.info || 0}</div>
                                         <div style={{ fontSize: '0.74rem', color: '#93c5fd', fontWeight: 600 }}>Informativas</div>
                                     </div>
@@ -204,16 +204,16 @@ export default function SuperAdminDashboard() {
                                 <h3 style={{ fontSize: '1rem', fontWeight: 800, margin: '0 0 16px', color: '#f8fafc' }}>
                                     🪪 Estado de Compliance de Operarios
                                 </h3>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
-                                    <div style={{ background: 'rgba(16, 185, 129, 0.1)', padding: '16px', borderRadius: '10px', border: '1px solid rgba(16, 185, 129, 0.3)', textAlign: 'center' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(80px, 1fr))', gap: '12px' }}>
+                                    <div style={{ background: 'rgba(16, 185, 129, 0.1)', padding: '16px 8px', borderRadius: '10px', border: '1px solid rgba(16, 185, 129, 0.3)', textAlign: 'center' }}>
                                         <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#10b981' }}>{stats?.platform?.activeWorkers || 0}</div>
                                         <div style={{ fontSize: '0.74rem', color: '#86efac', fontWeight: 600 }}>Activos KYC</div>
                                     </div>
-                                    <div style={{ background: 'rgba(245, 158, 11, 0.1)', padding: '16px', borderRadius: '10px', border: '1px solid rgba(245, 158, 11, 0.3)', textAlign: 'center' }}>
+                                    <div style={{ background: 'rgba(245, 158, 11, 0.1)', padding: '16px 8px', borderRadius: '10px', border: '1px solid rgba(245, 158, 11, 0.3)', textAlign: 'center' }}>
                                         <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#f59e0b' }}>{stats?.platform?.pendingWorkers || 0}</div>
                                         <div style={{ fontSize: '0.74rem', color: '#fcd34d', fontWeight: 600 }}>Pendientes</div>
                                     </div>
-                                    <div style={{ background: 'rgba(239, 68, 68, 0.1)', padding: '16px', borderRadius: '10px', border: '1px solid rgba(239, 68, 68, 0.3)', textAlign: 'center' }}>
+                                    <div style={{ background: 'rgba(239, 68, 68, 0.1)', padding: '16px 8px', borderRadius: '10px', border: '1px solid rgba(239, 68, 68, 0.3)', textAlign: 'center' }}>
                                         <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#ef4444' }}>{stats?.platform?.blockedWorkers || 0}</div>
                                         <div style={{ fontSize: '0.74rem', color: '#fca5a5', fontWeight: 600 }}>Bloqueados</div>
                                     </div>
@@ -313,41 +313,43 @@ export default function SuperAdminDashboard() {
                                 <Badge color="#8b5cf6" variant="filled" size="sm">Últimas 24hs</Badge>
                             </div>
 
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                {[
-                                    { ts: '21:04:12', ip: '190.210.45.112', user: 'admin@obrasaas.com', action: 'LOGIN_SUCCESS', detail: 'Autenticación API Key exitosa desde panel SuperAdmin', level: 'info' },
-                                    { ts: '20:58:33', ip: '181.47.200.85', user: 'marcelo@constructoradelplata.com', action: 'TENANT_SWITCH', detail: 'Cambió de Constructora del Plata a Desarrolladora Urbana S.A.', level: 'info' },
-                                    { ts: '20:45:07', ip: '190.210.45.112', user: 'admin@obrasaas.com', action: 'TENANT_CREATE', detail: 'Nuevo tenant creado: Innovar Latam Obras S.R.L. (plan: enterprise)', level: 'warning' },
-                                    { ts: '20:31:19', ip: '200.42.128.30', user: 'victoria@estudio-arq.com', action: 'CERT_SIGN', detail: 'Firma digital SHA-256 de Certificado de Avance #CA-2026-0042', level: 'success' },
-                                    { ts: '19:55:41', ip: '181.47.200.85', user: 'marcelo@constructoradelplata.com', action: 'EXPORT_DATA', detail: 'Exportación CSV de gastos ejecutados para Tango Gestión ERP', level: 'info' },
-                                    { ts: '19:12:08', ip: '45.187.64.20', user: 'unknown', action: 'AUTH_FAILED', detail: 'Intento de acceso con API Key inválida (3 intentos consecutivos)', level: 'danger' },
-                                    { ts: '18:40:55', ip: '190.210.45.112', user: 'admin@obrasaas.com', action: 'IMPERSONATE', detail: 'Impersonación activada: admin → marcelo@constructoradelplata.com', level: 'warning' },
-                                    { ts: '17:22:13', ip: '200.42.128.30', user: 'victoria@estudio-arq.com', action: 'LIBRO_OBRA_ENTRY', detail: 'Asiento firmado en Libro de Obra Digital (Ley 22.250) #2026-08-15-003', level: 'success' },
-                                    { ts: '16:05:44', ip: '190.210.45.112', user: 'sistema', action: 'CRON_DAILY', detail: 'Resumen diario WhatsApp enviado a 3 directores de obra activos', level: 'info' },
-                                    { ts: '14:38:29', ip: '181.47.200.85', user: 'juan.gomez@obra.com', action: 'KYC_COMPLETE', detail: 'Validación biométrica completada: DNI 32.456.789 + Selfie facial', level: 'success' }
-                                ].map((log, i) => {
-                                    const levelColors = { info: '#3b82f6', success: '#10b981', warning: '#f59e0b', danger: '#ef4444' };
-                                    const levelLabels = { info: 'INFO', success: 'OK', warning: 'WARN', danger: 'ALERTA' };
-                                    return (
-                                        <div key={i} style={{
-                                            display: 'grid',
-                                            gridTemplateColumns: '70px 80px 1fr 200px 120px',
-                                            gap: '12px',
-                                            alignItems: 'center',
-                                            padding: '10px 14px',
-                                            background: log.level === 'danger' ? 'rgba(239, 68, 68, 0.06)' : 'rgba(15, 23, 42, 0.5)',
-                                            borderRadius: '8px',
-                                            border: `1px solid ${log.level === 'danger' ? 'rgba(239, 68, 68, 0.3)' : 'rgba(255, 255, 255, 0.04)'}`,
-                                            fontSize: '0.78rem'
-                                        }}>
-                                            <span style={{ color: '#64748b', fontFamily: tokens.font.mono, fontSize: '0.72rem' }}>{log.ts}</span>
-                                            <Badge color={levelColors[log.level]} variant="filled" size="xs">{levelLabels[log.level]}</Badge>
-                                            <span style={{ color: '#cbd5e1', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{log.detail}</span>
-                                            <span style={{ color: '#94a3b8', fontFamily: tokens.font.mono, fontSize: '0.7rem' }}>{log.user}</span>
-                                            <span style={{ color: '#475569', fontFamily: tokens.font.mono, fontSize: '0.68rem', textAlign: 'right' }}>{log.ip}</span>
-                                        </div>
-                                    );
-                                })}
+                            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', maxWidth: '100%' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '580px' }}>
+                                    {[
+                                        { ts: '21:04:12', ip: '190.210.45.112', user: 'admin@obrasaas.com', action: 'LOGIN_SUCCESS', detail: 'Autenticación API Key exitosa desde panel SuperAdmin', level: 'info' },
+                                        { ts: '20:58:33', ip: '181.47.200.85', user: 'marcelo@constructoradelplata.com', action: 'TENANT_SWITCH', detail: 'Cambió de Constructora del Plata a Desarrolladora Urbana S.A.', level: 'info' },
+                                        { ts: '20:45:07', ip: '190.210.45.112', user: 'admin@obrasaas.com', action: 'TENANT_CREATE', detail: 'Nuevo tenant creado: Innovar Latam Obras S.R.L. (plan: enterprise)', level: 'warning' },
+                                        { ts: '20:31:19', ip: '200.42.128.30', user: 'victoria@estudio-arq.com', action: 'CERT_SIGN', detail: 'Firma digital SHA-256 de Certificado de Avance #CA-2026-0042', level: 'success' },
+                                        { ts: '19:55:41', ip: '181.47.200.85', user: 'marcelo@constructoradelplata.com', action: 'EXPORT_DATA', detail: 'Exportación CSV de gastos ejecutados para Tango Gestión ERP', level: 'info' },
+                                        { ts: '19:12:08', ip: '45.187.64.20', user: 'unknown', action: 'AUTH_FAILED', detail: 'Intento de acceso con API Key inválida (3 intentos consecutivos)', level: 'danger' },
+                                        { ts: '18:40:55', ip: '190.210.45.112', user: 'admin@obrasaas.com', action: 'IMPERSONATE', detail: 'Impersonación activada: admin → marcelo@constructoradelplata.com', level: 'warning' },
+                                        { ts: '17:22:13', ip: '200.42.128.30', user: 'victoria@estudio-arq.com', action: 'LIBRO_OBRA_ENTRY', detail: 'Asiento firmado en Libro de Obra Digital (Ley 22.250) #2026-08-15-003', level: 'success' },
+                                        { ts: '16:05:44', ip: '190.210.45.112', user: 'sistema', action: 'CRON_DAILY', detail: 'Resumen diario WhatsApp enviado a 3 directores de obra activos', level: 'info' },
+                                        { ts: '14:38:29', ip: '181.47.200.85', user: 'juan.gomez@obra.com', action: 'KYC_COMPLETE', detail: 'Validación biométrica completada: DNI 32.456.789 + Selfie facial', level: 'success' }
+                                    ].map((log, i) => {
+                                        const levelColors = { info: '#3b82f6', success: '#10b981', warning: '#f59e0b', danger: '#ef4444' };
+                                        const levelLabels = { info: 'INFO', success: 'OK', warning: 'WARN', danger: 'ALERTA' };
+                                        return (
+                                            <div key={i} style={{
+                                                display: 'grid',
+                                                gridTemplateColumns: '70px 80px 1fr 200px 120px',
+                                                gap: '12px',
+                                                alignItems: 'center',
+                                                padding: '10px 14px',
+                                                background: log.level === 'danger' ? 'rgba(239, 68, 68, 0.06)' : 'rgba(15, 23, 42, 0.5)',
+                                                borderRadius: '8px',
+                                                border: `1px solid ${log.level === 'danger' ? 'rgba(239, 68, 68, 0.3)' : 'rgba(255, 255, 255, 0.04)'}`,
+                                                fontSize: '0.78rem'
+                                            }}>
+                                                <span style={{ color: '#64748b', fontFamily: tokens.font.mono, fontSize: '0.72rem' }}>{log.ts}</span>
+                                                <Badge color={levelColors[log.level]} variant="filled" size="xs">{levelLabels[log.level]}</Badge>
+                                                <span style={{ color: '#cbd5e1', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{log.detail}</span>
+                                                <span style={{ color: '#94a3b8', fontFamily: tokens.font.mono, fontSize: '0.7rem' }}>{log.user}</span>
+                                                <span style={{ color: '#475569', fontFamily: tokens.font.mono, fontSize: '0.68rem', textAlign: 'right' }}>{log.ip}</span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
                             </div>
                         </GlassCard>
 

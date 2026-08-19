@@ -4,8 +4,10 @@ import { useState, useRef } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { tokens, Badge, Button, GlassCard, PageHeader, Modal } from '@/lib/design-system';
+import { useBreakpoint } from '@/lib/useBreakpoint';
 
 export default function PlanosPage() {
+    const { isMobile } = useBreakpoint();
     const [discipline, setDiscipline] = useState('Arquitectura');
     const [zoom, setZoom] = useState(1);
     const [pins, setPins] = useState([
@@ -83,11 +85,10 @@ export default function PlanosPage() {
                 }
             />
 
-            <main style={{ maxWidth: '1440px', margin: '0 auto', padding: '24px 24px 80px' }}>
+            <main style={{ maxWidth: '1440px', margin: '0 auto', padding: '20px clamp(14px, 4vw, 32px) 80px' }}>
                 
-                {/* Top Discipline Bar & Zoom Controls */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
-                    
+                {/* Control Bar */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
                     {/* Discipline Switcher */}
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                         {disciplines.map(d => (
@@ -97,16 +98,16 @@ export default function PlanosPage() {
                                 style={{
                                     padding: '8px 16px',
                                     borderRadius: '10px',
-                                    border: discipline === d.id ? '1px solid #f59e0b' : '1px solid rgba(255, 255, 255, 0.1)',
-                                    background: discipline === d.id ? 'rgba(245, 158, 11, 0.15)' : 'rgba(15, 23, 42, 0.6)',
-                                    color: discipline === d.id ? '#fbbf24' : '#94a3b8',
-                                    fontSize: '0.84rem',
+                                    border: discipline === d.id ? '1px solid #38bdf8' : '1px solid rgba(255, 255, 255, 0.08)',
+                                    background: discipline === d.id ? 'rgba(56, 189, 248, 0.15)' : 'rgba(15, 23, 42, 0.6)',
+                                    color: discipline === d.id ? '#38bdf8' : '#94a3b8',
+                                    fontSize: '0.82rem',
                                     fontWeight: discipline === d.id ? 700 : 500,
                                     cursor: 'pointer',
+                                    transition: 'all 0.2s',
                                     display: 'flex',
                                     alignItems: 'center',
-                                    gap: '6px',
-                                    transition: 'all 0.2s'
+                                    gap: '6px'
                                 }}
                             >
                                 <span>{d.icon}</span>
@@ -117,17 +118,17 @@ export default function PlanosPage() {
 
                     {/* Zoom & View Controls */}
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                        <Button variant="secondary" size="sm" onClick={() => setZoom(prev => Math.max(0.7, prev - 0.15))}>🔍 -</Button>
+                        <Button variant="secondary" size="sm" onClick={() => setZoom(prev => Math.max(0.7, prev - 0.15))}>-</Button>
                         <span style={{ fontSize: '0.82rem', color: '#94a3b8', fontFamily: tokens.font.mono }}>{Math.round(zoom * 100)}%</span>
-                        <Button variant="secondary" size="sm" onClick={() => setZoom(prev => Math.min(2.0, prev + 0.15))}>🔍 +</Button>
+                        <Button variant="secondary" size="sm" onClick={() => setZoom(prev => Math.min(2.0, prev + 0.15))}>+</Button>
                         <Button variant="ghost" size="sm" onClick={() => setZoom(1)}>Reset</Button>
                     </div>
                 </div>
 
                 {/* Main Blueprint Canvas Area */}
-                <div style={{ display: 'grid', gridTemplateColumns: selectedPin ? '1fr 340px' : '1fr', gap: '20px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: (selectedPin && !isMobile) ? '1fr 340px' : '1fr', gap: '20px' }}>
                     
-                    <GlassCard style={{ padding: '20px', overflow: 'auto', minHeight: '620px', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                    <GlassCard style={{ padding: '16px', overflow: 'auto', WebkitOverflowScrolling: 'touch', minHeight: isMobile ? '380px' : '620px', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
                         
                         <div
                             onClick={handleCanvasClick}

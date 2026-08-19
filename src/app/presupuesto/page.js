@@ -429,67 +429,69 @@ export default function Presupuesto() {
 
         {/* Table of Costs */}
         <div className="doc-section-title">Desglose de Costos de Desarrollo (MVP)</div>
-        <table className="budget-table">
-          <thead>
-            <tr>
-              <th>Ítem / Concepto</th>
-              <th>Horas Est.</th>
-              <th>Precio Unitario (ARS)</th>
-              <th>Subtotal (ARS)</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>
-                <strong>Diseño UX/UI, Prototipado &amp; Arquitectura de Obra</strong><br />
-                <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Diseño móvil y web adaptado a condiciones en obra. Diagramación de base de datos relacional.</span>
-              </td>
-              <td>30</td>
-              <td>$22.000 ARS</td>
-              <td>$660.000 ARS</td>
-            </tr>
-            <tr>
-              <td>
-                <strong>Backend Postgres Serverless (Neon/Prisma ORM) &amp; Geofencing Satelital</strong><br />
-                <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Creación de tablas, migración Prisma, validación de coordenadas por satélite y geocercas del predio.</span>
-              </td>
-              <td>50</td>
-              <td>$23.100 ARS</td>
-              <td>$1.155.000 ARS</td>
-            </tr>
-            <tr>
-              <td>
-                <strong>Webhooks WhatsApp API, Cloudinary Media Setup &amp; Logs</strong><br />
-                <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Configuración de webhooks en la API oficial de WhatsApp, almacenamiento de imágenes y grabaciones en Cloudinary.</span>
-              </td>
-              <td>40</td>
-              <td>$24.625 ARS</td>
-              <td>$985.000 ARS</td>
-            </tr>
-            <tr>
-              <td>
-                <strong>Módulo de Inferencia de Voz IA &amp; Speech-to-Task (ObraSaaS Engine)</strong><br />
-                <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Procesamiento de lenguaje natural y transcripción inteligente de reportes de obra. Clasificación automatizada de tareas y bloqueos.</span>
-              </td>
-              <td>55</td>
-              <td>$25.000 ARS</td>
-              <td>$1.375.000 ARS</td>
-            </tr>
-            <tr>
-              <td>
-                <strong>Despliegue de Producción (Vercel/Cloudflare) &amp; Soporte SLA (30 días)</strong><br />
-                <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Setup de CDN Cloudflare, pipelines automatizados de despliegue en Vercel, pruebas reales y soporte post-lanzamiento.</span>
-              </td>
-              <td>35</td>
-              <td>$23.428,57 ARS</td>
-              <td>$820.000 ARS</td>
-            </tr>
-            <tr className="budget-total-row">
-              <td colSpan="3" style={{ textAlign: 'right' }}>Total Cotización MVP Listo para Producción (ARS):</td>
-              <td>$4.995.000 ARS</td>
-            </tr>
-          </tbody>
-        </table>
+        <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', maxWidth: '100%', marginBottom: '24px' }}>
+          <table className="budget-table" style={{ minWidth: '540px' }}>
+            <thead>
+              <tr>
+                <th>Ítem / Concepto</th>
+                <th>Horas Est.</th>
+                <th>Precio Unitario (ARS)</th>
+                <th>Subtotal (ARS)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <strong>Diseño UX/UI, Prototipado &amp; Arquitectura de Obra</strong><br />
+                  <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Diseño móvil y web adaptado a condiciones en obra. Diagramación de base de datos relacional.</span>
+                </td>
+                <td>30</td>
+                <td>$22.000 ARS</td>
+                <td>$660.000 ARS</td>
+              </tr>
+              <tr>
+                <td>
+                  <strong>Backend Postgres Serverless (Neon/Prisma ORM) &amp; Geofencing Satelital</strong><br />
+                  <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Creación de tablas, migración Prisma, validación de coordenadas por satélite y geocercas del predio.</span>
+                </td>
+                <td>50</td>
+                <td>$23.100 ARS</td>
+                <td>$1.155.000 ARS</td>
+              </tr>
+              <tr>
+                <td>
+                  <strong>Motor de WhatsApp Webhook &amp; Detección de Incidentes con IA</strong><br />
+                  <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Transcripción Whisper de notas de voz, categorización automática de urgencias y respuestas de IA.</span>
+                </td>
+                <td>40</td>
+                <td>$24.000 ARS</td>
+                <td>$960.000 ARS</td>
+              </tr>
+              <tr>
+                <td>
+                  <strong>Cronograma Gantt Dinámico &amp; Dashboard de Control en Tiempo Real</strong><br />
+                  <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Interacciones reactivas, actualización de tareas por mensajería y cálculo de avances y desvíos.</span>
+                </td>
+                <td>60</td>
+                <td>$23.333,33 ARS</td>
+                <td>$1.400.000 ARS</td>
+              </tr>
+              <tr>
+                <td>
+                  <strong>Despliegue de Producción (Vercel/Cloudflare) &amp; Soporte SLA (30 días)</strong><br />
+                  <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Setup de CDN Cloudflare, pipelines automatizados de despliegue en Vercel, pruebas reales y soporte post-lanzamiento.</span>
+                </td>
+                <td>35</td>
+                <td>$23.428,57 ARS</td>
+                <td>$820.000 ARS</td>
+              </tr>
+              <tr className="budget-total-row">
+                <td colSpan="3" style={{ textAlign: 'right' }}>Total Cotización MVP Listo para Producción (ARS):</td>
+                <td>$4.995.000 ARS</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
 
         {/* Hitos / Deliverables */}
         <div className="doc-section-title">Hitos y Plan de Trabajo (Plazo Acotado: 4 Semanas)</div>

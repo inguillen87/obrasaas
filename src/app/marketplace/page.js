@@ -61,14 +61,14 @@ export default function MarketplacePage() {
                 }
             />
 
-            <main style={{ maxWidth: '1360px', margin: '0 auto', padding: '32px 24px 80px' }}>
+            <main style={{ maxWidth: '1360px', margin: '0 auto', padding: '24px clamp(14px, 4vw, 32px) 80px' }}>
                 
                 {/* Search & Filter Bar */}
                 <div style={{ display: 'flex', gap: '14px', marginBottom: '32px', flexWrap: 'wrap', alignItems: 'center' }}>
-                    <div style={{ flex: 1, minWidth: '280px', position: 'relative' }}>
+                    <div style={{ flex: 1, minWidth: 'min(100%, 260px)', position: 'relative' }}>
                         <input
                             type="text"
-                            placeholder="🔍 Buscar insumos, corralones o materiales..."
+                            placeholder="Buscar insumos, corralones o materiales..."
                             value={search}
                             onChange={e => setSearch(e.target.value)}
                             style={{
@@ -101,7 +101,7 @@ export default function MarketplacePage() {
                                     transition: 'all 0.2s'
                                 }}
                             >
-                                {r === 'todos' ? '📦 Todos los Rubros' : r}
+                                {r === 'todos' ? 'Todos los Rubros' : r}
                             </button>
                         ))}
                     </div>
@@ -115,13 +115,12 @@ export default function MarketplacePage() {
                     </div>
                 ) : filtered.length === 0 ? (
                     <EmptyState
-                        icon="🔍"
                         title="No se encontraron proveedores"
                         description={`No hay resultados que coincidan con "${search || filter}". Intente con otro término o rubro.`}
                         action={<Button variant="secondary" size="sm" onClick={() => { setSearch(''); setFilter('todos'); }}>Restablecer Filtros</Button>}
                     />
                 ) : (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '20px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 280px), 1fr))', gap: '20px' }}>
                         {filtered.map(p => (
                             <GlassCard key={p.id} style={{ padding: '24px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }} hover>
                                 <div>
@@ -216,7 +215,7 @@ export default function MarketplacePage() {
                                 style={{ width: '100%', padding: '10px 14px', background: '#060913', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', color: '#f8fafc' }}
                             />
                         </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px' }}>
                             <div>
                                 <label style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Cantidad Estimada *</label>
                                 <input

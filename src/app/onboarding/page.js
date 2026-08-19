@@ -89,27 +89,27 @@ function OnboardingContent() {
 
     if (completed) {
         return (
-            <div style={{ minHeight: '100vh', background: '#060913', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: tokens.font.sans, padding: '24px' }}>
+            <div style={{ minHeight: '100vh', background: '#060913', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: tokens.font.sans, padding: '16px' }}>
                 <motion.div
                     initial={{ scale: 0.9, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     style={{ maxWidth: '580px', width: '100%' }}
                 >
-                    <GlassCard style={{ padding: '48px 36px', textAlign: 'center', border: '1px solid rgba(245, 158, 11, 0.4)' }} glow>
+                    <GlassCard style={{ padding: '36px clamp(16px, 4vw, 36px)', textAlign: 'center', border: '1px solid rgba(245, 158, 11, 0.4)' }} glow>
                         <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 200 }}
                           style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'linear-gradient(135deg, #f59e0b, #d97706)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: '1.6rem', color: '#050810', fontWeight: 900 }}>✓</motion.div>
-                        <h1 style={{ color: '#f8fafc', fontSize: '2rem', fontWeight: 900, marginBottom: '12px', fontFamily: tokens.font.heading }}>
+                        <h1 style={{ color: '#f8fafc', fontSize: 'clamp(1.5rem, 5vw, 2rem)', fontWeight: 900, marginBottom: '12px', fontFamily: tokens.font.heading }}>
                             Tu espacio está listo
                         </h1>
-                        <p style={{ color: '#94a3b8', fontSize: '1rem', lineHeight: 1.6, marginBottom: '28px' }}>
+                        <p style={{ color: '#94a3b8', fontSize: '0.95rem', lineHeight: 1.6, marginBottom: '28px' }}>
                             Tu espacio de trabajo y primera obra han sido inicializados. Ya podés conectar tu número de WhatsApp para empezar a operar.
                         </p>
 
-                        <div style={{ background: 'rgba(6, 9, 19, 0.7)', borderRadius: '12px', padding: '20px', border: '1px solid rgba(255, 255, 255, 0.08)', marginBottom: '28px', textAlign: 'left' }}>
+                        <div style={{ background: 'rgba(6, 9, 19, 0.7)', borderRadius: '12px', padding: '16px', border: '1px solid rgba(255, 255, 255, 0.08)', marginBottom: '28px', textAlign: 'left' }}>
                             <div style={{ fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>
                                 Tu Entorno de Trabajo Aislado:
                             </div>
-                            <div style={{ color: '#f59e0b', fontSize: '1.15rem', fontWeight: 800, fontFamily: tokens.font.mono }}>
+                            <div style={{ color: '#f59e0b', fontSize: '1.1rem', fontWeight: 800, fontFamily: tokens.font.mono, wordBreak: 'break-all' }}>
                                 {form.companyName.toLowerCase().replace(/\s+/g, '-') || 'empresa'}.obrasaas.app
                             </div>
                             <div style={{ fontSize: '0.75rem', color: '#10b981', marginTop: '6px' }}>
@@ -118,12 +118,12 @@ function OnboardingContent() {
                         </div>
 
                         <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
-                            <Link href="/dashboard" style={{ flex: 1 }}>
+                            <Link href="/dashboard" style={{ flex: '1 1 180px' }}>
                                 <Button variant="primary" size="lg" style={{ width: '100%' }}>
                                     Ir al Dashboard
                                 </Button>
                             </Link>
-                            <Link href="/costos" style={{ flex: 1 }}>
+                            <Link href="/costos" style={{ flex: '1 1 180px' }}>
                                 <Button variant="secondary" size="lg" style={{ width: '100%' }}>
                                     Configurar Costos
                                 </Button>
@@ -139,7 +139,7 @@ function OnboardingContent() {
         <div style={{ minHeight: '100vh', background: '#060913', fontFamily: tokens.font.sans, color: '#f8fafc' }}>
             
             {/* Header */}
-            <header style={{ padding: '20px 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255, 255, 255, 0.08)' }}>
+            <header style={{ padding: '16px clamp(16px, 4vw, 32px)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255, 255, 255, 0.08)' }}>
                 <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none' }}>
                     <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: '#f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, color: '#060913' }}>
                         OS
@@ -151,19 +151,19 @@ function OnboardingContent() {
                 </Link>
             </header>
 
-            <main style={{ maxWidth: '640px', margin: '0 auto', padding: '40px 20px 80px' }}>
+            <main style={{ maxWidth: '640px', margin: '0 auto', padding: '32px clamp(14px, 4vw, 20px) 80px' }}>
                 
                 {/* Step Indicator */}
-                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px', marginBottom: '36px' }}>
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', marginBottom: '32px', flexWrap: 'wrap' }}>
                     {[
                         { num: 1, label: 'Empresa' },
                         { num: 2, label: 'Primera Obra' },
                         { num: 3, label: 'Plan & WhatsApp' }
                     ].map((s, idx) => (
-                        <div key={s.num} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div key={s.num} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <div style={{
-                                width: '34px',
-                                height: '34px',
+                                width: '32px',
+                                height: '32px',
                                 borderRadius: '50%',
                                 display: 'flex',
                                 alignItems: 'center',
@@ -171,74 +171,74 @@ function OnboardingContent() {
                                 background: step >= s.num ? '#f59e0b' : '#1e293b',
                                 color: step >= s.num ? '#060913' : '#94a3b8',
                                 fontWeight: 800,
-                                fontSize: '0.86rem',
-                                transition: 'all 0.3s'
+                                fontSize: '0.84rem',
+                                transition: 'all 0.3s',
+                                flexShrink: 0
                             }}>
                                 {step > s.num ? '✓' : s.num}
                             </div>
-                            <span style={{ color: step >= s.num ? '#f8fafc' : '#64748b', fontSize: '0.82rem', fontWeight: 600 }}>
+                            <span style={{ color: step >= s.num ? '#f8fafc' : '#64748b', fontSize: '0.8rem', fontWeight: 600, whiteSpace: 'nowrap' }}>
                                 {s.label}
                             </span>
                             {idx < 2 && (
-                                <div style={{ width: '32px', height: '2px', background: step > s.num ? '#f59e0b' : 'rgba(255,255,255,0.1)' }} />
+                                <div style={{ width: 'clamp(12px, 3vw, 28px)', height: '2px', background: step > s.num ? '#f59e0b' : 'rgba(255,255,255,0.1)', flexShrink: 0 }} />
                             )}
                         </div>
                     ))}
                 </div>
 
                 {/* Step Container */}
-                <GlassCard style={{ padding: '36px 32px' }}>
+                <GlassCard style={{ padding: '28px clamp(16px, 4vw, 32px)' }}>
                     
                     {/* STEP 1: Company Profile */}
                     {step === 1 && (
                         <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}>
                             <Badge color="#f59e0b" variant="filled" size="sm">PASO 1 DE 3</Badge>
                             <h2 style={{ fontSize: '1.45rem', fontWeight: 800, margin: '10px 0 6px', color: '#f8fafc' }}>
-                                Datos de tu Empresa o Estudio
+                                Creá el Perfil de tu Empresa
                             </h2>
-                            <p style={{ color: '#94a3b8', fontSize: '0.86rem', marginBottom: '24px' }}>
-                                Creá tu espacio de trabajo en 2 minutos. 14 días gratis sin tarjeta.
+                            <p style={{ color: '#94a3b8', fontSize: '0.86rem', marginBottom: '20px' }}>
+                                Configurá los datos de la constructora o desarrolladora para emitir certificados oficiales y activar la IA.
                             </p>
 
-                            <div>
-                                <label style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Razón Social / Nombre Fantasía *</label>
-                                <input
-                                    placeholder="Ej: Constructora Andina S.A."
-                                    value={form.companyName}
-                                    onChange={e => updateForm('companyName', e.target.value)}
-                                    style={inputStyle}
-                                />
-                            </div>
-
-                            <div>
-                                <label style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Nombre del Titular / Director *</label>
-                                <input
-                                    placeholder="Ej: Arq. Marcelo Fernández"
-                                    value={form.ownerName}
-                                    onChange={e => updateForm('ownerName', e.target.value)}
-                                    style={inputStyle}
-                                />
-                            </div>
-
-                            <div>
-                                <label style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Email Corporativo *</label>
-                                <input
-                                    type="email"
-                                    placeholder="marcelo@constructora.com"
-                                    value={form.email}
-                                    onChange={e => updateForm('email', e.target.value)}
-                                    style={inputStyle}
-                                />
-                            </div>
-
-                            <div>
-                                <label style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>WhatsApp Principal de Dirección *</label>
-                                <input
-                                    placeholder="+54 9 261 316-8608"
-                                    value={form.phone}
-                                    onChange={e => updateForm('phone', e.target.value)}
-                                    style={inputStyle}
-                                />
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '20px' }}>
+                                <div>
+                                    <label style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Razón Social / Nombre Comercial *</label>
+                                    <input
+                                        placeholder="Ej: Constructora del Plata S.A."
+                                        value={form.companyName}
+                                        onChange={e => updateForm('companyName', e.target.value)}
+                                        style={inputStyle}
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>CUIT / Identificación Fiscal (Opcional)</label>
+                                    <input
+                                        placeholder="30-71234567-9"
+                                        value={form.cuit}
+                                        onChange={e => updateForm('cuit', e.target.value)}
+                                        style={inputStyle}
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Email Corporativo del Administrador *</label>
+                                    <input
+                                        type="email"
+                                        placeholder="admin@empresa.com"
+                                        value={form.email}
+                                        onChange={e => updateForm('email', e.target.value)}
+                                        style={inputStyle}
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Teléfono Móvil (WhatsApp del Director) *</label>
+                                    <input
+                                        placeholder="+54 9 11 5555-0199"
+                                        value={form.phone}
+                                        onChange={e => updateForm('phone', e.target.value)}
+                                        style={inputStyle}
+                                    />
+                                </div>
                             </div>
 
                             <Button
@@ -264,34 +264,36 @@ function OnboardingContent() {
                                 Seleccioná una plantilla para pre-cargar rubros constructivos y cronograma base.
                             </p>
 
-                            <div>
-                                <label style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Nombre de la Obra *</label>
-                                <input
-                                    placeholder="Ej: Torre Palermo Soho"
-                                    value={form.projectName}
-                                    onChange={e => updateForm('projectName', e.target.value)}
-                                    style={inputStyle}
-                                />
-                            </div>
-
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '20px' }}>
                                 <div>
-                                    <label style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Ciudad *</label>
+                                    <label style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Nombre de la Obra *</label>
                                     <input
-                                        placeholder="CABA, Mendoza, Córdoba..."
-                                        value={form.city}
-                                        onChange={e => updateForm('city', e.target.value)}
+                                        placeholder="Ej: Torre Palermo Soho"
+                                        value={form.projectName}
+                                        onChange={e => updateForm('projectName', e.target.value)}
                                         style={inputStyle}
                                     />
                                 </div>
-                                <div>
-                                    <label style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Dirección / Emplazamiento</label>
-                                    <input
-                                        placeholder="Av. Santa Fe 3400"
-                                        value={form.address}
-                                        onChange={e => updateForm('address', e.target.value)}
-                                        style={inputStyle}
-                                    />
+
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+                                    <div>
+                                        <label style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Ciudad *</label>
+                                        <input
+                                            placeholder="CABA, Mendoza, Córdoba..."
+                                            value={form.city}
+                                            onChange={e => updateForm('city', e.target.value)}
+                                            style={inputStyle}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Dirección / Emplazamiento</label>
+                                        <input
+                                            placeholder="Av. Santa Fe 3400"
+                                            value={form.address}
+                                            onChange={e => updateForm('address', e.target.value)}
+                                            style={inputStyle}
+                                        />
+                                    </div>
                                 </div>
                             </div>
 

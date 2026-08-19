@@ -85,21 +85,21 @@ export default function CostosPage() {
                 </motion.div>
 
                 {/* Curva S Visual & CAC Inflation Simulator */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '28px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', gap: '24px', marginBottom: '28px' }}>
                     <motion.div variants={fadeInUp} initial="hidden" animate="visible">
                         <GlassCard style={{ height: '100%' }}>
                             <h3 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                📉 Análisis Curva S — Financiero vs Físico
+                                Análisis Curva S — Financiero vs Físico
                             </h3>
                             <ProgressBar value={pctGlobal} label="Avance Financiero" showLabel color={tokens.colors.accent.warning} height={10} />
                             <div style={{ height: '12px' }} />
                             <ProgressBar value={avanceFisico} label="Avance Físico" showLabel color={tokens.colors.accent.secondary} height={10} />
                             <div style={{ textAlign: 'center', marginTop: '16px' }}>
-                                <div style={{ fontSize: '2rem', fontWeight: 900, color: Math.abs(curvaDiff) > 5 ? tokens.colors.accent.danger : tokens.colors.accent.success }}>
+                                <div style={{ fontSize: 'clamp(1.5rem, 5vw, 2rem)', fontWeight: 900, color: Math.abs(curvaDiff) > 5 ? tokens.colors.accent.danger : tokens.colors.accent.success }}>
                                     {curvaDiff > 0 ? '+' : ''}{curvaDiff.toFixed(1)}%
                                 </div>
                                 <div style={{ fontSize: '0.75rem', color: tokens.colors.text.muted, marginTop: '2px' }}>
-                                    {curvaDiff > 5 ? '🚨 Desvío significativo — revisar rubros' : curvaDiff > 2 ? '⚠️ Desvío menor — monitorear' : '✅ Obra en línea presupuestaria'}
+                                    {curvaDiff > 5 ? 'Desvío significativo — revisar rubros' : curvaDiff > 2 ? 'Desvío menor — monitorear' : 'Obra en línea presupuestaria'}
                                 </div>
                             </div>
                         </GlassCard>
@@ -107,16 +107,16 @@ export default function CostosPage() {
 
                     <motion.div variants={fadeInUp} initial="hidden" animate="visible">
                         <GlassCard style={{ height: '100%', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
                                 <h3 style={{ fontSize: '0.9rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    🏛️ Simulador CAC & Estrategia de Acopio
+                                    Simulador CAC & Estrategia de Acopio
                                 </h3>
                                 <Badge color="#f59e0b" variant="filled" size="sm">CAC +4.2% / Mes</Badge>
                             </div>
                             <p style={{ fontSize: '0.78rem', color: tokens.colors.text.muted, margin: '0 0 12px', lineHeight: 1.4 }}>
                                 Proyección de ahorro al acopiar hierro (Acindar) y cemento (Loma Negra) por adelantado frente a la inflación de materiales.
                             </p>
-                            <div style={{ background: 'rgba(6, 9, 19, 0.7)', borderRadius: '10px', padding: '12px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', fontSize: '0.8rem' }}>
+                            <div style={{ background: 'rgba(6, 9, 19, 0.7)', borderRadius: '10px', padding: '12px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px', fontSize: '0.8rem' }}>
                                 <div>
                                     <span style={{ color: '#94a3b8', display: 'block', fontSize: '0.7rem' }}>Costo Proyectado a 6 Meses:</span>
                                     <strong style={{ color: '#ef4444', fontSize: '0.95rem' }}>+27.8% s/ Insumos</strong>
@@ -141,7 +141,7 @@ export default function CostosPage() {
                     variants={staggerContainer}
                     initial="hidden"
                     animate="visible"
-                    style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '12px' }}
+                    style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 280px), 1fr))', gap: '12px' }}
                 >
                     {rubros.map((r, i) => {
                         const pct = r.presupuesto > 0 ? (r.ejecutado / r.presupuesto * 100) : 0;

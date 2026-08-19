@@ -351,16 +351,23 @@ export const Button = forwardRef(function Button({ children, variant = 'primary'
 });
 
 // Interactive Tab Switcher with sliding pill highlight
+// Interactive Tab Switcher with sliding pill highlight and responsive scroll
 export function Tabs({ tabs, activeTab, onChange, color = tokens.colors.accent.primary }) {
   return (
-    <div style={{ 
-      display: 'inline-flex', 
+    <div style={{
+      display: 'inline-flex',
+      maxWidth: '100%',
+      overflowX: 'auto',
+      WebkitOverflowScrolling: 'touch',
+      scrollbarWidth: 'none',
+      msOverflowStyle: 'none',
       background: 'rgba(15, 23, 42, 0.6)', 
       border: `1px solid ${tokens.colors.border.subtle}`, 
       borderRadius: tokens.radius.md, 
       padding: '4px',
       gap: '4px',
-      backdropFilter: 'blur(10px)'
+      backdropFilter: 'blur(10px)',
+      whiteSpace: 'nowrap'
     }}>
       {tabs.map((tab) => {
         const isActive = activeTab === tab.id;
@@ -381,7 +388,8 @@ export function Tabs({ tabs, activeTab, onChange, color = tokens.colors.accent.p
               transition: 'color 0.2s',
               display: 'inline-flex',
               alignItems: 'center',
-              gap: '6px'
+              gap: '6px',
+              flexShrink: 0
             }}
           >
             {isActive && (
@@ -429,7 +437,7 @@ export function PageHeader({ title, subtitle, icon, actions, breadcrumbs }) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35 }}
       style={{
-        padding: '24px 32px',
+        padding: '20px clamp(16px, 4vw, 32px)',
         background: `linear-gradient(180deg, rgba(15, 23, 42, 0.9) 0%, rgba(6, 9, 19, 0.6) 100%)`,
         borderBottom: `1px solid ${tokens.colors.border.subtle}`,
         backdropFilter: 'blur(12px)',
@@ -457,13 +465,13 @@ export function PageHeader({ title, subtitle, icon, actions, breadcrumbs }) {
         )}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
           <div>
-            <h1 style={{ fontSize: '1.45rem', fontWeight: 800, margin: 0, color: tokens.colors.text.primary, display: 'flex', alignItems: 'center', gap: '10px', letterSpacing: '-0.03em', fontFamily: tokens.font.heading }}>
+            <h1 style={{ fontSize: 'clamp(1.2rem, 3.5vw, 1.45rem)', fontWeight: 800, margin: 0, color: tokens.colors.text.primary, display: 'flex', alignItems: 'center', gap: '10px', letterSpacing: '-0.03em', fontFamily: tokens.font.heading }}>
               {icon && <span style={{ fontSize: '1.3rem' }}>{icon}</span>}
               {title}
             </h1>
             {subtitle && <p style={{ color: tokens.colors.text.muted, fontSize: '0.82rem', margin: '4px 0 0', fontWeight: 400 }}>{subtitle}</p>}
           </div>
-          {actions && <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>{actions}</div>}
+          {actions && <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>{actions}</div>}
         </div>
       </div>
     </motion.header>
@@ -502,7 +510,7 @@ export function Modal({ isOpen, onClose, title, subtitle, children, maxWidth = '
             style={{
               background: '#0f172a',
               borderRadius: tokens.radius.xl,
-              padding: '28px 32px',
+              padding: '24px clamp(16px, 4vw, 32px)',
               width: '100%',
               maxWidth,
               border: `1px solid ${tokens.colors.border.default}`,
@@ -552,7 +560,7 @@ export function EmptyState({ icon = '📭', title, description, action }) {
       animate={{ opacity: 1, scale: 1 }}
       style={{
         textAlign: 'center',
-        padding: '56px 24px',
+        padding: '36px 16px',
         background: 'rgba(15, 23, 42, 0.4)',
         borderRadius: tokens.radius.lg,
         border: `1px dashed ${tokens.colors.border.default}`

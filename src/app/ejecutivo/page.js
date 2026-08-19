@@ -4,8 +4,10 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { tokens, Badge, Button, GlassCard, StatCard, ProgressBar, PageHeader, staggerContainer, staggerItem } from '@/lib/design-system';
+import { useBreakpoint } from '@/lib/useBreakpoint';
 
 export default function ExecutiveDashboard() {
+    const { isMobile } = useBreakpoint();
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [filterRisk, setFilterRisk] = useState('all');
@@ -68,14 +70,14 @@ export default function ExecutiveDashboard() {
                 }
             />
 
-            <main style={{ maxWidth: '1440px', margin: '0 auto', padding: '32px 28px 80px' }}>
+            <main style={{ maxWidth: '1440px', margin: '0 auto', padding: '24px clamp(14px, 4vw, 32px) 80px' }}>
                 
-                {/* Top Metrics Row */}
+                {/* Grid 1: KPI Executive Summary Cards */}
                 <motion.div
                     variants={staggerContainer}
                     initial="hidden"
                     animate="visible"
-                    style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '16px', marginBottom: '32px' }}
+                    style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px', marginBottom: '32px' }}
                 >
                     <StatCard label="MRR PLATAFORMA" value={`$${stats.platform?.mrr || 29} USD`} sub="Ingreso recurrente" icon="📈" color="#10b981" trend={12} />
                     <StatCard label="CARTERA DE OBRAS" value={projects.length} sub="Proyectos activos" icon="🏗️" color="#f59e0b" />
@@ -87,15 +89,15 @@ export default function ExecutiveDashboard() {
                 </motion.div>
 
                 {/* Grid 2: Projects Health Radar & Strategic Quick Launch */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: '24px', marginBottom: '32px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(12, 1fr)', gap: '24px', marginBottom: '32px' }}>
                     
                     {/* Projects Health Table / Radar */}
-                    <div style={{ gridColumn: 'span 8' }}>
-                        <GlassCard style={{ padding: '28px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                    <div style={{ gridColumn: isMobile ? '1 / -1' : 'span 8' }}>
+                        <GlassCard style={{ padding: '24px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
                                 <div>
                                     <h3 style={{ fontSize: '1.1rem', fontWeight: 800, margin: 0, color: '#f8fafc' }}>
-                                        🗺️ Semáforo de Salud por Emplazamiento
+                                        Semáforo de Salud por Emplazamiento
                                     </h3>
                                     <p style={{ color: '#94a3b8', fontSize: '0.8rem', margin: '4px 0 0' }}>Estado de avance, riesgo y cumplimiento de plazos</p>
                                 </div>
@@ -126,11 +128,12 @@ export default function ExecutiveDashboard() {
                                                 display: 'flex',
                                                 alignItems: 'center',
                                                 justifyContent: 'space-between',
-                                                gap: '16px'
+                                                flexWrap: 'wrap',
+                                                gap: '14px'
                                             }}
                                         >
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                                                <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: riskColor, boxShadow: `0 0 10px ${riskColor}` }} />
+                                                <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: riskColor, boxShadow: `0 0 10px ${riskColor}`, flexShrink: 0 }} />
                                                 <div>
                                                     <div style={{ fontWeight: 700, fontSize: '0.92rem', color: '#f8fafc' }}>
                                                         {p.name} {isActive && <span style={{ fontSize: '0.7rem', color: '#f59e0b', fontWeight: 800 }}>[PRINCIPAL]</span>}
@@ -141,8 +144,8 @@ export default function ExecutiveDashboard() {
                                                 </div>
                                             </div>
 
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
-                                                <div style={{ textAlign: 'right' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                                                <div style={{ textAlign: isMobile ? 'left' : 'right' }}>
                                                     <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Avance Físico</div>
                                                     <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#f59e0b', fontFamily: tokens.font.mono }}>
                                                         {isActive ? `${avance}%` : '42%'}
@@ -160,8 +163,8 @@ export default function ExecutiveDashboard() {
                     </div>
 
                     {/* Strategic Shortcuts & Financial Health */}
-                    <div style={{ gridColumn: 'span 4' }}>
-                        <GlassCard style={{ padding: '28px', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                    <div style={{ gridColumn: isMobile ? '1 / -1' : 'span 4' }}>
+                        <GlassCard style={{ padding: '24px', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                             <div>
                                 <h3 style={{ fontSize: '1.1rem', fontWeight: 800, margin: '0 0 16px', color: '#f8fafc' }}>
                                     Accesos estratégicos

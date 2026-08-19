@@ -61,10 +61,10 @@ export default function CompliancePage() {
                 }
             />
 
-            <main style={{ maxWidth: '1360px', margin: '0 auto', padding: '32px 24px 80px' }}>
+            <main style={{ maxWidth: '1360px', margin: '0 auto', padding: '20px clamp(14px, 4vw, 28px) 80px' }}>
                 
                 {/* KPI Metrics */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '16px', marginBottom: '32px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px', marginBottom: '32px' }}>
                     <StatCard
                         label="COMPLIANCE RATE"
                         value={`${artSummary.complianceRate || 92}%`}
@@ -148,7 +148,7 @@ export default function CompliancePage() {
                                         </Badge>
                                     </div>
 
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '0.8rem', background: 'rgba(6, 9, 19, 0.6)', padding: '12px', borderRadius: '10px' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '8px', fontSize: '0.8rem', background: 'rgba(6, 9, 19, 0.6)', padding: '12px', borderRadius: '10px' }}>
                                         <div><span style={{ color: '#64748b' }}>Jornal Diario:</span> <strong style={{ color: '#f8fafc', display: 'block' }}>{formatARS(w.jornalDiario || 18500)}</strong></div>
                                         <div><span style={{ color: '#64748b' }}>Presentismo (20%):</span> <strong style={{ color: '#f8fafc', display: 'block' }}>{formatARS(w.presentismo || 3700)}</strong></div>
                                         <div><span style={{ color: '#64748b' }}>Total Quincenal:</span> <strong style={{ color: '#10b981', display: 'block' }}>{formatARS(w.quincenal || 222000)}</strong></div>
