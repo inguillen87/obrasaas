@@ -3,268 +3,175 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { motion } from 'framer-motion';
 import { tokens } from '@/lib/design-system';
 
 export default function SignUpPage() {
   const router = useRouter();
-  const [companyName, setCompanyName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [password, setPassword] = useState('');
+  const [formData, setFormData] = useState({ name: '', company: '', email: '', password: '' });
   const [loading, setLoading] = useState(false);
+
+  const handleDemoLogin = (role = 'director') => {
+    setLoading(true);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('obrasaas_user_role', role);
+      localStorage.setItem('obrasaas_demo_mode', 'true');
+      localStorage.setItem('obrasaas_logged_in', 'true');
+    }
+    setTimeout(() => router.push('/dashboard'), 300);
+  };
 
   const handleFormSubmit = (e) => {
     e.preventDefault();
     setLoading(true);
     if (typeof window !== 'undefined') {
-      localStorage.setItem('obrasaas_company_name', companyName);
-      localStorage.setItem('obrasaas_demo_mode', 'true');
       localStorage.setItem('obrasaas_logged_in', 'true');
+      localStorage.setItem('obrasaas_user_name', formData.name);
+      localStorage.setItem('obrasaas_company', formData.company);
     }
-    setTimeout(() => {
-      router.push('/dashboard');
-    }, 400);
+    setTimeout(() => router.push('/onboarding'), 400);
+  };
+
+  const update = (key, val) => setFormData({ ...formData, [key]: val });
+
+  const inputStyle = {
+    width: '100%', padding: '13px 16px',
+    background: 'rgba(5, 8, 16, 0.8)', border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: '12px', color: '#f1f5f9', fontSize: '0.9rem',
+    outline: 'none', transition: 'border-color 0.2s',
+    fontFamily: tokens.font.sans
   };
 
   return (
     <div style={{
-      minHeight: '100vh',
-      background: '#060913',
-      color: '#f8fafc',
-      fontFamily: tokens.font.sans,
-      display: 'flex',
-      flexDirection: 'column',
-      justifyContent: 'center',
-      alignItems: 'center',
-      padding: '24px',
-      position: 'relative',
-      overflow: 'hidden'
+      minHeight: '100vh', background: '#050810', color: '#f1f5f9',
+      fontFamily: tokens.font.sans, display: 'flex', position: 'relative', overflow: 'hidden'
     }}>
-      {/* Background Ambient Glows */}
-      <div style={{ position: 'fixed', top: '-15%', left: '10%', width: '500px', height: '500px', background: 'radial-gradient(circle, rgba(245, 158, 11, 0.12) 0%, transparent 70%)', filter: 'blur(80px)', pointerEvents: 'none', zIndex: 0 }} />
-      <div style={{ position: 'fixed', bottom: '-15%', right: '10%', width: '600px', height: '600px', background: 'radial-gradient(circle, rgba(59, 130, 246, 0.08) 0%, transparent 70%)', filter: 'blur(100px)', pointerEvents: 'none', zIndex: 0 }} />
-
-      {/* Top Logo */}
-      <div style={{ marginBottom: '32px', zIndex: 10, textAlign: 'center' }}>
-        <Link href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: '12px', textDecoration: 'none' }}>
-          <div style={{
-            width: '42px',
-            height: '42px',
-            borderRadius: '12px',
-            background: 'linear-gradient(135deg, #f59e0b, #d97706)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontWeight: 900,
-            fontSize: '1.2rem',
-            color: '#060913',
-            boxShadow: '0 0 20px rgba(245, 158, 11, 0.35)'
-          }}>
-            OS
-          </div>
-          <div style={{ textAlign: 'left' }}>
-            <span style={{ fontSize: '1.4rem', fontWeight: 800, letterSpacing: '-0.03em', color: '#f8fafc', fontFamily: tokens.font.heading, display: 'block', lineHeight: 1.1 }}>
-              Obra<span style={{ color: '#f59e0b' }}>SaaS</span>
-            </span>
-            <span style={{ fontSize: '0.68rem', display: 'block', color: '#64748b', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-              Enterprise Platform
-            </span>
-          </div>
-        </Link>
+      {/* Ambient glow */}
+      <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0 }}>
+        <div style={{ position: 'absolute', top: '-15%', left: '20%', width: '500px', height: '500px', background: 'radial-gradient(circle, rgba(245, 158, 11, 0.08) 0%, transparent 70%)', filter: 'blur(80px)' }} />
+        <div style={{ position: 'absolute', bottom: '-15%', right: '15%', width: '600px', height: '600px', background: 'radial-gradient(circle, rgba(34, 197, 94, 0.05) 0%, transparent 70%)', filter: 'blur(100px)' }} />
       </div>
 
-      <div style={{ width: '100%', maxWidth: '440px', position: 'relative', zIndex: 10 }}>
-        {/* Fast Demo Banner */}
-        <div style={{
-          background: 'rgba(255, 255, 255, 0.03)',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
-          borderRadius: '14px',
-          padding: '12px 16px',
-          marginBottom: '20px',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          backdropFilter: 'blur(12px)'
-        }}>
-          <span style={{ fontSize: '0.78rem', color: '#cbd5e1' }}>
-            ¿Querés ver la demo interactiva primero?
+      {/* Left panel — branding */}
+      <div style={{
+        flex: '1 1 50%', display: 'flex', flexDirection: 'column', justifyContent: 'center',
+        padding: '64px 56px', position: 'relative', zIndex: 1,
+        borderRight: '1px solid rgba(255,255,255,0.04)'
+      }}>
+        <Link href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', textDecoration: 'none', marginBottom: '48px' }}>
+          <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: 'linear-gradient(135deg, #f59e0b, #d97706)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: '0.9rem', color: '#050810' }}>OS</div>
+          <span style={{ fontSize: '1.2rem', fontWeight: 800, letterSpacing: '-0.03em', fontFamily: tokens.font.heading }}>
+            Obra<span style={{ color: '#f59e0b' }}>SaaS</span>
           </span>
-          <Link href="/dashboard" style={{ textDecoration: 'none' }}>
-            <button style={{
-              padding: '6px 12px',
-              background: '#f59e0b',
-              color: '#060913',
-              fontWeight: 800,
-              fontSize: '0.75rem',
-              borderRadius: '8px',
-              border: 'none',
-              cursor: 'pointer'
-            }}>
-              Abrir Demo 🚀
-            </button>
-          </Link>
-        </div>
+        </Link>
 
-        {/* SignUp Card */}
-        <div style={{
-          background: 'rgba(15, 23, 42, 0.8)',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
-          borderRadius: '16px',
-          padding: '28px',
-          backdropFilter: 'blur(16px)',
-          boxShadow: '0 20px 50px rgba(0, 0, 0, 0.6)'
-        }}>
-          <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-            <h1 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#fff', margin: '0 0 6px', fontFamily: tokens.font.heading }}>
-              Comenzá tu Prueba Gratis
-            </h1>
-            <p style={{ fontSize: '0.8rem', color: '#94a3b8', margin: 0 }}>
-              14 días de acceso completo • Sin tarjeta de crédito
-            </p>
-          </div>
+        <motion.h1
+          initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
+          style={{ fontSize: '2.4rem', fontWeight: 900, letterSpacing: '-0.04em', lineHeight: 1.1, margin: '0 0 16px', fontFamily: tokens.font.heading, maxWidth: '400px' }}
+        >
+          Digitalizá tu constructora{' '}
+          <span style={{ color: '#f59e0b' }}>en minutos</span>
+        </motion.h1>
+
+        <motion.p
+          initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.08 }}
+          style={{ fontSize: '1.05rem', color: '#64748b', lineHeight: 1.6, maxWidth: '380px', margin: 0 }}
+        >
+          14 días gratis. Sin tarjeta de crédito. Cancelá cuando quieras.
+        </motion.p>
+
+        <motion.div
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5, delay: 0.16 }}
+          style={{ marginTop: '48px', display: 'flex', flexDirection: 'column', gap: '16px' }}
+        >
+          {[
+            { num: '01', title: 'Creá tu espacio de trabajo', desc: 'Configuración guiada en 3 minutos' },
+            { num: '02', title: 'Sumá a tu equipo', desc: 'Invitá directores, capataces y proveedores' },
+            { num: '03', title: 'Empezá a operar', desc: 'Tu equipo envía audios por WhatsApp y la plataforma hace el resto' }
+          ].map((step, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
+              <div style={{
+                width: '32px', height: '32px', borderRadius: '10px', flexShrink: 0,
+                background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.2)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '0.72rem', fontWeight: 900, color: '#f59e0b', fontFamily: tokens.font.mono
+              }}>{step.num}</div>
+              <div>
+                <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#e2e8f0' }}>{step.title}</div>
+                <div style={{ fontSize: '0.78rem', color: '#64748b' }}>{step.desc}</div>
+              </div>
+            </div>
+          ))}
+        </motion.div>
+      </div>
+
+      {/* Right panel — registration form */}
+      <div style={{
+        flex: '1 1 50%', display: 'flex', flexDirection: 'column', justifyContent: 'center',
+        alignItems: 'center', padding: '64px 48px', position: 'relative', zIndex: 1
+      }}>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.1 }}
+          style={{ width: '100%', maxWidth: '400px' }}
+        >
+          <h2 style={{ fontSize: '1.4rem', fontWeight: 900, margin: '0 0 6px', fontFamily: tokens.font.heading }}>Crear cuenta</h2>
+          <p style={{ color: '#64748b', fontSize: '0.86rem', margin: '0 0 28px' }}>Completá tus datos para comenzar tu prueba gratuita</p>
 
           <form onSubmit={handleFormSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                Empresa Constructora / Estudio
-              </label>
-              <input
-                type="text"
-                required
-                value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
-                placeholder="Constructora del Plata S.A."
-                style={{
-                  width: '100%',
-                  padding: '11px 14px',
-                  background: 'rgba(6, 9, 19, 0.8)',
-                  border: '1px solid rgba(255, 255, 255, 0.12)',
-                  borderRadius: '10px',
-                  fontSize: '0.88rem',
-                  color: '#fff',
-                  outline: 'none',
-                  boxSizing: 'border-box'
-                }}
-                onFocus={e => e.target.style.borderColor = '#f59e0b'}
-                onBlur={e => e.target.style.borderColor = 'rgba(255, 255, 255, 0.12)'}
-              />
+              <label style={{ fontSize: '0.76rem', color: '#94a3b8', display: 'block', marginBottom: '6px', fontWeight: 600 }}>Nombre completo</label>
+              <input required placeholder="Ej: Marcelo González" value={formData.name} onChange={e => update('name', e.target.value)}
+                style={inputStyle} onFocus={e => e.target.style.borderColor = 'rgba(245, 158, 11, 0.4)'} onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.1)'} />
             </div>
-
             <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                Correo Corporativo
-              </label>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="direccion@constructora.com"
-                style={{
-                  width: '100%',
-                  padding: '11px 14px',
-                  background: 'rgba(6, 9, 19, 0.8)',
-                  border: '1px solid rgba(255, 255, 255, 0.12)',
-                  borderRadius: '10px',
-                  fontSize: '0.88rem',
-                  color: '#fff',
-                  outline: 'none',
-                  boxSizing: 'border-box'
-                }}
-                onFocus={e => e.target.style.borderColor = '#f59e0b'}
-                onBlur={e => e.target.style.borderColor = 'rgba(255, 255, 255, 0.12)'}
-              />
+              <label style={{ fontSize: '0.76rem', color: '#94a3b8', display: 'block', marginBottom: '6px', fontWeight: 600 }}>Empresa / Estudio</label>
+              <input required placeholder="Ej: Constructora del Plata S.A." value={formData.company} onChange={e => update('company', e.target.value)}
+                style={inputStyle} onFocus={e => e.target.style.borderColor = 'rgba(245, 158, 11, 0.4)'} onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.1)'} />
             </div>
-
             <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                Celular / WhatsApp
-              </label>
-              <input
-                type="tel"
-                required
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="+54 9 11 5555-6666"
-                style={{
-                  width: '100%',
-                  padding: '11px 14px',
-                  background: 'rgba(6, 9, 19, 0.8)',
-                  border: '1px solid rgba(255, 255, 255, 0.12)',
-                  borderRadius: '10px',
-                  fontSize: '0.88rem',
-                  color: '#fff',
-                  outline: 'none',
-                  boxSizing: 'border-box'
-                }}
-                onFocus={e => e.target.style.borderColor = '#f59e0b'}
-                onBlur={e => e.target.style.borderColor = 'rgba(255, 255, 255, 0.12)'}
-              />
+              <label style={{ fontSize: '0.76rem', color: '#94a3b8', display: 'block', marginBottom: '6px', fontWeight: 600 }}>Email corporativo</label>
+              <input type="email" required placeholder="marcelo@constructora.com" value={formData.email} onChange={e => update('email', e.target.value)}
+                style={inputStyle} onFocus={e => e.target.style.borderColor = 'rgba(245, 158, 11, 0.4)'} onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.1)'} />
             </div>
-
             <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                Contraseña
-              </label>
-              <input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Mínimo 8 caracteres"
-                style={{
-                  width: '100%',
-                  padding: '11px 14px',
-                  background: 'rgba(6, 9, 19, 0.8)',
-                  border: '1px solid rgba(255, 255, 255, 0.12)',
-                  borderRadius: '10px',
-                  fontSize: '0.88rem',
-                  color: '#fff',
-                  outline: 'none',
-                  boxSizing: 'border-box'
-                }}
-                onFocus={e => e.target.style.borderColor = '#f59e0b'}
-                onBlur={e => e.target.style.borderColor = 'rgba(255, 255, 255, 0.12)'}
-              />
+              <label style={{ fontSize: '0.76rem', color: '#94a3b8', display: 'block', marginBottom: '6px', fontWeight: 600 }}>Contraseña</label>
+              <input type="password" required placeholder="Mínimo 8 caracteres" value={formData.password} onChange={e => update('password', e.target.value)}
+                style={inputStyle} onFocus={e => e.target.style.borderColor = 'rgba(245, 158, 11, 0.4)'} onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.1)'} />
             </div>
 
-            <button
-              type="submit"
-              disabled={loading}
+            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="submit" disabled={loading}
               style={{
-                width: '100%',
-                padding: '13px',
-                background: 'linear-gradient(135deg, #f59e0b, #d97706)',
-                color: '#060913',
-                fontWeight: 800,
-                fontSize: '0.9rem',
-                borderRadius: '10px',
-                border: 'none',
-                cursor: 'pointer',
-                marginTop: '6px',
-                boxShadow: '0 4px 16px rgba(245, 158, 11, 0.3)',
-                transition: 'all 0.2s'
-              }}
-              onMouseEnter={e => e.currentTarget.style.opacity = '0.92'}
-              onMouseLeave={e => e.currentTarget.style.opacity = '1'}
-            >
-              {loading ? 'Creando Espacio...' : 'Crear Cuenta Gratis →'}
-            </button>
+                padding: '14px', borderRadius: '12px', background: '#f59e0b', color: '#050810',
+                fontWeight: 800, fontSize: '0.92rem', border: 'none', cursor: 'pointer', marginTop: '6px',
+                boxShadow: '0 4px 16px rgba(245, 158, 11, 0.2)'
+              }}>
+              {loading ? 'Creando cuenta...' : 'Comenzar prueba gratuita'}
+            </motion.button>
           </form>
 
-          <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid rgba(255, 255, 255, 0.08)', textAlign: 'center', fontSize: '0.78rem', color: '#94a3b8' }}>
-            ¿Ya tenés una cuenta?{' '}
-            <Link href="/sign-in" style={{ color: '#f59e0b', fontWeight: 700, textDecoration: 'none' }}>
-              Iniciar Sesión
-            </Link>
+          {/* Divider */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', margin: '24px 0' }}>
+            <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.06)' }} />
+            <span style={{ fontSize: '0.74rem', color: '#475569', fontWeight: 600 }}>o probá la demo</span>
+            <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.06)' }} />
           </div>
-        </div>
 
-        {/* Security badges footer */}
-        <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'center', gap: '20px', fontSize: '0.75rem', color: '#64748b' }}>
-          <span>🔒 Cifrado SHA-256</span>
-          <span>⚖️ Cumplimiento Ley 22.250</span>
-        </div>
+          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+            onClick={() => handleDemoLogin('director')} disabled={loading}
+            style={{
+              width: '100%', padding: '13px', borderRadius: '12px',
+              background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)',
+              color: '#e2e8f0', fontWeight: 700, fontSize: '0.88rem', cursor: 'pointer'
+            }}>
+            Explorar demo sin registro
+          </motion.button>
+
+          <div style={{ textAlign: 'center', marginTop: '20px', fontSize: '0.82rem', color: '#64748b' }}>
+            ¿Ya tenés cuenta?{' '}
+            <Link href="/sign-in" style={{ color: '#f59e0b', fontWeight: 700, textDecoration: 'none' }}>Iniciar sesión</Link>
+          </div>
+        </motion.div>
       </div>
     </div>
   );

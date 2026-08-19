@@ -2,113 +2,105 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { motion, AnimatePresence } from 'framer-motion';
-import { tokens, Badge, Button, GlassCard, StatCard, ProgressBar, Modal } from '@/lib/design-system';
+import { motion, useScroll, useTransform, useInView, useSpring, AnimatePresence } from 'framer-motion';
+import { tokens, Button, GlassCard, Modal } from '@/lib/design-system';
+
+/* ─── Scroll-triggered reveal wrapper ─── */
+function Reveal({ children, delay = 0, direction = 'up', once = true, className, style }) {
+  const ref = useRef(null);
+  const isInView = useInView(ref, { once, margin: '-60px' });
+
+  const dirs = {
+    up: { hidden: { y: 40, opacity: 0 }, visible: { y: 0, opacity: 1 } },
+    down: { hidden: { y: -40, opacity: 0 }, visible: { y: 0, opacity: 1 } },
+    left: { hidden: { x: -50, opacity: 0 }, visible: { x: 0, opacity: 1 } },
+    right: { hidden: { x: 50, opacity: 0 }, visible: { x: 0, opacity: 1 } },
+    scale: { hidden: { scale: 0.9, opacity: 0 }, visible: { scale: 1, opacity: 1 } },
+    none: { hidden: { opacity: 0 }, visible: { opacity: 1 } }
+  };
+
+  return (
+    <motion.div
+      ref={ref}
+      initial="hidden"
+      animate={isInView ? 'visible' : 'hidden'}
+      variants={dirs[direction] || dirs.up}
+      transition={{ duration: 0.65, delay, ease: [0.22, 1, 0.36, 1] }}
+      className={className}
+      style={style}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+/* ─── Magnetic hover effect wrapper ─── */
+function Magnetic({ children, strength = 0.3 }) {
+  const ref = useRef(null);
+  const [pos, setPos] = useState({ x: 0, y: 0 });
+  const springX = useSpring(0, { stiffness: 150, damping: 15 });
+  const springY = useSpring(0, { stiffness: 150, damping: 15 });
+
+  useEffect(() => { springX.set(pos.x); springY.set(pos.y); }, [pos, springX, springY]);
+
+  return (
+    <motion.div
+      ref={ref}
+      style={{ x: springX, y: springY, display: 'inline-block' }}
+      onMouseMove={e => {
+        const rect = ref.current?.getBoundingClientRect();
+        if (!rect) return;
+        setPos({
+          x: (e.clientX - rect.left - rect.width / 2) * strength,
+          y: (e.clientY - rect.top - rect.height / 2) * strength
+        });
+      }}
+      onMouseLeave={() => setPos({ x: 0, y: 0 })}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+/* ─── Animated counter ─── */
+function AnimatedNumber({ value, suffix = '', prefix = '', duration = 1.5 }) {
+  const ref = useRef(null);
+  const isInView = useInView(ref, { once: true });
+  const [display, setDisplay] = useState(0);
+
+  useEffect(() => {
+    if (!isInView) return;
+    let start = 0;
+    const step = value / (duration * 60);
+    const timer = setInterval(() => {
+      start += step;
+      if (start >= value) { setDisplay(value); clearInterval(timer); }
+      else setDisplay(Math.floor(start));
+    }, 1000 / 60);
+    return () => clearInterval(timer);
+  }, [isInView, value, duration]);
+
+  return <span ref={ref}>{prefix}{display.toLocaleString('es-AR')}{suffix}</span>;
+}
 
 export default function Home() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [activeFaq, setActiveFaq] = useState(null);
-  const [billingCycle, setBillingCycle] = useState('annual'); // 'monthly' | 'annual'
-  const [authModal, setAuthModal] = useState({ show: false, mode: 'register' });
-  const [authEmail, setAuthEmail] = useState('');
-  const [authPassword, setAuthPassword] = useState('');
-
-  // Interactive Live Demo Playground State
-  const [activeScenario, setActiveScenario] = useState('gantt'); // 'gantt' | 'kyc' | 'expense' | 'incident'
-  const [demoProgress, setDemoProgress] = useState(78);
-  const [demoStatus, setDemoStatus] = useState('En Ejecución');
-  const [demoLastAction, setDemoLastAction] = useState('Revoque grueso completado al 100% por Juan Gómez');
-  const [demoHash, setDemoHash] = useState('8f4a1c9e2b7d5f0a3e8c1b4d6a9e2f5b');
-
-  // ROI Calculator State
-  const [roiProjects, setRoiProjects] = useState(3);
-  const [roiWorkers, setRoiWorkers] = useState(25);
-  const [roiBudget, setRoiBudget] = useState(120); // Millions ARS
-
-  // Mateo Voice Assistant State
-  const [mateoSpeaking, setMateoSpeaking] = useState(false);
-  const [mateoStatus, setMateoStatus] = useState('En línea • Haz clic para escuchar');
   const [leadModal, setLeadModal] = useState(false);
   const [leadData, setLeadData] = useState({ name: '', company: '', phone: '', email: '' });
   const [leadSubmitted, setLeadSubmitted] = useState(false);
+  const [activeFaq, setActiveFaq] = useState(null);
 
-  useEffect(() => {
-    const logged = localStorage.getItem('obrasaas_logged_in') === 'true';
-    setIsLoggedIn(logged);
-  }, []);
+  const { scrollYProgress } = useScroll();
+  const headerOpacity = useTransform(scrollYProgress, [0, 0.05], [0, 1]);
+  const headerBlur = useTransform(scrollYProgress, [0, 0.03], [0, 16]);
 
-  const handleScenarioChange = (scenario) => {
-    setActiveScenario(scenario);
-    if (scenario === 'gantt') {
-      setDemoProgress(100);
-      setDemoStatus('Hito Certificado');
-      setDemoLastAction('Juan Gómez certificó 100% Revoque Grueso con firma digital SHA-256');
-      setDemoHash('e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855');
-    } else if (scenario === 'kyc') {
-      setDemoProgress(85);
-      setDemoStatus('KYC Validado');
-      setDemoLastAction('Luis Martínez validó DNI + Facial. ART La Segunda Vigente (Póliza #88392)');
-      setDemoHash('4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945');
-    } else if (scenario === 'expense') {
-      setDemoProgress(88);
-      setDemoStatus('Remito AFIP Aprobado');
-      setDemoLastAction('Factura A Ferretería Central por $18.500 ARS validada con CAE Electrónico');
-      setDemoHash('7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b');
-    } else if (scenario === 'incident') {
-      setDemoProgress(75);
-      setDemoStatus('Incidencia Asignada');
-      setDemoLastAction('Rotura de caño detectada por foto. Tarea de emergencia asignada al Oficial Plomero');
-      setDemoHash('9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8e');
-    }
-  };
+  /* ─── ROI Calculator ─── */
+  const [roiProjects, setRoiProjects] = useState(3);
+  const [roiWorkers, setRoiWorkers] = useState(25);
 
-  const calculateSavings = () => {
-    const adminHoursSaved = roiProjects * 18; // 18 hrs/month per project
-    const adminMoneySaved = adminHoursSaved * 12500; // $12,500 ARS/hr
-    const materialWastePrevented = (roiBudget * 1000000) * 0.04; // 4% waste reduction
-    const totalMonthlyARS = adminMoneySaved + (materialWastePrevented / 12);
-    const deliveryDaysSaved = roiProjects * 12; // 12 days per project per year
-
-    return {
-      adminHoursSaved,
-      adminMoneySaved,
-      materialWastePrevented,
-      totalMonthlyARS,
-      deliveryDaysSaved
-    };
-  };
-
-  const savings = calculateSavings();
-
-  const handleMateoAudio = () => {
-    if (mateoSpeaking) return;
-    setMateoSpeaking(true);
-    setMateoStatus('Mateo explicando ObraSaaS...');
-
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const text = "Hola. Soy Mateo, copiloto de inteligencia artificial de ObraSaaS. Nuestra plataforma permite que tus directores, arquitectos y albañiles gestionen toda la obra únicamente usando notas de voz y fotos por WhatsApp. Automatizamos el control de presentismo por GPS, el Libro de Obra Digital según Ley 22.250 y la validación fiscal AFIP en tiempo real. Hacé clic en Comenzar Prueba para ver la demo en vivo.";
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'es-AR';
-      utterance.rate = 0.95;
-
-      utterance.onend = () => {
-        setMateoSpeaking(false);
-        setMateoStatus('En línea • Haz clic para escuchar');
-      };
-      utterance.onerror = () => {
-        setMateoSpeaking(false);
-        setMateoStatus('En línea • Haz clic para escuchar');
-      };
-
-      window.speechSynthesis.speak(utterance);
-    } else {
-      setTimeout(() => {
-        setMateoSpeaking(false);
-        setMateoStatus('En línea • Haz clic para escuchar');
-      }, 4000);
-    }
+  const savings = {
+    hoursMonth: roiProjects * 18,
+    moneyMonth: roiProjects * 18 * 12500,
+    deliveryDays: roiProjects * 12
   };
 
   const handleLeadSubmit = async (e) => {
@@ -117,1111 +109,460 @@ export default function Home() {
       const res = await fetch('/api/state');
       const state = await res.json();
       if (!state.crmLeads) state.crmLeads = [];
-      state.crmLeads.unshift({
-        name: leadData.name,
-        company: leadData.company,
-        phone: leadData.phone,
-        email: leadData.email,
-        status: 'Nuevo Lead Calificado',
-        createdAt: new Date().toISOString()
-      });
-      await fetch('/api/state', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(state)
-      });
+      state.crmLeads.unshift({ ...leadData, status: 'Nuevo Lead', createdAt: new Date().toISOString() });
+      await fetch('/api/state', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(state) });
       setLeadSubmitted(true);
-      setTimeout(() => {
-        setLeadModal(false);
-        setLeadSubmitted(false);
-        window.location.href = '/onboarding';
-      }, 1500);
-    } catch (err) {
-      window.location.href = '/onboarding';
-    }
+      setTimeout(() => { setLeadModal(false); setLeadSubmitted(false); window.location.href = '/onboarding'; }, 1500);
+    } catch { window.location.href = '/onboarding'; }
   };
 
-  const handleAuthSubmit = (e) => {
-    e.preventDefault();
-    localStorage.setItem('obrasaas_logged_in', 'true');
-    setIsLoggedIn(true);
-    setAuthModal({ show: false, mode: 'login' });
-    window.location.href = '/dashboard';
-  };
+  const capabilities = [
+    { title: 'Control de Obra por WhatsApp', desc: 'Notas de voz, fotos de remitos y ubicaciones GPS procesadas por IA. Sin apps que descargar.', accent: '#22c55e' },
+    { title: 'Libro de Obra Digital', desc: 'Cumplimiento nativo de Ley 22.250 con firma criptográfica SHA-256 inmutable.', accent: '#f59e0b' },
+    { title: 'KYC Biométrico en Campo', desc: 'Validación de DNI + reconocimiento facial + cruce automático con pólizas ART vigentes.', accent: '#3b82f6' },
+    { title: 'Geocerca GPS Anti-Fraude', desc: 'Presentismo satelital con radio configurable por predio. Sin posibilidad de adulteración.', accent: '#8b5cf6' },
+    { title: 'Certificaciones & Curva S', desc: 'Avance físico vs. financiero en tiempo real con exportación a Tango, Bejerman y SAP.', accent: '#06b6d4' },
+    { title: 'IA Predictiva CIRSOC 201', desc: 'Predicción de retrasos por clima, faltantes de acopio y riesgos de seguridad con 72hs de anticipación.', accent: '#f97316' }
+  ];
 
   const faqs = [
-    {
-      q: '¿Por qué ObraSaaS funciona por WhatsApp y no como una app tradicional?',
-      a: 'Porque en la construcción en Argentina y LATAM, el 95% de los operarios de obra se niegan a descargar nuevas aplicaciones o no tienen espacio en sus teléfonos. WhatsApp ya está instalado en el 100% de los dispositivos, funciona sin curva de aprendizaje y permite enviar notas de voz, fotos de remitos y ubicaciones GPS de forma natural.'
-    },
-    {
-      q: '¿Cómo valida la plataforma las leyes laborales UOCRA y la cobertura de ART?',
-      a: 'A través de nuestro módulo KYC con IA: el operario envía foto de su DNI y una selfie por WhatsApp. La IA valida identidad con RENAPER/AFIP y cruza el CUIT con la base de pólizas activas de ART. Si la póliza está vencida (Res. SRT 319/99), el acceso al predio se bloquea automáticamente y se notifica al Director Técnico.'
-    },
-    {
-      q: '¿Qué es el Libro de Obra Digital con firma SHA-256?',
-      a: 'Es la digitalización legal del libro diario de obra exigido por la Ley 22.250. Cada hito, orden de servicio, clima y nómina presente genera un bloque criptográfico SHA-256 inmutable que tiene validez ante peritajes, aseguradoras y comitentes.'
-    },
-    {
-      q: '¿Qué pasa si en el predio de la obra no hay buena señal de internet?',
-      a: 'ObraSaaS cuenta con soporte PWA Offline y sincronización en cola. Los partes diarios y fotos se guardan en el dispositivo del supervisor y se suben automáticamente al reconectar señal.'
-    },
-    {
-      q: '¿Se puede integrar con nuestros sistemas contables actuales (Tango, Bejerman, Xubio)?',
-      a: 'Sí. Nuestra API REST v1 y sistema de Webhooks en tiempo real permiten sincronizar remitos aprobados, asientos de caja chica y avances certificados con cualquier ERP o sistema administrativo.'
-    }
+    { q: '¿Por qué funciona por WhatsApp y no como una app?', a: 'En la construcción en Argentina, el 95% de los operarios no descargan apps nuevas. WhatsApp ya está instalado en todos los dispositivos y permite enviar fotos, audios y ubicaciones sin curva de aprendizaje.' },
+    { q: '¿Cómo se valida el cumplimiento de ART y UOCRA?', a: 'El operario envía foto de DNI + selfie por WhatsApp. La IA valida identidad y cruza el CUIT con pólizas ART activas. Si la cobertura está vencida, el acceso se bloquea automáticamente.' },
+    { q: '¿Qué es la firma digital SHA-256?', a: 'Cada hito y asiento genera un bloque criptográfico inmutable con validez ante peritajes, aseguradoras y comitentes. Funciona como un notario digital incorruptible.' },
+    { q: '¿Se integra con sistemas contables existentes?', a: 'Sí. La API REST v1 permite sincronizar datos con Tango Gestión, Bejerman, Xubio y SAP. También exporta CSV con codificación UTF-8 BOM compatible con Excel.' },
+    { q: '¿Funciona sin internet en la obra?', a: 'Sí. ObraSaaS es una PWA con soporte offline. Los partes y fotos se guardan en el dispositivo y se sincronizan automáticamente al recuperar señal.' }
   ];
 
   return (
-    <div style={{ minHeight: '100vh', background: '#060913', color: '#f8fafc', fontFamily: tokens.font.sans, overflowX: 'hidden', position: 'relative' }}>
-      
-      {/* 🌌 Atmospheric Ambient Background Glows */}
-      <div style={{ position: 'fixed', top: '-10%', left: '15%', width: '600px', height: '600px', background: 'radial-gradient(circle, rgba(245, 158, 11, 0.12) 0%, transparent 70%)', filter: 'blur(80px)', pointerEvents: 'none', zIndex: 0 }} />
-      <div style={{ position: 'fixed', top: '40%', right: '-5%', width: '700px', height: '700px', background: 'radial-gradient(circle, rgba(59, 130, 246, 0.08) 0%, transparent 70%)', filter: 'blur(100px)', pointerEvents: 'none', zIndex: 0 }} />
-      <div style={{ position: 'fixed', bottom: '-10%', left: '30%', width: '800px', height: '600px', background: 'radial-gradient(circle, rgba(16, 185, 129, 0.06) 0%, transparent 70%)', filter: 'blur(90px)', pointerEvents: 'none', zIndex: 0 }} />
+    <div style={{ minHeight: '100vh', background: '#050810', color: '#f1f5f9', fontFamily: tokens.font.sans, overflowX: 'hidden' }}>
 
-      {/* 🧭 Sticky Glassmorphic Navbar */}
-      <header style={{
-        position: 'sticky',
-        top: 0,
-        zIndex: 100,
-        background: 'rgba(6, 9, 19, 0.75)',
-        backdropFilter: 'blur(16px)',
-        WebkitBackdropFilter: 'blur(16px)',
-        borderBottom: '1px solid rgba(255, 255, 255, 0.08)'
+      {/* ═══ AMBIENT GLOW LAYER ═══ */}
+      <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0 }}>
+        <div style={{ position: 'absolute', top: '-15%', left: '10%', width: '50vw', height: '50vw', maxWidth: '800px', maxHeight: '800px', background: 'radial-gradient(circle, rgba(245, 158, 11, 0.07) 0%, transparent 70%)', filter: 'blur(80px)' }} />
+        <div style={{ position: 'absolute', top: '35%', right: '-8%', width: '45vw', height: '45vw', maxWidth: '700px', maxHeight: '700px', background: 'radial-gradient(circle, rgba(59, 130, 246, 0.05) 0%, transparent 70%)', filter: 'blur(100px)' }} />
+      </div>
+
+      {/* ═══ NAVBAR ═══ */}
+      <motion.header style={{
+        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100,
+        borderBottom: '1px solid rgba(255,255,255,0.06)',
+        background: 'rgba(5, 8, 16, 0.8)',
+        backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)'
       }}>
-        <div style={{ maxWidth: '1360px', margin: '0 auto', padding: '14px 28px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          
-          {/* Logo */}
+        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 32px', height: '64px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none' }}>
-            <div style={{
-              width: '36px',
-              height: '36px',
-              borderRadius: '10px',
-              background: 'linear-gradient(135deg, #f59e0b, #d97706)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontWeight: 900,
-              fontSize: '1.05rem',
-              color: '#060913',
-              boxShadow: '0 0 16px rgba(245, 158, 11, 0.35)'
-            }}>
-              OS
-            </div>
-            <div>
-              <span style={{ fontSize: '1.2rem', fontWeight: 800, letterSpacing: '-0.03em', color: '#f8fafc', fontFamily: tokens.font.heading }}>
-                Obra<span style={{ color: '#f59e0b' }}>SaaS</span>
-              </span>
-              <span style={{ fontSize: '0.62rem', display: 'block', color: '#64748b', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: '-2px' }}>
-                Enterprise Platform
-              </span>
-            </div>
+            <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'linear-gradient(135deg, #f59e0b, #d97706)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: '0.85rem', color: '#050810' }}>OS</div>
+            <span style={{ fontSize: '1.15rem', fontWeight: 800, letterSpacing: '-0.03em', color: '#f1f5f9', fontFamily: tokens.font.heading }}>
+              Obra<span style={{ color: '#f59e0b' }}>SaaS</span>
+            </span>
           </Link>
 
-          {/* Desktop Nav Items */}
-          <nav style={{ display: 'none', alignItems: 'center', gap: '28px', fontSize: '0.86rem', fontWeight: 500, color: '#94a3b8' }} className="desktop-menu">
-            <a href="#features" style={{ color: 'inherit', textDecoration: 'none', transition: 'color 0.2s' }} onMouseEnter={e => e.target.style.color = '#fff'} onMouseLeave={e => e.target.style.color = '#94a3b8'}>Soluciones</a>
-            <a href="#simulador" style={{ color: 'inherit', textDecoration: 'none', transition: 'color 0.2s' }} onMouseEnter={e => e.target.style.color = '#fff'} onMouseLeave={e => e.target.style.color = '#94a3b8'}>Simulador</a>
-            <a href="#calculadora" style={{ color: 'inherit', textDecoration: 'none', transition: 'color 0.2s' }} onMouseEnter={e => e.target.style.color = '#fff'} onMouseLeave={e => e.target.style.color = '#94a3b8'}>Calculadora ROI</a>
-            <Link href="/pricing" style={{ color: 'inherit', textDecoration: 'none', transition: 'color 0.2s' }} onMouseEnter={e => e.target.style.color = '#fff'} onMouseLeave={e => e.target.style.color = '#94a3b8'}>Precios</Link>
-            <Link href="/portal" style={{ color: 'inherit', textDecoration: 'none', transition: 'color 0.2s' }} onMouseEnter={e => e.target.style.color = '#fff'} onMouseLeave={e => e.target.style.color = '#94a3b8'}>Portal Inversor</Link>
-            <Link href="/marketplace" style={{ color: 'inherit', textDecoration: 'none', transition: 'color 0.2s' }} onMouseEnter={e => e.target.style.color = '#fff'} onMouseLeave={e => e.target.style.color = '#94a3b8'}>Proveedores</Link>
-            <Link href="/api-docs" style={{ color: 'inherit', textDecoration: 'none', transition: 'color 0.2s' }} onMouseEnter={e => e.target.style.color = '#fff'} onMouseLeave={e => e.target.style.color = '#94a3b8'}>API</Link>
+          <nav style={{ display: 'flex', alignItems: 'center', gap: '32px', fontSize: '0.84rem', color: '#94a3b8' }}>
+            {['Soluciones', 'Plataforma', 'Precios'].map((item, i) => (
+              <a key={i} href={item === 'Precios' ? '/pricing' : `#${item.toLowerCase()}`} style={{ color: 'inherit', textDecoration: 'none', fontWeight: 500, transition: 'color 0.2s' }}
+                onMouseEnter={e => e.target.style.color = '#f1f5f9'} onMouseLeave={e => e.target.style.color = '#94a3b8'}>
+                {item}
+              </a>
+            ))}
+            <Link href="/api-docs" style={{ color: 'inherit', textDecoration: 'none', fontWeight: 500, transition: 'color 0.2s' }}
+              onMouseEnter={e => e.target.style.color = '#f1f5f9'} onMouseLeave={e => e.target.style.color = '#94a3b8'}>
+              API Docs
+            </Link>
           </nav>
 
-          {/* Nav Actions */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <Link href="/sign-in" style={{ textDecoration: 'none' }}>
-              <button
-                style={{
-                  background: 'transparent',
-                  border: '1px solid rgba(255,255,255,0.15)',
-                  color: '#f8fafc',
-                  padding: '8px 16px',
-                  borderRadius: '10px',
-                  fontSize: '0.82rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  transition: 'all 0.2s'
-                }}
-                onMouseEnter={e => e.target.style.borderColor = '#f59e0b'}
-                onMouseLeave={e => e.target.style.borderColor = 'rgba(255,255,255,0.15)'}
-              >
-                Iniciar Sesión
-              </button>
-            </Link>
+            <Link href="/sign-in" style={{ textDecoration: 'none', color: '#cbd5e1', fontSize: '0.84rem', fontWeight: 600 }}>Acceder</Link>
             <Link href="/dashboard" style={{ textDecoration: 'none' }}>
-              <Button variant="primary" size="sm" icon="🚀">
-                Demo en Vivo
-              </Button>
+              <motion.button
+                whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}
+                style={{ padding: '9px 20px', borderRadius: '10px', background: '#f59e0b', color: '#050810', fontWeight: 800, fontSize: '0.84rem', border: 'none', cursor: 'pointer' }}
+              >
+                Demo en vivo
+              </motion.button>
             </Link>
           </div>
         </div>
-      </header>
+      </motion.header>
 
-      {/* 🚀 HERO SECTION */}
-      <section style={{ maxWidth: '1360px', margin: '0 auto', padding: '64px 28px 48px', position: 'relative', zIndex: 10 }}>
-        
-        {/* Top Feature Pill */}
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '24px' }}>
-          <motion.div
-            initial={{ opacity: 0, y: -12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-          >
-            <div style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '6px 16px',
-              borderRadius: '9999px',
-              background: 'rgba(255, 255, 255, 0.04)',
-              border: '1px solid rgba(255, 255, 255, 0.12)',
-              backdropFilter: 'blur(12px)',
-              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
-              fontSize: '0.8rem',
-              fontWeight: 600,
-              color: '#e2e8f0'
-            }}>
-              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 8px #22c55e' }} />
-              <span>Plataforma Enterprise de Control de Obra & Certificaciones Digitales</span>
-            </div>
-          </motion.div>
-        </div>
+      {/* ═══ HERO ═══ */}
+      <section style={{ maxWidth: '1100px', margin: '0 auto', padding: '140px 32px 80px', textAlign: 'center', position: 'relative', zIndex: 1 }}>
+        <Reveal delay={0}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '5px 14px', borderRadius: '9999px', border: '1px solid rgba(245, 158, 11, 0.25)', background: 'rgba(245, 158, 11, 0.06)', fontSize: '0.78rem', fontWeight: 600, color: '#fbbf24', marginBottom: '28px' }}>
+            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 6px #22c55e' }} />
+            Plataforma activa — 5 obras en producción
+          </div>
+        </Reveal>
 
-        {/* Hero Main Headline */}
-        <div style={{ textAlign: 'center', maxWidth: '960px', margin: '0 auto 24px' }}>
-          <motion.h1
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.1 }}
-            style={{
-              fontSize: 'clamp(2.4rem, 5.5vw, 4.2rem)',
-              fontWeight: 900,
-              letterSpacing: '-0.04em',
-              lineHeight: 1.08,
-              margin: 0,
-              fontFamily: tokens.font.heading
-            }}
-          >
-            El Sistema Operativo para la{' '}
-            <span style={{
-              background: 'linear-gradient(135deg, #f59e0b 0%, #fbbf24 50%, #f97316 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              display: 'inline-block'
-            }}>
-              Construcción Moderna
-            </span>{' '}
-            en LATAM
-          </motion.h1>
+        <Reveal delay={0.08}>
+          <h1 style={{ fontSize: 'clamp(2.6rem, 6vw, 4.4rem)', fontWeight: 900, letterSpacing: '-0.045em', lineHeight: 1.05, margin: '0 0 24px', fontFamily: tokens.font.heading }}>
+            El sistema operativo{' '}
+            <br />
+            <span style={{ background: 'linear-gradient(135deg, #f59e0b 0%, #fbbf24 40%, #f97316 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+              para la construcción
+            </span>
+          </h1>
+        </Reveal>
 
-          <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.2 }}
-            style={{
-              fontSize: 'clamp(1rem, 2vw, 1.25rem)',
-              color: '#94a3b8',
-              lineHeight: 1.6,
-              margin: '20px auto 32px',
-              maxWidth: '780px',
-              fontWeight: 400
-            }}
-          >
-            Conectá las <strong>notas de voz y fotos de tus albañiles en WhatsApp</strong> con tu cronograma Gantt,
-            control de costos y certificaciones digitales con firma SHA-256. 100% nativo para <strong>UOCRA, ART y AFIP</strong>.
-          </motion.p>
+        <Reveal delay={0.16}>
+          <p style={{ fontSize: 'clamp(1.05rem, 2vw, 1.28rem)', color: '#8896ab', lineHeight: 1.65, maxWidth: '680px', margin: '0 auto 40px', fontWeight: 400 }}>
+            Conectá las notas de voz y fotos de tu equipo en WhatsApp con tu cronograma Gantt,
+            control de costos y certificaciones digitales con firma SHA-256.
+          </p>
+        </Reveal>
 
-          {/* Primary CTA Buttons */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.3 }}
-            style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}
-          >
-            <Link href="/dashboard" style={{ textDecoration: 'none' }}>
-              <Button variant="primary" size="lg" icon="🚀">
-                Probar Demo en Vivo (Sin Registro)
-              </Button>
-            </Link>
-            <Link href="/sign-up" style={{ textDecoration: 'none' }}>
-              <button
+        <Reveal delay={0.24}>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '14px', flexWrap: 'wrap' }}>
+            <Magnetic>
+              <Link href="/dashboard" style={{ textDecoration: 'none' }}>
+                <motion.button whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }} style={{
+                  padding: '15px 32px', borderRadius: '14px', background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                  color: '#050810', fontWeight: 800, fontSize: '1rem', border: 'none', cursor: 'pointer',
+                  boxShadow: '0 6px 24px rgba(245, 158, 11, 0.25), inset 0 1px 0 rgba(255,255,255,0.2)'
+                }}>
+                  Explorar demo en vivo
+                </motion.button>
+              </Link>
+            </Magnetic>
+            <Magnetic>
+              <motion.button whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}
+                onClick={() => setLeadModal(true)}
                 style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  padding: '14px 22px',
-                  borderRadius: '16px',
-                  background: 'rgba(255, 255, 255, 0.05)',
-                  border: '1px solid rgba(255, 255, 255, 0.15)',
-                  color: '#f8fafc',
-                  fontSize: '0.94rem',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  backdropFilter: 'blur(10px)',
-                  transition: 'all 0.2s'
+                  padding: '15px 28px', borderRadius: '14px', background: 'rgba(255,255,255,0.04)',
+                  border: '1px solid rgba(255,255,255,0.12)', color: '#e2e8f0', fontWeight: 700,
+                  fontSize: '1rem', cursor: 'pointer', backdropFilter: 'blur(8px)'
                 }}
-                onMouseEnter={e => e.currentTarget.style.borderColor = '#f59e0b'}
-                onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)'}
               >
-                <span>✨ Crear Cuenta Gratis (14 Días)</span>
-              </button>
-            </Link>
-            <button
-              onClick={handleMateoAudio}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '10px',
-                padding: '14px 20px',
-                borderRadius: '16px',
-                background: 'rgba(30, 41, 59, 0.6)',
-                border: '1px solid rgba(255, 255, 255, 0.12)',
-                color: '#94a3b8',
-                fontSize: '0.9rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-                backdropFilter: 'blur(10px)',
-                transition: 'all 0.2s'
-              }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = '#38bdf8'; e.currentTarget.style.color = '#fff'; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.12)'; e.currentTarget.style.color = '#94a3b8'; }}
-            >
-              <span style={{ fontSize: '1.1rem' }}>{mateoSpeaking ? '🔊' : '🎙️'}</span>
-              <span>{mateoStatus}</span>
-            </button>
-          </motion.div>
+                Solicitar acceso
+              </motion.button>
+            </Magnetic>
+          </div>
+        </Reveal>
 
-          {/* Micro Trust Indicators */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.6, delay: 0.4 }}
-            style={{
-              display: 'flex',
-              justifyContent: 'center',
-              gap: '24px',
-              marginTop: '24px',
-              fontSize: '0.78rem',
-              color: '#64748b',
-              flexWrap: 'wrap'
-            }}
-          >
-            <span>✓ Sin tarjeta de crédito requerida</span>
-            <span>✓ Configuración en 3 minutos</span>
-            <span>✓ Compatible con celulares de cualquier gama</span>
-            <span>✓ Cumplimiento Ley 22.250 & SRT</span>
-          </motion.div>
-        </div>
+        <Reveal delay={0.32}>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '28px', marginTop: '32px', fontSize: '0.8rem', color: '#5a6579' }}>
+            <span>Sin tarjeta de crédito</span>
+            <span>·</span>
+            <span>Setup en 3 minutos</span>
+            <span>·</span>
+            <span>Cumple Ley 22.250</span>
+          </div>
+        </Reveal>
+      </section>
 
-        {/* 🎮 LIVE INTERACTIVE PLAYGROUND (HERO PREVIEW) */}
-        <div id="simulador" style={{ marginTop: '48px' }}>
-          <GlassCard style={{ padding: '0', overflow: 'hidden', border: '1px solid rgba(255, 255, 255, 0.12)', boxShadow: '0 20px 60px rgba(0, 0, 0, 0.6)' }}>
-            
-            {/* Header bar of interactive demo */}
-            <div style={{
-              padding: '16px 24px',
-              background: 'rgba(15, 23, 42, 0.9)',
-              borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              flexWrap: 'wrap',
-              gap: '12px'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 10px #22c55e' }} />
-                <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#f8fafc' }}>
-                  Simulador de Integración en Tiempo Real (WhatsApp ↔ Gantt Criptográfico)
-                </span>
+      {/* ═══ METRICS STRIP ═══ */}
+      <section style={{ borderTop: '1px solid rgba(255,255,255,0.05)', borderBottom: '1px solid rgba(255,255,255,0.05)', position: 'relative', zIndex: 1 }}>
+        <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '40px 32px', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '32px', textAlign: 'center' }}>
+          {[
+            { value: 5, suffix: '', label: 'Obras en producción' },
+            { value: 27, suffix: '', label: 'Endpoints API' },
+            { value: 100, suffix: '%', label: 'Compliance normativo' },
+            { value: 4, suffix: '', label: 'Roles RBAC activos' }
+          ].map((m, i) => (
+            <Reveal key={i} delay={i * 0.08}>
+              <div>
+                <div style={{ fontSize: '2.4rem', fontWeight: 900, fontFamily: tokens.font.heading, color: '#f59e0b', letterSpacing: '-0.03em' }}>
+                  <AnimatedNumber value={m.value} suffix={m.suffix} />
+                </div>
+                <div style={{ fontSize: '0.82rem', color: '#64748b', fontWeight: 500, marginTop: '4px' }}>{m.label}</div>
               </div>
+            </Reveal>
+          ))}
+        </div>
+      </section>
+
+      {/* ═══ CAPABILITIES GRID ═══ */}
+      <section id="soluciones" style={{ maxWidth: '1100px', margin: '0 auto', padding: '100px 32px 80px', position: 'relative', zIndex: 1 }}>
+        <Reveal>
+          <div style={{ textAlign: 'center', marginBottom: '56px' }}>
+            <h2 style={{ fontSize: 'clamp(1.8rem, 4vw, 2.8rem)', fontWeight: 900, letterSpacing: '-0.04em', fontFamily: tokens.font.heading, margin: '0 0 12px' }}>
+              Diseñado para la{' '}
+              <span style={{ color: '#f59e0b' }}>realidad del terreno</span>
+            </h2>
+            <p style={{ color: '#64748b', fontSize: '1.05rem', maxWidth: '560px', margin: '0 auto' }}>
+              Cada módulo resuelve un problema concreto de la construcción en Argentina y LATAM.
+            </p>
+          </div>
+        </Reveal>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
+          {capabilities.map((cap, i) => (
+            <Reveal key={i} delay={i * 0.06} direction="scale">
+              <motion.div
+                whileHover={{ y: -6, borderColor: cap.accent + '50' }}
+                transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                style={{
+                  padding: '32px 28px',
+                  borderRadius: '16px',
+                  border: '1px solid rgba(255,255,255,0.06)',
+                  background: 'rgba(13, 17, 30, 0.5)',
+                  backdropFilter: 'blur(8px)',
+                  cursor: 'default',
+                  transition: 'border-color 0.3s'
+                }}
+              >
+                <div style={{ width: '4px', height: '28px', borderRadius: '2px', background: cap.accent, marginBottom: '18px', boxShadow: `0 0 12px ${cap.accent}40` }} />
+                <h3 style={{ fontSize: '1.08rem', fontWeight: 800, margin: '0 0 8px', color: '#f1f5f9', fontFamily: tokens.font.heading }}>{cap.title}</h3>
+                <p style={{ fontSize: '0.88rem', color: '#7a8599', lineHeight: 1.55, margin: 0 }}>{cap.desc}</p>
+              </motion.div>
+            </Reveal>
+          ))}
+        </div>
+      </section>
+
+      {/* ═══ PLATFORM PREVIEW (INTERACTIVE DEMO) ═══ */}
+      <section id="plataforma" style={{ maxWidth: '1100px', margin: '0 auto', padding: '60px 32px 100px', position: 'relative', zIndex: 1 }}>
+        <Reveal>
+          <div style={{ textAlign: 'center', marginBottom: '40px' }}>
+            <h2 style={{ fontSize: 'clamp(1.8rem, 4vw, 2.8rem)', fontWeight: 900, letterSpacing: '-0.04em', fontFamily: tokens.font.heading, margin: '0 0 12px' }}>
+              WhatsApp como interfaz,{' '}
+              <span style={{ color: '#22c55e' }}>inteligencia como motor</span>
+            </h2>
+            <p style={{ color: '#64748b', fontSize: '1.05rem', maxWidth: '580px', margin: '0 auto' }}>
+              Tu equipo envía un audio. La plataforma actualiza el Gantt, certifica el avance y notifica al director.
+            </p>
+          </div>
+        </Reveal>
+
+        <Reveal delay={0.1} direction="scale">
+          <div style={{
+            borderRadius: '20px', border: '1px solid rgba(255,255,255,0.08)',
+            background: 'rgba(10, 14, 26, 0.7)', overflow: 'hidden',
+            boxShadow: '0 24px 64px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04)'
+          }}>
+            {/* Terminal header */}
+            <div style={{ padding: '14px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <div style={{ display: 'flex', gap: '6px' }}>
+                <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#ef4444' }} />
+                <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#f59e0b' }} />
+                <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#22c55e' }} />
+              </div>
+              <span style={{ fontSize: '0.76rem', color: '#475569', fontFamily: tokens.font.mono, marginLeft: '12px' }}>obrasaas.app/dashboard — Integración WhatsApp ↔ Gantt</span>
+            </div>
+
+            {/* Content */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', minHeight: '400px' }}>
+              {/* WhatsApp simulation */}
+              <div style={{ padding: '28px', borderRight: '1px solid rgba(255,255,255,0.05)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px', paddingBottom: '14px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                  <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'linear-gradient(135deg, #22c55e, #16a34a)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '1rem', fontWeight: 800 }}>W</div>
+                  <div>
+                    <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#f1f5f9' }}>ObraSaaS Bot</div>
+                    <div style={{ fontSize: '0.7rem', color: '#22c55e', fontWeight: 600 }}>en línea</div>
+                  </div>
+                </div>
+
+                {/* Outgoing message */}
+                <motion.div initial={{ opacity: 0, x: 20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ delay: 0.3 }}
+                  style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '14px' }}>
+                  <div style={{ background: 'rgba(22, 101, 52, 0.4)', border: '1px solid rgba(34, 197, 94, 0.2)', padding: '12px 16px', borderRadius: '14px 14px 4px 14px', maxWidth: '85%', fontSize: '0.84rem', color: '#d1fae5' }}>
+                    <div style={{ fontSize: '0.72rem', color: '#86efac', marginBottom: '4px', fontWeight: 600 }}>Juan Gómez — Oficial Albañil</div>
+                    [Audio 0:08s] "Marcelo, terminamos de revocar el muro norte. Listo para certificar."
+                    <div style={{ textAlign: 'right', fontSize: '0.64rem', color: '#6ee7b7', marginTop: '6px' }}>08:32 ✓✓</div>
+                  </div>
+                </motion.div>
+
+                {/* Incoming message */}
+                <motion.div initial={{ opacity: 0, x: -20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ delay: 0.6 }}
+                  style={{ display: 'flex', justifyContent: 'flex-start' }}>
+                  <div style={{ background: 'rgba(30, 41, 59, 0.6)', border: '1px solid rgba(255,255,255,0.06)', padding: '12px 16px', borderRadius: '14px 14px 14px 4px', maxWidth: '90%', fontSize: '0.84rem', color: '#cbd5e1' }}>
+                    <div style={{ fontSize: '0.72rem', color: '#f59e0b', marginBottom: '6px', fontWeight: 700 }}>Copiloto ObraSaaS</div>
+                    Revoque Grueso actualizado al 100% en el Gantt. Bloque SHA-256 generado. Director técnico notificado.
+                    <div style={{ marginTop: '8px', padding: '8px 10px', borderRadius: '8px', background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.15)', fontSize: '0.72rem', fontFamily: tokens.font.mono, color: '#fbbf24' }}>
+                      hash: e3b0c442...b7852b855
+                    </div>
+                  </div>
+                </motion.div>
+              </div>
+
+              {/* Dashboard simulation */}
+              <div style={{ padding: '28px' }}>
+                <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '16px' }}>
+                  Actualización en tiempo real
+                </div>
+
                 {[
-                  { id: 'gantt', label: '1️⃣ Certificar Losa', icon: '🏗️' },
-                  { id: 'kyc', label: '2️⃣ Fichar Asistencia', icon: '🪪' },
-                  { id: 'expense', label: '3️⃣ Remito AFIP', icon: '🧾' },
-                  { id: 'incident', label: '4️⃣ Alerta Rotura', icon: '🚨' }
-                ].map(s => (
-                  <button
-                    key={s.id}
-                    onClick={() => handleScenarioChange(s.id)}
-                    style={{
-                      padding: '6px 12px',
-                      borderRadius: '8px',
-                      border: activeScenario === s.id ? '1px solid #f59e0b' : '1px solid rgba(255, 255, 255, 0.08)',
-                      background: activeScenario === s.id ? 'rgba(245, 158, 11, 0.18)' : 'rgba(255, 255, 255, 0.03)',
-                      color: activeScenario === s.id ? '#fbbf24' : '#94a3b8',
-                      fontSize: '0.75rem',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      transition: 'all 0.2s'
-                    }}
-                  >
-                    {s.icon} {s.label}
-                  </button>
+                  { task: 'Revoque Grueso — Muro Norte', progress: 100, status: 'Certificado', color: '#22c55e' },
+                  { task: 'Contrapiso Nivel 3', progress: 75, status: 'En Ejecución', color: '#f59e0b' },
+                  { task: 'Instalación Sanitaria Piso 2', progress: 40, status: 'Programada', color: '#3b82f6' },
+                  { task: 'Losa de Hormigón Nivel 4', progress: 0, status: 'Pendiente', color: '#475569' }
+                ].map((t, i) => (
+                  <motion.div key={i} initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.3 + i * 0.1 }}
+                    style={{ marginBottom: '16px', padding: '14px 16px', borderRadius: '12px', background: 'rgba(15, 23, 42, 0.6)', border: '1px solid rgba(255,255,255,0.04)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                      <span style={{ fontSize: '0.82rem', fontWeight: 600, color: '#e2e8f0' }}>{t.task}</span>
+                      <span style={{ fontSize: '0.72rem', fontWeight: 700, color: t.color, padding: '2px 8px', borderRadius: '6px', background: t.color + '15' }}>{t.status}</span>
+                    </div>
+                    <div style={{ height: '4px', borderRadius: '2px', background: 'rgba(255,255,255,0.06)' }}>
+                      <motion.div initial={{ width: 0 }} whileInView={{ width: `${t.progress}%` }} viewport={{ once: true }} transition={{ duration: 1, delay: 0.5 + i * 0.15, ease: [0.22, 1, 0.36, 1] }}
+                        style={{ height: '100%', borderRadius: '2px', background: t.color }} />
+                    </div>
+                  </motion.div>
                 ))}
               </div>
             </div>
-
-            {/* Split Screen Container */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', background: '#0a0f1d' }}>
-              
-              {/* Left Column: Simulated WhatsApp Terminal */}
-              <div style={{ padding: '24px', borderRight: '1px solid rgba(255, 255, 255, 0.08)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: '380px' }}>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                    <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '0.9rem' }}>
-                      💬
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '0.82rem', fontWeight: 700 }}>ObraSaaS Copiloto IA</div>
-                      <div style={{ fontSize: '0.7rem', color: '#22c55e' }}>● Verificado Meta Cloud API</div>
-                    </div>
-                  </div>
-
-                  {/* Message Bubble (Worker) */}
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '12px' }}>
-                    <div style={{ background: '#1e3a29', color: '#f8fafc', padding: '10px 14px', borderRadius: '12px 12px 2px 12px', maxWidth: '85%', fontSize: '0.82rem', border: '1px solid rgba(34, 197, 94, 0.3)' }}>
-                      {activeScenario === 'gantt' && '🎙️ [Audio 0:08s] "Marcelo, soy Juan Gómez. Terminamos de revocar el muro norte al 100%, listo para certificar."'}
-                      {activeScenario === 'kyc' && '🪪 [Foto DNI + Selfie] "Hola, soy Luis Martínez. Envío mi DNI para registrar el ingreso a Torre Palermo."'}
-                      {activeScenario === 'expense' && '📸 [Foto Ticket] "Gasto de caja chica en Ferretería Central por $18.500 ARS en mechas y tornillos."'}
-                      {activeScenario === 'incident' && '🚨 [Foto Cañería] "Se pinchó la bajada de agua en piso 3. Se inunda el pasillo."' }
-                      <div style={{ textAlign: 'right', fontSize: '0.65rem', color: '#86efac', marginTop: '4px' }}>Hoy 08:32 AM ✓✓</div>
-                    </div>
-                  </div>
-
-                  {/* Message Bubble (AI Bot response) */}
-                  <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '12px' }}>
-                    <div style={{ background: '#1e293b', color: '#f8fafc', padding: '12px 16px', borderRadius: '12px 12px 12px 2px', maxWidth: '90%', fontSize: '0.82rem', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
-                      <div style={{ fontWeight: 700, color: '#f59e0b', marginBottom: '4px' }}>🤖 Copiloto ObraSaaS:</div>
-                      {activeScenario === 'gantt' && '✅ Revoque Grueso actualizado al 100% en el Gantt. Generado bloque SHA-256 #8849. Notificado Director Técnico.'}
-                      {activeScenario === 'kyc' && '✅ Identidad DNI verificada con RENAPER. Cobertura ART La Segunda vigente. Ingreso autorizado al predio.'}
-                      {activeScenario === 'expense' && '✅ Factura A validada con AFIP CAE. Gasto imputado a Caja Chica. Saldo restante actualizado en Dashboard.'}
-                      {activeScenario === 'incident' && '🚨 Incidencia de Emergencia creada. Tarea asignada automáticamente a Cuadrilla de Plomería.'}
-                      <div style={{ fontSize: '0.65rem', color: '#64748b', marginTop: '6px' }}>Sincronizado vía SSE Serverless</div>
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{ fontSize: '0.72rem', color: '#64748b', textAlign: 'center', background: 'rgba(255,255,255,0.02)', padding: '8px', borderRadius: '8px' }}>
-                  💡 Haz clic en los botones de arriba para simular diferentes eventos de obra
-                </div>
-              </div>
-
-              {/* Right Column: Live Telemetry & Gantt Dashboard */}
-              <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                    <div>
-                      <div style={{ fontSize: '0.72rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Obra Activa</div>
-                      <div style={{ fontSize: '1rem', fontWeight: 800, color: '#f8fafc' }}>Torre Palermo Soho (CABA)</div>
-                    </div>
-                    <Badge color={demoStatus.includes('Validado') || demoStatus.includes('Certificado') ? tokens.colors.accent.success : tokens.colors.accent.warning} variant="filled" size="sm">
-                      ● {demoStatus}
-                    </Badge>
-                  </div>
-
-                  {/* Progress Ring / Bar */}
-                  <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.06)', marginBottom: '16px' }}>
-                    <ProgressBar value={demoProgress} max={100} label="Avance Global Físico Certificado" showLabel color="#f59e0b" height={8} />
-                  </div>
-
-                  {/* Action feed */}
-                  <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '14px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.06)', marginBottom: '14px' }}>
-                    <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 700, marginBottom: '6px' }}>ÚLTIMO EVENTO REGISTRADO EN DB:</div>
-                    <div style={{ fontSize: '0.8rem', color: '#cbd5e1', lineHeight: 1.4 }}>{demoLastAction}</div>
-                  </div>
-
-                  {/* Hash verification */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.72rem', color: '#64748b', fontFamily: tokens.font.mono }}>
-                    <span>🔐 Hash SHA-256:</span>
-                    <span style={{ color: '#94a3b8' }}>{demoHash.slice(0, 18)}...</span>
-                    <span style={{ color: '#22c55e' }}>✓ Inmutable</span>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
-                  <Link href="/dashboard" style={{ flex: 1 }}>
-                    <Button variant="secondary" size="sm" style={{ width: '100%' }}>
-                      Ver Dashboard Completo →
-                    </Button>
-                  </Link>
-                  <Link href="/portal" style={{ flex: 1 }}>
-                    <Button variant="ghost" size="sm" style={{ width: '100%', border: '1px solid rgba(255,255,255,0.1)' }}>
-                      Portal Inversor 🏠
-                    </Button>
-                  </Link>
-                </div>
-              </div>
-            </div>
-          </GlassCard>
-        </div>
+          </div>
+        </Reveal>
       </section>
 
-      {/* 📊 PLATFORM METRICS TICKER */}
-      <section style={{ borderTop: '1px solid rgba(255, 255, 255, 0.08)', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', background: 'rgba(15, 23, 42, 0.5)', padding: '36px 28px' }}>
-        <div style={{ maxWidth: '1360px', margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '24px', textAlign: 'center' }}>
-          {[
-            { value: '500+', label: 'Obras Proyectadas en LATAM', icon: '🏗️', color: '#f59e0b' },
-            { value: '100%', label: 'WhatsApp Nativo (0 Descargas)', icon: '📱', color: '#22c55e' },
-            { value: '99.4%', label: 'Precisión OCR Fiscal AFIP', icon: '🧾', color: '#3b82f6' },
-            { value: '0', label: 'Multas SRT por ART Vencida', icon: '🛡️', color: '#10b981' },
-            { value: '18 hrs', label: 'Ahorro Administrativo Semanal', icon: '⚡', color: '#8b5cf6' }
-          ].map((stat, i) => (
-            <div key={i}>
-              <div style={{ fontSize: '2.2rem', fontWeight: 900, color: stat.color, fontFamily: tokens.font.heading, letterSpacing: '-0.03em' }}>
-                {stat.value}
-              </div>
-              <div style={{ fontSize: '0.82rem', color: '#94a3b8', marginTop: '4px', fontWeight: 500 }}>
-                {stat.icon} {stat.label}
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
+      {/* ═══ ROI CALCULATOR ═══ */}
+      <section id="calculadora" style={{ maxWidth: '900px', margin: '0 auto', padding: '60px 32px 100px', position: 'relative', zIndex: 1 }}>
+        <Reveal>
+          <div style={{
+            padding: '48px 40px', borderRadius: '20px',
+            border: '1px solid rgba(245, 158, 11, 0.15)',
+            background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.04) 0%, rgba(10, 14, 26, 0.7) 100%)',
+            backdropFilter: 'blur(12px)'
+          }}>
+            <h3 style={{ fontSize: '1.6rem', fontWeight: 900, margin: '0 0 6px', fontFamily: tokens.font.heading, textAlign: 'center' }}>Calculadora de ROI</h3>
+            <p style={{ color: '#64748b', fontSize: '0.9rem', margin: '0 0 32px', textAlign: 'center' }}>Estimá el ahorro mensual según tu escala operativa</p>
 
-      {/* 🧩 BENTO GRID — ENTERPRISE FEATURES */}
-      <section id="features" style={{ maxWidth: '1360px', margin: '0 auto', padding: '96px 28px' }}>
-        <div style={{ textAlign: 'center', marginBottom: '56px' }}>
-          <Badge color={tokens.colors.accent.primary} variant="filled" size="md">
-            ARQUITECTURA DE VANGUARDIA
-          </Badge>
-          <h2 style={{ fontSize: 'clamp(1.8rem, 3.5vw, 2.8rem)', fontWeight: 900, letterSpacing: '-0.03em', margin: '14px 0 8px', fontFamily: tokens.font.heading }}>
-            Todo lo que tu constructora necesita para escalar
-          </h2>
-          <p style={{ color: '#94a3b8', fontSize: '1rem', maxWidth: '640px', margin: '0 auto' }}>
-            Diseñado específicamente para el ecosistema de la construcción argentino y latinoamericano.
-          </p>
-        </div>
-
-        {/* Bento Grid layout */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: '20px' }}>
-          
-          {/* Card 1: WhatsApp First */}
-          <GlassCard style={{ gridColumn: 'span 8', padding: '32px' }} hover glow>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
-              <div style={{ fontSize: '2rem' }}>📱</div>
-              <Badge color="#22c55e" variant="filled">Meta Cloud API Oficial</Badge>
-            </div>
-            <h3 style={{ fontSize: '1.35rem', fontWeight: 800, margin: '0 0 8px', color: '#f8fafc' }}>
-              WhatsApp como Única Interfaz de Campo
-            </h3>
-            <p style={{ color: '#94a3b8', fontSize: '0.9rem', lineHeight: 1.6, margin: 0 }}>
-              Tus oficiales albañiles, capataces y subcontratistas no necesitan instalar ninguna app ni recordar contraseñas.
-              Envían un audio diciendo <em>"Terminamos el revoque"</em> o una foto del remito, y el motor de IA actualiza
-              automáticamente el Gantt, la caja chica y el presentismo con geocerca satelital.
-            </p>
-          </GlassCard>
-
-          {/* Card 2: KYC & Compliance */}
-          <GlassCard style={{ gridColumn: 'span 4', padding: '32px' }} hover>
-            <div style={{ fontSize: '2rem', marginBottom: '16px' }}>🪪</div>
-            <h3 style={{ fontSize: '1.2rem', fontWeight: 800, margin: '0 0 8px', color: '#f8fafc' }}>
-              KYC Biométrico & ART
-            </h3>
-            <p style={{ color: '#94a3b8', fontSize: '0.85rem', lineHeight: 1.5, margin: 0 }}>
-              Validación facial y DNI con cruce automático de vigencia de póliza ART. Bloqueo instantáneo ante vencimientos (Res. SRT 319/99).
-            </p>
-          </GlassCard>
-
-          {/* Card 3: Curva S & Costos */}
-          <GlassCard style={{ gridColumn: 'span 4', padding: '32px' }} hover>
-            <div style={{ fontSize: '2rem', marginBottom: '16px' }}>📉</div>
-            <h3 style={{ fontSize: '1.2rem', fontWeight: 800, margin: '0 0 8px', color: '#f8fafc' }}>
-              Curva S & Costos por Rubro
-            </h3>
-            <p style={{ color: '#94a3b8', fontSize: '0.85rem', lineHeight: 1.5, margin: 0 }}>
-              Detección predictiva de desvíos presupuestarios. Comparación instantánea entre avance físico certificado y dinero ejecutado.
-            </p>
-          </GlassCard>
-
-          {/* Card 4: Clima CIRSOC */}
-          <GlassCard style={{ gridColumn: 'span 4', padding: '32px' }} hover>
-            <div style={{ fontSize: '2rem', marginBottom: '16px' }}>🛰️</div>
-            <h3 style={{ fontSize: '1.2rem', fontWeight: 800, margin: '0 0 8px', color: '#f8fafc' }}>
-              Telemetría CIRSOC / IRAM 1666
-            </h3>
-            <p style={{ color: '#94a3b8', fontSize: '0.85rem', lineHeight: 1.5, margin: 0 }}>
-              Predicción satelital de ventanas óptimas de 72hs sin lluvia para colado de losas y hormigón elaborado.
-            </p>
-          </GlassCard>
-
-          {/* Card 5: Libro de Obra SHA-256 */}
-          <GlassCard style={{ gridColumn: 'span 4', padding: '32px' }} hover>
-            <div style={{ fontSize: '2rem', marginBottom: '16px' }}>🔐</div>
-            <h3 style={{ fontSize: '1.2rem', fontWeight: 800, margin: '0 0 8px', color: '#f8fafc' }}>
-              Libro de Obra Ley 22.250
-            </h3>
-            <p style={{ color: '#94a3b8', fontSize: '0.85rem', lineHeight: 1.5, margin: 0 }}>
-              Firma digital criptográfica SHA-256 en cada asiento diario. Validez legal ante inspecciones y comitentes.
-            </p>
-          </GlassCard>
-
-          {/* Card 6: Vecino Digital (Investor Portal) */}
-          <GlassCard style={{ gridColumn: 'span 12', padding: '32px' }} hover glow>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '28px', marginBottom: '32px' }}>
               <div>
-                <Badge color="#3b82f6" variant="filled">Diferenciador Exclusivo</Badge>
-                <h3 style={{ fontSize: '1.4rem', fontWeight: 800, margin: '8px 0', color: '#f8fafc' }}>
-                  Vecino Digital: El Portal Público para Inversores Inmobiliarios
-                </h3>
-                <p style={{ color: '#94a3b8', fontSize: '0.92rem', maxWidth: '780px', margin: 0, lineHeight: 1.6 }}>
-                  Brindale a los compradores de pozo e inversores un enlace web público con fotos actualizadas,
-                  porcentaje de avance certificado, timeline de obra y estado de cuotas sin revelar tus costos internos.
-                </p>
+                <label style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'block', marginBottom: '8px', fontWeight: 600 }}>Obras en simultáneo: <strong style={{ color: '#f59e0b' }}>{roiProjects}</strong></label>
+                <input type="range" min="1" max="20" value={roiProjects} onChange={e => setRoiProjects(+e.target.value)}
+                  style={{ width: '100%', accentColor: '#f59e0b' }} />
               </div>
-              <Link href="/portal">
-                <Button variant="secondary" size="md" icon="🏠">
-                  Explorar Portal Inversor →
-                </Button>
-              </Link>
-            </div>
-          </GlassCard>
-        </div>
-      </section>
-
-      {/* 🧮 INTERACTIVE ROI CALCULATOR */}
-      <section id="calculadora" style={{ background: 'rgba(15, 23, 42, 0.4)', borderTop: '1px solid rgba(255, 255, 255, 0.08)', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', padding: '96px 28px' }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-          <div style={{ textAlign: 'center', marginBottom: '48px' }}>
-            <Badge color="#10b981" variant="filled" size="md">CALCULADORA DE IMPACTO FINANCIERO</Badge>
-            <h2 style={{ fontSize: 'clamp(1.8rem, 3.5vw, 2.6rem)', fontWeight: 900, margin: '14px 0 8px', fontFamily: tokens.font.heading }}>
-              ¿Cuánto dinero y tiempo ahorrará tu empresa?
-            </h2>
-            <p style={{ color: '#94a3b8', fontSize: '0.95rem' }}>
-              Ajustá los parámetros de tu operación para ver el retorno de inversión mensual estimado.
-            </p>
-          </div>
-
-          <GlassCard style={{ padding: '36px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '36px' }}>
-              
-              {/* Sliders Input */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Cantidad de Obras Simultáneas</span>
-                    <span style={{ color: '#f59e0b', fontWeight: 800 }}>{roiProjects} obras</span>
-                  </div>
-                  <input
-                    type="range" min="1" max="20" value={roiProjects}
-                    onChange={e => setRoiProjects(parseInt(e.target.value))}
-                    style={{ width: '100%', accentColor: '#f59e0b', cursor: 'pointer' }}
-                  />
-                </div>
-
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Operarios Totales en Nómina</span>
-                    <span style={{ color: '#f59e0b', fontWeight: 800 }}>{roiWorkers} operarios</span>
-                  </div>
-                  <input
-                    type="range" min="5" max="200" step="5" value={roiWorkers}
-                    onChange={e => setRoiWorkers(parseInt(e.target.value))}
-                    style={{ width: '100%', accentColor: '#f59e0b', cursor: 'pointer' }}
-                  />
-                </div>
-
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Presupuesto Anual Total Administrado</span>
-                    <span style={{ color: '#f59e0b', fontWeight: 800 }}>${roiBudget}M ARS</span>
-                  </div>
-                  <input
-                    type="range" min="20" max="1000" step="10" value={roiBudget}
-                    onChange={e => setRoiBudget(parseInt(e.target.value))}
-                    style={{ width: '100%', accentColor: '#f59e0b', cursor: 'pointer' }}
-                  />
-                </div>
-              </div>
-
-              {/* Calculated Outputs */}
-              <div style={{ background: 'rgba(6, 9, 19, 0.6)', padding: '24px', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.08)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                <div>
-                  <div style={{ fontSize: '0.75rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                    Ahorro Estimado Mensual
-                  </div>
-                  <div style={{ fontSize: '2.5rem', fontWeight: 900, color: '#10b981', fontFamily: tokens.font.heading, margin: '6px 0 16px' }}>
-                    ${(savings.totalMonthlyARS / 1000000).toFixed(2)}M <span style={{ fontSize: '1rem', color: '#94a3b8' }}>ARS/mes</span>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '0.82rem' }}>
-                    <div style={{ background: 'rgba(255,255,255,0.03)', padding: '10px', borderRadius: '8px' }}>
-                      <div style={{ color: '#64748b' }}>Horas admin ahorradas:</div>
-                      <div style={{ fontWeight: 700, color: '#f8fafc' }}>{savings.adminHoursSaved} hs/mes</div>
-                    </div>
-                    <div style={{ background: 'rgba(255,255,255,0.03)', padding: '10px', borderRadius: '8px' }}>
-                      <div style={{ color: '#64748b' }}>Desperdicio evitado:</div>
-                      <div style={{ fontWeight: 700, color: '#f8fafc' }}>${(savings.materialWastePrevented / 1000000).toFixed(1)}M/año</div>
-                    </div>
-                  </div>
-                </div>
-
-                <Link href="/onboarding" style={{ marginTop: '20px' }}>
-                  <Button variant="primary" size="md" style={{ width: '100%' }}>
-                    Activar Ahorro con Plan Starter ($29 USD/mes) →
-                  </Button>
-                </Link>
-              </div>
-            </div>
-          </GlassCard>
-        </div>
-      </section>
-
-      {/* 🏛️ ENTERPRISE ARCHITECTURE & CAPABILITIES */}
-      <section style={{ maxWidth: '1360px', margin: '0 auto', padding: '96px 28px' }}>
-        <div style={{ textAlign: 'center', marginBottom: '56px' }}>
-          <Badge color="#f59e0b" variant="filled" size="md">ARQUITECTURA ENTERPRISE</Badge>
-          <h2 style={{ fontSize: 'clamp(1.8rem, 3.5vw, 2.6rem)', fontWeight: 900, margin: '14px 0 8px', fontFamily: tokens.font.heading }}>
-            Diseñado para la Escala de Grandes Constructoras
-          </h2>
-          <p style={{ color: '#94a3b8', fontSize: '0.95rem', maxWidth: '680px', margin: '0 auto' }}>
-            Una infraestructura sólida, segura y de alta disponibilidad que conecta el terreno, la oficina técnica y los comitentes en tiempo real.
-          </p>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '24px' }}>
-          {[
-            {
-              icon: 'fa-brands fa-whatsapp',
-              color: '#22c55e',
-              tag: 'Cero Fricción en Terreno',
-              title: 'Canal Primario WhatsApp Meta WABA',
-              desc: 'El 100% de los operarios y contratistas interactúan enviando audios de voz, fotos de remitos y ubicaciones GPS satelitales sin instalar aplicaciones adicionales.'
-            },
-            {
-              icon: 'fa-solid fa-file-shield',
-              color: '#a855f7',
-              tag: 'Ley 22.250 & SRT 319/99',
-              title: 'Libro de Obra & Firma SHA-256',
-              desc: 'Cada parte diario, certificación de avance y orden de servicio se sella criptográficamente en un Merkle Tree inmutable con plena validez probatoria ante peritajes.'
-            },
-            {
-              icon: 'fa-solid fa-cube',
-              color: '#38bdf8',
-              tag: 'Autodesk & IFC Compatible',
-              title: 'Gemelo Digital 3D BIM & Simulación 4D',
-              desc: 'Visualización tridimensional federada piso por piso con control de interferencias (clash detection) y simulación temporal de la evolución del cronograma.'
-            },
-            {
-              icon: 'fa-solid fa-chart-line',
-              color: '#f59e0b',
-              tag: 'Finanzas & Curva S',
-              title: 'Tesorería Multimoneda & CAC Live',
-              desc: 'Control presupuestario por rubro en ARS, USD Blue y USD MEP con tracking automático del índice de la Cámara Argentina de la Construcción.'
-            },
-            {
-              icon: 'fa-solid fa-id-card-clip',
-              color: '#ec4899',
-              tag: 'UOCRA & ART en Tiempo Real',
-              title: 'KYC Biométrico & Geocercas GPS',
-              desc: 'Validación de DNI y biometría facial en 10 segundos con verificación de póliza activa de ART y bloqueo automático de ingreso ante incumplimientos.'
-            },
-            {
-              icon: 'fa-solid fa-code',
-              color: '#6366f1',
-              tag: 'REST API & Webhooks',
-              title: 'Ecosistema Abierto & ERP Sync',
-              desc: 'Integración bidireccional inmediata con sistemas administrativos y contables (Tango, Bejerman, Xubio, SAP) y webhooks de eventos en tiempo real.'
-            }
-          ].map((item, i) => (
-            <motion.div
-              key={i}
-              whileHover={{ y: -6, transition: { duration: 0.2 } }}
-              style={{
-                background: 'rgba(15, 23, 42, 0.6)',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
-                borderRadius: '18px',
-                padding: '28px',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                backdropFilter: 'blur(16px)',
-                boxShadow: '0 10px 30px rgba(0, 0, 0, 0.4)',
-                position: 'relative',
-                overflow: 'hidden'
-              }}
-            >
-              <div style={{ position: 'absolute', top: 0, right: 0, width: '120px', height: '120px', background: `radial-gradient(circle, ${item.color}15 0%, transparent 70%)`, pointerEvents: 'none' }} />
               <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
-                  <div style={{
-                    width: '46px',
-                    height: '46px',
-                    borderRadius: '12px',
-                    background: `${item.color}18`,
-                    border: `1px solid ${item.color}40`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '1.25rem',
-                    color: item.color
-                  }}>
-                    <i className={item.icon}></i>
-                  </div>
-                  <span style={{
-                    fontSize: '0.72rem',
-                    fontWeight: 700,
-                    padding: '4px 10px',
-                    borderRadius: '6px',
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    color: '#cbd5e1',
-                    border: '1px solid rgba(255, 255, 255, 0.1)'
-                  }}>
-                    {item.tag}
-                  </span>
-                </div>
-                <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#f8fafc', margin: '0 0 8px', fontFamily: tokens.font.heading }}>
-                  {item.title}
-                </h3>
-                <p style={{ fontSize: '0.86rem', color: '#94a3b8', lineHeight: 1.6, margin: 0 }}>
-                  {item.desc}
-                </p>
+                <label style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'block', marginBottom: '8px', fontWeight: 600 }}>Operarios por obra: <strong style={{ color: '#f59e0b' }}>{roiWorkers}</strong></label>
+                <input type="range" min="5" max="100" value={roiWorkers} onChange={e => setRoiWorkers(+e.target.value)}
+                  style={{ width: '100%', accentColor: '#f59e0b' }} />
               </div>
-            </motion.div>
-          ))}
-        </div>
-      </section>
+            </div>
 
-      {/* 💳 PRICING PREVIEW */}
-      <section id="precios" style={{ background: 'rgba(15, 23, 42, 0.4)', borderTop: '1px solid rgba(255, 255, 255, 0.08)', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', padding: '96px 28px' }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-          <div style={{ textAlign: 'center', marginBottom: '40px' }}>
-            <Badge color="#f59e0b" variant="filled" size="md">PLANES TRANSPARENTES</Badge>
-            <h2 style={{ fontSize: 'clamp(1.8rem, 3.5vw, 2.6rem)', fontWeight: 900, margin: '14px 0 8px', fontFamily: tokens.font.heading }}>
-              Inversión clara sin costos ocultos
-            </h2>
-            <p style={{ color: '#94a3b8', fontSize: '0.95rem' }}>
-              Comenzá gratis hoy y escalá cuando tu empresa sume más obras.
-            </p>
-
-            {/* Billing Toggle */}
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: 'rgba(6, 9, 19, 0.6)', padding: '4px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)', marginTop: '20px' }}>
-              <button
-                onClick={() => setBillingCycle('monthly')}
-                style={{
-                  padding: '8px 16px',
-                  borderRadius: '8px',
-                  border: 'none',
-                  background: billingCycle === 'monthly' ? '#1e293b' : 'transparent',
-                  color: billingCycle === 'monthly' ? '#f8fafc' : '#64748b',
-                  fontSize: '0.82rem',
-                  fontWeight: 600,
-                  cursor: 'pointer'
-                }}
-              >
-                Mensual
-              </button>
-              <button
-                onClick={() => setBillingCycle('annual')}
-                style={{
-                  padding: '8px 16px',
-                  borderRadius: '8px',
-                  border: 'none',
-                  background: billingCycle === 'annual' ? '#f59e0b' : 'transparent',
-                  color: billingCycle === 'annual' ? '#060913' : '#64748b',
-                  fontSize: '0.82rem',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px'
-                }}
-              >
-                <span>Anual</span>
-                <span style={{ fontSize: '0.65rem', padding: '1px 6px', background: 'rgba(0,0,0,0.2)', borderRadius: '4px' }}>20% OFF</span>
-              </button>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+              {[
+                { label: 'Horas admin. ahorradas/mes', value: savings.hoursMonth, suffix: 'hs' },
+                { label: 'Ahorro mensual estimado', value: savings.moneyMonth, prefix: '$', suffix: '' },
+                { label: 'Días de entrega adelantados/año', value: savings.deliveryDays, suffix: '' }
+              ].map((s, i) => (
+                <div key={i} style={{ textAlign: 'center', padding: '20px 16px', borderRadius: '14px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#f59e0b', fontFamily: tokens.font.heading }}>
+                    {s.prefix || ''}{s.value.toLocaleString('es-AR')}{s.suffix}
+                  </div>
+                  <div style={{ fontSize: '0.76rem', color: '#64748b', marginTop: '4px' }}>{s.label}</div>
+                </div>
+              ))}
             </div>
           </div>
-
-          {/* Pricing Tier Cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px' }}>
-            
-            {/* Starter */}
-            <GlassCard style={{ padding: '32px' }} hover>
-              <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#f8fafc' }}>Starter</div>
-              <div style={{ color: '#94a3b8', fontSize: '0.8rem', margin: '4px 0 16px' }}>Para estudios y constructoras medianas</div>
-              <div style={{ fontSize: '2.5rem', fontWeight: 900, color: '#f8fafc', fontFamily: tokens.font.heading }}>
-                ${billingCycle === 'annual' ? '23' : '29'} <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 500 }}>USD/mes</span>
-              </div>
-              <div style={{ fontSize: '0.75rem', color: '#10b981', margin: '4px 0 20px' }}>1 obra activa • 5 usuarios</div>
-              <Link href="/onboarding?plan=starter">
-                <Button variant="secondary" size="md" style={{ width: '100%' }}>Comenzar Prueba Gratis</Button>
-              </Link>
-            </GlassCard>
-
-            {/* Professional (Highlighted) */}
-            <GlassCard style={{ padding: '32px', border: '1px solid rgba(245, 158, 11, 0.4)', background: 'rgba(245, 158, 11, 0.04)', position: 'relative' }} hover glow>
-              <div style={{ position: 'absolute', top: '-12px', right: '20px' }}>
-                <Badge color="#f59e0b" variant="solid" size="sm">MÁS POPULAR</Badge>
-              </div>
-              <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#f59e0b' }}>Professional</div>
-              <div style={{ color: '#94a3b8', fontSize: '0.8rem', margin: '4px 0 16px' }}>Para empresas en crecimiento</div>
-              <div style={{ fontSize: '2.5rem', fontWeight: 900, color: '#f59e0b', fontFamily: tokens.font.heading }}>
-                ${billingCycle === 'annual' ? '79' : '99'} <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 500 }}>USD/mes</span>
-              </div>
-              <div style={{ fontSize: '0.75rem', color: '#10b981', margin: '4px 0 20px' }}>5 obras activas • 20 usuarios • API REST</div>
-              <Link href="/onboarding?plan=professional">
-                <Button variant="primary" size="md" style={{ width: '100%' }}>Comenzar Prueba Gratis</Button>
-              </Link>
-            </GlassCard>
-
-            {/* Enterprise */}
-            <GlassCard style={{ padding: '32px' }} hover>
-              <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#f8fafc' }}>Enterprise</div>
-              <div style={{ color: '#94a3b8', fontSize: '0.8rem', margin: '4px 0 16px' }}>Para grandes desarrolladoras y gobiernos</div>
-              <div style={{ fontSize: '2.5rem', fontWeight: 900, color: '#f8fafc', fontFamily: tokens.font.heading }}>
-                ${billingCycle === 'annual' ? '159' : '199'} <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 500 }}>USD/mes</span>
-              </div>
-              <div style={{ fontSize: '0.75rem', color: '#10b981', margin: '4px 0 20px' }}>Obras ilimitadas • Soporte 24/7 SLA</div>
-              <Link href="/onboarding?plan=enterprise">
-                <Button variant="secondary" size="md" style={{ width: '100%' }}>Hablar con Ventas</Button>
-              </Link>
-            </GlassCard>
-          </div>
-        </div>
+        </Reveal>
       </section>
 
-      {/* ❓ FAQs ACCORDION */}
-      <section id="faqs" style={{ maxWidth: '900px', margin: '0 auto', padding: '96px 28px' }}>
-        <div style={{ textAlign: 'center', marginBottom: '48px' }}>
-          <Badge color="#06b6d4" variant="filled" size="md">PREGUNTAS FRECUENTES</Badge>
-          <h2 style={{ fontSize: 'clamp(1.8rem, 3.5vw, 2.4rem)', fontWeight: 900, margin: '14px 0 8px', fontFamily: tokens.font.heading }}>
-            Todo lo que necesitas saber
+      {/* ═══ FAQ ═══ */}
+      <section style={{ maxWidth: '780px', margin: '0 auto', padding: '40px 32px 100px', position: 'relative', zIndex: 1 }}>
+        <Reveal>
+          <h2 style={{ fontSize: '2rem', fontWeight: 900, letterSpacing: '-0.03em', fontFamily: tokens.font.heading, textAlign: 'center', marginBottom: '40px' }}>
+            Preguntas frecuentes
           </h2>
-        </div>
+        </Reveal>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {faqs.map((faq, idx) => {
-            const isOpen = activeFaq === idx;
-            return (
-              <GlassCard
-                key={idx}
-                style={{ padding: '20px 24px', cursor: 'pointer' }}
-                onClick={() => setActiveFaq(isOpen ? null : idx)}
-                hover={false}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
-                  <span style={{ fontSize: '0.96rem', fontWeight: 700, color: isOpen ? '#f59e0b' : '#f8fafc' }}>
-                    {faq.q}
-                  </span>
-                  <span style={{ fontSize: '1.2rem', color: '#64748b', transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
-                    ↓
-                  </span>
-                </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {faqs.map((faq, i) => (
+            <Reveal key={i} delay={i * 0.04}>
+              <div style={{ borderRadius: '14px', border: '1px solid rgba(255,255,255,0.06)', overflow: 'hidden', background: activeFaq === i ? 'rgba(245, 158, 11, 0.03)' : 'rgba(13, 17, 30, 0.4)' }}>
+                <button onClick={() => setActiveFaq(activeFaq === i ? null : i)} style={{
+                  width: '100%', padding: '18px 22px', background: 'none', border: 'none', color: '#e2e8f0',
+                  fontSize: '0.92rem', fontWeight: 700, textAlign: 'left', cursor: 'pointer',
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                }}>
+                  <span>{faq.q}</span>
+                  <motion.span animate={{ rotate: activeFaq === i ? 45 : 0 }} transition={{ duration: 0.2 }}
+                    style={{ fontSize: '1.2rem', color: '#f59e0b', flexShrink: 0, marginLeft: '16px' }}>+</motion.span>
+                </button>
                 <AnimatePresence>
-                  {isOpen && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.25 }}
-                      style={{ overflow: 'hidden' }}
-                    >
-                      <p style={{ color: '#94a3b8', fontSize: '0.88rem', lineHeight: 1.6, margin: '12px 0 0', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '12px' }}>
-                        {faq.a}
-                      </p>
+                  {activeFaq === i && (
+                    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}>
+                      <div style={{ padding: '0 22px 18px', fontSize: '0.86rem', color: '#8896ab', lineHeight: 1.6 }}>{faq.a}</div>
                     </motion.div>
                   )}
                 </AnimatePresence>
-              </GlassCard>
-            );
-          })}
+              </div>
+            </Reveal>
+          ))}
         </div>
       </section>
 
-      {/* 🚀 FINAL CTA BANNER */}
-      <section style={{ maxWidth: '1360px', margin: '0 auto', padding: '0 28px 96px' }}>
-        <GlassCard style={{ padding: '64px 32px', textAlign: 'center', background: 'radial-gradient(circle at center, rgba(245, 158, 11, 0.15) 0%, rgba(15, 23, 42, 0.9) 100%)', border: '1px solid rgba(245, 158, 11, 0.3)', boxShadow: '0 0 60px rgba(245, 158, 11, 0.15)' }}>
-          <h2 style={{ fontSize: 'clamp(2rem, 4vw, 3.2rem)', fontWeight: 900, margin: '0 0 16px', fontFamily: tokens.font.heading }}>
-            Modernizá tu constructora hoy mismo
+      {/* ═══ FINAL CTA ═══ */}
+      <section style={{ position: 'relative', zIndex: 1, padding: '80px 32px', textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+        <Reveal>
+          <h2 style={{ fontSize: 'clamp(1.8rem, 4vw, 2.6rem)', fontWeight: 900, letterSpacing: '-0.04em', fontFamily: tokens.font.heading, margin: '0 0 16px' }}>
+            Tu próxima obra, digitalizada{' '}
+            <span style={{ color: '#f59e0b' }}>desde el primer día</span>
           </h2>
-          <p style={{ color: '#cbd5e1', fontSize: '1.05rem', maxWidth: '600px', margin: '0 auto 32px' }}>
-            Sumate a más de 500 obras en toda la región. 14 días de prueba sin compromiso y con acompañamiento dedicado.
+          <p style={{ color: '#64748b', fontSize: '1.05rem', maxWidth: '500px', margin: '0 auto 32px' }}>
+            Comenzá con la demo en vivo. Sin tarjeta de crédito, sin reuniones de ventas.
           </p>
-          <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', flexWrap: 'wrap' }}>
-            <Link href="/onboarding">
-              <Button variant="primary" size="lg" icon="🚀">
-                Crear Mi Primera Obra Gratis
-              </Button>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '14px', flexWrap: 'wrap' }}>
+            <Magnetic>
+              <Link href="/dashboard" style={{ textDecoration: 'none' }}>
+                <motion.button whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }} style={{
+                  padding: '16px 36px', borderRadius: '14px',
+                  background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                  color: '#050810', fontWeight: 800, fontSize: '1.05rem', border: 'none', cursor: 'pointer',
+                  boxShadow: '0 6px 30px rgba(245, 158, 11, 0.3), inset 0 1px 0 rgba(255,255,255,0.2)'
+                }}>
+                  Explorar demo en vivo
+                </motion.button>
+              </Link>
+            </Magnetic>
+            <Link href="/pricing" style={{ textDecoration: 'none' }}>
+              <motion.button whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }} style={{
+                padding: '16px 28px', borderRadius: '14px', background: 'rgba(255,255,255,0.04)',
+                border: '1px solid rgba(255,255,255,0.12)', color: '#e2e8f0', fontWeight: 700,
+                fontSize: '1.05rem', cursor: 'pointer'
+              }}>
+                Ver planes y precios
+              </motion.button>
             </Link>
-            <button
-              onClick={() => setLeadModal(true)}
-              style={{
-                padding: '14px 28px',
-                borderRadius: '16px',
-                background: 'rgba(255, 255, 255, 0.05)',
-                border: '1px solid rgba(255, 255, 255, 0.15)',
-                color: '#f8fafc',
-                fontSize: '0.98rem',
-                fontWeight: 600,
-                cursor: 'pointer'
-              }}
-            >
-              Agendar Demo Personalizada
-            </button>
           </div>
-        </GlassCard>
+        </Reveal>
       </section>
 
-      {/* 🦶 ENTERPRISE FOOTER */}
-      <footer style={{ borderTop: '1px solid rgba(255, 255, 255, 0.08)', background: '#04070e', padding: '64px 28px 32px' }}>
-        <div style={{ maxWidth: '1360px', margin: '0 auto' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '40px', marginBottom: '48px' }}>
-            
-            {/* Col 1 */}
-            <div>
-              <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#f8fafc', marginBottom: '12px' }}>
-                Obra<span style={{ color: '#f59e0b' }}>SaaS</span>
-              </div>
-              <p style={{ color: '#64748b', fontSize: '0.82rem', lineHeight: 1.6 }}>
-                La plataforma de gestión de obra #1 en LATAM impulsada por WhatsApp e Inteligencia Artificial.
-              </p>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '16px', fontSize: '0.75rem', color: '#10b981' }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981' }} />
-                <span>Todos los sistemas operativos</span>
-              </div>
-            </div>
-
-            {/* Col 2 */}
-            <div>
-              <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#f8fafc', marginBottom: '16px' }}>Plataforma</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.82rem', color: '#94a3b8' }}>
-                <Link href="/dashboard" style={{ color: 'inherit', textDecoration: 'none' }}>Dashboard Central</Link>
-                <Link href="/costos" style={{ color: 'inherit', textDecoration: 'none' }}>Control de Costos</Link>
-                <Link href="/ejecutivo" style={{ color: 'inherit', textDecoration: 'none' }}>Dashboard Ejecutivo CEO</Link>
-                <Link href="/portal" style={{ color: 'inherit', textDecoration: 'none' }}>Portal Vecino Digital</Link>
-                <Link href="/compliance" style={{ color: 'inherit', textDecoration: 'none' }}>Centro de Compliance</Link>
-              </div>
-            </div>
-
-            {/* Col 3 */}
-            <div>
-              <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#f8fafc', marginBottom: '16px' }}>Ecosistema</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.82rem', color: '#94a3b8' }}>
-                <Link href="/marketplace" style={{ color: 'inherit', textDecoration: 'none' }}>Marketplace de Proveedores</Link>
-                <Link href="/pricing" style={{ color: 'inherit', textDecoration: 'none' }}>Planes y Precios</Link>
-                <Link href="/api-docs" style={{ color: 'inherit', textDecoration: 'none' }}>Documentación API REST</Link>
-                <Link href="/superadmin" style={{ color: 'inherit', textDecoration: 'none' }}>Super Admin Console</Link>
-              </div>
-            </div>
-
-            {/* Col 4: Compliance */}
-            <div>
-              <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#f8fafc', marginBottom: '16px' }}>Normativas & Legal</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.82rem', color: '#64748b' }}>
-                <span>• Cumplimiento Ley 22.250</span>
-                <span>• Resolución SRT 319/99</span>
-                <span>• Convenio Colectivo CCT 76/75 (UOCRA)</span>
-                <span>• Normas IRAM 1666 & CIRSOC 201</span>
-                <span>• Firma Criptográfica SHA-256</span>
-              </div>
-            </div>
+      {/* ═══ FOOTER ═══ */}
+      <footer style={{ borderTop: '1px solid rgba(255,255,255,0.05)', padding: '40px 32px', position: 'relative', zIndex: 1 }}>
+        <div style={{ maxWidth: '1100px', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ width: '28px', height: '28px', borderRadius: '7px', background: '#f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: '0.72rem', color: '#050810' }}>OS</div>
+            <span style={{ fontSize: '0.82rem', color: '#475569' }}>ObraSaaS — Buenos Aires, Argentina</span>
           </div>
-
-          <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.06)', paddingTop: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', fontSize: '0.75rem', color: '#475569' }}>
-            <div>© 2026 ObraSaaS Inc. Todos los derechos reservados. Hecho en Argentina para LATAM.</div>
-            <div style={{ display: 'flex', gap: '16px' }}>
-              <span>Términos del Servicio</span>
-              <span>Privacidad de Datos</span>
-              <span>Seguridad Criptográfica</span>
-            </div>
+          <div style={{ display: 'flex', gap: '24px', fontSize: '0.8rem', color: '#475569' }}>
+            <Link href="/pricing" style={{ color: 'inherit', textDecoration: 'none' }}>Precios</Link>
+            <Link href="/api-docs" style={{ color: 'inherit', textDecoration: 'none' }}>API</Link>
+            <Link href="/portal" style={{ color: 'inherit', textDecoration: 'none' }}>Portal Inversor</Link>
+            <Link href="/marketplace" style={{ color: 'inherit', textDecoration: 'none' }}>Proveedores</Link>
           </div>
         </div>
       </footer>
 
-      {/* 🔐 AUTH / LOGIN MODAL */}
-      <Modal
-        isOpen={authModal.show}
-        onClose={() => setAuthModal({ show: false, mode: 'login' })}
-        title={authModal.mode === 'login' ? 'Iniciar Sesión en ObraSaaS' : 'Crear Cuenta Enterprise'}
-        subtitle="Accedé al centro de mando de tus obras en tiempo real"
-      >
-        <form onSubmit={handleAuthSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div>
-            <label style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'block', marginBottom: '6px' }}>Email Corporativo</label>
-            <input
-              type="email"
-              required
-              placeholder="ejemplo@constructora.com"
-              value={authEmail}
-              onChange={e => setAuthEmail(e.target.value)}
-              style={{ width: '100%', padding: '12px', background: '#060913', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '10px', color: '#f8fafc', fontSize: '0.9rem' }}
-            />
-          </div>
-          <div>
-            <label style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'block', marginBottom: '6px' }}>Contraseña</label>
-            <input
-              type="password"
-              required
-              placeholder="••••••••"
-              value={authPassword}
-              onChange={e => setAuthPassword(e.target.value)}
-              style={{ width: '100%', padding: '12px', background: '#060913', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '10px', color: '#f8fafc', fontSize: '0.9rem' }}
-            />
-          </div>
-          <Button variant="primary" size="md" style={{ width: '100%', marginTop: '8px' }}>
-            {authModal.mode === 'login' ? 'Ingresar al Dashboard' : 'Crear Cuenta y Probar Gratis'}
-          </Button>
-        </form>
-      </Modal>
-
-      {/* 📋 LEAD / DEMO REQUEST MODAL */}
-      <Modal
-        isOpen={leadModal}
-        onClose={() => setLeadModal(false)}
-        title="Agendar Demo Personalizada"
-        subtitle="Un especialista te mostrará cómo implementar ObraSaaS en tu empresa"
-      >
+      {/* ═══ LEAD CAPTURE MODAL ═══ */}
+      <Modal isOpen={leadModal} onClose={() => setLeadModal(false)} title="Solicitar acceso a ObraSaaS" subtitle="Completá tus datos y te contactamos en 24hs">
         {leadSubmitted ? (
-          <div style={{ textAlign: 'center', padding: '24px 0', color: '#10b981' }}>
-            <div style={{ fontSize: '2.5rem', marginBottom: '8px' }}>✅</div>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 800 }}>¡Solicitud Recibida!</h3>
-            <p style={{ fontSize: '0.85rem', color: '#94a3b8' }}>Redirigiendo a tu espacio de trabajo...</p>
+          <div style={{ textAlign: 'center', padding: '32px 0' }}>
+            <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring' }} style={{ fontSize: '3rem', marginBottom: '12px' }}>✓</motion.div>
+            <div style={{ fontWeight: 800, color: '#22c55e', fontSize: '1.1rem' }}>Solicitud recibida</div>
           </div>
         ) : (
-          <form onSubmit={handleLeadSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            <div>
-              <label style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Nombre Completo</label>
-              <input
-                type="text" required placeholder="Arq. Marcelo Fernández"
-                value={leadData.name} onChange={e => setLeadData({ ...leadData, name: e.target.value })}
-                style={{ width: '100%', padding: '10px 12px', background: '#060913', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', color: '#f8fafc' }}
-              />
-            </div>
-            <div>
-              <label style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Empresa / Estudio</label>
-              <input
-                type="text" required placeholder="Constructora Cuyo S.A."
-                value={leadData.company} onChange={e => setLeadData({ ...leadData, company: e.target.value })}
-                style={{ width: '100%', padding: '10px 12px', background: '#060913', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', color: '#f8fafc' }}
-              />
-            </div>
-            <div>
-              <label style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>WhatsApp de Contacto</label>
-              <input
-                type="tel" required placeholder="+54 9 11 1234-5678"
-                value={leadData.phone} onChange={e => setLeadData({ ...leadData, phone: e.target.value })}
-                style={{ width: '100%', padding: '10px 12px', background: '#060913', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', color: '#f8fafc' }}
-              />
-            </div>
-            <div>
-              <label style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Email</label>
-              <input
-                type="email" required placeholder="marcelo@constructora.com"
-                value={leadData.email} onChange={e => setLeadData({ ...leadData, email: e.target.value })}
-                style={{ width: '100%', padding: '10px 12px', background: '#060913', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', color: '#f8fafc' }}
-              />
-            </div>
-            <Button variant="primary" size="md" style={{ width: '100%', marginTop: '6px' }}>
-              Confirmar y Enviar Solicitud
-            </Button>
+          <form onSubmit={handleLeadSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {[
+              { key: 'name', label: 'Nombre completo', placeholder: 'Ej: Marcelo González' },
+              { key: 'company', label: 'Empresa / Estudio', placeholder: 'Ej: Constructora del Plata S.A.' },
+              { key: 'phone', label: 'WhatsApp', placeholder: 'Ej: +54 9 261 316-8608' },
+              { key: 'email', label: 'Email corporativo', placeholder: 'marcelo@empresa.com' }
+            ].map(f => (
+              <div key={f.key}>
+                <label style={{ fontSize: '0.76rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>{f.label}</label>
+                <input required placeholder={f.placeholder} value={leadData[f.key]} onChange={e => setLeadData({ ...leadData, [f.key]: e.target.value })}
+                  style={{ width: '100%', padding: '11px 14px', background: '#050810', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '10px', color: '#f1f5f9', fontSize: '0.88rem' }} />
+              </div>
+            ))}
+            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="submit" style={{
+              padding: '13px', borderRadius: '12px', background: '#f59e0b', color: '#050810', fontWeight: 800,
+              fontSize: '0.92rem', border: 'none', cursor: 'pointer', marginTop: '4px'
+            }}>
+              Enviar solicitud
+            </motion.button>
           </form>
         )}
       </Modal>
-
     </div>
   );
 }
