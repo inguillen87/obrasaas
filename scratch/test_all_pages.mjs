@@ -1,4 +1,4 @@
-// ObraSaaS Comprehensive Frontend & API Verification Suite v6.0
+// ObraSaaS Comprehensive Frontend & API Verification Suite v7.0
 
 const BASE_URL = 'http://localhost:3000';
 
@@ -21,6 +21,10 @@ const pagesToTest = [
   { path: '/marketplace', name: 'Marketplace de Corralones & Materiales' },
   { path: '/ejecutivo', name: 'Dashboard Ejecutivo & ROI' },
   { path: '/api-docs', name: 'Documentación de APIs REST' },
+  { path: '/libro-obra', name: 'Libro de Obra Digital (Ley 22.250)' },
+  { path: '/inspecciones', name: 'Inspecciones & Checklists QA/QC' },
+  { path: '/documentos', name: 'Documentación Técnica & Submittals' },
+  { path: '/cronograma', name: 'Cronograma Studio & Gantt CPM' },
   { path: '/webview/attendance?worker=juan&token=test', name: 'Webview Fichaje Satelital' },
   { path: '/webview/kyc?worker=juan&token=test', name: 'Webview KYC Biométrico' },
   { path: '/webview/medical?worker=juan&token=test', name: 'Webview Apto Médico' },
