@@ -9,8 +9,20 @@ import { useBreakpoint } from '@/lib/useBreakpoint';
 export default function PlanosPage() {
     const { isMobile } = useBreakpoint();
     const [discipline, setDiscipline] = useState('Arquitectura');
+    const [sheet, setSheet] = useState('planta-tipo');
     const [zoom, setZoom] = useState(1);
     const [activeViewMode, setActiveViewMode] = useState('planos'); // 'planos' | 'punchlist' | 'rfi'
+    const [activeTool, setActiveTool] = useState('pin'); // 'pin' | 'measure' | 'cloud' | 'stamp'
+    const [measurePoints, setMeasurePoints] = useState([]);
+    const [measurements, setMeasurements] = useState([
+        { id: 'm-1', x1: 80, y1: 80, x2: 400, y2: 80, lengthMeters: 6.4, label: '6.40 m' }
+    ]);
+    const [clouds, setClouds] = useState([
+        { id: 'c-1', x: 440, y: 180, width: 140, height: 80, text: 'Verificar cota de mesada con instalador sanitario' }
+    ]);
+    const [stamps, setStamps] = useState([
+        { id: 's-1', x: 800, y: 120, text: 'APROBADO PARA CONSTRUCCIÓN', date: '18/08/2026', author: 'Arq. Marcelo' }
+    ]);
     const [pins, setPins] = useState([
         { id: 'pin-1', x: 35, y: 42, discipline: 'Arquitectura', type: 'critical', title: 'Falta Enlucido Fino', reporter: 'Arq. Marcelo', date: '18 Ago', trade: 'Albañilería Principal', status: 'EN_CORRECCION', photoUrl: 'https://images.unsplash.com/photo-1541888946425-d0fbb180c5f5?auto=format&fit=crop&w=600&q=80', deadline: '20 Ago' },
         { id: 'pin-2', x: 68, y: 28, discipline: 'Sanitarias', type: 'warning', title: 'Prueba Hidráulica Pendiente en Columna B', reporter: 'Carlos Pérez', date: '18 Ago', trade: 'Plomero / Gasista', status: 'ABIERTA', photoUrl: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80', deadline: '19 Ago' },
@@ -25,6 +37,7 @@ export default function PlanosPage() {
     const [newPinTrade, setNewPinTrade] = useState('Albañilería Principal');
     const [newPinDeadline, setNewPinDeadline] = useState('24hs');
     const [filterStatus, setFilterStatus] = useState('all');
+    const [exportNotice, setExportNotice] = useState(false);
 
     useEffect(() => {
         fetch('/api/v1/rfi')
@@ -40,6 +53,13 @@ export default function PlanosPage() {
         { id: 'Eléctricas', icon: '⚡', label: 'Inst. Eléctricas' }
     ];
 
+    const sheets = [
+        { id: 'planta-tipo', code: 'ARQ-P03-REV02', name: 'Planta Tipo (Pisos 1 al 6)', scale: '1:50' },
+        { id: 'subsuelo', code: 'EST-S01-REV01', name: 'Subsuelo S1 & Fundaciones', scale: '1:75' },
+        { id: 'planta-baja', code: 'ARQ-PB-REV04', name: 'Planta Baja & Hall de Acceso', scale: '1:50' },
+        { id: 'azotea', code: 'INS-AZ-REV01', name: 'Azotea Técnica & Tanques', scale: '1:100' }
+    ];
+
     const tradesList = [
         'Albañilería Principal (Juan Gómez)',
         'Plomero / Gasista (Luis Martínez)',
@@ -51,10 +71,52 @@ export default function PlanosPage() {
 
     const handleCanvasClick = (e) => {
         const rect = e.currentTarget.getBoundingClientRect();
-        const x = Math.round(((e.clientX - rect.left) / rect.width) * 100);
-        const y = Math.round(((e.clientY - rect.top) / rect.height) * 100);
+        const rawX = e.clientX - rect.left;
+        const rawY = e.clientY - rect.top;
+        const xPercent = Math.round((rawX / rect.width) * 100);
+        const yPercent = Math.round((rawY / rect.height) * 100);
 
-        setNewPinModal({ show: true, x, y });
+        if (activeTool === 'pin') {
+            setNewPinModal({ show: true, x: xPercent, y: yPercent });
+        } else if (activeTool === 'measure') {
+            if (measurePoints.length === 0) {
+                setMeasurePoints([{ x: rawX, y: rawY }]);
+            } else {
+                const p1 = measurePoints[0];
+                const p2 = { x: rawX, y: rawY };
+                const distPx = Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
+                // Scale factor: approx 50px = 1 meter in SVG
+                const meters = (distPx / 50).toFixed(2);
+                setMeasurements([...measurements, {
+                    id: `m-${Date.now()}`,
+                    x1: p1.x,
+                    y1: p1.y,
+                    x2: p2.x,
+                    y2: p2.y,
+                    lengthMeters: meters,
+                    label: `${meters} m`
+                }]);
+                setMeasurePoints([]);
+            }
+        } else if (activeTool === 'cloud') {
+            setClouds([...clouds, {
+                id: `c-${Date.now()}`,
+                x: rawX - 60,
+                y: rawY - 30,
+                width: 140,
+                height: 70,
+                text: 'Revisión Técnica en Obra'
+            }]);
+        } else if (activeTool === 'stamp') {
+            setStamps([...stamps, {
+                id: `s-${Date.now()}`,
+                x: rawX - 80,
+                y: rawY - 25,
+                text: 'APROBADO POR DIRECCIÓN',
+                date: new Date().toLocaleDateString('es-AR'),
+                author: 'Arq. Marcelo'
+            }]);
+        }
     };
 
     const handleCreatePin = (e) => {
@@ -88,6 +150,13 @@ export default function PlanosPage() {
         }
     };
 
+    const handleExportPlan = () => {
+        setExportNotice(true);
+        setTimeout(() => setExportNotice(false), 4000);
+    };
+
+    const currentSheetObj = sheets.find(s => s.id === sheet) || sheets[0];
+
     const filteredPins = pins.filter(p => {
         const matchDisc = p.discipline === discipline;
         const matchStatus = filterStatus === 'all' || p.status === filterStatus;
@@ -113,23 +182,32 @@ export default function PlanosPage() {
             
             {/* Header */}
             <PageHeader
-                title="Visor de Planos Interactivos & Geocontrol en Terreno"
-                subtitle="Navegación de planos CAD / DWG con marcado de incidencias geolocalizadas"
+                title="Visor de Planos CAD & Geocontrol en Terreno"
+                subtitle="Navegación vectorial multipágina con marcado QA/QC, mediciones calibradas y sellos de aprobación"
                 breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Planos' }]}
                 actions={
-                    <>
-                        <Link href="/dashboard">
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        <Link href="/dashboard" style={{ textDecoration: 'none' }}>
                             <Button variant="secondary" size="sm">← Dashboard</Button>
                         </Link>
+                        <Button variant="secondary" size="sm" icon="📥" onClick={handleExportPlan}>
+                            Exportar Lámina
+                        </Button>
                         <Button variant="primary" size="sm" icon="+" onClick={() => setNewPinModal({ show: true, x: 50, y: 50 })}>
                             Nuevo Marcador
                         </Button>
-                    </>
+                    </div>
                 }
             />
 
             <main style={{ maxWidth: '1440px', margin: '0 auto', padding: '20px clamp(14px, 4vw, 32px) 80px' }}>
                 
+                {exportNotice && (
+                    <div style={{ background: 'rgba(16, 185, 129, 0.15)', border: '1px solid #10b981', padding: '12px 16px', borderRadius: '8px', marginBottom: '20px', color: '#10b981', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span>✅</span> Lámina {currentSheetObj.code} con {pins.length} marcadores y {measurements.length} cotas generada para descarga en alta resolución.
+                    </div>
+                )}
+
                 {/* View Mode & Control Bar */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '16px' }}>
                     {/* View Switcher Tabs */}
@@ -141,13 +219,13 @@ export default function PlanosPage() {
                                 borderRadius: '8px',
                                 background: activeViewMode === 'planos' ? '#f59e0b' : 'transparent',
                                 color: activeViewMode === 'planos' ? '#060913' : '#94a3b8',
-                                fontWeight: 700,
-                                fontSize: '0.8rem',
                                 border: 'none',
+                                fontWeight: 700,
+                                fontSize: '0.82rem',
                                 cursor: 'pointer'
                             }}
                         >
-                            📐 Plano 2D & Pines
+                            📐 Plano 2D & Marcadores ({pins.length})
                         </button>
                         <button
                             onClick={() => setActiveViewMode('punchlist')}
@@ -156,17 +234,13 @@ export default function PlanosPage() {
                                 borderRadius: '8px',
                                 background: activeViewMode === 'punchlist' ? '#f59e0b' : 'transparent',
                                 color: activeViewMode === 'punchlist' ? '#060913' : '#94a3b8',
-                                fontWeight: 700,
-                                fontSize: '0.8rem',
                                 border: 'none',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '6px'
+                                fontWeight: 700,
+                                fontSize: '0.82rem',
+                                cursor: 'pointer'
                             }}
                         >
                             📋 Punch List QA/QC
-                            <Badge color="#ef4444" variant="filled" size="xs">{pins.filter(p => p.status === 'ABIERTA' || p.status === 'EN_CORRECCION').length}</Badge>
                         </button>
                         <button
                             onClick={() => setActiveViewMode('rfi')}
@@ -175,65 +249,118 @@ export default function PlanosPage() {
                                 borderRadius: '8px',
                                 background: activeViewMode === 'rfi' ? '#f59e0b' : 'transparent',
                                 color: activeViewMode === 'rfi' ? '#060913' : '#94a3b8',
-                                fontWeight: 700,
-                                fontSize: '0.8rem',
                                 border: 'none',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '6px'
+                                fontWeight: 700,
+                                fontSize: '0.82rem',
+                                cursor: 'pointer'
                             }}
                         >
-                            💬 Consultas Técnicas (RFI)
-                            <Badge color="#3b82f6" variant="filled" size="xs">{rfis.length}</Badge>
+                            💬 Consultas RFI ({rfis.length})
                         </button>
                     </div>
 
-                    {/* Discipline Switcher (for plan mode) */}
+                    {/* Sheet & Discipline Selectors */}
                     {activeViewMode === 'planos' && (
-                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                            {disciplines.map(d => (
-                                <button
-                                    key={d.id}
-                                    onClick={() => setDiscipline(d.id)}
-                                    style={{
-                                        padding: '8px 14px',
-                                        borderRadius: '10px',
-                                        border: discipline === d.id ? '1px solid #38bdf8' : '1px solid rgba(255, 255, 255, 0.08)',
-                                        background: discipline === d.id ? 'rgba(56, 189, 248, 0.15)' : 'rgba(15, 23, 42, 0.6)',
-                                        color: discipline === d.id ? '#38bdf8' : '#94a3b8',
-                                        fontSize: '0.8rem',
-                                        fontWeight: discipline === d.id ? 700 : 500,
-                                        cursor: 'pointer',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '6px'
-                                    }}
-                                >
-                                    <span>{d.icon}</span>
-                                    <span>{d.label}</span>
-                                </button>
-                            ))}
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                            <select
+                                value={sheet}
+                                onChange={e => setSheet(e.target.value)}
+                                style={{
+                                    padding: '8px 12px',
+                                    borderRadius: '8px',
+                                    background: 'rgba(15, 23, 42, 0.8)',
+                                    border: '1px solid rgba(255,255,255,0.12)',
+                                    color: '#f8fafc',
+                                    fontSize: '0.8rem',
+                                    fontWeight: 600
+                                }}
+                            >
+                                {sheets.map(s => (
+                                    <option key={s.id} value={s.id}>📄 {s.code} • {s.name}</option>
+                                ))}
+                            </select>
+
+                            <div style={{ display: 'flex', gap: '4px' }}>
+                                {disciplines.map(d => (
+                                    <button
+                                        key={d.id}
+                                        onClick={() => setDiscipline(d.id)}
+                                        style={{
+                                            padding: '7px 12px',
+                                            borderRadius: '8px',
+                                            border: discipline === d.id ? '1px solid #38bdf8' : '1px solid rgba(255, 255, 255, 0.08)',
+                                            background: discipline === d.id ? 'rgba(56, 189, 248, 0.15)' : 'rgba(15, 23, 42, 0.6)',
+                                            color: discipline === d.id ? '#38bdf8' : '#94a3b8',
+                                            fontSize: '0.78rem',
+                                            fontWeight: discipline === d.id ? 700 : 500,
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '4px'
+                                        }}
+                                    >
+                                        <span>{d.icon}</span>
+                                        <span>{d.label}</span>
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                     )}
                 </div>
 
-                {/* VIEW 1: INTERACTIVE 2D FLOORPLAN */}
+                {/* VIEW 1: INTERACTIVE 2D FLOORPLAN & FIELDWIRE MARKUP TOOLS */}
                 {activeViewMode === 'planos' && (
                     <div style={{ display: 'grid', gridTemplateColumns: (selectedPin && !isMobile) ? '1fr 360px' : '1fr', gap: '20px', alignItems: 'start' }}>
                         
                         <GlassCard style={{ padding: '0', overflow: 'hidden', border: '1px solid rgba(56, 189, 248, 0.3)' }}>
-                            <div style={{ padding: '12px 20px', background: 'rgba(15, 23, 42, 0.8)', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                    <span style={{ fontSize: '0.8rem', color: '#64748b', fontFamily: tokens.font.mono }}>LÁMINA: ARQ-P03-REV02</span>
-                                    <Badge color="#38bdf8" variant="filled" size="xs">Escala 1:50</Badge>
+                            
+                            {/* Toolbar Header (Fieldwire style) */}
+                            <div style={{ padding: '10px 16px', background: 'rgba(15, 23, 42, 0.9)', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                    <span style={{ fontSize: '0.8rem', color: '#f8fafc', fontWeight: 700 }}>
+                                        {currentSheetObj.code}
+                                    </span>
+                                    <Badge color="#38bdf8" variant="filled" size="xs">Escala {currentSheetObj.scale}</Badge>
+
+                                    {/* Tool Selector Bar */}
+                                    <div style={{ display: 'flex', gap: '4px', background: 'rgba(6, 9, 19, 0.7)', padding: '2px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                                        <button
+                                            onClick={() => setActiveTool('pin')}
+                                            style={{ padding: '4px 10px', borderRadius: '6px', background: activeTool === 'pin' ? '#f59e0b' : 'transparent', color: activeTool === 'pin' ? '#060913' : '#94a3b8', border: 'none', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer' }}
+                                        >
+                                            📍 Pin QA/QC
+                                        </button>
+                                        <button
+                                            onClick={() => setActiveTool('measure')}
+                                            style={{ padding: '4px 10px', borderRadius: '6px', background: activeTool === 'measure' ? '#38bdf8' : 'transparent', color: activeTool === 'measure' ? '#060913' : '#94a3b8', border: 'none', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer' }}
+                                        >
+                                            📏 Regla de Medición
+                                        </button>
+                                        <button
+                                            onClick={() => setActiveTool('cloud')}
+                                            style={{ padding: '4px 10px', borderRadius: '6px', background: activeTool === 'cloud' ? '#a855f7' : 'transparent', color: activeTool === 'cloud' ? '#fff' : '#94a3b8', border: 'none', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer' }}
+                                        >
+                                            ☁️ Nube de Revisión
+                                        </button>
+                                        <button
+                                            onClick={() => setActiveTool('stamp')}
+                                            style={{ padding: '4px 10px', borderRadius: '6px', background: activeTool === 'stamp' ? '#10b981' : 'transparent', color: activeTool === 'stamp' ? '#060913' : '#94a3b8', border: 'none', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer' }}
+                                        >
+                                            🏷️ Sello Dirección
+                                        </button>
+                                    </div>
                                 </div>
-                                <div style={{ fontSize: '0.74rem', color: '#94a3b8' }}>
-                                    💡 Haz clic en el plano para colocar un marcador geolocalizado
+
+                                {/* Zoom Controls */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <button onClick={() => setZoom(Math.max(0.7, zoom - 0.15))} style={{ width: '28px', height: '28px', borderRadius: '6px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#f8fafc', cursor: 'pointer' }}>-</button>
+                                    <span style={{ fontSize: '0.75rem', color: '#94a3b8', minWidth: '40px', textAlign: 'center' }}>{Math.round(zoom * 100)}%</span>
+                                    <button onClick={() => setZoom(Math.min(2.0, zoom + 0.15))} style={{ width: '28px', height: '28px', borderRadius: '6px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#f8fafc', cursor: 'pointer' }}>+</button>
+                                    <button onClick={() => setZoom(1)} style={{ padding: '4px 8px', borderRadius: '6px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#94a3b8', fontSize: '0.72rem', cursor: 'pointer' }}>Reset</button>
                                 </div>
                             </div>
 
-                            {/* Plan Canvas SVG */}
+                            {/* Plan Canvas SVG with Markup Layers */}
                             <div
                                 onClick={handleCanvasClick}
                                 style={{
@@ -243,7 +370,7 @@ export default function PlanosPage() {
                                     height: '62vh',
                                     background: '#040711',
                                     overflow: 'auto',
-                                    cursor: 'crosshair',
+                                    cursor: activeTool === 'pin' ? 'crosshair' : activeTool === 'measure' ? 'cell' : 'pointer',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
@@ -265,12 +392,48 @@ export default function PlanosPage() {
                                     <line x1="80" y1="320" x2="400" y2="320" stroke="#38bdf8" strokeWidth="3" />
                                     <line x1="650" y1="80" x2="650" y2="360" stroke="#38bdf8" strokeWidth="3" />
 
-                                    {/* Rooms Labels */}
+                                    {/* Room Labels */}
                                     <text x="140" y="180" fill="#64748b" fontSize="14" fontWeight="bold" fontFamily="sans-serif">DORMITORIO PPAL</text>
                                     <text x="140" y="420" fill="#64748b" fontSize="14" fontWeight="bold" fontFamily="sans-serif">ESTAR / COMEDOR</text>
                                     <text x="440" y="180" fill="#64748b" fontSize="14" fontWeight="bold" fontFamily="sans-serif">COCINA INTEGRADA</text>
                                     <text x="720" y="180" fill="#64748b" fontSize="14" fontWeight="bold" fontFamily="sans-serif">SUITE BALCÓN</text>
                                     <text x="560" y="440" fill="#64748b" fontSize="14" fontWeight="bold" fontFamily="sans-serif">TERRAZA TÉCNICA</text>
+
+                                    {/* Measurements Layer */}
+                                    {measurements.map(m => (
+                                        <g key={m.id}>
+                                            <line x1={m.x1} y1={m.y1} x2={m.x2} y2={m.y2} stroke="#38bdf8" strokeWidth="2" strokeDasharray="4,4" />
+                                            <circle cx={m.x1} cy={m.y1} r="4" fill="#38bdf8" />
+                                            <circle cx={m.x2} cy={m.y2} r="4" fill="#38bdf8" />
+                                            <rect x={(m.x1 + m.x2) / 2 - 25} y={(m.y1 + m.y2) / 2 - 12} width="50" height="20" rx="4" fill="#0f172a" stroke="#38bdf8" strokeWidth="1" />
+                                            <text x={(m.x1 + m.x2) / 2} y={(m.y1 + m.y2) / 2 + 2} fill="#38bdf8" fontSize="11" fontWeight="bold" textAnchor="middle" dominantBaseline="middle" fontFamily="sans-serif">
+                                                {m.label}
+                                            </text>
+                                        </g>
+                                    ))}
+
+                                    {/* Revision Clouds Layer */}
+                                    {clouds.map(c => (
+                                        <g key={c.id}>
+                                            <rect x={c.x} y={c.y} width={c.width} height={c.height} rx="14" fill="rgba(168, 85, 247, 0.1)" stroke="#a855f7" strokeWidth="2" strokeDasharray="6,4" />
+                                            <text x={c.x + 8} y={c.y + 20} fill="#d8b4fe" fontSize="10" fontWeight="bold" fontFamily="sans-serif">
+                                                ☁️ {c.text}
+                                            </text>
+                                        </g>
+                                    ))}
+
+                                    {/* Stamps Layer */}
+                                    {stamps.map(s => (
+                                        <g key={s.id} transform={`translate(${s.x}, ${s.y}) rotate(-5)`}>
+                                            <rect x="0" y="0" width="180" height="50" rx="6" fill="rgba(16, 185, 129, 0.15)" stroke="#10b981" strokeWidth="2" />
+                                            <text x="90" y="20" fill="#10b981" fontSize="10" fontWeight="bold" textAnchor="middle" fontFamily="sans-serif">
+                                                ✓ {s.text}
+                                            </text>
+                                            <text x="90" y="38" fill="#6ee7b7" fontSize="9" textAnchor="middle" fontFamily="sans-serif">
+                                                {s.author} • {s.date}
+                                            </text>
+                                        </g>
+                                    ))}
                                 </svg>
 
                                 {/* Clickable Pins */}

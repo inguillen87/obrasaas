@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import { tokens, Badge, Button, GlassCard, StatCard, PageHeader } from '@/lib/design-system';
+import { tokens, Badge, Button, GlassCard, StatCard, PageHeader, Modal } from '@/lib/design-system';
 import { useBreakpoint } from '@/lib/useBreakpoint';
 
 // ----------------------------------------------------------------------
@@ -40,17 +40,35 @@ export default function CronogramaPage() {
   const [viewMode, setViewMode] = useState('Gantt Completo');
   const [assigneeFilter, setAssigneeFilter] = useState('Todos');
   const [selectedTask, setSelectedTask] = useState(null);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [rainDaysSim, setRainDaysSim] = useState(0);
+  const [exportToast, setExportToast] = useState(false);
   
+  // New task form state
+  const [newTaskName, setNewTaskName] = useState('');
+  const [newTaskGroup, setNewTaskGroup] = useState('Estructura');
+  const [newTaskStart, setNewTaskStart] = useState(1);
+  const [newTaskDuration, setNewTaskDuration] = useState(2);
+  const [newTaskAssignee, setNewTaskAssignee] = useState('JZ');
+
   const { isMobile, isTablet } = useBreakpoint();
   
   // Chart dimensions
-  const weeksToShow = 16;
+  const weeksToShow = 18;
   const colWidth = isMobile ? 40 : 60;
   const rowHeight = 48;
   const nameColWidth = isMobile ? 140 : 220;
+
+  // Apply rain delay simulation: outdoor tasks shift by 1 week if rainDays >= 2
+  const tasksWithWeather = tasks.map(t => {
+    if (rainDaysSim >= 2 && (t.group === 'Estructura' || t.group === 'Cerramientos') && t.status !== 'completed') {
+      return { ...t, startWeek: t.startWeek + Math.floor(rainDaysSim / 2) };
+    }
+    return t;
+  });
   
   // Filtered tasks
-  const filteredTasks = tasks.filter(t => {
+  const filteredTasks = tasksWithWeather.filter(t => {
     let match = true;
     if (assigneeFilter !== 'Todos' && t.assignee !== assigneeFilter) match = false;
     if (viewMode === 'Lookahead 4 Semanas') {
@@ -64,6 +82,52 @@ export default function CronogramaPage() {
   });
 
   const assignees = ['Todos', ...Array.from(new Set(tasks.map(t => t.assignee)))];
+
+  const handleExportCSV = () => {
+    const headers = ['ID', 'Tarea', 'Rubro', 'Semana Inicio', 'Duracion (Semanas)', 'Avance (%)', 'Estado', 'Responsable'];
+    const rows = tasks.map(t => [
+      t.id,
+      `"${t.name}"`,
+      `"${t.group}"`,
+      t.startWeek,
+      t.duration,
+      t.progress,
+      t.status,
+      t.assignee
+    ]);
+    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `Cronograma_Gantt_ObraSaaS_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    setExportToast(true);
+    setTimeout(() => setExportToast(false), 4000);
+  };
+
+  const handleAddTask = (e) => {
+    e.preventDefault();
+    if (!newTaskName) return;
+
+    const newTask = {
+      id: `t-${Date.now()}`,
+      name: newTaskName,
+      group: newTaskGroup,
+      startWeek: parseInt(newTaskStart, 10) || 1,
+      duration: parseInt(newTaskDuration, 10) || 1,
+      progress: 0,
+      assignee: newTaskAssignee,
+      dependencies: [],
+      status: 'on-track'
+    };
+
+    setTasks([...tasks, newTask]);
+    setIsAddModalOpen(false);
+    setNewTaskName('');
+  };
 
   // Group tasks for rendering
   const groupedTasks = filteredTasks.reduce((acc, task) => {
@@ -106,15 +170,16 @@ export default function CronogramaPage() {
       paddingBottom: '80px'
     }}>
       <PageHeader 
-        title="Cronograma Studio" 
+        title="Cronograma Studio & Planificación Gantt CPM" 
+        subtitle="Control de plazos, ruta crítica, dependencias y cálculo de impacto climático por lluvia"
         breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Cronograma de Obra' }]}
         actions={
-          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
             <Link href="/dashboard" style={{ textDecoration: 'none' }}>
               <Button variant="ghost">← Dashboard</Button>
             </Link>
-            <Button variant="secondary">Exportar</Button>
-            <Button variant="primary">Agregar Tarea</Button>
+            <Button variant="secondary" icon="📥" onClick={handleExportCSV}>Exportar CSV / Excel</Button>
+            <Button variant="primary" icon="+" onClick={() => setIsAddModalOpen(true)}>Agregar Tarea</Button>
           </div>
         }
       />
@@ -129,6 +194,12 @@ export default function CronogramaPage() {
         flexDirection: 'column',
         gap: '24px'
       }}>
+
+        {exportToast && (
+          <div style={{ background: 'rgba(16, 185, 129, 0.15)', border: '1px solid #10b981', padding: '12px 16px', borderRadius: '8px', color: '#10b981', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span>✅</span> Archivo CSV del Cronograma exportado con éxito para Microsoft Project / Excel.
+          </div>
+        )}
         
         {/* Controls */}
         <GlassCard style={{ padding: '16px 24px', display: 'flex', flexWrap: 'wrap', gap: '20px', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -153,6 +224,33 @@ export default function CronogramaPage() {
                   {mode}
                 </button>
               ))}
+            </div>
+
+            <div style={{ width: '1px', height: '24px', background: tokens.colors.border.subtle }} />
+
+            {/* Rain Day Delay Simulator */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'rgba(56, 189, 248, 0.08)', padding: '6px 12px', borderRadius: '8px', border: '1px solid rgba(56, 189, 248, 0.2)' }}>
+              <span style={{ fontSize: '13px', color: '#38bdf8', fontWeight: 600 }}>🌧️ Días de Lluvia (Ley 22.250):</span>
+              <div style={{ display: 'flex', gap: '4px' }}>
+                {[0, 2, 4, 6].map(days => (
+                  <button
+                    key={days}
+                    onClick={() => setRainDaysSim(days)}
+                    style={{
+                      padding: '4px 8px',
+                      borderRadius: '4px',
+                      background: rainDaysSim === days ? '#38bdf8' : 'transparent',
+                      color: rainDaysSim === days ? '#060913' : '#94a3b8',
+                      border: 'none',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {days === 0 ? 'Normal' : `+${days}d`}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div style={{ width: '1px', height: '24px', background: tokens.colors.border.subtle }} />
@@ -590,6 +688,86 @@ export default function CronogramaPage() {
           <span style={{ fontWeight: '600', color: tokens.colors.accent.primary }}>Semana 18</span>
         </div>
       </div>
+      {/* Add Task Modal */}
+      {isAddModalOpen && (
+        <Modal
+          isOpen={isAddModalOpen}
+          onClose={() => setIsAddModalOpen(false)}
+          title="Agregar Nueva Tarea al Cronograma Gantt"
+          subtitle="Planificación de hitos y dependencias de obra"
+        >
+          <form onSubmit={handleAddTask} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div>
+              <label style={{ fontSize: '0.78rem', color: tokens.colors.text.muted, display: 'block', marginBottom: '4px' }}>Nombre de la Tarea / Hito *</label>
+              <input
+                required
+                placeholder="Ej: Montaje de Carpinterías DVH en Torre"
+                value={newTaskName}
+                onChange={e => setNewTaskName(e.target.value)}
+                style={{ width: '100%', padding: '10px 14px', background: '#060913', border: `1px solid ${tokens.colors.border.default}`, borderRadius: tokens.radius.sm, color: '#f8fafc' }}
+              />
+            </div>
+
+            <div>
+              <label style={{ fontSize: '0.78rem', color: tokens.colors.text.muted, display: 'block', marginBottom: '4px' }}>Rubro de Obra</label>
+              <select
+                value={newTaskGroup}
+                onChange={e => setNewTaskGroup(e.target.value)}
+                style={{ width: '100%', padding: '10px 14px', background: '#060913', border: `1px solid ${tokens.colors.border.default}`, borderRadius: tokens.radius.sm, color: '#f8fafc' }}
+              >
+                <option value="Estructura">Estructura & Hormigón</option>
+                <option value="Cerramientos">Cerramientos & Mampostería</option>
+                <option value="Terminaciones">Terminaciones & Revestimientos</option>
+                <option value="Instalaciones">Instalaciones Sanitarias / Eléctricas</option>
+              </select>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div>
+                <label style={{ fontSize: '0.78rem', color: tokens.colors.text.muted, display: 'block', marginBottom: '4px' }}>Semana de Inicio (1-18)</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="18"
+                  value={newTaskStart}
+                  onChange={e => setNewTaskStart(e.target.value)}
+                  style={{ width: '100%', padding: '10px 14px', background: '#060913', border: `1px solid ${tokens.colors.border.default}`, borderRadius: tokens.radius.sm, color: '#f8fafc' }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '0.78rem', color: tokens.colors.text.muted, display: 'block', marginBottom: '4px' }}>Duración (Semanas)</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="12"
+                  value={newTaskDuration}
+                  onChange={e => setNewTaskDuration(e.target.value)}
+                  style={{ width: '100%', padding: '10px 14px', background: '#060913', border: `1px solid ${tokens.colors.border.default}`, borderRadius: tokens.radius.sm, color: '#f8fafc' }}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label style={{ fontSize: '0.78rem', color: tokens.colors.text.muted, display: 'block', marginBottom: '4px' }}>Responsable (Iniciales)</label>
+              <select
+                value={newTaskAssignee}
+                onChange={e => setNewTaskAssignee(e.target.value)}
+                style={{ width: '100%', padding: '10px 14px', background: '#060913', border: `1px solid ${tokens.colors.border.default}`, borderRadius: tokens.radius.sm, color: '#f8fafc' }}
+              >
+                <option value="JZ">JZ - Ing. Juan Zapata</option>
+                <option value="MR">MR - Arq. Marcelo Rodríguez</option>
+                <option value="AP">AP - Capataz Antonio Pérez</option>
+                <option value="LG">LG - Subcontrato Lucas Gómez</option>
+              </select>
+            </div>
+
+            <Button variant="primary" size="md" style={{ width: '100%', marginTop: '6px' }} icon="📅">
+              Guardar Tarea en Gantt
+            </Button>
+          </form>
+        </Modal>
+      )}
+
     </div>
   );
 }
