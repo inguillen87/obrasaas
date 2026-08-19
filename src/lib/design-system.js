@@ -352,7 +352,7 @@ export const Button = forwardRef(function Button({ children, variant = 'primary'
 
 // Interactive Tab Switcher with sliding pill highlight
 // Interactive Tab Switcher with sliding pill highlight and responsive scroll
-export function Tabs({ tabs, activeTab, onChange, color = tokens.colors.accent.primary }) {
+export function Tabs({ tabs, activeTab, onChange, color = tokens.colors.accent.primary, style, ...props }) {
   return (
     <div style={{
       display: 'inline-flex',
@@ -367,7 +367,8 @@ export function Tabs({ tabs, activeTab, onChange, color = tokens.colors.accent.p
       padding: '4px',
       gap: '4px',
       backdropFilter: 'blur(10px)',
-      whiteSpace: 'nowrap'
+      whiteSpace: 'nowrap',
+      ...style
     }}>
       {tabs.map((tab) => {
         const isActive = activeTab === tab.id;

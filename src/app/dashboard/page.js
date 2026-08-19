@@ -1403,12 +1403,48 @@ export default function Dashboard() {
                 <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-rocket"></i> Landing Comercial</button>
               </Link>
             </li>
-            <li style={{ padding: '8px 16px', fontSize: '0.65rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 700, marginTop: '8px' }}>Enterprise</li>
+            <li style={{ padding: '8px 16px', fontSize: '0.65rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 700, marginTop: '8px' }}>Gestión de Obra</li>
+            <li className="nav-item">
+              <Link href="/libro-obra" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
+                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-book"></i> Libro de Obra</button>
+              </Link>
+            </li>
+            <li className="nav-item">
+              <Link href="/cronograma" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
+                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-calendar-days"></i> Cronograma Studio</button>
+              </Link>
+            </li>
+            <li className="nav-item">
+              <Link href="/inspecciones" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
+                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-clipboard-check"></i> Inspecciones QA/QC</button>
+              </Link>
+            </li>
+            <li className="nav-item">
+              <Link href="/documentos" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
+                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-folder-open"></i> Documentos & Submittals</button>
+              </Link>
+            </li>
+            <li className="nav-item">
+              <Link href="/presupuesto" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
+                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-calculator"></i> Presupuesto & Curva S</button>
+              </Link>
+            </li>
             <li className="nav-item">
               <Link href="/costos" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
                 <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-coins"></i> Control de Costos</button>
               </Link>
             </li>
+            <li className="nav-item">
+              <Link href="/planos" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
+                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-compass-drafting"></i> Visor Planos 2D</button>
+              </Link>
+            </li>
+            <li className="nav-item">
+              <Link href="/bim" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
+                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-cube"></i> Visor 3D BIM</button>
+              </Link>
+            </li>
+            <li style={{ padding: '8px 16px', fontSize: '0.65rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 700, marginTop: '8px' }}>Enterprise</li>
             <li className="nav-item">
               <Link href="/ejecutivo" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
                 <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-briefcase"></i> Dashboard CEO</button>
@@ -1420,13 +1456,8 @@ export default function Dashboard() {
               </Link>
             </li>
             <li className="nav-item">
-              <Link href="/superadmin" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
-                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-shield-halved"></i> Super Admin</button>
-              </Link>
-            </li>
-            <li className="nav-item">
-              <Link href="/api-docs" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
-                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-code"></i> API Docs</button>
+              <Link href="/compliance" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
+                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-scale-balanced"></i> Compliance</button>
               </Link>
             </li>
             <li className="nav-item">
@@ -1435,28 +1466,18 @@ export default function Dashboard() {
               </Link>
             </li>
             <li className="nav-item">
-              <Link href="/compliance" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
-                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-scale-balanced"></i> Compliance</button>
-              </Link>
-            </li>
-            <li className="nav-item">
-              <Link href="/bim" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
-                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-cube"></i> Visor 3D BIM</button>
-              </Link>
-            </li>
-            <li className="nav-item">
-              <Link href="/planos" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
-                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-compass-drafting"></i> Visor Planos 2D</button>
-              </Link>
-            </li>
-            <li className="nav-item">
-              <Link href="/poster" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
-                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-qrcode"></i> Cartel de Obra QR</button>
+              <Link href="/superadmin" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
+                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-shield-halved"></i> Super Admin</button>
               </Link>
             </li>
             <li className="nav-item">
               <Link href="/licitaciones" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
                 <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-landmark"></i> Licitómetro Público</button>
+              </Link>
+            </li>
+            <li className="nav-item">
+              <Link href="/api-docs" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
+                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-code"></i> API Docs</button>
               </Link>
             </li>
             <li className="nav-item">

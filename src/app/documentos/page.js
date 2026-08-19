@@ -65,7 +65,7 @@ export default function DocumentosPage() {
         <div style={{ minHeight: '100vh', padding: '0 0 60px 0', fontFamily: tokens.font.sans }}>
             <PageHeader 
                 title="Documentación Técnica"
-                breadcrumbs={[{ label: 'Dashboard', href: '/' }, { label: 'Documentación Técnica' }]}
+                breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Documentación Técnica' }]}
                 actions={
                     <Button variant="primary" icon={<svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>}>
                         Subir Documento

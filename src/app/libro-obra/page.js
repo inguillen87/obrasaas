@@ -514,7 +514,7 @@ export default function LibroObraPage() {
             <div style={{ maxWidth: '1440px', margin: '0 auto' }}>
                 <PageHeader 
                     title="Libro de Obra Digital" 
-                    breadcrumbs={['Dashboard', 'Libro de Obra']} 
+                    breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Libro de Obra' }]} 
                 >
                     <Button variant="primary" onClick={() => setActiveTab('nuevo')}>
                         ✍️ Nuevo Asiento

@@ -66,6 +66,52 @@ export default function DirectorRoleView({
         </div>
       </div>
 
+      {/* Quick Access Grid — Enterprise Modules */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))', gap: '10px', marginBottom: '20px' }}>
+        <Link href="/libro-obra" style={{ textDecoration: 'none' }}>
+          <div className="glass-panel-premium dashboard-card-hover" style={{ padding: '14px 16px', cursor: 'pointer', borderLeft: '3px solid #a855f7', transition: 'all 0.2s' }}>
+            <div style={{ fontSize: '1.2rem', marginBottom: '4px' }}>📖</div>
+            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#fff' }}>Libro de Obra</div>
+            <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>Ley 22.250 + CPAU</div>
+          </div>
+        </Link>
+        <Link href="/cronograma" style={{ textDecoration: 'none' }}>
+          <div className="glass-panel-premium dashboard-card-hover" style={{ padding: '14px 16px', cursor: 'pointer', borderLeft: '3px solid #3b82f6', transition: 'all 0.2s' }}>
+            <div style={{ fontSize: '1.2rem', marginBottom: '4px' }}>📅</div>
+            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#fff' }}>Cronograma Studio</div>
+            <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>Gantt CPM + Lookahead</div>
+          </div>
+        </Link>
+        <Link href="/inspecciones" style={{ textDecoration: 'none' }}>
+          <div className="glass-panel-premium dashboard-card-hover" style={{ padding: '14px 16px', cursor: 'pointer', borderLeft: '3px solid #10b981', transition: 'all 0.2s' }}>
+            <div style={{ fontSize: '1.2rem', marginBottom: '4px' }}>📋</div>
+            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#fff' }}>Inspecciones QA/QC</div>
+            <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>SRT 911/96 + CIRSOC</div>
+          </div>
+        </Link>
+        <Link href="/documentos" style={{ textDecoration: 'none' }}>
+          <div className="glass-panel-premium dashboard-card-hover" style={{ padding: '14px 16px', cursor: 'pointer', borderLeft: '3px solid #f59e0b', transition: 'all 0.2s' }}>
+            <div style={{ fontSize: '1.2rem', marginBottom: '4px' }}>📁</div>
+            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#fff' }}>Documentos</div>
+            <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>Submittals & Aprobaciones</div>
+          </div>
+        </Link>
+        <Link href="/planos" style={{ textDecoration: 'none' }}>
+          <div className="glass-panel-premium dashboard-card-hover" style={{ padding: '14px 16px', cursor: 'pointer', borderLeft: '3px solid #ef4444', transition: 'all 0.2s' }}>
+            <div style={{ fontSize: '1.2rem', marginBottom: '4px' }}>📐</div>
+            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#fff' }}>Planos & Punch List</div>
+            <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>QA/QC + RFIs</div>
+          </div>
+        </Link>
+        <Link href="/costos" style={{ textDecoration: 'none' }}>
+          <div className="glass-panel-premium dashboard-card-hover" style={{ padding: '14px 16px', cursor: 'pointer', borderLeft: '3px solid #06b6d4', transition: 'all 0.2s' }}>
+            <div style={{ fontSize: '1.2rem', marginBottom: '4px' }}>💰</div>
+            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#fff' }}>Costos & Adicionales</div>
+            <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>Change Orders CAC</div>
+          </div>
+        </Link>
+      </div>
+
       {/* Director Specific KPIs */}
       <div className="grid-4" style={{ marginBottom: '24px' }}>
         <div className="glass-panel-premium dashboard-card-hover stat-card">

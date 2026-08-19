@@ -107,7 +107,7 @@ export default function CronogramaPage() {
     }}>
       <PageHeader 
         title="Cronograma Studio" 
-        breadcrumbs={['Dashboard', 'Cronograma de Obra']}
+        breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Cronograma de Obra' }]}
         actions={
           <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
             <Link href="/dashboard" style={{ textDecoration: 'none' }}>
