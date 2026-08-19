@@ -86,7 +86,7 @@ export default function AdminPanel({
                     Indicadores clave de performance de la plataforma comercial.
                   </p>
                 </div>
-                <div className="grid-2" style={{ gap: '16px', marginBottom: 0, gridTemplateColumns: '1fr 1fr' }}>
+                <div className="grid-2" style={{ gap: '16px', marginBottom: 0 }}>
                   <div style={{ background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '8px', borderLeft: '3px solid var(--success)' }}>
                     <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block' }}>Retención (SLA)</span>
                     <strong style={{ fontSize: '1.25rem', fontFamily: 'var(--font-heading)', display: 'block' }}>100%</strong>

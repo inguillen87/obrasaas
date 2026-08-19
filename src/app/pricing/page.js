@@ -4,10 +4,12 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { tokens, Badge, Button, GlassCard, PageHeader } from '@/lib/design-system';
+import { useBreakpoint } from '@/lib/useBreakpoint';
 
 export default function PricingPage() {
     const [billingCycle, setBillingCycle] = useState('annual'); // 'monthly' | 'annual'
     const [activeFaq, setActiveFaq] = useState(null);
+    const { isMobile } = useBreakpoint();
 
     const plans = [
         {
@@ -157,7 +159,7 @@ export default function PricingPage() {
                 </div>
 
                 {/* Plans Grid */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '28px', marginBottom: '80px', alignItems: 'stretch' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(320px, 1fr))', gap: '28px', marginBottom: '80px', alignItems: 'stretch' }}>
                     {plans.map((plan) => {
                         const price = billingCycle === 'annual' ? plan.annualPrice : plan.monthlyPrice;
                         return (

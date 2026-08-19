@@ -199,7 +199,7 @@ export default function ApiDocsPage() {
             <main style={{ maxWidth: '1280px', margin: '0 auto', padding: '36px 24px 80px' }}>
                 
                 {/* Auth & Base URL Banner */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px', marginBottom: '36px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', gap: '20px', marginBottom: '36px' }}>
                     
                     {/* Base URL */}
                     <GlassCard style={{ padding: '24px' }}>

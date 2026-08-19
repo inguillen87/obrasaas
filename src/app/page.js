@@ -305,7 +305,7 @@ export default function Home() {
       </section>
 
       {/* ═══ CAPABILITIES GRID ═══ */}
-      <section id="soluciones" style={{ maxWidth: '1100px', margin: '0 auto', padding: '100px 32px 80px', position: 'relative', zIndex: 1 }}>
+      <section id="soluciones" style={{ maxWidth: '1100px', margin: '0 auto', padding: isMobile ? '60px 16px 48px' : '100px 32px 80px', position: 'relative', zIndex: 1 }}>
         <Reveal>
           <div style={{ textAlign: 'center', marginBottom: '56px' }}>
             <h2 style={{ fontSize: 'clamp(1.8rem, 4vw, 2.8rem)', fontWeight: 900, letterSpacing: '-0.04em', fontFamily: tokens.font.heading, margin: '0 0 12px' }}>
@@ -516,7 +516,7 @@ export default function Home() {
       </section>
 
       {/* ═══ FINAL CTA ═══ */}
-      <section style={{ position: 'relative', zIndex: 1, padding: '80px 32px', textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+      <section style={{ position: 'relative', zIndex: 1, padding: isMobile ? '48px 16px' : '80px 32px', textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
         <Reveal>
           <h2 style={{ fontSize: 'clamp(1.8rem, 4vw, 2.6rem)', fontWeight: 900, letterSpacing: '-0.04em', fontFamily: tokens.font.heading, margin: '0 0 16px' }}>
             Tu próxima obra, digitalizada{' '}

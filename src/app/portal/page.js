@@ -146,7 +146,7 @@ export default function VecinoDigitalPage() {
                 </GlassCard>
 
                 {/* Grid: Active Works & Completed Milestones */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px', marginBottom: '28px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', gap: '20px', marginBottom: '28px' }}>
                     
                     {/* Active Work */}
                     <GlassCard style={{ padding: '24px' }}>
@@ -195,7 +195,7 @@ export default function VecinoDigitalPage() {
                         <Badge color="#3b82f6" variant="filled">3 Nuevas Esta Semana</Badge>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))', gap: '16px' }}>
                         {photos.map(photo => (
                             <motion.div
                                 key={photo.id}

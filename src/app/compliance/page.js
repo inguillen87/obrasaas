@@ -135,7 +135,7 @@ export default function CompliancePage() {
                 {/* TAB 2: UOCRA SALARIES & CCT 76/75 */}
                 {activeTab === 'uocra' && (
                     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', gap: '16px', marginBottom: '24px' }}>
                             {(uocra.workers || []).map((w, i) => (
                                 <GlassCard key={i} style={{ padding: '20px' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>

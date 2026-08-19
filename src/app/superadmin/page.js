@@ -279,7 +279,7 @@ export default function SuperAdminDashboard() {
 
                     /* ============ BILLING & REVENUE ============ */
                     <div>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap: '20px' }}>
                             <GlassCard style={{ padding: '32px', textAlign: 'center' }} glow>
                                 <div style={{ color: '#94a3b8', fontSize: '0.85rem', marginBottom: '6px' }}>MRR (Monthly Recurring Revenue)</div>
                                 <div style={{ fontSize: '3rem', fontWeight: 900, color: '#10b981', fontFamily: tokens.font.heading }}>
