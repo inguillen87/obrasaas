@@ -1,9 +1,25 @@
 import "./globals.css";
 
 export const metadata = {
-  title: "ObraSaaS - Plataforma SaaS de Control de Obras",
-  description: "Control de presentismo por voz, Gantt dinámico y logística de acopios integrada. WhatsApp + IA + GPS.",
+  title: "ObraSaaS — Plataforma Enterprise de Control de Obra & Certificaciones Digitales",
+  description: "Sistema integral de gestión de obras con WhatsApp Bot IA, KYC biométrico, geocerca GPS, Libro de Obra Digital (Ley 22.250), Curva S financiera y certificaciones SHA-256. La plataforma #1 para constructoras en Argentina y LATAM.",
   manifest: "/manifest.json",
+  metadataBase: new URL("https://obrasaas.vercel.app"),
+  openGraph: {
+    title: "ObraSaaS — Plataforma Enterprise de Control de Obra",
+    description: "WhatsApp Bot IA + Geocerca GPS + Certificaciones SHA-256 para constructoras, desarrolladoras inmobiliarias y gobiernos.",
+    url: "https://obrasaas.vercel.app",
+    siteName: "ObraSaaS",
+    locale: "es_AR",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "ObraSaaS — Control de Obra Enterprise",
+    description: "La plataforma #1 para constructoras en Argentina. WhatsApp + IA + GPS + Certificaciones digitales.",
+  },
+  keywords: ["control de obra", "software construcción", "SaaS constructoras", "gestión de obras Argentina", "libro de obra digital", "UOCRA", "ART", "certificaciones digitales", "WhatsApp obra"],
+  robots: { index: true, follow: true },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
