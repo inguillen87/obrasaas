@@ -78,7 +78,7 @@ export default function VecinoDigitalPage() {
                         rel="noopener noreferrer"
                         style={{ textDecoration: 'none' }}
                     >
-                        <Button variant="whatsapp" size="sm" icon="💬">
+                        <Button variant="whatsapp" size="sm">
                             Consultar al Desarrollador
                         </Button>
                     </a>
@@ -97,7 +97,7 @@ export default function VecinoDigitalPage() {
                         {data?.project?.name || 'Torre Palermo Soho'}
                     </h1>
                     <p style={{ color: '#94a3b8', fontSize: '0.95rem', margin: 0 }}>
-                        📍 {data?.project?.address || 'Av. Santa Fe 3400'} — {data?.project?.city || 'CABA'}, {data?.project?.province || 'Buenos Aires'}
+                        {data?.project?.address || 'Av. Santa Fe 3400'} — {data?.project?.city || 'CABA'}, {data?.project?.province || 'Buenos Aires'}
                     </p>
                     <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '6px' }}>
                         Director Técnico: <strong>{data?.project?.director || 'Arq. Marcelo'}</strong> • Quincena Activa: <strong>{data?.progress?.currentQuincena || 'Q1'}</strong>
@@ -151,7 +151,7 @@ export default function VecinoDigitalPage() {
                     {/* Active Work */}
                     <GlassCard style={{ padding: '24px' }}>
                         <h3 style={{ fontSize: '1rem', fontWeight: 800, margin: '0 0 16px', color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            🏗️ Trabajos en Curso Esta Quincena
+                            Trabajos en curso
                         </h3>
                         {data?.activeWork?.length > 0 ? data.activeWork.map((w, i) => (
                             <div key={i} style={{ marginBottom: '14px', paddingBottom: '14px', borderBottom: i < data.activeWork.length - 1 ? '1px solid rgba(255,255,255,0.06)' : 'none' }}>
@@ -168,7 +168,7 @@ export default function VecinoDigitalPage() {
                     {/* Milestones */}
                     <GlassCard style={{ padding: '24px' }}>
                         <h3 style={{ fontSize: '1rem', fontWeight: 800, margin: '0 0 16px', color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            ✅ Hitos Certificados
+                            Hitos certificados
                         </h3>
                         {data?.milestones?.length > 0 ? data.milestones.map((m, i) => (
                             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px', padding: '10px 14px', background: 'rgba(16, 185, 129, 0.08)', borderRadius: '10px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
@@ -188,7 +188,7 @@ export default function VecinoDigitalPage() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                         <div>
                             <h3 style={{ fontSize: '1.1rem', fontWeight: 800, margin: 0, color: '#f8fafc' }}>
-                                📸 Registro Fotográfico Certificado
+                                Registro fotográfico
                             </h3>
                             <p style={{ color: '#94a3b8', fontSize: '0.8rem', margin: '4px 0 0' }}>Fotos en alta resolución con coordenadas GPS y fecha inmutable</p>
                         </div>
@@ -230,7 +230,7 @@ export default function VecinoDigitalPage() {
                 {/* Cryptographic SHA-256 Stamp */}
                 <GlassCard style={{ padding: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', border: '1px solid rgba(139, 92, 246, 0.3)', background: 'rgba(139, 92, 246, 0.04)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                        <span style={{ fontSize: '2rem' }}>🔐</span>
+                        <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(139, 92, 246, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#a78bfa', fontSize: '1rem', fontWeight: 900, fontFamily: tokens.font.mono }}>H</div>
                         <div>
                             <div style={{ fontSize: '0.88rem', fontWeight: 800, color: '#f8fafc' }}>
                                 Certificado Criptográfico de Avance Digital

@@ -204,7 +204,7 @@ export default function ApiDocsPage() {
                     {/* Base URL */}
                     <GlassCard style={{ padding: '24px' }}>
                         <div style={{ fontSize: '0.78rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '8px' }}>
-                            🌐 Base URL de Producción
+                            Base URL de producción
                         </div>
                         <div style={{ background: '#060913', padding: '12px 16px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.08)', fontFamily: tokens.font.mono, color: '#10b981', fontSize: '0.92rem' }}>
                             https://obrasaas.vercel.app
@@ -214,7 +214,7 @@ export default function ApiDocsPage() {
                     {/* Authentication */}
                     <GlassCard style={{ padding: '24px' }}>
                         <div style={{ fontSize: '0.78rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '8px' }}>
-                            🔐 Autenticación vía Header
+                            Autenticación vía header
                         </div>
                         <div style={{ background: '#060913', padding: '12px 16px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.08)', fontFamily: tokens.font.mono, color: '#f59e0b', fontSize: '0.92rem' }}>
                             x-api-key: tu_api_key_secreta
@@ -343,7 +343,7 @@ export default function ApiDocsPage() {
                 <div style={{ marginTop: '48px' }}>
                     <GlassCard style={{ padding: '28px' }}>
                         <h3 style={{ fontSize: '1.1rem', fontWeight: 800, margin: '0 0 16px', color: '#f8fafc' }}>
-                            ⚡ Cuotas y Rate Limits por Plan
+                            Cuotas y rate limits por plan
                         </h3>
                         <div style={{ overflowX: 'auto' }}>
                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
@@ -357,19 +357,19 @@ export default function ApiDocsPage() {
                                 </thead>
                                 <tbody>
                                     <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                                        <td style={{ padding: '12px 10px', fontWeight: 700, color: '#10b981' }}>🟢 Starter</td>
+                                        <td style={{ padding: '12px 10px', fontWeight: 700, color: '#10b981' }}>Starter</td>
                                         <td style={{ padding: '12px 10px', textAlign: 'center' }}>60</td>
                                         <td style={{ padding: '12px 10px', textAlign: 'center' }}>10,000</td>
                                         <td style={{ padding: '12px 10px', textAlign: 'center' }}>1</td>
                                     </tr>
                                     <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                                        <td style={{ padding: '12px 10px', fontWeight: 700, color: '#3b82f6' }}>🔵 Professional</td>
+                                        <td style={{ padding: '12px 10px', fontWeight: 700, color: '#3b82f6' }}>Professional</td>
                                         <td style={{ padding: '12px 10px', textAlign: 'center' }}>180</td>
                                         <td style={{ padding: '12px 10px', textAlign: 'center' }}>100,000</td>
                                         <td style={{ padding: '12px 10px', textAlign: 'center' }}>10</td>
                                     </tr>
                                     <tr>
-                                        <td style={{ padding: '12px 10px', fontWeight: 700, color: '#8b5cf6' }}>🟣 Enterprise</td>
+                                        <td style={{ padding: '12px 10px', fontWeight: 700, color: '#8b5cf6' }}>Enterprise</td>
                                         <td style={{ padding: '12px 10px', textAlign: 'center' }}>600</td>
                                         <td style={{ padding: '12px 10px', textAlign: 'center' }}>Ilimitado</td>
                                         <td style={{ padding: '12px 10px', textAlign: 'center' }}>Ilimitado</td>

@@ -164,7 +164,7 @@ export default function ExecutiveDashboard() {
                         <GlassCard style={{ padding: '28px', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                             <div>
                                 <h3 style={{ fontSize: '1.1rem', fontWeight: 800, margin: '0 0 16px', color: '#f8fafc' }}>
-                                    ⚡ Accesos Estratégicos
+                                    Accesos estratégicos
                                 </h3>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                     {[
@@ -201,7 +201,7 @@ export default function ExecutiveDashboard() {
 
                             <div style={{ marginTop: '24px', padding: '16px', background: 'rgba(245, 158, 11, 0.06)', borderRadius: '12px', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
                                 <div style={{ fontSize: '0.74rem', color: '#f59e0b', fontWeight: 800, marginBottom: '4px' }}>
-                                    💡 INSIGHT PREDICTIVO IA:
+                                    Insight predictivo:
                                 </div>
                                 <div style={{ fontSize: '0.78rem', color: '#cbd5e1', lineHeight: 1.4 }}>
                                     La ventana óptima meteorológica (CIRSOC 201) para el colado de la losa nivel 4 es este <strong>Jueves</strong> con 72hs de sol aseguradas.
@@ -217,7 +217,7 @@ export default function ExecutiveDashboard() {
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                             <div>
                                 <h3 style={{ fontSize: '1.1rem', fontWeight: 800, margin: 0, color: '#f8fafc' }}>
-                                    📋 Ejecución Presupuestaria por Rubro Constructivo
+                                    Ejecución presupuestaria por rubro Constructivo
                                 </h3>
                                 <p style={{ color: '#94a3b8', fontSize: '0.8rem', margin: '4px 0 0' }}>Monitoreo en vivo contra presupuesto inicial de obra</p>
                             </div>

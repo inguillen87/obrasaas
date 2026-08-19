@@ -162,7 +162,7 @@ export default function CompliancePage() {
                         {uocra.totals && (
                             <GlassCard style={{ padding: '28px', border: '1px solid rgba(59, 130, 246, 0.3)', background: 'radial-gradient(circle at center, rgba(59, 130, 246, 0.08) 0%, rgba(15, 23, 42, 0.7) 100%)' }}>
                                 <h3 style={{ fontSize: '1.05rem', fontWeight: 800, margin: '0 0 16px', color: '#f8fafc' }}>
-                                    📊 Consolidado de Costos Laborales (CCT 76/75)
+                                    Consolidado de costos laborales (CCT 76/75)
                                 </h3>
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '16px' }}>
                                     <div style={{ background: 'rgba(6, 9, 19, 0.6)', padding: '14px', borderRadius: '10px' }}>

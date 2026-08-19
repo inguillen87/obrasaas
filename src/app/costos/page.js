@@ -136,7 +136,7 @@ export default function CostosPage() {
                 </div>
 
                 {/* Rubros Grid */}
-                <h3 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: '12px', color: tokens.colors.text.secondary }}>📋 Desglose por Rubro</h3>
+                <h3 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: '12px', color: tokens.colors.text.secondary }}>Desglose por rubro</h3>
                 <motion.div
                     variants={staggerContainer}
                     initial="hidden"
@@ -239,7 +239,7 @@ export default function CostosPage() {
                             style={{ background: tokens.colors.bg.card, borderRadius: tokens.radius.xl, padding: '32px', width: '90%', maxWidth: '480px', border: `1px solid ${tokens.colors.border.default}` }}
                         >
                             <h2 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                💸 Registrar Gasto
+                                Registrar gasto
                             </h2>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                                 <select

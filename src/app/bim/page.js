@@ -202,7 +202,7 @@ export default function BimDigitalTwinPage() {
                                 transition: 'all 0.2s'
                             }}
                         >
-                            Mapa de Riesgo 🔥
+                            Mapa de riesgo
                         </button>
                         <button
                             onClick={() => setViewMode('materials')}
@@ -235,7 +235,7 @@ export default function BimDigitalTwinPage() {
                             alignItems: 'center',
                             gap: '6px'
                         }}>
-                            📐 Ver Planos 2D
+                            Ver Planos 2D
                         </button>
                     </Link>
                 </div>
@@ -596,7 +596,7 @@ export default function BimDigitalTwinPage() {
                                 boxShadow: '0 4px 14px rgba(16, 185, 129, 0.3)'
                             }}
                         >
-                            💬 Consultar Elemento vía WhatsApp
+                            Consultar Elemento vía WhatsApp
                         </a>
                         <Link
                             href="/dashboard"
