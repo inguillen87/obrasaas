@@ -61,6 +61,7 @@ export default function ExecutiveDashboard() {
                 actions={
                     <>
                         <Button variant="secondary" size="sm" onClick={loadData}>↻ Actualizar</Button>
+                        <Button variant="secondary" size="sm" icon="📄" onClick={() => window.print()}>Exportar PDF</Button>
                         <Link href="/costos">
                             <Button variant="primary" size="sm" icon="💰">Control de Costos</Button>
                         </Link>
@@ -250,7 +251,79 @@ export default function ExecutiveDashboard() {
                     </GlassCard>
                 )}
 
+                {/* Cash Flow Projection (6 Months) */}
+                <GlassCard style={{ padding: '28px', marginTop: '24px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                        <div>
+                            <h3 style={{ fontSize: '1.1rem', fontWeight: 800, margin: 0, color: '#f8fafc' }}>
+                                💹 Proyección de Flujo de Fondos Multi-Obra (6 Meses)
+                            </h3>
+                            <p style={{ color: '#94a3b8', fontSize: '0.8rem', margin: '4px 0 0' }}>Escenario con tasa de inflación CAC mensual del 4.2% aplicado sobre costos pendientes</p>
+                        </div>
+                        <Badge color="#06b6d4" variant="filled" size="sm">Actualizado Hoy</Badge>
+                    </div>
+
+                    {(() => {
+                        const totalPres = budget.totalPresupuesto || 85000000;
+                        const totalEjec = budget.totalEjecutado || 32500000;
+                        const pendiente = totalPres - totalEjec;
+                        const tasaMensual = 0.042;
+                        const meses = ['Sep 2026', 'Oct 2026', 'Nov 2026', 'Dic 2026', 'Ene 2027', 'Feb 2027'];
+                        
+                        return (
+                            <div style={{ overflowX: 'auto' }}>
+                                <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 6px', fontSize: '0.82rem' }}>
+                                    <thead>
+                                        <tr style={{ color: '#64748b', textTransform: 'uppercase', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.5px' }}>
+                                            <th style={{ textAlign: 'left', padding: '8px 14px' }}>Mes</th>
+                                            <th style={{ textAlign: 'right', padding: '8px 14px' }}>Egreso Proyectado</th>
+                                            <th style={{ textAlign: 'right', padding: '8px 14px' }}>Ajuste CAC</th>
+                                            <th style={{ textAlign: 'right', padding: '8px 14px' }}>Ingreso (Certificación)</th>
+                                            <th style={{ textAlign: 'right', padding: '8px 14px' }}>Saldo Acumulado</th>
+                                            <th style={{ textAlign: 'center', padding: '8px 14px' }}>Estado</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {meses.map((mes, i) => {
+                                            const egresoBase = (pendiente / 6);
+                                            const ajusteCAC = egresoBase * tasaMensual * (i + 1);
+                                            const egresoAjustado = egresoBase + ajusteCAC;
+                                            const ingreso = egresoBase * 1.12; // 12% markup
+                                            const saldo = (ingreso - egresoAjustado) * (i + 1);
+                                            const isPositive = saldo >= 0;
+                                            
+                                            return (
+                                                <tr key={i} style={{ background: 'rgba(15, 23, 42, 0.5)', borderRadius: '8px' }}>
+                                                    <td style={{ padding: '10px 14px', fontWeight: 700, color: '#f8fafc', borderRadius: '8px 0 0 8px' }}>{mes}</td>
+                                                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#f87171', fontFamily: tokens.font.mono }}>{formatARS(Math.round(egresoAjustado))}</td>
+                                                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#fbbf24', fontFamily: tokens.font.mono }}>+{formatARS(Math.round(ajusteCAC))}</td>
+                                                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#34d399', fontFamily: tokens.font.mono }}>{formatARS(Math.round(ingreso))}</td>
+                                                    <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 800, color: isPositive ? '#10b981' : '#ef4444', fontFamily: tokens.font.mono }}>{isPositive ? '+' : ''}{formatARS(Math.round(saldo))}</td>
+                                                    <td style={{ padding: '10px 14px', textAlign: 'center', borderRadius: '0 8px 8px 0' }}>
+                                                        <Badge color={isPositive ? '#10b981' : '#ef4444'} variant="filled" size="xs">
+                                                            {isPositive ? 'Superávit' : 'Déficit'}
+                                                        </Badge>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        );
+                    })()}
+                </GlassCard>
+
             </main>
+
+            {/* Print Stylesheet for PDF Export */}
+            <style jsx global>{`
+                @media print {
+                    body { background: #fff !important; color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                    header, nav, .no-print { display: none !important; }
+                    main { padding: 0 !important; max-width: 100% !important; }
+                }
+            `}</style>
         </div>
     );
 }
