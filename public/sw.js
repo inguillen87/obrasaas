@@ -1,11 +1,16 @@
 // ObraSaaS Service Worker — Offline-First for Field Workers
-const CACHE_NAME = 'obrasaas-v1';
+const CACHE_NAME = 'obrasaas-v2';
 const STATIC_ASSETS = [
+    '/',
     '/dashboard',
+    '/sign-in',
+    '/pricing',
     '/webview/attendance',
     '/webview/kyc',
     '/webview/medical',
-    '/manifest.json'
+    '/manifest.json',
+    '/icon-192.svg',
+    '/icon-512.svg'
 ];
 
 // Install: Cache core static assets
