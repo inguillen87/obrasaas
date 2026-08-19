@@ -124,6 +124,8 @@ model Project {
   projectPolicies       ProjectPolicy[]
   certifications        DigitalCertification[]
   blueprints            Blueprint[]
+  rfis                  RFI[]
+  changeOrders          ChangeOrder[]
 
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
@@ -440,6 +442,59 @@ model BillingSubscription {
   updatedAt           DateTime  @updatedAt
 
   @@index([tenantId])
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RFI (CONSULTAS TÉCNICAS) & CHANGE ORDERS (ADICIONALES DE OBRA)
+// ═══════════════════════════════════════════════════════════════
+
+model RFI {
+  id                  String    @id @default(cuid())
+  projectId           String
+  rfiNumber           Int       @default(1)
+  subject             String
+  question            String
+  suggestedAnswer     String?
+  officialAnswer      String?
+  status              String    @default("ABIERTO") // ABIERTO, EN_REVISION, RESPONDIDO, CERRADO
+  ballInCourt         String?   @default("Director Técnico") // Director Técnico, Calculista Estructural, Subcontratista
+  discipline          String    @default("Arquitectura") // Arquitectura, Estructura, Sanitarias, Eléctricas
+  pinCoordinates      Json?     // { blueprintId, x, y }
+  audioUrl            String?
+  costImpact          Float?    @default(0)
+  scheduleImpactDays  Int?      @default(0)
+  sha256Hash          String?
+  
+  project             Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([projectId, status])
+}
+
+model ChangeOrder {
+  id                  String    @id @default(cuid())
+  projectId           String
+  orderNumber         Int       @default(1)
+  title               String
+  description         String
+  rubroCode           String    @default("R-01") // Rubro constructivo
+  laborAmountARS      Float     @default(0)
+  materialAmountARS   Float     @default(0)
+  totalAmountARS      Float     @default(0)
+  totalAmountUSD      Float?    @default(0)
+  scheduleImpactDays  Int?      @default(0)
+  cacBaseIndex        Float?    @default(100.0)
+  status              String    @default("PENDIENTE_CLIENTE") // BORRADOR, PENDIENTE_CLIENTE, APROBADA, RECHAZADA
+  clientApprovedAt    DateTime?
+  clientSignature     String?
+  pdfUrl              String?
+
+  project             Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([projectId, status])
 }
 
 // ═══════════════════════════════════════════════════════════════

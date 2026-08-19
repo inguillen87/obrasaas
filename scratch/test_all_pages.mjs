@@ -33,6 +33,8 @@ const apiEndpointsToTest = [
   { path: '/api/admin/stats', name: 'API Admin Stats Platform-Wide', headers: { 'x-api-key': 'obrasaas_admin_key' } },
   { path: '/api/v1/certificacion/pdf', name: 'API Certificado PDF Oficial' },
   { path: '/api/admin/libro-obra/pdf', name: 'API Libro de Obra PDF (Ley 22.250)' },
+  { path: '/api/v1/rfi', name: 'API RFI Consultas Técnicas & Ball-in-Court' },
+  { path: '/api/v1/adicionales', name: 'API Change Orders & Adicionales CAC' },
 ];
 
 async function runFullVerification() {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { tokens, Badge, Button, GlassCard, PageHeader, Modal } from '@/lib/design-system';
@@ -10,22 +10,43 @@ export default function PlanosPage() {
     const { isMobile } = useBreakpoint();
     const [discipline, setDiscipline] = useState('Arquitectura');
     const [zoom, setZoom] = useState(1);
+    const [activeViewMode, setActiveViewMode] = useState('planos'); // 'planos' | 'punchlist' | 'rfi'
     const [pins, setPins] = useState([
-        { id: 'pin-1', x: 35, y: 42, discipline: 'Arquitectura', type: 'critical', title: 'Falta Enlucido Fino', reporter: 'Arq. Marcelo', date: '18 Ago' },
-        { id: 'pin-2', x: 68, y: 28, discipline: 'Sanitarias', type: 'warning', title: 'Prueba Hidráulica Pendiente', reporter: 'Carlos Pérez', date: '18 Ago' },
-        { id: 'pin-3', x: 50, y: 75, discipline: 'Estructura', type: 'success', title: 'Losa Nivelada 100%', reporter: 'Juan Gómez', date: '17 Ago' },
-        { id: 'pin-4', x: 82, y: 60, discipline: 'Eléctricas', type: 'info', title: 'Pase de Cañero Embutido', reporter: 'Miguel Silva', date: '16 Ago' }
+        { id: 'pin-1', x: 35, y: 42, discipline: 'Arquitectura', type: 'critical', title: 'Falta Enlucido Fino', reporter: 'Arq. Marcelo', date: '18 Ago', trade: 'Albañilería Principal', status: 'EN_CORRECCION', photoUrl: 'https://images.unsplash.com/photo-1541888946425-d0fbb180c5f5?auto=format&fit=crop&w=600&q=80', deadline: '20 Ago' },
+        { id: 'pin-2', x: 68, y: 28, discipline: 'Sanitarias', type: 'warning', title: 'Prueba Hidráulica Pendiente en Columna B', reporter: 'Carlos Pérez', date: '18 Ago', trade: 'Plomero / Gasista', status: 'ABIERTA', photoUrl: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80', deadline: '19 Ago' },
+        { id: 'pin-3', x: 50, y: 75, discipline: 'Estructura', type: 'success', title: 'Losa Nivelada 100% y Curada', reporter: 'Juan Gómez', date: '17 Ago', trade: 'Albañilería Principal', status: 'APROBADA', photoUrl: null, deadline: '17 Ago' },
+        { id: 'pin-4', x: 82, y: 60, discipline: 'Eléctricas', type: 'info', title: 'Pase de Cañero Embutido en Tabique', reporter: 'Miguel Silva', date: '16 Ago', trade: 'Electricista Matriculado', status: 'RESUELTA', photoUrl: null, deadline: '18 Ago' }
     ]);
+    const [rfis, setRfis] = useState([]);
     const [selectedPin, setSelectedPin] = useState(null);
     const [newPinModal, setNewPinModal] = useState({ show: false, x: 0, y: 0 });
     const [newPinTitle, setNewPinTitle] = useState('');
     const [newPinType, setNewPinType] = useState('warning');
+    const [newPinTrade, setNewPinTrade] = useState('Albañilería Principal');
+    const [newPinDeadline, setNewPinDeadline] = useState('24hs');
+    const [filterStatus, setFilterStatus] = useState('all');
+
+    useEffect(() => {
+        fetch('/api/v1/rfi')
+            .then(r => r.json())
+            .then(d => { if (d.rfis) setRfis(d.rfis); })
+            .catch(() => {});
+    }, []);
 
     const disciplines = [
         { id: 'Arquitectura', icon: '🏛️', label: 'Arquitectura' },
         { id: 'Estructura', icon: '🏗️', label: 'Estructura (CIRSOC)' },
         { id: 'Sanitarias', icon: '🚰', label: 'Inst. Sanitarias' },
         { id: 'Eléctricas', icon: '⚡', label: 'Inst. Eléctricas' }
+    ];
+
+    const tradesList = [
+        'Albañilería Principal (Juan Gómez)',
+        'Plomero / Gasista (Luis Martínez)',
+        'Pintor / Revestimientos (Carlos Pérez)',
+        'Electricista Matriculado',
+        'Herrería & Estructuras Metálicas',
+        'Yesería & Durlock'
     ];
 
     const handleCanvasClick = (e) => {
@@ -47,8 +68,12 @@ export default function PlanosPage() {
             discipline,
             type: newPinType,
             title: newPinTitle,
-            reporter: 'Arq. Marcelo',
-            date: 'Hoy'
+            reporter: 'Arq. Marcelo (Director)',
+            date: 'Hoy',
+            trade: newPinTrade,
+            status: 'ABIERTA',
+            photoUrl: null,
+            deadline: newPinDeadline
         };
 
         setPins([...pins, newPin]);
@@ -56,13 +81,31 @@ export default function PlanosPage() {
         setNewPinTitle('');
     };
 
-    const filteredPins = pins.filter(p => p.discipline === discipline);
+    const handleUpdatePinStatus = (pinId, newStatus) => {
+        setPins(pins.map(p => p.id === pinId ? { ...p, status: newStatus } : p));
+        if (selectedPin && selectedPin.id === pinId) {
+            setSelectedPin({ ...selectedPin, status: newStatus });
+        }
+    };
+
+    const filteredPins = pins.filter(p => {
+        const matchDisc = p.discipline === discipline;
+        const matchStatus = filterStatus === 'all' || p.status === filterStatus;
+        return matchDisc && matchStatus;
+    });
 
     const pinColorMap = {
         critical: '#ef4444',
         warning: '#f59e0b',
         info: '#3b82f6',
         success: '#10b981'
+    };
+
+    const statusBadgeMap = {
+        ABIERTA: { color: '#ef4444', label: '🔴 ABIERTA' },
+        EN_CORRECCION: { color: '#f59e0b', label: '🟡 EN CORRECCIÓN' },
+        RESUELTA: { color: '#3b82f6', label: '🔵 RESUELTA' },
+        APROBADA: { color: '#10b981', label: '🟢 APROBADA POR DIRECCIÓN' }
     };
 
     return (
@@ -87,185 +130,410 @@ export default function PlanosPage() {
 
             <main style={{ maxWidth: '1440px', margin: '0 auto', padding: '20px clamp(14px, 4vw, 32px) 80px' }}>
                 
-                {/* Control Bar */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
-                    {/* Discipline Switcher */}
-                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                        {disciplines.map(d => (
-                            <button
-                                key={d.id}
-                                onClick={() => setDiscipline(d.id)}
-                                style={{
-                                    padding: '8px 16px',
-                                    borderRadius: '10px',
-                                    border: discipline === d.id ? '1px solid #38bdf8' : '1px solid rgba(255, 255, 255, 0.08)',
-                                    background: discipline === d.id ? 'rgba(56, 189, 248, 0.15)' : 'rgba(15, 23, 42, 0.6)',
-                                    color: discipline === d.id ? '#38bdf8' : '#94a3b8',
-                                    fontSize: '0.82rem',
-                                    fontWeight: discipline === d.id ? 700 : 500,
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '6px'
-                                }}
-                            >
-                                <span>{d.icon}</span>
-                                <span>{d.label}</span>
-                            </button>
-                        ))}
-                    </div>
-
-                    {/* Zoom & View Controls */}
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                        <Button variant="secondary" size="sm" onClick={() => setZoom(prev => Math.max(0.7, prev - 0.15))}>-</Button>
-                        <span style={{ fontSize: '0.82rem', color: '#94a3b8', fontFamily: tokens.font.mono }}>{Math.round(zoom * 100)}%</span>
-                        <Button variant="secondary" size="sm" onClick={() => setZoom(prev => Math.min(2.0, prev + 0.15))}>+</Button>
-                        <Button variant="ghost" size="sm" onClick={() => setZoom(1)}>Reset</Button>
-                    </div>
-                </div>
-
-                {/* Main Blueprint Canvas Area */}
-                <div style={{ display: 'grid', gridTemplateColumns: (selectedPin && !isMobile) ? '1fr 340px' : '1fr', gap: '20px' }}>
-                    
-                    <GlassCard style={{ padding: '16px', overflow: 'auto', WebkitOverflowScrolling: 'touch', minHeight: isMobile ? '380px' : '620px', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-                        
-                        <div
-                            onClick={handleCanvasClick}
+                {/* View Mode & Control Bar */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '16px' }}>
+                    {/* View Switcher Tabs */}
+                    <div style={{ display: 'flex', gap: '6px', background: 'rgba(15, 23, 42, 0.6)', padding: '4px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                        <button
+                            onClick={() => setActiveViewMode('planos')}
                             style={{
-                                width: '920px',
-                                height: '580px',
-                                background: '#0a0f1d',
-                                border: '2px solid rgba(59, 130, 246, 0.4)',
-                                borderRadius: '12px',
-                                position: 'relative',
-                                transform: `scale(${zoom})`,
-                                transformOrigin: 'center center',
-                                transition: 'transform 0.2s ease',
-                                cursor: 'crosshair',
-                                backgroundImage: `
-                                    linear-gradient(to right, rgba(59, 130, 246, 0.08) 1px, transparent 1px),
-                                    linear-gradient(to bottom, rgba(59, 130, 246, 0.08) 1px, transparent 1px)
-                                `,
-                                backgroundSize: '40px 40px'
+                                padding: '6px 14px',
+                                borderRadius: '8px',
+                                background: activeViewMode === 'planos' ? '#f59e0b' : 'transparent',
+                                color: activeViewMode === 'planos' ? '#060913' : '#94a3b8',
+                                fontWeight: 700,
+                                fontSize: '0.8rem',
+                                border: 'none',
+                                cursor: 'pointer'
                             }}
                         >
-                            {/* Blueprint SVG Vector Layout */}
-                            <svg width="100%" height="100%" style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none' }}>
-                                {/* Perimeter walls */}
-                                <rect x="40" y="40" width="840" height="500" fill="none" stroke="#38bdf8" strokeWidth="3" strokeDasharray="0" />
-                                
-                                {/* Room divisions */}
-                                <line x1="320" y1="40" x2="320" y2="540" stroke="#38bdf8" strokeWidth="2" />
-                                <line x1="620" y1="40" x2="620" y2="340" stroke="#38bdf8" strokeWidth="2" />
-                                <line x1="40" y1="300" x2="320" y2="300" stroke="#38bdf8" strokeWidth="2" />
-                                <line x1="320" y1="340" x2="880" y2="340" stroke="#38bdf8" strokeWidth="2" />
+                            📐 Plano 2D & Pines
+                        </button>
+                        <button
+                            onClick={() => setActiveViewMode('punchlist')}
+                            style={{
+                                padding: '6px 14px',
+                                borderRadius: '8px',
+                                background: activeViewMode === 'punchlist' ? '#f59e0b' : 'transparent',
+                                color: activeViewMode === 'punchlist' ? '#060913' : '#94a3b8',
+                                fontWeight: 700,
+                                fontSize: '0.8rem',
+                                border: 'none',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px'
+                            }}
+                        >
+                            📋 Punch List QA/QC
+                            <Badge color="#ef4444" variant="filled" size="xs">{pins.filter(p => p.status === 'ABIERTA' || p.status === 'EN_CORRECCION').length}</Badge>
+                        </button>
+                        <button
+                            onClick={() => setActiveViewMode('rfi')}
+                            style={{
+                                padding: '6px 14px',
+                                borderRadius: '8px',
+                                background: activeViewMode === 'rfi' ? '#f59e0b' : 'transparent',
+                                color: activeViewMode === 'rfi' ? '#060913' : '#94a3b8',
+                                fontWeight: 700,
+                                fontSize: '0.8rem',
+                                border: 'none',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px'
+                            }}
+                        >
+                            💬 Consultas Técnicas (RFI)
+                            <Badge color="#3b82f6" variant="filled" size="xs">{rfis.length}</Badge>
+                        </button>
+                    </div>
 
-                                {/* Columns & Structural elements */}
-                                <rect x="35" y="35" width="20" height="20" fill="#f59e0b" />
-                                <rect x="310" y="35" width="20" height="20" fill="#f59e0b" />
-                                <rect x="610" y="35" width="20" height="20" fill="#f59e0b" />
-                                <rect x="865" y="35" width="20" height="20" fill="#f59e0b" />
-                                <rect x="35" y="525" width="20" height="20" fill="#f59e0b" />
-                                <rect x="310" y="525" width="20" height="20" fill="#f59e0b" />
-                                <rect x="865" y="525" width="20" height="20" fill="#f59e0b" />
-
-                                {/* Labels */}
-                                <text x="140" y="180" fill="#64748b" fontSize="14" fontWeight="bold" fontFamily="sans-serif">DORMITORIO PPAL</text>
-                                <text x="140" y="420" fill="#64748b" fontSize="14" fontWeight="bold" fontFamily="sans-serif">ESTAR / COMEDOR</text>
-                                <text x="440" y="180" fill="#64748b" fontSize="14" fontWeight="bold" fontFamily="sans-serif">COCINA INTEGRADA</text>
-                                <text x="720" y="180" fill="#64748b" fontSize="14" fontWeight="bold" fontFamily="sans-serif">SUITE BALCÓN</text>
-                                <text x="560" y="440" fill="#64748b" fontSize="14" fontWeight="bold" fontFamily="sans-serif">TERRAZA TÉCNICA</text>
-                            </svg>
-
-                            {/* Clickable Pins */}
-                            {filteredPins.map(pin => (
-                                <motion.div
-                                    key={pin.id}
-                                    initial={{ scale: 0 }}
-                                    animate={{ scale: 1 }}
-                                    onClick={(e) => { e.stopPropagation(); setSelectedPin(pin); }}
+                    {/* Discipline Switcher (for plan mode) */}
+                    {activeViewMode === 'planos' && (
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                            {disciplines.map(d => (
+                                <button
+                                    key={d.id}
+                                    onClick={() => setDiscipline(d.id)}
                                     style={{
-                                        position: 'absolute',
-                                        left: `${pin.x}%`,
-                                        top: `${pin.y}%`,
-                                        transform: 'translate(-50%, -100%)',
+                                        padding: '8px 14px',
+                                        borderRadius: '10px',
+                                        border: discipline === d.id ? '1px solid #38bdf8' : '1px solid rgba(255, 255, 255, 0.08)',
+                                        background: discipline === d.id ? 'rgba(56, 189, 248, 0.15)' : 'rgba(15, 23, 42, 0.6)',
+                                        color: discipline === d.id ? '#38bdf8' : '#94a3b8',
+                                        fontSize: '0.8rem',
+                                        fontWeight: discipline === d.id ? 700 : 500,
                                         cursor: 'pointer',
-                                        zIndex: 10
-                                    }}
-                                >
-                                    <div style={{
-                                        background: pinColorMap[pin.type] || '#f59e0b',
-                                        color: '#fff',
-                                        width: '28px',
-                                        height: '28px',
-                                        borderRadius: '50% 50% 50% 0',
-                                        transform: 'rotate(-45deg)',
                                         display: 'flex',
                                         alignItems: 'center',
-                                        justifyContent: 'center',
-                                        boxShadow: `0 4px 12px ${pinColorMap[pin.type]}80`,
-                                        border: '2px solid #fff'
-                                    }}>
-                                        <span style={{ transform: 'rotate(45deg)', fontSize: '11px', fontWeight: 900 }}>📍</span>
+                                        gap: '6px'
+                                    }}
+                                >
+                                    <span>{d.icon}</span>
+                                    <span>{d.label}</span>
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* VIEW 1: INTERACTIVE 2D FLOORPLAN */}
+                {activeViewMode === 'planos' && (
+                    <div style={{ display: 'grid', gridTemplateColumns: (selectedPin && !isMobile) ? '1fr 360px' : '1fr', gap: '20px', alignItems: 'start' }}>
+                        
+                        <GlassCard style={{ padding: '0', overflow: 'hidden', border: '1px solid rgba(56, 189, 248, 0.3)' }}>
+                            <div style={{ padding: '12px 20px', background: 'rgba(15, 23, 42, 0.8)', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <span style={{ fontSize: '0.8rem', color: '#64748b', fontFamily: tokens.font.mono }}>LÁMINA: ARQ-P03-REV02</span>
+                                    <Badge color="#38bdf8" variant="filled" size="xs">Escala 1:50</Badge>
+                                </div>
+                                <div style={{ fontSize: '0.74rem', color: '#94a3b8' }}>
+                                    💡 Haz clic en el plano para colocar un marcador geolocalizado
+                                </div>
+                            </div>
+
+                            {/* Plan Canvas SVG */}
+                            <div
+                                onClick={handleCanvasClick}
+                                style={{
+                                    position: 'relative',
+                                    width: '100%',
+                                    minHeight: '440px',
+                                    height: '62vh',
+                                    background: '#040711',
+                                    overflow: 'auto',
+                                    cursor: 'crosshair',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    touchAction: 'pan-x pan-y',
+                                    WebkitOverflowScrolling: 'touch'
+                                }}
+                            >
+                                <svg width="1000" height="600" viewBox="0 0 1000 600" style={{ transform: `scale(${zoom})`, transformOrigin: 'center center', transition: 'transform 0.2s', width: '100%', height: '100%', minWidth: '700px' }}>
+                                    <defs>
+                                        <pattern id="grid-pattern" width="40" height="40" patternUnits="userSpaceOnUse">
+                                            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(56, 189, 248, 0.06)" strokeWidth="1" />
+                                        </pattern>
+                                    </defs>
+                                    <rect width="1000" height="600" fill="url(#grid-pattern)" />
+
+                                    {/* Architectural Walls */}
+                                    <rect x="80" y="80" width="840" height="440" fill="none" stroke="#38bdf8" strokeWidth="4" />
+                                    <line x1="400" y1="80" x2="400" y2="520" stroke="#38bdf8" strokeWidth="3" />
+                                    <line x1="80" y1="320" x2="400" y2="320" stroke="#38bdf8" strokeWidth="3" />
+                                    <line x1="650" y1="80" x2="650" y2="360" stroke="#38bdf8" strokeWidth="3" />
+
+                                    {/* Rooms Labels */}
+                                    <text x="140" y="180" fill="#64748b" fontSize="14" fontWeight="bold" fontFamily="sans-serif">DORMITORIO PPAL</text>
+                                    <text x="140" y="420" fill="#64748b" fontSize="14" fontWeight="bold" fontFamily="sans-serif">ESTAR / COMEDOR</text>
+                                    <text x="440" y="180" fill="#64748b" fontSize="14" fontWeight="bold" fontFamily="sans-serif">COCINA INTEGRADA</text>
+                                    <text x="720" y="180" fill="#64748b" fontSize="14" fontWeight="bold" fontFamily="sans-serif">SUITE BALCÓN</text>
+                                    <text x="560" y="440" fill="#64748b" fontSize="14" fontWeight="bold" fontFamily="sans-serif">TERRAZA TÉCNICA</text>
+                                </svg>
+
+                                {/* Clickable Pins */}
+                                {filteredPins.map(pin => (
+                                    <motion.div
+                                        key={pin.id}
+                                        initial={{ scale: 0 }}
+                                        animate={{ scale: 1 }}
+                                        onClick={(e) => { e.stopPropagation(); setSelectedPin(pin); }}
+                                        style={{
+                                            position: 'absolute',
+                                            left: `${pin.x}%` ,
+                                            top: `${pin.y}%`,
+                                            transform: 'translate(-50%, -100%)',
+                                            cursor: 'pointer',
+                                            zIndex: 10
+                                        }}
+                                    >
+                                        <div style={{
+                                            background: pinColorMap[pin.type] || '#f59e0b',
+                                            color: '#fff',
+                                            width: '30px',
+                                            height: '30px',
+                                            borderRadius: '50% 50% 50% 0',
+                                            transform: 'rotate(-45deg)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            boxShadow: `0 4px 14px ${pinColorMap[pin.type]}90`,
+                                            border: '2px solid #fff'
+                                        }}>
+                                            <span style={{ transform: 'rotate(45deg)', fontSize: '11px', fontWeight: 900 }}>📍</span>
+                                        </div>
+                                    </motion.div>
+                                ))}
+                            </div>
+                        </GlassCard>
+
+                        {/* Side Detail Card for Selected Pin */}
+                        {selectedPin && (
+                            <GlassCard style={{ padding: '24px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                                <div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                                        <Badge color={statusBadgeMap[selectedPin.status]?.color || '#f59e0b'} variant="filled" size="xs">
+                                            {statusBadgeMap[selectedPin.status]?.label || selectedPin.status}
+                                        </Badge>
+                                        <button
+                                            onClick={() => setSelectedPin(null)}
+                                            style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '1.1rem' }}
+                                        >
+                                            ✕
+                                        </button>
                                     </div>
-                                </motion.div>
+
+                                    <h3 style={{ fontSize: '1.05rem', fontWeight: 800, margin: '0 0 10px', color: '#f8fafc' }}>
+                                        {selectedPin.title}
+                                    </h3>
+
+                                    <div style={{ fontSize: '0.8rem', color: '#94a3b8', display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
+                                        <div>🏷️ Disciplina: <strong style={{ color: '#f8fafc' }}>{selectedPin.discipline}</strong></div>
+                                        <div>👷 Gremio Asignado: <strong style={{ color: '#f59e0b' }}>{selectedPin.trade}</strong></div>
+                                        <div>👤 Reportó: <strong style={{ color: '#f8fafc' }}>{selectedPin.reporter}</strong></div>
+                                        <div>⏰ Plazo Máximo: <strong style={{ color: '#38bdf8' }}>{selectedPin.deadline}</strong></div>
+                                        <div>📍 Coordenadas: <code style={{ color: '#f59e0b' }}>X:{selectedPin.x}% Y:{selectedPin.y}%</code></div>
+                                    </div>
+
+                                    {/* Status Transition Buttons */}
+                                    <div style={{ marginBottom: '16px' }}>
+                                        <label style={{ fontSize: '0.72rem', color: '#64748b', display: 'block', marginBottom: '6px', textTransform: 'uppercase', fontWeight: 700 }}>
+                                            Cambiar Estado QA/QC:
+                                        </label>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                                            <button
+                                                onClick={() => handleUpdatePinStatus(selectedPin.id, 'EN_CORRECCION')}
+                                                style={{ padding: '6px', borderRadius: '6px', background: selectedPin.status === 'EN_CORRECCION' ? '#f59e0b' : 'rgba(15, 23, 42, 0.6)', color: selectedPin.status === 'EN_CORRECCION' ? '#060913' : '#fcd34d', border: '1px solid rgba(245,158,11,0.3)', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer' }}
+                                            >
+                                                🟡 En Corrección
+                                            </button>
+                                            <button
+                                                onClick={() => handleUpdatePinStatus(selectedPin.id, 'RESUELTA')}
+                                                style={{ padding: '6px', borderRadius: '6px', background: selectedPin.status === 'RESUELTA' ? '#3b82f6' : 'rgba(15, 23, 42, 0.6)', color: selectedPin.status === 'RESUELTA' ? '#fff' : '#93c5fd', border: '1px solid rgba(59,130,246,0.3)', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer' }}
+                                            >
+                                                🔵 Resuelta
+                                            </button>
+                                            <button
+                                                onClick={() => handleUpdatePinStatus(selectedPin.id, 'APROBADA')}
+                                                style={{ gridColumn: 'span 2', padding: '6px', borderRadius: '6px', background: selectedPin.status === 'APROBADA' ? '#10b981' : 'rgba(15, 23, 42, 0.6)', color: selectedPin.status === 'APROBADA' ? '#060913' : '#86efac', border: '1px solid rgba(16,185,129,0.3)', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer' }}
+                                            >
+                                                🟢 Aprobada por Dirección
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    <Button
+                                        variant="whatsapp"
+                                        size="sm"
+                                        icon="💬"
+                                        onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(`🚨 *NO CONFORMIDAD EN OBRA*\n• Título: *${selectedPin.title}*\n• Gremio: ${selectedPin.trade}\n• Disciplina: ${selectedPin.discipline}\n• Coordenadas: X:${selectedPin.x}% Y:${selectedPin.y}%\n• Plazo de Subsanación: ${selectedPin.deadline}\n\n_Gestionado vía ObraSaaS QA/QC Engine_`)}`)}
+                                    >
+                                        Notificar al Gremio por WhatsApp
+                                    </Button>
+                                    <Button
+                                        variant="danger"
+                                        size="sm"
+                                        onClick={() => {
+                                            setPins(pins.filter(p => p.id !== selectedPin.id));
+                                            setSelectedPin(null);
+                                        }}
+                                    >
+                                        Eliminar Marcador
+                                    </Button>
+                                </div>
+                            </GlassCard>
+                        )}
+
+                    </div>
+                )}
+
+                {/* VIEW 2: PUNCH LIST & NO CONFORMIDADES TABLE */}
+                {activeViewMode === 'punchlist' && (
+                    <GlassCard style={{ padding: '24px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+                            <div>
+                                <h3 style={{ fontSize: '1.15rem', fontWeight: 800, margin: '0 0 4px', color: '#f8fafc' }}>
+                                    📋 Punch List & Registro de No Conformidades
+                                </h3>
+                                <p style={{ color: '#94a3b8', fontSize: '0.8rem', margin: 0 }}>
+                                    Seguimiento riguroso de vicios, terminaciones y observaciones por subcontratista
+                                </p>
+                            </div>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                {['all', 'ABIERTA', 'EN_CORRECCION', 'RESUELTA', 'APROBADA'].map(st => (
+                                    <button
+                                        key={st}
+                                        onClick={() => setFilterStatus(st)}
+                                        style={{
+                                            padding: '4px 10px',
+                                            borderRadius: '6px',
+                                            background: filterStatus === st ? '#f59e0b' : 'rgba(15, 23, 42, 0.6)',
+                                            color: filterStatus === st ? '#060913' : '#94a3b8',
+                                            border: '1px solid rgba(255,255,255,0.08)',
+                                            fontSize: '0.74rem',
+                                            fontWeight: 700,
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        {st === 'all' ? 'Todos' : st}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+                            <table style={{ width: '100%', minWidth: '780px', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+                                <thead>
+                                    <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#64748b', textAlign: 'left' }}>
+                                        <th style={{ padding: '10px' }}>ESTADO</th>
+                                        <th style={{ padding: '10px' }}>DESCRIPCIÓN DE NO CONFORMIDAD</th>
+                                        <th style={{ padding: '10px' }}>GREMIO RESPONSABLE</th>
+                                        <th style={{ padding: '10px' }}>DISCIPLINA</th>
+                                        <th style={{ padding: '10px' }}>PLAZO</th>
+                                        <th style={{ padding: '10px', textAlign: 'right' }}>ACCIONES</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {pins.filter(p => filterStatus === 'all' || p.status === filterStatus).map((p, i) => (
+                                        <tr key={p.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: i % 2 === 0 ? 'rgba(15, 23, 42, 0.3)' : 'transparent' }}>
+                                            <td style={{ padding: '12px 10px' }}>
+                                                <Badge color={statusBadgeMap[p.status]?.color || '#f59e0b'} variant="filled" size="xs">
+                                                    {statusBadgeMap[p.status]?.label || p.status}
+                                                </Badge>
+                                            </td>
+                                            <td style={{ padding: '12px 10px', fontWeight: 700, color: '#f8fafc' }}>
+                                                {p.title}
+                                                <span style={{ display: 'block', fontSize: '0.7rem', color: '#64748b', fontWeight: 400 }}>Ubicación: X:{p.x}% Y:{p.y}%</span>
+                                            </td>
+                                            <td style={{ padding: '12px 10px', color: '#f59e0b', fontWeight: 600 }}>{p.trade}</td>
+                                            <td style={{ padding: '12px 10px', color: '#94a3b8' }}>{p.discipline}</td>
+                                            <td style={{ padding: '12px 10px', color: '#38bdf8', fontWeight: 700 }}>{p.deadline}</td>
+                                            <td style={{ padding: '12px 10px', textAlign: 'right' }}>
+                                                <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                                                    <button
+                                                        onClick={() => { setSelectedPin(p); setActiveViewMode('planos'); }}
+                                                        style={{ padding: '4px 8px', background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: '6px', fontSize: '0.72rem', cursor: 'pointer' }}
+                                                    >
+                                                        Ver en Plano
+                                                    </button>
+                                                    <button
+                                                        onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(`🚨 *RECLAMO PUNCH LIST OBRA*\n• Ítem: *${p.title}*\n• Gremio: ${p.trade}\n• Plazo: ${p.deadline}\n\nPor favor confirmar inicio de reparación por este medio.`)}`)}
+                                                        style={{ padding: '4px 8px', background: 'rgba(37, 211, 102, 0.15)', color: '#25d366', border: '1px solid rgba(37, 211, 102, 0.3)', borderRadius: '6px', fontSize: '0.72rem', cursor: 'pointer' }}
+                                                    >
+                                                        💬 WhatsApp
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </GlassCard>
+                )}
+
+                {/* VIEW 3: RFIS (CONSULTAS TÉCNICAS) */}
+                {activeViewMode === 'rfi' && (
+                    <GlassCard style={{ padding: '24px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+                            <div>
+                                <h3 style={{ fontSize: '1.15rem', fontWeight: 800, margin: '0 0 4px', color: '#f8fafc' }}>
+                                    💬 Consultas Técnicas Formales (RFIs & Ball-in-Court)
+                                </h3>
+                                <p style={{ color: '#94a3b8', fontSize: '0.8rem', margin: 0 }}>
+                                    Resolución de interferencias, cotas y detalles constructivos sin retrasar el cronograma
+                                </p>
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))', gap: '16px' }}>
+                            {rfis.map(rfi => (
+                                <div key={rfi.id} style={{ background: 'rgba(15, 23, 42, 0.7)', padding: '18px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                                    <div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                            <Badge color={rfi.status === 'RESPONDIDO' ? '#10b981' : '#f59e0b'} variant="filled" size="xs">
+                                                RFI #{rfi.rfiNumber} • {rfi.status}
+                                            </Badge>
+                                            <span style={{ fontSize: '0.72rem', color: '#38bdf8' }}>{rfi.discipline}</span>
+                                        </div>
+
+                                        <h4 style={{ fontSize: '0.95rem', fontWeight: 800, color: '#f8fafc', margin: '0 0 8px' }}>
+                                            {rfi.subject}
+                                        </h4>
+                                        <p style={{ fontSize: '0.8rem', color: '#cbd5e1', lineHeight: 1.4, margin: '0 0 12px' }}>
+                                            "{rfi.question}"
+                                        </p>
+
+                                        {rfi.officialAnswer ? (
+                                            <div style={{ background: 'rgba(16, 185, 129, 0.1)', padding: '10px 12px', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.3)', marginBottom: '12px' }}>
+                                                <div style={{ fontSize: '0.7rem', color: '#10b981', fontWeight: 700, marginBottom: '2px' }}>✓ RESPUESTA OFICIAL DIRECCIÓN:</div>
+                                                <div style={{ fontSize: '0.78rem', color: '#f8fafc' }}>{rfi.officialAnswer}</div>
+                                            </div>
+                                        ) : (
+                                            <div style={{ background: 'rgba(245, 158, 11, 0.1)', padding: '10px 12px', borderRadius: '8px', border: '1px solid rgba(245, 158, 11, 0.3)', marginBottom: '12px' }}>
+                                                <div style={{ fontSize: '0.7rem', color: '#f59e0b', fontWeight: 700, marginBottom: '2px' }}>⏳ RESPONSABLE ACTUAL (BALL-IN-COURT):</div>
+                                                <div style={{ fontSize: '0.78rem', color: '#fcd34d' }}>{rfi.ballInCourt}</div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <Button
+                                        variant="secondary"
+                                        size="sm"
+                                        icon="💬"
+                                        onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(`📋 *RFI #${rfi.rfiNumber}: ${rfi.subject}*\n• Estado: ${rfi.status}\n• Consulta: ${rfi.question}\n• Respuesta: ${rfi.officialAnswer || 'Pendiente de Director'}`)}`)}
+                                    >
+                                        Compartir RFI en WhatsApp
+                                    </Button>
+                                </div>
                             ))}
                         </div>
                     </GlassCard>
-
-                    {/* Side Detail Card for Selected Pin */}
-                    {selectedPin && (
-                        <GlassCard style={{ padding: '24px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                            <div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-                                    <Badge color={pinColorMap[selectedPin.type]} variant="filled" size="xs">
-                                        {selectedPin.type.toUpperCase()}
-                                    </Badge>
-                                    <button
-                                        onClick={() => setSelectedPin(null)}
-                                        style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '1rem' }}
-                                    >
-                                        ✕
-                                    </button>
-                                </div>
-
-                                <h3 style={{ fontSize: '1.1rem', fontWeight: 800, margin: '0 0 8px', color: '#f8fafc' }}>
-                                    {selectedPin.title}
-                                </h3>
-
-                                <div style={{ fontSize: '0.8rem', color: '#94a3b8', display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '20px' }}>
-                                    <div>🏷️ Disciplina: <strong style={{ color: '#f8fafc' }}>{selectedPin.discipline}</strong></div>
-                                    <div>👤 Reportó: <strong style={{ color: '#f8fafc' }}>{selectedPin.reporter}</strong></div>
-                                    <div>📅 Fecha: <strong style={{ color: '#f8fafc' }}>{selectedPin.date}</strong></div>
-                                    <div>📍 Coordenadas en Plano: <code style={{ color: '#f59e0b' }}>X:{selectedPin.x}% Y:{selectedPin.y}%</code></div>
-                                </div>
-                            </div>
-
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                <Button
-                                    variant="whatsapp"
-                                    size="sm"
-                                    icon="💬"
-                                    onClick={() => window.open(`https://wa.me/5492613168608?text=Alerta%20Plano:%20${encodeURIComponent(selectedPin.title)}`)}
-                                >
-                                    Enviar a Cuadrilla por WhatsApp
-                                </Button>
-                                <Button
-                                    variant="danger"
-                                    size="sm"
-                                    onClick={() => {
-                                        setPins(pins.filter(p => p.id !== selectedPin.id));
-                                        setSelectedPin(null);
-                                    }}
-                                >
-                                    Marcar como Resuelto
-                                </Button>
-                            </div>
-                        </GlassCard>
-                    )}
-
-                </div>
+                )}
 
             </main>
 
@@ -273,35 +541,59 @@ export default function PlanosPage() {
             <Modal
                 isOpen={newPinModal.show}
                 onClose={() => setNewPinModal({ show: false, x: 0, y: 0 })}
-                title="Nuevo Marcador sobre Plano"
+                title="Nuevo Marcador de No Conformidad sobre Plano"
                 subtitle={`Ubicación seleccionada en ${discipline}: X:${newPinModal.x}% Y:${newPinModal.y}%`}
             >
                 <form onSubmit={handleCreatePin} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                     <div>
-                        <label style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Título del Marcador / Tarea *</label>
+                        <label style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Título del Reclamo / No Conformidad *</label>
                         <input
                             required
-                            placeholder="Ej: Fuga en codo termofusión"
+                            placeholder="Ej: Caño de desagüe sin pendiente en losa"
                             value={newPinTitle}
                             onChange={e => setNewPinTitle(e.target.value)}
                             style={{ width: '100%', padding: '10px 14px', background: '#060913', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', color: '#f8fafc' }}
                         />
                     </div>
+
                     <div>
-                        <label style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Severidad</label>
+                        <label style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Gremio Responsable Asignado</label>
                         <select
-                            value={newPinType}
-                            onChange={e => setNewPinType(e.target.value)}
+                            value={newPinTrade}
+                            onChange={e => setNewPinTrade(e.target.value)}
                             style={{ width: '100%', padding: '10px 14px', background: '#060913', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', color: '#f8fafc' }}
                         >
-                            <option value="critical">🚨 Crítica / Vicio Oculto</option>
-                            <option value="warning">⚠️ Alerta / Pendiente</option>
-                            <option value="info">ℹ️ Informativo / Nota Técnica</option>
-                            <option value="success">✅ Hito Completado</option>
+                            {tradesList.map(t => <option key={t} value={t}>{t}</option>)}
                         </select>
                     </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                        <div>
+                            <label style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Severidad</label>
+                            <select
+                                value={newPinType}
+                                onChange={e => setNewPinType(e.target.value)}
+                                style={{ width: '100%', padding: '10px 14px', background: '#060913', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', color: '#f8fafc' }}
+                            >
+                                <option value="critical">🚨 Crítica / Vicio Oculto</option>
+                                <option value="warning">⚠️ Alerta / Observación</option>
+                                <option value="info">ℹ️ Nota Técnica</option>
+                                <option value="success">✅ Aprobado</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Plazo de Corrección</label>
+                            <input
+                                placeholder="Ej: 24hs, 48hs"
+                                value={newPinDeadline}
+                                onChange={e => setNewPinDeadline(e.target.value)}
+                                style={{ width: '100%', padding: '10px 14px', background: '#060913', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', color: '#f8fafc' }}
+                            />
+                        </div>
+                    </div>
+
                     <Button variant="primary" size="md" style={{ width: '100%', marginTop: '6px' }} icon="📍">
-                        Colocar Marcador en Plano
+                        Registrar en Punch List & Colocar Marcador
                     </Button>
                 </form>
             </Modal>
