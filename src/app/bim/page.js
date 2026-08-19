@@ -1,7 +1,9 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import Link from 'next/link';
+import { motion, AnimatePresence } from 'framer-motion';
+import { tokens } from '@/lib/design-system';
 
 export default function BimDigitalTwinPage() {
     const [activeDiscipline, setActiveDiscipline] = useState('all'); // all, estructura, mamposteria, instalaciones
@@ -10,7 +12,7 @@ export default function BimDigitalTwinPage() {
     const [selectedElement, setSelectedElement] = useState({
         id: 'slab-03',
         name: 'Losa Hormigón Armado Nivel 3',
-        discipline: 'Estructura H°A°',
+        discipline: 'ESTRUCTURA H°A°',
         volume: '42.5 m³ Hormigón H-30',
         reinforcement: '2.850 kg Hierro ADN-420',
         contractor: 'Juan Gómez (Albañilería Principal)',
@@ -58,91 +60,233 @@ export default function BimDigitalTwinPage() {
         { level: 0, name: 'Subsuelo & Fundaciones (Pilotes)', phase: 0, progress: 100, discipline: 'estructura' }
     ];
 
-    const getElementColor = (floor) => {
+    const getFloorStyle = (floor) => {
+        let bg = 'rgba(30, 41, 59, 0.7)';
+        let border = 'rgba(255, 255, 255, 0.15)';
+        let shadow = 'none';
+
         if (viewMode === 'heatmap') {
-            if (floor.progress === 100) return 'bg-emerald-500/80 border-emerald-400';
-            if (floor.progress >= 50) return 'bg-amber-500/80 border-amber-400';
-            return 'bg-rose-500/80 border-rose-400';
+            if (floor.progress === 100) {
+                bg = 'rgba(16, 185, 129, 0.85)';
+                border = '#34d399';
+            } else if (floor.progress >= 50) {
+                bg = 'rgba(245, 158, 11, 0.85)';
+                border = '#fbbf24';
+            } else {
+                bg = 'rgba(239, 68, 68, 0.85)';
+                border = '#f87171';
+            }
+        } else if (viewMode === 'materials') {
+            if (floor.discipline === 'estructura') {
+                bg = 'rgba(148, 163, 184, 0.85)';
+                border = '#cbd5e1';
+            } else if (floor.discipline === 'mamposteria') {
+                bg = 'rgba(234, 88, 12, 0.85)';
+                border = '#fb923c';
+            } else {
+                bg = 'rgba(6, 182, 212, 0.85)';
+                border = '#22d3ee';
+            }
+        } else {
+            // Progress Mode
+            if (floor.progress === 100) {
+                bg = 'rgba(16, 185, 129, 0.85)';
+                border = '#34d399';
+                shadow = '0 0 16px rgba(16, 185, 129, 0.4)';
+            } else if (floor.progress > 0) {
+                bg = 'rgba(245, 158, 11, 0.85)';
+                border = '#fcd34d';
+                shadow = '0 0 16px rgba(245, 158, 11, 0.4)';
+            } else {
+                bg = 'rgba(15, 23, 42, 0.6)';
+                border = 'rgba(255, 255, 255, 0.08)';
+            }
         }
-        if (viewMode === 'materials') {
-            if (floor.discipline === 'estructura') return 'bg-slate-400/80 border-slate-300';
-            if (floor.discipline === 'mamposteria') return 'bg-orange-600/80 border-orange-400';
-            return 'bg-cyan-500/80 border-cyan-300';
-        }
-        // Default Progress Mode
-        if (floor.progress === 100) return 'bg-emerald-600/85 border-emerald-400 shadow-emerald-500/30';
-        if (floor.progress > 0) return 'bg-amber-500/85 border-amber-300 shadow-amber-500/30 animate-pulse';
-        return 'bg-slate-800/60 border-slate-700 opacity-40';
+
+        return {
+            background: bg,
+            borderColor: border,
+            boxShadow: shadow
+        };
     };
 
     return (
-        <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-amber-500 selection:text-slate-950 font-sans">
+        <div style={{
+            minHeight: '100vh',
+            background: '#060913',
+            color: '#f8fafc',
+            fontFamily: tokens.font.sans,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden'
+        }}>
             {/* Top Navigation Bar */}
-            <header className="h-16 border-b border-slate-800 bg-slate-900/80 backdrop-blur-md flex items-center justify-between px-6 z-20">
-                <div className="flex items-center gap-4">
-                    <Link href="/dashboard" className="text-slate-400 hover:text-white text-sm font-semibold flex items-center gap-2">
+            <header style={{
+                height: '64px',
+                borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+                background: 'rgba(15, 23, 42, 0.85)',
+                backdropFilter: 'blur(16px)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '0 24px',
+                zIndex: 20
+            }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <Link href="/dashboard" style={{ color: '#94a3b8', textDecoration: 'none', fontSize: '0.85rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
                         ← Dashboard
                     </Link>
-                    <span className="text-slate-600">|</span>
-                    <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-lg bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400 font-bold text-lg">
+                    <span style={{ color: 'rgba(255, 255, 255, 0.15)' }}>|</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{
+                            width: '34px',
+                            height: '34px',
+                            borderRadius: '10px',
+                            background: 'rgba(99, 102, 241, 0.2)',
+                            border: '1px solid rgba(99, 102, 241, 0.4)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '1.1rem'
+                        }}>
                             🧊
                         </div>
                         <div>
-                            <h1 className="text-sm font-black tracking-wide text-white uppercase">Visor 3D BIM & Gemelo Digital</h1>
-                            <p className="text-xs text-slate-400 font-medium">Torre Palermo Soho • Modelo IFC v4.3</p>
+                            <h1 style={{ fontSize: '0.9rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.04em', margin: 0, color: '#fff', fontFamily: tokens.font.heading }}>
+                                Visor 3D BIM & Gemelo Digital
+                            </h1>
+                            <p style={{ fontSize: '0.72rem', color: '#94a3b8', margin: 0 }}>
+                                Torre Palermo Soho • Modelo IFC v4.3 Federado
+                            </p>
                         </div>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     {/* View Mode Switcher */}
-                    <div className="bg-slate-800/80 p-1 rounded-lg border border-slate-700 flex text-xs font-bold">
-                        <button 
+                    <div style={{
+                        background: 'rgba(6, 9, 19, 0.7)',
+                        padding: '4px',
+                        borderRadius: '10px',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        display: 'flex',
+                        gap: '4px',
+                        fontSize: '0.75rem',
+                        fontWeight: 700
+                    }}>
+                        <button
                             onClick={() => setViewMode('progress')}
-                            className={`px-3 py-1.5 rounded-md transition-all cursor-pointer ${viewMode === 'progress' ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:text-white'}`}>
+                            style={{
+                                padding: '6px 12px',
+                                borderRadius: '8px',
+                                border: 'none',
+                                background: viewMode === 'progress' ? '#f59e0b' : 'transparent',
+                                color: viewMode === 'progress' ? '#060913' : '#94a3b8',
+                                fontWeight: 800,
+                                cursor: 'pointer',
+                                transition: 'all 0.2s'
+                            }}
+                        >
                             Avance Real %
                         </button>
-                        <button 
+                        <button
                             onClick={() => setViewMode('heatmap')}
-                            className={`px-3 py-1.5 rounded-md transition-all cursor-pointer ${viewMode === 'heatmap' ? 'bg-rose-500 text-white' : 'text-slate-400 hover:text-white'}`}>
+                            style={{
+                                padding: '6px 12px',
+                                borderRadius: '8px',
+                                border: 'none',
+                                background: viewMode === 'heatmap' ? '#ef4444' : 'transparent',
+                                color: viewMode === 'heatmap' ? '#fff' : '#94a3b8',
+                                fontWeight: 800,
+                                cursor: 'pointer',
+                                transition: 'all 0.2s'
+                            }}
+                        >
                             Mapa de Riesgo 🔥
                         </button>
-                        <button 
+                        <button
                             onClick={() => setViewMode('materials')}
-                            className={`px-3 py-1.5 rounded-md transition-all cursor-pointer ${viewMode === 'materials' ? 'bg-cyan-500 text-slate-950' : 'text-slate-400 hover:text-white'}`}>
+                            style={{
+                                padding: '6px 12px',
+                                borderRadius: '8px',
+                                border: 'none',
+                                background: viewMode === 'materials' ? '#06b6d4' : 'transparent',
+                                color: viewMode === 'materials' ? '#060913' : '#94a3b8',
+                                fontWeight: 800,
+                                cursor: 'pointer',
+                                transition: 'all 0.2s'
+                            }}
+                        >
                             Por Disciplina
                         </button>
                     </div>
 
-                    <Link href="/planos" className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs font-bold text-slate-200">
-                        📐 Ver Planos 2D
+                    <Link href="/planos" style={{ textDecoration: 'none' }}>
+                        <button style={{
+                            padding: '8px 14px',
+                            background: 'rgba(255, 255, 255, 0.05)',
+                            border: '1px solid rgba(255, 255, 255, 0.15)',
+                            borderRadius: '10px',
+                            color: '#f8fafc',
+                            fontSize: '0.78rem',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                        }}>
+                            📐 Ver Planos 2D
+                        </button>
                     </Link>
                 </div>
             </header>
 
             {/* Main Content Workspace */}
-            <div className="flex-1 flex overflow-hidden">
+            <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
                 {/* Left Sidebar: Discipline Filters & 4D Simulation Slider */}
-                <div className="w-80 border-r border-slate-800 bg-slate-900/60 p-5 flex flex-col justify-between shrink-0">
-                    <div className="space-y-6">
+                <div style={{
+                    width: '320px',
+                    borderRight: '1px solid rgba(255, 255, 255, 0.08)',
+                    background: 'rgba(11, 17, 32, 0.7)',
+                    padding: '20px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    flexShrink: 0
+                }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                         {/* 4D Timeline Slider */}
-                        <div className="bg-slate-800/60 border border-slate-700/80 rounded-xl p-4">
-                            <div className="flex items-center justify-between mb-2">
-                                <span className="text-xs uppercase font-bold text-amber-400">Cronograma 4D BIM</span>
-                                <span className="text-xs font-black px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        <div style={{
+                            background: 'rgba(15, 23, 42, 0.8)',
+                            border: '1px solid rgba(245, 158, 11, 0.3)',
+                            borderRadius: '14px',
+                            padding: '16px'
+                        }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#fbbf24', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                    Cronograma 4D BIM
+                                </span>
+                                <span style={{
+                                    fontSize: '0.72rem',
+                                    fontWeight: 900,
+                                    padding: '2px 8px',
+                                    borderRadius: '6px',
+                                    background: 'rgba(245, 158, 11, 0.2)',
+                                    color: '#f59e0b',
+                                    border: '1px solid rgba(245, 158, 11, 0.4)'
+                                }}>
                                     Día {timelineDay} / 37
                                 </span>
                             </div>
-                            <input 
-                                type="range" 
-                                min="1" 
-                                max="37" 
+                            <input
+                                type="range"
+                                min="1"
+                                max="37"
                                 value={timelineDay}
                                 onChange={(e) => setTimelineDay(parseInt(e.target.value))}
-                                className="w-full accent-amber-500 cursor-pointer"
+                                style={{ width: '100%', accentColor: '#f59e0b', cursor: 'pointer' }}
                             />
-                            <div className="flex justify-between text-[10px] text-slate-400 font-bold mt-1">
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem', color: '#94a3b8', fontWeight: 700, marginTop: '4px' }}>
                                 <span>Fundaciones</span>
                                 <span>Estructura</span>
                                 <span>Entrega</span>
@@ -151,8 +295,10 @@ export default function BimDigitalTwinPage() {
 
                         {/* Discipline Filter */}
                         <div>
-                            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Capas de Modelo (IFC Layers)</p>
-                            <div className="space-y-2">
+                            <p style={{ fontSize: '0.72rem', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 10px' }}>
+                                Capas de Modelo (IFC Layers)
+                            </p>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                 {[
                                     { id: 'all', label: 'Todas las Capas', icon: '🏛️', count: '10 Pisos' },
                                     { id: 'estructura', label: 'Estructura (Hormigón)', icon: '🧱', count: 'H-30 / ADN-420' },
@@ -162,101 +308,178 @@ export default function BimDigitalTwinPage() {
                                     <button
                                         key={d.id}
                                         onClick={() => setActiveDiscipline(d.id)}
-                                        className={`w-full text-left px-3.5 py-2.5 rounded-lg text-xs font-bold flex items-center justify-between transition-all cursor-pointer border ${
-                                            activeDiscipline === d.id 
-                                                ? 'bg-amber-500/20 border-amber-500/50 text-amber-300' 
-                                                : 'bg-slate-800/40 border-slate-700/50 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
-                                        }`}>
-                                        <span className="flex items-center gap-2">
+                                        style={{
+                                            width: '100%',
+                                            textAlign: 'left',
+                                            padding: '10px 12px',
+                                            borderRadius: '10px',
+                                            fontSize: '0.78rem',
+                                            fontWeight: 700,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            cursor: 'pointer',
+                                            border: activeDiscipline === d.id ? '1px solid rgba(245, 158, 11, 0.5)' : '1px solid rgba(255, 255, 255, 0.08)',
+                                            background: activeDiscipline === d.id ? 'rgba(245, 158, 11, 0.15)' : 'rgba(15, 23, 42, 0.6)',
+                                            color: activeDiscipline === d.id ? '#fbbf24' : '#cbd5e1',
+                                            transition: 'all 0.2s'
+                                        }}
+                                    >
+                                        <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                             <span>{d.icon}</span>
                                             <span>{d.label}</span>
                                         </span>
-                                        <span className="text-[10px] text-slate-400 font-normal">{d.count}</span>
+                                        <span style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 500 }}>{d.count}</span>
                                     </button>
                                 ))}
                             </div>
                         </div>
 
                         {/* 3D Model Legend */}
-                        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 text-xs space-y-2">
-                            <p className="font-bold text-slate-300 uppercase text-[10px] tracking-wider mb-2">Convención de Colores</p>
-                            <div className="flex items-center gap-2">
-                                <span className="w-3 h-3 rounded-full bg-emerald-500"></span>
-                                <span className="text-slate-300">100% Completado & Certificado</span>
+                        <div style={{
+                            background: 'rgba(15, 23, 42, 0.7)',
+                            border: '1px solid rgba(255, 255, 255, 0.08)',
+                            borderRadius: '12px',
+                            padding: '14px',
+                            fontSize: '0.75rem',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '8px'
+                        }}>
+                            <p style={{ fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', fontSize: '0.68rem', letterSpacing: '0.5px', margin: 0 }}>
+                                Convención de Colores
+                            </p>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />
+                                <span style={{ color: '#cbd5e1' }}>100% Completado & Certificado</span>
                             </div>
-                            <div className="flex items-center gap-2">
-                                <span className="w-3 h-3 rounded-full bg-amber-500 animate-pulse"></span>
-                                <span className="text-slate-300">En Ejecución Activa (Hoy)</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#f59e0b', display: 'inline-block' }} />
+                                <span style={{ color: '#cbd5e1' }}>En Ejecución Activa (Hoy)</span>
                             </div>
-                            <div className="flex items-center gap-2">
-                                <span className="w-3 h-3 rounded-full bg-slate-700"></span>
-                                <span className="text-slate-400">Pendiente / Próximas Fases</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#334155', display: 'inline-block' }} />
+                                <span style={{ color: '#64748b' }}>Pendiente / Próximas Fases</span>
                             </div>
                         </div>
                     </div>
 
-                    <div className="text-[11px] text-slate-400 text-center border-t border-slate-800 pt-3 font-semibold">
+                    <div style={{ fontSize: '0.72rem', color: '#64748b', textAlign: 'center', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '12px', fontWeight: 600 }}>
                         Arrastrá con el mouse para rotar el edificio en 3D 🔄
                     </div>
                 </div>
 
-                {/* Center: 3D Interactive WebGL / Isometric Canvas */}
-                <div 
-                    className="flex-1 relative bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center cursor-grab active:cursor-grabbing overflow-hidden select-none"
+                {/* Center: 3D Interactive Isometric Stack */}
+                <div
+                    style={{
+                        flex: 1,
+                        position: 'relative',
+                        background: 'radial-gradient(circle at center, rgba(15, 23, 42, 0.9) 0%, #060913 100%)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: isDragging ? 'grabbing' : 'grab',
+                        overflow: 'hidden',
+                        userSelect: 'none'
+                    }}
                     onMouseDown={handleMouseDown}
                     onMouseMove={handleMouseMove}
-                    onMouseUp={handleMouseUp}>
-                    
-                    {/* Background Grid */}
-                    <div className="absolute inset-0 bg-[radial-gradient(#334155_1px,transparent_1px)] [background-size:24px_24px] opacity-25"></div>
-
+                    onMouseUp={handleMouseUp}
+                >
                     {/* Camera Rotation Indicator */}
-                    <div className="absolute top-4 left-4 bg-slate-900/80 border border-slate-800 backdrop-blur-md px-3 py-1.5 rounded-lg text-[11px] font-mono text-slate-400">
+                    <div style={{
+                        position: 'absolute',
+                        top: '16px',
+                        left: '16px',
+                        background: 'rgba(15, 23, 42, 0.8)',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        backdropFilter: 'blur(12px)',
+                        padding: '6px 12px',
+                        borderRadius: '8px',
+                        fontSize: '0.72rem',
+                        fontFamily: 'monospace',
+                        color: '#94a3b8'
+                    }}>
                         X: {Math.round(rotation.x)}° • Y: {Math.round(rotation.y)}°
                     </div>
 
                     {/* Interactive 3D Building Isometric Stack */}
-                    <div 
+                    <div
                         style={{
                             transform: `perspective(1000px) rotateX(${rotation.x}deg) rotateY(${rotation.y}deg)`,
                             transformStyle: 'preserve-3d',
-                            transition: isDragging ? 'none' : 'transform 0.1s ease-out'
+                            transition: isDragging ? 'none' : 'transform 0.1s ease-out',
+                            position: 'relative',
+                            width: '280px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            gap: '8px',
+                            padding: '40px 0'
                         }}
-                        className="relative w-72 flex flex-col items-center gap-2.5 py-12">
-                        
+                    >
                         {floors
                             .filter(f => activeDiscipline === 'all' || f.discipline === activeDiscipline)
-                            .map((f) => (
-                                <div
-                                    key={f.level}
-                                    onClick={() => setSelectedElement({
-                                        id: `slab-${f.level}`,
-                                        name: `${f.name} (Nivel ${f.level})`,
-                                        discipline: f.discipline.toUpperCase(),
-                                        volume: `${(35 + f.level * 2.5).toFixed(1)} m³ Hormigón H-30`,
-                                        reinforcement: `${(2400 + f.level * 150).toLocaleString('es-AR')} kg Hierro`,
-                                        contractor: f.level > 5 ? 'Carlos Pérez (Pintura/Interiores)' : 'Juan Gómez (Albañilería)',
-                                        progress: f.progress,
-                                        status: f.progress === 100 ? 'Finalizado & Certificado' : f.progress > 0 ? 'En Ejecución Activa' : 'Sin Iniciar',
-                                        riskLevel: f.progress < 50 && f.progress > 0 ? 'Medio' : 'Bajo',
-                                        lastInspection: 'Hoy, 04:16 p. m.',
-                                        inspector: 'Arq. Marcelo'
-                                    })}
-                                    className={`w-64 h-11 border-2 rounded-lg flex items-center justify-between px-4 transition-all duration-300 cursor-pointer shadow-lg hover:scale-105 hover:border-amber-400 ${getElementColor(f)}`}>
-                                    <span className="text-xs font-black text-white drop-shadow-md">
-                                        NIVEL {f.level}
-                                    </span>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-xs font-bold text-white drop-shadow-md">
+                            .map((f) => {
+                                const st = getFloorStyle(f);
+                                return (
+                                    <div
+                                        key={f.level}
+                                        onClick={() => setSelectedElement({
+                                            id: `slab-${f.level}`,
+                                            name: `${f.name} (Nivel ${f.level})`,
+                                            discipline: f.discipline.toUpperCase(),
+                                            volume: `${(35 + f.level * 2.5).toFixed(1)} m³ Hormigón H-30`,
+                                            reinforcement: `${(2400 + f.level * 150).toLocaleString('es-AR')} kg Hierro`,
+                                            contractor: f.level > 5 ? 'Carlos Pérez (Pintura/Interiores)' : 'Juan Gómez (Albañilería)',
+                                            progress: f.progress,
+                                            status: f.progress === 100 ? 'Finalizado & Certificado' : f.progress > 0 ? 'En Ejecución Activa' : 'Sin Iniciar',
+                                            riskLevel: f.progress < 50 && f.progress > 0 ? 'Medio' : 'Bajo',
+                                            lastInspection: 'Hoy, 04:16 p. m.',
+                                            inspector: 'Arq. Marcelo'
+                                        })}
+                                        style={{
+                                            width: '240px',
+                                            height: '40px',
+                                            border: `2px solid ${st.borderColor}`,
+                                            borderRadius: '8px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            padding: '0 16px',
+                                            cursor: 'pointer',
+                                            background: st.background,
+                                            boxShadow: st.boxShadow,
+                                            transition: 'all 0.2s',
+                                            transform: selectedElement.id === `slab-${f.level}` ? 'scale(1.06)' : 'scale(1)'
+                                        }}
+                                    >
+                                        <span style={{ fontSize: '0.78rem', fontWeight: 900, color: '#fff' }}>
+                                            NIVEL {f.level}
+                                        </span>
+                                        <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#fff' }}>
                                             {f.progress}%
                                         </span>
                                     </div>
-                                </div>
-                            ))}
+                                );
+                            })}
 
                         {/* Ground Grid Base Plate */}
-                        <div className="w-80 h-80 bg-amber-500/10 border-2 border-dashed border-amber-500/30 rounded-2xl absolute -bottom-16 -z-10 -rotate-x-90 flex items-center justify-center">
-                            <span className="text-amber-400/50 font-black text-xs tracking-widest uppercase">
+                        <div style={{
+                            width: '320px',
+                            height: '320px',
+                            background: 'rgba(245, 158, 11, 0.05)',
+                            border: '2px dashed rgba(245, 158, 11, 0.25)',
+                            borderRadius: '24px',
+                            position: 'absolute',
+                            bottom: '-60px',
+                            zIndex: -1,
+                            transform: 'rotateX(90deg)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                        }}>
+                            <span style={{ color: 'rgba(245, 158, 11, 0.4)', fontWeight: 900, fontSize: '0.75rem', letterSpacing: '0.15em', textTransform: 'uppercase' }}>
                                 Predio Obra: Honduras 4850
                             </span>
                         </div>
@@ -264,73 +487,135 @@ export default function BimDigitalTwinPage() {
                 </div>
 
                 {/* Right Sidebar: BIM Element Inspector & Properties */}
-                <div className="w-96 border-l border-slate-800 bg-slate-900/80 backdrop-blur-md p-6 flex flex-col justify-between shrink-0">
-                    <div className="space-y-6">
+                <div style={{
+                    width: '360px',
+                    borderLeft: '1px solid rgba(255, 255, 255, 0.08)',
+                    background: 'rgba(15, 23, 42, 0.85)',
+                    backdropFilter: 'blur(16px)',
+                    padding: '24px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    flexShrink: 0
+                }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                         <div>
-                            <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                            <span style={{
+                                fontSize: '0.68rem',
+                                fontWeight: 900,
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.08em',
+                                padding: '3px 8px',
+                                borderRadius: '6px',
+                                background: 'rgba(99, 102, 241, 0.2)',
+                                color: '#a5b4fc',
+                                border: '1px solid rgba(99, 102, 241, 0.4)'
+                            }}>
                                 {selectedElement.discipline}
                             </span>
-                            <h2 className="text-xl font-black text-white mt-2 leading-snug">
+                            <h2 style={{ fontSize: '1.2rem', fontWeight: 900, color: '#fff', margin: '8px 0 2px', fontFamily: tokens.font.heading }}>
                                 {selectedElement.name}
                             </h2>
-                            <p className="text-xs text-slate-400 mt-1">ID Elemento: {selectedElement.id} • Torre Palermo</p>
+                            <p style={{ fontSize: '0.75rem', color: '#94a3b8', margin: 0 }}>
+                                ID Elemento: {selectedElement.id} • Torre Palermo
+                            </p>
                         </div>
 
                         {/* Progress Gauge */}
-                        <div className="bg-slate-800/60 border border-slate-700/80 rounded-xl p-4">
-                            <div className="flex justify-between items-center mb-2">
-                                <span className="text-xs font-bold text-slate-400">Avance de Ejecución</span>
-                                <span className="text-lg font-black text-amber-400">{selectedElement.progress}%</span>
+                        <div style={{
+                            background: 'rgba(15, 23, 42, 0.8)',
+                            border: '1px solid rgba(255, 255, 255, 0.1)',
+                            borderRadius: '14px',
+                            padding: '16px'
+                        }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8' }}>Avance de Ejecución</span>
+                                <span style={{ fontSize: '1.1rem', fontWeight: 900, color: '#f59e0b' }}>{selectedElement.progress}%</span>
                             </div>
-                            <div className="w-full bg-slate-700 rounded-full h-2.5 overflow-hidden">
-                                <div 
-                                    className="bg-amber-500 h-2.5 rounded-full transition-all duration-500"
-                                    style={{ width: `${selectedElement.progress}%` }}>
-                                </div>
+                            <div style={{ width: '100%', background: '#1e293b', borderRadius: '9999px', height: '8px', overflow: 'hidden' }}>
+                                <div
+                                    style={{
+                                        background: '#f59e0b',
+                                        height: '100%',
+                                        borderRadius: '9999px',
+                                        width: `${selectedElement.progress}%`,
+                                        transition: 'all 0.5s'
+                                    }}
+                                />
                             </div>
-                            <div className="flex justify-between items-center text-[10px] text-slate-400 font-bold mt-2">
-                                <span>Estado: <strong className="text-emerald-400">{selectedElement.status}</strong></span>
-                                <span>Riesgo: <strong className="text-amber-400">{selectedElement.riskLevel}</strong></span>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.7rem', color: '#94a3b8', fontWeight: 700, marginTop: '8px' }}>
+                                <span>Estado: <strong style={{ color: '#10b981' }}>{selectedElement.status}</strong></span>
+                                <span>Riesgo: <strong style={{ color: '#fbbf24' }}>{selectedElement.riskLevel}</strong></span>
                             </div>
                         </div>
 
                         {/* Technical Properties Grid */}
-                        <div className="space-y-3 text-xs">
-                            <div className="bg-slate-800/40 p-3 rounded-lg border border-slate-700/50 flex justify-between">
-                                <span className="text-slate-400">Cubicaje Hormigón:</span>
-                                <span className="font-bold text-slate-200">{selectedElement.volume}</span>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.78rem' }}>
+                            <div style={{ background: 'rgba(6, 9, 19, 0.6)', padding: '10px 12px', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.06)', display: 'flex', justifyContent: 'space-between' }}>
+                                <span style={{ color: '#94a3b8' }}>Cubicaje Hormigón:</span>
+                                <strong style={{ color: '#f8fafc' }}>{selectedElement.volume}</strong>
                             </div>
-                            <div className="bg-slate-800/40 p-3 rounded-lg border border-slate-700/50 flex justify-between">
-                                <span className="text-slate-400">Cuantía de Armadura:</span>
-                                <span className="font-bold text-slate-200">{selectedElement.reinforcement}</span>
+                            <div style={{ background: 'rgba(6, 9, 19, 0.6)', padding: '10px 12px', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.06)', display: 'flex', justifyContent: 'space-between' }}>
+                                <span style={{ color: '#94a3b8' }}>Cuantía de Armadura:</span>
+                                <strong style={{ color: '#f8fafc' }}>{selectedElement.reinforcement}</strong>
                             </div>
-                            <div className="bg-slate-800/40 p-3 rounded-lg border border-slate-700/50 flex justify-between">
-                                <span className="text-slate-400">Cuadrilla Asignada:</span>
-                                <span className="font-bold text-slate-200">{selectedElement.contractor}</span>
+                            <div style={{ background: 'rgba(6, 9, 19, 0.6)', padding: '10px 12px', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.06)', display: 'flex', justifyContent: 'space-between' }}>
+                                <span style={{ color: '#94a3b8' }}>Cuadrilla Asignada:</span>
+                                <strong style={{ color: '#f8fafc' }}>{selectedElement.contractor}</strong>
                             </div>
-                            <div className="bg-slate-800/40 p-3 rounded-lg border border-slate-700/50 flex justify-between">
-                                <span className="text-slate-400">Última Inspección:</span>
-                                <span className="font-bold text-slate-200">{selectedElement.lastInspection}</span>
+                            <div style={{ background: 'rgba(6, 9, 19, 0.6)', padding: '10px 12px', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.06)', display: 'flex', justifyContent: 'space-between' }}>
+                                <span style={{ color: '#94a3b8' }}>Última Inspección:</span>
+                                <strong style={{ color: '#f8fafc' }}>{selectedElement.lastInspection}</strong>
                             </div>
-                            <div className="bg-slate-800/40 p-3 rounded-lg border border-slate-700/50 flex justify-between">
-                                <span className="text-slate-400">Certificado por:</span>
-                                <span className="font-bold text-amber-400">{selectedElement.inspector}</span>
+                            <div style={{ background: 'rgba(6, 9, 19, 0.6)', padding: '10px 12px', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.06)', display: 'flex', justifyContent: 'space-between' }}>
+                                <span style={{ color: '#94a3b8' }}>Certificado por:</span>
+                                <strong style={{ color: '#f59e0b' }}>{selectedElement.inspector}</strong>
                             </div>
                         </div>
                     </div>
 
                     {/* WhatsApp Action Launcher */}
-                    <div className="space-y-3 pt-6 border-t border-slate-800">
-                        <a 
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', paddingTop: '20px', borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                        <a
                             href={`https://wa.me/15551533706?text=${encodeURIComponent(`Consulta Técnica sobre ${selectedElement.name}: Estado actual ${selectedElement.progress}% de avance.`)}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl flex items-center justify-center gap-2 text-xs shadow-lg shadow-emerald-600/20 transition-all cursor-pointer">
+                            style={{
+                                width: '100%',
+                                padding: '12px',
+                                background: '#10b981',
+                                color: '#fff',
+                                fontWeight: 800,
+                                borderRadius: '10px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '8px',
+                                fontSize: '0.8rem',
+                                textDecoration: 'none',
+                                boxShadow: '0 4px 14px rgba(16, 185, 129, 0.3)'
+                            }}
+                        >
                             💬 Consultar Elemento vía WhatsApp
                         </a>
-                        <Link 
+                        <Link
                             href="/dashboard"
-                            className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl flex items-center justify-center text-xs border border-slate-700">
+                            style={{
+                                width: '100%',
+                                padding: '10px',
+                                background: 'rgba(255, 255, 255, 0.05)',
+                                color: '#cbd5e1',
+                                fontWeight: 700,
+                                borderRadius: '10px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '0.78rem',
+                                textDecoration: 'none',
+                                border: '1px solid rgba(255, 255, 255, 0.1)',
+                                boxSizing: 'border-box'
+                            }}
+                        >
                             Volver al Panel Principal
                         </Link>
                     </div>

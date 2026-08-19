@@ -188,6 +188,7 @@ export default function Dashboard() {
 
   // Multi-Role Persona Switcher State (v2.0)
   const [selectedPersona, setSelectedPersona] = useState('directora'); // 'directora' | 'compras' | 'capataz' | 'cliente'
+  const [selectedTenant, setSelectedTenant] = useState('constructora-plata');
   const [ganttQuincenaView, setGanttQuincenaView] = useState('todas'); // 'todas' | 'Q1' | 'Q2'
 
   const addToast = (message, type = 'info') => {
@@ -1536,6 +1537,27 @@ export default function Dashboard() {
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              {/* Multi-Tenant Organization Switcher */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '8px', padding: '4px 10px' }}>
+                <span style={{ fontSize: '0.75rem', color: '#fbbf24', fontWeight: 700 }}>
+                  <i className="fa-solid fa-building"></i> Empresa:
+                </span>
+                <select 
+                  value={selectedTenant}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setSelectedTenant(val);
+                    const name = e.target.options[e.target.selectedIndex].text;
+                    addToast(`🏢 Cambiado a espacio corporativo: ${name}`, 'info');
+                  }}
+                  style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: '0.8rem', fontWeight: 800, cursor: 'pointer', outline: 'none' }}
+                >
+                  <option value="constructora-plata" style={{ background: '#0f172a', color: '#fff' }}>Constructora del Plata S.A.</option>
+                  <option value="desarrolladora-urbana" style={{ background: '#0f172a', color: '#fff' }}>Desarrolladora Urbana S.A.</option>
+                  <option value="innovar-latam" style={{ background: '#0f172a', color: '#fff' }}>Innovar Latam Obras S.R.L.</option>
+                </select>
+              </div>
+
               {/* Multi-Obra Dynamic Project Switcher */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: '8px', padding: '4px 10px' }}>
                 <span style={{ fontSize: '0.75rem', color: '#38bdf8', fontWeight: 700 }}>
