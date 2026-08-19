@@ -347,9 +347,14 @@ export default function CostosPage() {
                                     Control formal de modificaciones solicitadas por el cliente, impacto en Gantt y redeterminación por inflación
                                 </p>
                             </div>
-                            <Button variant="primary" size="sm" icon="+" onClick={() => setShowNewOrderModal(true)}>
-                                Crear Orden de Cambio
-                            </Button>
+                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                <Button variant="primary" size="sm" icon="+" onClick={() => setShowNewOrderModal(true)}>
+                                    Crear Orden de Cambio
+                                </Button>
+                                <Link href="/cronograma" style={{ textDecoration: 'none' }}>
+                                    <Button variant="secondary" size="sm" icon="📅">Ver Cronograma</Button>
+                                </Link>
+                            </div>
                         </div>
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>

@@ -1485,6 +1485,11 @@ export default function Dashboard() {
                 <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-tag"></i> Precios</button>
               </Link>
             </li>
+            <li className="nav-item">
+              <Link href="/poster" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
+                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-qrcode"></i> Cartel de Obra QR</button>
+              </Link>
+            </li>
           </nav>
           
           <div className="sidebar-footer">

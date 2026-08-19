@@ -488,6 +488,14 @@ export default function PlanosPage() {
                                     Resolución de interferencias, cotas y detalles constructivos sin retrasar el cronograma
                                 </p>
                             </div>
+                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                <Link href="/inspecciones" style={{ textDecoration: 'none' }}>
+                                    <Button variant="secondary" size="sm" icon="📋">Inspecciones</Button>
+                                </Link>
+                                <Link href="/documentos" style={{ textDecoration: 'none' }}>
+                                    <Button variant="secondary" size="sm" icon="📁">Documentos</Button>
+                                </Link>
+                            </div>
                         </div>
 
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))', gap: '16px' }}>
