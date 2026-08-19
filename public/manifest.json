@@ -1,10 +1,11 @@
 {
-    "name": "ObraSaaS",
+    "id": "/dashboard",
+    "name": "ObraSaaS — Control de Obra",
     "short_name": "ObraSaaS",
-    "description": "Plataforma de Control de Obras — WhatsApp + IA + Geocerca GPS",
+    "description": "Plataforma de gestión de obra inteligente. Control por WhatsApp, KYC biométrico, geocerca GPS y compliance normativo.",
     "start_url": "/dashboard",
     "display": "standalone",
-    "background_color": "#0f172a",
+    "background_color": "#050810",
     "theme_color": "#f59e0b",
     "orientation": "any",
     "icons": [
@@ -12,9 +13,31 @@
             "src": "/favicon.ico",
             "sizes": "any",
             "type": "image/x-icon"
+        },
+        {
+            "src": "/icon-192.svg",
+            "sizes": "192x192",
+            "type": "image/svg+xml",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "/icon-512.svg",
+            "sizes": "512x512",
+            "type": "image/svg+xml",
+            "purpose": "any maskable"
+        }
+    ],
+    "screenshots": [
+        {
+            "src": "/icon-512.svg",
+            "sizes": "512x512",
+            "type": "image/svg+xml",
+            "form_factor": "wide",
+            "label": "Dashboard de control de obra"
         }
     ],
     "categories": ["business", "productivity"],
     "lang": "es-AR",
-    "scope": "/"
+    "scope": "/",
+    "prefer_related_applications": false
 }

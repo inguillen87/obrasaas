@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { motion, useScroll, useTransform, useInView, useSpring, AnimatePresence } from 'framer-motion';
 import { tokens, Button, GlassCard, Modal } from '@/lib/design-system';
+import { useBreakpoint } from '@/lib/useBreakpoint';
 
 /* ─── Scroll-triggered reveal wrapper ─── */
 function Reveal({ children, delay = 0, direction = 'up', once = true, className, style }) {
@@ -88,6 +89,8 @@ export default function Home() {
   const [leadData, setLeadData] = useState({ name: '', company: '', phone: '', email: '' });
   const [leadSubmitted, setLeadSubmitted] = useState(false);
   const [activeFaq, setActiveFaq] = useState(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { isMobile, isTablet } = useBreakpoint();
 
   const { scrollYProgress } = useScroll();
   const headerOpacity = useTransform(scrollYProgress, [0, 0.05], [0, 1]);
@@ -149,7 +152,7 @@ export default function Home() {
         background: 'rgba(5, 8, 16, 0.8)',
         backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)'
       }}>
-        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 32px', height: '64px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: isMobile ? '0 16px' : '0 32px', height: '64px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none' }}>
             <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'linear-gradient(135deg, #f59e0b, #d97706)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: '0.85rem', color: '#050810' }}>OS</div>
             <span style={{ fontSize: '1.15rem', fontWeight: 800, letterSpacing: '-0.03em', color: '#f1f5f9', fontFamily: tokens.font.heading }}>
@@ -157,35 +160,66 @@ export default function Home() {
             </span>
           </Link>
 
-          <nav style={{ display: 'flex', alignItems: 'center', gap: '32px', fontSize: '0.84rem', color: '#94a3b8' }}>
-            {['Soluciones', 'Plataforma', 'Precios'].map((item, i) => (
-              <a key={i} href={item === 'Precios' ? '/pricing' : `#${item.toLowerCase()}`} style={{ color: 'inherit', textDecoration: 'none', fontWeight: 500, transition: 'color 0.2s' }}
+          {/* Desktop nav */}
+          {!isMobile && (
+            <nav style={{ display: 'flex', alignItems: 'center', gap: '32px', fontSize: '0.84rem', color: '#94a3b8' }}>
+              {['Soluciones', 'Plataforma', 'Precios'].map((item, i) => (
+                <a key={i} href={item === 'Precios' ? '/pricing' : `#${item.toLowerCase()}`} style={{ color: 'inherit', textDecoration: 'none', fontWeight: 500, transition: 'color 0.2s' }}
+                  onMouseEnter={e => e.target.style.color = '#f1f5f9'} onMouseLeave={e => e.target.style.color = '#94a3b8'}>
+                  {item}
+                </a>
+              ))}
+              <Link href="/api-docs" style={{ color: 'inherit', textDecoration: 'none', fontWeight: 500, transition: 'color 0.2s' }}
                 onMouseEnter={e => e.target.style.color = '#f1f5f9'} onMouseLeave={e => e.target.style.color = '#94a3b8'}>
-                {item}
-              </a>
-            ))}
-            <Link href="/api-docs" style={{ color: 'inherit', textDecoration: 'none', fontWeight: 500, transition: 'color 0.2s' }}
-              onMouseEnter={e => e.target.style.color = '#f1f5f9'} onMouseLeave={e => e.target.style.color = '#94a3b8'}>
-              API Docs
-            </Link>
-          </nav>
+                API Docs
+              </Link>
+            </nav>
+          )}
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <Link href="/sign-in" style={{ textDecoration: 'none', color: '#cbd5e1', fontSize: '0.84rem', fontWeight: 600 }}>Acceder</Link>
+            {!isMobile && <Link href="/sign-in" style={{ textDecoration: 'none', color: '#cbd5e1', fontSize: '0.84rem', fontWeight: 600 }}>Acceder</Link>}
             <Link href="/dashboard" style={{ textDecoration: 'none' }}>
               <motion.button
                 whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}
                 style={{ padding: '9px 20px', borderRadius: '10px', background: '#f59e0b', color: '#050810', fontWeight: 800, fontSize: '0.84rem', border: 'none', cursor: 'pointer' }}
               >
-                Demo en vivo
+                Demo
               </motion.button>
             </Link>
+            {isMobile && (
+              <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} style={{ background: 'none', border: 'none', color: '#f1f5f9', fontSize: '1.4rem', cursor: 'pointer', padding: '4px', lineHeight: 1 }}>
+                {mobileMenuOpen ? '✕' : '☰'}
+              </button>
+            )}
           </div>
         </div>
+
+        {/* Mobile dropdown menu */}
+        <AnimatePresence>
+          {isMobile && mobileMenuOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.25 }}
+              style={{ overflow: 'hidden', borderTop: '1px solid rgba(255,255,255,0.06)', background: 'rgba(5, 8, 16, 0.95)' }}
+            >
+              <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {['Soluciones', 'Plataforma', 'Precios'].map((item, i) => (
+                  <a key={i} href={item === 'Precios' ? '/pricing' : `#${item.toLowerCase()}`}
+                    onClick={() => setMobileMenuOpen(false)}
+                    style={{ color: '#cbd5e1', textDecoration: 'none', fontSize: '0.92rem', fontWeight: 600, padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                    {item}
+                  </a>
+                ))}
+                <Link href="/api-docs" onClick={() => setMobileMenuOpen(false)} style={{ color: '#cbd5e1', textDecoration: 'none', fontSize: '0.92rem', fontWeight: 600, padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>API Docs</Link>
+                <Link href="/sign-in" onClick={() => setMobileMenuOpen(false)} style={{ color: '#f59e0b', textDecoration: 'none', fontSize: '0.92rem', fontWeight: 700, padding: '8px 0' }}>Acceder</Link>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </motion.header>
 
       {/* ═══ HERO ═══ */}
-      <section style={{ maxWidth: '1100px', margin: '0 auto', padding: '140px 32px 80px', textAlign: 'center', position: 'relative', zIndex: 1 }}>
+      <section style={{ maxWidth: '1100px', margin: '0 auto', padding: isMobile ? '100px 20px 48px' : '140px 32px 80px', textAlign: 'center', position: 'relative', zIndex: 1 }}>
         <Reveal delay={0}>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '5px 14px', borderRadius: '9999px', border: '1px solid rgba(245, 158, 11, 0.25)', background: 'rgba(245, 158, 11, 0.06)', fontSize: '0.78rem', fontWeight: 600, color: '#fbbf24', marginBottom: '28px' }}>
             <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 6px #22c55e' }} />
@@ -239,7 +273,7 @@ export default function Home() {
         </Reveal>
 
         <Reveal delay={0.32}>
-          <div style={{ display: 'flex', justifyContent: 'center', gap: '28px', marginTop: '32px', fontSize: '0.8rem', color: '#5a6579' }}>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: isMobile ? '12px' : '28px', marginTop: '32px', fontSize: '0.8rem', color: '#5a6579', flexWrap: 'wrap' }}>
             <span>Sin tarjeta de crédito</span>
             <span>·</span>
             <span>Setup en 3 minutos</span>
@@ -251,7 +285,7 @@ export default function Home() {
 
       {/* ═══ METRICS STRIP ═══ */}
       <section style={{ borderTop: '1px solid rgba(255,255,255,0.05)', borderBottom: '1px solid rgba(255,255,255,0.05)', position: 'relative', zIndex: 1 }}>
-        <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '40px 32px', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '32px', textAlign: 'center' }}>
+        <div style={{ maxWidth: '1100px', margin: '0 auto', padding: isMobile ? '24px 16px' : '40px 32px', display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: isMobile ? '16px' : '32px', textAlign: 'center' }}>
           {[
             { value: 5, suffix: '', label: 'Obras en producción' },
             { value: 27, suffix: '', label: 'Endpoints API' },
@@ -284,7 +318,7 @@ export default function Home() {
           </div>
         </Reveal>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fit, minmax(min(100%, 300px), 1fr))`, gap: '16px' }}>
           {capabilities.map((cap, i) => (
             <Reveal key={i} delay={i * 0.06} direction="scale">
               <motion.div
@@ -340,7 +374,7 @@ export default function Home() {
             </div>
 
             {/* Content */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', minHeight: '400px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', minHeight: isMobile ? 'auto' : '400px' }}>
               {/* WhatsApp simulation */}
               <div style={{ padding: '28px', borderRight: '1px solid rgba(255,255,255,0.05)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px', paddingBottom: '14px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
@@ -416,7 +450,7 @@ export default function Home() {
             <h3 style={{ fontSize: '1.6rem', fontWeight: 900, margin: '0 0 6px', fontFamily: tokens.font.heading, textAlign: 'center' }}>Calculadora de ROI</h3>
             <p style={{ color: '#64748b', fontSize: '0.9rem', margin: '0 0 32px', textAlign: 'center' }}>Estimá el ahorro mensual según tu escala operativa</p>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '28px', marginBottom: '32px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: isMobile ? '16px' : '28px', marginBottom: '32px' }}>
               <div>
                 <label style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'block', marginBottom: '8px', fontWeight: 600 }}>Obras en simultáneo: <strong style={{ color: '#f59e0b' }}>{roiProjects}</strong></label>
                 <input type="range" min="1" max="20" value={roiProjects} onChange={e => setRoiProjects(+e.target.value)}
@@ -429,7 +463,7 @@ export default function Home() {
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: '16px' }}>
               {[
                 { label: 'Horas admin. ahorradas/mes', value: savings.hoursMonth, suffix: 'hs' },
                 { label: 'Ahorro mensual estimado', value: savings.moneyMonth, prefix: '$', suffix: '' },

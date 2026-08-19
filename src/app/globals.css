@@ -2431,3 +2431,186 @@ select.form-input option {
   align-items: center;
   gap: 6px;
 }
+
+/* ==========================================================================
+   RESPONSIVE: TABLET (max-width: 1024px)
+   ========================================================================== */
+
+@media (max-width: 1024px) {
+  /* Landing: demo panel — stack columns */
+  section > div[style*="gridTemplateColumns: '1fr 1fr'"],
+  section > div > div[style*="grid-template-columns: 1fr 1fr"] {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ==========================================================================
+   RESPONSIVE: MOBILE (max-width: 768px)
+   ========================================================================== */
+
+@media (max-width: 768px) {
+
+  /* ── Landing page ── */
+
+  /* Navbar: hide desktop nav links, reduce padding */
+  header nav {
+    display: none !important;
+  }
+
+  header > div {
+    padding: 0 16px !important;
+    height: 56px !important;
+  }
+
+  /* Hero section */
+  section[style*="padding: '140px"] {
+    padding-top: 80px !important;
+    padding-bottom: 40px !important;
+  }
+
+  /* Metrics strip: 4-col → 2-col */
+  section > div[style*="gridTemplateColumns: 'repeat(4"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 16px !important;
+    padding: 24px 16px !important;
+  }
+
+  /* Capabilities grid: force single column on mobile */
+  div[style*="gridTemplateColumns: 'repeat(auto-fit, minmax(320px"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* ROI calculator: stack sliders */
+  div[style*="gridTemplateColumns: '1fr 1fr'"] {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
+
+  /* ROI results: 3 columns → 1 */
+  div[style*="gridTemplateColumns: 'repeat(3"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Demo terminal: 2 columns → 1 */
+  div[style*="gridTemplateColumns: '1fr 1fr'"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Footer: stack */
+  footer > div {
+    flex-direction: column !important;
+    text-align: center !important;
+    gap: 12px !important;
+  }
+
+  /* ── Sign-in / Sign-up split panels ── */
+
+  /* Stack the flex 50/50 panels vertically */
+  div[style*="flex: '1 1 50%'"]:first-child {
+    display: none !important;
+  }
+
+  div[style*="flex: '1 1 50%'"] {
+    flex: 1 1 100% !important;
+    padding: 32px 20px !important;
+  }
+
+  /* ── Dashboard topbar ── */
+
+  /* Wrap persona buttons */
+  div[style*="gap: '6px'"][style*="flexWrap"] {
+    flex-wrap: wrap !important;
+  }
+
+  /* ── All pages: common responsive fixes ── */
+
+  /* Reduce max-width padding on mobile */
+  main[style*="maxWidth"],
+  div[style*="maxWidth: '1360px'"],
+  div[style*="maxWidth: '1280px'"],
+  div[style*="maxWidth: '1100px'"] {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+
+  /* GlassCard responsive padding */
+  .glass-card {
+    padding: 20px !important;
+  }
+
+  /* Toast position on mobile */
+  .toast-container {
+    bottom: 16px;
+    right: 16px;
+    left: 16px;
+  }
+
+  .toast-notification {
+    width: 100%;
+  }
+
+  /* PageHeader responsive */
+  .page-header-content {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 12px !important;
+  }
+
+  /* Pricing grid: single column */
+  div[style*="gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))'"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* BIM viewer: reduce height */
+  div[style*="perspective"] {
+    min-height: 300px !important;
+  }
+}
+
+/* ==========================================================================
+   RESPONSIVE: SMALL MOBILE (max-width: 480px)
+   ========================================================================== */
+
+@media (max-width: 480px) {
+  /* Hero CTA buttons: full width stack */
+  div[style*="justifyContent: 'center'"][style*="gap: '14px'"] {
+    flex-direction: column !important;
+    width: 100% !important;
+  }
+
+  div[style*="justifyContent: 'center'"][style*="gap: '14px'"] button,
+  div[style*="justifyContent: 'center'"][style*="gap: '14px'"] a {
+    width: 100% !important;
+  }
+
+  /* Metrics: 2 → 1 column on very small screens */
+  section > div[style*="gridTemplateColumns: 'repeat(4"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Trust indicators: stack vertically */
+  div[style*="justifyContent: 'center'"][style*="gap: '28px'"] {
+    flex-direction: column !important;
+    gap: 8px !important;
+    align-items: center !important;
+  }
+}
+
+/* ==========================================================================
+   PWA: STANDALONE MODE ADJUSTMENTS
+   ========================================================================== */
+
+@media (display-mode: standalone) {
+  /* Remove extra top padding in PWA standalone */
+  body {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Fix navbar for notch */
+  header[style*="position: 'fixed'"],
+  header[style*="position: fixed"] {
+    padding-top: env(safe-area-inset-top) !important;
+  }
+}
+

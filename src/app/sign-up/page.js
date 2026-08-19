@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { tokens } from '@/lib/design-system';
+import { useBreakpoint } from '@/lib/useBreakpoint';
 
 export default function SignUpPage() {
   const router = useRouter();
@@ -33,6 +34,7 @@ export default function SignUpPage() {
   };
 
   const update = (key, val) => setFormData({ ...formData, [key]: val });
+  const { isMobile } = useBreakpoint();
 
   const inputStyle = {
     width: '100%', padding: '13px 16px',
@@ -45,7 +47,7 @@ export default function SignUpPage() {
   return (
     <div style={{
       minHeight: '100vh', background: '#050810', color: '#f1f5f9',
-      fontFamily: tokens.font.sans, display: 'flex', position: 'relative', overflow: 'hidden'
+      fontFamily: tokens.font.sans, display: 'flex', flexDirection: isMobile ? 'column' : 'row', position: 'relative', overflow: 'hidden'
     }}>
       {/* Ambient glow */}
       <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0 }}>
@@ -53,7 +55,8 @@ export default function SignUpPage() {
         <div style={{ position: 'absolute', bottom: '-15%', right: '15%', width: '600px', height: '600px', background: 'radial-gradient(circle, rgba(34, 197, 94, 0.05) 0%, transparent 70%)', filter: 'blur(100px)' }} />
       </div>
 
-      {/* Left panel — branding */}
+      {/* Left panel — branding (hidden on mobile) */}
+      {!isMobile && (
       <div style={{
         flex: '1 1 50%', display: 'flex', flexDirection: 'column', justifyContent: 'center',
         padding: '64px 56px', position: 'relative', zIndex: 1,
@@ -105,11 +108,12 @@ export default function SignUpPage() {
           ))}
         </motion.div>
       </div>
+      )}
 
       {/* Right panel — registration form */}
       <div style={{
-        flex: '1 1 50%', display: 'flex', flexDirection: 'column', justifyContent: 'center',
-        alignItems: 'center', padding: '64px 48px', position: 'relative', zIndex: 1
+        flex: isMobile ? '1 1 100%' : '1 1 50%', display: 'flex', flexDirection: 'column', justifyContent: 'center',
+        alignItems: 'center', padding: isMobile ? '40px 20px' : '64px 48px', position: 'relative', zIndex: 1
       }}>
         <motion.div
           initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.1 }}
