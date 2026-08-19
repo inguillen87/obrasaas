@@ -10,13 +10,39 @@ export default function VecinoDigitalPage() {
     const [loading, setLoading] = useState(true);
     const [selectedPhoto, setSelectedPhoto] = useState(null);
     const [copiedHash, setCopiedHash] = useState(false);
+    const [changeOrders, setChangeOrders] = useState([]);
+    const [selectedUnit, setSelectedUnit] = useState('3B');
 
     useEffect(() => {
-        fetch('/api/v1/portal?token=public')
-            .then(r => r.json())
-            .then(d => { setData(d); setLoading(false); })
-            .catch(() => setLoading(false));
+        Promise.all([
+            fetch('/api/v1/portal?token=public').then(r => r.json()),
+            fetch('/api/v1/adicionales').then(r => r.json()).catch(() => ({ changeOrders: [] }))
+        ]).then(([portalData, adicionalesData]) => {
+            setData(portalData);
+            if (adicionalesData.changeOrders) setChangeOrders(adicionalesData.changeOrders);
+            setLoading(false);
+        }).catch(() => setLoading(false));
     }, []);
+
+    const handleApproveOrder = async (orderId) => {
+        try {
+            const res = await fetch('/api/v1/adicionales', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    id: orderId,
+                    status: 'APROBADA',
+                    clientSignature: `Comitente Unidad ${selectedUnit} (Firma Digital Verificada)`
+                })
+            });
+            const d = await res.json();
+            if (d.changeOrder) {
+                setChangeOrders(changeOrders.map(o => o.id === orderId ? d.changeOrder : o));
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    };
 
     const copyHash = (hash) => {
         if (navigator.clipboard) {
@@ -182,6 +208,114 @@ export default function VecinoDigitalPage() {
                         )) : <p style={{ color: '#64748b', fontSize: '0.85rem' }}>Aún no se completaron hitos</p>}
                     </GlassCard>
                 </div>
+
+                {/* Unit Selector & Customization Banner */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '14px', background: 'rgba(15, 23, 42, 0.7)', padding: '16px 20px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <span style={{ fontSize: '1.4rem' }}>🔑</span>
+                        <div>
+                            <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#f8fafc' }}>
+                                Mi Unidad: Departamento {selectedUnit} — 2 Ambientes con Balcón
+                            </div>
+                            <div style={{ fontSize: '0.74rem', color: '#10b981' }}>
+                                ● Posesión Estimada: Diciembre 2026 • Estado: En Ejecución
+                            </div>
+                        </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <select
+                            value={selectedUnit}
+                            onChange={e => setSelectedUnit(e.target.value)}
+                            style={{ padding: '6px 12px', background: '#060913', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', color: '#f8fafc', fontSize: '0.78rem', fontWeight: 700 }}
+                        >
+                            <option value="3B">Unidad 3° B (Piso 3)</option>
+                            <option value="5A">Unidad 5° A (Piso 5)</option>
+                            <option value="8C">Unidad 8° C (Piso 8)</option>
+                        </select>
+                        <a href="/api/v1/certificacion/pdf" download="certificado_avance_oficial.pdf" style={{ textDecoration: 'none' }}>
+                            <Button variant="secondary" size="sm" icon="📥">
+                                Descargar Certificado PDF
+                            </Button>
+                        </a>
+                    </div>
+                </div>
+
+                {/* Change Orders & Personalizaciones de Unidad */}
+                <GlassCard style={{ padding: '28px', marginBottom: '28px', border: '1px solid rgba(59, 130, 246, 0.3)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
+                        <div>
+                            <h3 style={{ fontSize: '1.1rem', fontWeight: 800, margin: 0, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                📑 Mis Personalizaciones & Adicionales de Obra
+                            </h3>
+                            <p style={{ color: '#94a3b8', fontSize: '0.8rem', margin: '4px 0 0' }}>
+                                Modificaciones de terminaciones aprobadas y pendientes de firma digital
+                            </p>
+                        </div>
+                        <Badge color="#38bdf8" variant="filled" size="xs">
+                            {changeOrders.filter(o => o.status === 'PENDIENTE_CLIENTE').length} Pendientes de Firma
+                        </Badge>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        {changeOrders.map(co => (
+                            <div
+                                key={co.id}
+                                style={{
+                                    background: 'rgba(6, 9, 19, 0.7)',
+                                    padding: '16px 20px',
+                                    borderRadius: '10px',
+                                    border: '1px solid rgba(255,255,255,0.06)',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    flexWrap: 'wrap',
+                                    gap: '14px'
+                                }}
+                            >
+                                <div style={{ flex: '1 1 300px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                                        <Badge color={co.status === 'APROBADA' ? '#10b981' : '#f59e0b'} variant="filled" size="xs">
+                                            {co.status === 'APROBADA' ? '✓ APROBADA' : '⏳ PENDIENTE DE SU FIRMA'}
+                                        </Badge>
+                                        <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>Rubro: {co.rubroCode}</span>
+                                    </div>
+                                    <div style={{ fontSize: '0.92rem', fontWeight: 700, color: '#f8fafc' }}>
+                                        {co.title}
+                                    </div>
+                                    <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '2px' }}>
+                                        {co.description}
+                                    </div>
+                                </div>
+
+                                <div style={{ textAlign: 'right', minWidth: '160px' }}>
+                                    <div style={{ fontSize: '0.98rem', fontWeight: 800, color: '#f59e0b' }}>
+                                        ${(co.totalAmountARS || 0).toLocaleString('es-AR')} ARS
+                                    </div>
+                                    <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
+                                        ~USD {co.totalAmountUSD || Math.round(co.totalAmountARS / 1300)}
+                                    </div>
+                                </div>
+
+                                <div>
+                                    {co.status === 'PENDIENTE_CLIENTE' ? (
+                                        <Button
+                                            variant="primary"
+                                            size="sm"
+                                            icon="✍️"
+                                            onClick={() => handleApproveOrder(co.id)}
+                                        >
+                                            Firmar & Aprobar
+                                        </Button>
+                                    ) : (
+                                        <div style={{ padding: '6px 12px', background: 'rgba(16, 185, 129, 0.12)', borderRadius: '6px', color: '#10b981', fontSize: '0.76rem', fontWeight: 700, border: '1px solid rgba(16, 185, 129, 0.3)' }}>
+                                            🛡️ Firma Verificada
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </GlassCard>
 
                 {/* Photo Gallery (Site Log) */}
                 <GlassCard style={{ padding: '28px', marginBottom: '28px' }}>
