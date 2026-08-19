@@ -60,10 +60,13 @@ export default function CostosPage() {
                 subtitle={`${data?.projectName || 'Obra'} — Presupuesto por Rubro con Curva S`}
                 breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Costos' }]}
                 actions={
-                    <>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <a href="/api/v1/export?type=budget" download="presupuesto_obrasaas.csv" style={{ textDecoration: 'none' }}>
+                            <Button variant="secondary" size="sm">📥 Exportar ERP</Button>
+                        </a>
                         <Button variant="secondary" size="sm" onClick={() => window.location.reload()}>↻ Actualizar</Button>
                         <Button variant="primary" size="sm" icon="+" onClick={() => setShowAddExpense(true)}>Registrar Gasto</Button>
-                    </>
+                    </div>
                 }
             />
 
@@ -82,31 +85,56 @@ export default function CostosPage() {
                     <StatCard label="AVANCE FÍSICO" value={`${avanceFisico}%`} sub="Progreso de obra" icon="🏗️" color={tokens.colors.accent.info} />
                 </motion.div>
 
-                {/* Curva S Visual */}
-                <motion.div variants={fadeInUp} initial="hidden" animate="visible" style={{ marginBottom: '28px' }}>
-                    <GlassCard>
-                        <h3 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            📉 Análisis Curva S — Financiero vs Físico
-                        </h3>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-                            <div>
-                                <ProgressBar value={pctGlobal} label="Avance Financiero" showLabel color={tokens.colors.accent.warning} height={10} />
-                                <div style={{ height: '12px' }} />
-                                <ProgressBar value={avanceFisico} label="Avance Físico" showLabel color={tokens.colors.accent.secondary} height={10} />
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <div style={{ textAlign: 'center' }}>
-                                    <div style={{ fontSize: '2.5rem', fontWeight: 900, color: Math.abs(curvaDiff) > 5 ? tokens.colors.accent.danger : tokens.colors.accent.success }}>
-                                        {curvaDiff > 0 ? '+' : ''}{curvaDiff.toFixed(1)}%
-                                    </div>
-                                    <div style={{ fontSize: '0.8rem', color: tokens.colors.text.muted, marginTop: '4px' }}>
-                                        {curvaDiff > 5 ? '🚨 Desvío significativo — revisar rubros' : curvaDiff > 2 ? '⚠️ Desvío menor — monitorear' : '✅ Obra en línea presupuestaria'}
-                                    </div>
+                {/* Curva S Visual & CAC Inflation Simulator */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '28px' }}>
+                    <motion.div variants={fadeInUp} initial="hidden" animate="visible">
+                        <GlassCard style={{ height: '100%' }}>
+                            <h3 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                📉 Análisis Curva S — Financiero vs Físico
+                            </h3>
+                            <ProgressBar value={pctGlobal} label="Avance Financiero" showLabel color={tokens.colors.accent.warning} height={10} />
+                            <div style={{ height: '12px' }} />
+                            <ProgressBar value={avanceFisico} label="Avance Físico" showLabel color={tokens.colors.accent.secondary} height={10} />
+                            <div style={{ textAlign: 'center', marginTop: '16px' }}>
+                                <div style={{ fontSize: '2rem', fontWeight: 900, color: Math.abs(curvaDiff) > 5 ? tokens.colors.accent.danger : tokens.colors.accent.success }}>
+                                    {curvaDiff > 0 ? '+' : ''}{curvaDiff.toFixed(1)}%
+                                </div>
+                                <div style={{ fontSize: '0.75rem', color: tokens.colors.text.muted, marginTop: '2px' }}>
+                                    {curvaDiff > 5 ? '🚨 Desvío significativo — revisar rubros' : curvaDiff > 2 ? '⚠️ Desvío menor — monitorear' : '✅ Obra en línea presupuestaria'}
                                 </div>
                             </div>
-                        </div>
-                    </GlassCard>
-                </motion.div>
+                        </GlassCard>
+                    </motion.div>
+
+                    <motion.div variants={fadeInUp} initial="hidden" animate="visible">
+                        <GlassCard style={{ height: '100%', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                                <h3 style={{ fontSize: '0.9rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    🏛️ Simulador CAC & Estrategia de Acopio
+                                </h3>
+                                <Badge color="#f59e0b" variant="filled" size="sm">CAC +4.2% / Mes</Badge>
+                            </div>
+                            <p style={{ fontSize: '0.78rem', color: tokens.colors.text.muted, margin: '0 0 12px', lineHeight: 1.4 }}>
+                                Proyección de ahorro al acopiar hierro (Acindar) y cemento (Loma Negra) por adelantado frente a la inflación de materiales.
+                            </p>
+                            <div style={{ background: 'rgba(6, 9, 19, 0.7)', borderRadius: '10px', padding: '12px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', fontSize: '0.8rem' }}>
+                                <div>
+                                    <span style={{ color: '#94a3b8', display: 'block', fontSize: '0.7rem' }}>Costo Proyectado a 6 Meses:</span>
+                                    <strong style={{ color: '#ef4444', fontSize: '0.95rem' }}>+27.8% s/ Insumos</strong>
+                                </div>
+                                <div>
+                                    <span style={{ color: '#94a3b8', display: 'block', fontSize: '0.7rem' }}>Ahorro con Acopio Inmediato:</span>
+                                    <strong style={{ color: '#10b981', fontSize: '0.95rem' }}>$4.850.000 ARS</strong>
+                                </div>
+                            </div>
+                            <div style={{ marginTop: '12px', textAlign: 'right' }}>
+                                <Link href="/marketplace" style={{ fontSize: '0.75rem', color: '#f59e0b', fontWeight: 700, textDecoration: 'none' }}>
+                                    Explorar Corralones & Acopios en Marketplace →
+                                </Link>
+                            </div>
+                        </GlassCard>
+                    </motion.div>
+                </div>
 
                 {/* Rubros Grid */}
                 <h3 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: '12px', color: tokens.colors.text.secondary }}>📋 Desglose por Rubro</h3>

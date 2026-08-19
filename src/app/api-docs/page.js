@@ -106,6 +106,15 @@ export default function ApiDocsPage() {
 }`
         },
         {
+            category: 'financial',
+            method: 'GET',
+            path: '/api/v1/export',
+            title: 'Exportador Multi-ERP (CSV / Excel UTF-8)',
+            desc: 'Exporta libros contables, partes de obra, gastos con CAE y métricas de avance compatibles con Tango, Bejerman y SAP.',
+            params: [{ name: 'type', type: 'string', desc: 'Dataset a exportar: expenses | gantt | workers | libro | budget' }, { name: 'format', type: 'string', desc: 'Formato: csv | tsv' }],
+            response: `ID,Fecha,Rubro,Concepto,Proveedor,Monto_ARS,Monto_USD,CAE_AFIP\n"exp-01","2026-08-18","Estructura","Hierro Nervado 12mm","Acindar",450000.00,375.00,"27182818284590"`
+        },
+        {
             category: 'compliance',
             method: 'GET',
             path: '/api/admin/libro-obra',
