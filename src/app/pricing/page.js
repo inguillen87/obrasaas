@@ -90,14 +90,13 @@ export default function PricingPage() {
             
             {/* Header */}
             <PageHeader
-                icon="💲"
-                title="Planes y Precios Transparentes"
-                subtitle="Sin costos ocultos. Elegí el plan que mejor se adapte al tamaño de tu operación."
+                title="Planes y Precios"
+                subtitle="Sin costos ocultos. Elegí el plan que mejor se adapte a tu operación."
                 breadcrumbs={[{ label: 'Inicio', href: '/' }, { label: 'Precios' }]}
                 actions={
                     <Link href="/onboarding">
-                        <Button variant="primary" size="sm" icon="🚀">
-                            Prueba Gratis 14 Días
+                        <Button variant="primary" size="sm">
+                            Comenzar prueba gratis
                         </Button>
                     </Link>
                 }
