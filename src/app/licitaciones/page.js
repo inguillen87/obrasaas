@@ -72,7 +72,6 @@ export default function LicitacionesPage() {
             
             {/* Header */}
             <PageHeader
-                icon="🏛️"
                 title="Licitómetro — Oportunidades de Obra Pública & Gobiernos"
                 subtitle="Monitoreo automatizado de ComprarGob, Contrat.ar y Boletines Oficiales con matching técnico IA"
                 breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Licitómetro' }]}
@@ -97,7 +96,7 @@ export default function LicitacionesPage() {
                 <div style={{ display: 'flex', gap: '14px', marginBottom: '28px', flexWrap: 'wrap' }}>
                     <input
                         type="text"
-                        placeholder="🔍 Buscar por organismo, licitación o provincia..."
+                        placeholder="Buscar por organismo, licitación o provincia..."
                         value={search}
                         onChange={e => setSearch(e.target.value)}
                         style={{
@@ -137,8 +136,14 @@ export default function LicitacionesPage() {
 
                 {/* Bids List */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    {filtered.map(l => (
-                        <GlassCard key={l.id} style={{ padding: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+                {filtered.map((l, i) => (
+                        <motion.div
+                            key={l.id}
+                            initial={{ opacity: 0, y: 16 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.4, delay: i * 0.06, ease: [0.22, 1, 0.36, 1] }}
+                        >
+                        <GlassCard style={{ padding: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
                             <div style={{ flex: 1, minWidth: '280px' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
                                     <Badge color="#3b82f6" variant="filled" size="xs">{l.organismo}</Badge>
@@ -151,9 +156,9 @@ export default function LicitacionesPage() {
                                 </h3>
 
                                 <div style={{ fontSize: '0.8rem', color: '#94a3b8', display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-                                    <span>📍 {l.ubicacion}</span>
-                                    <span>📅 Apertura: <strong style={{ color: '#f8fafc' }}>{l.apertura}</strong></span>
-                                    <span>🎯 Match Técnico: <strong style={{ color: '#10b981' }}>{l.matchScore}%</strong></span>
+                                    <span>{l.ubicacion}</span>
+                                    <span>Apertura: <strong style={{ color: '#f8fafc' }}>{l.apertura}</strong></span>
+                                    <span>Match: <strong style={{ color: '#10b981' }}>{l.matchScore}%</strong></span>
                                 </div>
                             </div>
 
@@ -168,13 +173,13 @@ export default function LicitacionesPage() {
                                 <Button
                                     variant="primary"
                                     size="sm"
-                                    icon="📄"
                                     onClick={() => alert(`Descargando Pliego Oficial y Anexos Técnicos para ${l.title}`)}
                                 >
                                     Descargar Pliego
                                 </Button>
                             </div>
                         </GlassCard>
+                        </motion.div>
                     ))}
                 </div>
 

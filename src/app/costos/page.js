@@ -55,7 +55,6 @@ export default function CostosPage() {
             <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');`}</style>
 
             <PageHeader
-                icon="💰"
                 title="Control de Costos"
                 subtitle={`${data?.projectName || 'Obra'} — Presupuesto por Rubro con Curva S`}
                 breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Costos' }]}

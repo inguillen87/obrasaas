@@ -68,7 +68,6 @@ export default function PlanosPage() {
             
             {/* Header */}
             <PageHeader
-                icon="📐"
                 title="Visor de Planos Interactivos & Geocontrol en Terreno"
                 subtitle="Navegación de planos CAD / DWG con marcado de incidencias geolocalizadas"
                 breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Planos' }]}

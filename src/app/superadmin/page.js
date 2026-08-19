@@ -135,7 +135,6 @@ export default function SuperAdminDashboard() {
             
             {/* Header */}
             <PageHeader
-                icon="⚙️"
                 title="Super Admin Platform Console"
                 subtitle="Gestión multitenant, monitoreo de infraestructura y métricas de negocio"
                 breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'SuperAdmin' }]}

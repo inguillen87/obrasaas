@@ -51,7 +51,6 @@ export default function MarketplacePage() {
             
             {/* Header */}
             <PageHeader
-                icon="🏪"
                 title="Marketplace Oficial de Proveedores de Obra"
                 subtitle="Directorio verificado con cotizaciones automatizadas y contacto directo por WhatsApp"
                 breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Marketplace' }]}
@@ -248,7 +247,7 @@ export default function MarketplacePage() {
                                 style={{ width: '100%', padding: '10px 14px', background: '#060913', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', color: '#f8fafc', resize: 'none' }}
                             />
                         </div>
-                        <Button variant="primary" size="md" style={{ width: '100%', marginTop: '6px' }} icon="🚀">
+                        <Button variant="primary" size="md" style={{ width: '100%', marginTop: '6px' }}>
                             Enviar Pedido de Cotización Formal
                         </Button>
                     </form>

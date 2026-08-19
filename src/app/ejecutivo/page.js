@@ -54,16 +54,15 @@ export default function ExecutiveDashboard() {
             
             {/* Header */}
             <PageHeader
-                icon="📊"
                 title="Centro de Mando Ejecutivo (CEO / C-Level)"
                 subtitle="Vista consolidada de cartera de obras, salud operativa y flujo financiero"
                 breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Ejecutivo' }]}
                 actions={
                     <>
                         <Button variant="secondary" size="sm" onClick={loadData}>↻ Actualizar</Button>
-                        <Button variant="secondary" size="sm" icon="📄" onClick={() => window.print()}>Exportar PDF</Button>
+                        <Button variant="secondary" size="sm" onClick={() => window.print()}>Exportar PDF</Button>
                         <Link href="/costos">
-                            <Button variant="primary" size="sm" icon="💰">Control de Costos</Button>
+                            <Button variant="primary" size="sm">Control de Costos</Button>
                         </Link>
                     </>
                 }

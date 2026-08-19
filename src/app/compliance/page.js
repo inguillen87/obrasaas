@@ -46,7 +46,6 @@ export default function CompliancePage() {
             
             {/* Header */}
             <PageHeader
-                icon="⚖️"
                 title="Centro de Cumplimiento Normativo & Legal"
                 subtitle="Monitoreo en tiempo real de UOCRA, ART, Superintendencia de Riesgos del Trabajo y Ley 22.250"
                 breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Compliance' }]}

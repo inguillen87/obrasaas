@@ -96,9 +96,10 @@ function OnboardingContent() {
                     style={{ maxWidth: '580px', width: '100%' }}
                 >
                     <GlassCard style={{ padding: '48px 36px', textAlign: 'center', border: '1px solid rgba(245, 158, 11, 0.4)' }} glow>
-                        <div style={{ fontSize: '3.5rem', marginBottom: '16px' }}>🎉</div>
+                        <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 200 }}
+                          style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'linear-gradient(135deg, #f59e0b, #d97706)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: '1.6rem', color: '#050810', fontWeight: 900 }}>✓</motion.div>
                         <h1 style={{ color: '#f8fafc', fontSize: '2rem', fontWeight: 900, marginBottom: '12px', fontFamily: tokens.font.heading }}>
-                            ¡Bienvenido a ObraSaaS!
+                            Tu espacio está listo
                         </h1>
                         <p style={{ color: '#94a3b8', fontSize: '1rem', lineHeight: 1.6, marginBottom: '28px' }}>
                             Tu espacio de trabajo y primera obra han sido inicializados. Ya podés conectar tu número de WhatsApp para empezar a operar.
@@ -118,12 +119,12 @@ function OnboardingContent() {
 
                         <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
                             <Link href="/dashboard" style={{ flex: 1 }}>
-                                <Button variant="primary" size="lg" style={{ width: '100%' }} icon="🚀">
-                                    Ir al Dashboard Principal
+                                <Button variant="primary" size="lg" style={{ width: '100%' }}>
+                                    Ir al Dashboard
                                 </Button>
                             </Link>
                             <Link href="/costos" style={{ flex: 1 }}>
-                                <Button variant="secondary" size="lg" style={{ width: '100%' }} icon="💰">
+                                <Button variant="secondary" size="lg" style={{ width: '100%' }}>
                                     Configurar Costos
                                 </Button>
                             </Link>
@@ -392,9 +393,8 @@ function OnboardingContent() {
                                     style={{ flex: 2 }}
                                     loading={isSubmitting}
                                     onClick={handleSubmit}
-                                    icon="🚀"
                                 >
-                                    {isSubmitting ? 'Inicializando Workspace...' : 'Crear Cuenta y Comenzar'}
+                                    {isSubmitting ? 'Inicializando...' : 'Crear cuenta y comenzar'}
                                 </Button>
                             </div>
                         </motion.div>

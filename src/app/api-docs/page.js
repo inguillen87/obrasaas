@@ -184,13 +184,12 @@ export default function ApiDocsPage() {
             
             {/* Header */}
             <PageHeader
-                icon="📋"
                 title="Documentación de la API REST v1"
                 subtitle="Integración programática para ERPs, sistemas contables (Tango, Bejerman) y aplicaciones móviles"
                 breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'API Docs' }]}
                 actions={
                     <Link href="/onboarding">
-                        <Button variant="primary" size="sm" icon="🔑">
+                        <Button variant="primary" size="sm">
                             Obtener API Key
                         </Button>
                     </Link>
