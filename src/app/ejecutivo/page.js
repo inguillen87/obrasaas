@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { tokens, Badge, Button, GlassCard, StatCard, ProgressBar, PageHeader, staggerContainer, staggerItem } from '@/lib/design-system';
+import { tokens, Badge, Button, GlassCard, StatCard, ProgressBar, PageHeader, Modal, staggerContainer, staggerItem } from '@/lib/design-system';
 import { useBreakpoint } from '@/lib/useBreakpoint';
 
 export default function ExecutiveDashboard() {
@@ -11,6 +11,8 @@ export default function ExecutiveDashboard() {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [filterRisk, setFilterRisk] = useState('all');
+    const [summaryModal, setSummaryModal] = useState({ open: false, loading: false, result: null });
+    const [copied, setCopied] = useState(false);
 
     useEffect(() => {
         loadData();
@@ -18,14 +20,33 @@ export default function ExecutiveDashboard() {
 
     const loadData = async () => {
         try {
-            const [stateRes, statsRes, budgetRes] = await Promise.all([
+            const [stateRes, statsRes, budgetRes, predictiveRes] = await Promise.all([
                 fetch('/api/state').then(r => r.json()),
                 fetch('/api/admin/stats', { headers: { 'x-api-key': 'internal' } }).then(r => r.json()).catch(() => ({})),
-                fetch('/api/v1/budget', { headers: { 'x-api-key': 'internal' } }).then(r => r.json()).catch(() => ({}))
+                fetch('/api/v1/budget', { headers: { 'x-api-key': 'internal' } }).then(r => r.json()).catch(() => ({})),
+                fetch('/api/v1/predictive').then(r => r.json()).catch(() => ({}))
             ]);
-            setData({ state: stateRes, stats: statsRes, budget: budgetRes });
+            setData({ state: stateRes, stats: statsRes, budget: budgetRes, predictive: predictiveRes });
         } catch (err) { console.error(err); }
         setLoading(false);
+    };
+
+    const handleTriggerDailySummary = async () => {
+        setSummaryModal({ open: true, loading: true, result: null });
+        setCopied(false);
+        try {
+            const res = await fetch('/api/cron/daily-summary', { method: 'POST' });
+            const json = await res.json();
+            setSummaryModal({ open: true, loading: false, result: json });
+        } catch (err) {
+            setSummaryModal({ open: true, loading: false, result: { error: err.message } });
+        }
+    };
+
+    const copyToClipboard = (text) => {
+        navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2500);
     };
 
     const formatARS = (n) => `$${(n || 0).toLocaleString('es-AR')}`;
@@ -41,6 +62,7 @@ export default function ExecutiveDashboard() {
     const state = data?.state || {};
     const stats = data?.stats || {};
     const budget = data?.budget || {};
+    const predictive = data?.predictive || {};
     const projects = state.projects || [];
     const avance = parseFloat(state.avancePercentage) || 0;
     const incidents = state.incidents || [];
@@ -57,12 +79,15 @@ export default function ExecutiveDashboard() {
             {/* Header */}
             <PageHeader
                 title="Centro de Mando Ejecutivo (CEO / C-Level)"
-                subtitle="Vista consolidada de cartera de obras, salud operativa y flujo financiero"
+                subtitle="Vista consolidada de cartera de obras, IA predictiva y flujo financiero"
                 breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Ejecutivo' }]}
                 actions={
                     <>
                         <Button variant="secondary" size="sm" onClick={loadData}>↻ Actualizar</Button>
-                        <Button variant="secondary" size="sm" onClick={() => window.print()}>Exportar PDF</Button>
+                        <Button variant="secondary" size="sm" icon="📱" onClick={handleTriggerDailySummary}>Resumen WhatsApp</Button>
+                        <a href="/api/v1/certificacion/pdf" target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
+                            <Button variant="secondary" size="sm" icon="📄">Certificado PDF</Button>
+                        </a>
                         <Link href="/costos">
                             <Button variant="primary" size="sm">Control de Costos</Button>
                         </Link>
@@ -203,12 +228,22 @@ export default function ExecutiveDashboard() {
                             </div>
 
                             <div style={{ marginTop: '24px', padding: '16px', background: 'rgba(245, 158, 11, 0.06)', borderRadius: '12px', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
-                                <div style={{ fontSize: '0.74rem', color: '#f59e0b', fontWeight: 800, marginBottom: '4px' }}>
-                                    Insight predictivo:
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                    <div style={{ fontSize: '0.74rem', color: '#f59e0b', fontWeight: 800 }}>
+                                        🤖 Insight Predictivo IA (CIRSOC 201):
+                                    </div>
+                                    <Badge color={predictive.status === 'OPTIMO' ? '#10b981' : predictive.status === 'EN_RIESGO' ? '#ef4444' : '#f59e0b'} variant="filled" size="xs">
+                                        Score: {predictive.overallHealthScore || 88}/100
+                                    </Badge>
                                 </div>
-                                <div style={{ fontSize: '0.78rem', color: '#cbd5e1', lineHeight: 1.4 }}>
-                                    La ventana óptima meteorológica (CIRSOC 201) para el colado de la losa nivel 4 es este <strong>Jueves</strong> con 72hs de sol aseguradas.
+                                <div style={{ fontSize: '0.78rem', color: '#cbd5e1', lineHeight: 1.4, marginBottom: '8px' }}>
+                                    {predictive.weatherRisk?.optimalWindow || 'Próxima ventana de 72hs sin lluvia: Jueves a Sábado para hormigonado de losa.'}
                                 </div>
+                                {predictive.identifiedRisks && predictive.identifiedRisks.length > 0 && (
+                                    <div style={{ fontSize: '0.72rem', color: '#fca5a5', background: 'rgba(239, 68, 68, 0.1)', padding: '6px 8px', borderRadius: '6px', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
+                                        ⚠️ {predictive.identifiedRisks[0].title}: {predictive.identifiedRisks[0].recommendation}
+                                    </div>
+                                )}
                             </div>
                         </GlassCard>
                     </div>
@@ -317,6 +352,71 @@ export default function ExecutiveDashboard() {
                 </GlassCard>
 
             </main>
+
+            {/* WhatsApp Daily Summary Dispatch Modal */}
+            <Modal
+                isOpen={summaryModal.open}
+                onClose={() => setSummaryModal({ open: false, loading: false, result: null })}
+                title="📱 Despacho Diario de Resumen Ejecutivo WhatsApp"
+                maxWidth="640px"
+            >
+                {summaryModal.loading ? (
+                    <div style={{ textAlign: 'center', padding: '40px 0', color: '#94a3b8' }}>
+                        <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }} style={{ width: 36, height: 36, border: '3px solid rgba(245, 158, 11, 0.2)', borderTopColor: '#f59e0b', borderRadius: '50%', margin: '0 auto 16px' }} />
+                        Generando consolidado de obra y ejecutando motor cron...
+                    </div>
+                ) : summaryModal.result?.formattedWhatsAppDispatch ? (
+                    <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                            <Badge color="#10b981" variant="filled" size="sm">✓ DESPACHO PREPARADO</Badge>
+                            <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                                Obra: {summaryModal.result.project}
+                            </span>
+                        </div>
+
+                        <div style={{
+                            background: '#0b141a',
+                            border: '1px solid rgba(34, 197, 94, 0.3)',
+                            borderRadius: '12px',
+                            padding: '16px',
+                            fontFamily: tokens.font.mono,
+                            fontSize: '0.8rem',
+                            color: '#e9edef',
+                            whiteSpace: 'pre-wrap',
+                            lineHeight: 1.5,
+                            maxHeight: '360px',
+                            overflowY: 'auto',
+                            marginBottom: '20px'
+                        }}>
+                            {summaryModal.result.formattedWhatsAppDispatch}
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                            <Button
+                                variant="secondary"
+                                size="md"
+                                onClick={() => copyToClipboard(summaryModal.result.formattedWhatsAppDispatch)}
+                            >
+                                {copied ? '✓ Copiado al portapapeles' : '📋 Copiar Mensaje'}
+                            </Button>
+                            <a
+                                href={`https://wa.me/?text=${encodeURIComponent(summaryModal.result.formattedWhatsAppDispatch)}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                style={{ textDecoration: 'none' }}
+                            >
+                                <Button variant="primary" size="md" icon="💬">
+                                    Abrir en WhatsApp Web
+                                </Button>
+                            </a>
+                        </div>
+                    </div>
+                ) : (
+                    <div style={{ textAlign: 'center', padding: '20px', color: '#ef4444' }}>
+                        Error al generar despacho: {summaryModal.result?.error || 'No se pudo conectar con el servidor'}
+                    </div>
+                )}
+            </Modal>
 
             {/* Print Stylesheet for PDF Export */}
             <style jsx global>{`
