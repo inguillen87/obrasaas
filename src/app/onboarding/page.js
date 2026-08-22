@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { tokens, Badge, Button, GlassCard, ProgressBar, PageHeader } from '@/lib/design-system';
+import WhatsAppEmbeddedSignup from '@/components/WhatsAppEmbeddedSignup';
 
 function OnboardingContent() {
     const searchParams = useSearchParams();
@@ -158,7 +159,8 @@ function OnboardingContent() {
                     {[
                         { num: 1, label: 'Empresa' },
                         { num: 2, label: 'Primera Obra' },
-                        { num: 3, label: 'Plan & WhatsApp' }
+                        { num: 3, label: 'Plan' },
+                        { num: 4, label: 'Meta WhatsApp' }
                     ].map((s, idx) => (
                         <div key={s.num} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <div style={{
@@ -180,7 +182,7 @@ function OnboardingContent() {
                             <span style={{ color: step >= s.num ? '#f8fafc' : '#64748b', fontSize: '0.8rem', fontWeight: 600, whiteSpace: 'nowrap' }}>
                                 {s.label}
                             </span>
-                            {idx < 2 && (
+                            {idx < 3 && (
                                 <div style={{ width: 'clamp(12px, 3vw, 28px)', height: '2px', background: step > s.num ? '#f59e0b' : 'rgba(255,255,255,0.1)', flexShrink: 0 }} />
                             )}
                         </div>
@@ -193,7 +195,7 @@ function OnboardingContent() {
                     {/* STEP 1: Company Profile */}
                     {step === 1 && (
                         <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}>
-                            <Badge color="#f59e0b" variant="filled" size="sm">PASO 1 DE 3</Badge>
+                            <Badge color="#f59e0b" variant="filled" size="sm">PASO 1 DE 4</Badge>
                             <h2 style={{ fontSize: '1.45rem', fontWeight: 800, margin: '10px 0 6px', color: '#f8fafc' }}>
                                 Creá el Perfil de tu Empresa
                             </h2>
@@ -208,15 +210,6 @@ function OnboardingContent() {
                                         placeholder="Ej: Constructora del Plata S.A."
                                         value={form.companyName}
                                         onChange={e => updateForm('companyName', e.target.value)}
-                                        style={inputStyle}
-                                    />
-                                </div>
-                                <div>
-                                    <label style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>CUIT / Identificación Fiscal (Opcional)</label>
-                                    <input
-                                        placeholder="30-71234567-9"
-                                        value={form.cuit}
-                                        onChange={e => updateForm('cuit', e.target.value)}
                                         style={inputStyle}
                                     />
                                 </div>
@@ -248,7 +241,7 @@ function OnboardingContent() {
                                 disabled={!form.companyName || !form.email || !form.phone}
                                 onClick={() => setStep(2)}
                             >
-                                Continuar a Configuración de Obra →
+                                Siguiente: Primera Obra →
                             </Button>
                         </motion.div>
                     )}
@@ -256,71 +249,52 @@ function OnboardingContent() {
                     {/* STEP 2: First Project */}
                     {step === 2 && (
                         <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }}>
-                            <Badge color="#3b82f6" variant="filled" size="sm">PASO 2 DE 3</Badge>
+                            <Badge color="#38bdf8" variant="filled" size="sm">PASO 2 DE 4</Badge>
                             <h2 style={{ fontSize: '1.45rem', fontWeight: 800, margin: '10px 0 6px', color: '#f8fafc' }}>
                                 Configurá tu Primera Obra
                             </h2>
                             <p style={{ color: '#94a3b8', fontSize: '0.86rem', marginBottom: '20px' }}>
-                                Seleccioná una plantilla para pre-cargar rubros constructivos y cronograma base.
+                                Crearemos el libro de obra digital y la estructura de rubros automáticamente.
                             </p>
 
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '20px' }}>
                                 <div>
-                                    <label style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Nombre de la Obra *</label>
+                                    <label style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Nombre del Proyecto / Obra *</label>
                                     <input
-                                        placeholder="Ej: Torre Palermo Soho"
+                                        placeholder="Ej: Torre Palermo Green"
                                         value={form.projectName}
                                         onChange={e => updateForm('projectName', e.target.value)}
                                         style={inputStyle}
                                     />
                                 </div>
-
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
-                                    <div>
-                                        <label style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Ciudad *</label>
-                                        <input
-                                            placeholder="CABA, Mendoza, Córdoba..."
-                                            value={form.city}
-                                            onChange={e => updateForm('city', e.target.value)}
-                                            style={inputStyle}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Dirección / Emplazamiento</label>
-                                        <input
-                                            placeholder="Av. Santa Fe 3400"
-                                            value={form.address}
-                                            onChange={e => updateForm('address', e.target.value)}
-                                            style={inputStyle}
-                                        />
-                                    </div>
+                                <div>
+                                    <label style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Ciudad / Ubicación Geográfica *</label>
+                                    <input
+                                        placeholder="Ej: CABA / Mendoza / Rosario"
+                                        value={form.city}
+                                        onChange={e => updateForm('city', e.target.value)}
+                                        style={inputStyle}
+                                    />
                                 </div>
                             </div>
 
-                            <label style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'block', marginBottom: '8px' }}>
-                                Plantilla Constructiva Pre-configurada:
-                            </label>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '8px', marginBottom: '24px' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px', marginBottom: '24px' }}>
                                 {projectTemplates.map(t => (
                                     <div
                                         key={t.id}
                                         onClick={() => updateForm('projectType', t.id)}
                                         style={{
-                                            padding: '12px',
-                                            borderRadius: '10px',
-                                            background: form.projectType === t.id ? 'rgba(245, 158, 11, 0.12)' : 'rgba(6, 9, 19, 0.6)',
-                                            border: form.projectType === t.id ? '2px solid #f59e0b' : '1px solid rgba(255, 255, 255, 0.08)',
+                                            padding: '10px',
+                                            borderRadius: '8px',
+                                            background: form.projectType === t.id ? 'rgba(56, 189, 248, 0.15)' : 'rgba(6, 9, 19, 0.6)',
+                                            border: form.projectType === t.id ? '2px solid #38bdf8' : '1px solid rgba(255, 255, 255, 0.08)',
                                             cursor: 'pointer',
-                                            textAlign: 'center',
-                                            transition: 'all 0.2s'
+                                            textAlign: 'center'
                                         }}
                                     >
                                         <div style={{ fontSize: '1.4rem', marginBottom: '4px' }}>{t.icon}</div>
-                                        <div style={{ fontSize: '0.76rem', fontWeight: 700, color: form.projectType === t.id ? '#f59e0b' : '#f8fafc' }}>
+                                        <div style={{ fontSize: '0.75rem', fontWeight: 700, color: form.projectType === t.id ? '#38bdf8' : '#f8fafc' }}>
                                             {t.label}
-                                        </div>
-                                        <div style={{ fontSize: '0.65rem', color: '#64748b', marginTop: '2px' }}>
-                                            {t.rubros} rubros • {t.quincenas} quincenas
                                         </div>
                                     </div>
                                 ))}
@@ -337,21 +311,21 @@ function OnboardingContent() {
                                     disabled={!form.projectName || !form.city}
                                     onClick={() => setStep(3)}
                                 >
-                                    Siguiente: Confirmar Plan →
+                                    Siguiente: Elegir Plan →
                                 </Button>
                             </div>
                         </motion.div>
                     )}
 
-                    {/* STEP 3: Plan & Final Activation */}
+                    {/* STEP 3: Plan Selection */}
                     {step === 3 && (
                         <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }}>
-                            <Badge color="#10b981" variant="filled" size="sm">PASO 3 DE 3</Badge>
+                            <Badge color="#10b981" variant="filled" size="sm">PASO 3 DE 4</Badge>
                             <h2 style={{ fontSize: '1.45rem', fontWeight: 800, margin: '10px 0 6px', color: '#f8fafc' }}>
-                                Confirmación de Prueba Gratuita
+                                Selección de Plan SaaS
                             </h2>
                             <p style={{ color: '#94a3b8', fontSize: '0.86rem', marginBottom: '20px' }}>
-                                Seleccioná el plan para tu prueba gratuita de 14 días.
+                                Seleccioná el plan para tu prueba gratuita de 14 días con acceso a Meta Cloud API.
                             </p>
 
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '24px' }}>
@@ -393,10 +367,45 @@ function OnboardingContent() {
                                     variant="primary"
                                     size="lg"
                                     style={{ flex: 2 }}
+                                    onClick={() => setStep(4)}
+                                >
+                                    Siguiente: Conectar WhatsApp →
+                                </Button>
+                            </div>
+                        </motion.div>
+                    )}
+
+                    {/* STEP 4: Meta WhatsApp Official Embedded Signup */}
+                    {step === 4 && (
+                        <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }}>
+                            <Badge color="#22c55e" variant="filled" size="sm">PASO 4 DE 4 (OFICIAL META)</Badge>
+                            <h2 style={{ fontSize: '1.45rem', fontWeight: 800, margin: '10px 0 6px', color: '#f8fafc' }}>
+                                Conectar WhatsApp de la Constructora
+                            </h2>
+                            <p style={{ color: '#94a3b8', fontSize: '0.86rem', marginBottom: '20px' }}>
+                                Vinculá tu WhatsApp oficial a través del onboarding directo de Meta Tech Provider.
+                            </p>
+
+                            <div style={{ marginBottom: '24px' }}>
+                                <WhatsAppEmbeddedSignup
+                                    tenantSlug={form.companyName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') || 'empresa'}
+                                    companyName={form.companyName || 'Constructora'}
+                                    onConnected={() => handleSubmit()}
+                                />
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '12px' }}>
+                                <Button variant="secondary" size="lg" style={{ flex: 1 }} onClick={() => setStep(3)}>
+                                    ← Volver
+                                </Button>
+                                <Button
+                                    variant="primary"
+                                    size="lg"
+                                    style={{ flex: 2 }}
                                     loading={isSubmitting}
                                     onClick={handleSubmit}
                                 >
-                                    {isSubmitting ? 'Inicializando...' : 'Crear cuenta y comenzar'}
+                                    {isSubmitting ? 'Finalizando...' : 'Finalizar y Entrar al Dashboard →'}
                                 </Button>
                             </div>
                         </motion.div>

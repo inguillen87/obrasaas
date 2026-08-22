@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from 'react';
+import WhatsAppEmbeddedSignup from '@/components/WhatsAppEmbeddedSignup';
 
 export default function ChatSimulator({
   activeTab,
@@ -21,6 +22,7 @@ export default function ChatSimulator({
   const [simulatedRole, setSimulatedRole] = useState('director');
   const [dispatchPhone, setDispatchPhone] = useState('5492613168608');
   const [dispatching, setDispatching] = useState(false);
+  const [metaDrawerOpen, setMetaDrawerOpen] = useState(false);
 
   const handleLiveDispatch = async (messageType, customText = '') => {
     setDispatching(true);
@@ -410,8 +412,26 @@ export default function ChatSimulator({
           >
             🚨 Probar Alerta Ausentismo (08:30 hs)
           </button>
+          <button
+            onClick={() => setMetaDrawerOpen(!metaDrawerOpen)}
+            style={{ padding: '6px 12px', fontSize: '0.75rem', borderRadius: '6px', background: metaDrawerOpen ? '#1877F2' : 'rgba(24, 119, 242, 0.15)', border: '1px solid #1877F2', color: '#fff', fontWeight: 700, cursor: 'pointer', marginLeft: 'auto' }}
+          >
+            <i className="fa-brands fa-facebook"></i> {metaDrawerOpen ? '✕ Ocultar Onboarding Meta' : '🌐 Meta Embedded Signup (Tech Provider)'}
+          </button>
         </div>
       </div>
+
+      {metaDrawerOpen && (
+        <div style={{ marginBottom: '20px' }}>
+          <WhatsAppEmbeddedSignup
+            tenantSlug="palermo-soho"
+            companyName={state.projectConfig?.name || "Constructora del Plata"}
+            onConnected={(account) => {
+              if (addToast) addToast(`✅ Cuenta WhatsApp vinculada exitosamente con Meta (WABA: ${account.wabaId})`, 'success');
+            }}
+          />
+        </div>
+      )}
 
       <div className="grid-2">
         {/* Smartphone Mockup */}
