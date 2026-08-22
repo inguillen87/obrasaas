@@ -203,8 +203,13 @@ export function buildWorkerListMessage(state, senderName, senderRole, targetNumb
                         ]
                     },
                     {
-                        title: "Comprobantes & Salud",
+                        title: "Comprobantes, Sueldos & Salud",
                         rows: [
+                            {
+                                id: "cmd_7",
+                                title: "7️⃣ Recibo de Sueldo",
+                                description: "Ver y firmar digitalmente tu recibo quincenal UOCRA"
+                            },
                             {
                                 id: "cmd_5",
                                 title: "5️⃣ Rendir Gasto / Ticket",

@@ -6,6 +6,7 @@ import { appendAuditTransaction } from '../../../lib/auditLedger.js';
 import { buildDirectorListMessage, buildVictoriaListMessage, buildWorkerListMessage, buildActionButtonsMessage } from '../../../lib/metaTemplates.js';
 import { generateWebviewToken, verifyMetaWebhookSignature, isMessageDuplicate } from '../../../lib/auth.js';
 import { processCopilotMessage } from '../../../lib/llmCopilot.js';
+import { sendWhatsAppMessage } from '../../../lib/whatsappNotifications.js';
 
 // Geofencing Haversine Mathematical Formula
 function getDistance(lat1, lon1, lat2, lon2) {
@@ -211,6 +212,7 @@ export async function POST(request) {
         const attendanceLink = `${appUrl}/webview/attendance?worker=${shortId}&token=${token}`;
         const medicalLink = `${appUrl}/webview/medical?worker=${shortId}&token=${token}`;
         const kycLink = `${appUrl}/webview/kyc?worker=${shortId}&token=${token}`;
+        const recibosLink = `${appUrl}/webview/recibos?worker=${shortId}&token=${token}`;
 
         // 3. Audio / Voice Note Transcription via OpenAI Whisper
         if (mediaUrl && (mediaType.startsWith('audio/') || mediaType.startsWith('voice/'))) {
@@ -289,21 +291,20 @@ export async function POST(request) {
                     botReply = `🎉 *¡Registro Completado!*\n\n✅ *${finalName}*\n📋 DNI: *${finalDni}*\n🔧 Oficio: *${finalTrade}*\n📱 Teléfono: *+${cleanFrom.slice(-10)}*\n\n🏗️ Tu legajo fue creado en *${state.projectConfig?.name || 'ObraSaaS'}*.\n\n_Ahora podés fichar asistencia enviando tu 📍 ubicación, o escribí "menú" para ver las opciones._`;
 
                     // Notify director
-                    const directorPhone = state.projectConfig?.directorPhone;
+                    const directorPhone = state.projectConfig?.directorPhone || process.env.DIRECTOR_PHONE;
                     if (directorPhone) {
                         try {
                             await sendWhatsAppMessage(directorPhone, `🆕 *Nuevo operario auto-registrado:*\n• ${finalName} (${finalTrade})\n• DNI: ${finalDni}\n• Estado: PRE-VERIFICADO\n\n_Validá su legajo desde el Dashboard._`);
                         } catch(e) { console.warn('Director notification failed:', e.message); }
                     }
 
-                    // Skip to send reply
-                    const replyPayload = { messaging_product: 'whatsapp', to: cleanFrom, type: 'text', text: { body: botReply } };
-                    await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
-                        method: 'POST',
-                        headers: { 'Authorization': `Bearer ${process.env.WHATSAPP_TOKEN}`, 'Content-Type': 'application/json' },
-                        body: JSON.stringify(replyPayload)
-                    });
-                    return Response.json({ status: 'registration_completed' });
+                    // Send reply to worker via Meta WhatsApp Cloud API
+                    try {
+                        await sendWhatsAppMessage(cleanFrom, botReply);
+                    } catch(e) {
+                        console.warn('Worker registration reply failed:', e.message);
+                    }
+                    return Response.json({ status: 'registration_completed', reply: botReply });
                 }
             } else if (isReceiptIntent && base64) {
                 ocrResult = await analyzeRemitoWithAI({ base64, mimeType: mime, rawText: bodyText });
@@ -953,12 +954,14 @@ export async function POST(request) {
                     botReply = `🧾 *Rendición de Gastos / Remitos*\n\nEnviá la fotografía nítida del ticket o remito para procesarlo con el lector OCR fiscal AFIP.`;
                 } else if (normalBody === '6' || normalBody.includes('licencia') || normalBody.includes('medica')) {
                     botReply = `🏥 *Carga de Licencia Médica*\n\nCompletá el formulario y adjuntá el certificado médico desde tu celular:\n👉 ${medicalLink}`;
+                } else if (normalBody === '7' || normalBody.includes('recibo') || normalBody.includes('sueldo') || normalBody.includes('quincena') || normalBody.includes('cobro') || normalBody.includes('haber') || normalBody.includes('liquidacion')) {
+                    botReply = `📄 *Recibo de Sueldo Quincenal (Convenio UOCRA 76/75)*\n\nHola *${senderName}*. Tu recibo de sueldo de la quincena actual se encuentra disponible para visualización y firma digital legal:\n\n👉 *Ver y Firmar Recibo:* ${recibosLink}\n\n_Validez legal bajo Ley 20.744 y Res. MTEySS 1455/11 con sello de tiempo y SHA-256._`;
                 } else {
                     if (bodyText && bodyText.length > 5 && !['menu', 'ayuda', 'hola', 'opciones'].includes(normalBody)) {
                         const copilotRes = await processCopilotMessage(bodyText, { state, senderName, senderRole });
                         botReply = copilotRes.reply;
                     } else {
-                        botReply = `👷‍♂️ *Copiloto Inteligente de ObraSaaS*\n\nHola *${senderName}* (*${senderRole}*).\n\n1️⃣ *Fichar Entrada* (o enviá tu ubicación 📍)\n2️⃣ *Reportar Avance* (ej: "terminamos el revoque al 100%")\n3️⃣ *Reportar Incidencia* (ej: "fuga de agua en el caño")\n4️⃣ *Demora de Materiales*\n5️⃣ *Rendir Gasto / Remito* (enviá foto del ticket)\n6️⃣ *Cargar Licencia Médica*\n\n👉 Tarjeta de Presentismo: ${attendanceLink}`;
+                        botReply = `👷‍♂️ *Copiloto Inteligente de ObraSaaS*\n\nHola *${senderName}* (*${senderRole}*).\n\n1️⃣ *Fichar Entrada* (o enviá tu ubicación 📍)\n2️⃣ *Reportar Avance* (ej: "terminamos el revoque al 100%")\n3️⃣ *Reportar Incidencia* (ej: "fuga de agua en el caño")\n4️⃣ *Demora de Materiales*\n5️⃣ *Rendir Gasto / Remito* (enviá foto del ticket)\n6️⃣ *Cargar Licencia Médica*\n7️⃣ *Ver y Firmar Recibo de Sueldo (UOCRA)*\n\n👉 Tarjeta de Presentismo: ${attendanceLink}\n👉 Recibo Digital: ${recibosLink}`;
                     }
                 }
             }

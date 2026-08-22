@@ -37,6 +37,7 @@ const pagesToTest = [
   { path: '/webview/attendance?worker=juan&token=test', name: 'Webview Fichaje Satelital' },
   { path: '/webview/kyc?worker=juan&token=test', name: 'Webview KYC Biométrico' },
   { path: '/webview/medical?worker=juan&token=test', name: 'Webview Apto Médico' },
+  { path: '/webview/recibos?worker=juan&token=test', name: 'Webview Recibos Digitales UOCRA' },
 ];
 
 const AK = { 'x-api-key': 'obrasaas_admin_key' };

@@ -12,19 +12,20 @@
  * @returns {Promise<{success: boolean, messageId?: string, error?: string}>}
  */
 export async function sendWhatsAppMessage(to, body, phoneNumberId) {
-    const token = process.env.WHATSAPP_TOKEN;
-    const pnid = phoneNumberId || process.env.WHATSAPP_PHONE_NUMBER_ID;
+    const token = process.env.META_WHATSAPP_ACCESS_TOKEN || process.env.WHATSAPP_TOKEN;
+    const pnid = phoneNumberId || process.env.META_PHONE_NUMBER_ID || process.env.WHATSAPP_PHONE_NUMBER_ID;
+    const apiVersion = process.env.META_GRAPH_API_VERSION || 'v21.0';
     
     if (!token || !pnid) {
         console.warn('WhatsApp credentials not configured. Skipping notification.');
-        return { success: false, error: 'Missing WHATSAPP_TOKEN or WHATSAPP_PHONE_NUMBER_ID' };
+        return { success: false, error: 'Missing META_WHATSAPP_ACCESS_TOKEN or META_PHONE_NUMBER_ID' };
     }
 
     // Clean phone number
     const cleanTo = to.replace(/[^0-9]/g, '');
 
     try {
-        const res = await fetch(`https://graph.facebook.com/v21.0/${pnid}/messages`, {
+        const res = await fetch(`https://graph.facebook.com/${apiVersion}/${pnid}/messages`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -48,6 +49,91 @@ export async function sendWhatsAppMessage(to, body, phoneNumberId) {
         return { success: true, messageId: data.messages?.[0]?.id };
     } catch (err) {
         console.error('WhatsApp send exception:', err.message);
+        return { success: false, error: err.message };
+    }
+}
+
+/**
+ * Send an official Meta Approved HSM Template message (for notifications outside 24h window).
+ * @param {string} to - Phone number
+ * @param {string} templateName - Approved template name (e.g., 'obra_resumen_diario')
+ * @param {string} languageCode - Language (default 'es_AR')
+ * @param {Array} components - Template components array
+ * @param {string} [phoneNumberId] - Optional phone number ID
+ */
+export async function sendWhatsAppTemplate(to, templateName, languageCode = 'es_AR', components = [], phoneNumberId) {
+    const token = process.env.META_WHATSAPP_ACCESS_TOKEN || process.env.WHATSAPP_TOKEN;
+    const pnid = phoneNumberId || process.env.META_PHONE_NUMBER_ID || process.env.WHATSAPP_PHONE_NUMBER_ID;
+    const apiVersion = process.env.META_GRAPH_API_VERSION || 'v21.0';
+    
+    if (!token || !pnid) return { success: false, error: 'Missing credentials' };
+
+    const cleanTo = to.replace(/[^0-9]/g, '');
+
+    try {
+        const res = await fetch(`https://graph.facebook.com/${apiVersion}/${pnid}/messages`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                messaging_product: 'whatsapp',
+                to: cleanTo,
+                type: 'template',
+                template: {
+                    name: templateName,
+                    language: { code: languageCode },
+                    components: components.length > 0 ? components : undefined
+                }
+            })
+        });
+
+        const data = await res.json();
+        return { success: res.ok, messageId: data.messages?.[0]?.id, data };
+    } catch (err) {
+        return { success: false, error: err.message };
+    }
+}
+
+/**
+ * Send a document / PDF to a user on WhatsApp.
+ * @param {string} to - Phone number
+ * @param {string} documentUrl - Public URL of the PDF / document
+ * @param {string} filename - Display filename
+ * @param {string} [caption] - Optional text caption
+ */
+export async function sendWhatsAppDocument(to, documentUrl, filename, caption = '') {
+    const token = process.env.META_WHATSAPP_ACCESS_TOKEN || process.env.WHATSAPP_TOKEN;
+    const pnid = process.env.META_PHONE_NUMBER_ID || process.env.WHATSAPP_PHONE_NUMBER_ID;
+    const apiVersion = process.env.META_GRAPH_API_VERSION || 'v21.0';
+    
+    if (!token || !pnid) return { success: false, error: 'Missing credentials' };
+
+    const cleanTo = to.replace(/[^0-9]/g, '');
+
+    try {
+        const res = await fetch(`https://graph.facebook.com/${apiVersion}/${pnid}/messages`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                messaging_product: 'whatsapp',
+                to: cleanTo,
+                type: 'document',
+                document: {
+                    link: documentUrl,
+                    filename: filename,
+                    caption: caption
+                }
+            })
+        });
+
+        const data = await res.json();
+        return { success: res.ok, messageId: data.messages?.[0]?.id };
+    } catch (err) {
         return { success: false, error: err.message };
     }
 }

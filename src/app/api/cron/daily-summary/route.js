@@ -1,5 +1,6 @@
 import { getAppState, saveAppState } from '@/lib/db';
 import { appendAuditTransaction } from '@/lib/auditLedger';
+import { sendWhatsAppMessage } from '@/lib/whatsappNotifications';
 
 export const dynamic = 'force-dynamic';
 
@@ -81,6 +82,22 @@ _Sello Inmutable: SHA-256 verificado_ 🔒`;
 
         await saveAppState(state);
 
+        // Dispatch WhatsApp push notification to directors
+        const recipients = [
+            state.projectConfig?.directorPhone || process.env.DIRECTOR_PHONE || '54261153168608',
+            state.projectConfig?.techDirectorPhone || process.env.VICTORIA_PHONE || '54296415520753'
+        ].filter(Boolean);
+
+        const dispatchResults = [];
+        for (const phone of recipients) {
+            try {
+                const res = await sendWhatsAppMessage(phone, whatsappMessage);
+                dispatchResults.push({ phone: phone.slice(-6), status: res.success ? 'sent' : 'failed', error: res.error });
+            } catch (dispatchErr) {
+                dispatchResults.push({ phone: phone.slice(-6), status: 'error', error: dispatchErr.message });
+            }
+        }
+
         return Response.json({
             success: true,
             timestamp: now.toISOString(),
@@ -93,6 +110,7 @@ _Sello Inmutable: SHA-256 verificado_ 🔒`;
                 todayExpenses,
                 criticalIncidents: criticalIncidents.length
             },
+            dispatches: dispatchResults,
             formattedWhatsAppDispatch: whatsappMessage
         });
     } catch (err) {
