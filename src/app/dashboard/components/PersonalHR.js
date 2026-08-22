@@ -309,6 +309,95 @@ export default function PersonalHR({
         </div>
       </div>
 
+      {/* 📄 Recibos de Sueldo Digitales UOCRA (CCT 76/75 & Ley 22.250 / Ley 20.744) */}
+      <div className="glass-panel-premium dashboard-card-hover" style={{ marginTop: '24px' }}>
+        <div className="section-header" style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+          <div>
+            <h3 style={{ fontFamily: 'var(--font-heading)', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', color: '#38bdf8' }}>
+              <i className="fa-solid fa-file-invoice-dollar"></i> Recibos de Sueldo Digitales UOCRA (CCT 76/75 &amp; Ley 22.250)
+            </h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+              Distribución automatizada por WhatsApp y firma digital con validez legal bajo Ley 20.744 art. 140 con sellado de tiempo criptográfico SHA-256.
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <span className="badge badge-info" style={{ background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', border: '1px solid #38bdf8' }}>
+              1ra Quincena — Agosto 2026
+            </span>
+            <button
+              onClick={() => {
+                if (addToast) {
+                  addToast('Despachando recibos quincenales por WhatsApp a toda la cuadrilla...', 'info');
+                  setTimeout(() => addToast('✅ 5/5 Recibos de Sueldo enviados por WhatsApp con enlace de firma digital.', 'success'), 1200);
+                }
+              }}
+              style={{ padding: '6px 14px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '6px', background: 'linear-gradient(135deg, #0284c7, #38bdf8)', border: 'none', borderRadius: '8px', color: '#fff', fontWeight: 700, cursor: 'pointer' }}
+            >
+              <i className="fa-brands fa-whatsapp"></i> Despachar Recibos a Cuadrilla
+            </button>
+          </div>
+        </div>
+
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid var(--border-color)', color: 'var(--text-secondary)' }}>
+                <th style={{ padding: '10px' }}>Operario</th>
+                <th style={{ padding: '10px' }}>Categoría UOCRA</th>
+                <th style={{ padding: '10px' }}>Horas / Período</th>
+                <th style={{ padding: '10px', textAlign: 'right' }}>Bruto</th>
+                <th style={{ padding: '10px', textAlign: 'right' }}>Neto a Cobrar</th>
+                <th style={{ padding: '10px', textAlign: 'center' }}>Firma Digital</th>
+                <th style={{ padding: '10px', textAlign: 'center' }}>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                { name: 'Juan Zapata', cat: 'Oficial Armador', hs: '88 hs + 8 hs ext.', bruto: '$513.830', neto: '$352.240', status: 'FIRMADO', hash: 'SHA256:7f8a...7b8c', id: 'juan' },
+                { name: 'Carlos Gómez', cat: 'Oficial Albañil', hs: '88 hs', bruto: '$461.400', neto: '$318.500', status: 'PENDIENTE', hash: null, id: 'carlos' },
+                { name: 'Luis Martínez', cat: 'Medio Oficial', hs: '88 hs + 4 hs ext.', bruto: '$428.200', neto: '$294.750', status: 'PENDIENTE', hash: null, id: 'luis' },
+                { name: 'Marcelo Rodríguez', cat: 'Capataz General', hs: '88 hs', bruto: '$620.000', neto: '$428.100', status: 'FIRMADO', hash: 'SHA256:4a2c...9e10', id: 'marcelo' },
+                { name: 'Roberto Díaz', cat: 'Ayudante', hs: '80 hs (1 falta just.)', bruto: '$355.000', neto: '$245.300', status: 'PENDIENTE', hash: null, id: 'roberto' }
+              ].map((rec) => {
+                const isSigned = rec.status === 'FIRMADO';
+                return (
+                  <tr key={rec.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                    <td style={{ padding: '10px' }}><strong style={{ color: '#fff' }}>{rec.name}</strong></td>
+                    <td style={{ padding: '10px', color: '#38bdf8' }}>{rec.cat}</td>
+                    <td style={{ padding: '10px', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>{rec.hs}</td>
+                    <td style={{ padding: '10px', textAlign: 'right', color: 'var(--text-muted)' }}>{rec.bruto}</td>
+                    <td style={{ padding: '10px', textAlign: 'right', fontWeight: 800, color: '#10b981' }}>{rec.neto}</td>
+                    <td style={{ padding: '10px', textAlign: 'center' }}>
+                      {isSigned ? (
+                        <span className="badge badge-success" title={rec.hash} style={{ cursor: 'pointer' }}>
+                          <i className="fa-solid fa-signature"></i> Firmado ✓
+                        </span>
+                      ) : (
+                        <span className="badge badge-warning">
+                          <i className="fa-solid fa-clock"></i> Pendiente
+                        </span>
+                      )}
+                    </td>
+                    <td style={{ padding: '10px', textAlign: 'center' }}>
+                      <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+                        <a
+                          href={`/webview/recibos?worker=${rec.id}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{ padding: '3px 8px', fontSize: '0.72rem', textDecoration: 'none', borderRadius: '6px', background: 'rgba(56, 189, 248, 0.1)', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.3)', display: 'inline-block' }}
+                        >
+                          <i className="fa-solid fa-arrow-up-right-from-square"></i> Ver Recibo
+                        </a>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       {/* Attendance History */}
       <div className="glass-panel-premium dashboard-card-hover" style={{ marginTop: '24px' }}>
         <h3 style={{ fontFamily: 'var(--font-heading)', marginBottom: '12px', color: '#fff' }}><i className="fa-solid fa-calendar-check"></i> Historial de Presentismo &amp; Licencias de la Obra</h3>

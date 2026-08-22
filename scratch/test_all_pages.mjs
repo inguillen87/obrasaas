@@ -60,6 +60,8 @@ const apiEndpointsToTest = [
   { path: '/api/v1/workers', name: 'API Operarios & RRHH', headers: AK },
   { path: '/api/v1/export?type=budget', name: 'API Exportación ERP (CSV)' },
   { path: '/api/v1/webhooks', name: 'API Webhooks & Integraciones', headers: AK },
+  { path: '/api/v1/whatsapp/dispatch', name: 'API WhatsApp Dispatch & Health Hub' },
+  { path: '/api/v1/recibos', name: 'API Recibos Digitales UOCRA' },
 
   // Admin APIs
   { path: '/api/admin/stats', name: 'API Admin Stats Platform-Wide', headers: AK },

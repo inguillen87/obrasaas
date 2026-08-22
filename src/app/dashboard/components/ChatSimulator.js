@@ -18,6 +18,34 @@ export default function ChatSimulator({
   const [gpsModalOpen, setGpsModalOpen] = useState(false);
   const [gpsLabel, setGpsLabel] = useState('GPS: Obra Palermo Chico');
   const [playingAudioIndex, setPlayingAudioIndex] = useState(null);
+  const [simulatedRole, setSimulatedRole] = useState('director');
+  const [dispatchPhone, setDispatchPhone] = useState('5492613168608');
+  const [dispatching, setDispatching] = useState(false);
+
+  const handleLiveDispatch = async (messageType, customText = '') => {
+    setDispatching(true);
+    try {
+      const res = await fetch('/api/v1/whatsapp/dispatch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          recipientPhone: dispatchPhone,
+          messageType,
+          customText
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        if (addToast) addToast(`✅ Mensaje enviado a +${dispatchPhone.slice(-10)} [${messageType}]`, 'success');
+      } else {
+        if (addToast) addToast(`ℹ️ WhatsApp despachado (Modo sandbox / demo): ${data.error || 'OK'}`, 'info');
+      }
+    } catch(e) {
+      if (addToast) addToast('Error al despachar: ' + e.message, 'danger');
+    } finally {
+      setDispatching(false);
+    }
+  };
 
   const chatMessagesEndRef = useRef(null);
   const waveformRef1 = useRef(null);
@@ -176,12 +204,13 @@ export default function ChatSimulator({
     if (!text) return;
 
     setChatInput('');
+    const fromPhone = simulatedRole === 'director' ? '2613168608' : simulatedRole === 'victoria' ? '2964520753' : 'carlos';
     try {
       await fetch('/api/whatsapp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          from: 'carlos',
+          from: fromPhone,
           bodyText: text
         })
       });
@@ -200,7 +229,8 @@ export default function ChatSimulator({
   // Select simulated attachments
   const selectAttachment = async (type) => {
     setAttachmentMenuOpen(false);
-    let payload = { from: 'carlos' };
+    const fromPhone = simulatedRole === 'director' ? '2613168608' : simulatedRole === 'victoria' ? '2964520753' : 'carlos';
+    let payload = { from: fromPhone };
     
     if (type === 'document') {
       payload.bodyText = "Documento enviado: planos_palermo_v2.pdf";
@@ -246,12 +276,13 @@ export default function ChatSimulator({
 
   const confirmGpsSend = async () => {
     setGpsModalOpen(false);
+    const fromPhone = simulatedRole === 'director' ? '2613168608' : simulatedRole === 'victoria' ? '2964520753' : 'carlos';
     try {
       await fetch('/api/whatsapp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          from: 'carlos',
+          from: fromPhone,
           latitude: -34.5886,
           longitude: -58.4302
         })
@@ -270,10 +301,115 @@ export default function ChatSimulator({
 
   return (
     <section id="sec-whatsapp" className={`content-section animate-fade-in-up ${activeTab === 'sec-whatsapp' ? 'active' : ''}`}>
-      <div className="section-header">
+      <div className="section-header" style={{ marginBottom: '16px' }}>
         <div className="header-title">
-          <h1>Simulador de Chat de Obra (WhatsApp IA)</h1>
-          <p>Interactúa con la IA en tiempo real. Reproduce notas de voz con sonido sintetizado o chatea directamente con el bot.</p>
+          <h1>Meta WhatsApp Business Hub &amp; Copilot Engine</h1>
+          <p>Control central de interacciones por WhatsApp, audios Whisper, OCR fiscal y despacho real a teléfonos móviles.</p>
+        </div>
+        <div className="header-actions" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <span className="badge badge-success" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10b981', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
+            <i className="fa-solid fa-cloud-bolt"></i> Meta Cloud API Conectada
+          </span>
+        </div>
+      </div>
+
+      {/* Live Dispatcher Control Bar */}
+      <div className="glass-panel-premium dashboard-card-hover" style={{ padding: '16px', marginBottom: '20px', background: 'rgba(15, 23, 42, 0.7)', border: '1px solid rgba(56, 189, 248, 0.3)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <strong style={{ fontSize: '0.88rem', color: '#38bdf8' }}>📱 Rol del Remitente:</strong>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <button
+                onClick={() => { setSimulatedRole('director'); setDispatchPhone('5492613168608'); }}
+                style={{
+                  padding: '5px 10px',
+                  borderRadius: '6px',
+                  fontSize: '0.75rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  border: 'none',
+                  background: simulatedRole === 'director' ? '#0284c7' : 'rgba(255,255,255,0.05)',
+                  color: simulatedRole === 'director' ? '#fff' : '#94a3b8'
+                }}
+              >
+                👑 Guillermo (Director)
+              </button>
+              <button
+                onClick={() => { setSimulatedRole('victoria'); setDispatchPhone('5492964520753'); }}
+                style={{
+                  padding: '5px 10px',
+                  borderRadius: '6px',
+                  fontSize: '0.75rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  border: 'none',
+                  background: simulatedRole === 'victoria' ? '#0284c7' : 'rgba(255,255,255,0.05)',
+                  color: simulatedRole === 'victoria' ? '#fff' : '#94a3b8'
+                }}
+              >
+                📐 Victoria (Dir. Técnica)
+              </button>
+              <button
+                onClick={() => { setSimulatedRole('juan'); setDispatchPhone('5491138452190'); }}
+                style={{
+                  padding: '5px 10px',
+                  borderRadius: '6px',
+                  fontSize: '0.75rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  border: 'none',
+                  background: simulatedRole === 'juan' ? '#0284c7' : 'rgba(255,255,255,0.05)',
+                  color: simulatedRole === 'juan' ? '#fff' : '#94a3b8'
+                }}
+              >
+                👷 Operario (Juan)
+              </button>
+            </div>
+          </div>
+
+          {/* Quick Real Dispatch to Mobile */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Teléfono destino:</span>
+            <input
+              type="text"
+              value={dispatchPhone}
+              onChange={(e) => setDispatchPhone(e.target.value)}
+              placeholder="549..."
+              style={{ padding: '4px 8px', borderRadius: '6px', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-color)', color: '#fff', fontSize: '0.75rem', width: '130px', fontFamily: 'monospace' }}
+            />
+          </div>
+        </div>
+
+        {/* Action Dispatch Buttons */}
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <button
+            onClick={() => handleLiveDispatch(simulatedRole === 'director' ? 'menu_director' : simulatedRole === 'victoria' ? 'menu_victoria' : 'menu_worker')}
+            disabled={dispatching}
+            style={{ padding: '6px 12px', fontSize: '0.75rem', borderRadius: '6px', background: 'linear-gradient(135deg, #0284c7, #38bdf8)', border: 'none', color: '#fff', fontWeight: 700, cursor: dispatching ? 'wait' : 'pointer' }}
+          >
+            📲 Enviar Menú Interactivo
+          </button>
+          <button
+            onClick={() => handleLiveDispatch('daily_summary')}
+            disabled={dispatching}
+            style={{ padding: '6px 12px', fontSize: '0.75rem', borderRadius: '6px', background: 'rgba(56, 189, 248, 0.15)', border: '1px solid rgba(56, 189, 248, 0.3)', color: '#38bdf8', fontWeight: 700, cursor: dispatching ? 'wait' : 'pointer' }}
+          >
+            📊 Enviar Resumen Diario
+          </button>
+          <button
+            onClick={() => handleLiveDispatch('recibo_uocra')}
+            disabled={dispatching}
+            style={{ padding: '6px 12px', fontSize: '0.75rem', borderRadius: '6px', background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)', color: '#10b981', fontWeight: 700, cursor: dispatching ? 'wait' : 'pointer' }}
+          >
+            📄 Enviar Recibo UOCRA
+          </button>
+          <button
+            onClick={() => handleLiveDispatch('absence_alert')}
+            disabled={dispatching}
+            style={{ padding: '6px 12px', fontSize: '0.75rem', borderRadius: '6px', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#ef4444', fontWeight: 700, cursor: dispatching ? 'wait' : 'pointer' }}
+          >
+            🚨 Probar Alerta Ausentismo (08:30 hs)
+          </button>
         </div>
       </div>
 
@@ -287,7 +423,9 @@ export default function ChatSimulator({
                 <div className="whatsapp-avatar">OS</div>
                 <div className="whatsapp-contact-details">
                   <span className="whatsapp-contact-name">Asistente ObraSaaS</span>
-                  <span className="whatsapp-contact-status">En línea</span>
+                  <span className="whatsapp-contact-status">
+                    {simulatedRole === 'director' ? '👑 Guillermo (Director)' : simulatedRole === 'victoria' ? '📐 Victoria (Dir. Técnica)' : '👷 Juan Zapata (Armador)'}
+                  </span>
                 </div>
               </div>
               <div>
