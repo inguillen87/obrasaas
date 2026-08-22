@@ -61,6 +61,7 @@ const apiEndpointsToTest = [
   { path: '/api/v1/export?type=budget', name: 'API Exportación ERP (CSV)' },
   { path: '/api/v1/webhooks', name: 'API Webhooks & Integraciones', headers: AK },
   { path: '/api/v1/whatsapp/dispatch', name: 'API WhatsApp Dispatch & Health Hub' },
+  { path: '/api/v1/whatsapp/embedded-signup', name: 'API Meta Embedded Signup (Tech Provider)' },
   { path: '/api/v1/recibos', name: 'API Recibos Digitales UOCRA' },
 
   // Admin APIs
