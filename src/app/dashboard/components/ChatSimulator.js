@@ -302,7 +302,7 @@ export default function ChatSimulator({
   };
 
   return (
-    <section id="sec-whatsapp" className={`content-section animate-fade-in-up ${activeTab === 'sec-whatsapp' ? 'active' : ''}`}>
+    <section id="sec-whatsapp" className={`content-section animate-fade-in-up ${activeTab === 'sec-whatsapp' || activeTab === 'sec-chat' ? 'active' : ''}`}>
       <div className="section-header" style={{ marginBottom: '16px' }}>
         <div className="header-title">
           <h1>Meta WhatsApp Business Hub &amp; Copilot Engine</h1>

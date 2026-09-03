@@ -1685,7 +1685,9 @@ export default function Dashboard() {
           </section>
 
           {/* SECTION 2: WHATSAPP SIMULATOR */}
-          <ChatSimulator activeTab={activeTab} state={state} setState={setState} chatMessages={chatMessages} setChatMessages={setChatMessages} audioData={audioData} addToast={addToast} setCopilotMessages={setCopilotMessages} playBeep={playBeep} />\n\n          {/* SECTION 3: GANTT CHART POR QUINCENAS (v2.0) */}
+          <ChatSimulator activeTab={activeTab} state={state} setState={setState} chatMessages={chatMessages} setChatMessages={setChatMessages} audioData={audioData} addToast={addToast} setCopilotMessages={setCopilotMessages} playBeep={playBeep} />
+
+          {/* SECTION 3: GANTT CHART POR QUINCENAS (v2.0) */}
           <GanttChart state={state} setState={setState} activeTab={activeTab} setShowAddTaskModal={setShowAddTaskModal} setShowEditTaskModal={setShowEditTaskModal} setEditTaskId={setEditTaskId} setEditTaskName={setEditTaskName} setEditTaskAssignee={setEditTaskAssignee} setEditTaskStart={setEditTaskStart} setEditTaskDuration={setEditTaskDuration} setEditTaskProgress={setEditTaskProgress} setShowReceiveMaterialModal={setShowReceiveMaterialModal} setReceiveMaterialKey={setReceiveMaterialKey} addToast={addToast} />
 
           {/* SECTION 4: SUPER ADMIN MULTITENANT CONSOLE */}
