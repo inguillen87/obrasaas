@@ -152,6 +152,12 @@ export async function POST(request) {
         const state = await getAppState();
         const messages = await getMessages();
 
+        // Resolve Tenant Context from WABA metadata phone_number_id (Multi-Tenant Routing)
+        const metadataPhoneId = payload.entry?.[0]?.changes?.[0]?.value?.metadata?.phone_number_id || payload.phoneNumberId || '';
+        const tenantMatch = Object.values(state.tenantWhatsAppAccounts || {}).find(acc => acc.phoneNumberId === metadataPhoneId);
+        const activeTenantSlug = tenantMatch?.tenantSlug || payload.tenantSlug || 'palermo-soho';
+        const activeTenantName = tenantMatch?.companyName || state.projectConfig?.name || 'Torre Palermo Soho';
+
         // 1. Strict Identity and Role Routing
         const cleanFrom = (fromNumber || '').replace(/\D/g, '');
         let senderName = "Operario Obra";
@@ -166,8 +172,8 @@ export async function POST(request) {
         // Strict Phone Verification (suffix-based to prevent privilege escalation)
         const phoneSuffix = cleanFrom.slice(-10); // Last 10 digits for reliable Argentine mobile matching
         if (phoneSuffix.endsWith('2613168608') || cleanFrom === '54261153168608' || cleanFrom === '5492613168608') {
-            senderName = "Arq. Marcelo";
-            senderRole = "Director de Obra";
+            senderName = "Marcelo Guillén";
+            senderRole = "Director General & SuperAdmin";
             shortId = "director";
             isDirector = true;
         } else if (phoneSuffix.endsWith('2964520753') || cleanFrom === '54296415520753' || cleanFrom === '5492964520753') {
