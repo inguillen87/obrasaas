@@ -73,16 +73,25 @@ export async function POST(request) {
             const pnid = process.env.META_PHONE_NUMBER_ID || process.env.WHATSAPP_PHONE_NUMBER_ID;
             const apiVersion = process.env.META_GRAPH_API_VERSION || 'v21.0';
 
+            messageBody = `👑 *Centro de Mando — Director de Obra*\n\n1️⃣ Cuadrilla & KYC\n2️⃣ Certificar Avance\n3️⃣ Incidencia Crítica\n4️⃣ Replanificar Demora\n5️⃣ Proveedores\n6️⃣ Plan Quincenal\n7️⃣ Rendir Caja Chica\n8️⃣ Auditoría ART & GPS\n9️⃣ Libro de Obra\n🔟 Costos por Rubro\n1️⃣1️⃣ Certificado de Avance`;
+
             if (token && pnid) {
-                const res = await fetch(`https://graph.facebook.com/${apiVersion}/${pnid}/messages`, {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify(listPayload)
-                });
-                const data = await res.json();
-                dispatchResult = { success: res.ok, messageId: data.messages?.[0]?.id, data };
+                try {
+                    const res = await fetch(`https://graph.facebook.com/${apiVersion}/${pnid}/messages`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify(listPayload)
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        dispatchResult = { success: true, messageId: data.messages?.[0]?.id, data };
+                    } else {
+                        dispatchResult = await sendWhatsAppMessage(cleanTo, messageBody);
+                    }
+                } catch (e) {
+                    dispatchResult = await sendWhatsAppMessage(cleanTo, messageBody);
+                }
             } else {
-                messageBody = `👑 *Centro de Mando — Director de Obra*\n\n1️⃣ Cuadrilla & KYC\n2️⃣ Certificar Avance\n3️⃣ Incidencia Crítica\n4️⃣ Replanificar Demora\n5️⃣ Proveedores\n6️⃣ Plan Quincenal\n7️⃣ Rendir Caja Chica\n8️⃣ Auditoría ART & GPS\n9️⃣ Libro de Obra\n🔟 Costos por Rubro\n1️⃣1️⃣ Certificado de Avance`;
                 dispatchResult = await sendWhatsAppMessage(cleanTo, messageBody);
             }
         } else if (messageType === 'menu_victoria') {
@@ -91,16 +100,25 @@ export async function POST(request) {
             const pnid = process.env.META_PHONE_NUMBER_ID || process.env.WHATSAPP_PHONE_NUMBER_ID;
             const apiVersion = process.env.META_GRAPH_API_VERSION || 'v21.0';
 
+            messageBody = `📐 *Panel Técnico — Arq. Victoria*\n\n1️⃣ Estado de Cuadrilla & KYC\n2️⃣ Control Estructural CIRSOC 201\n3️⃣ Inspección de Incidencias\n4️⃣ Certificaciones Quincenales\n5️⃣ Balance de Caja Chica & AFIP`;
+
             if (token && pnid) {
-                const res = await fetch(`https://graph.facebook.com/${apiVersion}/${pnid}/messages`, {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify(listPayload)
-                });
-                const data = await res.json();
-                dispatchResult = { success: res.ok, messageId: data.messages?.[0]?.id, data };
+                try {
+                    const res = await fetch(`https://graph.facebook.com/${apiVersion}/${pnid}/messages`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify(listPayload)
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        dispatchResult = { success: true, messageId: data.messages?.[0]?.id, data };
+                    } else {
+                        dispatchResult = await sendWhatsAppMessage(cleanTo, messageBody);
+                    }
+                } catch (e) {
+                    dispatchResult = await sendWhatsAppMessage(cleanTo, messageBody);
+                }
             } else {
-                messageBody = `📐 *Panel Técnico — Arq. Victoria*\n\n1️⃣ Estado de Cuadrilla & KYC\n2️⃣ Control Estructural CIRSOC 201\n3️⃣ Inspección de Incidencias\n4️⃣ Certificaciones Quincenales\n5️⃣ Balance de Caja Chica & AFIP`;
                 dispatchResult = await sendWhatsAppMessage(cleanTo, messageBody);
             }
         } else if (messageType === 'recibo_uocra') {

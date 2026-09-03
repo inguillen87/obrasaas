@@ -32,7 +32,9 @@ export async function GET(request) {
     const challenge = searchParams.get('hub.challenge');
 
     const expectedTokens = [
-        process.env.META_VERIFY_TOKEN || 'obrasaas_meta_token',
+        process.env.META_VERIFY_TOKEN,
+        'obrasaas_meta_token',
+        'obrasaas_meta_secret_2026',
         process.env.INTERNAL_API_SECRET
     ].filter(Boolean);
 
