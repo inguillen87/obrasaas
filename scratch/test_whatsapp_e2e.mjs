@@ -185,6 +185,53 @@ async function runWhatsAppE2E() {
         if (!data.success) throw new Error('Daily summary push cron failed');
     });
 
+    // 13. Interactive CIRSOC 201 Structural Approval Button Dispatch
+    await testStep('13. Interactive CIRSOC 201 Structural Button Dispatch (POST /api/v1/whatsapp/dispatch)', async () => {
+        const res = await fetch(`${BASE_URL}/api/v1/whatsapp/dispatch`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                recipientPhone: '5492964520753',
+                messageType: 'cirsoc_approval'
+            })
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (!data.success) throw new Error('CIRSOC approval dispatch failed');
+    });
+
+    // 14. Interactive Remito OCR Confirmation Dispatch
+    await testStep('14. Interactive Remito OCR Confirmation Dispatch (POST /api/v1/whatsapp/dispatch)', async () => {
+        const res = await fetch(`${BASE_URL}/api/v1/whatsapp/dispatch`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                recipientPhone: '5492613168608',
+                messageType: 'remito_ocr_confirm',
+                customText: 'Hierro del 12 (150 barras)'
+            })
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (!data.success) throw new Error('Remito OCR confirmation dispatch failed');
+    });
+
+    // 15. Interactive UOCRA Payslip Signature Dispatch
+    await testStep('15. Interactive UOCRA Payslip Signature Dispatch (POST /api/v1/whatsapp/dispatch)', async () => {
+        const res = await fetch(`${BASE_URL}/api/v1/whatsapp/dispatch`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                recipientPhone: '5491138452190',
+                messageType: 'payslip_signature',
+                workerId: 'juan'
+            })
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (!data.success) throw new Error('Payslip signature dispatch failed');
+    });
+
     console.log('\n════════════════════════════════════════════════════════════════════');
     console.log(`📊 WHATSAPP E2E AUDIT RESULT: ${passed} PASSED / ${failed} FAILED (${((passed/(passed+failed))*100).toFixed(1)}%)`);
     console.log('════════════════════════════════════════════════════════════════════\n');

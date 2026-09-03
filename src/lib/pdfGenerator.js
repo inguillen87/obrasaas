@@ -340,14 +340,14 @@ export function generateQAAuditPdf(data = {}) {
   doc.text(`• ${techDirectorName} — Socia & Directora Técnica / Responsable de Obra`, 26, 55);
   doc.text(`• ${directorName} — Socio & Director General / SuperAdmin`, 26, 61);
 
-  // Status Box: 72/72 Tests Green
+  // Status Box: 80/80 Tests Green
   doc.setFillColor(20, 83, 45); // Dark green
   doc.roundedRect(20, 70, 170, 24, 3, 3, 'F');
 
   doc.setTextColor(187, 247, 208);
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
-  doc.text('✓ DICTAMEN DE AUDITORÍA: 100% APROBADO (72/72 PRUEBAS EN VERDE)', 26, 79);
+  doc.text('✓ DICTAMEN DE AUDITORÍA: 100% APROBADO (80/80 PRUEBAS EN VERDE)', 26, 79);
 
   doc.setTextColor(220, 252, 231);
   doc.setFontSize(8.5);

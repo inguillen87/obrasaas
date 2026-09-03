@@ -18,7 +18,7 @@ export function buildDirectorListMessage(state, targetNumber) {
                 text: "👑 Centro de Mando Directivo"
             },
             body: {
-                text: `Hola Arq. Marcelo. Obra activa: *${projectName}* (${projectCity}).\nSeleccioná una acción del menú interactivo para gestionar la obra en tiempo real:`
+                text: `Hola Marcelo. Obra activa: *${projectName}* (${projectCity}).\nSeleccioná una acción del menú interactivo para gestionar la obra en tiempo real:`
             },
             footer: {
                 text: "ObraSaaS Enterprise ConTech • IA & Blockchain"
@@ -250,3 +250,39 @@ export function buildActionButtonsMessage(bodyText, targetNumber, buttons = []) 
         }
     };
 }
+
+export function buildCirsocApprovalButtons(targetNumber, projectName = 'Torre Palermo', elemento = 'Losa Nivel +2') {
+    return buildActionButtonsMessage(
+        `📐 *Auditoría Estructural CIRSOC 201*\n\n*Obra:* ${projectName}\n*Elemento:* ${elemento}\n*Estado:* Armadura colocada y encofrado estanco.\n\n_¿Autoriza el inicio del colado de hormigón elaborado?_`,
+        targetNumber,
+        [
+            { id: "cirsoc_approve", title: "✅ Aprobar Llenado" },
+            { id: "cirsoc_observe", title: "⚠️ Con Observación" },
+            { id: "cirsoc_reject", title: "🚨 Rechazar Armadura" }
+        ]
+    );
+}
+
+export function buildRemitoConfirmButtons(targetNumber, material = 'Cemento Loma Negra (200 bolsas)', proveedor = 'Corralón Palermo') {
+    return buildActionButtonsMessage(
+        `📸 *Recepción de Materiales (OCR AFIP)*\n\n*Material:* ${material}\n*Proveedor:* ${proveedor}\n*Comprobante:* Remito Oficial Detectado.\n\n_¿Confirmás el ingreso para actualizar el stock y caja chica?_`,
+        targetNumber,
+        [
+            { id: "remito_confirm", title: "✅ Confirmar Stock" },
+            { id: "remito_edit", title: "✏️ Modificar Cantidad" },
+            { id: "remito_photo", title: "📸 Reenviar Foto" }
+        ]
+    );
+}
+
+export function buildPayslipNotificationButtons(targetNumber, workerName = 'Juan Zapata', quincena = '1ra Quincena', signUrl = '') {
+    return buildActionButtonsMessage(
+        `📄 *Recibo de Sueldo UOCRA (CCT 76/75)*\n\nHola ${workerName}, tu recibo correspondiente a la *${quincena}* está listo para su firma digital.\n\nLink seguro: ${signUrl}`,
+        targetNumber,
+        [
+            { id: "payslip_sign", title: "✍️ Firmar Recibo" },
+            { id: "payslip_view", title: "👁️ Ver Detalle" }
+        ]
+    );
+}
+

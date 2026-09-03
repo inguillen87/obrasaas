@@ -1,6 +1,6 @@
 import { getAppState, saveAppState } from '@/lib/db';
 import { sendWhatsAppMessage, sendWhatsAppTemplate, sendWhatsAppInteractive } from '@/lib/whatsappNotifications';
-import { buildDirectorListMessage, buildVictoriaListMessage, buildWorkerListMessage } from '@/lib/metaTemplates';
+import { buildDirectorListMessage, buildVictoriaListMessage, buildWorkerListMessage, buildCirsocApprovalButtons, buildRemitoConfirmButtons, buildPayslipNotificationButtons } from '@/lib/metaTemplates';
 import { generateWebviewToken } from '@/lib/auth';
 import { appendAuditTransaction } from '@/lib/auditLedger';
 
@@ -126,6 +126,43 @@ export async function POST(request) {
             } else {
                 dispatchResult = await sendWhatsAppMessage(cleanTo, messageBody);
             }
+        } else if (messageType === 'cirsoc_approval') {
+            const projName = state.projectConfig?.name || 'Torre Palermo Soho';
+            messageBody = `📐 *Auditoría Estructural CIRSOC 201*\n\n*Obra:* ${projName}\n*Elemento:* Losa Nivel +2\n*Estado:* Armadura colocada y encofrado estanco.\n\n_¿Autoriza el inicio del colado de hormigón elaborado?_\n1. ✅ Aprobar Llenado\n2. ⚠️ Con Observación\n3. 🚨 Rechazar Armadura`;
+            const buttonPayload = buildCirsocApprovalButtons(cleanTo, projName, 'Losa Nivel +2');
+            const token = process.env.META_WHATSAPP_ACCESS_TOKEN || process.env.WHATSAPP_TOKEN;
+            const pnid = process.env.META_PHONE_NUMBER_ID || process.env.WHATSAPP_PHONE_NUMBER_ID;
+            const apiVersion = process.env.META_GRAPH_API_VERSION || 'v21.0';
+
+            if (token && pnid) {
+                try {
+                    const res = await fetch(`https://graph.facebook.com/${apiVersion}/${pnid}/messages`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify(buttonPayload)
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        dispatchResult = { success: true, messageId: data.messages?.[0]?.id, data };
+                    } else {
+                        dispatchResult = await sendWhatsAppMessage(cleanTo, messageBody);
+                    }
+                } catch (e) {
+                    dispatchResult = await sendWhatsAppMessage(cleanTo, messageBody);
+                }
+            } else {
+                dispatchResult = await sendWhatsAppMessage(cleanTo, messageBody);
+            }
+        } else if (messageType === 'remito_ocr_confirm') {
+            const remitoText = customText || 'Cemento Loma Negra (200 bolsas)';
+            messageBody = `📸 *Recepción de Materiales (OCR AFIP)*\n\n*Material:* ${remitoText}\n*Proveedor:* Corralón Palermo S.A.\n*Comprobante:* Remito Oficial Detectado.\n\n_¿Confirmás el ingreso para actualizar el stock y caja chica?_\n1. ✅ Confirmar Stock\n2. ✏️ Modificar Cantidad\n3. 📸 Reenviar Foto`;
+            dispatchResult = await sendWhatsAppMessage(cleanTo, messageBody);
+        } else if (messageType === 'payslip_signature') {
+            const targetWorker = workerId || 'juan';
+            const token = generateWebviewToken(targetWorker);
+            const link = `${appUrl}/webview/recibos?worker=${targetWorker}&token=${token}`;
+            messageBody = `📄 *Recibo de Sueldo UOCRA (CCT 76/75)*\n\nHola Juan Zapata, tu recibo correspondiente a la *1ra Quincena* está listo para su firma digital:\n\n👉 *Firmar en Pantalla:* ${link}\n\n_Ley 20.744 / Fondo de Cese Laboral Ley 22.250 / Sello SHA-256._`;
+            dispatchResult = await sendWhatsAppMessage(cleanTo, messageBody);
         } else if (messageType === 'recibo_uocra') {
             const targetWorker = workerId || 'juan';
             const token = generateWebviewToken(targetWorker);

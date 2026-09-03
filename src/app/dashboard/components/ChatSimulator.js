@@ -42,11 +42,66 @@ export default function ChatSimulator({
       } else {
         if (addToast) addToast(`ℹ️ WhatsApp despachado (Modo sandbox / demo): ${data.error || 'OK'}`, 'info');
       }
+
+      // Sync simulator chat messages immediately
+      const messagesRes = await fetch('/api/whatsapp');
+      if (messagesRes.ok) {
+        const messagesData = await messagesRes.json();
+        setChatMessages(messagesData);
+      }
     } catch(e) {
       if (addToast) addToast('Error al despachar: ' + e.message, 'danger');
     } finally {
       setDispatching(false);
     }
+  };
+
+  const renderInteractiveButtons = (text) => {
+    if (!text || typeof text !== 'string') return null;
+    const lines = text.split('\n');
+    const options = [];
+    lines.forEach(l => {
+      const matchNumbered = l.match(/^(\d{1,2})[.\)]\s*(.+)/) || l.match(/^([1-9]|1[0-2])️⃣\s*(.+)/);
+      if (matchNumbered) {
+        options.push({ key: matchNumbered[1], label: matchNumbered[2].replace(/[*_]/g, '').trim() });
+      }
+    });
+
+    if (options.length === 0) return null;
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '10px', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+        <span style={{ fontSize: '0.68rem', color: '#38bdf8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>⚡ Opciones Interactivas de WhatsApp:</span>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+          {options.map((opt, idx) => (
+            <button
+              key={idx}
+              onClick={() => handleSendMessage(opt.key)}
+              style={{
+                background: 'rgba(56, 189, 248, 0.12)',
+                border: '1px solid rgba(56, 189, 248, 0.35)',
+                color: '#e2e8f0',
+                borderRadius: '8px',
+                padding: '5px 10px',
+                fontSize: '0.74rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                textAlign: 'left',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                transition: 'all 0.15s ease'
+              }}
+              onMouseOver={(e) => { e.currentTarget.style.background = 'rgba(56, 189, 248, 0.25)'; e.currentTarget.style.borderColor = '#38bdf8'; }}
+              onMouseOut={(e) => { e.currentTarget.style.background = 'rgba(56, 189, 248, 0.12)'; e.currentTarget.style.borderColor = 'rgba(56, 189, 248, 0.35)'; }}
+            >
+              <span style={{ background: '#0284c7', color: '#fff', borderRadius: '4px', padding: '1px 5px', fontSize: '0.65rem', fontWeight: 700 }}>{opt.key}</span>
+              <span>{opt.label.slice(0, 24)}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
   };
 
   const chatMessagesEndRef = useRef(null);
@@ -201,11 +256,11 @@ export default function ChatSimulator({
     });
   };
 
-  const handleSendMessage = async () => {
-    const text = chatInput.trim();
+  const handleSendMessage = async (customText) => {
+    const text = (typeof customText === 'string' ? customText : chatInput).trim();
     if (!text) return;
 
-    setChatInput('');
+    if (typeof customText !== 'string') setChatInput('');
     const fromPhone = simulatedRole === 'director' ? '2613168608' : simulatedRole === 'victoria' ? '2964520753' : 'carlos';
     try {
       await fetch('/api/whatsapp', {
@@ -222,6 +277,11 @@ export default function ChatSimulator({
       if (messagesRes.ok) {
         const messagesData = await messagesRes.json();
         setChatMessages(messagesData);
+      }
+      const stateRes = await fetch('/api/state');
+      if (stateRes.ok) {
+        const stateData = await stateRes.json();
+        setState(stateData);
       }
     } catch (e) {
       console.error(e);
@@ -413,6 +473,20 @@ export default function ChatSimulator({
             🚨 Probar Alerta Ausentismo (08:30 hs)
           </button>
           <button
+            onClick={() => handleLiveDispatch('cirsoc_approval')}
+            disabled={dispatching}
+            style={{ padding: '6px 12px', fontSize: '0.75rem', borderRadius: '6px', background: 'rgba(168, 85, 247, 0.15)', border: '1px solid rgba(168, 85, 247, 0.3)', color: '#c084fc', fontWeight: 700, cursor: dispatching ? 'wait' : 'pointer' }}
+          >
+            📐 Auditoría CIRSOC 201
+          </button>
+          <button
+            onClick={() => handleLiveDispatch('remito_ocr_confirm')}
+            disabled={dispatching}
+            style={{ padding: '6px 12px', fontSize: '0.75rem', borderRadius: '6px', background: 'rgba(234, 179, 8, 0.15)', border: '1px solid rgba(234, 179, 8, 0.3)', color: '#facc15', fontWeight: 700, cursor: dispatching ? 'wait' : 'pointer' }}
+          >
+            📸 Confirmar Remito OCR
+          </button>
+          <button
             onClick={() => setMetaDrawerOpen(!metaDrawerOpen)}
             style={{ padding: '6px 12px', fontSize: '0.75rem', borderRadius: '6px', background: metaDrawerOpen ? '#1877F2' : 'rgba(24, 119, 242, 0.15)', border: '1px solid #1877F2', color: '#fff', fontWeight: 700, cursor: 'pointer', marginLeft: 'auto' }}
           >
@@ -476,6 +550,7 @@ export default function ChatSimulator({
                   ) : (
                     <div style={{ whiteSpace: 'pre-wrap' }}>{msg.text}</div>
                   )}
+                  {msg.sender !== 'user' && renderInteractiveButtons(msg.text)}
                   <span className="message-time">{msg.time}</span>
                 </div>
               ))}
