@@ -32,7 +32,7 @@ async function runWhatsAppE2E() {
         const res = await fetch(`${BASE_URL}/api/v1/whatsapp/dispatch`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
-        if (!data.success || !data.directors?.guillermo?.phone) throw new Error('Missing director config');
+        if (!data.success || !data.directors?.marcelo?.phone) throw new Error('Missing director config');
     });
 
     // 3. Webhook GET Handshake (Meta Hub Verify Token)
@@ -93,8 +93,8 @@ async function runWhatsAppE2E() {
         if (!data.success) throw new Error('Remito OCR processing failed');
     });
 
-    // 7. Director (Guillermo) Interactive Menu Query
-    await testStep('7. Director of Works (Guillermo) Interactive Menu Dispatch', async () => {
+    // 7. Director (Marcelo Guillén) Interactive Menu Query
+    await testStep('7. Director General (Marcelo Guillén) Interactive Menu Dispatch', async () => {
         const res = await fetch(`${BASE_URL}/api/v1/whatsapp/dispatch`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

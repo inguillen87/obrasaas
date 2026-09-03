@@ -32,6 +32,7 @@ const pagesToTest = [
   { path: '/marketplace', name: 'Marketplace de Corralones & Materiales' },
   { path: '/superadmin', name: 'SuperAdmin Console & CRM' },
   { path: '/licitaciones', name: 'Licitómetro de Obra Pública' },
+  { path: '/qa-report', name: 'Informe Ejecutivo de Auditoría QA' },
 
   // MOBILE PWA WEBVIEWS
   { path: '/webview/attendance?worker=juan&token=test', name: 'Webview Fichaje Satelital' },
@@ -48,6 +49,7 @@ const apiEndpointsToTest = [
   { path: '/api/v1/predictive', name: 'API IA Predictiva & CIRSOC 201' },
   { path: '/api/v1/certificacion', name: 'API Certificación de Avance', headers: AK },
   { path: '/api/v1/certificacion/pdf', name: 'API Certificado PDF Oficial' },
+  { path: '/api/v1/audit/pdf', name: 'API Descarga PDF Auditoría QA (Victoria & Marcelo)' },
   { path: '/api/v1/rfi', name: 'API RFI Consultas Técnicas' },
   { path: '/api/v1/adicionales', name: 'API Change Orders & Adicionales CAC' },
   { path: '/api/v1/budget', name: 'API Presupuesto & Rubros', headers: AK },

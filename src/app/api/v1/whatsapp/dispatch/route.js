@@ -25,9 +25,14 @@ export async function GET() {
                 verifyTokenConfigured: !!process.env.META_VERIFY_TOKEN
             },
             directors: {
+                marcelo: {
+                    name: 'Marcelo Guillén',
+                    role: 'Director General & SuperAdmin',
+                    phone: state.projectConfig?.directorPhone || process.env.DIRECTOR_PHONE || '54261153168608'
+                },
                 guillermo: {
-                    name: 'Guillermo / Arq. Marcelo',
-                    role: 'Director de Obra & SuperAdmin',
+                    name: 'Marcelo Guillén',
+                    role: 'Director General & SuperAdmin',
                     phone: state.projectConfig?.directorPhone || process.env.DIRECTOR_PHONE || '54261153168608'
                 },
                 victoria: {

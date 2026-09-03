@@ -334,7 +334,7 @@ export default function ChatSimulator({
                   color: simulatedRole === 'director' ? '#fff' : '#94a3b8'
                 }}
               >
-                👑 Guillermo (Director)
+                👑 Marcelo Guillén (Director)
               </button>
               <button
                 onClick={() => { setSimulatedRole('victoria'); setDispatchPhone('5492964520753'); }}
@@ -349,7 +349,7 @@ export default function ChatSimulator({
                   color: simulatedRole === 'victoria' ? '#fff' : '#94a3b8'
                 }}
               >
-                📐 Victoria (Dir. Técnica)
+                📐 Arq. Victoria (Dir. Técnica)
               </button>
               <button
                 onClick={() => { setSimulatedRole('juan'); setDispatchPhone('5491138452190'); }}
@@ -364,7 +364,7 @@ export default function ChatSimulator({
                   color: simulatedRole === 'juan' ? '#fff' : '#94a3b8'
                 }}
               >
-                👷 Operario (Juan)
+                👷 Juan Zapata (Armador)
               </button>
             </div>
           </div>
@@ -444,7 +444,7 @@ export default function ChatSimulator({
                 <div className="whatsapp-contact-details">
                   <span className="whatsapp-contact-name">Asistente ObraSaaS</span>
                   <span className="whatsapp-contact-status">
-                    {simulatedRole === 'director' ? '👑 Guillermo (Director)' : simulatedRole === 'victoria' ? '📐 Victoria (Dir. Técnica)' : '👷 Juan Zapata (Armador)'}
+                    {simulatedRole === 'director' ? '👑 Marcelo Guillén (Director)' : simulatedRole === 'victoria' ? '📐 Arq. Victoria (Dir. Técnica)' : '👷 Juan Zapata (Armador)'}
                   </span>
                 </div>
               </div>
