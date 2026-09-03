@@ -484,29 +484,121 @@ export function generateQAAuditPdf(data = {}) {
     stepY += 13.5;
   });
 
-  // Seal Box
+  // Footer Pág 2
+  doc.setTextColor(100, 116, 139);
+  doc.setFontSize(7.5);
+  doc.text('Página 2 de 3 • ObraSaaS Enterprise QA Audit Report', 20, 288);
+
+  // ==================== PÁGINA 3: ANÁLISIS DE ROLES EN OBRA & MITIGACIÓN DE RIESGOS ====================
+  doc.addPage();
+  doc.setFillColor(15, 23, 42);
+  doc.rect(0, 0, 210, 297, 'F');
+
+  // Banner
+  doc.setFillColor(2, 132, 199);
+  doc.rect(0, 0, 210, 8, 'F');
+
+  // Header Pág 3
+  doc.setTextColor(248, 250, 252);
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.text('3. ANÁLISIS DE ROLES EN OBRA REAL & MITIGACIÓN DE RIESGOS', 20, 24);
+
+  doc.setDrawColor(51, 65, 85);
+  doc.setLineWidth(0.5);
+  doc.line(20, 30, 190, 30);
+
+  // Box 1: Roles Operativos
+  doc.setFillColor(30, 41, 59);
+  doc.roundedRect(20, 36, 170, 95, 3, 3, 'F');
+
+  doc.setTextColor(245, 158, 11);
+  doc.setFontSize(9.5);
+  doc.setFont('helvetica', 'bold');
+  doc.text('PLAN OPERATIVO POR PERFIL DE USUARIO EN CAMPO', 26, 45);
+
+  const rolesDetails = [
+    ['Marcelo Guillén (Dir. General):', 'Recibe alertas 08:30 hs y balance de costos a las 18:00 hs por WhatsApp.', 'Control CAC'],
+    ['Arq. Victoria (Dir. Técnica):', 'Auditoría CIRSOC 201 en encofrados, Libro de Obra Ley 22.250 y planos CAD.', 'Control QA'],
+    ['Jefe de Obra / Capataz:', 'Fotografía de remitos de materiales (cemento/hierro) y validación de nómina.', 'Gestión Sitio'],
+    ['Cuadrilla de Operarios:', 'Fichaje instantáneo enviando ubicación por WhatsApp y firma táctil de recibos.', 'Fricción Cero']
+  ];
+
+  let roleY = 56;
+  rolesDetails.forEach(([role, detail, badge]) => {
+    doc.setTextColor(56, 189, 248);
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'bold');
+    doc.text(role, 26, roleY);
+
+    doc.setTextColor(248, 250, 252);
+    doc.setFont('helvetica', 'normal');
+    doc.text(detail, 26, roleY + 6);
+
+    doc.setFillColor(15, 23, 42);
+    doc.roundedRect(150, roleY - 4, 32, 7, 2, 2, 'F');
+    doc.setTextColor(167, 139, 250);
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'bold');
+    doc.text(badge, 153, roleY + 1);
+
+    roleY += 18;
+  });
+
+  // Box 2: Mitigación de Riesgos en Obra
+  doc.setFillColor(30, 41, 59);
+  doc.roundedRect(20, 138, 170, 92, 3, 3, 'F');
+
+  doc.setTextColor(239, 68, 68);
+  doc.setFontSize(9.5);
+  doc.setFont('helvetica', 'bold');
+  doc.text('ANÁLISIS DE FACTORES CRÍTICOS EN OBRA & PROTOCOLOS DE MITIGACIÓN', 26, 147);
+
+  const riskDetails = [
+    ['Señal 4G débil en Subsuelos:', 'Protocolo de fichaje en planta baja/nivel vereda antes de descender al pozo.'],
+    ['Manos con cal o polvo:', 'Pantalla de firma táctil con botón de reinicio amplio y trazo vectorial suavizado.'],
+    ['Ruido de amoladora en audios:', 'Confirmación de texto por WhatsApp antes de impactar el avance en el Gantt.'],
+    ['Remitos físicos arrugados:', 'El bot consulta: "¿Confirmás 200 bolsas de cemento?" antes de sumar al stock.']
+  ];
+
+  let riskY = 158;
+  riskDetails.forEach(([risk, mitigation]) => {
+    doc.setTextColor(245, 158, 11);
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`• ${risk}`, 26, riskY);
+
+    doc.setTextColor(226, 232, 240);
+    doc.setFont('helvetica', 'normal');
+    doc.text(mitigation, 26, riskY + 5.5);
+
+    riskY += 16;
+  });
+
+  // Sello Final Box
   doc.setFillColor(24, 18, 43);
-  doc.roundedRect(20, 238, 170, 36, 3, 3, 'F');
+  doc.roundedRect(20, 238, 170, 38, 3, 3, 'F');
 
   doc.setTextColor(167, 139, 250);
   doc.setFontSize(8.5);
   doc.setFont('helvetica', 'bold');
-  doc.text('CERTIFICACIÓN DE AUDITORÍA & SELLO CRIPTOGRÁFICO INMUTABLE', 26, 247);
+  doc.text('CERTIFICACIÓN OFICIAL DE AUDITORÍA & SELLO CRIPTOGRÁFICO INMUTABLE', 26, 247);
 
   doc.setTextColor(248, 250, 252);
   doc.setFontSize(7.5);
   doc.setFont('courier', 'bold');
-  doc.text(`HASH: ${sha256Hash}`, 26, 254);
+  doc.text(`HASH: ${sha256Hash}`, 26, 255);
 
   doc.setTextColor(148, 163, 184);
   doc.setFontSize(7.5);
   doc.setFont('helvetica', 'normal');
-  doc.text(`Firmado y validado: Marcelo Guillén & Arq. Victoria • Timestamp: ${new Date().toISOString()}`, 26, 262);
+  doc.text(`Emitido para: ${directorName} & ${techDirectorName}`, 26, 263);
+  doc.text(`Timestamp: ${new Date().toISOString()} • Validez Legal y Técnica ConTech`, 26, 269);
 
-  // Footer Pág 2
+  // Footer Pág 3
   doc.setTextColor(100, 116, 139);
   doc.setFontSize(7.5);
-  doc.text('Página 2 de 2 • ObraSaaS Enterprise QA Audit Report', 20, 288);
+  doc.text('Página 3 de 3 • ObraSaaS Confidential — Para uso exclusivo de Marcelo Guillén y Arq. Victoria', 20, 288);
 
   return Buffer.from(doc.output('arraybuffer'));
 }
