@@ -704,7 +704,27 @@ export async function POST(request) {
                         details: { incident: "Fuga de agua baño principal", emergencyTask: 99, obra: state.projectConfig?.name }
                     });
 
-                    botReply = `🚨 *Alerta Crítica Registrada por Dirección*\n\n• Incidencia: *Fuga de Agua en Baño Principal*\n• Acción: *Tarea de Emergencia 99 incorporada al Gantt*\n• Asignado: *Luis Martínez (Plomero)*\n• Compras: Solicitud de accesorios PVC emitida.`;
+                    state.visualTaskAlerts = state.visualTaskAlerts || [];
+                    state.visualTaskAlerts.unshift({
+                        id: `vta-${Date.now().toString(36)}`,
+                        title: "Fuga de Agua en Baño Principal",
+                        description: "Fisura en descarga de baño principal. Reclama codo PVC de 110 urgente.",
+                        sector: "Losa Nivel +2 — Baño Principal",
+                        assignedTo: "Luis Martínez",
+                        assignedRole: "Plomero / Gasista",
+                        assignedPhone: "+54 9 11 8899-7766",
+                        assignedBy: senderName,
+                        urgency: "CRITICA",
+                        deadline: "Inmediato (Hoy)",
+                        status: "PENDIENTE",
+                        originalPhotoUrl: "https://images.unsplash.com/photo-1581094794329-c8112a89af12?auto=format&fit=crop&w=800&q=80",
+                        annotatedPhotoUrl: "https://images.unsplash.com/photo-1581094794329-c8112a89af12?auto=format&fit=crop&w=800&q=80",
+                        whatsappAlertSent: true,
+                        whatsappSentAt: new Date().toISOString(),
+                        createdAt: new Date().toISOString()
+                    });
+
+                    botReply = `🚨 *Alerta Crítica Registrada por Dirección*\n\n• Incidencia: *Fuga de Agua en Baño Principal*\n• Acción: *Tarea de Emergencia 99 incorporada al Gantt*\n• Asignado: *Luis Martínez (Plomero)*\n• Compras: Solicitud de accesorios PVC emitida.\n\n📸 *Tablero de Coordinación & Marcación Visual:*\n${appUrl}/coordinacion`;
 
                     feedIncident = {
                         id: "inc-fuga-" + Date.now(),
@@ -930,8 +950,18 @@ export async function POST(request) {
                     const tasks = Object.values(state.tasks || {});
                     const lastCompleted = tasks.filter(t => t.progress === 100).pop();
                     botReply = `🏗️ *Control Estructural & Climatológico (Dirección Técnica)*\n\n• *Obra:* ${state.projectConfig?.name || 'Obra'} (${state.projectConfig?.city || 'CABA'})\n• *Último hito:* ${lastCompleted?.name || 'Sin hitos completados'}\n• *Telemetría Meteorológica:* Condiciones monitoreadas via Open-Meteo.\n• *CIRSOC 201:* Ensayos de compresión probetas de hormigón conforme.`;
-                } else if (normalBody === '3' || normalBody.includes('incidencia') || normalBody.includes('vicios')) {
-                    botReply = `🔍 *Inspección de Incidencias & Vicios Ocultos*\n\n• Incidencias Abiertas: ${state.alertsCount || 0}\n• Fotos de Inspección en Bitácora: ${state.sitePhotos?.length || 0} registradas.\n• Libro de Obra: ${(state.libroObra || []).length} entradas.`;
+                } else if (normalBody === '3' || normalBody.includes('incidencia') || normalBody.includes('vicios') || normalBody.includes('alerta') || normalBody.includes('coordinacion')) {
+                    const visualAlerts = state.visualTaskAlerts || [];
+                    const pendingVisual = visualAlerts.filter(a => a.status === 'PENDIENTE' || a.status === 'EN_CORRECCION');
+                    const criticas = visualAlerts.filter(a => a.urgency === 'CRITICA');
+                    const summaryList = pendingVisual.slice(0, 3).map(a => `• *${a.title}* (${a.sector}) ➔ ${a.assignedTo} [${a.urgency === 'CRITICA' ? '🚨' : '⚠️'}]`).join('\n');
+
+                    botReply = `🔍 *Coordinación de Tareas & Alertas Visuales (Dirección Técnica)*\n\n` +
+                        `• 🚨 *Alertas Críticas Activas:* ${criticas.length}\n` +
+                        `• 📋 *Total Pendientes:* ${pendingVisual.length}\n\n` +
+                        (summaryList ? `*Tareas Asignadas a Cuadrilla:*\n${summaryList}\n\n` : '✅ Sin vicios pendientes reportados.\n\n') +
+                        `📸 *Crear / Marcar Nueva Alerta con Foto:* \n${appUrl}/coordinacion\n\n` +
+                        `_Las alertas marcadas notifican directamente por WhatsApp al responsable._`;
                 } else if (normalBody === '4' || normalBody.includes('quincena') || normalBody.includes('certificacion')) {
                     const budget = state.budget || { rubros: [] };
                     const totalEjec = budget.rubros.reduce((s, r) => s + r.ejecutado, 0);

@@ -286,3 +286,82 @@ export function buildPayslipNotificationButtons(targetNumber, workerName = 'Juan
     );
 }
 
+// NEW: Inspection approval template for safety/structural inspections
+export function buildInspectionApprovalButtons(targetNumber, inspectionType = 'Seguridad e Higiene', projectName = 'Torre Palermo', inspector = 'Ing. Mendez', score = 0, itemsFailed = []) {
+    const failedSummary = itemsFailed.length > 0 
+        ? `\n\n⚠️ *Observaciones (${itemsFailed.length}):*\n${itemsFailed.slice(0, 3).map(f => `• ${f.desc}: ${f.note || 'Sin detalle'}`).join('\n')}`
+        : '\n\n✅ Sin observaciones críticas.';
+
+    return buildActionButtonsMessage(
+        `📋 *Inspección ${inspectionType}*\n\n*Obra:* ${projectName}\n*Inspector:* ${inspector}\n*Score:* ${score}%${failedSummary}\n\n_¿Cómo procede con esta inspección?_`,
+        targetNumber,
+        [
+            { id: "insp_approve", title: "✅ Aprobar" },
+            { id: "insp_observe", title: "⚠️ Observar" },
+            { id: "insp_reject", title: "❌ Rechazar" }
+        ]
+    );
+}
+
+// NEW: ART/Insurance policy expiration alert
+export function buildArtExpirationAlert(targetNumber, workerName, artCompany, expirationDate, daysRemaining) {
+    const urgency = daysRemaining <= 7 ? '🚨 URGENTE' : daysRemaining <= 30 ? '⚠️ ATENCIÓN' : 'ℹ️ AVISO';
+    return buildActionButtonsMessage(
+        `${urgency} *Vencimiento de ART*\n\n*Operario:* ${workerName}\n*Aseguradora:* ${artCompany}\n*Vencimiento:* ${expirationDate}\n*Días restantes:* ${daysRemaining}\n\n_Ley 22.250 — El operario NO puede trabajar con ART vencida._`,
+        targetNumber,
+        [
+            { id: "art_renew", title: "📞 Gestionar Póliza" },
+            { id: "art_suspend", title: "⏸️ Suspender Operario" }
+        ]
+    );
+}
+
+// NEW: Weather interruption notification
+export function buildWeatherAlertMessage(targetNumber, projectName, weatherCondition, recommendation) {
+    return buildActionButtonsMessage(
+        `🌧️ *Alerta Meteorológica*\n\n*Obra:* ${projectName}\n*Condición:* ${weatherCondition}\n*Recomendación:* ${recommendation}\n\n_¿Registrar suspensión parcial en el Libro de Obra Digital?_`,
+        targetNumber,
+        [
+            { id: "weather_suspend", title: "⏸️ Suspender Tareas" },
+            { id: "weather_continue", title: "✅ Continuar Obra" }
+        ]
+    );
+}
+
+// NEW: Daily progress summary for directors
+export function buildDailySummaryMessage(state, targetNumber) {
+    const projectName = state.projectConfig?.name || 'Obra';
+    const avance = state.avancePercentage || 0;
+    const operarios = Object.values(state.attendance || {}).filter(a => a.status === 'Presente').length;
+    const totalOps = Object.keys(state.attendance || {}).length;
+    const incidents = (state.incidents || []).filter(i => i.type === 'danger' || i.type === 'critical').length;
+    const tasks = Object.values(state.tasks || {});
+    const completedTasks = tasks.filter(t => t.progress === 100).length;
+
+    return {
+        messaging_product: "whatsapp",
+        to: targetNumber,
+        type: "text",
+        text: {
+            body: `📊 *Resumen Diario — ${projectName}*\n\n` +
+                `🏗️ Avance Global: *${avance}%*\n` +
+                `👷 Operarios Presentes: *${operarios}/${totalOps}*\n` +
+                `✅ Tareas Completadas: *${completedTasks}/${tasks.length}*\n` +
+                `🚨 Incidencias Críticas: *${incidents}*\n\n` +
+                `📅 ${new Date().toLocaleDateString('es-AR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}\n\n` +
+                `_Enviado por ObraSaaS Enterprise — IA & Real-Time_`
+        }
+    };
+}
+
+// NEW: Libro de Obra digital entry confirmation
+export function buildLibroObraConfirmation(targetNumber, entry) {
+    return buildActionButtonsMessage(
+        `📖 *Nuevo Asiento en Libro de Obra*\n\n*Fecha:* ${entry.date}\n*Clima:* ${entry.weather} ${entry.temperature ? `(${entry.temperature}°C)` : ''}\n*Operarios:* ${entry.workersPresent || entry.workers}\n*Tareas:* ${(entry.tasksPerformed || entry.tasks || '').substring(0, 100)}...\n*Firmante:* ${entry.signedBy || entry.director}\n*Hash SHA-256:* ${(entry.hash || '').substring(0, 16)}...\n\n_¿Confirma el asiento como Director de Obra?_`,
+        targetNumber,
+        [
+            { id: "libro_confirm", title: "✅ Confirmar Asiento" },
+            { id: "libro_edit", title: "✏️ Editar Asiento" }
+        ]
+    );
+}

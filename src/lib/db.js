@@ -651,6 +651,84 @@ export const defaultAppState = {
             createdAt: '2026-08-19T08:00:00.000Z'
         }
     ],
+    // Visual Task Alerts & Photo Markup Hub (Victoria & Marcelo Workflow - Sep 2026)
+    visualTaskAlerts: [
+        {
+            id: 'vta-101',
+            title: 'Pase cloacal sin sellar en losa PB',
+            description: 'El caño cloacal de 110mm en sector baño principal debe colocarse y sellarse antes del hormigonado de mañana a las 14:00 hs.',
+            sector: 'Losa Nivel +2 — Baño Principal',
+            assignedTo: 'Luis Martínez',
+            assignedRole: 'Plomero / Gasista',
+            assignedPhone: '+54 9 11 8899-7766',
+            assignedBy: 'Arq. Victoria (Directora Técnica)',
+            urgency: 'CRITICA',
+            deadline: 'Mañana, 14:00 hs',
+            status: 'PENDIENTE',
+            originalPhotoUrl: 'https://images.unsplash.com/photo-1581094794329-c8112a89af12?auto=format&fit=crop&w=800&q=80',
+            annotatedPhotoUrl: 'https://images.unsplash.com/photo-1581094794329-c8112a89af12?auto=format&fit=crop&w=800&q=80',
+            markupData: {
+                textAnnotations: ['COLOCAR CAÑO 110 ANTES DE HORMIGÓN', 'SECTOR BAÑO'],
+                shapes: [{ type: 'circle', x: 42, y: 55, radius: 25, color: '#ef4444' }]
+            },
+            whatsappAlertSent: true,
+            whatsappSentAt: '2026-09-08T09:15:00.000Z',
+            resolutionPhotoUrl: null,
+            resolutionNotes: null,
+            hash: '4f9a8b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a',
+            createdAt: '2026-09-08T09:15:00.000Z'
+        },
+        {
+            id: 'vta-102',
+            title: 'Fisura y desaplome en tabique norte',
+            description: 'Verificar plomada y picar rebaba antes de iniciar revoque grueso.',
+            sector: 'Planta Baja — Eje medianero norte',
+            assignedTo: 'Juan Gómez',
+            assignedRole: 'Albañilería Principal',
+            assignedPhone: '+54 9 11 3241-9981',
+            assignedBy: 'Marcelo Guillén (Director de Obra)',
+            urgency: 'ALTA',
+            deadline: 'Hoy, 18:00 hs',
+            status: 'EN_CORRECCION',
+            originalPhotoUrl: 'https://images.unsplash.com/photo-1541888946425-d0fbb18086f6?auto=format&fit=crop&w=800&q=80',
+            annotatedPhotoUrl: 'https://images.unsplash.com/photo-1541888946425-d0fbb18086f6?auto=format&fit=crop&w=800&q=80',
+            markupData: {
+                textAnnotations: ['PLOMAR Y PICAR REBABA'],
+                shapes: [{ type: 'rect', x: 30, y: 40, width: 35, height: 25, color: '#f59e0b' }]
+            },
+            whatsappAlertSent: true,
+            whatsappSentAt: '2026-09-08T08:30:00.000Z',
+            resolutionPhotoUrl: null,
+            resolutionNotes: 'Cuadrilla trabajando en el picado',
+            hash: '1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b',
+            createdAt: '2026-09-08T08:30:00.000Z'
+        },
+        {
+            id: 'vta-103',
+            title: 'Protección de borde de losa sin baranda',
+            description: 'Colocar baranda de seguridad de 1 metro de altura reglamentaria SRT 319/99 en borde libre.',
+            sector: 'Piso 1 — Balcón al frente',
+            assignedTo: 'Juan Zapata',
+            assignedRole: 'Armador / Cuadrilla',
+            assignedPhone: '+54 9 11 3845-2190',
+            assignedBy: 'Arq. Victoria (Directora Técnica)',
+            urgency: 'CRITICA',
+            deadline: 'Inmediato (Seguridad e Higiene)',
+            status: 'RESUELTO',
+            originalPhotoUrl: 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=800&q=80',
+            annotatedPhotoUrl: 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=800&q=80',
+            markupData: {
+                textAnnotations: ['COLOCAR LÍNEA DE VIDA Y BARANDA SRT'],
+                shapes: [{ type: 'arrow', x1: 50, y1: 80, x2: 50, y2: 40, color: '#ef4444' }]
+            },
+            whatsappAlertSent: true,
+            whatsappSentAt: '2026-09-07T16:00:00.000Z',
+            resolutionPhotoUrl: 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=800&q=80',
+            resolutionNotes: 'Baranda colocada y cuerda de vida fijada a columna estructural.',
+            hash: '7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d',
+            createdAt: '2026-09-07T16:00:00.000Z'
+        }
+    ],
     // Tenant registry (multi-tenant)
     tenants: [
         {

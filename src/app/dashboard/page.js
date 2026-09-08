@@ -1420,6 +1420,11 @@ export default function Dashboard() {
               </Link>
             </li>
             <li className="nav-item">
+              <Link href="/coordinacion" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
+                <button style={{ textAlign: 'left', width: '100%', color: 'var(--primary)', fontWeight: 600 }}><i className="fa-solid fa-camera-retro"></i> Coordinación Visual & Alertas</button>
+              </Link>
+            </li>
+            <li className="nav-item">
               <Link href="/documentos" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
                 <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-folder-open"></i> Documentos & Submittals</button>
               </Link>
