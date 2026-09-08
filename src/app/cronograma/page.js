@@ -36,6 +36,12 @@ const statusColors = {
 
 export default function CronogramaPage() {
   const [tasks, setTasks] = useState(initialTasks);
+  const [apiTotalTasks, setApiTotalTasks] = useState(initialTasks.length);
+  const [apiOverallProgress, setApiOverallProgress] = useState(0);
+  const [apiCurrentQuincena, setApiCurrentQuincena] = useState('Quincena 1');
+  const [isLoading, setIsLoading] = useState(true);
+  const [sseConnected, setSseConnected] = useState(false);
+
   const [zoomLevel, setZoomLevel] = useState('Semanas');
   const [viewMode, setViewMode] = useState('Gantt Completo');
   const [assigneeFilter, setAssigneeFilter] = useState('Todos');
@@ -53,6 +59,89 @@ export default function CronogramaPage() {
 
   const { isMobile, isTablet } = useBreakpoint();
   
+  const calculateStartWeek = (dateString) => {
+    const projectStart = new Date('2026-08-01');
+    const taskStart = new Date(dateString);
+    const diffTime = Math.abs(taskStart - projectStart);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return Math.floor(diffDays / 7) + 1;
+  };
+
+  const calculateDuration = (startString, endString) => {
+    const start = new Date(startString);
+    const end = new Date(endString);
+    const diffTime = Math.abs(end - start);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return Math.max(1, Math.round(diffDays / 7));
+  };
+
+  const getAssigneeInitials = (name) => {
+    if (!name) return 'UN';
+    const parts = name.split(' ');
+    if (parts.length > 1) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+  };
+
+  const inferGroup = (name) => {
+    const n = name.toLowerCase();
+    if (n.includes('hormigón') || n.includes('excavación') || n.includes('vigas') || n.includes('losas') || n.includes('estructura') || n.includes('fundaciones')) return 'Estructura';
+    if (n.includes('mampostería') || n.includes('carpinterías') || n.includes('revoque grueso') || n.includes('contrapiso') || n.includes('cerramientos')) return 'Cerramientos';
+    if (n.includes('revoque fino') || n.includes('pintura') || n.includes('cerámicos') || n.includes('terminaciones') || n.includes('instalaciones')) return 'Terminaciones';
+    return 'Estructura';
+  };
+
+  const fetchTasks = async () => {
+    try {
+      const apiKey = typeof window !== 'undefined' ? localStorage.getItem('obrasaas_admin_key') || 'internal' : 'internal';
+      const res = await fetch('/api/v1/tasks', {
+        headers: { 'x-api-key': apiKey }
+      });
+      if (!res.ok) throw new Error('Failed to fetch tasks');
+      const data = await res.json();
+      
+      if (data.tasks) {
+        const mappedTasks = data.tasks.map(t => ({
+          id: t.id,
+          name: t.name,
+          startWeek: calculateStartWeek(t.startDate),
+          duration: calculateDuration(t.startDate, t.endDate),
+          progress: t.progress,
+          assignee: getAssigneeInitials(t.assignedTo),
+          group: inferGroup(t.name),
+          dependencies: t.dependencies || [],
+          status: t.status === 'in_progress' ? 'on-track' : t.status === 'completed' ? 'completed' : t.status === 'delayed' ? 'delayed' : t.status === 'critical' ? 'critical' : 'on-track'
+        }));
+        setTasks(mappedTasks);
+        setApiTotalTasks(data.total || mappedTasks.length);
+        setApiOverallProgress(data.overallProgress || 0);
+        setApiCurrentQuincena(data.currentQuincena || 'Quincena 1');
+      }
+    } catch (err) {
+      console.error(err);
+      // Keep initialTasks on failure
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchTasks();
+    const es = new EventSource('/api/realtime');
+    es.onopen = () => setSseConnected(true);
+    es.onerror = () => setSseConnected(false);
+    es.onmessage = (event) => {
+      try {
+        const update = JSON.parse(event.data);
+        if (update.type === 'STATE_UPDATE') {
+          fetchTasks();
+        }
+      } catch (e) {}
+    };
+    return () => es.close();
+  }, []);
+
   // Chart dimensions
   const weeksToShow = 18;
   const colWidth = isMobile ? 40 : 60;
@@ -154,9 +243,8 @@ export default function CronogramaPage() {
   });
 
   // Calculate bottom stats
-  const totalTasks = tasks.length;
   const onTrackCount = tasks.filter(t => t.status === 'on-track' || t.status === 'completed').length;
-  const onTrackPct = Math.round((onTrackCount / totalTasks) * 100);
+  const onTrackPct = Math.round((onTrackCount / tasks.length) * 100) || 0;
   const criticalCount = tasks.filter(t => t.status === 'critical' || t.status === 'delayed').length;
 
   return (
@@ -174,7 +262,12 @@ export default function CronogramaPage() {
         subtitle="Control de plazos, ruta crítica, dependencias y cálculo de impacto climático por lluvia"
         breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Cronograma de Obra' }]}
         actions={
-          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+            {sseConnected && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 'bold', color: '#10b981', background: 'rgba(16, 185, 129, 0.1)', padding: '6px 10px', borderRadius: '6px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+                🟢 En Vivo
+              </div>
+            )}
             <Link href="/dashboard" style={{ textDecoration: 'none' }}>
               <Button variant="ghost">← Dashboard</Button>
             </Link>
@@ -298,8 +391,14 @@ export default function CronogramaPage() {
         </GlassCard>
 
         {/* Main Workspace Area */}
-        <div style={{ display: 'flex', gap: '24px', flex: 1, minHeight: '500px' }}>
+        <div style={{ display: 'flex', gap: '24px', flex: 1, minHeight: '500px', position: 'relative' }}>
           
+          {isLoading && (
+            <div style={{ position: 'absolute', inset: 0, background: 'rgba(6,9,19,0.7)', zIndex: 100, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(4px)', borderRadius: tokens.radius.lg }}>
+              <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }} style={{ width: '40px', height: '40px', borderRadius: '50%', border: `3px solid ${tokens.colors.border.subtle}`, borderTopColor: tokens.colors.accent.primary }} />
+            </div>
+          )}
+
           {/* Gantt Chart Container */}
           <GlassCard style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', padding: 0 }}>
             <div style={{ overflowX: 'auto', overflowY: 'auto', flex: 1 }}>
@@ -672,11 +771,15 @@ export default function CronogramaPage() {
         <div style={{ display: 'flex', gap: '32px' }}>
           <div>
             <span style={{ color: tokens.colors.text.muted }}>Total Tareas: </span>
-            <span style={{ fontWeight: '600' }}>{totalTasks}</span>
+            <span style={{ fontWeight: '600' }}>{apiTotalTasks}</span>
           </div>
           <div>
-            <span style={{ color: tokens.colors.text.muted }}>On Track: </span>
-            <span style={{ fontWeight: '600', color: tokens.colors.accent.success }}>{onTrackPct}%</span>
+            <span style={{ color: tokens.colors.text.muted }}>Avance Global: </span>
+            <span style={{ fontWeight: '600', color: tokens.colors.accent.success }}>{apiOverallProgress}%</span>
+          </div>
+          <div>
+            <span style={{ color: tokens.colors.text.muted }}>Quincena: </span>
+            <span style={{ fontWeight: '600', color: tokens.colors.accent.primary }}>{apiCurrentQuincena}</span>
           </div>
           <div>
             <span style={{ color: tokens.colors.text.muted }}>Ruta Crítica: </span>

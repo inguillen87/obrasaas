@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { tokens, Badge, Button, GlassCard, StatCard, ProgressBar, Tabs, PageHeader, EmptyState } from '@/lib/design-system';
@@ -13,6 +13,8 @@ export default function InspeccionesPage() {
     const [filterType, setFilterType] = useState('all');
     const [selectedTemplate, setSelectedTemplate] = useState('Seguridad e Higiene SRT');
     const [checklistItems, setChecklistItems] = useState({});
+    const [inspections, setInspections] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
 
     const tabs = [
         { id: 'mis_inspecciones', label: 'Mis Inspecciones', icon: '📋' },
@@ -20,7 +22,7 @@ export default function InspeccionesPage() {
         { id: 'compliance', label: 'Compliance', icon: '📊' }
     ];
 
-    const inspections = [
+    const fallbackInspections = [
         { id: 'INSP-101', type: 'Seguridad e Higiene', icon: '👷', title: 'Inspección de Seguridad e Higiene (SRT Res. 319/99)', date: '19 Ago, 2026', inspector: 'Ing. Carlos Mendez', status: 'APROBADA', score: 92, passed: 11, failed: 1 },
         { id: 'INSP-102', type: 'Estructura', icon: '🏗️', title: 'Inspección de Estructura pre-Hormigonado (CIRSOC 201)', date: '18 Ago, 2026', inspector: 'Arq. Lucía Fernandez', status: 'OBSERVADA', score: 75, passed: 9, failed: 3 },
         { id: 'INSP-103', type: 'Instalación Eléctrica', icon: '⚡', title: 'Verificación de Instalación Eléctrica (RIEI)', date: '17 Ago, 2026', inspector: 'Tec. Marcelo Rojas', status: 'RECHAZADA', score: 40, passed: 4, failed: 6 },
@@ -34,6 +36,38 @@ export default function InspeccionesPage() {
         'Instalación Sanitaria',
         'Terminaciones Finales'
     ];
+
+    const fetchData = async () => {
+        try {
+            const res = await fetch('/api/v1/inspecciones', {
+                headers: { 'x-api-key': typeof window !== 'undefined' ? localStorage.getItem('obrasaas_admin_key') || 'internal' : 'internal' }
+            });
+            const json = await res.json();
+            if (json.data) {
+                setInspections(json.data);
+            } else {
+                setInspections(fallbackInspections);
+            }
+        } catch (e) {
+            setInspections(fallbackInspections);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchData();
+        const es = new EventSource('/api/realtime');
+        es.onmessage = (event) => {
+            try {
+                const update = JSON.parse(event.data);
+                if (update.type === 'STATE_UPDATE') {
+                    fetchData();
+                }
+            } catch (e) {}
+        };
+        return () => es.close();
+    }, []);
 
     const safetyChecklist = [
         { id: 'chk-1', desc: 'EPP completo (casco, guantes, zapatos de seguridad)' },
@@ -68,6 +102,41 @@ export default function InspeccionesPage() {
         return Math.round((passed / answered.length) * 100);
     };
 
+    const handleFinalizar = async () => {
+        setIsLoading(true);
+        const score = calculateScore();
+        const items = Object.values(checklistItems);
+        const passed = items.filter(i => i.status === 'pass').length;
+        const failed = items.filter(i => i.status === 'fail').length;
+        
+        try {
+            await fetch('/api/v1/inspecciones', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'x-api-key': typeof window !== 'undefined' ? localStorage.getItem('obrasaas_admin_key') || 'internal' : 'internal' 
+                },
+                body: JSON.stringify({
+                    title: `Inspección de ${selectedTemplate}`,
+                    type: selectedTemplate.split(' ')[0],
+                    icon: '📝',
+                    status: failed > 0 ? 'OBSERVADA' : (passed > 0 ? 'APROBADA' : 'PENDIENTE'),
+                    score,
+                    passed,
+                    failed,
+                    items: checklistItems
+                })
+            });
+            setActiveTab('mis_inspecciones');
+            setChecklistItems({});
+            fetchData();
+        } catch(e) {
+            console.error(e);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     const getStatusColor = (status) => {
         switch (status) {
             case 'APROBADA': return { bg: 'rgba(16, 185, 129, 0.15)', color: '#10b981', icon: '✅' };
@@ -91,10 +160,14 @@ export default function InspeccionesPage() {
                 subtitle="Gestión integral de calidad, seguridad y cumplimiento en obra"
                 breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Inspecciones & Checklists' }]}
                 actions={
-                    <>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 8px', background: 'rgba(16, 185, 129, 0.1)', borderRadius: tokens.radius.full, border: '1px solid rgba(16, 185, 129, 0.2)', color: tokens.colors.accent.success, fontSize: '12px', fontWeight: 600 }}>
+                            <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: tokens.colors.accent.success, boxShadow: `0 0 8px ${tokens.colors.accent.success}` }} />
+                            En Vivo
+                        </div>
                         <Button variant="secondary" size="sm" onClick={() => setActiveTab('mis_inspecciones')}>Mis Inspecciones</Button>
                         <Button variant="primary" size="sm" icon="➕" onClick={() => setActiveTab('nueva_inspeccion')}>Crear Inspección</Button>
-                    </>
+                    </div>
                 }
             />
 
@@ -131,55 +204,61 @@ export default function InspeccionesPage() {
                             </div>
 
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 350px), 1fr))', gap: '24px' }}>
-                                {filteredInspections.map((insp) => {
-                                    const st = getStatusColor(insp.status);
-                                    return (
-                                        <GlassCard key={insp.id} hover style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                                                    <div style={{ fontSize: '24px', background: 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: tokens.radius.md }}>
-                                                        {insp.icon}
+                                {isLoading ? (
+                                    <div style={{ gridColumn: '1 / -1', padding: '48px', textAlign: 'center', color: tokens.colors.text.secondary }}>Cargando inspecciones...</div>
+                                ) : filteredInspections.length === 0 ? (
+                                    <EmptyState title="No hay inspecciones" description="No se encontraron inspecciones con los filtros seleccionados." icon="📋" />
+                                ) : (
+                                    filteredInspections.map((insp) => {
+                                        const st = getStatusColor(insp.status);
+                                        return (
+                                            <GlassCard key={insp.id} hover style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                                                        <div style={{ fontSize: '24px', background: 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: tokens.radius.md }}>
+                                                            {insp.icon}
+                                                        </div>
+                                                        <div>
+                                                            <div style={{ fontSize: '13px', color: tokens.colors.text.secondary, marginBottom: '2px' }}>{insp.id} • {insp.type}</div>
+                                                            <div style={{ fontWeight: 600, fontSize: '15px', color: tokens.colors.text.primary, lineHeight: 1.3 }}>{insp.title}</div>
+                                                        </div>
                                                     </div>
-                                                    <div>
-                                                        <div style={{ fontSize: '13px', color: tokens.colors.text.secondary, marginBottom: '2px' }}>{insp.id} • {insp.type}</div>
-                                                        <div style={{ fontWeight: 600, fontSize: '15px', color: tokens.colors.text.primary, lineHeight: 1.3 }}>{insp.title}</div>
+                                                </div>
+                                                
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '14px', color: tokens.colors.text.secondary }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                        <span>👤</span> {insp.inspector}
+                                                    </div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                        <span>📅</span> {insp.date}
                                                     </div>
                                                 </div>
-                                            </div>
-                                            
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '14px', color: tokens.colors.text.secondary }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                    <span>👤</span> {insp.inspector}
-                                                </div>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                    <span>📅</span> {insp.date}
-                                                </div>
-                                            </div>
 
-                                            <div style={{ background: 'rgba(0,0,0,0.2)', padding: '16px', borderRadius: tokens.radius.md, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                <div>
-                                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 10px', borderRadius: tokens.radius.full, background: st.bg, color: st.color, fontSize: '12px', fontWeight: 600 }}>
-                                                        {st.icon} {insp.status}
+                                                <div style={{ background: 'rgba(0,0,0,0.2)', padding: '16px', borderRadius: tokens.radius.md, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                    <div>
+                                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 10px', borderRadius: tokens.radius.full, background: st.bg, color: st.color, fontSize: '12px', fontWeight: 600 }}>
+                                                            {st.icon} {insp.status}
+                                                        </div>
+                                                        {insp.status !== 'PENDIENTE' && (
+                                                            <div style={{ fontSize: '13px', color: tokens.colors.text.secondary, marginTop: '8px' }}>
+                                                                {insp.passed} aprobados, {insp.failed} fallados
+                                                            </div>
+                                                        )}
                                                     </div>
                                                     {insp.status !== 'PENDIENTE' && (
-                                                        <div style={{ fontSize: '13px', color: tokens.colors.text.secondary, marginTop: '8px' }}>
-                                                            {insp.passed} aprobados, {insp.failed} fallados
+                                                        <div style={{ textAlign: 'right' }}>
+                                                            <div style={{ fontSize: '24px', fontWeight: 700, color: insp.score >= 80 ? tokens.colors.accent.success : insp.score >= 60 ? tokens.colors.accent.warning : tokens.colors.accent.danger }}>
+                                                                {insp.score}%
+                                                            </div>
+                                                            <div style={{ fontSize: '12px', color: tokens.colors.text.secondary }}>Score</div>
                                                         </div>
                                                     )}
                                                 </div>
-                                                {insp.status !== 'PENDIENTE' && (
-                                                    <div style={{ textAlign: 'right' }}>
-                                                        <div style={{ fontSize: '24px', fontWeight: 700, color: insp.score >= 80 ? tokens.colors.accent.success : insp.score >= 60 ? tokens.colors.accent.warning : tokens.colors.accent.danger }}>
-                                                            {insp.score}%
-                                                        </div>
-                                                        <div style={{ fontSize: '12px', color: tokens.colors.text.secondary }}>Score</div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <Button variant="secondary" size="sm" style={{ width: '100%' }}>Ver Detalles</Button>
-                                        </GlassCard>
-                                    );
-                                })}
+                                                <Button variant="secondary" size="sm" style={{ width: '100%' }}>Ver Detalles</Button>
+                                            </GlassCard>
+                                        );
+                                    })
+                                )}
                             </div>
                         </motion.div>
                     )}
@@ -289,8 +368,10 @@ export default function InspeccionesPage() {
                                         </div>
 
                                         <div style={{ marginTop: '32px', display: 'flex', justifyContent: 'flex-end', gap: '16px', borderTop: `1px solid ${tokens.colors.border.subtle}`, paddingTop: '24px' }}>
-                                            <Button variant="secondary">Guardar Borrador</Button>
-                                            <Button variant="primary" icon="📝">Finalizar Inspección</Button>
+                                            <Button variant="secondary" disabled={isLoading}>Guardar Borrador</Button>
+                                            <Button variant="primary" icon="📝" onClick={handleFinalizar} disabled={isLoading}>
+                                                {isLoading ? 'Guardando...' : 'Finalizar Inspección'}
+                                            </Button>
                                         </div>
                                     </GlassCard>
                                 </div>

@@ -12,8 +12,9 @@ export default function CompliancePage() {
     const [selectedWorkerCred, setSelectedWorkerCred] = useState(null);
     const [onDemandActivated, setOnDemandActivated] = useState(false);
     const [brokerSentSuccess, setBrokerSentSuccess] = useState(false);
+    const [sseConnected, setSseConnected] = useState(false);
 
-    useEffect(() => {
+    const loadComplianceData = () => {
         Promise.all([
             fetch('/api/state').then(r => r.json()),
             fetch('/api/v1/uocra', { headers: { 'x-api-key': 'internal' } }).then(r => r.json()).catch(() => ({})),
@@ -22,6 +23,26 @@ export default function CompliancePage() {
             setData({ state, uocra, polizas });
             setLoading(false);
         }).catch(() => setLoading(false));
+    };
+
+    useEffect(() => {
+        loadComplianceData();
+    }, []);
+
+    // SSE Real-Time Updates
+    useEffect(() => {
+        const es = new EventSource('/api/realtime');
+        es.onopen = () => setSseConnected(true);
+        es.onerror = () => setSseConnected(false);
+        es.onmessage = (event) => {
+            try {
+                const update = JSON.parse(event.data);
+                if (update.type === 'STATE_UPDATE') {
+                    loadComplianceData();
+                }
+            } catch (e) {}
+        };
+        return () => { es.close(); setSseConnected(false); };
     }, []);
 
     const formatARS = n => `$${(n || 0).toLocaleString('es-AR')}`;

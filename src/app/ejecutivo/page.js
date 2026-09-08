@@ -13,9 +13,26 @@ export default function ExecutiveDashboard() {
     const [filterRisk, setFilterRisk] = useState('all');
     const [summaryModal, setSummaryModal] = useState({ open: false, loading: false, result: null });
     const [copied, setCopied] = useState(false);
+    const [sseConnected, setSseConnected] = useState(false);
 
     useEffect(() => {
         loadData();
+    }, []);
+
+    // SSE Real-Time Updates
+    useEffect(() => {
+        const es = new EventSource('/api/realtime');
+        es.onopen = () => setSseConnected(true);
+        es.onerror = () => setSseConnected(false);
+        es.onmessage = (event) => {
+            try {
+                const update = JSON.parse(event.data);
+                if (update.type === 'STATE_UPDATE') {
+                    loadData();
+                }
+            } catch (e) {}
+        };
+        return () => { es.close(); setSseConnected(false); };
     }, []);
 
     const loadData = async () => {
@@ -83,6 +100,11 @@ export default function ExecutiveDashboard() {
                 breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Ejecutivo' }]}
                 actions={
                     <>
+                        {sseConnected && (
+                            <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 12px', borderRadius: '20px', background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)', fontSize: '12px', fontWeight: 600, color: '#10b981' }}>
+                                <motion.span animate={{ opacity: [1, 0.3, 1] }} transition={{ duration: 1.5, repeat: Infinity }}>🟢</motion.span> En Vivo
+                            </motion.div>
+                        )}
                         <Button variant="secondary" size="sm" onClick={loadData}>↻ Actualizar</Button>
                         <Button variant="secondary" size="sm" icon="📱" onClick={handleTriggerDailySummary}>Resumen WhatsApp</Button>
                         <a href="/api/v1/certificacion/pdf" target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>

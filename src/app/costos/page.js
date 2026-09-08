@@ -24,8 +24,9 @@ export default function CostosPage() {
         scheduleImpactDays: 2,
         cacBaseIndex: 128.2
     });
+    const [sseConnected, setSseConnected] = useState(false);
 
-    useEffect(() => {
+    const fetchBudgetData = () => {
         Promise.all([
             fetch('/api/v1/budget', { headers: { 'x-api-key': typeof window !== 'undefined' ? localStorage.getItem('obrasaas_admin_key') || 'internal' : 'internal' } }).then(r => r.json()),
             fetch('/api/v1/adicionales').then(r => r.json()).catch(() => ({ changeOrders: [] }))
@@ -34,6 +35,26 @@ export default function CostosPage() {
             if (adicionalesData.changeOrders) setChangeOrders(adicionalesData.changeOrders);
             setLoading(false);
         }).catch(() => setLoading(false));
+    };
+
+    useEffect(() => {
+        fetchBudgetData();
+    }, []);
+
+    // SSE Real-Time Updates
+    useEffect(() => {
+        const es = new EventSource('/api/realtime');
+        es.onopen = () => setSseConnected(true);
+        es.onerror = () => setSseConnected(false);
+        es.onmessage = (event) => {
+            try {
+                const update = JSON.parse(event.data);
+                if (update.type === 'STATE_UPDATE') {
+                    fetchBudgetData();
+                }
+            } catch (e) {}
+        };
+        return () => { es.close(); setSseConnected(false); };
     }, []);
 
     const handleCreateChangeOrder = async (e) => {
@@ -117,7 +138,12 @@ export default function CostosPage() {
                 subtitle={`${data?.projectName || 'Obra'} — Presupuesto por Rubro, Redeterminación CAC y Adicionales`}
                 breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Costos' }]}
                 actions={
-                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                        {sseConnected && (
+                            <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 12px', borderRadius: '20px', background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)', fontSize: '12px', fontWeight: 600, color: '#10b981' }}>
+                                <motion.span animate={{ opacity: [1, 0.3, 1] }} transition={{ duration: 1.5, repeat: Infinity }}>🟢</motion.span> En Vivo
+                            </motion.div>
+                        )}
                         <a href="/api/v1/export?type=budget" download="presupuesto_obrasaas.csv" style={{ textDecoration: 'none' }}>
                             <Button variant="secondary" size="sm">📥 Exportar ERP</Button>
                         </a>

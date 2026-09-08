@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -106,6 +106,8 @@ export default function LibroObraPage() {
     const [searchTerm, setSearchTerm] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitSuccess, setSubmitSuccess] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isLive, setIsLive] = useState(false);
 
     // Form State
     const [form, setForm] = useState({
@@ -120,6 +122,60 @@ export default function LibroObraPage() {
         rainInterruption: false
     });
 
+    const fetchData = useCallback(async () => {
+        try {
+            const res = await fetch('/api/admin/libro-obra', {
+                headers: { 'x-api-key': typeof window !== 'undefined' ? localStorage.getItem('obrasaas_admin_key') || 'internal' : 'internal' }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                if (data.entries && data.entries.length > 0) {
+                    const mappedEntries = data.entries.map((e, idx) => ({
+                        id: e.id,
+                        folio: data.entries.length - idx,
+                        date: e.date,
+                        weather: e.weather || 'Despejado',
+                        temp: e.temperature ? `${e.temperature}°C` : 'N/A',
+                        workers: e.workersPresent || 0,
+                        tasks: Array.isArray(e.tasksPerformed) ? e.tasksPerformed.join('. ') : (e.tasksPerformed || ''),
+                        orders: e.observations || '',
+                        materials: Array.isArray(e.materialsReceived) ? e.materialsReceived.join(', ') : (e.materialsReceived || ''),
+                        safety: e.incidents && e.incidents.length > 0 ? (Array.isArray(e.incidents) ? e.incidents.join(', ') : e.incidents) : 'Sin incidentes',
+                        rainInterruption: e.weather && e.weather.toLowerCase().includes('lluvia') ? true : false,
+                        hash: e.hash || '8f4e2a1b9c7d0...e4f2',
+                        director: e.signedBy || 'Ing. Martín López'
+                    }));
+                    setEntries(mappedEntries);
+                } else {
+                    setEntries(DEMO_ENTRIES);
+                }
+            } else {
+                setEntries(DEMO_ENTRIES);
+            }
+        } catch (error) {
+            console.error('Error fetching data:', error);
+            setEntries(DEMO_ENTRIES);
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchData();
+        const es = new EventSource('/api/realtime');
+        es.onopen = () => setIsLive(true);
+        es.onerror = () => setIsLive(false);
+        es.onmessage = (event) => {
+            try {
+                const update = JSON.parse(event.data);
+                if (update.type === 'STATE_UPDATE') {
+                    fetchData();
+                }
+            } catch (e) {}
+        };
+        return () => es.close();
+    }, [fetchData]);
+
     const handleFormChange = (e) => {
         const { name, value, type, checked } = e.target;
         setForm(prev => ({
@@ -132,32 +188,30 @@ export default function LibroObraPage() {
         e.preventDefault();
         setIsSubmitting(true);
         
-        // Simular llamada a la API
         try {
-            await fetch('/api/admin/libro-obra', {
+            const payload = {
+                date: form.date,
+                weather: form.weather,
+                temperature: form.temp,
+                workers: parseInt(form.workers) || 0,
+                tasks: form.tasks,
+                observations: form.orders,
+                materials: form.materials,
+                signedBy: 'Ing. Martín López',
+                incidents: form.safety ? [form.safety] : []
+            };
+
+            const res = await fetch('/api/admin/libro-obra', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(form)
-            }).catch(() => {}); // Ignoramos error si no existe el endpoint en este mock
-            
-            setTimeout(() => {
-                const newEntry = {
-                    id: `lo-00${entries.length + 1}`,
-                    folio: entries.length + 1,
-                    date: form.date,
-                    weather: form.weather,
-                    temp: form.temp ? `${form.temp}°C` : 'N/A',
-                    workers: form.workers || 0,
-                    tasks: form.tasks,
-                    orders: form.orders,
-                    materials: form.materials,
-                    safety: form.safety,
-                    rainInterruption: form.rainInterruption,
-                    hash: Math.random().toString(36).substring(2, 15) + '...f0e1',
-                    director: 'Ing. Martín López'
-                };
-                
-                setEntries([newEntry, ...entries]);
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'x-api-key': typeof window !== 'undefined' ? localStorage.getItem('obrasaas_admin_key') || 'internal' : 'internal'
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                await fetchData();
                 setIsSubmitting(false);
                 setSubmitSuccess(true);
                 
@@ -176,8 +230,11 @@ export default function LibroObraPage() {
                         rainInterruption: false
                     });
                 }, 2000);
-            }, 1500);
+            } else {
+                throw new Error('API request failed');
+            }
         } catch (error) {
+            console.error(error);
             setIsSubmitting(false);
         }
     };
@@ -226,68 +283,72 @@ export default function LibroObraPage() {
                 </Button>
             </div>
 
-            {filteredEntries.map((entry) => (
-                <GlassCard key={entry.id} style={{ display: 'flex', flexDirection: 'column', gap: '16px', borderLeft: `4px solid ${entry.rainInterruption ? tokens.colors.accent.danger : tokens.colors.accent.primary}` }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
-                        <div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-                                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: tokens.colors.text.primary }}>
-                                    Folio N° {entry.folio}
-                                </h3>
-                                <Badge variant="subtle">{entry.date}</Badge>
-                                {entry.rainInterruption && <Badge color={tokens.colors.accent.danger} variant="filled">Lluvia (Paro)</Badge>}
-                            </div>
-                            <div style={{ display: 'flex', gap: '16px', color: tokens.colors.text.secondary, fontSize: '14px', flexWrap: 'wrap' }}>
-                                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    {weatherIcons[entry.weather] || '☀️'} {entry.weather} ({entry.temp})
-                                </span>
-                                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    👷 {entry.workers} operarios
-                                </span>
-                            </div>
-                        </div>
-                        <Link href="/api/admin/libro-obra/pdf" target="_blank" rel="noopener noreferrer">
-                            <Button variant="secondary" size="sm">Descargar PDF</Button>
-                        </Link>
-                    </div>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', gap: '20px', marginTop: '8px' }}>
-                        <div>
-                            <h4 style={{ margin: '0 0 8px 0', fontSize: '13px', textTransform: 'uppercase', color: tokens.colors.text.muted, letterSpacing: '0.5px' }}>Trabajos Ejecutados</h4>
-                            <p style={{ margin: 0, fontSize: '15px', color: tokens.colors.text.primary, lineHeight: 1.6 }}>{entry.tasks}</p>
-                        </div>
-                        <div>
-                            <h4 style={{ margin: '0 0 8px 0', fontSize: '13px', textTransform: 'uppercase', color: tokens.colors.text.muted, letterSpacing: '0.5px' }}>Órdenes Impartidas</h4>
-                            <p style={{ margin: 0, fontSize: '15px', color: tokens.colors.text.primary, lineHeight: 1.6 }}>{entry.orders || '-'}</p>
-                        </div>
-                        <div>
-                            <h4 style={{ margin: '0 0 8px 0', fontSize: '13px', textTransform: 'uppercase', color: tokens.colors.text.muted, letterSpacing: '0.5px' }}>Materiales Ingresados</h4>
-                            <p style={{ margin: 0, fontSize: '15px', color: tokens.colors.text.primary, lineHeight: 1.6 }}>{entry.materials || '-'}</p>
-                        </div>
-                        <div>
-                            <h4 style={{ margin: '0 0 8px 0', fontSize: '13px', textTransform: 'uppercase', color: tokens.colors.text.muted, letterSpacing: '0.5px' }}>Seguridad e Higiene</h4>
-                            <p style={{ margin: 0, fontSize: '15px', color: tokens.colors.text.primary, lineHeight: 1.6 }}>{entry.safety || '-'}</p>
-                        </div>
-                    </div>
-
-                    <div style={{ borderTop: `1px solid ${tokens.colors.border.subtle}`, paddingTop: '16px', marginTop: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
-                        <div style={{ fontSize: '12px', color: tokens.colors.text.muted, fontFamily: tokens.font.mono }}>
-                            Hash: {entry.hash}
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: tokens.colors.text.secondary }}>
-                            <span>Firmado digitalmente por:</span>
-                            <strong style={{ color: tokens.colors.accent.primary }}>{entry.director}</strong>
-                        </div>
-                    </div>
-                </GlassCard>
-            ))}
-
-            {filteredEntries.length === 0 && (
+            {isLoading ? (
+                <div style={{ display: 'flex', justifyContent: 'center', padding: '40px' }}>
+                    <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }} style={{ width: '32px', height: '32px', border: `3px solid ${tokens.colors.border.subtle}`, borderTopColor: tokens.colors.accent.primary, borderRadius: '50%' }} />
+                </div>
+            ) : filteredEntries.length === 0 ? (
                 <EmptyState 
                     title="No se encontraron asientos" 
                     description="Prueba con otros términos de búsqueda." 
                     icon="🔍" 
                 />
+            ) : (
+                filteredEntries.map((entry) => (
+                    <GlassCard key={entry.id} style={{ display: 'flex', flexDirection: 'column', gap: '16px', borderLeft: `4px solid ${entry.rainInterruption ? tokens.colors.accent.danger : tokens.colors.accent.primary}` }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
+                            <div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+                                    <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: tokens.colors.text.primary }}>
+                                        Folio N° {entry.folio}
+                                    </h3>
+                                    <Badge variant="subtle">{entry.date}</Badge>
+                                    {entry.rainInterruption && <Badge color={tokens.colors.accent.danger} variant="filled">Lluvia (Paro)</Badge>}
+                                </div>
+                                <div style={{ display: 'flex', gap: '16px', color: tokens.colors.text.secondary, fontSize: '14px', flexWrap: 'wrap' }}>
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        {weatherIcons[entry.weather] || '☀️'} {entry.weather} ({entry.temp})
+                                    </span>
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        👷 {entry.workers} operarios
+                                    </span>
+                                </div>
+                            </div>
+                            <Link href="/api/admin/libro-obra/pdf" target="_blank" rel="noopener noreferrer">
+                                <Button variant="secondary" size="sm">Descargar PDF</Button>
+                            </Link>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', gap: '20px', marginTop: '8px' }}>
+                            <div>
+                                <h4 style={{ margin: '0 0 8px 0', fontSize: '13px', textTransform: 'uppercase', color: tokens.colors.text.muted, letterSpacing: '0.5px' }}>Trabajos Ejecutados</h4>
+                                <p style={{ margin: 0, fontSize: '15px', color: tokens.colors.text.primary, lineHeight: 1.6 }}>{entry.tasks}</p>
+                            </div>
+                            <div>
+                                <h4 style={{ margin: '0 0 8px 0', fontSize: '13px', textTransform: 'uppercase', color: tokens.colors.text.muted, letterSpacing: '0.5px' }}>Órdenes Impartidas</h4>
+                                <p style={{ margin: 0, fontSize: '15px', color: tokens.colors.text.primary, lineHeight: 1.6 }}>{entry.orders || '-'}</p>
+                            </div>
+                            <div>
+                                <h4 style={{ margin: '0 0 8px 0', fontSize: '13px', textTransform: 'uppercase', color: tokens.colors.text.muted, letterSpacing: '0.5px' }}>Materiales Ingresados</h4>
+                                <p style={{ margin: 0, fontSize: '15px', color: tokens.colors.text.primary, lineHeight: 1.6 }}>{entry.materials || '-'}</p>
+                            </div>
+                            <div>
+                                <h4 style={{ margin: '0 0 8px 0', fontSize: '13px', textTransform: 'uppercase', color: tokens.colors.text.muted, letterSpacing: '0.5px' }}>Seguridad e Higiene</h4>
+                                <p style={{ margin: 0, fontSize: '15px', color: tokens.colors.text.primary, lineHeight: 1.6 }}>{entry.safety || '-'}</p>
+                            </div>
+                        </div>
+
+                        <div style={{ borderTop: `1px solid ${tokens.colors.border.subtle}`, paddingTop: '16px', marginTop: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+                            <div style={{ fontSize: '12px', color: tokens.colors.text.muted, fontFamily: tokens.font.mono }}>
+                                Hash: {entry.hash}
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: tokens.colors.text.secondary }}>
+                                <span>Firmado digitalmente por:</span>
+                                <strong style={{ color: tokens.colors.accent.primary }}>{entry.director}</strong>
+                            </div>
+                        </div>
+                    </GlassCard>
+                ))
             )}
         </motion.div>
     );
@@ -513,7 +574,23 @@ export default function LibroObraPage() {
         }}>
             <div style={{ maxWidth: '1440px', margin: '0 auto' }}>
                 <PageHeader 
-                    title="Libro de Obra Digital" 
+                    title={
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            Libro de Obra Digital
+                            {isLive && (
+                                <Badge color={tokens.colors.accent.success} variant="subtle">
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <motion.div
+                                            animate={{ opacity: [1, 0.5, 1] }}
+                                            transition={{ repeat: Infinity, duration: 2 }}
+                                            style={{ width: '8px', height: '8px', borderRadius: '50%', background: tokens.colors.accent.success }}
+                                        />
+                                        Libro Digital en Vivo
+                                    </span>
+                                </Badge>
+                            )}
+                        </div>
+                    } 
                     breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Libro de Obra' }]} 
                     actions={
                         <Button variant="primary" onClick={() => setActiveTab('nuevo')}>
