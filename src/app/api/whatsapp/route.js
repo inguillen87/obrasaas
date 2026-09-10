@@ -198,6 +198,18 @@ export async function POST(request) {
                 senderName = "Aberturas López (Proveedor)";
                 senderRole = "Proveedor Externo";
                 shortId = "proveedor";
+            } else if (cleanFrom.endsWith('44556677') || cleanFrom.endsWith('445566')) {
+                senderName = "Dr. Roberto Méndez (Inversor 3B)";
+                senderRole = "Comitente / Inversor";
+                shortId = "inv-3b";
+            } else if (cleanFrom.endsWith('55667788') || cleanFrom.endsWith('556677')) {
+                senderName = "Ing. Sofía Valenzuela (Inversora 5A)";
+                senderRole = "Comitente / Inversor";
+                shortId = "inv-5a";
+            } else if (cleanFrom.endsWith('66778899') || cleanFrom.endsWith('667788')) {
+                senderName = "Estudio Albarracín (Inversor 8C)";
+                senderRole = "Comitente / Inversor";
+                shortId = "inv-8c";
             } else {
                 // Unknown / Unregistered phone attempting contact
                 senderName = `Operario (+${cleanFrom.slice(-4)})`;
@@ -554,7 +566,7 @@ export async function POST(request) {
             botReply = `📸 *Inspección Fotográfica Procesada por IA*\n\n• Fase: *${sitePhotoAnalysis.phase}*\n• Análisis: _"${sitePhotoAnalysis.aiAnalysis}"_\n• Estado: *Registrado en Bitácora de Obra*\n• Recomendación: ${sitePhotoAnalysis.actionRecommendation || 'Continuar según cronograma.'}`;
         }
         // 10. Unregistered / Unauthenticated Worker — Conversational Self-Registration
-        else if (isUnregistered) {
+        else if (isUnregistered && !['portal', 'inversor', 'comitente', 'vecino', 'cartel', 'expediente', 'poster', 'certificacion', 'cac', 'cotizar', 'marketplace'].some(q => (bodyText || '').toLowerCase().includes(q))) {
             // Check if this phone has a pending registration in progress
             const pendingReg = (state.pendingRegistrations || {})[cleanFrom];
             const lowerBody = (bodyText || '').toLowerCase().trim();
@@ -728,6 +740,66 @@ export async function POST(request) {
                     icon: "fa-solid fa-boxes-stacked"
                 };
                 showInFeed = true;
+            } else if (normalBody === 'certificacion' || normalBody.includes('certificacion') || normalBody.includes('cac') || normalBody.includes('redeterminacion')) {
+                const cert = (state.certificaciones && state.certificaciones[0]) || {
+                    quincena: 'Q1 - Agosto 2026',
+                    montoBruto: 45500000,
+                    fondoReparo: 2275000,
+                    montoNeto: 43225000,
+                    indiceCacBase: 3240.50,
+                    indiceCacActual: 3701.00,
+                    variacionCacPct: 14.21,
+                    montoRedeterminado: 49367272
+                };
+                botReply = `📄 *Certificación Digital de Obra & Redeterminación CAC*\n\n` +
+                    `• *Período:* ${cert.quincena || 'Q1 - Agosto 2026'}\n` +
+                    `• *Obra:* ${state.projectConfig?.name || 'Torre Palermo Soho'}\n` +
+                    `• *Índice CAC Inicial:* ${cert.indiceCacBase || '3.240,50'} pts\n` +
+                    `• *Índice CAC Actual:* ${cert.indiceCacActual || '3.701,00'} pts (+${cert.variacionCacPct || '14.21'}%)\n` +
+                    `• *Monto Contractual:* $${(cert.montoBruto || 45500000).toLocaleString('es-AR')} ARS\n` +
+                    `• *Fondo de Reparo (5% Ley 22.250):* -$${(cert.fondoReparo || 2275000).toLocaleString('es-AR')} ARS\n` +
+                    `• *Neto Redeterminado a Pagar:* *$${(cert.montoRedeterminado || 49367272).toLocaleString('es-AR')} ARS*\n\n` +
+                    `👉 *Panel de Certificación:* ${appUrl}/certificacion\n` +
+                    `📥 *Descargar Acta PDF:* ${appUrl}/api/v1/certificacion/pdf`;
+                feedIncident = {
+                    id: "inc-cert-" + Date.now(),
+                    title: "Consulta de Certificación CAC",
+                    description: `${senderName} consultó certificación quincenal y redeterminación CAC.`,
+                    type: "info",
+                    badge: "CAC +14.2%",
+                    timestamp: `Hoy, ${timeStr}`,
+                    reporter: senderName,
+                    icon: "fa-solid fa-file-contract"
+                };
+                showInFeed = true;
+            } else if (normalBody === 'portal' || normalBody.includes('portal') || normalBody.includes('inversor') || normalBody.includes('comitente') || normalBody.includes('vecino digital')) {
+                botReply = `🏛️ *Portal Oficial de Inversor & Vecino Digital*\n\n` +
+                    `• *Obra:* ${state.projectConfig?.name || 'Torre Palermo Soho'}\n` +
+                    `• *Avance Global:* ${state.avancePercentage || 48}%\n` +
+                    `• *Hitos Verificados:* 5 concluidos\n` +
+                    `• *Índice SPI (EVM):* 1.05 (Adelantado respecto a cronograma)\n` +
+                    `• *Firma SHA-256:* Activa con trazabilidad inmutable.\n\n` +
+                    `👉 *Accedé al Portal Público Certificado:* ${appUrl}/portal\n\n` +
+                    `_Podés consultar fotos de obra con GPS, planos aprobados y solicitar personalizaciones de unidad._`;
+            } else if (normalBody === 'cartel' || normalBody.includes('cartel') || normalBody.includes('poster') || normalBody.includes('afiche') || normalBody.includes('codigo qr')) {
+                botReply = `🪧 *Cartel Oficial & Acceso a Obra*\n\n` +
+                    `• *Expediente GCBA:* EX-2026-148293-GCABA-DGROC\n` +
+                    `• *Dirección:* ${state.projectConfig?.address || 'Honduras 4850, Palermo'}\n` +
+                    `• *Directores:* Arq. Marcelo Guillén & Arq. Victoria Schiaffino\n` +
+                    `• *Geocerca Satelital:* Radio ${state.projectConfig?.geofenceRadiusMeters || 100}m Activo\n\n` +
+                    `🖨️ *Imprimir Cartel Reglamentario o QR de Ingreso:*\n` +
+                    `${appUrl}/poster\n\n` +
+                    `_Cumple con Res. SRT 319/99, Ley 22.250 y Código de Edificación GCBA._`;
+            } else if (normalBody === 'cotizar' || normalBody.includes('cotizar') || normalBody.includes('marketplace') || normalBody.includes('corralon') || normalBody.includes('pedidos campo')) {
+                const reqs = state.materialRequests || [];
+                const count = reqs.length;
+                botReply = `🛒 *Marketplace & Cotizaciones Inmediatas a Corralones*\n\n` +
+                    `• *Pedidos de Campo Registrados:* ${count} solicitudes\n` +
+                    `• *Red de Corralones Conectados:* 4 proveedores con cotización instantánea\n` +
+                    `• *Ahorro Promedio ObraSaaS:* 12% a 18% en compras por volumen\n\n` +
+                    `👉 *Cotizar Pedidos de Campo en 1-Clic:*\n` +
+                    `${appUrl}/marketplace\n\n` +
+                    `_Integrado directamente con los pedidos enviados por operarios desde WhatsApp._`;
             }
 
             // 👑 Arq. Marcelo (Director de Obra) Executive Handling
