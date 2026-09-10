@@ -348,10 +348,10 @@ export async function POST(request) {
                 showInFeed = true;
             } else {
                 const projectSite = {
-                    lat: state.projectConfig?.latitude || -34.5886,
-                    lon: state.projectConfig?.longitude || -58.4302,
+                    lat: state.geofenceSettings?.latitude || state.projectConfig?.latitude || -34.5886,
+                    lon: state.geofenceSettings?.longitude || state.projectConfig?.longitude || -58.4302,
                     name: state.projectConfig?.name || "Obra",
-                    radius: state.projectConfig?.geofenceRadiusMeters || 100
+                    radius: state.geofenceSettings?.radiusMeters || state.projectConfig?.geofenceRadiusMeters || 50
                 };
                 const distance = Math.round(getDistance(latitude, longitude, projectSite.lat, projectSite.lon));
 
@@ -622,8 +622,116 @@ export async function POST(request) {
                 .replace(/[\.\,\:\-]$/, '')
                 .trim();
 
+            // ==========================================
+            // Sprint Sep 2026 — Interactive Action Handlers (Citas & Materiales)
+            // ==========================================
+            if (normalBody === 'cita_confirm' || normalBody === 'confirmo cita' || normalBody.includes('confirmo')) {
+                const appts = state.calendarAppointments || [];
+                const pendingAppt = appts.find(a => a.estado === 'programada');
+                if (pendingAppt) {
+                    pendingAppt.estado = 'confirmada';
+                    pendingAppt.confirmadaPor = senderName;
+                    pendingAppt.fechaConfirmacion = new Date().toISOString();
+                    botReply = `✅ *Asistencia a Cita Confirmada*\n\nGracias *${senderName}*. Quedó registrada tu confirmación para:\n• *${pendingAppt.title}*\n• 📅 ${pendingAppt.fecha} a las ${pendingAppt.hora} hs\n• 📍 Obra: ${state.projectConfig?.name || 'Obra'}\n\n_El evento ya figura como 'Confirmado' en el Calendario de ObraSaaS._`;
+                    feedIncident = {
+                        id: "inc-cita-" + Date.now(),
+                        title: "Cita de Obra Confirmada",
+                        description: `${senderName} confirmó asistencia a "${pendingAppt.title}" (${pendingAppt.fecha} ${pendingAppt.hora}hs).`,
+                        type: "success",
+                        badge: "Cita OK",
+                        timestamp: `Hoy, ${timeStr}`,
+                        reporter: senderName,
+                        icon: "fa-solid fa-calendar-check"
+                    };
+                    showInFeed = true;
+                } else {
+                    botReply = `📅 *Calendario de Citas*\n\nNo tenés citas pendientes de confirmación en este momento. Todas las visitas están al día.`;
+                }
+            } else if (normalBody === 'cita_reschedule' || normalBody.includes('reprogramar')) {
+                const appts = state.calendarAppointments || [];
+                const pendingAppt = appts.find(a => a.estado === 'programada');
+                if (pendingAppt) {
+                    pendingAppt.estado = 'reprogramada';
+                    botReply = `🔄 *Solicitud de Reprogramación Registrada*\n\nSe notificó a la Dirección de Obra (Arq. Victoria / Arq. Marcelo) que solicitaste reprogramar:\n• *${pendingAppt.title}*\nNos pondremos en contacto a la brevedad para fijar una nueva fecha.`;
+                } else {
+                    botReply = `📅 *Calendario de Citas*\n\nNo hay citas pendientes para reprogramar.`;
+                }
+            } else if (normalBody === 'mat_approve' || (isDirector && (normalBody.includes('aprobar pedido') || normalBody.includes('aprobar material')))) {
+                const reqs = state.materialRequests || [];
+                const pendingReq = reqs.find(r => r.estado === 'pendiente_aprobacion');
+                if (pendingReq) {
+                    pendingReq.estado = 'aprobada';
+                    pendingReq.aprobadaPor = senderName;
+                    pendingReq.fechaAprobacion = new Date().toISOString();
+                    pendingReq.nroOrdenCompra = `OC-${new Date().getFullYear()}-${String(Math.floor(1000 + Math.random() * 9000))}`;
+                    pendingReq.proveedorAsignado = state.suppliers?.[0]?.name || 'Corralón Central';
+                    const itemsDesc = pendingReq.items?.map(i => `${i.cantidad} ${i.unidad} ${i.descripcion}`).join(', ') || 'Materiales';
+                    botReply = `✅ *Pedido de Material Aprobado por Dirección*\n\n• *Solicitante:* ${pendingReq.solicitante} (${pendingReq.rol})\n• *OC Generada:* *${pendingReq.nroOrdenCompra}*\n• *Materiales:* ${itemsDesc}\n• *Proveedor:* ${pendingReq.proveedorAsignado}\n\n_Orden de compra lista para despacho y cotejo con remito OCR._`;
+                    feedIncident = {
+                        id: "inc-mat-app-" + Date.now(),
+                        title: "Pedido de Material Aprobado",
+                        description: `${senderName} aprobó pedido de ${pendingReq.solicitante} (${pendingReq.nroOrdenCompra}): ${itemsDesc}.`,
+                        type: "success",
+                        badge: "OC Aprobada",
+                        timestamp: `Hoy, ${timeStr}`,
+                        reporter: senderName,
+                        icon: "fa-solid fa-cart-check"
+                    };
+                    showInFeed = true;
+                } else {
+                    botReply = `📦 *Pedidos de Materiales*\n\nNo hay solicitudes de materiales pendientes de aprobación en este momento.`;
+                }
+            } else if (normalBody === 'mat_reject') {
+                const reqs = state.materialRequests || [];
+                const pendingReq = reqs.find(r => r.estado === 'pendiente_aprobacion');
+                if (pendingReq) {
+                    pendingReq.estado = 'rechazada';
+                    pendingReq.updatedAt = new Date().toISOString();
+                    botReply = `❌ *Pedido de Material Rechazado*\n\nSe desestimó la solicitud de ${pendingReq.solicitante}. Quedó asentado en el panel de Control de Costos.`;
+                } else {
+                    botReply = `📦 *Pedidos de Materiales*\n\nNo hay pedidos pendientes para rechazar.`;
+                }
+            } else if (
+                (normalBody.includes('falta ') || normalBody.includes('faltan ') || normalBody.includes('necesitamos ') || normalBody.includes('pedido de material') || normalBody.includes('pedido material') || normalBody.includes('traer ')) &&
+                !isDirector
+            ) {
+                // Natural Language Material Request from Field Worker
+                const newReq = {
+                    id: `mat-req-${crypto.randomUUID().substring(0, 8)}`,
+                    obraId: state.activeProjectId,
+                    solicitante: senderName,
+                    rol: senderRole,
+                    telefono: fromNumber,
+                    fecha: new Date().toISOString(),
+                    items: [{ descripcion: bodyText, cantidad: 1, unidad: 'solicitud' }],
+                    justificacion: `Pedido por WhatsApp: ${bodyText}`,
+                    urgencia: normalBody.includes('urgente') ? 'alta' : 'media',
+                    estado: 'pendiente_aprobacion',
+                    aprobadaPor: null,
+                    fechaAprobacion: null,
+                    proveedorAsignado: null,
+                    nroOrdenCompra: null
+                };
+                state.materialRequests = state.materialRequests || [];
+                state.materialRequests.unshift(newReq);
+
+                botReply = `📦 *Pedido de Material Registrado*\n\nHola *${senderName}*. Tu solicitud fue enviada a la Dirección de Obra (Arq. Victoria / Arq. Marcelo) para su aprobación:\n• *Detalle:* ${bodyText}\n• *Urgencia:* ${newReq.urgencia.toUpperCase()}\n• *Estado:* Pendiente de Aprobación ⏳\n\nTe notificaremos por WhatsApp en cuanto sea aprobada la Orden de Compra.`;
+
+                feedIncident = {
+                    id: "inc-mat-req-" + Date.now(),
+                    title: "Solicitud de Materiales de Campo",
+                    description: `${senderName} solicitó: "${bodyText}". Pendiente de aprobación de Dirección.`,
+                    type: "warning",
+                    badge: "Faltante",
+                    timestamp: `Hoy, ${timeStr}`,
+                    reporter: senderName,
+                    icon: "fa-solid fa-boxes-stacked"
+                };
+                showInFeed = true;
+            }
+
             // 👑 Arq. Marcelo (Director de Obra) Executive Handling
-            if (isDirector) {
+            else if (isDirector) {
                 // 1️⃣ Supervisión de Cuadrilla & KYC
                 if (normalBody === '1' || normalBody.includes('cuadrilla') || normalBody.includes('supervision') || normalBody.includes('kyc') || normalBody.includes('personal') || normalBody.includes('operarios')) {
                     const activeWorkers = Object.keys(state.attendance || {}).map(wName => {

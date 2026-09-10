@@ -38,9 +38,10 @@ yarn-error.log*
 
 # vercel
 .vercel
-
 # typescript
 *.tsbuildinfo
 next-env.d.ts
 
-.vercel
+nexID_*
+data/*backup*.json
+scratch/downloads_whatsapp/

@@ -1,6 +1,19 @@
 import { getAppState, saveAppState } from '@/lib/db';
 import { sendWhatsAppMessage, sendWhatsAppTemplate, sendWhatsAppInteractive } from '@/lib/whatsappNotifications';
-import { buildDirectorListMessage, buildVictoriaListMessage, buildWorkerListMessage, buildCirsocApprovalButtons, buildRemitoConfirmButtons, buildPayslipNotificationButtons } from '@/lib/metaTemplates';
+import { 
+    buildDirectorListMessage, 
+    buildVictoriaListMessage, 
+    buildWorkerListMessage, 
+    buildCirsocApprovalButtons, 
+    buildRemitoConfirmButtons, 
+    buildPayslipNotificationButtons,
+    buildCitaReminderMessage,
+    buildMaterialAprobadoMessage,
+    buildEodReportRequest,
+    buildWeatherAlertMessage,
+    buildInspectionApprovalButtons,
+    buildArtExpirationAlert
+} from '@/lib/metaTemplates';
 import { generateWebviewToken } from '@/lib/auth';
 import { appendAuditTransaction } from '@/lib/auditLedger';
 
@@ -178,6 +191,41 @@ export async function POST(request) {
             const dateStr = new Date().toLocaleDateString('es-AR');
             messageBody = `🏗️ *RESUMEN DIARIO DE OBRA — ${projName}*\n📅 ${dateStr}\n\n👷 Presentismo: *4/5 operarios* (80%)\n🔨 Avance Global: *${state.avancePercentage || 24}%*\n💰 Caja Chica Hoy: *$18.500 ARS*\n🚨 Incidencias Activas: *${state.alertsCount || 1}*\n\n_ObraSaaS Engine_`;
             dispatchResult = await sendWhatsAppMessage(cleanTo, messageBody);
+        } else if (messageType === 'cita_reminder') {
+            const appt = (state.calendarAppointments || [])[0] || {
+                title: 'Visita de Inspección Estructural & Seguridad',
+                fecha: '2026-09-15',
+                hora: '10:00',
+                tipo: 'Inspección',
+                participantes: ['Arq. Victoria', 'Marcelo Guillén', 'Ing. Carlos Méndez'],
+                notas: 'Verificar armadura de vigas y columnas previa a hormigonado.'
+            };
+            const metaPayload = buildCitaReminderMessage(cleanTo, appt);
+            dispatchResult = await sendWhatsAppMessage(cleanTo, metaPayload);
+        } else if (messageType === 'material_approved') {
+            const req = (state.materialRequests || [])[0] || {
+                solicitante: 'Juan Zapata',
+                rol: 'Capataz de Obra',
+                nroOrdenCompra: 'OC-2026-8812',
+                proveedorAsignado: 'Corralón Palermo S.A.',
+                aprobadaPor: 'Marcelo Guillén (Director)',
+                items: [{ cantidad: 50, unidad: 'bolsas', descripcion: 'Cemento Loma Negra CPC 40' }]
+            };
+            const metaPayload = buildMaterialAprobadoMessage(cleanTo, req);
+            dispatchResult = await sendWhatsAppMessage(cleanTo, metaPayload);
+        } else if (messageType === 'eod_report_request') {
+            const workerName = customText || 'Juan Gómez';
+            const metaPayload = buildEodReportRequest(cleanTo, workerName, state.projectConfig?.name);
+            dispatchResult = await sendWhatsAppMessage(cleanTo, metaPayload);
+        } else if (messageType === 'weather_alert') {
+            const metaPayload = buildWeatherAlertMessage(cleanTo, state.projectConfig?.name || 'Torre Palermo Soho', 'Lluvia intensa prevista (35mm)', 'Suspender colado de hormigón y tareas en cubierta exterior.');
+            dispatchResult = await sendWhatsAppMessage(cleanTo, metaPayload);
+        } else if (messageType === 'art_alert') {
+            const metaPayload = buildArtExpirationAlert(cleanTo, 'Carlos Pérez', 'La Segunda ART', '2026-09-18', 3);
+            dispatchResult = await sendWhatsAppMessage(cleanTo, metaPayload);
+        } else if (messageType === 'inspection_approval') {
+            const metaPayload = buildInspectionApprovalButtons(cleanTo, 'Seguridad e Higiene (Dec. 911/96)', state.projectConfig?.name || 'Torre Palermo Soho', 'Ing. Carlos Méndez', 94, [{ desc: 'Falta arnés en operario de cubierta', note: 'Corregir en 24hs' }]);
+            dispatchResult = await sendWhatsAppMessage(cleanTo, metaPayload);
         } else {
             messageBody = customText || 'Mensaje de prueba enviado desde ObraSaaS Hub.';
             dispatchResult = await sendWhatsAppMessage(cleanTo, messageBody);

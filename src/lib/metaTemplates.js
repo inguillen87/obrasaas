@@ -365,3 +365,58 @@ export function buildLibroObraConfirmation(targetNumber, entry) {
         ]
     );
 }
+
+// Sprint Sep 2026 — Cita Reminder Template
+export function buildCitaReminderMessage(targetNumber, appointment) {
+    const { title, fecha, hora, tipo, participantes, notas } = appointment;
+    return buildActionButtonsMessage(
+        `📅 *Recordatorio de Cita — ObraSaaS*\n\n` +
+        `*${title}*\n` +
+        `📆 Fecha: ${fecha}\n` +
+        `🕐 Hora: ${hora}\n` +
+        `📋 Tipo: ${tipo}\n` +
+        `👥 Participantes: ${(participantes || []).join(', ')}\n` +
+        `${notas ? `📝 ${notas}` : ''}\n\n` +
+        `_¿Confirmás tu asistencia a esta cita de obra?_`,
+        targetNumber,
+        [
+            { id: 'cita_confirm', title: '✅ Confirmo Cita' },
+            { id: 'cita_reschedule', title: '🔄 Reprogramar' }
+        ]
+    );
+}
+
+// Sprint Sep 2026 — Material Request Approved Notification
+export function buildMaterialAprobadoMessage(targetNumber, request) {
+    const itemsSummary = (request.items || []).map(i => `• ${i.cantidad} ${i.unidad} — ${i.descripcion}`).join('\n');
+    return buildActionButtonsMessage(
+        `✅ *Pedido de Material Aprobado*\n\n` +
+        `*Solicitante:* ${request.solicitante} (${request.rol})\n` +
+        `*Nro. OC:* ${request.nroOrdenCompra || 'Pendiente'}\n` +
+        `*Proveedor:* ${request.proveedorAsignado || 'Por asignar'}\n\n` +
+        `*Materiales:*\n${itemsSummary}\n\n` +
+        `*Aprobado por:* ${request.aprobadaPor}\n` +
+        `_El pedido será despachado al corralón/proveedor asignado._`,
+        targetNumber,
+        [
+            { id: 'mat_track', title: '📦 Ver Estado' },
+            { id: 'mat_contact', title: '📞 Contactar Prov.' }
+        ]
+    );
+}
+
+// Sprint Sep 2026 — End-of-Day Photo Report Request
+export function buildEodReportRequest(targetNumber, workerName, projectName = 'Obra Activa') {
+    return {
+        messaging_product: 'whatsapp',
+        to: targetNumber,
+        type: 'text',
+        text: {
+            body: `📸 *Reporte Diario de Avance — 17:00 hs*\n\n` +
+                `Hola ${workerName}, es hora del cierre de jornada en *${projectName}*.\n\n` +
+                `Por favor enviá *una foto del sector donde trabajaste hoy* para registrar el avance físico en el Libro de Obra Digital.\n\n` +
+                `📌 La foto quedará documentada con fecha, hora y geolocalización automática.\n\n` +
+                `_ObraSaaS — Registro Diario Automatizado_`
+        }
+    };
+}

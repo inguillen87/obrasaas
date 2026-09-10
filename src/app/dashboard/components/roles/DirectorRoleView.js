@@ -103,11 +103,25 @@ export default function DirectorRoleView({
             <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>QA/QC + RFIs</div>
           </div>
         </Link>
+        <Link href="/calendario" style={{ textDecoration: 'none' }}>
+          <div className="glass-panel-premium dashboard-card-hover" style={{ padding: '14px 16px', cursor: 'pointer', borderLeft: '3px solid #38bdf8', transition: 'all 0.2s' }}>
+            <div style={{ fontSize: '1.2rem', marginBottom: '4px' }}>📅</div>
+            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#fff' }}>Calendario Citas</div>
+            <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>WhatsApp 24h/48h</div>
+          </div>
+        </Link>
+        <Link href="/coordinacion" style={{ textDecoration: 'none' }}>
+          <div className="glass-panel-premium dashboard-card-hover" style={{ padding: '14px 16px', cursor: 'pointer', borderLeft: '3px solid #f43f5e', transition: 'all 0.2s' }}>
+            <div style={{ fontSize: '1.2rem', marginBottom: '4px' }}>📸</div>
+            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#fff' }}>Coordinación & Markup</div>
+            <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>Alertas Visuales</div>
+          </div>
+        </Link>
         <Link href="/costos" style={{ textDecoration: 'none' }}>
           <div className="glass-panel-premium dashboard-card-hover" style={{ padding: '14px 16px', cursor: 'pointer', borderLeft: '3px solid #06b6d4', transition: 'all 0.2s' }}>
             <div style={{ fontSize: '1.2rem', marginBottom: '4px' }}>💰</div>
-            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#fff' }}>Costos & Adicionales</div>
-            <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>Change Orders CAC</div>
+            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#fff' }}>Costos & Materiales</div>
+            <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>Aprobación Compras</div>
           </div>
         </Link>
       </div>
@@ -143,6 +157,103 @@ export default function DirectorRoleView({
             <span className="stat-value">{state.alertsCount || 0}</span>
             <span className="stat-label">Desvíos & Alertas</span>
           </div>
+        </div>
+      </div>
+
+      {/* Sprint Victoria & Marcelo: Eficiencia Operativa Widgets */}
+      <div style={{ marginBottom: '24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '0.72rem', fontWeight: 800, padding: '3px 8px', borderRadius: '6px', background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', textTransform: 'uppercase' }}>
+              ⚡ Sprint Eficiencia Operativa
+            </span>
+            <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#f8fafc' }}>
+              Acuerdos Reunión Victoria & Marcelo
+            </span>
+          </div>
+          <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+            WhatsApp Meta Cloud API • Geocerca {state.geofenceSettings?.radiusMeters || 50}m
+          </span>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '14px' }}>
+          {/* Widget 1: Calendario & Próxima Cita */}
+          <Link href="/calendario" style={{ textDecoration: 'none' }}>
+            <div className="glass-panel-premium dashboard-card-hover" style={{ padding: '16px', borderLeft: '4px solid #38bdf8', height: '100%' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 600 }}>📅 Próxima Cita de Obra</span>
+                <span className="badge" style={{ background: 'rgba(56, 189, 248, 0.2)', color: '#38bdf8', fontSize: '0.7rem' }}>
+                  {(state.calendarAppointments || []).filter(a => a.estado === 'programada').length} pendientes
+                </span>
+              </div>
+              <div style={{ fontSize: '0.92rem', fontWeight: 700, color: '#f8fafc', marginBottom: '4px' }}>
+                {(state.calendarAppointments || [])[0]?.title || 'Sin citas programadas'}
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span><i className="fa-regular fa-calendar"></i> {(state.calendarAppointments || [])[0]?.fecha || '—'}</span>
+                <span><i className="fa-regular fa-clock"></i> {(state.calendarAppointments || [])[0]?.hora || '—'} hs</span>
+              </div>
+            </div>
+          </Link>
+
+          {/* Widget 2: Curva S & EVM */}
+          <Link href="/cronograma" style={{ textDecoration: 'none' }}>
+            <div className="glass-panel-premium dashboard-card-hover" style={{ padding: '16px', borderLeft: '4px solid #10b981', height: '100%' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 600 }}>📈 Curva S & Correlación</span>
+                <span className="badge" style={{ background: 'rgba(16, 185, 129, 0.2)', color: '#10b981', fontSize: '0.7rem' }}>
+                  EVM Live
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '4px' }}>
+                <span style={{ fontSize: '1.2rem', fontWeight: 800, color: '#10b981' }}>
+                  {((state.curvaS || [])[(state.curvaS || []).length - 1]?.avanceRealPct || state.avancePercentage || 42)}%
+                </span>
+                <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                  real vs {((state.curvaS || [])[(state.curvaS || []).length - 1]?.avancePlanificadoPct || 50)}% plan
+                </span>
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                Hito: {((state.curvaS || [])[(state.curvaS || []).length - 1]?.hitoClave || 'Seguimiento de tareas')}
+              </div>
+            </div>
+          </Link>
+
+          {/* Widget 3: Pedidos de Materiales de Campo */}
+          <Link href="/costos" style={{ textDecoration: 'none' }}>
+            <div className="glass-panel-premium dashboard-card-hover" style={{ padding: '16px', borderLeft: '4px solid #f59e0b', height: '100%' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 600 }}>📦 Pedidos de Campo</span>
+                <span className="badge" style={{ background: (state.materialRequests || []).filter(r => r.estado === 'pendiente_aprobacion').length > 0 ? 'rgba(245, 158, 11, 0.25)' : 'rgba(148, 163, 184, 0.2)', color: (state.materialRequests || []).filter(r => r.estado === 'pendiente_aprobacion').length > 0 ? '#fbbf24' : '#94a3b8', fontSize: '0.7rem' }}>
+                  {(state.materialRequests || []).filter(r => r.estado === 'pendiente_aprobacion').length} para aprobar
+                </span>
+              </div>
+              <div style={{ fontSize: '0.92rem', fontWeight: 700, color: '#f8fafc', marginBottom: '4px' }}>
+                {(state.materialRequests || [])[0]?.items?.[0]?.descripcion || 'Sin faltantes reportados'}
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                Solicitó: {(state.materialRequests || [])[0]?.solicitante || 'Cuadrilla'} • Click para aprobar OC
+              </div>
+            </div>
+          </Link>
+
+          {/* Widget 4: Higiene y Seguridad */}
+          <Link href="/libro-obra" style={{ textDecoration: 'none' }}>
+            <div className="glass-panel-premium dashboard-card-hover" style={{ padding: '16px', borderLeft: '4px solid #a855f7', height: '100%' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 600 }}>🦺 Higiene & Seguridad</span>
+                <span className="badge" style={{ background: 'rgba(168, 85, 247, 0.2)', color: '#c084fc', fontSize: '0.7rem' }}>
+                  Ley 22.250
+                </span>
+              </div>
+              <div style={{ fontSize: '0.92rem', fontWeight: 700, color: '#f8fafc', marginBottom: '4px' }}>
+                {(state.actasHyS || [])[0]?.tipo || 'Checklist EPP'} — {(state.actasHyS || [])[0]?.eppCumplimientoPct || 100}% EPP
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                Inspector: {(state.actasHyS || [])[0]?.inspectorHyS || 'Lic. H&S'} ({(state.actasHyS || []).length} actas registradas)
+              </div>
+            </div>
+          </Link>
         </div>
       </div>
 

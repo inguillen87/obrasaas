@@ -26,6 +26,12 @@ export default function CostosPage() {
     });
     const [sseConnected, setSseConnected] = useState(false);
 
+    const [materialRequests, setMaterialRequests] = useState([]);
+    const [matStats, setMatStats] = useState({ total: 0, pendientes: 0, aprobadas: 0, despachadas: 0, rechazadas: 0, urgentesAlta: 0 });
+    const [budgetImpact, setBudgetImpact] = useState({ totalPresupuesto: 0, totalEjecutado: 0, saldoDisponible: 0 });
+    const [matSuppliers, setMatSuppliers] = useState([]);
+    const [showMatTab, setShowMatTab] = useState(false);
+
     const fetchBudgetData = () => {
         Promise.all([
             fetch('/api/v1/budget', { headers: { 'x-api-key': typeof window !== 'undefined' ? localStorage.getItem('obrasaas_admin_key') || 'internal' : 'internal' } }).then(r => r.json()),
@@ -40,6 +46,34 @@ export default function CostosPage() {
     useEffect(() => {
         fetchBudgetData();
     }, []);
+
+    useEffect(() => {
+        fetch('/api/v1/materiales').then(r => r.json()).then(data => {
+            if (data.success) {
+                setMaterialRequests(data.requests || []);
+                setMatStats(data.stats || {});
+                setBudgetImpact(data.budgetImpact || {});
+                setMatSuppliers(data.suppliers || []);
+            }
+        }).catch(() => {});
+    }, []);
+
+    const handleMaterialAction = async (id, estado, aprobadaPor = 'Arq. Victoria') => {
+        try {
+            const res = await fetch('/api/v1/materiales', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id, estado, aprobadaPor })
+            });
+            const data = await res.json();
+            if (data.success) {
+                setMaterialRequests(prev => prev.map(r => r.id === id ? data.request : r));
+                fetch('/api/v1/materiales').then(r => r.json()).then(d => {
+                    if (d.success) { setMatStats(d.stats); setBudgetImpact(d.budgetImpact); }
+                });
+            }
+        } catch (e) { console.error(e); }
+    };
 
     // SSE Real-Time Updates
     useEffect(() => {
@@ -153,6 +187,9 @@ export default function CostosPage() {
                         <Button variant="primary" size="sm" icon="+" onClick={() => setShowAddExpense(true)}>
                             Registrar Gasto
                         </Button>
+                        <Button variant="secondary" size="sm" onClick={() => setShowMatTab(!showMatTab)} icon="📦">
+                            {showMatTab ? 'Ocultar Materiales' : 'Ver Materiales'}
+                        </Button>
                     </div>
                 }
             />
@@ -212,6 +249,27 @@ export default function CostosPage() {
                         }}
                     >
                         🧾 Remitos & Acopios Fiscales (AFIP)
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('materiales')}
+                        style={{
+                            padding: '8px 16px',
+                            borderRadius: '10px',
+                            background: activeTab === 'materiales' ? '#f59e0b' : 'rgba(15, 23, 42, 0.6)',
+                            color: activeTab === 'materiales' ? '#060913' : '#94a3b8',
+                            border: '1px solid rgba(255,255,255,0.08)',
+                            fontSize: '0.84rem',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                        }}
+                    >
+                        📦 Pedidos de Campo & Suministros
+                        {matStats.pendientes > 0 && (
+                            <Badge color="#f59e0b" variant="filled" size="xs">{matStats.pendientes}</Badge>
+                        )}
                     </button>
                 </div>
 
@@ -523,6 +581,93 @@ export default function CostosPage() {
                                     Acreditado en Pañol (Stock Actualizado)
                                 </Button>
                             </div>
+                        </div>
+                    </GlassCard>
+                )}
+
+                {/* TAB 4: PEDIDOS DE CAMPO & SUMINISTROS */}
+                {activeTab === 'materiales' && (
+                    <GlassCard style={{ padding: '24px' }}>
+                        <h3 style={{ fontSize: '1.2rem', fontWeight: 800, marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            📦 Pedidos de Campo & Cadena de Suministro
+                        </h3>
+                        
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px', marginBottom: '24px' }}>
+                            <StatCard label="Pendientes" value={matStats?.pendientes || 0} icon="⏳" color={tokens.colors.accent.warning} />
+                            <StatCard label="Aprobadas" value={matStats?.aprobadas || 0} icon="✅" color={tokens.colors.accent.success} />
+                            <StatCard label="Despachadas" value={matStats?.despachadas || 0} icon="🚚" color={tokens.colors.accent.info} />
+                            <StatCard label="Urgentes Alta" value={matStats?.urgentesAlta || 0} icon="🚨" color={tokens.colors.accent.danger} />
+                        </div>
+
+                        <div style={{ background: 'rgba(15, 23, 42, 0.4)', borderRadius: tokens.radius.lg, padding: '20px', marginBottom: '24px', border: `1px solid ${tokens.colors.border.subtle}` }}>
+                            <h4 style={{ fontSize: '0.9rem', marginBottom: '16px', color: tokens.colors.text.secondary }}>Impacto en Presupuesto</h4>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '0.85rem' }}>
+                                <span>Presupuesto: ${budgetImpact?.totalPresupuesto?.toLocaleString('es-AR') || 0}</span>
+                                <span>Ejecutado: ${budgetImpact?.totalEjecutado?.toLocaleString('es-AR') || 0}</span>
+                                <span style={{ color: tokens.colors.accent.success }}>Saldo: ${budgetImpact?.saldoDisponible?.toLocaleString('es-AR') || 0}</span>
+                            </div>
+                            <ProgressBar value={budgetImpact?.totalPresupuesto ? (budgetImpact.totalEjecutado / budgetImpact.totalPresupuesto) * 100 : 0} height={12} color={tokens.colors.accent.primary} />
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                            {materialRequests.map(req => (
+                                <GlassCard key={req.id} style={{ padding: '20px' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
+                                        <div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                                                <span style={{ fontWeight: 700, fontSize: '1.1rem' }}>
+                                                    {typeof req.solicitante === 'object' ? req.solicitante?.nombre : (req.solicitante || 'Operario de Obra')}
+                                                </span>
+                                                <Badge color={tokens.colors.accent.secondary} variant="outline">
+                                                    {typeof req.solicitante === 'object' ? req.solicitante?.rol : (req.rol || 'Campo')}
+                                                </Badge>
+                                                <Badge 
+                                                    color={req.urgencia === 'alta' ? tokens.colors.accent.danger : req.urgencia === 'media' ? tokens.colors.accent.warning : tokens.colors.accent.success} 
+                                                    variant="filled"
+                                                >
+                                                    Urgencia: {req.urgencia}
+                                                </Badge>
+                                                <Badge color={tokens.colors.accent.info} variant="filled">{req.estado}</Badge>
+                                            </div>
+                                            
+                                            <div style={{ marginBottom: '12px' }}>
+                                                <h5 style={{ fontSize: '0.85rem', color: tokens.colors.text.muted, marginBottom: '8px' }}>Ítems Solicitados:</h5>
+                                                <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '0.9rem', color: tokens.colors.text.secondary }}>
+                                                    {req.items?.map((item, idx) => (
+                                                        <li key={idx}>{item.cantidad} {item.unidad} - {item.descripcion || item.material}</li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+
+                                            <div>
+                                                <h5 style={{ fontSize: '0.85rem', color: tokens.colors.text.muted, marginBottom: '4px' }}>Justificación:</h5>
+                                                <p style={{ fontSize: '0.9rem', color: tokens.colors.text.secondary, margin: 0 }}>{req.justificacion}</p>
+                                            </div>
+
+                                            {req.estado === 'aprobada' && (
+                                                <div style={{ marginTop: '12px', padding: '12px', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+                                                    <div style={{ fontSize: '0.85rem', color: tokens.colors.accent.success }}>
+                                                        <strong>Proveedor Asignado:</strong> {req.proveedorAsignado} | <strong>OC:</strong> {req.nroOrdenCompra}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {req.estado === 'pendiente_aprobacion' && (
+                                            <div style={{ display: 'flex', gap: '8px' }}>
+                                                <Button variant="primary" size="sm" onClick={() => handleMaterialAction(req.id, 'aprobada')}>✅ Aprobar</Button>
+                                                <Button variant="secondary" size="sm" onClick={() => {}}>✏️ Ajustar</Button>
+                                                <Button variant="secondary" size="sm" onClick={() => handleMaterialAction(req.id, 'rechazada')}>❌ Rechazar</Button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </GlassCard>
+                            ))}
+                            {materialRequests.length === 0 && (
+                                <div style={{ textAlign: 'center', padding: '40px', color: tokens.colors.text.muted }}>
+                                    No hay pedidos de materiales registrados.
+                                </div>
+                            )}
                         </div>
                     </GlassCard>
                 )}

@@ -134,7 +134,8 @@ export function GlassCard({ children, style, hover = true, glow = false, delay =
 }
 
 // KPI Metric Stat Card with accent glow line
-export function StatCard({ label, value, sub, icon, color = tokens.colors.accent.primary, trend, delay = 0, onClick }) {
+export function StatCard({ label, title, value, sub, icon, color = tokens.colors.accent.primary, trend, delay = 0, onClick }) {
+  const displayLabel = label || title;
   return (
     <motion.div
       variants={staggerItem}
@@ -168,7 +169,7 @@ export function StatCard({ label, value, sub, icon, color = tokens.colors.accent
       
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
         <span style={{ color: tokens.colors.text.muted, fontSize: '0.75rem', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-          {label}
+          {displayLabel}
         </span>
         {icon && (
           <span style={{ 

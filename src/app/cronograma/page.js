@@ -48,6 +48,9 @@ export default function CronogramaPage() {
   const [selectedTask, setSelectedTask] = useState(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [rainDaysSim, setRainDaysSim] = useState(0);
+  const [curvaS, setCurvaS] = useState([]);
+  const [ganttFiles, setGanttFiles] = useState([]);
+  const [isDragging, setIsDragging] = useState(false);
   const [exportToast, setExportToast] = useState(false);
   
   // New task form state
@@ -140,6 +143,16 @@ export default function CronogramaPage() {
       } catch (e) {}
     };
     return () => es.close();
+  }, []);
+
+  useEffect(() => {
+    fetch('/api/state')
+      .then(r => r.json())
+      .then(data => {
+        if (data?.curvaS) setCurvaS(data.curvaS);
+        if (data?.ganttExternalFiles) setGanttFiles(data.ganttExternalFiles);
+      })
+      .catch(() => {});
   }, []);
 
   // Chart dimensions
@@ -298,7 +311,7 @@ export default function CronogramaPage() {
         <GlassCard style={{ padding: '16px 24px', display: 'flex', flexWrap: 'wrap', gap: '20px', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
             <div style={{ display: 'flex', gap: '8px', background: tokens.colors.bg.elevated, padding: '4px', borderRadius: tokens.radius.md }}>
-              {['Gantt Completo', 'Lookahead 4 Semanas', 'Ruta Crítica'].map(mode => (
+              {['Gantt Completo', 'Lookahead 4 Semanas', 'Ruta Crítica', 'Curva S'].map(mode => (
                 <button
                   key={mode}
                   onClick={() => setViewMode(mode)}
@@ -791,6 +804,165 @@ export default function CronogramaPage() {
           <span style={{ fontWeight: '600', color: tokens.colors.accent.primary }}>Semana 18</span>
         </div>
       </div>
+
+      {viewMode === 'Curva S' && (
+        <div style={{ position: 'absolute', top: '160px', left: 0, right: 0, padding: '0 32px', zIndex: 40, background: tokens.colors.bg.primary, paddingBottom: '120px' }}>
+          <div style={{ maxWidth: '1440px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          {(() => {
+            const latest = curvaS.length ? curvaS[curvaS.length - 1] : { costoPlanificadoARS: 0, avanceRealPct: 0, costoRealARS: 0 };
+            const pv = latest.costoPlanificadoARS || 0;
+            const ev = ((latest.avanceRealPct || 0) / 100) * 4995000;
+            const ac = latest.costoRealARS || 0;
+            const spi = pv ? (ev / pv).toFixed(2) : '1.00';
+            const cpi = ac ? (ev / ac).toFixed(2) : '1.00';
+
+            const chartW = 800;
+            const chartH = 400;
+            const padL = 60, padR = 20, padT = 20, padB = 40;
+            const plotW = chartW - padL - padR;
+            const plotH = chartH - padT - padB;
+
+            const pathPlan = curvaS.map((p, i) => {
+              const x = padL + (i / Math.max(1, curvaS.length - 1)) * plotW;
+              const y = padT + plotH - ((p.avancePlanificadoPct || 0) / 100) * plotH;
+              return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
+            }).join(' ');
+
+            const pathReal = curvaS.map((p, i) => {
+              const x = padL + (i / Math.max(1, curvaS.length - 1)) * plotW;
+              const y = padT + plotH - ((p.avanceRealPct || 0) / 100) * plotH;
+              return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
+            }).join(' ');
+            
+            let pathArea = '';
+            if (curvaS.length > 0) {
+              const reversePlan = [...curvaS].reverse().map((p, idx) => {
+                const i = curvaS.length - 1 - idx;
+                const x = padL + (i / Math.max(1, curvaS.length - 1)) * plotW;
+                const y = padT + plotH - ((p.avancePlanificadoPct || 0) / 100) * plotH;
+                return `L ${x} ${y}`;
+              }).join(' ');
+              pathArea = `${pathReal} ${reversePlan} Z`;
+            }
+
+            return (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+                  <StatCard title="PV (Costo Planificado)" value={`$${pv.toLocaleString('es-AR')}`} icon="📈" />
+                  <StatCard title="EV (Valor Ganado)" value={`$${ev.toLocaleString('es-AR', { maximumFractionDigits: 0 })}`} icon="🏆" />
+                  <StatCard title="AC (Costo Real)" value={`$${ac.toLocaleString('es-AR')}`} icon="💰" />
+                  <StatCard title="SPI / CPI (Rendimiento)" value={`${spi} / ${cpi}`} icon="📊" 
+                    trend={spi >= 1 && cpi >= 1 ? 'positive' : 'negative'}
+                    trendValue={spi >= 1 && cpi >= 1 ? 'Óptimo' : 'Desvío'}
+                  />
+                </div>
+
+                <GlassCard style={{ padding: '24px' }}>
+                  <h3 style={{ marginBottom: '16px', color: tokens.colors.text.primary }}>Curva S - Avance Físico (%)</h3>
+                  <div style={{ width: '100%', overflowX: 'auto' }}>
+                    <svg viewBox={`0 0 ${chartW} ${chartH}`} style={{ minWidth: '600px', width: '100%', height: 'auto', background: tokens.colors.bg.elevated, borderRadius: tokens.radius.md }}>
+                      <line x1={padL} y1={padT} x2={padL} y2={padT + plotH} stroke={tokens.colors.border.default} />
+                      <line x1={padL} y1={padT + plotH} x2={padL + plotW} y2={padT + plotH} stroke={tokens.colors.border.default} />
+                      
+                      {[0, 25, 50, 75, 100].map(val => (
+                        <g key={val}>
+                          <text x={padL - 10} y={padT + plotH - (val/100)*plotH + 4} fill={tokens.colors.text.muted} fontSize="12" textAnchor="end">{val}%</text>
+                          <line x1={padL} y1={padT + plotH - (val/100)*plotH} x2={padL + plotW} y2={padT + plotH - (val/100)*plotH} stroke={tokens.colors.border.subtle} strokeDasharray="4 4" />
+                        </g>
+                      ))}
+
+                      {curvaS.map((p, i) => {
+                        const x = padL + (i / Math.max(1, curvaS.length - 1)) * plotW;
+                        return (
+                          <text key={i} x={x} y={padT + plotH + 20} fill={tokens.colors.text.muted} fontSize="12" textAnchor="middle">S{p.semana}</text>
+                        );
+                      })}
+
+                      {pathArea && <path d={pathArea} fill="rgba(239, 68, 68, 0.2)" />}
+                      {pathPlan && <path d={pathPlan} fill="none" stroke={tokens.colors.accent.primary} strokeWidth="3" strokeDasharray="6 6" />}
+                      {pathReal && <path d={pathReal} fill="none" stroke={tokens.colors.accent.success} strokeWidth="3" />}
+
+                      {curvaS.map((p, i) => {
+                        const x = padL + (i / Math.max(1, curvaS.length - 1)) * plotW;
+                        const yPlan = padT + plotH - ((p.avancePlanificadoPct || 0) / 100) * plotH;
+                        const yReal = padT + plotH - ((p.avanceRealPct || 0) / 100) * plotH;
+                        return (
+                          <g key={i}>
+                            <circle cx={x} cy={yPlan} r="4" fill={tokens.colors.bg.primary} stroke={tokens.colors.accent.primary} strokeWidth="2" />
+                            <circle cx={x} cy={yReal} r="4" fill={tokens.colors.bg.primary} stroke={tokens.colors.accent.success} strokeWidth="2" />
+                          </g>
+                        );
+                      })}
+                    </svg>
+                  </div>
+                  <div style={{ display: 'flex', gap: '24px', justifyContent: 'center', marginTop: '16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div style={{ width: '20px', height: '3px', borderTop: `3px dashed ${tokens.colors.accent.primary}` }} />
+                      <span style={{ fontSize: '13px', color: tokens.colors.text.secondary }}>Avance Programado (Baseline)</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div style={{ width: '20px', height: '3px', background: tokens.colors.accent.success }} />
+                      <span style={{ fontSize: '13px', color: tokens.colors.text.secondary }}>Avance Real (Ejecutado)</span>
+                    </div>
+                  </div>
+                </GlassCard>
+
+                <GlassCard style={{ padding: '24px' }}>
+                  <h3 style={{ marginBottom: '16px', color: tokens.colors.text.primary }}>Gestor de Archivos Gantt (PDF/Imágenes)</h3>
+                  
+                  <div 
+                    onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
+                    onDragLeave={() => setIsDragging(false)}
+                    onDrop={e => { e.preventDefault(); setIsDragging(false); }}
+                    style={{
+                      border: `2px dashed ${isDragging ? tokens.colors.accent.primary : tokens.colors.border.strong}`,
+                      background: isDragging ? 'rgba(56, 189, 248, 0.05)' : tokens.colors.bg.elevated,
+                      padding: '40px 20px',
+                      borderRadius: tokens.radius.md,
+                      textAlign: 'center',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      marginBottom: '24px'
+                    }}
+                  >
+                    <div style={{ fontSize: '32px', marginBottom: '12px' }}>📁</div>
+                    <div style={{ fontWeight: '600', color: tokens.colors.text.primary, marginBottom: '8px' }}>
+                      Arrastra y suelta tu archivo exportado de MS Project o Primavera P6
+                    </div>
+                    <div style={{ fontSize: '13px', color: tokens.colors.text.muted }}>
+                      Soporta PDF, PNG, JPG (Max 10MB)
+                    </div>
+                  </div>
+
+                  {ganttFiles.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <h4 style={{ fontSize: '14px', color: tokens.colors.text.secondary, marginBottom: '4px' }}>Archivos Subidos</h4>
+                      {ganttFiles.map((file, i) => (
+                        <div key={i} style={{ 
+                          display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
+                          padding: '12px 16px', background: tokens.colors.bg.elevated, 
+                          borderRadius: tokens.radius.sm, border: `1px solid ${tokens.colors.border.subtle}`
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <span style={{ fontSize: '20px' }}>📄</span>
+                            <div>
+                              <div style={{ fontSize: '14px', fontWeight: '500', color: tokens.colors.text.primary }}>{file.name}</div>
+                              <div style={{ fontSize: '12px', color: tokens.colors.text.muted }}>Subido el {new Date(file.uploadDate).toLocaleDateString()}</div>
+                            </div>
+                          </div>
+                          <Badge color="success">Analizado</Badge>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </GlassCard>
+              </>
+            );
+          })()}
+          </div>
+        </div>
+      )}
+
       {/* Add Task Modal */}
       {isAddModalOpen && (
         <Modal

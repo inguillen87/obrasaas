@@ -1,0 +1,930 @@
+// ObraSaaS — Baseline Seed & Fallback State Definitions
+// Extracted from database adapter to ensure clean Neon PostgreSQL cloud persistence
+
+const initialIncidents = [
+    {
+        id: "inc-1",
+        title: "Quiebre de Stock Crítico",
+        description: "Cemento Loma Negra por debajo del mínimo de seguridad (35 de 40 bolsas). Riesgo de detención de revoque grueso.",
+        type: "warning",
+        badge: "Stock Bajo",
+        timestamp: "Hoy, 08:30 AM",
+        reporter: "Control de Corralón",
+        icon: "fa-solid fa-triangle-exclamation"
+    },
+    {
+        id: "inc-2",
+        title: "Alerta de Geocerca (Desvío GPS)",
+        description: "El operario Carlos Pérez registró check-in satelital a 150m del radio de obra verificado (excede límite de 20m).",
+        type: "critical",
+        badge: "Desvío GPS",
+        timestamp: "Hoy, 07:50 AM",
+        reporter: "Geolocalización Satelital",
+        icon: "fa-solid fa-location-crosshairs"
+    },
+    {
+        id: "inc-3",
+        title: "Asistencia Registrada por Voz",
+        description: "Juan Gómez (Albañilería Principal) inició jornada. Biometría de voz validada con éxito.",
+        type: "success",
+        badge: "Presentismo",
+        timestamp: "Hoy, 08:02 AM",
+        reporter: "Asistente de Voz IA",
+        icon: "fa-solid fa-microphone"
+    },
+    {
+        id: "inc-4",
+        title: "Planificación Gantt Sincronizada",
+        description: "Línea base reajustada. Hito de finalización proyectado para el 15/Jul.",
+        type: "info",
+        badge: "Gantt",
+        timestamp: "Ayer, 06:15 PM",
+        reporter: "Supervisor IA",
+        icon: "fa-solid fa-chart-gantt"
+    }
+];
+
+export const defaultAppState = {
+    operariosCount: 1,
+    avancePercentage: 42,
+    alertsCount: 2,
+    diasEstimados: "Día 12/35",
+    currentQuincena: "Quincena 1 (01/Ago - 15/Ago)",
+    // Tenant Project Configuration & Geofence
+    activeProjectId: "obra-palermo-01",
+    projects: [
+        {
+            id: "obra-palermo-01",
+            name: "Torre Palermo Soho",
+            city: "Buenos Aires",
+            province: "CABA",
+            address: "Honduras 4850, Palermo, CABA",
+            latitude: -34.5886,
+            longitude: -58.4302,
+            geofenceRadiusMeters: 100,
+            expectedWorkersCount: 5,
+            climateZone: "Templado Húmedo (Pampeano)",
+            director: { name: "Arq. Marcelo", phone: "+54 9 261 316-8608" },
+            capataz: { name: "Luis Martínez", phone: "+54 9 11 8899-7766" }
+        },
+        {
+            id: "obra-mendoza-02",
+            name: "Complejo Chacras de Coria",
+            city: "Mendoza",
+            province: "Mendoza",
+            address: "Italia 5800, Chacras de Coria, Luján de Cuyo",
+            latitude: -32.9961,
+            longitude: -68.8778,
+            geofenceRadiusMeters: 150,
+            expectedWorkersCount: 8,
+            climateZone: "Árido Andino / Gran Amplitud Térmica",
+            director: { name: "Arq. Marcelo", phone: "+54 9 261 316-8608" },
+            capataz: { name: "Juan Gómez", phone: "+54 9 11 3241-9981" }
+        },
+        {
+            id: "obra-ushuaia-03",
+            name: "Edificio Fueguino Canal Beagle",
+            city: "Ushuaia",
+            province: "Tierra del Fuego",
+            address: "Av. Maipú 1200, Ushuaia",
+            latitude: -54.8019,
+            longitude: -68.3030,
+            geofenceRadiusMeters: 120,
+            expectedWorkersCount: 6,
+            climateZone: "Patagónico Frío / Riesgo Heladas",
+            director: { name: "Arq. Victoria", phone: "+54 9 2964 52-0753" },
+            capataz: { name: "Carlos Pérez", phone: "+54 9 11 3241-9982" }
+        },
+        {
+            id: "obra-cordoba-04",
+            name: "Torre Nueva Córdoba",
+            city: "Córdoba",
+            province: "Córdoba",
+            address: "Av. Vélez Sarsfield 1100, Nueva Córdoba",
+            latitude: -31.4201,
+            longitude: -64.1888,
+            geofenceRadiusMeters: 100,
+            expectedWorkersCount: 10,
+            climateZone: "Serrano / Templado Cálido",
+            director: { name: "Arq. Marcelo", phone: "+54 9 261 316-8608" },
+            capataz: { name: "Luis Martínez", phone: "+54 9 11 8899-7766" }
+        },
+        {
+            id: "obra-rosario-05",
+            name: "Puerto Norte Muelle",
+            city: "Rosario",
+            province: "Santa Fe",
+            address: "Av. Carballo 180, Puerto Norte, Rosario",
+            latitude: -32.9282,
+            longitude: -60.6653,
+            geofenceRadiusMeters: 110,
+            expectedWorkersCount: 7,
+            climateZone: "Ribereño Húmedo",
+            director: { name: "Arq. Victoria", phone: "+54 9 2964 52-0753" },
+            capataz: { name: "Juan Gómez", phone: "+54 9 11 3241-9981" }
+        }
+    ],
+    projectConfig: {
+        id: "obra-palermo-01",
+        name: "Torre Palermo Soho",
+        city: "Buenos Aires",
+        province: "CABA",
+        address: "Honduras 4850, Palermo, CABA",
+        latitude: -34.5886,
+        longitude: -58.4302,
+        geofenceRadiusMeters: 100,
+        expectedWorkersCount: 5,
+        climateZone: "Templado Húmedo (Pampeano)",
+        totalBudget: 4995000,
+        director: { name: "Arq. Marcelo", phone: "+54 9 261 316-8608" },
+        capataz: { name: "Luis Martínez", phone: "+54 9 11 8899-7766" },
+        directorPhone: "5492613168608",
+        techDirectorPhone: "5492964520753"
+    },
+    // Pending self-registration flows (keyed by phone number)
+    pendingRegistrations: {},
+    // Worker Registry & Trade Directory
+    workerRegistry: [
+        { id: "w-1", name: "Juan Gómez", role: "Albañilería Principal", trade: "Albañil Principal", phone: "+54 9 11 3241-9981", dni: "34.589.120", status: "Activo", assignedTasks: ["Revoque Grueso"] },
+        { id: "w-2", name: "Luis Martínez", role: "Instalaciones y Sanitarios", trade: "Plomero / Gasista", phone: "+54 9 11 8899-7766", dni: "31.204.850", status: "Activo", assignedTasks: ["Cañería y Descargas"] },
+        { id: "w-3", name: "Carlos Pérez", role: "Pintura e Interiores", trade: "Pintor / Revestimientos", phone: "+54 9 11 3241-9982", dni: "28.940.111", status: "Activo", assignedTasks: ["Revestimiento Cerámico", "Pintura"] },
+        { id: "w-4", name: "Arq. Marcelo", role: "Director de Obra", trade: "Arquitectura & Dirección", phone: "+54 9 261 316-8608", dni: "25.109.800", status: "Director", assignedTasks: ["Certificaciones Quincenales"] },
+        { id: "w-5", name: "Aberturas López", role: "Proveedor Externo", trade: "Carpintería de Aluminio", phone: "+54 9 11 5544-3322", dni: "CUIT 30-71458920-4", status: "Proveedor", assignedTasks: ["Entrega Aberturas Q2"] },
+        { id: "w-6", name: "Arq. Victoria", role: "Socia & Directora Técnica", trade: "Arquitectura & Dirección Técnica", phone: "+54 9 2964 52-0753", dni: "33.450.912", status: "Socia Directora", assignedTasks: ["Supervisión Técnica", "Certificaciones"] }
+    ],
+    // Tasks with Quincenas and Material Blockers (v2.0)
+    tasks: {
+        1: {
+            name: "Revoque Grueso",
+            progress: 80,
+            duration: 5,
+            startOffset: 0,
+            assignee: "Juan Gómez",
+            quincena: "Q1",
+            startDate: "2026-08-01",
+            endDate: "2026-08-06",
+            requiredMaterials: ["Cemento Loma Negra", "Arena Fina"],
+            materialStatus: "Disponible",
+            isBlocked: false,
+            supplierStatus: "Confirmado",
+            supplierName: "Loma Negra S.A."
+        },
+        2: {
+            name: "Cañería y Descargas",
+            progress: 20,
+            duration: 4,
+            startOffset: 28.5,
+            assignee: "Luis Martínez",
+            quincena: "Q1",
+            startDate: "2026-08-07",
+            endDate: "2026-08-11",
+            requiredMaterials: ["Caño PVC 110", "Codos y Ramales"],
+            materialStatus: "Disponible",
+            isBlocked: false,
+            supplierStatus: "Confirmado",
+            supplierName: "Sanitarios Palermo"
+        },
+        3: {
+            name: "Revestimiento Cerámico",
+            progress: 0,
+            duration: 4,
+            startOffset: 57.1,
+            assignee: "Carlos Pérez",
+            quincena: "Q2",
+            startDate: "2026-08-16",
+            endDate: "2026-08-20",
+            requiredMaterials: ["Cerámicas San Lorenzo", "Pegamento Klaukol"],
+            materialStatus: "Pendiente de Materiales",
+            isBlocked: true,
+            supplierStatus: "En Riesgo (Demora 48hs)",
+            supplierName: "Cerámicas San Lorenzo",
+            isShifted: false
+        },
+        4: {
+            name: "Pintura y Terminación",
+            progress: 0,
+            duration: 2,
+            startOffset: 85.7,
+            assignee: "Carlos Pérez",
+            quincena: "Q2",
+            startDate: "2026-08-21",
+            endDate: "2026-08-23",
+            requiredMaterials: ["Látex Alba Interior", "Enduido Plástico"],
+            materialStatus: "Disponible",
+            isBlocked: false,
+            supplierStatus: "Confirmado",
+            supplierName: "Pinturerías Rex"
+        }
+    },
+    incidents: initialIncidents,
+    attendance: {
+        "Juan Gómez": { role: "Albañilería Principal", checkin: "08:02 AM", status: "Presente", verifiedBy: "Voz & Biometría", distanceMeters: 12 },
+        "Carlos Pérez": { role: "Pintura e Interiores", checkin: "--:--", status: "Ausente", verifiedBy: "Pendiente", distanceMeters: null },
+        "Luis Martínez": { role: "Instalaciones y Sanitarios", checkin: "--:--", status: "Ausente", verifiedBy: "Pendiente", distanceMeters: null },
+        "Arq. Victoria": { role: "Socia & Directora Técnica", checkin: "--:--", status: "Socia Directora", verifiedBy: "Acceso Remoto", distanceMeters: null }
+    },
+    // Stockpiles with Confirmed Delivery Dates (Módulo 4B)
+    stockpiles: {
+        cemento: { name: "Cemento Loma Negra", current: 35, min: 40, max: 150, unit: "Bolsas", supplier: "Loma Negra S.A.", status: "Crítico", confirmedDeliveryDate: "16/08/2026", onTimeStatus: "A tiempo" },
+        hierro: { name: "Hierro A500 Acindar", current: 85, min: 30, max: 100, unit: "Barras", supplier: "Acindar Distribuidores", status: "Stock OK", confirmedDeliveryDate: "18/08/2026", onTimeStatus: "A tiempo" },
+        ladrillo: { name: "Ladrillo Portante Alberdi", current: 1500, min: 800, max: 2500, unit: "Uds", supplier: "Ladrillos Alberdi", status: "Stock OK", confirmedDeliveryDate: "20/08/2026", onTimeStatus: "A tiempo" },
+        arena: { name: "Arena Fina Cantera", current: 4, min: 8, max: 20, unit: "m³", supplier: "Cantera Palermo", status: "En Camino", confirmedDeliveryDate: "17/08/2026", onTimeStatus: "A tiempo" },
+        ceramicas: { name: "Cerámica San Lorenzo 45x45", current: 0, min: 80, max: 150, unit: "m²", supplier: "Cerámicas San Lorenzo", status: "Demorado", confirmedDeliveryDate: "25/08/2026", onTimeStatus: "Retraso 48hs" }
+    },
+    // Suppliers with automated reminder & confirmation status (Módulo 2B)
+    suppliers: [
+        { id: "prov-1", name: "Loma Negra S.A.", category: "Cemento & Hormigón", email: "despacho@lomanegra.com", phone: "+54 9 11 4455-6677", status: "Confirmado", nextTaskDate: "15/08/2026", reminderDays: 7, confirmationStatus: "Confirmado" },
+        { id: "prov-2", name: "Acindar Distribuidores", category: "Hierro & Estructuras", email: "ventas@acindardist.com", phone: "+54 9 11 3322-1100", status: "En Camino", nextTaskDate: "18/08/2026", reminderDays: 7, confirmationStatus: "Confirmado" },
+        { id: "prov-3", name: "Ladrillos Alberdi", category: "Mampostería", email: "pedidos@alberdi.com.ar", phone: "+54 9 11 8899-0011", status: "Confirmado", nextTaskDate: "20/08/2026", reminderDays: 7, confirmationStatus: "Confirmado" },
+        { id: "prov-4", name: "Aberturas López & Hnos", category: "Carpintería de Aluminio", email: "ventas@aberturaslopez.com", phone: "+54 9 11 5544-3322", status: "Pendiente", nextTaskDate: "21/08/2026", reminderDays: 7, confirmationStatus: "Pendiente (2 días antes)" },
+        { id: "prov-5", name: "Cerámicas San Lorenzo", category: "Revestimientos", email: "logistica@sanlorenzo.com.ar", phone: "+54 9 11 7766-5544", status: "Demorado", nextTaskDate: "25/08/2026", reminderDays: 7, confirmationStatus: "En Riesgo - Demorado" }
+    ],
+    // Quincenal Certifications (Módulo 8 & 10)
+    certifications: [
+        { id: "cert-q1", period: "Quincena 1 (01/Ago - 15/Ago)", physicalProgress: "38%", financialValue: "$2.850.000 ARS", approvedByDirector: true, directorName: "Arq. Marcelo", status: "Certificado & Facturado", date: "15/08/2026" },
+        { id: "cert-q2", period: "Quincena 2 (16/Ago - 31/Ago)", physicalProgress: "14% (en curso)", financialValue: "$1.950.000 ARS", approvedByDirector: false, directorName: "Arq. Marcelo", status: "En Medición de Campo", date: "En curso" }
+    ],
+    // Operational Proposals Inbox (Maker-Checker approval)
+    operationalProposals: [
+        { id: "prop-1", intent: "avance_tarea", summary: "Juan Gómez reportó Revoque Grueso al 100%", proposedBy: "Juan Gómez", role: "Albañilería Principal", status: "APROBADO", timestamp: "Hoy, 08:15 AM", taskImpact: "Tarea 1 -> 100%" },
+        { id: "prop-2", intent: "replanificacion_material", summary: "Demora en flete de cerámicas. Mover Revestimiento a Q2 (25/Ago)", proposedBy: "Carlos Pérez", role: "Pintura e Interiores", status: "PENDIENTE_APROBACION", timestamp: "Hoy, 09:30 AM", taskImpact: "Tarea 3 -> +48hs desplazar" }
+    ],
+    // Caja Chica & Receipts OCR (Módulo 7)
+    cajaChica: {
+        saldoActual: 84500,
+        fondoInicial: 150000,
+        moneda: "ARS",
+        umbralAlerta: 50000,
+        movimientos: [
+            { id: "cc-1", descripcion: "Compra rápida clavos y alambre en ferretería", monto: 18500, tipo: "Egreso", solicitante: "Juan Gómez", estado: "Aprobado", fecha: "Hoy, 10:15 AM", ticketUrl: "/tickets/ticket-01.jpg" },
+            { id: "cc-2", descripcion: "Viáticos flete de emergencia arena", monto: 47000, tipo: "Egreso", solicitante: "Luis Martínez", estado: "Aprobado", fecha: "Ayer, 03:40 PM", ticketUrl: "/tickets/ticket-02.jpg" }
+        ]
+    },
+    crmLeads: [
+        { name: "Ing. R. Silva", company: "Silva Constructora", topic: "Cotización para 8 obras simultáneas", status: "Nuevo Lead" },
+        { name: "Arq. Sofía B.", company: "Estudio SB", topic: "Consulta por plan Pro de 3 usuarios", status: "En Contacto" },
+        { name: "Arq. Carlos M.", company: "PfZ Planeamiento", topic: "Demo de Geofencing en Mendoza", status: "Nuevo Lead" }
+    ],
+    crmTickets: [
+        { client: "Estudio BMA", issue: "Error de sincronización en mapa de Palermo", severity: "Media" },
+        { client: "MSGSSV", issue: "Falla al exportar reporte semanal en PDF", severity: "Alta" },
+        { client: "Constructora Innovar", issue: "Agregar invitación para 2 operarios extra", severity: "Baja" }
+    ],
+    hrAttendance: {
+        "Juan Gómez": { role: "Albañilería Principal", presents: 21, excused: 1, unexcused: 0, status: "Presente" },
+        "Carlos Pérez": { role: "Pintura e Interiores", presents: 15, excused: 2, unexcused: 5, status: "Ausente" },
+        "Luis Martínez": { role: "Instalaciones y Sanitarios", presents: 18, excused: 3, unexcused: 1, status: "Ausente" }
+    },
+    hrBonuses: [
+        { name: "Juan Gómez", type: "Bono Puntualidad", amount: "$25.000 ARS", date: "Hace 2 días" },
+        { name: "Luis Martínez", type: "Bono Desempeño", amount: "$45.000 ARS", date: "Hace 1 semana" }
+    ],
+    // KYC Biometrics & Identity Verification Hub (Enterprise ConTech)
+    kycVerifications: {
+        "w-1": {
+            workerId: "w-1",
+            workerName: "Juan Gómez",
+            dni: "34.589.120",
+            phone: "+54 9 11 3241-9981",
+            dniFrontUrl: "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&w=600&q=80",
+            dniBackUrl: "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&w=600&q=80",
+            selfieUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=600&q=80",
+            faceMatchScore: 98.4,
+            voiceSampleEnrolled: true,
+            geofenceRadiusValid: true,
+            status: "VERIFICADO",
+            verifiedAt: "10/08/2026 08:00 AM",
+            trade: "Albañil Principal",
+            uocraLevel: "Oficial Albañil"
+        },
+        "w-2": {
+            workerId: "w-2",
+            workerName: "Luis Martínez",
+            dni: "31.204.850",
+            phone: "+54 9 11 8899-7766",
+            dniFrontUrl: "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&w=600&q=80",
+            dniBackUrl: "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&w=600&q=80",
+            selfieUrl: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=600&q=80",
+            faceMatchScore: 96.8,
+            voiceSampleEnrolled: true,
+            geofenceRadiusValid: true,
+            status: "VERIFICADO",
+            verifiedAt: "11/08/2026 07:45 AM",
+            trade: "Plomero / Gasista",
+            uocraLevel: "Oficial Especializado"
+        },
+        "w-3": {
+            workerId: "w-3",
+            workerName: "Carlos Pérez",
+            dni: "28.940.111",
+            phone: "+54 9 11 3241-9982",
+            dniFrontUrl: null,
+            dniBackUrl: null,
+            selfieUrl: null,
+            faceMatchScore: 0,
+            voiceSampleEnrolled: false,
+            geofenceRadiusValid: false,
+            status: "PENDIENTE",
+            verifiedAt: null,
+            trade: "Pintor / Revestimientos",
+            uocraLevel: "Medio Oficial"
+        }
+    },
+    // Real Scanned Remitos & Receipts OCR with Line Items & Image Provenance
+    remitos: [
+        {
+            id: "rem-101",
+            proveedor: "Ferretería Palermo Soho",
+            cuit: "30-71829340-9",
+            comprobanteNro: "REM-0004-00019283",
+            fecha: "17/08/2026",
+            montoTotal: 18500,
+            moneda: "ARS",
+            items: [
+                { descripcion: "Clavos punta París 2 1/2 (kg)", cantidad: 2, precioUnitario: 3500, subtotal: 7000 },
+                { descripcion: "Alambre de fardo recocido #16 (kg)", cantidad: 2.5, precioUnitario: 4600, subtotal: 11500 }
+            ],
+            solicitante: "Arq. Marcelo",
+            estado: "Aprobado",
+            scannedPhotoUrl: "https://images.unsplash.com/photo-1554415707-9e49016a3e46?auto=format&fit=crop&w=600&q=80",
+            ocrConfidence: 99.2,
+            categoria: "Ferretería & Herramientas"
+        },
+        {
+            id: "rem-100",
+            proveedor: "Cantera & Corralón Central",
+            cuit: "33-65920194-9",
+            comprobanteNro: "FACT-A-0002-00448190",
+            fecha: "16/08/2026",
+            montoTotal: 47000,
+            moneda: "ARS",
+            items: [
+                { descripcion: "Flete de emergencia arena fina (m³)", cantidad: 2, precioUnitario: 23500, subtotal: 47000 }
+            ],
+            solicitante: "Luis Martínez",
+            estado: "Aprobado",
+            scannedPhotoUrl: "https://images.unsplash.com/photo-1607344645866-009c320b5ab8?auto=format&fit=crop&w=600&q=80",
+            ocrConfidence: 98.7,
+            categoria: "Áridos & Fletes"
+        }
+    ],
+    // Live Technical Construction Photos Analyzed by Vision AI
+    sitePhotos: [
+        {
+            id: "sp-1",
+            photoUrl: "https://images.unsplash.com/photo-1541888946425-d0fbb18086f6?auto=format&fit=crop&w=800&q=80",
+            caption: "Inspección de revoque grueso en frente de obra",
+            phase: "Mampostería & Revoques",
+            aiAnalysis: "Revoque grueso completado con nivel de plomada adecuado. Cobertura estimada: 100% de la sección frontal.",
+            timestamp: "Hoy, 11:48 AM",
+            reporter: "Juan Gómez (Albañilería)"
+        },
+        {
+            id: "sp-2",
+            photoUrl: "https://images.unsplash.com/photo-1581094794329-c8112a89af12?auto=format&fit=crop&w=800&q=80",
+            caption: "Instalación de cañerías cloacales y desagües secundarios",
+            phase: "Sanitarios & Descargas",
+            aiAnalysis: "Caños de PVC 110 fijados con abrazaderas metálicas. Pendiente verificada: 2.1%. Sin obstrucciones.",
+            timestamp: "Hoy, 10:20 AM",
+            reporter: "Luis Martínez (Plomero)"
+        }
+    ],
+    // Safety & Regulatory Compliance (UOCRA / ART Ley 22.250)
+    artPolicies: {
+        "Juan Gómez": {
+            company: "La Segunda ART",
+            policyNumber: "ART-882910-01",
+            expirationDate: "30/04/2027",
+            clausulaNoRepeticion: true,
+            status: "VIGENTE",
+            certificatePdfUrl: "/art/certificado-juan.pdf"
+        },
+        "Luis Martínez": {
+            company: "Federación Patronal ART",
+            policyNumber: "ART-449102-09",
+            expirationDate: "15/03/2027",
+            clausulaNoRepeticion: true,
+            status: "VIGENTE",
+            certificatePdfUrl: "/art/certificado-luis.pdf"
+        },
+        "Carlos Pérez": {
+            company: "Prevención ART",
+            policyNumber: "ART-109283-04",
+            expirationDate: "01/08/2026",
+            clausulaNoRepeticion: false,
+            status: "VENCIDA",
+            certificatePdfUrl: null
+        }
+    },
+    // Cryptographic Inmutable SHA-256 Audit Trail
+    auditLedger: [
+        {
+            index: 1,
+            timestamp: "2026-08-17T20:00:00.000Z",
+            formattedTime: "20:00:00",
+            action: "GENESIS_BLOQUE_AUDITORIA",
+            actor: "Sistema ObraSaaS Enterprise",
+            details: { obra: "Torre Palermo Soho", hashAlg: "SHA-256" },
+            previousHash: "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f",
+            hash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            signatureStatus: "CERTIFICADO_SHA256"
+        }
+    ],
+    // Budget tracking by rubro
+    budget: {
+        rubros: [
+            { id: 'estructura', nombre: 'Estructura (Hormigón + Hierro)', presupuesto: 1498500, ejecutado: 1423575, movimientos: [] },
+            { id: 'mamposteria', nombre: 'Mampostería y Revoques', presupuesto: 749250, ejecutado: 449550, movimientos: [] },
+            { id: 'instalaciones', nombre: 'Instalaciones (Sanitaria + Gas + Eléctrica)', presupuesto: 899100, ejecutado: 269730, movimientos: [] },
+            { id: 'carpinteria', nombre: 'Carpintería y Aberturas', presupuesto: 499500, ejecutado: 0, movimientos: [] },
+            { id: 'pintura', nombre: 'Pintura y Revestimientos', presupuesto: 399600, ejecutado: 0, movimientos: [] },
+            { id: 'pisos', nombre: 'Pisos y Mesadas', presupuesto: 349650, ejecutado: 0, movimientos: [] },
+            { id: 'cubierta', nombre: 'Cubierta e Impermeabilización', presupuesto: 249750, ejecutado: 0, movimientos: [] },
+            { id: 'mano_obra', nombre: 'Mano de Obra (Jornales UOCRA)', presupuesto: 249750, ejecutado: 124875, movimientos: [] },
+            { id: 'imprevistos', nombre: 'Imprevistos (5%)', presupuesto: 99900, ejecutado: 0, movimientos: [] }
+        ],
+        lastUpdated: "2026-08-18T12:00:00.000Z"
+    },
+    // Libro de Obra Digital (Ley 22.250)
+    libroObra: [
+        {
+            id: 'lo-005',
+            date: '2026-08-18',
+            weather: 'Despejado',
+            temperature: '24',
+            workersPresent: 18,
+            tasksPerformed: 'Hormigonado de losa sobre Planta Baja. Armado de encofrados para vigas perimetrales. Colocación de armadura inferior.',
+            observations: 'Se solicita al contratista de electricidad acelerar pases de cañería en sector norte antes de la próxima colada.',
+            incidents: [],
+            materialsReceived: 'Hormigón Elaborado H21 (30m3). Hierro nervado de 12mm y 8mm.',
+            signedBy: 'Ing. Martín López',
+            signedAt: '2026-08-18T18:00:00.000Z',
+            hash: '8f4e2a1b9c7d03e4f29a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2',
+            projectId: 'obra-palermo-01',
+            projectName: 'Torre Palermo Soho',
+            createdAt: '2026-08-18T18:00:00.000Z',
+            updatedAt: '2026-08-18T18:00:00.000Z'
+        },
+        {
+            id: 'lo-004',
+            date: '2026-08-17',
+            weather: 'Nublado',
+            temperature: '18',
+            workersPresent: 15,
+            tasksPerformed: 'Preparación de encofrados. Apuntalamiento general. Armado de hierro en taller.',
+            observations: 'Mantener orden y limpieza en obrador. Reubicar acopio de madera.',
+            incidents: [],
+            materialsReceived: 'Madera para encofrado (tablas y puntales). Clavos.',
+            signedBy: 'Ing. Martín López',
+            signedAt: '2026-08-17T18:00:00.000Z',
+            hash: '1a2b3c4d5e6f7890a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3',
+            projectId: 'obra-palermo-01',
+            projectName: 'Torre Palermo Soho',
+            createdAt: '2026-08-17T18:00:00.000Z',
+            updatedAt: '2026-08-17T18:00:00.000Z'
+        },
+        {
+            id: 'lo-003',
+            date: '2026-08-16',
+            weather: 'Lluvia Intensa',
+            temperature: '14',
+            workersPresent: 4,
+            tasksPerformed: 'Tareas suspendidas en el exterior por lluvia. Trabajos menores en obrador (doblado de hierro).',
+            observations: 'Proteger acopios de cemento y madera con lona.',
+            incidents: ['Suspensión parcial por lluvia'],
+            materialsReceived: 'Ninguno.',
+            signedBy: 'Arq. Roberto Sánchez',
+            signedAt: '2026-08-16T18:00:00.000Z',
+            hash: 'c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3',
+            projectId: 'obra-palermo-01',
+            projectName: 'Torre Palermo Soho',
+            createdAt: '2026-08-16T18:00:00.000Z',
+            updatedAt: '2026-08-16T18:00:00.000Z'
+        },
+        {
+            id: 'lo-002',
+            date: '2026-08-15',
+            weather: 'Lluvia Leve',
+            temperature: '16',
+            workersPresent: 12,
+            tasksPerformed: 'Armado de columnas PB. Colocación de estribos.',
+            observations: 'Alinear y aplomar columnas eje A y B.',
+            incidents: [],
+            materialsReceived: 'Alambre de atar. Separadores plásticos.',
+            signedBy: 'Ing. Martín López',
+            signedAt: '2026-08-15T18:00:00.000Z',
+            hash: 'b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2',
+            projectId: 'obra-palermo-01',
+            projectName: 'Torre Palermo Soho',
+            createdAt: '2026-08-15T18:00:00.000Z',
+            updatedAt: '2026-08-15T18:00:00.000Z'
+        },
+        {
+            id: 'lo-001',
+            date: '2026-08-14',
+            weather: 'Despejado',
+            temperature: '22',
+            workersPresent: 14,
+            tasksPerformed: 'Inicio formal de estructura PB. Limpieza de replanteo y llenado de bases.',
+            observations: 'Verificar niveles topográficos antes de llenar.',
+            incidents: [],
+            materialsReceived: 'Hormigón H30 (15m3).',
+            signedBy: 'Ing. Martín López',
+            signedAt: '2026-08-14T18:00:00.000Z',
+            hash: 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1',
+            projectId: 'obra-palermo-01',
+            projectName: 'Torre Palermo Soho',
+            createdAt: '2026-08-14T18:00:00.000Z',
+            updatedAt: '2026-08-14T18:00:00.000Z'
+        }
+    ],
+    // Inspecciones y Checklists de Calidad
+    inspecciones: [
+        {
+            id: 'INSP-101',
+            type: 'Seguridad e Higiene',
+            icon: '👷',
+            title: 'Inspección de Seguridad e Higiene (SRT Res. 319/99)',
+            date: '2026-08-19',
+            inspector: 'Ing. Carlos Mendez',
+            status: 'APROBADA',
+            score: 92,
+            projectId: 'obra-palermo-01',
+            items: [
+                { id: 'chk-1', desc: 'EPP completo (casco, guantes, zapatos de seguridad)', status: 'pass' },
+                { id: 'chk-2', desc: 'Matafuegos operativos y vigentes', status: 'pass' },
+                { id: 'chk-3', desc: 'Tablero eléctrico con disyuntor diferencial', status: 'pass' },
+                { id: 'chk-4', desc: 'Vallado perimetral y señalización', status: 'pass' },
+                { id: 'chk-5', desc: 'Escaleras con barandas y atadas', status: 'pass' },
+                { id: 'chk-6', desc: 'Orden y limpieza del obrador', status: 'fail', note: 'Acopio de madera desordenado en sector norte' },
+                { id: 'chk-7', desc: 'Botiquín de primeros auxilios completo', status: 'pass' },
+                { id: 'chk-8', desc: 'Capacitación documentada del personal', status: 'pass' },
+                { id: 'chk-9', desc: 'Líneas de vida instaladas en bordes', status: 'pass' },
+                { id: 'chk-10', desc: 'Protección de huecos (ascensor, escalera)', status: 'pass' },
+                { id: 'chk-11', desc: 'Cartelería de riesgos visible', status: 'pass' },
+                { id: 'chk-12', desc: 'Servicio sanitario para obreros', status: 'pass' }
+            ],
+            createdAt: '2026-08-19T10:00:00.000Z'
+        },
+        {
+            id: 'INSP-102',
+            type: 'Estructura',
+            icon: '🏗️',
+            title: 'Inspección de Estructura pre-Hormigonado (CIRSOC 201)',
+            date: '2026-08-18',
+            inspector: 'Arq. Lucía Fernandez',
+            status: 'OBSERVADA',
+            score: 75,
+            projectId: 'obra-palermo-01',
+            items: [
+                { id: 'chk-1', desc: 'Armadura según plano estructural', status: 'pass' },
+                { id: 'chk-2', desc: 'Recubrimiento mínimo 2.5cm', status: 'pass' },
+                { id: 'chk-3', desc: 'Separadores plásticos colocados', status: 'pass' },
+                { id: 'chk-4', desc: 'Estribos a distancia normativa', status: 'fail', note: 'Estribos en viga V3 a 20cm, norma indica 15cm' },
+                { id: 'chk-5', desc: 'Encofrado estanco y aplomado', status: 'pass' },
+                { id: 'chk-6', desc: 'Apuntalamiento verificado', status: 'pass' },
+                { id: 'chk-7', desc: 'Pases de instalaciones marcados', status: 'fail', note: 'Falta pase eléctrico en sector norte' },
+                { id: 'chk-8', desc: 'Altura libre de encofrado', status: 'pass' },
+                { id: 'chk-9', desc: 'Juntas de trabajo definidas', status: 'pass' },
+                { id: 'chk-10', desc: 'Vibrado previsto (tipo/equipo)', status: 'pass' },
+                { id: 'chk-11', desc: 'Probetas de hormigón preparadas', status: 'pass' },
+                { id: 'chk-12', desc: 'Limpieza de fondo de encofrado', status: 'fail', note: 'Residuos de alambre en fondo de encofrado V2' }
+            ],
+            createdAt: '2026-08-18T09:00:00.000Z'
+        },
+        {
+            id: 'INSP-103',
+            type: 'Instalación Eléctrica',
+            icon: '⚡',
+            title: 'Verificación de Instalación Eléctrica (RIEI)',
+            date: '2026-08-17',
+            inspector: 'Tec. Marcelo Rojas',
+            status: 'RECHAZADA',
+            score: 40,
+            projectId: 'obra-palermo-01',
+            items: [
+                { id: 'chk-1', desc: 'Tablero general con llave termomagnética', status: 'pass' },
+                { id: 'chk-2', desc: 'Disyuntor diferencial 30mA', status: 'pass' },
+                { id: 'chk-3', desc: 'Puesta a tierra (jabalina)', status: 'fail', note: 'Jabalina sin verificar resistencia' },
+                { id: 'chk-4', desc: 'Cañerías correctamente fijadas', status: 'pass' },
+                { id: 'chk-5', desc: 'Cajas de paso con tapa', status: 'fail', note: '4 cajas sin tapa en planta baja' },
+                { id: 'chk-6', desc: 'Cables según sección normativa', status: 'fail', note: 'Cable de 2.5mm en circuito que requiere 4mm' },
+                { id: 'chk-7', desc: 'Identificación de circuitos', status: 'fail', note: 'Ningún circuito identificado' },
+                { id: 'chk-8', desc: 'Tomacorrientes con toma tierra', status: 'pass' },
+                { id: 'chk-9', desc: 'Iluminación de emergencia', status: 'fail', note: 'No instalada' },
+                { id: 'chk-10', desc: 'Protocolo de medición RIEI', status: 'fail', note: 'No se realizó medición de aislación' }
+            ],
+            createdAt: '2026-08-17T14:00:00.000Z'
+        },
+        {
+            id: 'INSP-104',
+            type: 'Terminaciones',
+            icon: '🔍',
+            title: 'Inspección de Terminaciones y Vicios Ocultos',
+            date: '2026-08-19',
+            inspector: 'Arq. Lucía Fernandez',
+            status: 'PENDIENTE',
+            score: 0,
+            projectId: 'obra-palermo-01',
+            items: [],
+            createdAt: '2026-08-19T08:00:00.000Z'
+        }
+    ],
+    // Visual Task Alerts & Photo Markup Hub (Victoria & Marcelo Workflow - Sep 2026)
+    visualTaskAlerts: [
+        {
+            id: 'vta-101',
+            title: 'Pase cloacal sin sellar en losa PB',
+            description: 'El caño cloacal de 110mm en sector baño principal debe colocarse y sellarse antes del hormigonado de mañana a las 14:00 hs.',
+            sector: 'Losa Nivel +2 — Baño Principal',
+            assignedTo: 'Luis Martínez',
+            assignedRole: 'Plomero / Gasista',
+            assignedPhone: '+54 9 11 8899-7766',
+            assignedBy: 'Arq. Victoria (Directora Técnica)',
+            urgency: 'CRITICA',
+            deadline: 'Mañana, 14:00 hs',
+            status: 'PENDIENTE',
+            originalPhotoUrl: 'https://images.unsplash.com/photo-1581094794329-c8112a89af12?auto=format&fit=crop&w=800&q=80',
+            annotatedPhotoUrl: 'https://images.unsplash.com/photo-1581094794329-c8112a89af12?auto=format&fit=crop&w=800&q=80',
+            markupData: {
+                textAnnotations: ['COLOCAR CAÑO 110 ANTES DE HORMIGÓN', 'SECTOR BAÑO'],
+                shapes: [{ type: 'circle', x: 42, y: 55, radius: 25, color: '#ef4444' }]
+            },
+            whatsappAlertSent: true,
+            whatsappSentAt: '2026-09-08T09:15:00.000Z',
+            resolutionPhotoUrl: null,
+            resolutionNotes: null,
+            hash: '4f9a8b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a',
+            createdAt: '2026-09-08T09:15:00.000Z'
+        },
+        {
+            id: 'vta-102',
+            title: 'Fisura y desaplome en tabique norte',
+            description: 'Verificar plomada y picar rebaba antes de iniciar revoque grueso.',
+            sector: 'Planta Baja — Eje medianero norte',
+            assignedTo: 'Juan Gómez',
+            assignedRole: 'Albañilería Principal',
+            assignedPhone: '+54 9 11 3241-9981',
+            assignedBy: 'Marcelo Guillén (Director de Obra)',
+            urgency: 'ALTA',
+            deadline: 'Hoy, 18:00 hs',
+            status: 'EN_CORRECCION',
+            originalPhotoUrl: 'https://images.unsplash.com/photo-1541888946425-d0fbb18086f6?auto=format&fit=crop&w=800&q=80',
+            annotatedPhotoUrl: 'https://images.unsplash.com/photo-1541888946425-d0fbb18086f6?auto=format&fit=crop&w=800&q=80',
+            markupData: {
+                textAnnotations: ['PLOMAR Y PICAR REBABA'],
+                shapes: [{ type: 'rect', x: 30, y: 40, width: 35, height: 25, color: '#f59e0b' }]
+            },
+            whatsappAlertSent: true,
+            whatsappSentAt: '2026-09-08T08:30:00.000Z',
+            resolutionPhotoUrl: null,
+            resolutionNotes: 'Cuadrilla trabajando en el picado',
+            hash: '1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b',
+            createdAt: '2026-09-08T08:30:00.000Z'
+        },
+        {
+            id: 'vta-103',
+            title: 'Protección de borde de losa sin baranda',
+            description: 'Colocar baranda de seguridad de 1 metro de altura reglamentaria SRT 319/99 en borde libre.',
+            sector: 'Piso 1 — Balcón al frente',
+            assignedTo: 'Juan Zapata',
+            assignedRole: 'Armador / Cuadrilla',
+            assignedPhone: '+54 9 11 3845-2190',
+            assignedBy: 'Arq. Victoria (Directora Técnica)',
+            urgency: 'CRITICA',
+            deadline: 'Inmediato (Seguridad e Higiene)',
+            status: 'RESUELTO',
+            originalPhotoUrl: 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=800&q=80',
+            annotatedPhotoUrl: 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=800&q=80',
+            markupData: {
+                textAnnotations: ['COLOCAR LÍNEA DE VIDA Y BARANDA SRT'],
+                shapes: [{ type: 'arrow', x1: 50, y1: 80, x2: 50, y2: 40, color: '#ef4444' }]
+            },
+            whatsappAlertSent: true,
+            whatsappSentAt: '2026-09-07T16:00:00.000Z',
+            resolutionPhotoUrl: 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=800&q=80',
+            resolutionNotes: 'Baranda colocada y cuerda de vida fijada a columna estructural.',
+            hash: '7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d',
+            createdAt: '2026-09-07T16:00:00.000Z'
+        }
+    ],
+    // Tenant registry (multi-tenant)
+    tenants: [
+        {
+            id: 'tenant-default',
+            name: 'ObraSaaS Demo',
+            slug: 'demo',
+            plan: 'professional',
+            ownerEmail: 'marcelo@obrasaas.app',
+            ownerPhone: '5492613168608',
+            createdAt: '2026-01-15T00:00:00.000Z',
+            projectCount: 4,
+            workerCount: 6,
+            status: 'active'
+        }
+    ],
+    // Project-level insurance policies
+    projectPolicies: [
+        { type: 'Todo Riesgo Construcción', company: 'San Cristóbal Seguros', status: 'VIGENTE', expirationDate: '2027-03-15', coverage: '$50.000.000 ARS' },
+        { type: 'Responsabilidad Civil', company: 'La Meridional', status: 'VIGENTE', expirationDate: '2027-01-20', coverage: '$20.000.000 ARS' },
+        { type: 'Caución por Anticipo', company: 'Fianzas y Crédito', status: 'VIGENTE', expirationDate: '2026-12-31', coverage: '$5.000.000 ARS' }
+    ],
+    // Registered webhooks
+    webhooks: [],
+    subscription: {
+        status: "active",
+        plan: "Pro",
+        expiresAt: "2027-12-31"
+    },
+
+    // ========================================
+    // Sprint Sep 2026 — Victoria & Marcelo Reunion Agreements
+    // ========================================
+
+    // Calendario de Citas & Visitas de Obra
+    calendarAppointments: [
+        {
+            id: 'cita-001',
+            title: 'Visita Comitente — Revisión de Avance Q2',
+            obraId: 'obra-palermo-01',
+            fecha: '2026-09-15',
+            hora: '10:00',
+            tipo: 'Visita Comitente',
+            participantes: ['Arq. Victoria', 'Arq. Marcelo', 'Comitente'],
+            telefono: '+54 9 11 5544-3322',
+            estado: 'programada',
+            recordatorio24hEnviado: false,
+            recordatorio48hEnviado: false,
+            notas: 'Recorrer frente de obra y verificar avance de revoques y sanitarios.',
+            createdAt: '2026-09-08T10:00:00.000Z'
+        },
+        {
+            id: 'cita-002',
+            title: 'Inspección Municipal — Final de Estructura',
+            obraId: 'obra-palermo-01',
+            fecha: '2026-09-18',
+            hora: '14:00',
+            tipo: 'Inspección Municipal',
+            participantes: ['Inspector Municipal', 'Arq. Victoria'],
+            telefono: '+54 9 11 2233-4455',
+            estado: 'confirmada',
+            recordatorio24hEnviado: true,
+            recordatorio48hEnviado: true,
+            notas: 'Presentar planos de estructura aprobados y certificados de ensayos.',
+            createdAt: '2026-09-05T14:00:00.000Z'
+        },
+        {
+            id: 'cita-003',
+            title: 'Entrega de Aberturas — Carpintería López',
+            obraId: 'obra-palermo-01',
+            fecha: '2026-09-20',
+            hora: '09:00',
+            tipo: 'Entrega Material',
+            participantes: ['Aberturas López', 'Luis Martínez'],
+            telefono: '+54 9 11 5544-3322',
+            estado: 'programada',
+            recordatorio24hEnviado: false,
+            recordatorio48hEnviado: false,
+            notas: 'Verificar medidas contra carpeta de aberturas. Prever grúa si es necesario.',
+            createdAt: '2026-09-08T11:00:00.000Z'
+        }
+    ],
+
+    // Curva S — Avance Programado vs Real (semana a semana)
+    curvaS: [
+        { semana: 1, fecha: '2026-08-01', avancePlanificadoPct: 5, avanceRealPct: 6, costoPlanificadoARS: 249750, costoRealARS: 260000, hitoClave: 'Inicio de obra' },
+        { semana: 2, fecha: '2026-08-08', avancePlanificadoPct: 14, avanceRealPct: 15, costoPlanificadoARS: 699300, costoRealARS: 710000, hitoClave: 'Fundaciones completadas' },
+        { semana: 3, fecha: '2026-08-15', avancePlanificadoPct: 25, avanceRealPct: 22, costoPlanificadoARS: 1248750, costoRealARS: 1180000, hitoClave: 'Estructura PB' },
+        { semana: 4, fecha: '2026-08-22', avancePlanificadoPct: 38, avanceRealPct: 34, costoPlanificadoARS: 1898100, costoRealARS: 1820000, hitoClave: 'Mampostería iniciada' },
+        { semana: 5, fecha: '2026-08-29', avancePlanificadoPct: 50, avanceRealPct: 42, costoPlanificadoARS: 2497500, costoRealARS: 2267730, hitoClave: 'Instalaciones arrancadas' },
+        { semana: 6, fecha: '2026-09-05', avancePlanificadoPct: 60, avanceRealPct: 48, costoPlanificadoARS: 2997000, costoRealARS: 2580000, hitoClave: 'Revoques gruesos' }
+    ],
+
+    // Diagramas de Gantt Externos Subidos
+    ganttExternalFiles: [
+        {
+            id: 'gantt-ext-001',
+            nombre: 'Cronograma General Torre Palermo v3.pdf',
+            fechaSubida: '2026-09-08T12:00:00.000Z',
+            url: '/uploads/gantt/cronograma-palermo-v3.pdf',
+            comentarios: 'Versión actualizada con corrección de plazos de sanitarios.',
+            estadoCotejo: 'pendiente'
+        }
+    ],
+
+    // Solicitudes de Materiales Faltantes
+    materialRequests: [
+        {
+            id: 'mat-req-001',
+            obraId: 'obra-palermo-01',
+            solicitante: 'Luis Martínez',
+            rol: 'Plomero / Gasista',
+            telefono: '+54 9 11 8899-7766',
+            fecha: '2026-09-09T14:30:00.000Z',
+            items: [
+                { descripcion: 'Caño PVC 110mm x 4m', cantidad: 6, unidad: 'unidades' },
+                { descripcion: 'Codo PVC 110mm a 45°', cantidad: 8, unidad: 'unidades' },
+                { descripcion: 'Pegamento para PVC 500cc', cantidad: 2, unidad: 'potes' }
+            ],
+            justificacion: 'Reemplazo de tramo fisurado en descarga principal del baño PB.',
+            urgencia: 'alta',
+            estado: 'pendiente_aprobacion',
+            aprobadaPor: null,
+            fechaAprobacion: null,
+            proveedorAsignado: null,
+            nroOrdenCompra: null
+        },
+        {
+            id: 'mat-req-002',
+            obraId: 'obra-palermo-01',
+            solicitante: 'Juan Gómez',
+            rol: 'Albañilería Principal',
+            telefono: '+54 9 11 3241-9981',
+            fecha: '2026-09-08T09:00:00.000Z',
+            items: [
+                { descripcion: 'Cemento Loma Negra x 50kg', cantidad: 20, unidad: 'bolsas' },
+                { descripcion: 'Arena gruesa lavada', cantidad: 3, unidad: 'm³' }
+            ],
+            justificacion: 'Stock insuficiente para continuar revoque en piso 1.',
+            urgencia: 'media',
+            estado: 'aprobada',
+            aprobadaPor: 'Arq. Victoria',
+            fechaAprobacion: '2026-09-08T10:15:00.000Z',
+            proveedorAsignado: 'Corralón Central Palermo',
+            nroOrdenCompra: 'OC-2026-0089'
+        }
+    ],
+
+    // Actas de Higiene y Seguridad (H&S)
+    actasHyS: [
+        {
+            id: 'hys-001',
+            fecha: '2026-09-08',
+            inspectorHyS: 'Ing. Carlos Méndez',
+            matricula: 'MAT-HYS-4829',
+            tipo: 'Checklist EPP',
+            estadoClima: 'Despejado, 22°C',
+            eppCumplimientoPct: 92,
+            observaciones: 'Falta arnés de seguridad en operario de cubierta. Plazo de corrección: 24hs.',
+            fotos: [],
+            firmaDigitalToken: 'SHA256:a1b2c3d4e5f6...',
+            obraId: 'obra-palermo-01',
+            createdAt: '2026-09-08T08:00:00.000Z'
+        },
+        {
+            id: 'hys-002',
+            fecha: '2026-09-05',
+            inspectorHyS: 'Ing. Carlos Méndez',
+            matricula: 'MAT-HYS-4829',
+            tipo: 'Induccion 5 Minutos',
+            estadoClima: 'Nublado, 16°C',
+            eppCumplimientoPct: 100,
+            observaciones: 'Charla de seguridad sobre trabajo en altura y uso de línea de vida. 12 asistentes.',
+            fotos: [],
+            firmaDigitalToken: 'SHA256:f6e5d4c3b2a1...',
+            obraId: 'obra-palermo-01',
+            createdAt: '2026-09-05T07:45:00.000Z'
+        },
+        {
+            id: 'hys-003',
+            fecha: '2026-08-16',
+            inspectorHyS: 'Ing. Carlos Méndez',
+            matricula: 'MAT-HYS-4829',
+            tipo: 'Parada Climatica',
+            estadoClima: 'Lluvia Intensa con ráfagas >40km/h',
+            eppCumplimientoPct: 100,
+            observaciones: 'Suspensión total de tareas exteriores por lluvia intensa y viento. Solo tareas de taller en obrador cerrado. Solicitud de prórroga de plazo: 1 día hábil.',
+            fotos: [],
+            firmaDigitalToken: 'SHA256:c3d4e5f6a7b8...',
+            obraId: 'obra-palermo-01',
+            createdAt: '2026-08-16T09:00:00.000Z'
+        }
+    ],
+
+    // Configuración de Geocerca Parametrizable
+    geofenceSettings: {
+        radiusMeters: 50,
+        latitude: -34.5886,
+        longitude: -58.4302,
+        toleranciaHorarioMinutos: 15,
+        horaCheckin: '08:00',
+        horaReporteFotos: '17:00'
+    },
+
+    // Métricas de Construcción Sostenible en Madera Modular
+    woodModularMetrics: {
+        m3MaderaInstalada: 0,
+        kgCO2CapturadoPorM3: 250,
+        kgCO2EvitadoVsHormigon: 0,
+        porcentajeIndustrializacionOffSite: 0,
+        tipoSistema: 'Wood Frame / Panelería Modular'
+    }
+};
+
+export const defaultMessages = [
+    {
+        sender: "bot",
+        text: "Hola Arq. Marcelo. Soy tu Copiloto Inteligente de ObraSaaS. Estoy procesando los reportes de la cuadrilla y telemetría de obra en tiempo real. Escribe una consulta o reproduce un audio.",
+        time: "08:00 AM"
+    }
+];

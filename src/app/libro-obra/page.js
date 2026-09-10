@@ -109,6 +109,19 @@ export default function LibroObraPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [isLive, setIsLive] = useState(false);
 
+    const [actasHyS, setActasHyS] = useState([]);
+    const [showHySSection, setShowHySSection] = useState(false);
+    const [newActaModal, setNewActaModal] = useState(false);
+    const [newActa, setNewActa] = useState({
+        inspectorHyS: 'Ing. Carlos Méndez',
+        matricula: 'MAT-HYS-4829',
+        tipo: 'Checklist EPP',
+        estadoClima: 'Despejado',
+        eppCumplimientoPct: 100,
+        observaciones: '',
+        fotos: []
+    });
+
     // Form State
     const [form, setForm] = useState({
         date: new Date().toISOString().split('T')[0],
@@ -175,6 +188,12 @@ export default function LibroObraPage() {
         };
         return () => es.close();
     }, [fetchData]);
+
+    useEffect(() => {
+        fetch('/api/state').then(r => r.json()).then(data => {
+            if (data?.actasHyS) setActasHyS(data.actasHyS);
+        }).catch(() => {});
+    }, []);
 
     const handleFormChange = (e) => {
         const { name, value, type, checked } = e.target;
@@ -248,6 +267,7 @@ export default function LibroObraPage() {
     const tabs = [
         { id: 'asientos', label: '📖 Asientos del Libro' },
         { id: 'nuevo', label: '✍️ Nuevo Asiento' },
+        { id: 'hys', label: '🦺 Libro de Actas H&S' },
         { id: 'stats', label: '📊 Estadísticas' }
     ];
 
@@ -564,6 +584,183 @@ export default function LibroObraPage() {
         </motion.div>
     );
 
+    const handleHySSubmit = (e) => {
+        e.preventDefault();
+        const newEntry = {
+            ...newActa,
+            id: `hys-${Date.now()}`,
+            fecha: new Date().toISOString().split('T')[0],
+            hash: Math.random().toString(36).substring(2, 15)
+        };
+        setActasHyS([newEntry, ...actasHyS]);
+        setNewActaModal(false);
+    };
+
+    const renderHySSection = () => {
+        const totalActas = actasHyS.length;
+        const eppAvg = actasHyS.length ? Math.round(actasHyS.reduce((acc, a) => acc + (a.eppCumplimientoPct || 0), 0) / actasHyS.length) : 0;
+        
+        return (
+            <motion.div variants={staggerContainer} initial="hidden" animate="visible" style={{ display: 'flex', flexDirection: 'column', gap: '24px', marginBottom: '32px', padding: '24px', background: 'rgba(59, 130, 246, 0.05)', borderRadius: tokens.radius.lg, border: `1px solid rgba(59, 130, 246, 0.2)` }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+                    <div>
+                        <h2 style={{ margin: '0 0 8px 0', fontSize: '24px', color: tokens.colors.text.primary, display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            📄 Libro de Actas H&S y Prevención de Riesgos
+                        </h2>
+                        <div style={{ display: 'flex', gap: '12px' }}>
+                            <Badge variant="filled" color={tokens.colors.accent.primary}>{totalActas} Actas Registradas</Badge>
+                            <Badge variant="filled" color={eppAvg > 90 ? tokens.colors.accent.success : tokens.colors.accent.warning}>{eppAvg}% Cumplimiento EPP</Badge>
+                        </div>
+                    </div>
+                    <Button variant="primary" onClick={() => setNewActaModal(true)}>
+                        + Nueva Acta H&S
+                    </Button>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+                    <StatCard label="Total Actas" value={totalActas} icon="📋" />
+                    <StatCard label="Checklists EPP" value={actasHyS.filter(a => a.tipo === 'Checklist EPP').length} icon="🦺" />
+                    <StatCard label="Inducciones 5min" value={actasHyS.filter(a => a.tipo === 'Induccion 5 Minutos').length} icon="🗣️" />
+                    <StatCard label="Paradas Climáticas" value={actasHyS.filter(a => a.tipo === 'Parada Climatica').length} icon="🌧️" />
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    {actasHyS.map(acta => {
+                        let color;
+                        switch(acta.tipo) {
+                            case 'Checklist EPP': color = '#3b82f6'; break; // blue
+                            case 'Induccion 5 Minutos': color = '#10b981'; break; // green
+                            case 'Parada Climatica': color = '#f59e0b'; break; // amber
+                            case 'Incidente Menor': color = '#ef4444'; break; // red
+                            case 'Visita ART': color = '#8b5cf6'; break; // purple
+                            default: color = tokens.colors.accent.primary;
+                        }
+
+                        return (
+                            <GlassCard key={acta.id || acta.fecha} style={{ borderLeft: `4px solid ${color}` }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px', marginBottom: '16px' }}>
+                                    <div>
+                                        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '8px' }}>
+                                            <Badge style={{ backgroundColor: color, color: '#fff' }}>{acta.tipo}</Badge>
+                                            <span style={{ fontSize: '14px', color: tokens.colors.text.secondary }}>{acta.fecha || acta.date}</span>
+                                        </div>
+                                        <h3 style={{ margin: 0, fontSize: '16px', color: tokens.colors.text.primary }}>
+                                            {acta.inspectorHyS} <span style={{ fontSize: '14px', color: tokens.colors.text.muted, fontWeight: 'normal' }}>({acta.matricula})</span>
+                                        </h3>
+                                    </div>
+                                    <Button variant="secondary" size="sm" onClick={() => {
+                                        const blob = new Blob(['Simulated PDF'], { type: 'application/pdf' });
+                                        const url = URL.createObjectURL(blob);
+                                        const a = document.createElement('a');
+                                        a.href = url;
+                                        a.download = `Acta_HyS_${acta.fecha || 'Doc'}.pdf`;
+                                        a.click();
+                                    }}>
+                                        Descargar Acta Oficial Foliada PDF
+                                    </Button>
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '16px' }}>
+                                    <div>
+                                        <div style={{ fontSize: '12px', color: tokens.colors.text.muted, textTransform: 'uppercase', marginBottom: '4px' }}>Clima</div>
+                                        <div>{acta.estadoClima}</div>
+                                    </div>
+                                    <div>
+                                        <div style={{ fontSize: '12px', color: tokens.colors.text.muted, textTransform: 'uppercase', marginBottom: '4px' }}>Cumplimiento EPP</div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <ProgressBar progress={acta.eppCumplimientoPct || 0} color={acta.eppCumplimientoPct > 90 ? tokens.colors.accent.success : tokens.colors.accent.warning} />
+                                            <span>{acta.eppCumplimientoPct || 0}%</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div style={{ fontSize: '12px', color: tokens.colors.text.muted, textTransform: 'uppercase', marginBottom: '4px' }}>Observaciones</div>
+                                    <p style={{ margin: 0, fontSize: '14px', color: tokens.colors.text.primary }}>{acta.observaciones || '-'}</p>
+                                </div>
+                                <div style={{ borderTop: `1px solid ${tokens.colors.border.subtle}`, paddingTop: '12px', marginTop: '16px', fontSize: '12px', color: tokens.colors.text.muted, fontFamily: tokens.font.mono }}>
+                                    Firma Hash: {acta.hash || 'e3b0c44298fc1c149afbf4c8996fb924...'}
+                                </div>
+                            </GlassCard>
+                        )
+                    })}
+                </div>
+
+                <Modal isOpen={newActaModal} onClose={() => setNewActaModal(false)} title="Nueva Acta H&S">
+                    <form onSubmit={handleHySSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '14px', marginBottom: '4px', color: tokens.colors.text.secondary }}>Inspector H&S</label>
+                            <input 
+                                type="text"
+                                value={newActa.inspectorHyS}
+                                onChange={(e) => setNewActa({ ...newActa, inspectorHyS: e.target.value })}
+                                style={{ width: '100%', padding: '8px', borderRadius: tokens.radius.md, border: `1px solid ${tokens.colors.border.subtle}`, background: tokens.colors.bg.secondary, color: tokens.colors.text.primary }}
+                                required
+                            />
+                        </div>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '14px', marginBottom: '4px', color: tokens.colors.text.secondary }}>Matrícula</label>
+                            <input 
+                                type="text"
+                                value={newActa.matricula}
+                                onChange={(e) => setNewActa({ ...newActa, matricula: e.target.value })}
+                                style={{ width: '100%', padding: '8px', borderRadius: tokens.radius.md, border: `1px solid ${tokens.colors.border.subtle}`, background: tokens.colors.bg.secondary, color: tokens.colors.text.primary }}
+                                required
+                            />
+                        </div>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '14px', marginBottom: '4px', color: tokens.colors.text.secondary }}>Tipo de Acta</label>
+                            <select 
+                                value={newActa.tipo}
+                                onChange={(e) => setNewActa({ ...newActa, tipo: e.target.value })}
+                                style={{ width: '100%', padding: '8px', borderRadius: tokens.radius.md, border: `1px solid ${tokens.colors.border.subtle}`, background: tokens.colors.bg.secondary, color: tokens.colors.text.primary }}
+                            >
+                                <option value="Checklist EPP">Checklist EPP</option>
+                                <option value="Induccion 5 Minutos">Inducción 5 Minutos</option>
+                                <option value="Parada Climatica">Parada Climática</option>
+                                <option value="Inspeccion Andamios">Inspección Andamios</option>
+                                <option value="Visita ART">Visita ART</option>
+                                <option value="Incidente Menor">Incidente Menor</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '14px', marginBottom: '4px', color: tokens.colors.text.secondary }}>Estado del Clima</label>
+                            <input 
+                                type="text"
+                                value={newActa.estadoClima}
+                                onChange={(e) => setNewActa({ ...newActa, estadoClima: e.target.value })}
+                                style={{ width: '100%', padding: '8px', borderRadius: tokens.radius.md, border: `1px solid ${tokens.colors.border.subtle}`, background: tokens.colors.bg.secondary, color: tokens.colors.text.primary }}
+                                required
+                            />
+                        </div>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '14px', marginBottom: '4px', color: tokens.colors.text.secondary }}>Cumplimiento EPP (%) - {newActa.eppCumplimientoPct}%</label>
+                            <input 
+                                type="range"
+                                min="0"
+                                max="100"
+                                value={newActa.eppCumplimientoPct}
+                                onChange={(e) => setNewActa({ ...newActa, eppCumplimientoPct: parseInt(e.target.value) })}
+                                style={{ width: '100%' }}
+                            />
+                        </div>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '14px', marginBottom: '4px', color: tokens.colors.text.secondary }}>Observaciones</label>
+                            <textarea 
+                                value={newActa.observaciones}
+                                onChange={(e) => setNewActa({ ...newActa, observaciones: e.target.value })}
+                                rows={3}
+                                style={{ width: '100%', padding: '8px', borderRadius: tokens.radius.md, border: `1px solid ${tokens.colors.border.subtle}`, background: tokens.colors.bg.secondary, color: tokens.colors.text.primary }}
+                            />
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '16px' }}>
+                            <Button type="button" variant="secondary" onClick={() => setNewActaModal(false)}>Cancelar</Button>
+                            <Button type="submit" variant="primary">Guardar Acta</Button>
+                        </div>
+                    </form>
+                </Modal>
+            </motion.div>
+        );
+    };
+
     return (
         <div style={{ 
             minHeight: '100vh', 
@@ -599,15 +796,19 @@ export default function LibroObraPage() {
                     }
                 />
 
-                <div style={{ marginBottom: '32px' }}>
+                <div style={{ marginBottom: '32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
                     <Tabs 
                         tabs={tabs} 
                         activeTab={activeTab} 
                         onChange={setActiveTab} 
                     />
+                    <Button variant={activeTab === 'hys' ? 'primary' : 'secondary'} onClick={() => setActiveTab(activeTab === 'hys' ? 'asientos' : 'hys')}>
+                        {activeTab === 'hys' ? '📖 Ver Asientos' : '🦺 Ver Libro H&S'}
+                    </Button>
                 </div>
 
                 <AnimatePresence mode="wait">
+                    {activeTab === 'hys' && <motion.div key="hys" variants={fadeInUp} initial="hidden" animate="visible" exit="hidden">{renderHySSection()}</motion.div>}
                     {activeTab === 'asientos' && <motion.div key="asientos" variants={fadeInUp} initial="hidden" animate="visible" exit="hidden">{renderAsientos()}</motion.div>}
                     {activeTab === 'nuevo' && <motion.div key="nuevo" variants={fadeInUp} initial="hidden" animate="visible" exit="hidden">{renderNuevo()}</motion.div>}
                     {activeTab === 'stats' && <motion.div key="stats" variants={fadeInUp} initial="hidden" animate="visible" exit="hidden">{renderStats()}</motion.div>}

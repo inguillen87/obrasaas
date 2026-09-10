@@ -13,15 +13,23 @@ import { Pool } from 'pg';
 // ============================================================================
 
 let pool = null;
+let realtimeCooldownUntil = 0;
 
 function getPool() {
+    if (Date.now() < realtimeCooldownUntil) {
+        return null;
+    }
     if (!pool && process.env.DATABASE_URL) {
         pool = new Pool({
             connectionString: process.env.DATABASE_URL,
             ssl: { rejectUnauthorized: false },
             max: 3, // Keep pool small for realtime connections
             idleTimeoutMillis: 30000,
-            connectionTimeoutMillis: 5000,
+            connectionTimeoutMillis: 2000,
+        });
+        pool.on('error', (err) => {
+            console.warn('Realtime pool error, activating 60s cooldown:', err.message);
+            realtimeCooldownUntil = Date.now() + 60000;
         });
     }
     return pool;
@@ -44,7 +52,8 @@ export async function getStateVersion(tenantId = 'default') {
         );
         return rows[0]?.updated_at?.toISOString() || null;
     } catch (err) {
-        console.warn('Realtime version check error:', err.message);
+        realtimeCooldownUntil = Date.now() + 60000;
+        console.warn('Realtime version check error (activating 60s cooldown):', err.message);
         return null;
     }
 }

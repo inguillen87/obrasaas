@@ -16,11 +16,28 @@ export async function sendWhatsAppMessage(to, body, phoneNumberId) {
     const pnid = phoneNumberId || process.env.META_PHONE_NUMBER_ID || process.env.WHATSAPP_PHONE_NUMBER_ID;
     const apiVersion = process.env.META_GRAPH_API_VERSION || 'v21.0';
     
-    // Clean phone number
-    const cleanTo = (to || '').replace(/[^0-9]/g, '');
+    let messagePayload;
+    let cleanTo = '';
+    let logBody = '';
+
+    if (typeof to === 'object' && to !== null) {
+        messagePayload = to;
+        cleanTo = (to.to || '').replace(/[^0-9]/g, '');
+        messagePayload.to = cleanTo;
+        logBody = to.text?.body || to.interactive?.body?.text || JSON.stringify(to);
+    } else {
+        cleanTo = (to || '').replace(/[^0-9]/g, '');
+        logBody = body;
+        messagePayload = {
+            messaging_product: 'whatsapp',
+            to: cleanTo,
+            type: 'text',
+            text: { body }
+        };
+    }
 
     if (!token || !pnid) {
-        console.log(`[WhatsApp Sandbox Mode] Dispatched to +${cleanTo}: ${body?.slice(0, 80)}...`);
+        console.log(`[WhatsApp Sandbox Mode] Dispatched to +${cleanTo}: ${logBody?.slice(0, 80)}...`);
         return { success: true, simulated: true, messageId: `sim_wamid_${Date.now()}` };
     }
 
@@ -31,12 +48,7 @@ export async function sendWhatsAppMessage(to, body, phoneNumberId) {
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                messaging_product: 'whatsapp',
-                to: cleanTo,
-                type: 'text',
-                text: { body }
-            })
+            body: JSON.stringify(messagePayload)
         });
 
         if (!res.ok) {
