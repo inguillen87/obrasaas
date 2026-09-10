@@ -13,9 +13,11 @@ export default function MarketplacePage() {
     const [rfqModal, setRfqModal] = useState({ show: false, provider: null });
     const [rfqDetails, setRfqDetails] = useState({ material: '', quantity: '', deliveryDate: '', notes: '' });
     const [rfqSent, setRfqSent] = useState(false);
+    const [materialRequests, setMaterialRequests] = useState([]);
 
     useEffect(() => {
         fetch('/api/state').then(r => r.json()).then(state => {
+            if (state.materialRequests) setMaterialRequests(state.materialRequests);
             const registry = (state.workerRegistry || []).filter(w => w.status === 'Proveedor');
             const catalog = [
                 { id: 'p-1', name: 'Cementos Avellaneda S.A.', rubro: 'Materiales', rating: 4.9, city: 'Buenos Aires', phone: '5491144445555', products: ['Cemento Portland', 'Cal Hidratada', 'Mortero Listo'], leadTime: '24-48 hs', priceRange: '$', verified: true },
@@ -63,6 +65,79 @@ export default function MarketplacePage() {
 
             <main style={{ maxWidth: '1360px', margin: '0 auto', padding: '24px clamp(14px, 4vw, 32px) 80px' }}>
                 
+                {/* Solicitudes de Campo Pendientes de Cotización */}
+                {materialRequests.length > 0 && (
+                    <GlassCard style={{ padding: '20px 24px', marginBottom: '32px', border: '1px solid rgba(245, 158, 11, 0.3)', background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(15, 23, 42, 0.8) 100%)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <span style={{ fontSize: '1.3rem' }}>⚡</span>
+                                <div>
+                                    <h3 style={{ fontSize: '1rem', fontWeight: 800, margin: 0, color: '#f8fafc' }}>
+                                        Pedidos de Campo Listos para Cotización Inmediata
+                                    </h3>
+                                    <p style={{ fontSize: '0.76rem', color: '#94a3b8', margin: '2px 0 0' }}>
+                                        Insumos solicitados por la cuadrilla de obra que requieren cotización de corralón
+                                    </p>
+                                </div>
+                            </div>
+                            <Badge color="#f59e0b" variant="filled" size="sm">
+                                {materialRequests.filter(m => m.estado === 'pendiente_aprobacion').length} Pendientes
+                            </Badge>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px' }}>
+                            {materialRequests.map((req, idx) => (
+                                <div key={idx} style={{ background: 'rgba(15, 23, 42, 0.6)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '12px', padding: '14px 16px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                                    <div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                                            <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#f8fafc' }}>{req.solicitante} ({req.rol})</span>
+                                            <Badge color={req.estado === 'aprobada' ? '#10b981' : '#f59e0b'} variant="subtle" size="xs">
+                                                {req.estado === 'aprobada' ? 'Aprobada' : 'Pendiente'}
+                                            </Badge>
+                                        </div>
+                                        <div style={{ fontSize: '0.78rem', color: '#cbd5e1', marginBottom: '8px' }}>
+                                            {req.items?.map(it => `${it.descripcion} (${it.cantidad} ${it.unidad})`).join(', ')}
+                                        </div>
+                                        {req.justificacion && (
+                                            <div style={{ fontSize: '0.72rem', color: '#94a3b8', fontStyle: 'italic', marginBottom: '10px' }}>
+                                                "{req.justificacion}"
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '8px', marginTop: '6px', flexWrap: 'wrap' }}>
+                                        <Button 
+                                            variant="whatsapp" 
+                                            size="xs"
+                                            onClick={() => {
+                                                const text = encodeURIComponent(`Hola, quisiera cotizar los siguientes materiales para la obra:\n${req.items?.map(it => `- ${it.descripcion}: ${it.cantidad} ${it.unidad}`).join('\n')}\nJustificación: ${req.justificacion || 'Urgente'}`);
+                                                window.open(`https://wa.me/5491144445555?text=${text}`, '_blank');
+                                            }}
+                                        >
+                                            📲 Cotizar WhatsApp
+                                        </Button>
+                                        <Button 
+                                            variant="secondary" 
+                                            size="xs"
+                                            onClick={() => {
+                                                const firstItem = req.items?.[0];
+                                                setRfqDetails({
+                                                    material: firstItem ? `${firstItem.descripcion} x ${firstItem.cantidad} ${firstItem.unidad}` : '',
+                                                    quantity: String(firstItem?.cantidad || ''),
+                                                    deliveryDate: '24-48 hs',
+                                                    notes: req.justificacion || ''
+                                                });
+                                                setRfqModal({ show: true, provider: providers[0] });
+                                            }}
+                                        >
+                                            Cotización Formal
+                                        </Button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </GlassCard>
+                )}
+
                 {/* Search & Filter Bar */}
                 <div style={{ display: 'flex', gap: '14px', marginBottom: '32px', flexWrap: 'wrap', alignItems: 'center' }}>
                     <div style={{ flex: 1, minWidth: 'min(100%, 260px)', position: 'relative' }}>
