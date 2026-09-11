@@ -112,6 +112,15 @@ export default function Dashboard() {
   const [isLightTheme, setIsLightTheme] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [mapMode, setMapMode] = useState('sat');
+  const [sidebarSearch, setSidebarSearch] = useState('');
+  const [collapsedCategories, setCollapsedCategories] = useState({});
+
+  const toggleCategory = (catId) => {
+    setCollapsedCategories(prev => ({
+      ...prev,
+      [catId]: !prev[catId]
+    }));
+  };
 
   // Modal Overlays
   const [clerkModalOpen, setClerkModalOpen] = useState(false);
@@ -1346,6 +1355,81 @@ export default function Dashboard() {
     };
   }, [state]);
 
+  const sidebarNavSections = [
+    {
+      id: 'operaciones',
+      title: 'Operaciones & Campo',
+      icon: 'fa-solid fa-hard-hat',
+      items: [
+        { id: 'sec-dashboard', label: 'Dashboard General', icon: 'fa-solid fa-chart-line', type: 'tab', badge: 'Principal' },
+        { id: 'sec-whatsapp', label: 'Simulador WhatsApp', icon: 'fa-brands fa-whatsapp', type: 'tab', badge: 'En Vivo', badgeClass: 'new' },
+        { id: 'sec-personal', label: 'Personal & RRHH', icon: 'fa-solid fa-users-gear', type: 'tab', badge: 'UOCRA' },
+        { id: 'sec-gantt', label: 'Cronograma Gantt', icon: 'fa-solid fa-timeline', type: 'tab' },
+        { href: '/coordinacion', label: 'Coordinación & Markup', icon: 'fa-solid fa-camera-retro', type: 'link', badge: 'Fotos', badgeClass: 'amber' },
+        { href: '/calendario', label: 'Calendario de Citas', icon: 'fa-solid fa-calendar-check', type: 'link', badge: 'WhatsApp', badgeClass: 'new' }
+      ]
+    },
+    {
+      id: 'tecnica',
+      title: 'Gestión Técnica & Calidad',
+      icon: 'fa-solid fa-compass-drafting',
+      items: [
+        { href: '/libro-obra', label: 'Libro de Obra Digital', icon: 'fa-solid fa-book', type: 'link', badge: 'Ley 22.250', badgeClass: 'purple' },
+        { href: '/cronograma', label: 'Cronograma Studio (EVM)', icon: 'fa-solid fa-calendar-days', type: 'link', badge: 'Curva S', badgeClass: 'amber' },
+        { href: '/inspecciones', label: 'Inspecciones QA/QC', icon: 'fa-solid fa-clipboard-check', type: 'link', badge: 'SRT 911' },
+        { href: '/planos', label: 'Visor Planos 2D', icon: 'fa-solid fa-compass-drafting', type: 'link' },
+        { href: '/bim', label: 'Visor 3D BIM', icon: 'fa-solid fa-cube', type: 'link' },
+        { href: '/documentos', label: 'Documentos & Submittals', icon: 'fa-solid fa-folder-open', type: 'link' }
+      ]
+    },
+    {
+      id: 'sostenibilidad',
+      title: 'Sostenibilidad & Off-Site',
+      icon: 'fa-solid fa-seedling',
+      items: [
+        { href: '/sostenibilidad', label: 'Madera Modular & CO₂', icon: 'fa-solid fa-tree', type: 'link', badge: 'ESG Cert', badgeClass: 'new' },
+        { href: '/sostenibilidad', label: 'Módulos Off-Site Prefab', icon: 'fa-solid fa-cubes', type: 'link', badge: '12/16' }
+      ]
+    },
+    {
+      id: 'finanzas',
+      title: 'Finanzas, Costos & CAC',
+      icon: 'fa-solid fa-coins',
+      items: [
+        { href: '/certificacion', label: 'Certificación CAC & Actas', icon: 'fa-solid fa-file-contract', type: 'link', badge: 'CAMARCO', badgeClass: 'amber' },
+        { id: 'sec-presupuesto', label: 'Presupuesto Formal', icon: 'fa-solid fa-file-invoice-dollar', type: 'tab' },
+        { href: '/presupuesto', label: 'Presupuesto & Curva S', icon: 'fa-solid fa-calculator', type: 'link' },
+        { href: '/costos', label: 'Control de Costos & Rubros', icon: 'fa-solid fa-sack-dollar', type: 'link' },
+        { href: '/marketplace', label: 'Marketplace Corralones', icon: 'fa-solid fa-store', type: 'link', badge: 'Cotizar', badgeClass: 'new' }
+      ]
+    },
+    {
+      id: 'enterprise',
+      title: 'Dirección & Enterprise',
+      icon: 'fa-solid fa-crown',
+      items: [
+        { id: 'sec-admin', label: 'Consola SuperAdmin', icon: 'fa-solid fa-building-user', type: 'tab' },
+        { href: '/superadmin', label: 'Panel SuperAdmin Cloud', icon: 'fa-solid fa-shield-halved', type: 'link' },
+        { href: '/portal', label: 'Portal Inversor & Vecino', icon: 'fa-solid fa-building', type: 'link', badge: 'Público' },
+        { href: '/ejecutivo', label: 'Dashboard CEO Ejecutivo', icon: 'fa-solid fa-briefcase', type: 'link' },
+        { href: '/compliance', label: 'Compliance & Legal', icon: 'fa-solid fa-scale-balanced', type: 'link' },
+        { href: '/poster', label: 'Cartel de Obra QR', icon: 'fa-solid fa-qrcode', type: 'link', badge: 'GCBA' },
+        { href: '/licitaciones', label: 'Licitómetro Público', icon: 'fa-solid fa-landmark', type: 'link' },
+        { href: '/api-docs', label: 'API REST & Docs', icon: 'fa-solid fa-code', type: 'link' },
+        { href: '/pricing', label: 'Planes & Precios', icon: 'fa-solid fa-tag', type: 'link' },
+        { href: '/', label: 'Landing Comercial', icon: 'fa-solid fa-rocket', type: 'link' }
+      ]
+    }
+  ];
+
+  const allNavItems = sidebarNavSections.flatMap(s => s.items);
+  const filteredNavItems = sidebarSearch.trim()
+    ? allNavItems.filter(item => 
+        item.label.toLowerCase().includes(sidebarSearch.toLowerCase()) || 
+        (item.badge && item.badge.toLowerCase().includes(sidebarSearch.toLowerCase()))
+      )
+    : [];
+
   return (
     <>
       {/* Live Toasts Notifications Container */}
@@ -1364,152 +1448,180 @@ export default function Dashboard() {
       </div>
 
       <div className="app-container">
-        {/* Sidebar Navigation */}
+        {/* Sidebar Navigation — Enhanced UX/UI with Pinned Header, Scroll Area & Pinned Footer */}
         <aside className={`sidebar ${mobileSidebarOpen ? 'active' : ''}`}>
-          <div className="brand">
-            <div className="brand-logo">OS</div>
-            <div className="brand-name">ObraSaaS</div>
+          {/* Top Fixed Header */}
+          <div className="sidebar-header">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <Link href="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div className="brand-logo">OS</div>
+                <div className="brand-name">ObraSaaS</div>
+              </Link>
+              <button 
+                onClick={handleToggleTheme} 
+                title={isLightTheme ? "Cambiar a modo oscuro" : "Cambiar a modo claro"}
+                style={{ 
+                  background: 'rgba(255,255,255,0.06)', 
+                  border: '1px solid rgba(255,255,255,0.1)', 
+                  color: isLightTheme ? '#0f172a' : '#fbbf24', 
+                  borderRadius: '7px', 
+                  padding: '5px 8px', 
+                  cursor: 'pointer',
+                  fontSize: '0.72rem' 
+                }}
+              >
+                <i className={isLightTheme ? "fa-solid fa-sun" : "fa-solid fa-moon"}></i>
+              </button>
+            </div>
+
+            {/* Active Obra Badge with pulse dot */}
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '6px', 
+              padding: '5px 8px', 
+              background: 'rgba(255,255,255,0.03)', 
+              border: '1px solid rgba(255,255,255,0.06)', 
+              borderRadius: '6px', 
+              marginBottom: '8px' 
+            }}>
+              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 6px #22c55e', display: 'inline-block' }}></span>
+              <span style={{ fontSize: '0.68rem', color: '#cbd5e1', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {state.projectConfig?.name || 'Torre Palermo Soho'}
+              </span>
+            </div>
+
+            {/* Live Search Filter Input */}
+            <div className="sidebar-search-container">
+              <i className="fa-solid fa-magnifying-glass sidebar-search-icon"></i>
+              <input
+                type="text"
+                className="sidebar-search-input"
+                placeholder="Buscar módulo..."
+                value={sidebarSearch}
+                onChange={(e) => setSidebarSearch(e.target.value)}
+              />
+              {sidebarSearch && (
+                <button 
+                  className="sidebar-search-clear" 
+                  onClick={() => setSidebarSearch('')}
+                  title="Limpiar búsqueda"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
           </div>
-          
-          {/* Light/Dark Theme Toggle */}
-          <div className="theme-toggle-container" style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', padding: '8px 12px', borderRadius: '12px' }}>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}><i className="fa-solid fa-circle-half-stroke"></i> Tema</span>
-            <button onClick={handleToggleTheme} className="btn btn-sm" style={{ padding: '4px 10px', fontSize: '0.75rem', background: 'var(--primary)', color: 'var(--bg-main)', border: 'none', cursor: 'pointer', fontWeight: 700, borderRadius: '8px' }}>
-              {isLightTheme ? <><i className="fa-solid fa-sun"></i> Claro</> : <><i className="fa-solid fa-moon"></i> Oscuro</>}
-            </button>
+
+          {/* Scrollable Navigation Area */}
+          <div className="sidebar-scroll-area">
+            {sidebarSearch.trim() ? (
+              // Flat View when Searching
+              <div>
+                <div style={{ fontSize: '0.64rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px', padding: '0 6px' }}>
+                  Resultados ({filteredNavItems.length}):
+                </div>
+                <ul className="nav-menu">
+                  {filteredNavItems.length === 0 ? (
+                    <li style={{ padding: '16px 10px', fontSize: '0.78rem', color: '#64748b', textAlign: 'center' }}>
+                      No se encontraron módulos para "{sidebarSearch}"
+                    </li>
+                  ) : (
+                    filteredNavItems.map((item, idx) => (
+                      <li key={idx} className={`nav-item ${item.type === 'tab' && activeTab === item.id ? 'active' : ''}`}>
+                        {item.type === 'tab' ? (
+                          <button onClick={() => { setActiveTab(item.id); if (window.innerWidth <= 1024) setMobileSidebarOpen(false); }}>
+                            <i className={item.icon}></i>
+                            <span>{item.label}</span>
+                            {item.badge && <span className={`nav-badge ${item.badgeClass || ''}`}>{item.badge}</span>}
+                          </button>
+                        ) : (
+                          <Link href={item.href} style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
+                            <button style={{ textAlign: 'left', width: '100%' }}>
+                              <i className={item.icon}></i>
+                              <span>{item.label}</span>
+                              {item.badge && <span className={`nav-badge ${item.badgeClass || ''}`}>{item.badge}</span>}
+                            </button>
+                          </Link>
+                        )}
+                      </li>
+                    ))
+                  )}
+                </ul>
+              </div>
+            ) : (
+              // Categorized Accordion View
+              sidebarNavSections.map(section => {
+                const isCollapsed = collapsedCategories[section.id];
+                return (
+                  <div key={section.id} className="nav-category-group">
+                    <div 
+                      className="nav-category-title" 
+                      onClick={() => toggleCategory(section.id)}
+                      title="Haz clic para expandir o contraer sección"
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <i className={section.icon} style={{ fontSize: '0.7rem', color: 'var(--primary)', opacity: 0.9 }}></i>
+                        <span>{section.title}</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <span style={{ fontSize: '0.58rem', opacity: 0.6, background: 'rgba(255,255,255,0.06)', padding: '1px 5px', borderRadius: '4px' }}>
+                          {section.items.length}
+                        </span>
+                        <i className={`fa-solid fa-chevron-${isCollapsed ? 'right' : 'down'}`} style={{ fontSize: '0.6rem', opacity: 0.5 }}></i>
+                      </div>
+                    </div>
+
+                    {!isCollapsed && (
+                      <ul className="nav-menu">
+                        {section.items.map((item, idx) => (
+                          <li key={idx} className={`nav-item ${item.type === 'tab' && activeTab === item.id ? 'active' : ''}`}>
+                            {item.type === 'tab' ? (
+                              <button onClick={() => { setActiveTab(item.id); if (window.innerWidth <= 1024) setMobileSidebarOpen(false); }}>
+                                <i className={item.icon}></i>
+                                <span>{item.label}</span>
+                                {item.badge && <span className={`nav-badge ${item.badgeClass || ''}`}>{item.badge}</span>}
+                              </button>
+                            ) : (
+                              <Link href={item.href} style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
+                                <button style={{ textAlign: 'left', width: '100%' }}>
+                                  <i className={item.icon}></i>
+                                  <span>{item.label}</span>
+                                  {item.badge && <span className={`nav-badge ${item.badgeClass || ''}`}>{item.badge}</span>}
+                                </button>
+                              </Link>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                );
+              })
+            )}
           </div>
-          
-          <nav className="nav-menu">
-            <li className={`nav-item ${activeTab === 'sec-dashboard' ? 'active' : ''}`}>
-              <button onClick={() => setActiveTab('sec-dashboard')}><i className="fa-solid fa-chart-line"></i> Dashboard</button>
-            </li>
-            <li className={`nav-item ${activeTab === 'sec-whatsapp' ? 'active' : ''}`}>
-              <button onClick={() => setActiveTab('sec-whatsapp')}><i className="fa-brands fa-whatsapp"></i> Simulador WhatsApp</button>
-            </li>
-            <li className={`nav-item ${activeTab === 'sec-gantt' ? 'active' : ''}`}>
-              <button onClick={() => setActiveTab('sec-gantt')}><i className="fa-solid fa-timeline"></i> Cronograma Gantt</button>
-            </li>
-            <li className={`nav-item ${activeTab === 'sec-admin' ? 'active' : ''}`}>
-              <button onClick={() => setActiveTab('sec-admin')}><i className="fa-solid fa-building-user"></i> Consola SuperAdmin</button>
-            </li>
-            <li className={`nav-item ${activeTab === 'sec-presupuesto' ? 'active' : ''}`}>
-              <button onClick={() => setActiveTab('sec-presupuesto')}><i className="fa-solid fa-file-invoice-dollar"></i> Presupuesto Formal</button>
-            </li>
-            <li className={`nav-item ${activeTab === 'sec-personal' ? 'active' : ''}`}>
-              <button onClick={() => setActiveTab('sec-personal')}><i className="fa-solid fa-users-gear"></i> Personal &amp; RRHH</button>
-            </li>
-            <li className="nav-item">
-              <Link href="/" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
-                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-rocket"></i> Landing Comercial</button>
-              </Link>
-            </li>
-            <li style={{ padding: '8px 16px', fontSize: '0.65rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 700, marginTop: '8px' }}>Gestión de Obra</li>
-            <li className="nav-item">
-              <Link href="/libro-obra" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
-                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-book"></i> Libro de Obra</button>
-              </Link>
-            </li>
-            <li className="nav-item">
-              <Link href="/cronograma" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
-                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-calendar-days"></i> Cronograma Studio</button>
-              </Link>
-            </li>
-            <li className="nav-item">
-              <Link href="/inspecciones" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
-                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-clipboard-check"></i> Inspecciones QA/QC</button>
-              </Link>
-            </li>
-            <li className="nav-item">
-              <Link href="/coordinacion" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
-                <button style={{ textAlign: 'left', width: '100%', color: 'var(--primary)', fontWeight: 600 }}><i className="fa-solid fa-camera-retro"></i> Coordinación Visual & Alertas</button>
-              </Link>
-            </li>
-            <li className="nav-item">
-              <Link href="/calendario" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
-                <button style={{ textAlign: 'left', width: '100%', color: 'var(--primary)', fontWeight: 600 }}><i className="fa-solid fa-calendar-check"></i> Calendario de Citas</button>
-              </Link>
-            </li>
-            <li className="nav-item">
-              <Link href="/documentos" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
-                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-folder-open"></i> Documentos & Submittals</button>
-              </Link>
-            </li>
-            <li className="nav-item">
-              <Link href="/presupuesto" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
-                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-calculator"></i> Presupuesto & Curva S</button>
-              </Link>
-            </li>
-            <li className="nav-item">
-              <Link href="/costos" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
-                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-coins"></i> Control de Costos</button>
-              </Link>
-            </li>
-            <li className="nav-item">
-              <Link href="/planos" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
-                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-compass-drafting"></i> Visor Planos 2D</button>
-              </Link>
-            </li>
-            <li className="nav-item">
-              <Link href="/bim" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
-                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-cube"></i> Visor 3D BIM</button>
-              </Link>
-            </li>
-            <li style={{ padding: '8px 16px', fontSize: '0.65rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 700, marginTop: '8px' }}>Enterprise</li>
-            <li className="nav-item">
-              <Link href="/ejecutivo" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
-                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-briefcase"></i> Dashboard CEO</button>
-              </Link>
-            </li>
-            <li className="nav-item">
-              <Link href="/portal" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
-                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-building"></i> Portal Inversor</button>
-              </Link>
-            </li>
-            <li className="nav-item">
-              <Link href="/compliance" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
-                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-scale-balanced"></i> Compliance</button>
-              </Link>
-            </li>
-            <li className="nav-item">
-              <Link href="/marketplace" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
-                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-store"></i> Marketplace</button>
-              </Link>
-            </li>
-            <li className="nav-item">
-              <Link href="/superadmin" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
-                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-shield-halved"></i> Super Admin</button>
-              </Link>
-            </li>
-            <li className="nav-item">
-              <Link href="/licitaciones" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
-                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-landmark"></i> Licitómetro Público</button>
-              </Link>
-            </li>
-            <li className="nav-item">
-              <Link href="/api-docs" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
-                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-code"></i> API Docs</button>
-              </Link>
-            </li>
-            <li className="nav-item">
-              <Link href="/pricing" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
-                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-tag"></i> Precios</button>
-              </Link>
-            </li>
-            <li className="nav-item">
-              <Link href="/poster" style={{ textDecoration: 'none', display: 'block', width: '100%' }}>
-                <button style={{ textAlign: 'left', width: '100%' }}><i className="fa-solid fa-qrcode"></i> Cartel de Obra QR</button>
-              </Link>
-            </li>
-          </nav>
-          
+
+          {/* Fixed Pinned Bottom Footer */}
           <div className="sidebar-footer">
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%' }}>
-              <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--primary)', color: 'var(--bg-main)', fontWeight: 800, display: 'flex', alignItems: 'center', fontSize: '0.85rem', flexShrink: 0, justifyContent: 'center' }}>{(state.projectConfig?.director?.name || 'M')[0]}</div>
-              <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexGrow: 1 }}>
-                <span style={{ fontSize: '0.75rem', fontWeight: 700, display: 'block', color: '#fff' }}>{state.projectConfig?.director?.name || 'Director'}</span>
-                <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>Plan {state.subscription?.plan || 'Pro'}</span>
+              <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: '#060913', fontWeight: 800, display: 'flex', alignItems: 'center', fontSize: '0.85rem', flexShrink: 0, justifyContent: 'center' }}>
+                {(state.projectConfig?.director?.name || 'M')[0]}
               </div>
-              <button onClick={handleClerkLogout} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+              <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexGrow: 1 }}>
+                <span style={{ fontSize: '0.76rem', fontWeight: 700, display: 'block', color: '#fff' }}>
+                  {state.projectConfig?.director?.name || 'Marcelo Guillén'}
+                </span>
+                <span style={{ fontSize: '0.64rem', color: '#94a3b8' }}>
+                  Director General • Plan {state.subscription?.plan || 'Enterprise'}
+                </span>
+              </div>
+              <button 
+                onClick={handleClerkLogout} 
+                title="Cerrar Sesión" 
+                style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '4px 6px', borderRadius: '4px', transition: 'color 0.2s' }} 
+                onMouseEnter={(e) => e.currentTarget.style.color = '#ef4444'} 
+                onMouseLeave={(e) => e.currentTarget.style.color = '#94a3b8'}
+              >
                 <i className="fa-solid fa-right-from-bracket"></i>
               </button>
             </div>
