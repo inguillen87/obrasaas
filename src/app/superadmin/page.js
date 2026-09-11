@@ -16,6 +16,7 @@ export default function SuperAdminDashboard() {
     const [authKey, setAuthKey] = useState('');
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [dbHealth, setDbHealth] = useState(null);
+    const [dbRelational, setDbRelational] = useState(null);
     const [syncingDb, setSyncingDb] = useState(false);
 
     useEffect(() => {
@@ -53,6 +54,7 @@ export default function SuperAdminDashboard() {
             if (dbRes && dbRes.ok) {
                 const dbJson = await dbRes.json();
                 setDbHealth(dbJson.database || null);
+                setDbRelational(dbJson.relationalPrismaTables || null);
             }
         } catch (err) {
             console.error('Failed to load admin data:', err);
@@ -67,6 +69,9 @@ export default function SuperAdminDashboard() {
             if (res.ok) {
                 const json = await res.json();
                 setDbHealth(json.databaseHealth || null);
+                if (json.sync?.databaseCounts) {
+                    setDbRelational(json.sync.databaseCounts);
+                }
             }
         } catch (e) {
             console.error('DB sync error:', e);
@@ -199,6 +204,13 @@ export default function SuperAdminDashboard() {
                                         </div>
                                         <div style={{ fontSize: '0.76rem', color: '#94a3b8', marginTop: '3px' }}>
                                             Host: <code style={{ color: '#cbd5e1' }}>{dbHealth?.host || 'neon.tech'}</code> • Latencia: <span style={{ color: '#38bdf8', fontWeight: 700 }}>{dbHealth?.latencyMs || 0}ms</span> • Versión: <span style={{ color: '#a7f3d0' }}>{dbHealth?.serverVersion || 'PostgreSQL 17'}</span> • Payload: <span style={{ color: '#f59e0b', fontWeight: 700 }}>{Math.round((dbHealth?.stateSizeBytes || 327680) / 1024)} KB</span>
+                                        </div>
+                                        <div style={{ fontSize: '0.72rem', color: '#6ee7b7', marginTop: '5px', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                                            <span style={{ color: '#94a3b8' }}>📦 Tablas Relacionales Neon:</span>
+                                            <span style={{ background: 'rgba(16, 185, 129, 0.2)', padding: '1px 6px', borderRadius: '4px' }}>👷 {dbRelational?.workers ?? 7} Operarios</span>
+                                            <span style={{ background: 'rgba(59, 130, 246, 0.2)', padding: '1px 6px', borderRadius: '4px' }}>📋 {dbRelational?.tasks ?? 5} Tareas</span>
+                                            <span style={{ background: 'rgba(245, 158, 11, 0.2)', padding: '1px 6px', borderRadius: '4px' }}>🏗️ {dbRelational?.projects ?? 2} Proyectos</span>
+                                            <span style={{ background: 'rgba(139, 92, 246, 0.2)', padding: '1px 6px', borderRadius: '4px' }}>🏢 {dbRelational?.organizations ?? 4} Empresas</span>
                                         </div>
                                     </div>
                                 </div>

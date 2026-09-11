@@ -10,7 +10,7 @@ export async function GET() {
         const health = await getDatabaseHealth();
         
         let relationalStats = {
-            tenants: 0,
+            organizations: 0,
             projects: 0,
             workers: 0,
             tasks: 0
@@ -18,15 +18,24 @@ export async function GET() {
 
         if (health.connected) {
             try {
-                const [tenants, projects, workers, tasks] = await Promise.all([
-                    prisma.tenant.count().catch(() => 0),
-                    prisma.project.count().catch(() => 0),
-                    prisma.worker.count().catch(() => 0),
-                    prisma.task.count().catch(() => 0)
-                ]);
-                relationalStats = { tenants, projects, workers, tasks };
+                const { getPool } = await import('@/lib/db');
+                const p = getPool();
+                if (p) {
+                    const [orgs, projs, wrks, tsks] = await Promise.all([
+                        p.query('SELECT count(*) FROM "Organization"').catch(() => ({ rows: [{ count: 0 }] })),
+                        p.query('SELECT count(*) FROM "Project"').catch(() => ({ rows: [{ count: 0 }] })),
+                        p.query('SELECT count(*) FROM "Worker"').catch(() => ({ rows: [{ count: 0 }] })),
+                        p.query('SELECT count(*) FROM "Task"').catch(() => ({ rows: [{ count: 0 }] }))
+                    ]);
+                    relationalStats = {
+                        organizations: parseInt(orgs.rows[0].count, 10),
+                        projects: parseInt(projs.rows[0].count, 10),
+                        workers: parseInt(wrks.rows[0].count, 10),
+                        tasks: parseInt(tsks.rows[0].count, 10)
+                    };
+                }
             } catch (relErr) {
-                console.warn('Prisma table count warning:', relErr.message);
+                console.warn('Postgres table count warning:', relErr.message);
             }
         }
 
