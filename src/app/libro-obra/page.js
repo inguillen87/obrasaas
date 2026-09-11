@@ -137,11 +137,15 @@ export default function LibroObraPage() {
 
     const fetchData = useCallback(async () => {
         try {
-            const res = await fetch('/api/admin/libro-obra', {
-                headers: { 'x-api-key': typeof window !== 'undefined' ? localStorage.getItem('obrasaas_admin_key') || 'internal' : 'internal' }
-            });
-            if (res.ok) {
-                const data = await res.json();
+            const [libroRes, hysRes] = await Promise.all([
+                fetch('/api/admin/libro-obra', {
+                    headers: { 'x-api-key': typeof window !== 'undefined' ? localStorage.getItem('obrasaas_admin_key') || 'internal' : 'internal' }
+                }),
+                fetch('/api/v1/hys').catch(() => null)
+            ]);
+
+            if (libroRes.ok) {
+                const data = await libroRes.json();
                 if (data.entries && data.entries.length > 0) {
                     const mappedEntries = data.entries.map((e, idx) => ({
                         id: e.id,
@@ -164,6 +168,13 @@ export default function LibroObraPage() {
                 }
             } else {
                 setEntries(DEMO_ENTRIES);
+            }
+
+            if (hysRes && hysRes.ok) {
+                const hysData = await hysRes.json();
+                if (hysData.actas && hysData.actas.length > 0) {
+                    setActasHyS(hysData.actas);
+                }
             }
         } catch (error) {
             console.error('Error fetching data:', error);
@@ -584,16 +595,32 @@ export default function LibroObraPage() {
         </motion.div>
     );
 
-    const handleHySSubmit = (e) => {
+    const handleHySSubmit = async (e) => {
         e.preventDefault();
-        const newEntry = {
-            ...newActa,
-            id: `hys-${Date.now()}`,
-            fecha: new Date().toISOString().split('T')[0],
-            hash: Math.random().toString(36).substring(2, 15)
-        };
-        setActasHyS([newEntry, ...actasHyS]);
-        setNewActaModal(false);
+        try {
+            const res = await fetch('/api/v1/hys', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(newActa)
+            });
+            const data = await res.json();
+            if (data.success && data.acta) {
+                setActasHyS([data.acta, ...actasHyS]);
+            } else {
+                const fallbackEntry = {
+                    ...newActa,
+                    id: `hys-${Date.now()}`,
+                    fecha: new Date().toISOString().split('T')[0],
+                    firmaDigitalToken: 'SHA256:manual...'
+                };
+                setActasHyS([fallbackEntry, ...actasHyS]);
+            }
+        } catch (err) {
+            console.error('Error submitting acta HyS:', err);
+        } finally {
+            setNewActaModal(false);
+            fetchData();
+        }
     };
 
     const renderHySSection = () => {

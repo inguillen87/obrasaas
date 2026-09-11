@@ -124,6 +124,34 @@ export default function DirectorRoleView({
             <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>Aprobación Compras</div>
           </div>
         </Link>
+        <Link href="/sostenibilidad" style={{ textDecoration: 'none' }}>
+          <div className="glass-panel-premium dashboard-card-hover" style={{ padding: '14px 16px', cursor: 'pointer', borderLeft: '3px solid #22c55e', transition: 'all 0.2s' }}>
+            <div style={{ fontSize: '1.2rem', marginBottom: '4px' }}>🌱</div>
+            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#fff' }}>Sostenibilidad & Madera</div>
+            <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>CO₂ & Módulos Off-Site</div>
+          </div>
+        </Link>
+        <Link href="/certificacion" style={{ textDecoration: 'none' }}>
+          <div className="glass-panel-premium dashboard-card-hover" style={{ padding: '14px 16px', cursor: 'pointer', borderLeft: '3px solid #6366f1', transition: 'all 0.2s' }}>
+            <div style={{ fontSize: '1.2rem', marginBottom: '4px' }}>📊</div>
+            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#fff' }}>Certificación CAC</div>
+            <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>Actas & Redeterminación</div>
+          </div>
+        </Link>
+        <Link href="/marketplace" style={{ textDecoration: 'none' }}>
+          <div className="glass-panel-premium dashboard-card-hover" style={{ padding: '14px 16px', cursor: 'pointer', borderLeft: '3px solid #ec4899', transition: 'all 0.2s' }}>
+            <div style={{ fontSize: '1.2rem', marginBottom: '4px' }}>🛒</div>
+            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#fff' }}>Marketplace</div>
+            <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>Cotizaciones Corralones</div>
+          </div>
+        </Link>
+        <Link href="/portal" style={{ textDecoration: 'none' }}>
+          <div className="glass-panel-premium dashboard-card-hover" style={{ padding: '14px 16px', cursor: 'pointer', borderLeft: '3px solid #14b8a6', transition: 'all 0.2s' }}>
+            <div style={{ fontSize: '1.2rem', marginBottom: '4px' }}>🏛️</div>
+            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#fff' }}>Portal Inversor</div>
+            <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>Hitos & Curva S Pública</div>
+          </div>
+        </Link>
       </div>
 
       {/* Director Specific KPIs */}

@@ -153,7 +153,22 @@ async function readDb() {
                     materialRequests: storedState.materialRequests || defaultAppState.materialRequests,
                     actasHyS: storedState.actasHyS || defaultAppState.actasHyS,
                     geofenceSettings: storedState.geofenceSettings || defaultAppState.geofenceSettings,
-                    ganttExternalFiles: storedState.ganttExternalFiles || defaultAppState.ganttExternalFiles
+                    ganttExternalFiles: storedState.ganttExternalFiles || defaultAppState.ganttExternalFiles,
+                    overtimeRecords: storedState.overtimeRecords || defaultAppState.overtimeRecords,
+                    woodModularMetrics: {
+                        ...defaultAppState.woodModularMetrics,
+                        ...(storedState.woodModularMetrics || {}),
+                        kgCO2CapturadoTotal: storedState.woodModularMetrics?.kgCO2CapturadoTotal || defaultAppState.woodModularMetrics.kgCO2CapturadoTotal,
+                        m3MaderaInstalada: storedState.woodModularMetrics?.m3MaderaInstalada || defaultAppState.woodModularMetrics.m3MaderaInstalada,
+                        modulosOffSite: {
+                            ...defaultAppState.woodModularMetrics.modulosOffSite,
+                            ...(storedState.woodModularMetrics?.modulosOffSite || {})
+                        },
+                        tornilleriaFijaciones: {
+                            ...defaultAppState.woodModularMetrics.tornilleriaFijaciones,
+                            ...(storedState.woodModularMetrics?.tornilleriaFijaciones || {})
+                        }
+                    }
                 };
                 return {
                     appState: mergedState,
@@ -203,7 +218,12 @@ async function readDb() {
             materialRequests: storedState.materialRequests || defaultAppState.materialRequests,
             actasHyS: storedState.actasHyS || defaultAppState.actasHyS,
             geofenceSettings: storedState.geofenceSettings || defaultAppState.geofenceSettings,
-            ganttExternalFiles: storedState.ganttExternalFiles || defaultAppState.ganttExternalFiles
+            ganttExternalFiles: storedState.ganttExternalFiles || defaultAppState.ganttExternalFiles,
+            overtimeRecords: storedState.overtimeRecords || defaultAppState.overtimeRecords,
+            woodModularMetrics: {
+                ...defaultAppState.woodModularMetrics,
+                ...(storedState.woodModularMetrics || {})
+            }
         };
         return {
             appState: mergedState,

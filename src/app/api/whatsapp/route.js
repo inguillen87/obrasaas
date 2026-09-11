@@ -802,6 +802,179 @@ export async function POST(request) {
                     `_Integrado directamente con los pedidos enviados por operarios desde WhatsApp._`;
             }
 
+            // ==========================================
+            // Sprint Sep 2026 — Horas Extras UOCRA CCT 76/75
+            // ==========================================
+            else if (
+                normalBody === 'overtime' ||
+                normalBody.includes('horas extra') ||
+                normalBody.includes('hora extra') ||
+                normalBody.includes('horas extras') ||
+                normalBody.includes('sobrecosto uocra') ||
+                normalBody.includes('recargo uocra') ||
+                normalBody.includes('aprobar horas')
+            ) {
+                state.overtimeRecords = state.overtimeRecords || [];
+                const records = state.overtimeRecords;
+                
+                // If director or technical director wants to approve pending overtime
+                const isApprovalCommand = normalBody.includes('aprobar') || normalBody === 'aprobar horas';
+                if ((isDirector || isTechnicalDirector) && isApprovalCommand) {
+                    const pending = records.filter(r => r.status === 'PENDIENTE');
+                    if (pending.length > 0) {
+                        pending.forEach(r => {
+                            r.status = 'APROBADA';
+                            r.approvedBy = senderName;
+                            r.approvedAt = new Date().toISOString();
+                        });
+                        
+                        botReply = `✅ *Horas Extras UOCRA Aprobadas por ${senderName}*\n\n` +
+                            `• *Registros aprobados:* ${pending.length}\n` +
+                            `• *Operarios:* ${pending.map(p => p.workerName).join(', ')}\n` +
+                            `• *Normativa:* Convenio Colectivo UOCRA 76/75 (Recargos 50% y 100%)\n` +
+                            `• *Trazabilidad:* Firma digital registrada en el Cronograma de Obra.\n\n` +
+                            `👉 *Ver Cronograma & Horas:* ${appUrl}/cronograma`;
+
+                        feedIncident = {
+                            id: "inc-ot-app-" + Date.now(),
+                            title: "Horas Extras UOCRA Aprobadas",
+                            description: `${senderName} aprobó ${pending.length} registros de horas extras (${pending.map(p => p.workerName).join(', ')}).`,
+                            type: "success",
+                            badge: "Horas Extras OK",
+                            timestamp: `Hoy, ${timeStr}`,
+                            reporter: senderName,
+                            icon: "fa-solid fa-clock-rotate-left"
+                        };
+                        showInFeed = true;
+                    } else {
+                        botReply = `⏰ *Gestor de Horas Extras UOCRA*\n\nNo hay registros pendientes de aprobación en este momento. Todas las horas extras están al día y certificadas.`;
+                    }
+                } else {
+                    const total50 = records.reduce((acc, r) => acc + (r.hours50 || 0), 0);
+                    const total100 = records.reduce((acc, r) => acc + (r.hours100 || 0), 0);
+                    const totalARS = records.reduce((acc, r) => acc + (r.totalAmountARS || 0), 0);
+                    const pendingCount = records.filter(r => r.status === 'PENDIENTE').length;
+
+                    const recentList = records.slice(-3).reverse().map(r => {
+                        const statusBadge = r.status === 'APROBADA' ? '✅ Aprobada' : '⏳ Pendiente';
+                        return `• *${r.workerName}* (${r.dayType}): ${r.hours50 ? r.hours50 + 'hs al 50%' : ''} ${r.hours100 ? r.hours100 + 'hs al 100%' : ''} ➔ *$${(r.totalAmountARS || 0).toLocaleString('es-AR')} ARS* [${statusBadge}]`;
+                    }).join('\n');
+
+                    botReply = `⏰ *Control de Horas Extras UOCRA (CCT 76/75)*\n\n` +
+                        `• *Obra:* ${state.projectConfig?.name || 'Torre Palermo Soho'}\n` +
+                        `• *Total Acumulado Quincena:* *$${totalARS.toLocaleString('es-AR')} ARS*\n` +
+                        `• *Horas al 50% (Días hábiles prolongados):* ${total50} hs\n` +
+                        `• *Horas al 100% (Sábados tarde / Domingos / Feriados):* ${total100} hs\n` +
+                        `• *Registros Pendientes de Aprobación:* ${pendingCount}\n\n` +
+                        `📋 *Últimos Registros:*\n${recentList || '• Sin registros cargados'}\n\n` +
+                        (isDirector || isTechnicalDirector ? `💡 _Para aprobar pendientes escribí: *aprobar horas*_\n` : '') +
+                        `👉 *Gestor Completo en Cronograma:* ${appUrl}/cronograma`;
+                }
+            }
+
+            // ==========================================
+            // Sprint Sep 2026 — Actas de Higiene y Seguridad Digitales (SHA-256)
+            // ==========================================
+            else if (
+                normalBody === 'hys' ||
+                normalBody.includes('higiene') ||
+                normalBody.includes('acta de seguridad') ||
+                normalBody.includes('actas de seguridad') ||
+                normalBody.includes('inspeccion hys') ||
+                normalBody.includes('cumplimiento epp') ||
+                normalBody.includes('acta hys') ||
+                (normalBody.includes('seguridad') && (normalBody.includes('acta') || normalBody.includes('inspeccion') || normalBody.includes('libro') || normalBody.includes('srt')))
+            ) {
+                state.actasHyS = state.actasHyS || [];
+                const actas = state.actasHyS;
+                const total = actas.length;
+                const avgEpp = total > 0 ? Math.round(actas.reduce((acc, a) => acc + (a.eppCumplimientoPct || 0), 0) / total) : 100;
+                const lastActa = actas[0] || null;
+
+                let lastActaDetail = '• Sin actas registradas';
+                if (lastActa) {
+                    lastActaDetail = `• *Tipo:* ${lastActa.tipo}\n` +
+                        `• *Fecha:* ${lastActa.fecha}\n` +
+                        `• *Inspector:* ${lastActa.inspectorHyS} (${lastActa.matricula || 'MAT-HYS'})\n` +
+                        `• *Cumplimiento EPP:* ${lastActa.eppCumplimientoPct}%\n` +
+                        `• *Observaciones:* _"${lastActa.observaciones}"_\n` +
+                        `• *Token Criptográfico:* \`${lastActa.firmaDigitalToken ? lastActa.firmaDigitalToken.slice(0, 20) + '...' : 'SHA-256 OK'}\``;
+                }
+
+                botReply = `🦺 *Actas de Higiene y Seguridad Digital (Ley 22.250 / Res. SRT 319/99)*\n\n` +
+                    `• *Obra:* ${state.projectConfig?.name || 'Torre Palermo Soho'}\n` +
+                    `• *Total Actas Digitalizadas:* ${total} actas\n` +
+                    `• *Cumplimiento Promedio EPP:* *${avgEpp}%*\n` +
+                    `• *Validez Jurídica:* Firma SHA-256 inmutable vinculada al Libro de Obra Digital.\n\n` +
+                    `📋 *Última Inspección:* \n${lastActaDetail}\n\n` +
+                    `👉 *Ver Libro de Obra & Actas HyS:* ${appUrl}/libro-obra`;
+
+                feedIncident = {
+                    id: "inc-hys-query-" + Date.now(),
+                    title: "Consulta de Actas HyS",
+                    description: `${senderName} consultó el estado de Higiene y Seguridad (${avgEpp}% cumplimiento EPP).`,
+                    type: "info",
+                    badge: "HyS Digital",
+                    timestamp: `Hoy, ${timeStr}`,
+                    reporter: senderName,
+                    icon: "fa-solid fa-shield-halved"
+                };
+                showInFeed = true;
+            }
+
+            // ==========================================
+            // Sprint Sep 2026 — Sostenibilidad & Madera Modular Off-Site (Arq. Victoria Schiaffino)
+            // ==========================================
+            else if (
+                normalBody === 'sostenibilidad' ||
+                normalBody.includes('sostenib') ||
+                normalBody.includes('madera modular') ||
+                normalBody.includes('carbono') ||
+                normalBody.includes('co2') ||
+                normalBody.includes('rothoblaas') ||
+                normalBody.includes('modulos off-site') ||
+                normalBody.includes('offsite') ||
+                normalBody.includes('off-site') ||
+                normalBody.includes('fsc') ||
+                normalBody.includes('iram 11556')
+            ) {
+                const metrics = state.woodModularMetrics || {
+                    m3MaderaInstalada: 48.5,
+                    kgCO2CapturadoTotal: 43650,
+                    kgCO2EvitadoVsHormigon: 31525,
+                    reduccionHuellaPct: 68.4,
+                    modulosOffSite: { total: 16, montadosObra: 10, completadosTaller: 14, tiempoMontajePromedioHoras: 4.2 },
+                    tornilleriaFijaciones: { totalProyectado: 2400, instalados: 1850, proveedor: 'Rothoblaas / Heco-Topix Estructural' }
+                };
+
+                const arbolesEquiv = Math.round((metrics.kgCO2CapturadoTotal || 0) / 22);
+                const modulos = metrics.modulosOffSite || { total: 16, montadosObra: 10 };
+                const pctMontaje = Math.round((modulos.montadosObra / modulos.total) * 100);
+
+                botReply = `🌱 *Construcción Sostenible & Madera Modular Off-Site*\n` +
+                    `_Liderazgo Técnico: Arq. María Victoria Schiaffino_\n\n` +
+                    `• *Madera Estructural:* ${(metrics.m3MaderaInstalada || 48.5)} m³ (${metrics.certificacion || 'FSC / PEFC'})\n` +
+                    `• *Carbono Capturado:* *${((metrics.kgCO2CapturadoTotal || 43650) / 1000).toFixed(1)} toneladas de CO₂* (~${arbolesEquiv} árboles absorbiendo)\n` +
+                    `• *Huella Evitada vs Hormigón:* -${metrics.reduccionHuellaPct || 68.4}%\n` +
+                    `• *Módulos Off-Site:* *${modulos.montadosObra}/${modulos.total} montados en obra* (${pctMontaje}%)\n` +
+                    `• *Velocidad de Montaje:* ${modulos.tiempoMontajePromedioHoras || 4.2} hs promedio por módulo\n` +
+                    `• *Fijaciones Estructurales:* ${metrics.tornilleriaFijaciones?.instalados || 1850}/${metrics.tornilleriaFijaciones?.totalProyectado || 2400} (${metrics.tornilleriaFijaciones?.proveedor || 'Rothoblaas'})\n\n` +
+                    `👉 *Panel ESG de Sostenibilidad:* ${appUrl}/sostenibilidad\n` +
+                    `📄 *Descargar Balance de Carbono:* ${appUrl}/api/v1/sostenibilidad`;
+
+                feedIncident = {
+                    id: "inc-sust-query-" + Date.now(),
+                    title: "Consulta ESG Madera Modular",
+                    description: `${senderName} consultó métricas de sostenibilidad y avance de módulos off-site.`,
+                    type: "success",
+                    badge: "ESG -68% CO2",
+                    timestamp: `Hoy, ${timeStr}`,
+                    reporter: senderName,
+                    icon: "fa-solid fa-tree"
+                };
+                showInFeed = true;
+            }
+
             // 👑 Arq. Marcelo (Director de Obra) Executive Handling
             else if (isDirector) {
                 // 1️⃣ Supervisión de Cuadrilla & KYC

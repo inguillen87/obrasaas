@@ -38,6 +38,11 @@ export function buildDirectorListMessage(state, targetNumber) {
                                 id: "cmd_8",
                                 title: "8️⃣ Auditoría ART & GPS",
                                 description: "Pólizas UOCRA Ley 22.250, geocerca satelital y radar CIRSOC"
+                            },
+                            {
+                                id: "cmd_hys",
+                                title: "🦺 Actas HyS & EPP",
+                                description: "Cumplimiento de seguridad y actas digitales SHA-256"
                             }
                         ]
                     },
@@ -78,6 +83,11 @@ export function buildDirectorListMessage(state, targetNumber) {
                                 id: "cmd_7",
                                 title: "7️⃣ Rendir Caja Chica",
                                 description: "Rendición de gastos en ferretería con firma contable"
+                            },
+                            {
+                                id: "cmd_overtime",
+                                title: "⏰ Horas Extras UOCRA",
+                                description: "Sobrecostos CCT 76/75 al 50% y 100% y aprobación"
                             }
                         ]
                     }
@@ -121,6 +131,21 @@ export function buildVictoriaListMessage(state, targetNumber) {
                                 id: "cmd_2",
                                 title: "2️⃣ Calidad Estructural",
                                 description: "Ensayos de compresión CIRSOC 201 y radar meteorológico"
+                            },
+                            {
+                                id: "cmd_hys",
+                                title: "🦺 Actas HyS & EPP",
+                                description: "Auditoría de seguridad y actas con firma SHA-256"
+                            }
+                        ]
+                    },
+                    {
+                        title: "Sostenibilidad & Madera Modular",
+                        rows: [
+                            {
+                                id: "cmd_sostenibilidad",
+                                title: "🌱 Madera Modular & CO2",
+                                description: "Módulos off-site, fijaciones Rothoblaas y balance ESG"
                             }
                         ]
                     },
@@ -141,6 +166,11 @@ export function buildVictoriaListMessage(state, targetNumber) {
                                 id: "cmd_5",
                                 title: "5️⃣ Caja Chica & AFIP",
                                 description: "Auditoría de facturas y remitos con CAE validado"
+                            },
+                            {
+                                id: "cmd_overtime",
+                                title: "⏰ Horas Extras UOCRA",
+                                description: "Cálculo y aprobación de sobrecostos CCT 76/75"
                             }
                         ]
                     }

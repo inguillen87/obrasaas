@@ -52,6 +52,23 @@ export default function CronogramaPage() {
   const [ganttFiles, setGanttFiles] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
   const [exportToast, setExportToast] = useState(false);
+
+  // Sprint H&S, Gantt Import & Overtime State
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importCsvText, setImportCsvText] = useState('');
+  const [importTasksPreview, setImportTasksPreview] = useState([]);
+  const [importLoading, setImportLoading] = useState(false);
+  const [importSuccessMsg, setImportSuccessMsg] = useState(null);
+
+  const [isOvertimeModalOpen, setIsOvertimeModalOpen] = useState(false);
+  const [overtimeData, setOvertimeData] = useState(null);
+  const [overtimeLoading, setOvertimeLoading] = useState(false);
+  const [newOtWorker, setNewOtWorker] = useState('Juan Gómez');
+  const [newOtTrade, setNewOtTrade] = useState('Oficial Albañil Principal');
+  const [newOtHours50, setNewOtHours50] = useState(0);
+  const [newOtHours100, setNewOtHours100] = useState(0);
+  const [newOtConcept, setNewOtConcept] = useState('');
+  const [newOtDayType, setNewOtDayType] = useState('Día Hábil Prolongado (50%)');
   
   // New task form state
   const [newTaskName, setNewTaskName] = useState('');
@@ -95,7 +112,127 @@ export default function CronogramaPage() {
     return 'Estructura';
   };
 
-  const fetchTasks = async () => {
+  const fetchOvertime = async () => {
+    setOvertimeLoading(true);
+    try {
+      const res = await fetch('/api/v1/overtime');
+      const json = await res.json();
+      if (json.success) {
+        setOvertimeData(json);
+      }
+    } catch (e) {
+      console.error('Error fetching overtime:', e);
+    } finally {
+      setOvertimeLoading(false);
+    }
+  };
+
+  const handleApproveOvertime = async (id) => {
+    try {
+      const res = await fetch('/api/v1/overtime', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'approve', id, approvedBy: 'Arq. Victoria Schiaffino' })
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchOvertime();
+      }
+    } catch (e) {
+      console.error('Error approving overtime:', e);
+    }
+  };
+
+  const handleCreateOvertime = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/v1/overtime', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workerName: newOtWorker,
+          trade: newOtTrade,
+          hours50: Number(newOtHours50),
+          hours100: Number(newOtHours100),
+          dayType: newOtDayType,
+          concept: newOtConcept || 'Jornada extendida por avance crítico'
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setNewOtHours50(0);
+        setNewOtHours100(0);
+        setNewOtConcept('');
+        fetchOvertime();
+      }
+    } catch (e) {
+      console.error('Error creating overtime:', e);
+    }
+  };
+
+  const handleLoadSampleGantt = () => {
+    const sample = `Excavación y Subsuelo,Estructura,1,2,JZ,100
+Hormigonado de Bases,Estructura,2,3,MR,100
+Muros Portantes Madera / CLT,Estructura,4,4,AP,85
+Entrepisos y Viguetas,Estructura,6,3,JZ,50
+Instalación Eléctrica Embutida,Instalaciones,5,4,LG,60
+Aberturas DVH Triple Vidrio,Cerramientos,8,2,AP,30
+Terminaciones y Revestimientos,Terminaciones,9,4,MR,10`;
+    setImportCsvText(sample);
+    parseCsv(sample);
+  };
+
+  const parseCsv = (text) => {
+    const lines = text.trim().split('\n');
+    const parsed = lines.map((line, idx) => {
+      const [name, group, start, duration, assignee, progress] = line.split(',').map(s => s ? s.trim() : '');
+      return {
+        id: 'imp-' + idx,
+        name: name || 'Tarea ' + (idx + 1),
+        group: group || 'Estructura',
+        startWeek: Number(start) || 1,
+        duration: Number(duration) || 2,
+        assignee: assignee || 'JZ',
+        progress: Number(progress) || 0
+      };
+    });
+    setImportTasksPreview(parsed);
+  };
+
+  const handleSyncImportedTasks = async () => {
+    if (!importTasksPreview.length) return;
+    setImportLoading(true);
+    try {
+      const apiKey = typeof window !== 'undefined' ? localStorage.getItem('obrasaas_admin_key') || 'internal' : 'internal';
+      for (const t of importTasksPreview) {
+        await fetch('/api/v1/tasks', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey
+          },
+          body: JSON.stringify({
+            name: t.name,
+            quincena: 'Q' + Math.ceil(t.startWeek / 2),
+            assignee: t.assignee === 'JZ' ? 'Juan Zapata' : t.assignee === 'MR' ? 'Marcelo Rodríguez' : 'Antonio Pérez',
+            progress: t.progress
+          })
+        }).catch(() => {});
+      }
+      setImportSuccessMsg(`¡${importTasksPreview.length} tareas importadas y sincronizadas exitosamente con la obra!`);
+      await fetchTasks();
+      setTimeout(() => {
+        setIsImportModalOpen(false);
+        setImportSuccessMsg(null);
+      }, 2000);
+    } catch (e) {
+      console.error('Error syncing imported tasks:', e);
+    } finally {
+      setImportLoading(false);
+    }
+  };
+
+    const fetchTasks = async () => {
     try {
       const apiKey = typeof window !== 'undefined' ? localStorage.getItem('obrasaas_admin_key') || 'internal' : 'internal';
       const res = await fetch('/api/v1/tasks', {
@@ -131,6 +268,7 @@ export default function CronogramaPage() {
 
   useEffect(() => {
     fetchTasks();
+    fetchOvertime();
     const es = new EventSource('/api/realtime');
     es.onopen = () => setSseConnected(true);
     es.onerror = () => setSseConnected(false);
@@ -284,7 +422,9 @@ export default function CronogramaPage() {
             <Link href="/dashboard" style={{ textDecoration: 'none' }}>
               <Button variant="ghost">← Dashboard</Button>
             </Link>
-            <Button variant="secondary" icon="📥" onClick={handleExportCSV}>Exportar CSV / Excel</Button>
+            <Button variant="secondary" icon="📥" onClick={() => setIsImportModalOpen(true)}>Importar Gantt</Button>
+            <Button variant="secondary" icon="⏱️" onClick={() => { setIsOvertimeModalOpen(true); fetchOvertime(); }}>Horas Extras UOCRA</Button>
+            <Button variant="secondary" icon="💾" onClick={handleExportCSV}>Exportar CSV</Button>
             <Button variant="primary" icon="+" onClick={() => setIsAddModalOpen(true)}>Agregar Tarea</Button>
           </div>
         }
@@ -402,6 +542,115 @@ export default function CronogramaPage() {
             </select>
           </div>
         </GlassCard>
+
+        
+        {/* VIEW MODE: CURVA S EVM VIEW */}
+        {viewMode === 'Curva S' && (
+          <GlassCard style={{ padding: '28px', border: '1px solid rgba(56, 189, 248, 0.3)', marginBottom: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
+              <div>
+                <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#f8fafc', margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  📈 Curva S Físico-Financiera (EVM) — Torre Palermo Soho
+                </h2>
+                <p style={{ fontSize: '0.85rem', color: '#94a3b8', margin: '6px 0 0' }}>
+                  Correlación quincenal: Avance Programado (PV) vs Real Certificado (EV) vs Costo Directo (AC)
+                </p>
+              </div>
+              <div style={{ display: 'flex', gap: '12px', fontSize: '0.8rem', fontWeight: 700 }}>
+                <span style={{ color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '4px' }}>● Planificado (Baseline PV)</span>
+                <span style={{ color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '4px' }}>● Real Certificado (EV)</span>
+                <span style={{ color: '#10b981', display: 'flex', alignItems: 'center', gap: '4px' }}>● SPI = 1.05 (+5%)</span>
+              </div>
+            </div>
+
+            {/* EVM KPIs */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+              <div style={{ background: 'rgba(6, 9, 19, 0.8)', padding: '18px', borderRadius: '12px', border: '1px solid rgba(56, 189, 248, 0.25)' }}>
+                <div style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 600 }}>Índice de Rendimiento (SPI)</div>
+                <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#10b981', margin: '4px 0' }}>1.05</div>
+                <div style={{ fontSize: '0.74rem', color: '#86efac' }}>↑ Obra adelantada +5% frente a línea de base</div>
+              </div>
+              <div style={{ background: 'rgba(6, 9, 19, 0.8)', padding: '18px', borderRadius: '12px', border: '1px solid rgba(245, 158, 11, 0.25)' }}>
+                <div style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 600 }}>Índice de Costos (CPI)</div>
+                <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#f59e0b', margin: '4px 0' }}>0.98</div>
+                <div style={{ fontSize: '0.74rem', color: '#fbbf24' }}>Gasto de insumos controlado dentro del 2%</div>
+              </div>
+              <div style={{ background: 'rgba(6, 9, 19, 0.8)', padding: '18px', borderRadius: '12px', border: '1px solid rgba(16, 185, 129, 0.25)' }}>
+                <div style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 600 }}>Variación de Plazo (SV)</div>
+                <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#10b981', margin: '4px 0' }}>+4 Días</div>
+                <div style={{ fontSize: '0.74rem', color: '#86efac' }}>Plazo holgado respecto al contrato comitente</div>
+              </div>
+              <div style={{ background: 'rgba(6, 9, 19, 0.8)', padding: '18px', borderRadius: '12px', border: '1px solid rgba(168, 85, 247, 0.25)' }}>
+                <div style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 600 }}>Impacto por Lluvia Simulado</div>
+                <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#a855f7', margin: '4px 0' }}>+{rainDaysSim}d</div>
+                <div style={{ fontSize: '0.74rem', color: '#d8b4fe' }}>Prórroga amparada por Ley 22.250 UOCRA</div>
+              </div>
+            </div>
+
+            {/* S-Curve Chart */}
+            <div style={{ background: 'rgba(6, 9, 19, 0.95)', padding: '24px', borderRadius: '14px', border: '1px solid rgba(255,255,255,0.08)', marginBottom: '20px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', height: '220px', gap: '8px', paddingBottom: '12px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                {[
+                  { q: 'Q1 Ene', plan: 8, real: 10 },
+                  { q: 'Q2 Ene', plan: 18, real: 22 },
+                  { q: 'Q1 Feb', plan: 32, real: 35 },
+                  { q: 'Q2 Feb', plan: 46, real: 50 },
+                  { q: 'Q1 Mar', plan: 60, real: 62 },
+                  { q: 'Q2 Mar', plan: 74, real: null },
+                  { q: 'Q1 Abr', plan: 88, real: null },
+                  { q: 'Q2 Abr', plan: 100, real: null }
+                ].map((d, i) => (
+                  <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', height: '100%', justifyContent: 'flex-end', gap: '6px' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px', width: '100%', justifyContent: 'center', height: '180px' }}>
+                      <div style={{ width: '12px', height: (d.plan * 1.7) + 'px', background: 'rgba(148, 163, 184, 0.4)', borderRadius: '4px 4px 0 0' }} title={'Plan: ' + d.plan + '%'} />
+                      {d.real !== null && (
+                        <div style={{ width: '12px', height: (d.real * 1.7) + 'px', background: '#38bdf8', borderRadius: '4px 4px 0 0' }} title={'Real: ' + d.real + '%'} />
+                      )}
+                    </div>
+                    <span style={{ fontSize: '0.72rem', color: '#94a3b8', fontWeight: 700 }}>{d.q}</span>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '12px', fontSize: '0.78rem', color: '#64748b' }}>
+                <span>Inicio de Obra (01/Ene/2026)</span>
+                <span style={{ color: '#38bdf8', fontWeight: 800 }}>Punto de Control Activo: Q1 Marzo (62% Real vs 60% Plan)</span>
+                <span>Finalización Prevista (30/Abr/2026)</span>
+              </div>
+            </div>
+
+            {/* Quincenas Breakdown Table */}
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#94a3b8', textAlign: 'left' }}>
+                    <th style={{ padding: '10px' }}>Período</th>
+                    <th style={{ padding: '10px' }}>Planificado (PV)</th>
+                    <th style={{ padding: '10px' }}>Real (EV)</th>
+                    <th style={{ padding: '10px' }}>Desvío (SV)</th>
+                    <th style={{ padding: '10px' }}>Estado Quincenal</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    { p: 'Q1 Enero 2026', pv: '8%', ev: '10%', sv: '+2%', st: 'Adelantada', c: '#10b981' },
+                    { p: 'Q2 Enero 2026', pv: '18%', ev: '22%', sv: '+4%', st: 'Adelantada', c: '#10b981' },
+                    { p: 'Q1 Febrero 2026', pv: '32%', ev: '35%', sv: '+3%', st: 'Adelantada', c: '#10b981' },
+                    { p: 'Q2 Febrero 2026', pv: '46%', ev: '50%', sv: '+4%', st: 'Adelantada', c: '#10b981' },
+                    { p: 'Q1 Marzo 2026 (Activa)', pv: '60%', ev: '62%', sv: '+2%', st: 'En Curso Conforme', c: '#38bdf8' }
+                  ].map((row, idx) => (
+                    <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', color: '#f8fafc' }}>
+                      <td style={{ padding: '10px', fontWeight: 600 }}>{row.p}</td>
+                      <td style={{ padding: '10px', color: '#94a3b8' }}>{row.pv}</td>
+                      <td style={{ padding: '10px', color: '#38bdf8', fontWeight: 700 }}>{row.ev}</td>
+                      <td style={{ padding: '10px', color: '#10b981', fontWeight: 700 }}>{row.sv}</td>
+                      <td style={{ padding: '10px' }}><span style={{ background: 'rgba(255,255,255,0.06)', color: row.c, padding: '4px 8px', borderRadius: '4px', fontWeight: 700, fontSize: '0.75rem' }}>{row.st}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </GlassCard>
+        )}
 
         {/* Main Workspace Area */}
         <div style={{ display: 'flex', gap: '24px', flex: 1, minHeight: '500px', position: 'relative' }}>
@@ -961,6 +1210,173 @@ export default function CronogramaPage() {
           })()}
           </div>
         </div>
+      )}
+
+      
+      {/* Modal: Importar Gantt desde Excel / CSV / MS Project */}
+      {isImportModalOpen && (
+        <Modal
+          isOpen={isImportModalOpen}
+          onClose={() => setIsImportModalOpen(false)}
+          title="Importar Cronograma Gantt (Excel / CSV / MS Project)"
+          subtitle="Sincroniza tareas, semanas de inicio, duraciones y avances con la obra en vivo"
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {importSuccessMsg && (
+              <div style={{ background: 'rgba(16, 185, 129, 0.15)', border: '1px solid #10b981', padding: '12px 16px', borderRadius: '8px', color: '#10b981', fontSize: '0.85rem' }}>
+                ✅ {importSuccessMsg}
+              </div>
+            )}
+
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <label style={{ fontSize: '0.8rem', color: tokens.colors.text.secondary }}>Pega los datos en formato CSV o carga una plantilla de ejemplo:</label>
+                <Button size="sm" variant="ghost" onClick={handleLoadSampleGantt}>
+                  📄 Cargar Ejemplo MS Project
+                </Button>
+              </div>
+              <textarea
+                rows={6}
+                value={importCsvText}
+                onChange={e => { setImportCsvText(e.target.value); parseCsv(e.target.value); }}
+                placeholder="Nombre, Rubro, SemanaInicio, DuracionSemanas, Responsable, Progreso"
+                style={{ width: '100%', padding: '12px', background: '#060913', border: `1px solid ${tokens.colors.border.default}`, borderRadius: tokens.radius.sm, color: '#f8fafc', fontFamily: tokens.font.mono, fontSize: '13px' }}
+              />
+            </div>
+
+            {importTasksPreview.length > 0 && (
+              <div>
+                <h4 style={{ fontSize: '0.85rem', color: '#38bdf8', marginBottom: '8px' }}>Vista Previa ({importTasksPreview.length} tareas detectadas):</h4>
+                <div style={{ maxHeight: '180px', overflowY: 'auto', border: `1px solid ${tokens.colors.border.subtle}`, borderRadius: '6px' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem' }}>
+                    <thead>
+                      <tr style={{ background: 'rgba(255,255,255,0.05)', color: '#94a3b8' }}>
+                        <th style={{ padding: '6px' }}>Tarea</th>
+                        <th style={{ padding: '6px' }}>Rubro</th>
+                        <th style={{ padding: '6px' }}>Inicio</th>
+                        <th style={{ padding: '6px' }}>Duración</th>
+                        <th style={{ padding: '6px' }}>Resp.</th>
+                        <th style={{ padding: '6px' }}>Avance</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {importTasksPreview.map((t, i) => (
+                        <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                          <td style={{ padding: '6px', color: '#fff' }}>{t.name}</td>
+                          <td style={{ padding: '6px', color: '#94a3b8' }}>{t.group}</td>
+                          <td style={{ padding: '6px', textAlign: 'center' }}>S{t.startWeek}</td>
+                          <td style={{ padding: '6px', textAlign: 'center' }}>{t.duration} sem</td>
+                          <td style={{ padding: '6px', textAlign: 'center' }}>{t.assignee}</td>
+                          <td style={{ padding: '6px', textAlign: 'center', color: '#10b981' }}>{t.progress}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '12px' }}>
+              <Button variant="secondary" onClick={() => setIsImportModalOpen(false)}>Cancelar</Button>
+              <Button variant="primary" icon="🔄" onClick={handleSyncImportedTasks} disabled={importLoading || !importTasksPreview.length}>
+                {importLoading ? 'Sincronizando...' : 'Sincronizar Tareas con la Obra'}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal: Horas Extras UOCRA (Acuerdo Victoria & Marcelo) */}
+      {isOvertimeModalOpen && (
+        <Modal
+          isOpen={isOvertimeModalOpen}
+          onClose={() => setIsOvertimeModalOpen(false)}
+          title="Gestor de Horas Extras & Sobrecostos Laborales (UOCRA CCT 76/75)"
+          subtitle="Seguimiento de horas al 50% y 100%, impacto quincenal y aprobación por Dirección Técnica"
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {/* Stats Summary */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px' }}>
+              <div style={{ background: 'rgba(6,9,19,0.8)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(56, 189, 248, 0.2)' }}>
+                <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Total Horas Extras</div>
+                <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#38bdf8' }}>{overtimeData?.stats?.totalHoursCombined || 0} hs</div>
+                <div style={{ fontSize: '0.68rem', color: '#64748b' }}>{overtimeData?.stats?.totalHours50 || 0}h (50%) + {overtimeData?.stats?.totalHours100 || 0}h (100%)</div>
+              </div>
+              <div style={{ background: 'rgba(6,9,19,0.8)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+                <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Sobrecosto Acumulado</div>
+                <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#10b981' }}>${(overtimeData?.stats?.totalAmountARS || 0).toLocaleString('es-AR')}</div>
+                <div style={{ fontSize: '0.68rem', color: '#86efac' }}>Aprobado: ${(overtimeData?.stats?.approvedAmountARS || 0).toLocaleString('es-AR')}</div>
+              </div>
+              <div style={{ background: 'rgba(6,9,19,0.8)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
+                <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Pendiente Aprobación</div>
+                <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#f59e0b' }}>{overtimeData?.stats?.pendingCount || 0} reg.</div>
+                <div style={{ fontSize: '0.68rem', color: '#fbbf24' }}>${(overtimeData?.stats?.pendingAmountARS || 0).toLocaleString('es-AR')}</div>
+              </div>
+            </div>
+
+            {/* Overtime Records List */}
+            <div>
+              <h4 style={{ fontSize: '0.85rem', color: '#f8fafc', marginBottom: '10px' }}>Registros de la Quincena:</h4>
+              <div style={{ maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {overtimeData?.records?.map(r => (
+                  <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div>
+                      <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#fff' }}>{r.workerName} ({r.trade})</div>
+                      <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{r.date} • {r.dayType} • {r.concept}</div>
+                      <div style={{ fontSize: '0.75rem', color: '#10b981', fontWeight: 700 }}>${(r.totalAmountARS || 0).toLocaleString('es-AR')} ARS</div>
+                    </div>
+                    <div>
+                      {r.status === 'APROBADA' ? (
+                        <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#10b981', background: 'rgba(16, 185, 129, 0.1)', padding: '4px 8px', borderRadius: '4px' }}>
+                          ✓ Aprobada ({r.approvedBy})
+                        </span>
+                      ) : (
+                        <Button size="sm" variant="primary" onClick={() => handleApproveOvertime(r.id)}>
+                          Aprobar
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Quick Add Form */}
+            <form onSubmit={handleCreateOvertime} style={{ background: 'rgba(255,255,255,0.02)', padding: '16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#38bdf8' }}>➕ Cargar Nuevas Horas Extras:</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '8px' }}>
+                <select value={newOtWorker} onChange={e => setNewOtWorker(e.target.value)} style={{ padding: '8px', background: '#060913', border: `1px solid ${tokens.colors.border.default}`, borderRadius: '4px', color: '#fff', fontSize: '0.78rem' }}>
+                  <option value="Juan Gómez">Juan Gómez (Oficial)</option>
+                  <option value="Luis Martínez">Luis Martínez (Instalaciones)</option>
+                  <option value="Carlos Pérez">Carlos Pérez (Medio Oficial)</option>
+                </select>
+                <input
+                  type="number"
+                  placeholder="Horas al 50%"
+                  value={newOtHours50 || ''}
+                  onChange={e => setNewOtHours50(e.target.value)}
+                  style={{ padding: '8px', background: '#060913', border: `1px solid ${tokens.colors.border.default}`, borderRadius: '4px', color: '#fff', fontSize: '0.78rem' }}
+                />
+                <input
+                  type="number"
+                  placeholder="Horas al 100%"
+                  value={newOtHours100 || ''}
+                  onChange={e => setNewOtHours100(e.target.value)}
+                  style={{ padding: '8px', background: '#060913', border: `1px solid ${tokens.colors.border.default}`, borderRadius: '4px', color: '#fff', fontSize: '0.78rem' }}
+                />
+              </div>
+              <input
+                placeholder="Motivo / Justificación de la extensión horaria..."
+                value={newOtConcept}
+                onChange={e => setNewOtConcept(e.target.value)}
+                style={{ padding: '8px', background: '#060913', border: `1px solid ${tokens.colors.border.default}`, borderRadius: '4px', color: '#fff', fontSize: '0.78rem' }}
+              />
+              <Button type="submit" variant="primary" size="sm">
+                Registrar Horas Extras
+              </Button>
+            </form>
+          </div>
+        </Modal>
       )}
 
       {/* Add Task Modal */}

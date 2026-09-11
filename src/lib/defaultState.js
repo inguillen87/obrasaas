@@ -911,13 +911,86 @@ export const defaultAppState = {
         horaReporteFotos: '17:00'
     },
 
-    // Métricas de Construcción Sostenible en Madera Modular
+    // Gestión de Horas Extras UOCRA (Acuerdo Marcelo & Victoria)
+    overtimeRecords: [
+        {
+            id: 'ot-101',
+            workerId: 'w-1',
+            workerName: 'Juan Gómez',
+            trade: 'Oficial Albañil Principal',
+            date: '2026-09-06',
+            dayType: 'Sábado Tarde (100%)',
+            hours50: 0,
+            hours100: 4,
+            hourlyBaseARS: 4850,
+            totalAmountARS: 38800,
+            concept: 'Colado continuo de losa nivel 2 para evitar junta fría antes de lluvia',
+            quincena: 'Q1 - Septiembre 2026',
+            status: 'APROBADA',
+            approvedBy: 'Arq. Victoria Schiaffino',
+            approvedAt: '2026-09-06T19:30:00.000Z'
+        },
+        {
+            id: 'ot-102',
+            workerId: 'w-2',
+            workerName: 'Luis Martínez',
+            trade: 'Oficial Especializado Instalaciones',
+            date: '2026-09-07',
+            dayType: 'Día Hábil Prolongado (50%)',
+            hours50: 3,
+            hours100: 0,
+            hourlyBaseARS: 5120,
+            totalAmountARS: 23040,
+            concept: 'Prueba hidráulica de montantes sanitarias y sellado termofusión',
+            quincena: 'Q1 - Septiembre 2026',
+            status: 'APROBADA',
+            approvedBy: 'Arq. Marcelo Guillén',
+            approvedAt: '2026-09-07T20:15:00.000Z'
+        },
+        {
+            id: 'ot-103',
+            workerId: 'w-3',
+            workerName: 'Carlos Pérez',
+            trade: 'Medio Oficial Revestimientos',
+            date: '2026-09-09',
+            dayType: 'Día Hábil Prolongado (50%)',
+            hours50: 2,
+            hours100: 0,
+            hourlyBaseARS: 4200,
+            totalAmountARS: 12600,
+            concept: 'Revoque fino hidrófugo sector subsuelo',
+            quincena: 'Q1 - Septiembre 2026',
+            status: 'PENDIENTE',
+            approvedBy: null,
+            approvedAt: null
+        }
+    ],
+
+    // Métricas de Construcción Sostenible en Madera Modular (Especialidad Arq. Victoria Schiaffino)
     woodModularMetrics: {
-        m3MaderaInstalada: 0,
-        kgCO2CapturadoPorM3: 250,
-        kgCO2EvitadoVsHormigon: 0,
-        porcentajeIndustrializacionOffSite: 0,
-        tipoSistema: 'Wood Frame / Panelería Modular'
+        m3MaderaInstalada: 48.5,
+        especies: ['Pino Elliotis Tratado CCA', 'Eucalipto Grandis Laminado (Glulam)'],
+        certificacion: 'FSC / PEFC Cadena de Custodia #ARG-2026-442',
+        kgCO2CapturadoTotal: 43650, // 48.5 m3 * ~900 kg CO2e fijado
+        kgCO2EvitadoVsHormigon: 31525, // vs estructura convencional
+        reduccionHuellaPct: 68.4,
+        modulosOffSite: {
+            total: 16,
+            completadosTaller: 14,
+            montadosObra: 10,
+            enTransporte: 2,
+            tiempoMontajePromedioHoras: 4.2
+        },
+        tornilleriaFijaciones: {
+            totalProyectado: 2400,
+            instalados: 1850,
+            proveedor: 'Rothoblaas / Heco-Topix Estructural',
+            resistenciaCertificadaKN: 28.5,
+            calibracionDinamométrica: 'Conforme IRAM 11556'
+        },
+        eficienciaTermicaK: 0.28, // W/m2K (Aislamiento de alto rendimiento)
+        ahorroTiempoSemanas: 6.5,
+        tipoSistema: 'Wood Frame Industrializado + CLT Muros Portantes'
     }
 };
 
