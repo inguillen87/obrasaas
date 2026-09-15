@@ -102,7 +102,8 @@ export default function CompliancePage() {
         { id: 'ondemand', label: '⚡ ART On-Demand por Día', icon: '⚡' },
         { id: 'competencias', label: 'Capacitaciones & QR', icon: '🎓' },
         { id: 'uocra', label: 'CCT 76/75 UOCRA', icon: '👷' },
-        { id: 'polizas', label: 'Pólizas de Obra & RC', icon: '📋' }
+        { id: 'polizas', label: 'Pólizas de Obra & RC', icon: '📋' },
+        { id: 'auditoria', label: '📋 Auditoría & Score', icon: '🔍' }
     ];
 
     const presentWorkersToday = [
@@ -111,6 +112,27 @@ export default function CompliancePage() {
         { name: 'Miguel Ángel Benítez', cuil: '20-32981765-2', role: 'Especialista Hormigón', hour: '08:02 AM', artType: 'ART Fija (La Segunda)', costDay: 0 },
         { name: 'Darío Fernández (Subcontrato)', cuil: '20-41098231-1', role: 'Colocador Porcelanato', hour: '08:15 AM', artType: 'AP On-Demand (Activa)', costDay: 3850 },
         { name: 'Lucas Molina (Subcontrato)', cuil: '20-39821450-8', role: 'Ayudante Yesero', hour: '08:20 AM', artType: 'AP On-Demand (Activa)', costDay: 3200 }
+    ];
+
+    const AUDIT_TRAIL = [
+        { id: 'AUD-001', timestamp: '2026-09-15 08:00', event: 'CHECK_IN_GEOCERCADO', actor: 'Juan Pérez', detail: 'Ingreso verificado dentro del perímetro (50m). GPS: -34.5871, -58.4018', hash: 'a3f2c1', status: 'OK', icon: '📍' },
+        { id: 'AUD-002', timestamp: '2026-09-15 08:05', event: 'ART_VALIDADA', actor: 'Sistema', detail: 'Póliza ART-2026-4451 (La Segunda) verificada válida para Juan Pérez', hash: 'b7e4d2', status: 'OK', icon: '🛡️' },
+        { id: 'AUD-003', timestamp: '2026-09-15 08:12', event: 'AP_ONDEMAND_ACTIVADO', actor: 'Sistema', detail: 'Cobertura AP activada para Darío Fernández (Subcontrato). Costo: $3.850', hash: 'c9a5e3', status: 'OK', icon: '⚡' },
+        { id: 'AUD-004', timestamp: '2026-09-15 09:30', event: 'CAPACITACION_VENCIDA', actor: 'Sistema', detail: 'Certificación "Primeros Auxilios" de Juan Pérez venció el 04/05/2026. ACCIÓN REQUERIDA.', hash: 'd2b6f4', status: 'WARNING', icon: '⚠️' },
+        { id: 'AUD-005', timestamp: '2026-09-15 10:00', event: 'INSPECCION_HYS', actor: 'Arq. Victoria', detail: 'Inspección de seguridad e higiene completada. Score: 94/100. Sin No Conformidades.', hash: 'e8c7g5', status: 'OK', icon: '✅' },
+        { id: 'AUD-006', timestamp: '2026-09-14 17:00', event: 'REPORTE_EOD', actor: 'Sistema', detail: 'Reporte de fin de día generado. 5/5 operarios presentes. 0 incidentes.', hash: 'f1d8h6', status: 'OK', icon: '📊' },
+        { id: 'AUD-007', timestamp: '2026-09-14 12:30', event: 'ALERTA_EPP', actor: 'Sistema IA', detail: 'Detección por cámara: operario sin casco en sector Losa +3. Alerta enviada a encargado.', hash: 'g4e9i7', status: 'CRITICAL', icon: '🚨' },
+        { id: 'AUD-008', timestamp: '2026-09-13 08:00', event: 'CHARLA_5MIN', actor: 'Capataz Miguel', detail: 'Charla de 5 minutos registrada: "Riesgos en trabajo en altura". 5 asistentes firmaron.', hash: 'h5f0j8', status: 'OK', icon: '📝' },
+    ];
+
+    const COMPLIANCE_SCORE_BREAKDOWN = [
+        { category: 'Pólizas ART/AP vigentes', weight: 25, score: 100, color: '#10b981' },
+        { category: 'Capacitaciones SRT al día', weight: 20, score: 85, color: '#f59e0b' },
+        { category: 'Charlas de 5 min diarias', weight: 15, score: 100, color: '#10b981' },
+        { category: 'EPP verificado en obra', weight: 15, score: 90, color: '#10b981' },
+        { category: 'Check-in geocercado', weight: 10, score: 100, color: '#10b981' },
+        { category: 'Inspecciones H&S mensuales', weight: 10, score: 94, color: '#10b981' },
+        { category: 'Documentación actualizada', weight: 5, score: 80, color: '#f59e0b' },
     ];
 
     const handleSendBrokerWhatsApp = () => {
@@ -457,6 +479,115 @@ export default function CompliancePage() {
                                 <div>• <strong>Ley 22.250:</strong> Régimen Laboral de la Industria de la Construcción y Libreta / IERIC.</div>
                             </div>
                         </div>
+                    </motion.div>
+                )}
+
+                {/* TAB 6: AUDIT TRAIL & SCORE */}
+                {activeTab === 'auditoria' && (
+                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                        
+                        {/* Seccion A: Score Global de Compliance */}
+                        <GlassCard style={{ padding: '32px', background: 'radial-gradient(circle at center, rgba(16, 185, 129, 0.1) 0%, rgba(15, 23, 42, 0.8) 100%)', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
+                            <div style={{ position: 'relative', width: '160px', height: '160px', marginBottom: '16px' }}>
+                                <svg width="160" height="160" viewBox="0 0 100 100">
+                                    <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="8" />
+                                    <circle cx="50" cy="50" r="45" fill="none" stroke="#10b981" strokeWidth="8" strokeDasharray="282.74" strokeDashoffset={282.74 * (1 - 0.94)} transform="rotate(-90 50 50)" strokeLinecap="round" />
+                                </svg>
+                                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                                    <span style={{ fontSize: '2.5rem', fontWeight: 900, color: '#f8fafc', lineHeight: 1 }}>94</span>
+                                    <span style={{ fontSize: '0.8rem', color: '#10b981', fontWeight: 700 }}>/ 100</span>
+                                </div>
+                            </div>
+                            <h3 style={{ margin: '0 0 8px', fontSize: '1.2rem', fontWeight: 800, color: '#f8fafc', letterSpacing: '1px' }}>COMPLIANCE SCORE</h3>
+                            <p style={{ margin: '0 0 16px', color: '#94a3b8', fontSize: '0.9rem', maxWidth: '400px' }}>
+                                Índice global de cumplimiento normativo y seguridad en obra. Nivel Óptimo.
+                            </p>
+                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                                <Badge color="#38bdf8" variant="subtle" size="xs">CIRSOC 201</Badge>
+                                <Badge color="#38bdf8" variant="subtle" size="xs">SRT 319/99</Badge>
+                                <Badge color="#38bdf8" variant="subtle" size="xs">Ley 22.250</Badge>
+                            </div>
+                        </GlassCard>
+
+                        {/* Seccion B: Breakdown por Categoria */}
+                        <div>
+                            <h4 style={{ margin: '0 0 16px', fontSize: '1.05rem', fontWeight: 800, color: '#f8fafc' }}>
+                                Desglose por Categoría
+                            </h4>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+                                {COMPLIANCE_SCORE_BREAKDOWN.map((item, idx) => (
+                                    <GlassCard key={idx} style={{ padding: '16px' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                                            <div>
+                                                <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#f8fafc' }}>{item.category}</div>
+                                                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Peso: {item.weight}%</div>
+                                            </div>
+                                            {item.score < 90 && (
+                                                <Badge color="#f59e0b" variant="filled" size="xs">Acción Requerida</Badge>
+                                            )}
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                            <div style={{ flex: 1, height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
+                                                <div style={{ height: '100%', width: `${item.score}%`, background: item.color, borderRadius: '3px' }} />
+                                            </div>
+                                            <span style={{ fontSize: '0.85rem', fontWeight: 700, color: item.color }}>{item.score}</span>
+                                        </div>
+                                    </GlassCard>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Seccion C: Audit Trail Cronologico */}
+                        <div>
+                            <h4 style={{ margin: '0 0 16px', fontSize: '1.05rem', fontWeight: 800, color: '#f8fafc' }}>
+                                Audit Trail Cronológico
+                            </h4>
+                            <GlassCard style={{ padding: '24px' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                                    {AUDIT_TRAIL.map((audit, idx) => (
+                                        <motion.div 
+                                            key={audit.id}
+                                            initial={{ opacity: 0, x: -10 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                            transition={{ delay: idx * 0.05 }}
+                                            style={{ display: 'flex', gap: '16px', position: 'relative' }}
+                                        >
+                                            {/* Linea vertical conectora */}
+                                            {idx !== AUDIT_TRAIL.length - 1 && (
+                                                <div style={{ position: 'absolute', top: '32px', left: '15px', bottom: '-20px', width: '2px', background: 'rgba(255,255,255,0.05)' }} />
+                                            )}
+                                            
+                                            {/* Nodo circular */}
+                                            <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'rgba(15, 23, 42, 0.8)', border: `1px solid ${audit.status === 'OK' ? '#10b981' : audit.status === 'WARNING' ? '#f59e0b' : '#ef4444'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.9rem', zIndex: 1 }}>
+                                                {audit.icon}
+                                            </div>
+                                            
+                                            {/* Contenido */}
+                                            <div style={{ flex: 1, paddingBottom: '8px' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px', marginBottom: '4px' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                        <Badge color={audit.status === 'OK' ? '#10b981' : audit.status === 'WARNING' ? '#f59e0b' : '#ef4444'} variant="subtle" size="xs">
+                                                            {audit.event}
+                                                        </Badge>
+                                                        <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{audit.timestamp}</span>
+                                                    </div>
+                                                    <span style={{ fontFamily: tokens.font.mono, fontSize: '0.7rem', color: '#64748b', background: 'rgba(0,0,0,0.2)', padding: '2px 6px', borderRadius: '4px' }}>
+                                                        {audit.hash}
+                                                    </span>
+                                                </div>
+                                                <div style={{ fontSize: '0.85rem', color: '#f8fafc', marginBottom: '2px' }}>
+                                                    {audit.detail}
+                                                </div>
+                                                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                                                    Actor: {audit.actor}
+                                                </div>
+                                            </div>
+                                        </motion.div>
+                                    ))}
+                                </div>
+                            </GlassCard>
+                        </div>
+
                     </motion.div>
                 )}
 
