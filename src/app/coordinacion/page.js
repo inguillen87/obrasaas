@@ -34,6 +34,19 @@ const SAMPLE_SITE_PHOTOS = [
     }
 ];
 
+const ACTIVITY_FEED = [
+    { id: 'act-1', timestamp: '2026-09-15 08:15', type: 'ALERTA_CREADA', actor: 'Arq. Victoria', description: 'Creó alerta crítica: Falta pase cloacal 110mm en losa N+2', alertId: 'COORD-008', icon: '🚨', color: '#ef4444' },
+    { id: 'act-2', timestamp: '2026-09-15 08:18', type: 'WHATSAPP_ENVIADO', actor: 'Sistema', description: 'WhatsApp enviado a Luis Martínez (Plomero) con foto anotada', alertId: 'COORD-008', icon: '📨', color: '#22c55e' },
+    { id: 'act-3', timestamp: '2026-09-15 09:45', type: 'EN_CORRECCION', actor: 'Luis Martínez', description: 'Confirmó recepción y comenzó trabajos de pase cloacal', alertId: 'COORD-008', icon: '🔨', color: '#f59e0b' },
+    { id: 'act-4', timestamp: '2026-09-15 11:30', type: 'FOTO_ADJUNTA', actor: 'Luis Martínez', description: 'Adjuntó foto de avance: pase cloacal terminado, falta sello', alertId: 'COORD-008', icon: '📷', color: '#3b82f6' },
+    { id: 'act-5', timestamp: '2026-09-15 14:00', type: 'RESUELTO', actor: 'Arq. Marcelo', description: 'Verificó en obra y aprobó pase cloacal con sello estánco', alertId: 'COORD-008', icon: '✅', color: '#10b981' },
+    { id: 'act-6', timestamp: '2026-09-14 07:30', type: 'ALERTA_CREADA', actor: 'Arq. Marcelo', description: 'Detectado desplome en muro medianero sector sur. Requiere apuntalamiento inmediato.', alertId: 'COORD-007', icon: '🚨', color: '#ef4444' },
+    { id: 'act-7', timestamp: '2026-09-14 08:00', type: 'WHATSAPP_ENVIADO', actor: 'Sistema', description: 'WhatsApp enviado a Carlos Peralta (Encargado Albañil)', alertId: 'COORD-007', icon: '📨', color: '#22c55e' },
+    { id: 'act-8', timestamp: '2026-09-14 10:15', type: 'EN_CORRECCION', actor: 'Carlos Peralta', description: 'Colocación de puntales metálicos y arriostramiento lateral', alertId: 'COORD-007', icon: '🔨', color: '#f59e0b' },
+    { id: 'act-9', timestamp: '2026-09-14 16:30', type: 'RESUELTO', actor: 'Arq. Victoria', description: 'Muro estabilizado. Registrado en acta de dirección técnica con fotos.', alertId: 'COORD-007', icon: '✅', color: '#10b981' },
+    { id: 'act-10', timestamp: '2026-09-13 09:00', type: 'ALERTA_CREADA', actor: 'Arq. Victoria', description: 'Armadura de viga sin estribos de borde. CIRSOC 201, Art. 11.4.', alertId: 'COORD-006', icon: '🚨', color: '#ef4444' },
+];
+
 export default function CoordinacionVisualPage() {
     const { isMobile, isTablet } = useBreakpoint();
     const [activeTab, setActiveTab] = useState('nueva_alerta');
@@ -74,6 +87,7 @@ export default function CoordinacionVisualPage() {
 
     // Image Zoom Modal
     const [zoomModal, setZoomModal] = useState({ open: false, alert: null });
+    const [timelineFilter, setTimelineFilter] = useState('all');
 
     // Load Data
     const loadAlerts = useCallback(async () => {
@@ -372,7 +386,8 @@ export default function CoordinacionVisualPage() {
     const tabs = [
         { id: 'nueva_alerta', label: '📸 Nueva Alerta con Marcación', icon: '✏️' },
         { id: 'tablero', label: `📋 Tablero de Tareas (${alerts.length})`, icon: '📊' },
-        { id: 'matriz', label: '🛡️ Matriz de Responsabilidad', icon: '👷' }
+        { id: 'matriz', label: '🛡️ Matriz de Responsabilidad', icon: '👷' },
+        { id: 'timeline', label: '📅 Timeline de Actividad', icon: '⏳' }
     ];
 
     return (
@@ -912,6 +927,110 @@ export default function CoordinacionVisualPage() {
                                             ))}
                                         </tbody>
                                     </table>
+                                </div>
+                            </GlassCard>
+                        </motion.div>
+                    )}
+
+                    {/* TAB 4: TIMELINE DE ACTIVIDAD */}
+                    {activeTab === 'timeline' && (
+                        <motion.div key="tab-timeline" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                            {/* Stats */}
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+                                <StatCard title="Tiempo Promedio Resolución" value="4.2 hs" icon="⏱️" trend="-15% vs ayer" variant="primary" />
+                                <StatCard title="Alertas Resueltas Hoy" value="2" icon="✅" trend="Mantiene ritmo" variant="success" />
+                                <StatCard title="Operarios Más Activos" value="Luis Martínez" icon="👷" trend="3 intervenciones" variant="warning" />
+                                <StatCard title="Índice de Respuesta" value="98%" icon="📈" trend="+2% vs semana" variant="primary" />
+                            </div>
+
+                            <GlassCard style={{ padding: '24px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '24px' }}>
+                                    <div>
+                                        <h3 style={{ fontSize: '17px', fontWeight: 700, margin: '0 0 4px' }}>📅 Registro de Actividad Inmutable</h3>
+                                        <p style={{ fontSize: '13px', color: tokens.colors.text.secondary, margin: 0 }}>Historial completo de alertas, notificaciones y resoluciones.</p>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '8px', background: 'rgba(255,255,255,0.03)', padding: '4px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                                        {[
+                                            { id: 'all', label: 'Todos' },
+                                            { id: 'ALERTA_CREADA', label: 'Alertas' },
+                                            { id: 'WHATSAPP_ENVIADO', label: 'WhatsApp' },
+                                            { id: 'EN_CORRECCION', label: 'Correcciones' },
+                                            { id: 'RESUELTO', label: 'Resueltas' }
+                                        ].map(f => (
+                                            <button
+                                                key={f.id}
+                                                onClick={() => setTimelineFilter(f.id)}
+                                                style={{
+                                                    background: timelineFilter === f.id ? tokens.colors.accent.primary : 'transparent',
+                                                    color: timelineFilter === f.id ? '#000' : tokens.colors.text.secondary,
+                                                    border: 'none',
+                                                    padding: '6px 12px',
+                                                    borderRadius: '6px',
+                                                    fontSize: '12px',
+                                                    fontWeight: 600,
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.2s'
+                                                }}
+                                            >
+                                                {f.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div style={{ position: 'relative', paddingLeft: '32px' }}>
+                                    {/* Vertical Timeline Line */}
+                                    <div style={{ position: 'absolute', top: 0, bottom: 0, left: '11px', width: '2px', background: `linear-gradient(to bottom, ${tokens.colors.accent.primary}, rgba(245, 158, 11, 0.1))` }} />
+                                    
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                                        {ACTIVITY_FEED
+                                            .filter(a => timelineFilter === 'all' || a.type === timelineFilter)
+                                            .map((activity, index) => {
+                                                const dateStr = activity.timestamp.split(' ')[0];
+                                                const timeStr = activity.timestamp.split(' ')[1];
+                                                const isNewDay = index === 0 || ACTIVITY_FEED[index - 1].timestamp.split(' ')[0] !== dateStr;
+
+                                                return (
+                                                    <div key={activity.id} style={{ position: 'relative' }}>
+                                                        {isNewDay && (
+                                                            <div style={{ fontSize: '11px', fontWeight: 700, color: tokens.colors.text.secondary, marginBottom: '16px', background: 'rgba(255,255,255,0.05)', display: 'inline-block', padding: '4px 10px', borderRadius: '12px' }}>
+                                                                Día {dateStr}
+                                                            </div>
+                                                        )}
+                                                        
+                                                        <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.05 }} style={{ position: 'relative' }}>
+                                                            {/* Node Icon */}
+                                                            <div style={{ position: 'absolute', left: '-32px', top: '4px', width: '24px', height: '24px', borderRadius: '50%', background: activity.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', boxShadow: `0 0 10px ${activity.color}40`, border: '2px solid #060913', zIndex: 2 }}>
+                                                                {activity.icon}
+                                                            </div>
+
+                                                            {/* Content */}
+                                                            <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '10px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px' }}>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                        <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 600 }}>{timeStr} hs</span>
+                                                                        <Badge variant="outline" style={{ borderColor: `${activity.color}40`, color: activity.color, fontSize: '10px' }}>
+                                                                            {activity.type.replace('_', ' ')}
+                                                                        </Badge>
+                                                                    </div>
+                                                                    <div style={{ fontSize: '11px', color: tokens.colors.accent.primary, fontFamily: 'monospace', fontWeight: 600, background: 'rgba(245, 158, 11, 0.1)', padding: '2px 6px', borderRadius: '4px' }}>
+                                                                        {activity.alertId}
+                                                                    </div>
+                                                                </div>
+                                                                
+                                                                <div style={{ fontSize: '14px', lineHeight: 1.4, color: '#fff' }}>
+                                                                    {activity.description}
+                                                                </div>
+
+                                                                <div style={{ fontSize: '12px', color: tokens.colors.text.secondary, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                    <span>👤</span> <strong>{activity.actor}</strong>
+                                                                </div>
+                                                            </div>
+                                                        </motion.div>
+                                                    </div>
+                                                );
+                                            })}
+                                    </div>
                                 </div>
                             </GlassCard>
                         </motion.div>
