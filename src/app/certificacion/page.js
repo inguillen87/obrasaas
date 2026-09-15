@@ -13,7 +13,7 @@ const HISTORICAL_CERTS = [
 ];
 
 export default function CertificacionPage() {
-    const isMobile = useBreakpoint('sm');
+    const { isMobile } = useBreakpoint();
     const [state, setState] = useState(null);
     const [loading, setLoading] = useState(true);
     const [selectedPeriod, setSelectedPeriod] = useState('Q1 - Agosto 2026');
@@ -94,8 +94,8 @@ export default function CertificacionPage() {
 
     if (loading) {
         return (
-            <div style={{ minHeight: '100vh', background: tokens.colors.background, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }} style={{ width: 40, height: 40, border: '3px solid rgba(245, 158, 11, 0.2)', borderTopColor: tokens.colors.accent, borderRadius: '50%' }} />
+            <div style={{ minHeight: '100vh', background: '#060913', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }} style={{ width: 40, height: 40, border: '3px solid rgba(245, 158, 11, 0.2)', borderTopColor: '#f59e0b', borderRadius: '50%' }} />
             </div>
         );
     }
@@ -130,12 +130,12 @@ export default function CertificacionPage() {
     const simuladorDiferencial = simuladorMontoAjustado - totalEjecutado;
 
     return (
-        <div style={{ minHeight: '100vh', background: tokens.colors.background, color: '#f8fafc', fontFamily: tokens.font.sans }}>
+        <div style={{ minHeight: '100vh', background: '#060913', color: '#f8fafc', fontFamily: tokens.font.sans }}>
             <PageHeader
                 title={
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                         Certificaciones de Obra Digitales
-                        {sseConnected && <Badge color={tokens.colors.success} variant="filled" size="sm">En Vivo</Badge>}
+                        {sseConnected && <Badge color="#10b981" variant="filled" size="sm">En Vivo</Badge>}
                     </div>
                 }
                 subtitle="Emisión fehaciente de certificados de avance físico-financiero con índice CAC, retención de fondo de reparo y firma digital SHA-256"
@@ -175,7 +175,7 @@ export default function CertificacionPage() {
                                 <GlassCard style={{ padding: '18px 24px', marginBottom: '28px', border: '1px solid rgba(245, 158, 11, 0.3)', background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(15, 23, 42, 0.8) 100%)' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                                            <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: tokens.colors.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', color: tokens.colors.background, fontSize: '1.4rem', fontWeight: 900 }}>📜</div>
+                                            <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: '#f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#060913', fontSize: '1.4rem', fontWeight: 900 }}>📜</div>
                                             <div>
                                                 <div style={{ fontSize: '1rem', fontWeight: 800, color: '#f8fafc' }}>Certificado Nº CERT-2026-004 — {selectedPeriod}</div>
                                                 <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: '2px' }}>
@@ -195,10 +195,10 @@ export default function CertificacionPage() {
                             </motion.div>
 
                             <motion.div variants={fadeInUp} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '16px', marginBottom: '32px' }}>
-                                <StatCard label="AVANCE FÍSICO GLOBAL" value={String(state?.avancePercentage || 42) + '%'} sub="Verificado en obra" icon="🏗️" color={tokens.colors.secondary} />
-                                <StatCard label="MONTO BÁSICO ACUMULADO" value={'$' + totalEjecutado.toLocaleString('es-AR')} sub="A valores contractuales" icon="💰" color={tokens.colors.accent} />
-                                <StatCard label="AJUSTADO POR CAC (+14.2%)" value={'$' + montoAjustadoCAC.toLocaleString('es-AR')} sub="Redeterminación oficial" icon="📈" color={tokens.colors.success} />
-                                <StatCard label="FONDO DE REPARO (5%)" value={'$' + fondoReparo.toLocaleString('es-AR')} sub="Retención Ley 22.250" icon="🛡️" color={tokens.colors.danger} />
+                                <StatCard label="AVANCE FÍSICO GLOBAL" value={String(state?.avancePercentage || 42) + '%'} sub="Verificado en obra" icon="🏗️" color="#3b82f6" />
+                                <StatCard label="MONTO BÁSICO ACUMULADO" value={'$' + totalEjecutado.toLocaleString('es-AR')} sub="A valores contractuales" icon="💰" color="#f59e0b" />
+                                <StatCard label="AJUSTADO POR CAC (+14.2%)" value={'$' + montoAjustadoCAC.toLocaleString('es-AR')} sub="Redeterminación oficial" icon="📈" color="#10b981" />
+                                <StatCard label="FONDO DE REPARO (5%)" value={'$' + fondoReparo.toLocaleString('es-AR')} sub="Retención Ley 22.250" icon="🛡️" color="#ec4899" />
                                 <StatCard label="LÍQUIDO A PERCIBIR" value={'$' + liquidoAPagar.toLocaleString('es-AR')} sub="Saldo neto a transferir" icon="💵" color="#22c55e" />
                             </motion.div>
 
@@ -209,7 +209,7 @@ export default function CertificacionPage() {
                                             <h3 style={{ fontSize: '1.1rem', fontWeight: 800, margin: 0, color: '#f8fafc' }}>📑 Discriminación por Rubros Constructivos</h3>
                                             <p style={{ fontSize: '0.78rem', color: '#94a3b8', margin: '4px 0 0' }}>Comparativa entre presupuesto contractual, porcentaje acumulado y liquidación del período</p>
                                         </div>
-                                        <Badge color={tokens.colors.success} variant="filled" size="sm">Normativa CIRSOC & UOCRA</Badge>
+                                        <Badge color="#10b981" variant="filled" size="sm">Normativa CIRSOC & UOCRA</Badge>
                                     </div>
                                     
                                     <div style={{ display: 'flex', gap: '24px', marginBottom: '24px', flexWrap: 'wrap' }}>
@@ -238,36 +238,36 @@ export default function CertificacionPage() {
                                                                     <td style={{ padding: '14px 8px' }}>
                                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                                             <span style={{ fontWeight: 700, color: '#f8fafc' }}>{r.nombre}</span>
-                                                                            {r.tendency === 'up' && <span style={{ color: tokens.colors.success, fontSize: '12px' }}>↑</span>}
-                                                                            {r.tendency === 'down' && <span style={{ color: tokens.colors.danger, fontSize: '12px' }}>↓</span>}
+                                                                            {r.tendency === 'up' && <span style={{ color: '#10b981', fontSize: '12px' }}>↑</span>}
+                                                                            {r.tendency === 'down' && <span style={{ color: '#ef4444', fontSize: '12px' }}>↓</span>}
                                                                         </div>
                                                                         <div style={{ fontSize: '0.7rem', color: '#64748b' }}>Item {r.id}</div>
                                                                     </td>
                                                                     <td style={{ padding: '14px 8px', color: '#cbd5e1' }}>{'$' + (r.presupuesto || 0).toLocaleString('es-AR')}</td>
                                                                     <td style={{ padding: '14px 8px', minWidth: '140px' }}>
                                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                                            <span style={{ fontWeight: 800, color: pct === 100 ? tokens.colors.success : tokens.colors.accent, fontSize: '0.8rem', minWidth: '35px' }}>{pct}%</span>
+                                                                            <span style={{ fontWeight: 800, color: pct === 100 ? '#10b981' : '#f59e0b', fontSize: '0.8rem', minWidth: '35px' }}>{pct}%</span>
                                                                             <div style={{ flex: 1 }}>
-                                                                                <ProgressBar value={pct} color={pct === 100 ? tokens.colors.success : tokens.colors.accent} height={5} />
+                                                                                <ProgressBar value={pct} color={pct === 100 ? '#10b981' : '#f59e0b'} height={5} />
                                                                             </div>
                                                                         </div>
                                                                     </td>
-                                                                    <td style={{ padding: '14px 8px', color: tokens.colors.accent, fontWeight: 600 }}>{'$' + (r.ejecutado || 0).toLocaleString('es-AR')}</td>
+                                                                    <td style={{ padding: '14px 8px', color: '#f59e0b', fontWeight: 600 }}>{'$' + (r.ejecutado || 0).toLocaleString('es-AR')}</td>
                                                                     <td style={{ padding: '14px 8px', color: '#38bdf8', fontWeight: 600 }}>{'$' + ajustado.toLocaleString('es-AR')}</td>
-                                                                    <td style={{ padding: '14px 8px', color: tokens.colors.danger, fontWeight: 600 }}>{'-$' + retenido.toLocaleString('es-AR')}</td>
+                                                                    <td style={{ padding: '14px 8px', color: '#ec4899', fontWeight: 600 }}>{'-$' + retenido.toLocaleString('es-AR')}</td>
                                                                     <td style={{ padding: '14px 8px', textAlign: 'right', fontWeight: 800, color: '#22c55e', fontSize: '0.9rem' }}>{'$' + neto.toLocaleString('es-AR')}</td>
                                                                 </tr>
                                                             );
                                                         })}
                                                     </tbody>
                                                     <tfoot>
-                                                        <tr style={{ background: 'linear-gradient(90deg, rgba(245, 158, 11, 0.05) 0%, rgba(245, 158, 11, 0.15) 100%)', borderTop: `1px solid ${tokens.colors.accent}` }}>
+                                                        <tr style={{ background: 'linear-gradient(90deg, rgba(245, 158, 11, 0.05) 0%, rgba(245, 158, 11, 0.15) 100%)', borderTop: '1px solid #f59e0b' }}>
                                                             <td style={{ padding: '16px 8px', fontWeight: 900, color: '#f8fafc' }}>TOTALES</td>
                                                             <td style={{ padding: '16px 8px', fontWeight: 800, color: '#cbd5e1' }}>{'$' + totalPresupuesto.toLocaleString('es-AR')}</td>
-                                                            <td style={{ padding: '16px 8px', fontWeight: 800, color: tokens.colors.accent }}>{String(state?.avancePercentage || 42) + '% Global'}</td>
-                                                            <td style={{ padding: '16px 8px', fontWeight: 800, color: tokens.colors.accent }}>{'$' + totalEjecutado.toLocaleString('es-AR')}</td>
+                                                            <td style={{ padding: '16px 8px', fontWeight: 800, color: '#f59e0b' }}>{String(state?.avancePercentage || 42) + '% Global'}</td>
+                                                            <td style={{ padding: '16px 8px', fontWeight: 800, color: '#f59e0b' }}>{'$' + totalEjecutado.toLocaleString('es-AR')}</td>
                                                             <td style={{ padding: '16px 8px', fontWeight: 800, color: '#38bdf8' }}>{'$' + montoAjustadoCAC.toLocaleString('es-AR')}</td>
-                                                            <td style={{ padding: '16px 8px', fontWeight: 800, color: tokens.colors.danger }}>{'-$' + fondoReparo.toLocaleString('es-AR')}</td>
+                                                            <td style={{ padding: '16px 8px', fontWeight: 800, color: '#ec4899' }}>{'-$' + fondoReparo.toLocaleString('es-AR')}</td>
                                                             <td style={{ padding: '16px 8px', textAlign: 'right', fontWeight: 900, color: '#22c55e', fontSize: '1.05rem' }}>{'$' + liquidoAPagar.toLocaleString('es-AR')}</td>
                                                         </tr>
                                                     </tfoot>
@@ -278,16 +278,16 @@ export default function CertificacionPage() {
                                             <div style={{ width: '220px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '16px', background: 'rgba(255,255,255,0.02)', borderRadius: '12px' }}>
                                                 <h4 style={{ fontSize: '0.8rem', color: '#94a3b8', marginBottom: '16px', textAlign: 'center' }}>Distribución Presupuesto</h4>
                                                 <svg width="140" height="140" viewBox="0 0 42 42">
-                                                    <circle cx="21" cy="21" r="15.91549430918954" fill="transparent" stroke={tokens.colors.accent} strokeWidth="6" strokeDasharray="40 60" strokeDashoffset="25"></circle>
-                                                    <circle cx="21" cy="21" r="15.91549430918954" fill="transparent" stroke={tokens.colors.secondary} strokeWidth="6" strokeDasharray="30 70" strokeDashoffset="85"></circle>
-                                                    <circle cx="21" cy="21" r="15.91549430918954" fill="transparent" stroke={tokens.colors.success} strokeWidth="6" strokeDasharray="20 80" strokeDashoffset="55"></circle>
-                                                    <circle cx="21" cy="21" r="15.91549430918954" fill="transparent" stroke={tokens.colors.danger} strokeWidth="6" strokeDasharray="10 90" strokeDashoffset="35"></circle>
+                                                    <circle cx="21" cy="21" r="15.91549430918954" fill="transparent" stroke="#f59e0b" strokeWidth="6" strokeDasharray="40 60" strokeDashoffset="25"></circle>
+                                                    <circle cx="21" cy="21" r="15.91549430918954" fill="transparent" stroke="#3b82f6" strokeWidth="6" strokeDasharray="30 70" strokeDashoffset="85"></circle>
+                                                    <circle cx="21" cy="21" r="15.91549430918954" fill="transparent" stroke="#10b981" strokeWidth="6" strokeDasharray="20 80" strokeDashoffset="55"></circle>
+                                                    <circle cx="21" cy="21" r="15.91549430918954" fill="transparent" stroke="#ef4444" strokeWidth="6" strokeDasharray="10 90" strokeDashoffset="35"></circle>
                                                 </svg>
                                                 <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.7rem', width: '100%' }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><div style={{ width: 8, height: 8, background: tokens.colors.accent, borderRadius: '50%' }}/> Estructura (40%)</div>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><div style={{ width: 8, height: 8, background: tokens.colors.secondary, borderRadius: '50%' }}/> Mampostería (30%)</div>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><div style={{ width: 8, height: 8, background: tokens.colors.success, borderRadius: '50%' }}/> Instalaciones (20%)</div>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><div style={{ width: 8, height: 8, background: tokens.colors.danger, borderRadius: '50%' }}/> Terminaciones (10%)</div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><div style={{ width: 8, height: 8, background: '#f59e0b', borderRadius: '50%' }}/> Estructura (40%)</div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><div style={{ width: 8, height: 8, background: '#3b82f6', borderRadius: '50%' }}/> Mampostería (30%)</div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><div style={{ width: 8, height: 8, background: '#10b981', borderRadius: '50%' }}/> Instalaciones (20%)</div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><div style={{ width: 8, height: 8, background: '#ef4444', borderRadius: '50%' }}/> Terminaciones (10%)</div>
                                                 </div>
                                             </div>
                                         )}
@@ -323,26 +323,26 @@ export default function CertificacionPage() {
                         <motion.div key="historial" variants={staggerContainer} initial="initial" animate="animate" exit="exit" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                             {HISTORICAL_CERTS.map((cert) => (
                                 <motion.div key={cert.id} variants={fadeInUp}>
-                                    <GlassCard style={{ padding: '20px', borderLeft: `4px solid ${cert.status === 'Aprobado' ? tokens.colors.success : tokens.colors.accent}` }}>
+                                    <GlassCard style={{ padding: '20px', borderLeft: `4px solid ${cert.status === 'Aprobado' ? '#10b981' : '#f59e0b'}` }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
                                             <div>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
                                                     <h4 style={{ margin: 0, fontSize: '1.1rem', color: '#f8fafc' }}>{cert.id}</h4>
-                                                    <Badge color={cert.status === 'Aprobado' ? tokens.colors.success : tokens.colors.accent} variant="outline" size="sm">{cert.status}</Badge>
+                                                    <Badge color={cert.status === 'Aprobado' ? '#10b981' : '#f59e0b'} variant="outline" size="sm">{cert.status}</Badge>
                                                 </div>
                                                 <div style={{ fontSize: '0.85rem', color: '#94a3b8' }}>Período: <span style={{ color: '#e2e8f0' }}>{cert.periodo}</span> | Fecha: {cert.fecha}</div>
                                                 <div style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: '4px' }}>Aprobado por: <span style={{ color: '#e2e8f0' }}>{cert.aprobadoPor}</span></div>
                                                 
                                                 <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
                                                     <span style={{ fontSize: '0.8rem', color: '#94a3b8', minWidth: '90px' }}>Avance Acum:</span>
-                                                    <div style={{ width: '200px' }}><ProgressBar value={cert.avance} color={tokens.colors.secondary} height={6} /></div>
+                                                    <div style={{ width: '200px' }}><ProgressBar value={cert.avance} color="#3b82f6" height={6} /></div>
                                                     <span style={{ fontSize: '0.85rem', fontWeight: 'bold' }}>{cert.avance}%</span>
                                                 </div>
                                             </div>
                                             <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                                                 <div>
                                                     <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Monto Base: <span style={{ color: '#e2e8f0' }}>${cert.montoBase.toLocaleString('es-AR')}</span></div>
-                                                    <div style={{ fontSize: '0.9rem', color: tokens.colors.success, fontWeight: 'bold', marginTop: '4px' }}>
+                                                    <div style={{ fontSize: '0.9rem', color: '#10b981', fontWeight: 'bold', marginTop: '4px' }}>
                                                         Monto Ajustado (CAC {cert.cacIndex}%): ${(cert.montoBase * (1 + cert.cacIndex / 100)).toLocaleString('es-AR', { maximumFractionDigits: 0 })}
                                                     </div>
                                                 </div>
@@ -373,14 +373,14 @@ export default function CertificacionPage() {
                                         <div>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
                                                 <label style={{ fontSize: '0.9rem', fontWeight: 600, color: '#e2e8f0' }}>Índice CAC Simulado</label>
-                                                <span style={{ fontSize: '1.1rem', fontWeight: 800, color: tokens.colors.accent }}>{simulatedCac}%</span>
+                                                <span style={{ fontSize: '1.1rem', fontWeight: 800, color: '#f59e0b' }}>{simulatedCac}%</span>
                                             </div>
                                             <input 
                                                 type="range" 
                                                 min="0" max="30" step="0.1" 
                                                 value={simulatedCac} 
                                                 onChange={e => setSimulatedCac(Number(e.target.value))}
-                                                style={{ width: '100%', accentColor: tokens.colors.accent, cursor: 'pointer' }}
+                                                style={{ width: '100%', accentColor: '#f59e0b', cursor: 'pointer' }}
                                             />
                                             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '0.75rem', color: '#64748b' }}>
                                                 <span>0%</span>
@@ -394,13 +394,13 @@ export default function CertificacionPage() {
                                                 <div style={{ fontSize: '0.85rem', color: '#94a3b8', marginBottom: '8px' }}>Monto Básico Acumulado</div>
                                                 <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#e2e8f0' }}>${totalEjecutado.toLocaleString('es-AR')}</div>
                                             </div>
-                                            <div style={{ background: 'rgba(255,255,255,0.03)', padding: '16px', borderRadius: '12px', border: `1px solid ${tokens.colors.success}40` }}>
+                                            <div style={{ background: 'rgba(255,255,255,0.03)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
                                                 <div style={{ fontSize: '0.85rem', color: '#94a3b8', marginBottom: '8px' }}>Monto Ajustado Simulado</div>
-                                                <div style={{ fontSize: '1.4rem', fontWeight: 800, color: tokens.colors.success }}>${simuladorMontoAjustado.toLocaleString('es-AR')}</div>
+                                                <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#10b981' }}>${simuladorMontoAjustado.toLocaleString('es-AR')}</div>
                                             </div>
-                                            <div style={{ background: `linear-gradient(135deg, ${tokens.colors.accent}10 0%, transparent 100%)`, padding: '16px', borderRadius: '12px', border: `1px solid ${tokens.colors.accent}60` }}>
+                                            <div style={{ background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, transparent 100%)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(245, 158, 11, 0.4)' }}>
                                                 <div style={{ fontSize: '0.85rem', color: '#94a3b8', marginBottom: '8px' }}>Diferencial (Impacto Redeterminación)</div>
-                                                <div style={{ fontSize: '1.4rem', fontWeight: 800, color: tokens.colors.accent }}>+${simuladorDiferencial.toLocaleString('es-AR')}</div>
+                                                <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#f59e0b' }}>+${simuladorDiferencial.toLocaleString('es-AR')}</div>
                                             </div>
                                         </div>
 
@@ -411,8 +411,8 @@ export default function CertificacionPage() {
                                                 </div>
                                             </div>
                                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-                                                <div style={{ width: '80px', height: `${100 * (1 + simulatedCac / 100)}px`, background: tokens.colors.success, borderRadius: '8px 8px 0 0', position: 'relative', transition: 'height 0.3s ease' }}>
-                                                    <div style={{ position: 'absolute', top: '-24px', width: '100%', textAlign: 'center', fontSize: '0.75rem', fontWeight: 'bold', color: tokens.colors.success }}>Ajustado</div>
+                                                <div style={{ width: '80px', height: `${100 * (1 + simulatedCac / 100)}px`, background: '#10b981', borderRadius: '8px 8px 0 0', position: 'relative', transition: 'height 0.3s ease' }}>
+                                                    <div style={{ position: 'absolute', top: '-24px', width: '100%', textAlign: 'center', fontSize: '0.75rem', fontWeight: 'bold', color: '#10b981' }}>Ajustado</div>
                                                 </div>
                                             </div>
                                         </div>
@@ -429,9 +429,9 @@ export default function CertificacionPage() {
                     {activeTab === 'resumen' && (
                         <motion.div key="resumen" variants={staggerContainer} initial="initial" animate="animate" exit="exit">
                             <motion.div variants={fadeInUp} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-                                <StatCard label="MONTO TOTAL CERTIFICADO" value="$11.4M" sub="Acumulado Histórico" icon="📊" color={tokens.colors.secondary} />
-                                <StatCard label="PROMEDIO POR QUINCENA" value="$1.42M" sub="Últimos 6 períodos" icon="📉" color={tokens.colors.accent} />
-                                <StatCard label="TASA DE CRECIMIENTO" value="+8.4%" sub="Variación inter-quincenal" icon="🚀" color={tokens.colors.success} />
+                                <StatCard label="MONTO TOTAL CERTIFICADO" value="$11.4M" sub="Acumulado Histórico" icon="📊" color="#3b82f6" />
+                                <StatCard label="PROMEDIO POR QUINCENA" value="$1.42M" sub="Últimos 6 períodos" icon="📉" color="#f59e0b" />
+                                <StatCard label="TASA DE CRECIMIENTO" value="+8.4%" sub="Variación inter-quincenal" icon="🚀" color="#10b981" />
                                 <StatCard label="PROYECCIÓN FIN DE OBRA" value="Nov 2026" sub="Estimación s/ curva avance" icon="📅" color="#8b5cf6" />
                             </motion.div>
 
@@ -442,14 +442,14 @@ export default function CertificacionPage() {
                                     <div style={{ height: '300px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-around', padding: '0 20px 30px', position: 'relative', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
                                         {/* Trend Line (SVG overlay) */}
                                         <svg style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 1, pointerEvents: 'none' }}>
-                                            <polyline points="10%,90% 25%,80% 40%,65% 55%,50% 70%,40% 85%,20%" fill="none" stroke={tokens.colors.accent} strokeWidth="3" strokeDasharray="5,5" />
+                                            <polyline points="10%,90% 25%,80% 40%,65% 55%,50% 70%,40% 85%,20%" fill="none" stroke="#f59e0b" strokeWidth="3" strokeDasharray="5,5" />
                                         </svg>
                                         
                                         {/* Bars */}
                                         {[10, 20, 35, 50, 60, 80].map((h, i) => (
                                             <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 2 }}>
-                                                <div style={{ width: '40px', height: `${h * 2.5}px`, background: i === 5 ? tokens.colors.accent : 'rgba(59, 130, 246, 0.6)', borderRadius: '6px 6px 0 0', position: 'relative' }}>
-                                                    <span style={{ position: 'absolute', top: '-24px', left: '50%', transform: 'translateX(-50%)', fontSize: '0.75rem', fontWeight: 'bold', color: i === 5 ? tokens.colors.accent : '#e2e8f0' }}>{h}%</span>
+                                                <div style={{ width: '40px', height: `${h * 2.5}px`, background: i === 5 ? '#f59e0b' : 'rgba(59, 130, 246, 0.6)', borderRadius: '6px 6px 0 0', position: 'relative' }}>
+                                                    <span style={{ position: 'absolute', top: '-24px', left: '50%', transform: 'translateX(-50%)', fontSize: '0.75rem', fontWeight: 'bold', color: i === 5 ? '#f59e0b' : '#e2e8f0' }}>{h}%</span>
                                                 </div>
                                                 <span style={{ position: 'absolute', bottom: '5px', fontSize: '0.75rem', color: '#94a3b8' }}>Q{i%2===0?1:2}</span>
                                             </div>
@@ -472,19 +472,19 @@ export default function CertificacionPage() {
                                                     <td style={{ padding: '8px' }}>Agosto 2026</td>
                                                     <td style={{ padding: '8px' }}>55%</td>
                                                     <td style={{ padding: '8px' }}>$2.1M</td>
-                                                    <td style={{ padding: '8px', textAlign: 'right' }}><Badge color={tokens.colors.success} variant="outline" size="xs">Bajo</Badge></td>
+                                                    <td style={{ padding: '8px', textAlign: 'right' }}><Badge color="#10b981" variant="outline" size="xs">Bajo</Badge></td>
                                                 </tr>
                                                 <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', color: '#cbd5e1' }}>
                                                     <td style={{ padding: '8px' }}>Septiembre 2026</td>
                                                     <td style={{ padding: '8px' }}>68%</td>
                                                     <td style={{ padding: '8px' }}>$2.8M</td>
-                                                    <td style={{ padding: '8px', textAlign: 'right' }}><Badge color={tokens.colors.success} variant="outline" size="xs">Bajo</Badge></td>
+                                                    <td style={{ padding: '8px', textAlign: 'right' }}><Badge color="#10b981" variant="outline" size="xs">Bajo</Badge></td>
                                                 </tr>
                                                 <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', color: '#cbd5e1' }}>
                                                     <td style={{ padding: '8px' }}>Octubre 2026</td>
                                                     <td style={{ padding: '8px' }}>85%</td>
                                                     <td style={{ padding: '8px' }}>$3.5M</td>
-                                                    <td style={{ padding: '8px', textAlign: 'right' }}><Badge color={tokens.colors.accent} variant="outline" size="xs">Medio</Badge></td>
+                                                    <td style={{ padding: '8px', textAlign: 'right' }}><Badge color="#f59e0b" variant="outline" size="xs">Medio</Badge></td>
                                                 </tr>
                                             </tbody>
                                         </table>
