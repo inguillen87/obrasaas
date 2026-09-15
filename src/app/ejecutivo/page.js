@@ -6,9 +6,28 @@ import { motion } from 'framer-motion';
 import { tokens, Badge, Button, GlassCard, StatCard, ProgressBar, PageHeader, Modal, staggerContainer, staggerItem } from '@/lib/design-system';
 import { useBreakpoint } from '@/lib/useBreakpoint';
 
+const AVANCE_DATA = [
+    { mes: 'Abr', planificado: 12, real: 10 },
+    { mes: 'May', planificado: 22, real: 19 },
+    { mes: 'Jun', planificado: 35, real: 30 },
+    { mes: 'Jul', planificado: 48, real: 42 },
+    { mes: 'Ago', planificado: 60, real: 52 },
+    { mes: 'Sep', planificado: 72, real: 58 },
+];
+
+const EXECUTIVE_ALERTS = [
+    { id: 1, severity: 'critical', title: 'Desvío de Cronograma Detectado', description: 'El SPI actual es 0.86 (< 1.0). La obra acumula 14% de atraso vs planificación. Se recomienda refuerzo de cuadrilla o extensión de jornada.', recommendation: 'Activar horas extras UOCRA 50% por 2 semanas', icon: '⏰', timestamp: 'Hoy 08:00' },
+    { id: 2, severity: 'warning', title: 'Vencimiento de Póliza ART en 15 días', description: 'La póliza de riesgos del trabajo Nº ART-2026-4451 vence el 30/09/2026. Gestión de renovación debe iniciarse ahora.', recommendation: 'Contactar broker de seguros Marsh S.A.', icon: '🛡️', timestamp: 'Hoy 09:30' },
+    { id: 3, severity: 'info', title: 'Ventana Óptima de Hormigonado', description: 'Pronóstico 72hs sin lluvia: Jueves a Sábado. Temperatura mínima 14°C. Condiciones ideales para colada de losa Nivel +3.', recommendation: 'Coordinar camiones hormigoneros para Jueves 07:00', icon: '☀️', timestamp: 'Hoy 11:00' },
+    { id: 4, severity: 'success', title: 'Certificación Q2 Julio Aprobada', description: 'El certificado CERT-2026-004 fue aprobado y firmado digitalmente con hash SHA-256. Monto ajustado por CAC: $2.466.360.', recommendation: 'Verificar transferencia en cuenta BBVA Constructora', icon: '✅', timestamp: 'Ayer 16:00' },
+];
+
 export default function ExecutiveDashboard() {
     const { isMobile } = useBreakpoint();
     const [data, setData] = useState(null);
+    const [roiInversion, setRoiInversion] = useState(85000000);
+    const [roiVenta, setRoiVenta] = useState(130000000);
+    const [roiPlazo, setRoiPlazo] = useState(18);
     const [loading, setLoading] = useState(true);
     const [filterRisk, setFilterRisk] = useState('all');
     const [summaryModal, setSummaryModal] = useState({ open: false, loading: false, result: null });
@@ -310,6 +329,97 @@ export default function ExecutiveDashboard() {
                     </GlassCard>
                 )}
 
+                {/* Gráfico SVG de Rendimiento de Obra */}
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5 }}
+                    style={{ marginTop: '32px' }}
+                >
+                    <GlassCard style={{ padding: '24px' }}>
+                        <h3 style={{ fontSize: '1.1rem', fontWeight: 800, margin: '0 0 24px', color: '#f8fafc' }}>
+                            📊 Avance Planificado vs Real — Curva Comparativa
+                        </h3>
+                        <div style={{ width: '100%', height: '280px', position: 'relative' }}>
+                            <svg viewBox="0 0 600 280" width="100%" height="100%" preserveAspectRatio="none">
+                                {/* Grilla horizontal */}
+                                {[0, 20, 40, 60, 80, 100].map((val, i) => {
+                                    const y = 250 - (val * 2.2);
+                                    return (
+                                        <g key={i}>
+                                            <line x1="40" y1={y} x2="600" y2={y} stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
+                                            <text x="30" y={y + 4} fill="#64748b" fontSize="10" textAnchor="end">{val}%</text>
+                                        </g>
+                                    );
+                                })}
+                                {/* Barras */}
+                                {AVANCE_DATA.map((d, i) => {
+                                    const x = 70 + (i * 90);
+                                    const planY = 250 - (d.planificado * 2.2);
+                                    const planHeight = d.planificado * 2.2;
+                                    const realY = 250 - (d.real * 2.2);
+                                    const realHeight = d.real * 2.2;
+                                    return (
+                                        <g key={i}>
+                                            {/* Planificado */}
+                                            <rect x={x} y={planY} width="24" height={planHeight} fill="#3b82f6" rx="4" opacity="0.8" />
+                                            {/* Real */}
+                                            <rect x={x + 28} y={realY} width="24" height={realHeight} fill="#f59e0b" rx="4" />
+                                            {/* Mes */}
+                                            <text x={x + 26} y="270" fill="#94a3b8" fontSize="12" textAnchor="middle">{d.mes}</text>
+                                        </g>
+                                    );
+                                })}
+                            </svg>
+                        </div>
+                        <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', marginTop: '12px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><div style={{ width: 12, height: 12, background: '#3b82f6', borderRadius: 2 }}/> <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Planificado</span></div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><div style={{ width: 12, height: 12, background: '#f59e0b', borderRadius: 2 }}/> <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Real</span></div>
+                        </div>
+                    </GlassCard>
+                </motion.div>
+
+                {/* Panel de Alertas Ejecutivas Inteligentes */}
+                <motion.div
+                    variants={staggerContainer}
+                    initial="hidden"
+                    animate="visible"
+                    style={{ marginTop: '32px' }}
+                >
+                    <h3 style={{ fontSize: '1.2rem', fontWeight: 800, margin: '0 0 16px', color: '#f8fafc' }}>
+                        ⚡ Alertas Ejecutivas Inteligentes
+                    </h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        {EXECUTIVE_ALERTS.map((alert, i) => {
+                            const colors = {
+                                critical: '#ef4444',
+                                warning: '#f59e0b',
+                                info: '#3b82f6',
+                                success: '#10b981'
+                            };
+                            const color = colors[alert.severity];
+                            return (
+                                <motion.div key={alert.id} variants={staggerItem}>
+                                    <GlassCard style={{ borderLeft: `4px solid ${color}`, padding: '20px', display: 'flex', gap: '16px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                                        <div style={{ fontSize: '2rem' }}>{alert.icon}</div>
+                                        <div style={{ flex: 1, minWidth: '280px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                                                <h4 style={{ margin: 0, fontSize: '1rem', color: '#f8fafc' }}>{alert.title}</h4>
+                                                <Badge color={color} variant="filled" size="xs">{alert.severity.toUpperCase()}</Badge>
+                                            </div>
+                                            <p style={{ margin: '0 0 12px', fontSize: '0.85rem', color: '#cbd5e1', lineHeight: 1.5 }}>{alert.description}</p>
+                                            <Button variant="secondary" size="sm" onClick={() => {}}>{alert.recommendation}</Button>
+                                        </div>
+                                        <div style={{ fontSize: '0.75rem', color: '#64748b', whiteSpace: 'nowrap' }}>
+                                            {alert.timestamp}
+                                        </div>
+                                    </GlassCard>
+                                </motion.div>
+                            );
+                        })}
+                    </div>
+                </motion.div>
+
                 {/* Cash Flow Projection (6 Months) */}
                 <GlassCard style={{ padding: '28px', marginTop: '24px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -368,6 +478,55 @@ export default function ExecutiveDashboard() {
                                         })}
                                     </tbody>
                                 </table>
+                            </div>
+                        );
+                    })()}
+                </GlassCard>
+
+                {/* Mini ROI Calculator */}
+                <GlassCard style={{ padding: '28px', marginTop: '32px' }}>
+                    <h3 style={{ fontSize: '1.1rem', fontWeight: 800, margin: '0 0 20px', color: '#f8fafc' }}>
+                        💰 Calculadora Rápida de ROI por Obra
+                    </h3>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '24px', marginBottom: '24px' }}>
+                        <div style={{ flex: '1 1 200px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <label style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Inversión Total (ARS)</label>
+                            <input 
+                                type="number" 
+                                value={roiInversion} 
+                                onChange={(e) => setRoiInversion(Number(e.target.value))}
+                                style={{ background: 'rgba(15, 23, 42, 0.5)', border: '1px solid rgba(255,255,255,0.1)', color: '#f8fafc', padding: '10px 14px', borderRadius: '8px', fontFamily: tokens.font.mono }}
+                            />
+                        </div>
+                        <div style={{ flex: '1 1 200px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <label style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Precio Venta Estimado (ARS)</label>
+                            <input 
+                                type="number" 
+                                value={roiVenta} 
+                                onChange={(e) => setRoiVenta(Number(e.target.value))}
+                                style={{ background: 'rgba(15, 23, 42, 0.5)', border: '1px solid rgba(255,255,255,0.1)', color: '#f8fafc', padding: '10px 14px', borderRadius: '8px', fontFamily: tokens.font.mono }}
+                            />
+                        </div>
+                        <div style={{ flex: '1 1 150px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <label style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Plazo (meses)</label>
+                            <input 
+                                type="number" 
+                                value={roiPlazo} 
+                                onChange={(e) => setRoiPlazo(Number(e.target.value))}
+                                style={{ background: 'rgba(15, 23, 42, 0.5)', border: '1px solid rgba(255,255,255,0.1)', color: '#f8fafc', padding: '10px 14px', borderRadius: '8px', fontFamily: tokens.font.mono }}
+                            />
+                        </div>
+                    </div>
+                    {(() => {
+                        const ganancia = roiVenta - roiInversion;
+                        const roiPorcentaje = roiInversion > 0 ? (ganancia / roiInversion) * 100 : 0;
+                        const rentabilidadMensual = roiPlazo > 0 ? roiPorcentaje / roiPlazo : 0;
+                        
+                        return (
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px' }}>
+                                <StatCard label="GANANCIA NETA" value={formatARS(ganancia)} sub="ARS Estimados" icon="💵" color={ganancia >= 0 ? '#10b981' : '#ef4444'} />
+                                <StatCard label="ROI %" value={`${roiPorcentaje.toFixed(2)}%`} sub="Retorno s/inversión" icon="📈" color={roiPorcentaje >= 0 ? '#10b981' : '#ef4444'} />
+                                <StatCard label="RENT. MENSUAL" value={`${rentabilidadMensual.toFixed(2)}%`} sub="Promedio por mes" icon="📅" color="#3b82f6" />
                             </div>
                         );
                     })()}
