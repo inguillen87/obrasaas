@@ -12,6 +12,7 @@ import DirectorRoleView from './components/roles/DirectorRoleView';
 import ComprasRoleView from './components/roles/ComprasRoleView';
 import CapatazRoleView from './components/roles/CapatazRoleView';
 import ClienteRoleView from './components/roles/ClienteRoleView';
+import OperarioRoleView from './components/roles/OperarioRoleView';
 // Minimal loading skeleton — real state arrives via SSE within milliseconds
 // Single source of truth: src/lib/db.js (defaultAppState)
 const initialAppState = {
@@ -1675,6 +1676,13 @@ export default function Dashboard() {
                   <i className="fa-solid fa-helmet-safety" style={{ marginRight: '4px' }}></i> Jefe de Obra / Capataz
                 </button>
                 <button 
+                  onClick={() => { setSelectedPersona('operario'); addToast("Cambiado a vista: Operario / Cuadrilla UOCRA (Juan Gómez)", "info"); }}
+                  className={`btn btn-sm ${selectedPersona === 'operario' ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ fontSize: '0.75rem', padding: '5px 12px', borderRadius: '6px' }}
+                >
+                  <i className="fa-solid fa-person-digging" style={{ marginRight: '4px' }}></i> Operario UOCRA
+                </button>
+                <button 
                   onClick={() => { setSelectedPersona('cliente'); addToast("Cambiado a vista: Cliente / Licitación Pública", "info"); }}
                   className={`btn btn-sm ${selectedPersona === 'cliente' ? 'btn-primary' : 'btn-secondary'}`}
                   style={{ fontSize: '0.75rem', padding: '5px 12px', borderRadius: '6px' }}
@@ -1759,6 +1767,78 @@ export default function Dashboard() {
             </div>
           </div>
           
+          {/* Live Real-World Construction Site Simulation Suite */}
+          <div className="glass-panel-premium" style={{ marginBottom: '20px', padding: '12px 18px', borderLeft: '4px solid #38bdf8', background: 'linear-gradient(90deg, rgba(56, 189, 248, 0.08) 0%, rgba(15, 23, 42, 0.75) 100%)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ padding: '3px 8px', borderRadius: '6px', background: 'rgba(56, 189, 248, 0.25)', color: '#38bdf8', fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  🏗️ SIMULADOR OPERATIVO DE OBRA REAL
+                </span>
+                <span style={{ fontSize: '0.8rem', color: '#e2e8f0', fontWeight: 700 }}>
+                  Prueba Integral en Vivo: Empleados UOCRA, Capataces, Arquitectos y Dirección
+                </span>
+              </div>
+              <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>Eventos reales de terreno en 1-clic:</span>
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <button 
+                onClick={() => {
+                  setSelectedPersona('operario');
+                  addToast("🌅 Simulación 08:00 AM: Cuadrilla UOCRA en obra. Validando geocerca GPS (32m) y ART.", "info");
+                }}
+                className="btn btn-sm"
+                style={{ fontSize: '0.73rem', padding: '6px 12px', background: 'rgba(34, 197, 94, 0.15)', color: '#4ade80', border: '1px solid rgba(34, 197, 94, 0.4)', borderRadius: '6px', cursor: 'pointer', fontWeight: 700 }}
+              >
+                🌅 08:00 AM — Fichaje GPS &amp; ART (Operario)
+              </button>
+
+              <button 
+                onClick={() => {
+                  setSelectedPersona('capataz');
+                  addToast("🚚 Simulación 10:30 AM: Camión mixer Hormisur en puerta. Verificando remito de 8m³.", "info");
+                }}
+                className="btn btn-sm"
+                style={{ fontSize: '0.73rem', padding: '6px 12px', background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.4)', borderRadius: '6px', cursor: 'pointer', fontWeight: 700 }}
+              >
+                🚚 10:30 AM — Recepción Hormigón (Capataz)
+              </button>
+
+              <button 
+                onClick={() => {
+                  setSelectedPersona('directora');
+                  addToast("📐 Simulación 11:30 AM: Inspección CIRSOC 201 pre-colado de Losa Nivel +3.", "info");
+                }}
+                className="btn btn-sm"
+                style={{ fontSize: '0.73rem', padding: '6px 12px', background: 'rgba(16, 185, 129, 0.15)', color: '#34d399', border: '1px solid rgba(16, 185, 129, 0.4)', borderRadius: '6px', cursor: 'pointer', fontWeight: 700 }}
+              >
+                📐 11:30 AM — Inspección CIRSOC 201 (Arquitecta)
+              </button>
+
+              <button 
+                onClick={() => {
+                  setSelectedPersona('capataz');
+                  addToast("🌧️ Simulación 14:00 PM: Tormenta 14mm. Protocolo lluvia UOCRA CCT 76/75 activado.", "warning");
+                }}
+                className="btn btn-sm"
+                style={{ fontSize: '0.73rem', padding: '6px 12px', background: 'rgba(245, 158, 11, 0.15)', color: '#fbbf24', border: '1px solid rgba(245, 158, 11, 0.4)', borderRadius: '6px', cursor: 'pointer', fontWeight: 700 }}
+              >
+                🌧️ 14:00 PM — Régimen Lluvia UOCRA (Art. 21)
+              </button>
+
+              <button 
+                onClick={() => {
+                  setSelectedPersona('operario');
+                  addToast("📝 Simulación 17:00 PM: Recibo de sueldo quincenal UOCRA listo para firma digital.", "success");
+                }}
+                className="btn btn-sm"
+                style={{ fontSize: '0.73rem', padding: '6px 12px', background: 'rgba(168, 85, 247, 0.15)', color: '#c084fc', border: '1px solid rgba(168, 85, 247, 0.4)', borderRadius: '6px', cursor: 'pointer', fontWeight: 700 }}
+              >
+                📝 17:00 PM — Firma Recibo Digital UOCRA
+              </button>
+            </div>
+          </div>
+          
           {/* SECTION 1: DASHBOARD (DYNAMIC ROLE-BASED WORKSPACE) */}
           <section id="sec-dashboard" className={`content-section animate-fade-in-up ${activeTab === 'sec-dashboard' ? 'active' : ''}`}>
             {selectedPersona === 'directora' && (
@@ -1791,6 +1871,14 @@ export default function Dashboard() {
 
             {selectedPersona === 'capataz' && (
               <CapatazRoleView
+                state={state}
+                setState={setState}
+                addToast={addToast}
+              />
+            )}
+
+            {selectedPersona === 'operario' && (
+              <OperarioRoleView
                 state={state}
                 setState={setState}
                 addToast={addToast}

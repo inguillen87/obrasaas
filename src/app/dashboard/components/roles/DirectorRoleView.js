@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 
 export default function DirectorRoleView({
@@ -20,6 +20,33 @@ export default function DirectorRoleView({
   setShowWeeklyReportModal,
   addToast
 }) {
+  const [showCirsocModal, setShowCirsocModal] = useState(false);
+  const [cirsocItems, setCirsocItems] = useState([
+    { id: 1, text: 'Recubrimiento mínimo 25mm verificado con separadores plásticos', checked: true },
+    { id: 2, text: 'Armaduras longitudinales y estribos según plano de cálculo E-04', checked: true },
+    { id: 3, text: 'Estanqueidad de encofrados y apuntalamiento telescópico cada 80cm', checked: true },
+    { id: 4, text: 'Pasantes sanitarios 110mm y cajas eléctricas sin corte de hierros', checked: true },
+    { id: 5, text: 'Limpieza de fondo de losa (sin aserrín ni virutas) y mojado previo', checked: true },
+  ]);
+  const [cirsocApproved, setCirsocApproved] = useState(false);
+  const [cirsocHash, setCirsocHash] = useState('');
+
+  const handleToggleCirsocItem = (id) => {
+    setCirsocItems(prev => prev.map(item => item.id === id ? { ...item, checked: !item.checked } : item));
+  };
+
+  const handleApproveCirsoc = () => {
+    const allChecked = cirsocItems.every(i => i.checked);
+    if (!allChecked) {
+      addToast('⚠️ Todos los puntos de la norma CIRSOC 201 deben estar verificados.', 'warning');
+      return;
+    }
+    const hash = 'CIRSOC-201-SHA256-' + Date.now().toString(36).toUpperCase() + '-APROBADO';
+    setCirsocHash(hash);
+    setCirsocApproved(true);
+    setShowCirsocModal(false);
+    addToast(`🏛️ Inspección CIRSOC 201 Losa Nivel +3 aprobada por Dirección de Obra. Hash: ${hash.substring(0, 16)}...`, 'success');
+  };
   return (
     <div className="role-view director-view animate-fade-in-up">
       {/* Role Header Banner */}
@@ -41,6 +68,13 @@ export default function DirectorRoleView({
 
         {/* Quick Action Toolbar for Director */}
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <button 
+            onClick={() => setShowCirsocModal(true)}
+            className="btn btn-sm"
+            style={{ background: '#10b981', color: '#0f172a', fontWeight: 800, fontSize: '0.78rem', padding: '8px 14px', borderRadius: '8px', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <i className="fa-solid fa-ruler-combined"></i> Inspección CIRSOC 201
+          </button>
           <button 
             onClick={() => setShowForensicCertModal(true)}
             className="btn btn-sm"
@@ -431,6 +465,73 @@ export default function DirectorRoleView({
           </table>
         </div>
       </div>
+
+      {/* MODAL: INSPECCIÓN ESTRUCTURAL CIRSOC 201 */}
+      {showCirsocModal && (
+        <div className="modal-overlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.75)', zIndex: 9999 }}>
+          <div className="glass-card modal-content" style={{ maxWidth: '600px', width: '90%', background: '#0b1120', border: '1px solid rgba(16, 185, 129, 0.4)', borderRadius: '14px', padding: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px' }}>
+              <div>
+                <span style={{ fontSize: '0.7rem', color: '#34d399', fontWeight: 800, textTransform: 'uppercase' }}>Control Técnico de Calidad QA/QC</span>
+                <h3 style={{ margin: '2px 0 0', fontSize: '1.15rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <i className="fa-solid fa-ruler-combined" style={{ color: '#10b981' }}></i> Inspección Pre-Colado Losa Nivel +3 (CIRSOC 201)
+                </h3>
+              </div>
+              <i className="fa-solid fa-xmark" onClick={() => setShowCirsocModal(false)} style={{ cursor: 'pointer', fontSize: '1.2rem', color: '#94a3b8' }}></i>
+            </div>
+
+            <div style={{ background: 'rgba(255,255,255,0.02)', padding: '12px 14px', borderRadius: '8px', border: '1px solid var(--border-color)', marginBottom: '16px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', fontSize: '0.72rem' }}>
+              <div><span style={{ color: '#94a3b8' }}>Inspector:</span> <strong style={{ color: '#fff' }}>Arq. Victoria</strong></div>
+              <div><span style={{ color: '#94a3b8' }}>Matrícula:</span> <strong style={{ color: '#38bdf8' }}>CPAU 48.910</strong></div>
+              <div><span style={{ color: '#94a3b8' }}>Estructura:</span> <strong style={{ color: '#fbbf24' }}>H-21 / ADN 420</strong></div>
+            </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#fff', marginBottom: '10px' }}>
+                Checklist de Inspección Obligatoria (CIRSOC 201 - Reglamento Argentino de Estructuras de Hormigón):
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {cirsocItems.map(item => (
+                  <div 
+                    key={item.id} 
+                    onClick={() => handleToggleCirsocItem(item.id)}
+                    style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px', background: item.checked ? 'rgba(34, 197, 94, 0.08)' : 'rgba(255,255,255,0.02)', borderRadius: '6px', border: `1px solid ${item.checked ? 'rgba(34, 197, 94, 0.3)' : 'rgba(255,255,255,0.08)'}`, cursor: 'pointer' }}
+                  >
+                    <input 
+                      type="checkbox" 
+                      checked={item.checked} 
+                      onChange={() => {}} 
+                      style={{ cursor: 'pointer', accentColor: '#22c55e' }} 
+                    />
+                    <span style={{ fontSize: '0.78rem', color: item.checked ? '#fff' : '#94a3b8' }}>{item.text}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ background: 'rgba(34, 197, 94, 0.1)', border: '1px solid #22c55e', padding: '10px 14px', borderRadius: '8px', fontSize: '0.75rem', color: '#86efac', marginBottom: '18px' }}>
+              <strong>Dictamen Técnico:</strong> Se autoriza el vertido y colado de hormigón bombeable H-21. Probetas testigo según IRAM 1534 y asentamiento slump cone 10-14cm.
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button 
+                onClick={() => setShowCirsocModal(false)}
+                className="btn btn-secondary btn-sm"
+                style={{ padding: '8px 16px', fontSize: '0.8rem' }}
+              >
+                Cerrar
+              </button>
+              <button 
+                onClick={handleApproveCirsoc}
+                className="btn btn-primary btn-sm"
+                style={{ padding: '8px 20px', fontSize: '0.8rem', fontWeight: 800, background: '#10b981', color: '#0f172a', border: 'none', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                <i className="fa-solid fa-stamp"></i> Emitir Dictamen &amp; Sello SHA-256
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
