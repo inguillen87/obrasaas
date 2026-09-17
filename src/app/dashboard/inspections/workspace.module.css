@@ -1,0 +1,25 @@
+.shell { min-height: 100vh; border-radius: 16px; color-scheme: dark; }
+.content { max-width: 1440px; padding: 24px; margin: auto; }
+.workspace { display: grid; grid-template-columns: minmax(260px, .8fr) minmax(0, 1.4fr); gap: 24px; align-items: start; }
+.context { color: #94a3b8; line-height: 1.6; font-size: .9rem; }
+.shell h2 { font-size: 1.2rem; margin: 0 0 12px; }
+.shell h3 { font-size: 1rem; margin: 0 0 12px; }
+.fields { border: 0; margin: 0; padding: 0; min-width: 0; display: grid; gap: 16px; }
+.shell label { display: grid; gap: 8px; font-size: .88rem; line-height: 1.4; }
+.shell input, .shell textarea, .shell select { box-sizing: border-box; width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid rgba(255,255,255,.12); border-radius: 8px; background: #0b1120; color: #f8fafc; font: inherit; }
+.shell textarea { resize: vertical; }
+.shell :focus-visible { outline: 2px solid #f59e0b; outline-offset: 3px; }
+.shell :disabled { cursor: not-allowed; }
+.check, .review, .history { padding: 20px 0; margin-top: 16px; border-top: 1px solid rgba(255,255,255,.12); display: grid; gap: 12px; }
+.actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 18px; }
+.list { display: grid; gap: 10px; }
+.record { padding: 16px; display: grid; gap: 9px; width: 100%; text-align: left; border: 1px solid rgba(255,255,255,.12); border-radius: 12px; background: transparent; color: inherit; cursor: pointer; }
+.record[aria-pressed='true'] { border-color: #f59e0b; }
+.record strong, .record span { overflow-wrap: anywhere; }
+.record small { color: #94a3b8; }
+.error, .notice { padding: 14px 18px; border-radius: 12px; line-height: 1.6; }
+.error { border: 1px solid #ef4444; }
+.notice { border: 1px solid #10b981; }
+.error button { margin-left: 12px; color: inherit; background: transparent; border: 0; text-decoration: underline; cursor: pointer; }
+.history code { overflow-wrap: anywhere; font-size: .75rem; }
+@media (max-width: 900px) { .workspace { grid-template-columns: minmax(0, 1fr); } .content { padding: 16px; } }

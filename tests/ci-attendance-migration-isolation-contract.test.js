@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile as readFileRaw } from 'node:fs/promises';
+// Contracts must be identical on Windows CRLF and Linux LF checkouts.
+const readFile = async (...args) => (await readFileRaw(...args)).replace(/\r\n/g, '\n');
 import test from 'node:test';
 
 const continuousIntegration = await readFile(

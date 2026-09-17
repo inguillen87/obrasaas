@@ -925,7 +925,9 @@ test('a stale checkout link cannot close a later shift for the same worker', asy
   assert.equal(after.auditCount, 0);
 });
 
-test('legacy v1 check-in keeps the historical operation identity across a fresh GPS retry', async () => {
+test('legacy v1 check-in keeps the historical operation identity across a fresh GPS retry', async (t) => {
+  // Exercise the historical compatibility window without reopening it in runtime.
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-08-15T12:00:00Z') });
   const database = createAttendanceDatabase({
     pendingCheckInAt: new Date(Date.now() - 10_000),
   });
@@ -980,7 +982,9 @@ test('legacy v1 check-in keeps the historical operation identity across a fresh 
   assert.equal(Number(afterReplay.entries[0].accuracyMeters), firstLocation.accuracy);
 });
 
-test('an expired legacy v1 check-in commits expiry before returning NO_PENDING and retries cleanly', async () => {
+test('an expired legacy v1 check-in commits expiry before returning NO_PENDING and retries cleanly', async (t) => {
+  // Exercise the historical compatibility window without reopening it in runtime.
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-08-15T12:00:00Z') });
   const database = createAttendanceDatabase({
     pendingCheckInAt: new Date(Date.now() - (2 * 60 * 60 * 1_000) - 1_000),
   });

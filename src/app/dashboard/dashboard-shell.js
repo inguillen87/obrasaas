@@ -23,6 +23,7 @@ const WORKSPACE_DESTINATIONS = Object.freeze([
   { key: 'approvals', href: '/dashboard/approvals', exact: true, label: 'Aprobaciones', icon: 'fa-solid fa-list-check', permission: 'canReadApprovals' },
   { key: 'attendance', href: '/dashboard/attendance', exact: true, label: 'Asistencia y turnos', icon: 'fa-solid fa-user-clock', permission: 'canReadAttendance' },
   { key: 'execution', href: '/dashboard/execution', exact: true, label: 'Cuadrillas y blockers', icon: 'fa-solid fa-people-group', permission: 'canReadExecution' },
+  { key: 'inspections', href: '/dashboard/inspections', exact: true, label: 'Inspecciones QA/QC', icon: 'fa-solid fa-clipboard-check', permission: 'canReadExecution' },
   { key: 'progress', href: '/dashboard/progress', exact: true, label: 'Bitácora de avance', icon: 'fa-solid fa-camera-retro', permission: 'canReadExecution' },
   { key: 'measurements', href: '/dashboard/measurements', exact: true, label: 'Mediciones de avance', icon: 'fa-solid fa-ruler-combined', permission: 'canReadMeasurements' },
   { key: 'contracts', href: '/dashboard/contracts', exact: true, label: 'Contrato y SOV', icon: 'fa-solid fa-file-signature', permission: 'canReadContracts' },

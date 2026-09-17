@@ -29,6 +29,7 @@ export const TENANT_ROLES = {
 const ROLE_PERMISSIONS = {
   ADMIN: ['*'],
   DIRECTOR: [
+    'org:inspections:approve',
     'org:projects:read',
     'org:projects:manage',
     'org:operational-proposals:read',
