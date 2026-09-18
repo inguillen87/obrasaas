@@ -16,6 +16,7 @@ import { evidenceSelectionIssue, evidenceScopeHeaders, evidenceFailureState, req
 import { useWorkspaceLeaveGuard } from '../use-workspace-leave-guard';
 import { createProgressRequest, confirmedProgressLog } from '@/lib/progress-request';
 import ProgressContextPanel from './progress-context-panel';
+import { publishFieldInvalidation } from '@/lib/schedule-field-channel';
 import ProgressReviewDialog from './progress-review-dialog';
 import EvidenceViewer from './evidence-viewer';
 import { evidencePreviewHref } from '@/lib/evidence-viewer-policy';
@@ -397,6 +398,7 @@ function VisualAssessmentCard({
 }
 
 export default function ProgressClient({
+  filteredTaskId = null,
   initialData,
   initialVisualAssessments = [],
   tasks,
@@ -423,10 +425,10 @@ export default function ProgressClient({
   const [visualFeedbackByEvidence, setVisualFeedbackByEvidence] = useState(() => new Map());
   const [title, setTitle] = useState("");
   const [summary, setSummary] = useState("");
-  const [taskId, setTaskId] = useState("");
+  const [taskId, setTaskId] = useState(filteredTaskId || "");
   const [workDate, setWorkDate] = useState(initialWorkDate);
   const [authorWorkerId, setAuthorWorkerId] = useState("");
-  const [evidenceTaskId, setEvidenceTaskId] = useState("");
+  const [evidenceTaskId, setEvidenceTaskId] = useState(filteredTaskId || "");
   const [caption, setCaption] = useState("");
   const [evidenceFile, setEvidenceFile] = useState(null);
   const [evidenceAuthorWorkerId, setEvidenceAuthorWorkerId] = useState('');
@@ -508,7 +510,7 @@ export default function ProgressClient({
 
   async function refreshPrimaryRecords() {
     try {
-      const latest = await api('/api/progress?limit=50');
+      const latest = await api('/api/progress?limit=50' + (filteredTaskId ? '&taskId=' + encodeURIComponent(filteredTaskId) : ''));
       setData((current) => ({
         ...current,
         dailyLogs: latest.dailyLogs,
@@ -536,6 +538,7 @@ export default function ProgressClient({
         }),
       });
       const dailyLog = confirmedProgressLog(result);
+      publishFieldInvalidation({ organizationId, projectId });
       setData((current) => ({
         ...current,
         dailyLogs: [dailyLog, ...current.dailyLogs.filter(item => item.id !== dailyLog.id)],
@@ -589,6 +592,7 @@ export default function ProgressClient({
       if (result.evidence.taskId !== evidenceTaskId) throw new Error('El registro recibido no corresponde a la tarea seleccionada. No se confirmó esta operación.');
       setData(current => ({ ...current, evidence: [result.evidence, ...current.evidence.filter(item => item.id !== result.evidence.id)] }));
       evidenceUploadAttemptRef.current = null;
+      publishFieldInvalidation({ organizationId, projectId });
       setSavedEvidenceId(result.evidence.id); setCaption(''); setEvidenceFile(null);
       if (evidenceFileInputRef.current) evidenceFileInputRef.current.value = '';
       setEvidenceStage('saved'); setEvidenceFeedback('Archivo registrado en esta tarea. La evidencia conserva su estado de revisión; no modifica automáticamente el avance.');
@@ -622,6 +626,7 @@ export default function ProgressClient({
         body: JSON.stringify({ kind, status, expectedRevision: item.revision, reviewNote: note }),
       });
       const confirmed = confirmedProgressReview(result, { item, kind, status, projectId, note });
+      publishFieldInvalidation({ organizationId, projectId });
       setData((current) => ({
         ...current,
         dailyLogs:
@@ -816,6 +821,7 @@ export default function ProgressClient({
     if (!beginOperation()) return;
     try {
       const query = new URLSearchParams({ limit: "50" });
+      if (filteredTaskId) query.set("taskId", filteredTaskId);
       if (timelineKind) query.set("kind", timelineKind);
       if (timelineStatus) query.set("status", timelineStatus);
       const result = await api(`/api/progress?${query}`);
@@ -838,6 +844,7 @@ export default function ProgressClient({
         limit: "50",
         before: data.page.nextBefore,
       });
+      if (filteredTaskId) query.set("taskId", filteredTaskId);
       if (timelineKind) query.set("kind", timelineKind);
       if (timelineStatus) query.set("status", timelineStatus);
       const result = await api(`/api/progress?${query}`);
@@ -875,6 +882,11 @@ export default function ProgressClient({
         selection={reviewSelection} projectName={projectName} taskTitle={taskById.get(reviewSelection.item.taskId)?.title}
         onDirtyChange={setReviewDirty} onClose={() => setReviewSelection(null)}
         onConfirm={note => review(reviewSelection.item, reviewSelection.kind, reviewSelection.status, note)} />}
+      {filteredTaskId && <nav className={styles.recordDecision} aria-label="Contexto de tarea">
+        <strong>Tarea: {taskById.get(filteredTaskId)?.title || 'Tarea seleccionada'}</strong>
+        <Link href={'/dashboard?tab=sec-gantt&fieldTaskId=' + encodeURIComponent(filteredTaskId)} onNavigate={event => { if (hasJournalChanges && !window.confirm('Hay cambios sin guardar. ¿Salir del editor?')) event.preventDefault(); }}>Ver esta tarea en el cronograma</Link>
+        <span> · </span><Link href="/dashboard/progress" onNavigate={event => { if (hasJournalChanges && !window.confirm('Hay cambios sin guardar. ¿Salir del editor?')) event.preventDefault(); }}>Ver toda la bitácora</Link>
+      </nav>}
       <ProgressContextPanel projectName={projectName} changed={contextChanged} busy={busy}
         hasUnsaved={hasJournalChanges} draftText={[title, summary, caption].filter(Boolean).join('\n\n')} />
       {notice && (
@@ -917,6 +929,7 @@ export default function ProgressClient({
                 <select
                   aria-label="Tarea vinculada a la bitácora"
                   value={taskId}
+                  disabled={Boolean(filteredTaskId) || busy || contextChanged}
                   onChange={(event) => setTaskId(event.target.value)}
                 >
                   <option value="">Sin tarea</option>
@@ -1051,6 +1064,14 @@ export default function ProgressClient({
                   <div className={styles.evidenceHeader}>
                     <div>
                       <strong>{item.caption || "Evidencia sin descripción"}</strong>
+                      {item.taskId && permissions.canReadSchedule && <p>
+                        <Link href={'/dashboard?tab=sec-gantt&fieldTaskId=' + encodeURIComponent(item.taskId)}
+                          onNavigate={event => { if (hasJournalChanges && !window.confirm('Hay cambios sin guardar. ¿Salir del editor?')) event.preventDefault(); }}>Ver impacto en el cronograma</Link>
+                      </p>}
+                      {item.taskId && item.status === 'APPROVED' && permissions.canReadMeasurements && <p>
+                        <Link href={'/dashboard/measurements?taskId=' + encodeURIComponent(item.taskId)}
+                          onNavigate={event => { if (hasJournalChanges && !window.confirm('Hay cambios sin guardar. ¿Salir del editor?')) event.preventDefault(); }}>Ver mediciones de esta tarea</Link>
+                      </p>}
                       {item.reviewNote && ['APPROVED', 'REJECTED'].includes(item.status) && <div className={styles.recordDecision}><strong>{item.status === 'REJECTED' ? 'Motivo del rechazo' : 'Nota de revisión'}</strong><p>{item.reviewNote}</p></div>}
                       <span className={styles.evidenceTask}>
                         Tarea: {task?.code ? `${task.code} · ` : ""}{task?.title || item.taskId}

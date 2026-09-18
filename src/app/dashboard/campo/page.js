@@ -20,7 +20,7 @@ export default async function FieldPage() {
   ]);
   const channel = deriveWhatsAppChannelPresentation(connection);
   return <FieldClient key={access.organization.id + ':' + access.project.id + ':' + access.databaseUserId}
-    project={{ id: access.project.id, name: access.project.name, organization: access.organization.name, status: access.project.status }}
+    project={{ organizationId: access.organization.id, id: access.project.id, name: access.project.name, organization: access.organization.name, status: access.project.status }}
     workDate={localDateKey(new Date(), access.organization.timezone)} counts={{ workers, tasks }}
     channel={{ label: channel.label, summary: channel.summary }} permissions={{
       write: hasTenantPermission(access, 'org:execution:manage') && ['ACTIVE', 'PLANNING', 'PAUSED'].includes(access.project.status),

@@ -1,0 +1,34 @@
+.panel { min-width: 0; margin: 20px 0; padding: clamp(16px, 3vw, 26px); border: 1px solid #334155; border-radius: 18px; color: #f8fafc; background: #0b1120; }
+.header { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
+.eyebrow { font-size: .65rem; font-weight: 800; letter-spacing: .14em; color: var(--field-accent, #f59e0b); }
+.header h2 { font-size: clamp(1.18rem, 3vw, 1.7rem); margin: 9px 0; letter-spacing: -.025em; }
+.header p, .hint { color: #94a3b8; font-size: .85rem; line-height: 1.65; }
+.panel button, .task nav a, .back { min-height: 44px; display: inline-flex; align-items: center; padding: 10px 13px; border: 1px solid #475569; border-radius: 9px; color: #f8fafc; background: transparent; text-decoration: none; font: inherit; font-size: .8rem; cursor: pointer; }
+.panel button:disabled { cursor: not-allowed; opacity: .5; }
+.panel :focus-visible { outline: 3px solid #f59e0b; outline-offset: 3px; }
+.sync { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; font-size: .8rem; padding: 14px 0; line-height: 1.6; }
+.sync i { width: 8px; height: 8px; border-radius: 50%; background: #f59e0b; }
+.sync i[data-state='verified'] { background: #10b981; }
+.sync small { flex-basis: 100%; color: #94a3b8; }
+.steps { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; padding: 0; margin: 12px 0; list-style: none; }
+.steps li { min-width: 0; padding: 16px; background: #060913; border-radius: 12px; border: 1px solid #334155; }
+.steps strong { display: block; font-size: 1.6rem; color: #fbbf24; }
+.steps span { font-size: .77rem; color: #cbd5e1; line-height: 1.5; }
+.tasks { display: grid; gap: 12px; margin-top: 18px; }
+.task { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 12px 24px; padding: 18px; border: 1px solid #334155; border-radius: 12px; background: #060913; }
+.task h3 { margin: 0 0 8px; font-size: .95rem; overflow-wrap: anywhere; }
+.task p { margin: 0; color: #94a3b8; font-size: .8rem; line-height: 1.6; }
+.task nav { display: flex; flex-wrap: wrap; gap: 10px; grid-column: 1 / -1; }
+.progress { min-width: 0; display: grid; gap: 6px; font-size: .75rem; }
+.progress label { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.progress meter { width: 100%; height: 12px; accent-color: #10b981; }
+.progress small { color: #94a3b8; overflow-wrap: anywhere; }
+.warning, .empty { padding: 14px; margin: 14px 0; border: 1px solid #f59e0b66; border-radius: 10px; line-height: 1.6; font-size: .85rem; }
+.pagination { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-top: 18px; font-size: .8rem; color: #94a3b8; }
+@media (max-width: 650px) { .header { display: grid; } .steps { gap: 6px; } .steps li { padding: 10px; } .steps span { font-size: .7rem; } .task { grid-template-columns: minmax(0,1fr); padding: 14px; } }
+@media (prefers-reduced-motion: reduce) { .panel * { animation: none; transition: none; } }
+
+.progress meter::-webkit-meter-optimum-value { background: #10b981; }
+.progress .operational::-webkit-meter-optimum-value { background: #f59e0b; }
+.progress meter::-moz-meter-bar { background: #10b981; }
+.progress .operational::-moz-meter-bar { background: #f59e0b; }

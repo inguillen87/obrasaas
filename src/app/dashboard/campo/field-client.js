@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { FIELD_REPORT_CATEGORIES, normalizeFieldReport } from '@/lib/field-report';
+import { publishFieldInvalidation } from '@/lib/schedule-field-channel';
 import { tokens } from '@/lib/design-system';
 import PwaControls, { useDeviceOnline } from './pwa-controls';
 import { useWorkspaceLeaveGuard } from '../use-workspace-leave-guard';
@@ -42,6 +43,7 @@ export default function FieldClient({ project, workDate, counts, channel, permis
         throw new Error(result.error || 'No se confirmó el envío. Revisá la sesión y reintentá esta misma solicitud.');
       }
       if (typeof result.report?.id !== 'string' || !result.report.status) throw new Error('Respuesta incompleta. No se confirmó el envío.');
+      publishFieldInvalidation({ organizationId: project.organizationId, projectId: project.id });
       setSaved(result.report); setDraft(empty(workDate)); setUnconfirmed(false); attempt.current = null;
     } catch (failure) {
       if (attempt.current) setUnconfirmed(true);

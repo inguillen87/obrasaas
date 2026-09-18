@@ -17,6 +17,7 @@ import {
   visibleConversationMessages,
 } from '@/lib/conversation-access';
 import GanttPlanner from './gantt-planner';
+import ScheduleFieldPanel from './schedule-field-panel';
 import OperationalPulse from './operational-pulse';
 import PlatformReadiness from './platform-readiness';
 import ScheduleSnapshotsPanel from './schedule-snapshots-panel';
@@ -249,6 +250,7 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
   }, [searchParams, setup.canUseReviewedEvidence]);
   // Application State
   const [state, setState] = useState(() => normalizeAppState(initialState));
+  const [fieldSnapshot, setFieldSnapshot] = useState(null);
   const [canonicalTasks, setCanonicalTasks] = useState(
     () => (Array.isArray(setup.canonicalTasks) ? setup.canonicalTasks : []),
   );
@@ -2336,7 +2338,11 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
                 tasksTruncated={setup.canonicalTasksHasMore}
               />
             )}
+            {activeTab === 'sec-gantt' && setup.canReadFieldStatus && <ScheduleFieldPanel
+              key={platformAccess.organization.id + ':' + platformAccess.project.id}
+              organizationId={platformAccess.organization.id} projectId={platformAccess.project.id} onSnapshot={setFieldSnapshot} />}
             <GanttPlanner
+              fieldStatus={activeTab === 'sec-gantt' && fieldSnapshot?.projectId === platformAccess.project.id && fieldSnapshot?.organizationId === platformAccess.organization.id ? fieldSnapshot : null}
               canManage={setup.canReadCanonicalTasks ? setup.canManageCanonicalTasks : setup.canManageProjects}
               canonicalMode={setup.canReadCanonicalTasks}
               fieldWorkers={fieldWorkers}

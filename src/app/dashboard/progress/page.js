@@ -1,6 +1,7 @@
 import { getPlatformAccess, hasTenantPermission, requireTenantPermission } from '@/lib/access';
 import { tenantAiSettingsFromMetadata } from '@/lib/ai/tenant-settings';
-import { listCanonicalTasks } from '@/lib/canonical-tasks';
+import { notFound } from 'next/navigation';
+import { listCanonicalTasks, serializeCanonicalTask } from '@/lib/canonical-tasks';
 import { SOURCE_EVIDENCE_PERMISSION } from '@/lib/medical-privacy';
 import { getPrisma } from '@/lib/prisma';
 import { listProgressJournal } from '@/lib/progress-journal';
@@ -41,9 +42,14 @@ function visualAssessmentForClient(assessment) {
   };
 }
 
-export default async function ProgressPage() {
+export default async function ProgressPage({ searchParams }) {
   const access = await getPlatformAccess(); requireTenantPermission(access, 'org:execution:read', { subscriptionMode: 'read' });
   const prisma = getPrisma();
+  const params = await searchParams;
+  const requestedTaskId = params?.taskId ?? null;
+  if (requestedTaskId !== null && (typeof requestedTaskId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,189}$/.test(requestedTaskId))) notFound();
+  const selectedTask = requestedTaskId ? await prisma.task.findFirst({ where: { id: requestedTaskId, projectId: access.project.id, metadata: { path: ['source'], equals: 'canonical-task-v1' } }, include: { predecessors: true } }) : null;
+  if (requestedTaskId && !selectedTask) notFound();
   const canManage = hasTenantPermission(access, 'org:execution:manage');
   const canReadSourceEvidence = hasTenantPermission(access, SOURCE_EVIDENCE_PERMISSION);
   const aiSettings = tenantAiSettingsFromMetadata(access.organization.metadata);
@@ -57,12 +63,13 @@ export default async function ProgressPage() {
     && hasTenantPermission(access, 'org:tasks:manage')
   );
   const journal = await listProgressJournal(prisma, {
+    taskId: requestedTaskId,
     projectId: access.project.id,
     includeSourceEvidence: canReadSourceEvidence,
   });
   const visibleEvidenceIds = journal.evidence.map((evidence) => evidence.id);
   const [tasks, workers, visualAssessments] = await Promise.all([
-    listCanonicalTasks(prisma, { projectId: access.project.id, limit: 500 }),
+    selectedTask ? Promise.resolve({ tasks: [serializeCanonicalTask(selectedTask)] }) : listCanonicalTasks(prisma, { projectId: access.project.id, limit: 500 }),
     prisma.worker.findMany({ where: { projectId: access.project.id, active: true }, orderBy: { name: 'asc' }, select: { id: true, name: true } }),
     canReadSourceEvidence
       ? listVisualProgressAssessments(prisma, {
@@ -73,7 +80,8 @@ export default async function ProgressPage() {
       : Promise.resolve({ assessments: [] }),
   ]);
   return (
-    <ProgressClient key={access.organization.id + ":" + access.project.id + ":" + access.databaseUserId}
+    <ProgressClient key={access.organization.id + ":" + access.project.id + ":" + access.databaseUserId + ":" + (requestedTaskId || "all")}
+      filteredTaskId={requestedTaskId}
       organizationId={access.organization.id} projectId={access.project.id}
       initialData={journal}
       initialVisualAssessments={visualAssessments.assessments.map(visualAssessmentForClient)}
@@ -82,6 +90,8 @@ export default async function ProgressPage() {
       initialWorkDate={localDateKey(new Date(), access.organization.timezone)}
       permissions={{
         canManage,
+        canReadSchedule: hasTenantPermission(access, 'org:tasks:read'),
+        canReadMeasurements: hasTenantPermission(access, 'org:measurements:read'),
         canReviewJournal: canManage && hasTenantPermission(access, 'org:progress:review'),
         canReadSourceEvidence,
         canUseReviewedEvidence,
