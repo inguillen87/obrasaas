@@ -362,3 +362,12 @@ test('a query result that omits the durable relation fails closed', async () => 
   assert.deepEqual(await response.json(), { error: 'Evidence not found' });
   assert.deepEqual(effects.reads, []);
 });
+
+for (const headers of [{ 'x-obrasaas-organization': 'org-a', 'x-obrasaas-project': 'wrong-project' }, { 'x-obrasaas-organization': 'wrong-org', 'x-obrasaas-project': 'project-a' }, { 'x-obrasaas-project': 'project-a' }]) {
+  test('message evidence rejects mismatched editor context before query: ' + JSON.stringify(headers), async () => {
+    const { handlers, effects } = harness();
+    const response = await handlers.GET(new Request('https://app.obrasaas.test/api/evidence/message-1', { headers }), routeContext());
+    assert.equal(response.status, 409); assert.equal(effects.queries.length, 0); assert.equal(effects.reads.length, 0);
+    assert.match(response.headers.get('cache-control'), /private, no-store/);
+  });
+}

@@ -1,3 +1,4 @@
+import { assertEvidenceRequestContext, evidenceContextErrorResponse } from '@/lib/evidence-context';
 import {
   AccessError,
   accessErrorResponse,
@@ -22,9 +23,10 @@ function notFound() {
   );
 }
 
-export async function GET(_request, { params }) {
+export async function GET(request, { params }) {
   try {
     const access = await getPlatformAccess();
+    assertEvidenceRequestContext(request, access);
     requireTenantPermission(access, 'org:execution:read', { subscriptionMode: 'read' });
     requireTenantPermission(access, SOURCE_EVIDENCE_PERMISSION, { subscriptionMode: 'read' });
     const { recordId } = await params;
@@ -43,6 +45,8 @@ export async function GET(_request, { params }) {
     if (!downloaded?.stream) return notFound();
     return progressEvidenceFileResponse(evidence.media, downloaded);
   } catch (error) {
+    const contextError = evidenceContextErrorResponse(error);
+    if (contextError) return contextError;
     if (error instanceof AccessError) return accessErrorResponse(error);
     console.error('Progress attachment delivery failed:', {
       name: error?.name,

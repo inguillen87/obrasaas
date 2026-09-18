@@ -17,6 +17,8 @@ import { useWorkspaceLeaveGuard } from '../use-workspace-leave-guard';
 import { createProgressRequest, confirmedProgressLog } from '@/lib/progress-request';
 import ProgressContextPanel from './progress-context-panel';
 import ProgressReviewDialog from './progress-review-dialog';
+import EvidenceViewer from './evidence-viewer';
+import { evidencePreviewHref } from '@/lib/evidence-viewer-policy';
 import { confirmedProgressReview, normalizeProgressReviewNote } from '@/lib/progress-review-policy';
 import styles from "./progress.module.css";
 
@@ -406,6 +408,7 @@ export default function ProgressClient({
   initialWorkDate,
 }) {
   const [contextChanged, setContextChanged] = useState(false);
+  const [viewingEvidence, setViewingEvidence] = useState(null);
   const [reviewSelection, setReviewSelection] = useState(null);
   const [reviewDirty, setReviewDirty] = useState(false);
   const api = useMemo(
@@ -865,6 +868,9 @@ export default function ProgressClient({
           </p>
         </div>
       </header>
+      {viewingEvidence && <EvidenceViewer key={viewingEvidence.id + ':' + viewingEvidence.revision}
+        item={viewingEvidence} organizationId={organizationId} projectId={projectId} projectName={projectName}
+        taskTitle={taskById.get(viewingEvidence.taskId)?.title} onClose={() => setViewingEvidence(null)} />}
       {reviewSelection && <ProgressReviewDialog key={reviewSelection.item.id + ':' + reviewSelection.status + ':' + reviewSelection.item.revision}
         selection={reviewSelection} projectName={projectName} taskTitle={taskById.get(reviewSelection.item.taskId)?.title}
         onDirtyChange={setReviewDirty} onClose={() => setReviewSelection(null)}
@@ -1061,6 +1067,10 @@ export default function ProgressClient({
                           {locationLabel}
                         </span>
                       )}
+                      {permissions.canReadSourceEvidence && evidencePreviewHref(item) && <button type="button" className={styles.evidencePreviewButton}
+                        disabled={busy || contextChanged} onClick={() => setViewingEvidence(item)}>
+                        Ver imagen en la bitácora
+                      </button>}
                       {item.attachment?.href && (
                         <a
                           className={styles.protectedLink}
