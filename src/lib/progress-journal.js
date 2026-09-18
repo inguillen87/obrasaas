@@ -1,3 +1,4 @@
+import { normalizeProgressReviewNote, ProgressReviewPolicyError } from './progress-review-policy.js';
 import { runOperationalProjectMutation } from './project-write-policy.js';
 import {
   assertProtectedUploadReplay,
@@ -209,7 +210,13 @@ export async function reviewProgressRecord(prisma, { scope: rawScope, actorId, i
     const current = await table.findFirst({ where: { projectId: currentScope.projectId, id } }); if (!current) throw new ProgressJournalError('Registro no encontrado.', 'PROGRESS_JOURNAL_NOT_FOUND', 404);
     if (current.revision !== revision) throw new ProgressJournalError('El registro cambió; recargá antes de revisar.', 'PROGRESS_JOURNAL_CONFLICT', 409);
     assertReviewTransition(normalizedKind, current.status, normalizedStatus);
-    const updated = await table.update({ where: { id }, data: normalizedKind === 'DAILY_LOG' ? { status: normalizedStatus, revision: { increment: 1 }, submittedAt: normalizedStatus === 'SUBMITTED' ? new Date() : current.submittedAt, approvedAt: normalizedStatus === 'APPROVED' ? new Date() : current.approvedAt, rejectionReason: normalizedStatus === 'REJECTED' ? optionalText(reviewNote, 'reviewNote', 2000) : current.rejectionReason } : { status: normalizedStatus, revision: { increment: 1 }, reviewedAt: new Date(), reviewNote: optionalText(reviewNote, 'reviewNote', 2000) } });
+    let normalizedNote;
+    try { normalizedNote = normalizeProgressReviewNote(normalizedKind, normalizedStatus, reviewNote); }
+    catch (error) {
+      if (error instanceof ProgressReviewPolicyError) throw new ProgressJournalError(error.message, error.code, error.status);
+      throw error;
+    }
+    const updated = await table.update({ where: { id }, data: normalizedKind === 'DAILY_LOG' ? { status: normalizedStatus, revision: { increment: 1 }, submittedAt: normalizedStatus === 'SUBMITTED' ? new Date() : current.submittedAt, approvedAt: normalizedStatus === 'APPROVED' ? new Date() : current.approvedAt, rejectionReason: normalizedStatus === 'REJECTED' ? normalizedNote : current.rejectionReason } : { status: normalizedStatus, revision: { increment: 1 }, reviewedAt: new Date(), reviewNote: normalizedNote } });
     await tx.auditLog.create({ data: { organizationId: currentScope.organizationId, actorId: actor, action: `progress.${normalizedKind.toLowerCase()}.reviewed`, entityType: normalizedKind === 'DAILY_LOG' ? 'DailyLog' : 'ProgressEvidence', entityId: id, metadata: { projectId: currentScope.projectId, previousStatus: current.status, status: normalizedStatus, revision: revision + 1 } } });
     return normalizedKind === 'DAILY_LOG' ? { dailyLog: serializeLog(updated) } : { evidence: serializeProgressEvidence(updated, { includeSourceEvidence }) };
   });

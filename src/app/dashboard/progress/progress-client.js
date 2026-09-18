@@ -16,6 +16,8 @@ import { evidenceSelectionIssue, evidenceScopeHeaders, evidenceFailureState, req
 import { useWorkspaceLeaveGuard } from '../use-workspace-leave-guard';
 import { createProgressRequest, confirmedProgressLog } from '@/lib/progress-request';
 import ProgressContextPanel from './progress-context-panel';
+import ProgressReviewDialog from './progress-review-dialog';
+import { confirmedProgressReview, normalizeProgressReviewNote } from '@/lib/progress-review-policy';
 import styles from "./progress.module.css";
 
 const JOURNAL_STATUS_LABELS = Object.freeze({
@@ -404,6 +406,8 @@ export default function ProgressClient({
   initialWorkDate,
 }) {
   const [contextChanged, setContextChanged] = useState(false);
+  const [reviewSelection, setReviewSelection] = useState(null);
+  const [reviewDirty, setReviewDirty] = useState(false);
   const api = useMemo(
     () => createProgressRequest({ organizationId, projectId }, { onContextChange: () => setContextChanged(true) }),
     [organizationId, projectId],
@@ -446,7 +450,7 @@ export default function ProgressClient({
     (Array.isArray(tasks) ? tasks : []).map((task) => [task.id, task]),
   ), [tasks]);
 
-  const hasJournalChanges = Boolean(title || summary || caption || evidenceFile);
+  const hasJournalChanges = Boolean(title || summary || caption || evidenceFile || reviewDirty);
   useWorkspaceLeaveGuard({ dirty: hasJournalChanges, busy });
   useEffect(() => {
     const warn = event => { if (hasJournalChanges || busy) { event.preventDefault(); event.returnValue = ''; } };
@@ -598,28 +602,40 @@ export default function ProgressClient({
       setEvidenceStage(evidenceFailureState(error, attempt)); setEvidenceFeedback(error.message);
     } finally { endOperation(); }
   }
-  async function review(item, kind, status) {
-    if (!beginOperation()) return;
+  async function review(item, kind, status, reviewNote) {
+    const finalDecision = ['APPROVED', 'REJECTED'].includes(status);
+    if (finalDecision && reviewNote === undefined) {
+      if (!permissions.canReviewJournal || busy || contextChanged) return;
+      setReviewSelection({ item, kind, status }); return;
+    }
+    if (!beginOperation()) {
+      if (finalDecision) throw Object.assign(new Error('La operación no está disponible. Conservá el fundamento y verificá el contexto.'), { code: 'EVIDENCE_CONTEXT_CHANGED' });
+      return;
+    }
     try {
+      const note = normalizeProgressReviewNote(kind, status, reviewNote);
       const result = await api(`/api/progress/${item.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ kind, status, expectedRevision: item.revision }),
+        body: JSON.stringify({ kind, status, expectedRevision: item.revision, reviewNote: note }),
       });
+      const confirmed = confirmedProgressReview(result, { item, kind, status, projectId, note });
       setData((current) => ({
         ...current,
         dailyLogs:
           kind === "DAILY_LOG"
             ? current.dailyLogs.map((entry) =>
-                entry.id === item.id ? result.dailyLog : entry,
+                entry.id === item.id ? confirmed : entry,
               )
             : current.dailyLogs,
         evidence:
           kind === "EVIDENCE"
             ? current.evidence.map((entry) =>
-                entry.id === item.id ? result.evidence : entry,
+                entry.id === item.id ? confirmed : entry,
               )
             : current.evidence,
       }));
+      setNotice(status === 'REJECTED' ? 'Rechazo registrado con su motivo.' : status === 'APPROVED' ? 'Aprobación registrada.' : 'Parte enviado a revisión.');
+      if (finalDecision) setReviewSelection(null);
     } catch (error) {
       if (error.code === 'EVIDENCE_CONTEXT_CHANGED') {
         setNotice(error.message);
@@ -631,6 +647,7 @@ export default function ProgressClient({
       } else {
         setNotice(error.message);
       }
+      if (finalDecision) throw error;
     } finally {
       endOperation();
     }
@@ -848,6 +865,10 @@ export default function ProgressClient({
           </p>
         </div>
       </header>
+      {reviewSelection && <ProgressReviewDialog key={reviewSelection.item.id + ':' + reviewSelection.status + ':' + reviewSelection.item.revision}
+        selection={reviewSelection} projectName={projectName} taskTitle={taskById.get(reviewSelection.item.taskId)?.title}
+        onDirtyChange={setReviewDirty} onClose={() => setReviewSelection(null)}
+        onConfirm={note => review(reviewSelection.item, reviewSelection.kind, reviewSelection.status, note)} />}
       <ProgressContextPanel projectName={projectName} changed={contextChanged} busy={busy}
         hasUnsaved={hasJournalChanges} draftText={[title, summary, caption].filter(Boolean).join('\n\n')} />
       {notice && (
@@ -941,6 +962,7 @@ export default function ProgressClient({
                     {item.workDate} · {journalStatusLabel(item.status)}
                   </span>
                   <p>{item.summary}</p>
+                  {item.status === 'REJECTED' && item.rejectionReason && <div className={styles.recordDecision}><strong>Motivo del rechazo</strong><p>{item.rejectionReason}</p></div>}
                 </div>
                 {permissions.canManage && item.status === "DRAFT" && (
                   <div>
@@ -1023,6 +1045,7 @@ export default function ProgressClient({
                   <div className={styles.evidenceHeader}>
                     <div>
                       <strong>{item.caption || "Evidencia sin descripción"}</strong>
+                      {item.reviewNote && ['APPROVED', 'REJECTED'].includes(item.status) && <div className={styles.recordDecision}><strong>{item.status === 'REJECTED' ? 'Motivo del rechazo' : 'Nota de revisión'}</strong><p>{item.reviewNote}</p></div>}
                       <span className={styles.evidenceTask}>
                         Tarea: {task?.code ? `${task.code} · ` : ""}{task?.title || item.taskId}
                       </span>
