@@ -16,6 +16,7 @@ const PROJECT_STATUS_LABELS = Object.freeze({
 });
 
 const WORKSPACE_DESTINATIONS = Object.freeze([
+  { key: 'field-mobile', href: '/dashboard/campo', exact: true, label: 'Campo móvil', icon: 'fa-solid fa-mobile-screen-button', permission: 'canReadExecution' },
   { key: 'summary', href: '/dashboard', tab: 'sec-dashboard', label: 'Hoy', icon: 'fa-solid fa-house-chimney' },
   { key: 'whatsapp', href: '/dashboard?tab=sec-whatsapp', tab: 'sec-whatsapp', label: 'Operación de campo', icon: 'fa-brands fa-whatsapp' },
   { key: 'inbox', href: '/dashboard/inbox', exact: true, label: 'Bandeja WhatsApp', icon: 'fa-solid fa-comments', permission: 'canReadInbox' },

@@ -13,7 +13,7 @@ test('pins the Turbopack root to this repository', () => {
 test('applies the security baseline to every application route', async () => {
   const rules = await nextConfig.headers();
 
-  assert.equal(rules.length, 2);
+  assert.equal(rules.length, 3);
   assert.equal(rules[0].source, '/:path*');
 
   const headers = Object.fromEntries(
@@ -56,4 +56,13 @@ test('disables sensitive browser capabilities while preserving first-party locat
   assert.match(permissions.value, /geolocation=\(self\)/);
   assert.match(permissions.value, /browsing-topics=\(\)/);
   assert.doesNotMatch(permissions.value, /\*/);
+});
+
+test('the service worker can update without caching a stale script', async () => {
+  const rules = await nextConfig.headers();
+  const worker = rules.find(rule => rule.source === '/sw.js');
+  assert.ok(worker);
+  const headers = Object.fromEntries(worker.headers.map(({ key, value }) => [key.toLowerCase(), value]));
+  assert.equal(headers['cache-control'], 'public, max-age=0, must-revalidate');
+  assert.equal(headers['service-worker-allowed'], '/');
 });

@@ -915,7 +915,7 @@ export default function ProgressClient({
         <section className={styles.panel}>
           <h2>Nueva evidencia</h2>
           {permissions.canManage ? (
-            <form onSubmit={createEvidence}>
+            <form id="capture-evidence" onSubmit={createEvidence}>
               <select
                 aria-label="Tarea vinculada a la evidencia"
                 required
@@ -966,7 +966,7 @@ export default function ProgressClient({
         ) : (
           <ul>
             {data.dailyLogs.map((item) => (
-              <li key={item.id}>
+              <li key={item.id} id={"daily-log-" + item.id}>
                 <div>
                   <strong>{item.title}</strong>
                   <span>
