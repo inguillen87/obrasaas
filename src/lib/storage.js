@@ -10,7 +10,11 @@ import {
 } from "./cloudinary.js";
 
 function isVercelBlobConfigured() {
-  return Boolean(process.env.BLOB_READ_WRITE_TOKEN || process.env.VERCEL_OIDC_TOKEN);
+  // The installed Blob SDK resolves rotating OIDC from the Vercel request context.
+  // Its token need not be exported as an environment variable. A connected store
+  // identifies the target; the SDK still authenticates every storage operation.
+  const runtimeStore = process.env.VERCEL === "1" && Boolean(process.env.BLOB_STORE_ID?.trim());
+  return Boolean(process.env.BLOB_READ_WRITE_TOKEN?.trim() || process.env.VERCEL_OIDC_TOKEN?.trim() || runtimeStore);
 }
 
 function safePathSegment(value, fallback) {
