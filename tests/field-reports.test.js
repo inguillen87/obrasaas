@@ -20,6 +20,7 @@ function fakeDatabase() {
   const state = { logs: [], receipts: [], failAudit: false, projectStatus: 'ACTIVE' };
   const matches = (row, where) => Object.entries(where).every(([key, value]) => row[key] === value);
   const tx = {
+    task: { findFirst: async ({ where }) => { assert.equal(where.projectId, scope.projectId); assert.equal(where.type, 'TASK'); assert.equal(where.metadata.equals, 'canonical-task-v1'); return where.id === 'task-a' ? { id: 'task-a' } : null; } },
     $executeRawUnsafe: async () => 1,
     project: { findFirst: async ({ where }) => where.id === scope.projectId && where.organizationId === scope.organizationId ? { ...scope, id: scope.projectId, status: state.projectStatus } : null },
     dailyLog: {
@@ -92,3 +93,16 @@ test('operación sin clave o actor no toca datos', async () => {
   await assert.rejects(createFieldReport(prisma, options({ operationKey: 'short' })));
   await assert.rejects(createFieldReport(prisma, options({ actorId: '' })), { code: 'FIELD_SCOPE_REQUIRED' });
 });
+
+test('captura de campo vincula una tarea canónica verificada y la conserva en auditoría', async () => {
+  const { prisma, state } = fakeDatabase(); const result = await createFieldReport(prisma, options({ input: input({ taskId: 'task-a' }) }));
+  assert.equal(result.report.taskId, 'task-a'); assert.equal(state.logs[0].taskId, 'task-a'); assert.equal(state.receipts[0].metadata.taskId, 'task-a');
+  const retry = await createFieldReport(prisma, options({ input: input({ taskId: 'task-a' }) })); assert.equal(retry.replayed, true); assert.equal(state.logs.length, 1);
+});
+test('tarea ajena o ausente no crea parte ni auditoría', async () => {
+  const { prisma, state } = fakeDatabase(); await assert.rejects(createFieldReport(prisma, options({ input: input({ taskId: 'task-other' }) })), { code: 'FIELD_TASK_NOT_FOUND' }); assert.equal(state.logs.length, 0); assert.equal(state.receipts.length, 0);
+});
+test('omitir tarea conserva exactamente la huella normalizada del contrato anterior', () => {
+  const original = normalizeFieldReport(input()); assert.ok(!Object.hasOwn(original, 'taskId')); assert.deepEqual(normalizeFieldReport(input({ taskId: '' })), original); assert.deepEqual(normalizeFieldReport(input({ taskId: null })), original);
+});
+test('tarea no admite identificadores malformados', () => { for (const taskId of [1, {}, '../otra', ' task-a ', 'x'.repeat(191)]) assert.throws(() => normalizeFieldReport(input({ taskId }))); });

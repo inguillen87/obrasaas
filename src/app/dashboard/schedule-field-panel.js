@@ -35,7 +35,7 @@ export default function ScheduleFieldPanel({ organizationId, projectId, onSnapsh
         {snapshot.canReadMeasurements && task.type === 'TASK' && <Link href={'/dashboard/measurements?taskId=' + encodeURIComponent(task.id)}>{task.measured ? 'Consultar medición' : 'Preparar medición'}</Link>}
       </nav>
     </article>)}</div>
-    {snapshot?.unassignedParts > 0 && <p className={styles.warning}>{snapshot.unassignedParts} partes de la obra todavía no están vinculados a una tarea. No se atribuyen automáticamente a ninguna barra.</p>}
+    {snapshot?.unassignedParts > 0 && <p className={styles.warning}>{snapshot.unassignedParts} partes de la obra todavía no están vinculados a una tarea. No se atribuyen automáticamente a ninguna barra. <Link href="/dashboard/progress?unassigned=1" className={styles.back}>Revisar partes sin tarea</Link></p>}
     {snapshot && !taskId && <footer className={styles.pagination}>{after && <button type="button" onClick={() => setAfter(null)}>Primera página</button>}<span>Hasta {snapshot.page.limit} tareas por consulta</span>{snapshot.page.hasMore && <button type="button" onClick={() => setAfter(snapshot.page.nextAfter)}>Siguientes tareas</button>}</footer>}
   </section>;
 }

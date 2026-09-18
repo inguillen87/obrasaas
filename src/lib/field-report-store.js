@@ -4,7 +4,7 @@ import { FieldReportError, normalizeFieldReport, fieldReportAsDailyLog } from '.
 
 const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const present = value => typeof value === 'string' && value.trim() && value.length <= 190;
-const publicReport = item => ({ id: item.id, title: item.title, status: item.status, revision: item.revision });
+const publicReport = item => ({ id: item.id, title: item.title, status: item.status, revision: item.revision, taskId: item.taskId || null });
 export async function createFieldReport(prisma, { scope, actorId, operationKey, input }) {
   const report = normalizeFieldReport(input);
   if (!present(actorId) || !present(scope?.organizationId) || !present(scope?.projectId)) {
@@ -28,13 +28,17 @@ export async function createFieldReport(prisma, { scope, actorId, operationKey, 
       return { report: publicReport(existing), replayed: true };
     }
     if (existing) throw new FieldReportError('La operación requiere revisión de integridad.', 'FIELD_RECEIPT_MISSING', 409);
+    if (report.taskId) {
+      const task = await tx.task.findFirst({ where: { id: report.taskId, projectId: scope.projectId, type: 'TASK', metadata: { path: ['source'], equals: 'canonical-task-v1' } }, select: { id: true } });
+      if (!task) throw new FieldReportError('La tarea no está disponible en esta obra.', 'FIELD_TASK_NOT_FOUND', 404);
+    }
     const created = await tx.dailyLog.create({ data: {
-      id, projectId: scope.projectId, ...fieldReportAsDailyLog(report), status: 'DRAFT',
+      id, projectId: scope.projectId, ...(report.taskId ? { taskId: report.taskId } : {}), ...fieldReportAsDailyLog(report), status: 'DRAFT',
     } });
     await tx.auditLog.create({ data: {
       id: receiptId, organizationId: scope.organizationId, actorId,
       action: 'progress.daily_log.created', entityType: 'DailyLog', entityId: id,
-      metadata: { projectId: scope.projectId, source: 'field-mobile-v1', category: report.category, fingerprint },
+      metadata: { projectId: scope.projectId, source: 'field-mobile-v1', category: report.category, ...(report.taskId ? { taskId: report.taskId } : {}), fingerprint },
     } });
     return { report: publicReport(created), replayed: false };
   });

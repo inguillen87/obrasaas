@@ -7,14 +7,14 @@ import { tokens } from '@/lib/design-system';
 import PwaControls, { useDeviceOnline } from './pwa-controls';
 import { useWorkspaceLeaveGuard } from '../use-workspace-leave-guard';
 import styles from './field.module.css';
-const empty = date => ({ category: 'PROGRESS', title: '', location: '', details: '', workDate: date });
-export default function FieldClient({ project, workDate, counts, channel, permissions }) {
+const empty = date => ({ taskId: '', category: 'PROGRESS', title: '', location: '', details: '', workDate: date });
+export default function FieldClient({ project, workDate, counts, channel, permissions, taskOptions = [], tasksTruncated = false, canReadTasks = false }) {
   const [draft, setDraft] = useState(() => empty(workDate));
   const [busy, setBusy] = useState(false), [unconfirmed, setUnconfirmed] = useState(false);
   const [error, setError] = useState(''), [saved, setSaved] = useState(null);
   const inFlight = useRef(false), attempt = useRef(null);
   const online = useDeviceOnline();
-  const dirty = Boolean(draft.title || draft.location || draft.details);
+  const dirty = Boolean(draft.title || draft.location || draft.details || draft.taskId);
   useWorkspaceLeaveGuard({ dirty: dirty || unconfirmed, busy, message: 'Hay un parte pendiente de guardar o confirmar. ¿Salir de esta obra o sección?' });
   const category = FIELD_REPORT_CATEGORIES.find(item => item.key === draft.category);
   useEffect(() => {
@@ -73,7 +73,7 @@ export default function FieldClient({ project, workDate, counts, channel, permis
       <p>Se guarda como borrador en la bitácora. No cambia stock, costos ni avance aprobado automáticamente.</p>
       {!permissions.write && <p role="status">Tu acceso o el estado de la obra es de solo lectura. El responsable puede revisar los permisos.</p>}
       {!online && <p className={styles.warning} role="status">Podés redactar en esta pantalla, pero necesitás conexión para guardar. No cierres la pestaña: todavía no hay una cola offline de partes.</p>}
-      {saved && <div className={styles.success} role="status"><strong>Guardado confirmado por el servidor</strong><p>{saved.title}</p><Link onNavigate={guardNavigation} href={'/dashboard/progress#daily-log-' + saved.id}>Abrir parte en la bitácora</Link></div>}
+      {saved && <div className={styles.success} role="status"><strong>Guardado confirmado por el servidor</strong><p>{saved.title}</p><Link onNavigate={guardNavigation} href={'/dashboard/progress' + (saved.taskId ? '?taskId=' + encodeURIComponent(saved.taskId) : '') + '#daily-log-' + saved.id}>Abrir parte en la bitácora</Link></div>}
       {error && <p className={styles.warning} role="alert">{error}</p>}
       <form onSubmit={save}>
         <fieldset disabled={!permissions.write || busy || unconfirmed} className={styles.fields}>
@@ -85,6 +85,9 @@ export default function FieldClient({ project, workDate, counts, channel, permis
               <span>{item.label}</span><small>{item.help}</small>
             </label>)}
           </div>
+          {canReadTasks && <label>Tarea de la obra<select aria-label="Tarea de la obra" value={draft.taskId} onChange={event => field('taskId', event.target.value)}><option value="">Sin tarea · pendiente de vincular</option>{taskOptions.map(task => <option key={task.id} value={task.id}>{task.title}</option>)}</select></label>}
+          {draft.taskId ? <p className={styles.hint}>Este parte aparecerá junto a la tarea elegida en el Gantt. No modificará su porcentaje ni sus fechas.</p> : <p className={styles.hint}>Sin tarea, el parte irá a la bandeja de pendientes de vinculación. No se asignará automáticamente a una actividad.</p>}
+          {tasksTruncated && <p className={styles.hint}>Se muestran las primeras 500 tareas. Para una actividad que no aparece, guardá el parte sin tarea y vinculalo desde la bitácora.</p>}
           <label>Título<input name="title" value={draft.title} required maxLength={160} placeholder="Ej.: falta cemento para la mampostería" onChange={e => field('title', e.target.value)} /></label>
           <div className={styles.twoColumns}>
             <label>Sector o ubicación<input name="location" value={draft.location} required maxLength={240} placeholder="Ej.: planta baja, sector norte" onChange={e => field('location', e.target.value)} /></label>

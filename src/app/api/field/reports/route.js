@@ -15,6 +15,7 @@ export async function POST(request) {
     const access = await getPlatformAccess();
     requireTenantPermission(access, 'org:execution:manage', { subscriptionMode: 'write' });
     const input = await readJsonRequest(request, { maxBytes: 16 * 1024 });
+    if (input?.taskId) requireTenantPermission(access, 'org:tasks:read', { subscriptionMode: 'read' });
     const result = await createFieldReport(getPrisma(), {
       scope: { organizationId: access.organization.id, projectId: access.project.id },
       actorId: access.databaseUserId, operationKey: request.headers.get('idempotency-key'), input,

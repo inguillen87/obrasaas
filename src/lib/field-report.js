@@ -9,7 +9,7 @@ export class FieldReportError extends Error {
     super(message); this.code = code; this.status = status;
   }
 }
-const KEYS = new Set(['projectId', 'category', 'title', 'location', 'details', 'workDate']);
+const KEYS = new Set(['projectId', 'category', 'title', 'location', 'details', 'workDate', 'taskId']);
 function text(value, label, max, multiline = false) {
   if (typeof value !== 'string') throw new FieldReportError(label + ': completá el campo.');
   const normalized = value.trim().replace(/\r\n/g, '\n');
@@ -30,10 +30,12 @@ export function normalizeFieldReport(input) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(workDate) || !Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== workDate) {
     throw new FieldReportError('La fecha del parte no es válida.');
   }
+  if (input.taskId != null && input.taskId !== '' && (typeof input.taskId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,189}$/.test(input.taskId))) throw new FieldReportError('La tarea seleccionada no es válida.');
   return {
     projectId: text(input.projectId, 'Obra', 190), category: category.key,
     title: text(input.title, 'Título', 160), location: text(input.location, 'Sector', 240),
     details: text(input.details, 'Detalle', 2000, true), workDate,
+    ...(input.taskId ? { taskId: input.taskId } : {}),
   };
 }
 export function fieldReportAsDailyLog(input) {

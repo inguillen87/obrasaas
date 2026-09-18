@@ -47,6 +47,9 @@ export default async function ProgressPage({ searchParams }) {
   const prisma = getPrisma();
   const params = await searchParams;
   const requestedTaskId = params?.taskId ?? null;
+  if (params?.unassigned != null && params.unassigned !== '1') notFound();
+  const unassignedOnly = params?.unassigned === '1';
+  if (unassignedOnly && requestedTaskId) notFound();
   if (requestedTaskId !== null && (typeof requestedTaskId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,189}$/.test(requestedTaskId))) notFound();
   const selectedTask = requestedTaskId ? await prisma.task.findFirst({ where: { id: requestedTaskId, projectId: access.project.id, metadata: { path: ['source'], equals: 'canonical-task-v1' } }, include: { predecessors: true } }) : null;
   if (requestedTaskId && !selectedTask) notFound();
@@ -63,7 +66,7 @@ export default async function ProgressPage({ searchParams }) {
     && hasTenantPermission(access, 'org:tasks:manage')
   );
   const journal = await listProgressJournal(prisma, {
-    taskId: requestedTaskId,
+    taskId: requestedTaskId, unassigned: unassignedOnly,
     projectId: access.project.id,
     includeSourceEvidence: canReadSourceEvidence,
   });
@@ -80,8 +83,8 @@ export default async function ProgressPage({ searchParams }) {
       : Promise.resolve({ assessments: [] }),
   ]);
   return (
-    <ProgressClient key={access.organization.id + ":" + access.project.id + ":" + access.databaseUserId + ":" + (requestedTaskId || "all")}
-      filteredTaskId={requestedTaskId}
+    <ProgressClient key={access.organization.id + ":" + access.project.id + ":" + access.databaseUserId + ":" + (requestedTaskId || (unassignedOnly ? "unassigned" : "all"))}
+      filteredTaskId={requestedTaskId} unassignedOnly={unassignedOnly}
       organizationId={access.organization.id} projectId={access.project.id}
       initialData={journal}
       initialVisualAssessments={visualAssessments.assessments.map(visualAssessmentForClient)}

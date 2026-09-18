@@ -13,14 +13,17 @@ export default async function FieldPage() {
     return current;
   });
   const prisma = getPrisma();
-  const [workers, tasks, connection] = await Promise.all([
+  const canReadTasks = hasTenantPermission(access, 'org:tasks:read');
+  const [workers, tasks, connection, taskOptions] = await Promise.all([
     prisma.worker.count({ where: { projectId: access.project.id, active: true } }),
     prisma.task.count({ where: { projectId: access.project.id, metadata: { path: ['source'], equals: 'canonical-task-v1' } } }),
     prisma.whatsAppConnection.findUnique({ where: { projectId: access.project.id }, select: { enabled: true, connectionStatus: true, lastVerifiedAt: true, metadata: true } }),
+    canReadTasks ? prisma.task.findMany({ where: { projectId: access.project.id, type: 'TASK', metadata: { path: ['source'], equals: 'canonical-task-v1' } }, orderBy: { id: 'asc' }, take: 501, select: { id: true, title: true } }) : [],
   ]);
   const channel = deriveWhatsAppChannelPresentation(connection);
   return <FieldClient key={access.organization.id + ':' + access.project.id + ':' + access.databaseUserId}
     project={{ organizationId: access.organization.id, id: access.project.id, name: access.project.name, organization: access.organization.name, status: access.project.status }}
+    taskOptions={taskOptions.slice(0, 500)} tasksTruncated={taskOptions.length > 500} canReadTasks={canReadTasks}
     workDate={localDateKey(new Date(), access.organization.timezone)} counts={{ workers, tasks }}
     channel={{ label: channel.label, summary: channel.summary }} permissions={{
       write: hasTenantPermission(access, 'org:execution:manage') && ['ACTIVE', 'PLANNING', 'PAUSED'].includes(access.project.status),

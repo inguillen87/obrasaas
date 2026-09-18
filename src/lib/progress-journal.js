@@ -121,7 +121,10 @@ export function serializeProgressEvidence(item, { includeSourceEvidence = false 
   };
 }
 
-export async function listProgressJournal(prisma, { projectId, limit = 50, before = null, kind = null, status = null, taskId = null, includeSourceEvidence = false } = {}) {
+export async function listProgressJournal(prisma, { projectId, limit = 50, before = null, kind = null, status = null, taskId = null, unassigned = false, includeSourceEvidence = false } = {}) {
+  if (![true, false, '1'].includes(unassigned)) throw new ProgressJournalError('Filtro de partes sin tarea inválido.');
+  const onlyUnassigned = unassigned === true || unassigned === '1';
+  if (onlyUnassigned && taskId) throw new ProgressJournalError('No combines tarea y partes sin tarea.');
   const take = Math.min(Math.max(Number(limit) || 50, 1), 100);
   const beforeDate = before ? new Date(before) : null;
   if (before && Number.isNaN(beforeDate?.getTime?.())) throw new ProgressJournalError('before no es una fecha válida.');
@@ -130,10 +133,10 @@ export async function listProgressJournal(prisma, { projectId, limit = 50, befor
   const normalizedStatus = status ? String(status).toUpperCase() : null;
   if (normalizedKind && !['DAILY_LOG', 'EVIDENCE', 'BLOCKER', 'INCIDENT'].includes(normalizedKind)) throw new ProgressJournalError('kind de timeline inválido.');
   const [dailyLogs, evidence, blockers, incidents] = await Promise.all([
-    (!normalizedKind || normalizedKind === 'DAILY_LOG') ? prisma.dailyLog.findMany({ where: { projectId, ...(taskId ? { taskId } : {}), ...(normalizedStatus ? { status: normalizedStatus } : {}), ...(dateFilter ? { createdAt: dateFilter } : {}) }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take }) : [],
-    (!normalizedKind || normalizedKind === 'EVIDENCE') ? prisma.progressEvidence.findMany({ where: { projectId, ...(taskId ? { taskId } : {}), ...(normalizedStatus ? { status: normalizedStatus } : {}), ...(dateFilter ? { capturedAt: dateFilter } : {}) }, orderBy: [{ capturedAt: 'desc' }, { id: 'desc' }], take }) : [],
-    (!normalizedKind || normalizedKind === 'BLOCKER') ? prisma.projectBlocker.findMany({ where: { projectId, ...(taskId ? { taskId } : {}), ...(normalizedStatus ? { status: normalizedStatus } : {}), ...(dateFilter ? { createdAt: dateFilter } : {}) }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take, select: { id: true, title: true, status: true, severity: true, taskId: true, createdAt: true, updatedAt: true } }) : [],
-    (!taskId && (!normalizedKind || normalizedKind === 'INCIDENT')) ? prisma.incident.findMany({ where: { projectId, ...(normalizedStatus ? { status: normalizedStatus } : {}), ...(dateFilter ? { occurredAt: dateFilter } : {}) }, orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take, select: { id: true, title: true, severity: true, status: true, occurredAt: true } }) : [],
+    (!normalizedKind || normalizedKind === 'DAILY_LOG') ? prisma.dailyLog.findMany({ where: { projectId, ...(onlyUnassigned ? { taskId: null } : taskId ? { taskId } : {}), ...(normalizedStatus ? { status: normalizedStatus } : {}), ...(dateFilter ? { createdAt: dateFilter } : {}) }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take }) : [],
+    (!onlyUnassigned && (!normalizedKind || normalizedKind === 'EVIDENCE')) ? prisma.progressEvidence.findMany({ where: { projectId, ...(taskId ? { taskId } : {}), ...(normalizedStatus ? { status: normalizedStatus } : {}), ...(dateFilter ? { capturedAt: dateFilter } : {}) }, orderBy: [{ capturedAt: 'desc' }, { id: 'desc' }], take }) : [],
+    (!onlyUnassigned && (!normalizedKind || normalizedKind === 'BLOCKER')) ? prisma.projectBlocker.findMany({ where: { projectId, ...(taskId ? { taskId } : {}), ...(normalizedStatus ? { status: normalizedStatus } : {}), ...(dateFilter ? { createdAt: dateFilter } : {}) }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take, select: { id: true, title: true, status: true, severity: true, taskId: true, createdAt: true, updatedAt: true } }) : [],
+    (!onlyUnassigned && !taskId && (!normalizedKind || normalizedKind === 'INCIDENT')) ? prisma.incident.findMany({ where: { projectId, ...(normalizedStatus ? { status: normalizedStatus } : {}), ...(dateFilter ? { occurredAt: dateFilter } : {}) }, orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take, select: { id: true, title: true, severity: true, status: true, occurredAt: true } }) : [],
   ]);
   const timeline = [
     ...dailyLogs.map((item) => ({ id: item.id, kind: 'DAILY_LOG', occurredAt: item.createdAt?.toISOString?.() || null, taskId: item.taskId || null, title: item.title, status: item.status, severity: null })),

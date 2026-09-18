@@ -18,6 +18,7 @@ import { createProgressRequest, confirmedProgressLog } from '@/lib/progress-requ
 import ProgressContextPanel from './progress-context-panel';
 import { publishFieldInvalidation } from '@/lib/schedule-field-channel';
 import ProgressReviewDialog from './progress-review-dialog';
+import JournalTaskLinkDialog from './journal-task-link-dialog';
 import EvidenceViewer from './evidence-viewer';
 import { evidencePreviewHref } from '@/lib/evidence-viewer-policy';
 import { confirmedProgressReview, normalizeProgressReviewNote } from '@/lib/progress-review-policy';
@@ -398,7 +399,7 @@ function VisualAssessmentCard({
 }
 
 export default function ProgressClient({
-  filteredTaskId = null,
+  filteredTaskId = null, unassignedOnly = false,
   initialData,
   initialVisualAssessments = [],
   tasks,
@@ -412,6 +413,9 @@ export default function ProgressClient({
   const [contextChanged, setContextChanged] = useState(false);
   const [viewingEvidence, setViewingEvidence] = useState(null);
   const [reviewSelection, setReviewSelection] = useState(null);
+  const [linkingRecord, setLinkingRecord] = useState(null);
+  const [linkDirty, setLinkDirty] = useState(false);
+  const [linkBusy, setLinkBusy] = useState(false);
   const [reviewDirty, setReviewDirty] = useState(false);
   const api = useMemo(
     () => createProgressRequest({ organizationId, projectId }, { onContextChange: () => setContextChanged(true) }),
@@ -455,13 +459,13 @@ export default function ProgressClient({
     (Array.isArray(tasks) ? tasks : []).map((task) => [task.id, task]),
   ), [tasks]);
 
-  const hasJournalChanges = Boolean(title || summary || caption || evidenceFile || reviewDirty);
-  useWorkspaceLeaveGuard({ dirty: hasJournalChanges, busy });
+  const hasJournalChanges = Boolean(title || summary || caption || evidenceFile || reviewDirty || linkDirty);
+  useWorkspaceLeaveGuard({ dirty: hasJournalChanges, busy: busy || linkBusy });
   useEffect(() => {
-    const warn = event => { if (hasJournalChanges || busy) { event.preventDefault(); event.returnValue = ''; } };
+    const warn = event => { if (hasJournalChanges || busy || linkBusy) { event.preventDefault(); event.returnValue = ''; } };
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
-  }, [hasJournalChanges, busy]);
+  }, [hasJournalChanges, busy, linkBusy]);
   function guardJournalLeave(event) {
     if (busy || (hasJournalChanges && !window.confirm('Hay datos o un archivo sin confirmar. ¿Salir de la bitácora?'))) event.preventDefault();
   }
@@ -510,7 +514,7 @@ export default function ProgressClient({
 
   async function refreshPrimaryRecords() {
     try {
-      const latest = await api('/api/progress?limit=50' + (filteredTaskId ? '&taskId=' + encodeURIComponent(filteredTaskId) : ''));
+      const latest = await api('/api/progress?limit=50' + (filteredTaskId ? '&taskId=' + encodeURIComponent(filteredTaskId) : unassignedOnly ? '&unassigned=1' : ''));
       setData((current) => ({
         ...current,
         dailyLogs: latest.dailyLogs,
@@ -822,6 +826,7 @@ export default function ProgressClient({
     try {
       const query = new URLSearchParams({ limit: "50" });
       if (filteredTaskId) query.set("taskId", filteredTaskId);
+      if (unassignedOnly) query.set("unassigned", "1");
       if (timelineKind) query.set("kind", timelineKind);
       if (timelineStatus) query.set("status", timelineStatus);
       const result = await api(`/api/progress?${query}`);
@@ -845,6 +850,7 @@ export default function ProgressClient({
         before: data.page.nextBefore,
       });
       if (filteredTaskId) query.set("taskId", filteredTaskId);
+      if (unassignedOnly) query.set("unassigned", "1");
       if (timelineKind) query.set("kind", timelineKind);
       if (timelineStatus) query.set("status", timelineStatus);
       const result = await api(`/api/progress?${query}`);
@@ -878,6 +884,18 @@ export default function ProgressClient({
       {viewingEvidence && <EvidenceViewer key={viewingEvidence.id + ':' + viewingEvidence.revision}
         item={viewingEvidence} organizationId={organizationId} projectId={projectId} projectName={projectName}
         taskTitle={taskById.get(viewingEvidence.taskId)?.title} onClose={() => setViewingEvidence(null)} />}
+      {linkingRecord && <JournalTaskLinkDialog key={linkingRecord.id + ':' + linkingRecord.revision} record={linkingRecord} tasks={tasks}
+        projectName={projectName} projectId={projectId} organizationId={organizationId} onDirtyChange={setLinkDirty} onBusyChange={setLinkBusy}
+        onClose={() => setLinkingRecord(null)} onCommit={saved => {
+          const remainsVisible = !unassignedOnly && (!filteredTaskId || saved.taskId === filteredTaskId);
+          setData(current => ({ ...current,
+            dailyLogs: current.dailyLogs.flatMap(row => row.id === saved.id ? (remainsVisible ? [saved] : []) : [row]),
+            timeline: current.timeline.flatMap(row => row.kind === 'DAILY_LOG' && row.id === saved.id ? (remainsVisible ? [{ ...row, taskId: saved.taskId }] : []) : [row]),
+          }));
+          publishFieldInvalidation({ organizationId, projectId });
+          setNotice('Parte vinculado. La tarea del Gantt se actualizará con el registro confirmado.'); setLinkingRecord(null);
+        }} />}
+      {unassignedOnly && <section className={styles.taskInbox} aria-label="Partes sin tarea"><span>PENDIENTES DE VINCULACIÓN</span><h2>Que ningún parte quede fuera del plan</h2><p>Asigná una actividad a cada borrador. Los partes enviados o decididos conservan su relación original y no se modifican desde esta bandeja.</p><Link href="/dashboard/progress" onNavigate={guardJournalLeave}>Abrir toda la bitácora</Link></section>}
       {reviewSelection && <ProgressReviewDialog key={reviewSelection.item.id + ':' + reviewSelection.status + ':' + reviewSelection.item.revision}
         selection={reviewSelection} projectName={projectName} taskTitle={taskById.get(reviewSelection.item.taskId)?.title}
         onDirtyChange={setReviewDirty} onClose={() => setReviewSelection(null)}
@@ -897,7 +915,7 @@ export default function ProgressClient({
           </button>
         </div>
       )}
-      <div className={styles.grid}>
+      {!unassignedOnly && <div className={styles.grid}>
         <section className={styles.panel}>
           <h2>Nueva bitácora</h2>
           {permissions.canManage ? (
@@ -966,14 +984,14 @@ export default function ProgressClient({
           fileInputRef={evidenceFileInputRef} onFile={selectEvidenceFile} onTask={value => editEvidence(setEvidenceTaskId, value)}
           onAuthor={value => editEvidence(setEvidenceAuthorWorkerId, value)} onCaption={value => editEvidence(setCaption, value)} onSubmit={createEvidence} onReset={resetEvidence}
           onLeave={guardJournalLeave} /> : <section className={styles.panel}><h2>Evidencia de obra</h2><p>Tu rol puede consultar los registros autorizados, pero no cargar archivos.</p></section>}
-      </div>
+      </div>}
       <section className={styles.panel}>
-        <h2>Bitácoras recientes</h2>
+        <h2>{unassignedOnly ? "Partes pendientes de vinculación" : "Bitácoras recientes"}</h2>
         {data.dailyLogs.length === 0 ? (
           <p>No hay bitácoras.</p>
         ) : (
           <ul>
-            {data.dailyLogs.map((item) => (
+            {data.dailyLogs.filter(item => !unassignedOnly || !item.taskId).map((item) => (
               <li key={item.id} id={"daily-log-" + item.id}>
                 <div>
                   <strong>{item.title}</strong>
@@ -981,6 +999,9 @@ export default function ProgressClient({
                     {item.workDate} · {journalStatusLabel(item.status)}
                   </span>
                   <p>{item.summary}</p>
+                  <p className={styles.taskRelation}>{item.taskId ? 'Tarea: ' + (taskById.get(item.taskId)?.title || item.taskId) : 'Sin tarea vinculada'}</p>
+                  {permissions.canManage && permissions.canReadSchedule && item.status === 'DRAFT' && <button type="button" disabled={busy || contextChanged} onClick={() => setLinkingRecord(item)}>{item.taskId ? 'Cambiar tarea del borrador' : 'Vincular a una tarea'}</button>}
+
                   {item.status === 'REJECTED' && item.rejectionReason && <div className={styles.recordDecision}><strong>Motivo del rechazo</strong><p>{item.rejectionReason}</p></div>}
                 </div>
                 {permissions.canManage && item.status === "DRAFT" && (
@@ -1017,7 +1038,7 @@ export default function ProgressClient({
           </ul>
         )}
       </section>
-      <section className={styles.panel}>
+      {!unassignedOnly && <section className={styles.panel}>
         <h2>Evidencia pendiente/revisada</h2>
         {data.evidence.length === 0 ? (
           <p>No hay evidencia.</p>
@@ -1203,7 +1224,7 @@ export default function ProgressClient({
             })}
           </ul>
         )}
-      </section>
+      </section>}
       <section className={styles.panel}>
         <div className={styles.timelineHead}>
           <div>
