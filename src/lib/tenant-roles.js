@@ -30,6 +30,7 @@ const ROLE_PERMISSIONS = {
   ADMIN: ['*'],
   DIRECTOR: [
     'org:inspections:approve',
+    'org:progress:review',
     'org:projects:read',
     'org:projects:manage',
     'org:operational-proposals:read',

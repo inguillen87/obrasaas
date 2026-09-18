@@ -14,6 +14,11 @@ import {
 } from "@/lib/protected-upload-policy";
 import styles from "./progress.module.css";
 
+const JOURNAL_STATUS_LABELS = Object.freeze({
+  DRAFT: 'Borrador', SUBMITTED: 'En revisión', APPROVED: 'Aprobado', REJECTED: 'Rechazado',
+  PENDING: 'Pendiente', OPEN: 'Abierto', IN_PROGRESS: 'En curso', RESOLVED: 'Resuelto', CANCELLED: 'Cancelado',
+});
+const journalStatusLabel = status => JOURNAL_STATUS_LABELS[status] || 'Estado no reconocido';
 const TERMINAL_VISUAL_STATUSES = new Set(["COMPLETED", "ABSTAINED", "FAILED"]);
 const VISUAL_STATUS_LABELS = Object.freeze({
   PENDING: "En cola",
@@ -970,7 +975,7 @@ export default function ProgressClient({
                 <div>
                   <strong>{item.title}</strong>
                   <span>
-                    {item.workDate} · {item.status}
+                    {item.workDate} · {journalStatusLabel(item.status)}
                   </span>
                   <p>{item.summary}</p>
                 </div>
@@ -984,7 +989,10 @@ export default function ProgressClient({
                     </button>
                   </div>
                 )}
-                {permissions.canManage && item.status === "SUBMITTED" && (
+                {!permissions.canReviewJournal && item.status === "SUBMITTED" && (
+                  <p>En revisión por Dirección o un administrador de la empresa.</p>
+                )}
+                {permissions.canReviewJournal && item.status === "SUBMITTED" && (
                   <div>
                     <button
                       disabled={busy}
@@ -1056,7 +1064,7 @@ export default function ProgressClient({
                         Tarea: {task?.code ? `${task.code} · ` : ""}{task?.title || item.taskId}
                       </span>
                       <span>
-                        {item.capturedAt} · {item.status}
+                        {item.capturedAt} · {journalStatusLabel(item.status)}
                         {item.source?.channel === "whatsapp" ? " · WhatsApp" : ""}
                       </span>
                       {locationLabel && (
@@ -1078,7 +1086,7 @@ export default function ProgressClient({
                         </a>
                       )}
                     </div>
-                    {permissions.canManage && item.status === "PENDING" && (
+                    {permissions.canReviewJournal && permissions.canReadSourceEvidence && item.status === "PENDING" && (
                       <div className={styles.evidenceActions}>
                         <button
                           disabled={busy}
@@ -1227,7 +1235,7 @@ export default function ProgressClient({
                     {item.kind} · {item.title}
                   </strong>
                   <span>
-                    {item.occurredAt || "Sin fecha"} · {item.status}
+                    {item.occurredAt || "Sin fecha"} · {journalStatusLabel(item.status)}
                     {item.severity ? ` · ${item.severity}` : ""}
                   </span>
                 </div>

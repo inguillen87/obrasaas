@@ -81,6 +81,7 @@ export default async function ProgressPage() {
       initialWorkDate={localDateKey(new Date(), access.organization.timezone)}
       permissions={{
         canManage,
+        canReviewJournal: canManage && hasTenantPermission(access, 'org:progress:review'),
         canReadSourceEvidence,
         canUseReviewedEvidence,
         canUseVisualProgress,

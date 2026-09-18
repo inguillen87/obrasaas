@@ -25,11 +25,21 @@ function known(error) {
 }
 export async function PATCH(request, { params }) {
   try {
+    const origin = request.headers.get('origin');
+    if ((origin && origin !== new URL(request.url).origin) || request.headers.get('sec-fetch-site') === 'cross-site') {
+      return Response.json({ error: 'Origen de solicitud no autorizado.', code: 'PROGRESS_ORIGIN_FORBIDDEN' }, { status: 403, headers: { 'Cache-Control': 'private, no-store' } });
+    }
     const access = await getPlatformAccess();
     requireTenantPermission(access, "org:execution:manage", {
       subscriptionMode: "write",
     });
     const input = await readJsonRequest(request, { maxBytes: 16 * 1024 });
+    if (['APPROVED', 'REJECTED'].includes(String(input.status ?? '').toUpperCase())) {
+      requireTenantPermission(access, 'org:progress:review', { subscriptionMode: 'write' });
+      if (String(input.kind ?? '').toUpperCase() === 'EVIDENCE') {
+        requireTenantPermission(access, SOURCE_EVIDENCE_PERMISSION, { subscriptionMode: 'read' });
+      }
+    }
     const { recordId } = await params;
     return Response.json(
       await reviewProgressRecord(getPrisma(), {
@@ -48,6 +58,7 @@ export async function PATCH(request, { params }) {
           SOURCE_EVIDENCE_PERMISSION,
         ),
       }),
+      { headers: { 'Cache-Control': 'private, no-store' } },
     );
   } catch (error) {
     return (
