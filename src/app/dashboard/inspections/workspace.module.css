@@ -23,3 +23,13 @@
 .error button { margin-left: 12px; color: inherit; background: transparent; border: 0; text-decoration: underline; cursor: pointer; }
 .history code { overflow-wrap: anywhere; font-size: .75rem; }
 @media (max-width: 900px) { .workspace { grid-template-columns: minmax(0, 1fr); } .content { padding: 16px; } }
+
+.nextStep { margin-bottom: 24px; }
+.stepHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.stepHeader h2 { margin-top: 8px; }
+.stepHeader p { max-width: 760px; margin-bottom: 0; }
+.nextStep a { color: inherit; text-underline-offset: 4px; padding: 8px 0; }
+.pending { margin-top: 20px; line-height: 1.6; }
+.pending summary { cursor: pointer; font-weight: 600; }
+.pending ul { margin: 10px 0 0; padding-left: 22px; }
+@media (max-width: 600px) { .stepHeader { flex-direction: column; gap: 12px; } }
