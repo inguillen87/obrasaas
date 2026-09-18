@@ -48,7 +48,7 @@ export default async function InboxPage() {
       <header className={styles.pageHeader}>
         <div>
           <p className={styles.eyebrow}>WhatsApp · atención operativa</p>
-          <h1>Las conversaciones recientes de la obra, en un solo lugar.</h1>
+          <h1>De un mensaje a una tarea con seguimiento.</h1>
           <p className={styles.lead}>
             Consultá los mensajes recientes del canal conectado, respondé dentro de la ventana
             permitida por Meta y seguí cada entrega sin mezclar obras ni organizaciones.
@@ -65,6 +65,8 @@ export default async function InboxPage() {
       <InboxClient
         key={`${access.organization.id}:${access.project.id}`}
         canLinkProgressEvidence={canLinkProgressEvidence}
+        canCreateProgressReport={canLinkProgressEvidence && hasTenantPermission(access, 'org:tasks:read')}
+        organizationId={access.organization.id}
         canManageIntegrations={hasTenantPermission(access, 'org:integrations:manage')}
         canManageOnboarding={hasTenantPermission(access, 'org:workers:onboarding:manage')}
         canViewSourceEvidence={canViewSourceEvidence}

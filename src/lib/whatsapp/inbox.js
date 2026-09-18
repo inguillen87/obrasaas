@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { reportSourceKind } from './progress-report-policy.js';
 
 import {
   isMedicalEvidenceRecord,
@@ -331,6 +332,7 @@ function publicMessage(message, {
     sourceEvidenceViewable,
     progressEvidenceEligible,
     progressEvidenceLinked,
+    progressReportKind: includeSourceEvidence ? reportSourceKind(safeMessage) : null,
     sentAt: validDate(safeMessage.sentAt)?.toISOString() || null,
     recordedAt: validDate(safeMessage.createdAt)?.toISOString() || null,
     media: sourceRestricted || metadata.sourceContentRestricted && !includeSourceEvidence
