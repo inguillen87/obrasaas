@@ -21,7 +21,7 @@ export default function useScheduleFieldStatus({ organizationId, projectId, task
           headers: { ...evidenceScopeHeaders(scope), ...(etag ? { 'If-None-Match': etag } : {}) } });
         if (!active) return;
         if (response.status === 304 && current) {
-          failures = 0; setResult({ key, snapshot: current, state: 'verified', error: '', checkedAt: response.headers.get('x-obrasaas-checked-at') }); return;
+          failures = 0; setResult({ key, snapshot: current, state: 'verified', error: '', checkedAt: new Date().toISOString() }); return;
         }
         const payload = await response.json().catch(() => null);
         if (!response.ok) {
@@ -32,7 +32,7 @@ export default function useScheduleFieldStatus({ organizationId, projectId, task
           blocked = true; current = null; throw new Error('La respuesta no corresponde al contexto de esta pantalla.');
         }
         current = payload; etag = response.headers.get('etag'); failures = 0;
-        setResult({ key, snapshot: payload, state: 'verified', error: '', checkedAt: payload.checkedAt });
+        setResult({ key, snapshot: payload, state: 'verified', error: '', checkedAt: new Date().toISOString() });
       } catch (error) {
         if (active) { failures = Math.min(failures + 1, 3); setResult(previous => ({ key, snapshot: current, state: blocked ? 'blocked' : 'stale', error: error.message, checkedAt: current ? previous.checkedAt : null })); }
       } finally { clearTimeout(timeout); inFlight = false; schedule(); }

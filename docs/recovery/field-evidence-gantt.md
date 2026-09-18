@@ -38,3 +38,6 @@ scripts/verify-field-gantt-ui.mjs monta el panel y Gantt reales con HTTP sintét
 6. Tiempo real y offline: medir carga y latencia, agregar entrega durable de eventos y cola offline por identidad/obra con reintentos idempotentes, sin reenviar acciones a otra sesión.
 
 Los medios que envíe Victoria se tratarán como evidencia privada con contexto y validación; no como entrenamiento automático ni como autorización para alterar una línea base. No se incorporaron personas, credenciales, datos de otra aplicación ni imágenes externas en esta entrega.
+
+## ComprobaciÃ³n publicada y precisiÃ³n de la hora
+La prueba autenticada creÃ³ un parte sintÃ©tico vinculado a una tarea y comprobÃ³ su apariciÃ³n en la pestaÃ±a de Gantt sin recarga manual, conservando el porcentaje operativo. Se detectÃ³ que una respuesta 304 podÃ­a llegar sin la cabecera personalizada de fecha. La hora visible ahora indica la recepciÃ³n confirmada por este navegador; no depende de esa cabecera ni se presenta como la hora de modificaciÃ³n del registro. El ensayo automatizado reproduce tambiÃ©n esa ausencia de cabecera.

@@ -27,7 +27,7 @@ const server = createServer((req, res) => {
   if (path === '/api/schedule/field-status') {
     reads.push({ org: req.headers['x-obrasaas-organization'], project: req.headers['x-obrasaas-project'], conditional: req.headers['if-none-match'] });
     const etag = '"field-' + snapshot.version + '"';
-    res.setHeader('Content-Type', 'application/json'); res.setHeader('Cache-Control', 'no-store'); res.setHeader('ETag', etag); res.setHeader('X-ObraSaaS-Checked-At', new Date().toISOString());
+    res.setHeader('Content-Type', 'application/json'); res.setHeader('Cache-Control', 'no-store'); res.setHeader('ETag', etag); // Exercise a conditional response without custom timestamp headers.
     if (deny) { res.statusCode = 403; res.end('{"error":"Acceso revocado"}'); return; }
     if (req.headers['if-none-match'] === etag) { res.statusCode = 304; res.end(); return; }
     res.end(JSON.stringify(snapshot)); return;
@@ -67,11 +67,12 @@ try {
   assert.equal(await panel.getByRole('link', { name: 'Consultar medición' }).getAttribute('href'), '/dashboard/measurements?taskId=task-A');
   await panel.getByRole('button', { name: 'Actualizar ahora' }).click();
   await page.waitForTimeout(200); assert.ok(reads.some(read => read.conditional));
+  await expect(panel.getByRole('status')).not.toContainText('Sin verificar');
   deny = true; await signal();
   await expect(panel.getByRole('alert')).toHaveText('Acceso revocado');
   await expect(panel.getByText('30%', { exact: true })).toHaveCount(0);
   await expect(page.getByText(/Medido 30%/)).toHaveCount(0);
   assert.ok(reads.every(read => read.org === 'org-A' && read.project === 'project-A')); assert.deepEqual(errors, []);
-  const proof = { result: 'PASS', environment: 'real-panel-and-gantt-with-synthetic-HTTP', serverAuthoritative: true, crossTabInvalidation: true, otherTenantSignalIgnored: true, periodicCrossDeviceRecovery: true, measuredLayerSeparateFromManual: true, conditionalReads: true, revocationClearsFieldData: true, widths: [320,390,768,1280], pageErrors: errors.length };
+  const proof = { result: 'PASS', environment: 'real-panel-and-gantt-with-synthetic-HTTP', serverAuthoritative: true, crossTabInvalidation: true, otherTenantSignalIgnored: true, periodicCrossDeviceRecovery: true, measuredLayerSeparateFromManual: true, conditionalReads: true, conditionalWithoutTimestampHeader: true, revocationClearsFieldData: true, widths: [320,390,768,1280], pageErrors: errors.length };
   writeFileSync(resolve(output, 'proof.json'), JSON.stringify(proof, null, 2)); console.log(JSON.stringify(proof));
 } finally { await browser?.close(); await new Promise(done => server.close(done)); }
