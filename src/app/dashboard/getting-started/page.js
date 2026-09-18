@@ -1,5 +1,7 @@
 import Link from 'next/link';
 
+import BusinessProfilePanel from './business-profile-panel';
+import { BUSINESS_PROFILE_KINDS, BusinessProfileError, businessProfileFromMetadata, businessProfilePaths } from '@/lib/organization-business-profile';
 import ReportMilestoneAction from './report-milestone-action';
 import styles from './getting-started.module.css';
 import {
@@ -93,6 +95,9 @@ export default async function GettingStartedPage() {
   requireTenantPermission(access, 'org:projects:read');
   const prisma = getPrisma();
   const now = new Date();
+  let businessProfile = null;
+  try { businessProfile = businessProfileFromMetadata(access.organization.metadata); } catch (error) { if (!(error instanceof BusinessProfileError)) throw error; }
+  const businessPaths = Object.fromEntries(BUSINESS_PROFILE_KINDS.map(kind => [kind.key, businessProfilePaths({ kind: kind.key }, permission => hasTenantPermission(access, permission))]));
   const canManageField = hasTenantPermission(access, 'org:field:manage');
   const canManageOperationalProposals = hasTenantPermission(
     access,
@@ -348,7 +353,7 @@ export default async function GettingStartedPage() {
         <div className={styles.headerGrid}>
           <div>
             <p className={styles.eyebrow}>Primer valor · puesta en marcha</p>
-            <h1>De tenant vacío a una operación demostrable.</h1>
+            <h1>Prepará tu organización para operar varias obras.</h1>
             <p className={styles.lead}>
               Seis hitos verificables para que {access.organization.name} pueda planificar,
               reportar, decidir y emitir su primer control sin contratar ningún servicio adicional.
@@ -362,6 +367,9 @@ export default async function GettingStartedPage() {
         </div>
       </header>
 
+      <BusinessProfilePanel key={access.organization.id + ':' + access.project.id}
+        organizationId={access.organization.id} projectId={access.project.id} organizationName={access.organization.name}
+        initialProfile={businessProfile} pathsByKind={businessPaths} canManage={hasTenantPermission(access, 'tenant:members:manage')} />
       <section className={styles.progressCard} aria-labelledby="activation-progress-title">
         <div className={styles.progressCopy}>
           <span>Activación operativa</span>
