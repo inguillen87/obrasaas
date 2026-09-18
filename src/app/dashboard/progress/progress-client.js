@@ -14,6 +14,8 @@ import {
 import EvidencePicker from './evidence-picker';
 import { evidenceSelectionIssue, evidenceScopeHeaders, evidenceFailureState, requestEvidenceStep } from '@/lib/evidence-capture-policy';
 import { useWorkspaceLeaveGuard } from '../use-workspace-leave-guard';
+import { createProgressRequest, confirmedProgressLog } from '@/lib/progress-request';
+import ProgressContextPanel from './progress-context-panel';
 import styles from "./progress.module.css";
 
 const JOURNAL_STATUS_LABELS = Object.freeze({
@@ -49,23 +51,6 @@ const QUALITY_VALUES = Object.freeze({
   partial: "Parcial",
   severe: "Severa",
 });
-
-async function api(path, options = {}) {
-  const response = await fetch(path, {
-    ...options,
-    cache: "no-store",
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
-  });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const error = new Error(body.error || "No se pudo completar la operación.");
-    error.status = response.status;
-    error.code = body.code || null;
-    error.assessmentCreated = Boolean(body.assessmentId);
-    throw error;
-  }
-  return body;
-}
 
 function createVisualIdempotencyKey() {
   const suffix = globalThis.crypto?.randomUUID
@@ -418,6 +403,11 @@ export default function ProgressClient({
   projectId,
   initialWorkDate,
 }) {
+  const [contextChanged, setContextChanged] = useState(false);
+  const api = useMemo(
+    () => createProgressRequest({ organizationId, projectId }, { onContextChange: () => setContextChanged(true) }),
+    [organizationId, projectId],
+  );
   const [data, setData] = useState(initialData);
   const [visualAssessments, setVisualAssessments] = useState(() => (
     mergeVisualAssessments([], initialVisualAssessments)
@@ -498,7 +488,7 @@ export default function ProgressClient({
   }
 
   function beginOperation() {
-    if (operationRef.current) return false;
+    if (operationRef.current || contextChanged) return false;
     operationRef.current = true;
     setBusy(true);
     return true;
@@ -538,9 +528,10 @@ export default function ProgressClient({
           authorWorkerId: authorWorkerId || undefined,
         }),
       });
+      const dailyLog = confirmedProgressLog(result);
       setData((current) => ({
         ...current,
-        dailyLogs: [result.dailyLog, ...current.dailyLogs],
+        dailyLogs: [dailyLog, ...current.dailyLogs.filter(item => item.id !== dailyLog.id)],
       }));
       setTitle("");
       setSummary("");
@@ -595,6 +586,7 @@ export default function ProgressClient({
       if (evidenceFileInputRef.current) evidenceFileInputRef.current.value = '';
       setEvidenceStage('saved'); setEvidenceFeedback('Archivo registrado en esta tarea. La evidencia conserva su estado de revisión; no modifica automáticamente el avance.');
     } catch (error) {
+      if (error.code === 'EVIDENCE_CONTEXT_CHANGED') setContextChanged(true);
       if (attempt?.uploadId && isTerminalProtectedUploadClientError(error) && evidenceFailureState(error) !== 'context') {
         try {
           await discardProtectedUploadAttempt(attempt, '/api/progress/upload', { fetchImpl: scopedFetch });
@@ -629,7 +621,9 @@ export default function ProgressClient({
             : current.evidence,
       }));
     } catch (error) {
-      if (error.status === 409) {
+      if (error.code === 'EVIDENCE_CONTEXT_CHANGED') {
+        setNotice(error.message);
+      } else if (error.status === 409) {
         const refreshed = await refreshPrimaryRecords();
         setNotice(refreshed
           ? "El registro cambió en otra sesión. Actualizamos el estado antes de reintentar."
@@ -854,6 +848,8 @@ export default function ProgressClient({
           </p>
         </div>
       </header>
+      <ProgressContextPanel projectName={projectName} changed={contextChanged} busy={busy}
+        hasUnsaved={hasJournalChanges} draftText={[title, summary, caption].filter(Boolean).join('\n\n')} />
       {notice && (
         <div className={styles.notice} role="status" aria-live="polite">
           {notice}
@@ -916,8 +912,8 @@ export default function ProgressClient({
                   </option>
                 ))}
               </select>
-              <button disabled={busy} type="submit">
-                Guardar borrador
+              <button disabled={busy || contextChanged} type="submit">
+                {busy ? "Guardando…" : contextChanged ? "Verificá la obra activa" : "Guardar borrador"}
               </button>
             </form>
           ) : (
@@ -926,7 +922,7 @@ export default function ProgressClient({
         </section>
         {permissions.canManage ? <EvidencePicker tasks={tasks} workers={workers} projectName={projectName}
           file={evidenceFile} taskId={evidenceTaskId} authorId={evidenceAuthorWorkerId} caption={caption}
-          stage={evidenceStage} feedback={evidenceFeedback} savedId={savedEvidenceId} disabled={busy}
+          stage={evidenceStage} feedback={evidenceFeedback} savedId={savedEvidenceId} disabled={busy || contextChanged}
           fileInputRef={evidenceFileInputRef} onFile={selectEvidenceFile} onTask={value => editEvidence(setEvidenceTaskId, value)}
           onAuthor={value => editEvidence(setEvidenceAuthorWorkerId, value)} onCaption={value => editEvidence(setCaption, value)} onSubmit={createEvidence} onReset={resetEvidence}
           onLeave={guardJournalLeave} /> : <section className={styles.panel}><h2>Evidencia de obra</h2><p>Tu rol puede consultar los registros autorizados, pero no cargar archivos.</p></section>}
@@ -949,7 +945,7 @@ export default function ProgressClient({
                 {permissions.canManage && item.status === "DRAFT" && (
                   <div>
                     <button
-                      disabled={busy}
+                      disabled={busy || contextChanged}
                       onClick={() => review(item, "DAILY_LOG", "SUBMITTED")}
                     >
                       Enviar
@@ -962,13 +958,13 @@ export default function ProgressClient({
                 {permissions.canReviewJournal && item.status === "SUBMITTED" && (
                   <div>
                     <button
-                      disabled={busy}
+                      disabled={busy || contextChanged}
                       onClick={() => review(item, "DAILY_LOG", "APPROVED")}
                     >
                       Aprobar
                     </button>
                     <button
-                      disabled={busy}
+                      disabled={busy || contextChanged}
                       onClick={() => review(item, "DAILY_LOG", "REJECTED")}
                     >
                       Rechazar
@@ -1056,13 +1052,13 @@ export default function ProgressClient({
                     {permissions.canReviewJournal && permissions.canReadSourceEvidence && item.status === "PENDING" && (
                       <div className={styles.evidenceActions}>
                         <button
-                          disabled={busy}
+                          disabled={busy || contextChanged}
                           onClick={() => review(item, "EVIDENCE", "APPROVED")}
                         >
                           Aprobar
                         </button>
                         <button
-                          disabled={busy}
+                          disabled={busy || contextChanged}
                           onClick={() => review(item, "EVIDENCE", "REJECTED")}
                         >
                           Rechazar
@@ -1188,7 +1184,7 @@ export default function ProgressClient({
               <option value="RESOLVED">Resuelto</option>
               <option value="REJECTED">Rechazado</option>
             </select>
-            <button disabled={busy} type="button" onClick={reloadTimeline}>
+            <button disabled={busy || contextChanged} type="button" onClick={reloadTimeline}>
               Filtrar
             </button>
           </div>
@@ -1213,7 +1209,7 @@ export default function ProgressClient({
           <p>No hay actividad operativa registrada.</p>
         )}
         {data.page?.hasMore && data.page?.nextBefore && (
-          <button type="button" disabled={busy} onClick={loadMoreTimeline}>
+          <button type="button" disabled={busy || contextChanged} onClick={loadMoreTimeline}>
             Cargar actividad anterior
           </button>
         )}

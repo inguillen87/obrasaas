@@ -1,3 +1,4 @@
+import { assertEvidenceRequestContext, evidenceContextErrorResponse } from '@/lib/evidence-context';
 import {
   AccessError,
   accessErrorResponse,
@@ -19,6 +20,8 @@ import {
 } from "@/lib/progress-journal";
 
 function known(error) {
+  const contextError = evidenceContextErrorResponse(error);
+  if (contextError) return contextError;
   if (error instanceof AccessError) return accessErrorResponse(error);
   if (error instanceof RequestBodyError) return requestBodyErrorResponse(error);
   return progressJournalErrorResponse(error) || projectWritePolicyErrorResponse(error);
@@ -30,6 +33,7 @@ export async function PATCH(request, { params }) {
       return Response.json({ error: 'Origen de solicitud no autorizado.', code: 'PROGRESS_ORIGIN_FORBIDDEN' }, { status: 403, headers: { 'Cache-Control': 'private, no-store' } });
     }
     const access = await getPlatformAccess();
+    assertEvidenceRequestContext(request, access);
     requireTenantPermission(access, "org:execution:manage", {
       subscriptionMode: "write",
     });

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
 import { roleHasPermission } from '../src/lib/tenant-roles.js';
+import { assertEvidenceRequestContext, evidenceContextErrorResponse } from '../src/lib/evidence-context.js';
 const read = file => fs.readFileSync(new URL('../' + file, import.meta.url), 'utf8');
 const source = read('src/app/api/progress/[recordId]/route.js')
   .replace(/import[\s\S]*?from ["'][^"']+["'];\r?\n/g, '')
@@ -11,7 +12,7 @@ class RequestBodyError extends Error {}
 function route(role, { evidence = true } = {}) {
   const calls = { writes: [], reads: 0 };
   const deps = {
-    AccessError, RequestBodyError,
+    AccessError, RequestBodyError, assertEvidenceRequestContext, evidenceContextErrorResponse,
     accessErrorResponse: () => Response.json({ code: 'ROLE_DENIED' }, { status: 403 }),
     requestBodyErrorResponse: () => Response.json({}, { status: 400 }),
     projectWritePolicyErrorResponse: () => null, progressJournalErrorResponse: () => null,
