@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { listCanonicalTasks, serializeCanonicalTask } from '@/lib/canonical-tasks';
 import { SOURCE_EVIDENCE_PERMISSION } from '@/lib/medical-privacy';
 import { getPrisma } from '@/lib/prisma';
+import { withJournalCorrectionLinks } from '@/lib/journal-correction';
 import { listProgressJournal } from '@/lib/progress-journal';
 import { listVisualProgressAssessments } from '@/lib/visual-progress-assessments';
 import { localDateKey } from '@/lib/zoned-time';
@@ -47,6 +48,8 @@ export default async function ProgressPage({ searchParams }) {
   const prisma = getPrisma();
   const params = await searchParams;
   const requestedTaskId = params?.taskId ?? null;
+  const focusedRecordId = params?.recordId ?? null;
+  if (focusedRecordId !== null && (typeof focusedRecordId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,189}$/.test(focusedRecordId) || requestedTaskId || params?.unassigned != null)) notFound();
   if (params?.unassigned != null && params.unassigned !== '1') notFound();
   const unassignedOnly = params?.unassigned === '1';
   if (unassignedOnly && requestedTaskId) notFound();
@@ -65,11 +68,14 @@ export default async function ProgressPage({ searchParams }) {
     canUseVisualProgress
     && hasTenantPermission(access, 'org:tasks:manage')
   );
-  const journal = await listProgressJournal(prisma, {
+  const baseJournal = await listProgressJournal(prisma, {
+    recordId: focusedRecordId,
     taskId: requestedTaskId, unassigned: unassignedOnly,
     projectId: access.project.id,
     includeSourceEvidence: canReadSourceEvidence,
   });
+  if (focusedRecordId && baseJournal.dailyLogs.length !== 1) notFound();
+  const journal = await withJournalCorrectionLinks(prisma, { organizationId: access.organization.id, projectId: access.project.id, journal: baseJournal });
   const visibleEvidenceIds = journal.evidence.map((evidence) => evidence.id);
   const [tasks, workers, visualAssessments] = await Promise.all([
     selectedTask ? Promise.resolve({ tasks: [serializeCanonicalTask(selectedTask)] }) : listCanonicalTasks(prisma, { projectId: access.project.id, limit: 500 }),
@@ -83,8 +89,8 @@ export default async function ProgressPage({ searchParams }) {
       : Promise.resolve({ assessments: [] }),
   ]);
   return (
-    <ProgressClient key={access.organization.id + ":" + access.project.id + ":" + access.databaseUserId + ":" + (requestedTaskId || (unassignedOnly ? "unassigned" : "all"))}
-      filteredTaskId={requestedTaskId} unassignedOnly={unassignedOnly}
+    <ProgressClient key={access.organization.id + ":" + access.project.id + ":" + access.databaseUserId + ":" + (focusedRecordId || requestedTaskId || (unassignedOnly ? "unassigned" : "all"))}
+      filteredTaskId={requestedTaskId} unassignedOnly={unassignedOnly} focusedRecordId={focusedRecordId}
       organizationId={access.organization.id} projectId={access.project.id}
       initialData={journal}
       initialVisualAssessments={visualAssessments.assessments.map(visualAssessmentForClient)}

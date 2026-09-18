@@ -16,6 +16,7 @@ import { evidenceSelectionIssue, evidenceScopeHeaders, evidenceFailureState, req
 import { useWorkspaceLeaveGuard } from '../use-workspace-leave-guard';
 import { createProgressRequest, confirmedProgressLog } from '@/lib/progress-request';
 import ProgressContextPanel from './progress-context-panel';
+import JournalCorrectionDialog from './journal-correction-dialog';
 import { publishFieldInvalidation } from '@/lib/schedule-field-channel';
 import ProgressReviewDialog from './progress-review-dialog';
 import JournalTaskLinkDialog from './journal-task-link-dialog';
@@ -399,7 +400,7 @@ function VisualAssessmentCard({
 }
 
 export default function ProgressClient({
-  filteredTaskId = null, unassignedOnly = false,
+  filteredTaskId = null, unassignedOnly = false, focusedRecordId = null,
   initialData,
   initialVisualAssessments = [],
   tasks,
@@ -414,6 +415,9 @@ export default function ProgressClient({
   const [viewingEvidence, setViewingEvidence] = useState(null);
   const [reviewSelection, setReviewSelection] = useState(null);
   const [linkingRecord, setLinkingRecord] = useState(null);
+  const [correctingId, setCorrectingId] = useState(null);
+  const [correctionDirty, setCorrectionDirty] = useState(false);
+  const [correctionBusy, setCorrectionBusy] = useState(false);
   const [linkDirty, setLinkDirty] = useState(false);
   const [linkBusy, setLinkBusy] = useState(false);
   const [reviewDirty, setReviewDirty] = useState(false);
@@ -459,15 +463,15 @@ export default function ProgressClient({
     (Array.isArray(tasks) ? tasks : []).map((task) => [task.id, task]),
   ), [tasks]);
 
-  const hasJournalChanges = Boolean(title || summary || caption || evidenceFile || reviewDirty || linkDirty);
-  useWorkspaceLeaveGuard({ dirty: hasJournalChanges, busy: busy || linkBusy });
+  const hasJournalChanges = Boolean(title || summary || caption || evidenceFile || reviewDirty || linkDirty || correctionDirty);
+  useWorkspaceLeaveGuard({ dirty: hasJournalChanges, busy: busy || linkBusy || correctionBusy });
   useEffect(() => {
-    const warn = event => { if (hasJournalChanges || busy || linkBusy) { event.preventDefault(); event.returnValue = ''; } };
+    const warn = event => { if (hasJournalChanges || busy || linkBusy || correctionBusy) { event.preventDefault(); event.returnValue = ''; } };
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
-  }, [hasJournalChanges, busy, linkBusy]);
+  }, [hasJournalChanges, busy, linkBusy, correctionBusy]);
   function guardJournalLeave(event) {
-    if (busy || (hasJournalChanges && !window.confirm('Hay datos o un archivo sin confirmar. ¿Salir de la bitácora?'))) event.preventDefault();
+    if (busy || linkBusy || correctionBusy || (hasJournalChanges && !window.confirm('Hay datos o un archivo sin confirmar. ¿Salir de la bitácora?'))) event.preventDefault();
   }
   function selectEvidenceFile(file) {
     if (busy || ['unconfirmed','context'].includes(evidenceStage)) return;
@@ -514,7 +518,7 @@ export default function ProgressClient({
 
   async function refreshPrimaryRecords() {
     try {
-      const latest = await api('/api/progress?limit=50' + (filteredTaskId ? '&taskId=' + encodeURIComponent(filteredTaskId) : unassignedOnly ? '&unassigned=1' : ''));
+      const latest = await api('/api/progress?limit=50' + (filteredTaskId ? '&taskId=' + encodeURIComponent(filteredTaskId) : unassignedOnly ? '&unassigned=1' : '') + (focusedRecordId ? '&recordId=' + encodeURIComponent(focusedRecordId) : ''));
       setData((current) => ({
         ...current,
         dailyLogs: latest.dailyLogs,
@@ -636,7 +640,7 @@ export default function ProgressClient({
         dailyLogs:
           kind === "DAILY_LOG"
             ? current.dailyLogs.map((entry) =>
-                entry.id === item.id ? confirmed : entry,
+                entry.id === item.id ? { ...entry, ...confirmed } : entry.correction?.id === item.id ? { ...entry, correction: { ...entry.correction, title: confirmed.title, status: confirmed.status, revision: confirmed.revision } } : entry,
               )
             : current.dailyLogs,
         evidence:
@@ -825,6 +829,7 @@ export default function ProgressClient({
     if (!beginOperation()) return;
     try {
       const query = new URLSearchParams({ limit: "50" });
+      if (focusedRecordId) query.set("recordId", focusedRecordId);
       if (filteredTaskId) query.set("taskId", filteredTaskId);
       if (unassignedOnly) query.set("unassigned", "1");
       if (timelineKind) query.set("kind", timelineKind);
@@ -849,6 +854,7 @@ export default function ProgressClient({
         limit: "50",
         before: data.page.nextBefore,
       });
+      if (focusedRecordId) query.set("recordId", focusedRecordId);
       if (filteredTaskId) query.set("taskId", filteredTaskId);
       if (unassignedOnly) query.set("unassigned", "1");
       if (timelineKind) query.set("kind", timelineKind);
@@ -884,12 +890,25 @@ export default function ProgressClient({
       {viewingEvidence && <EvidenceViewer key={viewingEvidence.id + ':' + viewingEvidence.revision}
         item={viewingEvidence} organizationId={organizationId} projectId={projectId} projectName={projectName}
         taskTitle={taskById.get(viewingEvidence.taskId)?.title} onClose={() => setViewingEvidence(null)} />}
+      {correctingId && <JournalCorrectionDialog key={correctingId} sourceId={correctingId}
+        organizationId={organizationId} projectId={projectId} projectName={projectName} tasks={tasks}
+        onClose={() => setCorrectingId(null)} onDirtyChange={setCorrectionDirty} onBusyChange={setCorrectionBusy}
+        onSaved={saved => {
+          const showChild = !focusedRecordId && (!unassignedOnly || !saved.taskId) && (!filteredTaskId || filteredTaskId === saved.taskId);
+          setData(current => {
+            const dailyLogs = current.dailyLogs.filter(row => row.id !== saved.id).map(row => row.id === saved.correctionOf.id ? { ...row, correction: { id: saved.id, title: saved.title, status: saved.status, revision: saved.revision } } : row);
+            return { ...current, dailyLogs: showChild ? [saved, ...dailyLogs] : dailyLogs };
+          });
+          publishFieldInvalidation({ organizationId, projectId }); setCorrectingId(null);
+          setNotice(<>Corrección confirmada. <Link href={'/dashboard/progress?recordId=' + encodeURIComponent(saved.id)} onNavigate={guardJournalLeave}>Abrir el parte corregido</Link></>);
+        }} />}
+      {focusedRecordId && <section className={styles.taskInbox}><span>DETALLE Y CONTINUIDAD</span><h2>Un registro, su origen y su revisión</h2><Link href="/dashboard/progress" onNavigate={guardJournalLeave}>Volver a toda la bitácora</Link></section>}
       {linkingRecord && <JournalTaskLinkDialog key={linkingRecord.id + ':' + linkingRecord.revision} record={linkingRecord} tasks={tasks}
         projectName={projectName} projectId={projectId} organizationId={organizationId} onDirtyChange={setLinkDirty} onBusyChange={setLinkBusy}
         onClose={() => setLinkingRecord(null)} onCommit={saved => {
           const remainsVisible = !unassignedOnly && (!filteredTaskId || saved.taskId === filteredTaskId);
           setData(current => ({ ...current,
-            dailyLogs: current.dailyLogs.flatMap(row => row.id === saved.id ? (remainsVisible ? [saved] : []) : [row]),
+            dailyLogs: current.dailyLogs.flatMap(row => row.id === saved.id ? (remainsVisible ? [{ ...row, ...saved }] : []) : [row]),
             timeline: current.timeline.flatMap(row => row.kind === 'DAILY_LOG' && row.id === saved.id ? (remainsVisible ? [{ ...row, taskId: saved.taskId }] : []) : [row]),
           }));
           publishFieldInvalidation({ organizationId, projectId });
@@ -915,7 +934,7 @@ export default function ProgressClient({
           </button>
         </div>
       )}
-      {!unassignedOnly && <div className={styles.grid}>
+      {!unassignedOnly && !focusedRecordId && <div className={styles.grid}>
         <section className={styles.panel}>
           <h2>Nueva bitácora</h2>
           {permissions.canManage ? (
@@ -999,6 +1018,9 @@ export default function ProgressClient({
                     {item.workDate} · {journalStatusLabel(item.status)}
                   </span>
                   <p>{item.summary}</p>
+                  {item.correctionOf && <div className={styles.correctionRelation}><span>ES UNA CORRECCIÓN</span><Link href={'/dashboard/progress?recordId=' + encodeURIComponent(item.correctionOf.id)} onNavigate={guardJournalLeave}>Ver original: {item.correctionOf.title}</Link><small>El original conserva su rechazo y su historial.</small></div>}
+                  {item.correction && <div className={styles.correctionRelation}><span>TIENE UNA CORRECCIÓN</span><Link href={'/dashboard/progress?recordId=' + encodeURIComponent(item.correction.id)} onNavigate={guardJournalLeave}>Continuar en: {item.correction.title}</Link><small>{journalStatusLabel(item.correction.status)} · v{item.correction.revision}</small></div>}
+                  {permissions.canManage && permissions.canReadSchedule && item.status === 'REJECTED' && !item.correction && <button className={styles.correctAction} type="button" disabled={busy || contextChanged || correctionBusy} onClick={() => setCorrectingId(item.id)}>Preparar corrección</button>}
                   <p className={styles.taskRelation}>{item.taskId ? 'Tarea: ' + (taskById.get(item.taskId)?.title || item.taskId) : 'Sin tarea vinculada'}</p>
                   {permissions.canManage && permissions.canReadSchedule && item.status === 'DRAFT' && <button type="button" disabled={busy || contextChanged} onClick={() => setLinkingRecord(item)}>{item.taskId ? 'Cambiar tarea del borrador' : 'Vincular a una tarea'}</button>}
 
@@ -1038,7 +1060,7 @@ export default function ProgressClient({
           </ul>
         )}
       </section>
-      {!unassignedOnly && <section className={styles.panel}>
+      {!unassignedOnly && !focusedRecordId && <section className={styles.panel}>
         <h2>Evidencia pendiente/revisada</h2>
         {data.evidence.length === 0 ? (
           <p>No hay evidencia.</p>

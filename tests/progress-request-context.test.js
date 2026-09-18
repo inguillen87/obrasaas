@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { createProgressRequest, confirmedProgressLog } from '../src/lib/progress-request.js';
+import { withJournalCorrectionLinks } from '../src/lib/journal-correction.js';
 import { assertEvidenceRequestContext, evidenceContextErrorResponse } from '../src/lib/evidence-context.js';
 const scope={organizationId:'org-A',projectId:'project-A'};
 const source=path=>readFileSync(new URL('../'+path,import.meta.url),'utf8');
@@ -9,7 +10,7 @@ class AccessError extends Error {}
 class RequestBodyError extends Error {}
 function fixture(context=scope, reviewer=true){
  const calls={data:0,read:0,write:0,review:0};
- const deps={AccessError,RequestBodyError,assertEvidenceRequestContext,evidenceContextErrorResponse,
+ const deps={withJournalCorrectionLinks,AccessError,RequestBodyError,assertEvidenceRequestContext,evidenceContextErrorResponse,
   accessErrorResponse:()=>Response.json({}, {status:403}),requestBodyErrorResponse:()=>Response.json({}, {status:400}),
   protectedUploadErrorResponse:()=>null,projectWritePolicyErrorResponse:()=>null,progressJournalErrorResponse:()=>null,
   SOURCE_EVIDENCE_PERMISSION:'org:field:evidence:read',
