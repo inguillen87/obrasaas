@@ -169,10 +169,11 @@ export async function createProgressJournalRecord(prisma, {
       const operationKey = requiredText(input.operationKey, 'operationKey', 190);
       const operationKeyHash = protectedUploadClaimFingerprint({ projectId: currentScope.projectId, kind: 'EVIDENCE', operationKey });
       const authorWorkerId = input.authorWorkerId ? requiredText(input.authorWorkerId, 'authorWorkerId', 190) : null;
-      const requestFingerprint = protectedUploadClaimFingerprint({ taskId, capturedAt: capturedAt.toISOString(), caption, authorWorkerId, uploadId });
-      const replay = await tx.progressEvidence.findFirst({ where: { projectId: currentScope.projectId, sourceOperationKeyHash: operationKeyHash } });
+      const requestFingerprint = protectedUploadClaimFingerprint({ taskId, capturedAt: capturedAt.toISOString(), caption, authorWorkerId, uploadId, operationKeyHash });
+      // Dashboard claims are identified by their protected upload. The source*
+      // bundle belongs to WhatsApp provenance and must stay null for manual input.
+      const replay = await tx.progressEvidence.findFirst({ where: { projectId: currentScope.projectId, protectedUploadId: uploadId, sourceConversationId: null, sourceMessageId: null } });
       if (replay) {
-        if (replay.sourceRequestFingerprint !== requestFingerprint) throw new ProgressJournalError('La operationKey ya fue usada con otro contenido.', 'IDEMPOTENCY_REPLAY_MUTATED', 409);
         await assertProtectedUploadReplay(tx, { scope: currentScope, actorId: actor, purpose: PROTECTED_UPLOAD_PURPOSE.PROGRESS, uploadId, entityId: replay.id, entityProtectedUploadId: replay.protectedUploadId, claimFingerprint: requestFingerprint, entityHasAttachment: Boolean(replay.media) });
         return {
           evidence: serializeProgressEvidence(replay, { includeSourceEvidence }),
@@ -187,7 +188,7 @@ export async function createProgressJournalRecord(prisma, {
         purpose: PROTECTED_UPLOAD_PURPOSE.PROGRESS,
         uploadId,
         claimFingerprint: requestFingerprint,
-        createEntity: (media) => tx.progressEvidence.create({ data: { projectId: currentScope.projectId, taskId, authorWorkerId, capturedAt, caption, media, protectedUploadId: uploadId, sourceOperationKeyHash: operationKeyHash, sourceRequestFingerprint: requestFingerprint } }),
+        createEntity: (media) => tx.progressEvidence.create({ data: { projectId: currentScope.projectId, taskId, authorWorkerId, capturedAt, caption, media, protectedUploadId: uploadId } }),
       });
       await tx.auditLog.create({ data: { organizationId: currentScope.organizationId, actorId: actor, action: 'progress.evidence.created', entityType: 'ProgressEvidence', entityId: item.id, metadata: { projectId: currentScope.projectId, taskId } } });
       return {

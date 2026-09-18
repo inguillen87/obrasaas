@@ -18,3 +18,10 @@ Pruebas unitarias de MIME, límites, respuestas incompletas, timeout, errores HT
 Estos ensayos locales no certifican almacenamiento productivo, WhatsApp, Android/iOS físicos ni aislamiento de todos los roles con cuentas distintas. La prueba publicada debe registrarse aparte con resultado real y commit. No se generaron invitaciones, mensajes externos ni efectos económicos mediante esta entrega.
 
 Referencias técnicas consultadas: documentación local de Next.js instalado; MDN input type=file (https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/input/file); límites de Vercel Functions (https://vercel.com/docs/functions/limitations).
+
+## Compatibilidad del recorrido real
+El adaptador de almacenamiento reconoce también un store conectado en runtime Vercel. El SDK instalado obtiene y valida la autenticación administrada; no se copian tokens de producción ni se crea otro almacén. La presencia de configuración no se usa como evidencia de una carga exitosa.
+
+Las cargas manuales mantienen nulo el bundle source* reservado a procedencia WhatsApp. Su repetición se resuelve mediante protectedUploadId, el propietario de la reserva y claimFingerprint (incluye la identidad de operación y el contenido). Se conservan el índice único por obra/carga, el bloqueo transaccional y las restricciones de procedencia de PostgreSQL, sin modificar migraciones.
+
+Se agregó una regresión que aplica la regla source_bundle del catálogo PostgreSQL al modelo de prueba y ejecuta claim/replay reales del dominio. También se comprobó en la base de preview una inserción sintética con el bundle manual correcto, revertida dentro de la misma operación y sin conservar el registro de ensayo. Esa comprobación no se presenta como una aprobación ni como un archivo publicado.
