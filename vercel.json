@@ -1,7 +1,7 @@
 {
   "version": 2,
   "framework": "nextjs",
-  "buildCommand": "npm run build:vercel",
+  "buildCommand": "node scripts/inspect-release-configuration.mjs && npm run build:vercel",
   "crons": [
     {
       "path": "/api/cron/webhooks",
