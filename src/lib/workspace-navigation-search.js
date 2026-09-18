@@ -1,6 +1,6 @@
 const HINTS = Object.freeze({
   'field-mobile': ['Registrar desde el terreno', 'parte faltante incidencia mejora celular movil'],
-  summary: ['Resumen de la obra activa', 'inicio resumen hoy direccion'],
+  summary: ['Resumen de la obra activa', 'inicio resumen hoy direccion centro operaciones pendientes ciclos'],
   whatsapp: ['Operación del canal de obra', 'mensajes chat terreno'],
   inbox: ['Conversaciones y entregas', 'whatsapp chat mensajes audio voz'],
   gantt: ['Tareas, dependencias y línea base', 'planificacion gantt tareas fechas calendario'],

@@ -19,6 +19,7 @@ import {
 import GanttPlanner from './gantt-planner';
 import ScheduleFieldPanel from './schedule-field-panel';
 import OperationalPulse from './operational-pulse';
+import OperationsCenter from './operations-center';
 import PlatformReadiness from './platform-readiness';
 import ScheduleSnapshotsPanel from './schedule-snapshots-panel';
 import StockpilePanel from './stockpile-panel';
@@ -1679,6 +1680,8 @@ export default function Dashboard({ platformAccess, initialState, initialMessage
           
           {/* SECTION 1: DASHBOARD */}
           <section id="sec-dashboard" className={`content-section animate-fade-in-up ${activeTab === 'sec-dashboard' ? 'active' : ''}`}>
+            {activeTab === 'sec-dashboard' && <OperationsCenter key={platformAccess.organization.id + ':' + platformAccess.project.id}
+              organizationId={platformAccess.organization.id} projectId={platformAccess.project.id} projectName={platformAccess.project.name} />}
             <OperationalPulse
               project={{
                 ...platformAccess.project,

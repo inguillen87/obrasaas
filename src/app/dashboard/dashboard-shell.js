@@ -8,6 +8,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ObraSaasLogo } from '@/app/brand/brand-logo';
 import { dashboardDestinationIsActive } from '@/lib/dashboard-navigation';
 import WorkspaceNavigator, { NavigationLauncher } from './workspace-navigator';
+import { groupWorkspaceByCycle } from '@/lib/workspace-cycle-groups';
 import { buildNavigationCatalog } from '@/lib/workspace-navigation-search';
 import { requestWorkspaceNavigation } from '@/lib/workspace-leave-policy';
 
@@ -72,6 +73,7 @@ function visibleDestinations(destinations, permissions) {
 function NavigationGroup({
   destinations,
   label,
+  description,
   location,
   onNavigate,
   pendingApprovalCount,
@@ -82,8 +84,9 @@ function NavigationGroup({
     onNavigate?.();
   };
   return (
-    <section className="dashboard-nav-group">
+    <section className="dashboard-nav-group" aria-label={label}>
       <p className="dashboard-nav-label">{label}</p>
+      {description && <p className="dashboard-nav-description">{description}</p>}
       <ul className="nav-menu">
         {destinations.map((destination) => {
           const active = dashboardDestinationIsActive(destination, location);
@@ -282,11 +285,10 @@ export default function DashboardShell({ children, model }) {
   }
 
   const closeSidebarForSearch = useCallback(() => setMobileOpen(false), []);
-  const navigationCatalog = buildNavigationCatalog([
-    { label: 'Obra', destinations: workspaceDestinations },
-    { label: 'Gestión', destinations: controlDestinations },
-    { label: 'Explorar', destinations: exploreDestinations },
-  ], model.permissions);
+  const cycleGroups = groupWorkspaceByCycle([...workspaceDestinations, ...controlDestinations, ...exploreDestinations]);
+  const navigationCatalog = buildNavigationCatalog(cycleGroups, model.permissions);
+  const activeCycle = cycleGroups.find(group => group.destinations.some(destination => dashboardDestinationIsActive(destination, location)));
+  const activeDestination = activeCycle?.destinations.find(destination => dashboardDestinationIsActive(destination, location));
   return (
     <div className="app-container dashboard-shell">
       <WorkspaceNavigator catalog={navigationCatalog} projectName={model.project.name} roleLabel={model.identity.tenantRoleLabel} onOpen={closeSidebarForSearch} />
@@ -393,30 +395,9 @@ export default function DashboardShell({ children, model }) {
         </section>
 
         <nav className="dashboard-shell-nav">
-          <NavigationGroup
-            destinations={workspaceDestinations}
-            label="Obra"
-            location={location}
-            onNavigate={() => setMobileOpen(false)}
-            pendingApprovalCount={pendingApprovalCount}
-            unreadNotificationCount={unreadNotificationCount}
-          />
-          <NavigationGroup
-            destinations={controlDestinations}
-            label="Gestión"
-            location={location}
-            onNavigate={() => setMobileOpen(false)}
-            pendingApprovalCount={pendingApprovalCount}
-            unreadNotificationCount={unreadNotificationCount}
-          />
-          <NavigationGroup
-            destinations={exploreDestinations}
-            label="Explorar"
-            location={location}
-            onNavigate={() => setMobileOpen(false)}
-            pendingApprovalCount={0}
-            unreadNotificationCount={0}
-          />
+          {cycleGroups.map(group => <NavigationGroup key={group.key} destinations={group.destinations}
+            label={group.label} description={group.description} location={location}
+            onNavigate={() => setMobileOpen(false)} pendingApprovalCount={pendingApprovalCount} unreadNotificationCount={unreadNotificationCount} />)}
           {model.identity.isSuperadmin && (
             <NavigationGroup
               destinations={[{
@@ -503,6 +484,7 @@ export default function DashboardShell({ children, model }) {
         role="main"
         tabIndex="-1"
       >
+        {activeDestination && <div className="workspace-cycle-location" aria-label="Ubicación en el espacio de trabajo"><span>{activeCycle.label}</span><i aria-hidden="true">/</i><strong>{activeDestination.label}</strong></div>}
         {children}
       </div>
     </div>
