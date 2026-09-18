@@ -1,12 +1,15 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { OrganizationSwitcher, UserButton, useUser } from '@clerk/nextjs';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 import { ObraSaasLogo } from '@/app/brand/brand-logo';
 import { dashboardDestinationIsActive } from '@/lib/dashboard-navigation';
+import WorkspaceNavigator, { NavigationLauncher } from './workspace-navigator';
+import { buildNavigationCatalog } from '@/lib/workspace-navigation-search';
+import { requestWorkspaceNavigation } from '@/lib/workspace-leave-policy';
 
 const PROJECT_STATUS_LABELS = Object.freeze({
   ACTIVE: 'Activa',
@@ -74,6 +77,10 @@ function NavigationGroup({
   pendingApprovalCount,
   unreadNotificationCount,
 }) {
+  const navigate = event => {
+    if (!requestWorkspaceNavigation('route')) { event.preventDefault(); return; }
+    onNavigate?.();
+  };
   return (
     <section className="dashboard-nav-group">
       <p className="dashboard-nav-label">{label}</p>
@@ -88,7 +95,7 @@ function NavigationGroup({
                   aria-current={active ? 'page' : undefined}
                   className="nav-button-link"
                   href={destination.href}
-                  onClick={onNavigate}
+                  onClick={navigate}
                 >
                   <i className={destination.icon} aria-hidden="true" />
                   <span>{destination.label}</span>
@@ -98,13 +105,14 @@ function NavigationGroup({
                   aria-current={active ? 'page' : undefined}
                   className="nav-button-link"
                   href={destination.href}
-                  onClick={onNavigate}
+                  prefetch={false}
+                  onNavigate={navigate}
                 >
                   <i className={destination.icon} aria-hidden="true" />
                   <span>{destination.label}</span>
                   {count > 0 && (
                     <span
-                      aria-label={`${count} aprobaciones pendientes`}
+                      aria-label={`${count} ${destination.key === 'notifications' ? 'notificaciones sin leer' : 'aprobaciones pendientes'}`}
                       className="nav-count-badge"
                     >
                       {count > 99 ? '99+' : count}
@@ -247,6 +255,9 @@ export default function DashboardShell({ children, model }) {
 
   async function switchProject(event) {
     const projectId = event.target.value;
+    if (projectId !== model.project.id && !requestWorkspaceNavigation('project')) {
+      event.target.value = model.project.id; setProjectSwitchError('Se conservó la obra actual. Terminá o guardá el trabajo pendiente.'); return;
+    }
     setSelectedProjectId(projectId);
     setProjectSwitchError('');
     if (projectId === model.project.id) return;
@@ -270,8 +281,15 @@ export default function DashboardShell({ children, model }) {
     }
   }
 
+  const closeSidebarForSearch = useCallback(() => setMobileOpen(false), []);
+  const navigationCatalog = buildNavigationCatalog([
+    { label: 'Obra', destinations: workspaceDestinations },
+    { label: 'Gestión', destinations: controlDestinations },
+    { label: 'Explorar', destinations: exploreDestinations },
+  ], model.permissions);
   return (
     <div className="app-container dashboard-shell">
+      <WorkspaceNavigator catalog={navigationCatalog} projectName={model.project.name} roleLabel={model.identity.tenantRoleLabel} onOpen={closeSidebarForSearch} />
       <a className="dashboard-skip-link" href="#dashboard-content">Saltar al contenido</a>
       <aside
         aria-label="Navegación principal de ObraSaaS"
@@ -302,6 +320,7 @@ export default function DashboardShell({ children, model }) {
           </button>
         </div>
 
+        <NavigationLauncher />
         {model.identity.isSuperadmin ? (
           <div className="internal-workspace" aria-label="Workspace interno de plataforma">
             <span className="internal-workspace__eyebrow">Control plane</span>
@@ -472,6 +491,7 @@ export default function DashboardShell({ children, model }) {
           <small>{model.organization.name}</small>
           <strong>{model.project.name}</strong>
         </div>
+        <NavigationLauncher compact />
         <UserButton afterSignOutUrl="/" />
       </header>
 

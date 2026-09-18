@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { FIELD_REPORT_CATEGORIES, normalizeFieldReport } from '@/lib/field-report';
 import { tokens } from '@/lib/design-system';
 import PwaControls, { useDeviceOnline } from './pwa-controls';
+import { useWorkspaceLeaveGuard } from '../use-workspace-leave-guard';
 import styles from './field.module.css';
 const empty = date => ({ category: 'PROGRESS', title: '', location: '', details: '', workDate: date });
 export default function FieldClient({ project, workDate, counts, channel, permissions }) {
@@ -13,6 +14,7 @@ export default function FieldClient({ project, workDate, counts, channel, permis
   const inFlight = useRef(false), attempt = useRef(null);
   const online = useDeviceOnline();
   const dirty = Boolean(draft.title || draft.location || draft.details);
+  useWorkspaceLeaveGuard({ dirty: dirty || unconfirmed, busy, message: 'Hay un parte pendiente de guardar o confirmar. ¿Salir de esta obra o sección?' });
   const category = FIELD_REPORT_CATEGORIES.find(item => item.key === draft.category);
   useEffect(() => {
     const warn = event => { if (dirty || unconfirmed) { event.preventDefault(); event.returnValue = ''; } };
@@ -50,7 +52,12 @@ export default function FieldClient({ project, workDate, counts, channel, permis
     if ((dirty || unconfirmed) && !window.confirm('Hay un parte sin confirmar o cambios sin guardar. ¿Salir de esta pantalla?')) event.preventDefault();
   }
   return <div className={styles.shell} style={{ '--field-bg': tokens.colors.bg.primary, '--field-accent': tokens.colors.accent.primary }}>
-    <header className={styles.header}><p>{project.organization}</p><h1>Campo móvil</h1><h2>{project.name}</h2><p>Reportar una vez. Revisar y continuar en la misma obra.</p></header>
+    <header className={styles.header}>
+      <div className={styles.eyebrow}><span className={styles.brandDot} /> OPERACIÓN DE CAMPO <span>{project.organization}</span></div>
+      <div className={styles.heroRow}><div><h1>Campo móvil</h1><p className={styles.heroDescription}>Una novedad. Un registro. Seguimiento en la misma obra.</p></div>
+        <a className={styles.quickCreate} href="#report-title"><span aria-hidden="true">＋</span> Nuevo parte</a></div>
+      <div className={styles.projectPill}><i className="fa-solid fa-building" aria-hidden="true" /><h2>{project.name}</h2><span>{permissions.write ? 'Captura habilitada' : 'Solo lectura'}</span></div>
+    </header>
     <PwaControls />
     <nav className={styles.actions} aria-label="Acciones de campo">
       <Link onNavigate={guardNavigation} href="/dashboard/progress#capture-evidence"><strong>{permissions.write ? 'Foto / evidencia' : 'Ver evidencias'}</strong><span>Adjuntar a una tarea de la obra</span></Link>
@@ -59,7 +66,8 @@ export default function FieldClient({ project, workDate, counts, channel, permis
       {permissions.inbox && <Link onNavigate={guardNavigation} href="/dashboard/inbox"><strong>Bandeja WhatsApp</strong><span>Conversaciones del canal de la obra</span></Link>}
     </nav>
     <section className={styles.card} aria-labelledby="report-title">
-      <h2 id="report-title">Nuevo parte de campo</h2>
+      <div className={styles.reportHeading}><div><span className={styles.sectionEyebrow}>REGISTRO ESTRUCTURADO</span><h2 id="report-title" tabIndex={-1}>Nuevo parte de campo</h2></div><span className={styles.draftBadge}>{busy ? 'Guardando' : unconfirmed ? 'Por confirmar' : saved ? 'Guardado' : 'Borrador'}</span></div>
+      <ol className={styles.journey} aria-label="Circuito del parte"><li aria-current={!saved ? 'step' : undefined}><span>01</span> Registrar</li><li aria-current={saved ? 'step' : undefined}><span>02</span> Enviar a revisión</li><li><span>03</span> Decisión autorizada</li></ol>
       <p>Se guarda como borrador en la bitácora. No cambia stock, costos ni avance aprobado automáticamente.</p>
       {!permissions.write && <p role="status">Tu acceso o el estado de la obra es de solo lectura. El responsable puede revisar los permisos.</p>}
       {!online && <p className={styles.warning} role="status">Podés redactar en esta pantalla, pero necesitás conexión para guardar. No cierres la pestaña: todavía no hay una cola offline de partes.</p>}
@@ -67,8 +75,14 @@ export default function FieldClient({ project, workDate, counts, channel, permis
       {error && <p className={styles.warning} role="alert">{error}</p>}
       <form onSubmit={save}>
         <fieldset disabled={!permissions.write || busy || unconfirmed} className={styles.fields}>
-          <label>Tipo de parte<select value={draft.category} onChange={e => field('category', e.target.value)}>{FIELD_REPORT_CATEGORIES.map(item => <option value={item.key} key={item.key}>{item.label}</option>)}</select></label>
-          <p className={styles.hint}>{category.help}</p>
+          <div className={styles.categoryHeader}><strong>¿Qué necesitás informar?</strong><span>Elegí el tipo de novedad</span></div>
+          <div className={styles.categoryGrid} role="group" aria-label="Tipo de parte">
+            {FIELD_REPORT_CATEGORIES.map((item, index) => <label key={item.key} className={`${styles.category} ${draft.category === item.key ? styles.categorySelected : ''}`}>
+              <input type="radio" name="report-category" value={item.key} checked={draft.category === item.key} onChange={() => field('category', item.key)} />
+              <i aria-hidden="true" className={['fa-solid fa-arrow-trend-up', 'fa-solid fa-box-open', 'fa-solid fa-triangle-exclamation', 'fa-solid fa-lightbulb'][index]} />
+              <span>{item.label}</span><small>{item.help}</small>
+            </label>)}
+          </div>
           <label>Título<input name="title" value={draft.title} required maxLength={160} placeholder="Ej.: falta cemento para la mampostería" onChange={e => field('title', e.target.value)} /></label>
           <div className={styles.twoColumns}>
             <label>Sector o ubicación<input name="location" value={draft.location} required maxLength={240} placeholder="Ej.: planta baja, sector norte" onChange={e => field('location', e.target.value)} /></label>

@@ -4,6 +4,7 @@ import { Badge, Button, EmptyState, GlassCard, PageHeader, tokens } from '@/lib/
 import Link from 'next/link';
 import { INSPECTION_STATUS_LABELS, INSPECTION_ACTION_LABELS, inspectionDraftChanged, inspectionReadiness, inspectionNextStep } from '@/lib/inspection-workflow-view';
 import styles from './workspace.module.css';
+import { useWorkspaceLeaveGuard } from '../use-workspace-leave-guard';
 
 const STATUS = INSPECTION_STATUS_LABELS;
 const RESULTS = { PENDING: 'Pendiente', PASS: 'Conforme', FAIL: 'No conforme', NA: 'No aplica' };
@@ -37,6 +38,7 @@ export default function InspectionWorkspace({ projectName, templates, canManage,
   const dirty = inspectionDraftChanged(draft, baseline);
   const reviewDirty = record?.status === 'SUBMITTED' && reviewNotes !== (record.reviewNotes || '');
   const hasUnsaved = dirty || reviewDirty;
+  useWorkspaceLeaveGuard({ dirty: hasUnsaved, busy });
   const readiness = inspectionReadiness(draft);
   const nextStep = inspectionNextStep({ record, draft, dirty, canManage, canReview });
   const confirmDiscard = () => !hasUnsaved || window.confirm('Hay cambios sin guardar. ¿Descartarlos y continuar?');

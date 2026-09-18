@@ -35,3 +35,29 @@
 .links a { min-height: 44px; display: inline-flex; align-items: center; padding: 6px 10px; }
 @media (max-width: 520px) { .twoColumns { grid-template-columns: minmax(0, 1fr); } .actions a { padding: 14px; } }
 @media (prefers-reduced-motion: reduce) { .shell *, .shell *::before, .shell *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+
+/* Operational field hierarchy; colors follow the existing Obsidian palette. */
+.header { padding: 8px 0 22px; }
+.eyebrow { display:flex; align-items:center; flex-wrap:wrap; gap:8px; color:#cbd5e1; font-size:.66rem; letter-spacing:.11em; font-weight:700; }
+.eyebrow > span:last-child { margin-left:auto; color:#94a3b8; letter-spacing:0; font-weight:400; }
+.brandDot { width:7px; height:7px; border-radius:50%; background:var(--field-accent); box-shadow:0 0 18px rgba(245,158,11,.35); }
+.heroRow { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:20px 0; }
+.header .heroDescription { margin:6px 0 0; max-width:480px; }
+.header h1 { font-size:clamp(2rem,4vw,2.75rem); letter-spacing:-.045em; }
+.quickCreate { display:inline-flex; align-items:center; gap:8px; flex-shrink:0; min-height:46px; padding:10px 16px; color:#060913; background:var(--field-accent); border-radius:10px; text-decoration:none; font-size:.85rem; font-weight:750; }
+.projectPill { display:flex; align-items:center; flex-wrap:wrap; gap:10px; padding:14px 16px; background:linear-gradient(100deg,rgba(245,158,11,.07),transparent); border:1px solid rgba(245,158,11,.19); border-radius:12px; }
+.projectPill i { color:#fbbf24; }.projectPill h2 { flex:1; font-size:.92rem; line-height:1.5; }.projectPill > span { color:#94a3b8; font-size:.75rem; }
+.reportHeading { display:flex; gap:12px; align-items:center; justify-content:space-between; }.reportHeading h2 { margin:6px 0 0; }
+.sectionEyebrow { font-size:.64rem; letter-spacing:.12em; color:#94a3b8; font-weight:700; }
+.draftBadge { padding:5px 10px; border:1px solid #475569; border-radius:20px; color:#cbd5e1; font-size:.72rem; white-space:nowrap; }
+.journey { display:flex; list-style:none; padding:16px 0; margin:16px 0; gap:10px; border-top:1px solid rgba(255,255,255,.08); border-bottom:1px solid rgba(255,255,255,.08); }
+.journey li { flex:1; display:flex; gap:8px; align-items:center; font-size:.74rem; color:#94a3b8; line-height:1.4; }.journey li > span { font-size:.68rem; border-radius:6px; padding:5px; background:#1e293b; }.journey li[aria-current] { color:#fbbf24; }.journey li[aria-current] > span { background:rgba(245,158,11,.15); }
+.categoryHeader { display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:space-between; }.categoryHeader strong { font-size:.9rem; }.categoryHeader > span { font-size:.76rem; color:#94a3b8; }
+.categoryGrid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.fields .category { position:relative; display:grid; gap:8px; padding:16px; border:1px solid rgba(255,255,255,.12); border-radius:12px; background:#060913; cursor:pointer; }
+.fields .category input { position:absolute; width:1px; height:1px; min-height:0; padding:0; margin:0; opacity:0; }
+.category:has(input:focus-visible) { outline:3px solid var(--field-accent); outline-offset:3px; }
+.category i { color:#94a3b8; font-size:1.1rem; }.category > span { font-weight:700; }.category small { color:#94a3b8; font-size:.75rem; line-height:1.5; }
+.fields .categorySelected { border-color:var(--field-accent); background:rgba(245,158,11,.055); }.categorySelected i { color:#fbbf24; }.category:has(input:disabled) { cursor:not-allowed; }
+@media (max-width:560px) { .heroRow { gap:12px; }.quickCreate { padding:10px;font-size:.76rem; }.header .heroDescription { font-size:.88rem; }.eyebrow > span:last-child { width:100%;margin-left:15px; }.projectPill > span { width:100%;padding-left:24px; }.journey { gap:8px; }.journey li { flex-direction:column;align-items:flex-start;font-size:.68rem; }.fields .category { padding:12px; }.category small { font-size:.72rem; } }
+@media (max-width:360px) { .heroRow { align-items:flex-start; flex-direction:column; }.quickCreate { min-height:44px; }.categoryGrid { gap:8px; } }
