@@ -21,7 +21,7 @@ export default function EvidencePicker({ tasks, workers, projectName, file, task
   const locked = disabled || ['uploading', 'attaching', 'unconfirmed', 'context'].includes(stage);
   const issue = file ? evidenceSelectionIssue(file) : null;
   const task = tasks.find(item => item.id === taskId);
-  const canSend = file && !issue && task && !disabled && !['uploading', 'attaching', 'context'].includes(stage);
+  const canSend = file && !issue && task && !disabled && !['uploading', 'attaching'].includes(stage);
   return <section className={styles.capture} id="capture-evidence" aria-labelledby={pickerId + '-title'}>
     <header><span className={styles.eyebrow}>EVIDENCIA DE OBRA</span><h2 id={pickerId + '-title'}>De la foto a la revisión</h2><p>{projectName}</p></header>
     <ol className={styles.steps} aria-label="Etapas de la evidencia"><li aria-current={['ready','error'].includes(stage) ? 'step' : undefined}>01 · Preparar</li><li aria-current={stage === 'uploading' ? 'step' : undefined}>02 · Transferir</li><li aria-current={stage === 'attaching' ? 'step' : undefined}>03 · Registrar</li><li aria-current={stage === 'saved' ? 'step' : undefined}>04 · Revisar</li></ol>
@@ -48,7 +48,7 @@ export default function EvidencePicker({ tasks, workers, projectName, file, task
       {stage === 'saved' && savedId && <a className={styles.savedLink} href={'#evidence-' + encodeURIComponent(savedId)}>Ver evidencia guardada y su estado</a>}
       {['uploading','attaching'].includes(stage) && <p role="status" className={styles.processing}>{EVIDENCE_STAGES[stage]} No cierres esta pantalla.</p>}
       {['unconfirmed','context'].includes(stage) && <p>La selección queda protegida para no duplicar archivos. La transferencia o el registro podrían haberse completado; no los damos por confirmados.</p>}
-      <button className={styles.submit} type="submit" disabled={!canSend}>{stage === 'unconfirmed' ? 'Reintentar la misma evidencia' : ['uploading','attaching'].includes(stage) ? EVIDENCE_STAGES[stage] : 'Guardar evidencia para revisión'}</button>
+      <button className={styles.submit} type="submit" disabled={!canSend}>{stage === 'context' ? 'Reintentar en la obra original' : stage === 'unconfirmed' ? 'Reintentar la misma evidencia' : ['uploading','attaching'].includes(stage) ? EVIDENCE_STAGES[stage] : 'Guardar evidencia para revisión'}</button>
       {file && !locked && <button className={styles.reset} type="button" onClick={onReset}>Limpiar selección</button>}
     </form>
     <p className={styles.disclaimer}>La revisión de esta evidencia no certifica automáticamente avance, calidad estructural ni pagos. No adjuntes documentos personales o médicos en este circuito.</p>

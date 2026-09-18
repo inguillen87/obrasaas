@@ -41,6 +41,7 @@ const server = createServer((request, response) => {
       if (attachRequests === 1) {
         response.writeHead(503); response.end(JSON.stringify({ error: 'Respuesta de registro incierta (ensayo)' })); return;
       }
+      if (attachRequests === 2) { response.writeHead(409); response.end(JSON.stringify({ code: 'EVIDENCE_CONTEXT_CHANGED', error: 'Volvé a la obra original (ensayo)' })); return; }
       response.end(JSON.stringify({ evidence: { id: 'fixture-evidence', taskId: body.taskId, caption: body.caption, capturedAt: body.capturedAt, status: 'PENDING', revision: 0, attachment: { available: false } } }));
     }); return;
   }
@@ -74,9 +75,12 @@ try {
   await expect(page.getByText('Resultado por confirmar', { exact: true })).toBeVisible();
   await expect(fileInput).toBeDisabled(); await expect(page.getByLabel('Tarea vinculada a la evidencia', { exact: true })).toBeDisabled();
   await page.getByRole('button', { name: 'Reintentar la misma evidencia', exact: true }).click();
+  await expect(page.getByText('Verificá la sesión y la obra', { exact: true })).toBeVisible();
+  await expect(fileInput).toBeDisabled();
+  await page.getByRole('button', { name: 'Reintentar en la obra original', exact: true }).click();
   await expect(page.getByText('Evidencia guardada', { exact: true })).toBeVisible();
-  assert.equal(uploads, 1); assert.equal(attachRequests, 2);
-  assert.deepEqual(operations[0], operations[1]);
+  assert.equal(uploads, 1); assert.equal(attachRequests, 3);
+  assert.deepEqual(operations[0], operations[1]); assert.deepEqual(operations[1], operations[2]);
   assert.ok(headersSeen.every(item => item.project === 'fixture-project' && item.organization === 'fixture-org'));
   await expect(page.locator('#evidence-fixture-evidence')).toHaveCount(1);
   await expect(page.getByRole('button', { name: 'Aprobar', exact: true })).toHaveCount(0);
@@ -93,7 +97,7 @@ try {
   }
   assert.deepEqual(errors, []);
   const result = { result: 'PASS', environment: 'local-synthetic-http', realClientComponent: true, nativeFileChooser: true,
-    localPreview: true, invalidFileBlocked: true, uploads, attachRequests, sameIdempotentRetry: true, scopeHeaders: true,
+    localPreview: true, invalidFileBlocked: true, uploads, attachRequests, sameIdempotentRetry: true, scopeHeaders: true, explicitContextRecovery: true,
     reviewControlsAbsentForCaptureRole: true, captureWidths: widths, pageErrors: 0, limits: 'Synthetic provider/server; no live storage, phone or tenant authorization certification.' };
   writeFileSync(resolve(output, 'result.json'), JSON.stringify(result, null, 2)); console.log(JSON.stringify(result));
 } finally { await browser?.close(); await new Promise(done => server.close(done)); }
