@@ -1,17 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   discardProtectedUploadAttempt,
   isProtectedUploadFileSizeAllowed,
   isTerminalProtectedUploadClientError,
   protectedUploadAttemptForPayload,
   protectedUploadFileIdentity,
-  protectedUploadFileSizeMessage,
   protectedUploadPayloadKey,
   rememberProtectedUploadId,
 } from "@/lib/protected-upload-policy";
+import EvidencePicker from './evidence-picker';
+import { evidenceSelectionIssue, evidenceScopeHeaders, evidenceFailureState, requestEvidenceStep } from '@/lib/evidence-capture-policy';
+import { useWorkspaceLeaveGuard } from '../use-workspace-leave-guard';
 import styles from "./progress.module.css";
 
 const JOURNAL_STATUS_LABELS = Object.freeze({
@@ -412,6 +414,8 @@ export default function ProgressClient({
   workers,
   permissions,
   projectName,
+  organizationId,
+  projectId,
   initialWorkDate,
 }) {
   const [data, setData] = useState(initialData);
@@ -428,6 +432,10 @@ export default function ProgressClient({
   const [evidenceTaskId, setEvidenceTaskId] = useState("");
   const [caption, setCaption] = useState("");
   const [evidenceFile, setEvidenceFile] = useState(null);
+  const [evidenceAuthorWorkerId, setEvidenceAuthorWorkerId] = useState('');
+  const [evidenceStage, setEvidenceStage] = useState('ready');
+  const [evidenceFeedback, setEvidenceFeedback] = useState('');
+  const [savedEvidenceId, setSavedEvidenceId] = useState(null);
   const [timelineKind, setTimelineKind] = useState("");
   const [timelineStatus, setTimelineStatus] = useState("");
   const [notice, setNotice] = useState(null);
@@ -447,6 +455,30 @@ export default function ProgressClient({
   const taskById = useMemo(() => new Map(
     (Array.isArray(tasks) ? tasks : []).map((task) => [task.id, task]),
   ), [tasks]);
+
+  const hasJournalChanges = Boolean(title || summary || caption || evidenceFile);
+  useWorkspaceLeaveGuard({ dirty: hasJournalChanges, busy });
+  useEffect(() => {
+    const warn = event => { if (hasJournalChanges || busy) { event.preventDefault(); event.returnValue = ''; } };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [hasJournalChanges, busy]);
+  function guardJournalLeave(event) {
+    if (busy || (hasJournalChanges && !window.confirm('Hay datos o un archivo sin confirmar. ¿Salir de la bitácora?'))) event.preventDefault();
+  }
+  function selectEvidenceFile(file) {
+    if (busy || ['unconfirmed','context'].includes(evidenceStage)) return;
+    setEvidenceFile(file); setEvidenceStage('ready'); setEvidenceFeedback(''); setSavedEvidenceId(null);
+    if (!file && evidenceFileInputRef.current) evidenceFileInputRef.current.value = '';
+  }
+  function editEvidence(setter, value) {
+    if (busy || ['unconfirmed','context'].includes(evidenceStage)) return;
+    setter(value); setEvidenceStage('ready'); setEvidenceFeedback(''); setSavedEvidenceId(null);
+  }
+  function resetEvidence() {
+    if (busy || ['unconfirmed','context'].includes(evidenceStage)) return;
+    selectEvidenceFile(null); setCaption('');
+  }
 
   function setVisualBusy(evidenceId, active) {
     setVisualBusyIds((current) => {
@@ -521,83 +553,58 @@ export default function ProgressClient({
   }
   async function createEvidence(event) {
     event.preventDefault();
-    if (!evidenceFile) {
-      setNotice("Seleccioná una imagen, video o PDF.");
-      return;
+    const problem = evidenceSelectionIssue(evidenceFile);
+    if (problem || !tasks.some(task => task.id === evidenceTaskId)) {
+      setEvidenceStage('error'); setEvidenceFeedback(problem || 'Elegí una tarea de esta obra antes de enviar.'); return;
     }
-    if (!isProtectedUploadFileSizeAllowed(evidenceFile)) {
-      setNotice(`${protectedUploadFileSizeMessage("La evidencia")} Para video MP4 usá un clip breve.`);
-      return;
-    }
+    if (!isProtectedUploadFileSizeAllowed(evidenceFile)) return;
+    let scopeHeaders;
+    try { scopeHeaders = evidenceScopeHeaders({ organizationId, projectId }); }
+    catch (error) { setEvidenceStage('context'); setEvidenceFeedback(error.message); return; }
     if (!beginOperation()) return;
     let attempt;
+    const scopedFetch = (url, options = {}) => fetch(url, { ...options, headers: { ...options.headers, ...scopeHeaders } });
     try {
       const payloadKey = protectedUploadPayloadKey({
-        taskId: evidenceTaskId,
-        caption,
-        authorWorkerId: authorWorkerId || null,
-        file: protectedUploadFileIdentity(evidenceFile),
+        organizationId, projectId, taskId: evidenceTaskId, caption,
+        authorWorkerId: evidenceAuthorWorkerId || null, file: protectedUploadFileIdentity(evidenceFile),
       });
-      attempt = await protectedUploadAttemptForPayload(
-        evidenceUploadAttemptRef.current,
-        payloadKey,
-        { deleteEndpoint: "/api/progress/upload" },
-      );
+      attempt = await protectedUploadAttemptForPayload(evidenceUploadAttemptRef.current, payloadKey, {
+        deleteEndpoint: '/api/progress/upload', fetchImpl: scopedFetch,
+      });
       evidenceUploadAttemptRef.current = attempt;
+      setEvidenceFeedback('');
       if (!attempt.uploadId) {
-        const form = new FormData();
-        form.append("file", evidenceFile);
-        const upload = await fetch("/api/progress/upload", {
-          method: "POST",
-          headers: { "Idempotency-Key": attempt.operationKey },
-          body: form,
-        });
-        const uploaded = await upload.json().catch(() => ({}));
-        if (!upload.ok) {
-          const uploadError = new Error(
-            uploaded.error || "No se pudo cargar la media.",
-          );
-          uploadError.status = upload.status;
-          uploadError.code = uploaded.code;
-          throw uploadError;
-        }
+        setEvidenceStage('uploading');
+        const form = new FormData(); form.append('file', evidenceFile);
+        const uploaded = await requestEvidenceStep('/api/progress/upload', {
+          method: 'POST', headers: { 'Idempotency-Key': attempt.operationKey, ...scopeHeaders }, body: form,
+        }, { phase: 'upload' });
         rememberProtectedUploadId(attempt, uploaded.uploadId);
       }
-      const result = await api("/api/progress", {
-        method: "POST",
-        body: JSON.stringify({
-          kind: "EVIDENCE",
-          taskId: evidenceTaskId,
-          caption,
-          uploadId: attempt.uploadId,
-          operationKey: attempt.operationKey,
-          capturedAt: attempt.capturedAt,
-          authorWorkerId: authorWorkerId || undefined,
-        }),
-      });
-      setData((current) => ({
-        ...current,
-        evidence: [result.evidence, ...current.evidence],
-      }));
+      setEvidenceStage('attaching');
+      const result = await requestEvidenceStep('/api/progress', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...scopeHeaders },
+        body: JSON.stringify({ kind: 'EVIDENCE', taskId: evidenceTaskId, caption, uploadId: attempt.uploadId,
+          operationKey: attempt.operationKey, capturedAt: attempt.capturedAt, authorWorkerId: evidenceAuthorWorkerId || undefined }),
+      }, { phase: 'attach' });
+      if (result.evidence.taskId !== evidenceTaskId) throw new Error('El registro recibido no corresponde a la tarea seleccionada. No se confirmó esta operación.');
+      setData(current => ({ ...current, evidence: [result.evidence, ...current.evidence.filter(item => item.id !== result.evidence.id)] }));
       evidenceUploadAttemptRef.current = null;
-      setCaption("");
-      setEvidenceFile(null);
-      if (evidenceFileInputRef.current) evidenceFileInputRef.current.value = "";
-      setNotice("Evidencia privada guardada para revisión humana.");
+      setSavedEvidenceId(result.evidence.id); setCaption(''); setEvidenceFile(null);
+      if (evidenceFileInputRef.current) evidenceFileInputRef.current.value = '';
+      setEvidenceStage('saved'); setEvidenceFeedback('Archivo registrado en esta tarea. La evidencia conserva su estado de revisión; no modifica automáticamente el avance.');
     } catch (error) {
-      if (attempt?.uploadId && isTerminalProtectedUploadClientError(error)) {
+      if (attempt?.uploadId && isTerminalProtectedUploadClientError(error) && evidenceFailureState(error) !== 'context') {
         try {
-          await discardProtectedUploadAttempt(attempt, "/api/progress/upload");
+          await discardProtectedUploadAttempt(attempt, '/api/progress/upload', { fetchImpl: scopedFetch });
           evidenceUploadAttemptRef.current = null;
-        } catch (cleanupError) {
-          setNotice(`${error.message} ${cleanupError.message}`);
-          return;
+        } catch {
+          setEvidenceStage('unconfirmed'); setEvidenceFeedback('La operación no quedó confirmada y la limpieza está pendiente. Conservá el archivo y reintentá la misma operación.'); return;
         }
       }
-      setNotice(error.message);
-    } finally {
-      endOperation();
-    }
+      setEvidenceStage(evidenceFailureState(error, attempt)); setEvidenceFeedback(error.message);
+    } finally { endOperation(); }
   }
   async function review(item, kind, status) {
     if (!beginOperation()) return;
@@ -898,7 +905,7 @@ export default function ProgressClient({
                 </select>
               </div>
               <select
-                aria-label="Autor de la bitácora o evidencia"
+                aria-label="Autor de la bitácora"
                 value={authorWorkerId}
                 onChange={(event) => setAuthorWorkerId(event.target.value)}
               >
@@ -917,52 +924,12 @@ export default function ProgressClient({
             <p>Tu rol puede consultar registros, pero no crearlos.</p>
           )}
         </section>
-        <section className={styles.panel}>
-          <h2>Nueva evidencia</h2>
-          {permissions.canManage ? (
-            <form id="capture-evidence" onSubmit={createEvidence}>
-              <select
-                aria-label="Tarea vinculada a la evidencia"
-                required
-                value={evidenceTaskId}
-                onChange={(event) => setEvidenceTaskId(event.target.value)}
-              >
-                <option value="">Elegí tarea canónica</option>
-                {tasks.map((task) => (
-                  <option key={task.id} value={task.id}>
-                    {task.title}
-                  </option>
-                ))}
-              </select>
-              <input
-                ref={evidenceFileInputRef}
-                aria-label="Archivo de evidencia"
-                type="file"
-                required
-                accept="image/jpeg,image/png,image/webp,video/mp4,application/pdf"
-                onChange={(event) =>
-                  setEvidenceFile(event.target.files?.[0] || null)
-                }
-              />
-              <input
-                aria-label="Descripción de la evidencia"
-                value={caption}
-                onChange={(event) => setCaption(event.target.value)}
-                placeholder="Descripción breve"
-                maxLength={2000}
-              />
-              <small>
-                Media privada de hasta 4 MiB; para video MP4 usá un clip breve.
-                El archivo no queda expuesto públicamente.
-              </small>
-              <button disabled={busy} type="submit">
-                Enviar a revisión
-              </button>
-            </form>
-          ) : (
-            <p>Tu rol puede consultar evidencia, pero no crearla.</p>
-          )}
-        </section>
+        {permissions.canManage ? <EvidencePicker tasks={tasks} workers={workers} projectName={projectName}
+          file={evidenceFile} taskId={evidenceTaskId} authorId={evidenceAuthorWorkerId} caption={caption}
+          stage={evidenceStage} feedback={evidenceFeedback} savedId={savedEvidenceId} disabled={busy}
+          fileInputRef={evidenceFileInputRef} onFile={selectEvidenceFile} onTask={value => editEvidence(setEvidenceTaskId, value)}
+          onAuthor={value => editEvidence(setEvidenceAuthorWorkerId, value)} onCaption={value => editEvidence(setCaption, value)} onSubmit={createEvidence} onReset={resetEvidence}
+          onLeave={guardJournalLeave} /> : <section className={styles.panel}><h2>Evidencia de obra</h2><p>Tu rol puede consultar los registros autorizados, pero no cargar archivos.</p></section>}
       </div>
       <section className={styles.panel}>
         <h2>Bitácoras recientes</h2>
@@ -1056,7 +1023,7 @@ export default function ProgressClient({
                     : null;
 
               return (
-                <li className={styles.evidenceItem} key={item.id}>
+                <li className={styles.evidenceItem} key={item.id} id={"evidence-" + item.id}>
                   <div className={styles.evidenceHeader}>
                     <div>
                       <strong>{item.caption || "Evidencia sin descripción"}</strong>

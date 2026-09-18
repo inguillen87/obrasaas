@@ -73,7 +73,8 @@ export default async function ProgressPage() {
       : Promise.resolve({ assessments: [] }),
   ]);
   return (
-    <ProgressClient
+    <ProgressClient key={access.organization.id + ":" + access.project.id + ":" + access.databaseUserId}
+      organizationId={access.organization.id} projectId={access.project.id}
       initialData={journal}
       initialVisualAssessments={visualAssessments.assessments.map(visualAssessmentForClient)}
       tasks={tasks.tasks}

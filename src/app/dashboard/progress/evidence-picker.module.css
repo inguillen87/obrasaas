@@ -1,0 +1,38 @@
+.capture { min-width: 0; color: var(--text-primary, #f8fafc); border: 1px solid rgba(245,158,11,.24); border-radius: 18px; background: var(--bg-secondary, #0b1120); padding: clamp(18px,3vw,28px); scroll-margin-top: 92px; }
+.capture header h2 { margin: 7px 0; font-size: clamp(1.3rem,3vw,1.8rem); letter-spacing: -.025em; }
+.capture header p { margin: 0; overflow-wrap: anywhere; color: var(--text-secondary,#94a3b8); }
+.eyebrow { font-size: .7rem; font-weight: 700; letter-spacing: .14em; color: var(--accent-color,#f59e0b); }
+.steps { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; list-style: none; padding: 16px 0; margin: 16px 0; border-top: 1px solid var(--border-color,rgba(255,255,255,.12)); border-bottom: 1px solid var(--border-color,rgba(255,255,255,.12)); }
+.steps li { font-size: .75rem; color: var(--text-secondary,#94a3b8); line-height: 1.6; overflow-wrap: anywhere; }
+.steps li[aria-current=step] { color: var(--accent-color,#f59e0b); font-weight: 700; }
+.fields { display: grid; gap: 18px; border: 0; padding: 0; margin: 20px 0; min-width: 0; }
+.fields label { display: grid; gap: 8px; font-size: .9rem; line-height: 1.5; }
+.fields select,.fields textarea,.fields input[type=file] { min-height: 48px; max-width: 100%; width: 100%; min-width: 0; padding: 12px; box-sizing: border-box; border-radius: 9px; border: 1px solid var(--border-color,rgba(255,255,255,.2)); color: inherit; background: var(--bg-primary,#060913); font: inherit; font-size: 16px; }
+.fields input[type=file] { padding: 8px; font-size: .85rem; }
+.fields input[type=file]::file-selector-button { padding: 12px 10px; min-height: 44px; border: 0; border-radius: 6px; margin-right: 8px; background: var(--bg-secondary,#1e293b); color: inherit; cursor: pointer; }
+.fields textarea { resize: vertical; }
+.fileArea { padding: 16px; border: 1px dashed var(--border-color,rgba(255,255,255,.25)); border-radius: 12px; display: grid; gap: 12px; }
+.fileLabel { font-weight: 700; }
+.fields .camera { position: relative; display: flex; width: fit-content; min-height: 44px; align-items: center; justify-content: center; padding: 0 16px; background: rgba(245,158,11,.09); border: 1px solid rgba(245,158,11,.35); border-radius: 8px; cursor: pointer; }
+.camera:focus-within { outline: 3px solid #f59e0b; outline-offset: 3px; }
+.fields .srOnly { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.fileArea small,.selected small,.disclaimer { color: var(--text-secondary,#94a3b8); font-size: .8rem; line-height: 1.65; }
+.selected { display: grid; gap: 12px; padding: 14px; border-radius: 12px; background: var(--bg-primary,#060913); min-width: 0; }
+.selected strong { overflow-wrap: anywhere; font-size: .9rem; }
+.selected p { margin: 5px 0; font-size: .8rem; color: var(--text-secondary,#94a3b8); }
+.preview { max-width: 100%; max-height: 220px; width: 100%; object-fit: contain; background: #060913; border-radius: 8px; }
+.fileIcon { padding: 22px; background: rgba(245,158,11,.1); color: #f59e0b; text-align: center; font-weight: 700; border-radius: 8px; }
+.error,.feedback { padding: 14px; margin: 14px 0; border: 1px solid rgba(245,158,11,.5); border-radius: 10px; line-height: 1.55; overflow-wrap: anywhere; }
+.error { border-color: #ef4444; }
+.error p,.feedback p { margin: 8px 0 0; }
+.submit { width: 100%; min-height: 50px; padding: 12px; border: 0; border-radius: 10px; background: #f59e0b; color: #060913; font: inherit; font-weight: 750; cursor: pointer; }
+.capture button:disabled { opacity: .5; cursor: not-allowed; }
+.clear,.reset { min-height: 44px; background: transparent; color: inherit; border: 1px solid var(--border-color,rgba(255,255,255,.2)); padding: 10px 14px; border-radius: 8px; font: inherit; cursor: pointer; }
+.reset { margin-top: 12px; }
+.processing { line-height: 1.5; color: var(--accent-color,#f59e0b); }
+.savedLink,.back { display: inline-flex; min-height: 44px; align-items: center; margin: 10px 0; color: inherit; text-underline-offset: 4px; }
+.empty { padding: 16px; margin: 16px 0; background: rgba(245,158,11,.08); border-radius: 10px; line-height: 1.6; }
+.capture :focus-visible { outline: 3px solid #f59e0b; outline-offset: 3px; }
+.disclaimer { margin: 18px 0 0; }
+@media(max-width:380px) { .steps { grid-template-columns: repeat(2,minmax(0,1fr)); } .capture { padding: 16px; } .fileArea { padding: 12px; } }
+@media(prefers-reduced-motion:reduce) { .capture * { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }
