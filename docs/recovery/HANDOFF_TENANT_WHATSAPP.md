@@ -3,7 +3,7 @@
 Fecha: 19/09/2026. Leé primero `PLAN_DE_IMPLEMENTACION_CODEX.md` y `tenant-owned-whatsapp-architecture.md` en esta carpeta. Este documento no contiene secretos ni acredita un despliegue distinto del que figure con SHA en el PR #1.
 
 ## Qué queda implementado en esta fase
-- Preparación persistente por Organization, bajo metadata.whatsappWorkspace: nombre del asistente, intención de número (dedicado/app existente/proveedor existente), primera obra y circuitos solicitados. Propiedad CUSTOMER y política REVIEW_REQUIRED fijas.
+- Preparación persistente por Project, bajo metadata.whatsappWorkspace de schemaVersion 2, con lectura del antecedente de Organization únicamente desde su obra original: nombre del asistente, intención de número (dedicado/app existente/proveedor existente), obra del canal y circuitos solicitados. Propiedad CUSTOMER y política REVIEW_REQUIRED fijas.
 - GET/POST `/api/integrations/whatsapp/workspace`, con permiso de integraciones, lectura de obras, contexto de sesión, control de origen, revisión, preservación de metadata ajena y auditoría transaccional. No envía mensajes ni invoca Meta al guardar.
 - Formulario dentro de Integraciones con los tokens del diseño, recuperación del mismo intento, conservación de borrador/conflicto y bloqueo de autorización ante cambios no guardados.
 - La autorización dedicada existente recibe preparedRevision; se comprueba empresa/obra/preparación antes de Meta y de nuevo dentro de las dos transacciones de persistencia (conexión nueva y reconexión).
@@ -22,6 +22,9 @@ WhatsAppConnection sigue ligado a una obra. El nombre y los circuitos guardados 
 No se renovó la credencial temporal del piloto al implementar esta preparación. La comprobación de estado de un proveedor, un mock de navegador y una respuesta real entregada son evidencias diferentes. No afirmar que el canal opera bidireccionalmente o con cientos de empresas por el resultado de una suite.
 
 ## Siguiente entrega recomendada
+Prioridad aclarada por el usuario: números independientes por obra de cada empresa. Cerrar alta/roles de participantes y operación real; no exigir una migración a número compartido multiobra antes de ese piloto.
+
+La siguiente secuencia permanece como opción futura de número compartido, no bloqueante:
 1. Inventariar las dependencias de WhatsAppConnection.projectId y las constraints SQL. Diseñar y probar el registro organizacional y ChannelProjectBinding, sin duplicar secretos.
 2. Implementar resolución de contexto de obra con participantes autorizados y pruebas de dos tenants/dos obras. No cambiar el ámbito de registros históricos al cambiar la obra activa.
 3. Añadir la sesión durable de autorización/recuperación (nonce, TTL, recibos y reconciliación de código consumido) antes de ofrecer links de instalación delegados.
@@ -36,3 +39,6 @@ Comandos de desarrollo, desde el repo: `npm test`; ESLint sobre los archivos afe
 La validación funcional publicada debe usar empresa cliente autorizada y obra correcta, guardar sin llamar a Meta, recargar, comprobar auditoría y demostrar bloqueo en otro tenant. Sólo probar autorización Meta con consentimiento del titular y activos correctos. Una credencial vencida no se resuelve apagando un control de salud.
 
 El deploy de Preview no es Production. Mantener el preflight, identidad y SHA de migración, configuración live, resguardo y prueba autenticada como requisitos del pase. La evidencia final de cada versión debe enumerar lo ejecutado, lo simulado y lo no ejecutado con SHA/env; no reutilizar resultados antiguos como pruebas del código nuevo.
+
+## Ampliación v3.1
+Leer `worksite-numbers-and-participant-isolation.md`. La configuración de una obra no reemplaza la de otra. La respuesta a menú/ayuda se construye a partir de los permisos de campo existentes, dentro del número/obra ya resuelto. Pruebas adicionales en `tests/field-workers.test.js` y `tests/field-worker-menu.test.js`. No es una prueba de entrega física ni un menú de pagos administrativos para operarios.

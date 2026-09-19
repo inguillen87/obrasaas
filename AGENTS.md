@@ -7,3 +7,5 @@ This version has breaking changes — APIs, conventions, and file structure may 
 ## ObraSaaS: continuidad del producto
 Antes de cambiar onboarding, WhatsApp, tenants o agentes, leer `PLAN_DE_IMPLEMENTACION_CODEX.md`, `docs/recovery/tenant-owned-whatsapp-architecture.md` y `docs/recovery/HANDOFF_TENANT_WHATSAPP.md`.
 La decisión aprobada es cuenta/número autorizado por cada empresa; el canal comercial de ObraSaaS no recibe partes de todos los tenants. No mover activos de ChatBoc u otros productos para resolver ObraSaaS. Diferenciar preparación guardada, consentimiento Meta, recepción, entrega y ejecución del agente. El esquema legacy sigue siendo por obra hasta una migración multiobra explícita y probada.
+
+Aclaración v3.1: priorizar número independiente por obra, propiedad del tenant, y mismo teléfono de trabajador con identidad/permisos separados por empresa y obra. Leer `docs/recovery/worksite-numbers-and-participant-isolation.md`. No bloquear esa modalidad por la futura variante de número compartido multiobra. El teléfono no reemplaza al DNI/legajo; no fusionar identidades entre empleadores.

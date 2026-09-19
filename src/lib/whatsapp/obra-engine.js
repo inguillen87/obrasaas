@@ -1,3 +1,4 @@
+import { buildFieldWorkerMenu } from '@/lib/whatsapp/field-worker-menu';
 import { generateWebviewToken } from "@/lib/auth";
 import {
   AttendanceDomainError,
@@ -1072,7 +1073,7 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
     if (stateChanged) state.alertsCount += 1;
     reply = "Demora registrada. Quedó pendiente de impacto y reprogramación por el responsable de planificación.";
   } else if (lowerBody.includes("ayuda") || lowerBody.includes("menu") || lowerBody.includes("menú")) {
-    reply = "Puedo ayudarte a: registrar ingreso (“fichar”), iniciar pausa (“almuerzo”), volver (“volví”), registrar salida (“chau”), configurar cómo cobrar, informar avances, reportar incidencias, adjuntar evidencia o cargar un certificado médico.";
+    reply = buildFieldWorkerMenu({ role: worker.whatsappRole, projectName: projectSettings.name });
   } else {
     reply = "Guardé el reporte en la bitácora. Para convertirlo en una acción, indicá “fichar”, “almuerzo”, “volví”, “chau”, “datos de cobro”, “avance 60% tarea 3”, “incidencia urgente” o “licencia”.";
   }

@@ -3,6 +3,9 @@
 Estado: decisión de arquitectura adoptada; implementación incremental. Fecha: 19/09/2026.
 Solicitud explícita del propietario del producto: cada cliente autoriza su número, sus empleados le escriben a ese canal y el ecosistema se configura desde ObraSaaS con la mínima intervención técnica del cliente.
 
+## Aclaración v3.1 — prioridad confirmada
+El patrón inmediato es un número por obra, autorizado por su constructora; cada empleado utiliza su mismo número y se da de alta en cada ámbito. Compartir un número entre varias obras sigue como opción futura. No se exige el número de soporte de ObraSaaS ni la migración de la sección 5 para operar el patrón por obra. Los detalles de identidad y el cambio de preparación están en `worksite-numbers-and-participant-isolation.md`.
+
 ## 1. Decisión y límites
 Se separan tres ámbitos: (a) número comercial de ObraSaaS para ventas/soporte; (b) números operativos autorizados por cada tenant; (c) plano técnico compartido que valida y enruta eventos. Un único endpoint técnico verificador puede recibir muchos canales registrados sin que exista un número común para todas las empresas.
 
@@ -46,7 +49,7 @@ No importar activos de otros productos, ni reutilizar WABAs, teléfonos o claves
 
 Los nombres son de diseño: no se afirma que estas tablas existan en el schema actual. Reusar o extender las entidades actuales cuando sus invariantes coincidan. No construir dos bandejas o dos libros de obra en paralelo.
 
-## 5. Migración incremental del vínculo legacy a una obra
+## 5. Migración opcional futura hacia un número compartido entre obras
 1. Inventariar todas las consultas que usan WhatsAppConnection.projectId: webhooks, bandeja, assets, Flows, invitaciones, recibos, notificaciones, reportes y verificadores SQL. Aprobar un mapa de dependencias antes de cambiar claves.
 2. Agregar entidades/vínculos y referencias opcionales con migración expansiva. Crear por cada conexión antigua una pertenencia de tenant y un único vínculo de obra, derivado de la FK existente, no de mensajes o nombres. Revisar duplicados/propiedad antes de activar tráfico.
 3. Mantener compatibilidad de lecturas legacy detrás de un adaptador explícito; el registro nuevo es fuente de enrutamiento. Las escrituras duales, cuando sean necesarias, se hacen con transacción y reconciliación verificable, no con dos requests independientes.
@@ -57,7 +60,7 @@ Los nombres son de diseño: no se afirma que estas tablas existan en el schema a
 ## 6. Enrutamiento determinista antes de IA
 Firma Meta válida → app receptora identificada → número/cuenta en el registro → tenant → participante autorizado → contexto permitido de obra → herramientas del dominio.
 
-Si hay varias obras posibles y no existe una selección vigente, mostrar solamente las opciones autorizadas y solicitar elección. Una mención ambigua en el texto no selecciona una empresa. Si el empleado cambia de obra, los mensajes anteriores conservan su origen y los pendientes no se reprocesan dentro de la nueva obra.
+Sólo en la futura modalidad de número compartido, si hay varias obras posibles y no existe una selección vigente, mostrar solamente las opciones autorizadas y solicitar elección. Una mención ambigua en el texto no selecciona una empresa. Si el empleado cambia de obra, los mensajes anteriores conservan su origen y los pendientes no se reprocesan dentro de la nueva obra.
 
 Las políticas nunca se toman de archivos o transcripciones aportados por un remitente. La IA puede proponer una clasificación, pero el servidor valida proyecto, rol, estado, versión, cantidad y autorización al ejecutar. Búsqueda documental, cachés, archivos privados y contexto del modelo deben incluir tenant y permisos; no se usa un índice común sin filtro de autorización.
 

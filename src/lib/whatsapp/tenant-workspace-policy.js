@@ -18,7 +18,7 @@ export function normalizeTenantWorkspace(input) {
   if (!object(input) || Object.keys(input).some(key => !keys.has(key))) throw new TenantWorkspaceError('La configuración contiene campos no admitidos.');
   const name = typeof input.assistantName === 'string' ? input.assistantName.trim() : '';
   if (!name || name.length > 70 || /[\u0000-\u001f\u007f<>]/.test(name)) throw new TenantWorkspaceError('Usá un nombre del asistente de 1 a 70 caracteres, sin etiquetas.');
-  if (!WORKSPACE_NUMBER_MODES.some(mode => mode.key === input.numberMode) || !workspaceIdentifier(input.initialProjectId)) throw new TenantWorkspaceError('Seleccioná el tipo de número y la primera obra.');
+  if (!WORKSPACE_NUMBER_MODES.some(mode => mode.key === input.numberMode) || !workspaceIdentifier(input.initialProjectId)) throw new TenantWorkspaceError('Seleccioná el tipo de número y la obra abierta.');
   if (!Array.isArray(input.useCases) || !input.useCases.length || input.useCases.length > WORKSPACE_USE_CASES.length || new Set(input.useCases).size !== input.useCases.length || input.useCases.some(key => !WORKSPACE_USE_CASES.some(item => item.key === key))) throw new TenantWorkspaceError('Elegí al menos un circuito del asistente.');
   if (!Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 0 || input.confirmOwnership !== true) throw new TenantWorkspaceError('Confirmá la cuenta de tu empresa y la revisión de la configuración.');
   return { assistantName: name, numberMode: input.numberMode, initialProjectId: input.initialProjectId,
@@ -35,8 +35,8 @@ export function tenantWorkspaceFromMetadata(metadata) {
   } catch { throw new TenantWorkspaceError('La configuración guardada requiere revisión; no se reemplazó por valores de ejemplo.', 'WORKSPACE_INTEGRITY', 409); }
 }
 export function workspaceAuthorizationState(profile, projectId) {
-  if (!profile.configured) return { allowed: false, code: 'WORKSPACE_REQUIRED', message: 'Guardá primero la preparación del asistente de tu empresa.' };
-  if (profile.initialProjectId !== projectId) return { allowed: false, code: 'WORKSPACE_PROJECT_MISMATCH', message: 'Abrí Integraciones en la primera obra que elegiste. No conectaremos el número a otra obra.' };
+  if (!profile.configured) return { allowed: false, code: 'WORKSPACE_REQUIRED', message: 'Guardá la preparación del asistente de esta obra.' };
+  if (profile.initialProjectId !== projectId) return { allowed: false, code: 'WORKSPACE_PROJECT_MISMATCH', message: 'La preparación debe pertenecer a la obra abierta, sin modificar otras obras.' };
   if (profile.numberMode !== 'DEDICATED') return { allowed: false, code: 'WORKSPACE_ASSISTED_ONBOARDING', message: profile.numberMode === 'BUSINESS_APP' ? 'Conservamos tu elección. La coexistencia debe habilitarse y verificarse antes de conectar, sin perder tu app.' : 'Conservamos tu elección. El traspaso necesita un plan y validación antes de modificar el proveedor actual.' };
   return { allowed: true, code: 'READY_FOR_META_AUTHORIZATION', message: 'Preparación guardada. Falta autorizar en Meta y comprobar recepción y respuesta.' };
 }
@@ -45,14 +45,14 @@ export function confirmsTenantWorkspaceSave(body, command, scope) {
   return Boolean(body?.organizationId === scope.organizationId && body?.projectId === scope.projectId && typeof body.unchanged === 'boolean' && p?.configured === true && p.assistantName === command.assistantName && p.numberMode === command.numberMode && p.initialProjectId === command.initialProjectId && p.mode === 'REVIEW_REQUIRED' && p.ownership === 'CUSTOMER' && JSON.stringify(p.useCases) === JSON.stringify(command.useCases) && (p.revision === command.expectedRevision + 1 || body.unchanged && p.revision === command.expectedRevision));
 }
 const PUBLIC_WORKSPACE_ERRORS = Object.freeze({
-  WORKSPACE_INVALID: 'Revisá el nombre, el tipo de número, la primera obra y la confirmación de tu empresa.',
+  WORKSPACE_INVALID: 'Revisá el nombre, el tipo de número, la obra abierta y la confirmación de tu empresa.',
   WORKSPACE_SCOPE: 'No se pudo confirmar el espacio de tu empresa.',
   WORKSPACE_CUSTOMER_REQUIRED: 'Abrí esta preparación desde una empresa cliente, no desde administración interna.',
   WORKSPACE_INTEGRITY: 'La preparación guardada necesita revisión. No fue reemplazada.',
-  WORKSPACE_PROJECT_UNAVAILABLE: 'La primera obra no está disponible para operar en esta empresa.',
+  WORKSPACE_PROJECT_UNAVAILABLE: 'La obra abierta no está disponible para operar en esta empresa.',
   WORKSPACE_CONFLICT: 'Otro cambio modificó esta preparación. Conservá tu texto y consultá la versión actual.',
   WORKSPACE_REQUIRED: 'Guardá la preparación del asistente antes de autorizar el número.',
-  WORKSPACE_PROJECT_MISMATCH: 'Abrí Integraciones en la primera obra elegida para esta conexión.',
+  WORKSPACE_PROJECT_MISMATCH: 'Abrí Integraciones en la obra abierta elegida para esta conexión.',
   WORKSPACE_ASSISTED_ONBOARDING: 'El tipo de conexión elegido necesita habilitación específica antes de cambiar tu número.',
   WORKSPACE_REVISION_CHANGED: 'La preparación cambió. Consultá la revisión actual antes de autorizar.',
 });

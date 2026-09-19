@@ -1,15 +1,20 @@
 # PLAN MAESTRO DE IMPLEMENTACIÓN — OBRASAAS
 
-Versión 3.0 · Continuidad de producto y arquitectura · 19 de septiembre de 2026.
+Versión 3.1 · Continuidad de producto y arquitectura · 19 de septiembre de 2026.
 Repositorio: inguillen87/obrasaas. Rama de trabajo: `codex/saas-recovery-20260917`.
-Base inspeccionada al iniciar esta fase: `9859890f2d6ed479946185eb8d847bda1e04e4aa`.
+Base de esta ampliación: `5b4cea6e3586780e62142bb85764d0db4a5a1850`.
 
 ## 1. Decisión de producto aprobada por Marcelo
-**Cada empresa cliente autoriza su propia cuenta y número WhatsApp. Sus empleados escriben a ese número. ObraSaaS procesa dentro del tenant, con obras, personas, documentos, herramientas y permisos separados.** El número comercial de ObraSaaS se usa para ventas y soporte: no es la bandeja común de partes privados de todas las constructoras.
+**Cada empresa autoriza sus cuentas y números de WhatsApp y puede asignar un número distinto a cada obra. Sus empleados usan su mismo WhatsApp en las obras donde estén autorizados. ObraSaaS procesa dentro del tenant, con obras, personas, documentos, herramientas y permisos separados.** El número comercial de ObraSaaS se usa para ventas y soporte: no es la bandeja común de partes privados de todas las constructoras.
 
 La experiencia buscada es plug-and-play: preparar empresa/asistente → autorizar con Meta → incorporar equipo → comprobar una operación → activar los circuitos autorizados. No se solicitan contraseñas de Facebook, claves de aplicación, WABA IDs ni tokens manuales al cliente. La autorización del titular, las verificaciones que Meta exija y el consentimiento aplicable no se omiten ni simulan.
 
 El agente es un servicio del backend, no un proceso que dependa del celular encendido o WhatsApp Web. El teléfono es el canal y la identidad comercial. Una conexión aceptada no demuestra respuesta del agente, entrega o acceso correcto a una obra.
+
+### Aclaración prioritaria: número por obra, identidad por empresa
+El número al que escribe el trabajador define la obra de destino. Sus permisos no se trasladan de una empresa a otra, aunque use el mismo teléfono. No es necesario un número comercial de ObraSaaS para operar. El teléfono reconoce el contacto; no reemplaza al legajo, DNI o identidad interna estable. La participación en otros empleadores no se expone al tenant actual.
+
+La preparación pasa a Project.metadata y conserva el perfil anterior de Organization sólo en su obra original. Dos obras pueden preparar asistentes/números distintos sin reemplazarse. Compartir un único número entre varias obras queda como modalidad futura opcional, no como requisito de lanzamiento. Ver `docs/recovery/worksite-numbers-and-participant-isolation.md`.
 
 ## 2. Cómo leer este plan y las fuentes anteriores
 El plan v2.4 y el walkthrough aportados en el proyecto describen 14 módulos y los sprints 9–14. Se preservan como antecedentes de alcance, no como evidencia de que todo el SaaS real esté terminado. Sus rótulos «100%», referencias legales y métricas de simulación no se trasladan automáticamente al producto comercial.
@@ -21,7 +26,7 @@ Referencias para trabajar: `docs/recovery/competitive-cycles-roadmap.md`, `docs/
 ## 3. Estado y stack de esta rama
 Next.js 16.3.5, React 19, Prisma/client 7.9.0 y PostgreSQL; confirmar package.json y package-lock.json antes de actualizar. Dark Obsidian y tokens de `src/lib/design-system.js`. Las versiones antiguas del v2.4 no son la fuente del lockfile actual.
 
-Existe Embedded Signup, aislamiento por empresa, almacenamiento cifrado de credenciales, recepción persistida, bandeja, revisión, mediciones y lectura del Gantt. La conexión técnica actual `WhatsAppConnection` tiene `projectId` único: **un número conectado a una obra**, no un canal multiobra resuelto. El límite no debe ocultarse ni arreglarse duplicando el token en cada obra.
+Existe Embedded Signup, aislamiento por empresa, almacenamiento cifrado de credenciales, recepción persistida, bandeja, revisión, mediciones y lectura del Gantt. La conexión técnica actual `WhatsAppConnection` tiene `projectId` único: **un número conectado a una obra**, no un canal multiobra resuelto. Esta estructura corresponde al modo prioritario de un número por obra. Un número compartido entre varias obras necesitaría otro enrutamiento y no se habilita por duplicar conexiones.
 
 La fase anterior probó recepción del piloto, pero el estado consultado seguía con autorización temporal vencida y sin salida registrada. No se considera cerrada la prueba bidireccional ni el pase a Production. La versión y prueba concretas de cada nueva entrega se registran después de ejecutarlas.
 
@@ -35,8 +40,8 @@ Compartir infraestructura no significa compartir datos, números, WABAs, presupu
 | --- | --- | --- |
 | S9 · Persistencia | Usar modelos actuales y transacciones reales; sin fixtures en indicadores operativos. Probar guardado, recarga, edición concurrente y aislamiento. | Base implementada; ampliar la cobertura por circuito. |
 | S10 · Roles | Administradores, dirección, compras, capataces y operarios según permisos reales. Inversores/clientes externos sólo ven información publicada de su unidad/obra. | Base de control implementada; no equiparar membresía de plataforma con participante de WhatsApp. |
-| S11.A1 · Preparación del tenant | Nombre del asistente, número dedicado/app existente/proveedor existente, primera obra y circuitos deseados. Persistencia por empresa, revisión, consentimiento, retorno seguro al botón Meta. | Tramo de esta entrega; validar por SHA antes de llamarlo publicado. |
-| S11.A2 · Canal de empresa multiobra | Registrar cuenta/número del tenant una sola vez, enlazar obras autorizadas y resolver contexto por participante. Migración expansiva desde el vínculo actual a una obra. | Pendiente; no está implementado por guardar una primera obra. |
+| S11.A1 · Preparación por obra del tenant | Nombre del asistente, tipo de número y circuitos de la obra abierta. Perfil independiente en Project, revisión, consentimiento y lectura compatible del antecedente de Organization. | Tramo ampliado de esta entrega; publicación y pruebas por SHA en el PR. |
+| S11.A2 · Números por obra; canal multiobra opcional | Operar números separados dentro de la misma empresa, con participantes y roles por obra. Un número compartido para varias obras queda como ampliación posterior. | Preparación independiente y resolución existentes comprobadas con datos controlados; piloto físico y alta de empleados pendientes. |
 | S11.A3 · Alta y recuperación autoservicio | Embedded Signup robusto y sesión durable; coexistencia cuando corresponda; traspaso asistido; expiración/revocación; reanudar sin duplicados. | Flujo dedicado existente + protección de preparación; coexistencia, links de instalación y sesiones durables pendientes. |
 | S11.A4 · Equipo | Invitar por enlace/QR seguro, roles y proyectos, alta por propietario, revocación efectiva. El teléfono que escribe no obtiene permisos automáticamente. | Reutilizar onboarding de trabajadores existente; cerrar UX comercial y prueba física. |
 | S11.A5 · Agente de construcción | Texto/audio/imagen/video → intención y contexto → propuesta/acción permitida → fuente → resultado/entrega. Handoff humano y conocimiento privado. | Recepción y módulos base existen; cerrar interpretación, herramientas y pruebas por formato. |
@@ -46,7 +51,7 @@ Compartir infraestructura no significa compartir datos, números, WABAs, presupu
 | S14 · Offline y móvil | Cola por identidad/tenant/obra con idempotencia, expiración, conflictos y archivos privados; pruebas en Android/iPhone y red de obra. | El fallback PWA no acredita operación offline completa. |
 
 ## 6. Experiencia objetivo para el cliente
-Entrar a su empresa → elegir primera obra y asistente → «Conectar WhatsApp» → autorizar cuenta y número en Meta → volver a ObraSaaS con estado confirmado → incorporar empleados → probar un parte → habilitar los circuitos listos.
+Entrar a su empresa → abrir una obra y preparar su asistente → «Conectar WhatsApp» → autorizar cuenta y número en Meta → volver a ObraSaaS con estado confirmado → incorporar empleados → probar un parte → habilitar los circuitos listos.
 
 La interfaz separa «preparado», «autorizado», «mensaje recibido», «respuesta entregada» y «agente habilitado». No se usan porcentajes ficticios para rellenar la activación. El contenido sensible del negocio no viaja en URLs, logs ni herramientas de soporte no autorizadas.
 
@@ -81,4 +86,4 @@ No introducir secretos en el repo o documentos de traspaso. No forzar un merge a
 Este turno incorpora la preparación por empresa y su validación conectada al flujo de autorización existente. Los campos del nombre/circuitos son configuración preparatoria: no activan runtime IA ni empleados por guardarse. No hay migración de WhatsAppConnection a cuenta multiobra en esta entrega. Consultar el PR y `docs/recovery/HANDOFF_TENANT_WHATSAPP.md` para la evidencia final.
 
 ## 11. Prompt de traspaso para Codex, Claude u otro agente
-«Trabajás en ObraSaaS, repo inguillen87/obrasaas. Leé AGENTS.md, este plan v3, el ADR tenant-owned-whatsapp-architecture y el handoff. La decisión aprobada es número/cuenta de WhatsApp autorizados por cada tenant, empleados con permisos y obras separadas; no una bandeja común en el número comercial. El agente corre en el backend. El control técnico puede ser común, los datos y autorizaciones no. Antes de modificar, verificá git status, SHA, rama, esquema y últimas pruebas. No des por hecho que el v2.4 o el walkthrough prueban el estado productivo. No toques ChatBoc ni muevas activos Meta entre productos sin un procedimiento autorizado y verificado. Conservá lo implementado, explicá los límites actuales y cerrá un circuito con pruebas, build y evidencia por entorno. La prioridad pendiente es migración expansiva al registro de canales por tenant y enrutamiento multiobra, junto a sesión durable de alta/recuperación y prueba real del canal; no más pantallas sin backend.»
+«Trabajás en ObraSaaS, repo inguillen87/obrasaas. Leé AGENTS.md, este plan v3, el ADR tenant-owned-whatsapp-architecture y el handoff. La decisión aprobada es número/cuenta de WhatsApp autorizados por cada tenant, empleados con permisos y obras separadas; no una bandeja común en el número comercial. El agente corre en el backend. El control técnico puede ser común, los datos y autorizaciones no. Antes de modificar, verificá git status, SHA, rama, esquema y últimas pruebas. No des por hecho que el v2.4 o el walkthrough prueban el estado productivo. No toques ChatBoc ni muevas activos Meta entre productos sin un procedimiento autorizado y verificado. Conservá lo implementado, explicá los límites actuales y cerrá un circuito con pruebas, build y evidencia por entorno. La prioridad es cerrar altas de participantes, menú por rol y operaciones reales por número de obra, junto a recuperación durable y prueba física del canal. El número compartido multiobra es una variante posterior; no más pantallas sin backend.»
