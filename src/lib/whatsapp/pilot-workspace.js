@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { PILOT_SLUGS_DISABLED, pilotWorkspaceErrorMessage, isPilotSlugConfigurationError } from './pilot-provider-errors.js';
 import { syncClerkOrganization } from '../clerk-organization-sync.js';
 import { withClerkIdentitySyncLock, clerkIdentityRuntimeLockKeys } from '../clerk-identity-lock.js';
 import { getCurrentClerkOrganizationMembership, resolveClerkTenantRole } from '../clerk-membership-state.js';
@@ -6,7 +7,7 @@ import { databaseOrganizationIsInternal } from '../organization-policy.js';
 import { getSubscriptionEntitlements } from '../plans.js';
 import { roleHasPermission } from '../tenant-roles.js';
 export class PilotWorkspaceError extends Error {
-  constructor(code, status = 409) { super('No se pudo confirmar el espacio piloto. Conservá el intento y consultá su estado.'); this.code = code; this.status = status; }
+  constructor(code, status = 409) { super(pilotWorkspaceErrorMessage(code)); this.code = code; this.status = status; }
 }
 const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 export function normalizePilotWorkspaceInput(body) {
@@ -28,10 +29,11 @@ export async function provisionPilotWorkspace({ prisma, clerk, access, body, env
   const fingerprint = hash(input), slug = 'obrasaas-piloto-' + ownerKey.slice(0,24);
   let remote;
   try { remote = await clerk.organizations.getOrganization({ slug }); }
-  catch (error) { if (Number(error.status ?? error.statusCode) !== 404) throw new PilotWorkspaceError('PILOT_SETUP_PROVIDER_UNAVAILABLE', 503); }
+  catch (error) { if (isPilotSlugConfigurationError(error)) throw new PilotWorkspaceError(PILOT_SLUGS_DISABLED); if (Number(error.status ?? error.statusCode) !== 404) throw new PilotWorkspaceError('PILOT_SETUP_PROVIDER_UNAVAILABLE', 503); }
   if (!remote) {
     try { remote = await clerk.organizations.createOrganization({ name: input.organizationName, slug, createdBy: access.userId, privateMetadata: { obrasaasPilotVersion: 1, obrasaasPilotOwnerKey: ownerKey, obrasaasPilotFingerprint: fingerprint } }); }
-    catch {
+    catch (error) {
+      if (isPilotSlugConfigurationError(error)) throw new PilotWorkspaceError(PILOT_SLUGS_DISABLED);
       // A lost response is reconciled by the unique slug; never issue a second create here.
       try { remote = await clerk.organizations.getOrganization({ slug }); }
       catch { throw new PilotWorkspaceError('PILOT_SETUP_PROVIDER_UNCONFIRMED', 503); }

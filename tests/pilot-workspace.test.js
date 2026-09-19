@@ -45,3 +45,30 @@ test('expired trial is not extended silently', async () => { const { state, deps
 test('audit failure rolls back database provisioning while preserving recoverable remote identity', async () => { const { state, deps } = fixture(); state.auditFail = true; await assert.rejects(provisionPilotWorkspace(deps)); assert.equal(state.projects.length, 0); state.auditFail = false; await provisionPilotWorkspace(deps); assert.equal(state.creates, 1); assert.equal(state.audits.length, 1); });
 test('revoked database membership is not restored by provisioning', async () => { const { state, deps } = fixture(); await provisionPilotWorkspace(deps); state.memberships[0].status = 'SUSPENDED'; await assert.rejects(provisionPilotWorkspace(deps), { code: 'PILOT_SETUP_EXISTING_MEMBERSHIP_RESTRICTED' }); });
 for (const patch of [{ confirmIsolatedPilot: false }, { organizationName: '' }, { actorId: 'other' }, { projectId: 'other' }, { accessToken: 'secret' }, { organizationName: 'x'.repeat(101) }, { projectName: 'bad\u0000text' }]) test('untrusted provisioning fields rejected: ' + Object.keys(patch)[0], () => assert.throws(() => normalizePilotWorkspaceInput({ ...body, ...patch })));
+
+test('disabled organization slugs do not become a lost-response loop or a partial tenant', async () => {
+  const { state, deps } = fixture(); const original = deps.clerk.organizations.createOrganization; let reads = 0;
+  const read = deps.clerk.organizations.getOrganization;
+  deps.clerk.organizations.getOrganization = async args => { reads++; return read(args); };
+  deps.clerk.organizations.createOrganization = async () => { state.creates++; throw Object.assign(new Error('private provider response'), { status: 403, errors: [{ code: 'organization_slugs_disabled' }] }); };
+  await assert.rejects(provisionPilotWorkspace(deps), error => error.code === 'PILOT_SETUP_SLUGS_DISABLED' && error.status === 409 && error.message.includes('Clerk') && !error.message.includes('private provider response'));
+  assert.equal(reads, 1); assert.equal(state.creates, 1); assert.equal(state.remote, null);
+  assert.equal(state.projects.length, 0); assert.equal(state.memberships.length, 0); assert.equal(state.audits.length, 0);
+  deps.clerk.organizations.createOrganization = original;
+  const confirmed = await provisionPilotWorkspace(deps);
+  assert.equal(confirmed.status, 'READY_FOR_CONNECTION'); assert.equal(state.projects.length, 1);
+  await provisionPilotWorkspace(deps); assert.equal(state.creates, 2); assert.equal(state.audits.length, 1);
+});
+test('a slug-disabled lookup fails before requesting a create', async () => {
+  const { state, deps } = fixture();
+  deps.clerk.organizations.getOrganization = async () => { throw Object.assign(new Error('private'), { status: 403, errors: [{ code: 'organization_slugs_disabled' }] }); };
+  await assert.rejects(provisionPilotWorkspace(deps), { code: 'PILOT_SETUP_SLUGS_DISABLED', status: 409 }); assert.equal(state.creates, 0);
+});
+test('ambiguous provider failure still reads back without issuing a second create', async () => {
+  const { state, deps } = fixture(); let reads = 0;
+  const read = deps.clerk.organizations.getOrganization;
+  deps.clerk.organizations.getOrganization = async args => { reads++; return read(args); };
+  deps.clerk.organizations.createOrganization = async () => { state.creates++; throw new Error('network result unknown'); };
+  await assert.rejects(provisionPilotWorkspace(deps), { code: 'PILOT_SETUP_PROVIDER_UNCONFIRMED' });
+  assert.equal(state.creates, 1); assert.equal(reads, 2); assert.equal(state.projects.length, 0);
+});

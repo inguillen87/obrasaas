@@ -20,3 +20,16 @@ Se prueban dominio y handlers con proveedores controlados: alta aislada, reinten
 La creación autenticada, vinculación del número, recepción desde WhatsApp Web, persistencia y respuesta se documentan por separado con sus resultados efectivos. No se consideran terminadas por pasar tests aislados ni se afirma capacidad para cientos de tenants sin mediciones de carga y operación. La continuidad corresponde al aislamiento del Sprint 10 y la operación real por celular del Sprint 11 del plan maestro.
 
 Referencias de SDK consultadas: documentación oficial Clerk createOrganization y getOrganization. No se solicita la contraseña del usuario ni se imprimen credenciales. No hay nuevas tablas, migraciones o dependencias.
+
+## Diagnóstico específico de slugs de Clerk
+Una prueba real del alta devolvió HTTP 403 / organization_slugs_disabled. La aplicación solicitaba un slug determinista para evitar duplicados; la instancia de identidad tenía esa función deshabilitada. El catch anterior ocultaba esa causa bajo PILOT_SETUP_PROVIDER_UNCONFIRMED.
+
+La corrección distingue el código exacto y el estado HTTP del proveedor, sin interpretar mensajes arbitrarios ni exponer respuestas privadas. Devuelve PILOT_SETUP_SLUGS_DISABLED con instrucciones en español y mantiene los nombres del intento. La UI muestra Reintentar tras guardar en Clerk, no la recuperación propia de una respuesta perdida. No se activan opciones de Clerk desde el endpoint ni se alteran claves, callbacks o permisos de Meta.
+
+La recuperación determinista existente se mantiene: si una respuesta es incierta, se consulta el mismo slug antes de otra creación; no se crea otra empresa dentro de esa solicitud. Un rechazo conocido por configuración no dispara esa reconciliación ni crea membresías/proyectos en PostgreSQL. Después de corregir la configuración, la misma solicitud puede completar el alta y los reintentos posteriores recuperan el mismo espacio.
+
+Referencia primaria: https://clerk.com/docs/guides/organizations/configure#organization-slugs . Clerk documenta que los slugs están deshabilitados por defecto para nuevas aplicaciones desde octubre de 2025. La configuración se debe revisar en la aplicación y entorno de identidad correspondientes, no en la pantalla de Meta.
+
+Se agregan regresiones de dominio para el rechazo exacto, ausencia de escrituras parciales, recuperación después del cambio y conservación de respuestas inciertas. La prueba de navegador incluye el código real con HTTP controlado, mantiene los datos bloqueados para impedir cambios ambiguos, verifica ausencia de reintentos automáticos y conserva el mismo contenido al reintentar explícitamente. No equivale por sí sola a un alta real en Clerk/PostgreSQL.
+
+El estado de la configuración externa y la ejecución real del alta se registran por separado con su evidencia. No se declara un tenant creado por haber corregido el mensaje de error.

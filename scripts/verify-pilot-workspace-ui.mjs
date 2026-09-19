@@ -13,6 +13,7 @@ const server=createServer((req,res)=>{
  if(path==='/api/integrations/whatsapp/pilot-workspace'){
   let data='';req.on('data',chunk=>data+=chunk);req.on('end',()=>{
    const body=JSON.parse(data);calls.push({body,organization:req.headers['x-obrasaas-organization'],project:req.headers['x-obrasaas-project']});res.setHeader('Content-Type','application/json');
+   if(mode==='slugs'){res.statusCode=409;res.end(JSON.stringify({error:'Clerk rechazó el alta: habilitá Enable organization slugs y guardá.',code:'PILOT_SETUP_SLUGS_DISABLED'}));return;}
    if(mode==='lost'){mode='ok';res.statusCode=503;res.end('{"error":"Alta no confirmada"}');return;}
    if(mode==='denied'){res.statusCode=403;res.end('{"error":"Acceso denegado"}');return;}
    res.end(JSON.stringify({context:{organizationId:mode==='foreign'?'other':'org-internal',projectId:'project-internal'},organization:{id:'org-pilot',name:body.organizationName},project:{id:'project-pilot',name:body.projectName},status:'READY_FOR_CONNECTION',messagesSent:false,connectionCreated:false}));
@@ -32,6 +33,15 @@ try{
  mode='lost';const retry=await open();await retry.getByRole('checkbox').check();await retry.getByRole('button',{name:'Crear empresa piloto'}).click();await expect(retry.getByRole('alert')).toHaveText('Alta no confirmada');await expect(retry.getByRole('textbox',{name:'Empresa piloto'})).toBeDisabled();await retry.getByRole('button',{name:'Verificar el mismo intento'}).click();await expect(retry.getByRole('status')).toContainText('Ahora podés seleccionar');assert.deepEqual(calls[1],calls[2]);await retry.close();
  mode='denied';const denied=await open();await denied.getByRole('checkbox').check();await denied.getByRole('button',{name:'Crear empresa piloto'}).click();await expect(denied.getByRole('alert')).toHaveText('Acceso denegado');await expect(denied.getByRole('button',{name:'Crear empresa piloto'})).toBeDisabled();await denied.close();
  mode='foreign';const foreign=await open();await foreign.getByRole('checkbox').check();await foreign.getByRole('button',{name:'Crear empresa piloto'}).click();await expect(foreign.getByRole('alert')).toContainText('Respuesta no confirmada');await expect(foreign.getByText('Destino preparado',{exact:true})).toHaveCount(0);await foreign.close();
- assert.equal(calls.length,5);assert.ok(calls.every(c=>c.organization==='org-internal'&&c.project==='project-internal'&&c.body.confirmIsolatedPilot===true));assert.deepEqual(errors,[]);
- const proof={result:'PASS',environment:'real-component-with-synthetic-identity-provider-responses',explicitConfirmation:true,identicalRetry:true,scopeMismatchRejected:true,roleFailureBlocked:true,widths:[320,390,768,1280],requests:5,pageErrors:0};writeFileSync(resolve(out,'proof.json'),JSON.stringify(proof,null,2));console.log(JSON.stringify(proof));
+ mode='slugs';const configured=await open();await configured.getByRole('checkbox').check();await configured.getByRole('button',{name:'Crear empresa piloto'}).click();
+ await expect(configured.getByRole('alert')).toContainText('Enable organization slugs');
+ await expect(configured.getByRole('button',{name:'Verificar el mismo intento'})).toHaveCount(0);
+ await expect(configured.getByRole('button',{name:'Reintentar tras guardar en Clerk'})).toBeEnabled();
+ await expect(configured.getByRole('textbox',{name:'Empresa piloto'})).toBeDisabled();
+ await configured.waitForTimeout(300);assert.equal(calls.length,6);
+ for(const width of [320,390,768,1280]){await configured.setViewportSize({width,height:950});assert.equal(await configured.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);if([390,1280].includes(width))await configured.screenshot({path:resolve(out,'pilot-slug-error-'+width+'.png'),fullPage:true});}
+ mode='ok';await configured.getByRole('button',{name:'Reintentar tras guardar en Clerk'}).click();
+ await expect(configured.getByRole('status')).toContainText('Ahora podés seleccionar');assert.deepEqual(calls[5],calls[6]);await configured.close();
+ assert.equal(calls.length,7);assert.ok(calls.every(c=>c.organization==='org-internal'&&c.project==='project-internal'&&c.body.confirmIsolatedPilot===true));assert.deepEqual(errors,[]);
+ const proof={result:'PASS',environment:'real-component-with-synthetic-identity-provider-responses',explicitConfirmation:true,identicalRetry:true,scopeMismatchRejected:true,roleFailureBlocked:true,widths:[320,390,768,1280],requests:7,pageErrors:0,slugConfigurationExplained:true,noAutomaticRetry:true,configurationRetryPreservesAttempt:true};writeFileSync(resolve(out,'proof.json'),JSON.stringify(proof,null,2));console.log(JSON.stringify(proof));
 }catch(error){console.error(JSON.stringify({pageErrors:errors}));throw error;}finally{await browser?.close();await new Promise(resolve=>server.close(resolve));}

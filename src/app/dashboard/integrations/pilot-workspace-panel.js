@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { tokens } from '@/lib/design-system';
+import { pilotWorkspaceRecoveryState } from '@/lib/whatsapp/pilot-provider-errors';
 import { evidenceScopeHeaders } from '@/lib/evidence-capture-policy';
 import styles from './platform-preflight-panel.module.css';
 export default function PilotWorkspacePanel({ organizationId, projectId }) {
@@ -9,7 +10,7 @@ export default function PilotWorkspacePanel({ organizationId, projectId }) {
   const [name, setName] = useState('Piloto Marcelo y Victoria'), [projectName, setProjectName] = useState('Obra piloto - Marcelo y Victoria');
   const [accepted, setAccepted] = useState(false), [state, setState] = useState('idle'), [error, setError] = useState(''), [result, setResult] = useState(null);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
-  const frozen = ['saving','uncertain','blocked','ready'].includes(state);
+  const frozen = ['saving','uncertain','configuration','blocked','ready'].includes(state);
   async function submit(event) {
     event.preventDefault(); if (pending.current || !accepted || ['blocked','ready'].includes(state)) return;
     request.current ||= { organizationName: name.trim(), projectName: projectName.trim(), confirmIsolatedPilot: true };
@@ -20,10 +21,10 @@ export default function PilotWorkspacePanel({ organizationId, projectId }) {
         headers: { 'Content-Type': 'application/json', ...evidenceScopeHeaders({ organizationId, projectId }) }, body: JSON.stringify(request.current) });
       const body = await response.json().catch(() => null);
       if (!alive.current) return;
-      if (!response.ok) { const failure = new Error(typeof body?.error === 'string' ? body.error + (body.code ? ` (${body.code})` : '') : 'Alta no confirmada.'); failure.status = response.status; throw failure; }
+      if (!response.ok) { const failure = new Error(typeof body?.error === 'string' ? body.error + (body.code ? ` (${body.code})` : '') : 'Alta no confirmada.'); failure.status = response.status; failure.code = typeof body?.code === 'string' ? body.code : null; throw failure; }
       if (body?.context?.organizationId !== organizationId || body.context.projectId !== projectId || body.status !== 'READY_FOR_CONNECTION' || !body.organization?.id || !body.project?.id || body.connectionCreated !== false || body.messagesSent !== false) throw new Error('Respuesta no confirmada para esta obra.');
       setResult(body); setState('ready'); router.refresh();
-    } catch (failure) { if (alive.current) { if (failure.status === 400) request.current = null; setState(failure.status === 400 ? 'idle' : [401,403,404,409].includes(failure.status) ? 'blocked' : 'uncertain'); setError(failure.name === 'AbortError' ? 'El alta podría haberse completado. Verificá el mismo intento sin crear otra empresa.' : failure.message); } }
+    } catch (failure) { if (alive.current) { if (failure.status === 400) request.current = null; setState(pilotWorkspaceRecoveryState(failure)); setError(failure.name === 'AbortError' ? 'El alta podría haberse completado. Verificá el mismo intento sin crear otra empresa.' : failure.message); } }
     finally { clearTimeout(timeout); pending.current = false; }
   }
   const css = { '--preflight-bg': tokens.colors.bg.secondary, '--preflight-border': tokens.colors.border.default, '--preflight-accent': tokens.colors.accent.primary, '--preflight-text': tokens.colors.text.primary, '--preflight-muted': tokens.colors.text.secondary };
@@ -33,10 +34,11 @@ export default function PilotWorkspacePanel({ organizationId, projectId }) {
       <label>Empresa piloto<input aria-label="Empresa piloto" minLength={3} maxLength={100} required value={name} disabled={frozen} onChange={event => setName(event.target.value)} /></label>
       <label>Obra del piloto<input aria-label="Obra del piloto" minLength={3} maxLength={100} required value={projectName} disabled={frozen} onChange={event => setProjectName(event.target.value)} /></label>
       <label className={styles.pilotConsent}><input type="checkbox" checked={accepted} disabled={frozen} onChange={event => setAccepted(event.target.checked)} />Confirmo crear una organización y una obra de prueba, con acceso del titular. No copiar datos, enviar invitaciones ni activar pagos.</label>
-      <button type="submit" disabled={!accepted || ['saving','blocked','ready'].includes(state)}>{state === 'saving' ? 'Preparando espacio aislado…' : state === 'uncertain' ? 'Verificar el mismo intento' : state === 'ready' ? 'Piloto preparado' : 'Crear empresa piloto'}</button>
+      <button type="submit" disabled={!accepted || ['saving','blocked','ready'].includes(state)}>{state === 'saving' ? 'Preparando espacio aislado…' : state === 'configuration' ? 'Reintentar tras guardar en Clerk' : state === 'uncertain' ? 'Verificar el mismo intento' : state === 'ready' ? 'Piloto preparado' : 'Crear empresa piloto'}</button>
     </form>
     <p className={styles.scope}>El alta usa la identidad autenticada y mantiene separados los datos. Repetir el mismo intento recupera el mismo espacio. No conecta WhatsApp, no crea trabajadores y no cambia planes de otros clientes.</p>
     {error && <p role="alert" className={styles.error}>{error}</p>}
+    {state === 'configuration' && <p className={styles.scope} role="status">Configuración pendiente de identidad. Los nombres se conservan. No se cambió la configuración de Meta ni se enviaron mensajes; reintentá sólo después de guardar el ajuste en Clerk.</p>}
     {result && <div className={styles.results}><article><h3>{result.organization.name}</h3><p>{result.project.name}</p><strong>Destino preparado</strong><p role="status">Ahora podés seleccionar esta empresa y obra en la importación del número piloto.</p></article></div>}
   </section>;
 }
