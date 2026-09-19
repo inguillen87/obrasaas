@@ -70,3 +70,13 @@ test('historical unassigned intake is not presented as the current membership st
   assert.match(code, /vinculación actual/);
   assert.doesNotMatch(code, /mensajes esperan vinculación/);
 });
+
+test('connected pilot summary consumes client design exports inside an explicit client boundary', async () => {
+  const fs = await import('node:fs/promises');
+  const component = await fs.readFile(new URL('../src/app/dashboard/integrations/pilot-connection-progress.js', import.meta.url), 'utf8');
+  const design = await fs.readFile(new URL('../src/lib/design-system.js', import.meta.url), 'utf8');
+  assert.match(design, /["']use client["']/);
+  assert.match(component, /^['"]use client['"];\s/);
+  assert.match(component, /tokens\.colors\.bg\.secondary/);
+  assert.doesNotMatch(component, /getPrisma|clerkClient|encryptedAccessToken/);
+});

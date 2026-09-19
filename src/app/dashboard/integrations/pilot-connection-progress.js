@@ -1,3 +1,5 @@
+'use client';
+
 import { tokens } from '@/lib/design-system';
 import styles from './whatsapp-connect-experience.module.css';
 export default function PilotConnectionProgress({ progress }) {

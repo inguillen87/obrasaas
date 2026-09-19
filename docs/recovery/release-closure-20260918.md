@@ -23,3 +23,6 @@ No se sustituye la base principal por la de Preview, no se desactivan las guarda
 La suite, lint, build y el ensayo de navegador de esta entrega se registran con el SHA y su resultado en el PR. El navegador controlado usa el componente real y HTTP sintético: consulta sin envío, consentimiento explícito, respuesta perdida, intento idéntico y estados de entrega separados. Se comprueba adaptación a 320/390/768/1280 píxeles.
 
 La prueba física del mensaje se documenta separadamente con registro entrante, mensaje saliente del backend y estado confirmado por Meta. Un mensaje enviado desde la consola de Meta no cuenta como respuesta de ObraSaaS. No declarar esta fase publicada en producción por un build local o un preview READY.
+
+## Regresión descubierta en la sesión publicada
+La prueba autenticada del primer candidato detectó un error en el resumen del piloto: un componente de servidor intentaba leer tokens del módulo de diseño marcado como cliente. El resumen se ubica ahora explícitamente en la frontera cliente y conserva únicamente las propiedades ya sanitizadas. Se añade una regresión de ese contrato. Un build aprobado no había probado esta rama dependiente de un piloto conectado; la validación publicada se mantiene como paso independiente.
