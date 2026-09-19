@@ -20,7 +20,7 @@ jobs:
           POSTGRES_DB: obrasaas_security_ci
         ports: ['5432:5432']
         options: >-
-          --health-cmd 'pg_isready -U obrasaas_security_ci -d obrasaas_security_ci'
+          --health-cmd "pg_isready -U obrasaas_security_ci -d obrasaas_security_ci"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 12
