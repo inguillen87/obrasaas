@@ -1,3 +1,4 @@
+import PilotChannelProofPanel from './pilot-channel-proof-panel';
 import { databaseOrganizationIsInternal } from '@/lib/organization-policy';
 import PilotConnectionProgress from './pilot-connection-progress';
 import { readPilotConnectionProgress } from '@/lib/whatsapp/pilot-connection-progress';
@@ -126,6 +127,7 @@ export default async function IntegrationsPage() {
           assets={pilotImportAssets}
         />
       )}
+      {pilotPanelEnabled && <PilotChannelProofPanel organizationId={access.organization.id} projectId={access.project.id} targets={pilotImportCatalog.targets} />}
       </details>}
       <AiProcessingControls
         canManage={hasTenantPermission(access, "tenant:members:manage")}
