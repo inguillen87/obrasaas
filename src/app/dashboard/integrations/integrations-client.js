@@ -10,6 +10,7 @@ import {
   whatsappReconnectRequired,
 } from './channel-client-state';
 import WhatsAppConnectExperience from './whatsapp-connect-experience';
+import ChannelRecoveryPanel from './channel-recovery-panel';
 import TenantWhatsAppWorkspace from './tenant-whatsapp-workspace';
 import { evidenceScopeHeaders } from '@/lib/evidence-capture-policy';
 import styles from './integrations.module.css';
@@ -208,6 +209,7 @@ export default function IntegrationsClient({
   const [preparedWorkspace, setPreparedWorkspace] = useState(null);
   const preparedRevisionRef = useRef(null);
   const [channelHealth, setChannelHealth] = useState(initialHealth);
+  const [lifecycleView, setLifecycleView] = useState(null);
   const [healthDiagnostics, setHealthDiagnostics] = useState(initialHealthDiagnostics);
   const [healthPending, setHealthPending] = useState(false);
   const [sdkReady, setSdkReady] = useState(false);
@@ -237,9 +239,13 @@ export default function IntegrationsClient({
   const linked = whatsappConnectionLinked(connection);
   const connectionIdentity = whatsappConnectionIdentity(connection);
   const connectionActive = whatsappConnectionActive(connection);
-  const graphReady = whatsappGraphAccessReady(connection, channelHealth);
+  const lifecycleMatches = lifecycleView?.organizationId === organizationId && lifecycleView?.projectId === projectId;
+  const lifecycleBlocked = linked && (!lifecycleMatches || lifecycleView.state !== 'ready' || lifecycleView.credential?.blocksProviderActions !== false);
+  const lifecycleContextBlocked = linked && lifecycleMatches && lifecycleView.state === 'blocked';
+  const lifecycleReauthorization = linked && lifecycleMatches && lifecycleView.credential?.reauthorizationRequired === true;
+  const graphReady = whatsappGraphAccessReady(connection, channelHealth) && !lifecycleBlocked;
   const remoteVerificationUnavailable = linked && !graphReady;
-  const reconnectRequired = whatsappReconnectRequired(connection, channelHealth);
+  const reconnectRequired = whatsappReconnectRequired(connection, channelHealth) || lifecycleReauthorization;
   const safeInitialFlowCatalog = Array.isArray(initialFlowCatalog)
     ? initialFlowCatalog
     : EMPTY_CATALOG;
@@ -251,7 +257,7 @@ export default function IntegrationsClient({
   const presentedFlowNotice = graphReady ? flowNotice : null;
   const presentedTemplateNotice = graphReady ? templateNotice : null;
   const configured = Boolean(appId && configId && platformReady);
-  const healthStateClass = channelHealth?.degraded
+  const healthStateClass = lifecycleBlocked || channelHealth?.degraded
     ? styles.degradedState
     : channelHealth?.operational
       ? styles.connected
@@ -292,6 +298,7 @@ export default function IntegrationsClient({
     remoteChannelEpochRef.current += 1;
     healthRequestSequenceRef.current += 1;
     setChannelHealth(null);
+    setLifecycleView(null);
     setHealthDiagnostics(null);
     setFlowCatalog(Array.isArray(initialFlowCatalog) ? initialFlowCatalog : []);
     setFlowEndpoint(null);
@@ -486,7 +493,7 @@ export default function IntegrationsClient({
   }, [connectionIdentity, graphReady, advancedOpen]);
 
   function startSignup() {
-    if (internalWorkspace || pending || signupActiveRef.current) return;
+    if (internalWorkspace || pending || lifecycleContextBlocked || signupActiveRef.current) return;
     if (preparedWorkspace?.allowed !== true) { setStatus({ type: 'error', text: 'Guardá la preparación y abrí la primera obra elegida antes de autorizar.' }); return; }
     preparedRevisionRef.current = preparedWorkspace.revision;
     if (!/^\d{6}$/.test(registrationPin)) {
@@ -562,6 +569,7 @@ export default function IntegrationsClient({
   }
 
   async function verifyChannel() {
+    if (lifecycleContextBlocked || healthPending) return;
     setHealthPending(true);
     setStatus({ type: 'progress', text: 'Verificando token, permisos, teléfono y suscripción en Meta…' });
     try {
@@ -708,7 +716,7 @@ export default function IntegrationsClient({
             <h2>WhatsApp Business</h2>
           </div>
           <span className={`${styles.state} ${healthStateClass}`}>
-            {channelHealth?.label || 'Estado pendiente'}
+            {lifecycleBlocked ? (lifecycleReauthorization ? 'Reautorizar WhatsApp' : 'Estado por verificar') : channelHealth?.label || 'Estado pendiente'}
           </span>
         </div>
 
@@ -719,14 +727,20 @@ export default function IntegrationsClient({
 
         {!internalWorkspace && <TenantWhatsAppWorkspace organizationId={organizationId} projectId={projectId} companyName={companyName}
           onState={setPreparedWorkspace} connectionPending={pending} />}
+        {linked && !internalWorkspace && <ChannelRecoveryPanel key={organizationId + ':' + projectId}
+          organizationId={organizationId} projectId={projectId} refreshKey={healthDiagnostics?.checkedAt || ''}
+          busy={pending || healthPending || Boolean(flowPendingKey) || Boolean(templatePendingKey)}
+          onStatus={setLifecycleView} onVerify={verifyChannel} />}
+        <div id="customer-whatsapp-authorization" tabIndex={-1}>
         <WhatsAppConnectExperience companyName={companyName} projectName={projectName} internalWorkspace={internalWorkspace}
           linked={linked} reconnectRequired={reconnectRequired} configured={configured} sdkReady={sdkReady}
-          pending={pending} blocked={healthPending || Boolean(flowPendingKey) || Boolean(templatePendingKey) || preparedWorkspace?.allowed !== true}
+          pending={pending} blocked={healthPending || lifecycleContextBlocked || Boolean(flowPendingKey) || Boolean(templatePendingKey) || preparedWorkspace?.allowed !== true}
           pin={registrationPin} onPinChange={value => { pinRef.current = value; setRegistrationPin(value); }}
           onConnect={startSignup} diagnostics={healthDiagnostics} canReadInbox={canReadInbox} />
+        </div>
         {pilotImportEnabled && <p className={styles.pilotTargetSummary}>El número piloto se administra en <a href="#platform-technical-tools">Administración técnica</a>. La autorización de clientes se realiza con Meta.</p>}
         <details className={styles.technicalTools}><summary>Ver estado detallado de la conexión</summary>
-        {channelHealth && (
+        {channelHealth && !lifecycleBlocked && (
           <section className={styles.readinessPanel} aria-labelledby="whatsapp-readiness-title">
             <div className={styles.readinessHeader}>
               <div>

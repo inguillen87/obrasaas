@@ -48,3 +48,6 @@ Se agregó el seguimiento de la invitación, el enlace al alta exacta y la compr
 
 ## Continuación S11.A5.1: menú nativo de campo
 Leer `native-whatsapp-field-menu.md`. Archivos nuevos: `field-interactive-menu.js` (catálogo, binding público, descriptor y contrato de lista) y `field-menu-delivery.js` (revalidación del participante antes de materializar). El motor, queue y dispatcher usan ese descriptor opcional; el sender exige credencial del tenant/número exactos. Las opciones de jornada delegan al dominio de asistencia; no crear otro sistema de fichaje. Verificador: `node scripts/verify-native-field-menu.mjs`, renderer local etiquetado con normalizador/motor reales y estado sintético. La entrega por Meta y la configuración vigente de Production se comprueban aparte. No reenviar texto ni lista automáticamente después de un resultado incierto.
+
+## Continuación S11.A6: vigencia y recuperación del canal
+Leer `whatsapp-credential-recovery.md`. La lectura de vigencia no renueva credenciales ni envía mensajes. El panel aplica aviso/deadline por obra sin perder la preparación y conduce a la autorización existente. Ejecutar `node scripts/verify-channel-recovery-ui.mjs`; usa componentes reales con identidad/HTTP controlados, no consentimiento Meta ni entrega física. Mantener pendientes las pruebas operativas y el pase de Production hasta verificarlos por separado.

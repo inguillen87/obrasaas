@@ -10,11 +10,11 @@ export default function WhatsAppConnectExperience({ companyName, projectName, in
   const outbound = Boolean(diagnostics?.lastConfirmedOutboundAt);
   const css = { '--connect-bg': tokens.colors.bg.secondary, '--connect-border': tokens.colors.border.default, '--connect-accent': tokens.colors.accent.primary, '--connect-muted': tokens.colors.text.secondary, '--connect-text': tokens.colors.text.primary };
   return <section className={styles.panel} style={css} aria-label="Conectar WhatsApp paso a paso">
-    <header><span className={styles.eyebrow}>CONEXIÓN GUIADA</span><h2>{internalWorkspace ? 'Administración de canales de clientes' : needsConnect ? 'Conectá el WhatsApp de tu empresa' : 'Tu número ya está vinculado'}</h2><p>{companyName} · {projectName}</p></header>
+    <header><span className={styles.eyebrow}>CONEXIÓN GUIADA</span><h2>{internalWorkspace ? 'Administración de canales de clientes' : needsConnect ? (reconnectRequired ? 'Recuperá el WhatsApp de esta obra' : 'Conectá el WhatsApp de tu empresa') : 'Tu número ya está vinculado'}</h2><p>{companyName} · {projectName}</p></header>
     {internalWorkspace && <p className={styles.notice}>Estás en la administración interna de ObraSaaS. Cada empresa autoriza su número desde su propio espacio. Para el ensayo, usá el destino piloto ya preparado en Administración técnica.</p>}
     <p className={styles.lead}>Vos autorizás la cuenta y elegís el número en Meta. ObraSaaS se encarga de validar y guardar la conexión. No tenés que copiar tokens ni claves de la app.</p>
     <ol className={styles.steps}>
-      <li data-done={linked}><b>1</b><div><strong>Autorizar en Meta</strong><span>Elegí la cuenta de tu empresa y verificá su número cuando Meta lo solicite.</span></div></li>
+      <li data-done={linked && !reconnectRequired}><b>1</b><div><strong>Autorizar en Meta</strong><span>Elegí la cuenta de tu empresa y verificá su número cuando Meta lo solicite.</span></div></li>
       <li data-done={linked}><b>2</b><div><strong>Vincular a la obra</strong><span>La conexión se guarda en el destino que estás viendo, no en otra empresa.</span></div></li>
       <li data-done={inbound && outbound}><b>3</b><div><strong>Comprobar una conversación</strong><span>{inbound ? 'Hay entrada registrada. ' : 'Falta recibir un mensaje en esta obra. '}{outbound ? 'Hay salida confirmada desde ObraSaaS.' : 'Falta confirmar la respuesta de ObraSaaS.'}</span></div></li>
     </ol>
