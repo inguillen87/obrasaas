@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { readTaskRestrictionStatus } from './task-restriction-status.js';
 import { normalizeProgressMeasurementQuantity, progressMeasurementPercent, compareProgressMeasurementQuantities } from './progress-measurement-quantity.js';
 const ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,189}$/;
 export const FIELD_STATUS_PAGE_SIZE = 50;
@@ -34,7 +35,7 @@ function measuredBalance(balance) {
   if (compareProgressMeasurementQuantities(completed, baseline) > 0) throw new ScheduleFieldStatusError('La medición requiere conciliación.', 'FIELD_STATUS_INCONSISTENT', 503);
   return { percent: progressMeasurementPercent(completed, baseline), baseline, completed, unit: balance.unitCode, revision: balance.revision, updatedAt: iso(balance.updatedAt), measurementId: balance.lastApprovedMeasurementId };
 }
-export async function readScheduleFieldStatus(prisma, { scope, query = {}, canReadMeasurements = false }) {
+export async function readScheduleFieldStatus(prisma, { scope, query = {}, canReadMeasurements = false, now = new Date() }) {
   const organizationId = identifier(scope?.organizationId), projectId = identifier(scope?.projectId);
   const taskId = query.taskId ? identifier(query.taskId) : null;
   const after = query.after ? identifier(query.after) : null;
@@ -53,10 +54,11 @@ export async function readScheduleFieldStatus(prisma, { scope, query = {}, canRe
       canReadMeasurements && taskIds.length ? tx.taskProgressMeasurementBalance.findMany({ where: { ...where, organizationId }, select: { taskId: true, baseQuantity: true, approvedCumulativeQuantity: true, unitCode: true, revision: true, updatedAt: true, lastApprovedMeasurementId: true } }) : [],
       tx.dailyLog.count({ where: { projectId, taskId: null } }),
     ]);
+    const restrictions = await readTaskRestrictionStatus(tx, { organizationId, projectId, taskIds, now });
     const payload = { organizationId, projectId, projectName: project.name, canReadMeasurements, unassignedParts,
       tasks: visible.map(task => ({ id: task.id, title: task.title, type: task.type, operationalProgress: task.progress, revision: task.revision,
         startsAt: iso(task.startsAt), endsAt: iso(task.endsAt), updatedAt: iso(task.updatedAt),
-        evidence: counts(evidence, task.id), reports: counts(logs, task.id),
+        evidence: counts(evidence, task.id), reports: counts(logs, task.id), restrictions: restrictions.get(task.id),
         measured: canReadMeasurements ? measuredBalance(balances.find(row => row.taskId === task.id)) : null })),
       page: { limit: FIELD_STATUS_PAGE_SIZE, hasMore: tasks.length > FIELD_STATUS_PAGE_SIZE, nextAfter: tasks.length > FIELD_STATUS_PAGE_SIZE ? visible.at(-1).id : null },
     };

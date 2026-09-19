@@ -1,4 +1,5 @@
 'use client';
+import TaskRestrictionBadge from './task-restriction-badge';
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -486,6 +487,7 @@ export default function GanttPlanner({
                       <span>{task.assignee}</span>
                       <StatusPill tone={task.tone}>{task.status}</StatusPill>
                       {fieldByTask.has(task.id) && <span className={styles.fieldBadge}>
+                        <TaskRestrictionBadge restrictions={fieldByTask.get(task.id).restrictions} />
                         {fieldByTask.get(task.id).evidence.total} evidencias · {fieldByTask.get(task.id).reports.total} partes
                         {fieldByTask.get(task.id).measured && <> · Medido {Number(fieldByTask.get(task.id).measured.percent).toLocaleString('es-AR', { maximumFractionDigits: 4 })}%</>}
                       </span>}

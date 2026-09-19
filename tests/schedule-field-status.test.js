@@ -5,13 +5,14 @@ import { fieldSignalMatches } from '../src/lib/schedule-field-channel.js';
 const scope = { organizationId: 'org-a', projectId: 'project-a' };
 const date = new Date('2026-09-18T12:00:00Z');
 const task = id => ({ id, title: 'Tarea ' + id, type: 'TASK', progress: 10, revision: 2, startsAt: date, endsAt: date, updatedAt: date });
-function database({ tasks = [task('task-a')], evidence = [], logs = [], balances = [], found = true } = {}) {
+function database({ tasks = [task('task-a')], evidence = [], logs = [], balances = [], restrictions = [], found = true } = {}) {
   const calls = { reads: [], balanceReads: 0, writes: 0 };
   const tx = {
     project: { findFirst: async ({ where }) => { assert.deepEqual(where, { id: scope.projectId, organizationId: scope.organizationId }); return found ? { id: scope.projectId, name: 'Obra demo' } : null; } },
     task: { findMany: async options => { calls.reads.push(options); assert.equal(options.where.projectId, scope.projectId); assert.equal(options.where.metadata.equals, 'canonical-task-v1'); return tasks; } },
     progressEvidence: { groupBy: async options => { calls.reads.push(options); assert.equal(options.where.projectId, scope.projectId); return evidence; } },
     dailyLog: { groupBy: async options => { calls.reads.push(options); assert.equal(options.where.projectId, scope.projectId); return logs; }, count: async ({ where }) => { assert.deepEqual(where, { projectId: scope.projectId, taskId: null }); return 1; } },
+    projectBlocker: { groupBy: async options => { assert.equal(options.where.projectId, scope.projectId); assert.equal(options.where.project.organizationId, scope.organizationId); return restrictions; } },
     taskProgressMeasurementBalance: { findMany: async options => { calls.balanceReads++; assert.equal(options.where.organizationId, scope.organizationId); assert.equal(options.where.projectId, scope.projectId); return balances; } },
   };
   return { calls, prisma: { $transaction: async (operation, options) => { assert.equal(options.isolationLevel, 'RepeatableRead'); return operation(tx); } } };
@@ -71,4 +72,23 @@ test('validated task and cursor filters remain bounded inputs', () => {
 test('signals only match the same company/project and protocol version', () => {
   assert.equal(fieldSignalMatches({ version: 1, ...scope }, scope), true);
   for (const signal of [null, { version: 2, ...scope }, { version: 1, ...scope, organizationId: 'org-b' }, { version: 1, ...scope, projectId: 'project-b' }]) assert.equal(fieldSignalMatches(signal, scope), false);
+});
+
+const restrictionGroup = (status, severity, count, dueAt = null) => ({ taskId: 'task-a', status, severity, _count: { _all: count }, _min: { dueAt }, _max: { updatedAt: date } });
+test('Gantt snapshot includes restrictions while preserving progress, baseline dates and measurements', async () => {
+  const { prisma } = database({ restrictions: [restrictionGroup('OPEN','CRITICAL',2),restrictionGroup('RESOLVED','HIGH',3)] });
+  const result = await readScheduleFieldStatus(prisma,{scope});
+  assert.equal(result.tasks[0].restrictions.active,2);assert.equal(result.tasks[0].restrictions.resolved,3);
+  assert.equal(result.tasks[0].operationalProgress,10);assert.equal(result.tasks[0].startsAt,date.toISOString());assert.equal(result.tasks[0].endsAt,date.toISOString());assert.equal(result.tasks[0].measured,null);
+});
+test('resolving a restriction changes the snapshot version without inventing progress',async()=>{
+ const active=await readScheduleFieldStatus(database({restrictions:[restrictionGroup('OPEN','HIGH',1)]}).prisma,{scope});
+ const resolved=await readScheduleFieldStatus(database({restrictions:[restrictionGroup('RESOLVED','HIGH',1)]}).prisma,{scope});
+ assert.notEqual(active.version,resolved.version);assert.equal(resolved.tasks[0].restrictions.active,0);assert.equal(active.tasks[0].operationalProgress,resolved.tasks[0].operationalProgress);
+});
+test('a deadline crossing invalidates the ETag but not the task itself',async()=>{
+ const prisma=database({restrictions:[restrictionGroup('OPEN','LOW',1,'2026-09-19T12:00:00Z')]}).prisma;
+ const before=await readScheduleFieldStatus(prisma,{scope,now:new Date('2026-09-19T11:59:59Z')});
+ const after=await readScheduleFieldStatus(prisma,{scope,now:new Date('2026-09-19T12:00:01Z')});
+ assert.notEqual(before.version,after.version);assert.equal(after.tasks[0].restrictions.overdue,true);assert.equal(before.tasks[0].revision,after.tasks[0].revision);
 });

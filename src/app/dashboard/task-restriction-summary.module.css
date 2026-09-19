@@ -1,0 +1,14 @@
+.card { grid-column: 1 / -1; min-width: 0; padding: 15px; border: 1px solid var(--risk-border); border-radius: 12px; background: var(--risk-bg); color: var(--risk-text); }
+.card[data-attention='true'] { border-left: 3px solid var(--risk-warning); }
+.card[data-critical='true'] { border-left-color: var(--risk-danger); }
+.card header { display: grid; gap: 7px; }
+.card header > span { font-size: .61rem; letter-spacing: .11em; color: var(--risk-muted); font-weight: 700; }
+.card header > strong { font-size: .92rem; line-height: 1.5; }
+.statuses { display: flex; gap: 7px 15px; flex-wrap: wrap; margin: 10px 0; font-size: .75rem; line-height: 1.6; color: var(--risk-muted); }
+.statuses b { color: var(--risk-warning); font-weight: 700; }
+.card .overdue { color: var(--risk-warning); font-weight: 600; margin: 8px 0; font-size: .76rem; }
+.card .due { color: var(--risk-muted); margin: 8px 0; font-size: .76rem; }
+.card a { min-height: 44px; display: inline-flex; align-items: center; gap: 10px; color: var(--risk-text); text-decoration: none; font-size: .8rem; font-weight: 600; }
+.card a:hover { text-decoration: underline; text-underline-offset: 4px; }
+.card small { display: block; color: var(--risk-muted); font-size: .71rem; line-height: 1.6; }
+@media (max-width: 440px) { .card { padding: 12px; } .statuses { gap: 6px 12px; } }

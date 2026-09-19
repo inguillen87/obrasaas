@@ -24,6 +24,7 @@ export default function useScheduleFieldStatus({ organizationId, projectId, task
           failures = 0; setResult({ key, snapshot: current, state: 'verified', error: '', checkedAt: new Date().toISOString() }); return;
         }
         const payload = await response.json().catch(() => null);
+        if (!active) return;
         if (!response.ok) {
           if ([401,403,404,409].includes(response.status)) { blocked = true; current = null; etag = null; }
           throw new Error(payload?.error || 'No se pudo verificar la actualización de campo.');

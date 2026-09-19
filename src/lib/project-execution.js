@@ -88,14 +88,17 @@ const TEAM_INCLUDE = { members: { orderBy: { startsAt: 'asc' }, select: { id: tr
 const ASSIGNMENT_SELECT = { id: true, projectId: true, taskId: true, workerId: true, teamId: true, status: true, startsAt: true, endsAt: true, revision: true };
 const BLOCKER_SELECT = { id: true, projectId: true, taskId: true, ownerWorkerId: true, ownerTeamId: true, title: true, description: true, severity: true, status: true, dueAt: true, resolvedAt: true, resolution: true, revision: true, createdAt: true, updatedAt: true };
 
-export async function listProjectExecution(prisma, { projectId }) {
+export async function listProjectExecution(prisma, { projectId, taskId = null }) {
   const safeProjectId = text(projectId, 'projectId', 190);
+  if (taskId !== null && (typeof taskId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,189}$/.test(taskId))) throw new ProjectExecutionError('La tarea solicitada no es válida.');
+  const focusedTask = taskId ? await prisma.task.findFirst({ where: { id: taskId, projectId: safeProjectId, metadata: { path: ['source'], equals: 'canonical-task-v1' } }, select: { id: true, title: true, type: true } }) : null;
+  if (taskId && !focusedTask) throw new ProjectExecutionError('La tarea no está disponible en esta obra.', 'PROJECT_EXECUTION_TASK_NOT_FOUND', 404);
   const [teams, assignments, blockers] = await Promise.all([
     prisma.workTeam.findMany({ where: { projectId: safeProjectId }, orderBy: [{ status: 'asc' }, { name: 'asc' }], include: TEAM_INCLUDE }),
-    prisma.taskAssignment.findMany({ where: { projectId: safeProjectId }, orderBy: [{ status: 'asc' }, { createdAt: 'desc' }], select: ASSIGNMENT_SELECT }),
-    prisma.projectBlocker.findMany({ where: { projectId: safeProjectId }, orderBy: [{ status: 'asc' }, { dueAt: 'asc' }, { createdAt: 'desc' }], select: BLOCKER_SELECT }),
+    prisma.taskAssignment.findMany({ where: { projectId: safeProjectId, ...(taskId ? { taskId } : {}) }, orderBy: [{ status: 'asc' }, { createdAt: 'desc' }], select: ASSIGNMENT_SELECT }),
+    prisma.projectBlocker.findMany({ where: { projectId: safeProjectId, ...(taskId ? { taskId } : {}) }, orderBy: [{ status: 'asc' }, { dueAt: 'asc' }, { createdAt: 'desc' }], select: BLOCKER_SELECT }),
   ]);
-  return { teams: teams.map(serializeTeam), assignments: assignments.map(serializeAssignment), blockers: blockers.map(serializeBlocker) };
+  return { ...(focusedTask ? { focusedTask } : {}), teams: teams.map(serializeTeam), assignments: assignments.map(serializeAssignment), blockers: blockers.map(serializeBlocker) };
 }
 
 export async function createExecutionRecord(prisma, { scope: scopeInput, actorId, input } = {}) {
