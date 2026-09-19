@@ -64,6 +64,7 @@ try{
   for(const width of [320,390,768,1280]){
     await page.setViewportSize({width,height:1000});const box=await modal.boundingBox();assert.ok(box&&box.x>=0&&box.x+box.width<=width+1,'Dialog overflow '+width);
     assert.equal(await modal.evaluate(el=>el.scrollWidth<=el.clientWidth),true);
+    const caption=await modal.locator('footer small').boundingBox();assert.ok(caption&&caption.width>=150,'Footer explanation is cramped at '+width);
     if([390,1280].includes(width))await page.screenshot({path:resolve(out,'message-blocker-'+width+'.png')});
   }
   await modal.getByRole('button',{name:'Crear restricción abierta'}).click();await expect(modal.getByRole('alert')).toContainText('Respuesta perdida');

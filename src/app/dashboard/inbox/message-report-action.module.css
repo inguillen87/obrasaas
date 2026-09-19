@@ -36,3 +36,9 @@
 .dialog header,.dialog footer { flex: 0 0 auto; }
 .body { overflow-y: auto; min-height: 0; overscroll-behavior: contain; padding: 0 4px; }
 .recovery { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 12px 0; font-size: .82rem; }
+
+/* The restriction dialog has a longer confirmation caption than a plain report. */
+.dialog footer.blockerFooter { display:grid; grid-template-columns:minmax(0,1fr) minmax(210px,320px); align-items:center; gap:18px; }
+.dialog footer.blockerFooter small { min-width:0; }
+.dialog footer.blockerFooter .primary { width:100%; }
+@media(max-width:480px){.dialog footer.blockerFooter{grid-template-columns:minmax(0,1fr);gap:12px}}

@@ -96,7 +96,7 @@ export function MessageBlockerDialog({ organizationId, projectId, projectName, c
       {error&&<p className={styles.warning} role="alert">{error}</p>}
       {['uncertain','blocked'].includes(phase)&&data&&<div className={styles.recovery}><button type="button" onClick={copy}>Copiar detalle revisado</button><span role="status">{copied}</span></div>}
     </div>
-    <footer><small>Texto y antecedentes conservados en la obra. Repetir el mismo intento no genera otra restricción.</small>
+    <footer className={styles.blockerFooter}><small>Texto y antecedentes conservados en la obra. Repetir el mismo intento no genera otra restricción.</small>
       {!data?.existing&&<button type="submit" form={titleId+'-form'} className={styles.primary} disabled={busy||!data||data.canCreate===false||!reviewed||phase==='blocked'||!draft.taskId||!(draft.ownerWorkerId||draft.ownerTeamId)}>
         {busy?'Confirmando…':phase==='uncertain'?'Verificar el mismo intento':'Crear restricción abierta'}</button>}
     </footer>
