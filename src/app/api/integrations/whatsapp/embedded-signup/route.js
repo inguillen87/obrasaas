@@ -1,3 +1,5 @@
+import { assertSignupScreenContext, signupScreenContextResponse } from '@/lib/whatsapp/signup-screen-context';
+import { evidenceContextErrorResponse } from '@/lib/evidence-context';
 import {
   AccessError,
   accessErrorResponse,
@@ -72,15 +74,18 @@ function connectionLeaseErrorResponse(error) {
   }, { status: error.status, headers });
 }
 
-export async function GET() {
+export async function GET(request) {
   try {
     const access = await getPlatformAccess();
     requireTenantPermission(access, 'org:integrations:manage');
+    assertSignupScreenContext(request, access);
     const connection = await getPrisma().whatsAppConnection.findUnique({
       where: { projectId: access.project.id },
     });
-    return Response.json({ connection: safeConnection(connection) });
+    return Response.json({ connection: safeConnection(connection), context: { organizationId: access.organization.id, projectId: access.project.id } }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
+    const contextFailure = signupScreenContextResponse(error) || evidenceContextErrorResponse(error);
+    if (contextFailure) return contextFailure;
     if (error instanceof AccessError) return accessErrorResponse(error);
     console.error('WhatsApp connection read failed:', error);
     return Response.json({ error: 'No se pudo cargar la conexión.' }, { status: 500 });
@@ -95,6 +100,7 @@ export async function POST(request) {
   try {
     access = await getPlatformAccess();
     requireTenantPermission(access, 'org:integrations:manage');
+    assertSignupScreenContext(request, access);
     const body = await readJsonRequest(request, {
       maxBytes: MAX_EMBEDDED_SIGNUP_JSON_BYTES,
     });
@@ -244,7 +250,7 @@ export async function POST(request) {
       });
     }
 
-    return Response.json({ connection: safeConnection(connection) });
+    return Response.json({ connection: safeConnection(connection), context: { organizationId: access.organization.id, projectId: access.project.id } }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     if (connectionLease && !connectionLeaseCommitted && prisma) {
       try {
@@ -257,6 +263,8 @@ export async function POST(request) {
         });
       }
     }
+    const contextFailure = signupScreenContextResponse(error) || evidenceContextErrorResponse(error);
+    if (contextFailure) return contextFailure;
     if (error instanceof AccessError) return accessErrorResponse(error);
     if (error instanceof RequestBodyError) return requestBodyErrorResponse(error);
     if (error instanceof WhatsAppFlowProvisioningLeaseError) {
@@ -288,6 +296,7 @@ export async function DELETE(request) {
   try {
     const access = await getPlatformAccess();
     requireTenantPermission(access, 'org:integrations:manage');
+    assertSignupScreenContext(request, access);
     prisma = getPrisma();
     const existing = await prisma.whatsAppConnection.findUnique({
       where: { projectId: access.project.id },
@@ -338,6 +347,8 @@ export async function DELETE(request) {
         });
       }
     }
+    const contextFailure = signupScreenContextResponse(error) || evidenceContextErrorResponse(error);
+    if (contextFailure) return contextFailure;
     if (error instanceof AccessError) return accessErrorResponse(error);
     if (error instanceof WhatsAppFlowProvisioningLeaseError) {
       return connectionLeaseErrorResponse(error);

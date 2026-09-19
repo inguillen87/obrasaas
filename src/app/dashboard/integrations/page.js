@@ -1,3 +1,6 @@
+import { databaseOrganizationIsInternal } from '@/lib/organization-policy';
+import PilotConnectionProgress from './pilot-connection-progress';
+import { readPilotConnectionProgress } from '@/lib/whatsapp/pilot-connection-progress';
 import IntegrationsClient from "./integrations-client";
 import PlatformPreflightPanel from "./platform-preflight-panel";
 import PilotWorkspacePanel from "./pilot-workspace-panel";
@@ -66,6 +69,7 @@ export default async function IntegrationsPage() {
       ? loadWhatsAppPilotImportTargetCatalog(prisma, access)
       : Promise.resolve({ targets: [], emptyState: null }),
   ]);
+  const pilotProgress = pilotPanelEnabled ? await readPilotConnectionProgress(prisma, { targets: pilotImportCatalog.targets }).catch(() => ({ channels: [], unavailable: true })) : null;
   const metaPlatformReady = Boolean(
     process.env.META_APP_SECRET &&
       process.env.META_VERIFY_TOKEN &&
@@ -80,7 +84,7 @@ export default async function IntegrationsPage() {
           <h1>Integraciones</h1>
           <p>
             Conectá los activos propios de {access.organization.name}. ObraSaaS
-            nunca comparte números, tokens ni cuentas de WhatsApp entre tenants.
+            mantiene separados los números, permisos y datos de cada empresa.
           </p>
         </div>
         <div className={styles.projectBadge}>
@@ -89,13 +93,14 @@ export default async function IntegrationsPage() {
         </div>
       </header>
 
-      {access.isSuperadmin && <PlatformPreflightPanel
-        key={access.organization.id + ':' + access.project.id}
-        organizationId={access.organization.id} projectId={access.project.id}
-        initialConfiguration={inspectWhatsAppPlatformPrerequisites(process.env)} />}
-      {pilotPanelEnabled && <PilotWorkspacePanel key={access.organization.id + ":" + access.project.id} organizationId={access.organization.id} projectId={access.project.id} />}
+      {pilotPanelEnabled && <PilotConnectionProgress progress={pilotProgress} />}
       <IntegrationsClient
-        key={channelHealth.connection?.updatedAt?.toISOString() || "unlinked"}
+        key={access.organization.id + ":" + access.project.id + ":" + (channelHealth.connection?.updatedAt?.toISOString() || "unlinked")}
+        organizationId={access.organization.id} projectId={access.project.id}
+        companyName={access.organization.name} projectName={access.project.name}
+        internalWorkspace={databaseOrganizationIsInternal(access.organization)}
+        canReadInbox={hasTenantPermission(access, "org:conversations:read")}
+        graphVersion={process.env.META_GRAPH_API_VERSION || "v25.0"}
         appId={process.env.NEXT_PUBLIC_META_APP_ID || ""}
         configId={process.env.NEXT_PUBLIC_META_EMBEDDED_SIGNUP_CONFIG_ID || ""}
         platformReady={metaPlatformReady}
@@ -105,6 +110,14 @@ export default async function IntegrationsPage() {
         initialHealthDiagnostics={channelHealth.diagnostics}
         initialFlowCatalog={getWhatsAppFlowCatalog()}
       />
+      {access.isSuperadmin && <details className={styles.technicalTools} id="platform-technical-tools">
+        <summary>Administración técnica · solo ObraSaaS</summary>
+        <p>Este panel es para configurar y probar la plataforma. No forma parte del alta de una empresa cliente.</p>
+      {access.isSuperadmin && <PlatformPreflightPanel
+        key={access.organization.id + ':' + access.project.id}
+        organizationId={access.organization.id} projectId={access.project.id}
+        initialConfiguration={inspectWhatsAppPlatformPrerequisites(process.env)} />}
+      {pilotPanelEnabled && <PilotWorkspacePanel key={access.organization.id + ":" + access.project.id} organizationId={access.organization.id} projectId={access.project.id} />}
       {pilotPanelEnabled && (
         <WhatsAppPilotImportPanel
           currentProjectId={access.project.id}
@@ -113,6 +126,7 @@ export default async function IntegrationsPage() {
           assets={pilotImportAssets}
         />
       )}
+      </details>}
       <AiProcessingControls
         canManage={hasTenantPermission(access, "tenant:members:manage")}
         initialSettings={publicTenantAiSettings(access.organization.metadata)}

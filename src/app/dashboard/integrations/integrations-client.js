@@ -9,6 +9,8 @@ import {
   whatsappGraphAccessRejected,
   whatsappReconnectRequired,
 } from './channel-client-state';
+import WhatsAppConnectExperience from './whatsapp-connect-experience';
+import { evidenceScopeHeaders } from '@/lib/evidence-capture-policy';
 import styles from './integrations.module.css';
 
 const META_ORIGINS = new Set([
@@ -191,6 +193,7 @@ async function readTemplateCatalog({ signal } = {}) {
 }
 
 export default function IntegrationsClient({
+  organizationId, projectId, companyName, projectName, canReadInbox = false, internalWorkspace = false, graphVersion = 'v25.0',
   appId,
   configId,
   platformReady,
@@ -205,6 +208,7 @@ export default function IntegrationsClient({
   const [healthDiagnostics, setHealthDiagnostics] = useState(initialHealthDiagnostics);
   const [healthPending, setHealthPending] = useState(false);
   const [sdkReady, setSdkReady] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [registrationPin, setRegistrationPin] = useState('');
   const [status, setStatus] = useState(null);
   const [pending, setPending] = useState(false);
@@ -221,6 +225,8 @@ export default function IntegrationsClient({
   );
   const signupRef = useRef({ code: null, whatsappBusinessId: null, phoneNumberId: null });
   const pinRef = useRef('');
+  const signupActiveRef = useRef(false);
+  const signupGenerationRef = useRef(0);
   const submittedRef = useRef(false);
   const graphAccessFailureSyncRef = useRef(false);
   const healthRequestSequenceRef = useRef(0);
@@ -331,18 +337,20 @@ export default function IntegrationsClient({
     const signup = signupRef.current;
     if (
       submittedRef.current
+      || !signupActiveRef.current
       || !signup.code
       || !signup.whatsappBusinessId
       || !signup.phoneNumberId
     ) return;
 
     submittedRef.current = true;
+    signupActiveRef.current = false;
     setPending(true);
     setStatus({ type: 'progress', text: 'Validando activos y registrando el número…' });
     try {
       const response = await fetch('/api/integrations/whatsapp/embedded-signup', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...evidenceScopeHeaders({ organizationId, projectId }) },
         body: JSON.stringify({
           code: signup.code,
           whatsappBusinessId: signup.whatsappBusinessId,
@@ -352,6 +360,7 @@ export default function IntegrationsClient({
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || 'No se pudo conectar WhatsApp.');
+      if (payload.context?.organizationId !== organizationId || payload.context?.projectId !== projectId || payload.connection?.linked !== true) throw new Error('No se confirmó la conexión en esta empresa y obra. Revisá Integraciones antes de repetir.');
       invalidateRemoteChannelState();
       setFlowEndpoint(undefined);
       setConnection(payload.connection);
@@ -389,7 +398,7 @@ export default function IntegrationsClient({
         appId,
         cookie: false,
         xfbml: false,
-        version: 'v25.0',
+        version: graphVersion,
       });
       setSdkReady(true);
     };
@@ -407,30 +416,33 @@ export default function IntegrationsClient({
     }
 
     function onMessage(event) {
-      if (!META_ORIGINS.has(event.origin)) return;
+      if (!signupActiveRef.current || !META_ORIGINS.has(event.origin)) return;
       const payload = parseEmbeddedSignupEvent(event.data);
       if (payload?.type !== 'WA_EMBEDDED_SIGNUP') return;
 
       if (payload.event === 'FINISH') {
+        if (!/^\d{5,32}$/.test(payload.data?.waba_id || '') || !/^\d{5,32}$/.test(payload.data?.phone_number_id || '')) return;
         signupRef.current.whatsappBusinessId = payload.data?.waba_id || null;
         signupRef.current.phoneNumberId = payload.data?.phone_number_id || null;
         setStatus({ type: 'progress', text: 'Activos recibidos. Finalizando conexión segura…' });
         submitConnectionFromMetaEvent();
       } else if (payload.event === 'CANCEL') {
+        signupActiveRef.current = false; signupRef.current = {};
         setPending(false);
         setStatus({ type: 'info', text: 'El registro fue cancelado antes de compartir los activos.' });
       } else if (payload.event === 'ERROR') {
+        signupActiveRef.current = false; signupRef.current = {};
         setPending(false);
         setStatus({ type: 'error', text: 'Meta informó un error durante el registro.' });
       }
     }
 
     window.addEventListener('message', onMessage);
-    return () => window.removeEventListener('message', onMessage);
-  }, [appId]);
+    return () => { signupActiveRef.current = false; signupGenerationRef.current += 1; window.removeEventListener('message', onMessage); };
+  }, [appId, graphVersion]);
 
   useEffect(() => {
-    if (!graphReady) return undefined;
+    if (!graphReady || !advancedOpen) return undefined;
     let active = true;
     const remoteChannelEpoch = remoteChannelEpochRef.current;
     const controller = new AbortController();
@@ -467,9 +479,10 @@ export default function IntegrationsClient({
       active = false;
       controller.abort();
     };
-  }, [connectionIdentity, graphReady]);
+  }, [connectionIdentity, graphReady, advancedOpen]);
 
   function startSignup() {
+    if (internalWorkspace || pending || signupActiveRef.current) return;
     if (!/^\d{6}$/.test(registrationPin)) {
       setStatus({ type: 'error', text: 'Definí un PIN de 6 números antes de conectar.' });
       return;
@@ -479,18 +492,21 @@ export default function IntegrationsClient({
       return;
     }
 
+    const generation = ++signupGenerationRef.current; signupActiveRef.current = true;
     signupRef.current = { code: null, whatsappBusinessId: null, phoneNumberId: null };
     pinRef.current = registrationPin;
     submittedRef.current = false;
     setPending(true);
     setStatus({ type: 'progress', text: 'Completá el registro seguro en la ventana de Meta.' });
     window.FB.login((response) => {
+      if (!signupActiveRef.current || generation !== signupGenerationRef.current) return;
       if (response.authResponse?.code) {
         signupRef.current.code = response.authResponse.code;
         void submitConnection();
         return;
       }
       setPending(false);
+      signupActiveRef.current = false;
       setStatus({ type: 'info', text: 'Meta no autorizó la conexión. No se guardó ningún dato.' });
     }, {
       config_id: configId,
@@ -507,6 +523,7 @@ export default function IntegrationsClient({
     try {
       const response = await fetch('/api/integrations/whatsapp/embedded-signup', {
         method: 'DELETE',
+        headers: evidenceScopeHeaders({ organizationId, projectId }),
       });
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
@@ -694,6 +711,13 @@ export default function IntegrationsClient({
           y se convierten en evidencia trazable dentro de la obra correcta.
         </p>
 
+        <WhatsAppConnectExperience companyName={companyName} projectName={projectName} internalWorkspace={internalWorkspace}
+          linked={linked} reconnectRequired={reconnectRequired} configured={configured} sdkReady={sdkReady}
+          pending={pending} blocked={healthPending || Boolean(flowPendingKey) || Boolean(templatePendingKey)}
+          pin={registrationPin} onPinChange={value => { pinRef.current = value; setRegistrationPin(value); }}
+          onConnect={startSignup} diagnostics={healthDiagnostics} canReadInbox={canReadInbox} />
+        {pilotImportEnabled && <p className={styles.pilotTargetSummary}>El número piloto se administra en <a href="#platform-technical-tools">Administración técnica</a>. La autorización de clientes se realiza con Meta.</p>}
+        <details className={styles.technicalTools}><summary>Ver estado detallado de la conexión</summary>
         {channelHealth && (
           <section className={styles.readinessPanel} aria-labelledby="whatsapp-readiness-title">
             <div className={styles.readinessHeader}>
@@ -758,54 +782,7 @@ export default function IntegrationsClient({
           </div>
         )}
 
-        {(!linked || reconnectRequired) && (
-          <div className={styles.connectFlow}>
-            <label htmlFor="whatsapp-pin">
-              <span>PIN de registro del número</span>
-              <input
-                id="whatsapp-pin"
-                type="password"
-                inputMode="numeric"
-                autoComplete="new-password"
-                maxLength={6}
-                placeholder="6 números"
-                value={registrationPin}
-                onChange={(event) => {
-                  const nextPin = event.target.value.replace(/\D/g, '').slice(0, 6);
-                  pinRef.current = nextPin;
-                  setRegistrationPin(nextPin);
-                }}
-              />
-              <small>No es un código SMS. Es el PIN de 2 pasos que protegerá el número en Meta.</small>
-            </label>
-            <button
-              type="button"
-              className={styles.primaryButton}
-              onClick={startSignup}
-              disabled={
-                !configured
-                || !sdkReady
-                || pending
-                || healthPending
-                || Boolean(flowPendingKey)
-                || Boolean(templatePendingKey)
-              }
-            >
-              <i className="fa-brands fa-meta" aria-hidden="true" />
-              {pending ? 'Conectando…' : linked ? 'Reconectar con Meta' : 'Conectar con Meta'}
-            </button>
-            {reconnectRequired && (
-              <small>
-                La identidad del WABA se conserva. Meta debe emitir una credencial nueva antes de
-                volver a habilitar operaciones autenticadas.
-                {pilotImportEnabled && (
-                  <> En este Preview también podés usar la <a href="#pilot-import-title">importación piloto cifrada</a>.</>
-                )}
-              </small>
-            )}
-          </div>
-        )}
-
+        </details>
         {status && (
           <div className={`${styles.notice} ${styles[status.type]}`} role="status">
             {status.text}
@@ -851,7 +828,7 @@ export default function IntegrationsClient({
               </button>
             )}
           </div>
-          <span>{configured ? 'Embedded Signup v4 listo' : 'Activación técnica pendiente'}</span>
+          <span>{configured ? 'Autorización con Meta configurada · pendiente de validación comercial' : 'Habilitación a cargo de ObraSaaS'}</span>
         </div>
       </section>
 
@@ -873,6 +850,7 @@ export default function IntegrationsClient({
       </aside>
       </div>
 
+      <details className={styles.technicalTools} onToggle={event => setAdvancedOpen(event.currentTarget.open)}><summary>Formularios y automatizaciones · configuración avanzada</summary>
       <section className={styles.flowsSection} aria-labelledby="whatsapp-flows-title">
         <header className={styles.flowsHeader}>
           <div>
@@ -1080,6 +1058,7 @@ export default function IntegrationsClient({
           </div>
         </div>
       </section>
+      </details>
     </>
   );
 }
