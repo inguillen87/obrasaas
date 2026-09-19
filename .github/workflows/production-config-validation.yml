@@ -1,0 +1,114 @@
+name: Validate production configuration before integration
+on:
+  push:
+    branches: ['validation/production-config-20260919']
+permissions:
+  contents: write
+concurrency:
+  group: production-config-validation-20260919
+  cancel-in-progress: false
+jobs:
+  validate-and-integrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      PRISMA_ALLOW_EMPTY_DATABASE_URL: '1'
+    steps:
+      - name: Read isolated validation payload
+        uses: actions/checkout@v7
+        with:
+          path: harness
+          persist-credentials: false
+      - name: Checkout exact application base
+        uses: actions/checkout@v7
+        with:
+          ref: 7481591c10ead6060ec050fd2a80126ff23eb245
+          path: candidate
+      - name: Install locked dependencies
+        working-directory: candidate
+        run: npm ci
+      - name: Read installed framework build guidance
+        working-directory: candidate
+        shell: bash
+        run: |
+          find node_modules/next/dist/docs -iname '*environment*' -type f -print -exec head -n 45 {} \; || true
+      - name: Apply reviewed payload with source hash checks
+        shell: bash
+        run: |
+          mkdir -p proof
+          python3 - <<'PY'
+          import pathlib, subprocess, json
+          root=pathlib.Path('candidate')
+          expected='7481591c10ead6060ec050fd2a80126ff23eb245'
+          assert subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip()==expected
+          assert subprocess.check_output(['git','rev-parse','HEAD:scripts/inspect-release-configuration.mjs'],cwd=root,text=True).strip()=='954bbf2a2f0f40d148be71fd94908dfc61d4e38b'
+          files={
+            'scripts/lib/production-configuration-check.mjs':'6cdd4d062a34b5870832b50a296544d60c97956c',
+            'scripts/inspect-release-configuration.mjs':'59f01bf477ed20f208002ba4358141f6d531f09e',
+            'tests/production-configuration-check.test.js':'76e3c81e3ccb0491c0d71c4587112fadff03a879',
+            'tests/production-configuration-entrypoint.test.js':'d71e14473335b044df8cbcd253fc676a88ef7f2f',
+            'docs/recovery/production-configuration-preflight.md':'b22089440e9e128cb01e226c8e64b3e39868d1bc',
+          }
+          for name, sha in files.items():
+            source=pathlib.Path('harness/.release-validation')/name
+            assert subprocess.check_output(['git','hash-object',str(source)],text=True).strip()==sha
+            target=root/name
+            if name!='scripts/inspect-release-configuration.mjs': assert not target.exists()
+            target.parent.mkdir(parents=True,exist_ok=True)
+            target.write_bytes(source.read_bytes())
+          pathlib.Path('proof/payload.json').write_text(json.dumps({'base':expected,'files':files},indent=2))
+          PY
+      - name: Full unit and contract suite
+        working-directory: candidate
+        shell: bash
+        run: |
+          npm test > ../proof/tests.log 2>&1 || { tail -n 100 ../proof/tests.log; exit 1; }
+          tail -n 10 ../proof/tests.log
+      - name: Lint affected code
+        working-directory: candidate
+        shell: bash
+        run: |
+          npx eslint scripts/lib/production-configuration-check.mjs scripts/inspect-release-configuration.mjs tests/production-configuration-check.test.js tests/production-configuration-entrypoint.test.js > ../proof/lint.log 2>&1 || { cat ../proof/lint.log; exit 1; }
+      - name: Complete production bundle build without production credentials
+        working-directory: candidate
+        shell: bash
+        run: |
+          npm run build > ../proof/build.log 2>&1 || { tail -n 100 ../proof/build.log; exit 1; }
+          tail -n 16 ../proof/build.log
+          git diff --check
+      - name: Confirm preflight stops incomplete production configuration
+        working-directory: candidate
+        shell: bash
+        run: |
+          set +e
+          VERCEL_ENV=production node scripts/inspect-release-configuration.mjs > ../proof/synthetic-incomplete-production.json
+          result=$?
+          set -e
+          test "$result" -eq 1
+          node --input-type=module -e "import fs from 'node:fs'; const r=JSON.parse(fs.readFileSync('../proof/synthetic-incomplete-production.json')); if(r.productionPrerequisites.status!=='BLOCKED'||r.runtimeVerified!==false||r.providerVerified!==false) process.exit(1)"
+      - name: Commit only validated application files if branch is unchanged
+        working-directory: candidate
+        shell: bash
+        run: |
+          expected=7481591c10ead6060ec050fd2a80126ff23eb245
+          branch=codex/saas-recovery-20260917
+          actual=$(git ls-remote origin "refs/heads/$branch" | cut -f1)
+          test "$actual" = "$expected"
+          git add -- scripts/lib/production-configuration-check.mjs scripts/inspect-release-configuration.mjs tests/production-configuration-check.test.js tests/production-configuration-entrypoint.test.js docs/recovery/production-configuration-preflight.md
+          test "$(git diff --cached --name-only | wc -l)" -eq 5
+          git diff --cached --check
+          git diff --cached --stat > ../proof/changes.txt
+          git config user.name 'ObraSaaS Release Validation'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'build: check production prerequisites before migrations [skip ci]'
+          git push origin "HEAD:$branch"
+          git rev-parse HEAD | tee ../proof/application-sha.txt
+      - name: Preserve exact validation evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: production-config-validation-${{ github.run_id }}
+          path: proof/
+          if-no-files-found: warn
+          retention-days: 7
