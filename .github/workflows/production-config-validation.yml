@@ -1,50 +1,191 @@
-name: Classify locked production dependency audit
+name: Validate targeted security dependency update
 on:
   push:
     branches: ['validation/production-config-20260919']
 permissions:
-  contents: read
+  contents: write
+concurrency:
+  group: production-config-validation-20260919
+  cancel-in-progress: false
 jobs:
-  production-dependency-audit:
+  security-release-validation:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+        env:
+          POSTGRES_USER: obrasaas_security_ci
+          POSTGRES_PASSWORD: obrasaas_security_ci
+          POSTGRES_DB: obrasaas_security_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd 'pg_isready -U obrasaas_security_ci -d obrasaas_security_ci'
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      DATABASE_URL: postgresql://obrasaas_security_ci:obrasaas_security_ci@127.0.0.1:5432/obrasaas_security_ci?schema=public
+      DATABASE_URL_UNPOOLED: postgresql://obrasaas_security_ci:obrasaas_security_ci@127.0.0.1:5432/obrasaas_security_ci?schema=public
+      DIRECT_URL: postgresql://obrasaas_security_ci:obrasaas_security_ci@127.0.0.1:5432/obrasaas_security_ci?schema=public
     steps:
-      - name: Checkout validated candidate
+      - name: Read isolated validation payload
+        uses: actions/checkout@v7
+        with:
+          path: harness
+          persist-credentials: false
+      - name: Checkout exact application base
         uses: actions/checkout@v7
         with:
           ref: b47980aa948899dbb30af91a344a10b07f6bebd4
-          persist-credentials: false
-      - name: Use project Node version
+          path: candidate
+      - name: Use Node 24
         uses: actions/setup-node@v7
         with:
           node-version: 24
-      - name: Audit locked runtime dependency graph without installs or changes
+      - name: Prepare only reviewed dependency updates
+        working-directory: candidate
         shell: bash
         run: |
-          mkdir -p /tmp/obrasaas-audit
-          set +e
-          npm audit --omit=dev --package-lock-only --json > /tmp/obrasaas-audit/production.json
-          result=$?
-          set -e
-          echo "$result" > /tmp/obrasaas-audit/npm-exit-code.txt
+          mkdir -p ../security-proof
+          cp package-lock.json ../security-proof/before-lock.json
           node --input-type=module <<'JS'
           import fs from 'node:fs';
-          const data=JSON.parse(fs.readFileSync('/tmp/obrasaas-audit/production.json','utf8'));
-          if (!data.metadata?.vulnerabilities || data.error) throw new Error('Dependency audit not confirmed');
-          const summary={scope:'locked-production-dependencies-only',candidate:'b47980aa948899dbb30af91a344a10b07f6bebd4',counts:data.metadata.vulnerabilities,
-            findings:Object.entries(data.vulnerabilities || {}).map(([name,value])=>({name,severity:value.severity,isDirect:value.isDirect,range:value.range,fixAvailable:value.fixAvailable,
-              advisories:value.via.filter(item=>typeof item==='object').map(item=>({name:item.name,title:item.title,url:item.url,range:item.range})),viaPackages:value.via.filter(item=>typeof item==='string')}))};
-          fs.writeFileSync('/tmp/obrasaas-audit/summary.json',JSON.stringify(summary,null,2));
-          console.log(JSON.stringify(summary,null,2));
-          if(data.metadata.vulnerabilities.high>0 || data.metadata.vulnerabilities.critical>0) process.exitCode=1;
+          import assert from 'node:assert/strict';
+          const p=JSON.parse(fs.readFileSync('package.json','utf8'));
+          assert.equal(p.dependencies.next,'16.2.11');
+          assert.equal(p.devDependencies['eslint-config-next'],'16.2.11');
+          assert.equal(p.devDependencies.sharp,'0.35.3');
+          assert.equal(p.overrides.sharp,'0.35.3');
+          assert.equal(p.overrides['fast-uri'],'3.1.5');
+          assert.equal(p.overrides['@prisma/config'],undefined);
+          p.dependencies.next='16.3.5';
+          p.devDependencies['eslint-config-next']='16.3.5';
+          p.devDependencies.sharp='0.35.4';
+          p.overrides.sharp='0.35.4';
+          p.overrides['fast-uri']='3.1.6';
+          p.overrides.mysql2='3.23.1';
+          p.overrides['baseline-browser-mapping']='2.11.0';
+          p.overrides['@prisma/config']={'deepmerge-ts':'8.0.0'};
+          fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\n');
           JS
-      - name: Confirm repository unchanged
-        if: always()
-        run: test -z "$(git status --porcelain)"
-      - name: Preserve audit classification
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund > ../security-proof/resolve.log 2>&1 || { tail -n 80 ../security-proof/resolve.log; exit 1; }
+          test "$(git diff --name-only | sort | tr '\n' ' ')" = 'package-lock.json package.json '
+          python3 - <<'PY'
+          import pathlib, subprocess
+          files={'tests/security-dependency-contract.test.js':'9defb769b3c17da403f672201a316a2a5c030bf0','docs/recovery/security-dependency-release.md':'6e478b91e176113c3c7e6f3a1b654d78710d49c8'}
+          for name,sha in files.items():
+            source=pathlib.Path('../harness/.release-security')/name
+            assert subprocess.check_output(['git','hash-object',str(source)],text=True).strip()==sha
+            target=pathlib.Path(name)
+            assert not target.exists()
+            target.parent.mkdir(parents=True,exist_ok=True)
+            target.write_bytes(source.read_bytes())
+          PY
+      - name: Install exactly the candidate lockfile
+        working-directory: candidate
+        shell: bash
+        run: |
+          npm ci > ../security-proof/install.log 2>&1 || { tail -n 80 ../security-proof/install.log; exit 1; }
+          node --version
+          npx next --version
+          npx prisma --version
+          find node_modules/next/dist/docs -iname '*upgrad*' -type f -print -exec head -n 35 {} \; > ../security-proof/installed-next-guidance.txt
+      - name: Record dependency changes and audit runtime graph
+        working-directory: candidate
+        shell: bash
+        run: |
+          set +e
+          npm audit --omit=dev --json > ../security-proof/audit-production.json
+          result=$?
+          set -e
+          echo "$result" > ../security-proof/audit-exit.txt
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          const old=JSON.parse(fs.readFileSync('../security-proof/before-lock.json'));
+          const now=JSON.parse(fs.readFileSync('package-lock.json'));
+          const changes=Object.entries(now.packages).filter(([name,p])=>p.version!==old.packages[name]?.version).map(([name,p])=>({name,from:old.packages[name]?.version||null,to:p.version||null}));
+          fs.writeFileSync('../security-proof/resolved-changes.json',JSON.stringify(changes,null,2));
+          const audit=JSON.parse(fs.readFileSync('../security-proof/audit-production.json'));
+          if(!audit.metadata?.vulnerabilities||audit.error) throw new Error('Audit not confirmed');
+          console.log('Production audit:',JSON.stringify(audit.metadata.vulnerabilities));
+          fs.writeFileSync('../security-proof/audit-summary.json',JSON.stringify(audit.metadata.vulnerabilities,null,2));
+          if(audit.metadata.vulnerabilities.high||audit.metadata.vulnerabilities.critical) process.exitCode=1;
+          JS
+      - name: Full unit and contract suite including dependency compatibility
+        working-directory: candidate
+        shell: bash
+        run: |
+          npm test > ../security-proof/tests.log 2>&1 || { tail -n 120 ../security-proof/tests.log; exit 1; }
+          tail -n 10 ../security-proof/tests.log
+      - name: Lint new regression test
+        working-directory: candidate
+        shell: bash
+        run: npx eslint tests/security-dependency-contract.test.js > ../security-proof/lint.log 2>&1 || { cat ../security-proof/lint.log; exit 1; }
+      - name: Validate Prisma and migrate disposable PostgreSQL 17
+        working-directory: candidate
+        shell: bash
+        run: |
+          npx prisma validate > ../security-proof/prisma-validate.log 2>&1
+          npx prisma migrate deploy > ../security-proof/migrations.log 2>&1 || { tail -n 100 ../security-proof/migrations.log; exit 1; }
+          npx prisma migrate status > ../security-proof/migration-status.log 2>&1
+          npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code > ../security-proof/schema-drift.log 2>&1
+      - name: Verify core persisted domains on disposable PostgreSQL
+        working-directory: candidate
+        shell: bash
+        run: |
+          export WORKER_IDENTITY_MIGRATION_DATABASE_URL="$DATABASE_URL"
+          export WORKER_IDENTITY_MIGRATION_SCHEMA=public
+          export PROGRESS_JOURNAL_MIGRATION_DATABASE_URL="$DATABASE_URL"
+          export PROGRESS_JOURNAL_MIGRATION_SCHEMA=public
+          export PROTECTED_UPLOAD_MIGRATION_DATABASE_URL="$DATABASE_URL"
+          export PROTECTED_UPLOAD_MIGRATION_SCHEMA=public
+          export PROJECT_EXECUTION_MIGRATION_DATABASE_URL="$DATABASE_URL"
+          export PROJECT_EXECUTION_MIGRATION_SCHEMA=public
+          npm run verify:worker-identity-migrations > ../security-proof/worker-identity.log 2>&1 || { tail -n 80 ../security-proof/worker-identity.log; exit 1; }
+          npm run verify:progress-journal-migration > ../security-proof/journal.log 2>&1 || { tail -n 80 ../security-proof/journal.log; exit 1; }
+          npm run verify:protected-upload-migration > ../security-proof/uploads.log 2>&1 || { tail -n 80 ../security-proof/uploads.log; exit 1; }
+          npm run verify:project-execution-migration > ../security-proof/execution.log 2>&1 || { tail -n 80 ../security-proof/execution.log; exit 1; }
+      - name: Complete application build
+        working-directory: candidate
+        shell: bash
+        run: |
+          npm run build > ../security-proof/build.log 2>&1 || { tail -n 100 ../security-proof/build.log; exit 1; }
+          tail -n 16 ../security-proof/build.log
+          git diff --check
+      - name: Browser regression of public navigation
+        working-directory: candidate
+        shell: bash
+        run: |
+          npx playwright install --with-deps chromium > ../security-proof/browser-install.log 2>&1
+          npm run test:e2e:public > ../security-proof/public-browser.log 2>&1 || { tail -n 100 ../security-proof/public-browser.log; exit 1; }
+          tail -n 20 ../security-proof/public-browser.log
+      - name: Integrate only after all checks and unchanged recovery HEAD
+        working-directory: candidate
+        shell: bash
+        run: |
+          branch=codex/saas-recovery-20260917
+          expected=b47980aa948899dbb30af91a344a10b07f6bebd4
+          actual=$(git ls-remote origin "refs/heads/$branch" | cut -f1)
+          test "$actual" = "$expected"
+          git add -- package.json package-lock.json tests/security-dependency-contract.test.js docs/recovery/security-dependency-release.md
+          test "$(git diff --cached --name-only | wc -l)" -eq 4
+          git diff --cached --check
+          git diff --cached --stat > ../security-proof/changes.txt
+          git config user.name 'ObraSaaS Release Validation'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'build: patch security dependencies with verified Prisma compatibility [skip ci]'
+          git push origin "HEAD:$branch"
+          git rev-parse HEAD | tee ../security-proof/application-sha.txt
+      - name: Preserve exact release verification
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: production-dependency-audit-${{ github.run_id }}
-          path: /tmp/obrasaas-audit/
+          name: security-release-validation-${{ github.run_id }}
+          path: |
+            security-proof/
+            candidate/test-results/
+            candidate/playwright-report/
           retention-days: 7
+          if-no-files-found: warn
