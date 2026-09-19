@@ -702,3 +702,37 @@ test('journey is scoped and returns null when that worker has no shift', async (
   assert.equal(journey.shift.workerId, scope.workerId);
   assert.deepEqual(journey.nextAllowedActions, ['BREAK_START', 'CHECK_OUT']);
 });
+
+test('interactive journey delegates to the real attendance domain and does not bypass GPS', async () => {
+  const { tsImport } = await import('tsx/esm/api');
+  const { processIncomingObraMessage } = await tsImport('../src/lib/whatsapp/obra-engine.js', { parentURL:import.meta.url,tsconfig:'./jsconfig.json' });
+  const { fieldMenuRows } = await import('../src/lib/whatsapp/field-interactive-menu.js');
+  const db=createAttendancePrisma(),startedAt=new Date('2026-09-19T11:00:00Z');
+  const menuScope={...scope,organizationId:'company-a',phoneNumberId:'123456789012345'};
+  const rows=fieldMenuRows({scope:menuScope,role:'WORKER',section:'JOURNEY'});
+  const state={attendance:{},incidents:[],tasks:{},alertsCount:0,operariosCount:0};
+  const oldSecret=process.env.WEBVIEW_TOKEN_SECRET;
+  process.env.WEBVIEW_TOKEN_SECRET='fixture-menu-attendance-not-a-production-key';
+  const invoke=async(action,minute=0)=>{
+    const row=rows.find(item=>item.id.endsWith(':'+action));assert.ok(row);
+    const timestamp=new Date(startedAt.getTime()+minute*60000);
+    return processIncomingObraMessage({provider:'meta',kind:'interactive',phoneNumberId:menuScope.phoneNumberId,from:'15551230001',externalId:'wamid.menu-'+action,timestamp,text:row.title,interactive:{type:'list',id:row.id,title:row.title}},menuScope,
+      {persist:false,state,prisma:db.prisma,processingTime:timestamp,projectSettings:{id:scope.projectId,organizationId:menuScope.organizationId,name:'Obra de ensayo',timezone},
+        worker:{id:scope.workerId,projectId:scope.projectId,name:'Participante de ensayo',active:true,metadata:{whatsappRole:'WORKER'}},
+        environment:{NEXT_PUBLIC_APP_URL:'https://preview.example.test',VERCEL_ENV:'preview',WHATSAPP_PREVIEW_ALLOWED_PUBLIC_ORIGINS:'https://preview.example.test'}});
+  };
+  try {
+    const request=await invoke('CHECK_IN');assert.equal(request.flowPrompt,'shift-check-in');
+    assert.equal(db.snapshot().entries.length,1);assert.equal(db.snapshot().entries[0].verificationStatus,'PENDING');assert.equal(db.snapshot().shifts.length,0);
+    await invoke('CHECK_IN');assert.equal(db.snapshot().entries.length,1);
+    const pendingId=db.snapshot().entries[0].id;
+    await completeCheckIn(db.prisma,{now:new Date(startedAt.getTime()+60000),sourceOccurredAt:startedAt,pendingEntryId:pendingId,key:'menu-gps-fixture'});
+    assert.equal(db.snapshot().shifts.length,1);assert.equal(db.snapshot().shifts[0].status,'OPEN');
+    await invoke('BREAK_START',180);assert.equal(db.snapshot().entries.filter(e=>e.eventType==='BREAK_START').length,1);
+    await invoke('BREAK_END',210);assert.equal(db.snapshot().entries.filter(e=>e.eventType==='BREAK_END').length,1);
+    const exit=await invoke('CHECK_OUT',480);assert.match(exit.reply,/ubicación/);assert.equal(db.snapshot().shifts[0].status,'OPEN');
+    assert.equal(db.snapshot().entries.filter(e=>e.eventType==='CHECK_OUT').length,0);
+  } finally {
+    if(oldSecret===undefined)delete process.env.WEBVIEW_TOKEN_SECRET;else process.env.WEBVIEW_TOKEN_SECRET=oldSecret;
+  }
+});

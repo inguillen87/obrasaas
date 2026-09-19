@@ -1,6 +1,6 @@
 # PLAN MAESTRO DE IMPLEMENTACIÓN — OBRASAAS
 
-Versión 3.2 · Continuidad de producto y arquitectura · 19 de septiembre de 2026.
+Versión 3.3 · Continuidad de producto y arquitectura · 19 de septiembre de 2026.
 Repositorio: inguillen87/obrasaas. Rama de trabajo: `codex/saas-recovery-20260917`.
 Base de esta ampliación: `5b4cea6e3586780e62142bb85764d0db4a5a1850`.
 
@@ -46,6 +46,7 @@ Compartir infraestructura no significa compartir datos, números, WABAs, presupu
 | S11.A4 · Equipo | Invitar por enlace/QR seguro, roles y proyectos, alta por propietario, revocación efectiva. El teléfono que escribe no obtiene permisos automáticamente. | Reutilizar onboarding de trabajadores existente; cerrar UX comercial y prueba física. |
 | S11.A4.1 · Del contacto al acceso vigente | Invitación consentida, seguimiento dentro de la conversación, alta exacta, decisión recuperable y revalidación de identidad/asignación actual. | Implementado en el código de esta fase; evidencia de pruebas y despliegue por SHA en el PR. La prueba física del canal sigue separada. |
 | S11.A5 · Agente de construcción | Texto/audio/imagen/video → intención y contexto → propuesta/acción permitida → fuente → resultado/entrega. Handoff humano y conocimiento privado. | Recepción y módulos base existen; cerrar interpretación, herramientas y pruebas por formato. |
+| S11.A5.1 · Menú interactivo de campo | Lista nativa por rol, selección vinculada a participante/obra, jornada e incidencias por los dominios existentes y despacho durable sin duplicados. | Implementado en esta fase; validar el SHA y la entrega física por separado. No activa pagos ni cambia el Gantt al seleccionar. |
 | S11.A6 · Operación de SaaS | Métricas por tenant, límites, retención, exportación, desconexión, salud del canal, facturación de uso y soporte. | Implementación incremental; no vender SLA de cientos de empresas sin medir. |
 | S12 · Fiscal y abastecimiento | CAE y tipos documentales correctamente separados; compras/recepción/stock/costo trazables. Regla fiscal respaldada por fuente vigente. | Conservar módulos reales y verificar integraciones externas antes de declararlas oficiales. |
 | S13 · Cobros | Suscripción SaaS separada de pagos/anticipos/cuotas de cada obra; conciliación y permisos. | Pendiente cierre comercial completo; no activar cobros por configurar WhatsApp. |
@@ -91,3 +92,6 @@ Este turno incorpora la preparación por empresa y su validación conectada al f
 
 ## Cierre incremental de participantes
 Consultar `docs/recovery/participant-onboarding-journey.md`. El alta aprobada es un antecedente, no autoridad perpetua: el canal canónico y el vínculo de la obra se revalidan. La conversación abre el registro exacto sin buscar datos en otros tenants. Se conservan privacidad, control de revisiones y recibos de WhatsApp. Esta entrega no renueva credenciales ni reemplaza la prueba real de invitación → revisión → primer parte → respuesta entregada.
+
+## Menú interactivo y primera acción
+Consultar `docs/recovery/native-whatsapp-field-menu.md`. El motor puede entregar una lista nativa de opciones de Meta y una segunda lista para jornada. La selección exacta utiliza los dominios actuales; entrada/salida conservan GPS, pago significa datos de cobro propios y avance sigue siendo una propuesta revisable. Cada click se valida contra la identidad/obra y el rol actuales. El descriptor durable no es una credencial y nunca sustituye la autorización canónica. La validación local o el estado READY no acreditan un mensaje recibido por un trabajador real.
