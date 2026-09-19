@@ -23,3 +23,13 @@
 .steps { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); list-style: none; padding: 18px 0 0; margin: 20px 0 0; gap: 12px; border-top: 1px solid var(--preflight-border); font-size: .75rem; line-height: 1.6; color: var(--preflight-muted); }
 @media (max-width:700px) { .header { display: grid; } .checks { grid-template-columns: repeat(2,minmax(0,1fr)); } .results { grid-template-columns: minmax(0,1fr); } .steps { grid-template-columns: repeat(2,minmax(0,1fr)); } }
 @media (prefers-reduced-motion:reduce) { .panel * { animation: none !important; transition: none !important; } }
+
+.pilotForm { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 18px; margin: 22px 0; }
+.pilotForm label { display: grid; gap: 9px; font-size: .9rem; line-height: 1.6; min-width: 0; }
+.pilotForm input:not([type='checkbox']) { box-sizing: border-box; width: 100%; min-height: 46px; padding: 12px; border: 1px solid var(--preflight-border); border-radius: 9px; background: var(--preflight-bg); color: var(--preflight-text); font: inherit; font-size: 16px; }
+.pilotForm .pilotConsent { grid-column: 1 / -1; display: flex; align-items: flex-start; gap: 12px; color: var(--preflight-muted); }
+.pilotConsent input { margin-top: 6px; width: 20px; height: 20px; flex-shrink: 0; }
+.pilotForm button { min-height: 46px; border: 1px solid var(--preflight-accent); background: var(--preflight-accent); color: #060913; border-radius: 9px; padding: 12px 18px; font: inherit; font-weight: 700; cursor: pointer; }
+.pilotForm button:disabled { opacity: .55; cursor: not-allowed; }
+.pilotForm :focus-visible { outline: 3px solid var(--preflight-accent); outline-offset: 3px; }
+@media(max-width:640px) { .pilotForm { grid-template-columns: minmax(0,1fr); } }

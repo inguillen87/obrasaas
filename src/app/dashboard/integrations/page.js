@@ -1,5 +1,6 @@
 import IntegrationsClient from "./integrations-client";
 import PlatformPreflightPanel from "./platform-preflight-panel";
+import PilotWorkspacePanel from "./pilot-workspace-panel";
 import { inspectWhatsAppPlatformPrerequisites } from "@/lib/whatsapp/platform-preflight";
 import AiProcessingControls from "./ai-processing-controls";
 import WhatsAppPilotImportPanel from "./pilot-import-panel";
@@ -92,6 +93,7 @@ export default async function IntegrationsPage() {
         key={access.organization.id + ':' + access.project.id}
         organizationId={access.organization.id} projectId={access.project.id}
         initialConfiguration={inspectWhatsAppPlatformPrerequisites(process.env)} />}
+      {pilotPanelEnabled && <PilotWorkspacePanel key={access.organization.id + ":" + access.project.id} organizationId={access.organization.id} projectId={access.project.id} />}
       <IntegrationsClient
         key={channelHealth.connection?.updatedAt?.toISOString() || "unlinked"}
         appId={process.env.NEXT_PUBLIC_META_APP_ID || ""}
