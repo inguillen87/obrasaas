@@ -15,6 +15,7 @@ import InboxComposerContext from './inbox-composer-context';
 import { confirmInboxReply } from '@/lib/whatsapp/inbox-composer-book';
 import { evidenceScopeHeaders } from '@/lib/evidence-capture-policy';
 import styles from './inbox.module.css';
+import MessageBlockerAction, { MessageBlockerDialog } from './message-blocker-action';
 import MessageReportAction, { MessageReportDialog } from './message-report-action';
 import ContactOnboardingAction, {
   normalizeContactOnboarding,
@@ -769,6 +770,8 @@ function InboxWorkspace({
 }) {
   const [conversations, setConversations] = useState([]);
   const [reportSource, setReportSource] = useState(null);
+  const [blockerSource, setBlockerSource] = useState(null);
+  const [createdBlockers, setCreatedBlockers] = useState({});
   const [createdReports, setCreatedReports] = useState({});
   const [connection, setConnection] = useState(() => normalizeConnection(null));
   const [selectedId, setSelectedId] = useState('');
@@ -1572,6 +1575,9 @@ function InboxWorkspace({
         </div>
       )}
 
+      {blockerSource && canCreateProgressReport && <MessageBlockerDialog key={blockerSource.messageId} organizationId={organizationId} projectId={projectId} projectName={projectName}
+        conversationId={blockerSource.conversationId} messageId={blockerSource.messageId} tasks={progressEvidenceTasks}
+        onClose={() => setBlockerSource(null)} onSaved={saved => { setCreatedBlockers(current => ({ ...current, [blockerSource.messageId]: saved })); setBlockerSource(null); }} />}
       {reportSource && canCreateProgressReport && <MessageReportDialog key={reportSource.messageId}
         organizationId={organizationId} projectId={projectId} projectName={projectName}
         conversationId={reportSource.conversationId} messageId={reportSource.messageId} tasks={progressEvidenceTasks}
@@ -1865,6 +1871,8 @@ function InboxWorkspace({
                               canOpenSourceEvidence={canViewSourceEvidence}
                               message={message}
                             />
+                            {canCreateProgressReport && message.progressReportKind && <MessageBlockerAction saved={createdBlockers[message.id]}
+                              onOpen={() => setBlockerSource({ conversationId: selectedConversation.id, messageId: message.id })} />}
                             {canCreateProgressReport && message.progressReportKind && <MessageReportAction
                               sourceKind={message.progressReportKind} saved={createdReports[message.id]}
                               onOpen={() => setReportSource({ conversationId: selectedConversation.id, messageId: message.id })} />}

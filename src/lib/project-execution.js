@@ -141,41 +141,7 @@ export async function createExecutionRecord(prisma, { scope: scopeInput, actorId
       await tx.auditLog.create({ data: { organizationId: scope.organizationId, actorId: actor, action: 'execution.task.assignment.created', entityType: 'TaskAssignment', entityId: assignment.id, metadata: { projectId: scope.projectId, taskId, workerId, teamId, status } } });
       return { kind, assignment: serializeAssignment(assignment) };
     }
-    if (kind === 'BLOCKER') {
-      const title = text(input.title, 'title', 220); const description = text(input.description, 'description', 4000, false);
-      const severity = String(input.severity || 'MEDIUM'); const status = String(input.status || 'OPEN');
-      if (!BLOCKER_SEVERITIES.has(severity) || !BLOCKER_STATUSES.has(status)) throw new ProjectExecutionError('Severidad o estado del blocker inválido.');
-      const taskId = text(input.taskId, 'taskId', 190, false); const ownerWorkerId = text(input.ownerWorkerId, 'ownerWorkerId', 190, false); const ownerTeamId = text(input.ownerTeamId, 'ownerTeamId', 190, false);
-      const dueAt = date(input.dueAt, 'dueAt');
-      if (!ownerWorkerId && !ownerTeamId) throw new ProjectExecutionError('El blocker debe tener una persona o cuadrilla responsable.');
-      if (status === 'RESOLVED') throw new ProjectExecutionError('Un blocker nuevo no puede nacer resuelto.');
-      if (taskId) {
-        const task = await tx.task.findFirst({ where: { id: taskId, projectId: scope.projectId, metadata: { path: ['source'], equals: 'canonical-task-v1' } }, select: { id: true } });
-        if (!task) throw new ProjectExecutionError('La tarea del blocker está fuera del alcance.', 'PROJECT_EXECUTION_TASK_SCOPE', 409);
-      }
-      const [ownerWorker, ownerTeam] = await Promise.all([
-        ownerWorkerId ? tx.worker.findFirst({ where: { id: ownerWorkerId, projectId: scope.projectId, active: true }, select: { id: true } }) : null,
-        ownerTeamId ? tx.workTeam.findFirst({ where: { id: ownerTeamId, projectId: scope.projectId, status: 'ACTIVE' }, select: { id: true } }) : null,
-      ]);
-      if (ownerWorkerId && !ownerWorker || ownerTeamId && !ownerTeam) throw new ProjectExecutionError('El owner del blocker está fuera del alcance de la obra.', 'PROJECT_EXECUTION_OWNER_SCOPE', 409);
-      const blocker = await tx.projectBlocker.create({ data: { projectId: scope.projectId, taskId, ownerWorkerId, ownerTeamId, title, description, severity, status, dueAt }, select: BLOCKER_SELECT });
-      await tx.auditLog.create({ data: { organizationId: scope.organizationId, actorId: actor, action: 'execution.blocker.created', entityType: 'ProjectBlocker', entityId: blocker.id, metadata: { projectId: scope.projectId, taskId, severity, ownerWorkerId, ownerTeamId } } });
-      if (['HIGH', 'CRITICAL'].includes(severity)) {
-        const recipients = await tx.projectMembership.findMany({
-          where: {
-            projectId: scope.projectId,
-            status: 'ACTIVE',
-            tenantMembership: {
-              organizationId: scope.organizationId,
-              status: 'ACTIVE',
-            },
-          },
-          select: { tenantMembership: { select: { userId: true } } },
-        });
-        for (const recipient of recipients) await enqueueNotification(tx, { organizationId: scope.organizationId, projectId: scope.projectId, recipientId: recipient.tenantMembership.userId, eventKey: `blocker:${blocker.id}`, channel: 'IN_APP', title: `Blocker ${severity.toLowerCase()}`, body: blocker.title, payload: { blockerId: blocker.id, severity, taskId } });
-      }
-      return { kind, blocker: serializeBlocker(blocker) };
-    }
+    if (kind === 'BLOCKER') return createProjectBlockerInTransaction(tx, { scope, actorId: actor, input });
     throw new ProjectExecutionError('Tipo de registro de ejecución inválido.');
   });
 }
@@ -202,4 +168,49 @@ export async function updateProjectBlocker(prisma, { scope: scopeInput, actorId,
 export function projectExecutionErrorResponse(error) {
   if (!(error instanceof ProjectExecutionError)) return null;
   return Response.json({ error: error.message, code: error.code, ...(error.details ? { details: error.details } : {}) }, { status: error.status });
+}
+
+// Caller must hold the operational project transaction; no HTTP identity is accepted here.
+export async function createProjectBlockerInTransaction(tx, { scope: scopeInput, actorId, input, recordId = null }) {
+  const scope = scopeOf(scopeInput); const actor = actorOf(actorId);
+  const title = text(input.title, 'title', 220); const description = text(input.description, 'description', 4000, false);
+  const severity = String(input.severity || 'MEDIUM'); const status = String(input.status || 'OPEN');
+  if (!BLOCKER_SEVERITIES.has(severity) || !BLOCKER_STATUSES.has(status)) throw new ProjectExecutionError('Severidad o estado del blocker inválido.');
+  const taskId = text(input.taskId, 'taskId', 190, false); const ownerWorkerId = text(input.ownerWorkerId, 'ownerWorkerId', 190, false); const ownerTeamId = text(input.ownerTeamId, 'ownerTeamId', 190, false);
+  const dueAt = date(input.dueAt, 'dueAt');
+  if (!ownerWorkerId && !ownerTeamId) throw new ProjectExecutionError('El blocker debe tener una persona o cuadrilla responsable.');
+  if (status === 'RESOLVED') throw new ProjectExecutionError('Un blocker nuevo no puede nacer resuelto.');
+  if (taskId) {
+    const task = await tx.task.findFirst({ where: { id: taskId, projectId: scope.projectId, metadata: { path: ['source'], equals: 'canonical-task-v1' } }, select: { id: true } });
+    if (!task) throw new ProjectExecutionError('La tarea del blocker está fuera del alcance.', 'PROJECT_EXECUTION_TASK_SCOPE', 409);
+  }
+  const [ownerWorker, ownerTeam] = await Promise.all([
+    ownerWorkerId ? tx.worker.findFirst({ where: { id: ownerWorkerId, projectId: scope.projectId, active: true }, select: { id: true } }) : null,
+    ownerTeamId ? tx.workTeam.findFirst({ where: { id: ownerTeamId, projectId: scope.projectId, status: 'ACTIVE' }, select: { id: true } }) : null,
+  ]);
+  if (ownerWorkerId && !ownerWorker || ownerTeamId && !ownerTeam) throw new ProjectExecutionError('El owner del blocker está fuera del alcance de la obra.', 'PROJECT_EXECUTION_OWNER_SCOPE', 409);
+  const blocker = await tx.projectBlocker.create({ data: { ...(recordId ? { id: text(recordId, 'recordId', 190) } : {}), projectId: scope.projectId, taskId, ownerWorkerId, ownerTeamId, title, description, severity, status, dueAt }, select: BLOCKER_SELECT });
+  await tx.auditLog.create({ data: { organizationId: scope.organizationId, actorId: actor, action: 'execution.blocker.created', entityType: 'ProjectBlocker', entityId: blocker.id, metadata: { projectId: scope.projectId, taskId, severity, ownerWorkerId, ownerTeamId } } });
+  if (['HIGH', 'CRITICAL'].includes(severity)) {
+    const recipients = await tx.projectMembership.findMany({
+      where: {
+        projectId: scope.projectId,
+        status: 'ACTIVE',
+        tenantMembership: {
+          organizationId: scope.organizationId,
+          status: 'ACTIVE',
+        },
+      },
+      select: { tenantMembership: { select: { userId: true } } },
+    });
+    for (const recipient of recipients) await enqueueNotification(tx, { organizationId: scope.organizationId, projectId: scope.projectId, recipientId: recipient.tenantMembership.userId, eventKey: `blocker:${blocker.id}`, channel: 'IN_APP', title: severity === 'CRITICAL' ? 'Restricción crítica' : 'Restricción prioritaria', body: blocker.title, payload: { blockerId: blocker.id, severity, taskId } });
+  }
+  return { kind: 'BLOCKER', blocker: serializeBlocker(blocker) };
+}
+
+export async function getProjectBlocker(prisma, { scope: rawScope, blockerId }) {
+  const scope = scopeOf(rawScope), id = text(blockerId, 'blockerId', 190);
+  const row = await prisma.projectBlocker.findFirst({ where: { id, projectId: scope.projectId, project: { organizationId: scope.organizationId } }, select: BLOCKER_SELECT });
+  if (!row) throw new ProjectExecutionError('La restricción no está disponible en esta obra.', 'PROJECT_BLOCKER_NOT_FOUND', 404);
+  return serializeBlocker(row);
 }

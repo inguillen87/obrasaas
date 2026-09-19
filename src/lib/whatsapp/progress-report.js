@@ -74,3 +74,6 @@ export async function createWhatsAppProgressReport(prisma, options) {
     return { report: publicLog(report), replayed: false };
   });
 }
+
+// Reused operational source validation; mutations stay in their own domain.
+export { source as readWhatsAppOperationalMessageSource };
