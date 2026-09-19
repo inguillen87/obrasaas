@@ -1,0 +1,127 @@
+name: Validate scoped WhatsApp credential recovery
+on:
+  push:
+    branches: ['validation/channel-recovery-20260919']
+permissions:
+  contents: write
+concurrency:
+  group: channel-recovery-validation-20260919
+  cancel-in-progress: false
+jobs:
+  validate-and-integrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      PRISMA_ALLOW_EMPTY_DATABASE_URL: '1'
+    steps:
+      - name: Read isolated validation payload
+        uses: actions/checkout@v7
+        with:
+          path: harness
+          persist-credentials: false
+      - name: Checkout exact application base
+        uses: actions/checkout@v7
+        with:
+          ref: b189ab5bc54df9a3ab7b6089657b3432b87ff376
+          path: candidate
+      - name: Use project Node version
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Install locked dependencies and read installed framework guidance
+        working-directory: candidate
+        shell: bash
+        run: |
+          mkdir -p ../proof
+          npm ci > ../proof/install.log 2>&1 || { tail -n 80 ../proof/install.log; exit 1; }
+          find node_modules/next/dist/docs -name 'route.md' -o -iname '*client-component*' | head -n 5 | while read -r path; do echo "## $path"; head -n 65 "$path"; done | tee ../proof/installed-next-guidance.txt
+          node --version
+          npx next --version
+      - name: Apply explicit payload after source identity check
+        working-directory: candidate
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import pathlib, subprocess, json, hashlib
+          root=pathlib.Path.cwd()
+          assert subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()=='b189ab5bc54df9a3ab7b6089657b3432b87ff376'
+          assert subprocess.check_output(['git','rev-parse','HEAD:src/app/dashboard/integrations/integrations-client.js'],text=True).strip()=='e79ff139fab4a29b52cd56ddaaa40c3e297252e8'
+          files=[
+            'src/lib/whatsapp/credential-lifecycle.js',
+            'src/app/api/integrations/whatsapp/lifecycle/route.js',
+            'src/app/dashboard/integrations/channel-recovery-panel.js',
+            'src/app/dashboard/integrations/channel-recovery-panel.module.css',
+            'tests/whatsapp-credential-lifecycle.test.js',
+            'tests/whatsapp-credential-lifecycle-route.test.js',
+            'tests/whatsapp-channel-recovery-wiring.test.js',
+            'scripts/verify-channel-recovery-ui.mjs',
+            'docs/recovery/whatsapp-credential-recovery.md',
+          ]
+          manifest={}
+          for name in files:
+            source=root.parent/'harness/.recovery-validation'/name
+            target=root/name
+            assert not target.exists(),name+' already exists'
+            assert source.is_file() and not source.is_symlink()
+            content=source.read_bytes()
+            target.parent.mkdir(parents=True,exist_ok=True)
+            target.write_bytes(content)
+            manifest[name]=hashlib.sha256(content).hexdigest()
+          (root.parent/'proof/payload.json').write_text(json.dumps(manifest,indent=2))
+          PY
+          python3 ../harness/.recovery-validation/scripts/apply-channel-recovery.py
+          git diff --check
+      - name: Full unit and contract suite
+        working-directory: candidate
+        shell: bash
+        run: |
+          npm test > ../proof/tests.log 2>&1 || { tail -n 130 ../proof/tests.log; exit 1; }
+          tail -n 10 ../proof/tests.log
+      - name: Lint all affected JavaScript
+        working-directory: candidate
+        shell: bash
+        run: |
+          npx eslint src/lib/whatsapp/credential-lifecycle.js src/app/api/integrations/whatsapp/lifecycle/route.js src/app/dashboard/integrations/channel-recovery-panel.js src/app/dashboard/integrations/integrations-client.js src/app/dashboard/integrations/whatsapp-connect-experience.js tests/whatsapp-credential-lifecycle.test.js tests/whatsapp-credential-lifecycle-route.test.js tests/whatsapp-channel-recovery-wiring.test.js tests/proxy-sensitive-route-coverage.test.js scripts/verify-channel-recovery-ui.mjs > ../proof/lint.log 2>&1 || { cat ../proof/lint.log; exit 1; }
+      - name: Verify responsive recovery and preservation of existing form
+        working-directory: candidate
+        shell: bash
+        run: |
+          npx playwright install --with-deps chromium > ../proof/browser-install.log 2>&1 || { tail -n 80 ../proof/browser-install.log; exit 1; }
+          node scripts/verify-channel-recovery-ui.mjs > ../proof/browser.log 2>&1 || { tail -n 100 ../proof/browser.log; exit 1; }
+          cat ../proof/browser.log
+      - name: Build complete application without provider or database credentials
+        working-directory: candidate
+        shell: bash
+        run: |
+          npm run build > ../proof/build.log 2>&1 || { tail -n 120 ../proof/build.log; exit 1; }
+          tail -n 16 ../proof/build.log
+          git diff --check
+      - name: Integrate only after all checks and unchanged recovery HEAD
+        working-directory: candidate
+        shell: bash
+        run: |
+          branch=codex/saas-recovery-20260917
+          expected=b189ab5bc54df9a3ab7b6089657b3432b87ff376
+          actual=$(git ls-remote origin "refs/heads/$branch" | cut -f1)
+          test "$actual" = "$expected"
+          git add -- src/lib/whatsapp/credential-lifecycle.js src/app/api/integrations/whatsapp/lifecycle/route.js src/app/dashboard/integrations/channel-recovery-panel.js src/app/dashboard/integrations/channel-recovery-panel.module.css src/app/dashboard/integrations/integrations-client.js src/app/dashboard/integrations/whatsapp-connect-experience.js tests/whatsapp-credential-lifecycle.test.js tests/whatsapp-credential-lifecycle-route.test.js tests/whatsapp-channel-recovery-wiring.test.js tests/proxy-sensitive-route-coverage.test.js scripts/verify-channel-recovery-ui.mjs docs/recovery/whatsapp-credential-recovery.md docs/recovery/HANDOFF_TENANT_WHATSAPP.md
+          test "$(git diff --cached --name-only | wc -l)" -eq 13
+          git diff --cached --check
+          git diff --cached --stat > ../proof/changes.txt
+          git config user.name 'ObraSaaS Release Validation'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat: expose scoped credential lifetime and recover existing WhatsApp authorization [skip ci]'
+          git push origin "HEAD:$branch"
+          git rev-parse HEAD | tee ../proof/application-sha.txt
+      - name: Preserve validation logs and synthetic screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: channel-recovery-validation-${{ github.run_id }}
+          path: |
+            proof/
+            candidate/.vercel/channel-recovery-ui/*.png
+            candidate/.vercel/channel-recovery-ui/proof.json
+          retention-days: 7
+          if-no-files-found: warn
