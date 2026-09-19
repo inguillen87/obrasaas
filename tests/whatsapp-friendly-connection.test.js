@@ -64,3 +64,9 @@ test('internal platform workspace cannot onboard a customer number', () => {
 test('internal legacy connection may still be disabled with the correct context', () => {
   assert.doesNotThrow(() => assertSignupScreenContext(request({}, 'DELETE'), { ...scope, organization: { id: 'org-a', metadata: { internal: true } } }));
 });
+test('historical unassigned intake is not presented as the current membership state', () => {
+  const code = readFileSync(new URL('../src/app/dashboard/integrations/pilot-connection-progress.js', import.meta.url), 'utf8');
+  assert.match(code, /ingresaron sin un participante reconocido/);
+  assert.match(code, /vinculación actual/);
+  assert.doesNotMatch(code, /mensajes esperan vinculación/);
+});
