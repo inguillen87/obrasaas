@@ -42,6 +42,7 @@ export default function ScheduleFieldPanel({ organizationId, projectId, onSnapsh
         {task.measured && <><meter min="0" max="100" value={Number(task.measured.percent)} aria-label={'Avance medido de ' + task.title} /><small>{task.measured.completed} / {task.measured.baseline} {task.measured.unit} · revisión {task.measured.revision}</small></>}
       </div>
       <TaskRestrictionSummary taskId={task.id} taskTitle={task.title} restrictions={task.restrictions} />
+      {task.assignments && <p className={styles.assignmentHint}>{task.assignments.active} asignaciones en curso Â· {task.assignments.planned} planificadas. Son registros de asignaciÃ³n, no cantidad de trabajadores ni avance.</p>}
       <nav aria-label={'Continuar tarea ' + task.title}><Link onNavigate={guard} prefetch={false} href={'/dashboard/progress?taskId=' + encodeURIComponent(task.id)}>Ver partes y evidencias</Link>
         {snapshot.canReadMeasurements && task.type === 'TASK' && <Link onNavigate={guard} prefetch={false} href={'/dashboard/measurements?taskId=' + encodeURIComponent(task.id)}>{task.measured ? 'Consultar medición' : 'Preparar medición'}</Link>}
       </nav>

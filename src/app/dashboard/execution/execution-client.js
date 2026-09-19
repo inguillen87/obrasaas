@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import BlockerFollowupCard from './blocker-followup-card';
+import AssignmentBoard from './assignment-board';
 import { useWorkspaceLeaveGuard } from '../use-workspace-leave-guard';
 import { requestWorkspaceNavigation } from '@/lib/workspace-leave-policy';
 import { publishFieldInvalidation } from '@/lib/schedule-field-channel';
@@ -49,6 +50,9 @@ export default function ExecutionClient({ initialData, workers, tasks, permissio
         organizationId={organizationId} projectId={projectId} canManage={permissions.canManage} canReadTasks={permissions.canReadTasks}
         onChanged={saved => setData(current => ({ ...current, blockers: current.blockers.map(row => row.id === saved.id ? saved : row) }))} />)}</ul>}{permissions.canManage && <form className={styles.form} onSubmit={createBlocker}><input value={blockerTitle} onChange={(event) => setBlockerTitle(event.target.value)} aria-label="Título de la restricción" placeholder="Título de la restricción" maxLength={220} /><select aria-label="Actividad de la restricción" disabled={Boolean(focusedTask)} value={blockerTask} onChange={(event) => setBlockerTask(event.target.value)}><option value="">Sin tarea vinculada</option>{tasks.map((task) => <option value={task.id} key={task.id}>{task.title}</option>)}</select><select aria-label="Persona responsable" value={blockerOwnerWorker} onChange={(event) => { setBlockerOwnerWorker(event.target.value); setBlockerOwnerTeam(''); }}><option value="">Responsable: persona</option>{workers.map((worker) => <option value={worker.id} key={worker.id}>{worker.name}</option>)}</select><select aria-label="Cuadrilla responsable" value={blockerOwnerTeam} onChange={(event) => { setBlockerOwnerTeam(event.target.value); setBlockerOwnerWorker(''); }}><option value="">Responsable: cuadrilla</option>{data.teams.filter((team) => team.status === 'ACTIVE').map((team) => <option value={team.id} key={team.id}>{team.name}</option>)}</select><button disabled={busy} type="submit">Abrir restricción</button></form>}</section>
     </div>
-    <section className={styles.panel}><div className={styles.heading}><div><span className={styles.kicker}>Fuente de verdad</span><h2>Asignaciones versionadas</h2></div></div>{data.assignments.length === 0 ? <p className={styles.empty}>Las asignaciones se crean desde la API de ejecución y quedan vinculadas al WBS.</p> : <div className={styles.tableWrap}><table><thead><tr><th>Tarea</th><th>Persona</th><th>Equipo</th><th>Estado</th><th>Revisión</th></tr></thead><tbody>{data.assignments.map((assignment) => <tr key={assignment.id}><td>{tasks.find((task) => task.id === assignment.taskId)?.title || assignment.taskId}</td><td>{workers.find((worker) => worker.id === assignment.workerId)?.name || '—'}</td><td>{data.teams.find((team) => team.id === assignment.teamId)?.name || '—'}</td><td>{assignment.status}</td><td>{assignment.revision}</td></tr>)}</tbody></table></div>}</section>
+    <AssignmentBoard assignments={data.assignments} tasks={tasks} workers={workers} teams={data.teams} permissions={permissions}
+      organizationId={organizationId} projectId={projectId} focusedTask={focusedTask}
+      onChanged={saved=>setData(current=>({...current,assignments:current.assignments.some(row=>row.id===saved.id)?current.assignments.map(row=>row.id===saved.id?saved:row):[saved,...current.assignments]}))}/>
+
   </section>;
 }

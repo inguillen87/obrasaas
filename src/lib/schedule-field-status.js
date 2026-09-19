@@ -55,10 +55,17 @@ export async function readScheduleFieldStatus(prisma, { scope, query = {}, canRe
       tx.dailyLog.count({ where: { projectId, taskId: null } }),
     ]);
     const restrictions = await readTaskRestrictionStatus(tx, { organizationId, projectId, taskIds, now });
+    const assignmentGroups = taskIds.length ? await tx.taskAssignment.groupBy({ by: ['taskId','status'], where: { ...where, project: { organizationId } }, _count: { _all: true } }) : [];
+    const assignments = new Map(taskIds.map(id => [id, { planned: 0, active: 0, ended: 0, cancelled: 0 }]));
+    for (const group of assignmentGroups) {
+      const key = { PLANNED:'planned',ACTIVE:'active',ENDED:'ended',CANCELLED:'cancelled' }[group.status];
+      if (!assignments.has(group.taskId) || !key || !Number.isSafeInteger(group._count?._all) || group._count._all < 0) throw new ScheduleFieldStatusError('No se pudo confirmar el resumen de asignaciones.', 'FIELD_STATUS_INCONSISTENT', 503);
+      assignments.get(group.taskId)[key] += group._count._all;
+    }
     const payload = { organizationId, projectId, projectName: project.name, canReadMeasurements, unassignedParts,
       tasks: visible.map(task => ({ id: task.id, title: task.title, type: task.type, operationalProgress: task.progress, revision: task.revision,
         startsAt: iso(task.startsAt), endsAt: iso(task.endsAt), updatedAt: iso(task.updatedAt),
-        evidence: counts(evidence, task.id), reports: counts(logs, task.id), restrictions: restrictions.get(task.id),
+        evidence: counts(evidence, task.id), reports: counts(logs, task.id), restrictions: restrictions.get(task.id), assignments: assignments.get(task.id),
         measured: canReadMeasurements ? measuredBalance(balances.find(row => row.taskId === task.id)) : null })),
       page: { limit: FIELD_STATUS_PAGE_SIZE, hasMore: tasks.length > FIELD_STATUS_PAGE_SIZE, nextAfter: tasks.length > FIELD_STATUS_PAGE_SIZE ? visible.at(-1).id : null },
     };

@@ -5,7 +5,7 @@ import { fieldSignalMatches } from '../src/lib/schedule-field-channel.js';
 const scope = { organizationId: 'org-a', projectId: 'project-a' };
 const date = new Date('2026-09-18T12:00:00Z');
 const task = id => ({ id, title: 'Tarea ' + id, type: 'TASK', progress: 10, revision: 2, startsAt: date, endsAt: date, updatedAt: date });
-function database({ tasks = [task('task-a')], evidence = [], logs = [], balances = [], restrictions = [], found = true } = {}) {
+function database({ tasks = [task('task-a')], evidence = [], logs = [], balances = [], assignmentGroups = [], restrictions = [], found = true } = {}) {
   const calls = { reads: [], balanceReads: 0, writes: 0 };
   const tx = {
     project: { findFirst: async ({ where }) => { assert.deepEqual(where, { id: scope.projectId, organizationId: scope.organizationId }); return found ? { id: scope.projectId, name: 'Obra demo' } : null; } },
@@ -13,6 +13,7 @@ function database({ tasks = [task('task-a')], evidence = [], logs = [], balances
     progressEvidence: { groupBy: async options => { calls.reads.push(options); assert.equal(options.where.projectId, scope.projectId); return evidence; } },
     dailyLog: { groupBy: async options => { calls.reads.push(options); assert.equal(options.where.projectId, scope.projectId); return logs; }, count: async ({ where }) => { assert.deepEqual(where, { projectId: scope.projectId, taskId: null }); return 1; } },
     projectBlocker: { groupBy: async options => { assert.equal(options.where.projectId, scope.projectId); assert.equal(options.where.project.organizationId, scope.organizationId); return restrictions; } },
+    taskAssignment: { groupBy: async options => { assert.equal(options.where.projectId,scope.projectId); assert.equal(options.where.project.organizationId,scope.organizationId); return assignmentGroups; } },
     taskProgressMeasurementBalance: { findMany: async options => { calls.balanceReads++; assert.equal(options.where.organizationId, scope.organizationId); assert.equal(options.where.projectId, scope.projectId); return balances; } },
   };
   return { calls, prisma: { $transaction: async (operation, options) => { assert.equal(options.isolationLevel, 'RepeatableRead'); return operation(tx); } } };
@@ -91,4 +92,17 @@ test('a deadline crossing invalidates the ETag but not the task itself',async()=
  const before=await readScheduleFieldStatus(prisma,{scope,now:new Date('2026-09-19T11:59:59Z')});
  const after=await readScheduleFieldStatus(prisma,{scope,now:new Date('2026-09-19T12:00:01Z')});
  assert.notEqual(before.version,after.version);assert.equal(after.tasks[0].restrictions.overdue,true);assert.equal(before.tasks[0].revision,after.tasks[0].revision);
+});
+
+test('assignment counts remain separate from staffing headcount and progress',async()=>{
+  const result=await readScheduleFieldStatus(database({assignmentGroups:[{taskId:'task-a',status:'PLANNED',_count:{_all:2}},{taskId:'task-a',status:'ACTIVE',_count:{_all:1}}]}).prisma,{scope});
+  assert.deepEqual(result.tasks[0].assignments,{planned:2,active:1,ended:0,cancelled:0});assert.equal(result.tasks[0].operationalProgress,10);
+});
+test('assignment lifecycle changes invalidate the field snapshot without changing dates or percentages',async()=>{
+  const start=await readScheduleFieldStatus(database({assignmentGroups:[{taskId:'task-a',status:'PLANNED',_count:{_all:1}}]}).prisma,{scope});
+  const end=await readScheduleFieldStatus(database({assignmentGroups:[{taskId:'task-a',status:'ENDED',_count:{_all:1}}]}).prisma,{scope});
+  assert.notEqual(start.version,end.version);assert.equal(start.tasks[0].startsAt,end.tasks[0].startsAt);assert.equal(start.tasks[0].operationalProgress,end.tasks[0].operationalProgress);
+});
+test('malformed assignment aggregate cannot be represented as a healthy zero',async()=>{
+  await assert.rejects(readScheduleFieldStatus(database({assignmentGroups:[{taskId:'other',status:'ACTIVE',_count:{_all:1}}]}).prisma,{scope}),{code:'FIELD_STATUS_INCONSISTENT'});
 });

@@ -127,23 +127,7 @@ export async function createExecutionRecord(prisma, { scope: scopeInput, actorId
       await tx.auditLog.create({ data: { organizationId: scope.organizationId, actorId: actor, action: 'execution.team.member.added', entityType: 'WorkTeamMember', entityId: member.id, metadata: { projectId: scope.projectId, teamId, workerId, role } } });
       return { kind, member: { id: member.id, teamId, workerId, role, startsAt: startsAt.toISOString(), endsAt: endsAt?.toISOString() || null } };
     }
-    if (kind === 'ASSIGNMENT') {
-      const taskId = text(input.taskId, 'taskId', 190); const workerId = text(input.workerId, 'workerId', 190, false); const teamId = text(input.teamId, 'teamId', 190, false);
-      if (!workerId && !teamId) throw new ProjectExecutionError('La asignación debe tener persona o equipo.');
-      const status = String(input.status || 'PLANNED'); if (!ASSIGNMENT_STATUSES.has(status)) throw new ProjectExecutionError('Estado de asignación inválido.');
-      const startsAt = date(input.startsAt, 'startsAt'); const endsAt = date(input.endsAt, 'endsAt');
-      if (startsAt && endsAt && endsAt < startsAt) throw new ProjectExecutionError('endsAt no puede preceder a startsAt.');
-      const task = await tx.task.findFirst({ where: { id: taskId, projectId: scope.projectId, metadata: { path: ['source'], equals: 'canonical-task-v1' } }, select: { id: true } });
-      if (!task) throw new ProjectExecutionError('La tarea debe ser canónica y pertenecer a la obra.', 'PROJECT_EXECUTION_TASK_SCOPE', 409);
-      const [worker, team] = await Promise.all([
-        workerId ? tx.worker.findFirst({ where: { id: workerId, projectId: scope.projectId, active: true }, select: { id: true } }) : null,
-        teamId ? tx.workTeam.findFirst({ where: { id: teamId, projectId: scope.projectId, status: 'ACTIVE' }, select: { id: true } }) : null,
-      ]);
-      if (workerId && !worker || teamId && !team) throw new ProjectExecutionError('El responsable de la asignación está fuera del alcance.', 'PROJECT_EXECUTION_SCOPE', 409);
-      const assignment = await tx.taskAssignment.create({ data: { projectId: scope.projectId, taskId, workerId, teamId, status, startsAt, endsAt }, select: ASSIGNMENT_SELECT });
-      await tx.auditLog.create({ data: { organizationId: scope.organizationId, actorId: actor, action: 'execution.task.assignment.created', entityType: 'TaskAssignment', entityId: assignment.id, metadata: { projectId: scope.projectId, taskId, workerId, teamId, status } } });
-      return { kind, assignment: serializeAssignment(assignment) };
-    }
+    if (kind === 'ASSIGNMENT') return createTaskAssignmentInTransaction(tx, { scope, actorId: actor, input });
     if (kind === 'BLOCKER') return createProjectBlockerInTransaction(tx, { scope, actorId: actor, input });
     throw new ProjectExecutionError('Tipo de registro de ejecución inválido.');
   });
@@ -216,4 +200,23 @@ export async function getProjectBlocker(prisma, { scope: rawScope, blockerId }) 
   const row = await prisma.projectBlocker.findFirst({ where: { id, projectId: scope.projectId, project: { organizationId: scope.organizationId } }, select: BLOCKER_SELECT });
   if (!row) throw new ProjectExecutionError('La restricción no está disponible en esta obra.', 'PROJECT_BLOCKER_NOT_FOUND', 404);
   return serializeBlocker(row);
+}
+
+export async function createTaskAssignmentInTransaction(tx, { scope: rawScope, actorId, input, recordId = null, auditId = null, requestMetadata = {} }) {
+  const scope = scopeOf(rawScope), actor = actorOf(actorId);
+      const taskId = text(input.taskId, 'taskId', 190); const workerId = text(input.workerId, 'workerId', 190, false); const teamId = text(input.teamId, 'teamId', 190, false);
+      if (!workerId && !teamId) throw new ProjectExecutionError('La asignación debe tener persona o equipo.');
+      const status = String(input.status || 'PLANNED'); if (!ASSIGNMENT_STATUSES.has(status)) throw new ProjectExecutionError('Estado de asignación inválido.');
+      const startsAt = date(input.startsAt, 'startsAt'); const endsAt = date(input.endsAt, 'endsAt');
+      if (startsAt && endsAt && endsAt < startsAt) throw new ProjectExecutionError('endsAt no puede preceder a startsAt.');
+      const task = await tx.task.findFirst({ where: { id: taskId, projectId: scope.projectId, metadata: { path: ['source'], equals: 'canonical-task-v1' } }, select: { id: true } });
+      if (!task) throw new ProjectExecutionError('La tarea debe ser canónica y pertenecer a la obra.', 'PROJECT_EXECUTION_TASK_SCOPE', 409);
+      const [worker, team] = await Promise.all([
+        workerId ? tx.worker.findFirst({ where: { id: workerId, projectId: scope.projectId, active: true }, select: { id: true } }) : null,
+        teamId ? tx.workTeam.findFirst({ where: { id: teamId, projectId: scope.projectId, status: 'ACTIVE' }, select: { id: true } }) : null,
+      ]);
+      if (workerId && !worker || teamId && !team) throw new ProjectExecutionError('El responsable de la asignación está fuera del alcance.', 'PROJECT_EXECUTION_SCOPE', 409);
+      const assignment = await tx.taskAssignment.create({ data: { ...(recordId ? { id: recordId } : {}), projectId: scope.projectId, taskId, workerId, teamId, status, startsAt, endsAt }, select: ASSIGNMENT_SELECT });
+      await tx.auditLog.create({ data: { ...(auditId ? { id: auditId } : {}), organizationId: scope.organizationId, actorId: actor, action: 'execution.task.assignment.created', entityType: 'TaskAssignment', entityId: assignment.id, metadata: { projectId: scope.projectId, taskId, workerId, teamId, status, ...requestMetadata } } });
+      return { kind: 'ASSIGNMENT', assignment: serializeAssignment(assignment) };
 }
