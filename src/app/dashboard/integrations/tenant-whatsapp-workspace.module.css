@@ -1,0 +1,40 @@
+.panel { margin-bottom: 24px; padding: clamp(18px,3vw,28px); border: 1px solid var(--setup-border); border-radius: 20px; background: var(--setup-bg); color: var(--setup-text); min-width: 0; }
+.header { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; flex-wrap: wrap; }
+.header span { font-size: .68rem; letter-spacing: .13em; color: var(--setup-accent); font-weight: 800; }
+.header h2 { font-size: clamp(1.35rem,3vw,2rem); letter-spacing: -.03em; margin: 10px 0; }
+.header p { margin: 0; color: var(--setup-muted); font-size: .9rem; overflow-wrap: anywhere; }
+.private { padding: 9px 12px; font-size: .7rem; border: 1px solid var(--setup-border); border-radius: 30px; line-height: 1.5; }
+.intro { line-height: 1.7; color: var(--setup-muted); margin: 20px 0; font-size: .9rem; }
+.panel fieldset { min-width: 0; padding: 0; border: 0; margin: 24px 0; }
+.panel legend { padding: 0; margin-bottom: 12px; font-size: .92rem; font-weight: 650; }
+.fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; }
+.fields label { display: grid; gap: 9px; font-size: .83rem; min-width: 0; }
+.fields input, .fields select { width: 100%; min-width: 0; box-sizing: border-box; min-height: 46px; padding: 12px; border-radius: 10px; border: 1px solid var(--setup-border); background: #060913; color: var(--setup-text); font: inherit; font-size: 16px; }
+.choices { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; }
+.choices label, .useCases label { display: flex; align-items: flex-start; gap: 10px; min-width: 0; padding: 16px; border: 1px solid var(--setup-border); border-radius: 12px; cursor: pointer; }
+.choices label[data-selected='true'] { border-color: var(--setup-accent); background: color-mix(in srgb,var(--setup-accent) 6%,var(--setup-bg)); }
+.choices input, .useCases input, .consent input { flex-shrink: 0; width: 18px; height: 18px; accent-color: var(--setup-accent); margin: 2px 0 0; }
+.choices strong, .useCases strong { display: block; font-size: .84rem; line-height: 1.5; }
+.choices small, .useCases small { display: block; margin-top: 8px; font-size: .77rem; line-height: 1.6; color: var(--setup-muted); }
+.useCases { display: grid; gap: 9px; }
+.useCases label { padding: 12px 15px; }
+.boundary { margin: 20px 0; border-left: 3px solid var(--setup-accent); padding: 8px 16px; line-height: 1.65; font-size: .85rem; }
+.boundary p, .note { color: var(--setup-muted); font-size: .78rem; line-height: 1.65; }
+.consent { display: flex; gap: 12px; align-items: flex-start; line-height: 1.65; padding: 15px 0; font-size: .82rem; cursor: pointer; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
+.panel button { min-height: 46px; padding: 12px 18px; border-radius: 10px; border: 1px solid var(--setup-accent); background: var(--setup-accent); color: #060913; cursor: pointer; font: inherit; font-size: .88rem; font-weight: 700; }
+.panel button:disabled { opacity: .45; cursor: not-allowed; }
+.actions small { color: var(--setup-muted); font-size: .75rem; }
+.panel :focus-visible { outline: 3px solid var(--setup-accent); outline-offset: 3px; }
+.success, .next, .error { padding: 14px; border: 1px solid var(--setup-border); border-radius: 10px; line-height: 1.65; font-size: .86rem; }
+.error { border-color: var(--setup-accent); }
+@media(max-width:700px) { .fields, .choices { grid-template-columns: minmax(0,1fr); } .actions button { width: 100%; } }
+@media(prefers-reduced-motion:reduce) { .panel * { animation: none !important; transition: none !important; } }
+
+.saved { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 18px; padding: 18px; border: 1px solid var(--setup-border); border-radius: 14px; margin: 20px 0; }
+.saved div { min-width: 0; }
+.saved span { display: block; font-size: .73rem; color: var(--setup-muted); margin-bottom: 8px; }
+.saved strong { display: block; font-size: .88rem; line-height: 1.6; overflow-wrap: anywhere; }
+.panel .secondary { background: transparent; color: var(--setup-text); border-color: var(--setup-border); }
+.saved button { justify-self: start; }
+@media(max-width:700px) { .saved { grid-template-columns: minmax(0,1fr); gap: 14px; } }

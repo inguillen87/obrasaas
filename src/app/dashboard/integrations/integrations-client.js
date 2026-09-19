@@ -10,6 +10,7 @@ import {
   whatsappReconnectRequired,
 } from './channel-client-state';
 import WhatsAppConnectExperience from './whatsapp-connect-experience';
+import TenantWhatsAppWorkspace from './tenant-whatsapp-workspace';
 import { evidenceScopeHeaders } from '@/lib/evidence-capture-policy';
 import styles from './integrations.module.css';
 
@@ -204,6 +205,8 @@ export default function IntegrationsClient({
   initialFlowCatalog,
 }) {
   const [connection, setConnection] = useState(initialConnection);
+  const [preparedWorkspace, setPreparedWorkspace] = useState(null);
+  const preparedRevisionRef = useRef(null);
   const [channelHealth, setChannelHealth] = useState(initialHealth);
   const [healthDiagnostics, setHealthDiagnostics] = useState(initialHealthDiagnostics);
   const [healthPending, setHealthPending] = useState(false);
@@ -356,6 +359,7 @@ export default function IntegrationsClient({
           whatsappBusinessId: signup.whatsappBusinessId,
           phoneNumberId: signup.phoneNumberId,
           registrationPin: pinRef.current,
+          preparedRevision: preparedRevisionRef.current,
         }),
       });
       const payload = await response.json().catch(() => ({}));
@@ -483,6 +487,8 @@ export default function IntegrationsClient({
 
   function startSignup() {
     if (internalWorkspace || pending || signupActiveRef.current) return;
+    if (preparedWorkspace?.allowed !== true) { setStatus({ type: 'error', text: 'Guardá la preparación y abrí la primera obra elegida antes de autorizar.' }); return; }
+    preparedRevisionRef.current = preparedWorkspace.revision;
     if (!/^\d{6}$/.test(registrationPin)) {
       setStatus({ type: 'error', text: 'Definí un PIN de 6 números antes de conectar.' });
       return;
@@ -711,9 +717,11 @@ export default function IntegrationsClient({
           y se convierten en evidencia trazable dentro de la obra correcta.
         </p>
 
+        {!internalWorkspace && <TenantWhatsAppWorkspace organizationId={organizationId} projectId={projectId} companyName={companyName}
+          onState={setPreparedWorkspace} connectionPending={pending} />}
         <WhatsAppConnectExperience companyName={companyName} projectName={projectName} internalWorkspace={internalWorkspace}
           linked={linked} reconnectRequired={reconnectRequired} configured={configured} sdkReady={sdkReady}
-          pending={pending} blocked={healthPending || Boolean(flowPendingKey) || Boolean(templatePendingKey)}
+          pending={pending} blocked={healthPending || Boolean(flowPendingKey) || Boolean(templatePendingKey) || preparedWorkspace?.allowed !== true}
           pin={registrationPin} onPinChange={value => { pinRef.current = value; setRegistrationPin(value); }}
           onConnect={startSignup} diagnostics={healthDiagnostics} canReadInbox={canReadInbox} />
         {pilotImportEnabled && <p className={styles.pilotTargetSummary}>El número piloto se administra en <a href="#platform-technical-tools">Administración técnica</a>. La autorización de clientes se realiza con Meta.</p>}

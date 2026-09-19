@@ -1,3 +1,5 @@
+import { assertTenantWorkspaceAuthorization } from '@/lib/whatsapp/tenant-workspace';
+import { tenantWorkspaceErrorResponse } from '@/lib/whatsapp/tenant-workspace-policy';
 import { assertSignupScreenContext, signupScreenContextResponse } from '@/lib/whatsapp/signup-screen-context';
 import { evidenceContextErrorResponse } from '@/lib/evidence-context';
 import {
@@ -84,6 +86,8 @@ export async function GET(request) {
     });
     return Response.json({ connection: safeConnection(connection), context: { organizationId: access.organization.id, projectId: access.project.id } }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
+    const workspaceFailure = tenantWorkspaceErrorResponse(error);
+    if (workspaceFailure) return workspaceFailure;
     const contextFailure = signupScreenContextResponse(error) || evidenceContextErrorResponse(error);
     if (contextFailure) return contextFailure;
     if (error instanceof AccessError) return accessErrorResponse(error);
@@ -109,6 +113,8 @@ export async function POST(request) {
     const registrationPin = String(body.registrationPin || '');
 
     prisma = getPrisma();
+    const preparation = { scope: { organizationId: access.organization.id, projectId: access.project.id }, preparedRevision: body.preparedRevision };
+    await assertTenantWorkspaceAuthorization(prisma, preparation);
     const existingSnapshot = await prisma.whatsAppConnection.findUnique({
       where: { projectId: access.project.id },
       select: { id: true, updatedAt: true },
@@ -181,7 +187,9 @@ export async function POST(request) {
             }),
           };
         },
-        createAuditLog: (tx) => tx.auditLog.create({
+        createAuditLog: async (tx) => {
+          await assertTenantWorkspaceAuthorization(tx, { ...preparation, lock: true });
+          return tx.auditLog.create({
           data: {
             organizationId: access.organization.id,
             actorId: access.databaseUserId,
@@ -202,7 +210,7 @@ export async function POST(request) {
               } : {}),
             },
           },
-        }),
+        }); },
       });
       connectionLeaseCommitted = true;
       connection = {
@@ -211,6 +219,7 @@ export async function POST(request) {
       };
     } else {
       connection = await prisma.$transaction(async (tx) => {
+        await assertTenantWorkspaceAuthorization(tx, { ...preparation, lock: true });
         const saved = await tx.whatsAppConnection.create({
           data: {
             projectId: access.project.id,
@@ -263,6 +272,8 @@ export async function POST(request) {
         });
       }
     }
+    const workspaceFailure = tenantWorkspaceErrorResponse(error);
+    if (workspaceFailure) return workspaceFailure;
     const contextFailure = signupScreenContextResponse(error) || evidenceContextErrorResponse(error);
     if (contextFailure) return contextFailure;
     if (error instanceof AccessError) return accessErrorResponse(error);
@@ -347,6 +358,8 @@ export async function DELETE(request) {
         });
       }
     }
+    const workspaceFailure = tenantWorkspaceErrorResponse(error);
+    if (workspaceFailure) return workspaceFailure;
     const contextFailure = signupScreenContextResponse(error) || evidenceContextErrorResponse(error);
     if (contextFailure) return contextFailure;
     if (error instanceof AccessError) return accessErrorResponse(error);
