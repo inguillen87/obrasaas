@@ -1,6 +1,7 @@
 import { pathToFileURL } from 'node:url';
 import { config } from 'dotenv';
 import { databaseIdentityDigest, evaluateMigrationGate } from './vercel-build.mjs';
+import { inspectProductionPrerequisites } from './lib/production-configuration-check.mjs';
 
 const CONNECTION_KEYS = ['DIRECT_URL', 'DATABASE_URL_UNPOOLED', 'DATABASE_URL'];
 const HEX = /^[a-f0-9]{64}$/i;
@@ -38,6 +39,7 @@ export function inspectReleaseConfiguration(environment) {
       preview: typeof preview === 'string' && HEX.test(preview) ? 'FORMAT_VALID' : 'UNAVAILABLE_OR_INVALID',
     },
     mixedDatabaseTargets: groups.size > 1, migrationGate,
+    productionPrerequisites: inspectProductionPrerequisites(environment),
     runtimeVerified: false, providerVerified: false,
     note: 'Configuration inspection only; this is not a deployment or an end-to-end verification.',
   };
@@ -52,6 +54,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     if (args.includes('--local')) config({ path: '.env.local', quiet: true, override: false });
     const result = inspectReleaseConfiguration(process.env);
     console.log(JSON.stringify(result, null, 2));
-    if (result.migrationGate.status === 'BLOCKED') process.exitCode = 1;
+    if (result.migrationGate.status === 'BLOCKED' || result.productionPrerequisites.status === 'BLOCKED') process.exitCode = 1;
   }
 }
