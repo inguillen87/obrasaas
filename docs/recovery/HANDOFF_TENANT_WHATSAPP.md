@@ -51,3 +51,6 @@ Leer `native-whatsapp-field-menu.md`. Archivos nuevos: `field-interactive-menu.j
 
 ## Continuación S11.A6: vigencia y recuperación del canal
 Leer `whatsapp-credential-recovery.md`. La lectura de vigencia no renueva credenciales ni envía mensajes. El panel aplica aviso/deadline por obra sin perder la preparación y conduce a la autorización existente. Ejecutar `node scripts/verify-channel-recovery-ui.mjs`; usa componentes reales con identidad/HTTP controlados, no consentimiento Meta ni entrega física. Mantener pendientes las pruebas operativas y el pase de Production hasta verificarlos por separado.
+
+## Continuación S11.A7: continuidad de respuestas en la bandeja
+Leer `inbox-reply-continuity.md`. Los borradores y las solicitudes inciertas se conservan por conversación dentro de la instancia de empresa/obra/usuario, sin almacenamiento persistente nuevo. El sender canónico y su idempotencia siguen siendo la autoridad. GET/POST de mensajes añaden contexto verificable; una respuesta tardía o de otra conversación no se incorpora al historial visible. Ejecutar `node scripts/verify-inbox-continuity-ui.mjs`; usa InboxClient real con HTTP controlado, no envío a Meta. El número de tests y la publicación se consignan en el PR después de verificarlos. No confundir esta retención en memoria con sincronización offline ni con recuperación después de cerrar la pestaña.

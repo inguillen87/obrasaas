@@ -63,6 +63,7 @@ export default async function InboxPage() {
       </header>
 
       <InboxClient
+        viewerId={access.databaseUserId}
         key={`${access.organization.id}:${access.project.id}`}
         canLinkProgressEvidence={canLinkProgressEvidence}
         canCreateProgressReport={canLinkProgressEvidence && hasTenantPermission(access, 'org:tasks:read')}

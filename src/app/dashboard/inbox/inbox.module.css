@@ -2650,3 +2650,5 @@
 
 .onboardingConsent { grid-column: 1 / -1; display: flex; align-items: flex-start; gap: 10px; padding: 12px; border: 1px solid var(--border-color, #334155); border-radius: 9px; font-size: .8rem; line-height: 1.65; }
 .onboardingConsent input { width: 18px; height: 18px; flex-shrink: 0; margin: 3px 0 0; accent-color: var(--accent-primary, #f59e0b); }
+
+.draftBadge { display: block; width: fit-content; margin: 4px 0; padding: 3px 7px; border: 1px solid var(--border-color); border-radius: 6px; color: var(--primary); font-size: .65rem; font-weight: 700; line-height: 1.5; }

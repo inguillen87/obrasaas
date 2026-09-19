@@ -10,6 +10,10 @@ import {
   useState,
 } from 'react';
 
+import useInboxComposers from './use-inbox-composers';
+import InboxComposerContext from './inbox-composer-context';
+import { confirmInboxReply } from '@/lib/whatsapp/inbox-composer-book';
+import { evidenceScopeHeaders } from '@/lib/evidence-capture-policy';
 import styles from './inbox.module.css';
 import MessageReportAction, { MessageReportDialog } from './message-report-action';
 import ContactOnboardingAction, {
@@ -269,14 +273,6 @@ async function readResponse(response, fallback) {
     throw error;
   }
   return payload;
-}
-
-function sendFailureResolution(error) {
-  const code = textValue(error?.code).toUpperCase();
-  if (code === 'WHATSAPP_SEND_REJECTED') return 'FAILED';
-  if (code === 'WHATSAPP_DELIVERY_UNKNOWN') return 'UNKNOWN';
-  if (Number(error?.status) >= 500 || error instanceof TypeError) return 'UNKNOWN';
-  return '';
 }
 
 function createIdempotencyKey(prefix = 'inbox') {
@@ -755,7 +751,10 @@ function LoadingWorkspace() {
   );
 }
 
-export default function InboxClient({
+export default function InboxClient(props) {
+  return <InboxWorkspace key={JSON.stringify([props.organizationId, props.projectId, props.viewerId || ''])} {...props} />;
+}
+function InboxWorkspace({
   canCreateProgressReport = false,
   organizationId,
   canLinkProgressEvidence = false,
@@ -784,19 +783,19 @@ export default function InboxClient({
     normalizeContactOnboarding(null)
   ));
   const [query, setQuery] = useState('');
-  const [draft, setDraft] = useState('');
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [messageLoading, setMessageLoading] = useState(false);
   const [loadingMoreConversations, setLoadingMoreConversations] = useState(false);
   const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
-  const [sending, setSending] = useState(false);
+
   const [loadError, setLoadError] = useState('');
   const [messageError, setMessageError] = useState('');
   const [historyPageError, setHistoryPageError] = useState('');
   const [readStateError, setReadStateError] = useState('');
-  const [sendError, setSendError] = useState('');
-  const [sendResolution, setSendResolution] = useState('');
+
+
   const [messageAnnouncement, setMessageAnnouncement] = useState({ id: 'initial', text: '' });
   const [online, setOnline] = useState(true);
   const [now, setNow] = useState(() => new Date());
@@ -807,8 +806,8 @@ export default function InboxClient({
   const messageRequestRef = useRef(null);
   const readStateAbortRef = useRef(null);
   const failedReadTargetRef = useRef(null);
-  const draftKeyRef = useRef(createIdempotencyKey());
-  const unresolvedSendRef = useRef(null);
+
+
   const knownMessageIdsRef = useRef(new Set());
   const knownMessageStatusRef = useRef(new Map());
   const shouldStickToBottomRef = useRef(true);
@@ -823,6 +822,17 @@ export default function InboxClient({
   const conversationButtonRefs = useRef(new Map());
   const restoreConversationFocusRef = useRef('');
   const selectedConversationIdRef = useRef('');
+  const composers = useInboxComposers({ organizationId, projectId }, selectedId);
+  const { book } = composers;
+  const { draft, sending, error: sendError, resolution: sendResolution } = composers.current;
+  const [draftNotice, setDraftNotice] = useState('');
+  const liveRef = useRef(true);
+  const sendControllersRef = useRef(new Set());
+  useEffect(() => {
+    liveRef.current = true;
+    const controllers = sendControllersRef.current;
+    return () => { liveRef.current = false; controllers.forEach(controller => controller.abort()); };
+  }, []);
 
   const selectedConversation = useMemo(() => (
     conversations.find((conversation) => conversation.id === selectedId) || null
@@ -997,7 +1007,7 @@ export default function InboxClient({
       const response = await fetch(
         `/api/whatsapp/inbox/${encodeURIComponent(conversationId)}/messages?${params.toString()}`,
         {
-          headers: { Accept: 'application/json' },
+          headers: { Accept: 'application/json', ...evidenceScopeHeaders({ organizationId, projectId }) },
           cache: 'no-store',
           signal: controller.signal,
         },
@@ -1006,6 +1016,10 @@ export default function InboxClient({
         response,
         'No pudimos consultar los mensajes de esta conversación.',
       );
+      if (controller.signal.aborted || messageRequestRef.current?.controller !== controller || selectedConversationIdRef.current !== conversationId) return null;
+      if (payload?.context?.organizationId !== organizationId || payload.context.projectId !== projectId || payload.context.conversationId !== conversationId || payload.conversation?.id !== conversationId) {
+        throw Object.assign(new Error('La respuesta de la conversación no coincide con la obra abierta.'), { status: 409 });
+      }
       const detailConversation = normalizeConversation(payload.conversation);
       const nextMessages = normalizeMessageList(payload);
       const nextPageInfo = normalizePageInfo(payload);
@@ -1096,7 +1110,8 @@ export default function InboxClient({
       setNow(new Date());
       return nextOnboarding;
     } catch (error) {
-      if (error.name !== 'AbortError') {
+      if (error.name !== 'AbortError' && selectedConversationIdRef.current === conversationId) {
+        if ([401,403,404,409].includes(error.status)) { setMessages([]); setComposerCapability(UNVERIFIED_COMPOSER_CAPABILITY); book.block(conversationId); }
         const safeMessage = safeErrorMessage(
           error,
           loadingOlder
@@ -1104,7 +1119,7 @@ export default function InboxClient({
             : 'No pudimos consultar los mensajes de esta conversación.',
         );
         if (loadingOlder) setHistoryPageError(safeMessage);
-        else if (!refreshingMessages) setMessageError(safeMessage);
+        else if (!refreshingMessages || [401,403,404,409].includes(error.status)) setMessageError(safeMessage);
       }
       return null;
     } finally {
@@ -1114,7 +1129,7 @@ export default function InboxClient({
         else if (!refreshingMessages) setMessageLoading(false);
       }
     }
-  }, [projectId]);
+  }, [book, organizationId, projectId]);
 
   const markConversationRead = useCallback(async (conversationId, throughMessageId) => {
     if (!conversationId || !throughMessageId) return;
@@ -1195,7 +1210,6 @@ export default function InboxClient({
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
       if (!selectedId) {
-        unresolvedSendRef.current = null;
         setMessages([]);
         setWindowState(normalizeWindow(null));
         setComposerCapability(null);
@@ -1208,10 +1222,6 @@ export default function InboxClient({
         return;
       }
       readStateAbortRef.current?.abort();
-      unresolvedSendRef.current = null;
-      setDraft('');
-      setSendError('');
-      setSendResolution('');
       setReadStateError('');
       failedReadTargetRef.current = null;
       setHistoryPageError('');
@@ -1225,7 +1235,6 @@ export default function InboxClient({
       setHistoryAtBottom(true);
       setMessagePageInfo(normalizePageInfo(null));
       messagePageInfoRef.current = normalizePageInfo(null);
-      draftKeyRef.current = createIdempotencyKey();
       void loadMessages(selectedId);
     });
     return () => window.cancelAnimationFrame(frame);
@@ -1243,26 +1252,8 @@ export default function InboxClient({
   }, []);
 
   useEffect(() => {
-    if (sendResolution !== 'UNKNOWN') return;
-    const unresolved = unresolvedSendRef.current;
-    if (!unresolved?.messageId || unresolved.conversationId !== selectedId) return;
-    const reconciled = messages.find((message) => message.id === unresolved.messageId);
-    if (!reconciled || UNRESOLVED_SEND_STATES.has(reconciled.status)) return;
-
-    unresolvedSendRef.current = null;
-    draftKeyRef.current = createIdempotencyKey();
-    if (reconciled.status === 'FAILED') {
-      setSendResolution('FAILED');
-      setSendError(
-        'Meta confirmó que este intento falló. El borrador se conservó y podés enviarlo como una operación nueva.',
-      );
-      return;
-    }
-
-    setSendResolution('');
-    setSendError('');
-    if (draft.trim() === unresolved.body) setDraft('');
-  }, [draft, messages, selectedId, sendResolution]);
+    if (loadedConversationId === selectedId) book.reconcile(selectedId, messages);
+  }, [book, messages, selectedId, loadedConversationId]);
 
   useEffect(() => {
     if (!online) return undefined;
@@ -1364,6 +1355,7 @@ export default function InboxClient({
   }, [mobileDetailOpen]);
 
   function selectConversation(conversationId) {
+    setDraftNotice('');
     setSelectedId(conversationId);
     setMobileDetailOpen(true);
   }
@@ -1413,136 +1405,58 @@ export default function InboxClient({
   }
 
   function updateDraft(value) {
-    if (sendError && !sendResolution) {
-      setSendError('');
-    }
-    setDraft(value);
+    try { book.edit(selectedId, value); setDraftNotice(''); }
+    catch (error) { setDraftNotice(error.message); }
   }
-
-  function sendMessage(event) {
-    event.preventDefault();
-    void submitMessage();
+  function discardDraft() {
+    if (!window.confirm('¿Descartar el borrador de esta conversación? No se eliminarán mensajes del historial.')) return;
+    if (book.discard(selectedId)) setDraftNotice('Borrador descartado.');
   }
-
+  async function copyDraft() {
+    try { await navigator.clipboard.writeText(book.get(selectedId).draft); setDraftNotice('Texto copiado. El envío conserva su estado.'); }
+    catch { setDraftNotice('No se pudo copiar. Seleccioná el texto para conservarlo.'); }
+  }
+  function sendMessage(event) { event.preventDefault(); void submitMessage(); }
   async function submitMessage({ asNewAttempt = false, reconcileUnknown = false } = {}) {
-    const pendingAttempt = reconcileUnknown ? unresolvedSendRef.current : null;
-    const body = pendingAttempt?.conversationId === selectedConversation?.id
-      ? pendingAttempt.body
-      : draft.trim();
-    if (
-      !body
-      || !selectedConversation
-      || sending
-      || (!reconcileUnknown && !canCompose)
-      || (reconcileUnknown && (!online || !pendingAttempt))
-    ) return;
-    if (sendResolution === 'UNKNOWN' && !reconcileUnknown) return;
-    if (sendResolution === 'FAILED' && !asNewAttempt) return;
-
-    const idempotencyKey = reconcileUnknown
-      ? pendingAttempt.idempotencyKey
-      : asNewAttempt
-        ? createIdempotencyKey()
-        : draftKeyRef.current;
-    if (asNewAttempt) draftKeyRef.current = idempotencyKey;
-    const attempt = {
-      body,
-      conversationId: selectedConversation.id,
-      idempotencyKey,
-      messageId: pendingAttempt?.messageId || null,
-    };
-
-    setSending(true);
-    if (!reconcileUnknown) setSendError('');
-    setSendResolution(reconcileUnknown ? 'UNKNOWN' : '');
-
+    const conversationId = selectedConversation?.id;
+    if (!conversationId || !online || (!reconcileUnknown && !canCompose)) return;
+    if (asNewAttempt && !window.confirm('El envío anterior falló. ¿Enviar este texto como una nueva operación al mismo contacto?')) return;
+    let attempt;
+    try { attempt = book.begin(conversationId, { asNewAttempt, reconcileUnknown }); }
+    catch (error) { setDraftNotice(error.message); return; }
+    if (!attempt) return;
+    const controller = new AbortController(); sendControllersRef.current.add(controller);
+    const timeout = setTimeout(() => controller.abort(), 30000);
     try {
-      const response = await fetch(
-        `/api/whatsapp/inbox/${encodeURIComponent(selectedConversation.id)}/messages?projectId=${encodeURIComponent(projectId)}`,
-        {
-          method: 'POST',
-          headers: {
-            Accept: 'application/json',
-            'Content-Type': 'application/json',
-            'Idempotency-Key': idempotencyKey,
-          },
-          body: JSON.stringify({
-            projectId,
-            body,
-            idempotencyKey,
-          }),
-        },
-      );
-      const payload = await readResponse(
-        response,
-        'No pudimos confirmar el envío. Reintentá sin cambiar el mensaje.',
-      );
-      if (reconcileUnknown && unresolvedSendRef.current === null) return;
+      const response = await fetch(`/api/whatsapp/inbox/${encodeURIComponent(conversationId)}/messages?projectId=${encodeURIComponent(projectId)}`, {
+        method: 'POST', cache: 'no-store', signal: controller.signal,
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json', ...evidenceScopeHeaders({ organizationId, projectId }), 'Idempotency-Key': attempt.idempotencyKey },
+        body: JSON.stringify({ projectId, body: attempt.body, idempotencyKey: attempt.idempotencyKey }),
+      });
+      const payload = await readResponse(response, 'No pudimos confirmar el envío. Conservá el mismo intento.');
+      if (!liveRef.current) return;
+      const receipt = confirmInboxReply(payload, attempt);
       const sentMessage = normalizeMessage(payload.message);
-      if (sentMessage) {
-        attempt.messageId = sentMessage.id;
+      if (!sentMessage) throw Object.assign(new Error('Respuesta de envío incompleta.'), { code: 'WHATSAPP_DELIVERY_UNKNOWN' });
+      if (!book.settle(attempt, receipt)) return;
+      if (selectedConversationIdRef.current === conversationId) {
         shouldStickToBottomRef.current = true;
-        knownMessageIdsRef.current = new Set([
-          ...knownMessageIdsRef.current,
-          sentMessage.id,
-        ]);
+        knownMessageIdsRef.current = new Set([...knownMessageIdsRef.current, sentMessage.id]);
         knownMessageStatusRef.current.set(sentMessage.id, sentMessage.status);
-        setMessages((current) => mergeMessagePage(current, [sentMessage]));
-        setMessageAnnouncement({
-          id: sentMessage.id,
-          text: sentMessage.status === 'FAILED'
-            ? 'El mensaje fue rechazado.'
-            : sentMessage.status === 'UNKNOWN'
-              ? 'La entrega del mensaje sigue sin confirmación.'
-              : 'Mensaje enviado.',
-        });
+        setMessages(current => mergeMessagePage(current, [sentMessage]));
+        setMessageAnnouncement({ id: sentMessage.id, text: receipt.status === 'DELIVERED' ? 'Mensaje entregado.'
+          : receipt.status === 'READ' ? 'Mensaje leído.' : receipt.status === 'FAILED' ? 'Envío fallido.'
+            : ['ACCEPTED', 'SENT'].includes(receipt.status) ? 'Meta registró el envío; la entrega todavía no está confirmada.' : 'Envío pendiente de confirmación.' });
+        setWindowState(normalizeWindow(payload.window));
+        const capability = normalizeComposerCapability(payload.composerCapability);
+        if (capability) setComposerCapability(capability);
+        else void loadMessages(conversationId, { mode: 'refresh' });
+        setNow(new Date());
       }
-      setWindowState(normalizeWindow(payload.window));
-      const nextComposerCapability = normalizeComposerCapability(payload.composerCapability);
-      if (nextComposerCapability) setComposerCapability(nextComposerCapability);
-      else void loadMessages(selectedConversation.id, { mode: 'refresh' });
-      setNow(new Date());
       void loadInbox();
-
-      if (sentMessage && UNRESOLVED_SEND_STATES.has(sentMessage.status)) {
-        unresolvedSendRef.current = attempt;
-        setSendResolution('UNKNOWN');
-        setSendError(
-          'Meta todavía no confirmó la entrega. Conservamos el borrador y la misma clave segura para comprobar o reintentar esta operación sin duplicarla.',
-        );
-        return;
-      }
-
-      if (sentMessage?.status === 'FAILED') {
-        unresolvedSendRef.current = null;
-        setSendResolution('FAILED');
-        setSendError(
-          'Meta confirmó que este intento falló. El borrador se conservó y podés enviarlo como una operación nueva.',
-        );
-        return;
-      }
-
-      unresolvedSendRef.current = null;
-      setDraft((current) => (current.trim() === body ? '' : current));
-      draftKeyRef.current = createIdempotencyKey();
     } catch (error) {
-      const resolution = sendFailureResolution(error);
-      if (resolution === 'UNKNOWN' || reconcileUnknown) {
-        unresolvedSendRef.current = attempt;
-        setSendResolution('UNKNOWN');
-      } else {
-        unresolvedSendRef.current = null;
-        setSendResolution(resolution);
-      }
-      setSendError(safeErrorMessage(
-        error,
-        reconcileUnknown
-          ? 'No pudimos obtener el estado final. La operación conserva su clave segura y el borrador sigue disponible.'
-          : 'No pudimos confirmar el envío. El borrador queda en esta pantalla para un reintento seguro.',
-      ));
-    } finally {
-      setSending(false);
-    }
+      if (liveRef.current) book.fail(attempt, error);
+    } finally { clearTimeout(timeout); sendControllersRef.current.delete(controller); }
   }
 
   async function handleProactiveFlowSent(payload) {
@@ -1750,6 +1664,9 @@ export default function InboxClient({
                               {formatConversationTime(conversation.lastMessageAt, timeZone, now)}
                             </time>
                           </span>
+                          {(composers.entries[conversation.id]?.draft || composers.entries[conversation.id]?.attempt) && <span className={styles.draftBadge}>
+                            {composers.entries[conversation.id].sending ? 'Enviando' : composers.entries[conversation.id].resolution === 'UNKNOWN' ? 'Por confirmar' : composers.entries[conversation.id].resolution === 'BLOCKED' ? 'Revisar acceso' : 'Borrador en esta pestaña'}
+                          </span>}
                           <span className={styles.conversationPreview}>
                             {conversation.lastMessage?.direction === 'OUTBOUND' && (
                               <DeliveryState status={conversation.lastMessage.status} compact />
@@ -1826,7 +1743,7 @@ export default function InboxClient({
                   onClick={closeMobileDetail}
                   aria-label="Volver a conversaciones"
                 >
-                  <i className="fa-solid fa-arrow-left" aria-hidden="true" />
+                  <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m14 5-7 7 7 7M7 12h14" /></svg>
                 </button>
                 <Avatar conversation={selectedConversation} large />
                 <div className={styles.contactIdentity}>
@@ -1996,6 +1913,9 @@ export default function InboxClient({
               )}
 
               <form className={styles.composer} onSubmit={sendMessage}>
+                <InboxComposerContext recipient={contactLabel(selectedConversation)} projectName={projectName}
+                  entry={composers.current} notice={draftNotice}
+                  onDiscard={discardDraft} onCopy={copyDraft} />
                 {sendError && (
                   <div className={styles.sendError} role="alert">
                     <i className="fa-solid fa-triangle-exclamation" aria-hidden="true" />
@@ -2051,7 +1971,7 @@ export default function InboxClient({
                       placeholder={canCompose ? 'Escribí una respuesta…' : 'Respuesta no disponible'}
                       rows="1"
                       maxLength="4096"
-                      disabled={!canCompose || sending}
+                      disabled={!canCompose || sending || ['UNKNOWN', 'BLOCKED'].includes(sendResolution)}
                     />
                   </label>
                   <button
@@ -2065,9 +1985,9 @@ export default function InboxClient({
                           ? 'Enviando mensaje'
                           : 'Enviar mensaje'}
                   >
-                    <i className={sending
-                      ? 'fa-solid fa-circle-notch fa-spin'
-                      : 'fa-solid fa-paper-plane'} aria-hidden="true" />
+                    <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                      {sending ? <><circle cx="12" cy="12" r="8" /><path d="M12 7v5l3 2" /></> : <path d="m3 3 19 9-19 9 3-9-3-9Zm3 9h16" />}
+                    </svg>
                     <span>{sending ? 'Enviando…' : 'Enviar'}</span>
                   </button>
                 </div>
