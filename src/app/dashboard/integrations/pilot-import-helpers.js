@@ -1,3 +1,4 @@
+import { pilotImportPublicDiagnostic } from '../../../lib/whatsapp/pilot-import-diagnostics.js';
 const META_RESOURCE_ID_PATTERN = /^\d{5,32}$/;
 const REGISTRATION_PIN_PATTERN = /^\d{6}$/;
 const TARGET_ID_SUFFIX_LENGTH = 6;
@@ -79,7 +80,9 @@ export function pilotImportRequestBody(draft) {
   };
 }
 
-export function pilotImportErrorMessage(status, code) {
+export function pilotImportErrorMessage(status, code, diagnosticCode) {
+  const diagnostic = pilotImportPublicDiagnostic(status, code, diagnosticCode);
+  if (diagnostic) return diagnostic.message;
   if (code === "PILOT_IMPORT_IN_PROGRESS") {
     return "Hay otra validación segura en curso. Esperá unos segundos y reintentá.";
   }

@@ -13,6 +13,7 @@ import {
   resolveRequestCorrelationId,
   withCorrelationId,
 } from "@/lib/request-correlation";
+import { pilotImportProviderDiagnostic } from '@/lib/whatsapp/pilot-import-diagnostics';
 import { MetaIntegrationError } from "@/lib/whatsapp/embedded-signup";
 import { WhatsAppFlowProvisioningLeaseError } from "@/lib/whatsapp/flow-provisioning-lease";
 import {
@@ -154,6 +155,7 @@ export function createWhatsAppPilotImportHandlers({
         );
       }
       if (error instanceof MetaIntegrationError) {
+        const diagnostic = pilotImportProviderDiagnostic(error);
         console.error(
           "WhatsApp pilot import validation failed:",
           safeLog(error, correlationId),
@@ -162,6 +164,7 @@ export function createWhatsAppPilotImportHandlers({
           {
             error: "Meta no pudo validar la conexi\u00f3n piloto.",
             code: "PILOT_IMPORT_VALIDATION_FAILED",
+            ...(diagnostic ? { diagnosticCode: diagnostic.code } : {}),
           },
           correlationId,
           {
