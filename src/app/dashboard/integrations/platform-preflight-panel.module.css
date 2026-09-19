@@ -33,3 +33,10 @@
 .pilotForm button:disabled { opacity: .55; cursor: not-allowed; }
 .pilotForm :focus-visible { outline: 3px solid var(--preflight-accent); outline-offset: 3px; }
 @media(max-width:640px) { .pilotForm { grid-template-columns: minmax(0,1fr); } }
+
+.pilotRecovery { padding: 18px; margin: 20px 0; border: 1px solid var(--preflight-accent); border-radius: 14px; background: var(--preflight-bg); color: var(--preflight-text); }
+.pilotRecovery strong { display: block; font-size: 1rem; line-height: 1.5; }
+.pilotRecovery p { margin: 10px 0; font-size: .86rem; line-height: 1.65; overflow-wrap: anywhere; }
+.pilotRecovery a { display: inline-flex; align-items: center; min-height: 44px; padding: 10px 14px; border-radius: 9px; border: 1px solid var(--preflight-accent); color: var(--preflight-text); text-decoration: none; font-size: .85rem; font-weight: 650; }
+.pilotRecovery a:focus-visible { outline: 3px solid var(--preflight-accent); outline-offset: 3px; }
+.pilotRecovery p:last-child { color: var(--preflight-muted); font-size: .78rem; }

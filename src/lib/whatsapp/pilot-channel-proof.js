@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { deriveWhatsAppTextChannelState } from './channel-recovery.js';
 import { databaseOrganizationIsInternal } from '../organization-policy.js';
 import { roleHasPermission } from '../tenant-roles.js';
 import { listAllowedWhatsAppPilotAssets } from './pilot-import.js';
@@ -20,7 +21,7 @@ export async function resolvePilotProofContext({ prisma, clerk, principal, proje
   if (membership?.status !== 'ACTIVE' || !roleHasPermission(membership.tenantRole, 'org:conversations:manage') || !roleHasPermission(membership.tenantRole, 'org:integrations:manage')) fail('PILOT_PROOF_PERMISSION', 'Tu membresía no permite comprobar este canal.', 403);
   const remote = await clerk.organizations.getOrganizationMembershipList({ organizationId: project.organization.clerkOrganizationId, userId: [principal.userId] });
   if (!remote.data.some(m => m.role === 'org:admin' && m.publicUserData?.userId === principal.userId)) fail('PILOT_PROOF_MEMBERSHIP', 'La membresía administrativa ya no está vigente.', 403);
-  const connection = await prisma.whatsAppConnection.findUnique({ where: { projectId }, select: { id: true, projectId: true, phoneNumberId: true, whatsappBusinessId: true, displayPhoneNumber: true, connectionStatus: true, enabled: true, embeddedSignupVersion: true } });
+  const connection = await prisma.whatsAppConnection.findUnique({ where: { projectId }, select: { id: true, projectId: true, phoneNumberId: true, whatsappBusinessId: true, displayPhoneNumber: true, connectionStatus: true, enabled: true, embeddedSignupVersion: true, metadata: true, lastError: true } });
   const assets = listAllowedWhatsAppPilotAssets(environment.WHATSAPP_PILOT_ALLOWED_ASSETS);
   if (!connection || !assets.some(a => a.phoneNumberId === connection.phoneNumberId && a.whatsappBusinessId === connection.whatsappBusinessId) || connection.embeddedSignupVersion !== 'pilot-preview-v1') fail('PILOT_PROOF_ASSET', 'El número no corresponde al activo piloto autorizado.', 403);
   if (!connection.enabled || connection.connectionStatus !== 'CONNECTED') fail('PILOT_PROOF_NOT_CONNECTED', 'Completá primero la importación del número.');
@@ -34,14 +35,15 @@ function publicReceipt(message) {
   const status = String(message.status || '').toLowerCase();
   return { id: message.id, status: ['prepared','sending','accepted','sent','delivered','read','failed','unknown'].includes(status) ? status : 'unknown' };
 }
-export async function readPilotChannelProof({ prisma, context, now = new Date() }) {
+export async function readPilotChannelProof({ prisma, context, now = new Date(), env = process.env }) {
   const { project, connection } = context;
   const inbound = await lastInbound(prisma, project.id);
+  const { recovery } = deriveWhatsAppTextChannelState(connection, { env, now });
   const age = inbound ? now.getTime() - new Date(inbound.sentAt).getTime() : Infinity;
   const reply = inbound ? await prisma.message.findFirst({ where: { conversationId: inbound.conversationId, direction: 'OUTBOUND', body: pilotProofReplyText(project, inbound) }, orderBy: { createdAt: 'desc' } }) : null;
   return { projectId: project.id, organizationId: project.organizationId, projectName: project.name, connectionId: connection.id,
-    sender: connection.displayPhoneNumber, checkedAt: now.toISOString(),
-    inbound: inbound ? { id: inbound.id, receivedAt: new Date(inbound.createdAt).toISOString(), contactLast4: inbound.conversation.externalId.replace(/\D/g, '').slice(-4), canReply: age >= 0 && age < 24 * 60 * 60 * 1000 } : null,
+    sender: connection.displayPhoneNumber, checkedAt: now.toISOString(), recovery,
+    inbound: inbound ? { id: inbound.id, receivedAt: new Date(inbound.createdAt).toISOString(), contactLast4: inbound.conversation.externalId.replace(/\D/g, '').slice(-4), windowOpen: age >= 0 && age < 24 * 60 * 60 * 1000, canReply: recovery.sendAllowed && age >= 0 && age < 24 * 60 * 60 * 1000 } : null,
     reply: publicReceipt(reply), workersAuthorizedByThisAction: false };
 }
 export async function sendPilotChannelProof({ prisma, context, input, sendMessage }) {

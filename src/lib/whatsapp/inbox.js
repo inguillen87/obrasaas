@@ -1,3 +1,4 @@
+import { deriveWhatsAppTextChannelState } from './channel-recovery.js';
 import { createHash } from 'node:crypto';
 import { reportSourceKind } from './progress-report-policy.js';
 
@@ -1080,9 +1081,10 @@ function assertManualSendState({ project, connection, inbound, observedAt, env }
   }
   const { operational } = textChannelReadiness(connection, env, observedAt);
   if (!operational) {
+    const { recovery } = deriveWhatsAppTextChannelState(connection, { env, now: observedAt });
     throw new WhatsAppInboxError(
-      'La cuenta de WhatsApp todavía no cumple las verificaciones de mensajería.',
-      { code: 'WHATSAPP_CHANNEL_NOT_READY', status: 409 },
+      recovery.blocker?.message || 'Verificá el canal desde Integraciones antes de enviar.',
+      { code: recovery.blocker?.code || 'WHATSAPP_CHANNEL_NOT_READY', status: 409 },
     );
   }
   const window = whatsAppCustomerCareWindow(inbound?.sentAt, observedAt);
