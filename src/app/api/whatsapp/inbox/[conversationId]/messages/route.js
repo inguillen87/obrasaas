@@ -1,3 +1,4 @@
+import { projectParticipantOnboarding } from '@/lib/whatsapp/participant-onboarding-progress';
 import {
   AccessError,
   accessErrorResponse,
@@ -27,13 +28,6 @@ export const runtime = 'nodejs';
 const MAX_SEND_BODY_BYTES = 20_000;
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/;
 const SEND_FIELDS = new Set(['projectId', 'body', 'idempotencyKey']);
-const ONBOARDING_STATES = new Set([
-  'eligible',
-  'already_pending',
-  'authorized',
-  'conflict',
-  'closed',
-]);
 
 function json(payload, init = {}) {
   return Response.json(payload, {
@@ -141,16 +135,7 @@ function assertSendInput(input) {
   }
 }
 
-function onboardingProjection(result) {
-  const state = String(result?.state || '').trim().toLowerCase();
-  const reason = typeof result?.capability?.reason === 'string'
-    ? result.capability.reason.trim().slice(0, 280)
-    : '';
-  return {
-    state: ONBOARDING_STATES.has(state) ? state : 'closed',
-    reason,
-  };
-}
+function onboardingProjection(result) { return projectParticipantOnboarding(result); }
 
 async function loadContactOnboarding({
   loadOnboardingState,
@@ -178,7 +163,7 @@ async function loadContactOnboarding({
       name: error?.name,
       code: error?.code,
     });
-    return { state: 'closed', reason: '' };
+    return projectParticipantOnboarding({ state: 'closed', unavailable: true });
   }
 }
 

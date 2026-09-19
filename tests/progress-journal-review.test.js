@@ -236,3 +236,32 @@ test('revision conflicts win before transition evaluation and have no side effec
   assert.equal(state.updates.length, 0);
   assert.equal(state.audits.length, 0);
 });
+
+for (const kind of ['DAILY_LOG', 'EVIDENCE']) {
+  test(`${kind} requires a rejection reason without changing the record`, async () => {
+    const { prisma, state } = fakePrisma(kind, kind === 'DAILY_LOG' ? 'SUBMITTED' : 'PENDING', 2);
+    for (const note of [undefined, null, '', '   ', '\n\t']) {
+      await assert.rejects(review(prisma, kind, 'REJECTED', 2, note), { code: 'PROGRESS_REVIEW_NOTE_REQUIRED', status: 422 });
+    }
+    assert.equal(state.updates.length, 0); assert.equal(state.audits.length, 0);
+  });
+  test(`${kind} validates the note before a write`, async () => {
+    for (const note of [{ text: 'bad' }, ['not-text'], 'a'.repeat(2001), 'invalid\u0000text']) {
+      const { prisma, state } = fakePrisma(kind, kind === 'DAILY_LOG' ? 'SUBMITTED' : 'PENDING', 2);
+      await assert.rejects(review(prisma, kind, 'REJECTED', 2, note), { code: 'PROGRESS_REVIEW_INVALID' });
+      assert.equal(state.updates.length, 0); assert.equal(state.audits.length, 0);
+    }
+  });
+  test(`${kind} returns the exact normalized rejection reason`, async () => {
+    const { prisma, state } = fakePrisma(kind, kind === 'DAILY_LOG' ? 'SUBMITTED' : 'PENDING', 2);
+    const result = await review(prisma, kind, 'REJECTED', 2, '  Falta metrado.\r\nRevisar tarea.  ');
+    const record = kind === 'DAILY_LOG' ? result.dailyLog : result.evidence;
+    assert.equal(kind === 'DAILY_LOG' ? record.rejectionReason : record.reviewNote, 'Falta metrado.\nRevisar tarea.');
+    assert.equal(record.status, 'REJECTED'); assert.equal(record.revision, 3); assert.equal(state.audits.length, 1);
+  });
+}
+test('daily log does not silently discard a note on approval', async () => {
+  const { prisma, state } = fakePrisma('DAILY_LOG', 'SUBMITTED');
+  await assert.rejects(review(prisma, 'DAILY_LOG', 'APPROVED', 0, 'No guardar silenciosamente'), { code: 'PROGRESS_REVIEW_NOTE_NOT_SUPPORTED' });
+  assert.equal(state.updates.length, 0);
+});

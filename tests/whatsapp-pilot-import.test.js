@@ -1267,3 +1267,21 @@ test("pilot refuses a phone reserved by another tenant before local or Meta effe
   assert.equal(state.creates, 0);
   assert.equal(remoteCalls, 0);
 });
+
+for (const diagnostic of ['META_PILOT_TOKEN_EXPIRY_REQUIRED','META_PILOT_TOKEN_EXPIRED']) {
+  test('route preserves generic error contract and safely exposes known reason: ' + diagnostic, async () => {
+    const previous=console.error; const logs=[]; console.error=(...args)=>logs.push(args);
+    try {
+      const {POST}=createWhatsAppPilotImportHandlers({
+        environment:{VERCEL_ENV:'preview',WHATSAPP_PILOT_IMPORT_ENABLED:'true',WHATSAPP_CREDENTIALS_ENCRYPTION_KEY:SECRET,WHATSAPP_PILOT_ALLOWED_ASSETS:ALLOWED_ASSETS},
+        resolveAccess:async()=>ACCESS,prismaFactory:()=>({}),
+        importConnection:async()=>{throw new MetaIntegrationError(TOKEN,{status:403,code:diagnostic});},
+      });
+      const response=await POST(new Request('https://preview.example/api/integrations/whatsapp/pilot-import',{method:'POST',headers:{'Content-Type':'application/json','Idempotency-Key':'pilot-import-reason-0001'},body:JSON.stringify(BODY)}));
+      const payload=await response.json();assert.equal(response.status,400);
+      assert.equal(payload.code,'PILOT_IMPORT_VALIDATION_FAILED');
+      assert.equal(payload.diagnosticCode,diagnostic==='META_PILOT_TOKEN_EXPIRED'?'PILOT_TOKEN_EXPIRED':'PILOT_TOKEN_NOT_TEMPORARY');
+      assert.ok(!JSON.stringify({payload,logs}).includes(TOKEN));assert.match(response.headers.get('cache-control'),/private, no-store/);
+    }finally{console.error=previous;}
+  });
+}

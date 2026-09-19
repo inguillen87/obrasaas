@@ -11,6 +11,7 @@ import {
 } from 'react';
 
 import styles from './inbox.module.css';
+import MessageReportAction, { MessageReportDialog } from './message-report-action';
 import ContactOnboardingAction, {
   normalizeContactOnboarding,
 } from './contact-onboarding-action';
@@ -137,6 +138,7 @@ function normalizeMessage(raw) {
     sourceEvidenceViewable: source.sourceEvidenceViewable === true,
     progressEvidenceEligible: source.progressEvidenceEligible === true,
     progressEvidenceLinked: source.progressEvidenceLinked === true,
+    progressReportKind: ['TEXT', 'AUDIO_TRANSCRIPT'].includes(source.progressReportKind) ? source.progressReportKind : null,
   };
 }
 
@@ -754,6 +756,8 @@ function LoadingWorkspace() {
 }
 
 export default function InboxClient({
+  canCreateProgressReport = false,
+  organizationId,
   canLinkProgressEvidence = false,
   canManageIntegrations = false,
   canManageOnboarding = false,
@@ -765,6 +769,8 @@ export default function InboxClient({
   timeZone = DEFAULT_TIME_ZONE,
 }) {
   const [conversations, setConversations] = useState([]);
+  const [reportSource, setReportSource] = useState(null);
+  const [createdReports, setCreatedReports] = useState({});
   const [connection, setConnection] = useState(() => normalizeConnection(null));
   const [selectedId, setSelectedId] = useState('');
   const [loadedConversationId, setLoadedConversationId] = useState('');
@@ -1652,6 +1658,12 @@ export default function InboxClient({
         </div>
       )}
 
+      {reportSource && canCreateProgressReport && <MessageReportDialog key={reportSource.messageId}
+        organizationId={organizationId} projectId={projectId} projectName={projectName}
+        conversationId={reportSource.conversationId} messageId={reportSource.messageId} tasks={progressEvidenceTasks}
+        onClose={() => setReportSource(null)} onSaved={record => {
+          setCreatedReports(current => ({ ...current, [reportSource.messageId]: record })); setReportSource(null);
+        }} />}
       <div className={styles.workspace}>
         <aside className={styles.conversationPanel} aria-label="Conversaciones">
           <div className={styles.conversationHeader}>
@@ -1831,6 +1843,7 @@ export default function InboxClient({
 
               <ContactOnboardingAction
                 canManageOnboarding={canManageOnboarding}
+                canManageIntegrations={canManageIntegrations} projectName={projectName}
                 conversationId={selectedConversation.id}
                 key={`${selectedConversation.id}:${contactOnboarding.state}`}
                 onboarding={contactOnboarding}
@@ -1935,6 +1948,9 @@ export default function InboxClient({
                               canOpenSourceEvidence={canViewSourceEvidence}
                               message={message}
                             />
+                            {canCreateProgressReport && message.progressReportKind && <MessageReportAction
+                              sourceKind={message.progressReportKind} saved={createdReports[message.id]}
+                              onOpen={() => setReportSource({ conversationId: selectedConversation.id, messageId: message.id })} />}
                             {canLinkProgressEvidence && message.progressEvidenceLinked ? (
                               <ProgressEvidenceLinkedState />
                             ) : canLinkProgressEvidence && message.progressEvidenceEligible ? (

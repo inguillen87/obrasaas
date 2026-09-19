@@ -1211,3 +1211,8 @@
     transition: none;
   }
 }
+
+.technicalTools { margin: 20px 0; padding: 16px; border: 1px solid rgba(148,163,184,.24); border-radius: 14px; min-width: 0; }
+.technicalTools > summary { cursor: pointer; min-height: 44px; padding: 10px 0; font-size: .88rem; font-weight: 650; line-height: 1.5; }
+.technicalTools > summary:focus-visible { outline: 3px solid var(--primary,#f59e0b); outline-offset: 3px; }
+.technicalTools > p { font-size: .83rem; line-height: 1.6; color: var(--text-secondary,#94a3b8); }

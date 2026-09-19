@@ -1821,3 +1821,21 @@ test('list is cursor bounded, resolves effective expiry and exposes legal name o
     && claim.retention.purgedAt === null
   )));
 });
+
+test('exact-claim view loads only its current tenant/project record and preserves privacy',async()=>{
+  const database=createFakePrisma(),dependencies=createDependencies();const {submitted}=await issuedAndSubmitted(database,dependencies);
+  database.mutate(state=>{const sample=structuredClone(state.claims[0]);state.claims.push({...sample,id:'other-claim',organizationId:'other-org'});state.claims.push({...sample,id:'other-site-claim',projectId:'other-project'});});
+  const before=database.state();
+  const result=await listWorkerOnboardingClaims(database.prisma,{scope:SCOPE,requestedByMembershipId:'membership-manager',claimId:submitted.id,now:NOW,dependencies});
+  assert.equal(result.items.length,1);assert.equal(result.items[0].id,submitted.id);assert.equal(result.nextCursor,null);assert.equal(result.items[0].reviewReady,true);
+  for(const value of [PHONE,PROVIDER_SUBJECT,CUIL])assert.ok(!JSON.stringify(result).includes(value));assert.deepEqual(database.state(),before);
+});
+for(const claimId of ['absent-claim','foreign-claim'])test('exact claim lookup never substitutes another available identity: '+claimId,async()=>{
+  const database=createFakePrisma(),dependencies=createDependencies();await issuedAndSubmitted(database,dependencies);
+  database.mutate(state=>{state.claims.push({...structuredClone(state.claims[0]),id:'foreign-claim',organizationId:'another-company'});});
+  const result=await listWorkerOnboardingClaims(database.prisma,{scope:SCOPE,requestedByMembershipId:'membership-manager',claimId,now:NOW,dependencies});
+  assert.deepEqual(result,{items:[],nextCursor:null});
+});
+for(const filters of [{claimId:'claim-a',status:'SUBMITTED'},{claimId:'claim-a',cursor:'somecursor'},{claimId:'../foreign'}])test('a pinned claim rejects ambiguous filters: '+JSON.stringify(filters),async()=>{
+  await assert.rejects(listWorkerOnboardingClaims({}, {scope:SCOPE,requestedByMembershipId:'membership-manager',now:NOW,dependencies:createDependencies(),...filters}),{code:'WORKER_ONBOARDING_INPUT_INVALID'});
+});

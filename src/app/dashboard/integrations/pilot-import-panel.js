@@ -10,6 +10,7 @@ import {
   pilotTargetIdSuffix,
   validatePilotImportDraft,
 } from "./pilot-import-helpers";
+import { pilotImportPublicDiagnostic } from '@/lib/whatsapp/pilot-import-diagnostics';
 import styles from "./integrations.module.css";
 
 const EMPTY_DRAFT = Object.freeze({
@@ -157,9 +158,12 @@ export default function WhatsAppPilotImportPanel({
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
+        const diagnosis = pilotImportPublicDiagnostic(response.status, payload?.code, payload?.diagnosticCode);
         setNotice({
           type: "error",
-          text: pilotImportErrorMessage(response.status, payload?.code),
+          text: pilotImportErrorMessage(response.status, payload?.code, payload?.diagnosticCode),
+          title: diagnosis?.title,
+          changeRequired: diagnosis?.changeRequired === true,
         });
         return;
       }
@@ -449,6 +453,7 @@ export default function WhatsAppPilotImportPanel({
             className={styles.primaryButton}
             disabled={
               pending ||
+              notice?.changeRequired ||
               !confirmed ||
               !selectedOrganization ||
               !selectedProject ||
@@ -457,6 +462,8 @@ export default function WhatsAppPilotImportPanel({
           >
             {pending
               ? "Validando con Meta…"
+              : notice?.changeRequired
+                ? "Revisá los datos del intento"
               : notice?.type === "error"
                 ? "Reintentar importación"
                 : "Importar conexión piloto"}
@@ -470,7 +477,7 @@ export default function WhatsAppPilotImportPanel({
           role={notice.type === "error" ? "alert" : "status"}
           aria-live={notice.type === "error" ? "assertive" : "polite"}
         >
-          {notice.text}
+          <div>{notice.title && <strong>{notice.title}</strong>}<p>{notice.text}</p></div>
         </div>
       )}
     </section>

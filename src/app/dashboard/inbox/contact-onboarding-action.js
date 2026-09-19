@@ -1,6 +1,7 @@
 'use client';
+import { projectParticipantOnboarding } from '@/lib/whatsapp/participant-onboarding-progress';
+import ContactOnboardingProgress from './contact-onboarding-progress';
 
-import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 
 import styles from './inbox.module.css';
@@ -37,7 +38,7 @@ export function normalizeContactOnboarding(raw) {
   const state = textValue(source.state || source.status).toLowerCase();
   return {
     state: ONBOARDING_STATES.has(state) ? state : 'closed',
-    reason: textValue(source.reason).slice(0, 280),
+    ...projectParticipantOnboarding({ ...source, state: ONBOARDING_STATES.has(state) ? state : 'closed' }),
   };
 }
 
@@ -67,43 +68,10 @@ function safeError(error, fallback) {
   return message;
 }
 
-function PendingState({ reason }) {
-  return (
-    <section className={styles.contactOnboardingCard} data-tone="pending" aria-labelledby="contact-onboarding-title">
-      <span className={styles.contactOnboardingIcon} aria-hidden="true">
-        <i className="fa-regular fa-clock" />
-      </span>
-      <div className={styles.contactOnboardingCopy}>
-        <strong id="contact-onboarding-title">Alta de identidad en curso</strong>
-        <p>{reason || 'La invitación ya está abierta. No enviaremos otra mientras siga vigente.'}</p>
-      </div>
-      <Link href="/dashboard/team#worker-onboarding">Ver altas</Link>
-    </section>
-  );
-}
-
-function ConflictState({ reason }) {
-  return (
-    <section
-      className={styles.contactOnboardingCard}
-      data-tone="conflict"
-      aria-labelledby="contact-onboarding-title"
-      role="alert"
-    >
-      <span className={styles.contactOnboardingIcon} aria-hidden="true">
-        <i className="fa-solid fa-triangle-exclamation" />
-      </span>
-      <div className={styles.contactOnboardingCopy}>
-        <strong id="contact-onboarding-title">Alta bloqueada por conflicto</strong>
-        <p>{reason || 'Revisá la identidad en Equipo antes de realizar otra acción.'}</p>
-      </div>
-      <Link href="/dashboard/team#worker-onboarding">Revisar</Link>
-    </section>
-  );
-}
-
 export default function ContactOnboardingAction({
   canManageOnboarding = false,
+  canManageIntegrations = false,
+  projectName,
   conversationId,
   onboarding: onboardingInput,
   online = true,
@@ -111,6 +79,9 @@ export default function ContactOnboardingAction({
   projectId,
 }) {
   const onboarding = normalizeContactOnboarding(onboardingInput);
+  const [prepared, setPrepared] = useState(false);
+  const [consented, setConsented] = useState(false);
+  const submissionLock = useRef(false);
   const [pending, setPending] = useState(false);
   const [reconciling, setReconciling] = useState(false);
   const [error, setError] = useState('');
@@ -122,10 +93,10 @@ export default function ContactOnboardingAction({
 
   useEffect(() => () => requestRef.current?.abort(), []);
 
-  if (!canManageOnboarding || ['authorized', 'closed'].includes(onboarding.state)) return null;
-  if (onboarding.state === 'already_pending') return <PendingState reason={onboarding.reason} />;
-  if (onboarding.state === 'conflict') return <ConflictState reason={onboarding.reason} />;
-  if (onboarding.state !== 'eligible') return null;
+  if (!canManageOnboarding) return null;
+  const progress = <ContactOnboardingProgress onboarding={onboarding} projectName={projectName}
+    canManageIntegrations={canManageIntegrations} online={online} onRefresh={onRefresh} />;
+  if (onboarding.state !== 'eligible') return progress;
 
   async function refreshServerState({ mode = reconciliationModeRef.current } = {}) {
     if (reconciling || !online) return;
@@ -161,7 +132,8 @@ export default function ContactOnboardingAction({
   }
 
   async function issueOnboarding() {
-    if (pending || refreshRequired || !online || !conversationId || !projectId) return;
+    if (submissionLock.current || !prepared || !consented || pending || refreshRequired || !online || !conversationId || !projectId) return;
+    submissionLock.current = true;
     const idempotencyKey = idempotencyKeyRef.current || createIdempotencyKey();
     idempotencyKeyRef.current = idempotencyKey;
     setHasAttempt(true);
@@ -219,10 +191,12 @@ export default function ContactOnboardingAction({
     } finally {
       if (requestRef.current === controller) requestRef.current = null;
       setPending(false);
+      submissionLock.current = false;
     }
   }
 
-  return (
+  return (<>
+    {progress}
     <section className={styles.contactOnboardingCard} data-tone="eligible" aria-labelledby="contact-onboarding-title">
       <span className={styles.contactOnboardingIcon} aria-hidden="true">
         <i className="fa-solid fa-user-shield" />
@@ -236,7 +210,8 @@ export default function ContactOnboardingAction({
         {!online && <small>Conectate a internet para gestionar esta alta.</small>}
         {error && <small className={styles.contactOnboardingError} role="alert">{error}</small>}
       </div>
-      {refreshRequired ? (
+      {prepared && !hasAttempt && <label className={styles.onboardingConsent}><input type="checkbox" checked={consented} disabled={pending} onChange={event => setConsented(event.target.checked)} />Confirmo enviar una invitación privada a este contacto para esta obra. Tendré que revisar el alta antes de que pueda operar.</label>}
+      {!prepared ? <button type="button" disabled={!online} onClick={() => setPrepared(true)}>Preparar invitación</button> : refreshRequired ? (
         <button
           type="button"
           onClick={() => void refreshServerState({ mode: reconciliationModeRef.current })}
@@ -248,13 +223,13 @@ export default function ContactOnboardingAction({
         <button
           type="button"
           onClick={() => void issueOnboarding()}
-          disabled={!online || pending}
+          disabled={!online || pending || !consented}
         >
           {pending
             ? 'Solicitando alta…'
-            : hasAttempt ? 'Reintentar operación segura' : 'Invitar a registrarse'}
+            : hasAttempt ? 'Reintentar operación segura' : 'Enviar invitación de alta'}
         </button>
       )}
     </section>
-  );
+  </>);
 }

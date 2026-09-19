@@ -1,19 +1,35 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   discardProtectedUploadAttempt,
   isProtectedUploadFileSizeAllowed,
   isTerminalProtectedUploadClientError,
   protectedUploadAttemptForPayload,
   protectedUploadFileIdentity,
-  protectedUploadFileSizeMessage,
   protectedUploadPayloadKey,
   rememberProtectedUploadId,
 } from "@/lib/protected-upload-policy";
+import EvidencePicker from './evidence-picker';
+import { evidenceSelectionIssue, evidenceScopeHeaders, evidenceFailureState, requestEvidenceStep } from '@/lib/evidence-capture-policy';
+import { useWorkspaceLeaveGuard } from '../use-workspace-leave-guard';
+import { createProgressRequest, confirmedProgressLog } from '@/lib/progress-request';
+import ProgressContextPanel from './progress-context-panel';
+import JournalCorrectionDialog from './journal-correction-dialog';
+import { publishFieldInvalidation } from '@/lib/schedule-field-channel';
+import ProgressReviewDialog from './progress-review-dialog';
+import JournalTaskLinkDialog from './journal-task-link-dialog';
+import EvidenceViewer from './evidence-viewer';
+import { evidencePreviewHref } from '@/lib/evidence-viewer-policy';
+import { confirmedProgressReview, normalizeProgressReviewNote } from '@/lib/progress-review-policy';
 import styles from "./progress.module.css";
 
+const JOURNAL_STATUS_LABELS = Object.freeze({
+  DRAFT: 'Borrador', SUBMITTED: 'En revisión', APPROVED: 'Aprobado', REJECTED: 'Rechazado',
+  PENDING: 'Pendiente', OPEN: 'Abierto', IN_PROGRESS: 'En curso', RESOLVED: 'Resuelto', CANCELLED: 'Cancelado',
+});
+const journalStatusLabel = status => JOURNAL_STATUS_LABELS[status] || 'Estado no reconocido';
 const TERMINAL_VISUAL_STATUSES = new Set(["COMPLETED", "ABSTAINED", "FAILED"]);
 const VISUAL_STATUS_LABELS = Object.freeze({
   PENDING: "En cola",
@@ -42,23 +58,6 @@ const QUALITY_VALUES = Object.freeze({
   partial: "Parcial",
   severe: "Severa",
 });
-
-async function api(path, options = {}) {
-  const response = await fetch(path, {
-    ...options,
-    cache: "no-store",
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
-  });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const error = new Error(body.error || "No se pudo completar la operación.");
-    error.status = response.status;
-    error.code = body.code || null;
-    error.assessmentCreated = Boolean(body.assessmentId);
-    throw error;
-  }
-  return body;
-}
 
 function createVisualIdempotencyKey() {
   const suffix = globalThis.crypto?.randomUUID
@@ -401,14 +400,31 @@ function VisualAssessmentCard({
 }
 
 export default function ProgressClient({
+  filteredTaskId = null, unassignedOnly = false, focusedRecordId = null,
   initialData,
   initialVisualAssessments = [],
   tasks,
   workers,
   permissions,
   projectName,
+  organizationId,
+  projectId,
   initialWorkDate,
 }) {
+  const [contextChanged, setContextChanged] = useState(false);
+  const [viewingEvidence, setViewingEvidence] = useState(null);
+  const [reviewSelection, setReviewSelection] = useState(null);
+  const [linkingRecord, setLinkingRecord] = useState(null);
+  const [correctingId, setCorrectingId] = useState(null);
+  const [correctionDirty, setCorrectionDirty] = useState(false);
+  const [correctionBusy, setCorrectionBusy] = useState(false);
+  const [linkDirty, setLinkDirty] = useState(false);
+  const [linkBusy, setLinkBusy] = useState(false);
+  const [reviewDirty, setReviewDirty] = useState(false);
+  const api = useMemo(
+    () => createProgressRequest({ organizationId, projectId }, { onContextChange: () => setContextChanged(true) }),
+    [organizationId, projectId],
+  );
   const [data, setData] = useState(initialData);
   const [visualAssessments, setVisualAssessments] = useState(() => (
     mergeVisualAssessments([], initialVisualAssessments)
@@ -417,12 +433,16 @@ export default function ProgressClient({
   const [visualFeedbackByEvidence, setVisualFeedbackByEvidence] = useState(() => new Map());
   const [title, setTitle] = useState("");
   const [summary, setSummary] = useState("");
-  const [taskId, setTaskId] = useState("");
+  const [taskId, setTaskId] = useState(filteredTaskId || "");
   const [workDate, setWorkDate] = useState(initialWorkDate);
   const [authorWorkerId, setAuthorWorkerId] = useState("");
-  const [evidenceTaskId, setEvidenceTaskId] = useState("");
+  const [evidenceTaskId, setEvidenceTaskId] = useState(filteredTaskId || "");
   const [caption, setCaption] = useState("");
   const [evidenceFile, setEvidenceFile] = useState(null);
+  const [evidenceAuthorWorkerId, setEvidenceAuthorWorkerId] = useState('');
+  const [evidenceStage, setEvidenceStage] = useState('ready');
+  const [evidenceFeedback, setEvidenceFeedback] = useState('');
+  const [savedEvidenceId, setSavedEvidenceId] = useState(null);
   const [timelineKind, setTimelineKind] = useState("");
   const [timelineStatus, setTimelineStatus] = useState("");
   const [notice, setNotice] = useState(null);
@@ -443,6 +463,30 @@ export default function ProgressClient({
     (Array.isArray(tasks) ? tasks : []).map((task) => [task.id, task]),
   ), [tasks]);
 
+  const hasJournalChanges = Boolean(title || summary || caption || evidenceFile || reviewDirty || linkDirty || correctionDirty);
+  useWorkspaceLeaveGuard({ dirty: hasJournalChanges, busy: busy || linkBusy || correctionBusy });
+  useEffect(() => {
+    const warn = event => { if (hasJournalChanges || busy || linkBusy || correctionBusy) { event.preventDefault(); event.returnValue = ''; } };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [hasJournalChanges, busy, linkBusy, correctionBusy]);
+  function guardJournalLeave(event) {
+    if (busy || linkBusy || correctionBusy || (hasJournalChanges && !window.confirm('Hay datos o un archivo sin confirmar. ¿Salir de la bitácora?'))) event.preventDefault();
+  }
+  function selectEvidenceFile(file) {
+    if (busy || ['unconfirmed','context'].includes(evidenceStage)) return;
+    setEvidenceFile(file); setEvidenceStage('ready'); setEvidenceFeedback(''); setSavedEvidenceId(null);
+    if (!file && evidenceFileInputRef.current) evidenceFileInputRef.current.value = '';
+  }
+  function editEvidence(setter, value) {
+    if (busy || ['unconfirmed','context'].includes(evidenceStage)) return;
+    setter(value); setEvidenceStage('ready'); setEvidenceFeedback(''); setSavedEvidenceId(null);
+  }
+  function resetEvidence() {
+    if (busy || ['unconfirmed','context'].includes(evidenceStage)) return;
+    selectEvidenceFile(null); setCaption('');
+  }
+
   function setVisualBusy(evidenceId, active) {
     setVisualBusyIds((current) => {
       const next = new Set(current);
@@ -461,7 +505,7 @@ export default function ProgressClient({
   }
 
   function beginOperation() {
-    if (operationRef.current) return false;
+    if (operationRef.current || contextChanged) return false;
     operationRef.current = true;
     setBusy(true);
     return true;
@@ -474,7 +518,7 @@ export default function ProgressClient({
 
   async function refreshPrimaryRecords() {
     try {
-      const latest = await api('/api/progress?limit=50');
+      const latest = await api('/api/progress?limit=50' + (filteredTaskId ? '&taskId=' + encodeURIComponent(filteredTaskId) : unassignedOnly ? '&unassigned=1' : '') + (focusedRecordId ? '&recordId=' + encodeURIComponent(focusedRecordId) : ''));
       setData((current) => ({
         ...current,
         dailyLogs: latest.dailyLogs,
@@ -501,9 +545,11 @@ export default function ProgressClient({
           authorWorkerId: authorWorkerId || undefined,
         }),
       });
+      const dailyLog = confirmedProgressLog(result);
+      publishFieldInvalidation({ organizationId, projectId });
       setData((current) => ({
         ...current,
-        dailyLogs: [result.dailyLog, ...current.dailyLogs],
+        dailyLogs: [dailyLog, ...current.dailyLogs.filter(item => item.id !== dailyLog.id)],
       }));
       setTitle("");
       setSummary("");
@@ -516,108 +562,100 @@ export default function ProgressClient({
   }
   async function createEvidence(event) {
     event.preventDefault();
-    if (!evidenceFile) {
-      setNotice("Seleccioná una imagen, video o PDF.");
-      return;
+    const problem = evidenceSelectionIssue(evidenceFile);
+    if (problem || !tasks.some(task => task.id === evidenceTaskId)) {
+      setEvidenceStage('error'); setEvidenceFeedback(problem || 'Elegí una tarea de esta obra antes de enviar.'); return;
     }
-    if (!isProtectedUploadFileSizeAllowed(evidenceFile)) {
-      setNotice(`${protectedUploadFileSizeMessage("La evidencia")} Para video MP4 usá un clip breve.`);
-      return;
-    }
+    if (!isProtectedUploadFileSizeAllowed(evidenceFile)) return;
+    let scopeHeaders;
+    try { scopeHeaders = evidenceScopeHeaders({ organizationId, projectId }); }
+    catch (error) { setEvidenceStage('context'); setEvidenceFeedback(error.message); return; }
     if (!beginOperation()) return;
     let attempt;
+    const scopedFetch = (url, options = {}) => fetch(url, { ...options, headers: { ...options.headers, ...scopeHeaders } });
     try {
       const payloadKey = protectedUploadPayloadKey({
-        taskId: evidenceTaskId,
-        caption,
-        authorWorkerId: authorWorkerId || null,
-        file: protectedUploadFileIdentity(evidenceFile),
+        organizationId, projectId, taskId: evidenceTaskId, caption,
+        authorWorkerId: evidenceAuthorWorkerId || null, file: protectedUploadFileIdentity(evidenceFile),
       });
-      attempt = await protectedUploadAttemptForPayload(
-        evidenceUploadAttemptRef.current,
-        payloadKey,
-        { deleteEndpoint: "/api/progress/upload" },
-      );
+      attempt = await protectedUploadAttemptForPayload(evidenceUploadAttemptRef.current, payloadKey, {
+        deleteEndpoint: '/api/progress/upload', fetchImpl: scopedFetch,
+      });
       evidenceUploadAttemptRef.current = attempt;
+      setEvidenceFeedback('');
       if (!attempt.uploadId) {
-        const form = new FormData();
-        form.append("file", evidenceFile);
-        const upload = await fetch("/api/progress/upload", {
-          method: "POST",
-          headers: { "Idempotency-Key": attempt.operationKey },
-          body: form,
-        });
-        const uploaded = await upload.json().catch(() => ({}));
-        if (!upload.ok) {
-          const uploadError = new Error(
-            uploaded.error || "No se pudo cargar la media.",
-          );
-          uploadError.status = upload.status;
-          uploadError.code = uploaded.code;
-          throw uploadError;
-        }
+        setEvidenceStage('uploading');
+        const form = new FormData(); form.append('file', evidenceFile);
+        const uploaded = await requestEvidenceStep('/api/progress/upload', {
+          method: 'POST', headers: { 'Idempotency-Key': attempt.operationKey, ...scopeHeaders }, body: form,
+        }, { phase: 'upload' });
         rememberProtectedUploadId(attempt, uploaded.uploadId);
       }
-      const result = await api("/api/progress", {
-        method: "POST",
-        body: JSON.stringify({
-          kind: "EVIDENCE",
-          taskId: evidenceTaskId,
-          caption,
-          uploadId: attempt.uploadId,
-          operationKey: attempt.operationKey,
-          capturedAt: attempt.capturedAt,
-          authorWorkerId: authorWorkerId || undefined,
-        }),
-      });
-      setData((current) => ({
-        ...current,
-        evidence: [result.evidence, ...current.evidence],
-      }));
+      setEvidenceStage('attaching');
+      const result = await requestEvidenceStep('/api/progress', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...scopeHeaders },
+        body: JSON.stringify({ kind: 'EVIDENCE', taskId: evidenceTaskId, caption, uploadId: attempt.uploadId,
+          operationKey: attempt.operationKey, capturedAt: attempt.capturedAt, authorWorkerId: evidenceAuthorWorkerId || undefined }),
+      }, { phase: 'attach' });
+      if (result.evidence.taskId !== evidenceTaskId) throw new Error('El registro recibido no corresponde a la tarea seleccionada. No se confirmó esta operación.');
+      setData(current => ({ ...current, evidence: [result.evidence, ...current.evidence.filter(item => item.id !== result.evidence.id)] }));
       evidenceUploadAttemptRef.current = null;
-      setCaption("");
-      setEvidenceFile(null);
-      if (evidenceFileInputRef.current) evidenceFileInputRef.current.value = "";
-      setNotice("Evidencia privada guardada para revisión humana.");
+      publishFieldInvalidation({ organizationId, projectId });
+      setSavedEvidenceId(result.evidence.id); setCaption(''); setEvidenceFile(null);
+      if (evidenceFileInputRef.current) evidenceFileInputRef.current.value = '';
+      setEvidenceStage('saved'); setEvidenceFeedback('Archivo registrado en esta tarea. La evidencia conserva su estado de revisión; no modifica automáticamente el avance.');
     } catch (error) {
-      if (attempt?.uploadId && isTerminalProtectedUploadClientError(error)) {
+      if (error.code === 'EVIDENCE_CONTEXT_CHANGED') setContextChanged(true);
+      if (attempt?.uploadId && isTerminalProtectedUploadClientError(error) && evidenceFailureState(error) !== 'context') {
         try {
-          await discardProtectedUploadAttempt(attempt, "/api/progress/upload");
+          await discardProtectedUploadAttempt(attempt, '/api/progress/upload', { fetchImpl: scopedFetch });
           evidenceUploadAttemptRef.current = null;
-        } catch (cleanupError) {
-          setNotice(`${error.message} ${cleanupError.message}`);
-          return;
+        } catch {
+          setEvidenceStage('unconfirmed'); setEvidenceFeedback('La operación no quedó confirmada y la limpieza está pendiente. Conservá el archivo y reintentá la misma operación.'); return;
         }
       }
-      setNotice(error.message);
-    } finally {
-      endOperation();
-    }
+      setEvidenceStage(evidenceFailureState(error, attempt)); setEvidenceFeedback(error.message);
+    } finally { endOperation(); }
   }
-  async function review(item, kind, status) {
-    if (!beginOperation()) return;
+  async function review(item, kind, status, reviewNote) {
+    const finalDecision = ['APPROVED', 'REJECTED'].includes(status);
+    if (finalDecision && reviewNote === undefined) {
+      if (!permissions.canReviewJournal || busy || contextChanged) return;
+      setReviewSelection({ item, kind, status }); return;
+    }
+    if (!beginOperation()) {
+      if (finalDecision) throw Object.assign(new Error('La operación no está disponible. Conservá el fundamento y verificá el contexto.'), { code: 'EVIDENCE_CONTEXT_CHANGED' });
+      return;
+    }
     try {
+      const note = normalizeProgressReviewNote(kind, status, reviewNote);
       const result = await api(`/api/progress/${item.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ kind, status, expectedRevision: item.revision }),
+        body: JSON.stringify({ kind, status, expectedRevision: item.revision, reviewNote: note }),
       });
+      const confirmed = confirmedProgressReview(result, { item, kind, status, projectId, note });
+      publishFieldInvalidation({ organizationId, projectId });
       setData((current) => ({
         ...current,
         dailyLogs:
           kind === "DAILY_LOG"
             ? current.dailyLogs.map((entry) =>
-                entry.id === item.id ? result.dailyLog : entry,
+                entry.id === item.id ? { ...entry, ...confirmed } : entry.correction?.id === item.id ? { ...entry, correction: { ...entry.correction, title: confirmed.title, status: confirmed.status, revision: confirmed.revision } } : entry,
               )
             : current.dailyLogs,
         evidence:
           kind === "EVIDENCE"
             ? current.evidence.map((entry) =>
-                entry.id === item.id ? result.evidence : entry,
+                entry.id === item.id ? confirmed : entry,
               )
             : current.evidence,
       }));
+      setNotice(status === 'REJECTED' ? 'Rechazo registrado con su motivo.' : status === 'APPROVED' ? 'Aprobación registrada.' : 'Parte enviado a revisión.');
+      if (finalDecision) setReviewSelection(null);
     } catch (error) {
-      if (error.status === 409) {
+      if (error.code === 'EVIDENCE_CONTEXT_CHANGED') {
+        setNotice(error.message);
+      } else if (error.status === 409) {
         const refreshed = await refreshPrimaryRecords();
         setNotice(refreshed
           ? "El registro cambió en otra sesión. Actualizamos el estado antes de reintentar."
@@ -625,6 +663,7 @@ export default function ProgressClient({
       } else {
         setNotice(error.message);
       }
+      if (finalDecision) throw error;
     } finally {
       endOperation();
     }
@@ -790,6 +829,9 @@ export default function ProgressClient({
     if (!beginOperation()) return;
     try {
       const query = new URLSearchParams({ limit: "50" });
+      if (focusedRecordId) query.set("recordId", focusedRecordId);
+      if (filteredTaskId) query.set("taskId", filteredTaskId);
+      if (unassignedOnly) query.set("unassigned", "1");
       if (timelineKind) query.set("kind", timelineKind);
       if (timelineStatus) query.set("status", timelineStatus);
       const result = await api(`/api/progress?${query}`);
@@ -812,6 +854,9 @@ export default function ProgressClient({
         limit: "50",
         before: data.page.nextBefore,
       });
+      if (focusedRecordId) query.set("recordId", focusedRecordId);
+      if (filteredTaskId) query.set("taskId", filteredTaskId);
+      if (unassignedOnly) query.set("unassigned", "1");
       if (timelineKind) query.set("kind", timelineKind);
       if (timelineStatus) query.set("status", timelineStatus);
       const result = await api(`/api/progress?${query}`);
@@ -842,6 +887,45 @@ export default function ProgressClient({
           </p>
         </div>
       </header>
+      {viewingEvidence && <EvidenceViewer key={viewingEvidence.id + ':' + viewingEvidence.revision}
+        item={viewingEvidence} organizationId={organizationId} projectId={projectId} projectName={projectName}
+        taskTitle={taskById.get(viewingEvidence.taskId)?.title} onClose={() => setViewingEvidence(null)} />}
+      {correctingId && <JournalCorrectionDialog key={correctingId} sourceId={correctingId}
+        organizationId={organizationId} projectId={projectId} projectName={projectName} tasks={tasks}
+        onClose={() => setCorrectingId(null)} onDirtyChange={setCorrectionDirty} onBusyChange={setCorrectionBusy}
+        onSaved={saved => {
+          const showChild = !focusedRecordId && (!unassignedOnly || !saved.taskId) && (!filteredTaskId || filteredTaskId === saved.taskId);
+          setData(current => {
+            const dailyLogs = current.dailyLogs.filter(row => row.id !== saved.id).map(row => row.id === saved.correctionOf.id ? { ...row, correction: { id: saved.id, title: saved.title, status: saved.status, revision: saved.revision } } : row);
+            return { ...current, dailyLogs: showChild ? [saved, ...dailyLogs] : dailyLogs };
+          });
+          publishFieldInvalidation({ organizationId, projectId }); setCorrectingId(null);
+          setNotice(<>Corrección confirmada. <Link href={'/dashboard/progress?recordId=' + encodeURIComponent(saved.id)} onNavigate={guardJournalLeave}>Abrir el parte corregido</Link></>);
+        }} />}
+      {focusedRecordId && <section className={styles.taskInbox}><span>DETALLE Y CONTINUIDAD</span><h2>Un registro, su origen y su revisión</h2><Link href="/dashboard/progress" onNavigate={guardJournalLeave}>Volver a toda la bitácora</Link></section>}
+      {linkingRecord && <JournalTaskLinkDialog key={linkingRecord.id + ':' + linkingRecord.revision} record={linkingRecord} tasks={tasks}
+        projectName={projectName} projectId={projectId} organizationId={organizationId} onDirtyChange={setLinkDirty} onBusyChange={setLinkBusy}
+        onClose={() => setLinkingRecord(null)} onCommit={saved => {
+          const remainsVisible = !unassignedOnly && (!filteredTaskId || saved.taskId === filteredTaskId);
+          setData(current => ({ ...current,
+            dailyLogs: current.dailyLogs.flatMap(row => row.id === saved.id ? (remainsVisible ? [{ ...row, ...saved }] : []) : [row]),
+            timeline: current.timeline.flatMap(row => row.kind === 'DAILY_LOG' && row.id === saved.id ? (remainsVisible ? [{ ...row, taskId: saved.taskId }] : []) : [row]),
+          }));
+          publishFieldInvalidation({ organizationId, projectId });
+          setNotice('Parte vinculado. La tarea del Gantt se actualizará con el registro confirmado.'); setLinkingRecord(null);
+        }} />}
+      {unassignedOnly && <section className={styles.taskInbox} aria-label="Partes sin tarea"><span>PENDIENTES DE VINCULACIÓN</span><h2>Que ningún parte quede fuera del plan</h2><p>Asigná una actividad a cada borrador. Los partes enviados o decididos conservan su relación original y no se modifican desde esta bandeja.</p><Link href="/dashboard/progress" onNavigate={guardJournalLeave}>Abrir toda la bitácora</Link></section>}
+      {reviewSelection && <ProgressReviewDialog key={reviewSelection.item.id + ':' + reviewSelection.status + ':' + reviewSelection.item.revision}
+        selection={reviewSelection} projectName={projectName} taskTitle={taskById.get(reviewSelection.item.taskId)?.title}
+        onDirtyChange={setReviewDirty} onClose={() => setReviewSelection(null)}
+        onConfirm={note => review(reviewSelection.item, reviewSelection.kind, reviewSelection.status, note)} />}
+      {filteredTaskId && <nav className={styles.recordDecision} aria-label="Contexto de tarea">
+        <strong>Tarea: {taskById.get(filteredTaskId)?.title || 'Tarea seleccionada'}</strong>
+        <Link href={'/dashboard?tab=sec-gantt&fieldTaskId=' + encodeURIComponent(filteredTaskId)} onNavigate={event => { if (hasJournalChanges && !window.confirm('Hay cambios sin guardar. ¿Salir del editor?')) event.preventDefault(); }}>Ver esta tarea en el cronograma</Link>
+        <span> · </span><Link href="/dashboard/progress" onNavigate={event => { if (hasJournalChanges && !window.confirm('Hay cambios sin guardar. ¿Salir del editor?')) event.preventDefault(); }}>Ver toda la bitácora</Link>
+      </nav>}
+      <ProgressContextPanel projectName={projectName} changed={contextChanged} busy={busy}
+        hasUnsaved={hasJournalChanges} draftText={[title, summary, caption].filter(Boolean).join('\n\n')} />
       {notice && (
         <div className={styles.notice} role="status" aria-live="polite">
           {notice}
@@ -850,7 +934,7 @@ export default function ProgressClient({
           </button>
         </div>
       )}
-      <div className={styles.grid}>
+      {!unassignedOnly && !focusedRecordId && <div className={styles.grid}>
         <section className={styles.panel}>
           <h2>Nueva bitácora</h2>
           {permissions.canManage ? (
@@ -882,6 +966,7 @@ export default function ProgressClient({
                 <select
                   aria-label="Tarea vinculada a la bitácora"
                   value={taskId}
+                  disabled={Boolean(filteredTaskId) || busy || contextChanged}
                   onChange={(event) => setTaskId(event.target.value)}
                 >
                   <option value="">Sin tarea</option>
@@ -893,7 +978,7 @@ export default function ProgressClient({
                 </select>
               </div>
               <select
-                aria-label="Autor de la bitácora o evidencia"
+                aria-label="Autor de la bitácora"
                 value={authorWorkerId}
                 onChange={(event) => setAuthorWorkerId(event.target.value)}
               >
@@ -904,96 +989,66 @@ export default function ProgressClient({
                   </option>
                 ))}
               </select>
-              <button disabled={busy} type="submit">
-                Guardar borrador
+              <button disabled={busy || contextChanged} type="submit">
+                {busy ? "Guardando…" : contextChanged ? "Verificá la obra activa" : "Guardar borrador"}
               </button>
             </form>
           ) : (
             <p>Tu rol puede consultar registros, pero no crearlos.</p>
           )}
         </section>
-        <section className={styles.panel}>
-          <h2>Nueva evidencia</h2>
-          {permissions.canManage ? (
-            <form onSubmit={createEvidence}>
-              <select
-                aria-label="Tarea vinculada a la evidencia"
-                required
-                value={evidenceTaskId}
-                onChange={(event) => setEvidenceTaskId(event.target.value)}
-              >
-                <option value="">Elegí tarea canónica</option>
-                {tasks.map((task) => (
-                  <option key={task.id} value={task.id}>
-                    {task.title}
-                  </option>
-                ))}
-              </select>
-              <input
-                ref={evidenceFileInputRef}
-                aria-label="Archivo de evidencia"
-                type="file"
-                required
-                accept="image/jpeg,image/png,image/webp,video/mp4,application/pdf"
-                onChange={(event) =>
-                  setEvidenceFile(event.target.files?.[0] || null)
-                }
-              />
-              <input
-                aria-label="Descripción de la evidencia"
-                value={caption}
-                onChange={(event) => setCaption(event.target.value)}
-                placeholder="Descripción breve"
-                maxLength={2000}
-              />
-              <small>
-                Media privada de hasta 4 MiB; para video MP4 usá un clip breve.
-                El archivo no queda expuesto públicamente.
-              </small>
-              <button disabled={busy} type="submit">
-                Enviar a revisión
-              </button>
-            </form>
-          ) : (
-            <p>Tu rol puede consultar evidencia, pero no crearla.</p>
-          )}
-        </section>
-      </div>
+        {permissions.canManage ? <EvidencePicker tasks={tasks} workers={workers} projectName={projectName}
+          file={evidenceFile} taskId={evidenceTaskId} authorId={evidenceAuthorWorkerId} caption={caption}
+          stage={evidenceStage} feedback={evidenceFeedback} savedId={savedEvidenceId} disabled={busy || contextChanged}
+          fileInputRef={evidenceFileInputRef} onFile={selectEvidenceFile} onTask={value => editEvidence(setEvidenceTaskId, value)}
+          onAuthor={value => editEvidence(setEvidenceAuthorWorkerId, value)} onCaption={value => editEvidence(setCaption, value)} onSubmit={createEvidence} onReset={resetEvidence}
+          onLeave={guardJournalLeave} /> : <section className={styles.panel}><h2>Evidencia de obra</h2><p>Tu rol puede consultar los registros autorizados, pero no cargar archivos.</p></section>}
+      </div>}
       <section className={styles.panel}>
-        <h2>Bitácoras recientes</h2>
+        <h2>{unassignedOnly ? "Partes pendientes de vinculación" : "Bitácoras recientes"}</h2>
         {data.dailyLogs.length === 0 ? (
           <p>No hay bitácoras.</p>
         ) : (
           <ul>
-            {data.dailyLogs.map((item) => (
-              <li key={item.id}>
+            {data.dailyLogs.filter(item => !unassignedOnly || !item.taskId).map((item) => (
+              <li key={item.id} id={"daily-log-" + item.id}>
                 <div>
                   <strong>{item.title}</strong>
                   <span>
-                    {item.workDate} · {item.status}
+                    {item.workDate} · {journalStatusLabel(item.status)}
                   </span>
                   <p>{item.summary}</p>
+                  {item.correctionOf && <div className={styles.correctionRelation}><span>ES UNA CORRECCIÓN</span><Link href={'/dashboard/progress?recordId=' + encodeURIComponent(item.correctionOf.id)} onNavigate={guardJournalLeave}>Ver original: {item.correctionOf.title}</Link><small>El original conserva su rechazo y su historial.</small></div>}
+                  {item.correction && <div className={styles.correctionRelation}><span>TIENE UNA CORRECCIÓN</span><Link href={'/dashboard/progress?recordId=' + encodeURIComponent(item.correction.id)} onNavigate={guardJournalLeave}>Continuar en: {item.correction.title}</Link><small>{journalStatusLabel(item.correction.status)} · v{item.correction.revision}</small></div>}
+                  {permissions.canManage && permissions.canReadSchedule && item.status === 'REJECTED' && !item.correction && <button className={styles.correctAction} type="button" disabled={busy || contextChanged || correctionBusy} onClick={() => setCorrectingId(item.id)}>Preparar corrección</button>}
+                  <p className={styles.taskRelation}>{item.taskId ? 'Tarea: ' + (taskById.get(item.taskId)?.title || item.taskId) : 'Sin tarea vinculada'}</p>
+                  {permissions.canManage && permissions.canReadSchedule && item.status === 'DRAFT' && <button type="button" disabled={busy || contextChanged} onClick={() => setLinkingRecord(item)}>{item.taskId ? 'Cambiar tarea del borrador' : 'Vincular a una tarea'}</button>}
+
+                  {item.status === 'REJECTED' && item.rejectionReason && <div className={styles.recordDecision}><strong>Motivo del rechazo</strong><p>{item.rejectionReason}</p></div>}
                 </div>
                 {permissions.canManage && item.status === "DRAFT" && (
                   <div>
                     <button
-                      disabled={busy}
+                      disabled={busy || contextChanged}
                       onClick={() => review(item, "DAILY_LOG", "SUBMITTED")}
                     >
                       Enviar
                     </button>
                   </div>
                 )}
-                {permissions.canManage && item.status === "SUBMITTED" && (
+                {!permissions.canReviewJournal && item.status === "SUBMITTED" && (
+                  <p>En revisión por Dirección o un administrador de la empresa.</p>
+                )}
+                {permissions.canReviewJournal && item.status === "SUBMITTED" && (
                   <div>
                     <button
-                      disabled={busy}
+                      disabled={busy || contextChanged}
                       onClick={() => review(item, "DAILY_LOG", "APPROVED")}
                     >
                       Aprobar
                     </button>
                     <button
-                      disabled={busy}
+                      disabled={busy || contextChanged}
                       onClick={() => review(item, "DAILY_LOG", "REJECTED")}
                     >
                       Rechazar
@@ -1005,7 +1060,7 @@ export default function ProgressClient({
           </ul>
         )}
       </section>
-      <section className={styles.panel}>
+      {!unassignedOnly && !focusedRecordId && <section className={styles.panel}>
         <h2>Evidencia pendiente/revisada</h2>
         {data.evidence.length === 0 ? (
           <p>No hay evidencia.</p>
@@ -1048,15 +1103,24 @@ export default function ProgressClient({
                     : null;
 
               return (
-                <li className={styles.evidenceItem} key={item.id}>
+                <li className={styles.evidenceItem} key={item.id} id={"evidence-" + item.id}>
                   <div className={styles.evidenceHeader}>
                     <div>
                       <strong>{item.caption || "Evidencia sin descripción"}</strong>
+                      {item.taskId && permissions.canReadSchedule && <p>
+                        <Link href={'/dashboard?tab=sec-gantt&fieldTaskId=' + encodeURIComponent(item.taskId)}
+                          onNavigate={event => { if (hasJournalChanges && !window.confirm('Hay cambios sin guardar. ¿Salir del editor?')) event.preventDefault(); }}>Ver impacto en el cronograma</Link>
+                      </p>}
+                      {item.taskId && item.status === 'APPROVED' && permissions.canReadMeasurements && <p>
+                        <Link href={'/dashboard/measurements?taskId=' + encodeURIComponent(item.taskId)}
+                          onNavigate={event => { if (hasJournalChanges && !window.confirm('Hay cambios sin guardar. ¿Salir del editor?')) event.preventDefault(); }}>Ver mediciones de esta tarea</Link>
+                      </p>}
+                      {item.reviewNote && ['APPROVED', 'REJECTED'].includes(item.status) && <div className={styles.recordDecision}><strong>{item.status === 'REJECTED' ? 'Motivo del rechazo' : 'Nota de revisión'}</strong><p>{item.reviewNote}</p></div>}
                       <span className={styles.evidenceTask}>
                         Tarea: {task?.code ? `${task.code} · ` : ""}{task?.title || item.taskId}
                       </span>
                       <span>
-                        {item.capturedAt} · {item.status}
+                        {item.capturedAt} · {journalStatusLabel(item.status)}
                         {item.source?.channel === "whatsapp" ? " · WhatsApp" : ""}
                       </span>
                       {locationLabel && (
@@ -1067,6 +1131,10 @@ export default function ProgressClient({
                           {locationLabel}
                         </span>
                       )}
+                      {permissions.canReadSourceEvidence && evidencePreviewHref(item) && <button type="button" className={styles.evidencePreviewButton}
+                        disabled={busy || contextChanged} onClick={() => setViewingEvidence(item)}>
+                        Ver imagen en la bitácora
+                      </button>}
                       {item.attachment?.href && (
                         <a
                           className={styles.protectedLink}
@@ -1078,16 +1146,16 @@ export default function ProgressClient({
                         </a>
                       )}
                     </div>
-                    {permissions.canManage && item.status === "PENDING" && (
+                    {permissions.canReviewJournal && permissions.canReadSourceEvidence && item.status === "PENDING" && (
                       <div className={styles.evidenceActions}>
                         <button
-                          disabled={busy}
+                          disabled={busy || contextChanged}
                           onClick={() => review(item, "EVIDENCE", "APPROVED")}
                         >
                           Aprobar
                         </button>
                         <button
-                          disabled={busy}
+                          disabled={busy || contextChanged}
                           onClick={() => review(item, "EVIDENCE", "REJECTED")}
                         >
                           Rechazar
@@ -1178,7 +1246,7 @@ export default function ProgressClient({
             })}
           </ul>
         )}
-      </section>
+      </section>}
       <section className={styles.panel}>
         <div className={styles.timelineHead}>
           <div>
@@ -1213,7 +1281,7 @@ export default function ProgressClient({
               <option value="RESOLVED">Resuelto</option>
               <option value="REJECTED">Rechazado</option>
             </select>
-            <button disabled={busy} type="button" onClick={reloadTimeline}>
+            <button disabled={busy || contextChanged} type="button" onClick={reloadTimeline}>
               Filtrar
             </button>
           </div>
@@ -1227,7 +1295,7 @@ export default function ProgressClient({
                     {item.kind} · {item.title}
                   </strong>
                   <span>
-                    {item.occurredAt || "Sin fecha"} · {item.status}
+                    {item.occurredAt || "Sin fecha"} · {journalStatusLabel(item.status)}
                     {item.severity ? ` · ${item.severity}` : ""}
                   </span>
                 </div>
@@ -1238,7 +1306,7 @@ export default function ProgressClient({
           <p>No hay actividad operativa registrada.</p>
         )}
         {data.page?.hasMore && data.page?.nextBefore && (
-          <button type="button" disabled={busy} onClick={loadMoreTimeline}>
+          <button type="button" disabled={busy || contextChanged} onClick={loadMoreTimeline}>
             Cargar actividad anterior
           </button>
         )}

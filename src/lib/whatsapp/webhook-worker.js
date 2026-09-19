@@ -1,3 +1,5 @@
+import { materializeFieldMenuDelivery } from '@/lib/whatsapp/field-menu-delivery';
+import { sendWhatsAppInteractiveMenu } from '@/lib/whatsapp/meta';
 import {
   acquireWebhookEvent,
   applyWebhookMessageAtomically,
@@ -353,6 +355,8 @@ export async function deliverWhatsAppMessageOutcome({
   settleDelivery = settleAutomaticWhatsAppDelivery,
   sendFlow = trySendPublishedFlow,
   sendText = sendWhatsAppText,
+  sendMenu = sendWhatsAppInteractiveMenu,
+  prepareMenu = materializeFieldMenuDelivery,
   materializeLocationDelivery = materializeProgressEvidenceLocationDelivery,
   materializePaymentReceiptDelivery = materializeWorkerPaymentPrivateReceiptDelivery,
   materializeWebviewDelivery = materializeSecureWebviewDelivery,
@@ -366,6 +370,9 @@ export async function deliverWhatsAppMessageOutcome({
     };
   }
 
+  if (outcome?.fieldMenu && (outcome.flowPrompt || outcome.flowSessionId || outcome.progressEvidenceLocationDelivery || outcome.workerPaymentPrivateReceiptDelivery || outcome.secureWebviewDelivery)) {
+    throw Object.assign(new Error('Conflicting delivery envelope.'), { code:'WEBHOOK_OUTCOME_INVALID' });
+  }
   const deliveryScope = {
     ...scope,
     phoneNumberId: scope?.phoneNumberId || event?.phoneNumberId,
@@ -445,7 +452,14 @@ export async function deliverWhatsAppMessageOutcome({
     }
 
     providerMessageId = flowDelivery.providerMessageId;
-    if (!flowDelivery.sent) {
+    if (!flowDelivery.sent && outcome.fieldMenu) {
+      const message = await prepareMenu(prisma || getPrisma(), { descriptor:outcome.fieldMenu, scope:deliveryScope,
+        recipientPhone:event.from, replyToMessageId:event.externalId });
+      await assertSubscription(deliveryScope);
+      providerDispatchStarted = true;
+      const delivery = await sendMenu({ to:event.from, message, phoneNumberId:deliveryScope.phoneNumberId, scope:deliveryScope });
+      providerMessageId = providerMessageIdFromMetaResult(delivery);
+    } else if (!flowDelivery.sent) {
       let deliveryText = outcome.reply;
       if (outcome.progressEvidenceLocationDelivery) {
         const prepared = await materializeLocationDelivery(
@@ -566,6 +580,7 @@ export async function deliverWhatsAppMessageOutcome({
   }
   return {
     flowSent: flowDelivery.sent,
+    ...(outcome.fieldMenu ? { menuSent:true } : {}),
     providerMessageId,
   };
 }

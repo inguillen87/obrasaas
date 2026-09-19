@@ -826,3 +826,8 @@
   .paymentActions, .paymentDecisionActions { display: grid; grid-template-columns: 1fr; }
   .paymentActions button, .paymentDecisionActions button { width: 100%; }
 }
+
+.onboardingFocus { display: grid; gap: 10px; margin: 20px 0; padding: 16px; border: 1px solid var(--border-color, #334155); border-left: 3px solid var(--accent-primary, #f59e0b); border-radius: 12px; background: var(--bg-secondary, #0b1120); }
+.onboardingFocus strong { font-size: .96rem; }
+.onboardingFocus p { margin: 0; color: var(--text-secondary, #94a3b8); font-size: .85rem; line-height: 1.65; }
+.onboardingFocus a { color: var(--text-primary, #f8fafc); display: inline-flex; align-items: center; min-height: 44px; font-size: .85rem; text-underline-offset: 4px; }

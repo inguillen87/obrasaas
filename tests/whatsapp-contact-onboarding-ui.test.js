@@ -14,6 +14,7 @@ const actionSource = readFileSync(
   new URL('../src/app/dashboard/inbox/contact-onboarding-action.js', import.meta.url),
   'utf8',
 );
+const progressSource = readFileSync(new URL('../src/app/dashboard/inbox/contact-onboarding-progress.js', import.meta.url), 'utf8');
 const cssSource = readFileSync(
   new URL('../src/app/dashboard/inbox/inbox.module.css', import.meta.url),
   'utf8',
@@ -27,7 +28,7 @@ test('Inbox gates contact onboarding with the exact independent tenant permissio
   assert.match(inboxClientSource, /canManageOnboarding = false/);
   assert.match(
     actionSource,
-    /if \(!canManageOnboarding \|\| \['authorized', 'closed'\]\.includes\(onboarding\.state\)\) return null/,
+    /if \(!canManageOnboarding\) return null/,
   );
 });
 
@@ -107,8 +108,8 @@ test('delivery outcomes preserve the exact retry safety boundary', () => {
 test('contact onboarding states are accessible and responsive', () => {
   assert.match(actionSource, /aria-labelledby="contact-onboarding-title"/);
   assert.match(actionSource, /role="alert"/);
-  assert.match(actionSource, /disabled=\{!online \|\| pending\}/);
-  assert.match(actionSource, /href="\/dashboard\/team#worker-onboarding"/);
+  assert.match(actionSource, /disabled=\{!online \|\| pending \|\| !consented\}/);
+  assert.match(progressSource, /onboardingClaimHref\(onboarding.claimId\)/);
   assert.match(cssSource, /\.contactOnboardingCard/);
   assert.match(cssSource, /\.contactOnboardingCard\[data-tone='conflict'\]/);
   assert.match(

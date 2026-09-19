@@ -895,3 +895,14 @@ test('activation and revocation reject client evidence, policy, operation key, a
   assert.equal(activationCalls, 0);
   assert.equal(revocationCalls, 0);
 });
+
+test('pinned onboarding route forwards only the opaque claim and current membership scope',async()=>{
+  let input=null;
+  const handlers=createWorkerOnboardingClaimHandlers({resolveAccess:async()=>access(),authorize:()=>{},prismaFactory:()=>({}),listClaims:async(db,options)=>{input=options;return{items:[],nextCursor:null};},clock:()=>NOW});
+  const response=await handlers.GET(request('/api/worker-onboarding/claims?claimId=claim-a'));
+  assertSecure(response,200);assert.equal(input.claimId,'claim-a');assert.deepEqual(input.scope,{organizationId:'organization-a',projectId:'project-a'});assert.equal(input.requestedByMembershipId,'membership-a');
+});
+for(const query of ['claimId=','claimId=claim-a&status=SUBMITTED','claimId=claim-a&limit=100','claimId=one&claimId=two','claimId=..%2Fother'])test('pinned claim is rejected before DB for invalid query: '+query,async()=>{
+  let reads=0;const handlers=createWorkerOnboardingClaimHandlers({resolveAccess:async()=>access(),authorize:()=>{},prismaFactory:()=>{reads++;return{};},listClaims:async()=>{throw new Error('Must not read');}});
+  const response=await handlers.GET(request('/api/worker-onboarding/claims?'+query));assertSecure(response,400);assert.equal(reads,0);
+});

@@ -1,3 +1,4 @@
+import { normalizeProgressReviewNote, ProgressReviewPolicyError } from './progress-review-policy.js';
 import { runOperationalProjectMutation } from './project-write-policy.js';
 import {
   assertProtectedUploadReplay,
@@ -120,7 +121,11 @@ export function serializeProgressEvidence(item, { includeSourceEvidence = false 
   };
 }
 
-export async function listProgressJournal(prisma, { projectId, limit = 50, before = null, kind = null, status = null, taskId = null, includeSourceEvidence = false } = {}) {
+export async function listProgressJournal(prisma, { projectId, limit = 50, before = null, kind = null, status = null, taskId = null, unassigned = false, recordId = null, includeSourceEvidence = false } = {}) {
+  if (![true, false, '1'].includes(unassigned)) throw new ProgressJournalError('Filtro de partes sin tarea inválido.');
+  const onlyUnassigned = unassigned === true || unassigned === '1';
+  if (onlyUnassigned && taskId) throw new ProgressJournalError('No combines tarea y partes sin tarea.');
+  if (recordId && (typeof recordId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,189}$/.test(recordId) || taskId || unassigned || before || kind || status)) throw new ProgressJournalError('La consulta de un parte no admite otros filtros.');
   const take = Math.min(Math.max(Number(limit) || 50, 1), 100);
   const beforeDate = before ? new Date(before) : null;
   if (before && Number.isNaN(beforeDate?.getTime?.())) throw new ProgressJournalError('before no es una fecha válida.');
@@ -129,10 +134,10 @@ export async function listProgressJournal(prisma, { projectId, limit = 50, befor
   const normalizedStatus = status ? String(status).toUpperCase() : null;
   if (normalizedKind && !['DAILY_LOG', 'EVIDENCE', 'BLOCKER', 'INCIDENT'].includes(normalizedKind)) throw new ProgressJournalError('kind de timeline inválido.');
   const [dailyLogs, evidence, blockers, incidents] = await Promise.all([
-    (!normalizedKind || normalizedKind === 'DAILY_LOG') ? prisma.dailyLog.findMany({ where: { projectId, ...(taskId ? { taskId } : {}), ...(normalizedStatus ? { status: normalizedStatus } : {}), ...(dateFilter ? { createdAt: dateFilter } : {}) }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take }) : [],
-    (!normalizedKind || normalizedKind === 'EVIDENCE') ? prisma.progressEvidence.findMany({ where: { projectId, ...(taskId ? { taskId } : {}), ...(normalizedStatus ? { status: normalizedStatus } : {}), ...(dateFilter ? { capturedAt: dateFilter } : {}) }, orderBy: [{ capturedAt: 'desc' }, { id: 'desc' }], take }) : [],
-    (!normalizedKind || normalizedKind === 'BLOCKER') ? prisma.projectBlocker.findMany({ where: { projectId, ...(taskId ? { taskId } : {}), ...(normalizedStatus ? { status: normalizedStatus } : {}), ...(dateFilter ? { createdAt: dateFilter } : {}) }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take, select: { id: true, title: true, status: true, severity: true, taskId: true, createdAt: true, updatedAt: true } }) : [],
-    (!normalizedKind || normalizedKind === 'INCIDENT') ? prisma.incident.findMany({ where: { projectId, ...(normalizedStatus ? { status: normalizedStatus } : {}), ...(dateFilter ? { occurredAt: dateFilter } : {}) }, orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take, select: { id: true, title: true, severity: true, status: true, occurredAt: true } }) : [],
+    (!normalizedKind || normalizedKind === 'DAILY_LOG') ? prisma.dailyLog.findMany({ where: { projectId, ...(recordId ? { id: recordId } : {}), ...(onlyUnassigned ? { taskId: null } : taskId ? { taskId } : {}), ...(normalizedStatus ? { status: normalizedStatus } : {}), ...(dateFilter ? { createdAt: dateFilter } : {}) }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take }) : [],
+    (!onlyUnassigned && (!normalizedKind || normalizedKind === 'EVIDENCE')) && !recordId ? prisma.progressEvidence.findMany({ where: { projectId, ...(taskId ? { taskId } : {}), ...(normalizedStatus ? { status: normalizedStatus } : {}), ...(dateFilter ? { capturedAt: dateFilter } : {}) }, orderBy: [{ capturedAt: 'desc' }, { id: 'desc' }], take }) : [],
+    (!onlyUnassigned && (!normalizedKind || normalizedKind === 'BLOCKER')) && !recordId ? prisma.projectBlocker.findMany({ where: { projectId, ...(taskId ? { taskId } : {}), ...(normalizedStatus ? { status: normalizedStatus } : {}), ...(dateFilter ? { createdAt: dateFilter } : {}) }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take, select: { id: true, title: true, status: true, severity: true, taskId: true, createdAt: true, updatedAt: true } }) : [],
+    (!onlyUnassigned && !taskId && (!normalizedKind || normalizedKind === 'INCIDENT')) && !recordId ? prisma.incident.findMany({ where: { projectId, ...(normalizedStatus ? { status: normalizedStatus } : {}), ...(dateFilter ? { occurredAt: dateFilter } : {}) }, orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take, select: { id: true, title: true, severity: true, status: true, occurredAt: true } }) : [],
   ]);
   const timeline = [
     ...dailyLogs.map((item) => ({ id: item.id, kind: 'DAILY_LOG', occurredAt: item.createdAt?.toISOString?.() || null, taskId: item.taskId || null, title: item.title, status: item.status, severity: null })),
@@ -169,10 +174,11 @@ export async function createProgressJournalRecord(prisma, {
       const operationKey = requiredText(input.operationKey, 'operationKey', 190);
       const operationKeyHash = protectedUploadClaimFingerprint({ projectId: currentScope.projectId, kind: 'EVIDENCE', operationKey });
       const authorWorkerId = input.authorWorkerId ? requiredText(input.authorWorkerId, 'authorWorkerId', 190) : null;
-      const requestFingerprint = protectedUploadClaimFingerprint({ taskId, capturedAt: capturedAt.toISOString(), caption, authorWorkerId, uploadId });
-      const replay = await tx.progressEvidence.findFirst({ where: { projectId: currentScope.projectId, sourceOperationKeyHash: operationKeyHash } });
+      const requestFingerprint = protectedUploadClaimFingerprint({ taskId, capturedAt: capturedAt.toISOString(), caption, authorWorkerId, uploadId, operationKeyHash });
+      // Dashboard claims are identified by their protected upload. The source*
+      // bundle belongs to WhatsApp provenance and must stay null for manual input.
+      const replay = await tx.progressEvidence.findFirst({ where: { projectId: currentScope.projectId, protectedUploadId: uploadId, sourceConversationId: null, sourceMessageId: null } });
       if (replay) {
-        if (replay.sourceRequestFingerprint !== requestFingerprint) throw new ProgressJournalError('La operationKey ya fue usada con otro contenido.', 'IDEMPOTENCY_REPLAY_MUTATED', 409);
         await assertProtectedUploadReplay(tx, { scope: currentScope, actorId: actor, purpose: PROTECTED_UPLOAD_PURPOSE.PROGRESS, uploadId, entityId: replay.id, entityProtectedUploadId: replay.protectedUploadId, claimFingerprint: requestFingerprint, entityHasAttachment: Boolean(replay.media) });
         return {
           evidence: serializeProgressEvidence(replay, { includeSourceEvidence }),
@@ -187,7 +193,7 @@ export async function createProgressJournalRecord(prisma, {
         purpose: PROTECTED_UPLOAD_PURPOSE.PROGRESS,
         uploadId,
         claimFingerprint: requestFingerprint,
-        createEntity: (media) => tx.progressEvidence.create({ data: { projectId: currentScope.projectId, taskId, authorWorkerId, capturedAt, caption, media, protectedUploadId: uploadId, sourceOperationKeyHash: operationKeyHash, sourceRequestFingerprint: requestFingerprint } }),
+        createEntity: (media) => tx.progressEvidence.create({ data: { projectId: currentScope.projectId, taskId, authorWorkerId, capturedAt, caption, media, protectedUploadId: uploadId } }),
       });
       await tx.auditLog.create({ data: { organizationId: currentScope.organizationId, actorId: actor, action: 'progress.evidence.created', entityType: 'ProgressEvidence', entityId: item.id, metadata: { projectId: currentScope.projectId, taskId } } });
       return {
@@ -208,7 +214,13 @@ export async function reviewProgressRecord(prisma, { scope: rawScope, actorId, i
     const current = await table.findFirst({ where: { projectId: currentScope.projectId, id } }); if (!current) throw new ProgressJournalError('Registro no encontrado.', 'PROGRESS_JOURNAL_NOT_FOUND', 404);
     if (current.revision !== revision) throw new ProgressJournalError('El registro cambió; recargá antes de revisar.', 'PROGRESS_JOURNAL_CONFLICT', 409);
     assertReviewTransition(normalizedKind, current.status, normalizedStatus);
-    const updated = await table.update({ where: { id }, data: normalizedKind === 'DAILY_LOG' ? { status: normalizedStatus, revision: { increment: 1 }, submittedAt: normalizedStatus === 'SUBMITTED' ? new Date() : current.submittedAt, approvedAt: normalizedStatus === 'APPROVED' ? new Date() : current.approvedAt, rejectionReason: normalizedStatus === 'REJECTED' ? optionalText(reviewNote, 'reviewNote', 2000) : current.rejectionReason } : { status: normalizedStatus, revision: { increment: 1 }, reviewedAt: new Date(), reviewNote: optionalText(reviewNote, 'reviewNote', 2000) } });
+    let normalizedNote;
+    try { normalizedNote = normalizeProgressReviewNote(normalizedKind, normalizedStatus, reviewNote); }
+    catch (error) {
+      if (error instanceof ProgressReviewPolicyError) throw new ProgressJournalError(error.message, error.code, error.status);
+      throw error;
+    }
+    const updated = await table.update({ where: { id }, data: normalizedKind === 'DAILY_LOG' ? { status: normalizedStatus, revision: { increment: 1 }, submittedAt: normalizedStatus === 'SUBMITTED' ? new Date() : current.submittedAt, approvedAt: normalizedStatus === 'APPROVED' ? new Date() : current.approvedAt, rejectionReason: normalizedStatus === 'REJECTED' ? normalizedNote : current.rejectionReason } : { status: normalizedStatus, revision: { increment: 1 }, reviewedAt: new Date(), reviewNote: normalizedNote } });
     await tx.auditLog.create({ data: { organizationId: currentScope.organizationId, actorId: actor, action: `progress.${normalizedKind.toLowerCase()}.reviewed`, entityType: normalizedKind === 'DAILY_LOG' ? 'DailyLog' : 'ProgressEvidence', entityId: id, metadata: { projectId: currentScope.projectId, previousStatus: current.status, status: normalizedStatus, revision: revision + 1 } } });
     return normalizedKind === 'DAILY_LOG' ? { dailyLog: serializeLog(updated) } : { evidence: serializeProgressEvidence(updated, { includeSourceEvidence }) };
   });

@@ -980,3 +980,25 @@ export async function sendWhatsAppFlowTemplate({
   }
   return result;
 }
+
+// Same tenant-bound credential lookup and failure semantics as text delivery.
+export async function sendWhatsAppInteractiveMenu({ to, message, phoneNumberId: requestedPhoneNumberId,
+  scope, fetchImpl = fetch, now = new Date() }) {
+  const { assertFieldMenuPayload, FieldMenuError } = await import('./field-interactive-menu.js');
+  if (!requestedPhoneNumberId || !scope?.organizationId || !scope?.projectId) throw new FieldMenuError('WHATSAPP_FIELD_MENU_SCOPE');
+  assertFieldMenuPayload(message, to);
+  const { version, accessToken, phoneNumberId, appSecret } = await requireMetaPhoneConfig(requestedPhoneNumberId, scope, { now });
+  const url=new URL(`https://graph.facebook.com/${version}/${phoneNumberId}/messages`);
+  if (appSecret) url.searchParams.set('appsecret_proof',crypto.createHmac('sha256',appSecret).update(accessToken).digest('hex'));
+  let response;
+  try {
+    response=await fetchImpl(url,{method:'POST',headers:{Authorization:`Bearer ${accessToken}`,'Content-Type':'application/json'},
+      body:JSON.stringify(message),signal:AbortSignal.timeout(20000)});
+  } catch {
+    throw new WhatsAppMetaSendError('Meta did not confirm whether the interactive menu was accepted.',{ambiguous:true});
+  }
+  const result=await response.json().catch(()=>({}));
+  if (!response.ok) throw new WhatsAppMetaSendError(`Meta send failed (${response.status}).`,{
+    status:response.status,providerCode:result?.error?.code||null,ambiguous:response.status>=500});
+  return result;
+}

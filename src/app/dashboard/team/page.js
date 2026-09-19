@@ -1,3 +1,4 @@
+import { notFound } from 'next/navigation';
 import { clerkClient } from '@clerk/nextjs/server';
 
 import TeamClient from './team-client';
@@ -23,7 +24,10 @@ import { serializeInvitation } from '@/lib/invitations';
 
 export const dynamic = 'force-dynamic';
 
-export default async function TeamPage() {
+export default async function TeamPage({ searchParams } = {}) {
+  const query = await searchParams;
+  const focusedClaimId = query?.onboardingClaimId ?? null;
+  if (focusedClaimId !== null && (typeof focusedClaimId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,189}$/.test(focusedClaimId))) notFound();
   const access = await resolvePageAccess(async () => {
     const candidate = await getPlatformAccess();
     requireTenantPermission(candidate, 'tenant:members:read');
@@ -174,7 +178,8 @@ export default async function TeamPage() {
       />
 
       {canReadOnboarding && (
-        <WorkerOnboardingClient
+        <WorkerOnboardingClient key={access.organization.id + ":" + access.project.id + ":" + (focusedClaimId || "all")}
+          focusedClaimId={focusedClaimId} projectId={access.project.id} organizationId={access.organization.id}
           canManage={canManageOnboarding}
           canRead={canReadOnboarding}
           projectName={access.project.name}

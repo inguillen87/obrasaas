@@ -1,0 +1,50 @@
+# Traspaso operativo — WhatsApp por empresa
+
+Fecha: 19/09/2026. Leé primero `PLAN_DE_IMPLEMENTACION_CODEX.md` y `tenant-owned-whatsapp-architecture.md` en esta carpeta. Este documento no contiene secretos ni acredita un despliegue distinto del que figure con SHA en el PR #1.
+
+## Qué queda implementado en esta fase
+- Preparación persistente por Project, bajo metadata.whatsappWorkspace de schemaVersion 2, con lectura del antecedente de Organization únicamente desde su obra original: nombre del asistente, intención de número (dedicado/app existente/proveedor existente), obra del canal y circuitos solicitados. Propiedad CUSTOMER y política REVIEW_REQUIRED fijas.
+- GET/POST `/api/integrations/whatsapp/workspace`, con permiso de integraciones, lectura de obras, contexto de sesión, control de origen, revisión, preservación de metadata ajena y auditoría transaccional. No envía mensajes ni invoca Meta al guardar.
+- Formulario dentro de Integraciones con los tokens del diseño, recuperación del mismo intento, conservación de borrador/conflicto y bloqueo de autorización ante cambios no guardados.
+- La autorización dedicada existente recibe preparedRevision; se comprueba empresa/obra/preparación antes de Meta y de nuevo dentro de las dos transacciones de persistencia (conexión nueva y reconexión).
+- Las opciones Business App y proveedor existente se pueden guardar, pero no ejecutan el registro API-only. Su activación requiere recorridos específicos pendientes. El usuario no debe perder el servicio anterior por elegir una tarjeta.
+
+## Archivos de código
+`src/lib/whatsapp/tenant-workspace-policy.js` contiene contratos públicos, opciones, validación, confirmación y mensajes seguros. `tenant-workspace.js` contiene lecturas/escrituras y guardas de autorización. `src/app/api/integrations/whatsapp/workspace/route.js` aplica sesión, permisos y límites del request.
+
+`src/app/dashboard/integrations/tenant-whatsapp-workspace.js` y su CSS implementan el formulario; `integrations-client.js` conecta su estado al botón existente y conserva una revisión para el intento Meta. `src/app/api/integrations/whatsapp/embedded-signup/route.js` revalida la preparación sin devolver errores crudos de proveedores ni eliminar las guardas anteriores.
+
+Pruebas: `tests/tenant-whatsapp-workspace.test.js`, `tests/tenant-whatsapp-workspace-route.test.js`, `tests/tenant-workspace-signup-binding.test.js` y `scripts/verify-tenant-whatsapp-workspace-ui.mjs`. También deben seguir pasando las pruebas existentes de Embedded Signup, errores públicos, permisos y leases. El número esperado de rutas protegidas se incrementa sólo por el nuevo handler.
+
+## Estado que NO se debe dar por terminado
+WhatsAppConnection sigue ligado a una obra. El nombre y los circuitos guardados no configuran todavía el runtime del modelo. No existe un setup link durable nuevo en esta fase, no se implementó coexistencia ni traspaso automático, no se migraron activos de ChatBoc y no se habilitó facturación gestionada. Los empleados y clientes externos necesitan sus propios accesos, no una promoción automática por mensaje.
+
+No se renovó la credencial temporal del piloto al implementar esta preparación. La comprobación de estado de un proveedor, un mock de navegador y una respuesta real entregada son evidencias diferentes. No afirmar que el canal opera bidireccionalmente o con cientos de empresas por el resultado de una suite.
+
+## Siguiente entrega recomendada
+Prioridad aclarada por el usuario: números independientes por obra de cada empresa. Cerrar alta/roles de participantes y operación real; no exigir una migración a número compartido multiobra antes de ese piloto.
+
+La siguiente secuencia permanece como opción futura de número compartido, no bloqueante:
+1. Inventariar las dependencias de WhatsAppConnection.projectId y las constraints SQL. Diseñar y probar el registro organizacional y ChannelProjectBinding, sin duplicar secretos.
+2. Implementar resolución de contexto de obra con participantes autorizados y pruebas de dos tenants/dos obras. No cambiar el ámbito de registros históricos al cambiar la obra activa.
+3. Añadir la sesión durable de autorización/recuperación (nonce, TTL, recibos y reconciliación de código consumido) antes de ofrecer links de instalación delegados.
+4. Incorporar la variante coexistente sólo tras confirmar el flujo oficial y su disponibilidad para esta app. Mantener migración de proveedor separada y reversible.
+5. Activar un circuito de IA a la vez con su política publicada, presupuesto y fuente: primero parte revisable, después material solicitado y consulta de avance. Comprobar entrega y trazabilidad real con el piloto autorizado.
+
+## Validación y despliegue
+Trabajar sobre el HEAD observado de `codex/saas-recovery-20260917`; el PR #1 tiene otra rama de base y no representa por sí mismo una promoción a master. No hacer force push. Preservar cualquier cambio local ajeno.
+
+Comandos de desarrollo, desde el repo: `npm test`; ESLint sobre los archivos afectados; `node scripts/verify-tenant-whatsapp-workspace-ui.mjs`; `npm run build`; `git diff --check`. El verificador usa Chrome en modo headless y HTTP local sintético, no credenciales de Meta. Capturas/resultados quedan bajo `.vercel/tenant-whatsapp-workspace-ui`.
+
+La validación funcional publicada debe usar empresa cliente autorizada y obra correcta, guardar sin llamar a Meta, recargar, comprobar auditoría y demostrar bloqueo en otro tenant. Sólo probar autorización Meta con consentimiento del titular y activos correctos. Una credencial vencida no se resuelve apagando un control de salud.
+
+El deploy de Preview no es Production. Mantener el preflight, identidad y SHA de migración, configuración live, resguardo y prueba autenticada como requisitos del pase. La evidencia final de cada versión debe enumerar lo ejecutado, lo simulado y lo no ejecutado con SHA/env; no reutilizar resultados antiguos como pruebas del código nuevo.
+
+## Ampliación v3.1
+Leer `worksite-numbers-and-participant-isolation.md`. La configuración de una obra no reemplaza la de otra. La respuesta a menú/ayuda se construye a partir de los permisos de campo existentes, dentro del número/obra ya resuelto. Pruebas adicionales en `tests/field-workers.test.js` y `tests/field-worker-menu.test.js`. No es una prueba de entrega física ni un menú de pagos administrativos para operarios.
+
+## Continuación S11.A4.1: alta desde la conversación
+Se agregó el seguimiento de la invitación, el enlace al alta exacta y la comprobación del acceso vigente frente a una aprobación histórica. El listado acepta `claimId` exclusivo dentro de la obra/tenant activos; el cliente usa el mismo endpoint de decisión, confirma su resultado y conserva el intento en respuestas inciertas. Consultar `participant-onboarding-journey.md` y ejecutar `node scripts/verify-participant-onboarding-journey-ui.mjs`. Ese verificador utiliza HTTP/identidad controlados, no mensajes de personas reales. No retirar los controles canónicos para permitir una nueva invitación tras una revocación.
+
+## Continuación S11.A5.1: menú nativo de campo
+Leer `native-whatsapp-field-menu.md`. Archivos nuevos: `field-interactive-menu.js` (catálogo, binding público, descriptor y contrato de lista) y `field-menu-delivery.js` (revalidación del participante antes de materializar). El motor, queue y dispatcher usan ese descriptor opcional; el sender exige credencial del tenant/número exactos. Las opciones de jornada delegan al dominio de asistencia; no crear otro sistema de fichaje. Verificador: `node scripts/verify-native-field-menu.mjs`, renderer local etiquetado con normalizador/motor reales y estado sintético. La entrega por Meta y la configuración vigente de Production se comprueban aparte. No reenviar texto ni lista automáticamente después de un resultado incierto.
