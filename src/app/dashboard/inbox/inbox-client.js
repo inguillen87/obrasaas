@@ -1843,6 +1843,7 @@ export default function InboxClient({
 
               <ContactOnboardingAction
                 canManageOnboarding={canManageOnboarding}
+                canManageIntegrations={canManageIntegrations} projectName={projectName}
                 conversationId={selectedConversation.id}
                 key={`${selectedConversation.id}:${contactOnboarding.state}`}
                 onboarding={contactOnboarding}

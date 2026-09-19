@@ -355,7 +355,9 @@ function databaseDouble({
     async resolveWorker() {
       return {
         status: store.resolvedStatus,
-        worker: store.resolvedStatus === 'RESOLVED' ? { id: 'worker-a' } : null,
+        worker: store.resolvedStatus === 'RESOLVED' ? (store.approvedWorker || { id: 'worker-a' }) : null,
+        source: store.approvedWorker ? 'CANONICAL' : 'LEGACY',
+        channelIdentityId: store.approvedWorker ? 'channel-identity-a' : null,
         normalizedPhone: '+5491155551212',
       };
     },
@@ -937,8 +939,13 @@ test('approved scoped claim remains authorized when the privacy-minimal receipt 
   const claim = [...store.claims.values()][0];
   claim.status = 'APPROVED';
   claim.resolvedWorkerId = 'worker-approved-a';
+  claim.resolvedPersonId = 'person-approved-a';
+  claim.resolvedChannelIdentityId = 'channel-identity-a';
+  store.resolvedStatus = 'RESOLVED';
   store.approvedWorker = {
     id: 'worker-approved-a',
+    personId: 'person-approved-a',
+    metadata: { whatsappRole: 'WORKER' },
     organizationId: 'organization-a',
     projectId: 'project-a',
     active: true,
@@ -1203,4 +1210,28 @@ test('route GET uses awaited params, exact active project and no-store state res
   assert.equal((await response.json()).state, 'eligible');
   assert.equal(loads.length, 1);
   assert.equal(loads[0].conversationId, 'conversation-a');
+});
+
+async function reviewedParticipantFixture() {
+  const f=databaseDouble();
+  await sendWorkerOnboardingInvitation({prisma:f.prisma,access:access(),conversationId:'conversation-a',idempotencyKey:'participant-lifecycle-test',...f.dependencies,sendFlow:async()=>({messages:[{id:'wamid.participant-fixture'}]})});
+  const claim=[...f.store.claims.values()][0];
+  Object.assign(claim,{status:'APPROVED',resolvedWorkerId:'worker-a',resolvedPersonId:'person-a',resolvedChannelIdentityId:'channel-identity-a'});
+  f.store.approvedWorker={id:'worker-a',personId:'person-a',organizationId:'organization-a',projectId:'project-a',active:true,metadata:{whatsappRole:'FOREMAN'}};
+  f.store.resolvedStatus='RESOLVED';
+  f.store.inbound={...f.store.inbound,metadata:{provider:'meta',receiptType:'worker_onboarding_submitted'}};
+  f.check=()=>getWorkerOnboardingInvitationState({prisma:f.prisma,access:access(),conversationId:'conversation-a',canManage:true,...f.dependencies});
+  return f;
+}
+test('approved minimal receipt rechecks current identity and exposes only the current worksite role',async()=>{
+  const f=await reviewedParticipantFixture();const before=f.store.audits.length;const result=await f.check();
+  assert.equal(result.state,'authorized');assert.equal(result.currentAccess.role,'FOREMAN');assert.equal(result.currentAccess.workerId,'worker-a');assert.equal(result.currentAccess.verifiedNow,true);
+  assert.equal(result.invitation.claimId,[...f.store.claims.keys()][0]);assert.equal(f.store.audits.length,before);assert.equal(f.store.outbound.length,1);
+  assert.ok(!JSON.stringify(result).includes('5491155551212'));
+});
+for(const status of ['UNKNOWN','CANONICAL_BLOCKED','AMBIGUOUS'])test('historical approval never overrides current '+status,async()=>{
+  const f=await reviewedParticipantFixture();f.store.resolvedStatus=status;const result=await f.check();assert.equal(result.state,'conflict');assert.equal(result.currentAccess,null);assert.equal(result.capability.allowed,false);assert.equal(f.store.outbound.length,1);
+});
+for(const patch of [{personId:'other-person'},{projectId:'other-project'},{organizationId:'other-company'},{active:false}])test('old claim must match exact currently authorized identity: '+Object.keys(patch)[0],async()=>{
+  const f=await reviewedParticipantFixture();Object.assign(f.store.approvedWorker,patch);const result=await f.check();assert.equal(result.state,'conflict');assert.equal(result.currentAccess,null);
 });

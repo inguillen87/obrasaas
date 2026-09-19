@@ -619,7 +619,7 @@ test('GET messages projects server-owned onboarding state for an authorized mana
   assert.equal(response.status, 200);
   assert.deepEqual(payload.onboarding, {
     state: 'eligible',
-    reason: 'Puede iniciar el alta segura.',
+    reason: 'Puede iniciar el alta segura.', code:'READY', claimId:null, claimStatus:null, delivery:null, expiresAt:null, currentAccess:null, checkedAt:null, needsIntegration:false, unavailable:false,
   });
   assert.equal(onboardingInput.conversationId, 'conversation-a');
   assert.equal(onboardingInput.access.organization.id, 'organization-a');
@@ -648,7 +648,10 @@ test('GET messages fails contact onboarding closed without hiding the conversati
 
     assert.equal(response.status, 200);
     assert.equal(payload.conversation.id, 'conversation-a');
-    assert.deepEqual(payload.onboarding, { state: 'closed', reason: '' });
+    assert.equal(payload.onboarding.state, 'closed');
+    assert.equal(payload.onboarding.unavailable, true);
+    assert.equal(payload.onboarding.currentAccess, null);
+    assert.equal(payload.onboarding.reason, '');
     assert.equal(JSON.stringify(payload).includes('sensitive provider detail'), false);
   } finally {
     console.error = originalError;

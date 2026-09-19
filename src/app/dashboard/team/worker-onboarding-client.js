@@ -3,6 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import styles from './team.module.css';
+import Link from 'next/link';
+import { confirmedOnboardingDecision } from '@/lib/whatsapp/participant-onboarding-progress';
+import { evidenceScopeHeaders } from '@/lib/evidence-capture-policy';
+import { useWorkspaceLeaveGuard } from '../use-workspace-leave-guard';
+import { requestWorkspaceNavigation } from '@/lib/workspace-leave-policy';
 
 const PAGE_SIZE = 25;
 const STATUS_FILTERS = Object.freeze([
@@ -91,7 +96,7 @@ function emptyPage() {
 }
 
 function initialPages() {
-  return Object.fromEntries(STATUS_FILTERS.map(({ key }) => [key, emptyPage()]));
+  return { ...Object.fromEntries(STATUS_FILTERS.map(({ key }) => [key, emptyPage()])), FOCUSED: emptyPage() };
 }
 
 function normalizeClaim(raw) {
@@ -198,7 +203,7 @@ function formatDate(value, timeZone) {
 }
 
 function claimTitle(claim) {
-  if (claim.retention.state !== 'ACTIVE') return 'Alta histÃ³rica';
+  if (claim.retention.state !== 'ACTIVE') return 'Alta histórica';
   return claim.identity?.legalName || 'Contacto de WhatsApp';
 }
 
@@ -217,6 +222,7 @@ function DecisionPanel({
   onChangeReason,
   onSubmit,
   pending,
+  uncertain = false,
 }) {
   const rejecting = draft.action === 'REJECT';
   const reason = draft.rejectionReason;
@@ -238,6 +244,7 @@ function DecisionPanel({
           <span>Motivo del rechazo</span>
           <textarea
             autoFocus
+            disabled={pending || uncertain || draft.blocked}
             maxLength={500}
             required
             rows={3}
@@ -256,11 +263,11 @@ function DecisionPanel({
         <button
           className={rejecting ? styles.onboardingRejectConfirm : styles.onboardingApproveConfirm}
           type="submit"
-          disabled={pending || !validReason}
+          disabled={pending || draft.blocked || !validReason}
         >
           {pending
             ? 'Guardando decisión…'
-            : rejecting ? 'Rechazar alta' : 'Aprobar alta operativa'}
+            : uncertain ? 'Verificar la misma decisión' : rejecting ? 'Rechazar alta' : 'Aprobar alta operativa'}
         </button>
       </div>
     </form>
@@ -276,6 +283,7 @@ function ClaimCard({
   onOpenDecision,
   onSubmitDecision,
   pendingDecision,
+  decisionUncertain,
   timeZone,
 }) {
   const presentation = STATUS_PRESENTATION[claim.status];
@@ -291,9 +299,9 @@ function ClaimCard({
             <strong>{claimTitle(claim)}</strong>
             <small>
               {claim.retention.state === 'PURGED'
-                ? 'Datos sensibles eliminados segÃºn la polÃ­tica de retenciÃ³n'
+                ? 'Datos sensibles eliminados según la política de retención'
                 : claim.retention.state === 'PENDING_PURGE'
-                  ? 'Datos sensibles fuera de vista; eliminaciÃ³n programada'
+                  ? 'Datos sensibles fuera de vista; eliminación programada'
                   : claim.sender}
             </small>
           </div>
@@ -339,14 +347,14 @@ function ClaimCard({
         <>
           <p className={styles.onboardingDecisionRecorded}>
             <i className="fa-solid fa-circle-check" aria-hidden="true" />
-            Canal de WhatsApp verificado. La identidad civil conserva su revisión documental separada.
+            La aprobación quedó registrada. Consultá el acceso actual en la cuadrilla; la revisión civil permanece separada.
           </p>
           <a
             className={styles.onboardingWorkerLink}
-            href={`#field-worker-${claim.resolution.workerId}`}
+            href={`/dashboard/team?onboardingCompleted=${encodeURIComponent(claim.id)}#field-worker-${encodeURIComponent(claim.resolution.workerId)}`}
           >
             <i className="fa-solid fa-arrow-down" aria-hidden="true" />
-            Ver operario en la cuadrilla
+            Ver operario en la cuadrilla actualizada
           </a>
         </>
       )}
@@ -389,6 +397,7 @@ function ClaimCard({
           onChangeReason={onChangeReason}
           onSubmit={(event) => onSubmitDecision(event, claim)}
           pending={pendingDecision === claim.id}
+          uncertain={decisionUncertain}
         />
       )}
     </article>
@@ -399,13 +408,18 @@ export default function WorkerOnboardingClient({
   canManage = false,
   canRead = false,
   projectName,
+  organizationId, projectId, focusedClaimId = null,
   timeZone = 'America/Argentina/Buenos_Aires',
 }) {
-  const [activeStatus, setActiveStatus] = useState('SUBMITTED');
+  const [activeStatus, setActiveStatus] = useState(focusedClaimId ? 'FOCUSED' : 'SUBMITTED');
   const [pages, setPages] = useState(initialPages);
   const [decisionDraft, setDecisionDraft] = useState(null);
   const [pendingDecision, setPendingDecision] = useState('');
   const [notice, setNotice] = useState(null);
+  const [decisionUncertain, setDecisionUncertain] = useState(false);
+  const sendLock = useRef(false);
+  useWorkspaceLeaveGuard({ dirty: Boolean(decisionDraft) || decisionUncertain, busy: Boolean(pendingDecision) });
+  useEffect(() => { const guard = event => { if (decisionDraft || pendingDecision || decisionUncertain) { event.preventDefault(); event.returnValue = ''; } }; window.addEventListener('beforeunload', guard); return () => window.removeEventListener('beforeunload', guard); }, [decisionDraft, pendingDecision, decisionUncertain]);
   const requestsRef = useRef(new Map());
   const decisionAttemptsRef = useRef(new Map());
 
@@ -413,7 +427,7 @@ export default function WorkerOnboardingClient({
     append = false,
     cursor = '',
   } = {}) => {
-    if (!canRead || !CLAIM_STATUSES.has(status)) return;
+    if (!canRead || (!CLAIM_STATUSES.has(status) && !(focusedClaimId && status === 'FOCUSED'))) return;
     requestsRef.current.get(status)?.abort();
     const controller = new AbortController();
     requestsRef.current.set(status, controller);
@@ -427,10 +441,10 @@ export default function WorkerOnboardingClient({
     }));
 
     try {
-      const params = new URLSearchParams({ status, limit: String(PAGE_SIZE) });
+      const params = new URLSearchParams(focusedClaimId ? { claimId: focusedClaimId } : { status, limit: String(PAGE_SIZE) });
       if (append && cursor) params.set('cursor', cursor);
       const response = await fetch(`/api/worker-onboarding/claims?${params.toString()}`, {
-        headers: { Accept: 'application/json' },
+        headers: { Accept: 'application/json', ...evidenceScopeHeaders({ organizationId, projectId }) },
         cache: 'no-store',
         signal: controller.signal,
       });
@@ -438,9 +452,10 @@ export default function WorkerOnboardingClient({
         response,
         'No pudimos cargar las altas de operarios.',
       );
-      const incoming = (Array.isArray(payload.items) ? payload.items : [])
-        .map(normalizeClaim)
-        .filter(Boolean);
+      if (controller.signal.aborted || requestsRef.current.get(status) !== controller) return;
+      if (!Array.isArray(payload.items)) throw new Error('No se confirmó la lista de altas.');
+      const incoming = payload.items.map(normalizeClaim);
+      if (incoming.some(item => !item) || focusedClaimId && (incoming.length > 1 || incoming.some(item => item.id !== focusedClaimId) || payload.nextCursor)) throw new Error('La respuesta no corresponde al alta solicitada.');
       setPages((current) => ({
         ...current,
         [status]: {
@@ -459,6 +474,8 @@ export default function WorkerOnboardingClient({
         [status]: {
           ...current[status],
           loaded: true,
+          items: [],
+          nextCursor: '',
           pending: '',
           error: safeError(error, 'No pudimos cargar las altas de operarios.'),
         },
@@ -468,7 +485,7 @@ export default function WorkerOnboardingClient({
         requestsRef.current.delete(status);
       }
     }
-  }, [canRead]);
+  }, [canRead, focusedClaimId, organizationId, projectId]);
 
   const activePage = pages[activeStatus];
   const activeFilter = useMemo(
@@ -484,11 +501,11 @@ export default function WorkerOnboardingClient({
   useEffect(() => {
     if (!canRead) return undefined;
     function refreshWhenVisible() {
-      if (document.visibilityState === 'visible') void loadClaims(activeStatus);
+      if (document.visibilityState === 'visible' && !decisionDraft && !pendingDecision && !decisionUncertain) void loadClaims(activeStatus);
     }
     document.addEventListener('visibilitychange', refreshWhenVisible);
     return () => document.removeEventListener('visibilitychange', refreshWhenVisible);
-  }, [activeStatus, canRead, loadClaims]);
+  }, [activeStatus, canRead, loadClaims, decisionDraft, pendingDecision, decisionUncertain]);
 
   useEffect(() => () => {
     for (const controller of requestsRef.current.values()) controller.abort();
@@ -496,7 +513,8 @@ export default function WorkerOnboardingClient({
   }, []);
 
   function selectStatus(status) {
-    if (!CLAIM_STATUSES.has(status) || status === activeStatus) return;
+    if (!CLAIM_STATUSES.has(status) || status === activeStatus || pendingDecision || decisionUncertain) return;
+    if (decisionDraft && !window.confirm('¿Descartar la decisión todavía no confirmada?')) return;
     setDecisionDraft(null);
     setActiveStatus(status);
   }
@@ -505,10 +523,11 @@ export default function WorkerOnboardingClient({
     if (
       !canManage
       || claim.status !== 'SUBMITTED'
-      || pendingDecision
+      || pendingDecision || activePage.pending || activePage.error
       || (action === 'APPROVE' && !claim.reviewReady)
     ) return;
     setNotice(null);
+    setDecisionUncertain(false);
     setDecisionDraft({
       claimId: claim.id,
       action,
@@ -518,6 +537,7 @@ export default function WorkerOnboardingClient({
 
   async function submitDecision(event, claim) {
     event.preventDefault();
+    if (sendLock.current || decisionDraft?.blocked) return;
     const action = decisionDraft?.action;
     if (
       !canManage
@@ -536,6 +556,9 @@ export default function WorkerOnboardingClient({
     const idempotencyKey = decisionAttemptsRef.current.get(attemptIdentity)
       || createIdempotencyKey();
     decisionAttemptsRef.current.set(attemptIdentity, idempotencyKey);
+    sendLock.current = true;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 20000);
     setPendingDecision(claim.id);
     setNotice(null);
 
@@ -545,10 +568,12 @@ export default function WorkerOnboardingClient({
         {
           method: 'POST',
           cache: 'no-store',
+          signal: controller.signal,
           headers: {
             Accept: 'application/json',
             'Content-Type': 'application/json',
             'Idempotency-Key': idempotencyKey,
+            ...evidenceScopeHeaders({ organizationId, projectId }),
           },
           body: JSON.stringify({
             action,
@@ -558,6 +583,8 @@ export default function WorkerOnboardingClient({
         },
       );
       const result = await readResponse(response, 'No pudimos confirmar la decisión.');
+      if (!confirmedOnboardingDecision(result, { claimId:claim.id, expectedRevision:claim.revision, action, projectId })) throw new Error('Respuesta incompleta: verificá la misma decisión antes de continuar.');
+      setDecisionUncertain(false);
       decisionAttemptsRef.current.delete(attemptIdentity);
       setDecisionDraft(null);
       setNotice({
@@ -575,17 +602,19 @@ export default function WorkerOnboardingClient({
           loaded: false,
         },
       }));
-      await loadClaims('SUBMITTED');
+      await loadClaims(focusedClaimId ? 'FOCUSED' : 'SUBMITTED');
     } catch (error) {
       if (Number(error?.status) === 409) {
         decisionAttemptsRef.current.delete(attemptIdentity);
-        setDecisionDraft(null);
+        setDecisionUncertain(false);
+        setDecisionDraft(current => current ? { ...current, blocked: true } : current);
         setNotice({
           type: 'warning',
-          text: 'El alta cambió mientras la revisabas. Recargamos el estado antes de permitir otra decisión.',
+          text: 'El alta cambió. Conservamos el texto de tu decisión; cancelá la edición y actualizá antes de decidir de nuevo.',
         });
-        await loadClaims('SUBMITTED');
+        // Do not overwrite an unconfirmed decision with a new claim snapshot.
       } else {
+        setDecisionUncertain(!error.status || error.status >= 500);
         setNotice({
           type: 'error',
           text: safeError(
@@ -595,6 +624,8 @@ export default function WorkerOnboardingClient({
         });
       }
     } finally {
+      clearTimeout(timer);
+      sendLock.current = false;
       setPendingDecision('');
     }
   }
@@ -616,14 +647,15 @@ export default function WorkerOnboardingClient({
           className={styles.onboardingRefreshButton}
           type="button"
           onClick={() => void loadClaims(activeStatus)}
-          disabled={Boolean(activePage.pending)}
+          disabled={Boolean(activePage.pending) || Boolean(decisionDraft) || Boolean(pendingDecision)}
         >
           <i className="fa-solid fa-arrows-rotate" aria-hidden="true" />
           {activePage.pending === 'refresh' ? 'Actualizando…' : 'Actualizar'}
         </button>
       </header>
 
-      <div className={styles.onboardingFilters} aria-label="Filtrar altas de operarios">
+      {focusedClaimId && <div className={styles.onboardingFocus} role="status"><strong>Alta vinculada a la conversación</strong><p>Consultás sólo este registro dentro de la obra activa. La decisión no habilita accesos en otras obras.</p><Link href="/dashboard/team#worker-onboarding" prefetch={false} onNavigate={event => { if (!requestWorkspaceNavigation('route')) event.preventDefault(); }}>Ver todas las altas de esta obra</Link><Link href="/dashboard/inbox" prefetch={false} onNavigate={event => { if (!requestWorkspaceNavigation('route')) event.preventDefault(); }}>Volver a Bandeja WhatsApp</Link></div>}
+      {!focusedClaimId && <div className={styles.onboardingFilters} aria-label="Filtrar altas de operarios">
         {STATUS_FILTERS.map((filter) => {
           const page = pages[filter.key];
           return (
@@ -640,7 +672,7 @@ export default function WorkerOnboardingClient({
             </button>
           );
         })}
-      </div>
+      </div>}
 
       {notice && (
         <div
@@ -681,22 +713,23 @@ export default function WorkerOnboardingClient({
         ) : activePage.items.length === 0 ? (
           <div className={styles.onboardingEmpty}>
             <i className="fa-regular fa-address-card" aria-hidden="true" />
-            <strong>{activeFilter.emptyTitle}</strong>
-            <p>{activeFilter.emptyCopy}</p>
+            <strong>{focusedClaimId ? 'Esta alta no está disponible en la obra activa' : activeFilter.emptyTitle}</strong>
+            <p>{focusedClaimId ? 'No se buscó en otras empresas ni se seleccionó otro registro. Revisá el contexto o volvé a la lista autorizada.' : activeFilter.emptyCopy}</p>
           </div>
         ) : activePage.items.map((claim) => (
           <ClaimCard
             key={claim.id}
-            canManage={canManage}
+            canManage={canManage && !activePage.pending && !activePage.error}
             claim={claim}
             decisionDraft={decisionDraft}
-            onCancelDecision={() => setDecisionDraft(null)}
+            onCancelDecision={() => { if (decisionUncertain && !window.confirm('La decisión podría estar registrada. ¿Salir de la edición para consultar su estado?')) return; setDecisionDraft(null); setDecisionUncertain(false); }}
             onChangeReason={(rejectionReason) => setDecisionDraft((current) => (
               current?.claimId === claim.id ? { ...current, rejectionReason } : current
             ))}
             onOpenDecision={openDecision}
             onSubmitDecision={submitDecision}
             pendingDecision={pendingDecision}
+            decisionUncertain={decisionUncertain}
             timeZone={timeZone}
           />
         ))}

@@ -42,3 +42,6 @@ El deploy de Preview no es Production. Mantener el preflight, identidad y SHA de
 
 ## Ampliación v3.1
 Leer `worksite-numbers-and-participant-isolation.md`. La configuración de una obra no reemplaza la de otra. La respuesta a menú/ayuda se construye a partir de los permisos de campo existentes, dentro del número/obra ya resuelto. Pruebas adicionales en `tests/field-workers.test.js` y `tests/field-worker-menu.test.js`. No es una prueba de entrega física ni un menú de pagos administrativos para operarios.
+
+## Continuación S11.A4.1: alta desde la conversación
+Se agregó el seguimiento de la invitación, el enlace al alta exacta y la comprobación del acceso vigente frente a una aprobación histórica. El listado acepta `claimId` exclusivo dentro de la obra/tenant activos; el cliente usa el mismo endpoint de decisión, confirma su resultado y conserva el intento en respuestas inciertas. Consultar `participant-onboarding-journey.md` y ejecutar `node scripts/verify-participant-onboarding-journey-ui.mjs`. Ese verificador utiliza HTTP/identidad controlados, no mensajes de personas reales. No retirar los controles canónicos para permitir una nueva invitación tras una revocación.

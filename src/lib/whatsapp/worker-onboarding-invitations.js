@@ -2,6 +2,7 @@ import crypto, { createHash } from 'node:crypto';
 
 import {
   FIELD_WORKER_RESOLUTION,
+  fieldWorkerWhatsAppRole,
   resolveActiveFieldWorkerByPhone,
 } from '@/lib/field-workers';
 import { subscriptionAllowsWrites } from '@/lib/plans';
@@ -144,25 +145,22 @@ function normalizePhone(value) {
   return { address: `+${digits}`, providerSubject: digits };
 }
 
-function conversationSender(conversation, inbound, connection) {
+function authenticatedConversationSender(conversation, inbound, connection) {
   const externalId = String(conversation?.externalId || '');
-  const conversationPhone = externalId.startsWith(META_CONVERSATION_PREFIX)
-    ? normalizePhone(externalId.slice(META_CONVERSATION_PREFIX.length))
-    : null;
+  const expected = externalId.startsWith(META_CONVERSATION_PREFIX)
+    ? normalizePhone(externalId.slice(META_CONVERSATION_PREFIX.length)) : null;
   const metadata = jsonObject(inbound?.metadata);
-  const inboundPhone = normalizePhone(metadata.from);
-  if (
-    !conversationPhone
-    || !inboundPhone
-    || conversationPhone.address !== inboundPhone.address
-    || conversationPhone.providerSubject !== inboundPhone.providerSubject
-    || metadata.provider !== 'meta'
-    || metadata.quarantined !== true
-    || metadata.contactStatus !== 'UNASSIGNED'
-    || metadata.workerResolution !== FIELD_WORKER_RESOLUTION.UNKNOWN
-    || String(metadata.phoneNumberId || '') !== String(connection?.phoneNumberId || '')
-  ) return null;
-  return inboundPhone;
+  const observed = normalizePhone(metadata.from);
+  return expected && observed && expected.address === observed.address
+    && expected.providerSubject === observed.providerSubject && metadata.provider === 'meta'
+    && String(metadata.phoneNumberId || '') === String(connection?.phoneNumberId || '')
+    ? observed : null;
+}
+function conversationSender(conversation, inbound, connection) {
+  const sender = authenticatedConversationSender(conversation, inbound, connection);
+  const metadata = jsonObject(inbound?.metadata);
+  return sender && metadata.quarantined === true && metadata.contactStatus === 'UNASSIGNED'
+    && metadata.workerResolution === FIELD_WORKER_RESOLUTION.UNKNOWN ? sender : null;
 }
 
 function platformConfigured(env) {
@@ -270,6 +268,7 @@ function publicInvitation(message, claim, session, now) {
     id: message.id,
     status,
     delivery,
+    claimId: claim?.id || null,
     claimStatus: effectiveClaimStatus(claim, now),
     recordedAt: validDate(message.createdAt)?.toISOString() || null,
     attemptedAt: validDate(message.sentAt)?.toISOString() || null,
@@ -443,8 +442,9 @@ async function readState(prisma, scope, conversationId, {
     latestInvitation(prisma, scope, conversation.id),
   ]);
   const sender = conversationSender(conversation, inbound, connection);
-  let workerResolution = sender
-    ? await resolveWorker(prisma, scope, sender.address)
+  const authenticatedSender = authenticatedConversationSender(conversation, inbound, connection);
+  let workerResolution = authenticatedSender
+    ? await resolveWorker(prisma, scope, authenticatedSender.address)
     : {
         status: FIELD_WORKER_RESOLUTION.INVALID_PHONE,
         worker: null,
@@ -456,33 +456,24 @@ async function readState(prisma, scope, conversationId, {
     !invitation.corrupt
     && effectiveClaimStatus(invitation.claim, now) === 'APPROVED'
   ) {
-    const resolvedWorkerId = String(invitation.claim?.resolvedWorkerId || '').trim();
-    const resolvedWorker = resolvedWorkerId && typeof prisma.worker?.findFirst === 'function'
-      ? await prisma.worker.findFirst({
-          where: {
-            id: resolvedWorkerId,
-            organizationId: scope.organizationId,
-            projectId: scope.projectId,
-            active: true,
-          },
-          select: { id: true },
-        })
-      : null;
-    if (resolvedWorker) {
-      authorizedByClaim = true;
-      workerResolution = {
-        status: FIELD_WORKER_RESOLUTION.RESOLVED,
-        worker: resolvedWorker,
-        normalizedPhone: null,
-        source: 'APPROVED_ONBOARDING_CLAIM',
-      };
-    } else {
+    const claim = approvedClaimIdentity(invitation.claim);
+    // Terminal receipt messages deliberately omit sender data. A prior approval is
+    // not authority: resolve the current identity using this scoped conversation.
+    const receipt = jsonObject(inbound?.metadata);
+    if (!authenticatedSender && claim && claim.connectionId === connection?.id
+      && receipt.provider === 'meta' && receipt.receiptType === 'worker_onboarding_submitted') {
+      const retainedContact = normalizePhone(String(conversation.externalId).slice(META_CONVERSATION_PREFIX.length));
+      if (retainedContact) workerResolution = await resolveWorker(prisma, scope, retainedContact.address);
+    }
+    const current = workerResolution;
+    authorizedByClaim = Boolean(claim && claim.connectionId === connection?.id
+      && current.status === FIELD_WORKER_RESOLUTION.RESOLVED && current.source === 'CANONICAL'
+      && current.worker?.id === claim.resolvedWorkerId && current.worker?.personId === claim.resolvedPersonId
+      && current.worker?.organizationId === scope.organizationId && current.worker?.projectId === scope.projectId
+      && current.worker?.active === true && current.channelIdentityId === claim.resolvedChannelIdentityId);
+    if (!authorizedByClaim) {
       approvedClaimInvalid = true;
-      workerResolution = {
-        status: FIELD_WORKER_RESOLUTION.CANONICAL_BLOCKED,
-        worker: null,
-        normalizedPhone: null,
-      };
+      workerResolution = { status: FIELD_WORKER_RESOLUTION.CANONICAL_BLOCKED, worker: null, normalizedPhone: null };
     }
   }
   const channel = channelOperational(connection, env, now, deriveReadiness);
@@ -499,6 +490,10 @@ async function readState(prisma, scope, conversationId, {
     channel,
     publishedFlow: fixedPublishedFlow(connection, resolvePublishedFlow),
   };
+}
+
+function approvedClaimIdentity(claim) {
+  return claim?.resolvedWorkerId && claim?.resolvedPersonId && claim?.resolvedChannelIdentityId ? claim : null;
 }
 
 function capabilityError(state, {
@@ -1284,6 +1279,13 @@ export async function getWorkerOnboardingInvitationState({
   const blueprint = getWhatsAppFlowBlueprint(BLUEPRINT_KEY);
   return {
     conversationId: state.conversation.id,
+    checkedAt: now.toISOString(),
+    currentAccess: state.workerResolution.status === FIELD_WORKER_RESOLUTION.RESOLVED
+      && state.workerResolution.worker?.active === true ? {
+        workerId: state.workerResolution.worker.id,
+        role: fieldWorkerWhatsAppRole(state.workerResolution.worker),
+        verifiedNow: true, checkedAt: now.toISOString(),
+      } : null,
     state: onboardingUiState(state, error, now),
     contact: {
       status: state.workerResolution.status === FIELD_WORKER_RESOLUTION.UNKNOWN
@@ -1292,7 +1294,7 @@ export async function getWorkerOnboardingInvitationState({
         : state.workerResolution.status,
     },
     capability: capabilityDto(error),
-    invitation: publicInvitation(
+    invitation: state.invitation.corrupt ? null : publicInvitation(
       state.invitation.message,
       state.invitation.claim,
       state.invitation.session,

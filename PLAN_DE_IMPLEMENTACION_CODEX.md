@@ -1,6 +1,6 @@
 # PLAN MAESTRO DE IMPLEMENTACIÓN — OBRASAAS
 
-Versión 3.1 · Continuidad de producto y arquitectura · 19 de septiembre de 2026.
+Versión 3.2 · Continuidad de producto y arquitectura · 19 de septiembre de 2026.
 Repositorio: inguillen87/obrasaas. Rama de trabajo: `codex/saas-recovery-20260917`.
 Base de esta ampliación: `5b4cea6e3586780e62142bb85764d0db4a5a1850`.
 
@@ -44,6 +44,7 @@ Compartir infraestructura no significa compartir datos, números, WABAs, presupu
 | S11.A2 · Números por obra; canal multiobra opcional | Operar números separados dentro de la misma empresa, con participantes y roles por obra. Un número compartido para varias obras queda como ampliación posterior. | Preparación independiente y resolución existentes comprobadas con datos controlados; piloto físico y alta de empleados pendientes. |
 | S11.A3 · Alta y recuperación autoservicio | Embedded Signup robusto y sesión durable; coexistencia cuando corresponda; traspaso asistido; expiración/revocación; reanudar sin duplicados. | Flujo dedicado existente + protección de preparación; coexistencia, links de instalación y sesiones durables pendientes. |
 | S11.A4 · Equipo | Invitar por enlace/QR seguro, roles y proyectos, alta por propietario, revocación efectiva. El teléfono que escribe no obtiene permisos automáticamente. | Reutilizar onboarding de trabajadores existente; cerrar UX comercial y prueba física. |
+| S11.A4.1 · Del contacto al acceso vigente | Invitación consentida, seguimiento dentro de la conversación, alta exacta, decisión recuperable y revalidación de identidad/asignación actual. | Implementado en el código de esta fase; evidencia de pruebas y despliegue por SHA en el PR. La prueba física del canal sigue separada. |
 | S11.A5 · Agente de construcción | Texto/audio/imagen/video → intención y contexto → propuesta/acción permitida → fuente → resultado/entrega. Handoff humano y conocimiento privado. | Recepción y módulos base existen; cerrar interpretación, herramientas y pruebas por formato. |
 | S11.A6 · Operación de SaaS | Métricas por tenant, límites, retención, exportación, desconexión, salud del canal, facturación de uso y soporte. | Implementación incremental; no vender SLA de cientos de empresas sin medir. |
 | S12 · Fiscal y abastecimiento | CAE y tipos documentales correctamente separados; compras/recepción/stock/costo trazables. Regla fiscal respaldada por fuente vigente. | Conservar módulos reales y verificar integraciones externas antes de declararlas oficiales. |
@@ -87,3 +88,6 @@ Este turno incorpora la preparación por empresa y su validación conectada al f
 
 ## 11. Prompt de traspaso para Codex, Claude u otro agente
 «Trabajás en ObraSaaS, repo inguillen87/obrasaas. Leé AGENTS.md, este plan v3, el ADR tenant-owned-whatsapp-architecture y el handoff. La decisión aprobada es número/cuenta de WhatsApp autorizados por cada tenant, empleados con permisos y obras separadas; no una bandeja común en el número comercial. El agente corre en el backend. El control técnico puede ser común, los datos y autorizaciones no. Antes de modificar, verificá git status, SHA, rama, esquema y últimas pruebas. No des por hecho que el v2.4 o el walkthrough prueban el estado productivo. No toques ChatBoc ni muevas activos Meta entre productos sin un procedimiento autorizado y verificado. Conservá lo implementado, explicá los límites actuales y cerrá un circuito con pruebas, build y evidencia por entorno. La prioridad es cerrar altas de participantes, menú por rol y operaciones reales por número de obra, junto a recuperación durable y prueba física del canal. El número compartido multiobra es una variante posterior; no más pantallas sin backend.»
+
+## Cierre incremental de participantes
+Consultar `docs/recovery/participant-onboarding-journey.md`. El alta aprobada es un antecedente, no autoridad perpetua: el canal canónico y el vínculo de la obra se revalidan. La conversación abre el registro exacto sin buscar datos en otros tenants. Se conservan privacidad, control de revisiones y recibos de WhatsApp. Esta entrega no renueva credenciales ni reemplaza la prueba real de invitación → revisión → primer parte → respuesta entregada.

@@ -19,7 +19,7 @@ import {
 
 export const runtime = 'nodejs';
 
-const LIST_QUERY_FIELDS = new Set(['status', 'cursor', 'limit']);
+const LIST_QUERY_FIELDS = new Set(['status', 'cursor', 'limit', 'claimId']);
 const SAFE_IDENTIFIER = /^[^\u0000-\u001f\u007f]{1,190}$/;
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/;
 const MAX_PRISMA_INT = 2_147_483_647;
@@ -205,9 +205,16 @@ export function createWorkerOnboardingClaimHandlers({
       const membershipId = requireTenantMembershipActor(access);
       const searchParams = new URL(request.url).searchParams;
       assertWorkerSensitiveSearchParams(searchParams, LIST_QUERY_FIELDS);
+      if (searchParams.has('claimId')) {
+        const id = searchParams.get('claimId');
+        if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,189}$/.test(id || '') || [...searchParams.keys()].some(key => key !== 'claimId')) {
+          throw new WorkerSensitiveApiError('El alta solicitada no admite otros filtros.', { code: 'WORKER_SENSITIVE_QUERY_INVALID', status: 400 });
+        }
+      }
       const claims = await listClaims(prismaFactory(), {
         scope: workerSensitiveScope(access),
         requestedByMembershipId: membershipId,
+        ...(queryValue(searchParams, 'claimId') ? { claimId: queryValue(searchParams, 'claimId') } : {}),
         status: queryValue(searchParams, 'status'),
         cursor: queryValue(searchParams, 'cursor'),
         limit: queryValue(searchParams, 'limit'),
