@@ -37,10 +37,10 @@ export async function prepareTaskAssignment(prisma,{scope:rawScope,taskId}) {
       owners:{workers:workers.slice(0,100),teams:teams.slice(0,100),truncated:workers.length>100||teams.length>100}};
   },{isolationLevel:'RepeatableRead',timeout:10000});
 }
-export async function planTaskAssignment(prisma,{scope:rawScope,actorId,operationKey,input}) {
+export async function planTaskAssignment(prisma,{scope:rawScope,actorId,operationKey,input,beforeCreate=null,reviewContext=null}) {
   const scope=scopeOf(rawScope);assignmentId(actorId);const plan=normalizeAssignmentPlan(input);
   if(typeof operationKey!=='string'||!/^[A-Za-z0-9_-]{16,96}$/.test(operationKey))throw new TaskAssignmentError('La solicitud necesita una referencia de intento válida.');
-  const key=digest(['assignment-plan-v1',scope,actorId,operationKey]),id='assignment_'+key,auditId='assignment_request_'+key,fingerprint=digest(plan);
+  const key=digest(['assignment-plan-v1',scope,actorId,operationKey]),id='assignment_'+key,auditId='assignment_request_'+key,fingerprint=digest(reviewContext ? ['reviewed-plan-v1',plan,reviewContext] : plan);
   return runOperationalProjectMutation(prisma,scope,async tx=>{
     await scopedProject(tx,scope,true);
     const [existing,receipt]=await Promise.all([
@@ -58,8 +58,9 @@ export async function planTaskAssignment(prisma,{scope:rawScope,actorId,operatio
     const duplicate=await tx.taskAssignment.findFirst({where:{projectId:scope.projectId,taskId:plan.taskId,workerId:plan.workerId,teamId:plan.teamId,
       startsAt:plan.startsAt?new Date(plan.startsAt):null,endsAt:plan.endsAt?new Date(plan.endsAt):null,status:{in:['PLANNED','ACTIVE']}},select:{id:true}});
     if(duplicate)throw new TaskAssignmentError('Ya existe una asignación pendiente o en curso para esa actividad, responsable y fechas. Revisá el listado.','ASSIGNMENT_DUPLICATE',409);
+    const reviewedMetadata=beforeCreate ? await beforeCreate(tx,plan) : {};
     const created=await createTaskAssignmentInTransaction(tx,{scope,actorId,recordId:id,auditId,
-      requestMetadata:{requestFingerprint:fingerprint,taskRevision:task.revision,source:'assignment-planner-v1'},input:{...plan,status:'PLANNED'}});
+      requestMetadata:{requestFingerprint:fingerprint,taskRevision:task.revision,source:'assignment-planner-v1',...reviewedMetadata},input:{...plan,status:'PLANNED'}});
     return {context:scope,assignment:created.assignment,replayed:false};
   });
 }

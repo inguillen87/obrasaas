@@ -41,3 +41,5 @@
 @media (max-width:800px) { .cards { grid-template-columns:minmax(0,1fr); } }
 @media (max-width:500px) { .boardHeader { display:grid; }.toolbar { display:grid; }.toolbar label:last-child { flex:auto; }.card { padding:14px; }.card header { flex-wrap:wrap; }.dialog { width:calc(100vw - 12px); max-height:calc(100dvh - 12px); }.dialogHeader,.dialogBody { padding:16px; }.dialogFooter { padding:14px 16px; flex-direction:column-reverse; }.dialogFooter button { width:100%; }.dates { grid-template-columns:minmax(0,1fr); } }
 @media (prefers-reduced-motion:reduce) { .board *,.dialog * { transition:none!important; animation:none!important; scroll-behavior:auto!important; } }
+
+.coordinationNote { display:grid; gap:8px; font-size:.84rem; line-height:1.6; margin:16px 0; }

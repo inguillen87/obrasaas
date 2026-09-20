@@ -6,6 +6,7 @@ import { resolve } from 'node:path';
 import { build } from 'esbuild';
 import { chromium,expect } from '@playwright/test';
 import { normalizeAssignmentPlan } from '../src/lib/task-assignment-policy.js';
+import { reviewedAssignmentInput } from '../src/lib/assignment-overlap-policy.js';
 const root=fileURLToPath(new URL('../',import.meta.url)),out=resolve(root,'.vercel/task-assignments-ui');mkdirSync(out,{recursive:true});
 const tasks=[{id:'task-a',title:'Mampostería · Ensayo Norte',type:'TASK',revision:3}],workers=[{id:'worker-a',name:'Persona de ensayo'}],teams=[{id:'team-a',name:'Cuadrilla de ensayo',status:'ACTIVE',revision:0,members:[]}];
 const scope={organizationId:'org-a',projectId:'project-a'};
@@ -22,8 +23,11 @@ const server=createServer((req,res)=>{
   if(url.pathname==='/api/execution/assignments'&&req.method==='GET'){
     calls.push({type:'PREPARE',taskId:url.searchParams.get('taskId')});return json(res,{context:scope,task:tasks[0],canCreate:true,owners:{workers,teams,truncated:false}});
   }
+  if(url.pathname==='/api/execution/assignments/review'&&req.method==='POST'){
+    let text='';req.on('data',chunk=>text+=chunk);req.on('end',()=>{const plan=normalizeAssignmentPlan(JSON.parse(text));json(res,{context:scope,plan,version:'a'.repeat(64),warnings:false,summary:{overlaps:0,incomplete:0,proposedDatesIncomplete:false,rosterUnverified:false},totalFindings:0,findings:[]});});return;
+  }
   if(url.pathname==='/api/execution/assignments'&&req.method==='POST'){
-    let text='';req.on('data',chunk=>text+=chunk);req.on('end',()=>{const input=JSON.parse(text),plan=normalizeAssignmentPlan(input),key=req.headers['idempotency-key'];
+    let text='';req.on('data',chunk=>text+=chunk);req.on('end',()=>{const input=JSON.parse(text),plan=reviewedAssignmentInput(input).plan,key=req.headers['idempotency-key'];
       calls.push({type:'CREATE',input,key,organization:req.headers['x-obrasaas-organization'],project:req.headers['x-obrasaas-project']});
       const replayed=Boolean(assignment);assignment ||= {id:'assignment-fixture',projectId:'project-a',taskId:plan.taskId,workerId:plan.workerId,teamId:plan.teamId,startsAt:plan.startsAt,endsAt:plan.endsAt,status:'PLANNED',revision:0};
       if(losePlan){losePlan=false;return json(res,{error:'Respuesta interrumpida después de guardar'},503);}json(res,{context:scope,assignment,replayed});});return;
@@ -53,6 +57,7 @@ try{
     if([390,1280].includes(width))await page.screenshot({path:resolve(out,'plan-'+width+'.png')});
   }
   page.once('dialog',dialog=>dialog.dismiss());await modal.getByRole('button',{name:'Volver sin confirmar'}).click();await expect(modal.getByRole('combobox',{name:'Responsable de la asignación'})).toHaveValue('team-a');
+  await modal.getByRole('button',{name:'Revisar coincidencias',exact:true}).click();await expect(modal.getByText('Sin coincidencias detectadas en esta revisión',{exact:true})).toBeVisible();
   await modal.getByRole('checkbox').check();await modal.getByRole('button',{name:'Confirmar planificación'}).click();
   await expect(modal.getByRole('button',{name:'Verificar el mismo intento'})).toBeVisible();await expect(modal.getByRole('combobox',{name:'Responsable de la asignación'})).toHaveValue('team-a');
   await modal.getByRole('button',{name:'Verificar el mismo intento'}).click();await expect(modal).toHaveCount(0);

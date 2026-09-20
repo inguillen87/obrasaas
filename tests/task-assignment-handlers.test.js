@@ -9,10 +9,10 @@ function fixture(overrides={}){
   const calls={db:0,permissions:[],input:null};const access={organization:{id:'org-a'},project:{id:'project-a'},databaseUserId:'manager-a'};
   const deps={AccessError,RequestBodyError,TaskAssignmentError,assignmentId,assignmentFailure,assertEvidenceRequestContext,evidenceContextErrorResponse,
     accessErrorResponse:()=>Response.json({},{status:403}),requestBodyErrorResponse:()=>Response.json({},{status:400}),projectWritePolicyErrorResponse:()=>null,projectExecutionErrorResponse:()=>null,
-    getPlatformAccess:async()=>access,requireTenantPermission:()=>{},getPrisma:()=>({}),prepareTaskAssignment:async()=>({}),planTaskAssignment:async()=>({}),getTaskAssignment:async()=>({}),decideTaskAssignment:async()=>({}),readJsonRequest:async request=>request.json()};
+    getPlatformAccess:async()=>access,requireTenantPermission:()=>{},getPrisma:()=>({}),prepareTaskAssignment:async()=>({}),planReviewedTaskAssignment:async()=>({}),reviewTaskAssignment:async()=>({}),getTaskAssignment:async()=>({}),decideTaskAssignment:async()=>({}),readJsonRequest:async request=>request.json()};
   const factory=new Function(...Object.keys(deps),code+'\nreturn createTaskAssignmentHandlers;')(...Object.values(deps));
   const read=async(db,input)=>{calls.input=input;return {assignment:{},replayed:false};};
-  return {calls,handlers:factory({resolveAccess:async()=>access,authorize:(a,p,o)=>calls.permissions.push([p,o.subscriptionMode]),database:()=>{calls.db++;return{};},prepare:read,plan:read,read,decide:read,...overrides})};
+  return {calls,handlers:factory({resolveAccess:async()=>access,authorize:(a,p,o)=>calls.permissions.push([p,o.subscriptionMode]),database:()=>{calls.db++;return{};},prepare:read,plan:read,review:read,read,decide:read,...overrides})};
 }
 const params={params:Promise.resolve({assignmentId:'assignment-a'})};
 const request=(method='GET',headers={},query='')=>new Request('https://obra.test/api/execution/assignments'+query,{method,headers:{'Content-Type':'application/json','X-ObraSaaS-Project':'project-a','X-ObraSaaS-Organization':'org-a','Idempotency-Key':'request-key-00000001',...headers},...(['POST','PATCH'].includes(method)?{body:'{"taskId":"task-a"}'}:{})});
@@ -39,4 +39,17 @@ test('unexpected provider detail is sanitized and not cached',async()=>{
 });
 test('verified replay reports 200 rather than a second creation',async()=>{
   const {handlers}=fixture({plan:async()=>({assignment:{},replayed:true})});assert.equal((await handlers.planPOST(request('POST'))).status,200);
+});
+
+test('review endpoint uses read permission and never calls the write service',async()=>{
+  let writes=0;const {handlers,calls}=fixture({plan:async()=>{writes++;throw new Error('Must not write');}});
+  const response=await handlers.reviewPOST(request('POST'));assert.equal(response.status,200);assert.equal(writes,0);assert.equal(calls.permissions[0][0],'org:execution:read');
+  assert.deepEqual(calls.input.scope,{organizationId:'org-a',projectId:'project-a'});
+});
+for(const headers of [{'X-ObraSaaS-Organization':'other'},{'X-ObraSaaS-Project':''},{Origin:'https://other.test'}])test('review rejects unauthorized context before reading '+JSON.stringify(headers),async()=>{
+  const {handlers,calls}=fixture();assert.ok([403,409].includes((await handlers.reviewPOST(request('POST',headers))).status));assert.equal(calls.db,0);
+});
+test('review denies a role without schedule-read access',async()=>{
+  const {handlers,calls}=fixture({authorize:(a,p)=>{if(p==='org:tasks:read')throw new AccessError();}});
+  assert.equal((await handlers.reviewPOST(request('POST'))).status,403);assert.equal(calls.db,0);
 });
