@@ -111,22 +111,7 @@ export async function createExecutionRecord(prisma, { scope: scopeInput, actorId
       await tx.auditLog.create({ data: { organizationId: scope.organizationId, actorId: actor, action: 'execution.team.created', entityType: 'WorkTeam', entityId: team.id, metadata: { projectId: scope.projectId, name: team.name, code: team.code } } });
       return { kind, team: serializeTeam(team) };
     }
-    if (kind === 'TEAM_MEMBER') {
-      const teamId = text(input.teamId, 'teamId', 190); const workerId = text(input.workerId, 'workerId', 190);
-      const role = String(input.role || 'MEMBER'); if (!MEMBER_ROLES.has(role)) throw new ProjectExecutionError('Rol de miembro inválido.');
-      const startsAt = date(input.startsAt, 'startsAt') || new Date(); const endsAt = date(input.endsAt, 'endsAt');
-      if (endsAt && endsAt < startsAt) throw new ProjectExecutionError('endsAt no puede preceder a startsAt.');
-      const [team, worker] = await Promise.all([
-        tx.workTeam.findFirst({ where: { id: teamId, projectId: scope.projectId, status: 'ACTIVE' }, select: { id: true } }),
-        tx.worker.findFirst({ where: { id: workerId, projectId: scope.projectId, active: true }, select: { id: true } }),
-      ]);
-      if (!team || !worker) throw new ProjectExecutionError('Equipo o persona fuera del alcance de la obra.', 'PROJECT_EXECUTION_SCOPE', 409);
-      const activeMembership = await tx.workTeamMember.findFirst({ where: { projectId: scope.projectId, teamId, workerId, endsAt: null }, select: { id: true } });
-      if (activeMembership) throw new ProjectExecutionError('La persona ya pertenece al equipo activo.', 'PROJECT_TEAM_MEMBER_DUPLICATE', 409);
-      const member = await tx.workTeamMember.create({ data: { projectId: scope.projectId, teamId, workerId, role, startsAt, endsAt } });
-      await tx.auditLog.create({ data: { organizationId: scope.organizationId, actorId: actor, action: 'execution.team.member.added', entityType: 'WorkTeamMember', entityId: member.id, metadata: { projectId: scope.projectId, teamId, workerId, role } } });
-      return { kind, member: { id: member.id, teamId, workerId, role, startsAt: startsAt.toISOString(), endsAt: endsAt?.toISOString() || null } };
-    }
+    if (kind === 'TEAM_MEMBER') return addWorkTeamMemberInTransaction(tx, { scope, actorId: actor, input });
     if (kind === 'ASSIGNMENT') return createTaskAssignmentInTransaction(tx, { scope, actorId: actor, input });
     if (kind === 'BLOCKER') return createProjectBlockerInTransaction(tx, { scope, actorId: actor, input });
     throw new ProjectExecutionError('Tipo de registro de ejecución inválido.');
@@ -219,4 +204,22 @@ export async function createTaskAssignmentInTransaction(tx, { scope: rawScope, a
       const assignment = await tx.taskAssignment.create({ data: { ...(recordId ? { id: recordId } : {}), projectId: scope.projectId, taskId, workerId, teamId, status, startsAt, endsAt }, select: ASSIGNMENT_SELECT });
       await tx.auditLog.create({ data: { ...(auditId ? { id: auditId } : {}), organizationId: scope.organizationId, actorId: actor, action: 'execution.task.assignment.created', entityType: 'TaskAssignment', entityId: assignment.id, metadata: { projectId: scope.projectId, taskId, workerId, teamId, status, ...requestMetadata } } });
       return { kind: 'ASSIGNMENT', assignment: serializeAssignment(assignment) };
+}
+
+export async function addWorkTeamMemberInTransaction(tx, { scope: rawScope, actorId, input, recordId = null, auditId = null, requestMetadata = {} }) {
+  const scope = scopeOf(rawScope), actor = actorOf(actorId);
+      const teamId = text(input.teamId, 'teamId', 190); const workerId = text(input.workerId, 'workerId', 190);
+      const role = String(input.role || 'MEMBER'); if (!MEMBER_ROLES.has(role)) throw new ProjectExecutionError('Rol de miembro inválido.');
+      const startsAt = date(input.startsAt, 'startsAt') || new Date(); const endsAt = date(input.endsAt, 'endsAt');
+      if (endsAt && endsAt < startsAt) throw new ProjectExecutionError('endsAt no puede preceder a startsAt.');
+      const [team, worker] = await Promise.all([
+        tx.workTeam.findFirst({ where: { id: teamId, projectId: scope.projectId, status: 'ACTIVE' }, select: { id: true } }),
+        tx.worker.findFirst({ where: { id: workerId, projectId: scope.projectId, active: true }, select: { id: true } }),
+      ]);
+      if (!team || !worker) throw new ProjectExecutionError('Equipo o persona fuera del alcance de la obra.', 'PROJECT_EXECUTION_SCOPE', 409);
+      const activeMembership = await tx.workTeamMember.findFirst({ where: { projectId: scope.projectId, teamId, workerId, endsAt: null }, select: { id: true } });
+      if (activeMembership) throw new ProjectExecutionError('La persona ya pertenece al equipo activo.', 'PROJECT_TEAM_MEMBER_DUPLICATE', 409);
+      const member = await tx.workTeamMember.create({ data: { ...(recordId ? { id: recordId } : {}), projectId: scope.projectId, teamId, workerId, role, startsAt, endsAt } });
+      await tx.auditLog.create({ data: { ...(auditId ? { id: auditId } : {}), organizationId: scope.organizationId, actorId: actor, action: 'execution.team.member.added', entityType: 'WorkTeamMember', entityId: member.id, metadata: { projectId: scope.projectId, teamId, workerId, role, ...requestMetadata } } });
+      return { kind: 'TEAM_MEMBER', member: { id: member.id, teamId, workerId, role, startsAt: startsAt.toISOString(), endsAt: endsAt?.toISOString() || null } };
 }
