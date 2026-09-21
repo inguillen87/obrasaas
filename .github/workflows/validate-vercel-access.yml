@@ -1,0 +1,86 @@
+name: Validar acceso de release sin escritorio
+on:
+  push:
+    branches: ['operations/vercel-access-20260921']
+permissions:
+  contents: read
+concurrency:
+  group: obrasaas-validate-vercel-access
+  cancel-in-progress: false
+jobs:
+  validate-and-inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      PRISMA_ALLOW_EMPTY_DATABASE_URL: '1'
+    steps:
+      - name: Leer payload operativo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: harness
+          persist-credentials: false
+      - name: Leer candidata exacta
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: 80e78840a3eb5d037ac3162c69722a1916782439
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Instalar versiones fijadas y consultar guia del framework
+        working-directory: candidate
+        run: |
+          mkdir -p ../evidence
+          npm ci > ../evidence/install.log 2>&1 || { tail -n 50 ../evidence/install.log; exit 1; }
+          head -n 45 node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/route.md > ../evidence/framework-guide.txt
+      - name: Aplicar archivos revisados por hash
+        run: |
+          python3 - <<'PY'
+          import pathlib, subprocess, json
+          root=pathlib.Path('candidate')
+          assert subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip()=='80e78840a3eb5d037ac3162c69722a1916782439'
+          files={
+            'scripts/vercel-release-access.mjs':'053aaac9c996da10b71484b85103039313b2b905',
+            'tests/vercel-release-access.test.js':'36b6e1151eab400c6d858a4c66cd6442f0246167',
+            'docs/recovery/vercel-release-access.md':'71d624e88bc5f45dc2853f00e10f5cc984162bfb',
+            '.github/workflows/vercel-release-access.yml':'7f8f062144e8cf091a32bc50825704baefb53b2d',
+          }
+          for name, sha in files.items():
+            source=pathlib.Path('harness/.release-access')/name
+            assert subprocess.check_output(['git','hash-object',str(source)],text=True).strip()==sha
+            target=root/name
+            assert not target.exists()
+            target.parent.mkdir(parents=True,exist_ok=True)
+            target.write_bytes(source.read_bytes())
+          pathlib.Path('evidence/manifest.json').write_text(json.dumps({'base':'80e78840a3eb5d037ac3162c69722a1916782439','files':files},indent=2))
+          PY
+      - name: Tests completos y lint
+        working-directory: candidate
+        run: |
+          npm test > ../evidence/tests.log 2>&1 || { tail -n 80 ../evidence/tests.log; exit 1; }
+          tail -n 10 ../evidence/tests.log
+          npx eslint scripts/vercel-release-access.mjs tests/vercel-release-access.test.js > ../evidence/lint.log 2>&1 || { cat ../evidence/lint.log; exit 1; }
+      - name: Build de candidata antes de integrar
+        working-directory: candidate
+        run: |
+          npm run build > ../evidence/build.log 2>&1 || { tail -n 80 ../evidence/build.log; exit 1; }
+          git diff --check
+          tail -n 12 ../evidence/build.log
+      - name: Probar credencial CI autorizada sin modificar Vercel
+        working-directory: candidate
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: node scripts/vercel-release-access.mjs
+      - name: Conservar logs de validacion y resultado filtrado
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: vercel-release-access-validation-${{ github.run_id }}
+          path: |
+            evidence/
+            candidate/evidence/vercel-release-access.json
+          retention-days: 1
+          if-no-files-found: warn

@@ -3,26 +3,10 @@
   "framework": "nextjs",
   "buildCommand": "node scripts/inspect-release-configuration.mjs && npm run build:vercel",
   "crons": [
-    {
-      "path": "/api/cron/webhooks",
-      "schedule": "* * * * *"
-    },
-    {
-      "path": "/api/cron/protected-uploads",
-      "schedule": "*/15 * * * *"
-    },
-    {
-      "path": "/api/cron/notifications",
-      "schedule": "*/15 * * * *"
-    },
-    {
-      "path": "/api/cron/supplier-reminders",
-      "schedule": "*/15 * * * *"
-    }
+    { "path": "/api/cron/webhooks", "schedule": "* * * * *" },
+    { "path": "/api/cron/protected-uploads", "schedule": "*/15 * * * *" },
+    { "path": "/api/cron/notifications", "schedule": "*/15 * * * *" },
+    { "path": "/api/cron/supplier-reminders", "schedule": "*/15 * * * *" }
   ],
-  "git": {
-    "deploymentEnabled": {
-      "codex/saas-recovery-20260917": false
-    }
-  }
+  "git": { "deploymentEnabled": { "codex/saas-recovery-20260917": false, "operations/vercel-access-20260921": false } }
 }
