@@ -1,0 +1,86 @@
+name: Validate grouped native Preview release
+on:
+  push:
+    branches: ['operations/native-preview-20260921']
+permissions:
+  contents: read
+concurrency:
+  group: obrasaas-native-preview-validation
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      PRISMA_ALLOW_EMPTY_DATABASE_URL: '1'
+    steps:
+      - name: Read isolated release payload
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: harness
+          persist-credentials: false
+      - name: Checkout exact application baseline
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: ab6b69d73536f015917dbac22aa3333b9b59f6ab
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Exact dependencies and installed framework guide
+        working-directory: candidate
+        run: |
+          mkdir -p ../evidence
+          npm ci > ../evidence/install.log 2>&1 || { tail -n 50 ../evidence/install.log; exit 1; }
+          head -n 45 node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/route.md > ../evidence/framework-guide.txt
+      - name: Apply and verify release file hashes
+        run: |
+          python3 - <<'PY'
+          import pathlib, subprocess, json
+          root=pathlib.Path('candidate')
+          assert subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip()=='ab6b69d73536f015917dbac22aa3333b9b59f6ab'
+          before=json.loads((root/'vercel.json').read_text())
+          assert before['git']['deploymentEnabled']['codex/saas-recovery-20260917'] is False
+          assert 'ignoreCommand' not in before
+          files={
+            'scripts/vercel-native-git-release.mjs':'843d53134ff5c7717ba9ac86b60e4a479e298387',
+            'tests/vercel-native-git-release.test.js':'b8de7223e5fe3d37779c9ffe73dd0dc485241365',
+            'docs/recovery/native-git-preview-release.md':'646a4737966c66301d9e5a2aebece9db46964ad0',
+            'vercel.json':'925cf166b2ee5ae0cc32d7d7eb48965b97b08387',
+          }
+          for name,sha in files.items():
+            source=pathlib.Path('harness/.native-release')/name
+            assert subprocess.check_output(['git','hash-object',str(source)],text=True).strip()==sha
+            target=root/name
+            if name!='vercel.json': assert not target.exists()
+            target.parent.mkdir(parents=True,exist_ok=True)
+            target.write_bytes(source.read_bytes())
+          after=json.loads((root/'vercel.json').read_text())
+          for key in ['version','framework','buildCommand','crons']:
+            assert before[key]==after[key]
+          pathlib.Path('evidence/manifest.json').write_text(json.dumps({'base':'ab6b69d73536f015917dbac22aa3333b9b59f6ab','files':files},indent=2))
+          PY
+      - name: Full suite and affected lint
+        working-directory: candidate
+        run: |
+          npm test > ../evidence/tests.log 2>&1 || { tail -n 80 ../evidence/tests.log; exit 1; }
+          tail -n 10 ../evidence/tests.log
+          npx eslint scripts/vercel-native-git-release.mjs tests/vercel-native-git-release.test.js > ../evidence/lint.log 2>&1 || { cat ../evidence/lint.log; exit 1; }
+      - name: Complete build before any product commit
+        working-directory: candidate
+        run: |
+          npm run build > ../evidence/build.log 2>&1 || { tail -n 80 ../evidence/build.log; exit 1; }
+          git diff --check
+          git diff -- vercel.json > ../evidence/configuration.diff
+          tail -n 15 ../evidence/build.log
+      - name: Preserve only validation evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: native-preview-validation-${{ github.run_id }}
+          path: evidence/
+          retention-days: 3
+          if-no-files-found: warn
