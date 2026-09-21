@@ -1,0 +1,145 @@
+name: Validate integrated execution contracts before commit
+on:
+  push:
+    branches: ['validation/execution-release-20260921']
+permissions:
+  contents: write
+concurrency:
+  group: execution-release-validation-20260921
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+        env:
+          POSTGRES_USER: execution_fixture
+          POSTGRES_PASSWORD: local_fixture_only
+          POSTGRES_DB: obrasaas_execution_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U execution_fixture -d obrasaas_execution_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      DATABASE_URL: postgresql://execution_fixture:local_fixture_only@127.0.0.1:5432/obrasaas_execution_ci?schema=public
+      DATABASE_URL_UNPOOLED: postgresql://execution_fixture:local_fixture_only@127.0.0.1:5432/obrasaas_execution_ci?schema=public
+      DIRECT_URL: postgresql://execution_fixture:local_fixture_only@127.0.0.1:5432/obrasaas_execution_ci?schema=public
+      EXECUTION_RELEASE_DATABASE_URL: postgresql://execution_fixture:local_fixture_only@127.0.0.1:5432/obrasaas_execution_ci?schema=public
+      EXECUTION_RELEASE_DISPOSABLE: 'true'
+      EXECUTION_RELEASE_PROOF_PATH: ../evidence/postgres-domain.json
+    steps:
+      - name: Read validation payload
+        uses: actions/checkout@v7
+        with:
+          path: harness
+          persist-credentials: false
+      - name: Read exact application baseline
+        uses: actions/checkout@v7
+        with:
+          ref: 93deca173ef38f79db4c2c8e6242057e6f52c95c
+          path: candidate
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Apply only reviewed verification files
+        shell: bash
+        run: |
+          mkdir -p evidence
+          python3 - <<'PY'
+          import pathlib, subprocess, json
+          root=pathlib.Path('candidate')
+          assert subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip()=='93deca173ef38f79db4c2c8e6242057e6f52c95c'
+          files={
+            'scripts/lib/execution-test-database.mjs':'820078e5ca58326645cab8af20f4605012a828f8',
+            'tests/execution-test-database.test.js':'d2be8a490af7eb36b92ce0635a1c3f501d17a902',
+            'scripts/verify-execution-release-postgres.mjs':'f5348abd9426660e0daea061c234168549c58331',
+            'docs/recovery/execution-postgres-release.md':'0633c6194ce3c725603472b06764daa240ee8fa4',
+            '.github/workflows/execution-postgres.yml':'20961950bb77d2b33d30b60a8bcd124ed7b98291',
+          }
+          for name,sha in files.items():
+            source=pathlib.Path('harness/.execution-validation')/name
+            assert subprocess.check_output(['git','hash-object',str(source)],text=True).strip()==sha
+            target=root/name
+            assert not target.exists()
+            target.parent.mkdir(parents=True,exist_ok=True)
+            target.write_bytes(source.read_bytes())
+          pathlib.Path('evidence/manifest.json').write_text(json.dumps({'base':'93deca173ef38f79db4c2c8e6242057e6f52c95c','files':files},indent=2))
+          PY
+      - name: Install exact dependencies and read installed framework guidance
+        working-directory: candidate
+        shell: bash
+        run: |
+          npm ci > ../evidence/install.log 2>&1 || { tail -n 70 ../evidence/install.log; exit 1; }
+          node --version
+          head -n 55 node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/route.md > ../evidence/installed-framework-guidance.txt
+      - name: Full suite and affected lint
+        working-directory: candidate
+        shell: bash
+        run: |
+          npm test > ../evidence/tests.log 2>&1 || { tail -n 100 ../evidence/tests.log; exit 1; }
+          tail -n 10 ../evidence/tests.log
+          npx eslint scripts/lib/execution-test-database.mjs scripts/verify-execution-release-postgres.mjs tests/execution-test-database.test.js > ../evidence/lint.log 2>&1 || { cat ../evidence/lint.log; exit 1; }
+      - name: Rebuild and verify disposable PostgreSQL schema
+        working-directory: candidate
+        shell: bash
+        run: |
+          npx prisma validate > ../evidence/schema-validate.log 2>&1
+          npx prisma migrate deploy > ../evidence/migrations.log 2>&1 || { tail -n 80 ../evidence/migrations.log; exit 1; }
+          npx prisma migrate status > ../evidence/migration-status.log 2>&1
+          npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code > ../evidence/schema-diff.log 2>&1
+      - name: Execute real domain transactions and contention
+        working-directory: candidate
+        shell: bash
+        run: |
+          npx tsx scripts/verify-execution-release-postgres.mjs > ../evidence/postgres-domain.log 2>&1 || { tail -n 150 ../evidence/postgres-domain.log; exit 1; }
+          tail -n 16 ../evidence/postgres-domain.log
+      - name: Browser regressions of integrated workflows
+        working-directory: candidate
+        shell: bash
+        run: |
+          npx playwright install --with-deps chrome > ../evidence/browser-install.log 2>&1
+          for check in verify-assignment-overlap-ui verify-task-assignments-ui verify-crew-roster-ui verify-schedule-restrictions-ui; do
+            node "scripts/$check.mjs" > "../evidence/$check.log" 2>&1 || { tail -n 80 "../evidence/$check.log"; exit 1; }
+            tail -n 1 "../evidence/$check.log"
+          done
+      - name: Full application build before integration
+        working-directory: candidate
+        shell: bash
+        run: |
+          npm run build > ../evidence/build.log 2>&1 || { tail -n 100 ../evidence/build.log; exit 1; }
+          tail -n 16 ../evidence/build.log
+          git diff --check
+      - name: Integrate only when the product branch is unchanged
+        working-directory: candidate
+        shell: bash
+        run: |
+          branch=codex/saas-recovery-20260917
+          expected=93deca173ef38f79db4c2c8e6242057e6f52c95c
+          actual=$(git ls-remote origin "refs/heads/$branch" | cut -f1)
+          test "$actual" = "$expected"
+          git add -- scripts/lib/execution-test-database.mjs tests/execution-test-database.test.js scripts/verify-execution-release-postgres.mjs docs/recovery/execution-postgres-release.md .github/workflows/execution-postgres.yml
+          test "$(git diff --cached --name-only | wc -l)" -eq 5
+          git diff --cached --check
+          git config user.name 'ObraSaaS Release Validation'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'test: verify execution lifecycle against contended PostgreSQL transactions [skip ci]'
+          git push origin "HEAD:$branch"
+          git rev-parse HEAD | tee ../evidence/application-sha.txt
+      - name: Preserve logs and synthetic UI evidence only
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: execution-release-${{ github.run_id }}
+          path: |
+            evidence/
+            candidate/.vercel/assignment-overlap-ui/*.png
+            candidate/.vercel/task-assignments-ui/*.png
+            candidate/.vercel/crew-roster-ui/*.png
+            candidate/.vercel/schedule-restrictions-ui/*.png
+          retention-days: 7
+          if-no-files-found: warn
