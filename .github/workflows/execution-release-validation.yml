@@ -1,16 +1,13 @@
-name: Validate transaction query ordering before integration
+name: Diagnose remaining transaction warning on disposable PostgreSQL
 on:
   push:
     branches: ['validation/execution-release-20260921']
 permissions:
-  contents: write
-concurrency:
-  group: execution-release-validation-20260921
-  cancel-in-progress: false
+  contents: read
 jobs:
-  validate:
+  diagnose:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 8
     services:
       postgres:
         image: postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
@@ -25,7 +22,6 @@ jobs:
           --health-timeout 5s
           --health-retries 12
     env:
-      NEXT_TELEMETRY_DISABLED: '1'
       DATABASE_URL: postgresql://execution_fixture:local_fixture_only@127.0.0.1:5432/obrasaas_execution_ci?schema=public
       DATABASE_URL_UNPOOLED: postgresql://execution_fixture:local_fixture_only@127.0.0.1:5432/obrasaas_execution_ci?schema=public
       DIRECT_URL: postgresql://execution_fixture:local_fixture_only@127.0.0.1:5432/obrasaas_execution_ci?schema=public
@@ -33,111 +29,39 @@ jobs:
       EXECUTION_RELEASE_DISPOSABLE: 'true'
       EXECUTION_RELEASE_PROOF_PATH: ../evidence/postgres-domain.json
     steps:
-      - name: Read validation payload without persistent credentials
-        uses: actions/checkout@v7
+      - uses: actions/checkout@v7
         with:
           path: harness
           persist-credentials: false
-      - name: Checkout the exact integrated baseline
-        uses: actions/checkout@v7
+      - uses: actions/checkout@v7
         with:
           ref: 4b6d6d05b21574bfa2469d6c6ae1a86e08444aa5
           path: candidate
+          persist-credentials: false
       - uses: actions/setup-node@v7
         with:
           node-version: 24
-      - name: Install exact dependencies and read installed guidance
+      - name: Prepare identical isolated candidate and diagnostic hook
         working-directory: candidate
-        shell: bash
         run: |
-          mkdir -p ../evidence
-          npm ci > ../evidence/install.log 2>&1 || { tail -n 70 ../evidence/install.log; exit 1; }
-          node --version
-          head -n 55 node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/route.md > ../evidence/installed-framework-guidance.txt
-      - name: Apply bounded source changes
-        working-directory: candidate
-        shell: bash
-        run: |
-          test "$(git rev-parse HEAD)" = 4b6d6d05b21574bfa2469d6c6ae1a86e08444aa5
+          mkdir -p ../evidence .vercel/transaction-validation
+          npm ci > ../evidence/install.log 2>&1
           test "$(git hash-object ../harness/.transaction-validation/apply.mjs)" = d089a8c05ad2162ca4ac7d8abe0c713d6adf0579
-          mkdir -p .vercel/transaction-validation
+          test "$(git hash-object ../harness/.transaction-validation/trace-client.mjs)" = be5747b07ce1f2a0cb13943235c1fa0d455a5cca
           cp ../harness/.transaction-validation/apply.mjs .vercel/transaction-validation/apply.mjs
-          node .vercel/transaction-validation/apply.mjs | tee ../evidence/transform.log
-          python3 - <<'PY'
-          import pathlib, subprocess
-          files={'tests/execution-transaction-query-order.test.js':'658750a10da1f9287b5b33a76bf07ffc54203085','docs/recovery/execution-transaction-compatibility.md':'5cf4c9d3d729dd6f5d22880019d65078a2f5fda4'}
-          for name,sha in files.items():
-            source=pathlib.Path('../harness/.transaction-validation')/name
-            assert subprocess.check_output(['git','hash-object',str(source)],text=True).strip()==sha
-            target=pathlib.Path(name)
-            assert not target.exists()
-            target.parent.mkdir(parents=True,exist_ok=True)
-            target.write_bytes(source.read_bytes())
-          PY
-      - name: Full suite and lint of affected sources
+          cp ../harness/.transaction-validation/trace-client.mjs .vercel/transaction-validation/trace-client.mjs
+          node .vercel/transaction-validation/apply.mjs > ../evidence/transform.log
+          npx prisma migrate deploy > ../evidence/migrations.log 2>&1
+      - name: Trace the unsuppressed warning without changing query outcomes
         working-directory: candidate
         shell: bash
         run: |
-          npm test > ../evidence/tests.log 2>&1 || { tail -n 100 ../evidence/tests.log; exit 1; }
-          tail -n 10 ../evidence/tests.log
-          npx eslint src/lib/project-execution.js src/lib/task-assignments.js src/lib/crew-memberships.js src/lib/schedule-field-status.js scripts/verify-execution-release-postgres.mjs tests/execution-transaction-query-order.test.js > ../evidence/lint.log 2>&1 || { cat ../evidence/lint.log; exit 1; }
-      - name: Rebuild and verify disposable PostgreSQL schema
-        working-directory: candidate
-        shell: bash
-        run: |
-          npx prisma validate > ../evidence/schema-validate.log 2>&1
-          npx prisma migrate deploy > ../evidence/migrations.log 2>&1 || { tail -n 80 ../evidence/migrations.log; exit 1; }
-          npx prisma migrate status > ../evidence/migration-status.log 2>&1
-          npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code > ../evidence/schema-diff.log 2>&1
-      - name: Real transactions, contention, rollback and driver warning guard
-        working-directory: candidate
-        shell: bash
-        run: |
-          npx tsx scripts/verify-execution-release-postgres.mjs > ../evidence/postgres-domain.log 2>&1 || { tail -n 150 ../evidence/postgres-domain.log; exit 1; }
-          tail -n 16 ../evidence/postgres-domain.log
-      - name: Browser regressions of integrated workflows
-        working-directory: candidate
-        shell: bash
-        run: |
-          npx playwright install --with-deps chrome > ../evidence/browser-install.log 2>&1
-          for check in verify-assignment-overlap-ui verify-task-assignments-ui verify-crew-roster-ui verify-schedule-restrictions-ui; do
-            node "scripts/$check.mjs" > "../evidence/$check.log" 2>&1 || { tail -n 80 "../evidence/$check.log"; exit 1; }
-            tail -n 1 "../evidence/$check.log"
-          done
-      - name: Build before commit and review exact source diff
-        working-directory: candidate
-        shell: bash
-        run: |
-          npm run build > ../evidence/build.log 2>&1 || { tail -n 100 ../evidence/build.log; exit 1; }
-          tail -n 16 ../evidence/build.log
-          git diff --check
-          git diff -- src/lib/project-execution.js src/lib/task-assignments.js src/lib/crew-memberships.js src/lib/schedule-field-status.js scripts/verify-execution-release-postgres.mjs > ../evidence/reviewed-source.diff
-      - name: Integrate only validated application files on an unchanged branch
-        working-directory: candidate
-        shell: bash
-        run: |
-          branch=codex/saas-recovery-20260917
-          expected=4b6d6d05b21574bfa2469d6c6ae1a86e08444aa5
-          actual=$(git ls-remote origin "refs/heads/$branch" | cut -f1)
-          test "$actual" = "$expected"
-          git add -- src/lib/project-execution.js src/lib/task-assignments.js src/lib/crew-memberships.js src/lib/schedule-field-status.js scripts/verify-execution-release-postgres.mjs tests/execution-transaction-query-order.test.js docs/recovery/execution-transaction-compatibility.md
-          test "$(git diff --cached --name-only | wc -l)" -eq 7
-          git diff --cached --check
-          git config user.name 'ObraSaaS Release Validation'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'fix: sequence execution reads on shared transaction connections [skip ci]'
-          git push origin "HEAD:$branch"
-          git rev-parse HEAD | tee ../evidence/application-sha.txt
-      - name: Preserve verification logs and synthetic screenshots only
+          NODE_OPTIONS="--trace-deprecation --import=$PWD/.vercel/transaction-validation/trace-client.mjs" npx tsx scripts/verify-execution-release-postgres.mjs > ../evidence/driver-diagnostic.log 2>&1 || { tail -n 110 ../evidence/driver-diagnostic.log; exit 1; }
+      - name: Preserve diagnostic evidence only
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: execution-query-order-${{ github.run_id }}
-          path: |
-            evidence/
-            candidate/.vercel/assignment-overlap-ui/*.png
-            candidate/.vercel/task-assignments-ui/*.png
-            candidate/.vercel/crew-roster-ui/*.png
-            candidate/.vercel/schedule-restrictions-ui/*.png
+          name: execution-driver-diagnostic-${{ github.run_id }}
+          path: evidence/
           retention-days: 7
           if-no-files-found: warn
