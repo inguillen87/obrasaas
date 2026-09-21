@@ -1,3 +1,5 @@
+// A transaction owns one PostgreSQL connection: await its reads in order.
+// Independent pooled operations outside a transaction may remain concurrent.
 import { createHash } from 'node:crypto';
 import { readTaskRestrictionStatus } from './task-restriction-status.js';
 import { normalizeProgressMeasurementQuantity, progressMeasurementPercent, compareProgressMeasurementQuantities } from './progress-measurement-quantity.js';
@@ -48,12 +50,12 @@ export async function readScheduleFieldStatus(prisma, { scope, query = {}, canRe
     if (taskId && tasks.length === 0) throw new ScheduleFieldStatusError('Tarea no disponible en esta obra.', 'FIELD_STATUS_NOT_FOUND', 404);
     const visible = tasks.slice(0, FIELD_STATUS_PAGE_SIZE), taskIds = visible.map(row => row.id);
     const where = { projectId, taskId: { in: taskIds } };
-    const [evidence, logs, balances, unassignedParts] = await Promise.all([
-      taskIds.length ? tx.progressEvidence.groupBy({ by: ['taskId', 'status'], where, _count: { _all: true }, _max: { updatedAt: true } }) : [],
-      taskIds.length ? tx.dailyLog.groupBy({ by: ['taskId', 'status'], where, _count: { _all: true }, _max: { updatedAt: true } }) : [],
-      canReadMeasurements && taskIds.length ? tx.taskProgressMeasurementBalance.findMany({ where: { ...where, organizationId }, select: { taskId: true, baseQuantity: true, approvedCumulativeQuantity: true, unitCode: true, revision: true, updatedAt: true, lastApprovedMeasurementId: true } }) : [],
-      tx.dailyLog.count({ where: { projectId, taskId: null } }),
-    ]);
+    const [evidence, logs, balances, unassignedParts] = [
+      await (taskIds.length ? tx.progressEvidence.groupBy({ by: ['taskId', 'status'], where, _count: { _all: true }, _max: { updatedAt: true } }) : []),
+      await (taskIds.length ? tx.dailyLog.groupBy({ by: ['taskId', 'status'], where, _count: { _all: true }, _max: { updatedAt: true } }) : []),
+      await (canReadMeasurements && taskIds.length ? tx.taskProgressMeasurementBalance.findMany({ where: { ...where, organizationId }, select: { taskId: true, baseQuantity: true, approvedCumulativeQuantity: true, unitCode: true, revision: true, updatedAt: true, lastApprovedMeasurementId: true } }) : []),
+      await (tx.dailyLog.count({ where: { projectId, taskId: null } })),
+    ];
     const restrictions = await readTaskRestrictionStatus(tx, { organizationId, projectId, taskIds, now });
     const assignmentGroups = taskIds.length ? await tx.taskAssignment.groupBy({ by: ['taskId','status'], where: { ...where, project: { organizationId } }, _count: { _all: true } }) : [];
     const assignments = new Map(taskIds.map(id => [id, { planned: 0, active: 0, ended: 0, cancelled: 0 }]));

@@ -1,3 +1,5 @@
+// A transaction owns one PostgreSQL connection: await its reads in order.
+// Independent pooled operations outside a transaction may remain concurrent.
 import { runOperationalProjectMutation } from './project-write-policy.js';
 import { enqueueNotification } from './notification-outbox.js';
 
@@ -156,10 +158,10 @@ export async function createProjectBlockerInTransaction(tx, { scope: scopeInput,
     const task = await tx.task.findFirst({ where: { id: taskId, projectId: scope.projectId, metadata: { path: ['source'], equals: 'canonical-task-v1' } }, select: { id: true } });
     if (!task) throw new ProjectExecutionError('La tarea del blocker está fuera del alcance.', 'PROJECT_EXECUTION_TASK_SCOPE', 409);
   }
-  const [ownerWorker, ownerTeam] = await Promise.all([
-    ownerWorkerId ? tx.worker.findFirst({ where: { id: ownerWorkerId, projectId: scope.projectId, active: true }, select: { id: true } }) : null,
-    ownerTeamId ? tx.workTeam.findFirst({ where: { id: ownerTeamId, projectId: scope.projectId, status: 'ACTIVE' }, select: { id: true } }) : null,
-  ]);
+  const [ownerWorker, ownerTeam] = [
+    await (ownerWorkerId ? tx.worker.findFirst({ where: { id: ownerWorkerId, projectId: scope.projectId, active: true }, select: { id: true } }) : null),
+    await (ownerTeamId ? tx.workTeam.findFirst({ where: { id: ownerTeamId, projectId: scope.projectId, status: 'ACTIVE' }, select: { id: true } }) : null),
+  ];
   if (ownerWorkerId && !ownerWorker || ownerTeamId && !ownerTeam) throw new ProjectExecutionError('El owner del blocker está fuera del alcance de la obra.', 'PROJECT_EXECUTION_OWNER_SCOPE', 409);
   const blocker = await tx.projectBlocker.create({ data: { ...(recordId ? { id: text(recordId, 'recordId', 190) } : {}), projectId: scope.projectId, taskId, ownerWorkerId, ownerTeamId, title, description, severity, status, dueAt }, select: BLOCKER_SELECT });
   await tx.auditLog.create({ data: { organizationId: scope.organizationId, actorId: actor, action: 'execution.blocker.created', entityType: 'ProjectBlocker', entityId: blocker.id, metadata: { projectId: scope.projectId, taskId, severity, ownerWorkerId, ownerTeamId } } });
@@ -196,10 +198,10 @@ export async function createTaskAssignmentInTransaction(tx, { scope: rawScope, a
       if (startsAt && endsAt && endsAt < startsAt) throw new ProjectExecutionError('endsAt no puede preceder a startsAt.');
       const task = await tx.task.findFirst({ where: { id: taskId, projectId: scope.projectId, metadata: { path: ['source'], equals: 'canonical-task-v1' } }, select: { id: true } });
       if (!task) throw new ProjectExecutionError('La tarea debe ser canónica y pertenecer a la obra.', 'PROJECT_EXECUTION_TASK_SCOPE', 409);
-      const [worker, team] = await Promise.all([
-        workerId ? tx.worker.findFirst({ where: { id: workerId, projectId: scope.projectId, active: true }, select: { id: true } }) : null,
-        teamId ? tx.workTeam.findFirst({ where: { id: teamId, projectId: scope.projectId, status: 'ACTIVE' }, select: { id: true } }) : null,
-      ]);
+      const [worker, team] = [
+        await (workerId ? tx.worker.findFirst({ where: { id: workerId, projectId: scope.projectId, active: true }, select: { id: true } }) : null),
+        await (teamId ? tx.workTeam.findFirst({ where: { id: teamId, projectId: scope.projectId, status: 'ACTIVE' }, select: { id: true } }) : null),
+      ];
       if (workerId && !worker || teamId && !team) throw new ProjectExecutionError('El responsable de la asignación está fuera del alcance.', 'PROJECT_EXECUTION_SCOPE', 409);
       const assignment = await tx.taskAssignment.create({ data: { ...(recordId ? { id: recordId } : {}), projectId: scope.projectId, taskId, workerId, teamId, status, startsAt, endsAt }, select: ASSIGNMENT_SELECT });
       await tx.auditLog.create({ data: { ...(auditId ? { id: auditId } : {}), organizationId: scope.organizationId, actorId: actor, action: 'execution.task.assignment.created', entityType: 'TaskAssignment', entityId: assignment.id, metadata: { projectId: scope.projectId, taskId, workerId, teamId, status, ...requestMetadata } } });
@@ -212,10 +214,10 @@ export async function addWorkTeamMemberInTransaction(tx, { scope: rawScope, acto
       const role = String(input.role || 'MEMBER'); if (!MEMBER_ROLES.has(role)) throw new ProjectExecutionError('Rol de miembro inválido.');
       const startsAt = date(input.startsAt, 'startsAt') || new Date(); const endsAt = date(input.endsAt, 'endsAt');
       if (endsAt && endsAt < startsAt) throw new ProjectExecutionError('endsAt no puede preceder a startsAt.');
-      const [team, worker] = await Promise.all([
-        tx.workTeam.findFirst({ where: { id: teamId, projectId: scope.projectId, status: 'ACTIVE' }, select: { id: true } }),
-        tx.worker.findFirst({ where: { id: workerId, projectId: scope.projectId, active: true }, select: { id: true } }),
-      ]);
+      const [team, worker] = [
+        await (tx.workTeam.findFirst({ where: { id: teamId, projectId: scope.projectId, status: 'ACTIVE' }, select: { id: true } })),
+        await (tx.worker.findFirst({ where: { id: workerId, projectId: scope.projectId, active: true }, select: { id: true } })),
+      ];
       if (!team || !worker) throw new ProjectExecutionError('Equipo o persona fuera del alcance de la obra.', 'PROJECT_EXECUTION_SCOPE', 409);
       const activeMembership = await tx.workTeamMember.findFirst({ where: { projectId: scope.projectId, teamId, workerId, endsAt: null }, select: { id: true } });
       if (activeMembership) throw new ProjectExecutionError('La persona ya pertenece al equipo activo.', 'PROJECT_TEAM_MEMBER_DUPLICATE', 409);

@@ -1,3 +1,4 @@
+import { readAssignmentReviewLabels } from './assignment-review-labels.js';
 import { createHash } from 'node:crypto';
 import { assignmentId, normalizeAssignmentPlan, TaskAssignmentError } from './task-assignment-policy.js';
 import { analyzeAssignmentOverlap, calendarWindow, OVERLAP_LIMITS, reviewedAssignmentInput } from './assignment-overlap-policy.js';
@@ -31,11 +32,11 @@ export async function reviewAssignmentInTransaction(tx, scope, plan) {
   const teamIds = [...new Set([plan.teamId,...memberships.map(row=>row.teamId)].filter(Boolean))];
   const rows = await tx.taskAssignment.findMany({ where: { projectId:scope.projectId,project:{organizationId:scope.organizationId},status:{in:['PLANNED','ACTIVE']},AND:clauses,
       OR:[{workerId:{in:workerIds}},{teamId:{in:teamIds}}] },orderBy:{id:'asc'},take:OVERLAP_LIMITS.assignments+1,
-    select:{id:true,projectId:true,taskId:true,workerId:true,teamId:true,startsAt:true,endsAt:true,status:true,revision:true,
-      task:{select:{title:true}},worker:{select:{name:true}},team:{select:{name:true}}} });
+    select:{id:true,projectId:true,taskId:true,workerId:true,teamId:true,startsAt:true,endsAt:true,status:true,revision:true} });
   if(rows.length>OVERLAP_LIMITS.assignments) throw new TaskAssignmentError('Hay demasiadas asignaciones relacionadas. Delimitá el período; no se descartaron registros.', 'ASSIGNMENT_REVIEW_TOO_LARGE',503);
-  if(rows.some(row=>row.projectId!==scope.projectId||!row.task)) throw new TaskAssignmentError('No se confirmó el origen de las asignaciones.', 'ASSIGNMENT_REVIEW_INCONSISTENT',503);
-  const assignments = rows.map(row => ({ id: row.id, taskId: row.taskId, workerId: row.workerId, teamId: row.teamId, status: row.status,
+  if(rows.some(row=>row.projectId!==scope.projectId)) throw new TaskAssignmentError('No se confirmó el origen de las asignaciones.', 'ASSIGNMENT_REVIEW_INCONSISTENT',503);
+  const labeledRows = await readAssignmentReviewLabels(tx, scope, rows);
+  const assignments = labeledRows.map(row => ({ id: row.id, taskId: row.taskId, workerId: row.workerId, teamId: row.teamId, status: row.status,
     revision: row.revision, startsAt: stamp(row.startsAt), endsAt: stamp(row.endsAt), taskTitle: row.task.title,
     ownerLabel: [row.worker?.name, row.team?.name].filter(Boolean).join(' · ') || 'Responsable registrado' }));
   const members = memberships.map(row => ({ id: row.id, teamId: row.teamId, workerId: row.workerId, revision: row.revision, startsAt: stamp(row.startsAt), endsAt: stamp(row.endsAt) }));

@@ -10,6 +10,10 @@ import { PrismaClient } from '../src/generated/prisma/client.ts';
 import { executionTestConnection, EXECUTION_CI_DATABASE } from './lib/execution-test-database.mjs';
 
 const connectionString = executionTestConnection();
+const concurrentQueryWarnings = [];
+process.on('warning', warning => {
+  if (warning.name === 'DeprecationWarning' && warning.message.includes('already executing a query')) concurrentQueryWarnings.push(warning.message);
+});
 registerHooks({ resolve(specifier, context, nextResolve) {
   if (specifier.startsWith('@/')) {
     const suffix = /\.(?:js|mjs|ts)$/.test(specifier) ? '' : specifier.startsWith('@/generated/') ? '.ts' : '.js';
@@ -185,6 +189,9 @@ try {
     assert.equal(await db.workTeam.count(), before);
     assert.equal(await db.organization.count(), 2); assert.equal(await db.project.count(), 3);
   });
+  await pause(0);
+  assert.equal(concurrentQueryWarnings.length, 0, 'Execution still issued concurrent queries on one PostgreSQL transaction client.');
+  report.concurrentTransactionQueryWarnings = concurrentQueryWarnings.length;
   report.status = 'PASS';
 } catch (error) {
   report.status = 'FAIL'; report.failure = { code: String(error.code || error.name), message: String(error.message).slice(0, 1400) };

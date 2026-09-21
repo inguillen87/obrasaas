@@ -1,3 +1,5 @@
+// A transaction owns one PostgreSQL connection: await its reads in order.
+// Independent pooled operations outside a transaction may remain concurrent.
 import { createHash } from 'node:crypto';
 import { addWorkTeamMemberInTransaction } from './project-execution.js';
 import { runOperationalProjectMutation,isOperationalProjectWriteStatus } from './project-write-policy.js';
@@ -31,11 +33,13 @@ export async function readCrewRoster(prisma,{scope:rawScope,teamId,query={view:'
   if(!['current','past','scheduled','all'].includes(query.view))throw new CrewMembershipError('Filtro no admitido.');
   return prisma.$transaction(async tx=>{
     const now=clock(),project=await projectIn(tx,scope,now),team=await teamIn(tx,scope,teamId),base={projectId:scope.projectId,teamId};
-    const [rows,workers,current,past,scheduled]=await Promise.all([
-      tx.workTeamMember.findMany({where:{...base,...period(query.view,now),...(query.after?{id:{gt:query.after}}:{})},orderBy:{id:'asc'},take:51,select:SELECT}),
-      tx.worker.findMany({where:{projectId:scope.projectId,active:true},orderBy:[{name:'asc'},{id:'asc'}],take:101,select:{id:true,name:true}}),
-      ...['current','past','scheduled'].map(view=>tx.workTeamMember.count({where:{...base,...period(view,now)}})),
-    ]);
+    const [rows,workers,current,past,scheduled]=[
+      await (tx.workTeamMember.findMany({where:{...base,...period(query.view,now),...(query.after?{id:{gt:query.after}}:{})},orderBy:{id:'asc'},take:51,select:SELECT})),
+      await (tx.worker.findMany({where:{projectId:scope.projectId,active:true},orderBy:[{name:'asc'},{id:'asc'}],take:101,select:{id:true,name:true}})),
+      await (tx.workTeamMember.count({where:{...base,...period('current',now)}})),
+      await (tx.workTeamMember.count({where:{...base,...period('past',now)}})),
+      await (tx.workTeamMember.count({where:{...base,...period('scheduled',now)}})),
+    ];
     const members=rows.slice(0,50).map(row=>serialize(row,now));
     return {context:scope,team,members,workers:workers.slice(0,100),workersTruncated:workers.length>100,summary:{current,past,scheduled},
       writable:isOperationalProjectWriteStatus(project.status)&&subscriptionAllowsWrites(project.organization,now),checkedAt:iso(now),
@@ -48,8 +52,10 @@ export async function addCrewMember(prisma,{scope:rawScope,actorId,teamId,operat
   const key=digest(['crew-member-v1',scope,teamId,actorId,operationKey]),id='crew_member_'+key,auditId='crew_request_'+key,fingerprint=digest(command);
   return runOperationalProjectMutation(prisma,scope,async tx=>{
     const now=clock();await projectIn(tx,scope,now,true);const team=await teamIn(tx,scope,teamId);
-    const [existing,receipt]=await Promise.all([tx.workTeamMember.findFirst({where:{id,projectId:scope.projectId,teamId},select:SELECT}),
-      tx.auditLog.findFirst({where:{id:auditId,organizationId:scope.organizationId,actorId,entityType:'WorkTeamMember',entityId:id,action:'execution.team.member.added'}})]);
+    const [existing,receipt]=[
+      await (tx.workTeamMember.findFirst({where:{id,projectId:scope.projectId,teamId},select:SELECT})),
+      await (tx.auditLog.findFirst({where:{id:auditId,organizationId:scope.organizationId,actorId,entityType:'WorkTeamMember',entityId:id,action:'execution.team.member.added'}})),
+    ];
     if(existing||receipt){
       if(!receipt||receipt.metadata?.projectId!==scope.projectId||receipt.metadata?.teamId!==teamId||receipt.metadata?.fingerprint!==fingerprint)throw new CrewMembershipError('El intento ya tiene otro contenido o requiere revisión.','CREW_ATTEMPT_CONFLICT',409);
       if(!existing)throw new CrewMembershipError('La participación anterior ya no está disponible. No se recreó.','CREW_MEMBER_GONE',410);

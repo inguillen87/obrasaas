@@ -1,3 +1,5 @@
+// A transaction owns one PostgreSQL connection: await its reads in order.
+// Independent pooled operations outside a transaction may remain concurrent.
 import { createHash } from 'node:crypto';
 import { assignmentId, normalizeAssignmentPlan, normalizeAssignmentDecision, ASSIGNMENT_TRANSITIONS, TaskAssignmentError } from './task-assignment-policy.js';
 import { createTaskAssignmentInTransaction } from './project-execution.js';
@@ -29,10 +31,10 @@ export async function prepareTaskAssignment(prisma,{scope:rawScope,taskId}) {
   const scope=scopeOf(rawScope);assignmentId(taskId);
   return prisma.$transaction(async tx=>{
     const project=await scopedProject(tx,scope),task=await taskIn(tx,scope,taskId);
-    const [workers,teams]=await Promise.all([
-      tx.worker.findMany({where:{projectId:scope.projectId,active:true},orderBy:[{name:'asc'},{id:'asc'}],take:101,select:{id:true,name:true}}),
-      tx.workTeam.findMany({where:{projectId:scope.projectId,status:'ACTIVE'},orderBy:[{name:'asc'},{id:'asc'}],take:101,select:{id:true,name:true}}),
-    ]);
+    const [workers,teams]=[
+      await (tx.worker.findMany({where:{projectId:scope.projectId,active:true},orderBy:[{name:'asc'},{id:'asc'}],take:101,select:{id:true,name:true}})),
+      await (tx.workTeam.findMany({where:{projectId:scope.projectId,status:'ACTIVE'},orderBy:[{name:'asc'},{id:'asc'}],take:101,select:{id:true,name:true}})),
+    ];
     return {context:scope,task,canCreate:isOperationalProjectWriteStatus(project.status)&&subscriptionAllowsWrites(project.organization,new Date()),
       owners:{workers:workers.slice(0,100),teams:teams.slice(0,100),truncated:workers.length>100||teams.length>100}};
   },{isolationLevel:'RepeatableRead',timeout:10000});
@@ -43,10 +45,10 @@ export async function planTaskAssignment(prisma,{scope:rawScope,actorId,operatio
   const key=digest(['assignment-plan-v1',scope,actorId,operationKey]),id='assignment_'+key,auditId='assignment_request_'+key,fingerprint=digest(reviewContext ? ['reviewed-plan-v1',plan,reviewContext] : plan);
   return runOperationalProjectMutation(prisma,scope,async tx=>{
     await scopedProject(tx,scope,true);
-    const [existing,receipt]=await Promise.all([
-      tx.taskAssignment.findFirst({where:{id,projectId:scope.projectId},select:SELECT}),
-      tx.auditLog.findFirst({where:{id:auditId,organizationId:scope.organizationId,actorId,entityType:'TaskAssignment',entityId:id,action:ACTION}}),
-    ]);
+    const [existing,receipt]=[
+      await (tx.taskAssignment.findFirst({where:{id,projectId:scope.projectId},select:SELECT})),
+      await (tx.auditLog.findFirst({where:{id:auditId,organizationId:scope.organizationId,actorId,entityType:'TaskAssignment',entityId:id,action:ACTION}})),
+    ];
     if(existing||receipt){
       if(!receipt||receipt.metadata?.projectId!==scope.projectId||receipt.metadata?.requestFingerprint!==fingerprint)throw new TaskAssignmentError('El intento ya tiene otro contenido o requiere revisión de integridad.','ASSIGNMENT_ATTEMPT_CONFLICT',409);
       if(!existing)throw new TaskAssignmentError('La asignación de este intento ya no está disponible. No se recreó.','ASSIGNMENT_GONE',410);
