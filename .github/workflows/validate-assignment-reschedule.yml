@@ -1,0 +1,132 @@
+name: Validate assignment rescheduling before release
+on:
+  push:
+    branches: ['operations/assignment-reschedule-20260921']
+permissions:
+  contents: write
+concurrency:
+  group: obrasaas-assignment-reschedule-validation
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+        env:
+          POSTGRES_USER: execution_fixture
+          POSTGRES_PASSWORD: local_fixture_only
+          POSTGRES_DB: obrasaas_execution_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U execution_fixture -d obrasaas_execution_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      DATABASE_URL: postgresql://execution_fixture:local_fixture_only@127.0.0.1:5432/obrasaas_execution_ci?schema=public
+      DATABASE_URL_UNPOOLED: postgresql://execution_fixture:local_fixture_only@127.0.0.1:5432/obrasaas_execution_ci?schema=public
+      DIRECT_URL: postgresql://execution_fixture:local_fixture_only@127.0.0.1:5432/obrasaas_execution_ci?schema=public
+      EXECUTION_RELEASE_DATABASE_URL: postgresql://execution_fixture:local_fixture_only@127.0.0.1:5432/obrasaas_execution_ci?schema=public
+      EXECUTION_RELEASE_DISPOSABLE: 'true'
+      REPLAN_PROOF_PATH: ../evidence/reschedule-postgres.json
+    steps:
+      - name: Checkout reviewed payload
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: harness
+          persist-credentials: false
+      - name: Checkout exact product baseline
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: candidate
+          ref: 1712129d903eb0b690ca5ccef90af9de77f3750d
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Install locked dependencies and read framework guidance
+        working-directory: candidate
+        run: |
+          mkdir -p ../evidence
+          npm ci > ../evidence/install.log 2>&1 || { tail -n 70 ../evidence/install.log; exit 1; }
+          head -n 55 node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/route.md > ../evidence/framework-guide.txt
+      - name: Apply only reviewed source files and anchors
+        run: python3 harness/.reschedule/apply.py
+      - name: Full unit and contract suite
+        working-directory: candidate
+        run: |
+          npm test > ../evidence/tests.log 2>&1 || { tail -n 120 ../evidence/tests.log; exit 1; }
+          tail -n 10 ../evidence/tests.log
+      - name: Lint all affected JavaScript
+        working-directory: candidate
+        run: |
+          python3 - <<'PY'
+          import subprocess,json
+          files=json.load(open('../evidence/changed-files.json'))
+          code=[name for name in files if name.endswith(('.js','.mjs'))]
+          with open('../evidence/lint.log','w') as log:
+            result=subprocess.run(['npx','eslint',*code],stdout=log,stderr=subprocess.STDOUT)
+          if result.returncode: print(open('../evidence/lint.log').read())
+          raise SystemExit(result.returncode)
+          PY
+      - name: Apply migrations only in disposable PostgreSQL
+        working-directory: candidate
+        run: |
+          npx prisma validate > ../evidence/schema.log 2>&1
+          npx prisma migrate deploy > ../evidence/migrations.log 2>&1 || { tail -n 100 ../evidence/migrations.log; exit 1; }
+          npx prisma migrate status > ../evidence/migration-status.log 2>&1
+          npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code > ../evidence/schema-diff.log 2>&1
+      - name: Verify reprogramming against real transactions
+        working-directory: candidate
+        run: |
+          npx tsx scripts/verify-assignment-reschedule-postgres.mjs > ../evidence/postgres.log 2>&1 || { tail -n 120 ../evidence/postgres.log; exit 1; }
+          tail -n 12 ../evidence/postgres.log
+      - name: Browser circuit backed by disposable PostgreSQL
+        working-directory: candidate
+        run: |
+          npx playwright install --with-deps chrome > ../evidence/browser-install.log 2>&1
+          npx tsx scripts/verify-assignment-reschedule-ui.mjs > ../evidence/browser.log 2>&1 || { tail -n 100 ../evidence/browser.log; exit 1; }
+          tail -n 1 ../evidence/browser.log
+          for script in verify-task-assignments-ui verify-assignment-overlap-ui; do
+            node "scripts/$script.mjs" > "../evidence/$script.log" 2>&1 || { tail -n 70 "../evidence/$script.log"; exit 1; }
+          done
+      - name: Complete Next build and final diff check
+        working-directory: candidate
+        run: |
+          npm run build > ../evidence/build.log 2>&1 || { tail -n 90 ../evidence/build.log; exit 1; }
+          tail -n 14 ../evidence/build.log
+          git diff --check
+      - name: Store only validated product tree on a non-deploying branch
+        working-directory: candidate
+        run: |
+          expected=1712129d903eb0b690ca5ccef90af9de77f3750d
+          test "$(git ls-remote origin refs/heads/codex/saas-recovery-20260917 | cut -f1)" = "$expected"
+          python3 - <<'PY'
+          import json,subprocess
+          files=json.load(open('../evidence/changed-files.json'))
+          assert len(files)==15
+          subprocess.run(['git','add','--',*files],check=True)
+          actual=subprocess.check_output(['git','diff','--cached','--name-only'],text=True).splitlines()
+          assert set(files)==set(actual)
+          subprocess.run(['git','diff','--cached','--check'],check=True)
+          PY
+          git config user.name 'ObraSaaS Release Validation'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat: verified assignment rescheduling candidate [skip ci]'
+          git push origin HEAD:refs/heads/validation/assignment-reschedule-candidate-20260921
+          git rev-parse HEAD | tee ../evidence/candidate-sha.txt
+          git rev-parse 'HEAD^{tree}' | tee ../evidence/candidate-tree.txt
+      - name: Preserve proofs and synthetic screenshots
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: assignment-reschedule-${{ github.run_id }}
+          path: |
+            evidence/
+            candidate/.vercel/assignment-reschedule-ui/*.png
+            candidate/.vercel/assignment-reschedule-ui/proof.json
+          retention-days: 7
+          if-no-files-found: warn

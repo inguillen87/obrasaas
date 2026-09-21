@@ -1,0 +1,21 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { normalizeReschedule,rescheduleSupported,reschedulePlan,rescheduleSnapshotMatches,rescheduleReceiptMatches,rescheduleReviewMatches } from '../src/lib/assignment-reschedule-policy.js';
+const scope={organizationId:'org-a',projectId:'project-a'};
+const source=()=>({context:scope,assignment:{id:'assignment-a',projectId:'project-a',taskId:'task-a',workerId:'worker-a',teamId:null,status:'PLANNED',revision:2,startsAt:'2026-10-01T00:00:00.000Z',endsAt:'2026-10-03T00:00:00.000Z'},task:{id:'task-a',title:'Mampostería',revision:3},ownerLabel:'Persona de ensayo',writable:true,lastReschedule:null});
+const raw=()=>({expectedRevision:2,startsOn:'2026-10-05',endsOn:'2026-10-09'});
+const command=()=>({...raw(),confirmed:true,note:'Coordinación del frente de trabajo.',reviewVersion:'a'.repeat(64)});
+function receipt(){const s=source();return {...s,assignment:{...s.assignment,revision:3,startsAt:'2026-10-05T00:00:00.000Z',endsAt:'2026-10-09T00:00:00.000Z'},lastReschedule:{previousRevision:2,revision:3,previousStartsAt:s.assignment.startsAt,previousEndsAt:s.assignment.endsAt,reviewVersion:'a'.repeat(64),note:command().note}};}
+test('calendar dates are normalized without client-chosen owner, actor or task',()=>{assert.deepEqual(normalizeReschedule(raw()),{expectedRevision:2,startsAt:'2026-10-05T00:00:00.000Z',endsAt:'2026-10-09T00:00:00.000Z'});assert.equal(reschedulePlan(source(),normalizeReschedule(raw())).workerId,'worker-a');});
+for(const extra of [{actorId:'other'},{projectId:'other'},{workerId:'other'},{taskId:'other'},{status:'ENDED'},{expectedRevision:'2'},{expectedRevision:-1},{startsOn:'2026-02-30'},{startsOn:'2026-10-12'},{startsOn:'',endsOn:'2026-10-09'}])test('invalid or authority-bearing change denied '+JSON.stringify(extra),()=>assert.throws(()=>normalizeReschedule({...raw(),...extra})));
+test('null periods are explicit and omitted dates never become implicit resets',()=>{assert.deepEqual(normalizeReschedule({expectedRevision:0,startsOn:null,endsOn:''}),{expectedRevision:0,startsAt:null,endsAt:null});assert.throws(()=>normalizeReschedule({expectedRevision:0}));});
+test('commit needs literal confirmation, a bound review and a real explanation',()=>{for(const extra of [{confirmed:false},{confirmed:'true'},{note:'short'},{note:'x'.repeat(1001)},{note:'abcdefgh\0'},{reviewVersion:'invalid'}])assert.throws(()=>normalizeReschedule({...command(),...extra},true));});
+test('active, terminal, dual-owner and timed legacy plans stay outside this date-only workflow',()=>{
+  assert.equal(rescheduleSupported(source().assignment),true);
+  for(const extra of [{status:'ACTIVE'},{status:'ENDED'},{status:'CANCELLED'},{teamId:'team-a'},{workerId:null},{startsAt:'2026-10-01T14:00:00.000Z'}])assert.equal(rescheduleSupported({...source().assignment,...extra}),false);
+});
+test('scope and assignment identity must match before a snapshot is used',()=>{assert.equal(rescheduleSnapshotMatches(source(),scope,'assignment-a'),true);for(const bad of [{},{...source(),context:{...scope,projectId:'other'}},{...source(),task:{id:'other',title:'Other',revision:3}}])assert.equal(rescheduleSnapshotMatches(bad,scope,'assignment-a'),false);});
+test('same ID, exact dates, version and audited motive recover a lost acknowledgement',()=>{assert.equal(rescheduleReceiptMatches(receipt(),source(),command(),scope),true);});
+for(const change of [{revision:4},{workerId:'other'},{teamId:'other'},{taskId:'other'},{status:'ACTIVE'},{startsAt:'2026-10-06T00:00:00.000Z'}])test('different stored result cannot clear the pending operation '+JSON.stringify(change),()=>{const result=receipt();result.assignment={...result.assignment,...change};assert.equal(rescheduleReceiptMatches(result,source(),command(),scope),false);});
+test('receipt needs the exact reviewed previous period and reason',()=>{for(const change of [{previousRevision:1},{note:'Otra explicación'},{reviewVersion:'b'.repeat(64)},{previousStartsAt:null}]){const result=receipt();result.lastReschedule={...result.lastReschedule,...change};assert.equal(rescheduleReceiptMatches(result,source(),command(),scope),false);}});
+test('empty review is never accepted as no-conflict',()=>{assert.equal(rescheduleReviewMatches({},source(),raw(),scope),false);});
