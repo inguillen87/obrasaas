@@ -6,7 +6,8 @@ import { planTaskAssignment } from './task-assignments.js';
 const scopeOf = value => ({ organizationId: assignmentId(value?.organizationId), projectId: assignmentId(value?.projectId) });
 const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const stamp = value => value ? new Date(value).toISOString() : null;
-export async function reviewAssignmentInTransaction(tx, scope, plan) {
+export async function reviewAssignmentInTransaction(tx, scope, plan, { excludeAssignmentId = null } = {}) {
+  if (excludeAssignmentId !== null) assignmentId(excludeAssignmentId);
   const project = await tx.project.findFirst({ where: { id: scope.projectId, organizationId: scope.organizationId }, select: { id: true } });
   if (!project) throw new TaskAssignmentError('La obra no está disponible.', 'ASSIGNMENT_PROJECT_MISSING', 404);
   const task = await tx.task.findFirst({ where: { id: plan.taskId, projectId: scope.projectId, type: 'TASK', metadata: { path: ['source'], equals: 'canonical-task-v1' } }, select: { id: true, revision: true } });
@@ -30,11 +31,11 @@ export async function reviewAssignmentInTransaction(tx, scope, plan) {
   if(memberships.length>OVERLAP_LIMITS.memberships) throw new TaskAssignmentError('La consulta supera el límite de participaciones. No se confirmó la revisión.', 'ASSIGNMENT_REVIEW_TOO_LARGE',503);
   if(memberships.some(row=>row.projectId!==scope.projectId||!workerIds.includes(row.workerId))) throw new TaskAssignmentError('Las participaciones no corresponden a esta obra.', 'ASSIGNMENT_REVIEW_INCONSISTENT',503);
   const teamIds = [...new Set([plan.teamId,...memberships.map(row=>row.teamId)].filter(Boolean))];
-  const rows = await tx.taskAssignment.findMany({ where: { projectId:scope.projectId,project:{organizationId:scope.organizationId},status:{in:['PLANNED','ACTIVE']},AND:clauses,
+  const rows = await tx.taskAssignment.findMany({ where: { ...(excludeAssignmentId ? { id: { not: excludeAssignmentId } } : {}), projectId:scope.projectId,project:{organizationId:scope.organizationId},status:{in:['PLANNED','ACTIVE']},AND:clauses,
       OR:[{workerId:{in:workerIds}},{teamId:{in:teamIds}}] },orderBy:{id:'asc'},take:OVERLAP_LIMITS.assignments+1,
     select:{id:true,projectId:true,taskId:true,workerId:true,teamId:true,startsAt:true,endsAt:true,status:true,revision:true} });
   if(rows.length>OVERLAP_LIMITS.assignments) throw new TaskAssignmentError('Hay demasiadas asignaciones relacionadas. Delimitá el período; no se descartaron registros.', 'ASSIGNMENT_REVIEW_TOO_LARGE',503);
-  if(rows.some(row=>row.projectId!==scope.projectId)) throw new TaskAssignmentError('No se confirmó el origen de las asignaciones.', 'ASSIGNMENT_REVIEW_INCONSISTENT',503);
+  if(rows.some(row=>row.projectId!==scope.projectId || excludeAssignmentId && row.id===excludeAssignmentId)) throw new TaskAssignmentError('No se confirmó el origen de las asignaciones.', 'ASSIGNMENT_REVIEW_INCONSISTENT',503);
   const labeledRows = await readAssignmentReviewLabels(tx, scope, rows);
   const assignments = labeledRows.map(row => ({ id: row.id, taskId: row.taskId, workerId: row.workerId, teamId: row.teamId, status: row.status,
     revision: row.revision, startsAt: stamp(row.startsAt), endsAt: stamp(row.endsAt), taskTitle: row.task.title,
