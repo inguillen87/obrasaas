@@ -1,4 +1,4 @@
-name: Validate integrated execution contracts before commit
+name: Validate transaction query ordering before integration
 on:
   push:
     branches: ['validation/execution-release-20260921']
@@ -33,57 +33,54 @@ jobs:
       EXECUTION_RELEASE_DISPOSABLE: 'true'
       EXECUTION_RELEASE_PROOF_PATH: ../evidence/postgres-domain.json
     steps:
-      - name: Read validation payload
+      - name: Read validation payload without persistent credentials
         uses: actions/checkout@v7
         with:
           path: harness
           persist-credentials: false
-      - name: Read exact application baseline
+      - name: Checkout the exact integrated baseline
         uses: actions/checkout@v7
         with:
-          ref: 93deca173ef38f79db4c2c8e6242057e6f52c95c
+          ref: 4b6d6d05b21574bfa2469d6c6ae1a86e08444aa5
           path: candidate
       - uses: actions/setup-node@v7
         with:
           node-version: 24
-      - name: Apply only reviewed verification files
-        shell: bash
-        run: |
-          mkdir -p evidence
-          python3 - <<'PY'
-          import pathlib, subprocess, json
-          root=pathlib.Path('candidate')
-          assert subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip()=='93deca173ef38f79db4c2c8e6242057e6f52c95c'
-          files={
-            'scripts/lib/execution-test-database.mjs':'820078e5ca58326645cab8af20f4605012a828f8',
-            'tests/execution-test-database.test.js':'d2be8a490af7eb36b92ce0635a1c3f501d17a902',
-            'scripts/verify-execution-release-postgres.mjs':'f5348abd9426660e0daea061c234168549c58331',
-            'docs/recovery/execution-postgres-release.md':'0633c6194ce3c725603472b06764daa240ee8fa4',
-            '.github/workflows/execution-postgres.yml':'20961950bb77d2b33d30b60a8bcd124ed7b98291',
-          }
-          for name,sha in files.items():
-            source=pathlib.Path('harness/.execution-validation')/name
-            assert subprocess.check_output(['git','hash-object',str(source)],text=True).strip()==sha
-            target=root/name
-            assert not target.exists()
-            target.parent.mkdir(parents=True,exist_ok=True)
-            target.write_bytes(source.read_bytes())
-          pathlib.Path('evidence/manifest.json').write_text(json.dumps({'base':'93deca173ef38f79db4c2c8e6242057e6f52c95c','files':files},indent=2))
-          PY
-      - name: Install exact dependencies and read installed framework guidance
+      - name: Install exact dependencies and read installed guidance
         working-directory: candidate
         shell: bash
         run: |
+          mkdir -p ../evidence
           npm ci > ../evidence/install.log 2>&1 || { tail -n 70 ../evidence/install.log; exit 1; }
           node --version
           head -n 55 node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/route.md > ../evidence/installed-framework-guidance.txt
-      - name: Full suite and affected lint
+      - name: Apply bounded source changes
+        working-directory: candidate
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = 4b6d6d05b21574bfa2469d6c6ae1a86e08444aa5
+          test "$(git hash-object ../harness/.transaction-validation/apply.mjs)" = d089a8c05ad2162ca4ac7d8abe0c713d6adf0579
+          mkdir -p .vercel/transaction-validation
+          cp ../harness/.transaction-validation/apply.mjs .vercel/transaction-validation/apply.mjs
+          node .vercel/transaction-validation/apply.mjs | tee ../evidence/transform.log
+          python3 - <<'PY'
+          import pathlib, subprocess
+          files={'tests/execution-transaction-query-order.test.js':'658750a10da1f9287b5b33a76bf07ffc54203085','docs/recovery/execution-transaction-compatibility.md':'5cf4c9d3d729dd6f5d22880019d65078a2f5fda4'}
+          for name,sha in files.items():
+            source=pathlib.Path('../harness/.transaction-validation')/name
+            assert subprocess.check_output(['git','hash-object',str(source)],text=True).strip()==sha
+            target=pathlib.Path(name)
+            assert not target.exists()
+            target.parent.mkdir(parents=True,exist_ok=True)
+            target.write_bytes(source.read_bytes())
+          PY
+      - name: Full suite and lint of affected sources
         working-directory: candidate
         shell: bash
         run: |
           npm test > ../evidence/tests.log 2>&1 || { tail -n 100 ../evidence/tests.log; exit 1; }
           tail -n 10 ../evidence/tests.log
-          npx eslint scripts/lib/execution-test-database.mjs scripts/verify-execution-release-postgres.mjs tests/execution-test-database.test.js > ../evidence/lint.log 2>&1 || { cat ../evidence/lint.log; exit 1; }
+          npx eslint src/lib/project-execution.js src/lib/task-assignments.js src/lib/crew-memberships.js src/lib/schedule-field-status.js scripts/verify-execution-release-postgres.mjs tests/execution-transaction-query-order.test.js > ../evidence/lint.log 2>&1 || { cat ../evidence/lint.log; exit 1; }
       - name: Rebuild and verify disposable PostgreSQL schema
         working-directory: candidate
         shell: bash
@@ -92,7 +89,7 @@ jobs:
           npx prisma migrate deploy > ../evidence/migrations.log 2>&1 || { tail -n 80 ../evidence/migrations.log; exit 1; }
           npx prisma migrate status > ../evidence/migration-status.log 2>&1
           npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code > ../evidence/schema-diff.log 2>&1
-      - name: Execute real domain transactions and contention
+      - name: Real transactions, contention, rollback and driver warning guard
         working-directory: candidate
         shell: bash
         run: |
@@ -107,34 +104,35 @@ jobs:
             node "scripts/$check.mjs" > "../evidence/$check.log" 2>&1 || { tail -n 80 "../evidence/$check.log"; exit 1; }
             tail -n 1 "../evidence/$check.log"
           done
-      - name: Full application build before integration
+      - name: Build before commit and review exact source diff
         working-directory: candidate
         shell: bash
         run: |
           npm run build > ../evidence/build.log 2>&1 || { tail -n 100 ../evidence/build.log; exit 1; }
           tail -n 16 ../evidence/build.log
           git diff --check
-      - name: Integrate only when the product branch is unchanged
+          git diff -- src/lib/project-execution.js src/lib/task-assignments.js src/lib/crew-memberships.js src/lib/schedule-field-status.js scripts/verify-execution-release-postgres.mjs > ../evidence/reviewed-source.diff
+      - name: Integrate only validated application files on an unchanged branch
         working-directory: candidate
         shell: bash
         run: |
           branch=codex/saas-recovery-20260917
-          expected=93deca173ef38f79db4c2c8e6242057e6f52c95c
+          expected=4b6d6d05b21574bfa2469d6c6ae1a86e08444aa5
           actual=$(git ls-remote origin "refs/heads/$branch" | cut -f1)
           test "$actual" = "$expected"
-          git add -- scripts/lib/execution-test-database.mjs tests/execution-test-database.test.js scripts/verify-execution-release-postgres.mjs docs/recovery/execution-postgres-release.md .github/workflows/execution-postgres.yml
-          test "$(git diff --cached --name-only | wc -l)" -eq 5
+          git add -- src/lib/project-execution.js src/lib/task-assignments.js src/lib/crew-memberships.js src/lib/schedule-field-status.js scripts/verify-execution-release-postgres.mjs tests/execution-transaction-query-order.test.js docs/recovery/execution-transaction-compatibility.md
+          test "$(git diff --cached --name-only | wc -l)" -eq 7
           git diff --cached --check
           git config user.name 'ObraSaaS Release Validation'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'test: verify execution lifecycle against contended PostgreSQL transactions [skip ci]'
+          git commit -m 'fix: sequence execution reads on shared transaction connections [skip ci]'
           git push origin "HEAD:$branch"
           git rev-parse HEAD | tee ../evidence/application-sha.txt
-      - name: Preserve logs and synthetic UI evidence only
+      - name: Preserve verification logs and synthetic screenshots only
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: execution-release-${{ github.run_id }}
+          name: execution-query-order-${{ github.run_id }}
           path: |
             evidence/
             candidate/.vercel/assignment-overlap-ui/*.png
