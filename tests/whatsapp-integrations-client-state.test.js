@@ -158,14 +158,15 @@ test('the integrations UI wires provider calls and reconnect controls to verifie
   assert.match(client, /const presentedFlowNotice = graphReady/);
   assert.match(client, /const presentedTemplateNotice = graphReady/);
   assert.match(client, /remoteChannelEpochRef\.current \+= 1/);
-  assert.match(client, /\[connectionIdentity, graphReady, advancedOpen, organizationId, projectId\]/);
+  assert.match(client, /\[connectionIdentity, graphReady, advancedOpen, organizationId, projectId, beginTemplateObservation\]/);
   assert.match(client, /throw integrationResponseError\(payload/);
   assert.match(client, /whatsappGraphAccessRejected\(error\?\.code\)/);
   assert.match(client, /synchronizeChannelHealth\(\{ method: 'POST' \}\)/);
   assert.match(client, /handleGraphAccessFailureEvent\(error\)/);
   assert.match(client, /if \(handleGraphAccessFailure\(error\)\) return;/);
   assert.match(client, /const remoteVerificationUnavailable = linked && !graphReady/);
-  assert.match(client, /Estado Meta no verificado/);
+  assert.match(client, /templateCatalogObservationPresentation/);
+  assert.match(client, /templateGeneration !== templateRequestSequenceRef\.current/);
   assert.match(client, /verificationUnavailable: remoteVerificationUnavailable/);
   assert.ok(
     client.indexOf('setChannelHealth(null)')

@@ -84,3 +84,13 @@ Leer `clerk-recovery-branch-gate.md`. Tras autorización del usuario, CI y la po
 
 ## Continuación: aceptación autenticada de asignaciones
 El usuario delegó la aprobación del entorno de ensayo; el run `35816505410` completó S9.2/S9.3/S10 con Clerk Development y PostgreSQL aislado. Leer `authenticated-assignment-continuity.md`. La ampliación S11 reutiliza esas sesiones para creación/reprogramación móvil, recuperación idempotente, duplicados, sólo lectura y aislamiento. El resultado se acredita por su propio SHA/run en el PR; no confundir el éxito anterior con cobertura ejecutada de código nuevo. Una revisión explícita no modifica protecciones ni constituye una promoción productiva.
+
+## Continuación S11.A16–A19: agenda, directorio y plantillas
+La agenda A16, recuperación A17 y directorio A18 están descritos en `assignment-agenda.md`, `assignment-planner-recovery.md` y `assignment-owner-directory.md`. La revisión de contenido, solicitud explícita y recuperación de plantillas A19 está en `whatsapp-template-review.md`. El nombre/estado de plantilla consultados no equivalen a envío ni entrega; conservar la separación entre proveedor controlado y una cuenta real de Meta.
+
+## Continuación S11.A20: observaciones vigentes del catálogo
+Leer `whatsapp-template-catalog-consistency.md`. Las tarjetas de Integraciones retiran una aprobación histórica al comenzar/fallar una nueva consulta. Las respuestas atrasadas no reemplazan otra observación ni invalidan el canal por un error anterior; una confirmación parcial sólo verifica su blueprint. El botón «Formulario operativo» describe el Flow, no un envío. Ejecutar `verify-template-catalog-consistency-ui.mjs` y las regresiones de plantillas/canal/bandeja.
+
+Desktop Commander volvió a estar disponible y el worktree de planificación fue actualizado por fast-forward desde `eaeaa1c` a `be88e2b`, preservando las otras copias. Se aprobó por delegación el run `35918766962` de `be88e2b`: S9.2/S9.3/S10-CERT pasaron con Clerk Development y PostgreSQL aislado. Es evidencia de ese SHA, no de commits posteriores.
+
+La sesión real del titular en Preview comprobó app/callback y consultó el piloto autorizado: credencial temporal vencida, ventana cerrada y cero salidas del backend. No se renovó por fuera del circuito ni se mandaron mensajes. El paso de renovación fue bloqueado por la herramienta y se dejó sin ejecutar, sin buscar un canal alternativo para eludirlo. La evidencia actual de A20 y su publicación/autenticación se registra separada en el PR.

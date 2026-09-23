@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useEffectEvent, useRef, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useReducer, useRef, useState } from 'react';
 import {
   whatsappConnectionActive,
   whatsappConnectionIdentity,
@@ -10,7 +10,8 @@ import {
   whatsappReconnectRequired,
 } from './channel-client-state';
 import TemplateReviewControl from './template-review-control';
-import { templateCatalogMatches, templateStatusPresentation } from '@/lib/whatsapp/template-review-policy';
+import { templateCatalogMatches } from '@/lib/whatsapp/template-review-policy';
+import { initialTemplateCatalogObservation, templateCatalogObservationReducer, templateCatalogObservationPresentation } from '@/lib/whatsapp/template-catalog-observation';
 import WhatsAppConnectExperience from './whatsapp-connect-experience';
 import ChannelRecoveryPanel from './channel-recovery-panel';
 import TenantWhatsAppWorkspace from './tenant-whatsapp-workspace';
@@ -139,16 +140,11 @@ function flowActionLabel({
 }) {
   if (verificationUnavailable) return 'Verificar cuenta';
   if (isPending) return 'Validando…';
-  if (isPublished && runtimeActive) return 'Listo para enviar';
+  if (isPublished && runtimeActive) return 'Formulario operativo';
   if (publishedHealthBlocked) return 'Revisar en Meta';
   if (publishedCanReconcile) return 'Reconciliar canal';
   if (isPublished) return 'Requiere nueva versión';
   return remoteStatus === 'DRAFT' ? 'Actualizar borrador' : 'Crear borrador';
-}
-
-function templatePresentation(template, verificationUnavailable = false) {
-  if (verificationUnavailable) return { label: 'Estado Meta no verificado', tone: 'blocked' };
-  return templateStatusPresentation(template);
 }
 
 async function readFlowCatalog({ signal } = {}) {
@@ -204,7 +200,9 @@ export default function IntegrationsClient({
   );
   const [flowPendingKey, setFlowPendingKey] = useState(null);
   const [flowNotice, setFlowNotice] = useState(null);
-  const [templateCatalog, setTemplateCatalog] = useState([]);
+  const [templateObservation, updateTemplateObservation] = useReducer(templateCatalogObservationReducer, undefined, initialTemplateCatalogObservation);
+  const templateRequestSequenceRef = useRef(0);
+  const templateDialogRequestRef = useRef(null);
   const [templateReviewEpoch, setTemplateReviewEpoch] = useState(0);
   const [templatePendingKey, setTemplatePendingKey] = useState(null);
   const [templateNotice, setTemplateNotice] = useState(null);
@@ -235,9 +233,13 @@ export default function IntegrationsClient({
   const presentedFlowCatalog = graphReady
     ? flowCatalog
     : safeInitialFlowCatalog;
-  const presentedTemplateCatalog = graphReady ? templateCatalog : EMPTY_CATALOG;
+  const presentedTemplateCatalog = graphReady ? templateObservation.catalog : EMPTY_CATALOG;
   const presentedFlowEndpoint = graphReady ? flowEndpoint : null;
-  const presentedFlowNotice = graphReady ? flowNotice : null;
+  const presentedFlowNotice = graphReady
+    && (flowNotice?.templateGeneration === undefined
+      || flowNotice.templateGeneration === templateObservation.generation
+        && templateObservation.phase === 'ready' && templateObservation.fullSnapshot)
+    ? flowNotice : null;
   const presentedTemplateNotice = graphReady ? templateNotice : null;
   const configured = Boolean(appId && configId && platformReady);
   const healthStateClass = lifecycleBlocked || channelHealth?.degraded
@@ -253,6 +255,37 @@ export default function IntegrationsClient({
   const endpointFingerprint = typeof presentedFlowEndpoint?.keyFingerprint === 'string'
     ? presentedFlowEndpoint.keyFingerprint
     : null;
+
+  const beginTemplateObservation = useCallback(() => {
+    const generation = ++templateRequestSequenceRef.current;
+    updateTemplateObservation({ type: 'begin', generation });
+    return generation;
+  }, []);
+
+  function templateDialogBusy(key, value) {
+    if (value) {
+      templateDialogRequestRef.current = { key, generation: beginTemplateObservation() };
+      setTemplatePendingKey(key);
+    } else if (templateDialogRequestRef.current?.key === key) {
+      updateTemplateObservation({ type: 'settled', generation: templateDialogRequestRef.current.generation });
+      templateDialogRequestRef.current = null;
+      setTemplatePendingKey(current => current === key ? null : current);
+    }
+  }
+
+  function templateDialogCatalog(key, catalog, partial) {
+    const request = templateDialogRequestRef.current;
+    if (!request || request.key !== key || request.generation !== templateRequestSequenceRef.current) return;
+    updateTemplateObservation({ type: 'resolved', generation: request.generation, items: catalog, partial });
+    setTemplateNotice(null);
+  }
+
+  function templateDialogFailure(key, error) {
+    const request = templateDialogRequestRef.current;
+    if (!request || request.key !== key || request.generation !== templateRequestSequenceRef.current) return;
+    updateTemplateObservation({ type: 'failed', generation: request.generation });
+    handleGraphAccessFailure(error);
+  }
 
   async function synchronizeChannelHealth({ method = 'GET' } = {}) {
     const remoteChannelEpoch = remoteChannelEpochRef.current;
@@ -288,7 +321,8 @@ export default function IntegrationsClient({
     setFlowEndpoint(null);
     setFlowNotice(null);
     setFlowPendingKey(null);
-    setTemplateCatalog([]);
+    updateTemplateObservation({ type: 'reset', generation: ++templateRequestSequenceRef.current });
+    templateDialogRequestRef.current = null;
     setTemplateNotice(null);
     setTemplatePendingKey(null);
   }
@@ -441,6 +475,7 @@ export default function IntegrationsClient({
     let active = true;
     const remoteChannelEpoch = remoteChannelEpochRef.current;
     const controller = new AbortController();
+    const templateGeneration = beginTemplateObservation();
     readFlowCatalog({ signal: controller.signal })
       .then((payload) => {
         if (!active || remoteChannelEpoch !== remoteChannelEpochRef.current) return;
@@ -458,23 +493,27 @@ export default function IntegrationsClient({
       });
     readTemplateCatalog({ signal: controller.signal, scope: { organizationId, projectId } })
       .then((templates) => {
-        if (!active || remoteChannelEpoch !== remoteChannelEpochRef.current) return;
-        setTemplateCatalog(templates);
+        if (!active || remoteChannelEpoch !== remoteChannelEpochRef.current || templateGeneration !== templateRequestSequenceRef.current) return;
+        updateTemplateObservation({ type: 'resolved', generation: templateGeneration, items: templates, partial: false });
+        setTemplateNotice(null);
       })
       .catch((error) => {
         if (
           !active
           || remoteChannelEpoch !== remoteChannelEpochRef.current
+          || templateGeneration !== templateRequestSequenceRef.current
           || error.name === 'AbortError'
         ) return;
+        updateTemplateObservation({ type: 'failed', generation: templateGeneration });
         if (handleGraphAccessFailureEvent(error)) return;
         setTemplateNotice({ type: 'error', text: error.message });
       });
     return () => {
       active = false;
       controller.abort();
+      updateTemplateObservation({ type: 'settled', generation: templateGeneration });
     };
-  }, [connectionIdentity, graphReady, advancedOpen, organizationId, projectId]);
+  }, [connectionIdentity, graphReady, advancedOpen, organizationId, projectId, beginTemplateObservation]);
 
   function startSignup() {
     if (internalWorkspace || pending || lifecycleContextBlocked || signupActiveRef.current) return;
@@ -572,6 +611,7 @@ export default function IntegrationsClient({
 
   async function refreshFlows() {
     const remoteChannelEpoch = remoteChannelEpochRef.current;
+    const templateGeneration = beginTemplateObservation();
     setFlowPendingKey('refresh');
     setFlowNotice({ type: 'progress', text: 'Consultando el estado real en Meta…' });
     try {
@@ -579,16 +619,19 @@ export default function IntegrationsClient({
         readFlowCatalog(),
         readTemplateCatalog({ scope: { organizationId, projectId } }),
       ]);
-      if (remoteChannelEpoch !== remoteChannelEpochRef.current) return;
+      if (remoteChannelEpoch !== remoteChannelEpochRef.current || templateGeneration !== templateRequestSequenceRef.current) return;
       setFlowCatalog(payload.catalog);
       setFlowEndpoint(payload.endpoint || null);
-      setTemplateCatalog(templates);
+      updateTemplateObservation({ type: 'resolved', generation: templateGeneration, items: templates, partial: false });
       setTemplateNotice(null);
       setFlowNotice({
         type: 'success',
+        templateGeneration,
         text: 'Flows, Data Endpoint y plantillas sincronizados con la cuenta de WhatsApp.',
       });
     } catch (error) {
+      if (templateGeneration !== templateRequestSequenceRef.current) return;
+      updateTemplateObservation({ type: 'failed', generation: templateGeneration });
       if (handleGraphAccessFailure(error)) return;
       if (remoteChannelEpoch === remoteChannelEpochRef.current) {
         setFlowNotice({ type: 'error', text: error.message });
@@ -880,11 +923,8 @@ export default function IntegrationsClient({
               && flow.remoteDataEndpointReady === true
               && !publishedHealthBlocked;
             const isPending = flowPendingKey === flow.key;
-            const templateEntry = presentedTemplateCatalog.find((item) => item.blueprintKey === flow.key);
-            const template = templateEntry?.template || null;
-            const templateState = templatePresentation(
-              template,
-              remoteVerificationUnavailable,
+            const templateState = templateCatalogObservationPresentation(
+              { ...templateObservation, catalog: presentedTemplateCatalog }, flow.key, graphReady,
             );
             const actionLabel = flowActionLabel({
               isPending,
@@ -924,8 +964,8 @@ export default function IntegrationsClient({
                       : 'fa-regular fa-clock'} aria-hidden="true" />
                     {runtimePresentation.label}
                   </span>
-                  <span data-state={templateState.tone}>
-                    <i className={template?.status === 'APPROVED'
+                  <span role="status" aria-label="Estado de plantilla" data-state={templateState.tone}>
+                    <i className={templateState.tone === 'ready'
                       ? 'fa-solid fa-circle-check'
                       : 'fa-regular fa-message'} aria-hidden="true" />
                     {templateState.label}
@@ -957,6 +997,7 @@ export default function IntegrationsClient({
                         || pending
                         || healthPending
                         || Boolean(flowPendingKey)
+                        || Boolean(templatePendingKey)
                         || runtimeActive
                         || (isPublished && !publishedCanReconcile)
                       }
@@ -968,12 +1009,9 @@ export default function IntegrationsClient({
                       flow={flow} organizationId={organizationId} projectId={projectId}
                       companyName={companyName} projectName={projectName} canReadInbox={canReadInbox}
                       disabled={!graphReady || !platformReady || pending || healthPending || Boolean(flowPendingKey) || Boolean(templatePendingKey)}
-                      onBusy={value => setTemplatePendingKey(current => value ? flow.key : current === flow.key ? null : current)}
-                      onGraphError={handleGraphAccessFailure}
-                      onCatalog={(catalog, partial) => {
-                        setTemplateCatalog(current => partial ? [...current.filter(row => !catalog.some(item => item.blueprintKey === row.blueprintKey)), ...catalog] : catalog);
-                        setTemplateNotice(null);
-                      }}
+                      onBusy={value => templateDialogBusy(flow.key, value)}
+                      onGraphError={error => templateDialogFailure(flow.key, error)}
+                      onCatalog={(catalog, partial) => templateDialogCatalog(flow.key, catalog, partial)}
                     />
                   </div>
                 </div>
