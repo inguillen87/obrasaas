@@ -61,7 +61,8 @@ export default function AssignmentRescheduleDialog({assignmentId,organizationId,
       setSnapshot(body);setReview(null);attempt.current=null;setPhase('ready');
       setMessage('Estado consultado sin reenviar. Se mantienen tus fechas propuestas y el motivo; revisalos contra la versión actual antes de confirmar.');
     }catch(error){if(alive.current){setMessage(error.name==='AbortError'?'La respuesta demoró. El cambio podría estar guardado; consultá el estado antes de repetir.':error.message);
-      if([401,402,403,404,410].includes(error.status)){setSnapshot(null);setReview(null);setPhase('blocked');}
+      if(error.code==='ASSIGNMENT_DUPLICATE'){attempt.current=null;setReview(null);setPhase('ready');}
+      else if([401,402,403,404,410].includes(error.status)){setSnapshot(null);setReview(null);setPhase('blocked');}
       else if(mode==='save'&&[400,422].includes(error.status)){attempt.current=null;setPhase('ready');}
       else setPhase(mode==='save'||mode==='read'||error.status===409?'uncertain':'ready');}}
     finally{clearTimeout(timeout);active.current=null;}

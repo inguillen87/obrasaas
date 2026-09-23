@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import { assignmentPlanFeedback } from '@/lib/task-assignment-policy';
 import { tokens } from '@/lib/design-system';
 import { publishFieldInvalidation } from '@/lib/schedule-field-channel';
 import AssignmentPlanner from './assignment-planner';
@@ -23,6 +24,6 @@ export default function AssignmentBoard({assignments,tasks,workers,teams,permiss
     {notice&&<p role="status" className={styles.warning}>{notice}</p>}
     {visible.length===0&&<div className={styles.empty}><strong>{assignments.length?'No hay coincidencias con estos filtros':'Todavía no hay asignaciones registradas'}</strong><p>{assignments.length?'Cambiá el estado o la búsqueda para consultar otros registros.':canPlan?'Prepará una actividad y elegí una persona o cuadrilla de esta obra. Se guardará como planificada.':'Un responsable con permiso de ejecución puede planificar el trabajo.'}</p></div>}
     <div className={styles.cards}>{visible.map(row=><AssignmentCard key={row.id} assignment={row} tasks={tasks} workers={workers} teams={teams} organizationId={organizationId} projectId={projectId} canManage={permissions.canManage} canReadTasks={permissions.canReadTasks} onChanged={changed}/>)}</div>
-    {planning&&<AssignmentPlanner organizationId={organizationId} projectId={projectId} tasks={tasks} focusedTask={focusedTask} onClose={()=>setPlanning(false)} onSaved={row=>{changed(row);setPlanning(false);setFilter('all');setQuery('');setNotice('Asignación confirmada. Continuá desde su tarjeta; no se modificó el avance de la actividad.');}}/>}
+    {planning&&<AssignmentPlanner organizationId={organizationId} projectId={projectId} tasks={tasks} focusedTask={focusedTask} onClose={()=>setPlanning(false)} onSaved={(row,outcome)=>{changed(row);setPlanning(false);setFilter('all');setQuery('');setNotice(assignmentPlanFeedback(outcome));}}/>}
   </section>;
 }

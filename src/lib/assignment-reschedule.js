@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { assertAssignmentPeriodUnique } from './assignment-period-uniqueness.js';
 import { assignmentId, TaskAssignmentError } from './task-assignment-policy.js';
 import { normalizeReschedule, reschedulePlan, rescheduleScope, rescheduleSupported } from './assignment-reschedule-policy.js';
 import { reviewAssignmentInTransaction } from './assignment-overlap-review.js';
@@ -38,6 +39,7 @@ function assertChange(snapshot,command) {
 async function reviewIn(tx,scope,id,command) {
   const snapshot = await snapshotIn(tx,scope,id); assertChange(snapshot,command);
   const plan = reschedulePlan(snapshot,command);
+  await assertAssignmentPeriodUnique(tx,scope,plan,snapshot.assignment.id);
   // The ID comes from a scoped row, never from an arbitrary exclusion in input.
   const overlap = await reviewAssignmentInTransaction(tx,scope,plan,{excludeAssignmentId:snapshot.assignment.id});
   const before = {revision:snapshot.assignment.revision,startsAt:snapshot.assignment.startsAt,endsAt:snapshot.assignment.endsAt};

@@ -37,7 +37,7 @@ export default function AssignmentPlanner({organizationId,projectId,tasks,focuse
       const response=await fetch('/api/execution/assignments',{method:'POST',cache:'no-store',signal:controller.signal,headers:{'Content-Type':'application/json',...evidenceScopeHeaders({organizationId,projectId}),'Idempotency-Key':attempt.current.key},body:JSON.stringify(attempt.current.input)});
       const payload=await response.json().catch(()=>null);if(!response.ok)throw Object.assign(new Error(payload?.error||'La planificación no quedó confirmada.'),{status:response.status,code:payload?.code});
       const assignment=confirmAssignmentPlan(payload,attempt.current.normalized,{organizationId,projectId});
-      if(alive.current)onSaved(assignment);
+      if(alive.current)onSaved(assignment,{replayed:payload.replayed,periodChanged:assignment.startsAt!==attempt.current.normalized.startsAt||assignment.endsAt!==attempt.current.normalized.endsAt});
     }catch(failure){if(alive.current){setError(failure.name==='AbortError'?'La respuesta demoró. Verificá el mismo intento antes de crear otra asignación.':failure.message);
       if(failure.code==='ASSIGNMENT_REVIEW_CHANGED'){attempt.current=null;setReview(null);setReviewEpoch(v=>v+1);setConsent(false);setPhase('idle');}else if([400,422].includes(failure.status)){attempt.current=null;setPhase('idle');}else setPhase([401,402,403,404,409,410].includes(failure.status)?'blocked':'uncertain');}}
     finally{clearTimeout(timeout);inFlight.current=false;}
