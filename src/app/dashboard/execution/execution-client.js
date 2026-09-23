@@ -17,7 +17,7 @@ async function api(options = {}) {
   return data;
 }
 
-export default function ExecutionClient({ initialData, workers, tasks, permissions, organizationId, projectId, focusedBlockerId = null, focusedTask = null }) {
+export default function ExecutionClient({ initialData, workers, tasks, permissions, organizationId, projectId, focusedBlockerId = null, focusedTask = null, timeZone = null, agendaDay = null }) {
   const [data, setData] = useState(initialData);
   const [teamName, setTeamName] = useState('');
   const [blockerTitle, setBlockerTitle] = useState('');
@@ -52,7 +52,7 @@ export default function ExecutionClient({ initialData, workers, tasks, permissio
         onChanged={saved => setData(current => ({ ...current, blockers: current.blockers.map(row => row.id === saved.id ? saved : row) }))} />)}</ul>}{permissions.canManage && <form className={styles.form} onSubmit={createBlocker}><input value={blockerTitle} onChange={(event) => setBlockerTitle(event.target.value)} aria-label="Título de la restricción" placeholder="Título de la restricción" maxLength={220} /><select aria-label="Actividad de la restricción" disabled={Boolean(focusedTask)} value={blockerTask} onChange={(event) => setBlockerTask(event.target.value)}><option value="">Sin tarea vinculada</option>{tasks.map((task) => <option value={task.id} key={task.id}>{task.title}</option>)}</select><select aria-label="Persona responsable" value={blockerOwnerWorker} onChange={(event) => { setBlockerOwnerWorker(event.target.value); setBlockerOwnerTeam(''); }}><option value="">Responsable: persona</option>{workers.map((worker) => <option value={worker.id} key={worker.id}>{worker.name}</option>)}</select><select aria-label="Cuadrilla responsable" value={blockerOwnerTeam} onChange={(event) => { setBlockerOwnerTeam(event.target.value); setBlockerOwnerWorker(''); }}><option value="">Responsable: cuadrilla</option>{data.teams.filter((team) => team.status === 'ACTIVE').map((team) => <option value={team.id} key={team.id}>{team.name}</option>)}</select><button disabled={busy} type="submit">Abrir restricción</button></form>}</section>
     </div>
     <AssignmentBoard assignments={data.assignments} tasks={tasks} workers={workers} teams={data.teams} permissions={permissions}
-      organizationId={organizationId} projectId={projectId} focusedTask={focusedTask}
+      organizationId={organizationId} projectId={projectId} focusedTask={focusedTask} timeZone={timeZone} agendaDay={agendaDay}
       onChanged={saved=>setData(current=>({...current,assignments:current.assignments.some(row=>row.id===saved.id)?current.assignments.map(row=>row.id===saved.id?saved:row):[saved,...current.assignments]}))}/>
 
   </section>;

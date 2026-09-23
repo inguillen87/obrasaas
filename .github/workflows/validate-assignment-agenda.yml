@@ -1,0 +1,156 @@
+name: Validate assignment agenda before release
+on:
+  push:
+    branches: ['operations/assignment-agenda-20260923']
+permissions:
+  contents: read
+concurrency:
+  group: obrasaas-assignment-agenda-validation
+  cancel-in-progress: false
+jobs:
+  validate:
+    if: >-
+      !startsWith(github.event.head_commit.message, 'verify: published agenda ')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Verify exact candidate tree
+        run: |
+          mkdir -p evidence
+          python3 - <<'PY'
+          import json,os,pathlib,subprocess,tempfile
+          m=json.load(open('.assignment-agenda-candidate.json'))
+          with tempfile.TemporaryDirectory() as temp:
+              env={**os.environ,'GIT_INDEX_FILE':str(pathlib.Path(temp)/'index')}
+              subprocess.run(['git','read-tree','HEAD'],env=env,check=True)
+              subprocess.run(['git','update-index','--force-remove','--','.github/workflows/validate-assignment-agenda.yml','.assignment-agenda-candidate.json'],env=env,check=True)
+              tree=subprocess.check_output(['git','write-tree'],env=env,text=True).strip()
+          assert tree==m['productTree'],(tree,m['productTree'])
+          for file,expected in m['files'].items():
+              assert subprocess.check_output(['git','rev-parse','HEAD:'+file],text=True).strip()==expected,file
+          pathlib.Path('evidence/validated-tree.json').write_text(json.dumps(m,indent=2))
+          print('EXACT_PRODUCT_TREE',tree)
+          PY
+      - name: Exact dependencies and installed framework guide
+        run: |
+          npm ci > evidence/install.log 2>&1 || { tail -n 60 evidence/install.log; exit 1; }
+          head -n 85 node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/page.md > evidence/framework-guide.log
+          cat evidence/framework-guide.log
+      - name: Complete unit suite and affected lint
+        run: |
+          npm test > evidence/tests.log 2>&1 || { tail -n 100 evidence/tests.log; exit 1; }
+          tail -n 12 evidence/tests.log
+          python3 - <<'PY'
+          import json,subprocess
+          files=[f for f in json.load(open('.assignment-agenda-candidate.json'))['files'] if f.endswith(('.js','.mjs'))]
+          with open('evidence/lint.log','w') as out:
+              p=subprocess.run(['npx','eslint',*files],stdout=out,stderr=subprocess.STDOUT)
+          print(open('evidence/lint.log').read())
+          raise SystemExit(p.returncode)
+          PY
+      - name: Real components and existing browser regressions
+        run: |
+          npx playwright install --with-deps chrome > evidence/browser-install.log 2>&1
+          for script in verify-assignment-agenda-ui verify-task-assignments-ui verify-assignment-overlap-ui verify-assignment-continuity-ui verify-schedule-restrictions-ui; do
+            node "scripts/$script.mjs" > "evidence/$script.log" 2>&1 || { tail -n 90 "evidence/$script.log"; exit 1; }
+            tail -n 1 "evidence/$script.log"
+          done
+      - name: Complete build
+        run: |
+          npm run build > evidence/build.log 2>&1 || { tail -n 90 evidence/build.log; exit 1; }
+          tail -n 12 evidence/build.log
+          git diff --check
+      - name: Preserve synthetic validation evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: assignment-agenda-${{ github.run_id }}
+          path: |
+            evidence/
+            .vercel/assignment-agenda-ui/proof.json
+            .vercel/assignment-agenda-ui/*.png
+          include-hidden-files: true
+          retention-days: 7
+          if-no-files-found: warn
+  published-preview:
+    if: >-
+      startsWith(github.event.head_commit.message, 'verify: published agenda ')
+    permissions:
+      contents: read
+      statuses: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Match the exact release and provider status
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p evidence
+          python3 - <<'PY'
+          import json,os,pathlib,re,urllib.request
+          m=json.load(open('.assignment-agenda-release.json'))
+          assert re.fullmatch('[a-f0-9]{40}',m['sha'])
+          assert re.fullmatch(r'https://obrasaas-saas-[a-z0-9]+-marcelos-projects-c26aa499\.vercel\.app',m['url'])
+          def get(path):
+              request=urllib.request.Request('https://api.github.com/repos/inguillen87/obrasaas/'+path,headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json'})
+              return json.load(urllib.request.urlopen(request,timeout=25))
+          commit=get('git/commits/'+m['sha'])
+          assert commit['tree']['sha']==m['tree']
+          assert commit['message'].count('ObraSaaS-Preview-Release: approved')==1
+          states=get('commits/'+m['sha']+'/status')['statuses']
+          provider=next(s for s in states if s['context']=='Vercel')
+          assert provider['state']=='success' and provider['description']=='Deployment has completed'
+          assert provider['target_url'].endswith('/'+m['deployment'].removeprefix('dpl_'))
+          pathlib.Path('evidence/release-provider.json').write_text(json.dumps(m,indent=2))
+          with open(os.environ['GITHUB_ENV'],'a') as out:out.write('E2E_BASE_URL='+m['url']+'\n')
+          print('EXACT_PUBLISHED_PREVIEW',json.dumps(m))
+          PY
+      - name: Public HTTP and anonymous boundary
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import {writeFileSync} from 'node:fs';
+          const rows=[];
+          for(const path of ['/','/privacy','/terms','/sign-in','/dashboard/execution','/api/execution/assignments/synthetic-agenda-probe/reschedule']) {
+            const r=await fetch(process.env.E2E_BASE_URL+path,{redirect:'manual',signal:AbortSignal.timeout(25000),headers:{Accept:path.startsWith('/api/')?'application/json':'text/html'}});
+            const row={path,status:r.status,authStatus:r.headers.get('x-clerk-auth-status')};rows.push(row);
+            if(['/','/privacy','/terms'].includes(path))assert.equal(r.status,200);
+            if(path==='/sign-in')assert.ok(r.status===200||r.status===307&&row.authStatus==='handshake');
+            if(path==='/dashboard/execution')assert.equal(r.status,307);
+            if(path.startsWith('/api/'))assert.equal(r.status,404);
+            console.log('PUBLIC_HTTP',JSON.stringify(row));
+          }
+          writeFileSync('evidence/public-http.json',JSON.stringify(rows,null,2));
+          JS
+      - name: Public browser on the immutable URL without retries
+        run: |
+          npm ci > evidence/install.log 2>&1 || { tail -n 50 evidence/install.log; exit 1; }
+          npx playwright install --with-deps chromium > evidence/browser-install.log 2>&1
+          npm run test:e2e:public -- --retries=0 > evidence/public-browser.log 2>&1 || { tail -n 80 evidence/public-browser.log; exit 1; }
+          cat evidence/public-browser.log
+      - name: Preserve public release evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: assignment-agenda-published-${{ github.run_id }}
+          path: evidence/
+          retention-days: 7
+          if-no-files-found: warn
