@@ -158,7 +158,7 @@ test('the integrations UI wires provider calls and reconnect controls to verifie
   assert.match(client, /const presentedFlowNotice = graphReady/);
   assert.match(client, /const presentedTemplateNotice = graphReady/);
   assert.match(client, /remoteChannelEpochRef\.current \+= 1/);
-  assert.match(client, /\[connectionIdentity, graphReady, advancedOpen\]/);
+  assert.match(client, /\[connectionIdentity, graphReady, advancedOpen, organizationId, projectId\]/);
   assert.match(client, /throw integrationResponseError\(payload/);
   assert.match(client, /whatsappGraphAccessRejected\(error\?\.code\)/);
   assert.match(client, /synchronizeChannelHealth\(\{ method: 'POST' \}\)/);
