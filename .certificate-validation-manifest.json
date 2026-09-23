@@ -1,0 +1,22 @@
+{
+  "base": "b7203e04cd0fb8a5afd8ca87836e2dbb55264221",
+  "productTree": "ce43df719fb48b7c9db67bb15b0d21a684092f71",
+  "files": [
+    "scripts/lib/certificate-archive-outcome.mjs",
+    "scripts/verify-project-certificates-migration.mjs",
+    "scripts/verify-certificate-archive-orders.mjs",
+    "tests/certificate-archive-outcome.test.js",
+    "tests/project-certificates-migration-verifier-contract.test.js",
+    "docs/recovery/certificate-archive-race-verification.md",
+    "docs/recovery/HANDOFF_TENANT_WHATSAPP.md"
+  ],
+  "blobs": {
+    "scripts/lib/certificate-archive-outcome.mjs": "4031577eb3be863fa1a8cd33e9912e2a30a18609",
+    "scripts/verify-project-certificates-migration.mjs": "690a7843cddea1b48d71ba9dc1dc73a6a117fcce",
+    "scripts/verify-certificate-archive-orders.mjs": "ad1e9fdf632f732d72c67fa0db7c99d8de311b3e",
+    "tests/certificate-archive-outcome.test.js": "769ba2cfaad0df1a28418c33efdcf47a2644204a",
+    "tests/project-certificates-migration-verifier-contract.test.js": "11605436076893348f837a9fbdb7f33f7879213e",
+    "docs/recovery/certificate-archive-race-verification.md": "7e0d8b212113575577ff504f4df1ee5d90feea35",
+    "docs/recovery/HANDOFF_TENANT_WHATSAPP.md": "9d44a3921fdcbe18829cec16166e283d96e834a2"
+  }
+}

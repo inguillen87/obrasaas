@@ -157,13 +157,19 @@ test('S10 disposable verifier cannot regress to placeholder races or partial gov
     /async function assertDisposableArchiveVsPending\([\s\S]*?(?=async function assertDisposableActorRevokeVsApprove)/,
   )?.[0];
   assert.ok(archiveVsPending, 'archive-vs-pending race helper is required');
-  assert.match(archiveVsPending, /fulfilled\(outcomes\)\.length === 1 && rejected\(outcomes\)\.length === 1/);
-  assert.match(archiveVsPending, /const prepareWon = outcomes\[0\]\.status === 'fulfilled'/);
-  assert.match(archiveVsPending, /PROJECT_ARCHIVE_BLOCKED_BY_PENDING_GOVERNANCE/);
-  assert.match(archiveVsPending, /loser\?\.code === '40001'[\s\S]*PROJECT_ARCHIVE_BUSY/);
-  assert.match(archiveVsPending, /code=\$\{loser\?\.code \|\| 'none'\} message=\$\{loserMessage\}/);
-  assert.match(archiveVsPending, /prepareWon[\s\S]*state\.status === 'ACTIVE'[\s\S]*state\.versions === 1[\s\S]*state\.pending/);
-  assert.match(archiveVsPending, /!prepareWon[\s\S]*state\.status === 'ARCHIVED'[\s\S]*state\.versions === 0[\s\S]*state\.pending === null/);
+  assert.match(archiveVsPending, /\['simultaneous','archive-first','prepare-first','pending-committed'\]/);
+  assert.match(archiveVsPending, /fulfilled\(outcomes\)\.length===1 && rejected\(outcomes\)\.length===1/);
+  assert.match(archiveVsPending, /isControlledArchiveLoser/);
+  assert.match(archiveVsPending, /observeArchiveBlocker\(probe,waiterPid,holderPid\)/);
+  assert.match(verifier, /\$2=ANY\(pg_blocking_pids\(pid\)\)/);
+  assert.match(archiveVsPending, /reason\.code==='42501'[\s\S]*PROJECT_CERTIFICATE_PREPARER_REQUIRED/);
+  assert.match(archiveVsPending, /'40001','PROJECT_ARCHIVE_BUSY:'/);
+  assert.match(archiveVsPending, /'55000','PROJECT_ARCHIVE_BLOCKED_BY_PENDING_GOVERNANCE:'/);
+  assert.match(archiveVsPending, /assert\.deepEqual\(state\.basis,before\.basis/);
+  assert.match(archiveVsPending, /assert\.deepEqual\(state\.facts,before\.facts/);
+  assert.match(archiveVsPending, /books:1,heads:1,versions:1,lines:1,deductions:0,decisions:0,receipts:1/);
+  assert.match(archiveVsPending, /transactionOwner\.query\('ROLLBACK'\)[\s\S]*if\(pendingQuery\)await pendingQuery/);
+
 
   assert.match(migration, /CREATE FUNCTION "obrasaas_project_certificate_approval_is_fresh"/);
   assert.match(migration, /v_approval_fresh := "obrasaas_project_certificate_approval_is_fresh"/);
@@ -183,4 +189,16 @@ test('package, PostgreSQL 17 CI and Vercel rollback-only gate invoke S10 verifie
   assert.match(vercelBuild, /PROJECT_CERTIFICATES_DISPOSABLE_CONCURRENCY: "0"/);
   assert.doesNotMatch(vercelBuild, /PROJECT_CERTIFICATES_DISPOSABLE_CONCURRENCY: "1"/);
   assert.match(vercelBuild, /if \(cliPaths\.projectCertificatesVerifier\)/);
+});
+
+
+test('focused archive verification runs all fixed orders only on the explicit disposable target', async () => {
+  const focused=await readFile(new URL('../scripts/verify-certificate-archive-orders.mjs',import.meta.url),'utf8');
+  assert.match(focused,/!config\.local \|\| !config\.disposable/);
+  assert.match(focused,/process\.env\.VERCEL_ENV==='production'/);
+  assert.match(focused,/iteration<=3/);
+  assert.match(focused,/await assertDisposableArchiveVsPending/);
+  assert.doesNotMatch(focused,/dotenv|prisma migrate|UPDATE|DELETE|TRUNCATE/);
+  assert.match(focused,/report\.status='FAIL'/);
+  assert.match(verifier,/state\.book_revision===null && state\.head_revision===null/);
 });

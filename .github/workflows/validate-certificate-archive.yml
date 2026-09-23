@@ -1,0 +1,106 @@
+name: Validate certificate archive ordering
+on:
+  push:
+    branches: ['operations/certificate-archive-20260923']
+permissions:
+  contents: read
+concurrency:
+  group: obrasaas-certificate-archive-validation
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    services:
+      postgres:
+        image: postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+        env:
+          POSTGRES_USER: obrasaas_ci
+          POSTGRES_PASSWORD: obrasaas_ci
+          POSTGRES_DB: obrasaas_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U obrasaas_ci -d obrasaas_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      DATABASE_URL: postgresql://obrasaas_ci:obrasaas_ci@127.0.0.1:5432/obrasaas_ci?schema=public
+      DATABASE_URL_UNPOOLED: postgresql://obrasaas_ci:obrasaas_ci@127.0.0.1:5432/obrasaas_ci?schema=public
+      DIRECT_URL: postgresql://obrasaas_ci:obrasaas_ci@127.0.0.1:5432/obrasaas_ci?schema=public
+      PROJECT_CERTIFICATES_MIGRATION_DATABASE_URL: postgresql://obrasaas_ci:obrasaas_ci@127.0.0.1:5432/obrasaas_ci?schema=public
+      PROJECT_CERTIFICATES_MIGRATION_SCHEMA: public
+      PROJECT_CERTIFICATES_DISPOSABLE_CONCURRENCY: '1'
+      CERTIFICATE_ARCHIVE_PROOF_PATH: evidence/certificate-archive-orders.json
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Verify exact candidate tree
+        run: |
+          mkdir -p evidence
+          python3 - <<'PY'
+          import json,os,pathlib,subprocess,tempfile
+          m=json.load(open('.certificate-validation-manifest.json'))
+          with tempfile.TemporaryDirectory() as temp:
+              env={**os.environ,'GIT_INDEX_FILE':str(pathlib.Path(temp)/'index')}
+              subprocess.run(['git','read-tree','HEAD'],env=env,check=True)
+              subprocess.run(['git','update-index','--force-remove','--','.github/workflows/validate-certificate-archive.yml','.certificate-validation-manifest.json','.certificate-baseline-reproduce.mjs'],env=env,check=True)
+              tree=subprocess.check_output(['git','write-tree'],env=env,text=True).strip()
+          assert tree==m['productTree'],(tree,m['productTree'])
+          for file,expected in m['blobs'].items():
+              actual=subprocess.check_output(['git','rev-parse','HEAD:'+file],text=True).strip()
+              assert actual==expected,file
+          pathlib.Path('evidence/validated-tree.json').write_text(json.dumps(m,indent=2))
+          print('Exact product tree:',tree)
+          PY
+      - name: Exact dependencies and isolated schema
+        run: |
+          npm ci > evidence/install.log 2>&1 || { tail -n 50 evidence/install.log; exit 1; }
+          npx prisma validate > evidence/schema.log 2>&1
+          npx prisma migrate deploy > evidence/migrations.log 2>&1 || { tail -n 70 evidence/migrations.log; exit 1; }
+          npx prisma migrate status > evidence/migration-status.log 2>&1
+          npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code > evidence/schema-diff.log 2>&1
+      - name: Reproduce the original verifier failure without changing SQL or its predicate
+        run: |
+          node .certificate-baseline-reproduce.mjs > evidence/baseline.log 2>&1 || { tail -n 80 evidence/baseline.log; exit 1; }
+          cat evidence/baseline-reproduction.json
+      - name: Full corrected certificate journey and all four archive orders
+        run: |
+          npm run verify:project-certificates-migration > evidence/certificates-full.log 2>&1 || { tail -n 100 evidence/certificates-full.log; exit 1; }
+          tail -n 6 evidence/certificates-full.log
+      - name: Twelve fixed archive-order runs without retry-until-success
+        run: |
+          node scripts/verify-certificate-archive-orders.mjs > evidence/archive-orders.log 2>&1 || { tail -n 90 evidence/archive-orders.log; exit 1; }
+          cat evidence/certificate-archive-orders.json
+      - name: Full suite and affected lint
+        run: |
+          npm test > evidence/tests.log 2>&1 || { tail -n 100 evidence/tests.log; exit 1; }
+          tail -n 10 evidence/tests.log
+          python3 - <<'PY'
+          import json,subprocess
+          files=[f for f in json.load(open('.certificate-validation-manifest.json'))['files'] if f.endswith(('.js','.mjs'))]
+          with open('evidence/lint.log','w') as output:
+              result=subprocess.run(['npx','eslint',*files],stdout=output,stderr=subprocess.STDOUT)
+          if result.returncode: print(open('evidence/lint.log').read())
+          raise SystemExit(result.returncode)
+          PY
+      - name: Complete application build
+        run: |
+          npm run build > evidence/build.log 2>&1 || { tail -n 90 evidence/build.log; exit 1; }
+          tail -n 12 evidence/build.log
+          git diff --check
+      - name: Preserve bounded verification evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: certificate-archive-${{ github.run_id }}
+          path: evidence/
+          retention-days: 7
+          if-no-files-found: warn

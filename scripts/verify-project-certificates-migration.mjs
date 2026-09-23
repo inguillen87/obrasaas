@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import assert from 'node:assert/strict';
+import { isControlledArchiveLoser } from './lib/certificate-archive-outcome.mjs';
 import { createHash, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -1494,50 +1495,128 @@ async function assertDisposableCrossKindKey(connectionString, schema) {
   }
 }
 
-async function assertDisposableArchiveVsPending(connectionString, schema) {
-  const { item, snapshot } = await seedCommittedReadyFixture(connectionString, schema, 'archive-vs-pending');
-  try {
-    const outcomes = await Promise.allSettled([
-      runDisposableQuery(connectionString, schema, 'archive-prepare', PREPARE_SQL,
-        prepareArgs(item, snapshot, {
-          operationKey: `${item.prefix}_archive_prepare`,
-          fingerprintValue: sha256(`${item.prefix}:archive-prepare`),
-        })),
-      runDisposableQuery(connectionString, schema, 'archive-project',
-        `UPDATE "Project" SET "status"='ARCHIVED' WHERE "organizationId"=$1 AND "id"=$2 RETURNING "status"::text`,
-        [item.organizationId, item.projectId]),
-    ]);
-    invariant(fulfilled(outcomes).length === 1 && rejected(outcomes).length === 1,
-      'Archive-vs-pending must select exactly one winner.');
-    const loser = rejected(outcomes)[0];
-    const loserMessage = String(loser?.message || loser);
-    const prepareWon = outcomes[0].status === 'fulfilled';
-    const controlledLoser = prepareWon
-      ? loserMessage.includes('PROJECT_ARCHIVE_BLOCKED_BY_PENDING_GOVERNANCE')
-        || (loser?.code === '40001' && loserMessage.includes('PROJECT_ARCHIVE_BUSY'))
-      : loserMessage.includes('PROJECT_CERTIFICATE_NOT_READY')
-        || loserMessage.includes('PROJECT_CERTIFICATE_PROJECT_ARCHIVED');
-    invariant(controlledLoser,
-      `Archive-vs-pending loser was not controlled: code=${loser?.code || 'none'} message=${loserMessage}`);
-    const state = await runDisposableQuery(
-      connectionString, schema, 'archive-probe',
-      `SELECT p."status"::text,
-              (SELECT count(*)::int FROM "ProjectCertificateVersion"
-                WHERE "organizationId"=$1 AND "projectId"=$2) versions,
-              (SELECT "pendingCertificateVersionId" FROM "ProjectCertificateBook"
-                WHERE "organizationId"=$1 AND "projectId"=$2) pending
-         FROM "Project" p WHERE p."organizationId"=$1 AND p."id"=$2`,
-      [item.organizationId, item.projectId],
+async function readCertificateArchiveState(client, item) {
+  const row = (await client.query(
+    `SELECT p."status"::text,
+      EXISTS (SELECT 1 FROM "TenantMembership" tm JOIN "ProjectMembership" pm
+        ON pm."tenantMembershipId"=tm."id" AND pm."projectId"=p."id"
+        WHERE tm."organizationId"=p."organizationId" AND tm."id"=$3
+          AND tm."status"='ACTIVE' AND pm."status"='ACTIVE'
+          AND tm."tenantRole"='SITE_MANAGER') AS "actorActive",
+      "obrasaas_project_contract_membership_matches"($1,$2,$3,'SITE_MANAGER') AS "preparerEligible",
+      (SELECT count(*)::int FROM "ProjectCertificateVersion"
+        WHERE "organizationId"=$1 AND "projectId"=$2) versions,
+      (SELECT "pendingCertificateVersionId" FROM "ProjectCertificateBook"
+        WHERE "organizationId"=$1 AND "projectId"=$2) pending,
+      (SELECT "revision" FROM "ProjectCertificateBook"
+        WHERE "organizationId"=$1 AND "projectId"=$2) book_revision,
+      (SELECT "revision" FROM "ProjectCertificatePeriodHead"
+        WHERE "organizationId"=$1 AND "projectId"=$2) head_revision,
+      (SELECT "latestVersionId" FROM "ProjectCertificatePeriodHead"
+        WHERE "organizationId"=$1 AND "projectId"=$2) head_latest,
+      (SELECT count(*)::int FROM "Task" WHERE "projectId"=$2) task_count,
+      jsonb_build_object(
+        'actor',(SELECT to_jsonb(tm) FROM "TenantMembership" tm WHERE tm."organizationId"=$1 AND tm."id"=$3),
+        'assignment',(SELECT to_jsonb(pm) FROM "ProjectMembership" pm WHERE pm."projectId"=$2 AND pm."tenantMembershipId"=$3),
+        'task',(SELECT to_jsonb(t) FROM "Task" t WHERE t."projectId"=$2 AND t."id"=$4),
+        'contract',(SELECT to_jsonb(h) FROM "ProjectContractHead" h WHERE h."organizationId"=$1 AND h."projectId"=$2),
+        'cut',(SELECT to_jsonb(h) FROM "ProjectProgressMeasurementCutHead" h WHERE h."organizationId"=$1 AND h."projectId"=$2)
+      ) basis
+      FROM "Project" p WHERE p."organizationId"=$1 AND p."id"=$2`,
+    [item.organizationId,item.projectId,item.memberships.site,item.taskId],
+  )).rows[0];
+  invariant(row, 'Archive verification lost its scoped project.');
+  return { ...row, facts:await certificateFactCounts(client,item.organizationId) };
+}
+
+async function observeArchiveBlocker(client, waiterPid, holderPid) {
+  const deadline=Date.now()+6000;
+  while(Date.now()<deadline) {
+    const result=await client.query(
+      `SELECT 1 FROM pg_stat_activity WHERE pid=$1 AND wait_event_type='Lock'
+        AND wait_event='advisory' AND $2=ANY(pg_blocking_pids(pid))`,
+      [waiterPid,holderPid],
     );
-    invariant((prepareWon
-      && state.status === 'ACTIVE' && state.versions === 1 && state.pending)
-      || (!prepareWon
-        && state.status === 'ARCHIVED' && state.versions === 0 && state.pending === null),
-    'Archive-vs-pending did not linearize around the raw-project lock.');
-    return true;
-  } finally {
-    await cleanupDisposableFixture(connectionString, schema, item);
+    if(result.rowCount===1) return true;
+    await new Promise(resolve=>setTimeout(resolve,40));
   }
+  throw new Error('Archive-first verification did not observe the exact blocking session.');
+}
+
+async function assertDisposableArchiveVsPending(connectionString, schema, { record = () => {} } = {}) {
+  // All orders are required; never rerun an uncontrolled race until it turns green.
+  for(const order of ['simultaneous','archive-first','prepare-first','pending-committed']) {
+    const label='archive-'+order;
+    const {item,snapshot}=await seedCommittedReadyFixture(connectionString,schema,label);
+    const connections=[];
+    let prepareClient,archiveClient,probe,pendingQuery,transactionOwner;
+    try {
+      for(const suffix of ['prepare','archive','probe']) connections.push(await connectDisposable(connectionString,schema,label+'-'+suffix));
+      [prepareClient,archiveClient,probe]=connections;
+      const before=await readCertificateArchiveState(probe,item);
+      invariant(before.status==='ACTIVE' && before.actorActive && before.preparerEligible,
+        'Archive verification must start with an authorized active SITE_MANAGER.');
+      invariant(Object.values(before.facts).every(count=>count===0) && before.task_count===1,
+        'Archive verification must start without certificate facts and with its one-task fixture.');
+      const args=prepareArgs(item,snapshot,{operationKey:`${item.prefix}_archive_prepare`,fingerprintValue:sha256(`${item.prefix}:archive-prepare`)});
+      const archiveSql=`UPDATE "Project" SET "status"='ARCHIVED' WHERE "organizationId"=$1 AND "id"=$2 RETURNING "status"::text`;
+      const archiveArgs=[item.organizationId,item.projectId];
+      const capture=promise=>promise.then(result=>({status:'fulfilled',value:result.rows[0]}),reason=>({status:'rejected',reason}));
+      let outcomes,blockingObserved=false;
+      if(order==='simultaneous') {
+        outcomes=await Promise.all([capture(prepareClient.query(PREPARE_SQL,args)),capture(archiveClient.query(archiveSql,archiveArgs))]);
+      } else if(order==='archive-first') {
+        const holderPid=(await archiveClient.query('SELECT pg_backend_pid() pid')).rows[0].pid;
+        const waiterPid=(await prepareClient.query('SELECT pg_backend_pid() pid')).rows[0].pid;
+        await archiveClient.query('BEGIN');transactionOwner=archiveClient;
+        const archived=await capture(archiveClient.query(archiveSql,archiveArgs));
+        invariant(archived.status==='fulfilled','Archive-first fixture could not acquire the real project guard.');
+        pendingQuery=capture(prepareClient.query(PREPARE_SQL,args));
+        blockingObserved=await observeArchiveBlocker(probe,waiterPid,holderPid);
+        await archiveClient.query('COMMIT');transactionOwner=null;
+        outcomes=[await pendingQuery,archived];pendingQuery=null;
+        invariant(outcomes[0].status==='rejected' && outcomes[0].reason.code==='42501'
+          && outcomes[0].reason.message.startsWith('PROJECT_CERTIFICATE_PREPARER_REQUIRED:'),
+        'Archive-first did not reproduce the exact membership-eligibility rejection.');
+      } else {
+        if(order==='prepare-first'){await prepareClient.query('BEGIN');transactionOwner=prepareClient;}
+        const prepared=await capture(prepareClient.query(PREPARE_SQL,args));
+        invariant(prepared.status==='fulfilled','Preparation must hold or commit the real pending certificate.');
+        const archived=await capture(archiveClient.query(archiveSql,archiveArgs));
+        if(transactionOwner){await prepareClient.query('COMMIT');transactionOwner=null;}
+        outcomes=[prepared,archived];
+        const expected=order==='prepare-first'?['40001','PROJECT_ARCHIVE_BUSY:']:['55000','PROJECT_ARCHIVE_BLOCKED_BY_PENDING_GOVERNANCE:'];
+        invariant(archived.status==='rejected' && archived.reason.code===expected[0]
+          && archived.reason.message.startsWith(expected[1]),'Archive guard did not enforce the requested lock/committed order.');
+      }
+      invariant(fulfilled(outcomes).length===1 && rejected(outcomes).length===1,'Archive-vs-pending must select exactly one winner.');
+      const prepareWon=outcomes[0].status==='fulfilled',loser=rejected(outcomes)[0];
+      const state=await readCertificateArchiveState(probe,item);
+      assert.deepEqual(state.basis,before.basis,'Archiving/preparing changed actor membership, task, contract or technical cut.');
+      invariant(isControlledArchiveLoser({prepareWon,error:loser,state}),
+        `Archive-vs-pending loser was not controlled: code=${loser?.code || 'none'} message=${loser?.message}`);
+      if(prepareWon) {
+        const id=outcomes[0].value.payload.certificate.id;
+        assert.deepEqual(state.facts,{books:1,heads:1,versions:1,lines:1,deductions:0,decisions:0,receipts:1},'Preparation did not create exactly one governed certificate and receipt.');
+        invariant(state.pending===id && state.head_latest===id && state.book_revision===1 && state.head_revision===1,
+          'Pending certificate pointers or revisions did not match the only committed result.');
+      } else {
+        assert.deepEqual(state.facts,before.facts,'Archive winner left rejected preparation facts or receipts.');
+        invariant(state.book_revision===null && state.head_revision===null && state.head_latest===null,
+          'Archive winner left certificate projections.');
+      }
+      const result={order,winner:prepareWon?'prepare':'archive',sqlState:loser.code,marker:loser.message.split(':')[0],blockingObserved,
+        actorMembershipUnchanged:true,taskContractCutUnchanged:true,exactFactsVerified:true};
+      record(result);console.log('CERTIFICATE_ARCHIVE_ORDER '+JSON.stringify(result));
+    } finally {
+      // Release any held transaction before waiting for the other connection.
+      if(transactionOwner)await transactionOwner.query('ROLLBACK').catch(()=>undefined);
+      if(pendingQuery)await pendingQuery;
+      for(const client of connections)await client.end();
+      await cleanupDisposableFixture(connectionString,schema,item);
+    }
+  }
+  return true;
 }
 
 async function assertDisposableActorRevokeVsApprove(connectionString, schema) {
@@ -2281,7 +2360,7 @@ async function verify() {
   }
 }
 
-export { appAdapter, assertRolledBack, expectDatabaseError };
+export { appAdapter, assertRolledBack, expectDatabaseError, assertDisposableArchiveVsPending };
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   if (process.argv.includes('--help') || process.argv.includes('-h')) console.log(help());
