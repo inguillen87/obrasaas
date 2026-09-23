@@ -1,0 +1,108 @@
+name: Verify released WhatsApp templates Preview
+on:
+  push:
+    branches: ['operations/whatsapp-template-preview-20260923']
+permissions:
+  contents: read
+  statuses: read
+  deployments: read
+jobs:
+  public-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      PLAYWRIGHT_CHANNEL: chrome
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: be88e2bca437a5de9d0c91c69b80b4f2c95017a3
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Exact dependencies and public browser
+        run: |
+          mkdir -p evidence
+          npm ci --no-audit --no-fund > evidence/install.log 2>&1
+          npx playwright install --with-deps chrome > evidence/browser-install.log 2>&1
+      - name: Verify release identity and signed-out template boundary
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PYCODE'
+          import json,os,pathlib,time,urllib.request,urllib.parse,urllib.error
+          repo='https://api.github.com/repos/inguillen87/obrasaas/'
+          sha='be88e2bca437a5de9d0c91c69b80b4f2c95017a3'
+          inspection='https://vercel.com/marcelos-projects-c26aa499/obrasaas-saas/97z8jsvviVo5vSFXTDmtQ7denecG'
+          def get(path):
+              req=urllib.request.Request(repo+path,headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json'})
+              with urllib.request.urlopen(req,timeout=25) as response:return json.load(response)
+          candidate=None
+          for attempt in range(30):
+              state=next((s for s in get('commits/'+sha+'/status')['statuses'] if s['context']=='Vercel'),{})
+              print('Release state:',state.get('state','absent'),flush=True)
+              if state.get('state') in ('error','failure'):raise SystemExit('Deployment failed')
+              if state.get('state')=='success':
+                  assert state['target_url']==inspection
+                  for deployment in get('deployments?sha='+sha+'&per_page=20'):
+                      if deployment['sha']!=sha or deployment.get('production_environment') or deployment.get('environment','').lower()=='production':continue
+                      for status in get('deployments/'+str(deployment['id'])+'/statuses'):
+                          if status.get('state')=='success' and status.get('environment_url'):
+                              candidate={'url':status['environment_url'],'githubDeployment':deployment['id'],'environment':deployment['environment']};break
+                      if candidate:break
+                  if candidate:break
+              time.sleep(20)
+          assert candidate is not None,'No verified exact deployment URL'
+          url=urllib.parse.urlsplit(candidate['url'])
+          assert url.scheme=='https' and not url.username and not url.password and not url.query and not url.fragment and url.path in ('','/')
+          assert url.hostname.startswith('obrasaas-saas-') and url.hostname.endswith('-marcelos-projects-c26aa499.vercel.app') and '-git-' not in url.hostname
+          assert get('git/ref/heads/codex/saas-recovery-20260917')['object']['sha']==sha
+          checks=[]
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self,*args,**kwargs):return None
+          opener=urllib.request.build_opener(NoRedirect())
+          for path,accept in [('/','text/html'),('/privacy','text/html'),('/terms','text/html'),('/dashboard/integrations','text/html'),('/api/integrations/whatsapp/templates','application/json')]:
+              request=urllib.request.Request(candidate['url'].rstrip('/')+path,headers={'Accept':accept,'User-Agent':'ObraSaaS-Public-Release-Smoke'})
+              try:response=opener.open(request,timeout=25)
+              except urllib.error.HTTPError as error:response=error
+              code=response.code
+              safe={key:response.headers.get(key) for key in ['cache-control','x-clerk-auth-status','x-clerk-auth-reason'] if response.headers.get(key)}
+              body=response.read(4096);response.close()
+              if path.startswith('/api/'):
+                  assert code==404 and 'signed-out' in safe.get('x-clerk-auth-status','') and 'protect-rewrite' in safe.get('x-clerk-auth-reason',''),(path,code,safe)
+                  assert body==b'','Anonymous API unexpectedly returned content'
+              elif path.startswith('/dashboard/'):
+                  assert code==307 and safe.get('x-clerk-auth-status')=='handshake',(path,code,safe)
+              else:assert code==200,(path,code,safe)
+              checks.append({'path':path,'status':code,'headers':safe})
+          report={'sha':sha,'providerInspection':inspection,'providerState':'success',**candidate,'immutableUrl':True,'checks':checks,'authenticated':False,'providerOperations':0,'productionModified':False}
+          pathlib.Path('evidence/deployment.json').write_text(json.dumps(report,indent=2))
+          with open(os.environ['GITHUB_ENV'],'a') as output:output.write('E2E_BASE_URL='+candidate['url']+'\n')
+          print(json.dumps(report),flush=True)
+          PYCODE
+      - name: Public acceptance on the immutable deployment
+        run: |
+          npm run test:e2e:public > evidence/public-browser.log 2>&1 || { tail -n 100 evidence/public-browser.log; exit 1; }
+          tail -n 14 evidence/public-browser.log
+      - name: Confirm unchanged release after acceptance
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PYCODE'
+          import json,os,pathlib,urllib.request
+          req=urllib.request.Request('https://api.github.com/repos/inguillen87/obrasaas/git/ref/heads/codex/saas-recovery-20260917',headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json'})
+          with urllib.request.urlopen(req,timeout=25) as response:head=json.load(response)['object']['sha']
+          report=json.load(open('evidence/deployment.json'));assert head==report['sha']
+          report.update({'publicBrowserTests':2,'browserStatus':'PASS','headUnchangedAfterChecks':True})
+          pathlib.Path('evidence/deployed-proof.json').write_text(json.dumps(report,indent=2))
+          print(json.dumps(report))
+          PYCODE
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: whatsapp-template-preview-${{ github.run_id }}
+          path: evidence/
+          retention-days: 7
+          if-no-files-found: warn
