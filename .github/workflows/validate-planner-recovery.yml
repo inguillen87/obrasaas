@@ -1,0 +1,71 @@
+name: Validate planner recovery before release
+on:
+  push:
+    branches: ['operations/planner-recovery-20260923']
+permissions:
+  contents: read
+concurrency:
+  group: obrasaas-planner-recovery-validation
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Verify exact product tree
+        run: |
+          mkdir -p evidence
+          python3 - <<'PY'
+          import os,pathlib,subprocess,tempfile,json
+          expected='057d1a30c0f3190ed32cc5683c7ab593cf00de25'
+          with tempfile.TemporaryDirectory() as temp:
+              env={**os.environ,'GIT_INDEX_FILE':str(pathlib.Path(temp)/'index')}
+              subprocess.run(['git','read-tree','HEAD'],env=env,check=True)
+              subprocess.run(['git','update-index','--force-remove','--','.github/workflows/validate-planner-recovery.yml'],env=env,check=True)
+              tree=subprocess.check_output(['git','write-tree'],env=env,text=True).strip()
+          assert tree==expected,(tree,expected)
+          pathlib.Path('evidence/product-tree.json').write_text(json.dumps({'base':'184781b1f22d34cc9b87570730d522c513e16343','tree':tree,'productionChanged':False},indent=2))
+          print('Exact candidate:',tree)
+          PY
+      - name: Exact dependencies and installed framework guidance
+        run: |
+          npm ci --no-audit --no-fund > evidence/install.log 2>&1 || { tail -n 60 evidence/install.log; exit 1; }
+          head -n 90 node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/route.md > evidence/framework-guide.txt
+      - name: Full unit suite and affected lint
+        run: |
+          npm test > evidence/tests.log 2>&1 || { tail -n 100 evidence/tests.log; exit 1; }
+          tail -n 12 evidence/tests.log
+          npx eslint src/lib/assignment-planner-recovery.js src/app/dashboard/execution/assignment-planner.js tests/assignment-planner-recovery.test.js scripts/verify-assignment-planner-recovery-ui.mjs > evidence/lint.log 2>&1 || { cat evidence/lint.log; exit 1; }
+      - name: Browser recovery and established regressions
+        run: |
+          npx playwright install --with-deps chrome > evidence/browser-install.log 2>&1
+          for script in verify-assignment-planner-recovery-ui verify-assignment-agenda-ui verify-task-assignments-ui verify-assignment-overlap-ui verify-assignment-continuity-ui; do
+            node "scripts/$script.mjs" > "evidence/$script.log" 2>&1 || { tail -n 100 "evidence/$script.log"; exit 1; }
+            tail -n 2 "evidence/$script.log"
+          done
+      - name: Complete application build
+        run: |
+          npm run build > evidence/build.log 2>&1 || { tail -n 100 evidence/build.log; exit 1; }
+          tail -n 12 evidence/build.log
+          git diff --check
+      - name: Preserve bounded synthetic evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: planner-recovery-${{ github.run_id }}
+          path: |
+            evidence/
+            .vercel/assignment-planner-recovery-ui/proof.json
+            .vercel/assignment-planner-recovery-ui/*.png
+          include-hidden-files: true
+          retention-days: 7
+          if-no-files-found: warn
