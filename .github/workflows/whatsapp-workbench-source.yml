@@ -1,0 +1,33 @@
+name: Inspect WhatsApp implementation source
+on:
+  push:
+    branches: ['operations/whatsapp-workbench-20260923']
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: eaf219e77702bcc961bb18d0c23fc9d4e1828bbf
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Export tracked application source and installed guides only
+        run: |
+          mkdir -p evidence
+          git archive --format=tar --output=evidence/application-source.tar HEAD AGENTS.md PLAN_DE_IMPLEMENTACION_CODEX.md src tests scripts docs e2e prisma prisma.config.ts package.json package-lock.json jsconfig.json next.config.mjs eslint.config.mjs playwright.config.js vercel.json .github/workflows
+          git ls-tree -r --name-only HEAD > evidence/source-files.txt
+          npm ci --no-audit --no-fund > evidence/dependencies.log 2>&1
+          tar -cf evidence/next-guides.tar -C node_modules/next/dist docs
+          git rev-parse HEAD > evidence/source-sha.txt
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: whatsapp-workbench-source-${{ github.run_id }}
+          path: evidence/
+          retention-days: 2
+          if-no-files-found: error
