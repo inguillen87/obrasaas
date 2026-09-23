@@ -32,18 +32,23 @@ export default function AssignmentPlanner({organizationId,projectId,tasks,focuse
     return()=>{active=false;controller.abort();clearTimeout(timeout);};
   },[organizationId,projectId,taskId,queryEpoch]);
   const directorySourceChanged=useCallback(()=>{
+    if(inFlight.current||attempt.current)return;
     setDirectoryOpen(false);setReview(null);setConsent(false);setPhase('refresh-required');
     setError('La actividad cambió durante la búsqueda. Actualizá la actividad y responsables; se conserva tu planificación.');
   },[]);
   function close(){if(inFlight.current)return;if(dirty&&!window.confirm('¿Salir sin confirmar esta planificación? El texto y la selección sólo están en esta ventana.'))return;onClose();}
   function change(key,value){if(key==='ownerKind'){setDirectoryOpen(false);setExternalOwner(null);}setDraft(previous=>({...previous,[key]:value,...(key==='ownerKind'?{ownerId:''}:{})}));setConsent(false);setReview(null);}
+  function openDirectory(){
+    if(inFlight.current||attempt.current||locked)return;
+    setReview(null);setReviewEpoch(value=>value+1);setConsent(false);setDirectoryOpen(true);
+  }
   function refreshSource(){
     if(inFlight.current||!taskId||!['load-error','refresh-required'].includes(phase))return;
     // Offered only for a failed GET or a confirmed pre-write rejection, never an uncertain POST.
     setDirectoryOpen(false);setExternalOwner(null);setSource(null);setReview(null);setConsent(false);setError('');setPhase('loading');setReviewEpoch(value=>value+1);setQueryEpoch(value=>value+1);
   }
   async function save(event){
-    event.preventDefault();if(inFlight.current||!source||!consent||blocked||sourcePending)return;
+    event.preventDefault();if(inFlight.current||!source||!consent||blocked||sourcePending||directoryOpen)return;
     try{if(!attempt.current){const input={taskId,expectedTaskRevision:source.task.revision,...draft};const normalized=normalizeAssignmentPlan(input);if(!assignmentReviewMatches(review,normalized,{organizationId,projectId}))throw new Error('Revisá las coincidencias antes de confirmar.');attempt.current={key:crypto.randomUUID(),input:{...input,review:{version:review.version,acknowledged:true,reason:review.warnings?coordination:''}},normalized};}}catch(failure){setError(failure.message);return;}
     inFlight.current=true;setPhase('saving');setError('');const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),20000);
     try{
@@ -76,20 +81,20 @@ export default function AssignmentPlanner({organizationId,projectId,tasks,focuse
       <label>{draft.ownerKind==='WORKER'?'Persona de esta obra':'Cuadrilla de esta obra'}<select required aria-label="Responsable de la asignación" value={draft.ownerId} onChange={event=>change('ownerId',event.target.value)}><option value="">Seleccionar responsable</option>{draft.ownerId&&!owner&&<option value={draft.ownerId} disabled>Selección anterior no disponible en esta consulta</option>}{displayed.map(row=><option key={row.id} value={row.id}>{row.name}</option>)}</select></label>
       {draft.ownerId&&!owner&&<p role="status">El responsable seleccionado no aparece en las opciones actuales. Revisá la selección antes de confirmar; tus fechas y explicación se conservaron.</p>}
       {options.length===0&&<p role="status">No hay {draft.ownerKind==='WORKER'?'personas activas':'cuadrillas activas'} disponibles en esta obra. Registralas antes de asignar.</p>}
-      {source.owners.truncated&&<div className={styles.warning}><p>Se muestran hasta 100 opciones por tipo. No encontrar un responsable en esta lista no confirma que no exista.</p><button type="button" onClick={()=>setDirectoryOpen(true)} disabled={directoryOpen}>Abrir directorio completo</button></div>}
-      {directoryOpen&&<AssignmentOwnerDirectory key={organizationId+':'+projectId+':'+taskId+':'+source.task.revision+':'+draft.ownerKind+':'+queryEpoch} organizationId={organizationId} projectId={projectId} taskId={taskId} taskRevision={source.task.revision} ownerKind={draft.ownerKind} disabled={locked} onClose={()=>setDirectoryOpen(false)} onSourceChanged={directorySourceChanged} onPick={record=>{if(locked)return;setExternalOwner({source,kind:draft.ownerKind,record});change('ownerId',record.id);setDirectoryOpen(false);}}/>}
+      {source.owners.truncated&&<div className={styles.warning}><p>Se muestran hasta 100 opciones por tipo. No encontrar un responsable en esta lista no confirma que no exista.</p><button type="button" onClick={openDirectory} disabled={directoryOpen}>Abrir directorio completo</button></div>}
+      {directoryOpen&&<AssignmentOwnerDirectory key={organizationId+':'+projectId+':'+taskId+':'+source.task.revision+':'+draft.ownerKind+':'+queryEpoch} organizationId={organizationId} projectId={projectId} taskId={taskId} taskRevision={source.task.revision} ownerKind={draft.ownerKind} disabled={locked} onClose={()=>setDirectoryOpen(false)} onSourceChanged={directorySourceChanged} onPick={record=>{if(locked||inFlight.current||attempt.current)return;setExternalOwner({source,kind:draft.ownerKind,record});change('ownerId',record.id);setDirectoryOpen(false);}}/>}
       <div className={styles.dates}><label>Inicio previsto · opcional<input aria-label="Inicio previsto" type="date" value={draft.startsOn} onChange={event=>change('startsOn',event.target.value)} /></label><label>Fin previsto · opcional<input aria-label="Fin previsto" type="date" min={draft.startsOn||undefined} value={draft.endsOn} onChange={event=>change('endsOn',event.target.value)} /></label></div>
       <p className={styles.hint}>Fechas de planificación, sin horas ni cálculo de disponibilidad. No cambian las fechas del Gantt.</p></>}
       </fieldset>
       {source&&owner&&<section className={styles.confirmation} aria-label="Revisar planificación"><span>ANTES DE CONFIRMAR</span><strong>{source.task.title}</strong><p>{draft.ownerKind==='WORKER'?'Persona':'Cuadrilla'}: {owner.name}</p><p>{draft.startsOn?draft.startsOn.split('-').reverse().join('/'):'Sin fecha de inicio'} → {draft.endsOn?draft.endsOn.split('-').reverse().join('/'):'Sin fecha final'}</p><small>Versión de la actividad: {source.task.revision}. Estado inicial: planificada.</small></section>}
       {source&&owner&&<AssignmentOverlapCheck key={JSON.stringify([taskId,source.task.revision,draft,reviewEpoch])}
-        input={{taskId,expectedTaskRevision:source.task.revision,...draft}} organizationId={organizationId} projectId={projectId} disabled={locked}
+        input={{taskId,expectedTaskRevision:source.task.revision,...draft}} organizationId={organizationId} projectId={projectId} disabled={locked||directoryOpen}
         onReviewed={value=>{setReview(value);setConsent(false);if(value)setError('');}}/>}
       {(review?.warnings||coordination)&&<label className={styles.coordinationNote}>Criterio de coordinación<textarea aria-label="Explicación de coordinación" value={coordination} minLength={8} maxLength={1000} rows={3} disabled={locked} onChange={event=>{setCoordination(event.target.value);setConsent(false);}} placeholder="Explicá cómo coordinarás los trabajos o completarás los datos pendientes."/></label>}
-      <label className={styles.consent}><input type="checkbox" checked={consent} disabled={locked||!owner||!review||review.warnings&&coordination.trim().length<8} onChange={event=>setConsent(event.target.checked)} />Confirmo actividad, responsable y fechas. Esta asignación no acredita avance ni otorga acceso adicional.</label>
+      <label className={styles.consent}><input type="checkbox" checked={consent} disabled={locked||directoryOpen||!owner||!review||review.warnings&&coordination.trim().length<8} onChange={event=>setConsent(event.target.checked)} />Confirmo actividad, responsable y fechas. Esta asignación no acredita avance ni otorga acceso adicional.</label>
       {error&&<p role="alert" className={styles.warning}>{error}</p>}
       {['load-error','refresh-required'].includes(phase)&&<section className={styles.confirmation} aria-label="Recuperar consulta de planificación"><p>Se conservan la selección, las fechas y la explicación en esta ventana. Volver a consultar no crea ni modifica asignaciones. Después deberás revisar y confirmar nuevamente.</p><button type="button" className={styles.primary} onClick={refreshSource}>{phase==='load-error'?'Volver a consultar la actividad':'Actualizar actividad y responsables'}</button></section>}
-      </div><footer className={styles.dialogFooter}><button type="button" onClick={close} disabled={busy}>Volver sin confirmar</button><button className={styles.primary} disabled={!source||!owner||!consent||busy||blocked||sourcePending||!review||review.warnings&&coordination.trim().length<8} type="submit">{busy?'Confirmando…':uncertain?'Verificar el mismo intento':'Confirmar planificación'}</button></footer>
+      </div><footer className={styles.dialogFooter}><button type="button" onClick={close} disabled={busy}>Volver sin confirmar</button><button className={styles.primary} disabled={!source||!owner||!consent||busy||blocked||sourcePending||directoryOpen||!review||review.warnings&&coordination.trim().length<8} type="submit">{busy?'Confirmando…':uncertain?'Verificar el mismo intento':'Confirmar planificación'}</button></footer>
     </form>
   </dialog>;
 }

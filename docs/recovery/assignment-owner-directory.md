@@ -14,9 +14,18 @@ GET `/api/execution/assignments/owners` exige sesión, permisos execution:read y
 
 El cursor vincula consulta, tipo, empresa, obra y revisión para impedir usos accidentales fuera de la búsqueda. No es una firma ni una autorización. Incluso un cursor alterado no reemplaza los filtros de empresa/obra ni los permisos del servidor. Se limita tamaño del cursor, texto y filas; la consulta pide 31 para devolver 30 e indicar continuación sin hacer un count global.
 
-Los errores de red permiten reintentar sólo esa lectura. Las respuestas ajenas o malformadas no ofrecen selección. Una Task modificada deriva al recuperador A17. Cerrar/cambiar el contexto aborta la consulta y descarta respuestas tardías. Un POST de planificación incierto conserva su intento: el directorio queda deshabilitado y no se usa para reemplazarlo.
+Los errores de red permiten reintentar sólo esa lectura. Las respuestas ajenas o malformadas no ofrecen selección. Una Task modificada deriva al recuperador A17. Cerrar/cambiar el contexto aborta la consulta y descarta respuestas tardías.
+
+## Exclusión entre búsquedas y escrituras
+Abrir el directorio retira revisión y consentimiento e invalida la consulta de coincidencias anterior. No se puede confirmar mientras el directorio está abierto, tampoco mediante un submit programático. Cerrarlo no restaura automáticamente la aprobación anterior: hace falta revisar de nuevo. Durante una escritura en curso o incierta no se puede abrir ni seleccionar en el directorio, y una respuesta tardía no puede reemplazar el estado del intento. Un POST incierto conserva su clave y cuerpo originales.
 
 ## Pruebas y operación
-`assignment-owner-directory.test.js` y `assignment-owner-directory-handlers.test.js` cubren paginación, límites, aislamiento, cursores, palabras literales, permisos y caché. El verificador PostgreSQL exige la conexión desechable local ya existente y usa 137 personas/73 cuadrillas sintéticas, sin credenciales de la aplicación. El verificador UI monta Planner real y los servicios reales con HTTP/base/identidad controlados: selección más allá de 100, navegación, borrador, errores, recuperación y un guardado tras consentimiento. No acredita Clerk ni una constructora real.
+`assignment-owner-directory.test.js` y `assignment-owner-directory-handlers.test.js` cubren paginación, límites, aislamiento, cursores, palabras literales, permisos y caché. La ruta conecta expresamente getPlatformAccess y forma parte del inventario exhaustivo de rutas privadas (134); no se cambian ni amplían las excepciones públicas del Proxy.
 
-La validación completa del árbol, build, regresiones previas y publicación se registra por SHA en PR #1. Esta fase incorpora un endpoint de lectura y UI; no cambia esquema, dependencias, permisos, lógica de escritura, Gantt, nómina o activos de Meta. Production y el recorrido autenticado del SHA actual conservan sus requisitos propios. La copia de Windows no se modifica cuando Desktop Commander está desconectado.
+El verificador PostgreSQL exige la conexión desechable local ya existente y usa 137 personas/73 cuadrillas sintéticas, sin credenciales de la aplicación. Se incorpora también como tercera suite independiente del workflow permanente de contratos PostgreSQL.
+
+El verificador UI monta Planner real y los servicios reales con HTTP/base/identidad controlados: selección más allá de 100, navegación, borrador, errores, recuperación y guardado tras consentimiento. Retiene una respuesta antigua del directorio hasta después de una escritura cuya respuesta se pierde; comprueba recuperación del mismo intento, una asignación/auditoría y ausencia de reemplazo por la lectura tardía. No acredita Clerk ni una constructora real.
+
+El candidato anterior `ef23f14` falló el inventario de rutas antes de los pasos SQL/UI/build. Ese fallo y su evidencia se conservan en el PR; el éxito sólo corresponde al árbol final realmente validado.
+
+La validación completa del árbol, build, regresiones previas y publicación se registra por SHA en PR #1. Esta fase incorpora un endpoint de lectura y UI; no cambia esquema, dependencias, permisos de roles, lógica de escritura, Gantt, nómina o activos de Meta. Production y el recorrido autenticado del SHA actual conservan sus requisitos propios. La copia de Windows no se modifica cuando Desktop Commander está desconectado.

@@ -83,6 +83,7 @@ function examplePathname(routeFile) {
 }
 
 const SENSITIVE_API_PATHS = [
+  '/api/execution/assignments/owners',
   '/api/superadmin/ai-cost-reconciliations',
   '/api/tenant/privacy/requests',
   '/api/tenant/privacy/requests/request-a/review',
@@ -190,7 +191,7 @@ test('every API Route Handler is exhaustively classified behind Clerk or its own
     );
   }
 
-  assert.equal(protectedRouteCount, 133, 'the complete current Clerk surface must remain classified');
+  assert.equal(protectedRouteCount, 134, 'the complete current Clerk surface must remain classified');
   assert.deepEqual(discoveredPublicRoutes.sort(), PUBLIC_SELF_AUTHENTICATED_API_PATHS.toSorted());
 });
 

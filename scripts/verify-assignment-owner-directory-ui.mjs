@@ -14,7 +14,8 @@ import { reviewTaskAssignment, planReviewedTaskAssignment } from '../src/lib/ass
 const root = fileURLToPath(new URL('../', import.meta.url)), out = resolve(root, '.vercel/assignment-owner-directory-ui');
 mkdirSync(out, { recursive: true });
 const fixture = ownerDirectoryFixture(), task = fixture.state.task;
-let mode = 'normal', saves = 0, reads = 0; const errors = [];
+let mode = 'normal', saves = 0, reads = 0, lostReply = false, staleReplyCount = 0;
+const errors = [], writeRequests = [], heldDirectories = [];
 const entry = `import React,{useState}from'react';import{createRoot}from'react-dom/client';import Planner from'./src/app/dashboard/execution/assignment-planner';import './src/app/globals.css';function App(){const[saved,setSaved]=useState(null);return saved?<p role="status">Asignación guardada: {saved.workerId}</p>:<Planner tasks={[${JSON.stringify(task)}]} focusedTask={${JSON.stringify(task)}} organizationId="org-a" projectId="project-a" onClose={()=>{}} onSaved={setSaved}/>};createRoot(document.getElementById('root')).render(<React.StrictMode><App/>);`;
 await build({ stdin: { contents: entry, resolveDir: root, loader: 'jsx' }, outfile: resolve(out, 'bundle.js'), bundle: true, format: 'esm', platform: 'browser', jsx: 'automatic', loader: { '.js': 'jsx' }, alias: { '@': resolve(root, 'src') }, define: { 'process.env.NODE_ENV': '"development"' }, logLevel: 'silent', plugins: [{ name: 'test-link', setup(api) {
   api.onResolve({ filter: /^next\/link$/ }, () => ({ path: 'link', namespace: 'fixture' }));
@@ -28,6 +29,12 @@ const server = createServer(async (req, res) => {
       assert.equal(req.headers['x-obrasaas-organization'], scope.organizationId); assert.equal(req.headers['x-obrasaas-project'], scope.projectId);
       if (url.pathname.endsWith('/owners')) {
         assert.equal(req.method, 'GET'); reads++;
+        if (mode === 'held-stale') {
+          await new Promise(done => { heldDirectories.push(done); });
+          json(res, { code: 'ASSIGNMENT_TASK_CHANGED', error: 'Respuesta de lectura antigua del ensayo.' }, 409);
+          staleReplyCount++;
+          return;
+        }
         if (mode === 'fail') { json(res, { code: 'ASSIGNMENT_DIRECTORY_UNAVAILABLE', error: 'Consulta interrumpida de ensayo.' }, 503); return; }
         const input = { taskId: url.searchParams.get('taskId'), expectedTaskRevision: Number(url.searchParams.get('expectedTaskRevision')), ownerKind: url.searchParams.get('ownerKind'), query: url.searchParams.get('query') || '', cursor: url.searchParams.get('cursor') };
         const result = await listAssignmentOwners(fixture.prisma, { scope, input });
@@ -39,8 +46,9 @@ const server = createServer(async (req, res) => {
       let raw = ''; for await (const chunk of req) raw += chunk;
       const input = JSON.parse(raw);
       if (url.pathname.endsWith('/review')) { json(res, await reviewTaskAssignment(fixture.prisma, { scope, input })); return; }
-      saves++;
+      saves++; writeRequests.push({ key: req.headers['idempotency-key'], body: raw });
       const result = await planReviewedTaskAssignment(fixture.prisma, { scope, actorId, operationKey: req.headers['idempotency-key'], input });
+      if (lostReply && !result.replayed) { json(res, { error: 'Respuesta perdida después del guardado.' }, 503); return; }
       json(res, result, result.replayed ? 200 : 201);
     } catch (failure) { json(res, { code: failure.code, error: failure.message }, failure.status || 503); }
     return;
@@ -76,8 +84,34 @@ try {
   await expect(modal.getByRole('button', { name: 'Confirmar planificación' })).toBeDisabled(); assert.equal(saves, 0);
   await modal.getByRole('button', { name: 'Revisar coincidencias', exact: true }).click();
   await expect(modal.getByText('Sin coincidencias detectadas en esta revisión', { exact: true })).toBeVisible();
-  await modal.getByRole('checkbox').check(); await modal.getByRole('button', { name: 'Confirmar planificación' }).click();
-  await expect(page.getByRole('status')).toHaveText('Asignación guardada: worker-136'); assert.equal(saves, 1); assert.equal(fixture.state.rows.length, 1);
+  await modal.getByRole('checkbox').check();
+  await expect(modal.getByRole('button', { name: 'Confirmar planificación' })).toBeEnabled();
+  // An obsolete GET is held while its UI closes and a real domain save loses its reply.
+  mode = 'held-stale';
+  await modal.getByRole('button', { name: 'Abrir directorio completo' }).click();
+  await expect.poll(() => heldDirectories.length > 0).toBe(true);
+  await expect(modal.getByRole('button', { name: 'Confirmar planificación' })).toBeDisabled();
+  await expect(modal.getByRole('checkbox')).not.toBeChecked();
+  await expect(modal.getByRole('button', { name: 'Revisar coincidencias', exact: true })).toBeDisabled();
+  await modal.locator('form').evaluate(form => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
+  assert.equal(saves, 0);
+  await directory.getByRole('button', { name: 'Cerrar directorio' }).click();
+  await expect(modal.getByRole('button', { name: 'Confirmar planificación' })).toBeDisabled();
+  mode = 'normal';
+  await modal.getByRole('button', { name: 'Revisar coincidencias', exact: true }).click();
+  await expect(modal.getByText('Sin coincidencias detectadas en esta revisión', { exact: true })).toBeVisible();
+  await modal.getByRole('checkbox').check(); lostReply = true;
+  await modal.getByRole('button', { name: 'Confirmar planificación' }).click();
+  await expect(modal.getByRole('button', { name: 'Verificar el mismo intento' })).toBeEnabled();
+  heldDirectories.forEach(done => done()); await expect.poll(() => staleReplyCount).toBe(heldDirectories.length);
+  await page.waitForTimeout(100);
+  await expect(modal.getByRole('button', { name: 'Verificar el mismo intento' })).toBeEnabled();
+  await expect(modal.getByRole('button', { name: 'Actualizar actividad y responsables' })).toHaveCount(0);
+  await expect(modal.getByRole('button', { name: 'Abrir directorio completo' })).toBeDisabled();
+  await expect(modal.getByRole('combobox', { name: 'Responsable de la asignación' })).toHaveValue('worker-136');
+  await modal.getByRole('button', { name: 'Verificar el mismo intento' }).click();
+  await expect(page.getByRole('status')).toHaveText('Asignación guardada: worker-136');
+  assert.equal(saves, 2); assert.equal(fixture.state.rows.length, 1); assert.deepEqual(writeRequests[0], writeRequests[1]);
   mode = 'fail'; await open(); await expect(directory.getByRole('alert')).toContainText('Consulta interrumpida'); await expect(start).toHaveValue('2026-09-21');
   mode = 'normal'; await directory.getByRole('button', { name: 'Reintentar esta consulta' }).click(); await expect(directory.getByRole('button', { name: 'Elegir Persona 000', exact: true })).toBeEnabled();
   await directory.getByLabel('Nombre en el directorio').fill('Nadie inexistente'); await directory.getByRole('button', { name: 'Buscar en toda la obra', exact: true }).click(); await expect(directory.getByText(/No hay resultados activos/)).toBeVisible();
@@ -86,7 +120,7 @@ try {
   await modal.getByRole('button', { name: 'Abrir directorio completo' }).click(); await expect(modal.getByRole('button', { name: 'Actualizar actividad y responsables' })).toBeVisible(); await expect(start).toHaveValue('2026-10-01');
   await modal.getByRole('button', { name: 'Actualizar actividad y responsables' }).click(); await expect(modal.getByRole('button', { name: 'Abrir directorio completo' })).toBeEnabled();
   mode = 'slow'; await modal.getByRole('button', { name: 'Abrir directorio completo' }).click(); await directory.getByRole('button', { name: 'Cerrar directorio' }).click(); await page.waitForTimeout(350); await expect(directory).toHaveCount(0);
-  assert.equal(saves, 1); assert.equal(fixture.state.audits.length, 1); assert.deepEqual(errors, []);
-  const proof = { status: 'PASS', environment: 'real-react-planner-and-domain-services-controlled-HTTP-database-identity', initialDirectorySize: 137, selectedBeyondInitial100: true, pagesForwardAndBack: true, searchOnExplicitAction: true, draftPreserved: true, selectionDoesNotWrite: true, writesAfterReviewAndConsent: 1, failedReadRetry: true, emptyResults: true, foreignResponseRejected: true, changedTaskRequiresRefresh: true, lateResponseIgnored: true, widths: [320, 390, 768, 1280], pageErrors: 0, clerkVerified: false };
+  assert.equal(saves, 2); assert.equal(fixture.state.audits.length, 1); assert.deepEqual(errors, []);
+  const proof = { status: 'PASS', environment: 'real-react-planner-and-domain-services-controlled-HTTP-database-identity', initialDirectorySize: 137, selectedBeyondInitial100: true, pagesForwardAndBack: true, searchOnExplicitAction: true, draftPreserved: true, selectionDoesNotWrite: true, logicalCreationsAfterReviewAndConsent: 1, writeRequests: 2, directoryAndSubmitExclusive: true, staleReadDoesNotReplaceUncertainWrite: true, identicalReplay: true, failedReadRetry: true, emptyResults: true, foreignResponseRejected: true, changedTaskRequiresRefresh: true, lateResponseIgnored: true, widths: [320, 390, 768, 1280], pageErrors: 0, clerkVerified: false };
   writeFileSync(resolve(out, 'proof.json'), JSON.stringify(proof, null, 2)); console.log(JSON.stringify(proof));
-} finally { await browser?.close(); await new Promise(done => server.close(done)); }
+} finally { heldDirectories.forEach(done => done()); await browser?.close(); server.closeAllConnections(); await new Promise(done => server.close(done)); }

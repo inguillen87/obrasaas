@@ -9,11 +9,13 @@ on:
       - 'src/lib/task-assignment*.js'
       - 'src/lib/assignment-overlap*.js'
       - 'src/lib/assignment-reschedule*.js'
+      - 'src/lib/assignment-owner-directory*.js'
       - 'src/lib/assignment-period-uniqueness.js'
       - 'src/lib/schedule-field-status.js'
       - 'prisma/**'
       - 'scripts/verify-execution-release-postgres.mjs'
       - 'scripts/verify-assignment-continuity-postgres.mjs'
+      - 'scripts/verify-assignment-owner-directory-postgres.mjs'
       - 'scripts/lib/execution-test-database.mjs'
       - '.github/workflows/execution-postgres.yml'
 permissions:
@@ -28,7 +30,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [execution-release, assignment-continuity]
+        suite: [execution-release, assignment-continuity, assignment-owner-directory]
     services:
       postgres:
         image: postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
