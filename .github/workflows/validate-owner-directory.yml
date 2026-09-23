@@ -1,0 +1,105 @@
+name: Validate owner directory before release
+on:
+  push:
+    branches: ['operations/owner-directory-20260923']
+permissions:
+  contents: read
+concurrency:
+  group: owner-directory-validation
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    services:
+      postgres:
+        image: postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+        env:
+          POSTGRES_USER: execution_fixture
+          POSTGRES_PASSWORD: local_fixture_only
+          POSTGRES_DB: obrasaas_execution_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U execution_fixture -d obrasaas_execution_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      DATABASE_URL: postgresql://execution_fixture:local_fixture_only@127.0.0.1:5432/obrasaas_execution_ci?schema=public
+      DATABASE_URL_UNPOOLED: postgresql://execution_fixture:local_fixture_only@127.0.0.1:5432/obrasaas_execution_ci?schema=public
+      DIRECT_URL: postgresql://execution_fixture:local_fixture_only@127.0.0.1:5432/obrasaas_execution_ci?schema=public
+      EXECUTION_RELEASE_DATABASE_URL: postgresql://execution_fixture:local_fixture_only@127.0.0.1:5432/obrasaas_execution_ci?schema=public
+      EXECUTION_RELEASE_DISPOSABLE: 'true'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Verify exact product tree and preserve candidate source
+        run: |
+          mkdir -p evidence
+          python3 - <<'PY'
+          import json,os,pathlib,subprocess,tempfile
+          m=json.load(open('.owner-directory-validation.json'))
+          with tempfile.TemporaryDirectory() as t:
+              env={**os.environ,'GIT_INDEX_FILE':str(pathlib.Path(t)/'index')}
+              subprocess.run(['git','read-tree','HEAD'],env=env,check=True)
+              subprocess.run(['git','update-index','--force-remove','--','.github/workflows/validate-owner-directory.yml','.owner-directory-validation.json'],env=env,check=True)
+              tree=subprocess.check_output(['git','write-tree'],env=env,text=True).strip()
+          assert tree==m['productTree'],(tree,m['productTree'])
+          pathlib.Path('evidence/product-tree.json').write_text(json.dumps(m,indent=2))
+          subprocess.run(['git','archive','--format=tar','--output=evidence/candidate-source.tar','HEAD',*m['files']],check=True)
+          print('Verified product tree',tree)
+          PY
+      - name: Exact dependencies and installed framework guide
+        run: |
+          npm ci > evidence/install.log 2>&1 || { tail -n 60 evidence/install.log; exit 1; }
+          head -n 170 node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/route.md > evidence/framework-guide.txt
+      - name: Full unit suite and affected lint
+        run: |
+          npm test > evidence/tests.log 2>&1 || { tail -n 120 evidence/tests.log; grep -A20 -B3 '^not ok\|^✖' evidence/tests.log | head -n 120; exit 1; }
+          tail -n 10 evidence/tests.log
+          python3 - <<'PY'
+          import json,subprocess
+          m=json.load(open('.owner-directory-validation.json'))
+          files=[p for p in m['files'] if p.endswith(('.js','.mjs'))]
+          with open('evidence/lint.log','w') as out:
+              r=subprocess.run(['npx','eslint',*files],stdout=out,stderr=subprocess.STDOUT)
+          print(open('evidence/lint.log').read())
+          raise SystemExit(r.returncode)
+          PY
+      - name: Real paginated queries on disposable PostgreSQL 17
+        run: |
+          npx prisma validate > evidence/schema.log 2>&1
+          npx prisma migrate deploy > evidence/migrations.log 2>&1 || { tail -n 60 evidence/migrations.log; exit 1; }
+          npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code > evidence/schema-diff.log 2>&1
+          npx tsx scripts/verify-assignment-owner-directory-postgres.mjs > evidence/postgres.log 2>&1 || { cat evidence/postgres.log; exit 1; }
+          cat evidence/postgres.log
+      - name: Browser directory and existing recovery circuits
+        run: |
+          npx playwright install --with-deps chrome > evidence/browser-install.log 2>&1
+          for script in verify-assignment-owner-directory-ui verify-assignment-planner-recovery-ui verify-assignment-agenda-ui verify-assignment-continuity-ui verify-assignment-overlap-ui verify-task-assignments-ui; do
+            node "scripts/$script.mjs" > "evidence/$script.log" 2>&1 || { tail -n 90 "evidence/$script.log"; exit 1; }
+            tail -n 1 "evidence/$script.log"
+          done
+      - name: Complete build and diff checks
+        run: |
+          npm run build > evidence/build.log 2>&1 || { tail -n 100 evidence/build.log; exit 1; }
+          tail -n 12 evidence/build.log
+          git diff --check
+      - name: Preserve bounded non-authenticated evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: owner-directory-${{ github.run_id }}
+          path: |
+            evidence/
+            .vercel/assignment-owner-directory-ui/proof.json
+            .vercel/assignment-owner-directory-ui/*.png
+          include-hidden-files: true
+          retention-days: 7
+          if-no-files-found: warn
