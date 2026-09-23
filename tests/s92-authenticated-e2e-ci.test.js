@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { runInNewContext } from 'node:vm';
 
 const workflow = readFileSync(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8');
 
@@ -62,4 +63,36 @@ test('authenticated web-server diagnostics are scoped without publishing artifac
   assert.doesNotMatch(job, /sk_test_[A-Za-z0-9]/);
   assert.doesNotMatch(job, /upload-artifact/);
   assert.doesNotMatch(job, /playwright-report|test-results|trace|video/i);
+});
+
+test('Clerk gate admits only authorized branch refs on push or explicit dispatch', () => {
+  const job = jobSource('authenticated-s92-e2e');
+  const condition = job.match(/\n    if: >-\r?\n([\s\S]*?)\n    runs-on:/)?.[1]
+    .trim().replace(/\s+/g, ' ');
+  const allowedRefs = [
+    'refs/heads/master',
+    'refs/heads/codex/platform-ux-foundation',
+    'refs/heads/codex/saas-recovery-20260917',
+  ];
+  const expected = "(github.event_name == 'push' || github.event_name == 'workflow_dispatch') "
+    + `&& (${allowedRefs.map(ref => `github.ref == '${ref}'`).join(' || ')})`;
+  assert.equal(condition, expected, 'Keep the exact event/branch allowlist, not a wildcard or PR secret path.');
+  const untrustedRefs = [
+    'refs/pull/1/merge',
+    'refs/pull/1/head',
+    'refs/heads/codex/saas-recovery-20260917-extra',
+    'refs/heads/codex/saas-recovery-20260918',
+    'refs/heads/operations/certificate-archive-20260923',
+    'refs/tags/codex/saas-recovery-20260917',
+    'refs/tags/master',
+    'refs/heads/master-copy',
+    '',
+  ];
+  for (const event_name of ['push', 'workflow_dispatch', 'pull_request', 'pull_request_target', 'workflow_run', 'schedule']) {
+    for (const ref of [...allowedRefs, ...untrustedRefs]) {
+      const observed = runInNewContext(condition, { github: { event_name, ref } }, { timeout: 100 });
+      const eligible = ['push', 'workflow_dispatch'].includes(event_name) && allowedRefs.includes(ref);
+      assert.equal(observed, eligible, `${event_name}: ${ref}`);
+    }
+  }
 });

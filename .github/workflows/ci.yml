@@ -260,7 +260,8 @@ jobs:
     if: >-
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
       && (github.ref == 'refs/heads/master'
-      || github.ref == 'refs/heads/codex/platform-ux-foundation')
+      || github.ref == 'refs/heads/codex/platform-ux-foundation'
+      || github.ref == 'refs/heads/codex/saas-recovery-20260917')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: clerk-development-e2e
