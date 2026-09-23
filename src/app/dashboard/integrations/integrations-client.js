@@ -205,6 +205,7 @@ export default function IntegrationsClient({
   const [flowPendingKey, setFlowPendingKey] = useState(null);
   const [flowNotice, setFlowNotice] = useState(null);
   const [templateCatalog, setTemplateCatalog] = useState([]);
+  const [templateReviewEpoch, setTemplateReviewEpoch] = useState(0);
   const [templatePendingKey, setTemplatePendingKey] = useState(null);
   const [templateNotice, setTemplateNotice] = useState(null);
   const [flowEndpoint, setFlowEndpoint] = useState(
@@ -278,6 +279,7 @@ export default function IntegrationsClient({
 
   function invalidateRemoteChannelState() {
     remoteChannelEpochRef.current += 1;
+    setTemplateReviewEpoch(value => value + 1);
     healthRequestSequenceRef.current += 1;
     setChannelHealth(null);
     setLifecycleView(null);
@@ -472,7 +474,7 @@ export default function IntegrationsClient({
       active = false;
       controller.abort();
     };
-  }, [connectionIdentity, graphReady, advancedOpen]);
+  }, [connectionIdentity, graphReady, advancedOpen, organizationId, projectId]);
 
   function startSignup() {
     if (internalWorkspace || pending || lifecycleContextBlocked || signupActiveRef.current) return;
@@ -962,7 +964,7 @@ export default function IntegrationsClient({
                       {actionLabel}
                     </button>
                     <TemplateReviewControl
-                      key={flow.key + ':' + connectionIdentity + ':' + remoteChannelEpochRef.current}
+                      key={flow.key + ':' + connectionIdentity + ':' + templateReviewEpoch}
                       flow={flow} organizationId={organizationId} projectId={projectId}
                       companyName={companyName} projectName={projectName} canReadInbox={canReadInbox}
                       disabled={!graphReady || !platformReady || pending || healthPending || Boolean(flowPendingKey) || Boolean(templatePendingKey)}

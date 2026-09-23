@@ -14,7 +14,7 @@ export default function TemplateReviewControl({ flow, organizationId, projectId,
   const [consent, setConsent] = useState(false), [uncertain, setUncertain] = useState(false), [error, setError] = useState('');
   const saving = phase === 'saving', busy = saving || phase === 'loading';
   useWorkspaceLeaveGuard({ dirty: uncertain || open && consent, busy: saving });
-  useEffect(() => { alive.current = true; return () => { alive.current = false; sequence.current++; flight.current?.abort(); }; }, []);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; flight.current?.abort(); }; }, []);
   useEffect(() => {
     if (!open) return;
     const el = dialog.current, previous = document.activeElement;
