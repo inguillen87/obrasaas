@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { verifyAuthenticatedAssignmentContinuity } from './s11-assignment-journey.js';
 import { clerk, setupClerkTestingToken } from '@clerk/testing/playwright';
 
 import {
@@ -562,6 +563,7 @@ test.describe('S9.2 authenticated acceptance', () => {
       await expect(
         sessions.auditor.page.getByRole('button', { name: /Sellar (primer corte|nueva revisión)/ }),
       ).toHaveCount(0);
+      await verifyAuthenticatedAssignmentContinuity({ fixture, sessions, baseURL });
     } finally {
       await Promise.allSettled(
         Object.values(sessions).map(({ context }) => context.close()),

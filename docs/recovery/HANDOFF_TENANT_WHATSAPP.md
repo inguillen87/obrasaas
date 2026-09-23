@@ -81,3 +81,6 @@ Leer `certificate-archive-race-verification.md`. Se identificó el rechazo PREPA
 
 ## Continuación Clerk E2E: rama de recuperación autorizada
 Leer `clerk-recovery-branch-gate.md`. Tras autorización del usuario, CI y la política del entorno admiten exclusivamente `codex/saas-recovery-20260917` como tercera rama. Se mantienen el revisor obligatorio, la base PostgreSQL desechable, los secretos por paso y los tres journeys. No se aprueban ejecuciones automáticamente ni se cambian roles o credenciales productivas. Registrar en el PR el run y SHA exactos; distinguir revisión pendiente de un login probado. Esta sección actualiza la restricción de rama indicada en la entrega S10.CERT-QA, sin cambiar su evidencia histórica.
+
+## Continuación: aceptación autenticada de asignaciones
+El usuario delegó la aprobación del entorno de ensayo; el run `35816505410` completó S9.2/S9.3/S10 con Clerk Development y PostgreSQL aislado. Leer `authenticated-assignment-continuity.md`. La ampliación S11 reutiliza esas sesiones para creación/reprogramación móvil, recuperación idempotente, duplicados, sólo lectura y aislamiento. El resultado se acredita por su propio SHA/run en el PR; no confundir el éxito anterior con cobertura ejecutada de código nuevo. Una revisión explícita no modifica protecciones ni constituye una promoción productiva.
