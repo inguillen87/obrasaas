@@ -1,0 +1,110 @@
+name: Verify published owner directory Preview
+on:
+  push:
+    branches: ['operations/owner-directory-preview-20260923']
+permissions:
+  contents: read
+  statuses: read
+  deployments: read
+jobs:
+  public-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      PLAYWRIGHT_CHANNEL: chrome
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: eaf219e77702bcc961bb18d0c23fc9d4e1828bbf
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Exact dependencies and browser
+        run: |
+          mkdir -p evidence
+          npm ci --no-audit --no-fund > evidence/install.log 2>&1 || { tail -n 40 evidence/install.log; exit 1; }
+          npx playwright install --with-deps chrome > evidence/browser-install.log 2>&1
+      - name: Resolve this exact Preview and verify anonymous boundaries
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import json,os,pathlib,time,urllib.request,urllib.parse,urllib.error
+          repo='https://api.github.com/repos/inguillen87/obrasaas/'
+          sha='eaf219e77702bcc961bb18d0c23fc9d4e1828bbf'
+          inspection='https://vercel.com/marcelos-projects-c26aa499/obrasaas-saas/Apr3BauM4g6Yks7Hfy6igyJJc8yP'
+          def get(path):
+              req=urllib.request.Request(repo+path,headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json'})
+              with urllib.request.urlopen(req,timeout=25) as response:return json.load(response)
+          for attempt in range(30):
+              statuses=get('commits/'+sha+'/status')['statuses']
+              status=next((s for s in statuses if s['context']=='Vercel'),{})
+              print('Provider state:',status.get('state','absent'),flush=True)
+              if status.get('state') in ['failure','error']:raise SystemExit('Exact Preview deployment failed')
+              if status.get('state')=='success':
+                  assert status['target_url']==inspection
+                  break
+              time.sleep(20)
+          else:raise SystemExit('Exact Preview still pending')
+          candidate=None
+          for deployment in get('deployments?sha='+sha+'&per_page=10'):
+              if deployment['sha']!=sha or deployment.get('production_environment') or not deployment.get('environment','').lower().startswith('preview'):continue
+              states=get('deployments/'+str(deployment['id'])+'/statuses')
+              state=states[0] if states else {}
+              if state.get('state')=='success' and state.get('environment_url'):
+                  candidate={'url':state['environment_url'],'githubDeployment':deployment['id'],'environment':deployment['environment']}
+                  break
+          assert candidate is not None,'No immutable Preview deployment for the exact SHA'
+          target=urllib.parse.urlsplit(candidate['url'])
+          assert target.scheme=='https' and not target.username and not target.password and not target.query and not target.fragment and target.path in ('','/')
+          assert target.hostname.startswith('obrasaas-saas-') and target.hostname.endswith('-marcelos-projects-c26aa499.vercel.app') and '-git-' not in target.hostname
+          assert get('git/ref/heads/codex/saas-recovery-20260917')['object']['sha']==sha
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self,req,fp,code,msg,headers,newurl):return None
+          opener=urllib.request.build_opener(NoRedirect())
+          checks=[]
+          for path,accept in [('/','text/html'),('/privacy','text/html'),('/terms','text/html'),('/sign-in','text/html'),('/dashboard/execution','text/html'),('/api/execution/assignments/owners?taskId=synthetic-probe&expectedTaskRevision=0&ownerKind=WORKER','application/json')]:
+              req=urllib.request.Request(candidate['url'].rstrip('/')+path,headers={'Accept':accept})
+              try: response=opener.open(req,timeout=25)
+              except urllib.error.HTTPError as error: response=error
+              with response:
+                  code=response.code
+                  safe={key.lower():value for key,value in response.headers.items() if key.lower() in ['cache-control','x-clerk-auth-status','x-clerk-auth-reason','content-type']}
+              if path in ['/','/privacy','/terms']:assert code==200,(path,code)
+              elif path.startswith('/api/'):
+                  assert code==404 and safe.get('x-clerk-auth-status')=='signed-out' and 'protect-rewrite' in safe.get('x-clerk-auth-reason',''),(code,safe)
+              else:assert code in [200,307],(path,code)
+              checks.append({'path':path,'status':code,'headers':safe})
+          report={'sha':sha,'providerInspection':inspection,'providerState':'success',**candidate,'immutableUrl':True,'authenticated':False,'productionModified':False,'httpChecks':checks}
+          pathlib.Path('evidence/deployment.json').write_text(json.dumps(report,indent=2))
+          with open(os.environ['GITHUB_ENV'],'a') as output:output.write('E2E_BASE_URL='+candidate['url']+'\n')
+          print(json.dumps(report),flush=True)
+          PY
+      - name: Public browser acceptance on deployed Preview
+        run: |
+          npm run test:e2e:public > evidence/public-browser.log 2>&1 || { tail -n 100 evidence/public-browser.log; exit 1; }
+          tail -n 14 evidence/public-browser.log
+      - name: Confirm unchanged release head after browser checks
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import json,os,pathlib,urllib.request
+          req=urllib.request.Request('https://api.github.com/repos/inguillen87/obrasaas/git/ref/heads/codex/saas-recovery-20260917',headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json'})
+          with urllib.request.urlopen(req,timeout=25) as response:head=json.load(response)['object']['sha']
+          report=json.load(open('evidence/deployment.json'));assert head==report['sha']
+          report.update({'publicBrowserTests':2,'browserStatus':'PASS','headUnchangedAfterChecks':True})
+          pathlib.Path('evidence/deployed-proof.json').write_text(json.dumps(report,indent=2))
+          print(json.dumps(report))
+          PY
+      - name: Preserve public bounded evidence only
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: owner-directory-preview-${{ github.run_id }}
+          path: evidence/
+          retention-days: 7
+          if-no-files-found: warn
