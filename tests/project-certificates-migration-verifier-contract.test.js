@@ -157,14 +157,14 @@ test('S10 disposable verifier cannot regress to placeholder races or partial gov
     /async function assertDisposableArchiveVsPending\([\s\S]*?(?=async function assertDisposableActorRevokeVsApprove)/,
   )?.[0];
   assert.ok(archiveVsPending, 'archive-vs-pending race helper is required');
-  assert.match(archiveVsPending, /\['simultaneous','archive-first','prepare-first','pending-committed'\]/);
+  assert.match(archiveVsPending, /\['simultaneous','archive-first','prepare-lock-first','prepare-first','pending-committed'\]/);
   assert.match(archiveVsPending, /fulfilled\(outcomes\)\.length===1 && rejected\(outcomes\)\.length===1/);
   assert.match(archiveVsPending, /isControlledArchiveLoser/);
   assert.match(archiveVsPending, /observeArchiveBlocker\(probe,waiterPid,holderPid\)/);
   assert.match(verifier, /\$2=ANY\(pg_blocking_pids\(pid\)\)/);
   assert.match(archiveVsPending, /reason\.code==='42501'[\s\S]*PROJECT_CERTIFICATE_PREPARER_REQUIRED/);
-  assert.match(archiveVsPending, /'40001','PROJECT_ARCHIVE_BUSY:'/);
-  assert.match(archiveVsPending, /'55000','PROJECT_ARCHIVE_BLOCKED_BY_PENDING_GOVERNANCE:'/);
+  assert.match(archiveVsPending, /reason\.code==='40001'[\s\S]*PROJECT_ARCHIVE_BUSY:/);
+  assert.match(archiveVsPending, /reason\.code==='55000'[\s\S]*PROJECT_ARCHIVE_BLOCKED_BY_PENDING_GOVERNANCE:/);
   assert.match(archiveVsPending, /assert\.deepEqual\(state\.basis,before\.basis/);
   assert.match(archiveVsPending, /assert\.deepEqual\(state\.facts,before\.facts/);
   assert.match(archiveVsPending, /books:1,heads:1,versions:1,lines:2,deductions:0,decisions:0,receipts:1/);
@@ -201,4 +201,14 @@ test('focused archive verification runs all fixed orders only on the explicit di
   assert.doesNotMatch(focused,/dotenv|prisma migrate|UPDATE|DELETE|TRUNCATE/);
   assert.match(focused,/report\.status='FAIL'/);
   assert.match(verifier,/state\.book_revision===null && state\.head_revision===null/);
+});
+
+
+test('prepare-first observes row-lock dependency and commits before awaiting the blocked UPDATE', () => {
+  const section=verifier.slice(verifier.indexOf("} else if(order==='prepare-first')"),verifier.indexOf("'Archive guard did not protect the previously committed pending certificate.'"));
+  assert.match(section,/pendingQuery=capture\(archiveClient\.query\(archiveSql,archiveArgs\)\)/);
+  assert.match(section,/observeArchiveBlocker\(probe,waiterPid,holderPid,'row'\)/);
+  assert.match(section,/query\('COMMIT'\);transactionOwner=null;[\s\S]*const archived=await pendingQuery/);
+  assert.match(verifier,/wait_event IN \('transactionid','tuple'\)/);
+  assert.doesNotMatch(section,/lock_timeout=|statement_timeout=|reason\.code==='55P03'/);
 });

@@ -71,11 +71,11 @@ jobs:
         run: |
           node .certificate-baseline-reproduce.mjs > evidence/baseline.log 2>&1 || { tail -n 80 evidence/baseline.log; exit 1; }
           cat evidence/baseline-reproduction.json
-      - name: Full corrected certificate journey and all four archive orders
+      - name: Full corrected certificate journey and all five archive orders
         run: |
           npm run verify:project-certificates-migration > evidence/certificates-full.log 2>&1 || { tail -n 100 evidence/certificates-full.log; exit 1; }
           tail -n 6 evidence/certificates-full.log
-      - name: Twelve fixed archive-order runs without retry-until-success
+      - name: Fifteen fixed archive-order runs without retry-until-success
         run: |
           node scripts/verify-certificate-archive-orders.mjs > evidence/archive-orders.log 2>&1 || { tail -n 90 evidence/archive-orders.log; exit 1; }
           cat evidence/certificate-archive-orders.json

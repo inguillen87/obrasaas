@@ -1,6 +1,6 @@
 {
   "base": "b7203e04cd0fb8a5afd8ca87836e2dbb55264221",
-  "productTree": "97c6316214171900beb2af8367d0cb2e09a7cc78",
+  "productTree": "8ca9374f477db238c41e2ffe6f53d8c1773b06bf",
   "files": [
     "scripts/lib/certificate-archive-outcome.mjs",
     "scripts/verify-project-certificates-migration.mjs",
@@ -12,11 +12,11 @@
   ],
   "blobs": {
     "scripts/lib/certificate-archive-outcome.mjs": "4031577eb3be863fa1a8cd33e9912e2a30a18609",
-    "scripts/verify-project-certificates-migration.mjs": "3591e3cce179c5ef7c4f3e4eae9e64968c0aa64c",
-    "scripts/verify-certificate-archive-orders.mjs": "ad1e9fdf632f732d72c67fa0db7c99d8de311b3e",
+    "scripts/verify-project-certificates-migration.mjs": "e507ae59265c325e3a0574c43777779e1affa5fe",
+    "scripts/verify-certificate-archive-orders.mjs": "571435c3b2cb26e35c881a983b202e003825eda5",
     "tests/certificate-archive-outcome.test.js": "769ba2cfaad0df1a28418c33efdcf47a2644204a",
-    "tests/project-certificates-migration-verifier-contract.test.js": "db91303a5cfaddbd6e0b7db6003cc9f6c2823301",
-    "docs/recovery/certificate-archive-race-verification.md": "dd0bd50b5e22c2a896f1f00520bfc0dbe5f1b613",
-    "docs/recovery/HANDOFF_TENANT_WHATSAPP.md": "9d44a3921fdcbe18829cec16166e283d96e834a2"
+    "tests/project-certificates-migration-verifier-contract.test.js": "92dd951ddcec9f24c532ed4f7ab422d3fe40758f",
+    "docs/recovery/certificate-archive-race-verification.md": "f5709b9cc8663bab4f38c38698e3ec216bcb6826",
+    "docs/recovery/HANDOFF_TENANT_WHATSAPP.md": "8848a14330bfc228df942560a290f1e21f5c3955"
   }
 }

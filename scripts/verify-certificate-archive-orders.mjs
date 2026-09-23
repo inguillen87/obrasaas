@@ -7,7 +7,7 @@ try {
   const config=configuration();
   if(!config.local || !config.disposable || process.env.VERCEL_ENV==='production' || process.env.VERCEL_TARGET_ENV==='production')
     throw new Error('Archive-order stress requires the explicitly acknowledged local disposable certificate database.');
-  // Fixed coverage, not retry-until-success: all 12 outcomes must satisfy the contract.
+  // Fixed coverage, not retry-until-success: all 15 outcomes must satisfy the contract.
   for(let iteration=1;iteration<=3;iteration++)
     await assertDisposableArchiveVsPending(config.connectionString,config.schema,{record:result=>report.orders.push({iteration,...result})});
   report.status='PASS';

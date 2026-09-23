@@ -22,18 +22,19 @@ La política de ensayo coteja SQLSTATE, marcador exacto y estado final. PREPARER
 
 Se comprueban las siete tablas de certificados: un archivado ganador no deja libros, cabezas, versiones, líneas, deducciones, decisiones ni recibos. Si gana PREPARE, queda exactamente un certificado, dos líneas del fixture (medida y sin reclamo), un recibo, punteros al mismo ID y revisiones 1. Las membresías, tarea, contrato y corte técnico se comparan antes/después sin cambios.
 
-## Cuatro órdenes obligatorios
+## Cinco órdenes obligatorios
 
 1. Inicio simultáneo, conservando la carrera original y admitiendo sólo el resultado contractual con un ganador.
 2. Archivado dentro de una transacción abierta; PREPARE queda esperando el bloqueo real. El observador comprueba PID bloqueado, PID bloqueante mediante `pg_blocking_pids` y espera de tipo advisory. Al confirmar el archivado debe reproducirse el rechazo exacto 42501/PREPARER_REQUIRED, sin hechos residuales.
-3. PREPARE mantiene abierta su transacción; el archivado debe rechazar con 40001/PROJECT_ARCHIVE_BUSY. Se confirma un solo certificado y la obra sigue activa.
-4. PREPARE ya confirmado; el archivado debe rechazar con 55000/PROJECT_ARCHIVE_BLOCKED_BY_PENDING_GOVERNANCE. La restricción persistida no depende de que siga tomado un lock.
+3. Se toma el bloqueo advisory de obra antes de ejecutar PREPARE. El archivado debe rechazar con 40001/PROJECT_ARCHIVE_BUSY; después el titular del bloqueo prepara y confirma un certificado.
+4. PREPARE completo mantiene abierta su transacción. El UPDATE de archivado puede esperar sobre la fila Project antes del trigger. Se observan los PID exactos y la espera transactionid/tuple; entonces se confirma PREPARE para liberar la espera. El archivado debe rechazar con 55000/PROJECT_ARCHIVE_BLOCKED_BY_PENDING_GOVERNANCE. No se acepta timeout ni se retiene el COMMIT esperando una respuesta bloqueada.
+5. PREPARE ya confirmado antes de iniciar el archivado; éste debe rechazar con 55000/PROJECT_ARCHIVE_BLOCKED_BY_PENDING_GOVERNANCE. La restricción persistida no depende de que siga tomado un lock.
 
-Los cuatro casos se ejecutan en el verificador permanente de CI. El ensayo focal `verify-certificate-archive-orders.mjs` exige base local desechable reconocida y ejecuta tres repeticiones fijas: doce resultados obligatorios, no reintentos hasta aprobar. Ante un fallo no se omite el caso. El cleanup existente, restringido a fixtures, debe restaurar sus triggers y no dejar residuos.
+Los cinco casos se ejecutan en el verificador permanente de CI. El ensayo focal `verify-certificate-archive-orders.mjs` exige base local desechable reconocida y ejecuta tres repeticiones fijas: quince resultados obligatorios, no reintentos hasta aprobar. Ante un fallo no se omite el caso. El cleanup existente, restringido a fixtures, debe restaurar sus triggers y no dejar residuos.
 
 ## Validación y alcance
 
-Pruebas unitarias de política incluyen estados incoherentes y SQLSTATE/marcadores incorrectos. La validación SQL reproduce primero el fallo de la implementación anterior forzando únicamente el orden archivado→PREPARE en un harness temporal; no cambia el predicado anterior ni las funciones SQL. Después ejecuta el verificador corregido completo y los doce órdenes focales con PostgreSQL 17 aislado.
+Pruebas unitarias de política incluyen estados incoherentes y SQLSTATE/marcadores incorrectos. La validación SQL reproduce primero el fallo de la implementación anterior forzando únicamente el orden archivado→PREPARE en un harness temporal; no cambia el predicado anterior ni las funciones SQL. Después ejecuta el verificador corregido completo y los quince órdenes focales con PostgreSQL 17 aislado.
 
 SHA, integridad del árbol, recuentos y resultados efectivos se registran en el PR tras ejecutarlos. Una prueba negativa esperada de la base anterior no es una ejecución aprobada de esa versión; demuestra la regresión que se corrige.
 
