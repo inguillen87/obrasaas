@@ -5,11 +5,13 @@ import { ASSIGNMENT_LABELS,ASSIGNMENT_TRANSITIONS,assignmentRecordMatches,normal
 import { evidenceScopeHeaders } from '@/lib/evidence-capture-policy';
 import { requestWorkspaceNavigation } from '@/lib/workspace-leave-policy';
 import { useWorkspaceLeaveGuard } from '../use-workspace-leave-guard';
+import AssignmentRescheduleDialog from './assignment-reschedule-dialog';
 import styles from './assignments.module.css';
 const ACTIONS={ACTIVE:'Iniciar asignación',ENDED:'Finalizar asignación',CANCELLED:'Cancelar asignación'};
 function day(value){if(!value)return 'Sin fecha';const date=String(value).slice(0,10);const [year,month,dayOfMonth]=date.split('-');return dayOfMonth+'/'+month+'/'+year;}
 export default function AssignmentCard({assignment,tasks,workers,teams,organizationId,projectId,canManage,canReadTasks,onChanged}){
   const [action,setAction]=useState(''),[note,setNote]=useState(''),[consent,setConsent]=useState(false),[phase,setPhase]=useState('idle'),[message,setMessage]=useState('');
+  const [replanning,setReplanning]=useState(false);
   const alive=useRef(true),inFlight=useRef(false),attempt=useRef(null),controllerRef=useRef(null);
   const busy=['saving','loading'].includes(phase),uncertain=phase==='uncertain',blocked=phase==='blocked';
   const allowed=ASSIGNMENT_TRANSITIONS[assignment.status]||[];
@@ -44,7 +46,7 @@ export default function AssignmentCard({assignment,tasks,workers,teams,organizat
     <p className={styles.hint}>El estado de la asignación no modifica asistencia, permisos, fechas ni porcentajes de avance.</p>
     {assignment.lastDecision&&<section className={styles.decision} aria-label="Última decisión registrada"><strong>{ASSIGNMENT_LABELS[assignment.lastDecision.status]} · revisión {assignment.lastDecision.revision}</strong><p>{assignment.lastDecision.note}</p></section>}
     <div className={styles.cardLinks}><button type="button" disabled={busy||blocked} onClick={()=>request(false)}>{busy?'Consultando…':uncertain?'Consultar estado sin reenviar':'Consultar última decisión'}</button>
-      {canReadTasks&&<Link href={'/dashboard?tab=sec-gantt&fieldTaskId='+encodeURIComponent(assignment.taskId)} onNavigate={event=>{if(!requestWorkspaceNavigation('route'))event.preventDefault();}}>Ver actividad en el Gantt →</Link>}</div>
+      {canReadTasks&&<Link href={'/dashboard?tab=sec-gantt&fieldTaskId='+encodeURIComponent(assignment.taskId)} onNavigate={event=>{if(!requestWorkspaceNavigation('route'))event.preventDefault();}}>Ver actividad en el Gantt →</Link>}{canReadTasks&&!action&&<button type="button" disabled={busy||blocked} onClick={()=>setReplanning(true)}>{canManage&&assignment.status==='PLANNED'?'Reprogramar fechas':'Ver fechas y cambios'}</button>}</div>
     {canManage&&canReadTasks&&!action&&!blocked&&<div className={styles.cardActions}>{allowed.map(status=><button key={status} type="button" disabled={busy} onClick={()=>choose(status)}>{ACTIONS[status]}</button>)}</div>}
     {action&&<form className={styles.changeForm} onSubmit={event=>{event.preventDefault();request(true);}}>
       <strong>{ACTIONS[action]}</strong><label>Motivo o resultado<textarea aria-label={'Explicación del cambio de '+(task?.title||'actividad')} value={note} onChange={event=>{setNote(event.target.value);setConsent(false);}} maxLength={1000} rows={3} disabled={busy||uncertain||blocked} required /></label>
@@ -52,6 +54,7 @@ export default function AssignmentCard({assignment,tasks,workers,teams,organizat
       <label className={styles.consent}><input type="checkbox" checked={consent} onChange={event=>setConsent(event.target.checked)} disabled={busy||uncertain||blocked||!allowed.includes(action)} />Confirmo cambiar sólo el estado de la asignación, sin acreditar avance físico ni jornada trabajada.</label>
       <div className={styles.cardActions}><button type="button" onClick={cancel} disabled={busy||uncertain||blocked}>Volver al seguimiento</button><button type="submit" className={styles.primary} disabled={busy||uncertain||blocked||!note.trim()||!consent||!allowed.includes(action)}>Confirmar cambio</button></div>
     </form>}
+    {replanning&&<AssignmentRescheduleDialog key={organizationId+':'+projectId+':'+assignment.id} assignmentId={assignment.id} organizationId={organizationId} projectId={projectId} canManage={canManage} onClose={()=>setReplanning(false)} onSaved={saved=>{onChanged(saved);setReplanning(false);setMessage('Fechas confirmadas y auditadas. Se conserva la misma asignación; no cambió el avance de la actividad.');}}/>}
     {message&&<p className={styles.warning} role="status">{message}</p>}
   </article>;
 }
