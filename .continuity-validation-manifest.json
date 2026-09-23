@@ -1,0 +1,36 @@
+{
+  "base": "342555bfcbfa9b56677e53ff70f84a0277cb42ce",
+  "productTree": "cec523e95586326a7aa9ff85da12613590b0917e",
+  "files": [
+    ".github/workflows/execution-postgres.yml",
+    "docs/recovery/HANDOFF_TENANT_WHATSAPP.md",
+    "docs/recovery/assignment-lifecycle-continuity.md",
+    "src/app/dashboard/execution/assignment-board.js",
+    "src/app/dashboard/execution/assignment-planner.js",
+    "src/app/dashboard/execution/assignment-reschedule-dialog.js",
+    "src/lib/assignment-reschedule.js",
+    "src/lib/task-assignment-policy.js",
+    "src/lib/task-assignments.js",
+    "tests/helpers/assignment-overlap-fixture.js",
+    "scripts/verify-assignment-continuity-ui.mjs",
+    "scripts/verify-assignment-continuity-postgres.mjs",
+    "src/lib/assignment-period-uniqueness.js",
+    "tests/assignment-lifecycle-continuity.test.js"
+  ],
+  "blobs": {
+    ".github/workflows/execution-postgres.yml": "02831856a061ec17d4aed34f00f3700c7197ff2c",
+    "docs/recovery/HANDOFF_TENANT_WHATSAPP.md": "bb37e679a86a7088688cde8465927e93f6d31116",
+    "docs/recovery/assignment-lifecycle-continuity.md": "757af220cc34d5aedf510b1b245ca5e29268cf2d",
+    "src/app/dashboard/execution/assignment-board.js": "d82a3abc146d29ed6455af3a37b94a4d3e1c5f47",
+    "src/app/dashboard/execution/assignment-planner.js": "73dd7dbe0c8f561fe7e1dee42d8425fb6276db37",
+    "src/app/dashboard/execution/assignment-reschedule-dialog.js": "8bd13e80fdd6f959993ec6e88ca48801219e9117",
+    "src/lib/assignment-reschedule.js": "db967c847c4f7ba65714d280df8910010ff0ee19",
+    "src/lib/task-assignment-policy.js": "95208773992f25ed8cfb02e404021c6a3d183522",
+    "src/lib/task-assignments.js": "dee8a188b3c90ee98b7560d5bd060fc7c09a432b",
+    "tests/helpers/assignment-overlap-fixture.js": "e8efbab925216224452ecf1b86c28d4da9dd8fa3",
+    "scripts/verify-assignment-continuity-ui.mjs": "d4d82579fcee969902796392038d670cc006f87e",
+    "scripts/verify-assignment-continuity-postgres.mjs": "1fc84d0dc194738723d31376004e7be147e72772",
+    "src/lib/assignment-period-uniqueness.js": "75affd9d45fe250dfcaf7be0b5ac53a83a478bf4",
+    "tests/assignment-lifecycle-continuity.test.js": "a3765e19cc2aec3bde9c4e463c11c1301f5dc630"
+  }
+}

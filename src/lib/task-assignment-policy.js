@@ -46,12 +46,30 @@ export function assignmentRecordMatches(row,projectId,original=null) {
     &&(!row.lastDecision||typeof row.lastDecision.note==='string'&&row.lastDecision.revision===row.revision&&row.lastDecision.status===row.status)
     &&(!original||row.id===original.id&&row.taskId===original.taskId&&row.revision>=original.revision));
 }
+function creationReceiptMatches(receipt,row,command) {
+  return Boolean(receipt?.schemaVersion===1&&receipt.assignmentId===row?.id
+    &&['taskId','expectedTaskRevision','workerId','teamId','startsAt','endsAt'].every(field=>receipt[field]===command[field]));
+}
+function calendarPeriod(row) {
+  const valid=value=>value===null||typeof value==='string'&&/^20\d{2}-\d{2}-\d{2}T00:00:00\.000Z$/.test(value)
+    &&Number.isFinite(Date.parse(value))&&new Date(value).toISOString()===value;
+  return valid(row.startsAt)&&valid(row.endsAt)&&(!row.endsAt||row.startsAt&&row.endsAt>=row.startsAt);
+}
 export function confirmAssignmentPlan(payload,command,scope) {
   const row=payload?.assignment;
+  const samePeriod=row?.startsAt===command.startsAt&&row?.endsAt===command.endsAt;
+  const hasReceipt=Boolean(payload&&Object.hasOwn(payload,'creationReceipt'));
+  const verifiedReceipt=creationReceiptMatches(payload?.creationReceipt,row,command);
   if(payload?.context?.organizationId!==scope.organizationId||payload.context.projectId!==scope.projectId||!assignmentRecordMatches(row,scope.projectId)
     ||typeof payload.replayed!=='boolean'||row.taskId!==command.taskId||row.workerId!==command.workerId||row.teamId!==command.teamId
-    ||row.startsAt!==command.startsAt||row.endsAt!==command.endsAt||!payload.replayed&&(row.status!=='PLANNED'||row.revision!==0)) {
+    ||hasReceipt&&!verifiedReceipt||!samePeriod&&(!payload.replayed||row.revision<1||!verifiedReceipt||!calendarPeriod(row))
+    ||!payload.replayed&&(row.status!=='PLANNED'||row.revision!==0)) {
     throw new TaskAssignmentError('La respuesta no confirmó la asignación solicitada. Conservá el intento para verificarlo.','ASSIGNMENT_UNCONFIRMED',503);
   }
   return row;
+}
+export function assignmentPlanFeedback({replayed=false,periodChanged=false}={}) {
+  if(replayed&&periodChanged)return 'Se recuperó la asignación original. Sus fechas cambiaron después: la tarjeta muestra el período vigente, sin restaurar el anterior ni crear otra asignación.';
+  if(replayed)return 'Se recuperó la asignación ya guardada. No se creó otra ni se reinició su estado; revisá su tarjeta actual.';
+  return 'Asignación confirmada. Continuá desde su tarjeta; no se modificó el avance de la actividad.';
 }

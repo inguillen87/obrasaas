@@ -1,0 +1,106 @@
+name: Validate assignment continuity before release
+on:
+  push:
+    branches: ['operations/assignment-continuity-20260922']
+permissions:
+  contents: read
+concurrency:
+  group: obrasaas-assignment-continuity-validation
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    services:
+      postgres:
+        image: postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+        env:
+          POSTGRES_USER: execution_fixture
+          POSTGRES_PASSWORD: local_fixture_only
+          POSTGRES_DB: obrasaas_execution_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U execution_fixture -d obrasaas_execution_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      DATABASE_URL: postgresql://execution_fixture:local_fixture_only@127.0.0.1:5432/obrasaas_execution_ci?schema=public
+      DATABASE_URL_UNPOOLED: postgresql://execution_fixture:local_fixture_only@127.0.0.1:5432/obrasaas_execution_ci?schema=public
+      DIRECT_URL: postgresql://execution_fixture:local_fixture_only@127.0.0.1:5432/obrasaas_execution_ci?schema=public
+      EXECUTION_RELEASE_DATABASE_URL: postgresql://execution_fixture:local_fixture_only@127.0.0.1:5432/obrasaas_execution_ci?schema=public
+      EXECUTION_RELEASE_DISPOSABLE: 'true'
+      CONTINUITY_PROOF_PATH: evidence/assignment-continuity-postgres.json
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Verify exact candidate tree without the validation harness
+        run: |
+          mkdir -p evidence
+          python3 - <<'PY'
+          import json,os,pathlib,subprocess,tempfile
+          m=json.load(open('.continuity-validation-manifest.json'))
+          with tempfile.TemporaryDirectory() as temp:
+              env={**os.environ,'GIT_INDEX_FILE':str(pathlib.Path(temp)/'index')}
+              subprocess.run(['git','read-tree','HEAD'],env=env,check=True)
+              subprocess.run(['git','update-index','--force-remove','--','.github/workflows/validate-assignment-continuity.yml','.continuity-validation-manifest.json'],env=env,check=True)
+              tree=subprocess.check_output(['git','write-tree'],env=env,text=True).strip()
+          assert tree==m['productTree'],(tree,m['productTree'])
+          for file,expected in m['blobs'].items():
+              actual=subprocess.check_output(['git','rev-parse','HEAD:'+file],text=True).strip()
+              assert actual==expected,file
+          pathlib.Path('evidence/validated-tree.json').write_text(json.dumps(m,indent=2))
+          print('Exact candidate tree:',tree)
+          PY
+      - name: Exact dependencies
+        run: npm ci > evidence/install.log 2>&1 || { tail -n 60 evidence/install.log; exit 1; }
+      - name: Full unit suite and affected lint
+        run: |
+          npm test > evidence/tests.log 2>&1 || { tail -n 90 evidence/tests.log; exit 1; }
+          tail -n 10 evidence/tests.log
+          python3 - <<'PY'
+          import json,subprocess
+          files=[f for f in json.load(open('.continuity-validation-manifest.json'))['files'] if f.endswith(('.js','.mjs'))]
+          with open('evidence/lint.log','w') as output:
+              result=subprocess.run(['npx','eslint',*files],stdout=output,stderr=subprocess.STDOUT)
+          if result.returncode: print(open('evidence/lint.log').read())
+          raise SystemExit(result.returncode)
+          PY
+      - name: Disposable PostgreSQL schema and real concurrent operations
+        run: |
+          npx prisma validate > evidence/schema.log 2>&1
+          npx prisma migrate deploy > evidence/migrations.log 2>&1 || { tail -n 70 evidence/migrations.log; exit 1; }
+          npx prisma migrate status > evidence/migration-status.log 2>&1
+          npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code > evidence/schema-diff.log 2>&1
+          npx tsx scripts/verify-assignment-continuity-postgres.mjs > evidence/postgres.log 2>&1 || { tail -n 100 evidence/postgres.log; exit 1; }
+          tail -n 12 evidence/postgres.log
+      - name: Browser continuity and relevant regressions
+        run: |
+          npx playwright install --with-deps chrome > evidence/browser-install.log 2>&1
+          for script in verify-assignment-continuity-ui verify-task-assignments-ui verify-assignment-overlap-ui verify-crew-roster-ui verify-schedule-restrictions-ui; do
+            node "scripts/$script.mjs" > "evidence/$script.log" 2>&1 || { tail -n 80 "evidence/$script.log"; exit 1; }
+            tail -n 1 "evidence/$script.log"
+          done
+      - name: Complete build and diff checks
+        run: |
+          npm run build > evidence/build.log 2>&1 || { tail -n 90 evidence/build.log; exit 1; }
+          tail -n 12 evidence/build.log
+          git diff --check
+      - name: Preserve bounded synthetic evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: assignment-continuity-${{ github.run_id }}
+          path: |
+            evidence/
+            .vercel/assignment-continuity-ui/proof.json
+            .vercel/assignment-continuity-ui/*.png
+          include-hidden-files: true
+          retention-days: 7
+          if-no-files-found: warn

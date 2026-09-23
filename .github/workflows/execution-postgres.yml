@@ -8,9 +8,12 @@ on:
       - 'src/lib/crew-membership*.js'
       - 'src/lib/task-assignment*.js'
       - 'src/lib/assignment-overlap*.js'
+      - 'src/lib/assignment-reschedule*.js'
+      - 'src/lib/assignment-period-uniqueness.js'
       - 'src/lib/schedule-field-status.js'
       - 'prisma/**'
       - 'scripts/verify-execution-release-postgres.mjs'
+      - 'scripts/verify-assignment-continuity-postgres.mjs'
       - 'scripts/lib/execution-test-database.mjs'
       - '.github/workflows/execution-postgres.yml'
 permissions:
@@ -22,6 +25,10 @@ jobs:
   execution-postgres:
     runs-on: ubuntu-latest
     timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [execution-release, assignment-continuity]
     services:
       postgres:
         image: postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
@@ -63,12 +70,12 @@ jobs:
           npx prisma migrate status > evidence/migration-status.log 2>&1
           npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code > evidence/schema-diff.log 2>&1
       - name: Real domain operations and competing PostgreSQL sessions
-        run: npx tsx scripts/verify-execution-release-postgres.mjs
+        run: npx tsx scripts/verify-${{ matrix.suite }}-postgres.mjs
       - name: Preserve bounded verification evidence only
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: execution-postgres-${{ github.run_id }}
+          name: execution-postgres-${{ matrix.suite }}-${{ github.run_id }}
           path: evidence/
           retention-days: 7
           if-no-files-found: warn

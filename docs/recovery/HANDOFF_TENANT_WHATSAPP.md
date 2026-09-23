@@ -72,3 +72,6 @@ Leer `assignment-overlap-review.md`. El planificador revisa asignaciones directa
 
 ## Continuación S11.A14: reprogramar fechas de una asignación
 Leer `assignment-reschedule.md`. La tarjeta conserva la misma asignación y su responsable al revisar/cambiar fechas previstas. Sólo PLANNED, revisión y motivo obligatorios, coincidencias verificadas nuevamente bajo transacción y recuperación por GET de respuestas inciertas. No modifica Task, avance, asistencia o WhatsApp. Ejecutar `verify-assignment-reschedule-postgres.mjs` y `verify-assignment-reschedule-ui.mjs` contra PostgreSQL desechable; la sesión del browser es sintética. Publicación y pruebas reales del canal siguen separadas.
+
+## Continuación S11.A15: continuidad de creación y reprogramación
+Leer `assignment-lifecycle-continuity.md`. El replay de creación verifica su recibo original y devuelve el estado vigente aunque las fechas hayan cambiado; no restaura el período ni duplica la asignación. Creación y reprogramación comparten la prohibición de duplicados exactos, comprobada nuevamente bajo bloqueo de proyecto. El rechazo conocido conserva el formulario editable; una respuesta incierta sigue requiriendo recuperación. Ejecutar `verify-assignment-continuity-ui.mjs` y `verify-assignment-continuity-postgres.mjs` con sus ámbitos de ensayo explícitos. No acreditar Clerk ni Production con esos resultados.
