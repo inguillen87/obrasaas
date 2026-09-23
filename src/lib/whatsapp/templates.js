@@ -187,8 +187,8 @@ function normalizeRemoteTemplate(value) {
   return {
     id,
     name,
-    status: statusValue(value.status),
-    category: statusValue(value.category, WHATSAPP_FLOW_TEMPLATE_CATEGORY),
+    status: statusValue(value.status, 'UNKNOWN'),
+    category: statusValue(value.category, 'UNKNOWN'),
     language: normalizeLanguage(value.language),
     components: Array.isArray(value.components) ? value.components : [],
     rejectedReason: value.rejected_reason
@@ -212,7 +212,13 @@ function remoteFlowButton(components) {
 
 export function remoteTemplateMatchesDefinition(remote, definition) {
   if (!remote || !definition) return false;
-  const button = remoteFlowButton(remote.components || []);
+  const components = remote.components;
+  if (!Array.isArray(components) || components.length !== 2
+    || components.filter(item => String(item?.type || '').toUpperCase() === 'BODY').length !== 1
+    || components.filter(item => String(item?.type || '').toUpperCase() === 'BUTTONS').length !== 1) return false;
+  const buttons = components.find(item => String(item?.type || '').toUpperCase() === 'BUTTONS')?.buttons;
+  if (!Array.isArray(buttons) || buttons.length !== 1) return false;
+  const button = remoteFlowButton(components);
   if (!button) return false;
   const remoteAction = String(button.flow_action || 'navigate').toLowerCase();
   return remote.name === definition.name
@@ -398,8 +404,13 @@ function publicTemplate(record) {
     rejectionReason: record.rejectionReason || null,
     submittedAt: record.submittedAt?.toISOString?.() || record.submittedAt || null,
     lastSyncedAt: record.lastSyncedAt?.toISOString?.() || record.lastSyncedAt || null,
-    canSend: record.status === 'APPROVED',
+    canSend: record.status === 'APPROVED' && record.category === WHATSAPP_FLOW_TEMPLATE_CATEGORY,
   };
+}
+
+export function publicTemplatePreview(definition) {
+  const { bodyText, buttonText, language, category, flowId, screenId, flowAction } = definition;
+  return { bodyText, buttonText, language, category, flowId, screenId, flowAction };
 }
 
 async function persistOwnedTemplate(prisma, connection, definition, remote, now) {
@@ -545,6 +556,7 @@ export async function synchronizeOwnedWhatsAppFlowTemplates({
       }
       catalog.push({
         blueprintKey,
+        preview: publicTemplatePreview(definition),
         expectedName: definition.name,
         contentSha256: definition.contentSha256,
         template: existing ? publicTemplate({ ...existing, status: 'MISSING', lastSyncedAt: now }) : null,
@@ -554,6 +566,7 @@ export async function synchronizeOwnedWhatsAppFlowTemplates({
     const record = await persistOwnedTemplate(prisma, connection, definition, remote, now);
     catalog.push({
       blueprintKey,
+      preview: publicTemplatePreview(definition),
       expectedName: definition.name,
       contentSha256: definition.contentSha256,
       template: publicTemplate(record),
@@ -595,6 +608,8 @@ export async function provisionOwnedWhatsAppFlowTemplate({
   const record = await persistOwnedTemplate(prisma, connection, definition, remote, now);
   return {
     created,
+    blueprintKey: definition.blueprintKey,
+    preview: publicTemplatePreview(definition),
     expectedName: definition.name,
     contentSha256: definition.contentSha256,
     template: publicTemplate(record),

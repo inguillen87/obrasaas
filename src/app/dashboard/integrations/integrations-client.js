@@ -9,6 +9,8 @@ import {
   whatsappGraphAccessRejected,
   whatsappReconnectRequired,
 } from './channel-client-state';
+import TemplateReviewControl from './template-review-control';
+import { templateCatalogMatches, templateStatusPresentation } from '@/lib/whatsapp/template-review-policy';
 import WhatsAppConnectExperience from './whatsapp-connect-experience';
 import ChannelRecoveryPanel from './channel-recovery-panel';
 import TenantWhatsAppWorkspace from './tenant-whatsapp-workspace';
@@ -74,8 +76,8 @@ function normalizeFlowCatalogPayload(payload) {
   };
 }
 
-function normalizeTemplateCatalogPayload(payload) {
-  if (!isPlainRecord(payload) || !Array.isArray(payload.templates)) {
+function normalizeTemplateCatalogPayload(payload, scope) {
+  if (!templateCatalogMatches(payload, scope)) {
     throw new Error('La respuesta de plantillas de WhatsApp no tiene un formato v\u00e1lido.');
   }
   return payload.templates;
@@ -145,29 +147,8 @@ function flowActionLabel({
 }
 
 function templatePresentation(template, verificationUnavailable = false) {
-  if (verificationUnavailable) {
-    return { label: 'Estado Meta no verificado', tone: 'blocked' };
-  }
-  if (!template) return { label: 'Sin plantilla aprobada', tone: 'idle' };
-  if (template.status === 'APPROVED') return { label: 'Plantilla aprobada', tone: 'ready' };
-  if (template.status === 'PENDING' || template.status === 'IN_APPEAL') {
-    return { label: 'En revisi\u00f3n de Meta', tone: 'pending' };
-  }
-  if (template.status === 'MISSING') return { label: 'Reconciliaci\u00f3n pendiente', tone: 'pending' };
-  if (['REJECTED', 'DISABLED', 'FLAGGED', 'DELETED'].includes(template.status)) {
-    return { label: `Plantilla ${template.status.toLowerCase()}`, tone: 'blocked' };
-  }
-  return { label: 'Estado de plantilla pendiente', tone: 'pending' };
-}
-
-function templateActionLabel(template, pending, verificationUnavailable = false) {
-  if (verificationUnavailable) return 'Verificar cuenta';
-  if (pending) return 'Preparando\u2026';
-  if (!template) return 'Crear plantilla';
-  if (template.status === 'APPROVED') return 'Plantilla aprobada';
-  if (template.status === 'MISSING') return 'Reconciliar plantilla';
-  if (template.status === 'PENDING' || template.status === 'IN_APPEAL') return 'En revisi\u00f3n';
-  return 'Revisar en Meta';
+  if (verificationUnavailable) return { label: 'Estado Meta no verificado', tone: 'blocked' };
+  return templateStatusPresentation(template);
 }
 
 async function readFlowCatalog({ signal } = {}) {
@@ -182,8 +163,9 @@ async function readFlowCatalog({ signal } = {}) {
   return normalizeFlowCatalogPayload(payload);
 }
 
-async function readTemplateCatalog({ signal } = {}) {
+async function readTemplateCatalog({ signal, scope } = {}) {
   const response = await fetch('/api/integrations/whatsapp/templates', {
+    headers: evidenceScopeHeaders(scope),
     cache: 'no-store',
     signal,
   });
@@ -191,7 +173,7 @@ async function readTemplateCatalog({ signal } = {}) {
   if (!response.ok) {
     throw integrationResponseError(payload, 'No se pudieron consultar las plantillas.');
   }
-  return normalizeTemplateCatalogPayload(payload);
+  return normalizeTemplateCatalogPayload(payload, scope);
 }
 
 export default function IntegrationsClient({
@@ -472,7 +454,7 @@ export default function IntegrationsClient({
         if (handleGraphAccessFailureEvent(error)) return;
         setFlowNotice({ type: 'error', text: error.message });
       });
-    readTemplateCatalog({ signal: controller.signal })
+    readTemplateCatalog({ signal: controller.signal, scope: { organizationId, projectId } })
       .then((templates) => {
         if (!active || remoteChannelEpoch !== remoteChannelEpochRef.current) return;
         setTemplateCatalog(templates);
@@ -593,7 +575,7 @@ export default function IntegrationsClient({
     try {
       const [payload, templates] = await Promise.all([
         readFlowCatalog(),
-        readTemplateCatalog(),
+        readTemplateCatalog({ scope: { organizationId, projectId } }),
       ]);
       if (remoteChannelEpoch !== remoteChannelEpochRef.current) return;
       setFlowCatalog(payload.catalog);
@@ -654,54 +636,6 @@ export default function IntegrationsClient({
     }
   }
 
-  async function provisionTemplate(blueprintKey) {
-    const remoteChannelEpoch = remoteChannelEpochRef.current;
-    setTemplatePendingKey(blueprintKey);
-    setTemplateNotice({
-      type: 'progress',
-      text: 'Preparando una plantilla operativa propia y envi\u00e1ndola a revisi\u00f3n de Meta\u2026',
-    });
-    try {
-      const response = await fetch('/api/integrations/whatsapp/templates', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ blueprintKey }),
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw integrationResponseError(payload, 'No se pudo preparar la plantilla.');
-      }
-      if (remoteChannelEpoch !== remoteChannelEpochRef.current) return;
-      if (!isPlainRecord(payload.result) || !isPlainRecord(payload.result.template)) {
-        throw new Error('Meta respondi\u00f3 sin el estado reconciliado de la plantilla.');
-      }
-      const entry = {
-        blueprintKey,
-        expectedName: payload.result.expectedName,
-        contentSha256: payload.result.contentSha256,
-        template: payload.result.template,
-      };
-      setTemplateCatalog((current) => {
-        const exists = current.some((item) => item.blueprintKey === blueprintKey);
-        return exists
-          ? current.map((item) => (item.blueprintKey === blueprintKey ? entry : item))
-          : [...current, entry];
-      });
-      setTemplateNotice({
-        type: 'success',
-        text: payload.result.template.status === 'APPROVED'
-          ? 'Plantilla aprobada y lista para mensajes operativos iniciados por la empresa.'
-          : 'Plantilla enviada a Meta. ObraSaaS la habilitar\u00e1 s\u00f3lo cuando el estado sea APPROVED.',
-      });
-    } catch (error) {
-      if (handleGraphAccessFailure(error)) return;
-      if (remoteChannelEpoch === remoteChannelEpochRef.current) {
-        setTemplateNotice({ type: 'error', text: error.message });
-      }
-    } finally {
-      if (remoteChannelEpoch === remoteChannelEpochRef.current) setTemplatePendingKey(null);
-    }
-  }
 
   return (
     <>
@@ -950,9 +884,6 @@ export default function IntegrationsClient({
               template,
               remoteVerificationUnavailable,
             );
-            const templatePending = templatePendingKey === flow.key;
-            const templateCanProvision = runtimeActive
-              && (!template || template.status === 'MISSING');
             const actionLabel = flowActionLabel({
               isPending,
               isPublished,
@@ -1030,25 +961,18 @@ export default function IntegrationsClient({
                     >
                       {actionLabel}
                     </button>
-                    <button
-                      type="button"
-                      className={styles.templateButton}
-                      onClick={() => provisionTemplate(flow.key)}
-                      disabled={
-                        !graphReady
-                        || !platformReady
-                        || pending
-                        || healthPending
-                        || Boolean(templatePendingKey)
-                        || !templateCanProvision
-                      }
-                    >
-                      {templateActionLabel(
-                        template,
-                        templatePending,
-                        remoteVerificationUnavailable,
-                      )}
-                    </button>
+                    <TemplateReviewControl
+                      key={flow.key + ':' + connectionIdentity + ':' + remoteChannelEpochRef.current}
+                      flow={flow} organizationId={organizationId} projectId={projectId}
+                      companyName={companyName} projectName={projectName} canReadInbox={canReadInbox}
+                      disabled={!graphReady || !platformReady || pending || healthPending || Boolean(flowPendingKey) || Boolean(templatePendingKey)}
+                      onBusy={value => setTemplatePendingKey(current => value ? flow.key : current === flow.key ? null : current)}
+                      onGraphError={handleGraphAccessFailure}
+                      onCatalog={(catalog, partial) => {
+                        setTemplateCatalog(current => partial ? [...current.filter(row => !catalog.some(item => item.blueprintKey === row.blueprintKey)), ...catalog] : catalog);
+                        setTemplateNotice(null);
+                      }}
+                    />
                   </div>
                 </div>
               </article>

@@ -1,0 +1,79 @@
+name: Validate WhatsApp template review before release
+on:
+  push:
+    branches: ['operations/whatsapp-template-review-20260923']
+permissions:
+  contents: read
+concurrency:
+  group: whatsapp-template-review-validation
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Verify exact product tree and reviewed file contents
+        run: |
+          mkdir -p evidence
+          python3 - <<'PY'
+          import json,os,pathlib,subprocess,tempfile
+          m=json.load(open('.whatsapp-template-review-validation.json'))
+          with tempfile.TemporaryDirectory() as t:
+              env={**os.environ,'GIT_INDEX_FILE':str(pathlib.Path(t)/'index')}
+              subprocess.run(['git','read-tree','HEAD'],env=env,check=True)
+              subprocess.run(['git','update-index','--force-remove','--','.github/workflows/validate-whatsapp-template-review.yml','.whatsapp-template-review-validation.json'],env=env,check=True)
+              tree=subprocess.check_output(['git','write-tree'],env=env,text=True).strip()
+          assert tree==m['productTree'],(tree,m['productTree'])
+          for p,expected in m['blobs'].items():
+              actual=subprocess.check_output(['git','rev-parse','HEAD:'+p],text=True).strip()
+              assert actual==expected,(p,actual,expected)
+          pathlib.Path('evidence/validated-product.json').write_text(json.dumps(m,indent=2))
+          subprocess.run(['git','archive','--format=tar','--output=evidence/reviewed-source.tar','HEAD',*m['blobs']],check=True)
+          print('Exact verified tree',tree)
+          PY
+      - name: Exact dependencies
+        run: npm ci --no-audit --no-fund > evidence/install.log 2>&1 || { tail -n 70 evidence/install.log; exit 1; }
+      - name: Full unit suite and affected lint
+        run: |
+          npm test > evidence/tests.log 2>&1 || { tail -n 180 evidence/tests.log; exit 1; }
+          tail -n 10 evidence/tests.log
+          python3 - <<'PY'
+          import json,subprocess
+          files=[p for p in json.load(open('.whatsapp-template-review-validation.json'))['blobs'] if p.endswith(('.js','.mjs'))]
+          with open('evidence/lint.log','w') as out:r=subprocess.run(['npx','eslint',*files],stdout=out,stderr=subprocess.STDOUT)
+          print(open('evidence/lint.log').read());raise SystemExit(r.returncode)
+          PY
+      - name: Browser template review and WhatsApp regressions
+        run: |
+          npx playwright install --with-deps chrome chromium > evidence/browser-install.log 2>&1
+          for script in verify-whatsapp-template-review-ui verify-inbox-continuity-ui verify-channel-recovery-ui verify-tenant-whatsapp-workspace-ui verify-participant-onboarding-journey-ui verify-pilot-channel-proof-ui; do
+            node "scripts/$script.mjs" > "evidence/$script.log" 2>&1 || { tail -n 90 "evidence/$script.log"; exit 1; }
+            tail -n 1 "evidence/$script.log"
+          done
+      - name: Complete Next build and diff checks
+        run: |
+          npm run build > evidence/build.log 2>&1 || { tail -n 100 evidence/build.log; exit 1; }
+          tail -n 12 evidence/build.log
+          git diff --check
+      - name: Preserve bounded synthetic evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: whatsapp-template-review-${{ github.run_id }}
+          path: |
+            evidence/
+            .vercel/whatsapp-template-review-ui/proof.json
+            .vercel/whatsapp-template-review-ui/failure.json
+            .vercel/whatsapp-template-review-ui/*.png
+          include-hidden-files: true
+          retention-days: 7
+          if-no-files-found: warn

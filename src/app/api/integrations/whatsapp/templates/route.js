@@ -1,3 +1,5 @@
+import { assertEvidenceRequestContext, evidenceContextErrorResponse } from '@/lib/evidence-context';
+import { normalizeTemplateReview, assertTemplateReviewDefinition, TemplateReviewError } from '@/lib/whatsapp/template-review-policy';
 import {
   AccessError,
   accessErrorResponse,
@@ -18,6 +20,7 @@ import {
   WhatsAppFlowProvisioningLeaseError,
 } from '@/lib/whatsapp/flow-provisioning-lease';
 import {
+  buildOwnedWhatsAppFlowTemplate,
   provisionOwnedWhatsAppFlowTemplate,
   synchronizeOwnedWhatsAppFlowTemplates,
 } from '@/lib/whatsapp/templates';
@@ -37,6 +40,8 @@ function json(payload, init = {}) {
     ...init,
     headers: {
       'Cache-Control': 'private, no-store, max-age=0',
+      'Vary': 'Cookie, Authorization, X-ObraSaaS-Organization, X-ObraSaaS-Project',
+      'X-Content-Type-Options': 'nosniff',
       ...init.headers,
     },
   });
@@ -48,7 +53,23 @@ function auditIp(request) {
     || null;
 }
 
-function errorResponse(error, fallback) {
+function assertTemplateRequest(request, access) {
+  if (!request?.headers?.get('x-obrasaas-organization') || !request.headers.get('x-obrasaas-project')) {
+    throw new TemplateReviewError('Actualizá la empresa y obra de esta pantalla.', 'WHATSAPP_TEMPLATE_CONTEXT_REQUIRED', 409);
+  }
+  assertEvidenceRequestContext(request, access);
+  const url = new URL(request.url);
+  if (url.search) throw new TemplateReviewError('La consulta no admite cambios de alcance por URL.');
+  if (request.headers.get('sec-fetch-site') === 'cross-site'
+    || request.headers.get('origin') && request.headers.get('origin') !== url.origin) {
+    throw new TemplateReviewError('Origen no autorizado.', 'WHATSAPP_TEMPLATE_ORIGIN', 403);
+  }
+  return { organizationId: access.organization.id, projectId: access.project.id };
+}
+function secureErrorResponse(error, fallback) {
+  if (error instanceof TemplateReviewError) return json({ error: error.message, code: error.code }, { status: error.status });
+  const contextFailure = evidenceContextErrorResponse(error);
+  if (contextFailure) return contextFailure;
   if (error instanceof AccessError) return accessErrorResponse(error);
   if (error instanceof RequestBodyError) return requestBodyErrorResponse(error);
   if (error instanceof WhatsAppGraphAccessError) {
@@ -74,14 +95,23 @@ function errorResponse(error, fallback) {
       status: failure.status,
     });
   }
-  console.error(fallback, error);
+  console.error(fallback, { code: 'WHATSAPP_TEMPLATE_OPERATION_UNCONFIRMED' });
   return json({ error: 'No se pudieron administrar las plantillas de WhatsApp.' }, { status: 500 });
 }
 
-export async function GET() {
+function errorResponse(error, fallback) {
+  const response = secureErrorResponse(error, fallback);
+  response.headers.set('Cache-Control', 'private, no-store, max-age=0');
+  response.headers.set('Vary', 'Cookie, Authorization, X-ObraSaaS-Organization, X-ObraSaaS-Project');
+  response.headers.set('X-Content-Type-Options', 'nosniff');
+  return response;
+}
+
+export async function GET(request) {
   try {
     const access = await getPlatformAccess();
     requireTenantPermission(access, 'org:integrations:manage');
+    const context = assertTemplateRequest(request, access);
     const prisma = getPrisma();
     const connection = await requireGraphReadyWhatsAppConnection(prisma, access.project.id);
     const templates = await synchronizeOwnedWhatsAppFlowTemplates({
@@ -89,7 +119,7 @@ export async function GET() {
       connection,
       accessToken: decryptCredential(connection.encryptedAccessToken),
     });
-    return json({ templates });
+    return json({ context, templates });
   } catch (error) {
     return errorResponse(error, 'WhatsApp template catalog read failed:');
   }
@@ -101,17 +131,13 @@ export async function POST(request) {
   try {
     const access = await getPlatformAccess();
     requireTenantPermission(access, 'org:integrations:manage');
-    const body = await readJsonRequest(request, { maxBytes: MAX_TEMPLATE_REQUEST_BYTES });
-    const blueprintKey = typeof body.blueprintKey === 'string' ? body.blueprintKey.trim() : '';
-    if (!blueprintKey || blueprintKey.length > 100) {
-      throw new MetaIntegrationError('El blueprint de WhatsApp Flow no es v\u00e1lido.', {
-        code: 'FLOW_BLUEPRINT_NOT_FOUND',
-        status: 400,
-      });
-    }
+    const context = assertTemplateRequest(request, access);
+    const review = normalizeTemplateReview(await readJsonRequest(request, { maxBytes: MAX_TEMPLATE_REQUEST_BYTES }));
+    const { blueprintKey } = review;
 
     prisma = getPrisma();
     const connection = await requireGraphReadyWhatsAppConnection(prisma, access.project.id);
+    assertTemplateReviewDefinition(review, buildOwnedWhatsAppFlowTemplate({ connection, blueprintKey }));
     const expectedConnectionIdentity = {
       phoneNumberId: connection.phoneNumberId,
       whatsappBusinessId: connection.whatsappBusinessId,
@@ -126,6 +152,7 @@ export async function POST(request) {
     });
     lease = { connectionId: connection.id, leaseId: acquired.lease.id };
 
+    assertTemplateReviewDefinition(review, buildOwnedWhatsAppFlowTemplate({ connection: { ...connection, metadata: acquired.metadata }, blueprintKey }));
     const result = await provisionOwnedWhatsAppFlowTemplate({
       prisma,
       connection: { ...connection, metadata: acquired.metadata },
@@ -153,7 +180,7 @@ export async function POST(request) {
         },
       },
     });
-    return json({ result });
+    return json({ context, result });
   } catch (error) {
     return errorResponse(error, 'WhatsApp template provisioning failed:');
   } finally {
@@ -161,7 +188,7 @@ export async function POST(request) {
       try {
         await releaseWhatsAppConnectionLease(prisma, lease);
       } catch (releaseError) {
-        console.error('WhatsApp template provisioning lease release failed:', releaseError);
+        console.error('WhatsApp template provisioning lease release failed:', { code: releaseError?.code || 'LEASE_RELEASE_FAILED' });
       }
     }
   }
