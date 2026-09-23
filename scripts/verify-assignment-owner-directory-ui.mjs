@@ -16,7 +16,7 @@ mkdirSync(out, { recursive: true });
 const fixture = ownerDirectoryFixture(), task = fixture.state.task;
 let mode = 'normal', saves = 0, reads = 0, lostReply = false, staleReplyCount = 0;
 const errors = [], writeRequests = [], heldDirectories = [];
-const entry = `import React,{useState}from'react';import{createRoot}from'react-dom/client';import Planner from'./src/app/dashboard/execution/assignment-planner';import './src/app/globals.css';function App(){const[saved,setSaved]=useState(null);return saved?<p role="status">Asignación guardada: {saved.workerId}</p>:<Planner tasks={[${JSON.stringify(task)}]} focusedTask={${JSON.stringify(task)}} organizationId="org-a" projectId="project-a" onClose={()=>{}} onSaved={setSaved}/>};createRoot(document.getElementById('root')).render(<React.StrictMode><App/>);`;
+const entry = `import React,{useState}from'react';import{createRoot}from'react-dom/client';import Planner from'./src/app/dashboard/execution/assignment-planner';import './src/app/globals.css';function App(){const[saved,setSaved]=useState(null);return saved?<p role="status">Asignación guardada: {saved.workerId}</p>:<Planner tasks={[${JSON.stringify(task)}]} focusedTask={${JSON.stringify(task)}} organizationId="org-a" projectId="project-a" onClose={()=>{}} onSaved={setSaved}/>};createRoot(document.getElementById('root')).render(<React.StrictMode><App/></React.StrictMode>);`;
 await build({ stdin: { contents: entry, resolveDir: root, loader: 'jsx' }, outfile: resolve(out, 'bundle.js'), bundle: true, format: 'esm', platform: 'browser', jsx: 'automatic', loader: { '.js': 'jsx' }, alias: { '@': resolve(root, 'src') }, define: { 'process.env.NODE_ENV': '"development"' }, logLevel: 'silent', plugins: [{ name: 'test-link', setup(api) {
   api.onResolve({ filter: /^next\/link$/ }, () => ({ path: 'link', namespace: 'fixture' }));
   api.onLoad({ filter: /.*/, namespace: 'fixture' }, () => ({ loader: 'jsx', resolveDir: root, contents: `import React from'react';export default function Link({href,onNavigate,prefetch,...props}){return <a href={href} {...props}/>} ` }));
@@ -56,10 +56,10 @@ const server = createServer(async (req, res) => {
   if (['/bundle.js', '/bundle.css'].includes(url.pathname)) { res.setHeader('Content-Type', url.pathname.endsWith('.js') ? 'text/javascript' : 'text/css'); res.end(readFileSync(resolve(out, url.pathname.slice(1)))); return; }
   res.setHeader('Content-Type', 'text/html; charset=utf-8'); res.end('<!doctype html><html lang="es"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/bundle.css"><style>:root{--font-geist:Arial;--font-manrope:Arial}body{margin:0;background:#060913}</style><div id="root"></div><script type="module" src="/bundle.js"></script></html>');
 });
-await new Promise(done => server.listen(0, '127.0.0.1', done)); let browser;
+await new Promise(done => server.listen(0, '127.0.0.1', done)); let browser, page;
 try {
   browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || 'chrome', headless: true });
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, locale: 'es-AR' }); page.on('pageerror', error => errors.push(error.message));
+  page = await browser.newPage({ viewport: { width: 390, height: 844 }, locale: 'es-AR' }); page.on('pageerror', error => errors.push(error.message));
   const url = 'http://127.0.0.1:' + server.address().port;
   const modal = page.getByRole('dialog', { name: 'Planificar asignación' });
   const directory = page.getByRole('region', { name: 'Directorio completo de responsables' });
@@ -68,6 +68,7 @@ try {
   await open(); await expect(directory.getByRole('button', { name: 'Elegir Persona 000', exact: true })).toBeEnabled();
   await directory.getByRole('button', { name: 'Página siguiente' }).click(); await expect(directory.getByRole('button', { name: 'Elegir Persona 030', exact: true })).toBeEnabled();
   await directory.getByRole('button', { name: 'Página anterior' }).click(); await expect(directory.getByRole('button', { name: 'Elegir Persona 000', exact: true })).toBeEnabled();
+  console.log('PASS directory pagination');
   for (const width of [320, 390, 768, 1280]) {
     await page.setViewportSize({ width, height: width < 500 ? 844 : 1000 }); await directory.scrollIntoViewIfNeeded();
     assert.equal(await modal.evaluate(el => el.scrollWidth <= el.clientWidth), true);
@@ -112,6 +113,7 @@ try {
   await modal.getByRole('button', { name: 'Verificar el mismo intento' }).click();
   await expect(page.getByRole('status')).toHaveText('Asignación guardada: worker-136');
   assert.equal(saves, 2); assert.equal(fixture.state.rows.length, 1); assert.deepEqual(writeRequests[0], writeRequests[1]);
+  console.log('PASS selected responsible 137, consent and uncertain-write isolation');
   mode = 'fail'; await open(); await expect(directory.getByRole('alert')).toContainText('Consulta interrumpida'); await expect(start).toHaveValue('2026-09-21');
   mode = 'normal'; await directory.getByRole('button', { name: 'Reintentar esta consulta' }).click(); await expect(directory.getByRole('button', { name: 'Elegir Persona 000', exact: true })).toBeEnabled();
   await directory.getByLabel('Nombre en el directorio').fill('Nadie inexistente'); await directory.getByRole('button', { name: 'Buscar en toda la obra', exact: true }).click(); await expect(directory.getByText(/No hay resultados activos/)).toBeVisible();
@@ -123,4 +125,5 @@ try {
   assert.equal(saves, 2); assert.equal(fixture.state.audits.length, 1); assert.deepEqual(errors, []);
   const proof = { status: 'PASS', environment: 'real-react-planner-and-domain-services-controlled-HTTP-database-identity', initialDirectorySize: 137, selectedBeyondInitial100: true, pagesForwardAndBack: true, searchOnExplicitAction: true, draftPreserved: true, selectionDoesNotWrite: true, logicalCreationsAfterReviewAndConsent: 1, writeRequests: 2, directoryAndSubmitExclusive: true, staleReadDoesNotReplaceUncertainWrite: true, identicalReplay: true, failedReadRetry: true, emptyResults: true, foreignResponseRejected: true, changedTaskRequiresRefresh: true, lateResponseIgnored: true, widths: [320, 390, 768, 1280], pageErrors: 0, clerkVerified: false };
   writeFileSync(resolve(out, 'proof.json'), JSON.stringify(proof, null, 2)); console.log(JSON.stringify(proof));
-} finally { heldDirectories.forEach(done => done()); await browser?.close(); server.closeAllConnections(); await new Promise(done => server.close(done)); }
+} catch (error) { await page?.screenshot({ path: resolve(out, 'failed-controlled-fixture.png') }).catch(() => {}); throw error; }
+finally { heldDirectories.forEach(done => done()); await browser?.close(); server.closeAllConnections(); await new Promise(done => server.close(done)); }
