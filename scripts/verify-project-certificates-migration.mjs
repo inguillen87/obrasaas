@@ -1518,12 +1518,12 @@ async function readCertificateArchiveState(client, item) {
       jsonb_build_object(
         'actor',(SELECT to_jsonb(tm) FROM "TenantMembership" tm WHERE tm."organizationId"=$1 AND tm."id"=$3),
         'assignment',(SELECT to_jsonb(pm) FROM "ProjectMembership" pm WHERE pm."projectId"=$2 AND pm."tenantMembershipId"=$3),
-        'task',(SELECT to_jsonb(t) FROM "Task" t WHERE t."projectId"=$2 AND t."id"=$4),
+        'tasks',(SELECT jsonb_agg(to_jsonb(t) ORDER BY t."id") FROM "Task" t WHERE t."projectId"=$2),
         'contract',(SELECT to_jsonb(h) FROM "ProjectContractHead" h WHERE h."organizationId"=$1 AND h."projectId"=$2),
         'cut',(SELECT to_jsonb(h) FROM "ProjectProgressMeasurementCutHead" h WHERE h."organizationId"=$1 AND h."projectId"=$2)
       ) basis
       FROM "Project" p WHERE p."organizationId"=$1 AND p."id"=$2`,
-    [item.organizationId,item.projectId,item.memberships.site,item.taskId],
+    [item.organizationId,item.projectId,item.memberships.site],
   )).rows[0];
   invariant(row, 'Archive verification lost its scoped project.');
   return { ...row, facts:await certificateFactCounts(client,item.organizationId) };
@@ -1556,8 +1556,8 @@ async function assertDisposableArchiveVsPending(connectionString, schema, { reco
       const before=await readCertificateArchiveState(probe,item);
       invariant(before.status==='ACTIVE' && before.actorActive && before.preparerEligible,
         'Archive verification must start with an authorized active SITE_MANAGER.');
-      invariant(Object.values(before.facts).every(count=>count===0) && before.task_count===1,
-        'Archive verification must start without certificate facts and with its one-task fixture.');
+      invariant(Object.values(before.facts).every(count=>count===0) && before.task_count===2,
+        'Archive verification must start without certificate facts and with its measured/no-claim two-task fixture.');
       const args=prepareArgs(item,snapshot,{operationKey:`${item.prefix}_archive_prepare`,fingerprintValue:sha256(`${item.prefix}:archive-prepare`)});
       const archiveSql=`UPDATE "Project" SET "status"='ARCHIVED' WHERE "organizationId"=$1 AND "id"=$2 RETURNING "status"::text`;
       const archiveArgs=[item.organizationId,item.projectId];
@@ -1597,7 +1597,7 @@ async function assertDisposableArchiveVsPending(connectionString, schema, { reco
         `Archive-vs-pending loser was not controlled: code=${loser?.code || 'none'} message=${loser?.message}`);
       if(prepareWon) {
         const id=outcomes[0].value.payload.certificate.id;
-        assert.deepEqual(state.facts,{books:1,heads:1,versions:1,lines:1,deductions:0,decisions:0,receipts:1},'Preparation did not create exactly one governed certificate and receipt.');
+        assert.deepEqual(state.facts,{books:1,heads:1,versions:1,lines:2,deductions:0,decisions:0,receipts:1},'Preparation did not create exactly one governed certificate and receipt.');
         invariant(state.pending===id && state.head_latest===id && state.book_revision===1 && state.head_revision===1,
           'Pending certificate pointers or revisions did not match the only committed result.');
       } else {

@@ -20,7 +20,7 @@ Fuentes del código: `20260811200000_project_contract_authority_sov/migration.sq
 
 La política de ensayo coteja SQLSTATE, marcador exacto y estado final. PREPARER_REQUIRED sólo es aceptable con obra archivada, membresía SITE_MANAGER todavía activa, elegibilidad de obra retirada y ninguna versión o pendiente. Un error de rol en una obra activa, una membresía revocada, error de alcance, timeout, deadlock o duplicación SQL sigue haciendo fallar el ensayo.
 
-Se comprueban las siete tablas de certificados: un archivado ganador no deja libros, cabezas, versiones, líneas, deducciones, decisiones ni recibos. Si gana PREPARE, queda exactamente un certificado, una línea del fixture, un recibo, punteros al mismo ID y revisiones 1. Las membresías, tarea, contrato y corte técnico se comparan antes/después sin cambios.
+Se comprueban las siete tablas de certificados: un archivado ganador no deja libros, cabezas, versiones, líneas, deducciones, decisiones ni recibos. Si gana PREPARE, queda exactamente un certificado, dos líneas del fixture (medida y sin reclamo), un recibo, punteros al mismo ID y revisiones 1. Las membresías, tarea, contrato y corte técnico se comparan antes/después sin cambios.
 
 ## Cuatro órdenes obligatorios
 

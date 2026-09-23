@@ -167,7 +167,7 @@ test('S10 disposable verifier cannot regress to placeholder races or partial gov
   assert.match(archiveVsPending, /'55000','PROJECT_ARCHIVE_BLOCKED_BY_PENDING_GOVERNANCE:'/);
   assert.match(archiveVsPending, /assert\.deepEqual\(state\.basis,before\.basis/);
   assert.match(archiveVsPending, /assert\.deepEqual\(state\.facts,before\.facts/);
-  assert.match(archiveVsPending, /books:1,heads:1,versions:1,lines:1,deductions:0,decisions:0,receipts:1/);
+  assert.match(archiveVsPending, /books:1,heads:1,versions:1,lines:2,deductions:0,decisions:0,receipts:1/);
   assert.match(archiveVsPending, /transactionOwner\.query\('ROLLBACK'\)[\s\S]*if\(pendingQuery\)await pendingQuery/);
 
 
