@@ -3,6 +3,7 @@ import { getPlatformAccess, hasTenantPermission, requireTenantPermission } from 
 import { listCanonicalTasks } from '@/lib/canonical-tasks';
 import { listProjectExecution } from '@/lib/project-execution';
 import { getPrisma } from '@/lib/prisma';
+import { assignmentAgendaToday } from '@/lib/assignment-agenda';
 import ExecutionClient from './execution-client';
 import styles from './execution.module.css';
 
@@ -33,6 +34,7 @@ export default async function ExecutionPage({ searchParams }) {
       </header>
       <ExecutionClient key={access.organization.id + ":" + access.project.id + ":" + access.databaseUserId + ":" + (focusedTaskId || focusedBlockerId || "all")}
         organizationId={access.organization.id} projectId={access.project.id} focusedBlockerId={focusedBlockerId} focusedTask={execution.focusedTask || null}
+        timeZone={access.organization.timezone || null} agendaDay={assignmentAgendaToday(access.organization.timezone, new Date())}
         initialData={execution}
         workers={workers}
         tasks={execution.focusedTask ? [execution.focusedTask] : canonicalTasks.tasks}

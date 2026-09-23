@@ -1,0 +1,23 @@
+.agenda { min-width:0; margin:20px 0; padding:clamp(14px,2.5vw,22px); border:1px solid var(--assign-border,#334155); border-radius:14px; background:linear-gradient(135deg,#0c1728,#080e1c); color:var(--assign-text,#f8fafc); }
+.heading { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:14px; }
+.heading > div { min-width:0; }
+.heading span { color:var(--assign-accent,#67e8f9); font-size:.66rem; font-weight:800; letter-spacing:.12em; }
+.heading h3 { margin:8px 0; font-size:1.18rem; }
+.heading p,.note { color:var(--assign-muted,#a5b4c7); font-size:.78rem; line-height:1.65; }
+.reference { display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; margin:18px 0; }
+.reference label { display:grid; gap:7px; min-width:0; font-size:.81rem; }
+.reference input { width:190px; }
+.reference small { flex-basis:100%; color:var(--assign-muted,#a5b4c7); overflow-wrap:anywhere; font-size:.72rem; }
+.tiles { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+.tiles .tile { --agenda-tone:#67e8f9; display:flex; flex-direction:column; align-items:flex-start; gap:9px; min-width:0; text-align:left; border:1px solid var(--assign-border,#334155); border-top:3px solid var(--agenda-tone); background:#070e1b; padding:15px; border-radius:12px; white-space:normal; }
+.tile[data-kind='overdue'] { --agenda-tone:#fda4af; }
+.tile[data-kind='upcoming'] { --agenda-tone:#c4b5fd; }
+.tile[data-kind='review'] { --agenda-tone:#fcd34d; }
+.tile span { font-size:.78rem; font-weight:700; line-height:1.5; overflow-wrap:anywhere; }
+.tile strong { font-size:1.9rem; line-height:1.1; color:var(--agenda-tone); font-variant-numeric:tabular-nums; }
+.tile small { color:var(--assign-muted,#a5b4c7); font-size:.7rem; line-height:1.6; }
+.tiles .tile[aria-pressed='true'] { border-color:var(--agenda-tone); box-shadow:inset 0 0 0 1px var(--agenda-tone); background:#152138; }
+.note { margin:13px 0 0; overflow-wrap:anywhere; }
+@media (max-width:1050px) { .tiles { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media (max-width:500px) { .heading { align-items:stretch; }.heading > button { width:100%; }.reference { display:grid; }.reference input { width:100%; }.tiles .tile { padding:12px; }.tile strong { font-size:1.65rem; } }
+@media (prefers-reduced-motion:reduce) { .agenda * { transition:none!important; animation:none!important; } }
