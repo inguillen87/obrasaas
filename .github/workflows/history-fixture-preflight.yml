@@ -1,0 +1,59 @@
+name: Validate history fixture on disposable PostgreSQL
+on:
+  push:
+    branches: ['operations/auth-history-fixture-check-20260924']
+permissions:
+  contents: read
+jobs:
+  fixture-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    services:
+      postgres:
+        image: postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+        env:
+          POSTGRES_USER: fixture_only
+          POSTGRES_PASSWORD: disposable_only
+          POSTGRES_DB: obrasaas_e2e
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U fixture_only -d obrasaas_e2e"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      S92_E2E_DISPOSABLE: '1'
+      DATABASE_URL: postgresql://fixture_only:disposable_only@127.0.0.1:5432/obrasaas_e2e?schema=public
+      DATABASE_URL_UNPOOLED: postgresql://fixture_only:disposable_only@127.0.0.1:5432/obrasaas_e2e?schema=public
+      DIRECT_URL: postgresql://fixture_only:disposable_only@127.0.0.1:5432/obrasaas_e2e?schema=public
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Verify unchanged helper and no provider credentials
+        run: |
+          mkdir -p evidence
+          node -e "for(const k of ['CLERK_SECRET_KEY','META_APP_SECRET','WHATSAPP_ACCESS_TOKEN']) if(process.env[k]) throw Error('No provider credentials permitted for this SQL-only test')"
+          git rev-parse HEAD:scripts/lib/s11-flow-history-fixture.mjs > evidence/helper-blob.txt
+          test "$(git rev-parse HEAD:scripts/lib/s11-flow-history-fixture.mjs)" = "$(git rev-parse HEAD^:scripts/lib/s11-flow-history-fixture.mjs)"
+      - name: Exact dependencies and required schema
+        run: |
+          npm ci --no-audit --no-fund > evidence/install.log 2>&1 || { tail -n 50 evidence/install.log; exit 1; }
+          npx prisma migrate deploy > evidence/migrations.log 2>&1 || { tail -n 50 evidence/migrations.log; exit 1; }
+          npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code > evidence/schema-diff.log 2>&1
+      - name: Exercise exact helper and history query without an identity provider
+        run: |
+          npx tsx scripts/verify-history-fixture-preflight.mjs > evidence/sql-preflight.log 2>&1 || { cat evidence/sql-preflight.log; exit 1; }
+          cat evidence/sql-preflight.log
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: history-fixture-preflight-${{ github.run_id }}
+          path: evidence/
+          retention-days: 7
+          if-no-files-found: warn
