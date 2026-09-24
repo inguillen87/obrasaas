@@ -112,3 +112,6 @@ Leer `authenticated-flow-history.md`. El run 36069145046 de bbdbd1e completó S9
 Las correcciones del fixture no alteraron esquema ni permisos. Se conserva el fallo del harness SQL auxiliar 36069414112, cuyo diagnóstico no pudo leerse; no se cuenta como aprobado. La aceptación principal se apoya en su propia ejecución satisfactoria, no en ese harness. Las reglas de ensayo y de Production permanecen separadas.
 
 El cierre documentado solicita un único Preview del SHA final y registra sus resultados en PR #1. La aprobación y comprobación del nuevo SHA deben ser explícitas. El enlace al parte/incidencia/fichaje, la autorización piloto y el pase productivo siguen pendientes de su propia evidencia.
+
+## Continuación S11.A25: respuesta original correlacionada
+Leer `correlated-flow-reply.md`. El historial ofrece una consulta explícita desde el envío a la sesión y mensaje entrante exactos. GET reply reutiliza la privacidad mínima de la bandeja y sus permisos; no busca por teléfono, no envía y no convierte la respuesta en un parte/fichaje aprobado. El nuevo verificador UI, seis casos SQL y el recorrido autenticado amplían los controles existentes. Publicación y resultados se acreditan por SHA; el enlace a registros de negocio y el piloto físico siguen separados.

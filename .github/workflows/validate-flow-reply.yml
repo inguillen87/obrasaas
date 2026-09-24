@@ -1,0 +1,102 @@
+name: Validate correlated Flow reply before release
+on:
+  push:
+    branches: ['operations/flow-reply-20260924']
+permissions:
+  contents: read
+concurrency:
+  group: flow-reply-validation
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    services:
+      postgres:
+        image: postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+        env:
+          POSTGRES_USER: execution_fixture
+          POSTGRES_PASSWORD: local_fixture_only
+          POSTGRES_DB: obrasaas_execution_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U execution_fixture -d obrasaas_execution_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      PLAYWRIGHT_CHANNEL: chrome
+      DATABASE_URL: postgresql://execution_fixture:local_fixture_only@127.0.0.1:5432/obrasaas_execution_ci?schema=public
+      DATABASE_URL_UNPOOLED: postgresql://execution_fixture:local_fixture_only@127.0.0.1:5432/obrasaas_execution_ci?schema=public
+      DIRECT_URL: postgresql://execution_fixture:local_fixture_only@127.0.0.1:5432/obrasaas_execution_ci?schema=public
+      EXECUTION_RELEASE_DATABASE_URL: postgresql://execution_fixture:local_fixture_only@127.0.0.1:5432/obrasaas_execution_ci?schema=public
+      EXECUTION_RELEASE_DISPOSABLE: 'true'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Exact product tree excluding the validation harness
+        run: |
+          mkdir -p evidence
+          python3 - <<'PY'
+          import json,os,pathlib,subprocess,tempfile
+          m=json.load(open('.flow-reply-validation.json'))
+          with tempfile.TemporaryDirectory() as t:
+              env={**os.environ,'GIT_INDEX_FILE':str(pathlib.Path(t)/'index')}
+              subprocess.run(['git','read-tree','HEAD'],env=env,check=True)
+              subprocess.run(['git','update-index','--force-remove','--','.flow-reply-validation.json','.github/workflows/validate-flow-reply.yml'],env=env,check=True)
+              tree=subprocess.check_output(['git','write-tree'],env=env,text=True).strip()
+          assert tree==m['tree'],(tree,m['tree'])
+          for file,expected in m['blobs'].items():
+              assert subprocess.check_output(['git','rev-parse','HEAD:'+file],text=True).strip()==expected,file
+          pathlib.Path('evidence/product-manifest.json').write_text(json.dumps(m,indent=2))
+          print('Verified exact product tree:',tree)
+          PY
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund > evidence/install.log 2>&1 || { tail -n 65 evidence/install.log; exit 1; }
+      - name: Complete tests and changed-file lint
+        run: |
+          npm test > evidence/tests.log 2>&1 || { tail -n 140 evidence/tests.log; exit 1; }
+          tail -n 10 evidence/tests.log
+          python3 - <<'PY'
+          import json,subprocess
+          files=[f for f in json.load(open('.flow-reply-validation.json'))['files'] if f.endswith(('.js','.mjs'))]
+          with open('evidence/lint.log','w') as output:r=subprocess.run(['npx','eslint',*files],stdout=output,stderr=subprocess.STDOUT)
+          print(open('evidence/lint.log').read());raise SystemExit(r.returncode)
+          PY
+      - name: PostgreSQL history and exact reply correlation
+        run: |
+          npx prisma validate > evidence/schema.log 2>&1
+          npx prisma migrate deploy > evidence/migrations.log 2>&1 || { tail -n 80 evidence/migrations.log; exit 1; }
+          npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code > evidence/schema-diff.log 2>&1
+          npx tsx scripts/verify-proactive-flow-history-postgres.mjs > evidence/postgres.log 2>&1 || { tail -n 120 evidence/postgres.log; exit 1; }
+          cat evidence/postgres.log
+      - name: Browser reply and preserved inbox circuits
+        run: |
+          npx playwright install --with-deps chrome > evidence/browser-install.log 2>&1
+          for script in verify-proactive-flow-reply-ui verify-proactive-flow-history-ui verify-proactive-flow-confirmation-ui verify-inbox-continuity-ui; do
+            node "scripts/$script.mjs" > "evidence/$script.log" 2>&1 || { tail -n 90 "evidence/$script.log"; exit 1; }
+            tail -n 1 "evidence/$script.log"
+          done
+      - name: Complete application build
+        run: |
+          npm run build > evidence/build.log 2>&1 || { tail -n 90 evidence/build.log; exit 1; }
+          tail -n 12 evidence/build.log
+          git diff --check
+      - name: Preserve bounded synthetic evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: flow-reply-${{ github.run_id }}
+          path: |
+            evidence/
+            .vercel/proactive-flow-reply-ui/proof.json
+            .vercel/proactive-flow-reply-ui/*.png
+          include-hidden-files: true
+          retention-days: 7
+          if-no-files-found: warn

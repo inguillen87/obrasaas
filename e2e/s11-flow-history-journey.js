@@ -3,6 +3,7 @@ import { clerk } from '@clerk/testing/playwright';
 import { sameOriginJson, requireS92DisposableTarget } from './s92-fixture.js';
 import { openAuthenticatedFlowHistoryFixture, FLOW_HISTORY_ACCEPTANCE } from '../scripts/lib/s11-flow-history-fixture.mjs';
 import { flowHistoryPageMatches } from '../src/lib/whatsapp/proactive-flow-history-policy.js';
+import { flowReplyMatches } from '../src/lib/whatsapp/proactive-flow-reply-policy.js';
 
 // Uses the actual route, Clerk sessions and isolated PostgreSQL; no auth/API mocks.
 export async function verifyAuthenticatedFlowHistory({ fixture, sessions, baseURL }) {
@@ -14,6 +15,7 @@ export async function verifyAuthenticatedFlowHistory({ fixture, sessions, baseUR
     if (cursor) query.set('cursor', cursor);
     return '/api/whatsapp/inbox/' + encodeURIComponent(conversationId) + '/proactive-flows?' + query;
   };
+  const replyPath = (messageId = 's11e2e_history_message_000') => '/api/whatsapp/inbox/' + encodeURIComponent(scope.conversationId) + '/proactive-flows?' + new URLSearchParams({ projectId: scope.projectId, mode: 'reply', messageId });
   const admin = sessions.admin.page, director = sessions.director.page;
   const db = await openAuthenticatedFlowHistoryFixture(fixture);
   const before = await db.snapshot(), steps = [];
@@ -37,6 +39,10 @@ export async function verifyAuthenticatedFlowHistory({ fixture, sessions, baseUR
       expect(flowHistoryPageMatches(next.payload, scope, first.payload.nextCursor)).toBe(true);
       expect(next.payload.items).toHaveLength(6); expect(next.payload.nextCursor).toBeNull();
       expect(new Set([...first.payload.items, ...next.payload.items].map(row => row.messageId)).size).toBe(26);
+      const reply = await sameOriginJson(admin, replyPath(), { headers });
+      expect(reply.status).toBe(200); expect(flowReplyMatches(reply.payload, scope, 's11e2e_history_message_000')).toBe(true);
+      expect(reply.payload).toMatchObject({ state: 'available', reply: { messageId: FLOW_HISTORY_ACCEPTANCE.replyMessageId, body: 'Respuesta operativa correlacionada de ensayo.' } });
+      for (const secret of [FLOW_HISTORY_ACCEPTANCE.privateCanary, 'wamid.', 'tokenSha256']) expect(JSON.stringify(reply.payload)).not.toContain(secret);
       steps.push('real-clerk-postgres-history-pagination-without-sending-credentials');
     });
     await test.step('S11-HISTORY: another tenant, forged scope, cursors and anonymous requests cannot retrieve history', async () => {
@@ -56,6 +62,9 @@ export async function verifyAuthenticatedFlowHistory({ fixture, sessions, baseUR
       expect(anonymous.headers['x-clerk-auth-status']).toBe('signed-out');
       expect(anonymous.headers['x-clerk-auth-reason']).toContain('protect-rewrite');
       const noScope = await sameOriginJson(admin, pathname()); expect(noScope.status).toBe(409);
+      expect((await sameOriginJson(sessions.outsider.page, replyPath(), { headers })).status).toBe(409);
+      const anonymousReply = await sameOriginJson(sessions.anonymous.page, replyPath(), { headers });
+      expect(anonymousReply.status).toBe(404); expect(anonymousReply.payload).toBeNull();
       steps.push('tenant-isolation-cursor-binding-anonymous-and-missing-context');
     });
     await test.step('S11-HISTORY: the real mobile inbox loads, filters, paginates and survives reload without dispatch', async () => {
@@ -71,6 +80,9 @@ export async function verifyAuthenticatedFlowHistory({ fixture, sessions, baseUR
       await history.getByRole('button', { name: 'Con respuesta (1)', exact: true }).click();
       await expect(history.getByRole('listitem')).toHaveCount(1);
       expect(requests.length).toBe(beforeFilter);
+      await history.getByRole('button', { name: 'Consultar respuesta vinculada', exact: true }).click();
+      await expect(history.getByText('Origen de la respuesta verificado', { exact: true })).toBeVisible();
+      await expect(history.getByText('Respuesta operativa correlacionada de ensayo.', { exact: true })).toBeVisible();
       await history.getByRole('button', { name: 'Todos en esta página (20)', exact: true }).click();
       await history.getByRole('button', { name: 'Más antiguos', exact: true }).click();
       await expect(history.getByRole('listitem')).toHaveCount(6);
@@ -93,10 +105,12 @@ export async function verifyAuthenticatedFlowHistory({ fixture, sessions, baseUR
       expect(signedOut.status).toBe(404); expect(signedOut.payload).toBeNull();
       expect(signedOut.headers['x-clerk-auth-status']).toBe('signed-out');
       const stillAuthorized = await sameOriginJson(admin, pathname(), { headers }); expect(stillAuthorized.status).toBe(200);
+      const signedOutReply = await sameOriginJson(director, replyPath(), { headers }); expect(signedOutReply.status).toBe(404); expect(signedOutReply.payload).toBeNull();
+      expect((await sameOriginJson(admin, replyPath(), { headers })).payload.state).toBe('available');
       steps.push('real-signout-denies-history-without-affecting-other-session');
     });
     expect(await db.snapshot()).toEqual(before);
     expect(requests.some(request => request.method !== 'GET')).toBe(false);
-    console.log('S11_HISTORY_AUTHENTICATED ' + JSON.stringify({ status: 'PASS', cases: steps, rows: 26, clerk: 'development-real-sessions', database: 'loopback-disposable-postgresql', httpWrites: 0, providerCredentialsConfigured: false, businessRowsUnchanged: true, realMessagesSent: 0 }));
+    console.log('S11_HISTORY_AUTHENTICATED ' + JSON.stringify({ status: 'PASS', cases: steps, rows: 26, correlatedInboundMessages: 1, replyReadVerified: true, clerk: 'development-real-sessions', database: 'loopback-disposable-postgresql', httpWrites: 0, providerCredentialsConfigured: false, businessRowsUnchanged: true, realMessagesSent: 0 }));
   } finally { admin.off('request', observe); await db.close(); }
 }

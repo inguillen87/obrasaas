@@ -1,3 +1,5 @@
+import { readProactiveFlowReply } from '@/lib/whatsapp/proactive-flow-reply';
+import { normalizeFlowReplyQuery, flowReplyMatches } from '@/lib/whatsapp/proactive-flow-reply-policy';
 import { listProactiveFlowHistory } from '@/lib/whatsapp/proactive-flow-history';
 import { FlowHistoryError, flowHistoryPageMatches } from '@/lib/whatsapp/proactive-flow-history-policy';
 import {
@@ -161,6 +163,7 @@ export function createWhatsAppProactiveFlowHandlers({
   loadCatalog = getProactiveWhatsAppFlowCatalog,
   readReceipt = readProactiveWhatsAppFlowReceipt,
   readHistory = listProactiveFlowHistory,
+  readReply = readProactiveFlowReply,
   resolveUncertainty = resolveProactiveWhatsAppFlowUncertainty,
   sendFlow = sendProactiveWhatsAppFlowTemplate,
   parseBody = (request) => readJsonRequest(request, { maxBytes: MAX_BODY_BYTES }),
@@ -177,6 +180,12 @@ export function createWhatsAppProactiveFlowHandlers({
       const prisma = prismaFactory();
       await assertActiveProject(prisma, access, projectId);
       const scope = responseScope(access, conversationId);
+      if (new URL(request.url).searchParams.get('mode') === 'reply') {
+        const { messageId } = normalizeFlowReplyQuery(new URL(request.url).searchParams);
+        const result = await readReply({ prisma, access, conversationId, messageId, clock });
+        assertResponse(flowReplyMatches(result, scope, messageId));
+        return json(result);
+      }
       if (new URL(request.url).searchParams.get('mode') === 'history') {
         const cursor = new URL(request.url).searchParams.get('cursor');
         const page = await readHistory({ prisma, access, conversationId, cursor, clock });
@@ -314,8 +323,10 @@ function assertRequestScope(request, access) {
   }
   const receipt = request.method === 'GET' && params.get('mode') === 'receipt';
   const history = request.method === 'GET' && params.get('mode') === 'history';
+  const reply = request.method === 'GET' && params.get('mode') === 'reply';
+  if (reply) normalizeFlowReplyQuery(params);
   for (const key of params.keys()) {
-    if (!(receipt ? ['projectId', 'mode', 'blueprintKey'] : history ? ['projectId', 'mode', 'cursor'] : ['projectId']).includes(key) || params.getAll(key).length !== 1) {
+    if (!(receipt ? ['projectId', 'mode', 'blueprintKey'] : history ? ['projectId', 'mode', 'cursor'] : reply ? ['projectId', 'mode', 'messageId'] : ['projectId']).includes(key) || params.getAll(key).length !== 1) {
       throw new WhatsAppProactiveFlowError('La consulta contiene campos no admitidos.', { code: 'WHATSAPP_FLOW_QUERY_INVALID', status: 400 });
     }
   }

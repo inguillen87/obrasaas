@@ -42,7 +42,7 @@ test('raw SQL fixture names only persisted columns and supplies client-managed u
  const source=fs.readFileSync(new URL('../scripts/lib/s11-flow-history-fixture.mjs',import.meta.url),'utf8');
  const schema=fs.readFileSync(new URL('../prisma/schema.prisma',import.meta.url),'utf8');
  const statements=[...source.matchAll(/INSERT INTO "(Worker|Conversation|Message|WhatsAppFlowSession)" \(([^)]+)\) VALUES/g)];
- assert.equal(statements.length,4);
+ assert.equal(statements.length,5);
  for(const [,table,columns] of statements){
   const marker='model '+table+' {'; const start=schema.indexOf(marker);assert.notEqual(start,-1);
   const lines=schema.slice(start+marker.length,schema.indexOf('\n}',start)).split('\n');
@@ -52,4 +52,12 @@ test('raw SQL fixture names only persisted columns and supplies client-managed u
   for(const name of supplied)assert.ok(fields.has(name),table+'.'+name+' must exist in the current schema');
   for(const [name,line] of fields)if(line.includes('@updatedAt'))assert.ok(supplied.includes(name),table+'.'+name+' requires an explicit raw-SQL value');
  }
+});
+
+test('authenticated history exercises the exact persisted reply, not a substituted response',()=>{
+ const helper=fs.readFileSync(new URL('../scripts/lib/s11-flow-history-fixture.mjs',import.meta.url),'utf8');
+ const journey=fs.readFileSync(new URL('../e2e/s11-flow-history-journey.js',import.meta.url),'utf8');
+ assert.match(helper,/rows\[0\]\.consumedExternalId/);assert.match(helper,/whatsappFlowSessionId: rows\[0\]\.sessionId/);
+ assert.match(journey,/flowReplyMatches\(reply\.payload/);assert.match(journey,/Consultar respuesta vinculada/);
+ assert.match(journey,/signedOutReply\.status\)\.toBe\(404\)/);assert.doesNotMatch(journey,/route\.fulfill|page\.route|context\.route/);
 });
