@@ -1,0 +1,101 @@
+import { expect, test } from '@playwright/test';
+import { clerk } from '@clerk/testing/playwright';
+import { sameOriginJson, requireS92DisposableTarget } from './s92-fixture.js';
+import { openAuthenticatedFlowHistoryFixture, FLOW_HISTORY_ACCEPTANCE } from '../scripts/lib/s11-flow-history-fixture.mjs';
+import { flowHistoryPageMatches } from '../src/lib/whatsapp/proactive-flow-history-policy.js';
+
+// Uses the actual route, Clerk sessions and isolated PostgreSQL; no auth/API mocks.
+export async function verifyAuthenticatedFlowHistory({ fixture, sessions, baseURL }) {
+  requireS92DisposableTarget(baseURL);
+  const scope = { organizationId: fixture.primary.databaseOrganizationId, projectId: fixture.primary.project.id, conversationId: FLOW_HISTORY_ACCEPTANCE.conversationId };
+  const headers = { 'X-ObraSaaS-Organization': scope.organizationId, 'X-ObraSaaS-Project': scope.projectId };
+  const pathname = (conversationId = scope.conversationId, projectId = scope.projectId, cursor = null) => {
+    const query = new URLSearchParams({ projectId, mode: 'history' });
+    if (cursor) query.set('cursor', cursor);
+    return '/api/whatsapp/inbox/' + encodeURIComponent(conversationId) + '/proactive-flows?' + query;
+  };
+  const admin = sessions.admin.page, director = sessions.director.page;
+  const db = await openAuthenticatedFlowHistoryFixture(fixture);
+  const before = await db.snapshot(), steps = [];
+  const requests = [];
+  const observe = request => { if (new URL(request.url()).pathname.includes('/proactive-flows')) requests.push({ method: request.method(), path: new URL(request.url()).pathname }); };
+  admin.on('request', observe);
+  try {
+    let first;
+    await test.step('S11-HISTORY: authenticated administrator reads persisted sessions without a sending channel', async () => {
+      first = await sameOriginJson(admin, pathname(), { headers });
+      expect(first.status).toBe(200);
+      expect(flowHistoryPageMatches(first.payload, scope, null)).toBe(true);
+      expect(first.payload.items).toHaveLength(20);
+      expect(first.headers['cache-control']).toContain('private, no-store');
+      expect(first.payload.items[0]).toMatchObject({ status: 'delivered', correlation: 'verified', reply: { state: 'recorded' } });
+      expect(first.payload.items[1].status).toBe('unknown');
+      expect(first.payload.items[3].riskDecision).toBe(true);
+      for (const secret of [FLOW_HISTORY_ACCEPTANCE.privateCanary, 'wamid.', 'tokenSha256', 'recipientPhone']) expect(JSON.stringify(first.payload)).not.toContain(secret);
+      const next = await sameOriginJson(admin, pathname(undefined, undefined, first.payload.nextCursor), { headers });
+      expect(next.status).toBe(200);
+      expect(flowHistoryPageMatches(next.payload, scope, first.payload.nextCursor)).toBe(true);
+      expect(next.payload.items).toHaveLength(6); expect(next.payload.nextCursor).toBeNull();
+      expect(new Set([...first.payload.items, ...next.payload.items].map(row => row.messageId)).size).toBe(26);
+      steps.push('real-clerk-postgres-history-pagination-without-sending-credentials');
+    });
+    await test.step('S11-HISTORY: another tenant, forged scope, cursors and anonymous requests cannot retrieve history', async () => {
+      const foreignHeaders = { 'X-ObraSaaS-Organization': fixture.otherTenant.databaseOrganizationId, 'X-ObraSaaS-Project': fixture.otherTenant.anchorProjectId };
+      const forged = await sameOriginJson(sessions.outsider.page, pathname(), { headers });
+      expect(forged.status).toBe(409);
+      const outsider = await sameOriginJson(sessions.outsider.page, pathname(scope.conversationId, fixture.otherTenant.anchorProjectId), { headers: foreignHeaders });
+      expect(outsider.status).toBe(404);
+      expect(JSON.stringify(outsider.payload)).not.toContain('s11e2e_history_message');
+      const otherOwn = await sameOriginJson(sessions.outsider.page, pathname(FLOW_HISTORY_ACCEPTANCE.otherConversationId, fixture.otherTenant.anchorProjectId), { headers: foreignHeaders });
+      expect(otherOwn.status).toBe(200); expect(otherOwn.payload.items).toEqual([]);
+      const foreignCursor = await sameOriginJson(sessions.outsider.page, pathname(FLOW_HISTORY_ACCEPTANCE.otherConversationId, fixture.otherTenant.anchorProjectId, first.payload.nextCursor), { headers: foreignHeaders });
+      expect(foreignCursor.status).toBe(422);
+      const anonymous = await sameOriginJson(sessions.anonymous.page, pathname(), { headers });
+      expect(anonymous.status).toBe(404); expect(anonymous.payload).toBeNull();
+      expect(anonymous.headers['x-clerk-auth-status']).toBe('signed-out');
+      expect(anonymous.headers['x-clerk-auth-reason']).toContain('protect-rewrite');
+      const noScope = await sameOriginJson(admin, pathname()); expect(noScope.status).toBe(409);
+      steps.push('tenant-isolation-cursor-binding-anonymous-and-missing-context');
+    });
+    await test.step('S11-HISTORY: the real mobile inbox loads, filters, paginates and survives reload without dispatch', async () => {
+      await admin.setViewportSize({ width: 390, height: 844 });
+      await admin.goto('/dashboard/inbox');
+      await expect(admin.getByRole('heading', { name: 'De un mensaje a una tarea con seguimiento.' })).toBeVisible();
+      await clerk.loaded({ page: admin });
+      await admin.getByRole('button', { name: new RegExp(FLOW_HISTORY_ACCEPTANCE.displayName) }).click();
+      const history = admin.getByRole('region', { name: 'Seguimiento de formularios' });
+      await history.getByRole('button', { name: 'Consultar envíos anteriores', exact: true }).click();
+      await expect(history.getByRole('listitem')).toHaveCount(20);
+      const beforeFilter = requests.length;
+      await history.getByRole('button', { name: 'Con respuesta (1)', exact: true }).click();
+      await expect(history.getByRole('listitem')).toHaveCount(1);
+      expect(requests.length).toBe(beforeFilter);
+      await history.getByRole('button', { name: 'Todos en esta página (20)', exact: true }).click();
+      await history.getByRole('button', { name: 'Más antiguos', exact: true }).click();
+      await expect(history.getByRole('listitem')).toHaveCount(6);
+      await expect(history.getByRole('button', { name: 'Más antiguos', exact: true })).toBeDisabled();
+      expect(await admin.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await admin.reload(); await clerk.loaded({ page: admin });
+      await admin.getByRole('button', { name: new RegExp(FLOW_HISTORY_ACCEPTANCE.displayName) }).click();
+      await history.getByRole('button', { name: 'Consultar envíos anteriores', exact: true }).click();
+      await expect(history.getByRole('listitem')).toHaveCount(20);
+      expect(requests.every(request => request.method === 'GET')).toBe(true);
+      expect(await history.innerText()).not.toContain(FLOW_HISTORY_ACCEPTANCE.privateCanary);
+      steps.push('mobile-inbox-filter-pagination-and-reload-no-post');
+    });
+    await test.step('S11-HISTORY: ending a real session removes read access without modifying records', async () => {
+      const signedIn = await sameOriginJson(director, pathname(), { headers }); expect(signedIn.status).toBe(200);
+      await director.evaluate(async () => { await window.Clerk.signOut(); });
+      await director.goto('/sign-in'); await clerk.loaded({ page: director });
+      await director.waitForFunction(() => window.Clerk?.loaded === true && window.Clerk.session === null);
+      const signedOut = await sameOriginJson(director, pathname(), { headers });
+      expect(signedOut.status).toBe(404); expect(signedOut.payload).toBeNull();
+      expect(signedOut.headers['x-clerk-auth-status']).toBe('signed-out');
+      const stillAuthorized = await sameOriginJson(admin, pathname(), { headers }); expect(stillAuthorized.status).toBe(200);
+      steps.push('real-signout-denies-history-without-affecting-other-session');
+    });
+    expect(await db.snapshot()).toEqual(before);
+    expect(requests.some(request => request.method !== 'GET')).toBe(false);
+    console.log('S11_HISTORY_AUTHENTICATED ' + JSON.stringify({ status: 'PASS', cases: steps, rows: 26, clerk: 'development-real-sessions', database: 'loopback-disposable-postgresql', httpWrites: 0, providerCredentialsConfigured: false, businessRowsUnchanged: true, realMessagesSent: 0 }));
+  } finally { admin.off('request', observe); await db.close(); }
+}
