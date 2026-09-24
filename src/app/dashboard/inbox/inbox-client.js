@@ -1952,6 +1952,7 @@ function InboxWorkspace({
                 )}
 
                 <ProactiveFlowLauncher
+                  organizationId={organizationId}
                   canManageIntegrations={canManageIntegrations}
                   conversationId={selectedConversation.id}
                   key={selectedConversation.id}

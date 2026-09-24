@@ -244,6 +244,11 @@ jobs:
       - name: Run public E2E
         run: npm run test:e2e:public
 
+      - name: Check scoped Flow send receipts with synthetic provider
+        env:
+          PLAYWRIGHT_CHANNEL: chromium
+        run: node scripts/verify-proactive-flow-confirmation-ui.mjs
+
       - name: Preserve Playwright diagnostics
         if: always()
         uses: actions/upload-artifact@v7
@@ -252,6 +257,9 @@ jobs:
           path: |
             playwright-report/
             test-results/
+            .vercel/proactive-flow-confirmation-ui/proof.json
+            .vercel/proactive-flow-confirmation-ui/*.png
+          include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 7
 

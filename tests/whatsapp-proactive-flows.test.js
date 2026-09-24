@@ -43,398 +43,20 @@ registerHooks({
 
 const [
   {
+    readProactiveWhatsAppFlowReceipt,
     getProactiveWhatsAppFlowCatalog,
     resolveProactiveWhatsAppFlowUncertainty,
     sendProactiveWhatsAppFlowTemplate,
   },
-  { buildOwnedWhatsAppFlowTemplate },
-  { getWhatsAppFlowScopedName },
   { consumeWhatsAppFlowSession },
   { createWhatsAppProactiveFlowHandlers },
 ] = await Promise.all([
   import('../src/lib/whatsapp/proactive-flows.js'),
-  import('../src/lib/whatsapp/templates.js'),
-  import('../src/lib/whatsapp/flows.js'),
   import('../src/lib/whatsapp/flow-sessions.js'),
   import('../src/app/api/whatsapp/inbox/[conversationId]/proactive-flows/route.js'),
 ]);
 
-const NOW = new Date('2026-07-23T12:00:00.000Z');
-const FLOW_SECRET = 'whatsapp-flow-test-secret-with-at-least-32-bytes';
-const CONFIGURED_META_ENV = Object.freeze({
-  NEXT_PUBLIC_APP_URL: 'https://preview.obrasaas.test',
-  NEXT_PUBLIC_META_APP_ID: 'app-a',
-  META_APP_SECRET: 'secret-a',
-  NEXT_PUBLIC_META_EMBEDDED_SIGNUP_CONFIG_ID: 'config-a',
-  META_VERIFY_TOKEN: 'verify-a',
-  WHATSAPP_CREDENTIALS_ENCRYPTION_KEY: 'encryption-a',
-  WHATSAPP_FLOW_TOKEN_SECRET: FLOW_SECRET,
-});
-
-function access(overrides = {}) {
-  return {
-    databaseUserId: 'actor-a',
-    isSuperadmin: false,
-    orgId: 'org-a',
-    tenantRole: 'ADMIN',
-    subscription: { canRead: true, canWrite: true },
-    organization: { id: 'organization-a', name: 'Constructora A' },
-    project: { id: 'project-a', organizationId: 'organization-a', name: 'Obra A' },
-    ...overrides,
-  };
-}
-
-function matchesWhere(record, where = {}) {
-  return Object.entries(where).every(([field, expected]) => {
-    const actual = record[field];
-    if (expected && typeof expected === 'object' && !Array.isArray(expected)) {
-      if (Object.hasOwn(expected, 'not')) return actual !== expected.not;
-      if (Object.hasOwn(expected, 'gt')) {
-        return new Date(actual).getTime() > new Date(expected.gt).getTime();
-      }
-      if (Object.hasOwn(expected, 'lte')) {
-        return new Date(actual).getTime() <= new Date(expected.lte).getTime();
-      }
-      if (Object.hasOwn(expected, 'in')) return expected.in.includes(actual);
-    }
-    return actual === expected;
-  });
-}
-
-function flowSessionDelegate(records) {
-  function find(where) {
-    if (where.id) return records.find((record) => record.id === where.id) || null;
-    const composite = where.projectId_sourceExternalId_blueprintKey;
-    return composite
-      ? records.find((record) => (
-          record.projectId === composite.projectId
-          && record.sourceExternalId === composite.sourceExternalId
-          && record.blueprintKey === composite.blueprintKey
-        )) || null
-      : null;
-  }
-  return {
-    async findUnique({ where }) {
-      const record = find(where);
-      return record ? { ...record } : null;
-    },
-    async create({ data }) {
-      const duplicate = find({
-        projectId_sourceExternalId_blueprintKey: {
-          projectId: data.projectId,
-          sourceExternalId: data.sourceExternalId,
-          blueprintKey: data.blueprintKey,
-        },
-      });
-      if (duplicate) throw Object.assign(new Error('unique'), { code: 'P2002' });
-      const record = {
-        ...data,
-        deliveryAttemptedAt: null,
-        deliveryRejectedAt: null,
-        sentAt: null,
-        providerMessageId: null,
-        consumedAt: null,
-        consumedExternalId: null,
-        createdAt: NOW,
-        updatedAt: NOW,
-      };
-      records.push(record);
-      return { ...record };
-    },
-    async updateMany({ where, data }) {
-      const matching = records.filter((record) => matchesWhere(record, where));
-      for (const record of matching) Object.assign(record, data, { updatedAt: NOW });
-      return { count: matching.length };
-    },
-  };
-}
-
-function createDatabase({
-  inbound = true,
-  worker = true,
-  templateStatus = 'APPROVED',
-  inboundAt = new Date('2026-07-22T18:00:00.000Z'),
-  flowEndpoint = true,
-  endpointEnabled = true,
-  endpointFingerprintMatches = true,
-} = {}) {
-  const calls = [];
-  const messages = [];
-  const sessions = [];
-  const audits = [];
-  const project = {
-    id: 'project-a',
-    organizationId: 'organization-a',
-    name: 'Obra A',
-    status: 'ACTIVE',
-    organization: {
-      subscriptionPlan: 'PRO',
-      subscriptionStatus: 'ACTIVE',
-      trialEndsAt: null,
-    },
-  };
-  const conversation = {
-    id: 'conversation-a',
-    projectId: 'project-a',
-    externalId: 'meta:5491111111111',
-    displayName: 'Ana',
-    updatedAt: inboundAt,
-  };
-  const connection = {
-    id: 'connection-a',
-    projectId: 'project-a',
-    phoneNumberId: '123456789012345',
-    whatsappBusinessId: '987654321098765',
-    enabled: true,
-    connectionStatus: 'CONNECTED',
-    encryptedAccessToken: 'encrypted-token-value',
-    lastError: null,
-    metadata: {
-      channelHealth: {
-        tokenStatus: 'VALID',
-        scopes: [
-          'whatsapp_business_management',
-          'whatsapp_business_messaging',
-        ],
-        phoneStatus: 'REGISTERED',
-        subscriptionStatus: 'SUBSCRIBED',
-        qualityStatus: 'HEALTHY',
-        providerStatus: 'HEALTHY',
-      },
-      whatsappFlows: {
-        'incident-report': {
-          id: '111111111111111',
-          name: getWhatsAppFlowScopedName(
-            'incident-report',
-            '11111111-1111-4111-8111-111111111111',
-          ),
-          status: 'PUBLISHED',
-          dataExchange: true,
-          flowScope: '11111111-1111-4111-8111-111111111111',
-        },
-      },
-      whatsappFlowEndpoint: {
-        id: 'endpoint-a',
-        keyFingerprint: endpointFingerprintMatches ? 'endpoint-key-a' : 'stale-key',
-        keyVersion: 1,
-        signatureStatus: 'VALID',
-        whatsappBusinessId: '987654321098765',
-        phoneNumberId: '123456789012345',
-      },
-    },
-    flowEndpoint: flowEndpoint
-      ? {
-          id: 'endpoint-a',
-          enabled: endpointEnabled,
-          updatedAt: NOW,
-          keys: [{
-            status: 'ACTIVE',
-            version: 1,
-            publicKeySha256: 'endpoint-key-a',
-            verifiedAt: NOW,
-          }],
-        }
-      : null,
-  };
-  const definition = buildOwnedWhatsAppFlowTemplate({
-    connection,
-    blueprintKey: 'incident-report',
-  });
-  const template = {
-    id: 'template-local-a',
-    connectionId: connection.id,
-    whatsappBusinessId: connection.whatsappBusinessId,
-    blueprintKey: definition.blueprintKey,
-    providerTemplateId: '222222222222222',
-    name: definition.name,
-    language: definition.language,
-    category: definition.category,
-    status: templateStatus,
-    contentSha256: definition.contentSha256,
-    flowId: definition.flowId,
-    screenId: definition.screenId,
-    bodyText: definition.bodyText,
-    buttonText: definition.buttonText,
-    rejectionReason: null,
-    submittedAt: NOW,
-    lastSyncedAt: NOW,
-    statusChangedAt: NOW,
-    createdAt: NOW,
-    updatedAt: NOW,
-  };
-  const workerRow = {
-    id: 'worker-a',
-    projectId: 'project-a',
-    phone: '+5491111111111',
-    name: 'Ana Rojas',
-    role: 'Capataz',
-    active: true,
-    metadata: { whatsappRole: 'FOREMAN' },
-    createdAt: NOW,
-    updatedAt: NOW,
-    project: { organizationId: 'organization-a' },
-  };
-  const inboundMessage = inbound
-    ? {
-        id: 'inbound-a',
-        conversationId: conversation.id,
-        externalId: 'wamid.inbound-a',
-        direction: 'INBOUND',
-        sentAt: inboundAt,
-        createdAt: inboundAt,
-      }
-    : null;
-
-  const database = {
-    project: {
-      async findFirst(args) {
-        calls.push(['project', args]);
-        return args.where.id === project.id
-          && args.where.organizationId === project.organizationId
-          ? { ...project }
-          : null;
-      },
-    },
-    conversation: {
-      async findFirst(args) {
-        calls.push(['conversation', args]);
-        return args.where.id === conversation.id
-          && args.where.projectId === conversation.projectId
-          && args.where.project?.organizationId === project.organizationId
-          ? { ...conversation }
-          : null;
-      },
-      async update({ where, data }) {
-        assert.equal(where.id, conversation.id);
-        Object.assign(conversation, data);
-        return { ...conversation };
-      },
-    },
-    whatsAppConnection: {
-      async findUnique(args) {
-        calls.push(['connection', args]);
-        return args.where.projectId === project.id ? structuredClone(connection) : null;
-      },
-    },
-    worker: {
-      async findMany(args) {
-        calls.push(['workers', args]);
-        return worker ? [{ ...workerRow }] : [];
-      },
-    },
-    whatsAppFlowTemplate: {
-      async findMany() {
-        return [{ ...template }];
-      },
-      async findFirst({ where }) {
-        return matchesWhere(template, where) ? { ...template } : null;
-      },
-    },
-    whatsAppFlowSession: flowSessionDelegate(sessions),
-    message: {
-      async findFirst(args) {
-        calls.push(['message-first', args]);
-        if (args.where.direction === 'INBOUND') return inboundMessage;
-        if (args.where.status?.in) {
-          const filters = Array.isArray(args.where.AND) ? args.where.AND : [];
-          const jsonExpected = Object.fromEntries(filters.map((filter) => {
-            const path = filter?.metadata?.path?.[0];
-            return path ? [path, filter.metadata.equals] : [null, null];
-          }).filter(([path]) => path));
-          return messages
-            .filter((message) => (
-              message.conversationId === args.where.conversationId
-              && message.direction === args.where.direction
-              && args.where.status.in.includes(message.status)
-              && Object.entries(jsonExpected).every(
-                ([field, expected]) => message.metadata?.[field] === expected,
-              )
-            ))
-            .sort((left, right) => (
-              new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
-            ))[0] || null;
-        }
-        if (args.where.id) {
-          return messages.find((message) => (
-            message.id === args.where.id
-            && message.conversationId === args.where.conversationId
-            && message.direction === args.where.direction
-          )) || null;
-        }
-        return null;
-      },
-      async findMany({ where, take }) {
-        return messages
-          .filter((message) => matchesWhere(message, where))
-          .sort((left, right) => (
-            new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
-          ))
-          .slice(0, take || messages.length)
-          .map((message) => ({ ...message }));
-      },
-      async findUnique({ where }) {
-        if (where.externalId) {
-          return messages.find((message) => message.externalId === where.externalId) || null;
-        }
-        return null;
-      },
-      async create({ data }) {
-        if (messages.some((message) => message.externalId === data.externalId)) {
-          throw Object.assign(new Error('unique'), { code: 'P2002' });
-        }
-        const created = {
-          id: `outbound-${messages.length + 1}`,
-          createdAt: NOW,
-          ...data,
-        };
-        messages.push(created);
-        return { ...created };
-      },
-      async update({ where, data }) {
-        const target = messages.find((message) => message.id === where.id);
-        assert.ok(target);
-        Object.assign(target, data);
-        return { ...target };
-      },
-      async updateMany({ where, data }) {
-        const matching = messages.filter((message) => matchesWhere(message, where));
-        for (const message of matching) Object.assign(message, data);
-        return { count: matching.length };
-      },
-    },
-    auditLog: {
-      async count() {
-        return 0;
-      },
-      async create({ data }) {
-        audits.push(data);
-        return data;
-      },
-    },
-    async $executeRawUnsafe(...args) {
-      calls.push(['execute', args]);
-      return 1;
-    },
-    async $queryRawUnsafe(...args) {
-      calls.push(['query', args]);
-      return [{ id: project.organizationId }];
-    },
-    async $transaction(callback) {
-      return callback(database);
-    },
-  };
-  return {
-    prisma: database,
-    calls,
-    messages,
-    sessions,
-    audits,
-    template,
-    connection,
-    project,
-    worker: workerRow,
-  };
-}
+const { NOW, FLOW_SECRET, CONFIGURED_META_ENV, access, createDatabase } = await import('./helpers/proactive-flow-fixture.js');
 
 test('catalog only enables the exact approved owned template for a resolved worker', async () => {
   const store = createDatabase();
@@ -1144,7 +766,8 @@ function routeRequest({
   body,
   idempotencyKey,
 } = {}) {
-  const headers = new Headers();
+  const headers = new Headers({ 'x-obrasaas-organization': 'organization-a', 'x-obrasaas-project': projectId });
+  if (method === 'POST' && body && typeof body === 'object') body = { reviewVersion: 'a'.repeat(64), confirmed: true, ...body };
   if (body !== undefined) headers.set('content-type', 'application/json');
   if (idempotencyKey) headers.set('idempotency-key', idempotencyKey);
   return new Request(
@@ -1178,7 +801,7 @@ test('proactive Flow route authorizes reads and forwards only trusted scope', as
     prismaFactory: routeProjectPrisma,
     loadCatalog: async (input) => {
       calls.push(input);
-      return { capability: { allowed: true, code: 'READY', reason: null }, catalog: [] };
+      return { context: { organizationId: 'organization-a', projectId: 'project-a', conversationId: input.conversationId }, conversationId: input.conversationId, capability: { allowed: true, code: 'READY', reason: null }, recipient: null, catalog: [] };
     },
     clock: () => NOW,
     env: CONFIGURED_META_ENV,
@@ -1204,7 +827,7 @@ test('proactive Flow route validates project, body fields, and idempotency befor
     prismaFactory: routeProjectPrisma,
     sendFlow: async (input) => {
       sends.push(input);
-      return { message: { id: 'outbound-a', status: 'accepted' } };
+      return { context: { organizationId: 'organization-a', projectId: 'project-a', conversationId: input.conversationId }, conversationId: input.conversationId, flow: { key: input.blueprintKey }, operationKey: input.idempotencyKey, reviewVersion: input.reviewVersion, idempotent: false, message: { id: 'outbound-a', status: 'accepted', direction: 'OUTBOUND', kind: 'interactive', body: 'Prueba', sentAt: null, recordedAt: null } };
     },
     clock: () => NOW,
     env: CONFIGURED_META_ENV,
@@ -1259,8 +882,9 @@ test('uncertainty resolution route requires manage permission and forwards exact
     resolveUncertainty: async (input) => {
       resolutions.push(input);
       return {
-        conversationId: input.conversationId,
-        resolvedAttempt: { id: input.messageId, status: 'failed' },
+        context: { organizationId: 'organization-a', projectId: 'project-a', conversationId: input.conversationId },
+        conversationId: input.conversationId, flow: { key: input.blueprintKey }, idempotent: false,
+        resolvedAttempt: { id: input.messageId, status: 'failed', direction: 'OUTBOUND', kind: 'interactive', body: 'Prueba', sentAt: null, recordedAt: null },
       };
     },
     clock: () => NOW,
@@ -1294,4 +918,99 @@ test('uncertainty resolution route requires manage permission and forwards exact
   }), routeContext());
   assert.equal(extraField.status, 400);
   assert.equal(resolutions.length, 1);
+});
+
+
+async function reviewedSendInput(store, extra = {}) {
+  const common = { prisma: store.prisma, access: access(), conversationId: 'conversation-a', clock: () => NOW, env: CONFIGURED_META_ENV };
+  const catalog = await getProactiveWhatsAppFlowCatalog({ ...common, canManage: true });
+  const row = catalog.catalog.find(item => item.key === 'incident-report');
+  assert.equal(row.preview.bodyText, store.template.bodyText);
+  return { ...common, blueprintKey: row.key, reviewVersion: row.reviewVersion, idempotencyKey: 'reviewed-send-attempt-a', sendTemplate: async () => ({ messages: [{ id: 'wamid.reviewed-attempt-a' }] }), ...extra };
+}
+
+test('read-only receipt recovers the accepted operation without another provider call', async () => {
+  const store=createDatabase();let sends=0;
+  const input=await reviewedSendInput(store,{sendTemplate:async()=>{sends++;return {messages:[{id:'wamid.receipt-a'}]};}});
+  const first=await sendProactiveWhatsAppFlowTemplate(input);const before=JSON.stringify({messages:store.messages,audits:store.audits,sessions:store.sessions});
+  const receipt=await readProactiveWhatsAppFlowReceipt(input);
+  assert.equal(receipt.found,true);assert.equal(receipt.message.id,first.message.id);assert.equal(receipt.message.status,'accepted');assert.equal(receipt.reviewVersion,input.reviewVersion);
+  assert.equal(sends,1);assert.equal(JSON.stringify({messages:store.messages,audits:store.audits,sessions:store.sessions}),before);
+});
+test('missing receipt returns no message and never materializes a send',async()=>{
+  const store=createDatabase(),input=await reviewedSendInput(store);
+  const before=store.calls.length;const result=await readProactiveWhatsAppFlowReceipt(input);
+  assert.equal(result.found,false);assert.equal(result.message,null);assert.equal(store.messages.length,0);assert.equal(store.audits.length,0);assert.equal(store.sessions.length,0);
+  assert.ok(store.calls.slice(before).every(([name])=>name==='conversation'));
+});
+test('receipt remains readable after channel credential or template changes',async()=>{
+  const store=createDatabase(),input=await reviewedSendInput(store);await sendProactiveWhatsAppFlowTemplate(input);
+  store.connection.enabled=false;store.connection.encryptedAccessToken=null;store.template.status='PAUSED';store.worker.active=false;
+  const result=await readProactiveWhatsAppFlowReceipt(input);assert.equal(result.message.status,'accepted');assert.equal(store.messages.length,1);
+});
+for(const patch of [{reviewVersion:'b'.repeat(64)},{access:access({databaseUserId:'another-user'})},{access:access({organization:{id:'foreign'}})},{conversationId:'foreign'}])test('receipt refuses changed scope/actor/review '+JSON.stringify(patch),async()=>{
+  const store=createDatabase(),input=await reviewedSendInput(store);await sendProactiveWhatsAppFlowTemplate(input);
+  const before=JSON.stringify({messages:store.messages,audits:store.audits});
+  await assert.rejects(readProactiveWhatsAppFlowReceipt({...input,...patch}));assert.equal(JSON.stringify({messages:store.messages,audits:store.audits}),before);
+});
+test('changing the resolved worker after review rejects before provider or reservation',async()=>{
+  const store=createDatabase();let calls=0;const input=await reviewedSendInput(store,{sendTemplate:async()=>{calls++;throw new Error('Should not reach provider');}});
+  store.worker.id='worker-reassigned';await assert.rejects(sendProactiveWhatsAppFlowTemplate(input),{code:'WHATSAPP_FLOW_REVIEW_CHANGED'});
+  assert.equal(calls,0);assert.equal(store.messages.length,0);assert.equal(store.sessions.length,0);assert.equal(store.audits.length,0);
+});
+test('reviewed message is checked again before dispatch after reservation',async()=>{
+  const store=createDatabase();let transactions=0,calls=0;
+  const input=await reviewedSendInput(store,{sendTemplate:async()=>{calls++;throw new Error('Should not dispatch');}});
+  store.prisma.$transaction=async fn=>{transactions++;if(transactions===2)store.worker.id='worker-changed';return fn(store.prisma);};
+  await assert.rejects(sendProactiveWhatsAppFlowTemplate(input),{code:'WHATSAPP_FLOW_REVIEW_CHANGED'});assert.equal(calls,0);assert.equal(store.messages[0].status,'failed');
+});
+test('receipt with an accepted status but no provider reference fails closed to unknown',async()=>{
+  const store=createDatabase(),input=await reviewedSendInput(store);await sendProactiveWhatsAppFlowTemplate(input);store.messages[0].providerMessageId=null;
+  assert.equal((await readProactiveWhatsAppFlowReceipt(input)).message.status,'unknown');assert.equal(store.messages[0].status,'accepted');
+});
+test('transport success with malformed domain output is rejected by the route',async()=>{
+  for(const returned of [{},{message:{id:'outbound-a',status:'accepted'}},{context:{},conversationId:'other',flow:{key:'shift-check-in'}}]){
+    const handlers=createWhatsAppProactiveFlowHandlers({resolveAccess:async()=>access(),authorize:()=>{},prismaFactory:routeProjectPrisma,sendFlow:async()=>returned});
+    const response=await handlers.POST(routeRequest({method:'POST',idempotencyKey:'flow-invalid-receipt',body:{projectId:'project-a',blueprintKey:'incident-report'}}),routeContext());
+    assert.equal(response.status,503);assert.equal((await response.json()).code,'WHATSAPP_FLOW_RESPONSE_UNCONFIRMED');
+  }
+});
+test('a malformed PATCH response never authorizes a new attempt in the route',async()=>{
+  const handlers=createWhatsAppProactiveFlowHandlers({resolveAccess:async()=>access(),authorize:()=>{},prismaFactory:routeProjectPrisma,resolveUncertainty:async()=>({})});
+  const response=await handlers.PATCH(routeRequest({method:'PATCH',body:{projectId:'project-a',blueprintKey:'incident-report',messageId:'outbound-a',confirmation:'ACEPTO_RIESGO_DE_DUPLICADO'}}),routeContext());
+  assert.equal(response.status,503);
+});
+for(const method of ['GET','POST','PATCH'])test(method+' denies stale context and cross-site origin before database or provider',async()=>{
+  let reads=0;
+  const handlers=createWhatsAppProactiveFlowHandlers({resolveAccess:async()=>access(),authorize:()=>{},prismaFactory:()=>{reads++;return routeProjectPrisma();}});
+  for(const headers of [{'X-ObraSaaS-Organization':'other'},{'X-ObraSaaS-Project':'other'},{'X-ObraSaaS-Project':''},{Origin:'https://foreign.test'},{'Sec-Fetch-Site':'cross-site'}]){
+    const request=routeRequest({method,body:method==='GET'?undefined:{},idempotencyKey:'scope-tests-a'});for(const [k,v] of Object.entries(headers))request.headers.set(k,v);
+    const response=await handlers[method](request,routeContext());assert.ok([403,409].includes(response.status));assert.match(response.headers.get('cache-control'),/private, no-store/);
+  }
+  assert.equal(reads,0);
+});
+test('duplicate query keys and mismatched header/body identities are rejected',async()=>{
+  let sends=0;const handlers=createWhatsAppProactiveFlowHandlers({resolveAccess:async()=>access(),authorize:()=>{},prismaFactory:routeProjectPrisma,sendFlow:async()=>{sends++;}});
+  const original=routeRequest();const duplicate=new Request(original.url+'&projectId=other',{headers:original.headers});assert.equal((await handlers.GET(duplicate,routeContext())).status,400);
+  const mismatched=routeRequest({method:'POST',idempotencyKey:'header-key-a',body:{projectId:'project-a',blueprintKey:'incident-report',idempotencyKey:'body-key-a'}});
+  assert.equal((await handlers.POST(mismatched,routeContext())).status,400);assert.equal(sends,0);
+});
+test('GET receipt goes through the read service, never through send or manual resolution',async()=>{
+  const store=createDatabase(),input=await reviewedSendInput(store);await sendProactiveWhatsAppFlowTemplate(input);
+  let sends=0,resolves=0;
+  const handlers=createWhatsAppProactiveFlowHandlers({resolveAccess:async()=>access(),authorize:()=>{},prismaFactory:()=>store.prisma,sendFlow:async()=>{sends++;},resolveUncertainty:async()=>{resolves++;}});
+  const base=routeRequest(),request=new Request(base.url+'&mode=receipt&blueprintKey=incident-report',{headers:base.headers});request.headers.set('Idempotency-Key',input.idempotencyKey);request.headers.set('X-ObraSaaS-Flow-Review',input.reviewVersion);
+  const response=await handlers.GET(request,routeContext());assert.equal(response.status,200);assert.equal((await response.json()).message.status,'accepted');assert.equal(sends,0);assert.equal(resolves,0);
+});
+
+test('unreviewed legacy HTTP requests cannot send through the new route',async()=>{
+  let reads=0;const handlers=createWhatsAppProactiveFlowHandlers({resolveAccess:async()=>access(),authorize:()=>{},prismaFactory:()=>{reads++;return routeProjectPrisma();}});
+  const base=routeRequest();const request=new Request(base.url,{method:'POST',headers:{...Object.fromEntries(base.headers),'Content-Type':'application/json','Idempotency-Key':'unreviewed-request-a'},body:JSON.stringify({projectId:'project-a',blueprintKey:'incident-report'})});
+  const result=await handlers.POST(request,routeContext());assert.equal(result.status,400);assert.equal((await result.json()).code,'WHATSAPP_FLOW_REVIEW_REQUIRED');assert.equal(reads,0);
+});
+test('revoked read permission stops receipt lookup before database access',async()=>{
+  const {AccessError}=await import('../src/lib/access.js');let reads=0;
+  const handlers=createWhatsAppProactiveFlowHandlers({resolveAccess:async()=>access(),authorize:()=>{throw new AccessError('Revoked',{status:403,code:'REVOKED'});},prismaFactory:()=>{reads++;return routeProjectPrisma();}});
+  const base=routeRequest(),request=new Request(base.url+'&mode=receipt&blueprintKey=incident-report',{headers:base.headers});request.headers.set('Idempotency-Key','denied-receipt-a');request.headers.set('X-ObraSaaS-Flow-Review','a'.repeat(64));
+  assert.equal((await handlers.GET(request,routeContext())).status,403);assert.equal(reads,0);
 });

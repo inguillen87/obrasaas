@@ -29,6 +29,7 @@ import {
 } from '@/lib/whatsapp/flow-sessions';
 import { sendWhatsAppFlowTemplate } from '@/lib/whatsapp/meta';
 import {
+  publicTemplatePreview,
   buildOwnedWhatsAppFlowTemplate,
   WHATSAPP_FLOW_TEMPLATE_LANGUAGE,
 } from '@/lib/whatsapp/templates';
@@ -398,7 +399,7 @@ async function findUnresolvedFlowMessage(prisma, conversationId, blueprintKey) {
 async function buildCatalog(
   prisma,
   connection,
-  { baseAllowed = false, conversationId = null } = {},
+  { baseAllowed = false, conversationId = null, state = null } = {},
 ) {
   const blueprints = getWhatsAppFlowCatalog().filter((item) => (
     OPERATIONAL_PROACTIVE_BLUEPRINTS.has(item.key)
@@ -457,6 +458,8 @@ async function buildCatalog(
         1,
         Math.round((getWhatsAppFlowSessionTtlMs(blueprint.key) || 0) / 60_000),
       ),
+      preview: matching && definition ? publicTemplatePreview(definition) : null,
+      reviewVersion: matching && state?.workerResolution?.worker ? payloadDigest({ state, definition }) : null,
       template: {
         id: matching?.providerTemplateId || null,
         status: status.status,
@@ -488,6 +491,7 @@ export async function getProactiveWhatsAppFlowCatalog({
   const catalog = await buildCatalog(prisma, state.connection, {
     baseAllowed: !error,
     conversationId: state.conversation.id,
+    state,
   });
   const anySendable = catalog.some((item) => item.canSend);
   const hasUnresolvedAttempt = catalog.some((item) => item.unresolvedAttempt);
@@ -510,6 +514,8 @@ export async function getProactiveWhatsAppFlowCatalog({
     for (const item of catalog) item.canSend = false;
   }
   return {
+    context: { ...scope, conversationId: state.conversation.id },
+    conversationId: state.conversation.id,
     capability,
     recipient: state.workerResolution.status === FIELD_WORKER_RESOLUTION.RESOLVED
       ? {
@@ -646,6 +652,7 @@ export async function resolveProactiveWhatsAppFlowUncertainty({
     ) {
       await invalidateUncertainFlowSession(transaction, session, now);
       return {
+        context: { ...scope, conversationId: state.conversation.id },
         conversationId: state.conversation.id,
         flow: { key: blueprintKey, title: blueprint.title },
         resolvedAttempt: publicMessage(message),
@@ -710,6 +717,7 @@ export async function resolveProactiveWhatsAppFlowUncertainty({
       },
     });
     return {
+      context: { ...scope, conversationId: state.conversation.id },
       conversationId: state.conversation.id,
       flow: { key: blueprintKey, title: blueprint.title },
       resolvedAttempt: publicMessage(updated),
@@ -1062,6 +1070,7 @@ export async function sendProactiveWhatsAppFlowTemplate({
   conversationId,
   blueprintKey: requestedBlueprint,
   idempotencyKey: requestedIdempotencyKey,
+  reviewVersion = null,
   sendTemplate = sendWhatsAppFlowTemplate,
   flowSessionSecret,
   clock = () => new Date(),
@@ -1090,6 +1099,7 @@ export async function sendProactiveWhatsAppFlowTemplate({
         blueprintKey,
       );
       const digest = payloadDigest({ state, definition });
+      assertProactiveReview(reviewVersion, digest);
       expectedPayloadDigest = digest;
       expectedTemplateName = template.name;
       const existing = await transaction.message.findUnique({
@@ -1308,6 +1318,8 @@ export async function sendProactiveWhatsAppFlowTemplate({
       );
     }
     return {
+      context: { ...scope, conversationId: existing.conversationId },
+      operationKey: key, reviewVersion: metadata.payloadDigest,
       conversationId: existing.conversationId,
       message: publicMessage(existing),
       flow: { key: blueprintKey, title: blueprint.title },
@@ -1317,6 +1329,8 @@ export async function sendProactiveWhatsAppFlowTemplate({
 
   if (!reservation.dispatch) {
     return {
+      context: { ...scope, conversationId: reservation.message.conversationId },
+      operationKey: key, reviewVersion: reservation.digest,
       conversationId: reservation.message.conversationId,
       message: publicMessage(reservation.message),
       flow: { key: blueprintKey, title: blueprint.title },
@@ -1337,6 +1351,7 @@ export async function sendProactiveWhatsAppFlowTemplate({
         },
       );
       const freshTemplate = await approvedTemplate(transaction, freshState, blueprintKey);
+      assertProactiveReview(reviewVersion, payloadDigest({ state: freshState, definition: freshTemplate.definition }));
       if (
         freshTemplate.record.id !== reservation.template.id
         || freshTemplate.definition.contentSha256 !== reservation.definition.contentSha256
@@ -1540,9 +1555,49 @@ export async function sendProactiveWhatsAppFlowTemplate({
   }
 
   return {
+    context: { ...scope, conversationId: reservation.message.conversationId },
+    operationKey: key, reviewVersion: reservation.digest,
     conversationId: reservation.message.conversationId,
     message: publicMessage(accepted),
     flow: { key: blueprintKey, title: blueprint.title },
     idempotent: reservation.idempotent,
   };
+}
+
+// Internal legacy callers keep their contract. The inbox HTTP route requires the
+// reviewed fingerprint unconditionally; it cannot be bypassed from the browser.
+function assertProactiveReview(reviewVersion, expected) {
+  if (reviewVersion === null) return;
+  if (typeof reviewVersion !== 'string' || !/^[a-f0-9]{64}$/.test(reviewVersion) || reviewVersion !== expected) {
+    throw new WhatsAppProactiveFlowError('El mensaje o su destinatario cambiaron. Revisá nuevamente antes de enviar.', {
+      code: 'WHATSAPP_FLOW_REVIEW_CHANGED', status: 409,
+    });
+  }
+}
+
+// Receipt lookup is read-only and does not depend on the current template/token
+// being sendable. A revoked sending credential must not hide an existing receipt.
+export async function readProactiveWhatsAppFlowReceipt({ prisma, access, conversationId, blueprintKey: requestedBlueprint, idempotencyKey: requestedKey, reviewVersion }) {
+  const scope = trustedScope(access), key = normalizedIdempotencyKey(requestedKey);
+  const { key: blueprintKey, blueprint } = selectedBlueprint(requestedBlueprint);
+  if (typeof reviewVersion !== 'string' || !/^[a-f0-9]{64}$/.test(reviewVersion)) {
+    throw new WhatsAppProactiveFlowError('La consulta requiere la revisión del intento original.', { code: 'WHATSAPP_FLOW_RECEIPT_INVALID', status: 400 });
+  }
+  const conversation = await scopedConversation(prisma, scope, conversationId);
+  if (!conversation) throw new WhatsAppProactiveFlowError('La conversación no está disponible en esta obra.', { code: 'INBOX_CONVERSATION_NOT_FOUND', status: 404 });
+  const identity = sendIdentity(scope, conversation.id, blueprintKey, key);
+  const record = await prisma.message.findUnique({ where: { externalId: identity.externalId } });
+  const base = { context: { ...scope, conversationId: conversation.id }, conversationId: conversation.id,
+    flow: { key: blueprintKey, title: blueprint.title }, operationKey: key, reviewVersion, idempotent: true };
+  if (!record) return { ...base, found: false, message: null };
+  const metadata = jsonObject(record.metadata);
+  if (record.conversationId !== conversation.id || record.direction !== 'OUTBOUND'
+    || metadata.messageType !== 'whatsapp_flow_template' || metadata.blueprintKey !== blueprintKey
+    || metadata.idempotencyDigest !== identity.digest || metadata.payloadDigest !== reviewVersion
+    || !access.databaseUserId || metadata.actorId !== access.databaseUserId) {
+    throw new WhatsAppProactiveFlowError('No se pudo conciliar el recibo con este intento y usuario.', { code: 'WHATSAPP_FLOW_RECEIPT_CONFLICT', status: 409 });
+  }
+  const message = publicMessage(record);
+  if (['accepted', 'sent', 'delivered', 'read'].includes(message.status) && !record.providerMessageId) message.status = 'unknown';
+  return { ...base, found: true, message };
 }

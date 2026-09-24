@@ -5,6 +5,8 @@ import {
   hasTenantPermission,
   requireTenantPermission,
 } from '@/lib/access';
+import { assertEvidenceRequestContext, evidenceContextErrorResponse } from '@/lib/evidence-context';
+import { flowCatalogMatches, flowResultMatches, flowReceiptMatches, flowResolutionMatches } from '@/lib/whatsapp/proactive-flow-confirmation';
 import { getPrisma } from '@/lib/prisma';
 import {
   RequestBodyError,
@@ -12,6 +14,7 @@ import {
   requestBodyErrorResponse,
 } from '@/lib/request-body';
 import {
+  readProactiveWhatsAppFlowReceipt,
   getProactiveWhatsAppFlowCatalog,
   resolveProactiveWhatsAppFlowUncertainty,
   sendProactiveWhatsAppFlowTemplate,
@@ -21,7 +24,7 @@ import {
 export const runtime = 'nodejs';
 
 const MAX_BODY_BYTES = 10_000;
-const POST_FIELDS = new Set(['projectId', 'blueprintKey', 'idempotencyKey']);
+const POST_FIELDS = new Set(['projectId', 'blueprintKey', 'idempotencyKey', 'reviewVersion', 'confirmed']);
 const PATCH_FIELDS = new Set(['projectId', 'blueprintKey', 'messageId', 'confirmation']);
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/;
 
@@ -30,6 +33,8 @@ function json(payload, init = {}) {
     ...init,
     headers: {
       'Cache-Control': 'private, no-store, max-age=0',
+      Vary: 'Cookie, Authorization, X-ObraSaaS-Organization, X-ObraSaaS-Project, Idempotency-Key, X-ObraSaaS-Flow-Review',
+      'X-Content-Type-Options': 'nosniff',
       ...init.headers,
     },
   });
@@ -108,6 +113,9 @@ function assertPatchInput(input) {
 }
 
 function idempotencyKey(request, input) {
+  if (input?.idempotencyKey !== undefined && request.headers.get('idempotency-key') && input.idempotencyKey !== request.headers.get('idempotency-key')) {
+    throw new WhatsAppProactiveFlowError('Las identidades del intento no coinciden.', { code: 'IDEMPOTENCY_KEY_INVALID', status: 400 });
+  }
   const key = String(
     request.headers.get('idempotency-key') || input?.idempotencyKey || '',
   ).trim();
@@ -120,7 +128,9 @@ function idempotencyKey(request, input) {
   return key;
 }
 
-function errorResponse(error) {
+function unwrappedErrorResponse(error) {
+  const contextError = evidenceContextErrorResponse(error);
+  if (contextError) return contextError;
   if (error instanceof AccessError) return accessErrorResponse(error);
   if (error instanceof RequestBodyError) return requestBodyErrorResponse(error);
   if (error instanceof WhatsAppProactiveFlowError) {
@@ -146,6 +156,7 @@ export function createWhatsAppProactiveFlowHandlers({
   authorize = requireTenantPermission,
   prismaFactory = getPrisma,
   loadCatalog = getProactiveWhatsAppFlowCatalog,
+  readReceipt = readProactiveWhatsAppFlowReceipt,
   resolveUncertainty = resolveProactiveWhatsAppFlowUncertainty,
   sendFlow = sendProactiveWhatsAppFlowTemplate,
   parseBody = (request) => readJsonRequest(request, { maxBytes: MAX_BODY_BYTES }),
@@ -156,22 +167,34 @@ export function createWhatsAppProactiveFlowHandlers({
     try {
       const access = await resolveAccess();
       authorize(access, 'org:conversations:read');
+      assertRequestScope(request, access);
       const projectId = projectIdFromRequest(request);
       const conversationId = await conversationIdFromContext(context);
       const prisma = prismaFactory();
       await assertActiveProject(prisma, access, projectId);
-      return json(await loadCatalog({
+      const scope = responseScope(access, conversationId);
+      if (new URL(request.url).searchParams.get('mode') === 'receipt') {
+        const blueprintKey = new URL(request.url).searchParams.get('blueprintKey');
+        const key = idempotencyKey(request);
+        const reviewVersion = request.headers.get('x-obrasaas-flow-review');
+        const result = await readReceipt({ prisma, access, conversationId, blueprintKey, idempotencyKey: key, reviewVersion });
+        assertResponse(flowReceiptMatches(result, { key, blueprintKey, reviewVersion }, scope));
+        return json(result);
+      }
+      const catalog = await loadCatalog({
         prisma,
         access,
         conversationId,
         canManage: hasTenantPermission(access, 'org:conversations:manage'),
         clock,
         env,
-      }));
+      });
+      assertResponse(flowCatalogMatches(catalog, scope));
+      return json(catalog);
     } catch (error) {
       const response = errorResponse(error);
       if (response) return response;
-      console.error('WhatsApp proactive Flow catalog failed:', error);
+      console.error('WhatsApp proactive Flow catalog failed:', { code: 'CATALOG_UNAVAILABLE' });
       return json({ error: 'No se pudieron cargar los formularios.' }, { status: 500 });
     }
   }
@@ -180,10 +203,15 @@ export function createWhatsAppProactiveFlowHandlers({
     try {
       const access = await resolveAccess();
       authorize(access, 'org:conversations:manage');
+      assertRequestScope(request, access);
       const queryProjectId = projectIdFromRequest(request);
       const conversationId = await conversationIdFromContext(context);
       const input = await parseBody(request);
       assertPostInput(input);
+      if (input.confirmed !== true || typeof input.reviewVersion !== 'string' || !/^[a-f0-9]{64}$/.test(input.reviewVersion)) {
+        throw new WhatsAppProactiveFlowError('Revisá el mensaje y confirmá el envío explícitamente.', { code: 'WHATSAPP_FLOW_REVIEW_REQUIRED', status: 400 });
+      }
+      const key = idempotencyKey(request, input);
       const bodyProjectId = input.projectId == null
         ? queryProjectId
         : String(input.projectId || '').trim();
@@ -195,19 +223,22 @@ export function createWhatsAppProactiveFlowHandlers({
       }
       const prisma = prismaFactory();
       await assertActiveProject(prisma, access, queryProjectId);
-      return json(await sendFlow({
+      const result = await sendFlow({
         prisma,
         access,
         conversationId,
         blueprintKey: input.blueprintKey,
-        idempotencyKey: idempotencyKey(request, input),
+        idempotencyKey: key,
+        reviewVersion: input.reviewVersion,
         clock,
         env,
-      }));
+      });
+      assertResponse(flowResultMatches(result, { key, blueprintKey: input.blueprintKey, reviewVersion: input.reviewVersion }, responseScope(access, conversationId)));
+      return json(result);
     } catch (error) {
       const response = errorResponse(error);
       if (response) return response;
-      console.error('WhatsApp proactive Flow send failed:', error);
+      console.error('WhatsApp proactive Flow send failed:', { code: 'SEND_UNCONFIRMED' });
       return json({ error: 'No se pudo enviar el formulario.' }, { status: 500 });
     }
   }
@@ -216,6 +247,7 @@ export function createWhatsAppProactiveFlowHandlers({
     try {
       const access = await resolveAccess();
       authorize(access, 'org:conversations:manage');
+      assertRequestScope(request, access);
       const queryProjectId = projectIdFromRequest(request);
       const conversationId = await conversationIdFromContext(context);
       const input = await parseBody(request);
@@ -229,7 +261,7 @@ export function createWhatsAppProactiveFlowHandlers({
       }
       const prisma = prismaFactory();
       await assertActiveProject(prisma, access, queryProjectId);
-      return json(await resolveUncertainty({
+      const result = await resolveUncertainty({
         prisma,
         access,
         conversationId,
@@ -237,11 +269,13 @@ export function createWhatsAppProactiveFlowHandlers({
         messageId: input.messageId,
         confirmation: input.confirmation,
         clock,
-      }));
+      });
+      assertResponse(flowResolutionMatches(result, input, responseScope(access, conversationId)));
+      return json(result);
     } catch (error) {
       const response = errorResponse(error);
       if (response) return response;
-      console.error('WhatsApp proactive Flow uncertainty resolution failed:', error);
+      console.error('WhatsApp proactive Flow uncertainty resolution failed:', { code: 'RESOLUTION_UNCONFIRMED' });
       return json({ error: 'No se pudo resolver el estado del formulario.' }, { status: 500 });
     }
   }
@@ -250,3 +284,37 @@ export function createWhatsAppProactiveFlowHandlers({
 }
 
 export const { GET, POST, PATCH } = createWhatsAppProactiveFlowHandlers();
+
+function responseScope(access, conversationId) {
+  return { organizationId: access.organization.id, projectId: access.project.id, conversationId };
+}
+function assertResponse(valid) {
+  if (!valid) throw new WhatsAppProactiveFlowError('El resultado no confirmó la operación solicitada. Consultá el mismo intento sin reenviarlo.', {
+    code: 'WHATSAPP_FLOW_RESPONSE_UNCONFIRMED', status: 503,
+  });
+}
+function assertRequestScope(request, access) {
+  if (!request.headers.get('x-obrasaas-organization') || !request.headers.get('x-obrasaas-project')) {
+    throw new WhatsAppProactiveFlowError('Actualizá el contexto de empresa y obra.', { code: 'WHATSAPP_FLOW_CONTEXT_REQUIRED', status: 409 });
+  }
+  assertEvidenceRequestContext(request, access);
+  const url = new URL(request.url), params = url.searchParams;
+  if (request.headers.get('sec-fetch-site') === 'cross-site' || request.headers.get('origin') && request.headers.get('origin') !== url.origin) {
+    throw new WhatsAppProactiveFlowError('Origen no autorizado.', { code: 'WHATSAPP_FLOW_ORIGIN', status: 403 });
+  }
+  const receipt = request.method === 'GET' && params.get('mode') === 'receipt';
+  for (const key of params.keys()) {
+    if (!(receipt ? ['projectId', 'mode', 'blueprintKey'] : ['projectId']).includes(key) || params.getAll(key).length !== 1) {
+      throw new WhatsAppProactiveFlowError('La consulta contiene campos no admitidos.', { code: 'WHATSAPP_FLOW_QUERY_INVALID', status: 400 });
+    }
+  }
+}
+function errorResponse(error) {
+  const response = unwrappedErrorResponse(error);
+  if (response) {
+    response.headers.set('Cache-Control', 'private, no-store, max-age=0');
+    response.headers.set('Vary', 'Cookie, Authorization, X-ObraSaaS-Organization, X-ObraSaaS-Project, Idempotency-Key, X-ObraSaaS-Flow-Review');
+    response.headers.set('X-Content-Type-Options', 'nosniff');
+  }
+  return response;
+}
