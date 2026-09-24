@@ -49,7 +49,8 @@ export async function verifyAuthenticatedFlowHistory({ fixture, sessions, baseUR
       const otherOwn = await sameOriginJson(sessions.outsider.page, pathname(FLOW_HISTORY_ACCEPTANCE.otherConversationId, fixture.otherTenant.anchorProjectId), { headers: foreignHeaders });
       expect(otherOwn.status).toBe(200); expect(otherOwn.payload.items).toEqual([]);
       const foreignCursor = await sameOriginJson(sessions.outsider.page, pathname(FLOW_HISTORY_ACCEPTANCE.otherConversationId, fixture.otherTenant.anchorProjectId, first.payload.nextCursor), { headers: foreignHeaders });
-      expect(foreignCursor.status).toBe(422);
+      expect(foreignCursor).toMatchObject({ status: 400, payload: { code: 'WHATSAPP_FLOW_HISTORY_CURSOR_INVALID' } });
+      expect(foreignCursor.payload).not.toHaveProperty('items');
       const anonymous = await sameOriginJson(sessions.anonymous.page, pathname(), { headers });
       expect(anonymous.status).toBe(404); expect(anonymous.payload).toBeNull();
       expect(anonymous.headers['x-clerk-auth-status']).toBe('signed-out');

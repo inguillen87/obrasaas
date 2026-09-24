@@ -36,3 +36,20 @@ test('authenticated journey is wired after existing acceptance without mocking i
  assert.match(journey,/openAuthenticatedFlowHistoryFixture/);assert.match(journey,/window.Clerk.signOut/);assert.match(journey,/expect\(await db.snapshot\(\)\).toEqual\(before\)/);
  assert.doesNotMatch(journey,/route\.fulfill|storageState\s*:|Authorization\s*:/);
 });
+
+
+test('raw SQL fixture names only persisted columns and supplies client-managed updatedAt values',()=>{
+ const source=fs.readFileSync(new URL('../scripts/lib/s11-flow-history-fixture.mjs',import.meta.url),'utf8');
+ const schema=fs.readFileSync(new URL('../prisma/schema.prisma',import.meta.url),'utf8');
+ const statements=[...source.matchAll(/INSERT INTO "(Worker|Conversation|Message|WhatsAppFlowSession)" \(([^)]+)\) VALUES/g)];
+ assert.equal(statements.length,4);
+ for(const [,table,columns] of statements){
+  const marker='model '+table+' {'; const start=schema.indexOf(marker);assert.notEqual(start,-1);
+  const lines=schema.slice(start+marker.length,schema.indexOf('\n}',start)).split('\n');
+  const fields=new Map(lines.map(line=>line.trim()).filter(line=>/^[A-Za-z]\w*\s/.test(line)).map(line=>[line.split(/\s+/)[0],line]));
+  const supplied=columns.split(',').map(value=>value.replaceAll('"','').trim());
+  assert.equal(new Set(supplied).size,supplied.length);
+  for(const name of supplied)assert.ok(fields.has(name),table+'.'+name+' must exist in the current schema');
+  for(const [name,line] of fields)if(line.includes('@updatedAt'))assert.ok(supplied.includes(name),table+'.'+name+' requires an explicit raw-SQL value');
+ }
+});
