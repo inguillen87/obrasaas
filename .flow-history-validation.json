@@ -1,6 +1,6 @@
 {
   "base": "72061e8f8004a677cd486d012732a537dd90b0bd",
-  "productTree": "5ddcad746ff6f0a4f8a645b028742f2d5970f41b",
+  "productTree": "30245f6a4749a0101131cc2bafe636474bd68570",
   "files": [
     ".github/workflows/ci.yml",
     ".github/workflows/execution-postgres.yml",
@@ -27,12 +27,12 @@
     "src/app/dashboard/inbox/proactive-flow-launcher.js": "946f588bf41cff689ece77853e4329d9a6e9aac1",
     "src/app/dashboard/inbox/proactive-flow-history.js": "0e11de2d0a9bf58ff6b11dbab2bcca17bf53fcee",
     "src/app/dashboard/inbox/proactive-flow-history.module.css": "32dbc6cd404b48e6dc1ee339eb443d46804a2f58",
-    "src/lib/whatsapp/proactive-flow-history.js": "d12ec1ede857c37c81d80d90376478319ce7e347",
+    "src/lib/whatsapp/proactive-flow-history.js": "d0bc5a3197f4b0bc22d82d8fe70f34f0753ede26",
     "src/lib/whatsapp/proactive-flow-history-policy.js": "143d192668d90cb82ce788a23eeb87541600134d",
     "tests/helpers/flow-history-fixture.js": "e622ce4a1967683fc58f985e9449ec0e1fa4074c",
-    "tests/proactive-flow-history.test.js": "66c8a5e94547be8b19b247e03ac616aad1e7320a",
+    "tests/proactive-flow-history.test.js": "6758f7d2fa9f825d38a6266eb1e0a8447ec2f782",
     "tests/whatsapp-proactive-flows.test.js": "cc48c429f44992f0f5da87d6505e8ebbb26e4f26",
-    "scripts/verify-proactive-flow-history-postgres.mjs": "4bf3225eb409901e265d372f3caf8bb8a29af7f2",
+    "scripts/verify-proactive-flow-history-postgres.mjs": "8309fea9dcb3c3d6c76f9894640b5b45f58f6a27",
     "scripts/verify-proactive-flow-history-ui.mjs": "dc0aec9750ac4f517c21bc710140d1b5801510b9"
   }
 }

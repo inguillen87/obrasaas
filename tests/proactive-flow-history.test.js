@@ -77,3 +77,12 @@ test('client rejects mixed context, wrong page, malformed status or injected pri
   for (const bad of [null, { ...page, context: { ...historyScope, projectId: 'foreign' } }, { ...page, cursor: 'different' }, { ...page, items: [row, row] }, { ...page, observedAt: null }, ...badRows.map(item => ({ ...page, items: [item], nextCursor: null }))]) assert.equal(flowHistoryPageMatches(bad, historyScope), false);
 });
 test('empty history is explicit and does not create records', async () => { const f = createHistoryFixture(0); const page = await read(f); assert.deepEqual(page.items, []); assert.equal(page.nextCursor, null); assert.equal(f.messages.length, 0); });
+
+for (const providerMessageId of [' ', '   ', '\u00a0', '\twamid.invalid', 'wamid.trailing ', 'wamid.internal space', 123]) test('malformed provider reference is not acceptance: ' + JSON.stringify(providerMessageId), async () => {
+  const f = createHistoryFixture(1);
+  f.messages[0].providerMessageId = providerMessageId;
+  const before = structuredClone([f.messages, f.sessions]);
+  const page = await read(f);
+  assert.equal(page.items[0].status, 'unknown');
+  assert.deepEqual([f.messages, f.sessions], before);
+});

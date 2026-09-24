@@ -5,7 +5,7 @@ const iso = value => {
   if (!(value instanceof Date) && (typeof value !== 'string' || !value)) return null;
   const d = new Date(value); return Number.isFinite(d.getTime()) ? d.toISOString() : null;
 };
-const reference = value => typeof value === 'string' && value.length > 0 && value.length <= 500 && !/[\u0000-\u001f\u007f]/.test(value);
+const reference = value => typeof value === 'string' && value.length > 0 && value.length <= 500 && !/[\s\u0000-\u001f\u007f]/.test(value);
 const binding = scope => createHash('sha256').update(JSON.stringify([scope.organizationId, scope.projectId, scope.conversationId])).digest('hex');
 function afterCursor(cursor, scope) {
   if (!cursor) return null;

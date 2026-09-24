@@ -23,7 +23,7 @@ try {
     }
     await db.conversation.create({ data: { id: historyScope.conversationId, projectId: historyScope.projectId, channel: 'whatsapp', externalId: 'meta:5491111111111', displayName: 'Contacto de ensayo' } });
     await db.message.createMany({ data: source.messages });
-    await db.whatsAppFlowSession.createMany({ data: source.sessions.map(({ recipientPhone: _phone, tokenSha256: _token, ...row }, index) => ({ ...row, workerId: 'worker-history', phoneNumberId: '111111111111111', recipientPhone: '5491111111111', flowId: '222222222222222', screenId: 'INCIDENT', flowType: 'incident', tokenSha256: createHash('sha256').update('synthetic-history-' + index).digest('hex') })) });
+    await db.whatsAppFlowSession.createMany({ data: source.sessions.map(({ recipientPhone: _phone, tokenSha256: _token, ...row }, index) => ({ ...row, createdAt: source.messages[index].createdAt, deliveryAttemptedAt: row.sentAt, workerId: 'worker-history', phoneNumberId: '111111111111111', recipientPhone: '5491111111111', flowId: '222222222222222', screenId: 'INCIDENT', flowType: 'incident', tokenSha256: createHash('sha256').update('synthetic-history-' + index).digest('hex') })) });
   });
   await check('real keyset pagination reads 46 records without duplicates or writes', async () => {
     const before = await snapshot(), ids = []; let cursor = null;
@@ -31,10 +31,17 @@ try {
     assert.equal(ids.length, 46); assert.equal(new Set(ids).size, 46); assert.equal(await snapshot(), before);
   });
   await check('verified session response and absent provider reference remain distinct', async () => {
-    await db.whatsAppFlowSession.update({ where: { id: source.sessions[0].id }, data: { consumedAt: HISTORY_NOW } });
+    await db.whatsAppFlowSession.update({ where: { id: source.sessions[0].id }, data: { consumedAt: HISTORY_NOW, consumedExternalId: 'wamid.synthetic-history-response' } });
     await db.message.update({ where: { id: source.messages[1].id }, data: { providerMessageId: null } });
     const before = await snapshot(), page = await read({});
     assert.equal(page.items[0].reply.state, 'recorded'); assert.equal(page.items[0].status, 'accepted'); assert.equal(page.items[1].status, 'unknown'); assert.equal(await snapshot(), before);
+  });
+  await check('blank provider reference never turns a persisted accepted row into proof of acceptance', async () => {
+    const id = source.messages[3].id;
+    await db.message.update({ where: { id }, data: { providerMessageId: '   ' } });
+    const before = await snapshot(), page = await read({});
+    assert.equal(page.items.find(row => row.messageId === id).status, 'unknown');
+    assert.equal(await snapshot(), before);
   });
   await check('foreign conversation scope and cursor are denied without leaking session data', async () => {
     const page = await read({}), before = await snapshot();
@@ -45,7 +52,7 @@ try {
   });
   await check('a foreign session id in a scoped message cannot disclose a reply timestamp', async () => {
     const foreignId = '20000000-0000-4000-8000-000000000001';
-    await db.whatsAppFlowSession.create({ data: { id: foreignId, organizationId: 'organization-a-foreign', projectId: 'project-a-foreign', workerId: 'worker-history-foreign', phoneNumberId: '333333333333333', recipientPhone: '5492222222222', blueprintKey: 'incident-report', flowId: '444444444444444', screenId: 'INCIDENT', flowType: 'incident', sourceExternalId: 'foreign-history', tokenSha256: 'f'.repeat(64), expiresAt: HISTORY_NOW, consumedAt: HISTORY_NOW } });
+    await db.whatsAppFlowSession.create({ data: { id: foreignId, organizationId: 'organization-a-foreign', projectId: 'project-a-foreign', workerId: 'worker-history-foreign', phoneNumberId: '333333333333333', recipientPhone: '5492222222222', blueprintKey: 'incident-report', flowId: '444444444444444', screenId: 'INCIDENT', flowType: 'incident', sourceExternalId: 'foreign-history', tokenSha256: 'f'.repeat(64), createdAt: new Date(HISTORY_NOW.getTime() - 3600000), expiresAt: new Date(HISTORY_NOW.getTime() + 3600000), deliveryAttemptedAt: new Date(HISTORY_NOW.getTime() - 60000), consumedAt: HISTORY_NOW, consumedExternalId: 'wamid.synthetic-foreign-history-response' } });
     await db.message.update({ where: { id: source.messages[2].id }, data: { metadata: { ...source.messages[2].metadata, flowSessionId: foreignId } } });
     const before = await snapshot(), page = await read({}), row = page.items.find(item => item.messageId === source.messages[2].id);
     assert.equal(row.correlation, 'unavailable'); assert.equal(row.reply.state, 'unverified'); assert.equal(row.reply.recordedAt, null); assert.equal(row.expiresAt, null); assert.equal(await snapshot(), before);
