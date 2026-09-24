@@ -67,7 +67,7 @@ export async function openAuthenticatedFlowHistoryFixture(fixture, environment =
     await db.query('BEGIN');
     await db.query(`INSERT INTO "Worker" (id,"organizationId","projectId",name,active,"updatedAt") VALUES ($1,$2,$3,$4,true,$5)`, [FLOW_HISTORY_ACCEPTANCE.workerId, scope.organizationId, scope.projectId, 'Persona ficticia de aceptación', now]);
     for (const [conversationId, projectId, phone] of [[FLOW_HISTORY_ACCEPTANCE.conversationId, scope.projectId, '5491111111111'], [FLOW_HISTORY_ACCEPTANCE.otherConversationId, fixture.otherTenant.anchorProjectId, '5492222222222']]) {
-      await db.query(`INSERT INTO "Conversation" (id,"projectId",channel,"externalId","displayName","lastMessageAt","updatedAt") VALUES ($1,$2,'whatsapp',$3,$4,$5,$5)`, [conversationId, projectId, 'meta:' + phone, FLOW_HISTORY_ACCEPTANCE.displayName, now]);
+      await db.query(`INSERT INTO "Conversation" (id,"projectId",channel,"externalId","displayName","updatedAt") VALUES ($1,$2,'whatsapp',$3,$4,$5)`, [conversationId, projectId, 'meta:' + phone, FLOW_HISTORY_ACCEPTANCE.displayName, now]);
     }
     for (const row of rows) {
       await db.query(`INSERT INTO "Message" (id,"conversationId",direction,kind,"externalId","providerMessageId",body,status,metadata,"createdAt","sentAt") VALUES ($1,$2,'OUTBOUND','INTERACTIVE',$3,$4,$5,$6,$7::jsonb,$8,$8)`, [row.id, FLOW_HISTORY_ACCEPTANCE.conversationId, row.externalId, row.reference, row.body, row.status, JSON.stringify(row.metadata), row.createdAt]);
