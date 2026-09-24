@@ -2,6 +2,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { evidenceScopeHeaders } from '@/lib/evidence-capture-policy';
 import { flowHistoryPageMatches, flowHistoryReplyPresentation, flowHistoryStatusLabel } from '@/lib/whatsapp/proactive-flow-history-policy';
+import { FLOW_FOLLOWUP_FILTERS, summarizeFlowFollowup, flowFollowupFilter } from '@/lib/whatsapp/proactive-flow-followup';
 import styles from './proactive-flow-history.module.css';
 const titleFor = key => key === 'incident-report' ? 'Incidencia de obra' : 'Fichaje y seguridad';
 const formatDate = value => new Intl.DateTimeFormat('es-AR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
@@ -9,7 +10,7 @@ export default function ProactiveFlowHistory(props) {
   return <ScopedHistory key={[props.organizationId, props.projectId, props.conversationId].join(':')} {...props} />;
 }
 function ScopedHistory({ organizationId, projectId, conversationId, online = true }) {
-  const heading = useId(), panelId = useId(), alive = useRef(true), active = useRef(null);
+  const heading = useId(), panelId = useId(), filterDescriptionId = useId(), listRef = useRef(null), alive = useRef(true), active = useRef(null);
   const [open, setOpen] = useState(false), [page, setPage] = useState(null), [phase, setPhase] = useState('idle');
   const [request, setRequest] = useState({ cursor: null, trail: [] }), [error, setError] = useState(''), [filter, setFilter] = useState('all');
   useEffect(() => { alive.current = true; return () => { alive.current = false; active.current?.abort(); active.current = null; }; }, []);
@@ -17,7 +18,7 @@ function ScopedHistory({ organizationId, projectId, conversationId, online = tru
   async function load(next) {
     if (!online || !organizationId || !projectId || !conversationId) return;
     active.current?.abort(); const controller = new AbortController(); active.current = controller;
-    setRequest(next); setPage(null); setPhase('loading'); setError(''); setFilter('all');
+    setRequest(next); setPage(null); setPhase('loading'); setError('');
     const timer = setTimeout(() => controller.abort(), 15000);
     try {
       const params = new URLSearchParams({ projectId, mode: 'history' });
@@ -39,9 +40,12 @@ function ScopedHistory({ organizationId, projectId, conversationId, online = tru
   }
   function toggle() {
     if (open) { active.current?.abort(); active.current = null; setOpen(false); setPage(null); setPhase('idle'); }
-    else { setOpen(true); void load({ cursor: null, trail: [] }); }
+    else { setFilter('all'); setOpen(true); void load({ cursor: null, trail: [] }); }
   }
-  const items = ready && page ? page.items.filter(item => filter === 'all' || ['sending', 'unknown', 'failed'].includes(item.status) || item.correlation !== 'verified') : [];
+  const followup = ready && page ? summarizeFlowFollowup(page) : { available: false, counts: null, items: [] };
+  const selectedFilter = flowFollowupFilter(filter);
+  const items = followup.items.filter(row => selectedFilter.key === 'all' || row.category === selectedFilter.key).map(row => row.item);
+  function chooseFilter(key) { setFilter(key); if (listRef.current) listRef.current.scrollTop = 0; }
   return <section className={styles.history} aria-labelledby={heading}>
     <header className={styles.header}><div><span>TRAZABILIDAD · SÓLO LECTURA</span><h3 id={heading}>Seguimiento de formularios</h3></div>
       <button type="button" onClick={toggle} aria-expanded={open} aria-controls={panelId} disabled={!open && !online}>{open ? 'Cerrar seguimiento' : 'Consultar envíos anteriores'}</button></header>
@@ -52,12 +56,16 @@ function ScopedHistory({ organizationId, projectId, conversationId, online = tru
       {!online && <p role="status" className={styles.notice}>Sin conexión. Los estados no se presentan como actualizados. Reconectar no envía mensajes.</p>}
       {busy && <p role="status">Consultando registros de esta conversación…</p>}
       {error && <p role="alert" className={styles.notice}>{error}</p>}
-      {ready && page && <>
+      {ready && page && followup.available && <>
         <p className={styles.caption}>Consulta: {formatDate(page.observedAt)} · Fechas en hora de este dispositivo.</p>
-        <div className={styles.filters} role="group" aria-label="Filtrar esta página"><button type="button" aria-pressed={filter === 'all'} onClick={() => setFilter('all')}>Todos en esta página ({page.items.length})</button>
-          <button type="button" aria-pressed={filter === 'attention'} onClick={() => setFilter('attention')}>Revisar pendientes</button></div>
-        {items.length === 0 && <p role="status" className={styles.empty}>{page.items.length ? 'No hay pendientes en esta página. El filtro no evalúa las demás páginas.' : 'Todavía no hay formularios registrados en esta conversación. La ausencia no demuestra que un envío en curso haya fallado.'}</p>}
-        <ol className={styles.list}>{items.map(item => {
+        <div className={styles.filters} role="group" aria-label="Filtrar esta página" aria-describedby={filterDescriptionId}>
+          {FLOW_FOLLOWUP_FILTERS.map(option => <button key={option.key} type="button" data-category={option.key}
+            aria-pressed={selectedFilter.key === option.key} onClick={() => chooseFilter(option.key)}>{option.label} ({followup.counts[option.key]})</button>)}
+        </div>
+        <p id={filterDescriptionId} className={styles.filterExplanation}>{selectedFilter.detail}</p>
+        <p role="status" className={styles.resultCount}>{items.length} de {page.items.length} registros de esta página · {selectedFilter.label}. Los estados corresponden a la hora de consulta.</p>
+        {items.length === 0 && <p role="status" className={styles.empty}>{page.items.length ? 'No hay registros en «' + selectedFilter.label + '» en esta página. El filtro no evalúa las demás páginas; podés seguir recorriéndolas.' : 'Todavía no hay formularios registrados en esta conversación. La ausencia no demuestra que un envío en curso haya fallado.'}</p>}
+        <ol ref={listRef} className={styles.list} aria-label="Formularios de la página consultada">{items.map(item => {
           const reply = flowHistoryReplyPresentation(item, page.observedAt);
           return <li key={item.messageId} className={styles.item}><div className={styles.rowHeader}><strong>{titleFor(item.blueprintKey)}</strong><time dateTime={item.recordedAt}>Registro: {formatDate(item.recordedAt)}</time></div>
             <p className={styles.status} data-tone={item.riskDecision || ['failed', 'unknown', 'sending'].includes(item.status) ? 'attention' : 'observed'}>{flowHistoryStatusLabel(item)}</p>
