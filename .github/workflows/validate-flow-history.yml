@@ -1,0 +1,97 @@
+name: Validate Flow history before release
+on:
+  push:
+    branches: ['operations/flow-history-20260924']
+permissions:
+  contents: read
+jobs:
+  verify-history:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+        env:
+          POSTGRES_USER: execution_fixture
+          POSTGRES_PASSWORD: local_fixture_only
+          POSTGRES_DB: obrasaas_execution_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U execution_fixture -d obrasaas_execution_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      PLAYWRIGHT_CHANNEL: chromium
+      DATABASE_URL: postgresql://execution_fixture:local_fixture_only@127.0.0.1:5432/obrasaas_execution_ci?schema=public
+      DATABASE_URL_UNPOOLED: postgresql://execution_fixture:local_fixture_only@127.0.0.1:5432/obrasaas_execution_ci?schema=public
+      DIRECT_URL: postgresql://execution_fixture:local_fixture_only@127.0.0.1:5432/obrasaas_execution_ci?schema=public
+      EXECUTION_RELEASE_DATABASE_URL: postgresql://execution_fixture:local_fixture_only@127.0.0.1:5432/obrasaas_execution_ci?schema=public
+      EXECUTION_RELEASE_DISPOSABLE: 'true'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - name: Exact product tree
+        run: |
+          mkdir -p evidence
+          python3 - <<'PY'
+          import json,os,pathlib,subprocess,tempfile
+          m=json.load(open('.flow-history-validation.json'))
+          with tempfile.TemporaryDirectory() as t:
+              env={**os.environ,'GIT_INDEX_FILE':str(pathlib.Path(t)/'index')}
+              subprocess.run(['git','read-tree','HEAD'],env=env,check=True)
+              subprocess.run(['git','update-index','--force-remove','--','.flow-history-validation.json','.github/workflows/validate-flow-history.yml'],env=env,check=True)
+              tree=subprocess.check_output(['git','write-tree'],env=env,text=True).strip()
+          assert tree==m['productTree'],(tree,m['productTree'])
+          for p,h in m['blobs'].items():assert subprocess.check_output(['git','rev-parse','HEAD:'+p],text=True).strip()==h,p
+          pathlib.Path('evidence/validated-tree.json').write_text(json.dumps(m,indent=2))
+          print('Exact product tree',tree)
+          PY
+      - name: Exact dependencies, unit tests and affected lint
+        run: |
+          npm ci > evidence/install.log 2>&1 || { tail -n 50 evidence/install.log; exit 1; }
+          npm test > evidence/tests.log 2>&1 || { tail -n 100 evidence/tests.log; exit 1; }
+          tail -n 10 evidence/tests.log
+          python3 - <<'PY'
+          import json,subprocess
+          files=[p for p in json.load(open('.flow-history-validation.json'))['files'] if p.endswith(('.js','.mjs'))]
+          with open('evidence/lint.log','w') as out:r=subprocess.run(['npx','eslint',*files],stdout=out,stderr=subprocess.STDOUT)
+          print(open('evidence/lint.log').read());raise SystemExit(r.returncode)
+          PY
+      - name: Real isolated PostgreSQL queries and unchanged stored records
+        run: |
+          npx prisma validate > evidence/schema.log 2>&1
+          npx prisma migrate deploy > evidence/migrations.log 2>&1 || { tail -n 60 evidence/migrations.log; exit 1; }
+          npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code > evidence/schema-diff.log 2>&1
+          npx tsx scripts/verify-proactive-flow-history-postgres.mjs > evidence/history-postgres.log 2>&1 || { cat evidence/history-postgres.log; exit 1; }
+          cat evidence/history-postgres.log
+      - name: Browser history and send recovery
+        run: |
+          npx playwright install --with-deps chromium > evidence/browser-install.log 2>&1
+          node scripts/verify-proactive-flow-history-ui.mjs > evidence/history-browser.log 2>&1 || { tail -n 80 evidence/history-browser.log; exit 1; }
+          node scripts/verify-proactive-flow-confirmation-ui.mjs > evidence/send-browser.log 2>&1 || { tail -n 80 evidence/send-browser.log; exit 1; }
+          cat evidence/history-browser.log
+          tail -n 1 evidence/send-browser.log
+      - name: Complete Next build
+        run: |
+          npm run build > evidence/build.log 2>&1 || { tail -n 90 evidence/build.log; exit 1; }
+          tail -n 12 evidence/build.log
+          git diff --check
+      - name: Preserve synthetic evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: flow-history-${{ github.run_id }}
+          path: |
+            evidence/
+            .vercel/proactive-flow-history-ui/proof.json
+            .vercel/proactive-flow-history-ui/*.png
+          include-hidden-files: true
+          retention-days: 7
+          if-no-files-found: warn

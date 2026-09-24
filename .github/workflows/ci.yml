@@ -247,7 +247,9 @@ jobs:
       - name: Check scoped Flow send receipts with synthetic provider
         env:
           PLAYWRIGHT_CHANNEL: chromium
-        run: node scripts/verify-proactive-flow-confirmation-ui.mjs
+        run: |
+          node scripts/verify-proactive-flow-confirmation-ui.mjs
+          node scripts/verify-proactive-flow-history-ui.mjs
 
       - name: Preserve Playwright diagnostics
         if: always()
@@ -259,6 +261,8 @@ jobs:
             test-results/
             .vercel/proactive-flow-confirmation-ui/proof.json
             .vercel/proactive-flow-confirmation-ui/*.png
+            .vercel/proactive-flow-history-ui/proof.json
+            .vercel/proactive-flow-history-ui/*.png
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 7

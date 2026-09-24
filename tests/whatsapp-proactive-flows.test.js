@@ -1014,3 +1014,34 @@ test('revoked read permission stops receipt lookup before database access',async
   const base=routeRequest(),request=new Request(base.url+'&mode=receipt&blueprintKey=incident-report',{headers:base.headers});request.headers.set('Idempotency-Key','denied-receipt-a');request.headers.set('X-ObraSaaS-Flow-Review','a'.repeat(64));
   assert.equal((await handlers.GET(request,routeContext())).status,403);assert.equal(reads,0);
 });
+
+const historyFixture = await import('./helpers/flow-history-fixture.js');
+function historyRequest(suffix = '', headers = {}) {
+  return new Request('https://obra.test/api/whatsapp/inbox/conversation-a/proactive-flows?projectId=project-a&mode=history' + suffix, {
+    headers: { 'X-ObraSaaS-Organization': 'organization-a', 'X-ObraSaaS-Project': 'project-a', ...headers },
+  });
+}
+test('history reads existing persisted sends without send/manage capability or operation key', async () => {
+  const f = historyFixture.createHistoryFixture(), permissions = []; let sends = 0;
+  const handlers = createWhatsAppProactiveFlowHandlers({ resolveAccess: async () => access({ tenantRole: 'VIEWER' }), authorize: (a, p) => permissions.push(p), prismaFactory: () => f.prisma,
+    sendFlow: async () => { sends++; }, clock: () => historyFixture.HISTORY_NOW });
+  const response = await handlers.GET(historyRequest(), routeContext()); assert.equal(response.status, 200); assert.equal((await response.json()).items.length, 20);
+  assert.deepEqual(permissions, ['org:conversations:read']); assert.equal(sends, 0); assert.match(response.headers.get('cache-control'), /private, no-store/); assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+});
+for (const suffix of ['&mode=history','&limit=10000','&workerId=other','&projectId=other','&blueprintKey=incident-report','&cursor=a&cursor=b']) test('history query cannot change scope or enlarge results '+suffix, async () => {
+  let queries = 0; const handlers = createWhatsAppProactiveFlowHandlers({ resolveAccess: async () => access(), authorize: () => {}, prismaFactory: () => { queries++; return {}; } });
+  assert.equal((await handlers.GET(historyRequest(suffix), routeContext())).status, 400); assert.equal(queries, 0);
+});
+for (const headers of [{'X-ObraSaaS-Organization':'other'},{'X-ObraSaaS-Project':'other'},{Origin:'https://foreign.test'},{'Sec-Fetch-Site':'cross-site'}]) test('history rejects stale scope/origin before storage '+JSON.stringify(headers), async () => {
+  let queries = 0; const handlers = createWhatsAppProactiveFlowHandlers({ resolveAccess: async () => access(), authorize: () => {}, prismaFactory: () => { queries++; return {}; } });
+  assert.ok([403,409].includes((await handlers.GET(historyRequest('',headers),routeContext())).status)); assert.equal(queries,0);
+});
+test('revoked reader cannot discover any history or obtain cursors', async () => {
+  const {AccessError}=await import('../src/lib/access.js');let queries=0;
+  const handlers=createWhatsAppProactiveFlowHandlers({resolveAccess:async()=>access(),authorize:()=>{throw new AccessError('Revoked',{status:403,code:'REVOKED'});},prismaFactory:()=>{queries++;return {};}});
+  assert.equal((await handlers.GET(historyRequest(),routeContext())).status,403);assert.equal(queries,0);
+});
+test('an incomplete history response fails closed even if the read service returns successfully', async () => {
+  const f = historyFixture.createHistoryFixture(); const handlers = createWhatsAppProactiveFlowHandlers({ resolveAccess: async () => access(), authorize: () => {}, prismaFactory: () => f.prisma, readHistory: async () => ({ items: [] }) });
+  const response = await handlers.GET(historyRequest(), routeContext()); assert.equal(response.status,503); assert.equal((await response.json()).code,'WHATSAPP_FLOW_RESPONSE_UNCONFIRMED');
+});

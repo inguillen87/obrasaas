@@ -1,3 +1,5 @@
+import { listProactiveFlowHistory } from '@/lib/whatsapp/proactive-flow-history';
+import { FlowHistoryError, flowHistoryPageMatches } from '@/lib/whatsapp/proactive-flow-history-policy';
 import {
   AccessError,
   accessErrorResponse,
@@ -133,6 +135,7 @@ function unwrappedErrorResponse(error) {
   if (contextError) return contextError;
   if (error instanceof AccessError) return accessErrorResponse(error);
   if (error instanceof RequestBodyError) return requestBodyErrorResponse(error);
+  if (error instanceof FlowHistoryError) return json({ error: error.message, code: error.code }, { status: error.status });
   if (error instanceof WhatsAppProactiveFlowError) {
     return json(
       {
@@ -157,6 +160,7 @@ export function createWhatsAppProactiveFlowHandlers({
   prismaFactory = getPrisma,
   loadCatalog = getProactiveWhatsAppFlowCatalog,
   readReceipt = readProactiveWhatsAppFlowReceipt,
+  readHistory = listProactiveFlowHistory,
   resolveUncertainty = resolveProactiveWhatsAppFlowUncertainty,
   sendFlow = sendProactiveWhatsAppFlowTemplate,
   parseBody = (request) => readJsonRequest(request, { maxBytes: MAX_BODY_BYTES }),
@@ -173,6 +177,12 @@ export function createWhatsAppProactiveFlowHandlers({
       const prisma = prismaFactory();
       await assertActiveProject(prisma, access, projectId);
       const scope = responseScope(access, conversationId);
+      if (new URL(request.url).searchParams.get('mode') === 'history') {
+        const cursor = new URL(request.url).searchParams.get('cursor');
+        const page = await readHistory({ prisma, access, conversationId, cursor, clock });
+        assertResponse(flowHistoryPageMatches(page, scope, cursor));
+        return json(page);
+      }
       if (new URL(request.url).searchParams.get('mode') === 'receipt') {
         const blueprintKey = new URL(request.url).searchParams.get('blueprintKey');
         const key = idempotencyKey(request);
@@ -303,8 +313,9 @@ function assertRequestScope(request, access) {
     throw new WhatsAppProactiveFlowError('Origen no autorizado.', { code: 'WHATSAPP_FLOW_ORIGIN', status: 403 });
   }
   const receipt = request.method === 'GET' && params.get('mode') === 'receipt';
+  const history = request.method === 'GET' && params.get('mode') === 'history';
   for (const key of params.keys()) {
-    if (!(receipt ? ['projectId', 'mode', 'blueprintKey'] : ['projectId']).includes(key) || params.getAll(key).length !== 1) {
+    if (!(receipt ? ['projectId', 'mode', 'blueprintKey'] : history ? ['projectId', 'mode', 'cursor'] : ['projectId']).includes(key) || params.getAll(key).length !== 1) {
       throw new WhatsAppProactiveFlowError('La consulta contiene campos no admitidos.', { code: 'WHATSAPP_FLOW_QUERY_INVALID', status: 400 });
     }
   }

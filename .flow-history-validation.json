@@ -1,0 +1,38 @@
+{
+  "base": "72061e8f8004a677cd486d012732a537dd90b0bd",
+  "productTree": "5ddcad746ff6f0a4f8a645b028742f2d5970f41b",
+  "files": [
+    ".github/workflows/ci.yml",
+    ".github/workflows/execution-postgres.yml",
+    "docs/recovery/HANDOFF_TENANT_WHATSAPP.md",
+    "docs/recovery/proactive-flow-history.md",
+    "src/app/api/whatsapp/inbox/[conversationId]/proactive-flows/route.js",
+    "src/app/dashboard/inbox/proactive-flow-launcher.js",
+    "src/app/dashboard/inbox/proactive-flow-history.js",
+    "src/app/dashboard/inbox/proactive-flow-history.module.css",
+    "src/lib/whatsapp/proactive-flow-history.js",
+    "src/lib/whatsapp/proactive-flow-history-policy.js",
+    "tests/helpers/flow-history-fixture.js",
+    "tests/proactive-flow-history.test.js",
+    "tests/whatsapp-proactive-flows.test.js",
+    "scripts/verify-proactive-flow-history-postgres.mjs",
+    "scripts/verify-proactive-flow-history-ui.mjs"
+  ],
+  "blobs": {
+    ".github/workflows/ci.yml": "ec7be3feec804b983319def4ecfe7bf207130bf1",
+    ".github/workflows/execution-postgres.yml": "e6b5150964e8493650728dbc5550888c0a450c4b",
+    "docs/recovery/HANDOFF_TENANT_WHATSAPP.md": "51ae7607862f80ed0015b3db39c683523949825c",
+    "docs/recovery/proactive-flow-history.md": "a4dd59e10664741360f40b7e39944b391919db63",
+    "src/app/api/whatsapp/inbox/[conversationId]/proactive-flows/route.js": "054ae0a48160d3f0010bb2da0ac301b513bbaf69",
+    "src/app/dashboard/inbox/proactive-flow-launcher.js": "946f588bf41cff689ece77853e4329d9a6e9aac1",
+    "src/app/dashboard/inbox/proactive-flow-history.js": "0e11de2d0a9bf58ff6b11dbab2bcca17bf53fcee",
+    "src/app/dashboard/inbox/proactive-flow-history.module.css": "32dbc6cd404b48e6dc1ee339eb443d46804a2f58",
+    "src/lib/whatsapp/proactive-flow-history.js": "d12ec1ede857c37c81d80d90376478319ce7e347",
+    "src/lib/whatsapp/proactive-flow-history-policy.js": "143d192668d90cb82ce788a23eeb87541600134d",
+    "tests/helpers/flow-history-fixture.js": "e622ce4a1967683fc58f985e9449ec0e1fa4074c",
+    "tests/proactive-flow-history.test.js": "66c8a5e94547be8b19b247e03ac616aad1e7320a",
+    "tests/whatsapp-proactive-flows.test.js": "cc48c429f44992f0f5da87d6505e8ebbb26e4f26",
+    "scripts/verify-proactive-flow-history-postgres.mjs": "4bf3225eb409901e265d372f3caf8bb8a29af7f2",
+    "scripts/verify-proactive-flow-history-ui.mjs": "dc0aec9750ac4f517c21bc710140d1b5801510b9"
+  }
+}
