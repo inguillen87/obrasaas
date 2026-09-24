@@ -105,3 +105,10 @@ Leer `proactive-flow-history.md`. La bandeja consulta Message y sus sesiones ver
 
 ## Continuación S11.A23: priorización del seguimiento
 Leer `proactive-flow-followup.md`. La vista A22 separa ausencia de respuesta vigente, enlace vencido, revisión del envío y respuesta registrada, con conteos exclusivos de la página observada. Conserva filtros durante paginación/actualización, indica el alcance de una página vacía y no hace consultas por filtrar. La clasificación usa observedAt, no el reloj del dispositivo. No modifica API, permisos, base, sender ni resolución. Ejecutar las nuevas pruebas de `proactive-flow-followup.test.js` y el verificador ampliado de historia. El enlace al registro de negocio y el piloto real siguen separados. En esta revisión una lectura exploratoria de los dominios fue bloqueada por la herramienta; no se repitió mediante otro canal y no se implementó una correlación por suposición.
+
+## Continuación S11.A24: seguimiento autenticado comprobado
+Leer `authenticated-flow-history.md`. El run 36069145046 de bbdbd1e completó S9.2/S11-HISTORY, S9.3 y S10-CERT con Clerk Development real y PostgreSQL aislado. El seguimiento acredita paginación 20+6, privacidad, aislamiento, uso móvil con recarga sin despacho y denegación tras sign-out; no acredita recepción física en Meta ni revocación administrativa de membresías.
+
+Las correcciones del fixture no alteraron esquema ni permisos. Se conserva el fallo del harness SQL auxiliar 36069414112, cuyo diagnóstico no pudo leerse; no se cuenta como aprobado. La aceptación principal se apoya en su propia ejecución satisfactoria, no en ese harness. Las reglas de ensayo y de Production permanecen separadas.
+
+El cierre documentado solicita un único Preview del SHA final y registra sus resultados en PR #1. La aprobación y comprobación del nuevo SHA deben ser explícitas. El enlace al parte/incidencia/fichaje, la autorización piloto y el pase productivo siguen pendientes de su propia evidencia.
