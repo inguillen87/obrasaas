@@ -5,6 +5,7 @@ import { authorizeS92DisposableDatabase, assertS92ClientSocketIdentity, assertS9
 
 export const FLOW_HISTORY_ACCEPTANCE = Object.freeze({
   conversationId: 's11e2e_history_conversation',
+  replyMessageId: 's11e2e_history_reply',
   otherConversationId: 's11e2e_history_foreign',
   displayName: 'Seguimiento autenticado de ensayo',
   workerId: 's11e2e_history_worker',
@@ -73,6 +74,10 @@ export async function openAuthenticatedFlowHistoryFixture(fixture, environment =
       await db.query(`INSERT INTO "Message" (id,"conversationId",direction,kind,"externalId","providerMessageId",body,status,metadata,"createdAt","sentAt") VALUES ($1,$2,'OUTBOUND','INTERACTIVE',$3,$4,$5,$6,$7::jsonb,$8,$8)`, [row.id, FLOW_HISTORY_ACCEPTANCE.conversationId, row.externalId, row.reference, row.body, row.status, JSON.stringify(row.metadata), row.createdAt]);
       await db.query(`INSERT INTO "WhatsAppFlowSession" (id,"organizationId","projectId","workerId","phoneNumberId","recipientPhone","blueprintKey","flowId","screenId","flowType","sourceExternalId","tokenSha256","expiresAt","createdAt","deliveryAttemptedAt","sentAt","providerMessageId","consumedAt","consumedExternalId","updatedAt") VALUES ($1,$2,$3,$4,'111111111111111','5491111111111','incident-report','222222222222222','INCIDENT','incident',$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`, [row.sessionId, scope.organizationId, scope.projectId, FLOW_HISTORY_ACCEPTANCE.workerId, row.externalId, row.tokenSha256, row.expiresAt, row.sessionCreatedAt, row.attemptedAt, row.sentAt, row.reference, row.consumedAt, row.consumedExternalId, now]);
     }
+    await db.query(`INSERT INTO "Message" (id,"conversationId",direction,kind,"externalId",body,metadata,"createdAt","sentAt") VALUES ($1,$2,'INBOUND','INTERACTIVE',$3,$4,$5::jsonb,$6,$6)`,
+      [FLOW_HISTORY_ACCEPTANCE.replyMessageId, FLOW_HISTORY_ACCEPTANCE.conversationId, rows[0].consumedExternalId,
+        'Respuesta operativa correlacionada de ensayo.', JSON.stringify({ provider: 'meta', authorized: true, workerId: FLOW_HISTORY_ACCEPTANCE.workerId,
+          whatsappFlowSessionId: rows[0].sessionId, whatsappFlowBlueprintKey: 'incident-report', recipient: FLOW_HISTORY_ACCEPTANCE.privateCanary }), now]);
     await db.query('COMMIT');
     async function snapshot() {
       const messages = await db.query('SELECT * FROM "Message" WHERE "conversationId"=$1 ORDER BY id', [FLOW_HISTORY_ACCEPTANCE.conversationId]);

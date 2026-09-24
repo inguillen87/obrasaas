@@ -348,6 +348,14 @@ function publicMessage(message, {
   };
 }
 
+// Fixed least-privilege excerpt for a correlated Flow reply. Keep the same
+// medical, source-evidence and sensitive-text redaction as ordinary inbox reads.
+// This presenter grants no access; its caller must establish the exact scope.
+export function presentWhatsAppReplyExcerpt(message) {
+  const safe = publicMessage(message);
+  return { messageId: safe.id, body: safe.body.slice(0, 4096), recordedAt: safe.recordedAt };
+}
+
 function publicConversation(conversation, options = {}) {
   const lastMessage = Array.isArray(conversation.messages)
     ? conversation.messages[0] || null

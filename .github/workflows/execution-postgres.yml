@@ -5,6 +5,8 @@ on:
     paths:
       - 'src/lib/project-execution.js'
       - 'src/lib/whatsapp/proactive-flow-history*.js'
+      - 'src/lib/whatsapp/proactive-flow-reply*.js'
+      - 'src/lib/whatsapp/inbox.js'
       - 'scripts/verify-proactive-flow-history-postgres.mjs'
       - 'tests/helpers/flow-history-fixture.js'
       - 'src/lib/project-write-policy.js'

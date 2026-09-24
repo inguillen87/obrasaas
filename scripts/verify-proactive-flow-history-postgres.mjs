@@ -8,6 +8,14 @@ import { listProactiveFlowHistory } from '../src/lib/whatsapp/proactive-flow-his
 import { flowHistoryPageMatches } from '../src/lib/whatsapp/proactive-flow-history-policy.js';
 import { createHistoryFixture, historyScope, historyAccess, HISTORY_NOW } from '../tests/helpers/flow-history-fixture.js';
 
+import { registerHooks } from 'node:module';
+registerHooks({ resolve(specifier, context, next) {
+  if (specifier.startsWith('@/')) return next(new URL('../src/' + specifier.slice(2) + (specifier.startsWith('@/generated/') ? '.ts' : '.js'), import.meta.url).href, context);
+  return next(specifier, context);
+} });
+const { readProactiveFlowReply } = await import('../src/lib/whatsapp/proactive-flow-reply.js');
+const readReply = changes => readProactiveFlowReply({ prisma: db, access: historyAccess, conversationId: historyScope.conversationId, messageId: source.messages[0].id, clock: () => HISTORY_NOW, ...changes });
+
 const connectionString = executionTestConnection(), db = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 const source = createHistoryFixture(46), report = { status: 'RUNNING', environment: 'disposable-postgresql-17', cases: [], realMessagesSent: 0, providerCalls: 0 };
 const read = changes => listProactiveFlowHistory({ prisma: db, access: historyAccess, conversationId: historyScope.conversationId, clock: () => HISTORY_NOW, ...changes });
@@ -56,6 +64,43 @@ try {
     await db.message.update({ where: { id: source.messages[2].id }, data: { metadata: { ...source.messages[2].metadata, flowSessionId: foreignId } } });
     const before = await snapshot(), page = await read({}), row = page.items.find(item => item.messageId === source.messages[2].id);
     assert.equal(row.correlation, 'unavailable'); assert.equal(row.reply.state, 'unverified'); assert.equal(row.reply.recordedAt, null); assert.equal(row.expiresAt, null); assert.equal(await snapshot(), before);
+  });
+  await check('reply lookup distinguishes a consumed session without its preserved inbound message', async () => {
+    const before = await snapshot();
+    assert.equal((await readReply({})).state, 'unavailable');
+    assert.equal((await readReply({ messageId: source.messages[5].id })).state, 'not_recorded');
+    assert.equal(await snapshot(), before);
+  });
+  const inboundMetadata = { provider: 'meta', authorized: true, workerId: 'worker-history', whatsappFlowSessionId: source.sessions[0].id,
+    whatsappFlowBlueprintKey: 'incident-report', from: 'PRIVATE_PHONE_CANARY', flowToken: 'PRIVATE_TOKEN_CANARY' };
+  await check('exact source-session-inbound lookup returns a private-safe excerpt on real PostgreSQL', async () => {
+    await db.message.create({ data: { id: 'reply-history-a', conversationId: historyScope.conversationId, externalId: 'wamid.synthetic-history-response',
+      direction: 'INBOUND', kind: 'INTERACTIVE', body: 'Demora de materiales en el frente norte.', metadata: inboundMetadata, createdAt: HISTORY_NOW, sentAt: HISTORY_NOW } });
+    const before = await snapshot(), response = await readReply({});
+    assert.equal(response.state, 'available'); assert.equal(response.reply.messageId, 'reply-history-a');
+    for (const secret of ['PRIVATE_PHONE_CANARY','PRIVATE_TOKEN_CANARY','wamid.','tokenSha256','recipientPhone']) assert.equal(JSON.stringify(response).includes(secret),false);
+    assert.equal(await snapshot(), before);
+  });
+  await check('the exact external reference from another conversation cannot disclose its body', async () => {
+    await db.conversation.create({ data: { id: 'reply-foreign-chat', projectId: 'project-a-foreign', channel: 'whatsapp', externalId: 'meta:5499999999999' } });
+    await db.message.update({ where: { id: 'reply-history-a' }, data: { conversationId: 'reply-foreign-chat' } });
+    const before = await snapshot(); assert.equal((await readReply({})).state, 'unavailable'); assert.equal(await snapshot(), before);
+    await db.message.update({ where: { id: 'reply-history-a' }, data: { conversationId: historyScope.conversationId } });
+  });
+  await check('inbound session marker conflicts are not inferred from shared phone or text', async () => {
+    await db.message.update({ where: { id: 'reply-history-a' }, data: { metadata: { ...inboundMetadata, whatsappFlowSessionId: source.sessions[4].id } } });
+    const before = await snapshot(); assert.equal((await readReply({})).state, 'unavailable'); assert.equal(await snapshot(), before);
+    await db.message.update({ where: { id: 'reply-history-a' }, data: { metadata: inboundMetadata } });
+  });
+  await check('medical redaction applies to a correctly correlated reply', async () => {
+    await db.message.update({ where: { id: 'reply-history-a' }, data: { body: 'PRIVATE_MEDICAL_CANARY', metadata: { ...inboundMetadata, sensitivity: 'medical' } } });
+    const before = await snapshot(), response = await readReply({}); assert.equal(response.state,'available');
+    assert.equal(JSON.stringify(response).includes('PRIVATE_MEDICAL_CANARY'),false); assert.equal(await snapshot(), before);
+    await db.message.update({ where: { id: 'reply-history-a' }, data: { body: 'Demora de materiales en el frente norte.', metadata: inboundMetadata } });
+  });
+  await check('reply reader cannot cross tenant scope and uses no sending credentials', async () => {
+    const before = await snapshot(); await assert.rejects(readReply({ access: { ...historyAccess, organization: { id: 'organization-a-foreign' } } }), { code: 'INBOX_CONVERSATION_NOT_FOUND' });
+    assert.equal(await db.whatsAppConnection.count(),0); assert.equal(await db.auditLog.count(),0); assert.equal(await snapshot(),before);
   });
   await check('equal timestamps use stable ids and no cursor row lookup after deletion', async () => {
     await db.message.updateMany({ where: { conversationId: historyScope.conversationId }, data: { createdAt: HISTORY_NOW } });

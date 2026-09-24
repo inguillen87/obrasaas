@@ -3,6 +3,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { evidenceScopeHeaders } from '@/lib/evidence-capture-policy';
 import { flowHistoryPageMatches, flowHistoryReplyPresentation, flowHistoryStatusLabel } from '@/lib/whatsapp/proactive-flow-history-policy';
 import { FLOW_FOLLOWUP_FILTERS, summarizeFlowFollowup, flowFollowupFilter } from '@/lib/whatsapp/proactive-flow-followup';
+import ProactiveFlowReply from './proactive-flow-reply';
 import styles from './proactive-flow-history.module.css';
 const titleFor = key => key === 'incident-report' ? 'Incidencia de obra' : 'Fichaje y seguridad';
 const formatDate = value => new Intl.DateTimeFormat('es-AR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
@@ -75,6 +76,7 @@ function ScopedHistory({ organizationId, projectId, conversationId, online = tru
             <details className={styles.details}><summary>Ver mensaje y registro</summary><p className={styles.body}>{item.body || 'Sin cuerpo conservado.'}</p><dl><div><dt>Registro</dt><dd>{item.messageId}</dd></div>
               {item.reply.recordedAt && <div><dt>Respuesta registrada</dt><dd>{formatDate(item.reply.recordedAt)}</dd></div>}
               {item.expiresAt && <div><dt>Vigencia original del enlace</dt><dd>{formatDate(item.expiresAt)}</dd></div>}</dl></details>
+            {item.reply.state === 'recorded' && item.correlation === 'verified' && <ProactiveFlowReply organizationId={organizationId} projectId={projectId} conversationId={conversationId} sourceMessageId={item.messageId} observedAt={page.observedAt} online={online}/>}
           </li>;
         })}</ol>
         <nav className={styles.pagination} aria-label="Páginas de seguimiento"><button type="button" disabled={!request.trail.length} onClick={() => load({ cursor: request.trail.at(-1), trail: request.trail.slice(0, -1) })}>Más recientes</button><span>Página {request.trail.length + 1} · hasta {page.pageSize} registros</span><button type="button" disabled={!page.nextCursor} onClick={() => load({ cursor: page.nextCursor, trail: [...request.trail, request.cursor] })}>Más antiguos</button></nav>
