@@ -21,6 +21,7 @@ import ContactOnboardingAction, {
   normalizeContactOnboarding,
 } from './contact-onboarding-action';
 import ProactiveFlowLauncher from './proactive-flow-launcher';
+import ConversationFollowupPanel from './conversation-followup-panel';
 
 const DEFAULT_TIME_ZONE = 'America/Argentina/Buenos_Aires';
 const DELIVERY_STATES = new Set([
@@ -1758,6 +1759,8 @@ function InboxWorkspace({
                   </h2>
                   <span>{contactSecondary(selectedConversation)}</span>
                 </div>
+                <ConversationFollowupPanel organizationId={organizationId} projectId={projectId} conversationId={selectedConversation.id}
+                  contactName={contactLabel(selectedConversation)} projectName={projectName} online={online}/>
                 <div className={styles.windowBadge} data-tone={replyWindow.tone}>
                   <span><i aria-hidden="true" /> {replyWindow.label}</span>
                   <small>{replyWindow.detail}</small>

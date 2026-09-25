@@ -30,7 +30,7 @@ export async function verifyAuthenticatedFlowIncident({fixture,sessions,baseURL}
    await admin.setViewportSize({width:390,height:844});await admin.goto('/dashboard/inbox');await clerk.loaded({page:admin});
    const open=async()=>{
     await admin.getByRole('button',{name:/Incidencia vinculada de ensayo/}).click();
-    const history=admin.getByRole('region',{name:'Seguimiento de formularios'});await history.getByRole('button',{name:'Consultar envíos anteriores',exact:true}).click();await expect(history.getByRole('listitem')).toHaveCount(2);
+    const history=admin.getByRole('region',{name:'Seguimiento de formularios'});await admin.getByRole('button',{name:'Abrir seguimiento de formularios',exact:true}).click();await expect(history.getByRole('listitem')).toHaveCount(2);
     const row=history.getByRole('listitem').filter({hasText:db.rows[0].sourceId});await row.getByRole('button',{name:'Consultar respuesta vinculada',exact:true}).click();await row.getByRole('button',{name:'Consultar incidencia vinculada',exact:true}).click();
     await expect(row.getByText(db.rows[0].incidentId,{exact:true})).toBeVisible();await expect(row.getByText('Sin estado de resolución registrado',{exact:true})).toBeVisible();
     await expect(row.getByRole('link',{name:'Abrir tablero de obra',exact:true})).toHaveAttribute('href','/dashboard');expect(await admin.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);

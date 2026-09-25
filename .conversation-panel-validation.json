@@ -1,0 +1,19 @@
+{
+  "base": "81b3e2da653f360759602006d9889293fd16f22c",
+  "productTree": "ea3b9f9a111c5db6a98983aafde793bafed34872",
+  "blobs": {
+    "src/app/dashboard/inbox/conversation-followup-panel.js": "2438f32d1293b66e66c614e2f082bd9758811b98",
+    "src/app/dashboard/inbox/conversation-followup-panel.module.css": "c98a0618d4d504a2f5053d1d5f3f66c2ac9020e6",
+    "src/app/dashboard/inbox/inbox-client.js": "b4ad54c750e3e24cebfe5caac113aa4850a9d12d",
+    "src/app/dashboard/inbox/proactive-flow-history.js": "4ebe7d949075957f74293cd91ad892db400d6cf9",
+    "src/app/dashboard/inbox/proactive-flow-history.module.css": "b835740ae54246fb96ba2250d4deb3ee18c7e7d6",
+    "src/app/dashboard/inbox/proactive-flow-launcher.js": "27a9b5e3567ebe0fd623b5a09a87c6996cca4c81",
+    "scripts/verify-inbox-continuity-ui.mjs": "a434fa5ef4c416ebedded4853ad34c895153af74",
+    "e2e/s11-flow-history-journey.js": "f1a7fa523ee68181c926bfe6c02e4f41c405dacb",
+    "e2e/s11-flow-attendance-journey.js": "56daf192441c44047e365a23a3a453eeb70b96ac",
+    "e2e/s11-flow-incident-journey.js": "7015b5c1f0ab9edfcef74d0602593d535cd81188",
+    ".github/workflows/ci.yml": "f55522b74f6f043888f71095b081cf7dc3c72bd5",
+    "docs/recovery/conversation-followup-panel.md": "f2b53766f5fe0295eb0fd3167f327be4642270bb",
+    "docs/recovery/HANDOFF_TENANT_WHATSAPP.md": "3f0c0c04bcc6991c07bd274ea3fd96c265a146ae"
+  }
+}
