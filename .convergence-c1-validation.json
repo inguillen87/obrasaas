@@ -1,0 +1,15 @@
+{
+  "base": "633e3647131f3b3b1763569686b24cd69882a894",
+  "productTree": "f23b64994fa7c69776bd85f394adf4b069569885",
+  "blobs": {
+    "src/lib/enterprise-convergence.js": "6a0678394d0452597f2e74f079cb85dcc80b1bf3",
+    "src/app/legacy-enterprise-alias.js": "93efb54bf5086a157ffd59162647b1963da0096d",
+    "src/app/costos/page.js": "c54e58f182220556c3830a623216d8faf07b676a",
+    "src/app/cronograma/page.js": "e512e580df500183a80fe86ee7b7f3f81ba3b1c7",
+    "src/app/libro-obra/page.js": "24353b04e2698ea2b0baf10e6f352a6d84e9add6",
+    "src/app/marketplace/page.js": "a42c916eab3541c95893c9eda889c1fbeb89cb83",
+    "src/app/onboarding/page.js": "d51617394eb3ad3badf0c22a2b9c6d9decc2e218",
+    "tests/enterprise-convergence.test.js": "eb000832d1a5ec8ec1b9ac49a17831646c9d0987",
+    "docs/recovery/enterprise-convergence-c1.md": "0e267d128894e8e968f90825d02673591d9616d7"
+  }
+}

@@ -1,0 +1,56 @@
+name: Validate enterprise convergence C1
+on:
+  push:
+    branches: ['operations/convergence-c1-20260925']
+permissions:
+  contents: read
+concurrency:
+  group: convergence-c1-preflight
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Verify exact product tree
+        run: |
+          mkdir -p evidence
+          python3 - <<'PYCODE'
+          import json,pathlib,tempfile,os,subprocess
+          m=json.load(open('.convergence-c1-validation.json'))
+          with tempfile.TemporaryDirectory() as t:
+              env={**os.environ,'GIT_INDEX_FILE':str(pathlib.Path(t)/'index')}
+              subprocess.run(['git','read-tree','HEAD'],env=env,check=True)
+              subprocess.run(['git','update-index','--force-remove','--','.github/workflows/validate-convergence-c1.yml','.convergence-c1-validation.json'],env=env,check=True)
+              tree=subprocess.check_output(['git','write-tree'],env=env,text=True).strip()
+          assert tree==m['productTree']
+          for p,sha in m['blobs'].items(): assert subprocess.check_output(['git','rev-parse','HEAD:'+p],text=True).strip()==sha,p
+          pathlib.Path('evidence/validated-tree.json').write_text(json.dumps(m,indent=2))
+          print('Exact product tree',tree)
+          PYCODE
+      - name: Exact dependencies
+        run: npm ci --no-audit --no-fund > evidence/install.log 2>&1 || { tail -n 80 evidence/install.log; exit 1; }
+      - name: Full suite and affected lint
+        run: |
+          npm test > evidence/tests.log 2>&1 || { tail -n 120 evidence/tests.log; exit 1; }
+          tail -n 10 evidence/tests.log
+          npx eslint src/lib/enterprise-convergence.js src/app/legacy-enterprise-alias.js src/app/costos/page.js src/app/cronograma/page.js src/app/libro-obra/page.js src/app/marketplace/page.js src/app/onboarding/page.js tests/enterprise-convergence.test.js > evidence/lint.log 2>&1 || { cat evidence/lint.log; exit 1; }
+      - name: Full application build
+        run: npm run build > evidence/build.log 2>&1 || { tail -n 120 evidence/build.log; exit 1; }
+      - name: Preserve evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: convergence-c1-${{ github.run_id }}
+          path: evidence/
+          retention-days: 7
+          if-no-files-found: warn
