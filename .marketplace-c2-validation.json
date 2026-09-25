@@ -1,0 +1,18 @@
+{
+  "base": "bce79d6c73b6ad8d060e9e5855ebaadb85f6bfb7",
+  "productTree": "4cd39585a69592084620e59556b328bf4983bae6",
+  "blobs": {
+    ".github/workflows/ci.yml": "ce5b4525e9cab40fc1f877f21fc2826d3ae2f200",
+    "docs/recovery/HANDOFF_TENANT_WHATSAPP.md": "8648aa2bfaeb0bc4a272acf189bbc46ec47fc872",
+    "docs/recovery/enterprise-convergence-c1.md": "ed206e20eebb609257983958383b7a0870e83a12",
+    "docs/recovery/marketplace-convergence-c2.md": "c53154fad3192da920a52564cb6361b7cb19d030",
+    "src/app/dashboard/dashboard-shell.js": "3709fdc8043e944c6400b8447bf5695527e56c4f",
+    "src/app/dashboard/purchases/page.js": "fb51756a4713687f7f6e991a583098a8bc541408",
+    "src/app/dashboard/purchases/purchases-client.js": "4d43949191057862f381dddae62055569aebeeda",
+    "src/app/dashboard/purchases/purchases.module.css": "6bc5778990997ad5d83e560675574ab5efe7b27e",
+    "src/lib/enterprise-convergence.js": "a87e6a50d6428edda5b5eab6fea1ddc2be9d585a",
+    "src/lib/purchase-marketplace-view.js": "d0eacd18a564a61311eadc345465f9b6c0353f34",
+    "tests/purchase-marketplace-view.test.js": "3ec13c0333198b714be642b7c3062338e86c873d",
+    "scripts/verify-marketplace-ui.mjs": "02ccf69fc0b71bcf7c7ad62863f8ca75b4de8488"
+  }
+}

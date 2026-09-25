@@ -248,6 +248,7 @@ jobs:
         env:
           PLAYWRIGHT_CHANNEL: chromium
         run: |
+          node scripts/verify-marketplace-ui.mjs
           node scripts/verify-proactive-flow-confirmation-ui.mjs
           node scripts/verify-proactive-flow-history-ui.mjs
           node scripts/verify-inbox-continuity-ui.mjs
