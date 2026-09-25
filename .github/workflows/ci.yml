@@ -249,6 +249,7 @@ jobs:
           PLAYWRIGHT_CHANNEL: chromium
         run: |
           node scripts/verify-marketplace-ui.mjs
+          node scripts/verify-budget-control-ui.mjs
           node scripts/verify-proactive-flow-confirmation-ui.mjs
           node scripts/verify-proactive-flow-history-ui.mjs
           node scripts/verify-inbox-continuity-ui.mjs
@@ -266,6 +267,10 @@ jobs:
           path: |
             playwright-report/
             test-results/
+            .vercel/marketplace-ui/proof.json
+            .vercel/marketplace-ui/*.png
+            .vercel/budget-control-ui/proof.json
+            .vercel/budget-control-ui/*.png
             .vercel/proactive-flow-confirmation-ui/proof.json
             .vercel/proactive-flow-confirmation-ui/*.png
             .vercel/inbox-continuity-ui/proof.json

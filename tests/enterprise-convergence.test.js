@@ -6,7 +6,7 @@ const expectedMasterOnly = ['/api-docs','/bim','/calendario','/certificacion','/
 const approvedAliases = new Map([['/costos','/dashboard/budgets'],['/cronograma','/dashboard?tab=sec-gantt'],['/libro-obra','/dashboard/progress'],['/marketplace','/dashboard/purchases'],['/onboarding','/dashboard/getting-started']]);
 
 test('C1 manifest accounts for every route that exists only in master', () => {
-  assert.equal(ENTERPRISE_CONVERGENCE_VERSION, 'c1-2026-09-25');
+  assert.equal(ENTERPRISE_CONVERGENCE_VERSION, 'c2-2026-09-25');
   assert.deepEqual(MASTER_ONLY_ROUTE_CONVERGENCE.map(row => row.legacy), expectedMasterOnly);
   assert.equal(new Set(MASTER_ONLY_ROUTE_CONVERGENCE.map(row => row.legacy)).size, expectedMasterOnly.length);
 });
@@ -16,6 +16,12 @@ test('only exact enterprise equivalents are enabled as temporary aliases', () =>
     if (approvedAliases.has(row.legacy)) {
       assert.equal(row.status, 'alias'); assert.equal(row.target, approvedAliases.get(row.legacy)); assert.equal(typeof row.label, 'string');
     } else { assert.equal(row.status, 'pending'); assert.equal(row.target, undefined); assert.ok(row.reason.length > 20); }
+  }
+});
+test('convergence copy is valid UTF-8 Spanish without mojibake placeholders', () => {
+  for (const row of MASTER_ONLY_ROUTE_CONVERGENCE) {
+    const copy = [row.reason, row.label].filter(Boolean).join(' ');
+    assert.doesNotMatch(copy, /Ã|Â|\?\p{L}/u);
   }
 });
 test('alias resolver never guesses a pending module', () => {

@@ -43,7 +43,7 @@ const WORKSPACE_DESTINATIONS = Object.freeze([
 const CONTROL_DESTINATIONS = Object.freeze([
   { key: 'projects', href: '/dashboard/projects', exact: true, label: 'Obras y portfolio', icon: 'fa-solid fa-building-circle-check' },
   { key: 'report', href: '/dashboard/report', exact: true, label: 'Reporte semanal', icon: 'fa-solid fa-file-lines', permission: 'canReadReports' },
-  { key: 'budgets', href: '/dashboard/budgets', exact: true, label: 'Presupuesto y costos', icon: 'fa-solid fa-coins', permission: 'canReadExecution' },
+  { key: 'budgets', href: '/dashboard/budgets', exact: true, label: 'Presupuesto & costos', icon: 'fa-solid fa-coins', permission: 'canReadExecution' },
   { key: 'purchases', href: '/dashboard/purchases', exact: true, label: 'Marketplace & compras', icon: 'fa-solid fa-truck-ramp-box', permission: 'canReadExecution' },
   { key: 'payables', href: '/dashboard/payables', exact: true, label: 'Cuentas por pagar', icon: 'fa-solid fa-file-invoice-dollar', permission: 'canReadExecution' },
   { key: 'activation', href: '/dashboard/getting-started', exact: true, label: 'Puesta en marcha', icon: 'fa-solid fa-route' },
