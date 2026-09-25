@@ -111,6 +111,8 @@ try {
     assert.equal(await db.whatsAppConnection.count(), 0); assert.equal(await db.auditLog.count(), 0);
     const before = await snapshot(); await read({}); assert.equal(await snapshot(), before);
   });
+  const { verifyFlowAttendanceRead } = await import('./lib/verify-flow-attendance-read.mjs');
+  report.cases.push(...await verifyFlowAttendanceRead(db));
   report.status = 'PASS';
 } catch (error) { report.status = 'FAIL'; report.error = { code: error.code || error.name, message: String(error.message).slice(0, 2000) }; process.exitCode = 1; }
 finally { mkdirSync('evidence', { recursive: true }); writeFileSync('evidence/proactive-flow-history-postgres.json', JSON.stringify(report, null, 2)); console.log(JSON.stringify(report)); await db.$disconnect(); }

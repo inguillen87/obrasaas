@@ -1,0 +1,24 @@
+{
+  "base": "34e5d55afa421240fb1886d7ddb2e7b9f11a09e6",
+  "productTree": "213a4856d4e948e1b1091eb0fb712fd59b971887",
+  "blobs": {
+    ".github/workflows/ci.yml": "1a8ce4fc91fefbfedd1edafd3fcf36e6c72a258e",
+    "docs/recovery/HANDOFF_TENANT_WHATSAPP.md": "2ce001a017d9afb75603ca0aaa0229557cc53213",
+    "docs/recovery/flow-attendance-link.md": "e0d6157f274074c01bc43f3b9647d9abd8dd29aa",
+    "src/lib/whatsapp/flow-attendance-policy.js": "74468c78642b8ac666504487ff0d800594cc3102",
+    "src/lib/whatsapp/flow-attendance.js": "4d723bcdf125b415592f7f17f4cf8e9038db5b60",
+    "src/lib/whatsapp/proactive-flow-reply.js": "78900eba6ef5e9436bf2560df00f8ef5ca157e23",
+    "src/lib/whatsapp/proactive-flow-reply-policy.js": "9a605f9b44ef7af4e2a2e2083709192c559f805e",
+    "src/lib/whatsapp/obra-engine.js": "839f90828a6f145d831186c84d13579e1ade9f19",
+    "src/app/api/whatsapp/inbox/[conversationId]/proactive-flows/route.js": "34d77ed00e55aae76d17e8d831a11d26f655a40f",
+    "src/app/dashboard/inbox/proactive-flow-reply.js": "5874abf61607ced8aad24de21c423d39e36fa5e2",
+    "src/app/dashboard/inbox/flow-attendance-view.js": "7a31195049ae8b0feaf44fe73424bb959c9bbdda",
+    "src/app/dashboard/inbox/flow-attendance-view.module.css": "9880bc972733ca1f859fe60c5fd49a334e580246",
+    "tests/flow-attendance.test.js": "58687fb29644ce701539b7c65ed4eaf24ccd3557",
+    "tests/helpers/flow-attendance-fixture.js": "0e29878b43192de310a59ef1eeb049c5771e5a6f",
+    "tests/obra-engine-flows.test.js": "683c18d6b694f66ff19b64e8a88f64a3b7b5daec",
+    "scripts/verify-flow-attendance-ui.mjs": "7049cbb93b1bda6a32951cf4b830bff1cb182199",
+    "scripts/lib/verify-flow-attendance-read.mjs": "9e2201ae990b08b8b4eb650d735fed71d210b314",
+    "scripts/verify-proactive-flow-history-postgres.mjs": "00caba79f98627a2c6f1bc098fc11411fb413484"
+  }
+}

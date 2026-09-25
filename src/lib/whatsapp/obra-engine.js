@@ -1,3 +1,4 @@
+import { buildFlowAttendanceReceipt } from './flow-attendance-policy.js';
 import { normalizeFieldMenuDescriptor, resolveFieldMenuSelection } from '@/lib/whatsapp/field-interactive-menu';
 import { buildFieldWorkerMenu } from '@/lib/whatsapp/field-worker-menu';
 import { generateWebviewToken } from "@/lib/auth";
@@ -397,6 +398,7 @@ function audioProposalReply(proposal, {
 }
 
 async function processFlowReply({
+  onAttendanceEntry,
   state,
   worker,
   event,
@@ -463,6 +465,7 @@ async function processFlowReply({
         ...(response.task_ref ? { taskRef: response.task_ref } : {}),
       },
     });
+    if (isMetaFlow) onAttendanceEntry(pending);
     attendanceLink = links.attendance("CHECK_IN", { pendingEntryId: pending.id });
     replaceWorkerAttendance(state.attendance, worker, {
       checkin: new Intl.DateTimeFormat("es-AR", {
@@ -610,6 +613,7 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
   let audioProposal = null;
   let operationalProposal = null;
   let attendanceResult = null;
+  let flowAttendanceReceipt = null;
   let authorized = true;
   const isMetaFlowReply = (
     event.provider === "meta"
@@ -708,6 +712,7 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
     operationalProposal = outcome.proposal;
   } else if (event.interactive?.type === "flow") {
     reply = await processFlowReply({
+      onAttendanceEntry: entry => { flowAttendanceReceipt = buildFlowAttendanceReceipt(entry, trustedFlowSession); },
       state,
       worker,
       event,
@@ -1124,6 +1129,7 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
             ...(expiredFlowSession ? { whatsappFlowSessionExpired: true } : {}),
           }
         : {}),
+      ...(flowAttendanceReceipt ? { flowAttendanceReceipt } : {}),
       ...(sourceContentRestricted ? { sourceContentRestricted: true } : {}),
       ...(sensitiveMedicalContent
         ? { sensitivity: "medical" }
