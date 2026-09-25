@@ -1,0 +1,20 @@
+{
+  "base": "674f78a10e806f0ad9bc28084325591ac09af402",
+  "productTree": "b5c0d76dfcfe316fc0490b8352b39e7de52ccc9a",
+  "blobs": {
+    ".github/workflows/ci.yml": "ba6306c6a6c8867d343aa1de9a1ee24c722e1358",
+    "docs/recovery/HANDOFF_TENANT_WHATSAPP.md": "9ec4426059a7dbf150ec6ecb1fa3451a971969c5",
+    "docs/recovery/budget-cost-convergence-c2.md": "0598c5a2079f4eb851d11e8cb6eb2e7f6cac3194",
+    "scripts/verify-budget-control-ui.mjs": "c91b2c5ef4ce2ba527f4eebdfa8ebba9b8b64aea",
+    "src/app/dashboard/budgets/budget-client.js": "291559d8a28f2c5a9f88db4434ff9c558d89723c",
+    "src/app/dashboard/budgets/ledger-summary.js": "9205ddacb9826328d3832e632c9030c1086236fa",
+    "src/app/dashboard/budgets/page.js": "41366c99f138c3bef6980432c89bb44df50afddd",
+    "src/app/dashboard/budgets/budgets.module.css": "e887f112e98b51be28651fff088994b466ad117d",
+    "src/app/dashboard/dashboard-shell.js": "32257d24049b58f9905c0b7267f98133edbea018",
+    "src/lib/budget-control-view.js": "9bf42368106a767b739750e63233b72b9d7337e0",
+    "src/lib/budget-entries.js": "759b02798effa99d8a4240364ee59317980a644b",
+    "src/lib/enterprise-convergence.js": "259be862e9a7e4fd3522fe8f292fb4e271b03230",
+    "tests/budget-control-view.test.js": "3c37a3f657accf4b6f76c6d5da981e67df104293",
+    "tests/enterprise-convergence.test.js": "161dfa50a98ce4572046a2793d813625bd222cf1"
+  }
+}
