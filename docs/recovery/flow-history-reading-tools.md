@@ -25,3 +25,10 @@ La lógica de presentación no modifica los datos de entrada, el cursor, la hora
 Nuevas pruebas puras para consulta literal/acento, límites, búsqueda profunda en el cuerpo permitido, combinación de categoría, orden estable, página vacía/inválida y ausencia de mutaciones. El navegador de seguimiento conserva sus escenarios anteriores y añade búsqueda, orden, errores, foco, consulta privada no indexada, paginación y tamaños 320/390/768/1280. La aceptación S9.2 amplía su recorrido móvil con sesiones Clerk y PostgreSQL de ensayo para comprobar búsqueda/orden sin peticiones nuevas ni escrituras.
 
 Los resultados del árbol y despliegue exactos se registran en PR #1. Las pruebas controladas no acreditan entrega física, renovación de la cuenta piloto, dispatcher o producción. Sin dependencias, migraciones, endpoints o permisos nuevos.
+
+## Integración con el redactor y corrección de aceptación
+El primer candidato pasó los componentes aislados, pero la aceptación con Clerk detectó que la búsqueda estaba anidando un formulario dentro del formulario real del redactor. La vista dejaba de conservar el selector tras pulsar Enter. Se conservó el fallo del SHA inicial `09763e9`; no se amplió el timeout ni se retiró el paso de teclado.
+
+La barra usa ahora una región de búsqueda sin elemento form. Enter en su campo se cancela de forma local para no ejecutar el envío implícito del redactor; Escape sólo limpia la búsqueda activa. La regresión controlada monta el seguimiento dentro de un redactor con un borrador y botón de envío, exige cero formularios anidados y cero invocaciones de submit. El recorrido autenticado mantiene Enter y comprueba explícitamente que búsqueda y selector sigan disponibles.
+
+Esta corrección no cambia el botón de envío real ni sus controles. Un campo de búsqueda no equivale a redactar una respuesta de WhatsApp. La aceptación corregida y su nuevo SHA se deben comprobar antes de declarar cerrada A33.
