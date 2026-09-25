@@ -112,6 +112,15 @@ try {
     const after = await snapshot(f); assert.equal(after.snapshot.version, 2); assert.equal(after.snapshot.state.incidents.length, 1);
     await assertLinked(f);
   });
+  await check('expired processing lease is reclaimed without repeating committed business effects', async () => {
+    const f = await fixture('reclaimed'); await execute(f); const before = await snapshot(f), oldLease = f.leased.leaseToken;
+    const reacquired = await acquireWebhookEvent({ projectId: f.scope.projectId, now: new Date(new Date(f.leased.leaseExpiresAt).getTime() + 1) });
+    assert.equal(reacquired.id, f.leased.id); assert.notEqual(reacquired.leaseToken, oldLease);
+    assert.equal(reacquired.attempts, 2); f.leased = reacquired;
+    await assert.rejects(execute(f, { leaseToken: oldLease }), { code: 'WEBHOOK_LEASE_LOST' });
+    const result = await execute(f); assert.equal(result.alreadyApplied, true); assert.equal(f.engineCalls, 1);
+    assert.deepEqual(await snapshot(f), before); await assertLinked(f);
+  });
   await check('duplicate ingress retains the same durable event without extra application', async () => {
     const f = await fixture('duplicate'); await execute(f); const before = await snapshot(f);
     const duplicate = await storeWebhookEvent({ provider: 'meta', externalId: f.scope.projectId + ':' + f.event.externalId,

@@ -4,6 +4,8 @@ Base: 98b671fb2e5d0997f743493d6e853d90c63fb705. Conserva A29/A30. Esta fase prue
 
 El nuevo verificador usa Prisma y PostgreSQL reales en una base vacia de loopback expresamente autorizada. Carga el cliente por la ruta existente de la aplicacion; no reemplaza delegados de base ni emula transacciones. La preparacion crea organizaciones, obras y participantes sinteticos, conexiones sin access token y un formulario firmado con secreto exclusivo de ensayo. El emisor HTTP esta bloqueado dentro de ese proceso.
 
+La recuperacion de una lease vencida conserva el evento aplicado: la lease anterior es rechazada y la nueva recupera el resultado sin ejecutar el motor otra vez.
+
 Se verifican persistencia de recibo y lectura vinculada, reaplicacion y concurrencia con la misma lease, duplicados de ingreso, rollback al fallar la escritura final de appliedAt y recuperacion del mismo intento. La falla tardia se inyecta mediante un trigger temporal de ensayo limitado al evento exacto; debe deshacer sesion, snapshot y ambos mensajes antes de reintentar.
 
 Se comprueban lease equivocada, evidencia de token alterada, un telefono compartido entre dos empresas, conexion deshabilitada y trabajador inactivo. Este ultimo queda en cuarentena sin consumir el formulario o ejecutar el motor. Las identidades de telefono del fixture usan el camino legacy explicito, no acreditan alta ni revocacion de identidades canonicas cifradas.
