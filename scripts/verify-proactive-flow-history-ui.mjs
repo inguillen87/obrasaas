@@ -27,6 +27,7 @@ const entry=`import React,{useState,useEffect}from'react';import{createRoot}from
 await build({stdin:{contents:entry,resolveDir:root,loader:'jsx'},outfile:resolve(out,'bundle.js'),bundle:true,format:'esm',platform:'browser',jsx:'automatic',loader:{'.js':'jsx'},alias:{'@':resolve(root,'src')},define:{'process.env.NODE_ENV':'"development"'},logLevel:'silent'});
 const store = createHistoryFixture(), requests = [], errors = [], cases = []; let mode = 'normal', held = null;
 store.messages[0].status='delivered';store.sessions[0].consumedAt=HISTORY_NOW;
+store.messages[4].body='Revisión de hormigón en sector norte';
 store.messages[1].status='unknown';store.messages[1].providerMessageId=null;
 store.sessions[2].expiresAt=new Date(HISTORY_NOW.getTime()-60000);
 store.messages[3].status='failed';store.messages[3].providerMessageId=null;store.sessions[3].providerMessageId=null;store.sessions[3].sentAt=null;
@@ -56,6 +57,28 @@ try{
  await page.goto(url);assert.equal(requests.length,0);await open();await expect(history.getByRole('listitem')).toHaveCount(20);await expect(history.getByText('Respuesta registrada',{exact:true}).first()).toBeVisible();
  await expect(history.getByText('Intento cerrado por decisión manual',{exact:true})).toHaveCount(1);
  cases.push('read-on-demand-and-distinct-outcomes');
+ const search=history.getByRole('searchbox',{name:'Buscar en esta página',exact:true});
+ const order=history.getByRole('combobox',{name:'Ordenar esta página',exact:true});
+ const beforeTools=requests.length;
+ await search.fill('HORMIGON norte');await expect(history.getByRole('listitem')).toHaveCount(1);
+ await expect(history.getByRole('listitem').first()).toContainText('message-0004');
+ await search.press('Enter');assert.equal(requests.length,beforeTools);
+ await search.fill('.*');await expect(history.getByRole('listitem')).toHaveCount(0);await expect(history.getByText(/No hay coincidencias con esta b/)).toBeVisible();
+ await search.fill('PRIVATE_TOKEN_CANARY');await expect(history.getByRole('listitem')).toHaveCount(0);assert.equal(requests.length,beforeTools);
+ await history.getByRole('button',{name:'Limpiar búsqueda',exact:true}).click();await expect(search).toBeFocused();await expect(history.getByRole('listitem')).toHaveCount(20);
+ cases.push('literal-accent-search-enter-no-dispatch-private-data-not-indexed-and-clear-focus');
+ await order.selectOption('attention');await expect(history.getByRole('listitem').nth(0)).toContainText('message-0001');await expect(history.getByRole('listitem').nth(1)).toContainText('message-0003');await expect(history.getByRole('listitem').nth(2)).toContainText('message-0002');
+ await search.fill('0019');await expect(history.getByRole('listitem')).toHaveCount(1);assert.equal(requests.length,beforeTools);
+ await history.getByRole('button',{name:'Más antiguos',exact:true}).click();await expect(history.getByRole('listitem')).toHaveCount(0);await expect(search).toHaveValue('0019');await expect(order).toHaveValue('attention');await expect(history.getByRole('button',{name:'Más antiguos',exact:true})).toBeEnabled();
+ await history.getByRole('button',{name:'Más recientes',exact:true}).click();await expect(history.getByRole('listitem')).toHaveCount(1);await refresh();await expect(history.getByRole('listitem')).toHaveCount(1);await expect(order).toHaveValue('attention');
+ cases.push('priority-stable-and-query-order-survive-pagination-and-refresh');
+ mode='fail';await refresh();await expect(history.getByRole('alert')).toBeVisible();await expect(search).toHaveValue('0019');await expect(history.getByRole('listitem')).toHaveCount(0);
+ mode='normal';await refresh();await expect(history.getByRole('listitem')).toHaveCount(1);await search.press('Escape');await expect(search).toHaveValue('');await expect(search).toBeFocused();await expect(history.getByRole('listitem')).toHaveCount(20);
+ await order.selectOption('recent');await expect(history.getByRole('listitem').first()).toContainText('message-0000');
+ cases.push('failed-read-preserves-search-not-data-escape-clears-without-network');
+ await search.fill('hormigon');await history.getByRole('button',{name:'Con respuesta (1)',exact:true}).click();await expect(history.getByRole('listitem')).toHaveCount(0);await history.getByRole('button',{name:'Sin respuesta (16)',exact:true}).click();await expect(history.getByRole('listitem')).toHaveCount(1);
+ await history.getByRole('button',{name:'Todos en esta página (20)',exact:true}).click();await search.fill('');cases.push('query-category-intersection-keeps-page-counts');
+
  await history.getByRole('button',{name:'Más antiguos',exact:true}).click();await expect(history.getByText('Página 2 · hasta 20 registros',{exact:true})).toBeVisible();await expect(history.getByRole('listitem')).toHaveCount(20);
  await history.getByRole('button',{name:'Más antiguos',exact:true}).click();await expect(history.getByRole('listitem')).toHaveCount(6);await expect(history.getByRole('button',{name:'Más antiguos',exact:true})).toBeDisabled();
  await history.getByRole('button',{name:'Más recientes',exact:true}).click();await expect(history.getByRole('listitem')).toHaveCount(20);cases.push('keyset-next-and-previous');
@@ -72,7 +95,8 @@ try{
  await refresh();await expect(history.getByRole('button',{name:'Enlace vencido (1)',exact:true})).toHaveAttribute('aria-pressed','true');await expect(history.getByRole('listitem')).toHaveCount(1);cases.push('filter-persists-through-pages-and-explicit-refresh');
  await history.getByRole('button',{name:'Sin respuesta (16)',exact:true}).focus();await page.keyboard.press('Enter');await expect(history.getByRole('button',{name:'Sin respuesta (16)',exact:true})).toHaveAttribute('aria-pressed','true');await expect(history.getByRole('listitem')).toHaveCount(16);cases.push('keyboard-filter-selection');
  await history.getByRole('button',{name:'Todos en esta página (20)',exact:true}).click();
- for(const width of [320,390,768,1280]){await page.setViewportSize({width,height:width<500?844:1000});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await expect(history).toBeVisible();if([390,1280].includes(width))await history.screenshot({path:resolve(out,'history-'+width+'.png')});}
+ for(const width of [320,390,768,1280]){await page.setViewportSize({width,height:width<500?844:1000});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await expect(history).toBeVisible();if(width<=390){assert.equal(await history.getByRole('list').evaluate(el=>getComputedStyle(el).overflowY),'visible');assert.equal(await search.evaluate(el=>parseFloat(getComputedStyle(el).fontSize)>=16),true);}if([390,1280].includes(width))await history.screenshot({path:resolve(out,'history-'+width+'.png')});}
+ await search.fill('hormigon');await expect(history.getByRole('listitem')).toHaveCount(1);for(const width of [390,1280]){await page.setViewportSize({width,height:900});await history.scrollIntoViewIfNeeded();await page.screenshot({path:resolve(out,'search-'+width+'.png'),fullPage:true});}await search.fill('');
  await history.getByRole('listitem').first().getByText('Ver mensaje y registro',{exact:true}).click();await expect(history.getByText('Mensaje conservado 0000',{exact:true})).toBeVisible();assert.ok(!(await page.locator('body').innerText()).includes('PRIVATE_TOKEN_CANARY'));cases.push('page-filter-responsive-and-content');
  await page.reload();await open();await expect(history.getByRole('listitem')).toHaveCount(20);assert.equal(requests.some(r=>r.method!=='GET'),false);cases.push('reload-recovers-persisted-history-without-operation-key');
  mode='fail';await refresh();await expect(history.getByRole('alert')).toBeVisible();await expect(history.getByRole('listitem')).toHaveCount(0);mode='normal';await refresh();await expect(history.getByRole('listitem')).toHaveCount(20);cases.push('failed-query-removes-stale-results-and-retry');
