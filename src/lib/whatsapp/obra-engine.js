@@ -1,3 +1,5 @@
+import { buildFlowIncidentReceipt } from './flow-incident-receipt.js';
+import { operationalIncidentIdForEvent } from './obra-policy.js';
 import { buildFlowAttendanceReceipt } from './flow-attendance-policy.js';
 import { normalizeFieldMenuDescriptor, resolveFieldMenuSelection } from '@/lib/whatsapp/field-interactive-menu';
 import { buildFieldWorkerMenu } from '@/lib/whatsapp/field-worker-menu';
@@ -399,6 +401,7 @@ function audioProposalReply(proposal, {
 
 async function processFlowReply({
   onAttendanceEntry,
+  onIncident,
   state,
   worker,
   event,
@@ -526,6 +529,11 @@ async function processFlowReply({
       timeZone,
     },
   );
+  if (isMetaFlow && isIncident) {
+    const incidentId = operationalIncidentIdForEvent(event.externalId);
+    const rows = state.incidents.filter(row => row?.id === incidentId);
+    onIncident(rows.length === 1 ? rows[0] : null);
+  }
   if (
     incidentAdded
     && (
@@ -614,6 +622,7 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
   let operationalProposal = null;
   let attendanceResult = null;
   let flowAttendanceReceipt = null;
+  let flowIncidentReceipt = null;
   let authorized = true;
   const isMetaFlowReply = (
     event.provider === "meta"
@@ -713,6 +722,7 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
   } else if (event.interactive?.type === "flow") {
     reply = await processFlowReply({
       onAttendanceEntry: entry => { flowAttendanceReceipt = buildFlowAttendanceReceipt(entry, trustedFlowSession); },
+      onIncident: incident => { flowIncidentReceipt = buildFlowIncidentReceipt(incident, event.externalId, trustedFlowSession); },
       state,
       worker,
       event,
@@ -1130,6 +1140,7 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
           }
         : {}),
       ...(flowAttendanceReceipt ? { flowAttendanceReceipt } : {}),
+      ...(flowIncidentReceipt ? { flowIncidentReceipt } : {}),
       ...(sourceContentRestricted ? { sourceContentRestricted: true } : {}),
       ...(sensitiveMedicalContent
         ? { sensitivity: "medical" }

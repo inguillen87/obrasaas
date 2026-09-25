@@ -1,3 +1,4 @@
+import { verifyFlowIncidentRead } from './lib/verify-flow-incident-read.mjs';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -113,6 +114,7 @@ try {
   });
   const { verifyFlowAttendanceRead } = await import('./lib/verify-flow-attendance-read.mjs');
   report.cases.push(...await verifyFlowAttendanceRead(db));
+  report.cases.push(...await verifyFlowIncidentRead(db));
   report.status = 'PASS';
 } catch (error) { report.status = 'FAIL'; report.error = { code: error.code || error.name, message: String(error.message).slice(0, 2000) }; process.exitCode = 1; }
 finally { mkdirSync('evidence', { recursive: true }); writeFileSync('evidence/proactive-flow-history-postgres.json', JSON.stringify(report, null, 2)); console.log(JSON.stringify(report)); await db.$disconnect(); }

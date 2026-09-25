@@ -38,7 +38,7 @@ export async function resolveProactiveFlowReplyInTransaction(tx, scope, messageI
     return { state: 'available', source, session, inbound, processedAt };
 }
 
-export async function readProactiveFlowReply({ prisma, access, conversationId, messageId, canReadAttendance = false, clock = () => new Date() }) {
+export async function readProactiveFlowReply({ prisma, access, conversationId, messageId, canReadAttendance = false, canReadIncident = false, clock = () => new Date() }) {
   const scope = { organizationId: historyId(access?.organization?.id), projectId: historyId(access?.project?.id), conversationId: historyId(conversationId) };
   historyId(messageId);
   return prisma.$transaction(async tx => {
@@ -46,7 +46,8 @@ export async function readProactiveFlowReply({ prisma, access, conversationId, m
     const resolved = await resolveProactiveFlowReplyInTransaction(tx, scope, messageId, observedAt);
     const payload = { context: scope, sourceMessageId: messageId, observedAt, state: resolved.state,
       reply: resolved.state === 'available' ? { ...presentWhatsAppReplyExcerpt(resolved.inbound), processedAt: resolved.processedAt } : null,
-      ...(canReadAttendance === true && resolved.state === 'available' && resolved.session.blueprintKey === 'shift-check-in' ? { attendanceAvailable: true } : {}) };
+      ...(canReadAttendance === true && resolved.state === 'available' && resolved.session.blueprintKey === 'shift-check-in' ? { attendanceAvailable: true } : {}),
+      ...(canReadIncident === true && resolved.state === 'available' && resolved.session.blueprintKey === 'incident-report' ? { incidentAvailable: true } : {}) };
     if (!flowReplyMatches(payload, scope, messageId)) throw new FlowHistoryError('No se pudo verificar la respuesta del formulario.', 'WHATSAPP_FLOW_REPLY_UNVERIFIED', 503);
     return payload;
   }, { isolationLevel: 'RepeatableRead', maxWait: 5000, timeout: 10000 });

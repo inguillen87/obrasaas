@@ -451,3 +451,14 @@ test('a denied or expired form does not acquire a domain link from sender metada
   const result = await processIncomingObraMessage(event,{projectId,organizationId:'organization-meta-flow',phoneNumberId},engineOptions(emptyState(),null,{expiredFlowSession:incidentSession(),expiredFlowCanReissue:false}));
   assert.equal(result.newMessages[0].metadata.flowAttendanceReceipt,undefined);
 });
+
+
+test('incident engine stores only the exact server-created record receipt and ignores payload selectors', async()=>{
+ const state=emptyState(),session=incidentSession();
+ const result=await processIncomingObraMessage(incidentEvent(),{projectId,organizationId:'organization-meta-flow',phoneNumberId},engineOptions(state,session));
+ const receipt=result.newMessages[0].metadata.flowIncidentReceipt;
+ assert.deepEqual(receipt,{version:1,incidentId:state.incidents[0].id,projectId,workerId:worker.id,sessionId:session.id});
+ assert.equal(JSON.stringify(receipt).includes('description'),false);assert.equal(JSON.stringify(receipt).includes('wamid.'),false);
+ const again=await processIncomingObraMessage(incidentEvent(),{projectId,organizationId:'organization-meta-flow',phoneNumberId},engineOptions(state,session));
+ assert.equal(state.incidents.length,1);assert.deepEqual(again.newMessages[0].metadata.flowIncidentReceipt,receipt);
+});

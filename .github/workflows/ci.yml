@@ -252,6 +252,7 @@ jobs:
           node scripts/verify-proactive-flow-history-ui.mjs
           node scripts/verify-proactive-flow-reply-ui.mjs
           node scripts/verify-flow-attendance-ui.mjs
+          node scripts/verify-flow-incident-ui.mjs
           node scripts/verify-whatsapp-report-ui.mjs
 
       - name: Preserve Playwright diagnostics

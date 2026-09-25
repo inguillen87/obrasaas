@@ -1,3 +1,5 @@
+import { readProactiveFlowIncident } from '@/lib/whatsapp/flow-incident';
+import { normalizeFlowIncidentQuery, flowIncidentMatches } from '@/lib/whatsapp/flow-incident-policy';
 import { readProactiveFlowAttendance } from '@/lib/whatsapp/flow-attendance';
 import { normalizeFlowAttendanceQuery, flowAttendanceMatches } from '@/lib/whatsapp/flow-attendance-policy';
 import { readProactiveFlowReply } from '@/lib/whatsapp/proactive-flow-reply';
@@ -167,6 +169,7 @@ export function createWhatsAppProactiveFlowHandlers({
   readHistory = listProactiveFlowHistory,
   readReply = readProactiveFlowReply,
   readAttendance = readProactiveFlowAttendance,
+  readIncident = readProactiveFlowIncident,
   resolveUncertainty = resolveProactiveWhatsAppFlowUncertainty,
   sendFlow = sendProactiveWhatsAppFlowTemplate,
   parseBody = (request) => readJsonRequest(request, { maxBytes: MAX_BODY_BYTES }),
@@ -179,11 +182,18 @@ export function createWhatsAppProactiveFlowHandlers({
       authorize(access, 'org:conversations:read');
       assertRequestScope(request, access);
       if (new URL(request.url).searchParams.get('mode') === 'attendance') authorize(access, 'org:attendance:read', { subscriptionMode: 'read' });
+      if (new URL(request.url).searchParams.get('mode') === 'incident') authorize(access, 'org:projects:read', { subscriptionMode: 'read' });
       const projectId = projectIdFromRequest(request);
       const conversationId = await conversationIdFromContext(context);
       const prisma = prismaFactory();
       await assertActiveProject(prisma, access, projectId);
       const scope = responseScope(access, conversationId);
+      if (new URL(request.url).searchParams.get('mode') === 'incident') {
+        const { messageId } = normalizeFlowIncidentQuery(new URL(request.url).searchParams);
+        const result = await readIncident({ prisma, access, conversationId, messageId, clock });
+        assertResponse(flowIncidentMatches(result, scope, messageId));
+        return json(result);
+      }
       if (new URL(request.url).searchParams.get('mode') === 'attendance') {
         const { messageId } = normalizeFlowAttendanceQuery(new URL(request.url).searchParams);
         const result = await readAttendance({ prisma, access, conversationId, messageId, clock });
@@ -193,7 +203,9 @@ export function createWhatsAppProactiveFlowHandlers({
       if (new URL(request.url).searchParams.get('mode') === 'reply') {
         const { messageId } = normalizeFlowReplyQuery(new URL(request.url).searchParams);
         const canReadAttendance = hasTenantPermission(access, 'org:attendance:read');
-        const result = await readReply({ prisma, access, conversationId, messageId, clock, canReadAttendance });
+        const canReadIncident = hasTenantPermission(access, 'org:projects:read');
+        const result = await readReply({ prisma, access, conversationId, messageId, clock, canReadAttendance, canReadIncident });
+        assertResponse(result?.incidentAvailable !== true || canReadIncident);
         assertResponse(result?.attendanceAvailable !== true || canReadAttendance);
         assertResponse(flowReplyMatches(result, scope, messageId));
         return json(result);
@@ -338,9 +350,11 @@ function assertRequestScope(request, access) {
   const reply = request.method === 'GET' && params.get('mode') === 'reply';
   const attendance = request.method === 'GET' && params.get('mode') === 'attendance';
   if (attendance) normalizeFlowAttendanceQuery(params);
+  const incident = request.method === 'GET' && params.get('mode') === 'incident';
+  if (incident) normalizeFlowIncidentQuery(params);
   if (reply) normalizeFlowReplyQuery(params);
   for (const key of params.keys()) {
-    if (!(receipt ? ['projectId', 'mode', 'blueprintKey'] : history ? ['projectId', 'mode', 'cursor'] : (reply || attendance) ? ['projectId', 'mode', 'messageId'] : ['projectId']).includes(key) || params.getAll(key).length !== 1) {
+    if (!(receipt ? ['projectId', 'mode', 'blueprintKey'] : history ? ['projectId', 'mode', 'cursor'] : (reply || attendance || incident) ? ['projectId', 'mode', 'messageId'] : ['projectId']).includes(key) || params.getAll(key).length !== 1) {
       throw new WhatsAppProactiveFlowError('La consulta contiene campos no admitidos.', { code: 'WHATSAPP_FLOW_QUERY_INVALID', status: 400 });
     }
   }
