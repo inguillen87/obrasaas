@@ -81,6 +81,8 @@ export async function verifyAuthenticatedFlowHistory({ fixture, sessions, baseUR
       const beforeSearch = requests.length;
       await search.fill('s11e2e_history_message_019'); await expect(history.getByRole('listitem')).toHaveCount(1);
       await search.press('Enter'); expect(requests.length).toBe(beforeSearch);
+      await expect(order).toBeVisible(); await expect(search).toHaveValue('s11e2e_history_message_019');
+      expect(await admin.locator('form form').count()).toBe(0);
       await order.selectOption('attention'); await search.fill('');
       await expect(history.getByRole('listitem').first()).toContainText('s11e2e_history_message_001');
       await search.fill(FLOW_HISTORY_ACCEPTANCE.privateCanary); await expect(history.getByRole('listitem')).toHaveCount(0);

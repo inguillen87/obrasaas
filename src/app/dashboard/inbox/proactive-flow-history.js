@@ -60,12 +60,12 @@ function ScopedHistory({ organizationId, projectId, conversationId, online = tru
       <p>Buscá y priorizá los formularios de esta conversación. Consultar no envía mensajes ni levanta bloqueos.</p>
       <div className={styles.actions}><button type="button" disabled={busy || !online || phase === 'blocked'} onClick={() => load({ cursor: null, trail: [] })}>Consultar últimos registros</button>
         {request.cursor && <button type="button" disabled={busy || !online || phase === 'blocked'} onClick={() => load({ ...request })}>Actualizar esta página</button>}</div>
-      <form className={styles.tools} role="search" aria-label="Buscar en el seguimiento consultado" onSubmit={event => event.preventDefault()}>
+      <div className={styles.tools} role="search" aria-label="Buscar en el seguimiento consultado">
         <div className={styles.searchField}><label htmlFor={searchId}>Buscar en esta página</label>
           <div className={styles.searchInput}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg>
             <input ref={searchRef} id={searchId} type="search" value={query} maxLength={FLOW_HISTORY_SEARCH_LIMIT} autoComplete="off" spellCheck={false}
               aria-describedby={searchHintId} placeholder="Texto, tipo de formulario o registro" disabled={busy || !online || phase === 'blocked'}
-              onChange={event => { setQuery(event.target.value); resetListScroll(); }} onKeyDown={event => { if (event.key === 'Escape' && query) { event.preventDefault(); clearSearch(); } }}/>
+              onChange={event => { setQuery(event.target.value); resetListScroll(); }} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); event.stopPropagation(); } else if (event.key === 'Escape' && query) { event.preventDefault(); event.stopPropagation(); clearSearch(); } }}/>
             {query && <button type="button" className={styles.clearSearch} onClick={clearSearch} disabled={busy || !online || phase === 'blocked'} aria-label="Limpiar búsqueda">×</button>}
           </div>
         </div>
@@ -75,7 +75,7 @@ function ScopedHistory({ organizationId, projectId, conversationId, online = tru
           </select>
         </div>
         <p id={searchHintId} className={styles.searchHint}>Busca sólo en esta página, no en otros chats.</p>
-      </form>
+      </div>
       {!online && <p role="status" className={styles.notice}>Sin conexión. Los estados no se presentan como actualizados. Reconectar no envía mensajes.</p>}
       {busy && <p role="status">Consultando registros de esta conversación…</p>}
       {error && <p role="alert" className={styles.notice}>{error}</p>}
