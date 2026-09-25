@@ -133,3 +133,6 @@ Leer `flow-read-connectivity.md`. History y Reply descartan lecturas anteriores 
 
 ## Continuacion S11.A31: persistencia atomica de incidencias
 Leer `atomic-flow-processing.md`. Ejecutar `verify-webhook-flow-atomic-postgres.mjs` solo con la base PostgreSQL desechable explicitamente autorizada. Prueba cola durable, lease, motor, consumo y recibos juntos, incluyendo rollback final y reintentos. No confundir efectos persistidos con despacho/entrega fisica ni con autenticacion del participante canonico. La aceptacion de A29/A30 y el release nuevo se acreditan por SHA en PR #1.
+
+## Continuacion S11.A32: ingreso HTTP firmado y durable
+Leer `signed-webhook-ingress.md`. El handler exige firma exacta, rechaza normalizacion malformada y devuelve 503 sin ACK ni despacho cuando falla la persistencia. La septima suite SQL usa HTTP loopback y el handler/normalizador/lote reales, con firma sintetica y captura de after/dispatcher. Cubre duplicados, rollback y nfm_reply hasta la incidencia atomica; no es trafico fisico de Meta. No quitar los controles de A31 ni usar bases de aplicacion para este verificador.

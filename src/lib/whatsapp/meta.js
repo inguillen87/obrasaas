@@ -106,9 +106,9 @@ export function isAllowedMetaMediaUrl(value) {
 }
 
 export function verifyMetaSignature(rawBody, signatureHeader, appSecret) {
-  if (!rawBody || !signatureHeader || !appSecret) return false;
-  const [algorithm, providedSignature] = signatureHeader.split("=");
-  if (algorithm !== "sha256" || !providedSignature) return false;
+  if (!rawBody || typeof signatureHeader !== "string" || !appSecret
+    || !/^sha256=[a-f0-9]{64}$/.test(signatureHeader)) return false;
+  const providedSignature = signatureHeader.slice(7);
 
   const expectedSignature = crypto
     .createHmac("sha256", appSecret)
