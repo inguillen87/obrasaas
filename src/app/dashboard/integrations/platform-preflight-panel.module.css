@@ -1,0 +1,42 @@
+.panel { color: var(--preflight-text); background: var(--preflight-bg); border: 1px solid var(--preflight-border); border-radius: 18px; padding: clamp(16px,3vw,26px); margin: 0 0 24px; min-width: 0; }
+.header { display: flex; align-items: flex-start; justify-content: space-between; gap: 22px; }
+.header span { color: var(--preflight-accent); font-size: .65rem; font-weight: 750; letter-spacing: .14em; }
+.header h2 { font-size: clamp(1.2rem,3vw,1.7rem); margin: 10px 0; letter-spacing: -.025em; }
+.header p { color: var(--preflight-muted); font-size: .86rem; line-height: 1.65; margin: 0; }
+.header button { min-height: 48px; padding: 12px 16px; border: 0; border-radius: 10px; font: inherit; font-size: .87rem; font-weight: 700; background: var(--preflight-accent); color: #060913; cursor: pointer; flex-shrink: 0; }
+.header button:disabled { opacity: .55; cursor: not-allowed; }
+.panel :focus-visible { outline: 3px solid var(--preflight-accent); outline-offset: 4px; }
+.checks { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; margin: 20px 0; }
+.checks article { padding: 15px; border: 1px solid var(--preflight-border); border-radius: 12px; min-width: 0; }
+.checks strong { display: block; font-size: .85rem; margin-bottom: 8px; }
+.checks span { font-size: .75rem; color: var(--preflight-accent); line-height: 1.6; }
+.checks p, .scope, .disclaimer { color: var(--preflight-muted); line-height: 1.65; font-size: .79rem; margin: 10px 0 0; }
+.checks article[data-status='MISSING'], .checks article[data-status='MISSING_OR_INVALID'] { border-style: dashed; border-color: var(--preflight-accent); }
+.results { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; margin: 20px 0; }
+.results article { border: 1px solid var(--preflight-border); border-radius: 12px; padding: 17px; }
+.results h3 { margin: 0 0 10px; font-size: 1rem; }
+.results strong { color: var(--preflight-accent); font-size: .83rem; }
+.results p { line-height: 1.65; font-size: .86rem; }
+.results article[data-status='BLOCKED'] { border-color: var(--preflight-accent); }
+.results .disclaimer { grid-column: 1 / -1; }
+.error { padding: 14px; border-left: 3px solid var(--preflight-accent); font-size: .87rem; line-height: 1.65; overflow-wrap: anywhere; }
+.steps { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); list-style: none; padding: 18px 0 0; margin: 20px 0 0; gap: 12px; border-top: 1px solid var(--preflight-border); font-size: .75rem; line-height: 1.6; color: var(--preflight-muted); }
+@media (max-width:700px) { .header { display: grid; } .checks { grid-template-columns: repeat(2,minmax(0,1fr)); } .results { grid-template-columns: minmax(0,1fr); } .steps { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media (prefers-reduced-motion:reduce) { .panel * { animation: none !important; transition: none !important; } }
+
+.pilotForm { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 18px; margin: 22px 0; }
+.pilotForm label { display: grid; gap: 9px; font-size: .9rem; line-height: 1.6; min-width: 0; }
+.pilotForm input:not([type='checkbox']) { box-sizing: border-box; width: 100%; min-height: 46px; padding: 12px; border: 1px solid var(--preflight-border); border-radius: 9px; background: var(--preflight-bg); color: var(--preflight-text); font: inherit; font-size: 16px; }
+.pilotForm .pilotConsent { grid-column: 1 / -1; display: flex; align-items: flex-start; gap: 12px; color: var(--preflight-muted); }
+.pilotConsent input { margin-top: 6px; width: 20px; height: 20px; flex-shrink: 0; }
+.pilotForm button { min-height: 46px; border: 1px solid var(--preflight-accent); background: var(--preflight-accent); color: #060913; border-radius: 9px; padding: 12px 18px; font: inherit; font-weight: 700; cursor: pointer; }
+.pilotForm button:disabled { opacity: .55; cursor: not-allowed; }
+.pilotForm :focus-visible { outline: 3px solid var(--preflight-accent); outline-offset: 3px; }
+@media(max-width:640px) { .pilotForm { grid-template-columns: minmax(0,1fr); } }
+
+.pilotRecovery { padding: 18px; margin: 20px 0; border: 1px solid var(--preflight-accent); border-radius: 14px; background: var(--preflight-bg); color: var(--preflight-text); }
+.pilotRecovery strong { display: block; font-size: 1rem; line-height: 1.5; }
+.pilotRecovery p { margin: 10px 0; font-size: .86rem; line-height: 1.65; overflow-wrap: anywhere; }
+.pilotRecovery a { display: inline-flex; align-items: center; min-height: 44px; padding: 10px 14px; border-radius: 9px; border: 1px solid var(--preflight-accent); color: var(--preflight-text); text-decoration: none; font-size: .85rem; font-weight: 650; }
+.pilotRecovery a:focus-visible { outline: 3px solid var(--preflight-accent); outline-offset: 3px; }
+.pilotRecovery p:last-child { color: var(--preflight-muted); font-size: .78rem; }

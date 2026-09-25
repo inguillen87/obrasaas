@@ -1,12 +1,16 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { OrganizationSwitcher, UserButton, useUser } from '@clerk/nextjs';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 import { ObraSaasLogo } from '@/app/brand/brand-logo';
 import { dashboardDestinationIsActive } from '@/lib/dashboard-navigation';
+import WorkspaceNavigator, { NavigationLauncher } from './workspace-navigator';
+import { groupWorkspaceByCycle } from '@/lib/workspace-cycle-groups';
+import { buildNavigationCatalog } from '@/lib/workspace-navigation-search';
+import { requestWorkspaceNavigation } from '@/lib/workspace-leave-policy';
 
 const PROJECT_STATUS_LABELS = Object.freeze({
   ACTIVE: 'Activa',
@@ -16,6 +20,7 @@ const PROJECT_STATUS_LABELS = Object.freeze({
 });
 
 const WORKSPACE_DESTINATIONS = Object.freeze([
+  { key: 'field-mobile', href: '/dashboard/campo', exact: true, label: 'Campo móvil', icon: 'fa-solid fa-mobile-screen-button', permission: 'canReadExecution' },
   { key: 'summary', href: '/dashboard', tab: 'sec-dashboard', label: 'Hoy', icon: 'fa-solid fa-house-chimney' },
   { key: 'whatsapp', href: '/dashboard?tab=sec-whatsapp', tab: 'sec-whatsapp', label: 'Operación de campo', icon: 'fa-brands fa-whatsapp' },
   { key: 'inbox', href: '/dashboard/inbox', exact: true, label: 'Bandeja WhatsApp', icon: 'fa-solid fa-comments', permission: 'canReadInbox' },
@@ -23,6 +28,7 @@ const WORKSPACE_DESTINATIONS = Object.freeze([
   { key: 'approvals', href: '/dashboard/approvals', exact: true, label: 'Aprobaciones', icon: 'fa-solid fa-list-check', permission: 'canReadApprovals' },
   { key: 'attendance', href: '/dashboard/attendance', exact: true, label: 'Asistencia y turnos', icon: 'fa-solid fa-user-clock', permission: 'canReadAttendance' },
   { key: 'execution', href: '/dashboard/execution', exact: true, label: 'Cuadrillas y blockers', icon: 'fa-solid fa-people-group', permission: 'canReadExecution' },
+  { key: 'inspections', href: '/dashboard/inspections', exact: true, label: 'Inspecciones QA/QC', icon: 'fa-solid fa-clipboard-check', permission: 'canReadExecution' },
   { key: 'progress', href: '/dashboard/progress', exact: true, label: 'Bitácora de avance', icon: 'fa-solid fa-camera-retro', permission: 'canReadExecution' },
   { key: 'measurements', href: '/dashboard/measurements', exact: true, label: 'Mediciones de avance', icon: 'fa-solid fa-ruler-combined', permission: 'canReadMeasurements' },
   { key: 'contracts', href: '/dashboard/contracts', exact: true, label: 'Contrato y SOV', icon: 'fa-solid fa-file-signature', permission: 'canReadContracts' },
@@ -67,14 +73,20 @@ function visibleDestinations(destinations, permissions) {
 function NavigationGroup({
   destinations,
   label,
+  description,
   location,
   onNavigate,
   pendingApprovalCount,
   unreadNotificationCount,
 }) {
+  const navigate = event => {
+    if (!requestWorkspaceNavigation('route')) { event.preventDefault(); return; }
+    onNavigate?.();
+  };
   return (
-    <section className="dashboard-nav-group">
+    <section className="dashboard-nav-group" aria-label={label}>
       <p className="dashboard-nav-label">{label}</p>
+      {description && <p className="dashboard-nav-description">{description}</p>}
       <ul className="nav-menu">
         {destinations.map((destination) => {
           const active = dashboardDestinationIsActive(destination, location);
@@ -86,7 +98,7 @@ function NavigationGroup({
                   aria-current={active ? 'page' : undefined}
                   className="nav-button-link"
                   href={destination.href}
-                  onClick={onNavigate}
+                  onClick={navigate}
                 >
                   <i className={destination.icon} aria-hidden="true" />
                   <span>{destination.label}</span>
@@ -96,13 +108,14 @@ function NavigationGroup({
                   aria-current={active ? 'page' : undefined}
                   className="nav-button-link"
                   href={destination.href}
-                  onClick={onNavigate}
+                  prefetch={false}
+                  onNavigate={navigate}
                 >
                   <i className={destination.icon} aria-hidden="true" />
                   <span>{destination.label}</span>
                   {count > 0 && (
                     <span
-                      aria-label={`${count} aprobaciones pendientes`}
+                      aria-label={`${count} ${destination.key === 'notifications' ? 'notificaciones sin leer' : 'aprobaciones pendientes'}`}
                       className="nav-count-badge"
                     >
                       {count > 99 ? '99+' : count}
@@ -245,6 +258,9 @@ export default function DashboardShell({ children, model }) {
 
   async function switchProject(event) {
     const projectId = event.target.value;
+    if (projectId !== model.project.id && !requestWorkspaceNavigation('project')) {
+      event.target.value = model.project.id; setProjectSwitchError('Se conservó la obra actual. Terminá o guardá el trabajo pendiente.'); return;
+    }
     setSelectedProjectId(projectId);
     setProjectSwitchError('');
     if (projectId === model.project.id) return;
@@ -268,8 +284,14 @@ export default function DashboardShell({ children, model }) {
     }
   }
 
+  const closeSidebarForSearch = useCallback(() => setMobileOpen(false), []);
+  const cycleGroups = groupWorkspaceByCycle([...workspaceDestinations, ...controlDestinations, ...exploreDestinations]);
+  const navigationCatalog = buildNavigationCatalog(cycleGroups, model.permissions);
+  const activeCycle = cycleGroups.find(group => group.destinations.some(destination => dashboardDestinationIsActive(destination, location)));
+  const activeDestination = activeCycle?.destinations.find(destination => dashboardDestinationIsActive(destination, location));
   return (
     <div className="app-container dashboard-shell">
+      <WorkspaceNavigator catalog={navigationCatalog} projectName={model.project.name} roleLabel={model.identity.tenantRoleLabel} onOpen={closeSidebarForSearch} />
       <a className="dashboard-skip-link" href="#dashboard-content">Saltar al contenido</a>
       <aside
         aria-label="Navegación principal de ObraSaaS"
@@ -300,6 +322,7 @@ export default function DashboardShell({ children, model }) {
           </button>
         </div>
 
+        <NavigationLauncher />
         {model.identity.isSuperadmin ? (
           <div className="internal-workspace" aria-label="Workspace interno de plataforma">
             <span className="internal-workspace__eyebrow">Control plane</span>
@@ -372,30 +395,9 @@ export default function DashboardShell({ children, model }) {
         </section>
 
         <nav className="dashboard-shell-nav">
-          <NavigationGroup
-            destinations={workspaceDestinations}
-            label="Obra"
-            location={location}
-            onNavigate={() => setMobileOpen(false)}
-            pendingApprovalCount={pendingApprovalCount}
-            unreadNotificationCount={unreadNotificationCount}
-          />
-          <NavigationGroup
-            destinations={controlDestinations}
-            label="Gestión"
-            location={location}
-            onNavigate={() => setMobileOpen(false)}
-            pendingApprovalCount={pendingApprovalCount}
-            unreadNotificationCount={unreadNotificationCount}
-          />
-          <NavigationGroup
-            destinations={exploreDestinations}
-            label="Explorar"
-            location={location}
-            onNavigate={() => setMobileOpen(false)}
-            pendingApprovalCount={0}
-            unreadNotificationCount={0}
-          />
+          {cycleGroups.map(group => <NavigationGroup key={group.key} destinations={group.destinations}
+            label={group.label} description={group.description} location={location}
+            onNavigate={() => setMobileOpen(false)} pendingApprovalCount={pendingApprovalCount} unreadNotificationCount={unreadNotificationCount} />)}
           {model.identity.isSuperadmin && (
             <NavigationGroup
               destinations={[{
@@ -470,6 +472,7 @@ export default function DashboardShell({ children, model }) {
           <small>{model.organization.name}</small>
           <strong>{model.project.name}</strong>
         </div>
+        <NavigationLauncher compact />
         <UserButton afterSignOutUrl="/" />
       </header>
 
@@ -481,6 +484,7 @@ export default function DashboardShell({ children, model }) {
         role="main"
         tabIndex="-1"
       >
+        {activeDestination && <div className="workspace-cycle-location" aria-label="Ubicación en el espacio de trabajo"><span>{activeCycle.label}</span><i aria-hidden="true">/</i><strong>{activeDestination.label}</strong></div>}
         {children}
       </div>
     </div>

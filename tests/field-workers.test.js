@@ -822,3 +822,43 @@ test('id resolver and phone conflict lookup retain project and tenant boundaries
   );
   assert.equal(conflict.id, 'worker-a');
 });
+
+function samePhoneAcrossCompanies() {
+  const keyConfiguration=workerFinancialKeyConfiguration();
+  const channels=[canonicalChannel({keyConfiguration,id:'channel-a',organizationId:'org-a',personId:'person-a'}),
+    canonicalChannel({keyConfiguration,id:'channel-b',organizationId:'org-b',personId:'person-b'})];
+  const workers=[worker({id:'worker-a1',projectId:'project-a',personId:'person-a',metadata:{whatsappRole:'WORKER'}}),
+    worker({id:'worker-a2',projectId:'project-a2',personId:'person-a',metadata:{whatsappRole:'SAFETY'}}),
+    worker({id:'worker-b',organizationId:'org-b',projectId:'project-b',personId:'person-b',project:{organizationId:'org-b'},metadata:{whatsappRole:'FOREMAN'}})];
+  return {keyConfiguration,channels,workers};
+}
+test('same WhatsApp address resolves to separate employer identities and worksite roles',async()=>{
+  const f=samePhoneAcrossCompanies(),prisma=canonicalPrisma(f);
+  const results=await Promise.all([{organizationId:'org-a',projectId:'project-a'},{organizationId:'org-a',projectId:'project-a2'},{organizationId:'org-b',projectId:'project-b'}]
+    .map(s=>resolveActiveFieldWorkerByPhone(prisma,s,'+5491112345678',{keyConfiguration:f.keyConfiguration,requireCanonicalModel:true})));
+  assert.deepEqual(results.map(r=>r.status),['RESOLVED','RESOLVED','RESOLVED']);
+  assert.deepEqual(results.map(r=>r.worker.id),['worker-a1','worker-a2','worker-b']);
+  assert.deepEqual(results.map(r=>fieldWorkerWhatsAppRole(r.worker)),['WORKER','SAFETY','FOREMAN']);
+  assert.notEqual(f.channels[0].addressFingerprint,f.channels[1].addressFingerprint);
+  assert.notEqual(f.channels[0].personId,f.channels[1].personId);
+});
+test('revoking the employer A WhatsApp identity does not revoke employer B membership',async()=>{
+  const f=samePhoneAcrossCompanies();f.channels[0].status='REVOKED';f.channels[0].revokedAt=now;
+  const prisma=canonicalPrisma(f),deps={keyConfiguration:f.keyConfiguration,requireCanonicalModel:true};
+  const a=await resolveActiveFieldWorkerByPhone(prisma,scope,'+5491112345678',deps);
+  const b=await resolveActiveFieldWorkerByPhone(prisma,{organizationId:'org-b',projectId:'project-b'},'+5491112345678',deps);
+  assert.equal(a.status,'CANONICAL_BLOCKED');assert.equal(a.worker,null);assert.equal(b.status,'RESOLVED');assert.equal(b.worker.id,'worker-b');
+});
+test('leaving one worksite does not remove another approved worksite of the same company',async()=>{
+  const f=samePhoneAcrossCompanies();f.workers[0].active=false;
+  const prisma=canonicalPrisma(f),deps={keyConfiguration:f.keyConfiguration,requireCanonicalModel:true};
+  const left=await resolveActiveFieldWorkerByPhone(prisma,scope,'+5491112345678',deps);
+  const kept=await resolveActiveFieldWorkerByPhone(prisma,{...scope,projectId:'project-a2'},'+5491112345678',deps);
+  assert.equal(left.status,'UNKNOWN');assert.equal(kept.status,'RESOLVED');assert.equal(kept.worker.id,'worker-a2');
+});
+test('phone known in a different company or site is not an automatic enrollment',async()=>{
+  const f=samePhoneAcrossCompanies(),prisma=canonicalPrisma(f),deps={keyConfiguration:f.keyConfiguration,requireCanonicalModel:true};
+  const wrongSite=await resolveActiveFieldWorkerByPhone(prisma,{organizationId:'org-a',projectId:'project-b'},'+5491112345678',deps);
+  const newEmployer=await resolveActiveFieldWorkerByPhone(prisma,{organizationId:'org-c',projectId:'project-c'},'+5491112345678',deps);
+  assert.equal(wrongSite.worker,null);assert.equal(newEmployer.worker,null);assert.equal(wrongSite.status,'UNKNOWN');assert.equal(newEmployer.status,'UNKNOWN');
+});

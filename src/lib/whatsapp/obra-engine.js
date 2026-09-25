@@ -1,3 +1,8 @@
+import { buildFlowIncidentReceipt } from './flow-incident-receipt.js';
+import { operationalIncidentIdForEvent } from './obra-policy.js';
+import { buildFlowAttendanceReceipt } from './flow-attendance-policy.js';
+import { normalizeFieldMenuDescriptor, resolveFieldMenuSelection } from '@/lib/whatsapp/field-interactive-menu';
+import { buildFieldWorkerMenu } from '@/lib/whatsapp/field-worker-menu';
 import { generateWebviewToken } from "@/lib/auth";
 import {
   AttendanceDomainError,
@@ -395,6 +400,8 @@ function audioProposalReply(proposal, {
 }
 
 async function processFlowReply({
+  onAttendanceEntry,
+  onIncident,
   state,
   worker,
   event,
@@ -461,6 +468,7 @@ async function processFlowReply({
         ...(response.task_ref ? { taskRef: response.task_ref } : {}),
       },
     });
+    if (isMetaFlow) onAttendanceEntry(pending);
     attendanceLink = links.attendance("CHECK_IN", { pendingEntryId: pending.id });
     replaceWorkerAttendance(state.attendance, worker, {
       checkin: new Intl.DateTimeFormat("es-AR", {
@@ -521,6 +529,11 @@ async function processFlowReply({
       timeZone,
     },
   );
+  if (isMetaFlow && isIncident) {
+    const incidentId = operationalIncidentIdForEvent(event.externalId);
+    const rows = state.incidents.filter(row => row?.id === incidentId);
+    onIncident(rows.length === 1 ? rows[0] : null);
+  }
   if (
     incidentAdded
     && (
@@ -562,6 +575,14 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
     || scope?.organization?.id
     || scope?.organizationId
     || null;
+  const menuScope = { organizationId, projectId:projectSettings.id, workerId:worker.id, phoneNumberId:event.phoneNumberId };
+  const menuSelection = resolveFieldMenuSelection(event, { scope:menuScope, role:worker.whatsappRole });
+  if (menuSelection) event = { ...event, text:menuSelection.allowed ? menuSelection.command || 'menú' : '' };
+  const mainMenuRequested = event.kind === 'text' && ['menu','ayuda','hola','buen dia','buenas tardes','buenas noches'].includes(normalize(event.text).trim());
+  const menuDescriptor = section => {
+    if (event.provider !== 'meta' || !organizationId || !event.phoneNumberId) return null;
+    return normalizeFieldMenuDescriptor({ version:1, section, ...menuScope });
+  };
   const links = secureLinks(
     worker.id,
     projectSettings.id,
@@ -595,10 +616,13 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
     : null;
   let reply;
   let flowPrompt = null;
+  let fieldMenu = null;
   let stateChanged = false;
   let audioProposal = null;
   let operationalProposal = null;
   let attendanceResult = null;
+  let flowAttendanceReceipt = null;
+  let flowIncidentReceipt = null;
   let authorized = true;
   const isMetaFlowReply = (
     event.provider === "meta"
@@ -621,7 +645,7 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
     error.code = "WHATSAPP_FLOW_SESSION_INVALID";
     throw error;
   }
-  const intent = classifyObraIntent(event, {
+  const intent = menuSelection ? menuSelection.allowed ? menuSelection.intent : FIELD_WORKER_INTENTS.HELP : mainMenuRequested ? FIELD_WORKER_INTENTS.HELP : classifyObraIntent(event, {
     trustedFlowType: trustedFlowContext?.flowType || null,
   });
   const sensitiveMedicalContent = (
@@ -657,7 +681,10 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
     && options.simulationScenario === FIRST_VALUE_APPROVAL_SIMULATOR_SCENARIO
   );
 
-  if (!canFieldWorkerHandleIntent(worker.whatsappRole, intent)) {
+  if (menuSelection && !menuSelection.allowed) {
+    authorized = false;
+    reply = 'Esta opción no corresponde a tu acceso actual en esta obra. Escribí «menú» para consultar tus opciones vigentes. No se modificó la obra.';
+  } else if (!canFieldWorkerHandleIntent(worker.whatsappRole, intent)) {
     authorized = false;
     reply = intent === FIELD_WORKER_INTENTS.TASK_PROGRESS
       ? "Tu número está autorizado para reportar, pero no para cambiar avances. Pedile al capataz o jefe de obra que confirme la actualización."
@@ -672,6 +699,9 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
     reply = expiredFlowSession.blueprintKey === "shift-check-in"
       ? `El control de ingreso anterior venció y no registré sus datos, porque el fichaje debe representar el momento actual. ${recoveryCopy}`
       : `El formulario anterior venció y no registré sus datos. ${recoveryCopy}`;
+  } else if (menuSelection?.guidance) {
+    reply = menuSelection.guidance;
+    if (menuSelection.key === 'JOURNEY') fieldMenu = menuDescriptor('JOURNEY');
   } else if (operationalDecision) {
     requireOperationalAtomicContext(options);
     const outcome = await resolveOperationalProposalDecision({
@@ -691,6 +721,8 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
     operationalProposal = outcome.proposal;
   } else if (event.interactive?.type === "flow") {
     reply = await processFlowReply({
+      onAttendanceEntry: entry => { flowAttendanceReceipt = buildFlowAttendanceReceipt(entry, trustedFlowSession); },
+      onIncident: incident => { flowIncidentReceipt = buildFlowIncidentReceipt(incident, event.externalId, trustedFlowSession); },
       state,
       worker,
       event,
@@ -1071,8 +1103,9 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
     );
     if (stateChanged) state.alertsCount += 1;
     reply = "Demora registrada. Quedó pendiente de impacto y reprogramación por el responsable de planificación.";
-  } else if (lowerBody.includes("ayuda") || lowerBody.includes("menu") || lowerBody.includes("menú")) {
-    reply = "Puedo ayudarte a: registrar ingreso (“fichar”), iniciar pausa (“almuerzo”), volver (“volví”), registrar salida (“chau”), configurar cómo cobrar, informar avances, reportar incidencias, adjuntar evidencia o cargar un certificado médico.";
+  } else if (mainMenuRequested || lowerBody.includes("ayuda") || lowerBody.includes("menu") || lowerBody.includes("menú")) {
+    reply = buildFieldWorkerMenu({ role: worker.whatsappRole, projectName: projectSettings.name });
+    fieldMenu = menuDescriptor('MAIN');
   } else {
     reply = "Guardé el reporte en la bitácora. Para convertirlo en una acción, indicá “fichar”, “almuerzo”, “volví”, “chau”, “datos de cobro”, “avance 60% tarea 3”, “incidencia urgente” o “licencia”.";
   }
@@ -1098,6 +1131,7 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
       workerRole: worker.whatsappRole,
       intent,
       authorized,
+      ...(menuSelection ? { fieldMenuAction:menuSelection.allowed ? menuSelection.key : 'REJECTED' } : {}),
       ...(trustedFlowContext
         ? {
             whatsappFlowSessionId: trustedFlowContext.id,
@@ -1105,6 +1139,8 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
             ...(expiredFlowSession ? { whatsappFlowSessionExpired: true } : {}),
           }
         : {}),
+      ...(flowAttendanceReceipt ? { flowAttendanceReceipt } : {}),
+      ...(flowIncidentReceipt ? { flowIncidentReceipt } : {}),
       ...(sourceContentRestricted ? { sourceContentRestricted: true } : {}),
       ...(sensitiveMedicalContent
         ? { sensitivity: "medical" }
@@ -1131,7 +1167,8 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
   }, {
     externalId: event.externalId ? `obrasaas-reply:${event.externalId}` : null,
     sender: "bot",
-    kind: "text",
+    kind: fieldMenu ? "interactive" : "text",
+    ...(fieldMenu ? { metadata:{ fieldMenu:{version:1,section:fieldMenu.section} } } : {}),
     text: reply,
     time,
     sentAt: new Date().toISOString(),
@@ -1158,6 +1195,7 @@ export async function processIncomingObraMessage(event, scope, options = {}) {
     stateChanged,
     newMessages,
     attendanceResult,
+    ...(fieldMenu ? { fieldMenu } : {}),
     operationalProposal: publicOperationalProposal(operationalProposal),
   };
 }

@@ -444,7 +444,7 @@ test("pilot error presentation is allowlisted and the client has no persistence 
   );
   assert.match(
     pageSource,
-    /key=\{channelHealth\.connection\?\.updatedAt\?\.toISOString\(\) \|\| "unlinked"\}/,
+    /key=\{access.organization.id \+ ":" \+ access.project.id \+ ":" \+ \(channelHealth\.connection\?\.updatedAt\?\.toISOString\(\) \|\| "unlinked"\)\}/,
   );
   assert.match(pageSource, /currentProjectId=\{access\.project\.id\}/);
   assert.doesNotMatch(

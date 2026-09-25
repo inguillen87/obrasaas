@@ -1,0 +1,41 @@
+.panel { margin: 24px 0; padding: clamp(16px,3vw,28px); background: var(--profile-bg); color: var(--profile-text); border: 1px solid var(--profile-border); border-radius: 20px; min-width: 0; }
+.panel header { display: flex; justify-content: space-between; gap: 18px; align-items: flex-start; }
+.panel header span { color: var(--profile-accent); font-size: .67rem; letter-spacing: .12em; font-weight: 750; }
+.panel h2 { font-size: clamp(1.3rem,3vw,1.85rem); margin: 9px 0; line-height: 1.25; letter-spacing: -.025em; }
+.panel header p { margin: 0; font-size: .88rem; overflow-wrap: anywhere; }
+.panel header small { padding: 8px 10px; border: 1px solid var(--profile-border); border-radius: 8px; font-size: .72rem; color: var(--profile-muted); }
+.scope { color: var(--profile-muted); font-size: .84rem; line-height: 1.7; margin: 18px 0; }
+.panel fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.panel legend { font-size: .92rem; margin: 8px 0 15px; font-weight: 600; }
+.kinds { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; }
+.choice { display: grid; position: relative; min-width: 0; gap: 9px; padding: 18px; border: 1px solid var(--profile-border); border-radius: 12px; background: rgba(0,0,0,.12); cursor: pointer; }
+.choice input { position: absolute; right: 12px; top: 12px; width: 18px; height: 18px; accent-color: var(--profile-accent); }
+.choice i { font-size: 1.2rem; color: var(--profile-accent); }
+.choice strong { font-size: .85rem; padding-right: 10px; line-height: 1.45; }
+.choice span { color: var(--profile-muted); font-size: .77rem; line-height: 1.6; }
+.choice[data-selected='true'] { border-color: var(--profile-accent); background: rgba(245,158,11,.06); }
+.choice:focus-within { outline: 2px solid var(--profile-accent); outline-offset: 3px; }
+.marketTitle { margin: 22px 0 12px; font-size: .92rem; font-weight: 600; }
+.markets { display: flex; flex-wrap: wrap; gap: 10px; }
+.markets label { display: flex; align-items: center; min-height: 46px; gap: 10px; padding: 10px 14px; border: 1px solid var(--profile-border); border-radius: 9px; cursor: pointer; font-size: .84rem; }
+.markets label[data-selected='true'] { border-color: var(--profile-accent); }
+.markets input { accent-color: var(--profile-accent); }
+.panel fieldset:disabled label { cursor: default; }
+.panel footer { margin: 22px 0 8px; padding-top: 18px; border-top: 1px solid var(--profile-border); display: flex; justify-content: space-between; gap: 16px; align-items: center; flex-wrap: wrap; }
+.panel footer > span { font-size: .8rem; color: var(--profile-muted); }
+.panel button { min-height: 46px; padding: 12px 16px; background: var(--profile-accent); color: #060913; border: 0; border-radius: 9px; font: inherit; font-size: .85rem; font-weight: 700; cursor: pointer; }
+.panel button:disabled { opacity: .55; cursor: not-allowed; }
+.next { margin-top: 22px; padding: 18px; border: 1px solid var(--profile-border); border-radius: 12px; }
+.next h3 { font-size: 1rem; margin: 0 0 8px; line-height: 1.5; }
+.next p { font-size: .8rem; line-height: 1.6; color: var(--profile-muted); }
+.next nav { display: flex; gap: 10px; flex-wrap: wrap; }
+.next a { display: inline-flex; align-items: center; min-height: 44px; padding: 10px 13px; gap: 10px; color: var(--profile-text); font-size: .83rem; text-decoration: none; border: 1px solid var(--profile-border); border-radius: 9px; }
+.next a:hover { border-color: var(--profile-accent); }
+.participants { margin-top: 18px; padding: 16px; border-left: 3px solid var(--profile-accent); border-radius: 9px; background: rgba(245,158,11,.04); }
+.participants strong { font-size: .86rem; }
+.participants p { margin: 8px 0 0; font-size: .8rem; line-height: 1.7; color: var(--profile-muted); }
+.notice { border: 1px solid var(--profile-accent); border-radius: 9px; padding: 14px; font-size: .84rem; line-height: 1.6; }
+.panel :focus-visible { outline: 3px solid var(--profile-accent); outline-offset: 3px; }
+@media(max-width:900px) { .kinds { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media(max-width:480px) { .panel header { display: grid; } .kinds { grid-template-columns:minmax(0,1fr); } .choice { padding:15px; } .panel footer button { width:100%; } .next { padding:14px; } .next nav { display:grid; } }
+@media(prefers-reduced-motion:reduce) { .panel * { animation:none !important;transition:none !important; } }

@@ -1,3 +1,5 @@
+import { assertEvidenceRequestContext, evidenceContextErrorResponse } from '@/lib/evidence-context';
+import { projectParticipantOnboarding } from '@/lib/whatsapp/participant-onboarding-progress';
 import {
   AccessError,
   accessErrorResponse,
@@ -27,13 +29,6 @@ export const runtime = 'nodejs';
 const MAX_SEND_BODY_BYTES = 20_000;
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/;
 const SEND_FIELDS = new Set(['projectId', 'body', 'idempotencyKey']);
-const ONBOARDING_STATES = new Set([
-  'eligible',
-  'already_pending',
-  'authorized',
-  'conflict',
-  'closed',
-]);
 
 function json(payload, init = {}) {
   return Response.json(payload, {
@@ -46,7 +41,9 @@ function json(payload, init = {}) {
 }
 
 function projectIdFromRequest(request) {
-  const value = new URL(request.url).searchParams.get('projectId');
+  const parameters = new URL(request.url).searchParams;
+  if (parameters.getAll('projectId').length > 1) throw new WhatsAppInboxError('La obra no admite valores repetidos.', { code: 'PROJECT_SCOPE_MISMATCH', status: 400 });
+  const value = parameters.get('projectId');
   const projectId = String(value || '').trim();
   if (!projectId) {
     throw new WhatsAppInboxError('Seleccioná una obra para abrir la conversación.', {
@@ -97,6 +94,8 @@ async function conversationIdFromContext(context) {
 }
 
 function inboxErrorResponse(error) {
+  const mismatch = evidenceContextErrorResponse(error);
+  if (mismatch) return mismatch;
   if (error instanceof AccessError) return accessErrorResponse(error);
   if (error instanceof RequestBodyError) return requestBodyErrorResponse(error);
   if (error instanceof WhatsAppInboxError) {
@@ -114,6 +113,8 @@ function inboxErrorResponse(error) {
 }
 
 function idempotencyKey(request, input) {
+  const header = request.headers.get('idempotency-key');
+  if (header && input?.idempotencyKey && header !== input.idempotencyKey) throw new WhatsAppInboxError('Las referencias del intento no coinciden.', { code: 'IDEMPOTENCY_PAYLOAD_MISMATCH', status: 409 });
   const value = String(
     request.headers.get('idempotency-key') || input?.idempotencyKey || '',
   ).trim();
@@ -141,16 +142,7 @@ function assertSendInput(input) {
   }
 }
 
-function onboardingProjection(result) {
-  const state = String(result?.state || '').trim().toLowerCase();
-  const reason = typeof result?.capability?.reason === 'string'
-    ? result.capability.reason.trim().slice(0, 280)
-    : '';
-  return {
-    state: ONBOARDING_STATES.has(state) ? state : 'closed',
-    reason,
-  };
-}
+function onboardingProjection(result) { return projectParticipantOnboarding(result); }
 
 async function loadContactOnboarding({
   loadOnboardingState,
@@ -178,7 +170,7 @@ async function loadContactOnboarding({
       name: error?.name,
       code: error?.code,
     });
-    return { state: 'closed', reason: '' };
+    return projectParticipantOnboarding({ state: 'closed', unavailable: true });
   }
 }
 
@@ -197,6 +189,7 @@ export function createWhatsAppConversationMessageHandlers({
     try {
       const access = await resolveAccess();
       authorize(access, 'org:conversations:read');
+      assertEvidenceRequestContext(request, access);
       const projectId = projectIdFromRequest(request);
       const pagination = paginationFromRequest(request);
       const conversationId = await conversationIdFromContext(context);
@@ -229,7 +222,7 @@ export function createWhatsAppConversationMessageHandlers({
           env,
         }),
       ]);
-      return json({ ...messages, onboarding });
+      return json({ ...messages, onboarding, context: { organizationId: access.organization.id, projectId, conversationId } });
     } catch (error) {
       const response = inboxErrorResponse(error);
       if (response) return response;
@@ -242,6 +235,8 @@ export function createWhatsAppConversationMessageHandlers({
     try {
       const access = await resolveAccess();
       authorize(access, 'org:conversations:manage');
+      assertEvidenceRequestContext(request, access);
+      if (request.headers.get('sec-fetch-site') === 'cross-site' || (request.headers.get('origin') && request.headers.get('origin') !== new URL(request.url).origin)) throw new WhatsAppInboxError('Origen de envío no autorizado.', { code: 'INBOX_ORIGIN_REJECTED', status: 403 });
       const queryProjectId = projectIdFromRequest(request);
       const conversationId = await conversationIdFromContext(context);
       const input = await parseBody(request);
@@ -258,7 +253,7 @@ export function createWhatsAppConversationMessageHandlers({
       const key = idempotencyKey(request, input);
       const prisma = prismaFactory();
       await assertActiveProject(prisma, access, queryProjectId);
-      return json(await sendMessage({
+      const result = await sendMessage({
         prisma,
         access,
         conversationId,
@@ -270,7 +265,8 @@ export function createWhatsAppConversationMessageHandlers({
         ),
         clock,
         env,
-      }));
+      });
+      return json({ ...result, context: { organizationId: access.organization.id, projectId: queryProjectId, conversationId, idempotencyKey: key } });
     } catch (error) {
       const response = inboxErrorResponse(error);
       if (response) return response;

@@ -244,6 +244,19 @@ jobs:
       - name: Run public E2E
         run: npm run test:e2e:public
 
+      - name: Check scoped Flow send receipts with synthetic provider
+        env:
+          PLAYWRIGHT_CHANNEL: chromium
+        run: |
+          node scripts/verify-proactive-flow-confirmation-ui.mjs
+          node scripts/verify-proactive-flow-history-ui.mjs
+          node scripts/verify-inbox-continuity-ui.mjs
+          node scripts/verify-flow-read-connectivity-ui.mjs
+          node scripts/verify-proactive-flow-reply-ui.mjs
+          node scripts/verify-flow-attendance-ui.mjs
+          node scripts/verify-flow-incident-ui.mjs
+          node scripts/verify-whatsapp-report-ui.mjs
+
       - name: Preserve Playwright diagnostics
         if: always()
         uses: actions/upload-artifact@v7
@@ -252,6 +265,17 @@ jobs:
           path: |
             playwright-report/
             test-results/
+            .vercel/proactive-flow-confirmation-ui/proof.json
+            .vercel/proactive-flow-confirmation-ui/*.png
+            .vercel/inbox-continuity-ui/proof.json
+            .vercel/inbox-continuity-ui/*.png
+            .vercel/proactive-flow-history-ui/proof.json
+            .vercel/proactive-flow-history-ui/*.png
+            .vercel/message-report-ui/proof.json
+            .vercel/message-report-ui/*.png
+            .vercel/proactive-flow-reply-ui/proof.json
+            .vercel/proactive-flow-reply-ui/*.png
+          include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 7
 
@@ -260,7 +284,8 @@ jobs:
     if: >-
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
       && (github.ref == 'refs/heads/master'
-      || github.ref == 'refs/heads/codex/platform-ux-foundation')
+      || github.ref == 'refs/heads/codex/platform-ux-foundation'
+      || github.ref == 'refs/heads/codex/saas-recovery-20260917')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: clerk-development-e2e

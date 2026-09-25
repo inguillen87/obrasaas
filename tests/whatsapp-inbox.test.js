@@ -619,7 +619,7 @@ test('GET messages projects server-owned onboarding state for an authorized mana
   assert.equal(response.status, 200);
   assert.deepEqual(payload.onboarding, {
     state: 'eligible',
-    reason: 'Puede iniciar el alta segura.',
+    reason: 'Puede iniciar el alta segura.', code:'READY', claimId:null, claimStatus:null, delivery:null, expiresAt:null, currentAccess:null, checkedAt:null, needsIntegration:false, unavailable:false,
   });
   assert.equal(onboardingInput.conversationId, 'conversation-a');
   assert.equal(onboardingInput.access.organization.id, 'organization-a');
@@ -648,7 +648,10 @@ test('GET messages fails contact onboarding closed without hiding the conversati
 
     assert.equal(response.status, 200);
     assert.equal(payload.conversation.id, 'conversation-a');
-    assert.deepEqual(payload.onboarding, { state: 'closed', reason: '' });
+    assert.equal(payload.onboarding.state, 'closed');
+    assert.equal(payload.onboarding.unavailable, true);
+    assert.equal(payload.onboarding.currentAccess, null);
+    assert.equal(payload.onboarding.reason, '');
     assert.equal(JSON.stringify(payload).includes('sensitive provider detail'), false);
   } finally {
     console.error = originalError;
@@ -2033,30 +2036,51 @@ test('a local correlation failure after Meta accepts is unknown, never rejected'
   assert.equal([...records.values()][0].status, 'unknown');
 });
 
-test('Inbox composer reconciles UNKNOWN with the same key and preserves the pending body', async () => {
-  const clientSource = await readFile(
-    new URL('../src/app/dashboard/inbox/inbox-client.js', import.meta.url),
-    'utf8',
-  );
+test('Inbox composer delegates identical retry and draft preservation to its conversation-bound book', async () => {
+  const clientSource = await readFile(new URL('../src/app/dashboard/inbox/inbox-client.js', import.meta.url), 'utf8');
+  const bookSource = await readFile(new URL('../src/lib/whatsapp/inbox-composer-book.js', import.meta.url), 'utf8');
+  assert.match(clientSource, /book.begin\(conversationId, \{ asNewAttempt, reconcileUnknown \}\)/);
+  assert.match(clientSource, /'Idempotency-Key': attempt.idempotencyKey/);
+  assert.match(clientSource, /body: attempt.body/);
+  assert.match(clientSource, /book.fail\(attempt, error\)/);
+  assert.match(clientSource, /submitMessage\(\{ reconcileUnknown: true \}\)/);
+  assert.match(bookSource, /reconcileUnknown \? current.attempt/);
+  assert.match(bookSource, /current.draft.trim\(\) === attempt.body/);
+});
 
-  assert.doesNotMatch(clientSource, /if \(sendResolution === 'UNKNOWN'\) return/);
-  assert.match(
-    clientSource,
-    /const pendingAttempt = reconcileUnknown \? unresolvedSendRef\.current : null;[\s\S]{0,220}pendingAttempt\.body/,
-  );
-  assert.match(
-    clientSource,
-    /const idempotencyKey = reconcileUnknown[\s\S]{0,120}pendingAttempt\.idempotencyKey/,
-  );
-  assert.match(clientSource, /'Idempotency-Key': idempotencyKey/);
-  assert.match(clientSource, /unresolvedSendRef\.current = attempt;[\s\S]{0,100}setSendResolution\('UNKNOWN'\)/);
-  assert.match(
-    clientSource,
-    /sendResolution === 'UNKNOWN'[\s\S]{0,300}submitMessage\(\{ reconcileUnknown: true \}\)/,
-  );
-  assert.match(
-    clientSource,
-    /UNRESOLVED_SEND_STATES\.has\(reconciled\.status\)[\s\S]{0,360}setSendResolution\('FAILED'\)[\s\S]{0,300}setSendResolution\(''\)/,
-  );
-  assert.match(clientSource, /current\.trim\(\) === body \? '' : current/);
+test('send acknowledgement returns the exact server-scoped conversation and attempt', async () => {
+  const { prisma } = routePrisma(); let sends = 0;
+  const handlers = createWhatsAppConversationMessageHandlers({ resolveAccess: async () => access(), authorize: () => {}, prismaFactory: () => prisma,
+    sendMessage: async () => { sends++; return { message: { id: 'out-a', direction: 'OUTBOUND', status: 'accepted' } }; } });
+  const request = new Request('https://obra.test/api/whatsapp/inbox/conversation-a/messages?projectId=project-a', { method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'inbox-attempt-001', 'X-ObraSaaS-Organization': 'organization-a', 'X-ObraSaaS-Project': 'project-a' },
+    body: JSON.stringify({ projectId: 'project-a', body: 'Ensayo', idempotencyKey: 'inbox-attempt-001' }) });
+  const response = await handlers.POST(request, routeContext()); assert.equal(response.status, 200);
+  assert.deepEqual((await response.json()).context, { organizationId: 'organization-a', projectId: 'project-a', conversationId: 'conversation-a', idempotencyKey: 'inbox-attempt-001' }); assert.equal(sends, 1);
+});
+for (const [header, value, expected] of [['X-ObraSaaS-Organization','other',409], ['X-ObraSaaS-Project','other',409], ['Origin','https://other.test',403], ['Sec-Fetch-Site','cross-site',403]]) {
+  test('unsafe send context is rejected before the sender: ' + header, async () => {
+    let reads = 0, sends = 0;
+    const handlers = createWhatsAppConversationMessageHandlers({ resolveAccess: async () => access(), authorize: () => {}, prismaFactory: () => { reads++; return {}; }, sendMessage: async () => { sends++; } });
+    const request = new Request('https://obra.test/api/whatsapp/inbox/conversation-a/messages?projectId=project-a', { method: 'POST', headers: { 'Content-Type': 'application/json', [header]: value }, body: JSON.stringify({ body: 'No enviar', idempotencyKey: 'inbox-attempt-001' }) });
+    assert.equal((await handlers.POST(request, routeContext())).status, expected); assert.equal(reads, 0); assert.equal(sends, 0);
+  });
+}
+test('contradictory idempotency keys and repeated project selectors cannot reach a send', async () => {
+  let sends = 0;
+  const handlers = createWhatsAppConversationMessageHandlers({ resolveAccess: async () => access(), authorize: () => {}, prismaFactory: () => { throw new Error('Database must not be reached'); }, sendMessage: async () => { sends++; } });
+  for (const query of ['projectId=project-a', 'projectId=project-a&projectId=project-b']) {
+    const request = new Request('https://obra.test/api/whatsapp/inbox/conversation-a/messages?' + query, { method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'inbox-header-001' }, body: JSON.stringify({ body: 'Ensayo', idempotencyKey: 'inbox-body-002' }) });
+    assert.ok([400,409].includes((await handlers.POST(request, routeContext())).status));
+  }
+  assert.equal(sends, 0);
+});
+test('history includes scope and cannot accept another company header', async () => {
+  const { prisma } = routePrisma();
+  const handlers = createWhatsAppConversationMessageHandlers({ resolveAccess: async () => access(), authorize: () => {}, prismaFactory: () => prisma, clock: () => NOW });
+  const success = await handlers.GET(messagesRequest(), routeContext());
+  assert.deepEqual((await success.json()).context, { organizationId: 'organization-a', projectId: 'project-a', conversationId: 'conversation-a' });
+  const request = new Request(messagesRequest().url, { headers: { 'X-ObraSaaS-Organization': 'another' } });
+  assert.equal((await handlers.GET(request, routeContext())).status, 409);
 });

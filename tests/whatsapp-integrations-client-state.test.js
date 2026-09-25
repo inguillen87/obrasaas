@@ -149,23 +149,24 @@ test('the integrations UI wires provider calls and reconnect controls to verifie
   ]);
 
   assert.match(client, /whatsappGraphAccessReady\(initialConnection, initialHealth\)/);
-  assert.match(client, /if \(!graphReady\) return undefined;/);
+  assert.match(client, /if \(!graphReady \|\| !advancedOpen\) return undefined;/);
   assert.match(client, /!graphReady\s+\|\| pending\s+\|\| healthPending/);
-  assert.match(client, /linked \? 'Reconectar con Meta' : 'Conectar con Meta'/);
-  assert.match(client, /href="#pilot-import-title"/);
+  assert.match(client, /<WhatsAppConnectExperience/);
+  assert.match(client, /href="#platform-technical-tools"/);
   assert.match(client, /const presentedFlowCatalog = graphReady/);
   assert.match(client, /const presentedTemplateCatalog = graphReady/);
   assert.match(client, /const presentedFlowNotice = graphReady/);
   assert.match(client, /const presentedTemplateNotice = graphReady/);
   assert.match(client, /remoteChannelEpochRef\.current \+= 1/);
-  assert.match(client, /\[connectionIdentity, graphReady\]/);
+  assert.match(client, /\[connectionIdentity, graphReady, advancedOpen, organizationId, projectId, beginTemplateObservation\]/);
   assert.match(client, /throw integrationResponseError\(payload/);
   assert.match(client, /whatsappGraphAccessRejected\(error\?\.code\)/);
   assert.match(client, /synchronizeChannelHealth\(\{ method: 'POST' \}\)/);
   assert.match(client, /handleGraphAccessFailureEvent\(error\)/);
   assert.match(client, /if \(handleGraphAccessFailure\(error\)\) return;/);
   assert.match(client, /const remoteVerificationUnavailable = linked && !graphReady/);
-  assert.match(client, /Estado Meta no verificado/);
+  assert.match(client, /templateCatalogObservationPresentation/);
+  assert.match(client, /templateGeneration !== templateRequestSequenceRef\.current/);
   assert.match(client, /verificationUnavailable: remoteVerificationUnavailable/);
   assert.ok(
     client.indexOf('setChannelHealth(null)')

@@ -1,3 +1,4 @@
+import { assertEvidenceRequestContext, evidenceContextErrorResponse } from '@/lib/evidence-context';
 import {
   AccessError,
   accessErrorResponse,
@@ -95,6 +96,7 @@ export function createEvidenceHandlers({
   async function GET(request, { params }) {
     try {
       const access = await resolveAccess();
+      assertEvidenceRequestContext(request, access);
       authorize(access, "org:projects:read");
       const { messageId } = await params;
       const message = await prismaFactory().message.findFirst({
@@ -221,6 +223,8 @@ export function createEvidenceHandlers({
         },
       });
     } catch (error) {
+      const contextError = evidenceContextErrorResponse(error);
+      if (contextError) return contextError;
       if (error instanceof AccessError) return accessErrorResponse(error);
       try {
         reportFailure();

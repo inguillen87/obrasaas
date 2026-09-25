@@ -151,3 +151,5 @@
 @media (prefers-reduced-motion: reduce) {
   .primaryActions a, .primaryActions button, .emptyState button, .bar { transition: none; }
 }
+
+.taskLabel > .fieldBadge { grid-column: 1 / -1; white-space: normal; color: #6ee7b7; font-size: .62rem; line-height: 1.5; }

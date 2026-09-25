@@ -1,0 +1,98 @@
+name: Execution contracts on disposable PostgreSQL
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src/lib/project-execution.js'
+      - 'src/lib/db.js'
+      - 'src/lib/whatsapp/obra-engine.js'
+      - 'src/lib/whatsapp/flow-sessions.js'
+      - 'scripts/verify-webhook-flow-atomic-postgres.mjs'
+      - 'src/app/api/webhooks/whatsapp/route.js'
+      - 'src/lib/whatsapp/meta.js'
+      - 'scripts/verify-signed-webhook-ingress-postgres.mjs'
+      - 'tests/webhook-flow-atomic-bootstrap.test.js'
+      - 'src/lib/whatsapp/progress-report*.js'
+      - 'scripts/verify-message-report-recovery-postgres.mjs'
+      - 'src/lib/whatsapp/proactive-flow-history*.js'
+      - 'src/lib/whatsapp/proactive-flow-reply*.js'
+      - 'src/lib/whatsapp/inbox.js'
+      - 'scripts/verify-proactive-flow-history-postgres.mjs'
+      - 'tests/helpers/flow-history-fixture.js'
+      - 'src/lib/project-write-policy.js'
+      - 'src/lib/crew-membership*.js'
+      - 'src/lib/task-assignment*.js'
+      - 'src/lib/assignment-overlap*.js'
+      - 'src/lib/assignment-reschedule*.js'
+      - 'src/lib/assignment-owner-directory*.js'
+      - 'src/lib/assignment-period-uniqueness.js'
+      - 'src/lib/schedule-field-status.js'
+      - 'prisma/**'
+      - 'scripts/verify-execution-release-postgres.mjs'
+      - 'scripts/verify-assignment-continuity-postgres.mjs'
+      - 'scripts/verify-assignment-owner-directory-postgres.mjs'
+      - 'scripts/lib/execution-test-database.mjs'
+      - '.github/workflows/execution-postgres.yml'
+permissions:
+  contents: read
+concurrency:
+  group: execution-postgres-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  execution-postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [execution-release, assignment-continuity, assignment-owner-directory, proactive-flow-history, message-report-recovery, webhook-flow-atomic, signed-webhook-ingress]
+    services:
+      postgres:
+        image: postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+        env:
+          POSTGRES_USER: execution_fixture
+          POSTGRES_PASSWORD: local_fixture_only
+          POSTGRES_DB: obrasaas_execution_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U execution_fixture -d obrasaas_execution_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      DATABASE_URL: postgresql://execution_fixture:local_fixture_only@127.0.0.1:5432/obrasaas_execution_ci?schema=public
+      DATABASE_URL_UNPOOLED: postgresql://execution_fixture:local_fixture_only@127.0.0.1:5432/obrasaas_execution_ci?schema=public
+      DIRECT_URL: postgresql://execution_fixture:local_fixture_only@127.0.0.1:5432/obrasaas_execution_ci?schema=public
+      EXECUTION_RELEASE_DATABASE_URL: postgresql://execution_fixture:local_fixture_only@127.0.0.1:5432/obrasaas_execution_ci?schema=public
+      EXECUTION_RELEASE_DISPOSABLE: 'true'
+      EXECUTION_RELEASE_PROOF_PATH: evidence/execution-postgres.json
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - name: Exact dependencies and database guard tests
+        run: |
+          npm ci
+          node --test tests/execution-test-database.test.js
+      - name: Rebuild disposable schema
+        run: |
+          mkdir -p evidence
+          npx prisma validate
+          npx prisma migrate deploy > evidence/migrations.log 2>&1
+          npx prisma migrate status > evidence/migration-status.log 2>&1
+          npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code > evidence/schema-diff.log 2>&1
+      - name: Real domain operations and competing PostgreSQL sessions
+        run: npx tsx scripts/verify-${{ matrix.suite }}-postgres.mjs
+      - name: Preserve bounded verification evidence only
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: execution-postgres-${{ matrix.suite }}-${{ github.run_id }}
+          path: evidence/
+          retention-days: 7
+          if-no-files-found: warn

@@ -2491,6 +2491,7 @@ export async function decideWorkerOnboardingClaim(prisma, {
 export async function listWorkerOnboardingClaims(prisma, {
   scope: scopeInput,
   requestedByMembershipId,
+  claimId: focusedClaimIdInput = null,
   status: statusInput = null,
   limit: limitInput = DEFAULT_LIST_LIMIT,
   cursor: cursorInput = null,
@@ -2500,6 +2501,10 @@ export async function listWorkerOnboardingClaims(prisma, {
   const scope = normalizeScope(scopeInput);
   const currentTime = operationNow(nowInput, dependencies);
   const cryptoDependencies = resolveCryptoDependencies(dependencies);
+  const focusedClaimId = focusedClaimIdInput == null ? null : requiredIdentifier(focusedClaimIdInput, 'claimId');
+  if (focusedClaimId && (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,189}$/.test(focusedClaimId) || statusInput || cursorInput)) {
+    throw onboardingError('Un alta específica no admite otros filtros.', 'WORKER_ONBOARDING_INPUT_INVALID');
+  }
   const cursor = decodeListCursor(cursorInput);
   const status = statusInput == null || statusInput === ''
     ? null
@@ -2537,6 +2542,7 @@ export async function listWorkerOnboardingClaims(prisma, {
     organizationId: scope.organizationId,
     projectId: scope.projectId,
   }];
+  if (focusedClaimId) filters.push({ id: focusedClaimId });
   if (status === 'EXPIRED') {
     filters.push({
       OR: [
@@ -2563,7 +2569,7 @@ export async function listWorkerOnboardingClaims(prisma, {
   const claims = await prisma.workerOnboardingClaim.findMany({
     where: { AND: filters },
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-    take: limit + 1,
+    take: focusedClaimId ? 1 : limit + 1,
     select: {
       id: true,
       organizationId: true,
@@ -2598,7 +2604,7 @@ export async function listWorkerOnboardingClaims(prisma, {
       },
     },
   });
-  const hasMore = claims.length > limit;
+  const hasMore = !focusedClaimId && claims.length > limit;
   const page = hasMore ? claims.slice(0, limit) : claims;
   const items = page.map((claim) => {
     const legalName = serializeClaimRetention(claim, currentTime).state === 'ACTIVE'

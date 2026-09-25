@@ -1,4 +1,5 @@
 'use client';
+import TaskRestrictionBadge from './task-restriction-badge';
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -84,8 +85,10 @@ export default function GanttPlanner({
   project,
   tasks,
   tasksTruncated = false,
+  fieldStatus = null,
 }) {
   const [unitDays, setUnitDays] = useState(null);
+  const fieldByTask = useMemo(() => new Map((fieldStatus?.tasks || []).map(row => [row.id, row])), [fieldStatus]);
   const [editor, setEditor] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -483,6 +486,11 @@ export default function GanttPlanner({
                       <strong>{task.name}</strong>
                       <span>{task.assignee}</span>
                       <StatusPill tone={task.tone}>{task.status}</StatusPill>
+                      {fieldByTask.has(task.id) && <span className={styles.fieldBadge}>
+                        <TaskRestrictionBadge restrictions={fieldByTask.get(task.id).restrictions} />
+                        {fieldByTask.get(task.id).evidence.total} evidencias · {fieldByTask.get(task.id).reports.total} partes
+                        {fieldByTask.get(task.id).measured && <> · Medido {Number(fieldByTask.get(task.id).measured.percent).toLocaleString('es-AR', { maximumFractionDigits: 4 })}%</>}
+                      </span>}
                     </button>
                     <div className={styles.track} style={{ '--gantt-columns': model.columns.length }}>
                       <button

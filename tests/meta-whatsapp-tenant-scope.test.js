@@ -306,3 +306,37 @@ test("Meta text failures never retain provider-reflected content or transport ca
     },
   );
 });
+
+test('interactive menu sends through the exact tenant credential, never the legacy global token', async () => {
+  const {sendWhatsAppInteractiveMenu}=await import('../src/lib/whatsapp/meta.js');
+  const {buildFieldMenuPayload}=await import('../src/lib/whatsapp/field-interactive-menu.js');
+  const scope={organizationId:'organization-a',projectId:'project-a'},phoneNumberId='123456789012345';
+  globalThis.__obraSaasPrisma=prismaForConnections([{phoneNumberId,projectId:scope.projectId,project:{organizationId:scope.organizationId},enabled:true,connectionStatus:'CONNECTED',encryptedAccessToken:encryptCredential('menu-tenant-fixture')}]);
+  const message=buildFieldMenuPayload({to:'15551230001',scope:{...scope,phoneNumberId,workerId:'worker-a'},role:'WORKER',projectName:'Obra Norte'});
+  let request=null;
+  const result=await sendWhatsAppInteractiveMenu({to:'15551230001',phoneNumberId,scope,message,fetchImpl:async(url,options)=>{request={url:new URL(url),options};return Response.json({messages:[{id:'wamid.menu-tenant'}]});}});
+  assert.equal(result.messages[0].id,'wamid.menu-tenant');assert.equal(request.options.headers.Authorization,'Bearer menu-tenant-fixture');assert.deepEqual(JSON.parse(request.options.body),message);
+  assert.equal(request.url.pathname,'/v25.0/'+phoneNumberId+'/messages');
+});
+for(const wrong of ['scope','expired'])test('interactive menu fails before provider for '+wrong,async()=>{
+  const {sendWhatsAppInteractiveMenu}=await import('../src/lib/whatsapp/meta.js');
+  const {buildFieldMenuPayload}=await import('../src/lib/whatsapp/field-interactive-menu.js');
+  const scope={organizationId:'organization-a',projectId:'project-a'},phoneNumberId='123456789012345',now=new Date('2026-09-19T17:00:00Z');
+  globalThis.__obraSaasPrisma=prismaForConnections([{phoneNumberId,projectId:scope.projectId,project:{organizationId:wrong==='scope'?'another-company':scope.organizationId},enabled:true,connectionStatus:'CONNECTED',encryptedAccessToken:encryptCredential('menu-fixture'),metadata:{channelHealth:{expiresAt:Math.floor(now.getTime()/1000)-1}}}]);
+  const message=buildFieldMenuPayload({to:'15551230001',scope:{...scope,phoneNumberId,workerId:'worker-a'},role:'WORKER'});let calls=0;
+  await assert.rejects(sendWhatsAppInteractiveMenu({to:'15551230001',phoneNumberId,scope,now,message,fetchImpl:async()=>{calls++;return Response.json({});}}));assert.equal(calls,0);
+});
+test('interactive menu never uses the legacy global fallback when tenant scope is absent',async()=>{
+  const {sendWhatsAppInteractiveMenu}=await import('../src/lib/whatsapp/meta.js');let calls=0;
+  await assert.rejects(sendWhatsAppInteractiveMenu({to:'15551230001',message:{},fetchImpl:async()=>{calls++;return Response.json({});}}),{code:'WHATSAPP_FIELD_MENU_SCOPE'});assert.equal(calls,0);
+});
+test('interactive provider errors omit reflected message content and transport causes',async()=>{
+  const {sendWhatsAppInteractiveMenu}=await import('../src/lib/whatsapp/meta.js');
+  const {buildFieldMenuPayload}=await import('../src/lib/whatsapp/field-interactive-menu.js');
+  const scope={organizationId:'organization-a',projectId:'project-a'},phoneNumberId='123456789012345';
+  globalThis.__obraSaasPrisma=prismaForConnections([{phoneNumberId,projectId:scope.projectId,project:{organizationId:scope.organizationId},enabled:true,connectionStatus:'CONNECTED',encryptedAccessToken:encryptCredential('menu-error-fixture')}]);
+  const message=buildFieldMenuPayload({to:'15551230001',scope:{...scope,phoneNumberId,workerId:'worker-a'},role:'WORKER'});
+  await assert.rejects(sendWhatsAppInteractiveMenu({to:'15551230001',phoneNumberId,scope,message,fetchImpl:async()=>Response.json({error:{code:100,message:'private-reflected-content'}},{status:400})}),error=>{
+    assert.equal(error.providerCode,100);assert.equal(error.ambiguous,false);assert.ok(!error.message.includes('private-reflected-content'));assert.equal(error.cause,undefined);return true;
+  });
+});

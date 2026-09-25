@@ -1739,6 +1739,9 @@ model CrmAccount {
 }
 
 model PlatformUser {
+  inspectionsAuthored                 InspectionRecord[]                   @relation("InspectionAuthor")
+  inspectionsReviewed                 InspectionRecord[]                   @relation("InspectionReviewer")
+  inspectionRevisions                 InspectionRevision[]
   id                                  String                               @id @default(cuid())
   clerkUserId                         String                               @unique
   primaryEmail                        String                               @unique
@@ -1826,9 +1829,9 @@ model TenantMembership {
   projectContractAuthorityDecisions    ProjectContractAuthorityDecision[]      @relation("ProjectContractAuthorityChecker")
   preparedProjectContractVersions      ProjectContractVersion[]                @relation("ProjectContractPreparer")
   projectContractDecisions             ProjectContractDecision[]               @relation("ProjectContractChecker")
-  preparedProjectCertificates          ProjectCertificateVersion[]              @relation("ProjectCertificatePreparer")
-  projectCertificateDecisions          ProjectCertificateDecision[]             @relation("ProjectCertificateDecisionActor")
-  projectCertificateOperationReceipts  ProjectCertificateOperationReceipt[]     @relation("ProjectCertificateOperationActor")
+  preparedProjectCertificates          ProjectCertificateVersion[]             @relation("ProjectCertificatePreparer")
+  projectCertificateDecisions          ProjectCertificateDecision[]            @relation("ProjectCertificateDecisionActor")
+  projectCertificateOperationReceipts  ProjectCertificateOperationReceipt[]    @relation("ProjectCertificateOperationActor")
   createdAt                            DateTime                                @default(now())
   updatedAt                            DateTime                                @updatedAt
 
@@ -1857,6 +1860,7 @@ model AuditLog {
 }
 
 model Project {
+  inspectionRecords                    InspectionRecord[]
   id                                   String                                @id @default(cuid())
   organizationId                       String
   organization                         Organization                          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -3557,31 +3561,31 @@ model ProjectProgressMeasurementCutHead {
 /// Immutable, server-derived technical snapshot for one project and civil
 /// fortnight. It contains no price, certificate, payment or financial state.
 model ProjectProgressMeasurementCut {
-  id                   String                              @id @default(cuid())
-  organizationId       String
-  organization         Organization                        @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "PPMCut_organization_fkey")
-  projectId            String
-  project              Project                             @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "PPMCut_project_scope_fkey")
-  headId               String
-  head                 ProjectProgressMeasurementCutHead   @relation("ProjectProgressMeasurementCutHeadLedger", fields: [organizationId, projectId, headId], references: [organizationId, projectId, id], onDelete: Restrict, map: "PPMCut_head_scope_fkey")
-  version              Int
-  predecessorId        String?                             @unique(map: "PPMCut_predecessor_key")
-  predecessor          ProjectProgressMeasurementCut?      @relation("ProjectProgressMeasurementCutRevisionChain", fields: [organizationId, projectId, headId, predecessorId], references: [organizationId, projectId, headId, id], onDelete: Restrict, map: "PPMCut_predecessor_scope_fkey")
-  successor            ProjectProgressMeasurementCut?      @relation("ProjectProgressMeasurementCutRevisionChain")
-  taskCount            Int
-  measuredLineCount    Int
-  missingLineCount     Int
-  candidateSha256      String                              @db.Char(64)
-  cutSha256            String                              @db.Char(64)
-  headRevisionAtSeal   Int
-  sealedByMembershipId String
-  sealedByMembership   TenantMembership                    @relation("ProjectProgressMeasurementCutSealer", fields: [organizationId, sealedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "PPMCut_sealer_membership_fkey")
-  operationKeyHash     String                              @db.Char(64)
-  requestFingerprint   String                              @db.Char(64)
-  lines                ProjectProgressMeasurementCutLine[]
-  projectCertificateVersions ProjectCertificateVersion[] @relation("ProjectCertificateVersionCut")
-  currentForHead       ProjectProgressMeasurementCutHead?  @relation("ProjectProgressMeasurementCutCurrent")
-  createdAt            DateTime                            @default(now())
+  id                         String                              @id @default(cuid())
+  organizationId             String
+  organization               Organization                        @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "PPMCut_organization_fkey")
+  projectId                  String
+  project                    Project                             @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "PPMCut_project_scope_fkey")
+  headId                     String
+  head                       ProjectProgressMeasurementCutHead   @relation("ProjectProgressMeasurementCutHeadLedger", fields: [organizationId, projectId, headId], references: [organizationId, projectId, id], onDelete: Restrict, map: "PPMCut_head_scope_fkey")
+  version                    Int
+  predecessorId              String?                             @unique(map: "PPMCut_predecessor_key")
+  predecessor                ProjectProgressMeasurementCut?      @relation("ProjectProgressMeasurementCutRevisionChain", fields: [organizationId, projectId, headId, predecessorId], references: [organizationId, projectId, headId, id], onDelete: Restrict, map: "PPMCut_predecessor_scope_fkey")
+  successor                  ProjectProgressMeasurementCut?      @relation("ProjectProgressMeasurementCutRevisionChain")
+  taskCount                  Int
+  measuredLineCount          Int
+  missingLineCount           Int
+  candidateSha256            String                              @db.Char(64)
+  cutSha256                  String                              @db.Char(64)
+  headRevisionAtSeal         Int
+  sealedByMembershipId       String
+  sealedByMembership         TenantMembership                    @relation("ProjectProgressMeasurementCutSealer", fields: [organizationId, sealedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "PPMCut_sealer_membership_fkey")
+  operationKeyHash           String                              @db.Char(64)
+  requestFingerprint         String                              @db.Char(64)
+  lines                      ProjectProgressMeasurementCutLine[]
+  projectCertificateVersions ProjectCertificateVersion[]         @relation("ProjectCertificateVersionCut")
+  currentForHead             ProjectProgressMeasurementCutHead?  @relation("ProjectProgressMeasurementCutCurrent")
+  createdAt                  DateTime                            @default(now())
 
   @@unique([organizationId, operationKeyHash], map: "PPMCut_org_operation_hash_key")
   @@unique([headId, version], map: "PPMCut_head_version_key")
@@ -3632,7 +3636,7 @@ model ProjectProgressMeasurementCutLine {
   measurementDecisionCreatedAt DateTime?
   lineSnapshotSha256           String                            @db.Char(64)
   createdAt                    DateTime                          @default(now())
-  projectCertificateLines     ProjectCertificateLine[] @relation("ProjectCertificateLineCut")
+  projectCertificateLines      ProjectCertificateLine[]          @relation("ProjectCertificateLineCut")
 
   @@unique([cutId, ordinal], map: "PPMCutLine_cut_ordinal_key")
   @@unique([cutId, taskId], map: "PPMCutLine_cut_task_key")
@@ -3644,32 +3648,32 @@ model ProjectProgressMeasurementCutLine {
 /// Mutable project pointer for the independently governed authority and
 /// contractual-SOV ledgers. Only PostgreSQL command functions may advance it.
 model ProjectContractHead {
-  id                          String                             @id @default(cuid())
-  organizationId              String
-  organization                Organization                       @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "ProjectContractHead_organization_fkey")
-  projectId                   String
-  project                      Project                            @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "ProjectContractHead_project_scope_fkey")
-  currentAuthorityVersionId   String?                            @unique(map: "ProjectContractHead_current_authority_key")
-  currentAuthorityVersion     ProjectContractAuthorityVersion?   @relation("ProjectContractCurrentAuthority", fields: [organizationId, projectId, currentAuthorityVersionId], references: [organizationId, projectId, id], onDelete: Restrict, map: "ProjectContractHead_current_authority_fkey")
-  latestAuthorityVersionId    String?                            @unique(map: "ProjectContractHead_latest_authority_key")
-  latestAuthorityVersion      ProjectContractAuthorityVersion?   @relation("ProjectContractLatestAuthority", fields: [organizationId, projectId, latestAuthorityVersionId], references: [organizationId, projectId, id], onDelete: Restrict, map: "ProjectContractHead_latest_authority_fkey")
-  pendingAuthorityVersionId   String?                            @unique(map: "ProjectContractHead_pending_authority_key")
-  pendingAuthorityVersion     ProjectContractAuthorityVersion?   @relation("ProjectContractPendingAuthority", fields: [organizationId, projectId, pendingAuthorityVersionId], references: [organizationId, projectId, id], onDelete: Restrict, map: "ProjectContractHead_pending_authority_fkey")
-  authorityRevision           Int                                @default(0)
-  currentVersionId            String?                            @unique(map: "ProjectContractHead_current_version_key")
-  currentVersion              ProjectContractVersion?            @relation("ProjectContractCurrentVersion", fields: [organizationId, projectId, currentVersionId], references: [organizationId, projectId, id], onDelete: Restrict, map: "ProjectContractHead_current_version_fkey")
-  latestVersionId             String?                            @unique(map: "ProjectContractHead_latest_version_key")
-  latestVersion               ProjectContractVersion?            @relation("ProjectContractLatestVersion", fields: [organizationId, projectId, latestVersionId], references: [organizationId, projectId, id], onDelete: Restrict, map: "ProjectContractHead_latest_version_fkey")
-  pendingVersionId            String?                            @unique(map: "ProjectContractHead_pending_version_key")
-  pendingVersion              ProjectContractVersion?            @relation("ProjectContractPendingVersion", fields: [organizationId, projectId, pendingVersionId], references: [organizationId, projectId, id], onDelete: Restrict, map: "ProjectContractHead_pending_version_fkey")
-  revision                    Int                                @default(0)
-  authorityVersions           ProjectContractAuthorityVersion[]  @relation("ProjectContractAuthorityLedger")
-  authorityDecisions          ProjectContractAuthorityDecision[] @relation("ProjectContractAuthorityDecisionHead")
-  versions                    ProjectContractVersion[]           @relation("ProjectContractVersionLedger")
-  decisions                   ProjectContractDecision[]          @relation("ProjectContractDecisionHead")
-  lines                       ProjectContractLine[]               @relation("ProjectContractLineHead")
-  createdAt                   DateTime                           @default(now())
-  updatedAt                   DateTime                           @updatedAt
+  id                        String                             @id @default(cuid())
+  organizationId            String
+  organization              Organization                       @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "ProjectContractHead_organization_fkey")
+  projectId                 String
+  project                   Project                            @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "ProjectContractHead_project_scope_fkey")
+  currentAuthorityVersionId String?                            @unique(map: "ProjectContractHead_current_authority_key")
+  currentAuthorityVersion   ProjectContractAuthorityVersion?   @relation("ProjectContractCurrentAuthority", fields: [organizationId, projectId, currentAuthorityVersionId], references: [organizationId, projectId, id], onDelete: Restrict, map: "ProjectContractHead_current_authority_fkey")
+  latestAuthorityVersionId  String?                            @unique(map: "ProjectContractHead_latest_authority_key")
+  latestAuthorityVersion    ProjectContractAuthorityVersion?   @relation("ProjectContractLatestAuthority", fields: [organizationId, projectId, latestAuthorityVersionId], references: [organizationId, projectId, id], onDelete: Restrict, map: "ProjectContractHead_latest_authority_fkey")
+  pendingAuthorityVersionId String?                            @unique(map: "ProjectContractHead_pending_authority_key")
+  pendingAuthorityVersion   ProjectContractAuthorityVersion?   @relation("ProjectContractPendingAuthority", fields: [organizationId, projectId, pendingAuthorityVersionId], references: [organizationId, projectId, id], onDelete: Restrict, map: "ProjectContractHead_pending_authority_fkey")
+  authorityRevision         Int                                @default(0)
+  currentVersionId          String?                            @unique(map: "ProjectContractHead_current_version_key")
+  currentVersion            ProjectContractVersion?            @relation("ProjectContractCurrentVersion", fields: [organizationId, projectId, currentVersionId], references: [organizationId, projectId, id], onDelete: Restrict, map: "ProjectContractHead_current_version_fkey")
+  latestVersionId           String?                            @unique(map: "ProjectContractHead_latest_version_key")
+  latestVersion             ProjectContractVersion?            @relation("ProjectContractLatestVersion", fields: [organizationId, projectId, latestVersionId], references: [organizationId, projectId, id], onDelete: Restrict, map: "ProjectContractHead_latest_version_fkey")
+  pendingVersionId          String?                            @unique(map: "ProjectContractHead_pending_version_key")
+  pendingVersion            ProjectContractVersion?            @relation("ProjectContractPendingVersion", fields: [organizationId, projectId, pendingVersionId], references: [organizationId, projectId, id], onDelete: Restrict, map: "ProjectContractHead_pending_version_fkey")
+  revision                  Int                                @default(0)
+  authorityVersions         ProjectContractAuthorityVersion[]  @relation("ProjectContractAuthorityLedger")
+  authorityDecisions        ProjectContractAuthorityDecision[] @relation("ProjectContractAuthorityDecisionHead")
+  versions                  ProjectContractVersion[]           @relation("ProjectContractVersionLedger")
+  decisions                 ProjectContractDecision[]          @relation("ProjectContractDecisionHead")
+  lines                     ProjectContractLine[]              @relation("ProjectContractLineHead")
+  createdAt                 DateTime                           @default(now())
+  updatedAt                 DateTime                           @updatedAt
 
   @@unique([organizationId, projectId], map: "ProjectContractHead_scope_key")
   @@unique([organizationId, projectId, id], map: "ProjectContractHead_scope_id_key")
@@ -3684,36 +3688,36 @@ model ProjectContractHead {
 /// Immutable proposal assigning the three independent contractual authorities.
 /// It becomes current only after a separate DIRECTOR decision.
 model ProjectContractAuthorityVersion {
-  id                      String                            @id @default(cuid())
-  organizationId          String
-  organization            Organization                      @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "ProjectContractAuthority_organization_fkey")
-  projectId               String
-  project                  Project                           @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "ProjectContractAuthority_project_scope_fkey")
-  headId                  String
-  head                    ProjectContractHead               @relation("ProjectContractAuthorityLedger", fields: [organizationId, projectId, headId], references: [organizationId, projectId, id], onDelete: Restrict, map: "ProjectContractAuthority_head_scope_fkey")
-  version                 Int
-  predecessorId           String?                           @unique(map: "ProjectContractAuthority_predecessor_key")
-  predecessor             ProjectContractAuthorityVersion?  @relation("ProjectContractAuthorityChain", fields: [organizationId, projectId, headId, predecessorId], references: [organizationId, projectId, headId, id], onDelete: Restrict, map: "ProjectContractAuthority_predecessor_fkey")
-  successor               ProjectContractAuthorityVersion?  @relation("ProjectContractAuthorityChain")
-  certifierMembershipId   String
-  certifierMembership     TenantMembership                  @relation("ProjectContractCertifierAuthority", fields: [organizationId, certifierMembershipId], references: [organizationId, id], onDelete: Restrict, map: "ProjectContractAuthority_certifier_fkey")
-  financeMembershipId     String
-  financeMembership       TenantMembership                  @relation("ProjectContractFinanceAuthority", fields: [organizationId, financeMembershipId], references: [organizationId, id], onDelete: Restrict, map: "ProjectContractAuthority_finance_fkey")
-  registrarMembershipId   String
-  registrarMembership     TenantMembership                  @relation("ProjectContractRegistrarAuthority", fields: [organizationId, registrarMembershipId], references: [organizationId, id], onDelete: Restrict, map: "ProjectContractAuthority_registrar_fkey")
-  headRevisionAtPrepare   Int
-  preparedByMembershipId  String
-  preparedByMembership    TenantMembership                  @relation("ProjectContractAuthorityPreparer", fields: [organizationId, preparedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "ProjectContractAuthority_preparer_fkey")
-  candidateSha256         String                            @db.Char(64)
-  authoritySha256         String                            @db.Char(64)
-  operationKeyHash        String                            @db.Char(64)
-  requestFingerprint      String                            @db.Char(64)
-  decision                ProjectContractAuthorityDecision?
-  currentForHead          ProjectContractHead?              @relation("ProjectContractCurrentAuthority")
-  latestForHead           ProjectContractHead?              @relation("ProjectContractLatestAuthority")
-  pendingForHead          ProjectContractHead?              @relation("ProjectContractPendingAuthority")
-  contractVersions        ProjectContractVersion[]
-  createdAt               DateTime                          @default(now())
+  id                     String                            @id @default(cuid())
+  organizationId         String
+  organization           Organization                      @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "ProjectContractAuthority_organization_fkey")
+  projectId              String
+  project                Project                           @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "ProjectContractAuthority_project_scope_fkey")
+  headId                 String
+  head                   ProjectContractHead               @relation("ProjectContractAuthorityLedger", fields: [organizationId, projectId, headId], references: [organizationId, projectId, id], onDelete: Restrict, map: "ProjectContractAuthority_head_scope_fkey")
+  version                Int
+  predecessorId          String?                           @unique(map: "ProjectContractAuthority_predecessor_key")
+  predecessor            ProjectContractAuthorityVersion?  @relation("ProjectContractAuthorityChain", fields: [organizationId, projectId, headId, predecessorId], references: [organizationId, projectId, headId, id], onDelete: Restrict, map: "ProjectContractAuthority_predecessor_fkey")
+  successor              ProjectContractAuthorityVersion?  @relation("ProjectContractAuthorityChain")
+  certifierMembershipId  String
+  certifierMembership    TenantMembership                  @relation("ProjectContractCertifierAuthority", fields: [organizationId, certifierMembershipId], references: [organizationId, id], onDelete: Restrict, map: "ProjectContractAuthority_certifier_fkey")
+  financeMembershipId    String
+  financeMembership      TenantMembership                  @relation("ProjectContractFinanceAuthority", fields: [organizationId, financeMembershipId], references: [organizationId, id], onDelete: Restrict, map: "ProjectContractAuthority_finance_fkey")
+  registrarMembershipId  String
+  registrarMembership    TenantMembership                  @relation("ProjectContractRegistrarAuthority", fields: [organizationId, registrarMembershipId], references: [organizationId, id], onDelete: Restrict, map: "ProjectContractAuthority_registrar_fkey")
+  headRevisionAtPrepare  Int
+  preparedByMembershipId String
+  preparedByMembership   TenantMembership                  @relation("ProjectContractAuthorityPreparer", fields: [organizationId, preparedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "ProjectContractAuthority_preparer_fkey")
+  candidateSha256        String                            @db.Char(64)
+  authoritySha256        String                            @db.Char(64)
+  operationKeyHash       String                            @db.Char(64)
+  requestFingerprint     String                            @db.Char(64)
+  decision               ProjectContractAuthorityDecision?
+  currentForHead         ProjectContractHead?              @relation("ProjectContractCurrentAuthority")
+  latestForHead          ProjectContractHead?              @relation("ProjectContractLatestAuthority")
+  pendingForHead         ProjectContractHead?              @relation("ProjectContractPendingAuthority")
+  contractVersions       ProjectContractVersion[]
+  createdAt              DateTime                          @default(now())
 
   @@unique([organizationId, operationKeyHash], map: "ProjectContractAuthority_org_operation_key")
   @@unique([headId, version], map: "ProjectContractAuthority_head_version_key")
@@ -3725,25 +3729,25 @@ model ProjectContractAuthorityVersion {
 
 /// Append-only maker/checker decision over one authority proposal.
 model ProjectContractAuthorityDecision {
-  id                      String                           @id @default(cuid())
+  id                      String                          @id @default(cuid())
   organizationId          String
-  organization            Organization                     @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "ProjectContractAuthorityDecision_organization_fkey")
+  organization            Organization                    @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "ProjectContractAuthorityDecision_organization_fkey")
   projectId               String
-  project                  Project                          @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "ProjectContractAuthorityDecision_project_scope_fkey")
+  project                 Project                         @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "ProjectContractAuthorityDecision_project_scope_fkey")
   headId                  String
-  head                    ProjectContractHead              @relation("ProjectContractAuthorityDecisionHead", fields: [organizationId, projectId, headId], references: [organizationId, projectId, id], onDelete: Restrict, map: "ProjectContractAuthorityDecision_head_scope_fkey")
-  authorityVersionId      String                           @unique(map: "ProjectContractAuthorityDecision_version_key")
-  authorityVersion        ProjectContractAuthorityVersion  @relation(fields: [organizationId, projectId, headId, authorityVersionId], references: [organizationId, projectId, headId, id], onDelete: Restrict, map: "ProjectContractAuthorityDecision_version_scope_fkey")
+  head                    ProjectContractHead             @relation("ProjectContractAuthorityDecisionHead", fields: [organizationId, projectId, headId], references: [organizationId, projectId, id], onDelete: Restrict, map: "ProjectContractAuthorityDecision_head_scope_fkey")
+  authorityVersionId      String                          @unique(map: "ProjectContractAuthorityDecision_version_key")
+  authorityVersion        ProjectContractAuthorityVersion @relation(fields: [organizationId, projectId, headId, authorityVersionId], references: [organizationId, projectId, headId, id], onDelete: Restrict, map: "ProjectContractAuthorityDecision_version_scope_fkey")
   decision                ProjectContractDecisionType
-  reason                  String                           @db.VarChar(1000)
+  reason                  String                          @db.VarChar(1000)
   expectedHeadRevision    Int
   headRevisionAfter       Int
-  authoritySha256Snapshot String                           @db.Char(64)
+  authoritySha256Snapshot String                          @db.Char(64)
   decidedByMembershipId   String
-  decidedByMembership     TenantMembership                 @relation("ProjectContractAuthorityChecker", fields: [organizationId, decidedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "ProjectContractAuthorityDecision_checker_fkey")
-  operationKeyHash        String                           @db.Char(64)
-  requestFingerprint      String                           @db.Char(64)
-  createdAt               DateTime                         @default(now())
+  decidedByMembership     TenantMembership                @relation("ProjectContractAuthorityChecker", fields: [organizationId, decidedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "ProjectContractAuthorityDecision_checker_fkey")
+  operationKeyHash        String                          @db.Char(64)
+  requestFingerprint      String                          @db.Char(64)
+  createdAt               DateTime                        @default(now())
 
   @@unique([organizationId, operationKeyHash], map: "ProjectContractAuthorityDecision_org_operation_key")
   @@unique([organizationId, projectId, headId, authorityVersionId], map: "ProjectContractAuthorityDecision_scope_version_key")
@@ -3753,48 +3757,48 @@ model ProjectContractAuthorityDecision {
 /// Immutable full Schedule of Values snapshot. Monetary authority is expressed
 /// only as exact minor-unit contract amounts; certification remains a later domain.
 model ProjectContractVersion {
-  id                         String                             @id @default(cuid())
+  id                         String                          @id @default(cuid())
   organizationId             String
-  organization               Organization                       @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "ProjectContractVersion_organization_fkey")
+  organization               Organization                    @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "ProjectContractVersion_organization_fkey")
   projectId                  String
-  project                     Project                            @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "ProjectContractVersion_project_scope_fkey")
+  project                    Project                         @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "ProjectContractVersion_project_scope_fkey")
   headId                     String
-  head                       ProjectContractHead                @relation("ProjectContractVersionLedger", fields: [organizationId, projectId, headId], references: [organizationId, projectId, id], onDelete: Restrict, map: "ProjectContractVersion_head_scope_fkey")
+  head                       ProjectContractHead             @relation("ProjectContractVersionLedger", fields: [organizationId, projectId, headId], references: [organizationId, projectId, id], onDelete: Restrict, map: "ProjectContractVersion_head_scope_fkey")
   version                    Int
-  predecessorId              String?                            @unique(map: "ProjectContractVersion_predecessor_key")
-  predecessor                ProjectContractVersion?            @relation("ProjectContractVersionChain", fields: [organizationId, projectId, headId, predecessorId], references: [organizationId, projectId, headId, id], onDelete: Restrict, map: "ProjectContractVersion_predecessor_fkey")
-  successor                  ProjectContractVersion?            @relation("ProjectContractVersionChain")
+  predecessorId              String?                         @unique(map: "ProjectContractVersion_predecessor_key")
+  predecessor                ProjectContractVersion?         @relation("ProjectContractVersionChain", fields: [organizationId, projectId, headId, predecessorId], references: [organizationId, projectId, headId, id], onDelete: Restrict, map: "ProjectContractVersion_predecessor_fkey")
+  successor                  ProjectContractVersion?         @relation("ProjectContractVersionChain")
   authorityVersionId         String
-  authorityVersion           ProjectContractAuthorityVersion    @relation(fields: [organizationId, projectId, headId, authorityVersionId], references: [organizationId, projectId, headId, id], onDelete: Restrict, map: "ProjectContractVersion_authority_scope_fkey")
+  authorityVersion           ProjectContractAuthorityVersion @relation(fields: [organizationId, projectId, headId, authorityVersionId], references: [organizationId, projectId, headId, id], onDelete: Restrict, map: "ProjectContractVersion_authority_scope_fkey")
   authorityRevisionAtPrepare Int
-  contractReference          String                             @db.VarChar(120)
-  title                      String                             @db.VarChar(240)
-  counterpartyLabel          String                             @db.VarChar(240)
-  effectiveFrom              DateTime                           @db.Date
-  currencyCode               String                             @db.Char(3)
-  currencyMinorUnits         Int                                @db.SmallInt
+  contractReference          String                          @db.VarChar(120)
+  title                      String                          @db.VarChar(240)
+  counterpartyLabel          String                          @db.VarChar(240)
+  effectiveFrom              DateTime                        @db.Date
+  currencyCode               String                          @db.Char(3)
+  currencyMinorUnits         Int                             @db.SmallInt
   retentionBps               Int
-  roundingPolicyVersion      String                             @db.VarChar(64)
-  adjustmentPolicyVersion    String                             @db.VarChar(64)
+  roundingPolicyVersion      String                          @db.VarChar(64)
+  adjustmentPolicyVersion    String                          @db.VarChar(64)
   lineCount                  Int
   valuedLineCount            Int
   noClaimLineCount           Int
   totalContractAmountMinor   BigInt
-  candidateSha256            String                             @db.Char(64)
-  contractSha256             String                             @db.Char(64)
+  candidateSha256            String                          @db.Char(64)
+  contractSha256             String                          @db.Char(64)
   headRevisionAtPrepare      Int
   preparedByMembershipId     String
-  preparedByMembership       TenantMembership                   @relation("ProjectContractPreparer", fields: [organizationId, preparedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "ProjectContractVersion_preparer_fkey")
-  operationKeyHash           String                             @db.Char(64)
-  requestFingerprint         String                             @db.Char(64)
+  preparedByMembership       TenantMembership                @relation("ProjectContractPreparer", fields: [organizationId, preparedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "ProjectContractVersion_preparer_fkey")
+  operationKeyHash           String                          @db.Char(64)
+  requestFingerprint         String                          @db.Char(64)
   lines                      ProjectContractLine[]
-  projectCertificateBooks    ProjectCertificateBook[]    @relation("ProjectCertificatePinnedContract")
-  projectCertificateVersions ProjectCertificateVersion[] @relation("ProjectCertificateVersionContract")
+  projectCertificateBooks    ProjectCertificateBook[]        @relation("ProjectCertificatePinnedContract")
+  projectCertificateVersions ProjectCertificateVersion[]     @relation("ProjectCertificateVersionContract")
   decision                   ProjectContractDecision?
-  currentForHead             ProjectContractHead?               @relation("ProjectContractCurrentVersion")
-  latestForHead              ProjectContractHead?               @relation("ProjectContractLatestVersion")
-  pendingForHead             ProjectContractHead?               @relation("ProjectContractPendingVersion")
-  createdAt                  DateTime                            @default(now())
+  currentForHead             ProjectContractHead?            @relation("ProjectContractCurrentVersion")
+  latestForHead              ProjectContractHead?            @relation("ProjectContractLatestVersion")
+  pendingForHead             ProjectContractHead?            @relation("ProjectContractPendingVersion")
+  createdAt                  DateTime                        @default(now())
 
   @@unique([organizationId, operationKeyHash], map: "ProjectContractVersion_org_operation_key")
   @@unique([headId, version], map: "ProjectContractVersion_head_version_key")
@@ -3808,30 +3812,30 @@ model ProjectContractVersion {
 /// Immutable one-line-per-canonical-task SOV snapshot. NO_CLAIM is explicit
 /// absence of contractual value and never an inferred zero amount.
 model ProjectContractLine {
-  id                  String                   @id @default(cuid())
-  organizationId      String
-  organization        Organization             @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "ProjectContractLine_organization_fkey")
-  projectId           String
-  project              Project                  @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "ProjectContractLine_project_scope_fkey")
-  headId              String
-  head                ProjectContractHead      @relation("ProjectContractLineHead", fields: [organizationId, projectId, headId], references: [organizationId, projectId, id], onDelete: Restrict, map: "ProjectContractLine_head_scope_fkey")
-  contractVersionId   String
-  contractVersion     ProjectContractVersion   @relation(fields: [organizationId, projectId, headId, contractVersionId], references: [organizationId, projectId, headId, id], onDelete: Restrict, map: "ProjectContractLine_version_scope_fkey")
-  ordinal             Int
-  state               ProjectContractLineState
-  taskId              String
-  task                Task                     @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict, map: "ProjectContractLine_task_scope_fkey")
-  taskCode            String?                  @db.VarChar(64)
-  taskTitle           String                   @db.Text
-  taskRevision        Int
-  unitCode            ProgressMeasurementUnitCode?
-  baseQuantity        Decimal?                 @db.Decimal(18, 4)
-  contractAmountMinor BigInt?
-  noClaimReason       String?                  @db.VarChar(1000)
+  id                            String                                 @id @default(cuid())
+  organizationId                String
+  organization                  Organization                           @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "ProjectContractLine_organization_fkey")
+  projectId                     String
+  project                       Project                                @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "ProjectContractLine_project_scope_fkey")
+  headId                        String
+  head                          ProjectContractHead                    @relation("ProjectContractLineHead", fields: [organizationId, projectId, headId], references: [organizationId, projectId, id], onDelete: Restrict, map: "ProjectContractLine_head_scope_fkey")
+  contractVersionId             String
+  contractVersion               ProjectContractVersion                 @relation(fields: [organizationId, projectId, headId, contractVersionId], references: [organizationId, projectId, headId, id], onDelete: Restrict, map: "ProjectContractLine_version_scope_fkey")
+  ordinal                       Int
+  state                         ProjectContractLineState
+  taskId                        String
+  task                          Task                                   @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict, map: "ProjectContractLine_task_scope_fkey")
+  taskCode                      String?                                @db.VarChar(64)
+  taskTitle                     String                                 @db.Text
+  taskRevision                  Int
+  unitCode                      ProgressMeasurementUnitCode?
+  baseQuantity                  Decimal?                               @db.Decimal(18, 4)
+  contractAmountMinor           BigInt?
+  noClaimReason                 String?                                @db.VarChar(1000)
   technicalBasisStatusAtPrepare ProjectContractTechnicalBasisSnapshot?
-  lineSha256          String                   @db.Char(64)
-  createdAt           DateTime                 @default(now())
-  projectCertificateLines ProjectCertificateLine[] @relation("ProjectCertificateLineContract")
+  lineSha256                    String                                 @db.Char(64)
+  createdAt                     DateTime                               @default(now())
+  projectCertificateLines       ProjectCertificateLine[]               @relation("ProjectCertificateLineContract")
 
   @@unique([contractVersionId, ordinal], map: "ProjectContractLine_version_ordinal_key")
   @@unique([contractVersionId, taskId], map: "ProjectContractLine_version_task_key")
@@ -3846,7 +3850,7 @@ model ProjectContractDecision {
   organizationId         String
   organization           Organization                @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "ProjectContractDecision_organization_fkey")
   projectId              String
-  project                 Project                     @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "ProjectContractDecision_project_scope_fkey")
+  project                Project                     @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "ProjectContractDecision_project_scope_fkey")
   headId                 String
   head                   ProjectContractHead         @relation("ProjectContractDecisionHead", fields: [organizationId, projectId, headId], references: [organizationId, projectId, id], onDelete: Restrict, map: "ProjectContractDecision_head_scope_fkey")
   contractVersionId      String                      @unique(map: "ProjectContractDecision_version_key")
@@ -3872,27 +3876,27 @@ model ProjectContractDecision {
 /// DB-owned projection for one project's governed certificate sequence and
 /// contractual pin. It is writable only through the S10-CERT command workers.
 model ProjectCertificateBook {
-  id                                   String                         @id @default(cuid())
-  organizationId                       String
-  organization                         Organization                   @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "ProjectCertificateBook_organization_fkey")
-  projectId                            String
-  project                               Project                        @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "ProjectCertificateBook_project_scope_fkey")
-  pinnedContractHeadId                 String?
-  pinnedContractVersionId              String?
-  pinnedAuthorityVersionId             String?
-  pinnedContractVersion                ProjectContractVersion?        @relation("ProjectCertificatePinnedContract", fields: [organizationId, projectId, pinnedContractHeadId, pinnedContractVersionId, pinnedAuthorityVersionId], references: [organizationId, projectId, headId, id, authorityVersionId], onDelete: Restrict, map: "ProjectCertificateBook_pinned_contract_fkey")
-  latestVersionSequence                BigInt                         @default(0)
-  latestApprovedPeriodStart            DateTime?                      @db.Date
-  latestApprovedCertificateVersionId   String?                        @unique(map: "ProjectCertificateBook_latest_approved_version_key")
-  latestApprovedCertificateVersion     ProjectCertificateVersion?     @relation("ProjectCertificateBookLatestApproved", fields: [organizationId, projectId, id, latestApprovedCertificateVersionId], references: [organizationId, projectId, bookId, id], onDelete: Restrict, map: "ProjectCertificateBook_latest_approved_fkey")
-  pendingCertificateVersionId          String?                        @unique(map: "ProjectCertificateBook_pending_version_key")
-  pendingCertificateVersion            ProjectCertificateVersion?     @relation("ProjectCertificateBookPending", fields: [organizationId, projectId, id, pendingCertificateVersionId], references: [organizationId, projectId, bookId, id], onDelete: Restrict, map: "ProjectCertificateBook_pending_version_fkey")
-  revision                             Int                            @default(0)
-  periodHeads                          ProjectCertificatePeriodHead[]  @relation("ProjectCertificatePeriodBook")
-  versions                             ProjectCertificateVersion[]    @relation("ProjectCertificateVersionBook")
-  decisions                            ProjectCertificateDecision[]   @relation("ProjectCertificateDecisionBook")
-  createdAt                            DateTime                       @default(now())
-  updatedAt                            DateTime                       @updatedAt
+  id                                 String                         @id @default(cuid())
+  organizationId                     String
+  organization                       Organization                   @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "ProjectCertificateBook_organization_fkey")
+  projectId                          String
+  project                            Project                        @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "ProjectCertificateBook_project_scope_fkey")
+  pinnedContractHeadId               String?
+  pinnedContractVersionId            String?
+  pinnedAuthorityVersionId           String?
+  pinnedContractVersion              ProjectContractVersion?        @relation("ProjectCertificatePinnedContract", fields: [organizationId, projectId, pinnedContractHeadId, pinnedContractVersionId, pinnedAuthorityVersionId], references: [organizationId, projectId, headId, id, authorityVersionId], onDelete: Restrict, map: "ProjectCertificateBook_pinned_contract_fkey")
+  latestVersionSequence              BigInt                         @default(0)
+  latestApprovedPeriodStart          DateTime?                      @db.Date
+  latestApprovedCertificateVersionId String?                        @unique(map: "ProjectCertificateBook_latest_approved_version_key")
+  latestApprovedCertificateVersion   ProjectCertificateVersion?     @relation("ProjectCertificateBookLatestApproved", fields: [organizationId, projectId, id, latestApprovedCertificateVersionId], references: [organizationId, projectId, bookId, id], onDelete: Restrict, map: "ProjectCertificateBook_latest_approved_fkey")
+  pendingCertificateVersionId        String?                        @unique(map: "ProjectCertificateBook_pending_version_key")
+  pendingCertificateVersion          ProjectCertificateVersion?     @relation("ProjectCertificateBookPending", fields: [organizationId, projectId, id, pendingCertificateVersionId], references: [organizationId, projectId, bookId, id], onDelete: Restrict, map: "ProjectCertificateBook_pending_version_fkey")
+  revision                           Int                            @default(0)
+  periodHeads                        ProjectCertificatePeriodHead[] @relation("ProjectCertificatePeriodBook")
+  versions                           ProjectCertificateVersion[]    @relation("ProjectCertificateVersionBook")
+  decisions                          ProjectCertificateDecision[]   @relation("ProjectCertificateDecisionBook")
+  createdAt                          DateTime                       @default(now())
+  updatedAt                          DateTime                       @updatedAt
 
   @@unique([organizationId, projectId], map: "ProjectCertificateBook_scope_key")
   @@unique([organizationId, projectId, id], map: "ProjectCertificateBook_scope_id_key")
@@ -3904,24 +3908,24 @@ model ProjectCertificateBook {
 /// Mutable pointer for one civil-fortnight certificate chain. Rejections and
 /// cancellations advance latestVersionId but never replace currentApprovedVersionId.
 model ProjectCertificatePeriodHead {
-  id                       String                      @id @default(cuid())
+  id                       String                       @id @default(cuid())
   organizationId           String
-  organization             Organization                @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "ProjectCertificatePeriodHead_organization_fkey")
+  organization             Organization                 @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "ProjectCertificatePeriodHead_organization_fkey")
   projectId                String
-  project                   Project                     @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "ProjectCertificatePeriodHead_project_scope_fkey")
+  project                  Project                      @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "ProjectCertificatePeriodHead_project_scope_fkey")
   bookId                   String
-  book                     ProjectCertificateBook      @relation("ProjectCertificatePeriodBook", fields: [organizationId, projectId, bookId], references: [organizationId, projectId, id], onDelete: Restrict, map: "ProjectCertificatePeriodHead_book_scope_fkey")
-  periodStart              DateTime                    @db.Date
-  periodEnd                DateTime                    @db.Date
-  currentApprovedVersionId String?                     @unique(map: "ProjectCertificatePeriodHead_current_approved_key")
-  currentApprovedVersion   ProjectCertificateVersion?  @relation("ProjectCertificatePeriodCurrent", fields: [organizationId, projectId, bookId, id, currentApprovedVersionId], references: [organizationId, projectId, bookId, periodHeadId, id], onDelete: Restrict, map: "ProjectCertificatePeriodHead_current_approved_fkey")
-  latestVersionId          String?                     @unique(map: "ProjectCertificatePeriodHead_latest_version_key")
-  latestVersion            ProjectCertificateVersion?  @relation("ProjectCertificatePeriodLatest", fields: [organizationId, projectId, bookId, id, latestVersionId], references: [organizationId, projectId, bookId, periodHeadId, id], onDelete: Restrict, map: "ProjectCertificatePeriodHead_latest_version_fkey")
-  revision                 Int                         @default(0)
-  versions                 ProjectCertificateVersion[] @relation("ProjectCertificatePeriodLedger")
+  book                     ProjectCertificateBook       @relation("ProjectCertificatePeriodBook", fields: [organizationId, projectId, bookId], references: [organizationId, projectId, id], onDelete: Restrict, map: "ProjectCertificatePeriodHead_book_scope_fkey")
+  periodStart              DateTime                     @db.Date
+  periodEnd                DateTime                     @db.Date
+  currentApprovedVersionId String?                      @unique(map: "ProjectCertificatePeriodHead_current_approved_key")
+  currentApprovedVersion   ProjectCertificateVersion?   @relation("ProjectCertificatePeriodCurrent", fields: [organizationId, projectId, bookId, id, currentApprovedVersionId], references: [organizationId, projectId, bookId, periodHeadId, id], onDelete: Restrict, map: "ProjectCertificatePeriodHead_current_approved_fkey")
+  latestVersionId          String?                      @unique(map: "ProjectCertificatePeriodHead_latest_version_key")
+  latestVersion            ProjectCertificateVersion?   @relation("ProjectCertificatePeriodLatest", fields: [organizationId, projectId, bookId, id, latestVersionId], references: [organizationId, projectId, bookId, periodHeadId, id], onDelete: Restrict, map: "ProjectCertificatePeriodHead_latest_version_fkey")
+  revision                 Int                          @default(0)
+  versions                 ProjectCertificateVersion[]  @relation("ProjectCertificatePeriodLedger")
   decisions                ProjectCertificateDecision[] @relation("ProjectCertificateDecisionPeriod")
-  createdAt                DateTime                    @default(now())
-  updatedAt                DateTime                    @updatedAt
+  createdAt                DateTime                     @default(now())
+  updatedAt                DateTime                     @updatedAt
 
   @@unique([organizationId, projectId, periodStart], map: "ProjectCertificatePeriodHead_scope_period_key")
   @@unique([organizationId, projectId, id], map: "ProjectCertificatePeriodHead_scope_id_key")
@@ -3934,74 +3938,74 @@ model ProjectCertificatePeriodHead {
 /// Immutable full certificate attempt. Monetary values are exact BIGINT minor
 /// units; quantities are DECIMAL(18,4), never JavaScript Number projections.
 model ProjectCertificateVersion {
-  id                                           String                            @id @default(cuid())
-  organizationId                               String
-  organization                                 Organization                      @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "ProjectCertificateVersion_organization_fkey")
-  projectId                                    String
-  project                                       Project                           @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "ProjectCertificateVersion_project_scope_fkey")
-  bookId                                       String
-  book                                         ProjectCertificateBook            @relation("ProjectCertificateVersionBook", fields: [organizationId, projectId, bookId], references: [organizationId, projectId, id], onDelete: Restrict, map: "ProjectCertificateVersion_book_scope_fkey")
-  periodHeadId                                 String
-  periodHead                                   ProjectCertificatePeriodHead      @relation("ProjectCertificatePeriodLedger", fields: [organizationId, projectId, bookId, periodHeadId], references: [organizationId, projectId, bookId, id], onDelete: Restrict, map: "ProjectCertificateVersion_period_head_scope_fkey")
-  projectSequence                              BigInt
-  periodVersion                                Int
-  predecessorId                                String?                           @unique(map: "ProjectCertificateVersion_predecessor_key")
-  predecessor                                  ProjectCertificateVersion?        @relation("ProjectCertificateVersionChain", fields: [organizationId, projectId, bookId, periodHeadId, predecessorId], references: [organizationId, projectId, bookId, periodHeadId, id], onDelete: Restrict, map: "ProjectCertificateVersion_predecessor_fkey")
-  successor                                    ProjectCertificateVersion?        @relation("ProjectCertificateVersionChain")
-  supersedesApprovedVersionId                  String?
-  supersedesApprovedVersion                    ProjectCertificateVersion?        @relation("ProjectCertificateSupersededApproved", fields: [organizationId, projectId, bookId, periodHeadId, supersedesApprovedVersionId], references: [organizationId, projectId, bookId, periodHeadId, id], onDelete: Restrict, map: "ProjectCertificateVersion_supersedes_fkey")
-  supersedingAttempts                          ProjectCertificateVersion[]        @relation("ProjectCertificateSupersededApproved")
-  previousApprovedCertificateVersionId         String?
-  previousApprovedCertificateVersion           ProjectCertificateVersion?        @relation("ProjectCertificatePreviousApproved", fields: [organizationId, projectId, bookId, previousApprovedCertificateVersionId], references: [organizationId, projectId, bookId, id], onDelete: Restrict, map: "ProjectCertificateVersion_previous_approved_fkey")
-  followingCertificateVersions                 ProjectCertificateVersion[]        @relation("ProjectCertificatePreviousApproved")
-  cutHeadId                                    String
-  cutId                                        String
-  cut                                          ProjectProgressMeasurementCut      @relation("ProjectCertificateVersionCut", fields: [organizationId, projectId, cutHeadId, cutId], references: [organizationId, projectId, headId, id], onDelete: Restrict, map: "ProjectCertificateVersion_cut_scope_fkey")
-  contractHeadId                               String
-  contractVersionId                            String
-  authorityVersionId                           String
-  contractVersion                              ProjectContractVersion             @relation("ProjectCertificateVersionContract", fields: [organizationId, projectId, contractHeadId, contractVersionId, authorityVersionId], references: [organizationId, projectId, headId, id, authorityVersionId], onDelete: Restrict, map: "ProjectCertificateVersion_contract_scope_fkey")
-  periodStart                                  DateTime                           @db.Date
-  periodEnd                                    DateTime                           @db.Date
-  coverageFrom                                 DateTime                           @db.Date
-  coverageThrough                              DateTime                           @db.Date
-  currencyCode                                 String                             @db.Char(3)
-  currencyMinorUnits                           Int                                @db.SmallInt
-  contractualRoundingPolicyVersion             String                             @db.VarChar(64)
-  cumulativeGrossPolicyVersion                 String                             @db.VarChar(64)
-  cumulativeRetentionPolicyVersion             String                             @db.VarChar(64)
-  adjustmentPolicyVersion                      String                             @db.VarChar(64)
-  retentionBps                                 Int
-  taskCount                                    Int
-  valuedLineCount                              Int
-  noClaimLineCount                             Int
-  previousApprovedCumulativeGrossTotalMinor    BigInt
-  cumulativeGrossTotalMinor                    BigInt
-  certificateIncrementGrossTotalMinor          BigInt
-  previousApprovedCumulativeRetentionMinor     BigInt
-  cumulativeRetentionMinor                     BigInt
-  certificateIncrementRetentionMinor           BigInt
-  certificateIncrementDeductionsMinor          BigInt
-  certificateIncrementNetMinor                 BigInt
-  sourceCutCandidateSha256                      String                             @db.Char(64)
-  sourceCutSha256                               String                             @db.Char(64)
-  sourceContractSha256                          String                             @db.Char(64)
-  sourceAuthoritySha256                         String                             @db.Char(64)
-  candidateSha256                               String                             @db.Char(64)
-  certificateSha256                             String                             @db.Char(64)
-  preparedByMembershipId                        String
-  preparedByMembership                          TenantMembership                   @relation("ProjectCertificatePreparer", fields: [organizationId, preparedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "ProjectCertificateVersion_preparer_fkey")
-  bookRevisionAtPrepare                         Int
-  periodHeadRevisionAtPrepare                   Int
-  lines                                        ProjectCertificateLine[]
-  deductions                                   ProjectCertificateDeduction[]
-  decision                                     ProjectCertificateDecision?
-  operationReceipts                            ProjectCertificateOperationReceipt[]
-  latestApprovedForBook                         ProjectCertificateBook?             @relation("ProjectCertificateBookLatestApproved")
-  pendingForBook                                ProjectCertificateBook?             @relation("ProjectCertificateBookPending")
-  currentForPeriod                              ProjectCertificatePeriodHead?       @relation("ProjectCertificatePeriodCurrent")
-  latestForPeriod                               ProjectCertificatePeriodHead?       @relation("ProjectCertificatePeriodLatest")
-  createdAt                                    DateTime                           @default(now())
+  id                                        String                               @id @default(cuid())
+  organizationId                            String
+  organization                              Organization                         @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "ProjectCertificateVersion_organization_fkey")
+  projectId                                 String
+  project                                   Project                              @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "ProjectCertificateVersion_project_scope_fkey")
+  bookId                                    String
+  book                                      ProjectCertificateBook               @relation("ProjectCertificateVersionBook", fields: [organizationId, projectId, bookId], references: [organizationId, projectId, id], onDelete: Restrict, map: "ProjectCertificateVersion_book_scope_fkey")
+  periodHeadId                              String
+  periodHead                                ProjectCertificatePeriodHead         @relation("ProjectCertificatePeriodLedger", fields: [organizationId, projectId, bookId, periodHeadId], references: [organizationId, projectId, bookId, id], onDelete: Restrict, map: "ProjectCertificateVersion_period_head_scope_fkey")
+  projectSequence                           BigInt
+  periodVersion                             Int
+  predecessorId                             String?                              @unique(map: "ProjectCertificateVersion_predecessor_key")
+  predecessor                               ProjectCertificateVersion?           @relation("ProjectCertificateVersionChain", fields: [organizationId, projectId, bookId, periodHeadId, predecessorId], references: [organizationId, projectId, bookId, periodHeadId, id], onDelete: Restrict, map: "ProjectCertificateVersion_predecessor_fkey")
+  successor                                 ProjectCertificateVersion?           @relation("ProjectCertificateVersionChain")
+  supersedesApprovedVersionId               String?
+  supersedesApprovedVersion                 ProjectCertificateVersion?           @relation("ProjectCertificateSupersededApproved", fields: [organizationId, projectId, bookId, periodHeadId, supersedesApprovedVersionId], references: [organizationId, projectId, bookId, periodHeadId, id], onDelete: Restrict, map: "ProjectCertificateVersion_supersedes_fkey")
+  supersedingAttempts                       ProjectCertificateVersion[]          @relation("ProjectCertificateSupersededApproved")
+  previousApprovedCertificateVersionId      String?
+  previousApprovedCertificateVersion        ProjectCertificateVersion?           @relation("ProjectCertificatePreviousApproved", fields: [organizationId, projectId, bookId, previousApprovedCertificateVersionId], references: [organizationId, projectId, bookId, id], onDelete: Restrict, map: "ProjectCertificateVersion_previous_approved_fkey")
+  followingCertificateVersions              ProjectCertificateVersion[]          @relation("ProjectCertificatePreviousApproved")
+  cutHeadId                                 String
+  cutId                                     String
+  cut                                       ProjectProgressMeasurementCut        @relation("ProjectCertificateVersionCut", fields: [organizationId, projectId, cutHeadId, cutId], references: [organizationId, projectId, headId, id], onDelete: Restrict, map: "ProjectCertificateVersion_cut_scope_fkey")
+  contractHeadId                            String
+  contractVersionId                         String
+  authorityVersionId                        String
+  contractVersion                           ProjectContractVersion               @relation("ProjectCertificateVersionContract", fields: [organizationId, projectId, contractHeadId, contractVersionId, authorityVersionId], references: [organizationId, projectId, headId, id, authorityVersionId], onDelete: Restrict, map: "ProjectCertificateVersion_contract_scope_fkey")
+  periodStart                               DateTime                             @db.Date
+  periodEnd                                 DateTime                             @db.Date
+  coverageFrom                              DateTime                             @db.Date
+  coverageThrough                           DateTime                             @db.Date
+  currencyCode                              String                               @db.Char(3)
+  currencyMinorUnits                        Int                                  @db.SmallInt
+  contractualRoundingPolicyVersion          String                               @db.VarChar(64)
+  cumulativeGrossPolicyVersion              String                               @db.VarChar(64)
+  cumulativeRetentionPolicyVersion          String                               @db.VarChar(64)
+  adjustmentPolicyVersion                   String                               @db.VarChar(64)
+  retentionBps                              Int
+  taskCount                                 Int
+  valuedLineCount                           Int
+  noClaimLineCount                          Int
+  previousApprovedCumulativeGrossTotalMinor BigInt
+  cumulativeGrossTotalMinor                 BigInt
+  certificateIncrementGrossTotalMinor       BigInt
+  previousApprovedCumulativeRetentionMinor  BigInt
+  cumulativeRetentionMinor                  BigInt
+  certificateIncrementRetentionMinor        BigInt
+  certificateIncrementDeductionsMinor       BigInt
+  certificateIncrementNetMinor              BigInt
+  sourceCutCandidateSha256                  String                               @db.Char(64)
+  sourceCutSha256                           String                               @db.Char(64)
+  sourceContractSha256                      String                               @db.Char(64)
+  sourceAuthoritySha256                     String                               @db.Char(64)
+  candidateSha256                           String                               @db.Char(64)
+  certificateSha256                         String                               @db.Char(64)
+  preparedByMembershipId                    String
+  preparedByMembership                      TenantMembership                     @relation("ProjectCertificatePreparer", fields: [organizationId, preparedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "ProjectCertificateVersion_preparer_fkey")
+  bookRevisionAtPrepare                     Int
+  periodHeadRevisionAtPrepare               Int
+  lines                                     ProjectCertificateLine[]
+  deductions                                ProjectCertificateDeduction[]
+  decision                                  ProjectCertificateDecision?
+  operationReceipts                         ProjectCertificateOperationReceipt[]
+  latestApprovedForBook                     ProjectCertificateBook?              @relation("ProjectCertificateBookLatestApproved")
+  pendingForBook                            ProjectCertificateBook?              @relation("ProjectCertificateBookPending")
+  currentForPeriod                          ProjectCertificatePeriodHead?        @relation("ProjectCertificatePeriodCurrent")
+  latestForPeriod                           ProjectCertificatePeriodHead?        @relation("ProjectCertificatePeriodLatest")
+  createdAt                                 DateTime                             @default(now())
 
   @@unique([bookId, projectSequence], map: "ProjectCertificateVersion_book_sequence_key")
   @@unique([periodHeadId, periodVersion], map: "ProjectCertificateVersion_period_version_key")
@@ -4015,41 +4019,41 @@ model ProjectCertificateVersion {
 
 /// Immutable joined technical/contractual task snapshot for one certificate.
 model ProjectCertificateLine {
-  id                                      String                            @id @default(cuid())
-  organizationId                          String
-  organization                            Organization                      @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "ProjectCertificateLine_organization_fkey")
-  projectId                               String
-  project                                  Project                           @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "ProjectCertificateLine_project_scope_fkey")
-  certificateVersionId                    String
-  cutId                                   String
-  contractVersionId                       String
-  certificateVersion                      ProjectCertificateVersion         @relation(fields: [organizationId, projectId, certificateVersionId, cutId, contractVersionId], references: [organizationId, projectId, id, cutId, contractVersionId], onDelete: Restrict, map: "ProjectCertificateLine_version_source_fkey")
-  ordinal                                 Int
-  state                                   ProjectCertificateLineState
-  cutLineState                            ProgressMeasurementCutLineState
-  taskId                                  String
-  task                                     Task                              @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict, map: "ProjectCertificateLine_task_scope_fkey")
-  cutLineId                               String
-  cutLine                                  ProjectProgressMeasurementCutLine  @relation("ProjectCertificateLineCut", fields: [organizationId, projectId, cutId, taskId, cutLineId], references: [organizationId, projectId, cutId, taskId, id], onDelete: Restrict, map: "ProjectCertificateLine_cut_line_scope_fkey")
-  contractLineId                          String
-  contractLine                             ProjectContractLine                @relation("ProjectCertificateLineContract", fields: [organizationId, projectId, contractVersionId, taskId, contractLineId], references: [organizationId, projectId, contractVersionId, taskId, id], onDelete: Restrict, map: "ProjectCertificateLine_contract_line_scope_fkey")
-  taskCode                                String?                           @db.VarChar(64)
-  taskTitle                               String                            @db.Text
-  taskRevision                            Int
-  unitCode                                ProgressMeasurementUnitCode?
-  baseQuantity                            Decimal?                          @db.Decimal(18, 4)
-  periodQuantity                          Decimal?                          @db.Decimal(18, 4)
-  cumulativeQuantity                      Decimal?                          @db.Decimal(18, 4)
-  technicalCumulativeOriginPeriodStart    DateTime?                         @db.Date
-  contractAmountMinor                     BigInt?
-  previousApprovedCumulativeGrossMinor    BigInt?
-  cumulativeGrossMinor                    BigInt?
-  certificateIncrementGrossMinor          BigInt?
-  noClaimReason                           String?                           @db.VarChar(1000)
-  cutLineSha256                           String                            @db.Char(64)
-  contractLineSha256                      String                            @db.Char(64)
-  lineSha256                              String                            @db.Char(64)
-  createdAt                               DateTime                          @default(now())
+  id                                   String                            @id @default(cuid())
+  organizationId                       String
+  organization                         Organization                      @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "ProjectCertificateLine_organization_fkey")
+  projectId                            String
+  project                              Project                           @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "ProjectCertificateLine_project_scope_fkey")
+  certificateVersionId                 String
+  cutId                                String
+  contractVersionId                    String
+  certificateVersion                   ProjectCertificateVersion         @relation(fields: [organizationId, projectId, certificateVersionId, cutId, contractVersionId], references: [organizationId, projectId, id, cutId, contractVersionId], onDelete: Restrict, map: "ProjectCertificateLine_version_source_fkey")
+  ordinal                              Int
+  state                                ProjectCertificateLineState
+  cutLineState                         ProgressMeasurementCutLineState
+  taskId                               String
+  task                                 Task                              @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict, map: "ProjectCertificateLine_task_scope_fkey")
+  cutLineId                            String
+  cutLine                              ProjectProgressMeasurementCutLine @relation("ProjectCertificateLineCut", fields: [organizationId, projectId, cutId, taskId, cutLineId], references: [organizationId, projectId, cutId, taskId, id], onDelete: Restrict, map: "ProjectCertificateLine_cut_line_scope_fkey")
+  contractLineId                       String
+  contractLine                         ProjectContractLine               @relation("ProjectCertificateLineContract", fields: [organizationId, projectId, contractVersionId, taskId, contractLineId], references: [organizationId, projectId, contractVersionId, taskId, id], onDelete: Restrict, map: "ProjectCertificateLine_contract_line_scope_fkey")
+  taskCode                             String?                           @db.VarChar(64)
+  taskTitle                            String                            @db.Text
+  taskRevision                         Int
+  unitCode                             ProgressMeasurementUnitCode?
+  baseQuantity                         Decimal?                          @db.Decimal(18, 4)
+  periodQuantity                       Decimal?                          @db.Decimal(18, 4)
+  cumulativeQuantity                   Decimal?                          @db.Decimal(18, 4)
+  technicalCumulativeOriginPeriodStart DateTime?                         @db.Date
+  contractAmountMinor                  BigInt?
+  previousApprovedCumulativeGrossMinor BigInt?
+  cumulativeGrossMinor                 BigInt?
+  certificateIncrementGrossMinor       BigInt?
+  noClaimReason                        String?                           @db.VarChar(1000)
+  cutLineSha256                        String                            @db.Char(64)
+  contractLineSha256                   String                            @db.Char(64)
+  lineSha256                           String                            @db.Char(64)
+  createdAt                            DateTime                          @default(now())
 
   @@unique([certificateVersionId, ordinal], map: "ProjectCertificateLine_version_ordinal_key")
   @@unique([certificateVersionId, taskId], map: "ProjectCertificateLine_version_task_key")
@@ -4063,7 +4067,7 @@ model ProjectCertificateDeduction {
   organizationId       String
   organization         Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "ProjectCertificateDeduction_organization_fkey")
   projectId            String
-  project               Project                   @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "ProjectCertificateDeduction_project_scope_fkey")
+  project              Project                   @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "ProjectCertificateDeduction_project_scope_fkey")
   certificateVersionId String
   certificateVersion   ProjectCertificateVersion @relation(fields: [organizationId, projectId, certificateVersionId], references: [organizationId, projectId, id], onDelete: Restrict, map: "ProjectCertificateDeduction_version_scope_fkey")
   ordinal              Int
@@ -4080,29 +4084,29 @@ model ProjectCertificateDeduction {
 
 /// Append-only terminal checker decision over one certificate attempt.
 model ProjectCertificateDecision {
-  id                        String                                  @id @default(cuid())
-  organizationId            String
-  organization              Organization                            @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "ProjectCertificateDecision_organization_fkey")
-  projectId                 String
-  project                   Project                                 @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "ProjectCertificateDecision_project_scope_fkey")
-  bookId                    String
-  book                      ProjectCertificateBook                  @relation("ProjectCertificateDecisionBook", fields: [organizationId, projectId, bookId], references: [organizationId, projectId, id], onDelete: Restrict, map: "ProjectCertificateDecision_book_scope_fkey")
-  periodHeadId              String
-  periodHead                ProjectCertificatePeriodHead            @relation("ProjectCertificateDecisionPeriod", fields: [organizationId, projectId, bookId, periodHeadId], references: [organizationId, projectId, bookId, id], onDelete: Restrict, map: "ProjectCertificateDecision_period_scope_fkey")
-  certificateVersionId      String                                  @unique(map: "ProjectCertificateDecision_version_key")
-  certificateVersion        ProjectCertificateVersion               @relation(fields: [organizationId, projectId, bookId, periodHeadId, certificateVersionId], references: [organizationId, projectId, bookId, periodHeadId, id], onDelete: Restrict, map: "ProjectCertificateDecision_version_scope_fkey")
-  decision                  ProjectCertificateDecisionType
-  actorBasis                ProjectCertificateDecisionActorBasis
-  reason                    String                                  @db.VarChar(1000)
-  expectedBookRevision      Int
+  id                         String                               @id @default(cuid())
+  organizationId             String
+  organization               Organization                         @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "ProjectCertificateDecision_organization_fkey")
+  projectId                  String
+  project                    Project                              @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "ProjectCertificateDecision_project_scope_fkey")
+  bookId                     String
+  book                       ProjectCertificateBook               @relation("ProjectCertificateDecisionBook", fields: [organizationId, projectId, bookId], references: [organizationId, projectId, id], onDelete: Restrict, map: "ProjectCertificateDecision_book_scope_fkey")
+  periodHeadId               String
+  periodHead                 ProjectCertificatePeriodHead         @relation("ProjectCertificateDecisionPeriod", fields: [organizationId, projectId, bookId, periodHeadId], references: [organizationId, projectId, bookId, id], onDelete: Restrict, map: "ProjectCertificateDecision_period_scope_fkey")
+  certificateVersionId       String                               @unique(map: "ProjectCertificateDecision_version_key")
+  certificateVersion         ProjectCertificateVersion            @relation(fields: [organizationId, projectId, bookId, periodHeadId, certificateVersionId], references: [organizationId, projectId, bookId, periodHeadId, id], onDelete: Restrict, map: "ProjectCertificateDecision_version_scope_fkey")
+  decision                   ProjectCertificateDecisionType
+  actorBasis                 ProjectCertificateDecisionActorBasis
+  reason                     String                               @db.VarChar(1000)
+  expectedBookRevision       Int
   expectedPeriodHeadRevision Int
-  bookRevisionAfter         Int
-  periodHeadRevisionAfter   Int
-  certificateSha256Snapshot String                                  @db.Char(64)
-  decidedByMembershipId     String
-  decidedByMembership       TenantMembership                        @relation("ProjectCertificateDecisionActor", fields: [organizationId, decidedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "ProjectCertificateDecision_actor_fkey")
-  operationReceipts         ProjectCertificateOperationReceipt[]
-  createdAt                 DateTime                                @default(now())
+  bookRevisionAfter          Int
+  periodHeadRevisionAfter    Int
+  certificateSha256Snapshot  String                               @db.Char(64)
+  decidedByMembershipId      String
+  decidedByMembership        TenantMembership                     @relation("ProjectCertificateDecisionActor", fields: [organizationId, decidedByMembershipId], references: [organizationId, id], onDelete: Restrict, map: "ProjectCertificateDecision_actor_fkey")
+  operationReceipts          ProjectCertificateOperationReceipt[]
+  createdAt                  DateTime                             @default(now())
 
   @@unique([organizationId, projectId, certificateVersionId, id], map: "ProjectCertificateDecision_scope_id_key")
   @@unique([organizationId, projectId, bookId, periodHeadId, certificateVersionId], map: "ProjectCertificateDecision_exact_version_key")
@@ -4112,23 +4116,23 @@ model ProjectCertificateDecision {
 /// Common cross-kind append-only idempotency ledger. A single organization/key
 /// namespace prevents PREPARE and decision command keys from colliding.
 model ProjectCertificateOperationReceipt {
-  id                       String                           @id @default(cuid())
-  organizationId           String
-  organization             Organization                     @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "ProjectCertificateOperation_organization_fkey")
-  projectId                String
-  project                   Project                          @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "ProjectCertificateOperation_project_scope_fkey")
-  operationKind            ProjectCertificateOperationKind
-  operationKeyHash         String                           @db.Char(64)
-  requestFingerprint       String                           @db.Char(64)
-  actorMembershipId        String
-  actorMembership          TenantMembership                 @relation("ProjectCertificateOperationActor", fields: [organizationId, actorMembershipId], references: [organizationId, id], onDelete: Restrict, map: "ProjectCertificateOperation_actor_fkey")
-  certificateVersionId     String
-  certificateVersion       ProjectCertificateVersion        @relation(fields: [organizationId, projectId, certificateVersionId], references: [organizationId, projectId, id], onDelete: Restrict, map: "ProjectCertificateOperation_version_scope_fkey")
-  decisionId               String?
-  decision                 ProjectCertificateDecision?      @relation(fields: [organizationId, projectId, certificateVersionId, decisionId], references: [organizationId, projectId, certificateVersionId, id], onDelete: Restrict, map: "ProjectCertificateOperation_decision_scope_fkey")
-  bookRevisionAfter        Int
-  periodHeadRevisionAfter  Int
-  createdAt                DateTime                         @default(now())
+  id                      String                          @id @default(cuid())
+  organizationId          String
+  organization            Organization                    @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "ProjectCertificateOperation_organization_fkey")
+  projectId               String
+  project                 Project                         @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict, map: "ProjectCertificateOperation_project_scope_fkey")
+  operationKind           ProjectCertificateOperationKind
+  operationKeyHash        String                          @db.Char(64)
+  requestFingerprint      String                          @db.Char(64)
+  actorMembershipId       String
+  actorMembership         TenantMembership                @relation("ProjectCertificateOperationActor", fields: [organizationId, actorMembershipId], references: [organizationId, id], onDelete: Restrict, map: "ProjectCertificateOperation_actor_fkey")
+  certificateVersionId    String
+  certificateVersion      ProjectCertificateVersion       @relation(fields: [organizationId, projectId, certificateVersionId], references: [organizationId, projectId, id], onDelete: Restrict, map: "ProjectCertificateOperation_version_scope_fkey")
+  decisionId              String?
+  decision                ProjectCertificateDecision?     @relation(fields: [organizationId, projectId, certificateVersionId, decisionId], references: [organizationId, projectId, certificateVersionId, id], onDelete: Restrict, map: "ProjectCertificateOperation_decision_scope_fkey")
+  bookRevisionAfter       Int
+  periodHeadRevisionAfter Int
+  createdAt               DateTime                        @default(now())
 
   @@unique([organizationId, operationKeyHash], map: "ProjectCertificateOperation_org_key")
   @@unique([organizationId, projectId, certificateVersionId, id], map: "ProjectCertificateOperation_scope_id_key")
@@ -5344,4 +5348,55 @@ model DataSubjectDecisionItem {
   @@unique([organizationId, decisionSetId, discoveryItemId], map: "DataSubjectDecisionItem_decision_item_key")
   @@unique([organizationId, decisionSetId, ordinal], map: "DataSubjectDecisionItem_decision_ordinal_key")
   @@index([organizationId, requestId, manifestId, action], map: "DataSubjectDecisionItem_request_action_idx")
+}
+
+model InspectionRecord {
+  id                 String               @id @default(cuid())
+  organizationId     String
+  projectId          String
+  project            Project              @relation(fields: [organizationId, projectId], references: [organizationId, id], onDelete: Restrict)
+  clientRequestId    String
+  requestHash        String               @db.VarChar(64)
+  title              String
+  location           String
+  templateKey        String
+  templateVersion    Int
+  technicalReference String
+  notes              String
+  checklist          Json
+  status             String               @default("DRAFT")
+  version            Int                  @default(1)
+  contentHash        String               @db.VarChar(64)
+  createdById        String
+  createdBy          PlatformUser         @relation("InspectionAuthor", fields: [createdById], references: [id], onDelete: Restrict)
+  reviewedById       String?
+  reviewedBy         PlatformUser?        @relation("InspectionReviewer", fields: [reviewedById], references: [id], onDelete: Restrict)
+  reviewedAt         DateTime?
+  reviewNotes        String?
+  revisions          InspectionRevision[]
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  @@unique([organizationId, projectId, id], map: "InspectionRecord_scope_key")
+  @@unique([projectId, clientRequestId], map: "InspectionRecord_request_key")
+  @@index([projectId, status, createdAt], map: "InspectionRecord_list_idx")
+}
+
+model InspectionRevision {
+  id             String           @id @default(cuid())
+  organizationId String
+  projectId      String
+  inspectionId   String
+  inspection     InspectionRecord @relation(fields: [organizationId, projectId, inspectionId], references: [organizationId, projectId, id], onDelete: Restrict)
+  version        Int
+  action         String
+  actorId        String
+  actor          PlatformUser     @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  snapshot       Json
+  contentHash    String           @db.VarChar(64)
+  previousHash   String?          @db.VarChar(64)
+  createdAt      DateTime         @default(now())
+
+  @@unique([inspectionId, version], map: "InspectionRevision_version_key")
+  @@index([organizationId, projectId, inspectionId], map: "InspectionRevision_scope_idx")
 }

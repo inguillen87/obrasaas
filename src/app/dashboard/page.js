@@ -122,6 +122,7 @@ export default async function DashboardPage() {
         canManageIntegrations: hasTenantPermission(access, 'org:integrations:manage'),
         canReadOperationalProposals,
         canReadCanonicalTasks,
+        canReadFieldStatus: canReadCanonicalTasks && hasTenantPermission(access, 'org:execution:read'),
         canManageCanonicalTasks: hasTenantPermission(access, 'org:tasks:manage'),
         canUseReviewedEvidence,
         canonicalTasks: canonicalTasks.tasks,

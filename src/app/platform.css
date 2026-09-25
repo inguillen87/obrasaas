@@ -2620,3 +2620,10 @@ select.form-input option {
     transform: none !important;
   }
 }
+
+/* Work-cycle navigation: same authorized routes, shared with the command palette. */
+.dashboard-nav-description { margin: -2px 20px 8px; font-size: 10px; line-height: 1.5; color: var(--text-secondary, #94a3b8); opacity: .9; }
+.workspace-cycle-location { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 6px 0 20px; font-size: 12px; line-height: 1.5; color: var(--text-secondary, #94a3b8); }
+.workspace-cycle-location i { font-style: normal; opacity: .45; }
+.workspace-cycle-location strong { font-weight: 600; color: var(--text-primary, #f8fafc); }
+@media (max-width: 768px) { .workspace-cycle-location { margin: 4px 0 14px; font-size: 11px; } }

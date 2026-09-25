@@ -1,3 +1,4 @@
+import { normalizeFieldMenuDescriptor } from './whatsapp/field-interactive-menu.js';
 import { projectWhatsAppFlowReplyForPersistence } from './whatsapp/flows.js';
 import {
   SECURE_WEBVIEW_DELIVERY_MARKER,
@@ -12,6 +13,9 @@ export const WEBHOOK_RETRY_BASE_MS = 5_000;
 export const WEBHOOK_RETRY_CAP_MS = 15 * 60_000;
 
 const TERMINAL_WEBHOOK_CODES = new Set([
+  "WHATSAPP_FIELD_MENU_INVALID",
+  "WHATSAPP_FIELD_MENU_SCOPE",
+  "WHATSAPP_FIELD_MENU_PARTICIPANT_REVOKED",
   "FIELD_WORKER_UNKNOWN",
   "FIELD_WORKER_AMBIGUOUS",
   "FIELD_WORKER_CANONICAL_BLOCKED",
@@ -110,6 +114,7 @@ export function createMessageWebhookOutcome({
   progressEvidenceLocationDelivery = null,
   workerPaymentPrivateReceiptDelivery = null,
   secureWebviewDelivery = null,
+  fieldMenu = null,
 } = {}) {
   if (typeof reply !== "string" || !reply.trim()) throw invalidWebhookOutcome();
   const normalizedFlowPrompt = flowPrompt === null || flowPrompt === undefined || flowPrompt === ""
@@ -158,6 +163,9 @@ export function createMessageWebhookOutcome({
   ) {
     throw invalidWebhookOutcome();
   }
+  let menu = null;
+  try { menu = normalizeFieldMenuDescriptor(fieldMenu); } catch { throw invalidWebhookOutcome(); }
+  if (menu && (normalizedFlowPrompt || normalizedSecureWebviewDelivery || normalizedProgressEvidenceLocationDelivery || normalizedWorkerPaymentPrivateReceiptDelivery)) throw invalidWebhookOutcome();
   const durableReply = secureWebviewDurableReply(reply, normalizedSecureWebviewDelivery);
   if (
     normalizedSecureWebviewDelivery
@@ -170,6 +178,7 @@ export function createMessageWebhookOutcome({
     type: "message",
     reply: durableReply.slice(0, MAX_WHATSAPP_TEXT_LENGTH),
     flowPrompt: normalizedFlowPrompt,
+    ...(menu ? { fieldMenu:menu } : {}),
     ...(normalizedFlowSessionId ? { flowSessionId: normalizedFlowSessionId } : {}),
     ...(normalizedProgressEvidenceLocationDelivery
       ? { progressEvidenceLocationDelivery: normalizedProgressEvidenceLocationDelivery }
@@ -283,6 +292,9 @@ export function readAppliedMessageWebhookOutcome(webhookEvent, options = {}) {
   ) {
     throw invalidWebhookOutcome();
   }
+  let menu = null;
+  try { menu = normalizeFieldMenuDescriptor(outcome.fieldMenu); } catch { throw invalidWebhookOutcome(); }
+  if (menu && (outcome.flowPrompt || secureWebviewDelivery || progressEvidenceLocationDelivery || workerPaymentPrivateReceiptDelivery || menu.projectId !== webhookEvent.projectId)) throw invalidWebhookOutcome();
   const durableReply = secureWebviewDurableReply(outcome.reply, secureWebviewDelivery);
   if (
     secureWebviewDelivery
@@ -295,6 +307,7 @@ export function readAppliedMessageWebhookOutcome(webhookEvent, options = {}) {
     type: "message",
     reply: durableReply,
     flowPrompt: outcome.flowPrompt || null,
+    ...(menu ? { fieldMenu:menu } : {}),
     ...(outcome.flowSessionId ? { flowSessionId: outcome.flowSessionId } : {}),
     ...(progressEvidenceLocationDelivery ? { progressEvidenceLocationDelivery } : {}),
     ...(workerPaymentPrivateReceiptDelivery

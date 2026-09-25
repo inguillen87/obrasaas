@@ -1,0 +1,21 @@
+.panel { padding: 18px 20px; margin: 0; background: var(--onboarding-bg); border-block: 1px solid var(--onboarding-border); color: var(--onboarding-text); min-width: 0; }
+.panel header { display: grid; gap: 7px; }
+.panel header > span { color: var(--onboarding-accent); font-size: .62rem; letter-spacing: .12em; font-weight: 800; }
+.panel header strong { font-size: .95rem; line-height: 1.4; }
+.panel header small { color: var(--onboarding-muted); font-size: .75rem; }
+.panel ol { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; padding: 0; list-style: none; margin: 17px 0; }
+.panel li { display: flex; gap: 7px; align-items: center; color: var(--onboarding-muted); font-size: .72rem; line-height: 1.4; }
+.panel li > span { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; flex-shrink: 0; border: 1px solid var(--onboarding-border); border-radius: 50%; }
+.panel li[aria-current='step'] { color: var(--onboarding-text); font-weight: 700; }
+.panel li[aria-current='step'] > span { background: var(--onboarding-accent); color: #060913; border-color: transparent; }
+.panel p { margin: 10px 0; font-size: .8rem; line-height: 1.65; overflow-wrap: anywhere; }
+.panel .reason { border-left: 2px solid var(--onboarding-accent); padding-left: 12px; }
+.panel .access { color: var(--onboarding-text); }
+.panel footer { display: flex; flex-wrap: wrap; gap: 8px; }
+.panel footer a, .panel button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 9px 12px; border: 1px solid var(--onboarding-border); border-radius: 8px; background: transparent; color: var(--onboarding-text); font: inherit; font-size: .77rem; cursor: pointer; text-decoration: none; }
+.panel button:disabled { opacity: .5; cursor: not-allowed; }
+.panel :focus-visible { outline: 3px solid var(--onboarding-accent); outline-offset: 3px; }
+.note { display: block; color: var(--onboarding-muted); font-size: .7rem; line-height: 1.65; margin-top: 12px; }
+.panel[data-tone='conflict'] { border-left: 3px solid var(--onboarding-accent); }
+@media(max-width:700px) { .panel { padding: 15px; }.panel ol { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }.panel footer a, .panel button { width: 100%; } }
+@media(prefers-reduced-motion:reduce) { .panel * { transition: none !important; animation: none !important; } }

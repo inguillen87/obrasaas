@@ -87,6 +87,7 @@ const nextConfig = {
         source: '/:path*',
         headers: securityHeaders,
       },
+      { source: '/sw.js', headers: [{ key: 'Cache-Control', value: 'public, max-age=0, must-revalidate' }, { key: 'Service-Worker-Allowed', value: '/' }] },
       {
         // This route receives its bearer in the URL fragment and scrubs it
         // before the first request. Override the global navigation policy so

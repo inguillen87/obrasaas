@@ -1,3 +1,4 @@
+import { assertEvidenceRequestContext, evidenceContextErrorResponse } from '@/lib/evidence-context';
 import { createHash } from 'node:crypto';
 
 import {
@@ -39,6 +40,8 @@ function json(payload, init = {}) {
 }
 
 function errorResponse(error) {
+  const contextError = evidenceContextErrorResponse(error);
+  if (contextError) return contextError;
   if (error instanceof AccessError) return accessErrorResponse(error);
   const protectedError = protectedUploadErrorResponse(error);
   if (protectedError) return protectedError;
@@ -55,7 +58,7 @@ function errorResponse(error) {
 
 export async function POST(request) {
   try {
-    const access = await getPlatformAccess();
+    const access = await getPlatformAccess(); assertEvidenceRequestContext(request, access);
     requireTenantPermission(access, 'org:execution:manage', { subscriptionMode: 'write' });
     const idempotencyKey = normalizeProtectedUploadIdempotencyKey(
       request.headers.get('Idempotency-Key'),
@@ -97,7 +100,7 @@ export async function POST(request) {
 
 export async function DELETE(request) {
   try {
-    const access = await getPlatformAccess();
+    const access = await getPlatformAccess(); assertEvidenceRequestContext(request, access);
     requireTenantPermission(access, 'org:execution:manage', { subscriptionMode: 'write' });
     const uploadId = (await request.json().catch(() => null))?.uploadId;
     await deleteProtectedUpload(getPrisma(), {

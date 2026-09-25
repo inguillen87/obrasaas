@@ -30,7 +30,7 @@ test('Equipo mounts the onboarding queue before field workers with independent e
   );
   assert.match(
     pageSource,
-    /\{canReadOnboarding && \([\s\S]{0,220}<WorkerOnboardingClient[\s\S]{0,160}canManage=\{canManageOnboarding\}[\s\S]{0,160}canRead=\{canReadOnboarding\}/,
+    /\{canReadOnboarding && \([\s\S]{0,220}<WorkerOnboardingClient[\s\S]{0,400}canManage=\{canManageOnboarding\}[\s\S]{0,160}canRead=\{canReadOnboarding\}/,
   );
   assert.ok(
     pageSource.indexOf('<WorkerOnboardingClient') < pageSource.indexOf('<FieldWorkersClient'),
@@ -51,16 +51,17 @@ test('onboarding queue covers every governed status with cursor paging and refre
   }
   assert.match(
     clientSource,
-    /new URLSearchParams\(\{ status, limit: String\(PAGE_SIZE\) \}\)/,
+    /new URLSearchParams\(focusedClaimId \? \{ claimId: focusedClaimId \} : \{ status, limit: String\(PAGE_SIZE\) \}\)/,
   );
   assert.match(clientSource, /if \(append && cursor\) params\.set\('cursor', cursor\)/);
   assert.match(clientSource, /cache: 'no-store'/);
   assert.match(clientSource, /document\.addEventListener\('visibilitychange', refreshWhenVisible\)/);
   assert.match(clientSource, /onClick=\{\(\) => void loadClaims\(activeStatus\)\}/);
-  assert.doesNotMatch(clientSource, /setInterval|setTimeout/);
+  assert.doesNotMatch(clientSource, /setInterval/);
+  assert.match(clientSource, /setTimeout\(\(\) => controller.abort\(\), 20000\)/);
 });
 
-test('decisions are revisioned, replay-safe, non-optimistic, and reload on conflict', () => {
+test('decisions are revisioned, replay-safe, non-optimistic, and preserve a conflict for review', () => {
   assert.match(clientSource, /'Idempotency-Key': idempotencyKey/);
   assert.match(clientSource, /expectedRevision: claim\.revision/);
   assert.match(
@@ -69,11 +70,11 @@ test('decisions are revisioned, replay-safe, non-optimistic, and reload on confl
   );
   assert.match(
     clientSource,
-    /const result = await readResponse\([\s\S]{0,900}await loadClaims\('SUBMITTED'\)/,
+    /const result = await readResponse\([\s\S]{0,1500}await loadClaims\(focusedClaimId \? 'FOCUSED' : 'SUBMITTED'\)/,
   );
   assert.match(
     clientSource,
-    /Number\(error\?\.status\) === 409[\s\S]{0,520}await loadClaims\('SUBMITTED'\)/,
+    /Number\(error\?\.status\) === 409[\s\S]{0,520}blocked: true/,
   );
   assert.match(clientSource, /rejectionReason\.length < 1 \|\| rejectionReason\.length > 500/);
   assert.match(clientSource, /maxLength=\{500\}/);
@@ -133,7 +134,7 @@ test('the legacy direct worker form is explicitly exceptional and approved cards
   assert.match(workersSource, /Alta administrativa heredada · uso excepcional/);
   assert.match(workersSource, /Crear alta excepcional/);
   assert.match(workersSource, /id=\{`field-worker-\$\{worker\.id\}`\}/);
-  assert.match(clientSource, /href=\{`#field-worker-\$\{claim\.resolution\.workerId\}`\}/);
+  assert.match(clientSource, /onboardingCompleted=\$\{encodeURIComponent\(claim.id\)\}#field-worker-\$\{encodeURIComponent\(claim.resolution.workerId\)\}/);
   assert.match(cssSource, /\.legacyWorkerNotice/);
   assert.match(cssSource, /\.onboardingPanel/);
   assert.match(cssSource, /\.onboardingFilters button\[aria-pressed="true"\]/);
@@ -143,7 +144,7 @@ test('the legacy direct worker form is explicitly exceptional and approved cards
 test('approval copy distinguishes operational enablement from civil-identity review', () => {
   assert.match(clientSource, /Alta operativa aprobada/);
   assert.match(clientSource, /nombre completo visible y el CUIL enmascarado/);
-  assert.match(clientSource, /La identidad civil conserva su revisión documental separada/);
+  assert.match(clientSource, /la revisión civil permanece separada/);
   assert.match(clientSource, /el teléfono y el CUIL se muestran enmascarados/);
   assert.doesNotMatch(clientSource, /Identidad aprobada y vinculada/);
   assert.doesNotMatch(clientSource, /los datos declarados permanecen enmascarados/);

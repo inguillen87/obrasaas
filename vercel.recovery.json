@@ -1,0 +1,6 @@
+{
+  "version": 2,
+  "framework": "nextjs",
+  "buildCommand": "node scripts/inspect-release-configuration.mjs && npm run build:vercel",
+  "crons": []
+}

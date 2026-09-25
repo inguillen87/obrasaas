@@ -1,0 +1,44 @@
+.entry { margin-top: 12px; padding-top: 10px; border-top: 1px solid #334155; }
+.entry button,.entry a { min-height: 44px; padding: 10px 12px; border: 1px solid #475569; border-radius: 10px; background: #0b1120; color: #fbbf24; font: inherit; font-size: .8rem; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; }
+.dialog { box-sizing: border-box; width: min(760px,calc(100vw - 24px)); max-height: calc(100dvh - 24px); margin: auto; padding: clamp(18px,3vw,28px); color: #f8fafc; background: var(--report-bg,#0b1120); border: 1px solid #475569; border-radius: 20px; overflow-y: auto; color-scheme: dark; box-shadow: 0 24px 80px #0008; }
+.dialog::backdrop { background: #020617c9; backdrop-filter: blur(4px); }
+.dialog header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+.eyebrow { font-size: .65rem; letter-spacing: .13em; color: var(--report-accent,#f59e0b); font-weight: 800; }
+.dialog h2 { margin: 10px 0; font-size: clamp(1.25rem,4vw,1.8rem); line-height: 1.2; letter-spacing: -.02em; }
+.dialog header p { color: #fbbf24; font-size: .88rem; }
+.intro { color: #cbd5e1; line-height: 1.65; font-size: .9rem; }
+.source { padding: 16px; border: 1px solid #334155; border-radius: 12px; background: #060913; margin: 20px 0; }
+.source div { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; font-size: .82rem; }
+.source span,.source small { color: #94a3b8; }
+.source p { white-space: pre-wrap; max-height: 170px; overflow-y: auto; line-height: 1.6; font-size: .9rem; overflow-wrap: anywhere; }
+.source small { display: block; margin-bottom: 12px; font-size: .77rem; line-height: 1.6; }
+.fields { min-width: 0; margin: 22px 0; padding: 0; border: 0; display: grid; gap: 18px; }
+.fields label { display: grid; min-width: 0; gap: 8px; font-size: .9rem; }
+.fields input:not([type='checkbox']),.fields select,.fields textarea { box-sizing: border-box; width: 100%; min-width: 0; border: 1px solid #64748b; border-radius: 9px; padding: 12px; min-height: 46px; color: #f8fafc; background: #060913; font: inherit; font-size: 16px; }
+.fields textarea { resize: vertical; }
+.fields .check { display: flex; align-items: flex-start; line-height: 1.6; padding: 12px; border: 1px solid #475569; border-radius: 10px; }
+.check input { min-width: 20px; height: 20px; margin-top: 2px; accent-color: #f59e0b; }
+.hint { color: #94a3b8; font-size: .78rem; line-height: 1.65; margin: 0; }
+.dialog button,.existing a { min-height: 46px; border: 1px solid #64748b; border-radius: 10px; padding: 10px 14px; background: #0b1120; color: #f8fafc; font: inherit; font-size: .86rem; cursor: pointer; }
+.dialog header button { min-width: 44px; font-size: 1.3rem; }
+.dialog button:disabled { opacity: .5; cursor: not-allowed; }
+.dialog .primary { width: 100%; color: #060913; background: var(--report-accent,#f59e0b); border-color: transparent; font-weight: 750; }
+.warning { padding: 14px; border-left: 3px solid #f59e0b; background: #f59e0b10; font-size: .88rem; line-height: 1.6; border-radius: 10px; }
+.existing { border: 1px solid #10b981; padding: 18px; border-radius: 12px; margin: 18px 0; }
+.existing a { display: inline-flex; align-items: center; text-decoration: none; }
+.dialog footer { margin-top: 18px; padding-top: 16px; border-top: 1px solid #334155; display: flex; align-items: center; gap: 16px; }
+.dialog footer small { flex: 1; color: #94a3b8; font-size: .76rem; line-height: 1.6; }
+.dialog :focus-visible,.entry :focus-visible { outline: 3px solid #f59e0b; outline-offset: 3px; }
+@media(max-width:480px){.dialog{width:calc(100vw - 16px);padding:18px;border-radius:14px}.dialog footer{flex-direction:column;align-items:stretch}.source{padding:12px}}
+@media(prefers-reduced-motion:reduce){.dialog *{animation:none!important;transition:none!important;scroll-behavior:auto}}
+
+.dialog[open] { display: flex; flex-direction: column; overflow: hidden; }
+.dialog header,.dialog footer { flex: 0 0 auto; }
+.body { overflow-y: auto; min-height: 0; overscroll-behavior: contain; padding: 0 4px; }
+.recovery { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 12px 0; font-size: .82rem; }
+
+/* The restriction dialog has a longer confirmation caption than a plain report. */
+.dialog footer.blockerFooter { display:grid; grid-template-columns:minmax(0,1fr) minmax(210px,320px); align-items:center; gap:18px; }
+.dialog footer.blockerFooter small { min-width:0; }
+.dialog footer.blockerFooter .primary { width:100%; }
+@media(max-width:480px){.dialog footer.blockerFooter{grid-template-columns:minmax(0,1fr);gap:12px}}

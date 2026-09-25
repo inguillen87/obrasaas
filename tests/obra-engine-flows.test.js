@@ -321,6 +321,7 @@ test('attendance Flow persists its server-owned task and work-area references', 
   assert.equal(result.intent, 'ATTENDANCE_START');
   assert.equal(result.stateChanged, true);
   assert.equal(createdEntries.length, 1);
+  assert.deepEqual(result.newMessages[0].metadata.flowAttendanceReceipt, { version: 1, entryId: 'attendance-meta-flow', projectId, workerId: worker.id, sessionId: attendanceSession().id });
   assert.deepEqual(createdEntries[0].metadata, {
     attendanceTimezone: 'America/Argentina/Buenos_Aires',
     ppeStatus: 'complete',
@@ -436,4 +437,28 @@ test('an internally inconsistent session cannot cross-route a valid blueprint re
   );
   assert.equal(state.incidents.length, 0);
   assert.equal(state.operariosCount, 0);
+});
+
+test('attendance form stores the exact reused pending entry instead of inventing a new one', async () => {
+  const now = new Date('2026-09-24T12:00:00.000Z'); let creates = 0;
+  const existing = { id: 'existing-pending-entry', projectId, workerId: worker.id, eventType: 'CHECK_IN', verificationStatus: 'PENDING', status: 'PENDING_GEO', occurredAt: new Date(now.getTime()-30000), source: 'meta' };
+  const prisma = { attendanceEntry: { updateMany: async () => ({count:0}), findFirst: async ({where}) => where.verificationStatus === 'PENDING' ? existing : null, create: async () => { creates++; throw Error('Unexpected duplicate'); } } };
+  const result = await processIncomingObraMessage(attendanceEvent(), {projectId,organizationId:'organization-meta-flow',phoneNumberId}, engineOptions(emptyState(), attendanceSession(), {prisma,processingTime:now}));
+  assert.equal(result.newMessages[0].metadata.flowAttendanceReceipt.entryId,existing.id); assert.equal(creates,0); assert.match(result.reply,/pendiente|falta/);
+});
+test('a denied or expired form does not acquire a domain link from sender metadata', async () => {
+  const event = incidentEvent(); event.flowAttendanceReceipt = {version:1,entryId:'forged'};
+  const result = await processIncomingObraMessage(event,{projectId,organizationId:'organization-meta-flow',phoneNumberId},engineOptions(emptyState(),null,{expiredFlowSession:incidentSession(),expiredFlowCanReissue:false}));
+  assert.equal(result.newMessages[0].metadata.flowAttendanceReceipt,undefined);
+});
+
+
+test('incident engine stores only the exact server-created record receipt and ignores payload selectors', async()=>{
+ const state=emptyState(),session=incidentSession();
+ const result=await processIncomingObraMessage(incidentEvent(),{projectId,organizationId:'organization-meta-flow',phoneNumberId},engineOptions(state,session));
+ const receipt=result.newMessages[0].metadata.flowIncidentReceipt;
+ assert.deepEqual(receipt,{version:1,incidentId:state.incidents[0].id,projectId,workerId:worker.id,sessionId:session.id});
+ assert.equal(JSON.stringify(receipt).includes('description'),false);assert.equal(JSON.stringify(receipt).includes('wamid.'),false);
+ const again=await processIncomingObraMessage(incidentEvent(),{projectId,organizationId:'organization-meta-flow',phoneNumberId},engineOptions(state,session));
+ assert.equal(state.incidents.length,1);assert.deepEqual(again.newMessages[0].metadata.flowIncidentReceipt,receipt);
 });
