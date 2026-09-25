@@ -11,7 +11,7 @@ import { localDateKey } from '@/lib/zoned-time';
 import ProgressClient from './progress-client';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Bitácora de avance', description: 'Registro diario y evidencia revisable por tarea.' };
+export const metadata = { title: 'Libro de Obra & evidencia', description: 'Asientos diarios, evidencia y revisiones trazables por obra y tarea.' };
 
 function visualAssessmentForClient(assessment) {
   return {

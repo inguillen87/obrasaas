@@ -142,3 +142,9 @@ Leer `flow-history-reading-tools.md`. El historial permite buscar en los campos 
 
 ## Continuación S11.A34: seguimiento fuera del redactor
 Leer `conversation-followup-panel.md`. La cabecera de la conversación abre el seguimiento en diálogo lateral/pantalla móvil, con una consulta explícita y contexto visible. El compositor y el lanzador permanecen montados; borrador e intentos pendientes no se reinician al consultar. Cerrar, cambiar contexto o pasar offline retira la lectura, restaura scroll/foco y no reenvía. Se mantienen los lectores de A22–A33 y sus permisos. Ejecutar el verificador ampliado de InboxClient y los tres journeys de historial/ingreso/incidencia antes de cerrar el SHA. Dispatcher y piloto real continúan separados.
+
+## Convergencia enterprise C-1/C-2
+La rama `release/enterprise-unified-2026` nace desde A34 y conserva recovery como autoridad de backend. Leer `enterprise-convergence-c1.md`, `marketplace-convergence-c2.md` y `budget-cost-convergence-c2.md`. Cinco rutas históricas tienen alias temporales a equivalentes exactos; las demás no se aproximan por conveniencia. Marketplace adopta UI enterprise sobre proveedores, OC, recepciones y compromisos reales y prohíbe reutilizar catálogos, precios o ratings ficticios de master. Presupuesto & costos usa versiones y ledger reales y separa movimientos por moneda; una fila sin moneda resuelta queda fuera de los totales ARS/USD. Mantener tests y build antes de cada incorporación y portar el resto módulo por módulo.
+
+## Convergencia enterprise C-2.3 — Libro de Obra
+Leer `libro-obra-convergence-c23.md`. `/libro-obra` apunta temporalmente a `/dashboard/progress`, ahora presentado como «Libro de Obra & evidencia» sobre DailyLog, evidencia y revisiones reales. KPIs y filtros describen sólo filas cargadas; no importar folios, clima, materiales, firmas o hashes demo de master. Las mutaciones de parte/evidencia mantienen sus contratos y pruebas existentes.
