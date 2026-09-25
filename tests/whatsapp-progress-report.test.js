@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { prepareWhatsAppProgressReport, createWhatsAppProgressReport } from '../src/lib/whatsapp/progress-report.js';
-import { normalizeMessageReport, reportSourceKind, confirmedMessageReport } from '../src/lib/whatsapp/progress-report-policy.js';
+import { normalizeMessageReport, reportSourceKind, confirmedMessageReport, messageReportSourceId, messageReportFingerprint } from '../src/lib/whatsapp/progress-report-policy.js';
 const scope = { organizationId: 'org-a', projectId: 'project-a' };
 const context = { scope, actorId: 'director-a', conversationId: 'conversation-a', messageId: 'message-a' };
 const makeMessage = () => ({ id: 'message-a', conversationId: 'conversation-a', externalId: 'wamid.test', direction: 'INBOUND', kind: 'TEXT', body: 'Faltan diez bolsas de cemento en el sector norte.', sentAt: new Date('2026-09-18T02:30:00Z'),
@@ -95,9 +95,13 @@ test('obra archivada y suscripción suspendida no reciben escrituras', async () 
 for (const override of [{ actorId: 'forged' }, { title: '' }, { sourceVersion: '' }, { summary: 'a'.repeat(3001) }, { summary: 'El operario tiene un diagnóstico de cáncer' }, { taskId: '../other' }]) test('contrato de entrada rechaza autoridad o texto inválido: ' + Object.keys(override)[0], () => {
   assert.throws(() => normalizeMessageReport({ taskId: 'task-a', title: 'Título', summary: 'Resumen', sourceVersion: 'a'.repeat(64), ...override }));
 });
-test('la confirmación del cliente exige obra, tarea, versión y estado válidos', () => {
-  const expected = { projectId: 'project-a', taskId: 'task-a' }; const report = { id: 'log', ...expected, status: 'DRAFT', revision: 0 };
-  assert.equal(confirmedMessageReport({ report }, expected), report);
+test('la confirmación del cliente exige obra, tarea, versión y estado válidos', async () => {
+  const sourceContext = { ...scope, conversationId: context.conversationId, messageId: context.messageId };
+  const input = { taskId: 'task-a', title: 'Parte', summary: 'Resumen operativo', sourceVersion: 'a'.repeat(64) };
+  const expected = { ...sourceContext, reportId: await messageReportSourceId(sourceContext), taskId: input.taskId, sourceVersion: input.sourceVersion, requestFingerprint: await messageReportFingerprint(input) };
+  const report = { id: expected.reportId, projectId: scope.projectId, taskId: 'task-a', status: 'DRAFT', revision: 0 };
+  const payload = { context: sourceContext, sourceVersion: expected.sourceVersion, requestFingerprint: expected.requestFingerprint, report, replayed: false };
+  assert.equal(confirmedMessageReport(payload, expected), report);
   for (const bad of [{}, { report: { ...report, projectId: 'other' } }, { report: { ...report, revision: -1 } }, { report: { ...report, taskId: 'other' } }]) assert.throws(() => confirmedMessageReport(bad, expected), { code: 'WHATSAPP_REPORT_UNCONFIRMED' });
   assert.equal(reportSourceKind(makeMessage()), 'TEXT');
 });

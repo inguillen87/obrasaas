@@ -251,6 +251,7 @@ jobs:
           node scripts/verify-proactive-flow-confirmation-ui.mjs
           node scripts/verify-proactive-flow-history-ui.mjs
           node scripts/verify-proactive-flow-reply-ui.mjs
+          node scripts/verify-whatsapp-report-ui.mjs
 
       - name: Preserve Playwright diagnostics
         if: always()
@@ -264,6 +265,8 @@ jobs:
             .vercel/proactive-flow-confirmation-ui/*.png
             .vercel/proactive-flow-history-ui/proof.json
             .vercel/proactive-flow-history-ui/*.png
+            .vercel/message-report-ui/proof.json
+            .vercel/message-report-ui/*.png
             .vercel/proactive-flow-reply-ui/proof.json
             .vercel/proactive-flow-reply-ui/*.png
           include-hidden-files: true

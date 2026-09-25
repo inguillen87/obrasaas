@@ -1,0 +1,23 @@
+{
+  "base": "3f67efbc13cae99abf7a277ef2b951a838513e1a",
+  "productTree": "4ab8b4c7b8a497632729083df4397fc52f42326b",
+  "blobs": {
+    ".github/workflows/ci.yml": "7c4f1624c41dffc3ffb5d7988b8ab9157742a6d7",
+    ".github/workflows/execution-postgres.yml": "530ee320f2e6a9e89e13e4177790adca1ff708f5",
+    "docs/recovery/HANDOFF_TENANT_WHATSAPP.md": "3e80624c451d1731cf11f059c6b9542895ea1652",
+    "docs/recovery/message-report-bound-recovery.md": "7c57cf74d69e44aca6cfa0fdc34a76aea35ab419",
+    "e2e/s92-authenticated.spec.js": "dfd52327458d4e2a072f6842f1d3091da6689058",
+    "e2e/s11-message-report-journey.js": "197c0b0db6a8df1e03877d339a1fc31255f44412",
+    "scripts/lib/s11-message-report-fixture.mjs": "d6f6706b94f723438878021bed227af4d71d75d9",
+    "scripts/verify-message-report-recovery-postgres.mjs": "4a7c033219fcc5eee07947cfe70d755651175159",
+    "scripts/verify-whatsapp-report-ui.mjs": "33e5ce5b308aa44fc6431911ae239d33fddd6b5b",
+    "src/app/api/whatsapp/inbox/[conversationId]/messages/[messageId]/progress-report/route.js": "9d28402fe3de9ee5b2749a566b8ccdf2e7c4f1cc",
+    "src/app/dashboard/inbox/message-report-action.js": "c0ae70b567f624d50ea5d17d6f115bcce14e463e",
+    "src/lib/whatsapp/progress-report.js": "73818b1cf35c78916fb1d8139d334b7df423422f",
+    "src/lib/whatsapp/progress-report-policy.js": "46da7e79f4e4d13f2c6adc9092d99fb7f8a8f110",
+    "tests/whatsapp-progress-report-route.test.js": "713b8bc1d44963c7d96057177d92cf182227a1dd",
+    "tests/whatsapp-progress-report.test.js": "7d99744299f5480f5cd97b1300385a28e6c7cbfe",
+    "tests/message-report-recovery.test.js": "c27d85ac657b0f0d79c6b46822d1753495eede7f",
+    "tests/helpers/message-report-fixture.js": "dc7c8062bc9fd0a987bb3178f6d03ddf26df0d16"
+  }
+}
