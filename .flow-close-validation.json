@@ -1,6 +1,6 @@
 {
   "base": "6f77f652e1a03de549c602c6bdb1945655b8cde6",
-  "productTree": "3ddea0495d393e6072aabe5ba3b0c0df5f382588",
+  "productTree": "80f93da6ae36a6de1feec2a7c0bb9e967c2511a5",
   "blobs": {
     ".github/workflows/ci.yml": "83ceed3baa4de49aa795f8ec66e8afb31a5a4d89",
     "docs/recovery/HANDOFF_TENANT_WHATSAPP.md": "d21ba1191ee1edd3348becf951eb971fdbf3e40c",
@@ -11,7 +11,7 @@
     "scripts/lib/flow-incident-fixture.mjs": "8940ca9b7d00467e9bfed31b6f3eef6662f0d0da",
     "scripts/lib/s11-flow-incident-fixture.mjs": "18656e9844e5b6c95a0aa97cffc4b4d19f7e25d8",
     "scripts/lib/verify-flow-incident-read.mjs": "9c0a2cc5e642830aac4b7222aa3c2f9b22ee80e1",
-    "scripts/verify-flow-incident-ui.mjs": "700c33cd13ec59c046cda998ff0074c94c94d9cb",
+    "scripts/verify-flow-incident-ui.mjs": "6be1a596619732254e3ec08461f62321a6859de0",
     "scripts/verify-flow-read-connectivity-ui.mjs": "0c931d7814bb009e387aa1612b07de0acddfaf31",
     "scripts/verify-proactive-flow-history-postgres.mjs": "bb57ced31a002eef741ad678e1f8399bae24de35",
     "scripts/verify-proactive-flow-history-ui.mjs": "7417c4adcacb21a892a974dfae96e494209de0c4",
