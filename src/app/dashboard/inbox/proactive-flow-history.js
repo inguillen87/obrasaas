@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useId, useRef, useState } from 'react';
 import { evidenceScopeHeaders } from '@/lib/evidence-capture-policy';
 import { flowHistoryPageMatches, flowHistoryReplyPresentation, flowHistoryStatusLabel } from '@/lib/whatsapp/proactive-flow-history-policy';
 import { FLOW_FOLLOWUP_FILTERS, flowFollowupFilter } from '@/lib/whatsapp/proactive-flow-followup';
@@ -12,9 +12,9 @@ const formatDate = value => new Intl.DateTimeFormat('es-AR', { dateStyle: 'mediu
 export default function ProactiveFlowHistory(props) {
   return <ScopedHistory key={JSON.stringify([props.organizationId, props.projectId, props.conversationId, props.online !== false])} {...props} />;
 }
-function ScopedHistory({ organizationId, projectId, conversationId, online = true }) {
+function ScopedHistory({ organizationId, projectId, conversationId, online = true, embedded = false, startExpanded = false }) {
   const heading = useId(), panelId = useId(), filterDescriptionId = useId(), listRef = useRef(null), alive = useRef(true), active = useRef(null);
-  const [open, setOpen] = useState(false), [page, setPage] = useState(null), [phase, setPhase] = useState('idle');
+  const [open, setOpen] = useState(startExpanded), [page, setPage] = useState(null), [phase, setPhase] = useState('idle');
   const searchId = useId(), searchHintId = useId(), orderId = useId(), searchRef = useRef(null);
   const [query, setQuery] = useState(''), [order, setOrder] = useState('recent');
   const [request, setRequest] = useState({ cursor: null, trail: [] }), [error, setError] = useState(''), [filter, setFilter] = useState('all');
@@ -43,6 +43,12 @@ function ScopedHistory({ organizationId, projectId, conversationId, online = tru
       }
     } finally { clearTimeout(timer); if (active.current === controller) active.current = null; }
   }
+  const initialRead = useEffectEvent(() => { if (startExpanded) void load({ cursor: null, trail: [] }); });
+  useEffect(() => {
+    if (!startExpanded) return;
+    const frame = requestAnimationFrame(() => initialRead());
+    return () => cancelAnimationFrame(frame);
+  }, [startExpanded]);
   function toggle() {
     if (open) { active.current?.abort(); active.current = null; setOpen(false); setPage(null); setPhase('idle'); }
     else { setFilter('all'); setQuery(''); setOrder('recent'); setOpen(true); void load({ cursor: null, trail: [] }); }
@@ -53,9 +59,9 @@ function ScopedHistory({ organizationId, projectId, conversationId, online = tru
   function resetListScroll() { if (listRef.current) listRef.current.scrollTop = 0; }
   function clearSearch() { setQuery(''); resetListScroll(); searchRef.current?.focus(); }
   function chooseFilter(key) { setFilter(key); resetListScroll(); }
-  return <section className={styles.history} aria-labelledby={heading}>
+  return <section className={`${styles.history} ${embedded ? styles.embedded : ''}`} aria-labelledby={heading}>
     <header className={styles.header}><div><span>TRAZABILIDAD · SÓLO LECTURA</span><h3 id={heading}>Seguimiento de formularios</h3></div>
-      <button type="button" onClick={toggle} aria-expanded={open} aria-controls={panelId} disabled={!open && !online}>{open ? 'Cerrar seguimiento' : 'Consultar envíos anteriores'}</button></header>
+      {!embedded && <button type="button" onClick={toggle} aria-expanded={open} aria-controls={panelId} disabled={!open && !online}>{open ? 'Cerrar seguimiento' : 'Consultar envíos anteriores'}</button>}</header>
     {open && <div id={panelId} className={styles.content} aria-busy={busy}>
       <p>Buscá y priorizá los formularios de esta conversación. Consultar no envía mensajes ni levanta bloqueos.</p>
       <div className={styles.actions}><button type="button" disabled={busy || !online || phase === 'blocked'} onClick={() => load({ cursor: null, trail: [] })}>Consultar últimos registros</button>

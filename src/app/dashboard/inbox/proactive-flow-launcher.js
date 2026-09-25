@@ -1,6 +1,5 @@
 'use client';
 import Link from 'next/link';
-import ProactiveFlowHistory from './proactive-flow-history';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { evidenceScopeHeaders } from '@/lib/evidence-capture-policy';
 import { flowCatalogMatches, flowResultMatches, flowReceiptMatches, flowResolutionMatches, flowOutcomePresentation } from '@/lib/whatsapp/proactive-flow-confirmation';
@@ -20,7 +19,7 @@ const unconfirmed = () => Object.assign(new Error('La respuesta no confirmó est
 
 // Remount on every scope change. No attempt or recipient survives into another chat.
 export default function ProactiveFlowLauncher(props) {
-  return <><ScopedFlowLauncher key={[props.organizationId, props.projectId, props.conversationId].join(':')} {...props} /><ProactiveFlowHistory organizationId={props.organizationId} projectId={props.projectId} conversationId={props.conversationId} online={props.online} /></>;
+  return <ScopedFlowLauncher key={[props.organizationId, props.projectId, props.conversationId].join(':')} {...props} />;
 }
 function ScopedFlowLauncher({ organizationId, projectId, conversationId, online = true, canManageIntegrations = false, replyWindowOpen = false, onMessageSent }) {
   const heading = useId(), contentId = useId();

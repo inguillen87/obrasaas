@@ -74,8 +74,16 @@ export async function verifyAuthenticatedFlowHistory({ fixture, sessions, baseUR
       await clerk.loaded({ page: admin });
       await admin.getByRole('button', { name: new RegExp(FLOW_HISTORY_ACCEPTANCE.displayName) }).click();
       const history = admin.getByRole('region', { name: 'Seguimiento de formularios' });
-      await history.getByRole('button', { name: 'Consultar envíos anteriores', exact: true }).click();
+      await admin.getByRole('button', { name: 'Abrir seguimiento de formularios', exact: true }).click();
       await expect(history.getByRole('listitem')).toHaveCount(20);
+      const panel = admin.getByRole('dialog', {name:'Seguimiento de formularios', exact:true});
+      await expect(panel.getByRole('heading', {name:'Seguimiento de formularios',level:2})).toBeFocused();
+      expect(await admin.locator('form').getByRole('region', {name:'Seguimiento de formularios'}).count()).toBe(0);
+      await panel.getByRole('button', {name:'Cerrar panel de seguimiento',exact:true}).click();
+      await expect(admin.getByRole('button', {name:'Abrir seguimiento de formularios',exact:true})).toBeFocused();
+      await admin.getByRole('button', {name:'Abrir seguimiento de formularios',exact:true}).click();
+      await expect(history.getByRole('listitem')).toHaveCount(20);
+      steps.push('real-drawer-outside-composer-focus-return-and-fresh-reopen');
       const search = history.getByRole('searchbox', { name: 'Buscar en esta página', exact: true });
       const order = history.getByRole('combobox', { name: 'Ordenar esta página', exact: true });
       const beforeSearch = requests.length;
@@ -105,10 +113,13 @@ export async function verifyAuthenticatedFlowHistory({ fixture, sessions, baseUR
       expect(await admin.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       await admin.reload(); await clerk.loaded({ page: admin });
       await admin.getByRole('button', { name: new RegExp(FLOW_HISTORY_ACCEPTANCE.displayName) }).click();
-      await history.getByRole('button', { name: 'Consultar envíos anteriores', exact: true }).click();
+      await admin.getByRole('button', { name: 'Abrir seguimiento de formularios', exact: true }).click();
       await expect(history.getByRole('listitem')).toHaveCount(20);
       expect(requests.every(request => request.method === 'GET')).toBe(true);
       expect(await history.innerText()).not.toContain(FLOW_HISTORY_ACCEPTANCE.privateCanary);
+      await panel.getByRole('button', {name:'Volver a la conversación',exact:true}).click();
+      await expect(panel).toHaveCount(0);
+      expect(await admin.evaluate(() => document.documentElement.style.overflow)).not.toBe('hidden');
       steps.push('mobile-inbox-filter-pagination-and-reload-no-post');
     });
     await test.step('S11-HISTORY: ending a real session removes read access without modifying records', async () => {

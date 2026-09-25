@@ -18,3 +18,8 @@
 .searchInput input::-webkit-search-cancel-button,.searchInput input::-webkit-search-decoration{display:none}.history .searchInput input:focus-visible{outline:none}.searchInput:focus-within{outline:2px solid #67e8f9;outline-offset:2px;box-shadow:none}
 .status[data-status=accepted][data-tone=observed],.status[data-status=sent][data-tone=observed]{background:#173046;color:#bfdef1}
 @media(max-width:500px){.rowHeader{flex-direction:column;align-items:flex-start;gap:6px}}
+
+/* Drawer embedding keeps a single scroll container; the inline reader remains available. */
+.embedded{margin:0;padding:0;border:0;border-radius:0;background:transparent;min-width:0}
+.embedded>.header{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.embedded .content{padding-top:12px}.embedded .list{max-height:none;overflow:visible;scrollbar-gutter:auto}

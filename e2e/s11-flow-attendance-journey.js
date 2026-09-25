@@ -47,7 +47,7 @@ export async function verifyAuthenticatedFlowAttendance({ fixture, sessions, bas
       const open = async () => {
         await admin.getByRole('button', { name: new RegExp(ATTENDANCE_ACCEPTANCE.displayName) }).click();
         const history = admin.getByRole('region', { name: 'Seguimiento de formularios' });
-        await history.getByRole('button', { name: 'Consultar envíos anteriores', exact: true }).click();
+        await admin.getByRole('button', { name: 'Abrir seguimiento de formularios', exact: true }).click();
         await expect(history.getByRole('listitem')).toHaveCount(3);
         const linked = history.getByRole('listitem').filter({ hasText: db.rows[0].sourceId });
         await linked.getByRole('button', { name: 'Consultar respuesta vinculada', exact: true }).click();
