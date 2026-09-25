@@ -115,3 +115,6 @@ El cierre documentado solicita un único Preview del SHA final y registra sus re
 
 ## Continuación S11.A25: respuesta original correlacionada
 Leer `correlated-flow-reply.md`. El historial ofrece una consulta explícita desde el envío a la sesión y mensaje entrante exactos. GET reply reutiliza la privacidad mínima de la bandeja y sus permisos; no busca por teléfono, no envía y no convierte la respuesta en un parte/fichaje aprobado. El nuevo verificador UI, seis casos SQL y el recorrido autenticado amplían los controles existentes. Publicación y resultados se acreditan por SHA; el enlace a registros de negocio y el piloto físico siguen separados.
+
+## Continuación S11.A26: confirmación del parte ligada a origen e intento
+Leer `message-report-bound-recovery.md`. El cliente calcula el ID determinista del parte y compara contexto, fuente y huella; preparar valida el recibo de auditoría del registro existente. La recuperación incierta consulta GET sin repetir la escritura y conserva el estado actual. Un fallo de origen se corrige sin perder borrador, con nueva revisión. Ejecutar unitarias, `verify-whatsapp-report-ui.mjs`, la nueva suite SQL y el journey autenticado integrado antes de declarar cerrada issue #3. No confundir esta preparación de texto/audio con un enlace universal desde respuestas de Flow a todos los registros de negocio.

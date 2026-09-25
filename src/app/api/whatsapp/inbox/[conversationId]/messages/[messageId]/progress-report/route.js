@@ -5,7 +5,7 @@ import { assertEvidenceRequestContext, evidenceContextErrorResponse } from '@/li
 import { RequestBodyError, readJsonRequest, requestBodyErrorResponse } from '@/lib/request-body';
 import { projectWritePolicyErrorResponse } from '@/lib/project-write-policy';
 import { prepareWhatsAppProgressReport, createWhatsAppProgressReport } from '@/lib/whatsapp/progress-report';
-import { WhatsAppProgressReportError, messageReportErrorResponse } from '@/lib/whatsapp/progress-report-policy';
+import { normalizeMessageReport, messageReportSourceId, messageReportFingerprint, messageReportPreparationMatches, confirmedMessageReport, WhatsAppProgressReportError, messageReportErrorResponse } from '@/lib/whatsapp/progress-report-policy';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 const headers = { 'Cache-Control': 'private, no-store, max-age=0', Vary: 'Cookie, Authorization, X-ObraSaaS-Organization, X-ObraSaaS-Project', 'X-Content-Type-Options': 'nosniff' };
@@ -21,7 +21,12 @@ export function createMessageReportHandlers({ resolveAccess = getPlatformAccess,
       for (const permission of ['org:conversations:read', SOURCE_EVIDENCE_PERMISSION, 'org:execution:manage', 'org:tasks:read']) authorize(access, permission, { subscriptionMode: write ? 'write' : 'read' });
       const { conversationId, messageId } = await context.params;
       const input = { scope: { organizationId: access.organization.id, projectId: access.project.id }, actorId: access.databaseUserId, conversationId, messageId };
-      const result = write ? await create(database(), { ...input, input: await parse(request, { maxBytes: 16 * 1024 }), operationKey: request.headers.get('idempotency-key') }) : await prepare(database(), input);
+      const expectedContext = { ...input.scope, conversationId, messageId };
+      const reportId = await messageReportSourceId(expectedContext);
+      const normalized = write ? normalizeMessageReport(await parse(request, { maxBytes: 16 * 1024 })) : null;
+      const result = write ? await create(database(), { ...input, input: normalized, operationKey: request.headers.get('idempotency-key') }) : await prepare(database(), input);
+      if (write) confirmedMessageReport(result, { ...expectedContext, reportId, taskId: normalized.taskId, sourceVersion: normalized.sourceVersion, requestFingerprint: await messageReportFingerprint(normalized) });
+      else if (!messageReportPreparationMatches(result, { ...expectedContext, reportId })) throw new WhatsAppProgressReportError('No se confirmó el origen del parte.', 'WHATSAPP_REPORT_SOURCE_UNCONFIRMED', 502);
       return Response.json(result, { status: write && !result.replayed ? 201 : 200, headers });
     } catch (error) {
       const known = error instanceof AccessError ? accessErrorResponse(error) : error instanceof RequestBodyError ? requestBodyErrorResponse(error) : evidenceContextErrorResponse(error) || messageReportErrorResponse(error) || projectWritePolicyErrorResponse(error);

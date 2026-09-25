@@ -1,3 +1,4 @@
+import { verifyAuthenticatedMessageReport } from './s11-message-report-journey.js';
 import { expect, test } from '@playwright/test';
 import { verifyAuthenticatedAssignmentContinuity } from './s11-assignment-journey.js';
 import { verifyAuthenticatedFlowHistory } from './s11-flow-history-journey.js';
@@ -565,6 +566,7 @@ test.describe('S9.2 authenticated acceptance', () => {
         sessions.auditor.page.getByRole('button', { name: /Sellar (primer corte|nueva revisión)/ }),
       ).toHaveCount(0);
       await verifyAuthenticatedAssignmentContinuity({ fixture, sessions, baseURL });
+      await verifyAuthenticatedMessageReport({ fixture, sessions, baseURL });
       await verifyAuthenticatedFlowHistory({ fixture, sessions, baseURL });
     } finally {
       await Promise.allSettled(
