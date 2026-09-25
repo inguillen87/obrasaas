@@ -21,6 +21,10 @@ import { drainProjectWebhookEvents } from "@/lib/whatsapp/webhook-worker";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
+function json(payload, init = {}) {
+  return Response.json(payload, { ...init, headers: { 'Cache-Control': 'private, no-store, max-age=0', 'X-Content-Type-Options': 'nosniff' } });
+}
+
 export async function GET(request) {
   const verification = verifyMetaSubscription(
     new URL(request.url).searchParams,
@@ -33,7 +37,7 @@ export async function GET(request) {
 export async function POST(request) {
   const appSecret = process.env.META_APP_SECRET;
   if (!appSecret) {
-    return Response.json({ error: "Meta webhook is not configured" }, { status: 503 });
+    return json({ error: "Meta webhook is not configured" }, { status: 503 });
   }
 
   let rawBytes;
@@ -48,7 +52,7 @@ export async function POST(request) {
   }
   const signature = request.headers.get("x-hub-signature-256");
   if (!verifyMetaSignature(rawBytes, signature, appSecret)) {
-    return Response.json({ error: "Invalid Meta signature" }, { status: 401 });
+    return json({ error: "Invalid Meta signature" }, { status: 401 });
   }
 
   let rawBody;
@@ -62,21 +66,32 @@ export async function POST(request) {
   try {
     payload = JSON.parse(rawBody);
   } catch {
-    return Response.json({ error: "Invalid JSON payload" }, { status: 400 });
+    return json({ error: "Invalid JSON payload" }, { status: 400 });
   }
 
   let updateCount;
+  let events;
   try {
     updateCount = assertMetaWebhookBatchLimit(payload);
+    events = normalizeMetaWebhook(payload);
   } catch (error) {
     if (error instanceof MetaWebhookBatchError) {
-      return Response.json({ error: error.message, code: error.code }, { status: error.status });
+      return json({ error: error.message, code: error.code }, { status: error.status });
     }
-    throw error;
+    // Signed bytes can still contain malformed collections. Do not acknowledge
+    // or enqueue a partial normalization, and never echo the provider body.
+    return json({ error: "Invalid Meta webhook payload", code: "META_WEBHOOK_BATCH_INVALID" }, { status: 400 });
   }
 
-  const events = normalizeMetaWebhook(payload);
-  const persistence = await storeMetaWebhookBatch({ events });
+  let persistence;
+  try {
+    persistence = await storeMetaWebhookBatch({ events });
+  } catch {
+    // No ACK and no after() work before durable storage succeeds. A retry uses
+    // the existing scoped event identity; provider data/SQL errors stay private.
+    console.error("Meta webhook persistence unavailable", { code: "META_WEBHOOK_PERSISTENCE_UNAVAILABLE" });
+    return json({ error: "Meta webhook storage unavailable", code: "META_WEBHOOK_PERSISTENCE_UNAVAILABLE" }, { status: 503 });
+  }
   if (persistence.unknownConnections > 0) {
     console.warn(
       `Rejected ${persistence.unknownConnections} Meta event(s) for unknown tenant connections.`,
@@ -95,7 +110,7 @@ export async function POST(request) {
     });
   }
 
-  return Response.json({
+  return json({
     received: true,
     updates: updateCount,
     accepted: persistence.accepted,

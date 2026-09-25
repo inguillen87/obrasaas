@@ -8,6 +8,9 @@ on:
       - 'src/lib/whatsapp/obra-engine.js'
       - 'src/lib/whatsapp/flow-sessions.js'
       - 'scripts/verify-webhook-flow-atomic-postgres.mjs'
+      - 'src/app/api/webhooks/whatsapp/route.js'
+      - 'src/lib/whatsapp/meta.js'
+      - 'scripts/verify-signed-webhook-ingress-postgres.mjs'
       - 'tests/webhook-flow-atomic-bootstrap.test.js'
       - 'src/lib/whatsapp/progress-report*.js'
       - 'scripts/verify-message-report-recovery-postgres.mjs'
@@ -42,7 +45,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [execution-release, assignment-continuity, assignment-owner-directory, proactive-flow-history, message-report-recovery, webhook-flow-atomic]
+        suite: [execution-release, assignment-continuity, assignment-owner-directory, proactive-flow-history, message-report-recovery, webhook-flow-atomic, signed-webhook-ingress]
     services:
       postgres:
         image: postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193

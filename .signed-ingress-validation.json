@@ -1,0 +1,17 @@
+{
+  "base": "5c5099fda6153619a965c5637253eb3a797cfb83",
+  "productTree": "c6077821cb2246b152543a079a13892e725fc217",
+  "blobs": {
+    "src/app/api/webhooks/whatsapp/route.js": "e8946f0bb2050f869b7dc5f106b46d38b54bf7c3",
+    "src/lib/whatsapp/meta.js": "b03562f014e62905edf46387db5a50468d31e3d3",
+    "scripts/verify-signed-webhook-ingress-postgres.mjs": "59eecfb9df276b97066c439d6a297a60a8bde3cd",
+    "tests/signed-webhook-ingress-bootstrap.test.js": "18720c8dabba18fa1e234e15dea20c70a2389772",
+    "tests/whatsapp-signed-ingress-boundary.test.js": "dfb1370ae042de9a37a98f75c29f78345a82653d",
+    ".github/workflows/execution-postgres.yml": "2459e5bff91a5b300a20c1685603e14f755729fb",
+    "docs/recovery/signed-webhook-ingress.md": "3145074bfa1836c53359cf97bbbdc2f9708bccc7",
+    "docs/recovery/HANDOFF_TENANT_WHATSAPP.md": "ae02a6d5952674e7fcda82f885a5ec0b976bfdf0"
+  },
+  "localFullSuite": "not executed - tool blocked",
+  "localFocalTests": 21,
+  "localLint": 0
+}
