@@ -1,0 +1,14 @@
+{
+  "base": "2c2eb18e0ed8670b275673036edd12338e111024",
+  "productTree": "b2a6a94c05ff84bbc74fa1f5266bcc38a49914de",
+  "blobs": {
+    "src/lib/whatsapp/proactive-flow-history-view.js": "9b73e538cb73599cb9a1abea189ae6c7d4298cd9",
+    "src/app/dashboard/inbox/proactive-flow-history.js": "742e2c166402d868bedd8d3781a710238f6cb728",
+    "src/app/dashboard/inbox/proactive-flow-history.module.css": "07e51114e9e33c3ab5b77b8b408d86554d60ca9e",
+    "tests/proactive-flow-history-view.test.js": "12ca647d93fb1aedcc03ed26c141e7c4faa02ae9",
+    "scripts/verify-proactive-flow-history-ui.mjs": "9359c6397cee07e62af2a740b84fce6a2bebc320",
+    "e2e/s11-flow-history-journey.js": "6ab617e946bcc244e682b90853bf0dd9c31280c7",
+    "docs/recovery/flow-history-reading-tools.md": "25584d90576fc4b850ee3e62eeca4af6ca1b4059",
+    "docs/recovery/HANDOFF_TENANT_WHATSAPP.md": "04a3515b71b5c672a619f173574cd40aa5ff2d52"
+  }
+}

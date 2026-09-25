@@ -136,3 +136,6 @@ Leer `atomic-flow-processing.md`. Ejecutar `verify-webhook-flow-atomic-postgres.
 
 ## Continuacion S11.A32: ingreso HTTP firmado y durable
 Leer `signed-webhook-ingress.md`. El handler exige firma exacta, rechaza normalizacion malformada y devuelve 503 sin ACK ni despacho cuando falla la persistencia. La septima suite SQL usa HTTP loopback y el handler/normalizador/lote reales, con firma sintetica y captura de after/dispatcher. Cubre duplicados, rollback y nfm_reply hasta la incidencia atomica; no es trafico fisico de Meta. No quitar los controles de A31 ni usar bases de aplicacion para este verificador.
+
+## Continuación S11.A33: búsqueda y prioridad del seguimiento
+Leer `flow-history-reading-tools.md`. El historial permite buscar en los campos autorizados de la página y ordenar por atención sin llamadas nuevas, sin alterar estados y sin convertir conteos parciales en métricas globales. Conserva consulta/orden durante paginación y error, pero descarta observaciones y filtros al cambiar contexto o conexión. La lista móvil no impone un segundo scroll; vista previa del mensaje y detalles completos mantienen sus restricciones. Ejecutar las pruebas puras nuevas, el navegador ampliado y S9.2 sobre el SHA final. No modifica el dispatcher ni la configuración del piloto; esos cierres siguen separados.
