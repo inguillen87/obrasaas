@@ -1,3 +1,4 @@
+import { verifyAuthenticatedFlowAttendance } from './s11-flow-attendance-journey.js';
 import { verifyAuthenticatedMessageReport } from './s11-message-report-journey.js';
 import { expect, test } from '@playwright/test';
 import { verifyAuthenticatedAssignmentContinuity } from './s11-assignment-journey.js';
@@ -567,6 +568,7 @@ test.describe('S9.2 authenticated acceptance', () => {
       ).toHaveCount(0);
       await verifyAuthenticatedAssignmentContinuity({ fixture, sessions, baseURL });
       await verifyAuthenticatedMessageReport({ fixture, sessions, baseURL });
+      await verifyAuthenticatedFlowAttendance({ fixture, sessions, baseURL });
       await verifyAuthenticatedFlowHistory({ fixture, sessions, baseURL });
     } finally {
       await Promise.allSettled(

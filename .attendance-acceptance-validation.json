@@ -1,0 +1,13 @@
+{
+  "base": "27e59cb03149df53367170865d255a3b7854612a",
+  "productTree": "710c71a96f30b1f8ed69a5fd213be96a33636917",
+  "blobs": {
+    "e2e/s92-authenticated.spec.js": "39020fdf00386196d7be2bc0966954e9a7458a4a",
+    "e2e/s11-flow-attendance-journey.js": "6e93c99d2094ebc53e4d22fd1222be7b5b121a2f",
+    "scripts/lib/s11-flow-attendance-fixture.mjs": "161661fd7a7805375503ebade74661778e54e49a",
+    "scripts/verify-flow-attendance-acceptance-postgres.mjs": "e2819aa43762cac4404b7b1ea9322f0b89ddd969",
+    "tests/authenticated-flow-attendance-fixture.test.js": "1aa7f0af9b451e61b5403f50fdaae19fb3f6b920",
+    "docs/recovery/authenticated-flow-attendance.md": "891ec292e5531a6d16a292b486b061e9d416456a",
+    "docs/recovery/HANDOFF_TENANT_WHATSAPP.md": "feec360eab71813345c122d97152309c5bfdc3c4"
+  }
+}

@@ -1,0 +1,71 @@
+name: Validate attendance acceptance before release
+on:
+  push:
+    branches: ['operations/attendance-acceptance-20260924']
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+        env:
+          POSTGRES_USER: acceptance_fixture
+          POSTGRES_PASSWORD: local_fixture_only
+          POSTGRES_DB: obrasaas_e2e
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U acceptance_fixture -d obrasaas_e2e"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      S92_E2E_DISPOSABLE: '1'
+      DATABASE_URL: postgresql://acceptance_fixture:local_fixture_only@127.0.0.1:5432/obrasaas_e2e?schema=public
+      DATABASE_URL_UNPOOLED: postgresql://acceptance_fixture:local_fixture_only@127.0.0.1:5432/obrasaas_e2e?schema=public
+      DIRECT_URL: postgresql://acceptance_fixture:local_fixture_only@127.0.0.1:5432/obrasaas_e2e?schema=public
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Check exact source identity
+        run: |
+          mkdir -p evidence
+          python3 - <<'PY'
+          import os,json,pathlib,subprocess,tempfile
+          m=json.load(open('.attendance-acceptance-validation.json'))
+          with tempfile.TemporaryDirectory() as directory:
+              env={**os.environ,'GIT_INDEX_FILE':directory+'/index'}
+              subprocess.run(['git','read-tree','HEAD'],env=env,check=True)
+              subprocess.run(['git','update-index','--force-remove','--','.github/workflows/validate-attendance-acceptance.yml','.attendance-acceptance-validation.json'],env=env,check=True)
+              assert subprocess.check_output(['git','write-tree'],env=env,text=True).strip()==m['productTree']
+          for path,sha in m['blobs'].items():assert subprocess.check_output(['git','rev-parse','HEAD:'+path],text=True).strip()==sha,path
+          pathlib.Path('evidence/validated-tree.json').write_text(json.dumps(m,indent=2))
+          PY
+      - name: Exact dependencies and tests
+        run: |
+          npm ci --no-audit --no-fund > evidence/install.log 2>&1
+          npm test > evidence/tests.log 2>&1 || { tail -n 90 evidence/tests.log; exit 1; }
+          tail -n 10 evidence/tests.log
+          npx eslint e2e/s92-authenticated.spec.js e2e/s11-flow-attendance-journey.js scripts/lib/s11-flow-attendance-fixture.mjs scripts/verify-flow-attendance-acceptance-postgres.mjs tests/authenticated-flow-attendance-fixture.test.js > evidence/lint.log 2>&1
+      - name: Check fixture with actual disposable PostgreSQL
+        run: |
+          npx prisma migrate deploy > evidence/migrations.log 2>&1
+          npx tsx scripts/verify-flow-attendance-acceptance-postgres.mjs > evidence/postgres.log 2>&1 || { cat evidence/postgres.log; exit 1; }
+          cat evidence/postgres.log
+      - name: Complete application build
+        run: npm run build > evidence/build.log 2>&1 || { tail -n 80 evidence/build.log; exit 1; }
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: attendance-acceptance-${{ github.run_id }}
+          path: evidence/
+          retention-days: 7
+          if-no-files-found: error
