@@ -11,7 +11,7 @@ export const MASTER_ONLY_ROUTE_CONVERGENCE = Object.freeze([
   { legacy: '/cronograma', status: 'alias', target: '/dashboard?tab=sec-gantt', label: 'Cronograma' },
   { legacy: '/documentos', status: 'pending', reason: 'No existe aún un gestor documental enterprise equivalente al módulo visual de master.' },
   { legacy: '/ejecutivo', status: 'pending', reason: 'El dashboard operativo no reemplaza todavía el centro ejecutivo CEO de master.' },
-  { legacy: '/libro-obra', status: 'alias', target: '/dashboard/progress', label: 'Bitácora de avance' },
+  { legacy: '/libro-obra', status: 'alias', target: '/dashboard/progress', label: 'Libro de Obra & evidencia', phase: 'c2-real-ui' },
   { legacy: '/licitaciones', status: 'pending', reason: 'Compras reales no equivalen al proceso de licitación y matriz de oferentes.' },
   { legacy: '/marketplace', status: 'alias', target: '/dashboard/purchases', label: 'Marketplace & compras', phase: 'c2-real-ui' },
   { legacy: '/onboarding', status: 'alias', target: '/dashboard/getting-started', label: 'Puesta en marcha' },

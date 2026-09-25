@@ -145,3 +145,6 @@ Leer `conversation-followup-panel.md`. La cabecera de la conversación abre el s
 
 ## Convergencia enterprise C-1/C-2
 La rama `release/enterprise-unified-2026` nace desde A34 y conserva recovery como autoridad de backend. Leer `enterprise-convergence-c1.md`, `marketplace-convergence-c2.md` y `budget-cost-convergence-c2.md`. Cinco rutas históricas tienen alias temporales a equivalentes exactos; las demás no se aproximan por conveniencia. Marketplace adopta UI enterprise sobre proveedores, OC, recepciones y compromisos reales y prohíbe reutilizar catálogos, precios o ratings ficticios de master. Presupuesto & costos usa versiones y ledger reales y separa movimientos por moneda; una fila sin moneda resuelta queda fuera de los totales ARS/USD. Mantener tests y build antes de cada incorporación y portar el resto módulo por módulo.
+
+## Convergencia enterprise C-2.3 — Libro de Obra
+Leer `libro-obra-convergence-c23.md`. `/libro-obra` apunta temporalmente a `/dashboard/progress`, ahora presentado como «Libro de Obra & evidencia» sobre DailyLog, evidencia y revisiones reales. KPIs y filtros describen sólo filas cargadas; no importar folios, clima, materiales, firmas o hashes demo de master. Las mutaciones de parte/evidencia mantienen sus contratos y pruebas existentes.

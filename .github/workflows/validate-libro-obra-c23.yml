@@ -1,0 +1,71 @@
+name: Validate Libro Obra C23 convergence
+on:
+  push:
+    branches: ['operations/libro-obra-c23-20260925']
+permissions:
+  contents: read
+concurrency:
+  group: libro-obra-c23-preflight
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      PLAYWRIGHT_CHANNEL: chromium
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Verify exact product tree
+        run: |
+          mkdir -p evidence
+          python3 - <<'PYCODE'
+          import json,pathlib,tempfile,os,subprocess
+          m=json.load(open('.libro-obra-c23-validation.json'))
+          with tempfile.TemporaryDirectory() as t:
+              env={**os.environ,'GIT_INDEX_FILE':str(pathlib.Path(t)/'index')}
+              subprocess.run(['git','read-tree','HEAD'],env=env,check=True)
+              subprocess.run(['git','update-index','--force-remove','--','.github/workflows/validate-libro-obra-c23.yml','.libro-obra-c23-validation.json'],env=env,check=True)
+              tree=subprocess.check_output(['git','write-tree'],env=env,text=True).strip()
+          assert tree==m['productTree']
+          for p,sha in m['blobs'].items():assert subprocess.check_output(['git','rev-parse','HEAD:'+p],text=True).strip()==sha,p
+          pathlib.Path('evidence/validated-tree.json').write_text(json.dumps(m,indent=2))
+          subprocess.run(['git','archive','--format=tar','--output=evidence/candidate-source.tar','HEAD',*m['blobs']],check=True)
+          print('Exact product tree',tree)
+          PYCODE
+      - name: Exact dependencies
+        run: npm ci --no-audit --no-fund > evidence/install.log 2>&1 || { tail -n 80 evidence/install.log; exit 1; }
+      - name: Complete suite and affected lint
+        run: |
+          npm test > evidence/tests.log 2>&1 || { tail -n 120 evidence/tests.log; exit 1; }
+          tail -n 10 evidence/tests.log
+          npx eslint src/lib/progress-journal-view.js src/lib/enterprise-convergence.js src/app/dashboard/progress/progress-client.js src/app/dashboard/progress/page.js src/app/dashboard/dashboard-shell.js tests/progress-journal-view.test.js tests/enterprise-convergence.test.js scripts/verify-libro-obra-ui.mjs > evidence/lint.log 2>&1 || { cat evidence/lint.log; exit 1; }
+      - name: Libro de Obra UX and preserved progress circuits
+        run: |
+          npx playwright install --with-deps chromium > evidence/browser-install.log 2>&1
+          for script in verify-libro-obra-ui verify-progress-context-ui verify-progress-review-ui verify-journal-correction-ui verify-journal-task-link-ui; do
+            node "scripts/$script.mjs" > "evidence/$script.log" 2>&1 || { tail -n 100 "evidence/$script.log"; exit 1; }
+            tail -n 1 "evidence/$script.log"
+          done
+          node --test tests/progress-journal-view.test.js tests/progress-journal-review.test.js tests/journal-correction.test.js tests/journal-record-focus.test.js > evidence/progress-contracts.log 2>&1 || { cat evidence/progress-contracts.log; exit 1; }
+      - name: Complete application build
+        run: npm run build > evidence/build.log 2>&1 || { tail -n 120 evidence/build.log; exit 1; }
+      - name: Preserve evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: libro-obra-c23-${{ github.run_id }}
+          path: |
+            evidence/
+            .vercel/libro-obra-ui/proof.json
+            .vercel/libro-obra-ui/failure.json
+            .vercel/libro-obra-ui/*.png
+          include-hidden-files: true
+          retention-days: 7
+          if-no-files-found: warn

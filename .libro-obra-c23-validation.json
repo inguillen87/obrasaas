@@ -1,0 +1,18 @@
+{
+  "base": "943127bd77655b23da7717c7b5e345e2c45ae400",
+  "productTree": "db78ef3df153795b86a8e0c9e6d62d4d210f0f98",
+  "blobs": {
+    ".github/workflows/ci.yml": "6b963d7eb3a5c18ead1a48a85677acbdbb4a4c1d",
+    "docs/recovery/HANDOFF_TENANT_WHATSAPP.md": "ff32511ffb4cce9ec75ebbfbb782073401763d48",
+    "docs/recovery/libro-obra-convergence-c23.md": "1f1c1fd52804962c0dc89c04d1630fe4747b0b61",
+    "scripts/verify-libro-obra-ui.mjs": "91140cb400a3f8f30f30819fd00212c1c15c4db8",
+    "src/app/dashboard/dashboard-shell.js": "e5159a0914d15ca5acd01f37dd471e63f378d329",
+    "src/app/dashboard/progress/page.js": "04c604140f60656254ca00fd37c5a243571e3d41",
+    "src/app/dashboard/progress/progress-client.js": "4d3d652988942b447c9ad86190c9c850af8703f6",
+    "src/app/dashboard/progress/progress.module.css": "fc73d059e066dd536b5450070cb0a9f38820253e",
+    "src/lib/enterprise-convergence.js": "2a0a6cdfc049e2523e8585c91ab18b773ed5ad07",
+    "src/lib/progress-journal-view.js": "6041febd30b08dd0ae04fb23704efbbb2d660fe8",
+    "tests/enterprise-convergence.test.js": "b4ea0ad8a5556322ca80ad1870482d9bca4e5c91",
+    "tests/progress-journal-view.test.js": "7762b7d9b9aaf9833a0e73e8042e4ca78ed06568"
+  }
+}
