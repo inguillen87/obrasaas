@@ -124,3 +124,9 @@ Leer `flow-attendance-link.md`. El motor registra el AttendanceEntry exacto devu
 
 ## Continuación S11.A28: ingreso vinculado con sesión real
 Leer `authenticated-flow-attendance.md`. El journey S9.2 añade la consulta exacta de dos formularios que comparten un pendiente anterior, legacy sin backfill, permisos/acceso ajeno, recarga móvil y sign-out independiente. Preparación con dominio y Prisma reales, sin canal de envío; no es prueba del webhook completo ni GPS físico. El fixture exige base/socket/obra sintéticos, y su verificador SQL auxiliar comprueba reutilización, lecturas sin mutación y rollback por carga duplicada. El resultado del SHA final se acredita en el PR, sin trasladar automáticamente la aceptación de A27.
+
+## Continuación S11.A29: incidencia operativa vinculada
+Leer `flow-incident-link.md`. La fuente de las incidencias Flow es ProjectSnapshot, no la tabla Incident. El motor conserva el ID exacto junto a proyecto/trabajador/sesión en el mensaje entrante. El lector comprueba origen y recibo, devuelve sólo estado/severidad y fecha/versión del snapshot, con permisos de conversaciones y obra. Sin recibo no se infiere un vínculo, y sin status no se anuncia resolución. Ejecutar `verify-flow-incident-ui.mjs`, la suite SQL de historia ampliada y el nuevo recorrido específico en S9.2. No confundir motor+persistencia de ensayo con webhook firmado o entrega física. Publicación y resultados finales por SHA en el PR.
+
+## Continuaci?n S11.A30: observaciones despu?s de reconectar
+Leer `flow-read-connectivity.md`. History y Reply descartan lecturas anteriores al cambiar la disponibilidad de red. No reinicia borradores ni intentos inciertos de escritura; exige otra consulta expl?cita. Esta correcci?n se integra junto con A29 para que el v?nculo de incidencias no restaure datos antiguos. El verificador `verify-flow-read-connectivity-ui.mjs` permanece en CI.

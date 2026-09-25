@@ -3,10 +3,11 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { evidenceScopeHeaders } from '@/lib/evidence-capture-policy';
 import { flowReplyMatches } from '@/lib/whatsapp/proactive-flow-reply-policy';
 import FlowAttendanceView from './flow-attendance-view';
+import FlowIncidentView from './flow-incident-view';
 import styles from './proactive-flow-reply.module.css';
 const formatDate = value => new Intl.DateTimeFormat('es-AR',{dateStyle:'medium',timeStyle:'short'}).format(new Date(value));
 export default function ProactiveFlowReply(props) {
-  return <ScopedReply key={[props.organizationId,props.projectId,props.conversationId,props.sourceMessageId,props.observedAt].join(':')} {...props}/>;
+  return <ScopedReply key={JSON.stringify([props.organizationId,props.projectId,props.conversationId,props.sourceMessageId,props.observedAt,props.online !== false])} {...props}/>;
 }
 function ScopedReply({organizationId,projectId,conversationId,sourceMessageId,online=true}) {
   const regionId=useId(),alive=useRef(true),active=useRef(null);
@@ -38,6 +39,7 @@ function ScopedReply({organizationId,projectId,conversationId,sourceMessageId,on
         {result.state==='available'?<><strong className={styles.verified}>Origen de la respuesta verificado</strong><p className={styles.body}>{result.reply.body||'El mensaje no tiene texto operativo conservado.'}</p><dl><div><dt>Mensaje recibido</dt><dd>{result.reply.messageId}</dd></div><div><dt>Registrado en la bandeja</dt><dd><time dateTime={result.reply.recordedAt}>{formatDate(result.reply.recordedAt)}</time></dd></div><div><dt>Respuesta procesada</dt><dd><time dateTime={result.reply.processedAt}>{formatDate(result.reply.processedAt)}</time></dd></div></dl></>
           :<p role="status" className={styles.notice}>{result.state==='not_recorded'?'La consulta actual no encontró una respuesta procesada para esta sesión. No se infiere recepción ni se reenvía el formulario.':'No se pudo vincular un mensaje visible con certeza. Puede no estar disponible o sus datos no ser consistentes; no se busca por nombre, teléfono ni cercanía de fechas.'}</p>}
         {result.attendanceAvailable === true && <FlowAttendanceView organizationId={organizationId} projectId={projectId} conversationId={conversationId} sourceMessageId={sourceMessageId} online={online}/>}
+        {result.incidentAvailable === true && <FlowIncidentView organizationId={organizationId} projectId={projectId} conversationId={conversationId} sourceMessageId={sourceMessageId} online={online}/>}
         <p className={styles.disclaimer}>Esta consulta comprueba el mensaje de origen; no certifica un parte, fichaje, incidencia o pago aprobado. Los datos privados siguen sujetos a las restricciones de la bandeja. No se ejecutó ninguna acción de obra.</p>
       </>}
       {!online&&<p role="status" className={styles.notice}>Sin conexión. Volvé a consultar antes de utilizar esta información.</p>}

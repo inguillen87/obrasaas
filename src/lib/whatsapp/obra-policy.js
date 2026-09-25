@@ -191,6 +191,11 @@ export function countPresentAttendanceEntries(attendance) {
   )).length;
 }
 
+export function operationalIncidentIdForEvent(externalId) {
+  if (typeof externalId !== 'string' || !externalId || externalId.length > 512 || /[\s\u0000-\u001f\u007f]/.test(externalId)) throw new Error('A valid event reference is required.');
+  return `inc-event-${createHash('sha256').update(externalId).digest('hex').slice(0,32)}`;
+}
+
 export function prependUniqueEventIncident(incidents, externalId, incident) {
   if (!Array.isArray(incidents) || !incident?.id) {
     throw new Error('A valid incident collection and incident are required.');
