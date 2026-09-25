@@ -11,7 +11,8 @@ export function normalizeFlowReplyQuery(params) {
 export function flowReplyMatches(value, scope, sourceMessageId) {
   try {
     historyId(sourceMessageId); [scope.organizationId,scope.projectId,scope.conversationId].forEach(historyId);
-    if (!fields(value,['context','sourceMessageId','observedAt','state','reply'])
+    if (!(fields(value,['context','sourceMessageId','observedAt','state','reply'])
+        || fields(value,['context','sourceMessageId','observedAt','state','reply','attendanceAvailable']) && value.attendanceAvailable === true && value.state === 'available')
       || !fields(value.context,['organizationId','projectId','conversationId'])
       || Object.keys(value.context).some(key => value.context[key] !== scope[key])
       || value.sourceMessageId !== sourceMessageId || !instant(value.observedAt)
