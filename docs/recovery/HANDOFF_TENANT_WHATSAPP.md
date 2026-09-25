@@ -130,3 +130,6 @@ Leer `flow-incident-link.md`. La fuente de las incidencias Flow es ProjectSnapsh
 
 ## Continuaci?n S11.A30: observaciones despu?s de reconectar
 Leer `flow-read-connectivity.md`. History y Reply descartan lecturas anteriores al cambiar la disponibilidad de red. No reinicia borradores ni intentos inciertos de escritura; exige otra consulta expl?cita. Esta correcci?n se integra junto con A29 para que el v?nculo de incidencias no restaure datos antiguos. El verificador `verify-flow-read-connectivity-ui.mjs` permanece en CI.
+
+## Continuacion S11.A31: persistencia atomica de incidencias
+Leer `atomic-flow-processing.md`. Ejecutar `verify-webhook-flow-atomic-postgres.mjs` solo con la base PostgreSQL desechable explicitamente autorizada. Prueba cola durable, lease, motor, consumo y recibos juntos, incluyendo rollback final y reintentos. No confundir efectos persistidos con despacho/entrega fisica ni con autenticacion del participante canonico. La aceptacion de A29/A30 y el release nuevo se acreditan por SHA en PR #1.
