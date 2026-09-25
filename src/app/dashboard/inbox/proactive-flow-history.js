@@ -7,8 +7,10 @@ import ProactiveFlowReply from './proactive-flow-reply';
 import styles from './proactive-flow-history.module.css';
 const titleFor = key => key === 'incident-report' ? 'Incidencia de obra' : 'Fichaje y seguridad';
 const formatDate = value => new Intl.DateTimeFormat('es-AR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+// Read-only observations are invalidated across network transitions; the existing
+// cleanup aborts reads. Reconnection never submits writes or fetches automatically.
 export default function ProactiveFlowHistory(props) {
-  return <ScopedHistory key={[props.organizationId, props.projectId, props.conversationId].join(':')} {...props} />;
+  return <ScopedHistory key={JSON.stringify([props.organizationId, props.projectId, props.conversationId, props.online !== false])} {...props} />;
 }
 function ScopedHistory({ organizationId, projectId, conversationId, online = true }) {
   const heading = useId(), panelId = useId(), filterDescriptionId = useId(), listRef = useRef(null), alive = useRef(true), active = useRef(null);

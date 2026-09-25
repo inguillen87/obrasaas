@@ -124,3 +124,8 @@ Leer `flow-attendance-link.md`. El motor registra el AttendanceEntry exacto devu
 
 ## Continuación S11.A28: ingreso vinculado con sesión real
 Leer `authenticated-flow-attendance.md`. El journey S9.2 añade la consulta exacta de dos formularios que comparten un pendiente anterior, legacy sin backfill, permisos/acceso ajeno, recarga móvil y sign-out independiente. Preparación con dominio y Prisma reales, sin canal de envío; no es prueba del webhook completo ni GPS físico. El fixture exige base/socket/obra sintéticos, y su verificador SQL auxiliar comprueba reutilización, lecturas sin mutación y rollback por carga duplicada. El resultado del SHA final se acredita en el PR, sin trasladar automáticamente la aceptación de A27.
+
+## Continuación S11.A30: observaciones después de reconectar
+Leer `flow-read-connectivity.md`. History y Reply descartan el resultado al cambiar disponibilidad de red y requieren una nueva consulta explícita, sin recuperar automáticamente datos previos como verificados. Es sólo lectura: no reiniciar formularios, borradores ni intentos inciertos del sender. Ejecutar el nuevo `verify-flow-read-connectivity-ui.mjs` y las regresiones de historia/respuesta.
+
+A29 permanece separado: su run `36084197162` falló en SQL y la lectura del diagnóstico fue bloqueada. Sus 23 archivos staged no se modificaron en este trabajo. Incorporar la corrección de reconexión al candidato y validar su nueva base antes de integrarlo; no restaurar el árbol candidato antiguo sobre el producto.

@@ -5,8 +5,10 @@ import { flowReplyMatches } from '@/lib/whatsapp/proactive-flow-reply-policy';
 import FlowAttendanceView from './flow-attendance-view';
 import styles from './proactive-flow-reply.module.css';
 const formatDate = value => new Intl.DateTimeFormat('es-AR',{dateStyle:'medium',timeStyle:'short'}).format(new Date(value));
+// Read-only observations are invalidated across network transitions; the existing
+// cleanup aborts reads. Reconnection never submits writes or fetches automatically.
 export default function ProactiveFlowReply(props) {
-  return <ScopedReply key={[props.organizationId,props.projectId,props.conversationId,props.sourceMessageId,props.observedAt].join(':')} {...props}/>;
+  return <ScopedReply key={JSON.stringify([props.organizationId,props.projectId,props.conversationId,props.sourceMessageId,props.observedAt,props.online !== false])} {...props}/>;
 }
 function ScopedReply({organizationId,projectId,conversationId,sourceMessageId,online=true}) {
   const regionId=useId(),alive=useRef(true),active=useRef(null);
