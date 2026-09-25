@@ -1,0 +1,29 @@
+{
+  "base": "6f77f652e1a03de549c602c6bdb1945655b8cde6",
+  "productTree": "58b2c3fdfb99ec2a38ef71517e5c9d7521a57b4c",
+  "blobs": {
+    ".github/workflows/ci.yml": "10d4d30406400365af901d2dfa7dea24e2d7d6b3",
+    "docs/recovery/HANDOFF_TENANT_WHATSAPP.md": "7cf960e32079e14d846340a93813a6e8d744c1de",
+    "docs/recovery/flow-incident-link.md": "70292e3e8879dee24b6102930260aea3971998ab",
+    "e2e/s11-flow-incident-journey.js": "68f8d3612ae1d2db1e8195108585c97aa5f42f03",
+    "e2e/s92-authenticated.spec.js": "e07a3bc1c4e4362e2f962e1fda88d2b478bdbed5",
+    "scripts/lib/flow-incident-fixture.mjs": "8940ca9b7d00467e9bfed31b6f3eef6662f0d0da",
+    "scripts/lib/s11-flow-incident-fixture.mjs": "18656e9844e5b6c95a0aa97cffc4b4d19f7e25d8",
+    "scripts/lib/verify-flow-incident-read.mjs": "9c0a2cc5e642830aac4b7222aa3c2f9b22ee80e1",
+    "scripts/verify-flow-incident-ui.mjs": "700c33cd13ec59c046cda998ff0074c94c94d9cb",
+    "scripts/verify-proactive-flow-history-postgres.mjs": "18d06b6ab4bc75e56275bad92a9d85d54f30218b",
+    "src/app/api/whatsapp/inbox/[conversationId]/proactive-flows/route.js": "358ca15cd3b40d999c833a7653355618926f9139",
+    "src/app/dashboard/inbox/flow-incident-view.js": "06b39c6f26254b9adaa1f5664804e435a71bd07f",
+    "src/app/dashboard/inbox/proactive-flow-reply.js": "50f52b7f3e0b5cd13b4ae0c3b4381d22fbf063c1",
+    "src/lib/whatsapp/flow-incident-policy.js": "3c240875d5991909495d7adc23fe8dd0e46a61cb",
+    "src/lib/whatsapp/flow-incident-receipt.js": "e84a0ce4ea337605553e27b3b277324f1ade1992",
+    "src/lib/whatsapp/flow-incident.js": "1fd92bd735d7d86031f16f755674e0eb457fcaae",
+    "src/lib/whatsapp/obra-engine.js": "c603f6c9151373a47e290aaa837e164c7bbb3286",
+    "src/lib/whatsapp/obra-policy.js": "b38671781232e257efb2dd8530e105f649ff2df8",
+    "src/lib/whatsapp/proactive-flow-reply-policy.js": "729eb7f19678c564ddff692a21c891ee313f30fb",
+    "src/lib/whatsapp/proactive-flow-reply.js": "de598d93c71667e983d6c94595b5307548b51baf",
+    "tests/flow-incident.test.js": "33b805d7259ffc69883385e3e36b682f5aac6096",
+    "tests/helpers/flow-incident-fixture.js": "bcd1271d685d57e9f25e44731306a8514b16c1ea",
+    "tests/obra-engine-flows.test.js": "d6e9cf7a0f2e786c9031bd3af08ae7a9c7bcad85"
+  }
+}
