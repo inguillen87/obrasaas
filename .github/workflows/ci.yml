@@ -251,6 +251,7 @@ jobs:
           node scripts/verify-marketplace-ui.mjs
           node scripts/verify-budget-control-ui.mjs
           node scripts/verify-libro-obra-ui.mjs
+          node scripts/verify-inspections-workspace-ui.mjs
           node scripts/verify-proactive-flow-confirmation-ui.mjs
           node scripts/verify-proactive-flow-history-ui.mjs
           node scripts/verify-inbox-continuity-ui.mjs
@@ -274,6 +275,8 @@ jobs:
             .vercel/budget-control-ui/*.png
             .vercel/libro-obra-ui/proof.json
             .vercel/libro-obra-ui/*.png
+            .vercel/inspections-workspace-ui/proof.json
+            .vercel/inspections-workspace-ui/*.png
             .vercel/proactive-flow-confirmation-ui/proof.json
             .vercel/proactive-flow-confirmation-ui/*.png
             .vercel/inbox-continuity-ui/proof.json

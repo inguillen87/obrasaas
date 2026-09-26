@@ -148,3 +148,6 @@ La rama `release/enterprise-unified-2026` nace desde A34 y conserva recovery com
 
 ## Convergencia enterprise C-2.3 — Libro de Obra
 Leer `libro-obra-convergence-c23.md`. `/libro-obra` apunta temporalmente a `/dashboard/progress`, ahora presentado como «Libro de Obra & evidencia» sobre DailyLog, evidencia y revisiones reales. KPIs y filtros describen sólo filas cargadas; no importar folios, clima, materiales, firmas o hashes demo de master. Las mutaciones de parte/evidencia mantienen sus contratos y pruebas existentes.
+
+## Convergencia enterprise C-2.4 — Inspecciones QA/QC
+Leer `inspections-convergence-c24.md`. `/inspecciones` continúa como alias de `/dashboard/inspections`, ahora con cabecera enterprise, KPIs de la página cargada y filtros locales sobre registros reales. No copiar fallback de inspecciones, puntajes, inspectores, API keys de localStorage ni checklists normativos estáticos de master. Mantener workflow DRAFT→SUBMITTED→dictamen y permisos actuales.

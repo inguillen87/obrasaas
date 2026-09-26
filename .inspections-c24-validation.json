@@ -1,0 +1,15 @@
+{
+  "base": "eb929942f989201205408377438282b87d0f82b0",
+  "productTree": "4c46602ada866e3859d3030e5ad2fcca8b382469",
+  "blobs": {
+    ".github/workflows/ci.yml": "9a161595ca39fcc1125055a63d3f0c7a61c992a1",
+    "docs/recovery/HANDOFF_TENANT_WHATSAPP.md": "a606189c82152334224720108622ef2a33348a7c",
+    "docs/recovery/inspections-convergence-c24.md": "6cb1183194782a861728bf3ff82d7c832382bc04",
+    "scripts/verify-inspections-workspace-ui.mjs": "f208fbfdacf66cf536abb246e9e9e6c3816f52ab",
+    "src/app/dashboard/inspections/page.js": "faa38c03dbbb76bfac7bfe67aee31fbc94ce2787",
+    "src/app/dashboard/inspections/workspace.js": "3fe4ce4a6d1fe93a4c1cbd587c097f21391fd438",
+    "src/app/dashboard/inspections/workspace.module.css": "8892d275035c56ea3e43c499afe347940d9048cf",
+    "src/lib/inspection-workspace-view.js": "0ae2992ad182318eafb61ccb0936a3601d1ef430",
+    "tests/inspection-workspace-view.test.js": "f8576b4b97b54d824e4efb0264705511b53313da"
+  }
+}
