@@ -252,6 +252,7 @@ jobs:
           node scripts/verify-budget-control-ui.mjs
           node scripts/verify-libro-obra-ui.mjs
           node scripts/verify-inspections-workspace-ui.mjs
+          node scripts/verify-gantt-enterprise-ui.mjs
           node scripts/verify-proactive-flow-confirmation-ui.mjs
           node scripts/verify-proactive-flow-history-ui.mjs
           node scripts/verify-inbox-continuity-ui.mjs
@@ -277,6 +278,8 @@ jobs:
             .vercel/libro-obra-ui/*.png
             .vercel/inspections-workspace-ui/proof.json
             .vercel/inspections-workspace-ui/*.png
+            .vercel/gantt-enterprise-ui/proof.json
+            .vercel/gantt-enterprise-ui/*.png
             .vercel/proactive-flow-confirmation-ui/proof.json
             .vercel/proactive-flow-confirmation-ui/*.png
             .vercel/inbox-continuity-ui/proof.json

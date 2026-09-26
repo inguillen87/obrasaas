@@ -8,7 +8,7 @@ export const MASTER_ONLY_ROUTE_CONVERGENCE = Object.freeze([
   { legacy: '/compliance', status: 'pending', reason: 'Privacidad y auditoría reales no sustituyen por sí solas el tablero normativo de master.' },
   { legacy: '/coordinacion', status: 'pending', reason: 'Ejecución y evidencias existen, pero no reproducen todavía el lienzo georreferenciado.' },
   { legacy: '/costos', status: 'alias', target: '/dashboard/budgets', label: 'Presupuesto & costos', phase: 'c2-real-ui' },
-  { legacy: '/cronograma', status: 'alias', target: '/dashboard?tab=sec-gantt', label: 'Cronograma' },
+  { legacy: '/cronograma', status: 'alias', target: '/dashboard?tab=sec-gantt', label: 'Cronograma & dependencias', phase: 'c2-real-ui' },
   { legacy: '/documentos', status: 'pending', reason: 'No existe aún un gestor documental enterprise equivalente al módulo visual de master.' },
   { legacy: '/ejecutivo', status: 'pending', reason: 'El dashboard operativo no reemplaza todavía el centro ejecutivo CEO de master.' },
   { legacy: '/libro-obra', status: 'alias', target: '/dashboard/progress', label: 'Libro de Obra & evidencia', phase: 'c2-real-ui' },

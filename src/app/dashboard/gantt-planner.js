@@ -14,6 +14,7 @@ import {
   ganttTaskStatusForProgress,
 } from '@/lib/gantt';
 import styles from './gantt-planner.module.css';
+import { ganttTaskSearchIds, ganttWorkspaceSummary } from '@/lib/gantt-workspace-view';
 import { useModalFocus } from './use-modal-focus';
 
 const SCALE_OPTIONS = [
@@ -49,14 +50,6 @@ function legacyOffset(startDay) {
   return Math.min(100, Math.max(0, ((integer(startDay, 1, 1, 3_650) - 1) / 13) * 100));
 }
 
-function progressAverage(tasks) {
-  const values = Object.values(tasks || {});
-  if (values.length === 0) return 0;
-  return Math.round(values.reduce((sum, task) => (
-    sum + integer(task?.progress, 0, 0, 100)
-  ), 0) / values.length);
-}
-
 function emptyEditor(startDay = 1) {
   return {
     id: null,
@@ -90,6 +83,7 @@ export default function GanttPlanner({
   const [unitDays, setUnitDays] = useState(null);
   const fieldByTask = useMemo(() => new Map((fieldStatus?.tasks || []).map(row => [row.id, row])), [fieldStatus]);
   const [editor, setEditor] = useState(null);
+  const [taskQuery, setTaskQuery] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const svgRef = useRef(null);
@@ -110,6 +104,9 @@ export default function GanttPlanner({
   }), [automaticModel.unitDays, projectEndsAt, projectStartsAt, tasks, unitDays]);
   const selectedScale = unitDays || automaticModel.unitDays;
   const chartWidth = Math.max(760, 250 + model.columns.length * (selectedScale === 1 ? 48 : 74));
+  const workspaceSummary = useMemo(() => ganttWorkspaceSummary(model, tasks), [model, tasks]);
+  const searchIds = useMemo(() => new Set(ganttTaskSearchIds(model.tasks, taskQuery)), [model.tasks, taskQuery]);
+  const searchActive = Boolean(taskQuery.trim());
 
   const drawDependencies = useCallback(() => {
     const svg = svgRef.current;
@@ -415,9 +412,9 @@ export default function GanttPlanner({
     <div className={styles.planner}>
       <div className={styles.topbar}>
         <div>
-          <span className={styles.eyebrow}>Plan maestro de ejecución</span>
-          <h1>Cronograma y dependencias</h1>
-          <p>{planLabel} · La secuencia se guarda por obra y por tenant.</p>
+          <span className={styles.eyebrow}>{canonicalMode ? 'PLAN MAESTRO · TAREAS CANÓNICAS' : 'PLAN MAESTRO DE EJECUCIÓN'}</span>
+          <h1>Cronograma & dependencias</h1>
+          <p>{planLabel} · La secuencia, responsables y predecesoras se conservan dentro de la obra activa.</p>
         </div>
         <div className={styles.primaryActions}>
           <Link className={styles.reportButton} href="/dashboard/report">Reporte semanal</Link>
@@ -431,15 +428,20 @@ export default function GanttPlanner({
         </div>
       )}
 
-      <div className={styles.metrics} aria-label="Indicadores del cronograma">
-        <article><span>Avance ponderado simple</span><strong>{progressAverage(tasks)}%</strong><small>{model.completeTasks} de {model.tasks.length} finalizadas</small></article>
-        <article><span>Horizonte visible</span><strong>{model.totalDays}</strong><small>días planificados</small></article>
-        <article><span>Dependencias reales</span><strong>{model.dependencyCount}</strong><small>relaciones configuradas</small></article>
-        <article className={model.dependencyConflicts ? styles.metricRisk : undefined}><span>Conflictos de secuencia</span><strong>{model.dependencyConflicts}</strong><small>{model.dependencyConflicts ? 'requieren replanificación' : 'plan consistente'}</small></article>
+      <div className={styles.metrics} role="region" aria-label="Indicadores del cronograma">
+        <article><span>Avance promedio</span><strong>{workspaceSummary.progressAverage}%</strong><small>promedio simple de {workspaceSummary.total} tareas</small></article>
+        <article><span>Tareas abiertas</span><strong>{workspaceSummary.open}</strong><small>{workspaceSummary.complete} finalizadas</small></article>
+        <article><span>Dependencias reales</span><strong>{workspaceSummary.dependencies}</strong><small>relaciones configuradas</small></article>
+        <article className={workspaceSummary.delayed ? styles.metricRisk : undefined}><span>Riesgos de secuencia</span><strong>{workspaceSummary.delayed}</strong><small>{workspaceSummary.conflicts ? workspaceSummary.conflicts + ' conflictos de predecesoras' : 'sin conflictos de predecesoras'}</small></article>
       </div>
 
       <div className={styles.panel}>
         <div className={styles.panelToolbar}>
+          <div className={styles.searchGroup} role="search" aria-label="Buscar actividades del cronograma">
+            <label htmlFor="gantt-task-search">Buscar</label>
+            <input id="gantt-task-search" type="search" value={taskQuery} placeholder="Actividad, responsable o estado" onChange={(event) => setTaskQuery(event.target.value)} />
+            {searchActive && <span role="status">{searchIds.size} coincidencia{searchIds.size === 1 ? '' : 's'}</span>}
+          </div>
           <div className={styles.scaleGroup} aria-label="Escala temporal">
             <span>Escala</span>
             {SCALE_OPTIONS.map((option) => (
@@ -481,7 +483,7 @@ export default function GanttPlanner({
               <div className={styles.rows} ref={rowsRef}>
                 <svg className={styles.dependencies} ref={svgRef} aria-hidden="true" />
                 {model.tasks.map((task) => (
-                  <div className={styles.row} key={task.id}>
+                  <div className={`${styles.row} ${searchActive ? (searchIds.has(task.id) ? styles.searchMatch : styles.searchMuted) : ''}`} key={task.id}>
                     <button type="button" className={styles.taskLabel} onClick={() => openEdit(task.id)} disabled={busy}>
                       <strong>{task.name}</strong>
                       <span>{task.assignee}</span>

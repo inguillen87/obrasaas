@@ -153,3 +153,7 @@
 }
 
 .taskLabel > .fieldBadge { grid-column: 1 / -1; white-space: normal; color: #6ee7b7; font-size: .62rem; line-height: 1.5; }
+.searchGroup{display:grid;grid-template-columns:auto minmax(180px,280px) auto;align-items:center;gap:7px}.searchGroup label{color:var(--text-muted);font-size:.59rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase}.searchGroup input{box-sizing:border-box;width:100%;min-height:34px;padding:6px 10px;color:var(--text-primary);border:1px solid var(--border-color);border-radius:8px;background:rgba(255,255,255,.035);font:inherit;font-size:.68rem}.searchGroup input:focus-visible{outline:2px solid var(--primary);outline-offset:2px;border-color:transparent}.searchGroup span{color:var(--text-secondary);font-size:.59rem;white-space:nowrap}
+.row{transition:opacity 160ms ease,background 160ms ease}.searchMuted{opacity:.28}.searchMatch{background:rgba(255,159,28,.035)}.searchMatch .taskLabel{box-shadow:inset 3px 0 0 var(--primary),10px 0 24px rgba(0,0,0,.16)}
+@media(max-width:900px){.searchGroup{width:100%;grid-template-columns:auto minmax(0,1fr) auto;order:-1}.searchGroup input{font-size:16px}}
+@media(max-width:620px){.searchGroup{grid-template-columns:minmax(0,1fr)}.searchGroup label{display:none}.searchGroup span{white-space:normal}.searchMuted{opacity:.2}}

@@ -151,3 +151,6 @@ Leer `libro-obra-convergence-c23.md`. `/libro-obra` apunta temporalmente a `/das
 
 ## Convergencia enterprise C-2.4 — Inspecciones QA/QC
 Leer `inspections-convergence-c24.md`. `/inspecciones` continúa como alias de `/dashboard/inspections`, ahora con cabecera enterprise, KPIs de la página cargada y filtros locales sobre registros reales. No copiar fallback de inspecciones, puntajes, inspectores, API keys de localStorage ni checklists normativos estáticos de master. Mantener workflow DRAFT→SUBMITTED→dictamen y permisos actuales.
+
+## Convergencia enterprise C-2.5 — Cronograma & dependencias
+Leer `gantt-convergence-c25.md`. `/cronograma` continúa como alias de `/dashboard?tab=sec-gantt`, ahora con KPIs operativos y búsqueda visual sobre tareas canónicas. La búsqueda no filtra el grafo ni dispara API: sólo resalta coincidencias y mantiene dependencias visibles. No importar tareas, CSV, horas extra, API v1 ni responsables demo de master.

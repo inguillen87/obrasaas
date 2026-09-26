@@ -1,0 +1,16 @@
+{
+  "base": "e75f9bd99f80f62cdf77b9b2ec1bbbefb2ec8981",
+  "productTree": "1dd3bdc6ae305e8c8af195f2de42fd206d750cad",
+  "blobs": {
+    ".github/workflows/ci.yml": "0beb0a437e5000b433ba04abee96b010bac092d8",
+    "docs/recovery/HANDOFF_TENANT_WHATSAPP.md": "6c5cca8958fcd15591db171506dc0ed8769ace72",
+    "docs/recovery/gantt-convergence-c25.md": "b1a37e40275366b3029a50c78a6cebd9146e5947",
+    "scripts/verify-gantt-enterprise-ui.mjs": "38da26cf79b4943b42fd94c2d5e310d988fb61a9",
+    "src/app/dashboard/gantt-planner.js": "06cb9b0b6213ccc6be431d132ffb514f82d6355b",
+    "src/app/dashboard/gantt-planner.module.css": "dc8628ee43406bf57d31ad0ee649566f709f398c",
+    "src/lib/enterprise-convergence.js": "2d125211312c7fbbda0c840e327e8fe6d53dd961",
+    "src/lib/gantt-workspace-view.js": "7ae34c65c38d68a4ebab95c0b364515d62aea9bf",
+    "tests/enterprise-convergence.test.js": "59e948728abf394cab1821ad536e9bca4d01748f",
+    "tests/gantt-workspace-view.test.js": "6e0322063edcbef6e84ece7a36deed908bfa8dce"
+  }
+}
