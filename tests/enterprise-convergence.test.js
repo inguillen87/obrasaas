@@ -26,7 +26,7 @@ test('convergence copy is valid UTF-8 Spanish without mojibake placeholders', ()
 });
 test('C2 marks the modules whose enterprise UI is already converged', () => {
   const converged = MASTER_ONLY_ROUTE_CONVERGENCE.filter(row => row.phase === 'c2-real-ui').map(row => row.legacy);
-  assert.deepEqual(converged, ['/costos','/libro-obra','/marketplace']);
+  assert.deepEqual(converged, ['/costos','/cronograma','/libro-obra','/marketplace']);
 });
 test('alias resolver never guesses a pending module', () => {
   for (const [legacy,target] of approvedAliases) assert.equal(enterpriseAliasFor(legacy), target);
