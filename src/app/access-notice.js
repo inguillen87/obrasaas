@@ -14,12 +14,12 @@ export default function AccessNotice() {
     <section className={styles.card} aria-labelledby="access-title">
       <Link href="/" className={styles.brand} aria-label="ObraSaaS, volver al inicio"><span>OS</span> ObraSaaS</Link>
       <p className={styles.status}>OPERACIONES RESTRINGIDAS</p>
-      <h1 id="access-title">El acceso empresarial necesita una sesión verificada.</h1>
-      <p className={styles.description}>El ingreso anterior de demostración fue retirado. No habilitaba una cuenta de empresa ni verificaba la contraseña.</p>
+      <h1 id="access-title">Acceso empresarial temporalmente restringido.</h1>
+      <p className={styles.description}>La portada está disponible. Para entrar a los datos y operaciones de tu empresa necesitamos completar la configuración de inicio de sesión.</p>
       <div className={styles.notice}><strong>Datos y operaciones protegidos</strong><p>El panel permanecerá restringido hasta completar la configuración del servicio de identidad para producción.</p></div>
-      <p className={styles.detail}>No ingreses claves en formularios anteriores ni compartas credenciales por correo. La portada continúa disponible.</p>
+      <p className={styles.detail}>Esta pantalla no solicita contraseñas ni modifica registros de obra.</p>
       <Link href="/" className={styles.primary}>Volver a la portada <span aria-hidden="true">→</span></Link>
-      <p className={styles.footer}>Las marcas locales del navegador no conceden acceso a una obra.</p>
+      <p className={styles.footer}>No se habilitan operaciones sin verificar el acceso correspondiente.</p>
     </section>
   </main>;
 }
