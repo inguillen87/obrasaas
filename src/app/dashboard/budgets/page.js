@@ -2,8 +2,31 @@ import { getPlatformAccess, hasTenantPermission, requireTenantPermission } from 
 import { getPrisma } from '@/lib/prisma';
 import { listBudgets } from '@/lib/budgets';
 import { listBudgetEntries } from '@/lib/budget-entries';
+import { enrichBudgetEntriesWithCurrency } from '@/lib/budget-control-view';
 import BudgetClient from './budget-client';
 import LedgerSummary from './ledger-summary';
+
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Presupuesto', description: 'Presupuesto versionado y auditable por obra.' };
-export default async function BudgetsPage() { const access = await getPlatformAccess(); requireTenantPermission(access, 'org:execution:read', { subscriptionMode: 'read' }); const prisma = getPrisma(); const [data, entries] = await Promise.all([listBudgets(prisma, { projectId: access.project.id }), listBudgetEntries(prisma, { projectId: access.project.id })]); return <><BudgetClient initialBudgets={data.budgets} canManage={hasTenantPermission(access, 'org:execution:manage')} projectName={access.project.name} /><LedgerSummary entries={entries.entries} /></>; }
+export const metadata = {
+  title: 'Presupuesto & costos',
+  description: 'Presupuesto versionado y movimientos financieros separados por moneda.',
+};
+
+export default async function BudgetsPage() {
+  const access = await getPlatformAccess();
+  requireTenantPermission(access, 'org:execution:read', { subscriptionMode: 'read' });
+  const prisma = getPrisma();
+  const [data, entries] = await Promise.all([
+    listBudgets(prisma, { projectId: access.project.id }),
+    listBudgetEntries(prisma, { projectId: access.project.id }),
+  ]);
+  const ledgerEntries = enrichBudgetEntriesWithCurrency(entries.entries, data.budgets);
+  return <>
+    <BudgetClient
+      initialBudgets={data.budgets}
+      canManage={hasTenantPermission(access, 'org:execution:manage')}
+      projectName={access.project.name}
+    />
+    <LedgerSummary entries={ledgerEntries} />
+  </>;
+}

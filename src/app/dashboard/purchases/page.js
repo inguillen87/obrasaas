@@ -16,8 +16,8 @@ import PurchasesClient from "./purchases-client";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
-  title: "Compras",
-  description: "Órdenes y recepción de materiales.",
+  title: "Marketplace & compras",
+  description: "Proveedores, órdenes, compromisos y recepción de materiales con trazabilidad por obra.",
 };
 
 export default async function PurchasesPage() {

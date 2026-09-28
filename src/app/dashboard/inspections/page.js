@@ -6,7 +6,7 @@ import { getPrisma } from '@/lib/prisma';
 import InspectionWorkspace from './workspace';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Inspecciones de obra', robots: { index: false, follow: false } };
+export const metadata = { title: 'Inspecciones QA/QC', description: 'Controles técnicos, revisión humana y trazabilidad por obra.', robots: { index: false, follow: false } };
 export default async function InspectionsPage({ searchParams }) {
   const access = await getPlatformAccess();
   requireTenantPermission(access, 'org:execution:read', { subscriptionMode: 'read' });

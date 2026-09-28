@@ -23,6 +23,7 @@ import JournalTaskLinkDialog from './journal-task-link-dialog';
 import EvidenceViewer from './evidence-viewer';
 import { evidencePreviewHref } from '@/lib/evidence-viewer-policy';
 import { confirmedProgressReview, normalizeProgressReviewNote } from '@/lib/progress-review-policy';
+import { filterProgressLogs, progressJournalSummary, PROGRESS_LOG_FILTERS } from '@/lib/progress-journal-view';
 import styles from "./progress.module.css";
 
 const JOURNAL_STATUS_LABELS = Object.freeze({
@@ -445,6 +446,8 @@ export default function ProgressClient({
   const [savedEvidenceId, setSavedEvidenceId] = useState(null);
   const [timelineKind, setTimelineKind] = useState("");
   const [timelineStatus, setTimelineStatus] = useState("");
+  const [logQuery, setLogQuery] = useState("");
+  const [logStatus, setLogStatus] = useState("ALL");
   const [notice, setNotice] = useState(null);
   const [busy, setBusy] = useState(false);
   const operationRef = useRef(false);
@@ -462,6 +465,12 @@ export default function ProgressClient({
   const taskById = useMemo(() => new Map(
     (Array.isArray(tasks) ? tasks : []).map((task) => [task.id, task]),
   ), [tasks]);
+  const journalSummary = useMemo(() => progressJournalSummary(data), [data]);
+  const visibleDailyLogs = useMemo(() => filterProgressLogs(data.dailyLogs, {
+    query: logQuery,
+    status: logStatus,
+    unassignedOnly,
+  }), [data.dailyLogs, logQuery, logStatus, unassignedOnly]);
 
   const hasJournalChanges = Boolean(title || summary || caption || evidenceFile || reviewDirty || linkDirty || correctionDirty);
   useWorkspaceLeaveGuard({ dirty: hasJournalChanges, busy: busy || linkBusy || correctionBusy });
@@ -878,15 +887,24 @@ export default function ProgressClient({
   return (
     <main className={styles.shell}>
       <header className={styles.hero}>
-        <div>
-          <span className={styles.eyebrow}>Avance verificable</span>
-          <h1>Bitácora y evidencia</h1>
-          <p>
-            {projectName} · cada registro queda ligado a una tarea canónica y la
-            evidencia requiere revisión humana.
-          </p>
+        <div className={styles.heroTop}>
+          <div>
+            <span className={styles.eyebrow}>LIBRO DE OBRA · TRAZABILIDAD</span>
+            <h1>Libro de Obra & evidencia</h1>
+            <p>
+              {projectName} · asientos diarios, evidencia y revisiones ligadas a la obra y,
+              cuando corresponde, a una tarea canónica.
+            </p>
+          </div>
+          <span className={styles.sourceBadge}><i className="fa-solid fa-book-open" aria-hidden="true" /> DailyLog · evidencia real</span>
         </div>
       </header>
+      <section className={styles.journalStats} aria-label="Resumen del Libro de Obra">
+        <article><span>Asientos cargados</span><strong>{journalSummary.records}</strong></article>
+        <article><span>Borradores</span><strong>{journalSummary.drafts}</strong></article>
+        <article><span>En revisión</span><strong>{journalSummary.inReview}</strong></article>
+        <article><span>Evidencias</span><strong>{journalSummary.evidence}</strong></article>
+      </section>
       {viewingEvidence && <EvidenceViewer key={viewingEvidence.id + ':' + viewingEvidence.revision}
         item={viewingEvidence} organizationId={organizationId} projectId={projectId} projectName={projectName}
         taskTitle={taskById.get(viewingEvidence.taskId)?.title} onClose={() => setViewingEvidence(null)} />}
@@ -1004,13 +1022,24 @@ export default function ProgressClient({
           onAuthor={value => editEvidence(setEvidenceAuthorWorkerId, value)} onCaption={value => editEvidence(setCaption, value)} onSubmit={createEvidence} onReset={resetEvidence}
           onLeave={guardJournalLeave} /> : <section className={styles.panel}><h2>Evidencia de obra</h2><p>Tu rol puede consultar los registros autorizados, pero no cargar archivos.</p></section>}
       </div>}
-      <section className={styles.panel}>
-        <h2>{unassignedOnly ? "Partes pendientes de vinculación" : "Bitácoras recientes"}</h2>
+      <section className={styles.panel} id="libro-obra-registros">
+        <div className={styles.journalHead}>
+          <div>
+            <h2>{unassignedOnly ? "Partes pendientes de vinculación" : "Asientos recientes"}</h2>
+            <p>{visibleDailyLogs.length} de {data.dailyLogs.length} registros cargados en esta vista.</p>
+          </div>
+          {!focusedRecordId && <div className={styles.journalTools} role="search" aria-label="Buscar asientos del Libro de Obra">
+            <label>Buscar<input type="search" value={logQuery} placeholder="Título, resumen o fecha" onChange={event => setLogQuery(event.target.value)} /></label>
+            <label>Estado<select value={logStatus} onChange={event => setLogStatus(event.target.value)}>{PROGRESS_LOG_FILTERS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+          </div>}
+        </div>
         {data.dailyLogs.length === 0 ? (
-          <p>No hay bitácoras.</p>
+          <p>No hay asientos registrados en esta vista.</p>
+        ) : visibleDailyLogs.length === 0 ? (
+          <p className={styles.emptyJournal}>No hay asientos que coincidan con la búsqueda y el estado seleccionados.</p>
         ) : (
           <ul>
-            {data.dailyLogs.filter(item => !unassignedOnly || !item.taskId).map((item) => (
+            {visibleDailyLogs.map((item) => (
               <li key={item.id} id={"daily-log-" + item.id}>
                 <div>
                   <strong>{item.title}</strong>

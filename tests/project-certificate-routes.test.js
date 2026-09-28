@@ -77,7 +77,7 @@ function request(path = '?periodDate=2026-01-03', {
 
 function assertPrivate(response, replayed = null) {
   assert.equal(response.headers.get('cache-control'), 'private, no-store, max-age=0');
-  assert.equal(response.headers.get('vary'), 'Cookie, Authorization');
+  assert.equal(response.headers.get('vary'), 'Cookie, Authorization, X-ObraSaaS-Organization, X-ObraSaaS-Project, X-ObraSaaS-Membership');
   assert.equal(response.headers.get('referrer-policy'), 'no-referrer');
   assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
   assert.equal(response.headers.get('x-robots-tag'), 'noindex, nofollow, noarchive');
@@ -416,3 +416,32 @@ test('unexpected route failures redact messages and logs carry only correlation 
   });
   assertPrivate(response);
 });
+
+for (const operation of ['read', 'prepare', 'decision']) {
+  for (const field of ['organization', 'project', 'membership']) {
+    test(`${operation} rejects a stale ${field} hint before database access`, async () => {
+      let reachedDatabase = false;
+      const options = {
+        resolveAccess: async () => ACCESS,
+        authorize: () => {},
+        prismaFactory: () => { reachedDatabase = true; throw new Error('Database must not be reached'); },
+      };
+      const headers = {
+        'X-ObraSaaS-Organization': ACCESS.organization.id,
+        'X-ObraSaaS-Project': ACCESS.project.id,
+        'X-ObraSaaS-Membership': ACCESS.tenantMembershipId,
+        'x-request-id': 'certificate-route-correlation',
+      };
+      headers[`X-ObraSaaS-${field === 'organization' ? 'Organization' : field === 'project' ? 'Project' : 'Membership'}`] = 'another-context';
+      const req = new Request('https://example.test/api/project-certificates?periodDate=2026-01-03', {
+        method: operation === 'read' ? 'GET' : 'POST', headers,
+      });
+      const response = operation === 'decision'
+        ? await createProjectCertificateDecisionHandlers(options).POST(req, { params: Promise.resolve({ certificateVersionId: 'certificate-a' }) })
+        : await createProjectCertificateHandlers(options)[operation === 'read' ? 'GET' : 'POST'](req);
+      assert.equal(response.status, 409);
+      assert.equal(reachedDatabase, false);
+      assertPrivate(response);
+    });
+  }
+}

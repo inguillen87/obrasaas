@@ -1,10 +1,11 @@
 'use client';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Badge, Button, EmptyState, GlassCard, PageHeader, tokens } from '@/lib/design-system';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Badge, Button, EmptyState, GlassCard, tokens } from '@/lib/design-system';
 import Link from 'next/link';
 import { INSPECTION_STATUS_LABELS, INSPECTION_ACTION_LABELS, inspectionDraftChanged, inspectionReadiness, inspectionNextStep } from '@/lib/inspection-workflow-view';
 import styles from './workspace.module.css';
 import { useWorkspaceLeaveGuard } from '../use-workspace-leave-guard';
+import { filterInspectionRecords, inspectionListSummary, INSPECTION_LIST_FILTERS } from '@/lib/inspection-workspace-view';
 
 const STATUS = INSPECTION_STATUS_LABELS;
 const RESULTS = { PENDING: 'Pendiente', PASS: 'Conforme', FAIL: 'No conforme', NA: 'No aplica' };
@@ -31,6 +32,9 @@ export default function InspectionWorkspace({ projectName, templates, canManage,
   const listGeneration = useRef(0);
   const [listError, setListError] = useState('');
   const [listLoading, setListLoading] = useState(false);
+  const [listQuery, setListQuery] = useState('');
+  const [listStatus, setListStatus] = useState('ALL');
+  const [listTemplate, setListTemplate] = useState('ALL');
   const [lastSynced, setLastSynced] = useState(null);
   const operationLock = useRef(false);
   const editable = canManage && (!record || record.status === 'DRAFT') && !busy;
@@ -41,6 +45,8 @@ export default function InspectionWorkspace({ projectName, templates, canManage,
   useWorkspaceLeaveGuard({ dirty: hasUnsaved, busy });
   const readiness = inspectionReadiness(draft);
   const nextStep = inspectionNextStep({ record, draft, dirty, canManage, canReview });
+  const listSummary = useMemo(() => inspectionListSummary(records), [records]);
+  const visibleRecords = useMemo(() => filterInspectionRecords(records, { query: listQuery, status: listStatus, templateKey: listTemplate }), [records, listQuery, listStatus, listTemplate]);
   const confirmDiscard = () => !hasUnsaved || window.confirm('Hay cambios sin guardar. ¿Descartarlos y continuar?');
   const load = useCallback(async (targetPage = page) => {
     const generation = ++listGeneration.current;
@@ -137,8 +143,24 @@ export default function InspectionWorkspace({ projectName, templates, canManage,
     const link = document.createElement('a'); link.href = url; link.download = 'inspeccion-' + record.id + '.json'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   return <div className={styles.shell} style={{ background: tokens.colors.bg.primary, color: tokens.colors.text.primary, fontFamily: tokens.font.sans }}>
-    <PageHeader title="Inspecciones de obra" subtitle={projectName + ' · Checklist, revisión humana y trazabilidad'} actions={canManage && <Button onClick={startNew} disabled={busy}>Nueva inspección</Button>} />
+    <header className={styles.hero}>
+      <div>
+        <span className={styles.eyebrow}>CALIDAD · CONTROL TÉCNICO</span>
+        <h1>Inspecciones QA/QC</h1>
+        <p>{projectName} · controles técnicos, revisión humana y trazabilidad por obra.</p>
+      </div>
+      <div className={styles.heroActions}>
+        <span className={styles.sourceBadge}><i className="fa-solid fa-clipboard-check" aria-hidden="true" /> Workflow auditado</span>
+        {canManage && <Button onClick={startNew} disabled={busy}>Nueva inspección</Button>}
+      </div>
+    </header>
     <div className={styles.content}>
+      <section className={styles.stats} aria-label="Resumen de inspecciones de esta página">
+        <article><span>Registros cargados</span><strong>{listSummary.records}</strong></article>
+        <article><span>Borradores</span><strong>{listSummary.drafts}</strong></article>
+        <article><span>En revisión</span><strong>{listSummary.inReview}</strong></article>
+        <article><span>Requieren atención</span><strong>{listSummary.attention}</strong></article>
+      </section>
       {error && <div role="alert" className={styles.error}>{error} <button onClick={() => record ? open(record.id) : load().catch(err => setError(err.message))}>Actualizar datos</button></div>}
       {notice && <p role="status" className={styles.notice}>{notice}</p>}
       <p className={styles.context}>Cada registro pertenece a la obra activa. Los criterios se documentan según el proyecto: no hay umbrales técnicos universales ni aprobación automática.</p>
@@ -165,7 +187,14 @@ export default function InspectionWorkspace({ projectName, templates, canManage,
           {lastSynced && <small className={styles.context}>Última consulta: {lastSynced.toLocaleTimeString('es-AR')}</small>}
           {listError && <div role="alert" className={styles.error}>No se pudo actualizar el listado: {listError}<Button variant="secondary" disabled={listLoading} onClick={() => load(page)}>Reintentar listado</Button></div>}
           {!loading && !listError && !records.length && <EmptyState title="Todavía no hay inspecciones" description="Creá la primera con su ubicación, documento de referencia y controles. No se cargan ejemplos en tu obra." />}
-          <div className={styles.list}>{records.map(item => <button key={item.id} className={styles.record} onClick={() => open(item.id)} disabled={busy} aria-pressed={record?.id === item.id}><strong>{item.title}</strong><span>{item.location}</span><Badge>{STATUS[item.status]}</Badge><small>v{item.version} · {new Date(item.createdAt).toLocaleDateString('es-AR')}</small></button>)}</div>
+          {!loading && records.length > 0 && <div className={styles.listTools} role="search" aria-label="Buscar inspecciones cargadas">
+            <label>Buscar<input type="search" value={listQuery} placeholder="Título, ubicación o identificador" onChange={event => setListQuery(event.target.value)} /></label>
+            <label>Estado<select value={listStatus} onChange={event => setListStatus(event.target.value)}>{INSPECTION_LIST_FILTERS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+            <label>Plantilla<select value={listTemplate} onChange={event => setListTemplate(event.target.value)}><option value="ALL">Todas</option>{templates.map(template => <option key={template.key} value={template.key}>{template.title}</option>)}</select></label>
+          </div>}
+          {!loading && records.length > 0 && <p className={styles.resultCount} role="status">{visibleRecords.length} de {records.length} registros de esta página.</p>}
+          {!loading && records.length > 0 && visibleRecords.length === 0 && <p className={styles.emptyResults}>No hay inspecciones que coincidan con la búsqueda y los filtros seleccionados.</p>}
+          <div className={styles.list}>{visibleRecords.map(item => <button key={item.id} className={styles.record} onClick={() => open(item.id)} disabled={busy} aria-pressed={record?.id === item.id}><strong>{item.title}</strong><span>{item.location}</span><Badge>{STATUS[item.status]}</Badge><small>v{item.version} · {new Date(item.createdAt).toLocaleDateString('es-AR')}</small></button>)}</div>
           <div className={styles.actions}><Button variant="secondary" disabled={page === 0 || busy || listLoading} onClick={() => load(page - 1).catch(err => setError(err.message))}>Anterior</Button><span>Página {page + 1}</span><Button variant="secondary" disabled={!hasMore || busy || listLoading} onClick={() => load(page + 1).catch(err => setError(err.message))}>Siguiente</Button></div>
         </GlassCard>
         <GlassCard hover={false}>
