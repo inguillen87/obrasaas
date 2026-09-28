@@ -1,12 +1,17 @@
 import { getAppState, saveAppState } from '../../../../lib/db.js';
 import { analyzeDniWithAI, verifyFacialMatchAndLiveness } from '../../../../lib/aiVision.js';
 import { appendAuditTransaction } from '../../../../lib/auditLedger.js';
-import { verifyWebviewToken } from '../../../../lib/auth.js';
+import { verifyWebviewToken, verifyApiAuth } from '../../../../lib/auth.js';
 import { uploadKycImages } from '../../../../lib/blobStorage.js';
+import { unauthorizedLegacyResponse } from '../../../../lib/legacy-access-boundary.js';
+import { assertPrivateImageConfigured, preparePrivateKycImages, privateImageErrorResponse, readPrivateKycBody } from '../../../../lib/private-image-upload.mjs';
 
 export async function POST(request) {
+    if (!verifyApiAuth(request).authorized) return unauthorizedLegacyResponse();
     try {
-        const body = await request.json();
+        assertPrivateImageConfigured();
+        const body = await readPrivateKycBody(request);
+        preparePrivateKycImages(body.workerId, body.dniFrontBase64, body.selfieBase64);
 
         // Token Validation (ensures request comes from a legitimate WhatsApp link)
         if (body.token && body.workerId) {
@@ -78,6 +83,7 @@ export async function POST(request) {
             }, { status: 400 });
         }
 
+        const { dniFrontUrl, selfieUrl } = await uploadKycImages(workerId, cleanDniBase64, cleanSelfieBase64);
         const state = await getAppState();
 
         // 4. Calculate Geofence Distance to current active obra
@@ -129,7 +135,7 @@ export async function POST(request) {
 
 
         // 6. Upload images to Vercel Blob Storage (prevents DB bloat)
-        const { dniFrontUrl, selfieUrl } = await uploadKycImages(key, cleanDniBase64, cleanSelfieBase64);
+        // Both private objects were confirmed before loading or mutating app state.
 
         // 7. Update KYC Verification Record (stores URLs, NOT base64)
         state.kycVerifications = state.kycVerifications || {};
@@ -206,10 +212,12 @@ export async function POST(request) {
         });
 
     } catch (error) {
-        console.error("KYC Webview POST Error:", error);
+        const storageFailure = privateImageErrorResponse(error);
+        if (storageFailure) return storageFailure;
+        console.error("KYC_REQUEST_FAILED");
         return Response.json({
             success: false,
-            error: "Error interno al procesar la verificación biométrica: " + error.message
+            error: "No se pudo completar la solicitud. No se confirmó el registro."
         }, { status: 500 });
     }
 }
