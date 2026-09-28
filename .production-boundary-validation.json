@@ -1,5 +1,5 @@
 {
-  "productTree": "e9fb22a8117a2047ad8cf78818c5f5b3114c7ee7",
+  "productTree": "e8a7f77876963447439955cba5fbb5a60d0d0491",
   "base": "0ff2bb23f549eb65016f993a8d587865bb56618c",
   "blobs": {
     ".github/workflows/production-boundary.yml": "01375c8a8d535e46e03bb958da56abd183d51bf0",
@@ -7,7 +7,7 @@
     "docs/production/access-boundary-20260928.md": "ad12169984752b701a88c3cfe1e43af2fbcc284b",
     "next.config.mjs": "905f34be5149d1a0fc0428fa901adb17b3c47e15",
     "public/sw.js": "3d12115637119294117388960505a313baa15134",
-    "scripts/verify-production-boundary.mjs": "27ba62c67aca8c09a84b981fb64e1814ec6c9b35",
+    "scripts/verify-production-boundary.mjs": "0b8e1b3d34d342760e4e709f9c2de0f22721e77e",
     "src/app/access-notice.js": "1975141bf7ea5251e143d2c75e397d60912a335a",
     "src/app/access-notice.module.css": "759cacad0ed210eb532707bafdb39ad9a226a0d8",
     "src/app/api/health/route.js": "3b7ba1227c185239de790f7b48f395d63b5ab12b",

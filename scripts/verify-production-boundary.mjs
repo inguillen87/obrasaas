@@ -31,7 +31,7 @@ try {
   assert.equal((await fetch(base+'/api/does-not-exist',{headers:{authorization:'Bearer '+secret}})).status,404);
   assert.equal((await fetch(base+'/api/whatsapp',{method:'POST',headers:{'content-type':'application/json'},body:'{}'})).status,403);
   for(const route of ['/dashboard','/superadmin','/calendario','/documentos','/bim','/portal']){
-    const response=await fetch(base+route,{redirect:'manual'});assert.equal(response.status,307);assert.equal(new URL(response.headers.get('location')).pathname,'/sign-in');
+    const response=await fetch(base+route,{redirect:'manual'});assert.equal(response.status,307);assert.equal(new URL(response.headers.get('location'),base).pathname,'/sign-in');
   }
   for(const route of ['/','/sign-in','/sign-up','/bim_render.png','/cctv_render.png','/api/health']) assert.equal((await fetch(base+route)).status,200,route);
   browser=await puppeteer.launch({headless:true,args:['--no-sandbox','--disable-setuid-sandbox']});
