@@ -1,0 +1,42 @@
+import {Client} from 'pg';
+import assert from 'node:assert/strict';
+import {mkdirSync,writeFileSync} from 'node:fs';
+import {analyzeLegacyCutover,compareCutoverAudits} from './lib/legacy-cutover-audit.mjs';
+import {readLegacyCutover} from './lib/read-legacy-cutover.mjs';
+const url=new URL(process.env.CUTOVER_TEST_DATABASE_URL||'http://not-configured');
+assert.ok(process.env.CUTOVER_TEST_DISPOSABLE==='1'&&['localhost','127.0.0.1'].includes(url.hostname)&&url.pathname==='/obrasaas_cutover_ci','Only an explicitly disposable local test database is allowed');
+const client=new Client({connectionString:url.toString()});
+try{
+  await client.connect();
+  await client.query(`CREATE TABLE public.obrasaas_app_state(id text PRIMARY KEY,state jsonb NOT NULL,messages jsonb NOT NULL);
+    CREATE TABLE public."Organization"(id text PRIMARY KEY);
+    CREATE TABLE public."Project"(id text PRIMARY KEY,"organizationId" text NOT NULL REFERENCES public."Organization"(id));
+    CREATE TABLE public."Worker"(id text PRIMARY KEY,"projectId" text REFERENCES public."Project"(id),"externalId" text);
+    CREATE TABLE public."Task"(id text PRIMARY KEY,"projectId" text REFERENCES public."Project"(id),"externalId" text);
+    CREATE TABLE public."ProjectSnapshot"(id text PRIMARY KEY,"projectId" text REFERENCES public."Project"(id),version integer);
+    CREATE TABLE public._prisma_migrations(migration_name text,finished_at timestamptz,rolled_back_at timestamptz);
+    INSERT INTO public."Organization" VALUES('org-a'),('org-b');
+    INSERT INTO public."Project" VALUES('project-a','org-a'),('project-b','org-b');
+    INSERT INTO public."Worker" VALUES('worker-a','project-a','old-worker'),('worker-b','project-b','old-worker');
+    INSERT INTO public."Task" VALUES('task-a','project-a','old-task');
+    INSERT INTO public._prisma_migrations VALUES('baseline',now(),NULL);`);
+  const state={projects:[{id:'project-a'},{id:'project-b'}],tenants:[],workerRegistry:[{id:'old-worker',name:'PRIVATE_NAME',phone:'PRIVATE_PHONE'}],tasks:{'old-task':{name:'PRIVATE_TASK'}},activeProjectId:'project-a',kycVerifications:{secret:{dni:'PRIVATE_DOCUMENT'}}};
+  await client.query('INSERT INTO public.obrasaas_app_state VALUES($1,$2,$3)',['default',JSON.stringify(state),'[]']);
+  const original=(await client.query('SELECT state::text,messages::text FROM public.obrasaas_app_state')).rows;
+  const first=analyzeLegacyCutover(await readLegacyCutover(client),{sourceSha:'a'.repeat(40)});
+  const second=analyzeLegacyCutover(await readLegacyCutover(client),{sourceSha:'a'.repeat(40)});
+  assert.equal(first.readOnlyVerified,true);assert.equal(first.status,'BLOCKED');
+  assert.equal(first.domains.find(x=>x.domain==='workerRegistry').multipleExternalCandidates,1);
+  for(const needle of ['PRIVATE_NAME','PRIVATE_PHONE','PRIVATE_TASK','PRIVATE_DOCUMENT','old-worker','project-a'])assert.ok(!JSON.stringify(first).includes(needle));
+  assert.equal(compareCutoverAudits(first,second).sourceUnchanged,true);
+  assert.equal(compareCutoverAudits(first,second).catalogUnchanged,true);
+  const after=(await client.query('SELECT state::text,messages::text FROM public.obrasaas_app_state')).rows;
+  assert.deepEqual(after,original);
+  assert.equal((await client.query('SELECT count(*)::int AS n FROM public."Organization"')).rows[0].n,2);
+  assert.equal((await client.query("SELECT current_setting('transaction_read_only') AS ro")).rows[0].ro,'off');
+  const proof={status:'PASS',environment:'disposable-local-postgresql',realCustomerData:false,readOnlyTransactionVerified:true,
+    rawSourceUnchanged:true,scopeFingerprintStable:true,sharedIdentifierNotAutoAssigned:true,reportRedacted:true,importAuthorized:false};
+  mkdirSync('.vercel/cutover-audit-evidence',{recursive:true});
+  writeFileSync('.vercel/cutover-audit-evidence/proof.json',JSON.stringify(proof,null,2));
+  console.log(JSON.stringify(proof));
+}finally{await client.end();}
