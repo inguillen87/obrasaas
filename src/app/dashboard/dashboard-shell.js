@@ -32,6 +32,7 @@ const WORKSPACE_DESTINATIONS = Object.freeze([
   { key: 'progress', href: '/dashboard/progress', exact: true, label: 'Libro de Obra & evidencia', icon: 'fa-solid fa-camera-retro', permission: 'canReadExecution' },
   { key: 'measurements', href: '/dashboard/measurements', exact: true, label: 'Mediciones de avance', icon: 'fa-solid fa-ruler-combined', permission: 'canReadMeasurements' },
   { key: 'contracts', href: '/dashboard/contracts', exact: true, label: 'Contrato y SOV', icon: 'fa-solid fa-file-signature', permission: 'canReadContracts' },
+  { key: 'certificates', href: '/dashboard/certificates', exact: true, label: 'Certificaciones', icon: 'fa-solid fa-stamp', permission: 'canReadCertificates' },
   { key: 'notifications', href: '/dashboard/notifications', exact: true, label: 'Notificaciones', icon: 'fa-solid fa-bell', permission: 'canReadExecution' },
   { key: 'extra-work', href: '/dashboard/extra-work', exact: true, label: 'Trabajo extra', icon: 'fa-solid fa-person-digging', permission: 'canReadExecution' },
   { key: 'replan', href: '/dashboard/replan', exact: true, label: 'Escenarios de plan', icon: 'fa-solid fa-code-branch', permission: 'canReadExecution' },

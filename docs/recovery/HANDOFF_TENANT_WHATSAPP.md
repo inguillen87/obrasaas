@@ -154,3 +154,6 @@ Leer `inspections-convergence-c24.md`. `/inspecciones` continúa como alias de `
 
 ## Convergencia enterprise C-2.5 — Cronograma & dependencias
 Leer `gantt-convergence-c25.md`. `/cronograma` continúa como alias de `/dashboard?tab=sec-gantt`, ahora con KPIs operativos y búsqueda visual sobre tareas canónicas. La búsqueda no filtra el grafo ni dispara API: sólo resalta coincidencias y mantiene dependencias visibles. No importar tareas, CSV, horas extra, API v1 ni responsables demo de master.
+
+## Convergencia enterprise C-2.6 — Certificaciones
+Leer `certificates-convergence-c26.md`. `/certificacion` apunta temporalmente a `/dashboard/certificates`. La superficie usa el snapshot contractual durable, minor units con BigInt, capacidades del backend e idempotencia para preparar/decidir. No ejecutar pagos, no inferir permisos por rol visual y no presentar el hash de integridad como firma digital certificada.

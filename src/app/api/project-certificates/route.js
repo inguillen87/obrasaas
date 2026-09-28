@@ -10,6 +10,7 @@ import {
 } from '@/lib/project-certificates';
 import { readJsonRequest } from '@/lib/request-body';
 import {
+  assertProjectCertificateContext,
   finalizeProjectCertificateResponse,
   knownProjectCertificateError,
   projectCertificateScope,
@@ -36,6 +37,7 @@ export function createProjectCertificateHandlers({
       try {
         const access = await resolveAccess();
         authorize(access, 'org:certificates:read', { subscriptionMode: 'read' });
+        assertProjectCertificateContext(request, access);
         const actorMembershipId = requireProjectCertificateActor(access);
         const prisma = prismaFactory();
         await verifyMembership(prisma, {
@@ -57,6 +59,7 @@ export function createProjectCertificateHandlers({
         // This is deliberately a coarse authenticated mutation gate. PostgreSQL resolves
         // exact actor-bound replay before checking the mutable SITE_MANAGER role on a miss.
         authorize(access, 'org:certificates:read', { subscriptionMode: 'write' });
+        assertProjectCertificateContext(request, access);
         const actorMembershipId = requireProjectCertificateActor(access);
         const prisma = prismaFactory();
         await verifyMembership(prisma, {

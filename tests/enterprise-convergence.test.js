@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 import { enterpriseAliasFor, ENTERPRISE_CONVERGENCE_VERSION, MASTER_ONLY_ROUTE_CONVERGENCE } from '../src/lib/enterprise-convergence.js';
 const expectedMasterOnly = ['/api-docs','/bim','/calendario','/certificacion','/compliance','/coordinacion','/costos','/cronograma','/documentos','/ejecutivo','/libro-obra','/licitaciones','/marketplace','/onboarding','/planos','/portal','/poster','/pricing','/qa-report','/sostenibilidad'];
-const approvedAliases = new Map([['/costos','/dashboard/budgets'],['/cronograma','/dashboard?tab=sec-gantt'],['/libro-obra','/dashboard/progress'],['/marketplace','/dashboard/purchases'],['/onboarding','/dashboard/getting-started']]);
+const approvedAliases = new Map([['/certificacion','/dashboard/certificates'],['/costos','/dashboard/budgets'],['/cronograma','/dashboard?tab=sec-gantt'],['/libro-obra','/dashboard/progress'],['/marketplace','/dashboard/purchases'],['/onboarding','/dashboard/getting-started']]);
 
 test('C1 manifest accounts for every route that exists only in master', () => {
   assert.equal(ENTERPRISE_CONVERGENCE_VERSION, 'c2-2026-09-25');
@@ -26,7 +26,7 @@ test('convergence copy is valid UTF-8 Spanish without mojibake placeholders', ()
 });
 test('C2 marks the modules whose enterprise UI is already converged', () => {
   const converged = MASTER_ONLY_ROUTE_CONVERGENCE.filter(row => row.phase === 'c2-real-ui').map(row => row.legacy);
-  assert.deepEqual(converged, ['/costos','/cronograma','/libro-obra','/marketplace']);
+  assert.deepEqual(converged, ['/certificacion','/costos','/cronograma','/libro-obra','/marketplace']);
 });
 test('alias resolver never guesses a pending module', () => {
   for (const [legacy,target] of approvedAliases) assert.equal(enterpriseAliasFor(legacy), target);
