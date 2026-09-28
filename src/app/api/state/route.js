@@ -1,3 +1,4 @@
+import { unauthorizedLegacyResponse, privateLegacyHeaders } from '@/lib/legacy-access-boundary';
 import { getAppState, saveAppState, resetState, getMessages, saveMessages } from '@/lib/db';
 import { verifyApiAuth } from '@/lib/auth';
 
@@ -81,10 +82,11 @@ async function checkStockAndTriggerPurchases(state) {
     }
 }
 
-export async function GET() {
+export async function GET(request) {
+    if (!verifyApiAuth(request).authorized) return unauthorizedLegacyResponse();
     try {
         const state = await getAppState();
-        return Response.json(state);
+        return Response.json(state, { headers: privateLegacyHeaders() });
     } catch (error) {
         console.error("Error fetching state:", error);
         return Response.json({ error: "Failed to fetch state" }, { status: 500 });
@@ -92,6 +94,7 @@ export async function GET() {
 }
 
 export async function POST(request) {
+    if (!verifyApiAuth(request).authorized) return unauthorizedLegacyResponse();
     try {
         const body = await request.json();
         if (!body) {
@@ -102,7 +105,7 @@ export async function POST(request) {
         await checkStockAndTriggerPurchases(body);
         
         const updated = await saveAppState(body);
-        return Response.json(updated);
+        return Response.json(updated, { headers: privateLegacyHeaders() });
     } catch (error) {
         console.error("Error saving state:", error);
         return Response.json({ error: "Failed to save state" }, { status: 500 });
@@ -111,9 +114,9 @@ export async function POST(request) {
 
 export async function DELETE(request) {
     // Enterprise Security: Require API auth for destructive operations
-    const { authorized, reason } = verifyApiAuth(request);
+    const { authorized } = verifyApiAuth(request);
     if (!authorized) {
-        return Response.json({ error: 'Unauthorized', reason }, { status: 403 });
+        return unauthorizedLegacyResponse();
     }
     try {
         const fresh = await resetState();

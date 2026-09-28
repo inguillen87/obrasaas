@@ -1,169 +1,37 @@
-// ObraSaaS Service Worker v3.0 — Offline-First + Background Sync + Push Notifications
-const CACHE_NAME = 'obrasaas-v3';
-const STATIC_ASSETS = [
-    '/',
-    '/dashboard',
-    '/sign-in',
-    '/pricing',
-    '/planos',
-    '/costos',
-    '/compliance',
-    '/portal',
-    '/ejecutivo',
-    '/libro-obra',
-    '/inspecciones',
-    '/documentos',
-    '/cronograma',
-    '/marketplace',
-    '/presupuesto',
-    '/bim',
-    '/licitaciones',
-    '/webview/attendance',
-    '/webview/kyc',
-    '/webview/medical',
-    '/manifest.json',
-    '/icon-192.svg',
-    '/icon-512.svg'
-];
-
-const OFFLINE_QUEUE_STORE = 'obrasaas-offline-queue';
-
-// Install: Cache core static assets
-self.addEventListener('install', (event) => {
-    event.waitUntil(
-        caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS))
-    );
-    self.skipWaiting();
+// Production boundary v4: public assets only. Private data always needs the network.
+const CACHE_NAME = 'obrasaas-public-v4';
+const STATIC_ASSETS = ['/manifest.json', '/icon-192.svg', '/icon-512.svg'];
+self.addEventListener('install', event => {
+  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_ASSETS)).then(() => self.skipWaiting()));
 });
-
-// Activate: Clean up old caches
-self.addEventListener('activate', (event) => {
-    event.waitUntil(
-        caches.keys().then((keys) =>
-            Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)))
-        )
-    );
-    self.clients.claim();
+self.addEventListener('activate', event => {
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.filter(key => key.startsWith('obrasaas-') && key !== CACHE_NAME).map(key => caches.delete(key)));
+    await self.clients.claim();
+  })());
 });
-
-// Fetch: Network-first for API, Stale-While-Revalidate for pages
-self.addEventListener('fetch', (event) => {
-    if (!event.request.url.startsWith('http://') && !event.request.url.startsWith('https://')) return;
-    const url = new URL(event.request.url);
-    if (event.request.method !== 'GET') return;
-    if (url.pathname.startsWith('/api/realtime')) return;
-
-    if (url.pathname.startsWith('/api/')) {
-        event.respondWith(
-            fetch(event.request)
-                .then((response) => {
-                    if (response.ok) {
-                        const cloned = response.clone();
-                        caches.open(CACHE_NAME).then((cache) => {
-                            try { cache.put(event.request, cloned); } catch (_) {}
-                        });
-                    }
-                    return response;
-                })
-                .catch(() => caches.match(event.request))
-        );
-        return;
-    }
-
-    event.respondWith(
-        caches.match(event.request).then((cached) => {
-            const fetchPromise = fetch(event.request).then((response) => {
-                if (response.ok) {
-                    const cloned = response.clone();
-                    caches.open(CACHE_NAME).then((cache) => {
-                        try { cache.put(event.request, cloned); } catch (_) {}
-                    });
-                }
-                return response;
-            }).catch(() => cached);
-            return cached || fetchPromise;
-        })
-    );
+self.addEventListener('fetch', event => {
+  const url = new URL(event.request.url);
+  if (url.origin !== self.location.origin || event.request.method !== 'GET') return;
+  if (STATIC_ASSETS.includes(url.pathname) && !url.search) {
+    event.respondWith(caches.match(event.request).then(cached => cached || fetch(event.request)));
+    return;
+  }
+  // Never read a cached API/page response, including during a connection failure.
+  event.respondWith(fetch(event.request, { cache: 'no-store' }).catch(() => {
+    if (url.pathname.startsWith('/api/')) return Response.json({ code: 'OFFLINE_AUTH_REQUIRED', error: 'Conectate para verificar el acceso. No se muestran datos privados guardados.' },
+      { status: 503, headers: { 'Cache-Control': 'private, no-store' } });
+    return new Response('<!doctype html><html lang="es"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sin conexión · ObraSaaS</title><body style="margin:32px;background:#060913;color:#f1f5f9;font:16px Arial;line-height:1.6"><h1>No hay conexión</h1><p>Volvé a conectarte para verificar el acceso a ObraSaaS.</p><p>Las operaciones pendientes no se reenvían automáticamente.</p></body></html>',
+      { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'private, no-store' } });
+  }));
 });
-
-// Background Sync: Replay offline actions when connection restores
-self.addEventListener('sync', (event) => {
-    if (event.tag === 'obrasaas-offline-sync') {
-        event.waitUntil(replayOfflineQueue());
-    }
+// Legacy IndexedDB queue is deliberately retained, not replayed or deleted.
+// Recovery needs a future actor/tenant-bound receipt protocol, not blind POSTs.
+self.addEventListener('push', event => {
+  event.waitUntil(self.registration.showNotification('ObraSaaS', { body: 'Ingresá con una sesión verificada para consultar tu obra.', icon: '/icon-192.svg', tag: 'obrasaas-access' }));
 });
-
-async function replayOfflineQueue() {
-    try {
-        const db = await openOfflineDB();
-        const tx = db.transaction(OFFLINE_QUEUE_STORE, 'readonly');
-        const store = tx.objectStore(OFFLINE_QUEUE_STORE);
-        const allRequests = await getAllFromStore(store);
-        for (const item of allRequests) {
-            try {
-                await fetch(item.url, { method: item.method, headers: item.headers, body: item.body });
-                const deleteTx = db.transaction(OFFLINE_QUEUE_STORE, 'readwrite');
-                deleteTx.objectStore(OFFLINE_QUEUE_STORE).delete(item.id);
-            } catch (err) {
-                console.warn('[SW] Failed to replay:', err);
-                break;
-            }
-        }
-    } catch (err) {
-        console.error('[SW] Offline queue error:', err);
-    }
-}
-
-function openOfflineDB() {
-    return new Promise((resolve, reject) => {
-        const request = indexedDB.open('obrasaas-offline', 1);
-        request.onupgradeneeded = () => {
-            const db = request.result;
-            if (!db.objectStoreNames.contains(OFFLINE_QUEUE_STORE)) {
-                db.createObjectStore(OFFLINE_QUEUE_STORE, { keyPath: 'id', autoIncrement: true });
-            }
-        };
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-    });
-}
-
-function getAllFromStore(store) {
-    return new Promise((resolve, reject) => {
-        const request = store.getAll();
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-    });
-}
-
-// Push Notifications
-self.addEventListener('push', (event) => {
-    const data = event.data ? event.data.json() : {};
-    const title = data.title || 'ObraSaaS — Alerta de Obra';
-    const options = {
-        body: data.body || 'Tienes una nueva notificacion de tu obra.',
-        icon: '/icon-192.svg',
-        badge: '/icon-192.svg',
-        tag: data.tag || 'obrasaas-notification',
-        data: { url: data.url || '/dashboard' },
-        vibrate: [200, 100, 200],
-        actions: [
-            { action: 'open', title: 'Ver Detalle' },
-            { action: 'dismiss', title: 'Descartar' }
-        ]
-    };
-    event.waitUntil(self.registration.showNotification(title, options));
-});
-
-self.addEventListener('notificationclick', (event) => {
-    event.notification.close();
-    const url = event.notification.data?.url || '/dashboard';
-    event.waitUntil(
-        clients.matchAll({ type: 'window' }).then((clientList) => {
-            for (const client of clientList) {
-                if (client.url.includes(url) && 'focus' in client) return client.focus();
-            }
-            if (clients.openWindow) return clients.openWindow(url);
-        })
-    );
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  event.waitUntil(self.clients.openWindow('/sign-in'));
 });

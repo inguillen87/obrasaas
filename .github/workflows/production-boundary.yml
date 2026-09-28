@@ -1,0 +1,35 @@
+name: Production access boundary
+on:
+  push:
+    branches: [master, 'hotfix/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      DATABASE_URL: postgresql://build_only:build_only@127.0.0.1:5432/build_only
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm ci --no-audit --no-fund
+      - run: node --test tests/production-access-boundary.test.mjs
+      - name: Affected lint
+        run: npx eslint src/lib/legacy-access-boundary.js src/lib/auth.js src/proxy.js src/app/api/state/route.js src/app/api/whatsapp/route.js src/app/api/health/route.js src/app/sign-in/page.js src/app/sign-up/page.js src/app/access-notice.js next.config.mjs scripts/verify-production-boundary.mjs tests/production-access-boundary.test.mjs
+      - run: npm run build
+      - run: node scripts/verify-production-boundary.mjs
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: production-boundary-${{ github.run_id }}
+          path: .vercel/production-boundary-evidence/
+          include-hidden-files: true
+          retention-days: 7

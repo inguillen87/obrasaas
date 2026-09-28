@@ -1,0 +1,24 @@
+{
+  "productTree": "e9fb22a8117a2047ad8cf78818c5f5b3114c7ee7",
+  "base": "0ff2bb23f549eb65016f993a8d587865bb56618c",
+  "blobs": {
+    ".github/workflows/production-boundary.yml": "01375c8a8d535e46e03bb958da56abd183d51bf0",
+    ".vercelignore": "9b0beb761508c8d54d23ae6c5a66924392a658f7",
+    "docs/production/access-boundary-20260928.md": "ad12169984752b701a88c3cfe1e43af2fbcc284b",
+    "next.config.mjs": "905f34be5149d1a0fc0428fa901adb17b3c47e15",
+    "public/sw.js": "3d12115637119294117388960505a313baa15134",
+    "scripts/verify-production-boundary.mjs": "27ba62c67aca8c09a84b981fb64e1814ec6c9b35",
+    "src/app/access-notice.js": "1975141bf7ea5251e143d2c75e397d60912a335a",
+    "src/app/access-notice.module.css": "759cacad0ed210eb532707bafdb39ad9a226a0d8",
+    "src/app/api/health/route.js": "3b7ba1227c185239de790f7b48f395d63b5ab12b",
+    "src/app/api/state/route.js": "a4e47a7da0495aea8a9d47b495b961b05d10bc68",
+    "src/app/api/whatsapp/route.js": "1d5c979d346aeaba732cd5334e2640d851931946",
+    "src/app/sign-in/page.js": "5fad837030c82c4d72feba0ca150fa1879e7b3ed",
+    "src/app/sign-up/page.js": "5fad837030c82c4d72feba0ca150fa1879e7b3ed",
+    "src/lib/auth.js": "7cd871d7e9ff904f5621b4f8e72c30afe072a02d",
+    "src/lib/legacy-access-boundary.js": "f12fa66309b1362c7a95e28216d4ab91edbd81e5",
+    "src/proxy.js": "12ee96ab6c37fb545d538ec6bfe63a1cd39ee2ba",
+    "tests/production-access-boundary.test.mjs": "69ad9e4740a7aa5726b26a2bb90113a42533aa16",
+    "vercel.json": "063804490c658acec881fbbd055c622df5588b42"
+  }
+}
