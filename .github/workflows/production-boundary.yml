@@ -36,11 +36,13 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: node --test tests/production-*.test.mjs
       - name: Affected lint
-        run: npx eslint src/lib/legacy-access-boundary.js src/lib/auth.js src/proxy.js src/app/api/state/route.js src/app/api/whatsapp/route.js src/app/api/health/route.js src/app/sign-in/page.js src/app/sign-up/page.js src/app/access-notice.js next.config.mjs scripts/verify-production-boundary.mjs tests/production-access-boundary.test.mjs tests/production-dependencies.test.mjs tests/production-cutover-audit.test.mjs scripts/lib/legacy-cutover-audit.mjs scripts/lib/read-legacy-cutover.mjs scripts/audit-legacy-cutover.mjs scripts/verify-cutover-readonly-postgres.mjs scripts/lib/legacy-mapping-plan.mjs scripts/lib/legacy-mapping-files.mjs scripts/lib/legacy-mapping-review.mjs scripts/plan-legacy-mapping.mjs scripts/verify-mapping-plan-postgres.mjs scripts/verify-mapping-review-ui.mjs tests/production-mapping-plan.test.mjs tests/helpers/legacy-mapping-fixture.mjs
+        run: npx eslint src/lib/legacy-access-boundary.js src/lib/auth.js src/proxy.js src/app/api/state/route.js src/app/api/whatsapp/route.js src/app/api/health/route.js src/app/sign-in/page.js src/app/sign-up/page.js src/app/access-notice.js next.config.mjs scripts/verify-production-boundary.mjs tests/production-access-boundary.test.mjs tests/production-dependencies.test.mjs tests/production-cutover-audit.test.mjs scripts/lib/legacy-cutover-audit.mjs scripts/lib/read-legacy-cutover.mjs scripts/audit-legacy-cutover.mjs scripts/verify-cutover-readonly-postgres.mjs scripts/lib/legacy-mapping-plan.mjs scripts/lib/legacy-mapping-files.mjs scripts/lib/legacy-mapping-review.mjs scripts/plan-legacy-mapping.mjs scripts/verify-mapping-plan-postgres.mjs scripts/verify-mapping-review-ui.mjs tests/production-mapping-plan.test.mjs tests/helpers/legacy-mapping-fixture.mjs scripts/lib/legacy-link-policy.mjs scripts/lib/legacy-link-store.mjs scripts/lib/legacy-link-report.mjs scripts/rehearse-legacy-links.mjs scripts/verify-link-rehearsal-postgres.mjs scripts/verify-link-report-ui.mjs tests/production-link-rehearsal.test.mjs
       - name: Runtime dependency audit
         run: npm audit --omit=dev --audit-level=low
       - run: node scripts/verify-cutover-readonly-postgres.mjs
       - run: node scripts/verify-mapping-plan-postgres.mjs
+      - run: node scripts/verify-link-rehearsal-postgres.mjs
+      - run: node scripts/verify-link-report-ui.mjs
       - run: node scripts/verify-mapping-review-ui.mjs
       - run: npm run build
       - run: node scripts/verify-production-boundary.mjs
@@ -52,5 +54,6 @@ jobs:
             .vercel/production-boundary-evidence/
             .vercel/cutover-audit-evidence/
             .vercel/mapping-plan-evidence/
+            .vercel/link-rehearsal-evidence/
           include-hidden-files: true
           retention-days: 7

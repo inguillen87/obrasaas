@@ -9,7 +9,8 @@
     "start": "next start",
     "lint": "eslint",
     "release:audit-legacy": "node scripts/audit-legacy-cutover.mjs",
-    "release:plan-legacy": "node scripts/plan-legacy-mapping.mjs"
+    "release:plan-legacy": "node scripts/plan-legacy-mapping.mjs",
+    "release:rehearse-links": "node scripts/rehearse-legacy-links.mjs"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.0",
