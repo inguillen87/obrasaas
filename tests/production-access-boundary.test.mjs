@@ -100,7 +100,7 @@ test('the worker neither replays nor deletes pending IndexedDB operations',()=>{
   assert.doesNotMatch(workerSource,/indexedDB\.open|indexedDB\.deleteDatabase|replayOfflineQueue|addEventListener\(['"]sync/);
 });
 test('sign-in and sign-up cannot create a local authenticated flag',()=>{
-  for(const file of ['sign-in/page.js','sign-up/page.js','access-notice.js']){
+  for(const file of ['(identity)/sign-in/[[...sign-in]]/page.js','(identity)/sign-up/[[...sign-up]]/page.js','access-notice.js']){
     const text=readFileSync(new URL('../src/app/'+file,import.meta.url),'utf8');assert.doesNotMatch(text,/setItem|type=["']password|handleDemoLogin/);
   }
 });

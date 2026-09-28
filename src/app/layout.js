@@ -4,11 +4,11 @@ export const metadata = {
   title: "ObraSaaS — Plataforma Enterprise de Control de Obra & Certificaciones Digitales",
   description: "Sistema integral de gestión de obras con WhatsApp Bot IA, KYC biométrico, geocerca GPS, Libro de Obra Digital (Ley 22.250), Curva S financiera y certificaciones SHA-256. La plataforma #1 para constructoras en Argentina y LATAM.",
   manifest: "/manifest.json",
-  metadataBase: new URL("https://obrasaas.vercel.app"),
+  metadataBase: new URL("https://obrasaas.com"),
   openGraph: {
     title: "ObraSaaS — Plataforma Enterprise de Control de Obra",
     description: "WhatsApp Bot IA + Geocerca GPS + Certificaciones SHA-256 para constructoras, desarrolladoras inmobiliarias y gobiernos.",
-    url: "https://obrasaas.vercel.app",
+    url: "https://obrasaas.com",
     siteName: "ObraSaaS",
     locale: "es_AR",
     type: "website",
