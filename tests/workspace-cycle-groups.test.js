@@ -47,3 +47,10 @@ test('shell and home use a shared catalog and mount the operations reader only o
   assert.match(client, /activeTab === 'sec-dashboard' && <OperationsCenter/);
   assert.match(source, /requestWorkspaceNavigation\('route'\)/);
 });
+
+test('certificates belong to supply and preserve their read permission', () => {
+  assert.equal(workspaceCycleForDestination('certificates'), 'supply');
+  const catalog = buildNavigationCatalog(groupWorkspaceByCycle(all), { canReadCertificates: true });
+  assert.equal(catalog.find(item => item.key === 'certificates')?.href, '/dashboard/certificates');
+  assert.ok(!buildNavigationCatalog(groupWorkspaceByCycle(all), {}).some(item => item.key === 'certificates'));
+});

@@ -4,7 +4,7 @@ export const MASTER_ONLY_ROUTE_CONVERGENCE = Object.freeze([
   { legacy: '/api-docs', status: 'pending', reason: 'La documentación pública de master todavía no tiene una superficie enterprise equivalente.' },
   { legacy: '/bim', status: 'pending', reason: 'El gemelo IFC/4D requiere conectar archivos y progreso reales antes de recuperar su UI.' },
   { legacy: '/calendario', status: 'pending', reason: 'Calendario no equivale sólo a replanificar; falta una superficie canónica única.' },
-  { legacy: '/certificacion', status: 'pending', reason: 'Hay contratos y certificados reales, pero falta la pantalla enterprise equivalente completa.' },
+  { legacy: '/certificacion', status: 'alias', target: '/dashboard/certificates', label: 'Certificaciones', phase: 'c2-real-ui' },
   { legacy: '/compliance', status: 'pending', reason: 'Privacidad y auditoría reales no sustituyen por sí solas el tablero normativo de master.' },
   { legacy: '/coordinacion', status: 'pending', reason: 'Ejecución y evidencias existen, pero no reproducen todavía el lienzo georreferenciado.' },
   { legacy: '/costos', status: 'alias', target: '/dashboard/budgets', label: 'Presupuesto & costos', phase: 'c2-real-ui' },

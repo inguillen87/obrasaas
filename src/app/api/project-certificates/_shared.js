@@ -1,3 +1,4 @@
+import { assertEvidenceRequestContext, evidenceContextErrorResponse } from '@/lib/evidence-context';
 import {
   AccessError,
   accessErrorResponse,
@@ -18,7 +19,7 @@ import {
 export function finalizeProjectCertificateResponse(request, response, replayed = null) {
   const headers = new Headers(response.headers);
   headers.set('Cache-Control', 'private, no-store, max-age=0');
-  headers.set('Vary', 'Cookie, Authorization');
+  headers.set('Vary', 'Cookie, Authorization, X-ObraSaaS-Organization, X-ObraSaaS-Project, X-ObraSaaS-Membership');
   headers.set('Referrer-Policy', 'no-referrer');
   headers.set('X-Content-Type-Options', 'nosniff');
   headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
@@ -31,7 +32,7 @@ export function finalizeProjectCertificateResponse(request, response, replayed =
 }
 
 export function knownProjectCertificateError(request, error) {
-  let response = null;
+  let response = evidenceContextErrorResponse(error);
   if (error instanceof AccessError) response = accessErrorResponse(error);
   else if (error instanceof RequestBodyError) response = requestBodyErrorResponse(error);
   else if (error instanceof ProjectCertificateError) response = projectCertificateErrorResponse(error);
@@ -79,5 +80,15 @@ export function rejectProjectCertificateQuery(request) {
       'La ruta no admite parámetros de consulta.',
       'PROJECT_CERTIFICATE_QUERY_INVALID',
     );
+  }
+}
+
+// Optional context hints preserve legacy clients. They may only restrict the
+// authenticated scope, never select a different tenant, project or actor.
+export function assertProjectCertificateContext(request, access) {
+  assertEvidenceRequestContext(request, access);
+  const membership = request.headers.get('x-obrasaas-membership');
+  if (membership !== null && membership !== access.tenantMembershipId) {
+    throw new ProjectCertificateError('La sesión cambió de usuario. Volvé a ingresar a la obra.', 'CERTIFICATE_CONTEXT_CHANGED', 409);
   }
 }

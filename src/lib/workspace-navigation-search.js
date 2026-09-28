@@ -11,6 +11,7 @@ const HINTS = Object.freeze({
   progress: ['Partes y evidencia vinculada a tareas', 'bitacora avance fotos imagenes evidencia parte'],
   measurements: ['Cantidades de avance revisables', 'mediciones cantidades avance'],
   contracts: ['Alcance contractual y valores', 'contrato sov valores certificacion'],
+  certificates: ['Certificación contractual por quincena', 'certificados certificacion avance contrato retencion deducciones dictamen'],
   notifications: ['Avisos de la obra activa', 'alertas avisos notificaciones'],
   'extra-work': ['Cambios y trabajos adicionales', 'extra adicionales cambios'],
   replan: ['Evaluar alternativas de planificación', 'escenarios replanificacion impacto'],

@@ -8,6 +8,7 @@ import {
 } from '@/lib/project-certificates';
 import { readJsonRequest } from '@/lib/request-body';
 import {
+  assertProjectCertificateContext,
   finalizeProjectCertificateResponse,
   knownProjectCertificateError,
   projectCertificateScope,
@@ -37,6 +38,7 @@ export function createProjectCertificateDecisionHandlers({
         // replay before mutable role checks. The route only establishes a write-capable
         // authenticated certificate reader in the exact tenant/project scope.
         authorize(access, 'org:certificates:read', { subscriptionMode: 'write' });
+        assertProjectCertificateContext(request, access);
         const actorMembershipId = requireProjectCertificateActor(access);
         const prisma = prismaFactory();
         await verifyMembership(prisma, {

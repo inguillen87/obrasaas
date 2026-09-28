@@ -2,7 +2,7 @@ const CYCLES = Object.freeze([
   { key: 'daily', label: 'Trabajo diario', description: 'Capturar, atender y decidir', keys: ['summary', 'field-mobile', 'inbox', 'whatsapp', 'approvals', 'notifications'] },
   { key: 'planning', label: 'Planificación y equipo', description: 'Preparar el trabajo y resolver restricciones', keys: ['gantt', 'execution', 'people', 'attendance', 'replan'] },
   { key: 'quality', label: 'Calidad y avance', description: 'Documentar, revisar y medir', keys: ['progress', 'inspections', 'measurements', 'extra-work'] },
-  { key: 'supply', label: 'Abastecimiento y costos', description: 'Presupuestar, comprar y conciliar', keys: ['budgets', 'purchases', 'payables', 'cash', 'contracts'] },
+  { key: 'supply', label: 'Abastecimiento y costos', description: 'Presupuestar, comprar y conciliar', keys: ['budgets', 'purchases', 'payables', 'cash', 'contracts', 'certificates'] },
   { key: 'control', label: 'Empresa y control', description: 'Dirigir, configurar y auditar', keys: ['projects', 'report', 'activity', 'team', 'integrations', 'activation', 'privacy'] },
   { key: 'explore', label: 'Exploración', description: 'Funciones en evaluación', keys: ['labs'] },
 ].map(cycle => Object.freeze({ ...cycle, keys: Object.freeze(cycle.keys) })));
