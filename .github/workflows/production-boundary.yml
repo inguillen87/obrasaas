@@ -21,9 +21,11 @@ jobs:
           node-version: 24
           package-manager-cache: false
       - run: npm ci --no-audit --no-fund
-      - run: node --test tests/production-access-boundary.test.mjs
+      - run: node --test tests/production-*.test.mjs
       - name: Affected lint
-        run: npx eslint src/lib/legacy-access-boundary.js src/lib/auth.js src/proxy.js src/app/api/state/route.js src/app/api/whatsapp/route.js src/app/api/health/route.js src/app/sign-in/page.js src/app/sign-up/page.js src/app/access-notice.js next.config.mjs scripts/verify-production-boundary.mjs tests/production-access-boundary.test.mjs
+        run: npx eslint src/lib/legacy-access-boundary.js src/lib/auth.js src/proxy.js src/app/api/state/route.js src/app/api/whatsapp/route.js src/app/api/health/route.js src/app/sign-in/page.js src/app/sign-up/page.js src/app/access-notice.js next.config.mjs scripts/verify-production-boundary.mjs tests/production-access-boundary.test.mjs tests/production-dependencies.test.mjs
+      - name: Runtime dependency audit
+        run: npm audit --omit=dev --audit-level=low
       - run: npm run build
       - run: node scripts/verify-production-boundary.mjs
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
