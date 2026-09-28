@@ -38,8 +38,12 @@ export async function readPrivateMappingReview(root,input) {
     fail('PLAN_REVIEW_UNAVAILABLE');
   }
 }
-export async function writePrivateMappingBundle(root,input,{manifest,report,html}) {
+export async function writePrivateMappingBundle(root,input,{manifest,report,html,validatedPlan}) {
   const contents=[['manifest.json',JSON.stringify(manifest,null,2)+'\n'],['check.json',JSON.stringify(report,null,2)+'\n'],['review.html',html]];
+  if(validatedPlan!==undefined) {
+    if(report?.displayContextValidated!==true||report?.status!=='SELECTIONS_COMPLETE_NOT_AUTHORIZED')fail('PLAN_VALIDATED_EXPORT_INVALID');
+    contents.push(['validated-plan.json',JSON.stringify(validatedPlan,null,2)+'\n']);
+  }
   for(const [,text] of contents)if(typeof text!=='string'||Buffer.byteLength(text)>MAX_BYTES)fail('PLAN_BUNDLE_TOO_LARGE');
   const created=[];let folder,owned=false;
   try {

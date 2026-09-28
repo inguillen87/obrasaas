@@ -6,7 +6,8 @@ async function bounded(client,sql){
   if(rows.length>LIMIT)fail('AUDIT_CATALOG_LIMIT');
   return rows;
 }
-export async function readLegacyCutover(client){
+export async function readLegacyCutover(client, { withDisplayLabels = false } = {}){
+  if(typeof withDisplayLabels !== 'boolean')fail('AUDIT_LABEL_OPTION_INVALID');
   let transaction=false;
   try{
     await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');transaction=true;
@@ -25,8 +26,15 @@ export async function readLegacyCutover(client){
     const tasks=await bounded(client,'SELECT id,"projectId","externalId" FROM public."Task" ORDER BY id LIMIT 25001');
     const projectSnapshots=await bounded(client,'SELECT id,"projectId",version FROM public."ProjectSnapshot" ORDER BY id LIMIT 25001');
     const migrations=await bounded(client,'SELECT migration_name AS name, finished_at IS NOT NULL AS completed, rolled_back_at IS NOT NULL AS "rolledBack" FROM public._prisma_migrations ORDER BY migration_name LIMIT 25001');
+    let displayLabels;
+    if(withDisplayLabels) {
+      displayLabels={};
+      for(const table of ['Organization','Project','Worker','Task']) {
+        displayLabels[table]=await bounded(client,`SELECT id, COALESCE(to_jsonb(record)->>'name',to_jsonb(record)->>'title',to_jsonb(record)->>'fullName') AS label FROM public."${table}" record ORDER BY id LIMIT 25001`);
+      }
+    }
     await client.query('ROLLBACK');transaction=false;
-    return {readOnlyVerified:true,sources,organizations,projects,workers,tasks,projectSnapshots,migrations};
+    return {readOnlyVerified:true,sources,organizations,projects,workers,tasks,projectSnapshots,migrations,...(withDisplayLabels?{displayLabels}:{})};
   }catch(error){
     if(transaction)await client.query('ROLLBACK').catch(()=>{});
     if(error instanceof CutoverAuditError)throw error;
