@@ -31,12 +31,7 @@ export async function GET(request) {
     const token = searchParams.get('hub.verify_token');
     const challenge = searchParams.get('hub.challenge');
 
-    const expectedTokens = [
-        process.env.META_VERIFY_TOKEN,
-        'obrasaas_meta_token',
-        'obrasaas_meta_secret_2026',
-        process.env.INTERNAL_API_SECRET
-    ].filter(Boolean);
+    const expectedTokens = [process.env.META_VERIFY_TOKEN].filter(Boolean);
 
     if (mode === 'subscribe' && expectedTokens.includes(token)) {
         console.log('Meta WhatsApp Webhook Verified successfully');
@@ -48,6 +43,11 @@ export async function GET(request) {
 
 // Main Webhook Handler (POST request)
 export async function POST(request) {
+    if (!process.env.META_APP_SECRET) return Response.json({ error: 'El canal no tiene su verificación configurada.', code: 'CHANNEL_NOT_CONFIGURED' }, { status: 503, headers: { 'Cache-Control': 'private, no-store' } });
+    const bytes = await request.clone().arrayBuffer();
+    if (bytes.byteLength > 1024 * 1024) return Response.json({ error: 'Solicitud demasiado grande.' }, { status: 413 });
+    const signedBody = new TextDecoder().decode(bytes);
+    if (!verifyMetaWebhookSignature(request, signedBody)) return Response.json({ error: 'Firma de solicitud inválida.', code: 'INVALID_SIGNATURE' }, { status: 403, headers: { 'Cache-Control': 'private, no-store' } });
     try {
         const contentType = request.headers.get('content-type') || '';
         let payload = {};

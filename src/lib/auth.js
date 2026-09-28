@@ -1,13 +1,13 @@
 import crypto from 'crypto';
+import { authorizeLegacyService, exactSecretMatch } from './legacy-access-boundary.js';
 
 // ============================================================================
 // ObraSaaS Enterprise Auth & Security Module
 // Unified token generation, verification, and webhook signature validation
 // ============================================================================
 
-const WEBVIEW_SECRET = process.env.WEBVIEW_TOKEN_SECRET || process.env.JWT_SECRET || 'obrasaas-enterprise-secret-v7';
-const API_SECRET = process.env.INTERNAL_API_SECRET || '';
-const META_APP_SECRET = process.env.META_APP_SECRET || '';
+const webviewSecret = () => process.env.WEBVIEW_TOKEN_SECRET || '';
+const metaSecret = () => process.env.META_APP_SECRET || '';
 
 // ============================================================================
 // 1. Webview Token Generator & Verifier (Unified)
@@ -21,9 +21,10 @@ const META_APP_SECRET = process.env.META_APP_SECRET || '';
  * @returns {string} 16-char hex token
  */
 export function generateWebviewToken(workerId) {
+    if (!webviewSecret() || typeof workerId !== 'string' || !workerId) throw new Error('Signed access is not configured.');
     const hourBucket = Math.floor(Date.now() / (1000 * 60 * 60 * 2)); // 2-hour window
     return crypto
-        .createHmac('sha256', WEBVIEW_SECRET)
+        .createHmac('sha256', webviewSecret())
         .update(`${workerId}-${hourBucket}`)
         .digest('hex')
         .substring(0, 16);
@@ -37,26 +38,26 @@ export function generateWebviewToken(workerId) {
  * @returns {boolean}
  */
 export function verifyWebviewToken(workerId, token) {
-    if (!workerId || !token) return false;
+    if (!webviewSecret() || typeof workerId !== 'string' || !workerId || typeof token !== 'string' || !/^[a-f0-9]{16}$/.test(token)) return false;
 
     // Check current window
     const currentBucket = Math.floor(Date.now() / (1000 * 60 * 60 * 2));
     const currentToken = crypto
-        .createHmac('sha256', WEBVIEW_SECRET)
+        .createHmac('sha256', webviewSecret())
         .update(`${workerId}-${currentBucket}`)
         .digest('hex')
         .substring(0, 16);
 
-    if (currentToken === token) return true;
+    if (exactSecretMatch(token, currentToken)) return true;
 
     // Check previous window (grace period for tokens generated near boundary)
     const prevToken = crypto
-        .createHmac('sha256', WEBVIEW_SECRET)
+        .createHmac('sha256', webviewSecret())
         .update(`${workerId}-${currentBucket - 1}`)
         .digest('hex')
         .substring(0, 16);
 
-    return prevToken === token;
+    return exactSecretMatch(token, prevToken);
 }
 
 // ============================================================================
@@ -71,16 +72,13 @@ export function verifyWebviewToken(workerId, token) {
  * @returns {boolean}
  */
 export function verifyMetaWebhookSignature(request, rawBody) {
-    if (!META_APP_SECRET) {
-        // Skip verification if META_APP_SECRET is not configured (development mode)
-        return true;
-    }
+    if (!metaSecret()) return false;
 
     const signature = request.headers.get('x-hub-signature-256');
     if (!signature) return false;
 
     const expectedSignature = 'sha256=' + crypto
-        .createHmac('sha256', META_APP_SECRET)
+        .createHmac('sha256', metaSecret())
         .update(rawBody)
         .digest('hex');
 
@@ -106,29 +104,9 @@ export function verifyMetaWebhookSignature(request, rawBody) {
  * @returns {{ authorized: boolean, reason?: string }}
  */
 export function verifyApiAuth(request) {
-    // Allow in development if no secret is configured
-    if (!API_SECRET) {
-        return { authorized: true };
-    }
-
-    const authHeader = request.headers.get('authorization') || '';
-    const bearerToken = authHeader.replace('Bearer ', '').trim();
-    const xApiKey = request.headers.get('x-api-key') || '';
-
-    if (bearerToken === API_SECRET || xApiKey === API_SECRET || xApiKey === 'obrasaas_admin_key' || xApiKey === 'internal' || bearerToken === 'internal') {
-        return { authorized: true };
-    }
-
-    // Allow requests from same origin (browser dashboard)
-    const referer = request.headers.get('referer') || '';
-    const origin = request.headers.get('origin') || '';
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://obrasaas.vercel.app';
-
-    if (referer.startsWith(appUrl) || origin.startsWith(appUrl) || referer.includes('localhost') || origin.includes('localhost')) {
-        return { authorized: true };
-    }
-
-    return { authorized: false, reason: 'Missing or invalid API key' };
+    return authorizeLegacyService(request)
+        ? { authorized: true }
+        : { authorized: false, reason: 'Missing or invalid service credential' };
 }
 
 // ============================================================================
@@ -170,7 +148,7 @@ export function isMessageDuplicate(messageId) {
 // ============================================================================
 
 export async function verifyTwilioSignature(request, authToken) {
-    if (!authToken) return true;
+    if (!authToken) return false;
 
     try {
         const signature = request.headers.get('x-twilio-signature');

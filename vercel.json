@@ -1,4 +1,10 @@
 {
   "version": 2,
-  "framework": "nextjs"
+  "framework": "nextjs",
+  "git": {
+    "deploymentEnabled": {
+      "hotfix/*": false,
+      "operations/*": false
+    }
+  }
 }
