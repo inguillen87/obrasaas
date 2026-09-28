@@ -56,16 +56,19 @@ try {
   await page.evaluate(()=>navigator.serviceWorker.ready);
   await page.waitForFunction(()=>Boolean(navigator.serviceWorker.controller));
   const cacheKeys=await page.evaluate(()=>caches.keys());assert.ok(!cacheKeys.includes('obrasaas-v3'));assert.ok(cacheKeys.includes('unrelated-cache'));
-  await page.setOfflineMode(true);
+  // Page-scoped offline emulation does not disable a service worker's network.
+  // Stop this disposable origin instead, and prove its socket is unreachable.
+  const stopped=new Promise(done=>server.once('exit',done));server.kill('SIGTERM');await stopped;
+  let unavailable=false;try{await fetch(base+'/api/health',{signal:AbortSignal.timeout(2000)});}catch{unavailable=true;}
+  assert.equal(unavailable,true,'Test origin must be disconnected before offline assertion');
   const offline=await page.evaluate(async()=>{const r=await fetch('/api/state');return {status:r.status,body:await r.text()};});
   assert.equal(offline.status,503);assert.ok(!offline.body.includes('privateFixture'));
-  await page.setOfflineMode(false);
   const pendingCount=await page.evaluate(()=>new Promise((resolve,reject)=>{
     const request=indexedDB.open('obrasaas-offline',1);request.onerror=reject;request.onsuccess=()=>{const db=request.result;const tx=db.transaction('obrasaas-offline-queue','readonly');const count=tx.objectStore('obrasaas-offline-queue').count();count.onsuccess=()=>{resolve(count.result);db.close();};};
   }));assert.equal(pendingCount,1);assert.deepEqual(errors,[]);
   const proof={status:'PASS',environment:'local-built-Next-production-server',realDatabase:false,syntheticCredentials:true,acceptedBusinessWrites:0,
     protectedRequests:checks,forgedCredentialsRejected:true,authorizedUnknownRoute:404,privateNavigationProtected:true,
-    publicSiteAccessible:true,viewports:[320,390,768,1280],legacyCacheRemoved:true,offlinePrivateReadBlocked:true,pendingQueueRetained:true,pageErrors:errors};
+    publicSiteAccessible:true,viewports:[320,390,768,1280],legacyCacheRemoved:true,offlinePrivateReadBlocked:true,offlineMechanism:'disposable-origin-stopped',pendingQueueRetained:true,pageErrors:errors};
   writeFileSync(path.join(folder,'proof.json'),JSON.stringify(proof,null,2));console.log(JSON.stringify(proof));
 }catch(error){writeFileSync(path.join(folder,'failure.json'),JSON.stringify({message:error.message,stack:error.stack,checks,startup},null,2));throw error;
 }finally{await browser?.close();server.kill('SIGTERM');}
