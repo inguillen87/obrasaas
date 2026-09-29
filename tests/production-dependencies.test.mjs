@@ -27,7 +27,7 @@ test('Next tooling is aligned without moving development lint into runtime depen
   assert.equal(lock.packages['node_modules/eslint-config-next'].version, manifest.dependencies.next);
   assert.equal(manifest.dependencies['eslint-config-next'], undefined);
 });
-for (const [name, minimum] of Object.entries({ 'fast-uri': '3.1.6', 'mysql2': '3.23.1', 'baseline-browser-mapping': '2.11.0', 'deepmerge-ts': '8.0.0' })) {
+for (const [name, minimum] of Object.entries({ 'fast-uri': '3.1.7', 'undici': '6.28.1', 'mysql2': '3.23.1', 'baseline-browser-mapping': '2.11.0', 'deepmerge-ts': '8.0.0' })) {
   test(`all resolved ${name} nodes satisfy the reviewed security floor`, () => {
     const installed = Object.entries(lock.packages).filter(([path]) => path.endsWith('node_modules/' + name));
     assert.ok(installed.length > 0);

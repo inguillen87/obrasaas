@@ -17,3 +17,6 @@ El mismo chequeo operativo informa por separado la configuración de Clerk. Si f
 `INSTANCE_VERIFIED` no significa alta por email, sesión de usuario ni pertenencia empresarial probadas. Esos controles siguen siendo necesarios y el panel histórico no se reabre por aprobar el almacenamiento. Los secrets se configuran por un canal autorizado del proveedor y Vercel; un bloqueo de transferencia no se sortea copiando credenciales a código, parámetros visibles o enlaces de bypass.
 
 Fuentes consultadas: documentación oficial del CLI y Backend API de Clerk; Vercel Blob private storage y CLI. El almacén revisado es `obrasaas-private-evidence`, private, gru1, conectado únicamente al proyecto ObraSaaS para Production y Development. La aceptación de objetos debe provenir de la prueba real, no de ese nombre.
+
+## Auditoría de dependencias
+El CI de este cierre detectó avisos de fast-uri 3.1.6 y undici 6.28.0. Se fijan las revisiones corregidas 3.1.7 y 6.28.1 dentro de sus mismas versiones mayores y se elevan los pisos de regresión. No se desactiva ni se reduce la severidad de npm audit. Referencias primarias: fastify/fast-uri GHSA-qw65-cvwx-89v3 y GHSA-58mr-gqgx-xq4g; nodejs/undici GHSA-3wwx-pv8p-q78v.
