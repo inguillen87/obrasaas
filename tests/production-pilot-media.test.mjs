@@ -85,3 +85,7 @@ test('WhatsApp no longer auto-enrolls from OCR or prints transcripts',()=>{
  assert.ok(code.includes('if (isDniIntent || isRegDniPhoto) return kycReviewRequiredResponse();'));
  assert.ok(code.includes('if (!transcript) return mediaUnconfirmedResponse();'));
 });
+
+test('provider HTTP failure retains only a status, not its private body',async()=>{
+ const result=await harness({status:403}).client.analyzeDni({base64:PNG});assert.equal(result.providerStatus,403);assert.equal(result.code,'AI_PROVIDER_REQUEST_REJECTED');assert.equal(result.success,false);assert.equal(result.dni,undefined);
+});

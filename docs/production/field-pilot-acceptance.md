@@ -21,7 +21,7 @@ Los flujos financieros y GPS legacy no se certifican con este cambio. El pase en
 ## Pruebas del corte
 Pruebas de contrato e integración HTTP local: proveedor ausente, respuesta incompleta/truncada, documentos no legibles, flags inyectados, tipos/longitudes, errores de red, audio vacío, imagen irrelevante y par de imágenes válido que no puede provocar autoaprobación ni escritura. Se conservan las pruebas positivas previas del uploader privado y la suite productiva.
 
-Ensayo opcional `OBRASAAS_RUN_PILOT_MEDIA_CHECK=synthetic-media-v1`: sólo build Production del proyecto ObraSaaS y origen propio. Hace una transcripción de un WAV sintético en inglés (Microsoft Zira, no una grabación personal) y exige reconocer "two bags" y "cement". Envía un PNG de un píxel a las rutas de análisis para comprobar que no se acepta como DNI/foto de obra. Usa las credenciales del build sin exportarlas; no escribe datos de negocio. Es una prueba de protocolo/modelo, no del español de campo, ruido, acentos, micrófonos ni WhatsApp. La prueba no corre por defecto.
+Ensayo opcional `OBRASAAS_RUN_PILOT_MEDIA_CHECK=synthetic-media-v1`: sólo build Production del proyecto ObraSaaS y origen propio. Hace una transcripción de un WAV sintético en inglés (Microsoft Zira, no una grabación personal) y exige reconocer "two bags" y "cement". Envía un PNG sintético que sólo contiene un rótulo de prueba a las rutas de análisis para comprobar que no se acepta como DNI/foto de obra. Usa las credenciales del build sin exportarlas; no escribe datos de negocio. Es una prueba de protocolo/modelo, no del español de campo, ruido, acentos, micrófonos ni WhatsApp. La prueba no corre por defecto.
 
 ## Cierres pendientes antes del primer piloto
 1. Ingreso Clerk en el dominio propio: configurar la clave live de la instancia correcta mediante el panel seguro y probar login/logout real. La transferencia automática de ese secreto quedó bloqueada; no se elude el control ni se solicitan claves por chat.
@@ -33,3 +33,5 @@ Ensayo opcional `OBRASAAS_RUN_PILOT_MEDIA_CHECK=synthetic-media-v1`: sólo build
 El estado del piloto sigue NO ACEPTADO hasta esos recorridos. La evidencia de CI/modelos sintéticos no reemplaza la aceptación real.
 
 Fuentes técnicas primarias consultadas: https://clerk.com/docs/guides/development/deployment/vercel ; https://developers.openai.com/api/docs/guides/images-vision ; https://developers.openai.com/api/docs/guides/speech-to-text .
+
+El primer ensayo real confirmó la transcripción sintética pero no cerró el caso negativo de visión con un píxel. Se cambia el fixture a un rótulo PNG legible, sin documentos/personas ni obra, y se agrega el estado HTTP opaco del proveedor al diagnóstico. No se relajan las condiciones de rechazo de identidad ni se cuenta el intento incompleto como aprobado.

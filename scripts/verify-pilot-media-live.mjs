@@ -17,11 +17,13 @@ if(enabled){
   const words=audio.text?.toLowerCase()||'';
   if(!audio.success||!/(two|2) bags/.test(words)||!words.includes('cement')||audio.speakerVerified!==false)throw new Error('PILOT_AUDIO_UNCONFIRMED');
   proof.syntheticAudioTranscribed=true;proof.transcriptSha256=createHash('sha256').update(audio.text).digest('hex');
-  const pixel='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAACklEQVR4nGNgAAAAAgABSK+kcQAAAABJRU5ErkJggg==';
+  const pixel=readFileSync(new URL('./fixtures/pilot-negative-image.png',import.meta.url)).toString('base64');
   const dni=await analyzer.analyzeDni({base64:pixel,mimeType:'image/png'});
+  proof.documentOutcome={success:dni.success,code:dni.code||null,providerStatus:dni.providerStatus||null};
   if(dni.success!==false||dni.identityVerified!==false||dni.code!=='DNI_DOCUMENT_NOT_CONFIRMED')throw new Error('PILOT_INVALID_DOCUMENT_NOT_REJECTED');
   proof.invalidDocumentRejected=true;
   const photo=await analyzer.analyzePhoto({base64:pixel,mimeType:'image/png'});
+  proof.photoOutcome={success:photo.success,code:photo.code||null,providerStatus:photo.providerStatus||null};
   if(photo.success!==false||photo.code!=='PHOTO_ANALYSIS_INCOMPLETE')throw new Error('PILOT_INVALID_SITE_PHOTO_NOT_REJECTED');
   proof.invalidSitePhotoRejected=true;
   if(unavailableBiometricAssessment().isMatch!==null)throw new Error('PILOT_BIOMETRIC_GUARD_INVALID');

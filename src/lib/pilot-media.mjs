@@ -43,6 +43,7 @@ export function createPilotMediaAnalyzer({environment=()=>process.env,fetchImpl=
    : 'Describe sólo lo visible de una foto de obra, sin afirmar cumplimiento, almacenamiento o aprobación. Devuelve JSON con isWorksitePhoto (boolean), phase, aiAnalysis, isIncident (boolean), incidentSeverity y actionRecommendation. Si no es una foto de obra legible, isWorksitePhoto debe ser false. Declara incertidumbre; no inventes avances ni porcentajes.';
   try{
    const response=await fetchImpl('https://api.openai.com/v1/chat/completions',{method:'POST',redirect:'error',signal:AbortSignal.timeout(timeoutMs),headers:{Authorization:'Bearer '+key(),'Content-Type':'application/json'},body:JSON.stringify({model:'gpt-4o',messages:[{role:'system',content:prompt},{role:'user',content:[{type:'text',text:kind==='dni'?'Extraer campos legibles; la revisión humana es independiente.':(text(input.context,2000)||'Revisar la fotografía sin contexto adicional.')},{type:'image_url',image_url:{url:`data:${image.contentType};base64,${image.bytes.toString('base64')}`}}]}],response_format:{type:'json_object'},temperature:0.1,max_tokens:1000})});
+   if(!response.ok){const providerStatus=response.status;await response.body?.cancel?.().catch(()=>{});return {...failure('AI_PROVIDER_REQUEST_REJECTED'),providerStatus};}
    const data=await jsonBounded(response),choice=data?.choices?.[0];
    if(choice?.finish_reason!=='stop'||choice?.message?.refusal)return failure('AI_RESPONSE_UNCONFIRMED');
    let value;try{value=JSON.parse(choice.message.content);}catch{return failure('AI_RESPONSE_INVALID');}
@@ -57,6 +58,7 @@ export function createPilotMediaAnalyzer({environment=()=>process.env,fetchImpl=
    const form=new FormData();form.append('file',new Blob([buffer],{type:mime}),'worksite-note.'+AUDIO_TYPES[mime]);form.append('model','whisper-1');form.append('language',language);
    form.append('prompt','Notas de obra en Argentina: revoque, cañería, cerámica, metros cuadrados, cemento, capataz.');
    const response=await fetchImpl('https://api.openai.com/v1/audio/transcriptions',{method:'POST',headers:{Authorization:'Bearer '+key()},body:form,redirect:'error',signal:AbortSignal.timeout(timeoutMs)});
+   if(!response.ok){const providerStatus=response.status;await response.body?.cancel?.().catch(()=>{});return {...failure('AUDIO_PROVIDER_REQUEST_REJECTED'),providerStatus};}
    const data=await jsonBounded(response),transcript=text(data?.text,32000);
    return transcript?{success:true,status:'TRANSCRIBED_UNREVIEWED',text:transcript,speakerVerified:false,identityVerified:false,attendanceRegistered:false}:failure('AUDIO_TRANSCRIPTION_UNCONFIRMED');
   }catch{return failure('AUDIO_REQUEST_UNCONFIRMED');}
