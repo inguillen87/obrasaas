@@ -11,7 +11,9 @@
     "release:audit-legacy": "node scripts/audit-legacy-cutover.mjs",
     "release:plan-legacy": "node scripts/plan-legacy-mapping.mjs",
     "release:rehearse-links": "node scripts/rehearse-legacy-links.mjs",
-    "release:review-identities": "node scripts/review-legacy-identities.mjs"
+    "release:review-identities": "node scripts/review-legacy-identities.mjs",
+    "prebuild": "node scripts/verify-private-storage-live.mjs",
+    "release:verify-private-storage": "node scripts/verify-private-storage-live.mjs"
   },
   "dependencies": {
     "@clerk/localizations": "4.20.0",
