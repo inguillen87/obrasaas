@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import {useRouter} from 'next/navigation';
 import { ObraSaasLogo } from './brand/brand-logo';
 import { motion, useScroll, useTransform, useInView, useSpring, AnimatePresence } from 'framer-motion';
-import { tokens, Button, GlassCard, Modal } from '@/lib/design-system';
+import { tokens, Button, GlassCard } from '@/lib/design-system';
 import { useBreakpoint } from '@/lib/useBreakpoint';
 
 /* ─── Scroll-triggered reveal wrapper ─── */
@@ -86,9 +87,7 @@ function AnimatedNumber({ value, suffix = '', prefix = '', duration = 1.5 }) {
 }
 
 export default function Home() {
-  const [leadModal, setLeadModal] = useState(false);
-  const [leadData, setLeadData] = useState({ name: '', company: '', phone: '', email: '' });
-  const [leadSubmitted, setLeadSubmitted] = useState(false);
+  const router=useRouter();
   const [activeFaq, setActiveFaq] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { isMobile, isTablet } = useBreakpoint();
@@ -107,34 +106,21 @@ export default function Home() {
     deliveryDays: roiProjects * 12
   };
 
-  const handleLeadSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      const res = await fetch('/api/state');
-      const state = await res.json();
-      if (!state.crmLeads) state.crmLeads = [];
-      state.crmLeads.unshift({ ...leadData, status: 'Nuevo Lead', createdAt: new Date().toISOString() });
-      await fetch('/api/state', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(state) });
-      setLeadSubmitted(true);
-      setTimeout(() => { setLeadModal(false); setLeadSubmitted(false); window.location.href = '/onboarding'; }, 1500);
-    } catch { window.location.href = '/onboarding'; }
-  };
-
   const capabilities = [
-    { title: 'Control de Obra por WhatsApp', desc: 'Notas de voz, fotos de remitos y ubicaciones GPS procesadas por IA. Sin apps que descargar.', accent: '#22c55e' },
-    { title: 'Libro de Obra Digital', desc: 'Cumplimiento nativo de Ley 22.250 con firma criptográfica SHA-256 inmutable.', accent: '#f59e0b' },
-    { title: 'KYC Biométrico en Campo', desc: 'Validación de DNI + reconocimiento facial + cruce automático con pólizas ART vigentes.', accent: '#3b82f6' },
-    { title: 'Geocerca GPS Anti-Fraude', desc: 'Presentismo satelital con radio configurable por predio. Sin posibilidad de adulteración.', accent: '#8b5cf6' },
-    { title: 'Certificaciones & Curva S', desc: 'Avance físico vs. financiero en tiempo real con exportación a Tango, Bejerman y SAP.', accent: '#06b6d4' },
-    { title: 'IA Predictiva CIRSOC 201', desc: 'Predicción de retrasos por clima, faltantes de acopio y riesgos de seguridad con 72hs de anticipación.', accent: '#f97316' }
+    { title: 'Trabajo de campo', desc: 'Recorrido previsto para recibir notas, fotos y ubicaciones del equipo. El canal WhatsApp se acepta por separado.', accent: '#22c55e' },
+    { title: 'Libro de Obra', desc: 'Organización de partes y evidencias con revisión. No se equipara una huella SHA-256 con una firma digital certificada.', accent: '#f59e0b' },
+    { title: 'Identidad y documentación', desc: 'Captura privada y revisión vinculadas a la obra. Una imagen o lectura de DNI no aprueba automáticamente al trabajador.', accent: '#3b82f6' },
+    { title: 'Ubicación de obra', desc: 'La ubicación aporta contexto. No reemplaza los permisos, la revisión ni la aceptación del registro de asistencia.', accent: '#8b5cf6' },
+    { title: 'Seguimiento contractual', desc: 'Preparación y revisión de certificados según las autoridades de cada obra, sin ejecutar pagos automáticamente.', accent: '#06b6d4' },
+    { title: 'Planificación', desc: 'Vistas de tareas, dependencias e incidencias para revisar con los responsables de la obra.', accent: '#f97316' }
   ];
 
   const faqs = [
-    { q: '¿Por qué funciona por WhatsApp y no como una app?', a: 'En la construcción en Argentina, el 95% de los operarios no descargan apps nuevas. WhatsApp ya está instalado en todos los dispositivos y permite enviar fotos, audios y ubicaciones sin curva de aprendizaje.' },
-    { q: '¿Cómo se valida el cumplimiento de ART y UOCRA?', a: 'El operario envía foto de DNI + selfie por WhatsApp. La IA valida identidad y cruza el CUIT con pólizas ART activas. Si la cobertura está vencida, el acceso se bloquea automáticamente.' },
-    { q: '¿Qué es la firma digital SHA-256?', a: 'Cada hito y asiento genera un bloque criptográfico inmutable con validez ante peritajes, aseguradoras y comitentes. Funciona como un notario digital incorruptible.' },
-    { q: '¿Se integra con sistemas contables existentes?', a: 'Sí. La API REST v1 permite sincronizar datos con Tango Gestión, Bejerman, Xubio y SAP. También exporta CSV con codificación UTF-8 BOM compatible con Excel.' },
-    { q: '¿Funciona sin internet en la obra?', a: 'Sí. ObraSaaS es una PWA con soporte offline. Los partes y fotos se guardan en el dispositivo y se sincronizan automáticamente al recuperar señal.' }
+    { q: '¿Qué puedo probar en la demo?', a: 'La demo guiada utiliza exclusivamente ejemplos ficticios y permite recorrer las perspectivas de operario, encargado y director. No envía mensajes ni modifica obras.' },
+    { q: '¿Subir un DNI aprueba una identidad?', a: 'No. La captura, la extracción de texto y la revisión de identidad son pasos diferentes. La versión pública no habilita el alta de trabajadores con datos reales.' },
+    { q: '¿Qué acredita una huella SHA-256?', a: 'Es un control de integridad de los datos. La aplicación no la presenta como una firma digital certificada ni como una validación de seguros.' },
+    { q: '¿Cómo se habilita una empresa?', a: 'El acceso personal y los permisos sobre empresa y obra se verifican por separado. El piloto de campo requiere participantes designados y la aceptación de sus recorridos.' },
+    { q: '¿La demo funciona sin conexión?', a: 'La demo no guarda operaciones de obra. El circuito real debe confirmar cada registro con el servidor; las operaciones pendientes no se reenvían automáticamente.' }
   ];
 
   return (
@@ -176,7 +162,7 @@ export default function Home() {
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             {!isMobile && <Link href="/sign-in" style={{ textDecoration: 'none', color: '#cbd5e1', fontSize: '0.84rem', fontWeight: 600 }}>Acceder</Link>}
-            <Link href="/dashboard" style={{ textDecoration: 'none' }}>
+            <Link href="/demo" style={{ textDecoration: 'none' }}>
               <motion.button
                 whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}
                 style={{ padding: '9px 20px', borderRadius: '10px', background: '#f59e0b', color: '#050810', fontWeight: 800, fontSize: '0.84rem', border: 'none', cursor: 'pointer' }}
@@ -221,7 +207,7 @@ export default function Home() {
         <Reveal delay={0}>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '5px 14px', borderRadius: '9999px', border: '1px solid rgba(245, 158, 11, 0.25)', background: 'rgba(245, 158, 11, 0.06)', fontSize: '0.78rem', fontWeight: 600, color: '#fbbf24', marginBottom: '28px' }}>
             <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 6px #22c55e' }} />
-            Plataforma activa — 5 obras en producción
+            Piloto de campo en preparación
           </div>
         </Reveal>
 
@@ -237,34 +223,34 @@ export default function Home() {
 
         <Reveal delay={0.16}>
           <p style={{ fontSize: 'clamp(1.05rem, 2vw, 1.28rem)', color: '#8896ab', lineHeight: 1.65, maxWidth: '680px', margin: '0 auto 40px', fontWeight: 400 }}>
-            Conectá las notas de voz y fotos de tu equipo en WhatsApp con tu cronograma Gantt,
-            control de costos y certificaciones digitales con firma SHA-256.
+            Organizá el trabajo de campo, la documentación y el seguimiento de tu obra.
+            Recorré los ejemplos mientras completamos la habilitación del piloto.
           </p>
         </Reveal>
 
         <Reveal delay={0.24}>
           <div style={{ display: 'flex', justifyContent: 'center', gap: '14px', flexWrap: 'wrap' }}>
             <Magnetic>
-              <Link href="/dashboard" style={{ textDecoration: 'none' }}>
+              <Link href="/demo" style={{ textDecoration: 'none' }}>
                 <motion.button whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }} style={{
                   padding: '15px 32px', borderRadius: '14px', background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
                   color: '#050810', fontWeight: 800, fontSize: '1rem', border: 'none', cursor: 'pointer',
                   boxShadow: '0 6px 24px rgba(245, 158, 11, 0.25), inset 0 1px 0 rgba(255,255,255,0.2)'
                 }}>
-                  Explorar demo en vivo
+                  Explorar demo guiada
                 </motion.button>
               </Link>
             </Magnetic>
             <Magnetic>
               <motion.button whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}
-                onClick={() => setLeadModal(true)}
+                onClick={() => router.push('/sign-up')}
                 style={{
                   padding: '15px 28px', borderRadius: '14px', background: 'rgba(255,255,255,0.04)',
                   border: '1px solid rgba(255,255,255,0.12)', color: '#e2e8f0', fontWeight: 700,
                   fontSize: '1rem', cursor: 'pointer', backdropFilter: 'blur(8px)'
                 }}
               >
-                Solicitar acceso
+                Acceso personal
               </motion.button>
             </Magnetic>
           </div>
@@ -274,9 +260,9 @@ export default function Home() {
           <div style={{ display: 'flex', justifyContent: 'center', gap: isMobile ? '12px' : '28px', marginTop: '32px', fontSize: '0.8rem', color: '#5a6579', flexWrap: 'wrap' }}>
             <span>Sin tarjeta de crédito</span>
             <span>·</span>
-            <span>Setup en 3 minutos</span>
+            <span>Acceso por habilitación</span>
             <span>·</span>
-            <span>Cumple Ley 22.250</span>
+            <span>Roles por empresa y obra</span>
           </div>
         </Reveal>
       </section>
@@ -285,15 +271,15 @@ export default function Home() {
       <section style={{ borderTop: '1px solid rgba(255,255,255,0.05)', borderBottom: '1px solid rgba(255,255,255,0.05)', position: 'relative', zIndex: 1 }}>
         <div style={{ maxWidth: '1100px', margin: '0 auto', padding: isMobile ? '24px 16px' : '40px 32px', display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: isMobile ? '16px' : '32px', textAlign: 'center' }}>
           {[
-            { value: 5, suffix: '', label: 'Obras en producción' },
-            { value: 27, suffix: '', label: 'Endpoints API' },
-            { value: 100, suffix: '%', label: 'Compliance normativo' },
-            { value: 4, suffix: '', label: 'Roles RBAC activos' }
+            { value: 'Campo', label: 'Preparar información' },
+            { value: 'Revisión', label: 'Confirmar lo recibido' },
+            { value: 'Registro', label: 'Conservar el seguimiento' },
+            { value: 'Obra', label: 'Separar permisos y datos' }
           ].map((m, i) => (
             <Reveal key={i} delay={i * 0.08}>
               <div>
                 <div style={{ fontSize: '2.4rem', fontWeight: 900, fontFamily: tokens.font.heading, color: '#f59e0b', letterSpacing: '-0.03em' }}>
-                  <AnimatedNumber value={m.value} suffix={m.suffix} />
+                  {m.value}
                 </div>
                 <div style={{ fontSize: '0.82rem', color: '#64748b', fontWeight: 500, marginTop: '4px' }}>{m.label}</div>
               </div>
@@ -525,14 +511,14 @@ export default function Home() {
           </p>
           <div style={{ display: 'flex', justifyContent: 'center', gap: '14px', flexWrap: 'wrap' }}>
             <Magnetic>
-              <Link href="/dashboard" style={{ textDecoration: 'none' }}>
+              <Link href="/demo" style={{ textDecoration: 'none' }}>
                 <motion.button whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }} style={{
                   padding: '16px 36px', borderRadius: '14px',
                   background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
                   color: '#050810', fontWeight: 800, fontSize: '1.05rem', border: 'none', cursor: 'pointer',
                   boxShadow: '0 6px 30px rgba(245, 158, 11, 0.3), inset 0 1px 0 rgba(255,255,255,0.2)'
                 }}>
-                  Explorar demo en vivo
+                  Explorar demo guiada
                 </motion.button>
               </Link>
             </Magnetic>
@@ -565,36 +551,7 @@ export default function Home() {
         </div>
       </footer>
 
-      {/* ═══ LEAD CAPTURE MODAL ═══ */}
-      <Modal isOpen={leadModal} onClose={() => setLeadModal(false)} title="Solicitar acceso a ObraSaaS" subtitle="Completá tus datos y te contactamos en 24hs">
-        {leadSubmitted ? (
-          <div style={{ textAlign: 'center', padding: '32px 0' }}>
-            <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring' }} style={{ fontSize: '3rem', marginBottom: '12px' }}>✓</motion.div>
-            <div style={{ fontWeight: 800, color: '#22c55e', fontSize: '1.1rem' }}>Solicitud recibida</div>
-          </div>
-        ) : (
-          <form onSubmit={handleLeadSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {[
-              { key: 'name', label: 'Nombre completo', placeholder: 'Ej: Marcelo González' },
-              { key: 'company', label: 'Empresa / Estudio', placeholder: 'Ej: Constructora del Plata S.A.' },
-              { key: 'phone', label: 'WhatsApp', placeholder: 'Ej: +54 9 261 316-8608' },
-              { key: 'email', label: 'Email corporativo', placeholder: 'marcelo@empresa.com' }
-            ].map(f => (
-              <div key={f.key}>
-                <label style={{ fontSize: '0.76rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>{f.label}</label>
-                <input required placeholder={f.placeholder} value={leadData[f.key]} onChange={e => setLeadData({ ...leadData, [f.key]: e.target.value })}
-                  style={{ width: '100%', padding: '11px 14px', background: '#050810', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '10px', color: '#f1f5f9', fontSize: '0.88rem' }} />
-              </div>
-            ))}
-            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="submit" style={{
-              padding: '13px', borderRadius: '12px', background: '#f59e0b', color: '#050810', fontWeight: 800,
-              fontSize: '0.92rem', border: 'none', cursor: 'pointer', marginTop: '4px'
-            }}>
-              Enviar solicitud
-            </motion.button>
-          </form>
-        )}
-      </Modal>
+
     </div>
   );
 }
