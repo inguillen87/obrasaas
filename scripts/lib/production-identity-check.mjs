@@ -1,7 +1,14 @@
 import {identityConfig} from '../../src/lib/production-identity-config.mjs';
+export function identitySecretState(value){
+ if(typeof value!=='string'||!value.trim())return 'missing';
+ if(value==='[SENSITIVE]')return 'placeholder';
+ if(value.startsWith('sk_test_'))return 'development';
+ if(value.startsWith('sk_live_'))return 'live-prefix';
+ return 'unrecognized';
+}
 export async function inspectIdentityProvider({environment=process.env,fetchImpl=fetch}={}){
   const setup=identityConfig(environment);
-  const base={version:1,domain:setup.origin,businessAccessEnabled:false,customerLoginVerified:false};
+  const base={version:1,domain:setup.origin,businessAccessEnabled:false,customerLoginVerified:false,privateKeyState:identitySecretState(environment.CLERK_SECRET_KEY)};
   if(!setup.configured)return {...base,status:'CONFIGURATION_PENDING',errors:setup.errors,providerRequests:0};
   try{
     const response=await fetchImpl('https://api.clerk.com/v1/instance',{

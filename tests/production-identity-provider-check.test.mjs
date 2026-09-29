@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {inspectIdentityProvider} from '../scripts/lib/production-identity-check.mjs';
+import {inspectIdentityProvider,identitySecretState} from '../scripts/lib/production-identity-check.mjs';
 import {IDENTITY_ORIGIN,IDENTITY_PUBLIC_KEY,IDENTITY_INSTANCE} from '../src/lib/production-identity-config.mjs';
 const environment={NEXT_PUBLIC_APP_URL:IDENTITY_ORIGIN,NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:IDENTITY_PUBLIC_KEY,
   CLERK_EXPECTED_INSTANCE_ID:IDENTITY_INSTANCE,CLERK_AUTHORIZED_PARTIES:IDENTITY_ORIGIN,CLERK_SECRET_KEY:'sk_live_'+'synthetic_only'.repeat(4)};
@@ -22,3 +22,7 @@ for(const body of [{id:'another-instance'},{},null])test('wrong/missing instance
 test('network error never prints provider credentials',async()=>{
  const proof=await inspectIdentityProvider({environment,fetchImpl:async()=>{throw new Error(environment.CLERK_SECRET_KEY);}});assert.equal(proof.status,'PROVIDER_UNCONFIRMED');assert.ok(!JSON.stringify(proof).includes('sk_live'));
 });
+
+for(const [value,expected] of [[undefined,'missing'],['','missing'],['[SENSITIVE]','placeholder'],['sk_test_unit','development'],['sk_live_unit','live-prefix'],['not-a-credential','unrecognized']]){
+ test('private-key diagnostics reveal only category '+expected,()=>{assert.equal(identitySecretState(value),expected);});
+}
