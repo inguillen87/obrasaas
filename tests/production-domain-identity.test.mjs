@@ -34,8 +34,8 @@ test('verified user identity does not confer legacy API access',()=>{
 });
 test('account checks the server session before rendering and never reads business state',()=>{
   const page=readFileSync(new URL('../src/app/(identity)/cuenta/page.js',import.meta.url),'utf8');
-  assert.ok(page.indexOf('await auth()')<page.indexOf('return <section'));
-  assert.ok(page.includes("if (!accountAccess(session)) redirect('/sign-in')"));
+  assert.ok(page.indexOf('await verifyProductionSession(await headers())')<page.indexOf('return <section'));
+  assert.ok(page.includes("if (!session.authenticated) redirect('/sign-in')"));
   assert.doesNotMatch(page,/getAppState|saveAppState|prisma|sessionClaims.*role|organizationList/);
 });
 test('auth routes do not collect passwords locally or assert business approval',()=>{

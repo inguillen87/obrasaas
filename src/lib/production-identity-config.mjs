@@ -2,7 +2,7 @@ export const IDENTITY_ORIGIN = 'https://obrasaas.com';
 export const IDENTITY_INSTANCE = 'ins_3JyUDcOoJ4VPW8D75Dkzzyc6J0m';
 export const IDENTITY_PUBLIC_KEY = 'pk_live_Y2xlcmsub2JyYXNhYXMuY29tJA';
 export function identityRoute(pathname) {
-  return /^\/(sign-in|sign-up)(\/.*)?$/.test(pathname) || pathname === '/cuenta' || pathname === '/cuenta/';
+  return /^\/(sign-in|sign-up)(\/.*)?$/.test(pathname) || pathname === '/cuenta' || pathname === '/cuenta/' || pathname === '/api/identity/session';
 }
 export function identityConfig(environment = process.env) {
   const errors = [];
@@ -20,4 +20,19 @@ export function identityConfig(environment = process.env) {
 export function accountAccess(authResult) {
   return Boolean(authResult && authResult.isAuthenticated === true &&
     typeof authResult.userId === 'string' && /^user_[A-Za-z0-9]+$/.test(authResult.userId));
+}
+
+// Browser sign-in and verification of signed session JWTs use the public
+// Frontend API, not administrative Backend API credentials. Keep the older
+// identityConfig check intact for operations that actually need a live secret.
+export const IDENTITY_ISSUER = 'https://clerk.obrasaas.com';
+export const IDENTITY_JWKS_URL = IDENTITY_ISSUER + '/.well-known/jwks.json';
+export function sessionIdentityConfig(environment = process.env) {
+  const legacy = identityConfig(environment);
+  const errors = legacy.errors.filter(error => error !== 'IDENTITY_PRIVATE_KEY_REQUIRED');
+  return { configured: errors.length === 0, errors, origin: IDENTITY_ORIGIN,
+    publishableKey: IDENTITY_PUBLIC_KEY, instanceId: IDENTITY_INSTANCE,
+    issuer: IDENTITY_ISSUER, jwksUrl: IDENTITY_JWKS_URL,
+    authorizedParties: [IDENTITY_ORIGIN], verification: 'issuer-bound-rs256-jwks',
+    backendApiConfigured: legacy.configured, businessAccessEnabled: false };
 }

@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server';
-import { clerkMiddleware } from '@clerk/nextjs/server';
 import { authorizeLegacyService, legacyBoundaryKind, privateLegacyHeaders, unauthorizedLegacyResponse } from './lib/legacy-access-boundary.js';
-import { identityConfig, identityRoute, IDENTITY_ORIGIN } from './lib/production-identity-config.mjs';
+import { identityRoute, IDENTITY_ORIGIN } from './lib/production-identity-config.mjs';
 
-export async function proxy(request, event) {
+export async function proxy(request) {
   const path = request.nextUrl.pathname;
   if (identityRoute(path)) {
     if (process.env.VERCEL_ENV === 'production' && request.nextUrl.origin !== IDENTITY_ORIGIN) {
@@ -11,13 +10,8 @@ export async function proxy(request, event) {
       destination.search = request.nextUrl.search;
       return NextResponse.redirect(destination, 307);
     }
-    const setup = identityConfig();
-    if (setup.configured) {
-      const response = await clerkMiddleware({ authorizedParties: setup.authorizedParties,
-        signInUrl: IDENTITY_ORIGIN + '/sign-in', signUpUrl: IDENTITY_ORIGIN + '/sign-up' })(request, event);
-      if (response) for (const [key,value] of Object.entries(privateLegacyHeaders())) response.headers.set(key,value);
-      return response;
-    }
+    // Identity pages and the read-only session endpoint verify the actual JWT
+    // at their server boundary. No client-supplied Clerk headers grant access.
     const response = NextResponse.next();
     for (const [key,value] of Object.entries(privateLegacyHeaders())) response.headers.set(key,value);
     return response;

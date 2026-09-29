@@ -1,11 +1,11 @@
 import { SignUp } from '@clerk/nextjs';
 import Link from 'next/link';
 import { ObraSaasLogo } from '@/app/brand/brand-logo';
-import { identityConfig } from '../../../../lib/production-identity-config.mjs';
+import { sessionIdentityConfig } from '../../../../lib/production-identity-config.mjs';
 import styles from '../../identity.module.css';
 export const metadata = { title: 'Crear cuenta · ObraSaaS' };
 export default function SignUpPage() {
-  if (!identityConfig().configured) return null;
+  if (!sessionIdentityConfig().configured) return null;
   return <section className={styles.card}>
     <Link href="/" className={styles.brand}><ObraSaasLogo markSize={36} variant="inverse" /></Link>
     <h1>Creá tu cuenta</h1>

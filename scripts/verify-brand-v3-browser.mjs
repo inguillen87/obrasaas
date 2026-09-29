@@ -44,7 +44,13 @@ try{
  browser=await puppeteer.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{}),args:['--no-sandbox','--disable-setuid-sandbox']});
  page=await browser.newPage();page.on('pageerror',error=>pageErrors.push(error.message));
  await page.setRequestInterception(true);
- page.on('request',request=>['GET','HEAD','OPTIONS'].includes(request.method())?request.continue():request.abort());
+ page.on('request',request=>{
+  const url=new URL(request.url());
+  // Anonymous Clerk component bootstrap creates only its browser client.
+  // No user, sign-in attempt or business operation is submitted by this test.
+  const bootstrap=request.method()==='POST'&&url.origin==='https://clerk.obrasaas.com'&&url.pathname==='/v1/client';
+  return ['GET','HEAD','OPTIONS'].includes(request.method())||bootstrap?request.continue():request.abort();
+ });
  await page.emulateMediaFeatures([{name:'prefers-reduced-motion',value:'reduce'}]);
  await page.goto(base+'/api/health',{waitUntil:'domcontentloaded'});
  await page.evaluate(async()=>{const old=await caches.open('obrasaas-public-v4');await old.put('/manifest.json',new Response('{"oldLogoFixture":true}'));await caches.open('unrelated-cache-brand-fixture');});
