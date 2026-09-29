@@ -43,6 +43,8 @@ jobs:
         run: npx eslint scripts/lib/production-storage-check.mjs scripts/lib/production-identity-check.mjs scripts/verify-private-storage-live.mjs tests/production-storage-live-check.test.mjs tests/production-identity-provider-check.test.mjs
       - name: Brand v3 integration lint
         run: npx eslint src/app/brand src/lib/brand-assets.mjs src/app/layout.js src/app/page.js tests/production-brand-v3.test.mjs scripts/verify-brand-v3-browser.mjs
+      - name: Pilot media and KYC lint
+        run: npx eslint src/lib/pilot-media.mjs src/lib/kyc-pilot-boundary.mjs src/lib/aiVision.js src/app/api/webview/kyc/route.js src/app/api/whatsapp/route.js tests/production-pilot-media.test.mjs scripts/verify-pilot-media-live.mjs
       - name: Runtime dependency audit
         run: npm audit --omit=dev --audit-level=low
       - run: node scripts/verify-cutover-readonly-postgres.mjs

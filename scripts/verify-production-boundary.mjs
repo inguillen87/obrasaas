@@ -39,6 +39,11 @@ try {
     assert.equal(response.status,400);const result=await response.json();assert.equal(result.success,false);assert.equal(result.verified,false);
     assert.ok(result.code.startsWith('PRIVATE_IMAGE_'));assert.match(response.headers.get('cache-control'),/no-store/);
   }
+  const pixel='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAACklEQVR4nGNgAAAAAgABSK+kcQAAAABJRU5ErkJggg==';
+  const kyc=await fetch(base+'/api/webview/kyc',{method:'POST',headers:{authorization:'Bearer '+secret,'content-type':'application/json'},
+    body:JSON.stringify({workerId:'unit-worker',dniFrontBase64:pixel,selfieBase64:pixel,verified:true,voiceEnrolled:true})});
+  const kycResult=await kyc.json();assert.equal(kyc.status,503);assert.equal(kycResult.code,'KYC_REVIEW_WORKFLOW_REQUIRED');
+  assert.equal(kycResult.verified,false);assert.equal(kycResult.evidenceStored,false);assert.equal(kycResult.attendanceRegistered,false);
   browser=await puppeteer.launch({headless:true,args:['--no-sandbox','--disable-setuid-sandbox']});
   const page=await browser.newPage(),errors=[];page.on('pageerror',error=>errors.push(error.message));
   await page.goto(base+'/api/health');
@@ -72,7 +77,7 @@ try {
     const request=indexedDB.open('obrasaas-offline',1);request.onerror=reject;request.onsuccess=()=>{const db=request.result;const tx=db.transaction('obrasaas-offline-queue','readonly');const count=tx.objectStore('obrasaas-offline-queue').count();count.onsuccess=()=>{resolve(count.result);db.close();};};
   }));assert.equal(pendingCount,1);assert.deepEqual(errors,[]);
   const proof={status:'PASS',environment:'local-built-Next-production-server',realDatabase:false,syntheticCredentials:true,acceptedBusinessWrites:0,
-    protectedRequests:checks,forgedCredentialsRejected:true,authorizedUnknownRoute:404,privateNavigationProtected:true,kycInvalidRequestsRejectedBeforeProviders:4,
+    protectedRequests:checks,forgedCredentialsRejected:true,authorizedUnknownRoute:404,privateNavigationProtected:true,kycInvalidRequestsRejectedBeforeProviders:4,validImagePairCannotAutoApprove:true,
     publicSiteAccessible:true,viewports:[320,390,768,1280],legacyCacheRemoved:true,offlinePrivateReadBlocked:true,offlineMechanism:'disposable-origin-stopped',pendingQueueRetained:true,pageErrors:errors};
   writeFileSync(path.join(folder,'proof.json'),JSON.stringify(proof,null,2));console.log(JSON.stringify(proof));
 }catch(error){writeFileSync(path.join(folder,'failure.json'),JSON.stringify({message:error.message,stack:error.stack,checks,startup},null,2));throw error;

@@ -116,12 +116,12 @@ test('response never exposes URLs, base64 or provider error messages',async()=>{
   const body=await response.json();assert.equal(body.success,false);assert.equal(body.verified,false);assert.ok(!JSON.stringify(body).includes('https://'));assert.match(response.headers.get('cache-control'),/no-store/);
   assert.equal(privateImageErrorResponse(new Error('SECRET')),null);
 });
-test('route guards body/provider access and handles typed failures before generic logging',()=>{
-  const route=readFileSync(new URL('../src/app/api/webview/kyc/route.js',import.meta.url),'utf8');
-  assert.ok(route.indexOf('verifyApiAuth(request)')<route.indexOf('readPrivateKycBody(request)'));
-  assert.ok(route.indexOf('assertPrivateImageConfigured();')<route.indexOf('analyzeDniWithAI({'));
-  assert.ok(route.indexOf('preparePrivateKycImages(body.workerId')<route.indexOf('analyzeDniWithAI({'));
-  assert.ok(route.indexOf('await uploadKycImages(')<route.indexOf('await getAppState()'));
-  assert.ok(route.indexOf('await uploadKycImages(')<route.indexOf('await saveAppState(state)'));
-  assert.doesNotMatch(route,/console\.error\([^;]*error\)|\+ error\.message/);
+test('the pilot KYC boundary keeps private-image validation but cannot write or auto-approve',()=>{
+ const route=readFileSync(new URL('../src/app/api/webview/kyc/route.js',import.meta.url),'utf8');
+ const boundary=readFileSync(new URL('../src/lib/kyc-pilot-boundary.mjs',import.meta.url),'utf8');
+ assert.ok(route.includes('createKycPilotBoundary'));
+ assert.ok(boundary.indexOf('authorize(request)')<boundary.indexOf('const body=await readPrivateKycBody(request)'));
+ assert.ok(boundary.indexOf('assertPrivateImageConfigured(environment());')<boundary.indexOf('const body=await readPrivateKycBody(request)'));
+ assert.ok(boundary.includes('preparePrivateKycImages(body.workerId,body.dniFrontBase64,body.selfieBase64)'));
+ assert.doesNotMatch(route+boundary,/saveAppState|getAppState|uploadKycImages|verified:\s*true/);
 });

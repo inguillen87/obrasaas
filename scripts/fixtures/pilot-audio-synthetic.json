@@ -1,0 +1,8 @@
+{
+  "source": "Windows System.Speech; Microsoft Zira Desktop",
+  "recordingOfPerson": false,
+  "language": "en",
+  "text": "This is a software test. We need two bags of cement.",
+  "format": "WAV PCM16 mono 16000Hz",
+  "sha256": "0dc6a589d256997bb48d1105d1789c8ee0a96b8d751edc6627219fda0debb567"
+}

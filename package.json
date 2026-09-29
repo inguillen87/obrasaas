@@ -12,7 +12,7 @@
     "release:plan-legacy": "node scripts/plan-legacy-mapping.mjs",
     "release:rehearse-links": "node scripts/rehearse-legacy-links.mjs",
     "release:review-identities": "node scripts/review-legacy-identities.mjs",
-    "prebuild": "node scripts/verify-private-storage-live.mjs",
+    "prebuild": "node scripts/verify-private-storage-live.mjs && node scripts/verify-pilot-media-live.mjs",
     "release:verify-private-storage": "node scripts/verify-private-storage-live.mjs"
   },
   "dependencies": {

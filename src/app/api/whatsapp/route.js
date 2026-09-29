@@ -1,6 +1,7 @@
+import {kycReviewRequiredResponse,mediaUnconfirmedResponse} from '../../../lib/kyc-pilot-boundary.mjs';
 import { getAppState, saveAppState, getMessages, saveMessages } from '../../../lib/db.js';
 import crypto from 'crypto';
-import { downloadMetaMedia, analyzeRemitoWithAI, analyzeObraPhotoWithAI, analyzeDniWithAI, transcribeAudioWithWhisper } from '../../../lib/aiVision.js';
+import { downloadMetaMedia, analyzeRemitoWithAI, analyzeObraPhotoWithAI, transcribeAudioWithWhisper } from '../../../lib/aiVision.js';
 import { validateInvoiceFiscalData, validateCuit } from '../../../lib/afipValidator.js';
 import { appendAuditTransaction } from '../../../lib/auditLedger.js';
 import { buildDirectorListMessage, buildVictoriaListMessage, buildWorkerListMessage, buildActionButtonsMessage } from '../../../lib/metaTemplates.js';
@@ -234,22 +235,19 @@ export async function POST(request) {
         const kycLink = `${appUrl}/webview/kyc?worker=${shortId}&token=${token}`;
         const recibosLink = `${appUrl}/webview/recibos?worker=${shortId}&token=${token}`;
 
-        // 3. Audio / Voice Note Transcription via OpenAI Whisper
+        // A missing/failed transcript must not be interpreted as a completed
+        // worker command, a recognized speaker or a successful attendance event.
         if (mediaUrl && (mediaType.startsWith('audio/') || mediaType.startsWith('voice/'))) {
             const audioData = await downloadMetaMedia(mediaUrl);
-            if (audioData?.buffer) {
-                const whisperText = await transcribeAudioWithWhisper({ buffer: audioData.buffer, mimeType: audioData.mimeType });
-                if (whisperText) {
-                    bodyText = whisperText;
-                    console.log(`🎙️ Whisper Transcribed Audio from ${senderName}: "${bodyText}"`);
-                }
-            }
+            if (!audioData?.buffer) return mediaUnconfirmedResponse();
+            const transcript = await transcribeAudioWithWhisper({buffer:audioData.buffer,mimeType:audioData.mimeType});
+            if (!transcript) return mediaUnconfirmedResponse();
+            bodyText = transcript;
         }
 
         // 4. Multimodal Vision Inspection & OCR
         let ocrResult = null;
         let sitePhotoAnalysis = null;
-        let dniAnalysis = null;
 
         if (mediaUrl && (mediaType.startsWith('image/') || mediaType.startsWith('document/'))) {
             const imgData = await downloadMetaMedia(mediaUrl);
@@ -264,69 +262,11 @@ export async function POST(request) {
             const pendingRegPhoto = (state.pendingRegistrations || {})[cleanFrom];
             const isRegDniPhoto = pendingRegPhoto?.step === 'awaiting_dni_photo';
 
-            if ((isDniIntent || isRegDniPhoto) && base64) {
-                dniAnalysis = await analyzeDniWithAI({ base64, mimeType: mime });
-
-                // If this is a self-registration flow, auto-complete registration
-                if (isRegDniPhoto && dniAnalysis) {
-                    const regData = pendingRegPhoto;
-                    const newWorkerId = `w-${Date.now().toString().slice(-6)}`;
-                    const finalName = dniAnalysis.fullName || regData.name || `Operario (+${cleanFrom.slice(-4)})`;
-                    const finalDni = dniAnalysis.dni || '00.000.000';
-                    const finalTrade = regData.trade || 'Oficial Albañil';
-
-                    // Add to worker registry
-                    state.workerRegistry = state.workerRegistry || [];
-                    state.workerRegistry.push({
-                        id: newWorkerId,
-                        name: finalName,
-                        role: finalTrade,
-                        trade: finalTrade,
-                        phone: `+${cleanFrom}`,
-                        dni: finalDni,
-                        status: 'Activo (Auto-Registro WhatsApp)',
-                        assignedTasks: [],
-                        registeredAt: new Date().toISOString(),
-                        registeredVia: 'whatsapp-self-service'
-                    });
-
-                    // Update KYC record
-                    state.kycVerifications = state.kycVerifications || {};
-                    state.kycVerifications[newWorkerId] = {
-                        workerId: newWorkerId,
-                        workerName: finalName,
-                        dni: finalDni,
-                        phone: `+${cleanFrom}`,
-                        status: 'PRE-VERIFICADO',
-                        verifiedAt: new Date().toLocaleString('es-AR'),
-                        trade: finalTrade,
-                        registrationMethod: 'whatsapp-conversational'
-                    };
-
-                    // Clean up pending registration
-                    delete state.pendingRegistrations[cleanFrom];
-                    await saveAppState(state);
-
-                    // Send completion message and skip further processing
-                    botReply = `🎉 *¡Registro Completado!*\n\n✅ *${finalName}*\n📋 DNI: *${finalDni}*\n🔧 Oficio: *${finalTrade}*\n📱 Teléfono: *+${cleanFrom.slice(-10)}*\n\n🏗️ Tu legajo fue creado en *${state.projectConfig?.name || 'ObraSaaS'}*.\n\n_Ahora podés fichar asistencia enviando tu 📍 ubicación, o escribí "menú" para ver las opciones._`;
-
-                    // Notify director
-                    const directorPhone = state.projectConfig?.directorPhone || process.env.DIRECTOR_PHONE;
-                    if (directorPhone) {
-                        try {
-                            await sendWhatsAppMessage(directorPhone, `🆕 *Nuevo operario auto-registrado:*\n• ${finalName} (${finalTrade})\n• DNI: ${finalDni}\n• Estado: PRE-VERIFICADO\n\n_Validá su legajo desde el Dashboard._`);
-                        } catch(e) { console.warn('Director notification failed:', e.message); }
-                    }
-
-                    // Send reply to worker via Meta WhatsApp Cloud API
-                    try {
-                        await sendWhatsAppMessage(cleanFrom, botReply);
-                    } catch(e) {
-                        console.warn('Worker registration reply failed:', e.message);
-                    }
-                    return Response.json({ status: 'registration_completed', reply: botReply });
-                }
-            } else if (isReceiptIntent && base64) {
+            // Do not turn an OCR response into worker enrollment, insurance,
+            // biometric approval or attendance. No receipt is claimed here.
+            if (isDniIntent || isRegDniPhoto) return kycReviewRequiredResponse();
+            if (!base64) return mediaUnconfirmedResponse();
+            if (isReceiptIntent && base64) {
                 ocrResult = await analyzeRemitoWithAI({ base64, mimeType: mime, rawText: bodyText });
             } else if (base64) {
                 const receiptTest = await analyzeRemitoWithAI({ base64, mimeType: mime, rawText: bodyText });
@@ -334,6 +274,7 @@ export async function POST(request) {
                     ocrResult = receiptTest;
                 } else {
                     sitePhotoAnalysis = await analyzeObraPhotoWithAI({ base64, mimeType: mime, context: bodyText });
+                    if (!sitePhotoAnalysis?.success) return mediaUnconfirmedResponse();
                 }
             }
         }
@@ -410,55 +351,6 @@ export async function POST(request) {
                     details: { distanceMeters: distance, latitude, longitude, insideGeofence: distance <= projectSite.radius, obra: projectSite.name }
                 });
             }
-        }
-        // 7. Process DNI Scan
-        else if (dniAnalysis?.success) {
-            const workerId = dniAnalysis.numeroDocumento || `dni-${Date.now()}`;
-            const kycRecord = {
-                id: "kyc-" + Date.now(),
-                workerName: dniAnalysis.nombreCompleto || senderName,
-                dni: dniAnalysis.numeroDocumento,
-                cuil: dniAnalysis.cuil,
-                phone: fromNumber,
-                status: "VERIFICADO",
-                confidenceScore: dniAnalysis.confidenceScore || 95.0,
-                livenessScore: 98.2,
-                faceMatchScore: 96.5,
-                artPolicy: {
-                    company: "La Segunda ART",
-                    policyNumber: `ART-${Math.floor(100000 + Math.random() * 900000)}`,
-                    status: "VIGENTE",
-                    expirationDate: "30/04/2027"
-                },
-                timestamp: `Hoy, ${timeStr}`,
-                verifiedBy: "IA Vision + AFIP Padron"
-            };
-
-            state.kycVerifications = state.kycVerifications || {};
-            state.kycVerifications[workerId] = kycRecord;
-
-            state.artPolicies = state.artPolicies || {};
-            state.artPolicies[kycRecord.workerName] = kycRecord.artPolicy;
-
-            state.auditLedger = appendAuditTransaction(state.auditLedger, {
-                action: "KYC_DNI_VERIFICADO",
-                actor: kycRecord.workerName,
-                details: { dni: kycRecord.dni, cuil: kycRecord.cuil, confidence: kycRecord.confidenceScore, obra: state.projectConfig?.name }
-            });
-
-            botReply = `🪪 *Identidad Biométrica & DNI Validado* ✅\n\n• Operario: *${kycRecord.workerName}*\n• DNI: *${kycRecord.dni}*\n• CUIL: *${kycRecord.cuil || '20-' + kycRecord.dni + '-9'}*\n• Estado: *Legajo Activado en ${state.projectConfig?.name || 'Obra'}*\n• Cobertura ART: *${kycRecord.artPolicy.company} (Vigente)*\n\n_Tu perfil ha sido incorporado a la nómina oficial con firma SHA-256._`;
-
-            feedIncident = {
-                id: "inc-kyc-" + Date.now(),
-                title: "Nuevo Operario Verificado (KYC)",
-                description: `${kycRecord.workerName} (DNI ${kycRecord.dni}) completó su verificación. ART Vigente.`,
-                type: "success",
-                badge: "KYC Aprobado",
-                timestamp: `Hoy, ${timeStr}`,
-                reporter: "Motor Biométrico & AFIP",
-                icon: "fa-solid fa-id-card-clip"
-            };
-            showInFeed = true;
         }
         // 8. Process Receipt / Invoice OCR with AFIP Engine
         else if (ocrResult?.montoTotal > 0 && ocrResult?.isReceipt !== false) {
