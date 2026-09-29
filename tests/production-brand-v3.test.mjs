@@ -54,3 +54,5 @@ test('logo has canonical fonts, visible accessible text and reduced-motion behav
  assert.ok(component.includes('<strong>Obra</strong><span>SaaS</span>'));assert.ok(component.includes('aria-hidden="true"'));
  for(const path of ['src/app/access-notice.module.css','src/app/(identity)/identity.module.css'])assert.doesNotMatch(file(path).toString(),/\.brand\s*>?\s*span\s*\{/);
 });
+
+test("canonical font fallback variables are present in the root",()=>{const source=file("src/app/layout.js").toString();assert.ok(source.includes("'--font-manrope':"));assert.ok(source.includes("'--font-geist':"));});

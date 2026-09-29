@@ -45,7 +45,7 @@ export default function RootLayout({ children }) {
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="mobile-web-app-capable" content="yes" />
       </head>
-      <body style={{ '--font-manrope': '"Manrope"' }}>
+      <body style={{ '--font-manrope': '"Manrope"', '--font-geist': '"Inter"' }}>
         {children}
         <script
           dangerouslySetInnerHTML={{
