@@ -1,6 +1,6 @@
-// Production boundary v4: public assets only. Private data always needs the network.
-const CACHE_NAME = 'obrasaas-public-v4';
-const STATIC_ASSETS = ['/manifest.json', '/icon-192.svg', '/icon-512.svg'];
+// Production boundary v5 — approved brand v3: public assets only. Private data always needs the network.
+const CACHE_NAME = 'obrasaas-public-v5';
+const STATIC_ASSETS = ["/manifest.json", "/icon-192.svg", "/icon-512.svg", "/brand/obrasaas-app-icon.svg", "/brand/obrasaas-app-icon-192.png", "/brand/obrasaas-app-icon-512.png", "/brand/obrasaas-maskable-512.png"];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_ASSETS)).then(() => self.skipWaiting()));
 });

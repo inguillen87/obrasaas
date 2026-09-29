@@ -1,7 +1,7 @@
 .shell{min-height:100svh;display:grid;place-items:center;padding:32px 16px;background:#070c15;color:#eef4ff;font-family:Inter,Arial,sans-serif;box-sizing:border-box}
 .card{width:100%;max-width:620px;border:1px solid #2d3e55;background:#0c1523;border-radius:20px;padding:32px;box-sizing:border-box}
 .brand{display:inline-flex;align-items:center;gap:12px;color:#eef4ff;font-size:20px;font-weight:800;text-decoration:none}
-.brand span{display:grid;place-items:center;background:#f4b049;color:#121b2a;width:36px;height:36px;border-radius:9px;font-size:14px}
+
 .header{display:flex;align-items:center;justify-content:space-between;gap:20px}
 .card h1{font-size:clamp(27px,4vw,35px);line-height:1.2;letter-spacing:-.03em;margin:28px 0 12px}
 .lead{font-size:14px;line-height:1.7;color:#bdcee2;margin:0 0 25px}
@@ -22,3 +22,5 @@
 .card button:focus-visible,.card a:focus-visible{outline:3px solid #a4ceff;outline-offset:4px}
 .retry{border:0;padding:12px 20px;min-height:46px;border-radius:9px;background:#f4b049;color:#121b2a;font-weight:700;cursor:pointer}
 @media(max-width:500px){.shell{padding:14px 10px;align-items:start}.card{padding:24px 18px;border-radius:15px}.status div{flex-direction:column;gap:6px}.status dd{text-align:left}.widget{margin-inline:-8px;width:calc(100% + 16px);max-width:none}}
+
+.brand{min-height:44px;color:#F4F1E8;--font-manrope:"Manrope";}

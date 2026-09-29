@@ -1,4 +1,5 @@
 "use client";
+import { ObraSaasLogo, ObraSaasMark } from '../brand/brand-logo';
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import Link from 'next/link';
@@ -1455,8 +1456,7 @@ export default function Dashboard() {
           <div className="sidebar-header">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
               <Link href="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div className="brand-logo">OS</div>
-                <div className="brand-name">ObraSaaS</div>
+                <ObraSaasLogo markSize={34} variant="auto" />
               </Link>
               <button 
                 onClick={handleToggleTheme} 
@@ -1638,8 +1638,7 @@ export default function Dashboard() {
             <i className="fa-solid fa-bars"></i>
           </button>
           <div className="mobile-logo">
-            <div className="mobile-logo-box">OS</div>
-            <span className="mobile-brand-name">ObraSaaS</span>
+            <ObraSaasLogo markSize={28} variant="auto" />
           </div>
           <div style={{ width: '32px' }}></div>
         </header>
@@ -2273,7 +2272,7 @@ export default function Dashboard() {
                 {/* Header logo */}
                 <div style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)', color: '#ffffff', padding: '20px 25px', borderRadius: '10px', marginBottom: '25px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                    <div style={{ width: '42px', height: '42px', background: 'linear-gradient(135deg, #ff9f1c 0%, #ff6b35 100%)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 900, fontFamily: "'Outfit', sans-serif", fontSize: '1.3rem' }}>OS</div>
+                    <ObraSaasMark size={42} variant="inverse" />
                     <div>
                       <h1 style={{ fontFamily: "'Outfit', sans-serif", fontSize: '1.4rem', fontWeight: 800, margin: 0 }}>ObraSaaS</h1>
                       <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', display: 'block', marginTop: '3px' }}>Innovar Latam • Reporte de Dirección</span>

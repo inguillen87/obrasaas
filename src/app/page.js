@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { ObraSaasLogo } from './brand/brand-logo';
 import { motion, useScroll, useTransform, useInView, useSpring, AnimatePresence } from 'framer-motion';
 import { tokens, Button, GlassCard, Modal } from '@/lib/design-system';
 import { useBreakpoint } from '@/lib/useBreakpoint';
@@ -153,11 +154,8 @@ export default function Home() {
         backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)'
       }}>
         <div style={{ maxWidth: '1280px', margin: '0 auto', padding: isMobile ? '0 16px' : '0 32px', height: '64px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none' }}>
-            <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'linear-gradient(135deg, #f59e0b, #d97706)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: '0.85rem', color: '#050810' }}>OS</div>
-            <span style={{ fontSize: '1.15rem', fontWeight: 800, letterSpacing: '-0.03em', color: '#f1f5f9', fontFamily: tokens.font.heading }}>
-              Obra<span style={{ color: '#f59e0b' }}>SaaS</span>
-            </span>
+          <Link href="/" aria-label="ObraSaaS, inicio" style={{ display: 'inline-flex', alignItems: 'center', minHeight: '44px', textDecoration: 'none', fontSize: '1.15rem', color: '#F4F1E8', flexShrink: 0 }}>
+            <ObraSaasLogo markSize={32} variant="inverse" />
           </Link>
 
           {/* Desktop nav */}
@@ -390,7 +388,7 @@ export default function Home() {
                   style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '14px' }}>
                   <div style={{ background: 'rgba(22, 101, 52, 0.4)', border: '1px solid rgba(34, 197, 94, 0.2)', padding: '12px 16px', borderRadius: '14px 14px 4px 14px', maxWidth: '85%', fontSize: '0.84rem', color: '#d1fae5' }}>
                     <div style={{ fontSize: '0.72rem', color: '#86efac', marginBottom: '4px', fontWeight: 600 }}>Juan Gómez — Oficial Albañil</div>
-                    [Audio 0:08s] "Marcelo, terminamos de revocar el muro norte. Listo para certificar."
+                    [Audio 0:08s] &quot;Marcelo, terminamos de revocar el muro norte. Listo para certificar.&quot;
                     <div style={{ textAlign: 'right', fontSize: '0.64rem', color: '#6ee7b7', marginTop: '6px' }}>08:32 ✓✓</div>
                   </div>
                 </motion.div>
@@ -554,9 +552,9 @@ export default function Home() {
       {/* ═══ FOOTER ═══ */}
       <footer style={{ borderTop: '1px solid rgba(255,255,255,0.05)', padding: '40px 32px', position: 'relative', zIndex: 1 }}>
         <div style={{ maxWidth: '1100px', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div style={{ width: '28px', height: '28px', borderRadius: '7px', background: '#f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: '0.72rem', color: '#050810' }}>OS</div>
-            <span style={{ fontSize: '0.82rem', color: '#475569' }}>ObraSaaS — Buenos Aires, Argentina</span>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '16px' }}>
+            <Link href="/" aria-label="ObraSaaS, inicio" style={{ display: 'inline-flex', minHeight: '44px', alignItems: 'center', color: '#F4F1E8', fontSize: '1.15rem', textDecoration: 'none' }}><ObraSaasLogo markSize={28} variant="inverse" /></Link>
+            <span style={{ fontSize: '0.82rem', color: '#94a3b8' }}>Buenos Aires, Argentina</span>
           </div>
           <div style={{ display: 'flex', gap: '24px', fontSize: '0.8rem', color: '#475569' }}>
             <Link href="/pricing" style={{ color: 'inherit', textDecoration: 'none' }}>Precios</Link>

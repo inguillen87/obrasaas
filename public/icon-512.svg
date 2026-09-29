@@ -1,15 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#050810"/>
-      <stop offset="100%" stop-color="#0a1020"/>
-    </linearGradient>
-    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#f59e0b"/>
-      <stop offset="100%" stop-color="#d97706"/>
-    </linearGradient>
-  </defs>
-  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
-  <rect x="120" y="140" width="272" height="232" rx="32" fill="url(#accent)"/>
-  <text x="256" y="290" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="120" fill="#050810">OS</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">ObraSaaS</title>
+  <desc id="desc">Ícono del enlace estructural y operativo ObraSaaS.</desc>
+  <rect width="64" height="64" rx="14" fill="#08110F"/>
+  <g transform="translate(5.12 5.12) scale(.84)">
+    <path d="M8 35V14C8 8 12 4 18 4H48L60 16V31H50V20L44 14H18V35ZM56 29V50C56 56 52 60 46 60H16L4 48V33H14V44L20 50H46V29Z" fill="#F4F1E8"/>
+    <path d="M4 45H19C24.5 45 29 40.5 29 35V29C29 23.5 33.5 19 39 19H60" fill="none" stroke="#F28A42" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
 </svg>

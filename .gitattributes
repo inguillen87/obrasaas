@@ -1,0 +1,6 @@
+/public/brand/*.svg text eol=lf
+/public/icon-192.svg text eol=lf
+/public/icon-512.svg text eol=lf
+/src/app/brand/*.js text eol=lf
+/src/app/brand/*.css text eol=lf
+/docs/BRAND_SYSTEM.md text eol=lf

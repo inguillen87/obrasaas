@@ -41,6 +41,8 @@ jobs:
         run: npx eslint scripts/lib/identity-review-*.mjs scripts/review-legacy-identities.mjs scripts/verify-identity-context-*.mjs tests/production-identity-context.test.mjs tests/helpers/identity-context-fixture.mjs
       - name: Production verification lint
         run: npx eslint scripts/lib/production-storage-check.mjs scripts/lib/production-identity-check.mjs scripts/verify-private-storage-live.mjs tests/production-storage-live-check.test.mjs tests/production-identity-provider-check.test.mjs
+      - name: Brand v3 integration lint
+        run: npx eslint src/app/brand src/lib/brand-assets.mjs src/app/layout.js src/app/page.js tests/production-brand-v3.test.mjs scripts/verify-brand-v3-browser.mjs
       - name: Runtime dependency audit
         run: npm audit --omit=dev --audit-level=low
       - run: node scripts/verify-cutover-readonly-postgres.mjs
@@ -52,6 +54,7 @@ jobs:
       - run: node scripts/verify-mapping-review-ui.mjs
       - run: npm run build
       - run: node scripts/verify-production-boundary.mjs
+      - run: node scripts/verify-brand-v3-browser.mjs
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
@@ -62,5 +65,6 @@ jobs:
             .vercel/mapping-plan-evidence/
             .vercel/link-rehearsal-evidence/
             .vercel/identity-context-evidence/
+            .vercel/brand-v3-evidence/
           include-hidden-files: true
           retention-days: 7

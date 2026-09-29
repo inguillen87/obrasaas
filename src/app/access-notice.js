@@ -1,6 +1,7 @@
 'use client';
 import { useEffect } from 'react';
 import Link from 'next/link';
+import { ObraSaasLogo } from '@/app/brand/brand-logo';
 import styles from './access-notice.module.css';
 
 export default function AccessNotice() {
@@ -12,7 +13,7 @@ export default function AccessNotice() {
   }, []);
   return <main className={styles.shell}>
     <section className={styles.card} aria-labelledby="access-title">
-      <Link href="/" className={styles.brand} aria-label="ObraSaaS, volver al inicio"><span>OS</span> ObraSaaS</Link>
+      <Link href="/" className={styles.brand} aria-label="ObraSaaS, volver al inicio"><ObraSaasLogo markSize={36} variant="inverse" /></Link>
       <p className={styles.status}>OPERACIONES RESTRINGIDAS</p>
       <h1 id="access-title">Acceso empresarial temporalmente restringido.</h1>
       <p className={styles.description}>La portada está disponible. Para entrar a los datos y operaciones de tu empresa necesitamos completar la configuración de inicio de sesión.</p>

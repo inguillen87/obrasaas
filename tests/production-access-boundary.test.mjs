@@ -84,13 +84,13 @@ const workerSource=readFileSync(new URL('../public/sw.js',import.meta.url),'utf8
 function workerRuntime(networkFails=false) {
   const handlers={},deleted=[],calls=[];
   const context={URL,Response,Promise,self:{location:{origin:'https://app.example.test'},addEventListener:(name,fn)=>{handlers[name]=fn;},clients:{claim:async()=>{},openWindow:async()=>{}},skipWaiting:async()=>{},registration:{showNotification:async()=>{}}},
-    caches:{keys:async()=>['obrasaas-v3','obrasaas-public-v4','another-app'],delete:async key=>{deleted.push(key);},open:async()=>({addAll:async()=>{}}),match:async()=>{throw new Error('Private cache must never be read');}},
+    caches:{keys:async()=>['obrasaas-v3','obrasaas-public-v4','obrasaas-public-v5','another-app'],delete:async key=>{deleted.push(key);},open:async()=>({addAll:async()=>{}}),match:async()=>{throw new Error('Private cache must never be read');}},
     fetch:async(request)=>{calls.push(request.url);if(networkFails)throw new Error('offline');return new Response('network-only');}};
   vm.runInNewContext(workerSource,context);return {handlers,deleted,calls};
 }
 test('service worker activation purges only obsolete ObraSaaS caches',async()=>{
   const runtime=workerRuntime();let done;runtime.handlers.activate({waitUntil:promise=>{done=promise;}});await done;
-  assert.deepEqual(runtime.deleted,['obrasaas-v3']);assert.equal(runtime.handlers.sync,undefined);
+  assert.deepEqual(runtime.deleted,['obrasaas-v3','obrasaas-public-v4']);assert.equal(runtime.handlers.sync,undefined);
 });
 for(const path of ['/api/state','/dashboard','/api/v1/workers'])test(`offline never returns private cache for ${path}`,async()=>{
   const runtime=workerRuntime(true);let result;runtime.handlers.fetch({request:new Request('https://app.example.test'+path),respondWith:promise=>{result=promise;}});

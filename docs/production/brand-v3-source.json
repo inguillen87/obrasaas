@@ -1,0 +1,25 @@
+{
+  "sourceCommit": "1677ff72773c95140535603093e5cb8624d1f063",
+  "sourceBrandVersion": 3,
+  "files": {
+    "docs/BRAND_SYSTEM.md": "b56e122029e97f4d9dc83702a076daaa9e63b0f75e9964efeb6170c3189c0501",
+    "public/brand/obrasaas-app-icon-1024.png": "246f21b4abb40b57507608f7345f0baaf0dcf6d115abd9c017b85955736ca373",
+    "public/brand/obrasaas-app-icon-192.png": "543e82979bbd55918f89f686df207214ab47df2a7d3121878d53f12005c13f45",
+    "public/brand/obrasaas-app-icon-512.png": "47cd4ec8971e49c523ac84df0c829989b576da9d8d8039b574633f2f920b630a",
+    "public/brand/obrasaas-app-icon.svg": "a577d6b8f428996244487279137cc8c4f387171d89adf5ce3454b51af7b4d5ec",
+    "public/brand/obrasaas-favicon.svg": "7b6d0c86d3b2bcf6df489affd5cf565f61010f9bd2100b35adeb45d0ded88070",
+    "public/brand/obrasaas-lockup-inverse.svg": "34f948961110edac7a5fbe58b5fecf215513544ffa7a8762413ce8046cb3b716",
+    "public/brand/obrasaas-lockup-mono.svg": "7d87a9dad497772243237236283b7353c7e607c5daa9f30af21288bbd013cb76",
+    "public/brand/obrasaas-lockup.svg": "5acf8a4b5d9d39a121141e45e2079863f938764b886c7c5b16d707864a882f74",
+    "public/brand/obrasaas-maskable-512.png": "e48d05f1768356636acc070f44a0393b2eac88b2feb74d0494615248a5086044",
+    "public/brand/obrasaas-symbol-inverse.svg": "e0ef1333a268275462fc7be5e8c5c3330bfcc99ff6ad531564cd783107ffff0a",
+    "public/brand/obrasaas-symbol-mono.svg": "1e35c63afccfcdc68f3248108783fb35e3bb91582e93b63f5edaaa61be878849",
+    "public/brand/obrasaas-symbol.svg": "57be9d5fe32f2dea8daf5770f96119591a5a23b53681ead20be99235d6f32105",
+    "src/app/apple-icon.png": "d604f42de7f2ea80349a362e2055012fe85e5f400afaefbe7ccd2df2921883c4",
+    "src/app/brand/brand-geometry.js": "73c97fb1bba20ee373c59971d7207122020557192acebd33192774e9724fcaf6",
+    "src/app/brand/brand-logo.js": "046de1e7b2e00656ed49cd13b4a76228d5a5531f7cd57528856ea4fc7246143c",
+    "src/app/brand/brand-logo.module.css": "94bc6e069d56c477b4dd0e46d894217f411afc375267afd707af962ab5ce6ea3",
+    "src/app/favicon.ico": "db4a7bb6642b385d1ec880259e028fcf4ca030b13fa485d83867846b49f71fde",
+    "src/app/icon.png": "47cd4ec8971e49c523ac84df0c829989b576da9d8d8039b574633f2f920b630a"
+  }
+}
