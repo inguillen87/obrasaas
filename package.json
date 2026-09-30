@@ -12,8 +12,9 @@
     "release:plan-legacy": "node scripts/plan-legacy-mapping.mjs",
     "release:rehearse-links": "node scripts/rehearse-legacy-links.mjs",
     "release:review-identities": "node scripts/review-legacy-identities.mjs",
-    "prebuild": "node scripts/verify-private-storage-live.mjs && node scripts/verify-pilot-media-live.mjs",
-    "release:verify-private-storage": "node scripts/verify-private-storage-live.mjs"
+    "prebuild": "node scripts/verify-private-storage-live.mjs && node scripts/verify-pilot-media-live.mjs && node scripts/verify-meta-test-number.mjs",
+    "release:verify-private-storage": "node scripts/verify-private-storage-live.mjs",
+    "release:verify-meta-test": "node scripts/verify-meta-test-number.mjs"
   },
   "dependencies": {
     "@clerk/localizations": "4.20.0",

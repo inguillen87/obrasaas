@@ -1,6 +1,6 @@
 # Primer piloto de campo: identidad y medios sin resultados simulados
 
-Pedido: probar ObraSaaS en una obra real con albañiles y encargados; el usuario facilitará el número de WhatsApp Business. Base de este corte: 8398dbe01fb9a3aa5f80f92cb82fecf54cd32699, con marca v3 restaurada. Este cambio no revierte logos, identidad personal Clerk, almacenamiento privado ni controles existentes.
+Pedido: probar ObraSaaS en una obra real con albañiles y encargados; el usuario indicó continuar con el número Test Number asignado por Meta a ObraSaaS; no comprar ni registrar otro ahora. Base de este corte: 8398dbe01fb9a3aa5f80f92cb82fecf54cd32699, con marca v3 restaurada. Este cambio no revierte logos, identidad personal Clerk, almacenamiento privado ni controles existentes.
 
 ## Problema encontrado antes de habilitar empleados reales
 El KYC legacy convertía faltas de proveedor, resultados incompletos y datos faltantes en puntajes, DNI/CUIL, aprobación de identidad y asistencia. El camino DNI de WhatsApp también inventaba una póliza de ART y marcaba registros como verificados. No hay evidencia en esta revisión de que estos caminos hayan sido usados con personas reales; tampoco se revalidan ni corrigen silenciosamente los cinco registros históricos.
@@ -27,7 +27,7 @@ Ensayo opcional `OBRASAAS_RUN_PILOT_MEDIA_CHECK=synthetic-media-v1`: sólo build
 1. Ingreso Clerk en el dominio propio: configurar la clave live de la instancia correcta mediante el panel seguro y probar login/logout real. La transferencia automática de ese secreto quedó bloqueada; no se elude el control ni se solicitan claves por chat.
 2. Empresa y obra piloto explícitas, director/encargado designados y trabajadores invitados con roles de mínimo permiso. No reasignar las correspondencias históricas pendientes por intuición.
 3. Captura de identidad con información al trabajador, almacenamiento privado y revisión auditable; la asistencia se registra por un circuito distinto, no por subir un DNI.
-4. Número Business propio, WABA/phone ID, permisos y firma; luego audio español, foto, ubicación y casos de error en un teléfono real, verificando persistencia, no sólo mensajes de respuesta.
+4. Número de prueba de Meta ya asignado, WABA/phone ID correctos, destinatarios de prueba verificados, permisos y firma; luego audio español, foto, ubicación y casos de error en un teléfono real, verificando persistencia, no sólo mensajes de respuesta.
 5. Recibos, permisos ajenos, reintentos, desconexión y salida de sesión: ninguna pantalla puede informar un resultado que el backend no confirmó.
 
 El estado del piloto sigue NO ACEPTADO hasta esos recorridos. La evidencia de CI/modelos sintéticos no reemplaza la aceptación real.

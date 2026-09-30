@@ -1,3 +1,4 @@
+import {validateMetaEnvelope} from '../../../lib/meta-webhook-scope.mjs';
 import {kycReviewRequiredResponse,mediaUnconfirmedResponse} from '../../../lib/kyc-pilot-boundary.mjs';
 import { getAppState, saveAppState, getMessages, saveMessages } from '../../../lib/db.js';
 import crypto from 'crypto';
@@ -65,6 +66,9 @@ export async function POST(request) {
                 payload[key] = value;
             });
         }
+
+        const scope = validateMetaEnvelope(payload);
+        if (!scope.ok) return Response.json({ success:false, code:scope.code }, { status:scope.status, headers:{'Cache-Control':'private, no-store'} });
 
         let fromNumber = '';
         let bodyText = '';
@@ -1273,84 +1277,11 @@ export async function POST(request) {
         messages.push(botMsg);
         await saveMessages(messages);
 
-        // Outbound reply via Meta WhatsApp Cloud API (Native Interactive Templates + Fallback)
+        // Never rewrite the sender's number or retry as another message type.
+        // This acknowledgement covers processing only, not delivered/read status.
+        let outbound = null;
         if (payload.object === 'whatsapp_business_account' && fromNumber && botReply) {
-            const metaAccessToken = process.env.META_WHATSAPP_ACCESS_TOKEN;
-            const metaPhoneNumberId = process.env.META_PHONE_NUMBER_ID;
-            const metaApiVersion = process.env.META_GRAPH_API_VERSION || 'v21.0';
-
-            let targetNumber = fromNumber;
-            if (cleanFrom.endsWith('2613168608')) {
-                targetNumber = '54261153168608';
-            } else if (cleanFrom.endsWith('520753')) {
-                targetNumber = '54296415520753';
-            }
-
-            if (metaAccessToken && metaPhoneNumberId) {
-                try {
-                    let interactivePayload = null;
-                    const isMenuIntent = !bodyText || bodyText.toLowerCase() === 'menu' || bodyText.toLowerCase() === 'hola' || botReply.includes('Centro de Mando') || botReply.includes('Panel Técnico') || botReply.includes('Copiloto Inteligente');
-
-                    if (isMenuIntent) {
-                        if (isDirector) {
-                            interactivePayload = buildDirectorListMessage(state, targetNumber);
-                        } else if (isTechnicalDirector) {
-                            interactivePayload = buildVictoriaListMessage(state, targetNumber);
-                        } else {
-                            interactivePayload = buildWorkerListMessage(state, senderName, senderRole, targetNumber);
-                        }
-                    } else if (isDirector && (botReply.includes('Certificación de Avance') || botReply.includes('Alerta Crítica') || botReply.includes('Replanificación') || botReply.includes('Rendición'))) {
-                        interactivePayload = buildActionButtonsMessage(botReply, targetNumber, [
-                            { id: "cmd_menu", title: "📋 Menú Principal" },
-                            { id: "cmd_1", title: "👷‍♂️ Ver Cuadrilla" },
-                            { id: "cmd_6", title: "📅 Plan Quincenal" }
-                        ]);
-                    }
-
-                    let sentInteractive = false;
-                    if (interactivePayload) {
-                        const metaRes = await fetch(
-                            `https://graph.facebook.com/${metaApiVersion}/${metaPhoneNumberId}/messages`,
-                            {
-                                method: 'POST',
-                                headers: {
-                                    'Authorization': `Bearer ${metaAccessToken}`,
-                                    'Content-Type': 'application/json'
-                                },
-                                body: JSON.stringify(interactivePayload)
-                            }
-                        );
-                        if (metaRes.ok) {
-                            sentInteractive = true;
-                        } else {
-                            const errData = await metaRes.json();
-                            console.warn('Interactive message not accepted by Meta sandbox, falling back to text:', errData);
-                        }
-                    }
-
-                    // Fallback to rich text markdown if interactive was not sent or not applicable
-                    if (!sentInteractive) {
-                        await fetch(
-                            `https://graph.facebook.com/${metaApiVersion}/${metaPhoneNumberId}/messages`,
-                            {
-                                method: 'POST',
-                                headers: {
-                                    'Authorization': `Bearer ${metaAccessToken}`,
-                                    'Content-Type': 'application/json'
-                                },
-                                body: JSON.stringify({
-                                    messaging_product: 'whatsapp',
-                                    to: targetNumber,
-                                    type: 'text',
-                                    text: { body: botReply }
-                                })
-                            }
-                        );
-                    }
-                } catch (metaErr) {
-                    console.error('Meta Cloud API reply error:', metaErr.message);
-                }
-            }
+            outbound = await sendWhatsAppMessage(fromNumber, botReply);
         }
 
         // Format Response
@@ -1360,17 +1291,14 @@ export async function POST(request) {
         }
 
         return Response.json({
-            success: true,
-            sender: senderName,
-            role: senderRole,
-            isDirector,
-            isTechnicalDirector,
-            reply: botReply,
-            state: state
+            success: outbound ? outbound.accepted === true : true,
+            outbound,
+            delivered: false,
+            processingCompleted: true
         });
 
     } catch (error) {
-        console.error("Error processing WhatsApp webhook:", error);
+        console.error("WHATSAPP_PROCESSING_UNCONFIRMED");
         return Response.json({ error: "Internal Server Error" }, { status: 500 });
     }
 }

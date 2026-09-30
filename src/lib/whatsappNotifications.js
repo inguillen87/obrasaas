@@ -1,202 +1,17 @@
-// ============================================================================
-// ObraSaaS Enterprise — WhatsApp Push Notifications
-// Proactive notifications for critical events: stock alerts, ART expiry,
-// weather warnings, attendance anomalies, budget overruns
-// ============================================================================
-
-/**
- * Send a WhatsApp text message via Meta Cloud API.
- * @param {string} to - Phone number in international format (e.g., '5492613168608')
- * @param {string} body - Message text (supports WhatsApp markdown: *bold*, _italic_)
- * @param {string} [phoneNumberId] - Meta Phone Number ID (from env if not provided)
- * @returns {Promise<{success: boolean, messageId?: string, error?: string}>}
- */
-export async function sendWhatsAppMessage(to, body, phoneNumberId) {
-    const token = process.env.META_WHATSAPP_ACCESS_TOKEN || process.env.WHATSAPP_TOKEN;
-    const pnid = phoneNumberId || process.env.META_PHONE_NUMBER_ID || process.env.WHATSAPP_PHONE_NUMBER_ID;
-    const apiVersion = process.env.META_GRAPH_API_VERSION || 'v21.0';
-    
-    let messagePayload;
-    let cleanTo = '';
-    let logBody = '';
-
-    if (typeof to === 'object' && to !== null) {
-        messagePayload = to;
-        cleanTo = (to.to || '').replace(/[^0-9]/g, '');
-        messagePayload.to = cleanTo;
-        logBody = to.text?.body || to.interactive?.body?.text || JSON.stringify(to);
-    } else {
-        cleanTo = (to || '').replace(/[^0-9]/g, '');
-        logBody = body;
-        messagePayload = {
-            messaging_product: 'whatsapp',
-            to: cleanTo,
-            type: 'text',
-            text: { body }
-        };
-    }
-
-    if (!token || !pnid) {
-        console.log(`[WhatsApp Sandbox Mode] Dispatched to +${cleanTo}: ${logBody?.slice(0, 80)}...`);
-        return { success: true, simulated: true, messageId: `sim_wamid_${Date.now()}` };
-    }
-
-    try {
-        const res = await fetch(`https://graph.facebook.com/${apiVersion}/${pnid}/messages`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(messagePayload)
-        });
-
-        if (!res.ok) {
-            const errBody = await res.text();
-            console.error('WhatsApp send error:', res.status, errBody);
-            // In dev / sandbox, fallback gracefully
-            return { success: true, simulated: true, messageId: `sandbox_wamid_${Date.now()}`, error: `Meta API: ${res.status}` };
-        }
-
-        const data = await res.json();
-        return { success: true, messageId: data.messages?.[0]?.id };
-    } catch (err) {
-        console.error('WhatsApp send exception:', err.message);
-        return { success: true, simulated: true, messageId: `sandbox_wamid_${Date.now()}`, error: err.message };
-    }
+import {createMetaSender,prepareMetaPayload,metaFailure} from './meta-whatsapp-transport.mjs';
+const send=createMetaSender();
+export async function sendWhatsAppMessage(to,body,phoneNumberId){return send(to,body,phoneNumberId);}
+export async function sendWhatsAppTemplate(to,name,language='es_AR',components=[],phoneNumberId){
+ return send(to,{type:'template',template:{name,language:{code:language},...(components?.length?{components}:{})}},phoneNumberId);
 }
-
-/**
- * Send an official Meta Approved HSM Template message (for notifications outside 24h window).
- * @param {string} to - Phone number
- * @param {string} templateName - Approved template name (e.g., 'obra_resumen_diario')
- * @param {string} languageCode - Language (default 'es_AR')
- * @param {Array} components - Template components array
- * @param {string} [phoneNumberId] - Optional phone number ID
- */
-export async function sendWhatsAppTemplate(to, templateName, languageCode = 'es_AR', components = [], phoneNumberId) {
-    const token = process.env.META_WHATSAPP_ACCESS_TOKEN || process.env.WHATSAPP_TOKEN;
-    const pnid = phoneNumberId || process.env.META_PHONE_NUMBER_ID || process.env.WHATSAPP_PHONE_NUMBER_ID;
-    const apiVersion = process.env.META_GRAPH_API_VERSION || 'v21.0';
-    
-    const cleanTo = (to || '').replace(/[^0-9]/g, '');
-
-    if (!token || !pnid) {
-        return { success: true, simulated: true, messageId: `sim_tpl_${Date.now()}` };
-    }
-
-    try {
-        const res = await fetch(`https://graph.facebook.com/${apiVersion}/${pnid}/messages`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                messaging_product: 'whatsapp',
-                to: cleanTo,
-                type: 'template',
-                template: {
-                    name: templateName,
-                    language: { code: languageCode },
-                    components: components.length > 0 ? components : undefined
-                }
-            })
-        });
-
-        const data = await res.json();
-        return { success: res.ok, messageId: data.messages?.[0]?.id, data };
-    } catch (err) {
-        return { success: true, simulated: true, messageId: `sandbox_tpl_${Date.now()}`, error: err.message };
-    }
+export async function sendWhatsAppDocument(to,link,filename,caption=''){
+ return send(to,{type:'document',document:{link,filename,caption}});
 }
-
-/**
- * Send a document / PDF to a user on WhatsApp.
- * @param {string} to - Phone number
- * @param {string} documentUrl - Public URL of the PDF / document
- * @param {string} filename - Display filename
- * @param {string} [caption] - Optional text caption
- */
-export async function sendWhatsAppDocument(to, documentUrl, filename, caption = '') {
-    const token = process.env.META_WHATSAPP_ACCESS_TOKEN || process.env.WHATSAPP_TOKEN;
-    const pnid = process.env.META_PHONE_NUMBER_ID || process.env.WHATSAPP_PHONE_NUMBER_ID;
-    const apiVersion = process.env.META_GRAPH_API_VERSION || 'v21.0';
-    
-    const cleanTo = (to || '').replace(/[^0-9]/g, '');
-
-    if (!token || !pnid) {
-        return { success: true, simulated: true, messageId: `sim_doc_${Date.now()}` };
-    }
-
-    try {
-        const res = await fetch(`https://graph.facebook.com/${apiVersion}/${pnid}/messages`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                messaging_product: 'whatsapp',
-                to: cleanTo,
-                type: 'document',
-                document: {
-                    link: documentUrl,
-                    filename: filename,
-                    caption: caption
-                }
-            })
-        });
-
-        const data = await res.json();
-        return { success: res.ok, messageId: data.messages?.[0]?.id };
-    } catch (err) {
-        return { success: true, simulated: true, messageId: `sandbox_doc_${Date.now()}`, error: err.message };
-    }
-}
-
-/**
- * Send a WhatsApp interactive list message.
- * @param {string} to - Phone number
- * @param {object} options - { header, body, footer, buttonText, sections }
- */
-export async function sendWhatsAppInteractive(to, options) {
-    const token = process.env.WHATSAPP_TOKEN;
-    const pnid = process.env.WHATSAPP_PHONE_NUMBER_ID;
-    
-    if (!token || !pnid) return { success: false, error: 'Missing credentials' };
-
-    const cleanTo = to.replace(/[^0-9]/g, '');
-
-    try {
-        const res = await fetch(`https://graph.facebook.com/v21.0/${pnid}/messages`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                messaging_product: 'whatsapp',
-                to: cleanTo,
-                type: 'interactive',
-                interactive: {
-                    type: 'list',
-                    header: options.header ? { type: 'text', text: options.header } : undefined,
-                    body: { text: options.body },
-                    footer: options.footer ? { text: options.footer } : undefined,
-                    action: {
-                        button: options.buttonText || 'Ver opciones',
-                        sections: options.sections
-                    }
-                }
-            })
-        });
-
-        const data = await res.json();
-        return { success: res.ok, messageId: data.messages?.[0]?.id };
-    } catch (err) {
-        return { success: false, error: err.message };
-    }
+export async function sendWhatsAppInteractive(to,options){
+ if(!options||typeof options!=='object')return metaFailure('META_PAYLOAD_INVALID');
+ const payload={type:'interactive',interactive:{type:'list',...(options.header?{header:{type:'text',text:options.header}}:{}),
+  body:{text:options.body},...(options.footer?{footer:{text:options.footer}}:{}),action:{button:options.buttonText||'Ver opciones',sections:options.sections}}};
+ if(!prepareMetaPayload(to,payload))return metaFailure('META_PAYLOAD_INVALID');return send(to,payload);
 }
 
 // ============================================================================
@@ -278,10 +93,12 @@ export async function checkAndSendAlerts(state, previousState) {
     for (const alert of alerts) {
         for (const recipient of alert.recipients) {
             try {
-                await sendWhatsAppMessage(recipient, alert.message);
-                console.log(`📲 Alert sent [${alert.type}] to ${recipient.slice(-4)}`);
+                const result = await sendWhatsAppMessage(recipient, alert.message);
+                alert.delivery = result.accepted ? 'ACCEPTED_BY_META' : result.state;
+                alert.delivered = false;
             } catch (err) {
-                console.warn(`Failed to send alert [${alert.type}]:`, err.message);
+                alert.delivery = 'UNCONFIRMED';
+                alert.delivered = false;
             }
         }
     }
