@@ -1,4 +1,4 @@
-import {readMetaJson,resolveMetaTransport,metaErrorCode} from '../../src/lib/meta-whatsapp-transport.mjs';
+import {readMetaJson,resolveMetaTransport,metaErrorCode,createMetaSender,normalizeWhatsAppRecipient} from '../../src/lib/meta-whatsapp-transport.mjs';
 export const META_TEST_NUMBER='15551533706';
 export const META_TEST_CHECK_PROJECT='prj_68NErbCqCFsDVaMak81gcwsGI9pF';
 const numeric=value=>typeof value==='string'&&/^[1-9]\d{4,31}$/.test(value);
@@ -38,6 +38,20 @@ export async function inspectMetaTestNumber({environment=process.env,fetchImpl=f
 }
 export function metaTestCheckEnabled(environment=process.env){
  if(!environment.OBRASAAS_RUN_META_TEST_CHECK)return false;
- if(environment.OBRASAAS_RUN_META_TEST_CHECK!=='read-only-v1'||environment.VERCEL_ENV!=='production'||environment.VERCEL_PROJECT_ID!==META_TEST_CHECK_PROJECT||environment.NEXT_PUBLIC_APP_URL!=='https://obrasaas.com')throw new Error('META_TEST_CHECK_CONTEXT_REJECTED');
+ if(!['read-only-v1','send-hello-world-once-v1'].includes(environment.OBRASAAS_RUN_META_TEST_CHECK)||environment.VERCEL_ENV!=='production'||environment.VERCEL_PROJECT_ID!==META_TEST_CHECK_PROJECT||environment.NEXT_PUBLIC_APP_URL!=='https://obrasaas.com')throw new Error('META_TEST_CHECK_CONTEXT_REJECTED');
  return true;
+}
+
+export async function runMetaTestCheck({environment=process.env,fetchImpl=fetch}={}){
+ if(!metaTestCheckEnabled(environment))return {status:'NOT_REQUESTED',sentMessages:0};
+ const proof=await inspectMetaTestNumber({environment,fetchImpl});
+ if(environment.OBRASAAS_RUN_META_TEST_CHECK==='read-only-v1')return proof;
+ const recipient=environment.OBRASAAS_META_TEST_RECIPIENT;
+ if(normalizeWhatsAppRecipient(recipient)!==recipient)return {...proof,probeSend:{attempted:false,code:'META_EXPLICIT_TEST_RECIPIENT_REQUIRED'}};
+ if(proof.status!=='TEST_ASSETS_VERIFIED')return {...proof,probeSend:{attempted:false,code:'META_TEST_ASSETS_NOT_VERIFIED'}};
+ // One deliberate hello_world to the explicitly selected test recipient.
+ // No loops, alternative numbers, messages, or retries on provider uncertainty.
+ const send=createMetaSender({environment:()=>environment,fetchImpl});
+ const result=await send(recipient,{type:'template',template:{name:'hello_world',language:{code:'en_US'}}});
+ return {...proof,submissionAttempts:1,acceptedMessages:result.accepted?1:0,probeSend:{attempted:true,recipientSuffix:recipient.slice(-4),template:'hello_world',language:'en_US',...result}};
 }

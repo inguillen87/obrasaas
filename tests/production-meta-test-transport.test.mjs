@@ -84,3 +84,22 @@ test('webhook scope rejects other WABA/number before operational state access',a
  const route=readFileSync(new URL('../src/app/api/whatsapp/route.js',import.meta.url),'utf8');assert.ok(route.indexOf('validateMetaEnvelope(payload)')<route.indexOf('await getAppState()'));
  assert.doesNotMatch(route,/targetNumber = '542|state: state|fallback to rich text/i);
 });
+
+test('send probe requires an explicit recipient and verified test assets',async()=>{
+ const {runMetaTestCheck}=await import('../scripts/lib/meta-test-number-check.mjs');let writes=0,index=0;const data=inspectResponses();
+ const fetchImpl=async(_url,options)=>{if(options.method==='POST')writes++;return Response.json(data[index++]);};
+ const result=await runMetaTestCheck({environment:{...env,...build,OBRASAAS_RUN_META_TEST_CHECK:'send-hello-world-once-v1'},fetchImpl});
+ assert.equal(result.probeSend.attempted,false);assert.equal(writes,0);
+});
+test('send probe transmits exactly one approved template and does not equate acceptance with delivery',async()=>{
+ const {runMetaTestCheck}=await import('../scripts/lib/meta-test-number-check.mjs');let index=0,writes=0;const data=inspectResponses();
+ const result=await runMetaTestCheck({environment:{...env,...build,OBRASAAS_RUN_META_TEST_CHECK:'send-hello-world-once-v1',OBRASAAS_META_TEST_RECIPIENT:to},fetchImpl:async(_url,options)=>{
+  if(options.method==='POST'){writes++;assert.equal(JSON.parse(options.body).to,to);assert.equal(JSON.parse(options.body).template.name,'hello_world');return Response.json(acceptance);}return Response.json(data[index++]);
+ }});assert.equal(result.acceptedMessages,1);assert.equal(result.sentMessages,0);assert.equal(writes,1);assert.equal(result.probeSend.delivered,false);assert.equal(result.physicalDeliveryTested,false);
+});
+test('send probe returns 131030 without a second request or a simulated id',async()=>{
+ const {runMetaTestCheck}=await import('../scripts/lib/meta-test-number-check.mjs');let index=0,writes=0;const data=inspectResponses();
+ const result=await runMetaTestCheck({environment:{...env,...build,OBRASAAS_RUN_META_TEST_CHECK:'send-hello-world-once-v1',OBRASAAS_META_TEST_RECIPIENT:to},fetchImpl:async(_url,options)=>{
+  if(options.method==='POST'){writes++;return Response.json({error:{code:131030,message:'private'}},{status:400});}return Response.json(data[index++]);
+ }});assert.equal(result.sentMessages,0);assert.equal(writes,1);assert.equal(result.probeSend.code,'META_TEST_RECIPIENT_NOT_ALLOWED');assert.equal(result.probeSend.messageId,undefined);
+});

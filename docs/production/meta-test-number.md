@@ -23,3 +23,6 @@ La recepción conserva firma Meta, comprueba WABA y phone_number_id antes de toc
 Recuperar/verificar el destinatario demo en Meta y realizar una entrega real con wamid y callback. Confirmar después texto, imagen y audio real, revisiones y aislamiento de la obra piloto. El número propio queda para el final; no es el bloqueo de esta fase. La compra no resuelve un token inválido, destinatario fuera de lista o firma faltante.
 
 Pruebas puras y CI se ejecutan antes de publicar; la evidencia efectiva de Meta y del dominio se registra en el PR. No hubo migraciones ni traslado de datos históricos en este bloque.
+
+## Envío técnico explícito
+El marcador `send-hello-world-once-v1` sólo permite un hello_world/en_US al `OBRASAAS_META_TEST_RECIPIENT` explícito y después de comprobar número, WABA, suscripción y plantilla. No prueba destinatarios alternativos ni reenvía tras un error. El reporte distingue aceptación API de entrega física. Este marcador es por despliegue, no una tarea recurrente; no dejarlo configurado como variable permanente.
