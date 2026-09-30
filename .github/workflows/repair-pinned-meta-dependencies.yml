@@ -44,20 +44,22 @@ jobs:
           new=json.loads(pathlib.Path('package-lock.json').read_text())['packages']
           assert set(old)==set(new),'Do not add/remove dependency nodes'
           changed=[]
-          allowed={'fast-uri':('3.1.7','3.1.8'),'dompurify':('3.4.15','3.4.16')}
+          targets={'fast-uri':'3.1.8','dompurify':'3.4.16'}
+          affected={'fast-uri':{'3.1.7'},'dompurify':{'3.4.13','3.4.14','3.4.15'}}
           for path in old:
               if old[path]!=new[path]:
                   name=path.rsplit('node_modules/',1)[-1]
-                  assert name in allowed,(path,'unexpected dependency change')
-                  assert (old[path].get('version'),new[path].get('version'))==allowed[name]
+                  assert name in targets,(path,'unexpected dependency change')
+                  previous=old[path].get('version');replacement=new[path].get('version')
+                  assert previous in affected[name] and replacement==targets[name],(path,previous,replacement)
                   assert old[path].get('dependencies')==new[path].get('dependencies')
                   assert new[path]['resolved'].startswith('https://registry.npmjs.org/'+name+'/')
                   assert new[path]['integrity'].startswith('sha512-')
                   changed.append(name)
-          assert set(changed)==set(allowed)
+                  print('Reviewed patch:',name,previous,'->',replacement)
+          assert set(changed)==set(targets)
           names=set(subprocess.check_output(['git','diff','--name-only'],text=True).splitlines())
           assert names=={'package.json','package-lock.json','tests/production-dependencies.test.mjs'},names
-          print('Reviewed package patches only:',sorted(changed))
           PY
           node --test tests/production-dependencies.test.mjs
           npm audit --omit=dev --audit-level=low
