@@ -50,7 +50,7 @@ jobs:
       - name: Signed session verification lint
         run: npx eslint src/lib/verified-session.mjs src/app/api/identity/session/route.js tests/production-verified-session.test.mjs
       - name: Real Meta test-number transport lint
-        run: npx eslint src/lib/meta-whatsapp-transport.mjs src/lib/meta-test-dispatch.mjs src/lib/meta-webhook-scope.mjs src/lib/whatsappNotifications.js src/app/api/v1/whatsapp/dispatch/route.js src/app/api/whatsapp/route.js scripts/lib/meta-test-number-check.mjs scripts/verify-meta-test-number.mjs tests/production-meta-test-transport.test.mjs
+        run: npx eslint src/lib/meta-channel-binding.mjs tests/production-meta-channel-binding.test.mjs src/lib/meta-whatsapp-transport.mjs src/lib/meta-test-dispatch.mjs src/lib/meta-webhook-scope.mjs src/lib/whatsappNotifications.js src/app/api/v1/whatsapp/dispatch/route.js src/app/api/whatsapp/route.js scripts/lib/meta-test-number-check.mjs scripts/verify-meta-test-number.mjs tests/production-meta-test-transport.test.mjs
       - name: Runtime dependency audit
         run: npm audit --omit=dev --audit-level=low
       - run: node scripts/verify-cutover-readonly-postgres.mjs
