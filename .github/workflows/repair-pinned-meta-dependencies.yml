@@ -1,0 +1,77 @@
+name: Repair exact Meta hotfix dependency lock
+on:
+  push:
+    branches: ['operations/pinned-meta-deps-20260930']
+    paths: ['.github/workflows/repair-pinned-meta-dependencies.yml']
+permissions:
+  contents: read
+jobs:
+  repair:
+    if: github.repository == 'inguillen87/obrasaas' && github.ref == 'refs/heads/operations/pinned-meta-deps-20260930'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: 373eb584e70fa3949ef8ba243ce77741672a6d4e
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Update only the two reviewed patch versions
+        run: |
+          python3 - <<'PY'
+          import json,pathlib,subprocess
+          assert subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()=='373eb584e70fa3949ef8ba243ce77741672a6d4e'
+          p=pathlib.Path('package.json');data=json.loads(p.read_text())
+          assert data['overrides']['fast-uri']=='3.1.7'
+          data['overrides']['fast-uri']='3.1.8'
+          data['overrides']['dompurify']='3.4.16'
+          p.write_text(json.dumps(data,indent=2)+'\n')
+          p=pathlib.Path('tests/production-dependencies.test.mjs');text=p.read_text()
+          assert text.count("'fast-uri': '3.1.7'")==1
+          p.write_text(text.replace("'fast-uri': '3.1.7'","'fast-uri': '3.1.8', 'dompurify': '3.4.16'"))
+          PY
+          npm install --package-lock-only --ignore-scripts --no-fund --no-audit
+      - name: Verify the exact patch scope
+        run: |
+          python3 - <<'PY'
+          import json,pathlib,subprocess
+          old=json.loads(subprocess.check_output(['git','show','HEAD:package-lock.json'],text=True))['packages']
+          new=json.loads(pathlib.Path('package-lock.json').read_text())['packages']
+          assert set(old)==set(new),'Do not add/remove dependency nodes'
+          changed=[]
+          allowed={'fast-uri':('3.1.7','3.1.8'),'dompurify':('3.4.15','3.4.16')}
+          for path in old:
+              if old[path]!=new[path]:
+                  name=path.rsplit('node_modules/',1)[-1]
+                  assert name in allowed,(path,'unexpected dependency change')
+                  assert (old[path].get('version'),new[path].get('version'))==allowed[name]
+                  assert old[path].get('dependencies')==new[path].get('dependencies')
+                  assert new[path]['resolved'].startswith('https://registry.npmjs.org/'+name+'/')
+                  assert new[path]['integrity'].startswith('sha512-')
+                  changed.append(name)
+          assert set(changed)==set(allowed)
+          names=set(subprocess.check_output(['git','diff','--name-only'],text=True).splitlines())
+          assert names=={'package.json','package-lock.json','tests/production-dependencies.test.mjs'},names
+          print('Reviewed package patches only:',sorted(changed))
+          PY
+          node --test tests/production-dependencies.test.mjs
+          npm audit --omit=dev --audit-level=low
+          git diff --check
+      - name: Commit only to the reviewed hotfix branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +x
+          current=$(git ls-remote origin refs/heads/hotfix/pinned-meta-channel-20260930 | cut -f1)
+          test "$current" = 373eb584e70fa3949ef8ba243ce77741672a6d4e
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- package.json package-lock.json tests/production-dependencies.test.mjs
+          git commit -m 'fix: apply reviewed DOMPurify and fast-uri patches without changing Meta credentials'
+          git -c credential.helper='!f() { printf "username=x-access-token\npassword=%s\n" "$GH_TOKEN"; }; f' push origin HEAD:refs/heads/hotfix/pinned-meta-channel-20260930
+          git rev-parse HEAD
