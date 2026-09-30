@@ -1,3 +1,4 @@
+import {checkObrasaasMetaBinding} from './meta-channel-binding.mjs';
 // Real Meta transport. A test phone number still makes real API calls.
 // API acceptance is not delivery; never synthesize a wamid or silently retry.
 const text=value=>typeof value==='string'&&value.length>0&&!/[\u0000-\u001f\u007f]/.test(value);
@@ -9,6 +10,7 @@ export function normalizeWhatsAppRecipient(value){
  const digits=value.replace(/[+ ()-]/g,'');return /^[1-9]\d{6,14}$/.test(digits)?digits:null;
 }
 export function resolveMetaTransport(environment=process.env,phoneNumberId){
+ const binding=checkObrasaasMetaBinding(environment);if(!binding.ok)return {error:binding.code};
  const pair=(a,b)=>environment[a]&&environment[b]&&environment[a]!==environment[b];
  if(pair('META_WHATSAPP_ACCESS_TOKEN','WHATSAPP_TOKEN')||pair('META_PHONE_NUMBER_ID','WHATSAPP_PHONE_NUMBER_ID'))return {error:'META_CONFIG_CONFLICT'};
  const token=environment.META_WHATSAPP_ACCESS_TOKEN||environment.WHATSAPP_TOKEN;
