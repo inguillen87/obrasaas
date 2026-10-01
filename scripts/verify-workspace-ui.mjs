@@ -10,7 +10,7 @@ assert.ok(!process.env.VERCEL && !process.env.VERCEL_ENV);
 const root=process.cwd(),evidence=path.join(root,'.vercel/workspace-evidence');
 mkdirSync(evidence,{recursive:true});
 const fixture=mkdtempSync(path.join(root,'.vercel/workspace-ui-')),app=path.join(fixture,'app');
-mkdirSync(app);for(const file of ['workspace-client.js','workspace.module.css','customer-whatsapp-panel.js','customer-whatsapp-panel.module.css'])copyFileSync(path.join(root,'src/app/(identity)/cuenta',file),path.join(app,file));
+mkdirSync(app);for(const file of ['workspace-client.js','workspace.module.css','customer-whatsapp-panel.js','customer-whatsapp-panel.module.css','task-create-panel.js'])copyFileSync(path.join(root,'src/app/(identity)/cuenta',file),path.join(app,file));
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'isolated-workspace-ui-fixture',private:true}));
 writeFileSync(path.join(fixture,'next.config.mjs'),`export default {turbopack:{root:${JSON.stringify(root)}}};\n`);
 writeFileSync(path.join(app,'layout.js'),`export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:16,background:'#0b1c2d',fontFamily:'Arial,sans-serif'}}>{children}</body></html>}`);

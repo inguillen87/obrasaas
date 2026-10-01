@@ -1,4 +1,5 @@
-import { WorkspaceError, WORKSPACE_ROLES, workspaceId, operationId, requireWorkspaceIdentity, scopeStamp, checkScope, portfolioAccess, managesSchedule, validateScheduleChange, scheduleReceiptId, scheduleRequestDigest } from './workspace-policy.mjs';
+import { randomUUID } from 'node:crypto';
+import { WorkspaceError, WORKSPACE_ROLES, workspaceId, operationId, requireWorkspaceIdentity, scopeStamp, checkScope, calendarDate, digest, portfolioAccess, managesSchedule, validateScheduleChange, scheduleReceiptId, scheduleRequestDigest } from './workspace-policy.mjs';
 
 const taskColumns = `t.id, t.title, t.status::text AS status, t.progress,
   to_char(t."startsAt", 'YYYY-MM-DD') AS "startsOn", to_char(t."endsAt", 'YYYY-MM-DD') AS "endsOn",
@@ -72,6 +73,36 @@ export function createWorkspaceStore({ connect }) {
           WHERE p.id=$1 AND p."organizationId"=$2 AND p.status='ACTIVE' ${writable?'FOR UPDATE OF p':''}`,[projectId,member.organizationId]);
         if(selected.rows.length!==1)throw new WorkspaceError('WORKSPACE_PROJECT_UNAVAILABLE',404);
         return callback(client,member,scope,selected.rows[0]);
+      });
+    },
+    async createTask(session, input) {
+      const fields=['operationId','projectId','scope','title','startsOn','endsOn'];
+      if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).sort().join('|')!==fields.sort().join('|')||!operationId(input.operationId)||!workspaceId(input.projectId)||!/^[a-f0-9]{64}$/.test(input.scope||''))throw new WorkspaceError('TASK_CREATION_INVALID');
+      const title=typeof input.title==='string'?input.title.trim():'';
+      if(title.length<2||title.length>160||/[\u0000-\u001f\u007f<>]/.test(title))throw new WorkspaceError('TASK_CREATION_INVALID');
+      const noDates=input.startsOn===''&&input.endsOn==='';
+      if(!noDates&&(!calendarDate(input.startsOn)||!calendarDate(input.endsOn)||input.endsOn<input.startsOn))throw new WorkspaceError('SCHEDULE_DATES_INVALID');
+      return transaction(session,true,async(client,member,scope)=>{
+        checkScope(scope,input.scope);if(!managesSchedule(member.role))throw new WorkspaceError('SCHEDULE_PERMISSION_REQUIRED',403);
+        await project(client,member,input.projectId,true);
+        const receiptId='workspace_new_task_'+digest([member.actorId,input.projectId,input.operationId.toLowerCase()]);
+        const requestDigest=digest([input.projectId,input.scope,title,input.startsOn,input.endsOn]);
+        await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[receiptId]);
+        const prior=(await client.query(`SELECT id,"entityId",metadata FROM public."AuditLog" WHERE id=$1 AND "actorId"=$2 AND "organizationId"=$3 AND action='task.created.from_workspace'`,[receiptId,member.actorId,member.organizationId])).rows[0];
+        if(prior){if(prior.metadata.requestDigest!==requestDigest)throw new WorkspaceError('TASK_CREATION_OPERATION_CONFLICT',409);return {scope,created:true,replayed:true,receiptId,task:await task(client,input.projectId,prior.entityId)};}
+        const taskId='task_'+randomUUID().replaceAll('-','');
+        await client.query(`INSERT INTO public."Task"(id,"projectId",title,status,progress,"startsAt","endsAt",metadata,"updatedAt") VALUES($1,$2,$3,'BACKLOG',0,$4::date,$5::date,$6::jsonb,clock_timestamp())`,[taskId,input.projectId,title,noDates?null:input.startsOn,noDates?null:input.endsOn,JSON.stringify({source:'authorized-workspace',receiptId})]);
+        await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'task.created.from_workspace','Task',$4,$5::jsonb)`,[receiptId,member.organizationId,member.actorId,taskId,JSON.stringify({version:1,projectId:input.projectId,requestDigest})]);
+        return {scope,created:true,replayed:false,receiptId,task:await task(client,input.projectId,taskId)};
+      });
+    },
+    async taskCreationStatus(session,{projectId,scope:expected,operationId:key}) {
+      if(!operationId(key))throw new WorkspaceError('TASK_CREATION_INVALID');
+      return transaction(session,false,async(client,member,scope)=>{
+        checkScope(scope,expected);await project(client,member,projectId);
+        const receiptId='workspace_new_task_'+digest([member.actorId,projectId,key.toLowerCase()]);
+        const prior=(await client.query(`SELECT "entityId",metadata FROM public."AuditLog" WHERE id=$1 AND "actorId"=$2 AND "organizationId"=$3 AND action='task.created.from_workspace'`,[receiptId,member.actorId,member.organizationId])).rows[0];
+        return prior&&prior.metadata.projectId===projectId?{scope,state:'RECORDED',created:true,receiptId,task:await task(client,projectId,prior.entityId)}:{scope,state:'NOT_OBSERVED',definitive:false};
       });
     },
     async list(session) {
