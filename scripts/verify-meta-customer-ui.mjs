@@ -8,7 +8,7 @@ import puppeteer from 'puppeteer';
 assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV);
 const root=realpathSync(process.cwd()),parent=path.join(root,'.vercel'),evidence=path.join(parent,'meta-customer-evidence');mkdirSync(evidence,{recursive:true});
 const fixture=mkdtempSync(path.join(parent,'meta-customer-ui-')),app=path.join(fixture,'app');mkdirSync(app);
-for(const file of ['meta-onboarding-panel.js','meta-onboarding-panel.module.css'])copyFileSync(path.join(root,'src/app/(identity)/cuenta',file),path.join(app,file));
+for(const file of ['meta-onboarding-panel.js','meta-onboarding-panel.module.css','meta-sdk-loader.mjs'])copyFileSync(path.join(root,'src/app/(identity)/cuenta',file),path.join(app,file));
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'synthetic-meta-customer-ui',private:true}));
 writeFileSync(path.join(fixture,'next.config.mjs'),`export default {devIndicators:false,turbopack:{root:${JSON.stringify(root)}}};`);
 writeFileSync(path.join(app,'layout.js'),`export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:12,background:'#f4f7f9',fontFamily:'Arial,sans-serif'}}>{children}</body></html>}`);
@@ -18,14 +18,20 @@ let log='',browser;const errors=[],checks=[];for(const stream of [server.stdout,
 async function click(page,label){const handle=await page.evaluateHandle(text=>[...document.querySelectorAll('button')].find(button=>button.textContent.trim()===text),label);assert.ok(handle.asElement(),'Missing button '+label);await handle.asElement().click();await handle.dispose();}
 const wait=(page,text)=>page.waitForFunction(value=>document.body.innerText.includes(value),{timeout:20000},text);
 const buttonDisabled=(page,label)=>page.evaluate(text=>[...document.querySelectorAll('button')].find(button=>button.textContent.trim()===text)?.disabled,label);
-const signup=state=>({id:'12345678-1234-4234-8234-123456789012',state,canCancel:state==='PREPARED',canReconcile:state==='REVIEW_REQUIRED',operational:false});
+const signup=state=>({id:'12345678-1234-4234-8234-123456789012',state,canCancel:state==='PREPARED',canReconcile:['REVIEW_REQUIRED','REGISTRATION_REJECTED','REGISTRATION_UNKNOWN'].includes(state),registrationRequired:['REGISTRATION_REQUIRED','REGISTRATION_REJECTED'].includes(state),canRegister:['REGISTRATION_REQUIRED','REGISTRATION_REJECTED'].includes(state),canRetryRegistration:state==='REGISTRATION_REJECTED',operational:false});
 const base=(projectId,mode)=>({scope:(projectId==='p-a'?'a':'b').repeat(64),projectId,companyName:projectId==='p-a'?'Constructora de ensayo A':'Constructora de ensayo B',projectName:projectId==='p-a'?'Obra de ensayo A':'Obra de ensayo B',prepared:mode!=='missing',numberMode:mode==='business'?'BUSINESS_APP':'DEDICATED',preparedRevision:1,
  readiness:{canLaunchMeta:!['pending','business','missing'].includes(mode),appId:'1665088767899217',configId:'123456789123456',version:'v25.0',operational:false},signup:['unknown','escrow'].includes(mode)?{...signup('EXCHANGE_UNKNOWN'),canRestart:mode==='escrow'}:null,connection:null,templateWorkbench:{options:[],drafts:[]},acceptance:{roundTrip:'NOT_VERIFIED',fieldJourney:'NOT_VERIFIED'}});
 async function scenario(mode,width=390){
  const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1050});page.on('pageerror',error=>errors.push({mode,width,message:error.message}));
- const posts=[],external=[];let current=base('p-a',mode),readCount=0,firstUnknown=true;await page.setRequestInterception(true);
+ const posts=[],external=[];let current=base('p-a',mode),readCount=0,firstUnknown=true,sdkRequests=0;await page.setRequestInterception(true);
+ if(mode==='sdk-timeout')await page.evaluateOnNewDocument(()=>{const schedule=window.setTimeout;window.setTimeout=(callback,delay,...args)=>schedule(callback,delay===15000?100:delay,...args);});
  page.on('request',async request=>{try{const url=new URL(request.url());
-  if(url.hostname==='connect.facebook.net')return request.respond({status:200,contentType:'application/javascript',body:`window.FB={init:function(configuration){window.__sdkConfig=configuration;},login:function(callback,options){window.__metaLogin={callback:callback,options:options};}};window.fbAsyncInit();`});
+  if(url.hostname==='connect.facebook.net'){
+   sdkRequests++;
+   if(mode==='sdk-retry'&&sdkRequests===1)return request.abort();
+   if(mode==='sdk-timeout'&&sdkRequests===1)return request.respond({status:200,contentType:'application/javascript',body:'/* Controlled SDK response that never initializes. */'});
+   return request.respond({status:200,contentType:'application/javascript',body:`window.FB={init:function(configuration){window.__sdkConfig=configuration;},login:function(callback,options){window.__metaLogin={callback:callback,options:options};}};window.fbAsyncInit();`});
+  }
   if(url.origin!==origin){external.push(url.hostname);return request.abort();}
   if(url.pathname!=='/api/identity/meta-onboarding')return request.continue();
   let body,status=200;
@@ -45,6 +51,8 @@ async function scenario(mode,width=390){
    else if(payload.action==='review_inbox'){assert.equal(payload.expectedRevision,'2026-10-01T01:00:00.000001');assert.equal(payload.decision,'REFER_TO_PARTICIPANTS');current={...current,inbox:{...current.inbox,items:current.inbox.items.map(item=>({...item,canReview:false,reviewState:'REVIEWED',reviewDecision:payload.decision}))}};body=current;}
    else if(payload.action==='activate_channel'){assert.equal(payload.confirmActivation,true);current={...current,activation:{state:'ACTIVE',operational:true,canActivate:false,canDeactivate:true},connection:{...current.connection,enabled:true,storedStatus:'CONNECTED'}};status=503;body={code:'META_CUSTOMER_OPERATION_UNCONFIRMED'};}
    else if(payload.action==='deactivate_channel'){assert.equal(payload.confirmActivation,true);current={...current,activation:{state:'DEACTIVATED',operational:false,canActivate:true,canDeactivate:false},connection:{...current.connection,enabled:false,storedStatus:'DISABLED'}};body=current;}
+    else if(payload.action==='register_number'){assert.equal(payload.confirmRegistration,true);assert.equal(mode,'registration-rejected');const registrations=posts.filter(post=>post.action==='register_number');assert.equal(payload.pin,registrations.length===1?'123456':'654321');if(registrations.length===2)assert.notEqual(registrations[0].operationId,registrations[1].operationId);current={...current,signup:signup(registrations.length===1?'REGISTRATION_REJECTED':'LINKED_PENDING_ACCEPTANCE')};body=current;}
+    else if(payload.action==='reconcile'){assert.equal(mode,'registration-unknown');current={...current,signup:signup('LINKED_PENDING_ACCEPTANCE')};body=current;}
    else throw new Error('Unexpected controlled action '+payload.action);
    await new Promise(resolve=>setTimeout(resolve,100));
   }
@@ -53,7 +61,41 @@ async function scenario(mode,width=390){
  if(mode==='templates'){current={...base('p-a','ready'),signup:signup('LINKED_PENDING_ACCEPTANCE'),connection:{recordPresent:true,displayNumber:'+54 synthetic',enabled:false,storedStatus:'PENDING'},templateWorkbench:{options:[],drafts:[{title:'Invitación a participar',blueprintKey:'participant_invitation',name:'obrasaas_synthetic_owned',contentSha256:'c'.repeat(64),bodyText:'Tenés una invitación de {{1}}. Abrí tu cuenta de ObraSaaS.',language:'es_AR',category:'UTILITY',state:'DRAFT',canSubmit:true,canRecover:false}]}};}
  if(mode==='inbox')current={...base('p-a','pending'),connection:{recordPresent:true,displayNumber:'+54 synthetic',enabled:false,storedStatus:'PENDING'},inbox:{canSend:false,businessApplied:false,items:[{id:'customer_webhook_'+'d'.repeat(64),revision:'2026-10-01T00:00:00.000001',status:'PENDING',processing:'NOT_LEASED',canProcess:true,canReview:false,reviewState:'NOT_PROCESSED',identityStatus:'NOT_CHECKED',businessApplied:false,replySent:false,kind:'text',from:'5491112345678',body:'Mensaje privado sintético: aprobar VP-AAAAAAAAAAAA',payloadVerified:true}]}};
  if(mode==='activation')current={...base('p-a','ready'),signup:signup('LINKED_PENDING_ACCEPTANCE'),connection:{recordPresent:true,displayNumber:'+54 synthetic',enabled:false,storedStatus:'PENDING'},activation:{state:'NOT_ACCEPTED',operational:false,canActivate:true,canDeactivate:false}};
+  if(['sdk-retry','sdk-timeout','late-popup','late-popup-no-code','finish-first'].includes(mode))current={...base('p-a','ready'),signup:signup('PREPARED'),stateToken:'synthetic-server-state-token'};
+  if(mode.startsWith('registration-'))current={...base('p-a','ready'),signup:signup(mode==='registration-rejected'?'REGISTRATION_REQUIRED':'REGISTRATION_UNKNOWN'),connection:{recordPresent:true,displayNumber:'+54 synthetic',enabled:false,storedStatus:'PENDING'}};
  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await click(page,'Ver conexión');
+  if(['sdk-retry','sdk-timeout'].includes(mode)){
+   await wait(page,'No se pudo abrir Meta');assert.equal(sdkRequests,1);assert.equal(posts.length,0);assert.equal(await buttonDisabled(page,'Autorizar en Meta'),true);
+   assert.equal(await page.evaluate(()=>document.getElementById('customer-meta-sdk')),null);await click(page,'Reintentar acceso a Meta');
+   await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(button=>button.textContent.trim()==='Autorizar en Meta'&&!button.disabled));assert.equal(sdkRequests,2);assert.equal(posts.length,0);
+   assert.equal(await page.evaluate(()=>window.__metaLogin),undefined);await click(page,'Autorizar en Meta');await page.waitForFunction(()=>Boolean(window.__metaLogin));await click(page,'Cerrar autorización');
+   checks.push(mode+'-bounded-failure-preserves-preparation-explicit-retry-without-automatic-login');assert.deepEqual(external,[]);await context.close();return;
+  }
+  if(['late-popup','late-popup-no-code','finish-first'].includes(mode)){
+   await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(button=>button.textContent.trim()==='Autorizar en Meta'&&!button.disabled));await click(page,'Autorizar en Meta');
+   if(mode.startsWith('late-popup')){
+    await page.evaluate(()=>{window.__oldCallback=window.__metaLogin.callback;const frame=document.createElement('iframe');frame.hidden=true;document.body.appendChild(frame);window.__oldSource=frame.contentWindow;
+     window.dispatchEvent(new MessageEvent('message',{origin:'https://www.facebook.com',source:window.__oldSource,data:JSON.stringify({type:'WA_EMBEDDED_SIGNUP',event:'FINISH',data:{waba_id:'8888888801',phone_number_id:'9999999901'}})}));});
+    await click(page,'Cerrar autorización');await wait(page,'Cerrá también la ventana anterior de Meta');await click(page,'Autorizar en Meta');
+    await page.evaluate(noCode=>{window.__oldCallback(noCode?{}:{authResponse:{code:'old-synthetic-code-only'}});for(const event of ['CANCEL','ERROR','FINISH'])window.dispatchEvent(new MessageEvent('message',{origin:'https://www.facebook.com',source:window.__oldSource,data:JSON.stringify({type:'WA_EMBEDDED_SIGNUP',event,data:{waba_id:'7777777701',phone_number_id:'6666666601'}})}));},mode==='late-popup-no-code');
+    assert.equal(posts.length,0);assert.equal(await page.$eval('#switch-company',button=>button.disabled),true);assert.ok((await page.evaluate(()=>document.body.innerText)).includes('Cerrar autorización'));
+   }
+   await page.evaluate(()=>{window.dispatchEvent(new MessageEvent('message',{origin:'https://www.facebook.com',data:JSON.stringify({type:'WA_EMBEDDED_SIGNUP',event:'FINISH',data:{waba_id:'8888888801',phone_number_id:'9999999901'}})}));
+    window.dispatchEvent(new MessageEvent('message',{origin:'https://www.facebook.com',data:JSON.stringify({type:'WA_EMBEDDED_SIGNUP',event:'FINISH',data:{waba_id:'7777777701',phone_number_id:'6666666601'}})}));});
+   assert.equal(posts.length,0);await page.evaluate(()=>{window.__metaLogin.callback({authResponse:{code:'synthetic-code-only'}});window.dispatchEvent(new MessageEvent('message',{origin:'https://www.facebook.com',data:JSON.stringify({type:'WA_EMBEDDED_SIGNUP',event:'CANCEL'})}));});
+   await wait(page,'Cuenta vinculada · prueba integral pendiente');assert.equal(posts.filter(post=>post.action==='complete').length,1);
+   checks.push(mode+'-attempt-identity-source-isolation-first-finish-single-complete');assert.deepEqual(external,[]);await context.close();return;
+  }
+  if(mode.startsWith('registration-')){
+   assert.equal(posts.length,0);
+   if(mode==='registration-rejected'){
+    await wait(page,'Número pendiente de registro en Meta');assert.equal(await buttonDisabled(page,'Registrar este número'),true);await page.type('input[type=password]','123456');await page.click('input[type=checkbox]');await click(page,'Registrar este número');
+    await wait(page,'Meta rechazó el registro');assert.equal(await buttonDisabled(page,'Volver a intentar el registro'),true);await page.type('input[type=password]','654321');assert.equal(await buttonDisabled(page,'Volver a intentar el registro'),true);
+    await page.click('input[type=checkbox]');await page.waitForFunction(()=>document.querySelector('#switch-company').disabled);await click(page,'Cancelar borrador');assert.equal(await page.$eval('input[type=password]',input=>input.value),'');assert.equal(posts.length,1);
+    await page.type('input[type=password]','654321');await page.click('input[type=checkbox]');await click(page,'Volver a intentar el registro');await wait(page,'Cuenta vinculada · prueba integral pendiente');assert.equal(posts.filter(post=>post.action==='register_number').length,2);
+   }else{await wait(page,'No volvemos a registrar el número');assert.equal(await page.$('input[type=password]'),null);await click(page,'Recuperar conexión');await wait(page,'Cuenta vinculada · prueba integral pendiente');assert.equal(posts.filter(post=>post.action==='register_number').length,0);}
+   checks.push(mode+'-explicit-registration-consent-or-readback-only');assert.deepEqual(external,[]);await context.close();return;
+  }
  if(mode==='crossed'){
   await wait(page,'La respuesta pertenece a otra obra');assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Foreign company hidden'));assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Constructora de ensayo B'));checks.push('foreign-response-cannot-expose-or-replace-active-company');await context.close();return;
  }
@@ -95,7 +137,7 @@ async function scenario(mode,width=390){
 try{
  let ready=false;for(let index=0;index<120;index++){if(server.exitCode!==null)throw new Error('UI fixture exited');try{const response=await fetch(origin);if(response.ok){ready=true;break;}}catch{}await new Promise(resolve=>setTimeout(resolve,500));}assert.ok(ready);
  browser=await puppeteer.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{}),args:['--no-sandbox','--disable-setuid-sandbox']});
- for(const width of [320,390,768,1280])await scenario('pending',width);for(const mode of ['missing','business','unknown','escrow','ready','uncertain','crossed','templates'])await scenario(mode);for(const width of [320,1280]){await scenario('inbox',width);await scenario('activation',width);}
+ for(const width of [320,390,768,1280])await scenario('pending',width);for(const mode of ['missing','business','unknown','escrow','ready','uncertain','crossed','templates','sdk-retry','sdk-timeout','late-popup','late-popup-no-code','finish-first','registration-unknown'])await scenario(mode);for(const width of [320,1280]){await scenario('inbox',width);await scenario('activation',width);await scenario('registration-rejected',width);}
  assert.deepEqual(errors,[]);const result={status:'PASS',environment:'real-components-controlled-synthetic-meta-services',checks,widths:[320,390,768,1280],errors,realMetaCalls:0,numberRegistered:false,productionDataTouched:false};writeFileSync(path.join(evidence,'browser.json'),JSON.stringify(result,null,2));console.log(JSON.stringify(result));
 }catch(error){writeFileSync(path.join(evidence,'browser-failure.json'),JSON.stringify({message:error.message,errors,log},null,2));throw error;}
 finally{

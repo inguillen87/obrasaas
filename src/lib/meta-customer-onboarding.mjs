@@ -8,10 +8,30 @@ import {createMetaCustomerTemplates,publicCustomerTemplateWorkbench} from './met
 import {createMetaCustomerInboxReview,readMetaCustomerInbox} from './meta-customer-inbox-review.mjs';
 import {createMetaCustomerActivation,publicCustomerActivation} from './meta-customer-activation.mjs';
 
-const activeStates=new Set(['PREPARED','EXCHANGE_STARTED','EXCHANGE_UNKNOWN','CREDENTIAL_STORED','VERIFYING','REVIEW_REQUIRED','LINKED_PENDING_ACCEPTANCE','REGISTRATION_REQUIRED','REGISTRATION_STARTED','REGISTRATION_UNKNOWN']);
+const activeStates=new Set(['PREPARED','EXCHANGE_STARTED','EXCHANGE_UNKNOWN','CREDENTIAL_STORED','VERIFYING','REVIEW_REQUIRED','LINKED_PENDING_ACCEPTANCE','REGISTRATION_REQUIRED','REGISTRATION_REJECTED','REGISTRATION_VERIFYING','REGISTRATION_STARTED','REGISTRATION_UNKNOWN']);
 const secretContext=(member,project,purpose,resourceId)=>({organizationId:member.organizationId,projectId:project.id,purpose,resourceId});
 const publicSignup=(state,time)=>state?{id:state.id,state:state.state,createdAt:state.createdAt,expiresAt:state.expiresAt,updatedAt:state.updatedAt,lastCode:state.lastCode||null,
- wabaId:state.wabaId||null,phoneNumberId:state.phoneNumberId||null,registrationRequired:state.state==='REGISTRATION_REQUIRED',canCancel:state.state==='PREPARED',canReconcile:Boolean(state.encryptedToken)&&state.state!=='CANCELLED'&&(state.state!=='VERIFYING'||new Date(state.verificationLeaseExpiresAt).getTime()<=time),operational:false}:null;
+ wabaId:state.wabaId||null,phoneNumberId:state.phoneNumberId||null,registrationRequired:['REGISTRATION_REQUIRED','REGISTRATION_REJECTED'].includes(state.state),canRegister:['REGISTRATION_REQUIRED','REGISTRATION_REJECTED'].includes(state.state),canRetryRegistration:state.state==='REGISTRATION_REJECTED',canCancel:state.state==='PREPARED',canReconcile:Boolean(state.encryptedToken)&&state.state!=='CANCELLED'&&(state.state!=='VERIFYING'||new Date(state.verificationLeaseExpiresAt).getTime()<=time)&&(!['REGISTRATION_VERIFYING','REGISTRATION_STARTED'].includes(state.state)||new Date(state.registrationLeaseExpiresAt).getTime()<=time),operational:false}:null;
+function registrationAttempts(state){
+ let attempts=state.registrationAttempts||[];
+ if(!Array.isArray(attempts)||attempts.length>20)throw new WorkspaceError('META_CUSTOMER_BINDING_INTEGRITY',409);
+ attempts=attempts.map(attempt=>({...attempt,pinDigestScheme:attempt.pinDigestScheme||'sha256-legacy-v1'}));
+ if(state.registrationOperationId&&!attempts.some(attempt=>attempt.operationId===state.registrationOperationId))return [...attempts,{operationId:state.registrationOperationId,pinDigest:state.pinDigest,pinDigestScheme:state.pinDigestScheme||'sha256-legacy-v1',state:state.state==='REGISTRATION_REJECTED'?'REJECTED':'UNKNOWN'}];
+ return attempts;
+}
+function registrationPinDigest(pin,scheme,state,member,project,operation,environment){
+ if(scheme==='sha256-legacy-v1')return customerSecretDigest(pin);
+ if(scheme!=='hmac-sha256-v1')throw new WorkspaceError('META_CUSTOMER_BINDING_INTEGRITY',409);
+ return createHmac('sha256',environment.META_APP_SECRET).update(JSON.stringify(['customer-registration-pin-v1',member.organizationId,project.id,state.id,operation,pin])).digest('hex');
+}
+function registrationOutcome(state,operationId,outcome){return registrationAttempts(state).map(attempt=>attempt.operationId===operationId?{...attempt,...outcome}:attempt);}
+function unregisteredState(state){
+ if(!state.registrationOperationId)return 'REGISTRATION_REQUIRED';
+ const latest=registrationAttempts(state).find(attempt=>attempt.operationId===state.registrationOperationId);
+ if(latest?.state==='REJECTED')return 'REGISTRATION_REJECTED';
+ if(latest?.state==='NOT_SENT')return state.registrationResumeState==='REGISTRATION_REJECTED'?'REGISTRATION_REJECTED':'REGISTRATION_REQUIRED';
+ return 'REGISTRATION_UNKNOWN';
+}
 function stateToken(state,member,project,environment){return createHmac('sha256',environment.META_APP_SECRET).update(JSON.stringify([state.id,member.actorId,member.organizationId,project.id,state.preparedRevision,state.expiresAt])).digest('base64url');}
 function checkToken(value,expected){if(typeof value!=='string'||value.length!==expected.length||!timingSafeEqual(Buffer.from(value),Buffer.from(expected)))throw new WorkspaceError('META_CUSTOMER_STATE_REJECTED',403);}
 function input(body,fields){if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).sort().join('|')!==fields.sort().join('|')||!operationId(body.operationId))throw new WorkspaceError('META_CUSTOMER_INPUT_INVALID');}
@@ -53,9 +73,12 @@ export function createMetaCustomerOnboarding({workspace,provider,processor=null,
  }
  async function reconcile(session,body){
   const claim=await within(session,body,true,async(client,member,scope,project)=>{
-   const state=owned(project,member,body.signupId);requirePreparation(project);
+    let state=owned(project,member,body.signupId);requirePreparation(project);
    if(state.state==='LINKED_PENDING_ACCEPTANCE')return {already:true,result:await response(client,member,scope,project)};
-   if(!state.encryptedToken||!(['CREDENTIAL_STORED','REVIEW_REQUIRED','REGISTRATION_REQUIRED','REGISTRATION_UNKNOWN'].includes(state.state)||state.state==='VERIFYING'&&new Date(state.verificationLeaseExpiresAt).getTime()<=now()||state.state==='REGISTRATION_STARTED'&&new Date(state.registrationLeaseExpiresAt).getTime()<=now()))throw new WorkspaceError('META_CUSTOMER_RECONCILIATION_UNAVAILABLE',409);
+    if(!state.encryptedToken||!(['CREDENTIAL_STORED','REVIEW_REQUIRED','REGISTRATION_REQUIRED','REGISTRATION_REJECTED','REGISTRATION_UNKNOWN'].includes(state.state)||state.state==='VERIFYING'&&new Date(state.verificationLeaseExpiresAt).getTime()<=now()||['REGISTRATION_VERIFYING','REGISTRATION_STARTED'].includes(state.state)&&new Date(state.registrationLeaseExpiresAt).getTime()<=now()))throw new WorkspaceError('META_CUSTOMER_RECONCILIATION_UNAVAILABLE',409);
+    // A reclaimed preflight never authorized a register POST. Its old worker
+    // must recheck this fence before sending, so a fresh explicit retry is safe.
+    if(state.state==='REGISTRATION_VERIFYING')state={...state,registrationAttempts:registrationOutcome(state,state.registrationOperationId,{state:'NOT_SENT',finishedAt:new Date(now()).toISOString(),lastCode:'META_CUSTOMER_REGISTRATION_PREFLIGHT_EXPIRED'})};
    await assertAssetVacant(client,project,state.wabaId,state.phoneNumberId);
    const token=decryptCustomerSecret(state.encryptedToken,secretContext(member,project,'signup',state.id),environment);
    const verificationLeaseId=randomUUID();
@@ -81,7 +104,7 @@ export function createMetaCustomerOnboarding({workspace,provider,processor=null,
     const state=owned(project,member,body.signupId);if(state.state!=='VERIFYING'||state.verificationLeaseId!==claim.verificationLeaseId)throw new WorkspaceError('META_CUSTOMER_STATE_CHANGED',409);
     if(requirePreparation(project).revision!==state.preparedRevision)throw new WorkspaceError('META_CUSTOMER_PREPARATION_CHANGED',409);
     await client.query(`UPDATE public."WhatsAppConnection" SET metadata=metadata||$3::jsonb,"lastVerifiedAt"=clock_timestamp(),"updatedAt"=clock_timestamp() WHERE "projectId"=$1 AND "phoneNumberId"=$2`,[project.id,state.phoneNumberId,JSON.stringify({customerSubscribed:true,customerVerification:verified})]);
-    await save(client,member,project,{...state,state:verified.registered?'LINKED_PENDING_ACCEPTANCE':state.registrationOperationId?'REGISTRATION_UNKNOWN':'REGISTRATION_REQUIRED',lastCode:null},body.operationId);
+     await save(client,member,project,{...state,state:verified.registered?'LINKED_PENDING_ACCEPTANCE':unregisteredState(state),...(verified.registered&&state.registrationOperationId?{registrationAttempts:registrationOutcome(state,state.registrationOperationId,{state:'REGISTERED',finishedAt:new Date(now()).toISOString()})}:{}),lastCode:null},body.operationId);
     return response(client,member,scope,project);
    });
   }catch(error){
@@ -106,22 +129,46 @@ export function createMetaCustomerOnboarding({workspace,provider,processor=null,
    if(!['begin','complete','cancel','reconcile','refresh_templates','register_number','restart_authorization'].includes(action))throw new WorkspaceError('META_CUSTOMER_INPUT_INVALID');
    if(action==='reconcile')return reconcile(session,body);
    if(action==='register_number'){
-    if(!/^\d{6}$/.test(body.pin||'')||body.confirmRegistration!==true)throw new WorkspaceError('META_CUSTOMER_REGISTRATION_INPUT_INVALID');
+     if(typeof body.pin!=='string'||!/^\d{6}$/.test(body.pin)||body.confirmRegistration!==true)throw new WorkspaceError('META_CUSTOMER_REGISTRATION_INPUT_INVALID');
     const reserved=await within(session,body,true,async(client,member,scope,project)=>{
      const state=owned(project,member,body.signupId);
-     if(state.registrationOperationId){if(state.registrationOperationId===body.operationId&&state.pinDigest===customerSecretDigest(body.pin))return {replayed:true,result:await response(client,member,scope,project)};throw new WorkspaceError('META_CUSTOMER_REGISTRATION_ALREADY_ATTEMPTED',409);}
-     if(state.state!=='REGISTRATION_REQUIRED'||requirePreparation(project).revision!==state.preparedRevision)throw new WorkspaceError('META_CUSTOMER_REGISTRATION_UNAVAILABLE',409);
-     if(now()-new Date(state.createdAt).getTime()>=14*24*60*60*1000)throw new WorkspaceError('META_CUSTOMER_REGISTRATION_WINDOW_EXPIRED',409);
+      const attempts=registrationAttempts(state),previous=attempts.find(attempt=>attempt.operationId===body.operationId),pinDigestScheme='hmac-sha256-v1';
+      if(previous){if(previous.pinDigest!==registrationPinDigest(body.pin,previous.pinDigestScheme,state,member,project,body.operationId,environment))throw new WorkspaceError('META_CUSTOMER_OPERATION_CONFLICT',409);return {replayed:true,result:await response(client,member,scope,project)};}
+      const pinDigest=registrationPinDigest(body.pin,pinDigestScheme,state,member,project,body.operationId,environment);
+      if(!['REGISTRATION_REQUIRED','REGISTRATION_REJECTED'].includes(state.state)||requirePreparation(project).revision!==state.preparedRevision)throw new WorkspaceError('META_CUSTOMER_REGISTRATION_UNAVAILABLE',409);
+      if(attempts.length>=20)throw new WorkspaceError('META_CUSTOMER_REGISTRATION_REVIEW_REQUIRED',409);
+      if(now()-Date.parse(state.authCompletedAt||state.createdAt)>=14*24*60*60*1000)throw new WorkspaceError('META_CUSTOMER_REGISTRATION_WINDOW_EXPIRED',409);
      await assertAssetVacant(client,project,state.wabaId,state.phoneNumberId);
      const token=decryptCustomerSecret(state.encryptedToken,secretContext(member,project,'signup',state.id),environment);
-     const written=await client.query(`UPDATE public."WhatsAppConnection" SET "encryptedPin"=$3,"updatedAt"=clock_timestamp() WHERE "projectId"=$1 AND "phoneNumberId"=$2 AND metadata->>'customerSignupId'=$4`,[project.id,state.phoneNumberId,encryptCustomerSecret(body.pin,secretContext(member,project,'registration-pin',state.phoneNumberId),environment),state.id]);
-     if(written.rowCount!==1)throw new WorkspaceError('META_CUSTOMER_BINDING_INTEGRITY',409);
-     await save(client,member,project,{...state,state:'REGISTRATION_STARTED',registrationOperationId:body.operationId,pinDigest:customerSecretDigest(body.pin),registrationLeaseExpiresAt:new Date(now()+60000).toISOString()},body.operationId);
-     return {token,state};
+      const channel=(await client.query(`SELECT id,"encryptedAccessToken",metadata FROM public."WhatsAppConnection" WHERE "projectId"=$1 AND "phoneNumberId"=$2 AND "whatsappBusinessId"=$3 FOR UPDATE`,[project.id,state.phoneNumberId,state.wabaId])).rows[0];
+      if(!channel||channel.metadata?.customerSignupId!==state.id||channel.metadata.credentialOrganizationId!==member.organizationId||channel.metadata.credentialFormat!=='tenant-aad-v2')throw new WorkspaceError('META_CUSTOMER_BINDING_INTEGRITY',409);
+      const leaseId=randomUUID();
+      await save(client,member,project,{...state,state:'REGISTRATION_VERIFYING',registrationOperationId:body.operationId,pinDigest,pinDigestScheme,registrationLeaseId:leaseId,registrationResumeState:state.state,registrationLeaseExpiresAt:new Date(now()+60000).toISOString(),registrationAttempts:[...attempts,{operationId:body.operationId,pinDigest,pinDigestScheme,state:'VERIFYING',startedAt:new Date(now()).toISOString()}]},body.operationId);
+      return {token,state,channel,leaseId};
     });
     if(reserved.replayed)return reserved.result;
-    let registrationCode=null;try{await provider.register({token:reserved.token,phoneNumberId:reserved.state.phoneNumberId,pin:body.pin});}catch{registrationCode='META_CUSTOMER_REGISTRATION_UNCONFIRMED';}
-    await within(session,body,true,async(client,member,_scope,project)=>{const state=owned(project,member,body.signupId);if(state.registrationOperationId!==body.operationId||state.state!=='REGISTRATION_STARTED')throw new WorkspaceError('META_CUSTOMER_STATE_CHANGED',409);await save(client,member,project,{...state,state:'REGISTRATION_UNKNOWN',lastCode:registrationCode},body.operationId);});
+     const fenced=async(client,member,project,expected)=>{
+      const state=owned(project,member,body.signupId);
+      if(state.registrationOperationId!==body.operationId||state.registrationLeaseId!==reserved.leaseId||state.state!==expected||!(Date.parse(state.registrationLeaseExpiresAt)>now())||state.encryptedToken!==reserved.state.encryptedToken)throw new WorkspaceError('META_CUSTOMER_REGISTRATION_LEASE_CHANGED',409);
+      if(requirePreparation(project).revision!==state.preparedRevision)throw new WorkspaceError('META_CUSTOMER_PREPARATION_CHANGED',409);
+      const row=(await client.query(`SELECT id,"encryptedAccessToken",metadata FROM public."WhatsAppConnection" WHERE "projectId"=$1 AND "phoneNumberId"=$2 AND "whatsappBusinessId"=$3 FOR UPDATE`,[project.id,state.phoneNumberId,state.wabaId])).rows[0];
+      if(row?.id!==reserved.channel.id||row.encryptedAccessToken!==reserved.channel.encryptedAccessToken||row.metadata?.customerSignupId!==state.id)throw new WorkspaceError('META_CUSTOMER_BINDING_INTEGRITY',409);
+      return state;
+     };
+     let verified;
+     try{verified=await provider.inspect({token:reserved.token,wabaId:reserved.state.wabaId,phoneNumberId:reserved.state.phoneNumberId});}
+     catch(error){await within(session,body,true,async(client,member,_scope,project)=>{const state=await fenced(client,member,project,'REGISTRATION_VERIFYING');await save(client,member,project,{...state,state:state.registrationResumeState,lastCode:error instanceof WorkspaceError?error.code:'META_CUSTOMER_PROVIDER_UNCONFIRMED',registrationAttempts:registrationOutcome(state,body.operationId,{state:'NOT_SENT',finishedAt:new Date(now()).toISOString()})},body.operationId);}).catch(()=>{});throw error;}
+     await within(session,body,true,async(client,member,_scope,project)=>{
+      const state=await fenced(client,member,project,'REGISTRATION_VERIFYING');
+      if(!verified.registered){const written=await client.query(`UPDATE public."WhatsAppConnection" SET "encryptedPin"=$3,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[reserved.channel.id,project.id,encryptCustomerSecret(body.pin,secretContext(member,project,'registration-pin',state.phoneNumberId),environment)]);if(written.rowCount!==1)throw new WorkspaceError('META_CUSTOMER_BINDING_INTEGRITY',409);}
+      await save(client,member,project,{...state,state:verified.registered?'REGISTRATION_UNKNOWN':'REGISTRATION_STARTED',registrationLeaseExpiresAt:new Date(now()+60000).toISOString(),registrationAttempts:registrationOutcome(state,body.operationId,{state:verified.registered?'REGISTERED':'STARTED'})},body.operationId);
+     });
+     if(verified.registered)return reconcile(session,body);
+     let rejected=false,registrationCode=null;
+     try{await provider.register({token:reserved.token,phoneNumberId:reserved.state.phoneNumberId,pin:body.pin});}
+     catch(error){rejected=error instanceof WorkspaceError&&error.code==='META_CUSTOMER_PROVIDER_REJECTED'&&error.status===409;registrationCode=rejected?'META_CUSTOMER_REGISTRATION_REJECTED':'META_CUSTOMER_REGISTRATION_UNCONFIRMED';}
+     const result=await within(session,body,true,async(client,member,scope,project)=>{const state=await fenced(client,member,project,'REGISTRATION_STARTED');await save(client,member,project,{...state,state:rejected?'REGISTRATION_REJECTED':'REGISTRATION_UNKNOWN',lastCode:registrationCode,registrationAttempts:registrationOutcome(state,body.operationId,{state:rejected?'REJECTED':'UNKNOWN',finishedAt:new Date(now()).toISOString(),lastCode:registrationCode})},body.operationId);return response(client,member,scope,project);});
+     if(rejected)return result;
     // Only read-only inspection may recover an uncertain registration; never a second register POST.
     return reconcile(session,body);
    }
@@ -179,7 +226,7 @@ export function createMetaCustomerOnboarding({workspace,provider,processor=null,
     throw new WorkspaceError('META_CUSTOMER_EXCHANGE_UNCONFIRMED',503);
    }
    try{await within(session,body,true,async(client,member,_scope,project)=>{const state=owned(project,member,body.signupId);if(state.state!=='EXCHANGE_STARTED')throw new WorkspaceError('META_CUSTOMER_STATE_CHANGED',409);
-    await save(client,member,project,{...state,state:'CREDENTIAL_STORED',encryptedToken:encryptCustomerSecret(token,secretContext(member,project,'signup',state.id),environment)},body.operationId);});}
+     await save(client,member,project,{...state,state:'CREDENTIAL_STORED',authCompletedAt:new Date(now()).toISOString(),encryptedToken:encryptCustomerSecret(token,secretContext(member,project,'signup',state.id),environment)},body.operationId);});}
    catch{try{await within(session,body,true,async(client,member,_scope,project)=>{const state=owned(project,member,body.signupId);if(state.state==='EXCHANGE_STARTED')await save(client,member,project,{...state,state:'EXCHANGE_UNKNOWN',lastCode:'META_CUSTOMER_ESCROW_UNCONFIRMED'},body.operationId);});}catch{}throw new WorkspaceError('META_CUSTOMER_ESCROW_UNCONFIRMED',503);}
    return reconcile(session,{...body,action:'reconcile'});
   },
