@@ -16,8 +16,12 @@ test('reply requires exact owned conversation timestamp and preserves absence of
  assert.throws(()=>customerReplyMessage({type:'template',body:'invented'}));
 });
 test('activation is only operational after explicit acceptance and provider registration, subscription and all grants',()=>{
- const channel={enabled:true,connectionStatus:'CONNECTED',metadata:{customerActivation:{version:1,state:'ACTIVE',actorId:'u1'},customerSubscribed:true,customerVerification:{registered:true,scopes:['business_management','whatsapp_business_management','whatsapp_business_messaging'],expiresAt:null}}};
+ const channel={enabled:true,connectionStatus:'CONNECTED',metadata:{customerActivation:{version:1,state:'ACTIVE',actorId:'u1'},customerSubscribed:true,customerVerification:{registered:true,scopes:['whatsapp_business_management','whatsapp_business_messaging'],expiresAt:null}}};
  assert.equal(customerChannelActive(channel,time),true);
+ const verification=channel.metadata.customerVerification,withVerification=value=>({...channel,metadata:{...channel.metadata,customerVerification:value}});
+ assert.equal(customerChannelActive(withVerification({...verification,scopes:[...verification.scopes,'business_management']}),time),true);
+ for(const missing of verification.scopes)assert.equal(customerChannelActive(withVerification({...verification,scopes:[...verification.scopes.filter(scope=>scope!==missing),'business_management']}),time),false,missing);
+ for(const invalid of [{...verification,scopes:verification.scopes.join(',')},{...verification,expiresAt:new Date(time+60000).toISOString()},{...verification,expiresAt:'invalid'}])assert.equal(customerChannelActive(withVerification(invalid),time),false);
  for(const variant of [{...channel,enabled:false},{...channel,metadata:{...channel.metadata,customerActivation:null}},{...channel,metadata:{...channel.metadata,customerSubscribed:false}},{...channel,metadata:{...channel.metadata,customerVerification:{registered:false,scopes:channel.metadata.customerVerification.scopes}}}])assert.equal(customerChannelActive(variant,time),false);
 });
 test('interactive list preserves durable choice identifiers and rejects foreign structure, oversized menus and duplicate choices',()=>{

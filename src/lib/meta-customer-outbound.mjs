@@ -2,11 +2,12 @@ import {randomUUID} from 'node:crypto';
 import {WorkspaceError,digest} from './workspace-policy.mjs';
 import {encryptCustomerSecret,decryptCustomerSecret} from './meta-customer-credentials.mjs';
 import {customerReplyMessage} from './meta-customer-provider.mjs';
+import {hasMetaCustomerRequiredScopes} from './meta-customer-permissions.mjs';
 
 export const customerOutboundId=eventId=>'customer_outbound_'+digest(['meta-customer-reply-v1',eventId]);
 export function customerChannelActive(connection,now=Date.now()){
  const verified=connection?.metadata?.customerVerification,activation=connection?.metadata?.customerActivation;
- return connection?.enabled===true&&connection.connectionStatus==='CONNECTED'&&connection.metadata?.customerSubscribed===true&&activation?.version===1&&activation.state==='ACTIVE'&&typeof activation.actorId==='string'&&verified?.registered===true&&['business_management','whatsapp_business_management','whatsapp_business_messaging'].every(s=>verified.scopes?.includes(s))&&(!verified.expiresAt||new Date(verified.expiresAt).getTime()>now+60000);
+ return connection?.enabled===true&&connection.connectionStatus==='CONNECTED'&&connection.metadata?.customerSubscribed===true&&activation?.version===1&&activation.state==='ACTIVE'&&typeof activation.actorId==='string'&&verified?.registered===true&&hasMetaCustomerRequiredScopes(verified.scopes)&&(!verified.expiresAt||new Date(verified.expiresAt).getTime()>now+60000);
 }
 export function assertCustomerReplyWindow(payload,now=Date.now()){
  const value=payload?.value,timestamp=Number(value?.timestamp);
