@@ -22,7 +22,7 @@ export function CompanyBootstrapPanel({organizationId,organizationName,getSessio
  },[getSessionToken,getProfileToken,organizationId]);
  function accept(value){
   if(value.created!==true||value.state!=='CREATED'||!value.receiptId||!value.projectId||!value.organizationId)throw new Error('Falta el recibo confirmado del alta.');
-  setReceipt(value);setAttempt(null);setStage('created');setNotice('Empresa y primera obra creadas. WhatsApp todavía no quedó conectado.');
+  version.current++;setReceipt(value);setAttempt(null);setStage('created');setNotice('Empresa y primera obra creadas. WhatsApp todavía no quedó conectado.');
  }
  async function inspect(){
   if(busy||attempt)return;setBusy(true);setNotice('');const current=++version.current;
@@ -42,7 +42,7 @@ export function CompanyBootstrapPanel({organizationId,organizationName,getSessio
  async function submit(event){
   event.preventDefault();if(busy||attempt||!confirmed)return;
   const body={operationId:crypto.randomUUID(),expectedClerkOrganizationId:organizationId,companyName,project:{name:projectName,address},initialTasks:tasks.map(({title,startsOn,endsOn})=>({title,startsOn,endsOn})),confirmNewCompany:true};
-  setAttempt(body);setBusy(true);setNotice('');
+  version.current++;setAttempt(body);setBusy(true);setNotice('');
   try{const value=await api('POST',body);if(mounted.current)accept(value);}
   catch(error){if(mounted.current){if(error.status&&error.status<500){setAttempt(null);setNotice(error.message);}else setNotice('No recibimos la confirmación. Conservamos este intento: comprobá el alta antes de volver a crear una empresa.');}}
   finally{if(mounted.current)setBusy(false);}

@@ -85,3 +85,11 @@ Se muestran separados preparación, autorización, registro del número, plantil
 Contratos de origen: `src/lib/whatsapp/tenant-workspace-policy.js`, `project-workspace-profile.js`, `embedded-signup.js` y rutas de integraciones de la revisión enterprise indicada. Autoridad productiva: sesión verificada más tablas canónicas de pertenencias, nunca estado global demo.
 
 Documentación primaria: programa de partners de WhatsApp (`https://business.whatsapp.com/partners/become-a-partner`), colección oficial Meta de Embedded Signup en Postman (`https://www.postman.com/meta/whatsapp-business-platform/documentation/du6gzjv/embedded-signup`) y documentación de Embedded Signup/plantillas en Meta. Revalidar las versiones y capacidades aplicables antes de habilitar cada camino. Los permisos concretos de la app ObraSaaS requieren evidencia de su panel, no una afirmación genérica.
+
+## Corte de apertura de empresa desde cero
+
+Se integra el alta canónica de una constructora nueva antes del teléfono: sesión org:admin, correo acreditado por una prueba firmada de Clerk, confirmación de empresa/primera obra y tareas explícitas. Todo con recibo atómico y recuperación; no se reasigna una organización existente ni se copian datos demo. Se agrega Nueva tarea al cronograma para que la obra vacía pueda comenzar a planificarse.
+
+La plantilla de perfil `obrasaas-bootstrap-v1` está configurada por la CLI oficial en Production, con lifetime60s; no sustituye ni rota claves administrativas y no elimina verificaciones. La aceptación de código/SQL/UI se documenta en `docs/production/new-constructor-onboarding.md` y en el PR del bloque. La aceptación con un cliente físico sigue pendiente hasta ejecutarla; no se marca P0 completo.
+
+El número nuevo se incorporará por el consentimiento y la verificación propios de Embedded Signup. El OTP no equivale a permisos de toda la plataforma, aprobación automática de plantillas ni módulos comerciales terminados. Esta entrega prepara empresa/obra/tareas; los restantes cierres P0/P1 permanecen abiertos de forma explícita.
