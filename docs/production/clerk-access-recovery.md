@@ -1,0 +1,23 @@
+# Ingreso, invitaciones y renovación de sesión
+
+Una invitación a una obra debe sobrevivir al ingreso y a la selección de empresa. Antes, las rutas de Clerk y el selector volvían a `/cuenta` sin el identificador `participar`, por lo que una persona podía entrar a Clerk sin completar su pertenencia canónica a la obra.
+
+El retorno conserva únicamente un identificador de invitación válido. No acepta destinos elegidos por el navegador ni traslada un ticket de Clerk a la URL final de la cuenta. El identificador sirve para encontrar la invitación; no concede acceso. El servidor sigue comprobando la invitación, el correo verificado, la pertenencia de Clerk y la autorización vigente antes de vincular al participante.
+
+Los correos existentes apuntan a `/cuenta`. Cuando Clerk devuelve un ticket pendiente de ingreso o registro, esa misma página presenta su formulario oficial para procesarlo. El ticket no pasa por una implementación propia de autenticación, no se guarda en almacenamiento del navegador y no se copia a los enlaces de retorno. Un estado `complete` no sustituye la verificación de sesión ni la aceptación canónica de la obra.
+
+Una cookie vencida tampoco demuestra que haya terminado la sesión de Clerk. En ese caso la cuenta presenta una pantalla de renovación sin obras ni información privada. El cliente solicita un token actualizado al SDK y lo comprueba con el endpoint de sesión existente. Sólo si el navegador ya tiene la cookie correspondiente se vuelve a pedir la página al servidor. El servidor verifica otra vez antes de mostrar el espacio de trabajo. Hay una sola renovación automática; un fallo, cambio de contexto o falta de sincronización deja un reintento explícito.
+
+Las consultas y cambios del cronograma envían el token de la pestaña activa. Esto evita que el selector de una pestaña consulte otra empresa debido a la cookie compartida después de un cambio en otra pestaña. Las comprobaciones de pertenencia, ámbito, revisión y recibos permanecen en el servidor. El transporte no reenvía ningún POST automáticamente.
+
+## Verificación y límites
+
+Las pruebas de navegación y renovación utilizan los componentes reales en un servidor aislado, con hooks de Clerk y respuestas de sesión sintéticos. Las pruebas criptográficas positivas y negativas siguen utilizando el verificador real con claves de prueba. Esto acredita el comportamiento controlado, no la recepción de un correo ni la aceptación de una invitación por un cliente.
+
+La comprobación de la instancia Production de Clerk fue de lectura: organizaciones habilitadas, rol de creación `org:admin` y una plantilla `obrasaas-bootstrap-v1` de 60 segundos. No se cambiaron ajustes, factores, credenciales ni datos de usuarios.
+
+La credencial administrativa sensible guardada en Vercel tenía una fecha anterior a la creación de la instancia Production actual; su valor no se obtuvo del portal. Esa antigüedad no se presenta como un rechazo de credencial observado. El build de Production incorpora ahora una comprobación independiente de lectura a `GET /instance`, reutilizando el verificador existente. Sólo una coincidencia confirmada con la instancia de ObraSaaS permite continuar. Una configuración pendiente, credencial rechazada, instancia distinta o proveedor no comprobable bloquean el build. Los builds locales y de CI omiten expresamente esta comprobación real; su resultado no acredita la conexión administrativa de Production.
+
+Para registrar aceptación humana falta abrir un correo real en un navegador sin sesión, completar el formulario oficial, seleccionar la empresa y aceptar la pertenencia a la obra. También se debe comprobar ingreso, cierre de sesión y renovación desde un teléfono real. Los resultados de CI, Preview y Production se registran por revisión exacta; no equivalen a ese recorrido humano.
+
+Referencias: [invitaciones oficiales de Clerk](https://clerk.com/docs/guides/development/custom-flows/organizations/accept-organization-invitations), [sesiones de Clerk](https://clerk.com/docs/guides/sessions/session-tokens), [organizaciones y sesiones](https://clerk.com/docs/guides/organizations/overview).

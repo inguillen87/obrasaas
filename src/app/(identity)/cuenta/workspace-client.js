@@ -1,6 +1,7 @@
 'use client';
 import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import styles from './workspace.module.css';
+import {workspaceSessionRequest} from './workspace-session-request.mjs';
 import {TaskCreatePanel} from './task-create-panel';
 import {CustomerWhatsAppPanel} from './customer-whatsapp-panel';
 import {SiteRegisterPanel} from './site-register-panel';
@@ -13,8 +14,8 @@ import {OperationsStatusPanel} from './operations-status-panel';
 const endpoint='/api/identity/workspace';
 const messages={WORKSPACE_ORGANIZATION_REQUIRED:'Elegí una organización desde tu cuenta para consultar las obras asignadas.',WORKSPACE_MEMBERSHIP_REQUIRED:'Tu organización activa todavía no tiene una pertenencia vigente vinculada a esta cuenta.',WORKSPACE_PROJECT_UNAVAILABLE:'Esta obra no está disponible con tus permisos actuales.',WORKSPACE_CONTEXT_CHANGED:'Cambió tu organización o tu permiso. Volvé a cargar las obras antes de continuar.',SCHEDULE_REVISION_CHANGED:'Otra persona modificó la tarea. Actualizá el cronograma antes de volver a planificar.',SCHEDULE_PERMISSION_REQUIRED:'Tu rol actual no puede modificar la planificación.',SCHEDULE_UNCHANGED:'Las fechas son iguales a las registradas. No se hizo ningún cambio.',SCHEDULE_OPERATION_CONFLICT:'Este intento ya pertenece a otra solicitud. Comprobá su recibo antes de continuar.',SESSION_REQUIRED:'Tu sesión venció. Volvé a ingresar.',SCHEDULE_DATES_INVALID:'Revisá el inicio y el fin. El fin no puede ser anterior al inicio.',SCHEDULE_REASON_REQUIRED:'Explicá brevemente el motivo del cambio.'};
 const describe=code=>messages[code]||'No se pudo confirmar la operación. No se reemplazaron los datos por ejemplos.';
-async function request(query='',options={}){
- const response=await fetch(endpoint+query,{credentials:'same-origin',cache:'no-store',...options});
+async function requestWorkspace(getSessionToken,query='',options={}){
+ const response=await workspaceSessionRequest(endpoint+query,options,{getSessionToken});
  const body=await response.json();if(!response.ok){const error=new Error(describe(body.code));error.code=body.code;error.status=response.status;throw error;}return body;
 }
 const query=values=>'?' + new URLSearchParams(values).toString();
@@ -25,7 +26,8 @@ function timeline(tasks){
  if(!valid.length)return null;const start=Math.min(...valid.map(t=>day(t.startsOn))),end=Math.max(...valid.map(t=>day(t.endsOn)))+86400000;
  return {start,end};
 }
-export function AccountWorkspace(){
+export function AccountWorkspace({getSessionToken}={}){
+ const request=useCallback((query='',options={})=>requestWorkspace(getSessionToken,query,options),[getSessionToken]);
  const [account,setAccount]=useState(null),[view,setView]=useState(null),[loading,setLoading]=useState(true),[notice,setNotice]=useState(''),[draft,setDraft]=useState(null),[attempt,setAttempt]=useState(null),[retryAllowed,setRetryAllowed]=useState(false),[saving,setSaving]=useState(false),[receipt,setReceipt]=useState(null);
  const generation=useRef(0),controller=useRef(null),mounted=useRef(true);
  const [creatingTask,setTaskCreating]=useState(false),[modulePending,setModulePending]=useState({});
@@ -44,7 +46,7 @@ export function AccountWorkspace(){
   const epoch=generation;mounted.current=true;const abort=new AbortController();controller.current=abort;const current=++epoch.current;
   request('',{signal:abort.signal}).then(data=>{if(mounted.current&&current===generation.current)setAccount(data);}).catch(error=>{if(error.name!=='AbortError'&&mounted.current&&current===generation.current)setNotice(error.message);}).finally(()=>{if(mounted.current&&current===generation.current)setLoading(false);});
   return()=>{mounted.current=false;epoch.current++;abort.abort();controller.current?.abort();};
- },[]);
+ },[request]);
  async function refresh(){
   if(contextLocked)return;controller.current?.abort();const abort=new AbortController();controller.current=abort;const current=++generation.current;
   setAccount(null);setView(null);setDraft(null);setReceipt(null);setNotice('');setLoading(true);
