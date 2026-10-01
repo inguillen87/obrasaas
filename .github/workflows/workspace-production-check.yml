@@ -1,0 +1,44 @@
+name: Verify published workspace revision
+on:
+  push:
+    branches: ['operations/workspace-production-check-20261001']
+    paths: ['.github/workflows/workspace-production-check.yml']
+permissions:
+  contents: read
+jobs:
+  public_check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Check canonical public origin and access denials
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          const origin='https://obrasaas.com',sha='4b297d06296b035a420fdc46119ae06dcf5046c1';
+          const checks=[];
+          const get=path=>fetch(origin+path,{method:'GET',redirect:'manual',cache:'no-store',headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(15000)});
+          let health=null;
+          for(let attempt=0;attempt<12;attempt++){
+            try{
+              const response=await get('/api/health');
+              if(response.status===200){const value=await response.json();if(value.service==='ObraSaaS'&&value.sourceRevision===sha){health=value;break;}}
+              else await response.body?.cancel();
+            }catch{}
+            if(attempt<11)await new Promise(resolve=>setTimeout(resolve,10000));
+          }
+          assert.ok(health,'The exact deployed revision was not observed on the canonical domain');
+          assert.equal(health.release,'authorized-workspace-20261001');
+          assert.equal(health.databaseChecked,false);
+          assert.equal(health.workspaceAccess,'signed-organization-and-canonical-membership-required');
+          checks.push({path:'/api/health',status:200,sourceRevision:health.sourceRevision});
+          for(const [path,expected] of [['/',200],['/demo',200],['/sign-in',200],['/sign-up',200],['/api/identity/session',401],['/api/identity/workspace',401],['/api/state',401],['/api/v1/workers',401],['/api/v1/whatsapp/dispatch',401]]){
+            const response=await get(path);assert.equal(response.status,expected,'Unexpected status for '+path);
+            await response.body?.cancel();checks.push({path,status:response.status});
+          }
+          const account=await get('/cuenta');assert.equal(account.status,307);const destination=new URL(account.headers.get('location'),origin);assert.equal(destination.origin,origin);assert.equal(destination.pathname,'/sign-in');await account.body?.cancel();checks.push({path:'/cuenta',status:307,redirect:'/sign-in'});
+          console.log(JSON.stringify({status:'PASS',canonicalOrigin:origin,sourceRevision:sha,checks,methods:['GET'],credentialsSent:false,businessDataWritten:false,authenticatedProductionWorkspaceTested:false,physicalWhatsAppTested:false,checkedAt:new Date().toISOString()}));
+          JS
