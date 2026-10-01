@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
 import { authorizeLegacyService, legacyBoundaryKind, privateLegacyHeaders, unauthorizedLegacyResponse } from './lib/legacy-access-boundary.js';
 import { identityRoute, IDENTITY_ORIGIN } from './lib/production-identity-config.mjs';
+const verifiedWorkspaceRoutes=new Set(['/api/identity/workspace','/api/identity/whatsapp-setup','/api/identity/site-register','/api/identity/site-photo','/api/identity/company-onboarding','/api/identity/task-creation','/api/identity/site-purchases','/api/identity/participants','/api/identity/participant-join','/api/identity/field-operations','/api/identity/field-media','/api/identity/field-qr','/api/identity/meta-onboarding','/api/identity/operations-status']);
 
 export async function proxy(request) {
   const path = request.nextUrl.pathname;
-  if (identityRoute(path) || path === '/api/identity/workspace' || path === '/api/identity/whatsapp-setup' || path === '/api/identity/site-register' || path === '/api/identity/site-photo' || path === '/api/identity/company-onboarding' || path === '/api/identity/task-creation') {
+  if (identityRoute(path) || verifiedWorkspaceRoutes.has(path)) {
     if (process.env.VERCEL_ENV === 'production' && request.nextUrl.origin !== IDENTITY_ORIGIN) {
       const destination = new URL(path, IDENTITY_ORIGIN);
       destination.search = request.nextUrl.search;

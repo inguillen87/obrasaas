@@ -62,6 +62,6 @@ test('no message sends, identity approvals or financial side effects in the stor
 });
 test('route delegates to session verifier and does not accept client roles',()=>{
  const route=readFileSync(new URL('../src/app/api/identity/site-register/route.js',import.meta.url),'utf8');assert.match(route,/verifyWorkspaceSession/);assert.match(route,/productionWorkspace/);
- const proxy=readFileSync(new URL('../src/proxy.js',import.meta.url),'utf8');assert.match(proxy,/path === '\/api\/identity\/site-register'/);
+ const proxy=readFileSync(new URL('../src/proxy.js',import.meta.url),'utf8');assert.match(proxy,/verifiedWorkspaceRoutes/);
  const ui=readFileSync(new URL('../src/app/(identity)/cuenta/site-register-panel.js',import.meta.url),'utf8');assert.doesNotMatch(ui,/localStorage|sessionStorage|setInterval/);assert.match(ui,/Comprobar guardado/);
 });

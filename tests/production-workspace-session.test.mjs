@@ -48,6 +48,6 @@ test('forged organization headers cannot add scope to a personal token',async()=
 test('workspace route uses the reviewed verifier and store rather than a client identity',()=>{
  const file=readFileSync(new URL('../src/app/api/identity/workspace/route.js',import.meta.url),'utf8');
  assert.match(file,/verifyWorkspaceSession/);assert.match(file,/productionWorkspace/);assert.match(file,/createWorkspaceHandlers/);assert.doesNotMatch(file,/getAppState|saveAppState|defaultAppState/);
- const proxy=readFileSync(new URL('../src/proxy.js',import.meta.url),'utf8');assert.match(proxy,/path === '\/api\/identity\/workspace'/);assert.doesNotMatch(proxy,/path\.startsWith\('\/api\/identity/);
+ const proxy=readFileSync(new URL('../src/proxy.js',import.meta.url),'utf8');assert.match(proxy,/verifiedWorkspaceRoutes/);assert.doesNotMatch(proxy,/path\.startsWith\('\/api\/identity/);
  const ui=readFileSync(new URL('../src/app/(identity)/cuenta/workspace-identity.js',import.meta.url),'utf8');assert.match(ui,/key=\{`\$\{userId\}:\$\{orgId/);assert.doesNotMatch(ui,/localStorage|sessionStorage/);
 });

@@ -89,6 +89,7 @@ export function createSiteRegister({ workspace }) {
           audit={type,state:'OPEN'};
         }else{
           const row=await readReport(client,command.projectId,p.reportId,true),metadata=cleanMetadata(row.metadata),record=metadata.siteRegister;
+          if(metadata.procurement?.version===1&&!['REJECTED','CANCELLED'].includes(metadata.procurement.state))throw new WorkspaceError('SITE_PURCHASE_WORKFLOW_REQUIRED',409);
           if(record?.version!==1)throw new WorkspaceError('SITE_RECORD_NOT_SUPPORTED',409);
           if(row.revision!==p.revision)throw new WorkspaceError('SITE_REVISION_CHANGED',409);
           const state=siteTransition(record.type,record.state,p.decision);
