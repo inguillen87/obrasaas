@@ -1,0 +1,11 @@
+import {verifyWorkspaceSession} from '../../../../lib/verified-session.mjs';
+import {productionWorkspace} from '../../../../lib/workspace-runtime.mjs';
+import {createMetaCustomerProvider} from '../../../../lib/meta-customer-provider.mjs';
+import {createMetaCustomerOnboarding} from '../../../../lib/meta-customer-onboarding.mjs';
+import {createMetaCustomerHandlers} from '../../../../lib/meta-customer-http.mjs';
+export const runtime='nodejs';
+export const dynamic='force-dynamic';
+export const maxDuration=60;
+const handlers=createMetaCustomerHandlers({verify:verifyWorkspaceSession,service:createMetaCustomerOnboarding({workspace:productionWorkspace,provider:createMetaCustomerProvider()})});
+export const GET=handlers.GET;
+export const POST=handlers.POST;

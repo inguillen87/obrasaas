@@ -28,6 +28,7 @@ export function legacyBoundaryKind(pathname, method = 'GET') {
   // These entrypoints validate their own signed protocols; no browser role or
   // Origin/Referer header is an identity. All other legacy APIs are internal.
   if (path === '/api/whatsapp' && ['GET', 'POST'].includes(method)) return 'signed-protocol';
+  if (path === '/api/meta/customer-callback' && ['GET', 'POST'].includes(method)) return 'signed-protocol';
   if (read && path === '/api/auth/verify') return 'signed-protocol';
   return path === '/api' || path.startsWith('/api/') || !read ? 'private-api' : 'private-page';
 }

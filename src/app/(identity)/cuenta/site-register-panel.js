@@ -12,11 +12,12 @@ async function api(params,options={},resource='register'){
  const body=await response.json();if(!response.ok){const error=new Error(explain(body.code));error.status=response.status;throw error;}return body;
 }
 const blank=section=>section==='PEOPLE'?{action:'ADD_PERSON',payload:{name:'',phone:'',job:'WORKER'}}:section==='ISSUES'?{action:'REPORT_ISSUE',payload:{title:'',details:'',sector:'',severity:'MEDIUM'}}:{action:'REQUEST_MATERIAL',payload:{material:'',quantity:'',unit:'unidad',sector:'',details:''}};
-export function SiteRegisterPanel({projectId,scope}){
- const [opened,setOpened]=useState(false),[section,setSection]=useState('PEOPLE'),[data,setData]=useState(null),[draft,setDraft]=useState(null),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[attempt,setAttempt]=useState(null),[receipt,setReceipt]=useState(null);
+export function SiteRegisterPanel({projectId,scope,onPending}){
+ const [opened,setOpened]=useState(false),[section,setSection]=useState('PEOPLE'),[data,setData]=useState(null),[draft,setDraft]=useState(null),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[attempt,setAttempt]=useState(null),[retryAllowed,setRetryAllowed]=useState(false),[receipt,setReceipt]=useState(null);
  const [readingPhoto,setReadingPhoto]=useState(false);
  const mounted=useRef(true),sequence=useRef(0),abort=useRef(null),photoSequence=useRef(0);
  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;abort.current?.abort();};},[]);
+ useEffect(()=>{onPending?.(busy||Boolean(attempt)||readingPhoto||Boolean(draft));return()=>onPending?.(false);},[busy,attempt,readingPhoto,draft,onPending]);
  async function load(next=section,append=false){
   if(busy||attempt)return;const current=++sequence.current;abort.current?.abort();const controller=new AbortController();abort.current=controller;
   setBusy(true);setOpened(true);setNotice('');setSection(next);if(!append){setData(null);setDraft(null);}
@@ -28,7 +29,7 @@ export function SiteRegisterPanel({projectId,scope}){
  function edit(key,value){setDraft(previous=>({...previous,payload:{...previous.payload,[key]:value}}));}
  async function confirmed(result){
   if(result.scope!==scope||result.saved!==true||!result.receiptId||(!result.person&&!result.report&&!result.photo))throw new Error('El recibo no permite confirmar el registro.');
-  setReceipt(result.receiptId);setAttempt(null);setDraft(null);setNotice(result.photo?'Fotografía privada adjunta con recibo. No se aprobó avance ni identidad.':result.person?'Ficha guardada con recibo. Los permisos y la identidad se verifican por separado.':'Registro guardado con recibo. Podés continuar su seguimiento desde esta obra.');
+  setReceipt(result.receiptId);setAttempt(null);setRetryAllowed(false);setDraft(null);setNotice(result.photo?'Fotografía privada adjunta con recibo. No se aprobó avance ni identidad.':result.person?'Ficha guardada con recibo. Los permisos y la identidad se verifican por separado.':'Registro guardado con recibo. Podés continuar su seguimiento desde esta obra.');
   try{const refreshed=await api({projectId,scope,section});if(mounted.current&&refreshed.scope===scope&&refreshed.projectId===projectId)setData(refreshed);}
   catch{if(mounted.current)setNotice('El guardado está confirmado. Actualizá el listado para ver los registros vigentes.');}
  }
@@ -42,19 +43,27 @@ export function SiteRegisterPanel({projectId,scope}){
   reader.onerror=()=>{if(mounted.current&&current===photoSequence.current){setNotice('No se pudo leer el archivo. No se subió.');setReadingPhoto(false);}};
   reader.readAsDataURL(file);
  }
- async function save(event){
-  event.preventDefault();if(busy||readingPhoto||attempt||!draft)return;
-  const isPhoto=draft.action==='ATTACH_PHOTO',operationId=crypto.randomUUID();
-  const command=isPhoto?{operationId,projectId,scope,...draft.payload}:{operationId,projectId,scope,...draft};
-  setAttempt({command,isPhoto});setBusy(true);setNotice('');setReceipt(null);
+ async function sendAttempt(retained){
+  const {command,isPhoto}=retained;
+  setAttempt(retained);setRetryAllowed(false);setBusy(true);setNotice('');setReceipt(null);
   try{const result=await api(null,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(command),signal:AbortSignal.timeout(isPhoto?45000:20000)},isPhoto?'photo':'register');if(mounted.current)await confirmed(result);}
   catch(error){if(mounted.current){if(error.status&&error.status<500){setAttempt(null);setNotice(error.message);}else setNotice('El resultado quedó sin confirmar. Comprobá el recibo antes de volver a guardar.');}}
   finally{if(mounted.current)setBusy(false);}
  }
+ async function save(event){
+  event.preventDefault();if(busy||readingPhoto||attempt||!draft)return;
+  const isPhoto=draft.action==='ATTACH_PHOTO',operationId=crypto.randomUUID();
+  const command=isPhoto?{operationId,projectId,scope,...draft.payload}:{operationId,projectId,scope,...draft};
+  await sendAttempt({command,isPhoto});
+ }
+ async function retry(){
+  if(busy||readingPhoto||!attempt||!retryAllowed)return;
+  await sendAttempt(attempt);
+ }
  async function recover(){
-  if(busy||!attempt)return;setBusy(true);
+  if(busy||!attempt)return;setBusy(true);setRetryAllowed(false);
   const {command,isPhoto}=attempt;
-  try{const result=await api({projectId,scope,operationId:command.operationId,...(isPhoto?{reportId:command.reportId}:{})},{signal:AbortSignal.timeout(15000)},isPhoto?'photo':'register');if(mounted.current){if(result.state==='RECORDED')await confirmed(result);else setNotice('Todavía no se observa un recibo. No se reenvió ni se declaró perdida la operación.');}}
+  try{const result=await api({projectId:command.projectId,scope:command.scope,operationId:command.operationId,...(isPhoto?{reportId:command.reportId}:{})},{signal:AbortSignal.timeout(15000)},isPhoto?'photo':'register');if(mounted.current){if(result.scope!==scope)throw new Error('La respuesta corresponde a otra organización.');if(result.state==='RECORDED')await confirmed(result);else if(result.state==='NOT_OBSERVED'){setRetryAllowed(true);setNotice('No se observa un recibo todavía. Podés comprobar otra vez o reintentar exactamente la misma operación; conservamos sus datos para evitar duplicados.');}else throw new Error('Todavía no se pudo comprobar el guardado. Conservamos el intento.');}}
   catch(error){if(mounted.current)setNotice(error.message);}finally{if(mounted.current)setBusy(false);}
  }
  const locked=busy||readingPhoto||Boolean(attempt),p=draft?.payload;
@@ -67,7 +76,7 @@ export function SiteRegisterPanel({projectId,scope}){
    {data&&<><div className={styles.toolbar}><span>{data.records.length} de {data.total} registros</span><button type="button" disabled={locked} onClick={()=>{setDraft(blank(section));setReceipt(null);setNotice('');}}>{section==='PEOPLE'?'Agregar persona':section==='ISSUES'?'Registrar incidencia':'Solicitar material'}</button><button type="button" disabled={locked} onClick={()=>load()}>Actualizar registro</button></div>
     {!data.records.length&&<p className={styles.empty}>Todavía no hay registros de este tipo. No se crearon datos de ejemplo.</p>}
     <div className={styles.list}>{data.records.map(record=><article key={record.id} className={styles.card}>
-     {section==='PEOPLE'?<><div className={styles.cardHeader}><strong>{record.name}</strong><span>{record.active?'En nómina de obra':'Inactivo'}</span></div><p>{record.roleLabel||'Función sin indicar'} · {record.phone}</p><small>Identidad y canal pendientes de verificación.</small>{record.editable&&<button type="button" disabled={locked} onClick={()=>setDraft({action:'SET_PERSON_ACTIVE',payload:{personId:record.id,revision:record.revision,active:!record.active,reason:''}})}>{record.active?'Dar de baja en esta obra':'Reactivar registro'}</button>}</>:
+     {section==='PEOPLE'?<><div className={styles.cardHeader}><strong>{record.name}</strong><span>{record.active?'En nómina de obra':'Inactivo'}</span></div><p>{record.roleLabel||'Función sin indicar'} · {record.phone}</p><small>La ficha no certifica identidad. Consultá participantes para ver el acceso y la revisión vigentes.</small>{record.editable&&<button type="button" disabled={locked} onClick={()=>setDraft({action:'SET_PERSON_ACTIVE',payload:{personId:record.id,revision:record.revision,active:!record.active,reason:''}})}>{record.active?'Dar de baja en esta obra':'Reactivar registro'}</button>}</>:
       <><div className={styles.cardHeader}><strong>{record.title}</strong><span>{stateLabel[record.state]||record.state}</span></div><p>{record.sector}{record.type==='MATERIAL_REQUEST'?` · ${record.quantity} ${record.unit}`:` · Prioridad ${severityLabel[record.severity]||record.severity}`}</p><p className={styles.detail}>{record.details}</p>{(record.photos||[]).length>0&&<div className={styles.photos}>{record.photos.map((photo,index)=><a key={photo.id} href={photoEndpoint+'?'+new URLSearchParams({projectId,scope,reportId:record.id,photoId:photo.id})}>Descargar foto {index+1} · {Math.ceil(photo.bytes/1024)} KB</a>)}</div>}{['OPEN','ACKNOWLEDGED'].includes(record.state)&&(record.photos||[]).length<10&&<button type="button" disabled={locked} onClick={()=>setDraft({action:'ATTACH_PHOTO',payload:{reportId:record.id,revision:record.revision,image:''}})}>Adjuntar foto privada</button>}{record.review&&<small>Última decisión: {stateLabel[record.review.decision]}. {record.review.reason}</small>}{['OPEN','ACKNOWLEDGED'].includes(record.state)&&<button type="button" disabled={locked} onClick={()=>setDraft({action:'REVIEW_REPORT',payload:{reportId:record.id,revision:record.revision,decision:record.state==='OPEN'?'ACKNOWLEDGED':'RESOLVED',reason:''}})}>Gestionar registro</button>}</>}
     </article>)}</div>
     {data.nextCursor&&<button type="button" disabled={locked} onClick={()=>load(section,true)}>Cargar más registros</button>}
@@ -81,7 +90,7 @@ export function SiteRegisterPanel({projectId,scope}){
      {['REPORT_ISSUE','REQUEST_MATERIAL'].includes(draft.action)&&<><label>Sector<input required minLength={2} maxLength={100} value={p.sector} disabled={locked} onChange={e=>edit('sector',e.target.value)}/></label><label>Detalle<textarea required minLength={8} maxLength={2000} rows={3} value={p.details} disabled={locked} onChange={e=>edit('details',e.target.value)}/></label></>}
      {draft.action==='REVIEW_REPORT'&&<><h4>Gestión del registro</h4><label>Estado<select value={p.decision} disabled={locked} onChange={e=>edit('decision',e.target.value)}>{Object.entries(stateLabel).filter(([key])=>key!=='OPEN').map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label></>}
      {['SET_PERSON_ACTIVE','REVIEW_REPORT'].includes(draft.action)&&<label>Motivo<textarea required minLength={8} maxLength={500} rows={3} value={p.reason} disabled={locked} onChange={e=>edit('reason',e.target.value)}/></label>}
-     <div className={styles.actions}>{attempt?<button type="button" disabled={busy} onClick={recover}>Comprobar guardado</button>:<><button type="submit" disabled={busy||readingPhoto||(draft.action==='ATTACH_PHOTO'&&!p.image)}>Guardar registro</button><button type="button" disabled={locked} onClick={()=>setDraft(null)}>Cancelar</button></>}</div>
+     <div className={styles.actions}>{attempt?<><button type="button" disabled={busy} onClick={recover}>Comprobar guardado</button>{retryAllowed&&<button type="button" disabled={busy} onClick={retry}>Reintentar la misma operación</button>}</>:<><button type="submit" disabled={busy||readingPhoto||(draft.action==='ATTACH_PHOTO'&&!p.image)}>Guardar registro</button><button type="button" disabled={locked} onClick={()=>setDraft(null)}>Cancelar</button></>}</div>
     </form>}
     {receipt&&<p className={styles.receipt}>Recibo confirmado: <code>{receipt}</code></p>}
    </>}

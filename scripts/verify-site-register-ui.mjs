@@ -12,7 +12,7 @@ writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'isolated-s
 writeFileSync(path.join(fixture,'next.config.mjs'),`export default {devIndicators:false,turbopack:{root:${JSON.stringify(root)}}};`);
 writeFileSync(path.join(app,'layout.js'),`export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:12,background:'#081b2c',fontFamily:'Arial,sans-serif'}}>{children}</body></html>}`);
 const scope='a'.repeat(64),projectId='project-fixture';
-writeFileSync(path.join(app,'page.js'),`import {SiteRegisterPanel} from './site-register-panel';export default function Page(){return <main style={{maxWidth:1000,margin:'0 auto'}}><SiteRegisterPanel projectId="${projectId}" scope="${scope}"/></main>}`);
+writeFileSync(path.join(app,'page.js'),`'use client';import {useCallback,useState} from 'react';import {SiteRegisterPanel} from './site-register-panel';export default function Page(){const [pending,setPending]=useState(false);const onPending=useCallback(value=>setPending(value),[]);return <main style={{maxWidth:1000,margin:'0 auto'}}><button data-testid="project-switch" disabled={pending}>Cambiar obra</button><SiteRegisterPanel projectId="${projectId}" scope="${scope}" onPending={onPending}/></main>}`);
 const port=3112,origin='http://127.0.0.1:'+port;
 const server=spawn(process.execPath,[path.join(root,'node_modules/next/dist/bin/next'),'dev',fixture,'--webpack','--hostname','127.0.0.1','--port',String(port)],{cwd:root,env:{...process.env,NEXT_TELEMETRY_DISABLED:'1'},stdio:['ignore','pipe','pipe'],detached:process.platform!=='win32'});
 let serverLog='';for(const stream of [server.stdout,server.stderr])stream.on('data',data=>{serverLog=(serverLog+data.toString()).slice(-12000);});
@@ -23,10 +23,21 @@ let browser;const errors=[],checks=[];
 async function click(page,title){await page.waitForFunction(text=>[...document.querySelectorAll('button')].some(b=>b.textContent.trim()===text&&!b.disabled),{timeout:15000},title);const handle=await page.evaluateHandle(text=>[...document.querySelectorAll('button')].find(b=>b.textContent.trim()===text),title);assert.ok(handle.asElement(),'Missing button '+title);await handle.asElement().click();await handle.dispose();}
 const wait=(page,text)=>page.waitForFunction(value=>document.body.innerText.includes(value),{timeout:15000},text);
 async function fill(page,label,value){await page.waitForFunction(text=>[...document.querySelectorAll('form label')].some(item=>item.childNodes[0]?.textContent===text&&item.querySelector('input,textarea,select')),{timeout:15000},label);const handle=await page.evaluateHandle(text=>[...document.querySelectorAll('form label')].find(item=>item.childNodes[0]?.textContent===text)?.querySelector('input,textarea,select'),label);const node=handle.asElement();assert.ok(node,'Missing field '+label);await node.type(value);await handle.dispose();}
+async function retryUnobserved(page,posts,expectedPosts){
+ await wait(page,'resultado quedó sin confirmar');assert.equal(posts.length,expectedPosts);
+ assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Reintentar la misma operación'));
+ assert.ok(await page.$eval('[data-testid="project-switch"]',e=>e.disabled));
+ assert.ok(await page.evaluate(()=>[...document.querySelectorAll('form input,form textarea,form select,nav button')].every(e=>e.disabled)));
+ assert.ok(!(await page.evaluate(()=>[...document.querySelectorAll('form button')].map(b=>b.textContent))).includes('Cancelar'));
+ await click(page,'Comprobar guardado');await wait(page,'No se observa un recibo todavía');assert.equal(posts.length,expectedPosts);
+ assert.ok(await page.$eval('[data-testid="project-switch"]',e=>e.disabled));
+ await click(page,'Reintentar la misma operación');await wait(page,'Recibo confirmado');assert.equal(posts.length,expectedPosts+1);assert.deepEqual(posts.at(-1),posts.at(-2));
+ await page.waitForFunction(()=>!document.querySelector('[data-testid="project-switch"]').disabled);
+}
 async function scenario(width,mode='normal'){
  const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1000});
  page.on('pageerror',error=>errors.push({width,mode,error:error.message}));await page.setRequestInterception(true);
- const records={PEOPLE:[],ISSUES:[],MATERIALS:[]},receipts=new Map(),posts=[];let counter=0;
+ const records={PEOPLE:[],ISSUES:[],MATERIALS:[]},receipts=new Map(),posts=[];let counter=0,photoAttempts=0,statusChecks=0;
  const revision=()=>`2026-10-01T10:00:00.${String(++counter).padStart(6,'0')}`;
  page.on('request',async request=>{
   try{
@@ -36,6 +47,9 @@ async function scenario(width,mode='normal'){
    if(mode==='denied'){status=403;body={code:'WORKSPACE_INTEGRATION_PERMISSION_REQUIRED'};}
    else if(request.method()==='POST'){
     const input=JSON.parse(request.postData());posts.push(input);assert.equal(input.projectId,projectId);assert.equal(input.scope,scope);const p=input.payload;
+    const photo=url.pathname==='/api/identity/site-photo';if(photo)photoAttempts++;
+    const failure=(['rollback','not-arrived'].includes(mode)&&posts.length===1)||(mode.startsWith('photo-')&&photo&&photoAttempts===1);
+    if(failure){if(mode.endsWith('not-arrived'))await request.abort('failed');else await request.respond({status:503,contentType:'application/json',body:JSON.stringify({code:'SITE_OPERATION_UNCONFIRMED'})});return;}
     const receiptId='site_receipt_'+input.operationId;let person,report;
     if(url.pathname==='/api/identity/site-photo'){
      assert.deepEqual(Buffer.from(input.image.split(',').at(-1),'base64'),picture);const record=records.ISSUES.find(row=>row.id===input.reportId);assert.ok(record);assert.equal(record.revision,input.revision);const photo={id:'sitephoto_'+'a'.repeat(64),bytes:picture.length,contentType:'image/png'};record.photos=[photo];record.revision=revision();body={scope,saved:true,receiptId,photo};receipts.set(input.operationId,body);await request.respond({status:200,contentType:'application/json',body:JSON.stringify(body)});return;
@@ -49,7 +63,7 @@ async function scenario(width,mode='normal'){
     body={scope,saved:true,receiptId,kind:person?'PERSON':'REPORT',...(person?{person}:{report})};receipts.set(input.operationId,body);
     if(mode==='uncertain'){status=503;body={code:'SITE_OPERATION_UNCONFIRMED'};}
     if(mode==='conflict'){status=409;body={code:'SITE_REVISION_CHANGED'};records.PEOPLE=[];receipts.clear();}
-   }else if(url.searchParams.has('operationId')){assert.ok(receipts.has(url.searchParams.get('operationId')));body={state:'RECORDED',...receipts.get(url.searchParams.get('operationId'))};}
+   }else if(url.searchParams.has('operationId')){statusChecks++;const found=receipts.get(url.searchParams.get('operationId'));body=found?{state:'RECORDED',...found}:{scope,state:'NOT_OBSERVED',definitive:false};}
    else{const section=url.searchParams.get('section');assert.ok(records[section]);body={scope,projectId,section,records:records[section],total:records[section].length,nextCursor:null,roles:SITE_ROLES,units:MATERIAL_UNITS,workerSelfServiceEnabled:false};}
    await request.respond({status,contentType:'application/json',body:JSON.stringify(body),headers:{'Cache-Control':'no-store'}});
   }catch(error){errors.push({width,mode,error:error.message});if(!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});}
@@ -57,11 +71,16 @@ async function scenario(width,mode='normal'){
  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await click(page,'Abrir registro');
  if(mode==='denied'){await wait(page,'no permite administrar');assert.equal(posts.length,0);checks.push('unauthorized-view-has-no-example-records');await context.close();return;}
  await wait(page,'Agregar persona');await click(page,'Agregar persona');await fill(page,'Nombre','Persona de ensayo');await fill(page,'Teléfono internacional','+5491100001111');await page.select('form select','FOREMAN');
+ assert.ok(await page.$eval('[data-testid="project-switch"]',e=>e.disabled));assert.ok(!(await page.$eval('form input',e=>e.disabled)));
+ if(mode==='draft-cancel'){await click(page,'Cancelar');await page.waitForFunction(()=>!document.querySelector('form')&&!document.querySelector('[data-testid="project-switch"]').disabled);assert.equal(posts.length,0);checks.push('site-register-draft-locks-project-until-explicit-cancel');await context.close();return;}
  await click(page,'Guardar registro');
  if(mode==='uncertain'){await wait(page,'resultado quedó sin confirmar');assert.equal(posts.length,1);await click(page,'Comprobar guardado');await wait(page,'Recibo confirmado');assert.equal(posts.length,1);checks.push('uncertain-save-recovers-without-another-POST');await context.close();return;}
+ if(['rollback','not-arrived'].includes(mode)){
+  assert.equal(records.PEOPLE.length,0);await retryUnobserved(page,posts,1);assert.equal(records.PEOPLE.length,1);assert.equal(statusChecks,1);checks.push(mode+'-checks-receipt-and-retries-exact-register-command-once');await context.close();return;
+ }
  if(mode==='conflict'){await wait(page,'El registro cambió');assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Recibo confirmado'));assert.equal(await page.$eval('input[type="tel"]',el=>el.value),'+5491100001111');checks.push('conflict-preserves-form-and-never-shows-saved');await context.close();return;}
  await wait(page,'Persona de ensayo');await wait(page,'Recibo confirmado');assert.equal(posts.length,1);
- assert.ok((await page.evaluate(()=>document.body.innerText)).includes('Identidad y canal pendientes'));
+ assert.ok((await page.evaluate(()=>document.body.innerText)).includes('La ficha no certifica identidad'));
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  await page.screenshot({path:path.join(output,`roster-${width}.png`),fullPage:true});
  await click(page,'Dar de baja en esta obra');await fill(page,'Motivo','Terminó la participación en esta obra de ensayo.');await click(page,'Guardar registro');await wait(page,'Inactivo');assert.equal(posts.length,2);
@@ -72,15 +91,19 @@ async function scenario(width,mode='normal'){
  assert.ok((await page.evaluate(()=>document.body.innerText)).includes('no es una orden de compra'));
  await page.screenshot({path:path.join(output,`materials-${width}.png`),fullPage:true});
  await click(page,'Incidencias');await wait(page,'Registrar incidencia');await click(page,'Registrar incidencia');await fill(page,'Título','Acceso bloqueado');await fill(page,'Sector','Sector norte');await fill(page,'Detalle','Hace falta retirar el obstáculo para ingresar.');await click(page,'Guardar registro');await wait(page,'Acceso bloqueado');
- assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await click(page,'Adjuntar foto privada');const upload=await page.$('input[type="file"]');assert.ok(upload);await upload.uploadFile(picturePath);await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(b=>b.textContent==='Guardar registro'&&!b.disabled));await upload.uploadFile(invalidPath);await wait(page,'Elegí una imagen JPEG');assert.equal(await page.$$eval('button',all=>all.find(b=>b.textContent==='Guardar registro').disabled),true);await upload.uploadFile(picturePath);await click(page,'Guardar registro');await wait(page,'Fotografía privada adjunta');await wait(page,'Descargar foto');
+ assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await click(page,'Adjuntar foto privada');const upload=await page.$('input[type="file"]');assert.ok(upload);await upload.uploadFile(picturePath);await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(b=>b.textContent==='Guardar registro'&&!b.disabled));await upload.uploadFile(invalidPath);await wait(page,'Elegí una imagen JPEG');assert.equal(await page.$$eval('button',all=>all.find(b=>b.textContent==='Guardar registro').disabled),true);await upload.uploadFile(picturePath);await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(b=>b.textContent==='Guardar registro'&&!b.disabled));assert.ok(await page.$eval('[data-testid="project-switch"]',e=>e.disabled));
+ if(mode==='photo-cancel'){await click(page,'Cancelar');await page.waitForFunction(()=>!document.querySelector('form')&&!document.querySelector('[data-testid="project-switch"]').disabled);assert.equal(posts.length,6);assert.equal(records.ISSUES[0].photos?.length||0,0);checks.push('site-register-photo-draft-locks-project-until-explicit-cancel');await context.close();return;}
+ await click(page,'Guardar registro');
+ if(mode.startsWith('photo-')){await retryUnobserved(page,posts,7);assert.equal(photoAttempts,2);assert.equal(statusChecks,1);assert.equal(records.ISSUES[0].photos.length,1);checks.push(mode+'-retries-exact-private-image-command-once');await context.close();return;}
+ await wait(page,'Fotografía privada adjunta');await wait(page,'Descargar foto');
  assert.equal(await page.$eval('a',a=>new URL(a.href).pathname),'/api/identity/site-photo');assert.ok(!(await page.$eval('a',a=>a.href)).includes('blob.vercel-storage'));assert.equal(posts.length,7);checks.push(`private-photo-selection-and-authorized-link-${width}`);
  checks.push(`roster-issue-material-lifecycle-${width}`);await context.close();
 }
 try{
  let ready=false;for(let count=0;count<120;count++){if(server.exitCode!==null)throw new Error('Fixture exited');try{if((await fetch(origin)).ok){ready=true;break;}}catch{}await new Promise(done=>setTimeout(done,500));}assert.ok(ready);
  browser=await puppeteer.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{}),args:['--no-sandbox','--disable-setuid-sandbox']});
- for(const width of [320,390,768,1280])await scenario(width);for(const mode of ['uncertain','conflict','denied'])await scenario(390,mode);assert.deepEqual(errors,[]);
+ for(const width of [320,390,768,1280])await scenario(width);for(const mode of ['draft-cancel','photo-cancel','uncertain','rollback','not-arrived','photo-rollback','photo-not-arrived','conflict','denied'])await scenario(390,mode);assert.deepEqual(errors,[]);
  const proof={status:'PASS',environment:'actual-component-with-intercepted-synthetic-api',widths:[320,390,768,1280],checks,errors,productionDataWritten:false,workerPhoneVerified:false,metaMessagesSent:0};
  writeFileSync(path.join(output,'browser.json'),JSON.stringify(proof,null,2));console.log(JSON.stringify(proof));
 }catch(error){writeFileSync(path.join(output,'browser-failure.json'),JSON.stringify({message:error.message,errors,serverLog},null,2));throw error;}
-finally{await browser?.close();try{if(process.platform!=='win32')process.kill(-server.pid,'SIGTERM');else server.kill();}catch{}await new Promise(done=>setTimeout(done,500));rmSync(fixture,{recursive:true,force:true});}
+finally{await browser?.close();try{if(process.platform!=='win32')process.kill(-server.pid,'SIGTERM');else server.kill();}catch{}await new Promise(done=>setTimeout(done,500));assert.equal(path.dirname(path.resolve(fixture)),path.resolve(root,'.vercel'));rmSync(fixture,{recursive:true,force:true});}

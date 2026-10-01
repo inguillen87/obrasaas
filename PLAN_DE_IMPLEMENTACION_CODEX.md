@@ -10,13 +10,15 @@ El plan anterior se conserva en `docs/history/PLAN_2026-09-25_UNVERIFIED.md`. Su
 
 ## Base real y continuidad
 
-Repositorio único: `inguillen87/obrasaas`. Dominio principal: **obrasaas.com**. Base productiva verificada antes de esta revisión: **4b297d06296b035a420fdc46119ae06dcf5046c1**, PR #5. Mantener separados Chatboc, MuniControl y los demás productos.
+Repositorio único: `inguillen87/obrasaas`. Dominio principal: **obrasaas.com**. Base del corte integral del 1 de octubre: **2e6edee85726231b25cb845b7884bd100741ef5f**. Mantener separados Chatboc, MuniControl y los demás productos.
 
 Conservar sesión personal Clerk, marca v3, almacenamiento privado, rechazo de respuestas simuladas y ámbito canónico de empresas/obras. El alta de una empresa en Clerk no concede automáticamente acceso a todos los trabajadores, obras o registros históricos.
 
 La rama enterprise `1677ff72773c95140535603093e5cb8624d1f063` contiene piezas reutilizables de Embedded Signup, preparación por obra, revisiones de plantillas, participantes y operaciones. **Existencia en esa rama no implica publicación o aceptación en el dominio principal.** Reutilizar contratos y migrar cortes integrados; no publicar esa rama completa a ciegas ni mantener motores de fichaje paralelos.
 
 ## Estados de evidencia obligatorios
+
+El corte integral incorpora participantes e invitaciones, presentación privada de identidad con revisión humana, jornada y sectores/QR, evidencia privada, propuestas de cantidades/avance, compras/recepciones y pendientes auditados. Embedded Signup usa estados durables, credenciales cifradas aisladas e inbox firmado y catálogo/solicitud de plantillas por WABA. Se adaptaron contratos enterprise a las tablas canónicas existentes; no se creó otro motor ni se aplicó una migración a Production. Las pruebas controladas y sus límites figuran en `docs/production/integral-worksite.md`. Su estado de publicación se verifica por SHA/deployment en el PR; la aceptación humana y las llamadas de autorización a Meta continúan siendo evidencias separadas.
 
 Cada función debe indicar por separado: código implementado, prueba automatizada con fuente/identidad controladas, revisión publicada en Production y aceptación con un cliente real. Sólo la última permite afirmar que el cliente ya completó ese circuito.
 

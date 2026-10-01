@@ -39,6 +39,13 @@ test('only reviewed signed protocols bypass the service credential boundary', ()
   assert.equal(legacyBoundaryKind('/api/auth/verify'), 'signed-protocol');
   assert.equal(legacyBoundaryKind('/api/auth/verify','POST'), 'private-api');
 });
+test('customer callback bypass is limited to its signed handshake and receiver', () => {
+  for (const method of ['GET','POST']) assert.equal(legacyBoundaryKind('/api/meta/customer-callback',method), 'signed-protocol');
+  for (const method of ['HEAD','OPTIONS','PUT','PATCH','DELETE']) assert.equal(legacyBoundaryKind('/api/meta/customer-callback',method), 'private-api');
+  for (const path of ['/api/meta/customer-callback/fake','/api/meta/customer-callback-extra','/api/meta/fake']) {
+    for (const method of ['GET','POST']) assert.equal(legacyBoundaryKind(path,method), 'private-api');
+  }
+});
 test('public marketing and explicit assets remain accessible', () => {
   for (const path of ['/','/sign-in','/sign-up','/pricing','/bim_render.png','/icon-192.svg','/sw.js']) assert.equal(legacyBoundaryKind(path),'public');
   assert.equal(legacyBoundaryKind('/api/health'), 'public-api');

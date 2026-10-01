@@ -58,6 +58,38 @@ export function createWorkspaceStore({ connect }) {
     return result.rows[0] || null;
   }
   return {
+    // Company role changes lock the target membership without first locking a
+    // project. Field transactions acquire their own membership before project.
+    async organizationOperation(session, {projectId, scope: expected}, writable, callback) {
+      if(typeof callback!=='function'||typeof writable!=='boolean')throw new TypeError('Explicit organization transaction required');
+      if(!/^[a-f0-9]{64}$/.test(expected||''))throw new WorkspaceError('WORKSPACE_CONTEXT_CHANGED',409);
+      return transaction(session,writable,async(client,member,scope)=>{
+        checkScope(scope,expected);
+        if(member.role!=='ADMIN')throw new WorkspaceError('WORKSPACE_ORGANIZATION_PERMISSION_REQUIRED',403);
+        await project(client,member,projectId);
+        return callback(client,member,scope);
+      });
+    },
+    // Operational modules share canonical membership and project revocation.
+    // The module must enforce its own action-level permission inside the callback.
+    async projectOperation(session, {projectId, scope: expected}, writable, callback) {
+      if (typeof callback !== 'function' || typeof writable !== 'boolean') throw new TypeError('Explicit project transaction required');
+      if (!/^[a-f0-9]{64}$/.test(expected || '')) throw new WorkspaceError('WORKSPACE_CONTEXT_CHANGED',409);
+      return transaction(session,writable,async(client,member,scope)=>{
+        checkScope(scope,expected);
+        await project(client,member,projectId);
+        const selected=await client.query(`SELECT p.id,p.name,p.metadata,o.metadata AS "organizationMetadata"
+          FROM public."Project" p JOIN public."Organization" o ON o.id=p."organizationId"
+          WHERE p.id=$1 AND p."organizationId"=$2 AND p.status='ACTIVE' ${writable?'FOR UPDATE OF p':''}`,[projectId,member.organizationId]);
+        if(selected.rows.length!==1)throw new WorkspaceError('WORKSPACE_PROJECT_UNAVAILABLE',404);
+        // Lock order matches access revocation: project first, assignment second.
+        if(writable&&!portfolioAccess(member.role)) {
+          const assigned=await client.query(`SELECT id FROM public."ProjectMembership" WHERE "projectId"=$1 AND "tenantMembershipId"=$2 AND status='ACTIVE' FOR SHARE`,[projectId,member.membershipId]);
+          if(assigned.rows.length!==1)throw new WorkspaceError('WORKSPACE_PROJECT_UNAVAILABLE',404);
+        }
+        return callback(client,member,scope,selected.rows[0]);
+      });
+    },
     // Internal composition point: the caller supplies no identity or role claims.
     // Only the independently verified session and canonical membership decide access.
     async integrationProject(session, {projectId, scope: expected}, writable, callback) {

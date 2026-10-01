@@ -5,15 +5,16 @@ const endpoint='/api/identity/company-onboarding';
 const explanations={COMPANY_VERIFIED_PROFILE_REQUIRED:'Verificá el correo de tu cuenta antes de crear la empresa.',COMPANY_CREATOR_ROLE_REQUIRED:'La organización activa requiere un administrador para completar el alta.',COMPANY_ALREADY_CONFIGURED:'Esta organización ya tiene una empresa. No se creó otra.',COMPANY_IDENTITY_CONFLICT:'La identidad coincide con un registro que no puede reasignarse automáticamente. No se fusionaron cuentas.',WORKSPACE_MEMBERSHIP_REQUIRED:'Tu pertenencia a esta empresa no está habilitada.',WORKSPACE_CONTEXT_CHANGED:'Cambió la organización activa. Volvé a abrir la empresa correcta.',COMPANY_CREATION_LIMIT:'Se alcanzó el límite de nuevas empresas durante las últimas 24 horas.',COMPANY_INITIAL_DATES_INVALID:'Completá inicio y fin de cada tarea, o dejá ambos vacíos.',COMPANY_INITIAL_TASKS_DUPLICATED:'Dos tareas tienen el mismo título. Diferencialas antes de guardar.',SESSION_REQUIRED:'Tu sesión terminó. Volvé a ingresar.'};
 const explain=code=>explanations[code]||'No se pudo confirmar el alta. No se agregaron datos de ejemplo ni se conectó WhatsApp.';
 export function CompanyBootstrapPanel({organizationId,organizationName,getSessionToken,getProfileToken,children}){
- const [stage,setStage]=useState('checking'),[busy,setBusy]=useState(false),[notice,setNotice]=useState(''),[attempt,setAttempt]=useState(null),[receipt,setReceipt]=useState(null);
+ const [stage,setStage]=useState('checking'),[busy,setBusy]=useState(false),[notice,setNotice]=useState(''),[attempt,setAttempt]=useState(null),[receipt,setReceipt]=useState(null),[canRetry,setCanRetry]=useState(false);
  const [companyName,setCompanyName]=useState(organizationName||''),[projectName,setProjectName]=useState(''),[address,setAddress]=useState(''),[tasks,setTasks]=useState([]),[confirmed,setConfirmed]=useState(false);
- const mounted=useRef(true),version=useRef(0);
+ const mounted=useRef(true),version=useRef(0),retainedProfileProof=useRef(null);
  const api=useCallback(async function(method,body=null,operationId=null){
   const token=await getSessionToken();if(!token){const error=new Error(explain('SESSION_REQUIRED'));error.status=401;throw error;}
   const headers={Authorization:'Bearer '+token};
   if(method==='POST'){
-   let proof;try{proof=await getProfileToken();}catch{const error=new Error(explain('COMPANY_VERIFIED_PROFILE_REQUIRED'));error.status=403;throw error;}
+   let proof=retainedProfileProof.current;try{if(!proof)proof=await getProfileToken();}catch{const error=new Error(explain('COMPANY_VERIFIED_PROFILE_REQUIRED'));error.status=403;throw error;}
    if(!proof){const error=new Error(explain('COMPANY_VERIFIED_PROFILE_REQUIRED'));error.status=403;throw error;}
+   retainedProfileProof.current=proof;
    headers['Content-Type']='application/json';headers['X-Obrasaas-Bootstrap-Profile']=proof;
   }
   const suffix=method==='GET'?'?'+new URLSearchParams({expectedClerkOrganizationId:organizationId,...(operationId?{operationId}:{})}):'';
@@ -22,7 +23,7 @@ export function CompanyBootstrapPanel({organizationId,organizationName,getSessio
  },[getSessionToken,getProfileToken,organizationId]);
  function accept(value){
   if(value.created!==true||value.state!=='CREATED'||!value.receiptId||!value.projectId||!value.organizationId)throw new Error('Falta el recibo confirmado del alta.');
-  version.current++;setReceipt(value);setAttempt(null);setStage('created');setNotice('Empresa y primera obra creadas. WhatsApp todavía no quedó conectado.');
+  version.current++;retainedProfileProof.current=null;setReceipt(value);setAttempt(null);setCanRetry(false);setStage('created');setNotice('Empresa y primera obra creadas. WhatsApp todavía no quedó conectado.');
  }
  async function inspect(){
   if(busy||attempt)return;setBusy(true);setNotice('');const current=++version.current;
@@ -37,20 +38,24 @@ export function CompanyBootstrapPanel({organizationId,organizationName,getSessio
    if(cancelled||!mounted.current||current!==version.current)return;
    if(value.state==='ALREADY_CONFIGURED')setStage('ready');else if(value.state==='NOT_CREATED'&&value.canCreate===true)setStage('new');else throw new Error('No se pudo determinar el estado de la empresa.');
   }).catch(error=>{if(!cancelled&&mounted.current&&current===version.current){setNotice(error.message);setStage('failed');}});
-  return()=>{cancelled=true;mounted.current=false;};
+  return()=>{cancelled=true;mounted.current=false;retainedProfileProof.current=null;};
  },[api]);
+ async function send(body){
+  version.current++;setBusy(true);setCanRetry(false);setNotice('');
+  try{const value=await api('POST',body);if(mounted.current)accept(value);}
+  catch(error){if(mounted.current){if(error.status&&error.status<500){retainedProfileProof.current=null;setAttempt(null);setNotice(error.message);}else setNotice('No recibimos la confirmación. Conservamos este intento: comprobá el alta antes de volver a crear una empresa.');}}
+  finally{if(mounted.current)setBusy(false);}
+ }
  async function submit(event){
   event.preventDefault();if(busy||attempt||!confirmed)return;
   const body={operationId:crypto.randomUUID(),expectedClerkOrganizationId:organizationId,companyName,project:{name:projectName,address},initialTasks:tasks.map(({title,startsOn,endsOn})=>({title,startsOn,endsOn})),confirmNewCompany:true};
-  version.current++;setAttempt(body);setBusy(true);setNotice('');
-  try{const value=await api('POST',body);if(mounted.current)accept(value);}
-  catch(error){if(mounted.current){if(error.status&&error.status<500){setAttempt(null);setNotice(error.message);}else setNotice('No recibimos la confirmación. Conservamos este intento: comprobá el alta antes de volver a crear una empresa.');}}
-  finally{if(mounted.current)setBusy(false);}
+  retainedProfileProof.current=null;setAttempt(body);await send(body);
  }
+ async function retry(){if(!attempt||busy||!canRetry)return;await send(attempt);}
  async function recover(){
-  if(!attempt||busy)return;setBusy(true);
+  if(!attempt||busy)return;setBusy(true);setCanRetry(false);
   try{const value=await api('GET',null,attempt.operationId);if(!mounted.current)return;
-   if(value.state==='CREATED')accept(value);else if(value.state==='ALREADY_CONFIGURED'){setAttempt(null);setStage('ready');}else setNotice('Todavía no se observa el alta. No se reenvió la solicitud ni se declaró que hubiera fallado. Volvé a comprobarla.');
+   if(value.state==='CREATED')accept(value);else if(value.state==='ALREADY_CONFIGURED'){retainedProfileProof.current=null;setAttempt(null);setStage('ready');}else if(value.state==='NOT_OBSERVED'||value.state==='NOT_CREATED'&&value.canCreate===true){setCanRetry(true);setNotice('Todavía no se observa el alta. Podés reenviar este mismo intento con su identificador y sus datos originales. No se reenvía automáticamente.');}else throw new Error('No se pudo comprobar el alta de la empresa.');
   }catch(error){if(mounted.current)setNotice(error.message);}finally{if(mounted.current)setBusy(false);}
  }
  const locked=busy||Boolean(attempt);
@@ -73,7 +78,7 @@ export function CompanyBootstrapPanel({organizationId,organizationName,getSessio
    </section>
    <label className={styles.confirmation}><input type="checkbox" checked={confirmed} required disabled={locked} onChange={event=>setConfirmed(event.target.checked)}/><span>Confirmo que quiero crear una empresa nueva para esta organización. No se importarán empleados, mensajes, gastos ni obras de otras empresas.</span></label>
    <p className={styles.caption}>Se comprobarán tu sesión de administrador y el correo verificado por Clerk. El nombre declarado no acredita una verificación legal de la empresa.</p>
-   <div className={styles.actions}>{attempt?<button type="button" disabled={busy} onClick={recover}>Comprobar creación</button>:<button className={styles.primary} type="submit" disabled={busy||!confirmed}>Crear empresa y primera obra</button>}</div>
+   <div className={styles.actions}>{attempt?<><button type="button" disabled={busy} onClick={recover}>Comprobar creación</button>{canRetry&&<button type="button" disabled={busy} onClick={retry}>Reenviar mismo intento</button>}</>:<button className={styles.primary} type="submit" disabled={busy||!confirmed}>Crear empresa y primera obra</button>}</div>
   </form>}
   {stage==='created'&&receipt&&<div className={styles.created}><h3>El espacio está creado</h3><dl><dt>Empresa</dt><dd>{receipt.companyName}</dd><dt>Primera obra</dt><dd>{receipt.projectName}</dd><dt>Tareas iniciales</dt><dd>{receipt.initialTaskCount}</dd></dl><p>Sin empleados, movimientos económicos ni mensajes de ejemplo. El número y la autorización de Meta se completan por separado.</p><small>Recibo: {receipt.receiptId}</small><button type="button" className={styles.primary} onClick={()=>setStage('ready')}>Entrar a mi obra</button></div>}
  </section>;

@@ -1,13 +1,13 @@
 import "./globals.css";
 
 export const metadata = {
-  title: "ObraSaaS — Plataforma Enterprise de Control de Obra & Certificaciones Digitales",
-  description: "Sistema integral de gestión de obras con WhatsApp Bot IA, KYC biométrico, geocerca GPS, Libro de Obra Digital (Ley 22.250), Curva S financiera y certificaciones SHA-256. La plataforma #1 para constructoras en Argentina y LATAM.",
+  title: "ObraSaaS — Gestión y seguimiento de obras",
+  description: "Organizá participantes, jornadas, evidencias privadas, tareas y materiales de cada obra. Revisá identidades y propuestas de avance con permisos y recibos de operación.",
   manifest: "/manifest.json",
   metadataBase: new URL("https://obrasaas.com"),
   openGraph: {
-    title: "ObraSaaS — Plataforma Enterprise de Control de Obra",
-    description: "WhatsApp Bot IA + Geocerca GPS + Certificaciones SHA-256 para constructoras, desarrolladoras inmobiliarias y gobiernos.",
+    title: "ObraSaaS — Gestión y seguimiento de obras",
+    description: "Planificación, actividad de campo, evidencias privadas y decisiones autorizadas para constructoras.",
     url: "https://obrasaas.com",
     siteName: "ObraSaaS",
     locale: "es_AR",
@@ -15,8 +15,8 @@ export const metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "ObraSaaS — Control de Obra Enterprise",
-    description: "La plataforma #1 para constructoras en Argentina. WhatsApp + IA + GPS + Certificaciones digitales.",
+    title: "ObraSaaS — Gestión y seguimiento de obras",
+    description: "Organizá tu equipo y seguí cada obra con tareas, materiales, evidencias y revisiones autorizadas.",
   },
   keywords: ["control de obra", "software construcción", "SaaS constructoras", "gestión de obras Argentina", "libro de obra digital", "UOCRA", "ART", "certificaciones digitales", "WhatsApp obra"],
   robots: { index: true, follow: true },
