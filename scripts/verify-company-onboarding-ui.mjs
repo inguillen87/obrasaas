@@ -6,7 +6,7 @@ import puppeteer from 'puppeteer';
 assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV);
 const root=realpathSync(process.cwd()),parent=path.join(root,'.vercel'),output=path.join(parent,'company-onboarding-evidence');mkdirSync(output,{recursive:true});
 const dir=mkdtempSync(path.join(root,'.vercel/company-bootstrap-ui-')),app=path.join(dir,'app');mkdirSync(app);
-for(const file of readdirSync(path.join(root,'src/app/(identity)/cuenta')).filter(name=>/\.(js|css)$/.test(name)))copyFileSync(path.join(root,'src/app/(identity)/cuenta',file),path.join(app,file));
+for(const file of readdirSync(path.join(root,'src/app/(identity)/cuenta')).filter(name=>/\.(js|mjs|css)$/.test(name)))copyFileSync(path.join(root,'src/app/(identity)/cuenta',file),path.join(app,file));
 writeFileSync(path.join(dir,'package.json'),JSON.stringify({name:'synthetic-company-onboarding-ui',private:true}));
 writeFileSync(path.join(dir,'next.config.mjs'),`export default {devIndicators:false,turbopack:{root:${JSON.stringify(root)}}};`);
 writeFileSync(path.join(app,'layout.js'),`export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:12,background:'#081c2d',fontFamily:'Arial,sans-serif'}}>{children}</body></html>}`);
@@ -81,7 +81,16 @@ async function scenario(mode,width=390){
  checks.push(`${mode}-company-to-workspace-${width}`);await context.close();
 }
 try{
- let ready=false;for(let i=0;i<120;i++){if(server.exitCode!==null)throw new Error('Fixture exited');try{const r=await fetch(origin);if(r.ok){ready=true;break;}}catch{}await new Promise(done=>setTimeout(done,500));}assert.ok(ready);
+ let ready=false;
+ for(let i=0;i<120;i++){
+  if(server.exitCode!==null)throw new Error('Fixture exited: '+log.slice(-5000));
+  let response;try{response=await fetch(origin);}catch{}
+  await response?.body?.cancel();
+  if(response?.ok){ready=true;break;}
+  if(response&&response.status>=500)throw new Error('Fixture page failed with HTTP '+response.status+': '+log.slice(-5000));
+  await new Promise(done=>setTimeout(done,500));
+ }
+ assert.ok(ready,'Fixture server unavailable: '+log.slice(-5000));
  browser=await puppeteer.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{}),args:['--no-sandbox','--disable-setuid-sandbox']});
  for(const width of [320,390,768,1280])await scenario('empty',width);await scenario('planned',390);await scenario('uncertain');await scenario('no-arrival');await scenario('rollback');await scenario('denied');
  assert.deepEqual(errors,[]);const proof={status:'PASS',environment:'actual-ui-with-intercepted-synthetic-services',checks,widths:[320,390,768,1280],errors,realClerkLogin:false,physicalWhatsApp:false,productionDataWritten:false};
