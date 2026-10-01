@@ -14,7 +14,7 @@ mkdirSync(app);for(const file of readdirSync(path.join(root,'src/app/(identity)/
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'isolated-workspace-ui-fixture',private:true}));
 writeFileSync(path.join(fixture,'next.config.mjs'),`export default {turbopack:{root:${JSON.stringify(root)}}};\n`);
 writeFileSync(path.join(app,'layout.js'),`export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:16,background:'#0b1c2d',fontFamily:'Arial,sans-serif'}}>{children}</body></html>}`);
-writeFileSync(path.join(app,'page.js'),`import {AccountWorkspace} from './workspace-client';export default function Page(){return <main style={{maxWidth:1000,margin:'0 auto'}}><AccountWorkspace/></main>}`);
+writeFileSync(path.join(app,'page.js'),`'use client';import {AccountWorkspace} from './workspace-client';const token=async()=>'synthetic-active-tab-A';export default function Page(){return <main style={{maxWidth:1000,margin:'0 auto'}}><AccountWorkspace getSessionToken={token}/></main>}`);
 const port=3108,origin='http://127.0.0.1:'+port;
 const server=spawn(process.execPath,[path.join(root,'node_modules/next/dist/bin/next'),'dev',fixture,'--webpack','--hostname','127.0.0.1','--port',String(port)],{cwd:root,env:{...process.env,NEXT_TELEMETRY_DISABLED:'1'},stdio:['ignore','pipe','pipe'],detached:process.platform!=='win32'});
 let serverLog='';for(const stream of [server.stdout,server.stderr])stream.on('data',value=>{serverLog=(serverLog+value.toString()).slice(-20000);});
@@ -40,6 +40,7 @@ async function scenario(mode,width=390){
    const url=new URL(request.url());
    if(url.origin!==origin){if(url.protocol==='data:'||url.protocol==='blob:')return request.continue();return request.abort();}
    if(url.pathname!=='/api/identity/workspace')return request.continue();
+   assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');
    requests.push({method:request.method(),query:url.search});
    let body,status=200;
    if(request.method()==='POST'){

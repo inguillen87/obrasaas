@@ -1,7 +1,7 @@
 name: Authorized workspace acceptance
 on:
   push:
-    branches: [master, 'feat/integral-worksite-*', 'hotfix/production-workspace-*', 'hotfix/customer-whatsapp-self-service-*', 'hotfix/new-constructor-onboarding-*', 'hotfix/field-team-journal-*', 'fix/whatsapp-signup-*']
+    branches: [master, 'feat/integral-worksite-*', 'hotfix/production-workspace-*', 'hotfix/customer-whatsapp-self-service-*', 'hotfix/new-constructor-onboarding-*', 'hotfix/field-team-journal-*', 'fix/whatsapp-signup-*', 'fix/clerk-*']
   workflow_dispatch:
 permissions:
   contents: read
@@ -72,6 +72,11 @@ jobs:
       - run: node scripts/verify-workspace-ui.mjs
       - run: node scripts/verify-customer-whatsapp-ui.mjs
       - run: node scripts/verify-company-onboarding-ui.mjs
+      - name: Clerk entry, invitation navigation and expired-session recovery
+        run: |
+          npx eslint src/lib/identity-return-path.mjs src/lib/session-recovery.mjs 'src/app/(identity)/cuenta/session-recovery.js' 'src/app/(identity)/cuenta/invitation-entry.js' 'src/app/(identity)/cuenta/workspace-session-request.mjs' scripts/verify-clerk-access-ui.mjs tests/production-identity-return-path.test.mjs tests/production-session-recovery.test.mjs tests/production-workspace-session-request.test.mjs
+          node --test tests/production-identity-return-path.test.mjs tests/production-session-recovery.test.mjs tests/production-workspace-session-request.test.mjs
+          node scripts/verify-clerk-access-ui.mjs
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
@@ -89,5 +94,6 @@ jobs:
             .vercel/meta-field-evidence/
             .vercel/meta-signup-field-lifecycle-evidence/
             .vercel/operations-status-evidence/
+            .vercel/clerk-access-evidence/
           include-hidden-files: true
           retention-days: 7
