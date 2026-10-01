@@ -26,6 +26,8 @@ La habilitación depende de configuración efectiva y permisos del proveedor, se
 
 Las pruebas ejecutables cubren contratos HTTP/políticas, PostgreSQL real desechable, concurrencia, aislamiento de dos empresas, permisos/revocación, rollback de auditoría, pérdida de respuesta después del commit, idempotencia y recuperación. Los componentes reales se ensayan con APIs controladas a 320, 390, 768 y 1280 px, incluyendo errores y conservación de datos. Se revisan capturas, desbordamiento y errores del navegador. Los workflows `Production access boundary` y `Authorized workspace acceptance` ejecutan las comprobaciones antes de integrar.
 
+El acceso usa las variables de color vigentes de Clerk 7. El verificador `verify-access-contrast.mjs` carga el componente Clerk real y mide colores computados y composición sobre el fondo en registro/ingreso, cuatro tamaños, foco y hover. No envía formularios ni crea cuentas o registros de negocio. El modo live sólo admite el dominio canónico. La prueba distingue el formulario visible de un honeypot transparente y comprueba contraseña visible cuando aparece.
+
 Pruebas locales controladas no acreditan correo entregado, identidad civil, ubicación física, cámara QR en teléfono, análisis de una grabación real ni conexión Meta de una empresa externa. El PR documenta runs y deployment/SHA. La aceptación humana permanece sin verificar hasta ejecutar el circuito con participantes autorizados y guardar sus resultados.
 
 Detalles: [participantes/KYC](participant-access-and-private-kyc.md), [jornada/evidencia/avance](field-operations.md), [Embedded Signup](../meta-customer-onboarding.md).

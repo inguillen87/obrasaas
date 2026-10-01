@@ -5,7 +5,7 @@
 .header{display:flex;align-items:center;justify-content:space-between;gap:20px}
 .card h1{font-size:clamp(27px,4vw,35px);line-height:1.2;letter-spacing:-.03em;margin:28px 0 12px}
 .lead{font-size:14px;line-height:1.7;color:#bdcee2;margin:0 0 25px}
-.widget{display:flex;justify-content:center;max-width:100%;min-height:300px}
+.widget{display:flex;justify-content:center;max-width:100%;min-height:300px;color-scheme:dark}
 .widget :global(.cl-rootBox),.widget :global(.cl-cardBox){max-width:100%;width:100%}
 .widget :global(.cl-card){box-shadow:none;border:1px solid #2d3e55}
 .note{color:#b4c4db;font-size:12px;line-height:1.7;border-top:1px solid #2d3e55;padding-top:18px;margin:24px 0 0}
