@@ -6,7 +6,7 @@ import puppeteer from 'puppeteer';
 assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV);
 const root=process.cwd(),output=path.join(root,'.vercel/company-onboarding-evidence');mkdirSync(output,{recursive:true});
 const dir=mkdtempSync(path.join(root,'.vercel/company-bootstrap-ui-')),app=path.join(dir,'app');mkdirSync(app);
-for(const file of ['company-bootstrap-panel.js','company-bootstrap-panel.module.css','workspace-client.js','workspace.module.css','customer-whatsapp-panel.js','customer-whatsapp-panel.module.css','task-create-panel.js'])copyFileSync(path.join(root,'src/app/(identity)/cuenta',file),path.join(app,file));
+for(const file of ['company-bootstrap-panel.js','company-bootstrap-panel.module.css','workspace-client.js','workspace.module.css','customer-whatsapp-panel.js','customer-whatsapp-panel.module.css','site-register-panel.js','site-register-panel.module.css','task-create-panel.js'])copyFileSync(path.join(root,'src/app/(identity)/cuenta',file),path.join(app,file));
 writeFileSync(path.join(dir,'package.json'),JSON.stringify({name:'synthetic-company-onboarding-ui',private:true}));
 writeFileSync(path.join(dir,'next.config.mjs'),`export default {devIndicators:false,turbopack:{root:${JSON.stringify(root)}}};`);
 writeFileSync(path.join(app,'layout.js'),`export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:12,background:'#081c2d',fontFamily:'Arial,sans-serif'}}>{children}</body></html>}`);

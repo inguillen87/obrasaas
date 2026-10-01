@@ -1,7 +1,7 @@
 name: Authorized workspace acceptance
 on:
   push:
-    branches: [master, 'hotfix/production-workspace-*', 'hotfix/customer-whatsapp-self-service-*', 'hotfix/new-constructor-onboarding-*']
+    branches: [master, 'hotfix/production-workspace-*', 'hotfix/customer-whatsapp-self-service-*', 'hotfix/new-constructor-onboarding-*', 'hotfix/field-team-journal-*']
   workflow_dispatch:
 permissions:
   contents: read
@@ -34,10 +34,12 @@ jobs:
           node-version: 24
           package-manager-cache: false
       - run: npm ci --no-audit --no-fund
-      - run: node --test tests/production-workspace*.test.mjs tests/production-customer-whatsapp-setup.test.mjs tests/production-company-onboarding.test.mjs
+      - run: node --test tests/production-site-register.test.mjs tests/production-site-photo.test.mjs tests/production-workspace*.test.mjs tests/production-customer-whatsapp-setup.test.mjs tests/production-company-onboarding.test.mjs
       - name: Workspace lint
-        run: npx eslint src/lib/workspace-*.mjs src/lib/verified-session.mjs src/app/api/identity/workspace/route.js tests/production-workspace*.test.mjs scripts/verify-workspace-postgres.mjs scripts/verify-company-onboarding-postgres.mjs scripts/verify-company-onboarding-ui.mjs scripts/verify-company-onboarding-readonly.mjs scripts/lib/company-schema-preflight.mjs tests/production-company-schema-preflight.test.mjs src/lib/company-onboarding-*.mjs src/app/api/identity/company-onboarding/route.js src/app/api/identity/task-creation/route.js tests/production-company-onboarding.test.mjs scripts/verify-workspace-ui.mjs scripts/verify-customer-whatsapp-ui.mjs scripts/lib/meta-template-catalog-check.mjs scripts/verify-meta-template-catalog.mjs tests/production-meta-template-catalog.test.mjs src/lib/customer-whatsapp-*.mjs src/lib/whatsapp/tenant-workspace-policy.js src/lib/whatsapp/project-workspace-profile.js src/app/api/identity/whatsapp-setup/route.js tests/production-customer-whatsapp-setup.test.mjs 'src/app/(identity)/cuenta'
+        run: npx eslint src/lib/workspace-*.mjs src/lib/verified-session.mjs src/app/api/identity/workspace/route.js tests/production-workspace*.test.mjs scripts/verify-workspace-postgres.mjs scripts/verify-company-onboarding-postgres.mjs scripts/verify-site-register-postgres.mjs scripts/verify-site-register-ui.mjs src/lib/site-register-*.mjs src/lib/site-photo-*.mjs src/app/api/identity/site-photo/route.js tests/production-site-photo.test.mjs tests/production-site-register.test.mjs src/app/api/identity/site-register/route.js scripts/verify-company-onboarding-ui.mjs scripts/verify-company-onboarding-readonly.mjs scripts/lib/company-schema-preflight.mjs tests/production-company-schema-preflight.test.mjs src/lib/company-onboarding-*.mjs src/app/api/identity/company-onboarding/route.js src/app/api/identity/task-creation/route.js tests/production-company-onboarding.test.mjs scripts/verify-workspace-ui.mjs scripts/verify-customer-whatsapp-ui.mjs scripts/lib/meta-template-catalog-check.mjs scripts/verify-meta-template-catalog.mjs tests/production-meta-template-catalog.test.mjs src/lib/customer-whatsapp-*.mjs src/lib/whatsapp/tenant-workspace-policy.js src/lib/whatsapp/project-workspace-profile.js src/app/api/identity/whatsapp-setup/route.js tests/production-customer-whatsapp-setup.test.mjs 'src/app/(identity)/cuenta'
       - run: node scripts/verify-workspace-postgres.mjs
+      - run: node scripts/verify-site-register-postgres.mjs
+      - run: node scripts/verify-site-register-ui.mjs
       - run: node scripts/verify-company-onboarding-postgres.mjs
       - run: node scripts/verify-workspace-ui.mjs
       - run: node scripts/verify-customer-whatsapp-ui.mjs
@@ -50,5 +52,6 @@ jobs:
             .vercel/workspace-evidence/
             .vercel/customer-whatsapp-evidence/
             .vercel/company-onboarding-evidence/
+            .vercel/site-register-evidence/
           include-hidden-files: true
           retention-days: 7

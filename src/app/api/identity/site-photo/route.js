@@ -1,0 +1,12 @@
+import {get,put} from '@vercel/blob';
+import {verifyWorkspaceSession} from '../../../../lib/verified-session.mjs';
+import {productionWorkspace} from '../../../../lib/workspace-runtime.mjs';
+import {createPrivateImageUploader} from '../../../../lib/private-image-upload.mjs';
+import {createSitePhotos} from '../../../../lib/site-photo-service.mjs';
+import {createSitePhotoHandlers} from '../../../../lib/site-photo-http.mjs';
+export const runtime='nodejs';
+export const dynamic='force-dynamic';
+const images=createPrivateImageUploader({get,put});
+const handlers=createSitePhotoHandlers({verify:verifyWorkspaceSession,service:createSitePhotos({workspace:productionWorkspace,upload:images.uploadImageToBlob,get})});
+export const GET=handlers.GET;
+export const POST=handlers.POST;
