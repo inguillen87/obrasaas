@@ -2,9 +2,9 @@ import {createHmac,createHash} from 'node:crypto';
 import {WorkspaceError} from './workspace-policy.mjs';
 import {OBRASAAS_META_CHANNEL} from './meta-channel-binding.mjs';
 import {customerVaultConfigured} from './meta-customer-credentials.mjs';
+import {META_CUSTOMER_REQUIRED_SCOPES,hasMetaCustomerRequiredScopes} from './meta-customer-permissions.mjs';
 
 export const metaAssetId=value=>typeof value==='string'&&/^[1-9]\d{4,31}$/.test(value);
-const requiredScopes=['business_management','whatsapp_business_management','whatsapp_business_messaging'];
 export function customerReplyMessage(value){
  if(value?.type==='interactive'){
   const clean=(text,max,multiline=false)=>typeof text==='string'&&text.trim().length>0&&text.length<=max&&!(multiline?/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/:/[\u0000-\u001f\u007f]/).test(text),keys=(o,list)=>o&&typeof o==='object'&&!Array.isArray(o)&&Object.keys(o).sort().join('|')===list.sort().join('|');
@@ -54,14 +54,14 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
   async inspect({token,wabaId,phoneNumberId}){
    const ready=config();const result=await request('debug_token?'+new URLSearchParams({input_token:token}),{token:ready.appId+'|'+environment.META_APP_SECRET,appToken:true});
    const data=result.data;
-   if(data?.is_valid!==true||String(data.app_id)!==ready.appId||requiredScopes.some(scope=>!data.scopes?.includes(scope)))throw new WorkspaceError('META_CUSTOMER_TOKEN_SCOPE_REJECTED',403);
+   if(data?.is_valid!==true||String(data.app_id)!==ready.appId||!hasMetaCustomerRequiredScopes(data.scopes))throw new WorkspaceError('META_CUSTOMER_TOKEN_SCOPE_REJECTED',403);
    const expiresAt=Number(data.expires_at);if(!Number.isSafeInteger(expiresAt)||expiresAt<0||expiresAt&&expiresAt*1000<=now()+300000)throw new WorkspaceError('META_CUSTOMER_TOKEN_EXPIRED',409);
    const scopes=data.granular_scopes;
    if(!Array.isArray(scopes)||!scopes.some(scope=>scope.scope==='whatsapp_business_management'&&Array.isArray(scope.target_ids)&&scope.target_ids.map(String).includes(wabaId)))throw new WorkspaceError('META_CUSTOMER_WABA_SCOPE_REJECTED',403);
    const phones=await request(wabaId+'/phone_numbers?fields=id,display_phone_number,verified_name,code_verification_status,status&limit=100',{token});
    const phone=phones.data?.find(item=>String(item.id)===phoneNumberId);if(!phone)throw new WorkspaceError('META_CUSTOMER_PHONE_WABA_MISMATCH',403);
    // Phone verification is not the Cloud API registration signal.
-   return {expiresAt:expiresAt?new Date(expiresAt*1000).toISOString():null,scopes:[...requiredScopes],
+   return {expiresAt:expiresAt?new Date(expiresAt*1000).toISOString():null,scopes:[...META_CUSTOMER_REQUIRED_SCOPES],
     phoneStatus:typeof phone.status==='string'?phone.status:'UNKNOWN',registered:phone.status==='CONNECTED',
     displayPhoneNumber:typeof phone.display_phone_number==='string'?phone.display_phone_number.slice(0,64):null,
     verifiedBusinessName:typeof phone.verified_name==='string'?phone.verified_name.slice(0,160):null};

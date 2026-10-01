@@ -14,6 +14,8 @@ El registro de un número requiere PIN de seis dígitos y consentimiento explíc
 
 El cifrado adapta AES-256-GCM de `enterprise 1677ff7:src/lib/credentials.js`, con AAD adicional que vincula organización, obra, finalidad e identificador. Ni escrow ni token canónico salen en respuestas. Las claves no válidas fallan; no se deriva una clave débil de texto arbitrario. La API de Graph adapta inspección app/scopes/phone/WABA, appsecret proof y suscripción de `enterprise 1677ff7:src/lib/whatsapp/embedded-signup.js`, separando pasos para conservar resultados inciertos antes de cualquier siguiente efecto.
 
+El contrato compartido exige `whatsapp_business_management` y `whatsapp_business_messaging` en la inspección, activación y operación del canal. Ambos son obligatorios; un grant extra de `business_management` sigue siendo compatible, pero no reemplaza ninguno. La [colección oficial actual de Meta Cloud API](https://www.postman.com/meta/whatsapp-business-platform/documentation/wlk6lh4/whatsapp-cloud-api?entity=request-13382743-accf558f-2cde-4c15-8921-8fcb11b375ac) reserva `business_management` para consultas al portafolio empresarial. Este proveedor no realiza esas consultas: usa los activos WhatsApp seleccionados, inspección del token, suscripción, registro, plantillas, mensajes y medios. El alcance de permisos no sustituye la app exacta, grant granular sobre la WABA, teléfono perteneciente a esa WABA, token vigente, registro y suscripción verificados, ni la activación explícita del administrador.
+
 No se habilita `WhatsAppConnection.enabled`: la vinculación y la suscripción no prueban recepción, respuesta, permisos de participantes ni aceptación de campo.
 
 ## Recepción y catálogo
@@ -58,7 +60,7 @@ La UI muestra preparación, disponibilidad de configuración, estado durable y a
 
 ## Validación
 
-- `node --test tests/production-meta-customer.test.mjs`: criptografía, gates, aliases, grants cruzados, ausencia de secretos en errores, catálogo y firmas/handshake.
+- `node --test tests/production-meta-customer.test.mjs`: criptografía, gates, aliases, token con sólo los dos grants WhatsApp, compatibilidad con grants extra, rechazo de cada grant ausente y grants cruzados, ausencia de secretos en errores, catálogo y firmas/handshake.
 - `node --test tests/production-meta-customer-processing.test.mjs`: prueba cifrada de autenticidad, ventana/contexto, aceptación, jobs HMAC, ACK previo a scheduling, transporte cliente y descarga Graph limitada/hash.
 - `node scripts/verify-meta-customer-processing-postgres.mjs` con base local desechable: reserva previa a envío, incertidumbre sin retransmisión, correlación de estados, revocación entre reserva y envío, tenant cruzado, trabajador vencido y rechazo de inbox antiguo sin prueba. Usa resolvers/proveedores controlados para aislar el contrato durable; no sustituye la suite del vínculo canónico o del bridge.
 - `node scripts/verify-meta-customer-postgres.mjs` con base local desechable explícita: transacciones reales, canje concurrente único, aislamiento, cancelación, recuperación, registro incierto, inbox cifrado, replay/conflict, rollback, pérdida de ACK, lease vencida y revocación. También callback firmado sintético, locks concurrentes P→C, clasificación privada, identidad no comprobada/revocada, KYC pendiente, review/idempotencia/revisión, lease recuperada con rechazo del trabajador vencido y contenido alterado oculto/rechazado. No hace llamadas reales a Meta.

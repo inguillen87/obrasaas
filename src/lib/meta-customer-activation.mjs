@@ -4,6 +4,7 @@ import {decryptCustomerSecret} from './meta-customer-credentials.mjs';
 import {customerChannelActive} from './meta-customer-outbound.mjs';
 import {OBRASAAS_META_CHANNEL} from './meta-channel-binding.mjs';
 import {readProjectWorkspaceProfile} from './whatsapp/project-workspace-profile.js';
+import {hasMetaCustomerRequiredScopes} from './meta-customer-permissions.mjs';
 export function publicCustomerActivation(connection,readiness,member,now=Date.now()){
  const state=connection?.metadata?.customerActivation,active=customerChannelActive(connection,now);
  return {state:active?'ACTIVE':state?.state==='ACTIVE'?'REVIEW_REQUIRED':state?.state||'NOT_ACCEPTED',operational:active,actorId:state?.actorId||null,verifiedAt:state?.verifiedAt||null,lastCode:state?.lastCode||null,canActivate:member.role==='ADMIN'&&readiness.canLaunchMeta&&Boolean(connection?.metadata?.customerVerification?.registered)&&(!state?.leaseExpiresAt||Date.parse(state.leaseExpiresAt)<=now),canDeactivate:member.role==='ADMIN'&&connection?.enabled===true,roundTrip:'NOT_VERIFIED',fieldJourney:'NOT_VERIFIED'};
@@ -34,7 +35,7 @@ export function createMetaCustomerActivation({workspace,provider,environment=pro
   if(claimed.done)return {saved:true,replayed:true};
   try{
    const verified=await provider.inspect({token:claimed.token,wabaId:claimed.channel.whatsappBusinessId,phoneNumberId:claimed.channel.phoneNumberId});
-   if(!verified.registered||!['business_management','whatsapp_business_management','whatsapp_business_messaging'].every(scope=>verified.scopes?.includes(scope)))throw new WorkspaceError('META_CUSTOMER_ACTIVATION_PROVIDER_EVIDENCE_REQUIRED',409);
+   if(!verified.registered||!hasMetaCustomerRequiredScopes(verified.scopes))throw new WorkspaceError('META_CUSTOMER_ACTIVATION_PROVIDER_EVIDENCE_REQUIRED',409);
    const subscribed=await provider.inspectSubscription({token:claimed.token,wabaId:claimed.channel.whatsappBusinessId});if(subscribed!==true)throw new WorkspaceError('META_CUSTOMER_SUBSCRIPTION_UNCONFIRMED',409);
    return within(session,body,true,async(client,member,_scope,project)=>{
     if(member.role!=='ADMIN')throw new WorkspaceError('META_CUSTOMER_ACTIVATION_ADMIN_REQUIRED',403);
