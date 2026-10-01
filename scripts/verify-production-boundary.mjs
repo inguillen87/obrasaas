@@ -51,7 +51,7 @@ try {
   }
   const workspaceSessionChecks=[];
   for(const [route,methods] of [
-    ['/api/identity/participants',['GET','POST']],['/api/identity/participant-join',['GET','POST']],
+    ['/api/identity/participants',['GET','POST']],['/api/identity/participant-join',['GET','POST']],['/api/identity/worker-channel',['GET','POST']],
     ['/api/identity/field-operations',['GET','POST']],['/api/identity/field-media',['GET','POST']],
     ['/api/identity/field-qr',['GET']],['/api/identity/site-purchases',['GET','POST']],
     ['/api/identity/operations-status',['GET']],['/api/identity/meta-onboarding',['GET','POST']],
@@ -59,6 +59,7 @@ try {
     const response=await fetch(base+route,{method,headers:{'content-type':'application/json',origin:IDENTITY_ORIGIN},...(method==='POST'?{body:'{}'}:{})});
     assert.equal(response.status,401,method+' '+route);assert.equal((await response.json()).code,'SESSION_REQUIRED');assert.match(response.headers.get('cache-control'),/private, no-store/);workspaceSessionChecks.push({route,method,status:401});
   }
+  for(const method of ['GET','POST']){const response=await fetch(base+'/api/meta/customer-process',{method,...(method==='POST'?{headers:{'content-type':'application/json'},body:'{}'}:{})});assert.equal(response.status,403);assert.equal((await response.json()).code,'META_CUSTOMER_JOB_SIGNATURE_REJECTED');customerCallbackChecks.push({route:'/api/meta/customer-process',method,result:'missing-job-credential-rejected',status:403});}
   for(const route of ['/dashboard','/superadmin','/calendario','/documentos','/bim','/portal']){
     const response=await fetch(base+route,{redirect:'manual'});assert.equal(response.status,307);assert.equal(new URL(response.headers.get('location'),base).pathname,'/sign-in');
   }

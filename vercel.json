@@ -1,6 +1,7 @@
 {
   "version": 2,
   "framework": "nextjs",
+  "crons": [{"path":"/api/meta/customer-process","schedule":"*/5 * * * *"}],
   "git": {
     "deploymentEnabled": {
       "hotfix/*": false,

@@ -17,9 +17,17 @@ test('location accuracy, freshness and conservative geofence are independently e
  const now=new Date('2026-10-01T14:00:00Z'),sector={latitude:0,longitude:0,radius:30},point={latitude:0,longitude:0,accuracy:20,capturedAt:now.toISOString(),noticeVersion:'field-location-v1'};
  assert.equal(evaluateFieldLocation(point,sector,now).verificationStatus,'VERIFIED');
  assert.equal(evaluateFieldLocation({...point,accuracy:40},sector,now).verificationStatus,'REVIEW_REQUIRED');
+ const unmeasured=evaluateFieldLocation({...point,accuracy:null},sector,now);assert.equal(unmeasured.verificationStatus,'REVIEW_REQUIRED');assert.equal(unmeasured.accuracyMeters,null);
  assert.throws(()=>evaluateFieldLocation({...point,accuracy:101},sector,now),{code:'ATTENDANCE_LOCATION_ACCURACY_INVALID'});
  assert.throws(()=>evaluateFieldLocation({...point,capturedAt:'2026-10-01T13:55:00Z'},sector,now),{code:'ATTENDANCE_LOCATION_STALE'});
  assert.throws(()=>evaluateFieldLocation({...point,noticeVersion:null},sector,now),{code:'ATTENDANCE_PRIVACY_NOTICE_REQUIRED'});
+});
+test('participant reports use bounded canonical material and incident contracts',()=>{
+ const material={...context,action:'REQUEST_MATERIAL',payload:{workerId:'w-a',sectorId:'s-a',taskId:null,name:'Cemento',quantity:'0002.500',unit:'bolsa',reason:'Para preparar la mezcla de la obra.',evidenceIds:[]}};
+ assert.equal(normalizeFieldCommand(material).payload.quantity,'2.5');
+ for(const update of [{quantity:'1e6'},{quantity:'0'},{unit:'USD'},{purchaseAuthorized:true},{evidenceIds:['e-a','e-a']}])assert.throws(()=>normalizeFieldCommand({...material,payload:{...material.payload,...update}}));
+ const incident={...context,action:'REPORT_INCIDENT',payload:{workerId:'w-a',sectorId:'s-a',taskId:null,title:'Acceso bloqueado',description:'El acceso principal requiere atención.',severity:'MEDIUM',evidenceIds:[]}};
+ assert.equal(normalizeFieldCommand(incident).payload.severity,'MEDIUM');assert.throws(()=>normalizeFieldCommand({...incident,payload:{...incident.payload,severity:'MED'}}));
 });
 test('quantitative progress preserves enterprise exact decimals and does not accept inconsistent percentages',()=>{
  const input={...context,action:'PROPOSE_PROGRESS',payload:{workerId:'w-a',taskId:'t-a',revision:'2026-10-01T14:00:00.123456',progress:25,quantity:'2.5',baseline:'10',unit:'M2',reason:'Measured area at the worksite.',evidenceIds:['e-a']}};

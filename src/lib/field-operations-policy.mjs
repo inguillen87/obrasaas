@@ -1,5 +1,5 @@
 import { WorkspaceError, workspaceId, operationId, digest } from './workspace-policy.mjs';
-import { recordKeys, siteText, siteRevision } from './site-register-policy.mjs';
+import { recordKeys, siteText, siteRevision, siteQuantity, MATERIAL_UNITS } from './site-register-policy.mjs';
 import { validateReportedLocation, getDistanceMeters } from './geo.js';
 import { normalizeProgressMeasurementQuantity, parseProgressMeasurementQuantity } from './progress-measurement-quantity.js';
 
@@ -32,13 +32,16 @@ export function fieldTransition(action, latest) {
 export function evaluateFieldLocation(location, sector, now) {
   recordKeys(location,['latitude','longitude','accuracy','capturedAt','noticeVersion']);
   if(location.noticeVersion!==FIELD_NOTICE)throw new WorkspaceError('ATTENDANCE_PRIVACY_NOTICE_REQUIRED',422);
-  const point=validateReportedLocation(location),captured=new Date(location.capturedAt);
+  // Some channels supply coordinates without a measured accuracy. Preserve that
+  // absence and require human review; never fabricate a GPS precision.
+  const unknownAccuracy=location.accuracy===null;
+  const point=validateReportedLocation({...location,accuracy:unknownAccuracy?1:location.accuracy}),captured=new Date(location.capturedAt);
   if(!point.valid)throw new WorkspaceError(point.reason==='INVALID_COORDINATES'?'ATTENDANCE_LOCATION_INVALID':'ATTENDANCE_LOCATION_ACCURACY_INVALID',422);
   if(typeof location.capturedAt!=='string'||!Number.isFinite(captured.getTime())||Math.abs(now.getTime()-captured.getTime())>120000)throw new WorkspaceError('ATTENDANCE_LOCATION_STALE',422);
   const distance=getDistanceMeters(point.latitude,point.longitude,sector.latitude,sector.longitude);
-  return {latitude:point.latitude,longitude:point.longitude,accuracyMeters:point.accuracy,distanceMeters:Math.round(distance),
+  return {latitude:point.latitude,longitude:point.longitude,accuracyMeters:unknownAccuracy?null:point.accuracy,distanceMeters:Math.round(distance),
     geofenceRadiusMeters:sector.radius,locationCapturedAt:captured.toISOString(),noticeVersion:FIELD_NOTICE,
-    verificationStatus:distance+point.accuracy<=sector.radius?'VERIFIED':'REVIEW_REQUIRED'};
+    verificationStatus:!unknownAccuracy&&distance+point.accuracy<=sector.radius?'VERIFIED':'REVIEW_REQUIRED'};
 }
 export const fieldReceiptId = (actorId,projectId,key) => 'field_'+digest([actorId,projectId,key.toLowerCase()]);
 export function normalizeFieldCommand(input) {
@@ -58,6 +61,13 @@ export function normalizeFieldCommand(input) {
     recordKeys(p,['workerId','eventType','expectedEventId','sectorId','qrToken','location']);
     if(!FIELD_ACTIONS.includes(p.eventType)|| (p.expectedEventId!==null&&!workspaceId(p.expectedEventId)) || (p.qrToken!==null&&!/^[a-f0-9]{64}$/.test(p.qrToken)))throw new WorkspaceError('FIELD_INPUT_INVALID');
     payload={...p,workerId:id(p.workerId),sectorId:id(p.sectorId)};
+  }else if(['REPORT_INCIDENT','REQUEST_MATERIAL'].includes(input.action)) {
+    const incident=input.action==='REPORT_INCIDENT';
+    recordKeys(p,incident?['workerId','sectorId','taskId','title','description','severity','evidenceIds']:['workerId','sectorId','taskId','name','quantity','unit','reason','evidenceIds']);
+    if(!Array.isArray(p.evidenceIds)||p.evidenceIds.length>10||new Set(p.evidenceIds).size!==p.evidenceIds.length||(p.taskId!==null&&!workspaceId(p.taskId)))throw new WorkspaceError('FIELD_REPORT_INVALID');
+    const common={workerId:id(p.workerId),sectorId:id(p.sectorId),taskId:p.taskId,evidenceIds:p.evidenceIds.map(id).sort()};
+    if(incident){if(!['INFO','LOW','MEDIUM','HIGH','CRITICAL'].includes(p.severity))throw new WorkspaceError('FIELD_REPORT_INVALID');payload={...common,title:siteText(p.title,160,3),description:siteText(p.description,2000,8,true),severity:p.severity};}
+    else{if(!MATERIAL_UNITS.includes(p.unit))throw new WorkspaceError('FIELD_REPORT_INVALID');payload={...common,name:siteText(p.name,160,2),quantity:siteQuantity(p.quantity),unit:p.unit,reason:siteText(p.reason,2000,8,true)};}
   }else if(input.action==='REVIEW_ATTENDANCE') {
     recordKeys(p,['eventId','decision','reason']);
     if(!['APPROVE','REJECT'].includes(p.decision))throw new WorkspaceError('FIELD_DECISION_INVALID');

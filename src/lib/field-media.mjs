@@ -51,7 +51,7 @@ export function createFieldMedia({operations,put,get,analyzer,environment=()=>pr
   const run=operations.mediaTransaction;
   const prior=async(client,member,id)=>(await client.query(`SELECT id,metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "actorId"=$3 AND action='field.media.recorded'`,[id,member.organizationId,member.actorId])).rows[0];
   const saveReceipt=async(client,member,input,id,requestDigest,outcome)=>{
-    await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'field.media.recorded','Incident',$4,$5::jsonb)`,[id,member.organizationId,member.actorId,outcome.evidence.id,JSON.stringify({version:1,projectId:input.projectId,requestDigest,outcome})]);
+    await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'field.media.recorded','Incident',$4,$5::jsonb)`,[id,member.organizationId,member.actorId,outcome.evidence.id,JSON.stringify({version:1,projectId:input.projectId,requestDigest,...(member.channelProof?{channelProof:member.channelProof}:{}),outcome})]);
     return {saved:true,replayed:false,receiptId:id,...outcome};
   };
   async function storedBytes(media) {
@@ -91,8 +91,9 @@ export function createFieldMedia({operations,put,get,analyzer,environment=()=>pr
         confirmed=await storedBytes(media);
       }
       media.url=confirmed.url;
-      return run(session,input,true,async(client,member,scope)=>{
+      return run(session,input,true,async(client,member,scope,project)=>{
         await operations.assertWorker(client,member,session,input.projectId,input.workerId);await operations.readTask(client,input.projectId,input.taskId);
+        if(!project.metadata?.fieldOperations?.sectors?.some(s=>s.id===input.sectorId))throw new WorkspaceError('FIELD_SECTOR_UNAVAILABLE',404);
         if(member.actorId!==first.actorId)throw new WorkspaceError('WORKSPACE_CONTEXT_CHANGED',409);
         const previous=await prior(client,member,first.id);
         if(previous){if(previous.metadata.requestDigest!==requestDigest)throw new WorkspaceError('FIELD_OPERATION_CONFLICT',409);return {scope,saved:true,replayed:true,receiptId:first.id,...previous.metadata.outcome};}

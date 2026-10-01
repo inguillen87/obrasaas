@@ -39,16 +39,24 @@ jobs:
         run: npx eslint src/lib/workspace-*.mjs src/lib/verified-session.mjs src/app/api/identity/workspace/route.js tests/production-workspace*.test.mjs scripts/verify-workspace-postgres.mjs scripts/verify-company-onboarding-postgres.mjs scripts/verify-site-register-postgres.mjs scripts/verify-site-register-ui.mjs src/lib/site-register-*.mjs src/lib/site-photo-*.mjs src/app/api/identity/site-photo/route.js tests/production-site-photo.test.mjs tests/production-site-register.test.mjs src/app/api/identity/site-register/route.js scripts/verify-company-onboarding-ui.mjs scripts/verify-company-onboarding-readonly.mjs scripts/lib/company-schema-preflight.mjs tests/production-company-schema-preflight.test.mjs src/lib/company-onboarding-*.mjs src/app/api/identity/company-onboarding/route.js src/app/api/identity/task-creation/route.js tests/production-company-onboarding.test.mjs scripts/verify-workspace-ui.mjs scripts/verify-customer-whatsapp-ui.mjs scripts/lib/meta-template-catalog-check.mjs scripts/verify-meta-template-catalog.mjs tests/production-meta-template-catalog.test.mjs src/lib/customer-whatsapp-*.mjs src/lib/whatsapp/tenant-workspace-policy.js src/lib/whatsapp/project-workspace-profile.js src/app/api/identity/whatsapp-setup/route.js tests/production-customer-whatsapp-setup.test.mjs 'src/app/(identity)/cuenta'
       - run: node scripts/verify-workspace-postgres.mjs
       - run: node scripts/verify-site-register-postgres.mjs
-      - run: node --test tests/production-participants.test.mjs tests/production-field-operations.test.mjs tests/production-meta-customer.test.mjs tests/production-site-purchase.test.mjs tests/production-progress-measurement-quantity.test.mjs
+      - run: node --test tests/production-participants.test.mjs tests/production-field-operations.test.mjs tests/production-meta-customer*.test.mjs tests/production-meta-field.test.mjs tests/production-worker-channel*.test.mjs tests/production-operations-status.test.mjs tests/production-site-purchase.test.mjs tests/production-progress-measurement-quantity.test.mjs
       - name: Integral worksite lint
         run: npx eslint src/lib/participant-*.mjs src/lib/field-*.mjs src/lib/meta-customer-*.mjs src/lib/whatsapp/template-review-policy.js src/lib/whatsapp/obra-intent-policy.js src/lib/whatsapp/field-worker-intent-policy.js src/lib/whatsapp/operational-proposal-decision-policy.js src/lib/site-purchase-*.mjs src/lib/operations-status.mjs src/lib/geo.js src/lib/procurement-*.js src/lib/progress-measurement-quantity.js src/app/api/identity/participants src/app/api/identity/participant-join src/app/api/identity/field-operations src/app/api/identity/field-media src/app/api/identity/field-qr src/app/api/identity/site-purchases src/app/api/identity/operations-status src/app/api/identity/meta-onboarding src/app/api/meta/customer-callback scripts/verify-participants-*.mjs scripts/verify-field-operations-*.mjs scripts/verify-meta-customer-*.mjs scripts/verify-site-purchase-*.mjs tests/production-participants.test.mjs tests/production-field-operations.test.mjs tests/production-meta-customer.test.mjs tests/production-site-purchase.test.mjs
       - run: node scripts/verify-participants-postgres.mjs
       - run: node scripts/verify-field-operations-postgres.mjs
       - run: node scripts/verify-meta-customer-postgres.mjs
+      - name: Channel identity and integrated field transactions
+        run: |
+          npx eslint src/lib/worker-channel-*.mjs src/lib/meta-field-*.mjs src/app/api/identity/worker-channel src/app/api/meta/customer-process scripts/verify-worker-channel-*.mjs scripts/verify-meta-field-*.mjs scripts/verify-meta-customer-processing-*.mjs scripts/verify-operations-status-ui.mjs tests/production-worker-channel*.test.mjs tests/production-meta-field.test.mjs tests/production-meta-customer-processing.test.mjs tests/production-operations-status.test.mjs
+          node scripts/verify-worker-channel-postgres.mjs
+          node scripts/verify-meta-customer-processing-postgres.mjs
+          node scripts/verify-meta-field-bridge-postgres.mjs
       - run: node scripts/verify-site-purchase-postgres.mjs
       - run: node scripts/verify-participants-ui.mjs
       - run: node scripts/verify-field-operations-ui.mjs
       - run: node scripts/verify-meta-customer-ui.mjs
+      - run: node scripts/verify-worker-channel-ui.mjs
+      - run: node scripts/verify-operations-status-ui.mjs
       - run: node scripts/verify-site-purchase-ui.mjs
       - run: node scripts/verify-site-register-ui.mjs
       - run: node scripts/verify-company-onboarding-postgres.mjs
@@ -68,5 +76,8 @@ jobs:
             .vercel/field-operations-evidence/
             .vercel/meta-customer-evidence/
             .vercel/purchase-evidence/
+            .vercel/worker-channel-evidence/
+            .vercel/meta-field-evidence/
+            .vercel/operations-status-evidence/
           include-hidden-files: true
           retention-days: 7

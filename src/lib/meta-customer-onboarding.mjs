@@ -6,6 +6,7 @@ import {encryptCustomerSecret,decryptCustomerSecret,customerSecretDigest} from '
 import {OBRASAAS_META_CHANNEL} from './meta-channel-binding.mjs';
 import {createMetaCustomerTemplates,publicCustomerTemplateWorkbench} from './meta-customer-templates.mjs';
 import {createMetaCustomerInboxReview,readMetaCustomerInbox} from './meta-customer-inbox-review.mjs';
+import {createMetaCustomerActivation,publicCustomerActivation} from './meta-customer-activation.mjs';
 
 const activeStates=new Set(['PREPARED','EXCHANGE_STARTED','EXCHANGE_UNKNOWN','CREDENTIAL_STORED','VERIFYING','REVIEW_REQUIRED','LINKED_PENDING_ACCEPTANCE','REGISTRATION_REQUIRED','REGISTRATION_STARTED','REGISTRATION_UNKNOWN']);
 const secretContext=(member,project,purpose,resourceId)=>({organizationId:member.organizationId,projectId:project.id,purpose,resourceId});
@@ -14,9 +15,10 @@ const publicSignup=(state,time)=>state?{id:state.id,state:state.state,createdAt:
 function stateToken(state,member,project,environment){return createHmac('sha256',environment.META_APP_SECRET).update(JSON.stringify([state.id,member.actorId,member.organizationId,project.id,state.preparedRevision,state.expiresAt])).digest('base64url');}
 function checkToken(value,expected){if(typeof value!=='string'||value.length!==expected.length||!timingSafeEqual(Buffer.from(value),Buffer.from(expected)))throw new WorkspaceError('META_CUSTOMER_STATE_REJECTED',403);}
 function input(body,fields){if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).sort().join('|')!==fields.sort().join('|')||!operationId(body.operationId))throw new WorkspaceError('META_CUSTOMER_INPUT_INVALID');}
-export function createMetaCustomerOnboarding({workspace,provider,environment=process.env,now=()=>Date.now()}){
+export function createMetaCustomerOnboarding({workspace,provider,processor=null,environment=process.env,now=()=>Date.now()}){
  const templateService=createMetaCustomerTemplates({workspace,provider,environment,now});
  const inboxService=createMetaCustomerInboxReview({workspace,environment,now});
+ const activationService=createMetaCustomerActivation({workspace,provider,environment,now});
  const within=(session,context,writable,run)=>workspace.integrationProject(session,context,writable,run);
  function requirePreparation(project){const {profile}=readProjectWorkspaceProfile(project.metadata,project.organizationMetadata,project.id);if(!profile.configured||profile.numberMode!=='DEDICATED')throw new WorkspaceError('META_CUSTOMER_PREPARATION_REQUIRED',409);return profile;}
  function owned(project,member,id){const state=project.metadata?.metaSignup;if(!state||state.id!==id||state.actorId!==member.actorId||state.organizationId!==member.organizationId)throw new WorkspaceError('META_CUSTOMER_SESSION_UNAVAILABLE',404);return state;}
@@ -29,7 +31,7 @@ export function createMetaCustomerOnboarding({workspace,provider,environment=pro
   project.metadata={...project.metadata,metaSignup:updated};return updated;
  }
  async function response(client,member,scope,project){
-  const connections=await client.query(`SELECT id,"phoneNumberId","whatsappBusinessId","displayPhoneNumber",enabled,"connectionStatus"::text AS status,metadata FROM public."WhatsAppConnection" WHERE "projectId"=$1`,[project.id]);
+  const connections=await client.query(`SELECT id,"phoneNumberId","whatsappBusinessId","displayPhoneNumber",enabled,"connectionStatus"::text AS status,"connectionStatus"::text AS "connectionStatus",metadata FROM public."WhatsAppConnection" WHERE "projectId"=$1`,[project.id]);
   if(connections.rows.length>1)throw new WorkspaceError('META_CUSTOMER_BINDING_INTEGRITY',409);
   const connection=connections.rows[0],state=project.metadata?.metaSignup;
   const signup=state?.actorId===member.actorId&&state?.organizationId===member.organizationId?publicSignup(state,now()):null;
@@ -39,7 +41,8 @@ export function createMetaCustomerOnboarding({workspace,provider,environment=pro
   return {scope,projectId:project.id,companyName:member.organizationName,projectName:project.name,readiness,
    prepared:profile.configured,numberMode:profile.numberMode||null,preparedRevision:profile.revision,signup,
    stateToken:signup?.state==='PREPARED'&&readiness.canLaunchMeta?stateToken(state,member,project,environment):null,
-   connection:connection?{recordPresent:true,displayNumber:connection.displayPhoneNumber,wabaId:connection.whatsappBusinessId,phoneNumberId:connection.phoneNumberId,enabled:connection.enabled===true,storedStatus:connection.status,operational:false}:null,
+   connection:connection?{recordPresent:true,displayNumber:connection.displayPhoneNumber,wabaId:connection.whatsappBusinessId,phoneNumberId:connection.phoneNumberId,enabled:connection.enabled===true,storedStatus:connection.status,operational:publicCustomerActivation(connection,readiness,member,now()).operational}:null,
+   activation:publicCustomerActivation(connection,readiness,member,now()),
    templates:connection?.metadata?.customerTemplates||null,templateWorkbench:publicCustomerTemplateWorkbench(connection),inbox:await readMetaCustomerInbox(client,member,project,connection,environment),acceptance:{roundTrip:'NOT_VERIFIED',fieldJourney:'NOT_VERIFIED'}};
  }
  async function assertAssetVacant(client,project,wabaId,phoneNumberId){
@@ -90,6 +93,12 @@ export function createMetaCustomerOnboarding({workspace,provider,environment=pro
   read(session,context){return within(session,context,false,response);},
   async command(session,body){
    const action=body?.action;
+   if(action==='process_inbox'&&processor){
+    input(body,['action','operationId','projectId','scope','eventId']);if(!/^customer_webhook_[a-f0-9]{64}$/.test(body.eventId||''))throw new WorkspaceError('META_CUSTOMER_INBOX_INPUT_INVALID');
+    await within(session,body,false,async(client,_member,_scope,project)=>{const found=(await client.query(`SELECT e.id FROM public."WebhookEvent" e JOIN public."WhatsAppConnection" c ON c."projectId"=e."projectId" AND c.id=e.payload->>'channelId' WHERE e.id=$1 AND e."projectId"=$2 AND e.provider='meta-customer-v1'`,[body.eventId,project.id])).rows;if(found.length!==1)throw new WorkspaceError('META_CUSTOMER_INBOX_UNAVAILABLE',404);});
+    await processor.process(body.eventId);return within(session,body,false,response);
+   }
+   if(['activate_channel','deactivate_channel'].includes(action)){await activationService.command(session,body);return within(session,body,false,response);}
    if(['process_inbox','review_inbox'].includes(action)){await inboxService.command(session,body);return within(session,body,false,response);}
    if(['prepare_template','submit_template','recover_template'].includes(action)){await templateService.command(session,body);return within(session,body,false,response);}
    const base=['action','operationId','projectId','scope'];
