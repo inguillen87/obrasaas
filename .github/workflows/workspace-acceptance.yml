@@ -36,7 +36,7 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: node --test tests/production-workspace*.test.mjs tests/production-customer-whatsapp-setup.test.mjs
       - name: Workspace lint
-        run: npx eslint src/lib/workspace-*.mjs src/lib/verified-session.mjs src/app/api/identity/workspace/route.js tests/production-workspace*.test.mjs scripts/verify-workspace-postgres.mjs scripts/verify-workspace-ui.mjs scripts/verify-customer-whatsapp-ui.mjs src/lib/customer-whatsapp-*.mjs src/lib/whatsapp/tenant-workspace-policy.js src/lib/whatsapp/project-workspace-profile.js src/app/api/identity/whatsapp-setup/route.js tests/production-customer-whatsapp-setup.test.mjs 'src/app/(identity)/cuenta'
+        run: npx eslint src/lib/workspace-*.mjs src/lib/verified-session.mjs src/app/api/identity/workspace/route.js tests/production-workspace*.test.mjs scripts/verify-workspace-postgres.mjs scripts/verify-workspace-ui.mjs scripts/verify-customer-whatsapp-ui.mjs scripts/lib/meta-template-catalog-check.mjs scripts/verify-meta-template-catalog.mjs tests/production-meta-template-catalog.test.mjs src/lib/customer-whatsapp-*.mjs src/lib/whatsapp/tenant-workspace-policy.js src/lib/whatsapp/project-workspace-profile.js src/app/api/identity/whatsapp-setup/route.js tests/production-customer-whatsapp-setup.test.mjs 'src/app/(identity)/cuenta'
       - run: node scripts/verify-workspace-postgres.mjs
       - run: node scripts/verify-workspace-ui.mjs
       - run: node scripts/verify-customer-whatsapp-ui.mjs
