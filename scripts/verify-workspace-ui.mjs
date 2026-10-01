@@ -10,7 +10,7 @@ assert.ok(!process.env.VERCEL && !process.env.VERCEL_ENV);
 const root=process.cwd(),evidence=path.join(root,'.vercel/workspace-evidence');
 mkdirSync(evidence,{recursive:true});
 const fixture=mkdtempSync(path.join(root,'.vercel/workspace-ui-')),app=path.join(fixture,'app');
-mkdirSync(app);for(const file of readdirSync(path.join(root,'src/app/(identity)/cuenta')).filter(name=>/\.(js|css)$/.test(name)))copyFileSync(path.join(root,'src/app/(identity)/cuenta',file),path.join(app,file));
+mkdirSync(app);for(const file of readdirSync(path.join(root,'src/app/(identity)/cuenta')).filter(name=>/\.(js|mjs|css)$/.test(name)))copyFileSync(path.join(root,'src/app/(identity)/cuenta',file),path.join(app,file));
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'isolated-workspace-ui-fixture',private:true}));
 writeFileSync(path.join(fixture,'next.config.mjs'),`export default {turbopack:{root:${JSON.stringify(root)}}};\n`);
 writeFileSync(path.join(app,'layout.js'),`export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:16,background:'#0b1c2d',fontFamily:'Arial,sans-serif'}}>{children}</body></html>}`);
@@ -136,7 +136,16 @@ async function taskCreateScenario(mode){
  assert.equal(statusChecks,1);assert.equal(applications,1);assert.equal(await page.$$eval('[data-task-id="new-task"]',nodes=>nodes.length),1);assert.ok((await text(page)).includes('Avance registrado: 0 %'));assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await context.close();
 }
 try{
- let ready=false;for(let i=0;i<120;i++){if(server.exitCode!==null)throw new Error('Fixture server exited');try{const response=await fetch(origin);if(response.ok){ready=true;break;}}catch{}await new Promise(resolve=>setTimeout(resolve,500));}assert.ok(ready,'Fixture server unavailable');
+ let ready=false;
+ for(let i=0;i<120;i++){
+  if(server.exitCode!==null)throw new Error('Fixture server exited: '+serverLog.slice(-5000));
+  let response;try{response=await fetch(origin);}catch{}
+  await response?.body?.cancel();
+  if(response?.ok){ready=true;break;}
+  if(response&&response.status>=500)throw new Error('Fixture page failed with HTTP '+response.status+': '+serverLog.slice(-5000));
+  await new Promise(resolve=>setTimeout(resolve,500));
+ }
+ assert.ok(ready,'Fixture server unavailable: '+serverLog.slice(-5000));
  browser=await puppeteer.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{}),args:['--no-sandbox','--disable-setuid-sandbox']});
  for(const width of [320,390,768,1280])await scenario('success',width);
  for(const mode of ['readonly','denied','empty','draft-cancel','uncertain','rollback','not-arrived','conflict','race'])await scenario(mode);

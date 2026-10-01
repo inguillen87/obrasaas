@@ -2,9 +2,11 @@ import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {mkdirSync,writeFileSync} from 'node:fs';
 import {Client,Pool} from 'pg';
+import {trackDisposablePool,closeDisposablePool} from './lib/disposable-postgres-cleanup.mjs';
 import {createWorkspaceStore} from '../src/lib/workspace-store.mjs';
 import {createFieldOperations} from '../src/lib/field-operations-store.mjs';
 import {createFieldMedia,decodeFieldMedia} from '../src/lib/field-media.mjs';
+import {createSiteRegister} from '../src/lib/site-register-store.mjs';
 const url=new URL(process.env.CUTOVER_TEST_DATABASE_URL||'http://not-configured');
 assert.equal(process.env.CUTOVER_TEST_DISPOSABLE,'1');assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV);assert.ok(['127.0.0.1','localhost'].includes(url.hostname));assert.equal(url.pathname,'/obrasaas_cutover_ci');assert.equal(url.search,'');
 const database='obrasaas_field_'+randomUUID().replaceAll('-','');assert.match(database,/^obrasaas_field_[a-f0-9]{32}$/);
@@ -12,7 +14,7 @@ const admin=new Client({connectionString:url.toString()});let pool,created=false
 const session=(user,organization='org_A',role='org:member')=>({authenticated:true,verification:'clerk-production-jwt',userId:user,organizationId:organization,organizationRole:role});
 const owner=session('user_Owner','org_A','org:admin'),director=session('user_Director'),manager=session('user_Manager'),worker=session('user_Worker'),otherWorker=session('user_Worker2'),foreign=session('user_Foreign','org_B','org:admin');
 try{
- await admin.connect();await admin.query(`CREATE DATABASE "${database}"`);created=true;url.pathname='/'+database;pool=new Pool({connectionString:url.toString(),max:8});
+ await admin.connect();await admin.query(`CREATE DATABASE "${database}"`);created=true;url.pathname='/'+database;pool=trackDisposablePool(new Pool({connectionString:url.toString(),max:8}));
  await pool.query(`
  CREATE TYPE "IncidentSeverity" AS ENUM('INFO','LOW','MEDIUM','HIGH','CRITICAL');
  CREATE TYPE "AttendanceStatus" AS ENUM('PRESENT','OUTSIDE_GEOFENCE','EXCUSED','ABSENT','PENDING_GEO');
@@ -47,6 +49,18 @@ try{
  const conf=await operations.save(owner,command(owner,'CONFIGURE_SITE',{revision:(await read(owner)).projectRevision,sectors:[{id:'sector-main',name:'Synthetic sector',latitude:0,longitude:0,radius:100}]}));assert.equal(conf.qrTokens.length,1);
  assert.equal((await pool.query('SELECT metadata FROM "Project" WHERE id=$1',['p-a'])).rows[0].metadata.unrelated,true);
  const token=conf.qrTokens[0].token;checks.push('canonical-project-configuration-preserves-unrelated-metadata-and-is-tenant-isolated');
+ const requestMaterial=command(worker,'REQUEST_MATERIAL',{workerId:'w-a',sectorId:'sector-main',taskId:'task-a',name:'Synthetic cement',quantity:'002.500',unit:'bolsa',reason:'Synthetic worksite material need.',evidenceIds:[]});
+ const requests=await Promise.all([operations.save(worker,requestMaterial),operations.save(worker,requestMaterial)]);assert.equal(requests.filter(r=>!r.replayed).length,1);assert.equal(requests[0].report.quantity,'2.5');assert.equal(requests[0].purchaseAuthorized,false);
+ const register=createSiteRegister({workspace}),officeMaterials=await register.read(owner,{...context(owner),section:'MATERIALS'});assert.equal(officeMaterials.records[0].id,requests[0].report.id);assert.equal((await read(otherWorker)).materialRequests.length,0);
+ await assert.rejects(operations.save(otherWorker,{...requestMaterial,...context(otherWorker),operationId:randomUUID()}),{code:'FIELD_PARTICIPANT_REQUIRED'});
+ await assert.rejects(operations.save(worker,{...requestMaterial,operationId:randomUUID(),payload:{...requestMaterial.payload,taskId:'task-b'}}),{code:'WORKSPACE_TASK_UNAVAILABLE'});
+ const incidentCommand=command(worker,'REPORT_INCIDENT',{workerId:'w-a',sectorId:'sector-main',taskId:null,title:'Synthetic access issue',description:'Synthetic access needs the responsible review.',severity:'MEDIUM',evidenceIds:[]}),issue=await operations.save(worker,incidentCommand);
+ assert.equal((await register.read(owner,{...context(owner),section:'ISSUES'})).records[0].id,issue.report.id);
+ await register.save(owner,{...context(owner),operationId:randomUUID(),action:'REVIEW_REPORT',payload:{reportId:issue.report.id,revision:issue.report.revision,decision:'ACKNOWLEDGED',reason:'Responsible follows up the canonical worker report.'}});
+ assert.equal((await operations.status(worker,{...context(worker),operationId:incidentCommand.operationId})).report.state,'ACKNOWLEDGED');
+ const failReportWorkspace=createWorkspaceStore({connect:async()=>{const c=await pool.connect();return {release:bad=>c.release(bad),query:(sql,args)=>{if(sql.startsWith('INSERT INTO public."AuditLog"'))throw new Error('Synthetic worker report audit failure');return c.query(sql,args);}};}});
+ const reportCount=(await read(worker)).incidents.length;await assert.rejects(createFieldOperations({workspace:failReportWorkspace}).save(worker,{...incidentCommand,operationId:randomUUID()}),{code:'WORKSPACE_OPERATION_UNCONFIRMED'});assert.equal((await read(worker)).incidents.length,reportCount);
+ checks.push('worker-material-and-incidence-are-canonical-office-records-with-private-ownership-concurrent-receipt-and-audit-rollback');
  const attendance=(s,eventType,expectedEventId,overrides={})=>command(s,'ATTENDANCE',{workerId:'w-a',eventType,expectedEventId,sectorId:'sector-main',qrToken:token,location:['CHECK_IN','CHECK_OUT'].includes(eventType)?{latitude:0,longitude:0,accuracy:5,capturedAt:new Date().toISOString(),noticeVersion:'field-location-v1'}:null,...overrides});
  await assert.rejects(operations.save(otherWorker,attendance(otherWorker,'CHECK_IN',null)),{code:'FIELD_PARTICIPANT_REQUIRED'});
  await pool.query(`UPDATE "Worker" SET metadata=jsonb_set(metadata,'{participant,kyc,status}','"PENDING_REVIEW"') WHERE id='w-a'`);
@@ -119,9 +133,14 @@ try{
  await assert.rejects(ambiguous.save(worker,uncertain),{code:'WORKSPACE_OPERATION_UNCONFIRMED'});assert.equal((await operations.status(worker,{...context(worker),operationId:uncertain.operationId})).state,'RECORDED');assert.equal((await operations.save(worker,uncertain)).replayed,true);
  const failingWorkspace=createWorkspaceStore({connect:async()=>{const c=await pool.connect();return {release:bad=>c.release(bad),query:(sql,args)=>{if(sql.startsWith('INSERT INTO public."AuditLog"'))throw new Error('Synthetic audit failure');return c.query(sql,args);}};}}),failing=createFieldOperations({workspace:failingWorkspace}),before=(await read(worker)).attendance.length,last=(await read(worker)).attendance[0];
  await assert.rejects(failing.save(worker,attendance(worker,'BREAK_START',last.id)),{code:'WORKSPACE_OPERATION_UNCONFIRMED'});assert.equal((await read(worker)).attendance.length,before);
+ const siteBefore=(await pool.query(`SELECT metadata FROM "Project" WHERE id='p-a'`)).rows[0].metadata,sectorUpload={...upload,operationId:randomUUID(),caption:'Synthetic sector changed during upload.'},evidenceCount=(await read(worker)).evidence.length,putsBefore=putCount;
+ const changedSectorMedia=createFieldMedia({operations,put:async(...args)=>{const stored=await put(...args);await pool.query(`UPDATE "Project" SET metadata=jsonb_set(metadata,'{fieldOperations,sectors}','[]'::jsonb) WHERE id='p-a'`);return stored;},get,analyzer,environment:()=>({PRIVATE_MEDIA_PROVIDER:'vercel-blob',BLOB_READ_WRITE_TOKEN:'synthetic-private-fixture'})});
+ await assert.rejects(changedSectorMedia.attach(worker,sectorUpload),{code:'FIELD_SECTOR_UNAVAILABLE'});assert.equal((await read(worker)).evidence.length,evidenceCount);
+ await pool.query(`UPDATE "Project" SET metadata=$1::jsonb WHERE id='p-a'`,[JSON.stringify(siteBefore)]);const sectorRecovered=await media.attach(worker,sectorUpload);assert.equal(sectorRecovered.saved,true);assert.equal(putCount,putsBefore+1);assert.equal((await media.attach(worker,sectorUpload)).replayed,true);
+ checks.push('sector-removal-during-private-upload-prevents-orphan-evidence-and-exact-recovery-reuses-confirmed-object');
  const revokedDownload=createFieldMedia({operations,put,get:async pathname=>{await pool.query(`UPDATE "Worker" SET metadata=jsonb_set(metadata,'{participant,status}','"REVOKED"') WHERE id='w-a'`);return get(pathname);},analyzer});
  await assert.rejects(revokedDownload.download(worker,{...context(worker),evidenceId:attached.evidence.id}),{code:'FIELD_EVIDENCE_UNAVAILABLE'});await assert.rejects(operations.save(worker,attendance(worker,'BREAK_START',last.id)),{code:'FIELD_PARTICIPANT_REQUIRED'});
  await assert.rejects(operations.save(worker,uncertain),{code:'FIELD_PARTICIPANT_REQUIRED'});await assert.rejects(operations.status(worker,{...context(worker),operationId:uncertain.operationId}),{code:'FIELD_PARTICIPANT_REQUIRED'});
  checks.push('lost-commit-recovery-audit-failure-rollback-and-participant-revocation');
  const proof={status:'PASS',environment:'disposable-local-postgresql17',checks,productionDataWritten:false,providerCalls:0,mediaAdapters:'synthetic-isolated-objects-and-responses',physicalAttendanceAccepted:false,whatsAppTested:false};mkdirSync('.vercel/field-operations-evidence',{recursive:true});writeFileSync('.vercel/field-operations-evidence/postgres.json',JSON.stringify(proof,null,2));console.log(JSON.stringify(proof));
-}finally{await pool?.end();if(created)await admin.query(`DROP DATABASE "${database}"`);await admin.end();}
+}finally{try{await closeDisposablePool(pool);if(created)await admin.query(`DROP DATABASE "${database}"`);}finally{await admin.end();}}

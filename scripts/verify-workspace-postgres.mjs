@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {mkdirSync,writeFileSync} from 'node:fs';
 import {Pool,Client} from 'pg';
+import {trackDisposablePool,closeDisposablePool} from './lib/disposable-postgres-cleanup.mjs';
 import {createWorkspaceStore} from '../src/lib/workspace-store.mjs';
 import {createCustomerWhatsAppSetup} from '../src/lib/customer-whatsapp-setup.mjs';
 
@@ -20,7 +21,7 @@ const identify=(user,org='org_A',role='org:member')=>({authenticated:true,verifi
 const owner=identify('user_Owner','org_A','org:admin'),manager=identify('user_Manager'),viewer=identify('user_Viewer'),foreign=identify('user_Foreign','org_B','org:admin');
 try{
   await admin.connect();await admin.query(`CREATE DATABASE "${name}"`);created=true;
-  url.pathname='/'+name;pool=new Pool({connectionString:url.toString(),max:8,connectionTimeoutMillis:5000});
+  url.pathname='/'+name;pool=trackDisposablePool(new Pool({connectionString:url.toString(),max:8,connectionTimeoutMillis:5000}));
   await pool.query(`
     CREATE TABLE "Organization" (id text PRIMARY KEY,name text NOT NULL,"clerkOrganizationId" text UNIQUE,metadata jsonb);
     CREATE TABLE "PlatformUser" (id text PRIMARY KEY,"clerkUserId" text UNIQUE NOT NULL);
@@ -127,6 +128,4 @@ try{
   checks.push('invalid-prior-preparation-fails-without-replacing-it');
   const result={status:'PASS',environment:'local-disposable-postgresql',checks,productionDataTouched:false,providerCalls:0,physicalWhatsAppTested:false};
   mkdirSync('.vercel/workspace-evidence',{recursive:true});writeFileSync('.vercel/workspace-evidence/postgres.json',JSON.stringify(result,null,2));console.log(JSON.stringify(result));
-}finally{
-  await pool?.end();if(created)await admin.query(`DROP DATABASE "${name}"`);await admin.end();
-}
+}finally{try{await closeDisposablePool(pool);if(created)await admin.query(`DROP DATABASE "${name}"`);}finally{await admin.end();}}

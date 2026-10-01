@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {Client,Pool} from 'pg';
+import {trackDisposablePool,closeDisposablePool} from './lib/disposable-postgres-cleanup.mjs';
 import {mkdirSync,writeFileSync} from 'node:fs';
 import {createWorkspaceStore} from '../src/lib/workspace-store.mjs';
 import {createParticipantStore} from '../src/lib/participant-store.mjs';
@@ -20,7 +21,7 @@ const picture='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAACklEQVR4nGNgAAAAA
 const get=async path=>{const item=objects.get(path);if(!item)return null;return {statusCode:200,blob:{url:'https://fixture.private.blob.vercel-storage.com/'+path,pathname:path,size:item.bytes.length,contentType:item.contentType},stream:new ReadableStream({start(controller){controller.enqueue(item.bytes);controller.close();}})};};
 const uploader=createPrivateImageUploader({get,put:async(path,bytes,options)=>{assert.equal(options.access,'private');assert.equal(options.allowOverwrite,false);putCount++;objects.set(path,{bytes:Buffer.from(bytes),contentType:options.contentType});return {url:'https://fixture.private.blob.vercel-storage.com/'+path,pathname:path};},environment:()=>({PRIVATE_MEDIA_PROVIDER:'vercel-blob',BLOB_READ_WRITE_TOKEN:'synthetic-fixture-token'})});
 try{
- await admin.connect();await admin.query(`CREATE DATABASE "${database}"`);created=true;url.pathname='/'+database;pool=new Pool({connectionString:url.toString(),max:8});
+ await admin.connect();await admin.query(`CREATE DATABASE "${database}"`);created=true;url.pathname='/'+database;pool=trackDisposablePool(new Pool({connectionString:url.toString(),max:8}));
  await pool.query(`
   CREATE TYPE "MembershipStatus" AS ENUM('ACTIVE','INVITED','DISABLED');CREATE TYPE "TenantRole" AS ENUM('ADMIN','DIRECTOR','SITE_MANAGER','FINANCE','AUDITOR');CREATE TYPE "SystemRole" AS ENUM('TENANT_USER');
   CREATE TABLE "Organization"(id text PRIMARY KEY,name text NOT NULL,"clerkOrganizationId" text UNIQUE,metadata jsonb);
@@ -136,4 +137,4 @@ try{
  checks.push('revocation-immediately-blocks-project-field-identity-download-and-invitation-replay');
  assert.equal((await pool.query('SELECT metadata FROM "Worker" WHERE id=$1',[self.id])).rows[0].metadata.unrelated,true);assert.deepEqual((await pool.query('SELECT metadata FROM "Project" WHERE id=$1',['p-a'])).rows[0].metadata,{retain:true});
  mkdirSync('.vercel/participants-evidence',{recursive:true});writeFileSync('.vercel/participants-evidence/postgres.json',JSON.stringify({validated:true,synthetic:true,realEmailDelivered:false,realIdentityAccepted:false,checks},null,2));console.log(JSON.stringify({validated:true,checks}));
-}finally{await pool?.end();if(created)await admin.query(`DROP DATABASE "${database}" WITH(FORCE)`);await admin.end();}
+}finally{try{await closeDisposablePool(pool);if(created)await admin.query(`DROP DATABASE "${database}"`);}finally{await admin.end();}}

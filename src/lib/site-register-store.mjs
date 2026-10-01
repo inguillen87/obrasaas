@@ -10,13 +10,23 @@ function publicWorker(row) {
     roleLabel:row.role || null, active:row.active, revision:row.revision,
     editable:row.metadata?.siteRegister?.version===1, identityVerified:false, whatsappAccessGranted:false, loginAccessGranted:false };
 }
-function publicReport(row) {
+export function publicSiteReport(row) {
   const details = row.metadata?.siteRegister;
   if (!details || details.version !== 1) throw new WorkspaceError('SITE_RECORD_NOT_SUPPORTED',409);
   return { id:row.id,title:row.title,details:row.description,severity:row.severity,state:details.state,
     type:details.type,sector:details.sector,material:details.material || null,quantity:details.quantity || null,
     unit:details.unit || null,photos:Array.isArray(details.photos)?details.photos.map(photo=>({id:photo.id,contentType:photo.contentType,bytes:photo.bytes})):[],revision:row.revision,createdAt:row.createdAt,
+    workerId:details.workerId||null,taskId:details.taskId||null,evidenceIds:details.evidenceIds||[],
     review:details.review ? {decision:details.review.decision,reason:details.review.reason,recordedAt:details.review.recordedAt}:null };
+}
+const publicReport=publicSiteReport;
+// Both office entry and participant self-service use the same worksite register.
+export async function insertSiteReport(client,{id,projectId,actorId,type,title,description,severity,sector,material=null,quantity=null,unit=null,origin='responsible-entry',workerId=null,taskId=null,evidenceIds=[]}) {
+  const metadata={siteRegister:{version:1,type,state:'OPEN',sector,submittedBy:actorId,
+    ...(type==='MATERIAL_REQUEST'?{material,quantity,unit,purchaseAuthorized:false,stockChanged:false}:{}),
+    ...(workerId?{workerId,taskId,evidenceIds}:{}),source:origin}};
+  await client.query(`INSERT INTO public."Incident"(id,"projectId",title,description,severity,status,reporter,metadata,"updatedAt") VALUES($1,$2,$3,$4,$5::"IncidentSeverity",'open',$6,$7::jsonb,clock_timestamp())`,[id,projectId,title,description,severity,actorId,JSON.stringify(metadata)]);
+  return (await client.query(`SELECT ${reportSelect} FROM public."Incident" WHERE id=$1 AND "projectId"=$2`,[id,projectId])).rows[0];
 }
 export function createSiteRegister({ workspace }) {
   const run = (session, context, writable, callback) => workspace.integrationProject(session, context, writable, callback);
@@ -82,10 +92,7 @@ export function createSiteRegister({ workspace }) {
         }else if(['REPORT_ISSUE','REQUEST_MATERIAL'].includes(command.action)){
           const type=command.action==='REPORT_ISSUE'?'ISSUE':'MATERIAL_REQUEST';
           entityId=recordId('incident');kind='REPORT';
-          const metadata={siteRegister:{version:1,type,state:'OPEN',sector:p.sector,submittedBy:member.actorId,
-            ...(type==='MATERIAL_REQUEST'?{material:p.material,quantity:p.quantity,unit:p.unit,purchaseAuthorized:false,stockChanged:false}:{}),source:'responsible-entry'}};
-          await client.query(`INSERT INTO public."Incident"(id,"projectId",title,description,severity,status,reporter,metadata,"updatedAt") VALUES($1,$2,$3,$4,$5::"IncidentSeverity",'open',$6,$7::jsonb,clock_timestamp())`,
-            [entityId,command.projectId,type==='ISSUE'?p.title:p.material,p.details,type==='ISSUE'?p.severity:'INFO',member.actorId,JSON.stringify(metadata)]);
+          await insertSiteReport(client,{id:entityId,projectId:command.projectId,actorId:member.actorId,type,title:type==='ISSUE'?p.title:p.material,description:p.details,severity:type==='ISSUE'?p.severity:'INFO',sector:p.sector,material:p.material,quantity:p.quantity,unit:p.unit});
           audit={type,state:'OPEN'};
         }else{
           const row=await readReport(client,command.projectId,p.reportId,true),metadata=cleanMetadata(row.metadata),record=metadata.siteRegister;

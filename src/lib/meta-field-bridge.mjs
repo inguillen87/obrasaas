@@ -1,0 +1,111 @@
+import {WorkspaceError,digest} from './workspace-policy.mjs';
+import {createFieldOperations,publicFieldEvidence} from './field-operations-store.mjs';
+import {createFieldMedia,decodeFieldMedia} from './field-media.mjs';
+import {planMetaFieldConversation} from './meta-field-conversation.mjs';
+import {resolveWorkerChannelIdentity} from './worker-channel-identity.mjs';
+import {decryptCustomerSecret,encryptCustomerSecret} from './meta-customer-credentials.mjs';
+import {customerJobTransaction} from './meta-customer-outbound.mjs';
+
+export function metaFieldOperationId(eventId,purpose){const h=digest(['meta-field-operation-v1',eventId,purpose]);return `${h.slice(0,8)}-${h.slice(8,12)}-4${h.slice(13,16)}-a${h.slice(17,20)}-${h.slice(20,32)}`;}
+const receiptId=eventId=>'meta_field_'+digest(['meta-field-dispatch-v1',eventId]);
+const permissionFor=action=>action==='ATTENDANCE'?'attendance':'report';
+const safeErrors=new Set(['SITE_INPUT_INVALID','SITE_QUANTITY_INVALID','FIELD_QUANTITY_INVALID','FIELD_QUANTITY_PROGRESS_MISMATCH','FIELD_PROGRESS_REGRESSION','FIELD_PROGRESS_REVIEW_PENDING','FIELD_BASELINE_CHANGED','FIELD_REVISION_CHANGED','WORKSPACE_TASK_UNAVAILABLE','FIELD_SECTOR_UNAVAILABLE','ATTENDANCE_REVISION_CHANGED','ATTENDANCE_SHIFT_ALREADY_OPEN','ATTENDANCE_SHIFT_NOT_OPEN','ATTENDANCE_BREAK_ALREADY_OPEN','ATTENDANCE_BREAK_NOT_OPEN','ATTENDANCE_BREAK_OPEN','ATTENDANCE_LOCATION_STALE','ATTENDANCE_LOCATION_INVALID','FIELD_EVIDENCE_NOT_APPROVED']);
+const explanation=code=>({ATTENDANCE_SHIFT_ALREADY_OPEN:'Ya tenés una jornada abierta.',ATTENDANCE_SHIFT_NOT_OPEN:'Primero registrá una entrada.',ATTENDANCE_BREAK_ALREADY_OPEN:'Tu pausa ya está abierta.',ATTENDANCE_BREAK_NOT_OPEN:'No hay una pausa abierta.',ATTENDANCE_BREAK_OPEN:'Cerrá la pausa antes de registrar la salida.',ATTENDANCE_LOCATION_STALE:'La ubicación venció. Volvé a empezar y compartí una ubicación actual.',FIELD_PROGRESS_REVIEW_PENDING:'Esta tarea ya tiene una propuesta pendiente.',FIELD_EVIDENCE_NOT_APPROVED:'La evidencia requiere revisión del responsable.',FIELD_PROGRESS_REGRESSION:'El avance propuesto no puede ser menor al ya aprobado.'}[code]||'Revisá los datos y el estado actual de la obra antes de volver a intentar.');
+const text=body=>({type:'text',body});
+
+// Transport adapter, not a second field engine. The internal resolver supplies
+// the canonical actor after checking signed proof, binding, KYC and assignment.
+// It never creates a Clerk session or weakens the web authentication verifier.
+export function createMetaFieldBridge({connect,environment=process.env,resolveIdentity=resolveWorkerChannelIdentity,provider,put,get,analyzer}){
+ const within=run=>customerJobTransaction(connect,run);
+ const seal=(r,purpose,resourceId,value)=>encryptCustomerSecret(JSON.stringify(value),{organizationId:r.member.organizationId,projectId:r.project.id,purpose,resourceId},environment);
+ function unseal(r,purpose,resourceId,value){try{return JSON.parse(decryptCustomerSecret(value,{organizationId:r.member.organizationId,projectId:r.project.id,purpose,resourceId},environment));}catch{throw new WorkspaceError('META_CHANNEL_RECEIPT_INTEGRITY',409);}}
+ function conversation(r){const envelope=r.worker.metadata.fieldChannelConversation;if(!envelope)return null;if(envelope.version!==1||envelope.bindingId!==r.channelBinding.id)return null;const value=unseal(r,'field-conversation',r.worker.id,envelope.encryptedState);if(value.bindingId!==envelope.bindingId||value.lastEventId!==envelope.lastEventId||value.expiresAt!==envelope.expiresAt||value.lastMessageTimestamp!==envelope.lastMessageTimestamp||value.lastReceivedAt!==envelope.lastReceivedAt)throw new WorkspaceError('META_CHANNEL_RECEIPT_INTEGRITY',409);return value;}
+ function conversationEnvelope(r,state){if(!state)return null;const value={...state,version:1,lastEventId:r.event.id,lastMessageTimestamp:r.proof.value.timestamp,lastReceivedAt:new Date(r.event.createdAt).toISOString(),expiresAt:new Date(r.now.getTime()+15*60000).toISOString(),bindingId:r.channelBinding.id};return {version:1,lastEventId:value.lastEventId,lastMessageTimestamp:value.lastMessageTimestamp,lastReceivedAt:value.lastReceivedAt,expiresAt:value.expiresAt,bindingId:value.bindingId,encryptedState:seal(r,'field-conversation',r.worker.id,value)};}
+ async function resolve(client,context,permission=null){
+  const r=await resolveIdentity(client,{eventId:context.eventId,permission,claimChallenge:true,environment});
+  const {event,project,connection}=r,now=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now;
+  if(event.status!=='PENDING'||event.leaseToken!==context.leaseToken||new Date(event.leaseExpiresAt).getTime()<=now.getTime()||project.id!==context.projectId||connection.id!==context.channelId||event.payload.payloadDigest!==context.payloadDigest)throw new WorkspaceError('META_CUSTOMER_INBOX_LEASE_CHANGED',409);
+  return {...r,now,scope:digest(['meta-field-v1',event.id,event.payload.payloadDigest,r.worker.id,connection.id])};
+ }
+ function operations(client,r){
+  const session={userId:r.member.clerkUserId},member={...r.member,role:'AUDITOR',channelProof:{provider:'meta-customer-v1',eventId:r.event.id,channelId:r.connection.id,payloadDigest:r.event.payload.payloadDigest,bindingId:r.channelBinding.id}};
+  const workspace={projectOperation:async(s,input,writable,callback)=>{
+   if(s!==session||input.projectId!==r.project.id||input.scope!==r.scope)throw new WorkspaceError('META_CHANNEL_CONTEXT_CHANGED',409);
+   // Channel actions have participant permissions even when the same human
+   // holds an office role. Review and approval are restricted to the web UI.
+   return callback(client,member,r.scope,r.project);
+  }};
+  return {session,service:createFieldOperations({workspace})};
+ }
+ async function saved(client,r){const row=(await client.query(`SELECT metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "actorId"=$3 AND "entityId"=$4 AND action='meta.field.dispatched'`,[receiptId(r.event.id),r.member.organizationId,r.member.actorId,r.worker.id])).rows[0];if(!row)return null;if(row.metadata?.payloadDigest!==r.event.payload.payloadDigest||row.metadata.channelBindingId!==r.channelBinding.id)throw new WorkspaceError('META_CHANNEL_RECEIPT_INTEGRITY',409);return unseal(r,'field-dispatch',receiptId(r.event.id),row.metadata.encryptedResult);}
+ async function record(client,r,result,state,{onlyIfCurrent=false}={}){
+  const current=(await client.query(`SELECT metadata FROM public."Worker" WHERE id=$1 AND "projectId"=$2`,[r.worker.id,r.project.id])).rows[0];
+  if(!onlyIfCurrent||current.metadata?.fieldChannelConversation?.lastEventId===r.event.id)await client.query(`UPDATE public."Worker" SET metadata=$3::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[r.worker.id,r.project.id,JSON.stringify({...current.metadata,fieldChannelConversation:conversationEnvelope(r,state)})]);
+  await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'meta.field.dispatched','Worker',$4,$5::jsonb)`,[receiptId(r.event.id),r.member.organizationId,r.member.actorId,r.worker.id,JSON.stringify({version:1,projectId:r.project.id,channelId:r.connection.id,channelBindingId:r.channelBinding.id,eventId:r.event.id,payloadDigest:r.event.payload.payloadDigest,businessApplied:result.businessApplied,kind:result.kind,receiptId:result.receiptId||null,encryptedResult:seal(r,'field-dispatch',receiptId(r.event.id),result)})]);
+  return result;
+ }
+ const result=(r,kind,reply,extra={})=>({kind,identityStatus:'CHANNEL_VERIFIED',workerId:r.worker.id,reviewState:'OBSERVED',businessApplied:false,replySent:false,reply,...extra});
+ async function prepareMedia(client,r,media,state){
+  if(r.worker.metadata.participant.permissions.report!==true)throw new WorkspaceError('WORKER_CHANNEL_PERMISSION_REQUIRED',403);
+  await client.query(`UPDATE public."WebhookEvent" SET "leaseExpiresAt"=clock_timestamp()+interval '180 seconds' WHERE id=$1 AND "leaseToken"=$2`,[r.event.id,r.event.leaseToken]);
+  const token=decryptCustomerSecret(r.connection.encryptedAccessToken,{organizationId:r.member.organizationId,projectId:r.project.id,purpose:'access-token',resourceId:r.connection.phoneNumberId},environment);
+  return {media,state,token,phoneNumberId:r.connection.phoneNumberId,userId:r.member.clerkUserId,scope:r.scope,workerId:r.worker.id};
+ }
+ async function prepare(client,context){
+  const type=(await client.query(`SELECT "eventType" FROM public."WebhookEvent" WHERE id=$1 AND provider='meta-customer-v1'`,[context.eventId])).rows[0];if(type?.eventType!=='message')return null;
+  const r=await resolve(client,context),previous=await saved(client,r);if(previous)return {done:previous};
+  if(r.kind==='CHANNEL_BOUND')return {done:await record(client,r,result(r,'CHANNEL_BOUND',text('Tu canal quedó vinculado a esta participación. Escribí MENU para continuar cuando el responsable active la conexión de la empresa.')),null)};
+  const key='meta_field_media_'+digest(r.event.id),previousMedia=(await client.query(`SELECT metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "actorId"=$3 AND action='meta.field.media.prepared'`,[key,r.member.organizationId,r.member.actorId])).rows[0];
+  // A later conversation must not erase a durable upload already requested by
+  // this message. Recovery uses its recorded input and preserves the new draft.
+  if(previousMedia){if(previousMedia.metadata.payloadDigest!==r.event.payload.payloadDigest||previousMedia.metadata.channelBindingId!==r.channelBinding.id)throw new WorkspaceError('META_CHANNEL_MEDIA_CONTEXT_CHANGED',409);const input=unseal(r,'field-media-prepared',key,previousMedia.metadata.encryptedInput);return prepareMedia(client,r,input.media,input.state);}
+  const state=conversation(r),messageAt=Number(r.proof.value.timestamp)*1000;
+  const stale=state&&(Number(r.proof.value.timestamp)<Number(state.lastMessageTimestamp)||Number(r.proof.value.timestamp)===Number(state.lastMessageTimestamp)&&new Date(r.event.createdAt).getTime()<Date.parse(state.lastReceivedAt));
+  if(stale||!Number.isSafeInteger(messageAt)||messageAt>r.now.getTime()+60000||r.now.getTime()-messageAt>=86400000)return {done:await record(client,r,result(r,'STALE_CONVERSATION',text('Este mensaje pertenece a un paso anterior. Conservamos el borrador más reciente. Escribí MENU para empezar de nuevo.'),{code:'META_CHANNEL_STALE_MESSAGE'}),state,{onlyIfCurrent:true})};
+  const {session,service}=operations(client,r),data=await service.read(session,{projectId:r.project.id,scope:r.scope}),tasks=(await client.query(`SELECT id,title,progress,to_char("updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision FROM public."Task" WHERE "projectId"=$1 ORDER BY "createdAt",id LIMIT 101`,[r.project.id])).rows;
+  const latest=data.attendance.filter(e=>e.workerId===r.worker.id).sort((a,b)=>b.sequence-a.sequence)[0]||null;
+  const facts={projectName:r.project.name,workerId:r.worker.id,permissions:r.worker.metadata.participant.permissions,tasks,sectors:data.sectors,evidence:data.evidence,proposals:data.proposals,latest};
+  let plan;
+  try{plan=planMetaFieldConversation({message:r.proof.value,state,eventId:r.event.id,facts,now:r.now});}
+  catch(error){if(!safeErrors.has(error.code))throw error;return {done:await record(client,r,result(r,'INPUT_REVIEW',text(explanation(error.code)+' Escribí CANCELAR para volver al menú.'),{code:error.code}),state)};}
+  if(plan.media){
+   if(facts.permissions.report!==true)throw new WorkspaceError('WORKER_CHANNEL_PERMISSION_REQUIRED',403);
+   await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'meta.field.media.prepared','Worker',$4,$5::jsonb)`,[key,r.member.organizationId,r.member.actorId,r.worker.id,JSON.stringify({version:1,projectId:r.project.id,eventId:r.event.id,payloadDigest:r.event.payload.payloadDigest,channelBindingId:r.channelBinding.id,encryptedInput:seal(r,'field-media-prepared',key,{media:plan.media,state:plan.state})})]);
+   await client.query(`UPDATE public."Worker" SET metadata=$3::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[r.worker.id,r.project.id,JSON.stringify({...r.worker.metadata,fieldChannelConversation:conversationEnvelope(r,plan.state)})]);
+   return prepareMedia(client,r,plan.media,plan.state);
+  }
+  if(plan.command){
+   const required=permissionFor(plan.command.action);if(facts.permissions[required]!==true)throw new WorkspaceError('WORKER_CHANNEL_PERMISSION_REQUIRED',403);
+   // A failed command must not leave partial effects before its friendly error.
+   await client.query('SAVEPOINT meta_field_command');
+   try{const outcome=await service.save(session,{projectId:r.project.id,scope:r.scope,operationId:metaFieldOperationId(r.event.id,plan.command.action),...plan.command});
+    const reply=text(outcome.kind==='ATTENDANCE'?'Fichaje guardado. '+(outcome.event.verificationStatus==='REVIEW_REQUIRED'?'Quedó pendiente de revisión humana.':'Podés consultar el recibo en Mi cuenta.'):outcome.kind==='INCIDENT_REPORT'?'Incidencia guardada para seguimiento del responsable.':outcome.kind==='MATERIAL_REQUEST'?'Pedido de material guardado. La compra todavía requiere autorización.':'Propuesta de avance guardada. La tarea conservará su avance hasta una decisión autorizada.');
+    return {done:await record(client,r,result(r,outcome.kind,reply,{businessApplied:true,receiptId:outcome.receiptId,reviewState:'RECORDED'}),plan.state)};
+   }catch(error){if(!safeErrors.has(error.code))throw error;await client.query('ROLLBACK TO SAVEPOINT meta_field_command');return {done:await record(client,r,result(r,'INPUT_REVIEW',text(explanation(error.code)+' Escribí MENU para continuar.'),{code:error.code}),null)};}
+  }
+  return {done:await record(client,r,result(r,'CONVERSATION',plan.reply),plan.state)};
+ }
+ return {async execute(context){
+  const prepared=await within(client=>prepare(client,context));if(!prepared)return null;if(prepared.done)return prepared.done;
+  if(!provider||!put||!get||!analyzer)throw new WorkspaceError('META_CHANNEL_MEDIA_NOT_CONFIGURED',503);
+  let media;
+  try{const downloaded=await provider.downloadMedia({token:prepared.token,phoneNumberId:prepared.phoneNumberId,mediaId:prepared.media.mediaId,limit:prepared.media.kind==='image'?2*1024*1024:3*1024*1024});
+   media=decodeFieldMedia(downloaded.bytes,downloaded.contentType);if(downloaded.contentType.split(';')[0].trim()!==String(prepared.media.contentType).split(';')[0].trim()||media.kind!==prepared.media.kind)throw new WorkspaceError('META_CHANNEL_MEDIA_INTEGRITY',409);
+  }catch(error){if(!['META_CUSTOMER_MEDIA_INVALID','META_CUSTOMER_MEDIA_REJECTED','META_CUSTOMER_MEDIA_INTEGRITY','META_CHANNEL_MEDIA_INTEGRITY','FIELD_MEDIA_INVALID','FIELD_MEDIA_TOO_LARGE'].includes(error.code))throw error;
+   return within(async client=>{const r=await resolve(client,context,'report'),prior=await saved(client,r);if(prior)return prior;return record(client,r,result(r,'MEDIA_REVIEW_REQUIRED',text('No pudimos guardar este archivo con su tamaño o formato actual. Prepará una foto de hasta 2 MiB o audio/video de hasta 3 MiB desde la web, o enviá otro archivo. Tu tarea conserva su avance.'),{code:error.code}),prepared.state,{onlyIfCurrent:true});});
+  }
+  const session={userId:prepared.userId},workspace={projectOperation:async(s,input,writable,callback)=>within(async client=>{const r=await resolve(client,context,'report');if(s!==session||s.userId!==r.member.clerkUserId||input.projectId!==r.project.id||input.scope!==r.scope||prepared.workerId!==r.worker.id)throw new WorkspaceError('META_CHANNEL_CONTEXT_CHANGED',409);return callback(client,{...r.member,role:'AUDITOR',channelProof:{provider:'meta-customer-v1',eventId:r.event.id,channelId:r.connection.id,payloadDigest:r.event.payload.payloadDigest,bindingId:r.channelBinding.id}},r.scope,r.project);})};
+  const fieldOps=createFieldOperations({workspace}),service=createFieldMedia({operations:fieldOps,put,get,analyzer,environment:()=>environment});
+  const base={projectId:context.projectId,scope:prepared.scope};let attached;
+  try{attached=await service.attach(session,{...base,operationId:metaFieldOperationId(context.eventId,'MEDIA_ATTACH'),workerId:prepared.workerId,taskId:prepared.media.taskId,sectorId:prepared.media.sectorId,caption:prepared.media.caption,media});}
+  catch(error){if(!['FIELD_SECTOR_UNAVAILABLE','WORKSPACE_TASK_UNAVAILABLE'].includes(error.code))throw error;
+   return within(async client=>{const r=await resolve(client,context,'report'),prior=await saved(client,r);if(prior)return prior;return record(client,r,result(r,'MEDIA_CONTEXT_REVIEW',text('Cambió la tarea o el sector durante la carga. No registramos esta evidencia. Escribí EVIDENCIA y elegí nuevamente la tarea y el sector actuales.'),{code:error.code}),null,{onlyIfCurrent:true});});
+  }
+  let processed=attached;
+  if(media.kind!=='video')try{processed=await service.process(session,{...base,operationId:metaFieldOperationId(context.eventId,'MEDIA_PROCESS'),evidenceId:attached.evidence.id,revision:attached.evidence.revision});}
+  catch(error){if(!['FIELD_ALREADY_REVIEWED','FIELD_MEDIA_ALREADY_PROCESSED'].includes(error.code))throw error;processed={...attached,evidence:publicFieldEvidence(await workspace.projectOperation(session,base,false,client=>fieldOps.readEvidence(client,context.projectId,attached.evidence.id)))};}
+  return within(async client=>{const r=await resolve(client,context,'report'),prior=await saved(client,r);if(prior)return prior;
+   return record(client,r,result(r,'EVIDENCE',text('Evidencia guardada en privado. '+(processed.evidence.review?'El archivo ya tiene una revisión humana registrada; consultala desde la web.':processed.evidence.processing.status==='FAILED_RETRYABLE'?'El procesamiento necesita otro intento desde la web.':'El responsable debe revisar el archivo antes de aprobar avances.')+' Escribí MENU para continuar.'),{businessApplied:true,receiptId:attached.receiptId,reviewState:'RECORDED'}),null,{onlyIfCurrent:true});});
+ }};
+}

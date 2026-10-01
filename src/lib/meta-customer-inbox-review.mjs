@@ -47,8 +47,9 @@ function publicItem(row,payload){
  const outcome=row.outcome?.version===1?row.outcome:null,value=payload?.value||{};
  return {id:row.id,revision:row.revision,status:row.status,createdAt:row.createdAt,processedAt:row.processedAt,
   processing:row.leaseToken?'LEASED':'NOT_LEASED',canProcess:Boolean(payload)&&row.status==='PENDING'&&!row.activeLease,
+  processingCode:typeof row.lastError==='string'&&/^[A-Z0-9_]{1,120}$/.test(row.lastError)?row.lastError:null,
   canReview:Boolean(payload&&outcome)&&row.status==='PROCESSED'&&outcome.reviewState!=='REVIEWED',reviewState:outcome?.reviewState||'NOT_PROCESSED',intent:outcome?.intent||null,
-  identityStatus:outcome?.identity?.status||'NOT_CHECKED',workerId:outcome?.identity?.workerId||null,businessApplied:false,replySent:false,
+  identityStatus:outcome?.identity?.status||'NOT_CHECKED',workerId:outcome?.identity?.workerId||null,businessApplied:outcome?.businessApplied===true,replySent:outcome?.replySent===true,replyState:outcome?.replyState||null,businessKind:outcome?.kind||null,receiptId:outcome?.receiptId||null,
   kind:payload?.type==='message'?value.type:payload?.type||'UNVERIFIED',from:payload?.type==='message'&&typeof value.from==='string'?value.from:null,
   body:payload?.type==='message'?normalizedMessage(payload).text:'',hasLocation:payload?.type==='message'&&value.type==='location',
   providerStatus:payload?.type==='message_status'?value.status:null,field:payload?.field||null,
@@ -57,9 +58,11 @@ function publicItem(row,payload){
 }
 export async function readMetaCustomerInbox(client,member,project,connection,environment){
  if(!connection||connection.metadata?.credentialFormat!=='tenant-aad-v2'||connection.metadata?.credentialOrganizationId!==member.organizationId)return {items:[],truncated:false,canSend:false,businessApplied:false};
- const rows=(await client.query(`SELECT id,status::text AS status,payload,outcome,"createdAt" AS "createdAt","processedAt" AS "processedAt","leaseToken",("leaseExpiresAt">clock_timestamp()) AS "activeLease",${revision} AS revision FROM public."WebhookEvent" WHERE "projectId"=$1 AND provider='meta-customer-v1' AND payload->>'channelId'=$2 ORDER BY "createdAt" DESC,id DESC LIMIT 21`,[project.id,connection.id])).rows;
- const items=rows.slice(0,20).map(row=>{let payload=null;try{payload=decode(row,member,project,{...connection,whatsappBusinessId:connection.whatsappBusinessId,phoneNumberId:connection.phoneNumberId},environment);}catch{}return publicItem(row,payload);});
- return {items,truncated:rows.length>20,canSend:false,businessApplied:false,channelIdentityVerified:false};
+ const rows=(await client.query(`SELECT id,status::text AS status,payload,outcome,"createdAt" AS "createdAt","processedAt" AS "processedAt","leaseToken","lastError",("leaseExpiresAt">clock_timestamp()) AS "activeLease",${revision} AS revision FROM public."WebhookEvent" WHERE "projectId"=$1 AND provider='meta-customer-v1' AND payload->>'channelId'=$2 ORDER BY "createdAt" DESC,id DESC LIMIT 21`,[project.id,connection.id])).rows;
+ const outbound=(await client.query(`SELECT id,payload,outcome FROM public."WebhookEvent" WHERE "projectId"=$1 AND provider='meta-customer-outbound-v1' AND payload->>'channelId'=$2 AND payload->>'eventId'=ANY($3::text[])`,[project.id,connection.id,rows.slice(0,20).map(row=>row.id)])).rows;
+ const replies=new Map();for(const row of outbound){try{const request=JSON.parse(decryptCustomerSecret(row.payload.encryptedPayload,{organizationId:member.organizationId,projectId:project.id,purpose:'outbound',resourceId:row.id},environment));if(digest(request)!==row.payload.requestDigest||request.channelId!==connection.id||request.organizationId!==member.organizationId||request.eventId!==row.payload.eventId)continue;replies.set(request.eventId,row.outcome);}catch{}}
+ const items=rows.slice(0,20).map(row=>{let payload=null;try{payload=decode(row,member,project,{...connection,whatsappBusinessId:connection.whatsappBusinessId,phoneNumberId:connection.phoneNumberId},environment);}catch{}const item=publicItem(row,payload),reply=replies.get(row.id);return reply?{...item,replyState:reply.state,replySent:['SENT','STATUS_OBSERVED'].includes(reply.state)&&!['failed','deleted'].includes(reply.providerStatus),providerReplyStatus:reply.providerStatus||null}:item;});
+ return {items,truncated:rows.length>20,canSend:false,businessApplied:items.some(item=>item.businessApplied),channelIdentityVerified:items.some(item=>['VERIFIED','CHANNEL_VERIFIED'].includes(item.identityStatus))};
 }
 export function createMetaCustomerInboxReview({workspace,environment=process.env,now=()=>Date.now(),afterClaim=async()=>{}}){
  const within=(session,body,writable,run)=>workspace.integrationProject(session,body,writable,run);
@@ -76,7 +79,7 @@ export function createMetaCustomerInboxReview({workspace,environment=process.env
     if(prior)return {done:true};if(row.status!=='PROCESSED'||row.revision!==body.expectedRevision||row.outcome?.version!==1)throw new WorkspaceError('META_CUSTOMER_INBOX_REVISION_CHANGED',409);
     if(row.outcome.reviewState==='REVIEWED')throw new WorkspaceError('META_CUSTOMER_INBOX_ALREADY_REVIEWED',409);
     const payload=decode(row,member,project,currentChannel,environment),actor=await identity(client,member,project,payload);
-    await client.query(`UPDATE public."WebhookEvent" SET outcome=$3::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[row.id,project.id,JSON.stringify({...row.outcome,identity:actor,reviewState:'REVIEWED',review:{decision:body.decision,actorId:member.actorId,recordedAt:new Date(now()).toISOString()},businessApplied:false,replySent:false})]);
+    await client.query(`UPDATE public."WebhookEvent" SET outcome=$3::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[row.id,project.id,JSON.stringify({...row.outcome,reviewIdentity:actor,reviewState:'REVIEWED',review:{decision:body.decision,actorId:member.actorId,recordedAt:new Date(now()).toISOString()}})]);
     await audit(client,member,project,key,'integration.whatsapp.inbox.reviewed',{eventId:row.id,operationDigest,decision:body.decision,identityStatus:actor.status});return {done:true};
    }
    if(row.status==='PROCESSED'){if(!prior)await audit(client,member,project,key,'integration.whatsapp.inbox.process_requested',{eventId:row.id,operationDigest,replayed:true});return {done:true};}

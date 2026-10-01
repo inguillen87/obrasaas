@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {mkdirSync,writeFileSync} from 'node:fs';
 import {Client,Pool} from 'pg';
+import {trackDisposablePool,closeDisposablePool} from './lib/disposable-postgres-cleanup.mjs';
 import {createCompanyOnboardingStore} from '../src/lib/company-onboarding-store.mjs';
 import {createWorkspaceStore} from '../src/lib/workspace-store.mjs';
 const url=new URL(process.env.CUTOVER_TEST_DATABASE_URL||'https://not-configured.invalid');
@@ -12,7 +13,7 @@ const identity=(suffix='A')=>({authenticated:true,verification:'clerk-production
 const proof=session=>({verified:true,userId:session.userId,primaryEmail:session.userId.toLowerCase()+'@example.test',proofType:'clerk-signed-bootstrap-profile'});
 const command=session=>({operationId:randomUUID(),expectedClerkOrganizationId:session.organizationId,companyName:'Constructora '+session.organizationId,project:{name:'Primera obra '+session.organizationId,address:''},initialTasks:[],confirmNewCompany:true});
 try{
- await admin.connect();await admin.query(`CREATE DATABASE "${db}"`);created=true;url.pathname='/'+db;pool=new Pool({connectionString:url.toString(),max:8});
+ await admin.connect();await admin.query(`CREATE DATABASE "${db}"`);created=true;url.pathname='/'+db;pool=trackDisposablePool(new Pool({connectionString:url.toString(),max:8}));
  await pool.query(`CREATE TYPE "SystemRole" AS ENUM ('TENANT_USER','SUPER_ADMIN');CREATE TYPE "TenantRole" AS ENUM ('ADMIN','DIRECTOR','SITE_MANAGER','AUDITOR','FINANCE');CREATE TYPE "MembershipStatus" AS ENUM ('ACTIVE','DISABLED');CREATE TYPE "ProjectStatus" AS ENUM ('ACTIVE','ARCHIVED');CREATE TYPE "TaskStatus" AS ENUM ('BACKLOG','IN_PROGRESS','DONE','BLOCKED');
   CREATE TABLE "PlatformUser"(id text PRIMARY KEY,"clerkUserId" text NOT NULL UNIQUE,"primaryEmail" text NOT NULL UNIQUE,"systemRole" "SystemRole" NOT NULL DEFAULT 'TENANT_USER',"updatedAt" timestamp NOT NULL);
   CREATE TABLE "Organization"(id text PRIMARY KEY,name text NOT NULL,slug text NOT NULL UNIQUE,"clerkOrganizationId" text UNIQUE,country text NOT NULL,timezone text NOT NULL,metadata jsonb,"updatedAt" timestamp NOT NULL,"createdAt" timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,"trialEndsAt" timestamp,"subscriptionPlan" text NOT NULL DEFAULT 'TRIAL',"subscriptionStatus" text NOT NULL DEFAULT 'TRIALING');
@@ -86,4 +87,4 @@ try{
  checks.push('empty-worksite-can-add-a-real-task-once-without-progress-or-cross-company-writes');
  const report={status:'PASS',environment:'disposable-local-postgresql17',checks,realCustomer:false,productionDataWritten:false,clerkApiCalls:0,metaApiCalls:0,whatsAppConnected:false};
  mkdirSync('.vercel/company-onboarding-evidence',{recursive:true});writeFileSync('.vercel/company-onboarding-evidence/postgres.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));
-}finally{await pool?.end();if(created)await admin.query(`DROP DATABASE "${db}"`);await admin.end();}
+}finally{try{await closeDisposablePool(pool);if(created)await admin.query(`DROP DATABASE "${db}"`);}finally{await admin.end();}}

@@ -1,6 +1,7 @@
 import {randomUUID,createHash} from 'node:crypto';
 import {WorkspaceError,workspaceId,operationId,digest,requireWorkspaceIdentity,WORKSPACE_ROLES} from './workspace-policy.mjs';
 import {participantManager,participantCommand,participantContext,participantKycInput,participantReceiptId,PARTICIPANT_NOTICE,PARTICIPANT_NOTICE_VERSION,assertFieldParticipant,participantKeys,OFFICE_ROLES} from './participant-policy.mjs';
+import {invalidateWorkerChannelIdentity} from './worker-channel-identity.mjs';
 const columns=`id,name,active,metadata,to_char("updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision`;
 const id=prefix=>prefix+'_'+randomUUID().replaceAll('-','');
 const metadata=row=>row.metadata&&typeof row.metadata==='object'&&!Array.isArray(row.metadata)?structuredClone(row.metadata):{};
@@ -107,6 +108,7 @@ export function createParticipantStore({workspace,connect,identity,upload,get}){
     const part=m.participant;if(part?.version!==1)throw new WorkspaceError('PARTICIPANT_UNAVAILABLE',404);
     if(input.action==='REVOKE'){
      if(part.status==='REVOKED')throw new WorkspaceError('PARTICIPANT_ALREADY_REVOKED',409);
+     if(part.channelIdentity)part.channelIdentity=invalidateWorkerChannelIdentity(m,{reasonCode:'PARTICIPATION_REVOKED'}).participant.channelIdentity;
      part.status='REVOKED';part.permissions={attendance:false,report:false};if(part.invitation)part.invitation={...part.invitation,state:'REVOKED'};
      // Revoke the exact assigned project, never another project or tenant.
      if(part.clerkUserId)await client.query(`UPDATE public."ProjectMembership" pm SET status='DISABLED',"updatedAt"=clock_timestamp() FROM public."TenantMembership" tm JOIN public."PlatformUser" u ON u.id=tm."userId" WHERE pm."tenantMembershipId"=tm.id AND pm."projectId"=$1 AND tm."organizationId"=$2 AND tm."tenantRole"='AUDITOR' AND u."clerkUserId"=$3`,[input.projectId,member.organizationId,part.clerkUserId]);
@@ -122,7 +124,7 @@ export function createParticipantStore({workspace,connect,identity,upload,get}){
      if(submitted.length!==1||submitted[0].metadata.contentHash!==part.kyc.contentHash||!Array.isArray(part.kyc.images)||part.kyc.images.length!==2)throw new WorkspaceError('PARTICIPANT_KYC_EVIDENCE_UNCONFIRMED',409);
      const now=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now.toISOString();part.kyc={...part.kyc,status:p.decision,review:{decision:p.decision,reason:p.reason,actorId:member.actorId,recordedAt:now}};
     }
-    await writeWorker(client,input.projectId,row,m);await record(client,member,key,input.projectId,row.id,requestDigest,{kind:input.action,reason:p.reason,decision:p.decision||null,submissionId:p.submissionId||null,identityCertified:false});
+    await writeWorker(client,input.projectId,row,m);await record(client,member,key,input.projectId,row.id,requestDigest,{kind:input.action,reason:p.reason,decision:p.decision||null,submissionId:p.submissionId||null,channelBindingId:part.channelIdentity?.binding?.id||null,channelBindingRevoked:part.channelIdentity?.binding?.status==='REVOKED',identityCertified:false});
     return {done:{scope,...await currentOutcome(client,input.projectId,await receipt(client,member,key),false)}};
    });
    if(prepared.done)return prepared.done;
@@ -173,6 +175,7 @@ export function createParticipantStore({workspace,connect,identity,upload,get}){
    return run(session,input,true,async(client,member,scope)=>{const prior=await receipt(client,member,preflight.key);if(prior){if(prior.metadata.requestDigest!==fingerprint)throw new WorkspaceError('PARTICIPANT_OPERATION_CONFLICT',409);return {scope,...await currentOutcome(client,input.projectId,prior,true)};}
     const row=await assertFieldParticipant(client,member,session,input.projectId,input.workerId,{permission:'report',lock:true});if(row.revision!==input.revision)throw new WorkspaceError('PARTICIPANT_REVISION_CHANGED',409);if(['APPROVED','PENDING_REVIEW'].includes(row.metadata.participant.kyc?.status))throw new WorkspaceError('PARTICIPANT_KYC_ALREADY_SUBMITTED',409);
     const m=metadata(row),submissionId=id('kyc'),contentHash=digest(images.map(image=>[image.kind,image.sha256,image.bytes,image.contentType])),now=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now.toISOString();
+    if(m.participant.channelIdentity)m.participant.channelIdentity=invalidateWorkerChannelIdentity(m,{at:now,reasonCode:'KYC_RESUBMITTED'}).participant.channelIdentity;
     m.participant.kyc={version:1,status:'PENDING_REVIEW',submissionId,noticeVersion:PARTICIPANT_NOTICE_VERSION,noticeSha256:digest(PARTICIPANT_NOTICE),consentRecorded:true,submittedAt:now,contentHash,images};await writeWorker(client,input.projectId,row,m);
     await record(client,member,preflight.key,input.projectId,row.id,fingerprint,{kind:'KYC_SUBMITTED',submissionId,contentHash,noticeVersion:PARTICIPANT_NOTICE_VERSION,identityCertified:false});return {scope,...await currentOutcome(client,input.projectId,await receipt(client,member,preflight.key),false)};
    });

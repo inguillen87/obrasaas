@@ -1,0 +1,12 @@
+import {get,put} from '@vercel/blob';
+import {connectWorkspace} from './workspace-runtime.mjs';
+import {resolveWorkerChannelIdentity} from './worker-channel-identity.mjs';
+import {createMetaFieldBridge} from './meta-field-bridge.mjs';
+import {createPilotMediaAnalyzer} from './pilot-media.mjs';
+import {createMetaCustomerProvider} from './meta-customer-provider.mjs';
+import {createMetaCustomerOutbound} from './meta-customer-outbound.mjs';
+import {createMetaCustomerProcessor} from './meta-customer-processing.mjs';
+const provider=createMetaCustomerProvider();
+const bridge=createMetaFieldBridge({connect:connectWorkspace,resolveIdentity:resolveWorkerChannelIdentity,provider,put,get,analyzer:createPilotMediaAnalyzer()});
+export const productionMetaCustomerOutbound=createMetaCustomerOutbound({connect:connectWorkspace,resolveIdentity:resolveWorkerChannelIdentity,provider});
+export const productionMetaCustomerProcessor=createMetaCustomerProcessor({connect:connectWorkspace,dispatch:context=>bridge.execute(context),outbound:productionMetaCustomerOutbound});

@@ -62,23 +62,24 @@ export async function lockMetaCustomerInboxChannel(client,{wabaId,phoneNumberId,
  return {...channel,organizationId:project.organizationId};
 }
 export function createMetaCustomerInbox({connect,environment=process.env}){
- return {async record(events){
+ return {async record(events,{signatureVerified=false}={}){
   let client,broken=false;
   try{client=await connect();await client.query('BEGIN');await client.query("SET LOCAL statement_timeout='6000ms'");let received=0,replayed=0;
    for(const event of [...events].sort((left,right)=>left.externalId.localeCompare(right.externalId))){
     const channel=await lockMetaCustomerInboxChannel(client,event),id='customer_webhook_'+event.externalId;
     const encryptedPayload=encryptCustomerSecret(JSON.stringify(event.payload),{organizationId:channel.organizationId,projectId:channel.projectId,purpose:'webhook',resourceId:id},environment);
-    const payload={version:1,encryptedPayload,payloadDigest:event.payloadDigest,channelId:channel.id,organizationId:channel.organizationId};
+    const encryptedProof=signatureVerified===true?encryptCustomerSecret(JSON.stringify({scheme:'meta-hmac-sha256-v1',appId:OBRASAAS_META_CHANNEL.appId,payloadDigest:event.payloadDigest,channelId:channel.id,organizationId:channel.organizationId}),{organizationId:channel.organizationId,projectId:channel.projectId,purpose:'webhook-proof',resourceId:id},environment):null;
+    const payload={version:1,encryptedPayload,encryptedProof,payloadDigest:event.payloadDigest,channelId:channel.id,organizationId:channel.organizationId,signatureVerified:signatureVerified===true,signatureScheme:signatureVerified===true?'meta-hmac-sha256-v1':null};
     const write=await client.query(`INSERT INTO public."WebhookEvent" (id,"projectId",provider,"externalId","eventType",status,payload,"updatedAt") VALUES ($1,$2,'meta-customer-v1',$3,$4,'PENDING',$5::jsonb,clock_timestamp()) ON CONFLICT (provider,"externalId") DO NOTHING`,[id,channel.projectId,event.externalId,event.type,JSON.stringify(payload)]);
     if(write.rowCount===1)received++;else{const prior=await client.query(`SELECT "projectId",payload FROM public."WebhookEvent" WHERE provider='meta-customer-v1' AND "externalId"=$1`,[event.externalId]);
      if(prior.rows.length!==1||prior.rows[0].projectId!==channel.projectId||prior.rows[0].payload?.payloadDigest!==event.payloadDigest)throw new WorkspaceError('META_CUSTOMER_CALLBACK_REPLAY_CONFLICT',409);replayed++;}
    }
-   await client.query('COMMIT');return {received,replayed,durable:true,applied:false};
+   await client.query('COMMIT');return {received,replayed,durable:true,applied:false,eventIds:events.map(event=>'customer_webhook_'+event.externalId)};
   }catch(error){if(client)try{await client.query('ROLLBACK');}catch{broken=true;}throw error instanceof WorkspaceError?error:new WorkspaceError('META_CUSTOMER_CALLBACK_UNCONFIRMED',503);}
   finally{client?.release(broken);}
  }};
 }
-export function createMetaCustomerCallbackHandlers({inbox,environment=process.env}){
+export function createMetaCustomerCallbackHandlers({inbox,environment=process.env,schedule=()=>{}}){
  return {
   async GET(request){try{const params=new URL(request.url).searchParams;
    if(typeof environment.META_CUSTOMER_VERIFY_TOKEN!=='string'||environment.META_CUSTOMER_VERIFY_TOKEN.length<32)throw new WorkspaceError('META_CUSTOMER_CALLBACK_NOT_CONFIGURED',503);
@@ -90,8 +91,12 @@ export function createMetaCustomerCallbackHandlers({inbox,environment=process.en
    if(!customerVaultConfigured(environment))throw new WorkspaceError('META_CUSTOMER_CALLBACK_NOT_CONFIGURED',503);
    const bytes=await rawBody(request);if(!verifyMetaCustomerSignature(bytes,request.headers.get('x-hub-signature-256'),environment))throw new WorkspaceError('META_CUSTOMER_SIGNATURE_REJECTED',403);
    let payload;try{payload=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes));}catch{throw new WorkspaceError('META_CUSTOMER_CALLBACK_INVALID');}
-   const result=await inbox.record(splitMetaCustomerEvents(payload));
+   const result=await inbox.record(splitMetaCustomerEvents(payload),{signatureVerified:true});
    if(result.durable!==true)throw new WorkspaceError('META_CUSTOMER_CALLBACK_UNCONFIRMED',503);
+   // Scheduling is after the durable commit. A lost wake-up is recovered by
+   // the signed recovery endpoint; it must never turn an accepted inbox into
+   // a retry or make provider effects part of Meta's acknowledgement latency.
+   try{schedule(result.eventIds||[]);}catch{}
    return Response.json({received:true,durable:true,applied:false},{headers});
   }catch(error){return Response.json({received:false,code:error instanceof WorkspaceError?error.code:'META_CUSTOMER_CALLBACK_UNCONFIRMED'},{status:error instanceof WorkspaceError?error.status:503,headers});}},
  };

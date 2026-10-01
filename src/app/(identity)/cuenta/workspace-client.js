@@ -7,6 +7,7 @@ import {SiteRegisterPanel} from './site-register-panel';
 import {SitePurchasePanel} from './site-purchase-panel';
 import {ParticipantPanel} from './participant-panel';
 import {FieldOperationsPanel} from './field-operations-panel';
+import {WorkerChannelPanel} from './worker-channel-panel';
 import {MetaOnboardingPanel} from './meta-onboarding-panel';
 import {OperationsStatusPanel} from './operations-status-panel';
 const endpoint='/api/identity/workspace';
@@ -32,6 +33,7 @@ export function AccountWorkspace(){
  const contextLocked=saving||Boolean(attempt)||taskCreating||Boolean(draft);
  const participantPending=useCallback(value=>setModulePending(old=>old.participants===value?old:{...old,participants:value}),[]);
  const fieldPending=useCallback(value=>setModulePending(old=>old.field===value?old:{...old,field:value}),[]);
+ const channelPending=useCallback(value=>setModulePending(old=>old.channel===value?old:{...old,channel:value}),[]);
  const purchasePending=useCallback(value=>setModulePending(old=>old.purchase===value?old:{...old,purchase:value}),[]);
  const metaPending=useCallback(value=>setModulePending(old=>old.meta===value?old:{...old,meta:value}),[]);
  const registerPending=useCallback(value=>setModulePending(old=>old.register===value?old:{...old,register:value}),[]);
@@ -118,6 +120,7 @@ export function AccountWorkspace(){
   </section>}
   {view&&account?.canManageIntegrations&&<SiteRegisterPanel key={`register:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} onPending={registerPending}/> }
   {view&&<ParticipantPanel key={`participants:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} onPending={participantPending}/> }
+  {view&&<WorkerChannelPanel key={`channel:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} onPending={channelPending}/> }
   {view&&<FieldOperationsPanel key={`field:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} tasks={view.tasks} onPending={fieldPending} onTasksChanged={tasksChanged}/> }
   {view&&account?.canManageIntegrations&&<SitePurchasePanel key={`purchases:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} onPending={purchasePending}/> }
   {view&&account?.canManageIntegrations&&<CustomerWhatsAppPanel key={`${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} onPending={preparationPending}/> }
