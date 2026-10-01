@@ -66,9 +66,9 @@ export function CustomerWhatsAppPanel({projectId,scope,onPending}){
     <label className={styles.consent}><input type="checkbox" required checked={draft.confirmOwnership} disabled={locked} onChange={event=>setDraft({...draft,confirmOwnership:event.target.checked})}/><span>Confirmo que preparo la conexión para esta empresa y esta obra. Esto no autoriza todavía a ObraSaaS ante Meta.</span></label>
     <div className={styles.actions}>{attempt?<><button type="button" disabled={busy} onClick={recover}>Comprobar preparación</button>{canRetry&&<button type="button" disabled={busy} onClick={retry}>Reenviar mismo intento</button>}</>:<button type="submit" disabled={busy||!draft.numberMode||!draft.useCases.length}>Guardar preparación</button>}</div>
    </form>
-   <section className={styles.progress} aria-labelledby="wa-connection-progress"><h4 id="wa-connection-progress">Estado real de la conexión</h4><ol>{data.readiness.steps.map(step=><li key={step.key}><span>{step.title}</span><strong data-status={step.state}>{stateLabel(step.state)}</strong></li>)}</ol>
+   <section className={styles.progress} aria-labelledby="wa-connection-progress"><h4 id="wa-connection-progress">Preparación y pasos del alta</h4><ol>{data.readiness.steps.map(step=>{const inMetaPanel=['AUTHORIZATION','CONNECTION','TEMPLATES'].includes(step.key);return <li key={step.key}><span>{step.title}</span><strong data-status={inMetaPanel?'CONSULT_META':step.state}>{inMetaPanel?'Consultar conexión Meta':stateLabel(step.state)}</strong></li>;})}</ol>
     <p>Guardar esta preparación no registra un número, no cambia tu proveedor y no activa los circuitos seleccionados.</p>
-    <p className={styles.note}>Después de guardar, consultá el panel «Autorizar WhatsApp con Meta» para ver la disponibilidad y el estado de la conexión. El alta sigue pendiente mientras la configuración de plataforma no esté verificada.</p>
+    <p className={styles.note}>El panel «Autorizar WhatsApp con Meta» muestra la disponibilidad, el registro, las plantillas y la habilitación actual del canal. Estos pasos describen el recorrido; guardar la preparación no confirma su aceptación.</p>
    </section>
   </>}
  </section>;
