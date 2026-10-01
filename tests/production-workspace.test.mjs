@@ -41,6 +41,7 @@ test('database TLS cannot be weakened by URL parameters',()=>{
 function http({identity=session,fail=null}={}){
  const calls=[];const action=name=>async(...args)=>{calls.push({name,args});if(fail)throw fail;return {scope,saved:name==='schedule'};};
  return {calls,handlers:createWorkspaceHandlers({verify:async()=>identity,store:Object.fromEntries(['list','read','schedule','status'].map(name=>[name,action(name)]))})};
+}
 const request=(method='GET',body=null,extra={},query='')=>new Request('https://obrasaas.com/api/identity/workspace'+query,{method,headers:{...(method==='POST'?{'content-type':'application/json',origin:'https://obrasaas.com'}:{}),...extra},...(body!==null?{body:typeof body==='string'?body:JSON.stringify(body)}:{})});
 test('anonymous denial happens before body or database access',async()=>{const h=http({identity:{authenticated:false}});const result=await h.handlers.POST(request('POST','{'));assert.equal(result.status,401);assert.equal(h.calls.length,0);});
 test('provider outage remains unavailable rather than a login success',async()=>{const h=http({identity:{authenticated:false,code:'IDENTITY_PROVIDER_UNAVAILABLE'}});assert.equal((await h.handlers.GET(request())).status,503);assert.equal(h.calls.length,0);});
