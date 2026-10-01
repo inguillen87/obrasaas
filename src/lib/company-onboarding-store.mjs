@@ -1,5 +1,5 @@
 import {randomUUID} from 'node:crypto';
-import {WorkspaceError,operationId} from './workspace-policy.mjs';
+import {WorkspaceError,operationId,WORKSPACE_ROLES} from './workspace-policy.mjs';
 import {requireNewCompanyAdmin,normalizeCompanyOnboarding,bootstrapReceiptId,bootstrapRequestDigest,validProfileEmail} from './company-onboarding-policy.mjs';
 const identifier=prefix=>prefix+'_'+randomUUID().replaceAll('-','');
 const canonicalCompany=async(client,session,lock=false)=>(await client.query(`SELECT id,name,metadata FROM public."Organization" WHERE "clerkOrganizationId"=$1 ${lock?'FOR UPDATE':''}`,[session.organizationId])).rows[0];
@@ -17,12 +17,12 @@ export function createCompanyOnboardingStore({connect}){
    throw new WorkspaceError('COMPANY_CREATION_UNCONFIRMED',503);
   }finally{client?.release(broken);}
  }
- async function access(client,session,organization,lock=false){
+ async function access(client,session,organization,lock=false,adminOnly=true){
   if([true,'true'].includes(organization.metadata?.internal))throw new WorkspaceError('COMPANY_ALREADY_LINKED',403);
   const result=await client.query(`SELECT u.id AS "actorId",m.id AS "membershipId",m."tenantRole"::text AS role
    FROM public."PlatformUser" u JOIN public."TenantMembership" m ON m."userId"=u.id
    WHERE u."clerkUserId"=$1 AND m."organizationId"=$2 AND m."clerkRole"=$3 AND m.status='ACTIVE' ${lock?'FOR SHARE OF u,m':''}`,[session.userId,organization.id,session.organizationRole]);
-  if(result.rows.length!==1||result.rows[0].role!=='ADMIN')throw new WorkspaceError('WORKSPACE_MEMBERSHIP_REQUIRED',403);return result.rows[0];
+  if(result.rows.length!==1||(adminOnly?result.rows[0].role!=='ADMIN':!Object.hasOwn(WORKSPACE_ROLES,result.rows[0].role)))throw new WorkspaceError('WORKSPACE_MEMBERSHIP_REQUIRED',403);return result.rows[0];
  }
  async function receipt(client,session,id){return (await client.query(`SELECT a.id,a."organizationId",a.metadata
    FROM public."AuditLog" a JOIN public."PlatformUser" u ON u.id=a."actorId"
@@ -36,7 +36,7 @@ export function createCompanyOnboardingStore({connect}){
    return transaction(session,false,async client=>{
     const org=await canonicalCompany(client,session);
     if(!org)return {state:'NOT_CREATED',canCreate:true,whatsAppConnected:false};
-    await access(client,session,org);
+    await access(client,session,org,false,false);
     if(key){const found=await receipt(client,session,bootstrapReceiptId(session,key));if(found)return publicResult(found,true);}
     return {state:'ALREADY_CONFIGURED',canCreate:false,organizationId:org.id,companyName:org.name,whatsAppConnected:false};
    });

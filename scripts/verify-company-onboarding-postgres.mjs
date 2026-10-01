@@ -49,6 +49,11 @@ try{
  await assert.rejects(store.status(first,{operationId:request.operationId}),{code:'WORKSPACE_MEMBERSHIP_REQUIRED'});
  await pool.query('UPDATE "TenantMembership" SET status=$1 WHERE "organizationId"=$2',['ACTIVE',results[0].organizationId]);
  checks.push('revoked-membership-is-not-reactivated-by-onboarding-or-replay');
+ await pool.query('UPDATE "TenantMembership" SET "tenantRole"=$1 WHERE "organizationId"=$2',['DIRECTOR',results[0].organizationId]);
+ assert.equal((await store.status(first)).state,'ALREADY_CONFIGURED');
+ assert.equal((await workspace.list(first)).role,'DIRECTOR');
+ await pool.query('UPDATE "TenantMembership" SET "tenantRole"=$1 WHERE "organizationId"=$2',['ADMIN',results[0].organizationId]);
+ checks.push('existing-canonical-director-is-not-trapped-in-new-company-onboarding');
  const conflict=identity('Conflict');await assert.rejects(store.create(conflict,command(conflict),{...proof(conflict),primaryEmail:proof(first).primaryEmail}),{code:'COMPANY_IDENTITY_CONFLICT'});
  assert.equal((await store.status(conflict)).state,'NOT_CREATED');
  checks.push('verified-email-collision-never-reassigns-an-existing-user');

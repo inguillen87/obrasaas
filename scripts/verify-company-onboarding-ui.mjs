@@ -8,7 +8,7 @@ const root=process.cwd(),output=path.join(root,'.vercel/company-onboarding-evide
 const dir=mkdtempSync(path.join(root,'.vercel/company-bootstrap-ui-')),app=path.join(dir,'app');mkdirSync(app);
 for(const file of ['company-bootstrap-panel.js','company-bootstrap-panel.module.css','workspace-client.js','workspace.module.css','customer-whatsapp-panel.js','customer-whatsapp-panel.module.css','task-create-panel.js'])copyFileSync(path.join(root,'src/app/(identity)/cuenta',file),path.join(app,file));
 writeFileSync(path.join(dir,'package.json'),JSON.stringify({name:'synthetic-company-onboarding-ui',private:true}));
-writeFileSync(path.join(dir,'next.config.mjs'),`export default {turbopack:{root:${JSON.stringify(root)}}};`);
+writeFileSync(path.join(dir,'next.config.mjs'),`export default {devIndicators:false,turbopack:{root:${JSON.stringify(root)}}};`);
 writeFileSync(path.join(app,'layout.js'),`export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:12,background:'#081c2d',fontFamily:'Arial,sans-serif'}}>{children}</body></html>}`);
 writeFileSync(path.join(app,'page.js'),`'use client';import {CompanyBootstrapPanel} from './company-bootstrap-panel';import {AccountWorkspace} from './workspace-client';const session=async()=>'synthetic-session-token';const profile=async()=>{if(window.__profileUnavailable)throw new Error('fixture');return 'synthetic-profile-token';};export default function Page(){return <main style={{maxWidth:1120,margin:'0 auto'}}><CompanyBootstrapPanel organizationId="org_BootstrapA" organizationName="" getSessionToken={session} getProfileToken={profile}><AccountWorkspace/></CompanyBootstrapPanel></main>}`);
 const origin='http://127.0.0.1:3110';
@@ -61,7 +61,7 @@ async function scenario(mode,width=390){
  }
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  if(mode==='empty'||mode==='planned')await page.screenshot({path:path.join(output,`company-${mode}-${width}.png`),fullPage:true});
- await page.click('input[type="checkbox"]');await click(page,'Crear empresa y primera obra');
+ await page.click('input[type="checkbox"]');assert.equal(await page.$eval('input[type="checkbox"]',input=>input.checked),true);await click(page,'Crear empresa y primera obra');
  if(mode==='denied'){await wait(page,'Verificá el correo');assert.equal(created,false);assert.equal(posts.length,1);assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('El espacio está creado'));checks.push('unverified-email-never-shows-company-created');await context.close();return;}
  if(mode==='uncertain'){await wait(page,'No recibimos la confirmación');assert.equal(posts.length,1);await click(page,'Comprobar creación');}
  await wait(page,'El espacio está creado');assert.equal(posts.length,1);assert.equal(posts[0].initialTasks.length,mode==='planned'?1:0);assert.ok((await page.evaluate(()=>document.body.innerText)).includes('WhatsApp todavía no quedó conectado'));
@@ -75,7 +75,7 @@ async function scenario(mode,width=390){
 }
 try{
  let ready=false;for(let i=0;i<120;i++){if(server.exitCode!==null)throw new Error('Fixture exited');try{const r=await fetch(origin);if(r.ok){ready=true;break;}}catch{}await new Promise(done=>setTimeout(done,500));}assert.ok(ready);
- browser=await puppeteer.launch({headless:true,args:['--no-sandbox','--disable-setuid-sandbox']});
+ browser=await puppeteer.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{}),args:['--no-sandbox','--disable-setuid-sandbox']});
  for(const width of [320,390,768,1280])await scenario('empty',width);await scenario('planned',390);await scenario('uncertain');await scenario('denied');
  assert.deepEqual(errors,[]);const proof={status:'PASS',environment:'actual-ui-with-intercepted-synthetic-services',checks,widths:[320,390,768,1280],errors,realClerkLogin:false,physicalWhatsApp:false,productionDataWritten:false};
  writeFileSync(path.join(output,'browser.json'),JSON.stringify(proof,null,2));console.log(JSON.stringify(proof));

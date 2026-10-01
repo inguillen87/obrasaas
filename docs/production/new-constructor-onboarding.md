@@ -51,3 +51,8 @@ La app de proveedor sigue siendo ObraSaaS, pero los activos y credenciales resul
 Para la prueba física deben verificarse por separado: autorización/OTP real, conexión de esa WABA, callback firmado persistido, primera respuesta y estado de entrega. Si falta la configuración de plataforma para hacerlo, no se compensa pidiendo tokens al cliente ni se promete que un número nuevo lo solucionará.
 
 Fuentes primarias consultadas: Clerk, Session tokens/JWT templates/Organization management; Meta, Embedded Signup y colección oficial WhatsApp Business Platform. Verificar siempre los permisos y requisitos concretos de la app antes de generalizar el alta a cualquier cliente.
+
+## Prueba del emisor real de identidad
+Se verificó la plantilla de perfil contra Clerk Production usando un acceso oficial de un solo uso para la cuenta técnica de QA ya existente (ningún empleado). La sesión firmada y el token de perfil pasaron sus verificadores reales, incluido email_verified booleano. Se eliminó únicamente la organización temporal creada para esa comprobación y se cerró la sesión; no hubo registros de negocio productivos. Esta prueba no verifica recepción de email por un nuevo usuario humano.
+
+El prebuild de esta entrega también incluye un chequeo opt-in de esquema: una transacción explícitamente READ ONLY consulta exclusivamente columnas y privilegios de las siete tablas requeridas usando el entorno de Production. El resultado efectivo se registra después de ejecutarlo. No se utilizan registros personales ni DML y un build ordinario no lo ejecuta sin el marcador.
