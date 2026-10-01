@@ -12,9 +12,12 @@ export default function IdentityLayout({ children }) {
     signInUrl="/sign-in" signUpUrl="/sign-up" afterSignOutUrl="/"
     signInFallbackRedirectUrl="/cuenta" signUpFallbackRedirectUrl="/cuenta"
     allowedRedirectOrigins={[setup.origin]}
-    appearance={{ variables: { colorPrimary:'#f4b049',colorBackground:'#111b2b',
-      colorText:'#eef4ff',colorTextSecondary:'#bac9de',colorInputBackground:'#09101d',
-      colorInputText:'#eef4ff',borderRadius:'0.7rem',fontFamily:'Inter, Arial, sans-serif' } }}>
+    appearance={{ variables: { colorPrimary:'#f4b049',colorPrimaryForeground:'#121b2a',
+      colorBackground:'#111b2b',colorForeground:'#eef4ff',colorMuted:'#19283d',
+      colorMutedForeground:'#bac9de',colorNeutral:'#eef4ff',colorInput:'#09101d',
+      colorInputForeground:'#eef4ff',colorBorder:'#6c809c',colorRing:'#acd1ff',
+      colorDanger:'#ffb4ab',colorSuccess:'#87dcb5',colorWarning:'#f4b049',
+      borderRadius:'0.7rem',fontFamily:'Inter, Arial, sans-serif' } }}>
     <main className={styles.shell}>{children}</main>
   </ClerkProvider>;
 }

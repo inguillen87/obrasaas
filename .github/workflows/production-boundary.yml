@@ -42,7 +42,7 @@ jobs:
       - name: Production verification lint
         run: npx eslint scripts/lib/production-storage-check.mjs scripts/lib/production-identity-check.mjs scripts/verify-private-storage-live.mjs tests/production-storage-live-check.test.mjs tests/production-identity-provider-check.test.mjs
       - name: Brand v3 integration lint
-        run: npx eslint src/app/brand src/lib/brand-assets.mjs src/app/layout.js src/app/page.js tests/production-brand-v3.test.mjs scripts/verify-brand-v3-browser.mjs
+        run: npx eslint src/app/brand src/lib/brand-assets.mjs src/app/layout.js src/app/page.js tests/production-brand-v3.test.mjs scripts/verify-brand-v3-browser.mjs scripts/verify-access-contrast.mjs
       - name: Pilot media and KYC lint
         run: npx eslint src/lib/pilot-media.mjs src/lib/kyc-pilot-boundary.mjs src/lib/aiVision.js src/app/api/webview/kyc/route.js src/app/api/whatsapp/route.js tests/production-pilot-media.test.mjs scripts/verify-pilot-media-live.mjs
       - name: Guided demo lint
@@ -63,6 +63,7 @@ jobs:
       - run: npm run build
       - run: node scripts/verify-production-boundary.mjs
       - run: node scripts/verify-brand-v3-browser.mjs
+      - run: node scripts/verify-access-contrast.mjs
       - run: node scripts/verify-guided-demo.mjs
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
@@ -75,6 +76,7 @@ jobs:
             .vercel/link-rehearsal-evidence/
             .vercel/identity-context-evidence/
             .vercel/brand-v3-evidence/
+            .vercel/access-contrast-evidence/
             .vercel/guided-demo-evidence/
           include-hidden-files: true
           retention-days: 7
