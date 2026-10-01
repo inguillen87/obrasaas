@@ -1,20 +1,17 @@
 'use client';
 import {useEffect,useRef,useState} from 'react';
+import {loadCustomerMetaSdk} from './meta-sdk-loader.mjs';
 import styles from './meta-onboarding-panel.module.css';
 const endpoint='/api/identity/meta-onboarding';
-const labels={PREPARED:'Preparado para autorizar',EXCHANGE_STARTED:'Respuesta de Meta pendiente de comprobar',EXCHANGE_UNKNOWN:'Canje sin confirmar · requiere revisión',CREDENTIAL_STORED:'Autorización guardada · verificar conexión',VERIFYING:'Comprobando la cuenta de la empresa',REVIEW_REQUIRED:'Conexión pendiente de revisión',LINKED_PENDING_ACCEPTANCE:'Cuenta vinculada · prueba integral pendiente',REGISTRATION_REQUIRED:'Número pendiente de registro en Meta',REGISTRATION_STARTED:'Registro del número en curso',REGISTRATION_UNKNOWN:'Registro pendiente de comprobar',CANCELLED:'Autorización cancelada'};
+const labels={PREPARED:'Preparado para autorizar',EXCHANGE_STARTED:'Respuesta de Meta pendiente de comprobar',EXCHANGE_UNKNOWN:'Canje sin confirmar · requiere revisión',CREDENTIAL_STORED:'Autorización guardada · verificar conexión',VERIFYING:'Comprobando la cuenta de la empresa',REVIEW_REQUIRED:'Conexión pendiente de revisión',LINKED_PENDING_ACCEPTANCE:'Cuenta vinculada · prueba integral pendiente',REGISTRATION_REQUIRED:'Número pendiente de registro en Meta',REGISTRATION_REJECTED:'Meta rechazó el registro · revisar e intentar otra vez',REGISTRATION_VERIFYING:'Comprobando el número antes del registro',REGISTRATION_STARTED:'Registro del número en curso',REGISTRATION_UNKNOWN:'Registro pendiente de comprobar',CANCELLED:'Autorización cancelada'};
 const errors={META_CUSTOMER_CONFIGURATION_PENDING:'La autorización con Meta necesita configuración y revisión de plataforma. Tu preparación de la obra ya puede guardarse.',META_CUSTOMER_PREPARATION_REQUIRED:'Guardá primero la preparación con un número nuevo dedicado. La migración de cuentas existentes requiere su revisión específica.',META_CUSTOMER_PREPARATION_CHANGED:'Cambió la preparación de WhatsApp. Consultá el estado antes de continuar.',META_CUSTOMER_ATTEMPT_ALREADY_ACTIVE:'Ya existe una autorización en curso para esta obra. Comprobá su estado.',META_CUSTOMER_EXCHANGE_UNCONFIRMED:'Meta no confirmó el canje. El código no se vuelve a enviar: la operación necesita revisión.',META_CUSTOMER_EXISTING_CONNECTION_REVIEW:'Esta obra ya tiene una conexión que necesita revisión antes de reemplazarla.',META_CUSTOMER_DEMO_ASSET_REJECTED:'El canal de demostración no se puede asignar a una empresa cliente.',META_CUSTOMER_ASSET_ALREADY_BOUND:'La cuenta o el número ya tienen una vinculación. Hace falta revisar su pertenencia.',META_CUSTOMER_SIGNUP_EXPIRED:'Venció el tiempo de esta autorización. Cancelá la preparación y abrí un intento nuevo.',META_CUSTOMER_RECONCILIATION_UNAVAILABLE:'Todavía no se puede recuperar la conexión. Comprobá el estado del intento.',WORKSPACE_CONTEXT_CHANGED:'Cambió la organización activa. Volvé a abrir la obra.',SESSION_REQUIRED:'Tu sesión terminó. Volvé a ingresar.'};
 async function api(url,options={}){const result=await fetch(url,{credentials:'same-origin',cache:'no-store',...options});const body=await result.json();if(!result.ok){const error=new Error(errors[body.code]||'No se pudo confirmar esta operación. Conservamos el intento para comprobarlo.');error.status=result.status;throw error;}return body;}
-function loadSdk(config){
- return new Promise((resolve,reject)=>{if(window.FB){resolve(window.FB);return;}
-  const previous=window.fbAsyncInit;window.fbAsyncInit=()=>{previous?.();window.FB.init({appId:config.appId,version:config.version,autoLogAppEvents:false,xfbml:false});resolve(window.FB);};
-  let script=document.getElementById('customer-meta-sdk');if(!script){script=document.createElement('script');script.id='customer-meta-sdk';script.src='https://connect.facebook.net/es_LA/sdk.js';script.async=true;script.defer=true;script.onerror=()=>reject(new Error('No se pudo abrir Meta. Conservamos la preparación.'));document.body.appendChild(script);}
- });
-}
 export function MetaOnboardingPanel({projectId,scope,onPending}){
- const [opened,setOpened]=useState(false),[data,setData]=useState(null),[busy,setBusy]=useState(false),[uncertain,setUncertain]=useState(false),[message,setMessage]=useState(''),[sdkReady,setSdkReady]=useState(false),[authorizing,setAuthorizing]=useState(false),[pin,setPin]=useState(''),[confirmRegistration,setConfirmRegistration]=useState(false),[templateConsent,setTemplateConsent]=useState({}),[restartReason,setRestartReason]=useState(''),[confirmFresh,setConfirmFresh]=useState(false),[inboxDecisions,setInboxDecisions]=useState({}),[confirmActivation,setConfirmActivation]=useState(false);
- const mounted=useRef(true),authorization=useRef(null),onPendingRef=useRef(onPending);
+ const [opened,setOpened]=useState(false),[data,setData]=useState(null),[busy,setBusy]=useState(false),[uncertain,setUncertain]=useState(false),[message,setMessage]=useState(''),[sdkConfiguration,setSdkConfiguration]=useState(''),[authorizing,setAuthorizing]=useState(false),[pin,setPin]=useState(''),[confirmRegistration,setConfirmRegistration]=useState(false),[templateConsent,setTemplateConsent]=useState({}),[restartReason,setRestartReason]=useState(''),[confirmFresh,setConfirmFresh]=useState(false),[inboxDecisions,setInboxDecisions]=useState({}),[confirmActivation,setConfirmActivation]=useState(false);
+ const [sdkError,setSdkError]=useState(false),[sdkRetry,setSdkRetry]=useState(0);
+ const mounted=useRef(true),authorization=useRef(null),onPendingRef=useRef(onPending),closedSources=useRef(new WeakSet());
  const dirty=Boolean(pin||confirmRegistration||confirmActivation||restartReason||confirmFresh||Object.values(templateConsent).some(Boolean)||Object.values(inboxDecisions).some(Boolean));
+ const sdkReady=Boolean(data?.readiness.canLaunchMeta)&&sdkConfiguration===`${data?.readiness.appId}:${data?.readiness.version}`;
  useEffect(()=>{onPendingRef.current=onPending;},[onPending]);
  useEffect(()=>{onPendingRef.current?.(busy||uncertain||authorizing||dirty);},[busy,uncertain,authorizing,dirty]);
  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;authorization.current=null;onPendingRef.current?.(false);};},[]);
@@ -26,20 +23,22 @@ export function MetaOnboardingPanel({projectId,scope,onPending}){
    if(mounted.current){accept(result);setUncertain(false);setMessage(action==='refresh_templates'?'Catálogo comprobado para la cuenta de esta empresa. La aprobación depende de cada plantilla.':'Estado guardado. La recepción y el circuito completo con participantes todavía necesitan una prueba real.');}}
   catch(error){if(mounted.current){setMessage(error.status&&error.status<500?error.message:'La respuesta quedó sin confirmar. Usá Comprobar estado antes de continuar.');if(error.status&&error.status<500)setUncertain(false);}}
   finally{if(mounted.current)setBusy(false);}}
- useEffect(()=>{if(!data?.readiness.canLaunchMeta)return;let alive=true;loadSdk(data.readiness).then(()=>{if(alive)setSdkReady(true);}).catch(error=>{if(alive)setMessage(error.message);});return()=>{alive=false;};},[data?.readiness]);
+ useEffect(()=>{if(!data?.readiness.canLaunchMeta)return;let alive=true;loadCustomerMetaSdk(data.readiness).then(()=>{if(alive){setSdkConfiguration(`${data.readiness.appId}:${data.readiness.version}`);setSdkError(false);}}).catch(error=>{if(alive){setSdkError(true);setMessage(error.message);}});return()=>{alive=false;};},[data?.readiness,sdkRetry]);
  useEffect(()=>{
   function finish(){const current=authorization.current;if(!current?.code||!current.wabaId||!current.phoneNumberId||current.sent)return;current.sent=true;setAuthorizing(false);command('complete',{signupId:current.signupId,stateToken:current.stateToken,code:current.code,wabaId:current.wabaId,phoneNumberId:current.phoneNumberId});current.code=null;}
-  function receive(event){if(!['https://www.facebook.com','https://web.facebook.com'].includes(event.origin)||!authorization.current)return;let parsed;try{parsed=typeof event.data==='string'?JSON.parse(event.data):event.data;}catch{return;}
+  function receive(event){const current=authorization.current;if(!['https://www.facebook.com','https://web.facebook.com'].includes(event.origin)||!current||current.sent||event.source&&closedSources.current.has(event.source))return;let parsed;try{parsed=typeof event.data==='string'?JSON.parse(event.data):event.data;}catch{return;}
    if(parsed?.type!=='WA_EMBEDDED_SIGNUP')return;
-   if(parsed.event==='FINISH'){if(!/^\d{5,32}$/.test(parsed.data?.waba_id||'')||!/^\d{5,32}$/.test(parsed.data?.phone_number_id||''))return;authorization.current.wabaId=parsed.data.waba_id;authorization.current.phoneNumberId=parsed.data.phone_number_id;finish();}
-   if(['CANCEL','ERROR'].includes(parsed.event)){authorization.current=null;setAuthorizing(false);setMessage('Meta no completó la autorización. La preparación se conserva; podés comprobarla o cancelarla.');}}
+   if(parsed.event==='FINISH'){if(current.wabaId||!/^\d{5,32}$/.test(parsed.data?.waba_id||'')||!/^\d{5,32}$/.test(parsed.data?.phone_number_id||''))return;current.source=event.source;current.wabaId=parsed.data.waba_id;current.phoneNumberId=parsed.data.phone_number_id;finish();}
+   // Login's callback belongs to a captured attempt; cancellation messages do not.
+   // Let that callback (or the explicit close button) settle a cancelled popup.
+  }
   window.addEventListener('message',receive);authorization.currentFinish=finish;return()=>{window.removeEventListener('message',receive);};
  });
  function authorize(){if(!sdkReady||busy||uncertain||authorizing||!data?.stateToken||data.signup?.state!=='PREPARED')return;
-  authorization.current={signupId:data.signup.id,stateToken:data.stateToken,sent:false};onPendingRef.current?.(true);setAuthorizing(true);setMessage('Completá la autorización en la ventana de Meta.');
-  try{window.FB.login(response=>{if(!mounted.current||!authorization.current)return;const code=response?.authResponse?.code;
+  const attempt={signupId:data.signup.id,stateToken:data.stateToken,sent:false};authorization.current=attempt;onPendingRef.current?.(true);setAuthorizing(true);setMessage('Completá la autorización en la ventana de Meta.');
+  try{window.FB.login(response=>{if(!mounted.current||authorization.current!==attempt||attempt.sent)return;const code=response?.authResponse?.code;
    if(typeof code!=='string'||!code){authorization.current=null;setAuthorizing(false);setMessage('Meta no entregó un código. El intento sigue preparado; comprobá su estado.');return;}
-   authorization.current.code=code;authorization.currentFinish?.();
+   attempt.code=code;authorization.currentFinish?.();
   },{config_id:data.readiness.configId,response_type:'code',override_default_response_type:true,extras:{setup:{},sessionInfoVersion:'3'}});}catch{authorization.current=null;setAuthorizing(false);setMessage('No se pudo abrir la autorización de Meta. El intento sigue preparado.');}
  }
  const locked=busy||uncertain||authorizing;
@@ -61,18 +60,21 @@ export function MetaOnboardingPanel({projectId,scope,onPending}){
     <button type="submit" disabled={locked||!confirmFresh||restartReason.trim().length<8}>Preparar autorización nueva</button>
    </form>}
    {data.signup?.registrationRequired&&<p className={styles.note}>Meta todavía no confirmó el registro de este número para Cloud API. La verificación por SMS o llamada y el registro del número requieren el teléfono de la empresa.</p>}
-   {data.signup?.state==='REGISTRATION_REQUIRED'&&<form className={styles.registration} onSubmit={event=>{event.preventDefault();if(locked||!confirmRegistration||!/^\d{6}$/.test(pin))return;command('register_number',{signupId:data.signup.id,pin,confirmRegistration:true});setPin('');setConfirmRegistration(false);}}>
+    {data.signup?.state==='REGISTRATION_REJECTED'&&<p className={styles.notice}>Meta rechazó el registro. Revisá el número y su PIN de seguridad en Meta. Para intentarlo otra vez, escribí el PIN y autorizá un nuevo registro; primero comprobaremos si el número ya está registrado.</p>}
+    {data.signup?.state==='REGISTRATION_UNKNOWN'&&<p className={styles.notice}>No se pudo confirmar el resultado del registro. Usá Recuperar conexión para comprobarlo. No volvemos a registrar el número mientras ese resultado siga incierto.</p>}
+    {(data.signup?.canRegister===true||data.signup?.state==='REGISTRATION_REQUIRED')&&<form className={styles.registration} onSubmit={event=>{event.preventDefault();if(locked||!confirmRegistration||!/^\d{6}$/.test(pin))return;command('register_number',{signupId:data.signup.id,pin,confirmRegistration:true});setPin('');setConfirmRegistration(false);}}>
     <label>PIN de seguridad para este número<input type="password" inputMode="numeric" autoComplete="new-password" minLength={6} maxLength={6} pattern="[0-9]{6}" value={pin} disabled={locked} onChange={event=>setPin(event.target.value.replace(/\D/g,''))} required/></label>
     <small>Elegí seis dígitos. Este PIN protege el registro en Meta; no es el código recibido por SMS o llamada.</small>
     <label className={styles.consent}><input type="checkbox" checked={confirmRegistration} disabled={locked} onChange={event=>setConfirmRegistration(event.target.checked)}/><span>Autorizo registrar el número de esta empresa para Cloud API.</span></label>
-    <button type="submit" disabled={locked||!confirmRegistration||!/^\d{6}$/.test(pin)}>Registrar este número</button>
+     <button type="submit" disabled={locked||!confirmRegistration||!/^\d{6}$/.test(pin)}>{data.signup?.canRetryRegistration?'Volver a intentar el registro':'Registrar este número'}</button>
    </form>}
    <div className={styles.actions}>
+     {sdkError&&data.readiness.canLaunchMeta&&<button type="button" className={styles.secondary} disabled={locked} onClick={()=>{setSdkConfiguration('');setSdkError(false);setMessage('Volviendo a cargar el acceso a Meta. La preparación se conserva.');setSdkRetry(value=>value+1);}}>Reintentar acceso a Meta</button>}
     {!data.signup||data.signup.state==='CANCELLED'?<button type="button" disabled={locked||!data.prepared||data.numberMode!=='DEDICATED'||!data.readiness.canLaunchMeta} onClick={()=>command('begin',{preparedRevision:data.preparedRevision})}>Preparar autorización</button>:null}
     {data.signup?.state==='PREPARED'&&<button type="button" disabled={locked||!sdkReady||!data.readiness.canLaunchMeta} onClick={authorize}>Autorizar en Meta</button>}
     {data.signup?.canReconcile&&<button type="button" disabled={locked} onClick={()=>command('reconcile',{signupId:data.signup.id})}>Recuperar conexión</button>}
     {data.signup?.canCancel&&<button type="button" className={styles.secondary} disabled={locked} onClick={()=>command('cancel',{signupId:data.signup.id})}>Cancelar preparación</button>}
-    {authorizing&&<button type="button" className={styles.secondary} onClick={()=>{authorization.current=null;setAuthorizing(false);setMessage('La ventana ya no puede enviar esta autorización. Comprobá el estado o volvé a abrir Meta.');}}>Cerrar autorización</button>}
+     {authorizing&&<button type="button" className={styles.secondary} onClick={()=>{if(authorization.current?.source)closedSources.current.add(authorization.current.source);authorization.current=null;setAuthorizing(false);setMessage('Esta autorización queda cerrada en ObraSaaS. Cerrá también la ventana anterior de Meta antes de volver a abrirla.');}}>Cerrar autorización</button>}
     {['LINKED_PENDING_ACCEPTANCE','REGISTRATION_REQUIRED'].includes(data.signup?.state)&&<button type="button" className={styles.secondary} disabled={locked} onClick={()=>command('refresh_templates',{signupId:data.signup.id})}>Comprobar plantillas</button>}
    </div>
    {data.templates&&<div className={styles.catalog}><h4>Plantillas de esta cuenta</h4><p>Consulta completa del {new Date(data.templates.observedAt).toLocaleDateString('es-AR')}. Cada estado pertenece a esta WABA.</p>{data.templates.items.length?<ul>{data.templates.items.map(item=><li key={item.id}><span>{item.name} · {item.language}</span><strong>{item.status}</strong></li>)}</ul>:<p>Esta cuenta no tiene plantillas registradas.</p>}</div>}

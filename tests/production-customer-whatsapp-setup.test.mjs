@@ -58,7 +58,7 @@ test('preparation service neither calls Meta nor reads credentials nor changes p
  assert.doesNotMatch(source,/fetch\(|decryptCredential|access_token|encryptedAccessToken|META_WHATSAPP_ACCESS_TOKEN|UPDATE public\."WhatsAppConnection"|INSERT INTO public\."WhatsAppConnection"/);
  assert.match(source,/project.whatsapp_workspace.prepared.self_service/);
  const ui=readFileSync(new URL('../src/app/(identity)/cuenta/customer-whatsapp-panel.js',import.meta.url),'utf8');assert.doesNotMatch(ui,/FB\.login|localStorage|sessionStorage|type="password"/);
- assert.match(ui,/Autorizar WhatsApp con Meta/);assert.match(ui,/configuración de plataforma no esté verificada/);
+ assert.match(ui,/Autorizar WhatsApp con Meta/);assert.match(ui,/Preparación y pasos del alta/);assert.match(ui,/Consultar conexión Meta/);assert.match(ui,/guardar la preparación no confirma su aceptación/);
 });
 test('enterprise project-profile source was reused without a forked data format',()=>{
  const file=readFileSync(new URL('../src/lib/whatsapp/project-workspace-profile.js',import.meta.url));
