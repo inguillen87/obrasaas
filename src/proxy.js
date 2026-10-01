@@ -4,7 +4,7 @@ import { identityRoute, IDENTITY_ORIGIN } from './lib/production-identity-config
 
 export async function proxy(request) {
   const path = request.nextUrl.pathname;
-  if (identityRoute(path) || path === '/api/identity/workspace') {
+  if (identityRoute(path) || path === '/api/identity/workspace' || path === '/api/identity/whatsapp-setup') {
     if (process.env.VERCEL_ENV === 'production' && request.nextUrl.origin !== IDENTITY_ORIGIN) {
       const destination = new URL(path, IDENTITY_ORIGIN);
       destination.search = request.nextUrl.search;

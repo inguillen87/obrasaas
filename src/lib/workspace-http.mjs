@@ -2,7 +2,7 @@ import { WorkspaceError, workspaceId, operationId, requireWorkspaceIdentity } fr
 const origin = 'https://obrasaas.com';
 const headers = { 'Cache-Control':'private, no-store, max-age=0', 'Vary':'Cookie, Authorization', 'X-Content-Type-Options':'nosniff', 'Referrer-Policy':'no-referrer', 'X-Robots-Tag':'noindex, nofollow' };
 const reply = (body, status=200) => Response.json(body, {status,headers});
-async function boundedBody(request) {
+export async function boundedBody(request) {
   if (request.headers.get('content-type')?.split(';')[0].trim() !== 'application/json' || request.headers.has('content-encoding')) throw new WorkspaceError('SCHEDULE_INPUT_INVALID');
   const size=request.headers.get('content-length');
   if(size!==null&&(!/^\d+$/.test(size)||Number(size)>32768))throw new WorkspaceError('SCHEDULE_INPUT_INVALID',413);

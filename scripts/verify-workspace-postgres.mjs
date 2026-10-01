@@ -3,6 +3,7 @@ import {randomUUID} from 'node:crypto';
 import {mkdirSync,writeFileSync} from 'node:fs';
 import {Pool,Client} from 'pg';
 import {createWorkspaceStore} from '../src/lib/workspace-store.mjs';
+import {createCustomerWhatsAppSetup} from '../src/lib/customer-whatsapp-setup.mjs';
 
 // This script never connects to Neon/production and never receives provider secrets.
 const source=process.env.CUTOVER_TEST_DATABASE_URL;
@@ -24,14 +25,14 @@ try{
     CREATE TABLE "Organization" (id text PRIMARY KEY,name text NOT NULL,"clerkOrganizationId" text UNIQUE,metadata jsonb);
     CREATE TABLE "PlatformUser" (id text PRIMARY KEY,"clerkUserId" text UNIQUE NOT NULL);
     CREATE TABLE "TenantMembership" (id text PRIMARY KEY,"organizationId" text REFERENCES "Organization", "userId" text REFERENCES "PlatformUser", "tenantRole" text NOT NULL,"clerkRole" text NOT NULL,status text NOT NULL,UNIQUE("organizationId","userId"));
-    CREATE TABLE "Project" (id text PRIMARY KEY,"organizationId" text REFERENCES "Organization",name text NOT NULL,status text NOT NULL);
+    CREATE TABLE "Project" (id text PRIMARY KEY,"organizationId" text REFERENCES "Organization",name text NOT NULL,status text NOT NULL,metadata jsonb,"updatedAt" timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP);
     CREATE TABLE "ProjectMembership" (id text PRIMARY KEY,"projectId" text REFERENCES "Project","tenantMembershipId" text REFERENCES "TenantMembership",status text NOT NULL,UNIQUE("projectId","tenantMembershipId"));
     CREATE TABLE "Task" (id text PRIMARY KEY,"projectId" text REFERENCES "Project",title text NOT NULL,status text NOT NULL,progress integer NOT NULL,"startsAt" timestamp,"endsAt" timestamp,"updatedAt" timestamp NOT NULL,metadata jsonb);
     CREATE TABLE "AuditLog" (id text PRIMARY KEY,"organizationId" text REFERENCES "Organization","actorId" text REFERENCES "PlatformUser",action text NOT NULL,"entityType" text NOT NULL,"entityId" text,metadata jsonb,"createdAt" timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP);
     INSERT INTO "Organization" VALUES ('company-a','Synthetic company A','org_A','{}'),('company-b','Synthetic company B','org_B','{}'),('internal','Internal fixture','org_Internal','{"internal":true}');
     INSERT INTO "PlatformUser" VALUES ('owner','user_Owner'),('manager','user_Manager'),('viewer','user_Viewer'),('foreign','user_Foreign');
     INSERT INTO "TenantMembership" VALUES ('m-owner','company-a','owner','ADMIN','org:admin','ACTIVE'),('m-manager','company-a','manager','SITE_MANAGER','org:member','ACTIVE'),('m-viewer','company-a','viewer','AUDITOR','org:member','ACTIVE'),('m-foreign','company-b','foreign','ADMIN','org:admin','ACTIVE'),('m-internal','internal','owner','ADMIN','org:admin','ACTIVE');
-    INSERT INTO "Project" VALUES ('p-a','company-a','Synthetic worksite A','ACTIVE'),('p-a2','company-a','Synthetic worksite A2','ACTIVE'),('p-archived','company-a','Archived fixture','ARCHIVED'),('p-b','company-b','Synthetic worksite B','ACTIVE');
+    INSERT INTO "Project" (id,"organizationId",name,status) VALUES ('p-a','company-a','Synthetic worksite A','ACTIVE'),('p-a2','company-a','Synthetic worksite A2','ACTIVE'),('p-archived','company-a','Archived fixture','ARCHIVED'),('p-b','company-b','Synthetic worksite B','ACTIVE');
     INSERT INTO "ProjectMembership" VALUES ('pm-manager','p-a','m-manager','ACTIVE'),('pm-viewer','p-a','m-viewer','ACTIVE');
     INSERT INTO "Task" VALUES ('task-a','p-a','Synthetic scheduled task','IN_PROGRESS',37,'2026-10-01','2026-10-05','2026-09-30T12:00:00.123456','{"unrelated":"preserve"}'),('task-other','p-b','Other company task','BACKLOG',0,NULL,NULL,'2026-09-30T12:00:00.123456','{}');
   `);
@@ -88,6 +89,42 @@ try{
   await pool.query(`INSERT INTO "Task" (id,"projectId",title,status,progress,"updatedAt") SELECT 'page-'||lpad(i::text,3,'0'),'p-a','Synthetic paginated task','BACKLOG',0,CURRENT_TIMESTAMP FROM generate_series(1,105) i`);
   const first=await read(),second=await store.read(manager,{projectId:'p-a',scope:manage.scope,afterTask:first.nextCursor});
   assert.equal(first.tasks.length,100);assert.equal(first.totalTasks,106);assert.equal(second.tasks.length,6);assert.equal(new Set([...first.tasks,...second.tasks].map(t=>t.id)).size,106);assert.equal(second.nextCursor,null);checks.push('bounded-canonical-pagination-without-dropped-or-foreign-tasks');
+  // Customer preparation reuses the same canonical authorization and project metadata.
+  await pool.query(`CREATE TABLE "WhatsAppConnection" (id text PRIMARY KEY,"projectId" text REFERENCES "Project","displayPhoneNumber" text,enabled boolean NOT NULL,"connectionStatus" text NOT NULL)`);
+  const setup=createCustomerWhatsAppSetup({workspace:store});
+  const context={projectId:'p-a',scope:own.scope};
+  const initial=await setup.read(owner,context);assert.equal(initial.profile.configured,false);assert.equal(initial.readiness.canLaunchMeta,false);
+  await assert.rejects(setup.read(manager,{...context,scope:manage.scope}),{code:'WORKSPACE_INTEGRATION_PERMISSION_REQUIRED'});
+  await assert.rejects(setup.read(foreign,{...context,scope:other.scope}),{code:'WORKSPACE_PROJECT_UNAVAILABLE'});
+  await pool.query(`UPDATE "Project" SET metadata='{"otherFeature":{"preserve":true}}'::jsonb WHERE id='p-a'`);
+  const setupInput={...context,operationId:randomUUID(),profile:{assistantName:'Asistente de la obra',numberMode:'DEDICATED',initialProjectId:'p-a',useCases:['FIELD_REPORTS'],expectedRevision:0,confirmOwnership:true}};
+  const prepared=await Promise.all([setup.save(owner,setupInput),setup.save(owner,setupInput)]);
+  assert.equal(prepared.filter(value=>value.replayed===false).length,1);assert.equal(prepared[0].receipt.id,prepared[1].receipt.id);
+  assert.equal(prepared[0].profile.revision,1);assert.equal(prepared[0].readiness.operational,false);
+  assert.equal((await pool.query(`SELECT count(*)::int AS n FROM "AuditLog" WHERE action='project.whatsapp_workspace.prepared.self_service'`)).rows[0].n,1);
+  assert.deepEqual((await pool.query(`SELECT metadata->'otherFeature' AS other FROM "Project" WHERE id='p-a'`)).rows[0].other,{preserve:true});
+  assert.equal((await setup.read(owner,{projectId:'p-a2',scope:own.scope})).profile.configured,false);
+  checks.push('customer-preparation-is-scoped-persistent-idempotent-and-preserves-other-metadata');
+  const later={...setupInput,operationId:randomUUID(),profile:{...setupInput.profile,numberMode:'BUSINESS_APP',expectedRevision:1}};
+  const savedLater=await setup.save(owner,later);assert.equal(savedLater.profile.revision,2);assert.equal(savedLater.readiness.canLaunchMeta,false);
+  const historical=await setup.save(owner,setupInput);assert.equal(historical.replayed,true);assert.equal(historical.savedProfileIsCurrent,false);assert.equal(historical.profile.numberMode,'BUSINESS_APP');
+  assert.equal((await setup.status(owner,{...context,operationId:setupInput.operationId})).state,'RECORDED');
+  await assert.rejects(setup.save(owner,{...later,operationId:randomUUID()}),{code:'WORKSPACE_CONFLICT'});
+  await assert.rejects(setup.save(owner,{...setupInput,profile:{...setupInput.profile,assistantName:'Another request'}}),{code:'WHATSAPP_PREPARATION_OPERATION_CONFLICT'});
+  checks.push('customer-preparation-recovery-does-not-revert-a-later-selection');
+  const failingSetup=createCustomerWhatsAppSetup({workspace:failing});
+  await assert.rejects(failingSetup.save(owner,{...later,operationId:randomUUID(),profile:{...later.profile,assistantName:'Must roll back',expectedRevision:2}}),{code:'WORKSPACE_OPERATION_UNCONFIRMED'});
+  assert.equal((await setup.read(owner,context)).profile.assistantName,'Asistente de la obra');
+  await pool.query(`INSERT INTO "WhatsAppConnection" VALUES ('connection-fixture','p-a','Synthetic phone label',true,'CONNECTED')`);
+  const linked=await setup.read(owner,context);assert.equal(linked.connection.recordPresent,true);assert.equal(linked.readiness.steps.find(step=>step.key==='CONNECTION').state,'RECORD_PRESENT');
+  assert.equal(linked.readiness.operational,false);assert.equal(linked.readiness.steps.find(step=>step.key==='TEMPLATES').state,'NOT_VERIFIED');
+  assert.equal(linked.readiness.steps.find(step=>step.key==='ROUND_TRIP').state,'NOT_VERIFIED');
+  checks.push('stored-connected-status-is-not-template-or-roundtrip-acceptance');
+  const metadataBefore=(await pool.query(`SELECT metadata FROM "Project" WHERE id='p-a'`)).rows[0].metadata;
+  await pool.query(`UPDATE "Project" SET metadata='{"whatsappWorkspace":{"schemaVersion":2}}'::jsonb WHERE id='p-a'`);
+  await assert.rejects(setup.read(owner,context),{code:'WORKSPACE_INTEGRITY'});
+  await pool.query(`UPDATE "Project" SET metadata=$1::jsonb WHERE id='p-a'`,[JSON.stringify(metadataBefore)]);
+  checks.push('invalid-prior-preparation-fails-without-replacing-it');
   const result={status:'PASS',environment:'local-disposable-postgresql',checks,productionDataTouched:false,providerCalls:0,physicalWhatsAppTested:false};
   mkdirSync('.vercel/workspace-evidence',{recursive:true});writeFileSync('.vercel/workspace-evidence/postgres.json',JSON.stringify(result,null,2));console.log(JSON.stringify(result));
 }finally{
