@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {Client,Pool} from 'pg';
+import {trackDisposablePool,closeDisposablePool} from './lib/disposable-postgres-cleanup.mjs';
 import {mkdirSync,writeFileSync} from 'node:fs';
 import {createWorkspaceStore} from '../src/lib/workspace-store.mjs';
 import {createWorkerChannelStore,resolveWorkerChannelIdentity,workerChannelCodeDigest} from '../src/lib/worker-channel-identity.mjs';
@@ -8,7 +9,7 @@ import {createMetaCustomerInbox,splitMetaCustomerEvents} from '../src/lib/meta-c
 const url=new URL(process.env.CUTOVER_TEST_DATABASE_URL||'http://not-configured');assert.equal(process.env.CUTOVER_TEST_DISPOSABLE,'1');assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV);assert.ok(['localhost','127.0.0.1'].includes(url.hostname));assert.equal(url.pathname,'/obrasaas_cutover_ci');assert.equal(url.search,'');
 const database='obrasaas_worker_channel_'+randomUUID().replaceAll('-',''),admin=new Client({connectionString:url.toString()}),checks=[],environment={META_CUSTOMER_CREDENTIALS_KEY:Buffer.alloc(32,7).toString('base64')};let pool,created=false,failAudit=false,loseCommit=false,beforeUserLock=null;
 const session={authenticated:true,verification:'clerk-production-jwt',userId:'user_Person',organizationId:'org_A',organizationRole:'org:member'};
-try{await admin.connect();await admin.query(`CREATE DATABASE "${database}"`);created=true;url.pathname='/'+database;pool=new Pool({connectionString:url.toString(),max:8});
+try{await admin.connect();await admin.query(`CREATE DATABASE "${database}"`);created=true;url.pathname='/'+database;pool=trackDisposablePool(new Pool({connectionString:url.toString(),max:8}));
  await pool.query(`CREATE TYPE "TenantRole" AS ENUM('ADMIN','DIRECTOR','SITE_MANAGER','FINANCE','AUDITOR');
  CREATE TABLE "Organization"(id text PRIMARY KEY,name text,"clerkOrganizationId" text,metadata jsonb);
  CREATE TABLE "PlatformUser"(id text PRIMARY KEY,"clerkUserId" text UNIQUE,"primaryEmail" text,"updatedAt" timestamp DEFAULT CURRENT_TIMESTAMP);
@@ -53,4 +54,4 @@ try{await admin.connect();await admin.query(`CREATE DATABASE "${database}"`);cre
  requested=await challenge();const rollbackEvent=await event(requested.code);failAudit=true;await assert.rejects(resolve(rollbackEvent,{claimChallenge:true}),/Synthetic audit failure/);failAudit=false;assert.equal((await pool.query(`SELECT metadata->'participant'->'channelIdentity'->'challenge'->>'status' AS status FROM "Worker" WHERE id='worker-a'`)).rows[0].status,'PENDING');assert.equal((await resolve(rollbackEvent,{claimChallenge:true})).replayed,false);checks.push('audit-failure-rolls-back-binding-and-single-use-claim');
  const newRow=await own();await store.command(session,{...context,operationId:randomUUID(),action:'UNLINK',payload:{workerId:newRow.workerId,revision:newRow.revision,reason:'Prepare controlled lost acknowledgement.'}});const current=await own(),lostInput={...context,operationId:randomUUID(),action:'REQUEST_CHALLENGE',payload:{workerId:current.workerId,revision:current.revision}};loseCommit=true;await assert.rejects(store.command(session,lostInput),{code:'WORKSPACE_OPERATION_UNCONFIRMED'});loseCommit=false;const recovered=await store.command(session,lostInput);assert.equal(recovered.replayed,true);assert.equal(recovered.code,undefined);assert.equal(recovered.codeUnavailable,true);checks.push('lost-challenge-response-recovers-receipt-without-releasing-code-again');
  const report={status:'PASS',environment:'disposable-local-postgresql',checks,productionDataWritten:false,realWhatsAppEventReceived:false,humanIdentityAccepted:false};mkdirSync('.vercel/worker-channel-evidence',{recursive:true});writeFileSync('.vercel/worker-channel-evidence/postgres.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));
-}finally{await pool?.end();if(created)await admin.query(`DROP DATABASE "${database}" WITH (FORCE)`);await admin.end();}
+}finally{try{await closeDisposablePool(pool);if(created)await admin.query(`DROP DATABASE "${database}"`);}finally{await admin.end();}}

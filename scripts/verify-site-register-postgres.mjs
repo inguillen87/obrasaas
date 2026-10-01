@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {mkdirSync,writeFileSync} from 'node:fs';
 import {Client,Pool} from 'pg';
+import {trackDisposablePool,closeDisposablePool} from './lib/disposable-postgres-cleanup.mjs';
 import {createWorkspaceStore} from '../src/lib/workspace-store.mjs';
 import {createSiteRegister} from '../src/lib/site-register-store.mjs';
 import {createSitePhotos} from '../src/lib/site-photo-service.mjs';
@@ -14,7 +15,7 @@ const admin=new Client({connectionString:url.toString()});let pool,created=false
 const session=(user,organization='org_A',role='org:admin')=>({authenticated:true,verification:'clerk-production-jwt',userId:user,organizationId:organization,organizationRole:role});
 const owner=session('user_Owner'),director=session('user_Director','org_A','org:member'),manager=session('user_Manager','org_A','org:member'),foreign=session('user_Foreign','org_B');
 try{
- await admin.connect();await admin.query(`CREATE DATABASE "${database}"`);created=true;url.pathname='/'+database;pool=new Pool({connectionString:url.toString(),max:8});
+ await admin.connect();await admin.query(`CREATE DATABASE "${database}"`);created=true;url.pathname='/'+database;pool=trackDisposablePool(new Pool({connectionString:url.toString(),max:8}));
  await pool.query(`
   CREATE TYPE "IncidentSeverity" AS ENUM('INFO','LOW','MEDIUM','HIGH','CRITICAL');
   CREATE TABLE "Organization"(id text PRIMARY KEY,name text NOT NULL,"clerkOrganizationId" text UNIQUE,metadata jsonb);
@@ -127,4 +128,4 @@ try{
  checks.push('photo-integrity-failures-and-lost-commit-recover-without-duplicate-uploads');
  const proof={status:'PASS',environment:'disposable-local-postgresql17',checks,productionDataWritten:false,providerCalls:0,whatsAppTested:false,workerIdentityVerified:false};
  mkdirSync('.vercel/site-register-evidence',{recursive:true});writeFileSync('.vercel/site-register-evidence/postgres.json',JSON.stringify(proof,null,2));console.log(JSON.stringify(proof));
-}finally{await pool?.end();if(created)await admin.query(`DROP DATABASE "${database}"`);await admin.end();}
+}finally{try{await closeDisposablePool(pool);if(created)await admin.query(`DROP DATABASE "${database}"`);}finally{await admin.end();}}

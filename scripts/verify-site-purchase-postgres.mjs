@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {mkdirSync,writeFileSync} from 'node:fs';
 import {Client,Pool} from 'pg';
+import {trackDisposablePool,closeDisposablePool} from './lib/disposable-postgres-cleanup.mjs';
 import {createWorkspaceStore} from '../src/lib/workspace-store.mjs';
 import {createSiteRegister} from '../src/lib/site-register-store.mjs';
 import {createSitePurchases} from '../src/lib/site-purchase-store.mjs';
@@ -15,7 +16,7 @@ let pool,created=false;const checks=[];
 const session=(user,org='org_A',role='org:admin')=>({authenticated:true,verification:'clerk-production-jwt',userId:user,organizationId:org,organizationRole:role});
 const owner=session('user_Owner'),auditor=session('user_Auditor','org_A','org:member'),foreign=session('user_Foreign','org_B');
 try {
- await admin.connect();await admin.query(`CREATE DATABASE "${database}"`);created=true;url.pathname='/'+database;pool=new Pool({connectionString:url.toString(),max:8});
+ await admin.connect();await admin.query(`CREATE DATABASE "${database}"`);created=true;url.pathname='/'+database;pool=trackDisposablePool(new Pool({connectionString:url.toString(),max:8}));
  await pool.query(`
   CREATE TYPE "IncidentSeverity" AS ENUM('INFO','LOW','MEDIUM','HIGH','CRITICAL');
   CREATE TABLE "Organization"(id text PRIMARY KEY,name text,"clerkOrganizationId" text UNIQUE,metadata jsonb);
@@ -104,4 +105,4 @@ try {
  checks.push('receipt-isolation-and-immediate-revocation');
  const proof={status:'PASS',environment:'disposable-local-postgresql',checks,productionDataWritten:false,providerCalls:0,stockLedgerChanged:false,paymentRecorded:false};
  mkdirSync('.vercel/purchase-evidence',{recursive:true});writeFileSync('.vercel/purchase-evidence/postgres.json',JSON.stringify(proof,null,2));console.log(JSON.stringify(proof));
-}finally{await pool?.end();if(created)await admin.query(`DROP DATABASE "${database}"`);await admin.end();}
+}finally{try{await closeDisposablePool(pool);if(created)await admin.query(`DROP DATABASE "${database}"`);}finally{await admin.end();}}

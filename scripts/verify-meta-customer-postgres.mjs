@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {randomUUID,createHmac} from 'node:crypto';
 import {mkdirSync,writeFileSync} from 'node:fs';
 import {Pool,Client} from 'pg';
+import {trackDisposablePool,closeDisposablePool} from './lib/disposable-postgres-cleanup.mjs';
 import {createWorkspaceStore} from '../src/lib/workspace-store.mjs';
 import {createMetaCustomerOnboarding} from '../src/lib/meta-customer-onboarding.mjs';
 import {metaCustomerReadiness} from '../src/lib/meta-customer-provider.mjs';
@@ -29,7 +30,7 @@ const provider={readiness:()=>metaCustomerReadiness(environment),exchange:async(
  findTemplate:async({wabaId,name})=>remoteTemplates.get(wabaId+':'+name)||null,
  createTemplate:async({wabaId,definition})=>{templateCreates++;remoteTemplates.set(wabaId+':'+definition.name,{id:'123456789012345',name:definition.name,components:definition.components,language:definition.language,category:definition.category,status:'PENDING'});if(templateResponseLost)throw new WorkspaceError('META_CUSTOMER_TEMPLATE_SUBMISSION_UNCONFIRMED',503);return {id:'123456789012345',status:'PENDING'};}};
 try{
- await admin.connect();await admin.query(`CREATE DATABASE "${database}"`);created=true;url.pathname='/'+database;pool=new Pool({connectionString:url.toString(),max:8});
+ await admin.connect();await admin.query(`CREATE DATABASE "${database}"`);created=true;url.pathname='/'+database;pool=trackDisposablePool(new Pool({connectionString:url.toString(),max:8}));
  await pool.query(`CREATE TABLE "Organization"(id text PRIMARY KEY,name text,"clerkOrganizationId" text UNIQUE,metadata jsonb);
   CREATE TABLE "PlatformUser"(id text PRIMARY KEY,"clerkUserId" text UNIQUE);
   CREATE TABLE "TenantMembership"(id text PRIMARY KEY,"organizationId" text REFERENCES "Organization","userId" text REFERENCES "PlatformUser","tenantRole" text,"clerkRole" text,status text);
@@ -162,6 +163,6 @@ try{
  const enabled=await service.command(owner,activate);assert.equal(enabled.activation.operational,true);assert.equal(enabled.connection.enabled,true);assert.equal(enabled.connection.storedStatus,'CONNECTED');assert.equal((await service.command(owner,activate)).activation.operational,true);assert.equal((await pool.query(`SELECT count(*)::int AS n FROM "AuditLog" WHERE action='integration.whatsapp.customer.activated'`)).rows[0].n,1);assert.equal(enabled.acceptance.roundTrip,'NOT_VERIFIED');await service.command(owner,command('p-1','deactivate_channel',{confirmActivation:true}));assert.equal((await service.read(owner,context('p-1'))).activation.operational,false);checks.push('explicit-admin-activation-needs-fresh-provider-grants-registration-subscription-and-can-be-disabled-without-roundtrip-claim');
  const revoked=await begin('p-6');await pool.query(`UPDATE "TenantMembership" SET status='DISABLED' WHERE id='m-owner'`);await assert.rejects(service.command(owner,complete('p-6',revoked,6)),{code:'WORKSPACE_MEMBERSHIP_REQUIRED'});assert.equal(exchanges,beforeLease);checks.push('membership-revocation-wins-before-remote-exchange');
  const result={status:'PASS',environment:'local-disposable-postgresql',checks,realProviderCalls:0,physicalNumberTested:false,productionDataTouched:false};mkdirSync('.vercel/meta-customer-evidence',{recursive:true});writeFileSync('.vercel/meta-customer-evidence/postgres.json',JSON.stringify(result,null,2));console.log(JSON.stringify(result));
-}finally{await pool?.end();if(created)await admin.query(`DROP DATABASE "${database}"`);await admin.end();}
+}finally{try{await closeDisposablePool(pool);if(created)await admin.query(`DROP DATABASE "${database}"`);}finally{await admin.end();}}
 function encryptEscrowForTest(id){return encryptImported(token,{organizationId:'company-a',projectId:'p-5',purpose:'signup',resourceId:id},environment);}
 import {encryptCustomerSecret as encryptImported} from '../src/lib/meta-customer-credentials.mjs';

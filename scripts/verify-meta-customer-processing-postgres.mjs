@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {Pool,Client} from 'pg';
+import {trackDisposablePool,closeDisposablePool} from './lib/disposable-postgres-cleanup.mjs';
 import {createMetaCustomerInbox,splitMetaCustomerEvents} from '../src/lib/meta-customer-callback.mjs';
 import {createMetaCustomerProcessor,decodeSignedCustomerEvent} from '../src/lib/meta-customer-processing.mjs';
 import {createMetaCustomerOutbound,customerOutboundId} from '../src/lib/meta-customer-outbound.mjs';
@@ -11,7 +12,7 @@ assert.equal(process.env.CUTOVER_TEST_DISPOSABLE,'1');assert.ok(!process.env.VER
 const database='obrasaas_processing_'+randomUUID().replaceAll('-',''),admin=new Client({connectionString:source}),environment={WHATSAPP_CREDENTIALS_ENCRYPTION_KEY:Buffer.alloc(32,41).toString('base64')};let pool,created=false,clock=Date.now(),sends=0,revoked=false,afterReserve=async()=>{};
 const checked=[],connect=()=>pool.connect(),provider={sendReply:async()=>{sends++;throw new WorkspaceError('META_CUSTOMER_SEND_UNCONFIRMED',503);}};
 try{
- await admin.connect();await admin.query(`CREATE DATABASE "${database}"`);created=true;url.pathname='/'+database;pool=new Pool({connectionString:url.toString(),max:8});
+ await admin.connect();await admin.query(`CREATE DATABASE "${database}"`);created=true;url.pathname='/'+database;pool=trackDisposablePool(new Pool({connectionString:url.toString(),max:8}));
  await pool.query(`CREATE TABLE "Project"(id text PRIMARY KEY,"organizationId" text,status text);
  CREATE TABLE "WhatsAppConnection"(id text PRIMARY KEY,"projectId" text UNIQUE,"phoneNumberId" text UNIQUE,"whatsappBusinessId" text,enabled boolean,"connectionStatus" text,"encryptedAccessToken" text,metadata jsonb);
  CREATE TYPE "WebhookStatus" AS ENUM('PENDING','PROCESSED','FAILED');
@@ -45,6 +46,4 @@ try{
  const leaseId=await receive('lease'),old=createMetaCustomerProcessor({connect,dispatch,outbound,environment,now:()=>clock,afterClaim:async()=>{clock+=61000;await processor.process(leaseId);}});await assert.rejects(old.process(leaseId),{code:'META_CUSTOMER_OUTBOUND_CONTEXT_CHANGED'});assert.equal((await pool.query(`SELECT status::text AS status FROM "WebhookEvent" WHERE id=$1`,[leaseId])).rows[0].status,'PROCESSED');checked.push('expired-worker-is-fenced-after-new-worker-completes');
  const unsigned=(await inbox.record(splitMetaCustomerEvents(eventPayload('unsigned')))).eventIds[0];await assert.rejects(processor.process(unsigned),{code:'META_CUSTOMER_EVENT_PROOF_REQUIRED'});assert.equal((await pool.query(`SELECT status::text AS status FROM "WebhookEvent" WHERE id=$1`,[unsigned])).rows[0].status,'PENDING');assert.equal((await pool.query(`SELECT count(*)::int AS n FROM "CanonicalEffect" WHERE "eventId"=$1`,[unsigned])).rows[0].n,0);clock+=120000;assert.ok(!(await processor.recover()).results.some(row=>row.eventId===unsigned));checked.push('legacy-unsigned-inbox-cannot-gain-authority-by-mutable-flag-or-loop-in-periodic-recovery');
  console.log(JSON.stringify({passed:true,checks:checked,realProviderCalls:0},null,2));
-}finally{
- await pool?.end();if(created){await admin.query('SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname=$1',[database]);await admin.query(`DROP DATABASE "${database}"`);}await admin.end();
-}
+}finally{try{await closeDisposablePool(pool);if(created){await admin.query(`DROP DATABASE "${database}"`);}}finally{await admin.end();}}

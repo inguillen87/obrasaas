@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {mkdirSync,writeFileSync} from 'node:fs';
 import {Client,Pool} from 'pg';
+import {trackDisposablePool,closeDisposablePool} from './lib/disposable-postgres-cleanup.mjs';
 import {createWorkspaceStore} from '../src/lib/workspace-store.mjs';
 import {createFieldOperations} from '../src/lib/field-operations-store.mjs';
 import {createFieldMedia,decodeFieldMedia} from '../src/lib/field-media.mjs';
@@ -13,7 +14,7 @@ const admin=new Client({connectionString:url.toString()});let pool,created=false
 const session=(user,organization='org_A',role='org:member')=>({authenticated:true,verification:'clerk-production-jwt',userId:user,organizationId:organization,organizationRole:role});
 const owner=session('user_Owner','org_A','org:admin'),director=session('user_Director'),manager=session('user_Manager'),worker=session('user_Worker'),otherWorker=session('user_Worker2'),foreign=session('user_Foreign','org_B','org:admin');
 try{
- await admin.connect();await admin.query(`CREATE DATABASE "${database}"`);created=true;url.pathname='/'+database;pool=new Pool({connectionString:url.toString(),max:8});
+ await admin.connect();await admin.query(`CREATE DATABASE "${database}"`);created=true;url.pathname='/'+database;pool=trackDisposablePool(new Pool({connectionString:url.toString(),max:8}));
  await pool.query(`
  CREATE TYPE "IncidentSeverity" AS ENUM('INFO','LOW','MEDIUM','HIGH','CRITICAL');
  CREATE TYPE "AttendanceStatus" AS ENUM('PRESENT','OUTSIDE_GEOFENCE','EXCUSED','ABSENT','PENDING_GEO');
@@ -142,4 +143,4 @@ try{
  await assert.rejects(operations.save(worker,uncertain),{code:'FIELD_PARTICIPANT_REQUIRED'});await assert.rejects(operations.status(worker,{...context(worker),operationId:uncertain.operationId}),{code:'FIELD_PARTICIPANT_REQUIRED'});
  checks.push('lost-commit-recovery-audit-failure-rollback-and-participant-revocation');
  const proof={status:'PASS',environment:'disposable-local-postgresql17',checks,productionDataWritten:false,providerCalls:0,mediaAdapters:'synthetic-isolated-objects-and-responses',physicalAttendanceAccepted:false,whatsAppTested:false};mkdirSync('.vercel/field-operations-evidence',{recursive:true});writeFileSync('.vercel/field-operations-evidence/postgres.json',JSON.stringify(proof,null,2));console.log(JSON.stringify(proof));
-}finally{await pool?.end();if(created)await admin.query(`DROP DATABASE "${database}"`);await admin.end();}
+}finally{try{await closeDisposablePool(pool);if(created)await admin.query(`DROP DATABASE "${database}"`);}finally{await admin.end();}}

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {randomUUID,createHmac} from 'node:crypto';
 import {Client,Pool} from 'pg';
+import {trackDisposablePool,closeDisposablePool} from './lib/disposable-postgres-cleanup.mjs';
 import {mkdirSync,writeFileSync} from 'node:fs';
 import {createWorkspaceStore} from '../src/lib/workspace-store.mjs';
 import {createWorkerChannelStore} from '../src/lib/worker-channel-identity.mjs';
@@ -15,7 +16,7 @@ const url=new URL(process.env.CUTOVER_TEST_DATABASE_URL||'http://not-configured'
 const database='obrasaas_meta_field_'+randomUUID().replaceAll('-',''),admin=new Client({connectionString:url.toString()}),checks=[];let pool,created=false,failAudit=false,loseCommit=false,downloadHook=null,putHook=null,afterMediaCommit=null,downloads=0,puts=0,analyses=0;
 const environment={META_APP_SECRET:'synthetic-meta-secret-for-controlled-hmac-only',META_CUSTOMER_CREDENTIALS_KEY:Buffer.alloc(32,9).toString('base64'),PRIVATE_MEDIA_PROVIDER:'vercel-blob',BLOB_READ_WRITE_TOKEN:'synthetic-private-fixture'};
 const session=(user,org='org_A',role='org:member')=>({authenticated:true,verification:'clerk-production-jwt',userId:user,organizationId:org,organizationRole:role}),person=session('user_Person'),owner=session('user_Owner','org_A','org:admin'),foreign=session('user_Foreign','org_B','org:admin');
-try{await admin.connect();await admin.query(`CREATE DATABASE "${database}"`);created=true;url.pathname='/'+database;pool=new Pool({connectionString:url.toString(),max:8});await pool.query(`
+try{await admin.connect();await admin.query(`CREATE DATABASE "${database}"`);created=true;url.pathname='/'+database;pool=trackDisposablePool(new Pool({connectionString:url.toString(),max:8}));await pool.query(`
  CREATE TYPE "TenantRole" AS ENUM('ADMIN','DIRECTOR','SITE_MANAGER','FINANCE','AUDITOR');CREATE TYPE "IncidentSeverity" AS ENUM('INFO','LOW','MEDIUM','HIGH','CRITICAL');CREATE TYPE "AttendanceStatus" AS ENUM('PRESENT','OUTSIDE_GEOFENCE','EXCUSED','ABSENT','PENDING_GEO');CREATE TYPE "TaskStatus" AS ENUM('BACKLOG','READY','IN_PROGRESS','BLOCKED','DONE');CREATE TYPE "OperationalProposalType" AS ENUM('TASK_PROGRESS','DELAY_REPORT','CRITICAL_INCIDENT');CREATE TYPE "OperationalProposalStatus" AS ENUM('PENDING','APPLIED','REJECTED','EXPIRED','INVALIDATED');
  CREATE TABLE "Organization"(id text PRIMARY KEY,name text,"clerkOrganizationId" text UNIQUE,metadata jsonb);CREATE TABLE "PlatformUser"(id text PRIMARY KEY,"clerkUserId" text UNIQUE,"primaryEmail" text,"fullName" text,"updatedAt" timestamp DEFAULT CURRENT_TIMESTAMP);
  CREATE TABLE "TenantMembership"(id text PRIMARY KEY,"userId" text REFERENCES "PlatformUser","organizationId" text REFERENCES "Organization","tenantRole" "TenantRole","clerkRole" text,status text,"updatedAt" timestamp DEFAULT CURRENT_TIMESTAMP,UNIQUE("organizationId","userId"));CREATE TABLE "Project"(id text PRIMARY KEY,"organizationId" text REFERENCES "Organization",name text,status text,metadata jsonb,"updatedAt" timestamp DEFAULT CURRENT_TIMESTAMP);CREATE TABLE "ProjectMembership"(id text PRIMARY KEY,"projectId" text REFERENCES "Project","tenantMembershipId" text REFERENCES "TenantMembership",status text,"updatedAt" timestamp DEFAULT CURRENT_TIMESTAMP,UNIQUE("projectId","tenantMembershipId"));
@@ -76,4 +77,4 @@ try{await admin.connect();await admin.query(`CREATE DATABASE "${database}"`);cre
  assert.equal((await processor.process(immediateReview.eventId)).done,true);assert.equal(analyses,analysisCount);assert.equal(puts,reviewPuts);assert.equal(dispatched.get(immediateReview.eventId).kind,'EVIDENCE');
  checks.push('human-web-review-between-attach-and-processing-finalizes-job-with-private-file-and-no-analysis-repeat-or-task-change');
  const report={status:'PASS',environment:'disposable-local-postgresql-actual-HMAC-and-real-canonical-bridge',checks,provider:'controlled-synthetic-media-only',blob:'controlled-private-byte-store',outbound:'controlled-no-send-result-only',productionDataWritten:false,realMetaRequests:0,physicalAttendanceAccepted:false,realHumanIdentityAccepted:false};mkdirSync('.vercel/meta-field-evidence',{recursive:true});writeFileSync('.vercel/meta-field-evidence/postgres.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));
-}finally{await pool?.end();if(created)await admin.query(`DROP DATABASE "${database}" WITH (FORCE)`);await admin.end();}
+}finally{try{await closeDisposablePool(pool);if(created)await admin.query(`DROP DATABASE "${database}"`);}finally{await admin.end();}}
