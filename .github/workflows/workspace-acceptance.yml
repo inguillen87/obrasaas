@@ -1,7 +1,7 @@
 name: Authorized workspace acceptance
 on:
   push:
-    branches: [master, 'hotfix/production-workspace-*']
+    branches: [master, 'hotfix/production-workspace-*', 'hotfix/customer-whatsapp-self-service-*']
   workflow_dispatch:
 permissions:
   contents: read
@@ -34,15 +34,18 @@ jobs:
           node-version: 24
           package-manager-cache: false
       - run: npm ci --no-audit --no-fund
-      - run: node --test tests/production-workspace*.test.mjs
+      - run: node --test tests/production-workspace*.test.mjs tests/production-customer-whatsapp-setup.test.mjs
       - name: Workspace lint
-        run: npx eslint src/lib/workspace-*.mjs src/lib/verified-session.mjs src/app/api/identity/workspace/route.js tests/production-workspace*.test.mjs scripts/verify-workspace-postgres.mjs scripts/verify-workspace-ui.mjs 'src/app/(identity)/cuenta'
+        run: npx eslint src/lib/workspace-*.mjs src/lib/verified-session.mjs src/app/api/identity/workspace/route.js tests/production-workspace*.test.mjs scripts/verify-workspace-postgres.mjs scripts/verify-workspace-ui.mjs scripts/verify-customer-whatsapp-ui.mjs scripts/lib/meta-template-catalog-check.mjs scripts/verify-meta-template-catalog.mjs tests/production-meta-template-catalog.test.mjs src/lib/customer-whatsapp-*.mjs src/lib/whatsapp/tenant-workspace-policy.js src/lib/whatsapp/project-workspace-profile.js src/app/api/identity/whatsapp-setup/route.js tests/production-customer-whatsapp-setup.test.mjs 'src/app/(identity)/cuenta'
       - run: node scripts/verify-workspace-postgres.mjs
       - run: node scripts/verify-workspace-ui.mjs
+      - run: node scripts/verify-customer-whatsapp-ui.mjs
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
           name: workspace-acceptance-${{ github.run_id }}
-          path: .vercel/workspace-evidence/
+          path: |
+            .vercel/workspace-evidence/
+            .vercel/customer-whatsapp-evidence/
           include-hidden-files: true
           retention-days: 7

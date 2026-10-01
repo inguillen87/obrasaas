@@ -57,13 +57,30 @@ export function createWorkspaceStore({ connect }) {
     return result.rows[0] || null;
   }
   return {
+    // Internal composition point: the caller supplies no identity or role claims.
+    // Only the independently verified session and canonical membership decide access.
+    async integrationProject(session, {projectId, scope: expected}, writable, callback) {
+      if (typeof callback !== 'function' || typeof writable !== 'boolean') throw new TypeError('Explicit integration transaction required');
+      if (!/^[a-f0-9]{64}$/.test(expected || '')) throw new WorkspaceError('WORKSPACE_CONTEXT_CHANGED',409);
+      return transaction(session, writable, async (client, member, scope) => {
+        checkScope(scope, expected);
+        if (!['ADMIN','DIRECTOR'].includes(member.role)) throw new WorkspaceError('WORKSPACE_INTEGRATION_PERMISSION_REQUIRED',403);
+        await project(client, member, projectId);
+        // Recheck and lock directly: avoid two concurrent SHARE->UPDATE upgrades.
+        const selected=await client.query(`SELECT p.id,p.name,p.metadata,o.metadata AS "organizationMetadata"
+          FROM public."Project" p JOIN public."Organization" o ON o.id=p."organizationId"
+          WHERE p.id=$1 AND p."organizationId"=$2 AND p.status='ACTIVE' ${writable?'FOR UPDATE OF p':''}`,[projectId,member.organizationId]);
+        if(selected.rows.length!==1)throw new WorkspaceError('WORKSPACE_PROJECT_UNAVAILABLE',404);
+        return callback(client,member,scope,selected.rows[0]);
+      });
+    },
     async list(session) {
       return transaction(session, false, async (client, member, scope) => {
         const result = await client.query(`SELECT p.id,p.name,p.status::text AS status FROM public."Project" p
           WHERE p."organizationId"=$1 AND p.status='ACTIVE' AND ($2::boolean OR EXISTS
           (SELECT 1 FROM public."ProjectMembership" pm WHERE pm."projectId"=p.id AND pm."tenantMembershipId"=$3 AND pm.status='ACTIVE'))
           ORDER BY p.id LIMIT 101`, [member.organizationId, portfolioAccess(member.role), member.membershipId]);
-        return { scope, organizationName: member.organizationName, role: member.role, roleLabel: WORKSPACE_ROLES[member.role], canPlanSchedule: managesSchedule(member.role), projects: result.rows.slice(0,100), projectsTruncated: result.rows.length>100 };
+        return { scope, organizationName: member.organizationName, role: member.role, roleLabel: WORKSPACE_ROLES[member.role], canPlanSchedule: managesSchedule(member.role), canManageIntegrations: ['ADMIN','DIRECTOR'].includes(member.role), projects: result.rows.slice(0,100), projectsTruncated: result.rows.length>100 };
       });
     },
     async read(session, { projectId, scope: expected, afterTask = null }) {

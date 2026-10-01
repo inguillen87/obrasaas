@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';import test from 'node:test';
+import {catalogCheckEnabled,inspectDemoTemplateCatalog} from '../scripts/lib/meta-template-catalog-check.mjs';
+import {OBRASAAS_META_CHANNEL as ids} from '../src/lib/meta-channel-binding.mjs';
+const env={VERCEL_ENV:'production',VERCEL_PROJECT_ID:'prj_68NErbCqCFsDVaMak81gcwsGI9pF',NEXT_PUBLIC_APP_URL:'https://obrasaas.com',NEXT_PUBLIC_META_APP_ID:ids.appId,META_WABA_ID:ids.wabaId,META_PHONE_NUMBER_ID:ids.phoneNumberId,META_WHATSAPP_ACCESS_TOKEN:'synthetic-test-only-credential',OBRASAAS_VERIFY_META_CATALOG:'read-only-v1'};
+test('catalogue verification is opt-in for the exact production project',()=>{assert.equal(catalogCheckEnabled({}),false);assert.equal(catalogCheckEnabled(env),true);for(const patch of [{VERCEL_ENV:'preview'},{VERCEL_PROJECT_ID:'other'},{NEXT_PUBLIC_APP_URL:'https://other.example'},{OBRASAAS_VERIFY_META_CATALOG:'send'}])assert.throws(()=>catalogCheckEnabled({...env,...patch}));});
+test('all templates are read without sending and never certify customer onboarding',async()=>{
+ const proof=await inspectDemoTemplateCatalog({environment:env,fetchImpl:async(url,options)=>{assert.equal(options.method,'GET');assert.equal(url.searchParams.get('name'),null);return Response.json({data:[{name:'hello_world',language:'en_US',status:'APPROVED'},{name:'site_report',language:'es_AR',status:'PENDING'}]});}});
+ assert.equal(proof.complete,true);assert.equal(proof.templates.length,2);assert.equal(proof.sentMessages,0);assert.equal(proof.customerOnboardingVerified,false);assert.ok(!JSON.stringify(proof).includes(env.META_WHATSAPP_ACCESS_TOKEN));
+});
+test('pagination reconstructs trusted endpoint, never follows next URL',async()=>{let calls=0;const proof=await inspectDemoTemplateCatalog({environment:env,fetchImpl:async url=>{calls++;assert.equal(url.hostname,'graph.facebook.com');return Response.json(calls===1?{data:[{name:'a',language:'en',status:'APPROVED'}],paging:{next:'https://untrusted.invalid/secret',cursors:{after:'cursor-1'}}}:{data:[{name:'b',language:'es',status:'REJECTED'}]});}});assert.equal(calls,2);assert.equal(proof.complete,true);});
+test('bounded incomplete catalogue explicitly remains truncated',async()=>{let count=0;const proof=await inspectDemoTemplateCatalog({environment:env,fetchImpl:async()=>Response.json({data:[{name:'template_'+count++,language:'en',status:'APPROVED'}],paging:{next:'more',cursors:{after:'cursor'+count}}})});assert.equal(proof.requests,5);assert.equal(proof.complete,false);assert.equal(proof.truncated,true);});
+test('provider rejection and duplicate rows never count as a verified catalogue',async()=>{
+ const bad=await inspectDemoTemplateCatalog({environment:env,fetchImpl:async()=>Response.json({error:{code:190,message:'PRIVATE'}},{status:400})});assert.equal(bad.status,'NOT_VERIFIED');assert.ok(!JSON.stringify(bad).includes('PRIVATE'));
+ const duplicate=await inspectDemoTemplateCatalog({environment:env,fetchImpl:async()=>Response.json({data:[{name:'a',language:'en',status:'APPROVED'},{name:'a',language:'en',status:'APPROVED'}]})});assert.equal(duplicate.status,'NOT_VERIFIED');
+});
