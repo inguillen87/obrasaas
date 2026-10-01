@@ -1,3 +1,5 @@
+import {resolveMetaRecipientBinding,confirmBoundMetaRecipient} from './meta-test-recipient-binding.mjs';
+import {checkObrasaasMetaBinding} from './meta-channel-binding.mjs';
 // Real Meta transport. A test phone number still makes real API calls.
 // API acceptance is not delivery; never synthesize a wamid or silently retry.
 const text=value=>typeof value==='string'&&value.length>0&&!/[\u0000-\u001f\u007f]/.test(value);
@@ -9,6 +11,7 @@ export function normalizeWhatsAppRecipient(value){
  const digits=value.replace(/[+ ()-]/g,'');return /^[1-9]\d{6,14}$/.test(digits)?digits:null;
 }
 export function resolveMetaTransport(environment=process.env,phoneNumberId){
+ const binding=checkObrasaasMetaBinding(environment);if(!binding.ok)return {error:binding.code};
  const pair=(a,b)=>environment[a]&&environment[b]&&environment[a]!==environment[b];
  if(pair('META_WHATSAPP_ACCESS_TOKEN','WHATSAPP_TOKEN')||pair('META_PHONE_NUMBER_ID','WHATSAPP_PHONE_NUMBER_ID'))return {error:'META_CONFIG_CONFLICT'};
  const token=environment.META_WHATSAPP_ACCESS_TOKEN||environment.WHATSAPP_TOKEN;
@@ -80,13 +83,18 @@ export function classifyMetaSubmission(httpStatus,data){
 export function createMetaSender({fetchImpl=fetch,environment=()=>process.env,timeoutMs=15000}={}){
  return async function send(to,body,phoneNumberId){
   const payload=prepareMetaPayload(to,body);if(!payload)return metaFailure('META_PAYLOAD_INVALID');
-  const config=resolveMetaTransport(environment(),phoneNumberId);if(config.error)return metaFailure(config.error);
+  const env=environment(),config=resolveMetaTransport(env,phoneNumberId);if(config.error)return metaFailure(config.error);
+  const binding=resolveMetaRecipientBinding(payload.to,env,config.phoneNumberId);if(binding.error)return metaFailure(binding.error);
+  const outbound={...payload,to:binding.apiTo};
   try{
    const response=await fetchImpl(`https://graph.facebook.com/${config.version}/${config.phoneNumberId}/messages`,{
     method:'POST',headers:{Authorization:'Bearer '+config.token,'Content-Type':'application/json'},
-    body:JSON.stringify(payload),redirect:'error',cache:'no-store',signal:AbortSignal.timeout(timeoutMs)});
-   const data=await readMetaJson(response);return classifyMetaSubmission(response.status,data);
+    body:JSON.stringify(outbound),redirect:'error',cache:'no-store',signal:AbortSignal.timeout(timeoutMs)});
+   const data=await readMetaJson(response),result=classifyMetaSubmission(response.status,data);
+   if(!result.accepted||!binding.applied)return result;
+   if(!confirmBoundMetaRecipient(data,binding))return {...result,success:false,state:'ACCEPTED_RECIPIENT_UNCONFIRMED',code:'META_RECIPIENT_UNCONFIRMED',recipientBindingVerified:false};
+   return {...result,recipientBindingApplied:true,recipientBindingVerified:true};
   }catch{return metaFailure('META_RESULT_UNCONFIRMED','UNCONFIRMED');}
  };
 }
-export const metaDispatchHttpStatus=result=>result?.accepted?200:result?.state==='UNCONFIRMED'?502:result?.code==='META_PAYLOAD_INVALID'?400:result?.state==='REJECTED_BY_META'?422:503;
+export const metaDispatchHttpStatus=result=>result?.state==='ACCEPTED_RECIPIENT_UNCONFIRMED'?502:result?.accepted?200:result?.state==='UNCONFIRMED'?502:result?.code==='META_PAYLOAD_INVALID'?400:result?.state==='REJECTED_BY_META'?422:503;

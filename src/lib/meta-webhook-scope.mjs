@@ -1,6 +1,8 @@
+import {checkObrasaasMetaBinding} from './meta-channel-binding.mjs';
 import {normalizeWhatsAppRecipient} from './meta-whatsapp-transport.mjs';
 import {testRecipients} from './meta-test-dispatch.mjs';
 export function validateMetaEnvelope(payload,environment=process.env){
+ const binding=checkObrasaasMetaBinding(environment);if(!binding.ok)return {ok:false,status:503,code:binding.code};
  const waba=environment.META_WABA_ID,phone=environment.META_PHONE_NUMBER_ID||environment.WHATSAPP_PHONE_NUMBER_ID;
  if(!/^[1-9]\d{4,31}$/.test(waba||'')||!/^[1-9]\d{4,31}$/.test(phone||''))return {ok:false,status:503,code:'META_WEBHOOK_SCOPE_NOT_CONFIGURED'};
  if(payload?.object!=='whatsapp_business_account'||!Array.isArray(payload.entry)||!payload.entry.length)return {ok:false,status:400,code:'META_WEBHOOK_ENVELOPE_INVALID'};

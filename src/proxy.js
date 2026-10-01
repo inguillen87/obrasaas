@@ -4,14 +4,14 @@ import { identityRoute, IDENTITY_ORIGIN } from './lib/production-identity-config
 
 export async function proxy(request) {
   const path = request.nextUrl.pathname;
-  if (identityRoute(path)) {
+  if (identityRoute(path) || path === '/api/identity/workspace') {
     if (process.env.VERCEL_ENV === 'production' && request.nextUrl.origin !== IDENTITY_ORIGIN) {
       const destination = new URL(path, IDENTITY_ORIGIN);
       destination.search = request.nextUrl.search;
       return NextResponse.redirect(destination, 307);
     }
-    // Identity pages and the read-only session endpoint verify the actual JWT
-    // at their server boundary. No client-supplied Clerk headers grant access.
+    // Each exact route verifies the signed session at its server boundary.
+    // The workspace additionally checks canonical membership, project, and origin.
     const response = NextResponse.next();
     for (const [key,value] of Object.entries(privateLegacyHeaders())) response.headers.set(key,value);
     return response;
@@ -23,7 +23,6 @@ export async function proxy(request) {
     const response = NextResponse.redirect(new URL('/sign-in', request.url), 307);
     for (const [key,value] of Object.entries(privateLegacyHeaders())) response.headers.set(key,value);
     return response;
-
   }
   const response = NextResponse.next();
   for (const [key,value] of Object.entries(privateLegacyHeaders())) response.headers.set(key,value);

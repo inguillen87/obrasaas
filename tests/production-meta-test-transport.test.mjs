@@ -4,7 +4,9 @@ import {readFileSync} from 'node:fs';
 import {createMetaSender,prepareMetaPayload,resolveMetaTransport,normalizeWhatsAppRecipient,metaFailure,classifyMetaSubmission} from '../src/lib/meta-whatsapp-transport.mjs';
 import {inspectMetaTestNumber,metaTestCheckEnabled,META_TEST_NUMBER,META_TEST_CHECK_PROJECT} from '../scripts/lib/meta-test-number-check.mjs';
 import {createMetaTestDispatch,testRecipients} from '../src/lib/meta-test-dispatch.mjs';
-const phone='123456789012345',waba='234567890123456',app='345678901234567',to='5491112345678',wamid='wamid.'+'A'.repeat(48);
+// Production-mode fixtures use the fixed PUBLIC asset IDs, never real credentials.
+// Every provider request below is intercepted by an explicit fetchImpl fixture.
+const phone='1225843560610854',waba='2046153882937995',app='1665088767899217',to='5491112345678',wamid='wamid.'+'A'.repeat(48);
 const env={META_WHATSAPP_ACCESS_TOKEN:'synthetic_only_'+'X'.repeat(40),META_PHONE_NUMBER_ID:phone,META_WABA_ID:waba,NEXT_PUBLIC_META_APP_ID:app,META_GRAPH_API_VERSION:'v21.0'};
 const acceptance={messaging_product:'whatsapp',messages:[{id:wamid}]};
 function sender(response,environment=env){const calls=[];const send=createMetaSender({environment:()=>environment,fetchImpl:async(url,options)=>{calls.push({url,options});if(response instanceof Error)throw response;return typeof response==='function'?response():response;}});return {calls,send};}

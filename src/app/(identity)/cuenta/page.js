@@ -5,9 +5,11 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { ObraSaasLogo } from '@/app/brand/brand-logo';
 import { sessionIdentityConfig } from '../../../lib/production-identity-config.mjs';
+import { WorkspaceIdentityPanel } from './workspace-identity';
 import styles from '../identity.module.css';
+import workspaceStyles from './workspace.module.css';
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Mi cuenta · ObraSaaS' };
+export const metadata = { title: 'Mi cuenta y mis obras · ObraSaaS' };
 export default async function AccountPage() {
   if (!sessionIdentityConfig().configured) return null;
   const session = await verifyProductionSession(await headers());
@@ -17,16 +19,11 @@ export default async function AccountPage() {
       <Link href="/cuenta" className={styles.home}>Volver a verificar</Link></section>;
   }
   if (!session.authenticated) redirect('/sign-in');
-  return <section className={styles.card}>
+  return <section className={`${styles.card} ${workspaceStyles.shell}`}>
     <header className={styles.header}><Link href="/" className={styles.brand}><ObraSaasLogo markSize={36} variant="inverse" /></Link><UserButton /></header>
     <p className={styles.eyebrow}>MI CUENTA</p><h1>Sesión iniciada</h1>
-    <p className={styles.lead}>Tu identidad está autenticada. Podés administrar tu perfil y cerrar la sesión desde el menú de tu cuenta.</p>
-    <section className={styles.pending} aria-labelledby="business-access-title"><h2 id="business-access-title">Acceso empresarial pendiente</h2>
-      <p>Las pertenencias a empresas y obras todavía deben vincularse y aprobarse. Esta sesión no habilita los registros históricos ni concede permisos de administración.</p>
-    </section>
-    <dl className={styles.status}><div><dt>Identidad</dt><dd>Autenticada</dd></div><div><dt>Empresa y obra</dt><dd>Pendiente de vinculación</dd></div>
-      <div><dt>Operaciones empresariales</dt><dd>Restringidas</dd></div></dl>
-    <Link href="/demo" className={styles.home}>Abrir la demo guiada</Link><br />
-    <Link href="/" className={styles.home}>Volver a la portada</Link>
+    <p className={styles.lead}>Consultá tus obras y su cronograma con los permisos asignados por tu organización.</p>
+    <WorkspaceIdentityPanel />
+    <footer className={workspaceStyles.footer}><Link href="/demo" className={styles.home}>Ver demo ilustrativa</Link><Link href="/" className={styles.home}>Volver a la portada</Link></footer>
   </section>;
 }
