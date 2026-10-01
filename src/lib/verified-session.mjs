@@ -1,9 +1,9 @@
 import { createRemoteJWKSet, decodeProtectedHeader, jwtVerify } from 'jose';
 import { sessionIdentityConfig, IDENTITY_JWKS_URL, IDENTITY_ISSUER, IDENTITY_ORIGIN } from './production-identity-config.mjs';
+import { organizationFromVerifiedClaims } from './workspace-policy.mjs';
 
 const MAX_TOKEN_LENGTH = 8192;
-// A fixed HTTPS issuer and JOSE's rotating-key cache. No URL, key or algorithm
-// supplied in an incoming JWT can change the key source.
+// The provider and algorithm remain fixed. Incoming headers cannot select keys.
 const productionKeys = createRemoteJWKSet(new URL(IDENTITY_JWKS_URL), {
   timeoutDuration: 5000, cooldownDuration: 10000, cacheMaxAge: 300000,
 });
@@ -21,7 +21,7 @@ export function sessionTokenFromHeaders(headers) {
   const token = tokens[0].slice('__session='.length);
   return token.length <= MAX_TOKEN_LENGTH && /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token) ? token : null;
 }
-export function createSessionVerifier(keyResolver, { now = () => new Date() } = {}) {
+export function createSessionVerifier(keyResolver, { now = () => new Date(), includeOrganization = false } = {}) {
   if (typeof keyResolver !== 'function') throw new TypeError('An explicit trusted key resolver is required');
   return async function verify(headers, environment = process.env) {
     const config = sessionIdentityConfig(environment);
@@ -44,8 +44,13 @@ export function createSessionVerifier(keyResolver, { now = () => new Date() } = 
           payload.exp <= payload.iat || payload.exp - payload.iat > 300 || payload.nbf > payload.exp ||
           (payload.sts !== undefined && payload.sts !== 'active') ||
           (payload.v !== undefined && ![1,2].includes(payload.v))) return denied('SESSION_INVALID');
+      // Canonical database membership and per-project authorization are checked
+      // independently by the workspace store. No claim enables global legacy data.
+      const organization = includeOrganization && payload.act === undefined
+        ? organizationFromVerifiedClaims(payload) : null;
       return { authenticated: true, userId: payload.sub, sessionId: payload.sid,
-        expiresAt: payload.exp, verification: 'clerk-production-jwt', businessAccessEnabled: false };
+        expiresAt: payload.exp, verification: 'clerk-production-jwt', businessAccessEnabled: false,
+        ...(organization || {}) };
     } catch (error) {
       const unavailable = ['ERR_JWKS_TIMEOUT','ERR_JWKS_INVALID','ECONNRESET','ENOTFOUND','ETIMEDOUT'].includes(error?.code) ||
         (error?.code === 'ERR_JOSE_GENERIC' && /JSON Web Key Set HTTP response/.test(error.message || ''));
@@ -54,10 +59,11 @@ export function createSessionVerifier(keyResolver, { now = () => new Date() } = 
   };
 }
 export const verifyProductionSession = createSessionVerifier(productionKeys);
+export const verifyWorkspaceSession = createSessionVerifier(productionKeys, { includeOrganization: true });
 export async function sessionCheckResponse(request, verify = verifyProductionSession) {
   const result = await verify(request.headers);
   const code = result.authenticated ? 200 : ['IDENTITY_CONFIGURATION_PENDING','IDENTITY_PROVIDER_UNAVAILABLE'].includes(result.code) ? 503 : 401;
-  // No raw claims, identifiers, tokens, roles or personal data are returned.
+  // Raw claims and organization context stay server-side, even for workspace sessions.
   return Response.json(result.authenticated
     ? {authenticated:true,verification:result.verification,expiresAt:result.expiresAt,businessAccessEnabled:false}
     : {authenticated:false,code:result.code,businessAccessEnabled:false}, {
