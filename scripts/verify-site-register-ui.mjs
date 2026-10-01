@@ -18,6 +18,7 @@ const server=spawn(process.execPath,[path.join(root,'node_modules/next/dist/bin/
 let serverLog='';for(const stream of [server.stdout,server.stderr])stream.on('data',data=>{serverLog=(serverLog+data.toString()).slice(-12000);});
 const picture=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAACklEQVR4nGNgAAAAAgABSK+kcQAAAABJRU5ErkJggg==','base64');
 const picturePath=path.join(fixture,'synthetic.png');writeFileSync(picturePath,picture);
+const invalidPath=path.join(fixture,'not-an-image.txt');writeFileSync(invalidPath,'Not an image');
 let browser;const errors=[],checks=[];
 async function click(page,title){await page.waitForFunction(text=>[...document.querySelectorAll('button')].some(b=>b.textContent.trim()===text&&!b.disabled),{timeout:15000},title);const handle=await page.evaluateHandle(text=>[...document.querySelectorAll('button')].find(b=>b.textContent.trim()===text),title);assert.ok(handle.asElement(),'Missing button '+title);await handle.asElement().click();await handle.dispose();}
 const wait=(page,text)=>page.waitForFunction(value=>document.body.innerText.includes(value),{timeout:15000},text);
@@ -71,8 +72,8 @@ async function scenario(width,mode='normal'){
  assert.ok((await page.evaluate(()=>document.body.innerText)).includes('no es una orden de compra'));
  await page.screenshot({path:path.join(output,`materials-${width}.png`),fullPage:true});
  await click(page,'Incidencias');await wait(page,'Registrar incidencia');await click(page,'Registrar incidencia');await fill(page,'Título','Acceso bloqueado');await fill(page,'Sector','Sector norte');await fill(page,'Detalle','Hace falta retirar el obstáculo para ingresar.');await click(page,'Guardar registro');await wait(page,'Acceso bloqueado');
- assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await click(page,'Adjuntar foto privada');const upload=await page.$('input[type="file"]');assert.ok(upload);await upload.uploadFile(picturePath);await click(page,'Guardar registro');await wait(page,'Fotografía privada adjunta');await wait(page,'Descargar foto');
- assert.equal(await page.$eval('a',a=>new URL(a.href).pathname),'/api/identity/site-photo');assert.ok(!(await page.$eval('a',a=>a.href)).includes('blob.vercel-storage'));assert.equal(posts.length,7);
+ assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await click(page,'Adjuntar foto privada');const upload=await page.$('input[type="file"]');assert.ok(upload);await upload.uploadFile(picturePath);await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(b=>b.textContent==='Guardar registro'&&!b.disabled));await upload.uploadFile(invalidPath);await wait(page,'Elegí una imagen JPEG');assert.equal(await page.$$eval('button',all=>all.find(b=>b.textContent==='Guardar registro').disabled),true);await upload.uploadFile(picturePath);await click(page,'Guardar registro');await wait(page,'Fotografía privada adjunta');await wait(page,'Descargar foto');
+ assert.equal(await page.$eval('a',a=>new URL(a.href).pathname),'/api/identity/site-photo');assert.ok(!(await page.$eval('a',a=>a.href)).includes('blob.vercel-storage'));assert.equal(posts.length,7);checks.push(`private-photo-selection-and-authorized-link-${width}`);
  checks.push(`roster-issue-material-lifecycle-${width}`);await context.close();
 }
 try{

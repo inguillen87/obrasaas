@@ -33,7 +33,8 @@ export function SiteRegisterPanel({projectId,scope}){
   catch{if(mounted.current)setNotice('El guardado está confirmado. Actualizá el listado para ver los registros vigentes.');}
  }
  async function choosePhoto(event){
-  const file=event.target.files?.[0],current=++photoSequence.current;setNotice('');
+  const file=event.target.files?.[0],current=++photoSequence.current;setNotice('');setReadingPhoto(false);
+  setDraft(previous=>previous?.action==='ATTACH_PHOTO'?{...previous,payload:{...previous.payload,image:''}}:previous);
   if(!file)return;
   if(file.size>2*1024*1024||!['image/png','image/jpeg','image/webp'].includes(file.type)){setNotice('Elegí una imagen JPEG, PNG o WebP de hasta 2 MB. No se subió ningún archivo.');return;}
   setReadingPhoto(true);
