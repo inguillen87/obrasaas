@@ -11,7 +11,9 @@ export function constructorCrmRecord(value){
  return value;
 }
 export function constructorCrmSnapshot(value,context){
- if(value?.scope!==context.scope||value.projectId!==context.projectId||value.canManage!==true||typeof value.organizationName!=='string'||!Array.isArray(value.records)||value.records.length>20||!Number.isSafeInteger(value.total)||value.total<0||value.nextCursor!==null&&!id(value.nextCursor))fail();
+ const search=context.search??'',cursor=search?value=>typeof value==='string'&&/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}~[a-f0-9]{64}$/.test(value):id;
+ if(typeof search!=='string'||search.length>120||search!==search.trim()||/[\u0000-\u001f\u007f]/.test(search)||search&&(value?.search!==search)||value?.search!==undefined&&value.search!==search)fail();
+ if(value?.scope!==context.scope||value.projectId!==context.projectId||value.canManage!==true||typeof value.organizationName!=='string'||!Array.isArray(value.records)||value.records.length>20||!Number.isSafeInteger(value.total)||value.total<0||value.nextCursor!==null&&!cursor(value.nextCursor))fail();
  value.records.forEach(constructorCrmRecord);if(new Set(value.records.map(row=>row.id)).size!==value.records.length||value.total<value.records.length)fail();return value;
 }
 export function constructorCrmOutcome(value,command){

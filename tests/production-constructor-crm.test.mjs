@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {createConstructorCrmHandlers} from '../src/lib/constructor-crm-http.mjs';
-import {constructorCrmReceiptId} from '../src/lib/constructor-crm-store.mjs';
-import {WorkspaceError} from '../src/lib/workspace-policy.mjs';
+import {constructorCrmReceiptId,createConstructorCrm} from '../src/lib/constructor-crm-store.mjs';
+import {WorkspaceError,digest} from '../src/lib/workspace-policy.mjs';
 
 const scope='a'.repeat(64),session={authenticated:true,verification:'clerk-production-jwt',userId:'user_Owner',organizationId:'org_A',organizationRole:'org:admin'};
 const url='https://obrasaas.com/api/identity/constructor-crm',context='?projectId=project-a&scope='+scope;
@@ -30,6 +30,19 @@ test('HTTP boundary preserves confirmed receipt and marks it private/no-store wi
  const handlers=createConstructorCrmHandlers({verify:async()=>session,store:{save:async(s,b)=>{assert.equal(s,session);assert.deepEqual(b,input);return result;}}});
  const response=await handlers.POST(post());assert.equal(response.status,200);assert.deepEqual(await response.json(),result);
  assert.match(response.headers.get('cache-control'),/private.*no-store/);assert.equal(response.headers.get('referrer-policy'),'no-referrer');assert.match(response.headers.get('vary'),/Authorization/);
+});
+test('GET searches the whole authorized company with bounded literal text and keeps receipt/account selectors exact',async()=>{
+ const calls=[],handlers=createConstructorCrmHandlers({verify:async()=>session,store:{list:async(s,c)=>{calls.push([s,c]);return {};},status:()=>assert.fail('Search cannot select a receipt')}});
+ assert.equal((await handlers.GET(new Request(url+context+'&search='+encodeURIComponent('  Cliente %_  ')))).status,200);
+ assert.deepEqual(calls,[[session,{scope,projectId:'project-a',search:'Cliente %_'}]]);
+ for(const suffix of ['&search=a&search=b','&search='+encodeURIComponent('x'.repeat(121)),'&search=secret%00','&search=secret%0A','&search=a&accountId=crm_a','&search=a&operationId='+input.operationId,'&search=a&after=crm_a'])assert.equal((await handlers.GET(new Request(url+context+suffix))).status,400,suffix);
+ assert.equal(calls.length,1);
+});
+test('search cursors never replace canonical authorization and a different query/project/scope is rejected before a read',async()=>{
+ let calls=0;const guard=new WorkspaceError('WORKSPACE_MEMBERSHIP_REQUIRED',403),store=createConstructorCrm({workspace:{organizationOperation:async()=>{calls++;throw guard;}}}),context={scope,projectId:'project-a',search:'Cliente %_'},cursor='crm_owned~'+digest([scope,'project-a',context.search,'crm_owned']);
+ for(const change of [{search:'Otro cliente'},{projectId:'project-b'},{scope:'b'.repeat(64)},{search:undefined},{after:'crm_owned'}])await assert.rejects(store.list(session,{...context,after:cursor,...change}),{code:'CONSTRUCTOR_CRM_QUERY_INVALID'});
+ await assert.rejects(store.status(session,{...context,operationId:input.operationId}),{code:'CONSTRUCTOR_CRM_QUERY_INVALID'});assert.equal(calls,0);
+ await assert.rejects(store.list(session,{...context,after:cursor}),guard);assert.equal(calls,1);
 });
 test('foreign origins, cross-site headers and POST query overrides stop before any store mutation',async()=>{
  let calls=0;const handlers=createConstructorCrmHandlers({verify:async()=>session,store:{save:async()=>{calls++;return {};},list:async()=>{calls++;return {};}}});

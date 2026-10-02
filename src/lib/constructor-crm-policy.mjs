@@ -16,6 +16,9 @@ export class ConstructorCrmInputError extends Error {
 const own = (input, key) => Object.hasOwn(input, key);
 const record = value => value !== null && typeof value === 'object' && !Array.isArray(value) && [Object.prototype, null].includes(Object.getPrototypeOf(value));
 export const constructorCrmId = value => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(value);
+// A literal contact lookup, never a SQL pattern or a commercial automation.
+export const constructorCrmSearch = value => value === undefined ? '' : typeof value === 'string' && value.length <= 120 && !/[\u0000-\u001f\u007f]/.test(value) ? value.trim() : null;
+export const constructorCrmCursor = (value, search = '') => typeof value === 'string' && (search ? /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}~[a-f0-9]{64}$/.test(value) : constructorCrmId(value));
 const uuid = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 const revision = value => Number.isInteger(value) && value >= 1 && value <= CONSTRUCTOR_CRM_MAX_REVISION;
 const fail = () => { throw new ConstructorCrmInputError(); };
