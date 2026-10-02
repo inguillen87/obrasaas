@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
+import {readFileSync} from 'node:fs';
 import {META_CUSTOMER_PROTOCOL,META_DEMO_PILOT_PROTOCOL,resolveMetaCloudProtocol,metaCloudEventId} from '../src/lib/meta-cloud-protocol.mjs';
 import {metaDemoTransportReadiness,demoPilotCommand,META_DEMO_NOTICE_VERSION,META_DEMO_NOTICE_SHA256,labelDemoPilotReply,decodeDemoPilotGrant,assertDemoPilotConnection} from '../src/lib/meta-demo-pilot-policy.mjs';
 import {splitMetaAppEvents,splitMetaDemoPilotEvents,splitMetaCustomerEvents,createMetaCustomerCallbackHandlers} from '../src/lib/meta-customer-callback.mjs';
-import {createMetaAppCallback} from '../src/lib/meta-app-callback.mjs';
+import {createMetaAppCallback,metaAppHandshakeDiagnostics,createMetaAppHandshakeGet} from '../src/lib/meta-app-callback.mjs';
 import {decodeSignedCloudEvent,decodeSignedCustomerEvent} from '../src/lib/meta-customer-processing.mjs';
 import {encryptCustomerSecret,customerSecretDigest} from '../src/lib/meta-customer-credentials.mjs';
 import {createMetaDemoPilotHandlers} from '../src/lib/meta-demo-pilot-http.mjs';
@@ -92,6 +93,27 @@ test('canonical app handshake preserves exact app-token matching and fails close
   const value=new URL('https://obrasaas.com/api/webhooks/whatsapp');value.search=new URLSearchParams({'hub.mode':'subscribe','hub.verify_token':candidate,'hub.challenge':'opaque-challenge'});const response=await handlers.GET(new Request(value));assert.equal(response.status,403);assert.deepEqual(await response.json(),{code:'META_CUSTOMER_SIGNATURE_REJECTED'});
  }
  const value=new URL('https://obrasaas.com/api/webhooks/whatsapp');value.search=new URLSearchParams({'hub.mode':'subscribe','hub.verify_token':environment.META_VERIFY_TOKEN,'hub.challenge':'opaque-challenge'});const unavailable=createMetaAppCallback({environment:{},connect:()=>{throw new Error('GET must not connect');}});assert.equal((await unavailable.GET(new Request(value))).status,503);
+});
+test('canonical handshake diagnostics expose only fixed scalar query shape fields',()=>{
+ const token='synthetic-private-token-value',challenge='synthetic-private-challenge',unknown='synthetic-private-unknown-parameter';
+ const request=params=>{const value=new URL('https://synthetic-private-host.invalid/synthetic-private-path');value.search=params;return new Request(value,{headers:{'x-synthetic-private-header':'synthetic-private-header-value'}});};
+ const keys=['parameterCount','modeIsSubscribe','missingKnownParameters','duplicateKnownParameters','unknownParameterCount','challengeLength','challengeHasAsciiControl'];
+ const cases=[
+  [new URLSearchParams({'hub.mode':'subscribe','hub.verify_token':token,'hub.challenge':challenge}),{parameterCount:3,modeIsSubscribe:true,missingKnownParameters:false,duplicateKnownParameters:false,unknownParameterCount:0,challengeLength:challenge.length,challengeHasAsciiControl:false}],
+  [new URLSearchParams(),{parameterCount:0,modeIsSubscribe:false,missingKnownParameters:true,duplicateKnownParameters:false,unknownParameterCount:0,challengeLength:0,challengeHasAsciiControl:false}],
+  [new URLSearchParams([['hub.mode','invalid-private-mode'],['hub.challenge','private\r\nchallenge'],['hub.challenge',challenge],[unknown,token],[unknown+'-second',challenge]]),{parameterCount:5,modeIsSubscribe:false,missingKnownParameters:true,duplicateKnownParameters:true,unknownParameterCount:2,challengeLength:'private\r\nchallenge'.length,challengeHasAsciiControl:true}],
+ ];
+ for(const [params,expected] of cases){const result=metaAppHandshakeDiagnostics(request(params));assert.deepEqual(Object.keys(result),keys);assert.deepEqual(result,expected);assert.ok(Object.values(result).every(value=>typeof value==='boolean'||typeof value==='number'));const serialized=JSON.stringify(result);for(const secret of [token,challenge,unknown,'invalid-private-mode','synthetic-private-host','synthetic-private-path','synthetic-private-header'])assert.equal(serialized.includes(secret),false);}
+});
+test('canonical GET diagnostics log only 400 shape and preserve exact response, headers and unconsumed body',async()=>{
+ const request=new Request('https://obrasaas.com/api/webhooks/whatsapp?'+new URLSearchParams({'hub.mode':'subscribe','hub.verify_token':'synthetic-private-token','hub.challenge':'synthetic-private-challenge','synthetic-private-name':'synthetic-private-value'}));
+ for(const status of [200,400,403,503]){const entries=[],response=new Response('synthetic-response-body',{status,headers:{'Cache-Control':'no-store','X-Synthetic-Header':'unchanged'}});let calls=0;const wrapped=createMetaAppHandshakeGet(async received=>{calls++;assert.equal(received,request);return response;},{log:(...entry)=>entries.push(entry)});assert.equal(await wrapped(request),response);assert.equal(calls,1);assert.equal(response.bodyUsed,false);assert.equal(response.headers.get('X-Synthetic-Header'),'unchanged');assert.equal(await response.text(),'synthetic-response-body');assert.deepEqual(entries,status===400?[['META_APP_HANDSHAKE_INVALID',metaAppHandshakeDiagnostics(request)]]:[]);assert.doesNotMatch(JSON.stringify(entries),/synthetic-private/);}
+});
+test('canonical GET response remains unchanged if shape logging fails',async()=>{
+ const response=new Response('invalid-handshake',{status:400}),request=new Request('https://obrasaas.com/api/webhooks/whatsapp');const wrapped=createMetaAppHandshakeGet(async()=>response,{log:()=>{throw new Error('synthetic-private-logger-failure');}});assert.equal(await wrapped(request),response);assert.equal(response.bodyUsed,false);assert.equal(await response.text(),'invalid-handshake');
+});
+test('only canonical GET is wrapped for shape diagnostics while POST uses the unchanged handler',()=>{
+ const source=readFileSync(new URL('../src/app/api/webhooks/whatsapp/route.js',import.meta.url),'utf8');assert.match(source,/export const GET=createMetaAppHandshakeGet\(handlers\.GET\);/);assert.match(source,/export const POST=handlers\.POST;/);
 });
 test('label visibly marks both reply kinds without altering interactive capabilities',()=>{
  const r={type:'interactive',body:'MENU',sections:[{title:'Opciones',rows:[{id:'obra:abc:0',title:'Entrada'}]}],button:'Elegir'};
