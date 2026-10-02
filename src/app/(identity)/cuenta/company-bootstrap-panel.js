@@ -1,29 +1,40 @@
 'use client';
 import {useCallback,useEffect,useRef,useState} from 'react';
+import {workspaceActiveToken} from './workspace-session-request.mjs';
 import styles from './company-bootstrap-panel.module.css';
 const endpoint='/api/identity/company-onboarding';
-const explanations={COMPANY_VERIFIED_PROFILE_REQUIRED:'Verificá el correo de tu cuenta antes de crear la empresa.',COMPANY_CREATOR_ROLE_REQUIRED:'La organización activa requiere un administrador para completar el alta.',COMPANY_ALREADY_CONFIGURED:'Esta organización ya tiene una empresa. No se creó otra.',COMPANY_IDENTITY_CONFLICT:'La identidad coincide con un registro que no puede reasignarse automáticamente. No se fusionaron cuentas.',WORKSPACE_MEMBERSHIP_REQUIRED:'Tu pertenencia a esta empresa no está habilitada.',WORKSPACE_CONTEXT_CHANGED:'Cambió la organización activa. Volvé a abrir la empresa correcta.',COMPANY_CREATION_LIMIT:'Se alcanzó el límite de nuevas empresas durante las últimas 24 horas.',COMPANY_INITIAL_DATES_INVALID:'Completá inicio y fin de cada tarea, o dejá ambos vacíos.',COMPANY_INITIAL_TASKS_DUPLICATED:'Dos tareas tienen el mismo título. Diferencialas antes de guardar.',SESSION_REQUIRED:'Tu sesión terminó. Volvé a ingresar.'};
+const explanations={COMPANY_VERIFIED_PROFILE_REQUIRED:'No se pudo confirmar tu correo verificado. Comprobá tu cuenta y volvé a consultar el alta.',COMPANY_IDENTITY_PROVIDER_UNAVAILABLE:'No se pudo comprobar tu acceso. Conservamos tus datos; volvé a consultar.',IDENTITY_PROVIDER_UNAVAILABLE:'No se pudo renovar tu acceso. Conservamos tus datos; volvé a consultar.',COMPANY_CREATOR_ROLE_REQUIRED:'La organización activa requiere un administrador para completar el alta.',COMPANY_ALREADY_CONFIGURED:'Esta organización ya tiene una empresa. No se creó otra.',COMPANY_IDENTITY_CONFLICT:'La identidad coincide con un registro que no puede reasignarse automáticamente. No se fusionaron cuentas.',WORKSPACE_MEMBERSHIP_REQUIRED:'Tu pertenencia a esta empresa no está habilitada.',WORKSPACE_CONTEXT_CHANGED:'Cambió la organización activa. Volvé a abrir la empresa correcta.',COMPANY_CREATION_LIMIT:'Se alcanzó el límite de nuevas empresas durante las últimas 24 horas.',COMPANY_INITIAL_DATES_INVALID:'Completá inicio y fin de cada tarea, o dejá ambos vacíos.',COMPANY_INITIAL_TASKS_DUPLICATED:'Dos tareas tienen el mismo título. Diferencialas antes de guardar.',SESSION_REQUIRED:'Tu sesión terminó. Volvé a ingresar.'};
 const explain=code=>explanations[code]||'No se pudo confirmar el alta. No se agregaron datos de ejemplo ni se conectó WhatsApp.';
 export function CompanyBootstrapPanel({organizationId,organizationName,getSessionToken,getProfileToken,children}){
  const [stage,setStage]=useState('checking'),[busy,setBusy]=useState(false),[notice,setNotice]=useState(''),[attempt,setAttempt]=useState(null),[receipt,setReceipt]=useState(null),[canRetry,setCanRetry]=useState(false);
  const [companyName,setCompanyName]=useState(organizationName||''),[projectName,setProjectName]=useState(''),[address,setAddress]=useState(''),[tasks,setTasks]=useState([]),[confirmed,setConfirmed]=useState(false);
- const mounted=useRef(true),version=useRef(0),retainedProfileProof=useRef(null);
- const api=useCallback(async function(method,body=null,operationId=null){
-  const token=await getSessionToken();if(!token){const error=new Error(explain('SESSION_REQUIRED'));error.status=401;throw error;}
+ const mounted=useRef(true),version=useRef(0),retainedProfileProof=useRef(null),request=useRef(null);
+ const api=useCallback(async function(method,body=null,operationId=null,refreshProfile=false){
+  const controller=new AbortController();request.current?.abort();request.current=controller;const signal=controller.signal;
+  const timeout=setTimeout(()=>controller.abort(),20000);let dispatched=false;
+  try{
+  const token=await workspaceActiveToken(getSessionToken,{signal});if(!token)throw Object.assign(new Error(explain('SESSION_REQUIRED')),{status:401,code:'SESSION_REQUIRED'});
   const headers={Authorization:'Bearer '+token};
   if(method==='POST'){
-   let proof=retainedProfileProof.current;try{if(!proof)proof=await getProfileToken();}catch{const error=new Error(explain('COMPANY_VERIFIED_PROFILE_REQUIRED'));error.status=403;throw error;}
-   if(!proof){const error=new Error(explain('COMPANY_VERIFIED_PROFILE_REQUIRED'));error.status=403;throw error;}
+   // Renew identity after a checked absence; the original command and UUID stay unchanged.
+   let proof=refreshProfile?null:retainedProfileProof.current;
+   if(!proof)proof=await workspaceActiveToken(getProfileToken,{signal});
+   if(!proof)throw Object.assign(new Error(explain('COMPANY_VERIFIED_PROFILE_REQUIRED')),{status:403,code:'COMPANY_VERIFIED_PROFILE_REQUIRED'});
    retainedProfileProof.current=proof;
    headers['Content-Type']='application/json';headers['X-Obrasaas-Bootstrap-Profile']=proof;
   }
+  if(signal.aborted)throw new DOMException('La consulta se canceló.','AbortError');
   const suffix=method==='GET'?'?'+new URLSearchParams({expectedClerkOrganizationId:organizationId,...(operationId?{operationId}:{})}):'';
-  const response=await fetch(endpoint+suffix,{method,headers,credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(20000),...(body?{body:JSON.stringify(body)}:{})});
-  const value=await response.json();if(!response.ok){const error=new Error(explain(value.code));error.status=response.status;throw error;}return value;
+  dispatched=true;
+  const response=await fetch(endpoint+suffix,{method,headers,credentials:'same-origin',cache:'no-store',signal,...(body?{body:JSON.stringify(body)}:{})});
+  const value=await response.json();if(signal.aborted)throw new DOMException('La consulta se canceló.','AbortError');
+  if(!response.ok)throw Object.assign(new Error(explain(value.code)),{status:response.status,code:value.code});return value;
+  }catch(error){error.requestDispatched=dispatched;throw error;}
+  finally{clearTimeout(timeout);if(request.current===controller)request.current=null;}
  },[getSessionToken,getProfileToken,organizationId]);
  function accept(value){
   if(value.created!==true||value.state!=='CREATED'||!value.receiptId||!value.projectId||!value.organizationId)throw new Error('Falta el recibo confirmado del alta.');
-  version.current++;retainedProfileProof.current=null;setReceipt(value);setAttempt(null);setCanRetry(false);setStage('created');setNotice('Empresa y primera obra creadas. WhatsApp todavía no quedó conectado.');
+  version.current++;retainedProfileProof.current=null;setBusy(false);setReceipt(value);setAttempt(null);setCanRetry(false);setStage('created');setNotice('Empresa y primera obra creadas. WhatsApp todavía no quedó conectado.');
  }
  async function inspect(){
   if(busy||attempt)return;setBusy(true);setNotice('');const current=++version.current;
@@ -33,30 +44,35 @@ export function CompanyBootstrapPanel({organizationId,organizationName,getSessio
   finally{if(mounted.current&&current===version.current)setBusy(false);}
  }
  useEffect(()=>{
-  mounted.current=true;let cancelled=false;const current=++version.current;
+  const epoch=version;mounted.current=true;let cancelled=false;const current=++epoch.current;
   api('GET').then(value=>{
    if(cancelled||!mounted.current||current!==version.current)return;
    if(value.state==='ALREADY_CONFIGURED')setStage('ready');else if(value.state==='NOT_CREATED'&&value.canCreate===true)setStage('new');else throw new Error('No se pudo determinar el estado de la empresa.');
   }).catch(error=>{if(!cancelled&&mounted.current&&current===version.current){setNotice(error.message);setStage('failed');}});
-  return()=>{cancelled=true;mounted.current=false;retainedProfileProof.current=null;};
+  return()=>{cancelled=true;mounted.current=false;epoch.current++;request.current?.abort();retainedProfileProof.current=null;};
  },[api]);
- async function send(body){
-  version.current++;setBusy(true);setCanRetry(false);setNotice('');
-  try{const value=await api('POST',body);if(mounted.current)accept(value);}
-  catch(error){if(mounted.current){if(error.status&&error.status<500){retainedProfileProof.current=null;setAttempt(null);setNotice(error.message);}else setNotice('No recibimos la confirmación. Conservamos este intento: comprobá el alta antes de volver a crear una empresa.');}}
-  finally{if(mounted.current)setBusy(false);}
+ async function send(body,refreshProfile=false){
+  const current=++version.current;setBusy(true);setCanRetry(false);setNotice('');
+  try{const value=await api('POST',body,null,refreshProfile);if(mounted.current&&current===version.current)accept(value);}
+  catch(error){if(mounted.current&&current===version.current){
+   if(error.requestDispatched===false){setCanRetry(true);setNotice('No pudimos comprobar tu acceso. El alta no se envió. Conservamos los datos y el identificador de este intento. Volvé a comprobar o reenviar cuando el acceso esté disponible.');}
+   else if(['SESSION_REQUIRED','SESSION_INVALID','COMPANY_VERIFIED_PROFILE_REQUIRED'].includes(error.code)){retainedProfileProof.current=null;setNotice(error.message+' Conservamos los datos y el intento; comprobá la creación antes de reenviar.');}
+   else if(error.status&&error.status<500){retainedProfileProof.current=null;setAttempt(null);setNotice(error.message);}
+   else setNotice('No recibimos la confirmación. Conservamos este intento: comprobá el alta antes de volver a crear una empresa.');
+  }}
+  finally{if(mounted.current&&current===version.current)setBusy(false);}
  }
  async function submit(event){
   event.preventDefault();if(busy||attempt||!confirmed)return;
   const body={operationId:crypto.randomUUID(),expectedClerkOrganizationId:organizationId,companyName,project:{name:projectName,address},initialTasks:tasks.map(({title,startsOn,endsOn})=>({title,startsOn,endsOn})),confirmNewCompany:true};
   retainedProfileProof.current=null;setAttempt(body);await send(body);
  }
- async function retry(){if(!attempt||busy||!canRetry)return;await send(attempt);}
+ async function retry(){if(!attempt||busy||!canRetry)return;await send(attempt,true);}
  async function recover(){
-  if(!attempt||busy)return;setBusy(true);setCanRetry(false);
-  try{const value=await api('GET',null,attempt.operationId);if(!mounted.current)return;
-   if(value.state==='CREATED')accept(value);else if(value.state==='ALREADY_CONFIGURED'){retainedProfileProof.current=null;setAttempt(null);setStage('ready');}else if(value.state==='NOT_OBSERVED'||value.state==='NOT_CREATED'&&value.canCreate===true){setCanRetry(true);setNotice('Todavía no se observa el alta. Podés reenviar este mismo intento con su identificador y sus datos originales. No se reenvía automáticamente.');}else throw new Error('No se pudo comprobar el alta de la empresa.');
-  }catch(error){if(mounted.current)setNotice(error.message);}finally{if(mounted.current)setBusy(false);}
+  if(!attempt||busy)return;const current=++version.current;setBusy(true);setCanRetry(false);
+  try{const value=await api('GET',null,attempt.operationId);if(!mounted.current||current!==version.current)return;
+   if(value.state==='CREATED')accept(value);else if(value.state==='ALREADY_CONFIGURED'){retainedProfileProof.current=null;setAttempt(null);setStage('ready');}else if(['NOT_OBSERVED','NOT_CREATED'].includes(value.state)&&value.canCreate===true){setCanRetry(true);setNotice('Todavía no se observa el alta. Podés reenviar este mismo intento con su identificador y sus datos originales. Actualizaremos la verificación de tu cuenta. No se reenvía automáticamente.');}else throw new Error('No se pudo comprobar el alta de la empresa.');
+  }catch(error){if(mounted.current&&current===version.current)setNotice(error.name==='AbortError'?'La consulta no se completó. Conservamos tu intento; volvé a comprobar.':error.message);}finally{if(mounted.current&&current===version.current)setBusy(false);}
  }
  const locked=busy||Boolean(attempt);
  const editTask=(index,key,value)=>setTasks(previous=>previous.map((task,i)=>i===index?{...task,[key]:value}:task));

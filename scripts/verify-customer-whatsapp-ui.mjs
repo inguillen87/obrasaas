@@ -9,11 +9,12 @@ assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV);
 const root=realpathSync(process.cwd()),parent=path.join(root,'.vercel'),evidence=path.join(parent,'customer-whatsapp-evidence');mkdirSync(evidence,{recursive:true});
 const fixture=mkdtempSync(path.join(root,'.vercel/customer-whatsapp-ui-')),app=path.join(fixture,'app');mkdirSync(app);
 for(const name of ['customer-whatsapp-panel.js','customer-whatsapp-panel.module.css'])copyFileSync(path.join(root,'src/app/(identity)/cuenta',name),path.join(app,name));
+for(const dependency of ['workspace-session-request.mjs','workspace-request-lifecycle.mjs','workspace-request-lifecycle.js','private-workspace-download.js'])copyFileSync(path.join(root,'src/app/(identity)/cuenta',dependency),path.join(app,dependency));
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'customer-whatsapp-fixture',private:true}));
 writeFileSync(path.join(fixture,'next.config.mjs'),`export default {turbopack:{root:${JSON.stringify(root)}}};`);
 const scope='a'.repeat(64),projectId='project-a';
 writeFileSync(path.join(app,'layout.js'),`export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:12,background:'#081b2b',fontFamily:'Arial,sans-serif'}}>{children}</body></html>}`);
-writeFileSync(path.join(app,'page.js'),`'use client';import {useState} from 'react';import {CustomerWhatsAppPanel} from './customer-whatsapp-panel';export default function Page(){const [pending,setPending]=useState(false);return <main style={{maxWidth:1000,margin:'0 auto'}}><button id="change-worksite" disabled={pending}>Cambiar obra</button><CustomerWhatsAppPanel projectId="${projectId}" scope="${scope}" onPending={setPending}/></main>}`);
+writeFileSync(path.join(app,'page.js'),`'use client';import {useState} from 'react';import {CustomerWhatsAppPanel} from './customer-whatsapp-panel';const getSessionToken=async()=>window.__activeTabFixtureToken||'active-tab-controlled-token';export default function Page(){const [pending,setPending]=useState(false);return <main style={{maxWidth:1000,margin:'0 auto'}}><button id="change-worksite" disabled={pending}>Cambiar obra</button><CustomerWhatsAppPanel getSessionToken={getSessionToken} projectId="${projectId}" scope="${scope}" onPending={setPending}/></main>}`);
 const port=3109,origin='http://127.0.0.1:'+port;
 const server=spawn(process.execPath,[path.join(root,'node_modules/next/dist/bin/next'),'dev',fixture,'--webpack','--hostname','127.0.0.1','--port',String(port)],{cwd:root,env:{...process.env,NEXT_TELEMETRY_DISABLED:'1'},stdio:['ignore','pipe','pipe'],detached:process.platform!=='win32'});
 let serverLog='';for(const stream of [server.stdout,server.stderr])stream.on('data',data=>{serverLog=(serverLog+data.toString()).slice(-16000);});
@@ -29,7 +30,7 @@ async function scenario(mode,width=390,numberMode='DEDICATED'){
   readiness:customerWhatsAppReadiness(profile,null),options:{numberModes:WORKSPACE_NUMBER_MODES,useCases:WORKSPACE_USE_CASES}});
  page.on('request',async request=>{
   try{
-   const url=new URL(request.url());
+   const url=new URL(request.url());if(url.pathname.startsWith('/api/identity/'))assert.equal(request.headers().authorization,'Bearer active-tab-controlled-token');
    if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();external.push(url.hostname);return request.abort();}
    if(url.pathname!=='/api/identity/whatsapp-setup')return request.continue();
    requests.push(request.method());let response,status=200;
