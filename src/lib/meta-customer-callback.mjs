@@ -5,6 +5,7 @@ import {encryptCustomerSecret,customerVaultConfigured} from './meta-customer-cre
 import {metaAssetId} from './meta-customer-provider.mjs';
 import {OBRASAAS_META_CHANNEL} from './meta-channel-binding.mjs';
 import {META_CUSTOMER_PROTOCOL,META_DEMO_PILOT_PROTOCOL,resolveMetaCloudProtocol,metaCloudEventId} from './meta-cloud-protocol.mjs';
+import {reportMetaCallbackRejection} from './meta-callback-diagnostics.mjs';
 const MAX_BYTES=262144;
 const headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'};
 // JSON object ordering is transport formatting, while array ordering and
@@ -92,7 +93,7 @@ export function createMetaCustomerInbox({connect,environment=process.env,protoco
   finally{client?.release(broken);}
  }};
 }
-export function createMetaCustomerCallbackHandlers({inbox,environment=process.env,schedule=()=>{},protocol=META_CUSTOMER_PROTOCOL,verifyTokenName='META_CUSTOMER_VERIFY_TOKEN',splitEvents}){
+export function createMetaCustomerCallbackHandlers({inbox,environment=process.env,schedule=()=>{},protocol=META_CUSTOMER_PROTOCOL,verifyTokenName='META_CUSTOMER_VERIFY_TOKEN',splitEvents,reportRejection=reportMetaCallbackRejection}){
  resolveMetaCloudProtocol(protocol);
  if(!['META_CUSTOMER_VERIFY_TOKEN','META_VERIFY_TOKEN'].includes(verifyTokenName))throw new WorkspaceError('META_CLOUD_PROTOCOL_REJECTED',403);
  return {
@@ -105,17 +106,21 @@ export function createMetaCustomerCallbackHandlers({inbox,environment=process.en
    if(!exactSecretMatch(params.get('hub.verify_token'),environment[verifyTokenName]))throw new WorkspaceError('META_CUSTOMER_SIGNATURE_REJECTED',403);
    return new Response(challenge,{headers:{...headers,'Content-Type':'text/plain'}});
   }catch(error){return Response.json({code:error.code||'META_CUSTOMER_CALLBACK_UNCONFIRMED'},{status:error.status||503,headers});}},
-  async POST(request){try{
+  async POST(request){let stage='CONFIGURATION',signatureVerified=false;try{
    if(!customerVaultConfigured(environment))throw new WorkspaceError('META_CUSTOMER_CALLBACK_NOT_CONFIGURED',503);
-   const bytes=await rawBody(request);if(!verifyMetaCustomerSignature(bytes,request.headers.get('x-hub-signature-256'),environment))throw new WorkspaceError('META_CUSTOMER_SIGNATURE_REJECTED',403);
+   stage='BODY';const bytes=await rawBody(request);stage='SIGNATURE';if(!verifyMetaCustomerSignature(bytes,request.headers.get('x-hub-signature-256'),environment))throw new WorkspaceError('META_CUSTOMER_SIGNATURE_REJECTED',403);
+   signatureVerified=true;stage='PAYLOAD';
    let payload;try{payload=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes));}catch{throw new WorkspaceError('META_CUSTOMER_CALLBACK_INVALID');}
-   const result=await inbox.record(splitEvents?splitEvents(payload):protocol===META_CUSTOMER_PROTOCOL?splitMetaCustomerEvents(payload):splitMetaDemoPilotEvents(payload),{signatureVerified:true});
+   stage='VALIDATING_EVENTS';const events=splitEvents?splitEvents(payload):protocol===META_CUSTOMER_PROTOCOL?splitMetaCustomerEvents(payload):splitMetaDemoPilotEvents(payload);
+   stage='RECORDING';const result=await inbox.record(events,{signatureVerified:true});
    if(result.durable!==true)throw new WorkspaceError('META_CUSTOMER_CALLBACK_UNCONFIRMED',503);
    // Scheduling is after the durable commit. A lost wake-up is recovered by
    // the signed recovery endpoint; it must never turn an accepted inbox into
    // a retry or make provider effects part of Meta's acknowledgement latency.
    try{schedule(result.eventIds||[]);}catch{}
    return Response.json({received:true,durable:true,applied:false},{headers});
-  }catch(error){return Response.json({received:false,code:error instanceof WorkspaceError?error.code:'META_CUSTOMER_CALLBACK_UNCONFIRMED'},{status:error instanceof WorkspaceError?error.status:503,headers});}},
+  }catch(error){const code=error instanceof WorkspaceError?error.code:'META_CUSTOMER_CALLBACK_UNCONFIRMED',status=error instanceof WorkspaceError?error.status:503;
+   try{Promise.resolve(reportRejection({stage,signatureVerified,code,status})).catch(()=>{});}catch{/* Rejection logging must not acknowledge an uncommitted event. */}
+   return Response.json({received:false,code},{status,headers});}},
  };
 }

@@ -22,7 +22,12 @@ export function createFieldHandlers({verify,operations}) {
     const session=await identity(request,verify),params=new URL(request.url).searchParams;
     if(request.method==='POST'){if(params.size)throw new WorkspaceError('FIELD_QUERY_INVALID');return reply(await operations.save(session,await boundedBody(request)));}
     if(request.method!=='GET')return reply({code:'METHOD_NOT_ALLOWED'},405);
-    const input=context(params,['operationId']);return reply(params.has('operationId')?await operations.status(session,{...input,operationId:params.get('operationId')}):await operations.read(session,input));
+    const input=context(params,['operationId','proposalId']);
+    if(params.has('proposalId')){
+      if(params.has('operationId')||!workspaceId(params.get('proposalId')))throw new WorkspaceError('FIELD_QUERY_INVALID');
+      return reply(await operations.proposalEvidence(session,{...input,proposalId:params.get('proposalId')}));
+    }
+    return reply(params.has('operationId')?await operations.status(session,{...input,operationId:params.get('operationId')}):await operations.read(session,input));
   }catch(error){return failed(error);}};
   return {GET:handle,POST:handle};
 }
