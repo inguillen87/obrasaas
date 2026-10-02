@@ -76,6 +76,14 @@ never log or regenerate it to make a check pass. Confirm both the real handshake
 and a signed message reaching its exact durable receipt before transport
 acceptance. Receiving a message in WhatsApp alone is insufficient.
 
+The callback URL is a technical Meta receiver, not an onboarding page. A bare
+browser GET is an invalid verification request. Each required verification
+parameter must occur exactly once; additional query parameters are ignored,
+never used as identity or authority. Meta's real verification was observed with
+six parameters, including three additional keys. The exact token comparison,
+challenge constraints and signed POST remain mandatory. Invalid GET diagnostics
+contain only fixed scalar query-shape fields, without URL or parameter values.
+
 Private document/selfie review is human. Facial matching and liveness are not
 implemented. The manual open-shift reminder is the only adopted proactive
 template workflow; other catalog entries do not imply an implemented send.

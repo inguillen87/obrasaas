@@ -100,7 +100,8 @@ export function createMetaCustomerCallbackHandlers({inbox,environment=process.en
    if(typeof environment[verifyTokenName]!=='string'||environment[verifyTokenName].length<32)throw new WorkspaceError('META_CUSTOMER_CALLBACK_NOT_CONFIGURED',503);
    // Meta's challenge is opaque. Preserve it without parsing numeric content,
    // while retaining the existing size bound and rejecting control characters.
-   if(params.size!==3||[...params.keys()].some(name=>!['hub.mode','hub.verify_token','hub.challenge'].includes(name)||params.getAll(name).length!==1)||params.get('hub.mode')!=='subscribe'||!challenge||challenge.length>128||/[\u0000-\u001f\u007f]/.test(challenge))throw new WorkspaceError('META_CUSTOMER_CALLBACK_INVALID');
+   // Additional verification metadata cannot grant access or choose a handler.
+   if(['hub.mode','hub.verify_token','hub.challenge'].some(name=>params.getAll(name).length!==1)||params.get('hub.mode')!=='subscribe'||!challenge||challenge.length>128||/[\u0000-\u001f\u007f]/.test(challenge))throw new WorkspaceError('META_CUSTOMER_CALLBACK_INVALID');
    if(!exactSecretMatch(params.get('hub.verify_token'),environment[verifyTokenName]))throw new WorkspaceError('META_CUSTOMER_SIGNATURE_REJECTED',403);
    return new Response(challenge,{headers:{...headers,'Content-Type':'text/plain'}});
   }catch(error){return Response.json({code:error.code||'META_CUSTOMER_CALLBACK_UNCONFIRMED'},{status:error.status||503,headers});}},
