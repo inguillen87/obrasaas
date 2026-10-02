@@ -472,7 +472,7 @@ export default function Home() {
           {faqs.map((faq, i) => (
             <Reveal key={i} delay={i * 0.04}>
               <div style={{ borderRadius: '14px', border: '1px solid rgba(255,255,255,0.06)', overflow: 'hidden', background: activeFaq === i ? 'rgba(245, 158, 11, 0.03)' : 'rgba(13, 17, 30, 0.4)' }}>
-                <button onClick={() => setActiveFaq(activeFaq === i ? null : i)} style={{
+                <button aria-expanded={activeFaq === i} aria-controls={`home-faq-answer-${i}`} onClick={() => setActiveFaq(activeFaq === i ? null : i)} style={{
                   width: '100%', padding: '18px 22px', background: 'none', border: 'none', color: '#e2e8f0',
                   fontSize: '0.92rem', fontWeight: 700, textAlign: 'left', cursor: 'pointer',
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center'
@@ -481,13 +481,15 @@ export default function Home() {
                   <motion.span animate={{ rotate: activeFaq === i ? 45 : 0 }} transition={{ duration: 0.2 }}
                     style={{ fontSize: '1.2rem', color: '#f59e0b', flexShrink: 0, marginLeft: '16px' }}>+</motion.span>
                 </button>
-                <AnimatePresence>
-                  {activeFaq === i && (
-                    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}>
-                      <div style={{ padding: '0 22px 18px', fontSize: '0.86rem', color: '#8896ab', lineHeight: 1.6 }}>{faq.a}</div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                <div id={`home-faq-answer-${i}`}>
+                  <AnimatePresence>
+                    {activeFaq === i && (
+                      <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}>
+                        <div style={{ padding: '0 22px 18px', fontSize: '0.86rem', color: '#8896ab', lineHeight: 1.6 }}>{faq.a}</div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               </div>
             </Reveal>
           ))}
@@ -537,7 +539,7 @@ export default function Home() {
             <Link href="/" aria-label="ObraSaaS, inicio" style={{ display: 'inline-flex', minHeight: '44px', alignItems: 'center', color: '#F4F1E8', fontSize: '1.15rem', textDecoration: 'none' }}><ObraSaasLogo markSize={28} variant="inverse" /></Link>
             <span style={{ fontSize: '0.82rem', color: '#94a3b8' }}>Buenos Aires, Argentina</span>
           </div>
-          <div style={{ display: 'flex', gap: '24px', fontSize: '0.8rem', color: '#475569' }}>
+          <div style={{ display: 'flex', gap: '24px', fontSize: '0.8rem', color: '#94a3b8' }}>
             <Link href="/pricing" style={{ color: 'inherit', textDecoration: 'none' }}>Precios</Link>
             <Link href="/api-docs" style={{ color: 'inherit', textDecoration: 'none' }}>API</Link>
             <Link href="/portal" style={{ color: 'inherit', textDecoration: 'none' }}>Portal Inversor</Link>

@@ -3,6 +3,7 @@ import {mkdirSync,mkdtempSync,copyFileSync,writeFileSync,rmSync,realpathSync,rea
 import path from 'node:path';
 import {spawn,spawnSync} from 'node:child_process';
 import puppeteer from 'puppeteer';
+import {RECOVERY_DATABASE_NAME} from '../src/app/(identity)/cuenta/workspace-recovery-storage.mjs';
 
 // Actual component and request/journal lifecycle; all HTTP and identity are
 // explicitly controlled synthetic fixtures. No Meta, Clerk or business writes.
@@ -14,7 +15,7 @@ for(const file of readdirSync(source).filter(file=>/^workspace-.*\.(?:js|mjs)$/.
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'synthetic-customer-inbox-ui',private:true}));
 writeFileSync(path.join(fixture,'next.config.mjs'),`export default {devIndicators:false,turbopack:{root:${JSON.stringify(root)}}};`);
 writeFileSync(path.join(app,'layout.js'),`export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:12,background:'#f4f7f9',fontFamily:'Arial,sans-serif'}}>{children}</body></html>}`);
-writeFileSync(path.join(app,'page.js'),`'use client';import {useState,useCallback} from 'react';import {CustomerInboxPanel} from './customer-inbox-panel';const getSessionToken=()=>window.__holdToken?new Promise(()=>{}):window.__failToken?Promise.reject(new Error('Synthetic SDK unavailable')):Promise.resolve('active-tab-controlled-token');export default function Page(){const [project,setProject]=useState('p-a'),[pending,setPending]=useState(false);const onPending=useCallback(value=>setPending(value),[]);return <main style={{maxWidth:1100,margin:'0 auto'}}><button id="switch-company" disabled={pending} onClick={()=>setProject(project==='p-a'?'p-b':'p-a')}>Cambiar empresa</button><button id="identity-change" onClick={()=>setProject(project==='p-a'?'p-b':'p-a')}>Cambio de identidad controlado</button><span id="pending">{pending?'Pendiente':'Disponible'}</span><CustomerInboxPanel getSessionToken={getSessionToken} key={project} projectId={project} scope={(project==='p-a'?'a':'b').repeat(64)} onPending={onPending}/><div id="participant-title"/><div id="field-title"/><div id="site-register-title"/></main>}`);
+writeFileSync(path.join(app,'page.js'),`'use client';import {useEffect,useState,useCallback} from 'react';import {CustomerInboxPanel} from './customer-inbox-panel';import {browserRecoveryJournal} from './workspace-recovery-journal.mjs';const getSessionToken=()=>window.__holdToken?new Promise(()=>{}):window.__failToken?Promise.reject(new Error('Synthetic SDK unavailable')):Promise.resolve('active-tab-controlled-token');export default function Page(){const [project,setProject]=useState('p-a'),[pending,setPending]=useState(false);const onPending=useCallback(value=>setPending(value),[]);useEffect(()=>{window.__recoveryFixture={list:scope=>browserRecoveryJournal.list(scope)};return()=>{delete window.__recoveryFixture;};},[]);return <main style={{maxWidth:1100,margin:'0 auto'}}><button id="switch-company" disabled={pending} onClick={()=>setProject(project==='p-a'?'p-b':'p-a')}>Cambiar empresa</button><button id="identity-change" onClick={()=>setProject(project==='p-a'?'p-b':'p-a')}>Cambio de identidad controlado</button><span id="pending">{pending?'Pendiente':'Disponible'}</span><CustomerInboxPanel getSessionToken={getSessionToken} key={project} projectId={project} scope={(project==='p-a'?'a':'b').repeat(64)} onPending={onPending}/><div id="participant-title"/><div id="field-title"/><div id="site-register-title"/></main>}`);
 const origin='http://127.0.0.1:3124',server=spawn(process.execPath,[path.join(root,'node_modules/next/dist/bin/next'),'dev',fixture,'--webpack','--hostname','127.0.0.1','--port','3124'],{cwd:root,env:{...process.env,NEXT_TELEMETRY_DISABLED:'1'},stdio:['ignore','pipe','pipe'],detached:process.platform!=='win32'});
 let log='',browser,result;const errors=[],checks=[];for(const stream of [server.stdout,server.stderr])stream.on('data',chunk=>{log=(log+chunk.toString()).slice(-16000);});
 const eventId=index=>'customer_webhook_'+index.toString(16).padStart(64,'0');
@@ -26,6 +27,21 @@ const wait=(page,text)=>page.waitForFunction(value=>document.body.innerText.incl
 async function click(page,label){const handle=await page.evaluateHandle(text=>[...document.querySelectorAll('button')].find(button=>button.textContent.trim()===text),label);assert.ok(handle.asElement(),'Missing button '+label);await handle.asElement().click();await handle.dispose();}
 async function selectSender(page,sender=from){const handle=await page.evaluateHandle(value=>[...document.querySelectorAll('button')].find(button=>button.querySelector('strong')?.textContent==='Remitente +'+value),sender);assert.ok(handle.asElement());await handle.asElement().click();await handle.dispose();}
 const disabled=(page,label)=>page.evaluate(text=>[...document.querySelectorAll('button')].find(button=>button.textContent.trim()===text)?.disabled,label);
+// Count the canonical committed references across both controlled contexts.
+const journalEntries=page=>page.evaluate(async()=> (await Promise.all(['a'.repeat(64),'b'.repeat(64)].map(scope=>window.__recoveryFixture.list(scope)))).flat());
+const journalCount=async page=>(await journalEntries(page)).length;
+async function persistedStorage(page){
+ await journalEntries(page);
+ return page.evaluate(async database=>{
+  const db=await new Promise((resolve,reject)=>{const request=indexedDB.open(database);request.onupgradeneeded=()=>{request.transaction.abort();reject(new Error('Expected committed journal database'));};request.onerror=()=>reject(request.error);request.onsuccess=()=>resolve(request.result);});
+  try{return await new Promise((resolve,reject)=>{
+   const names=[...db.objectStoreNames],rows={},tx=db.transaction(names,'readonly');
+   for(const name of names){const request=tx.objectStore(name).getAll();request.onsuccess=()=>{rows[name]=request.result;};}
+   tx.onabort=()=>reject(tx.error||new Error('Journal privacy read aborted'));tx.onerror=()=>reject(tx.error);
+   tx.oncomplete=()=>resolve(JSON.stringify({indexedDB:rows,legacy:Object.keys(localStorage).map(key=>[key,localStorage.getItem(key)]),session:Object.keys(sessionStorage).map(key=>[key,sessionStorage.getItem(key)])}));
+  });}finally{db.close();}
+ },RECOVERY_DATABASE_NAME);
+}
 function stopOwnedWindows(owned,label){
  const stopped=spawnSync('taskkill.exe',['/PID',String(owned.pid),'/T','/F'],{stdio:'ignore'});
  if(stopped.status===0)return;
@@ -86,7 +102,7 @@ async function scenario(mode,width=390){
     await click(page,'Procesar evento recibido');
     if(['uncertain','receipt-error','receipt-sdk','denied-recovery','scope-recovery'].includes(mode)){await wait(page,'El resultado quedó sin confirmar.');await page.waitForFunction(()=>document.querySelector('#switch-company').disabled);assert.equal(posts.length,1);
      if(mode==='receipt-sdk'){assert.equal(gets.length,1);await page.evaluate(()=>{window.__failToken=false;});}
-     if(['denied-recovery','scope-recovery'].includes(mode)){const journalCount=()=>page.evaluate(()=>Object.keys(localStorage).filter(key=>key.startsWith('obrasaas.pending-receipt.v1.')).length);assert.equal(await journalCount(),1);deny=mode==='scope-recovery'?'scope':true;await click(page,'Comprobar este mismo intento');await wait(page,mode==='scope-recovery'?'Cambió el contexto de la obra':'Tu acceso no permite');assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Revisar material sintético'));assert.equal(posts.length,1);assert.equal(await journalCount(),1);assert.ok(await page.evaluate(()=>[...document.querySelectorAll('button')].some(button=>button.textContent==='Comprobar este mismo intento')));deny=false;}
+     if(['denied-recovery','scope-recovery'].includes(mode)){assert.equal(await journalCount(page),1);deny=mode==='scope-recovery'?'scope':true;await click(page,'Comprobar este mismo intento');await wait(page,mode==='scope-recovery'?'Cambió el contexto de la obra':'Tu acceso no permite');assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Revisar material sintético'));assert.equal(posts.length,1);assert.equal(await journalCount(page),1);assert.ok(await page.evaluate(()=>[...document.querySelectorAll('button')].some(button=>button.textContent==='Comprobar este mismo intento')));deny=false;}
      await click(page,'Comprobar este mismo intento');await wait(page,'esto no atribuye el resultado');checks.push(mode+'-same-event-GET-recovery-without-second-processing');}
     else if(mode==='pending'){await wait(page,'Todavía no se observa');assert.equal(await page.$eval('#switch-company',button=>button.disabled),true);assert.equal(posts.length,1);await click(page,'Comprobar este mismo intento');await wait(page,'Todavía no se observa');assert.equal(posts.length,1);pendingReceipt=false;await click(page,'Comprobar este mismo intento');await wait(page,'esto no atribuye el resultado');checks.push('processor-busy-HTTP200-not-confirmation-and-read-only-recovery');}
     else{await wait(page,'esto no atribuye el resultado');checks.push('processed-event-state-distinct-from-browser-operation');}
@@ -94,7 +110,7 @@ async function scenario(mode,width=390){
    assert.equal(posts.length,1);assert.equal(await page.$eval('#switch-company',button=>button.disabled),false);assert.equal(await disabled(page,'Comprobar este mismo intento'),undefined);
   }
  }
- const stored=await page.evaluate(()=>Object.values(localStorage).join('|')+'|'+Object.values(sessionStorage).join('|'));assert.ok(!stored.includes('Información privada')&&!stored.includes(from)&&!stored.includes('private-')&&!stored.includes('REFER_TO_PARTICIPANTS'));
+ const stored=await persistedStorage(page);assert.ok(!stored.includes('Información privada')&&!stored.includes(from)&&!stored.includes('private-')&&!stored.includes('REFER_TO_PARTICIPANTS'));
  assert.deepEqual(external,[]);await context.close();
 }
 try{
