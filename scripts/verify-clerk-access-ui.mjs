@@ -107,6 +107,10 @@ async function fixture(name, {width=390,signedIn=true,loaded=true,cookieSync=tru
   page.on('requestfinished', request=>record.pending.delete(request));
   page.on('requestfailed', request=>record.pending.delete(request));
   page.on('pageerror', error => errors.push({name,width,message:error.message}));
+  page.on('console', message => {
+    if (message.type() === 'error' && /hydration|hydrated.*match|server rendered HTML/i.test(message.text()))
+      errors.push({name,width,message:'React hydration error in controlled entry fixture'});
+  });
   await page.evaluateOnNewDocument((state, accelerated) => {window.__clerkFixture=state;
     if(accelerated){const realTimeout=window.setTimeout;window.setTimeout=(fn,ms,...args)=>realTimeout(fn,!window.__normalTimers&&ms===15000?75:ms,...args);}
   }, {isLoaded:loaded,isSignedIn:signedIn,userId:signedIn?'user_A':null,sessionId:signedIn?'sess_A':null,orgId:null,orgRole:null,token:'fixture.userA.signature',cookieSync,tokenDelay},controlledClock);
