@@ -62,6 +62,16 @@ export function createParticipantStore({workspace,connect,identity,upload,get}){
   if(row.metadata.participant.status==='REVOKED'||invite.state==='REVOKED')throw new WorkspaceError('PARTICIPANT_INVITATION_REVOKED',403);
   return row;
  }
+ async function acceptedInvitation(client,session,row){
+  const part=row.metadata?.participant,invite=part?.invitation;
+  if(part?.clerkUserId!==session.userId)throw new WorkspaceError('PARTICIPANT_ACCESS_REQUIRED',403);
+  const members=(await client.query(`SELECT tm.id AS "membershipId",u.id AS "actorId" FROM public."TenantMembership" tm JOIN public."PlatformUser" u ON u.id=tm."userId" WHERE tm."organizationId"=$1 AND u."clerkUserId"=$2 AND tm.status='ACTIVE' AND tm."clerkRole"=$3`,[row.organizationId,session.userId,session.organizationRole])).rows;
+  if(members.length!==1)throw new WorkspaceError('PARTICIPANT_ACCESS_REQUIRED',403);
+  const member={...members[0],organizationId:row.organizationId};await assertOwnParticipant(client,member,session,row.projectId,row.id);
+  const found=typeof part.acceptanceReceiptId==='string'?await receipt(client,member,part.acceptanceReceiptId):null;
+  if(!found||found.entityType!=='Worker'||found.entityId!==row.id||found.metadata?.version!==1||found.metadata.projectId!==row.projectId||found.metadata.kind!=='INVITATION_ACCEPTED'||found.metadata.invitationId!==invite?.id||invite.state!=='ACCEPTED')throw new WorkspaceError('PARTICIPANT_RECEIPT_INVALID',409);
+  return {invitationId:invite.id,projectId:row.projectId,projectName:row.projectName,organizationName:row.organizationName,participantName:row.name,state:'ACTIVE',canAccept:false,saved:true,joined:true,replayed:true,receiptId:found.id,identityCertified:false,whatsAppAccessGranted:false};
+ }
  return {
   read(session,context){participantContext(context);if(context.after!==undefined&&context.after!==null&&!workspaceId(context.after))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');return run(session,context,false,async(client,member,scope)=>{
    const manage=participantManager(member.role);const records=(await client.query(`SELECT ${columns} FROM public."Worker" WHERE "projectId"=$1 AND ($2::boolean OR (metadata->'participant'->>'clerkUserId'=$3 AND metadata->'participant'->>'status'='ACTIVE' AND active=true)) AND ($4::text IS NULL OR id>$4) ORDER BY id LIMIT 101`,[context.projectId,manage,session.userId,context.after||null])).rows;
@@ -138,12 +148,13 @@ export function createParticipantStore({workspace,connect,identity,upload,get}){
   });},
   async join(session,input,{accept=false}={}){
    participantKeys(input,accept?['invitationId','operationId']:['invitationId']);if(!/^invite_[a-f0-9]{32}$/.test(input.invitationId||'')||(accept&&!operationId(input.operationId)))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');requireWorkspaceIdentity(session);
+   if(!accept){const restored=await joinTransaction(session,false,async client=>{const row=await invitedWorker(client,session,input.invitationId);return row.metadata.participant.status==='ACTIVE'?acceptedInvitation(client,session,row):null;});if(restored)return restored;}
    const email=await identity.verifiedEmail(session.userId);
    const preliminary=await joinTransaction(session,false,async client=>{const row=await invitedWorker(client,session,input.invitationId);if(row.metadata.participant.invitation.email!==email)throw new WorkspaceError('PARTICIPANT_EMAIL_MISMATCH',403);return row;});
    const invite=preliminary.metadata.participant.invitation;const provider=await identity.findInvitation({organizationId:session.organizationId,invitationId:invite.id});matchProvider(invite,provider);
    if(provider.state!=='accepted'||provider.id!==invite.providerId)throw new WorkspaceError('PARTICIPANT_PROVIDER_ACCEPTANCE_REQUIRED',403);
    const providerMember=await identity.verifyMembership({userId:session.userId,organizationId:session.organizationId,invitationId:invite.id});if(providerMember.role!=='org:member')throw new WorkspaceError('PARTICIPANT_MEMBER_SESSION_REQUIRED',403);
-   if(!accept)return {invitationId:invite.id,projectName:preliminary.projectName,organizationName:preliminary.organizationName,participantName:preliminary.name,state:preliminary.metadata.participant.status,canAccept:preliminary.metadata.participant.status==='INVITED'};
+   if(!accept)return joinTransaction(session,false,async client=>{const row=await invitedWorker(client,session,input.invitationId);if(row.metadata.participant.status==='ACTIVE')return acceptedInvitation(client,session,row);const current=row.metadata.participant.invitation;if(current.email!==email||current.providerId!==provider.id)throw new WorkspaceError('PARTICIPANT_EMAIL_MISMATCH',403);if(row.metadata.participant.status!=='INVITED'||current.state!=='SENT'||!Number.isFinite(Date.parse(current.expiresAt))||Date.parse(current.expiresAt)<Date.now())throw new WorkspaceError('PARTICIPANT_INVITATION_EXPIRED',410);return {invitationId:invite.id,projectName:row.projectName,organizationName:row.organizationName,participantName:row.name,state:row.metadata.participant.status,canAccept:true};});
    return joinTransaction(session,true,async client=>{
     for(const lock of ['participant-user:'+session.userId,'participant-email:'+email].sort())await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[lock]);
     // Match the workspace lock order: canonical identity and membership before

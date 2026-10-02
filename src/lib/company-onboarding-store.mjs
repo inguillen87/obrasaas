@@ -1,5 +1,5 @@
 import {randomUUID} from 'node:crypto';
-import {WorkspaceError,operationId,WORKSPACE_ROLES} from './workspace-policy.mjs';
+import {WorkspaceError,operationId,workspaceId,WORKSPACE_ROLES,portfolioAccess} from './workspace-policy.mjs';
 import {requireNewCompanyAdmin,normalizeCompanyOnboarding,bootstrapReceiptId,bootstrapRequestDigest,validProfileEmail} from './company-onboarding-policy.mjs';
 const identifier=prefix=>prefix+'_'+randomUUID().replaceAll('-','');
 const canonicalCompany=async(client,session,lock=false)=>(await client.query(`SELECT id,name,metadata FROM public."Organization" WHERE "clerkOrganizationId"=$1 ${lock?'FOR UPDATE':''}`,[session.organizationId])).rows[0];
@@ -24,10 +24,14 @@ export function createCompanyOnboardingStore({connect}){
    WHERE u."clerkUserId"=$1 AND m."organizationId"=$2 AND m."clerkRole"=$3 AND m.status='ACTIVE' ${lock?'FOR SHARE OF u,m':''}`,[session.userId,organization.id,session.organizationRole]);
   if(result.rows.length!==1||(adminOnly?result.rows[0].role!=='ADMIN':!Object.hasOwn(WORKSPACE_ROLES,result.rows[0].role)))throw new WorkspaceError('WORKSPACE_MEMBERSHIP_REQUIRED',403);return result.rows[0];
  }
- async function receipt(client,session,id){return (await client.query(`SELECT a.id,a."organizationId",a.metadata
+ async function receipt(client,session,id,member){return (await client.query(`SELECT a.id,a."organizationId",a.metadata
    FROM public."AuditLog" a JOIN public."PlatformUser" u ON u.id=a."actorId"
    JOIN public."Organization" o ON o.id=a."organizationId"
-   WHERE a.id=$1 AND a.action='company.self_service.created' AND u."clerkUserId"=$2 AND o."clerkOrganizationId"=$3`,[id,session.userId,session.organizationId])).rows[0];}
+   JOIN public."TenantMembership" m ON m."organizationId"=o.id AND m."userId"=u.id AND m.status='ACTIVE' AND m."clerkRole"=$4 AND m.id=$5
+   JOIN public."Project" p ON p.id=a.metadata->>'projectId' AND p."organizationId"=o.id AND p.status='ACTIVE'
+   WHERE a.id=$1 AND a.action='company.self_service.created' AND a."entityType"='Organization' AND a."entityId"=o.id AND u."clerkUserId"=$2 AND o."clerkOrganizationId"=$3
+   AND ($6::boolean OR EXISTS(SELECT 1 FROM public."ProjectMembership" pm WHERE pm."projectId"=p.id AND pm."tenantMembershipId"=m.id AND pm.status='ACTIVE'))`,[id,session.userId,session.organizationId,session.organizationRole,member.membershipId,portfolioAccess(member.role)])).rows[0];}
+ const usableReceipt=row=>row?.metadata?.version===1&&workspaceId(row.metadata.projectId)&&typeof row.metadata.companyName==='string'&&typeof row.metadata.projectName==='string'&&Array.isArray(row.metadata.taskIds)&&row.metadata.taskIds.length<=25&&row.metadata.taskIds.every(workspaceId);
  const publicResult=(row,replayed)=>({state:'CREATED',created:true,replayed,receiptId:row.id,organizationId:row.organizationId,projectId:row.metadata.projectId,
    companyName:row.metadata.companyName,projectName:row.metadata.projectName,initialTaskCount:row.metadata.taskIds.length,whatsAppConnected:false,employeesCreated:0,financialRecordsCreated:0});
  return {
@@ -36,8 +40,11 @@ export function createCompanyOnboardingStore({connect}){
    return transaction(session,false,async client=>{
     const org=await canonicalCompany(client,session);
     if(!org)return {state:'NOT_CREATED',canCreate:true,whatsAppConnected:false};
-    await access(client,session,org,false,false);
-    if(key){const found=await receipt(client,session,bootstrapReceiptId(session,key));if(found)return publicResult(found,true);}
+    const member=await access(client,session,org,false,false);
+    // The existing canonical pointer survives a page reload. It is not proof of
+    // authorship: the audit lookup still checks the current actor and tenant.
+    const pointer=key?bootstrapReceiptId(session,key):org.metadata?.onboarding?.operationReceiptId;
+    if(typeof pointer==='string'&&/^company_bootstrap_[a-f0-9]{64}$/.test(pointer)){const found=await receipt(client,session,pointer,member);if(usableReceipt(found))return publicResult(found,true);}
     return {state:'ALREADY_CONFIGURED',canCreate:false,organizationId:org.id,companyName:org.name,whatsAppConnected:false};
    });
   },
@@ -48,7 +55,7 @@ export function createCompanyOnboardingStore({connect}){
     const id=bootstrapReceiptId(session,command.operationId),requestDigest=bootstrapRequestDigest(command);
     const org=await canonicalCompany(client,session,true);
     if(org){
-     await access(client,session,org,true);const previous=await receipt(client,session,id);
+     const member=await access(client,session,org,true);const previous=await receipt(client,session,id,member);
      if(!previous)throw new WorkspaceError('COMPANY_ALREADY_CONFIGURED',409);
      if(previous.metadata.requestDigest!==requestDigest)throw new WorkspaceError('COMPANY_CREATION_OPERATION_CONFLICT',409);
      return publicResult(previous,true);
@@ -73,7 +80,7 @@ export function createCompanyOnboardingStore({connect}){
     const metadata={version:1,projectId,companyName:command.companyName,projectName:command.project.name,taskIds,requestDigest,
       contactSource:'clerk-signed-verified-email',organizationRoleSource:'clerk-signed-org-admin',businessVerificationClaimed:false,whatsAppConnected:false};
     await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'company.self_service.created','Organization',$2,$4::jsonb)`,[id,organizationId,actor.id,JSON.stringify(metadata)]);
-    const saved=await receipt(client,session,id);if(!saved)throw new WorkspaceError('COMPANY_CREATION_UNCONFIRMED',503);return publicResult(saved,false);
+    const saved=await receipt(client,session,id,{membershipId,role:'ADMIN'});if(!saved)throw new WorkspaceError('COMPANY_CREATION_UNCONFIRMED',503);return publicResult(saved,false);
    });
   }
  };

@@ -26,6 +26,10 @@ Se conservan los contratos canónicos de las tablas reales de Production, revisa
 
 Los intentos se serializan por usuario/organización y por correo al crear usuarios. IDs internos aleatorios, claves únicas existentes, recibo por usuario+organización+UUID, fingerprint del contenido y transacción única impiden crear dos empresas con la misma autorización. Si una conexión falla después del commit, la consulta de recibo permite recuperar el resultado sin una segunda creación. Un usuario o membership revocado no se reactiva al recuperar el intento.
 
+Al recargar, la consulta autenticada puede recuperar el recibo original propio mediante el puntero canónico de Organization. Comprueba autor, empresa, proyecto activo y acceso vigente: ADMIN/DIRECTOR tienen alcance de empresa; otros roles requieren asignación activa a esa obra. El espacio queda abierto y los datos originales del alta se pueden desplegar junto al recibo, sin volver a exigir «Entrar a mi obra». Esos datos no presentan el plan inicial como estado actual del trabajo. Un puntero ausente, corrupto o de otro administrador no atribuye su creación al usuario actual: conserva el estado general de empresa ya configurada sin mostrar ese recibo. La lectura no solicita otra prueba de perfil ni ejecuta una creación.
+
+El formulario, el token y los datos de las tareas no se persisten en el navegador. Si la creación no alcanzó el commit antes de recargar, no se reconstruye el comando ni se conserva su UUID; la pantalla consulta el estado y no reenvía automáticamente. Mientras la pantalla original permanezca abierta, un intento incierto conserva su cuerpo en memoria y permite comprobar el recibo antes del reenvío explícito exacto.
+
 Hay un límite de tres altas nuevas por usuario en24h, comprobado dentro de la transacción, sin sustituir los límites del proveedor. Ningún dato financiero, worker, canal WhatsApp o registro global de la demo se importa al crear la obra.
 
 ## Tareas después del alta

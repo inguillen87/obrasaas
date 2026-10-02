@@ -21,6 +21,10 @@ El mismo UUID confirmado devuelve su recibo; otro cuerpo produce conflicto. Si e
 
 La aceptación crea usuario, pertenencia `AUDITOR`, pertenencia a la obra y vínculo de ficha en la misma transacción. Una cuenta deshabilitada no se reactiva desde la aceptación. Una respuesta perdida después del commit recupera el mismo acceso y recibo; no duplica personas ni pertenencias. Una cuenta existente puede participar en otra obra mediante asignación explícita, sin otra invitación de organización.
 
+Después de recargar, «Consultar mi invitación» recupera por GET el recibo original de aceptación de esa invitación para su titular. Una participación ACTIVE exige Worker propio vigente, TenantMembership y ProjectMembership activos y un AuditLog exacto por autor, empresa, obra, ficha e invitación. No alcanza con el estado del Worker ni con un puntero. Esta recuperación confirmada no consulta proveedores ni escribe registros; el ingreso sigue autenticado. El lookup inicial de una invitación pendiente mantiene sus verificaciones existentes de correo, aceptación y pertenencia en Clerk.
+
+«Comprobar la misma aceptación» sólo consulta con GET. Si no se observa una aceptación y la invitación sigue autorizada, se ofrece por separado «Reenviar la misma aceptación», usando el comando y UUID originales que siguen en memoria; nunca se ejecuta automáticamente. Un fallo de sesión o contexto bloquea ese reenvío hasta una nueva comprobación autorizada y oculta los datos previos. El formulario no se persiste: al cambiar de invitación o recargar se descarta el intento en memoria, y la lectura sólo puede recuperar una aceptación ya registrada.
+
 ## KYC privado y decisión humana
 El participante activo presenta únicamente sus dos imágenes y una elección explícita sobre el aviso versionado `participant-kyc-v1`. La interfaz admite JPEG, PNG o WebP de hasta 1 MiB por imagen. La captura no recopila datos bancarios ni médicos. La firma de formato y el readback privado comprueban contenido y almacenamiento; no se presentan como biometría, control documental civil o análisis antimalware.
 

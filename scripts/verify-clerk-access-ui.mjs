@@ -131,7 +131,7 @@ async function fixture(name, {width=390,signedIn=true,loaded=true,cookieSync=tru
       }
       record.businessReads.push({path:url.pathname,currentContext:header.includes('userB')?'B':'A'});
       if (url.pathname === '/api/identity/workspace') return respond(200,{scope:'c'.repeat(64),organizationName:header.includes('userB')?'Organización B de ensayo':'Organización A de ensayo',roleLabel:'Consulta de ensayo',role:'WORKER',canPlanSchedule:false,canManageIntegrations:false,projects:[],projectsTruncated:false});
-      if (url.pathname === '/api/identity/participant-join') {assert.equal(url.searchParams.get('invitationId'),invitation);return respond(200,{canAccept:false,state:'ACTIVE',organizationName:'Organización de ensayo',projectName:'Obra de ensayo',participantName:'Participante sintético'});}
+      if (url.pathname === '/api/identity/participant-join') {assert.equal(url.searchParams.get('invitationId'),invitation);return respond(200,{invitationId:invitation,projectId:'project-fixture',canAccept:false,state:'ACTIVE',saved:true,joined:true,replayed:true,receiptId:'participant_fixture_acceptance',organizationName:'Organización de ensayo',projectName:'Obra de ensayo',participantName:'Participante sintético',identityCertified:false,whatsAppAccessGranted:false});}
       if (url.pathname === '/api/identity/company-onboarding') return respond(200,{state:'ALREADY_CONFIGURED',canCreate:false,organizationId:'company-fixture'});
       throw new Error('Unexpected API: ' + url.pathname);
     } catch (error) {errors.push({name,width,message:error.message});if (!request.isInterceptResolutionHandled()) await request.abort().catch(()=>{});}
@@ -158,6 +158,8 @@ async function invitationFlow(width) {
   await wait(page, 'Organización B de ensayo');
   assert.equal(new URL(page.url()).pathname + new URL(page.url()).search, returnPath);
   await click(page, 'Consultar mi invitación'); await wait(page, 'Participante sintético');
+  await wait(page, 'Recibo: participant_fixture_acceptance');
+  assert.ok(await page.$('a[href="/cuenta"]'), 'Confirmed acceptance exposes the existing account entry');
   assert.equal(record.businessReads.find(row => row.path === '/api/identity/participant-join')?.currentContext, 'B');
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
   await page.screenshot({path:path.join(output, `invitation-${width}.png`),fullPage:true});

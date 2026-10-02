@@ -8,7 +8,8 @@ permissions:
 jobs:
   workspace:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Full baseline takes about 24 minutes; recovery and native-canvas KYC add browser coverage.
+    timeout-minutes: 35
     services:
       postgres:
         image: postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
@@ -91,6 +92,11 @@ jobs:
           node scripts/verify-manual-ui.mjs
           node scripts/verify-onboarding-guide-ui.mjs
       - run: node scripts/verify-participants-ui.mjs
+      - name: Bounded private KYC photo preparation and explicit visual review
+        run: |
+          npx eslint scripts/verify-mobile-identity-ui.mjs tests/production-photo-preparation.test.mjs
+          node --test tests/production-photo-preparation.test.mjs
+          node scripts/verify-mobile-identity-ui.mjs
       - run: node scripts/verify-field-operations-ui.mjs
       - run: node scripts/verify-meta-customer-ui.mjs
       - run: node scripts/verify-worker-channel-ui.mjs
@@ -121,6 +127,7 @@ jobs:
             .vercel/company-onboarding-evidence/
             .vercel/site-register-evidence/
             .vercel/participants-evidence/
+            .vercel/mobile-identity-evidence/
             .vercel/field-operations-evidence/
             .vercel/meta-customer-evidence/
             .vercel/purchase-evidence/

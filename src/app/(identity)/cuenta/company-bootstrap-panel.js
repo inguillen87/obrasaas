@@ -32,14 +32,14 @@ export function CompanyBootstrapPanel({organizationId,organizationName,getSessio
   }catch(error){error.requestDispatched=dispatched;throw error;}
   finally{clearTimeout(timeout);if(request.current===controller)request.current=null;}
  },[getSessionToken,getProfileToken,organizationId]);
- function accept(value){
+ function accept(value,openWorkspace=false){
   if(value.created!==true||value.state!=='CREATED'||!value.receiptId||!value.projectId||!value.organizationId)throw new Error('Falta el recibo confirmado del alta.');
-  version.current++;retainedProfileProof.current=null;setBusy(false);setReceipt(value);setAttempt(null);setCanRetry(false);setStage('created');setNotice('Empresa y primera obra creadas. WhatsApp todavía no quedó conectado.');
+  version.current++;retainedProfileProof.current=null;setBusy(false);setReceipt(value);setAttempt(null);setCanRetry(false);setStage(openWorkspace?'ready':'created');setNotice(openWorkspace?'Alta confirmada. Podés consultar el recibo original y continuar en tu espacio.':'Empresa y primera obra creadas. WhatsApp todavía no quedó conectado.');
  }
  async function inspect(){
   if(busy||attempt)return;setBusy(true);setNotice('');const current=++version.current;
   try{const value=await api('GET');if(!mounted.current||current!==version.current)return;
-   if(value.state==='ALREADY_CONFIGURED')setStage('ready');else if(value.state==='NOT_CREATED'&&value.canCreate===true)setStage('new');else throw new Error('No se pudo determinar el estado de la empresa.');
+   if(value.state==='CREATED')accept(value,true);else if(value.state==='ALREADY_CONFIGURED')setStage('ready');else if(value.state==='NOT_CREATED'&&value.canCreate===true)setStage('new');else throw new Error('No se pudo determinar el estado de la empresa.');
   }catch(error){if(mounted.current&&current===version.current){setNotice(error.message);setStage('failed');}}
   finally{if(mounted.current&&current===version.current)setBusy(false);}
  }
@@ -47,7 +47,7 @@ export function CompanyBootstrapPanel({organizationId,organizationName,getSessio
   const epoch=version;mounted.current=true;let cancelled=false;const current=++epoch.current;
   api('GET').then(value=>{
    if(cancelled||!mounted.current||current!==version.current)return;
-   if(value.state==='ALREADY_CONFIGURED')setStage('ready');else if(value.state==='NOT_CREATED'&&value.canCreate===true)setStage('new');else throw new Error('No se pudo determinar el estado de la empresa.');
+   if(value.state==='CREATED')accept(value,true);else if(value.state==='ALREADY_CONFIGURED')setStage('ready');else if(value.state==='NOT_CREATED'&&value.canCreate===true)setStage('new');else throw new Error('No se pudo determinar el estado de la empresa.');
   }).catch(error=>{if(!cancelled&&mounted.current&&current===version.current){setNotice(error.message);setStage('failed');}});
   return()=>{cancelled=true;mounted.current=false;epoch.current++;request.current?.abort();retainedProfileProof.current=null;};
  },[api]);
@@ -76,7 +76,7 @@ export function CompanyBootstrapPanel({organizationId,organizationName,getSessio
  }
  const locked=busy||Boolean(attempt);
  const editTask=(index,key,value)=>setTasks(previous=>previous.map((task,i)=>i===index?{...task,[key]:value}:task));
- if(stage==='ready')return children;
+ if(stage==='ready')return <>{receipt&&<section className={styles.panel} aria-labelledby="company-receipt-heading"><h2 id="company-receipt-heading">Alta confirmada</h2><p>Este recibo confirma el alta original. Tu espacio de trabajo muestra el estado vigente.</p><details className={styles.created}><summary>Datos del alta</summary><dl><dt>Empresa declarada al crear el espacio</dt><dd>{receipt.companyName}</dd><dt>Primera obra registrada</dt><dd>{receipt.projectName}</dd><dt>Tareas cargadas en el plan inicial</dt><dd>{receipt.initialTaskCount}</dd></dl><p className={styles.caption}>La confirmación del alta no acredita una conexión de WhatsApp ni la aprobación de identidades.</p><small>Recibo: {receipt.receiptId}</small></details></section>}{children}</>;
  return <section className={styles.panel} aria-labelledby="company-bootstrap-heading">
   <p className={styles.eyebrow}>ALTA DE CONSTRUCTORA</p><h2 id="company-bootstrap-heading">Tu empresa, desde cero.</h2>
   <p className={styles.intro}>Creá el espacio de esta organización y su primera obra. No necesitás el número de WhatsApp para empezar a organizar el trabajo.</p>
@@ -93,7 +93,7 @@ export function CompanyBootstrapPanel({organizationId,organizationName,getSessio
     {tasks.map((task,index)=><div key={task.key} className={styles.taskRow}><label>Tarea {index+1}<input required minLength={2} maxLength={160} value={task.title} disabled={locked} onChange={event=>editTask(index,'title',event.target.value)}/></label><label>Inicio previsto<input type="date" value={task.startsOn} disabled={locked} onChange={event=>editTask(index,'startsOn',event.target.value)}/></label><label>Fin previsto<input type="date" min={task.startsOn||undefined} value={task.endsOn} disabled={locked} onChange={event=>editTask(index,'endsOn',event.target.value)}/></label><button type="button" disabled={locked} onClick={()=>setTasks(tasks.filter((_,i)=>i!==index))} aria-label={`Quitar tarea ${index+1}`}>Quitar</button></div>)}
    </section>
    <label className={styles.confirmation}><input type="checkbox" checked={confirmed} required disabled={locked} onChange={event=>setConfirmed(event.target.checked)}/><span>Confirmo que quiero crear una empresa nueva para esta organización. No se importarán empleados, mensajes, gastos ni obras de otras empresas.</span></label>
-   <p className={styles.caption}>Se comprobarán tu sesión de administrador y el correo verificado por Clerk. El nombre declarado no acredita una verificación legal de la empresa.</p>
+   <p className={styles.caption}>Se comprobarán tu sesión de administrador y el correo verificado por Clerk. El nombre declarado no acredita una verificación legal de la empresa. El formulario no se conserva al recargar: se consultará el alta existente y no se reenviará automáticamente.</p>
    <div className={styles.actions}>{attempt?<><button type="button" disabled={busy} onClick={recover}>Comprobar creación</button>{canRetry&&<button type="button" disabled={busy} onClick={retry}>Reenviar mismo intento</button>}</>:<button className={styles.primary} type="submit" disabled={busy||!confirmed}>Crear empresa y primera obra</button>}</div>
   </form>}
   {stage==='created'&&receipt&&<div className={styles.created}><h3>El espacio está creado</h3><dl><dt>Empresa</dt><dd>{receipt.companyName}</dd><dt>Primera obra</dt><dd>{receipt.projectName}</dd><dt>Tareas iniciales</dt><dd>{receipt.initialTaskCount}</dd></dl><p>Sin empleados, movimientos económicos ni mensajes de ejemplo. El número y la autorización de Meta se completan por separado.</p><small>Recibo: {receipt.receiptId}</small><button type="button" className={styles.primary} onClick={()=>setStage('ready')}>Entrar a mi obra</button></div>}
