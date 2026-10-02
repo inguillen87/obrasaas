@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
-import {participantCommand,participantKycInput,PARTICIPANT_NOTICE_VERSION} from '../src/lib/participant-policy.mjs';
+import {participantCommand,participantKycInput,PARTICIPANT_NOTICE_VERSION,assertOwnParticipant,assertFieldParticipant} from '../src/lib/participant-policy.mjs';
 import {createParticipantHandlers} from '../src/lib/participant-http.mjs';
 import {createParticipantIdentityProvider} from '../src/lib/participant-identity-provider.mjs';
 import {IDENTITY_PUBLIC_KEY,IDENTITY_INSTANCE,IDENTITY_ORIGIN} from '../src/lib/production-identity-config.mjs';
@@ -19,6 +19,24 @@ test('KYC requires pinned privacy choice, two real image signatures and revision
  assert.throws(()=>participantKycInput({...body,consent:false}),{code:'PARTICIPANT_PRIVACY_REQUIRED'});
  assert.throws(()=>participantKycInput({...body,noticeVersion:'client-selected'}),{code:'PARTICIPANT_PRIVACY_REQUIRED'});
  assert.throws(()=>participantKycInput({...body,selfie:Buffer.from('not an image').toString('base64')}),{code:'PRIVATE_IMAGE_TYPE_MISMATCH'});
+});
+function personalParticipantFixture(change=()=>{},memberships=[{id:'member-a'}]){
+ const ownSession={...session,userId:'user_Worker',organizationRole:'org:member'},member={membershipId:'member-a',organizationId:'company-a'};
+ const row={id:'worker-a',active:true,metadata:{participant:{version:1,status:'ACTIVE',clerkUserId:ownSession.userId,permissions:{attendance:true,report:false},kyc:{status:'NOT_SUBMITTED'}}}};change(row);
+ const client={query:async(sql,args)=>{if(sql.includes('FROM public."Worker"')){assert.deepEqual(args,['worker-a','project-a']);return {rows:[row]};}assert.deepEqual(args,[member.membershipId,member.organizationId,ownSession.userId,'project-a']);return {rows:memberships};}};
+ return {client,member,ownSession,row};
+}
+test('personal identity presentation reuses canonical ownership and does not require report permission',async()=>{
+ const f=personalParticipantFixture(),before=structuredClone(f.row);
+ assert.equal(await assertOwnParticipant(f.client,f.member,f.ownSession,'project-a','worker-a'),f.row);assert.deepEqual(f.row,before);
+ await assert.rejects(assertFieldParticipant(f.client,f.member,f.ownSession,'project-a','worker-a',{permission:'report'}),{code:'PARTICIPANT_ACCESS_REQUIRED'});
+ await assert.rejects(assertFieldParticipant(f.client,f.member,f.ownSession,'project-a','worker-a',{permission:'attendance',requireKyc:true}),{code:'PARTICIPANT_KYC_REVIEW_REQUIRED'});
+ f.row.metadata.participant.kyc.status='APPROVED';assert.equal(await assertFieldParticipant(f.client,f.member,f.ownSession,'project-a','worker-a',{permission:'attendance',requireKyc:true}),f.row);
+ await assert.rejects(assertFieldParticipant(f.client,f.member,f.ownSession,'project-a','worker-a',{permission:'report',requireKyc:true}),{code:'PARTICIPANT_ACCESS_REQUIRED'});
+});
+test('personal identity ownership rejects revoked, inactive, foreign and unconfirmed canonical memberships',async()=>{
+ for(const change of [row=>{row.active=false;},row=>{row.metadata.participant.status='REVOKED';},row=>{row.metadata.participant.clerkUserId='user_Other';},row=>{row.metadata.participant.version=0;}]){const f=personalParticipantFixture(change);await assert.rejects(assertOwnParticipant(f.client,f.member,f.ownSession,'project-a','worker-a'),{code:'PARTICIPANT_ACCESS_REQUIRED'});}
+ for(const memberships of [[],[{id:'one'},{id:'ambiguous'}]]){const f=personalParticipantFixture(()=>{},memberships);await assert.rejects(assertOwnParticipant(f.client,f.member,f.ownSession,'project-a','worker-a'),{code:'PARTICIPANT_ACCESS_REQUIRED'});}
 });
 test('company role command permits only explicit non-administrator roles with exact membership revision',()=>{
  const office={...command,action:'SET_OFFICE_ROLE',payload:{membershipId:'member-a',revision:command.payload.revision,role:'DIRECTOR',reason:'The administrator reviewed this verified account.'}};
