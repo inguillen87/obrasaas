@@ -11,6 +11,7 @@ export const RECOVERY_RESOURCES = Object.freeze({
   'site-purchases':'Compra o recepción', 'whatsapp-setup':'Preparación de WhatsApp',
   'meta-onboarding':'Seguimiento de WhatsApp', 'worker-channel':'Mi WhatsApp y autorización de avisos',
   'template-send':'Recordatorio autorizado de jornada',
+  'constructor-crm':'Cliente u oportunidad de la empresa',
 });
 const failure = (code, message) => Object.assign(new Error(message), {code,status:409,requestDispatched:false});
 const unavailable = () => failure('WORKSPACE_RECOVERY_STORAGE_UNAVAILABLE','No se pudo conservar la referencia del intento en este navegador. Habilitá el almacenamiento y volvé a intentar; la operación no se envió.');
@@ -51,6 +52,13 @@ export function recoveryQuery(entry) {
 export function recoveryResult(entry, result) {
   if(!valid(entry)||result?.scope!==entry.scope)return null;
   if(result.projectId!==undefined&&result.projectId!==entry.projectId)return null;
+  if(entry.resource==='constructor-crm'){
+    if(result.projectId!==entry.projectId)return null;
+    if(result.state==='NOT_OBSERVED'&&result.saved===false&&result.definitive===false&&!result.receipt)return {state:'NOT_OBSERVED'};
+    const receipt=result.receipt;
+    if(result.state==='RECORDED'&&result.saved===true&&result.definitive===true&&id(receipt?.id)&&receipt.operationId===entry.operationId&&id(receipt.accountId)&&['CREATE','UPDATE'].includes(receipt.action)&&Number.isSafeInteger(receipt.revision)&&receipt.revision>=1&&(!result.record||result.record.id===receipt.accountId&&result.record.revision>=receipt.revision))return {state:'RECORDED',receiptId:receipt.id};
+    return null;
+  }
   if(entry.resource==='template-send') {
     const receipt=result.receipt;
     if(result.state==='NOT_OBSERVED'&&result.definitive===false)return {state:'NOT_OBSERVED'};
@@ -117,6 +125,7 @@ export function createWorkspaceRecoveryJournal({getStorage,now=Date.now,notify=(
       // A general Meta snapshot is not a receipt for this operation.
       if(entry.resource==='meta-onboarding')return;
       if(entry.resource==='template-send'){if(['ACCEPTED','STATUS_OBSERVED','REJECTED'].includes(recoveryResult(entry,result)?.state))remove(entry);return;}
+      if(entry.resource==='constructor-crm'){if(recoveryResult(entry,result)?.state==='RECORDED')remove(entry);return;}
       if(result?.scope===entry.scope&&(result.projectId===undefined||result.projectId===entry.projectId)&&(result.saved===true||result.created===true)&&(result.receiptId||result.receipt?.id))remove(entry);
     },
     observe(url, result) {
