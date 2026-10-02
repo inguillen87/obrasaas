@@ -3,6 +3,7 @@ import {createFieldOperations,publicFieldEvidence} from './field-operations-stor
 import {createFieldMedia,decodeFieldMedia} from './field-media.mjs';
 import {planMetaFieldConversation} from './meta-field-conversation.mjs';
 import {resolveWorkerChannelIdentity} from './worker-channel-identity.mjs';
+import {META_CUSTOMER_PROTOCOL,resolveMetaCloudProtocol} from './meta-cloud-protocol.mjs';
 import {decryptCustomerSecret,encryptCustomerSecret} from './meta-customer-credentials.mjs';
 import {customerJobTransaction} from './meta-customer-outbound.mjs';
 
@@ -16,7 +17,8 @@ const text=body=>({type:'text',body});
 // Transport adapter, not a second field engine. The internal resolver supplies
 // the canonical actor after checking signed proof, binding, KYC and assignment.
 // It never creates a Clerk session or weakens the web authentication verifier.
-export function createMetaFieldBridge({connect,environment=process.env,resolveIdentity=resolveWorkerChannelIdentity,provider,put,get,analyzer}){
+export function createMetaFieldBridge({connect,environment=process.env,resolveIdentity=resolveWorkerChannelIdentity,provider,put,get,analyzer,protocol=META_CUSTOMER_PROTOCOL}){
+ resolveMetaCloudProtocol(protocol);
  const within=run=>customerJobTransaction(connect,run);
  const seal=(r,purpose,resourceId,value)=>encryptCustomerSecret(JSON.stringify(value),{organizationId:r.member.organizationId,projectId:r.project.id,purpose,resourceId},environment);
  function unseal(r,purpose,resourceId,value){try{return JSON.parse(decryptCustomerSecret(value,{organizationId:r.member.organizationId,projectId:r.project.id,purpose,resourceId},environment));}catch{throw new WorkspaceError('META_CHANNEL_RECEIPT_INTEGRITY',409);}}
@@ -29,7 +31,7 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
   return {...r,now,scope:digest(['meta-field-v1',event.id,event.payload.payloadDigest,r.worker.id,connection.id])};
  }
  function operations(client,r){
-  const session={userId:r.member.clerkUserId},member={...r.member,role:'AUDITOR',channelProof:{provider:'meta-customer-v1',eventId:r.event.id,channelId:r.connection.id,payloadDigest:r.event.payload.payloadDigest,bindingId:r.channelBinding.id}};
+  const session={userId:r.member.clerkUserId},member={...r.member,role:'AUDITOR',channelProof:{provider:protocol.provider,eventId:r.event.id,channelId:r.connection.id,payloadDigest:r.event.payload.payloadDigest,bindingId:r.channelBinding.id}};
   const workspace={projectOperation:async(s,input,writable,callback)=>{
    if(s!==session||input.projectId!==r.project.id||input.scope!==r.scope)throw new WorkspaceError('META_CHANNEL_CONTEXT_CHANGED',409);
    // Channel actions have participant permissions even when the same human
@@ -49,11 +51,11 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
  async function prepareMedia(client,r,media,state){
   if(r.worker.metadata.participant.permissions.report!==true)throw new WorkspaceError('WORKER_CHANNEL_PERMISSION_REQUIRED',403);
   await client.query(`UPDATE public."WebhookEvent" SET "leaseExpiresAt"=clock_timestamp()+interval '180 seconds' WHERE id=$1 AND "leaseToken"=$2`,[r.event.id,r.event.leaseToken]);
-  const token=decryptCustomerSecret(r.connection.encryptedAccessToken,{organizationId:r.member.organizationId,projectId:r.project.id,purpose:'access-token',resourceId:r.connection.phoneNumberId},environment);
+  const token=decryptCustomerSecret(r.connection.encryptedAccessToken,{organizationId:r.member.organizationId,projectId:r.project.id,purpose:protocol.credentialPurpose,resourceId:r.connection.phoneNumberId},environment);
   return {media,state,token,phoneNumberId:r.connection.phoneNumberId,userId:r.member.clerkUserId,scope:r.scope,workerId:r.worker.id};
  }
  async function prepare(client,context){
-  const type=(await client.query(`SELECT "eventType" FROM public."WebhookEvent" WHERE id=$1 AND provider='meta-customer-v1'`,[context.eventId])).rows[0];if(type?.eventType!=='message')return null;
+  const type=(await client.query(`SELECT "eventType" FROM public."WebhookEvent" WHERE id=$1 AND provider=$2`,[context.eventId,protocol.provider])).rows[0];if(type?.eventType!=='message')return null;
   const r=await resolve(client,context),previous=await saved(client,r);if(previous)return {done:previous};
   if(r.kind==='CHANNEL_BOUND')return {done:await record(client,r,result(r,'CHANNEL_BOUND',text('Tu canal quedó vinculado a esta participación. Escribí MENU para continuar cuando el responsable active la conexión de la empresa.')),null)};
   const key='meta_field_media_'+digest(r.event.id),previousMedia=(await client.query(`SELECT metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "actorId"=$3 AND action='meta.field.media.prepared'`,[key,r.member.organizationId,r.member.actorId])).rows[0];
@@ -95,7 +97,7 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
   }catch(error){if(!['META_CUSTOMER_MEDIA_INVALID','META_CUSTOMER_MEDIA_REJECTED','META_CUSTOMER_MEDIA_INTEGRITY','META_CHANNEL_MEDIA_INTEGRITY','FIELD_MEDIA_INVALID','FIELD_MEDIA_TOO_LARGE'].includes(error.code))throw error;
    return within(async client=>{const r=await resolve(client,context,'report'),prior=await saved(client,r);if(prior)return prior;return record(client,r,result(r,'MEDIA_REVIEW_REQUIRED',text('No pudimos guardar este archivo con su tamaño o formato actual. Prepará una foto de hasta 2 MiB o audio/video de hasta 3 MiB desde la web, o enviá otro archivo. Tu tarea conserva su avance.'),{code:error.code}),prepared.state,{onlyIfCurrent:true});});
   }
-  const session={userId:prepared.userId},workspace={projectOperation:async(s,input,writable,callback)=>within(async client=>{const r=await resolve(client,context,'report');if(s!==session||s.userId!==r.member.clerkUserId||input.projectId!==r.project.id||input.scope!==r.scope||prepared.workerId!==r.worker.id)throw new WorkspaceError('META_CHANNEL_CONTEXT_CHANGED',409);return callback(client,{...r.member,role:'AUDITOR',channelProof:{provider:'meta-customer-v1',eventId:r.event.id,channelId:r.connection.id,payloadDigest:r.event.payload.payloadDigest,bindingId:r.channelBinding.id}},r.scope,r.project);})};
+  const session={userId:prepared.userId},workspace={projectOperation:async(s,input,writable,callback)=>within(async client=>{const r=await resolve(client,context,'report');if(s!==session||s.userId!==r.member.clerkUserId||input.projectId!==r.project.id||input.scope!==r.scope||prepared.workerId!==r.worker.id)throw new WorkspaceError('META_CHANNEL_CONTEXT_CHANGED',409);return callback(client,{...r.member,role:'AUDITOR',channelProof:{provider:protocol.provider,eventId:r.event.id,channelId:r.connection.id,payloadDigest:r.event.payload.payloadDigest,bindingId:r.channelBinding.id}},r.scope,r.project);})};
   const fieldOps=createFieldOperations({workspace}),service=createFieldMedia({operations:fieldOps,put,get,analyzer,environment:()=>environment});
   const base={projectId:context.projectId,scope:prepared.scope};let attached;
   try{attached=await service.attach(session,{...base,operationId:metaFieldOperationId(context.eventId,'MEDIA_ATTACH'),workerId:prepared.workerId,taskId:prepared.media.taskId,sectorId:prepared.media.sectorId,caption:prepared.media.caption,media});}

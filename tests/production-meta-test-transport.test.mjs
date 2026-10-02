@@ -83,7 +83,7 @@ test('webhook scope rejects other WABA/number before operational state access',a
  assert.equal(validateMetaEnvelope(payload,{...dispatchEnv,META_TEST_ALLOWED_RECIPIENTS:''}).code,'META_TEST_RECIPIENTS_REQUIRED');
  assert.equal(validateMetaEnvelope(payload,{...dispatchEnv,META_TEST_ALLOWED_RECIPIENTS:'5491199999999'}).code,'META_LOCAL_TEST_RECIPIENT_NOT_ALLOWED');
  const batch=structuredClone(payload);batch.entry.push(payload.entry[0]);assert.equal(validateMetaEnvelope(batch,dispatchEnv).code,'META_BATCH_REQUIRES_DURABLE_INGRESS');
- const route=readFileSync(new URL('../src/app/api/whatsapp/route.js',import.meta.url),'utf8');assert.ok(route.indexOf('validateMetaEnvelope(payload)')<route.indexOf('await getAppState()'));
+ const route=readFileSync(new URL('../src/app/api/whatsapp/route.js',import.meta.url),'utf8');assert.doesNotMatch(route,/getAppState|saveAppState|processLegacy|resolveRole|analyzeDni|verifyFacial|registerAttendance/);
  assert.doesNotMatch(route,/targetNumber = '542|state: state|fallback to rich text/i);
 });
 

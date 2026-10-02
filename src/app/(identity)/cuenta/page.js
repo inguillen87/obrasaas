@@ -28,6 +28,6 @@ export default async function AccountPage({ searchParams } = {}) {
     <p className={styles.eyebrow}>ESPACIO DE TRABAJO</p><h1>Mi cuenta</h1>
     <p className={styles.lead}>Consultá tus obras y su cronograma con los permisos asignados por tu organización.</p>
     <WorkspaceIdentityPanel />
-    <footer className={workspaceStyles.footer}><Link href="/demo" className={styles.home}>Ver demo ilustrativa</Link><Link href="/" className={styles.home}>Volver a la portada</Link></footer>
+    <footer className={workspaceStyles.footer}><Link href="/manual" className={styles.home}>Manual de inicio y WhatsApp</Link><Link href="/demo" className={styles.home}>Ver demo ilustrativa</Link><Link href="/" className={styles.home}>Volver a la portada</Link></footer>
   </section>;
 }

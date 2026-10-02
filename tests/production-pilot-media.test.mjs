@@ -82,8 +82,7 @@ test('no global state or biometric model is called by the legacy KYC boundary',(
 test('WhatsApp no longer auto-enrolls from OCR or prints transcripts',()=>{
  const code=readFileSync(new URL('../src/app/api/whatsapp/route.js',import.meta.url),'utf8');
  assert.doesNotMatch(code,/dniAnalysis|registration_completed|97\.4|livenessScore: 98\.2|Whisper Transcribed Audio|KYC_DNI_VERIFICADO/);
- assert.ok(code.includes('if (isDniIntent || isRegDniPhoto) return kycReviewRequiredResponse();'));
- assert.ok(code.includes('if (!transcript) return mediaUnconfirmedResponse();'));
+ assert.doesNotMatch(code,/analyzeDni|transcribeAudio|verifyFacial|uploadKyc|registerAttendance|getAppState|saveAppState/);
 });
 
 test('provider HTTP failure retains only a status, not its private body',async()=>{

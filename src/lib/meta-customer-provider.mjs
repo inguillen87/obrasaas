@@ -40,8 +40,8 @@ export function metaCustomerReadiness(environment=process.env){
   recovery:{afterResponse:true,signedJob:typeof environment.META_CUSTOMER_JOB_SECRET==='string'&&environment.META_CUSTOMER_JOB_SECRET.length>=32,periodic:typeof environment.CRON_SECRET==='string'&&environment.CRON_SECRET.length>=32,intervalMinutes:5,productionVerified:false},
   humanAcceptance:'NOT_VERIFIED',numberRegistration:'REQUIRES_CUSTOMER_NUMBER'};
 }
-export function createMetaCustomerProvider({environment=process.env,fetchImpl=fetch,now=()=>Date.now()}={}){
- const config=()=>{const ready=metaCustomerReadiness(environment);if(!ready.canLaunchMeta)throw new WorkspaceError(ready.launchCode,503);return ready;};
+export function createMetaCustomerProvider({environment=process.env,fetchImpl=fetch,now=()=>Date.now(),readiness=metaCustomerReadiness}={}){
+ const config=()=>{const ready=readiness(environment);if(!ready.canLaunchMeta)throw new WorkspaceError(ready.launchCode,503);return ready;};
  async function request(path,{token,method='GET',body,appToken=false}={}){
   const ready=config(),url=new URL(`https://graph.facebook.com/${ready.version}/${path}`);
   if(token&&!appToken)url.searchParams.set('appsecret_proof',createHmac('sha256',environment.META_APP_SECRET).update(token).digest('hex'));
@@ -51,7 +51,7 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
   if(!payload||typeof payload!=='object')throw new WorkspaceError('META_CUSTOMER_PROVIDER_UNCONFIRMED',503);return payload;
  }
  return {
-  readiness:()=>metaCustomerReadiness(environment),
+  readiness:()=>readiness(environment),
   async exchange(code){
    const ready=config(),query=new URLSearchParams({client_id:ready.appId,client_secret:environment.META_APP_SECRET,code});
    const result=await request('oauth/access_token?'+query);

@@ -15,6 +15,7 @@ import {WorkspaceRecoveryPanel} from './workspace-recovery-panel';
 import {CustomerInboxPanel} from './customer-inbox-panel';
 import {TemplateSendPanel} from './template-send-panel';
 import {ConstructorCrmPanel} from './constructor-crm-panel';
+import {DemoPilotPanel} from './demo-pilot-panel';
 const endpoint='/api/identity/workspace';
 const messages={WORKSPACE_ORGANIZATION_REQUIRED:'Elegí una organización desde tu cuenta para consultar las obras asignadas.',WORKSPACE_MEMBERSHIP_REQUIRED:'Tu organización activa todavía no tiene una pertenencia vigente vinculada a esta cuenta.',WORKSPACE_PROJECT_UNAVAILABLE:'Esta obra no está disponible con tus permisos actuales.',WORKSPACE_CONTEXT_CHANGED:'Cambió tu organización o tu permiso. Volvé a cargar las obras antes de continuar.',SCHEDULE_REVISION_CHANGED:'Otra persona modificó la tarea. Actualizá el cronograma antes de volver a planificar.',SCHEDULE_PERMISSION_REQUIRED:'Tu rol actual no puede modificar la planificación.',SCHEDULE_UNCHANGED:'Las fechas son iguales a las registradas. No se hizo ningún cambio.',SCHEDULE_OPERATION_CONFLICT:'Este intento ya pertenece a otra solicitud. Comprobá su recibo antes de continuar.',SESSION_REQUIRED:'Tu sesión venció. Volvé a ingresar.',SCHEDULE_DATES_INVALID:'Revisá el inicio y el fin. El fin no puede ser anterior al inicio.',SCHEDULE_REASON_REQUIRED:'Explicá brevemente el motivo del cambio.'};
 const describe=code=>messages[code]||'No se pudo confirmar la operación. No se reemplazaron los datos por ejemplos.';
@@ -49,6 +50,7 @@ export function AccountWorkspace({getSessionToken}={}){
  const inboxPending=useCallback(value=>setModulePending(old=>old.inbox===value?old:{...old,inbox:value}),[]);
  const templatePending=useCallback(value=>setModulePending(old=>old.template===value?old:{...old,template:value}),[]);
  const crmPending=useCallback(value=>setModulePending(old=>old.crm===value?old:{...old,crm:value}),[]);
+ const demoPending=useCallback(value=>setModulePending(old=>old.demo===value?old:{...old,demo:value}),[]);
  const tasksChanged=useCallback(task=>{if(task?.id)setView(old=>old?{...old,tasks:old.tasks.map(t=>t.id===task.id?{...t,...task}:t)}:old);},[]);
  const range=useMemo(()=>timeline(view?.tasks||[]),[view]);
  useEffect(()=>{
@@ -108,7 +110,7 @@ export function AccountWorkspace({getSessionToken}={}){
    <div className={styles.projects}>{account.projects.map(project=><button key={project.id} type="button" onClick={()=>open(project.id)} disabled={contextLocked} aria-pressed={view?.project.id===project.id}><span>{project.name}</span><small>Abrir obra</small></button>)}</div>
    {account.projectsTruncated&&<p>Se muestran las primeras 100 obras autorizadas.</p>}
   </>}
-  {view&&<nav className={styles.moduleNav} aria-label="Herramientas de la obra"><span>Ir a</span><a href="#schedule-title">Tareas</a><a href="#participant-title">Equipo y acceso</a><a href="#field-title">Jornada y evidencia</a>{account?.role==='ADMIN'&&<a href="#constructor-crm-title">Clientes</a>}{account?.canManageIntegrations&&<><a href="#purchase-title">Compras</a><a href="#customer-whatsapp-title">Preparar WhatsApp</a><a href="#customer-meta-title">Conexión y plantillas</a><a href="#customer-inbox-title">Bandeja y seguimiento</a><a href="#template-send-title">Enviar recordatorio</a></>}</nav>}
+  {view&&<nav className={styles.moduleNav} aria-label="Herramientas de la obra"><span>Ir a</span><a href="#onboarding-guide-title">Volver a la guía</a><a href="#schedule-title">Tareas</a><a href="#participant-title">Equipo y acceso</a><a href="#field-title">Jornada y evidencia</a>{account?.role==='ADMIN'&&<a href="#constructor-crm-title">Clientes</a>}{account?.canManageIntegrations&&<><a href="#purchase-title">Compras</a><a href="#customer-whatsapp-title">Preparar WhatsApp</a><a href="#customer-meta-title">Conexión y plantillas</a><a href="#customer-inbox-title">Bandeja y seguimiento</a><a href="#template-send-title">Enviar recordatorio</a></>}</nav>}
   {view&&<section aria-labelledby="schedule-title" className={styles.schedule}>
    <div className={styles.heading}><div><p className={styles.eyebrow}>CRONOGRAMA REGISTRADO</p><h3 id="schedule-title">{view.project.name}</h3></div><span>{view.tasks.length} de {view.totalTasks} tareas</span></div>
    {view.canPlanSchedule&&!draft&&<TaskCreatePanel key={`${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={setTaskCreating} onCreated={task=>setView(current=>current&&current.project.id===view.project.id?{...current,totalTasks:current.tasks.some(t=>t.id===task.id)?current.totalTasks:current.totalTasks+1,tasks:current.tasks.some(t=>t.id===task.id)?current.tasks.map(t=>t.id===task.id?task:t):[task,...current.tasks]}:current)}/> }
@@ -135,6 +137,7 @@ export function AccountWorkspace({getSessionToken}={}){
   {view&&account?.canManageIntegrations&&<SiteRegisterPanel key={`register:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={registerPending}/> }
   {view&&<ParticipantPanel key={`participants:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={participantPending}/> }
   {view&&<WorkerChannelPanel key={`channel:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={channelPending}/> }
+  {view&&account?.role==='ADMIN'&&<DemoPilotPanel key={`demo:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={demoPending}/> }
   {view&&<FieldOperationsPanel key={`field:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} tasks={view.tasks} onPending={fieldPending} onTasksChanged={tasksChanged}/> }
   {view&&account?.canManageIntegrations&&<SitePurchasePanel key={`purchases:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={purchasePending}/> }
   {view&&account?.canManageIntegrations&&<CustomerWhatsAppPanel key={`${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={preparationPending}/> }

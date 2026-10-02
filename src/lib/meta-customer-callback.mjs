@@ -4,6 +4,7 @@ import {exactSecretMatch} from './legacy-access-boundary.js';
 import {encryptCustomerSecret,customerVaultConfigured} from './meta-customer-credentials.mjs';
 import {metaAssetId} from './meta-customer-provider.mjs';
 import {OBRASAAS_META_CHANNEL} from './meta-channel-binding.mjs';
+import {META_CUSTOMER_PROTOCOL,META_DEMO_PILOT_PROTOCOL,resolveMetaCloudProtocol,metaCloudEventId} from './meta-cloud-protocol.mjs';
 const MAX_BYTES=262144;
 const headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'};
 // JSON object ordering is transport formatting, while array ordering and
@@ -26,17 +27,19 @@ async function rawBody(request){
  try{while(true){const {done,value}=await reader.read();if(done)break;length+=value.byteLength;if(length>MAX_BYTES)throw new WorkspaceError('META_CUSTOMER_CALLBACK_TOO_LARGE',413);parts.push(Buffer.from(value));}return Buffer.concat(parts,length);}
  finally{await reader.cancel().catch(()=>{});reader.releaseLock();}
 }
-export function splitMetaCustomerEvents(payload){
+function splitMetaCloudEvents(payload,protocol){
  if(payload?.object!=='whatsapp_business_account'||!Array.isArray(payload.entry)||!payload.entry.length||payload.entry.length>50)throw new WorkspaceError('META_CUSTOMER_CALLBACK_INVALID');
  const events=[];
  for(const entry of payload.entry){
   if(!metaAssetId(entry.id)||!Array.isArray(entry.changes)||!entry.changes.length||entry.changes.length>50)throw new WorkspaceError('META_CUSTOMER_CALLBACK_INVALID');
-  if(entry.id===OBRASAAS_META_CHANNEL.wabaId)throw new WorkspaceError('META_CUSTOMER_DEMO_ASSET_REJECTED',403);
+  if(protocol===META_CUSTOMER_PROTOCOL&&entry.id===OBRASAAS_META_CHANNEL.wabaId)throw new WorkspaceError('META_CUSTOMER_DEMO_ASSET_REJECTED',403);
+  if(protocol===META_DEMO_PILOT_PROTOCOL&&entry.id!==OBRASAAS_META_CHANNEL.wabaId)throw new WorkspaceError('META_DEMO_ASSET_REJECTED',403);
   for(const change of entry.changes){
    if(typeof change.field!=='string'||change.field.length>80||!change.value||typeof change.value!=='object'||Array.isArray(change.value))throw new WorkspaceError('META_CUSTOMER_CALLBACK_INVALID');
    const phoneNumberId=change.value.metadata?.phone_number_id||null;
    if(phoneNumberId!==null&&!metaAssetId(phoneNumberId))throw new WorkspaceError('META_CUSTOMER_CALLBACK_INVALID');
-   if(phoneNumberId===OBRASAAS_META_CHANNEL.phoneNumberId)throw new WorkspaceError('META_CUSTOMER_DEMO_ASSET_REJECTED',403);
+   if(protocol===META_CUSTOMER_PROTOCOL&&phoneNumberId===OBRASAAS_META_CHANNEL.phoneNumberId)throw new WorkspaceError('META_CUSTOMER_DEMO_ASSET_REJECTED',403);
+   if(protocol===META_DEMO_PILOT_PROTOCOL&&(change.field!=='messages'||phoneNumberId!==OBRASAAS_META_CHANNEL.phoneNumberId))throw new WorkspaceError('META_DEMO_ASSET_REJECTED',403);
    const add=(type,id,value)=>{const eventPayload={wabaId:entry.id,phoneNumberId,field:change.field,type,value};events.push({wabaId:entry.id,phoneNumberId,type,externalId:digest([entry.id,phoneNumberId,type,id]),payload:eventPayload,payloadDigest:metaCustomerContentDigest(eventPayload)});};
    if(change.field==='messages'){
     if(!phoneNumberId)throw new WorkspaceError('META_CUSTOMER_CALLBACK_INVALID');let count=0;
@@ -48,6 +51,13 @@ export function splitMetaCustomerEvents(payload){
   }
  }
  return events;
+}
+export const splitMetaCustomerEvents=payload=>splitMetaCloudEvents(payload,META_CUSTOMER_PROTOCOL);
+export const splitMetaDemoPilotEvents=payload=>splitMetaCloudEvents(payload,META_DEMO_PILOT_PROTOCOL);
+export function splitMetaAppEvents(payload){
+ if(payload?.object!=='whatsapp_business_account'||!Array.isArray(payload.entry)||!payload.entry.length||payload.entry.length>50)throw new WorkspaceError('META_CUSTOMER_CALLBACK_INVALID');
+ const events=payload.entry.flatMap(entry=>splitMetaCloudEvents({...payload,entry:[entry]},entry?.id===OBRASAAS_META_CHANNEL.wabaId?META_DEMO_PILOT_PROTOCOL:META_CUSTOMER_PROTOCOL));
+ if(events.length>200)throw new WorkspaceError('META_CUSTOMER_CALLBACK_TOO_LARGE',413);return events;
 }
 export async function lockMetaCustomerInboxChannel(client,{wabaId,phoneNumberId,projectId=null}){
  // Resolve without locks, then acquire every lock explicitly in canonical
@@ -61,37 +71,42 @@ export async function lockMetaCustomerInboxChannel(client,{wabaId,phoneNumberId,
  if(!channel||channel.whatsappBusinessId===OBRASAAS_META_CHANNEL.wabaId||channel.phoneNumberId===OBRASAAS_META_CHANNEL.phoneNumberId||channel.metadata?.credentialFormat!=='tenant-aad-v2'||channel.metadata?.credentialOrganizationId!==project.organizationId)throw new WorkspaceError('META_CUSTOMER_CALLBACK_SCOPE_REJECTED',403);
  return {...channel,organizationId:project.organizationId};
 }
-export function createMetaCustomerInbox({connect,environment=process.env}){
+export function createMetaCustomerInbox({connect,environment=process.env,protocol=META_CUSTOMER_PROTOCOL,lockChannel=lockMetaCustomerInboxChannel,routeEvent}){
+ resolveMetaCloudProtocol(protocol);
  return {async record(events,{signatureVerified=false}={}){
   let client,broken=false;
-  try{client=await connect();await client.query('BEGIN');await client.query("SET LOCAL statement_timeout='6000ms'");let received=0,replayed=0;
+  try{client=await connect();await client.query('BEGIN');await client.query("SET LOCAL statement_timeout='6000ms'");let received=0,replayed=0;const eventIds=[];
    for(const event of [...events].sort((left,right)=>left.externalId.localeCompare(right.externalId))){
-    const channel=await lockMetaCustomerInboxChannel(client,event),id='customer_webhook_'+event.externalId;
-    const encryptedPayload=encryptCustomerSecret(JSON.stringify(event.payload),{organizationId:channel.organizationId,projectId:channel.projectId,purpose:'webhook',resourceId:id},environment);
-    const encryptedProof=signatureVerified===true?encryptCustomerSecret(JSON.stringify({scheme:'meta-hmac-sha256-v1',appId:OBRASAAS_META_CHANNEL.appId,payloadDigest:event.payloadDigest,channelId:channel.id,organizationId:channel.organizationId}),{organizationId:channel.organizationId,projectId:channel.projectId,purpose:'webhook-proof',resourceId:id},environment):null;
-    const payload={version:1,encryptedPayload,encryptedProof,payloadDigest:event.payloadDigest,channelId:channel.id,organizationId:channel.organizationId,signatureVerified:signatureVerified===true,signatureScheme:signatureVerified===true?'meta-hmac-sha256-v1':null};
-    const write=await client.query(`INSERT INTO public."WebhookEvent" (id,"projectId",provider,"externalId","eventType",status,payload,"updatedAt") VALUES ($1,$2,'meta-customer-v1',$3,$4,'PENDING',$5::jsonb,clock_timestamp()) ON CONFLICT (provider,"externalId") DO NOTHING`,[id,channel.projectId,event.externalId,event.type,JSON.stringify(payload)]);
-    if(write.rowCount===1)received++;else{const prior=await client.query(`SELECT "projectId",payload FROM public."WebhookEvent" WHERE provider='meta-customer-v1' AND "externalId"=$1`,[event.externalId]);
+    const lane=routeEvent?routeEvent(event):{protocol,lockChannel},p=resolveMetaCloudProtocol(lane.protocol),channel=await lane.lockChannel(client,event),id=metaCloudEventId(p,event.externalId);eventIds.push(id);
+    const encryptedPayload=encryptCustomerSecret(JSON.stringify(event.payload),{organizationId:channel.organizationId,projectId:channel.projectId,purpose:p.payloadPurpose,resourceId:id},environment);
+    const grantProof=p===META_DEMO_PILOT_PROTOCOL?{grantId:channel.metadata?.demoPilot?.grantId}:{};
+    if(p===META_DEMO_PILOT_PROTOCOL&&!/^demo_grant_[a-f0-9]{64}$/.test(grantProof.grantId||''))throw new WorkspaceError('META_DEMO_PILOT_PROOF_REQUIRED',409);
+    const encryptedProof=signatureVerified===true?encryptCustomerSecret(JSON.stringify({scheme:p.scheme,purpose:p.purpose,appId:OBRASAAS_META_CHANNEL.appId,payloadDigest:event.payloadDigest,channelId:channel.id,organizationId:channel.organizationId,...grantProof}),{organizationId:channel.organizationId,projectId:channel.projectId,purpose:p.proofPurpose,resourceId:id},environment):null;
+    const payload={version:1,encryptedPayload,encryptedProof,payloadDigest:event.payloadDigest,channelId:channel.id,organizationId:channel.organizationId,channelPurpose:p.purpose,...grantProof,signatureVerified:signatureVerified===true,signatureScheme:signatureVerified===true?p.scheme:null};
+    const write=await client.query(`INSERT INTO public."WebhookEvent" (id,"projectId",provider,"externalId","eventType",status,payload,"updatedAt") VALUES ($1,$2,$6,$3,$4,'PENDING',$5::jsonb,clock_timestamp()) ON CONFLICT (provider,"externalId") DO NOTHING`,[id,channel.projectId,event.externalId,event.type,JSON.stringify(payload),p.provider]);
+    if(write.rowCount===1)received++;else{const prior=await client.query(`SELECT "projectId",payload FROM public."WebhookEvent" WHERE provider=$2 AND "externalId"=$1`,[event.externalId,p.provider]);
      if(prior.rows.length!==1||prior.rows[0].projectId!==channel.projectId||prior.rows[0].payload?.payloadDigest!==event.payloadDigest)throw new WorkspaceError('META_CUSTOMER_CALLBACK_REPLAY_CONFLICT',409);replayed++;}
    }
-   await client.query('COMMIT');return {received,replayed,durable:true,applied:false,eventIds:events.map(event=>'customer_webhook_'+event.externalId)};
+   await client.query('COMMIT');return {received,replayed,durable:true,applied:false,eventIds};
   }catch(error){if(client)try{await client.query('ROLLBACK');}catch{broken=true;}throw error instanceof WorkspaceError?error:new WorkspaceError('META_CUSTOMER_CALLBACK_UNCONFIRMED',503);}
   finally{client?.release(broken);}
  }};
 }
-export function createMetaCustomerCallbackHandlers({inbox,environment=process.env,schedule=()=>{}}){
+export function createMetaCustomerCallbackHandlers({inbox,environment=process.env,schedule=()=>{},protocol=META_CUSTOMER_PROTOCOL,verifyTokenName='META_CUSTOMER_VERIFY_TOKEN',splitEvents}){
+ resolveMetaCloudProtocol(protocol);
+ if(!['META_CUSTOMER_VERIFY_TOKEN','META_VERIFY_TOKEN'].includes(verifyTokenName))throw new WorkspaceError('META_CLOUD_PROTOCOL_REJECTED',403);
  return {
   async GET(request){try{const params=new URL(request.url).searchParams;
-   if(typeof environment.META_CUSTOMER_VERIFY_TOKEN!=='string'||environment.META_CUSTOMER_VERIFY_TOKEN.length<32)throw new WorkspaceError('META_CUSTOMER_CALLBACK_NOT_CONFIGURED',503);
+   if(typeof environment[verifyTokenName]!=='string'||environment[verifyTokenName].length<32)throw new WorkspaceError('META_CUSTOMER_CALLBACK_NOT_CONFIGURED',503);
    if(params.size!==3||[...params.keys()].some(name=>!['hub.mode','hub.verify_token','hub.challenge'].includes(name)||params.getAll(name).length!==1)||params.get('hub.mode')!=='subscribe'||!/^\d{1,128}$/.test(params.get('hub.challenge')||''))throw new WorkspaceError('META_CUSTOMER_CALLBACK_INVALID');
-   if(!exactSecretMatch(params.get('hub.verify_token'),environment.META_CUSTOMER_VERIFY_TOKEN))throw new WorkspaceError('META_CUSTOMER_SIGNATURE_REJECTED',403);
+   if(!exactSecretMatch(params.get('hub.verify_token'),environment[verifyTokenName]))throw new WorkspaceError('META_CUSTOMER_SIGNATURE_REJECTED',403);
    return new Response(params.get('hub.challenge'),{headers:{...headers,'Content-Type':'text/plain'}});
   }catch(error){return Response.json({code:error.code||'META_CUSTOMER_CALLBACK_UNCONFIRMED'},{status:error.status||503,headers});}},
   async POST(request){try{
    if(!customerVaultConfigured(environment))throw new WorkspaceError('META_CUSTOMER_CALLBACK_NOT_CONFIGURED',503);
    const bytes=await rawBody(request);if(!verifyMetaCustomerSignature(bytes,request.headers.get('x-hub-signature-256'),environment))throw new WorkspaceError('META_CUSTOMER_SIGNATURE_REJECTED',403);
    let payload;try{payload=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes));}catch{throw new WorkspaceError('META_CUSTOMER_CALLBACK_INVALID');}
-   const result=await inbox.record(splitMetaCustomerEvents(payload),{signatureVerified:true});
+   const result=await inbox.record(splitEvents?splitEvents(payload):protocol===META_CUSTOMER_PROTOCOL?splitMetaCustomerEvents(payload):splitMetaDemoPilotEvents(payload),{signatureVerified:true});
    if(result.durable!==true)throw new WorkspaceError('META_CUSTOMER_CALLBACK_UNCONFIRMED',503);
    // Scheduling is after the durable commit. A lost wake-up is recovered by
    // the signed recovery endpoint; it must never turn an accepted inbox into

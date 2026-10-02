@@ -6,25 +6,29 @@ import {metaCustomerInboxIntent} from './meta-customer-inbox-review.mjs';
 import {customerJobTransaction} from './meta-customer-outbound.mjs';
 import {OBRASAAS_META_CHANNEL} from './meta-channel-binding.mjs';
 import {exactSecretMatch} from './legacy-access-boundary.js';
+import {META_CUSTOMER_PROTOCOL,resolveMetaCloudProtocol,metaCloudEventMatches} from './meta-cloud-protocol.mjs';
 
 const validEvent=id=>/^customer_webhook_[a-f0-9]{64}$/.test(id||'');
 export const META_CUSTOMER_PROOF_REVIEW_CODES=Object.freeze(['WORKER_CHANNEL_SIGNED_PROOF_REQUIRED','WORKER_CHANNEL_PROOF_INTEGRITY','META_CUSTOMER_EVENT_PROOF_REQUIRED','META_CUSTOMER_INBOX_PAYLOAD_UNVERIFIED']);
 const authorizationObservations=new Set(['WORKER_CHANNEL_BINDING_REQUIRED','WORKER_CHANNEL_PARTICIPANT_REQUIRED','WORKER_CHANNEL_KYC_REVIEW_REQUIRED','WORKER_CHANNEL_PERMISSION_REQUIRED','WORKER_CHANNEL_CUSTOMER_ACTIVATION_REQUIRED','WORKER_CHANNEL_CUSTOMER_CONNECTION_REQUIRED','WORKER_CHANNEL_CHALLENGE_REJECTED','WORKER_CHANNEL_CHALLENGE_EXPIRED','WORKER_CHANNEL_CHALLENGE_USED','META_CUSTOMER_CHANNEL_ACCEPTANCE_REQUIRED','META_CHANNEL_MESSAGE_NOT_SUPPORTED','META_CHANNEL_INPUT_REVIEW_REQUIRED']);
-export function decodeSignedCustomerEvent(event,channel,environment){
+export function decodeSignedCloudEvent(event,channel,environment,protocol=META_CUSTOMER_PROTOCOL){
+ resolveMetaCloudProtocol(protocol);
  try{
-  if(event.payload?.signatureVerified!==true||event.payload?.signatureScheme!=='meta-hmac-sha256-v1'||event.payload.organizationId!==channel.organizationId||event.payload.channelId!==channel.id||event.projectId!==channel.projectId)throw new Error();
+  if(event.provider!==undefined&&event.provider!==protocol.provider||event.payload?.signatureVerified!==true||event.payload?.signatureScheme!==protocol.scheme||event.payload.organizationId!==channel.organizationId||event.payload.channelId!==channel.id||event.projectId!==channel.projectId||protocol!==META_CUSTOMER_PROTOCOL&&event.payload.channelPurpose!==protocol.purpose)throw new Error();
   const context={organizationId:channel.organizationId,projectId:channel.projectId,resourceId:event.id};
-  const proof=JSON.parse(decryptCustomerSecret(event.payload.encryptedProof,{...context,purpose:'webhook-proof'},environment));
-  const payload=JSON.parse(decryptCustomerSecret(event.payload.encryptedPayload,{...context,purpose:'webhook'},environment));
-  if(proof.scheme!=='meta-hmac-sha256-v1'||proof.appId!==OBRASAAS_META_CHANNEL.appId||proof.channelId!==channel.id||proof.organizationId!==channel.organizationId||proof.payloadDigest!==event.payload.payloadDigest||metaCustomerContentDigest(payload)!==proof.payloadDigest||payload.wabaId!==channel.whatsappBusinessId||payload.phoneNumberId!==null&&payload.phoneNumberId!==channel.phoneNumberId)throw new Error();
+  const proof=JSON.parse(decryptCustomerSecret(event.payload.encryptedProof,{...context,purpose:protocol.proofPurpose},environment));
+  const payload=JSON.parse(decryptCustomerSecret(event.payload.encryptedPayload,{...context,purpose:protocol.payloadPurpose},environment));
+  if(proof.scheme!==protocol.scheme||proof.purpose!==protocol.purpose&&!(protocol===META_CUSTOMER_PROTOCOL&&proof.purpose===undefined)||protocol!==META_CUSTOMER_PROTOCOL&&(proof.grantId!==channel.metadata?.demoPilot?.grantId||event.payload.grantId!==proof.grantId)||proof.appId!==OBRASAAS_META_CHANNEL.appId||proof.channelId!==channel.id||proof.organizationId!==channel.organizationId||proof.payloadDigest!==event.payload.payloadDigest||metaCustomerContentDigest(payload)!==proof.payloadDigest||payload.wabaId!==channel.whatsappBusinessId||payload.phoneNumberId!==null&&payload.phoneNumberId!==channel.phoneNumberId)throw new Error();
   return payload;
  }catch{throw new WorkspaceError('META_CUSTOMER_EVENT_PROOF_REQUIRED',409);}
 }
+export const decodeSignedCustomerEvent=(event,channel,environment)=>decodeSignedCloudEvent(event,channel,environment,META_CUSTOMER_PROTOCOL);
 const safeOutcome=result=>({version:1,classifierVersion:'enterprise-1677ff7-obra-intent-v1',intent:result.intent||null,reviewState:result.reviewState||'REVIEW_REQUIRED',businessApplied:result.businessApplied===true,replySent:result.replySent===true,kind:typeof result.kind==='string'?result.kind.slice(0,64):null,receiptId:typeof result.receiptId==='string'?result.receiptId.slice(0,160):null,replyState:result.replyState||null,code:result.code||null,identity:{status:result.identityStatus||'NOT_CHECKED',workerId:result.workerId||null}});
-export function createMetaCustomerProcessor({connect,dispatch,outbound,environment=process.env,now=()=>Date.now(),afterClaim=async()=>{}}){
+export function createMetaCustomerProcessor({connect,dispatch,outbound,environment=process.env,now=()=>Date.now(),afterClaim=async()=>{},protocol=META_CUSTOMER_PROTOCOL,lockChannel=lockMetaCustomerInboxChannel,authorizationCodes=[]}){
+ resolveMetaCloudProtocol(protocol);
  const within=run=>customerJobTransaction(connect,run);
  async function claim(eventId){return within(async client=>{
-  const row=(await client.query(`SELECT id,"projectId",payload,status::text AS status,"leaseToken","leaseExpiresAt",outcome,attempts FROM public."WebhookEvent" WHERE id=$1 AND provider='meta-customer-v1' FOR UPDATE`,[eventId])).rows[0];
+  const row=(await client.query(`SELECT id,"projectId",payload,status::text AS status,"leaseToken","leaseExpiresAt",outcome,attempts FROM public."WebhookEvent" WHERE id=$1 AND provider=$2 FOR UPDATE`,[eventId,protocol.provider])).rows[0];
   if(!row)throw new WorkspaceError('META_CUSTOMER_INBOX_UNAVAILABLE',404);
   if(row.status==='PROCESSED')return {done:true,eventId,businessApplied:row.outcome?.businessApplied===true,replySent:row.outcome?.replySent===true};
   if(row.status!=='PENDING'||row.leaseToken&&new Date(row.leaseExpiresAt).getTime()>now())return {busy:true,eventId};
@@ -34,10 +38,10 @@ export function createMetaCustomerProcessor({connect,dispatch,outbound,environme
  async function observe(context,code=null){return within(async client=>{
   const candidate=(await client.query(`SELECT "whatsappBusinessId","phoneNumberId" FROM public."WhatsAppConnection" WHERE id=$1 AND "projectId"=$2`,[context.channelId,context.projectId])).rows[0];
   if(!candidate)throw new WorkspaceError('META_CUSTOMER_CALLBACK_SCOPE_REJECTED',403);
-  const channel=await lockMetaCustomerInboxChannel(client,{wabaId:candidate.whatsappBusinessId,phoneNumberId:candidate.phoneNumberId,projectId:context.projectId});
-  const event=(await client.query(`SELECT id,"projectId",payload,status::text AS status,"leaseToken","leaseExpiresAt" FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 AND provider='meta-customer-v1' FOR UPDATE`,[context.eventId,context.projectId])).rows[0];
+  const channel=await lockChannel(client,{wabaId:candidate.whatsappBusinessId,phoneNumberId:candidate.phoneNumberId,projectId:context.projectId});
+  const event=(await client.query(`SELECT id,"projectId",provider,payload,status::text AS status,"leaseToken","leaseExpiresAt" FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 AND provider=$3 FOR UPDATE`,[context.eventId,context.projectId,protocol.provider])).rows[0];
   if(!event||event.leaseToken!==context.leaseToken||event.status!=='PENDING'||new Date(event.leaseExpiresAt).getTime()<=now()||event.payload.payloadDigest!==context.payloadDigest)throw new WorkspaceError('META_CUSTOMER_INBOX_LEASE_CHANGED',409);
-  const payload=decodeSignedCustomerEvent(event,channel,environment),intent=metaCustomerInboxIntent(payload);
+  const payload=decodeSignedCloudEvent(event,channel,environment,protocol),intent=metaCustomerInboxIntent(payload);
   if(payload.type==='message_status')await outbound?.observeStatus(client,{event,payload,channel});
   return {intent,kind:payload.type,reviewState:payload.type==='message'?'REVIEW_REQUIRED':'OBSERVED',identityStatus:payload.type==='message'?'CHANNEL_IDENTITY_UNVERIFIED':'NOT_APPLICABLE',businessApplied:false,replySent:false,code};
  });}
@@ -49,27 +53,27 @@ export function createMetaCustomerProcessor({connect,dispatch,outbound,environme
  });}
  return {
   async process(eventId){
-   if(!validEvent(eventId))throw new WorkspaceError('META_CUSTOMER_INBOX_INPUT_INVALID');
+   if(!metaCloudEventMatches(protocol,eventId))throw new WorkspaceError('META_CUSTOMER_INBOX_INPUT_INVALID');
    const context=await claim(eventId);if(context.done||context.busy)return context;await afterClaim();
    try{
     let result;
     try{result=await dispatch(context);}catch(error){
      // Authorization failures are durable observations, never invitations to
      // guess a recipient, imitate a web session, or run a fallback engine.
-     if(error instanceof WorkspaceError&&authorizationObservations.has(error.code))result=await observe(context,error.code);else throw error;
+     if(error instanceof WorkspaceError&&(authorizationObservations.has(error.code)||authorizationCodes.includes(error.code)))result=await observe(context,error.code);else throw error;
     }
     if(!result)result=await observe(context);
-    if(result.reply){let reply;try{reply=await outbound.send(context,result.reply);}catch(error){if(error instanceof WorkspaceError&&(error.code==='META_CUSTOMER_REPLY_WINDOW_CLOSED'||authorizationObservations.has(error.code)))reply={replySent:false,state:error.code};else throw error;}result={...result,replySent:reply.replySent,replyState:reply.state};}
+    if(result.reply){let reply;try{reply=await outbound.send(context,result.reply);}catch(error){if(error instanceof WorkspaceError&&(error.code==='META_CUSTOMER_REPLY_WINDOW_CLOSED'||authorizationObservations.has(error.code)||authorizationCodes.includes(error.code)))reply={replySent:false,state:error.code};else throw error;}result={...result,replySent:reply.replySent,replyState:reply.state};}
     return finish(context,result);
    }catch(error){
     await within(client=>client.query(`UPDATE public."WebhookEvent" SET "lastError"=$3,"leaseToken"=NULL,"leaseExpiresAt"=NULL,"updatedAt"=clock_timestamp() WHERE id=$1 AND "leaseToken"=$2 AND status='PENDING'`,[context.eventId,context.leaseToken,error instanceof WorkspaceError?error.code:'META_CUSTOMER_PROCESSING_UNCONFIRMED'])).catch(()=>{});throw error;
    }
   },
   async recover({limit=3,eventIds=null,budgetMs=210000}={}){
-   if(!Number.isInteger(limit)||limit<1||limit>20||eventIds!==null&&(!Array.isArray(eventIds)||eventIds.length>20||eventIds.some(id=>!validEvent(id))))throw new WorkspaceError('META_CUSTOMER_JOB_INPUT_INVALID');
+   if(!Number.isInteger(limit)||limit<1||limit>20||eventIds!==null&&(!Array.isArray(eventIds)||eventIds.length>20||eventIds.some(id=>!metaCloudEventMatches(protocol,id))))throw new WorkspaceError('META_CUSTOMER_JOB_INPUT_INVALID');
    if(!Number.isInteger(budgetMs)||budgetMs<180000||budgetMs>240000)throw new WorkspaceError('META_CUSTOMER_JOB_INPUT_INVALID');
    const started=Date.now();
-   const ids=eventIds||await within(async client=>(await client.query(`SELECT id FROM public."WebhookEvent" WHERE provider='meta-customer-v1' AND status='PENDING' AND ("leaseToken" IS NULL OR "leaseExpiresAt"<=$1) AND NOT (COALESCE("lastError",'')=ANY($3::text[])) AND ("lastError" IS NULL OR "updatedAt"<$1::timestamp-interval '1 minute') ORDER BY "createdAt",id LIMIT $2`,[new Date(now()),limit,META_CUSTOMER_PROOF_REVIEW_CODES])).rows.map(row=>row.id));
+   const ids=eventIds||await within(async client=>(await client.query(`SELECT id FROM public."WebhookEvent" WHERE provider=$4 AND status='PENDING' AND ("leaseToken" IS NULL OR "leaseExpiresAt"<=$1) AND NOT (COALESCE("lastError",'')=ANY($3::text[])) AND ("lastError" IS NULL OR "updatedAt"<$1::timestamp-interval '1 minute') ORDER BY "createdAt",id LIMIT $2`,[new Date(now()),limit,META_CUSTOMER_PROOF_REVIEW_CODES,protocol.provider])).rows.map(row=>row.id));
    const results=[];for(const id of ids.slice(0,limit)){if(results.length&&Date.now()-started>budgetMs-180000)break;try{results.push(await this.process(id));}catch(error){results.push({eventId:id,processed:false,code:error instanceof WorkspaceError?error.code:'META_CUSTOMER_PROCESSING_UNCONFIRMED'});}}
    return {durable:true,checked:results.length,results};
   },

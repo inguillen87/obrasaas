@@ -1,8 +1,10 @@
 import {productionMetaCustomerProcessor} from '../../../../lib/meta-customer-processing-runtime.mjs';
 import {createMetaCustomerJobHandlers} from '../../../../lib/meta-customer-processing.mjs';
+import {productionMetaDemoPilot} from '../../../../lib/meta-demo-pilot-runtime.mjs';
+import {createMetaAppRecovery} from '../../../../lib/meta-app-recovery.mjs';
 export const runtime='nodejs';
 export const dynamic='force-dynamic';
 export const maxDuration=300;
-const handlers=createMetaCustomerJobHandlers({processor:productionMetaCustomerProcessor});
+const handlers=createMetaCustomerJobHandlers({processor:createMetaAppRecovery({customer:productionMetaCustomerProcessor,demo:productionMetaDemoPilot.processor})});
 export const GET=handlers.GET;
 export const POST=handlers.POST;
