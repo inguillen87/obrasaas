@@ -29,7 +29,8 @@ async function scenario(mode,width=390){
    if(mode==='uncertain'||mode==='recover-sdk-fail'||mode==='recover-denied'||mode==='not-observed'||mode==='malformed-get'){status=503;body={code:'META_CUSTOMER_TEMPLATE_SEND_UNCONFIRMED'};}
    else if(mode==='provider-unknown')body=outcome(command,'SEND_UNKNOWN',{providerAccepted:false});
    else if(mode==='provider-rejected')body=outcome(command,'REJECTED',{providerAccepted:false,code:'META_CUSTOMER_PROVIDER_REJECTED'});
-   else if(mode==='state-changed'){status=409;body={code:'META_CUSTOMER_TEMPLATE_SEND_STATE_CHANGED'};}
+   else if(mode==='notice-changed')body=outcome(command,'REJECTED',{providerAccepted:false,code:'WORKER_TEMPLATE_CONSENT_NOTICE_CHANGED'});
+    else if(mode==='state-changed'){status=409;body={code:'META_CUSTOMER_TEMPLATE_SEND_STATE_CHANGED'};}
    else if(mode==='malformed-post')body=outcome(command,'ACCEPTED',{receipt:{...outcome(command).receipt,workerId:'worker-b'}});else body=outcome(command);
   }else{gets.push(url.search);if(url.searchParams.has('operationId')){
     assert.equal(url.searchParams.get('operationId'),saved.operationId);
@@ -38,12 +39,14 @@ async function scenario(mode,width=390){
     else if(mode==='malformed-get'&&wrongRecovery)body=outcome(saved,'ACCEPTED',{receipt:{...outcome(saved).receipt,workerId:'worker-b'}});else body=outcome(saved,'STATUS_OBSERVED',{providerStatus:'delivered',deliveryConfirmed:true});
    }else if(mode==='denied'){status=403;body={code:'WORKSPACE_INTEGRATION_PERMISSION_REQUIRED'};}
    else if(mode==='foreign')body={...snapshot(),projectId:'p-b'};
-   else if(mode==='empty')body={...snapshot(),canSend:false,template:{...snapshot().template,canSend:false,providerStatus:null},records:[]};
+   else if(mode==='consent-renewal-required')body={...snapshot(),canSend:false,template:{...snapshot().template,canSend:false},records:snapshot().records.map(row=>({...row,eligible:false,reasonCode:'WORKER_TEMPLATE_CONSENT_NOTICE_CHANGED'}))};
+    else if(mode==='empty')body={...snapshot(),canSend:false,template:{...snapshot().template,canSend:false,providerStatus:null},records:[]};
    else if(mode==='history'){saved={scope,projectId:'p-a',workerId:'worker-a',templateKey,operationId:'01234567-89ab-4cde-8fab-0123456789ab'};body={...snapshot(),recent:[outcome(saved)]};}
    else body=snapshot();}
   await request.respond({status,contentType:'application/json',body:JSON.stringify(body),headers:{'Cache-Control':'private, no-store'}});
  }catch(error){errors.push({mode,width,message:error.message});if(!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});}});
  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await click(page,'Consultar disponibilidad');
+ if(mode==='consent-renewal-required'){await wait(page,'necesita renovación');assert.equal(posts.length,0);assert.equal((await refs(page)).length,0);assert.ok(await page.$eval('select',element=>element.disabled));checks.push('canonical-consent-renewal-reason-is-readable-and-no-send-is-available');await context.close();return;}
  if(['empty','denied','foreign'].includes(mode)){await wait(page,mode==='empty'?'Todavía no hay un envío disponible':mode==='denied'?'No se pudo confirmar':'No se pudo comprobar');assert.equal(posts.length,0);assert.ok(!((await page.evaluate(()=>document.body.innerText)).includes('Mensaje para Persona')));checks.push(mode+'-no-private-or-send-controls');await context.close();return;}
  if(mode==='history'){await wait(page,'Envíos recientes de tu cuenta');await page.click('summary');await click(page,'Consultar este envío');await wait(page,'Meta informó entrega');assert.equal(posts.length,0);assert.equal(gets.filter(value=>value.includes('operationId')).length,1);checks.push('durable-history-delivery-read-is-GET-only');await context.close();return;}
  await wait(page,'Persona de ensayo');await page.select('select','worker-a');assert.equal(await page.$eval('button[type=submit]',button=>button.disabled),true);await page.click('input[type=checkbox]');await page.waitForFunction(()=>document.querySelector('#project').disabled,{timeout:15000});assert.equal(await page.$eval('#project',button=>button.disabled),true);
@@ -52,6 +55,7 @@ async function scenario(mode,width=390){
  await click(page,'Enviar recordatorio autorizado');
  if(mode==='identity-cancel'){await page.waitForFunction(()=>typeof window.__releaseToken==='function');await page.click('#identity');await page.evaluate(()=>window.__releaseToken?.('stale-token'));await wait(page,'Consultar disponibilidad');assert.equal(posts.length,0);assert.equal((await refs(page)).length,0);checks.push('identity-unmount-cancels-before-dispatch');await context.close();return;}
  if(['sdk-fail','sdk-hang'].includes(mode)){await wait(page,'No se pudo renovar tu sesión');assert.equal(posts.length,0);assert.equal((await refs(page)).length,0);checks.push(mode+'-before-send-retains-no-phantom-receipt');await context.close();return;}
+ if(mode==='notice-changed'){await wait(page,'No se envió el mensaje');await wait(page,'aceptar el aviso actualizado de la empresa');assert.equal(posts.length,1);assert.equal((await refs(page)).length,0);checks.push('changed-company-notice-definitely-stops-send-and-explains-renewal-without-retry-or-delivery-claim');await context.close();return;}
  if(mode==='state-changed'){await wait(page,'Cambió la jornada');assert.equal(posts.length,1);assert.equal((await refs(page)).length,0);checks.push('changed-state-no-auto-resend-and-needs-fresh-review');await context.close();return;}
  if(mode==='provider-rejected'){await wait(page,'Meta rechazó');assert.equal(posts.length,1);assert.equal((await refs(page)).length,0);checks.push('rejection-is-not-delivery-and-clears-exact-reference');await context.close();return;}
  if(['uncertain','provider-unknown','recover-sdk-fail','recover-denied','not-observed','malformed-post','malformed-get'].includes(mode)){
@@ -67,7 +71,7 @@ async function scenario(mode,width=390){
 }
 function stopOwned(pid){const result=spawnSync('taskkill.exe',['/PID',String(pid),'/T','/F'],{stdio:'ignore'});if(result.status!==0){try{process.kill(pid,0);}catch(error){if(error.code==='ESRCH')return;throw error;}assert.equal(result.status,0,'Owned process cleanup failed');}}
 try{let ready=false;for(let n=0;n<100;n++){if(server.exitCode!==null)throw new Error('Fixture server exited');try{if((await fetch(origin)).ok){ready=true;break;}}catch{}await new Promise(resolve=>setTimeout(resolve,500));}assert.ok(ready);browser=await puppeteer.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{}),args:['--no-sandbox','--disable-setuid-sandbox']});
- for(const width of [320,390,768,1280])await scenario('accepted',width);for(const mode of ['uncertain','provider-unknown','recover-sdk-fail','recover-denied','not-observed','provider-rejected','state-changed','empty','denied','foreign','sdk-fail','sdk-hang','identity-cancel','history','malformed-post','malformed-get'])await scenario(mode);
+ for(const width of [320,390,768,1280])await scenario('accepted',width);for(const mode of ['uncertain','provider-unknown','recover-sdk-fail','recover-denied','not-observed','provider-rejected','state-changed','empty','denied','foreign','sdk-fail','sdk-hang','identity-cancel','history','malformed-post','malformed-get','notice-changed','consent-renewal-required'])await scenario(mode);
  assert.deepEqual(errors,[]);
 }catch(error){failure=error;let snapshot=null;if(activePage&&!activePage.isClosed()){snapshot=await activePage.evaluate(()=>({text:document.body.innerText,buttons:[...document.querySelectorAll('button')].map(button=>({text:button.textContent,disabled:button.disabled}))})).catch(()=>null);await activePage.screenshot({path:path.join(evidence,'browser-failure.png'),fullPage:true}).catch(()=>{});}writeFileSync(path.join(evidence,'browser-failure.json'),JSON.stringify({message:error.message,scenario:activeScenario,checks,errors,snapshot,log},null,2));}
 finally{if(process.platform==='win32'){if(browser){const pid=browser.process().pid;browser.disconnect();stopOwned(pid);}stopOwned(server.pid);}else{await browser?.close();try{process.kill(-server.pid,'SIGTERM');}catch{}}

@@ -24,3 +24,5 @@ test('malformed POST or recovery result is rejected before a durable reference c
   assert.equal((await journal.list(command.scope)).length,1);transport.abort();
  }
 });
+
+test('changed company notice is a definite local stop with actionable renewal and no provider rejection claim',()=>{const value=templateSendResult(result({state:'REJECTED',saved:false,providerAccepted:false,code:'WORKER_TEMPLATE_CONSENT_NOTICE_CHANGED'}),command);assert.match(templateSendNotice(value),/No se envió/);assert.match(templateSendNotice(value),/aceptar el aviso actualizado de la empresa/);assert.doesNotMatch(templateSendNotice(value),/Meta rechazó/);});

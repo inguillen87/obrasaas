@@ -57,8 +57,8 @@ export default function ManualPage() {
           <section id="equipo" className={styles.section} aria-labelledby="equipo-title">
             <p className={styles.eyebrow}>02 · PERSONAS Y ACCESO</p><h2 id="equipo-title">Invitar al equipo y revisar su identidad</h2>
             <ol className={styles.stepsList}>
-              <li>El responsable carga la ficha en <strong>Equipo y acceso</strong> y asigna los permisos de jornada o reportes que correspondan. Una ficha o un teléfono declarado no crean acceso por sí solos.</li>
-              <li>El administrador envía la invitación al correo correcto. Si el envío queda pendiente, consulta su resultado antes de volver a invitar.</li>
+              <li>El responsable guarda la ficha en <strong>Equipo, incidencias y materiales → Abrir registro → Agregar persona</strong>. Una ficha o un teléfono declarado no crean acceso por sí solos.</li>
+              <li>Después, en <strong>Participantes y revisión de identidad</strong>, asigna los permisos de jornada o reportes que correspondan y envía la invitación al correo correcto. Si el envío queda pendiente, consulta su resultado antes de volver a invitar.</li>
               <li>El invitado abre el correo, completa el ingreso oficial y acepta la participación en esa obra. La cuenta y la pertenencia deben coincidir con la invitación.</li>
               <li>Desde su autoservicio, el participante lee el aviso y decide si presenta el frente de su documento y una selfie. Puede tomar o elegir JPEG, PNG o WebP de hasta <strong>20 MiB y 24 megapíxeles</strong>. La preparación se realiza en su dispositivo y conserva el original; la imagen a enviar queda dentro de <strong>1 MiB por imagen</strong>.</li>
               <li>Antes de usar cada imagen, revisa la vista previa, su orientación y la legibilidad del documento o del rostro. Puede girarla o descartarla. HEIC requiere guardar una copia JPEG. Sólo después de revisar ambas imágenes y aceptar el aviso se presenta la solicitud, con almacenamiento privado.</li>
