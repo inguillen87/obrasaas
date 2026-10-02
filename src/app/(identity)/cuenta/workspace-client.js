@@ -1,5 +1,5 @@
 'use client';
-import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
+import {useCallback,useEffect,useRef,useState} from 'react';
 import styles from './workspace.module.css';
 import {useWorkspaceRequest} from './workspace-request-lifecycle';
 import {TaskCreatePanel} from './task-create-panel';
@@ -17,6 +17,8 @@ import {TemplateSendPanel} from './template-send-panel';
 import {ConstructorCrmPanel} from './constructor-crm-panel';
 import {DemoPilotPanel} from './demo-pilot-panel';
 import {WorkspaceToolsNavigation} from './workspace-tools-navigation';
+import {ScheduleWorkbench} from './schedule-workbench';
+import {mergeLoadedTasks} from './schedule-workbench.mjs';
 const endpoint='/api/identity/workspace';
 const messages={WORKSPACE_ORGANIZATION_REQUIRED:'Elegí una organización desde tu cuenta para consultar las obras asignadas.',WORKSPACE_MEMBERSHIP_REQUIRED:'Tu organización activa todavía no tiene una pertenencia vigente vinculada a esta cuenta.',WORKSPACE_PROJECT_UNAVAILABLE:'Esta obra no está disponible con tus permisos actuales.',WORKSPACE_CONTEXT_CHANGED:'Cambió tu organización o tu permiso. Volvé a cargar las obras antes de continuar.',SCHEDULE_REVISION_CHANGED:'Otra persona modificó la tarea. Actualizá el cronograma antes de volver a planificar.',SCHEDULE_PERMISSION_REQUIRED:'Tu rol actual no puede modificar la planificación.',SCHEDULE_UNCHANGED:'Las fechas son iguales a las registradas. No se hizo ningún cambio.',SCHEDULE_OPERATION_CONFLICT:'Este intento ya pertenece a otra solicitud. Comprobá su recibo antes de continuar.',SESSION_REQUIRED:'Tu sesión venció. Volvé a ingresar.',SCHEDULE_DATES_INVALID:'Revisá el inicio y el fin. El fin no puede ser anterior al inicio.',SCHEDULE_REASON_REQUIRED:'Explicá brevemente el motivo del cambio.'};
 const describe=code=>messages[code]||'No se pudo confirmar la operación. No se reemplazaron los datos por ejemplos.';
@@ -26,13 +28,6 @@ async function requestWorkspace(transport,query='',options={}){
  });
 }
 const query=values=>'?' + new URLSearchParams(values).toString();
-const statusLabel=value=>({BACKLOG:'Por iniciar',IN_PROGRESS:'En curso',DONE:'Finalizada',BLOCKED:'Bloqueada'}[value]||value);
-const day=value=>value?Date.parse(value+'T00:00:00Z'):NaN;
-function timeline(tasks){
- const valid=tasks.filter(t=>Number.isFinite(day(t.startsOn))&&Number.isFinite(day(t.endsOn))&&day(t.endsOn)>=day(t.startsOn));
- if(!valid.length)return null;const start=Math.min(...valid.map(t=>day(t.startsOn))),end=Math.max(...valid.map(t=>day(t.endsOn)))+86400000;
- return {start,end};
-}
 export function AccountWorkspace({getSessionToken}={}){
  const transport=useWorkspaceRequest(getSessionToken);
  const request=useCallback((query='',options={})=>requestWorkspace(transport,query,options),[transport]);
@@ -55,7 +50,6 @@ export function AccountWorkspace({getSessionToken}={}){
  const crmPending=useCallback(value=>setModulePending(old=>old.crm===value?old:{...old,crm:value}),[]);
  const demoPending=useCallback(value=>setModulePending(old=>old.demo===value?old:{...old,demo:value}),[]);
  const tasksChanged=useCallback(task=>{if(task?.id)setView(old=>old?{...old,tasks:old.tasks.map(t=>t.id===task.id?{...t,...task}:t)}:old);},[]);
- const range=useMemo(()=>timeline(view?.tasks||[]),[view]);
  useEffect(()=>{
   const epoch=generation;mounted.current=true;const abort=new AbortController();controller.current=abort;const current=++epoch.current;
   request('',{signal:abort.signal}).then(data=>{if(mounted.current&&current===generation.current)setAccount(data);}).catch(error=>{if(error.name!=='AbortError'&&mounted.current&&current===generation.current)setNotice(error.message);}).finally(()=>{if(mounted.current&&current===generation.current)setLoading(false);});
@@ -73,7 +67,7 @@ export function AccountWorkspace({getSessionToken}={}){
    const data=await request(query({projectId,scope:account.scope,...(cursor?{afterTask:cursor}:{})}),{signal:abort.signal});
    if(!mounted.current||current!==generation.current)return;
    if(data.scope!==account.scope||data.project.id!==projectId)throw new Error('La respuesta no coincide con la obra seleccionada.');
-   setView(previous=>append?{...data,tasks:[...(previous?.tasks||[]),...data.tasks]}:data);
+   setView(previous=>append?{...data,tasks:mergeLoadedTasks(previous?.tasks||[],data.tasks)}:data);
   }catch(error){if(error.name!=='AbortError'&&mounted.current&&current===generation.current){setNotice(error.message);if(error.status===401||error.status===403||error.code==='WORKSPACE_CONTEXT_CHANGED'){setAccount(null);setView(null);}}}
   finally{if(mounted.current&&current===generation.current)setLoading(false);}
  }
@@ -104,7 +98,7 @@ export function AccountWorkspace({getSessionToken}={}){
  }
  return <section className={styles.workspace} aria-labelledby="workspace-title">
   <div className={styles.heading}><div><p className={styles.eyebrow}>ESPACIO DE TRABAJO</p><h2 id="workspace-title">Mis obras</h2></div><button type="button" onClick={refresh} disabled={contextLocked||loading}>Actualizar</button></div>
-  <p className={styles.intro}>Obras y tareas del registro de tu organización. Cada consulta vuelve a comprobar tu acceso; esta vista no usa los datos ficticios de la demo.</p>
+  <p className={styles.intro}>Elegí una obra para consultar sus tareas y organizar el trabajo con los permisos de tu empresa.</p>
   <div role="status" aria-live="polite" className={notice?styles.notice:styles.silent}>{notice}</div>
   {loading&&<p className={styles.loading}>Consultando registros autorizados…</p>}
   {account&&<><div className={styles.context}><strong>{account.organizationName}</strong><span>{account.roleLabel}</span></div>
@@ -117,17 +111,7 @@ export function AccountWorkspace({getSessionToken}={}){
   {view&&<section aria-labelledby="schedule-title" className={styles.schedule}>
    <div className={styles.heading}><div><p className={styles.eyebrow}>CRONOGRAMA REGISTRADO</p><h3 id="schedule-title">{view.project.name}</h3></div><span>{view.tasks.length} de {view.totalTasks} tareas</span></div>
    {view.canPlanSchedule&&!draft&&<TaskCreatePanel key={`${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={setTaskCreating} onCreated={task=>setView(current=>current&&current.project.id===view.project.id?{...current,totalTasks:current.tasks.some(t=>t.id===task.id)?current.totalTasks:current.totalTasks+1,tasks:current.tasks.some(t=>t.id===task.id)?current.tasks.map(t=>t.id===task.id?task:t):[task,...current.tasks]}:current)}/> }
-   {range&&<div className={styles.range}><span>{new Date(range.start).toISOString().slice(0,10)}</span><span>{new Date(range.end-86400000).toISOString().slice(0,10)}</span></div>}
-   {!view.tasks.length&&<p className={styles.empty}>Esta obra todavía no tiene tareas registradas. No se generaron barras ni porcentajes de ejemplo.</p>}
-   <div className={styles.tasks}>{view.tasks.map(task=>{
-    const hasDates=range&&Number.isFinite(day(task.startsOn))&&Number.isFinite(day(task.endsOn))&&day(task.endsOn)>=day(task.startsOn);
-    const progress=Number.isInteger(task.progress)&&task.progress>=0&&task.progress<=100?task.progress:null;
-    return <article key={task.id} className={styles.task} data-task-id={task.id}>
-     <div className={styles.taskHeading}><strong>{task.title}</strong><span>{statusLabel(task.status)}</span></div>
-     <div className={styles.track} aria-label={hasDates?`Planificada desde ${task.startsOn} hasta ${task.endsOn}`:'Sin intervalo de planificación válido'}>{hasDates?<span className={styles.bar} style={{left:((day(task.startsOn)-range.start)/(range.end-range.start)*100)+'%',width:((day(task.endsOn)+86400000-day(task.startsOn))/(range.end-range.start)*100)+'%'}}/>:<span className={styles.noDates}>Sin fechas planificadas válidas</span>}</div>
-     <div className={styles.taskFooter}><div><span>{task.startsOn||'Sin inicio'} → {task.endsOn||'Sin fin'}</span><small>Avance registrado: {progress===null?'Requiere revisión':`${progress} %`}</small></div>{view.canPlanSchedule&&<button type="button" disabled={contextLocked} onClick={()=>{setReceipt(null);setNotice('');setDraft({task,startsOn:task.startsOn||'',endsOn:task.endsOn||'',reason:''});}}>Planificar fechas</button>}</div>
-    </article>;
-   })}</div>
+   <ScheduleWorkbench key={`schedule:${account.scope}:${view.project.id}`} tasks={view.tasks} totalTasks={view.totalTasks} nextCursor={view.nextCursor} canPlan={view.canPlanSchedule} locked={contextLocked} onPlan={task=>{setReceipt(null);setNotice('');setDraft({task,startsOn:task.startsOn||'',endsOn:task.endsOn||'',reason:''});}}/>
    {view.nextCursor&&<button type="button" disabled={loading||contextLocked} onClick={()=>open(view.project.id,true)}>Cargar más tareas</button>}
    {!view.canPlanSchedule&&<p className={styles.caption}>Tu rol permite consultar este cronograma, no modificarlo.</p>}
    {draft&&<form onSubmit={save} className={styles.form} aria-labelledby="schedule-edit-title"><h4 id="schedule-edit-title" ref={scheduleEditor} tabIndex={-1}>Planificar: {draft.task.title}</h4><p>Revisá las fechas previstas y explicá el motivo. El cambio no certifica avance ni registra horas trabajadas.</p>
