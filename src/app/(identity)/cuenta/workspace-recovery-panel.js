@@ -3,6 +3,7 @@ import {useEffect,useState} from 'react';
 import {useWorkspaceRequest} from './workspace-request-lifecycle';
 import {browserRecoveryJournal,RECOVERY_EVENT,RECOVERY_RESOURCES,recoveryQuery,recoveryResult} from './workspace-recovery-journal.mjs';
 import styles from './workspace.module.css';
+import {templateSendNotice} from './template-send-view.mjs';
 
 export function WorkspaceRecoveryPanel({scope,projects,getSessionToken,onRecovered}) {
   const request=useWorkspaceRequest(getSessionToken);
@@ -19,7 +20,8 @@ export function WorkspaceRecoveryPanel({scope,projects,getSessionToken,onRecover
       const result=await request(recoveryQuery(entry),{requestTimeoutMs:15000},async response=>{const body=await response.json();if(!response.ok)throw new Error('No se pudo comprobar con tus permisos actuales. Conservamos la referencia.');if(!recoveryResult(entry,body))throw new Error('El resultado no permite confirmar este intento. Conservamos la referencia.');return body;});
       const outcome=recoveryResult(entry,result);
       const message=outcome.state==='RECORDED'?'Guardado confirmado. La consulta no volvió a enviar la operación.':outcome.state==='EVENT_PROCESSED'?'El evento ya está procesado. Este estado no atribuye su procesamiento a tu intento; consultá el seguimiento en la bandeja.':outcome.state==='PARTICIPATION_REVOKED'?'La participación está revocada en esta obra y no concede acceso. Esto no acredita la entrega ni la revocación remota de su correo.':outcome.state==='PROCESSING'?'El procesamiento sigue pendiente. Volvé a consultar su recibo.':outcome.state==='INVITATION_UNCONFIRMED'?'La invitación necesita comprobarse con el proveedor desde Participantes. No se volvió a enviar.':'Todavía no se observa un recibo. Esto no demuestra que el envío se haya perdido; conservamos su referencia y no habilitamos otro envío de este módulo.';
-      setMessages(old=>({...old,[entry.operationId]:message}));setNotice(message);
+      const display=entry.resource==='template-send'?templateSendNotice(result):message;
+      setMessages(old=>({...old,[entry.operationId]:display}));setNotice(display);
       if(outcome.state==='RECORDED')onRecovered?.(result);
     } catch(error){if(error.name!=='AbortError')setNotice(error.message);}
     finally {setBusy(null);}

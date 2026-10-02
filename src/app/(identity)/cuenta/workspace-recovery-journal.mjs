@@ -9,7 +9,8 @@ export const RECOVERY_RESOURCES = Object.freeze({
   'site-photo':'Fotografía privada', participants:'Participantes e identidad',
   'field-operations':'Operación de campo', 'field-media':'Evidencia privada',
   'site-purchases':'Compra o recepción', 'whatsapp-setup':'Preparación de WhatsApp',
-  'meta-onboarding':'Seguimiento de WhatsApp',
+  'meta-onboarding':'Seguimiento de WhatsApp', 'worker-channel':'Mi WhatsApp y autorización de avisos',
+  'template-send':'Recordatorio autorizado de jornada',
 });
 const failure = (code, message) => Object.assign(new Error(message), {code,status:409,requestDispatched:false});
 const unavailable = () => failure('WORKSPACE_RECOVERY_STORAGE_UNAVAILABLE','No se pudo conservar la referencia del intento en este navegador. Habilitá el almacenamiento y volvé a intentar; la operación no se envió.');
@@ -50,6 +51,16 @@ export function recoveryQuery(entry) {
 export function recoveryResult(entry, result) {
   if(!valid(entry)||result?.scope!==entry.scope)return null;
   if(result.projectId!==undefined&&result.projectId!==entry.projectId)return null;
+  if(entry.resource==='template-send') {
+    const receipt=result.receipt;
+    if(result.state==='NOT_OBSERVED'&&result.definitive===false)return {state:'NOT_OBSERVED'};
+    if(receipt?.operationId!==entry.operationId||typeof receipt.id!=='string'||!receipt.id||receipt.templateKey!=='open_attendance_reminder')return null;
+    if(['SEND_STARTED','SEND_UNKNOWN'].includes(result.state)&&result.definitive===false)return {state:'PROCESSING'};
+    if(result.state==='REJECTED'&&result.definitive===true&&result.providerAccepted===false&&result.deliveryConfirmed===false)return {state:'REJECTED',receiptId:receipt.id};
+    if(result.state==='ACCEPTED'&&result.definitive===true&&result.saved===true&&result.providerAccepted===true&&result.deliveryConfirmed===false)return {state:'ACCEPTED',receiptId:receipt.id};
+    if(result.state==='STATUS_OBSERVED'&&result.definitive===true&&result.saved===true&&['sent','delivered','read','failed','deleted'].includes(result.providerStatus)&&result.deliveryConfirmed===['delivered','read'].includes(result.providerStatus))return {state:'STATUS_OBSERVED',receiptId:receipt.id};
+    return null;
+  }
   if(entry.resource==='meta-onboarding') {
     const receipt=result.receipt;
     if(receipt?.operationId!==entry.operationId||receipt.eventId!==entry.eventId||receipt.action!==entry.action)return null;
@@ -105,6 +116,7 @@ export function createWorkspaceRecoveryJournal({getStorage,now=Date.now,notify=(
       const entry=ticket.entry;
       // A general Meta snapshot is not a receipt for this operation.
       if(entry.resource==='meta-onboarding')return;
+      if(entry.resource==='template-send'){if(['ACCEPTED','STATUS_OBSERVED','REJECTED'].includes(recoveryResult(entry,result)?.state))remove(entry);return;}
       if(result?.scope===entry.scope&&(result.projectId===undefined||result.projectId===entry.projectId)&&(result.saved===true||result.created===true)&&(result.receiptId||result.receipt?.id))remove(entry);
     },
     observe(url, result) {
@@ -114,7 +126,7 @@ export function createWorkspaceRecoveryJournal({getStorage,now=Date.now,notify=(
       const entry=list(scope).find(row=>row.resource===resource&&row.operationId===operationId.toLowerCase());
       if(!entry||params.get('projectId')!==entry.projectId)return;
       const outcome=recoveryResult(entry,result);
-      if(['RECORDED','EVENT_PROCESSED','PARTICIPATION_REVOKED'].includes(outcome?.state))remove(entry);
+      if(['RECORDED','EVENT_PROCESSED','PARTICIPATION_REVOKED','ACCEPTED','STATUS_OBSERVED','REJECTED'].includes(outcome?.state))remove(entry);
     },
   };
 }
