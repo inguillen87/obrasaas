@@ -65,6 +65,12 @@ jobs:
           npx eslint scripts/verify-meta-signup-field-lifecycle-postgres.mjs scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs tests/production-meta-signup-field-lifecycle.test.mjs
           node --test tests/production-meta-signup-field-lifecycle.test.mjs
           node scripts/verify-meta-signup-field-lifecycle-postgres.mjs
+      - name: Consented manual template send and signed status recovery
+        run: |
+          npx eslint src/lib/meta-customer-template-send*.mjs src/lib/worker-channel-consent-policy.mjs src/app/api/identity/template-send tests/production-meta-customer-template-send.test.mjs tests/production-template-send-view.test.mjs scripts/verify-meta-customer-template-send-postgres.mjs scripts/verify-template-send-ui.mjs
+          node --test tests/production-meta-customer-template-send.test.mjs tests/production-template-send-view.test.mjs
+          node scripts/verify-meta-customer-template-send-postgres.mjs
+          node scripts/verify-template-send-ui.mjs
       - run: node scripts/verify-site-purchase-postgres.mjs
       - run: node scripts/verify-participants-ui.mjs
       - run: node scripts/verify-field-operations-ui.mjs
@@ -107,5 +113,6 @@ jobs:
             .vercel/clerk-access-evidence/
             .vercel/workspace-reload-evidence/
             .vercel/customer-inbox-evidence/
+            .vercel/template-send-evidence/
           include-hidden-files: true
           retention-days: 7

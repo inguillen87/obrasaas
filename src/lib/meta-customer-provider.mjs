@@ -5,6 +5,12 @@ import {customerVaultConfigured} from './meta-customer-credentials.mjs';
 import {META_CUSTOMER_REQUIRED_SCOPES,hasMetaCustomerRequiredScopes} from './meta-customer-permissions.mjs';
 
 export const metaAssetId=value=>typeof value==='string'&&/^[1-9]\d{4,31}$/.test(value);
+// Deliberately limited to the adopted BODY-only, positional es_AR catalogue.
+// Meta Cloud API contract: https://www.postman.com/meta/whatsapp-business-platform/request/lwtlz1k/send-message-template-interactive
+export function customerTemplateMessage(value){
+ if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).sort().join('|')!=='bodyParameters|language|name'||!/^obrasaas_[a-z0-9_]{1,200}$/.test(value.name||'')||value.language!=='es_AR'||!Array.isArray(value.bodyParameters)||value.bodyParameters.length!==1||typeof value.bodyParameters[0]!=='string'||!value.bodyParameters[0].trim()||value.bodyParameters[0].length>160||/[\u0000-\u001f\u007f<>]/.test(value.bodyParameters[0]))throw new WorkspaceError('META_CUSTOMER_TEMPLATE_MESSAGE_INVALID');
+ return {type:'template',template:{name:value.name,language:{code:value.language},components:[{type:'body',parameters:value.bodyParameters.map(text=>({type:'text',text}))}]}};
+}
 export function customerReplyMessage(value){
  if(value?.type==='interactive'){
   const clean=(text,max,multiline=false)=>typeof text==='string'&&text.trim().length>0&&text.length<=max&&!(multiline?/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/:/[\u0000-\u001f\u007f]/).test(text),keys=(o,list)=>o&&typeof o==='object'&&!Array.isArray(o)&&Object.keys(o).sort().join('|')===list.sort().join('|');
@@ -109,6 +115,13 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
   async sendReply({token,phoneNumberId,to,message,correlationId,replyTo}){
    if(!metaAssetId(phoneNumberId)||!/^[1-9]\d{7,14}$/.test(to||'')||!/^customer_outbound_[a-f0-9]{64}$/.test(correlationId||'')||!/^wamid\.[A-Za-z0-9+/_=-]{8,1024}$/.test(replyTo||''))throw new WorkspaceError('META_CUSTOMER_REPLY_INVALID');
    const result=await request(phoneNumberId+'/messages',{token,method:'POST',body:{messaging_product:'whatsapp',recipient_type:'individual',to,...customerReplyMessage(message),context:{message_id:replyTo},biz_opaque_callback_data:correlationId}});
+   const id=result.messages?.length===1?result.messages[0].id:null;
+   if(!/^wamid\.[A-Za-z0-9+/_=-]{8,1024}$/.test(id||''))throw new WorkspaceError('META_CUSTOMER_SEND_UNCONFIRMED',503);
+   return {messageId:id};
+  },
+  async sendTemplate({token,phoneNumberId,to,message,correlationId}){
+   if(!metaAssetId(phoneNumberId)||!/^[1-9]\d{7,14}$/.test(to||'')||!/^customer_outbound_[a-f0-9]{64}$/.test(correlationId||''))throw new WorkspaceError('META_CUSTOMER_TEMPLATE_MESSAGE_INVALID');
+   const result=await request(phoneNumberId+'/messages',{token,method:'POST',body:{messaging_product:'whatsapp',recipient_type:'individual',to,...customerTemplateMessage(message),biz_opaque_callback_data:correlationId}});
    const id=result.messages?.length===1?result.messages[0].id:null;
    if(!/^wamid\.[A-Za-z0-9+/_=-]{8,1024}$/.test(id||''))throw new WorkspaceError('META_CUSTOMER_SEND_UNCONFIRMED',503);
    return {messageId:id};

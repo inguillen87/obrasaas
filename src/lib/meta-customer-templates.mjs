@@ -2,10 +2,12 @@ import {WorkspaceError,operationId,digest} from './workspace-policy.mjs';
 import {decryptCustomerSecret} from './meta-customer-credentials.mjs';
 import {assertTemplateReviewDefinition,TemplateReviewError} from './whatsapp/template-review-policy.js';
 const blueprints=Object.freeze({
+ open_attendance_reminder:{title:'Recordatorio de jornada abierta',text:'Tu jornada en {{1}} sigue abierta. Cuando termines, registrá la salida en ObraSaaS: https://obrasaas.com/cuenta',example:'Obra de ejemplo'},
  participant_invitation:{title:'Invitación a participar',text:'Tenés una invitación para participar en una obra de {{1}}. Abrí tu cuenta de ObraSaaS para consultar la invitación y decidir si querés aceptarla: https://obrasaas.com/cuenta',example:'Constructora de ejemplo'},
  field_evidence_request:{title:'Pedido de información de obra',text:'Tenés un pedido de información pendiente en {{1}}. Abrí tu cuenta de ObraSaaS para consultar el detalle y aportar la evidencia solicitada: https://obrasaas.com/cuenta',example:'Obra de ejemplo'},
  progress_review_notification:{title:'Avance pendiente de revisión',text:'Hay una propuesta de avance pendiente de revisión en {{1}}. Abrí tu cuenta de ObraSaaS para consultar la evidencia y registrar tu decisión: https://obrasaas.com/cuenta',example:'Obra de ejemplo'},
 });
+export function customerTemplateBlueprint(key){const value=blueprints[key];if(!value)throw new WorkspaceError('META_CUSTOMER_TEMPLATE_INVALID');return {title:value.title,bodyText:value.text};}
 export function buildCustomerTemplate(connection,blueprintKey){
  const blueprint=blueprints[blueprintKey];if(!blueprint)throw new WorkspaceError('META_CUSTOMER_TEMPLATE_INVALID');
  const language='es_AR',category='UTILITY',components=[{type:'BODY',text:blueprint.text,example:{body_text:[[blueprint.example]]}}];
