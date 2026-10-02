@@ -3,7 +3,7 @@ import {useEffect, useRef, useState, useSyncExternalStore} from 'react';
 import Link from 'next/link';
 import styles from './onboarding-guide.module.css';
 
-const targetIds = ['organization-context','company-bootstrap-heading','workspace-title','schedule-title','participant-title','field-title','customer-whatsapp-title','worker-channel-title'];
+const targetIds = ['organization-context','company-bootstrap-heading','workspace-title','schedule-title','participant-title','field-title','customer-whatsapp-title','worker-channel-title','constructor-crm-title'];
 function subscribeTargets(callback) {
  const observer = new MutationObserver(callback);
  observer.observe(document.body, {childList:true, subtree:true, attributes:true, attributeFilter:['hidden','style','aria-hidden']});
@@ -21,6 +21,7 @@ const steps = [
  {key:'identity',title:'Presentá y revisá la identidad',manual:'equipo',target:'participant-title',text:'El participante lee el aviso y presenta su documento y selfie desde su autoservicio. Otro responsable autorizado consulta las dos imágenes y registra su revisión.',detail:'La revisión es humana; no hay coincidencia facial ni prueba de vida. Las imágenes son privadas. No las envíes por WhatsApp ni apruebes tu propia identidad.',dependency:'Primero aceptá la invitación y abrí la obra asignada. Si no aparece tu ficha, consultá con el responsable.'},
  {key:'field',title:'Registrá el trabajo',manual:'trabajo',target:'field-title',text:'Con participación y revisión vigentes, abrí Jornada y evidencia. El responsable configura el sector antes de registrar jornada, fotos, incidencias o materiales.',detail:'En la web, obtené la ubicación puntual y el QR del sector cuando corresponda. Sin una comprobación completa, el fichaje queda para revisión. Subir evidencia no aprueba avance.',dependency:'Abrí una obra. La jornada y los reportes requieren tu ficha activa, identidad revisada y permisos actuales.'},
  {key:'whatsapp',title:'Prepará WhatsApp',manual:'whatsapp',target:'customer-whatsapp-title',text:'Podés trabajar desde la web mientras se prepara el canal. El responsable autoriza el número de la empresa con Meta; cada participante vincula el suyo desde su propia cuenta.',detail:'El código de SMS o llamada es distinto del PIN de registro. El código VINCULAR es privado y vence. Vincular un número no autoriza recordatorios: ese consentimiento se decide aparte.',dependency:'Abrí una obra con acceso a integraciones. Si sos participante, usá Mi WhatsApp de obra cuando el canal esté habilitado.'},
+ {key:'clients',title:'Clientes y seguimiento',manual:'clientes',target:'constructor-crm-title',text:'La administración consulta Clientes para registrar oportunidades, contactos, etapas y la próxima fecha de seguimiento. Buscá por cliente, contacto, correo o teléfono en toda la empresa.',detail:'Las fichas pertenecen a la empresa, no sólo a la obra abierta. Una fecha de seguimiento no envía mensajes ni emite un presupuesto. Guardar un teléfono no concede permiso para escribirle por WhatsApp.',dependency:'Abrí una obra con permiso de administración para consultar Clientes. Si tu rol no lo permite, pedile al responsable que gestione el seguimiento.'},
 ];
 
 export function OnboardingGuide({orgId=null, orgRole=null}) {

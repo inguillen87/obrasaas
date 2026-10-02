@@ -19,7 +19,9 @@ for (const file of readdirSync(path.join(root, 'src/app/(identity)/cuenta')).fil
 }
 for (const segment of ['sign-in', 'sign-up']) copy(path.join(root, 'src/app/(identity)', segment, `[[...${segment}]]/page.js`), path.join(identity, segment, `[[...${segment}]]/page.js`));
 copy(path.join(root, 'src/app/(identity)/identity.module.css'), path.join(identity, 'identity.module.css'));
+copy(path.join(root, 'src/app/(identity)/identity-load-guard.js'), path.join(identity, 'identity-load-guard.js'));
 for (const file of ['production-identity-config.mjs', 'identity-return-path.mjs', 'session-recovery.mjs', 'worker-channel-consent-policy.mjs']) copy(path.join(root, 'src/lib', file), path.join(src, 'lib', file));
+copy(path.join(root, 'src/lib/whatsapp/tenant-workspace-policy.js'), path.join(src, 'lib/whatsapp/tenant-workspace-policy.js'));
 for (const file of ['brand-logo.js', 'brand-logo.module.css', 'brand-geometry.js']) copy(path.join(root, 'src/app/brand', file), path.join(app, 'brand', file));
 write(path.join(dir, 'package.json'), JSON.stringify({name:'synthetic-clerk-access-ui',private:true}));
 write(path.join(dir, 'jsconfig.json'), JSON.stringify({compilerOptions:{baseUrl:'.',paths:{'@/*':['src/*']}}}));
@@ -106,6 +108,10 @@ async function fixture(name, {width=390,signedIn=true,loaded=true,cookieSync=tru
   page.on('requestfinished', request=>record.pending.delete(request));
   page.on('requestfailed', request=>record.pending.delete(request));
   page.on('pageerror', error => errors.push({name,width,message:error.message}));
+  page.on('console', message => {
+    if (message.type() === 'error' && /hydration|hydrated.*match|server rendered HTML/i.test(message.text()))
+      errors.push({name,width,message:'React hydration error in controlled entry fixture'});
+  });
   await page.evaluateOnNewDocument((state, accelerated) => {window.__clerkFixture=state;
     if(accelerated){const realTimeout=window.setTimeout;window.setTimeout=(fn,ms,...args)=>realTimeout(fn,!window.__normalTimers&&ms===15000?75:ms,...args);}
   }, {isLoaded:loaded,isSignedIn:signedIn,userId:signedIn?'user_A':null,sessionId:signedIn?'sess_A':null,orgId:null,orgRole:null,token:'fixture.userA.signature',cookieSync,tokenDelay},controlledClock);
@@ -250,6 +256,37 @@ async function boundedWorkspaceToken() {
   assert.equal(record.businessReads.length,1);
   checks.push('bounded-workspace-token-explicit-refresh-discards-late-token-controlled-clock');await f.close();
 }
+async function boundedEntryLoading(kind, width = 390) {
+  const account = kind === 'workspace', ticket = kind === 'invitation';
+  const route = account || ticket ? '/cuenta' : '/' + kind;
+  const query = '?participar=' + invitation + (ticket ? '&__clerk_ticket=synthetic-ticket-only&__clerk_status=sign_up' : '');
+  const f = await fixture('bounded-entry-' + kind, {width, loaded:false, signedIn:account, controlledClock:true, ssr:'allow'});
+  const {page, record, context} = f;
+  if (account) await context.setCookie({name:'__session',value:'fixture.userA.signature',url:origin});
+  await page.goto(origin + route + query, {waitUntil:'domcontentloaded'});
+  await wait(page, 'El servicio de acceso está tardando en cargar. Podés recargar esta página');
+  assert.equal(await page.$$eval('[data-fixture-widget]', nodes => nodes.length), 0, 'No provider widget while SDK is unloaded');
+  assert.equal(await page.$$eval('[data-fixture-organizations]', nodes => nodes.length), 0, 'No organization controls while SDK is unloaded');
+  assert.equal(record.businessReads.length, 0);assert.equal(record.sessionRequests.length, 0);assert.equal(record.refreshRequests.length, 0);
+  assert.equal(new URL(page.url()).pathname + new URL(page.url()).search, route + query);
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+  assert.ok(await page.$eval('section[aria-label="Carga del servicio de acceso"] button', node => node.getBoundingClientRect().height >= 44));
+  assert.equal(await page.$eval('section[aria-label="Carga del servicio de acceso"] a', node => node.getAttribute('href')), '/manual');
+  await page.screenshot({path:path.join(output, `entry-${kind}-delayed-${width}.png`),fullPage:true});
+  // The user reloads the same URL explicitly; it must not erase the original
+  // invitation context or silently submit a business operation.
+  await Promise.all([page.waitForNavigation({waitUntil:'domcontentloaded'}), click(page, 'Recargar acceso')]);
+  await wait(page, 'El servicio de acceso está tardando en cargar. Podés recargar esta página');
+  assert.equal(new URL(page.url()).pathname + new URL(page.url()).search, route + query);
+  assert.equal(record.businessReads.length, 0);assert.equal(record.sessionRequests.length, 0);assert.equal(record.refreshRequests.length, 0);
+  await page.evaluate(() => {window.__normalTimers=true;window.__setClerkFixture({isLoaded:true});});
+  if (account) await wait(page, 'Seleccioná o creá tu organización');
+  else await page.waitForSelector('[data-fixture-widget="' + (kind === 'sign-up' ? 'SignUp' : 'SignIn') + '"]');
+  assert.equal(await page.$$eval('section[aria-label="Carga del servicio de acceso"]', nodes => nodes.length), 0, 'Late SDK completion clears the loading recovery');
+  if (!account) assert.equal(await page.$eval('[data-fixture-widget]', node => node.dataset.return), returnPath);
+  assert.equal(new URL(page.url()).pathname + new URL(page.url()).search, route + query);
+  checks.push(`bounded-${kind}-SDK-explicit-reload-keeps-original-invitation-${width}`);await f.close();
+}
 async function signedOutWorkspace() {
   const f=await fixture('signed-out-workspace',{ssr:'allow'}),{context,page,record}=f;
   await context.setCookie({name:'__session',value:'fixture.userA.signature',url:origin});
@@ -324,6 +361,8 @@ try {
   for (const mode of ['401','503','cookie','expired']) await recoveryError(mode);
   await initialProviderUnavailable();
   for(const kind of ['SDK','token'])await boundedLoading(kind);
+  for (const width of widths) for (const kind of ['sign-in','sign-up']) await boundedEntryLoading(kind, width);
+  for (const kind of ['invitation','workspace']) await boundedEntryLoading(kind);
   await boundedWorkspaceToken();
   await signedOutWorkspace();
   for (const kind of ['response','token','unmount']) await lateRecovery(kind);

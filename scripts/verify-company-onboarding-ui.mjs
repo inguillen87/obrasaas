@@ -12,6 +12,7 @@ assert.ok([undefined,'onboarding-recovery'].includes(process.env.COMPANY_ONBOARD
 const root=realpathSync(process.cwd()),parent=path.join(root,'.vercel'),output=path.join(parent,'company-onboarding-evidence');mkdirSync(output,{recursive:true});
 const dir=mkdtempSync(path.join(root,'.vercel/company-bootstrap-ui-')),app=path.join(dir,'src/app'),components=path.join(app,'(identity)/cuenta');mkdirSync(components,{recursive:true});
 mkdirSync(path.join(dir,'src/lib'),{recursive:true});copyFileSync(path.join(root,'src/lib/worker-channel-consent-policy.mjs'),path.join(dir,'src/lib/worker-channel-consent-policy.mjs'));
+mkdirSync(path.join(dir,'src/lib/whatsapp'),{recursive:true});copyFileSync(path.join(root,'src/lib/whatsapp/tenant-workspace-policy.js'),path.join(dir,'src/lib/whatsapp/tenant-workspace-policy.js'));
 for(const file of readdirSync(path.join(root,'src/app/(identity)/cuenta')).filter(name=>/\.(js|mjs|css)$/.test(name)))copyFileSync(path.join(root,'src/app/(identity)/cuenta',file),path.join(components,file));
 writeFileSync(path.join(dir,'package.json'),JSON.stringify({name:'synthetic-company-onboarding-ui',private:true}));
 writeFileSync(path.join(dir,'next.config.mjs'),`export default {devIndicators:false,turbopack:{root:${JSON.stringify(root)}}};`);

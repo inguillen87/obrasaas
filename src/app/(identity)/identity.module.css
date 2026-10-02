@@ -21,6 +21,9 @@
 .home{color:#acd1ff;display:inline-flex;min-height:44px;align-items:center;text-underline-offset:3px;font-size:14px}
 .card button:focus-visible,.card a:focus-visible{outline:3px solid #a4ceff;outline-offset:4px}
 .retry{border:0;padding:12px 20px;min-height:46px;border-radius:9px;background:#f4b049;color:#121b2a;font-weight:700;cursor:pointer}
+.loading{width:100%;box-sizing:border-box;padding:20px;border:1px solid #2d3e55;border-radius:12px;background:#111b2b;align-self:start;overflow-wrap:anywhere}
+.loading p{font-size:14px;line-height:1.7;margin:0 0 16px;color:#bdcee2}
+.loading .loadingHelp{font-size:12px;margin:16px 0 0}
 @media(max-width:500px){.shell{padding:14px 10px;align-items:start}.card{padding:24px 18px;border-radius:15px}.status div{flex-direction:column;gap:6px}.status dd{text-align:left}.widget{margin-inline:-8px;width:calc(100% + 16px);max-width:none}}
 
 .brand{min-height:44px;color:#F4F1E8;--font-manrope:"Manrope";}

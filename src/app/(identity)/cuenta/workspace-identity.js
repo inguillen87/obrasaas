@@ -10,13 +10,14 @@ import {ParticipantSelfServicePanel} from './participant-panel';
 import {OnboardingGuide} from './onboarding-guide';
 import styles from './workspace.module.css';
 import identityStyles from '../identity.module.css';
+import {IdentityLoadingNotice} from '../identity-load-guard';
 export function WorkspaceIdentityPanel(){
  const params=useSearchParams(),returnPath=identityAccountReturnPath(params);
  const {isLoaded,isSignedIn,userId,sessionId,orgId,orgRole,getToken}=useAuth();
  const {organization}=useOrganization();
  const sessionToken=useCallback(()=>getToken({skipCache:true}),[getToken]);
  const profileToken=useCallback(()=>getToken({template:'obrasaas-bootstrap-v1',skipCache:true}),[getToken]);
- if(!isLoaded)return <p role="status">Verificando el contexto de tu cuenta…</p>;
+ if(!isLoaded)return <IdentityLoadingNotice/>;
  if(!isSignedIn)return <section role="alert"><p>La sesión terminó. Volvé a ingresar antes de consultar una obra.</p><Link href={identitySignInPath(params)} className={identityStyles.home}>Volver a ingresar</Link></section>;
  return <>
   <OnboardingGuide key={`guide:${userId}:${orgId||'personal'}:${sessionId}:${orgRole||'personal'}`} orgId={orgId} orgRole={orgRole}/>

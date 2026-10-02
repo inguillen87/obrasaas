@@ -1,6 +1,6 @@
 import {randomUUID} from 'node:crypto';
 import {WorkspaceError,digest,workspaceId,operationId} from './workspace-policy.mjs';
-import {validateConstructorCrmCommand,normalizeConstructorCrmInput,serializeConstructorCrmAccount,CONSTRUCTOR_CRM_FIELDS,ConstructorCrmInputError} from './constructor-crm-policy.mjs';
+import {validateConstructorCrmCommand,normalizeConstructorCrmInput,serializeConstructorCrmAccount,constructorCrmSearch,constructorCrmCursor,CONSTRUCTOR_CRM_FIELDS,ConstructorCrmInputError} from './constructor-crm-policy.mjs';
 import {assertConstructorCrmSchema} from './constructor-crm-schema.mjs';
 
 const columns=`id,name,"contactName",email,phone,stage::text AS stage,segment,source,"nextFollowUpAt",notes,revision,"createdAt","updatedAt"`;
@@ -9,8 +9,14 @@ function policyError(error){return error instanceof ConstructorCrmInputError?new
 export const constructorCrmReceiptId=(actorId,organizationId,projectId,key)=>'constructor_crm_'+digest([actorId,organizationId,projectId,key.toLowerCase()]);
 function contextInput(context,receipt=false){
  if(!context||!workspaceId(context.projectId)||!/^[a-f0-9]{64}$/.test(context.scope||'')||receipt&&!operationId(context.operationId))throw new WorkspaceError('CONSTRUCTOR_CRM_QUERY_INVALID');
- if(context.after!=null&&!workspaceId(context.after)||context.accountId!=null&&!workspaceId(context.accountId)||context.after!=null&&context.accountId!=null)throw new WorkspaceError('CONSTRUCTOR_CRM_QUERY_INVALID');
+ const search=constructorCrmSearch(context.search);
+ if(search===null||context.after!=null&&!constructorCrmCursor(context.after,search)||context.accountId!=null&&(!workspaceId(context.accountId)||Object.hasOwn(context,'search'))||context.after!=null&&context.accountId!=null||receipt&&Object.hasOwn(context,'search'))throw new WorkspaceError('CONSTRUCTOR_CRM_QUERY_INVALID');
+ if(context.after&&search){const [id,hash]=context.after.split('~');if(hash!==digest([context.scope,context.projectId,search,id]))throw new WorkspaceError('CONSTRUCTOR_CRM_QUERY_INVALID');}
 }
+// Spanish case pairs are explicit so contact lookup also works on a C-locale
+// database. Accents stay significant; the query is always literal text.
+const searchText=expression=>`lower(translate(${expression},'ÁÉÍÓÚÜÑ','áéíóúüñ'))`;
+const searchPredicate=parameter=>`(${parameter}::text='' OR ${['name','coalesce("contactName",\'\')','coalesce(email,\'\')','coalesce(phone,\'\')'].map(field=>`strpos(${searchText(field)},${searchText(parameter)})>0`).join(' OR ')})`;
 function requestDigest(command){
  // Field order is canonical; no private input is copied into the audit receipt.
  const payload=Object.fromEntries(CONSTRUCTOR_CRM_FIELDS.filter(key=>Object.hasOwn(command.payload,key)).map(key=>[key,command.payload[key]]));
@@ -41,12 +47,14 @@ export function createConstructorCrm({workspace}){
  return {
   async list(session,context){
    contextInput(context);
+   const search=constructorCrmSearch(context.search),after=context.after?.split('~')[0]??null;
    return within(session,context,false,async(client,member,scope)=>{
     if(context.accountId){const account=await row(client,member,context.accountId);if(!account)throw new WorkspaceError('CONSTRUCTOR_CRM_ACCOUNT_UNAVAILABLE',404);return {scope,projectId:context.projectId,organizationName:member.organizationName,canManage:true,records:[serializeConstructorCrmAccount(account)],nextCursor:null,total:1};}
-    if(context.after&&!await row(client,member,context.after))throw new WorkspaceError('CONSTRUCTOR_CRM_ACCOUNT_UNAVAILABLE',404);
-    const rows=(await client.query(`SELECT ${columns} FROM public."CrmAccount" WHERE "ownerOrganizationId"=$1 AND "organizationId" IS NULL AND ($2::text IS NULL OR id>$2) ORDER BY id LIMIT 21`,[member.organizationId,context.after??null])).rows;
-    const total=(await client.query(`SELECT count(*)::int AS n FROM public."CrmAccount" WHERE "ownerOrganizationId"=$1 AND "organizationId" IS NULL`,[member.organizationId])).rows[0].n;
-    return {scope,projectId:context.projectId,organizationName:member.organizationName,canManage:true,records:rows.slice(0,20).map(serializeConstructorCrmAccount),nextCursor:rows.length>20?rows[19].id:null,total};
+    if(after&&!await row(client,member,after))throw new WorkspaceError('CONSTRUCTOR_CRM_ACCOUNT_UNAVAILABLE',404);
+    const rows=(await client.query(`SELECT ${columns} FROM public."CrmAccount" WHERE "ownerOrganizationId"=$1 AND "organizationId" IS NULL AND ($2::text IS NULL OR id>$2) AND ${searchPredicate('$3')} ORDER BY id LIMIT 21`,[member.organizationId,after,search])).rows;
+    const total=(await client.query(`SELECT count(*)::int AS n FROM public."CrmAccount" WHERE "ownerOrganizationId"=$1 AND "organizationId" IS NULL AND ${searchPredicate('$2')}`,[member.organizationId,search])).rows[0].n;
+    const nextCursor=rows.length>20?rows[19].id:null;
+    return {scope,projectId:context.projectId,organizationName:member.organizationName,canManage:true,records:rows.slice(0,20).map(serializeConstructorCrmAccount),nextCursor:nextCursor&&search?nextCursor+'~'+digest([scope,context.projectId,search,nextCursor]):nextCursor,total,search};
    });
   },
   async save(session,input){

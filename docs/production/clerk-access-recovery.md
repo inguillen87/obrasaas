@@ -10,9 +10,13 @@ Una cookie vencida tampoco demuestra que haya terminado la sesión de Clerk. En 
 
 Las consultas y cambios del cronograma envían el token de la pestaña activa. Esto evita que el selector de una pestaña consulte otra empresa debido a la cookie compartida después de un cambio en otra pestaña. Las comprobaciones de pertenencia, ámbito, revisión y recibos permanecen en el servidor. El transporte no reenvía ningún POST automáticamente.
 
+El ingreso, registro, formulario de invitación y contexto de la cuenta presentan una espera explícita mientras carga el SDK de Clerk. Si supera quince segundos, ofrecen **Recargar acceso** y el manual. La recarga es una acción de la persona sobre la misma URL: conserva el contexto original, incluido el ticket que debe procesar el formulario oficial. No persiste ni copia tickets, consulta obras ni reenvía cambios. Cuando el SDK termina de cargar, el aviso se retira; esa carga no acredita una sesión ni permisos de obra. Google y otros botones siguen dependiendo de la configuración efectiva del proveedor, no de botones propios de ObraSaaS.
+
 ## Verificación y límites
 
 Las pruebas de navegación y renovación utilizan los componentes reales en un servidor aislado, con hooks de Clerk y respuestas de sesión sintéticos. Las pruebas criptográficas positivas y negativas siguen utilizando el verificador real con claves de prueba. Esto acredita el comportamiento controlado, no la recepción de un correo ni la aceptación de una invitación por un cliente.
+
+La prueba de espera del SDK incluye los cuatro anchos de pantalla, registro e ingreso, ticket de invitación, cuenta verificada por el servidor, recarga explícita y carga tardía. Comprueba que no aparezcan controles de organización ni formularios antes de terminar la carga, que se conserve el enlace y que no se envíen operaciones automáticamente. La guía de pruebas oficial de Clerk usa una instancia de desarrollo y credenciales de prueba; este harness no usa una clave administrativa Production para crear usuarios y no declara probado un OAuth real: [Testing con Playwright](https://clerk.com/docs/guides/development/testing/playwright/overview), [useAuth e isLoaded](https://clerk.com/docs/nextjs/reference/hooks/use-auth).
 
 La comprobación de la instancia Production de Clerk fue de lectura: organizaciones habilitadas, rol de creación `org:admin` y una plantilla `obrasaas-bootstrap-v1` de 60 segundos. No se cambiaron ajustes, factores, credenciales ni datos de usuarios.
 
