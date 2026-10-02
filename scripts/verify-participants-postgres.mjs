@@ -53,11 +53,25 @@ try{
  const joined=await store.join(workerSession,{invitationId,operationId:randomUUID()},{accept:true});assert.equal(joined.joined,true);assert.equal(joined.replayed,false);
  assert.equal((await store.join(workerSession,{invitationId,operationId:randomUUID()},{accept:true})).receiptId,joined.receiptId);
  const participantWorkspace=await workspace.list(workerSession);assert.equal(participantWorkspace.role,'AUDITOR');assert.deepEqual(participantWorkspace.projects.map(row=>row.id),['p-a']);assert.equal(participantWorkspace.canPlanSchedule,false);
- const personalContext={projectId:'p-a',scope:participantWorkspace.scope};rows=await store.read(workerSession,personalContext);assert.equal(rows.records.length,1);assert.equal(rows.records[0].self,true);assert.equal(rows.records[0].permissions.attendance,true);
+ const personalContext={projectId:'p-a',scope:participantWorkspace.scope};
+ // Identity presentation is personal, independent from the permission to report.
+ await pool.query(`UPDATE "Worker" SET metadata=jsonb_set(metadata,'{participant,permissions,report}','false'::jsonb),"updatedAt"=clock_timestamp() WHERE id='worker-a'`);
+ rows=await store.read(workerSession,personalContext);assert.equal(rows.records.length,1);assert.equal(rows.records[0].self,true);assert.equal(rows.records[0].permissions.attendance,true);assert.equal(rows.records[0].permissions.report,false);
  const self=rows.records[0];await assert.rejects(workspace.projectOperation(workerSession,personalContext,false,(client,member)=>assertFieldParticipant(client,member,workerSession,'p-a',self.id,{requireKyc:true})),{code:'PARTICIPANT_KYC_REVIEW_REQUIRED'});
  checks.push('verified-email-and-accepted-provider-invitation-bind-one-account-to-one-worker-and-only-the-invited-project');
  const kyc={...personalContext,operationId:randomUUID(),workerId:self.id,revision:self.revision,noticeVersion:PARTICIPANT_NOTICE_VERSION,consent:true,front:picture,selfie:picture};
+ const deniedPuts=putCount;
+ await assert.rejects(store.submitKyc(owner,{...kyc,scope:own.scope,operationId:randomUUID()}),{code:'PARTICIPANT_ACCESS_REQUIRED'});
+ await assert.rejects(store.submitKyc(workerSession,{...kyc,workerId:'worker-second',operationId:randomUUID()}),{code:'PARTICIPANT_ACCESS_REQUIRED'});
+ await assert.rejects(store.submitKyc(foreign,{...kyc,scope:other.scope,operationId:randomUUID()}),{code:'WORKSPACE_PROJECT_UNAVAILABLE'});
+ await pool.query(`UPDATE "Worker" SET metadata=jsonb_set(metadata,'{participant,status}','"REVOKED"'::jsonb) WHERE id='worker-a'`);
+ await assert.rejects(store.submitKyc(workerSession,{...kyc,operationId:randomUUID()}),{code:'PARTICIPANT_ACCESS_REQUIRED'});
+ await pool.query(`UPDATE "Worker" SET metadata=jsonb_set(metadata,'{participant,status}','"ACTIVE"'::jsonb) WHERE id='worker-a'`);
+ assert.equal(putCount,deniedPuts);
+ checks.push('kyc-personal-ownership-active-participation-and-tenant-denials-happen-before-private-storage');
  const submissions=await Promise.all([store.submitKyc(workerSession,kyc),store.submitKyc(workerSession,kyc)]);assert.equal(submissions.filter(value=>!value.replayed).length,1);assert.equal(submissions[0].participant.kyc.status,'PENDING_REVIEW');assert.equal(submissions[0].participant.identityCertified,false);assert.ok(!JSON.stringify(submissions).includes('.private.blob.'));
+ assert.equal(submissions[0].participant.permissions.report,false);assert.equal((await store.downloadKyc(workerSession,{...personalContext,workerId:self.id,imageId:'selfie'})).bytes.toString('base64'),picture);
+ checks.push('attendance-only-owned-active-participant-submits-and-downloads-personal-private-kyc-without-report-permission');
  const beforePuts=putCount;assert.equal((await store.submitKyc(workerSession,kyc)).replayed,true);assert.equal(putCount,beforePuts);
  const pending=(await store.read(owner,context)).records.find(row=>row.id===self.id);assert.equal((await store.downloadKyc(owner,{...context,workerId:self.id,imageId:'document-front'})).bytes.toString('base64'),picture);
  await assert.rejects(store.downloadKyc(foreign,{projectId:'p-a',scope:other.scope,workerId:self.id,imageId:'selfie'}),{code:'WORKSPACE_PROJECT_UNAVAILABLE'});
@@ -65,6 +79,8 @@ try{
  await assert.rejects(store.save(workerSession,command('REVIEW_KYC',{workerId:self.id,revision:pending.revision,submissionId:pending.kyc.submissionId,decision:'APPROVED',reason:'A responsible cannot approve their own identity.'},{scope:selfReviewScope})),{code:'PARTICIPANT_SELF_REVIEW_REJECTED'});
  await pool.query(`UPDATE "TenantMembership" SET "tenantRole"='AUDITOR' WHERE "userId"=(SELECT id FROM "PlatformUser" WHERE "clerkUserId"=$1)`,['user_Worker']);
  const approved=await store.save(director,command('REVIEW_KYC',{workerId:self.id,revision:pending.revision,submissionId:pending.kyc.submissionId,decision:'APPROVED',reason:'Synthetic responsible reviewed both private images.'},{scope:dir.scope}));assert.equal(approved.participant.kyc.status,'APPROVED');assert.equal(approved.participant.identityCertified,false);
+ await assert.rejects(workspace.projectOperation(workerSession,personalContext,false,(client,member)=>assertFieldParticipant(client,member,workerSession,'p-a',self.id,{permission:'report',requireKyc:true})),{code:'PARTICIPANT_ACCESS_REQUIRED'});
+ checks.push('personal-kyc-review-does-not-grant-report-permission-or-change-field-authorization');
  await assert.rejects(store.save(owner,command('REVIEW_KYC',{workerId:self.id,revision:pending.revision,submissionId:pending.kyc.submissionId,decision:'REJECTED',reason:'A stale decision must not overwrite the review.'})),{code:'PARTICIPANT_REVISION_CHANGED'});
  await workspace.projectOperation(workerSession,personalContext,false,(client,member)=>assertFieldParticipant(client,member,workerSession,'p-a',self.id,{requireKyc:true}));
  checks.push('private-kyc-readback-concurrent-idempotence-redaction-and-revision-bound-human-review');

@@ -35,13 +35,19 @@ export function participantKycInput(input){
  try{return {...input,operationId:input.operationId.toLowerCase(),front:decodePrivateImage(input.front),selfie:decodePrivateImage(input.selfie)};}catch(error){throw new WorkspaceError(error instanceof PrivateImageError?error.code:'PARTICIPANT_INPUT_INVALID',error.code==='PRIVATE_IMAGE_TOO_LARGE'?413:400);}
 }
 export const participantReceiptId=(actorId,projectId,key)=>'participant_'+digest([actorId,projectId,key.toLowerCase()]);
-export async function assertFieldParticipant(client,member,session,projectId,workerId,{permission='attendance',requireKyc=false,lock=false}={}){
- requireWorkspaceIdentity(session);if(!workspaceId(workerId)||!['attendance','report'].includes(permission))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');
+export async function assertOwnParticipant(client,member,session,projectId,workerId,{lock=false}={}){
+ requireWorkspaceIdentity(session);if(!workspaceId(workerId))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');
  const row=(await client.query(`SELECT id,name,active,metadata,to_char("updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision FROM public."Worker" WHERE id=$1 AND "projectId"=$2 ${lock?'FOR UPDATE':''}`,[workerId,projectId])).rows[0];
  const participant=row?.metadata?.participant;
- if(!row?.active||participant?.version!==1||participant.status!=='ACTIVE'||participant.clerkUserId!==session.userId||participant.permissions?.[permission]!==true)throw new WorkspaceError('PARTICIPANT_ACCESS_REQUIRED',403);
+ if(!row?.active||participant?.version!==1||participant.status!=='ACTIVE'||participant.clerkUserId!==session.userId)throw new WorkspaceError('PARTICIPANT_ACCESS_REQUIRED',403);
  const membership=(await client.query(`SELECT m.id FROM public."TenantMembership" m JOIN public."PlatformUser" u ON u.id=m."userId" JOIN public."ProjectMembership" pm ON pm."tenantMembershipId"=m.id WHERE m.id=$1 AND m."organizationId"=$2 AND u."clerkUserId"=$3 AND m.status='ACTIVE' AND pm."projectId"=$4 AND pm.status='ACTIVE' ${lock?'FOR SHARE OF m,u,pm':''}`,[member.membershipId,member.organizationId,session.userId,projectId])).rows;
  if(membership.length!==1)throw new WorkspaceError('PARTICIPANT_ACCESS_REQUIRED',403);
+ return row;
+}
+export async function assertFieldParticipant(client,member,session,projectId,workerId,{permission='attendance',requireKyc=false,lock=false}={}){
+ if(!['attendance','report'].includes(permission))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');
+ const row=await assertOwnParticipant(client,member,session,projectId,workerId,{lock}),participant=row.metadata.participant;
+ if(participant.permissions?.[permission]!==true)throw new WorkspaceError('PARTICIPANT_ACCESS_REQUIRED',403);
  if(requireKyc&&participant.kyc?.status!=='APPROVED')throw new WorkspaceError('PARTICIPANT_KYC_REVIEW_REQUIRED',403);
  return row;
 }
