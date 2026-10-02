@@ -85,6 +85,21 @@ export function createFieldOperations({workspace,assertParticipant}) {
   }
   const latest=async(client,projectId,workerId)=>(await client.query(`SELECT id,"workerId",metadata,${revision('"checkedInAt"')} AS "recordedAt" FROM public."AttendanceEntry" WHERE "projectId"=$1 AND "workerId"=$2 AND metadata->'fieldOperations'->>'version'='1' ORDER BY (metadata->'fieldOperations'->>'sequence')::int DESC,id DESC LIMIT 1`,[projectId,workerId])).rows[0]||null;
   return {
+    async proposalEvidence(session,context) {
+      if(!workspaceId(context.proposalId))throw new WorkspaceError('FIELD_QUERY_INVALID');
+      return run(session,context,false,async(client,member,scope)=>{
+        if(!canApproveProgress(member.role))throw new WorkspaceError('FIELD_PROGRESS_PERMISSION_REQUIRED',403);
+        const row=await proposal(client,context.projectId,context.proposalId),a=row.action;
+        if(!workspaceId(a.taskId)||!Array.isArray(a.evidenceIds)||!a.evidenceIds.length||a.evidenceIds.length>10||new Set(a.evidenceIds).size!==a.evidenceIds.length||a.evidenceIds.some(id=>!workspaceId(id)))throw new WorkspaceError('FIELD_PROPOSAL_UNAVAILABLE',404);
+        const linked=[];
+        for(const id of a.evidenceIds){
+          const record=await evidence(client,context.projectId,id);
+          if(record.metadata.fieldOperations.taskId!==a.taskId)throw new WorkspaceError('FIELD_EVIDENCE_UNAVAILABLE',404);
+          linked.push(publicFieldEvidence(record));
+        }
+        return {scope,projectId:context.projectId,proposalId:row.id,proposalRevision:row.revision,evidence:linked};
+      });
+    },
     async read(session,context) {
       return run(session,context,false,async(client,member,scope,project)=>{
         const reviewer=canReviewField(member.role),workers=(await client.query(`SELECT id,name,active,metadata FROM public."Worker" WHERE "projectId"=$1 AND active=true ORDER BY id LIMIT 101`,[context.projectId])).rows;

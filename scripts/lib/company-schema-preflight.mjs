@@ -11,7 +11,7 @@ export const COMPANY_SCHEMA_REQUIREMENTS=Object.freeze({
  AttendanceEntry:['id','projectId','workerId','status','latitude','longitude','distanceMeters','source','checkedInAt','metadata'],
  OperationalProposal:['id','projectId','type','status','sourceProvider','sourceExternalId','resolverProvider','resolverExternalId','confirmationCode','summary','action','precondition','result','proposedByWorkerId','resolvedByWorkerId','expiresAt','createdAt','updatedAt'],
  WhatsAppConnection:['id','projectId','phoneNumberId','whatsappBusinessId','displayPhoneNumber','enabled','connectionStatus','encryptedAccessToken','verifiedBusinessName','metadata','updatedAt'],
- WebhookEvent:['id','projectId','provider','externalId','eventType','status','attempts','payload','createdAt','updatedAt'],
+ WebhookEvent:['id','projectId','provider','externalId','eventType','status','attempts','payload','leaseToken','leaseExpiresAt','outcome','processedAt','appliedAt','lastError','createdAt','updatedAt'],
 });
 export function checkCompanySchema(rows){
  const present=new Set(rows.map(row=>row.table_name+'.'+row.column_name)),missing=[];
