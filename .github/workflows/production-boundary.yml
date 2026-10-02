@@ -1,7 +1,7 @@
 name: Production access boundary
 on:
   push:
-    branches: [master, 'hotfix/**', 'feat/integral-worksite-*', 'fix/whatsapp-signup-*']
+    branches: [master, 'hotfix/**', 'feat/integral-worksite-*', 'fix/whatsapp-signup-*', 'fix/clerk-*']
   workflow_dispatch:
 permissions:
   contents: read
@@ -40,7 +40,7 @@ jobs:
       - name: Identity context lint
         run: npx eslint scripts/lib/identity-review-*.mjs scripts/review-legacy-identities.mjs scripts/verify-identity-context-*.mjs tests/production-identity-context.test.mjs tests/helpers/identity-context-fixture.mjs
       - name: Production verification lint
-        run: npx eslint scripts/lib/production-storage-check.mjs scripts/lib/production-identity-check.mjs scripts/verify-private-storage-live.mjs tests/production-storage-live-check.test.mjs tests/production-identity-provider-check.test.mjs
+        run: npx eslint scripts/lib/production-storage-check.mjs scripts/lib/production-identity-check.mjs scripts/lib/clerk-access-build-gate.mjs scripts/verify-clerk-access-readonly.mjs scripts/verify-private-storage-live.mjs tests/production-storage-live-check.test.mjs tests/production-identity-provider-check.test.mjs tests/production-clerk-access-build-gate.test.mjs
       - name: Brand v3 integration lint
         run: npx eslint src/app/brand src/lib/brand-assets.mjs src/app/layout.js src/app/page.js tests/production-brand-v3.test.mjs scripts/verify-brand-v3-browser.mjs scripts/verify-access-contrast.mjs
       - name: Pilot media and KYC lint

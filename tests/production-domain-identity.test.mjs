@@ -32,16 +32,24 @@ test('verified user identity does not confer legacy API access',()=>{
   const request=new Request('https://obrasaas.com/api/state',{headers:{cookie:'__session=unit_only; obrasaas_logged_in=true'}});
   assert.equal(authorizeLegacyService(request,{INTERNAL_API_SECRET:'unit_only_internal_server_secret'}),false);
 });
-test('account checks the server session before rendering and never reads business state',()=>{
+test('account separates official invitation and recovery UI from verified workspace rendering',()=>{
   const page=readFileSync(new URL('../src/app/(identity)/cuenta/page.js',import.meta.url),'utf8');
-  assert.ok(page.indexOf('await verifyProductionSession(await headers())')<page.indexOf('return <section'));
-  assert.ok(page.includes("if (!session.authenticated) redirect('/sign-in')"));
+  const verify=page.indexOf('await verifyProductionSession(await headers())');
+  const recovery=page.indexOf('<SessionRecovery '), workspace=page.indexOf('<WorkspaceIdentityPanel />');
+  assert.ok(verify>=0&&verify<recovery&&recovery<workspace);
+  assert.match(page,/if \(identityHasPendingInvitation\(query\)\) return <InvitationEntry returnPath=\{identityAccountReturnPath\(query\)\}/);
+  assert.ok(page.indexOf('if (identityHasPendingInvitation(query))')<verify);
+  assert.match(page,/if \(!session\.authenticated\)\s*\{\s*return <section[\s\S]*?<SessionRecovery[\s\S]*?<\/section>;\s*\}/);
+  assert.match(page,/signInPath=\{identitySignInPath\(query\)\}/);
+  assert.doesNotMatch(page,/redirect\(|__clerk_ticket|localStorage|document\.cookie/);
   assert.doesNotMatch(page,/getAppState|saveAppState|prisma|sessionClaims.*role|organizationList/);
 });
 test('auth routes do not collect passwords locally or assert business approval',()=>{
   for(const route of ['sign-in/[[...sign-in]]','sign-up/[[...sign-up]]']){
     const page=readFileSync(new URL('../src/app/(identity)/'+route+'/page.js',import.meta.url),'utf8');
-    assert.doesNotMatch(page,/localStorage|<input|<form|INTERNAL_API_SECRET/);assert.match(page,/forceRedirectUrl="\/cuenta"/);
+    assert.doesNotMatch(page,/localStorage|<input|<form|INTERNAL_API_SECRET/);
+    assert.match(page,/await searchParams/);assert.match(page,/identityAccountReturnPath\(query\)/);
+    assert.match(page,/forceRedirectUrl=\{returnPath\}/);
   }
 });
 test('owned-domain metadata and SDK provider stay scoped',()=>{
