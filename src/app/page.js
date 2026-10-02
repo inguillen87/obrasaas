@@ -96,28 +96,23 @@ export default function Home() {
   const headerOpacity = useTransform(scrollYProgress, [0, 0.05], [0, 1]);
   const headerBlur = useTransform(scrollYProgress, [0, 0.03], [0, 16]);
 
-  /* ─── ROI Calculator ─── */
-  const [roiProjects, setRoiProjects] = useState(3);
-  const [roiWorkers, setRoiWorkers] = useState(25);
-
-  const savings = {
-    hoursMonth: roiProjects * 18,
-    moneyMonth: roiProjects * 18 * 12500,
-    deliveryDays: roiProjects * 12
-  };
+  /* ─── Pilot scope calculator ─── */
+  const [pilotProjects, setPilotProjects] = useState(1);
+  const [pilotWorkers, setPilotWorkers] = useState(5);
+  const pilotAssignments = pilotProjects * pilotWorkers;
 
   const capabilities = [
     { title: 'Trabajo de campo', desc: 'Recorrido previsto para recibir notas, fotos y ubicaciones del equipo. El canal WhatsApp se acepta por separado.', accent: '#22c55e' },
     { title: 'Libro de Obra', desc: 'Organización de partes y evidencias con revisión. No se equipara una huella SHA-256 con una firma digital certificada.', accent: '#f59e0b' },
     { title: 'Identidad y documentación', desc: 'Captura privada y revisión vinculadas a la obra. Una imagen o lectura de DNI no aprueba automáticamente al trabajador.', accent: '#3b82f6' },
     { title: 'Ubicación de obra', desc: 'La ubicación aporta contexto. No reemplaza los permisos, la revisión ni la aceptación del registro de asistencia.', accent: '#8b5cf6' },
-    { title: 'Seguimiento contractual', desc: 'Preparación y revisión de certificados según las autoridades de cada obra, sin ejecutar pagos automáticamente.', accent: '#06b6d4' },
-    { title: 'Planificación', desc: 'Vistas de tareas, dependencias e incidencias para revisar con los responsables de la obra.', accent: '#f97316' }
+    { title: 'Materiales y compras', desc: 'Pedidos de materiales, aprobación de compras y recepción parcial o completa con responsables definidos.', accent: '#06b6d4' },
+    { title: 'Planificación', desc: 'Vistas de tareas, fechas e incidencias para revisar con los responsables de la obra.', accent: '#f97316' }
   ];
 
   const faqs = [
     { q: '¿Qué puedo probar en la demo?', a: 'La demo guiada utiliza exclusivamente ejemplos ficticios y permite recorrer las perspectivas de operario, encargado y director. No envía mensajes ni modifica obras.' },
-    { q: '¿Subir un DNI aprueba una identidad?', a: 'No. La captura, la extracción de texto y la revisión de identidad son pasos diferentes. La versión pública no habilita el alta de trabajadores con datos reales.' },
+    { q: '¿Subir un DNI aprueba una identidad?', a: 'No. La demo utiliza ejemplos ficticios. En Mi cuenta, la presentación privada requiere acceso autorizado y consentimiento; otra persona con permiso debe revisar y decidir. Subir un documento no aprueba al participante.' },
     { q: '¿Qué acredita una huella SHA-256?', a: 'Es un control de integridad de los datos. La aplicación no la presenta como una firma digital certificada ni como una validación de seguros.' },
     { q: '¿Cómo se habilita una empresa?', a: 'El acceso personal y los permisos sobre empresa y obra se verifican por separado. El piloto de campo requiere participantes designados y la aceptación de sus recorridos.' },
     { q: '¿La demo funciona sin conexión?', a: 'La demo no guarda operaciones de obra. El circuito real debe confirmar cada registro con el servidor; las operaciones pendientes no se reenvían automáticamente.' }
@@ -422,7 +417,7 @@ export default function Home() {
         </Reveal>
       </section>
 
-      {/* ═══ ROI CALCULATOR ═══ */}
+      {/* ═══ PILOT SCOPE CALCULATOR ═══ */}
       <section id="calculadora" style={{ maxWidth: '900px', margin: '0 auto', padding: '60px 32px 100px', position: 'relative', zIndex: 1 }}>
         <Reveal>
           <div style={{
@@ -431,27 +426,27 @@ export default function Home() {
             background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.04) 0%, rgba(10, 14, 26, 0.7) 100%)',
             backdropFilter: 'blur(12px)'
           }}>
-            <h3 style={{ fontSize: '1.6rem', fontWeight: 900, margin: '0 0 6px', fontFamily: tokens.font.heading, textAlign: 'center' }}>Calculadora de ROI</h3>
-            <p style={{ color: '#64748b', fontSize: '0.9rem', margin: '0 0 32px', textAlign: 'center' }}>Estimá el ahorro mensual según tu escala operativa</p>
+            <h3 style={{ fontSize: '1.6rem', fontWeight: 900, margin: '0 0 6px', fontFamily: tokens.font.heading, textAlign: 'center' }}>Prepará el alcance de tu piloto</h3>
+            <p style={{ color: '#94a3b8', fontSize: '0.9rem', margin: '0 0 32px', textAlign: 'center' }}>Simulá las obras y asignaciones del equipo. Estos valores ayudan a organizar la prueba; no crean registros en tu empresa.</p>
 
             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: isMobile ? '16px' : '28px', marginBottom: '32px' }}>
               <div>
-                <label style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'block', marginBottom: '8px', fontWeight: 600 }}>Obras en simultáneo: <strong style={{ color: '#f59e0b' }}>{roiProjects}</strong></label>
-                <input type="range" min="1" max="20" value={roiProjects} onChange={e => setRoiProjects(+e.target.value)}
+                <label htmlFor="pilot-projects" style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'block', marginBottom: '8px', fontWeight: 600 }}>Obras en simultáneo: <strong style={{ color: '#f59e0b' }}>{pilotProjects}</strong></label>
+                <input id="pilot-projects" type="range" min="1" max="20" value={pilotProjects} onChange={e => setPilotProjects(+e.target.value)}
                   style={{ width: '100%', accentColor: '#f59e0b' }} />
               </div>
               <div>
-                <label style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'block', marginBottom: '8px', fontWeight: 600 }}>Operarios por obra: <strong style={{ color: '#f59e0b' }}>{roiWorkers}</strong></label>
-                <input type="range" min="5" max="100" value={roiWorkers} onChange={e => setRoiWorkers(+e.target.value)}
+                <label htmlFor="pilot-workers" style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'block', marginBottom: '8px', fontWeight: 600 }}>Operarios previstos por obra: <strong style={{ color: '#f59e0b' }}>{pilotWorkers}</strong></label>
+                <input id="pilot-workers" type="range" min="1" max="100" value={pilotWorkers} onChange={e => setPilotWorkers(+e.target.value)}
                   style={{ width: '100%', accentColor: '#f59e0b' }} />
               </div>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: '16px' }}>
               {[
-                { label: 'Horas admin. ahorradas/mes', value: savings.hoursMonth, suffix: 'hs' },
-                { label: 'Ahorro mensual estimado', value: savings.moneyMonth, prefix: '$', suffix: '' },
-                { label: 'Días de entrega adelantados/año', value: savings.deliveryDays, suffix: '' }
+                { label: 'Obras a preparar', value: pilotProjects, suffix: '' },
+                { label: 'Operarios previstos por obra', value: pilotWorkers, suffix: '' },
+                { label: 'Asignaciones obra/persona', value: pilotAssignments, suffix: '' }
               ].map((s, i) => (
                 <div key={i} style={{ textAlign: 'center', padding: '20px 16px', borderRadius: '14px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
                   <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#f59e0b', fontFamily: tokens.font.heading }}>
