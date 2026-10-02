@@ -56,7 +56,7 @@ async function scenario(mode,width=390){
      if(mode==='uncertain'){status=503;body={code:'WORKSPACE_OPERATION_UNCONFIRMED',saved:false};}else body=record;
     }
    }else if(url.searchParams.has('operationId')){
-    statusChecks++;assert.equal(url.searchParams.get('operationId'),posts[0].operationId);body=record?{...record,state:'RECORDED'}:{scope,state:'NOT_OBSERVED',definitive:false};
+    statusChecks++;assert.equal(url.searchParams.get('operationId'),posts[0].operationId);body=record?{scope,state:'RECORDED',saved:true,receipt:record.receipt,task:record.task}:{scope,state:'NOT_OBSERVED',definitive:false};
    }else if(!url.search){
     if(mode==='denied'){status=403;body={code:'WORKSPACE_MEMBERSHIP_REQUIRED'};}
     else body={scope,organizationName:'Organización de prueba sintética',role:mode==='readonly'?'AUDITOR':'SITE_MANAGER',roleLabel:mode==='readonly'?'Auditor':'Jefe de obra',canPlanSchedule:mode!=='readonly',projects:[{id:'p-a',name:'Obra de prueba A'},...(['race','draft-cancel','rollback','not-arrived'].includes(mode)?[{id:'p-b',name:'Obra de prueba B'}]:[])],projectsTruncated:false};

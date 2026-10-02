@@ -2,7 +2,7 @@ import {workspaceSessionRequest} from './workspace-session-request.mjs';
 
 // Own only the browser request lifetime. Authentication and dispatch remain in
 // the existing transport; reading the response body shares the same deadline.
-export function createWorkspaceRequestLifecycle(getSessionToken, {fetchImpl} = {}) {
+export function createWorkspaceRequestLifecycle(getSessionToken, {fetchImpl,journal} = {}) {
   const controllers = new Set();
   let active = true;
   return {
@@ -19,7 +19,9 @@ export function createWorkspaceRequestLifecycle(getSessionToken, {fetchImpl} = {
       else external?.addEventListener('abort', abort, {once:true});
       controllers.add(controller);
       const timer = setTimeout(abort, requestTimeoutMs);
+      let ticket;
       try {
+        ticket=await journal?.prepare(url,{...options,signal:controller.signal});
         const response = await workspaceSessionRequest(url, {...options, signal:controller.signal}, {getSessionToken, requestTimeoutMs,...(fetchImpl?{fetchImpl}:{})});
         const result = await new Promise((resolve,reject) => {
           const aborted = () => finish(reject,new DOMException('La consulta se canceló.', 'AbortError'));
@@ -29,7 +31,12 @@ export function createWorkspaceRequestLifecycle(getSessionToken, {fetchImpl} = {
           Promise.resolve().then(() => controller.signal.aborted ? undefined : consume(response)).then(value => finish(resolve,value),error => finish(reject,error));
         });
         if (controller.signal.aborted || !active) throw new DOMException('La consulta se canceló.', 'AbortError');
+        journal?.settle(ticket,result);
+        journal?.observe(url,result);
         return result;
+      } catch(error) {
+        journal?.settle(ticket,null,error);
+        throw error;
       } finally {
         clearTimeout(timer);
         external?.removeEventListener('abort', abort);

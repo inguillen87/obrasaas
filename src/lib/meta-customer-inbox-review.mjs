@@ -56,13 +56,31 @@ function publicItem(row,payload){
   observation:payload&&payload.type!=='message'&&payload.type!=='message_status'?text(value.event||value.decision||value.message_template_status).slice(0,80):null,
   reviewDecision:outcome?.review?.decision||null,payloadVerified:Boolean(payload)};
 }
-export async function readMetaCustomerInbox(client,member,project,connection,environment){
- if(!connection||connection.metadata?.credentialFormat!=='tenant-aad-v2'||connection.metadata?.credentialOrganizationId!==member.organizationId)return {items:[],truncated:false,canSend:false,businessApplied:false};
- const rows=(await client.query(`SELECT id,status::text AS status,payload,outcome,"createdAt" AS "createdAt","processedAt" AS "processedAt","leaseToken","lastError",("leaseExpiresAt">clock_timestamp()) AS "activeLease",${revision} AS revision FROM public."WebhookEvent" WHERE "projectId"=$1 AND provider='meta-customer-v1' AND payload->>'channelId'=$2 ORDER BY "createdAt" DESC,id DESC LIMIT 21`,[project.id,connection.id])).rows;
+export async function readMetaCustomerInbox(client,member,project,connection,environment,{after=null}={}){
+ if(after!==null&&!eventId(after))throw new WorkspaceError('META_CUSTOMER_INBOX_INPUT_INVALID');
+ if(!connection||connection.metadata?.credentialFormat!=='tenant-aad-v2'||connection.metadata?.credentialOrganizationId!==member.organizationId)return {items:[],truncated:false,nextCursor:null,canSend:false,businessApplied:false};
+ if(after){const cursor=(await client.query(`SELECT id FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 AND provider='meta-customer-v1' AND payload->>'channelId'=$3`,[after,project.id,connection.id])).rows;if(cursor.length!==1)throw new WorkspaceError('META_CUSTOMER_INBOX_CURSOR_UNAVAILABLE',409);}
+ const rows=(await client.query(`SELECT id,status::text AS status,payload,outcome,"createdAt" AS "createdAt","processedAt" AS "processedAt","leaseToken","lastError",("leaseExpiresAt">clock_timestamp()) AS "activeLease",${revision} AS revision FROM public."WebhookEvent" WHERE "projectId"=$1 AND provider='meta-customer-v1' AND payload->>'channelId'=$2 AND ($3::text IS NULL OR ("createdAt",id)<(SELECT "createdAt",id FROM public."WebhookEvent" WHERE id=$3 AND "projectId"=$1 AND provider='meta-customer-v1' AND payload->>'channelId'=$2)) ORDER BY "createdAt" DESC,id DESC LIMIT 21`,[project.id,connection.id,after])).rows;
  const outbound=(await client.query(`SELECT id,payload,outcome FROM public."WebhookEvent" WHERE "projectId"=$1 AND provider='meta-customer-outbound-v1' AND payload->>'channelId'=$2 AND payload->>'eventId'=ANY($3::text[])`,[project.id,connection.id,rows.slice(0,20).map(row=>row.id)])).rows;
  const replies=new Map();for(const row of outbound){try{const request=JSON.parse(decryptCustomerSecret(row.payload.encryptedPayload,{organizationId:member.organizationId,projectId:project.id,purpose:'outbound',resourceId:row.id},environment));if(digest(request)!==row.payload.requestDigest||request.channelId!==connection.id||request.organizationId!==member.organizationId||request.eventId!==row.payload.eventId)continue;replies.set(request.eventId,row.outcome);}catch{}}
  const items=rows.slice(0,20).map(row=>{let payload=null;try{payload=decode(row,member,project,{...connection,whatsappBusinessId:connection.whatsappBusinessId,phoneNumberId:connection.phoneNumberId},environment);}catch{}const item=publicItem(row,payload),reply=replies.get(row.id);return reply?{...item,replyState:reply.state,replySent:['SENT','STATUS_OBSERVED'].includes(reply.state)&&!['failed','deleted'].includes(reply.providerStatus),providerReplyStatus:reply.providerStatus||null}:item;});
- return {items,truncated:rows.length>20,canSend:false,businessApplied:items.some(item=>item.businessApplied),channelIdentityVerified:items.some(item=>['VERIFIED','CHANNEL_VERIFIED'].includes(item.identityStatus))};
+ return {items,truncated:rows.length>20,nextCursor:rows.length>20?rows[19].id:null,canSend:false,businessApplied:items.some(item=>item.businessApplied),channelIdentityVerified:items.some(item=>['VERIFIED','CHANNEL_VERIFIED'].includes(item.identityStatus))};
+}
+export async function readMetaCustomerInboxReceipt(client,member,project,connection,environment,request){
+ if(!request||!operationId(request.operationId)||!eventId(request.eventId)||!['process_inbox','review_inbox'].includes(request.action))throw new WorkspaceError('META_CUSTOMER_INBOX_INPUT_INVALID');
+ if(!connection||connection.metadata?.credentialFormat!=='tenant-aad-v2'||connection.metadata?.credentialOrganizationId!==member.organizationId)throw new WorkspaceError('META_CUSTOMER_INBOX_UNAVAILABLE',404);
+ const row=(await client.query(`SELECT id,status::text AS status,payload,outcome FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 AND provider='meta-customer-v1' AND payload->>'channelId'=$3`,[request.eventId,project.id,connection.id])).rows[0];if(!row)throw new WorkspaceError('META_CUSTOMER_INBOX_UNAVAILABLE',404);
+ decode(row,member,project,connection,environment);
+ const context={operationId:request.operationId,eventId:row.id,action:request.action,definitive:false};
+ if(request.action==='review_inbox'){
+  const key='meta_inbox_request_'+digest([member.actorId,project.id,request.operationId]);
+  const found=(await client.query(`SELECT id,metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "actorId"=$3 AND "entityId"=$4 AND action='integration.whatsapp.inbox.reviewed'`,[key,member.organizationId,member.actorId,row.id])).rows[0];
+  if(found&&found.metadata?.projectId===project.id&&found.metadata?.eventId===row.id&&['OBSERVED','REFER_TO_PARTICIPANTS','REFER_TO_FIELD'].includes(found.metadata.decision))return {...context,state:'RECORDED',actorOperationVerified:true,receiptId:found.id,decision:found.metadata.decision};
+  return {...context,state:'NOT_OBSERVED',actorOperationVerified:false};
+ }
+ // Processing is reserved by event, including automatic workers. A completed
+ // event does not prove that this browser's operation UUID caused the effect.
+ return {...context,state:row.status==='PROCESSED'&&row.outcome?.version===1?'EVENT_PROCESSED':'NOT_OBSERVED',actorOperationVerified:false,eventStatus:row.status,businessApplied:row.outcome?.businessApplied===true,businessReceiptId:typeof row.outcome?.receiptId==='string'&&/^[A-Za-z0-9_-]{1,160}$/.test(row.outcome.receiptId)?row.outcome.receiptId:null};
 }
 export function createMetaCustomerInboxReview({workspace,environment=process.env,now=()=>Date.now(),afterClaim=async()=>{}}){
  const within=(session,body,writable,run)=>workspace.integrationProject(session,body,writable,run);

@@ -7,7 +7,7 @@ import {PARTICIPANT_NOTICE,PARTICIPANT_NOTICE_VERSION,OFFICE_ROLES} from '../src
 assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV);
 const root=process.cwd(),evidence=path.join(root,'.vercel/participants-evidence');mkdirSync(evidence,{recursive:true});
 const fixture=mkdtempSync(path.join(root,'.vercel/participants-ui-')),app=path.join(fixture,'app');mkdirSync(app);
-for(const name of ['participant-panel.js','participant-panel.module.css','workspace-session-request.mjs','workspace-request-lifecycle.js','workspace-request-lifecycle.mjs'])copyFileSync(path.join(root,'src/app/(identity)/cuenta',name),path.join(app,name));
+for(const name of ['participant-panel.js','participant-panel.module.css','workspace-session-request.mjs','workspace-request-lifecycle.js','workspace-request-lifecycle.mjs','workspace-recovery-journal.mjs'])copyFileSync(path.join(root,'src/app/(identity)/cuenta',name),path.join(app,name));
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'isolated-participants-ui',private:true}));
 writeFileSync(path.join(fixture,'next.config.mjs'),`export default {devIndicators:false,turbopack:{root:${JSON.stringify(root)}}};`);
 writeFileSync(path.join(app,'layout.js'),`export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:12,background:'#eef3f9',fontFamily:'Arial,sans-serif'}}>{children}</body></html>}`);

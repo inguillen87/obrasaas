@@ -5,7 +5,7 @@ import {metaAssetId} from './meta-customer-provider.mjs';
 import {encryptCustomerSecret,decryptCustomerSecret,customerSecretDigest} from './meta-customer-credentials.mjs';
 import {OBRASAAS_META_CHANNEL} from './meta-channel-binding.mjs';
 import {createMetaCustomerTemplates,publicCustomerTemplateWorkbench} from './meta-customer-templates.mjs';
-import {createMetaCustomerInboxReview,readMetaCustomerInbox} from './meta-customer-inbox-review.mjs';
+import {createMetaCustomerInboxReview,readMetaCustomerInbox,readMetaCustomerInboxReceipt} from './meta-customer-inbox-review.mjs';
 import {createMetaCustomerActivation,publicCustomerActivation} from './meta-customer-activation.mjs';
 
 const activeStates=new Set(['PREPARED','EXCHANGE_STARTED','EXCHANGE_UNKNOWN','CREDENTIAL_STORED','VERIFYING','REVIEW_REQUIRED','LINKED_PENDING_ACCEPTANCE','REGISTRATION_REQUIRED','REGISTRATION_REJECTED','REGISTRATION_VERIFYING','REGISTRATION_STARTED','REGISTRATION_UNKNOWN']);
@@ -50,7 +50,7 @@ export function createMetaCustomerOnboarding({workspace,provider,processor=null,
    await client.query(`INSERT INTO public."AuditLog" (id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES ($1,$2,$3,'integration.whatsapp.customer_state','Project',$4,$5::jsonb) ON CONFLICT (id) DO NOTHING`,[receipt,member.organizationId,member.actorId,project.id,JSON.stringify({version:1,signupId:state.id,state:updated.state,code:code||null,operationDigest:customerSecretDigest(operation)})]);}
   project.metadata={...project.metadata,metaSignup:updated};return updated;
  }
- async function response(client,member,scope,project){
+ async function response(client,member,scope,project,context={}){
   const connections=await client.query(`SELECT id,"phoneNumberId","whatsappBusinessId","displayPhoneNumber",enabled,"connectionStatus"::text AS status,"connectionStatus"::text AS "connectionStatus",metadata FROM public."WhatsAppConnection" WHERE "projectId"=$1`,[project.id]);
   if(connections.rows.length>1)throw new WorkspaceError('META_CUSTOMER_BINDING_INTEGRITY',409);
   const connection=connections.rows[0],state=project.metadata?.metaSignup;
@@ -63,7 +63,7 @@ export function createMetaCustomerOnboarding({workspace,provider,processor=null,
    stateToken:signup?.state==='PREPARED'&&readiness.canLaunchMeta?stateToken(state,member,project,environment):null,
    connection:connection?{recordPresent:true,displayNumber:connection.displayPhoneNumber,wabaId:connection.whatsappBusinessId,phoneNumberId:connection.phoneNumberId,enabled:connection.enabled===true,storedStatus:connection.status,operational:publicCustomerActivation(connection,readiness,member,now()).operational}:null,
    activation:publicCustomerActivation(connection,readiness,member,now()),
-   templates:connection?.metadata?.customerTemplates||null,templateWorkbench:publicCustomerTemplateWorkbench(connection),inbox:await readMetaCustomerInbox(client,member,project,connection,environment),acceptance:{roundTrip:'NOT_VERIFIED',fieldJourney:'NOT_VERIFIED'}};
+   templates:connection?.metadata?.customerTemplates||null,templateWorkbench:publicCustomerTemplateWorkbench(connection),inbox:await readMetaCustomerInbox(client,member,project,connection,environment,{after:context.after||null}),...(context.operationId?{receipt:await readMetaCustomerInboxReceipt(client,member,project,connection,environment,context)}:{}),acceptance:{roundTrip:'NOT_VERIFIED',fieldJourney:'NOT_VERIFIED'}};
  }
  async function assertAssetVacant(client,project,wabaId,phoneNumberId){
   if(wabaId===OBRASAAS_META_CHANNEL.wabaId||phoneNumberId===OBRASAAS_META_CHANNEL.phoneNumberId)throw new WorkspaceError('META_CUSTOMER_DEMO_ASSET_REJECTED',403);
@@ -113,7 +113,7 @@ export function createMetaCustomerOnboarding({workspace,provider,processor=null,
   }
  }
  return {
-  read(session,context){return within(session,context,false,response);},
+  read(session,context){return within(session,context,false,(client,member,scope,project)=>response(client,member,scope,project,context));},
   async command(session,body){
    const action=body?.action;
    if(action==='process_inbox'&&processor){
