@@ -9,6 +9,7 @@ const root=process.cwd(),parent=path.resolve(root,'.vercel'),evidence=path.join(
 const fixture=mkdtempSync(path.join(parent,'onboarding-guide-ui-')),app=path.join(fixture,'app'),account=path.join(app,'(identity)','cuenta');mkdirSync(account,{recursive:true});mkdirSync(path.join(fixture,'lib'));
 for(const file of ['workspace-identity.js','workspace.module.css','onboarding-guide.js','onboarding-guide.module.css'])copyFileSync(path.join(root,'src/app/(identity)/cuenta',file),path.join(account,file));
 copyFileSync(path.join(root,'src/app/(identity)/identity.module.css'),path.join(app,'(identity)','identity.module.css'));
+copyFileSync(path.join(root,'src/app/(identity)/identity-load-guard.js'),path.join(app,'(identity)','identity-load-guard.js'));
 copyFileSync(path.join(root,'src/lib/identity-return-path.mjs'),path.join(fixture,'lib','identity-return-path.mjs'));
 copyFileSync(path.join(root,'src/app/globals.css'),path.join(app,'globals.css'));
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'actual-onboarding-guide-ui',private:true}));
