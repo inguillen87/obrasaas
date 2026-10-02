@@ -14,7 +14,7 @@ mkdirSync(app);for(const file of readdirSync(path.join(root,'src/app/(identity)/
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'isolated-workspace-ui-fixture',private:true}));
 writeFileSync(path.join(fixture,'next.config.mjs'),`export default {turbopack:{root:${JSON.stringify(root)}}};\n`);
 writeFileSync(path.join(app,'layout.js'),`export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:16,background:'#0b1c2d',fontFamily:'Arial,sans-serif'}}>{children}</body></html>}`);
-writeFileSync(path.join(app,'page.js'),`'use client';import {AccountWorkspace} from './workspace-client';const token=async()=>'synthetic-active-tab-A';export default function Page(){return <main style={{maxWidth:1000,margin:'0 auto'}}><AccountWorkspace getSessionToken={token}/></main>}`);
+writeFileSync(path.join(app,'page.js'),`'use client';import {useState} from 'react';import {AccountWorkspace} from './workspace-client';const token=async()=>{if(window.__failNextToken){window.__failNextToken=false;throw new Error('private SDK diagnostic');}if(window.__holdToken)await new Promise(resolve=>{window.__resolveToken=resolve;});return 'synthetic-active-tab-A';};export default function Page(){const [visible,setVisible]=useState(true);return <main style={{maxWidth:1000,margin:'0 auto'}}><button onClick={()=>setVisible(false)}>Desmontar ensayo</button>{visible?<AccountWorkspace getSessionToken={token}/>:<p>Ensayo desmontado</p>}</main>}`);
 const port=3108,origin='http://127.0.0.1:'+port;
 const server=spawn(process.execPath,[path.join(root,'node_modules/next/dist/bin/next'),'dev',fixture,'--webpack','--hostname','127.0.0.1','--port',String(port)],{cwd:root,env:{...process.env,NEXT_TELEMETRY_DISABLED:'1'},stdio:['ignore','pipe','pipe'],detached:process.platform!=='win32'});
 let serverLog='';for(const stream of [server.stdout,server.stderr])stream.on('data',value=>{serverLog=(serverLog+value.toString()).slice(-20000);});
@@ -83,9 +83,22 @@ async function scenario(mode,width=390){
  if(mode==='readonly'){assert.equal(await page.$$eval('button',nodes=>nodes.filter(node=>node.textContent==='Planificar fechas').length),0);checks.push('read-only-role-has-no-schedule-write-control');await context.close();return;}
  if(mode==='success')await page.screenshot({path:path.join(evidence,`workspace-${width}.png`),fullPage:true});
  await fill(page);assert.ok(await page.evaluate(()=>[...document.querySelectorAll('button')].filter(b=>b.textContent==='Actualizar'||b.textContent.includes('Obra de prueba B')).every(b=>b.disabled)));assert.ok(await page.evaluate(()=>[...document.querySelectorAll('form input,form textarea')].every(e=>!e.disabled)));
+ if(mode==='sdk-unavailable')await page.evaluate(()=>{window.__failNextToken=true;});
+ if(mode==='unmount-token')await page.evaluate(()=>{window.__holdToken=true;});
  if(mode==='draft-cancel'){await click(page,'Cancelar');await page.waitForFunction(()=>!document.querySelector('form'));assert.ok(await page.evaluate(()=>[...document.querySelectorAll('button')].filter(b=>b.textContent==='Actualizar'||b.textContent.includes('Obra de prueba B')).every(b=>!b.disabled)));assert.equal(posts.length,0);checks.push('schedule-draft-locks-project-and-refresh-until-explicit-cancel');await context.close();return;}
  await click(page,'Confirmar planificación');
- if(mode==='uncertain'){
+ if(mode==='sdk-unavailable'){
+  await waitText(page,'No se pudo renovar tu sesión');assert.equal(posts.length,0);
+  assert.equal(await page.$eval('textarea',e=>e.value),'Reprogramación revisada en reunión de obra.');
+  assert.ok(await page.evaluate(()=>[...document.querySelectorAll('form input,form textarea')].every(e=>!e.disabled)));
+  assert.ok(!(await text(page)).includes('Comprobar guardado'));assert.ok(!(await text(page)).includes('private SDK diagnostic'));
+  await click(page,'Confirmar planificación');await waitText(page,'Cambio confirmado');assert.equal(posts.length,1);
+  checks.push('unsent-session-failure-preserves-editable-schedule-and-allows-explicit-retry');
+ }else if(mode==='unmount-token'){
+  await page.waitForFunction(()=>typeof window.__resolveToken==='function');await click(page,'Desmontar ensayo');await waitText(page,'Ensayo desmontado');
+  await page.evaluate(()=>{window.__holdToken=false;window.__resolveToken();});await new Promise(resolve=>setTimeout(resolve,150));
+  assert.equal(posts.length,0);checks.push('unmounted-schedule-never-dispatches-late-token-post');await context.close();return;
+ }else if(mode==='uncertain'){
   await waitText(page,'no confirmó el guardado');assert.equal(posts.length,1);
   assert.equal(await page.$$eval('button',nodes=>nodes.find(node=>node.textContent==='Actualizar').disabled),true);
   await click(page,'Comprobar guardado');await waitText(page,'Cambio confirmado');assert.equal(posts.length,1);checks.push('uncertain-save-recovers-receipt-without-reposting');
@@ -96,6 +109,11 @@ async function scenario(mode,width=390){
   assert.ok(await page.evaluate(()=>[...document.querySelectorAll('form input,form textarea')].every(e=>e.disabled)));
   await click(page,'Comprobar guardado');await waitText(page,'No se observa un recibo todavía');assert.equal(posts.length,1);assert.equal(statusChecks,1);
   assert.ok(await page.$eval('textarea',e=>e.disabled));assert.equal(await page.$eval('textarea',e=>e.value),'Reprogramación revisada en reunión de obra.');
+  if(mode==='rollback'){
+   await page.evaluate(()=>{window.__failNextToken=true;});await click(page,'Reintentar la misma planificación');await waitText(page,'Conservamos el intento anterior');
+   assert.equal(posts.length,1);assert.ok(await page.$eval('textarea',e=>e.disabled));assert.ok((await text(page)).includes('Comprobar guardado'));
+   checks.push('unsent-retry-keeps-the-previous-uncertain-operation-and-original-draft');
+  }
   await click(page,'Reintentar la misma planificación');await waitText(page,'Cambio confirmado');assert.equal(posts.length,2);assert.deepEqual(posts[1],posts[0]);assert.equal(applications,1);
   assert.ok((await text(page)).includes('37 %'));assert.ok((await text(page)).includes('2026-10-07 → 2026-10-15'));checks.push(mode+'-schedule-checked-then-exact-retry-once');
  }else if(mode==='conflict'){
@@ -113,7 +131,7 @@ async function taskCreateScenario(mode){
  page.on('request',async request=>{
   try{
    const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();return request.abort();}
-   if(!['/api/identity/workspace','/api/identity/task-creation'].includes(url.pathname))return request.continue();let status=200,body;
+   if(!['/api/identity/workspace','/api/identity/task-creation'].includes(url.pathname))return request.continue();assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');let status=200,body;
    if(url.pathname==='/api/identity/workspace'){
     if(!url.search)body={scope,organizationName:'Organización de prueba sintética',role:'SITE_MANAGER',roleLabel:'Jefe de obra',canPlanSchedule:true,projects:[{id:'p-a',name:'Obra de prueba A'},{id:'p-b',name:'Obra de prueba B'}],projectsTruncated:false};
     else {assert.equal(url.searchParams.get('projectId'),'p-a');body={scope,project:{id:'p-a',name:'Obra de prueba A'},canPlanSchedule:true,tasks:[baseTask()],totalTasks:1,nextCursor:null};}
@@ -149,7 +167,7 @@ try{
  assert.ok(ready,'Fixture server unavailable: '+serverLog.slice(-5000));
  browser=await puppeteer.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{}),args:['--no-sandbox','--disable-setuid-sandbox']});
  for(const width of [320,390,768,1280])await scenario('success',width);
- for(const mode of ['readonly','denied','empty','draft-cancel','uncertain','rollback','not-arrived','conflict','race'])await scenario(mode);
+ for(const mode of ['readonly','denied','empty','draft-cancel','sdk-unavailable','unmount-token','uncertain','rollback','not-arrived','conflict','race'])await scenario(mode);
  for(const mode of ['draft-cancel','uncertain','rollback','not-arrived'])await taskCreateScenario(mode);
  assert.deepEqual(pageErrors,[]);
  const proof={status:'PASS',environment:'isolated-browser-with-intercepted-synthetic-api',widths:[320,390,768,1280],checks,pageErrors,productionLoginVerified:false,productionDataWritten:false,physicalWhatsAppVerified:false};

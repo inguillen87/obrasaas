@@ -1,16 +1,17 @@
 'use client';
 import {useEffect,useRef,useState} from 'react';
+import {useWorkspaceRequest} from './workspace-request-lifecycle';
 import styles from './customer-whatsapp-panel.module.css';
 const endpoint='/api/identity/whatsapp-setup';
 const messages={WORKSPACE_INTEGRATION_PERMISSION_REQUIRED:'Tu rol actual no permite configurar el WhatsApp de esta empresa.',WORKSPACE_MEMBERSHIP_REQUIRED:'La pertenencia a esta empresa no está vigente.',WORKSPACE_CONTEXT_CHANGED:'Cambió el contexto de tu organización. Volvé a abrir la obra.',WORKSPACE_CONFLICT:'La preparación cambió mientras editabas. Tu borrador se conserva; consultá la versión actual antes de volver a guardar.',WORKSPACE_INTEGRITY:'La preparación anterior requiere revisión. No la reemplazamos por un ejemplo.',WORKSPACE_INVALID:'Revisá el nombre, el tipo de número y los circuitos elegidos.',WORKSPACE_PROJECT_MISMATCH:'La preparación no pertenece a la obra abierta.',WHATSAPP_PREPARATION_OPERATION_CONFLICT:'La clave de este intento ya pertenece a otra solicitud.',SESSION_REQUIRED:'Tu sesión terminó. Volvé a ingresar.'};
 const explain=code=>messages[code]||'No se pudo confirmar la preparación. No se modificó ninguna cuenta de Meta.';
 const stateLabel=value=>({SAVED:'Guardado',PENDING:'Pendiente',NOT_VERIFIED:'Sin verificar',RECORD_PRESENT:'Registro existente; operación no verificada',NOT_LINKED:'Sin vincular'}[value]||'Sin verificar');
-async function api(url,options={}){
- const result=await fetch(url,{credentials:'same-origin',cache:'no-store',...options});const data=await result.json();
- if(!result.ok){const error=new Error(explain(data.code));error.status=result.status;throw error;}return data;
+async function api(sessionRequest,url,options={}){
+ return sessionRequest(url,options,async result=>{const data=await result.json();if(!result.ok){const error=new Error(explain(data.code));error.status=result.status;error.code=data.code;throw error;}return data;});
 }
 const empty=()=>({assistantName:'',numberMode:'',useCases:[],confirmOwnership:false});
-export function CustomerWhatsAppPanel({projectId,scope,onPending}){
+export function CustomerWhatsAppPanel({projectId,scope,onPending,getSessionToken}){
+ const sessionRequest=useWorkspaceRequest(getSessionToken);
  const [opened,setOpened]=useState(false),[data,setData]=useState(null),[draft,setDraft]=useState(empty),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[attempt,setAttempt]=useState(null),[canRetry,setCanRetry]=useState(false);
  const mounted=useRef(true),active=useRef(null);
  const dirty=Boolean(opened&&data&&(draft.assistantName!==data.profile.assistantName||draft.numberMode!==(data.profile.numberMode||'')||JSON.stringify([...draft.useCases].sort())!==JSON.stringify([...data.profile.useCases].sort())||draft.confirmOwnership));
@@ -23,17 +24,17 @@ export function CustomerWhatsAppPanel({projectId,scope,onPending}){
  }
  async function load(){
   if(busy||attempt||dirty)return;setOpened(true);setBusy(true);setMessage('');const abort=new AbortController();active.current=abort;
-  try{const result=await api(endpoint+'?'+new URLSearchParams({projectId,scope}),{signal:abort.signal});if(mounted.current)accept(result,true);}
+  try{const result=await api(sessionRequest,endpoint+'?'+new URLSearchParams({projectId,scope}),{signal:abort.signal});if(mounted.current)accept(result,true);}
   catch(error){if(mounted.current&&error.name!=='AbortError')setMessage(error.message);}finally{if(mounted.current)setBusy(false);}
  }
  function finish(result){
   if(result.saved!==true||!result.receipt?.id)throw new Error('Falta el recibo de la preparación.');
   accept(result,true);setAttempt(null);setCanRetry(false);setMessage(result.savedProfileIsCurrent===false?'Se recuperó tu recibo. Otro cambio posterior ya modificó la preparación; se muestra la versión vigente.':'Preparación guardada. El número todavía no quedó conectado ni se enviaron mensajes.');
  }
- async function send(payload){
+ async function send(payload,retrying=false){
   setBusy(true);setCanRetry(false);setMessage('');onPending?.(true);
-  try{const result=await api(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),signal:AbortSignal.timeout(20000)});if(mounted.current)finish(result);}
-  catch(error){if(mounted.current){if(error.status&&error.status<500){setAttempt(null);setMessage(error.message);}else setMessage('El guardado quedó sin confirmar. Conservamos este intento: comprobalo antes de reenviar.');}}
+  try{const result=await api(sessionRequest,endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),requestTimeoutMs:20000});if(mounted.current)finish(result);}
+  catch(error){if(mounted.current){if((error.requestDispatched===false||error.status&&error.status<500)){if(!retrying)setAttempt(null);setMessage(error.message);}else setMessage('El guardado quedó sin confirmar. Conservamos este intento: comprobalo antes de reenviar.');}}
   finally{if(mounted.current)setBusy(false);}
  }
  async function save(event){
@@ -41,10 +42,10 @@ export function CustomerWhatsAppPanel({projectId,scope,onPending}){
   const payload={operationId:crypto.randomUUID(),projectId,scope,profile:{...draft,useCases:[...draft.useCases],initialProjectId:projectId,expectedRevision:data.profile.revision}};
   setAttempt(payload);await send(payload);
  }
- async function retry(){if(!attempt||busy||!canRetry)return;await send(attempt);}
+ async function retry(){if(!attempt||busy||!canRetry)return;await send(attempt,true);}
  async function recover(){
   if(!attempt||busy)return;setBusy(true);setCanRetry(false);
-  try{const result=await api(endpoint+'?'+new URLSearchParams({projectId,scope,operationId:attempt.operationId}),{signal:AbortSignal.timeout(15000)});
+  try{const result=await api(sessionRequest,endpoint+'?'+new URLSearchParams({projectId,scope,operationId:attempt.operationId}),{requestTimeoutMs:15000});
    if(mounted.current){if(result.state==='RECORDED')finish(result);else if(result.state==='NOT_OBSERVED'){
     accept(result,false);setCanRetry(true);setMessage('Todavía no se observa el recibo. Podés reenviar este mismo intento con su identificador y sus datos originales. No se reenvía automáticamente.');
    }else throw new Error('No se pudo comprobar el recibo de la preparación.');}}

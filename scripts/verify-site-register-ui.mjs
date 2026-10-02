@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {mkdirSync,mkdtempSync,copyFileSync,writeFileSync,rmSync} from 'node:fs';
+import {mkdirSync,mkdtempSync,copyFileSync,writeFileSync,rmSync,existsSync,readFileSync} from 'node:fs';
 import path from 'node:path';
 import {spawn} from 'node:child_process';
 import puppeteer from 'puppeteer';
@@ -8,11 +8,12 @@ assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV);
 const root=process.cwd(),output=path.join(root,'.vercel/site-register-evidence');mkdirSync(output,{recursive:true});
 const fixture=mkdtempSync(path.join(root,'.vercel/site-register-ui-')),app=path.join(fixture,'app');mkdirSync(app);
 for(const file of ['site-register-panel.js','site-register-panel.module.css'])copyFileSync(path.join(root,'src/app/(identity)/cuenta',file),path.join(app,file));
+for(const dependency of ['workspace-session-request.mjs','workspace-request-lifecycle.mjs','workspace-request-lifecycle.js','private-workspace-download.js'])copyFileSync(path.join(root,'src/app/(identity)/cuenta',dependency),path.join(app,dependency));
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'isolated-site-register-ui',private:true}));
 writeFileSync(path.join(fixture,'next.config.mjs'),`export default {devIndicators:false,turbopack:{root:${JSON.stringify(root)}}};`);
 writeFileSync(path.join(app,'layout.js'),`export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:12,background:'#081b2c',fontFamily:'Arial,sans-serif'}}>{children}</body></html>}`);
 const scope='a'.repeat(64),projectId='project-fixture';
-writeFileSync(path.join(app,'page.js'),`'use client';import {useCallback,useState} from 'react';import {SiteRegisterPanel} from './site-register-panel';export default function Page(){const [pending,setPending]=useState(false);const onPending=useCallback(value=>setPending(value),[]);return <main style={{maxWidth:1000,margin:'0 auto'}}><button data-testid="project-switch" disabled={pending}>Cambiar obra</button><SiteRegisterPanel projectId="${projectId}" scope="${scope}" onPending={onPending}/></main>}`);
+writeFileSync(path.join(app,'page.js'),`'use client';import {useCallback,useState} from 'react';import {SiteRegisterPanel} from './site-register-panel';const getSessionToken=async()=>window.__activeTabFixtureToken||'active-tab-controlled-token';export default function Page(){const [pending,setPending]=useState(false);const onPending=useCallback(value=>setPending(value),[]);return <main style={{maxWidth:1000,margin:'0 auto'}}><button data-testid="project-switch" disabled={pending}>Cambiar obra</button><SiteRegisterPanel getSessionToken={getSessionToken} projectId="${projectId}" scope="${scope}" onPending={onPending}/></main>}`);
 const port=3112,origin='http://127.0.0.1:'+port;
 const server=spawn(process.execPath,[path.join(root,'node_modules/next/dist/bin/next'),'dev',fixture,'--webpack','--hostname','127.0.0.1','--port',String(port)],{cwd:root,env:{...process.env,NEXT_TELEMETRY_DISABLED:'1'},stdio:['ignore','pipe','pipe'],detached:process.platform!=='win32'});
 let serverLog='';for(const stream of [server.stdout,server.stderr])stream.on('data',data=>{serverLog=(serverLog+data.toString()).slice(-12000);});
@@ -34,16 +35,17 @@ async function retryUnobserved(page,posts,expectedPosts){
  await click(page,'Reintentar la misma operación');await wait(page,'Recibo confirmado');assert.equal(posts.length,expectedPosts+1);assert.deepEqual(posts.at(-1),posts.at(-2));
  await page.waitForFunction(()=>!document.querySelector('[data-testid="project-switch"]').disabled);
 }
+async function downloaded(downloadPath,name){const file=path.join(downloadPath,name);for(let n=0;n<200;n++){if(existsSync(file))return readFileSync(file);await new Promise(resolve=>setTimeout(resolve,50));}throw new Error('Controlled download did not complete: '+name);}
 async function scenario(width,mode='normal'){
- const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1000});
+ const downloadPath=path.join(fixture,'downloads-'+width+'-'+mode);mkdirSync(downloadPath,{recursive:true});const context=await browser.createBrowserContext({downloadBehavior:{policy:'allow',downloadPath}}),page=await context.newPage();await context.setCookie({name:'__session',value:'other-tab-org-controlled-cookie',domain:'127.0.0.1',path:'/'});await page.setViewport({width,height:1000});
  page.on('pageerror',error=>errors.push({width,mode,error:error.message}));await page.setRequestInterception(true);
  const records={PEOPLE:[],ISSUES:[],MATERIALS:[]},receipts=new Map(),posts=[];let counter=0,photoAttempts=0,statusChecks=0;
  const revision=()=>`2026-10-01T10:00:00.${String(++counter).padStart(6,'0')}`;
  page.on('request',async request=>{
   try{
-   const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();throw new Error('Unexpected external request');}
+   const url=new URL(request.url());if(url.pathname.startsWith('/api/identity/'))assert.equal(request.headers().authorization,'Bearer active-tab-controlled-token');if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();throw new Error('Unexpected external request');}
    if(!['/api/identity/site-register','/api/identity/site-photo'].includes(url.pathname))return request.continue();
-   let body,status=200;
+   if(url.pathname==='/api/identity/site-photo'&&request.method()==='GET'&&url.searchParams.has('photoId')){assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),projectId);await request.respond({status:200,contentType:'image/png',body:picture});return;}let body,status=200;
    if(mode==='denied'){status=403;body={code:'WORKSPACE_INTEGRATION_PERMISSION_REQUIRED'};}
    else if(request.method()==='POST'){
     const input=JSON.parse(request.postData());posts.push(input);assert.equal(input.projectId,projectId);assert.equal(input.scope,scope);const p=input.payload;
@@ -96,7 +98,7 @@ async function scenario(width,mode='normal'){
  await click(page,'Guardar registro');
  if(mode.startsWith('photo-')){await retryUnobserved(page,posts,7);assert.equal(photoAttempts,2);assert.equal(statusChecks,1);assert.equal(records.ISSUES[0].photos.length,1);checks.push(mode+'-retries-exact-private-image-command-once');await context.close();return;}
  await wait(page,'Fotografía privada adjunta');await wait(page,'Descargar foto');
- assert.equal(await page.$eval('a',a=>new URL(a.href).pathname),'/api/identity/site-photo');assert.ok(!(await page.$eval('a',a=>a.href)).includes('blob.vercel-storage'));assert.equal(posts.length,7);checks.push(`private-photo-selection-and-authorized-link-${width}`);
+ await click(page,'Descargar foto 1 · 1 KB');assert.deepEqual(await downloaded(downloadPath,'obrasaas-foto.png'),picture);assert.equal(posts.length,7);checks.push(`private-photo-active-tab-bearer-download-exact-bytes-${width}`);
  checks.push(`roster-issue-material-lifecycle-${width}`);await context.close();
 }
 try{

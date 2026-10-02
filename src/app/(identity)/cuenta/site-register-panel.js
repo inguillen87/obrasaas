@@ -1,5 +1,7 @@
 'use client';
 import {useEffect,useRef,useState} from 'react';
+import {useWorkspaceRequest} from './workspace-request-lifecycle';
+import {PrivateWorkspaceDownload} from './private-workspace-download';
 import styles from './site-register-panel.module.css';
 const endpoint='/api/identity/site-register',photoEndpoint='/api/identity/site-photo';
 const tabs={PEOPLE:'Equipo de la obra',ISSUES:'Incidencias',MATERIALS:'Pedidos de materiales'};
@@ -7,12 +9,12 @@ const stateLabel={OPEN:'Pendiente',ACKNOWLEDGED:'En seguimiento',RESOLVED:'Resue
 const severityLabel={INFO:'Informativa',LOW:'Baja',MEDIUM:'Media',HIGH:'Alta',CRITICAL:'Crítica'};
 const errors={SITE_PHONE_INVALID:'Usá el teléfono internacional con + y código de país, sin espacios.',SITE_PHONE_ALREADY_REGISTERED:'Ese teléfono ya figura en esta obra, incluso si el registro está inactivo. No se duplicó.',SITE_REVISION_CHANGED:'El registro cambió. Conservamos lo que escribiste; actualizá antes de volver a decidir.',SITE_REPORT_ALREADY_CLOSED:'El registro ya está cerrado. No se repitió la decisión.',SITE_INPUT_INVALID:'Revisá los campos y completá los detalles requeridos.',SITE_QUANTITY_INVALID:'Ingresá una cantidad positiva con hasta tres decimales y una unidad válida.',SITE_OPERATION_CONFLICT:'Este intento ya corresponde a otra solicitud. No se sobreescribió.',WORKSPACE_CONTEXT_CHANGED:'Cambió tu organización o permiso. Volvé a abrir la obra.',WORKSPACE_INTEGRATION_PERMISSION_REQUIRED:'Tu rol no permite administrar estos registros.',SITE_RECORD_NOT_SUPPORTED:'Este registro anterior necesita revisión antes de modificarlo.'};
 const explain=code=>errors[code]||'No se pudo confirmar la operación. No se muestran registros de ejemplo.';
-async function api(params,options={},resource='register'){
- const response=await fetch((resource==='photo'?photoEndpoint:endpoint)+(params?'?'+new URLSearchParams(params):''),{credentials:'same-origin',cache:'no-store',...options});
- const body=await response.json();if(!response.ok){const error=new Error(explain(body.code));error.status=response.status;throw error;}return body;
+async function api(sessionRequest,params,options={},resource='register'){
+ return sessionRequest((resource==='photo'?photoEndpoint:endpoint)+(params?'?'+new URLSearchParams(params):''),options,async response=>{const body=await response.json();if(!response.ok){const error=new Error(explain(body.code));error.status=response.status;error.code=body.code;throw error;}return body;});
 }
 const blank=section=>section==='PEOPLE'?{action:'ADD_PERSON',payload:{name:'',phone:'',job:'WORKER'}}:section==='ISSUES'?{action:'REPORT_ISSUE',payload:{title:'',details:'',sector:'',severity:'MEDIUM'}}:{action:'REQUEST_MATERIAL',payload:{material:'',quantity:'',unit:'unidad',sector:'',details:''}};
-export function SiteRegisterPanel({projectId,scope,onPending}){
+export function SiteRegisterPanel({projectId,scope,onPending,getSessionToken}){
+ const sessionRequest=useWorkspaceRequest(getSessionToken);
  const [opened,setOpened]=useState(false),[section,setSection]=useState('PEOPLE'),[data,setData]=useState(null),[draft,setDraft]=useState(null),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[attempt,setAttempt]=useState(null),[retryAllowed,setRetryAllowed]=useState(false),[receipt,setReceipt]=useState(null);
  const [readingPhoto,setReadingPhoto]=useState(false);
  const mounted=useRef(true),sequence=useRef(0),abort=useRef(null),photoSequence=useRef(0);
@@ -21,7 +23,7 @@ export function SiteRegisterPanel({projectId,scope,onPending}){
  async function load(next=section,append=false){
   if(busy||attempt)return;const current=++sequence.current;abort.current?.abort();const controller=new AbortController();abort.current=controller;
   setBusy(true);setOpened(true);setNotice('');setSection(next);if(!append){setData(null);setDraft(null);}
-  try{const result=await api({projectId,scope,section:next,...(append&&data?.nextCursor?{after:data.nextCursor}:{})},{signal:controller.signal});
+  try{const result=await api(sessionRequest,{projectId,scope,section:next,...(append&&data?.nextCursor?{after:data.nextCursor}:{})},{signal:controller.signal});
    if(!mounted.current||current!==sequence.current)return;if(result.scope!==scope||result.projectId!==projectId||result.section!==next)throw new Error('Respuesta de otra obra.');
    setData(previous=>append?{...result,records:[...(previous?.records||[]),...result.records]}:result);
   }catch(error){if(mounted.current&&current===sequence.current&&error.name!=='AbortError')setNotice(error.message);}finally{if(mounted.current&&current===sequence.current)setBusy(false);}
@@ -30,7 +32,7 @@ export function SiteRegisterPanel({projectId,scope,onPending}){
  async function confirmed(result){
   if(result.scope!==scope||result.saved!==true||!result.receiptId||(!result.person&&!result.report&&!result.photo))throw new Error('El recibo no permite confirmar el registro.');
   setReceipt(result.receiptId);setAttempt(null);setRetryAllowed(false);setDraft(null);setNotice(result.photo?'Fotografía privada adjunta con recibo. No se aprobó avance ni identidad.':result.person?'Ficha guardada con recibo. Los permisos y la identidad se verifican por separado.':'Registro guardado con recibo. Podés continuar su seguimiento desde esta obra.');
-  try{const refreshed=await api({projectId,scope,section});if(mounted.current&&refreshed.scope===scope&&refreshed.projectId===projectId)setData(refreshed);}
+  try{const refreshed=await api(sessionRequest,{projectId,scope,section},{requestTimeoutMs:15000});if(mounted.current&&refreshed.scope===scope&&refreshed.projectId===projectId)setData(refreshed);}
   catch{if(mounted.current)setNotice('El guardado está confirmado. Actualizá el listado para ver los registros vigentes.');}
  }
  async function choosePhoto(event){
@@ -43,11 +45,11 @@ export function SiteRegisterPanel({projectId,scope,onPending}){
   reader.onerror=()=>{if(mounted.current&&current===photoSequence.current){setNotice('No se pudo leer el archivo. No se subió.');setReadingPhoto(false);}};
   reader.readAsDataURL(file);
  }
- async function sendAttempt(retained){
+ async function sendAttempt(retained,retrying=false){
   const {command,isPhoto}=retained;
   setAttempt(retained);setRetryAllowed(false);setBusy(true);setNotice('');setReceipt(null);
-  try{const result=await api(null,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(command),signal:AbortSignal.timeout(isPhoto?45000:20000)},isPhoto?'photo':'register');if(mounted.current)await confirmed(result);}
-  catch(error){if(mounted.current){if(error.status&&error.status<500){setAttempt(null);setNotice(error.message);}else setNotice('El resultado quedó sin confirmar. Comprobá el recibo antes de volver a guardar.');}}
+  try{const result=await api(sessionRequest,null,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(command),requestTimeoutMs:isPhoto?45000:20000},isPhoto?'photo':'register');if(mounted.current)await confirmed(result);}
+  catch(error){if(mounted.current){if((error.requestDispatched===false||error.status&&error.status<500)){if(!retrying)setAttempt(null);setNotice(error.message);}else setNotice('El resultado quedó sin confirmar. Comprobá el recibo antes de volver a guardar.');}}
   finally{if(mounted.current)setBusy(false);}
  }
  async function save(event){
@@ -58,12 +60,12 @@ export function SiteRegisterPanel({projectId,scope,onPending}){
  }
  async function retry(){
   if(busy||readingPhoto||!attempt||!retryAllowed)return;
-  await sendAttempt(attempt);
+  await sendAttempt(attempt,true);
  }
  async function recover(){
   if(busy||!attempt)return;setBusy(true);setRetryAllowed(false);
   const {command,isPhoto}=attempt;
-  try{const result=await api({projectId:command.projectId,scope:command.scope,operationId:command.operationId,...(isPhoto?{reportId:command.reportId}:{})},{signal:AbortSignal.timeout(15000)},isPhoto?'photo':'register');if(mounted.current){if(result.scope!==scope)throw new Error('La respuesta corresponde a otra organización.');if(result.state==='RECORDED')await confirmed(result);else if(result.state==='NOT_OBSERVED'){setRetryAllowed(true);setNotice('No se observa un recibo todavía. Podés comprobar otra vez o reintentar exactamente la misma operación; conservamos sus datos para evitar duplicados.');}else throw new Error('Todavía no se pudo comprobar el guardado. Conservamos el intento.');}}
+  try{const result=await api(sessionRequest,{projectId:command.projectId,scope:command.scope,operationId:command.operationId,...(isPhoto?{reportId:command.reportId}:{})},{requestTimeoutMs:15000},isPhoto?'photo':'register');if(mounted.current){if(result.scope!==scope)throw new Error('La respuesta corresponde a otra organización.');if(result.state==='RECORDED')await confirmed(result);else if(result.state==='NOT_OBSERVED'){setRetryAllowed(true);setNotice('No se observa un recibo todavía. Podés comprobar otra vez o reintentar exactamente la misma operación; conservamos sus datos para evitar duplicados.');}else throw new Error('Todavía no se pudo comprobar el guardado. Conservamos el intento.');}}
   catch(error){if(mounted.current)setNotice(error.message);}finally{if(mounted.current)setBusy(false);}
  }
  const locked=busy||readingPhoto||Boolean(attempt),p=draft?.payload;
@@ -77,7 +79,7 @@ export function SiteRegisterPanel({projectId,scope,onPending}){
     {!data.records.length&&<p className={styles.empty}>Todavía no hay registros de este tipo. No se crearon datos de ejemplo.</p>}
     <div className={styles.list}>{data.records.map(record=><article key={record.id} className={styles.card}>
      {section==='PEOPLE'?<><div className={styles.cardHeader}><strong>{record.name}</strong><span>{record.active?'En nómina de obra':'Inactivo'}</span></div><p>{record.roleLabel||'Función sin indicar'} · {record.phone}</p><small>La ficha no certifica identidad. Consultá participantes para ver el acceso y la revisión vigentes.</small>{record.editable&&<button type="button" disabled={locked} onClick={()=>setDraft({action:'SET_PERSON_ACTIVE',payload:{personId:record.id,revision:record.revision,active:!record.active,reason:''}})}>{record.active?'Dar de baja en esta obra':'Reactivar registro'}</button>}</>:
-      <><div className={styles.cardHeader}><strong>{record.title}</strong><span>{stateLabel[record.state]||record.state}</span></div><p>{record.sector}{record.type==='MATERIAL_REQUEST'?` · ${record.quantity} ${record.unit}`:` · Prioridad ${severityLabel[record.severity]||record.severity}`}</p><p className={styles.detail}>{record.details}</p>{(record.photos||[]).length>0&&<div className={styles.photos}>{record.photos.map((photo,index)=><a key={photo.id} href={photoEndpoint+'?'+new URLSearchParams({projectId,scope,reportId:record.id,photoId:photo.id})}>Descargar foto {index+1} · {Math.ceil(photo.bytes/1024)} KB</a>)}</div>}{['OPEN','ACKNOWLEDGED'].includes(record.state)&&(record.photos||[]).length<10&&<button type="button" disabled={locked} onClick={()=>setDraft({action:'ATTACH_PHOTO',payload:{reportId:record.id,revision:record.revision,image:''}})}>Adjuntar foto privada</button>}{record.review&&<small>Última decisión: {stateLabel[record.review.decision]}. {record.review.reason}</small>}{['OPEN','ACKNOWLEDGED'].includes(record.state)&&<button type="button" disabled={locked} onClick={()=>setDraft({action:'REVIEW_REPORT',payload:{reportId:record.id,revision:record.revision,decision:record.state==='OPEN'?'ACKNOWLEDGED':'RESOLVED',reason:''}})}>Gestionar registro</button>}</>}
+      <><div className={styles.cardHeader}><strong>{record.title}</strong><span>{stateLabel[record.state]||record.state}</span></div><p>{record.sector}{record.type==='MATERIAL_REQUEST'?` · ${record.quantity} ${record.unit}`:` · Prioridad ${severityLabel[record.severity]||record.severity}`}</p><p className={styles.detail}>{record.details}</p>{(record.photos||[]).length>0&&<div className={styles.photos}>{record.photos.map((photo,index)=><PrivateWorkspaceDownload key={photo.id} url={photoEndpoint+'?'+new URLSearchParams({projectId,scope,reportId:record.id,photoId:photo.id})} getSessionToken={getSessionToken} filename='obrasaas-foto' expectedBytes={photo.bytes} expectedContentType={photo.contentType} maxBytes={2*1024*1024} disabled={locked}>Descargar foto {index+1} · {Math.ceil(photo.bytes/1024)} KB</PrivateWorkspaceDownload>)}</div>}{['OPEN','ACKNOWLEDGED'].includes(record.state)&&(record.photos||[]).length<10&&<button type="button" disabled={locked} onClick={()=>setDraft({action:'ATTACH_PHOTO',payload:{reportId:record.id,revision:record.revision,image:''}})}>Adjuntar foto privada</button>}{record.review&&<small>Última decisión: {stateLabel[record.review.decision]}. {record.review.reason}</small>}{['OPEN','ACKNOWLEDGED'].includes(record.state)&&<button type="button" disabled={locked} onClick={()=>setDraft({action:'REVIEW_REPORT',payload:{reportId:record.id,revision:record.revision,decision:record.state==='OPEN'?'ACKNOWLEDGED':'RESOLVED',reason:''}})}>Gestionar registro</button>}</>}
     </article>)}</div>
     {data.nextCursor&&<button type="button" disabled={locked} onClick={()=>load(section,true)}>Cargar más registros</button>}
     {section==='MATERIALS'&&<p className={styles.note}>Un pedido no es una orden de compra. Su seguimiento no mueve inventario, autoriza gastos ni certifica una entrega física.</p>}

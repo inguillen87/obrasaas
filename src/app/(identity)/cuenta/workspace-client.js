@@ -1,7 +1,7 @@
 'use client';
 import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import styles from './workspace.module.css';
-import {workspaceSessionRequest} from './workspace-session-request.mjs';
+import {useWorkspaceRequest} from './workspace-request-lifecycle';
 import {TaskCreatePanel} from './task-create-panel';
 import {CustomerWhatsAppPanel} from './customer-whatsapp-panel';
 import {SiteRegisterPanel} from './site-register-panel';
@@ -14,9 +14,10 @@ import {OperationsStatusPanel} from './operations-status-panel';
 const endpoint='/api/identity/workspace';
 const messages={WORKSPACE_ORGANIZATION_REQUIRED:'Elegí una organización desde tu cuenta para consultar las obras asignadas.',WORKSPACE_MEMBERSHIP_REQUIRED:'Tu organización activa todavía no tiene una pertenencia vigente vinculada a esta cuenta.',WORKSPACE_PROJECT_UNAVAILABLE:'Esta obra no está disponible con tus permisos actuales.',WORKSPACE_CONTEXT_CHANGED:'Cambió tu organización o tu permiso. Volvé a cargar las obras antes de continuar.',SCHEDULE_REVISION_CHANGED:'Otra persona modificó la tarea. Actualizá el cronograma antes de volver a planificar.',SCHEDULE_PERMISSION_REQUIRED:'Tu rol actual no puede modificar la planificación.',SCHEDULE_UNCHANGED:'Las fechas son iguales a las registradas. No se hizo ningún cambio.',SCHEDULE_OPERATION_CONFLICT:'Este intento ya pertenece a otra solicitud. Comprobá su recibo antes de continuar.',SESSION_REQUIRED:'Tu sesión venció. Volvé a ingresar.',SCHEDULE_DATES_INVALID:'Revisá el inicio y el fin. El fin no puede ser anterior al inicio.',SCHEDULE_REASON_REQUIRED:'Explicá brevemente el motivo del cambio.'};
 const describe=code=>messages[code]||'No se pudo confirmar la operación. No se reemplazaron los datos por ejemplos.';
-async function requestWorkspace(getSessionToken,query='',options={}){
- const response=await workspaceSessionRequest(endpoint+query,options,{getSessionToken});
- const body=await response.json();if(!response.ok){const error=new Error(describe(body.code));error.code=body.code;error.status=response.status;throw error;}return body;
+async function requestWorkspace(transport,query='',options={}){
+ return transport(endpoint+query,options,async response=>{
+  const body=await response.json();if(!response.ok){const error=new Error(describe(body.code));error.code=body.code;error.status=response.status;throw error;}return body;
+ });
 }
 const query=values=>'?' + new URLSearchParams(values).toString();
 const statusLabel=value=>({BACKLOG:'Por iniciar',IN_PROGRESS:'En curso',DONE:'Finalizada',BLOCKED:'Bloqueada'}[value]||value);
@@ -27,7 +28,8 @@ function timeline(tasks){
  return {start,end};
 }
 export function AccountWorkspace({getSessionToken}={}){
- const request=useCallback((query='',options={})=>requestWorkspace(getSessionToken,query,options),[getSessionToken]);
+ const transport=useWorkspaceRequest(getSessionToken);
+ const request=useCallback((query='',options={})=>requestWorkspace(transport,query,options),[transport]);
  const [account,setAccount]=useState(null),[view,setView]=useState(null),[loading,setLoading]=useState(true),[notice,setNotice]=useState(''),[draft,setDraft]=useState(null),[attempt,setAttempt]=useState(null),[retryAllowed,setRetryAllowed]=useState(false),[saving,setSaving]=useState(false),[receipt,setReceipt]=useState(null);
  const generation=useRef(0),controller=useRef(null),mounted=useRef(true);
  const [creatingTask,setTaskCreating]=useState(false),[modulePending,setModulePending]=useState({});
@@ -68,24 +70,25 @@ export function AccountWorkspace({getSessionToken}={}){
   if(data.scope!==account?.scope||data.task?.id!==draft?.task.id||data.saved!==true||!data.receipt?.id||data.receipt.taskId!==draft.task.id)throw new Error('No se pudo correlacionar el recibo con esta tarea.');
   setView(previous=>({...previous,tasks:previous.tasks.map(task=>task.id===data.task.id?data.task:task)}));setReceipt(data.receipt);setAttempt(null);setRetryAllowed(false);setDraft(null);setNotice('Planificación guardada con recibo. El avance ejecutado no fue modificado.');
  }
- async function sendAttempt(payload){
+ async function sendAttempt(payload,retrying=false){
+  const current=generation.current;
   setSaving(true);setNotice('');setAttempt(payload);setRetryAllowed(false);
-  try{const data=await request('',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),signal:AbortSignal.timeout(20000)});applySaved(data);}
-  catch(error){if(mounted.current){if(error.status&&error.status<500){setAttempt(null);setNotice(error.message);}else setNotice('El servidor no confirmó el guardado. Conservamos este intento: comprobá el recibo antes de modificar o reenviar.');}}
-  finally{if(mounted.current)setSaving(false);}
+  try{const data=await request('',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),signal:AbortSignal.timeout(20000)});if(mounted.current&&current===generation.current)applySaved(data);}
+  catch(error){if(mounted.current&&current===generation.current){if(retrying){setRetryAllowed(error.requestDispatched===false);setNotice(error.message+' Conservamos el intento anterior; comprobá su recibo antes de modificar la planificación.');}else if(error.requestDispatched===false||(error.status&&error.status<500)){setAttempt(null);setNotice(error.message);}else setNotice('El servidor no confirmó el guardado. Conservamos este intento: comprobá el recibo antes de modificar o reenviar.');}}
+  finally{if(mounted.current&&current===generation.current)setSaving(false);}
  }
  async function save(event){
   event.preventDefault();if(saving||attempt||!draft||!view)return;
   await sendAttempt({operationId:crypto.randomUUID(),projectId:view.project.id,taskId:draft.task.id,scope:account.scope,expectedRevision:draft.task.revision,startsOn:draft.startsOn,endsOn:draft.endsOn,reason:draft.reason});
  }
  async function retry(){
-  if(saving||!attempt||!retryAllowed)return;await sendAttempt(attempt);
+  if(saving||!attempt||!retryAllowed)return;await sendAttempt(attempt,true);
  }
  async function recover(){
-  if(saving||!attempt)return;setSaving(true);setRetryAllowed(false);
+  if(saving||!attempt)return;const current=generation.current;setSaving(true);setRetryAllowed(false);
   try{const data=await request(query({projectId:attempt.projectId,scope:attempt.scope,operationId:attempt.operationId}),{signal:AbortSignal.timeout(15000)});
-   if(mounted.current){if(data.scope!==account?.scope)throw new Error('La respuesta corresponde a otra organización.');if(data.state==='RECORDED')applySaved(data);else if(data.state==='NOT_OBSERVED'){setRetryAllowed(true);setNotice('No se observa un recibo todavía. Podés comprobar otra vez o reintentar exactamente la misma planificación; conservamos sus datos para evitar duplicados.');}else throw new Error('Todavía no se pudo comprobar el guardado. Conservamos el intento.');}
-  }catch(error){if(mounted.current)setNotice(error.message);}finally{if(mounted.current)setSaving(false);}
+   if(mounted.current&&current===generation.current){if(data.scope!==account?.scope)throw new Error('La respuesta corresponde a otra organización.');if(data.state==='RECORDED')applySaved(data);else if(data.state==='NOT_OBSERVED'){setRetryAllowed(true);setNotice('No se observa un recibo todavía. Podés comprobar otra vez o reintentar exactamente la misma planificación; conservamos sus datos para evitar duplicados.');}else throw new Error('Todavía no se pudo comprobar el guardado. Conservamos el intento.');}
+  }catch(error){if(mounted.current&&current===generation.current)setNotice(error.message);}finally{if(mounted.current&&current===generation.current)setSaving(false);}
  }
  return <section className={styles.workspace} aria-labelledby="workspace-title">
   <div className={styles.heading}><div><p className={styles.eyebrow}>ESPACIO DE TRABAJO</p><h2 id="workspace-title">Mis obras</h2></div><button type="button" onClick={refresh} disabled={contextLocked||loading}>Actualizar</button></div>
@@ -99,7 +102,7 @@ export function AccountWorkspace({getSessionToken}={}){
   </>}
   {view&&<section aria-labelledby="schedule-title" className={styles.schedule}>
    <div className={styles.heading}><div><p className={styles.eyebrow}>CRONOGRAMA REGISTRADO</p><h3 id="schedule-title">{view.project.name}</h3></div><span>{view.tasks.length} de {view.totalTasks} tareas</span></div>
-   {view.canPlanSchedule&&!draft&&<TaskCreatePanel key={`${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} onPending={setTaskCreating} onCreated={task=>setView(current=>current&&current.project.id===view.project.id?{...current,totalTasks:current.tasks.some(t=>t.id===task.id)?current.totalTasks:current.totalTasks+1,tasks:current.tasks.some(t=>t.id===task.id)?current.tasks.map(t=>t.id===task.id?task:t):[task,...current.tasks]}:current)}/> }
+   {view.canPlanSchedule&&!draft&&<TaskCreatePanel key={`${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={setTaskCreating} onCreated={task=>setView(current=>current&&current.project.id===view.project.id?{...current,totalTasks:current.tasks.some(t=>t.id===task.id)?current.totalTasks:current.totalTasks+1,tasks:current.tasks.some(t=>t.id===task.id)?current.tasks.map(t=>t.id===task.id?task:t):[task,...current.tasks]}:current)}/> }
    {range&&<div className={styles.range}><span>{new Date(range.start).toISOString().slice(0,10)}</span><span>{new Date(range.end-86400000).toISOString().slice(0,10)}</span></div>}
    {!view.tasks.length&&<p className={styles.empty}>Esta obra todavía no tiene tareas registradas. No se generaron barras ni porcentajes de ejemplo.</p>}
    <div className={styles.tasks}>{view.tasks.map(task=>{
@@ -120,13 +123,13 @@ export function AccountWorkspace({getSessionToken}={}){
    </form>}
    {receipt&&<div className={styles.receipt}><strong>Cambio confirmado</strong><span>{receipt.after.startsOn} → {receipt.after.endsOn}</span><small>Recibo: {receipt.id}</small></div>}
   </section>}
-  {view&&account?.canManageIntegrations&&<SiteRegisterPanel key={`register:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} onPending={registerPending}/> }
-  {view&&<ParticipantPanel key={`participants:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} onPending={participantPending}/> }
-  {view&&<WorkerChannelPanel key={`channel:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} onPending={channelPending}/> }
-  {view&&<FieldOperationsPanel key={`field:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} tasks={view.tasks} onPending={fieldPending} onTasksChanged={tasksChanged}/> }
-  {view&&account?.canManageIntegrations&&<SitePurchasePanel key={`purchases:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} onPending={purchasePending}/> }
-  {view&&account?.canManageIntegrations&&<CustomerWhatsAppPanel key={`${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} onPending={preparationPending}/> }
-  {view&&account?.canManageIntegrations&&<MetaOnboardingPanel key={`meta:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} onPending={metaPending}/> }
-  {view&&account?.canManageIntegrations&&<OperationsStatusPanel key={`operations:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope}/> }
+  {view&&account?.canManageIntegrations&&<SiteRegisterPanel key={`register:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={registerPending}/> }
+  {view&&<ParticipantPanel key={`participants:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={participantPending}/> }
+  {view&&<WorkerChannelPanel key={`channel:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={channelPending}/> }
+  {view&&<FieldOperationsPanel key={`field:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} tasks={view.tasks} onPending={fieldPending} onTasksChanged={tasksChanged}/> }
+  {view&&account?.canManageIntegrations&&<SitePurchasePanel key={`purchases:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={purchasePending}/> }
+  {view&&account?.canManageIntegrations&&<CustomerWhatsAppPanel key={`${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={preparationPending}/> }
+  {view&&account?.canManageIntegrations&&<MetaOnboardingPanel key={`meta:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={metaPending}/> }
+  {view&&account?.canManageIntegrations&&<OperationsStatusPanel key={`operations:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken}/> }
  </section>;
 }
