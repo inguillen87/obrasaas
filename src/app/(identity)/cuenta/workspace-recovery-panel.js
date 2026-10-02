@@ -9,10 +9,14 @@ export function WorkspaceRecoveryPanel({scope,projects,getSessionToken,onRecover
   const request=useWorkspaceRequest(getSessionToken);
   const [entries,setEntries]=useState([]),[busy,setBusy]=useState(null),[messages,setMessages]=useState({}),[notice,setNotice]=useState('');
   useEffect(()=>{
-    let active=true;
-    const read=()=>{try{const rows=browserRecoveryJournal.list(scope);if(active)setEntries(rows.filter(row=>projects.some(project=>project.id===row.projectId)));}catch{if(active)setNotice('No se pueden consultar las referencias pendientes de este navegador. Revisá su almacenamiento antes de guardar otra operación.');}};
-    read();window.addEventListener(RECOVERY_EVENT,read);window.addEventListener('storage',read);
-    return()=>{active=false;window.removeEventListener(RECOVERY_EVENT,read);window.removeEventListener('storage',read);};
+    let active=true,readSequence=0;
+    const storageNotice='No se pueden consultar las referencias pendientes de este navegador. Revisá su almacenamiento antes de guardar otra operación.';
+    const read=async()=>{const sequence=++readSequence;try{const rows=await browserRecoveryJournal.list(scope);if(active&&sequence===readSequence){setEntries(rows.filter(row=>projects.some(project=>project.id===row.projectId)));setNotice(previous=>previous===storageNotice?'':previous);}}catch{if(active&&sequence===readSequence)setNotice(storageNotice);}};
+    const visible=()=>{if(document.visibilityState==='visible')void read();};
+    let channel;
+    if(typeof BroadcastChannel==='function'){try{channel=new BroadcastChannel(RECOVERY_EVENT);channel.onmessage=event=>{if(event.data?.version===1&&event.data?.type==='invalidate')void read();};}catch{/* Focus and the local event remain available. */}}
+    read();window.addEventListener(RECOVERY_EVENT,read);window.addEventListener('storage',read);window.addEventListener('focus',read);document.addEventListener('visibilitychange',visible);
+    return()=>{active=false;channel?.close();window.removeEventListener(RECOVERY_EVENT,read);window.removeEventListener('storage',read);window.removeEventListener('focus',read);document.removeEventListener('visibilitychange',visible);};
   },[scope,projects]);
   async function check(entry) {
     if(busy)return;setBusy(entry.operationId);setNotice('');
@@ -26,11 +30,12 @@ export function WorkspaceRecoveryPanel({scope,projects,getSessionToken,onRecover
     } catch(error){if(error.name!=='AbortError')setNotice(error.message);}
     finally {setBusy(null);}
   }
-  if(!entries.length&&!notice)return null;
+  const visibleEntries=entries.filter(entry=>entry.scope===scope&&projects.some(project=>project.id===entry.projectId));
+  if(!visibleEntries.length&&!notice)return null;
   return <section className={styles.recovery} aria-labelledby="pending-receipts-title">
     <p className={styles.eyebrow}>RECUPERACIÓN</p><h3 id="pending-receipts-title">Operaciones por comprobar</h3>
     <p>Quedó una confirmación pendiente en este navegador. Podemos consultar su recibo después de recargar o volver a abrir la cuenta. Se conservan sólo referencias del intento; los textos, archivos y datos del formulario no se guardan en el navegador.</p>
     <p role="status" aria-live="polite">{notice}</p>
-    <ul>{entries.map(entry=><li key={entry.resource+entry.operationId}><div><strong>{RECOVERY_RESOURCES[entry.resource]}</strong><span>{projects.find(project=>project.id===entry.projectId)?.name}</span><small>{new Date(entry.createdAt).toLocaleString('es-AR')}</small>{messages[entry.operationId]&&<p>{messages[entry.operationId]}</p>}<details><summary>Referencia del intento</summary><code>{entry.operationId}</code></details></div><button type="button" disabled={Boolean(busy)} onClick={()=>check(entry)}>{busy===entry.operationId?'Comprobando…':'Comprobar recibo'}</button></li>)}</ul>
+    <ul>{visibleEntries.map(entry=><li key={entry.resource+entry.operationId}><div><strong>{RECOVERY_RESOURCES[entry.resource]}</strong><span>{projects.find(project=>project.id===entry.projectId)?.name}</span><small>{new Date(entry.createdAt).toLocaleString('es-AR')}</small>{messages[entry.operationId]&&<p>{messages[entry.operationId]}</p>}<details><summary>Referencia del intento</summary><code>{entry.operationId}</code></details></div><button type="button" disabled={Boolean(busy)} onClick={()=>check(entry)}>{busy===entry.operationId?'Comprobando…':'Comprobar recibo'}</button></li>)}</ul>
   </section>;
 }

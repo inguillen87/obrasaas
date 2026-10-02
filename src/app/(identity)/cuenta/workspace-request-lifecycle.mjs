@@ -31,11 +31,14 @@ export function createWorkspaceRequestLifecycle(getSessionToken, {fetchImpl,jour
           Promise.resolve().then(() => controller.signal.aborted ? undefined : consume(response)).then(value => finish(resolve,value),error => finish(reject,error));
         });
         if (controller.signal.aborted || !active) throw new DOMException('La consulta se canceló.', 'AbortError');
-        journal?.settle(ticket,result);
-        journal?.observe(url,result);
+        await journal?.settle(ticket,result);
+        await journal?.observe(url,result);
+        if (controller.signal.aborted || !active) throw new DOMException('La consulta se canceló.', 'AbortError');
         return result;
       } catch(error) {
-        journal?.settle(ticket,null,error);
+        // Cleanup can fail after a dispatch or a confirmed storage commit.
+        // Preserve the original request error and its dispatch classification.
+        try { await journal?.settle(ticket,null,error); } catch { /* The unresolved reference remains for explicit recovery. */ }
         throw error;
       } finally {
         clearTimeout(timer);

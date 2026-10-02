@@ -69,3 +69,24 @@ test('deadlines remain bounded without shortening existing 45–60 second provid
  await assert.rejects(lifecycle.request('/invalid',{requestTimeoutMs:60001}),TypeError);assert.equal(calls,0);
  assert.deepEqual(await lifecycle.request('/provider',{requestTimeoutMs:60000}),{saved:true});assert.equal(calls,1);lifecycle.abort();
 });
+
+for(const phase of ['settle','observe'])test(`cancellation during awaited ${phase} preserves confirmation without delivering an old-context result`,async()=>{
+ let release,start,calls=0,delivered=false,confirmed=false,cleanupErrors=0;
+ const started=new Promise(resolve=>{start=resolve;}),blocked=new Promise(resolve=>{release=resolve;});
+ const controller=new AbortController(),ticket={id:'original-reference'};
+ const journal={prepare:async()=>ticket,settle:async(current,result,error)=>{
+  assert.equal(current,ticket);
+  if(error){assert.equal(error.name,'AbortError');cleanupErrors++;return;}
+  assert.deepEqual(result,{saved:true,projectId:'old-project'});
+  if(phase==='settle'){start();await blocked;}
+  confirmed=true;
+ },observe:async()=>{if(phase==='observe'){start();await blocked;}}};
+ const lifecycle=createWorkspaceRequestLifecycle(async()=> 'active-tab',{journal,fetchImpl:async()=>{calls++;return Response.json({saved:true,projectId:'old-project'});}});
+ const pending=lifecycle.request('/write',{method:'POST',signal:controller.signal}).then(result=>{delivered=true;return result;});
+ await started;
+ if(phase==='settle')lifecycle.abort();else controller.abort();
+ release();
+ await assert.rejects(pending,error=>error.name==='AbortError'&&error.requestDispatched===undefined);
+ assert.equal(delivered,false);assert.equal(confirmed,true);assert.equal(cleanupErrors,1);assert.equal(calls,1);
+ lifecycle.abort();
+});
