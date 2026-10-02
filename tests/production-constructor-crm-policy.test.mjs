@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { randomUUID } from 'node:crypto';
 import { normalizeCrmAccountInput } from '../src/lib/enterprise-crm-policy.mjs';
 import { validateConstructorCrmCommand, normalizeConstructorCrmInput, serializeConstructorCrmAccount, CONSTRUCTOR_CRM_FIELDS } from '../src/lib/constructor-crm-policy.mjs';
 import { constructorCrmMigrationArguments, constructorCrmProductionContext, constructorCrmDisposableConnection, CONSTRUCTOR_CRM_TARGET } from '../scripts/lib/constructor-crm-migration.mjs';
@@ -61,22 +62,27 @@ test('production migration target comes from pinned project/team and production 
   assert.throws(() => constructorCrmProductionContext(env, { ...project, orgId: 'other-team' }, project.projectId, project.orgId), { code: 'CONSTRUCTOR_CRM_MIGRATION_TARGET_REJECTED' });
 });
 test('production build cannot bypass schema gate with CI and sanitizes failed connection diagnostics', async () => {
-  const environment = { VERCEL_ENV: 'production', VERCEL_PROJECT_ID: CONSTRUCTOR_CRM_TARGET.projectId, NEXT_PUBLIC_APP_URL: CONSTRUCTOR_CRM_TARGET.origin, CI: 'true', DATABASE_URL: 'postgresql://synthetic:private-value@ep-control.example.neon.tech/neondb?sslmode=require' };
+  // The parser requires userinfo; generate it per run and inject makeClient so no remote connection occurs.
+  const fixtureUrl = new URL('postgresql://ep-control.example.neon.tech/neondb?sslmode=require');
+  fixtureUrl.username = randomUUID(); fixtureUrl.password = randomUUID();
+  const environment = { VERCEL_ENV: 'production', VERCEL_PROJECT_ID: CONSTRUCTOR_CRM_TARGET.projectId, NEXT_PUBLIC_APP_URL: CONSTRUCTOR_CRM_TARGET.origin, CI: 'true', DATABASE_URL: fixtureUrl.toString() };
   let called = 0;
   const result = await inspectConstructorCrmBuildGate({ environment, makeClient: () => { called++; throw new Error(environment.DATABASE_URL); } });
   assert.equal(called, 1); assert.equal(result.required, true); assert.equal(result.passed, false); assert.equal(result.status, 'UNCONFIRMED');
-  assert.doesNotMatch(JSON.stringify(result), /synthetic|private-value|neon.tech|postgresql/);
+  const diagnostic = JSON.stringify(result);
+  assert.doesNotMatch(diagnostic, /neon.tech|postgresql/);
+  assert.equal(diagnostic.includes(fixtureUrl.username), false); assert.equal(diagnostic.includes(fixtureUrl.password), false);
   const skipped = await inspectConstructorCrmBuildGate({ environment: { ...environment, VERCEL_ENV: 'preview' }, makeClient: () => { throw Error('must not connect'); } });
   assert.equal(skipped.required, false); assert.equal(skipped.passed, false); assert.equal(skipped.status, 'SKIPPED_NON_PRODUCTION');
 });
 test('migration CLI rejects an unapproved target before opening a database and emits no raw credentials', () => {
   const script = new URL('../scripts/adopt-constructor-crm-schema.mjs', import.meta.url);
-  const result = spawnSync(process.execPath, [fileURLToPath(script), '--apply', '--expected-project', 'another-project', '--expected-team', 'another-team', '--expected-fingerprint', 'a'.repeat(64)], { encoding: 'utf8', env: { ...process.env, VERCEL_ENV: 'preview', DATABASE_URL: 'postgresql://private:never-print@private.example/secret' } });
+  const result = spawnSync(process.execPath, [fileURLToPath(script), '--apply', '--expected-project', 'another-project', '--expected-team', 'another-team', '--expected-fingerprint', 'a'.repeat(64)], { encoding: 'utf8', env: { ...process.env, VERCEL_ENV: 'preview', DATABASE_URL: 'postgresql://private.example/secret' } });
   assert.equal(result.status, 1); assert.doesNotMatch(result.stdout + result.stderr, /never-print|private.example|postgresql:/);
   assert.match(result.stderr, /CONSTRUCTOR_CRM_MIGRATION_TARGET_REJECTED/);
 });
 test('disposable fixture rejects production, nonlocal hosts and missing explicit disposability before any connection', () => {
-  const env = { CUTOVER_TEST_DATABASE_URL: 'postgresql://synthetic@127.0.0.1:6549/obrasaas_cutover_ci', CUTOVER_TEST_DISPOSABLE: '1' };
+  const env = { CUTOVER_TEST_DATABASE_URL: 'postgresql://127.0.0.1:6549/obrasaas_cutover_ci', CUTOVER_TEST_DISPOSABLE: '1' };
   assert.equal(constructorCrmDisposableConnection(env).hostname, '127.0.0.1');
-  for (const patch of [{ CUTOVER_TEST_DISPOSABLE: '0' }, { VERCEL_ENV: 'production' }, { VERCEL: '1' }, { CUTOVER_TEST_DATABASE_URL: 'postgresql://synthetic@ep-real.neon.tech/neondb' }, { CUTOVER_TEST_DATABASE_URL: 'postgresql://synthetic@localhost/another_database' }, { CUTOVER_TEST_DATABASE_URL: 'postgresql://synthetic@localhost/obrasaas_cutover_ci?sslmode=require' }]) assert.throws(() => constructorCrmDisposableConnection({ ...env, ...patch }), { code: 'CONSTRUCTOR_CRM_DISPOSABLE_TARGET_REJECTED' });
+  for (const patch of [{ CUTOVER_TEST_DISPOSABLE: '0' }, { VERCEL_ENV: 'production' }, { VERCEL: '1' }, { CUTOVER_TEST_DATABASE_URL: 'postgresql://ep-real.neon.tech/neondb' }, { CUTOVER_TEST_DATABASE_URL: 'postgresql://localhost/another_database' }, { CUTOVER_TEST_DATABASE_URL: 'postgresql://localhost/obrasaas_cutover_ci?sslmode=require' }]) assert.throws(() => constructorCrmDisposableConnection({ ...env, ...patch }), { code: 'CONSTRUCTOR_CRM_DISPOSABLE_TARGET_REJECTED' });
 });

@@ -7,6 +7,10 @@ import { readConstructorCrmCatalog, checkConstructorCrmCatalog, assertConstructo
 import { inspectConstructorCrmBuildGate } from './lib/constructor-crm-build-gate.mjs';
 
 const checks = [], database = 'obrasaas_crm_adoption_' + randomUUID().replaceAll('-', '');
+// Exercise the real production URL parser with ephemeral synthetic userinfo.
+// Both gate tests inject a client for the owned local DB; this URL is never used to connect.
+const productionFixtureUrl = new URL('postgresql://ep-fixture.example.neon.tech/neondb');
+productionFixtureUrl.username = randomUUID(); productionFixtureUrl.password = randomUUID();
 let admin, client, locker, created = false;
 try {
   const url = constructorCrmDisposableConnection(process.env);
@@ -95,10 +99,10 @@ try {
   await assert.rejects(assertConstructorCrmSchema(client), { code: 'CONSTRUCTOR_CRM_SCHEMA_INCOMPATIBLE' });
   await client.query('DROP INDEX public."CrmAccount_ownerOrganizationId_id_idx"'); await client.query('CREATE INDEX "CrmAccount_ownerOrganizationId_id_idx" ON public."CrmAccount"("ownerOrganizationId",id)');
   checks.push('runtime-rejects-unvalidated-or-PG18-unenforced-checks-and-wrong-keyset-index-despite-identical-object-names');
-  const build = await inspectConstructorCrmBuildGate({ environment: { VERCEL_ENV: 'production', VERCEL_PROJECT_ID: CONSTRUCTOR_CRM_TARGET.projectId, NEXT_PUBLIC_APP_URL: CONSTRUCTOR_CRM_TARGET.origin, CI: 'true', DATABASE_URL: 'postgresql://synthetic:controlled@ep-fixture.example.neon.tech/neondb' }, makeClient: () => new Client(connection) });
+  const build = await inspectConstructorCrmBuildGate({ environment: { VERCEL_ENV: 'production', VERCEL_PROJECT_ID: CONSTRUCTOR_CRM_TARGET.projectId, NEXT_PUBLIC_APP_URL: CONSTRUCTOR_CRM_TARGET.origin, CI: 'true', DATABASE_URL: productionFixtureUrl.toString() }, makeClient: () => new Client(connection) });
   assert.equal(build.required, true); assert.equal(build.passed, true); assert.equal(build.readOnly, true); assert.equal(build.ddlExecuted, false); assert.equal(build.businessRowsRead, 0);
   checks.push('mandatory-production-prebuild-reader-verifies-adopted-schema-in-real-local-RR-readonly-transaction-without-claiming-production-acceptance');
-  const lateFailure = await inspectConstructorCrmBuildGate({ environment: { VERCEL_ENV: 'production', VERCEL_PROJECT_ID: CONSTRUCTOR_CRM_TARGET.projectId, NEXT_PUBLIC_APP_URL: CONSTRUCTOR_CRM_TARGET.origin, DATABASE_URL: 'postgresql://synthetic:controlled@ep-fixture.example.neon.tech/neondb' }, makeClient: () => {
+  const lateFailure = await inspectConstructorCrmBuildGate({ environment: { VERCEL_ENV: 'production', VERCEL_PROJECT_ID: CONSTRUCTOR_CRM_TARGET.projectId, NEXT_PUBLIC_APP_URL: CONSTRUCTOR_CRM_TARGET.origin, DATABASE_URL: productionFixtureUrl.toString() }, makeClient: () => {
     const value = new Client(connection), end = value.end.bind(value);
     value.end = async () => { await end(); value.emit('error', new Error('Synthetic private connection diagnostic')); };
     return value;
