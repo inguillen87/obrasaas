@@ -1,17 +1,19 @@
 'use client';
 import {useEffect,useRef,useState} from 'react';
+import {useWorkspaceRequest} from './workspace-request-lifecycle';
 import styles from './operations-status-panel.module.css';
 const names={'site.register.changed':'Registro de obra','site.purchase.changed':'Compra o recepción','participant.operation.recorded':'Acceso o identidad','field.operation.recorded':'Jornada, evidencia o avance','field.media.recorded':'Archivo privado o procesamiento','meta.field.dispatched':'Actividad de campo recibida por WhatsApp','worker.channel.identity.recorded':'Vinculación de identidad al canal','integration.whatsapp.customer_state':'Autorización WhatsApp','integration.whatsapp.customer.activated':'Canal de WhatsApp habilitado','integration.whatsapp.customer.deactivated':'Canal de WhatsApp desactivado','integration.whatsapp.inbox.reviewed':'Revisión de un mensaje recibido','integration.whatsapp.inbox.classified':'Mensaje recibido clasificado','task.schedule.reviewed':'Fechas de tarea','task.created.from_workspace':'Nueva tarea'};
 const count=value=>Number.isInteger(value)&&value>=0?value:'Sin dato';
 function Metrics({rows}){return <dl className={styles.metrics}>{rows.map(([title,value])=><div key={title}><dt>{title}</dt><dd>{count(value)}</dd></div>)}</dl>;}
 const date=value=>new Date(/Z$|[+-]\d\d:\d\d$/.test(value||'')?value:value+'Z').toLocaleString('es-AR');
-function OperationsStatusPanelInner({projectId,scope}) {
+function OperationsStatusPanelInner({projectId,scope,getSessionToken}) {
+ const sessionRequest=useWorkspaceRequest(getSessionToken);
  const [data,setData]=useState(null),[busy,setBusy]=useState(false),[notice,setNotice]=useState(''),alive=useRef(true),request=useRef(null);
  useEffect(()=>{alive.current=true;return()=>{alive.current=false;request.current?.abort();};},[]);
  async function load() {
   if(busy)return;setBusy(true);setNotice('');const controller=new AbortController();request.current=controller;const timeout=setTimeout(()=>controller.abort(),15000);
-  try{const r=await fetch('/api/identity/operations-status?'+new URLSearchParams({projectId,scope}),{credentials:'same-origin',cache:'no-store',signal:controller.signal}),result=await r.json();
-   if(!r.ok||result.scope!==scope||result.projectId!==projectId)throw new Error('No se pudo consultar el estado con los permisos actuales. Volvé a intentar desde esta obra.');
+  try{const result=await sessionRequest('/api/identity/operations-status?'+new URLSearchParams({projectId,scope}),{signal:controller.signal,requestTimeoutMs:15000},async r=>{const value=await r.json();if(!r.ok)throw new Error('No se pudo consultar el estado con los permisos actuales. Volvé a intentar desde esta obra.');return value;});
+   if(result.scope!==scope||result.projectId!==projectId)throw new Error('No se pudo consultar el estado con los permisos actuales. Volvé a intentar desde esta obra.');
    if(alive.current)setData(result);
   }catch(e){if(alive.current){setData(null);setNotice(e.name==='AbortError'?'La consulta no se completó. Podés volver a intentar.':e.message);}}finally{clearTimeout(timeout);if(alive.current)setBusy(false);}
  }

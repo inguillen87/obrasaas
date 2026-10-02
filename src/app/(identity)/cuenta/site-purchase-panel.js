@@ -1,14 +1,15 @@
 'use client';
 import {useEffect,useRef,useState} from 'react';
+import {useWorkspaceRequest} from './workspace-request-lifecycle';
 import styles from './site-purchase-panel.module.css';
 const endpoint='/api/identity/site-purchases';
 const label={DRAFT:'Por autorizar',APPROVED:'Compra autorizada',REJECTED:'Rechazada',PARTIAL:'Recepción parcial',RECEIVED:'Recibida completa',CANCELLED:'Cancelada'};
 const messages={PURCHASE_REVISION_CHANGED:'Otra persona cambió este pedido. Conservamos tus campos; actualizá antes de decidir.',PURCHASE_RECEIPT_EXCEEDS_ORDER:'La recepción supera el saldo de la compra. Revisá la cantidad.',PURCHASE_REQUEST_QUANTITY_EXCEEDED:'La compra supera la cantidad solicitada. Revisá el pedido.',PURCHASE_DELIVERY_ALREADY_RECORDED:'Ese remito ya está registrado en esta compra.',PURCHASE_APPROVAL_REQUIRED:'Primero debe autorizarse la compra.',PURCHASE_STATE_CHANGED:'La compra cambió de estado. Actualizá antes de decidir.',PURCHASE_PRICE_INVALID:'Ingresá un precio positivo con hasta dos decimales.',PURCHASE_QUANTITY_INVALID:'Ingresá una cantidad positiva con hasta tres decimales.',PURCHASE_REQUEST_CLOSED:'Este pedido está cerrado. Hace falta registrar un nuevo pedido.',WORKSPACE_CONTEXT_CHANGED:'Cambió tu organización o permiso. Volvé a abrir la obra.'};
-async function api(params,options={}) {
- const r=await fetch(endpoint+(params?'?'+new URLSearchParams(params):''),{credentials:'same-origin',cache:'no-store',...options}),body=await r.json();
- if(!r.ok){const e=new Error(messages[body.code]||'No se pudo confirmar la operación. Conservamos tus datos.');e.status=r.status;throw e;}return body;
+async function api(sessionRequest,params,options={}) {
+ return sessionRequest(endpoint+(params?'?'+new URLSearchParams(params):''),options,async r=>{const body=await r.json();if(!r.ok){const e=new Error(messages[body.code]||'No se pudo confirmar la operación. Conservamos tus datos.');e.status=r.status;e.code=body.code;throw e;}return body;});
 }
-export function SitePurchasePanel({projectId,scope,onPending}) {
+export function SitePurchasePanel({projectId,scope,onPending,getSessionToken}) {
+ const sessionRequest=useWorkspaceRequest(getSessionToken);
  const [opened,setOpened]=useState(false),[data,setData]=useState(null),[draft,setDraft]=useState(null),[busy,setBusy]=useState(false),[attempt,setAttempt]=useState(null),[retryAllowed,setRetryAllowed]=useState(false),[notice,setNotice]=useState(''),[receipt,setReceipt]=useState('');
  const alive=useRef(true),sequence=useRef(0),abort=useRef(null);
  useEffect(()=>{alive.current=true;return()=>{alive.current=false;abort.current?.abort();};},[]);
@@ -16,7 +17,7 @@ export function SitePurchasePanel({projectId,scope,onPending}) {
  async function load(append=false) {
   if(busy||attempt)return;const n=++sequence.current;abort.current?.abort();const c=new AbortController();abort.current=c;
   setOpened(true);setBusy(true);setNotice('');
-  try {const result=await api({projectId,scope,...(append&&data?.nextCursor?{after:data.nextCursor}:{})},{signal:c.signal});
+  try {const result=await api(sessionRequest,{projectId,scope,...(append&&data?.nextCursor?{after:data.nextCursor}:{})},{signal:c.signal});
    if(!alive.current||n!==sequence.current)return;if(result.scope!==scope||result.projectId!==projectId)throw new Error('La respuesta corresponde a otra obra.');
    setData(old=>append?{...result,records:[...(old?.records||[]),...result.records]}:result);
   }catch(e){if(alive.current&&e.name!=='AbortError')setNotice(e.message);}finally{if(alive.current&&n===sequence.current)setBusy(false);}
@@ -33,10 +34,10 @@ export function SitePurchasePanel({projectId,scope,onPending}) {
   setData(old=>old?{...old,records:old.records.map(r=>r.id===result.record.id?result.record:r)}:old);
   setAttempt(null);setRetryAllowed(false);setDraft(null);setReceipt(result.receiptId);setNotice('Operación confirmada.');
  }
- async function sendAttempt(input) {
+ async function sendAttempt(input,retrying=false) {
   setBusy(true);setAttempt(input);setRetryAllowed(false);setNotice('');setReceipt('');
-  try{const result=await api(null,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(input),signal:AbortSignal.timeout(15000)});if(alive.current)confirmed(result);}
-  catch(error){if(alive.current){if(error.status&&error.status<500)setAttempt(null);setNotice(error.status&&error.status<500?error.message:'El resultado quedó sin confirmar. Comprobá el guardado antes de otro intento.');}}
+  try{const result=await api(sessionRequest,null,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(input),requestTimeoutMs:15000});if(alive.current)confirmed(result);}
+  catch(error){if(alive.current){if(!retrying&&(error.requestDispatched===false||error.status&&error.status<500))setAttempt(null);setNotice((error.requestDispatched===false||error.status&&error.status<500)?error.message:'El resultado quedó sin confirmar. Comprobá el guardado antes de otro intento.');}}
   finally{if(alive.current)setBusy(false);}
  }
  async function save(e) {
@@ -45,11 +46,11 @@ export function SitePurchasePanel({projectId,scope,onPending}) {
  }
  async function retry() {
   if(busy||!attempt||!retryAllowed)return;
-  await sendAttempt(attempt);
+  await sendAttempt(attempt,true);
  }
  async function recover() {
   if(busy||!attempt)return;setBusy(true);setRetryAllowed(false);
-  try{const result=await api({projectId,scope,operationId:attempt.operationId},{signal:AbortSignal.timeout(15000)});
+  try{const result=await api(sessionRequest,{projectId,scope,operationId:attempt.operationId},{requestTimeoutMs:15000});
    if(alive.current){if(result.scope!==scope)throw new Error('La respuesta corresponde a otra organización.');if(result.state==='RECORDED')confirmed(result);else if(result.state==='NOT_OBSERVED'){setRetryAllowed(true);setNotice('No se observa un recibo todavía. Podés comprobar otra vez o reintentar exactamente la misma operación; conservamos sus datos para evitar duplicados.');}else throw new Error('Todavía no se pudo comprobar el guardado. Conservamos el intento.');}}
   catch(error){if(alive.current)setNotice(error.message);}finally{if(alive.current)setBusy(false);}
  }
