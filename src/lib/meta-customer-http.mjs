@@ -1,4 +1,4 @@
-import {WorkspaceError,workspaceId,requireWorkspaceIdentity} from './workspace-policy.mjs';
+import {WorkspaceError,workspaceId,operationId,requireWorkspaceIdentity} from './workspace-policy.mjs';
 import {boundedBody} from './workspace-http.mjs';
 const headers={'Cache-Control':'private, no-store, max-age=0','Vary':'Cookie, Authorization','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','X-Robots-Tag':'noindex, nofollow'};
 export function createMetaCustomerHandlers({verify,service}){
@@ -9,9 +9,12 @@ export function createMetaCustomerHandlers({verify,service}){
    if(request.method==='POST'){if(request.headers.get('origin')!=='https://obrasaas.com'||params.size)throw new WorkspaceError('WORKSPACE_ORIGIN_REJECTED',403);
     return Response.json(await service.command(session,await boundedBody(request)),{headers});}
    if(request.method!=='GET')return Response.json({code:'METHOD_NOT_ALLOWED'},{status:405,headers});
-   for(const name of params.keys())if(!['projectId','scope'].includes(name)||params.getAll(name).length!==1)throw new WorkspaceError('META_CUSTOMER_INPUT_INVALID');
+   for(const name of params.keys())if(!['projectId','scope','after','operationId','eventId','action'].includes(name)||params.getAll(name).length!==1)throw new WorkspaceError('META_CUSTOMER_INPUT_INVALID');
    const projectId=params.get('projectId'),scope=params.get('scope');if(!workspaceId(projectId)||!/^[a-f0-9]{64}$/.test(scope||''))throw new WorkspaceError('META_CUSTOMER_INPUT_INVALID');
-   return Response.json(await service.read(session,{projectId,scope}),{headers});
+   const event=value=>/^customer_webhook_[a-f0-9]{64}$/.test(value||'');
+   const receipt=params.has('operationId')||params.has('eventId')||params.has('action');
+   if(params.has('after')&&(!event(params.get('after'))||receipt)||receipt&&(!operationId(params.get('operationId'))||!event(params.get('eventId'))||!['process_inbox','review_inbox'].includes(params.get('action'))))throw new WorkspaceError('META_CUSTOMER_INBOX_INPUT_INVALID');
+   return Response.json(await service.read(session,{projectId,scope,...(params.has('after')?{after:params.get('after')}:{}) ,...(receipt?{operationId:params.get('operationId'),eventId:params.get('eventId'),action:params.get('action')}:{})}),{headers});
   }catch(error){return Response.json({saved:false,code:error instanceof WorkspaceError?error.code:'META_CUSTOMER_OPERATION_UNCONFIRMED'},{status:error instanceof WorkspaceError?error.status:503,headers});}
  }
  return {GET:handle,POST:handle};

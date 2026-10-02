@@ -21,7 +21,7 @@ const session=(user,org)=>({authenticated:true,verification:'clerk-production-jw
 const owner=session('user_Owner','org_A'),foreign=session('user_Foreign','org_B'),colleague=session('user_Colleague','org_A');
 let pool,created=false,clock=Date.parse('2026-10-01T00:00:00Z');const admin=new Client({connectionString:source}),checks=[];
 const token='synthetic-customer-secret-only-1234567890';let exchanges=0,subscriptions=0,registrations=0,registered=false,subscriptionFails=false,exchangeFails=false,registerResponseLost=false,templateCreates=0,templateResponseLost=false;const remoteTemplates=new Map();
-let registerError=null,inspectHook=null,inspections=0;
+let registerError=null,inspectHook=null,inspections=0,templateFindHook=null;
 let inspectionScopes=['whatsapp_business_management','whatsapp_business_messaging'];
 const provider={readiness:()=>metaCustomerReadiness(environment),exchange:async()=>{exchanges++;if(exchangeFails)throw new Error('Synthetic exchange response lost');return token;},
  inspect:async()=>{inspections++;const hook=inspectHook;inspectHook=null;if(hook)await hook();return {scopes:[...inspectionScopes],expiresAt:null,registered,phoneStatus:registered?'CONNECTED':'PENDING',displayPhoneNumber:'+54 synthetic',verifiedBusinessName:'Synthetic customer'};},
@@ -29,7 +29,7 @@ const provider={readiness:()=>metaCustomerReadiness(environment),exchange:async(
  subscribe:async()=>{subscriptions++;if(subscriptionFails)throw new WorkspaceError('META_CUSTOMER_PROVIDER_UNCONFIRMED',503);return true;},
  templates:async({wabaId})=>({wabaId,items:[{id:'12345678',name:'customer_invite',language:'es_AR',status:'PENDING'}],complete:true,observedAt:new Date(clock).toISOString()}),
  register:async()=>{registrations++;if(registerError)throw registerError;registered=true;if(registerResponseLost)throw new WorkspaceError('META_CUSTOMER_REGISTRATION_UNCONFIRMED',503);return true;},
- findTemplate:async({wabaId,name})=>remoteTemplates.get(wabaId+':'+name)||null,
+ findTemplate:async(params)=>{const hook=templateFindHook;templateFindHook=null;return hook?hook(params):remoteTemplates.get(params.wabaId+':'+params.name)||null;},
  createTemplate:async({wabaId,definition})=>{templateCreates++;remoteTemplates.set(wabaId+':'+definition.name,{id:'123456789012345',name:definition.name,components:definition.components,language:definition.language,category:definition.category,status:'PENDING'});if(templateResponseLost)throw new WorkspaceError('META_CUSTOMER_TEMPLATE_SUBMISSION_UNCONFIRMED',503);return {id:'123456789012345',status:'PENDING'};}};
 try{
  await admin.connect();await admin.query(`CREATE DATABASE "${database}"`);created=true;url.pathname='/'+database;pool=trackDisposablePool(new Pool({connectionString:url.toString(),max:8}));
@@ -90,8 +90,28 @@ try{
  await service.command(owner,submit);assert.equal(templateCreates,1);
  const recoveredTemplate=await service.command(owner,command('p-1','recover_template',{signupId:start.signup.id,blueprintKey:'participant_invitation'}));assert.equal(recoveredTemplate.templateWorkbench.drafts[0].state,'SUBMITTED');assert.equal(recoveredTemplate.templateWorkbench.drafts[0].providerStatus,'PENDING');assert.equal(recoveredTemplate.templateWorkbench.drafts[0].canSend,false);assert.equal(templateCreates,1);checks.push('exact-template-review-and-lost-submission-recover-without-a-second-create');
  const remoteKey=input.wabaId+':'+draft.name,knownRemote=remoteTemplates.get(remoteKey);remoteTemplates.delete(remoteKey);
- const missingTemplate=await service.command(owner,command('p-1','recover_template',{signupId:start.signup.id,blueprintKey:'participant_invitation'}));assert.equal(missingTemplate.templateWorkbench.drafts[0].state,'SUBMISSION_UNKNOWN');assert.equal(templateCreates,1);
+ const missingTemplate=await service.command(owner,command('p-1','recover_template',{signupId:start.signup.id,blueprintKey:'participant_invitation'}));assert.equal(missingTemplate.templateWorkbench.drafts[0].state,'SUBMISSION_UNKNOWN');assert.equal(missingTemplate.templateWorkbench.drafts[0].providerStatus,null);assert.equal(missingTemplate.templateWorkbench.drafts[0].providerCategory,null);assert.equal(missingTemplate.templateWorkbench.drafts[0].lastConfirmedObservation.status,'PENDING');assert.equal(templateCreates,1);
  remoteTemplates.set(remoteKey,knownRemote);checks.push('missing-or-unverifiable-remote-template-clears-current-status-confidence-without-create');
+ // A slower missing observation cannot replace a newer confirmed approval.
+ let releaseOldTemplate,oldTemplateSeen;const oldTemplatePause=new Promise(resolve=>{releaseOldTemplate=resolve;}),oldTemplateObserved=new Promise(resolve=>{oldTemplateSeen=resolve;});
+ templateFindHook=async()=>{oldTemplateSeen();await oldTemplatePause;return null;};
+ const oldTemplateRecovery=service.command(owner,command('p-1','recover_template',{signupId:start.signup.id,blueprintKey:'participant_invitation'}));await oldTemplateObserved;
+ remoteTemplates.set(remoteKey,{...knownRemote,status:'APPROVED'});
+ const newestTemplateRequest=command('p-1','recover_template',{signupId:start.signup.id,blueprintKey:'participant_invitation'}),newestTemplate=await service.command(owner,newestTemplateRequest);assert.equal(newestTemplate.templateWorkbench.drafts[0].providerStatus,'APPROVED');
+ releaseOldTemplate();await assert.rejects(oldTemplateRecovery,{code:'META_CUSTOMER_TEMPLATE_STATE_CHANGED'});
+ const currentTemplate=(await service.read(owner,context('p-1'))).templateWorkbench.drafts[0];assert.equal(currentTemplate.state,'SUBMITTED');assert.equal(currentTemplate.providerStatus,'APPROVED');assert.equal(currentTemplate.lastConfirmedObservation.status,'APPROVED');assert.equal(currentTemplate.canSend,false);assert.equal(templateCreates,1);
+ checks.push('late-template-recovery-cannot-overwrite-a-newer-owned-provider-observation');
+ remoteTemplates.delete(remoteKey);const unavailableApproved=await service.command(owner,command('p-1','recover_template',{signupId:start.signup.id,blueprintKey:'participant_invitation'})),unavailableDraft=unavailableApproved.templateWorkbench.drafts[0];assert.equal(unavailableDraft.providerStatus,null);assert.equal(unavailableDraft.providerCategory,null);assert.equal(unavailableDraft.lastConfirmedObservation.status,'APPROVED');assert.equal(unavailableDraft.state,'SUBMISSION_UNKNOWN');assert.equal(unavailableDraft.canSend,false);assert.equal(templateCreates,1);
+ remoteTemplates.set(remoteKey,{...knownRemote,status:'APPROVED'});await service.command(owner,command('p-1','recover_template',{signupId:start.signup.id,blueprintKey:'participant_invitation'}));
+ checks.push('unknown-template-read-retains-approved-history-without-claiming-current-provider-approval');
+ // The same fence applies before CREATE, not only after provider I/O.
+ const secondTemplate=await service.command(owner,command('p-1','prepare_template',{signupId:start.signup.id,blueprintKey:'field_evidence_request'})),secondDraft=secondTemplate.templateWorkbench.drafts.find(item=>item.blueprintKey==='field_evidence_request');
+ let releaseOldSubmission,oldSubmissionSeen;const oldSubmissionPause=new Promise(resolve=>{releaseOldSubmission=resolve;}),oldSubmissionObserved=new Promise(resolve=>{oldSubmissionSeen=resolve;});
+ templateFindHook=async()=>{oldSubmissionSeen();await oldSubmissionPause;return null;};
+ const oldSubmission=service.command(owner,command('p-1','submit_template',{signupId:start.signup.id,review:{blueprintKey:secondDraft.blueprintKey,expectedName:secondDraft.name,contentSha256:secondDraft.contentSha256,confirmed:true}}));await oldSubmissionObserved;
+ const recoveryDuringSubmission=await service.command(owner,command('p-1','recover_template',{signupId:start.signup.id,blueprintKey:secondDraft.blueprintKey}));assert.equal(recoveryDuringSubmission.templateWorkbench.drafts.find(item=>item.blueprintKey===secondDraft.blueprintKey).state,'SUBMISSION_UNKNOWN');
+ releaseOldSubmission();await assert.rejects(oldSubmission,{code:'META_CUSTOMER_TEMPLATE_STATE_CHANGED'});assert.equal(templateCreates,1);
+ checks.push('superseded-template-submission-is-fenced-before-any-second-provider-create');
  const escrowStart=await begin('p-7');let failEscrow=true;
  const failingWorkspace=createWorkspaceStore({connect:async()=>{const client=await pool.connect();return {release:bad=>client.release(bad),query:async(sql,args)=>{if(failEscrow&&sql.startsWith('UPDATE public."Project"')&&JSON.parse(args[2]).metaSignup.state==='CREDENTIAL_STORED'){failEscrow=false;throw new Error('Synthetic escrow rollback');}return client.query(sql,args);}};}});
  const failingService=createMetaCustomerOnboarding({workspace:failingWorkspace,provider,environment,now:()=>clock}),escrowInput=complete('p-7',escrowStart,7);await assert.rejects(failingService.command(owner,escrowInput),{code:'META_CUSTOMER_ESCROW_UNCONFIRMED'});

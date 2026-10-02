@@ -56,6 +56,29 @@ test('missing database membership never reaches project data and rolls back',asy
  const store=createWorkspaceStore({connect:async()=>({query:async(sql)=>{calls.push(sql);return {rows:[]};},release:()=>{released=true;}})});
  await assert.rejects(store.list(session),{code:'WORKSPACE_MEMBERSHIP_REQUIRED'});assert.equal(released,true);assert.equal(calls.at(-1),'ROLLBACK');assert.ok(!calls.some(sql=>sql.includes('FROM public."Task"')));
 });
+
+test('real planning receipt recovery confirms recorded writes and leaves absent receipts uncertain',async()=>{
+ const calls=[],actor={...member,actorId:'actor-a',organizationName:'Synthetic organization'},receiptId=scheduleReceiptId(actor.actorId,'project-a',change().operationId);
+ const savedTask={id:'task-a',title:'Synthetic task',status:'IN_PROGRESS',progress:37,startsOn:'2026-10-01',endsOn:'2026-10-10',revision:'2026-10-01T12:00:00.123456'};
+ let recorded=true;
+ const store=createWorkspaceStore({connect:async()=>({query:async(sql,values)=>{
+  calls.push(sql);
+  if(sql.includes('FROM public."PlatformUser"'))return {rows:[actor]};
+  if(sql.includes('FROM public."ProjectMembership"'))return {rows:[{id:'project-member-a'}]};
+  if(sql.includes('FROM public."Project"'))return {rows:[{id:'project-a',name:'Synthetic worksite',status:'ACTIVE'}]};
+  if(sql.includes('FROM public."AuditLog"')){assert.deepEqual(values,[receiptId,actor.actorId,actor.organizationId]);return {rows:recorded?[{id:receiptId,entityId:savedTask.id,recordedAt:savedTask.revision,metadata:{projectId:'project-a',before:{startsOn:null,endsOn:null},after:{startsOn:savedTask.startsOn,endsOn:savedTask.endsOn}}}]:[]};}
+  if(sql.includes('FROM public."Task"'))return {rows:[savedTask]};
+  return {rows:[]};
+ },release:()=>{}})});
+ const handlers=createWorkspaceHandlers({verify:async()=>session,store});
+ const query='?'+new URLSearchParams({projectId:'project-a',scope,operationId:change().operationId});
+ const response=await handlers.GET(request('GET',null,{},query)),result=await response.json();
+ assert.equal(response.status,200);assert.match(response.headers.get('Cache-Control'),/no-store/);
+ assert.equal(result.state,'RECORDED');assert.equal(result.saved,true);assert.equal(result.receipt.id,receiptId);assert.equal(result.receipt.taskId,result.task.id);assert.deepEqual(result.task,savedTask);
+ recorded=false;
+ assert.deepEqual(await (await handlers.GET(request('GET',null,{},query))).json(),{scope,state:'NOT_OBSERVED',definitive:false});
+ assert.ok(calls.includes('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY'));assert.ok(!calls.some(sql=>/^(INSERT|UPDATE|DELETE|COMMIT)\b/.test(sql)));
+});
 test('workspace never reads global state, rotates Meta credentials or disables TLS',()=>{
  const files=['workspace-policy.mjs','workspace-store.mjs','workspace-http.mjs','workspace-runtime.mjs'].map(path=>readFileSync(new URL('../src/lib/'+path,import.meta.url),'utf8')).join('\n');
  assert.doesNotMatch(files,/getAppState|saveAppState|obrasaas_app_state|rejectUnauthorized:\s*false|META_WHATSAPP_ACCESS_TOKEN|CLERK_SECRET_KEY/);

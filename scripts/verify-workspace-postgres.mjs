@@ -4,6 +4,7 @@ import {mkdirSync,writeFileSync} from 'node:fs';
 import {Pool,Client} from 'pg';
 import {trackDisposablePool,closeDisposablePool} from './lib/disposable-postgres-cleanup.mjs';
 import {createWorkspaceStore} from '../src/lib/workspace-store.mjs';
+import {createWorkspaceHandlers} from '../src/lib/workspace-http.mjs';
 import {createCustomerWhatsAppSetup} from '../src/lib/customer-whatsapp-setup.mjs';
 
 // This script never connects to Neon/production and never receives provider secrets.
@@ -58,7 +59,7 @@ try{
   assert.deepEqual(persisted,{progress:37,status:'IN_PROGRESS',metadata:{unrelated:'preserve'}});checks.push('one-durable-receipt-under-concurrent-retries-no-progress-side-effects');
   await assert.rejects(store.schedule(manager,{...original,operationId:randomUUID()}),{code:'SCHEDULE_REVISION_CHANGED'});
   await assert.rejects(store.schedule(manager,{...original,reason:'Different payload using the same operation key'}),{code:'SCHEDULE_OPERATION_CONFLICT'});
-  const status=await store.status(manager,{projectId:'p-a',scope:manage.scope,operationId:original.operationId});assert.equal(status.state,'RECORDED');
+  const status=await store.status(manager,{projectId:'p-a',scope:manage.scope,operationId:original.operationId});assert.equal(status.state,'RECORDED');assert.equal(status.saved,true);assert.equal(status.receipt.id,results[0].receipt.id);assert.equal(status.receipt.taskId,status.task.id);
   assert.equal((await store.status(owner,{projectId:'p-a',scope:own.scope,operationId:original.operationId})).state,'NOT_OBSERVED');checks.push('conflict-and-receipt-isolation');
   const beforeRollback=(await read()).tasks[0];
   const failing=createWorkspaceStore({connect:async()=>{const client=await pool.connect();return {release:bad=>client.release(bad),query:(sql,values)=>{if(sql.startsWith('INSERT INTO public."AuditLog"'))throw new Error('SYNTHETIC_PRIVATE_FAILURE');return client.query(sql,values);}};}});
@@ -68,7 +69,10 @@ try{
   const ambiguous=createWorkspaceStore({connect:async()=>{const client=await pool.connect();return {release:bad=>client.release(bad),query:async(sql,values)=>{const result=await client.query(sql,values);if(sql==='COMMIT')throw new Error('Synthetic lost commit acknowledgement');return result;}};}});
   const ambiguousInput={...await input(),startsOn:'2026-11-03',endsOn:'2026-11-08'};
   await assert.rejects(ambiguous.schedule(manager,ambiguousInput),{code:'WORKSPACE_OPERATION_UNCONFIRMED'});
-  assert.equal((await store.status(manager,{projectId:'p-a',scope:manage.scope,operationId:ambiguousInput.operationId})).state,'RECORDED');
+  const handlers=createWorkspaceHandlers({verify:async()=>manager,store});
+  const recoveryResponse=await handlers.GET(new Request('https://obrasaas.com/api/identity/workspace?'+new URLSearchParams({projectId:'p-a',scope:manage.scope,operationId:ambiguousInput.operationId})));
+  assert.equal(recoveryResponse.status,200);assert.match(recoveryResponse.headers.get('Cache-Control'),/no-store/);
+  const recovery=await recoveryResponse.json();assert.equal(recovery.state,'RECORDED');assert.equal(recovery.saved,true);assert.equal(recovery.task.id,ambiguousInput.taskId);assert.equal(recovery.receipt.taskId,recovery.task.id);assert.deepEqual(recovery.receipt.after,{startsOn:ambiguousInput.startsOn,endsOn:ambiguousInput.endsOn,revision:recovery.task.revision});assert.equal(recovery.task.progress,37);
   assert.equal((await store.schedule(manager,ambiguousInput)).replayed,true);checks.push('lost-commit-acknowledgement-recovers-without-a-second-write');
   // Revocation wins before authorization: SELECT FOR SHARE waits and rechecks ACTIVE.
   const beforeRevocation=(await read()).tasks[0],blockedInput={...await input(),startsOn:'2026-12-01',endsOn:'2026-12-05'};
