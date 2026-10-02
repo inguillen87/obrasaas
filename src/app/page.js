@@ -336,7 +336,7 @@ export default function Home() {
               <span style={{ color: '#22c55e' }}>inteligencia como motor</span>
             </h2>
             <p style={{ color: '#64748b', fontSize: '1.05rem', maxWidth: '580px', margin: '0 auto' }}>
-              Tu equipo envía un audio. La plataforma actualiza el Gantt, certifica el avance y notifica al director.
+              Tu equipo presenta evidencia y propone un avance. Una persona autorizada revisa la propuesta; sólo una aprobación actualiza la tarea y el Gantt.
             </p>
           </div>
         </Reveal>
@@ -354,7 +354,7 @@ export default function Home() {
                 <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#f59e0b' }} />
                 <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#22c55e' }} />
               </div>
-              <span style={{ fontSize: '0.76rem', color: '#475569', fontFamily: tokens.font.mono, marginLeft: '12px' }}>obrasaas.app/dashboard — Integración WhatsApp ↔ Gantt</span>
+              <span style={{ fontSize: '0.76rem', color: '#94a3b8', fontFamily: tokens.font.mono, marginLeft: '12px', minWidth: 0, overflowWrap: 'anywhere' }}>obrasaas.com — Ejemplo ilustrativo de WhatsApp y avance</span>
             </div>
 
             {/* Content */}
@@ -365,7 +365,7 @@ export default function Home() {
                   <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'linear-gradient(135deg, #22c55e, #16a34a)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '1rem', fontWeight: 800 }}>W</div>
                   <div>
                     <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#f1f5f9' }}>ObraSaaS Bot</div>
-                    <div style={{ fontSize: '0.7rem', color: '#22c55e', fontWeight: 600 }}>en línea</div>
+                    <div style={{ fontSize: '0.7rem', color: '#22c55e', fontWeight: 600 }}>Conversación de ejemplo</div>
                   </div>
                 </div>
 
@@ -374,7 +374,7 @@ export default function Home() {
                   style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '14px' }}>
                   <div style={{ background: 'rgba(22, 101, 52, 0.4)', border: '1px solid rgba(34, 197, 94, 0.2)', padding: '12px 16px', borderRadius: '14px 14px 4px 14px', maxWidth: '85%', fontSize: '0.84rem', color: '#d1fae5' }}>
                     <div style={{ fontSize: '0.72rem', color: '#86efac', marginBottom: '4px', fontWeight: 600 }}>Juan Gómez — Oficial Albañil</div>
-                    [Audio 0:08s] &quot;Marcelo, terminamos de revocar el muro norte. Listo para certificar.&quot;
+                    [Audio 0:08s] &quot;Marcelo, terminamos de revocar el muro norte. Listo para revisar.&quot;
                     <div style={{ textAlign: 'right', fontSize: '0.64rem', color: '#6ee7b7', marginTop: '6px' }}>08:32 ✓✓</div>
                   </div>
                 </motion.div>
@@ -384,9 +384,9 @@ export default function Home() {
                   style={{ display: 'flex', justifyContent: 'flex-start' }}>
                   <div style={{ background: 'rgba(30, 41, 59, 0.6)', border: '1px solid rgba(255,255,255,0.06)', padding: '12px 16px', borderRadius: '14px 14px 14px 4px', maxWidth: '90%', fontSize: '0.84rem', color: '#cbd5e1' }}>
                     <div style={{ fontSize: '0.72rem', color: '#f59e0b', marginBottom: '6px', fontWeight: 700 }}>Copiloto ObraSaaS</div>
-                    Revoque Grueso actualizado al 100% en el Gantt. Bloque SHA-256 generado. Director técnico notificado.
+                    Propuesta de Revoque Grueso registrada para revisión. El avance del Gantt se mantiene hasta una decisión autorizada.
                     <div style={{ marginTop: '8px', padding: '8px 10px', borderRadius: '8px', background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.15)', fontSize: '0.72rem', fontFamily: tokens.font.mono, color: '#fbbf24' }}>
-                      hash: e3b0c442...b7852b855
+                      Ejemplo: propuesta pendiente de aprobación
                     </div>
                   </div>
                 </motion.div>
@@ -395,11 +395,11 @@ export default function Home() {
               {/* Dashboard simulation */}
               <div style={{ padding: '28px' }}>
                 <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '16px' }}>
-                  Actualización en tiempo real
+                  Ejemplo de tareas y revisiones
                 </div>
 
                 {[
-                  { task: 'Revoque Grueso — Muro Norte', progress: 100, status: 'Certificado', color: '#22c55e' },
+                  { task: 'Revoque Grueso — Muro Norte', progress: 60, status: 'Por revisar', color: '#f59e0b' },
                   { task: 'Contrapiso Nivel 3', progress: 75, status: 'En Ejecución', color: '#f59e0b' },
                   { task: 'Instalación Sanitaria Piso 2', progress: 40, status: 'Programada', color: '#3b82f6' },
                   { task: 'Losa de Hormigón Nivel 4', progress: 0, status: 'Pendiente', color: '#475569' }
