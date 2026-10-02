@@ -1,6 +1,9 @@
+import {createBrowserRecoveryStorage} from './workspace-recovery-storage.mjs';
+
 // Receipt references only. Never persist commands, tokens, files, location or messages.
 export const RECOVERY_EVENT = 'obrasaas:pending-receipts';
-const prefix = 'obrasaas.pending-receipt.v1.';
+export const WORKSPACE_RECOVERY_PREFIX = 'obrasaas.pending-receipt.v1.';
+const prefix = WORKSPACE_RECOVERY_PREFIX;
 const uuid = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 const id = value => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(value);
 const scopeValid = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
@@ -11,6 +14,7 @@ export const RECOVERY_RESOURCES = Object.freeze({
   'site-purchases':'Compra o recepción', 'whatsapp-setup':'Preparación de WhatsApp',
   'meta-onboarding':'Seguimiento de WhatsApp', 'worker-channel':'Mi WhatsApp y autorización de avisos',
   'template-send':'Recordatorio autorizado de jornada',
+  'constructor-crm':'Cliente u oportunidad de la empresa',
 });
 const failure = (code, message) => Object.assign(new Error(message), {code,status:409,requestDispatched:false});
 const unavailable = () => failure('WORKSPACE_RECOVERY_STORAGE_UNAVAILABLE','No se pudo conservar la referencia del intento en este navegador. Habilitá el almacenamiento y volvé a intentar; la operación no se envió.');
@@ -43,6 +47,15 @@ function valid(entry) {
   return (entry.resource!=='site-photo'||id(entry.reportId))&&(entry.resource!=='meta-onboarding'||['review_inbox','process_inbox'].includes(entry.action)&&id(entry.eventId));
 }
 const keyOf=entry=>prefix+entry.scope+'.'+entry.resource+'.'+entry.operationId;
+export function validateWorkspaceRecoveryStoredEntry(key,raw) {
+  let entry;
+  try {
+    if(typeof key!=='string'||typeof raw!=='string'||raw.length>2048)throw unavailable();
+    entry=JSON.parse(raw);
+    if(!valid(entry)||key!==keyOf(entry))throw unavailable();
+  } catch { throw unavailable(); }
+  return entry;
+}
 export function recoveryQuery(entry) {
   if(!valid(entry))throw new TypeError('Invalid receipt reference');
   return '/api/identity/'+entry.resource+'?'+new URLSearchParams({projectId:entry.projectId,scope:entry.scope,operationId:entry.operationId,
@@ -51,6 +64,13 @@ export function recoveryQuery(entry) {
 export function recoveryResult(entry, result) {
   if(!valid(entry)||result?.scope!==entry.scope)return null;
   if(result.projectId!==undefined&&result.projectId!==entry.projectId)return null;
+  if(entry.resource==='constructor-crm'){
+    if(result.projectId!==entry.projectId)return null;
+    if(result.state==='NOT_OBSERVED'&&result.saved===false&&result.definitive===false&&!result.receipt)return {state:'NOT_OBSERVED'};
+    const receipt=result.receipt;
+    if(result.state==='RECORDED'&&result.saved===true&&result.definitive===true&&id(receipt?.id)&&receipt.operationId===entry.operationId&&id(receipt.accountId)&&['CREATE','UPDATE'].includes(receipt.action)&&Number.isSafeInteger(receipt.revision)&&receipt.revision>=1&&(!result.record||result.record.id===receipt.accountId&&result.record.revision>=receipt.revision))return {state:'RECORDED',receiptId:receipt.id};
+    return null;
+  }
   if(entry.resource==='template-send') {
     const receipt=result.receipt;
     if(result.state==='NOT_OBSERVED'&&result.definitive===false)return {state:'NOT_OBSERVED'};
@@ -73,66 +93,104 @@ export function recoveryResult(entry, result) {
   if(entry.resource==='participants'&&result.state==='INVITATION_UNCONFIRMED'&&result.participant?.status==='REVOKED')return {state:'PARTICIPATION_REVOKED'};
   return ['NOT_OBSERVED','PROCESSING','INVITATION_UNCONFIRMED'].includes(result.state)?{state:result.state}:null;
 }
-export function createWorkspaceRecoveryJournal({getStorage,now=Date.now,notify=()=>{},withLock}) {
-  const storage=()=>{try{const value=getStorage();if(!value)throw unavailable();return value;}catch{throw unavailable();}};
-  function list(scope) {
-    if(!scopeValid(scope))return [];
-    const s=storage(),entries=[];
-    try {
+export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.now,notify=()=>{},withLock}) {
+  // getStorage is retained only for controlled in-memory tests. The browser uses
+  // one transactional adapter; receipt policy remains in this factory.
+  const storageOperation=withStorage||((mode,scope,callback,signal)=>{
+    if(signal?.aborted)throw new DOMException('La consulta se canceló.','AbortError');
+    const value=getStorage?.();if(!value)throw unavailable();return callback(value);
+  });
+  async function access(mode,scope,callback,signal) {
+    try { return await storageOperation(mode,scope,callback,signal); }
+    catch(error) {
+      if(error?.name==='AbortError'||error?.requestDispatched===false&&['WORKSPACE_RECOVERY_REQUIRED','WORKSPACE_RECOVERY_CONFLICT','WORKSPACE_RECOVERY_STORAGE_UNAVAILABLE'].includes(error.code))throw error;
+      throw unavailable();
+    }
+  }
+  function readEntries(s,scope) {
+    const entries=[];
     for(let i=0;i<s.length;i++){
       const key=s.key(i);if(!key?.startsWith(prefix+scope+'.'))continue;
-      const raw=s.getItem(key);let entry;try{if(raw?.length>2048)throw unavailable();entry=JSON.parse(raw);}catch{throw unavailable();}
-      if(!valid(entry)||entry.scope!==scope||key!==keyOf(entry))throw unavailable();
+      const entry=validateWorkspaceRecoveryStoredEntry(key,s.getItem(key));
+      if(entry.scope!==scope)throw unavailable();
       entries.push(entry);if(entries.length>64)throw unavailable();
     }
-    } catch { throw unavailable(); }
     return entries.sort((a,b)=>a.createdAt-b.createdAt||a.operationId.localeCompare(b.operationId));
   }
-  function remove(entry) {try{storage().removeItem(keyOf(entry));notify();return true;}catch{return false;}}
+  async function list(scope) {
+    if(!scopeValid(scope))return [];
+    return access('readonly',scope,s=>readEntries(s,scope));
+  }
+  async function remove(entry) {
+    try {
+      const removed=await access('readwrite',entry.scope,s=>{
+        const key=keyOf(entry),raw=s.getItem(key);if(raw===null)return false;
+        const stored=validateWorkspaceRecoveryStoredEntry(key,raw);
+        if(!Object.keys(entry).every(field=>entry[field]===stored[field]))return false;
+        s.removeItem(key);return true;
+      });
+      if(removed)notify();return removed;
+    } catch { return false; }
+  }
   return {
     list,
-    prepare(url, options) {
+    async prepare(url, options) {
       const entry=reference(url,options,now());if(!entry)return null;
-      const reserve=()=>{
+      const reserve=()=>access('readwrite',entry.scope,s=>{
       if(options.signal?.aborted)throw Object.assign(new DOMException('La consulta se canceló.','AbortError'),{requestDispatched:false});
-      const current=list(entry.scope),existing=current.find(row=>keyOf(row)===keyOf(entry));
+      const current=readEntries(s,entry.scope),existing=current.find(row=>keyOf(row)===keyOf(entry));
       if(existing){if(existing.projectId!==entry.projectId||existing.reportId!==entry.reportId||existing.eventId!==entry.eventId||existing.action!==entry.action)throw failure('WORKSPACE_RECOVERY_CONFLICT','Este identificador corresponde a otro intento. Comprobá el recibo antes de continuar.');return {entry:existing,existed:true};}
       const pending=current.find(row=>row.resource===entry.resource&&row.projectId===entry.projectId&&(entry.resource!=='meta-onboarding'||row.eventId===entry.eventId));
       let resolution=false;
       if(entry.resource==='participants'&&typeof options.body==='string'){try{resolution=JSON.parse(options.body).action==='REVOKE';}catch{ /* The server rejects malformed commands. */ }}
       if(pending&&!resolution)throw failure('WORKSPACE_RECOVERY_REQUIRED','Hay un envío anterior sin confirmar en este módulo. Comprobá su recibo en Operaciones por comprobar antes de iniciar otro.');
       if(current.length>=64)throw unavailable();
-      const s=storage();try{s.setItem(keyOf(entry),JSON.stringify(entry));if(s.getItem(keyOf(entry))!==JSON.stringify(entry))throw unavailable();}catch{throw unavailable();}
-      notify();return {entry,existed:false};
-      };
-      if(!withLock)return reserve();
-      // Reserve under an origin-wide browser lock before obtaining the token or
-      // dispatching. Separate tabs cannot both pass list/check/setItem.
-      return Promise.resolve().then(()=>withLock('obrasaas-receipt:'+entry.scope,options.signal,reserve)).catch(error=>{throw Object.assign(error,{requestDispatched:false});});
+      s.setItem(keyOf(entry),JSON.stringify(entry));if(s.getItem(keyOf(entry))!==JSON.stringify(entry))throw unavailable();
+      return {entry,existed:false};
+      },options.signal);
+      // The native lock spans the complete read/check/write transaction. The
+      // browser adapter resolves only after commit, before token acquisition.
+      let ticket;
+      try { ticket=withLock?await withLock('obrasaas-receipt:'+entry.scope,options.signal,reserve):await reserve(); }
+      catch(error) {
+        // The transaction has aborted, but it observed an existing committed
+        // attempt. Refresh this tab even when cross-tab broadcasts are absent.
+        if(error?.code==='WORKSPACE_RECOVERY_REQUIRED')notify();
+        throw Object.assign(error,{requestDispatched:false});
+      }
+      if(!ticket.existed)notify();return ticket;
     },
-    settle(ticket, result, error) {
+    async settle(ticket, result, error) {
       if(!ticket)return;
-      if(error){if(!ticket.existed&&(error.requestDispatched===false||error.status>=400&&error.status<500))remove(ticket.entry);return;}
+      if(error){if(!ticket.existed&&(error.requestDispatched===false||error.status>=400&&error.status<500))await remove(ticket.entry);return;}
       const entry=ticket.entry;
       // A general Meta snapshot is not a receipt for this operation.
       if(entry.resource==='meta-onboarding')return;
-      if(entry.resource==='template-send'){if(['ACCEPTED','STATUS_OBSERVED','REJECTED'].includes(recoveryResult(entry,result)?.state))remove(entry);return;}
-      if(result?.scope===entry.scope&&(result.projectId===undefined||result.projectId===entry.projectId)&&(result.saved===true||result.created===true)&&(result.receiptId||result.receipt?.id))remove(entry);
+      if(entry.resource==='template-send'){if(['ACCEPTED','STATUS_OBSERVED','REJECTED'].includes(recoveryResult(entry,result)?.state))await remove(entry);return;}
+      if(entry.resource==='constructor-crm'){if(recoveryResult(entry,result)?.state==='RECORDED')await remove(entry);return;}
+      if(result?.scope===entry.scope&&(result.projectId===undefined||result.projectId===entry.projectId)&&(result.saved===true||result.created===true)&&(result.receiptId||result.receipt?.id))await remove(entry);
     },
-    observe(url, result) {
+    async observe(url, result) {
       const resource=resourceOf(url);if(!resource||!url.includes('?'))return;
       const params=new URLSearchParams(url.slice(url.indexOf('?')+1));
       const scope=params.get('scope'),operationId=params.get('operationId');if(!scopeValid(scope)||!uuid(operationId))return;
-      const entry=list(scope).find(row=>row.resource===resource&&row.operationId===operationId.toLowerCase());
+      const entry=(await list(scope)).find(row=>row.resource===resource&&row.operationId===operationId.toLowerCase());
       if(!entry||params.get('projectId')!==entry.projectId)return;
       const outcome=recoveryResult(entry,result);
-      if(['RECORDED','EVENT_PROCESSED','PARTICIPATION_REVOKED','ACCEPTED','STATUS_OBSERVED','REJECTED'].includes(outcome?.state))remove(entry);
+      if(['RECORDED','EVENT_PROCESSED','PARTICIPATION_REVOKED','ACCEPTED','STATUS_OBSERVED','REJECTED'].includes(outcome?.state))await remove(entry);
     },
   };
 }
 export const browserRecoveryJournal=createWorkspaceRecoveryJournal({
-  getStorage:()=>globalThis.window?.localStorage,
-  notify:()=>{globalThis.window?.dispatchEvent(new Event(RECOVERY_EVENT));},
+  withStorage:createBrowserRecoveryStorage({prefix,validateStored:validateWorkspaceRecoveryStoredEntry}),
+  notify:()=>{
+    globalThis.window?.dispatchEvent(new Event(RECOVERY_EVENT));
+    if(globalThis.window&&typeof globalThis.BroadcastChannel==='function'){
+      // Invalidation only: never include scope, identifiers or receipt bodies.
+      try { const channel=new BroadcastChannel(RECOVERY_EVENT);channel.postMessage({version:1,type:'invalidate'});channel.close(); }
+      catch { /* Focus and same-window invalidation still refresh committed state. */ }
+    }
+  },
   withLock:(name,signal,reserve)=>{
     const locks=globalThis.navigator?.locks;
     if(!locks?.request)throw failure('WORKSPACE_RECOVERY_LOCK_UNAVAILABLE','Este navegador no permite conservar el intento de forma segura entre pestañas. Abrí ObraSaaS en un navegador actualizado; la operación no se envió.');

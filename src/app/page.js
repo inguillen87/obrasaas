@@ -96,28 +96,23 @@ export default function Home() {
   const headerOpacity = useTransform(scrollYProgress, [0, 0.05], [0, 1]);
   const headerBlur = useTransform(scrollYProgress, [0, 0.03], [0, 16]);
 
-  /* ─── ROI Calculator ─── */
-  const [roiProjects, setRoiProjects] = useState(3);
-  const [roiWorkers, setRoiWorkers] = useState(25);
-
-  const savings = {
-    hoursMonth: roiProjects * 18,
-    moneyMonth: roiProjects * 18 * 12500,
-    deliveryDays: roiProjects * 12
-  };
+  /* ─── Pilot scope calculator ─── */
+  const [pilotProjects, setPilotProjects] = useState(1);
+  const [pilotWorkers, setPilotWorkers] = useState(5);
+  const pilotAssignments = pilotProjects * pilotWorkers;
 
   const capabilities = [
     { title: 'Trabajo de campo', desc: 'Recorrido previsto para recibir notas, fotos y ubicaciones del equipo. El canal WhatsApp se acepta por separado.', accent: '#22c55e' },
     { title: 'Libro de Obra', desc: 'Organización de partes y evidencias con revisión. No se equipara una huella SHA-256 con una firma digital certificada.', accent: '#f59e0b' },
     { title: 'Identidad y documentación', desc: 'Captura privada y revisión vinculadas a la obra. Una imagen o lectura de DNI no aprueba automáticamente al trabajador.', accent: '#3b82f6' },
     { title: 'Ubicación de obra', desc: 'La ubicación aporta contexto. No reemplaza los permisos, la revisión ni la aceptación del registro de asistencia.', accent: '#8b5cf6' },
-    { title: 'Seguimiento contractual', desc: 'Preparación y revisión de certificados según las autoridades de cada obra, sin ejecutar pagos automáticamente.', accent: '#06b6d4' },
-    { title: 'Planificación', desc: 'Vistas de tareas, dependencias e incidencias para revisar con los responsables de la obra.', accent: '#f97316' }
+    { title: 'Materiales y compras', desc: 'Pedidos de materiales, aprobación de compras y recepción parcial o completa con responsables definidos.', accent: '#06b6d4' },
+    { title: 'Planificación', desc: 'Vistas de tareas, fechas e incidencias para revisar con los responsables de la obra.', accent: '#f97316' }
   ];
 
   const faqs = [
     { q: '¿Qué puedo probar en la demo?', a: 'La demo guiada utiliza exclusivamente ejemplos ficticios y permite recorrer las perspectivas de operario, encargado y director. No envía mensajes ni modifica obras.' },
-    { q: '¿Subir un DNI aprueba una identidad?', a: 'No. La captura, la extracción de texto y la revisión de identidad son pasos diferentes. La versión pública no habilita el alta de trabajadores con datos reales.' },
+    { q: '¿Subir un DNI aprueba una identidad?', a: 'No. La demo utiliza ejemplos ficticios. En Mi cuenta, la presentación privada requiere acceso autorizado y consentimiento; otra persona con permiso debe revisar y decidir. Subir un documento no aprueba al participante.' },
     { q: '¿Qué acredita una huella SHA-256?', a: 'Es un control de integridad de los datos. La aplicación no la presenta como una firma digital certificada ni como una validación de seguros.' },
     { q: '¿Cómo se habilita una empresa?', a: 'El acceso personal y los permisos sobre empresa y obra se verifican por separado. El piloto de campo requiere participantes designados y la aceptación de sus recorridos.' },
     { q: '¿La demo funciona sin conexión?', a: 'La demo no guarda operaciones de obra. El circuito real debe confirmar cada registro con el servidor; las operaciones pendientes no se reenvían automáticamente.' }
@@ -336,7 +331,7 @@ export default function Home() {
               <span style={{ color: '#22c55e' }}>inteligencia como motor</span>
             </h2>
             <p style={{ color: '#64748b', fontSize: '1.05rem', maxWidth: '580px', margin: '0 auto' }}>
-              Tu equipo envía un audio. La plataforma actualiza el Gantt, certifica el avance y notifica al director.
+              Tu equipo presenta evidencia y propone un avance. Una persona autorizada revisa la propuesta; sólo una aprobación actualiza la tarea y el Gantt.
             </p>
           </div>
         </Reveal>
@@ -354,7 +349,7 @@ export default function Home() {
                 <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#f59e0b' }} />
                 <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#22c55e' }} />
               </div>
-              <span style={{ fontSize: '0.76rem', color: '#475569', fontFamily: tokens.font.mono, marginLeft: '12px' }}>obrasaas.app/dashboard — Integración WhatsApp ↔ Gantt</span>
+              <span style={{ fontSize: '0.76rem', color: '#94a3b8', fontFamily: tokens.font.mono, marginLeft: '12px', minWidth: 0, overflowWrap: 'anywhere' }}>obrasaas.com — Ejemplo ilustrativo de WhatsApp y avance</span>
             </div>
 
             {/* Content */}
@@ -365,7 +360,7 @@ export default function Home() {
                   <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'linear-gradient(135deg, #22c55e, #16a34a)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '1rem', fontWeight: 800 }}>W</div>
                   <div>
                     <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#f1f5f9' }}>ObraSaaS Bot</div>
-                    <div style={{ fontSize: '0.7rem', color: '#22c55e', fontWeight: 600 }}>en línea</div>
+                    <div style={{ fontSize: '0.7rem', color: '#22c55e', fontWeight: 600 }}>Conversación de ejemplo</div>
                   </div>
                 </div>
 
@@ -374,7 +369,7 @@ export default function Home() {
                   style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '14px' }}>
                   <div style={{ background: 'rgba(22, 101, 52, 0.4)', border: '1px solid rgba(34, 197, 94, 0.2)', padding: '12px 16px', borderRadius: '14px 14px 4px 14px', maxWidth: '85%', fontSize: '0.84rem', color: '#d1fae5' }}>
                     <div style={{ fontSize: '0.72rem', color: '#86efac', marginBottom: '4px', fontWeight: 600 }}>Juan Gómez — Oficial Albañil</div>
-                    [Audio 0:08s] &quot;Marcelo, terminamos de revocar el muro norte. Listo para certificar.&quot;
+                    [Audio 0:08s] &quot;Marcelo, terminamos de revocar el muro norte. Listo para revisar.&quot;
                     <div style={{ textAlign: 'right', fontSize: '0.64rem', color: '#6ee7b7', marginTop: '6px' }}>08:32 ✓✓</div>
                   </div>
                 </motion.div>
@@ -384,9 +379,9 @@ export default function Home() {
                   style={{ display: 'flex', justifyContent: 'flex-start' }}>
                   <div style={{ background: 'rgba(30, 41, 59, 0.6)', border: '1px solid rgba(255,255,255,0.06)', padding: '12px 16px', borderRadius: '14px 14px 14px 4px', maxWidth: '90%', fontSize: '0.84rem', color: '#cbd5e1' }}>
                     <div style={{ fontSize: '0.72rem', color: '#f59e0b', marginBottom: '6px', fontWeight: 700 }}>Copiloto ObraSaaS</div>
-                    Revoque Grueso actualizado al 100% en el Gantt. Bloque SHA-256 generado. Director técnico notificado.
+                    Propuesta de Revoque Grueso registrada para revisión. El avance del Gantt se mantiene hasta una decisión autorizada.
                     <div style={{ marginTop: '8px', padding: '8px 10px', borderRadius: '8px', background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.15)', fontSize: '0.72rem', fontFamily: tokens.font.mono, color: '#fbbf24' }}>
-                      hash: e3b0c442...b7852b855
+                      Ejemplo: propuesta pendiente de aprobación
                     </div>
                   </div>
                 </motion.div>
@@ -395,11 +390,11 @@ export default function Home() {
               {/* Dashboard simulation */}
               <div style={{ padding: '28px' }}>
                 <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '16px' }}>
-                  Actualización en tiempo real
+                  Ejemplo de tareas y revisiones
                 </div>
 
                 {[
-                  { task: 'Revoque Grueso — Muro Norte', progress: 100, status: 'Certificado', color: '#22c55e' },
+                  { task: 'Revoque Grueso — Muro Norte', progress: 60, status: 'Por revisar', color: '#f59e0b' },
                   { task: 'Contrapiso Nivel 3', progress: 75, status: 'En Ejecución', color: '#f59e0b' },
                   { task: 'Instalación Sanitaria Piso 2', progress: 40, status: 'Programada', color: '#3b82f6' },
                   { task: 'Losa de Hormigón Nivel 4', progress: 0, status: 'Pendiente', color: '#475569' }
@@ -422,7 +417,7 @@ export default function Home() {
         </Reveal>
       </section>
 
-      {/* ═══ ROI CALCULATOR ═══ */}
+      {/* ═══ PILOT SCOPE CALCULATOR ═══ */}
       <section id="calculadora" style={{ maxWidth: '900px', margin: '0 auto', padding: '60px 32px 100px', position: 'relative', zIndex: 1 }}>
         <Reveal>
           <div style={{
@@ -431,27 +426,27 @@ export default function Home() {
             background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.04) 0%, rgba(10, 14, 26, 0.7) 100%)',
             backdropFilter: 'blur(12px)'
           }}>
-            <h3 style={{ fontSize: '1.6rem', fontWeight: 900, margin: '0 0 6px', fontFamily: tokens.font.heading, textAlign: 'center' }}>Calculadora de ROI</h3>
-            <p style={{ color: '#64748b', fontSize: '0.9rem', margin: '0 0 32px', textAlign: 'center' }}>Estimá el ahorro mensual según tu escala operativa</p>
+            <h3 style={{ fontSize: '1.6rem', fontWeight: 900, margin: '0 0 6px', fontFamily: tokens.font.heading, textAlign: 'center' }}>Prepará el alcance de tu piloto</h3>
+            <p style={{ color: '#94a3b8', fontSize: '0.9rem', margin: '0 0 32px', textAlign: 'center' }}>Simulá las obras y asignaciones del equipo. Estos valores ayudan a organizar la prueba; no crean registros en tu empresa.</p>
 
             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: isMobile ? '16px' : '28px', marginBottom: '32px' }}>
               <div>
-                <label style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'block', marginBottom: '8px', fontWeight: 600 }}>Obras en simultáneo: <strong style={{ color: '#f59e0b' }}>{roiProjects}</strong></label>
-                <input type="range" min="1" max="20" value={roiProjects} onChange={e => setRoiProjects(+e.target.value)}
+                <label htmlFor="pilot-projects" style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'block', marginBottom: '8px', fontWeight: 600 }}>Obras en simultáneo: <strong style={{ color: '#f59e0b' }}>{pilotProjects}</strong></label>
+                <input id="pilot-projects" type="range" min="1" max="20" value={pilotProjects} onChange={e => setPilotProjects(+e.target.value)}
                   style={{ width: '100%', accentColor: '#f59e0b' }} />
               </div>
               <div>
-                <label style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'block', marginBottom: '8px', fontWeight: 600 }}>Operarios por obra: <strong style={{ color: '#f59e0b' }}>{roiWorkers}</strong></label>
-                <input type="range" min="5" max="100" value={roiWorkers} onChange={e => setRoiWorkers(+e.target.value)}
+                <label htmlFor="pilot-workers" style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'block', marginBottom: '8px', fontWeight: 600 }}>Operarios previstos por obra: <strong style={{ color: '#f59e0b' }}>{pilotWorkers}</strong></label>
+                <input id="pilot-workers" type="range" min="1" max="100" value={pilotWorkers} onChange={e => setPilotWorkers(+e.target.value)}
                   style={{ width: '100%', accentColor: '#f59e0b' }} />
               </div>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: '16px' }}>
               {[
-                { label: 'Horas admin. ahorradas/mes', value: savings.hoursMonth, suffix: 'hs' },
-                { label: 'Ahorro mensual estimado', value: savings.moneyMonth, prefix: '$', suffix: '' },
-                { label: 'Días de entrega adelantados/año', value: savings.deliveryDays, suffix: '' }
+                { label: 'Obras a preparar', value: pilotProjects, suffix: '' },
+                { label: 'Operarios previstos por obra', value: pilotWorkers, suffix: '' },
+                { label: 'Asignaciones obra/persona', value: pilotAssignments, suffix: '' }
               ].map((s, i) => (
                 <div key={i} style={{ textAlign: 'center', padding: '20px 16px', borderRadius: '14px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
                   <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#f59e0b', fontFamily: tokens.font.heading }}>
@@ -477,7 +472,7 @@ export default function Home() {
           {faqs.map((faq, i) => (
             <Reveal key={i} delay={i * 0.04}>
               <div style={{ borderRadius: '14px', border: '1px solid rgba(255,255,255,0.06)', overflow: 'hidden', background: activeFaq === i ? 'rgba(245, 158, 11, 0.03)' : 'rgba(13, 17, 30, 0.4)' }}>
-                <button onClick={() => setActiveFaq(activeFaq === i ? null : i)} style={{
+                <button aria-expanded={activeFaq === i} aria-controls={`home-faq-answer-${i}`} onClick={() => setActiveFaq(activeFaq === i ? null : i)} style={{
                   width: '100%', padding: '18px 22px', background: 'none', border: 'none', color: '#e2e8f0',
                   fontSize: '0.92rem', fontWeight: 700, textAlign: 'left', cursor: 'pointer',
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center'
@@ -486,13 +481,15 @@ export default function Home() {
                   <motion.span animate={{ rotate: activeFaq === i ? 45 : 0 }} transition={{ duration: 0.2 }}
                     style={{ fontSize: '1.2rem', color: '#f59e0b', flexShrink: 0, marginLeft: '16px' }}>+</motion.span>
                 </button>
-                <AnimatePresence>
-                  {activeFaq === i && (
-                    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}>
-                      <div style={{ padding: '0 22px 18px', fontSize: '0.86rem', color: '#8896ab', lineHeight: 1.6 }}>{faq.a}</div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                <div id={`home-faq-answer-${i}`}>
+                  <AnimatePresence>
+                    {activeFaq === i && (
+                      <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}>
+                        <div style={{ padding: '0 22px 18px', fontSize: '0.86rem', color: '#8896ab', lineHeight: 1.6 }}>{faq.a}</div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               </div>
             </Reveal>
           ))}
@@ -542,7 +539,7 @@ export default function Home() {
             <Link href="/" aria-label="ObraSaaS, inicio" style={{ display: 'inline-flex', minHeight: '44px', alignItems: 'center', color: '#F4F1E8', fontSize: '1.15rem', textDecoration: 'none' }}><ObraSaasLogo markSize={28} variant="inverse" /></Link>
             <span style={{ fontSize: '0.82rem', color: '#94a3b8' }}>Buenos Aires, Argentina</span>
           </div>
-          <div style={{ display: 'flex', gap: '24px', fontSize: '0.8rem', color: '#475569' }}>
+          <div style={{ display: 'flex', gap: '24px', fontSize: '0.8rem', color: '#94a3b8' }}>
             <Link href="/pricing" style={{ color: 'inherit', textDecoration: 'none' }}>Precios</Link>
             <Link href="/api-docs" style={{ color: 'inherit', textDecoration: 'none' }}>API</Link>
             <Link href="/portal" style={{ color: 'inherit', textDecoration: 'none' }}>Portal Inversor</Link>

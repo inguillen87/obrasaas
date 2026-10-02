@@ -3,6 +3,7 @@ import {mkdirSync,mkdtempSync,copyFileSync,writeFileSync,rmSync,readdirSync} fro
 import path from 'node:path';
 import {spawn} from 'node:child_process';
 import puppeteer from 'puppeteer';
+import {RECOVERY_DATABASE_NAME} from '../src/app/(identity)/cuenta/workspace-recovery-storage.mjs';
 
 // Real account, mutation, transport, journal and recovery components.
 // Session tokens and HTTP replies are controlled fixtures, never a login.
@@ -15,12 +16,30 @@ for(const file of readdirSync(path.join(root,'src/app/(identity)/cuenta')).filte
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'isolated-workspace-reload-ui-fixture',private:true}));
 writeFileSync(path.join(fixture,'next.config.mjs'),'export default {turbopack:{root:'+JSON.stringify(root)+'}};\n');
 writeFileSync(path.join(app,'layout.js'),'export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:16,background:"#0b1c2d",fontFamily:"Arial,sans-serif"}}>{children}</body></html>}');
-writeFileSync(path.join(app,'page.js'),"'use client';import {useCallback,useState} from 'react';import {AccountWorkspace} from './(identity)/cuenta/workspace-client';export default function Page(){const [context,setContext]=useState('A');const token=useCallback(async()=>{if(window.__rejectToken){window.__rejectToken=false;throw new Error('controlled SDK failure');}return 'synthetic-current-'+context;},[context]);return <main style={{maxWidth:1000,margin:'0 auto'}}><div><button onClick={()=>setContext('A')}>Contexto A</button><button onClick={()=>setContext('B')}>Contexto B</button></div><AccountWorkspace key={context} getSessionToken={token}/></main>}");
+writeFileSync(path.join(app,'page.js'),`'use client';
+import {useCallback,useEffect,useState} from 'react';
+import {AccountWorkspace} from './(identity)/cuenta/workspace-client';
+import {browserRecoveryJournal,WORKSPACE_RECOVERY_PREFIX,validateWorkspaceRecoveryStoredEntry} from './(identity)/cuenta/workspace-recovery-journal.mjs';
+import {createBrowserRecoveryStorage} from './(identity)/cuenta/workspace-recovery-storage.mjs';
+export default function Page(){
+ const [context,setContext]=useState('A');
+ const token=useCallback(async()=>{if(window.__rejectToken){window.__rejectToken=false;throw new Error('controlled SDK failure');}return 'synthetic-current-'+context;},[context]);
+ useEffect(()=>{
+  window.__recoveryFixture={list:scope=>browserRecoveryJournal.list(scope),abortBeforeCommit:async entry=>{
+   const controller=new AbortController();
+   const storage=createBrowserRecoveryStorage({prefix:WORKSPACE_RECOVERY_PREFIX,validateStored:validateWorkspaceRecoveryStoredEntry});
+   try{await storage('readwrite',entry.scope,view=>{view.setItem(WORKSPACE_RECOVERY_PREFIX+entry.scope+'.'+entry.resource+'.'+entry.operationId,JSON.stringify(entry));controller.abort();},controller.signal);return {committed:true};}
+   catch(error){return {name:error.name,code:error.code,requestDispatched:error.requestDispatched};}
+  }};
+  return ()=>{delete window.__recoveryFixture;};
+ },[]);
+ return <main style={{maxWidth:1000,margin:'0 auto'}}><div><button onClick={()=>setContext('A')}>Contexto A</button><button onClick={()=>setContext('B')}>Contexto B</button></div><AccountWorkspace key={context} getSessionToken={token}/></main>;
+}`);
 const port=3162,origin='http://127.0.0.1:'+port,prefix='obrasaas.pending-receipt.v1.';
 const scopeA='a'.repeat(64),scopeB='b'.repeat(64),revision='2026-09-30T12:00:00.123456';
 const uuid='12345678-1234-4234-8234-123456789012';
 const server=spawn(process.execPath,[path.join(root,'node_modules/next/dist/bin/next'),'dev',fixture,'--webpack','--hostname','127.0.0.1','--port',String(port)],{cwd:root,env:{...process.env,NEXT_TELEMETRY_DISABLED:'1'},stdio:['ignore','pipe','pipe'],detached:process.platform!=='win32'});
-let serverLog='',browser;
+let serverLog='',browser,activeScenario;
 for(const stream of [server.stdout,server.stderr])stream.on('data',data=>{serverLog=(serverLog+data.toString()).slice(-20000);});
 const checks=[],pageErrors=[],screenshots=[];
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
@@ -30,7 +49,12 @@ async function click(page,label){const handle=await page.evaluateHandle(name=>[.
 const keyOf=entry=>prefix+entry.scope+'.'+entry.resource+'.'+entry.operationId;
 const entry=(resource='task-creation',extra={})=>({version:1,resource,scope:scopeA,projectId:'p-a',operationId:uuid,createdAt:Date.now(),...extra});
 const task=context=>({id:'task-'+context.toLowerCase(),title:'Tarea sintética '+context,status:'IN_PROGRESS',progress:37,startsOn:'2026-10-01',endsOn:'2026-10-05',revision});
-const stored=page=>page.evaluate(p=>Object.fromEntries(Object.entries(localStorage).filter(([key])=>key.startsWith(p))),prefix);
+// Read the real committed authority. Legacy localStorage is used only as an
+// upgrade input; it cannot prove that a reservation committed.
+const stored=page=>page.evaluate(async(p,scopes)=>{
+ const entries=(await Promise.all(scopes.map(scope=>window.__recoveryFixture.list(scope)))).flat();
+ return Object.fromEntries(entries.map(entry=>[p+entry.scope+'.'+entry.resource+'.'+entry.operationId,JSON.stringify(entry)]));
+},prefix,[scopeA,scopeB]);
 function assertMetadataOnly(snapshot){
  for(const [key,raw] of Object.entries(snapshot)){
   assert.ok(key.startsWith(prefix));const value=JSON.parse(raw);
@@ -43,7 +67,20 @@ function state(mode='uncertain'){return {mode,posts:[],receipts:[],requests:[],r
 async function createPage(context,current,{width=390,snapshot={},failStorage=false,noLocks=false}={}){
  const page=await context.newPage();await page.setViewport({width,height:1000});
  page.on('pageerror',error=>pageErrors.push({message:error.message,width}));
- await page.evaluateOnNewDocument((saved,blocked,p,disableLocks)=>{for(const [key,value] of Object.entries(saved))localStorage.setItem(key,value);if(disableLocks)Object.defineProperty(navigator,'locks',{configurable:true,value:undefined});if(blocked){const original=Storage.prototype.setItem;Storage.prototype.setItem=function(key,value){if(String(key).startsWith(p))throw new DOMException('Controlled quota failure','QuotaExceededError');return original.call(this,key,value);};}},snapshot,failStorage,prefix,noLocks);
+ await page.evaluateOnNewDocument((saved,blocked,p,disableLocks,database)=>{
+  for(const [key,value] of Object.entries(saved))localStorage.setItem(key,value);
+  if(disableLocks)Object.defineProperty(navigator,'locks',{configurable:true,value:undefined});
+  if(blocked){const open=IDBFactory.prototype.open;IDBFactory.prototype.open=function(name,...args){if(name===database)throw new DOMException('Controlled blocked native storage','QuotaExceededError');return open.call(this,name,...args);};}
+  const put=IDBObjectStore.prototype.put;
+  IDBObjectStore.prototype.put=function(...args){
+   const request=put.apply(this,args);
+   if(this.name==='references'&&this.transaction.db.name===database&&window.__abortNextReferencePut){
+    window.__abortNextReferencePut=false;
+    request.addEventListener('success',()=>{request.transaction.abort();window.__referenceCommitAborted=true;},{once:true});
+   }
+   return request;
+  };
+ },snapshot,failStorage,prefix,noLocks,RECOVERY_DATABASE_NAME);
  await page.setRequestInterception(true);
  page.on('request',async request=>{
   try{
@@ -84,7 +121,7 @@ async function createPage(context,current,{width=390,snapshot={},failStorage=fal
    pageErrors.push({message:error.message,width});if(!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});
   }
  });
- await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Organización sintética A');return page;
+ await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Organización sintética A');await page.waitForFunction(()=>typeof window.__recoveryFixture?.list==='function');return page;
 }
 async function fillTask(page,title='PRIVATE_FORM_MARKER tarea recuperable'){
  await page.bringToFront();
@@ -169,15 +206,48 @@ async function tamperedEntry(){
  const page=await createPage(context,current,{snapshot:{[keyOf(pending)]:JSON.stringify(pending)}});await waitText(page,'No se pueden consultar las referencias pendientes');assert.equal(current.receipts.length,0);await startTask(page);await waitText(page,'la operación no se envió');assert.equal(current.posts.length,0);
  checks.push('unexpected-fields-or-url-in-storage-are-rejected-before-any-recovery-or-post');await context.close();
 }
-async function twoTabRace(){
+async function abortedReferenceCommit(){
+ const context=await browser.createBrowserContext(),current=state(),page=await createPage(context,current);
+ await fillTask(page,'PRIVATE_FORM_MARKER conserva borrador tras abortar');assert.deepEqual(await stored(page),{});
+ await page.evaluate(()=>{window.__abortNextReferencePut=true;});await click(page,'Crear tarea');await waitText(page,'la operación no se envió');
+ assert.equal(await page.evaluate(()=>window.__referenceCommitAborted),true);assert.equal(current.posts.length,0);assert.deepEqual(await stored(page),{});
+ assert.equal(await page.$eval('form input:not([type="date"])',node=>node.value),'PRIVATE_FORM_MARKER conserva borrador tras abortar');
+ checks.push('native-idb-abort-before-reference-commit-blocks-post-and-preserves-draft');
+ await click(page,'Crear tarea');await waitText(page,'La confirmación no llegó');assert.equal(current.posts.length,1);assert.equal(current.persistedBeforeDispatch,true);assert.equal(Object.keys(await stored(page)).length,1);
+ checks.push('explicit-retry-after-aborted-idb-commit-reserves-before-http');await context.close();
+}
+async function abortedFactoryCallback(){
+ const context=await browser.createBrowserContext(),current=state(),page=await createPage(context,current);
+ assert.deepEqual(await stored(page),{});
+ const result=await page.evaluate(pending=>window.__recoveryFixture.abortBeforeCommit(pending),entry());
+ assert.equal(result.name,'AbortError');assert.equal(result.requestDispatched,false);assert.deepEqual(await stored(page),{});assert.equal(current.posts.length,0);
+ checks.push('actual-storage-factory-cancelled-callback-never-commits-a-reference');await context.close();
+}
+async function confirmedLegacyDoesNotReturn(){
+ const context=await browser.createBrowserContext(),current=state(),pending=entry();
+ current.outcome={scope:scopeA,state:'RECORDED',created:true,receiptId:'receipt-legacy-upgrade',task:{...task('A'),id:'legacy-upgrade-task'}};
+ const page=await createPage(context,current,{snapshot:{[keyOf(pending)]:JSON.stringify(pending)}});await waitText(page,'Operaciones por comprobar');
+ const migrated=await stored(page);assertMetadataOnly(migrated);assert.equal(Object.keys(migrated).length,1);
+ assert.equal(JSON.parse(Object.values(migrated)[0]).operationId,pending.operationId);checks.push('legacy-reference-is-migrated-into-actual-idb-authority');
+ await click(page,'Comprobar recibo');await waitText(page,'Guardado confirmado');assert.deepEqual(await stored(page),{});assert.equal(current.receipts.length,1);assert.equal(current.posts.length,0);
+ // The original legacy snapshot is deliberately restored on navigation by the
+ // preload hook. Its migration marker must prevent a confirmed attempt returning.
+ await page.reload({waitUntil:'networkidle0'});await waitText(page,'Organización sintética A');
+ await page.waitForFunction(async scope=>typeof window.__recoveryFixture?.list==='function'&&(await window.__recoveryFixture.list(scope)).length===0&&!document.body.innerText.includes('Operaciones por comprobar'),{timeout:15000},scopeA);
+ assert.deepEqual(await stored(page),{});assert.equal(current.receipts.length,1);assert.equal(current.posts.length,0);await capture(page,'legacy-confirmed-not-reimported-390');
+ checks.push('confirmed-idb-reference-is-not-reimported-from-stale-legacy-after-reload');await context.close();
+}
+async function twoTabRace(iteration){
  const context=await browser.createBrowserContext(),current=state(),first=await createPage(context,current),second=await createPage(context,current);
+ activeScenario={name:'twoTabRace-'+iteration,pages:[first,second],current};
  assert.ok(await first.evaluate(()=>window.isSecureContext&&typeof navigator.locks?.request==='function'),'Native Web Locks required for this fixture');
  await fillTask(first,'PRIVATE_FORM_MARKER intento primera pestaña');await fillTask(second,'PRIVATE_FORM_MARKER intento segunda pestaña');
  await Promise.all([first.$eval('form',form=>form.requestSubmit()),second.$eval('form',form=>form.requestSubmit())]);
  await Promise.all([first.waitForFunction(()=>document.body.innerText.includes('La confirmación no llegó')||document.body.innerText.includes('Hay un envío anterior sin confirmar'),{polling:'mutation',timeout:15000}),second.waitForFunction(()=>document.body.innerText.includes('La confirmación no llegó')||document.body.innerText.includes('Hay un envío anterior sin confirmar'),{polling:'mutation',timeout:15000})]);
  assert.equal(current.posts.length,1);const snapshot=await stored(first);assertMetadataOnly(snapshot);assert.equal(Object.keys(snapshot).length,1);assert.equal(JSON.parse(Object.values(snapshot)[0]).operationId,current.posts[0].operationId);
  const messages=[await text(first),await text(second)];assert.equal(messages.filter(value=>value.includes('La confirmación no llegó')).length,1);assert.equal(messages.filter(value=>value.includes('Hay un envío anterior sin confirmar')).length,1);
- assert.equal(current.receipts.length,0);checks.push('two-real-tabs-native-web-locks-allow-only-one-new-operation');await context.close();
+ assert.equal(current.receipts.length,0);assert.deepEqual(await stored(second),snapshot);
+ checks.push(iteration===1?'two-real-tabs-native-web-locks-allow-only-one-new-operation':'two-real-tabs-atomic-idb-reservation-one-post-iteration-'+iteration);await context.close();activeScenario=null;
 }
 async function noBrowserLocks(){
  const context=await browser.createBrowserContext(),current=state(),page=await createPage(context,current,{noLocks:true});
@@ -203,10 +273,19 @@ try{
  for(const resource of ['workspace','site-register','site-photo','participants','field-operations','field-media','site-purchases','whatsapp-setup','meta-onboarding'])await canonicalQuery(resource);
  await canonicalQuery('field-media','PROCESSING');await canonicalQuery('participants','INVITATION_UNCONFIRMED');await unauthorizedReceipt();await tamperedEntry();
  }
- await twoTabRace();await noBrowserLocks();await cancelWhileWaitingForLock();assert.deepEqual(pageErrors,[]);
- const proof={status:'PASS',environment:'isolated-browser-real-components-with-controlled-session-and-http',suite:locksOnly?'native-lock-focal':'full-reload-and-isolation',widths:locksOnly?[390]:[320,390,768,1280],checks,pageErrors,screenshots,nativeWebLocksTested:true,secureContext:'trusted-http-loopback',actualPageReloadTested:!locksOnly,actualTabCloseOpenTested:!locksOnly,profileRestartSimulatedByReferenceOnlyStorageClone:!locksOnly,realClerkLogin:false,realEmailDelivery:false,productionDataWritten:false,realProviderCalls:0,physicalDeviceAccepted:false,automaticRecoveryPostCount:0};
+ await abortedReferenceCommit();await abortedFactoryCallback();if(!locksOnly)await confirmedLegacyDoesNotReturn();
+ for(let iteration=1;iteration<=5;iteration++)await twoTabRace(iteration);
+ await noBrowserLocks();await cancelWhileWaitingForLock();assert.deepEqual(pageErrors,[]);
+ const proof={status:'PASS',environment:'isolated-browser-real-components-with-controlled-session-and-http',suite:locksOnly?'native-idb-lock-focal':'full-reload-and-isolation',widths:locksOnly?[390]:[320,390,768,1280],checks,pageErrors,screenshots,nativeWebLocksTested:true,nativeIndexedDbAuthorityTested:true,twoTabRaceIterations:5,reservationCommittedBeforeHttpTested:true,abortedTransactionBeforeHttpTested:true,legacyMigrationAndNoReimportTested:!locksOnly,secureContext:'trusted-http-loopback',actualPageReloadTested:!locksOnly,actualTabCloseOpenTested:!locksOnly,profileRestartSimulatedByReferenceOnlyStorageClone:!locksOnly,realClerkLogin:false,realEmailDelivery:false,productionDataWritten:false,realProviderCalls:0,providerCallCountScope:'This local controlled fixture only; it does not describe public Clerk SDK bootstrap or provider calls in other release checks.',physicalDeviceAccepted:false,automaticRecoveryPostCount:0};
  writeFileSync(path.join(evidence,'browser.json'),JSON.stringify(proof,null,2));console.log(JSON.stringify({status:proof.status,checks:checks.length,pageErrors:pageErrors.length,screenshots,evidence:path.join(evidence,'browser.json')}));
-}catch(error){writeFileSync(path.join(evidence,'browser-failure.json'),JSON.stringify({status:'FAILED',message:error.message,checks,pageErrors,serverLog},null,2));throw error;}
+}catch(error){
+ const scenario=activeScenario?{name:activeScenario.name,posts:activeScenario.current.posts.map(row=>({operationId:row.operationId,scope:row.scope,projectId:row.projectId})),requests:activeScenario.current.requests,rows:[]}:null;
+ if(scenario)for(const [index,page] of activeScenario.pages.entries()){
+  try{scenario.rows.push({index,url:page.url(),dom:await text(page),committedReferences:await stored(page)});await page.bringToFront();await page.screenshot({path:path.join(evidence,'failed-two-tabs-'+index+'.png'),fullPage:true});}
+  catch(snapshotError){scenario.rows.push({index,snapshotError:snapshotError.message});}
+ }
+ writeFileSync(path.join(evidence,'browser-failure.json'),JSON.stringify({status:'FAILED',message:error.message,checks,pageErrors,serverLog,scenario},null,2));throw error;
+}
 finally{
  await browser?.close();
  if(server.exitCode===null){if(process.platform==='win32')await new Promise(resolve=>{const kill=spawn('taskkill',['/PID',String(server.pid),'/T','/F'],{windowsHide:true,stdio:'ignore'});kill.on('exit',resolve);kill.on('error',resolve);});else{try{process.kill(-server.pid,'SIGTERM');}catch{}}}

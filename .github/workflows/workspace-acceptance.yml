@@ -71,6 +71,13 @@ jobs:
           node --test tests/production-meta-customer-template-send.test.mjs tests/production-template-send-view.test.mjs
           node scripts/verify-meta-customer-template-send-postgres.mjs
           node scripts/verify-template-send-ui.mjs
+      - name: Canonical constructor CRM ownership and receipt recovery
+        run: |
+          npx eslint src/lib/constructor-crm-*.mjs src/lib/enterprise-crm-policy.mjs src/app/api/identity/constructor-crm scripts/lib/constructor-crm-*.mjs scripts/verify-constructor-crm-*.mjs scripts/adopt-constructor-crm-schema.mjs tests/production-constructor-crm*.test.mjs
+          node --test tests/production-constructor-crm*.test.mjs
+          node scripts/verify-constructor-crm-adoption-postgres.mjs
+          node scripts/verify-constructor-crm-postgres.mjs
+          node scripts/verify-constructor-crm-ui.mjs
       - run: node scripts/verify-site-purchase-postgres.mjs
       - run: node scripts/verify-participants-ui.mjs
       - run: node scripts/verify-field-operations-ui.mjs
@@ -114,5 +121,7 @@ jobs:
             .vercel/workspace-reload-evidence/
             .vercel/customer-inbox-evidence/
             .vercel/template-send-evidence/
+            .vercel/constructor-crm-evidence/
+            .vercel/constructor-crm-adoption-evidence/
           include-hidden-files: true
           retention-days: 7

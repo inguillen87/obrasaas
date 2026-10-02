@@ -1,8 +1,8 @@
 # Preparación del piloto: recuperación, menú y seguimiento
 
-Este bloque usa los módulos de obra, recibos, inbox y procesador existentes. No
-incorpora otra base, otro motor de permisos ni un segundo CRM. Su publicación,
-CI y aceptación se registran por commit en un comprobante independiente.
+Este bloque usa los módulos de obra, recibos, inbox y procesador existentes.
+Conserva la base de negocio, el motor de permisos y el modelo CRM canónicos. Su
+publicación, CI y aceptación se registran por commit en un comprobante independiente.
 
 ## Recuperar una confirmación después de recargar
 
@@ -18,10 +18,35 @@ concede acceso. Después de identificar al usuario y obtener el ámbito vigente,
 se muestran únicamente sus referencias de las obras autorizadas. Un cambio de
 rol o empresa no migra los intentos a un ámbito diferente.
 
-La reserva utiliza Web Locks del navegador para serializar la comprobación y
-escritura entre pestañas del mismo origen. Sin almacenamiento o bloqueo
-disponible, la operación nueva se detiene antes del envío. La espera del bloqueo
-comparte la cancelación y el plazo del transporte existente.
+Las referencias tienen una única persistencia en IndexedDB del navegador.
+Una transacción de lectura y escritura comprueba los pendientes y reserva el
+intento; se espera su confirmación antes de obtener el token o enviar la operación.
+Web Locks mantiene además la coordinación entre pestañas del mismo origen.
+Sin almacenamiento, confirmación de la transacción o bloqueo disponible, la
+operación nueva se detiene antes del envío. La espera comparte la cancelación y
+el plazo del transporte existente.
+
+Las referencias de la versión anterior en localStorage se transfieren una vez
+por ámbito, con la misma validación estricta y sin copiar campos del formulario.
+La transferencia confirmada no elimina datos de otras aplicaciones o ámbitos.
+Una marca durable evita reimportar una referencia antigua después de haber
+comprobado su recibo. Una estructura inesperada o un conflicto detiene la
+operación; no se borra ni reinicializa el almacenamiento para aparentar recuperación.
+
+Al publicar esta transición, cerrar o recargar las pestañas que todavía ejecuten
+la versión anterior antes de comenzar el piloto. La marca de migración no permite
+reimportar escrituras posteriores de ese código antiguo en localStorage. No se
+afirma convivencia de ambas versiones ni se presenta la migración como cola offline.
+
+Las otras pestañas reciben sólo un aviso de invalidación, sin identificadores ni
+datos privados, y consultan de nuevo sus referencias autorizadas. Volver a enfocar
+la cuenta también actualiza la consulta. Las respuestas de una lectura anterior
+no reemplazan la lectura más reciente ni entran en otra empresa.
+
+La reserva no depende de que una caché localStorage de otro renderer ya se haya
+actualizado. La [planificación de transacciones de IndexedDB](https://w3c.github.io/IndexedDB/#transaction-scheduling)
+define la serialización y visibilidad de transacciones con ámbitos solapados.
+Esto conserva referencias de recibos; no agrega una cola de formularios ni adjuntos offline.
 
 Un recibo confirmado elimina su referencia exacta. Una falla antes del primer
 envío permite descartarla; esa misma falla durante un reintento no elimina el
@@ -84,10 +109,11 @@ indicando expresamente que `EVENT_PROCESSED` no atribuye ese procesamiento al
 UUID del administrador. Una respuesta general HTTP 200 no confirma ninguna de
 estas dos operaciones.
 
-**Alcance CRM:** atención y seguimiento operativo del equipo de una obra. El
-CRM comercial enterprise de cuentas/ventas no está integrado en `/cuenta`, y
-este bloque no incorpora embudo comercial, composer manual ni exportación de
-cuerpos privados. La bandeja anterior se reemplaza por esta única interfaz.
+**Alcance de la bandeja:** atención y seguimiento operativo del equipo de una
+obra. La bandeja anterior se reemplaza por esta única interfaz; no incorpora
+composer manual ni exportación de cuerpos privados. El bloque posterior de
+[CRM de la constructora](./constructor-crm.md) adopta cuentas y oportunidades del
+modelo enterprise y acredita su publicación y aceptación por separado.
 
 ## Validación y aceptación
 

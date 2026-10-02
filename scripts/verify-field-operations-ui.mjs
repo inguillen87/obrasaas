@@ -8,7 +8,7 @@ assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV);
 const root=process.cwd(),output=path.join(root,'.vercel/field-operations-evidence');mkdirSync(output,{recursive:true});
 const fixture=mkdtempSync(path.join(root,'.vercel/field-ui-')),app=path.join(fixture,'app');mkdirSync(app);
 for(const file of ['field-operations-panel.js','field-operations-panel.module.css','field-media-capture.js','field-media-preview.js','field-media-preparation.mjs'])copyFileSync(path.join(root,'src/app/(identity)/cuenta',file),path.join(app,file));
-for(const dependency of ['workspace-session-request.mjs','workspace-request-lifecycle.mjs','workspace-request-lifecycle.js','workspace-recovery-journal.mjs','private-workspace-download.js'])copyFileSync(path.join(root,'src/app/(identity)/cuenta',dependency),path.join(app,dependency));
+for(const dependency of ['workspace-session-request.mjs','workspace-request-lifecycle.mjs','workspace-request-lifecycle.js','workspace-recovery-journal.mjs','workspace-recovery-storage.mjs','private-workspace-download.js'])copyFileSync(path.join(root,'src/app/(identity)/cuenta',dependency),path.join(app,dependency));
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'isolated-field-operations-ui',private:true}));
 writeFileSync(path.join(fixture,'next.config.mjs'),`export default {devIndicators:false,turbopack:{root:${JSON.stringify(root)}}};`);
 writeFileSync(path.join(app,'layout.js'),`export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:12,background:'#f0f4f7',fontFamily:'Arial,sans-serif'}}>{children}</body></html>}`);

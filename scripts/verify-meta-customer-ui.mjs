@@ -9,7 +9,7 @@ assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV);
 const root=realpathSync(process.cwd()),parent=path.join(root,'.vercel'),evidence=path.join(parent,'meta-customer-evidence');mkdirSync(evidence,{recursive:true});
 const fixture=mkdtempSync(path.join(parent,'meta-customer-ui-')),app=path.join(fixture,'app');mkdirSync(app);
 for(const file of ['meta-onboarding-panel.js','meta-onboarding-panel.module.css','meta-sdk-loader.mjs','customer-inbox-panel.js','customer-inbox-panel.module.css','customer-inbox-view.mjs'])copyFileSync(path.join(root,'src/app/(identity)/cuenta',file),path.join(app,file));
-for(const dependency of ['workspace-session-request.mjs','workspace-request-lifecycle.mjs','workspace-request-lifecycle.js','private-workspace-download.js','workspace-recovery-journal.mjs'])copyFileSync(path.join(root,'src/app/(identity)/cuenta',dependency),path.join(app,dependency));
+for(const dependency of ['workspace-session-request.mjs','workspace-request-lifecycle.mjs','workspace-request-lifecycle.js','private-workspace-download.js','workspace-recovery-journal.mjs','workspace-recovery-storage.mjs'])copyFileSync(path.join(root,'src/app/(identity)/cuenta',dependency),path.join(app,dependency));
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'synthetic-meta-customer-ui',private:true}));
 writeFileSync(path.join(fixture,'next.config.mjs'),`export default {devIndicators:false,turbopack:{root:${JSON.stringify(root)}}};`);
 writeFileSync(path.join(app,'layout.js'),`export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:12,background:'#f4f7f9',fontFamily:'Arial,sans-serif'}}>{children}</body></html>}`);

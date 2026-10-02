@@ -17,10 +17,10 @@ test('definitive local stop and provider rejection have different messages',()=>
 test('malformed POST or recovery result is rejected before a durable reference can be removed',async()=>{
  for(const method of ['POST','GET']){
   const rows=new Map(),storage={get length(){return rows.size;},key:index=>[...rows.keys()][index],getItem:key=>rows.get(key),setItem:(key,value)=>rows.set(key,value),removeItem:key=>rows.delete(key)};
-  const journal=createWorkspaceRecoveryJournal({getStorage:()=>storage});journal.prepare('/api/identity/template-send',{method:'POST',body:JSON.stringify(command)});
+  const journal=createWorkspaceRecoveryJournal({getStorage:()=>storage});await journal.prepare('/api/identity/template-send',{method:'POST',body:JSON.stringify(command)});
   const transport=createWorkspaceRequestLifecycle(async()=>'controlled',{journal,fetchImpl:async()=>Response.json(result({receipt:{...receipt,workerId:'worker-b'}}))});
   const url='/api/identity/template-send'+(method==='GET'?'?'+new URLSearchParams({projectId:command.projectId,scope:command.scope,operationId:command.operationId}):'');
   await assert.rejects(transport.request(url,{method,...(method==='POST'?{body:JSON.stringify(command)}:{})},async response=>templateSendResult(await response.json(),command)));
-  assert.equal(journal.list(command.scope).length,1);transport.abort();
+  assert.equal((await journal.list(command.scope)).length,1);transport.abort();
  }
 });
