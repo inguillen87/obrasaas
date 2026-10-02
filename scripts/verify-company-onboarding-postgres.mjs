@@ -35,6 +35,16 @@ try{
  for(const name of ['Task','Worker','WhatsAppConnection'])assert.equal((await pool.query(`SELECT count(*)::int AS n FROM "${name}"`)).rows[0].n,0,name);
  const list=await workspace.list(first);assert.equal(list.projects.length,1);assert.equal(list.role,'ADMIN');assert.equal((await workspace.read(first,{projectId:results[0].projectId,scope:list.scope})).tasks.length,0);
  checks.push('empty-company-created-once-with-real-canonical-membership-and-no-fixtures');
+ const restored=await store.status(first);assert.equal(restored.state,'CREATED');assert.equal(restored.receiptId,results[0].receiptId);
+ assert.equal(restored.replayed,true);assert.equal((await pool.query('SELECT count(*)::int AS n FROM "AuditLog"')).rows[0].n,1);
+ checks.push('reload-recovers-own-original-company-receipt-by-canonical-pointer-with-no-new-command');
+ await pool.query(`INSERT INTO "PlatformUser"(id,"clerkUserId","primaryEmail","systemRole","updatedAt") VALUES('other-admin','user_OtherAdmin','other-admin@example.invalid','TENANT_USER',CURRENT_TIMESTAMP)`);await pool.query(`INSERT INTO "TenantMembership"(id,"organizationId","userId","clerkRole","tenantRole",status,"updatedAt") VALUES('other-admin-member',$1,'other-admin','org:admin','ADMIN','ACTIVE',CURRENT_TIMESTAMP)`,[results[0].organizationId]);
+ const otherAdmin=await store.status({...first,userId:'user_OtherAdmin'});assert.equal(otherAdmin.state,'ALREADY_CONFIGURED');assert.equal(otherAdmin.receiptId,undefined);
+ await pool.query(`UPDATE "AuditLog" SET "entityId"='wrong-organization' WHERE id=$1`,[results[0].receiptId]);assert.equal((await store.status(first)).state,'ALREADY_CONFIGURED');
+ await pool.query(`UPDATE "AuditLog" SET "entityId"=$2 WHERE id=$1`,[results[0].receiptId,results[0].organizationId]);
+ await pool.query(`UPDATE "Organization" SET metadata=jsonb_set(metadata,'{onboarding,operationReceiptId}','"company_bootstrap_0000000000000000000000000000000000000000000000000000000000000000"'::jsonb) WHERE id=$1`,[results[0].organizationId]);assert.equal((await store.status(first)).state,'ALREADY_CONFIGURED');
+ await pool.query(`UPDATE "Organization" SET metadata=jsonb_set(metadata,'{onboarding,operationReceiptId}',to_jsonb($2::text)) WHERE id=$1`,[results[0].organizationId,results[0].receiptId]);
+ checks.push('another-admin-or-missing-mismatched-company-pointer-never-inherits-the-creation-receipt');
  const inputB=command(second);inputB.initialTasks=[{title:'Replanteo',startsOn:'2026-10-01',endsOn:'2026-10-03'},{title:'Cimentación',startsOn:'',endsOn:''}];
  const companyB=await store.create(second,inputB,proof(second)),listB=await workspace.list(second),workB=await workspace.read(second,{projectId:companyB.projectId,scope:listB.scope});
  assert.equal(workB.tasks.length,2);assert.ok(workB.tasks.every(task=>task.progress===0&&task.status==='BACKLOG'));assert.equal(listB.projects.length,1);
@@ -51,8 +61,12 @@ try{
  await pool.query('UPDATE "TenantMembership" SET status=$1 WHERE "organizationId"=$2',['ACTIVE',results[0].organizationId]);
  checks.push('revoked-membership-is-not-reactivated-by-onboarding-or-replay');
  await pool.query('UPDATE "TenantMembership" SET "tenantRole"=$1 WHERE "organizationId"=$2',['DIRECTOR',results[0].organizationId]);
- assert.equal((await store.status(first)).state,'ALREADY_CONFIGURED');
+ assert.equal((await store.status(first)).state,'CREATED');
  assert.equal((await workspace.list(first)).role,'DIRECTOR');
+ await pool.query(`UPDATE "TenantMembership" SET "tenantRole"='AUDITOR' WHERE "organizationId"=$1 AND "userId"=(SELECT id FROM "PlatformUser" WHERE "clerkUserId"=$2)`,[results[0].organizationId,first.userId]);assert.equal((await store.status(first)).state,'CREATED');
+ await pool.query(`UPDATE "ProjectMembership" SET status='DISABLED' WHERE "projectId"=$1`,[results[0].projectId]);const reduced=await store.status(first);assert.equal(reduced.state,'ALREADY_CONFIGURED');assert.equal(reduced.receiptId,undefined);assert.equal((await store.status(first,{operationId:request.operationId})).receiptId,undefined);
+ await pool.query(`UPDATE "ProjectMembership" SET status='ACTIVE' WHERE "projectId"=$1`,[results[0].projectId]);
+ checks.push('company-receipt-cannot-expose-an-unassigned-project-after-a-role-or-membership-change');
  await pool.query('UPDATE "TenantMembership" SET "tenantRole"=$1 WHERE "organizationId"=$2',['ADMIN',results[0].organizationId]);
  checks.push('existing-canonical-director-is-not-trapped-in-new-company-onboarding');
  const conflict=identity('Conflict');await assert.rejects(store.create(conflict,command(conflict),{...proof(conflict),primaryEmail:proof(first).primaryEmail}),{code:'COMPANY_IDENTITY_CONFLICT'});
@@ -68,7 +82,7 @@ try{
  const lostUser=identity('Lost'),lostInput=command(lostUser);
  const lost=createCompanyOnboardingStore({connect:async()=>{const client=await pool.connect();return {release:bad=>client.release(bad),query:async(sql,params)=>{const value=await client.query(sql,params);if(sql==='COMMIT')throw new Error('Synthetic lost acknowledgement');return value;}};}});
  await assert.rejects(lost.create(lostUser,lostInput,proof(lostUser)),{code:'COMPANY_CREATION_UNCONFIRMED'});
- const recovered=await store.status(lostUser,{operationId:lostInput.operationId});assert.equal(recovered.state,'CREATED');assert.equal((await store.create(lostUser,lostInput,proof(lostUser))).replayed,true);
+ const recovered=await store.status(lostUser);assert.equal(recovered.state,'CREATED');assert.equal(recovered.receiptId,(await store.status(lostUser,{operationId:lostInput.operationId})).receiptId);assert.equal((await store.create(lostUser,lostInput,proof(lostUser))).replayed,true);
  checks.push('lost-commit-reply-recovers-the-same-existing-company');
  const additional1={...first,organizationId:'org_ExtraOne'},additional2={...first,organizationId:'org_ExtraTwo'},overLimit={...first,organizationId:'org_ExtraLimit'};
  await store.create(additional1,command(additional1),proof(first));await store.create(additional2,command(additional2),proof(first));
@@ -85,6 +99,6 @@ try{
  await assert.rejects(workspace.createTask(second,{...newTask,scope:listB.scope}),{code:'WORKSPACE_PROJECT_UNAVAILABLE'});
  await assert.rejects(workspace.createTask(first,{...newTask,operationId:randomUUID(),progress:100}),{code:'TASK_CREATION_INVALID'});
  checks.push('empty-worksite-can-add-a-real-task-once-without-progress-or-cross-company-writes');
- const report={status:'PASS',environment:'disposable-local-postgresql17',checks,realCustomer:false,productionDataWritten:false,clerkApiCalls:0,metaApiCalls:0,whatsAppConnected:false};
+ const report={status:'PASS',environment:'disposable-local-postgresql',databaseServerVersion:(await pool.query('SHOW server_version')).rows[0].server_version,checks,realCustomer:false,productionDataWritten:false,clerkApiCalls:0,metaApiCalls:0,whatsAppConnected:false};
  mkdirSync('.vercel/company-onboarding-evidence',{recursive:true});writeFileSync('.vercel/company-onboarding-evidence/postgres.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));
 }finally{try{await closeDisposablePool(pool);if(created)await admin.query(`DROP DATABASE "${db}"`);}finally{await admin.end();}}

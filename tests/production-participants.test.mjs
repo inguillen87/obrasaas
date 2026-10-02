@@ -51,6 +51,11 @@ test('HTTP independently requires signed identity, canonical origin and exclusiv
  assert.equal(calls,1);
  const unsigned=createParticipantHandlers({verify:async()=>({authenticated:false}),store:{read:async()=>assert.fail('unsigned identity reached data')}});assert.equal((await unsigned.GET(request())).status,401);
 });
+test('acceptance recovery GET delegates the invitation alone and cannot submit or select another actor',async()=>{
+ const invitationId='invite_'+'a'.repeat(32),calls=[],api=createParticipantHandlers({verify:async()=>({...session,organizationRole:'org:member'}),join:true,store:{join:async(...args)=>{calls.push(args);return {state:'ACTIVE',saved:true,joined:true,receiptId:'participant_original'};}}});
+ const result=await api.GET(request('GET','?invitationId='+invitationId));assert.equal(result.status,200);assert.equal(calls.length,1);assert.deepEqual(calls[0][1],{invitationId});assert.equal(calls[0].length,2);assert.match(result.headers.get('Cache-Control'),/no-store/);
+ for(const suffix of ['&operationId='+randomUUID(),'&userId=user_Other','&invitationId='+invitationId])assert.equal((await api.GET(request('GET','?invitationId='+invitationId+suffix))).status,400);assert.equal(calls.length,1);
+});
 const environment=()=>({NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:IDENTITY_PUBLIC_KEY,CLERK_SECRET_KEY:'sk_live_'+'A'.repeat(30),CLERK_EXPECTED_INSTANCE_ID:IDENTITY_INSTANCE,NEXT_PUBLIC_APP_URL:IDENTITY_ORIGIN,CLERK_AUTHORIZED_PARTIES:IDENTITY_ORIGIN});
 test('Clerk adapter correlates exact metadata across pages and never trusts unsafe profile fields',async()=>{
  const expected={id:'orginv_Exact',organizationId:'org_A',emailAddress:'worker@example.invalid',role:'org:member',expiresAt:Date.now()+60000,status:'accepted',publicMetadata:{obrasaasInvitationId:'invite_'+'a'.repeat(32)}};let options;

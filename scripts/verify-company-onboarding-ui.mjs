@@ -8,6 +8,7 @@ import {createBootstrapProfileVerifier} from '../src/lib/company-onboarding-iden
 import {BOOTSTRAP_PROFILE_AUDIENCE} from '../src/lib/company-onboarding-policy.mjs';
 import {IDENTITY_ISSUER,IDENTITY_ORIGIN} from '../src/lib/production-identity-config.mjs';
 assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV);
+assert.ok([undefined,'onboarding-recovery'].includes(process.env.COMPANY_ONBOARDING_UI_SUITE));
 const root=realpathSync(process.cwd()),parent=path.join(root,'.vercel'),output=path.join(parent,'company-onboarding-evidence');mkdirSync(output,{recursive:true});
 const dir=mkdtempSync(path.join(root,'.vercel/company-bootstrap-ui-')),app=path.join(dir,'src/app'),components=path.join(app,'(identity)/cuenta');mkdirSync(components,{recursive:true});
 mkdirSync(path.join(dir,'src/lib'),{recursive:true});copyFileSync(path.join(root,'src/lib/worker-channel-consent-policy.mjs'),path.join(dir,'src/lib/worker-channel-consent-policy.mjs'));
@@ -53,17 +54,18 @@ async function scenario(mode,width=390){
     if(request.method()==='GET'){
      assert.equal(url.searchParams.get('expectedClerkOrganizationId'),expectedOrganization);
      if(url.searchParams.has('operationId')){recoveryIds.push(url.searchParams.get('operationId'));if(posts.length)assert.equal(url.searchParams.get('operationId'),posts[0].operationId);body=created?{...result,replayed:true}:{state:'NOT_CREATED',canCreate:mode!=='retry-not-authorized'};}
-     else body=created?{state:'ALREADY_CONFIGURED',canCreate:false,organizationId:'company-test'}:{state:'NOT_CREATED',canCreate:true};
+     else if(created&&mode==='reload-denied'){status=403;body={code:'WORKSPACE_MEMBERSHIP_REQUIRED'};}
+     else body=created?(['reload-other-actor','reload-missing-receipt'].includes(mode)?{state:'ALREADY_CONFIGURED',canCreate:false,organizationId:'company-test'}:{...result,replayed:true}):{state:'NOT_CREATED',canCreate:true};
     }else{
      const command=JSON.parse(request.postData());posts.push(command);postBodies.push(request.postData());assert.equal(command.expectedClerkOrganizationId,'org_BootstrapA');assert.equal(command.confirmNewCompany,true);assert.ok(!JSON.stringify(command).includes('token'));
      const proof=request.headers()['x-obrasaas-bootstrap-profile'];if(verifyProfile)await verifyProfile(proof,sessionIdentity);else assert.match(proof,/^synthetic-profile-token-\d+$/);
      if(mode==='no-arrival'&&posts.length===1)return request.abort('failed');
-     if(['rollback','expired-profile','profile-retry-unavailable','retry-not-authorized'].includes(mode)&&posts.length===1){status=503;body={code:'COMPANY_CREATION_UNCONFIRMED'};}
+     if(['rollback','expired-profile','profile-retry-unavailable','retry-not-authorized','reload-not-committed'].includes(mode)&&posts.length===1){status=503;body={code:'COMPANY_CREATION_UNCONFIRMED'};}
      else if(mode==='denied'){status=403;body={code:'COMPANY_VERIFIED_PROFILE_REQUIRED'};}
      else{
       created=true;tasks=command.initialTasks.map((task,index)=>({id:'task-initial-'+index,title:task.title,startsOn:task.startsOn||null,endsOn:task.endsOn||null,progress:0,status:'BACKLOG',revision:'2026-10-01T12:00:00.123456'}));
       result={state:'CREATED',created:true,receiptId:'company_bootstrap_'+'a'.repeat(64),organizationId:'company-test',projectId:'project-test',companyName:command.companyName,projectName:command.project.name,initialTaskCount:tasks.length,whatsAppConnected:false};body=result;
-      if(mode==='uncertain'){status=503;body={code:'COMPANY_CREATION_UNCONFIRMED'};}
+      if(mode==='uncertain'||mode.startsWith('reload-')){status=503;body={code:'COMPANY_CREATION_UNCONFIRMED'};}
      }
     }
    }else if(url.pathname==='/api/identity/workspace'){
@@ -115,6 +117,14 @@ async function scenario(mode,width=390){
   assert.equal(await page.$$eval('button',buttons=>buttons.some(button=>button.textContent==='Reenviar mismo intento')),false);await click(page,'Comprobar creación');await wait(page,'No se reenvía automáticamente');assert.equal(posts.length,1);
   await click(page,'Reenviar mismo intento');await wait(page,'No se pudo confirmar tu correo verificado');assert.equal(posts.length,2);assert.equal(postBodies[0],postBodies[1]);assert.equal(created,false);checks.push('unverified-email-receipt-first-identical-retry-never-shows-company-created');await context.close();return;
  }
+ if(mode.startsWith('reload-')){
+  await wait(page,'No recibimos la confirmación');assert.equal(posts.length,1);const originalReceipt=result?.receiptId;await page.reload({waitUntil:'networkidle0'});
+  if(mode==='reload-denied'){await wait(page,'Tu pertenencia a esta empresa no está habilitada');assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Recibo:'));assert.equal((await page.$$('form')).length,0);}
+  else if(mode==='reload-not-committed'){await wait(page,'Crear empresa y primera obra');assert.equal(await page.$eval('input[autocomplete="organization"]',node=>node.value),'');assert.equal(await page.$eval('input[placeholder*="Edificio"]',node=>node.value),'');assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Recibo:'));assert.equal(created,false);}
+  else if(['reload-other-actor','reload-missing-receipt'].includes(mode)){await wait(page,'Mis obras');assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Recibo: '+originalReceipt));}
+  else {await wait(page,'Alta confirmada');await wait(page,'Mis obras');assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Entrar a mi obra'));await page.click('summary');await wait(page,'Recibo: '+originalReceipt);assert.equal(await page.evaluate(()=>window.__profileReads||0),0);}
+  assert.equal(posts.length,1,'Reload performed another company POST');assert.equal(recoveryIds.length,0);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:path.join(output,`company-${mode}-${width}.png`),fullPage:true});checks.push(`${mode}-company-receipt-readonly-after-reload-${width}`);await context.close();return;
+ }
  if(mode==='uncertain'){await wait(page,'No recibimos la confirmación');assert.equal(posts.length,1);await click(page,'Comprobar creación');}
  if(['no-arrival','rollback','expired-profile','profile-retry-unavailable','retry-not-authorized'].includes(mode)){
   await wait(page,'No recibimos la confirmación');assert.equal(posts.length,1);assert.equal(created,false);assert.equal(await page.$$eval('button',buttons=>buttons.some(button=>button.textContent==='Reenviar mismo intento')),false);
@@ -136,6 +146,7 @@ async function scenario(mode,width=390){
   await wait(page,'no tiene tareas registradas');await click(page,'Nueva tarea');await page.type('input[minlength="2"]','Primera tarea cargada después');await click(page,'Crear tarea');await wait(page,'Tarea creada y vinculada');assert.equal(taskPosts.length,1);assert.ok((await page.evaluate(()=>document.body.innerText)).includes('0 %'));
  }
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));assert.deepEqual(external,[]);
+ if(mode==='empty'){const beforeReturn=posts.length;await page.reload({waitUntil:'networkidle0'});await wait(page,'Alta confirmada');await wait(page,'Mis obras');assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Entrar a mi obra'));await page.click('summary');await wait(page,'Recibo: '+result.receiptId);assert.equal(posts.length,beforeReturn);assert.equal(await page.evaluate(()=>window.__profileReads||0),0);await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(button=>button.textContent.includes('Obra inicial de ensayo')&&!button.disabled));await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra inicial de ensayo')).click());await wait(page,'Primera tarea cargada después');assert.equal(taskPosts.length,1);checks.push(`ordinary-return-keeps-workspace-open-and-original-receipt-consultable-${width}`);}
  checks.push(`${mode}-company-to-workspace-${width}`);await context.close();
 }
 try{
@@ -150,8 +161,9 @@ try{
  }
  assert.ok(ready,'Fixture server unavailable: '+log.slice(-5000));
  browser=await puppeteer.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{}),args:['--no-sandbox','--disable-setuid-sandbox']});
- for(const width of [320,390,768,1280])await scenario('empty',width);await scenario('planned',390);await scenario('uncertain');await scenario('no-arrival');await scenario('rollback');await scenario('denied');
- for(const mode of ['expired-profile','profile-retry-unavailable','retry-not-authorized','initial-sdk-hung','session-hung','profile-hung','late-session-context','late-session-unmount','late-profile-unmount'])await scenario(mode);
+ if(!process.env.COMPANY_ONBOARDING_UI_SUITE){for(const width of [320,390,768,1280])await scenario('empty',width);await scenario('planned',390);await scenario('uncertain');await scenario('no-arrival');await scenario('rollback');await scenario('denied');
+ for(const mode of ['expired-profile','profile-retry-unavailable','retry-not-authorized','initial-sdk-hung','session-hung','profile-hung','late-session-context','late-session-unmount','late-profile-unmount'])await scenario(mode);}
+ for(const width of [320,390,768,1280])for(const mode of ['reload-committed','reload-not-committed','reload-denied','reload-other-actor','reload-missing-receipt'])await scenario(mode,width);
  assert.deepEqual(errors,[]);const proof={status:'PASS',environment:'actual-ui-with-intercepted-synthetic-services',checks,widths:[320,390,768,1280],errors,profileExpiryVerification:'real-RS256-verifier-with-disposable-local-key-and-controlled-clock',sdkDeadlines:'controlled-accelerated-clock',realClerkLogin:false,physicalWhatsApp:false,productionDataWritten:false};
  rmSync(path.join(output,'browser-failure.json'),{force:true});writeFileSync(path.join(output,'browser.json'),JSON.stringify(proof,null,2));console.log(JSON.stringify(proof));
 }catch(error){writeFileSync(path.join(output,'browser-failure.json'),JSON.stringify({message:error.message,errors,log},null,2));throw error;}
