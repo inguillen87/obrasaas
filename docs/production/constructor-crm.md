@@ -21,8 +21,19 @@ etapa, próximo seguimiento y notas. Las fichas son de toda la empresa; la obra
 seleccionada proporciona el contexto autorizado de la consulta y del recibo.
 Dirección y operarios no adquieren gestión comercial por sus permisos de obra.
 
-Se consultan páginas de 20 registros, con el total de la empresa y un cursor
-validado dentro de esa empresa. La búsqueda visible se aplica sólo a la página.
+Se consultan páginas de 20 registros. **Buscar clientes** consulta toda la empresa
+por nombre, contacto, correo o teléfono; se aplica sólo al confirmar la búsqueda.
+El texto admite hasta 120 caracteres, sin caracteres de control. `%` y `_` son
+literales, no comodines. La comparación no distingue mayúsculas de minúsculas;
+las tildes siguen siendo significativas. El total indica coincidencias y las
+páginas anterior y siguiente conservan el filtro.
+
+El cursor se valida para la empresa, obra, filtro y ficha; no concede permisos.
+Cada consulta verifica la autorización canónica vigente. Las páginas reflejan
+el estado al consultarlas y pueden cambiar si otra persona modifica fichas.
+Se conserva el límite de consulta existente de seis segundos, sin cambios de
+esquema ni índices. Escribir una búsqueda no consulta automáticamente ni envía
+mensajes de WhatsApp.
 No hay contactos de ejemplo. Se conservan las etapas existentes con etiquetas
 en español. Los campos de usuarios y valor mensual del CRM de ventas de SaaS no
 se presentan como presupuestos de construcción.

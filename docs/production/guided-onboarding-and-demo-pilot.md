@@ -6,6 +6,13 @@ The guide links to visible sections and respects the current account and
 organization. Its personal reading marks are temporary; they do not certify
 configuration, grant permissions or send commands.
 
+The eight-step guide includes the existing **Clientes y seguimiento** panel.
+Its shortcut is available only when that authorized panel is visible; a missing
+panel explains the administrator dependency. Reading marks never infer CRM
+authority. Official Meta asset authorization, receiving the phone verification
+code, and physical pilot acceptance remain human steps. Controlled browser and
+database fixtures do not certify those external or physical steps.
+
 ## Canonical pilot boundary
 
 The demo uses the existing app, WABA and Test Number through a trusted internal

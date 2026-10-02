@@ -21,6 +21,7 @@ for (const segment of ['sign-in', 'sign-up']) copy(path.join(root, 'src/app/(ide
 copy(path.join(root, 'src/app/(identity)/identity.module.css'), path.join(identity, 'identity.module.css'));
 copy(path.join(root, 'src/app/(identity)/identity-load-guard.js'), path.join(identity, 'identity-load-guard.js'));
 for (const file of ['production-identity-config.mjs', 'identity-return-path.mjs', 'session-recovery.mjs', 'worker-channel-consent-policy.mjs']) copy(path.join(root, 'src/lib', file), path.join(src, 'lib', file));
+copy(path.join(root, 'src/lib/whatsapp/tenant-workspace-policy.js'), path.join(src, 'lib/whatsapp/tenant-workspace-policy.js'));
 for (const file of ['brand-logo.js', 'brand-logo.module.css', 'brand-geometry.js']) copy(path.join(root, 'src/app/brand', file), path.join(app, 'brand', file));
 write(path.join(dir, 'package.json'), JSON.stringify({name:'synthetic-clerk-access-ui',private:true}));
 write(path.join(dir, 'jsconfig.json'), JSON.stringify({compilerOptions:{baseUrl:'.',paths:{'@/*':['src/*']}}}));
