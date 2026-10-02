@@ -20,7 +20,27 @@ export async function customerJobTransaction(connect,run){
  catch(error){try{await client.query('ROLLBACK');}catch{broken=true;}throw error;}
  finally{client.release(broken);}
 }
-const publicResult=row=>({id:row.id,state:row.outcome?.state||'SEND_UNKNOWN',replySent:['SENT','STATUS_OBSERVED'].includes(row.outcome?.state)&&!['failed','deleted'].includes(row.outcome?.providerStatus),messageId:row.outcome?.messageId||null,providerStatus:row.outcome?.providerStatus||null,replayed:true});
+export const customerOutboundResult=row=>({id:row.id,state:row.outcome?.state||'SEND_UNKNOWN',replySent:['SENT','STATUS_OBSERVED'].includes(row.outcome?.state)&&!['failed','deleted'].includes(row.outcome?.providerStatus),messageId:row.outcome?.messageId||null,providerStatus:row.outcome?.providerStatus||null,replayed:true});
+const publicResult=customerOutboundResult;
+// Authenticated compositions supply already locked, canonical recipient state.
+// Both replies and manual templates share this durable reservation/status lane.
+export async function reserveCustomerOutbound(client,{id,projectId,organizationId,actorId,request,eventType='reply',payloadFields={},environment=process.env,now=Date.now()}){
+ if(!/^customer_outbound_[a-f0-9]{64}$/.test(id)||!['reply','template'].includes(eventType)||request.channelId!==payloadFields.channelId&&payloadFields.channelId!==undefined||request.organizationId!==organizationId)throw new WorkspaceError('META_CUSTOMER_OUTBOUND_CONTEXT_CHANGED',409);
+ const requestDigest=digest(request),previous=(await client.query(`SELECT id,payload,outcome FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 AND provider='meta-customer-outbound-v1' FOR UPDATE`,[id,projectId])).rows[0];
+ if(previous){if(previous.payload?.requestDigest!==requestDigest)throw new WorkspaceError('META_CUSTOMER_OUTBOUND_CONFLICT',409);return {done:publicResult(previous)};}
+ const encryptedPayload=encryptCustomerSecret(JSON.stringify(request),{organizationId,projectId,purpose:'outbound',resourceId:id},environment),leaseToken=randomUUID();
+ await client.query(`INSERT INTO public."WebhookEvent"(id,"projectId",provider,"externalId","eventType",status,payload,outcome,"leaseToken","leaseExpiresAt",attempts,"updatedAt") VALUES($1,$2,'meta-customer-outbound-v1',$1,$3,'PENDING',$4::jsonb,$5::jsonb,$6,$7,1,clock_timestamp())`,[id,projectId,eventType,JSON.stringify({...payloadFields,version:1,channelId:request.channelId,organizationId,...(request.eventId?{eventId:request.eventId}:{}),requestDigest,encryptedPayload}),JSON.stringify({version:1,state:'SEND_STARTED',reservedAt:new Date(now).toISOString(),actorId}),leaseToken,new Date(now+60000)]);
+ return {id,leaseToken,requestDigest};
+}
+export async function completeCustomerOutbound(client,{id,projectId,leaseToken,state,messageId=null,now=Date.now(),outcomeFields={}}){
+ if(!['SENT','SEND_UNKNOWN','REJECTED'].includes(state))throw new WorkspaceError('META_CUSTOMER_OUTBOUND_CONTEXT_CHANGED',409);
+ const row=(await client.query(`SELECT id,payload,outcome FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 AND provider='meta-customer-outbound-v1' FOR UPDATE`,[id,projectId])).rows[0];
+ if(!row)throw new WorkspaceError('META_CUSTOMER_OUTBOUND_UNCONFIRMED',503);
+ if(row.outcome?.state==='STATUS_OBSERVED')return {...publicResult(row),payload:row.payload};
+ const updated=await client.query(`UPDATE public."WebhookEvent" SET status='PROCESSED',outcome=$4::jsonb,"processedAt"=clock_timestamp(),"leaseToken"=NULL,"leaseExpiresAt"=NULL,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2 AND "leaseToken"=$3`,[id,projectId,leaseToken,JSON.stringify({...row.outcome,...outcomeFields,state,messageId,completedAt:new Date(now).toISOString()})]);
+ if(updated.rowCount!==1)throw new WorkspaceError('META_CUSTOMER_OUTBOUND_LEASE_CHANGED',409);
+ return {id,state,replySent:state==='SENT',messageId,replayed:false,payload:row.payload};
+}
 export function createMetaCustomerOutbound({connect,resolveIdentity,provider,environment=process.env,now=()=>Date.now(),afterReserve=async()=>{}}){
  const within=run=>customerJobTransaction(connect,run);
  async function reserve(context,reply){
@@ -32,13 +52,10 @@ export function createMetaCustomerOutbound({connect,resolveIdentity,provider,env
    const {project,connection,event,member}=resolved,payload=resolved.proof?.payload||resolved.proof?.message||resolved.proof;
    if(resolved.kind!=='CHANNEL_VERIFIED'||project.id!==context.projectId||connection.id!==context.channelId||event.payload.payloadDigest!==context.payloadDigest||event.leaseToken!==context.leaseToken||event.status!=='PENDING'||new Date(event.leaseExpiresAt).getTime()<=now())throw new WorkspaceError('META_CUSTOMER_OUTBOUND_CONTEXT_CHANGED',409);
    if(!customerChannelActive(connection,now()))throw new WorkspaceError('META_CUSTOMER_CHANNEL_ACCEPTANCE_REQUIRED',409);
-   const {to,replyTo}=assertCustomerReplyWindow(payload,now()),id=customerOutboundId(event.id),request={version:1,eventId:event.id,payloadDigest:context.payloadDigest,channelId:connection.id,organizationId:member.organizationId,to,replyTo,message:reply},requestDigest=digest(request);
-   const previous=(await client.query(`SELECT id,payload,outcome FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 AND provider='meta-customer-outbound-v1' FOR UPDATE`,[id,project.id])).rows[0];
-   if(previous){if(previous.payload?.requestDigest!==requestDigest)throw new WorkspaceError('META_CUSTOMER_OUTBOUND_CONFLICT',409);return {done:publicResult(previous)};}
-   const encryptedPayload=encryptCustomerSecret(JSON.stringify(request),{organizationId:member.organizationId,projectId:project.id,purpose:'outbound',resourceId:id},environment),leaseToken=randomUUID();
-   await client.query(`INSERT INTO public."WebhookEvent"(id,"projectId",provider,"externalId","eventType",status,payload,outcome,"leaseToken","leaseExpiresAt",attempts,"updatedAt") VALUES($1,$2,'meta-customer-outbound-v1',$1,'reply','PENDING',$3::jsonb,$4::jsonb,$5,$6,1,clock_timestamp())`,[id,project.id,JSON.stringify({version:1,channelId:connection.id,organizationId:member.organizationId,eventId:event.id,requestDigest,encryptedPayload}),JSON.stringify({version:1,state:'SEND_STARTED',reservedAt:new Date(now()).toISOString(),actorId:member.actorId}),leaseToken,new Date(now()+60000)]);
+   const {to,replyTo}=assertCustomerReplyWindow(payload,now()),id=customerOutboundId(event.id),request={version:1,eventId:event.id,payloadDigest:context.payloadDigest,channelId:connection.id,organizationId:member.organizationId,to,replyTo,message:reply};
+   const reservation=await reserveCustomerOutbound(client,{id,projectId:project.id,organizationId:member.organizationId,actorId:member.actorId,request,environment,now:now()});if(reservation.done)return reservation;
    const token=decryptCustomerSecret(connection.encryptedAccessToken,{organizationId:member.organizationId,projectId:project.id,purpose:'access-token',resourceId:connection.phoneNumberId},environment);
-   return {id,leaseToken,token,phoneNumberId:connection.phoneNumberId,to,replyTo,requestDigest};
+   return {...reservation,token,phoneNumberId:connection.phoneNumberId,to,replyTo};
   });
  }
  return {
@@ -48,14 +65,8 @@ export function createMetaCustomerOutbound({connect,resolveIdentity,provider,env
    // a crashed worker, a timed-out POST or a lost database commit response.
    await afterReserve();await reserve(context,reply);let state='SEND_UNKNOWN',result=null;
    try{result=await provider.sendReply({...reserved,message:reply,correlationId:reserved.id});state='SENT';}catch(error){if(error instanceof WorkspaceError&&error.code==='META_CUSTOMER_PROVIDER_REJECTED')state='REJECTED';}
-   return within(async client=>{
-    const row=(await client.query(`SELECT id,outcome FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 AND provider='meta-customer-outbound-v1' FOR UPDATE`,[reserved.id,context.projectId])).rows[0];
-    if(!row)throw new WorkspaceError('META_CUSTOMER_OUTBOUND_UNCONFIRMED',503);
-    if(row.outcome?.state==='STATUS_OBSERVED')return publicResult(row);
-    const updated=await client.query(`UPDATE public."WebhookEvent" SET status='PROCESSED',outcome=$4::jsonb,"processedAt"=clock_timestamp(),"leaseToken"=NULL,"leaseExpiresAt"=NULL,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2 AND "leaseToken"=$3`,[reserved.id,context.projectId,reserved.leaseToken,JSON.stringify({...row.outcome,state,messageId:result?.messageId||null,completedAt:new Date(now()).toISOString()})]);
-    if(updated.rowCount!==1)throw new WorkspaceError('META_CUSTOMER_OUTBOUND_LEASE_CHANGED',409);
-    return {id:reserved.id,state,replySent:state==='SENT',messageId:result?.messageId||null,replayed:false};
-   });
+   const completed=await within(client=>completeCustomerOutbound(client,{...reserved,projectId:context.projectId,state,messageId:result?.messageId||null,now:now()}));
+   const {payload:privatePayload,...resultPublic}=completed;void privatePayload;return resultPublic;
   },
   async result({eventId,projectId,channelId}){
    return within(async client=>{const row=(await client.query(`SELECT id,payload,outcome FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 AND provider='meta-customer-outbound-v1' AND payload->>'channelId'=$3`,[customerOutboundId(eventId),projectId,channelId])).rows[0];return row?publicResult(row):{state:'NOT_OBSERVED',replySent:false,definitive:false};});

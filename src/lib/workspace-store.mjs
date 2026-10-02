@@ -92,12 +92,15 @@ export function createWorkspaceStore({ connect }) {
     },
     // Internal composition point: the caller supplies no identity or role claims.
     // Only the independently verified session and canonical membership decide access.
-    async integrationProject(session, {projectId, scope: expected}, writable, callback) {
-      if (typeof callback !== 'function' || typeof writable !== 'boolean') throw new TypeError('Explicit integration transaction required');
+    async integrationProject(session, {projectId, scope: expected}, writable, callback, beforeProject) {
+      if (typeof callback !== 'function' || typeof writable !== 'boolean' || beforeProject !== undefined && typeof beforeProject !== 'function') throw new TypeError('Explicit integration transaction required');
       if (!/^[a-f0-9]{64}$/.test(expected || '')) throw new WorkspaceError('WORKSPACE_CONTEXT_CHANGED',409);
       return transaction(session, writable, async (client, member, scope) => {
         checkScope(scope, expected);
         if (!['ADMIN','DIRECTOR'].includes(member.role)) throw new WorkspaceError('WORKSPACE_INTEGRATION_PERMISSION_REQUIRED',403);
+        // Internal compositions may lock the recipient membership before the
+        // project. Their return value never replaces canonical actor or scope.
+        if (beforeProject) await beforeProject(client, Object.freeze({...member}), scope);
         await project(client, member, projectId);
         // Recheck and lock directly: avoid two concurrent SHARE->UPDATE upgrades.
         const selected=await client.query(`SELECT p.id,p.name,p.metadata,o.metadata AS "organizationMetadata"

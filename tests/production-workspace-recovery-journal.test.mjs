@@ -108,3 +108,26 @@ test('a panel unmounted while awaiting the reservation lock never stores a refer
  const pending=lifecycle.request('/api/identity/task-creation',command());await new Promise(resolve=>setImmediate(resolve));lifecycle.abort();release();
  await assert.rejects(pending,error=>error.name==='AbortError'&&error.requestDispatched===false);assert.equal(j.list(scope).length,0);assert.equal(tokens,0);assert.equal(sent,0);
 });
+test('template uncertainty survives restart and forbids a fresh UUID without storing recipient or message',()=>{
+ const s=storage(),j=journal(s),ticket=j.prepare('/api/identity/template-send',command({workerId:'worker-private',templateKey:'open_attendance_reminder'}));
+ const receipt={id:'outbound-a',operationId,workerId:'worker-private',templateKey:'open_attendance_reminder'};
+ const value={scope,projectId:'p-a',state:'SEND_UNKNOWN',receipt,saved:false,definitive:false,providerAccepted:false,deliveryConfirmed:false};
+ j.settle(ticket,value);assert.equal(j.list(scope).length,1);j.observe(recoveryQuery(ticket.entry),value);assert.equal(journal(storage(s.rows)).list(scope).length,1);
+ assert.throws(()=>j.prepare('/api/identity/template-send',command({operationId:secondId})),{code:'WORKSPACE_RECOVERY_REQUIRED'});
+ assert.equal(JSON.stringify([...s.rows]).includes('worker-private'),false);assert.equal(JSON.stringify([...s.rows]).includes('Private medical'),false);
+});
+test('only exact terminal template outcomes clear the pending reference, with no claim of delivery',()=>{
+ for(const state of ['ACCEPTED','REJECTED','STATUS_OBSERVED']){
+  const j=journal(storage()),ticket=j.prepare('/api/identity/template-send',command()),receipt={id:'outbound-a',operationId,workerId:'worker-a',templateKey:'open_attendance_reminder'};
+  const value={scope,projectId:'p-a',receipt,state,definitive:true,saved:state!=='REJECTED',providerAccepted:state!=='REJECTED',providerStatus:state==='STATUS_OBSERVED'?'sent':null,deliveryConfirmed:false};
+  j.observe(recoveryQuery(ticket.entry),{...value,receipt:{...receipt,operationId:secondId}});assert.equal(j.list(scope).length,1);
+  if(state==='ACCEPTED'){j.observe(recoveryQuery(ticket.entry),{...value,deliveryConfirmed:true});assert.equal(j.list(scope).length,1);}
+  j.observe(recoveryQuery(ticket.entry),value);assert.equal(j.list(scope).length,0);
+ }
+});
+test('worker consent and unlink receipts survive lost response without storing challenge code',()=>{
+ const s=storage(),j=journal(s),ticket=j.prepare('/api/identity/worker-channel',command({action:'GRANT_TEMPLATE_MESSAGES',payload:{workerId:'worker-private',revision:'private-version',noticeSha256:'private-notice',confirmed:true}}));
+ assert.match(recoveryQuery(ticket.entry),/worker-channel\?/);j.settle(ticket,null,Object.assign(new Error('Lost ACK'),{requestDispatched:true}));assert.equal(j.list(scope).length,1);
+ j.observe(recoveryQuery(ticket.entry),{scope,projectId:'p-a',state:'RECORDED',saved:true,receiptId:'worker-receipt'});assert.equal(j.list(scope).length,0);
+ assert.equal(JSON.stringify([...s.rows]).includes('private-notice'),false);
+});

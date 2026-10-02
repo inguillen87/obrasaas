@@ -1,0 +1,40 @@
+'use client';
+import {useEffect,useRef,useState} from 'react';
+import {useWorkspaceRequest} from './workspace-request-lifecycle';
+import {TEMPLATE_SEND_KEY,templateSendSnapshot,templateSendResult,templateSendNotice} from './template-send-view.mjs';
+import styles from './template-send-panel.module.css';
+const endpoint='/api/identity/template-send';
+const errors={WORKSPACE_CONTEXT_CHANGED:'Cambió tu acceso a esta obra. Volvé a consultarla desde tu cuenta.',META_CUSTOMER_TEMPLATE_SEND_PENDING:'Hay un envío anterior sin confirmar. Comprobá su recibo antes de iniciar otro.',META_CUSTOMER_TEMPLATE_APPROVAL_REQUIRED:'La plantilla todavía no tiene una aprobación vigente de Meta.',META_CUSTOMER_TEMPLATE_SEND_STATE_CHANGED:'Cambió la jornada, el permiso o la conexión. Actualizá y revisá el estado antes de preparar otro mensaje.'};
+export function TemplateSendPanel({projectId,scope,getSessionToken,onPending}){
+ const request=useWorkspaceRequest(getSessionToken),mounted=useRef(true),callback=useRef(onPending);
+ const [data,setData]=useState(null),[busy,setBusy]=useState(false),[workerId,setWorkerId]=useState(''),[confirmed,setConfirmed]=useState(false),[attempt,setAttempt]=useState(null),[lastCommand,setLastCommand]=useState(null),[notice,setNotice]=useState(''),[stale,setStale]=useState(false);
+ useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
+ useEffect(()=>{callback.current=onPending;},[onPending]);
+ useEffect(()=>{callback.current?.(busy||Boolean(attempt)||confirmed);return()=>callback.current?.(false);},[busy,attempt,confirmed]);
+ function hide(error){if([401,403].includes(error.status)||error.code==='WORKSPACE_CONTEXT_CHANGED'){setData(null);setWorkerId('');setConfirmed(false);setLastCommand(null);}setStale(true);}
+ async function api(url,options={},validate=value=>value){return request(url,options,async response=>{const value=await response.json();if(!response.ok)throw Object.assign(new Error(errors[value.code]||'No se pudo confirmar la operación. Consultá su estado antes de continuar.'),{status:response.status,code:value.code});return validate(value);});}
+ async function load(){if(busy||attempt)return;setBusy(true);setNotice('');setConfirmed(false);try{const value=await api(endpoint+'?'+new URLSearchParams({projectId,scope}),{requestTimeoutMs:15000},value=>templateSendSnapshot(value,{projectId,scope}));if(mounted.current){setData(value);setWorkerId('');setStale(false);}}catch(error){if(mounted.current){hide(error);setNotice(error.message);}}finally{if(mounted.current)setBusy(false);}}
+ function observe(value,command){const result=templateSendResult(value,command);setNotice(templateSendNotice(result));setLastCommand(command);if(result.definitive){setAttempt(null);setConfirmed(false);setStale(true);}else setAttempt(command);return result;}
+ async function send(event){event.preventDefault();if(busy||attempt||stale||!confirmed||!data?.canSend||!data.template.canSend||!data.records.some(row=>row.workerId===workerId&&row.eligible))return;
+  const command={scope,projectId,operationId:crypto.randomUUID(),workerId,templateKey:TEMPLATE_SEND_KEY};setAttempt(command);setBusy(true);setNotice('');
+  try{const value=await api(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(command),requestTimeoutMs:55000},value=>templateSendResult(value,command));if(mounted.current)observe(value,command);}catch(error){if(mounted.current){if(error.requestDispatched===false||error.status>=400&&error.status<500){setAttempt(null);setConfirmed(false);hide(error);setNotice(error.message);}else setNotice('El resultado quedó sin confirmar. Consultá el recibo de este mismo intento; el mensaje no se vuelve a enviar automáticamente.');}}finally{if(mounted.current)setBusy(false);}
+ }
+ async function recover(){if(!attempt||busy)return;setBusy(true);try{const value=await api(endpoint+'?'+new URLSearchParams({projectId,scope,operationId:attempt.operationId}),{requestTimeoutMs:15000},value=>templateSendResult(value,attempt));if(mounted.current)observe(value,attempt);}catch(error){if(mounted.current){hide(error);setNotice(error.message);}}finally{if(mounted.current)setBusy(false);}}
+ async function inspect(command){if(busy||attempt)return;setBusy(true);try{const value=await api(endpoint+'?'+new URLSearchParams({projectId,scope,operationId:command.operationId}),{requestTimeoutMs:15000},value=>templateSendResult(value,command));if(mounted.current)observe(value,command);}catch(error){if(mounted.current){hide(error);setNotice(error.message);}}finally{if(mounted.current)setBusy(false);}}
+ const selected=data?.records.find(row=>row.workerId===workerId),locked=busy||Boolean(attempt),approval=data?.template.providerStatus==='APPROVED'?'Aprobada por Meta':'Sin aprobación disponible';
+ return <section className={styles.panel} aria-labelledby="template-send-title"><div className={styles.heading}><div><p className={styles.eyebrow}>AVISOS AUTORIZADOS</p><h3 id="template-send-title">Recordatorio de jornada por WhatsApp</h3></div><button type="button" disabled={locked} onClick={load}>Consultar disponibilidad</button></div>
+  <p>Podés recordar una jornada que sigue abierta. El trabajador debe autorizar estos avisos, tener su número vinculado y conservar sus permisos. Meta debe aprobar la plantilla de esta empresa.</p>
+  <p role="status" aria-live="polite" className={styles.notice}>{notice}</p>
+  {attempt&&<div className={styles.recovery}><button type="button" disabled={busy} onClick={recover}>Comprobar envío sin repetirlo</button><p>La consulta lee el recibo y los estados firmados recibidos de Meta. No envía otro mensaje.</p></div>}
+  {data&&<><p className={styles.context}><strong>{data.projectName}</strong></p><p>Plantilla: {data.template.title}. Último estado disponible: {approval}.</p>
+   {!data.canSend&&<p className={styles.empty}>Todavía no hay un envío disponible. Revisá la conexión, la aprobación de la plantilla, la autorización del trabajador y su jornada abierta.</p>}
+   {data.truncated&&<p>Esta consulta muestra los primeros 20 participantes. No representa todo el equipo de la obra.</p>}
+   <form onSubmit={send}><label>Trabajador con jornada abierta<select required value={workerId} disabled={locked||stale||!data.canSend} onChange={event=>{setWorkerId(event.target.value);setConfirmed(false);}}><option value="">Elegí un destinatario</option>{data.records.map(row=><option key={row.workerId} value={row.workerId} disabled={!row.eligible}>{row.name}{row.eligible?'':' — No habilitado'}</option>)}</select></label>
+    {selected?.eligible&&<div className={styles.preview}><strong>Mensaje para {selected.name}</strong><p>{data.template.bodyText}</p><label className={styles.confirm}><input type="checkbox" checked={confirmed} disabled={locked||stale} onChange={event=>setConfirmed(event.target.checked)}/>Revisé el destinatario y quiero enviar este recordatorio.</label></div>}
+    <button type="submit" disabled={locked||stale||!confirmed||!selected?.eligible||!data.canSend||!data.template.canSend}>Enviar recordatorio autorizado</button>
+   </form>{stale&&!attempt&&<p>Actualizá la disponibilidad para revisar el estado vigente antes de preparar otro envío.</p>}
+   {!attempt&&lastCommand&&<button type="button" disabled={busy} onClick={()=>inspect(lastCommand)}>Consultar estado de entrega</button>}
+   {data.recent?.length>0&&<details className={styles.history}><summary>Envíos recientes de tu cuenta en esta obra</summary><ul>{data.recent.map(value=><li key={value.receipt.id}><p>{templateSendNotice(value)}</p><small>Referencia: {value.receipt.operationId}</small><button type="button" disabled={locked} onClick={()=>inspect({scope,projectId,operationId:value.receipt.operationId,workerId:value.receipt.workerId,templateKey:TEMPLATE_SEND_KEY})}>Consultar este envío</button></li>)}</ul></details>}
+  </>}
+ </section>;
+}

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { authorizeLegacyService, legacyBoundaryKind, privateLegacyHeaders, unauthorizedLegacyResponse } from './lib/legacy-access-boundary.js';
 import { identityRoute, IDENTITY_ORIGIN } from './lib/production-identity-config.mjs';
-const verifiedWorkspaceRoutes=new Set(['/api/identity/workspace','/api/identity/whatsapp-setup','/api/identity/site-register','/api/identity/site-photo','/api/identity/company-onboarding','/api/identity/task-creation','/api/identity/site-purchases','/api/identity/participants','/api/identity/participant-join','/api/identity/worker-channel','/api/identity/field-operations','/api/identity/field-media','/api/identity/field-qr','/api/identity/meta-onboarding','/api/identity/operations-status']);
+const verifiedWorkspaceRoutes=new Set(['/api/identity/workspace','/api/identity/whatsapp-setup','/api/identity/site-register','/api/identity/site-photo','/api/identity/company-onboarding','/api/identity/task-creation','/api/identity/site-purchases','/api/identity/participants','/api/identity/participant-join','/api/identity/worker-channel','/api/identity/field-operations','/api/identity/field-media','/api/identity/field-qr','/api/identity/meta-onboarding','/api/identity/operations-status','/api/identity/template-send']);
 
 export async function proxy(request) {
   const path = request.nextUrl.pathname;

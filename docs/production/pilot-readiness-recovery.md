@@ -60,7 +60,7 @@ nueva. Un resultado incierto borra el estado de aprobación actual; la última
 observación confirmada se conserva sólo como historial explícito.
 
 La creación y aprobación de plantillas en la WABA cliente y su entrega real
-requieren el circuito del proveedor. `canSend:false` no se presenta como envío
+requieren el circuito del proveedor. En este bloque inicial, `canSend:false` no se presenta como envío
 disponible. Los menús dentro de la conversación usan el transporte canónico
 existente. No se crearon plantillas ni se enviaron mensajes reales durante estas
 pruebas. No se cambiaron tokens, app, WABA ni número demo.
@@ -109,3 +109,5 @@ humano, correo de invitación, KYC real, geolocalización/QR del teléfono y rec
 de obra por WhatsApp permanecen pruebas independientes. Tampoco la presencia de
 variables de configuración demuestra Advanced Access o el alta de cualquier
 cliente. MuniControl no forma parte de este bloque.
+
+El bloque posterior de [recordatorio autorizado de jornada](./manual-template-reminder.md) agrega un envío manual específico con consentimiento, reserva durable y estados firmados; su implementación y publicación se acreditan por separado.
