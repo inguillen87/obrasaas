@@ -9,7 +9,7 @@ const live=process.env.ACCESS_LIVE_ORIGIN;
 assert.ok(!live||live===IDENTITY_ORIGIN,'Only the canonical ObraSaaS origin is accepted for live checks');
 const local='http://127.0.0.1:3232',folder=resolve('.vercel/access-contrast-evidence'+(live?'-live':''));
 mkdirSync(folder,{recursive:true});
-let server,browser,page,startup='';const checks=[],pageErrors=[],blockedMutations=[];
+let server,browser,page,startup='',signUpPasswordPlaceholder=null;const checks=[],pageErrors=[],blockedMutations=[];
 if(!live){server=spawn(process.execPath,['node_modules/next/dist/bin/next','start','--hostname','127.0.0.1','--port','3232'],{
  env:{...process.env,NODE_ENV:'production',NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:IDENTITY_PUBLIC_KEY,CLERK_EXPECTED_INSTANCE_ID:IDENTITY_INSTANCE,NEXT_PUBLIC_APP_URL:IDENTITY_ORIGIN,CLERK_AUTHORIZED_PARTIES:IDENTITY_ORIGIN},stdio:['ignore','pipe','pipe']});
  for(const stream of [server.stdout,server.stderr])stream.on('data',chunk=>{startup=(startup+chunk.toString()).slice(-12000);});}
@@ -51,12 +51,17 @@ try{
    return request.continue();
   }catch(error){pageErrors.push(error.message);if(!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});}});
   await page.goto(IDENTITY_ORIGIN+route,{waitUntil:'networkidle2',timeout:90000});await page.waitForSelector('.cl-rootBox .cl-formFieldInput',{visible:true,timeout:30000});
+  if(route==='/sign-up'){
+   await page.waitForSelector('.cl-rootBox input[type="password"]',{visible:true,timeout:30000});
+   signUpPasswordPlaceholder=await page.$eval('.cl-rootBox input[type="password"]',input=>input.placeholder);
+   assert.equal(signUpPasswordPlaceholder,'Creá una contraseña','The real Clerk registration password prompt must remain in Spanish');
+  }
   for(const width of [320,390,768,1280]){await page.setViewport({width,height:950});await new Promise(done=>setTimeout(done,150));const result=await measure(page);checks.push({route,width,state:'default',...result});verify(result,route+' '+width);await page.screenshot({path:resolve(folder,(route==='/sign-in'?'sign-in':'sign-up')+'-'+width+'.png'),fullPage:true});}
   await page.setViewport({width:390,height:950});await page.type('.cl-formFieldInput','contrast-check@example.invalid');await page.focus('.cl-formFieldInput');const focused=await measure(page);verify(focused,route+' focused-input');checks.push({route,width:390,state:'focused-input-with-text',...focused});
   await page.hover('.cl-formButtonPrimary');const hovered=await measure(page);verify(hovered,route+' hovered-button');checks.push({route,width:390,state:'hovered-button',...hovered});
   await page.hover('.cl-footerActionLink');const link=await measure(page);verify(link,route+' hovered-link');checks.push({route,width:390,state:'hovered-link',...link});await page.close();page=null;
  }
  assert.deepEqual(pageErrors,[]);assert.deepEqual(blockedMutations,[]);
- const proof={status:'PASS',environment:live?'live-production-anonymous':'built-local-app-with-real-Clerk-at-canonical-browser-origin',base:live||local,checks,pageErrors,blockedMutations,realClerkRendered:true,submittedSignInAttempts:0,authenticatedUserTested:false,businessWrites:0};writeFileSync(resolve(folder,'proof.json'),JSON.stringify(proof,null,2));console.log(JSON.stringify({status:proof.status,environment:proof.environment,scenarios:checks.length,minimumContrast:Math.min(...checks.flatMap(value=>value.samples.map(sample=>sample.contrast))),submittedSignInAttempts:0,businessWrites:0}));
+ const proof={status:'PASS',environment:live?'live-production-anonymous':'built-local-app-with-real-Clerk-at-canonical-browser-origin',base:live||local,checks,pageErrors,blockedMutations,realClerkRendered:true,signUpPasswordPlaceholder,submittedSignInAttempts:0,authenticatedUserTested:false,businessWrites:0};writeFileSync(resolve(folder,'proof.json'),JSON.stringify(proof,null,2));console.log(JSON.stringify({status:proof.status,environment:proof.environment,scenarios:checks.length,minimumContrast:Math.min(...checks.flatMap(value=>value.samples.map(sample=>sample.contrast))),signUpPasswordPlaceholder,submittedSignInAttempts:0,businessWrites:0}));
 }catch(error){writeFileSync(resolve(folder,'failure.json'),JSON.stringify({message:error.message,stack:error.stack,pageErrors,blockedMutations,checks,startup},null,2));await page?.screenshot({path:resolve(folder,'failure.png'),fullPage:true}).catch(()=>{});throw error;
 }finally{await browser?.close();server?.kill('SIGTERM');}

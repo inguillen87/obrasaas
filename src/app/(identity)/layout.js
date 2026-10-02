@@ -8,7 +8,8 @@ export const metadata = { robots: { index: false, follow: false } };
 export default function IdentityLayout({ children }) {
   const setup = sessionIdentityConfig();
   if (!setup.configured) return <AccessNotice />;
-  return <ClerkProvider publishableKey={setup.publishableKey} localization={esES}
+  return <ClerkProvider publishableKey={setup.publishableKey}
+    localization={{ ...esES, formFieldInputPlaceholder__signUpPassword:'Creá una contraseña' }}
     signInUrl="/sign-in" signUpUrl="/sign-up" afterSignOutUrl="/"
     signInFallbackRedirectUrl="/cuenta" signUpFallbackRedirectUrl="/cuenta"
     allowedRedirectOrigins={[setup.origin]}
