@@ -96,11 +96,13 @@ export function createMetaCustomerCallbackHandlers({inbox,environment=process.en
  resolveMetaCloudProtocol(protocol);
  if(!['META_CUSTOMER_VERIFY_TOKEN','META_VERIFY_TOKEN'].includes(verifyTokenName))throw new WorkspaceError('META_CLOUD_PROTOCOL_REJECTED',403);
  return {
-  async GET(request){try{const params=new URL(request.url).searchParams;
+  async GET(request){try{const params=new URL(request.url).searchParams,challenge=params.get('hub.challenge');
    if(typeof environment[verifyTokenName]!=='string'||environment[verifyTokenName].length<32)throw new WorkspaceError('META_CUSTOMER_CALLBACK_NOT_CONFIGURED',503);
-   if(params.size!==3||[...params.keys()].some(name=>!['hub.mode','hub.verify_token','hub.challenge'].includes(name)||params.getAll(name).length!==1)||params.get('hub.mode')!=='subscribe'||!/^\d{1,128}$/.test(params.get('hub.challenge')||''))throw new WorkspaceError('META_CUSTOMER_CALLBACK_INVALID');
+   // Meta's challenge is opaque. Preserve it without parsing numeric content,
+   // while retaining the existing size bound and rejecting control characters.
+   if(params.size!==3||[...params.keys()].some(name=>!['hub.mode','hub.verify_token','hub.challenge'].includes(name)||params.getAll(name).length!==1)||params.get('hub.mode')!=='subscribe'||!challenge||challenge.length>128||/[\u0000-\u001f\u007f]/.test(challenge))throw new WorkspaceError('META_CUSTOMER_CALLBACK_INVALID');
    if(!exactSecretMatch(params.get('hub.verify_token'),environment[verifyTokenName]))throw new WorkspaceError('META_CUSTOMER_SIGNATURE_REJECTED',403);
-   return new Response(params.get('hub.challenge'),{headers:{...headers,'Content-Type':'text/plain'}});
+   return new Response(challenge,{headers:{...headers,'Content-Type':'text/plain'}});
   }catch(error){return Response.json({code:error.code||'META_CUSTOMER_CALLBACK_UNCONFIRMED'},{status:error.status||503,headers});}},
   async POST(request){try{
    if(!customerVaultConfigured(environment))throw new WorkspaceError('META_CUSTOMER_CALLBACK_NOT_CONFIGURED',503);
