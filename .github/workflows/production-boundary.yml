@@ -1,7 +1,7 @@
 name: Production access boundary
 on:
   push:
-    branches: [master, 'hotfix/**', 'feat/integral-worksite-*', 'fix/whatsapp-signup-*', 'fix/clerk-*']
+    branches: [master, 'hotfix/**', 'feat/integral-worksite-*', 'feat/pilot-readiness-*', 'fix/whatsapp-signup-*', 'fix/clerk-*']
   workflow_dispatch:
 permissions:
   contents: read

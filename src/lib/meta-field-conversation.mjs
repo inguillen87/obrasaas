@@ -6,6 +6,9 @@ import {normalizeProgressMeasurementQuantity,parseProgressMeasurementQuantity} f
 const menuOptions=[['ATTEND_IN','Entrada'],['ATTEND_PAUSE','Iniciar pausa'],['ATTEND_RESUME','Volver de pausa'],['ATTEND_OUT','Salida'],['TASKS','Mis tareas'],['MEDIA','Enviar evidencia'],['INCIDENT','Informar incidencia'],['MATERIAL','Pedir material'],['PROGRESS','Proponer avance'],['STATUS','Consultar estado']];
 const aliases={MENU:'MENU',AYUDA:'MENU',ENTRADA:'ATTEND_IN',PAUSA:'ATTEND_PAUSE',VOLVER:'ATTEND_RESUME',SALIDA:'ATTEND_OUT',TAREAS:'TASKS',EVIDENCIA:'MEDIA',INCIDENCIA:'INCIDENT',MATERIALES:'MATERIAL',AVANCE:'PROGRESS',ESTADO:'STATUS',CANCELAR:'MENU'};
 const text=body=>({type:'text',body});
+const permits=(purpose,facts)=>purpose==='ATTENDANCE'?facts.permissions.attendance===true:facts.permissions.report===true;
+const denied=purpose=>({state:null,reply:text((purpose==='ATTENDANCE'?'Tu participación no tiene habilitado el registro de jornada.':'Tu participación no tiene habilitado el envío de reportes, evidencia o propuestas de avance.')+' Pedí al responsable que revise tus permisos en Mi cuenta. Escribí MENU para consultar las opciones disponibles.')});
+const availableMenu=facts=>menuOptions.filter(([action])=>action.startsWith('ATTEND_')?permits('ATTENDANCE',facts):['MEDIA','INCIDENT','MATERIAL','PROGRESS'].includes(action)?permits('REPORT',facts):true);
 function choices(state,eventId,body,rows){const nonce=digest([eventId,state.step]).slice(0,20);return {state:{...state,nonce,choices:rows.map(([value,title])=>({value,title}))},reply:{type:'interactive',body,button:'Elegir',sections:[{title:'Opciones',rows:rows.map(([,title],i)=>({id:'obra:'+nonce+':'+i,title:title.slice(0,24)}))}]}};}
 const taskChoices=(tasks,optional=false)=>[...(optional?[['NONE','Sin tarea asociada']]:[]),...tasks.slice(0,optional?9:10).map(t=>[t.id,t.title])];
 const sectorChoices=sectors=>sectors.slice(0,10).map(s=>[s.id,s.name]);
@@ -13,12 +16,12 @@ function chooseSector(state,eventId,facts){if(!facts.sectors.length)return {stat
 function chooseTask(state,eventId,facts){if(!facts.tasks.length&&state.purpose!=='INCIDENT'&&state.purpose!=='MATERIAL')return {state:null,reply:text('La obra todavía no tiene tareas. Pedí al responsable que cree la tarea desde Mi cuenta.')};return choices({...state,step:'TASK'},eventId,'Elegí la tarea. Para más tareas, usá Mi cuenta.',taskChoices(facts.tasks,['INCIDENT','MATERIAL'].includes(state.purpose)));}
 function confirm(state,eventId,body){return choices({...state,step:'CONFIRM'},eventId,body,[['CONFIRM','Guardar'],['CANCEL','Cancelar']]);}
 function start(action,eventId,facts){
- if(action==='MENU')return choices({step:'MENU',purpose:'MENU'},eventId,'ObraSaaS · '+facts.projectName+'\nElegí una acción. CANCELAR vuelve al menú.',menuOptions);
+ if(action==='MENU')return choices({step:'MENU',purpose:'MENU'},eventId,'ObraSaaS · '+facts.projectName+'\nElegí una acción disponible para tu participación. CANCELAR vuelve al menú.',availableMenu(facts));
  if(action==='TASKS')return {state:null,reply:text(facts.tasks.length?'Tareas de '+facts.projectName+'\n'+facts.tasks.slice(0,15).map(t=>t.title.slice(0,160)+' · '+t.progress+'%').join('\n')+'\n'+(facts.tasks.length>15?'Consultá todas las tareas en Mi cuenta.\n':'')+'El avance cambia sólo tras aprobación del responsable.':'La obra todavía no tiene tareas.')};
  if(action==='STATUS'){const e=facts.latest;return {state:null,reply:text('Obra: '+facts.projectName+'\nJornada: '+(!e||e.eventType==='CHECK_OUT'?'cerrada':e.phase==='ON_BREAK'?'en pausa':'en curso')+'\nEvidencias pendientes: '+facts.evidence.filter(e=>e.status==='PENDING').length+'\nPropuestas pendientes: '+facts.proposals.filter(p=>p.status==='PENDING').length+'\nConsultá los recibos y las revisiones en Mi cuenta.')};}
  const events={ATTEND_IN:'CHECK_IN',ATTEND_PAUSE:'BREAK_START',ATTEND_RESUME:'BREAK_END',ATTEND_OUT:'CHECK_OUT'};
- if(events[action]){if(!facts.permissions.attendance)throw new WorkspaceError('WORKER_CHANNEL_PERMISSION_REQUIRED',403);return chooseSector({purpose:'ATTENDANCE',eventType:events[action],expectedEventId:facts.latest?.id||null},eventId,facts);}
- if(!facts.permissions.report)throw new WorkspaceError('WORKER_CHANNEL_PERMISSION_REQUIRED',403);
+ if(events[action]){if(!permits('ATTENDANCE',facts))return denied('ATTENDANCE');return chooseSector({purpose:'ATTENDANCE',eventType:events[action],expectedEventId:facts.latest?.id||null},eventId,facts);}
+ if(!permits('REPORT',facts))return denied('REPORT');
  return chooseTask({purpose:action},eventId,facts);
 }
 
@@ -33,6 +36,7 @@ export function planMetaFieldConversation({message,state,eventId,facts,now}){
  let selected=null;
  if(selection){const match=/^obra:([a-f0-9]{20}):(\d{1,2})$/.exec(selection);if(!active||!match||match[1]!==active.nonce||!active.choices?.[Number(match[2])])return {state:active,reply:text('Esta opción pertenece a un paso anterior. Escribí MENU para volver a empezar.')};selected=active.choices[Number(match[2])].value;}
  if(!active)return start('MENU',eventId,facts);
+ if(active.purpose!=='MENU'&&!permits(active.purpose,facts))return denied(active.purpose);
  const s={...active};delete s.choices;delete s.nonce;
  if(s.step==='MENU')return selected?start(selected,eventId,facts):start('MENU',eventId,facts);
  if(s.step==='TASK'){

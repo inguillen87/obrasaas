@@ -24,9 +24,23 @@ test('WhatsApp location needs explicit notice acceptance and remains unmeasured 
  assert.equal(saved.command.action,'ATTENDANCE');assert.equal(saved.command.payload.location.accuracy,null);assert.equal(saved.command.payload.qrToken,null);assert.equal(saved.command.payload.location.noticeVersion,'field-location-v1');
  const unsolicited=run({type:'location',timestamp:String(now.getTime()/1000),location:{latitude:0,longitude:0}});assert.equal(unsolicited.command,undefined);
 });
-test('permission changes stop attendance and report entry instead of downgrading identity',()=>{
- assert.throws(()=>say('ENTRADA',null,{facts:{...facts,permissions:{attendance:false,report:true}}}),{code:'WORKER_CHANNEL_PERMISSION_REQUIRED'});
- assert.throws(()=>say('INCIDENCIA',null,{facts:{...facts,permissions:{attendance:true,report:false}}}),{code:'WORKER_CHANNEL_PERMISSION_REQUIRED'});
+test('direct requests without a field permission explain the next step without a business effect',()=>{
+ for(const [body,permissions] of [['ENTRADA',{attendance:false,report:true}],['INCIDENCIA',{attendance:true,report:false}]]){
+  const result=say(body,null,{facts:{...facts,permissions}});assert.equal(result.state,null);assert.equal(result.command,undefined);assert.equal(result.media,undefined);assert.match(result.reply.body,/responsable.*permisos/);
+ }
+});
+test('menus expose only current capabilities while retaining help and task/status reads',()=>{
+ const reportOnly=say('MENU',null,{facts:{...facts,permissions:{attendance:false,report:true}}});
+ assert.deepEqual(reportOnly.state.choices.map(choice=>choice.value),['TASKS','MEDIA','INCIDENT','MATERIAL','PROGRESS','STATUS']);
+ const attendanceOnly=say('MENU',null,{facts:{...facts,permissions:{attendance:true,report:false}}});
+ assert.deepEqual(attendanceOnly.state.choices.map(choice=>choice.value),['ATTEND_IN','ATTEND_PAUSE','ATTEND_RESUME','ATTEND_OUT','TASKS','STATUS']);
+ for(const menu of [reportOnly,attendanceOnly])assert.ok(menu.reply.sections[0].rows.length<=10);
+});
+test('revoked draft permission blocks a previously offered confirmation and media capability',()=>{
+ const sector=say('PAUSA'),confirmation=pick(sector),revoked=pick(confirmation,0,{facts:{...facts,permissions:{attendance:false,report:true}}});
+ assert.equal(revoked.state,null);assert.equal(revoked.command,undefined);assert.match(revoked.reply.body,/no tiene habilitado/);
+ const task=say('EVIDENCIA'),place=pick(task),pending=pick(place),media=run({type:'image',image:{id:'123456789012345',mime_type:'image/jpeg'}},pending.state,{facts:{...facts,permissions:{attendance:true,report:false}}});
+ assert.equal(media.state,null);assert.equal(media.media,undefined);assert.match(media.reply.body,/permisos/);
 });
 test('progress with no approved evidence preserves task and asks for human review first',()=>{
  const task=say('AVANCE'),sector=pick(task),measurement=pick(sector),result=say('25%',measurement.state);assert.equal(result.command,undefined);assert.equal(result.state,null);assert.match(result.reply.body,/evidencia revisada/);

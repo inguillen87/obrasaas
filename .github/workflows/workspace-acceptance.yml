@@ -1,7 +1,7 @@
 name: Authorized workspace acceptance
 on:
   push:
-    branches: [master, 'feat/integral-worksite-*', 'hotfix/production-workspace-*', 'hotfix/customer-whatsapp-self-service-*', 'hotfix/new-constructor-onboarding-*', 'hotfix/field-team-journal-*', 'fix/whatsapp-signup-*', 'fix/clerk-*']
+    branches: [master, 'feat/integral-worksite-*', 'feat/pilot-readiness-*', 'hotfix/production-workspace-*', 'hotfix/customer-whatsapp-self-service-*', 'hotfix/new-constructor-onboarding-*', 'hotfix/field-team-journal-*', 'fix/whatsapp-signup-*', 'fix/clerk-*']
   workflow_dispatch:
 permissions:
   contents: read
@@ -45,6 +45,11 @@ jobs:
       - run: node scripts/verify-participants-postgres.mjs
       - run: node scripts/verify-field-operations-postgres.mjs
       - run: node scripts/verify-meta-customer-postgres.mjs
+      - name: Customer inbox pagination and operation recovery
+        run: |
+          npx eslint scripts/verify-customer-inbox-*.mjs tests/production-customer-inbox.test.mjs
+          node --test tests/production-customer-inbox.test.mjs
+          node scripts/verify-customer-inbox-postgres.mjs
       - name: Meta SDK loading and explicit recovery
         run: |
           npx eslint 'src/app/(identity)/cuenta/meta-sdk-loader.mjs' tests/production-meta-sdk-loader.test.mjs
@@ -70,6 +75,11 @@ jobs:
       - run: node scripts/verify-site-register-ui.mjs
       - run: node scripts/verify-company-onboarding-postgres.mjs
       - run: node scripts/verify-workspace-ui.mjs
+      - name: Full page receipt recovery and private inbox UX
+        run: |
+          npx eslint scripts/verify-workspace-reload-ui.mjs scripts/verify-customer-inbox-ui.mjs tests/production-workspace-recovery-journal.test.mjs
+          node scripts/verify-workspace-reload-ui.mjs
+          node scripts/verify-customer-inbox-ui.mjs
       - run: node scripts/verify-customer-whatsapp-ui.mjs
       - run: node scripts/verify-company-onboarding-ui.mjs
       - name: Clerk entry, invitation navigation and expired-session recovery
@@ -95,5 +105,7 @@ jobs:
             .vercel/meta-signup-field-lifecycle-evidence/
             .vercel/operations-status-evidence/
             .vercel/clerk-access-evidence/
+            .vercel/workspace-reload-evidence/
+            .vercel/customer-inbox-evidence/
           include-hidden-files: true
           retention-days: 7

@@ -194,7 +194,7 @@ export function createWorkspaceStore({ connect }) {
         await project(client, member, projectId);
         const found = await receipt(client, member, scheduleReceiptId(member.actorId, projectId, key));
         if (!found || found.metadata.projectId !== projectId) return { scope, state:'NOT_OBSERVED', definitive:false };
-        return { scope, state:'RECORDED', receipt:publicReceipt(found), task:await task(client, projectId, found.entityId) };
+        return { scope, state:'RECORDED', saved:true, receipt:publicReceipt(found), task:await task(client, projectId, found.entityId) };
       });
     },
   };
