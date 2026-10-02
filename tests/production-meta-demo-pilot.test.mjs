@@ -4,6 +4,7 @@ import {randomUUID} from 'node:crypto';
 import {META_CUSTOMER_PROTOCOL,META_DEMO_PILOT_PROTOCOL,resolveMetaCloudProtocol,metaCloudEventId} from '../src/lib/meta-cloud-protocol.mjs';
 import {metaDemoTransportReadiness,demoPilotCommand,META_DEMO_NOTICE_VERSION,META_DEMO_NOTICE_SHA256,labelDemoPilotReply,decodeDemoPilotGrant,assertDemoPilotConnection} from '../src/lib/meta-demo-pilot-policy.mjs';
 import {splitMetaAppEvents,splitMetaDemoPilotEvents,splitMetaCustomerEvents,createMetaCustomerCallbackHandlers} from '../src/lib/meta-customer-callback.mjs';
+import {createMetaAppCallback} from '../src/lib/meta-app-callback.mjs';
 import {decodeSignedCloudEvent,decodeSignedCustomerEvent} from '../src/lib/meta-customer-processing.mjs';
 import {encryptCustomerSecret,customerSecretDigest} from '../src/lib/meta-customer-credentials.mjs';
 import {createMetaDemoPilotHandlers} from '../src/lib/meta-demo-pilot-http.mjs';
@@ -70,6 +71,27 @@ test('unconfirmed inbox is not acknowledged and handshake rejects ambiguous quer
  assert.equal((await handlers.POST(signedDemoRequest(demoEnvelope('MENU')))).status,503);assert.equal(wakes,0);
  const u=new URL('https://obrasaas.com/api/whatsapp');u.search=new URLSearchParams({'hub.mode':'subscribe','hub.verify_token':demoEnvironment.META_VERIFY_TOKEN,'hub.challenge':'123456'});
  assert.equal(await(await handlers.GET(new Request(u))).text(),'123456');u.searchParams.append('hub.challenge','7');assert.equal((await handlers.GET(new Request(u))).status,400);
+});
+test('canonical app handshake echoes bounded opaque challenges exactly without database or scheduler access',async()=>{
+ let connects=0,wakes=0;const handlers=createMetaAppCallback({environment:demoEnvironment,connect:async()=>{connects++;throw new Error('GET must not connect');},schedule:()=>{wakes++;}});
+ for(const challenge of ['1158201444','000123','opaque_Ab9-+=/%','a443de34-bf19-4904-9055-8496f0ac0012','a'.repeat(128)]){
+  const url=new URL('https://obrasaas.com/api/webhooks/whatsapp');url.search=new URLSearchParams({'hub.mode':'subscribe','hub.verify_token':demoEnvironment.META_VERIFY_TOKEN,'hub.challenge':challenge});
+  const response=await handlers.GET(new Request(url));assert.equal(response.status,200);assert.equal(response.headers.get('content-type'),'text/plain');assert.equal(response.headers.get('cache-control'),'no-store');assert.equal(await response.text(),challenge);
+ }
+ assert.equal(connects,0);assert.equal(wakes,0);
+});
+test('canonical app handshake requires exactly three unambiguous keys and rejects unbounded or control challenges',async()=>{
+ const handlers=createMetaAppCallback({environment:demoEnvironment,connect:()=>{throw new Error('Invalid GET must not connect');}});
+ const url=()=>{const value=new URL('https://obrasaas.com/api/webhooks/whatsapp');value.search=new URLSearchParams({'hub.mode':'subscribe','hub.verify_token':demoEnvironment.META_VERIFY_TOKEN,'hub.challenge':'opaque-challenge'});return value;};
+ const cases=[value=>{value.search='';},...['hub.mode','hub.verify_token','hub.challenge'].map(key=>value=>value.searchParams.delete(key)),...['hub.mode','hub.verify_token','hub.challenge'].map(key=>value=>value.searchParams.append(key,value.searchParams.get(key))),value=>{value.searchParams.delete('hub.verify_token');value.searchParams.append('hub.challenge','second-challenge');},value=>{value.searchParams.delete('hub.verify_token');value.searchParams.append('role','ADMIN');},value=>value.searchParams.append('role','ADMIN'),value=>value.searchParams.set('hub.mode','unsubscribe'),...['','a'.repeat(129),'line\r\nbreak','nul\u0000value','del\u007fvalue'].map(challenge=>value=>value.searchParams.set('hub.challenge',challenge))];
+ for(const mutate of cases){const value=url();mutate(value);const response=await handlers.GET(new Request(value));assert.equal(response.status,400);assert.deepEqual(await response.json(),{code:'META_CUSTOMER_CALLBACK_INVALID'});}
+});
+test('canonical app handshake preserves exact app-token matching and fails closed when configuration is absent',async()=>{
+ const environment={...demoEnvironment,META_CUSTOMER_VERIFY_TOKEN:'synthetic-distinct-customer-token-not-app-token'},handlers=createMetaAppCallback({environment,connect:()=>{throw new Error('GET must not connect');}});
+ for(const candidate of ['synthetic-wrong-app-token',environment.META_CUSTOMER_VERIFY_TOKEN,environment.META_VERIFY_TOKEN+' ',environment.META_VERIFY_TOKEN.toUpperCase()]){
+  const value=new URL('https://obrasaas.com/api/webhooks/whatsapp');value.search=new URLSearchParams({'hub.mode':'subscribe','hub.verify_token':candidate,'hub.challenge':'opaque-challenge'});const response=await handlers.GET(new Request(value));assert.equal(response.status,403);assert.deepEqual(await response.json(),{code:'META_CUSTOMER_SIGNATURE_REJECTED'});
+ }
+ const value=new URL('https://obrasaas.com/api/webhooks/whatsapp');value.search=new URLSearchParams({'hub.mode':'subscribe','hub.verify_token':environment.META_VERIFY_TOKEN,'hub.challenge':'opaque-challenge'});const unavailable=createMetaAppCallback({environment:{},connect:()=>{throw new Error('GET must not connect');}});assert.equal((await unavailable.GET(new Request(value))).status,503);
 });
 test('label visibly marks both reply kinds without altering interactive capabilities',()=>{
  const r={type:'interactive',body:'MENU',sections:[{title:'Opciones',rows:[{id:'obra:abc:0',title:'Entrada'}]}],button:'Elegir'};
