@@ -6,6 +6,17 @@ The guide links to visible sections and respects the current account and
 organization. Its personal reading marks are temporary; they do not certify
 configuration, grant permissions or send commands.
 
+The team step first targets the existing worksite register when
+`site-register-title` is visible: **Abrir registro → Agregar persona** creates
+the initial worker record. A separate shortcut then focuses
+`participant-title` for current permissions and the invitation; the invitee
+still signs in with their own account and accepts that worksite participation.
+The guide follows the visible canonical panel capability, not an administrator
+role assumption. Without the register, it keeps the participant's own route and
+does not show worker-record creation instructions or an administrative shortcut.
+Browser coverage checks both destinations, keyboard focus and capability/role
+changes at 320/390/768/1280 pixels without creating a worker or invitation.
+
 The eight-step guide includes the existing **Clientes y seguimiento** panel.
 Its shortcut is available only when that authorized panel is visible; a missing
 panel explains the administrator dependency. Reading marks never infer CRM

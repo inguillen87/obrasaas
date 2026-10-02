@@ -16,6 +16,7 @@ import {CustomerInboxPanel} from './customer-inbox-panel';
 import {TemplateSendPanel} from './template-send-panel';
 import {ConstructorCrmPanel} from './constructor-crm-panel';
 import {DemoPilotPanel} from './demo-pilot-panel';
+import {WorkspaceToolsNavigation} from './workspace-tools-navigation';
 const endpoint='/api/identity/workspace';
 const messages={WORKSPACE_ORGANIZATION_REQUIRED:'Elegí una organización desde tu cuenta para consultar las obras asignadas.',WORKSPACE_MEMBERSHIP_REQUIRED:'Tu organización activa todavía no tiene una pertenencia vigente vinculada a esta cuenta.',WORKSPACE_PROJECT_UNAVAILABLE:'Esta obra no está disponible con tus permisos actuales.',WORKSPACE_CONTEXT_CHANGED:'Cambió tu organización o tu permiso. Volvé a cargar las obras antes de continuar.',SCHEDULE_REVISION_CHANGED:'Otra persona modificó la tarea. Actualizá el cronograma antes de volver a planificar.',SCHEDULE_PERMISSION_REQUIRED:'Tu rol actual no puede modificar la planificación.',SCHEDULE_UNCHANGED:'Las fechas son iguales a las registradas. No se hizo ningún cambio.',SCHEDULE_OPERATION_CONFLICT:'Este intento ya pertenece a otra solicitud. Comprobá su recibo antes de continuar.',SESSION_REQUIRED:'Tu sesión venció. Volvé a ingresar.',SCHEDULE_DATES_INVALID:'Revisá el inicio y el fin. El fin no puede ser anterior al inicio.',SCHEDULE_REASON_REQUIRED:'Explicá brevemente el motivo del cambio.'};
 const describe=code=>messages[code]||'No se pudo confirmar la operación. No se reemplazaron los datos por ejemplos.';
@@ -40,6 +41,8 @@ export function AccountWorkspace({getSessionToken}={}){
  const [creatingTask,setTaskCreating]=useState(false),[modulePending,setModulePending]=useState({});
  const taskCreating=creatingTask||Object.values(modulePending).some(Boolean);
  const contextLocked=saving||Boolean(attempt)||taskCreating||Boolean(draft);
+ const scheduleEditor=useRef(null),editingTaskId=draft?.task?.id;
+ useEffect(()=>{if(editingTaskId){scheduleEditor.current?.focus({preventScroll:true});scheduleEditor.current?.scrollIntoView({block:'start',behavior:'auto'});}},[editingTaskId]);
  const participantPending=useCallback(value=>setModulePending(old=>old.participants===value?old:{...old,participants:value}),[]);
  const fieldPending=useCallback(value=>setModulePending(old=>old.field===value?old:{...old,field:value}),[]);
  const channelPending=useCallback(value=>setModulePending(old=>old.channel===value?old:{...old,channel:value}),[]);
@@ -110,7 +113,7 @@ export function AccountWorkspace({getSessionToken}={}){
    <div className={styles.projects}>{account.projects.map(project=><button key={project.id} type="button" onClick={()=>open(project.id)} disabled={contextLocked} aria-pressed={view?.project.id===project.id}><span>{project.name}</span><small>Abrir obra</small></button>)}</div>
    {account.projectsTruncated&&<p>Se muestran las primeras 100 obras autorizadas.</p>}
   </>}
-  {view&&<nav className={styles.moduleNav} aria-label="Herramientas de la obra"><span>Ir a</span><a href="#onboarding-guide-title">Volver a la guía</a><a href="#schedule-title">Tareas</a><a href="#participant-title">Equipo y acceso</a><a href="#field-title">Jornada y evidencia</a>{account?.role==='ADMIN'&&<a href="#constructor-crm-title">Clientes</a>}{account?.canManageIntegrations&&<><a href="#purchase-title">Compras</a><a href="#customer-whatsapp-title">Preparar WhatsApp</a><a href="#customer-meta-title">Conexión y plantillas</a><a href="#customer-inbox-title">Bandeja y seguimiento</a><a href="#template-send-title">Enviar recordatorio</a></>}</nav>}
+  {view&&<WorkspaceToolsNavigation role={account?.role} canManageIntegrations={account?.canManageIntegrations} pending={modulePending} schedulePending={saving||Boolean(attempt)||Boolean(draft)||creatingTask} scheduleEditing={Boolean(draft)}/>}
   {view&&<section aria-labelledby="schedule-title" className={styles.schedule}>
    <div className={styles.heading}><div><p className={styles.eyebrow}>CRONOGRAMA REGISTRADO</p><h3 id="schedule-title">{view.project.name}</h3></div><span>{view.tasks.length} de {view.totalTasks} tareas</span></div>
    {view.canPlanSchedule&&!draft&&<TaskCreatePanel key={`${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={setTaskCreating} onCreated={task=>setView(current=>current&&current.project.id===view.project.id?{...current,totalTasks:current.tasks.some(t=>t.id===task.id)?current.totalTasks:current.totalTasks+1,tasks:current.tasks.some(t=>t.id===task.id)?current.tasks.map(t=>t.id===task.id?task:t):[task,...current.tasks]}:current)}/> }
@@ -127,7 +130,7 @@ export function AccountWorkspace({getSessionToken}={}){
    })}</div>
    {view.nextCursor&&<button type="button" disabled={loading||contextLocked} onClick={()=>open(view.project.id,true)}>Cargar más tareas</button>}
    {!view.canPlanSchedule&&<p className={styles.caption}>Tu rol permite consultar este cronograma, no modificarlo.</p>}
-   {draft&&<form onSubmit={save} className={styles.form} aria-labelledby="schedule-edit-title"><h4 id="schedule-edit-title">Planificar: {draft.task.title}</h4><p>Revisá las fechas previstas y explicá el motivo. El cambio no certifica avance ni registra horas trabajadas.</p>
+   {draft&&<form onSubmit={save} className={styles.form} aria-labelledby="schedule-edit-title"><h4 id="schedule-edit-title" ref={scheduleEditor} tabIndex={-1}>Planificar: {draft.task.title}</h4><p>Revisá las fechas previstas y explicá el motivo. El cambio no certifica avance ni registra horas trabajadas.</p>
     <div className={styles.dates}><label>Inicio previsto<input type="date" required value={draft.startsOn} disabled={saving||Boolean(attempt)} onChange={event=>setDraft({...draft,startsOn:event.target.value})}/></label><label>Fin previsto<input type="date" required min={draft.startsOn||undefined} value={draft.endsOn} disabled={saving||Boolean(attempt)} onChange={event=>setDraft({...draft,endsOn:event.target.value})}/></label></div>
     <label>Motivo del cambio<textarea required minLength={8} maxLength={800} rows={3} value={draft.reason} disabled={saving||Boolean(attempt)} onChange={event=>setDraft({...draft,reason:event.target.value})}/></label>
     <div className={styles.actions}>{attempt?<><button type="button" disabled={saving} onClick={recover}>{saving?'Comprobando…':'Comprobar guardado'}</button>{retryAllowed&&<button type="button" disabled={saving} onClick={retry}>Reintentar la misma planificación</button>}</>:<><button className={styles.primary} type="submit" disabled={saving}>Confirmar planificación</button><button type="button" disabled={saving} onClick={()=>setDraft(null)}>Cancelar</button></>}</div>

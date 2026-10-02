@@ -20,6 +20,7 @@ export function templateSendResult(value,command){
 export function templateSendNotice(value){
  if(value.state==='NOT_OBSERVED')return 'Todavía no se observa el recibo. Conservamos la referencia; no se genera otro envío automáticamente.';
  if(['SEND_STARTED','SEND_UNKNOWN'].includes(value.state))return 'El envío quedó sin confirmar. Consultá este mismo intento; no se repite la solicitud a Meta.';
+ if(value.state==='REJECTED'&&value.code==='WORKER_TEMPLATE_CONSENT_NOTICE_CHANGED')return 'No se envió el mensaje. El trabajador debe revisar y aceptar el aviso actualizado de la empresa desde Mi WhatsApp y autorización de avisos.';
  if(value.state==='REJECTED')return value.code==='META_CUSTOMER_PROVIDER_REJECTED'?'Meta rechazó el envío. No se confirmó la entrega; revisá el canal y la plantilla antes de preparar otra solicitud.':'Se detuvo el envío antes de confirmarlo. Revisá la jornada, la autorización y la aprobación de la plantilla antes de preparar otra solicitud.';
  if(['failed','deleted'].includes(value.providerStatus))return 'Meta informó que el mensaje falló o fue eliminado. El recibo conserva ese resultado; no se reenvía automáticamente.';
  if(value.deliveryConfirmed)return value.providerStatus==='read'?'Meta informó lectura del mensaje. Eso no registra la salida ni modifica la jornada.':'Meta informó entrega del mensaje. Eso no registra la salida ni modifica la jornada.';
