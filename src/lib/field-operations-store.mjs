@@ -3,6 +3,7 @@ import { WorkspaceError, workspaceId, operationId, digest } from './workspace-po
 import { cleanMetadata } from './site-register-policy.mjs';
 import { normalizeFieldCommand, fieldTransition, evaluateFieldLocation, fieldReceiptId, canReviewField, canApproveProgress } from './field-operations-policy.mjs';
 import { insertSiteReport, publicSiteReport } from './site-register-store.mjs';
+import { META_DEMO_PILOT_PROTOCOL } from './meta-cloud-protocol.mjs';
 
 const revision = name => `to_char(${name},'YYYY-MM-DD"T"HH24:MI:SS.US')`;
 const newId = prefix => prefix+'_'+randomUUID().replaceAll('-','');
@@ -125,7 +126,7 @@ export function createFieldOperations({workspace,assertParticipant}) {
           const needsLocation=['CHECK_IN','CHECK_OUT'].includes(p.eventType),location=needsLocation?evaluateFieldLocation(p.location,sector,now):null;
           if(!needsLocation&&p.location!==null)throw new WorkspaceError('FIELD_INPUT_INVALID');
           const verification=needsLocation?(location.verificationStatus==='VERIFIED'&&qrValid?'VERIFIED':'REVIEW_REQUIRED'):'NOT_REQUIRED';
-          const eventId=newId('attendance'),details={version:1,eventType:p.eventType,phase:transition.phase,shiftId:p.eventType==='CHECK_IN'?newId('shift'):last.shiftId,sequence:(last?.sequence||0)+1,previousEventId:previousEvent?.id||null,sectorId:p.sectorId,sectorName:sector.name,configRevision:selected.configRevision,qrStatus:qrValid?'MATCHED':'NOT_PROVIDED',verificationStatus:verification,location,recordedBy:member.actorId,recordedAt:now.toISOString(),source:member.channelProof?'meta-customer':'account',review:null};
+          const eventId=newId('attendance'),details={version:1,eventType:p.eventType,phase:transition.phase,shiftId:p.eventType==='CHECK_IN'?newId('shift'):last.shiftId,sequence:(last?.sequence||0)+1,previousEventId:previousEvent?.id||null,sectorId:p.sectorId,sectorName:sector.name,configRevision:selected.configRevision,qrStatus:qrValid?'MATCHED':'NOT_PROVIDED',verificationStatus:verification,location,recordedBy:member.actorId,recordedAt:now.toISOString(),source:member.channelProof?.provider===META_DEMO_PILOT_PROTOCOL.provider?'meta-demo-pilot':member.channelProof?'meta-customer':'account',review:null};
           await client.query(`INSERT INTO public."AttendanceEntry"(id,"projectId","workerId",status,latitude,longitude,"distanceMeters",source,"checkedInAt",metadata) VALUES($1,$2,$3,$4::"AttendanceStatus",$5,$6,$7,'account-field',clock_timestamp(),$8::jsonb)`,[eventId,command.projectId,p.workerId,verification==='REVIEW_REQUIRED'?'OUTSIDE_GEOFENCE':'PRESENT',location?.latitude??null,location?.longitude??null,location?.distanceMeters??null,JSON.stringify({fieldOperations:details})]);
           outcome={kind:'ATTENDANCE',event:{id:eventId,workerId:p.workerId,...details}};
         }else if(['REPORT_INCIDENT','REQUEST_MATERIAL'].includes(command.action)) {
@@ -133,7 +134,7 @@ export function createFieldOperations({workspace,assertParticipant}) {
           const sector=config(project).sectors.find(s=>s.id===p.sectorId);if(!sector)throw new WorkspaceError('FIELD_SECTOR_UNAVAILABLE',404);
           if(p.taskId!==null)await task(client,command.projectId,p.taskId);
           for(const eid of p.evidenceIds){const row=await evidence(client,command.projectId,eid),e=row.metadata.fieldOperations;if(e.workerId!==p.workerId||e.taskId!==p.taskId||e.review?.decision==='REJECT')throw new WorkspaceError('FIELD_EVIDENCE_UNAVAILABLE',404);}
-          const incident=command.action==='REPORT_INCIDENT',row=await insertSiteReport(client,{id:newId('incident'),projectId:command.projectId,actorId:member.actorId,type:incident?'ISSUE':'MATERIAL_REQUEST',title:incident?p.title:p.name,description:incident?p.description:p.reason,severity:incident?p.severity:'INFO',sector:sector.name,material:incident?null:p.name,quantity:incident?null:p.quantity,unit:incident?null:p.unit,origin:member.channelProof?'participant-whatsapp':'participant-field',workerId:p.workerId,taskId:p.taskId,evidenceIds:p.evidenceIds});
+          const incident=command.action==='REPORT_INCIDENT',row=await insertSiteReport(client,{id:newId('incident'),projectId:command.projectId,actorId:member.actorId,type:incident?'ISSUE':'MATERIAL_REQUEST',title:incident?p.title:p.name,description:incident?p.description:p.reason,severity:incident?p.severity:'INFO',sector:sector.name,material:incident?null:p.name,quantity:incident?null:p.quantity,unit:incident?null:p.unit,origin:member.channelProof?.provider===META_DEMO_PILOT_PROTOCOL.provider?'participant-whatsapp-demo':member.channelProof?'participant-whatsapp':'participant-field',workerId:p.workerId,taskId:p.taskId,evidenceIds:p.evidenceIds});
           outcome={kind:incident?'INCIDENT_REPORT':'MATERIAL_REQUEST',report:publicSiteReport(row),purchaseAuthorized:false,stockChanged:false};
         }else if(command.action==='REVIEW_ATTENDANCE') {
           if(!canReviewField(member.role))throw new WorkspaceError('FIELD_PERMISSION_REQUIRED',403);

@@ -148,6 +148,7 @@ export default function Home() {
                   {item}
                 </a>
               ))}
+              <Link href="/manual" style={{ color: 'inherit', textDecoration: 'none', fontWeight: 500, minHeight: '44px', display: 'inline-flex', alignItems: 'center' }}>Manual</Link>
               <Link href="/api-docs" style={{ color: 'inherit', textDecoration: 'none', fontWeight: 500, transition: 'color 0.2s' }}
                 onMouseEnter={e => e.target.style.color = '#f1f5f9'} onMouseLeave={e => e.target.style.color = '#94a3b8'}>
                 API Docs
@@ -539,7 +540,8 @@ export default function Home() {
             <Link href="/" aria-label="ObraSaaS, inicio" style={{ display: 'inline-flex', minHeight: '44px', alignItems: 'center', color: '#F4F1E8', fontSize: '1.15rem', textDecoration: 'none' }}><ObraSaasLogo markSize={28} variant="inverse" /></Link>
             <span style={{ fontSize: '0.82rem', color: '#94a3b8' }}>Buenos Aires, Argentina</span>
           </div>
-          <div style={{ display: 'flex', gap: '24px', fontSize: '0.8rem', color: '#94a3b8' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px 24px', fontSize: '0.8rem', color: '#94a3b8' }}>
+            <Link href="/manual" style={{ color: 'inherit', textDecoration: 'none', minHeight: '44px', display: 'inline-flex', alignItems: 'center' }}>Manual de inicio</Link>
             <Link href="/pricing" style={{ color: 'inherit', textDecoration: 'none' }}>Precios</Link>
             <Link href="/api-docs" style={{ color: 'inherit', textDecoration: 'none' }}>API</Link>
             <Link href="/portal" style={{ color: 'inherit', textDecoration: 'none' }}>Portal Inversor</Link>

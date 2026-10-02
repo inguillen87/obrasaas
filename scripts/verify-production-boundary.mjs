@@ -10,7 +10,7 @@ const port=3229, base=`http://127.0.0.1:${port}`, secret=randomBytes(32).toStrin
 let startup='';
 function startServer(configured){
  const child=spawn(process.execPath,['node_modules/next/dist/bin/next','start','--hostname','127.0.0.1','--port',String(port)],{
-  env:{...process.env,INTERNAL_API_SECRET:secret,META_APP_SECRET:'unit-only-meta-secret',META_CUSTOMER_VERIFY_TOKEN:customerVerifyToken,META_CUSTOMER_CREDENTIALS_KEY:randomBytes(32).toString('base64'),PRIVATE_MEDIA_PROVIDER:'vercel-blob',BLOB_READ_WRITE_TOKEN:'unit-only-no-storage-calls',NODE_ENV:'production',VERCEL_ENV:'development',NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:configured?IDENTITY_PUBLIC_KEY:'',CLERK_EXPECTED_INSTANCE_ID:configured?IDENTITY_INSTANCE:'',NEXT_PUBLIC_APP_URL:configured?IDENTITY_ORIGIN:'',CLERK_AUTHORIZED_PARTIES:configured?IDENTITY_ORIGIN:''},stdio:['ignore','pipe','pipe']});
+  env:{...process.env,INTERNAL_API_SECRET:secret,META_APP_SECRET:'unit-only-meta-secret',META_CUSTOMER_VERIFY_TOKEN:customerVerifyToken,META_VERIFY_TOKEN:customerVerifyToken,META_CUSTOMER_CREDENTIALS_KEY:randomBytes(32).toString('base64'),PRIVATE_MEDIA_PROVIDER:'vercel-blob',BLOB_READ_WRITE_TOKEN:'unit-only-no-storage-calls',NODE_ENV:'production',VERCEL_ENV:'development',NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:configured?IDENTITY_PUBLIC_KEY:'',CLERK_EXPECTED_INSTANCE_ID:configured?IDENTITY_INSTANCE:'',NEXT_PUBLIC_APP_URL:configured?IDENTITY_ORIGIN:'',CLERK_AUTHORIZED_PARTIES:configured?IDENTITY_ORIGIN:''},stdio:['ignore','pipe','pipe']});
  child.stdout.on('data',data=>{startup+=data;});child.stderr.on('data',data=>{startup+=data;});return child;
 }
 let server=startServer(true);
@@ -49,12 +49,20 @@ try {
   for(const route of ['/api/meta/customer-callback/fake','/api/meta/customer-callback-extra','/api/identity/meta-onboarding/fake','/api/identity/participants/fake']){
     const response=await fetch(base+route);assert.equal(response.status,401);assert.equal((await response.json()).code,'AUTHENTICATION_REQUIRED');customerCallbackChecks.push({route,result:'prefix-not-allowlisted',status:401});
   }
+  for(const method of ['GET','POST']) {
+    const url=base+'/api/webhooks/whatsapp'+(method==='GET'?'?'+new URLSearchParams({'hub.mode':'subscribe','hub.verify_token':'wrong','hub.challenge':'123456'}):'');
+    const response=await fetch(url,{method,...(method==='POST'?{headers:{'content-type':'application/json'},body:'{}'}:{})});
+    assert.equal(response.status,403);assert.equal((await response.json()).code,'META_CUSTOMER_SIGNATURE_REJECTED');customerCallbackChecks.push({route:'/api/webhooks/whatsapp',method,result:'unsigned-protocol-rejected',status:403});
+  }
+  for(const method of ['HEAD','OPTIONS','PUT','PATCH','DELETE'])assert.equal((await fetch(base+'/api/webhooks/whatsapp',{method})).status,401);
+  for(const route of ['/api/webhooks/whatsapp/fake','/api/webhooks/whatsapp-extra','/api/identity/demo-pilot/fake','/manual/private'])assert.equal((await fetch(base+route,{redirect:'manual'})).status,route==='/manual/private'?307:401);
   const workspaceSessionChecks=[];
   for(const [route,methods] of [
     ['/api/identity/participants',['GET','POST']],['/api/identity/participant-join',['GET','POST']],['/api/identity/worker-channel',['GET','POST']],
     ['/api/identity/field-operations',['GET','POST']],['/api/identity/field-media',['GET','POST']],
     ['/api/identity/field-qr',['GET']],['/api/identity/site-purchases',['GET','POST']],
     ['/api/identity/operations-status',['GET']],['/api/identity/meta-onboarding',['GET','POST']],
+    ['/api/identity/demo-pilot',['GET','POST']],
   ])for(const method of methods){
     const response=await fetch(base+route,{method,headers:{'content-type':'application/json',origin:IDENTITY_ORIGIN},...(method==='POST'?{body:'{}'}:{})});
     assert.equal(response.status,401,method+' '+route);assert.equal((await response.json()).code,'SESSION_REQUIRED');assert.match(response.headers.get('cache-control'),/private, no-store/);workspaceSessionChecks.push({route,method,status:401});
@@ -63,7 +71,7 @@ try {
   for(const route of ['/dashboard','/superadmin','/calendario','/documentos','/bim','/portal']){
     const response=await fetch(base+route,{redirect:'manual'});assert.equal(response.status,307);assert.equal(new URL(response.headers.get('location'),base).pathname,'/sign-in');
   }
-  for(const route of ['/','/sign-in','/sign-up','/bim_render.png','/cctv_render.png','/api/health']) assert.equal((await fetch(base+route)).status,200,route);
+  for(const route of ['/','/manual','/sign-in','/sign-up','/bim_render.png','/cctv_render.png','/api/health']) assert.equal((await fetch(base+route)).status,200,route);
   for(const body of ['{', '[]', '{}', JSON.stringify({workerId:'unit',dniFrontBase64:'invalid',selfieBase64:'invalid'})]){
     const response=await fetch(base+'/api/webview/kyc',{method:'POST',headers:{authorization:'Bearer '+secret,'content-type':'application/json'},body});
     assert.equal(response.status,400);const result=await response.json();assert.equal(result.success,false);assert.equal(result.verified,false);

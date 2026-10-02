@@ -3,6 +3,7 @@ import {WorkspaceError,digest} from './workspace-policy.mjs';
 import {encryptCustomerSecret,decryptCustomerSecret} from './meta-customer-credentials.mjs';
 import {customerReplyMessage} from './meta-customer-provider.mjs';
 import {hasMetaCustomerRequiredScopes} from './meta-customer-permissions.mjs';
+import {META_CUSTOMER_PROTOCOL,resolveMetaCloudProtocol} from './meta-cloud-protocol.mjs';
 
 export const customerOutboundId=eventId=>'customer_outbound_'+digest(['meta-customer-reply-v1',eventId]);
 export function customerChannelActive(connection,now=Date.now()){
@@ -41,7 +42,8 @@ export async function completeCustomerOutbound(client,{id,projectId,leaseToken,s
  if(updated.rowCount!==1)throw new WorkspaceError('META_CUSTOMER_OUTBOUND_LEASE_CHANGED',409);
  return {id,state,replySent:state==='SENT',messageId,replayed:false,payload:row.payload};
 }
-export function createMetaCustomerOutbound({connect,resolveIdentity,provider,environment=process.env,now=()=>Date.now(),afterReserve=async()=>{}}){
+export function createMetaCustomerOutbound({connect,resolveIdentity,provider,environment=process.env,now=()=>Date.now(),afterReserve=async()=>{},protocol=META_CUSTOMER_PROTOCOL,channelActive=customerChannelActive}){
+ resolveMetaCloudProtocol(protocol);
  const within=run=>customerJobTransaction(connect,run);
  async function reserve(context,reply){
   customerReplyMessage(reply);
@@ -51,10 +53,10 @@ export function createMetaCustomerOutbound({connect,resolveIdentity,provider,env
    const resolved=await resolveIdentity(client,{eventId:context.eventId,permission:null,claimChallenge:false,environment});
    const {project,connection,event,member}=resolved,payload=resolved.proof?.payload||resolved.proof?.message||resolved.proof;
    if(resolved.kind!=='CHANNEL_VERIFIED'||project.id!==context.projectId||connection.id!==context.channelId||event.payload.payloadDigest!==context.payloadDigest||event.leaseToken!==context.leaseToken||event.status!=='PENDING'||new Date(event.leaseExpiresAt).getTime()<=now())throw new WorkspaceError('META_CUSTOMER_OUTBOUND_CONTEXT_CHANGED',409);
-   if(!customerChannelActive(connection,now()))throw new WorkspaceError('META_CUSTOMER_CHANNEL_ACCEPTANCE_REQUIRED',409);
-   const {to,replyTo}=assertCustomerReplyWindow(payload,now()),id=customerOutboundId(event.id),request={version:1,eventId:event.id,payloadDigest:context.payloadDigest,channelId:connection.id,organizationId:member.organizationId,to,replyTo,message:reply};
+   if(!channelActive(connection,now()))throw new WorkspaceError('META_CUSTOMER_CHANNEL_ACCEPTANCE_REQUIRED',409);
+   const {to,replyTo}=assertCustomerReplyWindow(payload,now()),id=customerOutboundId(event.id),request={version:1,eventId:event.id,payloadDigest:context.payloadDigest,channelId:connection.id,organizationId:member.organizationId,to,replyTo,message:reply,...(protocol!==META_CUSTOMER_PROTOCOL?{channelPurpose:protocol.purpose}:{})};
    const reservation=await reserveCustomerOutbound(client,{id,projectId:project.id,organizationId:member.organizationId,actorId:member.actorId,request,environment,now:now()});if(reservation.done)return reservation;
-   const token=decryptCustomerSecret(connection.encryptedAccessToken,{organizationId:member.organizationId,projectId:project.id,purpose:'access-token',resourceId:connection.phoneNumberId},environment);
+   const token=decryptCustomerSecret(connection.encryptedAccessToken,{organizationId:member.organizationId,projectId:project.id,purpose:protocol.credentialPurpose,resourceId:connection.phoneNumberId},environment);
    return {...reservation,token,phoneNumberId:connection.phoneNumberId,to,replyTo};
   });
  }

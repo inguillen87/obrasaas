@@ -79,6 +79,17 @@ jobs:
           node scripts/verify-constructor-crm-postgres.mjs
           node scripts/verify-constructor-crm-ui.mjs
       - run: node scripts/verify-site-purchase-postgres.mjs
+      - name: Bounded demo pilot uses canonical signed inbox and isolated credentials
+        run: |
+          npx eslint src/lib/meta-cloud-protocol.mjs src/lib/meta-app-*.mjs src/lib/meta-demo-pilot*.mjs src/app/api/identity/demo-pilot src/app/api/webhooks/whatsapp tests/production-meta-demo-pilot.test.mjs tests/production-demo-pilot-view.test.mjs scripts/verify-meta-demo-pilot-postgres.mjs scripts/fixtures/meta-demo-pilot-fixture.mjs scripts/verify-demo-pilot-ui.mjs
+          node --test tests/production-meta-demo-pilot.test.mjs tests/production-demo-pilot-view.test.mjs
+          node scripts/verify-meta-demo-pilot-postgres.mjs
+          node scripts/verify-demo-pilot-ui.mjs
+      - name: Public manual and contextual first-use guide
+        run: |
+          npx eslint src/app/manual 'src/app/(identity)/cuenta/onboarding-guide.js' scripts/verify-manual-ui.mjs scripts/verify-onboarding-guide-ui.mjs
+          node scripts/verify-manual-ui.mjs
+          node scripts/verify-onboarding-guide-ui.mjs
       - run: node scripts/verify-participants-ui.mjs
       - run: node scripts/verify-field-operations-ui.mjs
       - run: node scripts/verify-meta-customer-ui.mjs
@@ -123,5 +134,9 @@ jobs:
             .vercel/template-send-evidence/
             .vercel/constructor-crm-evidence/
             .vercel/constructor-crm-adoption-evidence/
+            .vercel/meta-demo-pilot-evidence/
+            .vercel/demo-pilot-evidence/
+            .vercel/manual-evidence/
+            .vercel/onboarding-guide-evidence/
           include-hidden-files: true
           retention-days: 7

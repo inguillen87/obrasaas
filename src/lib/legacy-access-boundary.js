@@ -18,7 +18,7 @@ export function authorizeLegacyService(request, environment = process.env) {
   return !INSECURE_KEYS.has(credential) && exactSecretMatch(credential, secret);
 }
 
-const PUBLIC_PAGES = new Set(['/', '/demo', '/sign-in', '/sign-up', '/pricing', '/poster', '/api-docs']);
+const PUBLIC_PAGES = new Set(['/', '/demo', '/manual', '/sign-in', '/sign-up', '/pricing', '/poster', '/api-docs']);
 const PUBLIC_ASSETS = new Set([...BRAND_PUBLIC_ASSETS,'/sw.js', '/manifest.json', '/favicon.ico', '/icon-192.svg', '/icon-512.svg', '/robots.txt', '/sitemap.xml', '/bim_render.png', '/cctv_render.png', '/file.svg', '/globe.svg', '/next.svg', '/vercel.svg', '/window.svg']);
 export function legacyBoundaryKind(pathname, method = 'GET') {
   const path = pathname === '/' ? '/' : pathname.replace(/\/+$/, '');
@@ -28,6 +28,7 @@ export function legacyBoundaryKind(pathname, method = 'GET') {
   // These entrypoints validate their own signed protocols; no browser role or
   // Origin/Referer header is an identity. All other legacy APIs are internal.
   if (path === '/api/whatsapp' && ['GET', 'POST'].includes(method)) return 'signed-protocol';
+  if (path === '/api/webhooks/whatsapp' && ['GET', 'POST'].includes(method)) return 'signed-protocol';
   if (path === '/api/meta/customer-callback' && ['GET', 'POST'].includes(method)) return 'signed-protocol';
   if (path === '/api/meta/customer-process' && ['GET', 'POST'].includes(method)) return 'signed-protocol';
   if (read && path === '/api/auth/verify') return 'signed-protocol';

@@ -15,6 +15,7 @@ export const RECOVERY_RESOURCES = Object.freeze({
   'meta-onboarding':'Seguimiento de WhatsApp', 'worker-channel':'Mi WhatsApp y autorización de avisos',
   'template-send':'Recordatorio autorizado de jornada',
   'constructor-crm':'Cliente u oportunidad de la empresa',
+  'demo-pilot':'Preparación y vinculación del piloto DEMO',
 });
 const failure = (code, message) => Object.assign(new Error(message), {code,status:409,requestDispatched:false});
 const unavailable = () => failure('WORKSPACE_RECOVERY_STORAGE_UNAVAILABLE','No se pudo conservar la referencia del intento en este navegador. Habilitá el almacenamiento y volvé a intentar; la operación no se envió.');
@@ -64,6 +65,13 @@ export function recoveryQuery(entry) {
 export function recoveryResult(entry, result) {
   if(!valid(entry)||result?.scope!==entry.scope)return null;
   if(result.projectId!==undefined&&result.projectId!==entry.projectId)return null;
+  if(entry.resource==='demo-pilot') {
+    if(result.projectId!==entry.projectId)return null;
+    if(result.state==='NOT_OBSERVED'&&result.saved===false&&result.definitive===false&&!result.receipt)return {state:'NOT_OBSERVED'};
+    const receipt=result.receipt;
+    if(result.state==='RECORDED'&&result.saved===true&&result.identityCertified===false&&result.productionVerified===false&&id(receipt?.id)&&receipt.operationId===entry.operationId&&id(receipt.workerId)&&id(receipt.channelId)&&['PREPARE','REQUEST_CHALLENGE','UNLINK','REVOKE'].includes(receipt.action))return {state:'RECORDED',receiptId:receipt.id};
+    return null;
+  }
   if(entry.resource==='constructor-crm'){
     if(result.projectId!==entry.projectId)return null;
     if(result.state==='NOT_OBSERVED'&&result.saved===false&&result.definitive===false&&!result.receipt)return {state:'NOT_OBSERVED'};
