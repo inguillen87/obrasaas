@@ -27,5 +27,5 @@ test('confirmation failure does not erase objects or weaken access',()=>{
  const route=readFileSync(new URL('../src/app/api/identity/site-photo/route.js',import.meta.url),'utf8');assert.match(route,/createPrivateImageUploader/);assert.match(route,/verifyWorkspaceSession/);
 });
 test('UI does not expose Blob URLs and labels photos as distinct from KYC and progress approval',()=>{
- const source=readFileSync(new URL('../src/app/(identity)/cuenta/site-register-panel.js',import.meta.url),'utf8');assert.doesNotMatch(source,/blob\.vercel-storage\.com|createObjectURL/);assert.match(source,/no un trámite de KYC/);assert.match(source,/Descargar foto/);assert.match(source,/2 MB/);
+ const source=readFileSync(new URL('../src/app/(identity)/cuenta/site-register-panel.js',import.meta.url),'utf8');assert.doesNotMatch(source,/blob\.vercel-storage\.com|createObjectURL/);assert.match(source,/no un trámite de KYC/);assert.match(source,/Descargar foto/);assert.match(source,/2 MiB/);
 });

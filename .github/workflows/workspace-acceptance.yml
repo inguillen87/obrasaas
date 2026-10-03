@@ -8,8 +8,8 @@ permissions:
 jobs:
   workspace:
     runs-on: ubuntu-latest
-    # Full baseline takes about 24 minutes; recovery and native-canvas KYC add browser coverage.
-    timeout-minutes: 35
+    # Full field/access suite can approach 35 minutes; photo preparation adds browser coverage.
+    timeout-minutes: 45
     services:
       postgres:
         image: postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
