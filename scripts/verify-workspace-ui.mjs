@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import {mkdirSync,mkdtempSync,copyFileSync,writeFileSync,rmSync,readdirSync} from 'node:fs';
+import {mkdirSync,mkdtempSync,copyFileSync,writeFileSync,rmSync,readdirSync,readFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
 import path from 'node:path';
 import {spawn} from 'node:child_process';
 import puppeteer from 'puppeteer';
@@ -12,7 +13,9 @@ mkdirSync(evidence,{recursive:true});
 const fixture=mkdtempSync(path.join(root,'.vercel/workspace-ui-')),app=path.join(fixture,'src/app'),components=path.join(app,'(identity)/cuenta');
 mkdirSync(components,{recursive:true});mkdirSync(path.join(fixture,'src/lib'),{recursive:true});copyFileSync(path.join(root,'src/lib/worker-channel-consent-policy.mjs'),path.join(fixture,'src/lib/worker-channel-consent-policy.mjs'));
 mkdirSync(path.join(fixture,'src/lib/whatsapp'),{recursive:true});copyFileSync(path.join(root,'src/lib/whatsapp/tenant-workspace-policy.js'),path.join(fixture,'src/lib/whatsapp/tenant-workspace-policy.js'));
-for(const file of readdirSync(path.join(root,'src/app/(identity)/cuenta')).filter(name=>/\.(js|mjs|css)$/.test(name)))copyFileSync(path.join(root,'src/app/(identity)/cuenta',file),path.join(components,file));
+const sourceManifest=[];
+for(const file of readdirSync(path.join(root,'src/app/(identity)/cuenta')).filter(name=>/\.(js|mjs|css)$/.test(name))){copyFileSync(path.join(root,'src/app/(identity)/cuenta',file),path.join(components,file));sourceManifest.push({path:'src/app/(identity)/cuenta/'+file,sha256:createHash('sha256').update(readFileSync(path.join(components,file))).digest('hex')});}
+const harnessSha256=createHash('sha256').update(readFileSync(new URL(import.meta.url))).digest('hex');
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'isolated-workspace-ui-fixture',private:true}));
 writeFileSync(path.join(fixture,'next.config.mjs'),`export default {turbopack:{root:${JSON.stringify(root)}}};\n`);
 writeFileSync(path.join(app,'layout.js'),`export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:16,background:'#0b1c2d',fontFamily:'Arial,sans-serif'}}>{children}</body></html>}`);
@@ -182,6 +185,122 @@ async function navigationScenario(role,width){
  }
  await context.close();
 }
+const workbenchControl={search:'input[aria-label="Buscar tareas"]',status:'select[aria-label="Estado de las tareas"]',planning:'select[aria-label="Planificación de las tareas"]',order:'select[aria-label="Orden de las tareas"]'};
+const workbenchTasks=()=>[
+ {...baseTask(),id:'wb-mamp-a',title:'Mampostería planta baja',progress:40,startsOn:'2026-10-05',endsOn:'2026-10-09'},
+ {...baseTask(),id:'wb-mamp-b',title:'Mampostería sector norte',status:'BACKLOG',progress:0,startsOn:null,endsOn:null},
+ {...baseTask(),id:'wb-finished',title:'Acabado de fachada',status:'DONE',progress:100,startsOn:'2026-10-01',endsOn:'2026-10-04'},
+ {...baseTask(),id:'wb-invalid-dates',title:'Instalación eléctrica',status:'BLOCKED',progress:30,startsOn:'2026-10-09',endsOn:'2026-10-03'},
+ {...baseTask(),id:'wb-unknown-status',title:'Revisión de estructura',status:'PAUSED_LEGACY',progress:45,startsOn:null,endsOn:null},
+ {...baseTask(),id:'wb-invalid-progress',title:'Avance pendiente de revisión',progress:140,startsOn:'2026-10-11',endsOn:'2026-10-13'},
+];
+const workbenchTaskIds=page=>page.$$eval('[data-schedule-workbench] [data-task-id]',elements=>elements.map(element=>element.dataset.taskId));
+async function waitWorkbenchTasks(page,expected){await page.waitForFunction(ids=>JSON.stringify([...document.querySelectorAll('[data-schedule-workbench] [data-task-id]')].map(element=>element.dataset.taskId))===JSON.stringify(ids),{timeout:15000},expected);}
+async function searchWorkbench(page,value){await page.$eval(workbenchControl.search,element=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(element,'');element.dispatchEvent(new Event('input',{bubbles:true}));});if(value)await page.type(workbenchControl.search,value);}
+async function workbenchScenario(width){
+ const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1000,hasTouch:width<768});
+ const mode='workbench';page.on('pageerror',error=>pageErrors.push({mode,width,message:error.message}));
+ const requests=[],posts=[];let phase='initial-load';
+ await page.setRequestInterception(true);
+ page.on('request',async request=>{
+  try{
+   const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();return request.abort();}
+   if(!url.pathname.startsWith('/api/'))return request.continue();
+   requests.push({method:request.method(),path:url.pathname,query:url.search});
+   if(request.method()!=='GET'){posts.push(request.postData());throw new Error('Schedule filters must not mutate a business record');}
+   assert.equal(url.pathname,'/api/identity/workspace');assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');
+   let body;
+   if(!url.search)body={scope,organizationName:'Empresa de ensayo del cronograma',role:'SITE_MANAGER',roleLabel:'Jefe de obra',canPlanSchedule:true,projects:[{id:'p-a',name:'Obra de prueba A'},{id:'p-b',name:'Obra de prueba B'}],projectsTruncated:false};
+   else{
+    assert.equal(url.searchParams.get('scope'),scope);assert.ok(!url.searchParams.has('operationId'));
+    const projectId=url.searchParams.get('projectId'),cursor=url.searchParams.get('afterTask');
+    assert.ok(['p-a','p-b'].includes(projectId));
+    let tasks,totalTasks,nextCursor;
+    if(projectId==='p-b'){assert.equal(cursor,null);tasks=[{...baseTask(),id:'wb-project-b',title:'Tarea propia de la obra B'}];totalTasks=3;nextCursor=null;}
+    else if(cursor){
+     assert.equal(cursor,'controlled-page-2');
+     tasks=[{...workbenchTasks()[0],progress:41,revision:'2026-10-02T10:00:00.654321'},{...baseTask(),id:'wb-page-two-match',title:'Mampostería acceso',progress:15,startsOn:'2026-09-28',endsOn:'2026-10-02'},{...baseTask(),id:'wb-page-two-other',title:'Zanjeo del perímetro',status:'BACKLOG',progress:0,startsOn:'2026-10-15',endsOn:'2026-10-20'}];totalTasks=8;nextCursor=null;
+    }else{tasks=workbenchTasks();totalTasks=8;nextCursor='controlled-page-2';}
+    body={scope,project:{id:projectId,name:projectId==='p-a'?'Obra de prueba A':'Obra de prueba B'},canPlanSchedule:true,tasks,totalTasks,nextCursor};
+   }
+   await request.respond({status:200,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify(body)});
+  }catch(error){pageErrors.push({mode,width,phase,message:error.message});if(!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});}
+ });
+ try{
+  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Empresa de ensayo del cronograma');
+  await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba A')).click());
+  await page.waitForSelector('[data-schedule-workbench]');await waitWorkbenchTasks(page,workbenchTasks().map(task=>task.id));
+  const initialRequests=requests.length;
+  const assertLocalControls=()=>{assert.equal(requests.length,initialRequests);assert.equal(posts.length,0);};
+  assert.equal(await page.$eval(workbenchControl.search,element=>element.type),'search');
+  for(const [control,values] of [['status',['ALL','BACKLOG','IN_PROGRESS','DONE','BLOCKED','UNRECOGNIZED']],['planning',['ALL','VALID','MISSING','INVALID']],['order',['REGISTERED','START_ASC','TITLE_ASC']]])assert.deepEqual((await page.$$eval(workbenchControl[control]+' option',elements=>elements.map(element=>element.value))).sort(),values.sort());
+  await waitText(page,'Mostrando 6 de 6 tareas cargadas');
+  const overview=await page.$eval('#schedule-overview-title',element=>element.parentElement.innerText);
+  assert.match(overview,/parcial/i);assert.match(await page.$eval('[data-schedule-workbench]',element=>element.innerText),/tareas cargadas/i);
+  assert.ok(!/avance (?:global|promedio)|promedio de avance/i.test(await text(page)));
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Initial workbench overflow at '+width);
+  await (await page.$('[data-schedule-workbench]')).screenshot({path:path.join(evidence,'workspace-workbench-'+width+'.png')});
+  checks.push('workbench-partial-loaded-summary-and-accessible-controls-'+width);
+
+  phase='accent-and-combined-filters';await searchWorkbench(page,'mamposteria');await waitWorkbenchTasks(page,['wb-mamp-a','wb-mamp-b']);
+  await page.select(workbenchControl.status,'IN_PROGRESS');await page.select(workbenchControl.planning,'VALID');await waitWorkbenchTasks(page,['wb-mamp-a']);
+  await page.select(workbenchControl.order,'START_ASC');assertLocalControls();await waitText(page,'Mostrando 1 de 6 tareas cargadas');
+  checks.push('workbench-accent-insensitive-search-combined-filters-no-requests-'+width);
+
+  phase='no-matches-and-keyboard-clear';await searchWorkbench(page,'tarea que no existe');await waitWorkbenchTasks(page,[]);await waitText(page,'Mostrando 0 de 6 tareas cargadas');
+  await page.evaluate(()=>[...document.querySelectorAll('[data-schedule-workbench] button')].find(button=>button.textContent.trim()==='Limpiar filtros').focus());await page.keyboard.press('Enter');
+  await waitWorkbenchTasks(page,workbenchTasks().map(task=>task.id));
+  assert.equal(await page.$eval(workbenchControl.search,element=>element.value),'');
+  for(const [control,value] of [['status','ALL'],['planning','ALL'],['order','REGISTERED']])assert.equal(await page.$eval(workbenchControl[control],element=>element.value),value);
+  assertLocalControls();checks.push('workbench-no-matches-keyboard-clear-restores-loaded-tasks-'+width);
+
+  phase='invalid-data';await page.select(workbenchControl.planning,'INVALID');await waitWorkbenchTasks(page,['wb-invalid-dates']);assert.match(await page.$eval('[data-task-id="wb-invalid-dates"]',element=>element.innerText),/Fechas para revisar/);
+  await page.select(workbenchControl.planning,'MISSING');await waitWorkbenchTasks(page,['wb-mamp-b','wb-unknown-status']);
+  await page.select(workbenchControl.status,'UNRECOGNIZED');await waitWorkbenchTasks(page,['wb-unknown-status']);
+  await click(page,'Limpiar filtros');await waitWorkbenchTasks(page,workbenchTasks().map(task=>task.id));
+  const invalidProgress=await page.$eval('[data-task-id="wb-invalid-progress"]',element=>({text:element.innerText,bars:element.querySelectorAll('[role="progressbar"]').length}));
+  assert.match(invalidProgress.text,/Requiere revisión/);assert.ok(!invalidProgress.text.includes('140 %'));assert.equal(invalidProgress.bars,0);
+  assert.match(await page.$eval('[data-schedule-workbench]',element=>element.innerText),/Datos para revisar:/);assertLocalControls();
+  checks.push('workbench-invalid-dates-status-and-progress-require-review-'+width);
+
+  phase='ordering';await page.select(workbenchControl.order,'TITLE_ASC');await waitWorkbenchTasks(page,['wb-finished','wb-invalid-progress','wb-invalid-dates','wb-mamp-a','wb-mamp-b','wb-unknown-status']);
+  await page.select(workbenchControl.order,'START_ASC');await waitWorkbenchTasks(page,['wb-finished','wb-mamp-a','wb-invalid-progress','wb-mamp-b','wb-invalid-dates','wb-unknown-status']);
+  assertLocalControls();checks.push('workbench-local-title-and-valid-start-date-order-'+width);
+
+  phase='draft-preserved';await page.click('[data-task-id="wb-mamp-a"] button');await page.waitForSelector('#schedule-edit-title');
+  await page.type('textarea','Borrador de fechas conservado al filtrar el cronograma.');
+  const draftDates=await page.$$eval('form input[type="date"]',elements=>elements.map(element=>element.value));
+  await page.select(workbenchControl.status,'DONE');await page.select(workbenchControl.planning,'VALID');await page.select(workbenchControl.order,'TITLE_ASC');await searchWorkbench(page,'acabado');await waitWorkbenchTasks(page,['wb-finished']);
+  assert.equal(await page.$eval('textarea',element=>element.value),'Borrador de fechas conservado al filtrar el cronograma.');assert.deepEqual(await page.$$eval('form input[type="date"]',elements=>elements.map(element=>element.value)),draftDates);
+  assert.ok(await page.$('#schedule-edit-title'));assert.equal(await page.$('[data-task-id="wb-mamp-a"]'),null);assertLocalControls();
+  assert.ok(await page.evaluate(()=>[...document.querySelectorAll('button')].filter(button=>button.textContent==='Actualizar'||button.textContent.includes('Obra de prueba B')).every(button=>button.disabled)));
+  checks.push('workbench-filter-hidden-card-preserves-root-schedule-draft-'+width);
+  await page.screenshot({path:path.join(evidence,'workspace-workbench-draft-'+width+'.png'),fullPage:false});await click(page,'Cancelar');await page.waitForFunction(()=>!document.querySelector('#schedule-edit-title'));
+
+  phase='pagination-with-filters';await click(page,'Limpiar filtros');await searchWorkbench(page,'mamposteria');await page.select(workbenchControl.status,'IN_PROGRESS');await page.select(workbenchControl.planning,'VALID');await page.select(workbenchControl.order,'START_ASC');await waitWorkbenchTasks(page,['wb-mamp-a']);assertLocalControls();
+  await click(page,'Cargar más tareas');await waitWorkbenchTasks(page,['wb-page-two-match','wb-mamp-a']);
+  assert.equal(requests.length,initialRequests+1);assert.equal(new URL(origin+requests.at(-1).path+requests.at(-1).query).searchParams.get('afterTask'),'controlled-page-2');assert.equal(posts.length,0);
+  assert.equal(await page.$eval(workbenchControl.search,element=>element.value),'mamposteria');for(const [control,value] of [['status','IN_PROGRESS'],['planning','VALID'],['order','START_ASC']])assert.equal(await page.$eval(workbenchControl[control],element=>element.value),value);
+  await waitText(page,'Mostrando 2 de 8 tareas cargadas');assert.equal(await page.$$eval('[data-task-id="wb-mamp-a"]',elements=>elements.length),1);assert.match(await page.$eval('[data-task-id="wb-mamp-a"]',element=>element.innerText),/41 %/);
+  await click(page,'Limpiar filtros');assert.equal((await workbenchTaskIds(page)).length,8);assert.equal(new Set(await workbenchTaskIds(page)).size,8);assert.equal(requests.length,initialRequests+1);
+  checks.push('workbench-pagination-keeps-filters-and-merges-canonical-task-id-'+width);
+
+  phase='project-reset';await searchWorkbench(page,'mamposteria');await page.select(workbenchControl.status,'IN_PROGRESS');await page.select(workbenchControl.planning,'VALID');await page.select(workbenchControl.order,'TITLE_ASC');
+  await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba B')).click());await waitWorkbenchTasks(page,['wb-project-b']);
+  assert.equal(requests.length,initialRequests+2);assert.equal(new URL(origin+requests.at(-1).path+requests.at(-1).query).searchParams.get('projectId'),'p-b');assert.equal(posts.length,0);assert.equal(await page.$eval(workbenchControl.search,element=>element.value),'');
+  for(const [control,value] of [['status','ALL'],['planning','ALL'],['order','REGISTERED']])assert.equal(await page.$eval(workbenchControl[control],element=>element.value),value);
+  await waitText(page,'Mostrando 1 de 1 tareas cargadas');assert.match(await page.$eval('#schedule-overview-title',element=>element.parentElement.innerText),/parcial/i);
+  assert.equal(await page.$$eval('button',elements=>elements.filter(element=>element.textContent.trim()==='Cargar más tareas').length),0);
+  const partialResult=await page.$eval('[data-schedule-workbench] [role="status"]',element=>element.innerText);assert.ok(!partialResult.includes('Podés cargar más'));assert.ok(partialResult.includes('Actualizá la consulta y volvé a abrir la obra para comprobar el total.'));
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Final workbench overflow at '+width);
+  const targets=await page.$$eval('[data-schedule-workbench] input,[data-schedule-workbench] select,[data-schedule-workbench] button',elements=>elements.map(element=>({label:element.getAttribute('aria-label')||element.textContent.trim(),height:element.getBoundingClientRect().height,width:element.getBoundingClientRect().width})));assert.ok(targets.length>=5);assert.ok(targets.every(target=>target.height>=44&&target.width>=44),JSON.stringify(targets));
+  checks.push('workbench-project-reset-partial-total-and-touch-targets-'+width);
+  await (await page.$('[data-schedule-workbench]')).screenshot({path:path.join(evidence,'workspace-workbench-project-b-'+width+'.png')});
+ }catch(error){
+  await page.screenshot({path:path.join(evidence,'workspace-workbench-failure-'+width+'.png'),fullPage:false}).catch(()=>{});
+  writeFileSync(path.join(evidence,'workspace-workbench-failure-'+width+'.json'),JSON.stringify({status:'FAILED',phase,width,message:error.message,requests,postCount:posts.length,body:await text(page).catch(()=>null)},null,2));throw error;
+ }finally{await context.close();}
+}
 async function taskCreateScenario(mode){
  const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width:390,height:1000});page.on('pageerror',error=>pageErrors.push({mode:'taskcreate-'+mode,width:390,message:error.message}));
  const posts=[];let record=null,applications=0,statusChecks=0;await page.setRequestInterception(true);
@@ -209,7 +328,42 @@ async function taskCreateScenario(mode){
  assert.ok(await page.evaluate(()=>[...document.querySelectorAll('form input')].every(e=>e.disabled)));await click(page,'Comprobar tarea');
  if(mode==='uncertain'){await waitText(page,'Tarea creada y vinculada');assert.equal(posts.length,1);checks.push('taskcreate-uncertain-commit-recovers-without-second-post');}
  else {await waitText(page,'No se observa un recibo todavía');assert.equal(posts.length,1);assert.equal(await page.$eval('form input',e=>e.value),'Tarea de ensayo recuperable');assert.ok(await page.$eval('form input',e=>e.disabled));await click(page,'Reintentar la misma creación');await waitText(page,'Tarea creada y vinculada');assert.equal(posts.length,2);assert.deepEqual(posts[1],posts[0]);checks.push('taskcreate-'+mode+'-checked-then-exact-retry-once');}
- assert.equal(statusChecks,1);assert.equal(applications,1);assert.equal(await page.$$eval('[data-task-id="new-task"]',nodes=>nodes.length),1);assert.ok((await text(page)).includes('Avance registrado: 0 %'));assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await context.close();
+ assert.equal(statusChecks,1);assert.equal(applications,1);assert.equal(await page.$$eval('[data-task-id="new-task"]',nodes=>nodes.length),1);
+ const createdProgress=await page.$eval('[data-task-id="new-task"]',element=>({text:element.innerText.replace(/\s+/g,' '),bars:[...element.querySelectorAll('[role="progressbar"]')].map(bar=>bar.getAttribute('aria-valuenow'))}));assert.ok(createdProgress.text.includes('Avance registrado: 0 %'));assert.deepEqual(createdProgress.bars,['0']);
+ assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await context.close();
+}
+async function stalePaginationScenario(){
+ const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width:390,height:1000});
+ page.on('pageerror',error=>pageErrors.push({mode:'stale-pagination',width:390,message:error.message}));
+ const beforeRevision='2026-10-02T09:00:00.000001',afterRevision='2026-10-02T09:00:00.000002',original={...baseTask(),revision:beforeRevision},posts=[],requests=[];
+ let heldPage;const paginationStarted=new Promise(resolve=>{heldPage={resolve,request:null};});
+ await page.setRequestInterception(true);
+ page.on('request',async request=>{
+  try{
+   const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();return request.abort();}
+   if(!url.pathname.startsWith('/api/'))return request.continue();assert.equal(url.pathname,'/api/identity/workspace');assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');requests.push({method:request.method(),query:url.search});let body;
+   if(request.method()==='POST'){
+    const payload=JSON.parse(request.postData());posts.push(payload);assert.equal(posts.length,1);assert.equal(payload.scope,scope);assert.equal(payload.projectId,'p-a');assert.equal(payload.taskId,original.id);assert.equal(payload.expectedRevision,beforeRevision);assert.equal(payload.startsOn,'2026-10-07');assert.equal(payload.endsOn,'2026-10-15');
+    body={scope,saved:true,replayed:false,task:{...original,startsOn:payload.startsOn,endsOn:payload.endsOn,revision:afterRevision},receipt:{id:'workspace_schedule_'+ 'c'.repeat(64),taskId:original.id,recordedAt:afterRevision,before:{startsOn:original.startsOn,endsOn:original.endsOn},after:{startsOn:payload.startsOn,endsOn:payload.endsOn}}};
+   }else if(!url.search)body={scope,organizationName:'Empresa de ensayo de página tardía',role:'SITE_MANAGER',roleLabel:'Jefe de obra',canPlanSchedule:true,projects:[{id:'p-a',name:'Obra de prueba A'}],projectsTruncated:false};
+   else{
+    assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');
+    if(url.searchParams.has('afterTask')){assert.equal(url.searchParams.get('afterTask'),'held-page');heldPage.request=request;heldPage.resolve();return;}
+    body={scope,project:{id:'p-a',name:'Obra de prueba A'},canPlanSchedule:true,tasks:[original],totalTasks:2,nextCursor:'held-page'};
+   }
+   await request.respond({status:200,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify(body)});
+  }catch(error){pageErrors.push({mode:'stale-pagination',width:390,message:error.message});if(!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});}
+ });
+ try{
+  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Empresa de ensayo de página tardía');await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba A')).click());await page.waitForSelector('[data-task-id="task-a"]');
+  await click(page,'Cargar más tareas');await paginationStarted;await fill(page);await click(page,'Confirmar planificación');await waitText(page,'Cambio confirmado');assert.equal(posts.length,1);
+  await heldPage.request.respond({status:200,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify({scope,project:{id:'p-a',name:'Obra de prueba A'},canPlanSchedule:true,tasks:[original,{...original,id:'late-page-task',title:'Tarea añadida por la página tardía'}],totalTasks:2,nextCursor:null})});
+  await page.waitForSelector('[data-task-id="late-page-task"]');assert.equal(await page.$$eval('[data-task-id="task-a"]',elements=>elements.length),1);
+  assert.deepEqual(await page.$$eval('[data-task-id="task-a"] time',elements=>elements.map(element=>element.dateTime)),['2026-10-07','2026-10-15']);
+  assert.equal(await page.$eval('[data-task-id="task-a"] [role="progressbar"]',element=>element.getAttribute('aria-valuenow')),'37');assert.ok((await text(page)).includes('2026-10-07 → 2026-10-15'));assert.ok((await text(page)).includes('Cambio confirmado'));assert.equal(posts.length,1);assert.equal(requests.filter(request=>request.method==='GET').length,3);
+  await (await page.$('section[aria-labelledby="schedule-title"]')).screenshot({path:path.join(evidence,'workspace-workbench-stale-page-390.png')});checks.push('workbench-late-cursor-page-preserves-confirmed-newer-schedule-and-receipt-390');
+ }catch(error){await page.screenshot({path:path.join(evidence,'workspace-workbench-stale-page-failure-390.png'),fullPage:false}).catch(()=>{});throw error;}
+ finally{if(heldPage.request&&!heldPage.request.isInterceptResolutionHandled())await heldPage.request.abort().catch(()=>{});await context.close();}
 }
 try{
  let ready=false;
@@ -227,8 +381,10 @@ try{
  for(const mode of ['readonly','denied','empty','draft-cancel','sdk-unavailable','unmount-token','uncertain','rollback','not-arrived','conflict','race'])await scenario(mode);
  for(const mode of ['draft-cancel','uncertain','rollback','not-arrived'])await taskCreateScenario(mode);
  for(const width of [320,390,768,1280])for(const role of ['ADMIN','AUDITOR'])await navigationScenario(role,width);
+ for(const width of [320,390,768,1280])await workbenchScenario(width);
+ await stalePaginationScenario();
  assert.deepEqual(pageErrors,[]);
- const proof={status:'PASS',environment:'isolated-browser-with-intercepted-synthetic-api',widths:[320,390,768,1280],checks,pageErrors,productionLoginVerified:false,productionDataWritten:false,physicalWhatsAppVerified:false};
+ const proof={status:'PASS',environment:'isolated-browser-with-intercepted-synthetic-api',widths:[320,390,768,1280],checks,pageErrors,sourceManifest,harnessSha256,productionLoginVerified:false,productionDataWritten:false,physicalWhatsAppVerified:false};
  writeFileSync(path.join(evidence,'browser.json'),JSON.stringify(proof,null,2));console.log(JSON.stringify(proof));
 }catch(error){writeFileSync(path.join(evidence,'browser-failure.json'),JSON.stringify({status:'FAILED',message:error.message,pageErrors,serverLog},null,2));throw error;}
 finally{await browser?.close();try{if(process.platform!=='win32')process.kill(-server.pid,'SIGTERM');else server.kill();}catch{}await new Promise(resolve=>setTimeout(resolve,500));assert.equal(path.dirname(path.resolve(fixture)),path.resolve(root,'.vercel'));rmSync(fixture,{recursive:true,force:true});}
