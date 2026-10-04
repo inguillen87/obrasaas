@@ -59,7 +59,7 @@ export default function ManualPage() {
             <ol className={styles.stepsList}>
               <li>El responsable guarda la ficha en <strong>Equipo, incidencias y materiales → Abrir registro → Agregar persona</strong>. Una ficha o un teléfono declarado no crean acceso por sí solos.</li>
               <li>Después, en <strong>Participantes y revisión de identidad</strong>, asigna los permisos de jornada o reportes que correspondan y envía la invitación al correo correcto. Si el envío queda pendiente, consulta su resultado antes de volver a invitar.</li>
-              <li>El invitado abre el correo, completa el ingreso oficial y acepta la participación en esa obra. La cuenta y la pertenencia deben coincidir con la invitación.</li>
+              <li>El invitado abre el correo, completa el ingreso oficial y acepta la participación en esa obra. La cuenta y la pertenencia deben coincidir con la invitación. También puede usar un correo secundario verificado de su propia cuenta; no hace falta reemplazar su correo principal. Un correo declarado sin verificar no habilita la invitación.</li>
               <li>Desde su autoservicio, el participante lee el aviso y decide si presenta el frente de su documento y una selfie. Puede tomar o elegir JPEG, PNG o WebP de hasta <strong>20 MiB y 24 megapíxeles</strong>. La preparación se realiza en su dispositivo y conserva el original; la imagen a enviar queda dentro de <strong>1 MiB por imagen</strong>.</li>
               <li>Antes de usar cada imagen, revisa la vista previa, su orientación y la legibilidad del documento o del rostro. Puede girarla o descartarla. HEIC requiere guardar una copia JPEG. Sólo después de revisar ambas imágenes y aceptar el aviso se presenta la solicitud, con almacenamiento privado.</li>
               <li>Otro administrador o director autorizado consulta ambas imágenes y registra una decisión con fundamento. <strong>Pendiente de revisión</strong> no habilita actividad de campo ni equivale a aprobación.</li>
@@ -79,6 +79,8 @@ export default function ManualPage() {
             <p>En la obra abierta, entrá a <strong>Jornada y evidencia → Abrir operaciones</strong>. Antes de fichar, un administrador o director debe configurar el sector de la obra y su ubicación.</p>
             <p>En <strong>Sectores y QR</strong>, agregá o editá el sector que corresponde. Revisá su nombre, el centro y el radio; podés obtener una ubicación puntual desde el teléfono o completar las coordenadas. Obtenerla no guarda la configuración ni acredita el perímetro de la obra. Guardar una modificación renueva los QR de todos los sectores: revisá la confirmación y reemplazá los códigos colocados.</p>
             <p>Para volver a imprimir un código, descargá el <strong>QR vigente</strong> del sector. No hace falta guardar otra configuración ni renovar los códigos. La descarga comprueba tus permisos y la versión actual; si la configuración cambió, actualizá el listado antes de imprimir.</p>
+            <p>Para leerlo, elegí primero el sector y tocá <strong>Leer QR con cámara</strong>. La lectura se realiza en tu dispositivo; las imágenes de esa cámara no se guardan ni se envían. Podés <strong>Detener lectura QR</strong> incluso mientras esperás el permiso. Si no se lee en 30 segundos, la lectura termina y podés volver a iniciarla. Un código de otra obra o sector se rechaza.</p>
+            <p>Si la cámara no está disponible, abrí <strong>Pegar un QR leído con otra aplicación</strong>. Leer o pegar el código no guarda el fichaje: revisá la ubicación y elegí <strong>Guardar con recibo</strong>. Al cambiar de sector, volvé a leer su QR.</p>
             <div className={styles.cardGrid}>
               <article><h3>Jornada</h3><p>Elegí entrada, pausa, regreso o salida. Para entrada y salida, obtené la ubicación puntual desde el teléfono y leé el QR vigente del sector con la cámara, si el navegador lo permite. Una ubicación válida fuera del perímetro o un fichaje sin QR requiere revisión. Si no hay permiso de ubicación, la lectura quedó antigua o la precisión es peor de 100 metros, corregí el error antes de fichar.</p></article>
               <article><h3>Evidencia privada</h3><p>Elegí tarea y sector, capturá o adjuntá el archivo y explicá qué registra. Fotos hasta 2 MiB; audio y video hasta 3 MiB. Un análisis o transcripción de IA es orientativo y conserva la revisión humana. El video se revisa por una persona; no se analiza automáticamente.</p></article>
@@ -137,7 +139,7 @@ export default function ManualPage() {
           </section>
         </div>
       </div>
-      <footer className={styles.footer}><p>Guía revisada el 2 de octubre de 2026 · ObraSaaS, un producto desarrollado por Inmovar LATAM.</p><div><Link href="/cuenta">Ir a Mi cuenta</Link><a href="#manual-title">Volver al inicio del manual</a></div></footer>
+      <footer className={styles.footer}><p>Guía revisada el 4 de octubre de 2026 · ObraSaaS, un producto desarrollado por Inmovar LATAM.</p><div><Link href="/cuenta">Ir a Mi cuenta</Link><a href="#manual-title">Volver al inicio del manual</a></div></footer>
     </main>
   </div>;
 }
