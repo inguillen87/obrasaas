@@ -21,7 +21,21 @@ export function createParticipantIdentityProvider({client,environment=()=>proces
     if(matches.length>1)throw new WorkspaceError('PARTICIPANT_INVITATION_AMBIGUOUS',409);return matches.length===1?normalizedInvitation(matches[0],organizationId):null;
    }catch(error){if(error instanceof WorkspaceError)throw error;throw unavailable();}
   },
-  async verifiedEmail(userId){const api=await trustedClient();try{const user=await api.users.getUser(userId);if(user.id!==userId||!Array.isArray(user.emailAddresses))throw unavailable();const address=user.emailAddresses.find(item=>item.id===user.primaryEmailAddressId);if(address?.verification?.status!=='verified'||typeof address.emailAddress!=='string')throw new WorkspaceError('PARTICIPANT_VERIFIED_EMAIL_REQUIRED',403);return address.emailAddress.toLowerCase();}catch(error){if(error instanceof WorkspaceError)throw error;throw unavailable();}},
+   async verifiedEmail(userId,expectedEmail){
+    const selected=expectedEmail!==undefined;
+    if(selected&&(typeof expectedEmail!=='string'||expectedEmail.length>254||! /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(expectedEmail)))throw new WorkspaceError('PARTICIPANT_EMAIL_MISMATCH',403);
+    const api=await trustedClient();try{
+     const user=await api.users.getUser(userId);if(user.id!==userId||!Array.isArray(user.emailAddresses))throw unavailable();
+     // The caller may select an exact canonical invitation address, never an
+     // alias or a client-writable profile field. Without a selector, preserve
+     // the verified primary address used by canonical account/role operations.
+     const addresses=user.emailAddresses.filter(item=>selected?typeof item?.emailAddress==='string'&&item.emailAddress.toLowerCase()===expectedEmail.toLowerCase():item?.id===user.primaryEmailAddressId);
+     if(addresses.length>1)throw unavailable();
+     if(selected&&!addresses.length)throw new WorkspaceError('PARTICIPANT_EMAIL_MISMATCH',403);
+     const address=addresses[0];if(address?.verification?.status!=='verified'||typeof address.emailAddress!=='string')throw new WorkspaceError('PARTICIPANT_VERIFIED_EMAIL_REQUIRED',403);
+     return address.emailAddress.toLowerCase();
+    }catch(error){if(error instanceof WorkspaceError)throw error;throw unavailable();}
+   },
   async verifyMembership({userId,organizationId,invitationId=null}){const api=await trustedClient();try{const page=await api.organizations.getOrganizationMembershipList({organizationId,userId:[userId],limit:2});if(page?.totalCount!==1||page.data?.length!==1)throw new WorkspaceError('PARTICIPANT_PROVIDER_MEMBERSHIP_REQUIRED',403);const member=page.data[0];if(member.organization?.id!==organizationId||member.publicUserData?.userId!==userId||! /^org:[a-z][a-z0-9_]{0,63}$/.test(member.role||'')||(invitationId&&member.publicMetadata?.obrasaasInvitationId!==invitationId))throw new WorkspaceError('PARTICIPANT_PROVIDER_MEMBERSHIP_REQUIRED',403);return {userId,organizationId,role:member.role};}catch(error){if(error instanceof WorkspaceError)throw error;throw unavailable();}},
  };
 }

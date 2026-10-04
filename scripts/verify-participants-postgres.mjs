@@ -5,6 +5,8 @@ import {trackDisposablePool,closeDisposablePool} from './lib/disposable-postgres
 import {mkdirSync,writeFileSync} from 'node:fs';
 import {createWorkspaceStore} from '../src/lib/workspace-store.mjs';
 import {createParticipantStore} from '../src/lib/participant-store.mjs';
+import {createParticipantIdentityProvider} from '../src/lib/participant-identity-provider.mjs';
+import {IDENTITY_PUBLIC_KEY,IDENTITY_INSTANCE,IDENTITY_ORIGIN} from '../src/lib/production-identity-config.mjs';
 import {assertFieldParticipant,PARTICIPANT_NOTICE_VERSION} from '../src/lib/participant-policy.mjs';
 import {createPrivateImageUploader} from '../src/lib/private-image-upload.mjs';
 import {WorkspaceError} from '../src/lib/workspace-policy.mjs';
@@ -208,6 +210,67 @@ try{
  checks.push('receipt-consultation-preserves-read-only-snapshots-and-never-calls-identity-or-private-storage');
  await pool.query(`UPDATE "TenantMembership" SET status='DISABLED' WHERE id='director-m'`);await assert.rejects(store.read(director,{projectId:'p-a',scope:dir.scope}),{code:'WORKSPACE_MEMBERSHIP_REQUIRED'});
  checks.push('revocation-immediately-blocks-project-field-identity-download-and-invitation-replay');
+  // Real adapter and join transactions; the SDK objects and all addresses are
+  // synthetic. No Clerk request, account mutation or email delivery is made.
+  const emailProfiles=new Map(),emailMemberships=new Map();let emailProfileReads=0,emailMembershipHook=null;
+  const emailEnvironment=()=>({NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:IDENTITY_PUBLIC_KEY,CLERK_SECRET_KEY:'sk_live_'+'A'.repeat(30),CLERK_EXPECTED_INSTANCE_ID:IDENTITY_INSTANCE,NEXT_PUBLIC_APP_URL:IDENTITY_ORIGIN,CLERK_AUTHORIZED_PARTIES:IDENTITY_ORIGIN});
+  const emailSdk={users:{getUser:async userId=>{emailProfileReads++;return structuredClone(emailProfiles.get(userId));}},organizations:{
+   getOrganizationInvitationList:async({organizationId,offset})=>{assert.equal(organizationId,'org_A');assert.equal(offset,0);const data=[...providerInvitations.values()].map(value=>({id:value.id,organizationId,emailAddress:value.email,role:value.role,status:value.state,expiresAt:Date.parse(value.expiresAt),publicMetadata:{obrasaasInvitationId:value.invitationId}}));return {data,totalCount:data.length};},
+   getOrganizationMembershipList:async({organizationId,userId})=>{if(emailMembershipHook){const hook=emailMembershipHook;emailMembershipHook=null;await hook();}const invitationId=emailMemberships.get(userId[0]);return {totalCount:1,data:[{role:'org:member',organization:{id:organizationId},publicUserData:{userId:userId[0]},publicMetadata:{obrasaasInvitationId:invitationId}}]};},
+  }};
+  const emailIdentity=createParticipantIdentityProvider({client:async()=>emailSdk,environment:emailEnvironment});
+  const emailStore=createParticipantStore({workspace,connect,identity:emailIdentity});
+  const emailScope=(await workspace.list(owner)).scope;let emailFixtureSequence=0;
+  const emailProfile=(userId,primaryEmail,secondaryEmail)=>({id:userId,primaryEmailAddressId:'primary',emailAddresses:[{id:'primary',emailAddress:primaryEmail,verification:{status:'verified'}},{id:'secondary',emailAddress:secondaryEmail,verification:{status:'verified'}}],unsafeMetadata:{email:'unrelated@example.invalid',verified:true}});
+  async function emailInvitation(userId,address,projectId='p-a'){
+   const workerId='worker-email-'+(++emailFixtureSequence);await pool.query(`INSERT INTO "Worker"(id,"projectId",name,phone,metadata,"updatedAt") VALUES($1,$2,'Synthetic email participant',$3,'{"siteRegister":{"version":1}}',clock_timestamp())`,[workerId,projectId,'+549110001'+String(emailFixtureSequence).padStart(4,'0')]);
+   const row=(await store.read(owner,{projectId,scope:emailScope})).records.find(value=>value.id===workerId);
+   const invited=await store.save(owner,{projectId,scope:emailScope,operationId:randomUUID(),action:'INVITE',payload:{workerId,revision:row.revision,email:address}}),invitationId=invited.participant.invitation.id;
+   providerInvitations.get(invitationId).state='accepted';emailMemberships.set(userId,invitationId);return {workerId,invitationId,projectId};
+  }
+  const emailEffects=async()=>(await pool.query(`SELECT (SELECT jsonb_agg(t ORDER BY id) FROM "PlatformUser" t) users,(SELECT jsonb_agg(t ORDER BY id) FROM "TenantMembership" t) memberships,(SELECT jsonb_agg(t ORDER BY id) FROM "ProjectMembership" t) projects,(SELECT jsonb_agg(t ORDER BY id) FROM "AuditLog" t) audit`)).rows;
+  const secondaryUser='user_EmailSecondary',secondarySession=session(secondaryUser),primaryEmail='email-primary@example.invalid',secondaryEmail='email-secondary@example.invalid';emailProfiles.set(secondaryUser,emailProfile(secondaryUser,primaryEmail,secondaryEmail));
+  const secondaryInvite=await emailInvitation(secondaryUser,secondaryEmail),secondaryReadCount=emailProfileReads;
+  assert.equal((await emailStore.join(secondarySession,{invitationId:secondaryInvite.invitationId})).canAccept,true);assert.equal(emailProfileReads-secondaryReadCount,2);
+  const secondaryJoined=await emailStore.join(secondarySession,{invitationId:secondaryInvite.invitationId,operationId:randomUUID()},{accept:true});assert.equal(secondaryJoined.joined,true);assert.equal(secondaryJoined.replayed,false);
+  assert.equal((await pool.query(`SELECT "primaryEmail" FROM "PlatformUser" WHERE "clerkUserId"=$1`,[secondaryUser])).rows[0].primaryEmail,primaryEmail);
+  assert.equal((await pool.query(`SELECT metadata->'participant'->'invitation'->>'email' AS email FROM "Worker" WHERE id=$1`,[secondaryInvite.workerId])).rows[0].email,secondaryEmail);
+  checks.push('verified-secondary-invitation-joins-through-real-adapter-and-persists-only-verified-primary-email');
+  const secondaryEffects=await emailEffects(),replayedSecondary=await emailStore.join(secondarySession,{invitationId:secondaryInvite.invitationId,operationId:randomUUID()},{accept:true});assert.equal(replayedSecondary.receiptId,secondaryJoined.receiptId);assert.equal(replayedSecondary.replayed,true);assert.deepEqual(await emailEffects(),secondaryEffects);
+  const noProviderReads=emailProfileReads;assert.equal((await canonicalOnly.join(secondarySession,{invitationId:secondaryInvite.invitationId})).receiptId,secondaryJoined.receiptId);assert.equal(emailProfileReads,noProviderReads);
+  await pool.query(`UPDATE "TenantMembership" SET status='DISABLED' WHERE "userId"=(SELECT id FROM "PlatformUser" WHERE "clerkUserId"=$1)`,[secondaryUser]);await assert.rejects(canonicalOnly.join(secondarySession,{invitationId:secondaryInvite.invitationId}),{code:'PARTICIPANT_ACCESS_REQUIRED'});await pool.query(`UPDATE "TenantMembership" SET status='ACTIVE' WHERE "userId"=(SELECT id FROM "PlatformUser" WHERE "clerkUserId"=$1)`,[secondaryUser]);
+  await assert.rejects(emailStore.join(session(secondaryUser,'org_A','org:admin'),{invitationId:secondaryInvite.invitationId}),{code:'PARTICIPANT_MEMBER_SESSION_REQUIRED'});
+  checks.push('secondary-acceptance-replays-same-receipt-and-recovery-revalidates-current-membership-and-session-role');
+  const primaryUser='user_EmailPrimary';emailProfiles.set(primaryUser,emailProfile(primaryUser,'only-primary@example.invalid','other-owned@example.invalid'));const primaryInvite=await emailInvitation(primaryUser,'only-primary@example.invalid'),primaryReadCount=emailProfileReads;
+  const primaryJoined=await emailStore.join(session(primaryUser),{invitationId:primaryInvite.invitationId,operationId:randomUUID()},{accept:true});assert.equal(primaryJoined.joined,true);assert.equal(emailProfileReads-primaryReadCount,1);
+  const existingPrimaryInvite=await emailInvitation(secondaryUser,primaryEmail,'p-a2');await emailStore.join(secondarySession,{invitationId:existingPrimaryInvite.invitationId,operationId:randomUUID()},{accept:true});assert.equal((await pool.query(`SELECT "primaryEmail" FROM "PlatformUser" WHERE "clerkUserId"=$1`,[secondaryUser])).rows[0].primaryEmail,primaryEmail);
+  checks.push('verified-primary-invitation-keeps-single-profile-read-and-existing-account-primary-is-not-overwritten');
+  for(const [kind,mutate,expected]of[
+   ['unverified',value=>{value.emailAddresses[1].verification.status='unverified';return value;},'PARTICIPANT_VERIFIED_EMAIL_REQUIRED'],
+   ['unrelated',value=>{value.emailAddresses[1].emailAddress='different-owned@example.invalid';return value;},'PARTICIPANT_EMAIL_MISMATCH'],
+   ['foreign',value=>({...value,id:'user_EmailForeign'}),'PARTICIPANT_IDENTITY_PROVIDER_UNAVAILABLE'],
+   ['ambiguous',value=>{value.emailAddresses.push({...value.emailAddresses[1],id:'duplicate'});return value;},'PARTICIPANT_IDENTITY_PROVIDER_UNAVAILABLE'],
+  ]){
+   const userId='user_Email'+kind,invitation=await emailInvitation(userId,'rejected-'+kind+'@example.invalid');emailProfiles.set(userId,mutate(emailProfile(userId,'primary-'+kind+'@example.invalid','rejected-'+kind+'@example.invalid')));
+   const before=await emailEffects();await assert.rejects(emailStore.join(session(userId),{invitationId:invitation.invitationId,operationId:randomUUID()},{accept:true}),{code:expected});assert.deepEqual(await emailEffects(),before);
+   assert.equal((await pool.query(`SELECT metadata->'participant'->>'status' AS status FROM "Worker" WHERE id=$1`,[invitation.workerId])).rows[0].status,'INVITED');
+  }
+  checks.push('unverified-unrelated-foreign-and-ambiguous-invitation-addresses-deny-with-no-account-membership-or-audit-effects');
+  const deniedUser='user_EmailDenied';emailProfiles.set(deniedUser,emailProfile(deniedUser,'denied-primary@example.invalid','denied-secondary@example.invalid'));const deniedInvite=await emailInvitation(deniedUser,'denied-secondary@example.invalid');
+  const wrongIdentity=createParticipantIdentityProvider({client:async()=>{throw new Error('Wrong instance must not reach SDK');},environment:()=>({...emailEnvironment(),CLERK_EXPECTED_INSTANCE_ID:'wrong'})}),wrongStore=createParticipantStore({workspace,connect,identity:wrongIdentity});const beforeWrong=await emailEffects();await assert.rejects(wrongStore.join(session(deniedUser),{invitationId:deniedInvite.invitationId,operationId:randomUUID()},{accept:true}),{code:'PARTICIPANT_IDENTITY_PROVIDER_UNAVAILABLE'});assert.deepEqual(await emailEffects(),beforeWrong);
+  emailMemberships.set(deniedUser,'invite_'+'f'.repeat(32));await assert.rejects(emailStore.join(session(deniedUser),{invitationId:deniedInvite.invitationId,operationId:randomUUID()},{accept:true}),{code:'PARTICIPANT_PROVIDER_MEMBERSHIP_REQUIRED'});assert.deepEqual(await emailEffects(),beforeWrong);emailMemberships.set(deniedUser,deniedInvite.invitationId);
+  checks.push('secondary-email-cannot-bypass-trusted-instance-or-exact-provider-membership-invitation-correlation');
+  for(const [kind,sql,expected]of[
+   ['changed',`UPDATE "Worker" SET metadata=jsonb_set(metadata,'{participant,invitation,email}','"changed@example.invalid"'::jsonb) WHERE id=$1`,'PARTICIPANT_EMAIL_MISMATCH'],
+   ['revoked',`UPDATE "Worker" SET metadata=jsonb_set(metadata,'{participant,status}','"REVOKED"'::jsonb) WHERE id=$1`,'PARTICIPANT_INVITATION_REVOKED'],
+  ]){
+   const userId='user_EmailRace'+kind,address='race-'+kind+'@example.invalid';emailProfiles.set(userId,emailProfile(userId,'race-primary-'+kind+'@example.invalid',address));const invitation=await emailInvitation(userId,address),before=await emailEffects();emailMembershipHook=()=>pool.query(sql,[invitation.workerId]);
+   await assert.rejects(emailStore.join(session(userId),{invitationId:invitation.invitationId,operationId:randomUUID()},{accept:true}),{code:expected});assert.deepEqual(await emailEffects(),before);
+  }
+  checks.push('secondary-email-provider-preflight-revalidates-changed-or-revoked-canonical-invitation-before-commit');
+  const secondaryMembership=(await workspace.list(secondarySession)),secondaryCurrent=(await store.read(secondarySession,{projectId:'p-a',scope:secondaryMembership.scope})).records[0];assert.equal(secondaryCurrent.kyc.status,'NOT_SUBMITTED');assert.equal(secondaryMembership.role,'AUDITOR');assert.equal(secondaryMembership.canPlanSchedule,false);assert.equal(secondaryMembership.canManageIntegrations,false);
+  await assert.rejects(workspace.projectOperation(secondarySession,{projectId:'p-a',scope:secondaryMembership.scope},false,(client,member)=>assertFieldParticipant(client,member,secondarySession,'p-a',secondaryInvite.workerId,{requireKyc:true})),{code:'PARTICIPANT_KYC_REVIEW_REQUIRED'});
+  checks.push('secondary-email-selection-does-not-approve-kyc-or-expand-canonical-office-and-field-permissions');
  assert.equal((await pool.query('SELECT metadata FROM "Worker" WHERE id=$1',[self.id])).rows[0].metadata.unrelated,true);assert.deepEqual((await pool.query('SELECT metadata FROM "Project" WHERE id=$1',['p-a'])).rows[0].metadata,{retain:true});
  mkdirSync('.vercel/participants-evidence',{recursive:true});writeFileSync('.vercel/participants-evidence/postgres.json',JSON.stringify({validated:true,engine,synthetic:true,realEmailDelivered:false,realIdentityAccepted:false,checks},null,2));console.log(JSON.stringify({validated:true,engine,checks}));
 }finally{try{await closeDisposablePool(pool);if(created)await admin.query(`DROP DATABASE "${database}"`);}finally{await admin.end();}}
