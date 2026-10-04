@@ -46,16 +46,64 @@ export function createFieldMediaHandlers({verify,media}) {
   }catch(error){return failed(error);}};
   return {GET:handle,POST:handle};
 }
+async function currentConfigurationQrToken(client,member,projectId,configuration,sectorId) {
+  const unavailable=()=>{throw new WorkspaceError('FIELD_QR_RECEIPT_UNAVAILABLE',409);};
+  const c=configuration;
+  if(c?.version!==1||!workspaceId(c.configRevision)||!workspaceId(c.configuredBy)||
+    typeof c.configuredAt!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(c.configuredAt)||
+    !Number.isFinite(Date.parse(c.configuredAt))||new Date(c.configuredAt).toISOString()!==c.configuredAt||
+    !Array.isArray(c.sectors)||!c.sectors.length||c.sectors.length>20||
+    c.sectors.some(s=>!workspaceId(s?.id)||!/^[a-f0-9]{64}$/.test(s.qrHash||''))||
+    new Set(c.sectors.map(s=>s.id)).size!==c.sectors.length)unavailable();
+  // Configuration and its receipt were committed together. Match its exact
+  // author/time in this authorized read-only project snapshot, rather than
+  // scanning a recent-history window or falling back to an older token.
+  const rows=(await client.query(`SELECT id,"organizationId","actorId",action,"entityType","entityId",metadata
+    FROM public."AuditLog" WHERE "organizationId"=$1 AND "entityId"=$2 AND "actorId"=$3
+      AND action='field.operation.recorded' AND "entityType"='Project'
+      AND metadata->>'version'='1' AND metadata->>'projectId'=$2 AND metadata->>'command'='CONFIGURE_SITE'
+      AND metadata->'outcome'->>'kind'='CONFIGURATION' AND metadata->'outcome'->>'recordedAt'=$4
+    LIMIT 3`,[member.organizationId,projectId,c.configuredBy,c.configuredAt])).rows;
+  // Two configurations can share the same millisecond. Hashes distinguish them;
+  // a third row is a sentinel: uniqueness beyond this bound cannot be proven.
+  if(!rows.length||rows.length>2)unavailable();
+  const matches=[];
+  for(const row of rows) {
+    const m=row.metadata,tokens=m?.outcome?.qrTokens;
+    if(!/^field_[a-f0-9]{64}$/.test(row.id||'')||row.organizationId!==member.organizationId||
+      row.actorId!==c.configuredBy||row.action!=='field.operation.recorded'||row.entityType!=='Project'||row.entityId!==projectId||
+      m?.version!==1||m.projectId!==projectId||m.command!=='CONFIGURE_SITE'||!/^[a-f0-9]{64}$/.test(m.requestDigest||'')||
+      m.outcome?.kind!=='CONFIGURATION'||m.outcome.recordedAt!==c.configuredAt||
+      !Array.isArray(tokens)||!tokens.length||tokens.length>20||
+      tokens.some(t=>!t||Object.keys(t).sort().join('|')!=='sectorId|token'||!workspaceId(t.sectorId)||!/^[a-f0-9]{64}$/.test(t.token||''))||
+      new Set(tokens.map(t=>t.sectorId)).size!==tokens.length)unavailable();
+    if(tokens.length===c.sectors.length&&tokens.every(token=>{
+      const sector=c.sectors.find(s=>s.id===token.sectorId);
+      return sector&&digest([projectId,sector.id,c.configRevision,token.token])===sector.qrHash;
+    }))matches.push(tokens);
+  }
+  if(matches.length!==1)unavailable();
+  const token=matches[0].find(t=>t.sectorId===sectorId);
+  if(!token)unavailable();
+  return token.token;
+}
 export function createFieldQrHandler({verify,workspace,toSvg}) {
   return async request=>{try{
-    const session=await identity(request,verify),params=new URL(request.url).searchParams,input=context(params,['sectorId','token']);
-    if(!workspaceId(params.get('sectorId'))||!/^[a-f0-9]{64}$/.test(params.get('token')||''))throw new WorkspaceError('FIELD_QR_INVALID');
-    await workspace.projectOperation(session,input,false,async(client,member,scope,project)=>{
+    const session=await identity(request,verify),params=new URL(request.url).searchParams,input=context(params,['sectorId','token','expectedConfigRevision']);
+    if(request.method!=='GET')return reply({code:'METHOD_NOT_ALLOWED'},405);
+    if(!workspaceId(params.get('sectorId'))||(params.has('token')&&!/^[a-f0-9]{64}$/.test(params.get('token')||'')))throw new WorkspaceError('FIELD_QR_INVALID');
+    if(params.has('token')?params.has('expectedConfigRevision'):!workspaceId(params.get('expectedConfigRevision')))throw new WorkspaceError('FIELD_QUERY_INVALID');
+    const token=await workspace.projectOperation(session,input,false,async(client,member,scope,project)=>{
       if(!canApproveProgress(member.role))throw new WorkspaceError('FIELD_PERMISSION_REQUIRED',403);
-      const c=project.metadata?.fieldOperations,sector=c?.sectors?.find(s=>s.id===params.get('sectorId'));
-      if(!sector||digest([input.projectId,sector.id,c.configRevision,params.get('token')])!==sector.qrHash)throw new WorkspaceError('FIELD_QR_INVALID',422);
+      const c=project.metadata?.fieldOperations;
+      if(!params.has('token')&&params.get('expectedConfigRevision')!==c?.configRevision)throw new WorkspaceError('FIELD_REVISION_CHANGED',409);
+      const sector=Array.isArray(c?.sectors)?c.sectors.find(s=>s.id===params.get('sectorId')):null;
+      if(!sector)throw new WorkspaceError('FIELD_QR_INVALID',422);
+      const selected=params.has('token')?params.get('token'):await currentConfigurationQrToken(client,member,input.projectId,c,sector.id);
+      if(digest([input.projectId,sector.id,c.configRevision,selected])!==sector.qrHash)throw new WorkspaceError('FIELD_QR_INVALID',422);
+      return selected;
     });
-    const payload=JSON.stringify({version:1,projectId:input.projectId,sectorId:params.get('sectorId'),token:params.get('token')});
+    const payload=JSON.stringify({version:1,projectId:input.projectId,sectorId:params.get('sectorId'),token});
     const svg=await toSvg(payload);
     return new Response(svg,{headers:{...fieldHeaders,'Content-Type':'image/svg+xml','Content-Disposition':'attachment; filename="qr-sector.svg"','Content-Security-Policy':"default-src 'none'; sandbox"}});
   }catch(error){return failed(error);}};

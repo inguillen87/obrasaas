@@ -142,8 +142,15 @@ export function createParticipantStore({workspace,connect,identity,upload,get}){
    catch(error){throw error instanceof WorkspaceError?error:new WorkspaceError('PARTICIPANT_INVITATION_UNCONFIRMED',503);}
   },
   status(session,context){participantContext(context);if(!operationId(context.operationId))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');return run(session,context,false,async(client,member,scope)=>{
-   const found=await receipt(client,member,participantReceiptId(member.actorId,context.projectId,context.operationId));if(found)return {scope,state:'RECORDED',...await currentOutcome(client,context.projectId,found,true,member.actorId)};
+   const found=await receipt(client,member,participantReceiptId(member.actorId,context.projectId,context.operationId));if(found){
+    if(found.metadata?.projectId!==context.projectId)throw new WorkspaceError('PARTICIPANT_RECEIPT_INVALID',409);
+    if(found.entityType==='TenantMembership'&&found.metadata.kind==='OFFICE_ROLE_CHANGED'){if(member.role!=='ADMIN')throw new WorkspaceError('WORKSPACE_ORGANIZATION_PERMISSION_REQUIRED',403);}
+    else if(found.entityType==='Worker'){if(!participantManager(member.role))await assertOwnParticipant(client,member,session,context.projectId,found.entityId);}
+    else throw new WorkspaceError('PARTICIPANT_RECEIPT_INVALID',409);
+    return {scope,state:'RECORDED',...await currentOutcome(client,context.projectId,found,true,member.actorId)};
+   }
    const pending=(await client.query(`SELECT ${columns} FROM public."Worker" WHERE "projectId"=$1 AND metadata->'participant'->'invitation'->>'operationId'=$2 AND metadata->'participant'->'invitation'->>'createdBy'=$3`,[context.projectId,context.operationId.toLowerCase(),member.actorId])).rows;
+   if(pending.length===1&&!participantManager(member.role))await assertOwnParticipant(client,member,session,context.projectId,pending[0].id);
    return {scope,state:pending.length===1?'INVITATION_UNCONFIRMED':'NOT_OBSERVED',definitive:false,...(pending.length===1?{participant:publicParticipant(pending[0])}:{})};
   });},
   async join(session,input,{accept=false}={}){

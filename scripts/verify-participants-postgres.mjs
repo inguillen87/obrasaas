@@ -11,7 +11,7 @@ import {WorkspaceError} from '../src/lib/workspace-policy.mjs';
 const url=new URL(process.env.CUTOVER_TEST_DATABASE_URL||'http://not-configured');
 assert.equal(process.env.CUTOVER_TEST_DISPOSABLE,'1');assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV);assert.ok(['127.0.0.1','localhost'].includes(url.hostname));assert.equal(url.pathname,'/obrasaas_cutover_ci');assert.equal(url.search,'');
 const database='obrasaas_participants_'+randomUUID().replaceAll('-','');assert.match(database,/^obrasaas_participants_[a-f0-9]{32}$/);
-const admin=new Client({connectionString:url.toString()});let pool,created=false;const checks=[];
+const admin=new Client({connectionString:url.toString()});let pool,created=false,engine;const checks=[];
 const session=(user,organization='org_A',role='org:member')=>({authenticated:true,verification:'clerk-production-jwt',userId:user,organizationId:organization,organizationRole:role});
 const owner=session('user_Owner','org_A','org:admin'),director=session('user_Director'),foreign=session('user_Foreign','org_B','org:admin'),workerSession=session('user_Worker');
 const providerInvitations=new Map();let sends=0,loseSend=false,putCount=0,failAudit=false,loseCommit=false,revokeProvider=false;
@@ -22,6 +22,7 @@ const get=async path=>{const item=objects.get(path);if(!item)return null;return 
 const uploader=createPrivateImageUploader({get,put:async(path,bytes,options)=>{assert.equal(options.access,'private');assert.equal(options.allowOverwrite,false);putCount++;objects.set(path,{bytes:Buffer.from(bytes),contentType:options.contentType});return {url:'https://fixture.private.blob.vercel-storage.com/'+path,pathname:path};},environment:()=>({PRIVATE_MEDIA_PROVIDER:'vercel-blob',BLOB_READ_WRITE_TOKEN:'synthetic-fixture-token'})});
 try{
  await admin.connect();await admin.query(`CREATE DATABASE "${database}"`);created=true;url.pathname='/'+database;pool=trackDisposablePool(new Pool({connectionString:url.toString(),max:8}));
+ engine={name:'PostgreSQL',...(await pool.query(`SELECT current_setting('server_version') AS version,current_setting('server_version_num') AS "versionNum"`)).rows[0]};
  await pool.query(`
   CREATE TYPE "MembershipStatus" AS ENUM('ACTIVE','INVITED','DISABLED');CREATE TYPE "TenantRole" AS ENUM('ADMIN','DIRECTOR','SITE_MANAGER','FINANCE','AUDITOR');CREATE TYPE "SystemRole" AS ENUM('TENANT_USER');
   CREATE TABLE "Organization"(id text PRIMARY KEY,name text NOT NULL,"clerkOrganizationId" text UNIQUE,metadata jsonb);
@@ -99,7 +100,8 @@ try{
  await pool.query(`UPDATE "TenantMembership" SET "tenantRole"='DIRECTOR' WHERE "userId"=(SELECT id FROM "PlatformUser" WHERE "clerkUserId"=$1)`,['user_Worker']);const selfReviewScope=(await workspace.list(workerSession)).scope;
  await assert.rejects(store.save(workerSession,command('REVIEW_KYC',{workerId:self.id,revision:pending.revision,submissionId:pending.kyc.submissionId,decision:'APPROVED',reason:'A responsible cannot approve their own identity.'},{scope:selfReviewScope})),{code:'PARTICIPANT_SELF_REVIEW_REJECTED'});
  await pool.query(`UPDATE "TenantMembership" SET "tenantRole"='AUDITOR' WHERE "userId"=(SELECT id FROM "PlatformUser" WHERE "clerkUserId"=$1)`,['user_Worker']);
- const approved=await store.save(director,command('REVIEW_KYC',{workerId:self.id,revision:pending.revision,submissionId:pending.kyc.submissionId,decision:'APPROVED',reason:'Synthetic responsible reviewed both private images.'},{scope:dir.scope}));assert.equal(approved.participant.kyc.status,'APPROVED');assert.equal(approved.participant.identityCertified,false);
+ const approvalInput=command('REVIEW_KYC',{workerId:self.id,revision:pending.revision,submissionId:pending.kyc.submissionId,decision:'APPROVED',reason:'Synthetic responsible reviewed both private images.'},{scope:dir.scope});
+ const approved=await store.save(director,approvalInput);assert.equal(approved.participant.kyc.status,'APPROVED');assert.equal(approved.participant.identityCertified,false);
  await assert.rejects(workspace.projectOperation(workerSession,personalContext,false,(client,member)=>assertFieldParticipant(client,member,workerSession,'p-a',self.id,{permission:'report',requireKyc:true})),{code:'PARTICIPANT_ACCESS_REQUIRED'});
  checks.push('personal-kyc-review-does-not-grant-report-permission-or-change-field-authorization');
  await assert.rejects(store.save(owner,command('REVIEW_KYC',{workerId:self.id,revision:pending.revision,submissionId:pending.kyc.submissionId,decision:'REJECTED',reason:'A stale decision must not overwrite the review.'})),{code:'PARTICIPANT_REVISION_CHANGED'});
@@ -170,8 +172,42 @@ try{
  checks.push('director-has-company-portfolio-site-manager-only-assigned-planning-and-finance-auditor-assigned-read-only');
  const disabledTarget=await officeCommand('SITE_MANAGER');membershipProofHook=()=>pool.query(`UPDATE "TenantMembership" SET status='DISABLED',"updatedAt"=clock_timestamp() WHERE id=$1`,[workerMembership]);await assert.rejects(store.save(owner,disabledTarget),{code:'PARTICIPANT_OFFICE_ROLE_PROTECTED'});assert.equal((await pool.query(`SELECT "tenantRole"::text AS role,status::text AS status FROM "TenantMembership" WHERE id=$1`,[workerMembership])).rows[0].role,'AUDITOR');await assert.rejects(workspace.list(workerSession),{code:'WORKSPACE_MEMBERSHIP_REQUIRED'});await pool.query(`UPDATE "TenantMembership" SET status='ACTIVE',"updatedAt"=clock_timestamp() WHERE id=$1`,[workerMembership]);
  checks.push('provider-preflight-cannot-bypass-canonical-membership-revocation-before-office-role-commit');
+ // Receipt ownership does not preserve the old company role. These actors keep
+ // active project assignments and obtain the NEW scope after every downgrade.
+ await pool.query(`INSERT INTO "ProjectMembership"(id,"projectId","tenantMembershipId",status) VALUES('director-receipt-pm','p-a','director-m','ACTIVE'),('owner-receipt-pm','p-a','owner-m','ACTIVE')`);
+ const receiptSnapshot=async()=>(await pool.query(`SELECT (SELECT jsonb_agg(t ORDER BY id) FROM "Worker" t) workers,(SELECT jsonb_agg(t ORDER BY id) FROM "AuditLog" t) audit,(SELECT jsonb_agg(t ORDER BY id) FROM "TenantMembership" t) memberships,(SELECT jsonb_agg(t ORDER BY id) FROM "ProjectMembership" t) projects,(SELECT jsonb_agg(t ORDER BY id) FROM "PlatformUser" t) users,(SELECT jsonb_agg(t ORDER BY id) FROM "Project" t) sites`)).rows;
+ const readReceipt=async(session,input)=>{const before=await receiptSnapshot();try{return await store.status(session,input);}finally{assert.deepEqual(await receiptSnapshot(),before,'Receipt recovery must not change canonical data');}};
+ const callsBeforeReceipt={sends,putCount};
+ assert.equal((await readReceipt(director,{projectId:'p-a',scope:dir.scope,operationId:approvalInput.operationId})).participant.id,self.id);
+ for(const role of ['SITE_MANAGER','AUDITOR']){
+  await pool.query(`UPDATE "TenantMembership" SET "tenantRole"=$1::"TenantRole","updatedAt"=clock_timestamp() WHERE id='director-m'`,[role]);const currentScope=(await workspace.list(director)).scope;assert.notEqual(currentScope,dir.scope);assert.deepEqual((await store.read(director,{projectId:'p-a',scope:currentScope})).records,[]);
+  await assert.rejects(readReceipt(director,{projectId:'p-a',scope:dir.scope,operationId:approvalInput.operationId}),{code:'WORKSPACE_CONTEXT_CHANGED'});
+  await assert.rejects(async()=>{const value=await readReceipt(director,{projectId:'p-a',scope:currentScope,operationId:approvalInput.operationId});console.log(JSON.stringify({syntheticReceiptProbe:{role,scopeRecalculated:true,state:value.state,otherWorkerId:value.participant?.id,invitationEmail:value.participant?.invitation?.email,kycReviewReason:value.participant?.kyc?.review?.reason}}));return value;},{code:'PARTICIPANT_ACCESS_REQUIRED'});
+ }
+ await pool.query(`UPDATE "TenantMembership" SET "tenantRole"='DIRECTOR',"updatedAt"=clock_timestamp() WHERE id='director-m'`);const restoredDirectorScope=(await workspace.list(director)).scope;
+ assert.equal((await readReceipt(director,{projectId:'p-a',scope:restoredDirectorScope,operationId:approvalInput.operationId})).receiptId,approved.receiptId);
+ checks.push('receipt-from-former-director-cannot-reveal-other-worker-kyc-after-downgrade-with-active-project-and-fresh-scope');
+ await pool.query(`UPDATE "Worker" SET metadata=jsonb_set(metadata,'{participant,permissions,report}','false'::jsonb) WHERE id='worker-a'`);
+ const ownReceiptContext={projectId:'p-a',scope:(await workspace.list(workerSession)).scope,operationId:kyc.operationId};const ownReceipt=await readReceipt(workerSession,ownReceiptContext);assert.equal(ownReceipt.state,'RECORDED');assert.equal(ownReceipt.participant.id,self.id);assert.equal(ownReceipt.participant.kyc.status,'APPROVED');assert.equal(ownReceipt.participant.permissions.report,false);
+ for(const change of ['REVOKED','INACTIVE']){await pool.query(change==='REVOKED'?`UPDATE "Worker" SET metadata=jsonb_set(metadata,'{participant,status}','"REVOKED"'::jsonb) WHERE id='worker-a'`:`UPDATE "Worker" SET active=false WHERE id='worker-a'`);await assert.rejects(readReceipt(workerSession,ownReceiptContext),{code:'PARTICIPANT_ACCESS_REQUIRED'});await pool.query(`UPDATE "Worker" SET active=true,metadata=jsonb_set(metadata,'{participant,status}','"ACTIVE"'::jsonb) WHERE id='worker-a'`);}
+ await pool.query(`UPDATE "ProjectMembership" SET status='DISABLED' WHERE "projectId"='p-a' AND "tenantMembershipId"=$1`,[workerMembership]);await assert.rejects(readReceipt(workerSession,ownReceiptContext),{code:'WORKSPACE_PROJECT_UNAVAILABLE'});await pool.query(`UPDATE "ProjectMembership" SET status='ACTIVE' WHERE "projectId"='p-a' AND "tenantMembershipId"=$1`,[workerMembership]);
+ assert.equal((await readReceipt(workerSession,ownReceiptContext)).receiptId,ownReceipt.receiptId);
+ checks.push('own-kyc-receipt-remains-recoverable-without-report-but-revalidates-active-worker-and-project-assignment');
+ const thirdForReceipt=(await store.read(owner,context)).records.find(value=>value.id==='worker-third'),pendingReceiptInput=command('INVITE',{workerId:thirdForReceipt.id,revision:thirdForReceipt.revision,email:'third@example.invalid'});loseSend=true;await assert.rejects(store.save(owner,pendingReceiptInput),{code:'PARTICIPANT_INVITATION_UNCONFIRMED'});loseSend=false;
+ assert.equal((await readReceipt(owner,{...context,operationId:pendingReceiptInput.operationId})).state,'INVITATION_UNCONFIRMED');
+ const callsBeforeDowngradedReceipt={sends,putCount};
+ for(const role of ['DIRECTOR','AUDITOR']){
+  await pool.query(`UPDATE "TenantMembership" SET "tenantRole"=$1::"TenantRole","updatedAt"=clock_timestamp() WHERE id='owner-m'`,[role]);const currentScope=(await workspace.list(owner)).scope;assert.notEqual(currentScope,context.scope);
+  await assert.rejects(readReceipt(owner,{projectId:'p-a',scope:currentScope,operationId:directorChange.operationId}),{code:'WORKSPACE_ORGANIZATION_PERMISSION_REQUIRED'});
+  if(role==='DIRECTOR')assert.equal((await readReceipt(owner,{projectId:'p-a',scope:currentScope,operationId:pendingReceiptInput.operationId})).state,'INVITATION_UNCONFIRMED');else await assert.rejects(readReceipt(owner,{projectId:'p-a',scope:currentScope,operationId:pendingReceiptInput.operationId}),{code:'PARTICIPANT_ACCESS_REQUIRED'});
+  const absent=await readReceipt(owner,{projectId:'p-a',scope:currentScope,operationId:randomUUID()});assert.deepEqual(absent,{scope:currentScope,state:'NOT_OBSERVED',definitive:false});
+ }
+ checks.push('office-role-receipt-requires-current-admin-and-pending-invitation-requires-current-participant-permission');
+ assert.deepEqual({sends,putCount},callsBeforeDowngradedReceipt);assert.equal(callsBeforeDowngradedReceipt.sends,callsBeforeReceipt.sends+1);assert.equal(callsBeforeDowngradedReceipt.putCount,callsBeforeReceipt.putCount);
+ await pool.query(`UPDATE "TenantMembership" SET "tenantRole"='ADMIN',"updatedAt"=clock_timestamp() WHERE id='owner-m'`);const currentAdminScope=(await workspace.list(owner)).scope;assert.equal((await readReceipt(owner,{projectId:'p-a',scope:currentAdminScope,operationId:directorChange.operationId})).account.membershipId,workerMembership);assert.equal((await readReceipt(owner,{projectId:'p-a',scope:currentAdminScope,operationId:pendingReceiptInput.operationId})).state,'INVITATION_UNCONFIRMED');
+ checks.push('receipt-consultation-preserves-read-only-snapshots-and-never-calls-identity-or-private-storage');
  await pool.query(`UPDATE "TenantMembership" SET status='DISABLED' WHERE id='director-m'`);await assert.rejects(store.read(director,{projectId:'p-a',scope:dir.scope}),{code:'WORKSPACE_MEMBERSHIP_REQUIRED'});
  checks.push('revocation-immediately-blocks-project-field-identity-download-and-invitation-replay');
  assert.equal((await pool.query('SELECT metadata FROM "Worker" WHERE id=$1',[self.id])).rows[0].metadata.unrelated,true);assert.deepEqual((await pool.query('SELECT metadata FROM "Project" WHERE id=$1',['p-a'])).rows[0].metadata,{retain:true});
- mkdirSync('.vercel/participants-evidence',{recursive:true});writeFileSync('.vercel/participants-evidence/postgres.json',JSON.stringify({validated:true,synthetic:true,realEmailDelivered:false,realIdentityAccepted:false,checks},null,2));console.log(JSON.stringify({validated:true,checks}));
+ mkdirSync('.vercel/participants-evidence',{recursive:true});writeFileSync('.vercel/participants-evidence/postgres.json',JSON.stringify({validated:true,engine,synthetic:true,realEmailDelivered:false,realIdentityAccepted:false,checks},null,2));console.log(JSON.stringify({validated:true,engine,checks}));
 }finally{try{await closeDisposablePool(pool);if(created)await admin.query(`DROP DATABASE "${database}"`);}finally{await admin.end();}}
