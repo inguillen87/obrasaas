@@ -114,9 +114,11 @@ try {
     assert.equal(identity.withinViewport,true,'Public identity must fit the viewport at '+width);
     assert.equal(identity.linesFit,true,'Public identity text must wrap at '+width);
     for(const text of publicIdentityText)assert.ok(identity.text.includes(text),'Public identity at '+width+': '+text);
+    const footerHeight=await page.$eval('footer',node=>node.getBoundingClientRect().height);
+    if(width<=768)assert.ok(footerHeight<=400,'Mobile footer must remain compact at '+width+': '+footerHeight+'px');
     assert.equal(await page.$$eval('footer a',links=>links.every(link=>link.getBoundingClientRect().height>=44)),true,'Footer touch targets at '+width);
     if([320,1280].includes(width))await (await page.$('footer')).screenshot({path:path.join(folder,`public-identity-${width}.png`)});
-    publicIdentityViewports.push({width,javascript:false,visible:true,withinViewport:true,textWraps:true,touchTargetsAtLeast44:true});
+    publicIdentityViewports.push({width,javascript:false,visible:true,withinViewport:true,textWraps:true,footerHeight,touchTargetsAtLeast44:true});
   }
   await page.setJavaScriptEnabled(true);
   await page.goto(base+'/api/health');
