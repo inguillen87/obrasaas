@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
-import {normalizePurchase,applyPurchase,purchaseTotal,purchaseDigest} from '../src/lib/site-purchase-policy.mjs';
+import {normalizePurchase,applyPurchase,purchaseTotal,purchaseDigest,purchaseReceiptId} from '../src/lib/site-purchase-policy.mjs';
 import {createSitePurchaseHandlers} from '../src/lib/site-purchase-http.mjs';
 const scope='a'.repeat(64),revision='2026-10-01T12:00:00.123456';
 const request={keep:{untouched:true},siteRegister:{version:1,type:'MATERIAL_REQUEST',state:'OPEN',quantity:'12.5',unit:'bolsa',stockChanged:false}};
@@ -65,4 +65,68 @@ test('HTTP rejects cross-origin and duplicate queries before touching the store'
  assert.equal(post.status,403);
  const get=await h.GET(new Request('https://obrasaas.com/api/identity/site-purchases?scope='+scope+'&projectId=p&projectId=p'));
  assert.equal(get.status,400);assert.equal(calls,0);assert.match(get.headers.get('cache-control'),/no-store/);
+});
+
+import {createSitePurchases} from '../src/lib/site-purchase-store.mjs';
+import {purchaseRecord,purchaseSnapshot,purchaseOutcome,purchaseRecordedOutcome,purchaseCanContinue} from '../src/app/(identity)/cuenta/site-purchase-view.mjs';
+import {createWorkspaceRecoveryJournal,recoveryQuery,recoveryResult} from '../src/app/(identity)/cuenta/workspace-recovery-journal.mjs';
+import {createWorkspaceRequestLifecycle} from '../src/app/(identity)/cuenta/workspace-request-lifecycle.mjs';
+function purchaseResultFixture(input=draft()){
+ const metadata=applyPurchase(request,input,'actor','2026-10-05T04:00:00Z'),order=metadata.procurement;
+ const record={id:'request-a',material:'Material de ensayo',requestedQuantity:'12.5',unit:'bolsa',sector:'Sector de ensayo',requestState:'OPEN',revision,order:{state:order.state,supplier:order.supplier,quantity:order.quantity,unitPrice:order.unitPrice,total:order.total,currency:order.currency,reference:order.reference,received:order.received,decision:null,receipts:[]}};
+ const id=purchaseReceiptId('actor',input);return {scope,projectId:input.projectId,state:'RECORDED',saved:true,definitive:true,replayed:true,receiptId:id,receipt:{id,operationId:input.operationId,requestId:input.payload.requestId,action:input.action},record};
+}
+test('purchase receipt is current-operation correlated and supports later record revisions',()=>{
+ const input=draft(),value=purchaseResultFixture(input);assert.equal(purchaseOutcome(value,input),value);value.record.revision='2026-10-05T04:10:00.123456';assert.equal(purchaseOutcome(value,input),value);
+ assert.equal(purchaseOutcome({scope,projectId:input.projectId,state:'NOT_OBSERVED',saved:false,definitive:false},input).state,'NOT_OBSERVED');
+});
+test('purchase POST requires a RECORDED outcome while GET may explicitly remain NOT_OBSERVED',()=>{
+ const input=draft(),pending={scope,projectId:input.projectId,state:'NOT_OBSERVED',saved:false,definitive:false};assert.equal(purchaseOutcome(pending,input),pending);assert.throws(()=>purchaseRecordedOutcome(pending,input),{code:'PURCHASE_RESULT_UNCONFIRMED'});const recorded=purchaseResultFixture(input);assert.equal(purchaseRecordedOutcome(recorded,input),recorded);
+});
+test('purchase POST NOT_OBSERVED keeps its exact reference until a later receipt GET without another POST',async()=>{
+ const values=new Map(),storage={get length(){return values.size;},key:i=>[...values.keys()][i]||null,getItem:k=>values.get(k)||null,setItem:(k,v)=>values.set(k,String(v)),removeItem:k=>values.delete(k)};
+ const journal=createWorkspaceRecoveryJournal({getStorage:()=>storage,withLock:(_name,_signal,callback)=>callback()}),input=draft(),recorded=purchaseResultFixture(input),methods=[];
+ const lifecycle=createWorkspaceRequestLifecycle(async()=>'synthetic-token',{journal,fetchImpl:async(_url,options)=>{methods.push(options.method||'GET');return Response.json(options.method==='POST'?{scope,projectId:input.projectId,state:'NOT_OBSERVED',saved:false,definitive:false}:recorded);}});
+ await assert.rejects(lifecycle.request('/api/identity/site-purchases',{method:'POST',body:JSON.stringify(input)},async response=>purchaseRecordedOutcome(await response.json(),input)),{code:'PURCHASE_RESULT_UNCONFIRMED'});
+ const [entry]=await journal.list(scope);assert.equal(entry.operationId,input.operationId);assert.equal(entry.projectId,input.projectId);assert.deepEqual(Object.keys(entry).sort(),['createdAt','operationId','projectId','resource','scope','version']);assert.deepEqual(methods,['POST']);
+ assert.equal((await lifecycle.request(recoveryQuery(entry),{},async response=>purchaseOutcome(await response.json(),entry))).receipt.id,recorded.receipt.id);assert.deepEqual(methods,['POST','GET']);assert.equal((await journal.list(scope)).length,0);lifecycle.abort();
+});
+for(const [name,change] of [
+ ['missing-record',v=>{delete v.record;}],['crossed-request',v=>{v.record.id='request-other';}],['missing-receipt',v=>{delete v.receipt;}],['bad-receipt-id',v=>{v.receiptId='not-a-receipt';v.receipt.id=v.receiptId;}],['crossed-operation',v=>{v.receipt.operationId=randomUUID();}],['crossed-action',v=>{v.receipt.action='CANCEL_ORDER';}],['malformed-action',v=>{v.receipt.action='APPROVE_TASK';}],['crossed-project',v=>{v.projectId='project-other';}],['crossed-scope',v=>{v.scope='b'.repeat(64);}],['malformed-order',v=>{v.record.order.receipts=null;}],
+])test('purchase consumer rejects '+name+' before durable ACK',()=>{const input=draft(),value=purchaseResultFixture(input);change(value);assert.throws(()=>purchaseOutcome(value,input));});
+test('purchase snapshot rejects duplicates and a targeted response cannot substitute another request',()=>{
+ const input=draft(),row=purchaseResultFixture(input).record,value={scope,projectId:input.projectId,records:[row],total:1,nextCursor:null};assert.equal(purchaseSnapshot(value,{...input,requestId:row.id}),value);
+ assert.throws(()=>purchaseSnapshot({...value,records:[row,row],total:2},input));assert.throws(()=>purchaseSnapshot(value,{...input,requestId:'request-other'}));
+ const tiny={...row,order:{...row.order,quantity:'0.001',unitPrice:'0.01',total:purchaseTotal('0.001','0.01')}};assert.equal(purchaseRecord(tiny),tiny);
+});
+test('purchase conflict review respects action, unit and current state without rewriting draft fields',()=>{
+ const input=draft(),row=purchaseResultFixture(input).record,editor={action:input.action,payload:input.payload,material:row.material,unit:row.unit};assert.equal(purchaseCanContinue(row,editor),true);
+ assert.equal(purchaseCanContinue({...row,order:{...row.order,state:'APPROVED'}},editor),false);assert.equal(purchaseCanContinue({...row,unit:'otra unidad'},editor),false);assert.equal(purchaseCanContinue({...row,requestState:'REJECTED'},editor),false);assert.equal(editor.payload.unitPrice,'123.45');
+});
+test('purchase journal keeps malformed POST and GET then retires only the valid global receipt',async()=>{
+ const values=new Map(),storage={get length(){return values.size;},key:i=>[...values.keys()][i]||null,getItem:k=>values.get(k)||null,setItem:(k,v)=>values.set(k,String(v)),removeItem:k=>values.delete(k)};
+ const journal=createWorkspaceRecoveryJournal({getStorage:()=>storage,withLock:(_name,_signal,callback)=>callback()}),input=draft(),valid=purchaseResultFixture(input);let calls=0;
+ const lifecycle=createWorkspaceRequestLifecycle(async()=>'synthetic-token',{journal,fetchImpl:async()=>{calls++;return Response.json({...valid,record:null});}});
+ await assert.rejects(lifecycle.request('/api/identity/site-purchases',{method:'POST',body:JSON.stringify(input)},async response=>purchaseOutcome(await response.json(),input)));
+ const [entry]=await journal.list(scope);assert.ok(entry);assert.deepEqual(Object.keys(entry).sort(),['createdAt','operationId','projectId','resource','scope','version']);assert.equal(recoveryResult(entry,{...valid,record:null}),null);
+ await journal.observe(recoveryQuery(entry),{...valid,record:null});assert.equal((await journal.list(scope)).length,1);
+ await journal.observe(recoveryQuery(entry),valid);assert.equal((await journal.list(scope)).length,0);assert.equal(calls,1);lifecycle.abort();
+});
+function purchaseStoreFixture(input=draft(),alter=()=>{}){
+ const result=purchaseResultFixture(input),row={id:result.record.id,title:result.record.material,revision,metadata:{siteRegister:{...request.siteRegister,sector:result.record.sector},procurement:applyPurchase(request,input,'actor','2026-10-05T04:00:00Z').procurement}},found={id:result.receiptId,entityType:'Incident',entityId:row.id,metadata:{version:1,projectId:input.projectId,requestDigest:purchaseDigest(input),command:input.action,before:null,after:row.metadata.procurement}};
+ alter(found,row);const calls=[];
+ const client={query:async(sql,params)=>{calls.push({sql,params});if(sql.includes('FROM public."AuditLog"'))return {rows:[found]};if(sql.includes('FROM public."Incident"'))return {rows:params[0]===row.id&&params[1]===input.projectId?[row]:[]};throw new Error('Unexpected or mutating fixture query');}};
+ const workspace={integrationProject:async(_session,context,writable,callback)=>{assert.equal(writable,false);return callback(client,{actorId:'actor',organizationId:'company-a'},context.scope);}};
+ return {store:createSitePurchases({workspace}),input,calls,found};
+}
+test('purchase legacy version-one AuditLog produces minimal receipt without inventing stored operation metadata',async()=>{
+ const fixture=purchaseStoreFixture(),result=await fixture.store.status({},fixture.input);assert.equal(result.state,'RECORDED');assert.equal(result.receipt.operationId,fixture.input.operationId);assert.equal(fixture.found.metadata.operationId,undefined);assert.deepEqual(Object.keys(result.receipt).sort(),['action','id','operationId','requestId']);assert.ok(!JSON.stringify(result.receipt).includes('supplier'));purchaseOutcome(result,fixture.input);
+});
+for(const [name,alter] of [
+ ['wrong-entity-type',found=>{found.entityType='Worker';}],['malformed-entity-id',found=>{found.entityId='../other';}],['crossed-entity-id',found=>{found.entityId='request-other';}],['wrong-version',found=>{found.metadata.version=2;}],['wrong-project',found=>{found.metadata.projectId='project-other';}],['malformed-action',found=>{found.metadata.command='OTHER_ENGINE';}],['crossed-valid-action',found=>{found.metadata.command='CANCEL_ORDER';}],['malformed-digest',found=>{found.metadata.requestDigest='not-a-digest';}],['wrong-receipt-id',found=>{found.id='purchase_'+'b'.repeat(64);}]
+])test('purchase AuditLog fails closed for '+name,async()=>{const fixture=purchaseStoreFixture(draft(),alter);await assert.rejects(fixture.store.status({},fixture.input),{code:'PURCHASE_RECEIPT_INTEGRITY'});assert.ok(!fixture.calls.some(call=>/^(UPDATE|INSERT|DELETE)/.test(call.sql)));});
+test('purchase directed GET rejects ambiguous or invalid keys before the canonical store',async()=>{
+ let calls=0;const h=createSitePurchaseHandlers({verify:async()=>({authenticated:true,verification:'clerk-production-jwt',userId:'user_Test',organizationId:'org_Test',organizationRole:'org:admin'}),store:{list:async(_session,context)=>{calls++;assert.equal(context.requestId,'request-a');return {scope,projectId:context.projectId,records:[],total:0,nextCursor:null};},status:()=>{throw new Error('Unexpected receipt read');}}});
+ for(const extra of ['requestId=../x','requestId=request-a&after=request-b','requestId=request-a&operationId='+randomUUID(),'requestId=request-a&requestId=request-a']){const response=await h.GET(new Request('https://obrasaas.com/api/identity/site-purchases?'+new URLSearchParams({scope,projectId:'project-a'})+'&'+extra));assert.equal(response.status,400);assert.match(response.headers.get('cache-control'),/no-store/);}
+ assert.equal(calls,0);const response=await h.GET(new Request('https://obrasaas.com/api/identity/site-purchases?'+new URLSearchParams({scope,projectId:'project-a',requestId:'request-a'})));assert.equal(response.status,200);assert.equal(calls,1);
 });

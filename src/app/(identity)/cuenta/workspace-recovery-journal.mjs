@@ -1,4 +1,5 @@
 import {createBrowserRecoveryStorage} from './workspace-recovery-storage.mjs';
+import {purchaseOutcome} from './site-purchase-view.mjs';
 
 // Receipt references only. Never persist commands, tokens, files, location or messages.
 export const RECOVERY_EVENT = 'obrasaas:pending-receipts';
@@ -71,6 +72,9 @@ export function recoveryResult(entry, result) {
     const receipt=result.receipt;
     if(result.state==='RECORDED'&&result.saved===true&&result.identityCertified===false&&result.productionVerified===false&&id(receipt?.id)&&receipt.operationId===entry.operationId&&id(receipt.workerId)&&id(receipt.channelId)&&['PREPARE','REQUEST_CHALLENGE','UNLINK','REVOKE'].includes(receipt.action))return {state:'RECORDED',receiptId:receipt.id};
     return null;
+  }
+  if(entry.resource==='site-purchases'){
+    try{purchaseOutcome(result,entry);return result.state==='RECORDED'?{state:'RECORDED',receiptId:result.receiptId}:{state:'NOT_OBSERVED'};}catch{return null;}
   }
   if(entry.resource==='constructor-crm'){
     if(result.projectId!==entry.projectId)return null;
@@ -175,6 +179,7 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
       // A general Meta snapshot is not a receipt for this operation.
       if(entry.resource==='meta-onboarding')return;
       if(entry.resource==='template-send'){if(['ACCEPTED','STATUS_OBSERVED','REJECTED'].includes(recoveryResult(entry,result)?.state))await remove(entry);return;}
+      if(entry.resource==='site-purchases'){if(recoveryResult(entry,result)?.state==='RECORDED')await remove(entry);return;}
       if(entry.resource==='constructor-crm'){if(recoveryResult(entry,result)?.state==='RECORDED')await remove(entry);return;}
       if(result?.scope===entry.scope&&(result.projectId===undefined||result.projectId===entry.projectId)&&(result.saved===true||result.created===true)&&(result.receiptId||result.receipt?.id))await remove(entry);
     },

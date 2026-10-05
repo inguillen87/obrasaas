@@ -137,3 +137,11 @@ variables de configuración demuestra Advanced Access o el alta de cualquier
 cliente. MuniControl no forma parte de este bloque.
 
 El bloque posterior de [recordatorio autorizado de jornada](./manual-template-reminder.md) agrega un envío manual específico con consentimiento, reserva durable y estados firmados; su implementación y publicación se acreditan por separado.
+
+## Compras: autorización vigente, recibo y conflicto
+
+Un resultado de compra se confirma antes de retirar la referencia del navegador: ámbito, obra, UUID, recibo durable, acción y pedido deben coincidir. El recibo mínimo se obtiene de AuditLog versión1 existente, actor/organización y operación determinista; no requiere migrar metadata histórica ni crear otro motor. Un cuerpo incompleto o cruzado conserva la referencia y no habilita un segundo envío. La recuperación global aplica la misma validación después de recargar.
+
+Una denegación vigente oculta proveedores, importes, entregas, decisión y borrador. Sólo queda la referencia mínima del intento ya despachado. «Cerrar consulta y conservar referencia» permite volver a consultar el contexto sin hacer ACK; un borrador ocultado no se reconstruye ni reenvía. La falta de token antes de despachar sigue conservando el borrador local y no crea un recibo ficticio.
+
+Ante conflicto, «Consultar pedido vigente» usa GET requestId de un solo pedido autorizado, sin barrer páginas. Conserva campos y motivo, compara estado/importe vigente y exige «Revisé el pedido vigente y quiero continuar». La nueva decisión usa un UUID nuevo y la revisión consultada. Si la transición dejó de ser válida, no se habilita confirmar la acción anterior. requestId es mutuamente excluyente con after/operationId; la frontera canónica por actor/empresa/obra no cambia.
