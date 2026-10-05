@@ -17,7 +17,8 @@ test('accepts the actual canonical empty/prepared DTO, without certifying a stor
  assert.equal(result.readiness.operational,false);assert.equal(result.readiness.canLaunchMeta,false);
 });
 test('rejects a wrong project/scope, foreign prepared profile and incomplete options before acknowledgment',()=>{
- for(const result of [{...snapshot(),scope:'b'.repeat(64)},{...snapshot(),projectId:'other'},{...snapshot(),profile:{...profile(),initialProjectId:'other'}},{...snapshot(),options:{}}])assert.throws(()=>customerWhatsAppResult(result,context),invalid);
+ for(const result of [{...snapshot(),scope:'b'.repeat(64)},{...snapshot(),projectId:'other'}])assert.throws(()=>customerWhatsAppResult(result,context),{code:'WORKSPACE_CONTEXT_CHANGED',status:409});
+ for(const result of [{...snapshot(),profile:{...profile(),initialProjectId:'other'}},{...snapshot(),options:{}}])assert.throws(()=>customerWhatsAppResult(result,context),invalid);
 });
 test('rejects forged preparation readiness and malformed revisions',()=>{
  for(const result of [{...snapshot(),readiness:{...snapshot().readiness,operational:true}},{...snapshot(),readiness:{...snapshot().readiness,canLaunchMeta:true}},{...snapshot(),profile:{...profile(),revision:'1'}},{...snapshot(),profile:{...profile(),configured:false}}])assert.throws(()=>customerWhatsAppResult(result,context),invalid);
@@ -44,7 +45,9 @@ test('a malformed dispatched POST and malformed recovery GET preserve the exact 
  const journal=createWorkspaceRecoveryJournal({getStorage:()=>storage});let posts=0,gets=0,response={...recorded(),projectId:'foreign'};
  const lifecycle=createWorkspaceRequestLifecycle(async()=>'controlled-token',{journal,fetchImpl:async(_url,options)=>{options.method==='POST'?posts++:gets++;return Response.json(response);}});
  const consume=kind=>async result=>customerWhatsAppResult(await result.json(),context,{kind,command});
- await assert.rejects(lifecycle.request('/api/identity/whatsapp-setup',{method:'POST',body:JSON.stringify(command)},consume('save')),invalid);
+ let retainedError;
+ await lifecycle.request('/api/identity/whatsapp-setup',{method:'POST',body:JSON.stringify(command)},async result=>{try{return customerWhatsAppResult(await result.json(),context,{kind:'save',command});}catch(error){retainedError=error;return undefined;}});
+ assert.equal(retainedError.code,'WORKSPACE_CONTEXT_CHANGED');assert.equal(retainedError.status,409);
  const entries=await journal.list(context.scope);assert.equal(entries.length,1);assert.equal(entries[0].operationId,operationId);assert.equal(JSON.stringify([...rows]).includes(command.profile.assistantName),false);assert.equal(JSON.stringify([...rows]).includes('controlled-token'),false);
  response={...recorded(),receipt:{id:'invalid',savedRevision:1}};
  await assert.rejects(lifecycle.request(recoveryQuery(entries[0]),{},consume('status')),invalid);assert.equal((await journal.list(context.scope)).length,1);
@@ -56,6 +59,6 @@ test('next-step copy reuses canonical dedicated/coexistence/transfer policy, wit
  for(const numberMode of ['BUSINESS_APP','EXISTING_API']){const next=customerWhatsAppNextStep({...profile(),numberMode},context.projectId);assert.equal(next.requiresAssistance,true);assert.match(next.message,/coexistencia|traspaso/);}
 });
 test('only authentication/authorization/context failures require hiding the private current view',()=>{
- for(const error of [{status:401},{status:403},{code:'WORKSPACE_CONTEXT_CHANGED'}])assert.equal(customerWhatsAppAccessDenied(error),true);
- for(const error of [{status:409,code:'WORKSPACE_CONFLICT'},{status:503},new Error('Network')])assert.equal(customerWhatsAppAccessDenied(error),false);
+ for(const error of [{status:401},{status:403},{code:'WORKSPACE_CONTEXT_CHANGED'},{status:404,code:'WORKSPACE_PROJECT_UNAVAILABLE'},{code:'WORKSPACE_MEMBERSHIP_REQUIRED'}])assert.equal(customerWhatsAppAccessDenied(error),true);
+ for(const error of [{status:409,code:'WORKSPACE_CONFLICT'},{status:404,code:'META_CUSTOMER_INBOX_UNAVAILABLE'},{status:503},new Error('Network')])assert.equal(customerWhatsAppAccessDenied(error),false);
 });

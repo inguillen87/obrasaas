@@ -4,11 +4,19 @@ import {useWorkspaceRequest} from './workspace-request-lifecycle';
 import {customerWhatsAppAccessDenied,customerWhatsAppNextStep,customerWhatsAppResult} from './customer-whatsapp-view.mjs';
 import styles from './customer-whatsapp-panel.module.css';
 const endpoint='/api/identity/whatsapp-setup';
-const messages={WORKSPACE_INTEGRATION_PERMISSION_REQUIRED:'Tu rol actual no permite configurar el WhatsApp de esta empresa.',WORKSPACE_MEMBERSHIP_REQUIRED:'La pertenencia a esta empresa no está vigente.',WORKSPACE_CONTEXT_CHANGED:'Cambió el contexto de tu organización. Volvé a abrir la obra.',WORKSPACE_CONFLICT:'La preparación cambió mientras editabas. Tu borrador se conserva; consultá la versión actual antes de volver a guardar.',WORKSPACE_INTEGRITY:'La preparación anterior requiere revisión. No la reemplazamos por un ejemplo.',WORKSPACE_INVALID:'Revisá el nombre, el tipo de número y los circuitos elegidos.',WORKSPACE_PROJECT_MISMATCH:'La preparación no pertenece a la obra abierta.',WHATSAPP_PREPARATION_OPERATION_CONFLICT:'La clave de este intento ya pertenece a otra solicitud.',SESSION_REQUIRED:'Tu sesión terminó. Volvé a ingresar.'};
+const messages={WORKSPACE_INTEGRATION_PERMISSION_REQUIRED:'Tu rol actual no permite configurar el WhatsApp de esta empresa.',WORKSPACE_MEMBERSHIP_REQUIRED:'La pertenencia a esta empresa no está vigente.',WORKSPACE_CONTEXT_CHANGED:'Cambió el contexto de tu organización. Volvé a abrir la obra.',WORKSPACE_PROJECT_UNAVAILABLE:'La obra ya no está disponible con tu acceso actual. Volvé a consultar cuando se restablezca.',WORKSPACE_CONFLICT:'La preparación cambió mientras editabas. Tu borrador se conserva; consultá la versión actual antes de volver a guardar.',WORKSPACE_INTEGRITY:'La preparación anterior requiere revisión. No la reemplazamos por un ejemplo.',WORKSPACE_INVALID:'Revisá el nombre, el tipo de número y los circuitos elegidos.',WORKSPACE_PROJECT_MISMATCH:'La preparación no pertenece a la obra abierta.',WHATSAPP_PREPARATION_OPERATION_CONFLICT:'La clave de este intento ya pertenece a otra solicitud.',SESSION_REQUIRED:'Tu sesión terminó. Volvé a ingresar.'};
 const explain=code=>messages[code]||'No se pudo confirmar la preparación. No se modificó ninguna cuenta de Meta.';
 const stateLabel=value=>({SAVED:'Guardado',PENDING:'Pendiente',NOT_VERIFIED:'Sin verificar',RECORD_PRESENT:'Registro existente; operación no verificada',NOT_LINKED:'Sin vincular'}[value]||'Sin verificar');
 async function api(sessionRequest,url,options,validate){
- return sessionRequest(url,options,async result=>{const data=await result.json();if(!result.ok){const error=new Error(explain(data.code));error.status=result.status;error.code=data.code;throw error;}return validate(data);});
+ let retainedError;
+ const value=await sessionRequest(url,options,async result=>{
+  if(!result.ok){let data;try{data=await result.json();}catch{/* HTML access denials must preserve the HTTP status. */}const code=data?.code||(result.status===401?'SESSION_REQUIRED':undefined),error=Object.assign(new Error(messages[code]||(result.status===403?'Tu acceso no permite preparar esta conexión. Volvé a consultar cuando se restablezca.':explain(code))),{status:result.status,code});
+   // Resolve without a receipt so the existing journal keeps a dispatched attempt.
+   if(options?.method==='POST'&&customerWhatsAppAccessDenied(error)){retainedError=Object.assign(error,{retainAttempt:true});return undefined;}throw error;
+  }
+  try{return validate(await result.json());}catch(error){if(options?.method==='POST'){retainedError=Object.assign(error,{retainAttempt:true});return undefined;}throw error;}
+ });
+ if(retainedError)throw retainedError;return value;
 }
 const empty=()=>({assistantName:'',numberMode:'',useCases:[],confirmOwnership:false});
 const draftFrom=profile=>({assistantName:profile.assistantName,numberMode:profile.numberMode||'',useCases:[...profile.useCases],confirmOwnership:false});
@@ -51,8 +59,8 @@ function CustomerWhatsAppPreparation({projectId,scope,onPending,getSessionToken}
   try{const result=await api(sessionRequest,endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),requestTimeoutMs:20000},result=>valid(result,'save',payload));if(alive())finish(result);}
   catch(error){if(alive()){
    if(customerWhatsAppAccessDenied(error))hideDenied();
-   if(error.requestDispatched===false||error.status&&error.status<500){if(!retrying)setAttempt(null);if(error.code==='WORKSPACE_CONFLICT'&&!retrying){setRevisionReview({previousRevision:currentData.profile.revision,currentRevision:null,profile:null});setReviewed(false);}setMessage(error.message);}
-   else setMessage('El guardado quedó sin confirmar. Conservamos este intento: comprobalo antes de reenviar.');
+    if(!error.retainAttempt&&(error.requestDispatched===false||error.status&&error.status<500)){if(!retrying)setAttempt(null);if(error.code==='WORKSPACE_CONFLICT'&&!retrying){setRevisionReview({previousRevision:currentData.profile.revision,currentRevision:null,profile:null});setReviewed(false);}setMessage(error.message);}
+    else setMessage(customerWhatsAppAccessDenied(error)?error.message+' El guardado sigue sin confirmar. Comprobá el mismo intento cuando se restablezca tu acceso.':'El guardado quedó sin confirmar. Conservamos este intento: comprobalo antes de reenviar.');
   }}finally{if(alive())setBusy(false);}
  }
  async function save(event){
@@ -78,7 +86,7 @@ function CustomerWhatsAppPreparation({projectId,scope,onPending,getSessionToken}
   <p className={styles.intro}>Prepará la conexión desde tu cuenta. No tenés que compartir tokens, contraseñas ni claves con ObraSaaS. La autorización y el estado del número se consultan en Meta.</p>
   <p role="status" aria-live="polite" className={message?styles.notice:styles.silent}>{message}</p>
   {busy&&!currentData&&<p>Consultando la preparación de esta obra…</p>}
-  {currentAttempt&&!currentData&&<div className={styles.recovery}><p>Hay un intento sin confirmar. Podés consultar su recibo con tu acceso vigente; los datos anteriores no se muestran.</p><button type="button" disabled={busy} onClick={recover}>Comprobar preparación</button></div>}
+   {currentAttempt&&(!currentData||!currentAttempt.profile)&&<div className={styles.recovery}><p>Hay un intento sin confirmar. Consultá su recibo con tu acceso vigente; no reconstruimos ni reenviamos los datos ocultados.</p><button type="button" disabled={busy} onClick={recover}>Comprobar preparación</button><button type="button" disabled={busy} onClick={()=>{setAttempt(null);setMessage('Cerraste esta consulta. La referencia sigue en Operaciones por comprobar; no se declaró perdido el guardado ni se reenvió.');}}>Cerrar consulta y conservar referencia</button></div>}
   {opened&&currentData&&<>
    <div className={styles.context}><strong>{currentData.companyName}</strong><span>{currentData.projectName}</span></div>
    {revisionReview&&<section className={styles.review} aria-labelledby="wa-revision-review"><h4 id="wa-revision-review">Revisá el cambio antes de guardar</h4><p>Tu edición sigue en el formulario. {revisionReview.currentRevision===null?'Falta consultar la versión actual.':`La preparación pasó de la revisión ${revisionReview.previousRevision} a la revisión ${revisionReview.currentRevision}.`}</p>

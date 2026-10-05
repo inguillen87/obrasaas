@@ -271,6 +271,50 @@ try{
   const secondaryMembership=(await workspace.list(secondarySession)),secondaryCurrent=(await store.read(secondarySession,{projectId:'p-a',scope:secondaryMembership.scope})).records[0];assert.equal(secondaryCurrent.kyc.status,'NOT_SUBMITTED');assert.equal(secondaryMembership.role,'AUDITOR');assert.equal(secondaryMembership.canPlanSchedule,false);assert.equal(secondaryMembership.canManageIntegrations,false);
   await assert.rejects(workspace.projectOperation(secondarySession,{projectId:'p-a',scope:secondaryMembership.scope},false,(client,member)=>assertFieldParticipant(client,member,secondarySession,'p-a',secondaryInvite.workerId,{requireKyc:true})),{code:'PARTICIPANT_KYC_REVIEW_REQUIRED'});
   checks.push('secondary-email-selection-does-not-approve-kyc-or-expand-canonical-office-and-field-permissions');
+ // Own KYC POST recovery has the same current participation boundary as GET
+ // recovery and downloads, even when the company office assignment stays active.
+ // PostgreSQL transactions are real; these preaccepted actors and image storage
+ // are synthetic and do not contact an identity or storage provider.
+ let replayFixtureIndex=0;
+ const replayFixture=async(label,role)=>{
+  replayFixtureIndex++;const actorId='kyc-replay-'+label,userId='user_KycReplay'+label,membershipId=actorId+'-m',workerId=actorId+'-w',actor=session(userId),part={version:1,status:'ACTIVE',clerkUserId:userId,permissions:{attendance:true,report:false},kyc:{version:1,status:'NOT_SUBMITTED'}};
+  await pool.query(`INSERT INTO "PlatformUser"(id,"clerkUserId","primaryEmail") VALUES($1,$2,$3)`,[actorId,userId,'kyc-replay-'+label.toLowerCase()+'@example.invalid']);
+  await pool.query(`INSERT INTO "TenantMembership"(id,"organizationId","userId","tenantRole","clerkRole",status) VALUES($1,'company-a',$2,$3::"TenantRole",'org:member','ACTIVE')`,[membershipId,actorId,role]);
+  await pool.query(`INSERT INTO "ProjectMembership"(id,"projectId","tenantMembershipId",status) VALUES($1,'p-a',$2,'ACTIVE')`,[actorId+'-pm',membershipId]);
+  await pool.query(`INSERT INTO "Worker"(id,"projectId",name,phone,metadata,"updatedAt") VALUES($1,'p-a',$2,$3,$4::jsonb,clock_timestamp())`,[workerId,'Synthetic replay '+label,'+549119000'+String(replayFixtureIndex).padStart(4,'0'),JSON.stringify({siteRegister:{version:1},participant:part})]);
+  const actorWorkspace=await workspace.list(actor),actorContext={projectId:'p-a',scope:actorWorkspace.scope},row=(await store.read(actor,actorContext)).records.find(value=>value.id===workerId);
+  const input={...actorContext,operationId:randomUUID(),workerId,revision:row.revision,noticeVersion:PARTICIPANT_NOTICE_VERSION,consent:true,front:picture,selfie:picture};
+  return {actor,actorId,membershipId,workerId,role,context:actorContext,input};
+ };
+ const approveReplay=async f=>{const row=(await store.read(owner,context)).records.find(value=>value.id===f.workerId);return store.save(owner,command('REVIEW_KYC',{workerId:row.id,revision:row.revision,submissionId:row.kyc.submissionId,decision:'APPROVED',reason:'Synthetic responsible reviewed both private replay-fixture images.'}));};
+ const changeReplay=async(f,change)=>{if(change==='REVOKED'){const row=(await store.read(owner,context)).records.find(value=>value.id===f.workerId);await store.save(owner,command('REVOKE',{workerId:row.id,revision:row.revision,reason:'Synthetic field participation ended while office assignment remained active.'}));}else await pool.query(`UPDATE "Worker" SET active=false,"updatedAt"=clock_timestamp() WHERE id=$1`,[f.workerId]);};
+ const assertOfficePreserved=async f=>{const current=await workspace.list(f.actor);assert.equal(current.role,f.role);assert.equal(current.scope,f.context.scope);assert.ok(current.projects.some(value=>value.id==='p-a'));assert.equal((await pool.query(`SELECT status::text AS status FROM "ProjectMembership" WHERE "tenantMembershipId"=$1 AND "projectId"='p-a'`,[f.membershipId])).rows[0].status,'ACTIVE');};
+ const guardedReplayStore=()=>{const calls={uploads:0,downloads:0};return {calls,store:createParticipantStore({workspace,connect,identity,upload:async(...args)=>{calls.uploads++;return uploader.uploadImageToBlob(...args);},get:async(...args)=>{calls.downloads++;return get(...args);}})};};
+ for(const [label,role,change]of[['CachedRevoked','SITE_MANAGER','REVOKED'],['CachedInactive','FINANCE','INACTIVE']]){
+  const f=await replayFixture(label,role),submitted=await store.submitKyc(f.actor,f.input);await approveReplay(f);
+  const guarded=guardedReplayStore(),beforeReplay=await receiptSnapshot(),replayed=await guarded.store.submitKyc(f.actor,f.input);
+  assert.equal(replayed.receiptId,submitted.receiptId);assert.equal(replayed.replayed,true);assert.equal(replayed.participant.kyc.status,'APPROVED');assert.notEqual(replayed.participant.revision,f.input.revision);assert.equal(replayed.participant.permissions.report,false);assert.ok(!JSON.stringify(replayed).includes('.private.blob.'));assert.deepEqual(await receiptSnapshot(),beforeReplay);assert.deepEqual(guarded.calls,{uploads:0,downloads:0});
+  checks.push('cached-own-active-'+role.toLowerCase().replace('_','-')+'-kyc-replay-preserves-approved-revision-and-receipt-without-report-or-effects');
+  if(change==='REVOKED'){
+   const originalReceipt=(await pool.query(`SELECT "entityId","entityType",metadata FROM "AuditLog" WHERE id=$1`,[submitted.receiptId])).rows[0];
+   for(const patch of [{entityId:'worker-second'},{entityType:'TenantMembership'},{metadata:{...originalReceipt.metadata,kind:'REVIEW_KYC'}},{metadata:{...originalReceipt.metadata,projectId:'p-a2'}}]){
+    await pool.query(`UPDATE "AuditLog" SET "entityId"=$2,"entityType"=$3,metadata=$4::jsonb WHERE id=$1`,[submitted.receiptId,patch.entityId||originalReceipt.entityId,patch.entityType||originalReceipt.entityType,JSON.stringify(patch.metadata||originalReceipt.metadata)]);const before=await receiptSnapshot();await assert.rejects(guarded.store.submitKyc(f.actor,f.input),{code:'PARTICIPANT_RECEIPT_INVALID'});assert.deepEqual(await receiptSnapshot(),before);assert.deepEqual(guarded.calls,{uploads:0,downloads:0});
+    await pool.query(`UPDATE "AuditLog" SET "entityId"=$2,"entityType"=$3,metadata=$4::jsonb WHERE id=$1`,[submitted.receiptId,originalReceipt.entityId,originalReceipt.entityType,JSON.stringify(originalReceipt.metadata)]);
+   }
+   checks.push('cached-kyc-replay-rejects-wrong-worker-entity-type-kind-and-project-before-reading-current-outcome');
+  }
+  await changeReplay(f,change);await assertOfficePreserved(f);const deniedSnapshot=await receiptSnapshot(),oldPuts=putCount;
+  await assert.rejects(guarded.store.status(f.actor,{...f.context,operationId:f.input.operationId}),{code:'PARTICIPANT_ACCESS_REQUIRED'});await assert.rejects(guarded.store.downloadKyc(f.actor,{...f.context,workerId:f.workerId,imageId:'selfie'}),{code:'PARTICIPANT_ACCESS_REQUIRED'});await assert.rejects(guarded.store.submitKyc(f.actor,f.input),{code:'PARTICIPANT_ACCESS_REQUIRED'});
+  assert.deepEqual(await receiptSnapshot(),deniedSnapshot);assert.deepEqual(guarded.calls,{uploads:0,downloads:0});assert.equal(putCount,oldPuts);
+  checks.push('cached-kyc-replay-denies-'+change.toLowerCase()+'-'+role.toLowerCase().replace('_','-')+'-with-office-scope-preserved-and-zero-database-or-storage-effects');
+ }
+ for(const [label,role,change]of[['RaceRevoked','SITE_MANAGER','REVOKED'],['RaceInactive','FINANCE','INACTIVE'],['RaceActive','SITE_MANAGER','ACTIVE']]){
+  const f=await replayFixture(label,role);let attempts=0,publishedReceipt,beforeFinal;
+  const raceStore=createParticipantStore({workspace,connect,identity,get,upload:async(...args)=>{attempts++;const uploaded=await uploader.uploadImageToBlob(...args);if(attempts===2){publishedReceipt=await store.submitKyc(f.actor,f.input);await approveReplay(f);if(change!=='ACTIVE')await changeReplay(f,change);await assertOfficePreserved(f);beforeFinal=await receiptSnapshot();}return uploaded;}});
+  if(change==='ACTIVE'){const value=await raceStore.submitKyc(f.actor,f.input);assert.equal(value.replayed,true);assert.equal(value.receiptId,publishedReceipt.receiptId);assert.equal(value.participant.kyc.status,'APPROVED');assert.notEqual(value.participant.revision,f.input.revision);assert.equal(value.participant.permissions.report,false);assert.ok(!JSON.stringify(value).includes('.private.blob.'));checks.push('concurrent-prior-own-active-kyc-replay-retains-original-receipt-after-revision-and-human-review-change');}
+  else{await assert.rejects(raceStore.submitKyc(f.actor,f.input),{code:'PARTICIPANT_ACCESS_REQUIRED'});await assert.rejects(store.status(f.actor,{...f.context,operationId:f.input.operationId}),{code:'PARTICIPANT_ACCESS_REQUIRED'});await assert.rejects(store.downloadKyc(f.actor,{...f.context,workerId:f.workerId,imageId:'selfie'}),{code:'PARTICIPANT_ACCESS_REQUIRED'});checks.push('concurrent-prior-kyc-replay-denies-'+change.toLowerCase()+'-'+role.toLowerCase().replace('_','-')+'-after-permitted-storage-preflight-with-zero-final-transaction-effects');}
+  assert.equal(attempts,2);assert.deepEqual(await receiptSnapshot(),beforeFinal);assert.equal((await pool.query(`SELECT count(*)::int AS n FROM "AuditLog" WHERE "actorId"=$1 AND "entityId"=$2 AND action='participant.operation.recorded' AND metadata->>'kind'='KYC_SUBMITTED'`,[f.actorId,f.workerId])).rows[0].n,1);
+ }
  assert.equal((await pool.query('SELECT metadata FROM "Worker" WHERE id=$1',[self.id])).rows[0].metadata.unrelated,true);assert.deepEqual((await pool.query('SELECT metadata FROM "Project" WHERE id=$1',['p-a'])).rows[0].metadata,{retain:true});
  mkdirSync('.vercel/participants-evidence',{recursive:true});writeFileSync('.vercel/participants-evidence/postgres.json',JSON.stringify({validated:true,engine,synthetic:true,realEmailDelivered:false,realIdentityAccepted:false,checks},null,2));console.log(JSON.stringify({validated:true,engine,checks}));
 }finally{try{await closeDisposablePool(pool);if(created)await admin.query(`DROP DATABASE "${database}"`);}finally{await admin.end();}}
