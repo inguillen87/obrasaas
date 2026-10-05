@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import {mkdirSync,mkdtempSync,copyFileSync,writeFileSync,rmSync,realpathSync,readdirSync} from 'node:fs';
+import {mkdirSync,mkdtempSync,copyFileSync,writeFileSync,rmSync,realpathSync,readdirSync,readFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
 import path from 'node:path';
 import {spawn,spawnSync} from 'node:child_process';
 import puppeteer from 'puppeteer';
@@ -11,13 +12,15 @@ assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV);
 const root=realpathSync(process.cwd()),parent=path.join(root,'.vercel'),evidence=path.join(parent,'customer-inbox-evidence');mkdirSync(evidence,{recursive:true});
 const fixture=mkdtempSync(path.join(parent,'customer-inbox-ui-')),app=path.join(fixture,'app');mkdirSync(app);
 const source=path.join(root,'src/app/(identity)/cuenta');
-for(const file of readdirSync(source).filter(file=>/^workspace-.*\.(?:js|mjs)$/.test(file)||['customer-inbox-panel.js','customer-inbox-panel.module.css','customer-inbox-view.mjs'].includes(file)))copyFileSync(path.join(source,file),path.join(app,file));
+const copiedFiles=readdirSync(source).filter(file=>/^workspace-.*\.(?:js|mjs)$/.test(file)||['customer-inbox-panel.js','customer-inbox-panel.module.css','customer-inbox-view.mjs'].includes(file));
+const sourceManifest=copiedFiles.map(file=>{copyFileSync(path.join(source,file),path.join(app,file));assert.deepEqual(readFileSync(path.join(source,file)),readFileSync(path.join(app,file)));return {path:'src/app/(identity)/cuenta/'+file,sha256:createHash('sha256').update(readFileSync(path.join(source,file))).digest('hex')};});
+const focusedScenario=process.env.CUSTOMER_INBOX_SCENARIO||null;
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'synthetic-customer-inbox-ui',private:true}));
 writeFileSync(path.join(fixture,'next.config.mjs'),`export default {devIndicators:false,turbopack:{root:${JSON.stringify(root)}}};`);
 writeFileSync(path.join(app,'layout.js'),`export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:12,background:'#f4f7f9',fontFamily:'Arial,sans-serif'}}>{children}</body></html>}`);
 writeFileSync(path.join(app,'page.js'),`'use client';import {useEffect,useState,useCallback} from 'react';import {CustomerInboxPanel} from './customer-inbox-panel';import {browserRecoveryJournal} from './workspace-recovery-journal.mjs';const getSessionToken=()=>window.__holdToken?new Promise(()=>{}):window.__failToken?Promise.reject(new Error('Synthetic SDK unavailable')):Promise.resolve('active-tab-controlled-token');export default function Page(){const [project,setProject]=useState('p-a'),[pending,setPending]=useState(false);const onPending=useCallback(value=>setPending(value),[]);useEffect(()=>{window.__recoveryFixture={list:scope=>browserRecoveryJournal.list(scope)};return()=>{delete window.__recoveryFixture;};},[]);return <main style={{maxWidth:1100,margin:'0 auto'}}><button id="switch-company" disabled={pending} onClick={()=>setProject(project==='p-a'?'p-b':'p-a')}>Cambiar empresa</button><button id="identity-change" onClick={()=>setProject(project==='p-a'?'p-b':'p-a')}>Cambio de identidad controlado</button><span id="pending">{pending?'Pendiente':'Disponible'}</span><CustomerInboxPanel getSessionToken={getSessionToken} key={project} projectId={project} scope={(project==='p-a'?'a':'b').repeat(64)} onPending={onPending}/><div id="participant-title"/><div id="field-title"/><div id="site-register-title"/></main>}`);
 const origin='http://127.0.0.1:3124',server=spawn(process.execPath,[path.join(root,'node_modules/next/dist/bin/next'),'dev',fixture,'--webpack','--hostname','127.0.0.1','--port','3124'],{cwd:root,env:{...process.env,NEXT_TELEMETRY_DISABLED:'1'},stdio:['ignore','pipe','pipe'],detached:process.platform!=='win32'});
-let log='',browser,result;const errors=[],checks=[];for(const stream of [server.stdout,server.stderr])stream.on('data',chunk=>{log=(log+chunk.toString()).slice(-16000);});
+let log='',browser,result,activeScenario;const errors=[],checks=[];for(const stream of [server.stdout,server.stderr])stream.on('data',chunk=>{log=(log+chunk.toString()).slice(-16000);});
 const eventId=index=>'customer_webhook_'+index.toString(16).padStart(64,'0');
 const from='5491112345678',otherFrom='5491198765432';
 const item=(index,extra={})=>({id:eventId(index),revision:'2026-10-01T01:00:00.000001',createdAt:new Date(Date.UTC(2026,9,1,0,0,index)).toISOString(),status:'PROCESSED',kind:'text',from,body:'Información privada sintética '+index,payloadVerified:true,canProcess:false,canReview:false,reviewState:'REVIEW_REQUIRED',identityStatus:'CHANNEL_IDENTITY_UNVERIFIED',businessApplied:false,replySent:false,...extra});
@@ -51,6 +54,7 @@ function stopOwnedWindows(owned,label){
  assert.equal(stopped.status,0,'Owned '+label+' did not stop');
 }
 async function scenario(mode,width=390){
+ activeScenario={mode,width};
  const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1100});page.on('pageerror',error=>errors.push({mode,width,message:error.message}));
  const posts=[],gets=[],external=[];let current=snapshot(),pendingReceipt=false,deny=false,held,receiptFailure=true;
  await page.evaluateOnNewDocument(()=>{document.cookie='__session=other-tab-org-b-synthetic; Path=/';const schedule=window.setTimeout;window.setTimeout=(callback,delay,...args)=>schedule(callback,[15000,55000].includes(delay)?150:delay,...args);});
@@ -61,11 +65,12 @@ async function scenario(mode,width=390){
   let response,status=200;if(request.method()==='GET'){
    gets.push(url.search);assert.equal(url.searchParams.get('scope'),(url.searchParams.get('projectId')==='p-a'?'a':'b').repeat(64));
    if(mode==='held-request'&&!held){held=request;return;}
-   if(deny){status=deny==='scope'?409:403;response={code:deny==='scope'?'WORKSPACE_CONTEXT_CHANGED':'WORKSPACE_INTEGRATION_PERMISSION_REQUIRED'};}
+    if(deny){status=deny==='scope'?409:deny==='project404'?404:deny==='html401'?401:403;response={code:deny==='scope'?'WORKSPACE_CONTEXT_CHANGED':deny==='project404'?'WORKSPACE_PROJECT_UNAVAILABLE':'WORKSPACE_INTEGRATION_PERMISSION_REQUIRED'};if(String(deny).startsWith('html'))return request.respond({status,contentType:'text/html',headers:{'Cache-Control':'no-store'},body:'<html>Controlled denied inbox</html>'});}
    else if(url.searchParams.get('projectId')==='p-b')response=snapshot('p-b',[],null);
    else if(url.searchParams.has('operationId')){
     const action=url.searchParams.get('action');assert.equal(url.searchParams.get('eventId'),posts[0].eventId);assert.equal(url.searchParams.get('operationId'),posts[0].operationId);
-    if(mode==='receipt-error'&&receiptFailure){receiptFailure=false;status=503;response={code:'CONTROLLED_RECEIPT_UNAVAILABLE'};}
+     if(mode==='receipt-error'&&receiptFailure){receiptFailure=false;status=503;response={code:'CONTROLLED_RECEIPT_UNAVAILABLE'};}
+     else if(mode==='access-receipt-malformed'&&receiptFailure){receiptFailure=false;response={...current,receipt:{operationId:posts[0].operationId,eventId:posts[0].eventId,action,state:'RECORDED',actorOperationVerified:true,receiptId:'invalid-receipt'}};}
     else response={...current,receipt:{operationId:posts[0].operationId,eventId:posts[0].eventId,action,state:pendingReceipt?'NOT_OBSERVED':action==='review_inbox'?'RECORDED':'EVENT_PROCESSED',actorOperationVerified:action==='review_inbox',...(action==='review_inbox'?{receiptId:'meta_inbox_request_'+'c'.repeat(64),decision:posts[0].decision}:{eventStatus:'PROCESSED'})}};
    }else if(mode==='crossed')response=snapshot('p-b',[item(99,{body:'Foreign private content must stay hidden'})],null);
    else if(url.searchParams.has('after')){assert.equal(url.searchParams.get('after'),eventId(1));response=snapshot('p-a',[item(0,{body:'Página anterior sintética'})],null);}
@@ -75,6 +80,7 @@ async function scenario(mode,width=390){
    assert.ok(['review_inbox','process_inbox'].includes(body.action));
    if(body.action==='review_inbox'){assert.equal(body.eventId,eventId(20));assert.equal(body.expectedRevision,'2026-10-01T01:00:00.000001');assert.equal(body.decision,'REFER_TO_PARTICIPANTS');current=snapshot('p-a',pageItems.map(value=>value.id===body.eventId?{...value,canReview:false,reviewState:'REVIEWED',reviewDecision:body.decision}:value));}
    else{assert.equal(body.eventId,eventId(19));current=snapshot('p-a',pageItems.map(value=>value.id===body.eventId?{...value,status:'PROCESSED',canProcess:false,canReview:true,reviewState:'REVIEW_REQUIRED'}:value));}
+    if(mode.startsWith('access-review-')||mode==='access-close-absent'){assert.equal(body.action,'review_inbox');if(mode==='access-review-200-context')return request.respond({status:200,contentType:'application/json',body:JSON.stringify(snapshot('p-b',[],null))});const deniedStatus=mode.endsWith('404')?404:mode.endsWith('401')?401:403;if(mode==='access-close-absent')pendingReceipt=true;return request.respond({status:deniedStatus,contentType:mode.includes('html')?'text/html':'application/json',headers:{'Cache-Control':'no-store'},body:mode.includes('html')?'<html>Controlled denied dispatched review</html>':JSON.stringify({code:deniedStatus===404?'WORKSPACE_PROJECT_UNAVAILABLE':'WORKSPACE_INTEGRATION_PERMISSION_REQUIRED'})});}
    if(['uncertain','denied-recovery','scope-recovery'].includes(mode)){status=503;response={code:'META_CUSTOMER_OPERATION_UNCONFIRMED'};}else{response=current;if(mode==='pending')pendingReceipt=true;if(mode==='receipt-sdk')await page.evaluate(()=>{window.__failToken=true;});}
   }
   if(!request.isInterceptResolutionHandled())await request.respond({status,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify(response)});
@@ -88,7 +94,14 @@ async function scenario(mode,width=390){
  await wait(page,'20 eventos consultados');assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'horizontal overflow '+width);await selectSender(page);await wait(page,'Revisar material sintético');assert.equal(await page.evaluate(()=>window.__unsafe),undefined);assert.equal(await page.$('article img'),null);
  const text=await page.evaluate(()=>document.body.innerText);assert.ok(text.includes('Respuesta aceptada por Meta'));assert.ok(text.includes('Entrega sin confirmar'));assert.ok(text.includes('Resultado incierto; no se reenvía automáticamente'));assert.ok(text.includes('el participante sigue pendiente'));
  assert.ok(!text.includes('private-signup-sentinel')&&!text.includes('private-code-sentinel'));
- if(mode==='layout'){
+  if(mode.startsWith('access-read-')){
+   deny=mode.endsWith('404')?'project404':mode.endsWith('401')?'html401':'html403';await click(page,'Actualizar bandeja');await page.waitForFunction(()=>!document.querySelector('article'));assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Constructora de ensayo A'));assert.equal(posts.length,0);assert.equal(await journalCount(page),0);deny=false;await click(page,'Actualizar bandeja');await wait(page,'Constructora de ensayo A');assert.equal(await page.$eval('input[type=search]',input=>input.value),'');await selectSender(page);await wait(page,'Revisar material sintético');assert.equal(await page.$eval('article select',input=>input.value),'');assert.equal(posts.length,0);await page.screenshot({path:path.join(evidence,`${mode}-${width}.png`),fullPage:true});checks.push(`${mode}-${width}-private-hidden-GET-restores-clean-selection-no-POST`);
+  }else if(mode.startsWith('access-review-')||['access-close-absent','access-receipt-malformed'].includes(mode)){
+   await page.select('article select','REFER_TO_PARTICIPANTS');await click(page,'Registrar seguimiento');await page.waitForFunction(()=>!document.querySelector('article'));assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Constructora de ensayo A'));assert.equal(posts.length,1);assert.equal(await journalCount(page),1);assert.equal(await disabled(page,'Comprobar este mismo intento'),false);assert.equal(await disabled(page,'Cerrar consulta y conservar referencia'),false);const stored=await persistedStorage(page);assert.ok(!stored.includes('REFER_TO_PARTICIPANTS')&&!stored.includes('Revisar material')&&!stored.includes(from));await page.screenshot({path:path.join(evidence,`${mode}-${width}.png`),fullPage:true});await click(page,'Comprobar este mismo intento');
+   if(mode==='access-close-absent'){await wait(page,'Todavía no se observa');assert.equal(await journalCount(page),1);await click(page,'Cerrar consulta y conservar referencia');await page.waitForFunction(()=>!document.querySelector('#switch-company').disabled);assert.equal(await journalCount(page),1);await page.screenshot({path:path.join(evidence,`access-close-absent-${width}-local-close.png`),fullPage:true});await click(page,'Cambiar empresa');await click(page,'Abrir bandeja de mensajes');await wait(page,'Constructora de ensayo B');assert.equal(await journalCount(page),1);}
+   else{await wait(page,'Seguimiento comprobado con su recibo');assert.equal(await journalCount(page),0);assert.equal(await page.$eval('#switch-company',button=>button.disabled),false);await selectSender(page);assert.equal(await disabled(page,'Registrar seguimiento'),undefined);}
+   assert.equal(posts.length,1);checks.push(`${mode}-${width}-durable-same-receipt-recovery-clears-private-decision-no-repost`);
+  }else if(mode==='layout'){
   await page.type('input[type=search]','incidencia');await selectSender(page);await wait(page,'Incidencia registrada sintética');assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Revisar material sintético'));await page.click('input[type=search]');await page.keyboard.down('Control');await page.keyboard.press('A');await page.keyboard.up('Control');await page.keyboard.press('Backspace');
   await click(page,'Consultar eventos anteriores');await wait(page,'21 eventos consultados');assert.equal(gets.length,2);assert.equal(await disabled(page,'Consultar eventos anteriores'),undefined);await selectSender(page);await wait(page,'Página anterior sintética');
   await page.screenshot({path:path.join(evidence,`customer-inbox-${width}.png`),fullPage:true});await selectSender(page,otherFrom);await wait(page,'Varias fichas coinciden');assert.equal(await disabled(page,'Procesar evento recibido'),undefined);checks.push('private-page-counts-local-search-keyset-grouping-safe-content-'+width);
@@ -116,10 +129,11 @@ async function scenario(mode,width=390){
 try{
  let ready=false;for(let index=0;index<120;index++){if(server.exitCode!==null)throw new Error('UI fixture exited');try{if((await fetch(origin)).ok){ready=true;break;}}catch{}await new Promise(resolve=>setTimeout(resolve,500));}assert.ok(ready);
  browser=await puppeteer.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{}),args:['--no-sandbox','--disable-setuid-sandbox']});
- for(const width of [320,390,768,1280])await scenario('layout',width);
- for(const mode of ['review','process','uncertain','receipt-error','receipt-sdk','denied-recovery','scope-recovery','pending','sdk-command','held-token','cancel-token','held-request','crossed','denied'])await scenario(mode);
- assert.deepEqual(errors,[]);result={status:'PASS',environment:'real-components-controlled-synthetic-services',checks,widths:[320,390,768,1280],errors,realProviderCalls:0,productionDataWritten:false};
-}catch(error){writeFileSync(path.join(evidence,'browser-failure.json'),JSON.stringify({message:error.message,errors,log},null,2));throw error;}
+ if(!focusedScenario){for(const width of [320,390,768,1280])await scenario('layout',width);for(const mode of ['review','process','uncertain','receipt-error','receipt-sdk','denied-recovery','scope-recovery','pending','sdk-command','held-token','cancel-token','held-request','crossed','denied'])await scenario(mode);}
+ const accessModes=['access-read-html401','access-read-html403','access-read-project404','access-review-html401','access-review-html403','access-review-json403','access-review-project404','access-review-200-context'];
+ if(focusedScenario)await scenario(focusedScenario);else{for(const width of [320,390,768,1280])for(const mode of accessModes)await scenario(mode,width);for(const width of [320,390])await scenario('access-close-absent',width);await scenario('access-receipt-malformed');}
+ assert.deepEqual(errors,[]);result={status:'PASS',environment:'real-components-controlled-synthetic-services',checkedAt:new Date().toISOString(),checks,widths:focusedScenario?[390]:[320,390,768,1280],fullSuite:!focusedScenario,focusedScenario,sourceManifest,harnessSha256:createHash('sha256').update(readFileSync(path.join(root,'scripts/verify-customer-inbox-ui.mjs'))).digest('hex'),errors,realProviderCalls:0,productionDataWritten:false};
+}catch(error){writeFileSync(path.join(evidence,'browser-failure.json'),JSON.stringify({activeScenario,message:error.message,errors,log},null,2));throw error;}
 finally{
  // Chrome's close handshake can wait on canceled intercepted requests on
  // Windows. Stop only this launch's process tree, never another browser/port.

@@ -2,6 +2,7 @@ const eventPattern=/^customer_webhook_[a-f0-9]{64}$/;
 const text=(value,limit=4096)=>typeof value==='string'?value.slice(0,limit):'';
 const fold=value=>text(value).normalize('NFD').replace(/\p{Diacritic}/gu,'').toLocaleLowerCase('es');
 const invalid=()=>Object.assign(new Error('La respuesta no corresponde a la obra y la consulta actuales.'),{code:'WORKSPACE_CONTEXT_CHANGED',status:409});
+export const customerInboxAccessDenied=error=>[401,403].includes(error?.status)||['WORKSPACE_CONTEXT_CHANGED','WORKSPACE_PROJECT_UNAVAILABLE','WORKSPACE_MEMBERSHIP_REQUIRED'].includes(error?.code);
 
 // Project only the authorized inbox. Signup codes, credentials and state tokens
 // from the shared integration endpoint never become part of this view model.

@@ -3,12 +3,14 @@ import {WORKSPACE_NUMBER_MODES,WORKSPACE_USE_CASES,normalizeTenantWorkspace,tena
 const object=value=>value&&typeof value==='object'&&!Array.isArray(value);
 const invalid=()=>Object.assign(new Error('No se pudo verificar la respuesta de esta preparación. Comprobá el mismo intento antes de reenviar.'),{code:'WHATSAPP_PREPARATION_RESPONSE_INVALID'});
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
-export const customerWhatsAppAccessDenied=error=>error?.status===401||error?.status===403||error?.code==='WORKSPACE_CONTEXT_CHANGED';
+export const customerWhatsAppAccessDenied=error=>error?.status===401||error?.status===403||['WORKSPACE_CONTEXT_CHANGED','WORKSPACE_PROJECT_UNAVAILABLE','WORKSPACE_MEMBERSHIP_REQUIRED'].includes(error?.code);
 
 // This validates a view of the canonical preparation, never Meta authorization.
 // Run it inside the response consumer, before the recovery journal acknowledges.
 export function customerWhatsAppSnapshot(result,{scope,projectId}){
- if(!object(result)||result.scope!==scope||result.projectId!==projectId||typeof result.companyName!=='string'||typeof result.projectName!=='string'||!['PROJECT','LEGACY_ORGANIZATION','NONE'].includes(result.profileSource))throw invalid();
+  if(!object(result))throw invalid();
+  if(result.scope!==scope||result.projectId!==projectId)throw Object.assign(new Error('La respuesta pertenece a otra obra o contexto. Volvé a comprobar el mismo intento con tu acceso vigente.'),{code:'WORKSPACE_CONTEXT_CHANGED',status:409});
+  if(typeof result.companyName!=='string'||typeof result.projectName!=='string'||!['PROJECT','LEGACY_ORGANIZATION','NONE'].includes(result.profileSource))throw invalid();
  const p=result.profile;
  if(!object(p)||typeof p.configured!=='boolean')throw invalid();
  let canonical;
