@@ -18,6 +18,8 @@ copyFileSync(path.join(root,'src/lib/geo.js'),path.join(fixture,'src/lib/geo.js'
 sourceManifest.push({path:'src/lib/geo.js',sha256:createHash('sha256').update(readFileSync(path.join(fixture,'src/lib/geo.js'))).digest('hex')});
 for(const file of readdirSync(path.join(root,'src/app/(identity)/cuenta')).filter(name=>/\.(js|mjs|css)$/.test(name))){copyFileSync(path.join(root,'src/app/(identity)/cuenta',file),path.join(components,file));sourceManifest.push({path:'src/app/(identity)/cuenta/'+file,sha256:createHash('sha256').update(readFileSync(path.join(components,file))).digest('hex')});}
 const harnessSha256=createHash('sha256').update(readFileSync(new URL(import.meta.url))).digest('hex');
+for(const file of ["src/lib/whatsapp/tenant-workspace-policy.js","src/lib/worker-channel-consent-policy.mjs"])sourceManifest.push({path:file,sha256:createHash('sha256').update(readFileSync(path.join(root,file))).digest('hex')});
+assert.equal(new Set(sourceManifest.map(row=>row.path)).size,sourceManifest.length);
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'isolated-workspace-ui-fixture',private:true}));
 writeFileSync(path.join(fixture,'next.config.mjs'),`export default {turbopack:{root:${JSON.stringify(root)}}};\n`);
 writeFileSync(path.join(app,'layout.js'),`export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:16,background:'#0b1c2d',fontFamily:'Arial,sans-serif'}}>{children}</body></html>}`);

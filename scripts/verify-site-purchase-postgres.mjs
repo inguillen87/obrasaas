@@ -100,8 +100,41 @@ try {
  await assert.rejects(status.read(auditor,{...context,scope:readonly.scope}),{code:'WORKSPACE_INTEGRATION_PERMISSION_REQUIRED'});
  checks.push('operational-observability-counts-scoped-pending-reviews-without-credentials-or-foreign-audits');
  assert.equal((await store.status(foreign,{projectId:'p-b',scope:other.scope,operationId:last.operationId})).state,'NOT_OBSERVED');
+
+ // New contract checks reuse the same random disposable DB, canonical models
+ // and actual actor/project transactions. No provider or product DB is used.
+ const legacyReceipt=await store.status(owner,{...context,operationId:draft.operationId});
+ assert.deepEqual(legacyReceipt.receipt,{id:legacyReceipt.receiptId,operationId:draft.operationId,requestId:request.report.id,action:'DRAFT_ORDER'});assert.equal(legacyReceipt.projectId,'p-a');assert.equal(legacyReceipt.state,'RECORDED');assert.equal(legacyReceipt.definitive,true);
+ const legacyRow=(await pool.query('SELECT metadata FROM "AuditLog" WHERE id=$1',[legacyReceipt.receiptId])).rows[0];assert.equal(legacyRow.metadata.version,1);assert.equal(legacyRow.metadata.operationId,undefined);assert.equal(legacyReceipt.record.order.state,'RECEIVED');
+ checks.push('version-one-purchase-receipt-correlates-original-operation-with-later-current-record-without-metadata-migration');
+ const foreignContext={projectId:'p-b',scope:other.scope};
+ const notObserved=await store.status(foreign,{...foreignContext,operationId:draft.operationId});assert.deepEqual(notObserved,{scope:other.scope,projectId:'p-b',state:'NOT_OBSERVED',saved:false,definitive:false});
+ const directed=await store.list(owner,{...context,requestId:request.report.id});assert.equal(directed.total,1);assert.equal(directed.nextCursor,null);assert.equal(directed.records.length,1);assert.equal(directed.records[0].id,request.report.id);
+ await assert.rejects(store.list(foreign,{...foreignContext,requestId:request.report.id}),{code:'PURCHASE_REQUEST_UNAVAILABLE'});await assert.rejects(store.list(foreign,{projectId:'p-a',scope:other.scope,requestId:request.report.id}),{code:'WORKSPACE_PROJECT_UNAVAILABLE'});assert.throws(()=>store.list(owner,{...context,requestId:request.report.id,after:request.report.id}),{code:'PURCHASE_QUERY_INVALID'});
+ checks.push('directed-purchase-read-is-exactly-one-current-request-and-never-exposes-another-tenants-request');
+ const corruptionCases=[
+  ['version',{...legacyRow.metadata,version:2},'Incident',request.report.id],
+  ['project',{...legacyRow.metadata,projectId:'p-b'},'Incident',request.report.id],
+  ['action',{...legacyRow.metadata,command:'OTHER_ENGINE'},'Incident',request.report.id],
+  ['digest',{...legacyRow.metadata,requestDigest:'broken'},'Incident',request.report.id],
+  ['entity-type',legacyRow.metadata,'Worker',request.report.id],
+  ['entity-id',legacyRow.metadata,'Incident','../foreign'],
+ ];
+ const countsBefore=(await pool.query('SELECT (SELECT count(*)::int FROM "AuditLog") AS audit,(SELECT count(*)::int FROM "Incident") AS incident')).rows[0];
+ for(const [name,metadata,entityType,entityId] of corruptionCases){
+  try{await pool.query('UPDATE "AuditLog" SET metadata=$2::jsonb,"entityType"=$3,"entityId"=$4 WHERE id=$1',[legacyReceipt.receiptId,JSON.stringify(metadata),entityType,entityId]);await assert.rejects(store.status(owner,{...context,operationId:draft.operationId}),{code:'PURCHASE_RECEIPT_INTEGRITY'},name);}
+  finally{await pool.query('UPDATE "AuditLog" SET metadata=$2::jsonb,"entityType"=$4,"entityId"=$3 WHERE id=$1',[legacyReceipt.receiptId,JSON.stringify(legacyRow.metadata),request.report.id,'Incident']);}
+ }
+ assert.deepEqual((await pool.query('SELECT (SELECT count(*)::int FROM "AuditLog") AS audit,(SELECT count(*)::int FROM "Incident") AS incident')).rows[0],countsBefore);
+ checks.push('purchase-corrupted-audit-action-project-version-digest-and-entity-fail-closed-with-zero-business-writes');
+ const recoveredAgain=await store.status(owner,{...context,operationId:last.operationId});assert.equal(recoveredAgain.receipt.operationId,last.operationId);assert.equal(recoveredAgain.receipt.requestId,current.id);assert.equal(recoveredAgain.receipt.action,'RECEIVE_MATERIAL');assert.equal(recoveredAgain.receipt.id,recovered.receiptId);assert.equal(recoveredAgain.record.order.received,'12.500');
+ const replayAgain=await store.save(owner,last);assert.equal(replayAgain.replayed,true);assert.deepEqual(replayAgain.receipt,recoveredAgain.receipt);assert.deepEqual((await pool.query('SELECT (SELECT count(*)::int FROM "AuditLog") AS audit,(SELECT count(*)::int FROM "Incident") AS incident')).rows[0],countsBefore);
+ checks.push('lost-response-purchase-status-and-exact-replay-keep-one-durable-correlated-receipt-without-second-delivery');
+
  await pool.query(`UPDATE "TenantMembership" SET status='DISABLED' WHERE id='owner-m'`);
  await assert.rejects(store.list(owner,context),{code:'WORKSPACE_MEMBERSHIP_REQUIRED'});
+ await assert.rejects(store.status(owner,{...context,operationId:last.operationId}),{code:'WORKSPACE_MEMBERSHIP_REQUIRED'});
+ await assert.rejects(store.list(owner,{...context,requestId:request.report.id}),{code:'WORKSPACE_MEMBERSHIP_REQUIRED'});
  checks.push('receipt-isolation-and-immediate-revocation');
  const proof={status:'PASS',environment:'disposable-local-postgresql',checks,productionDataWritten:false,providerCalls:0,stockLedgerChanged:false,paymentRecorded:false};
  mkdirSync('.vercel/purchase-evidence',{recursive:true});writeFileSync('.vercel/purchase-evidence/postgres.json',JSON.stringify(proof,null,2));console.log(JSON.stringify(proof));

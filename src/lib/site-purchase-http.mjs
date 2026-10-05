@@ -12,14 +12,15 @@ export function createSitePurchaseHandlers({verify,store}) {
         return reply(await store.save(session,await boundedBody(request)));
       }
       if(request.method!=='GET')return reply({code:'METHOD_NOT_ALLOWED'},405);
-      for(const key of params.keys())if(!['projectId','scope','after','operationId'].includes(key)||params.getAll(key).length!==1)throw new WorkspaceError('PURCHASE_QUERY_INVALID');
+      for(const key of params.keys())if(!['projectId','scope','after','operationId','requestId'].includes(key)||params.getAll(key).length!==1)throw new WorkspaceError('PURCHASE_QUERY_INVALID');
       const context={projectId:params.get('projectId'),scope:params.get('scope')};
       if(!workspaceId(context.projectId)||!/^[a-f0-9]{64}$/.test(context.scope||''))throw new WorkspaceError('PURCHASE_QUERY_INVALID');
       if(params.has('operationId')) {
-        if(params.has('after'))throw new WorkspaceError('PURCHASE_QUERY_INVALID');
+        if(params.has('after')||params.has('requestId'))throw new WorkspaceError('PURCHASE_QUERY_INVALID');
         return reply(await store.status(session,{...context,operationId:params.get('operationId')}));
       }
-      return reply(await store.list(session,{...context,after:params.get('after')}));
+      if(params.has('requestId')&&(params.has('after')||!workspaceId(params.get('requestId'))))throw new WorkspaceError('PURCHASE_QUERY_INVALID');
+      return reply(await store.list(session,{...context,after:params.get('after'),...(params.has('requestId')?{requestId:params.get('requestId')}:{})}));
     }catch(error){return reply({saved:false,code:error instanceof WorkspaceError?error.code:'PURCHASE_OPERATION_UNCONFIRMED'},error instanceof WorkspaceError?error.status:503);}
   }
   return {GET:handle,POST:handle};

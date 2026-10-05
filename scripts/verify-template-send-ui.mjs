@@ -1,12 +1,17 @@
+import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
-import {mkdirSync,mkdtempSync,copyFileSync,writeFileSync,rmSync} from 'node:fs';
+import {mkdirSync,mkdtempSync,copyFileSync,writeFileSync,rmSync,readFileSync} from 'node:fs';
 import {spawn,spawnSync} from 'node:child_process';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
 assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV);
 const root=process.cwd(),parent=path.resolve(root,'.vercel'),evidence=path.join(parent,'template-send-evidence');mkdirSync(evidence,{recursive:true});
 const fixture=mkdtempSync(path.join(parent,'template-send-ui-')),app=path.join(fixture,'app');mkdirSync(app);
-for(const file of ['template-send-panel.js','template-send-panel.module.css','template-send-view.mjs','workspace-request-lifecycle.js','workspace-request-lifecycle.mjs','workspace-session-request.mjs','workspace-recovery-journal.mjs','workspace-recovery-storage.mjs'])copyFileSync(path.join(root,'src/app/(identity)/cuenta',file),path.join(app,file));
+for(const file of ['template-send-panel.js','template-send-panel.module.css','template-send-view.mjs','workspace-request-lifecycle.js','workspace-request-lifecycle.mjs','workspace-session-request.mjs','workspace-recovery-journal.mjs','site-purchase-view.mjs','workspace-recovery-storage.mjs'])copyFileSync(path.join(root,'src/app/(identity)/cuenta',file),path.join(app,file));
+const sourcePaths=["src/app/(identity)/cuenta/site-purchase-view.mjs","src/app/(identity)/cuenta/template-send-panel.js","src/app/(identity)/cuenta/template-send-panel.module.css","src/app/(identity)/cuenta/template-send-view.mjs","src/app/(identity)/cuenta/workspace-recovery-journal.mjs","src/app/(identity)/cuenta/workspace-recovery-storage.mjs","src/app/(identity)/cuenta/workspace-request-lifecycle.js","src/app/(identity)/cuenta/workspace-request-lifecycle.mjs","src/app/(identity)/cuenta/workspace-session-request.mjs"],copiedSourcePaths=new Set(["src/app/(identity)/cuenta/site-purchase-view.mjs","src/app/(identity)/cuenta/template-send-panel.js","src/app/(identity)/cuenta/template-send-panel.module.css","src/app/(identity)/cuenta/template-send-view.mjs","src/app/(identity)/cuenta/workspace-recovery-journal.mjs","src/app/(identity)/cuenta/workspace-recovery-storage.mjs","src/app/(identity)/cuenta/workspace-request-lifecycle.js","src/app/(identity)/cuenta/workspace-request-lifecycle.mjs","src/app/(identity)/cuenta/workspace-session-request.mjs"]);
+const sourceManifest=sourcePaths.map(file=>{const bytes=readFileSync(path.join(root,file));if(copiedSourcePaths.has(file)||false)assert.deepEqual(bytes,readFileSync(path.join(app,path.basename(file))));return {path:file,sha256:createHash('sha256').update(bytes).digest('hex')};});
+assert.equal(new Set(sourceManifest.map(row=>row.path)).size,sourceManifest.length);
+const harnessSha256=createHash('sha256').update(readFileSync(new URL(import.meta.url))).digest('hex');
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'controlled-template-send-ui',private:true}));
 writeFileSync(path.join(fixture,'next.config.mjs'),`export default {devIndicators:false,turbopack:{root:${JSON.stringify(root)}}};`);
 writeFileSync(path.join(app,'layout.js'),`export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:12,fontFamily:'Arial',background:'#edf3f8'}}>{children}</body></html>}`);
@@ -77,4 +82,4 @@ try{let ready=false;for(let n=0;n<100;n++){if(server.exitCode!==null)throw new E
 finally{if(process.platform==='win32'){if(browser){const pid=browser.process().pid;browser.disconnect();stopOwned(pid);}stopOwned(server.pid);}else{await browser?.close();try{process.kill(-server.pid,'SIGTERM');}catch{}}
  const target=path.resolve(fixture);assert.ok(target.startsWith(parent+path.sep)&&path.basename(target).startsWith('template-send-ui-'));rmSync(target,{recursive:true,force:true});}
 if(failure)throw failure;
-const proof={status:'PASS',environment:'actual-components-with-controlled-HTTP-and-session',checkedAt:new Date().toISOString(),checks,widths:[320,390,768,1280],errors,productionDataWritten:false,realProviderCalls:0,realConsentAccepted:false,realTemplateDeliveryAccepted:false};writeFileSync(path.join(evidence,'browser.json'),JSON.stringify(proof,null,2));console.log(JSON.stringify({status:'PASS',checks:checks.length,pageErrors:errors.length}));
+const proof={status:'PASS',environment:'actual-components-with-controlled-HTTP-and-session',checkedAt:new Date().toISOString(),checks,sourceManifest,harnessSha256,widths:[320,390,768,1280],errors,productionDataWritten:false,realProviderCalls:0,realConsentAccepted:false,realTemplateDeliveryAccepted:false};writeFileSync(path.join(evidence,'browser.json'),JSON.stringify(proof,null,2));console.log(JSON.stringify({status:'PASS',checks:checks.length,pageErrors:errors.length}));
