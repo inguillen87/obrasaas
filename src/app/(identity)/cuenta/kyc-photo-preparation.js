@@ -10,12 +10,12 @@ const size=bytes=>bytes>=1024*1024?(bytes/1024/1024).toFixed(2)+' MiB':Math.ceil
 export function KycPhotoPreparation({kind,disabled,onChange}){
  const documentPhoto=kind==='front',title=documentPhoto?'Frente del documento':'Fotografía del rostro';
  const [photo,setPhoto]=useState(null),[phase,setPhase]=useState('EMPTY'),[reviewed,setReviewed]=useState(false),[notice,setNotice]=useState('');
- const original=useRef(null),generation=useRef(0),controller=useRef(null),urls=useRef(new Set()),alive=useRef(true);
+ const original=useRef(null),generation=useRef(0),controller=useRef(null),acceptance=useRef(null),useButton=useRef(null),urls=useRef(new Set()),alive=useRef(true);
  const revoke=()=>{urls.current.forEach(url=>URL.revokeObjectURL(url));urls.current.clear();};
- useEffect(()=>{alive.current=true;const allocated=urls.current;return()=>{alive.current=false;controller.current?.abort();allocated.forEach(url=>URL.revokeObjectURL(url));allocated.clear();};},[]);
- function reset(){generation.current++;controller.current?.abort();revoke();original.current=null;setPhoto(null);setReviewed(false);setPhase('EMPTY');setNotice('');onChange(null);}
+ useEffect(()=>{alive.current=true;const allocated=urls.current,localGeneration=generation;return()=>{alive.current=false;localGeneration.current++;acceptance.current?.abort();acceptance.current=null;controller.current?.abort();allocated.forEach(url=>URL.revokeObjectURL(url));allocated.clear();};},[]);
+ function reset(){generation.current++;acceptance.current?.abort();acceptance.current=null;controller.current?.abort();revoke();original.current=null;setPhoto(null);setReviewed(false);setPhase('EMPTY');setNotice('');onChange(null);}
  async function prepare(file,rotation=0){
-  const current=++generation.current;controller.current?.abort();controller.current=new AbortController();const signal=controller.current.signal;
+  const current=++generation.current;acceptance.current?.abort();acceptance.current=null;controller.current?.abort();controller.current=new AbortController();const signal=controller.current.signal;
   revoke();setPhoto(null);setReviewed(false);setPhase('PREPARING');setNotice('');onChange(null);
   try{
    const copy=file.size>KYC_PHOTO_LIMIT||rotation!==0?await preparePhoto(file,{maxBytes:KYC_PHOTO_LIMIT,originalLimits:KYC_ORIGINAL_LIMITS,rotation,signal}):{file,...await verifyPhoto(file,{originalLimits:KYC_ORIGINAL_LIMITS,signal}),rotation:0};
@@ -26,16 +26,22 @@ export function KycPhotoPreparation({kind,disabled,onChange}){
  }
  async function accept(){
   if(!photo||!reviewed||disabled||phase!=='READY')return;
-  const current=generation.current;setPhase('USING');setNotice('');
-  try{const accepted=await onChange(photo.file);if(alive.current&&current===generation.current){setPhase(accepted?'ACCEPTED':'READY');if(!accepted)setNotice('No se pudo usar la copia. Volvé a intentarlo.');}}
-  catch{if(alive.current&&current===generation.current){setPhase('READY');setNotice('No se pudo usar la copia. Volvé a intentarlo.');}}
+  const current=++generation.current,attempt=new AbortController();acceptance.current=attempt;setPhase('USING');setNotice('');
+  try{const accepted=await onChange(photo.file,{signal:attempt.signal});if(alive.current&&current===generation.current&&!attempt.signal.aborted){setPhase(accepted?'ACCEPTED':'READY');if(!accepted)setNotice('No se completó la lectura. Conservamos esta copia y tu revisión. Volvé a usarla o descartá la fotografía.');}}
+  catch{if(alive.current&&current===generation.current&&!attempt.signal.aborted){setPhase('READY');setNotice('No se completó la lectura. Conservamos esta copia y tu revisión. Volvé a usarla o descartá la fotografía.');}}
+  finally{if(acceptance.current===attempt)acceptance.current=null;}
+ }
+ function cancelAcceptance(){
+  const attempt=acceptance.current;if(phase!=='USING'||!attempt)return;
+  const current=++generation.current;acceptance.current=null;attempt.abort();setPhase('READY');setNotice('Lectura detenida. Conservamos esta copia y tu revisión. Podés volver a usarla.');
+  requestAnimationFrame(()=>{if(alive.current&&current===generation.current)useButton.current?.focus();});
  }
  return <fieldset className={styles.photo} aria-label={title}>
   <legend>{title}</legend>
   <p>{documentPhoto?'Fotografiá el frente completo, con luz pareja y sin reflejos. Revisá que se lean los datos.':'Mirando a la cámara, con luz de frente y el rostro completo. Esta foto se presenta para revisión humana.'}</p>
   <label>Tomar o elegir una fotografía<input disabled={disabled||phase==='USING'} type="file" accept="image/jpeg,image/png,image/webp" capture={documentPhoto?'environment':'user'} onChange={event=>{const file=event.target.files?.[0];event.target.value='';if(file)prepare(file);}}/></label>
   <p className={styles.photoHint}>JPEG, PNG o WebP. Original hasta 20 MiB y 24 megapíxeles. La imagen a enviar será de hasta 1 MiB; el original se conserva.</p>
-  <p role="status" aria-live="polite">{notice|| (phase==='PREPARING'?'Preparando una copia en este teléfono…':phase==='ACCEPTED'?'Imagen revisada y lista para presentar.':'')}</p>
+  <p role="status" aria-live="polite">{notice|| (phase==='PREPARING'?'Preparando una copia en este teléfono…':phase==='USING'?'Leyendo la copia revisada… Todavía no se presentó.':phase==='ACCEPTED'?'Imagen revisada y lista para presentar.':'')}</p>
   {phase==='PREPARING'&&<button type="button" disabled={disabled} onClick={reset}>Cancelar preparación</button>}
   {photo&&<>
    {/* Only browser-local object URLs are shown; these images are not uploaded here. */}
@@ -45,7 +51,8 @@ export function KycPhotoPreparation({kind,disabled,onChange}){
    <a className={styles.photoLink} href={photo.originalUrl} download={photo.originalName}>Conservar original</a>
    {phase!=='ACCEPTED'&&<label className={styles.consent}><input disabled={disabled||phase==='USING'} type="checkbox" checked={reviewed} onChange={event=>setReviewed(event.target.checked)}/>{documentPhoto?'Revisé la orientación y los datos del documento se leen con claridad.':'Revisé la orientación y el rostro se ve con claridad.'}</label>}
    <div className={styles.actions}>
-    {phase!=='ACCEPTED'&&<button type="button" disabled={disabled||phase==='USING'||!reviewed} onClick={accept}>{documentPhoto?'Usar documento revisado':'Usar fotografía revisada'}</button>}
+    {phase==='USING'&&<button type="button" onClick={cancelAcceptance}>Cancelar lectura local</button>}
+    {phase!=='ACCEPTED'&&<button ref={useButton} type="button" disabled={disabled||phase==='USING'||!reviewed} onClick={accept}>{documentPhoto?'Usar documento revisado':'Usar fotografía revisada'}</button>}
     <button type="button" disabled={disabled||phase==='USING'} onClick={()=>prepare(original.current,(photo.rotation+90)%360)}>Girar 90°</button>
     <button type="button" disabled={disabled||phase==='USING'} onClick={reset}>Descartar fotografía</button>
    </div>
