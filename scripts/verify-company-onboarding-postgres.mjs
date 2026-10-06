@@ -51,10 +51,18 @@ try{
  assert.equal(results.filter(result=>!result.replayed).length,1);assert.equal(new Set(results.map(result=>result.receiptId)).size,1);
  for(const name of ['Organization','PlatformUser','Project','TenantMembership','ProjectMembership','AuditLog'])assert.equal((await pool.query(`SELECT count(*)::int AS n FROM "${name}"`)).rows[0].n,1,name);
  for(const name of ['Task','Worker','WhatsAppConnection'])assert.equal((await pool.query(`SELECT count(*)::int AS n FROM "${name}"`)).rows[0].n,0,name);
+ const trialWindow=async organizationId=>(await pool.query(`SELECT id,"createdAt"::text AS "createdAt","trialEndsAt"::text AS "trialEndsAt",EXTRACT(EPOCH FROM ("trialEndsAt"-"createdAt"))::double precision AS "durationSeconds" FROM "Organization" WHERE id=$1`,[organizationId])).rows[0];
+ const firstTrial=await trialWindow(results[0].organizationId);assert.equal(firstTrial.durationSeconds,15*24*60*60);assert.ok(firstTrial.createdAt);assert.ok(firstTrial.trialEndsAt);
+ assert.equal((await pool.query(`SELECT o."createdAt"=a."createdAt" AS "sameTransactionStart" FROM "Organization" o JOIN "AuditLog" a ON a."organizationId"=o.id WHERE o.id=$1 AND a.id=$2`,[results[0].organizationId,results[0].receiptId])).rows[0].sameTransactionStart,true);
+ checks.push('new-company-trial-is-exactly-fifteen-days-from-the-database-transaction-start');
  const list=await workspace.list(first);assert.equal(list.projects.length,1);assert.equal(list.role,'ADMIN');assert.equal((await workspace.read(first,{projectId:results[0].projectId,scope:list.scope})).tasks.length,0);
  checks.push('empty-company-created-once-with-real-canonical-membership-and-no-fixtures');
  const restored=await store.status(first);assert.equal(restored.state,'CREATED');assert.equal(restored.receiptId,results[0].receiptId);
  assert.equal(restored.replayed,true);assert.equal((await pool.query('SELECT count(*)::int AS n FROM "AuditLog"')).rows[0].n,1);
+ assert.deepEqual(await trialWindow(results[0].organizationId),firstTrial);
+ const replayed=await store.create(first,request,proof(first));assert.equal(replayed.replayed,true);assert.equal(replayed.receiptId,results[0].receiptId);assert.deepEqual(await trialWindow(results[0].organizationId),firstTrial);
+ assert.equal((await pool.query('SELECT count(*)::int AS n FROM "AuditLog"')).rows[0].n,1);
+ checks.push('concurrent-creation-status-recovery-and-sequential-replay-never-extend-the-original-trial');
  checks.push('reload-recovers-own-original-company-receipt-by-canonical-pointer-with-no-new-command');
  await pool.query(`INSERT INTO "PlatformUser"(id,"clerkUserId","primaryEmail","systemRole","updatedAt") VALUES('other-admin','user_OtherAdmin','other-admin@example.invalid','TENANT_USER',CURRENT_TIMESTAMP)`);await pool.query(`INSERT INTO "TenantMembership"(id,"organizationId","userId","clerkRole","tenantRole",status,"updatedAt") VALUES('other-admin-member',$1,'other-admin','org:admin','ADMIN','ACTIVE',CURRENT_TIMESTAMP)`,[results[0].organizationId]);
  const otherAdmin=await store.status({...first,userId:'user_OtherAdmin'});assert.equal(otherAdmin.state,'ALREADY_CONFIGURED');assert.equal(otherAdmin.receiptId,undefined);
@@ -69,6 +77,14 @@ try{
  await assert.rejects(workspace.read(first,{projectId:companyB.projectId,scope:list.scope}),{code:'WORKSPACE_PROJECT_UNAVAILABLE'});
  await assert.rejects(store.status({...second,userId:first.userId}),{code:'WORKSPACE_MEMBERSHIP_REQUIRED'});
  checks.push('second-customer-initial-plan-is-isolated-and-starts-at-zero');
+ assert.equal((await trialWindow(companyB.organizationId)).durationSeconds,15*24*60*60);
+ // Represent an existing fourteen-day trial; new bootstrap logic must not rewrite it.
+ await pool.query(`UPDATE "Organization" SET "trialEndsAt"="createdAt"+interval '14 days' WHERE id=$1`,[companyB.organizationId]);
+ const existingTrial=await trialWindow(companyB.organizationId);assert.equal(existingTrial.durationSeconds,14*24*60*60);
+ assert.equal((await store.create(second,inputB,proof(second))).replayed,true);assert.equal((await store.status(second)).state,'CREATED');
+ await assert.rejects(store.create(second,{...inputB,operationId:randomUUID()},proof(second)),{code:'COMPANY_ALREADY_CONFIGURED'});
+ assert.deepEqual(await trialWindow(companyB.organizationId),existingTrial);
+ checks.push('existing-fourteen-day-trial-is-preserved-through-replay-recovery-and-a-rejected-new-attempt');
  await assert.rejects(store.create(first,{...request,companyName:'Different name'},proof(first)),{code:'COMPANY_CREATION_OPERATION_CONFLICT'});
  await assert.rejects(store.create(first,{...request,operationId:randomUUID()},proof(first)),{code:'COMPANY_ALREADY_CONFIGURED'});
  const status=await store.status(first,{operationId:request.operationId});assert.equal(status.state,'CREATED');assert.equal(status.receiptId,results[0].receiptId);

@@ -73,7 +73,7 @@ export function createCompanyOnboardingStore({connect}){
     if(recent>=3)throw new WorkspaceError('COMPANY_CREATION_LIMIT',429);
     const organizationId=identifier('org'),projectId=identifier('project'),membershipId=identifier('member'),taskIds=[];
     await client.query(`INSERT INTO public."Organization"(id,name,slug,"clerkOrganizationId",country,timezone,metadata,"updatedAt","trialEndsAt")
-     VALUES($1,$2,$1,$3,'AR','America/Argentina/Buenos_Aires',$4::jsonb,clock_timestamp(),CURRENT_TIMESTAMP+interval '14 days')`,
+     VALUES($1,$2,$1,$3,'AR','America/Argentina/Buenos_Aires',$4::jsonb,clock_timestamp(),CURRENT_TIMESTAMP+interval '15 days')`,
      [organizationId,command.companyName,session.organizationId,JSON.stringify({onboarding:{version:1,source:'customer-self-service',operationReceiptId:id,companyIdentityVerified:false}})]);
     await client.query(`INSERT INTO public."TenantMembership"(id,"organizationId","userId","clerkRole","tenantRole",status,"updatedAt") VALUES($1,$2,$3,'org:admin','ADMIN','ACTIVE',clock_timestamp())`,[membershipId,organizationId,actor.id]);
     await client.query(`INSERT INTO public."Project"(id,"organizationId",name,slug,status,address,metadata,"updatedAt") VALUES($1,$2,$3,$1,'ACTIVE',$4,$5::jsonb,clock_timestamp())`,
