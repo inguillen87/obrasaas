@@ -5,6 +5,7 @@ import { normalizeFieldCommand, fieldTransition, evaluateFieldLocation, fieldRec
 import { insertSiteReport, publicSiteReport } from './site-register-store.mjs';
 import { META_DEMO_PILOT_PROTOCOL } from './meta-cloud-protocol.mjs';
 import { compareProgressMeasurementQuantities } from './progress-measurement-quantity.js';
+import {MATERIAL_INVENTORY_ACTIONS,applyInventoryFieldAction,readInventory,readConsumption} from './material-inventory.mjs';
 
 const revision = name => `to_char(${name},'YYYY-MM-DD"T"HH24:MI:SS.US')`;
 const newId = prefix => prefix+'_'+randomUUID().replaceAll('-','');
@@ -54,10 +55,10 @@ export function createFieldOperations({workspace,assertParticipant}) {
   async function recoveryPermission(client,member,session,projectId,receipt) {
     if(receipt.metadata?.projectId!==projectId)throw new WorkspaceError('FIELD_RECEIPT_INTEGRITY',409);
     const action=receipt.metadata.command;
-    if(['CONFIGURE_SITE','DECIDE_PROGRESS'].includes(action)&&!canApproveProgress(member.role))throw new WorkspaceError('FIELD_PERMISSION_REQUIRED',403);
+    if(['CONFIGURE_SITE','DECIDE_PROGRESS','ADD_MATERIAL','DECIDE_CONSUMPTION','REVERSE_CONSUMPTION'].includes(action)&&!canApproveProgress(member.role))throw new WorkspaceError('FIELD_PERMISSION_REQUIRED',403);
     if(['REVIEW_ATTENDANCE','REVIEW_EVIDENCE'].includes(action)&&!canReviewField(member.role))throw new WorkspaceError('FIELD_PERMISSION_REQUIRED',403);
-    if(['ATTENDANCE','PROPOSE_PROGRESS','REPORT_INCIDENT','REQUEST_MATERIAL'].includes(action)){
-      const workerId=receipt.metadata.outcome.event?.workerId||receipt.metadata.outcome.proposal?.workerId||receipt.metadata.outcome.report?.workerId,permission=action==='ATTENDANCE'?'attendance':'report';
+    if(['ATTENDANCE','PROPOSE_PROGRESS','REPORT_INCIDENT','REQUEST_MATERIAL','PROPOSE_CONSUMPTION'].includes(action)){
+      const workerId=receipt.metadata.outcome.event?.workerId||receipt.metadata.outcome.proposal?.workerId||receipt.metadata.outcome.report?.workerId||receipt.metadata.outcome.consumption?.workerId,permission=action==='ATTENDANCE'?'attendance':'report';
       // The project lock serializes writable replay against participant changes.
       // Read-only recovery keeps its snapshot without trying to lock the worker.
       const owned=(await client.query(`SELECT id FROM public."Worker" WHERE id=$1 AND "projectId"=$2 AND active=true AND metadata->'participant'->>'version'='1' AND metadata->'participant'->>'clerkUserId'=$3 AND metadata->'participant'->>'status'='ACTIVE' AND metadata->'participant'->'kyc'->>'status'='APPROVED' AND metadata->'participant'->'permissions'->>$4='true'`,[workerId,projectId,session.userId,permission])).rows;
@@ -66,6 +67,7 @@ export function createFieldOperations({workspace,assertParticipant}) {
   }
   async function recoveredOutcome(client,projectId,receipt) {
     const outcome=receipt.metadata.outcome;
+    if(outcome.consumption?.id)return {...outcome,consumption:(await readConsumption(client,projectId,outcome.consumption.id)).consumption};
     if(outcome.report?.id){const row=(await client.query(`SELECT id,title,description,severity::text AS severity,metadata,${revision('"updatedAt"')} AS revision,${revision('"createdAt"')} AS "createdAt" FROM public."Incident" WHERE id=$1 AND "projectId"=$2`,[outcome.report.id,projectId])).rows[0];if(!row)throw new WorkspaceError('SITE_REPORT_UNAVAILABLE',404);return {...outcome,report:publicSiteReport(row)};}
     const currentProposal=outcome.proposal?.id?publicProposal(await proposal(client,projectId,outcome.proposal.id)):null;
     if(outcome.kind==='PROGRESS_DECISION'&&outcome.task){
@@ -86,8 +88,9 @@ export function createFieldOperations({workspace,assertParticipant}) {
   }
   async function record(client,member,command,outcome,requestDigest) {
     const id=fieldReceiptId(member.actorId,command.projectId,command.operationId);
-    await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'field.operation.recorded','Project',$4,$5::jsonb)`,[id,member.organizationId,member.actorId,command.projectId,JSON.stringify({version:1,projectId:command.projectId,command:command.action,requestDigest,...(member.channelProof?{channelProof:member.channelProof}:{}),outcome})]);
-    return {saved:true,replayed:false,receiptId:id,...outcome};
+    const correlation=MATERIAL_INVENTORY_ACTIONS.includes(command.action)?{projectId:command.projectId,operationId:command.operationId,action:command.action}:{};
+    await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'field.operation.recorded','Project',$4,$5::jsonb)`,[id,member.organizationId,member.actorId,command.projectId,JSON.stringify({version:1,projectId:command.projectId,command:command.action,requestDigest,...correlation,...(member.channelProof?{channelProof:member.channelProof}:{}),outcome})]);
+    return {saved:true,replayed:false,receiptId:id,...(Object.keys(correlation).length?{...correlation,state:'RECORDED'}:{}),...outcome};
   }
   function config(project) {
     const c=project.metadata?.fieldOperations;
@@ -122,8 +125,9 @@ export function createFieldOperations({workspace,assertParticipant}) {
         const projectRevision=(await client.query(`SELECT ${revision('"updatedAt"')} AS revision FROM public."Project" WHERE id=$1 AND "organizationId"=$2`,[context.projectId,member.organizationId])).rows[0].revision;
         return {scope,projectId:context.projectId,projectRevision,canConfigure:canApproveProgress(member.role),canReview:reviewer,canApproveProgress:canApproveProgress(member.role),
           ...(canApproveProgress(member.role)?{configurationRevision:project.metadata?.fieldOperations?.configRevision||null}:{}),
-          selfWorkers:owned.map(w=>({id:w.id,name:w.name})),workers:(reviewer?workers:owned).map(w=>({id:w.id,name:w.name})),
+          selfWorkers:owned.map(w=>({id:w.id,name:w.name,canReport:w.metadata.participant.permissions?.report===true})),workers:(reviewer?workers:owned).map(w=>({id:w.id,name:w.name})),
           sectors:project.metadata?.fieldOperations?.sectors?.map(s=>({id:s.id,name:s.name,latitude:s.latitude,longitude:s.longitude,radius:s.radius}))||[],
+          inventory:await readInventory(client,member,project,{workerIds:owned.map(w=>w.id),reviewer:canApproveProgress(member.role)}),
           attendance:events.slice(0,100).map(publicEvent),evidence:media.slice(0,100).map(publicFieldEvidence),proposals:proposals.slice(0,100).map(publicProposal),incidents:reports.slice(0,100).filter(r=>r.metadata.siteRegister.type==='ISSUE').map(publicSiteReport),materialRequests:reports.slice(0,100).filter(r=>r.metadata.siteRegister.type==='MATERIAL_REQUEST').map(publicSiteReport),truncated:events.length>100||media.length>100||proposals.length>100||reports.length>100||workers.length>100};
       });
     },
@@ -131,10 +135,12 @@ export function createFieldOperations({workspace,assertParticipant}) {
       const command=normalizeFieldCommand(body),p=command.payload,requestDigest=digest(command);
       return run(session,command,true,async(client,member,scope,project)=>{
         const id=fieldReceiptId(member.actorId,command.projectId,command.operationId),previous=await prior(client,member,id);
-        if(previous){if(previous.metadata.requestDigest!==requestDigest)throw new WorkspaceError('FIELD_OPERATION_CONFLICT',409);await recoveryPermission(client,member,session,command.projectId,previous);return {scope,saved:true,replayed:true,receiptId:id,...await recoveredOutcome(client,command.projectId,previous)};}
+        if(previous){if(previous.metadata.requestDigest!==requestDigest)throw new WorkspaceError('FIELD_OPERATION_CONFLICT',409);await recoveryPermission(client,member,session,command.projectId,previous);return {scope,saved:true,replayed:true,receiptId:id,...(MATERIAL_INVENTORY_ACTIONS.includes(command.action)?{projectId:command.projectId,operationId:command.operationId,action:command.action,state:'RECORDED'}:{}),...await recoveredOutcome(client,command.projectId,previous)};}
         const now=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now;
         let outcome;
-        if(command.action==='CONFIGURE_SITE') {
+        if(MATERIAL_INVENTORY_ACTIONS.includes(command.action)){
+          outcome=await applyInventoryFieldAction({client,member,session,project,command,receiptId:id,at:now.toISOString(),assertWorker:worker,assertTask:task});
+        }else if(command.action==='CONFIGURE_SITE') {
           if(!canApproveProgress(member.role))throw new WorkspaceError('FIELD_PERMISSION_REQUIRED',403);
           const row=(await client.query(`SELECT metadata,${revision('"updatedAt"')} AS revision FROM public."Project" WHERE id=$1 AND "organizationId"=$2`,[command.projectId,member.organizationId])).rows[0];
           if(row.revision!==p.revision)throw new WorkspaceError('FIELD_REVISION_CHANGED',409);
@@ -222,9 +228,10 @@ export function createFieldOperations({workspace,assertParticipant}) {
       return run(session,context,false,async(client,member,scope)=>{
         const row=await prior(client,member,fieldReceiptId(member.actorId,context.projectId,context.operationId));
         if(row)await recoveryPermission(client,member,session,context.projectId,row);
-        return row?{scope,state:'RECORDED',saved:true,replayed:true,receiptId:row.id,...await recoveredOutcome(client,context.projectId,row)}:{scope,state:'NOT_OBSERVED',definitive:false};
+        return row?{scope,state:'RECORDED',saved:true,replayed:true,receiptId:row.id,...(MATERIAL_INVENTORY_ACTIONS.includes(row.metadata.command)?{projectId:context.projectId,operationId:context.operationId,action:row.metadata.command}:{}),...await recoveredOutcome(client,context.projectId,row)}:{scope,projectId:context.projectId,operationId:context.operationId,state:'NOT_OBSERVED',definitive:false};
       });
     },
+    inventoryHistory(session,context){return run(session,context,false,async(client,member,scope,project)=>{const reviewer=canApproveProgress(member.role);if(context.afterMovement&&!reviewer)throw new WorkspaceError('INVENTORY_MANAGE_REQUIRED',403);const owned=reviewer?[]:(await client.query(`SELECT id FROM public."Worker" WHERE "projectId"=$1 AND active=true AND metadata->'participant'->>'version'='1' AND metadata->'participant'->>'clerkUserId'=$2 AND metadata->'participant'->>'status'='ACTIVE' AND metadata->'participant'->'kyc'->>'status'='APPROVED' ORDER BY id LIMIT 101`,[project.id,session.userId])).rows.map(w=>w.id);return {scope,projectId:project.id,inventory:await readInventory(client,member,project,{reviewer,workerIds:owned,after:context.afterMovement,afterConsumption:context.afterConsumption,consumptionId:context.consumptionId})};});},
     // Media provider I/O is performed outside transactions. Every callback still
     // enters the same verified project transaction and rechecks actor/permissions.
     mediaTransaction:run,assertWorker:worker,readEvidence:evidence,readTask:task,

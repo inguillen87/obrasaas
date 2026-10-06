@@ -138,6 +138,24 @@ try{
  assert.deepEqual((await workspace.list(workerSession)).projects.map(row=>row.id),['p-a','p-a2']);
  await assert.rejects(store.downloadKyc(workerSession,{projectId:'p-a2',scope:participantWorkspace.scope,workerId:self.id,imageId:'selfie'}),{code:'PARTICIPANT_UNAVAILABLE'});
  checks.push('existing-verified-account-joins-a-second-worksite-with-explicit-scoped-assignment-and-no-extra-email');
+ // Nullable contact keeps identity and membership checks on the immutable
+ // Clerk subject, including provider failures and changes during preflight.
+ await pool.query(`ALTER TABLE "PlatformUser" ALTER COLUMN "primaryEmail" DROP NOT NULL;
+  UPDATE "PlatformUser" SET "primaryEmail"=NULL WHERE "clerkUserId"='user_Worker';
+  INSERT INTO "PlatformUser"(id,"clerkUserId","primaryEmail") VALUES('nullable-contact-history','user_ContactHistory','worker@example.invalid');
+  INSERT INTO "Project"(id,"organizationId",name,status,metadata) VALUES('p-null-contact','company-a','Nullable contact worksite','ACTIVE','{}');
+  INSERT INTO "Worker"(id,"projectId",name,phone,metadata,"updatedAt") VALUES('worker-null-contact','p-null-contact','Nullable contact roster','+5491100009999','{"siteRegister":{"version":1}}',CURRENT_TIMESTAMP);`);
+ const nullableContext={projectId:'p-null-contact',scope:own.scope},nullableRoster=(await store.read(owner,nullableContext)).records[0],nullableAssignment={...nullableContext,operationId:randomUUID(),action:'ASSIGN_EXISTING',payload:{workerId:nullableRoster.id,revision:nullableRoster.revision,membershipId:workerMembership,reason:'Assign the independently verified subject with an omitted historical contact.'}};
+ const nullableAccount=(await store.read(owner,nullableContext)).existingAccounts.find(account=>account.membershipId===workerMembership);assert.equal(nullableAccount.email,null);assert.equal(nullableAccount.name,'Cuenta de la empresa');
+ const unconfirmedContact=createParticipantStore({workspace,connect,identity:{...identity,verifiedEmail:async()=>undefined}});await assert.rejects(unconfirmedContact.save(owner,nullableAssignment),{code:'PARTICIPANT_MEMBERSHIP_REVIEW_REQUIRED'});
+ membershipProofHook=()=>pool.query(`UPDATE "PlatformUser" SET "primaryEmail"='changed-contact@example.invalid' WHERE "clerkUserId"='user_Worker'`);
+ await assert.rejects(store.save(owner,nullableAssignment),{code:'PARTICIPANT_MEMBERSHIP_REVIEW_REQUIRED'});assert.equal((await store.read(owner,nullableContext)).records[0].status,'NOT_INVITED');
+ await pool.query(`UPDATE "PlatformUser" SET "primaryEmail"=NULL WHERE "clerkUserId"='user_Worker'`);
+ revokeProvider=true;await assert.rejects(store.save(owner,nullableAssignment),{code:'PARTICIPANT_PROVIDER_MEMBERSHIP_REQUIRED'});revokeProvider=false;
+ const nullableAssigned=await store.save(owner,nullableAssignment);assert.equal(nullableAssigned.participant.status,'ACTIVE');assert.equal((await store.save(owner,nullableAssignment)).replayed,true);
+ assert.equal((await pool.query(`SELECT "clerkUserId","primaryEmail" FROM "PlatformUser" WHERE id='nullable-contact-history'`)).rows[0].clerkUserId,'user_ContactHistory');assert.equal((await pool.query(`SELECT "primaryEmail" FROM "PlatformUser" WHERE "clerkUserId"='user_Worker'`)).rows[0].primaryEmail,null);
+ await pool.query(`DELETE FROM "AuditLog" WHERE id=$1`,[nullableAssigned.receiptId]);await pool.query(`DELETE FROM "Worker" WHERE id='worker-null-contact';DELETE FROM "ProjectMembership" WHERE "projectId"='p-null-contact';DELETE FROM "Project" WHERE id='p-null-contact';DELETE FROM "PlatformUser" WHERE id='nullable-contact-history';UPDATE "PlatformUser" SET "primaryEmail"='worker@example.invalid' WHERE "clerkUserId"='user_Worker';`);
+ checks.push('nullable-contact-assignment-requires-live-verified-subject-and-membership-rejects-provider-failure-and-contact-races-without-adopting-history');
  const third=(await store.read(owner,context)).records.find(row=>row.id==='worker-third');failAudit=true;await assert.rejects(store.save(owner,command('INVITE',{workerId:third.id,revision:third.revision,email:'third@example.invalid'})),{code:'WORKSPACE_OPERATION_UNCONFIRMED'});failAudit=false;assert.equal(sends,2);assert.equal((await store.read(owner,context)).records.find(row=>row.id===third.id).status,'NOT_INVITED');
  checks.push('durable-attempt-audit-failure-rolls-back-before-provider-delivery');
  const current=(await store.read(owner,context)).records.find(row=>row.id===self.id);const revoked=await store.save(owner,command('REVOKE',{workerId:self.id,revision:current.revision,reason:'Synthetic participation ended in this project.'}));assert.equal(revoked.participant.status,'REVOKED');assert.equal(revoked.participant.permissions.attendance,false);

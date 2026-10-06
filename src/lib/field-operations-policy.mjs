@@ -2,6 +2,7 @@ import { WorkspaceError, workspaceId, operationId, digest } from './workspace-po
 import { recordKeys, siteText, siteRevision, siteQuantity, MATERIAL_UNITS } from './site-register-policy.mjs';
 import { validateReportedLocation, getDistanceMeters } from './geo.js';
 import { normalizeProgressMeasurementQuantity, parseProgressMeasurementQuantity } from './progress-measurement-quantity.js';
+import {inventoryQuantity} from './material-inventory.mjs';
 
 // The enterprise attendance transition and conservative geofence contracts are
 // preserved from 1677ff72773c95140535603093e5cb8624d1f063. This adapter writes the
@@ -48,7 +49,17 @@ export function normalizeFieldCommand(input) {
   recordKeys(input,['operationId','projectId','scope','action','payload']);
   if(!operationId(input.operationId)||!workspaceId(input.projectId)||!/^[a-f0-9]{64}$/.test(input.scope||''))throw new WorkspaceError('FIELD_INPUT_INVALID');
   const p=input.payload;let payload;
-  if(input.action==='CONFIGURE_SITE') {
+  if(input.action==='ADD_MATERIAL') {
+    recordKeys(p,['revision','catalogHash','name','unit']);if(!MATERIAL_UNITS.includes(p.unit)||!/^[a-f0-9]{64}$/.test(p.catalogHash||''))throw new WorkspaceError('INVENTORY_INPUT_INVALID');
+    payload={revision:siteRevision(p.revision),catalogHash:p.catalogHash,name:siteText(p.name,160,2),unit:p.unit};
+  }else if(input.action==='PROPOSE_CONSUMPTION') {
+    recordKeys(p,['workerId','taskId','sectorId','materialId','catalogHash','quantity','reason']);if(p.taskId!==null&&!workspaceId(p.taskId)||!/^[a-f0-9]{64}$/.test(p.catalogHash||''))throw new WorkspaceError('INVENTORY_INPUT_INVALID');
+    payload={workerId:id(p.workerId),taskId:p.taskId,sectorId:id(p.sectorId),materialId:id(p.materialId),catalogHash:p.catalogHash,quantity:inventoryQuantity(p.quantity),reason:siteText(p.reason,1000,8,true)};
+  }else if(['DECIDE_CONSUMPTION','REVERSE_CONSUMPTION'].includes(input.action)) {
+    const review=input.action==='DECIDE_CONSUMPTION';recordKeys(p,['proposalId','revision','catalogHash','reason',...(review?['decision']:[])]);
+    if(!/^[a-f0-9]{64}$/.test(p.catalogHash||'')||review&&!['APPROVE','REJECT'].includes(p.decision))throw new WorkspaceError('INVENTORY_INPUT_INVALID');
+    payload={proposalId:id(p.proposalId),revision:siteRevision(p.revision),catalogHash:p.catalogHash,reason:siteText(p.reason,1000,8,true),...(review?{decision:p.decision}:{})};
+  }else if(input.action==='CONFIGURE_SITE') {
     recordKeys(p,['revision','sectors']);siteRevision(p.revision);
     if(!Array.isArray(p.sectors)||!p.sectors.length||p.sectors.length>20)throw new WorkspaceError('FIELD_SECTORS_INVALID');
     payload={revision:p.revision,sectors:p.sectors.map(s=>{

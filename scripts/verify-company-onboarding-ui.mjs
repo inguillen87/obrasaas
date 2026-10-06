@@ -31,6 +31,12 @@ let log='';for(const stream of [server.stdout,server.stderr])stream.on('data',va
 let browser;const checks=[],errors=[];
 const click=async(page,label)=>{const handle=await page.evaluateHandle(text=>[...document.querySelectorAll('button')].find(button=>button.textContent.trim()===text),label);assert.ok(handle.asElement(),'Missing button '+label);await handle.asElement().click();await handle.dispose();};
 const wait=(page,text)=>page.waitForFunction(value=>document.body.innerText.includes(value),{timeout:20000},text);
+async function canonicalCreatedTask(page,task){
+ await page.waitForFunction(expected=>[...document.querySelectorAll('article[data-task-id]')].some(article=>article.dataset.taskId===expected.id&&article.querySelector('h5')?.textContent===expected.title&&article.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow')==='0'),{timeout:20000},task);
+ const rendered=await page.$$eval('article[data-task-id]',(articles,id)=>articles.filter(article=>article.dataset.taskId===id).map(article=>({title:article.querySelector('h5')?.textContent,zeroProgress:article.innerText.includes('0 %'),progress:article.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow')})),task.id);
+ assert.deepEqual(rendered,[{title:task.title,zeroProgress:true,progress:'0'}]);
+ assert.ok((await page.evaluate(()=>document.querySelector('[aria-labelledby="schedule-title"]').innerText)).includes('1 de 1 tareas'));
+}
 async function scenario(mode,width=390){
  const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1000});
  const epoch=Math.floor(Date.now()/1000);let profileClock=epoch;
@@ -49,7 +55,10 @@ async function scenario(mode,width=390){
   const nativeUuid=crypto.randomUUID.bind(crypto);window.__issuedIds=[];crypto.randomUUID=()=>{const id=nativeUuid();window.__issuedIds.push(id);return id;};
  },{tokens:profileTokens,initialHung:mode==='initial-sdk-hung'});
  page.on('pageerror',error=>errors.push({mode,width,message:error.message}));await page.setRequestInterception(true);
- let created=false,result=null,tasks=[],taskReceipts=new Map(),expectedOrganization='org_BootstrapA';const posts=[],postBodies=[],taskPosts=[],external=[],recoveryIds=[];const scope='c'.repeat(64);
+  let created=false,result=null,tasks=[],taskReceipts=new Map(),expectedOrganization='org_BootstrapA';const posts=[],postBodies=[],taskPosts=[],external=[],recoveryIds=[];const scope='c'.repeat(64);
+  let releaseTaskReadback,markTaskReadbackStarted,taskReadbackHeld=false,taskReadbacks=0;
+  const taskReadbackBarrier=mode==='empty'?new Promise(resolve=>{releaseTaskReadback=resolve;}):null;
+  const taskReadbackStarted=mode==='empty'?new Promise(resolve=>{markTaskReadbackStarted=resolve;}):null;
  page.on('request',async request=>{
   try{
    const url=new URL(request.url());
@@ -76,9 +85,14 @@ async function scenario(mode,width=390){
       if(mode==='uncertain'||mode.startsWith('reload-')){status=503;body={code:'COMPANY_CREATION_UNCONFIRMED'};}
      }
     }
-   }else if(url.pathname==='/api/identity/workspace'){
-    assert.equal(created,true);body=!url.search?{scope,organizationName:result.companyName,roleLabel:'Administrador',role:'ADMIN',canPlanSchedule:true,canManageIntegrations:false,projects:[{id:'project-test',name:result.projectName}],projectsTruncated:false}:
-      {scope,project:{id:'project-test',name:result.projectName},roleLabel:'Administrador',canPlanSchedule:true,tasks,totalTasks:tasks.length,nextCursor:null};
+    }else if(url.pathname==='/api/identity/workspace'){
+     assert.equal(created,true);assert.equal(request.method(),'GET');
+     if(url.search){
+      assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'project-test');
+      if(taskPosts.length){taskReadbacks++;if(taskReadbackBarrier&&!taskReadbackHeld){taskReadbackHeld=true;markTaskReadbackStarted();await taskReadbackBarrier;}}
+     }
+     body=!url.search?{scope,organizationName:result.companyName,roleLabel:'Administrador',role:'ADMIN',canPlanSchedule:true,canManageIntegrations:false,projects:[{id:'project-test',name:result.projectName}],projectsTruncated:false}:
+       {scope,project:{id:'project-test',name:result.projectName},roleLabel:'Administrador',canPlanSchedule:true,tasks,totalTasks:tasks.length,nextCursor:null};
    }else if(url.pathname==='/api/identity/task-creation'){
     assert.equal(created,true);const command=JSON.parse(request.postData());taskPosts.push(command);assert.equal(command.scope,scope);assert.equal(command.projectId,'project-test');
     if(!taskReceipts.has(command.operationId)){const task={id:'new-task-'+tasks.length,title:command.title,startsOn:command.startsOn||null,endsOn:command.endsOn||null,progress:0,status:'BACKLOG',revision:'2026-10-01T13:00:00.123456'};tasks.push(task);taskReceipts.set(command.operationId,{scope,created:true,receiptId:'new-task-receipt',task});}
@@ -150,11 +164,23 @@ async function scenario(mode,width=390){
  await wait(page,'El espacio está creado');assert.equal(posts.length,['no-arrival','rollback','expired-profile','profile-retry-unavailable'].includes(mode)?2:1);assert.equal(posts[0].initialTasks.length,mode==='planned'?1:0);assert.ok((await page.evaluate(()=>document.body.innerText)).includes('WhatsApp todavía no quedó conectado'));
  await click(page,'Entrar a mi obra');await wait(page,'Mis obras');await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(button=>button.textContent.includes('Obra inicial de ensayo')&&!button.disabled));await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra inicial de ensayo')).click());
  if(mode==='planned'){await wait(page,'Replanteo de la obra');assert.ok((await page.evaluate(()=>document.body.innerText)).includes('0 %'));}
- else{
-  await wait(page,'no tiene tareas registradas');await click(page,'Nueva tarea');await page.type('input[minlength="2"]','Primera tarea cargada después');await click(page,'Crear tarea');await wait(page,'Tarea creada y vinculada');assert.equal(taskPosts.length,1);assert.ok((await page.evaluate(()=>document.body.innerText)).includes('0 %'));
- }
+  else{
+   await wait(page,'no tiene tareas registradas');await click(page,'Nueva tarea');await page.type('input[minlength="2"]','Primera tarea cargada después');
+   await click(page,'Crear tarea');await wait(page,'Tarea creada y vinculada');
+   assert.equal(taskPosts.length,1);const createdTask=taskReceipts.get(taskPosts[0].operationId).task;assert.equal(createdTask.title,'Primera tarea cargada después');assert.equal(createdTask.progress,0);
+   if(mode==='empty'){
+    let readbackTimeout;try{await Promise.race([taskReadbackStarted,new Promise((_,reject)=>{readbackTimeout=setTimeout(()=>reject(new Error('Canonical task readback was not observed')),20000);})]);}finally{clearTimeout(readbackTimeout);}
+    assert.equal(taskReadbackHeld,true);assert.equal(taskReadbacks,1);
+    await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(button=>button.textContent==='Nueva tarea'&&button.disabled),{timeout:20000});
+    assert.equal(await page.$$eval('article[data-task-id]',articles=>articles.length),0,'A task receipt is not a canonical schedule read');
+    assert.equal(await page.$$eval('[role="progressbar"]',bars=>bars.length),0,'No recorded progress before canonical readback');
+    await wait(page,'Consultando el cronograma actualizado');assert.equal(taskPosts.length,1);releaseTaskReadback();
+    checks.push(`empty-task-receipt-before-held-canonical-readback-${width}`);
+   }
+   await canonicalCreatedTask(page,createdTask);assert.equal(taskPosts.length,1);assert.equal(taskReadbacks,1);
+  }
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));assert.deepEqual(external,[]);
- if(mode==='empty'){const beforeReturn=posts.length;await page.reload({waitUntil:'networkidle0'});await wait(page,'Alta confirmada');await wait(page,'Mis obras');assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Entrar a mi obra'));await page.click('summary');await wait(page,'Recibo: '+result.receiptId);assert.equal(posts.length,beforeReturn);assert.equal(await page.evaluate(()=>window.__profileReads||0),0);await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(button=>button.textContent.includes('Obra inicial de ensayo')&&!button.disabled));await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra inicial de ensayo')).click());await wait(page,'Primera tarea cargada después');assert.equal(taskPosts.length,1);checks.push(`ordinary-return-keeps-workspace-open-and-original-receipt-consultable-${width}`);}
+  if(mode==='empty'){const beforeReturn=posts.length;await page.reload({waitUntil:'networkidle0'});await wait(page,'Alta confirmada');await wait(page,'Mis obras');assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Entrar a mi obra'));await page.click('summary');await wait(page,'Recibo: '+result.receiptId);assert.equal(posts.length,beforeReturn);assert.equal(await page.evaluate(()=>window.__profileReads||0),0);await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(button=>button.textContent.includes('Obra inicial de ensayo')&&!button.disabled));await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra inicial de ensayo')).click());await canonicalCreatedTask(page,taskReceipts.get(taskPosts[0].operationId).task);assert.equal(taskPosts.length,1);assert.equal(taskReadbacks,2);checks.push(`ordinary-return-keeps-workspace-open-and-original-receipt-consultable-${width}`);}
  checks.push(`${mode}-company-to-workspace-${width}`);await context.close();
 }
 try{

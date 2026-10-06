@@ -7,6 +7,7 @@ import {TaskCreatePanel} from './task-create-panel';
 import {CustomerWhatsAppPanel} from './customer-whatsapp-panel';
 import {SiteRegisterPanel} from './site-register-panel';
 import {SitePurchasePanel} from './site-purchase-panel';
+import {MaterialInventoryPanel} from './material-inventory-panel';
 import {ParticipantPanel} from './participant-panel';
 import {FieldOperationsPanel} from './field-operations-panel';
 import {WorkerChannelPanel} from './worker-channel-panel';
@@ -19,6 +20,7 @@ import {ConstructorCrmPanel} from './constructor-crm-panel';
 import {DemoPilotPanel} from './demo-pilot-panel';
 import {WorkspaceToolsNavigation} from './workspace-tools-navigation';
 import {ScheduleWorkbench} from './schedule-workbench';
+import {PlanImportPanel} from './plan-import-panel';
 import {mergeLoadedTasks} from './schedule-workbench.mjs';
 const endpoint='/api/identity/workspace';
 const messages={WORKSPACE_ORGANIZATION_REQUIRED:'Elegí una organización desde tu cuenta para consultar las obras asignadas.',WORKSPACE_MEMBERSHIP_REQUIRED:'Tu organización activa todavía no tiene una pertenencia vigente vinculada a esta cuenta.',WORKSPACE_PROJECT_UNAVAILABLE:'Esta obra no está disponible con tus permisos actuales.',WORKSPACE_CONTEXT_CHANGED:'Cambió tu organización o tu permiso. Volvé a cargar las obras antes de continuar.',SCHEDULE_REVISION_CHANGED:'Otra persona modificó la tarea. Actualizá el cronograma antes de volver a planificar.',SCHEDULE_PERMISSION_REQUIRED:'Tu rol actual no puede modificar la planificación.',SCHEDULE_UNCHANGED:'Las fechas son iguales a las registradas. No se hizo ningún cambio.',SCHEDULE_OPERATION_CONFLICT:'Este intento ya pertenece a otra solicitud. Comprobá su recibo antes de continuar.',SESSION_REQUIRED:'Tu sesión venció. Volvé a ingresar.',SCHEDULE_DATES_INVALID:'Revisá el inicio y el fin. El fin no puede ser anterior al inicio.',SCHEDULE_REASON_REQUIRED:'Explicá brevemente el motivo del cambio.'};
@@ -35,14 +37,18 @@ export function AccountWorkspace({getSessionToken}={}){
  const [account,setAccount]=useState(null),[view,setView]=useState(null),[loading,setLoading]=useState(true),[notice,setNotice]=useState(''),[draft,setDraft]=useState(null),[attempt,setAttempt]=useState(null),[retryAllowed,setRetryAllowed]=useState(false),[saving,setSaving]=useState(false),[receipt,setReceipt]=useState(null);
  const generation=useRef(0),controller=useRef(null),mounted=useRef(true);
  const [creatingTask,setTaskCreating]=useState(false),[modulePending,setModulePending]=useState({});
+ const [planReadback,setPlanReadback]=useState(null);
+ const planReadbackMatches=Boolean(planReadback&&planReadback.scope===account?.scope&&planReadback.projectId===view?.project.id);
+ const planReadbackPending=planReadbackMatches&&planReadback.status==='pending';
  const taskCreating=creatingTask||Object.values(modulePending).some(Boolean);
- const contextLocked=saving||Boolean(attempt)||taskCreating||Boolean(draft);
+ const contextLocked=saving||Boolean(attempt)||taskCreating||Boolean(draft)||planReadbackPending;
  const scheduleEditor=useRef(null),editingTaskId=draft?.task?.id;
  useEffect(()=>{if(editingTaskId){scheduleEditor.current?.focus({preventScroll:true});scheduleEditor.current?.scrollIntoView({block:'start',behavior:'auto'});}},[editingTaskId]);
  const participantPending=useCallback(value=>setModulePending(old=>old.participants===value?old:{...old,participants:value}),[]);
  const fieldPending=useCallback(value=>setModulePending(old=>old.field===value?old:{...old,field:value}),[]);
  const channelPending=useCallback(value=>setModulePending(old=>old.channel===value?old:{...old,channel:value}),[]);
  const purchasePending=useCallback(value=>setModulePending(old=>old.purchase===value?old:{...old,purchase:value}),[]);
+ const inventoryPending=useCallback(value=>setModulePending(old=>old.inventory===value?old:{...old,inventory:value}),[]);
  const metaPending=useCallback(value=>setModulePending(old=>old.meta===value?old:{...old,meta:value}),[]);
  const registerPending=useCallback(value=>setModulePending(old=>old.register===value?old:{...old,register:value}),[]);
  const preparationPending=useCallback(value=>setModulePending(old=>old.preparation===value?old:{...old,preparation:value}),[]);
@@ -50,20 +56,21 @@ export function AccountWorkspace({getSessionToken}={}){
  const templatePending=useCallback(value=>setModulePending(old=>old.template===value?old:{...old,template:value}),[]);
  const crmPending=useCallback(value=>setModulePending(old=>old.crm===value?old:{...old,crm:value}),[]);
  const demoPending=useCallback(value=>setModulePending(old=>old.demo===value?old:{...old,demo:value}),[]);
+ const planPending=useCallback(value=>setModulePending(old=>old.plan===value?old:{...old,plan:value}),[]);
  const tasksChanged=useCallback(task=>{if(task?.id)setView(old=>old?{...old,tasks:old.tasks.map(t=>t.id===task.id?{...t,...task}:t)}:old);},[]);
  useEffect(()=>{
   const epoch=generation;mounted.current=true;const abort=new AbortController();controller.current=abort;const current=++epoch.current;
-  request('',{signal:abort.signal}).then(data=>{if(mounted.current&&current===generation.current)setAccount(data);}).catch(error=>{if(error.name!=='AbortError'&&mounted.current&&current===generation.current)setNotice(error.message);}).finally(()=>{if(mounted.current&&current===generation.current)setLoading(false);});
+  request('',{signal:abort.signal}).then(data=>{if(mounted.current&&current===generation.current)setAccount(data);}).catch(error=>{if(error.name!=='AbortError'&&mounted.current&&current===generation.current)setNotice(error.message);}).finally(()=>{if(mounted.current&&current===generation.current){setLoading(false);setPlanReadback(null);}});
   return()=>{mounted.current=false;epoch.current++;abort.abort();controller.current?.abort();};
  },[request]);
  async function refresh(){
   if(contextLocked)return;controller.current?.abort();const abort=new AbortController();controller.current=abort;const current=++generation.current;
-  setAccount(null);setView(null);setDraft(null);setReceipt(null);setNotice('');setLoading(true);
+  setAccount(null);setView(null);setDraft(null);setReceipt(null);setPlanReadback(null);setNotice('');setLoading(true);
   try{const data=await request('',{signal:abort.signal});if(mounted.current&&current===generation.current)setAccount(data);}catch(error){if(error.name!=='AbortError'&&mounted.current&&current===generation.current)setNotice(error.message);}finally{if(mounted.current&&current===generation.current)setLoading(false);}
  }
  async function open(projectId,append=false){
   if(!account||contextLocked)return;controller.current?.abort();const abort=new AbortController();controller.current=abort;const current=++generation.current;
-  const cursor=append?view?.nextCursor:null;setNotice('');setLoading(true);if(!append){setView(null);setDraft(null);setReceipt(null);}
+  const cursor=append?view?.nextCursor:null;setPlanReadback(null);setNotice('');setLoading(true);if(!append){setView(null);setDraft(null);setReceipt(null);}
   try{
    const data=await request(query({projectId,scope:account.scope,...(cursor?{afterTask:cursor}:{})}),{signal:abort.signal});
    if(!mounted.current||current!==generation.current)return;
@@ -71,6 +78,27 @@ export function AccountWorkspace({getSessionToken}={}){
    setView(previous=>append?{...data,tasks:mergeLoadedTasks(previous?.tasks||[],data.tasks)}:data);
   }catch(error){if(error.name!=='AbortError'&&mounted.current&&current===generation.current){setNotice(error.message);if(error.status===401||error.status===403||error.code==='WORKSPACE_CONTEXT_CHANGED'){setAccount(null);setView(null);}}}
   finally{if(mounted.current&&current===generation.current)setLoading(false);}
+ }
+ async function readRecordedSchedule(target){
+  if(!mounted.current||target.scope!==account?.scope||target.projectId!==view?.project.id)return;
+  controller.current?.abort();const abort=new AbortController();controller.current=abort;const current=++generation.current;
+  const context={scope:target.scope,projectId:target.projectId,generation:current,kind:target.kind==='task'?'task':'plan'};
+  const label=context.kind==='task'?'La tarea':'El plan';
+  setPlanReadback({...context,status:'pending'});setLoading(true);setNotice(label+' tiene un recibo confirmado. Consultando el cronograma actualizado…');
+  try{
+   // A receipt's tasks may be outside the loaded page and already included in
+   // count(*), especially after reload. Read the total and cursor together.
+   const data=await request(query({projectId:context.projectId,scope:context.scope}),{signal:abort.signal});
+   if(!mounted.current||current!==generation.current)return;
+   if(data.scope!==context.scope||data.project?.id!==context.projectId)throw new Error('La respuesta no coincide con la obra seleccionada.');
+   setView(previous=>previous?.scope===context.scope&&previous.project.id===context.projectId?data:previous);
+   setPlanReadback(null);setNotice('Cronograma actualizado desde los registros de la obra. '+(context.kind==='task'?'El total incluye la tarea creada.':'El total incluye las tareas del plan aplicado.'));
+  }catch(error){
+   if(mounted.current&&current===generation.current){
+    setPlanReadback({...context,status:'failed'});setNotice(label+' tiene un recibo confirmado, pero no pudimos actualizar el cronograma. '+(error.name==='AbortError'?'La consulta venció.':error.message)+' Volvé a consultar el cronograma para comprobar el total.');
+    if(error.status===401||error.status===403||error.code==='WORKSPACE_CONTEXT_CHANGED'){setAccount(null);setView(null);setPlanReadback(null);}
+   }
+  }finally{if(mounted.current&&current===generation.current)setLoading(false);}
  }
  function applySaved(data){
   if(!mounted.current)return;
@@ -100,10 +128,11 @@ export function AccountWorkspace({getSessionToken}={}){
  return <section className={styles.workspace} aria-labelledby="workspace-title" aria-busy={loading}>
   <div className={styles.heading}><div><p className={styles.eyebrow}>ESPACIO DE TRABAJO</p><h2 id="workspace-title">Mis obras</h2><p className={styles.intro}>Elegí dónde trabajar. Las tareas, el equipo y los registros quedan en la obra seleccionada.</p></div><button type="button" className={styles.refresh} onClick={refresh} disabled={contextLocked||loading} aria-describedby={contextLocked?'workspace-context-lock':undefined}><RefreshCw size={16} aria-hidden="true"/>Actualizar</button></div>
   <div role="status" aria-live="polite" className={notice?styles.notice:styles.silent}>{notice}</div>
+  {planReadbackMatches&&planReadback.status==='failed'&&<button type="button" disabled={loading||contextLocked} onClick={()=>readRecordedSchedule(planReadback)}>Volver a consultar el cronograma</button>}
   {loading&&<p className={styles.loading}><LoaderCircle size={18} className={styles.spinner} aria-hidden="true"/>Consultando registros autorizados…</p>}
   {contextLocked&&<p className={styles.contextLock} id="workspace-context-lock"><LockKeyhole size={16} aria-hidden="true"/><span>Hay una acción en curso. Completala, cancelá el borrador o comprobá su resultado antes de actualizar o cambiar de obra.</span></p>}
   {account&&<><div className={styles.context}><div className={styles.company}><Building2 size={22} aria-hidden="true"/><div><span>Empresa</span><strong>{account.organizationName}</strong></div></div><dl className={styles.contextDetails}><div><dt>Tu acceso</dt><dd>{account.roleLabel}</dd></div><div><dt>Obra activa</dt><dd>{view?.project.name||'Sin seleccionar'}</dd></div></dl></div>
-   <WorkspaceRecoveryPanel key={account.scope} scope={account.scope} projects={account.projects} getSessionToken={getSessionToken} onRecovered={result=>{if(result.task)tasksChanged(result.task);}}/>
+   <WorkspaceRecoveryPanel key={account.scope} scope={account.scope} projects={account.projects} getSessionToken={getSessionToken} onRecovered={(result,reference)=>{if(reference?.resource==='plan-import'&&result.scope===reference.scope&&result.projectId===reference.projectId&&result.saved===true&&result.receiptId&&result.action==='APPLY'&&result.draft?.status==='APPLIED')readRecordedSchedule({scope:reference.scope,projectId:reference.projectId,kind:'plan'});else if(result.created===true&&result.task&&reference?.resource==='task-creation')readRecordedSchedule({scope:reference.scope,projectId:reference.projectId,kind:'task'});else if(result.task)tasksChanged(result.task);}}/>
    {!account.projects.length&&!loading&&<div className={styles.empty}><FolderKanban size={25} aria-hidden="true"/><strong>No hay obras activas asignadas a tu cuenta.</strong><p>Pedile al responsable que revise tu pertenencia y la obra asignada. Podés volver a actualizar cuando confirme el acceso.</p></div>}
    {account.projects.length>0&&<div className={styles.projectCollection}><div className={styles.collectionHeading}><h3>Obras disponibles</h3><span>{account.projects.length}{account.projectsTruncated?' mostradas':account.projects.length===1?' asignada':' asignadas'}</span></div><div className={styles.projects}>{account.projects.map(project=><button key={project.id} type="button" onClick={()=>open(project.id)} disabled={contextLocked} aria-pressed={view?.project.id===project.id}><span className={styles.projectName}><FolderKanban size={18} aria-hidden="true"/><span>{project.name}</span></span><small>{view?.project.id===project.id?<><Check size={14} aria-hidden="true"/>Seleccionada</>:<>Abrir obra<ArrowUpRight size={14} aria-hidden="true"/></>}</small></button>)}</div></div>}
    {account.projectsTruncated&&<p>Se muestran las primeras 100 obras autorizadas.</p>}
@@ -112,7 +141,8 @@ export function AccountWorkspace({getSessionToken}={}){
   {view&&<div className={styles.workbench}><WorkspaceToolsNavigation role={account?.role} canManageIntegrations={account?.canManageIntegrations} pending={modulePending} schedulePending={saving||Boolean(attempt)||Boolean(draft)||creatingTask} scheduleEditing={Boolean(draft)}/><div className={styles.modules}>
   {view&&<section aria-labelledby="schedule-title" className={styles.schedule}>
    <div className={styles.heading}><div><p className={styles.eyebrow}>CRONOGRAMA REGISTRADO</p><h3 id="schedule-title">{view.project.name}</h3></div><span>{view.tasks.length} de {view.totalTasks} tareas</span></div>
-   {view.canPlanSchedule&&!draft&&<TaskCreatePanel key={`${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={setTaskCreating} onCreated={task=>setView(current=>current&&current.project.id===view.project.id?{...current,totalTasks:current.tasks.some(t=>t.id===task.id)?current.totalTasks:current.totalTasks+1,tasks:current.tasks.some(t=>t.id===task.id)?current.tasks.map(t=>t.id===task.id?task:t):[task,...current.tasks]}:current)}/> }
+   {view.canPlanSchedule&&!draft&&<TaskCreatePanel key={`${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={setTaskCreating} locked={planReadbackPending||Boolean(modulePending.plan)} onCreated={()=>readRecordedSchedule({scope:account.scope,projectId:view.project.id,kind:'task'})}/> }
+   {view.canPlanSchedule&&!draft&&<PlanImportPanel key={`plan:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={planPending} locked={saving||Boolean(attempt)||creatingTask||planReadbackPending||Object.entries(modulePending).some(([key,value])=>key!=='plan'&&value)} onApplied={()=>readRecordedSchedule({scope:account.scope,projectId:view.project.id,kind:'plan'})}/>}
    <ScheduleWorkbench key={`schedule:${account.scope}:${view.project.id}`} tasks={view.tasks} totalTasks={view.totalTasks} nextCursor={view.nextCursor} canPlan={view.canPlanSchedule} locked={contextLocked} onPlan={task=>{setReceipt(null);setNotice('');setDraft({task,startsOn:task.startsOn||'',endsOn:task.endsOn||'',reason:''});}}/>
    {view.nextCursor&&<button type="button" disabled={loading||contextLocked} onClick={()=>open(view.project.id,true)}>Cargar más tareas</button>}
    {!view.canPlanSchedule&&<p className={styles.caption}>Tu rol permite consultar este cronograma, no modificarlo.</p>}
@@ -128,6 +158,7 @@ export function AccountWorkspace({getSessionToken}={}){
   {view&&<WorkerChannelPanel key={`channel:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={channelPending}/> }
   {view&&account?.role==='ADMIN'&&<DemoPilotPanel key={`demo:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={demoPending}/> }
   {view&&<FieldOperationsPanel key={`field:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} tasks={view.tasks} onPending={fieldPending} onTasksChanged={tasksChanged}/> }
+  {view&&<MaterialInventoryPanel key={`inventory:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} tasks={view.tasks} onPending={inventoryPending}/> }
   {view&&account?.canManageIntegrations&&<SitePurchasePanel key={`purchases:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={purchasePending}/> }
   {view&&account?.canManageIntegrations&&<CustomerWhatsAppPanel key={`${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={preparationPending}/> }
   {view&&account?.canManageIntegrations&&<MetaOnboardingPanel key={`meta:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={metaPending}/> }

@@ -22,7 +22,9 @@ export function createFieldHandlers({verify,operations}) {
     const session=await identity(request,verify),params=new URL(request.url).searchParams;
     if(request.method==='POST'){if(params.size)throw new WorkspaceError('FIELD_QUERY_INVALID');return reply(await operations.save(session,await boundedBody(request)));}
     if(request.method!=='GET')return reply({code:'METHOD_NOT_ALLOWED'},405);
-    const input=context(params,['operationId','proposalId']);
+    const input=context(params,['operationId','proposalId','afterMovement','afterConsumption','consumptionId']);
+    const inventoryKeys=['afterMovement','afterConsumption','consumptionId'].filter(key=>params.has(key));
+    if(inventoryKeys.length){const key=inventoryKeys[0];if(params.has('operationId')||params.has('proposalId')||inventoryKeys.length!==1||!workspaceId(params.get(key)))throw new WorkspaceError('INVENTORY_QUERY_INVALID');return reply(await operations.inventoryHistory(session,{...input,[key]:params.get(key)}));}
     if(params.has('proposalId')){
       if(params.has('operationId')||!workspaceId(params.get('proposalId')))throw new WorkspaceError('FIELD_QUERY_INVALID');
       return reply(await operations.proposalEvidence(session,{...input,proposalId:params.get('proposalId')}));

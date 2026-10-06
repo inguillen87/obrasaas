@@ -35,6 +35,8 @@ jobs:
           package-manager-cache: false
       - run: npm ci --no-audit --no-fund
       - run: node --test tests/production-*.test.mjs
+      - name: Company principal separation and schema adoption lint
+        run: npx eslint scripts/lib/company-contact-migration.mjs scripts/adopt-company-contact-schema.mjs tests/production-company-contact-migration.test.mjs --max-warnings 0
       - name: Affected lint
         run: npx eslint src/lib/legacy-access-boundary.js src/lib/auth.js src/proxy.js src/app/api/state/route.js src/app/api/whatsapp/route.js src/app/api/health/route.js "src/app/(identity)" src/lib/production-identity-config.mjs tests/production-domain-identity.test.mjs src/app/access-notice.js next.config.mjs scripts/verify-production-boundary.mjs tests/production-access-boundary.test.mjs tests/production-dependencies.test.mjs tests/production-cutover-audit.test.mjs scripts/lib/legacy-cutover-audit.mjs scripts/lib/read-legacy-cutover.mjs scripts/audit-legacy-cutover.mjs scripts/verify-cutover-readonly-postgres.mjs scripts/lib/legacy-mapping-plan.mjs scripts/lib/legacy-mapping-files.mjs scripts/lib/legacy-mapping-review.mjs scripts/plan-legacy-mapping.mjs scripts/verify-mapping-plan-postgres.mjs scripts/verify-mapping-review-ui.mjs tests/production-mapping-plan.test.mjs tests/helpers/legacy-mapping-fixture.mjs scripts/lib/legacy-link-policy.mjs scripts/lib/legacy-link-store.mjs scripts/lib/legacy-link-report.mjs scripts/rehearse-legacy-links.mjs scripts/verify-link-rehearsal-postgres.mjs scripts/verify-link-report-ui.mjs tests/production-link-rehearsal.test.mjs src/lib/private-image-upload.mjs src/lib/blobStorage.js src/app/api/webview/kyc/route.js tests/production-private-image-storage.test.mjs
       - name: Identity context lint
@@ -45,6 +47,10 @@ jobs:
         run: npx eslint src/app/brand src/lib/brand-assets.mjs src/app/layout.js src/app/page.js tests/production-brand-v3.test.mjs scripts/verify-brand-v3-browser.mjs scripts/verify-access-contrast.mjs
       - name: Pilot media and KYC lint
         run: npx eslint src/lib/pilot-media.mjs src/lib/kyc-pilot-boundary.mjs src/lib/aiVision.js src/app/api/webview/kyc/route.js src/app/api/whatsapp/route.js tests/production-pilot-media.test.mjs scripts/verify-pilot-media-live.mjs
+      - name: Plan import source and opt-in provider check lint
+        run: npx eslint src/lib/plan-import-*.mjs src/app/api/identity/plan-import scripts/lib/plan-import-live-check.mjs scripts/verify-plan-import-*.mjs scripts/fixtures/generate-plan-import-fixtures.mjs tests/production-plan-import*.test.mjs --max-warnings 0
+      - name: Canonical material inventory and consumption lint
+        run: npx eslint src/lib/material-inventory.mjs scripts/verify-material-inventory-*.mjs tests/production-material-inventory.test.mjs --max-warnings 0
       - name: Guided demo lint
         run: npx eslint src/app/demo src/app/page.js tests/production-guided-demo.test.mjs scripts/verify-guided-demo.mjs scripts/verify-demo-company-ui.mjs
       - name: Signed session verification lint
@@ -69,7 +75,7 @@ jobs:
         run: node scripts/verify-demo-company-ui.mjs
       - name: Professional landing, reduced motion and keyboard navigation
         run: |
-          npx eslint src/app/page.js src/app/landing-interactions.js scripts/verify-professional-landing-ui.mjs --max-warnings 0
+          npx eslint src/app/page.js src/app/landing-interactions.js src/app/landing-phone-scene.js scripts/verify-professional-landing-ui.mjs --max-warnings 0
           node scripts/verify-professional-landing-ui.mjs
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()

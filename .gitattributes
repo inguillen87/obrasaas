@@ -4,3 +4,5 @@
 /src/app/brand/*.js text eol=lf
 /src/app/brand/*.css text eol=lf
 /docs/BRAND_SYSTEM.md text eol=lf
+/scripts/fixtures/plan-import-synthetic-v1.pdf binary
+/scripts/fixtures/plan-import-synthetic-v1.png binary

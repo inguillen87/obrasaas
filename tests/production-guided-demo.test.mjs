@@ -15,10 +15,14 @@ test('demonstration has no business I/O, credential collection, persistence or a
  assert.ok(source.includes('data-demo-only="true"'));assert.ok(source.includes('Sólo ejemplos ficticios.'));assert.ok(source.includes('No solicita DNI, fotos, audios ni datos de empleados.'));assert.ok(source.includes('0 operaciones reales'));
 });
 test('home demo destinations do not point to protected dashboard and lead receipts are not fabricated',()=>{
- const source=read('src/app/page.js');assert.ok((source.match(/href="\/demo"/g)||[]).length>=2);
- assert.doesNotMatch(source,/href="\/dashboard"|setLeadSubmitted|handleLeadSubmit|fetch\(['"]\/api\/state|Plataforma activa — 5 obras|Compliance normativo|Setup en 3 minutos/);
+ const source=read('src/app/page.js'),phone=read('src/app/landing-phone-scene.js');assert.ok((source.match(/href="\/demo"/g)||[]).length>=2);
+ assert.match(source,/import\s+\{LandingPhoneScene\}\s+from\s+['"]\.\/landing-phone-scene['"]/);
+ assert.match(source,/<LandingPhoneScene\s*\/>/);
+ for(const publicSource of [source,phone])assert.doesNotMatch(publicSource,/href="\/dashboard"|setLeadSubmitted|handleLeadSubmit|fetch\(['"]\/api\/state|Plataforma activa — 5 obras|Compliance normativo|Setup en 3 minutos/);
  assert.ok(source.includes('La conexión requiere un número autorizado y completar los requisitos de Meta.'));
- assert.ok(source.includes('Ejemplo ilustrativo'));assert.ok(source.includes('Conversación de ejemplo'));
+ assert.ok(source.includes('Ejemplo ilustrativo'));assert.ok(phone.includes('Ejemplo ilustrativo'));assert.ok(phone.includes('CONVERSACIÓN DE EJEMPLO'));
+ assert.ok(phone.includes('con horarios y referencia ficticios.'));assert.ok(phone.includes('No envía mensajes, no reproduce audio ni solicita tu ubicación.'));
+ assert.doesNotMatch(phone,/fetch\(|localStorage|sessionStorage|indexedDB|setCookie|useUser|useAuth|<input|<form|type=["']file|navigator\.mediaDevices|navigator\.geolocation|verified:\s*true/);
 });
 test('demonstration retains the approved brand and independent account path',()=>{
  const source=read('src/app/demo/demo-client.js');assert.ok(source.includes('ObraSaasLogo'));assert.ok(source.includes('href="/sign-in"'));

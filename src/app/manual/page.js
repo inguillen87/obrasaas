@@ -10,6 +10,7 @@ export const metadata = {
 
 const contents = [
   ['empezar', 'Abrir la empresa'], ['equipo', 'Invitar al equipo'], ['trabajo', 'Registrar trabajo'],
+  ['cronograma', 'Importar un cronograma'], ['inventario', 'Compras y consumo'],
   ['clientes', 'Clientes y seguimiento'], ['whatsapp', 'Conectar WhatsApp'], ['menu', 'Usar el menú'],
   ['recuperacion', 'Resolver un resultado pendiente'], ['equipo-tecnico', 'Equipo técnico'],
 ];
@@ -19,6 +20,7 @@ const commands = [
   ['TAREAS / ESTADO', 'Consultar las tareas y el estado del circuito de la obra.'],
   ['EVIDENCIA', 'Elegir tarea y sector antes de enviar una foto, audio o video privado.'],
   ['INCIDENCIA / MATERIALES', 'Informar un problema o solicitar material para revisión.'],
+  ['CONSUMO', 'Elegir un material del catálogo e informar su uso. El stock cambia después de una aprobación autorizada.'],
   ['AVANCE', 'Proponer un avance respaldado por evidencia aprobada de la tarea.'],
   ['CANCELAR', 'Volver al menú; una operación ya guardada conserva su recibo.'],
 ];
@@ -93,15 +95,39 @@ export default function ManualPage() {
             <p className={styles.note}>Los permisos de cámara y ubicación se conceden en el navegador. Se guarda una ubicación puntual para el fichaje; no se realiza seguimiento continuo.</p>
           </section>
 
+          <section id="cronograma" className={styles.section} aria-labelledby="cronograma-title">
+            <p className={styles.eyebrow}>04 · PLANIFICACIÓN</p><h2 id="cronograma-title">Del PDF o la imagen al cronograma</h2>
+            <ol className={styles.stepsList}>
+              <li>En el cronograma de la obra, elegí <strong>Importar PDF o imagen</strong>. Usá un PDF de hasta 3 MB o una imagen PNG, JPEG o WebP de hasta 2 MB, legible y con un máximo de 50 tareas.</li>
+              <li>Revisá el archivo y autorizá su envío a OpenAI para esta extracción. Elegí <strong>Extraer borrador</strong>. La fuente queda privada; todavía no se crean tareas.</li>
+              <li>Compará los títulos y fechas con <strong>Descargar fuente</strong>. Corregí las filas, completá fechas dudosas y resolvé cada observación. Podés excluir filas y <strong>Guardar correcciones</strong> con un motivo.</li>
+              <li>Un administrador o director revisa cuántas tareas existentes y nuevas tendrá la obra, confirma su aprobación y elige <strong>Aplicar tareas</strong>. Las nuevas empiezan por iniciar y con avance cero; las existentes conservan sus fechas y avance.</li>
+            </ol>
+            <div className={styles.callout}><strong>Un borrador necesita revisión</strong><p>Una imagen de un Gantt no acredita trabajo ejecutado ni convierte sus porcentajes en avance aprobado. Si cambió el cronograma durante la revisión, consultá el estado y prepará un borrador sobre la planificación vigente. Una fuente ya aplicada a esa obra no genera otro lote.</p><p>Ante una respuesta perdida, usá <strong>Comprobar resultado</strong>. La consulta no repite la IA. El panel muestra los 20 borradores más recientes. Este navegador conserva la referencia pendiente, sin guardar el archivo ni sus filas. Podés cerrar el panel y volver a comprobar el resultado; mientras siga incierto no se habilita otra carga de esa obra.</p><p>Si todavía no se observa un registro y el panel conserva los datos originales de ese intento, puede ofrecer <strong>Reintentar los mismos datos</strong>. Es una decisión tuya. Al cerrar o recargar desaparece esa opción; se conserva la referencia para consultar.</p></div>
+          </section>
+
+          <section id="inventario" className={styles.section} aria-labelledby="inventario-title">
+            <p className={styles.eyebrow}>05 · MATERIALES</p><h2 id="inventario-title">Compras, entregas y consumo</h2>
+            <ol className={styles.stepsList}>
+              <li>En <strong>Inventario y consumo → Abrir inventario → Agregar material</strong>, el administrador o director prepara el catálogo de la obra con nombre y unidad. Cada material comienza sin existencias; no se calcula stock a partir de mensajes antiguos.</li>
+              <li>Registrá el pedido de materiales. En compras, prepará la cotización y obtené la autorización del importe. Comprar y recibir son pasos distintos; el pago tiene su registro propio.</li>
+              <li>En <strong>Registrar entrega</strong>, elegí el material exacto del catálogo, con la misma unidad del pedido, la cantidad recibida y el remito o referencia. La recepción confirmada aumenta ese saldo una sola vez. Las entregas anteriores que no se vincularon al catálogo no se convierten automáticamente en stock.</li>
+              <li>La persona habilitada elige <strong>Proponer consumo</strong>, material, cantidad, sector y motivo; puede relacionarlo con una tarea. En WhatsApp escribe <code>CONSUMO</code>, sigue las opciones y confirma el envío para revisión.</li>
+              <li>Otro administrador o director abre <strong>Consumos informados</strong> y decide con fundamento. <strong>Aprobar consumo</strong> descuenta la cantidad si alcanza el saldo; <strong>Rechazar consumo</strong> conserva las existencias. Si el catálogo cambió desde la propuesta, rechazala con motivo y pedí una nueva selección vigente. Para registros más antiguos, usá <strong>Consultar consumos anteriores</strong>.</li>
+            </ol>
+            <details className={styles.details}><summary>Corregir un consumo aprobado</summary><p>Un administrador o director distinto de quien lo aprobó puede elegir <strong>Revertir consumo</strong> y explicar el motivo. Se registra un movimiento que devuelve la cantidad; el consumo original y su decisión permanecen en el historial. La reversión no elimina ni modifica el remito de compra.</p></details>
+            <p className={styles.note}>Usá punto decimal y hasta tres decimales. No hay conversiones entre bolsas, kilos y metros cúbicos. Una foto, un mensaje o un resultado de IA no descuentan existencias ni autorizan una compra.</p>
+          </section>
+
           <section id="clientes" className={styles.section} aria-labelledby="clientes-title">
-            <p className={styles.eyebrow}>04 · SEGUIMIENTO COMERCIAL</p><h2 id="clientes-title">Clientes y oportunidades</h2>
+            <p className={styles.eyebrow}>06 · SEGUIMIENTO COMERCIAL</p><h2 id="clientes-title">Clientes y oportunidades</h2>
             <p>El <strong>administrador</strong> accede a <strong>Mi cuenta → Abrir obra → Clientes</strong>. Cargá nombre, contacto, correo, teléfono, etapa, actividad, origen, próximo seguimiento y notas. Las fichas pertenecen a toda la empresa; la obra abierta aporta el contexto autorizado.</p>
             <p>La consulta muestra páginas de 20 registros. Usá Buscar clientes para consultar toda tu empresa por nombre, contacto, correo o teléfono; las páginas conservan la búsqueda. No hace falta respetar las mayúsculas, pero sí las tildes del dato guardado. Si una ficha cambió mientras editabas, consultá su versión vigente, compará los datos y revisá el cambio antes de guardar.</p>
             <p className={styles.note}>Guardar un cliente no verifica su número ni autoriza WhatsApp. Este CRM cubre contactos y etapas; no genera cotizaciones, presupuestos formales, licitaciones o automatizaciones comerciales.</p>
           </section>
 
           <section id="whatsapp" className={styles.section} aria-labelledby="whatsapp-title">
-            <p className={styles.eyebrow}>05 · WHATSAPP DE LA EMPRESA</p><h2 id="whatsapp-title">Preparar y autorizar tu número</h2>
+            <p className={styles.eyebrow}>07 · WHATSAPP DE LA EMPRESA</p><h2 id="whatsapp-title">Preparar y autorizar tu número</h2>
             <p>Este recorrido corresponde al número propio de la empresa. Tener la preparación guardada no significa que Meta ya autorizó la conexión.</p>
             <ol className={styles.stepsList}>
               <li>En <strong>Preparar WhatsApp → Tu número. Tu obra.</strong>, elegí nombre del asistente, tipo de número y circuitos. Usá <strong>número nuevo dedicado</strong> si la línea está libre y podés recibir SMS o llamada. Si ya trabajás en la app <strong>WhatsApp Business</strong>, elegí ese modo para preparar la coexistencia. Si ya usás <strong>Cloud API o un proveedor</strong>, necesitás revisar el plan de autorización de esa cuenta antes de conectarla. WhatsApp personal requiere primero el traslado oficial a Business App con respaldo; no borres tu cuenta ni desinstales la app para intentar habilitar una conexión.</li>
@@ -121,7 +147,7 @@ export default function ManualPage() {
           </section>
 
           <section id="menu" className={styles.section} aria-labelledby="menu-title">
-            <p className={styles.eyebrow}>06 · CONVERSACIÓN DE OBRA</p><h2 id="menu-title">Qué escribir en WhatsApp</h2>
+            <p className={styles.eyebrow}>08 · CONVERSACIÓN DE OBRA</p><h2 id="menu-title">Qué escribir en WhatsApp</h2>
             <p>Después de vincularte a un canal habilitado, escribí <code>MENU</code>. Las opciones dependen de tus permisos actuales. Elegí las opciones del último menú y revisá cada confirmación antes de guardar.</p>
             <p>El menú de jornada ofrece entrada, pausa, reanudación o salida según tu jornada vigente. Si un dato de avance o materiales no es válido, corregilo como indica la respuesta: el borrador sigue pendiente y todavía no se guardó ni se aprobó.</p>
             <dl className={styles.commands}>{commands.map(([command, explanation]) => <div key={command}><dt><code>{command}</code></dt><dd>{explanation}</dd></div>)}</dl>
@@ -129,13 +155,13 @@ export default function ManualPage() {
           </section>
 
           <section id="recuperacion" className={styles.section} aria-labelledby="recuperacion-title">
-            <p className={styles.eyebrow}>07 · COMPROBAR ANTES DE REPETIR</p><h2 id="recuperacion-title">Cuando el resultado queda pendiente</h2>
+            <p className={styles.eyebrow}>09 · COMPROBAR ANTES DE REPETIR</p><h2 id="recuperacion-title">Cuando el resultado queda pendiente</h2>
             <ol className={styles.stepsList}><li>Conservá la empresa y la obra correctas. Usá <strong>Comprobar estado</strong>, <strong>Comprobar creación</strong> o la acción de consultar recibo que ofrezca el panel.</li><li>La consulta comprueba lo registrado y no repite el envío. Una respuesta de aceptación de Meta tampoco demuestra entrega al teléfono: revisá el estado de entrega.</li><li>Si la sesión terminó, volvé a ingresar y seleccioná la misma empresa y obra. Si cambiaron los permisos o la revisión, consultá el estado actual antes de decidir.</li><li>No generes otro intento para eludir un envío incierto. Un registro rechazado definitivamente puede habilitar una nueva confirmación explícita; un resultado desconocido se recupera primero.</li></ol>
-            <div className={styles.callout}><strong>Qué conserva el navegador</strong><p>Las referencias pendientes guardan identificadores mínimos en IndexedDB para consultar el recibo, sin textos, imágenes, PIN ni códigos de vinculación. No son una copia de tus borradores ni una cola de archivos sin conexión. Para consultar se necesita conexión y acceso vigente.</p><p>Después de una actualización de la aplicación, recargá las pestañas antiguas antes de continuar. Si el almacenamiento del navegador falla, resolvelo antes de volver a guardar; no eludas la comprobación desde otra pestaña.</p></div>
+            <div className={styles.callout}><strong>Qué conserva el navegador</strong><p>El navegador conserva referencias mínimas para consultar los recibos, sin textos, imágenes, PIN ni códigos de vinculación. La importación también conserva su intento pendiente para volver a consultarlo. No son una copia de tus borradores ni una cola de archivos sin conexión. Para consultar se necesita conexión y acceso vigente.</p><p>Después de una actualización de la aplicación, recargá las pestañas antiguas antes de continuar. Si el almacenamiento del navegador falla, resolvelo antes de volver a guardar; no eludas la comprobación desde otra pestaña.</p></div>
           </section>
 
           <section id="equipo-tecnico" className={styles.section} aria-labelledby="tecnico-title">
-            <p className={styles.eyebrow}>08 · EQUIPO TÉCNICO</p><h2 id="tecnico-title">Comprobaciones antes de liberar el piloto</h2>
+            <p className={styles.eyebrow}>10 · EQUIPO TÉCNICO</p><h2 id="tecnico-title">Comprobaciones antes de liberar el piloto</h2>
             <p>Esta sección acompaña al equipo que configura y verifica la plataforma. No solicita credenciales en el manual ni ejecuta cambios del proveedor.</p>
             <p className={styles.note}>La dirección <code>/api/webhooks/whatsapp</code> es el receptor técnico de Meta. Abrirla directamente en el navegador no configura WhatsApp y puede mostrar un error de verificación. Para preparar la empresa y consultar su conexión, usá <Link href="/cuenta">Mi cuenta</Link>.</p>
             <details className={styles.details}><summary>Identidad y alta de empresa</summary><ul><li>Comprobar instancia Production de Clerk, claves existentes y dominio autorizado. El ingreso social necesita clientes OAuth propios y retorno exacto; un botón visible no prueba la sesión.</li><li>Verificar correo primario y pertenencia oficial de administrador. El alta valida sesión y prueba de perfil firmadas, y crea empresa, primera obra y recibo en la misma transacción.</li><li>Comprobar invitación recibida y aceptada por la cuenta correcta, pertenencia canónica y obra asignada. No usar un teléfono o correo escrito como autoridad.</li><li>Probar carga y descarga privadas con el titular y otro revisor autorizado. Eliminar de los registros de diagnóstico documentos, selfies y localizadores privados.</li></ul></details>
@@ -145,7 +171,7 @@ export default function ManualPage() {
           </section>
         </div>
       </div>
-      <footer className={styles.footer}><p>Guía revisada el 5 de octubre de 2026 · ObraSaaS, un producto desarrollado por Inmovar LATAM.</p><div><Link href="/cuenta">Ir a Mi cuenta</Link><a href="#manual-title">Volver al inicio del manual</a></div></footer>
+      <footer className={styles.footer}><p>Guía revisada el 6 de octubre de 2026 · ObraSaaS, un producto desarrollado por Inmovar LATAM.</p><div><Link href="/cuenta">Ir a Mi cuenta</Link><a href="#manual-title">Volver al inicio del manual</a></div></footer>
     </main>
   </div>;
 }
