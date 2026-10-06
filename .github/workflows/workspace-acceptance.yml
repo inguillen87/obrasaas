@@ -142,6 +142,10 @@ jobs:
           npx eslint scripts/verify-mobile-identity-ui.mjs tests/production-photo-preparation.test.mjs
           node --test tests/production-photo-preparation.test.mjs
           node scripts/verify-mobile-identity-ui.mjs
+      - name: Mobile participant and attendance review sources
+        run: |
+          npx eslint scripts/verify-mobile-workspace-review-ui.mjs --max-warnings 0
+          node scripts/verify-mobile-workspace-review-ui.mjs
       - run: node scripts/verify-field-operations-ui.mjs
       - name: Local QR decoding and camera cancellation
         run: |
@@ -177,6 +181,8 @@ jobs:
             .vercel/private/plan-import-ui-validation.json
             .vercel/private/plan-import-ui-*.png
             .vercel/private/workspace-plan-recovery-ui-validation.json
+            .vercel/private/mobile-workspace-review-ui-validation.json
+            .vercel/private/mobile-workspace-review-ui-*.png
             .vercel/customer-whatsapp-evidence/
             .vercel/company-onboarding-evidence/
             .vercel/site-register-evidence/
