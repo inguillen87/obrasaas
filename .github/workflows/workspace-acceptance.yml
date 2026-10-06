@@ -98,6 +98,13 @@ jobs:
           node scripts/verify-worker-channel-postgres.mjs
           node scripts/verify-meta-customer-processing-postgres.mjs
           node scripts/verify-meta-field-bridge-postgres.mjs
+      - name: Restricted own-business Meta pilot and authorization expiry
+        run: |
+          npx eslint src/lib/meta-development-pilot-policy.mjs src/lib/meta-customer-provider.mjs src/lib/meta-customer-onboarding.mjs src/lib/meta-customer-activation.mjs src/lib/meta-customer-app-projection.mjs src/lib/meta-customer-outbound.mjs src/lib/meta-customer-processing-runtime.mjs src/lib/meta-customer-processing.mjs src/lib/meta-field-bridge.mjs src/lib/worker-channel-identity.mjs src/lib/company-channel-store.mjs 'src/app/(identity)/cuenta/meta-onboarding-panel.js' 'src/app/(identity)/cuenta/meta-onboarding-readiness-view.mjs' tests/production-meta-development-pilot.test.mjs tests/production-meta-onboarding-readiness-view.test.mjs scripts/verify-meta-development-pilot-postgres.mjs scripts/verify-meta-development-pilot-boundary.mjs scripts/verify-meta-development-pilot-ui.mjs scripts/verify-meta-customer-ui.mjs --max-warnings 0
+          node --test tests/production-meta-development-pilot.test.mjs tests/production-meta-onboarding-readiness-view.test.mjs
+          node scripts/verify-meta-development-pilot-postgres.mjs
+          node scripts/verify-meta-development-pilot-boundary.mjs
+          node scripts/verify-meta-development-pilot-ui.mjs
       - name: Signup to participant field lifecycle
         run: |
           npx eslint scripts/verify-meta-signup-field-lifecycle-postgres.mjs scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs tests/production-meta-signup-field-lifecycle.test.mjs
@@ -197,6 +204,10 @@ jobs:
             .vercel/purchase-evidence/
             .vercel/worker-channel-evidence/
             .vercel/meta-field-evidence/
+            .vercel/private/restricted-meta-pilot-postgres-proof.json
+            .vercel/private/restricted-meta-pilot-boundary-proof.json
+            .vercel/private/restricted-meta-pilot-ui/proof.json
+            .vercel/private/restricted-meta-pilot-ui/active-*.png
             .vercel/meta-signup-field-lifecycle-evidence/
             .vercel/private/company-channel-postgres-proof.json
             .vercel/private/company-channel-boundary-proof.json
