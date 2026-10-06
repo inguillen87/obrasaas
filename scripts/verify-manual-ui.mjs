@@ -26,7 +26,7 @@ const server = spawn(process.execPath, [path.join(root,'node_modules/next/dist/b
 let browser, page, log = '', failure;
 const checks = [], errors = [], requests = [], widths = [320,390,768,1280];
 for (const stream of [server.stdout,server.stderr]) stream.on('data', chunk => { log = (log + chunk.toString()).slice(-10000); });
-const sectionIds = ['empezar','equipo','trabajo','clientes','whatsapp','menu','recuperacion','equipo-tecnico'];
+const sectionIds = ['empezar','equipo','trabajo','cronograma','inventario','clientes','whatsapp','menu','recuperacion','equipo-tecnico'];
 const luminance = values => values.map(v=>{const n=v/255;return n<=.04045?n/12.92:((n+.055)/1.055)**2.4;}).reduce((sum,n,index)=>sum+n*[.2126,.7152,.0722][index],0);
 function ratio(foreground,background){const a=luminance(foreground),b=luminance(background);return (Math.max(a,b)+.05)/(Math.min(a,b)+.05);}
 function stopOwned(pid){if(process.platform!=='win32'){try{process.kill(-pid,'SIGTERM');}catch(error){if(error.code!=='ESRCH')throw error;}return;}const result=spawnSync('taskkill.exe',['/PID',String(pid),'/T','/F'],{stdio:'ignore'});if(result.status!==0){try{process.kill(pid,0);}catch(error){if(error.code==='ESRCH')return;throw error;}assert.equal(result.status,0,'Owned process cleanup failed');}}
