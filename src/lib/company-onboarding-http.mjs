@@ -1,6 +1,6 @@
 import {WorkspaceError} from './workspace-policy.mjs';
 import {boundedBody} from './workspace-http.mjs';
-import {requireNewCompanyAdmin,normalizeCompanyOnboarding} from './company-onboarding-policy.mjs';
+import {requireNewCompanyAdmin,normalizeCompanyOnboarding,normalizeCompanyPhoneCommand} from './company-onboarding-policy.mjs';
 const reply=(body,status=200)=>Response.json(body,{status,headers:{'Cache-Control':'private, no-store, max-age=0','Vary':'Cookie, Authorization','Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff'}});
 export function createCompanyOnboardingHandlers({verifySession,verifyProfile,store}){
  async function handle(request){
@@ -11,13 +11,17 @@ export function createCompanyOnboardingHandlers({verifySession,verifyProfile,sto
    if(request.headers.get('sec-fetch-site')==='cross-site')throw new WorkspaceError('WORKSPACE_ORIGIN_REJECTED',403);
    const params=new URL(request.url).searchParams;
    if(request.method==='GET'){
-    for(const name of params.keys())if(!['expectedClerkOrganizationId','operationId'].includes(name)||params.getAll(name).length!==1)throw new WorkspaceError('COMPANY_ONBOARDING_INPUT_INVALID');
+    for(const name of params.keys())if(!['expectedClerkOrganizationId','operationId','action','projectId','scope'].includes(name)||params.getAll(name).length!==1)throw new WorkspaceError('COMPANY_ONBOARDING_INPUT_INVALID');
     if(params.get('expectedClerkOrganizationId')!==session.organizationId)throw new WorkspaceError('WORKSPACE_CONTEXT_CHANGED',409);
+    if(params.has('action')){if(params.get('action')!=='declare_company_phone')throw new WorkspaceError('COMPANY_PHONE_INPUT_INVALID');return reply(await store.phoneStatus(session,{projectId:params.get('projectId'),scope:params.get('scope'),...(params.has('operationId')?{operationId:params.get('operationId')}:{})}));}
+    if(params.has('projectId')||params.has('scope'))throw new WorkspaceError('COMPANY_ONBOARDING_INPUT_INVALID');
     return reply(await store.status(session,params.has('operationId')?{operationId:params.get('operationId')}:{}));
    }
    if(request.method!=='POST')return reply({code:'METHOD_NOT_ALLOWED'},405);
    if(params.size||request.headers.get('origin')!=='https://obrasaas.com')throw new WorkspaceError('WORKSPACE_ORIGIN_REJECTED',403);
-   const body=await boundedBody(request);normalizeCompanyOnboarding(body,session);
+   const body=await boundedBody(request);
+   if(body?.action==='declare_company_phone'){normalizeCompanyPhoneCommand(body,session);return reply(await store.declarePhone(session,body));}
+   normalizeCompanyOnboarding(body,session);
    const profile=await verifyProfile(request.headers.get('x-obrasaas-bootstrap-profile'),session);
    return reply(await store.create(session,body,profile));
   }catch(error){return reply({created:false,code:error instanceof WorkspaceError?error.code:'COMPANY_CREATION_UNCONFIRMED'},error instanceof WorkspaceError?error.status:503);}

@@ -8,6 +8,7 @@ import {hasMetaCustomerRequiredScopes} from './meta-customer-permissions.mjs';
 import {metaCustomerScopedTransportReady} from './meta-customer-provider.mjs';
 import {developmentPilotConnectionPolicy} from './meta-development-pilot-policy.mjs';
 import {customerLifecycleRecovery} from './meta-customer-coexistence.mjs';
+import {assertCompanyPhoneMatch,companyPhoneAuthorizationContract} from './company-onboarding-policy.mjs';
 const coexistenceGrant=connection=>connection?.metadata?.coexistence?.verified===true&&Number.isFinite(Date.parse(connection.metadata.coexistence.verifiedAt))&&connection.metadata.customerVerification?.isOnBizApp===true&&connection.metadata.customerVerification?.platformType==='CLOUD_API';
 export function customerActivationLifecycleReady(connection){
  const lifecycle=connection?.metadata?.customerLifecycle,recovery=customerLifecycleRecovery(connection);
@@ -40,6 +41,7 @@ export function createMetaCustomerActivation({workspace,provider,environment=pro
     await client.query(`UPDATE public."WhatsAppConnection" SET enabled=false,"connectionStatus"='DISABLED',metadata=metadata||$3::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[channel.id,project.id,JSON.stringify({customerActivation:{version:1,state:'DEACTIVATED',actorId:member.actorId,deactivatedAt:new Date(now()).toISOString()}})]);
     await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'integration.whatsapp.customer.deactivated','WhatsAppConnection',$4,$5::jsonb)`,[key,member.organizationId,member.actorId,channel.id,JSON.stringify({version:1,projectId:project.id,operationDigest})]);return {done:true};
    }
+   if(Object.hasOwn(channel.metadata,'declaredCompanyPhone')){const company=(await client.query(`SELECT metadata FROM public."Organization" WHERE id=$1 FOR SHARE`,[member.organizationId])).rows[0];if(!company)throw new WorkspaceError('META_CUSTOMER_COMPANY_PHONE_CHANGED',409);assertCompanyPhoneMatch(companyPhoneAuthorizationContract(channel.metadata),company.metadata,channel.metadata.customerVerification?.displayPhoneNumber);}
    if(!customerActivationLifecycleReady(channel))throw new WorkspaceError('META_CUSTOMER_ACTIVATION_RECONNECTION_REQUIRED',409);
    const previousSignup=customerLifecycleRecovery(channel)?.authorizationSignupId||channel.metadata.customerLifecycle?.authorizationSignupId;
    if(previousSignup&&channel.metadata.customerSignupId!==previousSignup){const signup=project.metadata?.metaSignup;if(signup?.id!==channel.metadata.customerSignupId||signup.state!=='LINKED_PENDING_ACCEPTANCE'||signup.organizationId!==member.organizationId||signup.wabaId!==channel.whatsappBusinessId||signup.phoneNumberId!==channel.phoneNumberId)throw new WorkspaceError('META_CUSTOMER_ACTIVATION_REAUTHORIZATION_REQUIRED',409);}
@@ -63,6 +65,11 @@ export function createMetaCustomerActivation({workspace,provider,environment=pro
     const profile=readProjectWorkspaceProfile(project.metadata,project.organizationMetadata,project.id).profile;if(!profile.configured||profile.numberMode!==claimed.numberMode||profile.revision!==claimed.preparedRevision)throw new WorkspaceError('META_CUSTOMER_PREPARATION_CHANGED',409);
     if(!metaCustomerScopedTransportReady(provider.readiness()))throw new WorkspaceError(provider.readiness().pilot?.code||'META_CUSTOMER_CONFIGURATION_PENDING',503);
     const channel=await load(client,member,project);if(channel.id!==claimed.channel.id||channel.phoneNumberId!==claimed.channel.phoneNumberId||channel.whatsappBusinessId!==claimed.channel.whatsappBusinessId||channel.encryptedAccessToken!==claimed.channel.encryptedAccessToken||channel.metadata.customerActivation?.leaseId!==claimed.leaseId||Date.parse(channel.metadata.customerActivation.leaseExpiresAt)<=now())throw new WorkspaceError('META_CUSTOMER_ACTIVATION_CHANGED',409);
+    if(Object.hasOwn(claimed.channel.metadata,'declaredCompanyPhone')){
+     if(digest(companyPhoneAuthorizationContract(channel.metadata))!==digest(companyPhoneAuthorizationContract(claimed.channel.metadata)))throw new WorkspaceError('META_CUSTOMER_COMPANY_PHONE_CHANGED',409);
+     const company=(await client.query(`SELECT metadata FROM public."Organization" WHERE id=$1 FOR SHARE`,[member.organizationId])).rows[0];
+     if(!company)throw new WorkspaceError('META_CUSTOMER_COMPANY_PHONE_CHANGED',409);if(verified.phoneNumberId!==channel.phoneNumberId)throw new WorkspaceError('META_CUSTOMER_PHONE_WABA_MISMATCH',403);assertCompanyPhoneMatch(companyPhoneAuthorizationContract(channel.metadata),company.metadata,verified.displayPhoneNumber);
+    }
     if(digest(channel.metadata.customerLifecycle||null)!==claimed.lifecycleDigest)throw new WorkspaceError('META_CUSTOMER_ACTIVATION_CHANGED',409);
     if(claimed.reauthorizationDigest&&digest(project.metadata.metaSignup)!==claimed.reauthorizationDigest)throw new WorkspaceError('META_CUSTOMER_ACTIVATION_REAUTHORIZATION_REQUIRED',409);
     if(claimed.numberMode==='BUSINESS_APP'&&!coexistenceGrant(channel))throw new WorkspaceError('META_CUSTOMER_COEXISTENCE_PHONE_REQUIRED',409);

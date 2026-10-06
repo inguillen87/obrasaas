@@ -11,11 +11,12 @@ import {createMetaCustomerActivation,publicCustomerActivation} from './meta-cust
 import {customerSignupFlow,createMetaCustomerCoexistence,publicCustomerCoexistence,customerLifecycleRecovery} from './meta-customer-coexistence.mjs';
 
 import {companyConnectionForProject,assertLegacyProjectChannel} from './company-channel-connection.mjs';
+import {companyPhoneContract,readCompanyPhoneDeclaration,assertCompanyPhoneMatch,companyPhoneAuthorizationContract} from './company-onboarding-policy.mjs';
 const activeStates=new Set(['PREPARED','EXCHANGE_STARTED','EXCHANGE_UNKNOWN','CREDENTIAL_STORED','VERIFYING','REVIEW_REQUIRED','LINKED_PENDING_ACCEPTANCE','REGISTRATION_REQUIRED','REGISTRATION_REJECTED','REGISTRATION_VERIFYING','REGISTRATION_STARTED','REGISTRATION_UNKNOWN']);
 const secretContext=(member,project,purpose,resourceId)=>({organizationId:member.organizationId,projectId:project.id,purpose,resourceId});
-const publicSignup=(state,time)=>state?{id:state.id,state:state.state,createdAt:state.createdAt,expiresAt:state.expiresAt,updatedAt:state.updatedAt,lastCode:state.lastCode||null,
- numberMode:state.numberMode||'DEDICATED',signupVersion:state.signupVersion||null,configId:state.configId||null,
- wabaId:state.wabaId||null,phoneNumberId:state.phoneNumberId||null,registrationRequired:state.numberMode!=='BUSINESS_APP'&&['REGISTRATION_REQUIRED','REGISTRATION_REJECTED'].includes(state.state),canRegister:state.numberMode!=='BUSINESS_APP'&&['REGISTRATION_REQUIRED','REGISTRATION_REJECTED'].includes(state.state),canRetryRegistration:state.numberMode!=='BUSINESS_APP'&&state.state==='REGISTRATION_REJECTED',canCancel:state.state==='PREPARED',canReconcile:Boolean(state.encryptedToken)&&state.state!=='CANCELLED'&&(state.state!=='VERIFYING'||new Date(state.verificationLeaseExpiresAt).getTime()<=time)&&(!['REGISTRATION_VERIFYING','REGISTRATION_STARTED'].includes(state.state)||new Date(state.registrationLeaseExpiresAt).getTime()<=time),operational:false}:null;
+const publicSignup=(state,time)=>{if(!state)return null;let companyPhoneRevision=null,companyPhoneReviewCode=null;try{companyPhoneRevision=companyPhoneAuthorizationContract(state)?.revision||null;}catch(error){companyPhoneReviewCode=error.code||'COMPANY_PHONE_INTEGRITY';}return {id:state.id,state:state.state,createdAt:state.createdAt,expiresAt:state.expiresAt,updatedAt:state.updatedAt,lastCode:state.lastCode||null,
+  companyPhoneRevision,companyPhoneReviewCode,numberMode:state.numberMode||'DEDICATED',signupVersion:state.signupVersion||null,configId:state.configId||null,
+ wabaId:state.wabaId||null,phoneNumberId:state.phoneNumberId||null,registrationRequired:state.numberMode!=='BUSINESS_APP'&&['REGISTRATION_REQUIRED','REGISTRATION_REJECTED'].includes(state.state),canRegister:!companyPhoneReviewCode&&state.numberMode!=='BUSINESS_APP'&&['REGISTRATION_REQUIRED','REGISTRATION_REJECTED'].includes(state.state),canRetryRegistration:!companyPhoneReviewCode&&state.numberMode!=='BUSINESS_APP'&&state.state==='REGISTRATION_REJECTED',canCancel:state.state==='PREPARED',canReconcile:!companyPhoneReviewCode&&Boolean(state.encryptedToken)&&state.state!=='CANCELLED'&&(state.state!=='VERIFYING'||new Date(state.verificationLeaseExpiresAt).getTime()<=time)&&(!['REGISTRATION_VERIFYING','REGISTRATION_STARTED'].includes(state.state)||new Date(state.registrationLeaseExpiresAt).getTime()<=time),operational:false};};
 function registrationAttempts(state){
  let attempts=state.registrationAttempts||[];
  if(!Array.isArray(attempts)||attempts.length>20)throw new WorkspaceError('META_CUSTOMER_BINDING_INTEGRITY',409);
@@ -36,7 +37,7 @@ function unregisteredState(state){
  if(latest?.state==='NOT_SENT')return state.registrationResumeState==='REGISTRATION_REJECTED'?'REGISTRATION_REJECTED':'REGISTRATION_REQUIRED';
  return 'REGISTRATION_UNKNOWN';
 }
-function stateToken(state,member,project,environment){return createHmac('sha256',environment.META_APP_SECRET).update(JSON.stringify([state.id,member.actorId,member.organizationId,project.id,state.preparedRevision,state.expiresAt,state.numberMode,state.configId,state.signupVersion])).digest('base64url');}
+function stateToken(state,member,project,environment){return createHmac('sha256',environment.META_APP_SECRET).update(JSON.stringify([state.id,member.actorId,member.organizationId,project.id,state.preparedRevision,state.expiresAt,state.numberMode,state.configId,state.signupVersion,...(Object.hasOwn(state,'declaredCompanyPhone')?[state.declaredCompanyPhone]:[])])).digest('base64url');}
 function checkToken(value,expected){if(typeof value!=='string'||value.length!==expected.length||!timingSafeEqual(Buffer.from(value),Buffer.from(expected)))throw new WorkspaceError('META_CUSTOMER_STATE_REJECTED',403);}
 function input(body,fields){if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).sort().join('|')!==fields.sort().join('|')||!operationId(body.operationId))throw new WorkspaceError('META_CUSTOMER_INPUT_INVALID');}
 export function createMetaCustomerOnboarding({workspace,provider,processor=null,environment=process.env,now=()=>Date.now(),scopedProvider=false}){
@@ -77,6 +78,13 @@ export function createMetaCustomerOnboarding({workspace,provider,processor=null,
  const activationService=createMetaCustomerActivation({workspace:guardedWorkspace,provider,environment,now});
  const coexistenceService=createMetaCustomerCoexistence({workspace:guardedWorkspace,provider,environment,now});
  const within=(...args)=>guardedWorkspace.integrationProject(...args);
+ async function checkDeclaredPhone(client,member,state,verified){
+  if(!Object.hasOwn(state,'declaredCompanyPhone'))return;
+  const company=(await client.query(`SELECT metadata FROM public."Organization" WHERE id=$1 FOR SHARE`,[member.organizationId])).rows[0];
+  if(!company)throw new WorkspaceError('META_CUSTOMER_COMPANY_PHONE_CHANGED',409);
+  if(state.numberMode!=='BUSINESS_APP'&&verified.phoneNumberId!==state.phoneNumberId)throw new WorkspaceError('META_CUSTOMER_PHONE_WABA_MISMATCH',403);
+  assertCompanyPhoneMatch(companyPhoneAuthorizationContract(state),company.metadata,verified.displayPhoneNumber);
+ }
  function flow(numberMode){const ready=provider.readiness();if(ready.mode===META_DEVELOPMENT_PILOT_MODE){if(numberMode!=='DEDICATED'||!metaCustomerAuthorizationReady(ready))throw new WorkspaceError(ready.pilot.code,503);return {numberMode:'DEDICATED',configId:ready.configId,signupVersion:'4',developmentPilot:provider.pilotReference()};}return customerSignupFlow(ready,numberMode);}
  function requirePreparation(project){const {profile}=readProjectWorkspaceProfile(project.metadata,project.organizationMetadata,project.id);if(!profile.configured||!['DEDICATED','BUSINESS_APP'].includes(profile.numberMode))throw new WorkspaceError('META_CUSTOMER_PREPARATION_REQUIRED',409);flow(profile.numberMode);return profile;}
  function owned(project,member,id){const state=project.metadata?.metaSignup;if(!state||state.id!==id||state.actorId!==member.actorId||state.organizationId!==member.organizationId)throw new WorkspaceError('META_CUSTOMER_SESSION_UNAVAILABLE',404);return state;}
@@ -88,6 +96,24 @@ export function createMetaCustomerOnboarding({workspace,provider,processor=null,
    await client.query(`INSERT INTO public."AuditLog" (id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES ($1,$2,$3,'integration.whatsapp.customer_state','Project',$4,$5::jsonb) ON CONFLICT (id) DO NOTHING`,[receipt,member.organizationId,member.actorId,project.id,JSON.stringify({version:1,signupId:state.id,state:updated.state,code:code||null,operationDigest:customerSecretDigest(operation),...(state.developmentPilot?{mode:'DEVELOPMENT_PILOT',policyDigest:state.developmentPilot.policyDigest,expiresAt:state.developmentPilot.expiresAt,attendanceOnly:true}:{})})]);}
   project.metadata={...project.metadata,metaSignup:updated};return updated;
  }
+ async function readPhoneReviewReceipt(client,member,scope,project,context,expectedInput=null){
+  if(!operationId(context.operationId)||!operationId(context.signupId)||context.action!=='reconcile')throw new WorkspaceError('META_CUSTOMER_INPUT_INVALID');
+  const state=owned(project,member,context.signupId),key='meta_company_phone_'+digest([member.actorId,member.organizationId,project.id,context.operationId.toLowerCase()]);
+  const found=(await client.query(`SELECT id,metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "actorId"=$3 AND "entityType"='Project' AND "entityId"=$4 AND action='integration.whatsapp.customer_phone.reviewed'`,[key,member.organizationId,member.actorId,project.id])).rows[0];
+  const correlation={action:'reconcile',operationId:context.operationId.toLowerCase(),signupId:state.id,projectId:project.id,scope};
+  if(!found)return {...correlation,state:'NOT_OBSERVED',definitive:false};
+  const rejected=found.metadata;
+  if(rejected?.outcome==='REJECTED'){
+   if(rejected.version!==1||rejected.action!=='reconcile'||rejected.operationId!==correlation.operationId||rejected.signupId!==state.id||rejected.projectId!==project.id||rejected.scope!==scope||rejected.actorId!==member.actorId||rejected.organizationId!==member.organizationId||rejected.phase!=='BEFORE_PROVIDER'||rejected.code!=='META_CUSTOMER_COMPANY_PHONE_CHANGED'||rejected.originalDigest!==state.declaredCompanyPhone?.digest||!Number.isSafeInteger(rejected.expectedCompanyPhoneRevision)||rejected.expectedCompanyPhoneRevision<1||!Number.isSafeInteger(rejected.observedCompanyPhoneRevision)||rejected.observedCompanyPhoneRevision<1||!Number.isSafeInteger(rejected.effectiveCompanyPhoneRevision)||rejected.effectiveCompanyPhoneRevision<1||rejected.expectedCompanyPhoneRevision===rejected.observedCompanyPhoneRevision&&rejected.expectedCompanyPhoneRevision>rejected.effectiveCompanyPhoneRevision||!/^[a-f0-9]{64}$/.test(rejected.requestDigest||''))throw new WorkspaceError('COMPANY_PHONE_INTEGRITY',409);
+   if(expectedInput&&rejected.requestDigest!==digest(expectedInput))throw new WorkspaceError('META_CUSTOMER_OPERATION_CONFLICT',409);
+   return {...correlation,state:'REJECTED',saved:false,definitive:true,receiptId:found.id,phase:rejected.phase,code:rejected.code,expectedCompanyPhoneRevision:rejected.expectedCompanyPhoneRevision,observedCompanyPhoneRevision:rejected.observedCompanyPhoneRevision,effectiveCompanyPhoneRevision:rejected.effectiveCompanyPhoneRevision};
+  }
+  companyPhoneAuthorizationContract(state);
+  const record=found.metadata,correction=(state.companyPhoneCorrections||[]).find(item=>item.operationId===correlation.operationId);
+  if(record?.version!==1||record.action!=='reconcile'||record.operationId!==correlation.operationId||record.signupId!==state.id||record.projectId!==project.id||record.scope!==scope||!correction||correction.actorId!==member.actorId||correction.organizationId!==member.organizationId||correction.projectId!==project.id||correction.signupId!==state.id||correction.receiptId!==key||record.expectedCompanyPhoneRevision!==correction.contract.revision||record.originalDigest!==correction.originalDigest||record.nextDigest!==correction.contract.digest||record.previousDigest!==correction.previousDigest)throw new WorkspaceError('COMPANY_PHONE_INTEGRITY',409);
+  if(expectedInput&&record.requestDigest!==digest(expectedInput))throw new WorkspaceError('META_CUSTOMER_OPERATION_CONFLICT',409);
+  return {...correlation,state:'RECORDED',saved:true,receiptId:found.id,expectedCompanyPhoneRevision:record.expectedCompanyPhoneRevision};
+ }
  async function response(client,member,scope,project,context={}){
   const connections=await client.query(`SELECT id,"projectId","phoneNumberId","whatsappBusinessId","displayPhoneNumber",enabled,"connectionStatus"::text AS status,"connectionStatus"::text AS "connectionStatus",metadata FROM public."WhatsAppConnection" WHERE "projectId"=$1`,[project.id]);
   if(connections.rows.length>1)throw new WorkspaceError('META_CUSTOMER_BINDING_INTEGRITY',409);
@@ -98,17 +124,18 @@ export function createMetaCustomerOnboarding({workspace,provider,processor=null,
   if(pilot&&readiness.mode===META_DEVELOPMENT_PILOT_MODE){const current=readDevelopmentPilotPolicy(environment,now());if(!current||pilot.policyDigest!==current.policyDigest||pilot.expiresAt!==current.expiresAt||state?.developmentPilot&&state.developmentPilot.policyDigest!==current.policyDigest)readiness=developmentPilotUnavailableReadiness(readiness,pilot.expiresAt);}
   const profile=readProjectWorkspaceProfile(project.metadata,project.organizationMetadata,project.id).profile;
   if(readiness.mode===META_DEVELOPMENT_PILOT_MODE&&(profile.numberMode&&profile.numberMode!=='DEDICATED'||connection&&!connection.metadata?.developmentPilot))readiness=developmentPilotUnavailableReadiness(readiness,readiness.pilot.expiresAt,'META_DEVELOPMENT_PILOT_ADAPTER_UNAVAILABLE');
-  const activation=publicCustomerActivation(connection,readiness,member,now(),profile.numberMode,environment),legacyBlocked=corporate&&(corporate.projectId!==project.id||['COMPANY','SUSPENDED'].includes(corporate.company.mode));
+  let declaration,phoneReviewCode=signup?.companyPhoneReviewCode||null;try{declaration=readCompanyPhoneDeclaration(project.organizationMetadata);if(Object.hasOwn(connection?.metadata||{},'declaredCompanyPhone'))assertCompanyPhoneMatch(companyPhoneAuthorizationContract(connection.metadata),project.organizationMetadata,connection.metadata.customerVerification?.displayPhoneNumber);}catch(error){declaration={status:'REVIEW_REQUIRED'};phoneReviewCode=error.code||'COMPANY_PHONE_INTEGRITY';}
+  const baseActivation=publicCustomerActivation(connection,readiness,member,now(),profile.numberMode,environment),activation=phoneReviewCode?{...baseActivation,canActivate:false,lastCode:phoneReviewCode}:baseActivation,legacyBlocked=corporate&&(corporate.projectId!==project.id||['COMPANY','SUSPENDED'].includes(corporate.company.mode));
   const currentActivation=legacyBlocked?{...activation,operational:corporate.company.mode==='COMPANY'&&activation.operational,canActivate:false,canDeactivate:false}:activation;
   const currentCoexistence=publicCustomerCoexistence(connection,readiness,now()),coexistence=readiness.mode===META_DEVELOPMENT_PILOT_MODE&&currentCoexistence?{...currentCoexistence,canSelectImport:false,canContinueImport:false}:currentCoexistence;
   return {scope,projectId:project.id,companyName:member.organizationName,projectName:project.name,readiness,...(corporate?{companyRouting:{mode:corporate.company.mode,connectionId:corporate.id,anchorProjectId:corporate.projectId,legacyActionsBlocked:corporate.projectId!==project.id||['COMPANY','SUSPENDED'].includes(corporate.company.mode),attendance:true,kyc:false,media:false,flows:false,templates:false,accepted:false}}:{}),
-   prepared:profile.configured,numberMode:profile.numberMode||null,preparedRevision:profile.revision,signup,
+   declaredCompanyPhone:declaration,companyPhoneReviewCode:phoneReviewCode,prepared:profile.configured,numberMode:profile.numberMode||null,preparedRevision:profile.revision,signup,
    stateToken:signup?.state==='PREPARED'&&metaCustomerAuthorizationReady(readiness)?stateToken(state,member,project,environment):null,
    connection:connection?{recordPresent:true,displayNumber:connection.displayPhoneNumber,wabaId:connection.whatsappBusinessId,phoneNumberId:connection.phoneNumberId,enabled:connection.enabled===true,storedStatus:connection.status,operational:currentActivation.operational}:null,
    coexistence,
    existingApiPlan:project.metadata?.metaExistingApiPlan?{state:project.metadata.metaExistingApiPlan.state,preparedAt:project.metadata.metaExistingApiPlan.preparedAt,preserveProvider:true,providerChanged:false}:null,
    activation:currentActivation,
-   templates:connection?.metadata?.customerTemplates||null,templateWorkbench:publicCustomerTemplateWorkbench(connection),inbox:await readMetaCustomerInbox(client,member,project,connection,environment,{after:context.after||null}),...(context.operationId?{receipt:await readMetaCustomerInboxReceipt(client,member,project,connection,environment,context)}:{}),acceptance:{roundTrip:'NOT_VERIFIED',fieldJourney:'NOT_VERIFIED'}};
+   templates:connection?.metadata?.customerTemplates||null,templateWorkbench:publicCustomerTemplateWorkbench(connection),inbox:await readMetaCustomerInbox(client,member,project,connection,environment,{after:context.after||null}),...(context.operationId?{receipt:context.action==='reconcile'?await readPhoneReviewReceipt(client,member,scope,project,context):await readMetaCustomerInboxReceipt(client,member,project,connection,environment,context)}:{}),acceptance:{roundTrip:'NOT_VERIFIED',fieldJourney:'NOT_VERIFIED'}};
  }
  async function assertAssetVacant(client,project,wabaId,phoneNumberId){
   if(wabaId===OBRASAAS_META_CHANNEL.wabaId||phoneNumberId===OBRASAAS_META_CHANNEL.phoneNumberId)throw new WorkspaceError('META_CUSTOMER_DEMO_ASSET_REJECTED',403);
@@ -128,9 +155,22 @@ export function createMetaCustomerOnboarding({workspace,provider,processor=null,
  }
  async function reconcile(session,body){
   const claim=await within(session,body,true,async(client,member,scope,project)=>{
-    let state=owned(project,member,body.signupId);requirePreparation(project);
-   if(state.state==='LINKED_PENDING_ACCEPTANCE')return {already:true,result:await response(client,member,scope,project)};
-    if(!state.encryptedToken||!(['CREDENTIAL_STORED','REVIEW_REQUIRED','REGISTRATION_REQUIRED','REGISTRATION_REJECTED','REGISTRATION_UNKNOWN'].includes(state.state)||state.state==='VERIFYING'&&new Date(state.verificationLeaseExpiresAt).getTime()<=now()||['REGISTRATION_VERIFYING','REGISTRATION_STARTED'].includes(state.state)&&new Date(state.registrationLeaseExpiresAt).getTime()<=now()))throw new WorkspaceError('META_CUSTOMER_RECONCILIATION_UNAVAILABLE',409);
+    let state=owned(project,member,body.signupId);
+    const review=Object.hasOwn(body,'expectedCompanyPhoneRevision');let proposedPhone=null;
+    if(review){if(!Object.hasOwn(state,'declaredCompanyPhone')||body.confirmCompanyPhoneRevision!==true||!Number.isSafeInteger(body.expectedCompanyPhoneRevision)||body.expectedCompanyPhoneRevision<1)throw new WorkspaceError('META_CUSTOMER_COMPANY_PHONE_CONFIRMATION_REQUIRED',409);const recorded=await readPhoneReviewReceipt(client,member,scope,project,{...body,action:'reconcile'},body);if(recorded.state!=='NOT_OBSERVED')return {already:true,result:{...await response(client,member,scope,project),receipt:recorded}};companyPhoneAuthorizationContract(state);}
+    requirePreparation(project);
+   if(review){proposedPhone=companyPhoneContract(project.organizationMetadata);if(!proposedPhone)throw new WorkspaceError('META_CUSTOMER_COMPANY_PHONE_CHANGED',409);const previous=companyPhoneAuthorizationContract(state);
+    if(proposedPhone.revision!==body.expectedCompanyPhoneRevision||body.expectedCompanyPhoneRevision<=previous.revision){
+     // Only a fresh command proven stale under the canonical locks is terminal.
+     // A previous provider lease remains uncertain even after its deadline.
+     if(!state.encryptedToken||!['CREDENTIAL_STORED','REVIEW_REQUIRED','REGISTRATION_REQUIRED','REGISTRATION_REJECTED','REGISTRATION_UNKNOWN','LINKED_PENDING_ACCEPTANCE'].includes(state.state))throw new WorkspaceError('META_CUSTOMER_COMPANY_PHONE_CHANGED',409);
+     const operation=body.operationId.toLowerCase(),key='meta_company_phone_'+digest([member.actorId,member.organizationId,project.id,operation]);
+     await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'integration.whatsapp.customer_phone.reviewed','Project',$4,$5::jsonb)`,[key,member.organizationId,member.actorId,project.id,JSON.stringify({version:1,outcome:'REJECTED',phase:'BEFORE_PROVIDER',code:'META_CUSTOMER_COMPANY_PHONE_CHANGED',action:'reconcile',operationId:operation,signupId:state.id,projectId:project.id,scope,actorId:member.actorId,organizationId:member.organizationId,expectedCompanyPhoneRevision:body.expectedCompanyPhoneRevision,observedCompanyPhoneRevision:proposedPhone.revision,effectiveCompanyPhoneRevision:previous.revision,originalDigest:state.declaredCompanyPhone.digest,requestDigest:digest(body)})]);
+     return {already:true,result:{...await response(client,member,scope,project),receipt:await readPhoneReviewReceipt(client,member,scope,project,{...body,action:'reconcile'},body)}};
+    }
+   }
+   if(state.state==='LINKED_PENDING_ACCEPTANCE'&&!review)return {already:true,result:await response(client,member,scope,project)};
+    if(!state.encryptedToken||!(['CREDENTIAL_STORED','REVIEW_REQUIRED','REGISTRATION_REQUIRED','REGISTRATION_REJECTED','REGISTRATION_UNKNOWN',...(review?['LINKED_PENDING_ACCEPTANCE']:[])].includes(state.state)||state.state==='VERIFYING'&&new Date(state.verificationLeaseExpiresAt).getTime()<=now()||['REGISTRATION_VERIFYING','REGISTRATION_STARTED'].includes(state.state)&&new Date(state.registrationLeaseExpiresAt).getTime()<=now()))throw new WorkspaceError('META_CUSTOMER_RECONCILIATION_UNAVAILABLE',409);
     // A reclaimed preflight never authorized a register POST. Its old worker
     // must recheck this fence before sending, so a fresh explicit retry is safe.
     if(state.state==='REGISTRATION_VERIFYING')state={...state,registrationAttempts:registrationOutcome(state,state.registrationOperationId,{state:'NOT_SENT',finishedAt:new Date(now()).toISOString(),lastCode:'META_CUSTOMER_REGISTRATION_PREFLIGHT_EXPIRED'})};
@@ -138,7 +178,7 @@ export function createMetaCustomerOnboarding({workspace,provider,processor=null,
    const token=decryptCustomerSecret(state.encryptedToken,secretContext(member,project,'signup',state.id),environment);
    const verificationLeaseId=randomUUID();
    await save(client,member,project,{...state,state:'VERIFYING',lastCode:null,verificationLeaseId,verificationLeaseExpiresAt:new Date(now()+60000).toISOString()},body.operationId);
-   return {token,state,member,project,verificationLeaseId};
+   return {token,state,member,project,verificationLeaseId,proposedPhone};
   });
   if(claim.already)return claim.result;
   try{
@@ -148,6 +188,20 @@ export function createMetaCustomerOnboarding({workspace,provider,processor=null,
    await within(session,body,true,async(client,member,_scope,project)=>{
     const state=owned(project,member,body.signupId);if(state.state!=='VERIFYING'||state.verificationLeaseId!==claim.verificationLeaseId)throw new WorkspaceError('META_CUSTOMER_STATE_CHANGED',409);
     if(requirePreparation(project).revision!==state.preparedRevision)throw new WorkspaceError('META_CUSTOMER_PREPARATION_CHANGED',409);
+    if(Object.hasOwn(state,'declaredCompanyPhone')&&(state.wabaId!==claim.state.wabaId||state.phoneNumberId!==claim.state.phoneNumberId||state.encryptedToken!==claim.state.encryptedToken))throw new WorkspaceError('META_CUSTOMER_STATE_CHANGED',409);
+    if(claim.proposedPhone){
+     if(state.numberMode!=='BUSINESS_APP'&&verified.phoneNumberId!==state.phoneNumberId)throw new WorkspaceError('META_CUSTOMER_PHONE_WABA_MISMATCH',403);
+     const company=(await client.query(`SELECT metadata FROM public."Organization" WHERE id=$1 FOR SHARE`,[member.organizationId])).rows[0];if(!company)throw new WorkspaceError('META_CUSTOMER_COMPANY_PHONE_CHANGED',409);
+     assertCompanyPhoneMatch(claim.proposedPhone,company.metadata,verified.displayPhoneNumber);
+     const previous=companyPhoneAuthorizationContract(state);if(claim.proposedPhone.revision<=previous.revision)throw new WorkspaceError('META_CUSTOMER_COMPANY_PHONE_CHANGED',409);
+     const history=state.companyPhoneCorrections||[];if(history.length>=20)throw new WorkspaceError('META_CUSTOMER_RESTART_REVIEW_REQUIRED',409);
+     const key='meta_company_phone_'+digest([member.actorId,member.organizationId,project.id,body.operationId.toLowerCase()]),correctedAt=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now.toISOString();
+     const entry={version:1,operationId:body.operationId.toLowerCase(),receiptId:key,signupId:state.id,actorId:member.actorId,organizationId:member.organizationId,projectId:project.id,originalDigest:state.declaredCompanyPhone.digest,previousDigest:previous.digest,contract:claim.proposedPhone,correctedAt};
+     state.companyPhoneCorrections=[...history,entry];claim.state.companyPhoneCorrections=state.companyPhoneCorrections;
+     await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'integration.whatsapp.customer_phone.reviewed','Project',$4,$5::jsonb)`,[key,member.organizationId,member.actorId,project.id,JSON.stringify({version:1,action:'reconcile',operationId:entry.operationId,signupId:state.id,projectId:project.id,scope:_scope,expectedCompanyPhoneRevision:body.expectedCompanyPhoneRevision,previousDigest:previous.digest,nextDigest:claim.proposedPhone.digest,originalDigest:state.declaredCompanyPhone.digest,wabaId:state.wabaId,phoneNumberId:verified.phoneNumberId||state.phoneNumberId,requestDigest:digest(body)})]);
+     await save(client,member,project,state,body.operationId);
+    }
+    await checkDeclaredPhone(client,member,state,verified);
     if(mode==='BUSINESS_APP'){
      if(verified.isOnBizApp!==true||verified.platformType!=='CLOUD_API'||!metaAssetId(verified.phoneNumberId))throw new WorkspaceError('META_CUSTOMER_COEXISTENCE_PHONE_REQUIRED',409);
      if(state.existingConnection&&(state.existingConnection.wabaId!==state.wabaId||state.existingConnection.phoneNumberId!==verified.phoneNumberId))throw new WorkspaceError('META_CUSTOMER_EXISTING_CONNECTION_REVIEW',409);
@@ -163,23 +217,29 @@ export function createMetaCustomerOnboarding({workspace,provider,processor=null,
     // until the new grant and subscription have both been verified.
     if(preserved)return;
     const encryptedToken=encryptCustomerSecret(claim.token,secretContext(member,project,'access-token',state.phoneNumberId),environment);
-    const pilotProof=provider.pilotProvenance?.(verified),metadata={...(existing.rows[0]?.metadata||{}),credentialFormat:'tenant-aad-v2',credentialOrganizationId:member.organizationId,customerSignupId:state.id,customerVerification:verified,...(pilotProof?{developmentPilot:pilotProof}:{}),roundTrip:'NOT_VERIFIED',fieldAcceptance:'NOT_VERIFIED'};
+    const pilotProof=provider.pilotProvenance?.(verified),metadata={...(existing.rows[0]?.metadata||{}),credentialFormat:'tenant-aad-v2',credentialOrganizationId:member.organizationId,customerSignupId:state.id,customerVerification:verified,...(Object.hasOwn(state,'declaredCompanyPhone')?{declaredCompanyPhone:state.declaredCompanyPhone,...(state.companyPhoneCorrections?{companyPhoneCorrections:state.companyPhoneCorrections}:{})}:{}),...(pilotProof?{developmentPilot:pilotProof}:{}),roundTrip:'NOT_VERIFIED',fieldAcceptance:'NOT_VERIFIED'};
     await client.query(`INSERT INTO public."WhatsAppConnection" (id,"projectId","phoneNumberId","whatsappBusinessId","displayPhoneNumber",enabled,"connectionStatus","encryptedAccessToken","verifiedBusinessName",metadata,"updatedAt") VALUES ($1,$2,$3,$4,$5,false,'PENDING',$6,$7,$8::jsonb,clock_timestamp()) ON CONFLICT ("projectId") DO UPDATE SET "encryptedAccessToken"=EXCLUDED."encryptedAccessToken",metadata=EXCLUDED.metadata,"updatedAt"=clock_timestamp()`,[existing.rows[0]?.id||'wa_customer_'+randomUUID().replaceAll('-',''),project.id,state.phoneNumberId,state.wabaId,verified.displayPhoneNumber,encryptedToken,verified.verifiedBusinessName,JSON.stringify(metadata)]);
    });
-   await provider.subscribe({token:claim.token,wabaId:claim.state.wabaId});
+   if(Object.hasOwn(claim.state,'declaredCompanyPhone'))await within(session,body,true,async(client,member,_scope,project)=>{
+    const state=owned(project,member,body.signupId);if(state.state!=='VERIFYING'||state.verificationLeaseId!==claim.verificationLeaseId||requirePreparation(project).revision!==state.preparedRevision)throw new WorkspaceError('META_CUSTOMER_STATE_CHANGED',409);
+    // The canonical organization share lock remains held across the POST, so
+    // a declaration cannot change between this check and the remote mutation.
+    await checkDeclaredPhone(client,member,state,verified);await provider.subscribe({token:claim.token,wabaId:state.wabaId});
+   });else await provider.subscribe({token:claim.token,wabaId:claim.state.wabaId});
    return await within(session,body,true,async(client,member,scope,project)=>{
     const state=owned(project,member,body.signupId);if(state.state!=='VERIFYING'||state.verificationLeaseId!==claim.verificationLeaseId)throw new WorkspaceError('META_CUSTOMER_STATE_CHANGED',409);
     if(requirePreparation(project).revision!==state.preparedRevision)throw new WorkspaceError('META_CUSTOMER_PREPARATION_CHANGED',409);
+    await checkDeclaredPhone(client,member,state,verified);
     if(mode==='BUSINESS_APP'){
      const bound=(await client.query(`SELECT id,"encryptedAccessToken",metadata,"phoneNumberId","whatsappBusinessId" FROM public."WhatsAppConnection" WHERE "projectId"=$1 FOR UPDATE`,[project.id])).rows;
      const c=bound[0];if(bound.length!==1||c.phoneNumberId!==state.phoneNumberId||c.whatsappBusinessId!==state.wabaId||c.metadata?.credentialOrganizationId!==member.organizationId||state.existingConnection&&(c.id!==state.existingConnection.id||digest(c.encryptedAccessToken)!==state.existingConnection.tokenDigest))throw new WorkspaceError('META_CUSTOMER_EXISTING_CONNECTION_REVIEW',409);
      const old=c.metadata.coexistence;
      const coexistence=old?.verified===true?old:{version:1,verified:true,verifiedAt:new Date(now()).toISOString(),syncDeadlineAt:new Date(Date.parse(state.authCompletedAt)+24*60*60000).toISOString(),contacts:{state:'NOT_SELECTED'},history:{state:'NOT_SELECTED'},echoes:0};
-     await client.query(`UPDATE public."WhatsAppConnection" SET "encryptedAccessToken"=$3,metadata=metadata||$4::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[c.id,project.id,encryptCustomerSecret(claim.token,secretContext(member,project,'access-token',state.phoneNumberId),environment),JSON.stringify({customerSignupId:state.id,customerVerification:verified,coexistence})]);
+     await client.query(`UPDATE public."WhatsAppConnection" SET "encryptedAccessToken"=$3,metadata=metadata||$4::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[c.id,project.id,encryptCustomerSecret(claim.token,secretContext(member,project,'access-token',state.phoneNumberId),environment),JSON.stringify({customerSignupId:state.id,customerVerification:verified,coexistence,...(Object.hasOwn(state,'declaredCompanyPhone')?{declaredCompanyPhone:state.declaredCompanyPhone,...(state.companyPhoneCorrections?{companyPhoneCorrections:state.companyPhoneCorrections}:{})}:{})})]);
     }
     await client.query(`UPDATE public."WhatsAppConnection" SET metadata=metadata||$3::jsonb,"lastVerifiedAt"=clock_timestamp(),"updatedAt"=clock_timestamp() WHERE "projectId"=$1 AND "phoneNumberId"=$2`,[project.id,state.phoneNumberId,JSON.stringify({customerSubscribed:true,customerVerification:verified})]);
      await save(client,member,project,{...state,state:verified.registered?'LINKED_PENDING_ACCEPTANCE':unregisteredState(state),...(verified.registered&&state.registrationOperationId?{registrationAttempts:registrationOutcome(state,state.registrationOperationId,{state:'REGISTERED',finishedAt:new Date(now()).toISOString()})}:{}),lastCode:null},body.operationId);
-    return response(client,member,scope,project);
+    return {...await response(client,member,scope,project),...(claim.proposedPhone?{receipt:await readPhoneReviewReceipt(client,member,scope,project,{...body,action:'reconcile'})}:{})};
    });
   }catch(error){
    try{await within(session,body,true,async(client,member,_scope,project)=>{const state=owned(project,member,body.signupId);if(state.state==='VERIFYING'&&state.verificationLeaseId===claim.verificationLeaseId)await save(client,member,project,{...state,state:'REVIEW_REQUIRED',lastCode:error instanceof WorkspaceError?error.code:'META_CUSTOMER_PROVIDER_UNCONFIRMED'},body.operationId);});}catch{}
@@ -201,9 +261,9 @@ export function createMetaCustomerOnboarding({workspace,provider,processor=null,
    if(['process_inbox','review_inbox'].includes(action)){await inboxService.command(session,body);return within(session,body,false,response);}
    if(['prepare_template','submit_template','recover_template'].includes(action)){await templateService.command(session,body);return within(session,body,false,response);}
    const base=['action','operationId','projectId','scope'];
-   input(body,action==='begin'?[...base,'preparedRevision']:action==='restart_authorization'?[...base,'signupId','preparedRevision','confirmFreshAuthorization','reason']:action==='complete'?[...base,'signupId','stateToken','code','wabaId','phoneNumberId',...(Object.hasOwn(body,'signupEvent')?['signupEvent']:[])]:action==='register_number'?[...base,'signupId','pin','confirmRegistration']:[...base,'signupId']);
+   input(body,action==='begin'?[...base,'preparedRevision']:action==='restart_authorization'?[...base,'signupId','preparedRevision','confirmFreshAuthorization','reason']:action==='complete'?[...base,'signupId','stateToken','code','wabaId','phoneNumberId',...(Object.hasOwn(body,'signupEvent')?['signupEvent']:[])]:action==='register_number'?[...base,'signupId','pin','confirmRegistration']:action==='reconcile'&&Object.hasOwn(body,'expectedCompanyPhoneRevision')?[...base,'signupId','expectedCompanyPhoneRevision','confirmCompanyPhoneRevision']:[...base,'signupId']);
    if(!['begin','complete','cancel','reconcile','refresh_templates','register_number','restart_authorization'].includes(action))throw new WorkspaceError('META_CUSTOMER_INPUT_INVALID');
-   if(action==='reconcile')return reconcile(session,body);
+   if(action==='reconcile')return reconcile(session,Object.hasOwn(body,'expectedCompanyPhoneRevision')?{...body,operationId:body.operationId.toLowerCase()}:body);
    if(action==='register_number'){
      if(typeof body.pin!=='string'||!/^\d{6}$/.test(body.pin)||body.confirmRegistration!==true)throw new WorkspaceError('META_CUSTOMER_REGISTRATION_INPUT_INVALID');
     const reserved=await within(session,body,true,async(client,member,scope,project)=>{
@@ -237,13 +297,14 @@ export function createMetaCustomerOnboarding({workspace,provider,processor=null,
      catch(error){await within(session,body,true,async(client,member,_scope,project)=>{const state=await fenced(client,member,project,'REGISTRATION_VERIFYING');await save(client,member,project,{...state,state:state.registrationResumeState,lastCode:error instanceof WorkspaceError?error.code:'META_CUSTOMER_PROVIDER_UNCONFIRMED',registrationAttempts:registrationOutcome(state,body.operationId,{state:'NOT_SENT',finishedAt:new Date(now()).toISOString()})},body.operationId);}).catch(()=>{});throw error;}
      await within(session,body,true,async(client,member,_scope,project)=>{
       const state=await fenced(client,member,project,'REGISTRATION_VERIFYING');
+      await checkDeclaredPhone(client,member,state,verified);
       if(!verified.registered){const written=await client.query(`UPDATE public."WhatsAppConnection" SET "encryptedPin"=$3,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[reserved.channel.id,project.id,encryptCustomerSecret(body.pin,secretContext(member,project,'registration-pin',state.phoneNumberId),environment)]);if(written.rowCount!==1)throw new WorkspaceError('META_CUSTOMER_BINDING_INTEGRITY',409);}
       await save(client,member,project,{...state,state:verified.registered?'REGISTRATION_UNKNOWN':'REGISTRATION_STARTED',registrationLeaseExpiresAt:new Date(now()+60000).toISOString(),registrationAttempts:registrationOutcome(state,body.operationId,{state:verified.registered?'REGISTERED':'STARTED'})},body.operationId);
      });
      if(verified.registered)return reconcile(session,body);
-     let rejected=false,registrationCode=null;
-     try{await provider.register({token:reserved.token,phoneNumberId:reserved.state.phoneNumberId,pin:body.pin});}
-     catch(error){rejected=error instanceof WorkspaceError&&error.code==='META_CUSTOMER_PROVIDER_REJECTED'&&error.status===409;registrationCode=rejected?'META_CUSTOMER_REGISTRATION_REJECTED':'META_CUSTOMER_REGISTRATION_UNCONFIRMED';}
+     let rejected=false,registrationCode=null,registrationDispatched=false;
+     try{if(Object.hasOwn(reserved.state,'declaredCompanyPhone'))await within(session,body,true,async(client,member,_scope,project)=>{const state=await fenced(client,member,project,'REGISTRATION_STARTED');await checkDeclaredPhone(client,member,state,verified);registrationDispatched=true;await provider.register({token:reserved.token,phoneNumberId:state.phoneNumberId,pin:body.pin});});else {registrationDispatched=true;await provider.register({token:reserved.token,phoneNumberId:reserved.state.phoneNumberId,pin:body.pin});}}
+     catch(error){if(!registrationDispatched){await within(session,body,true,async(client,member,_scope,project)=>{const state=await fenced(client,member,project,'REGISTRATION_STARTED');await save(client,member,project,{...state,state:'REVIEW_REQUIRED',lastCode:error instanceof WorkspaceError?error.code:'META_CUSTOMER_PROVIDER_UNCONFIRMED',registrationAttempts:registrationOutcome(state,body.operationId,{state:'NOT_SENT',finishedAt:new Date(now()).toISOString()})},body.operationId);}).catch(()=>{});throw error;}rejected=error instanceof WorkspaceError&&error.code==='META_CUSTOMER_PROVIDER_REJECTED'&&error.status===409;registrationCode=rejected?'META_CUSTOMER_REGISTRATION_REJECTED':'META_CUSTOMER_REGISTRATION_UNCONFIRMED';}
      const result=await within(session,body,true,async(client,member,scope,project)=>{const state=await fenced(client,member,project,'REGISTRATION_STARTED');await save(client,member,project,{...state,state:rejected?'REGISTRATION_REJECTED':'REGISTRATION_UNKNOWN',lastCode:registrationCode,registrationAttempts:registrationOutcome(state,body.operationId,{state:rejected?'REJECTED':'UNKNOWN',finishedAt:new Date(now()).toISOString(),lastCode:registrationCode})},body.operationId);return response(client,member,scope,project);});
      if(rejected)return result;
     // Only read-only inspection may recover an uncertain registration; never a second register POST.
@@ -257,10 +318,10 @@ export function createMetaCustomerOnboarding({workspace,provider,processor=null,
     if(previous&&activeStates.has(previous.state)&&!(profile.numberMode==='BUSINESS_APP'&&previous.state==='LINKED_PENDING_ACCEPTANCE'))throw new WorkspaceError('META_CUSTOMER_ATTEMPT_ALREADY_ACTIVE',409);
     const existing=await client.query(`SELECT id,"whatsappBusinessId","phoneNumberId","encryptedAccessToken",metadata FROM public."WhatsAppConnection" WHERE "projectId"=$1 FOR UPDATE`,[project.id]);
     if(existing.rows.length&&(profile.numberMode!=='BUSINESS_APP'||existing.rows.length!==1||existing.rows[0].metadata?.credentialFormat!=='tenant-aad-v2'||existing.rows[0].metadata.credentialOrganizationId!==member.organizationId))throw new WorkspaceError('META_CUSTOMER_EXISTING_CONNECTION_REVIEW',409);
-    const c=existing.rows[0],signupFlow=flow(profile.numberMode);
+    const c=existing.rows[0],signupFlow=flow(profile.numberMode),declaration=companyPhoneContract(project.organizationMetadata);
     await sealLegacyLifecycle(client,project,c);
     if(previous){const history=project.metadata.metaSignupHistory||[];if(!Array.isArray(history)||history.length>=20)throw new WorkspaceError('META_CUSTOMER_RESTART_REVIEW_REQUIRED',409);project.metadata={...project.metadata,metaSignupHistory:[...history,{id:previous.id,state:previous.state,codeDigest:previous.codeDigest,wabaId:previous.wabaId,phoneNumberId:previous.phoneNumberId,actorId:previous.actorId,createdAt:previous.createdAt,restartedAt:new Date(now()).toISOString(),remoteAuthorizationRevoked:false}]};}
-    await save(client,member,project,{version:1,id:randomUUID(),actorId:member.actorId,organizationId:member.organizationId,preparedRevision:profile.revision,operationId:body.operationId,startRequestDigest:digest(body),...signupFlow,...(c?{existingConnection:{id:c.id,wabaId:c.whatsappBusinessId,phoneNumberId:c.phoneNumberId,tokenDigest:digest(c.encryptedAccessToken)}}:{}),state:'PREPARED',createdAt:new Date(now()).toISOString(),expiresAt:new Date(now()+15*60000).toISOString()},body.operationId);
+    await save(client,member,project,{version:1,id:randomUUID(),actorId:member.actorId,organizationId:member.organizationId,preparedRevision:profile.revision,operationId:body.operationId,startRequestDigest:digest(body),...signupFlow,...(declaration?{declaredCompanyPhone:declaration}:{}),...(c?{existingConnection:{id:c.id,wabaId:c.whatsappBusinessId,phoneNumberId:c.phoneNumberId,tokenDigest:digest(c.encryptedAccessToken)}}:{}),state:'PREPARED',createdAt:new Date(now()).toISOString(),expiresAt:new Date(now()+15*60000).toISOString()},body.operationId);
     return response(client,member,scope,project);
    });
    if(action==='restart_authorization')return within(session,body,true,async(client,member,scope,project)=>{
@@ -274,7 +335,8 @@ export function createMetaCustomerOnboarding({workspace,provider,processor=null,
     const connections=await client.query(`SELECT id FROM public."WhatsAppConnection" WHERE "projectId"=$1`,[project.id]);if(connections.rows.length)throw new WorkspaceError('META_CUSTOMER_EXISTING_CONNECTION_REVIEW',409);
     const history=project.metadata.metaSignupHistory||[];if(!Array.isArray(history)||history.length>=20)throw new WorkspaceError('META_CUSTOMER_RESTART_REVIEW_REQUIRED',409);
     project.metadata={...project.metadata,metaSignupHistory:[...history,{id:previous.id,state:previous.state,codeDigest:previous.codeDigest,wabaId:previous.wabaId,phoneNumberId:previous.phoneNumberId,actorId:previous.actorId,createdAt:previous.createdAt,restartedAt:new Date(now()).toISOString(),reason:body.reason.trim(),remoteAuthorizationRevoked:false}]};
-    await save(client,member,project,{version:1,id:randomUUID(),actorId:member.actorId,organizationId:member.organizationId,preparedRevision:profile.revision,operationId:body.operationId,startRequestDigest:digest(body),...flow(profile.numberMode),state:'PREPARED',createdAt:new Date(now()).toISOString(),expiresAt:new Date(now()+15*60000).toISOString(),previousAttemptId:previous.id},body.operationId);
+    const declaration=companyPhoneContract(project.organizationMetadata);
+    await save(client,member,project,{version:1,id:randomUUID(),actorId:member.actorId,organizationId:member.organizationId,preparedRevision:profile.revision,operationId:body.operationId,startRequestDigest:digest(body),...flow(profile.numberMode),...(declaration?{declaredCompanyPhone:declaration}:{}),state:'PREPARED',createdAt:new Date(now()).toISOString(),expiresAt:new Date(now()+15*60000).toISOString(),previousAttemptId:previous.id},body.operationId);
     return response(client,member,scope,project);
    });
    if(action==='cancel')return within(session,body,true,async(client,member,scope,project)=>{const state=owned(project,member,body.signupId);if(!['PREPARED','CANCELLED'].includes(state.state))throw new WorkspaceError('META_CUSTOMER_CANCELLATION_REQUIRES_REVIEW',409);

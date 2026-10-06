@@ -1,9 +1,9 @@
 import {randomUUID} from 'node:crypto';
-import {WorkspaceError,operationId,workspaceId,WORKSPACE_ROLES,portfolioAccess,digest} from './workspace-policy.mjs';
+import {WorkspaceError,operationId,workspaceId,WORKSPACE_ROLES,portfolioAccess,digest,scopeStamp,checkScope} from './workspace-policy.mjs';
 import {IDENTITY_ISSUER} from './production-identity-config.mjs';
-import {requireNewCompanyAdmin,normalizeCompanyOnboarding,bootstrapReceiptId,bootstrapRequestDigest,validProfileEmail} from './company-onboarding-policy.mjs';
+import {requireNewCompanyAdmin,normalizeCompanyOnboarding,bootstrapReceiptId,bootstrapRequestDigest,validProfileEmail,readCompanyPhoneDeclaration,normalizeCompanyPhoneCommand,companyPhoneReceiptId} from './company-onboarding-policy.mjs';
 const identifier=prefix=>prefix+'_'+randomUUID().replaceAll('-','');
-const canonicalCompany=async(client,session,lock=false)=>(await client.query(`SELECT id,name,metadata FROM public."Organization" WHERE "clerkOrganizationId"=$1 ${lock?'FOR UPDATE':''}`,[session.organizationId])).rows[0];
+const canonicalCompany=async(client,session,lock=false)=>(await client.query(`SELECT id,name,metadata,to_char("trialEndsAt",'YYYY-MM-DD') AS "trialEndsOn" FROM public."Organization" WHERE "clerkOrganizationId"=$1 ${lock?'FOR UPDATE':''}`,[session.organizationId])).rows[0];
 export function createCompanyOnboardingStore({connect}){
  async function transaction(session,writable,run){
   requireNewCompanyAdmin(session);let client,broken=false;
@@ -35,6 +35,19 @@ export function createCompanyOnboardingStore({connect}){
  const usableReceipt=row=>row?.metadata?.version===1&&workspaceId(row.metadata.projectId)&&typeof row.metadata.companyName==='string'&&typeof row.metadata.projectName==='string'&&Array.isArray(row.metadata.taskIds)&&row.metadata.taskIds.length<=25&&row.metadata.taskIds.every(workspaceId);
  const publicResult=(row,replayed)=>({state:'CREATED',created:true,replayed,receiptId:row.id,organizationId:row.organizationId,projectId:row.metadata.projectId,
    companyName:row.metadata.companyName,projectName:row.metadata.projectName,initialTaskCount:row.metadata.taskIds.length,whatsAppConnected:false,employeesCreated:0,financialRecordsCreated:0});
+ async function phoneContext(client,org,member,session,context,lock=false){
+  if(!workspaceId(context.projectId)||typeof context.scope!=='string')throw new WorkspaceError('COMPANY_PHONE_INPUT_INVALID');
+  checkScope(scopeStamp(session,{...member,organizationId:org.id}),context.scope);
+  const projects=(await client.query(`SELECT id FROM public."Project" WHERE id=$1 AND "organizationId"=$2 AND status='ACTIVE' ${lock?'FOR SHARE':''}`,[context.projectId,org.id])).rows;
+  if(projects.length!==1)throw new WorkspaceError('WORKSPACE_PROJECT_UNAVAILABLE',404);
+ }
+ const currentCompany=(org,member)=>({organizationId:org.id,companyName:org.name,expectedClerkOrganizationId:null,canDeclarePhone:member.role==='ADMIN',phoneDeclaration:member.role==='ADMIN'?readCompanyPhoneDeclaration(org.metadata):null,trial:{endsOn:org.trialEndsOn||null}});
+ const current=(org,member,session)=>({...currentCompany(org,member),expectedClerkOrganizationId:session.organizationId});
+ async function phoneReceipt(client,org,member,id){
+  const row=(await client.query(`SELECT id,metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "actorId"=$3 AND action='company.phone.declared' AND "entityType"='Organization' AND "entityId"=$2`,[id,org.id,member.actorId])).rows[0];
+  if(row&&(row.metadata?.version!==1||row.metadata?.action!=='declare_company_phone'||!operationId(row.metadata.operationId)||!workspaceId(row.metadata.projectId)||!/^[a-f0-9]{64}$/.test(row.metadata.scope)||!Number.isSafeInteger(row.metadata.revision)||row.metadata.revision<1||!/^[a-f0-9]{64}$/.test(row.metadata.requestDigest)))throw new WorkspaceError('COMPANY_PHONE_INTEGRITY',409);return row;
+ }
+ const phoneResult=(row,org,member,session,replayed)=>({state:'RECORDED',saved:true,replayed,action:'declare_company_phone',projectId:row.metadata.projectId,scope:row.metadata.scope,operationId:row.metadata.operationId,expectedClerkOrganizationId:session.organizationId,organizationId:org.id,receipt:{id:row.id,savedRevision:row.metadata.revision},savedDeclarationIsCurrent:readCompanyPhoneDeclaration(org.metadata)?.receiptId===row.id,currentCompany:current(org,member,session)});
  return {
   status(session,{operationId:key}={}){
    if(key!==undefined&&!operationId(key))throw new WorkspaceError('COMPANY_ONBOARDING_INPUT_INVALID');
@@ -45,8 +58,32 @@ export function createCompanyOnboardingStore({connect}){
     // The existing canonical pointer survives a page reload. It is not proof of
     // authorship: the audit lookup still checks the current actor and tenant.
     const pointer=key?bootstrapReceiptId(session,key):org.metadata?.onboarding?.operationReceiptId;
-    if(typeof pointer==='string'&&/^company_bootstrap_[a-f0-9]{64}$/.test(pointer)){const found=await receipt(client,session,pointer,member);if(usableReceipt(found))return publicResult(found,true);}
-    return {state:'ALREADY_CONFIGURED',canCreate:false,organizationId:org.id,companyName:org.name,whatsAppConnected:false};
+    if(typeof pointer==='string'&&/^company_bootstrap_[a-f0-9]{64}$/.test(pointer)){const found=await receipt(client,session,pointer,member);if(usableReceipt(found))return {...publicResult(found,true),currentCompany:current(org,member,session)};}
+    return {state:'ALREADY_CONFIGURED',canCreate:false,organizationId:org.id,companyName:org.name,whatsAppConnected:false,currentCompany:current(org,member,session)};
+   });
+  },
+  phoneStatus(session,{operationId:key,projectId,scope}={}){
+   if(key!==undefined&&!operationId(key))throw new WorkspaceError('COMPANY_PHONE_INPUT_INVALID');
+   return transaction(session,false,async client=>{
+    const org=await canonicalCompany(client,session);if(!org)throw new WorkspaceError('COMPANY_PHONE_COMPANY_REQUIRED',409);
+    const member=await access(client,session,org);await phoneContext(client,org,member,session,{projectId,scope});const declaration=readCompanyPhoneDeclaration(org.metadata),id=key?companyPhoneReceiptId(session,key):declaration?.receiptId;
+    const found=id&&/^company_phone_[a-f0-9]{64}$/.test(id)?await phoneReceipt(client,org,member,id):null;
+    return found&&found.metadata.projectId===projectId&&found.metadata.scope===scope?phoneResult(found,org,member,session,true):{state:'NOT_OBSERVED',projectId,scope,definitive:false,action:'declare_company_phone',operationId:key?.toLowerCase()||null,expectedClerkOrganizationId:session.organizationId,organizationId:org.id,currentCompany:current(org,member,session)};
+   });
+  },
+  declarePhone(session,input){
+   const command=normalizeCompanyPhoneCommand(input,session);
+   return transaction(session,true,async client=>{
+    const org=await canonicalCompany(client,session,true);if(!org)throw new WorkspaceError('COMPANY_PHONE_COMPANY_REQUIRED',409);
+    const member=await access(client,session,org,true);await phoneContext(client,org,member,session,command,true);const id=companyPhoneReceiptId(session,command.operationId),requestDigest=digest(['company-phone-declaration-v1',command]);
+    const previous=await phoneReceipt(client,org,member,id);if(previous){if(previous.metadata.requestDigest!==requestDigest)throw new WorkspaceError('COMPANY_PHONE_OPERATION_CONFLICT',409);return phoneResult(previous,org,member,session,true);}
+    const old=readCompanyPhoneDeclaration(org.metadata);if((old?.revision||0)!==command.expectedRevision||command.expectedRevision>=Number.MAX_SAFE_INTEGER)throw new WorkspaceError('COMPANY_PHONE_CONFLICT',409);
+    const declaredAt=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now.toISOString(),revision=command.expectedRevision+1;
+    const declaration={version:1,status:'UNVERIFIED',e164:command.companyPhone,revision,declaredAt,receiptId:id};
+    org.metadata={...org.metadata,companyPhoneDeclaration:declaration};
+    const written=await client.query(`UPDATE public."Organization" SET metadata=$2::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1`,[org.id,JSON.stringify(org.metadata)]);if(written.rowCount!==1)throw new WorkspaceError('COMPANY_PHONE_UNCONFIRMED',503);
+    await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'company.phone.declared','Organization',$2,$4::jsonb)`,[id,org.id,member.actorId,JSON.stringify({version:1,action:command.action,operationId:command.operationId,projectId:command.projectId,scope:command.scope,revision,requestDigest,status:'UNVERIFIED'})]);
+    const saved=await phoneReceipt(client,org,member,id);if(!saved)throw new WorkspaceError('COMPANY_PHONE_UNCONFIRMED',503);return phoneResult(saved,org,member,session,false);
    });
   },
   async create(session,input,profile){
@@ -59,7 +96,7 @@ export function createCompanyOnboardingStore({connect}){
      const member=await access(client,session,org,true);const previous=await receipt(client,session,id,member);
      if(!previous)throw new WorkspaceError('COMPANY_ALREADY_CONFIGURED',409);
      if(previous.metadata.requestDigest!==requestDigest)throw new WorkspaceError('COMPANY_CREATION_OPERATION_CONFLICT',409);
-     return publicResult(previous,true);
+     return {...publicResult(previous,true),currentCompany:current(org,member,session)};
     }
     await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',['company-bootstrap-email:'+profile.primaryEmail.toLowerCase()]);
     let actor=(await client.query('SELECT id,"clerkUserId","primaryEmail" FROM public."PlatformUser" WHERE "clerkUserId"=$1 FOR UPDATE',[session.userId])).rows[0];
@@ -72,9 +109,11 @@ export function createCompanyOnboardingStore({connect}){
     const recent=(await client.query(`SELECT count(*)::int AS n FROM public."AuditLog" WHERE "actorId"=$1 AND action='company.self_service.created' AND "createdAt">CURRENT_TIMESTAMP-interval '24 hours'`,[actor.id])).rows[0].n;
     if(recent>=3)throw new WorkspaceError('COMPANY_CREATION_LIMIT',429);
     const organizationId=identifier('org'),projectId=identifier('project'),membershipId=identifier('member'),taskIds=[];
+    const organizationMetadata={onboarding:{version:1,source:'customer-self-service',operationReceiptId:id,companyIdentityVerified:false}};
+    if(command.companyPhone)organizationMetadata.companyPhoneDeclaration={version:1,status:'UNVERIFIED',e164:command.companyPhone,revision:1,declaredAt:(await client.query('SELECT clock_timestamp() AS now')).rows[0].now.toISOString(),receiptId:id};
     await client.query(`INSERT INTO public."Organization"(id,name,slug,"clerkOrganizationId",country,timezone,metadata,"updatedAt","trialEndsAt")
      VALUES($1,$2,$1,$3,'AR','America/Argentina/Buenos_Aires',$4::jsonb,clock_timestamp(),CURRENT_TIMESTAMP+interval '15 days')`,
-     [organizationId,command.companyName,session.organizationId,JSON.stringify({onboarding:{version:1,source:'customer-self-service',operationReceiptId:id,companyIdentityVerified:false}})]);
+     [organizationId,command.companyName,session.organizationId,JSON.stringify(organizationMetadata)]);
     await client.query(`INSERT INTO public."TenantMembership"(id,"organizationId","userId","clerkRole","tenantRole",status,"updatedAt") VALUES($1,$2,$3,'org:admin','ADMIN','ACTIVE',clock_timestamp())`,[membershipId,organizationId,actor.id]);
     await client.query(`INSERT INTO public."Project"(id,"organizationId",name,slug,status,address,metadata,"updatedAt") VALUES($1,$2,$3,$1,'ACTIVE',$4,$5::jsonb,clock_timestamp())`,
      [projectId,organizationId,command.project.name,command.project.address,JSON.stringify({onboarding:{version:1,source:'customer-self-service',locationVerified:false,emptyOperationalData:true}})]);
@@ -82,11 +121,12 @@ export function createCompanyOnboardingStore({connect}){
     for(const task of command.initialTasks){const taskId=identifier('task');taskIds.push(taskId);await client.query(`INSERT INTO public."Task"(id,"projectId",title,status,progress,"startsAt","endsAt",metadata,"updatedAt") VALUES($1,$2,$3,'BACKLOG',0,$4::date,$5::date,$6::jsonb,clock_timestamp())`,
       [taskId,projectId,task.title,task.startsOn,task.endsOn,JSON.stringify({source:'customer-initial-plan',operationReceiptId:id})]);}
     const metadata={version:1,projectId,companyName:command.companyName,projectName:command.project.name,taskIds,requestDigest,
+      ...(command.companyPhone?{requestDigestVersion:'company-phone-v1'}:{}),
       contactSource:'clerk-signed-verified-email',identitySource:'clerk-user-id',profileEmailVerified:true,profileEmailStored:actor.primaryEmail===email,
       verifiedProfileDigest:digest(['company-verified-profile-v1',IDENTITY_ISSUER,session.userId,email,true,profile.expiresAt??null]),
       organizationRoleSource:'clerk-signed-org-admin',businessVerificationClaimed:false,whatsAppConnected:false};
     await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'company.self_service.created','Organization',$2,$4::jsonb)`,[id,organizationId,actor.id,JSON.stringify(metadata)]);
-    const saved=await receipt(client,session,id,{membershipId,role:'ADMIN'});if(!saved)throw new WorkspaceError('COMPANY_CREATION_UNCONFIRMED',503);return publicResult(saved,false);
+    const saved=await receipt(client,session,id,{membershipId,role:'ADMIN'});if(!saved)throw new WorkspaceError('COMPANY_CREATION_UNCONFIRMED',503);return {...publicResult(saved,false),currentCompany:current(await canonicalCompany(client,session),{role:'ADMIN'},session)};
    });
   }
  };
