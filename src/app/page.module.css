@@ -36,7 +36,7 @@
 @media(max-width:620px){.hero{padding-top:34px}.heroGrid{grid-template-columns:1fr;gap:34px}.hero h1{font-size:clamp(42px,10vw,58px)}.heroCopy{padding-bottom:0}.heroBrand{margin-bottom:22px}.heroLead{max-width:350px}.heroProof{margin-top:25px}.heroVisual{max-width:460px}.heroAtmosphere{background:linear-gradient(180deg,#0c2030ed 0%,#0c2030cb 35%,#0c2030ee 75%,#0c2030 100%),url('/media/launch/obra-vista-amplia.webp') center 45%/cover no-repeat}.heroIndex{margin-top:20px}.presentation{gap:32px}.presentation::before{left:10%;top:40%;width:80%;height:50%}.whatsappGrid{gap:38px;grid-template-columns:1fr}.companyCard{border-radius:18px}.whatsapp .showcaseImage{aspect-ratio:1.12}}
 @media(max-width:360px){.hero h1{font-size:41px}.heroBrand{font-size:27px}.heroProof{font-size:10px}}
 .hero h1{font-size:clamp(48px,5vw,68px)}
-@media(max-width:620px){.hero h1{font-size:clamp(40px,9vw,54px)}.heroBrand{display:none}.heroProof{display:none}.heroGrid{gap:26px}}
+@media(max-width:620px){.hero h1{font-size:clamp(40px,9vw,54px)}.heroProof{display:none}.heroGrid{gap:26px}}
 @media(max-width:360px){.hero h1{font-size:40px}}
 @media(max-width:900px) and (min-width:621px){.heroGrid{grid-template-columns:1fr;gap:32px}.heroCopy{padding-bottom:0;max-width:650px}.hero h1{font-size:62px}.heroVisual{width:100%;max-width:600px;justify-self:center}.heroProof{margin-top:26px}.heroBrand{margin-bottom:24px}}
 @media(min-width:901px){.hero h1{font-size:clamp(48px,4.2vw,60px)}.hero h1 em{white-space:nowrap}}
