@@ -34,7 +34,7 @@ try{
  pool=trackDisposablePool(new Pool({connectionString:url.toString(),max:8}));await query(lifecycleSchema);
  for(const t of tenants){
   const active=t.key==='b';
-  await query(`INSERT INTO "Organization" VALUES($1,$2,$3,'{}')`,[t.organizationId,'Synthetic KYC company '+t.key,t.clerkOrganizationId]);
+  await query(`INSERT INTO "Organization"(id,name,"clerkOrganizationId",metadata) VALUES($1,$2,$3,'{}')`,[t.organizationId,'Synthetic KYC company '+t.key,t.clerkOrganizationId]);
   await query(`INSERT INTO "PlatformUser"(id,"clerkUserId","primaryEmail") VALUES($1,$2,$3)`,[t.ownerId,t.ownerUserId,'owner-'+t.key+'@example.invalid']);
   await query(`INSERT INTO "TenantMembership"(id,"userId","organizationId","tenantRole","clerkRole",status) VALUES($1,$2,$3,'ADMIN','org:admin','ACTIVE')`,['owner-member-'+t.key,t.ownerId,t.organizationId]);
   await query(`INSERT INTO "Project"(id,"organizationId",name,status,metadata) VALUES($1,$2,$3,'ACTIVE','{}')`,[t.projectId,t.organizationId,'Synthetic KYC project '+t.key]);

@@ -58,7 +58,7 @@ try{
  pool=trackDisposablePool(new Pool({connectionString:url.toString(),max:8}));
  await query(lifecycleSchema);
  for(const tenant of lifecycleTenants){
-  await query(`INSERT INTO "Organization" VALUES($1,$2,$3,'{}');`,[tenant.organizationId,'Synthetic company '+tenant.key,tenant.clerkOrganizationId]);
+  await query(`INSERT INTO "Organization"(id,name,"clerkOrganizationId",metadata) VALUES($1,$2,$3,'{}');`,[tenant.organizationId,'Synthetic company '+tenant.key,tenant.clerkOrganizationId]);
   await query(`INSERT INTO "PlatformUser"(id,"clerkUserId","primaryEmail") VALUES($1,$2,$3);`,[tenant.ownerId,tenant.ownerUserId,'owner-'+tenant.key+'@example.invalid']);
   await query(`INSERT INTO "TenantMembership"(id,"userId","organizationId","tenantRole","clerkRole",status) VALUES($1,$2,$3,'ADMIN','org:admin','ACTIVE')`,['owner-member-'+tenant.key,tenant.ownerId,tenant.organizationId]);
   await query(`INSERT INTO "Project"(id,"organizationId",name,status,metadata) VALUES($1,$2,$3,'ACTIVE','{"retained":true}')`,[tenant.projectId,tenant.organizationId,'Obra sintética '+tenant.key.toUpperCase()]);
