@@ -22,7 +22,10 @@ export function createFieldHandlers({verify,operations}) {
     const session=await identity(request,verify),params=new URL(request.url).searchParams;
     if(request.method==='POST'){if(params.size)throw new WorkspaceError('FIELD_QUERY_INVALID');return reply(await operations.save(session,await boundedBody(request)));}
     if(request.method!=='GET')return reply({code:'METHOD_NOT_ALLOWED'},405);
-    const input=context(params,['operationId','proposalId','afterMovement','afterConsumption','consumptionId']);
+    const input=context(params,['operationId','proposalId','afterMovement','afterConsumption','consumptionId','shiftId','closingEventId','journeyCursor']);
+    if(params.has('journeyCursor')){if(params.size!==3||!params.get('journeyCursor')||params.get('journeyCursor').length>1024)throw new WorkspaceError('FIELD_QUERY_INVALID');return reply(await operations.read(session,{...input,journeyCursor:params.get('journeyCursor')}));}
+    const shiftKeys=['shiftId','closingEventId'].filter(key=>params.has(key));
+    if(shiftKeys.length){const key=shiftKeys[0];if(shiftKeys.length!==1||params.size!==3||!workspaceId(params.get(key)))throw new WorkspaceError('FIELD_QUERY_INVALID');return reply(await operations.shift(session,{...input,[key]:params.get(key)}));}
     const inventoryKeys=['afterMovement','afterConsumption','consumptionId'].filter(key=>params.has(key));
     if(inventoryKeys.length){const key=inventoryKeys[0];if(params.has('operationId')||params.has('proposalId')||inventoryKeys.length!==1||!workspaceId(params.get(key)))throw new WorkspaceError('INVENTORY_QUERY_INVALID');return reply(await operations.inventoryHistory(session,{...input,[key]:params.get(key)}));}
     if(params.has('proposalId')){
