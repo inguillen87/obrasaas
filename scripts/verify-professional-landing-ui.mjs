@@ -10,6 +10,8 @@ const root=process.cwd(),parent=path.join(root,'.vercel'),output=path.join(paren
 mkdirSync(output,{recursive:true});
 const fixture=mkdtempSync(path.join(parent,'professional-landing-ui-')),app=path.join(fixture,'app');
 const files=['src/app/page.js','src/app/page.module.css','src/app/landing-interactions.js','src/app/landing-phone-scene.js','src/app/landing-phone-scene.module.css','src/app/layout.js','src/app/globals.css','src/app/brand/brand-logo.js','src/app/brand/brand-logo.module.css','src/app/brand/brand-geometry.js'];
+const fontSources=JSON.parse(readFileSync(path.join(root,'src/app/fonts/sources.json'),'utf8'));
+files.push('src/app/fonts/sources.json',...fontSources.assets.flatMap(asset=>['src/app/fonts/'+asset.path,'src/app/fonts/'+asset.license.path]));
 const mediaFiles=['obra-vista-amplia.webp','obra-registro-evidencia.webp','obra-entrega-materiales.webp','obrasaas-15s.mp4','obrasaas-15s-poster.webp','obrasaas-15s-es-AR.vtt'];
 for(const source of files){const target=path.join(app,source.replace('src/app/',''));mkdirSync(path.dirname(target),{recursive:true});copyFileSync(path.join(root,source),target);assert.deepEqual(readFileSync(path.join(root,source)),readFileSync(target));}
 for(const asset of mediaFiles){const target=path.join(fixture,'public/media/launch',asset);mkdirSync(path.dirname(target),{recursive:true});copyFileSync(path.join(root,'public/media/launch',asset),target);assert.deepEqual(readFileSync(path.join(root,'public/media/launch',asset)),readFileSync(target));}
@@ -34,12 +36,12 @@ async function canonicalNavigation(page){
  const legacy=paths.filter(route=>legacyRoutes.some(prefix=>route===prefix||route.startsWith(prefix+'/')));
  assert.deepEqual(legacy,[],'Public landing links to a legacy route');
 }
-async function geometry(page){return page.evaluate(()=>{
+async function geometry(page){return page.evaluate(requestedWidth=>{
  const visible=element=>{const closed=element.closest('details:not([open])');if(closed&&!element.closest('summary'))return false;const r=element.getBoundingClientRect();return r.width>0&&r.height>0&&getComputedStyle(element).visibility!=='hidden';};
  const main=document.querySelector('main'),h1=main.querySelector('h1'),targets=[...document.querySelectorAll('a,summary,button')].filter(visible).map(element=>({label:(element.getAttribute('aria-label')||element.textContent).trim().slice(0,80),height:Math.round(element.getBoundingClientRect().height)}));
- const overflow=[...document.querySelectorAll('main *,header *,footer *')].filter(element=>visible(element)&&!element.closest('svg')).map(element=>({element:element.tagName,label:element.textContent.trim().slice(0,45),rect:element.getBoundingClientRect()})).filter(({rect})=>rect.left<-.6||rect.right>innerWidth+.6).map(({element,label})=>({element,label}));
- return {documentOverflow:document.documentElement.scrollWidth>innerWidth,overflow,targets,heroOpacity:getComputedStyle(h1).opacity,heroVisible:h1.getBoundingClientRect().height>0,headline:h1.textContent,exampleLabels:[...document.querySelectorAll('[data-landing-example]')].map(example=>({kind:example.dataset.landingExample,visibleLabel:/Ejemplo ilustrativo|Conversación de ejemplo/.test(example.textContent)})),activeAnimations:document.getAnimations().filter(animation=>animation.playState==='running'&&animation.effect?.target?.closest?.('main')).length};
- });}
+ const overflow=[...document.querySelectorAll('main *,header *,footer *')].filter(element=>visible(element)&&!element.closest('svg')).map(element=>({element:element.tagName,label:element.textContent.trim().slice(0,45),rect:element.getBoundingClientRect()})).filter(({rect})=>rect.left<-.6||rect.right>requestedWidth+.6).map(({element,label})=>({element,label}));
+ return {documentOverflow:document.documentElement.scrollWidth>requestedWidth,overflow,targets,heroOpacity:getComputedStyle(h1).opacity,heroVisible:h1.getBoundingClientRect().height>0,headline:h1.textContent,exampleLabels:[...document.querySelectorAll('[data-landing-example]')].map(example=>({kind:example.dataset.landingExample,visibleLabel:/Ejemplo ilustrativo|Conversación de ejemplo/.test(example.textContent)})),activeAnimations:document.getAnimations().filter(animation=>animation.playState==='running'&&animation.effect?.target?.closest?.('main')).length};
+ },page.viewport().width);}
 async function phoneSceneChecks(browser){
  const page=await browser.newPage(),apiRequests=[],mediaRequests=[];page.on('pageerror',error=>errors.push(error.message));
  await page.setViewport({width:390,height:1000});await page.setBypassServiceWorker(true);await page.emulateMediaFeatures([{name:'prefers-reduced-motion',value:'no-preference'}]);

@@ -40,3 +40,9 @@
 @media(max-width:360px){.hero h1{font-size:40px}}
 @media(max-width:900px) and (min-width:621px){.heroGrid{grid-template-columns:1fr;gap:32px}.heroCopy{padding-bottom:0;max-width:650px}.hero h1{font-size:62px}.heroVisual{width:100%;max-width:600px;justify-self:center}.heroProof{margin-top:26px}.heroBrand{margin-bottom:24px}}
 @media(min-width:901px){.hero h1{font-size:clamp(48px,4.2vw,60px)}.hero h1 em{white-space:nowrap}}
+
+/* Enlarged text keeps its size and reflows within the public composition. */
+.heroCopy{min-width:0}.page :is(h1,h2,h3){overflow-wrap:anywhere}.hero h1 em{white-space:normal}.primary{max-width:100%;overflow-wrap:anywhere}.primary svg{flex-shrink:0}.closing>div,.heroIndex{flex-wrap:wrap}.showcaseControls button{min-width:0;flex-wrap:wrap;overflow-wrap:anywhere}
+@media(max-width:1000px){.headerInner,.desktopNav,.headerActions{flex-wrap:wrap}.headerInner{row-gap:8px;padding-top:10px;padding-bottom:10px}.headerActions{min-width:0}.brand{max-width:100%}}
+@media(max-width:900px){.heroGrid{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:768px){.page .headerInner{height:auto!important}}

@@ -1,0 +1,68 @@
+{
+  "schema": "obrasaas-local-font-sources.v1",
+  "retrievedAt": "2026-10-06T14:34:51.869Z",
+  "sourceCss": {
+    "url": "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Manrope:wght@650;800&family=Outfit:wght@400;500;600;700;800&display=swap",
+    "sha256": "77db9b1b43c9d78232cc04ac2d73891a72f20f169425f1371d23aaf82b6f0510"
+  },
+  "googleFontsLicenseCommit": "7085eb89a950e85db5b166b7a58d414544b4140c",
+  "assets": [
+    {
+      "family": "Inter",
+      "path": "inter-latin-variable.woff2",
+      "source": "https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa1ZL7.woff2",
+      "sha256": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62",
+      "bytes": 48256,
+      "weights": [
+        300,
+        400,
+        500,
+        600,
+        700
+      ],
+      "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD",
+      "license": {
+        "path": "Inter-OFL.txt",
+        "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/inter/OFL.txt",
+        "sha256": "5b9321a4298cfeb6b34354164a1c3afc3db114569984c502b9b35d988fd58c57"
+      }
+    },
+    {
+      "family": "Manrope",
+      "path": "manrope-latin-variable.woff2",
+      "source": "https://fonts.gstatic.com/s/manrope/v20/xn7gYHE41ni1AdIRggexSg.woff2",
+      "sha256": "a30ddcd349703aff7464c34bef3fffdff405ee50c113440d7c8693c02d210972",
+      "bytes": 24836,
+      "weights": [
+        650,
+        800
+      ],
+      "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD",
+      "license": {
+        "path": "Manrope-OFL.txt",
+        "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/manrope/OFL.txt",
+        "sha256": "58172e0c0fac2cda8a37b348164bb55e44b0e69051e557e92b1d3f6910141f7b"
+      }
+    },
+    {
+      "family": "Outfit",
+      "path": "outfit-latin-variable.woff2",
+      "source": "https://fonts.gstatic.com/s/outfit/v15/QGYvz_MVcBeNP4NJtEtq.woff2",
+      "sha256": "6c18d579fd87c3776be068b762cbc83fde3acb543d49eabd3ade842eb987e887",
+      "bytes": 32292,
+      "weights": [
+        400,
+        500,
+        600,
+        700,
+        800
+      ],
+      "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD",
+      "license": {
+        "path": "Outfit-OFL.txt",
+        "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/outfit/OFL.txt",
+        "sha256": "c676351bf8576b9aba743cd5eaa8c0e7ee0d51f805d720447b4df4ddb6a2e416"
+      }
+    }
+  ]
+}
