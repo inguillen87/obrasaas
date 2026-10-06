@@ -16,7 +16,7 @@ for(const file of readdirSync(path.join(root,'src/app/(identity)/cuenta')).filte
  const source='src/app/(identity)/cuenta/'+file;copyFileSync(path.join(root,source),path.join(components,file));
  sourceManifest.push({path:source,sha256:createHash('sha256').update(readFileSync(path.join(components,file))).digest('hex')});
 }
-for(const source of ['src/lib/geo.js','src/lib/field-media-privacy.mjs','src/lib/worker-channel-consent-policy.mjs','src/lib/whatsapp/tenant-workspace-policy.js']){
+for(const source of ['src/lib/geo.js','src/lib/field-media-privacy.mjs','src/lib/worker-channel-consent-policy.mjs','src/lib/whatsapp/tenant-workspace-policy.js','src/lib/company-phone-format.mjs']){
  const destination=path.join(fixture,source);mkdirSync(path.dirname(destination),{recursive:true});copyFileSync(path.join(root,source),destination);
  sourceManifest.push({path:source,sha256:createHash('sha256').update(readFileSync(destination)).digest('hex')});
 }

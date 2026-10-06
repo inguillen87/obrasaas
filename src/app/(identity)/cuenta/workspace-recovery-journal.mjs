@@ -23,6 +23,7 @@ export const RECOVERY_RESOURCES = Object.freeze({
   'demo-pilot':'Preparación y vinculación del piloto DEMO',
   'plan-import':'Importación de cronograma',
   'company-channel':'Canal de la empresa y obras',
+  'company-onboarding':'Número declarado de la empresa',
 });
 const failure = (code, message) => Object.assign(new Error(message), {code,status:409,requestDispatched:false});
 const unavailable = () => failure('WORKSPACE_RECOVERY_STORAGE_UNAVAILABLE','No se pudo conservar la referencia del intento en este navegador. Habilitá el almacenamiento y volvé a intentar; la operación no se envió.');
@@ -38,19 +39,21 @@ function reference(url, options, now) {
   if(typeof options.body==='string'){try{body=JSON.parse(options.body);}catch{return null;}}
   else if(typeof options.body?.get==='function') body=Object.fromEntries(['operationId','projectId','scope','action','reportId','eventId'].map(key=>[key,options.body.get(key)]));
   if(!body||!uuid(body.operationId)||!id(body.projectId)||!scopeValid(body.scope))return null;
+  if(resource==='company-onboarding'&&(body.action!=='declare_company_phone'||!id(body.expectedClerkOrganizationId)))throw unavailable();
   if(resource==='site-photo'&&!id(body.reportId))return null;
   if(resource==='company-channel'&&(!COMPANY_CHANNEL_ACTIONS.includes(body.action)||!id(body.payload?.connectionId)))throw unavailable();
   // Invitation reconciliation reads the provider and finalizes the original
   // invitation's receipt; it never creates a second invitation.
   if(resource==='participants'&&body.action==='RECOVER_INVITATION')return null;
-  if(resource==='meta-onboarding'&&(!['review_inbox','process_inbox'].includes(body.action)||!id(body.eventId)))return null;
+  if(resource==='meta-onboarding'&&(body.action==='reconcile'?(!uuid(body.signupId)||!Number.isSafeInteger(body.expectedCompanyPhoneRevision)||body.expectedCompanyPhoneRevision<1||body.confirmCompanyPhoneRevision!==true):(!['review_inbox','process_inbox'].includes(body.action)||!id(body.eventId))))return null;
   const progress=resource==='template-send'&&body.templateKey===PROGRESS_TEMPLATE_SEND_KEY;
   const overtime=resource==='field-operations'&&FIELD_OVERTIME_RECOVERY_ACTIONS.includes(body.action);
   if(progress&&(!id(body.workerId)||!templateSendActionReference(body.actionReference)))throw unavailable();
   return {version:1,resource,scope:body.scope,projectId:body.projectId,operationId:body.operationId.toLowerCase(),createdAt:now,
     ...(resource==='site-photo'?{reportId:body.reportId}:{}),
+    ...(resource==='company-onboarding'?{action:body.action,expectedClerkOrganizationId:body.expectedClerkOrganizationId}:{}),
     ...(resource==='company-channel'?{action:body.action,connectionId:body.payload.connectionId}:{}),
-    ...(resource==='meta-onboarding'?{action:body.action,eventId:body.eventId}:{}),
+    ...(resource==='meta-onboarding'?{action:body.action,...(body.action==='reconcile'?{signupId:body.signupId}:{eventId:body.eventId})}:{}),
     ...(overtime?{action:body.action}:{}),
     ...(progress?{templateKey:PROGRESS_TEMPLATE_SEND_KEY,workerId:body.workerId,actionReference:{proposalId:body.actionReference.proposalId,revision:body.actionReference.revision}}:{}),
   };
@@ -59,12 +62,13 @@ function valid(entry) {
   if(!entry||entry.version!==1||!Object.hasOwn(RECOVERY_RESOURCES,entry.resource)||!scopeValid(entry.scope)||!id(entry.projectId)||!uuid(entry.operationId)||!Number.isSafeInteger(entry.createdAt)||entry.createdAt<0)return false;
   const progress=entry.resource==='template-send'&&entry.templateKey===PROGRESS_TEMPLATE_SEND_KEY;
   const overtime=entry.resource==='field-operations'&&entry.action!==undefined;
-  const fields=['version','resource','scope','projectId','operationId','createdAt',...(entry.resource==='site-photo'?['reportId']:[]),...(entry.resource==='company-channel'?['action','connectionId']:[]),...(entry.resource==='meta-onboarding'?['action','eventId']:[]),...(overtime?['action']:[]),...(progress?['templateKey','workerId','actionReference']:[])];
+  const fields=['version','resource','scope','projectId','operationId','createdAt',...(entry.resource==='site-photo'?['reportId']:[]),...(entry.resource==='company-onboarding'?['action','expectedClerkOrganizationId']:[]),...(entry.resource==='company-channel'?['action','connectionId']:[]),...(entry.resource==='meta-onboarding'?['action',entry.action==='reconcile'?'signupId':'eventId']:[]),...(overtime?['action']:[]),...(progress?['templateKey','workerId','actionReference']:[])];
   if(Object.keys(entry).sort().join('|')!==fields.sort().join('|'))return false;
+  if(entry.resource==='company-onboarding'&&(entry.action!=='declare_company_phone'||!id(entry.expectedClerkOrganizationId)))return false;
   if(entry.resource==='company-channel'&&(!COMPANY_CHANNEL_ACTIONS.includes(entry.action)||!id(entry.connectionId)))return false;
   if(progress&&(!id(entry.workerId)||!templateSendActionReference(entry.actionReference)))return false;
   if(overtime&&!FIELD_OVERTIME_RECOVERY_ACTIONS.includes(entry.action))return false;
-  return (entry.resource!=='site-photo'||id(entry.reportId))&&(entry.resource!=='meta-onboarding'||['review_inbox','process_inbox'].includes(entry.action)&&id(entry.eventId));
+  return (entry.resource!=='site-photo'||id(entry.reportId))&&(entry.resource!=='meta-onboarding'||(entry.action==='reconcile'?uuid(entry.signupId):['review_inbox','process_inbox'].includes(entry.action)&&id(entry.eventId)));
 }
 const keyOf=entry=>prefix+entry.scope+'.'+entry.resource+'.'+entry.operationId;
 export function validateWorkspaceRecoveryStoredEntry(key,raw) {
@@ -79,12 +83,18 @@ export function validateWorkspaceRecoveryStoredEntry(key,raw) {
 export function recoveryQuery(entry) {
   if(!valid(entry))throw new TypeError('Invalid receipt reference');
   return '/api/identity/'+entry.resource+'?'+new URLSearchParams({projectId:entry.projectId,scope:entry.scope,operationId:entry.operationId,
-    ...(entry.resource==='site-photo'?{reportId:entry.reportId}:{}),...(entry.resource==='meta-onboarding'?{action:entry.action,eventId:entry.eventId}:{})});
+    ...(entry.resource==='company-onboarding'?{action:entry.action,expectedClerkOrganizationId:entry.expectedClerkOrganizationId}:{}),
+    ...(entry.resource==='site-photo'?{reportId:entry.reportId}:{}),...(entry.resource==='meta-onboarding'?{action:entry.action,...(entry.action==='reconcile'?{signupId:entry.signupId}:{eventId:entry.eventId})}:{})});
 }
 export function recoveryResult(entry, result) {
   if(!valid(entry)||result?.scope!==entry.scope)return null;
   if(result.projectId!==undefined&&result.projectId!==entry.projectId)return null;
-  if(entry.resource==='field-operations'&&FIELD_OVERTIME_RECOVERY_ACTIONS.includes(entry.action)){
+  if(entry.resource==='company-onboarding'){
+    if(result.projectId!==entry.projectId||result.operationId!==entry.operationId||result.action!==entry.action||result.expectedClerkOrganizationId!==entry.expectedClerkOrganizationId)return null;
+    if(result.state==='RECORDED'&&result.saved===true&&/^company_phone_[a-f0-9]{64}$/.test(result.receipt?.id||'')&&Number.isSafeInteger(result.receipt.savedRevision)&&result.receipt.savedRevision>=1&&typeof result.savedDeclarationIsCurrent==='boolean'&&id(result.organizationId)&&result.currentCompany?.organizationId===result.organizationId&&result.currentCompany?.expectedClerkOrganizationId===entry.expectedClerkOrganizationId)return {state:'RECORDED',receiptId:result.receipt.id};
+    if(result.state==='NOT_OBSERVED'&&result.definitive===false&&result.saved!==true&&!result.receipt)return {state:'NOT_OBSERVED'};return null;
+  }
+  if(entry.resource==='field-operations' &&FIELD_OVERTIME_RECOVERY_ACTIONS.includes(entry.action)){
     if(result.projectId!==entry.projectId||result.operationId!==entry.operationId)return null;
     if(result.state==='RECORDED'&&result.saved===true&&result.action===entry.action&&/^field_[a-f0-9]{64}$/.test(result.receiptId||''))return {state:'RECORDED',receiptId:result.receiptId};
     if(result.state==='NOT_OBSERVED'&&result.definitive===false&&result.saved!==true&&!result.receiptId&&!result.overtime&&(result.action===undefined||result.action===entry.action))return {state:'NOT_OBSERVED'};
@@ -144,6 +154,16 @@ export function recoveryResult(entry, result) {
     if(result.state==='ACCEPTED'&&result.definitive===true&&result.saved===true&&result.providerAccepted===true&&result.deliveryConfirmed===false)return {state:'ACCEPTED',receiptId:receipt.id};
     if(result.state==='STATUS_OBSERVED'&&result.definitive===true&&result.saved===true&&['sent','delivered','read','failed','deleted'].includes(result.providerStatus)&&result.deliveryConfirmed===['delivered','read'].includes(result.providerStatus))return {state:'STATUS_OBSERVED',receiptId:receipt.id};
     return null;
+  }
+  if(entry.resource==='meta-onboarding'&&entry.action==='reconcile'){
+    const receipt=result.receipt;if(receipt?.action!=='reconcile'||receipt.operationId!==entry.operationId||receipt.signupId!==entry.signupId||receipt.projectId!==entry.projectId||receipt.scope!==entry.scope)return null;
+    if(receipt.state==='RECORDED'&&receipt.saved===true&&/^meta_company_phone_[a-f0-9]{64}$/.test(receipt.receiptId||'')&&Number.isSafeInteger(receipt.expectedCompanyPhoneRevision)&&receipt.expectedCompanyPhoneRevision>=1)return {state:'RECORDED',receiptId:receipt.receiptId};
+    if(receipt.state==='REJECTED'){
+      const fields=['action','operationId','signupId','projectId','scope','state','saved','definitive','receiptId','phase','code','expectedCompanyPhoneRevision','observedCompanyPhoneRevision','effectiveCompanyPhoneRevision'];
+      if(Object.keys(receipt).sort().join('|')!==fields.sort().join('|')||receipt.saved!==false||receipt.definitive!==true||receipt.phase!=='BEFORE_PROVIDER'||receipt.code!=='META_CUSTOMER_COMPANY_PHONE_CHANGED'||!/^meta_company_phone_[a-f0-9]{64}$/.test(receipt.receiptId||'')||['expectedCompanyPhoneRevision','observedCompanyPhoneRevision','effectiveCompanyPhoneRevision'].some(key=>!Number.isSafeInteger(receipt[key])||receipt[key]<1)||receipt.expectedCompanyPhoneRevision===receipt.observedCompanyPhoneRevision&&receipt.expectedCompanyPhoneRevision>receipt.effectiveCompanyPhoneRevision)return null;
+      return {state:'REJECTED',receiptId:receipt.receiptId};
+    }
+    if(receipt.state==='NOT_OBSERVED'&&receipt.definitive===false&&!receipt.saved&&!receipt.receiptId)return {state:'NOT_OBSERVED'};return null;
   }
   if(entry.resource==='meta-onboarding') {
     const receipt=result.receipt;
@@ -218,8 +238,8 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
       const reserve=()=>access('readwrite',entry.scope,s=>{
       if(options.signal?.aborted)throw Object.assign(new DOMException('La consulta se canceló.','AbortError'),{requestDispatched:false});
       const current=readEntries(s,entry.scope),existing=current.find(row=>keyOf(row)===keyOf(entry));
-      if(existing){if(existing.projectId!==entry.projectId||existing.reportId!==entry.reportId||existing.eventId!==entry.eventId||existing.action!==entry.action||existing.connectionId!==entry.connectionId||existing.templateKey!==entry.templateKey||existing.workerId!==entry.workerId||existing.actionReference?.proposalId!==entry.actionReference?.proposalId||existing.actionReference?.revision!==entry.actionReference?.revision)throw failure('WORKSPACE_RECOVERY_CONFLICT','Este identificador corresponde a otro intento. Comprobá el recibo antes de continuar.');return {entry:existing,existed:true};}
-      const pending=current.find(row=>row.resource===entry.resource&&(entry.resource==='company-channel'||row.projectId===entry.projectId)&&(entry.resource!=='meta-onboarding'||row.eventId===entry.eventId));
+      if(existing){if(existing.projectId!==entry.projectId||existing.reportId!==entry.reportId||existing.eventId!==entry.eventId||existing.action!==entry.action||existing.connectionId!==entry.connectionId||existing.expectedClerkOrganizationId!==entry.expectedClerkOrganizationId||existing.signupId!==entry.signupId||existing.templateKey!==entry.templateKey||existing.workerId!==entry.workerId||existing.actionReference?.proposalId!==entry.actionReference?.proposalId||existing.actionReference?.revision!==entry.actionReference?.revision)throw failure('WORKSPACE_RECOVERY_CONFLICT','Este identificador corresponde a otro intento. Comprobá el recibo antes de continuar.');return {entry:existing,existed:true};}
+      const pending=current.find(row=>row.resource===entry.resource&&(['company-channel','company-onboarding'].includes(entry.resource)||row.projectId===entry.projectId)&&(entry.resource!=='meta-onboarding'||entry.action==='reconcile'||row.eventId===entry.eventId));
       let resolution=false;
       if(entry.resource==='participants'&&typeof options.body==='string'){try{resolution=JSON.parse(options.body).action==='REVOKE';}catch{ /* The server rejects malformed commands. */ }}
       if(pending&&!resolution)throw failure('WORKSPACE_RECOVERY_REQUIRED','Hay un envío anterior sin confirmar en este módulo. Comprobá su recibo en Operaciones por comprobar antes de iniciar otro.');
@@ -243,14 +263,15 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
       if(!ticket)return;
       if(error){
         const rejected=ticket.entry.resource==='plan-import'&&recoveryResult(ticket.entry,error.result)?.state==='REJECTED'&&error.code===error.result.code&&error.status===({PLAN_IMPORT_FILE_INVALID:400,PLAN_IMPORT_FILE_TOO_LARGE:413})[error.code];
-        if(!ticket.existed&&(error.requestDispatched===false||rejected||!['plan-import','company-channel'].includes(ticket.entry.resource)&&error.status>=400&&error.status<500))await remove(ticket.entry);return;
+        if(!ticket.existed&&(error.requestDispatched===false||rejected||!['plan-import','company-channel','company-onboarding'].includes(ticket.entry.resource)&&!(ticket.entry.resource==='meta-onboarding'&&ticket.entry.action==='reconcile')&&error.status>=400&&error.status<500))await remove(ticket.entry);return;
       }
       const entry=ticket.entry;
       // A general Meta snapshot is not a receipt for this operation.
-      if(entry.resource==='meta-onboarding')return;
+      if(entry.resource==='meta-onboarding'){if(entry.action==='reconcile'&&['RECORDED','REJECTED'].includes(recoveryResult(entry,result)?.state))await remove(entry);return;}
       if(entry.resource==='template-send'){if(['ACCEPTED','STATUS_OBSERVED','REJECTED'].includes(recoveryResult(entry,result)?.state))await remove(entry);return;}
       if(entry.resource==='site-purchases'){if(recoveryResult(entry,result)?.state==='RECORDED')await remove(entry);return;}
       if(entry.resource==='constructor-crm'){if(recoveryResult(entry,result)?.state==='RECORDED')await remove(entry);return;}
+      if(entry.resource==='company-onboarding'){if(recoveryResult(entry,result)?.state==='RECORDED')await remove(entry);return;}
       if(entry.resource==='company-channel'){if(['RECORDED','REJECTED'].includes(recoveryResult(entry,result)?.state))await remove(entry);return;}
       if(entry.resource==='plan-import'){const outcome=recoveryResult(entry,result);if(outcome?.state==='RECORDED'||outcome?.state==='REJECTED'&&!ticket.existed)await remove(entry);return;}
       if(entry.resource==='field-operations'&&FIELD_OVERTIME_RECOVERY_ACTIONS.includes(entry.action)){if(recoveryResult(entry,result)?.state==='RECORDED')await remove(entry);return;}
@@ -262,6 +283,8 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
       const scope=params.get('scope'),operationId=params.get('operationId');if(!scopeValid(scope)||!uuid(operationId))return;
       const entry=(await list(scope)).find(row=>row.resource===resource&&row.operationId===operationId.toLowerCase());
       if(!entry||params.get('projectId')!==entry.projectId)return;
+      if(entry.resource==='company-onboarding'&&(params.get('expectedClerkOrganizationId')!==entry.expectedClerkOrganizationId||params.get('action')!==entry.action))return;
+      if(entry.resource==='meta-onboarding'&&entry.action==='reconcile'&&(params.get('action')!==entry.action||params.get('signupId')!==entry.signupId))return;
       const outcome=recoveryResult(entry,result);
       // A pre-reservation POST rejection cannot settle an earlier attempt via GET.
       if(entry.resource==='plan-import'&&outcome?.state==='REJECTED')return;

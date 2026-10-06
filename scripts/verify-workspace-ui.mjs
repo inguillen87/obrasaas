@@ -18,6 +18,7 @@ copyFileSync(path.join(root,'src/lib/geo.js'),path.join(fixture,'src/lib/geo.js'
 copyFileSync(path.join(root,'src/lib/field-media-privacy.mjs'),path.join(fixture,'src/lib/field-media-privacy.mjs'));
 sourceManifest.push({path:'src/lib/geo.js',sha256:createHash('sha256').update(readFileSync(path.join(fixture,'src/lib/geo.js'))).digest('hex')});
 for(const file of readdirSync(path.join(root,'src/app/(identity)/cuenta')).filter(name=>/\.(js|mjs|css)$/.test(name))){copyFileSync(path.join(root,'src/app/(identity)/cuenta',file),path.join(components,file));sourceManifest.push({path:'src/app/(identity)/cuenta/'+file,sha256:createHash('sha256').update(readFileSync(path.join(components,file))).digest('hex')});}
+const phoneFormatPath='src/lib/company-phone-format.mjs';copyFileSync(path.join(root,phoneFormatPath),path.join(fixture,phoneFormatPath));assert.deepEqual(readFileSync(path.join(root,phoneFormatPath)),readFileSync(path.join(fixture,phoneFormatPath)));sourceManifest.push({path:phoneFormatPath,sha256:createHash('sha256').update(readFileSync(path.join(root,phoneFormatPath))).digest('hex')});
 const harnessSha256=createHash('sha256').update(readFileSync(new URL(import.meta.url))).digest('hex');
 for(const file of ["src/lib/whatsapp/tenant-workspace-policy.js","src/lib/worker-channel-consent-policy.mjs","src/lib/field-media-privacy.mjs"])sourceManifest.push({path:file,sha256:createHash('sha256').update(readFileSync(path.join(root,file))).digest('hex')});
 assert.equal(new Set(sourceManifest.map(row=>row.path)).size,sourceManifest.length);
