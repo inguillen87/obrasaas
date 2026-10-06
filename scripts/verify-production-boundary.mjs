@@ -24,7 +24,7 @@ async function waitForServer(){
 }
 async function stopServer(){if(server.exitCode!==null)return;const stopped=new Promise(done=>server.once('exit',done));server.kill('SIGTERM');await stopped;}
 let browser;const checks=[];
-const publicIdentityText=['ObraSaaS, un producto de Inmovar LATAM','Ing. Marcelo Guillén · Fundador','Arq. María Victoria Schiaffino · Socia','Titular legal: GUILLEN MARCELO ARIEL'];
+const publicIdentityText=['ObraSaaS, un producto de Inmovar LATAM','Ing. Marcelo Ariel Guillén Alba · Fundador','Arq. María Victoria Schiaffino · Socia','Titular: GUILLEN ALBA, MARCELO ARIEL','Nombre registrado en ARCA: GUILLEN MARCELO ARIEL'];
 const publicIdentityViewports=[];
 try {
   await waitForServer();

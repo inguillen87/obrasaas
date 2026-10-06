@@ -539,9 +539,10 @@ export default function Home() {
           <div data-public-site-identity="obrasaas" style={{ flex: '0 1 auto', width: 'min(100%, 360px)', minWidth: 0, lineHeight: 1.65 }}>
             <Link href="/" aria-label="ObraSaaS, inicio" style={{ display: 'inline-flex', minHeight: '44px', alignItems: 'center', color: '#F4F1E8', fontSize: '1.15rem', textDecoration: 'none' }}><ObraSaasLogo markSize={28} variant="inverse" /></Link>
             <p style={{ fontSize: '0.86rem', color: '#cbd5e1', marginTop: '8px' }}>ObraSaaS, un producto de Inmovar LATAM</p>
-            <p style={{ fontSize: '0.82rem', color: '#cbd5e1', marginTop: '8px' }}>Ing. Marcelo Guillén · Fundador</p>
+            <p style={{ fontSize: '0.82rem', color: '#cbd5e1', marginTop: '8px' }}>Ing. Marcelo Ariel Guillén Alba · Fundador</p>
             <p style={{ fontSize: '0.82rem', color: '#cbd5e1' }}>Arq. María Victoria Schiaffino · Socia</p>
-            <p style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '12px' }}>Titular legal: <strong style={{ fontWeight: 500 }}>GUILLEN MARCELO ARIEL</strong></p>
+            <p style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '12px' }}>Titular: <strong style={{ fontWeight: 500 }}>GUILLEN ALBA, MARCELO ARIEL</strong></p>
+            <p style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Nombre registrado en ARCA: <strong style={{ fontWeight: 500 }}>GUILLEN MARCELO ARIEL</strong></p>
           </div>
           <nav aria-label="Enlaces del sitio" style={{ display: 'flex', flex: '0 1 auto', width: 'min(100%, 460px)', minWidth: 0, flexWrap: 'wrap', alignContent: 'flex-start', gap: '0 24px', fontSize: '0.8rem', color: '#94a3b8' }}>
             <Link href="/manual" style={{ color: 'inherit', textDecoration: 'none', minHeight: '44px', display: 'inline-flex', alignItems: 'center' }}>Manual de inicio</Link>
