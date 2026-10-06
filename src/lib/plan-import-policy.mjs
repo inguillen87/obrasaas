@@ -8,6 +8,10 @@ export const PLAN_IMPORT_CONSENT='plan-document-openai-v1';
 export const canImportPlan=role=>['ADMIN','DIRECTOR','SITE_MANAGER'].includes(role);
 export const canApprovePlan=role=>['ADMIN','DIRECTOR'].includes(role);
 const fail=(code='PLAN_IMPORT_INPUT_INVALID',status=400)=>{throw new WorkspaceError(code,status);};
+// Only this parser can attest that source validation failed before attach.
+// A caller-controlled field or an error from the store cannot forge the marker.
+const sourceRejections=new WeakMap();
+export const planImportSourceRejection=error=>sourceRejections.get(error)||null;
 export function planContext(input) {
  if(!input||!workspaceId(input.projectId)||!/^[a-f0-9]{64}$/.test(input.scope||''))fail();
  return {projectId:input.projectId,scope:input.scope};
@@ -62,6 +66,11 @@ export async function boundedPlanMultipart(request) {
   const file=form.get('file');if(!file||typeof file==='string')fail();
   const input=Object.fromEntries(keys.filter(k=>k!=='file').map(k=>[k,form.get(k)]));
   if(!operationId(input.operationId)||input.consent!==PLAN_IMPORT_CONSENT)fail('PLAN_IMPORT_CONSENT_REQUIRED');planContext(input);
-  return {...input,source:decodePlanSource(new Uint8Array(await file.arrayBuffer()),file.type)};
+  const bytes=new Uint8Array(await file.arrayBuffer());let source;
+  try{source=decodePlanSource(bytes,file.type);}catch(error){
+   if(error instanceof WorkspaceError&&['PLAN_IMPORT_FILE_INVALID','PLAN_IMPORT_FILE_TOO_LARGE'].includes(error.code))sourceRejections.set(error,{scope:input.scope,projectId:input.projectId,operationId:input.operationId.toLowerCase()});
+   throw error;
+  }
+  return {...input,source};
  }catch(error){if(error instanceof WorkspaceError)throw error;fail();}finally{await reader.cancel().catch(()=>{});reader.releaseLock();}
 }

@@ -6,7 +6,9 @@ import {assertPrivateImageConfigured} from './private-image-upload.mjs';
 const fail=(code,status=409)=>{throw new WorkspaceError(code,status);};
 const draftKey=(actor,project,operation)=>'plan_draft_'+digest([actor,project,operation.toLowerCase()]);
 const receiptKey=(actor,project,operation)=>'plan_receipt_'+digest([actor,project,operation.toLowerCase()]);
-const publicDraft=row=>{const m=row.metadata;return {id:row.id,revision:m.revision,status:m.status,existingTaskCount:m.existingTaskCount,source:{contentType:m.source.contentType,bytes:m.source.bytes,sha256:m.source.sha256},rows:m.rows||[],warnings:m.warnings||[],failure:m.failure||null,createdAt:m.createdAt,updatedAt:m.updatedAt,processingExpired:['UPLOADING','PROCESSING'].includes(m.status)&&Date.parse(m.lease?.expiresAt)<Date.now(),decision:m.decision||null,sourceAvailable:m.sourceConfirmed===true};};
+const pending=status=>['UPLOADING','PROCESSING'].includes(status);
+const leaseExpiry=m=>{const value=m.lease?.expiresAt;return typeof value==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)&&Number.isFinite(Date.parse(value))&&new Date(value).toISOString()===value?value:null;};
+const publicDraft=row=>{const m=row.metadata,expiry=leaseExpiry(m);return {id:row.id,revision:m.revision,status:m.status,existingTaskCount:m.existingTaskCount,source:{contentType:m.source.contentType,bytes:m.source.bytes,sha256:m.source.sha256},rows:m.rows||[],warnings:m.warnings||[],failure:m.failure||null,createdAt:m.createdAt,updatedAt:m.updatedAt,processingExpired:Boolean(pending(m.status)&&expiry&&Date.parse(expiry)<=Date.now()),...(pending(m.status)?{processingExpiresAt:expiry}:{}),decision:m.decision||null,sourceAvailable:m.sourceConfirmed===true};};
 const taskColumns=`id,title,status::text AS status,progress,to_char("startsAt",'YYYY-MM-DD') AS "startsOn",to_char("endsAt",'YYYY-MM-DD') AS "endsOn",to_char("updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision`;
 export function createPlanImport({workspace,put,get,analyzer,environment=()=>process.env}) {
  if(typeof workspace?.projectOperation!=='function'||typeof put!=='function'||typeof get!=='function'||typeof analyzer?.analyze!=='function')throw new TypeError('Explicit plan import adapters required');
@@ -25,9 +27,10 @@ export function createPlanImport({workspace,put,get,analyzer,environment=()=>pro
   const row=(await client.query(`SELECT id,metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "entityId"=$3 AND action='plan.import.draft' ${lock?'FOR UPDATE':''}`,[id,member.organizationId,projectId])).rows[0];
   if(row?.metadata?.version!==1||row.metadata.projectId!==projectId)fail('PLAN_IMPORT_DRAFT_UNAVAILABLE',404);return row;
  };
- async function update(client,row,patch) {
+ async function update(client,row,patch,lease) {
   const metadata={...row.metadata,...patch,revision:row.metadata.revision+1,updatedAt:new Date().toISOString()};
-  await client.query(`UPDATE public."AuditLog" SET metadata=$2::jsonb WHERE id=$1 AND action='plan.import.draft'`,[row.id,JSON.stringify(metadata)]);return {id:row.id,metadata};
+  const result=await client.query(`UPDATE public."AuditLog" SET metadata=$2::jsonb WHERE id=$1 AND action='plan.import.draft' ${lease?"AND metadata->'lease'->>'token'=$3 AND metadata->'lease'->>'expiresAt'=$4 AND $4::timestamptz>clock_timestamp()":''} RETURNING id`,[row.id,JSON.stringify(metadata),...(lease?[lease,leaseExpiry(row.metadata)]:[])]);
+  if(lease&&result.rows.length!==1)fail('PLAN_IMPORT_PROCESSING_EXPIRED');return {id:row.id,metadata};
  }
  async function storedSource(source) {
   const value=await get(source.pathname,{access:'private',useCache:false,abortSignal:AbortSignal.timeout(20000)});
@@ -38,7 +41,7 @@ export function createPlanImport({workspace,put,get,analyzer,environment=()=>pro
    let sourceFile;try{sourceFile=decodePlanSource(Buffer.concat(parts),source.contentType);}catch{fail('PLAN_IMPORT_SOURCE_INTEGRITY',503);}if(sourceFile.bytes.length!==source.bytes||sourceFile.sha256!==source.sha256)fail('PLAN_IMPORT_SOURCE_INTEGRITY',503);return sourceFile;
   }finally{await reader.cancel().catch(()=>{});reader.releaseLock();}
  }
- const ownedLease=(row,lease)=>{if(row.metadata.lease?.token!==lease||!['UPLOADING','PROCESSING'].includes(row.metadata.status))fail('PLAN_IMPORT_REVISION_CHANGED');};
+ const ownedLease=(row,lease)=>{if(row.metadata.lease?.token!==lease||!pending(row.metadata.status))fail('PLAN_IMPORT_REVISION_CHANGED');const expiry=leaseExpiry(row.metadata);if(!expiry)fail('PLAN_IMPORT_LEASE_INVALID');if(Date.parse(expiry)<=Date.now())fail('PLAN_IMPORT_PROCESSING_EXPIRED');};
  const receipt=async(client,member,projectId,key)=>(await client.query(`SELECT id,metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "actorId"=$3 AND "entityId"=$4 AND action='plan.import.decision'`,[receiptKey(member.actorId,projectId,key),member.organizationId,member.actorId,projectId])).rows[0];
  const receiptOutcome=async(client,projectId,row)=>{
   const outcome=row.metadata.outcome,ids=outcome.taskSnapshots?.map(t=>t.id)||[];
@@ -47,11 +50,14 @@ export function createPlanImport({workspace,put,get,analyzer,environment=()=>pro
  };
  return {
   async read(session,context) {
-   planContext(context);return run(session,context,false,async(client,member,scope)=>{
+   // Exact receipt reads take the canonical Project lock without writing data,
+   // so an in-flight finalization commits before lease expiry is classified.
+   planContext(context);return run(session,context,Boolean(context.operationId),async(client,member,scope)=>{
     permission(member);
     if(context.operationId){if(!operationId(context.operationId))fail('PLAN_IMPORT_INPUT_INVALID',400);const recorded=await receipt(client,member,context.projectId,context.operationId);if(recorded)return {scope,projectId:context.projectId,state:'RECORDED',...await receiptOutcome(client,context.projectId,recorded)};
      const prior=(await client.query(`SELECT id,metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "actorId"=$3 AND "entityId"=$4 AND action='plan.import.draft'`,[draftKey(member.actorId,context.projectId,context.operationId),member.organizationId,member.actorId,context.projectId])).rows[0];
-     return prior?{scope,projectId:context.projectId,state:'RECORDED',draft:publicDraft(prior)}:{scope,projectId:context.projectId,state:'NOT_OBSERVED',definitive:false};
+     if(!prior)return {scope,projectId:context.projectId,state:'NOT_OBSERVED',definitive:false};
+     const found=publicDraft(prior);return found.processingExpired?{scope,projectId:context.projectId,operationId:context.operationId.toLowerCase(),state:'EXPIRED',saved:false,definitive:true,draft:found}:{scope,projectId:context.projectId,state:'RECORDED',draft:found};
     }
     if(context.draftId)return {scope,projectId:context.projectId,draft:publicDraft(await draft(client,member,context.projectId,context.draftId))};
     const records=(await client.query(`SELECT id,metadata FROM public."AuditLog" WHERE "organizationId"=$1 AND "entityId"=$2 AND action='plan.import.draft' ORDER BY "createdAt" DESC,id DESC LIMIT 21`,[member.organizationId,context.projectId])).rows;
@@ -84,14 +90,14 @@ export function createPlanImport({workspace,put,get,analyzer,environment=()=>pro
      try{await put(reservation.source.pathname,sourceFile.bytes,{access:'private',contentType:sourceFile.contentType,addRandomSuffix:false,allowOverwrite:false,cacheControlMaxAge:60,abortSignal:AbortSignal.timeout(20000)});}catch{/* Confirm the deterministic object after uncertain delivery; never overwrite. */}
      await storedSource(reservation.source);
     }confirmed=true;
-    await run(session,input,true,async(client,member)=>{permission(member);const row=await draft(client,member,input.projectId,reservation.id,true);ownedLease(row,lease);await update(client,row,{status:'PROCESSING',sourceConfirmed:true});});
+    await run(session,input,true,async(client,member)=>{permission(member);const row=await draft(client,member,input.projectId,reservation.id,true);ownedLease(row,lease);await update(client,row,{status:'PROCESSING',sourceConfirmed:true},lease);});
     // Provider and private storage IO run outside the canonical transaction.
     extraction=await analyzer.analyze(sourceFile);
     if(extraction?.success===true)extraction={success:true,rows:normalizePlanRows(extraction.rows),warnings:Array.isArray(extraction.warnings)?extraction.warnings.slice(0,20):[],provider:extraction.provider,model:extraction.model,requestedModel:extraction.requestedModel};
    }catch(error){if(error instanceof WorkspaceError&&['WORKSPACE_CONTEXT_CHANGED','WORKSPACE_MEMBERSHIP_REQUIRED','WORKSPACE_PROJECT_UNAVAILABLE','PLAN_IMPORT_PERMISSION_REQUIRED'].includes(error.code))throw error;extraction={success:false,code:confirmed?'AI_REQUEST_UNCONFIRMED':'PLAN_IMPORT_STORAGE_UNCONFIRMED'};}
    return run(session,input,true,async(client,member,scope)=>{
     permission(member);const row=await draft(client,member,input.projectId,reservation.id,true);ownedLease(row,lease);
-    const saved=await update(client,row,extraction?.success===true?{status:'READY',sourceConfirmed:true,rows:extraction.rows,extractedRows:extraction.rows,warnings:extraction.warnings,analysis:{provider:extraction.provider,model:extraction.model,requestedModel:extraction.requestedModel,reviewed:false},lease:null}:{status:'FAILED',sourceConfirmed:confirmed,failure:/^[A-Z_]{1,80}$/.test(extraction?.code||'')?extraction.code:'AI_RESPONSE_UNCONFIRMED',lease:null});
+    const saved=await update(client,row,extraction?.success===true?{status:'READY',sourceConfirmed:true,rows:extraction.rows,extractedRows:extraction.rows,warnings:extraction.warnings,analysis:{provider:extraction.provider,model:extraction.model,requestedModel:extraction.requestedModel,reviewed:false},lease:null}:{status:'FAILED',sourceConfirmed:confirmed,failure:/^[A-Z_]{1,80}$/.test(extraction?.code||'')?extraction.code:'AI_RESPONSE_UNCONFIRMED',lease:null},lease);
     return {scope,projectId:input.projectId,saved:true,replayed:false,draft:publicDraft(saved)};
    });
   },

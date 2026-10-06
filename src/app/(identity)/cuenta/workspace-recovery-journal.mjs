@@ -19,6 +19,7 @@ export const RECOVERY_RESOURCES = Object.freeze({
   'template-send':'Aviso autorizado por WhatsApp',
   'constructor-crm':'Cliente u oportunidad de la empresa',
   'demo-pilot':'Preparación y vinculación del piloto DEMO',
+  'plan-import':'Importación de cronograma',
 });
 const failure = (code, message) => Object.assign(new Error(message), {code,status:409,requestDispatched:false});
 const unavailable = () => failure('WORKSPACE_RECOVERY_STORAGE_UNAVAILABLE','No se pudo conservar la referencia del intento en este navegador. Habilitá el almacenamiento y volvé a intentar; la operación no se envió.');
@@ -73,6 +74,23 @@ export function recoveryQuery(entry) {
 export function recoveryResult(entry, result) {
   if(!valid(entry)||result?.scope!==entry.scope)return null;
   if(result.projectId!==undefined&&result.projectId!==entry.projectId)return null;
+  if(entry.resource==='plan-import') {
+    if(result.projectId!==entry.projectId)return null;
+    if(result.state==='EXPIRED'){
+      const draft=result.draft,expiry=draft?.processingExpiresAt;
+      if(Object.keys(result).sort().join('|')!=='definitive|draft|operationId|projectId|saved|scope|state'||result.operationId!==entry.operationId||result.saved!==false||result.definitive!==true||!id(draft?.id)||!Number.isSafeInteger(draft.revision)||draft.revision<1||!Array.isArray(draft.rows)||!['UPLOADING','PROCESSING'].includes(draft.status)||draft.processingExpired!==true||typeof expiry!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(expiry)||!Number.isFinite(Date.parse(expiry))||new Date(expiry).toISOString()!==expiry||Date.parse(expiry)>Date.now())return null;
+      return {state:'EXPIRED',draftId:draft.id};
+    }
+    if(result.state==='REJECTED'&&result.operationId===entry.operationId&&result.definitive===true&&result.saved===false&&result.reservationStarted===false&&result.phase==='PRE_RESERVATION'&&['PLAN_IMPORT_FILE_INVALID','PLAN_IMPORT_FILE_TOO_LARGE'].includes(result.code)&&Object.keys(result).sort().join('|')==='code|definitive|operationId|phase|projectId|reservationStarted|saved|scope|state')return {state:'REJECTED',code:result.code};
+    if(result.state==='NOT_OBSERVED'&&result.definitive===false&&!result.draft&&!result.receiptId)return {state:'NOT_OBSERVED'};
+    const draft=result.draft;
+    if(!(result.state==='RECORDED'||result.saved===true)||!id(draft?.id)||!Number.isSafeInteger(draft.revision)||draft.revision<1||!Array.isArray(draft.rows)||!['UPLOADING','PROCESSING','READY','FAILED','APPLIED','REJECTED'].includes(draft.status))return null;
+    if(result.receiptId!==undefined){
+      if(result.saved!==true||!id(result.receiptId)||!['EDIT','APPLY','REJECT'].includes(result.action)||draft.status!==({EDIT:'READY',APPLY:'APPLIED',REJECT:'REJECTED'})[result.action]||!Array.isArray(result.tasks))return null;
+      return {state:'RECORDED',receiptId:result.receiptId};
+    }
+    return ['UPLOADING','PROCESSING'].includes(draft.status)?{state:'PROCESSING'}:{state:'RECORDED',draftId:draft.id};
+  }
   if(entry.resource==='demo-pilot') {
     if(result.projectId!==entry.projectId)return null;
     if(result.state==='NOT_OBSERVED'&&result.saved===false&&result.definitive===false&&!result.receipt)return {state:'NOT_OBSERVED'};
@@ -161,9 +179,24 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
       if(removed)notify();return removed;
     } catch { return false; }
   }
-  return {
+  const api = {
     list,
-    async prepare(url, options) {
+    async migratePlanImportAttempt(scope,projectId,legacyStorage) {
+      if(!scopeValid(scope)||!id(projectId))throw unavailable();
+      const key='obrasaas-plan-attempt-v1:'+scope+':'+projectId;
+      let raw,value;
+      try {
+        raw=legacyStorage.getItem(key);if(raw===null)return;
+        if(typeof raw!=='string'||raw.length>2048)throw unavailable();
+        value=JSON.parse(raw);
+        if(!value||Object.keys(value).sort().join('|')!=='kind|operationId|projectId|scope'||value.scope!==scope||value.projectId!==projectId||!uuid(value.operationId)||!['UPLOAD','DECISION'].includes(value.kind))throw unavailable();
+      }catch{throw unavailable();}
+      // Adopt only the old receipt reference; never dispatch its operation.
+      // A different committed attempt keeps the legacy reference untouched.
+      await api.prepare('/api/identity/plan-import',{method:'POST',body:JSON.stringify({scope,projectId,operationId:value.operationId})},{notifyConflict:false});
+      try{if(legacyStorage.getItem(key)===raw)legacyStorage.removeItem(key);}catch{/* The committed canonical reference remains available. */}
+    },
+    async prepare(url, options, {notifyConflict=true} = {}) {
       const entry=reference(url,options,now());if(!entry)return null;
       const reserve=()=>access('readwrite',entry.scope,s=>{
       if(options.signal?.aborted)throw Object.assign(new DOMException('La consulta se canceló.','AbortError'),{requestDispatched:false});
@@ -184,20 +217,24 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
       catch(error) {
         // The transaction has aborted, but it observed an existing committed
         // attempt. Refresh this tab even when cross-tab broadcasts are absent.
-        if(error?.code==='WORKSPACE_RECOVERY_REQUIRED')notify();
+        if(error?.code==='WORKSPACE_RECOVERY_REQUIRED'&&notifyConflict)notify();
         throw Object.assign(error,{requestDispatched:false});
       }
       if(!ticket.existed)notify();return ticket;
     },
     async settle(ticket, result, error) {
       if(!ticket)return;
-      if(error){if(!ticket.existed&&(error.requestDispatched===false||error.status>=400&&error.status<500))await remove(ticket.entry);return;}
+      if(error){
+        const rejected=ticket.entry.resource==='plan-import'&&recoveryResult(ticket.entry,error.result)?.state==='REJECTED'&&error.code===error.result.code&&error.status===({PLAN_IMPORT_FILE_INVALID:400,PLAN_IMPORT_FILE_TOO_LARGE:413})[error.code];
+        if(!ticket.existed&&(error.requestDispatched===false||rejected||ticket.entry.resource!=='plan-import'&&error.status>=400&&error.status<500))await remove(ticket.entry);return;
+      }
       const entry=ticket.entry;
       // A general Meta snapshot is not a receipt for this operation.
       if(entry.resource==='meta-onboarding')return;
       if(entry.resource==='template-send'){if(['ACCEPTED','STATUS_OBSERVED','REJECTED'].includes(recoveryResult(entry,result)?.state))await remove(entry);return;}
       if(entry.resource==='site-purchases'){if(recoveryResult(entry,result)?.state==='RECORDED')await remove(entry);return;}
       if(entry.resource==='constructor-crm'){if(recoveryResult(entry,result)?.state==='RECORDED')await remove(entry);return;}
+      if(entry.resource==='plan-import'){const outcome=recoveryResult(entry,result);if(outcome?.state==='RECORDED'||outcome?.state==='REJECTED'&&!ticket.existed)await remove(entry);return;}
       if(result?.scope===entry.scope&&(result.projectId===undefined||result.projectId===entry.projectId)&&(result.saved===true||result.created===true)&&(result.receiptId||result.receipt?.id))await remove(entry);
     },
     async observe(url, result) {
@@ -207,9 +244,12 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
       const entry=(await list(scope)).find(row=>row.resource===resource&&row.operationId===operationId.toLowerCase());
       if(!entry||params.get('projectId')!==entry.projectId)return;
       const outcome=recoveryResult(entry,result);
-      if(['RECORDED','EVENT_PROCESSED','PARTICIPATION_REVOKED','ACCEPTED','STATUS_OBSERVED','REJECTED'].includes(outcome?.state))await remove(entry);
+      // A pre-reservation POST rejection cannot settle an earlier attempt via GET.
+      if(entry.resource==='plan-import'&&outcome?.state==='REJECTED')return;
+      if(['RECORDED','EXPIRED','EVENT_PROCESSED','PARTICIPATION_REVOKED','ACCEPTED','STATUS_OBSERVED','REJECTED'].includes(outcome?.state))await remove(entry);
     },
   };
+  return api;
 }
 export const browserRecoveryJournal=createWorkspaceRecoveryJournal({
   withStorage:createBrowserRecoveryStorage({prefix,validateStored:validateWorkspaceRecoveryStoredEntry}),

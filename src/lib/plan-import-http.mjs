@@ -1,5 +1,5 @@
 import {WorkspaceError,requireWorkspaceIdentity,workspaceId,operationId} from './workspace-policy.mjs';
-import {planContext,boundedPlanMultipart} from './plan-import-policy.mjs';
+import {planContext,boundedPlanMultipart,planImportSourceRejection} from './plan-import-policy.mjs';
 const headers={'Cache-Control':'private, no-store, max-age=0','Vary':'Cookie, Authorization','Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff','X-Robots-Tag':'noindex, nofollow'};
 const reply=(body,status=200)=>Response.json(body,{status,headers});
 async function boundedDecision(request) {
@@ -23,6 +23,6 @@ export function createPlanImportHandlers({verify,imports}) {
   if(params.has('operationId')){if(!operationId(params.get('operationId'))||params.has('source'))throw new WorkspaceError('PLAN_IMPORT_INPUT_INVALID');context.operationId=params.get('operationId');}
   if(params.has('source')){if(params.get('source')!=='1'||!context.draftId)throw new WorkspaceError('PLAN_IMPORT_INPUT_INVALID');const file=await imports.source(session,context);return new Response(file.bytes,{headers:{...headers,'Content-Type':file.contentType,'Content-Disposition':`attachment; filename="cronograma.${file.extension}"`,'Content-Length':String(file.bytes.length)}});}
   return reply(await imports.read(session,context));
- }catch(error){return reply({saved:false,code:error instanceof WorkspaceError?error.code:'PLAN_IMPORT_UNCONFIRMED'},error instanceof WorkspaceError?error.status:503);}};
+ }catch(error){const rejection=request.method==='POST'&&planImportSourceRejection(error);return reply({saved:false,code:error instanceof WorkspaceError?error.code:'PLAN_IMPORT_UNCONFIRMED',...(rejection?{...rejection,state:'REJECTED',definitive:true,reservationStarted:false,phase:'PRE_RESERVATION'}:{})},error instanceof WorkspaceError?error.status:503);}};
  return {GET:handle,POST:handle};
 }
