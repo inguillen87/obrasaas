@@ -15,10 +15,11 @@ import {createMetaCustomerAppProjection} from './meta-customer-app-projection.mj
 import {createCompanyChannelBridge,resolveCompanyEnvelope,resolveCompanyOutboundIdentity} from './company-channel-routing.mjs';
 import {customerJobTransaction} from './meta-customer-outbound.mjs';
 const provider=createMetaCustomerProvider();
-const companyBridge=createCompanyChannelBridge({connect:connectWorkspace});
+const analyzer=createPilotMediaAnalyzer();
+const companyBridge=createCompanyChannelBridge({connect:connectWorkspace,provider,put,get,analyzer});
 const companyOutbound=createMetaCustomerOutbound({connect:connectWorkspace,resolveIdentity:resolveCompanyOutboundIdentity,provider,sourceContext:true});
 const isCompany=context=>customerJobTransaction(connectWorkspace,client=>resolveCompanyEnvelope(client,{eventId:context.eventId})).then(Boolean);
-const bridge=createMetaFieldBridge({connect:connectWorkspace,resolveIdentity:resolveWorkerChannelIdentity,provider,put,get,analyzer:createPilotMediaAnalyzer()});
+const bridge=createMetaFieldBridge({connect:connectWorkspace,resolveIdentity:resolveWorkerChannelIdentity,provider,put,get,analyzer});
 const uploader=createPrivateImageUploader({put,get});
 const deposit=createParticipantChannelKycDeposit({connect:connectWorkspace,resolveAuthority:resolveMetaKycAuthority,upload:uploader.uploadImageToBlob});
 const kycBridge=createMetaKycBridge({connect:connectWorkspace,provider,deposit});

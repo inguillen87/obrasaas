@@ -3,6 +3,7 @@ import {companyChannelSchemaReady,requireCompanyChannelSchema} from './company-c
 import {assertWorkerCustomerConnection} from './worker-channel-identity.mjs';
 import {META_KYC_CONVERSATION_TTL_MS} from './meta-kyc-conversation.mjs';
 import {customerLifecycleRecovery} from './meta-customer-coexistence.mjs';
+import {customerChannelActive} from './meta-customer-outbound.mjs';
 
 export const COMPANY_CHANNEL_ACTIONS=Object.freeze(['PREPARE','ASSIGN','REVOKE','ACTIVATE','SUSPEND']);
 const fail=(code,status=409)=>{throw new WorkspaceError(code,status);};
@@ -13,11 +14,17 @@ function command(body){
  return {...body,operationId:body.operationId.toLowerCase()};
 }
 const identity=(member)=>({organization:{id:member.organizationId,name:member.organizationName},actor:{id:member.actorId,role:member.role}});
-const capabilities=ready=>({attendance:ready,kyc:false,media:false,flows:false,templates:false});
+const capabilities=operational=>({attendance:operational,kyc:false,media:operational,flows:false,templates:false});
+// Support describes the channel, never a participant's individual permission.
+// Callers supply the canonical database clock used for this read.
+export function companyChannelOperationalCapabilities(connection,{schemaReady=false,mode=connection?.company?.mode,now}={}){
+ return capabilities(schemaReady===true&&mode==='COMPANY'&&Number.isFinite(now)&&!connection?.metadata?.developmentPilot&&customerChannelActive(connection,now));
+}
 async function channels(client,member,ready,connectionId=null){
- const rows=(await client.query(`SELECT c.id,c."projectId" AS "anchorProjectId",p.name AS "anchorName",c."displayPhoneNumber"${ready?',cc.mode,cc.revision':''} FROM public."WhatsAppConnection" c JOIN public."Project" p ON p.id=c."projectId" ${ready?'JOIN public."WhatsAppCompanyChannel" cc ON cc."connectionId"=c.id AND cc."organizationId"=p."organizationId"':''} WHERE p."organizationId"=$1 AND ($2::text IS NULL OR c.id=$2) ORDER BY c.id LIMIT 101`,[member.organizationId,connectionId])).rows;
+ const now=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now.getTime();
+ const rows=(await client.query(`SELECT c.id,c."projectId" AS "anchorProjectId",p.name AS "anchorName",c."displayPhoneNumber",c.enabled,c."connectionStatus",c.metadata${ready?',cc.mode,cc.revision':''} FROM public."WhatsAppConnection" c JOIN public."Project" p ON p.id=c."projectId" ${ready?'JOIN public."WhatsAppCompanyChannel" cc ON cc."connectionId"=c.id AND cc."organizationId"=p."organizationId"':''} WHERE p."organizationId"=$1 AND ($2::text IS NULL OR c.id=$2) ORDER BY c.id LIMIT 101`,[member.organizationId,connectionId])).rows;
  const assignments=ready?(await client.query(`SELECT a."connectionId",a."projectId",p.name AS "projectName",a.status,a.revision FROM public."WhatsAppChannelProjectAssignment" a JOIN public."Project" p ON p.id=a."projectId" AND p."organizationId"=a."organizationId" WHERE a."organizationId"=$1 AND ($2::text IS NULL OR a."connectionId"=$2) ORDER BY a."connectionId",a."projectId" LIMIT 10001`,[member.organizationId,connectionId])).rows:[];
- return {truncated:rows.length>100||assignments.length>10000||rows.some(r=>assignments.filter(a=>a.connectionId===r.id).length>100),channels:rows.slice(0,100).map(r=>({...r,mode:r.mode||'PROJECT_ONLY',revision:r.revision||0,assignments:assignments.filter(a=>a.connectionId===r.id).slice(0,100).map(({connectionId,...a})=>{void connectionId;return a;})}))};
+ return {truncated:rows.length>100||assignments.length>10000||rows.some(r=>assignments.filter(a=>a.connectionId===r.id).length>100),channels:rows.slice(0,100).map(r=>({id:r.id,anchorProjectId:r.anchorProjectId,anchorName:r.anchorName,displayPhoneNumber:r.displayPhoneNumber,mode:r.mode||'PROJECT_ONLY',revision:r.revision||0,capabilities:companyChannelOperationalCapabilities(r,{schemaReady:ready,mode:r.mode,now}),assignments:assignments.filter(a=>a.connectionId===r.id).slice(0,100).map(a=>({projectId:a.projectId,projectName:a.projectName,status:a.status,revision:a.revision}))}))};
 }
 async function previous(client,member,projectId,id){return (await client.query(`SELECT id,metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "actorId"=$3 AND action='company.channel.recorded' AND metadata->>'projectId'=$4`,[receiptId(member,projectId,id),member.organizationId,member.actorId,projectId])).rows[0];}
 function publicReceipt(row,member,scope){const m=row.metadata;return {...identity(member),scope,projectId:m.projectId,operationId:m.operationId,action:m.action,state:m.state,saved:m.state==='RECORDED',definitive:true,receiptId:row.id,replayed:true,...(m.code?{code:m.code}:{}),...(m.channel?{channel:m.channel}:{})};}
@@ -54,7 +61,7 @@ export function createCompanyChannelStore({workspace}){
    return workspace.organizationOperation(session,context,false,async(client,member,scope)=>{
     if(context.operationId){const row=await previous(client,member,context.projectId,context.operationId.toLowerCase());return row?publicReceipt(row,member,scope):{...identity(member),scope,projectId:context.projectId,operationId:context.operationId.toLowerCase(),state:'NOT_OBSERVED',saved:false,definitive:false};}
     const schemaReady=await companyChannelSchemaReady(client),data=await channels(client,member,schemaReady),projects=(await client.query(`SELECT id,name FROM public."Project" WHERE "organizationId"=$1 AND status='ACTIVE' ORDER BY id LIMIT 101`,[member.organizationId])).rows;
-    return {...identity(member),scope,projectId:context.projectId,schemaReady,canManage:member.role==='ADMIN',channels:data.channels,projects:projects.slice(0,100),truncated:data.truncated||projects.length>100,capabilities:capabilities(schemaReady),accepted:false};
+    return {...identity(member),scope,projectId:context.projectId,schemaReady,canManage:member.role==='ADMIN',channels:data.channels,projects:projects.slice(0,100),truncated:data.truncated||projects.length>100,capabilities:capabilities(data.channels.some(item=>item.capabilities.media)),accepted:false};
    },Boolean(context.operationId));
   },
   async command(session,body){
