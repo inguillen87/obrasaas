@@ -20,6 +20,7 @@ export function purchaseRecord(value){
 }
 export function purchaseSnapshot(value,expected){
  context(value,expected);
+ if(value.inventory!==undefined){const i=value.inventory;if(!i||typeof i.configured!=='boolean'||!/^[a-f0-9]{64}$/.test(i.catalogHash||'')||!Array.isArray(i.materials)||i.materials.length>200||i.materials.some(m=>!id(m?.id)||!text(m.name,160,2)||!['unidad','m','m2','m3','kg','litro','bolsa'].includes(m.unit))||new Set(i.materials.map(m=>m.id)).size!==i.materials.length)fail();}
  if(!Array.isArray(value.records)||value.records.length>100||!Number.isSafeInteger(value.total)||value.total<value.records.length||value.nextCursor!==null&&!id(value.nextCursor))fail();
  value.records.forEach(purchaseRecord);if(new Set(value.records.map(row=>row.id)).size!==value.records.length)fail();
  if(expected.requestId&&(value.records.length!==1||value.records[0].id!==expected.requestId||value.total!==1||value.nextCursor!==null))fail();

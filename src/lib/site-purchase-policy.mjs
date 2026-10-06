@@ -31,9 +31,11 @@ export function normalizePurchase(input) {
     if(!['APPROVED','REJECTED'].includes(p.decision))throw new WorkspaceError('PURCHASE_DECISION_INVALID');
     payload={requestId:p.requestId,revision:siteRevision(p.revision),decision:p.decision,reason:siteText(p.reason,1000,8,true)};
   }else if(input.action==='RECEIVE_MATERIAL') {
-    recordKeys(p,['requestId','revision','quantity','deliveryReference','reason']);
+    const inventory=Object.hasOwn(p,'materialId')||Object.hasOwn(p,'inventoryCatalogHash');
+    recordKeys(p,['requestId','revision','quantity','deliveryReference','reason',...(inventory?['materialId','inventoryCatalogHash']:[])]);
+    if(inventory&&(!workspaceId(p.materialId)||!/^[a-f0-9]{64}$/.test(p.inventoryCatalogHash||'')))throw new WorkspaceError('INVENTORY_RECEIPT_MATERIAL_REQUIRED');
     payload={requestId:p.requestId,revision:siteRevision(p.revision),quantity:exactQuantity(p.quantity),
-      deliveryReference:siteText(p.deliveryReference,100,2),reason:siteText(p.reason,1000,8,true)};
+      deliveryReference:siteText(p.deliveryReference,100,2),reason:siteText(p.reason,1000,8,true),...(inventory?{materialId:p.materialId,inventoryCatalogHash:p.inventoryCatalogHash}:{})};
   }else if(input.action==='CANCEL_ORDER') {
     recordKeys(p,['requestId','revision','reason']);
     payload={requestId:p.requestId,revision:siteRevision(p.revision),reason:siteText(p.reason,1000,8,true)};
@@ -66,7 +68,7 @@ export function applyPurchase(record,input,actorId,recordedAt) {
     const received=parseProcurementQuantity(prior.received,{allowZero:true})+parseProcurementQuantity(p.quantity),ordered=parseProcurementQuantity(prior.quantity);
     if(received>ordered)throw new WorkspaceError('PURCHASE_RECEIPT_EXCEEDS_ORDER',409);
     order={...prior,state:received===ordered?'RECEIVED':'PARTIAL',received:formatProcurementQuantity(received),
-      receipts:[...prior.receipts,{operationId:input.operationId,quantity:p.quantity,deliveryReference:p.deliveryReference,reason:p.reason,by:actorId,at:recordedAt}]};
+      receipts:[...prior.receipts,{operationId:input.operationId,quantity:p.quantity,deliveryReference:p.deliveryReference,reason:p.reason,by:actorId,at:recordedAt,...(p.materialId?{materialId:p.materialId,inventoryCatalogHash:p.inventoryCatalogHash}:{})}]};
   }else {
     if(!['DRAFT','APPROVED','PARTIAL'].includes(prior.state))throw new WorkspaceError('PURCHASE_STATE_CHANGED',409);
     order={...prior,state:'CANCELLED',cancellation:{by:actorId,at:recordedAt,reason:p.reason}};

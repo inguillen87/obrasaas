@@ -7,6 +7,7 @@ import {TaskCreatePanel} from './task-create-panel';
 import {CustomerWhatsAppPanel} from './customer-whatsapp-panel';
 import {SiteRegisterPanel} from './site-register-panel';
 import {SitePurchasePanel} from './site-purchase-panel';
+import {MaterialInventoryPanel} from './material-inventory-panel';
 import {ParticipantPanel} from './participant-panel';
 import {FieldOperationsPanel} from './field-operations-panel';
 import {WorkerChannelPanel} from './worker-channel-panel';
@@ -47,6 +48,7 @@ export function AccountWorkspace({getSessionToken}={}){
  const fieldPending=useCallback(value=>setModulePending(old=>old.field===value?old:{...old,field:value}),[]);
  const channelPending=useCallback(value=>setModulePending(old=>old.channel===value?old:{...old,channel:value}),[]);
  const purchasePending=useCallback(value=>setModulePending(old=>old.purchase===value?old:{...old,purchase:value}),[]);
+ const inventoryPending=useCallback(value=>setModulePending(old=>old.inventory===value?old:{...old,inventory:value}),[]);
  const metaPending=useCallback(value=>setModulePending(old=>old.meta===value?old:{...old,meta:value}),[]);
  const registerPending=useCallback(value=>setModulePending(old=>old.register===value?old:{...old,register:value}),[]);
  const preparationPending=useCallback(value=>setModulePending(old=>old.preparation===value?old:{...old,preparation:value}),[]);
@@ -156,6 +158,7 @@ export function AccountWorkspace({getSessionToken}={}){
   {view&&<WorkerChannelPanel key={`channel:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={channelPending}/> }
   {view&&account?.role==='ADMIN'&&<DemoPilotPanel key={`demo:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={demoPending}/> }
   {view&&<FieldOperationsPanel key={`field:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} tasks={view.tasks} onPending={fieldPending} onTasksChanged={tasksChanged}/> }
+  {view&&<MaterialInventoryPanel key={`inventory:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} tasks={view.tasks} onPending={inventoryPending}/> }
   {view&&account?.canManageIntegrations&&<SitePurchasePanel key={`purchases:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={purchasePending}/> }
   {view&&account?.canManageIntegrations&&<CustomerWhatsAppPanel key={`${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={preparationPending}/> }
   {view&&account?.canManageIntegrations&&<MetaOnboardingPanel key={`meta:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={metaPending}/> }

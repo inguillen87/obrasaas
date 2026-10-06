@@ -11,6 +11,7 @@ const destinations={
  participants:tool('participant-title','Participantes y permisos'),
  channel:tool('worker-channel-title','Mi número y autorización de avisos'),
  purchase:tool('purchase-title','Compras'),
+ inventory:tool('inventory-title','Inventario y consumo'),
  preparation:tool('customer-whatsapp-title','Preparar WhatsApp de la empresa'),
  meta:tool('customer-meta-title','Conexión y plantillas'),
  inbox:tool('customer-inbox-title','Bandeja y seguimiento'),
@@ -42,7 +43,7 @@ export function WorkspaceToolsNavigation({canManageIntegrations=false,role,pendi
  // Visibility follows the same canonical account capabilities as the mounted panels.
  // These links neither grant permissions nor hide/unmount a form.
  const groups=[
-  {id:'work',label:'Trabajo en obra',icon:HardHat,tools:[destinations.schedule,destinations.field,...(canManageIntegrations?[destinations.register,destinations.purchase]:[])]},
+  {id:'work',label:'Trabajo en obra',icon:HardHat,tools:[destinations.schedule,destinations.field,destinations.inventory,...(canManageIntegrations?[destinations.register,destinations.purchase]:[])]},
   {id:'people',label:'Equipo y acceso',icon:UsersRound,tools:[...(canManageIntegrations?[tool('site-register-title','Fichas del equipo')]:[]),destinations.participants,destinations.channel]},
   ...(canManageIntegrations?[{id:'whatsapp',label:'WhatsApp de la empresa',icon:MessageCircle,tools:[destinations.preparation,destinations.meta,destinations.inbox,destinations.template]}]:[]),
   ...((role==='ADMIN'||canManageIntegrations)?[{id:'management',label:'Administración y seguimiento',icon:BriefcaseBusiness,tools:[...(role==='ADMIN'?[destinations.crm,destinations.demo]:[]),...(canManageIntegrations?[tool('operation-status-title','Pendientes y actividad')]:[])]}]:[]),
