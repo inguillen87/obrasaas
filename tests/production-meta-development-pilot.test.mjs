@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {OBRASAAS_META_CHANNEL} from '../src/lib/meta-channel-binding.mjs';
-import {createMetaCustomerProvider,metaCustomerReadiness,metaCustomerTransportReady} from '../src/lib/meta-customer-provider.mjs';
+import {createMetaCustomerProvider,metaCustomerReadiness,metaCustomerTransportReady,META_CUSTOMER_INSPECTION_PHASE} from '../src/lib/meta-customer-provider.mjs';
 import {readDevelopmentPilotPolicy,createDevelopmentPilotCapability,developmentPilotCapabilityPolicy,developmentPilotPhoneMatches,META_DEVELOPMENT_PILOT_TTL_MS} from '../src/lib/meta-development-pilot-policy.mjs';
 
 const time=Date.parse('2026-10-06T00:00:00.000Z'),customerToken='synthetic-customer-token-only-123456789',auditorToken='synthetic-existing-auditor-only-12345678',wabaId='123456789012345',phoneNumberId='123456789012346';
@@ -34,3 +34,49 @@ for(const value of [null,'',false])test('malformed auditor expiry stays closed '
 for(const value of [null,'',false])test('malformed customer expiry stays closed '+String(value),async()=>{const g=grant();g.data.expires_at=value;const f=graph([auditor(),{data:[{id:wabaId}]},g]),scoped=await f.provider.forWorkspace(context());await assert.rejects(scoped.inspect({token:customerToken,wabaId,phoneNumberId}),{code:'META_CUSTOMER_TOKEN_EXPIRED'});assert.equal(f.calls.length,3);});
 for(const [name,change] of [['Business App',p=>{p.is_on_biz_app=true;}],['unknown modality',p=>{delete p.is_on_biz_app;}],['unknown platform',p=>{delete p.platform_type;}],['other platform',p=>{p.platform_type='ON_PREMISE';}]])test('dedicated pilot denies remote '+name+' before any mutation',async()=>{const p=phone();change(p.data[0]);const f=graph([auditor(),{data:[{id:wabaId}]},grant(),p]),scoped=await f.provider.forWorkspace(context());await assert.rejects(scoped.inspect({token:customerToken,wabaId,phoneNumberId}),{code:'META_DEVELOPMENT_PILOT_DEDICATED_UNVERIFIED'});await assert.rejects(scoped.subscribe({token:customerToken,wabaId}),{code:'META_DEVELOPMENT_PILOT_OWNER_UNVERIFIED'});await assert.rejects(scoped.register({token:customerToken,phoneNumberId,pin:'123456'}),{code:'META_DEVELOPMENT_PILOT_OWNER_UNVERIFIED'});assert.equal(f.calls.length,4);assert.ok(f.calls.every(c=>c.options.method==='GET'));});
 test('explicit numeric zero expiry is valid, without coercing malformed values',async()=>{const a=auditor(),g=grant();a.data.expires_at=0;g.data.expires_at=0;const f=graph([a,{data:[{id:wabaId}]},g,phone()]),scoped=await f.provider.forWorkspace(context());assert.equal(scoped.readiness().pilot.canLaunch,true);assert.equal((await scoped.inspect({token:customerToken,wabaId,phoneNumberId})).expiresAt,null);});
+
+const preRegistration=META_CUSTOMER_INSPECTION_PHASE.PRE_REGISTRATION;
+const inspectInput={token:customerToken,wabaId,phoneNumberId};
+const replyInput={token:customerToken,phoneNumberId,to:'5491100001111',message:{type:'text',body:'Synthetic fixture reply'},correlationId:'customer_outbound_'+'a'.repeat(64),replyTo:'wamid.synthetic_inbound'};
+const pendingPhone=()=>{const p=phone();p.data[0].status='PENDING';p.data[0].platform_type='NOT_APPLICABLE';return p;};
+test('pre-registration verifies a dedicated pending number without making it operational',async()=>{
+ const f=graph([auditor(),{data:[{id:wabaId}]},grant(),pendingPhone(),{success:true}]),scoped=await f.provider.forWorkspace(context());
+ const verified=await scoped.inspect({...inspectInput,inspectionPhase:preRegistration});assert.equal(verified.registered,false);assert.equal(verified.platformType,'NOT_APPLICABLE');assert.equal(scoped.pilotProvenance(verified).ownerVerified,true);
+ await assert.rejects(scoped.sendReply(replyInput),{code:'META_DEVELOPMENT_PILOT_OWNER_UNVERIFIED'});assert.equal(f.calls.length,4);
+ await scoped.register({token:customerToken,phoneNumberId,pin:'123456'});assert.equal(f.calls.length,5);assert.equal(f.calls[4].url.pathname,`/v25.0/${phoneNumberId}/register`);assert.equal(f.calls[4].options.method,'POST');
+});
+for(const [name,change] of [
+ ['not registered',p=>{p.platform_type='NOT_APPLICABLE';p.status='PENDING';}],['Cloud pending',p=>{p.status='PENDING';}],['Cloud unknown status',p=>{delete p.status;}],
+])test('default operational inspection denies '+name+' before reply',async()=>{
+ const p=phone();change(p.data[0]);const f=graph([auditor(),{data:[{id:wabaId}]},grant(),p]),scoped=await f.provider.forWorkspace(context());
+ await assert.rejects(scoped.inspect(inspectInput),{code:'META_DEVELOPMENT_PILOT_DEDICATED_UNVERIFIED'});await assert.rejects(scoped.sendReply(replyInput),{code:'META_DEVELOPMENT_PILOT_OWNER_UNVERIFIED'});assert.equal(f.calls.length,4);
+});
+for(const [name,change] of [
+ ['contradictory connected',p=>{p.status='CONNECTED';}],['missing modality',p=>{delete p.is_on_biz_app;}],['null modality',p=>{p.is_on_biz_app=null;}],['string false modality',p=>{p.is_on_biz_app='false';}],['Business App',p=>{p.is_on_biz_app=true;}],['missing platform',p=>{delete p.platform_type;}],['null platform',p=>{p.platform_type=null;}],['on premise',p=>{p.platform_type='ON_PREMISE';}],['unknown platform',p=>{p.platform_type='OTHER';}],
+])test('pre-registration denies '+name+' without acquiring mutation or reply authority',async()=>{
+ const p=pendingPhone();change(p.data[0]);const f=graph([auditor(),{data:[{id:wabaId}]},grant(),p]),scoped=await f.provider.forWorkspace(context());
+ await assert.rejects(scoped.inspect({...inspectInput,inspectionPhase:preRegistration}),{code:'META_DEVELOPMENT_PILOT_DEDICATED_UNVERIFIED'});await assert.rejects(scoped.register({token:customerToken,phoneNumberId,pin:'123456'}),{code:'META_DEVELOPMENT_PILOT_OWNER_UNVERIFIED'});await assert.rejects(scoped.sendReply(replyInput),{code:'META_DEVELOPMENT_PILOT_OWNER_UNVERIFIED'});assert.equal(f.calls.length,4);
+});
+for(const [name,inspectionPhase,p] of [['PRE success',preRegistration,pendingPhone()],['PRE failure',preRegistration,Response.json({error:{}},{status:403})],['OP failure',undefined,Response.json({error:{}},{status:403})]])test('fresh '+name+' invalidates the previous operational proof',async()=>{
+ const second=p instanceof Response?[p]:[grant(),p],f=graph([auditor(),{data:[{id:wabaId}]},grant(),phone(),...second]),scoped=await f.provider.forWorkspace(context());
+ const old=await scoped.inspect(inspectInput);assert.equal(old.registered,true);if(p instanceof Response)await assert.rejects(scoped.inspect({...inspectInput,inspectionPhase}));else await scoped.inspect({...inspectInput,inspectionPhase});
+ assert.throws(()=>scoped.pilotProvenance(old),{code:'META_DEVELOPMENT_PILOT_OWNER_UNVERIFIED'});const count=f.calls.length;await assert.rejects(scoped.sendReply(replyInput),{code:'META_DEVELOPMENT_PILOT_OWNER_UNVERIFIED'});assert.equal(f.calls.length,count);
+});
+test('only a fresh operational readback after PRE permits a reply',async()=>{
+ const f=graph([auditor(),{data:[{id:wabaId}]},grant(),pendingPhone(),grant(),phone(),{messages:[{id:'wamid.synthetic_reply'}]}]),scoped=await f.provider.forWorkspace(context());
+ await scoped.inspect({...inspectInput,inspectionPhase:preRegistration});await assert.rejects(scoped.sendReply(replyInput));const verified=await scoped.inspect(inspectInput);assert.equal(verified.registered,true);await assert.rejects(scoped.register({token:customerToken,phoneNumberId,pin:'123456'}),{code:'META_DEVELOPMENT_PILOT_OWNER_UNVERIFIED'});assert.equal((await scoped.sendReply(replyInput)).messageId,'wamid.synthetic_reply');assert.equal(f.calls.filter(c=>c.options.method==='POST').length,1);
+});
+test('unknown internal phase is denied before IO and invalidates a previous proof',async()=>{
+ const f=graph([auditor(),{data:[{id:wabaId}]},grant(),phone()]),scoped=await f.provider.forWorkspace(context()),old=await scoped.inspect(inspectInput);
+ await assert.rejects(scoped.inspect({...inspectInput,inspectionPhase:'client-selected'}),{code:'META_CUSTOMER_INSPECTION_PHASE_INVALID'});assert.throws(()=>scoped.pilotProvenance(old));await assert.rejects(scoped.sendReply(replyInput));assert.equal(f.calls.length,4);
+});
+test('forConnection uses operational readback even when a caller supplies PRE',async()=>{
+ const f=graph([auditor(),{data:[{id:wabaId}]},grant(),phone(),auditor(),{data:[{id:wabaId}]},grant(),pendingPhone()]),scoped=await f.provider.forWorkspace(context()),verified=await scoped.inspect(inspectInput),connection={projectId:policy.projectId,organizationId:policy.organizationId,whatsappBusinessId:wabaId,phoneNumberId,metadata:{credentialOrganizationId:policy.organizationId,developmentPilot:scoped.pilotProvenance(verified)}},capability=createDevelopmentPilotCapability(context(),f.env,time);
+ await assert.rejects(f.provider.forConnection({capability,connection,token:customerToken,inspectionPhase:preRegistration}),{code:'META_DEVELOPMENT_PILOT_DEDICATED_UNVERIFIED'});assert.equal(f.calls.length,8);assert.ok(f.calls.every(c=>c.options.method==='GET'));
+});
+test('overlapping inspections cannot restore an older operational proof after a newer PRE',async()=>{
+ let release,started;const blocked=new Promise(resolve=>release=resolve),ready=new Promise(resolve=>started=resolve);let inspections=0;
+ // Hold the first phone response, while allowing the newer PRE to finish.
+ const concurrent=createMetaCustomerProvider({environment:environment(),now:()=>time,fetchImpl:async(url)=>{const u=new URL(url);if(u.pathname.endsWith('/phone_numbers')&&++inspections===1){started();await blocked;return Response.json(phone());}if(u.pathname.endsWith('/debug_token'))return Response.json(u.searchParams.get('input_token')===auditorToken?auditor():grant());if(u.pathname.endsWith('/owned_whatsapp_business_accounts'))return Response.json({data:[{id:wabaId}]});if(u.pathname.endsWith('/phone_numbers'))return Response.json(pendingPhone());throw new Error('Unexpected synthetic branch');}}),current=await concurrent.forWorkspace(context());
+ const old=current.inspect(inspectInput);await ready;await current.inspect({...inspectInput,inspectionPhase:preRegistration});release();await assert.rejects(old,{code:'META_DEVELOPMENT_PILOT_OWNER_UNVERIFIED'});await assert.rejects(current.sendReply(replyInput));
+});

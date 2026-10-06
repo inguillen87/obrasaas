@@ -1,7 +1,7 @@
 import {createHmac,randomUUID,timingSafeEqual} from 'node:crypto';
 import {WorkspaceError,operationId,digest} from './workspace-policy.mjs';
 import {readProjectWorkspaceProfile} from './whatsapp/project-workspace-profile.js';
-import {metaAssetId,metaCustomerAuthorizationReady,developmentPilotUnavailableReadiness} from './meta-customer-provider.mjs';
+import {metaAssetId,metaCustomerAuthorizationReady,developmentPilotUnavailableReadiness,META_CUSTOMER_INSPECTION_PHASE} from './meta-customer-provider.mjs';
 import {readDevelopmentPilotPolicy,createDevelopmentPilotCapability,META_DEVELOPMENT_PILOT_MODE} from './meta-development-pilot-policy.mjs';
 import {encryptCustomerSecret,decryptCustomerSecret,customerSecretDigest} from './meta-customer-credentials.mjs';
 import {OBRASAAS_META_CHANNEL} from './meta-channel-binding.mjs';
@@ -143,7 +143,7 @@ export function createMetaCustomerOnboarding({workspace,provider,processor=null,
   if(claim.already)return claim.result;
   try{
    const mode=claim.state.numberMode||'DEDICATED';
-   const verified=await provider.inspect({token:claim.token,wabaId:claim.state.wabaId,phoneNumberId:claim.state.phoneNumberId,numberMode:mode});
+   const verified=await provider.inspect({token:claim.token,wabaId:claim.state.wabaId,phoneNumberId:claim.state.phoneNumberId,numberMode:mode,inspectionPhase:META_CUSTOMER_INSPECTION_PHASE.PRE_REGISTRATION});
    // Persist an exclusive asset binding before subscribing to any remote WABA.
    await within(session,body,true,async(client,member,_scope,project)=>{
     const state=owned(project,member,body.signupId);if(state.state!=='VERIFYING'||state.verificationLeaseId!==claim.verificationLeaseId)throw new WorkspaceError('META_CUSTOMER_STATE_CHANGED',409);
@@ -233,7 +233,7 @@ export function createMetaCustomerOnboarding({workspace,provider,processor=null,
       return state;
      };
      let verified;
-     try{verified=await provider.inspect({token:reserved.token,wabaId:reserved.state.wabaId,phoneNumberId:reserved.state.phoneNumberId});}
+     try{verified=await provider.inspect({token:reserved.token,wabaId:reserved.state.wabaId,phoneNumberId:reserved.state.phoneNumberId,inspectionPhase:META_CUSTOMER_INSPECTION_PHASE.PRE_REGISTRATION});}
      catch(error){await within(session,body,true,async(client,member,_scope,project)=>{const state=await fenced(client,member,project,'REGISTRATION_VERIFYING');await save(client,member,project,{...state,state:state.registrationResumeState,lastCode:error instanceof WorkspaceError?error.code:'META_CUSTOMER_PROVIDER_UNCONFIRMED',registrationAttempts:registrationOutcome(state,body.operationId,{state:'NOT_SENT',finishedAt:new Date(now()).toISOString()})},body.operationId);}).catch(()=>{});throw error;}
      await within(session,body,true,async(client,member,_scope,project)=>{
       const state=await fenced(client,member,project,'REGISTRATION_VERIFYING');
@@ -311,7 +311,7 @@ export function createMetaCustomerOnboarding({workspace,provider,processor=null,
     throw new WorkspaceError('META_CUSTOMER_EXCHANGE_UNCONFIRMED',503);
    }
    try{
-    if(provider.readiness().mode===META_DEVELOPMENT_PILOT_MODE){const verified=await provider.inspect({token,wabaId:body.wabaId,phoneNumberId:body.phoneNumberId,numberMode:'DEDICATED'});provider.pilotProvenance(verified);}
+    if(provider.readiness().mode===META_DEVELOPMENT_PILOT_MODE){const verified=await provider.inspect({token,wabaId:body.wabaId,phoneNumberId:body.phoneNumberId,numberMode:'DEDICATED',inspectionPhase:META_CUSTOMER_INSPECTION_PHASE.PRE_REGISTRATION});provider.pilotProvenance(verified);}
     await within(session,body,true,async(client,member,_scope,project)=>{const state=owned(project,member,body.signupId);if(state.state!=='EXCHANGE_STARTED'||Date.parse(state.exchangeLeaseExpiresAt)<=now())throw new WorkspaceError('META_CUSTOMER_STATE_CHANGED',409);
      await save(client,member,project,{...state,state:'CREDENTIAL_STORED',authCompletedAt:new Date(now()).toISOString(),encryptedToken:encryptCustomerSecret(token,secretContext(member,project,'signup',state.id),environment)},body.operationId);});}
    catch{try{await within(session,body,true,async(client,member,_scope,project)=>{const state=owned(project,member,body.signupId);if(state.state==='EXCHANGE_STARTED')await save(client,member,project,{...state,state:'EXCHANGE_UNKNOWN',lastCode:'META_CUSTOMER_ESCROW_UNCONFIRMED'},body.operationId);});}catch{}throw new WorkspaceError('META_CUSTOMER_ESCROW_UNCONFIRMED',503);}
