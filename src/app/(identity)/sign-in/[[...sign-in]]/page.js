@@ -13,8 +13,8 @@ export default async function SignInPage({ searchParams }) {
   const returnPath = identityAccountReturnPath(query);
   return <div className={styles.authFrame}><AuthIntro /><section className={`${styles.card} ${styles.authCard}`}>
     <Link href="/" className={styles.brand}><ObraSaasLogo markSize={36} variant="inverse" /></Link>
-    <h1>Ingresá a tu cuenta</h1>
-    <p className={styles.lead}>Entrá para consultar y gestionar las obras de tu empresa.</p>
+    <h1>Ingresá con tu cuenta personal</h1>
+    <p className={styles.lead}>Creá una empresa o aceptá una invitación. Tu acceso a cada obra depende de los permisos asignados.</p>
     <div className={styles.widget}><IdentityWidget><SignIn routing="path" path="/sign-in" signUpUrl={identitySignUpPath(query)}
       forceRedirectUrl={returnPath} signUpForceRedirectUrl={returnPath} /></IdentityWidget></div>
     <p className={styles.note}>El responsable de la obra define tu acceso.</p>
