@@ -71,6 +71,10 @@ jobs:
         run: |
           npx eslint scripts/verify-local-font-delivery.mjs --max-warnings 0
           node scripts/verify-local-font-delivery.mjs
+      - name: PWA offline boundaries and mobile reconnection
+        run: |
+          npx eslint public/sw.js scripts/verify-pwa-browser.mjs --max-warnings 0
+          node scripts/verify-pwa-browser.mjs
       - run: node scripts/verify-production-boundary.mjs
       - run: node scripts/verify-brand-v3-browser.mjs
       - run: node scripts/verify-access-contrast.mjs
@@ -97,5 +101,6 @@ jobs:
             .vercel/demo-company-evidence/
             .vercel/professional-landing-evidence/
             .vercel/local-font-evidence/
+            .vercel/pwa-evidence/
           include-hidden-files: true
           retention-days: 7

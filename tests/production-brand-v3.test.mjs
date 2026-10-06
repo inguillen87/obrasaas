@@ -35,7 +35,7 @@ test('PNG launchers and Apple icon retain correct dimensions',()=>{
  assert.equal(file('src/app/favicon.ico').readUInt16LE(2),1);
 });
 test('manifest preserves installed app identity and uses distinct maskable icon',()=>{
- assert.equal(manifest.id,'/dashboard');assert.equal(manifest.start_url,'/dashboard');assert.equal(manifest.scope,'/');
+  assert.equal(manifest.id,'/dashboard');assert.equal(manifest.start_url,'/cuenta');assert.equal(manifest.scope,'/');
  assert.equal(manifest.theme_color,'#08110F');assert.equal(manifest.background_color,'#08110F');
  assert.equal(manifest.screenshots,undefined);
  assert.equal(manifest.icons.length,4);assert.equal(manifest.icons.filter(icon=>icon.purpose==='maskable').length,1);

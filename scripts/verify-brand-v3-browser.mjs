@@ -112,7 +112,7 @@ try{
  await page.evaluate(()=>navigator.serviceWorker.ready);
  await page.waitForFunction(()=>Boolean(navigator.serviceWorker.controller));
  const cachesNow=await page.evaluate(()=>caches.keys());
- assert.ok(cachesNow.includes('obrasaas-public-v5'));assert.ok(!cachesNow.includes('obrasaas-public-v4'));assert.ok(cachesNow.includes('unrelated-cache-brand-fixture'));
+ assert.ok(cachesNow.includes('obrasaas-public-v6'));assert.ok(!cachesNow.includes('obrasaas-public-v4'));assert.ok(cachesNow.includes('unrelated-cache-brand-fixture'));
  const freshManifest=await page.evaluate(async()=>{const result=await fetch('/manifest.json');return result.json();});
  assert.equal(freshManifest.oldLogoFixture,undefined);assert.ok(freshManifest.icons.every(icon=>icon.src.startsWith('/brand/')));
  const privateStatus=await page.evaluate(async()=>(await fetch('/api/state')).status);assert.equal(privateStatus,401);
