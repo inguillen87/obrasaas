@@ -6,6 +6,15 @@ const __dirname = path.dirname(__filename);
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  serverExternalPackages: ['ffmpeg-static'],
+  outputFileTracingIncludes: {
+    '/api/identity/field-*': ['node_modules/ffmpeg-static/ffmpeg*'],
+    '/api/meta/*': ['node_modules/ffmpeg-static/ffmpeg*'],
+    '/api/identity/meta-onboarding': ['node_modules/ffmpeg-static/ffmpeg*'],
+    '/api/identity/demo-pilot': ['node_modules/ffmpeg-static/ffmpeg*'],
+    '/api/whatsapp': ['node_modules/ffmpeg-static/ffmpeg*'],
+    '/api/webhooks/whatsapp': ['node_modules/ffmpeg-static/ffmpeg*'],
+  },
   async headers() {
     return [
       { source: '/sw.js', headers: [{ key: 'Cache-Control', value: 'no-store, max-age=0' }] },

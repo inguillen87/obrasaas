@@ -51,7 +51,7 @@ export function FieldMediaCapture({disabled,onChange,onBusyChange}) {
       <button type="button" disabled={disabled||active} onClick={()=>record('audio')}>Grabar audio</button>
       <button type="button" disabled={disabled||active} onClick={()=>record('video')}>Grabar video</button>
     </div>
-    <p className={styles.mediaHelp}>Audio: hasta 2 minutos, se solicita 64 kb/s. Video: hasta 40 segundos, se solicita 640 × 360 px y calidad reducida. El tamaño final se comprueba; estas opciones pueden variar según el navegador. Video: revisión humana.</p>
+    <p className={styles.mediaHelp}>Audio: hasta 2 minutos, se solicita 64 kb/s. Video: hasta 40 segundos, se solicita 640 × 360 px y calidad reducida. El tamaño final se comprueba; estas opciones pueden variar según el navegador. Video: análisis de cuatro cuadros y revisión humana.</p>
     <p role="status" aria-live="polite">{phase==='PREPARING'?'Preparando copia local. El original se conserva.':message}</p>
     {phase==='PREPARING'&&<button type="button" onClick={discard}>Cancelar preparación</button>}
     {['PERMISSION','RECORDING'].includes(phase)&&<div className={styles.recording}><strong>{phase==='PERMISSION'?'Esperando permiso':`Grabando ${recording==='audio'?'audio':'video'}: ${elapsed} / ${RECORDING_PROFILES[recording].seconds} segundos`}</strong>{recording==='video'&&phase==='RECORDING'&&<video ref={preview} autoPlay playsInline muted className={styles.mediaPlayer}/>}<div className={styles.actions}>{phase==='RECORDING'&&<button type="button" onClick={()=>recorder.current?.state==='recording'&&recorder.current.stop()}>Terminar y revisar</button>}<button type="button" onClick={discard}>Descartar grabación</button></div></div>}

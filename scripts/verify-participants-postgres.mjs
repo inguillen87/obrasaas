@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {randomUUID} from 'node:crypto';
+import {randomUUID,createHash} from 'node:crypto';
 import {Client,Pool} from 'pg';
 import {trackDisposablePool,closeDisposablePool} from './lib/disposable-postgres-cleanup.mjs';
 import {mkdirSync,writeFileSync} from 'node:fs';
@@ -7,7 +7,7 @@ import {createWorkspaceStore} from '../src/lib/workspace-store.mjs';
 import {createParticipantStore} from '../src/lib/participant-store.mjs';
 import {createParticipantIdentityProvider} from '../src/lib/participant-identity-provider.mjs';
 import {IDENTITY_PUBLIC_KEY,IDENTITY_INSTANCE,IDENTITY_ORIGIN} from '../src/lib/production-identity-config.mjs';
-import {assertFieldParticipant,PARTICIPANT_NOTICE_VERSION} from '../src/lib/participant-policy.mjs';
+import {assertFieldParticipant,PARTICIPANT_NOTICE_VERSION,PARTICIPANT_OCR_NOTICE_VERSION,PARTICIPANT_BIOMETRIC_NOTICE_VERSION} from '../src/lib/participant-policy.mjs';
 import {createPrivateImageUploader} from '../src/lib/private-image-upload.mjs';
 import {WorkspaceError} from '../src/lib/workspace-policy.mjs';
 const url=new URL(process.env.CUTOVER_TEST_DATABASE_URL||'http://not-configured');
@@ -320,6 +320,43 @@ try{
   else{await assert.rejects(raceStore.submitKyc(f.actor,f.input),{code:'PARTICIPANT_ACCESS_REQUIRED'});await assert.rejects(store.status(f.actor,{...f.context,operationId:f.input.operationId}),{code:'PARTICIPANT_ACCESS_REQUIRED'});await assert.rejects(store.downloadKyc(f.actor,{...f.context,workerId:f.workerId,imageId:'selfie'}),{code:'PARTICIPANT_ACCESS_REQUIRED'});checks.push('concurrent-prior-kyc-replay-denies-'+change.toLowerCase()+'-'+role.toLowerCase().replace('_','-')+'-after-permitted-storage-preflight-with-zero-final-transaction-effects');}
   assert.equal(attempts,2);assert.deepEqual(await receiptSnapshot(),beforeFinal);assert.equal((await pool.query(`SELECT count(*)::int AS n FROM "AuditLog" WHERE "actorId"=$1 AND "entityId"=$2 AND action='participant.operation.recorded' AND metadata->>'kind'='KYC_SUBMITTED'`,[f.actorId,f.workerId])).rows[0].n,1);
  }
- assert.equal((await pool.query('SELECT metadata FROM "Worker" WHERE id=$1',[self.id])).rows[0].metadata.unrelated,true);assert.deepEqual((await pool.query('SELECT metadata FROM "Project" WHERE id=$1',['p-a'])).rows[0].metadata,{retain:true});
+  // OCR runs against the same disposable canonical tables and synthetic Blob.
+  // No OpenAI request or real document is used.
+  const beforeOcr=(await pool.query('SELECT metadata FROM "Worker" WHERE id=$1',[self.id])).rows[0].metadata;
+  await pool.query(`UPDATE "Worker" SET metadata=jsonb_set(metadata,'{participant,kyc,status}','"NOT_SUBMITTED"'::jsonb),"updatedAt"=clock_timestamp() WHERE id=$1`,[self.id]);
+  let ocrCalls=0;const ocrStore=createParticipantStore({workspace,connect,identity,upload:uploader.uploadImageToBlob,get,analyzer:{analyzeDni:async input=>{ocrCalls++;assert.equal(input.base64,picture);return {success:true,isDni:true,nombreCompleto:'Persona OCR sintética',dni:'12345678',verified:true};}}});
+  const ocrSelf=(await ocrStore.read(workerSession,personalContext)).records.find(row=>row.id===self.id);
+  const ocrSubmitted=await ocrStore.submitKyc(workerSession,{...personalContext,operationId:randomUUID(),workerId:self.id,revision:ocrSelf.revision,noticeVersion:PARTICIPANT_NOTICE_VERSION,consent:true,ocrConsent:true,ocrNoticeVersion:PARTICIPANT_OCR_NOTICE_VERSION,front:picture,selfie:picture});
+  const ocrTarget=(await ocrStore.read(owner,context)).records.find(row=>row.id===self.id),ocrCommand={...context,operationId:randomUUID(),action:'PROCESS_KYC',payload:{workerId:self.id,revision:ocrTarget.revision,submissionId:ocrSubmitted.participant.kyc.submissionId}};
+  const processed=await ocrStore.save(owner,ocrCommand);assert.equal(processed.participant.kyc.status,'PENDING_REVIEW');assert.equal(processed.participant.identityCertified,false);assert.equal(processed.participant.kyc.processing.fields.dni,'12345678');assert.equal(ocrCalls,1);
+  assert.equal((await ocrStore.save(owner,ocrCommand)).replayed,true);assert.equal(ocrCalls,1);
+  const ocrStatus=await ocrStore.status(owner,{...context,operationId:ocrCommand.operationId});assert.equal(ocrStatus.state,'RECORDED');
+  assert.equal((await ocrStore.read(workerSession,personalContext)).records.find(row=>row.id===self.id).kyc.processing.fields,undefined);
+  const ocrAudit=(await pool.query('SELECT metadata FROM "AuditLog" WHERE id=$1',[processed.receiptId])).rows[0].metadata;assert.doesNotMatch(JSON.stringify(ocrAudit),/12345678|Persona OCR|nombreCompleto|\.private\.blob/);
+  // Hold the first provider response outside a transaction, expire its durable
+  // lease in the disposable fixture, and complete a second claim of the exact
+  // operation before releasing the old response.
+  await pool.query(`UPDATE "Worker" SET metadata=metadata #- '{participant,kyc,processing}',"updatedAt"=clock_timestamp() WHERE id=$1`,[self.id]);
+  let releaseStale,markStale,freshClaim,raceOcrCalls=0;const staleStarted=new Promise(resolve=>{markStale=resolve;});
+  const raceOcrStore=createParticipantStore({workspace,connect,identity,upload:uploader.uploadImageToBlob,get,analyzer:{analyzeDni:async()=>{raceOcrCalls++;if(raceOcrCalls===1){markStale();return new Promise(resolve=>{releaseStale=resolve;});}freshClaim=(await pool.query(`SELECT metadata->'participant'->'kyc'->'processing'->>'claimId' AS id FROM "Worker" WHERE id=$1`,[self.id])).rows[0].id;return {success:true,isDni:true,nombreCompleto:'Persona OCR vigente',dni:'12345678'};}}});
+  const raceOcrTarget=(await raceOcrStore.read(owner,context)).records.find(row=>row.id===self.id),raceOcrCommand={...context,operationId:randomUUID(),action:'PROCESS_KYC',payload:{workerId:self.id,revision:raceOcrTarget.revision,submissionId:raceOcrTarget.kyc.submissionId}},staleResult=raceOcrStore.save(owner,raceOcrCommand);
+  await staleStarted;const firstClaim=(await pool.query(`SELECT metadata->'participant'->'kyc'->'processing'->>'claimId' AS id FROM "Worker" WHERE id=$1`,[self.id])).rows[0].id;
+  const running=await raceOcrStore.save(owner,raceOcrCommand);assert.equal(running.state,'PROCESSING');assert.equal(running.retryAfterExpiration,false);assert.equal(raceOcrCalls,1);
+  await pool.query(`UPDATE "Worker" SET metadata=jsonb_set(metadata,'{participant,kyc,processing,expiresAt}',to_jsonb((clock_timestamp()-interval '1 second')::text)) WHERE id=$1`,[self.id]);
+  assert.equal((await raceOcrStore.status(owner,{...context,operationId:raceOcrCommand.operationId})).retryAfterExpiration,true);
+  const currentClaim=raceOcrStore.save(owner,raceOcrCommand),freshResult=await currentClaim;assert.equal(freshResult.participant.kyc.processing.fields.nombreCompleto,'Persona OCR vigente');assert.equal(raceOcrCalls,2);
+  releaseStale({success:true,isDni:true,nombreCompleto:'Persona OCR vencida',dni:'87654321'});const staleReplay=await staleResult;assert.equal(staleReplay.replayed,true);assert.equal(staleReplay.receiptId,freshResult.receiptId);assert.equal(staleReplay.participant.kyc.processing.fields.nombreCompleto,'Persona OCR vigente');
+  const raceAudit=(await pool.query(`SELECT metadata FROM "AuditLog" WHERE id=$1`,[freshResult.receiptId])).rows[0].metadata;assert.doesNotMatch(JSON.stringify(raceAudit),/Persona OCR|12345678|87654321/);assert.equal((await pool.query(`SELECT count(*)::int AS n FROM "AuditLog" WHERE id=$1`,[freshResult.receiptId])).rows[0].n,1);assert.ok(firstClaim);assert.notEqual(freshClaim,firstClaim);
+  checks.push('postgres-ocr-live-claim-expired-exact-retry-fresh-claim-and-concurrent-late-provider-result-preserves-single-safe-receipt');
+  await pool.query(`UPDATE "Worker" SET metadata=jsonb_set(metadata,'{participant,kyc,status}','"NOT_SUBMITTED"'::jsonb),"updatedAt"=clock_timestamp() WHERE id=$1`,[self.id]);
+  let biometricCalls=0;const syntheticImageSha=createHash('sha256').update(Buffer.from(picture,'base64')).digest('hex'),biometricStore=createParticipantStore({workspace,connect,identity,upload:uploader.uploadImageToBlob,get,analyzer:{analyzeDni:async()=>assert.fail('Independent biometric consent must never call OpenAI OCR')},assessBiometrics:async input=>{biometricCalls++;assert.equal(input.consentVersion,PARTICIPANT_BIOMETRIC_NOTICE_VERSION);return {success:true,status:'ADVISORY_UNREVIEWED',faceSimilarity:0.61,captureRiskSignal:0.15,identityCertified:false,livenessVerified:false,documentAuthenticityVerified:false,measurementCalibrated:false,requiresHumanReview:true,provider:'private-opencv-onnx',modelManifestSha256:'c695e1a85db3ac933836562ce1f7d7e2b372ba2951dc9c4d0160b88cd448c860',frontSha256:syntheticImageSha,selfieSha256:syntheticImageSha};}});
+  const bioSelf=(await biometricStore.read(workerSession,personalContext)).records.find(row=>row.id===self.id),bioSubmitted=await biometricStore.submitKyc(workerSession,{...personalContext,operationId:randomUUID(),workerId:self.id,revision:bioSelf.revision,noticeVersion:PARTICIPANT_NOTICE_VERSION,consent:true,ocrConsent:false,ocrNoticeVersion:PARTICIPANT_OCR_NOTICE_VERSION,biometricConsent:true,biometricNoticeVersion:PARTICIPANT_BIOMETRIC_NOTICE_VERSION,front:picture,selfie:picture});
+  const bioTarget=(await biometricStore.read(owner,context)).records.find(row=>row.id===self.id),bioCommand={...context,operationId:randomUUID(),action:'PROCESS_KYC',payload:{workerId:self.id,revision:bioTarget.revision,submissionId:bioSubmitted.participant.kyc.submissionId}},bioResult=await biometricStore.save(owner,bioCommand);assert.equal(bioResult.participant.kyc.processing.status,'ADVISORY_UNREVIEWED');assert.equal(bioResult.participant.kyc.processing.fields,undefined);assert.equal(bioResult.participant.kyc.status,'PENDING_REVIEW');assert.equal(biometricCalls,1);assert.equal((await biometricStore.save(owner,bioCommand)).replayed,true);assert.equal(biometricCalls,1);assert.equal((await biometricStore.read(workerSession,personalContext)).records.find(row=>row.id===self.id).kyc.processing.biometrics,undefined);
+  assert.doesNotMatch(JSON.stringify((await pool.query('SELECT metadata FROM "AuditLog" WHERE id=$1',[bioResult.receiptId])).rows[0].metadata),/faceSimilarity|captureRiskSignal|embedding/);
+  checks.push('postgres-independent-private-biometric-consent-zero-openai-calls-advisory-only-reviewer-projection-and-idempotent-receipt');
+  await pool.query(`UPDATE "Worker" SET metadata=jsonb_set(metadata,'{participant,status}','"REVOKED"'::jsonb),"updatedAt"=clock_timestamp() WHERE id=$1`,[self.id]);await assert.rejects(ocrStore.save(owner,ocrCommand),{code:'PARTICIPANT_ACCESS_REQUIRED'});await assert.rejects(ocrStore.status(owner,{...context,operationId:ocrCommand.operationId}),{code:'PARTICIPANT_ACCESS_REQUIRED'});assert.equal(ocrCalls,1);
+  await pool.query('UPDATE "Worker" SET metadata=$2::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1',[self.id,JSON.stringify(beforeOcr)]);
+  checks.push('optional-versioned-external-ocr-consent-private-extraction-receipt-replay-and-current-revocation-with-zero-real-provider-calls');
+  assert.equal((await pool.query('SELECT metadata FROM "Worker" WHERE id=$1',[self.id])).rows[0].metadata.unrelated,true);assert.deepEqual((await pool.query('SELECT metadata FROM "Project" WHERE id=$1',['p-a'])).rows[0].metadata,{retain:true});
  mkdirSync('.vercel/participants-evidence',{recursive:true});writeFileSync('.vercel/participants-evidence/postgres.json',JSON.stringify({validated:true,engine,synthetic:true,realEmailDelivered:false,realIdentityAccepted:false,checks},null,2));console.log(JSON.stringify({validated:true,engine,checks}));
 }finally{try{await closeDisposablePool(pool);if(created)await admin.query(`DROP DATABASE "${database}"`);}finally{await admin.end();}}

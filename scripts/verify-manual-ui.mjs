@@ -35,7 +35,7 @@ try {
  for(let n=0;n<100;n++){if(server.exitCode!==null)throw new Error('Manual fixture server exited');try{if((await fetch(origin+'/manual')).ok){ready=true;break;}}catch{}await new Promise(resolve=>setTimeout(resolve,500));}
  assert.ok(ready,'Manual fixture became ready');
  const html=await (await fetch(origin+'/manual')).text();
- assert.ok(html.includes('Tu primera obra'));assert.ok(html.includes('coincidencia facial'));checks.push('anonymous-server-rendered-manual-without-session');
+ assert.ok(html.includes('Tu primera obra'));assert.ok(html.includes('comparación facial'));checks.push('anonymous-server-rendered-manual-without-session');
  browser=await puppeteer.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{}),args:['--no-sandbox','--disable-setuid-sandbox']});
  page=await browser.newPage();page.on('pageerror',error=>errors.push(error.message));
  await page.setRequestInterception(true);
@@ -59,7 +59,7 @@ try {
  await page.$eval('#whatsapp details summary',node=>node.focus());await page.keyboard.press('Enter');assert.equal(await page.$eval('#whatsapp details',node=>node.open),true);await page.keyboard.press('Enter');assert.equal(await page.$eval('#whatsapp details',node=>node.open),false);checks.push('native-keyboard-expand-and-collapse');
  await page.$$eval('details',nodes=>nodes.forEach(node=>{node.open=true;}));
  const text=await page.evaluate(()=>document.body.innerText);
- for(const phrase of ['no implementa coincidencia facial','prueba de vida','Sólo el recordatorio de jornada abierta','envíos proactivos todavía no están implementados','no genera cotizaciones','No son una copia de tus borradores','no repite el envío','no se presume activo','Ese PIN no es el código de verificación recibido','Una implementación local o un recibo de preparación no acreditan']) assert.ok(text.includes(phrase),`Missing truthful boundary: ${phrase}`);
+ for(const phrase of ['requieren autorizaciones independientes','La selfie es una imagen estática','no certifica prueba de vida','Pendientes de aceptación de cuenta','IDENTIDAD','Sólo el recordatorio de jornada abierta','envíos proactivos todavía no están implementados','no genera cotizaciones','No son una copia de tus borradores','no repite el envío','no se presume activo','Ese PIN no es el código de verificación recibido','Una implementación local o un recibo de preparación no acreditan']) assert.ok(text.includes(phrase),`Missing truthful boundary: ${phrase}`);
  assert.ok(!/sk_(live|test)_|whsec_|eyJ[a-zA-Z0-9_-]+\./.test(text));
  assert.equal(await page.$$eval('form,input,textarea',nodes=>nodes.length),0);
  checks.push('truthful-identity-whatsapp-crm-offline-and-publication-boundaries');

@@ -3,6 +3,7 @@ import { productionFieldMedia } from '../../../../lib/field-operations-runtime.m
 import { createFieldMediaHandlers } from '../../../../lib/field-operations-http.mjs';
 export const dynamic='force-dynamic';
 export const runtime='nodejs';
+export const maxDuration=120;
 const handlers=createFieldMediaHandlers({verify:verifyWorkspaceSession,media:productionFieldMedia});
 export const GET=handlers.GET;
 export const POST=handlers.POST;

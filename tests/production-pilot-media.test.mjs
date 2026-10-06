@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {readFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
 import {createPilotMediaAnalyzer,normalizeDniExtraction,normalizeSitePhoto,unavailableBiometricAssessment} from '../src/lib/pilot-media.mjs';
 import {createKycPilotBoundary} from '../src/lib/kyc-pilot-boundary.mjs';
 const PNG=Buffer.from('89504e470d0a1a0a0000000a','hex').toString('base64');
@@ -87,4 +88,37 @@ test('WhatsApp no longer auto-enrolls from OCR or prints transcripts',()=>{
 
 test('provider HTTP failure retains only a status, not its private body',async()=>{
  const result=await harness({status:403}).client.analyzeDni({base64:PNG});assert.equal(result.providerStatus,403);assert.equal(result.code,'AI_PROVIDER_REQUEST_REJECTED');assert.equal(result.success,false);assert.equal(result.dni,undefined);
+});
+
+function sampledVideo(){
+ const frames=Array.from({length:4},(_,index)=>{const bytes=Buffer.from([255,216,255,224,index]);return {base64:bytes.toString('base64'),mimeType:'image/jpeg',bytes:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex'),capturedAtSeconds:index/2};});
+ return {frames,sampling:{version:'server-video-frames-v1',sourceSha256:'b'.repeat(64),sourceContentType:'video/mp4',sourceBytes:1000,durationSeconds:2,frameCount:4,audioAnalyzed:false},context:'Synthetic site context.'};
+}
+test('sampled video sends four ordered image copies in one provider request and retains server provenance',async()=>{
+ const {client,calls}=harness({raw:{...photo,estimatedProgressPercentage:80,verified:true}}),input=sampledVideo(),result=await client.analyzeVideo(input);
+ assert.equal(result.success,true);assert.equal(result.status,'ANALYZED_UNREVIEWED');assert.equal(result.analysisScope,'SAMPLED_VIDEO_FRAMES');assert.equal(result.sampling.sourceSha256,input.sampling.sourceSha256);assert.equal(result.sampling.audioAnalyzed,false);assert.equal(result.verified,false);assert.equal(result.estimatedProgressPercentage,null);assert.equal(result.providerModel,'gpt-4o');assert.equal(calls.length,1);
+ const body=JSON.parse(calls[0].options.body),content=body.messages[1].content;assert.equal(content.filter(part=>part.type==='image_url').length,4);assert.equal(content.filter(part=>part.type==='text').length,5);assert.match(body.messages[0].content,/no tenés acceso al audio/);assert.ok(!JSON.stringify(result).includes('base64'));
+});
+test('malformed, oversized, reordered and mismatched video frames never contact provider',async()=>{
+ const sample=sampledVideo();
+ for(const input of [{...sample,frames:sample.frames.slice(0,3)},{...sample,sampling:{...sample.sampling,durationSeconds:41}},{...sample,sampling:{...sample.sampling,audioAnalyzed:true}},{...sample,frames:[...sample.frames].reverse()},{...sample,frames:sample.frames.map((frame,index)=>index?frame:{...frame,sha256:'a'.repeat(64)})}]){
+  const {client,calls}=harness({raw:photo});assert.equal((await client.analyzeVideo(input)).code,'MEDIA_VIDEO_FRAMES_INVALID');assert.equal(calls.length,0);
+ }
+});
+test('audio default uses the current file transcription model and records the requested model',async()=>{
+ const {client,calls}=harness({audio:true,raw:{text:'Synthetic measured area.',languages:[{code:'es'}]}}),result=await client.transcribeAudio({buffer:Buffer.from('synthetic fixture'),mimeType:'audio/wav'});
+ assert.equal(calls[0].options.body.get('model'),'gpt-transcribe');assert.equal(calls[0].options.body.get('response_format'),'json');assert.equal(result.providerModel,'gpt-transcribe');assert.equal(result.requiresHumanReview,true);
+});
+test('configured transcription model is explicit and invalid configuration fails before provider calls',async()=>{
+ for(const model of ['whisper-1','gpt-4o-mini-transcribe','gpt-transcribe']){
+  let requested;const client=createPilotMediaAnalyzer({environment:()=>({...env,OPENAI_TRANSCRIPTION_MODEL:model}),fetchImpl:async(url,options)=>{requested=options.body.get('model');return Response.json({text:'Synthetic spoken note.'});}});
+  assert.equal((await client.transcribeAudio({buffer:Buffer.from('synthetic'),mimeType:'audio/wav'})).providerModel,model);assert.equal(requested,model);
+ }
+ for(const model of ['',null,'https://foreign.invalid/model','gpt-transcribe\nprivate']){
+  let requests=0;const client=createPilotMediaAnalyzer({environment:()=>({...env,OPENAI_TRANSCRIPTION_MODEL:model}),fetchImpl:()=>{requests++;throw new Error('must not run');}});
+  assert.equal((await client.transcribeAudio({buffer:Buffer.from('synthetic')})).code,'AUDIO_MODEL_CONFIGURATION_INVALID');assert.equal(requests,0);
+ }
+});
+test('an explicitly undetected language cannot turn provider text into confirmed speech',async()=>{
+ const result=await harness({audio:true,raw:{text:'Potential silence hallucination.',languages:[]}}).client.transcribeAudio({buffer:Buffer.from('unit')});assert.equal(result.success,false);assert.equal(result.code,'AUDIO_TRANSCRIPTION_UNCONFIRMED');
 });

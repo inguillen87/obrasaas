@@ -1,6 +1,12 @@
 {
   "version": 2,
   "framework": "nextjs",
+  "functions": {
+    "api/internal/biometric-analysis.py": {
+      "maxDuration": 120,
+      "excludeFiles": "{work/**,.vercel/**,tests/**,docs/**,data/**,scratch/**,node_modules/**,.next/**,src/**,scripts/**,public/**}"
+    }
+  },
   "crons": [{"path":"/api/meta/customer-process","schedule":"*/5 * * * *"}],
   "git": {
     "deploymentEnabled": {

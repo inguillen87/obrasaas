@@ -5,7 +5,7 @@ import {createPilotMediaAnalyzer,unavailableBiometricAssessment} from '../src/li
 const enabled=process.env.OBRASAAS_RUN_PILOT_MEDIA_CHECK;
 if(enabled){
  const proof={status:'UNCONFIRMED',syntheticOnly:true,realPeopleTested:false,whatsappTransportTested:false,businessDataWritten:false,
-  biometricAutoApprovalEnabled:false,audioLanguage:'en',audioModel:'whisper-1',visionModel:'gpt-4o'};
+  biometricAutoApprovalEnabled:false,audioLanguage:'en',audioModel:null,visionModel:'gpt-4o'};
  try{
   if(enabled!=='synthetic-media-v1'||process.env.VERCEL_ENV!=='production'||process.env.VERCEL_PROJECT_ID!=='prj_68NErbCqCFsDVaMak81gcwsGI9pF'||process.env.NEXT_PUBLIC_APP_URL!=='https://obrasaas.com')throw new Error('PILOT_CHECK_CONTEXT_INVALID');
   console.log(JSON.stringify({productionIdentityCheck:await inspectIdentityProvider()}));
@@ -14,6 +14,7 @@ if(enabled){
   if(createHash('sha256').update(buffer).digest('hex')!==metadata.sha256||metadata.recordingOfPerson!==false)throw new Error('PILOT_FIXTURE_CHANGED');
   const analyzer=createPilotMediaAnalyzer();
   const audio=await analyzer.transcribeAudio({buffer,mimeType:'audio/wav',language:'en'});
+  proof.audioModel=audio.providerModel||null;
   const words=audio.text?.toLowerCase()||'';
   if(!audio.success||!/(two|2) bags/.test(words)||!words.includes('cement')||audio.speakerVerified!==false)throw new Error('PILOT_AUDIO_UNCONFIRMED');
   proof.syntheticAudioTranscribed=true;proof.transcriptSha256=createHash('sha256').update(audio.text).digest('hex');
