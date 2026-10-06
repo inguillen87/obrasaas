@@ -7,6 +7,7 @@ import {OBRASAAS_META_CHANNEL} from './meta-channel-binding.mjs';
 import {META_CUSTOMER_PROTOCOL,META_DEMO_PILOT_PROTOCOL,resolveMetaCloudProtocol,metaCloudEventId} from './meta-cloud-protocol.mjs';
 import {reportMetaCallbackRejection} from './meta-callback-diagnostics.mjs';
 import {splitCustomerAppChange} from './meta-customer-app-projection.mjs';
+import {companyChannelSchemaReady,COMPANY_CHANNEL_SCHEMA_CONTRACT} from './company-channel-schema.mjs';
 const MAX_BYTES=1048576;
 const headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'};
 // JSON object ordering is transport formatting, while array ordering and
@@ -70,15 +71,19 @@ export function splitMetaAppEvents(payload){
 export async function lockMetaCustomerInboxChannel(client,{wabaId,phoneNumberId,projectId=null,writable=false}){
  // Resolve without locks, then acquire every lock explicitly in canonical
  // Project -> WhatsAppConnection order. A joined FOR SHARE has no such order.
- const candidates=await client.query(`SELECT c.id,c."projectId",p."organizationId" FROM public."WhatsAppConnection" c JOIN public."Project" p ON p.id=c."projectId" WHERE c."whatsappBusinessId"=$1 AND ($2::text IS NULL OR c."phoneNumberId"=$2) AND ($3::text IS NULL OR c."projectId"=$3) AND p.status='ACTIVE'`,[wabaId,phoneNumberId,projectId]);
+ const companyReady=await companyChannelSchemaReady(client);
+ const candidates=await client.query(`SELECT c.id,c."projectId",p."organizationId"${companyReady?',cc.mode,cc.revision':''} FROM public."WhatsAppConnection" c JOIN public."Project" p ON p.id=c."projectId" ${companyReady?'LEFT JOIN public."WhatsAppCompanyChannel" cc ON cc."connectionId"=c.id AND cc."organizationId"=p."organizationId"':''} WHERE c."whatsappBusinessId"=$1 AND ($2::text IS NULL OR c."phoneNumberId"=$2) AND ($3::text IS NULL OR c."projectId"=$3) AND (p.status='ACTIVE' ${companyReady?"OR cc.mode IN ('COMPANY','SUSPENDED')":''})`,[wabaId,phoneNumberId,projectId]);
  if(phoneNumberId===null&&candidates.rows.length>1)throw new WorkspaceError('META_CUSTOMER_CALLBACK_WABA_AMBIGUOUS',409);
  if(candidates.rows.length!==1)throw new WorkspaceError('META_CUSTOMER_CALLBACK_SCOPE_REJECTED',403);
  const candidate=candidates.rows[0];
- const project=(await client.query(`SELECT id,"organizationId" FROM public."Project" WHERE id=$1 AND "organizationId"=$2 AND status='ACTIVE' FOR SHARE`,[candidate.projectId,candidate.organizationId])).rows[0];
+ if((await client.query(`SELECT id FROM public."Organization" WHERE id=$1 AND COALESCE(metadata->'internal','false'::jsonb)<>'true'::jsonb FOR SHARE`,[candidate.organizationId])).rows.length!==1)throw new WorkspaceError('META_CUSTOMER_CALLBACK_SCOPE_REJECTED',403);
+ const project=(await client.query(`SELECT id,"organizationId" FROM public."Project" WHERE id=$1 AND "organizationId"=$2 AND (status='ACTIVE' OR $3::boolean) FOR SHARE`,[candidate.projectId,candidate.organizationId,companyReady&&['COMPANY','SUSPENDED'].includes(candidate.mode)])).rows[0];
  if(!project)throw new WorkspaceError('META_CUSTOMER_CALLBACK_SCOPE_REJECTED',403);
  const channel=(await client.query(`SELECT id,"projectId",metadata,"whatsappBusinessId","phoneNumberId",enabled,"connectionStatus"::text AS "connectionStatus","encryptedAccessToken" FROM public."WhatsAppConnection" WHERE id=$1 AND "projectId"=$2 AND "whatsappBusinessId"=$3 AND ($4::text IS NULL OR "phoneNumberId"=$4) FOR ${writable?'UPDATE':'SHARE'}`,[candidate.id,project.id,wabaId,phoneNumberId])).rows[0];
  if(!channel||channel.whatsappBusinessId===OBRASAAS_META_CHANNEL.wabaId||channel.phoneNumberId===OBRASAAS_META_CHANNEL.phoneNumberId||channel.metadata?.credentialFormat!=='tenant-aad-v2'||channel.metadata?.credentialOrganizationId!==project.organizationId)throw new WorkspaceError('META_CUSTOMER_CALLBACK_SCOPE_REJECTED',403);
- return {...channel,organizationId:project.organizationId};
+ if(channel.metadata?.companyRoutingVersion===1&&!companyReady)throw new WorkspaceError('COMPANY_CHANNEL_CATALOG_REQUIRED',409);
+ let companyRouting=null;if(companyReady){const owner=(await client.query(`SELECT mode,revision FROM public."WhatsAppCompanyChannel" WHERE "connectionId"=$1 AND "organizationId"=$2 AND "anchorProjectId"=$3 FOR SHARE`,[channel.id,project.organizationId,channel.projectId])).rows[0];if(['COMPANY','SUSPENDED'].includes(owner?.mode))companyRouting={mode:'COMPANY',revision:owner.revision,contract:COMPANY_CHANNEL_SCHEMA_CONTRACT};else if(channel.metadata?.companyRoutingVersion===1)throw new WorkspaceError('COMPANY_CHANNEL_CONTEXT_CHANGED',409);}
+ return {...channel,organizationId:project.organizationId,companyRouting};
 }
 export function createMetaCustomerInbox({connect,environment=process.env,protocol=META_CUSTOMER_PROTOCOL,lockChannel=lockMetaCustomerInboxChannel,routeEvent}){
  resolveMetaCloudProtocol(protocol);
@@ -88,7 +93,7 @@ export function createMetaCustomerInbox({connect,environment=process.env,protoco
    for(const event of [...events].sort((left,right)=>left.externalId.localeCompare(right.externalId))){
     const lane=routeEvent?routeEvent(event):{protocol,lockChannel},p=resolveMetaCloudProtocol(lane.protocol),channel=await lane.lockChannel(client,event),id=metaCloudEventId(p,event.externalId);eventIds.push(id);
     const encryptedPayload=encryptCustomerSecret(JSON.stringify(event.payload),{organizationId:channel.organizationId,projectId:channel.projectId,purpose:p.payloadPurpose,resourceId:id},environment);
-    const grantProof=p===META_DEMO_PILOT_PROTOCOL?{grantId:channel.metadata?.demoPilot?.grantId}:{};
+    const grantProof=p===META_DEMO_PILOT_PROTOCOL?{grantId:channel.metadata?.demoPilot?.grantId}:channel.companyRouting?{companyRouting:channel.companyRouting}:{};
     if(p===META_DEMO_PILOT_PROTOCOL&&!/^demo_grant_[a-f0-9]{64}$/.test(grantProof.grantId||''))throw new WorkspaceError('META_DEMO_PILOT_PROOF_REQUIRED',409);
     const encryptedProof=signatureVerified===true?encryptCustomerSecret(JSON.stringify({scheme:p.scheme,purpose:p.purpose,appId:OBRASAAS_META_CHANNEL.appId,payloadDigest:event.payloadDigest,channelId:channel.id,organizationId:channel.organizationId,...grantProof}),{organizationId:channel.organizationId,projectId:channel.projectId,purpose:p.proofPurpose,resourceId:id},environment):null;
     const payload={version:1,encryptedPayload,encryptedProof,payloadDigest:event.payloadDigest,channelId:channel.id,organizationId:channel.organizationId,channelPurpose:p.purpose,...grantProof,signatureVerified:signatureVerified===true,signatureScheme:signatureVerified===true?p.scheme:null};

@@ -103,6 +103,13 @@ jobs:
           npx eslint scripts/verify-meta-signup-field-lifecycle-postgres.mjs scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs tests/production-meta-signup-field-lifecycle.test.mjs
           node --test tests/production-meta-signup-field-lifecycle.test.mjs
           node scripts/verify-meta-signup-field-lifecycle-postgres.mjs
+      - name: Corporate worksite selection and canonical shared attendance
+        run: |
+          npx eslint src/lib/company-channel-*.mjs src/lib/person-worksite-journey.mjs src/app/api/identity/company-channel 'src/app/(identity)/cuenta/company-channel-panel.js' 'src/app/(identity)/cuenta/company-channel-view.mjs' scripts/lib/company-channel-*.mjs scripts/adopt-company-channel-schema.mjs scripts/verify-company-channel-*.mjs tests/production-company-channel*.test.mjs --max-warnings 0
+          node --test tests/production-company-channel*.test.mjs
+          node scripts/verify-company-channel-postgres.mjs
+          node scripts/verify-company-channel-boundary.mjs
+          node scripts/verify-company-channel-ui.mjs
       - name: Consented attendance and progress notices with signed status recovery
         run: |
           npx eslint src/lib/meta-customer-template-send*.mjs src/lib/worker-channel-consent-policy.mjs src/app/api/identity/template-send tests/production-meta-customer-template-send.test.mjs tests/production-template-send-view.test.mjs scripts/verify-meta-customer-template-send-postgres.mjs scripts/verify-template-send-ui.mjs
@@ -135,6 +142,10 @@ jobs:
           npx eslint scripts/verify-mobile-identity-ui.mjs tests/production-photo-preparation.test.mjs
           node --test tests/production-photo-preparation.test.mjs
           node scripts/verify-mobile-identity-ui.mjs
+      - name: Mobile participant and attendance review sources
+        run: |
+          npx eslint scripts/verify-mobile-workspace-review-ui.mjs --max-warnings 0
+          node scripts/verify-mobile-workspace-review-ui.mjs
       - run: node scripts/verify-field-operations-ui.mjs
       - name: Local QR decoding and camera cancellation
         run: |
@@ -170,6 +181,8 @@ jobs:
             .vercel/private/plan-import-ui-validation.json
             .vercel/private/plan-import-ui-*.png
             .vercel/private/workspace-plan-recovery-ui-validation.json
+            .vercel/private/mobile-workspace-review-ui-validation.json
+            .vercel/private/mobile-workspace-review-ui-*.png
             .vercel/customer-whatsapp-evidence/
             .vercel/company-onboarding-evidence/
             .vercel/site-register-evidence/
@@ -185,6 +198,9 @@ jobs:
             .vercel/worker-channel-evidence/
             .vercel/meta-field-evidence/
             .vercel/meta-signup-field-lifecycle-evidence/
+            .vercel/private/company-channel-postgres-proof.json
+            .vercel/private/company-channel-boundary-proof.json
+            .vercel/company-channel-ui-evidence/
             .vercel/operations-status-evidence/
             .vercel/clerk-access-evidence/
             .vercel/workspace-reload-evidence/

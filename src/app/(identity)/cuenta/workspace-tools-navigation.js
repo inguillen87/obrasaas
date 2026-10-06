@@ -6,10 +6,12 @@ import styles from './workspace-tools-navigation.module.css';
 const tool=(id,label)=>({id,label});
 const destinations={
  schedule:tool('schedule-title','Tareas y cronograma'),
+ plan:tool('plan-import-title','Importación de cronograma'),
  register:tool('site-register-title','Incidencias y materiales'),
  field:tool('field-title','Jornada, evidencia y avance'),
  participants:tool('participant-title','Participantes y permisos'),
  channel:tool('worker-channel-title','Mi número y autorización de avisos'),
+ companyChannel:tool('company-channel-title','Canal y obras de la empresa'),
  purchase:tool('purchase-title','Compras'),
  inventory:tool('inventory-title','Inventario y consumo'),
  preparation:tool('customer-whatsapp-title','Preparar WhatsApp de la empresa'),
@@ -38,17 +40,19 @@ function ToolLink({destination,active}){
  return <a href={'#'+destination.id} aria-current={active===destination.id?'location':undefined} onClick={event=>focusDestination(event,destination.id)}><span>{destination.label}</span><ArrowUpRight size={14} aria-hidden="true"/></a>;
 }
 
-export function WorkspaceToolsNavigation({canManageIntegrations=false,role,pending={},schedulePending=false,scheduleEditing=false}){
+export function WorkspaceToolsNavigation({canManageIntegrations=false,canImportPlan=false,role,pending={},schedulePending=false,scheduleEditing=false}){
  const active=useSyncExternalStore(subscribeFragment,currentFragment,serverFragment);
  // Visibility follows the same canonical account capabilities as the mounted panels.
  // These links neither grant permissions nor hide/unmount a form.
  const groups=[
   {id:'work',label:'Trabajo en obra',icon:HardHat,tools:[destinations.schedule,destinations.field,destinations.inventory,...(canManageIntegrations?[destinations.register,destinations.purchase]:[])]},
   {id:'people',label:'Equipo y acceso',icon:UsersRound,tools:[...(canManageIntegrations?[tool('site-register-title','Fichas del equipo')]:[]),destinations.participants,destinations.channel]},
-  ...(canManageIntegrations?[{id:'whatsapp',label:'WhatsApp de la empresa',icon:MessageCircle,tools:[destinations.preparation,destinations.meta,destinations.inbox,destinations.template]}]:[]),
+  ...((role==='ADMIN'||canManageIntegrations)?[{id:'whatsapp',label:'WhatsApp de la empresa',icon:MessageCircle,tools:[destinations.companyChannel,...(canManageIntegrations?[destinations.preparation,destinations.meta,destinations.inbox,destinations.template]:[])]}]:[]),
   ...((role==='ADMIN'||canManageIntegrations)?[{id:'management',label:'Administración y seguimiento',icon:BriefcaseBusiness,tools:[...(role==='ADMIN'?[destinations.crm,destinations.demo]:[]),...(canManageIntegrations?[tool('operation-status-title','Pendientes y actividad')]:[])]}]:[]),
  ];
  const visible=new Set(groups.flatMap(group=>group.tools.map(item=>item.id)));
+ // An open import is an outstanding action inside the schedule panel.
+ if(canImportPlan)visible.add(destinations.plan.id);
  const outstanding=[...(schedulePending?[scheduleEditing?tool('schedule-edit-title','Planificación pendiente'):destinations.schedule]:[]),...Object.entries(pending).filter(([,value])=>value===true).map(([key])=>destinations[key]).filter(item=>item&&visible.has(item.id))];
  return <nav className={styles.navigation} aria-labelledby="workspace-tools-title">
   <div className={styles.heading}><p className={styles.eyebrow}>NAVEGACIÓN</p><h3 id="workspace-tools-title">Herramientas de esta obra</h3><p className={styles.intro}>Todo el trabajo, en el mismo contexto.</p></div>

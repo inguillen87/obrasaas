@@ -28,8 +28,9 @@ function CustomerWhatsAppPreparation({projectId,scope,onPending,getSessionToken}
  const [opened,setOpened]=useState(false),[data,setData]=useState(null),[draft,setDraft]=useState(empty),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[attempt,setAttempt]=useState(null),[canRetry,setCanRetry]=useState(false),[revisionReview,setRevisionReview]=useState(null),[reviewed,setReviewed]=useState(false);
  const mounted=useRef(true),active=useRef(null);
  const currentData=data?.projectId===projectId&&data?.scope===scope?data:null;
+ const companyBlocked=currentData?.companyRouting?.legacyActionsBlocked===true;
  const currentAttempt=attempt?.projectId===projectId&&attempt?.scope===scope?attempt:null;
- const dirty=Boolean(opened&&currentData&&(draft.assistantName!==currentData.profile.assistantName||draft.numberMode!==(currentData.profile.numberMode||'')||JSON.stringify([...draft.useCases].sort())!==JSON.stringify([...currentData.profile.useCases].sort())||draft.confirmOwnership));
+ const dirty=Boolean(opened&&currentData&&!companyBlocked&&(draft.assistantName!==currentData.profile.assistantName||draft.numberMode!==(currentData.profile.numberMode||'')||JSON.stringify([...draft.useCases].sort())!==JSON.stringify([...currentData.profile.useCases].sort())||draft.confirmOwnership));
  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;active.current?.abort();};},[]);
  useEffect(()=>{onPending?.(busy||Boolean(currentAttempt)||dirty);return()=>onPending?.(false);},[busy,currentAttempt,dirty,onPending]);
  const valid=(result,kind='snapshot',command)=>customerWhatsAppResult(result,{scope,projectId},{kind,command});
@@ -54,6 +55,7 @@ function CustomerWhatsAppPreparation({projectId,scope,onPending,getSessionToken}
   accept(result,true);setAttempt(null);setCanRetry(false);setRevisionReview(null);setReviewed(false);setMessage(result.savedProfileIsCurrent===false?'Se recuperó tu recibo. Otro cambio posterior ya modificó la preparación; se muestra la versión vigente.':'Preparación guardada. Este guardado no conecta el número ni envía mensajes.');
  }
  async function send(payload,retrying=false){
+  if(companyBlocked){setCanRetry(false);setMessage('Este canal se administra como conexión compartida. Consultá sus obras y asignaciones en Canal y obras de la empresa.');return;}
   const alive=()=>mounted.current;
   setBusy(true);setCanRetry(false);setMessage('');onPending?.(true);
   try{const result=await api(sessionRequest,endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),requestTimeoutMs:20000},result=>valid(result,'save',payload));if(alive())finish(result);}
@@ -64,11 +66,11 @@ function CustomerWhatsAppPreparation({projectId,scope,onPending,getSessionToken}
   }}finally{if(alive())setBusy(false);}
  }
  async function save(event){
-  event.preventDefault();if(busy||currentAttempt||!currentData||revisionReview&&!reviewed)return;
+  event.preventDefault();if(busy||companyBlocked||currentAttempt||!currentData||revisionReview&&!reviewed)return;
   const payload={operationId:crypto.randomUUID(),projectId,scope,profile:{...draft,useCases:[...draft.useCases],initialProjectId:projectId,expectedRevision:currentData.profile.revision}};
   setAttempt(payload);await send(payload);
  }
- async function retry(){if(!currentAttempt?.profile||busy||!canRetry)return;await send(currentAttempt,true);}
+ async function retry(){if(companyBlocked||!currentAttempt?.profile||busy||!canRetry)return;await send(currentAttempt,true);}
  async function recover(){
   if(!currentAttempt||busy)return;
   const alive=()=>mounted.current;
@@ -89,6 +91,7 @@ function CustomerWhatsAppPreparation({projectId,scope,onPending,getSessionToken}
    {currentAttempt&&(!currentData||!currentAttempt.profile)&&<div className={styles.recovery}><p>Hay un intento sin confirmar. Consultá su recibo con tu acceso vigente; no reconstruimos ni reenviamos los datos ocultados.</p><button type="button" disabled={busy} onClick={recover}>Comprobar preparación</button><button type="button" disabled={busy} onClick={()=>{setAttempt(null);setMessage('Cerraste esta consulta. La referencia sigue en Operaciones por comprobar; no se declaró perdido el guardado ni se reenvió.');}}>Cerrar consulta y conservar referencia</button></div>}
   {opened&&currentData&&<>
    <div className={styles.context}><strong>{currentData.companyName}</strong><span>{currentData.projectName}</span></div>
+   {companyBlocked?<section className={styles.progress} aria-labelledby="wa-company-channel"><h4 id="wa-company-channel">Canal empresarial compartido</h4><p>Este canal se administra para varias obras. Revisá la conexión, las obras destino y las asignaciones en Canal y obras de la empresa.</p><p style={{overflowWrap:'anywhere'}}>Canal: <code>{currentData.companyRouting.connectionId}</code> · Obra de origen: <code>{currentData.companyRouting.anchorProjectId}</code>.</p><a className={styles.link} href="#company-channel-title">Administrar canal y obras de la empresa</a><p>Las consultas y referencias pendientes se conservan. En el modo de empresa, identidad por chat, fotos o audio, Flows y plantillas todavía no están habilitados.</p></section>:<>
    {revisionReview&&<section className={styles.review} aria-labelledby="wa-revision-review"><h4 id="wa-revision-review">Revisá el cambio antes de guardar</h4><p>Tu edición sigue en el formulario. {revisionReview.currentRevision===null?'Falta consultar la versión actual.':`La preparación pasó de la revisión ${revisionReview.previousRevision} a la revisión ${revisionReview.currentRevision}.`}</p>
     <button type="button" disabled={locked} onClick={()=>load(true)}>Consultar versión actual sin perder mi edición</button>
     {revisionReview.profile&&<><dl><dt>Nombre guardado</dt><dd>{revisionReview.profile.assistantName||'Sin preparar'}</dd><dt>Tipo de número guardado</dt><dd>{currentData.options.numberModes.find(mode=>mode.key===revisionReview.profile.numberMode)?.label||'Sin elegir'}</dd><dt>Circuitos guardados</dt><dd>{currentData.options.useCases.filter(item=>revisionReview.profile.useCases.includes(item.key)).map(item=>item.label).join(', ')||'Sin elegir'}</dd></dl><label className={styles.consent}><input type="checkbox" data-revision-reviewed checked={reviewed} disabled={locked} onChange={event=>setReviewed(event.target.checked)}/><span>Revisé la preparación vigente y quiero guardar mi edición sobre esta revisión.</span></label></>}
@@ -109,6 +112,7 @@ function CustomerWhatsAppPreparation({projectId,scope,onPending,getSessionToken}
     <p>Guardar esta preparación no registra un número, no cambia tu proveedor y no activa los circuitos seleccionados.</p>
     <p className={styles.note}>El panel «Autorizar WhatsApp con Meta» muestra la disponibilidad, el registro, las plantillas y la habilitación actual del canal. Estos pasos describen el recorrido; guardar la preparación no confirma su aceptación.</p>
    </section>
+   </>}
   </>}
  </section>;
 }

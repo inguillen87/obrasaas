@@ -156,7 +156,7 @@ async function navigationScenario(role,width){
  await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba A')).click());
  await page.waitForSelector('nav[aria-labelledby="workspace-tools-title"]');
  const nav='nav[aria-labelledby="workspace-tools-title"]';
- const expected=['onboarding-guide-title','schedule-title','field-title','inventory-title','participant-title','worker-channel-title',...(administrator?['site-register-title','purchase-title','customer-whatsapp-title','customer-meta-title','customer-inbox-title','template-send-title','constructor-crm-title','demo-pilot-title','operation-status-title']:[])];
+ const expected=['onboarding-guide-title','schedule-title','field-title','inventory-title','participant-title','worker-channel-title',...(administrator?['site-register-title','purchase-title','company-channel-title','customer-whatsapp-title','customer-meta-title','customer-inbox-title','template-send-title','constructor-crm-title','demo-pilot-title','operation-status-title']:[])];
  const anchors=await page.$$eval(nav+' a',elements=>elements.map(element=>element.hash.slice(1)));
  assert.deepEqual([...new Set(anchors)].sort(),expected.sort());
  assert.equal(await page.$eval(nav,element=>[...element.querySelectorAll('a')].every(link=>document.getElementById(link.hash.slice(1)))),true);

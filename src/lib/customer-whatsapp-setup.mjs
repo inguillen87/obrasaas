@@ -1,6 +1,7 @@
 import {normalizeTenantWorkspace,WORKSPACE_NUMBER_MODES,WORKSPACE_USE_CASES,TenantWorkspaceError} from './whatsapp/tenant-workspace-policy.js';
 import {readProjectWorkspaceProfile,projectWorkspaceMetadata} from './whatsapp/project-workspace-profile.js';
 import {WorkspaceError,operationId,digest} from './workspace-policy.mjs';
+import {companyConnectionForProject,assertLegacyProjectChannel} from './company-channel-connection.mjs';
 const publicError=error=>{if(error instanceof TenantWorkspaceError)throw new WorkspaceError(error.code,error.status);throw error;};
 const same=(current,command)=>['assistantName','numberMode','initialProjectId'].every(key=>current[key]===command[key])&&JSON.stringify(current.useCases)===JSON.stringify(command.useCases);
 const receiptId=(member,projectId,id)=>'wa_preparation_'+digest([member.actorId,projectId,id.toLowerCase()]);
@@ -26,10 +27,10 @@ export function createCustomerWhatsAppSetup({workspace}){
     const rows=await client.query(`SELECT id,"displayPhoneNumber",enabled,"connectionStatus"::text AS status
       FROM public."WhatsAppConnection" WHERE "projectId"=$1`,[project.id]);
     if(rows.rows.length>1)throw new WorkspaceError('WHATSAPP_PREPARATION_INTEGRITY',409);
-    const found=rows.rows[0];
+    const corporate=await companyConnectionForProject(client,member.organizationId,project.id),found=corporate?{...corporate,status:corporate.connectionStatus}:rows.rows[0];
     const connection=found?{recordPresent:true,displayNumber:found.displayPhoneNumber||null,storedStatus:found.status,enabled:found.enabled===true}:null;
     return {scope,projectId:project.id,projectName:project.name,companyName:member.organizationName,
-      profile,profileSource,connection,readiness:customerWhatsAppReadiness(profile,connection),
+      profile,profileSource,connection,...(corporate?{companyRouting:{mode:corporate.company.mode,connectionId:corporate.id,anchorProjectId:corporate.projectId,legacyActionsBlocked:corporate.projectId!==project.id||['COMPANY','SUSPENDED'].includes(corporate.company.mode),accepted:false}}:{}),readiness:customerWhatsAppReadiness(profile,connection),
       options:{numberModes:WORKSPACE_NUMBER_MODES,useCases:WORKSPACE_USE_CASES}};
   }
   async function findReceipt(client,member,id){
@@ -38,7 +39,7 @@ export function createCustomerWhatsAppSetup({workspace}){
     return result.rows[0]||null;
   }
   async function within(session,context,writable,run){
-    try{return await workspace.integrationProject(session,context,writable,async (...args)=>{try{return await run(...args);}catch(error){return publicError(error);}});}catch(error){return publicError(error);}
+    try{return await workspace.integrationProject(session,context,writable,async (...args)=>{try{if(writable)await assertLegacyProjectChannel(args[0],args[1],args[3].id);return await run(...args);}catch(error){return publicError(error);}});}catch(error){return publicError(error);}
   }
   return {
     read(session,context){return within(session,context,false,(client,member,scope,project)=>response(client,member,scope,project));},

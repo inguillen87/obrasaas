@@ -8,7 +8,7 @@ import {PARTICIPANT_NOTICE,PARTICIPANT_NOTICE_VERSION,PARTICIPANT_OCR_NOTICE,PAR
 assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV);
 const root=process.cwd(),scratch=path.join(root,'.vercel');mkdirSync(scratch,{recursive:true});
 const fixture=mkdtempSync(path.join(scratch,'participant-ai-ui-')),app=path.join(fixture,'app');mkdirSync(app);
-for(const name of ['participant-panel.js','participant-panel.module.css','kyc-photo-preparation.js','field-media-preparation.mjs','workspace-session-request.mjs','workspace-request-lifecycle.js','workspace-request-lifecycle.mjs','workspace-recovery-journal.mjs','site-purchase-view.mjs','workspace-recovery-storage.mjs'])copyFileSync(path.join(root,'src/app/(identity)/cuenta',name),path.join(app,name));
+for(const name of ['participant-panel.js','participant-panel.module.css','kyc-photo-preparation.js','field-media-preparation.mjs','workspace-session-request.mjs','workspace-request-lifecycle.js','workspace-request-lifecycle.mjs','workspace-recovery-journal.mjs','company-channel-view.mjs','site-purchase-view.mjs','workspace-recovery-storage.mjs'])copyFileSync(path.join(root,'src/app/(identity)/cuenta',name),path.join(app,name));
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({private:true}));writeFileSync(path.join(fixture,'next.config.mjs'),`export default {devIndicators:false,turbopack:{root:${JSON.stringify(root)}}};`);
 writeFileSync(path.join(app,'layout.js'),`export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:12,fontFamily:'Arial'}}>{children}</body></html>}`);
 const scope='a'.repeat(64),projectId='project-fixture';

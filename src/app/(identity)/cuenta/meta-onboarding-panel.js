@@ -14,21 +14,22 @@ export function MetaOnboardingPanel({projectId,scope,onPending,getSessionToken})
  const [sdkError,setSdkError]=useState(false),[sdkRetry,setSdkRetry]=useState(0),[importChoice,setImportChoice]=useState({contacts:false,history:false}),[confirmImport,setConfirmImport]=useState(false);
  const mounted=useRef(true),authorization=useRef(null),onPendingRef=useRef(onPending),closedSources=useRef(new WeakSet());
  const dirty=Boolean(pin||confirmRegistration||confirmActivation||confirmDeactivation||restartReason||confirmFresh||confirmImport||importChoice.contacts||importChoice.history||Object.values(templateConsent).some(Boolean));
- const sdkReady=Boolean(data?.readiness.canLaunchMeta)&&sdkConfiguration===`${data?.readiness.appId}:${data?.readiness.version}`;
+ const companyBlocked=data?.companyRouting?.legacyActionsBlocked===true;
+ const sdkReady=!companyBlocked&&Boolean(data?.readiness.canLaunchMeta)&&sdkConfiguration===`${data?.readiness.appId}:${data?.readiness.version}`;
  useEffect(()=>{onPendingRef.current=onPending;},[onPending]);
  useEffect(()=>{onPendingRef.current?.(busy||uncertain||authorizing||dirty);},[busy,uncertain,authorizing,dirty]);
  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;authorization.current=null;onPendingRef.current?.(false);};},[]);
  function clearTransient(){if(authorization.current?.source)closedSources.current.add(authorization.current.source);authorization.current=null;setAuthorizing(false);setPin('');setConfirmRegistration(false);setConfirmActivation(false);setConfirmDeactivation(false);setRestartReason('');setConfirmFresh(false);setTemplateConsent({});setImportChoice({contacts:false,history:false});setConfirmImport(false);}
   function hidePrivate(error){if([401,403].includes(error.status)||['WORKSPACE_CONTEXT_CHANGED','WORKSPACE_PROJECT_UNAVAILABLE','WORKSPACE_MEMBERSHIP_REQUIRED'].includes(error.code)){setData(null);setSdkConfiguration('');setSdkError(false);clearTransient();}}
-  function accept(result){metaOnboardingSnapshot(result,{scope,projectId});setData(result);setTemplateConsent({});setConfirmActivation(false);setConfirmDeactivation(false);setImportChoice({contacts:false,history:false});setConfirmImport(false);}
+  function accept(result){metaOnboardingSnapshot(result,{scope,projectId});if(result.companyRouting?.legacyActionsBlocked===true){clearTransient();setSdkConfiguration('');setSdkError(false);}setData(result);setTemplateConsent({});setConfirmActivation(false);setConfirmDeactivation(false);setImportChoice({contacts:false,history:false});setConfirmImport(false);}
  async function load(){if(busy||authorizing||dirty&&!uncertain)return;onPendingRef.current?.(true);setOpened(true);setBusy(true);setMessage('');try{const result=await api(sessionRequest,endpoint+'?'+new URLSearchParams({projectId,scope}),{requestTimeoutMs:15000});if(mounted.current){accept(result);setUncertain(false);}}
   catch(error){if(mounted.current){hidePrivate(error);setMessage(error.message);}}finally{if(mounted.current)setBusy(false);}}
- async function command(action,extra={}){if(busy)return;onPendingRef.current?.(true);setBusy(true);setMessage('');setUncertain(true);
+ async function command(action,extra={}){if(busy||companyBlocked)return;onPendingRef.current?.(true);setBusy(true);setMessage('');setUncertain(true);
   try{const result=await api(sessionRequest,endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,operationId:crypto.randomUUID(),projectId,scope,...extra}),requestTimeoutMs:55000});
    if(mounted.current){accept(result);setUncertain(false);setMessage(action==='deactivate_channel'?'El canal se mantiene desactivado por tu decisión. La reconexión de Meta no lo habilita automáticamente.':action==='refresh_templates'?'Catálogo comprobado para la cuenta de esta empresa. La aprobación depende de cada plantilla.':'Estado guardado. La recepción y el circuito completo con participantes todavía necesitan una prueba real.');}}
   catch(error){if(mounted.current){hidePrivate(error);setMessage((error.requestDispatched===false||error.status&&error.status<500)?error.message:'La respuesta quedó sin confirmar. Usá Comprobar estado antes de continuar.');if((error.requestDispatched===false||error.status&&error.status<500))setUncertain(false);}}
   finally{if(mounted.current)setBusy(false);}}
- useEffect(()=>{if(!data?.readiness.canLaunchMeta)return;let alive=true;loadCustomerMetaSdk(data.readiness).then(()=>{if(alive){setSdkConfiguration(`${data.readiness.appId}:${data.readiness.version}`);setSdkError(false);}}).catch(error=>{if(alive){setSdkError(true);setMessage(error.message);}});return()=>{alive=false;};},[data?.readiness,sdkRetry]);
+ useEffect(()=>{if(companyBlocked||!data?.readiness.canLaunchMeta)return;let alive=true;loadCustomerMetaSdk(data.readiness).then(()=>{if(alive){setSdkConfiguration(`${data.readiness.appId}:${data.readiness.version}`);setSdkError(false);}}).catch(error=>{if(alive){setSdkError(true);setMessage(error.message);}});return()=>{alive=false;};},[data?.readiness,sdkRetry,companyBlocked]);
  useEffect(()=>{
   function finish(){const current=authorization.current;if(!current?.code||!current.wabaId||current.numberMode!=='BUSINESS_APP'&&!current.phoneNumberId||current.sent)return;current.sent=true;setAuthorizing(false);command('complete',{signupId:current.signupId,stateToken:current.stateToken,code:current.code,wabaId:current.wabaId,phoneNumberId:current.phoneNumberId||null,signupEvent:current.signupEvent});current.code=null;}
   function receive(event){const current=authorization.current;if(!['https://www.facebook.com','https://web.facebook.com'].includes(event.origin)||!current||current.sent||event.source&&closedSources.current.has(event.source))return;let parsed;try{parsed=typeof event.data==='string'?JSON.parse(event.data):event.data;}catch{return;}
@@ -40,7 +41,7 @@ export function MetaOnboardingPanel({projectId,scope,onPending,getSessionToken})
   }
   window.addEventListener('message',receive);authorization.currentFinish=finish;return()=>{window.removeEventListener('message',receive);};
  });
- function authorize(){if(!sdkReady||busy||uncertain||authorizing||!data?.stateToken||data.signup?.state!=='PREPARED')return;
+ function authorize(){if(companyBlocked||!sdkReady||busy||uncertain||authorizing||!data?.stateToken||data.signup?.state!=='PREPARED')return;
   const numberMode=data.signup.numberMode||data.numberMode,flow=data.readiness.flows?.[numberMode];
   if(data.readiness.signupVersion!=='4'||flow?.available!==true||data.signup.configId&&data.signup.configId!==flow.configId)return;
   const attempt={signupId:data.signup.id,stateToken:data.stateToken,numberMode,sent:false};authorization.current=attempt;onPendingRef.current?.(true);setAuthorizing(true);setMessage('Completá la autorización en la ventana de Meta.');
@@ -57,6 +58,7 @@ export function MetaOnboardingPanel({projectId,scope,onPending,getSessionToken})
   <p role="status" aria-live="polite" className={message?styles.notice:styles.silent}>{message}</p>
   {opened&&data&&<>
    <div className={styles.context}><strong>{data.companyName}</strong><span>{data.projectName}</span></div>
+   {companyBlocked?<section className={styles.checklist} aria-labelledby="meta-company-channel"><h4 id="meta-company-channel">Canal empresarial compartido</h4><p>Esta conexión se administra para varias obras. Revisá sus obras destino y asignaciones en Canal y obras de la empresa; las acciones individuales de alta y plantillas no están disponibles para este canal.</p>{data.connection&&<p>Número registrado: <strong>{data.connection.displayNumber||'Sin número público confirmado'}</strong>.</p>}<p style={{overflowWrap:'anywhere'}}>Canal: <code>{data.companyRouting.connectionId}</code> · Obra de origen: <code>{data.companyRouting.anchorProjectId}</code>.</p><a style={{display:'inline-flex',alignItems:'center',minHeight:48,boxSizing:'border-box'}} href="#company-channel-title">Administrar canal y obras de la empresa</a><p>Las consultas y referencias pendientes se conservan. En el modo de empresa, identidad por chat, fotos o audio, Flows y plantillas todavía no están habilitados. La configuración interna no acredita entrega ni aceptación en campo.</p></section>:<>
    <dl className={styles.status}><div><dt>Preparación de la obra</dt><dd>{data.prepared?'Guardada':'Pendiente'}</dd></div><div><dt>Autorización de Meta</dt><dd>{data.readiness.canLaunchMeta?'Disponible':'Configuración de plataforma pendiente'}</dd></div><div><dt>Intento actual</dt><dd>{labels[data.signup?.state]||'Todavía no iniciado'}</dd></div><div><dt>Prueba real con participantes</dt><dd>Sin aceptar</dd></div></dl>
    <section className={styles.checklist} aria-labelledby="customer-meta-readiness-title">
     <h4 id="customer-meta-readiness-title">Qué falta para usar WhatsApp</h4><p className={styles.next}><strong>Próximo paso</strong><span>{uncertain?'Comprobá el estado del mismo intento antes de continuar. La consulta no repite la solicitud.':checklist.next}</span></p>
@@ -105,6 +107,7 @@ export function MetaOnboardingPanel({projectId,scope,onPending,getSessionToken})
     </article>)}
    </section>}
    <p className={styles.note}><a href="#customer-inbox-title">Consultar mensajes, entregas y seguimiento del equipo en la bandeja privada de esta obra</a>.</p>
+   </>}
   </>}
  </section>;
 }

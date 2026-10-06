@@ -6,6 +6,7 @@ import { insertSiteReport, publicSiteReport } from './site-register-store.mjs';
 import { META_DEMO_PILOT_PROTOCOL } from './meta-cloud-protocol.mjs';
 import { compareProgressMeasurementQuantities } from './progress-measurement-quantity.js';
 import {MATERIAL_INVENTORY_ACTIONS,applyInventoryFieldAction,readInventory,readConsumption} from './material-inventory.mjs';
+import {lockPersonWorksiteJourney,assertPersonWorksiteJourney} from './person-worksite-journey.mjs';
 
 const revision = name => `to_char(${name},'YYYY-MM-DD"T"HH24:MI:SS.US')`;
 const newId = prefix => prefix+'_'+randomUUID().replaceAll('-','');
@@ -30,7 +31,7 @@ const publicProposal=row=>({id:row.id,summary:row.summary,status:row.status==='P
   taskId:row.action.taskId,workerId:row.proposedByWorkerId,progress:row.action.progress,quantity:row.action.quantity,baseline:row.action.baseline,unit:row.action.unit,reason:row.action.reason,evidenceIds:row.action.evidenceIds,
   result:row.result?.fieldOperations||null});
 export function createFieldOperations({workspace,assertParticipant}) {
-  const run=(session,context,writable,callback)=>workspace.projectOperation(session,context,writable,callback);
+  const run=(session,context,writable,callback)=>workspace.projectOperation(session,context,writable,callback,writable&&context.action==='ATTENDANCE'?lockPersonWorksiteJourney:undefined);
   async function worker(client,member,session,projectId,workerId,permission='report') {
     if(!workspaceId(workerId))throw new WorkspaceError('FIELD_WORKER_REQUIRED');
     if(typeof assertParticipant==='function')return assertParticipant(client,member,session,projectId,workerId,{permission,requireKyc:true});
@@ -150,6 +151,7 @@ export function createFieldOperations({workspace,assertParticipant}) {
           outcome={kind:'CONFIGURATION',qrTokens:tokens.map(s=>({sectorId:s.id,token:s.token})),recordedAt:now.toISOString()};
         }else if(command.action==='ATTENDANCE') {
           await worker(client,member,session,command.projectId,p.workerId,'attendance');
+          await assertPersonWorksiteJourney(client,member,command.projectId,p.workerId,p.eventType);
           const selected=config(project),sector=selected.sectors.find(s=>s.id===p.sectorId);if(!sector)throw new WorkspaceError('FIELD_SECTOR_UNAVAILABLE',404);
           const previousEvent=await latest(client,command.projectId,p.workerId),last=previousEvent?.metadata.fieldOperations;
           if((previousEvent?.id||null)!==p.expectedEventId)throw new WorkspaceError('ATTENDANCE_REVISION_CHANGED',409);
