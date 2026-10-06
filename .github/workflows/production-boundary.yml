@@ -1,7 +1,7 @@
 name: Production access boundary
 on:
   push:
-    branches: [master, 'hotfix/**', 'feat/integral-worksite-*', 'feat/pilot-readiness-*', 'feat/professional-experience-*', 'fix/whatsapp-signup-*', 'fix/clerk-*']
+    branches: [master, 'hotfix/**', 'feat/integral-worksite-*', 'feat/pilot-readiness-*', 'feat/professional-experience-*', 'feat/local-font-*', 'fix/whatsapp-signup-*', 'fix/clerk-*']
   workflow_dispatch:
 permissions:
   contents: read
@@ -67,6 +67,10 @@ jobs:
       - run: node scripts/verify-identity-context-ui.mjs
       - run: node scripts/verify-mapping-review-ui.mjs
       - run: npm run build
+      - name: Local font delivery and Linux preloads
+        run: |
+          npx eslint scripts/verify-local-font-delivery.mjs --max-warnings 0
+          node scripts/verify-local-font-delivery.mjs
       - run: node scripts/verify-production-boundary.mjs
       - run: node scripts/verify-brand-v3-browser.mjs
       - run: node scripts/verify-access-contrast.mjs
@@ -92,5 +96,6 @@ jobs:
             .vercel/guided-demo-evidence/
             .vercel/demo-company-evidence/
             .vercel/professional-landing-evidence/
+            .vercel/local-font-evidence/
           include-hidden-files: true
           retention-days: 7

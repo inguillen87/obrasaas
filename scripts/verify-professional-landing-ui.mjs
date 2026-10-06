@@ -10,6 +10,8 @@ const root=process.cwd(),parent=path.join(root,'.vercel'),output=path.join(paren
 mkdirSync(output,{recursive:true});
 const fixture=mkdtempSync(path.join(parent,'professional-landing-ui-')),app=path.join(fixture,'app');
 const files=['src/app/page.js','src/app/page.module.css','src/app/landing-interactions.js','src/app/landing-phone-scene.js','src/app/landing-phone-scene.module.css','src/app/layout.js','src/app/globals.css','src/app/brand/brand-logo.js','src/app/brand/brand-logo.module.css','src/app/brand/brand-geometry.js'];
+const fontSources=JSON.parse(readFileSync(path.join(root,'src/app/fonts/sources.json'),'utf8'));
+files.push('src/app/fonts/sources.json',...fontSources.assets.flatMap(asset=>['src/app/fonts/'+asset.path,'src/app/fonts/'+asset.license.path]));
 const mediaFiles=['obra-vista-amplia.webp','obra-registro-evidencia.webp','obra-entrega-materiales.webp','obrasaas-15s.mp4','obrasaas-15s-poster.webp','obrasaas-15s-es-AR.vtt'];
 for(const source of files){const target=path.join(app,source.replace('src/app/',''));mkdirSync(path.dirname(target),{recursive:true});copyFileSync(path.join(root,source),target);assert.deepEqual(readFileSync(path.join(root,source)),readFileSync(target));}
 for(const asset of mediaFiles){const target=path.join(fixture,'public/media/launch',asset);mkdirSync(path.dirname(target),{recursive:true});copyFileSync(path.join(root,'public/media/launch',asset),target);assert.deepEqual(readFileSync(path.join(root,'public/media/launch',asset)),readFileSync(target));}

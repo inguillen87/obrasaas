@@ -6,3 +6,8 @@
 /docs/BRAND_SYSTEM.md text eol=lf
 /scripts/fixtures/plan-import-synthetic-v1.pdf binary
 /scripts/fixtures/plan-import-synthetic-v1.png binary
+/.gitattributes text eol=lf
+/src/app/fonts/*-OFL.txt text eol=lf whitespace=-blank-at-eol
+/src/app/fonts/*.json text eol=lf
+/src/app/fonts/README.md text eol=lf
+/src/app/fonts/*.woff2 -text
