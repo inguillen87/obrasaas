@@ -8,6 +8,9 @@
 .widget{display:flex;justify-content:center;max-width:100%;min-height:300px;color-scheme:dark}
 .widget :global(.cl-rootBox),.widget :global(.cl-cardBox){max-width:100%;width:100%}
 .widget :global(.cl-card){box-shadow:none;border:1px solid #2d3e55}
+.widget :global(.cl-socialButtonsBlockButton),.widget :global(.cl-formButtonPrimary),.widget :global(.cl-formFieldInput){min-height:44px}
+.widget :global(.cl-formFieldInputShowPasswordButton){min-width:44px;min-height:44px}
+.widget :global(.cl-footerActionLink){min-height:44px;display:inline-flex;align-items:center}
 .note{color:#b4c4db;font-size:12px;line-height:1.7;border-top:1px solid #2d3e55;padding-top:18px;margin:24px 0 0}
 .eyebrow{font-size:11px;letter-spacing:.15em;color:#aad0fa;font-weight:700;margin:30px 0 -16px}
 .pending{padding:18px;background:#231f17;border:1px solid #7b6437;border-radius:12px;margin:24px 0;color:#f7d893}
@@ -24,6 +27,6 @@
 .loading{width:100%;box-sizing:border-box;padding:20px;border:1px solid #2d3e55;border-radius:12px;background:#111b2b;align-self:start;overflow-wrap:anywhere}
 .loading p{font-size:14px;line-height:1.7;margin:0 0 16px;color:#bdcee2}
 .loading .loadingHelp{font-size:12px;margin:16px 0 0}
-@media(max-width:500px){.shell{padding:14px 10px;align-items:start}.card{padding:24px 18px;border-radius:15px}.status div{flex-direction:column;gap:6px}.status dd{text-align:left}.widget{margin-inline:-8px;width:calc(100% + 16px);max-width:none}}
+@media(max-width:500px){.shell{padding:14px 10px;align-items:start}.card{padding:24px 18px;border-radius:15px}.status div{flex-direction:column;gap:6px}.status dd{text-align:left}.widget{margin-inline:-8px;width:calc(100% + 16px);max-width:none}.widget :global(.cl-formFieldInput){font-size:16px}}
 
 .brand{min-height:44px;color:#F4F1E8;--font-manrope:"Manrope";}
