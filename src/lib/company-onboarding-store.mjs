@@ -1,5 +1,6 @@
 import {randomUUID} from 'node:crypto';
-import {WorkspaceError,operationId,workspaceId,WORKSPACE_ROLES,portfolioAccess} from './workspace-policy.mjs';
+import {WorkspaceError,operationId,workspaceId,WORKSPACE_ROLES,portfolioAccess,digest} from './workspace-policy.mjs';
+import {IDENTITY_ISSUER} from './production-identity-config.mjs';
 import {requireNewCompanyAdmin,normalizeCompanyOnboarding,bootstrapReceiptId,bootstrapRequestDigest,validProfileEmail} from './company-onboarding-policy.mjs';
 const identifier=prefix=>prefix+'_'+randomUUID().replaceAll('-','');
 const canonicalCompany=async(client,session,lock=false)=>(await client.query(`SELECT id,name,metadata FROM public."Organization" WHERE "clerkOrganizationId"=$1 ${lock?'FOR UPDATE':''}`,[session.organizationId])).rows[0];
@@ -13,7 +14,7 @@ export function createCompanyOnboardingStore({connect}){
    const result=await run(client);await client.query(writable?'COMMIT':'ROLLBACK');return result;
   }catch(error){if(client)try{await client.query('ROLLBACK');}catch{broken=true;}
    if(error instanceof WorkspaceError)throw error;
-   if(error?.code==='23505')throw new WorkspaceError('COMPANY_IDENTITY_CONFLICT',409);
+   if(error?.code==='23505'||error?.code==='23502'&&error.table==='PlatformUser'&&error.column==='primaryEmail')throw new WorkspaceError('COMPANY_IDENTITY_CONFLICT',409);
    throw new WorkspaceError('COMPANY_CREATION_UNCONFIRMED',503);
   }finally{client?.release(broken);}
  }
@@ -61,10 +62,13 @@ export function createCompanyOnboardingStore({connect}){
      return publicResult(previous,true);
     }
     await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',['company-bootstrap-email:'+profile.primaryEmail.toLowerCase()]);
-    let actor=(await client.query('SELECT id,"clerkUserId" FROM public."PlatformUser" WHERE "clerkUserId"=$1 FOR UPDATE',[session.userId])).rows[0];
+    let actor=(await client.query('SELECT id,"clerkUserId","primaryEmail" FROM public."PlatformUser" WHERE "clerkUserId"=$1 FOR UPDATE',[session.userId])).rows[0];
     const clash=(await client.query('SELECT id,"clerkUserId" FROM public."PlatformUser" WHERE lower("primaryEmail")=lower($1)',[profile.primaryEmail])).rows;
-    if(clash.some(user=>user.clerkUserId!==session.userId))throw new WorkspaceError('COMPANY_IDENTITY_CONFLICT',409);
-    if(!actor){actor={id:identifier('user')};await client.query(`INSERT INTO public."PlatformUser"(id,"clerkUserId","primaryEmail","systemRole","updatedAt") VALUES($1,$2,$3,'TENANT_USER',clock_timestamp())`,[actor.id,session.userId,profile.primaryEmail.toLowerCase()]);}
+    // Email is contact information, never a key for adopting another actor.
+    // A new verified subject can omit an occupied contact while the historical
+    // actor, its contact, roles and memberships remain untouched.
+    const email=profile.primaryEmail.toLowerCase(),occupied=clash.some(user=>user.clerkUserId!==session.userId);
+    if(!actor){actor={id:identifier('user'),primaryEmail:occupied?null:email};await client.query(`INSERT INTO public."PlatformUser"(id,"clerkUserId","primaryEmail","systemRole","updatedAt") VALUES($1,$2,$3,'TENANT_USER',clock_timestamp())`,[actor.id,session.userId,actor.primaryEmail]);}
     const recent=(await client.query(`SELECT count(*)::int AS n FROM public."AuditLog" WHERE "actorId"=$1 AND action='company.self_service.created' AND "createdAt">CURRENT_TIMESTAMP-interval '24 hours'`,[actor.id])).rows[0].n;
     if(recent>=3)throw new WorkspaceError('COMPANY_CREATION_LIMIT',429);
     const organizationId=identifier('org'),projectId=identifier('project'),membershipId=identifier('member'),taskIds=[];
@@ -78,7 +82,9 @@ export function createCompanyOnboardingStore({connect}){
     for(const task of command.initialTasks){const taskId=identifier('task');taskIds.push(taskId);await client.query(`INSERT INTO public."Task"(id,"projectId",title,status,progress,"startsAt","endsAt",metadata,"updatedAt") VALUES($1,$2,$3,'BACKLOG',0,$4::date,$5::date,$6::jsonb,clock_timestamp())`,
       [taskId,projectId,task.title,task.startsOn,task.endsOn,JSON.stringify({source:'customer-initial-plan',operationReceiptId:id})]);}
     const metadata={version:1,projectId,companyName:command.companyName,projectName:command.project.name,taskIds,requestDigest,
-      contactSource:'clerk-signed-verified-email',organizationRoleSource:'clerk-signed-org-admin',businessVerificationClaimed:false,whatsAppConnected:false};
+      contactSource:'clerk-signed-verified-email',identitySource:'clerk-user-id',profileEmailVerified:true,profileEmailStored:actor.primaryEmail===email,
+      verifiedProfileDigest:digest(['company-verified-profile-v1',IDENTITY_ISSUER,session.userId,email,true,profile.expiresAt??null]),
+      organizationRoleSource:'clerk-signed-org-admin',businessVerificationClaimed:false,whatsAppConnected:false};
     await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'company.self_service.created','Organization',$2,$4::jsonb)`,[id,organizationId,actor.id,JSON.stringify(metadata)]);
     const saved=await receipt(client,session,id,{membershipId,role:'ADMIN'});if(!saved)throw new WorkspaceError('COMPANY_CREATION_UNCONFIRMED',503);return publicResult(saved,false);
    });

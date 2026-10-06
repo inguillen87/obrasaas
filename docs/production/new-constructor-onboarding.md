@@ -18,11 +18,11 @@ La creación exige DOS comprobaciones: sesión ordinaria firmada con la organiza
 
 Ambos JWT se verifican contra las claves públicas del emisor Production ya fijado. Algoritmo, firma, audiencia, sub, vida útil y campos de la prueba se comprueban en servidor. No se acepta impersonación en la prueba ni se usa para otorgar autoridad a otras rutas. El código de frontend solicita los tokens oficiales con getToken; no muestra ni persiste ninguno en localStorage.
 
-Una colisión con el correo/usuario histórico se rechaza sin fusionar. El perfil previo de un PlatformUser existente no se sobreescribe por completar otra empresa. La organización declarada por el usuario debe coincidir exactamente con el contexto firmado de la solicitud, incluso al cambiar de pestaña.
+Una coincidencia de correo nunca fusiona identidades ni reasigna el actor histórico. La identidad canónica se resuelve exclusivamente por el usuario Clerk firmado. Tras adoptar el contrato de contacto opcional descrito en `company-identity-contact.md`, un usuario nuevo con correo verificado ya ocupado puede crearse como TENANT_USER con primaryEmail NULL, sin inventar ni sobrescribir contactos y sin heredar roles o pertenencias. El perfil previo de un PlatformUser existente no se sobreescribe por completar otra empresa. La organización declarada por el usuario debe coincidir exactamente con el contexto firmado de la solicitud, incluso al cambiar de pestaña.
 
 ## Persistencia, concurrencia y límites
 
-Se conservan los contratos canónicos de las tablas reales de Production, revisadas por information_schema, índices y triggers. No se ejecuta Prisma migrate ni se cambia el esquema. Conexión perezosa al pool actual, TLS verificado.
+Se conservan las tablas, identidades, índices y pertenencias canónicas de Production. La separación de contacto requiere únicamente la adopción explícita y revisada de `company-identity-contact.md`; ningún build ni solicitud HTTP ejecuta DDL o Prisma migrate. Conexión perezosa al pool actual, TLS verificado.
 
 Los intentos se serializan por usuario/organización y por correo al crear usuarios. IDs internos aleatorios, claves únicas existentes, recibo por usuario+organización+UUID, fingerprint del contenido y transacción única impiden crear dos empresas con la misma autorización. Si una conexión falla después del commit, la consulta de recibo permite recuperar el resultado sin una segunda creación. Un usuario o membership revocado no se reactiva al recuperar el intento.
 
