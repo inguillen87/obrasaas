@@ -2,6 +2,7 @@ import {digest,WorkspaceError} from './workspace-policy.mjs';
 import {FIELD_NOTICE,fieldTransition} from './field-operations-policy.mjs';
 import {siteText,siteQuantity,MATERIAL_UNITS} from './site-register-policy.mjs';
 import {normalizeProgressMeasurementQuantity,parseProgressMeasurementQuantity} from './progress-measurement-quantity.js';
+import {FIELD_MEDIA_PRIVACY_NOTICE,fieldMediaAnalysisConsent,validFieldMediaAnalysisConsent} from './field-media-privacy.mjs';
 
 const menuOptions=[['ATTEND_IN','Entrada'],['ATTEND_PAUSE','Iniciar pausa'],['ATTEND_RESUME','Volver de pausa'],['ATTEND_OUT','Salida'],['TASKS','Mis tareas'],['MEDIA','Enviar evidencia'],['INCIDENT','Informar incidencia'],['MATERIAL','Pedir material'],['PROGRESS','Proponer avance'],['STATUS','Consultar estado']];
 const aliases={MENU:'MENU',AYUDA:'MENU',ENTRADA:'ATTEND_IN',PAUSA:'ATTEND_PAUSE',VOLVER:'ATTEND_RESUME',SALIDA:'ATTEND_OUT',TAREAS:'TASKS',EVIDENCIA:'MEDIA',INCIDENCIA:'INCIDENT',MATERIALES:'MATERIAL',AVANCE:'PROGRESS',ESTADO:'STATUS',CANCELAR:'MENU'};
@@ -20,6 +21,7 @@ const sectorChoices=sectors=>sectors.slice(0,10).map(s=>[s.id,s.name]);
 function chooseSector(state,eventId,facts){if(!facts.sectors.length)return {state:null,reply:text('Un responsable debe configurar los sectores de la obra antes de continuar. Podés hacerlo desde Mi cuenta.')};return choices({...state,step:'SECTOR'},eventId,'Elegí el sector donde estás trabajando.',sectorChoices(facts.sectors));}
 function chooseTask(state,eventId,facts){if(!facts.tasks.length&&state.purpose!=='INCIDENT'&&state.purpose!=='MATERIAL')return {state:null,reply:text('La obra todavía no tiene tareas. Pedí al responsable que cree la tarea desde Mi cuenta.')};return choices({...state,step:'TASK'},eventId,'Elegí la tarea. Para más tareas, usá Mi cuenta.',taskChoices(facts.tasks,['INCIDENT','MATERIAL'].includes(state.purpose)));}
 function confirm(state,eventId,body){return choices({...state,step:'CONFIRM'},eventId,body,[['CONFIRM','Guardar'],['CANCEL','Cancelar']]);}
+const mediaNotice=(state,eventId)=>choices({...state,step:'MEDIA_NOTICE'},eventId,FIELD_MEDIA_PRIVACY_NOTICE,[['ANALYZE','Analizar y guardar'],['SAVE_ONLY','Sólo guardar'],['CANCEL','Cancelar']]);
 function start(action,eventId,facts){
  if(action==='MENU')return choices({step:'MENU',purpose:'MENU'},eventId,'ObraSaaS · '+facts.projectName+'\nElegí una acción disponible para tu participación. CANCELAR vuelve al menú.',availableMenu(facts));
  if(action==='TASKS')return {state:null,reply:text(facts.tasks.length?'Tareas de '+facts.projectName+'\n'+facts.tasks.slice(0,15).map(t=>t.title.slice(0,160)+' · '+t.progress+'%').join('\n')+'\n'+(facts.tasks.length>15?'Consultá todas las tareas en Mi cuenta.\n':'')+'El avance cambia sólo tras aprobación del responsable.':'La obra todavía no tiene tareas.')};
@@ -67,7 +69,7 @@ function planConversation({message,state,eventId,facts,now}){
    if(['BREAK_START','BREAK_END'].includes(s.eventType))return confirm(s,eventId,s.eventType==='BREAK_START'?'¿Guardar el inicio de pausa?':'¿Guardar el regreso de pausa?');
    return choices({...s,step:'LOCATION_NOTICE'},eventId,'Para registrar entrada o salida usaremos la ubicación que compartas, vinculada a esta obra y su sector. WhatsApp no informa precisión GPS: el fichaje quedará para revisión humana. Podés usar la web para capturar precisión y QR. ¿Querés continuar?',[['ACCEPT','Continuar'],['CANCEL','Cancelar']]);
   }
-  if(s.purpose==='MEDIA')return {state:{...s,step:'MEDIA'},reply:text('Enviá una foto de hasta 2 MiB, o audio/video de hasta 3 MiB, de esta tarea y sector. Guardaremos el archivo en privado. La revisión humana es obligatoria; un análisis automático no aprueba el avance.')};
+  if(s.purpose==='MEDIA')return mediaNotice(s,eventId);
   return {state:{...s,step:s.purpose==='INCIDENT'?'INCIDENT_TITLE':s.purpose==='MATERIAL'?'MATERIAL_NAME':'MEASUREMENT'},reply:text(s.purpose==='INCIDENT'?'Escribí un título breve para la incidencia.':s.purpose==='MATERIAL'?'Escribí el material que necesitás.':'Escribí el avance, por ejemplo 25%, o una cantidad como 2.5 / 10 M2. La tarea conservará su avance hasta que un responsable apruebe.')};
  }
  if(s.step==='LOCATION_NOTICE')return selected==='ACCEPT'?{state:{...s,step:'LOCATION',noticeVersion:FIELD_NOTICE},reply:text('Compartí tu ubicación actual con el botón de adjuntar de WhatsApp. No envíes la dirección escrita. La precisión y el QR quedan pendientes de revisión.')}:{state:null,reply:text('Operación cancelada. Escribí MENU cuando quieras continuar.')};
@@ -77,9 +79,15 @@ function planConversation({message,state,eventId,facts,now}){
   s.location={latitude:message.location?.latitude,longitude:message.location?.longitude,accuracy:null,capturedAt:capturedAt.toISOString(),noticeVersion:s.noticeVersion};
   return confirm(s,eventId,'¿Guardar este fichaje para revisión humana? La ubicación recibida no incluye precisión GPS ni lectura de QR.');
  }
+ if(s.step==='MEDIA_NOTICE'){
+  if(selected==='CANCEL')return {state:null,reply:text('Operación cancelada. Escribí MENU cuando quieras continuar.')};
+  if(!['ANALYZE','SAVE_ONLY'].includes(selected))return mediaNotice(s,eventId);
+  return {state:{...s,step:'MEDIA',analysisConsent:fieldMediaAnalysisConsent(selected==='ANALYZE'),analysisConsentEventId:eventId},reply:text('Enviá una foto de hasta 2 MiB, o audio/video de hasta 3 MiB, de esta tarea y sector. '+(selected==='ANALYZE'?'Autorizaste el análisis asistido; el video se limita a cuatro cuadros sin audio.':'Se guardará en privado para revisión manual, sin enviarlo a OpenAI.'))};
+ }
  if(s.step==='MEDIA'){
+  if(!validFieldMediaAnalysisConsent(s.analysisConsent))return mediaNotice(s,eventId);
   if(!['image','audio','video'].includes(message.type))return {state:active,reply:text('Esperamos una foto, audio o video. Escribí CANCELAR si querés volver al menú.')};
-  return {state:s,media:{taskId:s.taskId,sectorId:s.sectorId,mediaId:message[message.type]?.id,caption:siteText(message[message.type]?.caption||'Evidencia enviada desde el canal verificado.',1000,1,true),contentType:message[message.type]?.mime_type,kind:message.type}};
+  return {state:s,media:{taskId:s.taskId,sectorId:s.sectorId,mediaId:message[message.type]?.id,caption:siteText(message[message.type]?.caption||'Evidencia enviada desde el canal verificado.',1000,1,true),contentType:message[message.type]?.mime_type,kind:message.type,analysisConsent:s.analysisConsent,analysisConsentEventId:s.analysisConsentEventId}};
  }
  if(s.step==='INCIDENT_TITLE'){s.title=siteText(body,160,3);return {state:{...s,step:'INCIDENT_DESCRIPTION'},reply:text('Describí qué pasó y qué necesita atención. No incluyas documentos de identidad ni datos bancarios.')};}
  if(s.step==='INCIDENT_DESCRIPTION'){s.description=siteText(body,2000,8,true);return choices({...s,step:'SEVERITY'},eventId,'Elegí la prioridad de atención.',[['LOW','Baja'],['MEDIUM','Media'],['HIGH','Alta'],['CRITICAL','Crítica']]);}

@@ -34,10 +34,11 @@ export function tenantWorkspaceFromMetadata(metadata) {
     return { configured: true, revision: stored.revision, assistantName: normalized.assistantName, numberMode: normalized.numberMode, initialProjectId: normalized.initialProjectId, useCases: normalized.useCases, mode: 'REVIEW_REQUIRED', ownership: 'CUSTOMER', updatedAt: stored.updatedAt };
   } catch { throw new TenantWorkspaceError('La configuración guardada requiere revisión; no se reemplazó por valores de ejemplo.', 'WORKSPACE_INTEGRITY', 409); }
 }
-export function workspaceAuthorizationState(profile, projectId) {
+export function workspaceAuthorizationState(profile, projectId, readiness) {
   if (!profile.configured) return { allowed: false, code: 'WORKSPACE_REQUIRED', message: 'Guardá la preparación del asistente de esta obra.' };
   if (profile.initialProjectId !== projectId) return { allowed: false, code: 'WORKSPACE_PROJECT_MISMATCH', message: 'La preparación debe pertenecer a la obra abierta, sin modificar otras obras.' };
-  if (profile.numberMode !== 'DEDICATED') return { allowed: false, code: 'WORKSPACE_ASSISTED_ONBOARDING', message: profile.numberMode === 'BUSINESS_APP' ? 'Conservamos tu elección. La coexistencia debe habilitarse y verificarse antes de conectar, sin perder tu app.' : 'Conservamos tu elección. El traspaso necesita un plan y validación antes de modificar el proveedor actual.' };
+  if (profile.numberMode === 'BUSINESS_APP' && readiness?.flows?.BUSINESS_APP?.available === true) return {allowed:true,code:'READY_FOR_META_COEXISTENCE',message:'Preparación guardada. Autorizarás coexistencia en Meta; la elegibilidad y la importación se comprobarán por separado.'};
+  if (profile.numberMode !== 'DEDICATED') return { allowed: false, code: 'WORKSPACE_ASSISTED_ONBOARDING', message: profile.numberMode === 'BUSINESS_APP' ? 'Conservamos tu elección. Consultá Meta para comprobar la habilitación de coexistencia y la elegibilidad, conservando tu app.' : 'Conservamos tu elección. La autorización adicional necesita un plan; no transferimos ni desconectamos tu proveedor actual.' };
   return { allowed: true, code: 'READY_FOR_META_AUTHORIZATION', message: 'Preparación guardada. Falta autorizar en Meta y comprobar recepción y respuesta.' };
 }
 export function confirmsTenantWorkspaceSave(body, command, scope) {

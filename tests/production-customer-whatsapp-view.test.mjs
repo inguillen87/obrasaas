@@ -53,10 +53,10 @@ test('a malformed dispatched POST and malformed recovery GET preserve the exact 
  await assert.rejects(lifecycle.request(recoveryQuery(entries[0]),{},consume('status')),invalid);assert.equal((await journal.list(context.scope)).length,1);
  response=recorded();await lifecycle.request(recoveryQuery(entries[0]),{},consume('status'));assert.equal((await journal.list(context.scope)).length,0);assert.equal(posts,1);assert.equal(gets,2);lifecycle.abort();
 });
-test('next-step copy reuses canonical dedicated/coexistence/transfer policy, with no launch approval',()=>{
+test('next-step copy preserves dedicated, coexistence and existing-provider review without launch approval',()=>{
  const empty=customerWhatsAppNextStep(tenantWorkspaceFromMetadata(null),context.projectId);assert.equal(empty.canConsultMeta,false);
  const dedicated=customerWhatsAppNextStep(profile(),context.projectId);assert.equal(dedicated.canConsultMeta,true);assert.match(dedicated.message,/comprobar la autorización vigente/);assert.doesNotMatch(dedicated.message,/Falta autorizar/);
- for(const numberMode of ['BUSINESS_APP','EXISTING_API']){const next=customerWhatsAppNextStep({...profile(),numberMode},context.projectId);assert.equal(next.requiresAssistance,true);assert.match(next.message,/coexistencia|traspaso/);}
+ for(const numberMode of ['BUSINESS_APP','EXISTING_API']){const next=customerWhatsAppNextStep({...profile(),numberMode},context.projectId);assert.equal(next.requiresAssistance,true);assert.equal(next.canConsultMeta,true);if(numberMode==='BUSINESS_APP')assert.match(next.message,/coexistencia.*elegibilidad.*conservando tu app/);else{assert.match(next.message,/autorización adicional necesita un plan/);assert.match(next.message,/no transferimos ni desconectamos tu proveedor actual/);}}
 });
 test('only authentication/authorization/context failures require hiding the private current view',()=>{
  for(const error of [{status:401},{status:403},{code:'WORKSPACE_CONTEXT_CHANGED'},{status:404,code:'WORKSPACE_PROJECT_UNAVAILABLE'},{code:'WORKSPACE_MEMBERSHIP_REQUIRED'}])assert.equal(customerWhatsAppAccessDenied(error),true);

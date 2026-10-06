@@ -16,7 +16,7 @@ const source=process.env.CUTOVER_TEST_DATABASE_URL,url=new URL(source||'https://
 assert.equal(process.env.CUTOVER_TEST_DISPOSABLE,'1');assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV);
 assert.ok(['127.0.0.1','localhost'].includes(url.hostname));assert.equal(url.pathname,'/obrasaas_cutover_ci');assert.equal(url.search,'');
 const database='obrasaas_meta_'+randomUUID().replaceAll('-','');assert.match(database,/^obrasaas_meta_[a-f0-9]{32}$/);
-const environment={NEXT_PUBLIC_META_APP_ID:OBRASAAS_META_CHANNEL.appId,META_APP_SECRET:'synthetic-meta-app-secret-only',META_CONFIG_ID:'123456789123456',META_GRAPH_API_VERSION:'v25.0',WHATSAPP_CREDENTIALS_ENCRYPTION_KEY:Buffer.alloc(32,42).toString('base64'),META_CUSTOMER_VERIFY_TOKEN:'synthetic-verify-token-'.repeat(2),OBRASAAS_META_SIGNUP_RELEASE:'customer-self-service-v1'};
+const environment={NEXT_PUBLIC_META_APP_ID:OBRASAAS_META_CHANNEL.appId,META_APP_SECRET:'synthetic-meta-app-secret-only',META_CONFIG_ID:'123456789123456',META_GRAPH_API_VERSION:'v25.0',WHATSAPP_CREDENTIALS_ENCRYPTION_KEY:Buffer.alloc(32,42).toString('base64'),META_CUSTOMER_VERIFY_TOKEN:'synthetic-verify-token-'.repeat(2),META_EMBEDDED_SIGNUP_VERSION:'4',OBRASAAS_META_SIGNUP_RELEASE:'customer-self-service-v1'};
 const session=(user,org)=>({authenticated:true,verification:'clerk-production-jwt',userId:user,organizationId:org,organizationRole:'org:admin'});
 const owner=session('user_Owner','org_A'),foreign=session('user_Foreign','org_B'),colleague=session('user_Colleague','org_A');
 let pool,created=false,clock=Date.parse('2026-10-01T00:00:00Z');const admin=new Client({connectionString:source}),checks=[];

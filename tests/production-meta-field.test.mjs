@@ -4,6 +4,8 @@ import {planMetaFieldConversation} from '../src/lib/meta-field-conversation.mjs'
 import {metaFieldOperationId} from '../src/lib/meta-field-bridge.mjs';
 import {operationId} from '../src/lib/workspace-policy.mjs';
 import {fieldTransition,FIELD_ACTIONS} from '../src/lib/field-operations-policy.mjs';
+import {FIELD_MEDIA_PRIVACY_NOTICE,FIELD_MEDIA_PRIVACY_NOTICE_SHA256,fieldMediaAnalysisConsent} from '../src/lib/field-media-privacy.mjs';
+import {createHash} from 'node:crypto';
 const now=new Date('2026-10-01T12:00:00Z'),facts={projectName:'Synthetic obra',workerId:'worker-a',permissions:{attendance:true,report:true},sectors:[{id:'sector-a',name:'Planta baja'}],tasks:[{id:'task-a',title:'Mampostería',progress:0,revision:'2026-10-01T12:00:00.123456'}],evidence:[],proposals:[],latest:null};
 let sequence=0;
 const run=(message,state=null,extra={})=>{const result=planMetaFieldConversation({message,state,eventId:'synthetic_'+(++sequence),facts,now,...extra});if(result.state)result.state={...result.state,version:1,expiresAt:new Date(now.getTime()+900000).toISOString()};return result;};
@@ -52,9 +54,21 @@ test('quantitative proposal binds the selected task revision and approved eviden
  assert.equal(saved.command.action,'PROPOSE_PROGRESS');assert.equal(saved.command.payload.progress,25);assert.equal(saved.command.payload.quantity,'2.5000');assert.equal(saved.command.payload.revision,facts.tasks[0].revision);assert.deepEqual(saved.command.payload.evidenceIds,['evidence-a']);
 });
 test('media is attached only after canonical task and sector selection, never from webhook URLs',()=>{
- const task=say('EVIDENCIA'),sector=pick(task),pending=pick(sector),result=run({type:'image',image:{id:'123456789012345',mime_type:'image/jpeg',caption:'Trabajo del sector',url:'https://evil.invalid/private'}},pending.state);
+ const task=say('EVIDENCIA'),sector=pick(task),notice=pick(sector),pending=pickValue(notice,'ANALYZE'),result=run({type:'image',image:{id:'123456789012345',mime_type:'image/jpeg',caption:'Trabajo del sector',url:'https://evil.invalid/private'}},pending.state);
  assert.equal(result.media.mediaId,'123456789012345');assert.equal(result.media.taskId,'task-a');assert.equal(result.media.sectorId,'sector-a');assert.equal(result.media.url,undefined);
  const unsolicited=run({type:'image',image:{id:'123456789012345'}});assert.equal(unsolicited.media,undefined);
+});
+test('versioned optional media analysis requires a current interactive choice for image, audio and video',()=>{
+ assert.equal(createHash('sha256').update(FIELD_MEDIA_PRIVACY_NOTICE).digest('hex'),FIELD_MEDIA_PRIVACY_NOTICE_SHA256);
+ for(const kind of ['image','audio','video'])for(const allowed of [false,true]){
+  const task=say('EVIDENCIA'),sector=pick(task),notice=pick(sector);assert.match(notice.reply.body,/OpenAI.*cuatro cuadros/);assert.match(notice.reply.body,/sin audio/);
+  const plain=say('sí',notice.state);assert.equal(plain.media,undefined);assert.equal(plain.state.step,'MEDIA_NOTICE');
+  const pending=pickValue(notice,allowed?'ANALYZE':'SAVE_ONLY'),uploaded=run({type:kind,[kind]:{id:'123456789012345',mime_type:kind==='image'?'image/jpeg':kind==='audio'?'audio/ogg':'video/mp4'}},pending.state);
+  assert.deepEqual(uploaded.media.analysisConsent,fieldMediaAnalysisConsent(allowed));assert.ok(uploaded.media.analysisConsentEventId);assert.equal(uploaded.media.taskId,'task-a');assert.equal(uploaded.media.sectorId,'sector-a');
+ }
+ const legacy={version:1,expiresAt:new Date(now.getTime()+900000).toISOString(),purpose:'MEDIA',step:'MEDIA',taskId:'task-a',sectorId:'sector-a'};
+ const old=run({type:'video',video:{id:'123456789012345',mime_type:'video/mp4'}},legacy);assert.equal(old.media,undefined);assert.equal(old.state.step,'MEDIA_NOTICE');
+ const forged=run({type:'video',video:{id:'123456789012345',mime_type:'video/mp4'}},{...legacy,analysisConsent:{...fieldMediaAnalysisConsent(true),noticeSha256:'f'.repeat(64)}});assert.equal(forged.media,undefined);
 });
 test('event-derived operation id survives restarts and distinguishes business purposes',()=>{
  const first=metaFieldOperationId('event-a','ATTENDANCE');assert.ok(operationId(first));assert.equal(first,metaFieldOperationId('event-a','ATTENDANCE'));assert.notEqual(first,metaFieldOperationId('event-a','REPORT_INCIDENT'));assert.notEqual(first,metaFieldOperationId('event-b','ATTENDANCE'));

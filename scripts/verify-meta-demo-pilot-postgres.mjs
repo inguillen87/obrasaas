@@ -84,7 +84,7 @@ try{
  checks.push('sandbox-attendance-and-report-origin-match-internal-signed-protocol-and-canonical-audit-without-commercial-label');
 
  await workspace.createTask(demoSession,{...context,operationId:randomUUID(),title:'Tarea sintética del piloto',startsOn:'',endsOn:''});
- step=await execute('EVIDENCIA');step=await execute(choose(step.reply),{type:'interactive'});step=await execute(choose(step.reply),{type:'interactive'});step=await execute({id:'150000099',mime_type:'image/png'},{type:'image'});
+ step=await execute('EVIDENCIA');step=await execute(choose(step.reply),{type:'interactive'});step=await execute(choose(step.reply),{type:'interactive'});step=await execute(choose(step.reply),{type:'interactive'});step=await execute({id:'150000099',mime_type:'image/png'},{type:'image'});
  assert.equal(step.result.businessApplied,true);assert.equal(graph.blob.puts(),1);assert.equal(analyses,1);const evidence=(await pool.query(`SELECT metadata FROM "Incident" WHERE metadata->'fieldOperations'->>'kind'='EVIDENCE'`)).rows[0];assert.equal(evidence.metadata.fieldOperations.processing.humanReviewRequired,true);assert.notEqual(evidence.metadata.fieldOperations.review?.decision,'APPROVE');assert.equal((await pool.query(`SELECT progress FROM "Task"`)).rows[0].progress,0);
  checks.push('Graph-media-id-only-authorized-download-private-hash-readback-and-synthetic-analysis-never-auto-approve-progress');
 

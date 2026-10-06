@@ -1,9 +1,11 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { WorkspaceError, workspaceId, operationId, digest } from './workspace-policy.mjs';
 import { siteText, siteRevision, recordKeys, cleanMetadata } from './site-register-policy.mjs';
 import { assertPrivateImageConfigured, decodePrivateImage } from './private-image-upload.mjs';
 import { canReviewField } from './field-operations-policy.mjs';
 import { publicFieldEvidence } from './field-operations-store.mjs';
+import { createVideoFrameExtractor } from './video-frame-extractor.mjs';
+import { validFieldMediaAnalysisConsent } from './field-media-privacy.mjs';
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const fieldReceiptId=(actorId,projectId,key)=>'fieldmedia_'+digest([actorId,projectId,key.toLowerCase()]);
 // Keep uploads below the Production function request-body limit, including
@@ -23,7 +25,8 @@ export function decodeFieldMedia(bytes,contentType) {
   },extension=formats[mime];
   if(!extension)throw new WorkspaceError('FIELD_MEDIA_INVALID');
   // A container signature is not a codec decode, malware scan, identity proof,
-  // or complete audiovisual analysis. Video remains for human review.
+  // or complete audiovisual analysis. Server decoding is a separate explicit
+  // processing step; all evidence still requires independent human review.
   return {bytes:b,contentType:mime,kind:mime.startsWith('audio/')?'audio':'video',extension,digest:sha(b)};
 }
 export async function boundedFieldMultipart(request) {
@@ -47,7 +50,7 @@ function validMediaReceipt(stored,media) {
   if(url.protocol!=='https:'||!/^[-a-z0-9]+\.private\.blob\.vercel-storage\.com$/.test(url.hostname)||url.username||url.password||url.port||url.search||url.hash||url.pathname!=='/'+media.pathname||blob.pathname!==media.pathname||(stored.blob&&blob.size!==media.bytes))throw new WorkspaceError('FIELD_MEDIA_STORAGE_UNCONFIRMED',503);
   return url.toString();
 }
-export function createFieldMedia({operations,put,get,analyzer,environment=()=>process.env}) {
+export function createFieldMedia({operations,put,get,analyzer,extractVideoFrames=createVideoFrameExtractor(),environment=()=>process.env}) {
   const run=operations.mediaTransaction;
   const prior=async(client,member,id)=>(await client.query(`SELECT id,metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "actorId"=$3 AND action='field.media.recorded'`,[id,member.organizationId,member.actorId])).rows[0];
   const saveReceipt=async(client,member,input,id,requestDigest,outcome)=>{
@@ -98,40 +101,52 @@ export function createFieldMedia({operations,put,get,analyzer,environment=()=>pr
         const previous=await prior(client,member,first.id);
         if(previous){if(previous.metadata.requestDigest!==requestDigest)throw new WorkspaceError('FIELD_OPERATION_CONFLICT',409);return {scope,saved:true,replayed:true,receiptId:first.id,...previous.metadata.outcome};}
         const now=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now.toISOString(),evidenceId='evidence_'+digest([first.id,validated.digest]).slice(0,40);
-        const details={version:1,kind:'EVIDENCE',workerId:input.workerId,taskId:input.taskId,sectorId:input.sectorId,capturedAt:now,captureTimeAuthority:'SERVER_RECEIVED',recordedBy:member.actorId,media,processing:{status:media.kind==='video'?'MANUAL_REVIEW_REQUIRED':'QUEUED',code:media.kind==='video'?'VIDEO_ANALYSIS_NOT_IMPLEMENTED':null},review:null};
+        const details={version:1,kind:'EVIDENCE',workerId:input.workerId,taskId:input.taskId,sectorId:input.sectorId,capturedAt:now,captureTimeAuthority:'SERVER_RECEIVED',recordedBy:member.actorId,media,processing:{status:'QUEUED',code:null},review:null};
         await client.query(`INSERT INTO public."Incident"(id,"projectId",title,description,severity,status,reporter,metadata,"updatedAt") VALUES($1,$2,$3,$4,'INFO','open',$5,$6::jsonb,clock_timestamp())`,[evidenceId,input.projectId,media.kind==='audio'?'Nota de audio':media.kind==='video'?'Video de obra':'Fotografía de obra',input.caption,member.actorId,JSON.stringify({fieldOperations:details})]);
         const row=await operations.readEvidence(client,input.projectId,evidenceId);
         return {scope,...await saveReceipt(client,member,input,first.id,requestDigest,{kind:'EVIDENCE',evidence:publicFieldEvidence(row)})};
       });
     },
-    async process(session,input) {
-      recordKeys(input,['operationId','projectId','scope','evidenceId','revision']);scopeInput(input);siteRevision(input.revision);
+    async process(session,body) {
+      recordKeys(body,['operationId','projectId','scope','evidenceId','revision',...(Object.hasOwn(body||{},'analysisConsent')?['analysisConsent']:[])]);scopeInput(body);siteRevision(body.revision);
+      if(!validFieldMediaAnalysisConsent(body.analysisConsent)||!body.analysisConsent.allowed)throw new WorkspaceError('FIELD_MEDIA_ANALYSIS_CONSENT_REQUIRED',400);
+      const input={...body,operationId:body.operationId.toLowerCase()};
       if(!workspaceId(input.evidenceId))throw new WorkspaceError('FIELD_MEDIA_INPUT_INVALID');
       const requestDigest=digest(['PROCESS',input]),claim=await run(session,input,true,async(client,member,scope)=>{
         const id=fieldReceiptId(member.actorId,input.projectId,input.operationId),previous=await prior(client,member,id);
-        if(previous){if(previous.metadata.requestDigest!==requestDigest)throw new WorkspaceError('FIELD_OPERATION_CONFLICT',409);return {done:{scope,saved:true,replayed:true,receiptId:id,...previous.metadata.outcome}};}
+        if(previous){if(previous.metadata.requestDigest!==requestDigest)throw new WorkspaceError('FIELD_OPERATION_CONFLICT',409);const current=await operations.readEvidence(client,input.projectId,input.evidenceId);await ownsEvidence(client,member,session,input,current);return {done:{scope,saved:true,replayed:true,receiptId:id,...previous.metadata.outcome}};}
         const row=await operations.readEvidence(client,input.projectId,input.evidenceId,true);await ownsEvidence(client,member,session,input,row);
         const e=row.metadata.fieldOperations,processing=e.processing;
         if(e.review)throw new WorkspaceError('FIELD_ALREADY_REVIEWED',409);
-        if(e.media.kind==='video')throw new WorkspaceError('FIELD_VIDEO_MANUAL_REVIEW_REQUIRED',409);
         const sameClaim=processing?.status==='RUNNING'&&processing.operationId===input.operationId&&processing.requestDigest===requestDigest&&processing.actorId===member.actorId;
         if(processing?.status==='RUNNING'&&new Date(processing.expiresAt).getTime()>Date.now())throw new WorkspaceError('FIELD_MEDIA_PROCESSING',409);
         if(row.revision!==input.revision&&!sameClaim)throw new WorkspaceError('FIELD_REVISION_CHANGED',409);
         if(['ANALYZED_UNREVIEWED','TRANSCRIBED_UNREVIEWED'].includes(processing?.status))throw new WorkspaceError('FIELD_MEDIA_ALREADY_PROCESSED',409);
         const now=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now;
-        const next={...e,processing:{status:'RUNNING',operationId:input.operationId,requestDigest,actorId:member.actorId,startedAt:now.toISOString(),expiresAt:new Date(now.getTime()+90000).toISOString()}};
+        const leaseId=randomUUID(),next={...e,processing:{status:'RUNNING',operationId:input.operationId,requestDigest,actorId:member.actorId,leaseId,...(input.analysisConsent?{analysisConsent:input.analysisConsent}:{}),startedAt:now.toISOString(),expiresAt:new Date(now.getTime()+90000).toISOString()}};
         await client.query(`UPDATE public."Incident" SET metadata=$3::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[row.id,input.projectId,JSON.stringify({...cleanMetadata(row.metadata),fieldOperations:next})]);
-        return {id,actorId:member.actorId,media:e.media,caption:row.description};
+        return {id,actorId:member.actorId,leaseId,media:e.media,caption:row.description};
       });
       if(claim.done)return claim.done;
       let analysis;
-      try{const {bytes}=await storedBytes(claim.media);analysis=claim.media.kind==='audio'?await analyzer.transcribeAudio({buffer:bytes,mimeType:claim.media.contentType,language:'es'}):await analyzer.analyzePhoto({base64:bytes.toString('base64'),mimeType:claim.media.contentType,context:claim.caption});}
-      catch{analysis={success:false,status:'FAILED_RETRYABLE',code:'FIELD_MEDIA_PROVIDER_UNCONFIRMED'};}
-      const processing=analysis?.success?{status:analysis.status,result:analysis,humanReviewRequired:true}:{status:'FAILED_RETRYABLE',code:analysis?.code||'FIELD_MEDIA_PROVIDER_UNCONFIRMED',humanReviewRequired:true};
+      try{
+        const {bytes}=await storedBytes(claim.media);
+        const prepared=claim.media.kind==='video'?await extractVideoFrames({buffer:bytes,mimeType:claim.media.contentType}):null;
+        if(prepared&&prepared.sampling.sourceSha256!==claim.media.sha256)throw new WorkspaceError('FIELD_MEDIA_INTEGRITY',503);
+        // Decoding/storage may take time. Recheck current access and reservation
+        // before sending a copy outside this workspace.
+        // The canonical worker guard takes FOR SHARE, so its short permission
+        // transaction must permit row locks even though it writes no records.
+        await run(session,input,true,async(client,member)=>{const row=await operations.readEvidence(client,input.projectId,input.evidenceId);await ownsEvidence(client,member,session,input,row);
+          if(member.actorId!==claim.actorId||row.metadata.fieldOperations.processing?.leaseId!==claim.leaseId||row.metadata.fieldOperations.review)throw new WorkspaceError('FIELD_MEDIA_PROCESSING_CHANGED',409);
+        });
+        analysis=claim.media.kind==='video'?await analyzer.analyzeVideo({...prepared,context:claim.caption}):claim.media.kind==='audio'?await analyzer.transcribeAudio({buffer:bytes,mimeType:claim.media.contentType,language:'es'}):await analyzer.analyzePhoto({base64:bytes.toString('base64'),mimeType:claim.media.contentType,context:claim.caption});
+      }catch(error){analysis={success:false,status:'FAILED_RETRYABLE',code:/^FIELD_VIDEO_[A-Z_]+$/.test(error?.code||'')?error.code:'FIELD_MEDIA_PROVIDER_UNCONFIRMED'};}
+      const processing={...(analysis?.success?{status:analysis.status,result:analysis,humanReviewRequired:true}:{status:'FAILED_RETRYABLE',code:analysis?.code||'FIELD_MEDIA_PROVIDER_UNCONFIRMED',humanReviewRequired:true}),...(input.analysisConsent?{analysisConsent:input.analysisConsent}:{})};
       return run(session,input,true,async(client,member,scope)=>{
         const row=await operations.readEvidence(client,input.projectId,input.evidenceId,true);await ownsEvidence(client,member,session,input,row);
         const previous=await prior(client,member,claim.id);if(previous)return {scope,saved:true,replayed:true,receiptId:claim.id,...previous.metadata.outcome};
-        if(member.actorId!==claim.actorId||row.metadata.fieldOperations.processing?.operationId!==input.operationId||row.metadata.fieldOperations.processing.status!=='RUNNING'||row.metadata.fieldOperations.review)throw new WorkspaceError('FIELD_MEDIA_PROCESSING_CHANGED',409);
+        if(member.actorId!==claim.actorId||row.metadata.fieldOperations.processing?.operationId!==input.operationId||row.metadata.fieldOperations.processing.leaseId!==claim.leaseId||row.metadata.fieldOperations.processing.status!=='RUNNING'||row.metadata.fieldOperations.review)throw new WorkspaceError('FIELD_MEDIA_PROCESSING_CHANGED',409);
         const now=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now.toISOString(),metadata={...cleanMetadata(row.metadata),fieldOperations:{...row.metadata.fieldOperations,processing:{...processing,completedAt:now}}};
         await client.query(`UPDATE public."Incident" SET metadata=$3::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[row.id,input.projectId,JSON.stringify(metadata)]);
         return {scope,...await saveReceipt(client,member,input,claim.id,requestDigest,{kind:'EVIDENCE_PROCESSING',evidence:publicFieldEvidence(await operations.readEvidence(client,input.projectId,row.id))})};

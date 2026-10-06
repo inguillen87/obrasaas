@@ -45,3 +45,5 @@ next-env.d.ts
 nexID_*
 data/*backup*.json
 scratch/downloads_whatsapp/
+__pycache__/
+*.pyc

@@ -6,7 +6,8 @@ import {metaAssetId} from './meta-customer-provider.mjs';
 import {OBRASAAS_META_CHANNEL} from './meta-channel-binding.mjs';
 import {META_CUSTOMER_PROTOCOL,META_DEMO_PILOT_PROTOCOL,resolveMetaCloudProtocol,metaCloudEventId} from './meta-cloud-protocol.mjs';
 import {reportMetaCallbackRejection} from './meta-callback-diagnostics.mjs';
-const MAX_BYTES=262144;
+import {splitCustomerAppChange} from './meta-customer-app-projection.mjs';
+const MAX_BYTES=1048576;
 const headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'};
 // JSON object ordering is transport formatting, while array ordering and
 // actual values are part of the event content protected by the replay digest.
@@ -41,13 +42,17 @@ function splitMetaCloudEvents(payload,protocol){
    if(phoneNumberId!==null&&!metaAssetId(phoneNumberId))throw new WorkspaceError('META_CUSTOMER_CALLBACK_INVALID');
    if(protocol===META_CUSTOMER_PROTOCOL&&phoneNumberId===OBRASAAS_META_CHANNEL.phoneNumberId)throw new WorkspaceError('META_CUSTOMER_DEMO_ASSET_REJECTED',403);
    if(protocol===META_DEMO_PILOT_PROTOCOL&&(change.field!=='messages'||phoneNumberId!==OBRASAAS_META_CHANNEL.phoneNumberId))throw new WorkspaceError('META_DEMO_ASSET_REJECTED',403);
-   const add=(type,id,value)=>{const eventPayload={wabaId:entry.id,phoneNumberId,field:change.field,type,value};events.push({wabaId:entry.id,phoneNumberId,type,externalId:digest([entry.id,phoneNumberId,type,id]),payload:eventPayload,payloadDigest:metaCustomerContentDigest(eventPayload)});};
+   const add=(type,id,value,checkpoint)=>{const eventPayload={wabaId:entry.id,phoneNumberId,field:change.field,type,value,...(checkpoint?{checkpoint}:{} )};events.push({wabaId:entry.id,phoneNumberId,type,externalId:digest([entry.id,phoneNumberId,type,id]),payload:eventPayload,payloadDigest:metaCustomerContentDigest(eventPayload)});};
    if(change.field==='messages'){
     if(!phoneNumberId)throw new WorkspaceError('META_CUSTOMER_CALLBACK_INVALID');let count=0;
     for(const message of change.value.messages||[]){if(typeof message.id!=='string'||!/^wamid\.[A-Za-z0-9+/_=-]{8,1024}$/.test(message.id))throw new WorkspaceError('META_CUSTOMER_CALLBACK_INVALID');add('message',message.id,message);count++;}
     for(const status of change.value.statuses||[]){if(typeof status.id!=='string'||!/^wamid\.[A-Za-z0-9+/_=-]{8,1024}$/.test(status.id)||!['sent','delivered','read','failed','deleted'].includes(status.status)||!/^\d{1,14}$/.test(String(status.timestamp||'')))throw new WorkspaceError('META_CUSTOMER_CALLBACK_INVALID');add('message_status',[status.id,status.status,status.timestamp],status);count++;}
     if(!count)throw new WorkspaceError('META_CUSTOMER_CALLBACK_INVALID');
-   }else add(change.field,metaCustomerContentDigest(change.value),change.value);
+   }else{
+    const parts=protocol===META_CUSTOMER_PROTOCOL?splitCustomerAppChange(change.field,change.value):null;
+    if(parts){if(change.field!=='account_update'&&!phoneNumberId)throw new WorkspaceError('META_CUSTOMER_CALLBACK_INVALID');for(const part of parts)add(change.field,metaCustomerContentDigest(part),part.value,part.checkpoint);}
+    else add(change.field,metaCustomerContentDigest(change.value),change.value);
+   }
    if(events.length>200)throw new WorkspaceError('META_CUSTOMER_CALLBACK_TOO_LARGE',413);
   }
  }
@@ -60,7 +65,7 @@ export function splitMetaAppEvents(payload){
  const events=payload.entry.flatMap(entry=>splitMetaCloudEvents({...payload,entry:[entry]},entry?.id===OBRASAAS_META_CHANNEL.wabaId?META_DEMO_PILOT_PROTOCOL:META_CUSTOMER_PROTOCOL));
  if(events.length>200)throw new WorkspaceError('META_CUSTOMER_CALLBACK_TOO_LARGE',413);return events;
 }
-export async function lockMetaCustomerInboxChannel(client,{wabaId,phoneNumberId,projectId=null}){
+export async function lockMetaCustomerInboxChannel(client,{wabaId,phoneNumberId,projectId=null,writable=false}){
  // Resolve without locks, then acquire every lock explicitly in canonical
  // Project -> WhatsAppConnection order. A joined FOR SHARE has no such order.
  const candidates=await client.query(`SELECT c.id,c."projectId",p."organizationId" FROM public."WhatsAppConnection" c JOIN public."Project" p ON p.id=c."projectId" WHERE c."whatsappBusinessId"=$1 AND ($2::text IS NULL OR c."phoneNumberId"=$2) AND ($3::text IS NULL OR c."projectId"=$3) AND p.status='ACTIVE'`,[wabaId,phoneNumberId,projectId]);
@@ -68,7 +73,7 @@ export async function lockMetaCustomerInboxChannel(client,{wabaId,phoneNumberId,
  const candidate=candidates.rows[0];
  const project=(await client.query(`SELECT id,"organizationId" FROM public."Project" WHERE id=$1 AND "organizationId"=$2 AND status='ACTIVE' FOR SHARE`,[candidate.projectId,candidate.organizationId])).rows[0];
  if(!project)throw new WorkspaceError('META_CUSTOMER_CALLBACK_SCOPE_REJECTED',403);
- const channel=(await client.query(`SELECT id,"projectId",metadata,"whatsappBusinessId","phoneNumberId" FROM public."WhatsAppConnection" WHERE id=$1 AND "projectId"=$2 AND "whatsappBusinessId"=$3 AND ($4::text IS NULL OR "phoneNumberId"=$4) FOR SHARE`,[candidate.id,project.id,wabaId,phoneNumberId])).rows[0];
+ const channel=(await client.query(`SELECT id,"projectId",metadata,"whatsappBusinessId","phoneNumberId" FROM public."WhatsAppConnection" WHERE id=$1 AND "projectId"=$2 AND "whatsappBusinessId"=$3 AND ($4::text IS NULL OR "phoneNumberId"=$4) FOR ${writable?'UPDATE':'SHARE'}`,[candidate.id,project.id,wabaId,phoneNumberId])).rows[0];
  if(!channel||channel.whatsappBusinessId===OBRASAAS_META_CHANNEL.wabaId||channel.phoneNumberId===OBRASAAS_META_CHANNEL.phoneNumberId||channel.metadata?.credentialFormat!=='tenant-aad-v2'||channel.metadata?.credentialOrganizationId!==project.organizationId)throw new WorkspaceError('META_CUSTOMER_CALLBACK_SCOPE_REJECTED',403);
  return {...channel,organizationId:project.organizationId};
 }

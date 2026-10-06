@@ -1,7 +1,7 @@
 name: Authorized workspace acceptance
 on:
   push:
-    branches: [master, 'feat/integral-worksite-*', 'feat/pilot-readiness-*', 'hotfix/production-workspace-*', 'hotfix/customer-whatsapp-self-service-*', 'hotfix/new-constructor-onboarding-*', 'hotfix/field-team-journal-*', 'fix/whatsapp-signup-*', 'fix/clerk-*']
+    branches: [master, 'feat/integral-worksite-*', 'feat/pilot-readiness-*', 'feat/professional-experience-*', 'hotfix/production-workspace-*', 'hotfix/customer-whatsapp-self-service-*', 'hotfix/new-constructor-onboarding-*', 'hotfix/field-team-journal-*', 'fix/whatsapp-signup-*', 'fix/clerk-*']
   workflow_dispatch:
 permissions:
   contents: read
@@ -35,18 +35,35 @@ jobs:
           node-version: 24
           package-manager-cache: false
       - run: npm ci --no-audit --no-fund
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.12'
+      - name: Private facial assistance, protocol and real public model fixtures
+        run: |
+          python -m pip install --disable-pip-version-check -r requirements.txt
+          python -m unittest discover -s tests -p test_private_biometric.py
+          python scripts/verify-private-biometric-models.py
+          npx eslint src/lib/private-biometric-analyzer.mjs tests/production-private-biometric.test.mjs --max-warnings 0
+          node --test tests/production-private-biometric.test.mjs tests/production-biometric-boundary.test.mjs
       - run: node --test tests/production-disposable-postgres-cleanup.test.mjs tests/production-site-register.test.mjs tests/production-site-photo.test.mjs tests/production-workspace*.test.mjs tests/production-customer-whatsapp-setup.test.mjs tests/production-customer-whatsapp-view.test.mjs tests/production-company-onboarding.test.mjs
       - name: Workspace lint
         run: npx eslint scripts/lib/disposable-postgres-cleanup.mjs tests/production-disposable-postgres-cleanup.test.mjs src/lib/workspace-*.mjs src/lib/verified-session.mjs src/app/api/identity/workspace/route.js tests/production-workspace*.test.mjs scripts/verify-workspace-postgres.mjs scripts/verify-company-onboarding-postgres.mjs scripts/verify-site-register-postgres.mjs scripts/verify-site-register-ui.mjs src/lib/site-register-*.mjs src/lib/site-photo-*.mjs src/app/api/identity/site-photo/route.js tests/production-site-photo.test.mjs tests/production-site-register.test.mjs src/app/api/identity/site-register/route.js scripts/verify-company-onboarding-ui.mjs scripts/verify-company-onboarding-readonly.mjs scripts/lib/company-schema-preflight.mjs tests/production-company-schema-preflight.test.mjs src/lib/company-onboarding-*.mjs src/app/api/identity/company-onboarding/route.js src/app/api/identity/task-creation/route.js tests/production-company-onboarding.test.mjs scripts/verify-workspace-ui.mjs scripts/verify-customer-whatsapp-ui.mjs scripts/lib/meta-template-catalog-check.mjs scripts/verify-meta-template-catalog.mjs tests/production-meta-template-catalog.test.mjs src/lib/customer-whatsapp-*.mjs src/lib/whatsapp/tenant-workspace-policy.js src/lib/whatsapp/project-workspace-profile.js src/app/api/identity/whatsapp-setup/route.js tests/production-customer-whatsapp-setup.test.mjs tests/production-customer-whatsapp-view.test.mjs 'src/app/(identity)/cuenta'
       - run: node scripts/verify-workspace-postgres.mjs
       - run: node scripts/verify-site-register-postgres.mjs
-      - run: node --test tests/production-participants.test.mjs tests/production-participant-receipt-access.test.mjs tests/production-participant-invitation-email.test.mjs tests/production-participant-kyc-replay.test.mjs tests/production-participant-join-replay.test.mjs tests/production-field-*.test.mjs tests/production-meta-customer*.test.mjs tests/production-meta-field.test.mjs tests/production-worker-channel*.test.mjs tests/production-operations-status.test.mjs tests/production-site-purchase.test.mjs tests/production-progress-measurement-quantity.test.mjs
+      - run: node --test tests/production-participant*.test.mjs tests/production-field-*.test.mjs tests/production-meta-customer*.test.mjs tests/production-meta-field.test.mjs tests/production-meta-kyc*.test.mjs tests/production-meta-onboarding-readiness-view.test.mjs tests/production-pilot-media.test.mjs tests/production-video-frame-extractor.test.mjs tests/production-worker-channel*.test.mjs tests/production-operations-status.test.mjs tests/production-site-purchase.test.mjs tests/production-progress-measurement-quantity.test.mjs
+      - run: npx eslint src/lib/pilot-media.mjs src/lib/video-frame-extractor.mjs src/lib/meta-kyc-*.mjs tests/production-meta-kyc*.test.mjs tests/production-video-frame-extractor.test.mjs tests/production-pilot-media.test.mjs --max-warnings 0
       - name: Integral worksite lint
         run: npx eslint src/lib/participant-*.mjs src/lib/field-*.mjs src/lib/meta-customer-*.mjs src/lib/whatsapp/template-review-policy.js src/lib/whatsapp/obra-intent-policy.js src/lib/whatsapp/field-worker-intent-policy.js src/lib/whatsapp/operational-proposal-decision-policy.js src/lib/site-purchase-*.mjs src/lib/operations-status.mjs src/lib/geo.js src/lib/procurement-*.js src/lib/progress-measurement-quantity.js src/app/api/identity/participants src/app/api/identity/participant-join src/app/api/identity/field-operations src/app/api/identity/field-media src/app/api/identity/field-qr src/app/api/identity/site-purchases src/app/api/identity/operations-status src/app/api/identity/meta-onboarding src/app/api/meta/customer-callback scripts/verify-participants-*.mjs scripts/verify-field-operations-*.mjs scripts/verify-meta-customer-*.mjs scripts/verify-site-purchase-*.mjs tests/production-participants.test.mjs tests/production-field-operations.test.mjs tests/production-field-qr-reprint.test.mjs tests/production-meta-customer.test.mjs tests/production-site-purchase.test.mjs
       - run: npx eslint tests/production-participant-receipt-access.test.mjs tests/production-participant-invitation-email.test.mjs tests/production-participant-kyc-replay.test.mjs tests/production-participant-join-replay.test.mjs --max-warnings 0
       - run: node scripts/verify-participants-postgres.mjs
+      - run: node scripts/verify-meta-kyc-chat-postgres.mjs
       - run: node scripts/verify-field-operations-postgres.mjs
       - run: node scripts/verify-meta-customer-postgres.mjs
+      - name: Feature-gated WhatsApp Business App coexistence and private source preservation
+        run: |
+          npx eslint src/lib/meta-customer-coexistence.mjs src/lib/meta-customer-app-projection.mjs scripts/verify-meta-customer-coexistence-postgres.mjs tests/production-meta-customer-coexistence.test.mjs --max-warnings 0
+          node --test tests/production-meta-customer-coexistence.test.mjs
+          node scripts/verify-meta-customer-coexistence-postgres.mjs
       - name: Customer inbox pagination and operation recovery
         run: |
           npx eslint scripts/verify-customer-inbox-*.mjs tests/production-customer-inbox.test.mjs
@@ -93,6 +110,7 @@ jobs:
           node scripts/verify-manual-ui.mjs
           node scripts/verify-onboarding-guide-ui.mjs
       - run: node scripts/verify-participants-ui.mjs
+      - run: node scripts/verify-participant-ai-ui.mjs
       - name: Bounded private KYC photo preparation and explicit visual review
         run: |
           npx eslint scripts/verify-mobile-identity-ui.mjs tests/production-photo-preparation.test.mjs
@@ -132,6 +150,8 @@ jobs:
             .vercel/company-onboarding-evidence/
             .vercel/site-register-evidence/
             .vercel/participants-evidence/
+            .vercel/private/biometric-real-model-proof.json
+            .vercel/meta-kyc-chat-evidence/
             .vercel/mobile-identity-evidence/
             .vercel/field-operations-evidence/
             .vercel/field-qr-evidence/

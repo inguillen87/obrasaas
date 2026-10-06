@@ -24,7 +24,7 @@ export const lifecycleEnvironment={
  META_CUSTOMER_VERIFY_TOKEN:'synthetic-lifecycle-callback-verify-token-only',
  META_CUSTOMER_JOB_SECRET:'synthetic-lifecycle-internal-job-secret-only',
  CRON_SECRET:'synthetic-lifecycle-cron-secret-no-production-access',
- OBRASAAS_META_SIGNUP_RELEASE:'customer-self-service-v1',
+ META_EMBEDDED_SIGNUP_VERSION:'4',OBRASAAS_META_SIGNUP_RELEASE:'customer-self-service-v1',
  PRIVATE_MEDIA_PROVIDER:'vercel-blob',BLOB_READ_WRITE_TOKEN:'synthetic-private-byte-store-only',
  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:IDENTITY_PUBLIC_KEY,
  CLERK_SECRET_KEY:'sk_live_synthetic_lifecycle_fixture_no_provider_access',

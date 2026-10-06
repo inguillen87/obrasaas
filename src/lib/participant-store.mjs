@@ -1,11 +1,13 @@
 import {randomUUID,createHash} from 'node:crypto';
 import {WorkspaceError,workspaceId,operationId,digest,requireWorkspaceIdentity,WORKSPACE_ROLES} from './workspace-policy.mjs';
-import {participantManager,participantCommand,participantContext,participantKycInput,participantReceiptId,PARTICIPANT_NOTICE,PARTICIPANT_NOTICE_VERSION,assertOwnParticipant,participantKeys,OFFICE_ROLES} from './participant-policy.mjs';
+import {participantManager,participantCommand,participantContext,participantKycInput,participantReceiptId,PARTICIPANT_NOTICE,PARTICIPANT_NOTICE_VERSION,PARTICIPANT_OCR_NOTICE,PARTICIPANT_OCR_NOTICE_VERSION,PARTICIPANT_BIOMETRIC_NOTICE,PARTICIPANT_BIOMETRIC_NOTICE_VERSION,assertOwnParticipant,participantKeys,OFFICE_ROLES} from './participant-policy.mjs';
 import {invalidateWorkerChannelIdentity} from './worker-channel-identity.mjs';
+import {normalizeDniExtraction} from './pilot-media.mjs';
+import {adoptParticipantChannelKyc} from './participant-channel-kyc.mjs';
 const columns=`id,name,active,metadata,to_char("updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision`;
 const id=prefix=>prefix+'_'+randomUUID().replaceAll('-','');
 const metadata=row=>row.metadata&&typeof row.metadata==='object'&&!Array.isArray(row.metadata)?structuredClone(row.metadata):{};
-function publicParticipant(row,own=false){const p=row.metadata?.participant,k=p?.kyc;return {id:row.id,name:row.name,active:row.active,revision:row.revision,status:p?.status||'NOT_INVITED',self:own,accountLinked:Boolean(p?.clerkUserId),invitation:p?.invitation?{id:p.invitation.id,state:p.invitation.state,email:own?undefined:p.invitation.email,expiresAt:p.invitation.expiresAt,expired:Date.parse(p.invitation.expiresAt)<Date.now()}:null,kyc:{status:k?.status||'NOT_SUBMITTED',submissionId:k?.submissionId||null,submittedAt:k?.submittedAt||null,review:k?.review?{decision:k.review.decision,reason:k.review.reason,recordedAt:k.review.recordedAt}:null,images:Array.isArray(k?.images)?k.images.map(image=>({id:image.id,kind:image.kind,contentType:image.contentType,bytes:image.bytes})):[]},permissions:p?.status==='ACTIVE'?p.permissions:{attendance:false,report:false},identityCertified:false,whatsAppAccessGranted:false};}
+function publicParticipant(row,own=false,reviewer=false){const p=row.metadata?.participant,k=p?.kyc,processing=k?.processing;return {id:row.id,name:row.name,active:row.active,revision:row.revision,status:p?.status||'NOT_INVITED',self:own,accountLinked:Boolean(p?.clerkUserId),invitation:p?.invitation?{id:p.invitation.id,state:p.invitation.state,email:own?undefined:p.invitation.email,expiresAt:p.invitation.expiresAt,expired:Date.parse(p.invitation.expiresAt)<Date.now()}:null,kyc:{status:k?.status||'NOT_SUBMITTED',submissionId:k?.submissionId||null,submittedAt:k?.submittedAt||null,review:k?.review?{decision:k.review.decision,reason:k.review.reason,recordedAt:k.review.recordedAt}:null,ocrConsent:{allowed:k?.ocrConsent?.allowed===true,noticeVersion:k?.ocrConsent?.noticeVersion||null},biometricConsent:{allowed:k?.biometricConsent?.allowed===true,noticeVersion:k?.biometricConsent?.noticeVersion||null},processing:processing?{status:processing.status,code:processing.code||null,expiresAt:processing.status==='RUNNING'?processing.expiresAt:null,requiresHumanReview:true,...(reviewer&&processing.status==='EXTRACTED_UNVERIFIED'?{fields:processing.fields}:{}),...(reviewer&&processing.biometrics?{biometrics:processing.biometrics}:{})}:null,images:Array.isArray(k?.images)?k.images.map(image=>({id:image.id,kind:image.kind,contentType:image.contentType,bytes:image.bytes})):[]},permissions:p?.status==='ACTIVE'?p.permissions:{attendance:false,report:false},identityCertified:false,whatsAppAccessGranted:false};}
 async function worker(client,projectId,workerId,lock=false){const row=(await client.query(`SELECT ${columns} FROM public."Worker" WHERE id=$1 AND "projectId"=$2 ${lock?'FOR UPDATE':''}`,[workerId,projectId])).rows[0];if(!row)throw new WorkspaceError('PARTICIPANT_UNAVAILABLE',404);return row;}
 async function writeWorker(client,projectId,row,value){await client.query(`UPDATE public."Worker" SET metadata=$3::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[row.id,projectId,JSON.stringify(value)]);return worker(client,projectId,row.id);}
 const accountColumns=`tm.id AS "membershipId",tm."userId",u."clerkUserId",u."primaryEmail" AS email,COALESCE(u."fullName",u."primaryEmail") AS name,tm."tenantRole"::text AS role,tm."clerkRole",tm.status::text AS status,to_char(tm."updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision`;
@@ -24,9 +26,92 @@ async function ownKycReplayOutcome(client,member,session,input,found,fingerprint
 }
 function requireManager(member){if(!participantManager(member.role))throw new WorkspaceError('PARTICIPANT_MANAGE_REQUIRED',403);}
 function matchProvider(invitation,result){if(!result||result.invitationId!==invitation.id||result.email!==invitation.email||result.role!=='org:member'||!/^orginv_[A-Za-z0-9]+$/.test(result.id||'')||!['pending','accepted'].includes(result.state)||!Number.isFinite(Date.parse(result.expiresAt)))throw new WorkspaceError('PARTICIPANT_INVITATION_UNCONFIRMED',503);}
-export function createParticipantStore({workspace,connect,identity,upload,get}){
+export function createParticipantStore({workspace,connect,identity,upload,get,analyzer,prepareKycChat,assessBiometrics}){
  const run=(session,input,writable,callback)=>workspace.projectOperation(session,input,writable,callback);
  const organizationRun=(session,input,writable,callback)=>workspace.organizationOperation(session,input,writable,callback);
+ async function privateKycBytes(image){
+  let result;try{const url=new URL(image.url);if(url.protocol!=='https:'||! /^[a-z0-9-]+\.private\.blob\.vercel-storage\.com$/.test(url.hostname)||url.port||url.search||url.hash||url.username||url.password||! /^\/obrasaas\/legacy-images\/v1\/[a-f0-9]{64}\/image\.(png|jpg|webp)$/.test(url.pathname)||!Number.isInteger(image.bytes)||image.bytes<1||image.bytes>2*1024*1024||!['image/png','image/jpeg','image/webp'].includes(image.contentType)||!/^[a-f0-9]{64}$/.test(image.sha256||''))throw new Error();result=await get(url.pathname.slice(1),{access:'private',useCache:false,abortSignal:AbortSignal.timeout(15000)});if(result?.statusCode!==200||result.blob?.url!==image.url||result.blob.size!==image.bytes||result.blob.contentType?.split(';')[0]!==image.contentType)throw new Error();}catch{await result?.stream?.cancel?.().catch(()=>{});throw new WorkspaceError('PARTICIPANT_PRIVATE_STORAGE_UNCONFIRMED',503);}
+  const reader=result.stream.getReader(),chunks=[];let bytes=0;
+  try{while(true){const next=await reader.read();if(next.done)break;bytes+=next.value.byteLength;if(bytes>image.bytes||bytes>2*1024*1024)throw new Error();chunks.push(Buffer.from(next.value));}const buffer=Buffer.concat(chunks);if(bytes!==image.bytes||createHash('sha256').update(buffer).digest('hex')!==image.sha256)throw new Error();return {bytes:buffer,contentType:image.contentType};}
+  catch{throw new WorkspaceError('PARTICIPANT_KYC_INTEGRITY',409);}finally{await reader.cancel().catch(()=>{});reader.releaseLock();}
+ }
+ function ocrParticipant(row,session,submissionId,{pending=false}={}){
+  const part=row.metadata?.participant,k=part?.kyc;
+  if(!row.active||part?.version!==1||part.status!=='ACTIVE')throw new WorkspaceError('PARTICIPANT_ACCESS_REQUIRED',403);
+  if(part.clerkUserId===session.userId)throw new WorkspaceError('PARTICIPANT_SELF_REVIEW_REJECTED',403);
+  if(k?.submissionId!==submissionId||!['PENDING_REVIEW','APPROVED','REJECTED'].includes(k.status)||(pending&&k.status!=='PENDING_REVIEW'))throw new WorkspaceError('PARTICIPANT_KYC_NOT_PENDING',409);
+  return k;
+ }
+ async function ocrOutcome(client,member,session,input,found,requestDigest){
+  requireManager(member);const p=input.payload||input;
+  if(found.entityType!=='Worker'||found.entityId!==p.workerId||found.metadata?.kind!=='PROCESS_KYC'||found.metadata.projectId!==input.projectId)throw new WorkspaceError('PARTICIPANT_RECEIPT_INVALID',409);
+  if(requestDigest&&found.metadata.requestDigest!==requestDigest)throw new WorkspaceError('PARTICIPANT_OPERATION_CONFLICT',409);
+  const row=await worker(client,input.projectId,p.workerId),k=ocrParticipant(row,session,p.submissionId);
+  if(k.contentHash!==found.metadata.contentHash)throw new WorkspaceError('PARTICIPANT_REVISION_CHANGED',409);
+  return {saved:true,replayed:true,receiptId:found.id,participant:publicParticipant(row,false,true)};
+ }
+ async function processKyc(session,input){
+  const p=input.payload,requestDigest=digest(input);
+  const claim=await run(session,input,true,async(client,member,scope)=>{
+   requireManager(member);const key=participantReceiptId(member.actorId,input.projectId,input.operationId);
+   await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[key]);
+   const prior=await receipt(client,member,key);if(prior)return {done:{scope,...await ocrOutcome(client,member,session,input,prior,requestDigest)}};
+   const row=await worker(client,input.projectId,p.workerId,true),k=ocrParticipant(row,session,p.submissionId,{pending:true});
+   const ocrAllowed=k.ocrConsent?.allowed===true&&k.ocrConsent.noticeVersion===PARTICIPANT_OCR_NOTICE_VERSION&&k.ocrConsent.noticeSha256===digest(PARTICIPANT_OCR_NOTICE),biometricAllowed=k.biometricConsent?.allowed===true&&k.biometricConsent.noticeVersion===PARTICIPANT_BIOMETRIC_NOTICE_VERSION&&k.biometricConsent.noticeSha256===digest(PARTICIPANT_BIOMETRIC_NOTICE);
+   if(!ocrAllowed&&!biometricAllowed)throw new WorkspaceError('PARTICIPANT_OCR_CONSENT_REQUIRED',409);
+   const submitted=(await client.query(`SELECT metadata FROM public."AuditLog" WHERE "organizationId"=$1 AND "entityId"=$2 AND action='participant.operation.recorded' AND metadata->>'kind'='KYC_SUBMITTED' AND metadata->>'submissionId'=$3`,[member.organizationId,row.id,p.submissionId])).rows;
+   if(submitted.length!==1||submitted[0].metadata.contentHash!==k.contentHash||!Array.isArray(k.images)||k.images.length!==2||k.images.filter(image=>image.id==='document-front'&&image.kind==='DOCUMENT_FRONT').length!==1||k.images.filter(image=>image.id==='selfie'&&image.kind==='SELFIE').length!==1||digest(k.images.map(image=>[image.kind,image.sha256,image.bytes,image.contentType]))!==k.contentHash)throw new WorkspaceError('PARTICIPANT_KYC_EVIDENCE_UNCONFIRMED',409);
+   const now=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now,previous=k.processing;
+   if(previous?.status==='RUNNING'&&Date.parse(previous.expiresAt)>now.getTime()){
+    if(previous.operationId!==input.operationId||previous.actorId!==member.actorId||previous.requestDigest!==requestDigest)throw new WorkspaceError('PARTICIPANT_OCR_PROCESSING',409);
+    return {done:{scope,state:'PROCESSING',definitive:false,workerId:row.id,submissionId:k.submissionId,expiresAt:previous.expiresAt,retryAfterExpiration:false}};
+   }
+   const sameClaim=previous?.status==='RUNNING'&&previous.operationId===input.operationId&&previous.actorId===member.actorId&&previous.requestDigest===requestDigest;
+   if(row.revision!==p.revision&&!sameClaim)throw new WorkspaceError('PARTICIPANT_REVISION_CHANGED',409);
+   if(['EXTRACTED_UNVERIFIED','ADVISORY_UNREVIEWED'].includes(previous?.status))throw new WorkspaceError('PARTICIPANT_OCR_ALREADY_PROCESSED',409);
+   const claimId=id('ocrclaim'),m=metadata(row);m.participant.kyc.processing={status:'RUNNING',claimId,operationId:input.operationId,requestDigest,actorId:member.actorId,startedAt:now.toISOString(),expiresAt:new Date(now.getTime()+(biometricAllowed?150000:90000)).toISOString()};
+   const updated=await writeWorker(client,input.projectId,row,m);
+   return {key,claimId,actorId:member.actorId,revision:updated.revision,contentHash:k.contentHash,front:k.images.find(image=>image.id==='document-front'),selfie:biometricAllowed?k.images.find(image=>image.id==='selfie'):null,biometricAllowed,ocrAllowed};
+  });
+  if(claim.done)return claim.done;
+  let extraction,code,provenance,biometrics,frontImage;
+  const checkClaim=()=>run(session,input,false,async(client,member)=>{requireManager(member);const row=await worker(client,input.projectId,p.workerId),k=ocrParticipant(row,session,p.submissionId,{pending:true}),now=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now;if(member.actorId!==claim.actorId||row.revision!==claim.revision||k.contentHash!==claim.contentHash||k.processing?.claimId!==claim.claimId||k.processing.status!=='RUNNING'||Date.parse(k.processing.expiresAt)<=now.getTime())throw new WorkspaceError('PARTICIPANT_OCR_PROCESSING_CHANGED',409);});
+  const safeCodes=new Set(['AI_PROVIDER_NOT_CONFIGURED','AI_PROVIDER_REQUEST_REJECTED','MEDIA_IMAGE_INVALID','DNI_DOCUMENT_NOT_CONFIRMED','DNI_EXTRACTION_INCOMPLETE','AI_RESPONSE_UNCONFIRMED','AI_RESPONSE_INVALID','AI_REQUEST_UNCONFIRMED','PARTICIPANT_PRIVATE_STORAGE_UNCONFIRMED','PARTICIPANT_KYC_INTEGRITY']);
+  try{
+   const image=await privateKycBytes(claim.front);
+   frontImage=image;
+   // Recheck before the external transfer, as well as before persisting output.
+   await checkClaim();
+   if(claim.ocrAllowed){
+    const result=analyzer?.analyzeDni?await analyzer.analyzeDni({base64:image.bytes.toString('base64'),mimeType:image.contentType}):{success:false,code:'AI_PROVIDER_NOT_CONFIGURED'};
+    const normalized=result?.success===true?normalizeDniExtraction(result):null;
+    if(normalized?.success){extraction={nombreCompleto:normalized.nombreCompleto,dni:normalized.dni,cuil:normalized.cuil};if(result.provider==='openai'&&/^(?:gpt-4o(?:-mini)?|gpt-4\.1(?:-mini|-nano)?|gpt-5(?:\.\d)?(?:-mini|-nano)?)(?:-\d{4}-\d{2}-\d{2})?$/.test(result.providerModel||''))provenance={provider:'openai',providerModel:result.providerModel};}
+    else code=safeCodes.has(result?.code)?result.code:normalized?.code||'PARTICIPANT_OCR_UNCONFIRMED';
+   }
+  }catch(error){if(error instanceof WorkspaceError&&['PARTICIPANT_MANAGE_REQUIRED','PARTICIPANT_ACCESS_REQUIRED','PARTICIPANT_SELF_REVIEW_REJECTED','PARTICIPANT_KYC_NOT_PENDING','PARTICIPANT_OCR_PROCESSING_CHANGED','WORKSPACE_CONTEXT_CHANGED','WORKSPACE_PROJECT_UNAVAILABLE'].includes(error.code))throw error;code=safeCodes.has(error?.code)?error.code:'PARTICIPANT_OCR_UNCONFIRMED';}
+  if(claim.biometricAllowed){
+   biometrics={status:'UNAVAILABLE',code:'BIOMETRIC_SERVICE_NOT_CONFIGURED',identityCertified:false,livenessVerified:false,documentAuthenticityVerified:false,measurementCalibrated:false,requiresHumanReview:true};
+   if(typeof assessBiometrics==='function'&&frontImage)try{
+    const selfie=await privateKycBytes(claim.selfie);await checkClaim();
+    const result=await assessBiometrics({front:{buffer:frontImage.bytes,mimeType:frontImage.contentType},selfie:{buffer:selfie.bytes,mimeType:selfie.contentType},consentVersion:PARTICIPANT_BIOMETRIC_NOTICE_VERSION});
+    if(result?.success===true&&result.status==='ADVISORY_UNREVIEWED'&&result.identityCertified===false&&result.livenessVerified===false&&result.documentAuthenticityVerified===false&&result.measurementCalibrated===false&&result.requiresHumanReview===true&&result.provider==='private-opencv-onnx'&&result.modelManifestSha256==='c695e1a85db3ac933836562ce1f7d7e2b372ba2951dc9c4d0160b88cd448c860'&&result.frontSha256===claim.front.sha256&&result.selfieSha256===claim.selfie.sha256&&Number.isFinite(result.faceSimilarity)&&result.faceSimilarity>=-1&&result.faceSimilarity<=1&&Number.isFinite(result.captureRiskSignal)&&result.captureRiskSignal>=0&&result.captureRiskSignal<=1)biometrics={status:'ADVISORY_UNREVIEWED',provider:result.provider,modelManifestSha256:result.modelManifestSha256,frontSha256:result.frontSha256,selfieSha256:result.selfieSha256,faceSimilarity:result.faceSimilarity,captureRiskSignal:result.captureRiskSignal,identityCertified:false,livenessVerified:false,documentAuthenticityVerified:false,measurementCalibrated:false,requiresHumanReview:true};
+    else biometrics.code=['BIOMETRIC_SERVICE_NOT_CONFIGURED','BIOMETRIC_SERVICE_UNCONFIRMED','BIOMETRIC_RESULT_UNCONFIRMED','BIOMETRIC_IMAGE_INVALID','BIOMETRIC_INPUT_TOO_LARGE','BIOMETRIC_DISTINCT_CAPTURES_REQUIRED'].includes(result?.code)?result.code:'BIOMETRIC_RESULT_UNCONFIRMED';
+   }catch(error){if(error instanceof WorkspaceError&&!['PARTICIPANT_PRIVATE_STORAGE_UNCONFIRMED','PARTICIPANT_KYC_INTEGRITY'].includes(error.code))throw error;biometrics.code='BIOMETRIC_RESULT_UNCONFIRMED';}
+  }
+  return run(session,input,true,async(client,member,scope)=>{
+   requireManager(member);const prior=await receipt(client,member,claim.key);if(prior)return {scope,...await ocrOutcome(client,member,session,input,prior,requestDigest)};
+   const row=await worker(client,input.projectId,p.workerId,true),k=ocrParticipant(row,session,p.submissionId,{pending:true});
+   if(member.actorId!==claim.actorId||row.revision!==claim.revision||k.contentHash!==claim.contentHash||k.processing?.claimId!==claim.claimId||k.processing.status!=='RUNNING')throw new WorkspaceError('PARTICIPANT_OCR_PROCESSING_CHANGED',409);
+   const completed=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now;
+   if(Date.parse(k.processing.expiresAt)<=completed.getTime())throw new WorkspaceError('PARTICIPANT_OCR_PROCESSING_CHANGED',409);
+   if(!extraction&&!code&&biometrics?.status==='UNAVAILABLE')code=biometrics.code;
+   const completedAt=completed.toISOString(),status=extraction?'EXTRACTED_UNVERIFIED':biometrics?.status==='ADVISORY_UNREVIEWED'?'ADVISORY_UNREVIEWED':'FAILED_RETRYABLE',m=metadata(row);
+   m.participant.kyc.processing={status,completedAt,adapter:'pilot-media-v1',...provenance,requiresHumanReview:true,identityVerified:false,...(extraction?{fields:extraction}:{code}),...(biometrics?{biometrics}:{})};
+   await writeWorker(client,input.projectId,row,m);
+   await record(client,member,claim.key,input.projectId,row.id,requestDigest,{kind:'PROCESS_KYC',submissionId:p.submissionId,contentHash:claim.contentHash,status,code:code||null,adapter:'pilot-media-v1',...provenance,biometricStatus:biometrics?.status||null,identityCertified:false,livenessVerified:false});
+   return {scope,saved:true,replayed:false,receiptId:claim.key,participant:publicParticipant(await worker(client,input.projectId,row.id),false,true)};
+  });
+ }
  async function setOfficeRole(session,input,requestDigest){const context={projectId:input.projectId,scope:input.scope},p=input.payload;
   const target=await organizationRun(session,context,false,async(client,member,scope)=>{const prior=await receipt(client,member,participantReceiptId(member.actorId,input.projectId,input.operationId));if(prior){if(prior.metadata.requestDigest!==requestDigest)throw new WorkspaceError('PARTICIPANT_OPERATION_CONFLICT',409);return {done:{scope,...await currentOutcome(client,input.projectId,prior,true,member.actorId)}};}const current=await account(client,member.organizationId,p.membershipId);if(!publicAccount(current,member.actorId).canChangeRole)throw new WorkspaceError('PARTICIPANT_OFFICE_ROLE_PROTECTED',403);if(current.revision!==p.revision)throw new WorkspaceError('PARTICIPANT_REVISION_CHANGED',409);return current;});
   if(target.done)return target.done;
@@ -84,10 +169,20 @@ export function createParticipantStore({workspace,connect,identity,upload,get}){
   read(session,context){participantContext(context);if(context.after!==undefined&&context.after!==null&&!workspaceId(context.after))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');return run(session,context,false,async(client,member,scope)=>{
    const manage=participantManager(member.role);const records=(await client.query(`SELECT ${columns} FROM public."Worker" WHERE "projectId"=$1 AND ($2::boolean OR (metadata->'participant'->>'clerkUserId'=$3 AND metadata->'participant'->>'status'='ACTIVE' AND active=true)) AND ($4::text IS NULL OR id>$4) ORDER BY id LIMIT 101`,[context.projectId,manage,session.userId,context.after||null])).rows;
    const accounts=member.role==='ADMIN'?(await client.query(`SELECT ${accountColumns} FROM public."TenantMembership" tm JOIN public."PlatformUser" u ON u.id=tm."userId" WHERE tm."organizationId"=$1 AND tm.status='ACTIVE' ORDER BY tm.id LIMIT 101`,[member.organizationId])).rows:[];
-   return {scope,projectId:context.projectId,canManage:manage,canInvite:member.role==='ADMIN'&&session.organizationRole==='org:admin',canManageOfficeRoles:member.role==='ADMIN',officeRoles:OFFICE_ROLES,existingAccounts:accounts.slice(0,100).map(row=>publicAccount(row,member.actorId)),existingAccountsTruncated:accounts.length>100,records:records.slice(0,100).map(row=>publicParticipant(row,row.metadata?.participant?.clerkUserId===session.userId)),nextCursor:records.length>100?records[99].id:null,privacyNotice:{version:PARTICIPANT_NOTICE_VERSION,text:PARTICIPANT_NOTICE,sha256:digest(PARTICIPANT_NOTICE)},noAutomaticKycApproval:true};
+    return {scope,projectId:context.projectId,canManage:manage,canInvite:member.role==='ADMIN'&&session.organizationRole==='org:admin',canManageOfficeRoles:member.role==='ADMIN',officeRoles:OFFICE_ROLES,existingAccounts:accounts.slice(0,100).map(row=>publicAccount(row,member.actorId)),existingAccountsTruncated:accounts.length>100,records:records.slice(0,100).map(row=>publicParticipant(row,row.metadata?.participant?.clerkUserId===session.userId,manage)),nextCursor:records.length>100?records[99].id:null,privacyNotice:{version:PARTICIPANT_NOTICE_VERSION,text:PARTICIPANT_NOTICE,sha256:digest(PARTICIPANT_NOTICE)},externalOcrNotice:{version:PARTICIPANT_OCR_NOTICE_VERSION,text:PARTICIPANT_OCR_NOTICE},privateBiometricNotice:{version:PARTICIPANT_BIOMETRIC_NOTICE_VERSION,text:PARTICIPANT_BIOMETRIC_NOTICE},noAutomaticKycApproval:true};
   });},
   async save(session,body){const input=participantCommand(body),requestDigest=digest(input),context={projectId:input.projectId,scope:input.scope},p=input.payload;
    if(input.action==='SET_OFFICE_ROLE')return setOfficeRole(session,input,requestDigest);
+   if(input.action==='PROCESS_KYC')return processKyc(session,input);
+   if(input.action==='PREPARE_KYC_CHAT')return run(session,input,true,async(client,member,scope,project)=>{
+    requireManager(member);if(typeof prepareKycChat!=='function')throw new WorkspaceError('PARTICIPANT_CHANNEL_ADAPTER_UNAVAILABLE',503);
+    const key=participantReceiptId(member.actorId,input.projectId,input.operationId);await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[key]);
+    const row=await worker(client,input.projectId,p.workerId,true);if(!row.active||!['INVITED','ACTIVE'].includes(row.metadata?.participant?.status))throw new WorkspaceError('PARTICIPANT_ACCESS_REQUIRED',403);
+    const prior=await receipt(client,member,key);if(prior){if(prior.metadata.requestDigest!==requestDigest||prior.entityId!==row.id||prior.metadata.kind!=='PREPARE_KYC_CHAT')throw new WorkspaceError('PARTICIPANT_OPERATION_CONFLICT',409);return {scope,...await currentOutcome(client,input.projectId,prior,true),kind:'PREPARE_KYC_CHAT',codeUnavailable:true,expiresAt:prior.metadata.expiresAt};}
+    const value=await prepareKycChat(client,member,project,{operationId:input.operationId,...p});
+    await record(client,member,key,input.projectId,row.id,requestDigest,{kind:'PREPARE_KYC_CHAT',challengeReceiptId:value.receiptId,expiresAt:value.expiresAt,identityCertified:false,permissionsGranted:false});
+    return {scope,...value,receiptId:key,participant:publicParticipant(await worker(client,input.projectId,row.id))};
+   });
    const recorded=await run(session,context,false,async(client,member,scope)=>{requireManager(member);const prior=await receipt(client,member,participantReceiptId(member.actorId,input.projectId,input.operationId));if(!prior)return null;if(prior.metadata.requestDigest!==requestDigest)throw new WorkspaceError('PARTICIPANT_OPERATION_CONFLICT',409);return {scope,...await currentOutcome(client,input.projectId,prior,true)};});if(recorded)return recorded;
    let restoration=null;
    if(input.action==='RESTORE_ACCESS'){
@@ -152,12 +247,17 @@ export function createParticipantStore({workspace,connect,identity,upload,get}){
   status(session,context){participantContext(context);if(!operationId(context.operationId))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');return run(session,context,false,async(client,member,scope)=>{
    const found=await receipt(client,member,participantReceiptId(member.actorId,context.projectId,context.operationId));if(found){
     if(found.metadata?.projectId!==context.projectId)throw new WorkspaceError('PARTICIPANT_RECEIPT_INVALID',409);
+     if(found.metadata.kind==='PROCESS_KYC')return {scope,state:'RECORDED',...await ocrOutcome(client,member,session,{...context,workerId:found.entityId,submissionId:found.metadata.submissionId},found)};
+     if(found.metadata.kind==='PREPARE_KYC_CHAT'){requireManager(member);const row=await worker(client,context.projectId,found.entityId);if(!row.active||!['INVITED','ACTIVE'].includes(row.metadata?.participant?.status))throw new WorkspaceError('PARTICIPANT_ACCESS_REQUIRED',403);return {scope,state:'RECORDED',...await currentOutcome(client,context.projectId,found,true),kind:'PREPARE_KYC_CHAT',codeUnavailable:true,expiresAt:found.metadata.expiresAt};}
     if(found.entityType==='TenantMembership'&&found.metadata.kind==='OFFICE_ROLE_CHANGED'){if(member.role!=='ADMIN')throw new WorkspaceError('WORKSPACE_ORGANIZATION_PERMISSION_REQUIRED',403);}
     else if(found.entityType==='Worker'){if(!participantManager(member.role))await assertOwnParticipant(client,member,session,context.projectId,found.entityId);}
     else throw new WorkspaceError('PARTICIPANT_RECEIPT_INVALID',409);
     return {scope,state:'RECORDED',...await currentOutcome(client,context.projectId,found,true,member.actorId)};
    }
-   const pending=(await client.query(`SELECT ${columns} FROM public."Worker" WHERE "projectId"=$1 AND metadata->'participant'->'invitation'->>'operationId'=$2 AND metadata->'participant'->'invitation'->>'createdBy'=$3`,[context.projectId,context.operationId.toLowerCase(),member.actorId])).rows;
+    const processing=(await client.query(`SELECT ${columns} FROM public."Worker" WHERE "projectId"=$1 AND metadata->'participant'->'kyc'->'processing'->>'operationId'=$2 AND metadata->'participant'->'kyc'->'processing'->>'actorId'=$3`,[context.projectId,context.operationId.toLowerCase(),member.actorId])).rows.filter(row=>row.metadata?.participant?.kyc?.processing?.status==='RUNNING');
+    if(processing.length===1){requireManager(member);const row=processing[0],k=ocrParticipant(row,session,row.metadata.participant.kyc.submissionId,{pending:true}),now=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now;
+     return {scope,state:'PROCESSING',definitive:false,workerId:row.id,submissionId:k.submissionId,expiresAt:k.processing.expiresAt,retryAfterExpiration:Date.parse(k.processing.expiresAt)<=now.getTime()};}
+    const pending=(await client.query(`SELECT ${columns} FROM public."Worker" WHERE "projectId"=$1 AND metadata->'participant'->'invitation'->>'operationId'=$2 AND metadata->'participant'->'invitation'->>'createdBy'=$3`,[context.projectId,context.operationId.toLowerCase(),member.actorId])).rows;
    if(pending.length===1&&!participantManager(member.role))await assertOwnParticipant(client,member,session,context.projectId,pending[0].id);
    return {scope,state:pending.length===1?'INVITATION_UNCONFIRMED':'NOT_OBSERVED',definitive:false,...(pending.length===1?{participant:publicParticipant(pending[0])}:{})};
   });},
@@ -194,10 +294,11 @@ export function createParticipantStore({workspace,connect,identity,upload,get}){
     if(!projectMember)await client.query(`INSERT INTO public."ProjectMembership"(id,"projectId","tenantMembershipId",status,"updatedAt") VALUES($1,$2,$3,'ACTIVE',clock_timestamp())`,[id('projectmember'),row.projectId,member.id]);
     const duplicate=(await client.query(`SELECT id FROM public."Worker" WHERE "projectId"=$1 AND id<>$2 AND metadata->'participant'->>'clerkUserId'=$3 AND metadata->'participant'->>'status'='ACTIVE'`,[row.projectId,row.id,session.userId])).rows;if(duplicate.length)throw new WorkspaceError('PARTICIPANT_IDENTITY_CONFLICT',409);
     const key=participantReceiptId(user.id,row.projectId,input.operationId),memberContext={organizationId:row.organizationId,actorId:user.id};part.status='ACTIVE';part.clerkUserId=session.userId;part.permissions={attendance:true,report:true};part.invitation.state='ACCEPTED';part.acceptanceReceiptId=key;
+    await adoptParticipantChannelKyc(client,{row,participant:part,invitationId:input.invitationId,actorId:user.id,clerkUserId:session.userId,acceptanceReceiptId:key});
     await writeWorker(client,row.projectId,row,m);await record(client,memberContext,key,row.projectId,row.id,digest([row.id,input.invitationId,session.userId,email]),{kind:'INVITATION_ACCEPTED',invitationId:input.invitationId,identityCertified:false,whatsAppAccessGranted:false});return {saved:true,replayed:false,joined:true,projectId:row.projectId,receiptId:key};
    });
   },
-  async submitKyc(session,body){const input=participantKycInput(body),fingerprint=digest([input.projectId,input.scope,input.workerId,input.revision,input.noticeVersion,input.front.digest,input.selfie.digest]);
+   async submitKyc(session,body){const input=participantKycInput(body),fingerprint=digest([input.projectId,input.scope,input.workerId,input.revision,input.noticeVersion,input.front.digest,input.selfie.digest,...(input.ocrNoticeVersion?[input.ocrNoticeVersion,input.ocrConsent]:[]),...(input.biometricNoticeVersion?[input.biometricNoticeVersion,input.biometricConsent]:[])]);
    const preflight=await run(session,input,false,async(client,member,scope)=>{const key=participantReceiptId(member.actorId,input.projectId,input.operationId),prior=await receipt(client,member,key);if(prior)return {done:{scope,...await ownKycReplayOutcome(client,member,session,input,prior,fingerprint)}};
     const row=await assertOwnParticipant(client,member,session,input.projectId,input.workerId);if(row.revision!==input.revision)throw new WorkspaceError('PARTICIPANT_REVISION_CHANGED',409);if(['APPROVED','PENDING_REVIEW'].includes(row.metadata.participant.kyc?.status))throw new WorkspaceError('PARTICIPANT_KYC_ALREADY_SUBMITTED',409);return {key,actorId:member.actorId,organizationId:member.organizationId};});
    if(preflight.done)return preflight.done;const images=[];
@@ -206,8 +307,8 @@ export function createParticipantStore({workspace,connect,identity,upload,get}){
     const row=await assertOwnParticipant(client,member,session,input.projectId,input.workerId,{lock:true});if(row.revision!==input.revision)throw new WorkspaceError('PARTICIPANT_REVISION_CHANGED',409);if(['APPROVED','PENDING_REVIEW'].includes(row.metadata.participant.kyc?.status))throw new WorkspaceError('PARTICIPANT_KYC_ALREADY_SUBMITTED',409);
     const m=metadata(row),submissionId=id('kyc'),contentHash=digest(images.map(image=>[image.kind,image.sha256,image.bytes,image.contentType])),now=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now.toISOString();
     if(m.participant.channelIdentity)m.participant.channelIdentity=invalidateWorkerChannelIdentity(m,{at:now,reasonCode:'KYC_RESUBMITTED'}).participant.channelIdentity;
-    m.participant.kyc={version:1,status:'PENDING_REVIEW',submissionId,noticeVersion:PARTICIPANT_NOTICE_VERSION,noticeSha256:digest(PARTICIPANT_NOTICE),consentRecorded:true,submittedAt:now,contentHash,images};await writeWorker(client,input.projectId,row,m);
-    await record(client,member,preflight.key,input.projectId,row.id,fingerprint,{kind:'KYC_SUBMITTED',submissionId,contentHash,noticeVersion:PARTICIPANT_NOTICE_VERSION,identityCertified:false});return {scope,...await currentOutcome(client,input.projectId,await receipt(client,member,preflight.key),false)};
+    m.participant.kyc={version:1,status:'PENDING_REVIEW',submissionId,noticeVersion:PARTICIPANT_NOTICE_VERSION,noticeSha256:digest(PARTICIPANT_NOTICE),consentRecorded:true,submittedAt:now,contentHash,images,ocrConsent:{allowed:input.ocrConsent===true,noticeVersion:input.ocrNoticeVersion,noticeSha256:input.ocrNoticeVersion?digest(PARTICIPANT_OCR_NOTICE):null,recordedAt:now},biometricConsent:{allowed:input.biometricConsent===true,noticeVersion:input.biometricNoticeVersion,noticeSha256:input.biometricNoticeVersion?digest(PARTICIPANT_BIOMETRIC_NOTICE):null,recordedAt:now}};await writeWorker(client,input.projectId,row,m);
+    await record(client,member,preflight.key,input.projectId,row.id,fingerprint,{kind:'KYC_SUBMITTED',submissionId,contentHash,noticeVersion:PARTICIPANT_NOTICE_VERSION,ocrConsentRecorded:input.ocrConsent===true,ocrNoticeVersion:input.ocrNoticeVersion,ocrNoticeSha256:input.ocrNoticeVersion?digest(PARTICIPANT_OCR_NOTICE):null,biometricConsentRecorded:input.biometricConsent===true,biometricNoticeVersion:input.biometricNoticeVersion,biometricNoticeSha256:input.biometricNoticeVersion?digest(PARTICIPANT_BIOMETRIC_NOTICE):null,identityCertified:false});return {scope,...await currentOutcome(client,input.projectId,await receipt(client,member,preflight.key),false)};
    });
   },
   async downloadKyc(session,context){participantContext(context);if(!workspaceId(context.workerId)||!['document-front','selfie'].includes(context.imageId))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');

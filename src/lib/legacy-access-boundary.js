@@ -31,6 +31,7 @@ export function legacyBoundaryKind(pathname, method = 'GET') {
   if (path === '/api/webhooks/whatsapp' && ['GET', 'POST'].includes(method)) return 'signed-protocol';
   if (path === '/api/meta/customer-callback' && ['GET', 'POST'].includes(method)) return 'signed-protocol';
   if (path === '/api/meta/customer-process' && ['GET', 'POST'].includes(method)) return 'signed-protocol';
+  if (path === '/api/internal/biometric-analysis' && method === 'POST') return 'signed-protocol';
   if (read && path === '/api/auth/verify') return 'signed-protocol';
   return path === '/api' || path.startsWith('/api/') || !read ? 'private-api' : 'private-page';
 }

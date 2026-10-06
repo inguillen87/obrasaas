@@ -6,6 +6,7 @@ import {resolveWorkerChannelIdentity} from './worker-channel-identity.mjs';
 import {META_CUSTOMER_PROTOCOL,resolveMetaCloudProtocol} from './meta-cloud-protocol.mjs';
 import {decryptCustomerSecret,encryptCustomerSecret} from './meta-customer-credentials.mjs';
 import {customerJobTransaction} from './meta-customer-outbound.mjs';
+import {validFieldMediaAnalysisConsent} from './field-media-privacy.mjs';
 
 export function metaFieldOperationId(eventId,purpose){const h=digest(['meta-field-operation-v1',eventId,purpose]);return `${h.slice(0,8)}-${h.slice(8,12)}-4${h.slice(13,16)}-a${h.slice(17,20)}-${h.slice(20,32)}`;}
 const receiptId=eventId=>'meta_field_'+digest(['meta-field-dispatch-v1',eventId]);
@@ -105,9 +106,10 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
    return within(async client=>{const r=await resolve(client,context,'report'),prior=await saved(client,r);if(prior)return prior;return record(client,r,result(r,'MEDIA_CONTEXT_REVIEW',text('Cambió la tarea o el sector durante la carga. No registramos esta evidencia. Escribí EVIDENCIA y elegí nuevamente la tarea y el sector actuales.'),{code:error.code}),null,{onlyIfCurrent:true});});
   }
   let processed=attached;
-  if(media.kind!=='video')try{processed=await service.process(session,{...base,operationId:metaFieldOperationId(context.eventId,'MEDIA_PROCESS'),evidenceId:attached.evidence.id,revision:attached.evidence.revision});}
+  const consent=prepared.media.analysisConsent,analysisAllowed=validFieldMediaAnalysisConsent(consent)&&consent.allowed===true;
+  if(analysisAllowed)try{processed=await service.process(session,{...base,operationId:metaFieldOperationId(context.eventId,'MEDIA_PROCESS'),evidenceId:attached.evidence.id,revision:attached.evidence.revision,analysisConsent:consent});}
   catch(error){if(!['FIELD_ALREADY_REVIEWED','FIELD_MEDIA_ALREADY_PROCESSED'].includes(error.code))throw error;processed={...attached,evidence:publicFieldEvidence(await workspace.projectOperation(session,base,false,client=>fieldOps.readEvidence(client,context.projectId,attached.evidence.id)))};}
   return within(async client=>{const r=await resolve(client,context,'report'),prior=await saved(client,r);if(prior)return prior;
-   return record(client,r,result(r,'EVIDENCE',text('Evidencia guardada en privado. '+(processed.evidence.review?'El archivo ya tiene una revisión humana registrada; consultala desde la web.':processed.evidence.processing.status==='FAILED_RETRYABLE'?'El procesamiento necesita otro intento desde la web.':'El responsable debe revisar el archivo antes de aprobar avances.')+' Escribí MENU para continuar.'),{businessApplied:true,receiptId:attached.receiptId,reviewState:'RECORDED'}),null,{onlyIfCurrent:true});});
+   return record(client,r,result(r,'EVIDENCE',text('Evidencia guardada en privado. '+(processed.evidence.review?'El archivo ya tiene una revisión humana registrada; consultala desde la web.':!analysisAllowed?'No se envió a OpenAI. El responsable puede revisarlo manualmente desde la web.':processed.evidence.processing.status==='FAILED_RETRYABLE'?'El procesamiento necesita otro intento desde la web.':media.kind==='video'?'Se analizaron cuatro cuadros sin audio. El responsable debe revisar el video original antes de aprobar avances.':'El responsable debe revisar el archivo antes de aprobar avances.')+' Escribí MENU para continuar.'),{businessApplied:true,receiptId:attached.receiptId,reviewState:'RECORDED'}),null,{onlyIfCurrent:true});});
  }};
 }

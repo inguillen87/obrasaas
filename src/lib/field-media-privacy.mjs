@@ -1,0 +1,5 @@
+export const FIELD_MEDIA_PRIVACY_NOTICE_VERSION='field-media-analysis-v1';
+export const FIELD_MEDIA_PRIVACY_NOTICE='El análisis asistido es opcional. Si lo autorizás, OpenAI recibe una copia de la fotografía o del audio, o cuatro cuadros extraídos del video privado (hasta 40 segundos). El video se analiza sin audio y sin revisar todos sus cuadros. El resultado permanece privado, requiere revisión humana y no modifica cantidades, avances, asistencia ni permisos. Podés guardar el archivo y recibir revisión manual sin este análisis.';
+export const FIELD_MEDIA_PRIVACY_NOTICE_SHA256='2beefc81cd084f9c840ac517ee464999bb49aa2d5d9c229e2bb9cb161fb9c7f4';
+export const fieldMediaAnalysisConsent=allowed=>({allowed,noticeVersion:FIELD_MEDIA_PRIVACY_NOTICE_VERSION,noticeSha256:FIELD_MEDIA_PRIVACY_NOTICE_SHA256});
+export function validFieldMediaAnalysisConsent(value){return value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).sort().join('|')==='allowed|noticeSha256|noticeVersion'&&typeof value.allowed==='boolean'&&value.noticeVersion===FIELD_MEDIA_PRIVACY_NOTICE_VERSION&&value.noticeSha256===FIELD_MEDIA_PRIVACY_NOTICE_SHA256;}

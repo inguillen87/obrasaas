@@ -3,8 +3,10 @@ import {WorkspaceError,operationId,digest} from './workspace-policy.mjs';
 import {decryptCustomerSecret} from './meta-customer-credentials.mjs';
 import {lockMetaCustomerInboxChannel,metaCustomerContentDigest} from './meta-customer-callback.mjs';
 import {classifyObraIntent} from './whatsapp/obra-intent-policy.js';
+import {META_APP_PROJECTION_PROVIDER,decodeCustomerAppProjection} from './meta-customer-app-projection.mjs';
 const revision=`to_char("updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US')`;
 const text=value=>typeof value==='string'?value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g,' ').slice(0,4096):'';
+const phoneForView=value=>typeof value==='string'&&/^[1-9]\d{7,14}$/.test(value)?value:null;
 const eventId=value=>typeof value==='string'&&/^customer_webhook_[a-f0-9]{64}$/.test(value);
 const leaseMs=60000;
 function decode(row,member,project,channel,environment){
@@ -44,11 +46,11 @@ async function identity(client,member,project,payload){
  return {status:'CHANNEL_IDENTITY_UNVERIFIED',workerId:worker.id};
 }
 function publicItem(row,payload){
- const outcome=row.outcome?.version===1?row.outcome:null,value=payload?.value||{};
+ const outcome=row.outcome?.version===1?row.outcome:null,value=payload?.value||{},appSource=['history','smb_app_state_sync','smb_message_echoes'].includes(payload?.field);
  return {id:row.id,revision:row.revision,status:row.status,createdAt:row.createdAt,processedAt:row.processedAt,
-  processing:row.leaseToken?'LEASED':'NOT_LEASED',canProcess:Boolean(payload)&&row.status==='PENDING'&&!row.activeLease,
+  processing:row.leaseToken?'LEASED':'NOT_LEASED',canProcess:!appSource&&Boolean(payload)&&row.status==='PENDING'&&!row.activeLease,
   processingCode:typeof row.lastError==='string'&&/^[A-Z0-9_]{1,120}$/.test(row.lastError)?row.lastError:null,
-  canReview:Boolean(payload&&outcome)&&row.status==='PROCESSED'&&outcome.reviewState!=='REVIEWED',reviewState:outcome?.reviewState||'NOT_PROCESSED',intent:outcome?.intent||null,
+  canReview:!appSource&&Boolean(payload&&outcome)&&row.status==='PROCESSED'&&outcome.reviewState!=='REVIEWED',reviewState:outcome?.reviewState||'NOT_PROCESSED',intent:outcome?.intent||null,
   identityStatus:outcome?.identity?.status||'NOT_CHECKED',workerId:outcome?.identity?.workerId||null,businessApplied:outcome?.businessApplied===true,replySent:outcome?.replySent===true,replyState:outcome?.replyState||null,businessKind:outcome?.kind||null,receiptId:outcome?.receiptId||null,
   kind:payload?.type==='message'?value.type:payload?.type||'UNVERIFIED',from:payload?.type==='message'&&typeof value.from==='string'?value.from:null,
   body:payload?.type==='message'?normalizedMessage(payload).text:'',hasLocation:payload?.type==='message'&&value.type==='location',
@@ -57,13 +59,24 @@ function publicItem(row,payload){
   reviewDecision:outcome?.review?.decision||null,payloadVerified:Boolean(payload)};
 }
 export async function readMetaCustomerInbox(client,member,project,connection,environment,{after=null}={}){
- if(after!==null&&!eventId(after))throw new WorkspaceError('META_CUSTOMER_INBOX_INPUT_INVALID');
+ const cursorId=value=>eventId(value)||/^meta_app_source_[a-f0-9]{64}$/.test(value||'');
+ if(after!==null&&!cursorId(after))throw new WorkspaceError('META_CUSTOMER_INBOX_INPUT_INVALID');
  if(!connection||connection.metadata?.credentialFormat!=='tenant-aad-v2'||connection.metadata?.credentialOrganizationId!==member.organizationId)return {items:[],truncated:false,nextCursor:null,canSend:false,businessApplied:false};
- if(after){const cursor=(await client.query(`SELECT id FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 AND provider='meta-customer-v1' AND payload->>'channelId'=$3`,[after,project.id,connection.id])).rows;if(cursor.length!==1)throw new WorkspaceError('META_CUSTOMER_INBOX_CURSOR_UNAVAILABLE',409);}
- const rows=(await client.query(`SELECT id,status::text AS status,payload,outcome,"createdAt" AS "createdAt","processedAt" AS "processedAt","leaseToken","lastError",("leaseExpiresAt">clock_timestamp()) AS "activeLease",${revision} AS revision FROM public."WebhookEvent" WHERE "projectId"=$1 AND provider='meta-customer-v1' AND payload->>'channelId'=$2 AND ($3::text IS NULL OR ("createdAt",id)<(SELECT "createdAt",id FROM public."WebhookEvent" WHERE id=$3 AND "projectId"=$1 AND provider='meta-customer-v1' AND payload->>'channelId'=$2)) ORDER BY "createdAt" DESC,id DESC LIMIT 21`,[project.id,connection.id,after])).rows;
+ if(after){const cursor=(await client.query(`SELECT id FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 AND provider=ANY($4::text[]) AND payload->>'channelId'=$3`,[after,project.id,connection.id,['meta-customer-v1',META_APP_PROJECTION_PROVIDER]])).rows;if(cursor.length!==1)throw new WorkspaceError('META_CUSTOMER_INBOX_CURSOR_UNAVAILABLE',409);}
+ const rows=(await client.query(`SELECT id,provider,status::text AS status,payload,outcome,"createdAt" AS "createdAt","processedAt" AS "processedAt","leaseToken","lastError",("leaseExpiresAt">clock_timestamp()) AS "activeLease",${revision} AS revision FROM public."WebhookEvent" WHERE "projectId"=$1 AND provider=ANY($4::text[]) AND payload->>'channelId'=$2 AND ($3::text IS NULL OR ("createdAt",id)<(SELECT "createdAt",id FROM public."WebhookEvent" WHERE id=$3 AND "projectId"=$1 AND provider=ANY($4::text[]) AND payload->>'channelId'=$2)) ORDER BY "createdAt" DESC,id DESC LIMIT 21`,[project.id,connection.id,after,['meta-customer-v1',META_APP_PROJECTION_PROVIDER]])).rows;
  const outbound=(await client.query(`SELECT id,payload,outcome FROM public."WebhookEvent" WHERE "projectId"=$1 AND provider='meta-customer-outbound-v1' AND payload->>'channelId'=$2 AND payload->>'eventId'=ANY($3::text[])`,[project.id,connection.id,rows.slice(0,20).map(row=>row.id)])).rows;
  const replies=new Map();for(const row of outbound){try{const request=JSON.parse(decryptCustomerSecret(row.payload.encryptedPayload,{organizationId:member.organizationId,projectId:project.id,purpose:'outbound',resourceId:row.id},environment));if(digest(request)!==row.payload.requestDigest||request.channelId!==connection.id||request.organizationId!==member.organizationId||request.eventId!==row.payload.eventId)continue;replies.set(request.eventId,row.outcome);}catch{}}
- const items=rows.slice(0,20).map(row=>{let payload=null;try{payload=decode(row,member,project,{...connection,whatsappBusinessId:connection.whatsappBusinessId,phoneNumberId:connection.phoneNumberId},environment);}catch{}const item=publicItem(row,payload),reply=replies.get(row.id);return reply?{...item,replyState:reply.state,replySent:['SENT','STATUS_OBSERVED'].includes(reply.state)&&!['failed','deleted'].includes(reply.providerStatus),providerReplyStatus:reply.providerStatus||null}:item;});
+ const items=[];
+ for(const row of rows.slice(0,20)){
+  if(row.provider===META_APP_PROJECTION_PROVIDER){
+   let data=null;try{data=await decodeCustomerAppProjection(client,row,member,project,connection,environment);}catch{}
+   const record=data?.record,m=record?.data||{},contact=record?.kind==='contact',from=contact?m.contact?.phone_number:m.sourceThreadId||m.to||m.from;
+   items.push({...publicItem(row,null),kind:contact?'APP_CONTACT':data?.field==='history'?'APP_HISTORY':'APP_ECHO',source:'WHATSAPP_BUSINESS_APP',sourceEventId:data?.sourceEventId||null,sourceTimestamp:record?.timestamp||null,from:phoneForView(from),body:contact?text(m.contact?.full_name||m.contact?.first_name):text(m.text?.body||m[m.type]?.caption),observation:contact?(m.action==='remove'?'Eliminado en WhatsApp Business; los contactos manuales y las ventas se conservan.':'Contacto recibido de WhatsApp Business; fuente privada conservada.'):data?.field==='history'?'Mensaje histórico importado. No ejecuta acciones ni abre una ventana de respuesta.':'Mensaje enviado desde WhatsApp Business. Se muestra como fuente; no concede permisos.',payloadVerified:Boolean(data),canProcess:false,canReview:false,identityStatus:'NOT_APPLICABLE',businessApplied:false,replySent:false});
+   continue;
+  }
+  let payload=null;try{payload=decode(row,member,project,connection,environment);}catch{}
+  const item=publicItem(row,payload),reply=replies.get(row.id);items.push(reply?{...item,replyState:reply.state,replySent:['SENT','STATUS_OBSERVED'].includes(reply.state)&&!['failed','deleted'].includes(reply.providerStatus),providerReplyStatus:reply.providerStatus||null}:item);
+ }
  return {items,truncated:rows.length>20,nextCursor:rows.length>20?rows[19].id:null,canSend:false,businessApplied:items.some(item=>item.businessApplied),channelIdentityVerified:items.some(item=>['VERIFIED','CHANNEL_VERIFIED'].includes(item.identityStatus))};
 }
 export async function readMetaCustomerInboxReceipt(client,member,project,connection,environment,request){
@@ -91,7 +104,8 @@ export function createMetaCustomerInboxReview({workspace,environment=process.env
   const review=body?.action==='review_inbox',keys=['action','operationId','projectId','scope','eventId',...(review?['expectedRevision','decision']:[])];
   if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).sort().join('|')!==keys.sort().join('|')||!operationId(body.operationId)||!eventId(body.eventId)||!['process_inbox','review_inbox'].includes(body.action)||review&&(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}$/.test(body.expectedRevision||'')||!['OBSERVED','REFER_TO_PARTICIPANTS','REFER_TO_FIELD'].includes(body.decision)))throw new WorkspaceError('META_CUSTOMER_INBOX_INPUT_INVALID');
   const operationDigest=digest(body),claim=await within(session,body,true,async(client,member,_scope,project)=>{
-   const currentChannel=await channel(client,project),row=await event(client,project,body.eventId);decode(row,member,project,currentChannel,environment);
+   const currentChannel=await channel(client,project),row=await event(client,project,body.eventId),payload=decode(row,member,project,currentChannel,environment);
+   if(['history','smb_app_state_sync','smb_message_echoes'].includes(payload.field))throw new WorkspaceError('META_CUSTOMER_INBOX_SOURCE_READ_ONLY',409);
    const key='meta_inbox_request_'+digest([member.actorId,project.id,body.operationId]);const prior=(await client.query(`SELECT metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2`,[key,member.organizationId])).rows[0];if(prior&&prior.metadata.operationDigest!==operationDigest)throw new WorkspaceError('META_CUSTOMER_INBOX_OPERATION_CONFLICT',409);
    if(review){
     if(prior)return {done:true};if(row.status!=='PROCESSED'||row.revision!==body.expectedRevision||row.outcome?.version!==1)throw new WorkspaceError('META_CUSTOMER_INBOX_REVISION_CHANGED',409);

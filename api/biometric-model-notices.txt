@@ -1,0 +1,25 @@
+ObraSaaS private facial assistance - model and upstream attribution
+
+YuNet face_detection_yunet_2023mar.onnx: OpenCV Zoo, Apache-2.0.
+https://huggingface.co/opencv/face_detection_yunet/tree/3cc26e7f1014a5ee5d74a42acee58bafc9d0a310
+
+SFace face_recognition_sface_2021dec.onnx: OpenCV Zoo, Apache-2.0.
+https://huggingface.co/opencv/face_recognition_sface/tree/3d7082438a6e4551e840c9b2bb60b71e8da4b524
+
+MiniFASNetV2: minivision-ai / Beijing Mininglamp Vision Technology Co., Ltd., Apache-2.0.
+Upstream: https://github.com/minivision-ai/Silent-Face-Anti-Spoofing/tree/b6d5f04ad78778917853b25c778acef6d5626d15
+ONNX conversion distributed by garciafido/agilface:
+https://huggingface.co/garciafido/minifasnet-v2-anti-spoofing-onnx/tree/d29c87568ca9b5662da803b10f217c4db20b142b
+
+The Apache-2.0 license is included as biometric-model-license.txt.
+Immutable revisions and SHA-256 checksums are enforced in _biometric_core.py.
+No remote model code is executed. No identity images are uploaded to Hugging Face.
+
+This implementation uses the upstream 0..255 BGR input and live class 1.
+The third-party ONNX model card's 0..1 input and live class 0 are inconsistent
+with upstream inference. ONNX logits were compared with the pinned original
+PyTorch weights, using a deterministic random input, before this integration.
+
+Outputs are uncalibrated advisory signals. A static-image passive score does
+not prove life, document authenticity or legal identity. Approval remains a
+separate human decision in the canonical participant workflow.

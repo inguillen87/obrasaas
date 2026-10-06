@@ -4,9 +4,19 @@ import { cleanMetadata } from './site-register-policy.mjs';
 import { normalizeFieldCommand, fieldTransition, evaluateFieldLocation, fieldReceiptId, canReviewField, canApproveProgress } from './field-operations-policy.mjs';
 import { insertSiteReport, publicSiteReport } from './site-register-store.mjs';
 import { META_DEMO_PILOT_PROTOCOL } from './meta-cloud-protocol.mjs';
+import { compareProgressMeasurementQuantities } from './progress-measurement-quantity.js';
 
 const revision = name => `to_char(${name},'YYYY-MM-DD"T"HH24:MI:SS.US')`;
 const newId = prefix => prefix+'_'+randomUUID().replaceAll('-','');
+function assertProgressContinuity(current, proposed) {
+  if(proposed.progress<current.progress)throw new WorkspaceError('FIELD_PROGRESS_REGRESSION',409);
+  const approved=current.metadata?.fieldOperations?.quantity;
+  if(!approved)return;
+  if(approved.baseline!==proposed.baseline||approved.unit!==proposed.unit)throw new WorkspaceError('FIELD_BASELINE_CHANGED',409);
+  let comparison;
+  try{comparison=compareProgressMeasurementQuantities(proposed.quantity,approved.executed);}catch{throw new WorkspaceError('FIELD_QUANTITY_INVALID');}
+  if(comparison<0)throw new WorkspaceError('FIELD_PROGRESS_REGRESSION',409);
+}
 export function publicFieldEvidence(row) {
   const e=row.metadata?.fieldOperations;
   return {id:row.id,title:row.title,taskId:e.taskId,workerId:e.workerId,caption:row.description||'',sectorId:e.sectorId,
@@ -175,10 +185,8 @@ export function createFieldOperations({workspace,assertParticipant}) {
           await worker(client,member,session,command.projectId,p.workerId);
           const current=await task(client,command.projectId,p.taskId,true);
           if(current.revision!==p.revision)throw new WorkspaceError('FIELD_REVISION_CHANGED',409);
-          if(p.progress<current.progress)throw new WorkspaceError('FIELD_PROGRESS_REGRESSION',409);
+          assertProgressContinuity(current,p);
           for(const eid of p.evidenceIds){const e=await evidence(client,command.projectId,eid);if(e.metadata.fieldOperations.taskId!==p.taskId||e.metadata.fieldOperations.review?.decision!=='APPROVE')throw new WorkspaceError('FIELD_EVIDENCE_NOT_APPROVED',409);}
-          const baseline=current.metadata?.fieldOperations?.quantity;
-          if(baseline && (baseline.baseline!==p.baseline||baseline.unit!==p.unit))throw new WorkspaceError('FIELD_BASELINE_CHANGED',409);
           await expireProgress(client,member,command,p.taskId);
           const pending=(await client.query(`SELECT id FROM public."OperationalProposal" WHERE "projectId"=$1 AND type='TASK_PROGRESS' AND "sourceProvider"='account-field' AND status='PENDING' AND action->>'fieldOperationsVersion'='1' AND action->>'taskId'=$2 LIMIT 1`,[command.projectId,p.taskId])).rows;
           if(pending.length)throw new WorkspaceError('FIELD_PROGRESS_REVIEW_PENDING',409);
@@ -196,6 +204,7 @@ export function createFieldOperations({workspace,assertParticipant}) {
           if(p.decision==='APPROVE') {
             const current=await task(client,command.projectId,a.taskId,true);
             if(current.revision!==row.precondition?.taskRevision)throw new WorkspaceError('FIELD_REVISION_CHANGED',409);
+            assertProgressContinuity(current,a);
             for(const eid of a.evidenceIds){const e=await evidence(client,command.projectId,eid);if(e.metadata.fieldOperations.taskId!==a.taskId||e.metadata.fieldOperations.review?.decision!=='APPROVE')throw new WorkspaceError('FIELD_EVIDENCE_NOT_APPROVED',409);}
             const metadata={...cleanMetadata(current.metadata),fieldOperations:{version:1,approvedProposalId:row.id,approvedBy:member.actorId,approvedAt:now.toISOString(),...(a.quantity!==null?{quantity:{executed:a.quantity,baseline:a.baseline,unit:a.unit}}:{})}};
             await client.query(`UPDATE public."Task" SET progress=$3,status=$4::"TaskStatus",metadata=$5::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[current.id,command.projectId,a.progress,current.status==='BLOCKED'?'BLOCKED':a.progress===100?'DONE':a.progress>0?'IN_PROGRESS':'BACKLOG',JSON.stringify(metadata)]);

@@ -5,6 +5,9 @@ import {customerVaultConfigured} from './meta-customer-credentials.mjs';
 import {META_CUSTOMER_REQUIRED_SCOPES,hasMetaCustomerRequiredScopes} from './meta-customer-permissions.mjs';
 
 export const metaAssetId=value=>typeof value==='string'&&/^[1-9]\d{4,31}$/.test(value);
+export const metaCustomerTransportReady=readiness=>['app','secret','configuration','version','vault','review','callback'].every(key=>readiness?.gates?.[key]===true);
+const demoTransportGates=['fixedAssets','testMode','credential','vault','signature','version','recipients'];
+const injectedDemoTransportReady=readiness=>readiness?.canLaunchMeta===true&&readiness.gates&&typeof readiness.gates==='object'&&!Array.isArray(readiness.gates)&&Object.keys(readiness.gates).length===demoTransportGates.length&&demoTransportGates.every(key=>readiness.gates[key]===true);
 // Deliberately limited to the adopted BODY-only, positional es_AR catalogue.
 // Meta Cloud API contract: https://www.postman.com/meta/whatsapp-business-platform/request/lwtlz1k/send-message-template-interactive
 export function customerTemplateMessage(value){
@@ -32,16 +35,25 @@ export function metaCustomerReadiness(environment=process.env){
   configuration:consistentConfig&&metaAssetId(configId),version:/^v\d{2}\.0$/.test(environment.META_GRAPH_API_VERSION||''),
   vault:customerVaultConfigured(environment),
   review:environment.OBRASAAS_META_SIGNUP_RELEASE==='customer-self-service-v1',
-  callback:typeof environment.META_CUSTOMER_VERIFY_TOKEN==='string'&&environment.META_CUSTOMER_VERIFY_TOKEN.length>=32};
- return {canLaunchMeta:Object.values(gates).every(Boolean),operational:false,gates,
+  callback:typeof environment.META_CUSTOMER_VERIFY_TOKEN==='string'&&environment.META_CUSTOMER_VERIFY_TOKEN.length>=32,
+  signupVersion:environment.META_EMBEDDED_SIGNUP_VERSION==='4'};
+ const available=Object.values(gates).every(Boolean),coexistenceConfig=environment.META_COEXISTENCE_CONFIG_ID;
+ const coexistence=available&&environment.OBRASAAS_META_COEXISTENCE_RELEASE==='business-app-coexistence-v1'&&metaAssetId(coexistenceConfig)&&coexistenceConfig!==configId;
+ return {canLaunchMeta:Object.values(gates).every(Boolean),canUseCustomerTransport:metaCustomerTransportReady({gates}),operational:false,gates,
   launchCode:Object.values(gates).every(Boolean)?'META_CUSTOMER_AUTHORIZATION_AVAILABLE':'META_CUSTOMER_CONFIGURATION_PENDING',
   appId:gates.app?environment.NEXT_PUBLIC_META_APP_ID:null,configId:gates.configuration?configId:null,
   version:gates.version?environment.META_GRAPH_API_VERSION:null,callbackPath:'/api/meta/customer-callback',
   recovery:{afterResponse:true,signedJob:typeof environment.META_CUSTOMER_JOB_SECRET==='string'&&environment.META_CUSTOMER_JOB_SECRET.length>=32,periodic:typeof environment.CRON_SECRET==='string'&&environment.CRON_SECRET.length>=32,intervalMinutes:5,productionVerified:false},
-  humanAcceptance:'NOT_VERIFIED',numberRegistration:'REQUIRES_CUSTOMER_NUMBER'};
+  humanAcceptance:'NOT_VERIFIED',numberRegistration:'REQUIRES_CUSTOMER_NUMBER',signupVersion:'4',
+  flows:{DEDICATED:{available,configId:gates.configuration?configId:null},BUSINESS_APP:{available:coexistence,configId:coexistence?coexistenceConfig:null,featureType:'whatsapp_business_app_onboarding'},EXISTING_API:{available:false,configId:null,requiresSharePlan:true}}};
 }
 export function createMetaCustomerProvider({environment=process.env,fetchImpl=fetch,now=()=>Date.now(),readiness=metaCustomerReadiness}={}){
- const config=()=>{const ready=readiness(environment);if(!ready.canLaunchMeta)throw new WorkspaceError(ready.launchCode,503);return ready;};
+ // Embedded Signup versions govern new authorization flows. They do not
+ // revoke previously granted customer transport. Retain every existing
+ // transport prerequisite while requiring v4 separately for a new code.
+ // The internal DEMO composition injects a different, complete seven-gate
+ // contract. It cannot inherit CUSTOMER gates or authorize a partial shape.
+ const config=(signupRequired=false)=>{const ready=readiness(environment),transportReady=readiness===metaCustomerReadiness?metaCustomerTransportReady(ready):injectedDemoTransportReady(ready);if(!transportReady||signupRequired&&!ready.canLaunchMeta)throw new WorkspaceError(ready.launchCode,503);return ready;};
  async function request(path,{token,method='GET',body,appToken=false}={}){
   const ready=config(),url=new URL(`https://graph.facebook.com/${ready.version}/${path}`);
   if(token&&!appToken)url.searchParams.set('appsecret_proof',createHmac('sha256',environment.META_APP_SECRET).update(token).digest('hex'));
@@ -53,22 +65,27 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
  return {
   readiness:()=>readiness(environment),
   async exchange(code){
-   const ready=config(),query=new URLSearchParams({client_id:ready.appId,client_secret:environment.META_APP_SECRET,code});
+   const ready=config(true),query=new URLSearchParams({client_id:ready.appId,client_secret:environment.META_APP_SECRET,code});
    const result=await request('oauth/access_token?'+query);
    if(typeof result.access_token!=='string'||result.access_token.length<20||result.access_token.length>4096)throw new WorkspaceError('META_CUSTOMER_EXCHANGE_UNCONFIRMED',503);return result.access_token;
   },
-  async inspect({token,wabaId,phoneNumberId}){
+  async inspect({token,wabaId,phoneNumberId,numberMode='DEDICATED'}){
    const ready=config();const result=await request('debug_token?'+new URLSearchParams({input_token:token}),{token:ready.appId+'|'+environment.META_APP_SECRET,appToken:true});
    const data=result.data;
    if(data?.is_valid!==true||String(data.app_id)!==ready.appId||!hasMetaCustomerRequiredScopes(data.scopes))throw new WorkspaceError('META_CUSTOMER_TOKEN_SCOPE_REJECTED',403);
    const expiresAt=Number(data.expires_at);if(!Number.isSafeInteger(expiresAt)||expiresAt<0||expiresAt&&expiresAt*1000<=now()+300000)throw new WorkspaceError('META_CUSTOMER_TOKEN_EXPIRED',409);
    const scopes=data.granular_scopes;
    if(!Array.isArray(scopes)||!scopes.some(scope=>scope.scope==='whatsapp_business_management'&&Array.isArray(scope.target_ids)&&scope.target_ids.map(String).includes(wabaId)))throw new WorkspaceError('META_CUSTOMER_WABA_SCOPE_REJECTED',403);
-   const phones=await request(wabaId+'/phone_numbers?fields=id,display_phone_number,verified_name,code_verification_status,status&limit=100',{token});
-   const phone=phones.data?.find(item=>String(item.id)===phoneNumberId);if(!phone)throw new WorkspaceError('META_CUSTOMER_PHONE_WABA_MISMATCH',403);
+   const phones=await request(wabaId+'/phone_numbers?'+new URLSearchParams({fields:'id,display_phone_number,verified_name,code_verification_status,status,is_on_biz_app,platform_type',limit:'100'}),{token});
+   if(!Array.isArray(phones.data)||phones.paging?.next)throw new WorkspaceError('META_CUSTOMER_PHONE_SELECTION_REQUIRED',409);
+   const eligible=numberMode==='BUSINESS_APP'?phones.data.filter(item=>item.is_on_biz_app===true&&item.platform_type==='CLOUD_API'):phones.data;
+   const phone=phoneNumberId?eligible.find(item=>String(item.id)===phoneNumberId):numberMode==='BUSINESS_APP'&&eligible.length===1?eligible[0]:null;
+   if(!phone||!metaAssetId(String(phone.id)))throw new WorkspaceError(numberMode==='BUSINESS_APP'?'META_CUSTOMER_COEXISTENCE_PHONE_REQUIRED':'META_CUSTOMER_PHONE_WABA_MISMATCH',403);
+   if(numberMode==='BUSINESS_APP'&&eligible.length!==1)throw new WorkspaceError('META_CUSTOMER_PHONE_SELECTION_REQUIRED',409);
    // Phone verification is not the Cloud API registration signal.
    return {expiresAt:expiresAt?new Date(expiresAt*1000).toISOString():null,scopes:[...META_CUSTOMER_REQUIRED_SCOPES],
-    phoneStatus:typeof phone.status==='string'?phone.status:'UNKNOWN',registered:phone.status==='CONNECTED',
+    phoneNumberId:String(phone.id),isOnBizApp:phone.is_on_biz_app===true,platformType:phone.platform_type||null,
+    phoneStatus:typeof phone.status==='string'?phone.status:'UNKNOWN',registered:numberMode==='BUSINESS_APP'?phone.is_on_biz_app===true&&phone.platform_type==='CLOUD_API':phone.status==='CONNECTED',
     displayPhoneNumber:typeof phone.display_phone_number==='string'?phone.display_phone_number.slice(0,64):null,
     verifiedBusinessName:typeof phone.verified_name==='string'?phone.verified_name.slice(0,160):null};
   },
@@ -87,6 +104,13 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
    if(!metaAssetId(phoneNumberId)||!/^\d{6}$/.test(pin||''))throw new WorkspaceError('META_CUSTOMER_REGISTRATION_INPUT_INVALID');
    const result=await request(phoneNumberId+'/register',{token,method:'POST',body:{messaging_product:'whatsapp',pin}});
    if(result.success!==true)throw new WorkspaceError('META_CUSTOMER_REGISTRATION_UNCONFIRMED',503);return true;
+  },
+  async syncAppData({token,phoneNumberId,syncType}){
+   if(!readiness(environment).flows?.BUSINESS_APP?.available)throw new WorkspaceError('META_CUSTOMER_COEXISTENCE_CONFIGURATION_PENDING',503);
+   if(!metaAssetId(phoneNumberId)||!['smb_app_state_sync','history'].includes(syncType))throw new WorkspaceError('META_CUSTOMER_SYNC_INPUT_INVALID');
+   const result=await request(phoneNumberId+'/smb_app_data',{token,method:'POST',body:{messaging_product:'whatsapp',sync_type:syncType}});
+   if(typeof result.request_id!=='string'||!result.request_id.length||result.request_id.length>200||/[\s\u0000-\u001f]/.test(result.request_id))throw new WorkspaceError('META_CUSTOMER_SYNC_UNCONFIRMED',503);
+   return {requestId:result.request_id};
   },
   async templates({token,wabaId}){
    const templates=[];let path=wabaId+'/message_templates?fields=id,name,status,language,category&limit=100';
