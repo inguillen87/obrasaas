@@ -1,0 +1,73 @@
+{
+  "createdAt": "2026-10-06T10:27:08.556Z",
+  "purpose": "Existing ObraSaaS launch assets optimized for on-demand public presentation",
+  "contentChanged": false,
+  "assets": [
+    {
+      "path": "/media/launch/obra-vista-amplia.webp",
+      "sourceLabel": "obra-vista-amplia-vertical.png",
+      "sourceSha256": "73daef49fd148511f9159ed83a8e6d5245f27e79e1743c12a1f7eb95a0b23e03",
+      "sha256": "dd2c051e98d54c4bc253e9961f0d950ffe747b881b11f3a0768cc90af7d363ff",
+      "bytes": 142008,
+      "width": 941,
+      "height": 1672,
+      "illustrative": true,
+      "realCustomer": false
+    },
+    {
+      "path": "/media/launch/obra-registro-evidencia.webp",
+      "sourceLabel": "obra-registro-evidencia-vertical.png",
+      "sourceSha256": "3f5baa078f084989569bd27ecbcf5a3ec85c59261eaa81256a611a111a425434",
+      "sha256": "7b2f18d4c29561959b7a1c230f40437b5e9526b61296e6a4e55f9ead6dea4623",
+      "bytes": 52550,
+      "width": 941,
+      "height": 1672,
+      "illustrative": true,
+      "realCustomer": false
+    },
+    {
+      "path": "/media/launch/obra-entrega-materiales.webp",
+      "sourceLabel": "obra-entrega-materiales-vertical.png",
+      "sourceSha256": "cc564e26c9516e161737e7c6f3d1bbde99d7bdade87b240b2f168cf04222b831",
+      "sha256": "671bed8fc442aa2ff7474b3906bdf78ce7afa7ee3d187968a330df6ce8f39f07",
+      "bytes": 100644,
+      "width": 941,
+      "height": 1672,
+      "illustrative": true,
+      "realCustomer": false
+    },
+    {
+      "path": "/media/launch/obrasaas-15s.mp4",
+      "sourceLabel": "obrasaas-story-v2-15s.mp4",
+      "sourceSha256": "57ab045101065eb414eee25f1623009adb508320e46eb8e85f7556403fc61c3a",
+      "sha256": "d06e2e32f518cd6e0e4c4a6fb18f26da23b43c9fe4c68c47944ffaedb66d6e0e",
+      "bytes": 706472,
+      "width": 720,
+      "height": 1280,
+      "durationSeconds": 15,
+      "illustrative": true,
+      "syntheticVoice": true,
+      "realCustomer": false
+    },
+    {
+      "path": "/media/launch/obrasaas-15s-poster.webp",
+      "sourceLabel": "obrasaas-15s.mp4 at 1.15s",
+      "sourceSha256": "d06e2e32f518cd6e0e4c4a6fb18f26da23b43c9fe4c68c47944ffaedb66d6e0e",
+      "sha256": "238c8aec318c98780a71668461171459289252ee03daf977157fc5e3488e7d5e",
+      "bytes": 74714,
+      "width": 720,
+      "height": 1280,
+      "illustrative": true,
+      "realCustomer": false
+    },
+    {
+      "path": "/media/launch/obrasaas-15s-es-AR.vtt",
+      "sourceLabel": "story-es-AR.srt",
+      "sourceSha256": "b92f146308a94db9dbdc10c82c3ba6958c2af86a4048c45a8e3a58334a0c186d",
+      "sha256": "6b4a82d9ff3f7bfe512736d3f7cc6bb81aef7846b051624eb41e135818385e7a",
+      "bytes": 296,
+      "language": "es-AR",
+      "source": "Existing narration timing; SRT to WebVTT conversion"
+    }
+  ]
+}

@@ -80,6 +80,17 @@ async function scenario(mode,width=390,numberMode='DEDICATED'){
  });
  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});assert.equal(requests.length,0);
  await click(page,'Preparar WhatsApp');await wait(page,'Empresa de ensayo');
+ const guidanceText=await page.$eval('#wa-personal-app-guidance',element=>element.textContent);
+ assert.match(guidanceText,/WhatsApp personal no admite coexistencia/);assert.match(guidanceText,/No desinstales.*ni elimines tu cuenta/);
+ assert.deepEqual(await page.$$eval('input[name="number-mode"]',inputs=>inputs.map(input=>input.value)),['DEDICATED','BUSINESS_APP','EXISTING_API']);
+ if(mode==='classification'){
+  for(const [choice,expected] of [['DEDICATED','sólo para una línea libre'],['BUSINESS_APP','Meta decide la elegibilidad'],['EXISTING_API','Todavía no ejecuta una migración']]){
+   await page.click(`input[name="number-mode"][value="${choice}"]`);await page.waitForFunction((choice,expected)=>document.querySelector('[data-number-mode-guidance="'+choice+'"]')?.textContent.includes(expected),{},choice,expected);
+   assert.equal(await page.$$eval('input[name="number-mode"]:checked',inputs=>inputs.length),1);assert.equal(posts.length,0);
+  }
+  await page.click('input[name="number-mode"][value="BUSINESS_APP"]');assert.match(await page.$eval('[data-number-mode-guidance]',element=>element.textContent),/SMS para alta dedicada, detenelo/);
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'classification overflow '+width);assert.deepEqual(external,[]);await page.screenshot({path:path.join(evidence,`number-classification-${width}.png`),fullPage:true});checks.push(`number-classification-${width}-three-real-modes-no-save-no-meta`);await context.close();return;
+ }
  if(mode.startsWith('access-load-')){await click(page,'Volver a cargar');await page.waitForFunction(()=>!document.querySelector('input[maxlength="70"]'));assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Empresa de ensayo'));assert.equal(posts.length,0);await click(page,'Volver a cargar');await wait(page,'Empresa de ensayo');assert.equal(posts.length,0);await assertPrivateStorage(page);await page.screenshot({path:path.join(evidence,`${mode}-${width}.png`),fullPage:true});checks.push(`${mode}-${width}-hide-private-explicit-GET-restores-with-no-POST`);await context.close();return;}
  await page.type('input[maxlength="70"]','Asistente de mi obra');
  await page.waitForFunction(()=>document.querySelector('#change-worksite').disabled);
@@ -87,6 +98,7 @@ async function scenario(mode,width=390,numberMode='DEDICATED'){
   assert.equal(posts.length,0);await click(page,'Cancelar edición');await page.waitForFunction(()=>!document.querySelector('#change-worksite').disabled);assert.equal(await page.$('input[maxlength="70"]'),null);await click(page,'Preparar WhatsApp');await wait(page,'Empresa de ensayo');assert.equal(await page.$eval('input[maxlength="70"]',input=>input.value),'');checks.push('unsaved-preparation-blocks-context-until-explicit-cancel');await context.close();return;
  }
  await page.click(`input[type="radio"][value="${numberMode}"]`);
+ assert.equal(await page.$eval('[data-number-mode-guidance]',element=>element.dataset.numberModeGuidance),numberMode);
  await page.click('input[type="checkbox"]');
  const boxes=await page.$$('input[type="checkbox"]');await boxes.at(-1).click();
  assert.equal(await page.$$eval('input[type="password"]',elements=>elements.length),0);
@@ -150,7 +162,7 @@ async function scenario(mode,width=390,numberMode='DEDICATED'){
 try{
  let ready=false;for(let attempt=0;attempt<120;attempt++){if(server.exitCode!==null)throw new Error('Fixture server exited');try{const response=await fetch(origin);if(response.ok){ready=true;break;}}catch{}await new Promise(resolve=>setTimeout(resolve,500));}assert.ok(ready);
  browser=await puppeteer.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{}),args:['--no-sandbox','--disable-setuid-sandbox']});
- if(!focusedScenario){for(const width of [320,390,768,1280])await scenario('saved',width);
+ if(!focusedScenario){for(const width of [320,390,768,1280])await scenario('classification',width);for(const width of [320,390,768,1280])await scenario('saved',width);
  for(const mode of ['BUSINESS_APP','EXISTING_API'])await scenario('saved',390,mode);
  await scenario('draft-cancel');await scenario('uncertain');await scenario('no-arrival');await scenario('rollback');await scenario('conflict');
  for(const width of [320,390,768,1280])await scenario('denied-401',width);

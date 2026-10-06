@@ -68,6 +68,11 @@ export const lifecycleSchema=`
 
 export function createControlledLifecycleGraph(environment=lifecycleEnvironment){
  const assets=new Map(lifecycleTenants.map(tenant=>[tenant.key,{...tenant,registered:false,subscribed:false,subscriptionOverride:null,exchanges:0,registrations:0,subscriptions:0,sends:0,downloads:0,registerResponseLost:false,registerRejectedOnce:false,registerPendingOnce:false,sendResponseLost:false}]));
+ const media=new Map(lifecycleTenants.map(tenant=>[tenant.mediaId,{assetKey:tenant.key,bytes:lifecyclePng,pathname:'/whatsapp_business/attachments/synthetic-'+tenant.key+'.png'}]));
+ function addMedia(assetKey,mediaId,bytes){
+  assert.ok(assets.has(assetKey));assert.match(mediaId,/^\d+$/);assert.ok(!media.has(mediaId));assert.ok(Buffer.isBuffer(bytes));assert.ok(bytes.length>8&&bytes.length<=2*1024*1024);assert.equal(bytes.subarray(0,8).toString('hex'),'89504e470d0a1a0a');
+  media.set(mediaId,{assetKey,bytes:Buffer.from(bytes),pathname:'/whatsapp_business/attachments/synthetic-'+assetKey+'-'+mediaId+'.png'});
+ }
  const messages=new Map(),unexpected=[];
  let beforeRequest=async()=>{};
  async function fetchImpl(input,options={}){
@@ -76,9 +81,9 @@ export function createControlledLifecycleGraph(environment=lifecycleEnvironment)
    assert.equal(url.protocol,'https:');assert.equal(url.username,'');assert.equal(url.password,'');assert.equal(url.port,'');assert.equal(options.redirect,'error');
    const bearer=options.headers?.Authorization;
    if(url.hostname==='lookaside.fbsbx.com'){
-    const asset=[...assets.values()].find(value=>url.pathname==='/whatsapp_business/attachments/synthetic-'+value.key+'.png');
+    const selected=[...media.values()].find(value=>url.pathname===value.pathname),asset=assets.get(selected?.assetKey);
     assert.ok(asset);assert.equal(bearer,'Bearer '+asset.token);assert.equal(method,'GET');asset.downloads++;
-    return new Response(lifecyclePng,{headers:{'Content-Type':'image/png','Content-Length':String(lifecyclePng.length)}});
+    return new Response(selected.bytes,{headers:{'Content-Type':'image/png','Content-Length':String(selected.bytes.length)}});
    }
    assert.equal(url.hostname,'graph.facebook.com');assert.ok(url.pathname.startsWith('/v25.0/'));
    const endpoint=url.pathname.slice('/v25.0/'.length),body=options.body?JSON.parse(options.body):null;
@@ -114,14 +119,15 @@ export function createControlledLifecycleGraph(environment=lifecycleEnvironment)
     if(asset.sendResponseLost){asset.sendResponseLost=false;throw new Error('SYNTHETIC_SEND_RESPONSE_LOST');}
     return Response.json({messages:[{id:message.id}]});
    }
-   if(endpoint===asset.mediaId&&method==='GET'){
+   if(media.has(endpoint)&&method==='GET'){
+    const selected=media.get(endpoint);assert.equal(selected.assetKey,asset.key);
     assert.equal(url.searchParams.get('phone_number_id'),asset.phoneNumberId);
-    return Response.json({id:asset.mediaId,url:'https://lookaside.fbsbx.com/whatsapp_business/attachments/synthetic-'+asset.key+'.png',mime_type:'image/png',file_size:lifecyclePng.length,sha256:createHash('sha256').update(lifecyclePng).digest('hex')});
+    return Response.json({id:endpoint,url:'https://lookaside.fbsbx.com'+selected.pathname,mime_type:'image/png',file_size:selected.bytes.length,sha256:createHash('sha256').update(selected.bytes).digest('hex')});
    }
    throw new Error('LIFECYCLE_GRAPH_ENDPOINT_NOT_CONTROLLED');
   }catch(error){if(!/^SYNTHETIC_(REGISTER|SEND)_RESPONSE_LOST$/.test(error.message))unexpected.push('LIFECYCLE_GRAPH_REQUEST_REJECTED');throw error;}
  }
- return {fetchImpl,assets,messages,unexpected,setBeforeRequest:callback=>{beforeRequest=callback;}};
+ return {fetchImpl,assets,messages,unexpected,addMedia,setBeforeRequest:callback=>{beforeRequest=callback;}};
 }
 
 export function createControlledLifecycleClerk(){

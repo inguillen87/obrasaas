@@ -3,7 +3,7 @@ import test from 'node:test';
 import { createHmac } from 'node:crypto';
 import { readFileSync, readdirSync } from 'node:fs';
 import vm from 'node:vm';
-import { authorizeLegacyService, exactSecretMatch, legacyBoundaryKind, unauthorizedLegacyResponse } from '../src/lib/legacy-access-boundary.js';
+import { authorizeLegacyService, exactSecretMatch, legacyBoundaryKind, unauthorizedLegacyResponse, LAUNCH_PUBLIC_ASSETS } from '../src/lib/legacy-access-boundary.js';
 import { verifyApiAuth, verifyMetaWebhookSignature, verifyWebviewToken, generateWebviewToken } from '../src/lib/auth.js';
 const SECRET = 'unit-only-credential-'.repeat(4);
 const env = { INTERNAL_API_SECRET: SECRET };
@@ -55,6 +55,16 @@ test('public marketing and explicit assets remain accessible', () => {
   for (const path of ['/','/sign-in','/sign-up','/pricing','/bim_render.png','/icon-192.svg','/sw.js']) assert.equal(legacyBoundaryKind(path),'public');
   assert.equal(legacyBoundaryKind('/api/health'), 'public-api');
   assert.equal(legacyBoundaryKind('/api/health','POST'), 'private-api');
+});
+
+test('launch presentation assets are readable without exposing media directories or writes', () => {
+  assert.equal(LAUNCH_PUBLIC_ASSETS.length,6);
+  for (const route of LAUNCH_PUBLIC_ASSETS) {
+    assert.equal(legacyBoundaryKind(route,'GET'),'public',route);
+    assert.equal(legacyBoundaryKind(route,'HEAD'),'public',route);
+    for (const method of ['POST','PUT','PATCH','DELETE','OPTIONS']) assert.equal(legacyBoundaryKind(route,method),'private-api',method+' '+route);
+  }
+  for (const route of ['/media','/media/launch','/media/launch/private.pdf','/media/launch/provenance.json','/media/launch/obrasaas-15s.mp4/extra','/media/launch/obrasaas-15s.mp4.bak']) assert.equal(legacyBoundaryKind(route),'private-page',route);
 });
 test('all existing API routes have a classified nonpublic boundary', () => {
   function visit(folder) { return readdirSync(folder,{withFileTypes:true}).flatMap(item => item.isDirectory()?visit(new URL(item.name+'/',folder)):item.name==='route.js'?[new URL(item.name,folder)]:[]); }

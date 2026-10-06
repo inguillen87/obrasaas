@@ -6,10 +6,21 @@ import {OBRASAAS_META_CHANNEL} from './meta-channel-binding.mjs';
 import {readProjectWorkspaceProfile} from './whatsapp/project-workspace-profile.js';
 import {hasMetaCustomerRequiredScopes} from './meta-customer-permissions.mjs';
 import {metaCustomerTransportReady} from './meta-customer-provider.mjs';
+import {customerLifecycleRecovery} from './meta-customer-coexistence.mjs';
 const coexistenceGrant=connection=>connection?.metadata?.coexistence?.verified===true&&Number.isFinite(Date.parse(connection.metadata.coexistence.verifiedAt))&&connection.metadata.customerVerification?.isOnBizApp===true&&connection.metadata.customerVerification?.platformType==='CLOUD_API';
+export function customerActivationLifecycleReady(connection){
+ const lifecycle=connection?.metadata?.customerLifecycle,recovery=customerLifecycleRecovery(connection);
+ if(!lifecycle&&!recovery)return true;
+ const oldSignup=recovery?.authorizationSignupId||lifecycle?.authorizationSignupId,currentSignup=connection?.metadata?.customerSignupId;
+ if(typeof oldSignup==='string'&&typeof currentSignup==='string'&&oldSignup!==currentSignup)return true;
+ if(recovery&&['RESTORED','KEPT_DISABLED'].includes(recovery.state))return true;
+ if(recovery)return recovery.automatic===true&&lifecycle?.event==='account_reconnected'&&Boolean(recovery.pauseTimestamp)&&Boolean(lifecycle.providerTimestamp)&&Number(lifecycle.providerTimestamp)>Number(recovery.pauseTimestamp)&&recovery.lastCode!=='META_CUSTOMER_LIFECYCLE_ORDER_UNCONFIRMED';
+ if(lifecycle?.lastCode==='META_CUSTOMER_LIFECYCLE_ORDER_UNCONFIRMED')return false;
+ return !['account_offboarded','partner_removed','account_disconnected','account_reconnected'].includes(lifecycle?.event);
+}
 export function publicCustomerActivation(connection,readiness,member,now=Date.now(),numberMode='DEDICATED'){
- const state=connection?.metadata?.customerActivation,active=customerChannelActive(connection,now);
- return {state:active?'ACTIVE':state?.state==='ACTIVE'?'REVIEW_REQUIRED':state?.state||'NOT_ACCEPTED',operational:active,actorId:state?.actorId||null,verifiedAt:state?.verifiedAt||null,lastCode:state?.lastCode||null,canActivate:member.role==='ADMIN'&&metaCustomerTransportReady(readiness)&&['DEDICATED','BUSINESS_APP'].includes(numberMode)&&(numberMode!=='BUSINESS_APP'||coexistenceGrant(connection))&&Boolean(connection?.metadata?.customerVerification?.registered)&&(!state?.leaseExpiresAt||Date.parse(state.leaseExpiresAt)<=now),canDeactivate:member.role==='ADMIN'&&connection?.enabled===true,roundTrip:'NOT_VERIFIED',fieldJourney:'NOT_VERIFIED'};
+ const state=connection?.metadata?.customerActivation,active=customerChannelActive(connection,now),recovery=customerLifecycleRecovery(connection),lifecycleReady=customerActivationLifecycleReady(connection),canStopRecovery=recovery?.automatic===true&&recovery.previouslyEnabled===true&&['PAUSED','VERIFYING','REVIEW_REQUIRED'].includes(recovery.state)&&state?.state!=='DEACTIVATED';
+ return {state:active?'ACTIVE':state?.state==='ACTIVE'?'REVIEW_REQUIRED':state?.state||'NOT_ACCEPTED',operational:active,actorId:state?.actorId||null,verifiedAt:state?.verifiedAt||null,lastCode:state?.lastCode||recovery?.lastCode||(!lifecycleReady?'META_CUSTOMER_ACTIVATION_RECONNECTION_REQUIRED':null),canActivate:member.role==='ADMIN'&&lifecycleReady&&metaCustomerTransportReady(readiness)&&['DEDICATED','BUSINESS_APP'].includes(numberMode)&&(numberMode!=='BUSINESS_APP'||coexistenceGrant(connection))&&Boolean(connection?.metadata?.customerVerification?.registered)&&(!state?.leaseExpiresAt||Date.parse(state.leaseExpiresAt)<=now),canDeactivate:member.role==='ADMIN'&&(connection?.enabled===true||canStopRecovery),roundTrip:'NOT_VERIFIED',fieldJourney:'NOT_VERIFIED'};
 }
 export function createMetaCustomerActivation({workspace,provider,environment=process.env,now=()=>Date.now()}){
  const within=(session,body,writable,run)=>workspace.integrationProject(session,body,writable,run);
@@ -27,13 +38,16 @@ export function createMetaCustomerActivation({workspace,provider,environment=pro
     await client.query(`UPDATE public."WhatsAppConnection" SET enabled=false,"connectionStatus"='DISABLED',metadata=metadata||$3::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[channel.id,project.id,JSON.stringify({customerActivation:{version:1,state:'DEACTIVATED',actorId:member.actorId,deactivatedAt:new Date(now()).toISOString()}})]);
     await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'integration.whatsapp.customer.deactivated','WhatsAppConnection',$4,$5::jsonb)`,[key,member.organizationId,member.actorId,channel.id,JSON.stringify({version:1,projectId:project.id,operationDigest})]);return {done:true};
    }
+   if(!customerActivationLifecycleReady(channel))throw new WorkspaceError('META_CUSTOMER_ACTIVATION_RECONNECTION_REQUIRED',409);
+   const previousSignup=customerLifecycleRecovery(channel)?.authorizationSignupId||channel.metadata.customerLifecycle?.authorizationSignupId;
+   if(previousSignup&&channel.metadata.customerSignupId!==previousSignup){const signup=project.metadata?.metaSignup;if(signup?.id!==channel.metadata.customerSignupId||signup.state!=='LINKED_PENDING_ACCEPTANCE'||signup.organizationId!==member.organizationId||signup.wabaId!==channel.whatsappBusinessId||signup.phoneNumberId!==channel.phoneNumberId)throw new WorkspaceError('META_CUSTOMER_ACTIVATION_REAUTHORIZATION_REQUIRED',409);}
    const profile=readProjectWorkspaceProfile(project.metadata,project.organizationMetadata,project.id).profile;if(!profile.configured||!['DEDICATED','BUSINESS_APP'].includes(profile.numberMode))throw new WorkspaceError('META_CUSTOMER_PREPARATION_REQUIRED',409);
    if(!metaCustomerTransportReady(provider.readiness()))throw new WorkspaceError('META_CUSTOMER_CONFIGURATION_PENDING',503);
    if(profile.numberMode==='BUSINESS_APP'&&!coexistenceGrant(channel))throw new WorkspaceError('META_CUSTOMER_COEXISTENCE_PHONE_REQUIRED',409);
    const state=channel.metadata.customerActivation;if(state?.state==='VERIFYING'&&Date.parse(state.leaseExpiresAt)>now())throw new WorkspaceError('META_CUSTOMER_ACTIVATION_BUSY',409);
    const leaseId=randomUUID(),token=decryptCustomerSecret(channel.encryptedAccessToken,{organizationId:member.organizationId,projectId:project.id,purpose:'access-token',resourceId:channel.phoneNumberId},environment);
    await client.query(`UPDATE public."WhatsAppConnection" SET enabled=false,"connectionStatus"='PENDING',metadata=metadata||$3::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[channel.id,project.id,JSON.stringify({customerActivation:{version:1,state:'VERIFYING',actorId:member.actorId,leaseId,leaseExpiresAt:new Date(now()+60000).toISOString(),operationDigest}})]);
-   return {channel,token,leaseId,key,operationDigest,numberMode:profile.numberMode,preparedRevision:profile.revision,lifecycleDigest:digest(channel.metadata.customerLifecycle||null)};
+   return {channel,token,leaseId,key,operationDigest,numberMode:profile.numberMode,preparedRevision:profile.revision,lifecycleDigest:digest(channel.metadata.customerLifecycle||null),reauthorizationDigest:previousSignup&&channel.metadata.customerSignupId!==previousSignup?digest(project.metadata.metaSignup):null};
   });
   if(claimed.done)return {saved:true,replayed:true};
   try{
@@ -47,8 +61,12 @@ export function createMetaCustomerActivation({workspace,provider,environment=pro
     if(!metaCustomerTransportReady(provider.readiness()))throw new WorkspaceError('META_CUSTOMER_CONFIGURATION_PENDING',503);
     const channel=await load(client,member,project);if(channel.id!==claimed.channel.id||channel.phoneNumberId!==claimed.channel.phoneNumberId||channel.whatsappBusinessId!==claimed.channel.whatsappBusinessId||channel.encryptedAccessToken!==claimed.channel.encryptedAccessToken||channel.metadata.customerActivation?.leaseId!==claimed.leaseId||Date.parse(channel.metadata.customerActivation.leaseExpiresAt)<=now())throw new WorkspaceError('META_CUSTOMER_ACTIVATION_CHANGED',409);
     if(digest(channel.metadata.customerLifecycle||null)!==claimed.lifecycleDigest)throw new WorkspaceError('META_CUSTOMER_ACTIVATION_CHANGED',409);
+    if(claimed.reauthorizationDigest&&digest(project.metadata.metaSignup)!==claimed.reauthorizationDigest)throw new WorkspaceError('META_CUSTOMER_ACTIVATION_REAUTHORIZATION_REQUIRED',409);
     if(claimed.numberMode==='BUSINESS_APP'&&!coexistenceGrant(channel))throw new WorkspaceError('META_CUSTOMER_COEXISTENCE_PHONE_REQUIRED',409);
-    await client.query(`UPDATE public."WhatsAppConnection" SET enabled=true,"connectionStatus"='CONNECTED',metadata=metadata||$3::jsonb,"lastVerifiedAt"=clock_timestamp(),"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[channel.id,project.id,JSON.stringify({customerSubscribed:true,customerVerification:verified,customerActivation:{version:1,state:'ACTIVE',actorId:member.actorId,verifiedAt:new Date(now()).toISOString(),operationDigest:claimed.operationDigest,roundTrip:'NOT_VERIFIED',fieldJourney:'NOT_VERIFIED'}})]);
+    if(!customerActivationLifecycleReady(channel))throw new WorkspaceError('META_CUSTOMER_ACTIVATION_RECONNECTION_REQUIRED',409);
+    const recovery=customerLifecycleRecovery(channel),lifecycle=channel.metadata.customerLifecycle;
+    const lifecyclePatch=recovery||lifecycle?{customerLifecycle:{...lifecycle,authorizationSignupId:channel.metadata.customerSignupId||null,recovery:{...recovery,version:1,state:'RESTORED',recoveryMode:'MANUAL',authorizationSignupId:channel.metadata.customerSignupId||null,verifiedAt:new Date(now()).toISOString(),leaseToken:null,lastCode:null}}}:{};
+    await client.query(`UPDATE public."WhatsAppConnection" SET enabled=true,"connectionStatus"='CONNECTED',metadata=metadata||$3::jsonb,"lastVerifiedAt"=clock_timestamp(),"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[channel.id,project.id,JSON.stringify({customerSubscribed:true,customerVerification:verified,customerActivation:{version:1,state:'ACTIVE',actorId:member.actorId,verifiedAt:new Date(now()).toISOString(),operationDigest:claimed.operationDigest,roundTrip:'NOT_VERIFIED',fieldJourney:'NOT_VERIFIED'},...lifecyclePatch})]);
     await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'integration.whatsapp.customer.activated','WhatsAppConnection',$4,$5::jsonb)`,[claimed.key,member.organizationId,member.actorId,channel.id,JSON.stringify({version:1,projectId:project.id,operationDigest:claimed.operationDigest,providerGrantVerified:true,phoneRegistered:true,appSubscribed:true,roundTrip:'NOT_VERIFIED',fieldJourney:'NOT_VERIFIED'})]);return {saved:true,replayed:false};
    });
   }catch(error){

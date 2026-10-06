@@ -7,7 +7,7 @@ import {OBRASAAS_META_CHANNEL} from './meta-channel-binding.mjs';
 import {createMetaCustomerTemplates,publicCustomerTemplateWorkbench} from './meta-customer-templates.mjs';
 import {createMetaCustomerInboxReview,readMetaCustomerInbox,readMetaCustomerInboxReceipt} from './meta-customer-inbox-review.mjs';
 import {createMetaCustomerActivation,publicCustomerActivation} from './meta-customer-activation.mjs';
-import {customerSignupFlow,createMetaCustomerCoexistence,publicCustomerCoexistence} from './meta-customer-coexistence.mjs';
+import {customerSignupFlow,createMetaCustomerCoexistence,publicCustomerCoexistence,customerLifecycleRecovery} from './meta-customer-coexistence.mjs';
 
 const activeStates=new Set(['PREPARED','EXCHANGE_STARTED','EXCHANGE_UNKNOWN','CREDENTIAL_STORED','VERIFYING','REVIEW_REQUIRED','LINKED_PENDING_ACCEPTANCE','REGISTRATION_REQUIRED','REGISTRATION_REJECTED','REGISTRATION_VERIFYING','REGISTRATION_STARTED','REGISTRATION_UNKNOWN']);
 const secretContext=(member,project,purpose,resourceId)=>({organizationId:member.organizationId,projectId:project.id,purpose,resourceId});
@@ -76,6 +76,16 @@ export function createMetaCustomerOnboarding({workspace,provider,processor=null,
   const other=await client.query(`SELECT id,"projectId" FROM public."WhatsAppConnection" WHERE ("phoneNumberId"=$1 OR "whatsappBusinessId"=$2) AND "projectId"<>$3`,[phoneNumberId,wabaId,project.id]);
   if(other.rows.length)throw new WorkspaceError('META_CUSTOMER_ASSET_ALREADY_BOUND',409);
  }
+ async function sealLegacyLifecycle(client,project,connection){
+  if(!connection||connection.metadata?.customerLifecycle?.recovery)return;
+  const recovery=customerLifecycleRecovery(connection);if(!recovery)return;
+  // Before a canonical reauthorization replaces the grant ID, materialize the
+  // old restriction against that old grant. No callback between steps is needed.
+  const lifecycle={...connection.metadata.customerLifecycle,authorizationSignupId:recovery.authorizationSignupId||connection.metadata.customerSignupId||null,recovery:{...recovery,authorizationSignupId:recovery.authorizationSignupId||connection.metadata.customerSignupId||null}};
+  const written=await client.query(`UPDATE public."WhatsAppConnection" SET metadata=metadata||$3::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[connection.id,project.id,JSON.stringify({customerLifecycle:lifecycle})]);
+  if(written.rowCount!==1)throw new WorkspaceError('META_CUSTOMER_BINDING_INTEGRITY',409);
+  connection.metadata={...connection.metadata,customerLifecycle:lifecycle};
+ }
  async function reconcile(session,body){
   const claim=await within(session,body,true,async(client,member,scope,project)=>{
     let state=owned(project,member,body.signupId);requirePreparation(project);
@@ -108,6 +118,7 @@ export function createMetaCustomerOnboarding({workspace,provider,processor=null,
     const existing=await client.query(`SELECT id,metadata,"phoneNumberId","whatsappBusinessId" FROM public."WhatsAppConnection" WHERE "projectId"=$1 FOR UPDATE`,[project.id]);
     const preserved=mode==='BUSINESS_APP'&&state.existingConnection&&existing.rows.length===1&&existing.rows[0].id===state.existingConnection.id&&existing.rows[0].phoneNumberId===state.phoneNumberId&&existing.rows[0].whatsappBusinessId===state.wabaId&&existing.rows[0].metadata?.credentialOrganizationId===member.organizationId;
     if(existing.rows.length&&!preserved&&!(existing.rows.length===1&&existing.rows[0].metadata?.customerSignupId===state.id&&existing.rows[0].phoneNumberId===state.phoneNumberId&&existing.rows[0].whatsappBusinessId===state.wabaId))throw new WorkspaceError('META_CUSTOMER_EXISTING_CONNECTION_REVIEW',409);
+    await sealLegacyLifecycle(client,project,existing.rows[0]);
     // Existing matching assets retain their credential and operating state
     // until the new grant and subscription have both been verified.
     if(preserved)return;
@@ -207,6 +218,7 @@ export function createMetaCustomerOnboarding({workspace,provider,processor=null,
     const existing=await client.query(`SELECT id,"whatsappBusinessId","phoneNumberId","encryptedAccessToken",metadata FROM public."WhatsAppConnection" WHERE "projectId"=$1 FOR UPDATE`,[project.id]);
     if(existing.rows.length&&(profile.numberMode!=='BUSINESS_APP'||existing.rows.length!==1||existing.rows[0].metadata?.credentialFormat!=='tenant-aad-v2'||existing.rows[0].metadata.credentialOrganizationId!==member.organizationId))throw new WorkspaceError('META_CUSTOMER_EXISTING_CONNECTION_REVIEW',409);
     const c=existing.rows[0],flow=customerSignupFlow(provider.readiness(),profile.numberMode);
+    await sealLegacyLifecycle(client,project,c);
     if(previous){const history=project.metadata.metaSignupHistory||[];if(!Array.isArray(history)||history.length>=20)throw new WorkspaceError('META_CUSTOMER_RESTART_REVIEW_REQUIRED',409);project.metadata={...project.metadata,metaSignupHistory:[...history,{id:previous.id,state:previous.state,codeDigest:previous.codeDigest,wabaId:previous.wabaId,phoneNumberId:previous.phoneNumberId,actorId:previous.actorId,createdAt:previous.createdAt,restartedAt:new Date(now()).toISOString(),remoteAuthorizationRevoked:false}]};}
     await save(client,member,project,{version:1,id:randomUUID(),actorId:member.actorId,organizationId:member.organizationId,preparedRevision:profile.revision,operationId:body.operationId,startRequestDigest:digest(body),...flow,...(c?{existingConnection:{id:c.id,wabaId:c.whatsappBusinessId,phoneNumberId:c.phoneNumberId,tokenDigest:digest(c.encryptedAccessToken)}}:{}),state:'PREPARED',createdAt:new Date(now()).toISOString(),expiresAt:new Date(now()+15*60000).toISOString()},body.operationId);
     return response(client,member,scope,project);

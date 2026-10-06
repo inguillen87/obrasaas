@@ -2,11 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {metaCustomerReadiness} from '../src/lib/meta-customer-provider.mjs';
 import {OBRASAAS_META_CHANNEL} from '../src/lib/meta-channel-binding.mjs';
+import {publicCustomerCoexistence} from '../src/lib/meta-customer-coexistence.mjs';
 import {metaOnboardingSnapshot,metaOnboardingReadinessView} from '../src/app/(identity)/cuenta/meta-onboarding-readiness-view.mjs';
 const context={scope:'a'.repeat(64),projectId:'p-a'};
 const environment={NEXT_PUBLIC_META_APP_ID:OBRASAAS_META_CHANNEL.appId,META_APP_SECRET:'synthetic-secret-only-12345678',META_CONFIG_ID:'123456789012345',META_GRAPH_API_VERSION:'v25.0',META_CUSTOMER_CREDENTIALS_KEY:Buffer.alloc(32,24).toString('base64'),META_EMBEDDED_SIGNUP_VERSION:'4',OBRASAAS_META_SIGNUP_RELEASE:'customer-self-service-v1',META_CUSTOMER_VERIFY_TOKEN:'synthetic-verify-token-only-'.repeat(2)};
 const snapshot=(overrides={})=>({...context,companyName:'Empresa de ensayo',projectName:'Obra de ensayo',prepared:true,numberMode:'DEDICATED',readiness:metaCustomerReadiness(environment),signup:null,connection:null,...overrides});
 const state=(result,key)=>metaOnboardingReadinessView(result).steps.find(step=>step.key===key);
+const recovering=(recoveryState='PAUSED')=>snapshot({numberMode:'BUSINESS_APP',connection:{enabled:recoveryState==='RESTORED',storedStatus:recoveryState==='RESTORED'?'CONNECTED':'DISABLED'},activation:{state:recoveryState==='RESTORED'?'ACTIVE':'REVIEW_REQUIRED',operational:recoveryState==='RESTORED',canActivate:false,canDeactivate:['PAUSED','VERIFYING','REVIEW_REQUIRED','RESTORED'].includes(recoveryState),lastCode:recoveryState==='RESTORED'?null:'META_CUSTOMER_ACTIVATION_RECONNECTION_REQUIRED'},coexistence:publicCustomerCoexistence({metadata:{coexistence:{verified:true,verifiedAt:'2026-10-05T00:00:00Z',syncDeadlineAt:'2026-10-06T00:00:00Z'},customerLifecycle:{event:recoveryState==='PAUSED'?'account_offboarded':'account_reconnected',reason:'ACCOUNT_DISCONNECTED',initiatedBy:'SYSTEM',observedAt:'2026-10-05T12:00:00Z',recovery:{state:recoveryState,previouslyEnabled:true,pausedAt:'2026-10-05T12:00:00Z',reconnectedAt:recoveryState==='PAUSED'?null:'2026-10-05T12:01:00Z',verifiedAt:recoveryState==='RESTORED'?'2026-10-05T12:02:00Z':null,reason:'ACCOUNT_DISCONNECTED',initiatedBy:'SYSTEM',lastCode:null}}}},snapshot().readiness,Date.parse('2026-10-07T00:00:00Z'))});
 
 test('actual public readiness is accepted without attesting to business review or field acceptance',()=>{
  const result=snapshot();assert.equal(metaOnboardingSnapshot(result,context),result);
@@ -47,4 +49,42 @@ test('registered, enabled and approved templates still cannot certify message de
 test('a recovery secret and scheduler configuration show configuration only, never execution',()=>{
  const result=snapshot({readiness:metaCustomerReadiness({...environment,META_CUSTOMER_JOB_SECRET:'synthetic-job-'.repeat(4),CRON_SECRET:'synthetic-cron-'.repeat(4)})});metaOnboardingSnapshot(result,context);
  assert.equal(metaOnboardingReadinessView(result).recovery.state,'Configurada · ejecución por comprobar');assert.equal(metaOnboardingReadinessView(snapshot()).recovery.state,'Configuración pendiente');assert.match(metaOnboardingReadinessView(result).recovery.detail,/por separado/);
+});
+test('actual public lifecycle/recovery contract stays compatible with older snapshots',()=>{
+ const result=recovering();metaOnboardingSnapshot(result,context);
+ assert.equal(result.coexistence.canSelectImport,false);assert.equal(result.coexistence.canContinueImport,false);
+ for(const key of ['lifecycle','recovery'])delete result.coexistence[key];metaOnboardingSnapshot(result,context);
+ assert.equal(metaOnboardingReadinessView(result).channel.recovery,null);
+ assert.equal(metaOnboardingSnapshot(snapshot({activation:{operational:false}}),context).activation.operational,false);
+});
+test('paused and uncertain reconnections never advise activation or treat GET as a new registration/import',()=>{
+ const labels={PAUSED:'Canal pausado',VERIFYING:'Verificando reconexión',REVIEW_REQUIRED:'Reconexión pendiente de revisión',MANUAL_REVIEW_REQUIRED:'Revisión manual necesaria'};
+ for(const [recoveryState,label] of Object.entries(labels)){
+  const result=recovering(recoveryState);metaOnboardingSnapshot(result,context);const view=metaOnboardingReadinessView(result);
+  assert.equal(state(result,'activation').state,label);assert.match(view.next,/estado/);assert.doesNotMatch(view.next,/habilitarlo|Elegí Preparar|PIN/);
+  assert.equal(view.channel.canKeepDisabled,['PAUSED','VERIFYING','REVIEW_REQUIRED'].includes(recoveryState));
+  assert.equal(view.channel.recovery.pausedAt,'2026-10-05T12:00:00Z');assert.equal(state(result,'acceptance').state,'Sin aceptar');
+ }
+});
+test('restoration does not certify field acceptance and manual deactivation takes precedence over a stale recovery snapshot',()=>{
+ const restored=recovering('RESTORED');metaOnboardingSnapshot(restored,context);assert.equal(state(restored,'activation').state,'Canal restaurado');assert.match(state(restored,'activation').detail,/prueba real/);assert.equal(state(restored,'acceptance').state,'Sin aceptar');
+ for(const recoveryState of ['PAUSED','RESTORED','KEPT_DISABLED']){
+  const result=recovering(recoveryState);result.activation={state:'DEACTIVATED',operational:false,canActivate:false,canDeactivate:false,lastCode:null};result.connection.enabled=false;metaOnboardingSnapshot(result,context);
+  assert.equal(state(result,'activation').state,'Desactivado por el administrador');assert.match(metaOnboardingReadinessView(result).next,/decisión del administrador/);assert.equal(metaOnboardingReadinessView(result).channel.canKeepDisabled,false);
+ }
+});
+test('dedicated channels expose lifecycle guard without fabricated coexistence or activation advice',()=>{
+ for(const lastCode of ['META_CUSTOMER_ACTIVATION_RECONNECTION_REQUIRED','META_CUSTOMER_LIFECYCLE_ORDER_UNCONFIRMED','META_CUSTOMER_LEGACY_LIFECYCLE_REVIEW_REQUIRED']){
+  const result=snapshot({connection:{enabled:false},activation:{state:'REVIEW_REQUIRED',operational:false,canActivate:false,canDeactivate:true,lastCode}});metaOnboardingSnapshot(result,context);
+  assert.equal(result.coexistence,undefined);assert.equal(metaOnboardingReadinessView(result).channel.showRecovery,true);assert.equal(metaOnboardingReadinessView(result).channel.canKeepDisabled,true);assert.match(metaOnboardingReadinessView(result).next,/revisá|Revisá/);assert.doesNotMatch(metaOnboardingReadinessView(result).next,/habilitarlo|Elegí Preparar/);
+ }
+ const unavailable=snapshot({connection:{enabled:false},activation:{operational:false,canActivate:false}});metaOnboardingSnapshot(unavailable,context);assert.equal(state(unavailable,'activation').state,'Habilitación no disponible');assert.doesNotMatch(metaOnboardingReadinessView(unavailable).next,/habilitarlo/);
+});
+test('fresh reconnection review can offer ADMIN revalidation only when the public backend predicate permits it',()=>{
+ const result=recovering('REVIEW_REQUIRED');result.activation.canActivate=true;metaOnboardingSnapshot(result,context);assert.match(metaOnboardingReadinessView(result).next,/administrador puede comprobar y habilitar/);assert.equal(result.coexistence.canSelectImport,false);assert.equal(result.coexistence.canContinueImport,false);
+ result.activation.canActivate=false;metaOnboardingSnapshot(result,context);assert.doesNotMatch(metaOnboardingReadinessView(result).next,/habilitar/);
+});
+test('malformed recovery, impossible dates, internal metadata and optimistic actions are rejected before render',()=>{
+ const mutations=[r=>{r.coexistence.recovery.state='ACTIVE';},r=>{r.coexistence.recovery.previouslyEnabled='true';},r=>{r.coexistence.recovery.pausedAt='2026-02-30T12:00:00Z';},r=>{r.coexistence.recovery.reconnectedAt='yesterday';},r=>{delete r.coexistence.recovery.reason;},r=>{r.coexistence.recovery.leaseToken='private';},r=>{r.coexistence.recovery.reason='<img>';},r=>{r.coexistence.recovery.lastCode='unbounded unknown';},r=>{r.coexistence.recovery.initiatedBy='ADMIN';},r=>{r.coexistence.lifecycle.event='offboard<script>';},r=>{r.coexistence.lifecycle.reason='wrong';},r=>{r.coexistence.lifecycle.observedAt='2026-10-05';},r=>{r.coexistence.lifecycle.digest='private';},r=>{r.coexistence.canSelectImport=true;},r=>{r.activation.operational=true;},r=>{r.activation.canActivate='true';},r=>{r.activation.canDeactivate='false';},r=>{r.activation.lastCode='wrong';},r=>{r.activation.roundTrip='VERIFIED';},r=>{r.activation.leaseToken='private';}];
+ for(const mutate of mutations){const result=recovering();mutate(result);assert.throws(()=>metaOnboardingSnapshot(result,context),{code:'META_CUSTOMER_READINESS_RESPONSE_INVALID'});}
 });

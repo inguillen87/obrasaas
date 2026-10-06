@@ -7,6 +7,8 @@ export const WORKSPACE_RECOVERY_PREFIX = 'obrasaas.pending-receipt.v1.';
 const prefix = WORKSPACE_RECOVERY_PREFIX;
 const uuid = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 const id = value => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(value);
+const PROGRESS_TEMPLATE_SEND_KEY='progress_review_notification';
+const templateSendActionReference=value=>Boolean(value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).sort().join('|')==='proposalId|revision'&&id(value.proposalId)&&typeof value.revision==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}$/.test(value.revision));
 const scopeValid = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
 export const RECOVERY_RESOURCES = Object.freeze({
   workspace:'Planificación', 'task-creation':'Nueva tarea', 'site-register':'Registro de obra',
@@ -14,7 +16,7 @@ export const RECOVERY_RESOURCES = Object.freeze({
   'field-operations':'Operación de campo', 'field-media':'Evidencia privada',
   'site-purchases':'Compra o recepción', 'whatsapp-setup':'Preparación de WhatsApp',
   'meta-onboarding':'Seguimiento de WhatsApp', 'worker-channel':'Mi WhatsApp y autorización de avisos',
-  'template-send':'Recordatorio autorizado de jornada',
+  'template-send':'Aviso autorizado por WhatsApp',
   'constructor-crm':'Cliente u oportunidad de la empresa',
   'demo-pilot':'Preparación y vinculación del piloto DEMO',
 });
@@ -37,15 +39,20 @@ function reference(url, options, now) {
   // invitation's receipt; it never creates a second invitation.
   if(resource==='participants'&&body.action==='RECOVER_INVITATION')return null;
   if(resource==='meta-onboarding'&&(!['review_inbox','process_inbox'].includes(body.action)||!id(body.eventId)))return null;
+  const progress=resource==='template-send'&&body.templateKey===PROGRESS_TEMPLATE_SEND_KEY;
+  if(progress&&(!id(body.workerId)||!templateSendActionReference(body.actionReference)))throw unavailable();
   return {version:1,resource,scope:body.scope,projectId:body.projectId,operationId:body.operationId.toLowerCase(),createdAt:now,
     ...(resource==='site-photo'?{reportId:body.reportId}:{}),
     ...(resource==='meta-onboarding'?{action:body.action,eventId:body.eventId}:{}),
+    ...(progress?{templateKey:PROGRESS_TEMPLATE_SEND_KEY,workerId:body.workerId,actionReference:{proposalId:body.actionReference.proposalId,revision:body.actionReference.revision}}:{}),
   };
 }
 function valid(entry) {
   if(!entry||entry.version!==1||!Object.hasOwn(RECOVERY_RESOURCES,entry.resource)||!scopeValid(entry.scope)||!id(entry.projectId)||!uuid(entry.operationId)||!Number.isSafeInteger(entry.createdAt)||entry.createdAt<0)return false;
-  const fields=['version','resource','scope','projectId','operationId','createdAt',...(entry.resource==='site-photo'?['reportId']:[]),...(entry.resource==='meta-onboarding'?['action','eventId']:[])];
+  const progress=entry.resource==='template-send'&&entry.templateKey===PROGRESS_TEMPLATE_SEND_KEY;
+  const fields=['version','resource','scope','projectId','operationId','createdAt',...(entry.resource==='site-photo'?['reportId']:[]),...(entry.resource==='meta-onboarding'?['action','eventId']:[]),...(progress?['templateKey','workerId','actionReference']:[])];
   if(Object.keys(entry).sort().join('|')!==fields.sort().join('|'))return false;
+  if(progress&&(!id(entry.workerId)||!templateSendActionReference(entry.actionReference)))return false;
   return (entry.resource!=='site-photo'||id(entry.reportId))&&(entry.resource!=='meta-onboarding'||['review_inbox','process_inbox'].includes(entry.action)&&id(entry.eventId));
 }
 const keyOf=entry=>prefix+entry.scope+'.'+entry.resource+'.'+entry.operationId;
@@ -85,6 +92,16 @@ export function recoveryResult(entry, result) {
   }
   if(entry.resource==='template-send') {
     const receipt=result.receipt;
+    if(entry.templateKey===PROGRESS_TEMPLATE_SEND_KEY){
+      if(result.projectId!==entry.projectId||typeof result.definitive!=='boolean'||typeof result.providerAccepted!=='boolean'||typeof result.deliveryConfirmed!=='boolean')return null;
+      if(result.state==='NOT_OBSERVED'&&result.definitive===false&&!result.saved&&!result.providerAccepted&&!result.deliveryConfirmed&&!receipt)return {state:'NOT_OBSERVED'};
+      if(receipt?.operationId!==entry.operationId||receipt.workerId!==entry.workerId||typeof receipt.id!=='string'||!receipt.id||receipt.templateKey!==entry.templateKey||!templateSendActionReference(receipt.actionReference)||receipt.actionReference.proposalId!==entry.actionReference.proposalId||receipt.actionReference.revision!==entry.actionReference.revision)return null;
+      if(['SEND_STARTED','SEND_UNKNOWN'].includes(result.state)&&result.definitive===false&&!result.saved&&!result.deliveryConfirmed)return {state:'PROCESSING'};
+      if(result.state==='REJECTED'&&result.definitive===true&&!result.saved&&!result.providerAccepted&&!result.deliveryConfirmed)return {state:'REJECTED',receiptId:receipt.id};
+      if(result.state==='ACCEPTED'&&result.definitive===true&&result.saved===true&&result.providerAccepted===true&&result.deliveryConfirmed===false)return {state:'ACCEPTED',receiptId:receipt.id};
+      if(result.state==='STATUS_OBSERVED'&&result.definitive===true&&result.saved===true&&['sent','delivered','read','failed','deleted'].includes(result.providerStatus)&&result.deliveryConfirmed===['delivered','read'].includes(result.providerStatus))return {state:'STATUS_OBSERVED',receiptId:receipt.id};
+      return null;
+    }
     if(result.state==='NOT_OBSERVED'&&result.definitive===false)return {state:'NOT_OBSERVED'};
     if(receipt?.operationId!==entry.operationId||typeof receipt.id!=='string'||!receipt.id||receipt.templateKey!=='open_attendance_reminder')return null;
     if(['SEND_STARTED','SEND_UNKNOWN'].includes(result.state)&&result.definitive===false)return {state:'PROCESSING'};
@@ -138,7 +155,7 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
       const removed=await access('readwrite',entry.scope,s=>{
         const key=keyOf(entry),raw=s.getItem(key);if(raw===null)return false;
         const stored=validateWorkspaceRecoveryStoredEntry(key,raw);
-        if(!Object.keys(entry).every(field=>entry[field]===stored[field]))return false;
+        if(!Object.keys(entry).every(field=>field==='actionReference'?entry[field]?.proposalId===stored[field]?.proposalId&&entry[field]?.revision===stored[field]?.revision:entry[field]===stored[field]))return false;
         s.removeItem(key);return true;
       });
       if(removed)notify();return removed;
@@ -151,7 +168,7 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
       const reserve=()=>access('readwrite',entry.scope,s=>{
       if(options.signal?.aborted)throw Object.assign(new DOMException('La consulta se canceló.','AbortError'),{requestDispatched:false});
       const current=readEntries(s,entry.scope),existing=current.find(row=>keyOf(row)===keyOf(entry));
-      if(existing){if(existing.projectId!==entry.projectId||existing.reportId!==entry.reportId||existing.eventId!==entry.eventId||existing.action!==entry.action)throw failure('WORKSPACE_RECOVERY_CONFLICT','Este identificador corresponde a otro intento. Comprobá el recibo antes de continuar.');return {entry:existing,existed:true};}
+      if(existing){if(existing.projectId!==entry.projectId||existing.reportId!==entry.reportId||existing.eventId!==entry.eventId||existing.action!==entry.action||existing.templateKey!==entry.templateKey||existing.workerId!==entry.workerId||existing.actionReference?.proposalId!==entry.actionReference?.proposalId||existing.actionReference?.revision!==entry.actionReference?.revision)throw failure('WORKSPACE_RECOVERY_CONFLICT','Este identificador corresponde a otro intento. Comprobá el recibo antes de continuar.');return {entry:existing,existed:true};}
       const pending=current.find(row=>row.resource===entry.resource&&row.projectId===entry.projectId&&(entry.resource!=='meta-onboarding'||row.eventId===entry.eventId));
       let resolution=false;
       if(entry.resource==='participants'&&typeof options.body==='string'){try{resolution=JSON.parse(options.body).action==='REVOKE';}catch{ /* The server rejects malformed commands. */ }}

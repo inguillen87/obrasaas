@@ -18,6 +18,6 @@ const uploader=createPrivateImageUploader({put,get});
 const deposit=createParticipantChannelKycDeposit({connect:connectWorkspace,resolveAuthority:resolveMetaKycAuthority,upload:uploader.uploadImageToBlob});
 const kycBridge=createMetaKycBridge({connect:connectWorkspace,provider,deposit});
 const kycOutbound=createMetaKycOutbound({connect:connectWorkspace,provider});
-const appProjection=createMetaCustomerAppProjection({connect:connectWorkspace});
+const appProjection=createMetaCustomerAppProjection({connect:connectWorkspace,provider});
 export const productionMetaCustomerOutbound=createMetaCustomerOutbound({connect:connectWorkspace,resolveIdentity:resolveWorkerChannelIdentity,provider});
 export const productionMetaCustomerProcessor=createMetaCustomerProcessor({connect:connectWorkspace,dispatch:async context=>(await appProjection.execute(context))||(await kycBridge.execute(context))||bridge.execute(context),authorizationCodes:META_KYC_AUTHORIZATION_CODES,outbound:{send:(context,reply,{purpose}={})=>purpose==='KYC_CAPTURE'?kycOutbound.send(context,reply):productionMetaCustomerOutbound.send(context,reply),observeStatus:(...args)=>productionMetaCustomerOutbound.observeStatus(...args)}});

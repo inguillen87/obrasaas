@@ -4,10 +4,12 @@ import {encryptCustomerSecret,decryptCustomerSecret} from './meta-customer-crede
 import {customerReplyMessage} from './meta-customer-provider.mjs';
 import {hasMetaCustomerRequiredScopes} from './meta-customer-permissions.mjs';
 import {META_CUSTOMER_PROTOCOL,resolveMetaCloudProtocol} from './meta-cloud-protocol.mjs';
+import {customerLifecycleRecovery} from './meta-customer-coexistence.mjs';
 
 export const customerOutboundId=eventId=>'customer_outbound_'+digest(['meta-customer-reply-v1',eventId]);
 export function customerChannelActive(connection,now=Date.now()){
  const verified=connection?.metadata?.customerVerification,activation=connection?.metadata?.customerActivation;
+ const recovery=customerLifecycleRecovery(connection);if(recovery&&recovery.state!=='RESTORED')return false;
  return connection?.enabled===true&&connection.connectionStatus==='CONNECTED'&&connection.metadata?.customerSubscribed===true&&activation?.version===1&&activation.state==='ACTIVE'&&typeof activation.actorId==='string'&&verified?.registered===true&&hasMetaCustomerRequiredScopes(verified.scopes)&&(!verified.expiresAt||new Date(verified.expiresAt).getTime()>now+60000);
 }
 export function assertCustomerReplyWindow(payload,now=Date.now()){

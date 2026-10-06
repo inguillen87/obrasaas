@@ -19,7 +19,15 @@ export function authorizeLegacyService(request, environment = process.env) {
 }
 
 const PUBLIC_PAGES = new Set(['/', '/demo', '/manual', '/sign-in', '/sign-up', '/pricing', '/poster', '/api-docs']);
-const PUBLIC_ASSETS = new Set([...BRAND_PUBLIC_ASSETS,'/sw.js', '/manifest.json', '/favicon.ico', '/icon-192.svg', '/icon-512.svg', '/robots.txt', '/sitemap.xml', '/bim_render.png', '/cctv_render.png', '/file.svg', '/globe.svg', '/next.svg', '/vercel.svg', '/window.svg']);
+export const LAUNCH_PUBLIC_ASSETS = Object.freeze([
+  '/media/launch/obra-vista-amplia.webp',
+  '/media/launch/obra-registro-evidencia.webp',
+  '/media/launch/obra-entrega-materiales.webp',
+  '/media/launch/obrasaas-15s-poster.webp',
+  '/media/launch/obrasaas-15s.mp4',
+  '/media/launch/obrasaas-15s-es-AR.vtt',
+]);
+const PUBLIC_ASSETS = new Set([...BRAND_PUBLIC_ASSETS,...LAUNCH_PUBLIC_ASSETS,'/sw.js', '/manifest.json', '/favicon.ico', '/icon-192.svg', '/icon-512.svg', '/robots.txt', '/sitemap.xml', '/bim_render.png', '/cctv_render.png', '/file.svg', '/globe.svg', '/next.svg', '/vercel.svg', '/window.svg']);
 export function legacyBoundaryKind(pathname, method = 'GET') {
   const path = pathname === '/' ? '/' : pathname.replace(/\/+$/, '');
   const read = method === 'GET' || method === 'HEAD';

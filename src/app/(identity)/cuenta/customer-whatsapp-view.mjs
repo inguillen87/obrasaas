@@ -5,6 +5,15 @@ const invalid=()=>Object.assign(new Error('No se pudo verificar la respuesta de 
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 export const customerWhatsAppAccessDenied=error=>error?.status===401||error?.status===403||['WORKSPACE_CONTEXT_CHANGED','WORKSPACE_PROJECT_UNAVAILABLE','WORKSPACE_MEMBERSHIP_REQUIRED'].includes(error?.code);
 
+export const customerWhatsAppPersonalAppGuidance='WhatsApp personal no admite coexistencia. Primero completá el traslado oficial a WhatsApp Business App, conservando tu copia de seguridad, y después elegí esa opción. No desinstales la app ni elimines tu cuenta para intentar habilitar la conexión.';
+const numberModeGuidance=Object.freeze({
+ DEDICATED:Object.freeze({title:'Número nuevo o libre para Cloud API',detail:'Todavía no usa WhatsApp ni un proveedor API. La empresa controla la línea y puede recibir un SMS o una llamada.',next:'Este recorrido destina el número a Cloud API. Elegilo sólo para una línea libre; si ya atendés clientes por una app o un proveedor, usá el recorrido correspondiente.'}),
+ BUSINESS_APP:Object.freeze({title:'Ya uso WhatsApp Business App',detail:'Conservá la app y el número. Meta comprueba la elegibilidad y puede pedir que vincules la cuenta con un QR desde la app.',next:'Mantené WhatsApp Business App actualizado y disponible. Meta decide la elegibilidad; instalarlo no garantiza la conexión. Si aparece un recorrido de SMS para alta dedicada, detenelo y revisá la coexistencia antes de continuar.'}),
+ EXISTING_API:Object.freeze({title:'Ya tengo Cloud API u otro proveedor',detail:'Guardá un plan de revisión para tu conexión existente. La preparación conserva el proveedor actual.',next:'Este recorrido guarda un plan para revisar permisos, activos e historial con el proveedor actual. Todavía no ejecuta una migración ni una autorización adicional. La conexión actual se conserva.'}),
+});
+// Guidance classifies the existing three server modes; it never adds a saved mode.
+export const customerWhatsAppNumberModeGuidance=numberMode=>Object.hasOwn(numberModeGuidance,numberMode)?numberModeGuidance[numberMode]:null;
+
 // This validates a view of the canonical preparation, never Meta authorization.
 // Run it inside the response consumer, before the recovery journal acknowledges.
 export function customerWhatsAppSnapshot(result,{scope,projectId}){
