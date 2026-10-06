@@ -6,9 +6,9 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createHash} from 'node:crypto';
 import ffmpegPath from 'ffmpeg-static';
-import {createVideoFrameExtractor,VIDEO_LIMITS,VIDEO_SAMPLING_VERSION} from '../src/lib/video-frame-extractor.mjs';
+import {createVideoFrameExtractor,createDecodedVideoTimingReader,VIDEO_LIMITS,VIDEO_SAMPLING_VERSION} from '../src/lib/video-frame-extractor.mjs';
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
-let directory,mp4,fractionalFpsVideo,webm,longVideo,longWebm,largeVideo,oversizedDimensions,audioOnly,unsupported;
+let directory,mp4,fractionalFpsVideo,webm,boundaryWebm,overBoundaryWebm,sparseWebm,longVideo,longWebm,largeVideo,oversizedDimensions,audioOnly,unsupported;
 function generate(args,maxBuffer=4*1024*1024){const result=spawnSync(ffmpegPath,['-nostdin','-hide_banner','-loglevel','error','-threads','1','-filter_threads','1',...args],{windowsHide:true,timeout:15000,maxBuffer});assert.equal(result.status,0,result.stderr?.toString());return result.stdout;}
 before(async()=>{
  directory=await mkdtemp(join(tmpdir(),'obrasaas-synthetic-video-test-'));
@@ -17,6 +17,9 @@ before(async()=>{
  // Pipe output has no seekable header and commonly has no declared duration,
  // matching MediaRecorder WebM rather than merely accepting an EBML signature.
  webm=generate(['-f','lavfi','-i','testsrc2=size=320x180:rate=10','-t','2','-c:v','libvpx-vp9','-threads','1','-f','webm','pipe:1']);
+ boundaryWebm=generate(['-f','lavfi','-i','color=c=blue:size=64x64:rate=20','-t','40','-c:v','libvpx-vp9','-threads','1','-f','webm','pipe:1']);
+ overBoundaryWebm=generate(['-f','lavfi','-i','color=c=blue:size=64x64:rate=20','-t','40.05','-c:v','libvpx-vp9','-threads','1','-f','webm','pipe:1']);
+ sparseWebm=generate(['-f','lavfi','-i','color=c=blue:size=64x64:rate=10','-frames:v','10','-vf','setpts=PTS+60/TB*gte(N\\,5)','-fps_mode','passthrough','-c:v','libvpx-vp9','-threads','1','-f','webm','pipe:1']);
  longWebm=generate(['-f','lavfi','-i','color=c=blue:size=64x64:rate=1','-t','41','-c:v','libvpx-vp9','-threads','1','-f','webm','pipe:1']);
  const large=join(directory,'large.mp4');generate(['-f','lavfi','-i','testsrc2=size=1920x1080:rate=2','-t','1','-c:v','libx264','-threads','1',large]);largeVideo=await readFile(large);
  const wide=join(directory,'wide.mp4');generate(['-f','lavfi','-i','color=c=blue:size=4098x64:rate=2','-t','1','-c:v','libx264','-threads','1',wide]);oversizedDimensions=await readFile(wide);
@@ -40,6 +43,24 @@ test('30 FPS input retains exact decoded duration and never seeks past its final
 });
 test('decoded duration rejects an overlong streamed WebM without trusting a header',async()=>{
  await assert.rejects(createVideoFrameExtractor()({buffer:longWebm,mimeType:'video/webm'}),{code:'FIELD_VIDEO_DURATION_INVALID'});
+});
+test('streamed WebM includes the last frame display time at the exact 40 second boundary',async()=>{
+ const result=await createVideoFrameExtractor()({buffer:boundaryWebm,mimeType:'video/webm'});assert.equal(result.sampling.durationSeconds,40);assert.equal(result.frames.at(-1).capturedAtSeconds,39.95);
+ await assert.rejects(createVideoFrameExtractor()({buffer:overBoundaryWebm,mimeType:'video/webm'}),{code:'FIELD_VIDEO_DURATION_INVALID'});
+});
+test('a sparse streamed WebM cannot present its short prefix as the whole video before a distant PTS',async()=>{
+ await assert.rejects(createVideoFrameExtractor()({buffer:sparseWebm,mimeType:'video/webm'}),{code:'FIELD_VIDEO_DURATION_INVALID'});
+});
+const timingLine=(index,pts,duration)=>`[Parsed_showinfo_1 @ synthetic] n: ${index} pts: ${pts} pts_time: rounded duration: ${duration} duration_time: rounded\n`;
+test('frame timing reads chunked FFmpeg metadata without using rounded text or discarding the final duration',()=>{
+ const reader=createDecodedVideoTimingReader(),metadata=timingLine(0,0,33333)+timingLine(1,1966667,33333);
+ for(let index=0;index<metadata.length;index+=7)reader.push(metadata.slice(index,index+7));
+ assert.deepEqual(reader.finish(),{durationSeconds:2,lastFrameStart:1.966667});
+});
+test('zero/missing frame duration, invalid timestamps and an overlong displayed frame fail closed',()=>{
+ for(const metadata of [timingLine(0,0,0)+timingLine(1,1900000,0),timingLine(0,0,100000).replace(' duration: 100000',''),timingLine(0,-100000,100000),timingLine(0,0,100000)+timingLine(1,39950000,100000),timingLine(0,0,40100000)+timingLine(1,39950000,1000)]){
+  const reader=createDecodedVideoTimingReader();reader.push(metadata);assert.throws(()=>reader.finish(),{code:'FIELD_VIDEO_DURATION_INVALID'});
+ }
 });
 test('actual 1080p decode produces JPEGs no larger than 768 pixels and rejects excessive source dimensions',async()=>{
  const result=await createVideoFrameExtractor()({buffer:largeVideo,mimeType:'video/mp4'});

@@ -109,7 +109,7 @@ export function createFieldMedia({operations,put,get,analyzer,extractVideoFrames
     },
     async process(session,body) {
       recordKeys(body,['operationId','projectId','scope','evidenceId','revision',...(Object.hasOwn(body||{},'analysisConsent')?['analysisConsent']:[])]);scopeInput(body);siteRevision(body.revision);
-      if(body.analysisConsent!==undefined&&(!validFieldMediaAnalysisConsent(body.analysisConsent)||!body.analysisConsent.allowed))throw new WorkspaceError('FIELD_MEDIA_ANALYSIS_CONSENT_REQUIRED',400);
+      if(!validFieldMediaAnalysisConsent(body.analysisConsent)||!body.analysisConsent.allowed)throw new WorkspaceError('FIELD_MEDIA_ANALYSIS_CONSENT_REQUIRED',400);
       const input={...body,operationId:body.operationId.toLowerCase()};
       if(!workspaceId(input.evidenceId))throw new WorkspaceError('FIELD_MEDIA_INPUT_INVALID');
       const requestDigest=digest(['PROCESS',input]),claim=await run(session,input,true,async(client,member,scope)=>{
@@ -117,7 +117,6 @@ export function createFieldMedia({operations,put,get,analyzer,extractVideoFrames
         if(previous){if(previous.metadata.requestDigest!==requestDigest)throw new WorkspaceError('FIELD_OPERATION_CONFLICT',409);const current=await operations.readEvidence(client,input.projectId,input.evidenceId);await ownsEvidence(client,member,session,input,current);return {done:{scope,saved:true,replayed:true,receiptId:id,...previous.metadata.outcome}};}
         const row=await operations.readEvidence(client,input.projectId,input.evidenceId,true);await ownsEvidence(client,member,session,input,row);
         const e=row.metadata.fieldOperations,processing=e.processing;
-        if(e.media.kind==='video'&&!validFieldMediaAnalysisConsent(input.analysisConsent))throw new WorkspaceError('FIELD_MEDIA_ANALYSIS_CONSENT_REQUIRED',400);
         if(e.review)throw new WorkspaceError('FIELD_ALREADY_REVIEWED',409);
         const sameClaim=processing?.status==='RUNNING'&&processing.operationId===input.operationId&&processing.requestDigest===requestDigest&&processing.actorId===member.actorId;
         if(processing?.status==='RUNNING'&&new Date(processing.expiresAt).getTime()>Date.now())throw new WorkspaceError('FIELD_MEDIA_PROCESSING',409);

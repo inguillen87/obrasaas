@@ -36,7 +36,7 @@ function fixture({bytes=video,fetchImpl,extractVideoFrames,onGet,manual=false}={
 }
 test('stored original is actually decoded then sampled in one analysis request, with no task/proposal writes and receipt replay',async()=>{
  const f=fixture({manual:true}),result=await f.media.process({},command);
- assert.equal(result.saved,true);assert.equal(result.evidence.processing.status,'ANALYZED_UNREVIEWED');assert.equal(result.evidence.processing.result.sampling.sourceSha256,hash(video));assert.equal(result.evidence.processing.result.sampling.audioAnalyzed,false);assert.equal(result.evidence.status,'PENDING');assert.equal(f.calls.length,1);assert.equal(f.calls[0].body.messages[1].content.filter(part=>part.type==='image_url').length,4);
+ assert.equal(result.saved,true);assert.equal(result.evidence.processing.status,'ANALYZED_UNREVIEWED',result.evidence.processing.code);assert.equal(result.evidence.processing.result.sampling.sourceSha256,hash(video));assert.equal(result.evidence.processing.result.sampling.audioAnalyzed,false);assert.equal(result.evidence.status,'PENDING');assert.equal(f.calls.length,1);assert.equal(f.calls[0].body.messages[1].content.filter(part=>part.type==='image_url').length,4);
  assert.equal(f.receipts.size,1);assert.ok(f.queries.every(sql=>!sql.includes('public."Task"')&&!sql.includes('public."OperationalProposal"')));
  const again=await f.media.process({},{...command,operationId:command.operationId.toUpperCase()});assert.equal(again.replayed,true);assert.equal(again.receiptId,result.receiptId);assert.equal(f.calls.length,1);
  assert.deepEqual((await f.media.download({},{projectId:'project-a',scope,evidenceId:'evidence-a'})).bytes,video);
