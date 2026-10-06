@@ -9,8 +9,9 @@ import {createMetaAppCallback,metaAppHandshakeDiagnostics,createMetaAppHandshake
 import {decodeSignedCloudEvent,decodeSignedCustomerEvent} from '../src/lib/meta-customer-processing.mjs';
 import {encryptCustomerSecret,customerSecretDigest} from '../src/lib/meta-customer-credentials.mjs';
 import {createMetaDemoPilotHandlers} from '../src/lib/meta-demo-pilot-http.mjs';
+import {createMetaCustomerProvider} from '../src/lib/meta-customer-provider.mjs';
 import {OBRASAAS_META_CHANNEL} from '../src/lib/meta-channel-binding.mjs';
-import {demoEnvironment,demoToken,demoSender,demoSession,demoEnvelope,signedDemoRequest} from '../scripts/fixtures/meta-demo-pilot-fixture.mjs';
+import {demoEnvironment,demoToken,demoSender,demoSession,demoEnvelope,signedDemoRequest,createControlledDemoGraph} from '../scripts/fixtures/meta-demo-pilot-fixture.mjs';
 
 const context={projectId:'demo-project',scope:'a'.repeat(64)},grantId='demo_grant_'+'b'.repeat(64);
 function connection(){
@@ -27,6 +28,33 @@ test('Demo readiness is configuration only and each missing prerequisite fails c
  }
  assert.equal(metaDemoTransportReadiness(demoEnvironment).productionVerified,false);
  assert.equal(metaDemoTransportReadiness(demoEnvironment).customerActivation,false);
+});
+test('shared provider honors the real injected DEMO readiness for read-only grant and subscription verification',async()=>{
+ const graph=createControlledDemoGraph(),provider=createMetaCustomerProvider({environment:demoEnvironment,fetchImpl:graph.fetchImpl,readiness:metaDemoTransportReadiness});
+ const args={token:demoToken,wabaId:OBRASAAS_META_CHANNEL.wabaId,phoneNumberId:OBRASAAS_META_CHANNEL.phoneNumberId};
+ assert.equal((await provider.inspect(args)).registered,true);assert.equal(await provider.inspectSubscription(args),true);
+ assert.equal(graph.calls.length,3);assert.ok(graph.calls.every(call=>call.method==='GET'));assert.equal(graph.posts(),0);
+});
+test('shared provider rejects every missing DEMO prerequisite before any controlled Graph access',async()=>{
+ let calls=0;
+ for(const key of ['META_APP_ID','META_PHONE_NUMBER_ID','META_WABA_ID','META_WHATSAPP_ACCESS_TOKEN','META_CHANNEL_MODE','META_TEST_ALLOWED_RECIPIENTS','META_APP_SECRET','META_GRAPH_API_VERSION','META_CUSTOMER_CREDENTIALS_KEY']){
+  const environment={...demoEnvironment,[key]:''};if(key==='META_APP_ID')environment.NEXT_PUBLIC_META_APP_ID='';
+  const provider=createMetaCustomerProvider({environment,readiness:metaDemoTransportReadiness,fetchImpl:async()=>{calls++;throw new Error('No Graph access with an absent DEMO prerequisite');}});
+  await assert.rejects(provider.inspectSubscription({token:demoToken,wabaId:OBRASAAS_META_CHANNEL.wabaId}),{code:'META_DEMO_CONFIGURATION_PENDING'});
+ }
+ assert.equal(calls,0);
+});
+test('an optimistic internal readiness cannot authorize missing, false, unknown or nonboolean DEMO gates',async()=>{
+ const ready=metaDemoTransportReadiness(demoEnvironment),cases=[];let calls=0;
+ for(const key of Object.keys(ready.gates))for(const value of [undefined,false,'true']){
+  const gates={...ready.gates};if(value===undefined)delete gates[key];else gates[key]=value;cases.push({...ready,gates});
+ }
+ cases.push({...ready,canLaunchMeta:false},{...ready,gates:{vault:true}},{...ready,gates:{...ready.gates,unknown:true}},{...ready,gates:[]},{...ready,gates:{}});
+ for(const inconsistent of cases){
+  const provider=createMetaCustomerProvider({environment:demoEnvironment,readiness:()=>({...inconsistent,launchCode:'META_DEMO_CONFIGURATION_PENDING'}),fetchImpl:async()=>{calls++;throw new Error('No Graph access with an incomplete readiness');}});
+  await assert.rejects(provider.inspectSubscription({token:demoToken,wabaId:OBRASAAS_META_CHANNEL.wabaId}),{code:'META_DEMO_CONFIGURATION_PENDING'});
+ }
+ assert.equal(calls,0);
 });
 test('protocols are internal capabilities and copied/browser configuration cannot choose a lane',()=>{
  assert.equal(resolveMetaCloudProtocol(META_CUSTOMER_PROTOCOL),META_CUSTOMER_PROTOCOL);

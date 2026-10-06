@@ -6,6 +6,8 @@ import {META_CUSTOMER_REQUIRED_SCOPES,hasMetaCustomerRequiredScopes} from './met
 
 export const metaAssetId=value=>typeof value==='string'&&/^[1-9]\d{4,31}$/.test(value);
 export const metaCustomerTransportReady=readiness=>['app','secret','configuration','version','vault','review','callback'].every(key=>readiness?.gates?.[key]===true);
+const demoTransportGates=['fixedAssets','testMode','credential','vault','signature','version','recipients'];
+const injectedDemoTransportReady=readiness=>readiness?.canLaunchMeta===true&&readiness.gates&&typeof readiness.gates==='object'&&!Array.isArray(readiness.gates)&&Object.keys(readiness.gates).length===demoTransportGates.length&&demoTransportGates.every(key=>readiness.gates[key]===true);
 // Deliberately limited to the adopted BODY-only, positional es_AR catalogue.
 // Meta Cloud API contract: https://www.postman.com/meta/whatsapp-business-platform/request/lwtlz1k/send-message-template-interactive
 export function customerTemplateMessage(value){
@@ -49,7 +51,9 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
  // Embedded Signup versions govern new authorization flows. They do not
  // revoke previously granted customer transport. Retain every existing
  // transport prerequisite while requiring v4 separately for a new code.
- const config=(signupRequired=false)=>{const ready=readiness(environment);if(!metaCustomerTransportReady(ready)||signupRequired&&!ready.canLaunchMeta)throw new WorkspaceError(ready.launchCode,503);return ready;};
+ // The internal DEMO composition injects a different, complete seven-gate
+ // contract. It cannot inherit CUSTOMER gates or authorize a partial shape.
+ const config=(signupRequired=false)=>{const ready=readiness(environment),transportReady=readiness===metaCustomerReadiness?metaCustomerTransportReady(ready):injectedDemoTransportReady(ready);if(!transportReady||signupRequired&&!ready.canLaunchMeta)throw new WorkspaceError(ready.launchCode,503);return ready;};
  async function request(path,{token,method='GET',body,appToken=false}={}){
   const ready=config(),url=new URL(`https://graph.facebook.com/${ready.version}/${path}`);
   if(token&&!appToken)url.searchParams.set('appsecret_proof',createHmac('sha256',environment.META_APP_SECRET).update(token).digest('hex'));
