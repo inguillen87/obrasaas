@@ -140,7 +140,7 @@ export function AccountWorkspace({getSessionToken}={}){
    {account.projectsTruncated&&<p>Se muestran las primeras 100 obras autorizadas.</p>}
    {account.projects.length>0&&!view&&!loading&&<div className={styles.startState}><strong>Abrí una obra para empezar</strong><p>Consultá el cronograma, registrá el trabajo y accedé a las herramientas disponibles para tu rol.</p></div>}
   </>}
-  {view&&<div className={styles.workbench}><WorkspaceToolsNavigation role={account?.role} canManageIntegrations={account?.canManageIntegrations} pending={modulePending} schedulePending={saving||Boolean(attempt)||Boolean(draft)||creatingTask} scheduleEditing={Boolean(draft)}/><div className={styles.modules}>
+  {view&&<div className={styles.workbench}><WorkspaceToolsNavigation role={account?.role} canManageIntegrations={account?.canManageIntegrations} canImportPlan={view.canPlanSchedule} pending={modulePending} schedulePending={saving||Boolean(attempt)||Boolean(draft)||creatingTask} scheduleEditing={Boolean(draft)}/><div className={styles.modules}>
   {view&&<section aria-labelledby="schedule-title" className={styles.schedule}>
    <div className={styles.heading}><div><p className={styles.eyebrow}>CRONOGRAMA REGISTRADO</p><h3 id="schedule-title">{view.project.name}</h3></div><span>{view.tasks.length} de {view.totalTasks} tareas</span></div>
    {view.canPlanSchedule&&!draft&&<TaskCreatePanel key={`${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={setTaskCreating} locked={planReadbackPending||Boolean(modulePending.plan)} onCreated={()=>readRecordedSchedule({scope:account.scope,projectId:view.project.id,kind:'task'})}/> }

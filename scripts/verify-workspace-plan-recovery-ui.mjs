@@ -34,7 +34,7 @@ const scope='a'.repeat(64),scopeB='b'.repeat(64),projectId='project-plan-A',proj
 const row={title:'Fundaciones importadas',startsOn:'2026-10-08',endsOn:'2026-10-10',evidence:'Fila sintética 1',uncertainty:''};
 const importedTask={id:'z-imported',...row,status:'BACKLOG',progress:0,revision:'2026-10-06T00:00:00.000001'};
 const existingTasks=Array.from({length:150},(_,index)=>({id:'existing-'+String(index+1).padStart(3,'0'),title:'Tarea registrada '+(index+1),status:'BACKLOG',progress:0,startsOn:'2026-10-01',endsOn:'2026-10-05',revision:'2026-10-05T00:00:00.000001'}));
-const widths=[390,1280],modes=['apply','recover-after-reload','read-failure','scope-mismatch','project-mismatch','context-change-read','unmount-read','task-recover-existing','task-recover-after-reload'],checks=[],errors=[];
+const widths=[320,390,768,1280],modes=['apply','recover-after-reload','read-failure','scope-mismatch','project-mismatch','context-change-read','unmount-read','task-recover-existing','task-recover-after-reload'],checks=[],errors=[];
 const closureModes=['upload-not-observed','decision-not-observed','upload-denied-403','upload-context-409','decision-denied-403','decision-context-409','legacy-reference','legacy-conflict','global-recovery','global-read-failure','global-same-mount','invalid-source','oversized-source','upload-explicit-retry','decision-explicit-retry','upload-close-after-check','upload-lease-expiry','global-lease-expiry'];
 const selectedModes=process.env.PLAN_RECOVERY_UI_MODES?.split(',')||[...modes,...closureModes];assert.ok(selectedModes.length&&selectedModes.every(mode=>[...modes,...closureModes].includes(mode)));
 const waitText=(page,value)=>page.waitForFunction(expected=>document.body.innerText.includes(expected),{timeout:20000},value);
@@ -49,6 +49,19 @@ async function openProject(page,id=projectId){
 async function assertCount(page,total,loaded=100){
  await waitText(page,`${loaded} de ${total} tareas`);assert.equal(await page.$$eval('[data-task-id]',nodes=>nodes.length),loaded);
  assert.ok(!await page.evaluate(()=>document.body.innerText.includes('de 152 tareas')),'A recovered receipt must not increment an existing canonical count');
+}
+async function assertPlanBlockingNavigation(page,posts){
+ const selector='nav[aria-labelledby="workspace-tools-title"] [role="status"] a[href="#plan-import-title"]',beforePosts=posts.length;
+ await page.waitForSelector(selector);
+ assert.deepEqual(await page.$$eval('nav[aria-labelledby="workspace-tools-title"] [role="status"] a',links=>links.map(link=>link.getAttribute('href'))),['#plan-import-title'],'The plan lock must name the actual blocking module, without labelling it as task creation');
+ assert.equal(await page.$$eval('button',buttons=>buttons.find(button=>button.textContent.trim()==='Actualizar')?.disabled),true,'A ready or uncertain import locks context refresh');
+ const link=await page.$(selector);assert.ok(await link.evaluate(element=>{const rect=element.getBoundingClientRect();return rect.width>=44&&rect.height>=44;}),'The recovery link must be touch accessible');
+ await link.focus();await page.keyboard.press('Enter');
+ await page.waitForFunction(()=>document.activeElement?.id==='plan-import-title'&&location.hash==='#plan-import-title');
+ const destination=await page.$eval('#plan-import-title',element=>{const rect=element.getBoundingClientRect();return {top:rect.top,bottom:rect.bottom,height:innerHeight};});
+ assert.ok(destination.top>=-1&&destination.bottom<=destination.height,'Keyboard navigation must bring the blocking panel into view: '+JSON.stringify(destination));
+ await page.keyboard.press('Tab');assert.ok(await page.evaluate(()=>Boolean(document.activeElement?.closest('[data-plan-import]'))),'Tab after the destination enters the import controls');
+ assert.equal(posts.length,beforePosts,'Recovery navigation must never send a command');
 }
 async function scenario(mode,width){
  const taskMode=mode.startsWith('task-');
@@ -108,6 +121,7 @@ async function scenario(mode,width){
   await click(page,'Importar PDF o imagen');await waitText(page,'Autorizo enviar este cronograma a OpenAI');await (await page.$('[data-plan-import] input[type=file]')).uploadFile(sourceFile);await page.click('[data-plan-import] input[type=checkbox]');await click(page,'Extraer borrador');await waitText(page,'Compará cada fila con el archivo');
   await page.waitForFunction(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.trim()==='Nueva tarea')?.disabled===true);
   assert.equal(await page.$$eval('button',buttons=>buttons.find(button=>button.textContent.trim()==='Nueva tarea')?.disabled),true,'A ready plan draft prevents a new task from invalidating its reviewed baseline');
+  await assertPlanBlockingNavigation(page,posts);
   await page.type('[data-plan-import] textarea','Revisado con la fuente sintética');await (await page.$$('[data-plan-import] input[type=checkbox]')).at(-1).click();await click(page,'Aplicar 1 tareas');
  }
  if(mode==='task-recover-after-reload'){
@@ -120,8 +134,8 @@ async function scenario(mode,width){
   await waitText(page,'La confirmación no llegó. Comprobá el recibo');await assertCount(page,151);await click(page,'Comprobar tarea');
   await waitText(page,'El total incluye la tarea creada');await assertCount(page,151);assert.equal(recoveryReads.length,1);await waitText(page,'Tarea creada y vinculada a esta obra');
  }else if(mode==='recover-after-reload'){
-   await waitText(page,'La confirmación no llegó.');await waitText(page,'Intento pendiente de comprobación');assert.equal(posts.length,2);assert.equal(applied,true);
-  await page.reload({waitUntil:'networkidle0'});await waitText(page,'Empresa sintética de cronogramas');await openProject(page);await assertCount(page,151);await waitText(page,'Intento pendiente de comprobación');await click(page,'Comprobar resultado');await waitText(page,'Cronograma actualizado desde los registros de la obra');await assertCount(page,151);assert.equal(recoveryReads.length,1);
+   await waitText(page,'La confirmación no llegó.');await waitText(page,'Intento pendiente de comprobación');assert.equal(posts.length,2);assert.equal(applied,true);await assertPlanBlockingNavigation(page,posts);
+  await page.reload({waitUntil:'networkidle0'});await waitText(page,'Empresa sintética de cronogramas');await openProject(page);await assertCount(page,151);await waitText(page,'Intento pendiente de comprobación');await assertPlanBlockingNavigation(page,posts);await click(page,'Comprobar resultado');await waitText(page,'Cronograma actualizado desde los registros de la obra');await assertCount(page,151);assert.equal(recoveryReads.length,1);
  }else if(['read-failure','scope-mismatch','project-mismatch'].includes(mode)){
   await waitText(page,'no pudimos actualizar el cronograma');await waitText(page,'Recibo confirmado: receipt-plan-A');await assertCount(page,150);assert.ok(!await page.evaluate(()=>document.body.innerText.includes('999 tareas')));assert.equal(posts.length,2);
   await click(page,'Volver a consultar el cronograma');await waitText(page,'Cronograma actualizado desde los registros de la obra');await assertCount(page,151);assert.equal(readFailures,mode==='read-failure'?1:0);
@@ -234,6 +248,7 @@ async function recoveryClosureScenario(mode,width){
  // Clearing session storage and reloading must retain the only durable reference.
  if(mode!=='global-same-mount'&&!explicitRetryMode&&!closeAfterCheck){await page.evaluate(()=>sessionStorage.clear());await page.reload({waitUntil:'networkidle0'});await waitText(page,'Empresa sintética de cronogramas');await openProject(page);await assertCount(page,applied?151:150);await waitText(page,'Intento pendiente de comprobación');}
  const expectedPosts=legacyMode?0:decisionMode?2:1;assert.equal(posts.length,expectedPosts);
+ await assertPlanBlockingNavigation(page,posts);
  assert.equal(await page.$$eval('[data-plan-import] button',buttons=>buttons.some(button=>button.textContent==='Reintentar los mismos datos')),false,'A reload or an unqueried uncertain operation never authorizes a retry');
  if(expiryMode){
   await click(page,'Comprobar resultado');await page.waitForNetworkIdle({idleTime:100,timeout:10000});assert.deepEqual(await browserReferences(page),[reference]);assert.equal(await page.$$eval('[data-plan-import] button',buttons=>buttons.some(button=>button.textContent==='Reintentar los mismos datos')),false,'PROCESSING permits only another GET');
@@ -291,6 +306,6 @@ async function recoveryClosureScenario(mode,width){
 }
 try{
  for(let attempt=0;attempt<90;attempt++){try{if((await fetch(origin)).ok)break;}catch{}if(server.exitCode!==null)throw Error(log);await new Promise(resolve=>setTimeout(resolve,500));if(attempt===89)throw Error(log);}
- browser=await puppeteer.launch({headless:true,args:['--no-sandbox']});for(const width of widths){for(const mode of modes.filter(mode=>selectedModes.includes(mode)))await scenario(mode,width);for(const mode of closureModes.filter(mode=>selectedModes.includes(mode)))await recoveryClosureScenario(mode,width);}
- assert.deepEqual(errors,[]);writeFileSync(path.join(evidence,'workspace-plan-recovery-ui-validation.json'),JSON.stringify({validated:true,synthetic:true,realProviderCalls:false,widths,checks,sourceManifest,harnessSha256},null,2)+'\n');console.log(JSON.stringify({validated:true,synthetic:true,realProviderCalls:false,checks:checks.length}));
+ browser=await puppeteer.launch({headless:'shell',args:['--no-sandbox']});for(const width of widths){for(const mode of modes.filter(mode=>selectedModes.includes(mode)))await scenario(mode,width);for(const mode of closureModes.filter(mode=>selectedModes.includes(mode)))await recoveryClosureScenario(mode,width);}
+ assert.deepEqual(errors,[]);writeFileSync(path.join(evidence,'workspace-plan-recovery-ui-validation.json'),JSON.stringify({validated:true,synthetic:true,checkedAt:new Date().toISOString(),fullSuite:selectedModes.length===modes.length+closureModes.length,selectedModes,realProviderCalls:false,physicalPhoneAccepted:false,widths,checks,sourceManifest,harnessSha256},null,2)+'\n');console.log(JSON.stringify({validated:true,synthetic:true,realProviderCalls:false,checks:checks.length}));
 }catch(error){console.error(JSON.stringify({log,errors,checks}));throw error;}finally{await browser?.close();server.kill();assert.ok(path.resolve(fixture).startsWith(path.resolve(evidence)+path.sep));rmSync(fixture,{recursive:true,force:true});}
