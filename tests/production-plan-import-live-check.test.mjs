@@ -21,6 +21,14 @@ test('committed PDF and PNG fixture hashes and two exact date rows are checked i
 test('fixture mutation fails before either provider call',async()=>{
  let calls=0;await assert.rejects(verifyPlanImportLive({environment,analyzer:{analyze:()=>{calls++;}},readFixture:(url,encoding)=>url.pathname.endsWith('.png')?Buffer.from('changed'):readFileSync(url,encoding)}),{code:'PLAN_IMPORT_LIVE_FIXTURE_CHANGED'});assert.equal(calls,0);
 });
+
+test('provider denial diagnostics expose only fixed codes and HTTP status, never error content',async()=>{
+ let calls=0,cancelled=false;
+ const analyzer=createPlanImportAnalyzer({environment:()=>environment,fetchImpl:async()=>{calls++;return {ok:false,status:400,body:{cancel:async()=>{cancelled=true;}},json:async()=>{throw Error('Private provider body must not be read');}};}});
+ await assert.rejects(verifyPlanImportLive({environment,analyzer}),error=>{assert.deepEqual(error.proof.providerFailure,{code:'AI_PROVIDER_REQUEST_REJECTED',status:400});assert.doesNotMatch(JSON.stringify(error.proof),/synthetic-local-test-token|Private provider body/);return true;});
+ assert.equal(calls,1);assert.equal(cancelled,true);
+ for(const result of [{success:false,code:'private user or provider content',providerStatus:700,message:'Private fixture content'},{success:false,code:'AI_SECRET_CONTENT',providerStatus:'400'}])await assert.rejects(verifyPlanImportLive({environment,analyzer:{analyze:async()=>result}}),error=>{assert.deepEqual(error.proof.providerFailure,{code:'AI_RESPONSE_UNCONFIRMED',status:null});assert.doesNotMatch(JSON.stringify(error.proof),/Private fixture|AI_SECRET|private user/);return true;});
+});
 test('refusal, ambiguous dates, unexpected rows and model mismatch fail closed without retries',async()=>{
  for(const result of [{success:false,code:'AI_RESPONSE_UNCONFIRMED'},{...success(),rows:[{...rows[0],startsOn:null,uncertainty:'Año ilegible'},rows[1]]},{...success(),rows:rows.slice(0,1)},{...success(),rows:[{...rows[0],endsOn:'2026-11-07'},rows[1]]},{...success(),model:'different-model'}]){
   let calls=0;await assert.rejects(verifyPlanImportLive({environment,analyzer:{analyze:async()=>{calls++;return result;}}}));assert.equal(calls,1);
