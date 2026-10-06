@@ -12,7 +12,12 @@ import {resolveMetaKycAuthority,META_KYC_AUTHORIZATION_CODES} from './meta-kyc-i
 import {createParticipantChannelKycDeposit} from './participant-channel-kyc.mjs';
 import {createPrivateImageUploader} from './private-image-upload.mjs';
 import {createMetaCustomerAppProjection} from './meta-customer-app-projection.mjs';
+import {createCompanyChannelBridge,resolveCompanyEnvelope,resolveCompanyOutboundIdentity} from './company-channel-routing.mjs';
+import {customerJobTransaction} from './meta-customer-outbound.mjs';
 const provider=createMetaCustomerProvider();
+const companyBridge=createCompanyChannelBridge({connect:connectWorkspace});
+const companyOutbound=createMetaCustomerOutbound({connect:connectWorkspace,resolveIdentity:resolveCompanyOutboundIdentity,provider,sourceContext:true});
+const isCompany=context=>customerJobTransaction(connectWorkspace,client=>resolveCompanyEnvelope(client,{eventId:context.eventId})).then(Boolean);
 const bridge=createMetaFieldBridge({connect:connectWorkspace,resolveIdentity:resolveWorkerChannelIdentity,provider,put,get,analyzer:createPilotMediaAnalyzer()});
 const uploader=createPrivateImageUploader({put,get});
 const deposit=createParticipantChannelKycDeposit({connect:connectWorkspace,resolveAuthority:resolveMetaKycAuthority,upload:uploader.uploadImageToBlob});
@@ -20,4 +25,4 @@ const kycBridge=createMetaKycBridge({connect:connectWorkspace,provider,deposit})
 const kycOutbound=createMetaKycOutbound({connect:connectWorkspace,provider});
 const appProjection=createMetaCustomerAppProjection({connect:connectWorkspace,provider});
 export const productionMetaCustomerOutbound=createMetaCustomerOutbound({connect:connectWorkspace,resolveIdentity:resolveWorkerChannelIdentity,provider});
-export const productionMetaCustomerProcessor=createMetaCustomerProcessor({connect:connectWorkspace,dispatch:async context=>(await appProjection.execute(context))||(await kycBridge.execute(context))||bridge.execute(context),authorizationCodes:META_KYC_AUTHORIZATION_CODES,outbound:{send:(context,reply,{purpose}={})=>purpose==='KYC_CAPTURE'?kycOutbound.send(context,reply):productionMetaCustomerOutbound.send(context,reply),observeStatus:(...args)=>productionMetaCustomerOutbound.observeStatus(...args)}});
+export const productionMetaCustomerProcessor=createMetaCustomerProcessor({connect:connectWorkspace,dispatch:async context=>(await appProjection.execute(context))||(await companyBridge.execute(context))||(await kycBridge.execute(context))||bridge.execute(context),authorizationCodes:[...META_KYC_AUTHORIZATION_CODES,'COMPANY_CHANNEL_SOURCE_REQUIRED','COMPANY_CHANNEL_SUSPENDED','COMPANY_CHANNEL_CONTEXT_CHANGED','COMPANY_CHANNEL_IDENTITY_AMBIGUOUS','COMPANY_CHANNEL_CATALOG_REQUIRED'],outbound:{send:async(context,reply,{purpose}={})=>(await isCompany(context))?companyOutbound.send(context,reply):purpose==='KYC_CAPTURE'?kycOutbound.send(context,reply):productionMetaCustomerOutbound.send(context,reply),observeStatus:(...args)=>productionMetaCustomerOutbound.observeStatus(...args)}});

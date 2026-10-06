@@ -4,6 +4,9 @@ import {decryptCustomerSecret} from './meta-customer-credentials.mjs';
 import {lockMetaCustomerInboxChannel,metaCustomerContentDigest} from './meta-customer-callback.mjs';
 import {classifyObraIntent} from './whatsapp/obra-intent-policy.js';
 import {META_APP_PROJECTION_PROVIDER,decodeCustomerAppProjection} from './meta-customer-app-projection.mjs';
+import {companyChannelSchemaReady} from './company-channel-schema.mjs';
+import {decodeWorkerChannelProof} from './worker-channel-identity.mjs';
+import {assertLegacyProjectChannel} from './company-channel-connection.mjs';
 const revision=`to_char("updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US')`;
 const text=value=>typeof value==='string'?value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g,' ').slice(0,4096):'';
 const phoneForView=value=>typeof value==='string'&&/^[1-9]\d{7,14}$/.test(value)?value:null;
@@ -11,7 +14,7 @@ const eventId=value=>typeof value==='string'&&/^customer_webhook_[a-f0-9]{64}$/.
 const leaseMs=60000;
 function decode(row,member,project,channel,environment){
  if(row.payload?.organizationId!==member.organizationId||row.payload?.channelId!==channel.id)throw new WorkspaceError('META_CUSTOMER_INBOX_SCOPE_REJECTED',403);
- let payload;try{payload=JSON.parse(decryptCustomerSecret(row.payload.encryptedPayload,{organizationId:member.organizationId,projectId:project.id,purpose:'webhook',resourceId:row.id},environment));}catch{throw new WorkspaceError('META_CUSTOMER_INBOX_PAYLOAD_UNVERIFIED',409);}
+ let payload;try{payload=JSON.parse(decryptCustomerSecret(row.payload.encryptedPayload,{organizationId:member.organizationId,projectId:channel.projectId||project.id,purpose:'webhook',resourceId:row.id},environment));}catch{throw new WorkspaceError('META_CUSTOMER_INBOX_PAYLOAD_UNVERIFIED',409);}
  if(payload.wabaId!==channel.whatsappBusinessId||payload.phoneNumberId!==null&&payload.phoneNumberId!==channel.phoneNumberId||metaCustomerContentDigest(payload)!==row.payload.payloadDigest)throw new WorkspaceError('META_CUSTOMER_INBOX_PAYLOAD_UNVERIFIED',409);
  return payload;
 }
@@ -61,6 +64,8 @@ function publicItem(row,payload){
 export async function readMetaCustomerInbox(client,member,project,connection,environment,{after=null}={}){
  const cursorId=value=>eventId(value)||/^meta_app_source_[a-f0-9]{64}$/.test(value||'');
  if(after!==null&&!cursorId(after))throw new WorkspaceError('META_CUSTOMER_INBOX_INPUT_INVALID');
+ const corporate=await companyInboxConnection(client,member,project);
+ if(corporate)return readCompanyInbox(client,member,project,corporate,environment,after);
  if(!connection||connection.metadata?.credentialFormat!=='tenant-aad-v2'||connection.metadata?.credentialOrganizationId!==member.organizationId)return {items:[],truncated:false,nextCursor:null,canSend:false,businessApplied:false};
  if(after){const cursor=(await client.query(`SELECT id FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 AND provider=ANY($4::text[]) AND payload->>'channelId'=$3`,[after,project.id,connection.id,['meta-customer-v1',META_APP_PROJECTION_PROVIDER]])).rows;if(cursor.length!==1)throw new WorkspaceError('META_CUSTOMER_INBOX_CURSOR_UNAVAILABLE',409);}
  const rows=(await client.query(`SELECT id,provider,status::text AS status,payload,outcome,"createdAt" AS "createdAt","processedAt" AS "processedAt","leaseToken","lastError",("leaseExpiresAt">clock_timestamp()) AS "activeLease",${revision} AS revision FROM public."WebhookEvent" WHERE "projectId"=$1 AND provider=ANY($4::text[]) AND payload->>'channelId'=$2 AND ($3::text IS NULL OR ("createdAt",id)<(SELECT "createdAt",id FROM public."WebhookEvent" WHERE id=$3 AND "projectId"=$1 AND provider=ANY($4::text[]) AND payload->>'channelId'=$2)) ORDER BY "createdAt" DESC,id DESC LIMIT 21`,[project.id,connection.id,after,['meta-customer-v1',META_APP_PROJECTION_PROVIDER]])).rows;
@@ -79,6 +84,33 @@ export async function readMetaCustomerInbox(client,member,project,connection,env
  }
  return {items,truncated:rows.length>20,nextCursor:rows.length>20?rows[19].id:null,canSend:false,businessApplied:items.some(item=>item.businessApplied),channelIdentityVerified:items.some(item=>['VERIFIED','CHANNEL_VERIFIED'].includes(item.identityStatus))};
 }
+// Historical visibility uses the typed assignment and source projection. It
+// grants no operational binding and never assigns an inbound message by body,
+// phone, timestamp or the credential anchor's current selection.
+async function companyInboxConnection(client,member,project){
+ if(!await companyChannelSchemaReady(client))return null;
+ const rows=(await client.query(`SELECT c.*,cc.mode AS "companyMode" FROM public."WhatsAppConnection" c JOIN public."WhatsAppCompanyChannel" cc ON cc."connectionId"=c.id AND cc."anchorProjectId"=c."projectId" JOIN public."WhatsAppChannelProjectAssignment" a ON a."connectionId"=cc."connectionId" AND a."organizationId"=cc."organizationId" WHERE a."organizationId"=$1 AND a."projectId"=$2 AND cc.mode<>'PROJECT_ONLY'`,[member.organizationId,project.id])).rows;
+ if(rows.length!==1)return null;return rows[0];
+}
+async function readCompanyInbox(client,member,project,c,environment,after){
+ if(c.metadata?.credentialFormat!=='tenant-aad-v2'||c.metadata?.credentialOrganizationId!==member.organizationId)return {items:[],truncated:false,nextCursor:null,canSend:false,businessApplied:false};
+ const filter=`e."projectId"=$1 AND e.provider=ANY($5::text[]) AND e.payload->>'channelId'=$2 AND ((er."organizationId"=$3 AND er."connectionId"=$2 AND er."projectId"=$4 AND er.kind IN ('FIELD','BINDING')) OR (e."projectId"=$4 AND er."sourceEventId" IS NULL AND e.payload->'companyRouting' IS NULL))`;
+ const joins=`public."WebhookEvent" e LEFT JOIN public."WhatsAppCompanyEventRoute" er ON er."sourceEventId"=e.id`;
+ const args=[c.projectId,c.id,member.organizationId,project.id,['meta-customer-v1',META_APP_PROJECTION_PROVIDER]];
+ if(after&&(await client.query(`SELECT e.id FROM ${joins} WHERE ${filter} AND e.id=$6`,[...args,after])).rows.length!==1)throw new WorkspaceError('META_CUSTOMER_INBOX_CURSOR_UNAVAILABLE',409);
+ const rows=(await client.query(`SELECT e.*,e.status::text AS status,to_char(e."updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision,(e."leaseExpiresAt">clock_timestamp()) AS "activeLease",er.kind AS "routeKind",er."workerId" AS "routedWorkerId",er."payloadDigest" AS "routeDigest" FROM ${joins} WHERE ${filter} AND ($6::text IS NULL OR (e."createdAt",e.id)<(SELECT "createdAt",id FROM public."WebhookEvent" WHERE id=$6)) ORDER BY e."createdAt" DESC,e.id DESC LIMIT 21`,[...args,after])).rows;
+ const replies=(await client.query(`SELECT id,payload,outcome FROM public."WebhookEvent" WHERE "projectId"=$1 AND provider='meta-customer-outbound-v1' AND payload->>'channelId'=$2 AND payload->>'eventId'=ANY($3::text[])`,[c.projectId,c.id,rows.slice(0,20).map(r=>r.id)])).rows;
+ const replyByEvent=new Map();for(const row of replies){try{const request=JSON.parse(decryptCustomerSecret(row.payload.encryptedPayload,{organizationId:member.organizationId,projectId:c.projectId,purpose:'outbound',resourceId:row.id},environment)),source=rows.find(r=>r.id===request.eventId);if(!source||digest(request)!==row.payload.requestDigest||request.channelId!==c.id||request.organizationId!==member.organizationId||request.eventId!==row.payload.eventId||source.routeKind&&request.targetProjectId!==project.id)continue;replyByEvent.set(request.eventId,row.outcome);}catch{}}
+ const items=[];for(const row of rows.slice(0,20)){
+  if(row.provider===META_APP_PROJECTION_PROVIDER){
+   let data=null;try{data=await decodeCustomerAppProjection(client,row,member,project,c,environment);}catch{}
+   const record=data?.record,m=record?.data||{},contact=record?.kind==='contact';items.push({...publicItem(row,null),kind:contact?'APP_CONTACT':data?.field==='history'?'APP_HISTORY':'APP_ECHO',source:'WHATSAPP_BUSINESS_APP',sourceEventId:data?.sourceEventId||null,sourceTimestamp:record?.timestamp||null,from:phoneForView(contact?m.contact?.phone_number:m.sourceThreadId||m.to||m.from),body:contact?text(m.contact?.full_name||m.contact?.first_name):text(m.text?.body||m[m.type]?.caption),payloadVerified:Boolean(data),canProcess:false,canReview:false,identityStatus:'NOT_APPLICABLE',businessApplied:false,replySent:false});continue;
+  }
+  let payload=null;try{if(row.routeKind){if(row.routeDigest!==row.payload.payloadDigest)throw new Error();decodeWorkerChannelProof(row,{...c,organizationId:member.organizationId},environment);}payload=decode(row,member,project,c,environment);}catch{}
+  const item=publicItem(row,payload),reply=replyByEvent.get(row.id);items.push({...item,...(row.routeKind?{source:'COMPANY_WHATSAPP',workerId:row.routedWorkerId,body:row.routeKind==='BINDING'?'':item.body}:{}),...(row.routeKind||c.companyMode!=='PREPARED'?{canProcess:false,canReview:false}:{}),...(reply?{replyState:reply.state,replySent:['SENT','STATUS_OBSERVED'].includes(reply.state)&&!['failed','deleted'].includes(reply.providerStatus),providerReplyStatus:reply.providerStatus||null}:{})});
+ }
+ return {items,truncated:rows.length>20,nextCursor:rows.length>20?rows[19].id:null,canSend:false,businessApplied:items.some(i=>i.businessApplied),channelIdentityVerified:items.some(i=>['VERIFIED','CHANNEL_VERIFIED'].includes(i.identityStatus))};
+}
 export async function readMetaCustomerInboxReceipt(client,member,project,connection,environment,request){
  if(!request||!operationId(request.operationId)||!eventId(request.eventId)||!['process_inbox','review_inbox'].includes(request.action))throw new WorkspaceError('META_CUSTOMER_INBOX_INPUT_INVALID');
  if(!connection||connection.metadata?.credentialFormat!=='tenant-aad-v2'||connection.metadata?.credentialOrganizationId!==member.organizationId)throw new WorkspaceError('META_CUSTOMER_INBOX_UNAVAILABLE',404);
@@ -96,7 +128,7 @@ export async function readMetaCustomerInboxReceipt(client,member,project,connect
  return {...context,state:row.status==='PROCESSED'&&row.outcome?.version===1?'EVENT_PROCESSED':'NOT_OBSERVED',actorOperationVerified:false,eventStatus:row.status,businessApplied:row.outcome?.businessApplied===true,businessReceiptId:typeof row.outcome?.receiptId==='string'&&/^[A-Za-z0-9_-]{1,160}$/.test(row.outcome.receiptId)?row.outcome.receiptId:null};
 }
 export function createMetaCustomerInboxReview({workspace,environment=process.env,now=()=>Date.now(),afterClaim=async()=>{}}){
- const within=(session,body,writable,run)=>workspace.integrationProject(session,body,writable,run);
+ const within=(session,body,writable,run)=>workspace.integrationProject(session,body,writable,async(client,member,scope,project)=>{if(writable)await assertLegacyProjectChannel(client,member,project.id);return run(client,member,scope,project);});
  async function channel(client,project){const rows=(await client.query(`SELECT "whatsappBusinessId","phoneNumberId" FROM public."WhatsAppConnection" WHERE "projectId"=$1`,[project.id])).rows;if(rows.length!==1)throw new WorkspaceError('META_CUSTOMER_INBOX_SCOPE_REJECTED',403);return lockMetaCustomerInboxChannel(client,{...rows[0],wabaId:rows[0].whatsappBusinessId,projectId:project.id});}
  async function event(client,project,id){const row=(await client.query(`SELECT id,status::text AS status,payload,outcome,"leaseToken","leaseExpiresAt",${revision} AS revision FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 AND provider='meta-customer-v1' FOR UPDATE`,[id,project.id])).rows[0];if(!row)throw new WorkspaceError('META_CUSTOMER_INBOX_UNAVAILABLE',404);return row;}
  async function audit(client,member,project,key,action,metadata){await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,$4,'WebhookEvent',$5,$6::jsonb) ON CONFLICT(id) DO NOTHING`,[key,member.organizationId,member.actorId,action,metadata.eventId,JSON.stringify({...metadata,projectId:project.id,businessApplied:false,replySent:false})]);}

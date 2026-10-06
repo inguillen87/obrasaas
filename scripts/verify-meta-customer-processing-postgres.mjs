@@ -13,7 +13,9 @@ const database='obrasaas_processing_'+randomUUID().replaceAll('-',''),admin=new 
 const checked=[],connect=()=>pool.connect(),provider={sendReply:async()=>{sends++;throw new WorkspaceError('META_CUSTOMER_SEND_UNCONFIRMED',503);}};
 try{
  await admin.connect();await admin.query(`CREATE DATABASE "${database}"`);created=true;url.pathname='/'+database;pool=trackDisposablePool(new Pool({connectionString:url.toString(),max:8}));
- await pool.query(`CREATE TABLE "Project"(id text PRIMARY KEY,"organizationId" text,status text);
+ await pool.query(`CREATE TABLE "Organization"(id text PRIMARY KEY,metadata jsonb);
+ INSERT INTO "Organization" VALUES('o1','{}'),('o2','{}');
+ CREATE TABLE "Project"(id text PRIMARY KEY,"organizationId" text REFERENCES "Organization",status text);
  CREATE TABLE "WhatsAppConnection"(id text PRIMARY KEY,"projectId" text UNIQUE,"phoneNumberId" text UNIQUE,"whatsappBusinessId" text,enabled boolean,"connectionStatus" text,"encryptedAccessToken" text,metadata jsonb);
  CREATE TYPE "WebhookStatus" AS ENUM('PENDING','PROCESSED','FAILED');
  CREATE TABLE "WebhookEvent"(id text PRIMARY KEY,"projectId" text,provider text,"externalId" text,"eventType" text,status "WebhookStatus",payload jsonb,"updatedAt" timestamp,"createdAt" timestamp DEFAULT CURRENT_TIMESTAMP,"processedAt" timestamp,"appliedAt" timestamp,"leaseToken" text,"leaseExpiresAt" timestamp,attempts int DEFAULT 0,outcome jsonb,"lastError" text,UNIQUE(provider,"externalId"));

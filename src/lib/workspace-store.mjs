@@ -60,23 +60,31 @@ export function createWorkspaceStore({ connect }) {
   return {
     // Company role changes lock the target membership without first locking a
     // project. Field transactions acquire their own membership before project.
-    async organizationOperation(session, {projectId, scope: expected}, writable, callback) {
-      if(typeof callback!=='function'||typeof writable!=='boolean')throw new TypeError('Explicit organization transaction required');
+    async organizationOperation(session, {projectId, scope: expected}, writable, callback, allowArchivedProject=false) {
+      if(typeof callback!=='function'||typeof writable!=='boolean'||typeof allowArchivedProject!=='boolean'||allowArchivedProject&&writable)throw new TypeError('Explicit organization transaction required');
       if(!/^[a-f0-9]{64}$/.test(expected||''))throw new WorkspaceError('WORKSPACE_CONTEXT_CHANGED',409);
       return transaction(session,writable,async(client,member,scope)=>{
         checkScope(scope,expected);
         if(member.role!=='ADMIN')throw new WorkspaceError('WORKSPACE_ORGANIZATION_PERMISSION_REQUIRED',403);
-        await project(client,member,projectId);
+        // Internal receipt lookup only. A current canonical administrator may
+        // recover an operation from an archived origin in their organization.
+        // Snapshots and commands still require an active selected project.
+        if(allowArchivedProject){
+          if(!workspaceId(projectId))throw new WorkspaceError('WORKSPACE_PROJECT_INVALID');
+          const found=await client.query(`SELECT id FROM public."Project" WHERE id=$1 AND "organizationId"=$2`,[projectId,member.organizationId]);
+          if(found.rows.length!==1)throw new WorkspaceError('WORKSPACE_PROJECT_UNAVAILABLE',404);
+        }else await project(client,member,projectId);
         return callback(client,member,scope);
       });
     },
     // Operational modules share canonical membership and project revocation.
     // The module must enforce its own action-level permission inside the callback.
-    async projectOperation(session, {projectId, scope: expected}, writable, callback) {
-      if (typeof callback !== 'function' || typeof writable !== 'boolean') throw new TypeError('Explicit project transaction required');
+    async projectOperation(session, {projectId, scope: expected}, writable, callback, beforeProject) {
+      if (typeof callback !== 'function' || typeof writable !== 'boolean' || beforeProject !== undefined && typeof beforeProject !== 'function') throw new TypeError('Explicit project transaction required');
       if (!/^[a-f0-9]{64}$/.test(expected || '')) throw new WorkspaceError('WORKSPACE_CONTEXT_CHANGED',409);
       return transaction(session,writable,async(client,member,scope)=>{
         checkScope(scope,expected);
+        if (beforeProject) await beforeProject(client, Object.freeze({...member}), scope);
         await project(client,member,projectId);
         const selected=await client.query(`SELECT p.id,p.name,p.metadata,o.metadata AS "organizationMetadata"
           FROM public."Project" p JOIN public."Organization" o ON o.id=p."organizationId"
